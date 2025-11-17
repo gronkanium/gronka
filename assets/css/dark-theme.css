@@ -6,6 +6,11 @@
 body {
   color: #e0e0e0;
   background-color: #1a1a1a;
+  border-top: none;
+}
+
+html {
+  border-top: none;
 }
 
 /* Links */
@@ -43,7 +48,7 @@ code {
 
 /* Site header */
 .site-header {
-  border-top: none;
+  border-top: none !important;
   border-bottom: 1px solid #444;
   background-color: #1a1a1a;
 }
@@ -80,6 +85,20 @@ code {
   fill: #e0e0e0;
 }
 
+/* Hide hamburger menu on all screen sizes */
+.nav-trigger {
+  display: none;
+}
+
+.site-nav label[for="nav-trigger"] {
+  display: none;
+}
+
+/* Ensure navigation links are always visible */
+.site-nav .trigger {
+  display: block;
+}
+
 @media screen and (max-width: 600px) {
   .site-nav {
     background-color: #2a2a2a;
@@ -88,6 +107,10 @@ code {
   
   .site-nav .page-link {
     color: #e0e0e0;
+  }
+  
+  .site-nav .trigger {
+    display: block;
   }
 }
 

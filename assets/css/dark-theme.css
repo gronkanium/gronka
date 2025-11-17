@@ -6,11 +6,13 @@
 body {
   color: #e0e0e0;
   background-color: #1a1a1a;
-  border-top: none;
+  border-top: none !important;
+  overflow-x: hidden;
 }
 
 html {
-  border-top: none;
+  border-top: none !important;
+  overflow-x: hidden;
 }
 
 /* Links */
@@ -72,9 +74,9 @@ code {
   padding-left: 1rem;
 }
 
+/* Hide navigation completely - it's empty and creates a grey bar */
 .site-nav {
-  width: 100%;
-  order: 3;
+  display: none !important;
 }
 
 .site-nav .page-link {
@@ -97,21 +99,6 @@ code {
 /* Ensure navigation links are always visible */
 .site-nav .trigger {
   display: block;
-}
-
-@media screen and (max-width: 600px) {
-  .site-nav {
-    background-color: #2a2a2a;
-    border: 1px solid #444;
-  }
-  
-  .site-nav .page-link {
-    color: #e0e0e0;
-  }
-  
-  .site-nav .trigger {
-    display: block;
-  }
 }
 
 /* Site footer */
@@ -170,6 +157,22 @@ table td {
 /* Page content */
 .page-content {
   background-color: #1a1a1a;
+  overflow-x: hidden;
+  word-wrap: break-word;
+}
+
+/* Badge wrapping - prevent horizontal overflow on mobile */
+.page-content p:first-of-type {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  align-items: center;
+}
+
+.page-content p:first-of-type img {
+  max-width: 100%;
+  height: auto;
+  flex-shrink: 0;
 }
 
 /* Wrapper */

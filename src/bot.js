@@ -192,6 +192,110 @@ async function downloadFileFromUrl(url, isAdminUser = false) {
 }
 
 /**
+ * Parse Tenor GIF URL and extract the actual GIF file URL
+ * @param {string} url - Tenor page URL (e.g., https://tenor.com/view/gm-gif-1914360746739225000)
+ * @returns {Promise<string>} Direct URL to the GIF file
+ */
+async function parseTenorUrl(url) {
+  try {
+    // Check if URL is a Tenor view URL
+    const tenorViewPattern = /^https?:\/\/(www\.)?tenor\.com\/view\/.+-gif-(\d+)/i;
+    const match = url.match(tenorViewPattern);
+    
+    if (!match) {
+      throw new ValidationError('invalid Tenor URL format');
+    }
+
+    const gifId = match[2];
+    logger.info(`Parsing Tenor URL, extracted GIF ID: ${gifId}`);
+
+    // Try to fetch the page and parse meta tags
+    try {
+      const response = await axios.get(url, {
+        timeout: 30000,
+        headers: {
+          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+        },
+      });
+
+      const html = response.data;
+      
+      // Try to find the store-cache script tag with JSON data
+      // Match script tag with id="store-cache" (attributes can be in any order)
+      const storeCacheMatch = html.match(/<script[^>]*id=["']store-cache["'][^>]*>(.*?)<\/script>/is);
+      if (storeCacheMatch && storeCacheMatch[1]) {
+        try {
+          const storeData = JSON.parse(storeCacheMatch[1]);
+          // Navigate to gifs.byId[gifId].results[0].media_formats.gif.url
+          if (
+            storeData.gifs &&
+            storeData.gifs.byId &&
+            storeData.gifs.byId[gifId] &&
+            storeData.gifs.byId[gifId].results &&
+            storeData.gifs.byId[gifId].results[0] &&
+            storeData.gifs.byId[gifId].results[0].media_formats &&
+            storeData.gifs.byId[gifId].results[0].media_formats.gif &&
+            storeData.gifs.byId[gifId].results[0].media_formats.gif.url
+          ) {
+            const gifUrl = storeData.gifs.byId[gifId].results[0].media_formats.gif.url;
+            logger.info(`Found GIF URL from store-cache JSON: ${gifUrl}`);
+            return gifUrl;
+          }
+        } catch (error) {
+          logger.warn(`Failed to parse store-cache JSON: ${error.message}`);
+        }
+      }
+
+      // Try to find og:image meta tag
+      const ogImageMatch = html.match(/<meta\s+property=["']og:image["']\s+content=["']([^"']+)["']/i);
+      if (ogImageMatch && ogImageMatch[1]) {
+        const gifUrl = ogImageMatch[1];
+        logger.info(`Found GIF URL from og:image meta tag: ${gifUrl}`);
+        return gifUrl;
+      }
+
+      // Try to find other meta tags that might contain the GIF URL
+      const metaImageMatch = html.match(/<meta\s+name=["']image["']\s+content=["']([^"']+)["']/i);
+      if (metaImageMatch && metaImageMatch[1]) {
+        const gifUrl = metaImageMatch[1];
+        logger.info(`Found GIF URL from image meta tag: ${gifUrl}`);
+        return gifUrl;
+      }
+
+      // Try to find in JSON-LD structured data
+      const jsonLdMatch = html.match(/<script[^>]*type=["']application\/ld\+json["'][^>]*>(.*?)<\/script>/is);
+      if (jsonLdMatch) {
+        try {
+          const jsonLd = JSON.parse(jsonLdMatch[1]);
+          if (jsonLd.image && typeof jsonLd.image === 'string') {
+            logger.info(`Found GIF URL from JSON-LD: ${jsonLd.image}`);
+            return jsonLd.image;
+          }
+          if (jsonLd.image && jsonLd.image.url) {
+            logger.info(`Found GIF URL from JSON-LD image object: ${jsonLd.image.url}`);
+            return jsonLd.image.url;
+          }
+        } catch {
+          // Ignore JSON parsing errors
+        }
+      }
+    } catch (error) {
+      logger.warn(`Failed to parse Tenor page HTML: ${error.message}, falling back to direct URL pattern`);
+    }
+
+    // Fall back to direct URL pattern
+    const directUrl = `https://c.tenor.com/${gifId}/tenor.gif`;
+    logger.info(`Using fallback direct URL pattern: ${directUrl}`);
+    return directUrl;
+  } catch (error) {
+    if (error instanceof ValidationError) {
+      throw error;
+    }
+    throw new NetworkError(`failed to parse Tenor URL: ${error.message}`);
+  }
+}
+
+/**
  * Generate SHA-256 hash of buffer
  * @param {Buffer} buffer - Data buffer
  * @returns {string} SHA-256 hash in hex format
@@ -445,9 +549,22 @@ async function handleContextMenuCommand(interaction) {
     att => att.contentType && ALLOWED_IMAGE_TYPES.includes(att.contentType)
   );
 
+  // Check for URLs in message content if no attachments found
+  let url = null;
+  if (!videoAttachment && !imageAttachment && targetMessage.content) {
+    // Extract URLs from message content
+    const urlPattern = /https?:\/\/[^\s<>"{}|\\^`\[\]]+/gi;
+    const urls = targetMessage.content.match(urlPattern);
+    if (urls && urls.length > 0) {
+      url = urls[0]; // Use the first URL found
+      logger.info(`Found URL in message content: ${url}`);
+    }
+  }
+
   // Determine attachment type and validate
   let attachment = null;
   let attachmentType = null;
+  let preDownloadedBuffer = null;
 
   if (videoAttachment) {
     attachment = videoAttachment;
@@ -479,19 +596,110 @@ async function handleContextMenuCommand(interaction) {
       });
       return;
     }
+  } else if (url) {
+    // Validate URL format and protocol (strict validation)
+    const urlValidation = validateUrl(url);
+    if (!urlValidation.valid) {
+      logger.warn(`Invalid URL for user ${userId}: ${urlValidation.error}`);
+      await interaction.reply({
+        content: `invalid URL: ${urlValidation.error}`,
+        flags: MessageFlags.Ephemeral,
+      });
+      return;
+    }
+
+    // Defer reply since downloading may take time
+    await interaction.deferReply();
+
+    try {
+      // Check if URL is a Tenor GIF link and parse it
+      let actualUrl = url;
+      const isTenorUrl = /^https?:\/\/(www\.)?tenor\.com\/view\/.+-gif-\d+/i.test(url);
+      if (isTenorUrl) {
+        logger.info(`Detected Tenor URL, parsing to extract GIF URL: ${url}`);
+        try {
+          actualUrl = await parseTenorUrl(url);
+          logger.info(`Resolved Tenor URL to: ${actualUrl}`);
+        } catch (error) {
+          logger.error(`Failed to parse Tenor URL for user ${userId}:`, error);
+          await interaction.editReply({
+            content: error.message || 'failed to parse Tenor URL.',
+          });
+          return;
+        }
+      }
+
+      logger.info(`Downloading file from URL: ${actualUrl}`);
+      const fileData = await downloadFileFromUrl(actualUrl, adminUser);
+
+      // Store the buffer to avoid double download
+      preDownloadedBuffer = fileData.buffer;
+
+      // Create a pseudo-attachment object
+      attachment = {
+        url: actualUrl,
+        name: fileData.filename,
+        size: fileData.size,
+        contentType: fileData.contentType,
+      };
+
+      // Determine attachment type based on content type
+      if (fileData.contentType && ALLOWED_VIDEO_TYPES.includes(fileData.contentType)) {
+        attachmentType = 'video';
+        logger.info(
+          `Processing video from URL: ${attachment.name} (${(attachment.size / (1024 * 1024)).toFixed(2)}MB)`
+        );
+        const validation = validateVideoAttachment(attachment, adminUser);
+        if (!validation.valid) {
+          logger.warn(`Video validation failed for user ${userId}: ${validation.error}`);
+          await interaction.editReply({
+            content: validation.error,
+          });
+          return;
+        }
+      } else if (fileData.contentType && ALLOWED_IMAGE_TYPES.includes(fileData.contentType)) {
+        attachmentType = 'image';
+        logger.info(
+          `Processing image from URL: ${attachment.name} (${(attachment.size / (1024 * 1024)).toFixed(2)}MB)`
+        );
+        const validation = validateImageAttachment(attachment, adminUser);
+        if (!validation.valid) {
+          logger.warn(`Image validation failed for user ${userId}: ${validation.error}`);
+          await interaction.editReply({
+            content: validation.error,
+          });
+          return;
+        }
+      } else {
+        logger.warn(`Invalid attachment type for user ${userId}`);
+        await interaction.editReply({
+          content:
+            'unsupported file format. please provide a video (mp4, mov, webm, avi, mkv) or image (png, jpg, jpeg, webp, gif).',
+        });
+        return;
+      }
+    } catch (error) {
+      logger.error(`Failed to download file from URL for user ${userId}:`, error);
+      await interaction.editReply({
+        content: error.message || 'failed to download file from URL.',
+      });
+      return;
+    }
   } else {
-    logger.warn(`No video or image attachment found for user ${userId}`);
+    logger.warn(`No video or image attachment or URL found for user ${userId}`);
     await interaction.reply({
-      content: 'no video or image attachment found in this message.',
+      content: 'no video or image attachment or URL found in this message.',
       flags: MessageFlags.Ephemeral,
     });
     return;
   }
 
-  // Defer reply since conversion takes time
-  await interaction.deferReply();
+  // Defer reply if not already deferred (for attachment case)
+  if (!url) {
+    await interaction.deferReply();
+  }
 
-  await processConversion(interaction, attachment, attachmentType, adminUser);
+  await processConversion(interaction, attachment, attachmentType, adminUser, preDownloadedBuffer);
 }
 
 /**
@@ -531,26 +739,23 @@ async function handleStatsCommand(interaction) {
     const embed = new EmbedBuilder()
       .setTitle('bot statistics')
       .setColor(0x5865f2)
-      .setDescription('overview')
       .addFields(
         {
           name: 'bot info',
           value: `**uptime:** \`${formatUptime(uptime)}\`\n**guilds:** \`${guildCount.toLocaleString()}\`\n**users:** \`${userCount.toLocaleString()}\``,
-          inline: true,
+          inline: false,
         },
         {
           name: 'gif storage',
           value: `**total gifs:** \`${storageStats.totalGifs.toLocaleString()}\`\n**disk usage:** \`${storageStats.diskUsageFormatted}\``,
-          inline: true,
+          inline: false,
         },
         {
           name: 'configuration',
           value: `**max width:** \`${MAX_GIF_WIDTH}px\`\n**max duration:** \`${MAX_GIF_DURATION}s\`\n**default fps:** \`${DEFAULT_FPS}\``,
-          inline: true,
+          inline: false,
         }
-      )
-      .setTimestamp()
-      .setFooter({ text: client.user.tag, iconURL: client.user.displayAvatarURL() });
+      );
 
     await interaction.reply({ embeds: [embed] });
   } catch (error) {
@@ -642,15 +847,32 @@ async function handleSlashCommand(interaction) {
     await interaction.deferReply();
 
     try {
-      logger.info(`Downloading file from URL: ${url}`);
-      const fileData = await downloadFileFromUrl(url, adminUser);
+      // Check if URL is a Tenor GIF link and parse it
+      let actualUrl = url;
+      const isTenorUrl = /^https?:\/\/(www\.)?tenor\.com\/view\/.+-gif-\d+/i.test(url);
+      if (isTenorUrl) {
+        logger.info(`Detected Tenor URL, parsing to extract GIF URL: ${url}`);
+        try {
+          actualUrl = await parseTenorUrl(url);
+          logger.info(`Resolved Tenor URL to: ${actualUrl}`);
+        } catch (error) {
+          logger.error(`Failed to parse Tenor URL for user ${userId}:`, error);
+          await interaction.editReply({
+            content: error.message || 'failed to parse Tenor URL.',
+          });
+          return;
+        }
+      }
+
+      logger.info(`Downloading file from URL: ${actualUrl}`);
+      const fileData = await downloadFileFromUrl(actualUrl, adminUser);
 
       // Store the buffer to avoid double download
       preDownloadedBuffer = fileData.buffer;
 
       // Create a pseudo-attachment object
       finalAttachment = {
-        url: url,
+        url: actualUrl,
         name: fileData.filename,
         size: fileData.size,
         contentType: fileData.contentType,

@@ -1,0 +1,156 @@
+/**
+ * Dark theme overrides for Jekyll minima theme
+ */
+
+/* Base colors */
+body {
+  color: #e0e0e0;
+  background-color: #1a1a1a;
+}
+
+/* Links */
+a {
+  color: #4a9eff;
+}
+
+a:visited {
+  color: #7ba3d4;
+}
+
+a:hover {
+  color: #6bb3ff;
+  text-decoration: underline;
+}
+
+/* Headings */
+h1, h2, h3, h4, h5, h6 {
+  color: #ffffff;
+}
+
+/* Blockquotes */
+blockquote {
+  color: #b0b0b0;
+  border-left: 4px solid #444;
+}
+
+/* Code blocks */
+pre,
+code {
+  border: 1px solid #444;
+  background-color: #2a2a2a;
+  color: #e0e0e0;
+}
+
+/* Site header */
+.site-header {
+  border-top: none;
+  border-bottom: 1px solid #444;
+  background-color: #1a1a1a;
+}
+
+.site-header .wrapper {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.site-title,
+.site-title:visited {
+  color: #ffffff;
+}
+
+.site-description {
+  color: #b0b0b0;
+  font-size: 0.9rem;
+  margin-left: auto;
+  padding-left: 1rem;
+}
+
+.site-nav {
+  width: 100%;
+  order: 3;
+}
+
+.site-nav .page-link {
+  color: #e0e0e0;
+}
+
+.site-nav .menu-icon > svg {
+  fill: #e0e0e0;
+}
+
+@media screen and (max-width: 600px) {
+  .site-nav {
+    background-color: #2a2a2a;
+    border: 1px solid #444;
+  }
+  
+  .site-nav .page-link {
+    color: #e0e0e0;
+  }
+}
+
+/* Site footer */
+.site-footer {
+  border-top: 1px solid #444;
+  background-color: #1a1a1a;
+}
+
+.footer-col-wrapper {
+  color: #b0b0b0;
+}
+
+.footer-col-2 {
+  text-align: center;
+}
+
+/* Icons */
+.svg-icon {
+  fill: #b0b0b0;
+}
+
+/* Tables */
+table {
+  color: #e0e0e0;
+  border: 1px solid #444;
+}
+
+table tr:nth-child(even) {
+  background-color: #2a2a2a;
+}
+
+table th {
+  background-color: #333;
+  border: 1px solid #444;
+  border-bottom-color: #555;
+}
+
+table td {
+  border: 1px solid #444;
+}
+
+/* Post meta */
+.post-meta {
+  color: #b0b0b0;
+}
+
+/* Syntax highlighting */
+.highlight {
+  background: #2a2a2a;
+}
+
+.highlighter-rouge .highlight {
+  background: #2a2a2a;
+}
+
+/* Page content */
+.page-content {
+  background-color: #1a1a1a;
+}
+
+/* Wrapper */
+.wrapper {
+  background-color: transparent;
+}
+

@@ -5,15 +5,14 @@
 
     <div class="footer-col-wrapper">
       <div class="footer-col footer-col-1">
-        <p>{{ site.title | escape }}</p>
       </div>
 
       <div class="footer-col footer-col-2">
-        {%- include social.html -%}
+        <p>{{ site.title | escape }}</p>
       </div>
 
       <div class="footer-col footer-col-3">
-        <p>{{- site.description | escape -}}</p>
+        {%- include social.html -%}
       </div>
     </div>
 

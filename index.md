@@ -6,9 +6,10 @@ image: https://cdn.discordapp.com/attachments/1335451213285822485/14400554501324
 ![Node.js](https://img.shields.io/badge/Node.js-20+-339933?logo=node.js&logoColor=white)
 ![Discord.js](https://img.shields.io/badge/Discord.js-14.14-5865F2?logo=discord&logoColor=white)
 ![Docker](https://img.shields.io/badge/Docker-Ready-2496ED?logo=docker&logoColor=white)
-![FFmpeg](https://img.shields.io/badge/FFmpeg-007808?logo=ffmpeg&logoColor=white)
 ![Svelte](https://img.shields.io/badge/Svelte-4.2-FF3E00?logo=svelte&logoColor=white)
 ![License](https://img.shields.io/badge/License-MIT-yellow)
+[![FFmpeg](https://img.shields.io/badge/FFmpeg-007808?logo=ffmpeg&logoColor=white)](https://ffmpeg.org/)
+[![GitHub](https://img.shields.io/badge/GitHub-181717?logo=github&logoColor=white)](https://github.com/p2xai/gronka)
 
 a discord bot that turns your videos and images into gifs. that's it. that's the bot.
 

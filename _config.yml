@@ -1,0 +1,32 @@
+title: gronka
+description: a discord bot that turns your videos and images into gifs
+url: ""
+baseurl: ""
+
+# build settings
+markdown: kramdown
+theme: minima
+plugins:
+  - jekyll-feed
+
+# exclude
+exclude:
+  - node_modules
+  - logs
+  - temp
+  - data
+  - config
+  - scripts
+  - src
+  - docker-compose.yml
+  - docker-compose.dev.yml
+  - Dockerfile
+  - package.json
+  - package-lock.json
+  - eslint.config.js
+  - svelte.config.js
+  - vite.config.js
+  - .env.example
+  - .git
+  - .gitignore
+

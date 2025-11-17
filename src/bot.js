@@ -491,8 +491,9 @@ async function processConversion(
       `Successfully created GIF (hash: ${hash}, size: ${(gifBuffer.length / (1024 * 1024)).toFixed(2)}MB) for user ${userId}`
     );
 
+    const gifSizeMB = (gifBuffer.length / (1024 * 1024)).toFixed(2);
     await interaction.editReply({
-      content: `gif created : ${gifUrl}`,
+      content: `gif created : ${gifUrl}\n-# gif size: ${gifSizeMB} mb`,
     });
   } catch (error) {
     logger.error(`Conversion failed for user ${userId} (${interaction.user.tag}):`, error);

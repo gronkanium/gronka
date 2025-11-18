@@ -47,7 +47,14 @@ _site/
 vendor/
 .bundle/
 _layouts/
+_includes/
+_config.yml
+Gemfile
 Gemfile.lock
+privacy.md
+terms.md
+aspirations.md
+index.md
 
 # Build assets (generated files)
 src/public/assets/

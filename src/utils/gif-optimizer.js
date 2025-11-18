@@ -79,17 +79,16 @@ export async function optimizeGif(inputPath, outputPath) {
   const outputDir = path.dirname(outputPath);
   await fs.mkdir(outputDir, { recursive: true });
   
-  // Get absolute paths for docker volume mapping
+  // Get absolute paths - these are container paths inside /app
   const inputAbsPath = path.resolve(inputPath);
   const outputAbsPath = path.resolve(outputPath);
   
-  // Determine volume mount paths
-  // Input and output should be in /app/data/gifs or /app/temp
+  // Map container paths to paths inside the giflossy container
+  // Both containers will use the same paths since we'll inherit volumes
+  const cwd = process.cwd(); // This is /app inside the container
   let inputDockerPath = inputAbsPath;
   let outputDockerPath = outputAbsPath;
   
-  // Map host paths to container paths
-  const cwd = process.cwd();
   if (inputAbsPath.startsWith(cwd)) {
     inputDockerPath = inputAbsPath.replace(cwd, '/app');
   }
@@ -97,10 +96,14 @@ export async function optimizeGif(inputPath, outputPath) {
     outputDockerPath = outputAbsPath.replace(cwd, '/app');
   }
   
-  // Use docker exec to run giflossy in the giflossy container
-  // giflossy typically uses: giflossy [options] input.gif output.gif
-  // We'll use basic optimization settings
-  const command = `docker exec giflossy giflossy --lossy=80 "${inputDockerPath}" "${outputDockerPath}"`;
+  // Use --volumes-from to inherit all volumes from the current container
+  // This way we don't need to know the host paths
+  // Container name is 'gronka' as defined in docker-compose.yml
+  const containerName = 'gronka';
+  
+  // Use docker run with --volumes-from to inherit volumes
+  // gifsicle command: gifsicle --optimize=3 --lossy=80 input.gif -o output.gif
+  const command = `docker run --rm --volumes-from ${containerName} dylanninin/giflossy:latest /bin/gifsicle --optimize=3 --lossy=80 "${inputDockerPath}" -o "${outputDockerPath}"`;
   
   try {
     logger.debug(`Executing: ${command}`);

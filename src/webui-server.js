@@ -199,9 +199,11 @@ app.get('/api/crypto-prices', async (req, res) => {
       logger.debug('Returning stale cached data due to API error');
       return res.json(cryptoPriceCache.data);
     }
-    res.status(500).json({
-      error: 'Failed to fetch crypto prices',
-      message: error.message,
+    // Return null values instead of 500 error to prevent UI breakage
+    logger.debug('No cached data available, returning null values');
+    res.json({
+      bitcoin: null,
+      ethereum: null,
     });
   }
 });

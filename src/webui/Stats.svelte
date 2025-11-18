@@ -33,61 +33,71 @@
     <div class="error">Error: {error}</div>
     <button on:click={loadStats}>Retry</button>
   {:else if stats}
-    <div class="stats-list">
-      <div class="stat-line">
-        <span class="stat-label">GIFs:</span>
-        <span class="stat-value">{stats.total_gifs?.toLocaleString() || '0'} ({stats.gifs_disk_usage_formatted || '0.00 MB'})</span>
+    <dl>
+      <div class="stat-item">
+        <dt>GIFs</dt>
+        <dd>{stats.total_gifs?.toLocaleString() || '0'} ({stats.gifs_disk_usage_formatted || '0.00 MB'})</dd>
       </div>
-      <div class="stat-line">
-        <span class="stat-label">Videos:</span>
-        <span class="stat-value">{stats.videos_disk_usage_formatted || '0.00 MB'}</span>
+      <div class="stat-item">
+        <dt>Videos</dt>
+        <dd>{stats.videos_disk_usage_formatted || '0.00 MB'}</dd>
       </div>
-      <div class="stat-line">
-        <span class="stat-label">Images:</span>
-        <span class="stat-value">{stats.images_disk_usage_formatted || '0.00 MB'}</span>
+      <div class="stat-item">
+        <dt>Images</dt>
+        <dd>{stats.images_disk_usage_formatted || '0.00 MB'}</dd>
       </div>
-      <div class="stat-line">
-        <span class="stat-label">Total:</span>
-        <span class="stat-value">{stats.disk_usage_formatted || '0.00 MB'}</span>
+      <div class="stat-item">
+        <dt>Total</dt>
+        <dd>{stats.disk_usage_formatted || '0.00 MB'}</dd>
       </div>
-    </div>
+    </dl>
   {/if}
 </section>
 
 <style>
   section {
-    padding: 0.5rem;
+    padding: 1rem;
     border: 1px solid #333;
     background-color: #222;
   }
 
   h2 {
-    margin: 0 0 0.375rem 0;
+    margin: 0 0 0.75rem 0;
     font-size: 1.25rem;
     font-weight: 500;
     color: #fff;
     border-bottom: 1px solid #333;
-    padding-bottom: 0.25rem;
+    padding-bottom: 0.5rem;
   }
 
-  .stats-list {
+  dl {
     margin: 0;
     padding: 0;
   }
 
-  .stat-line {
-    padding: 0.25rem 0;
+  .stat-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    padding: 0.5rem 0;
+    border-bottom: 1px solid #2a2a2a;
+  }
+
+  .stat-item:last-child {
+    border-bottom: none;
+  }
+
+  dt {
+    font-size: 0.9rem;
+    color: #aaa;
+    font-weight: 400;
+  }
+
+  dd {
+    margin: 0;
     font-size: 1rem;
     color: #fff;
-  }
-
-  .stat-label {
     font-weight: 500;
-    margin-right: 0.5rem;
-  }
-
-  .stat-value {
-    font-weight: 400;
   }
 
   .loading {

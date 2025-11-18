@@ -12,3 +12,10 @@ services:
       # Keep data and temp volumes from base compose file
       - ./data:/app/data
       - ./temp:/app/temp
+
+  webui:
+    volumes:
+      # Mount source code for development (overrides the COPY in Dockerfile)
+      - ./src:/app/src
+      # Mount node_modules to avoid conflicts
+      - /app/node_modules

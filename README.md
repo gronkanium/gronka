@@ -6,8 +6,7 @@ a discord bot that turns your videos and images into gifs. that's it. that's the
 
 gronka takes video files or images you send in discord and converts them to gifs. no fancy features, no bloat - just straightforward file conversion. 
 
-it supports most common video formats (mp4, mov, webm, avi, mkv) and image formats (png, jpg, jpeg, webp, gif). yes, it can convert gifs to gifs. don't ask why, just embrace it.
-
+it supports most common video formats (mp4, mov, webm, avi, mkv) and image formats (png, jpg, jpeg, webp)
 ## how it works
 
 there are three parts to this thing:

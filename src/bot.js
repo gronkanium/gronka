@@ -73,6 +73,100 @@ function checkRateLimit(userId) {
 }
 
 /**
+ * Check if URL is a Discord CDN URL
+ * @param {string} url - URL to check
+ * @returns {boolean} True if URL is from Discord CDN
+ */
+function isDiscordCdnUrl(url) {
+  try {
+    const urlObj = new URL(url);
+    return (
+      urlObj.hostname === 'cdn.discordapp.com' ||
+      urlObj.hostname === 'media.discordapp.net' ||
+      urlObj.hostname.endsWith('.discordapp.com') ||
+      urlObj.hostname.endsWith('.discordapp.net')
+    );
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Check if attachment URL has expired
+ * @param {string} url - URL to check
+ * @returns {boolean} True if URL is expired or invalid
+ */
+function isAttachmentExpired(url) {
+  try {
+    const urlObj = new URL(url);
+    const expiry = urlObj.searchParams.get('ex');
+    if (!expiry || expiry.length > 8) {
+      return true;
+    }
+    // Parse hex expiry timestamp and compare with current time
+    const expiryTime = parseInt(`0x${expiry}`, 16) * 1000;
+    return Date.now() >= expiryTime;
+  } catch {
+    return true;
+  }
+}
+
+/**
+ * Refresh the attachment URL if expired using Discord's REST API
+ * @param {Client} client - Discord client instance
+ * @param {string} attachmentURL - Original attachment URL
+ * @returns {Promise<string>} Refreshed URL or original URL if not needed
+ */
+async function getRefreshedAttachmentURL(client, attachmentURL) {
+  try {
+    const url = new URL(attachmentURL);
+
+    // Check if it's a Discord CDN URL
+    if (
+      (url.hostname === 'cdn.discordapp.com' || url.hostname === 'media.discordapp.net') &&
+      url.pathname.match(/^\/(?:ephemeral-)?attachments\/\d+\/\d+\//)
+    ) {
+      // Check if expired or missing query parameters
+      if (isAttachmentExpired(attachmentURL) || !url.search || url.search.length === 0) {
+        logger.info(`Refreshing expired or invalid Discord CDN URL: ${attachmentURL}`);
+        // Use Discord's REST API to refresh the URL
+        const response = await client.rest.post('/attachments/refresh-urls', {
+          body: {
+            attachment_urls: [attachmentURL],
+          },
+        });
+
+        if (response.refreshed_urls && response.refreshed_urls[0] && response.refreshed_urls[0].refreshed) {
+          const refreshedURL = new URL(response.refreshed_urls[0].refreshed);
+          refreshedURL.searchParams.set('animated', 'true');
+          logger.info(`Successfully refreshed URL: ${refreshedURL.toString()}`);
+          return refreshedURL.toString();
+        }
+      }
+    }
+  } catch (error) {
+    logger.warn(`Failed to refresh attachment URL: ${error.message}`);
+    // Return original URL if refresh fails
+  }
+
+  return attachmentURL;
+}
+
+/**
+ * Get common headers for HTTP requests (needed for Discord CDN and other services)
+ * @returns {Object} Headers object
+ */
+function getRequestHeaders() {
+  return {
+    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+    'Accept': '*/*',
+    'Accept-Language': 'en-US,en;q=0.9',
+    'Accept-Encoding': 'identity',
+    'Referer': 'https://discord.com/',
+  };
+}
+
+/**
  * Download video from Discord CDN
  * @param {string} url - Video URL
  * @param {boolean} isAdminUser - Whether the user is an admin (allows larger files)
@@ -90,6 +184,8 @@ async function downloadVideo(url, isAdminUser = false) {
       responseType: 'arraybuffer',
       timeout: 60000, // 60 second timeout
       maxContentLength: isAdminUser ? Infinity : MAX_VIDEO_SIZE,
+      maxRedirects: 5,
+      headers: getRequestHeaders(),
     });
     return Buffer.from(response.data);
   } catch (error) {
@@ -118,6 +214,8 @@ async function downloadImage(url, isAdminUser = false) {
       responseType: 'arraybuffer',
       timeout: 60000, // 60 second timeout
       maxContentLength: isAdminUser ? Infinity : MAX_IMAGE_SIZE,
+      maxRedirects: 5,
+      headers: getRequestHeaders(),
     });
     return Buffer.from(response.data);
   } catch (error) {
@@ -132,21 +230,37 @@ async function downloadImage(url, isAdminUser = false) {
  * Download file from URL and detect content type
  * @param {string} url - File URL
  * @param {boolean} isAdminUser - Whether the user is an admin (allows larger files)
+ * @param {Client} [client] - Optional Discord client for refreshing expired URLs
  * @returns {Promise<{buffer: Buffer, contentType: string, size: number, filename: string}>} File data and metadata
  */
-async function downloadFileFromUrl(url, isAdminUser = false) {
+async function downloadFileFromUrl(url, isAdminUser = false, client = null) {
   // Validate URL to prevent SSRF
   const urlValidation = validateUrl(url);
   if (!urlValidation.valid) {
     throw new ValidationError(urlValidation.error);
   }
 
+  // Try to refresh Discord CDN URLs if client is available
+  let actualUrl = url;
+  if (client && isDiscordCdnUrl(url)) {
+    try {
+      actualUrl = await getRefreshedAttachmentURL(client, url);
+      if (actualUrl !== url) {
+        logger.info(`Using refreshed URL for Discord CDN attachment`);
+      }
+    } catch (error) {
+      logger.warn(`Failed to refresh Discord URL, using original: ${error.message}`);
+    }
+  }
+
   try {
-    const response = await axios.get(url, {
+    const response = await axios.get(actualUrl, {
       responseType: 'arraybuffer',
       timeout: 60000, // 60 second timeout
       maxContentLength: isAdminUser ? Infinity : Math.max(MAX_VIDEO_SIZE, MAX_IMAGE_SIZE),
+      maxRedirects: 5,
       validateStatus: status => status >= 200 && status < 400,
+      headers: getRequestHeaders(),
     });
 
     const buffer = Buffer.from(response.data);
@@ -187,6 +301,68 @@ async function downloadFileFromUrl(url, isAdminUser = false) {
     if (error.response?.status === 404) {
       throw new NetworkError('file not found at the provided URL');
     }
+    if (error.response?.status === 403) {
+      throw new NetworkError('access denied to the file URL (may be expired or require authentication)');
+    }
+    if (error.response?.status === 401) {
+      throw new NetworkError('authentication required to access the file URL');
+    }
+    // Handle 500 errors for Discord CDN URLs - try refreshing if we haven't already
+    if (error.response?.status === 500 && isDiscordCdnUrl(url) && client && actualUrl === url) {
+      try {
+        logger.info(`Got 500 error, attempting to refresh Discord URL`);
+        const refreshedUrl = await getRefreshedAttachmentURL(client, url);
+        if (refreshedUrl !== url) {
+          // Retry with refreshed URL
+          logger.info(`Retrying download with refreshed URL`);
+          const retryResponse = await axios.get(refreshedUrl, {
+            responseType: 'arraybuffer',
+            timeout: 60000,
+            maxContentLength: isAdminUser ? Infinity : Math.max(MAX_VIDEO_SIZE, MAX_IMAGE_SIZE),
+            maxRedirects: 5,
+            validateStatus: status => status >= 200 && status < 400,
+            headers: getRequestHeaders(),
+          });
+          const buffer = Buffer.from(retryResponse.data);
+          const contentType = retryResponse.headers['content-type'] || '';
+          const contentDisposition = retryResponse.headers['content-disposition'] || '';
+
+          let filename = 'file';
+          if (contentDisposition) {
+            const filenameMatch = contentDisposition.match(/filename[^;=\n]*=((['"]).*?\2|[^;\n]*)/);
+            if (filenameMatch && filenameMatch[1]) {
+              filename = sanitizeFilename(filenameMatch[1].replace(/['"]/g, ''));
+            }
+          }
+          if (filename === 'file') {
+            try {
+              const urlPath = new URL(refreshedUrl).pathname;
+              const urlFilename = path.basename(urlPath);
+              if (urlFilename && urlFilename !== '/') {
+                filename = sanitizeFilename(urlFilename);
+              }
+            } catch {
+              // Invalid URL, keep default
+            }
+          }
+
+          return {
+            buffer,
+            contentType,
+            size: buffer.length,
+            filename,
+          };
+        }
+      } catch (refreshError) {
+        logger.warn(`Failed to refresh and retry Discord URL: ${refreshError.message}`);
+      }
+      throw new NetworkError(
+        'discord cdn returned an error. the url may be expired or invalid. please try using a fresh url from discord.'
+      );
+    }
+    if (error.code === 'ECONNABORTED') {
+      throw new NetworkError('request timed out while downloading file');
+    }
     throw new NetworkError(`failed to download file from URL: ${error.message}`);
   }
 }
@@ -211,11 +387,13 @@ async function parseTenorUrl(url) {
 
     // Try to fetch the page and parse meta tags
     try {
+      const headers = getRequestHeaders();
+      // Remove Discord referer for Tenor URLs
+      delete headers.Referer;
       const response = await axios.get(url, {
         timeout: 30000,
-        headers: {
-          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
-        },
+        maxRedirects: 5,
+        headers,
       });
 
       const html = response.data;
@@ -475,10 +653,47 @@ async function processConversion(
         quality: 'medium',
       });
     } else {
-      await convertImageToGif(tempFilePath, gifPath, {
-        width: Math.min(MAX_GIF_WIDTH, 720),
-        quality: 'medium',
-      });
+      // Check if input is already a GIF
+      const isGif = attachment.contentType === 'image/gif' || ext === '.gif';
+      
+      if (isGif) {
+        // Get GIF dimensions to check if we need to resize
+        try {
+          const metadata = await getVideoMetadata(tempFilePath);
+          const videoStream = metadata.streams?.find(s => s.codec_type === 'video');
+          const gifWidth = videoStream?.width;
+          
+          if (gifWidth && gifWidth <= MAX_GIF_WIDTH) {
+            // GIF is within size limits, copy directly without re-encoding
+            logger.info(
+              `Input GIF is within size limits (${gifWidth}px <= ${MAX_GIF_WIDTH}px), copying directly`
+            );
+            await fs.copyFile(tempFilePath, gifPath);
+          } else {
+            // GIF exceeds size limits, resize with convertImageToGif
+            logger.info(
+              `Input GIF exceeds size limits (${gifWidth || 'unknown'}px > ${MAX_GIF_WIDTH}px), resizing`
+            );
+            await convertImageToGif(tempFilePath, gifPath, {
+              width: Math.min(MAX_GIF_WIDTH, 720),
+              quality: 'medium',
+            });
+          }
+        } catch (error) {
+          // If metadata extraction fails, fall back to normal conversion
+          logger.warn(`Failed to get GIF metadata, falling back to conversion: ${error.message}`);
+          await convertImageToGif(tempFilePath, gifPath, {
+            width: Math.min(MAX_GIF_WIDTH, 720),
+            quality: 'medium',
+          });
+        }
+      } else {
+        // Not a GIF, proceed with normal conversion
+        await convertImageToGif(tempFilePath, gifPath, {
+          width: Math.min(MAX_GIF_WIDTH, 720),
+          quality: 'medium',
+        });
+      }
     }
 
     // Read the generated GIF to verify it was created
@@ -631,7 +846,7 @@ async function handleContextMenuCommand(interaction) {
       }
 
       logger.info(`Downloading file from URL: ${actualUrl}`);
-      const fileData = await downloadFileFromUrl(actualUrl, adminUser);
+      const fileData = await downloadFileFromUrl(actualUrl, adminUser, interaction.client);
 
       // Store the buffer to avoid double download
       preDownloadedBuffer = fileData.buffer;
@@ -743,17 +958,17 @@ async function handleStatsCommand(interaction) {
       .addFields(
         {
           name: 'bot info',
-          value: `**uptime:** \`${formatUptime(uptime)}\`\n**guilds:** \`${guildCount.toLocaleString()}\`\n**users:** \`${userCount.toLocaleString()}\``,
+          value: `uptime: \`${formatUptime(uptime)}\`\nguilds: \`${guildCount.toLocaleString()}\`\nusers: \`${userCount.toLocaleString()}\``,
           inline: false,
         },
         {
           name: 'gif storage',
-          value: `**total gifs:** \`${storageStats.totalGifs.toLocaleString()}\`\n**disk usage:** \`${storageStats.diskUsageFormatted}\``,
+          value: `total gifs: \`${storageStats.totalGifs.toLocaleString()}\`\ndisk usage: \`${storageStats.diskUsageFormatted}\``,
           inline: false,
         },
         {
           name: 'configuration',
-          value: `**max width:** \`${MAX_GIF_WIDTH}px\`\n**max duration:** \`${MAX_GIF_DURATION}s\`\n**default fps:** \`${DEFAULT_FPS}\``,
+          value: `max width: \`${MAX_GIF_WIDTH}px\`\nmax duration: \`${MAX_GIF_DURATION}s\`\ndefault fps: \`${DEFAULT_FPS}\``,
           inline: false,
         }
       );
@@ -866,7 +1081,7 @@ async function handleSlashCommand(interaction) {
       }
 
       logger.info(`Downloading file from URL: ${actualUrl}`);
-      const fileData = await downloadFileFromUrl(actualUrl, adminUser);
+      const fileData = await downloadFileFromUrl(actualUrl, adminUser, interaction.client);
 
       // Store the buffer to avoid double download
       preDownloadedBuffer = fileData.buffer;

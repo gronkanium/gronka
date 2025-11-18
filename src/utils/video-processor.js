@@ -292,11 +292,13 @@ export async function convertImageToGif(inputPath, outputPath, options = {}) {
           .input(palettePath)
           .complexFilter([
             `[0:v]scale=${width}:-1:flags=lanczos[v]`,
-            `[v][1:v]paletteuse=dither=${dither}`,
+            `[v][1:v]paletteuse=dither=${dither}:stats_mode=single`,
           ])
           .outputOptions([
             '-loop',
             '0', // Infinite loop (for static GIF, this just means it can loop)
+            '-gifflags',
+            '+transdiff', // Better compression for GIFs
             '-y', // Overwrite output file
           ])
           .output(outputPath)

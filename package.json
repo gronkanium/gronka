@@ -8,6 +8,8 @@
     "start": "node src/bot.js",
     "server": "node src/server.js",
     "webui": "node src/webui-server.js",
+    "webui:dev": "concurrently \"WEBUI_PORT=3002 node src/webui-server.js\" \"vite\"",
+    "webui:dev:server": "WEBUI_PORT=3002 node src/webui-server.js",
     "build:webui": "vite build",
     "register-commands": "node src/register-commands.js",
     "dev": "node --watch src/bot.js",

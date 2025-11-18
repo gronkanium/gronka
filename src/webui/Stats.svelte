@@ -52,18 +52,18 @@
 
 <style>
   section {
-    padding: 1.5rem;
+    padding: 0.5rem;
     border: 1px solid #333;
     background-color: #222;
   }
 
   h2 {
-    margin: 0 0 1.5rem 0;
+    margin: 0 0 0.375rem 0;
     font-size: 1.25rem;
     font-weight: 500;
     color: #fff;
     border-bottom: 1px solid #333;
-    padding-bottom: 0.75rem;
+    padding-bottom: 0.25rem;
   }
 
   dl {
@@ -75,7 +75,7 @@
     display: flex;
     justify-content: space-between;
     align-items: baseline;
-    padding: 0.75rem 0;
+    padding: 0.25rem 0;
     border-bottom: 1px solid #2a2a2a;
   }
 

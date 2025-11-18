@@ -292,7 +292,7 @@ export async function convertImageToGif(inputPath, outputPath, options = {}) {
           .input(palettePath)
           .complexFilter([
             `[0:v]scale=${width}:-1:flags=lanczos[v]`,
-            `[v][1:v]paletteuse=dither=${dither}:stats_mode=single`,
+            `[v][1:v]paletteuse=dither=${dither}`,
           ])
           .outputOptions([
             '-loop',

@@ -51,6 +51,28 @@ const generalLimiter = rateLimit({
   message: 'too many requests from this IP, please try again later',
   standardHeaders: true,
   legacyHeaders: false,
+  skip: (req) => {
+    // Skip rate limiting for requests from internal Docker network (webui container)
+    // Check multiple IP sources
+    const ip = req.ip || req.connection?.remoteAddress || req.socket?.remoteAddress || req.headers['x-forwarded-for']?.split(',')[0]?.trim() || '';
+    const ipStr = String(ip);
+
+    // Check for Docker network IPs (172.16.0.0/12, 192.168.0.0/16, 10.0.0.0/8)
+    // Also check if request has Authorization header (webui always sends it)
+    const hasAuth = req.headers.authorization && req.headers.authorization.startsWith('Basic ');
+
+    if (ipStr.startsWith('172.') ||
+        ipStr.startsWith('192.168.') ||
+        ipStr.startsWith('10.') ||
+        ipStr.includes('::ffff:172.') ||
+        ipStr.includes('::ffff:192.168.') ||
+        ipStr.includes('::ffff:10.') ||
+        hasAuth) {
+      return true;
+    }
+
+    return false;
+  },
 });
 
 const cdnLimiter = rateLimit({

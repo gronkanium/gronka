@@ -49,3 +49,6 @@ vendor/
 _layouts/
 Gemfile.lock
 
+# Build assets (generated files)
+src/public/assets/
+

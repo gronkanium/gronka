@@ -10,7 +10,7 @@ services:
       - CLIENT_ID=${CLIENT_ID}
       - CDN_BASE_URL=${CDN_BASE_URL:-http://localhost:3000/gifs}
       - SERVER_PORT=3000
-      - GIF_STORAGE_PATH=./data/gifs
+      - GIF_STORAGE_PATH=./data
       - MAX_GIF_WIDTH=${MAX_GIF_WIDTH:-720}
       - MAX_GIF_DURATION=${MAX_GIF_DURATION:-30}
       - DEFAULT_FPS=${DEFAULT_FPS:-15}
@@ -23,6 +23,7 @@ services:
       - ./data:/app/data
       - ./temp:/app/temp
       - ./logs:/app/logs
+      - /var/run/docker.sock:/var/run/docker.sock
     ports:
       - '3000:3000'
     networks:
@@ -111,6 +112,17 @@ services:
     # Uncomment only if you use the COOKIE_PATH variable
     # volumes:
     #   - ./cookies.json:/cookies.json
+
+  giflossy:
+    image: dylanninin/giflossy:latest
+    container_name: giflossy
+    restart: unless-stopped
+    volumes:
+      - ./data:/app/data
+      - ./temp:/app/temp
+    networks:
+      - gronka-network
+    # Note: This service is used for GIF optimization via docker exec
 
   # watchtower updates the cobalt image automatically
   watchtower:

@@ -21,6 +21,15 @@ import { validateUrl, sanitizeFilename, validateFileExtension } from './utils/va
 import { ConfigurationError, NetworkError, ValidationError } from './utils/errors.js';
 import { isSocialMediaUrl, downloadFromSocialMedia } from './utils/cobalt.js';
 import { getUserConfig, setUserConfig } from './utils/user-config.js';
+import { trackUser, getUniqueUserCount, initializeUserTracking } from './utils/user-tracking.js';
+import {
+  isGifFile,
+  extractHashFromCdnUrl,
+  checkLocalGif,
+  optimizeGif,
+  calculateSizeReduction,
+  formatSizeMb,
+} from './utils/gif-optimizer.js';
 
 // Initialize logger
 const logger = createLogger('bot');
@@ -1465,7 +1474,7 @@ async function handleStatsCommand(interaction) {
     const uptime = botStartTime ? Date.now() - botStartTime : 0;
     const client = interaction.client;
     const guildCount = client.guilds.cache.size;
-    const userCount = client.guilds.cache.reduce((acc, guild) => acc + guild.memberCount, 0);
+    const userCount = await getUniqueUserCount();
 
     const embed = new EmbedBuilder()
       .setTitle('bot statistics')
@@ -1654,8 +1663,9 @@ async function handleDownloadContextMenuCommand(interaction) {
         `Successfully saved ${fileType} (hash: ${hash}, size: ${(fileData.buffer.length / (1024 * 1024)).toFixed(2)}MB) for user ${userId}`
       );
 
+      const fileSizeMB = (fileData.buffer.length / (1024 * 1024)).toFixed(2);
       await interaction.editReply({
-        content: `${fileType} downloaded : ${fileUrl}`,
+        content: `${fileType} downloaded : ${fileUrl}\n-# ${fileType} size: ${fileSizeMB} mb`,
       });
     }
   } catch (error) {
@@ -1800,8 +1810,9 @@ async function handleDownloadCommand(interaction) {
         `Successfully saved ${fileType} (hash: ${hash}, size: ${(fileData.buffer.length / (1024 * 1024)).toFixed(2)}MB) for user ${userId}`
       );
 
+      const fileSizeMB = (fileData.buffer.length / (1024 * 1024)).toFixed(2);
       await interaction.editReply({
-        content: `${fileType} downloaded : ${fileUrl}`,
+        content: `${fileType} downloaded : ${fileUrl}\n-# ${fileType} size: ${fileSizeMB} mb`,
       });
     }
   } catch (error) {
@@ -1933,6 +1944,370 @@ async function handleConfigCommand(interaction) {
 }
 
 /**
+ * Handle optimize context menu command
+ * @param {Interaction} interaction - Discord interaction
+ */
+async function handleOptimizeContextMenuCommand(interaction) {
+  if (!interaction.isMessageContextMenuCommand()) {
+    return;
+  }
+
+  if (interaction.commandName !== 'optimize') {
+    return;
+  }
+
+  const userId = interaction.user.id;
+  const adminUser = isAdmin(userId);
+
+  logger.info(
+    `User ${userId} (${interaction.user.tag}) initiated optimization via context menu${adminUser ? ' [ADMIN]' : ''}`
+  );
+
+  // Check rate limit (admins bypass this check)
+  if (checkRateLimit(userId)) {
+    logger.warn(`User ${userId} (${interaction.user.tag}) is rate limited`);
+    await interaction.reply({
+      content: 'please wait 30 seconds before optimizing another gif.',
+      flags: MessageFlags.Ephemeral,
+    });
+    return;
+  }
+
+  // Get the message that was right-clicked
+  const targetMessage = interaction.targetMessage;
+
+  // Find GIF attachment
+  const gifAttachment = targetMessage.attachments.find(
+    att => att.contentType === 'image/gif' || (att.name && att.name.toLowerCase().endsWith('.gif'))
+  );
+
+  // Check for URLs in message content if no attachment found
+  let url = null;
+  if (!gifAttachment && targetMessage.content) {
+    // Extract URLs from message content
+    const urlPattern = /https?:\/\/[^\s<>"{}|\\^`\[\]]+/gi;
+    const urls = targetMessage.content.match(urlPattern);
+    if (urls && urls.length > 0) {
+      url = urls[0]; // Use the first URL found
+      logger.info(`Found URL in message content: ${url}`);
+    }
+  }
+
+  // Determine attachment and validate it's a GIF
+  let attachment = null;
+  let preDownloadedBuffer = null;
+
+  if (gifAttachment) {
+    // Validate it's actually a GIF
+    if (!isGifFile(gifAttachment.name, gifAttachment.contentType)) {
+      logger.warn(`Attachment is not a GIF for user ${userId}`);
+      await interaction.reply({
+        content: 'this command only works on gif files.',
+        flags: MessageFlags.Ephemeral,
+      });
+      return;
+    }
+    attachment = gifAttachment;
+  } else if (url) {
+    // Validate URL format
+    const urlValidation = validateUrl(url);
+    if (!urlValidation.valid) {
+      logger.warn(`Invalid URL for user ${userId}: ${urlValidation.error}`);
+      await interaction.reply({
+        content: `invalid URL: ${urlValidation.error}`,
+        flags: MessageFlags.Ephemeral,
+      });
+      return;
+    }
+
+    // Defer reply since downloading may take time
+    await interaction.deferReply();
+
+    try {
+      // Check if it's a cdn.p1x.dev URL and try to use local file
+      const hash = extractHashFromCdnUrl(url);
+      let useLocalFile = false;
+      let localFilePath = null;
+
+      if (hash) {
+        const exists = await checkLocalGif(hash, GIF_STORAGE_PATH);
+        if (exists) {
+          localFilePath = getGifPath(hash, GIF_STORAGE_PATH);
+          useLocalFile = true;
+          logger.info(`Using local file for cdn.p1x.dev URL: ${localFilePath}`);
+        }
+      }
+
+      if (!useLocalFile) {
+        // Download the GIF
+        logger.info(`Downloading GIF from URL: ${url}`);
+        const fileData = await downloadFileFromUrl(url, adminUser, interaction.client);
+
+        // Validate it's a GIF
+        if (!isGifFile(fileData.filename, fileData.contentType)) {
+          await interaction.editReply({
+            content: 'this command only works on gif files.',
+          });
+          return;
+        }
+
+        preDownloadedBuffer = fileData.buffer;
+
+        // Create a pseudo-attachment object
+        attachment = {
+          url: url,
+          name: fileData.filename,
+          size: fileData.size,
+          contentType: fileData.contentType,
+        };
+      } else {
+        // Use local file
+        const stats = await fs.stat(localFilePath);
+        attachment = {
+          url: url,
+          name: path.basename(localFilePath),
+          size: stats.size,
+          contentType: 'image/gif',
+        };
+        preDownloadedBuffer = await fs.readFile(localFilePath);
+      }
+    } catch (error) {
+      logger.error(`Failed to process URL for user ${userId}:`, error);
+      await interaction.editReply({
+        content: error.message || 'failed to process gif from URL.',
+      });
+      return;
+    }
+  } else {
+    logger.warn(`No GIF attachment or URL found for user ${userId}`);
+    await interaction.reply({
+      content: 'no gif attachment or URL found in this message.',
+      flags: MessageFlags.Ephemeral,
+    });
+    return;
+  }
+
+  // Defer reply if not already deferred (for attachment case)
+  if (!url) {
+    await interaction.deferReply();
+  }
+
+  // Process optimization
+  await processOptimization(interaction, attachment, adminUser, preDownloadedBuffer);
+}
+
+/**
+ * Handle optimize slash command
+ * @param {Interaction} interaction - Discord interaction
+ */
+async function handleOptimizeCommand(interaction) {
+  const userId = interaction.user.id;
+  const adminUser = isAdmin(userId);
+
+  logger.info(
+    `User ${userId} (${interaction.user.tag}) initiated optimization via slash command${adminUser ? ' [ADMIN]' : ''}`
+  );
+
+  // Check rate limit (admins bypass this check)
+  if (checkRateLimit(userId)) {
+    logger.warn(`User ${userId} (${interaction.user.tag}) is rate limited`);
+    await interaction.reply({
+      content: 'please wait 30 seconds before optimizing another gif.',
+      flags: MessageFlags.Ephemeral,
+    });
+    return;
+  }
+
+  // Get attachment or URL from command options
+  const attachment = interaction.options.getAttachment('file');
+  const url = interaction.options.getString('url');
+
+  if (!attachment && !url) {
+    logger.warn(`No attachment or URL provided for user ${userId}`);
+    await interaction.reply({
+      content: 'please provide either a gif attachment or a URL to a gif file.',
+      flags: MessageFlags.Ephemeral,
+    });
+    return;
+  }
+
+  if (attachment && url) {
+    logger.warn(`Both attachment and URL provided for user ${userId}`);
+    await interaction.reply({
+      content: 'please provide either a file attachment or a URL, not both.',
+      flags: MessageFlags.Ephemeral,
+    });
+    return;
+  }
+
+  let finalAttachment = attachment;
+  let preDownloadedBuffer = null;
+
+  // Validate attachment is a GIF
+  if (attachment) {
+    if (!isGifFile(attachment.name, attachment.contentType)) {
+      logger.warn(`Attachment is not a GIF for user ${userId}`);
+      await interaction.reply({
+        content: 'this command only works on gif files.',
+        flags: MessageFlags.Ephemeral,
+      });
+      return;
+    }
+  }
+
+  // If URL is provided, download the file first
+  if (url) {
+    // Validate URL format and protocol (strict validation)
+    const urlValidation = validateUrl(url);
+    if (!urlValidation.valid) {
+      logger.warn(`Invalid URL for user ${userId}: ${urlValidation.error}`);
+      await interaction.reply({
+        content: `invalid URL: ${urlValidation.error}`,
+        flags: MessageFlags.Ephemeral,
+      });
+      return;
+    }
+
+    // Defer reply since downloading may take time
+    await interaction.deferReply();
+
+    try {
+      // Check if it's a cdn.p1x.dev URL and try to use local file
+      const hash = extractHashFromCdnUrl(url);
+      let useLocalFile = false;
+      let localFilePath = null;
+
+      if (hash) {
+        const exists = await checkLocalGif(hash, GIF_STORAGE_PATH);
+        if (exists) {
+          localFilePath = getGifPath(hash, GIF_STORAGE_PATH);
+          useLocalFile = true;
+          logger.info(`Using local file for cdn.p1x.dev URL: ${localFilePath}`);
+        }
+      }
+
+      if (!useLocalFile) {
+        // Download the GIF
+        logger.info(`Downloading GIF from URL: ${url}`);
+        const fileData = await downloadFileFromUrl(url, adminUser, interaction.client);
+
+        // Validate it's a GIF
+        if (!isGifFile(fileData.filename, fileData.contentType)) {
+          await interaction.editReply({
+            content: 'this command only works on gif files.',
+          });
+          return;
+        }
+
+        preDownloadedBuffer = fileData.buffer;
+
+        // Create a pseudo-attachment object
+        finalAttachment = {
+          url: url,
+          name: fileData.filename,
+          size: fileData.size,
+          contentType: fileData.contentType,
+        };
+      } else {
+        // Use local file
+        const stats = await fs.stat(localFilePath);
+        finalAttachment = {
+          url: url,
+          name: path.basename(localFilePath),
+          size: stats.size,
+          contentType: 'image/gif',
+        };
+        preDownloadedBuffer = await fs.readFile(localFilePath);
+      }
+    } catch (error) {
+      logger.error(`Failed to download file from URL for user ${userId}:`, error);
+      await interaction.editReply({
+        content: error.message || 'failed to download file from URL.',
+      });
+      return;
+    }
+  }
+
+  // Defer reply if not already deferred (for attachment case)
+  if (!url) {
+    await interaction.deferReply();
+  }
+
+  await processOptimization(interaction, finalAttachment, adminUser, preDownloadedBuffer);
+}
+
+/**
+ * Process GIF optimization
+ * @param {Interaction} interaction - Discord interaction
+ * @param {Attachment} attachment - Discord attachment (GIF file)
+ * @param {boolean} adminUser - Whether the user is an admin
+ * @param {Buffer} [preDownloadedBuffer] - Optional pre-downloaded buffer
+ */
+async function processOptimization(interaction, attachment, adminUser, preDownloadedBuffer = null) {
+  const userId = interaction.user.id;
+  const tempFiles = [];
+
+  try {
+    // Download file if not already downloaded
+    let fileBuffer = preDownloadedBuffer;
+    if (!fileBuffer) {
+      logger.info(`Downloading GIF: ${attachment.name}`);
+      fileBuffer = await downloadImage(attachment.url, adminUser);
+    }
+
+    // Generate hash for the original file
+    const originalHash = crypto.createHash('md5').update(fileBuffer).digest('hex');
+    const originalSize = fileBuffer.length;
+
+    // Save original to temp directory for optimization
+    const tempDir = path.join(process.cwd(), 'temp');
+    await fs.mkdir(tempDir, { recursive: true });
+
+    const tempInputPath = path.join(tempDir, `gif_input_${Date.now()}.gif`);
+    await fs.writeFile(tempInputPath, fileBuffer);
+    tempFiles.push(tempInputPath);
+
+    // Generate hash for optimized file (using original hash + 'opt' suffix for uniqueness)
+    const optimizedHash = crypto.createHash('md5').update(fileBuffer).update('optimized').digest('hex');
+    const optimizedGifPath = getGifPath(optimizedHash, GIF_STORAGE_PATH);
+
+    // Optimize the GIF
+    logger.info(`Optimizing GIF: ${tempInputPath} -> ${optimizedGifPath}`);
+    await optimizeGif(tempInputPath, optimizedGifPath);
+
+    // Read optimized file and get its size
+    const optimizedBuffer = await fs.readFile(optimizedGifPath);
+    const optimizedSize = optimizedBuffer.length;
+
+    // Calculate size reduction
+    const reduction = calculateSizeReduction(originalSize, optimizedSize);
+    const optimizedSizeMb = formatSizeMb(optimizedSize);
+
+    // Generate CDN URL
+    const filename = path.basename(optimizedGifPath);
+    const optimizedUrl = `${CDN_BASE_URL}/${filename}`;
+
+    logger.info(
+      `GIF optimization completed: ${originalSize} bytes -> ${optimizedSize} bytes (${reduction}% reduction) for user ${userId}`
+    );
+
+    // Format response message
+    const reductionText = reduction >= 0 ? `-${reduction}%` : `+${Math.abs(reduction)}%`;
+    await interaction.editReply({
+      content: `gif optimized: ${optimizedUrl}\ngif size ${optimizedSizeMb} (${reductionText})`,
+    });
+  } catch (error) {
+    logger.error(`GIF optimization failed for user ${userId}:`, error);
+    await interaction.editReply({
+      content: error.message || 'an error occurred while optimizing the gif.',
+    });
+  } finally {
+    // Clean up temp files
+    await cleanupTempFiles(tempFiles);
+  }
+}
+
+/**
  * Handle slash command interaction
  * @param {Interaction} interaction - Discord interaction
  */
@@ -1955,6 +2330,11 @@ async function handleSlashCommand(interaction) {
 
   if (commandName === 'config') {
     await handleConfigCommand(interaction);
+    return;
+  }
+
+  if (commandName === 'optimize') {
+    await handleOptimizeCommand(interaction);
     return;
   }
 
@@ -2150,8 +2530,9 @@ const client = new Client({
 let botStartTime = null;
 
 // Event handlers
-client.once(Events.ClientReady, readyClient => {
+client.once(Events.ClientReady, async readyClient => {
   botStartTime = Date.now();
+  await initializeUserTracking();
   logger.info(`bot logged in as ${readyClient.user.tag}`);
   logger.info(`gif storage: ${GIF_STORAGE_PATH}`);
   logger.info(`cdn url: ${CDN_BASE_URL}`);
@@ -2161,6 +2542,8 @@ client.on(Events.InteractionCreate, async interaction => {
   logger.debug(
     `Received interaction: ${interaction.type} from user ${interaction.user.id} (${interaction.user.tag})`
   );
+  // Track user interaction
+  await trackUser(interaction.user.id);
   if (interaction.isModalSubmit()) {
     await handleModalSubmit(interaction);
   } else if (interaction.isMessageContextMenuCommand()) {
@@ -2169,6 +2552,8 @@ client.on(Events.InteractionCreate, async interaction => {
       await handleAdvancedContextMenuCommand(interaction);
     } else if (interaction.commandName === 'download') {
       await handleDownloadContextMenuCommand(interaction);
+    } else if (interaction.commandName === 'optimize') {
+      await handleOptimizeContextMenuCommand(interaction);
     } else {
       await handleContextMenuCommand(interaction);
     }

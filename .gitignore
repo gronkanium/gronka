@@ -14,6 +14,9 @@ data/gifs/*.mp4
 data/gifs/*.mov
 data/gifs/*.webm
 
+# User configs
+data/configs/
+
 # Temporary files
 *.tmp
 temp/

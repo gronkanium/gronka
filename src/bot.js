@@ -20,6 +20,7 @@ import { botConfig } from './utils/config.js';
 import { validateUrl, sanitizeFilename, validateFileExtension } from './utils/validation.js';
 import { ConfigurationError, NetworkError, ValidationError } from './utils/errors.js';
 import { isSocialMediaUrl, downloadFromSocialMedia } from './utils/cobalt.js';
+import { getUserConfig, setUserConfig } from './utils/user-config.js';
 
 // Initialize logger
 const logger = createLogger('bot');
@@ -605,6 +606,9 @@ async function processConversion(
   const userId = interaction.user.id;
   const tempFiles = [];
 
+  // Load user config
+  const userConfig = await getUserConfig(userId);
+
   try {
     // Download file (video or image) if not already downloaded
     // Admins bypass size limits in download
@@ -688,11 +692,11 @@ async function processConversion(
     const gifPath = getGifPath(hash, GIF_STORAGE_PATH);
 
     if (attachmentType === 'video') {
-      // Build conversion options, using provided options or defaults
+      // Build conversion options, using provided options, user config, or defaults
       const conversionOptions = {
-        width: options.width ?? Math.min(MAX_GIF_WIDTH, 480),
-        fps: options.fps ?? DEFAULT_FPS,
-        quality: options.quality ?? 'medium',
+        width: options.width ?? (userConfig.width !== null ? userConfig.width : Math.min(MAX_GIF_WIDTH, 480)),
+        fps: options.fps ?? (userConfig.fps !== null ? userConfig.fps : DEFAULT_FPS),
+        quality: options.quality ?? (userConfig.quality !== null ? userConfig.quality : 'medium'),
         startTime: options.startTime ?? null,
         duration: options.duration ?? null,
       };
@@ -728,10 +732,10 @@ async function processConversion(
           const videoStream = metadata.streams?.find(s => s.codec_type === 'video');
           const gifWidth = videoStream?.width;
           
-          // Use provided width or check against limits
-          const targetWidth = options.width ?? Math.min(MAX_GIF_WIDTH, 720);
+          // Use provided width, user config, or check against limits
+          const targetWidth = options.width ?? (userConfig.width !== null ? userConfig.width : Math.min(MAX_GIF_WIDTH, 720));
           
-          if (gifWidth && gifWidth <= MAX_GIF_WIDTH && !options.width) {
+          if (gifWidth && gifWidth <= MAX_GIF_WIDTH && !options.width && (userConfig.width === null || gifWidth <= userConfig.width)) {
             // GIF is within size limits, copy directly without re-encoding
             logger.info(
               `Input GIF is within size limits (${gifWidth}px <= ${MAX_GIF_WIDTH}px), copying directly`
@@ -744,22 +748,22 @@ async function processConversion(
             );
             await convertImageToGif(tempFilePath, gifPath, {
               width: targetWidth,
-              quality: options.quality ?? 'medium',
+              quality: options.quality ?? (userConfig.quality !== null ? userConfig.quality : 'medium'),
             });
           }
         } catch (error) {
           // If metadata extraction fails, fall back to normal conversion
           logger.warn(`Failed to get GIF metadata, falling back to conversion: ${error.message}`);
           await convertImageToGif(tempFilePath, gifPath, {
-            width: options.width ?? Math.min(MAX_GIF_WIDTH, 720),
-            quality: options.quality ?? 'medium',
+            width: options.width ?? (userConfig.width !== null ? userConfig.width : Math.min(MAX_GIF_WIDTH, 720)),
+            quality: options.quality ?? (userConfig.quality !== null ? userConfig.quality : 'medium'),
           });
         }
       } else {
         // Not a GIF, proceed with normal conversion
         await convertImageToGif(tempFilePath, gifPath, {
-          width: options.width ?? Math.min(MAX_GIF_WIDTH, 720),
-          quality: options.quality ?? 'medium',
+          width: options.width ?? (userConfig.width !== null ? userConfig.width : Math.min(MAX_GIF_WIDTH, 720)),
+          quality: options.quality ?? (userConfig.quality !== null ? userConfig.quality : 'medium'),
         });
       }
     }
@@ -1809,6 +1813,126 @@ async function handleDownloadCommand(interaction) {
 }
 
 /**
+ * Handle config command
+ * @param {Interaction} interaction - Discord interaction
+ */
+async function handleConfigCommand(interaction) {
+  const userId = interaction.user.id;
+  const adminUser = isAdmin(userId);
+
+  // Check if user is admin
+  if (!adminUser) {
+    logger.warn(`Non-admin user ${userId} (${interaction.user.tag}) attempted to use /config`);
+    await interaction.reply({
+      content: 'this command is only available to admin users.',
+      flags: MessageFlags.Ephemeral,
+    });
+    return;
+  }
+
+  const subcommand = interaction.options.getSubcommand();
+
+  if (subcommand === 'view') {
+    try {
+      const userConfig = await getUserConfig(userId);
+
+      const embed = new EmbedBuilder()
+        .setTitle('your configuration')
+        .setColor(0x00ff00)
+        .setDescription('current personal settings for gif conversion')
+        .addFields(
+          {
+            name: 'fps',
+            value: userConfig.fps !== null ? userConfig.fps.toString() : `default (${DEFAULT_FPS})`,
+            inline: true,
+          },
+          {
+            name: 'width',
+            value: userConfig.width !== null ? userConfig.width.toString() : `default (480)`,
+            inline: true,
+          },
+          {
+            name: 'quality',
+            value: userConfig.quality !== null ? userConfig.quality : 'default (medium)',
+            inline: true,
+          }
+        )
+        .setTimestamp();
+
+      await interaction.reply({
+        embeds: [embed],
+        flags: MessageFlags.Ephemeral,
+      });
+    } catch (error) {
+      logger.error(`Failed to load config for user ${userId}:`, error);
+      await interaction.reply({
+        content: 'failed to load your configuration.',
+        flags: MessageFlags.Ephemeral,
+      });
+    }
+  } else if (subcommand === 'set') {
+    try {
+      const updates = {};
+      const fps = interaction.options.getNumber('fps');
+      const width = interaction.options.getNumber('width');
+      const quality = interaction.options.getString('quality');
+
+      if (fps !== null) {
+        updates.fps = fps;
+      }
+      if (width !== null) {
+        updates.width = width;
+      }
+      if (quality !== null) {
+        updates.quality = quality;
+      }
+
+      if (Object.keys(updates).length === 0) {
+        await interaction.reply({
+          content: 'please specify at least one setting to update (fps, width, or quality).',
+          flags: MessageFlags.Ephemeral,
+        });
+        return;
+      }
+
+      const result = await setUserConfig(userId, updates, adminUser);
+
+      if (!result.success) {
+        await interaction.reply({
+          content: `failed to update configuration: ${result.error}`,
+          flags: MessageFlags.Ephemeral,
+        });
+        return;
+      }
+
+      const updatedFields = [];
+      if (fps !== null) {
+        updatedFields.push(`**fps**: ${fps}`);
+      }
+      if (width !== null) {
+        updatedFields.push(`**width**: ${width}`);
+      }
+      if (quality !== null) {
+        updatedFields.push(`**quality**: ${quality}`);
+      }
+
+      await interaction.reply({
+        content: `configuration updated:\n${updatedFields.join('\n')}`,
+        flags: MessageFlags.Ephemeral,
+      });
+
+      logger.info(`User ${userId} (${interaction.user.tag}) updated their config: ${JSON.stringify(updates)}`);
+    } catch (error) {
+      logger.error(`Failed to update config for user ${userId}:`, error);
+      await interaction.reply({
+        content: 'an error occurred while updating your configuration.',
+        flags: MessageFlags.Ephemeral,
+      });
+    }
+  }
+}
+
+/**
  * Handle slash command interaction
  * @param {Interaction} interaction - Discord interaction
  */
@@ -1826,6 +1950,11 @@ async function handleSlashCommand(interaction) {
 
   if (commandName === 'download') {
     await handleDownloadCommand(interaction);
+    return;
+  }
+
+  if (commandName === 'config') {
+    await handleConfigCommand(interaction);
     return;
   }
 

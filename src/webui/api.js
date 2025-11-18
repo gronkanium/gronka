@@ -82,5 +82,12 @@ export async function fetchCryptoPrices() {
 
 export function formatPrice(price) {
   if (price === null || price === undefined) return 'N/A';
-  return `$${price.toFixed(2)}`;
+  // Format with commas as thousand separators and 2 decimal places
+  const formatted = price.toFixed(2);
+  const parts = formatted.split('.');
+  const integerPart = parts[0];
+  const decimalPart = parts[1];
+  // Add commas every 3 digits from the right
+  const integerWithCommas = integerPart.replace(/\B(?=(\d{3})+(?!\d))/g, ',');
+  return `$${integerWithCommas}.${decimalPart}`;
 }

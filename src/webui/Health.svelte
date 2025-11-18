@@ -79,7 +79,7 @@
         <dt>Status</dt>
         <dd class="status">
           {#if health.status === 'ok'}
-            <span class="status-ok">OK</span><span class="status-code"> 200</span>
+            <span class="status-ok">OK</span> <span class="status-code">200</span>
           {:else}
             {health.status || 'unknown'}
           {/if}
@@ -192,7 +192,8 @@
   .price-container {
     position: relative;
     overflow: hidden;
-    height: 1.2em;
+    height: 1.4em;
+    padding-bottom: 0.2em;
   }
 
   .price-roll {
@@ -205,8 +206,8 @@
 
   @keyframes rollDown {
     0% {
-      transform: translateY(-100%);
-      opacity: 0;
+      transform: translateY(-90%);
+      opacity: 0.3;
     }
     100% {
       transform: translateY(0);

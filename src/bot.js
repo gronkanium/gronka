@@ -794,7 +794,7 @@ async function processConversion(
   } catch (error) {
     logger.error(`Conversion failed for user ${userId} (${interaction.user.tag}):`, error);
     await interaction.editReply({
-      content: 'an error occured',
+      content: 'an error occurred',
     });
   } finally {
     // Clean up temp files
@@ -2673,7 +2673,7 @@ try {
 // Start bot
 logger.info('Starting Discord bot...');
 client.login(DISCORD_TOKEN).catch(error => {
-  logger.error('an error occured:', error);
+  logger.error('an error occurred:', error);
   process.exit(1);
 });
 

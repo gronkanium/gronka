@@ -196,7 +196,7 @@ const rest = new REST({ version: '10' }).setToken(DISCORD_TOKEN);
     );
     console.log('it may take up to an hour for the commands to appear in discord.');
   } catch (error) {
-    console.error('an error occured:', error);
+    console.error('an error occurred:', error);
 
     if (error.code === 50001) {
       console.error('   missing access: the bot does not have permission to register commands.');

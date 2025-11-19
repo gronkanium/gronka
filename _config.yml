@@ -18,6 +18,24 @@ plugins:
   - jekyll-seo-tag
   - jekyll-sitemap
 
+# collections
+collections:
+  docs:
+    output: true
+    permalink: /docs/:name/
+
+# collection defaults
+defaults:
+  - scope:
+      path: ""
+      type: docs
+    values:
+      layout: doc
+  - scope:
+      path: "docs.md"
+    values:
+      layout: doc
+
 # exclude
 exclude:
   - node_modules
@@ -27,6 +45,10 @@ exclude:
   - config
   - scripts
   - src
+  - commands.md
+  - CONTRIBUTING.md
+  - aspirations.md
+  - README.md
   - docker-compose.yml
   - docker-compose.dev.yml
   - Dockerfile

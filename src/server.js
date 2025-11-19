@@ -479,7 +479,7 @@ app.get('/stats', statsLimiter, basicAuth, async (req, res) => {
   } catch (error) {
     logger.error('Failed to get stats:', error);
     res.status(500).json({
-      error: 'Failed to get stats',
+      error: 'failed to get stats',
       message: error.message,
     });
   }
@@ -503,7 +503,7 @@ app.get('/api/stats', statsLimiter, basicAuth, async (req, res) => {
   } catch (error) {
     logger.error('Failed to get API stats:', error);
     res.status(500).json({
-      error: 'Failed to get stats',
+      error: 'failed to get stats',
       message: error.message,
     });
   }

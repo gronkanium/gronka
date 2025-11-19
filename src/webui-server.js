@@ -155,7 +155,7 @@ app.get('/api/stats', async (req, res) => {
   } catch (error) {
     logger.error('Failed to fetch stats from main server:', error);
     res.status(500).json({
-      error: 'Failed to fetch stats',
+      error: 'failed to fetch stats',
       message: error.message,
     });
   }
@@ -173,7 +173,7 @@ app.get('/api/health', async (req, res) => {
   } catch (error) {
     logger.error('Failed to fetch health from main server:', error);
     res.status(500).json({
-      error: 'Failed to fetch health',
+      error: 'failed to fetch health',
       message: error.message,
     });
   }
@@ -213,7 +213,7 @@ app.get('/api/crypto-prices', async (req, res) => {
 app.get('*', (req, res) => {
   // Skip if this is an API route or asset request (shouldn't reach here, but safety check)
   if (req.path.startsWith('/api') || req.path.startsWith('/assets')) {
-    return res.status(404).json({ error: 'Not found' });
+    return res.status(404).json({ error: 'not found' });
   }
   // Serve index.html for SPA routing
   res.sendFile(path.join(publicPath, 'index.html'));

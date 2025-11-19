@@ -8,7 +8,7 @@ image: https://cdn.discordapp.com/attachments/1335451213285822485/14400554501324
 ![Discord.js](https://img.shields.io/badge/Discord.js-14.14-5865F2?logo=discord&logoColor=white)
 ![Docker](https://img.shields.io/badge/Docker-Ready-2496ED?logo=docker&logoColor=white)
 ![Svelte](https://img.shields.io/badge/Svelte-4.2-FF3E00?logo=svelte&logoColor=white)
-![License](https://img.shields.io/badge/License-MIT-yellow)
+[![Docs](https://img.shields.io/badge/read-docs-blue)]({{ "/docs/" | relative_url }})
 [![FFmpeg](https://img.shields.io/badge/FFmpeg-007808?logo=ffmpeg&logoColor=white)](https://ffmpeg.org/)
 [![GitHub](https://img.shields.io/badge/GitHub-181717?logo=github&logoColor=white)](https://github.com/p2xai/gronka)
 

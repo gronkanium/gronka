@@ -46,6 +46,44 @@ code {
   border: 1px solid #444;
   background-color: #2a2a2a;
   color: #e0e0e0;
+  overflow-x: visible;
+  overflow-y: visible;
+  white-space: pre-wrap;
+  word-wrap: break-word;
+  max-width: 100%;
+}
+
+pre {
+  overflow-x: visible;
+  overflow-y: visible;
+  white-space: pre-wrap;
+  word-wrap: break-word;
+  max-width: 100%;
+}
+
+/* Hide scrollbars */
+pre::-webkit-scrollbar,
+code::-webkit-scrollbar {
+  display: none;
+}
+
+pre,
+code {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+
+/* Ensure code blocks expand to full width */
+.highlight,
+.highlighter-rouge {
+  overflow: visible;
+  max-width: 100%;
+}
+
+.highlight pre {
+  overflow: visible;
+  white-space: pre-wrap;
+  word-wrap: break-word;
 }
 
 /* Code block wrapper for copy button */
@@ -162,10 +200,19 @@ code {
 
 .footer-col-wrapper {
   color: #b0b0b0;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+}
+
+.footer-col-1,
+.footer-col-3 {
+  display: none;
 }
 
 .footer-col-2 {
   text-align: center;
+  width: 100%;
 }
 
 .footer-col-2 p {
@@ -249,6 +296,81 @@ table td {
 
 .highlighter-rouge .highlight {
   background: #2a2a2a;
+}
+
+/* Syntax highlighting colors - light green theme */
+.highlight .k,
+.highlight .kd,
+.highlight .kn,
+.highlight .kp,
+.highlight .kr,
+.highlight .kt,
+.highlight .nc,
+.highlight .nf,
+.highlight .nn,
+.highlight .nt,
+.highlight .nv,
+.highlight .o,
+.highlight .ow,
+.highlight .p,
+.highlight .s,
+.highlight .s1,
+.highlight .s2,
+.highlight .sb,
+.highlight .sc,
+.highlight .sd,
+.highlight .se,
+.highlight .sh,
+.highlight .si,
+.highlight .sr,
+.highlight .ss,
+.highlight .sx,
+.highlight .na,
+.highlight .nb,
+.highlight .nc,
+.highlight .nd,
+.highlight .ne,
+.highlight .nf,
+.highlight .nl,
+.highlight .nn,
+.highlight .no,
+.highlight .nt,
+.highlight .nv,
+.highlight .nx,
+.highlight .py,
+.highlight .bp,
+.highlight .vc,
+.highlight .vg,
+.highlight .vi,
+.highlight .vm {
+  color: #90ee90 !important; /* light green */
+}
+
+/* Operators and punctuation in light green */
+.highlight .o,
+.highlight .ow {
+  color: #90ee90 !important;
+}
+
+/* Comments stay gray */
+.highlight .c,
+.highlight .c1,
+.highlight .cm,
+.highlight .cp,
+.highlight .cs {
+  color: #888 !important;
+}
+
+/* Numbers stay default or light green */
+.highlight .m,
+.highlight .mf,
+.highlight .mh,
+.highlight .mi,
+.highlight .il,
+.highlight .mo,
+.highlight .mb,
+.highlight .mx {
+  color: #90ee90 !important;
 }
 
 /* Page content */

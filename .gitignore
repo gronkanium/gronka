@@ -46,7 +46,7 @@ Thumbs.db
 
 # Documentation
 docs/
-
+_docs/
 # Jekyll
 _site/
 .sass-cache/
@@ -54,6 +54,7 @@ _site/
 .jekyll-metadata
 vendor/
 .bundle/
+_data/
 _layouts/
 _includes/
 _config.yml

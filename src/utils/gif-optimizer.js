@@ -10,6 +10,21 @@ const execAsync = promisify(exec);
 const logger = createLogger('gif-optimizer');
 
 /**
+ * Escape a string for safe use in shell command arguments
+ * Prevents command injection by properly quoting and escaping special characters
+ * @param {string} arg - Argument to escape
+ * @returns {string} Escaped argument safe for shell use
+ */
+function escapeShellArg(arg) {
+  if (typeof arg !== 'string') {
+    throw new ValidationError('Argument must be a string');
+  }
+  // Replace single quotes with '\'' (exit quote, literal quote, enter quote)
+  // Then wrap entire string in single quotes to prevent shell expansion
+  return `'${arg.replace(/'/g, "'\\''")}'`;
+}
+
+/**
  * Check if a file is a GIF based on extension and content type
  * @param {string} filename - File name
  * @param {string} contentType - Content type (MIME type)
@@ -119,9 +134,21 @@ export async function optimizeGif(inputPath, outputPath, options = {}) {
   // Container name is 'gronka' as defined in docker-compose.yml
   const containerName = 'gronka';
 
+  // Validate paths don't contain shell metacharacters (additional safety check)
+  // Paths are already validated via path.resolve() and normalized, but add extra validation
+  const shellMetaChars = /[;&|`$(){}[\]*?~<>\\\n\r\t\0]/;
+  if (shellMetaChars.test(inputDockerPath) || shellMetaChars.test(outputDockerPath)) {
+    throw new ValidationError('Invalid characters in file paths');
+  }
+
   // Use docker run with --volumes-from to inherit volumes
   // gifsicle command: gifsicle --optimize=3 --lossy=35 input.gif -o output.gif (default lossy: 35)
-  const command = `docker run --rm --volumes-from ${containerName} dylanninin/giflossy:latest /bin/gifsicle --optimize=${optimizeLevel} --lossy=${lossy} "${inputDockerPath}" -o "${outputDockerPath}"`;
+  // SECURITY: Escape paths to prevent command injection
+  const escapedInputPath = escapeShellArg(inputDockerPath);
+  const escapedOutputPath = escapeShellArg(outputDockerPath);
+  const escapedContainerName = escapeShellArg(containerName);
+
+  const command = `docker run --rm --volumes-from ${escapedContainerName} dylanninin/giflossy:latest /bin/gifsicle --optimize=${optimizeLevel} --lossy=${lossy} ${escapedInputPath} -o ${escapedOutputPath}`;
 
   try {
     logger.debug(`Executing: ${command}`);

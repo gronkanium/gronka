@@ -1,0 +1,20 @@
+image: node:20
+
+stages:
+  - test
+
+test:
+  stage: test
+  only:
+    - merge_requests
+    - main
+    - master
+  before_script:
+    - npm ci
+  script:
+    - npm run validate
+    - npm test
+  cache:
+    paths:
+      - node_modules/
+

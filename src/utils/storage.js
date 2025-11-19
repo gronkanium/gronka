@@ -25,22 +25,22 @@ function getStoragePath(storagePath) {
  */
 export function detectFileType(extension, contentType = '') {
   const ext = extension.toLowerCase();
-  
+
   // Check extension first
   if (ext === '.gif') {
     return 'gif';
   }
-  
+
   const videoExtensions = ['.mp4', '.webm', '.mov', '.avi', '.mkv'];
   if (videoExtensions.includes(ext)) {
     return 'video';
   }
-  
+
   const imageExtensions = ['.png', '.jpg', '.jpeg', '.webp'];
   if (imageExtensions.includes(ext)) {
     return 'image';
   }
-  
+
   // Fall back to content type if extension is ambiguous
   if (contentType) {
     const contentTypeLower = contentType.toLowerCase();
@@ -54,7 +54,7 @@ export function detectFileType(extension, contentType = '') {
       return 'image';
     }
   }
-  
+
   // Default to video if unknown (for backward compatibility)
   return 'video';
 }
@@ -96,7 +96,7 @@ export function getGifPath(hash, storagePath) {
  * @returns {Promise<string>} Path to saved GIF file
  */
 export async function saveGif(buffer, hash, storagePath) {
-  const basePath = getStoragePath(storagePath);
+  const _basePath = getStoragePath(storagePath);
   const gifPath = getGifPath(hash, storagePath);
 
   // Ensure directory exists
@@ -188,7 +188,7 @@ export async function videoExists(hash, extension, storagePath) {
  * @returns {Promise<string>} Path to saved video file
  */
 export async function saveVideo(buffer, hash, extension, storagePath) {
-  const basePath = getStoragePath(storagePath);
+  const _basePath = getStoragePath(storagePath);
   const videoPath = getVideoPath(hash, extension, storagePath);
 
   // Ensure directory exists
@@ -244,7 +244,7 @@ export async function imageExists(hash, extension, storagePath) {
  * @returns {Promise<string>} Path to saved image file
  */
 export async function saveImage(buffer, hash, extension, storagePath) {
-  const basePath = getStoragePath(storagePath);
+  const _basePath = getStoragePath(storagePath);
   const imagePath = getImagePath(hash, extension, storagePath);
 
   // Ensure directory exists
@@ -265,7 +265,7 @@ export async function getStorageStats(storagePath) {
   try {
     logger.debug(`Getting storage stats for: ${storagePath}`);
     const basePath = getStoragePath(storagePath);
-    
+
     let totalGifs = 0;
     let totalVideos = 0;
     let totalImages = 0;
@@ -280,7 +280,7 @@ export async function getStorageStats(storagePath) {
       const gifFiles = await fs.readdir(gifsPath);
       const gifFilesOnly = gifFiles.filter(f => f.endsWith('.gif'));
       totalGifs = gifFilesOnly.length;
-      
+
       for (const file of gifFilesOnly) {
         try {
           const filePath = path.join(gifsPath, file);
@@ -308,7 +308,7 @@ export async function getStorageStats(storagePath) {
         return videoExtensions.includes(ext);
       });
       totalVideos = videoFilesOnly.length;
-      
+
       for (const file of videoFilesOnly) {
         try {
           const filePath = path.join(videosPath, file);
@@ -336,7 +336,7 @@ export async function getStorageStats(storagePath) {
         return imageExtensions.includes(ext);
       });
       totalImages = imageFilesOnly.length;
-      
+
       for (const file of imageFilesOnly) {
         try {
           const filePath = path.join(imagesPath, file);
@@ -368,7 +368,9 @@ export async function getStorageStats(storagePath) {
       imagesDiskUsageFormatted: formatFileSize(imagesSize),
     };
 
-    logger.debug(`Storage stats: ${stats.totalGifs} GIFs, ${stats.totalVideos} videos, ${stats.totalImages} images, ${stats.diskUsageFormatted}`);
+    logger.debug(
+      `Storage stats: ${stats.totalGifs} GIFs, ${stats.totalVideos} videos, ${stats.totalImages} images, ${stats.diskUsageFormatted}`
+    );
     return stats;
   } catch (error) {
     logger.error(`Failed to get storage stats:`, error);

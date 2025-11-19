@@ -3,7 +3,7 @@ import { promisify } from 'util';
 import fs from 'fs/promises';
 import path from 'path';
 import { createLogger } from './logger.js';
-import { gifExists, getGifPath } from './storage.js';
+import { gifExists } from './storage.js';
 import { ValidationError } from './errors.js';
 
 const execAsync = promisify(exec);
@@ -19,7 +19,7 @@ export function isGifFile(filename, contentType) {
   const ext = path.extname(filename).toLowerCase();
   const isGifExt = ext === '.gif';
   const isGifContentType = contentType && contentType.toLowerCase() === 'image/gif';
-  
+
   return isGifExt || isGifContentType;
 }
 
@@ -31,18 +31,18 @@ export function isGifFile(filename, contentType) {
 export function extractHashFromCdnUrl(url) {
   try {
     const urlObj = new URL(url);
-    
+
     // Check if it's a cdn.p1x.dev URL
     if (urlObj.hostname !== 'cdn.p1x.dev' && !urlObj.hostname.endsWith('.p1x.dev')) {
       return null;
     }
-    
+
     // Parse path pattern: /gifs/{hash}.gif
     const pathMatch = urlObj.pathname.match(/^\/gifs\/([a-f0-9]+)\.gif$/i);
     if (pathMatch && pathMatch[1]) {
       return pathMatch[1];
     }
-    
+
     return null;
   } catch {
     return null;
@@ -71,71 +71,73 @@ export async function checkLocalGif(hash, storagePath) {
 export async function optimizeGif(inputPath, outputPath, options = {}) {
   const lossy = options.lossy ?? 35;
   const optimizeLevel = options.optimize ?? 3;
-  
+
   // Validate lossy level (0-100)
   if (typeof lossy !== 'number' || lossy < 0 || lossy > 100) {
     throw new ValidationError('lossy level must be between 0 and 100');
   }
-  
+
   // Validate optimize level (1-3)
   if (typeof optimizeLevel !== 'number' || optimizeLevel < 1 || optimizeLevel > 3) {
     throw new ValidationError('optimize level must be between 1 and 3');
   }
-  
-  logger.info(`Optimizing GIF: ${inputPath} -> ${outputPath} (lossy: ${lossy}, optimize: ${optimizeLevel})`);
-  
+
+  logger.info(
+    `Optimizing GIF: ${inputPath} -> ${outputPath} (lossy: ${lossy}, optimize: ${optimizeLevel})`
+  );
+
   // Validate input file exists
   try {
     await fs.access(inputPath);
   } catch {
     throw new ValidationError(`Input GIF file not found: ${inputPath}`);
   }
-  
+
   // Ensure output directory exists
   const outputDir = path.dirname(outputPath);
   await fs.mkdir(outputDir, { recursive: true });
-  
+
   // Get absolute paths - these are container paths inside /app
   const inputAbsPath = path.resolve(inputPath);
   const outputAbsPath = path.resolve(outputPath);
-  
+
   // Map container paths to paths inside the giflossy container
   // Both containers will use the same paths since we'll inherit volumes
   const cwd = process.cwd(); // This is /app inside the container
   let inputDockerPath = inputAbsPath;
   let outputDockerPath = outputAbsPath;
-  
+
   if (inputAbsPath.startsWith(cwd)) {
     inputDockerPath = inputAbsPath.replace(cwd, '/app');
   }
   if (outputAbsPath.startsWith(cwd)) {
     outputDockerPath = outputAbsPath.replace(cwd, '/app');
   }
-  
+
   // Use --volumes-from to inherit all volumes from the current container
   // This way we don't need to know the host paths
   // Container name is 'gronka' as defined in docker-compose.yml
   const containerName = 'gronka';
-  
+
   // Use docker run with --volumes-from to inherit volumes
   // gifsicle command: gifsicle --optimize=3 --lossy=35 input.gif -o output.gif (default lossy: 35)
   const command = `docker run --rm --volumes-from ${containerName} dylanninin/giflossy:latest /bin/gifsicle --optimize=${optimizeLevel} --lossy=${lossy} "${inputDockerPath}" -o "${outputDockerPath}"`;
-  
+
   try {
     logger.debug(`Executing: ${command}`);
     const { stdout, stderr } = await execAsync(command, {
       timeout: 300000, // 5 minute timeout
       maxBuffer: 10 * 1024 * 1024, // 10MB buffer
     });
-    
+
     if (stderr && !stderr.includes('warning')) {
       logger.warn(`giflossy stderr: ${stderr}`);
     }
-    
+
     if (stdout) {
       logger.debug(`giflossy stdout: ${stdout}`);
     }
-    
+
     // Verify output file was created
     try {
       await fs.access(outputPath);
@@ -165,7 +167,7 @@ export function calculateSizeReduction(originalSize, optimizedSize) {
   if (originalSize === 0) {
     return 0;
   }
-  
+
   const reduction = ((originalSize - optimizedSize) / originalSize) * 100;
   return Math.round(reduction);
 }
@@ -179,4 +181,3 @@ export function formatSizeMb(bytes) {
   const mb = bytes / (1024 * 1024);
   return `${mb.toFixed(1)}mb`;
 }
-

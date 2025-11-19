@@ -1,52 +1,50 @@
 # code of conduct
 
-this code of conduct outlines expected behavior for contributors and participants in this project. by participating, you agree to follow these guidelines.
+this code of conduct outlines expected behavior for users of this service. by using this service, you agree to follow these guidelines.
 
 ## expected behavior
 
-when contributing to this project, you should:
+when using this service, you should:
 
 - treat others with respect and professionalism
-- use constructive criticism when providing feedback
-- collaborate in good faith
+- use the service responsibly and within reasonable limits
 - respect different viewpoints and experiences
-- accept responsibility for your contributions and their impact
-- focus on what is best for the community
+- accept responsibility for your use of the service and its impact
 
 ## unacceptable behavior
 
 the following behaviors are considered unacceptable:
 
-- **harassment**: any form of harassment, discrimination, or offensive comments related to gender, gender identity, sexual orientation, disability, physical appearance, race, age, religion, or nationality
+- **harassment**: any form of harassment, discrimination, or offensive content related to gender, gender identity, sexual orientation, disability, physical appearance, race, age, religion, or nationality
 - **abusive content**: threats, intimidation, personal attacks, or trolling
-- **spam**: excessive or repetitive messages, off-topic discussions, or unsolicited promotional content
+- **spam**: excessive or repetitive requests, automated usage, or any activity that degrades service performance
 - **illegal activity**: any activity that violates applicable laws or regulations
 - **intellectual property violations**: submitting content that infringes on copyrights, trademarks, or other intellectual property rights
 - **privacy violations**: sharing personal information of others without consent, or attempting to access private data
-- **service abuse**: attempting to overload systems, gain unauthorized access, or disrupt project infrastructure
+- **service abuse**: attempting to overload systems, gain unauthorized access, or disrupt service infrastructure
 
 ## fair use and respect
 
-this project operates on a fair use basis. you're welcome to contribute and participate within reasonable bounds.
+this service operates on a fair use basis. you're welcome to use it within reasonable bounds.
 
-operating this project incurs ongoing costs and maintenance effort. please use resources responsibly and avoid unnecessary or excessive usage.
+operating this service incurs ongoing costs and maintenance effort. please use resources responsibly and avoid unnecessary or excessive usage.
 
-spamming, intentionally submitting excessive content, or any activity that degrades project performance or availability is prohibited. we reserve the right to determine what constitutes abuse or excessive use.
+spamming, intentionally submitting excessive requests, or any activity that degrades service performance or availability is prohibited. we reserve the right to determine what constitutes abuse or excessive use.
 
-the project is intended for legitimate development and collaboration purposes. any use of project resources for data storage, archival, or other non-intended purposes is strictly prohibited.
+the service is intended for legitimate use. any use of service resources for data storage, archival, or other non-intended purposes is strictly prohibited.
 
-we may suspend or permanently ban any contributor at any time, without notice or explanation, for violations of this code of conduct or for any other reason we deem necessary. banned contributors have no right to appeal or request reinstatement.
+we may suspend or permanently ban any user at any time, without notice or explanation, for violations of this code of conduct or for any other reason we deem necessary. banned users have no right to appeal or request reinstatement.
 
-participation in this project is provided at our discretion. continued access is not guaranteed, and we are not obligated to provide access to any contributor.
+access to this service is provided at our discretion. continued access is not guaranteed, and we are not obligated to provide access to any user.
 
 ## privacy and data
 
-when contributing to this project:
+when using this service:
 
-- we may collect information necessary for project operation, including git commit information, issue/merge request data, and interaction logs
-- your contributions are public and may be retained indefinitely as part of the project history
+- we may collect information necessary for service operation, including usage logs, conversion requests, and interaction data
+- converted files may be stored and retained as part of the service
 - we do not sell or trade your information to third parties
-- we may share information when required by law or to protect project security
+- we may share information when required by law or to protect service security
 - you have the right to request information about data we have about you, subject to technical limitations
 
 for privacy concerns, contact us via the methods listed in the contact section.
@@ -56,9 +54,9 @@ for privacy concerns, contact us via the methods listed in the contact section.
 violations of this code of conduct may result in:
 
 - warnings
-- temporary suspension from project participation
-- permanent ban from the project
-- removal of contributions
+- temporary suspension from service access
+- permanent ban from the service
+- removal of stored content
 - reporting to relevant authorities if illegal activity is involved
 
 enforcement decisions are made at our sole discretion and are final. there is no appeal process.
@@ -67,26 +65,22 @@ enforcement decisions are made at our sole discretion and are final. there is no
 
 if you witness or experience behavior that violates this code of conduct, you can report it by:
 
-- contacting project maintainers via email: gronkasupport@proton.me
-- opening an issue in the gitlab repository (for non-sensitive matters)
-- contacting maintainers directly through gitlab
+- contacting service maintainers via email: gronkasupport@proton.me
 
 all reports will be reviewed, though we are not obligated to take action or provide updates on enforcement decisions.
 
 ## contact information
 
-for questions about this code of conduct:
+for questions about this code of conduct or the service:
 
 - **email**: gronkasupport@proton.me
-- **gitlab**: [https://gitlab.com/p2xai/gronka](https://gitlab.com/p2xai/gronka)
 
 ## changes to this code of conduct
 
-we reserve the right to modify this code of conduct at any time. changes will be effective immediately upon posting. your continued participation after changes constitutes acceptance of the updated code of conduct.
+we reserve the right to modify this code of conduct at any time. changes will be effective immediately upon posting. your continued use of the service after changes constitutes acceptance of the updated code of conduct.
 
-we will notify contributors of material changes by updating the document, but we are not obligated to provide individual notifications.
+we are not obligated to provide individual notifications of changes.
 
 ---
 
-*by participating in this project, you acknowledge that you have read, understood, and agree to be bound by this code of conduct.*
-
+_by using this service, you acknowledge that you have read, understood, and agree to be bound by this code of conduct._

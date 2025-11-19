@@ -13,7 +13,7 @@ complete reference for all gronka bot commands.
 ## command details
 
 {%- for command in site.data.commands -%}
+
   <h2 id="{{ command.name }}">{{ command.name }}</h2>
   {%- include command-card.html command=command -%}
 {%- endfor -%}
-

@@ -108,4 +108,3 @@ server.listen(port, host, () => {
   console.log(`Static file server running at http://${host}:${port}`);
   console.log(`Serving files from: ${siteDir}`);
 });
-

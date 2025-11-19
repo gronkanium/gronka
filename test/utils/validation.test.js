@@ -141,19 +141,19 @@ test('validateFilename - sanitizes path traversal attempts', () => {
   const result1 = validateFilename('../../etc/passwd', testStoragePath);
   assert.strictEqual(result1.valid, true);
   assert.strictEqual(result1.filename, 'etcpasswd');
-  
+
   const result2 = validateFilename('../file.txt', testStoragePath);
   assert.strictEqual(result2.valid, true);
   assert.strictEqual(result2.filename, 'file.txt');
-  
+
   const result3 = validateFilename('./../file.txt', testStoragePath);
   assert.strictEqual(result3.valid, true);
   assert.strictEqual(result3.filename, 'file.txt');
-  
+
   const result4 = validateFilename('..\\file.txt', testStoragePath);
   assert.strictEqual(result4.valid, true);
   assert.strictEqual(result4.filename, 'file.txt');
-  
+
   // However, if .. remains after sanitization (no separators), it should be rejected
   const result5 = validateFilename('..', testStoragePath);
   assert.strictEqual(result5.valid, false);
@@ -185,4 +185,3 @@ test('validateFilename - ensures path stays within storage directory', () => {
   assert.strictEqual(result.valid, true);
   assert(result.filePath.startsWith(path.resolve(testStoragePath)));
 });
-

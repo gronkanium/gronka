@@ -68,6 +68,21 @@ const commands = [
         type: 3, // STRING type
         required: false,
       },
+      {
+        name: 'optimize',
+        description: 'optimize the gif after conversion to reduce file size',
+        type: 5, // BOOLEAN type
+        required: false,
+      },
+      {
+        name: 'lossy',
+        description:
+          'lossy compression (0-100, default: 35). higher = more compression, lower quality. requires optimize',
+        type: 10, // NUMBER type
+        required: false,
+        min_value: 0,
+        max_value: 100,
+      },
     ],
     default_member_permissions: null, // Available to everyone
     dm_permission: true, // Enable in DMs
@@ -93,7 +108,8 @@ const commands = [
       },
       {
         name: 'lossy',
-        description: 'lossy compression level (0-100, default: 35). higher = more compression, lower quality',
+        description:
+          'lossy compression level (0-100, default: 35). higher = more compression, lower quality',
         type: 10, // NUMBER type
         required: false,
         min_value: 0,
@@ -148,7 +164,8 @@ const commands = [
         options: [
           {
             name: 'fps',
-            description: 'frames per second for gif conversion (max 30 for admins, max 15 for others)',
+            description:
+              'frames per second for gif conversion (max 30 for admins, max 15 for others)',
             type: 10, // NUMBER type
             required: false,
           },
@@ -169,10 +186,49 @@ const commands = [
               { name: 'high', value: 'high' },
             ],
           },
+          {
+            name: 'auto_optimize',
+            description:
+              'automatically optimize gifs after conversion or download (default: false)',
+            type: 5, // BOOLEAN type
+            required: false,
+          },
         ],
       },
     ],
     default_member_permissions: null, // Permission check done in handler
+    dm_permission: true, // Enable in DMs
+    integration_types: [1], // USER_INSTALL - allows users to install the bot directly
+    contexts: [0, 1, 2], // GUILD (0), BOT_DM (1), PRIVATE_CHANNEL (2) - enables command usage in all contexts
+  },
+  {
+    name: 'info',
+    description: 'get information about a gif file (dimensions, size, duration)',
+    type: 1, // CHAT_INPUT type (slash command)
+    options: [
+      {
+        name: 'file',
+        description: 'the gif file to get info about',
+        type: 11, // ATTACHMENT type
+        required: false,
+      },
+      {
+        name: 'url',
+        description: 'url to a gif file to get info about',
+        type: 3, // STRING type
+        required: false,
+      },
+    ],
+    default_member_permissions: null, // Available to everyone
+    dm_permission: true, // Enable in DMs
+    integration_types: [1], // USER_INSTALL - allows users to install the bot directly
+    contexts: [0, 1, 2], // GUILD (0), BOT_DM (1), PRIVATE_CHANNEL (2) - enables command usage in all contexts
+  },
+  {
+    name: 'recent',
+    description: 'view your recent gif conversions',
+    type: 1, // CHAT_INPUT type (slash command)
+    default_member_permissions: null, // Available to everyone
     dm_permission: true, // Enable in DMs
     integration_types: [1], // USER_INSTALL - allows users to install the bot directly
     contexts: [0, 1, 2], // GUILD (0), BOT_DM (1), PRIVATE_CHANNEL (2) - enables command usage in all contexts
@@ -192,7 +248,7 @@ const rest = new REST({ version: '10' }).setToken(DISCORD_TOKEN);
 
     console.log(`successfully registered ${data.length} global application command(s).`);
     console.log(
-      'commands registered: "convert to gif" (context menu), "convert to gif (advanced)" (context menu), "download" (context menu), "optimize" (context menu), "/convert", "/optimize", "/stats", "/download", "/config" (slash commands)'
+      'commands registered: "convert to gif" (context menu), "convert to gif (advanced)" (context menu), "download" (context menu), "optimize" (context menu), "/convert", "/optimize", "/stats", "/download", "/config", "/info", "/recent" (slash commands)'
     );
     console.log('it may take up to an hour for the commands to appear in discord.');
   } catch (error) {

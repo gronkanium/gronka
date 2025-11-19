@@ -10,6 +10,9 @@ const USERS_FILE = path.join(projectRoot, 'data', 'users.json');
 // In-memory Set for fast lookups and tracking
 let trackedUsers = new Set();
 
+// In-memory Map for recent conversions: userId -> array of URLs (max 10)
+let recentConversions = new Map();
+
 // Flag to prevent concurrent writes
 let isSaving = false;
 
@@ -35,7 +38,7 @@ async function ensureDataDir() {
  */
 async function loadUsers() {
   await ensureDataDir();
-  
+
   try {
     const data = await fs.readFile(USERS_FILE, 'utf-8');
     const userIds = JSON.parse(data);
@@ -54,7 +57,7 @@ async function loadUsers() {
       trackedUsers = new Set();
     }
   }
-  
+
   return trackedUsers;
 }
 
@@ -66,7 +69,7 @@ async function saveUsers() {
   if (isSaving) {
     return; // Skip if already saving
   }
-  
+
   isSaving = true;
   try {
     await ensureDataDir();
@@ -88,15 +91,15 @@ export async function trackUser(userId) {
   if (!userId || typeof userId !== 'string') {
     return;
   }
-  
+
   // Initialize if not loaded yet
   if (trackedUsers.size === 0 && !isSaving) {
     await loadUsers();
   }
-  
+
   const wasNew = !trackedUsers.has(userId);
   trackedUsers.add(userId);
-  
+
   // Only save if this was a new user (avoid unnecessary writes)
   if (wasNew) {
     // Save asynchronously without blocking
@@ -115,7 +118,7 @@ export async function getUniqueUserCount() {
   if (trackedUsers.size === 0) {
     await loadUsers();
   }
-  
+
   return trackedUsers.size;
 }
 
@@ -127,3 +130,47 @@ export async function initializeUserTracking() {
   await loadUsers();
 }
 
+/**
+ * Track a recent conversion for a user
+ * @param {string} userId - Discord user ID
+ * @param {string} url - GIF URL
+ * @returns {void}
+ */
+export function trackRecentConversion(userId, url) {
+  if (!userId || typeof userId !== 'string' || !url || typeof url !== 'string') {
+    return;
+  }
+
+  if (!recentConversions.has(userId)) {
+    recentConversions.set(userId, []);
+  }
+
+  const conversions = recentConversions.get(userId);
+
+  // Remove if already exists (to move to front)
+  const index = conversions.indexOf(url);
+  if (index !== -1) {
+    conversions.splice(index, 1);
+  }
+
+  // Add to front
+  conversions.unshift(url);
+
+  // Keep only last 10
+  if (conversions.length > 10) {
+    conversions.pop();
+  }
+}
+
+/**
+ * Get recent conversions for a user
+ * @param {string} userId - Discord user ID
+ * @returns {string[]} Array of recent conversion URLs (up to 10)
+ */
+export function getRecentConversions(userId) {
+  if (!userId || typeof userId !== 'string') {
+    return [];
+  }
+
+  return recentConversions.get(userId) || [];
+}

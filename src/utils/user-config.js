@@ -215,4 +215,3 @@ export async function setUserConfig(userId, updates, isAdmin = false) {
     return { success: false, error: `failed to save config: ${error.message}` };
   }
 }
-

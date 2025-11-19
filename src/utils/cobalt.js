@@ -37,7 +37,7 @@ export function isSocialMediaUrl(url) {
   try {
     const urlObj = new URL(url);
     const hostname = urlObj.hostname.toLowerCase().replace(/^www\./, '');
-    
+
     return SOCIAL_MEDIA_DOMAINS.some(domain => {
       const normalizedDomain = domain.replace(/^www\./, '');
       return hostname === normalizedDomain || hostname.endsWith(`.${normalizedDomain}`);
@@ -68,7 +68,7 @@ async function callCobaltApi(apiUrl, url) {
       {
         timeout: 60000, // 60 second timeout
         headers: {
-          'Accept': 'application/json',
+          Accept: 'application/json',
           'Content-Type': 'application/json',
           'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
         },
@@ -161,15 +161,16 @@ async function downloadFromCobalt(cobaltResponse, isAdminUser = false, maxSize =
       maxRedirects: 5,
       validateStatus: status => status >= 200 && status < 400,
       headers: {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-        'Accept': '*/*',
-        'Referer': videoUrl,
+        'User-Agent':
+          'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+        Accept: '*/*',
+        Referer: videoUrl,
       },
     });
 
     const buffer = Buffer.from(response.data);
     let contentType = response.headers['content-type'] || 'video/mp4';
-    
+
     // Extract filename from Content-Disposition if available
     const contentDisposition = response.headers['content-disposition'] || '';
     if (contentDisposition) {
@@ -180,16 +181,20 @@ async function downloadFromCobalt(cobaltResponse, isAdminUser = false, maxSize =
     }
 
     // If content type is generic or missing, try to infer from filename
-    if (!contentType || contentType === 'application/octet-stream' || contentType === 'binary/octet-stream') {
+    if (
+      !contentType ||
+      contentType === 'application/octet-stream' ||
+      contentType === 'binary/octet-stream'
+    ) {
       const ext = filename.toLowerCase().split('.').pop();
       const extToMime = {
-        'mp4': 'video/mp4',
-        'mov': 'video/quicktime',
-        'webm': 'video/webm',
-        'avi': 'video/x-msvideo',
-        'mkv': 'video/x-matroska',
-        'mp3': 'audio/mpeg',
-        'm4a': 'audio/mp4',
+        mp4: 'video/mp4',
+        mov: 'video/quicktime',
+        webm: 'video/webm',
+        avi: 'video/x-msvideo',
+        mkv: 'video/x-matroska',
+        mp3: 'audio/mpeg',
+        m4a: 'audio/mp4',
       };
       if (extToMime[ext]) {
         contentType = extToMime[ext];
@@ -200,7 +205,9 @@ async function downloadFromCobalt(cobaltResponse, isAdminUser = false, maxSize =
       }
     }
 
-    logger.info(`Downloaded file: ${filename}, size: ${buffer.length} bytes, content-type: ${contentType}`);
+    logger.info(
+      `Downloaded file: ${filename}, size: ${buffer.length} bytes, content-type: ${contentType}`
+    );
 
     return {
       buffer,
@@ -230,7 +237,12 @@ async function downloadFromCobalt(cobaltResponse, isAdminUser = false, maxSize =
  * @param {number} maxSize - Maximum file size in bytes
  * @returns {Promise<Object>} Object with buffer, contentType, size, and filename
  */
-export async function downloadFromSocialMedia(apiUrl, url, isAdminUser = false, maxSize = Infinity) {
+export async function downloadFromSocialMedia(
+  apiUrl,
+  url,
+  isAdminUser = false,
+  maxSize = Infinity
+) {
   logger.info(`Attempting to download from social media URL via Cobalt: ${url}`);
 
   try {
@@ -238,11 +250,12 @@ export async function downloadFromSocialMedia(apiUrl, url, isAdminUser = false, 
     logger.info(`Cobalt API response: ${JSON.stringify(cobaltResponse)}`);
     logger.info('Cobalt API call successful, downloading video');
     const result = await downloadFromCobalt(cobaltResponse, isAdminUser, maxSize);
-    logger.info(`Successfully downloaded video from Cobalt: ${result.filename} (${result.size} bytes, content-type: ${result.contentType})`);
+    logger.info(
+      `Successfully downloaded video from Cobalt: ${result.filename} (${result.size} bytes, content-type: ${result.contentType})`
+    );
     return result;
   } catch (error) {
     logger.warn(`Cobalt download failed: ${error.message}`);
     throw error;
   }
 }
-

@@ -1,4 +1,3 @@
-
 ## Project Structure
 
 This project consists of multiple components that can run independently or together:

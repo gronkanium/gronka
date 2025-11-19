@@ -39,7 +39,7 @@ async function moveFiles(sourceDir, destDir, type) {
 
   // Filter out directories, only process files
   const fileStats = await Promise.all(
-    files.map(async (file) => {
+    files.map(async file => {
       const filePath = path.join(sourceDir, file);
       try {
         const stat = await fs.stat(filePath);
@@ -131,13 +131,17 @@ async function main() {
   // Move files from data/gifs/gifs to data/gifs
   console.log('moving gifs from data/gifs/gifs to data/gifs...');
   const gifsResult = await moveFiles(OLD_GIFS_DIR, NEW_GIFS_DIR, 'gifs');
-  console.log(`  result: ${gifsResult.moved} moved, ${gifsResult.skipped} skipped, ${gifsResult.errors} errors`);
+  console.log(
+    `  result: ${gifsResult.moved} moved, ${gifsResult.skipped} skipped, ${gifsResult.errors} errors`
+  );
   console.log('');
 
   // Move files from data/gifs/videos to data/videos
   console.log('moving videos from data/gifs/videos to data/videos...');
   const videosResult = await moveFiles(OLD_VIDEOS_DIR, NEW_VIDEOS_DIR, 'videos');
-  console.log(`  result: ${videosResult.moved} moved, ${videosResult.skipped} skipped, ${videosResult.errors} errors`);
+  console.log(
+    `  result: ${videosResult.moved} moved, ${videosResult.skipped} skipped, ${videosResult.errors} errors`
+  );
   console.log('');
 
   // Try to remove empty nested directories
@@ -160,16 +164,15 @@ async function main() {
   try {
     const files = await fs.readdir(gifsParentDir);
     // Check if only 'gifs' and 'videos' subdirs exist (which would be the old nested ones)
-    const hasOnlyOldDirs = files.length <= 2 && 
-      files.every(f => f === 'gifs' || f === 'videos');
-    
+    const hasOnlyOldDirs = files.length <= 2 && files.every(f => f === 'gifs' || f === 'videos');
+
     if (hasOnlyOldDirs) {
       // Check if both are empty or don't exist
-      const oldGifsEmpty = !(await fileExists(OLD_GIFS_DIR)) || 
-        (await fs.readdir(OLD_GIFS_DIR)).length === 0;
-      const oldVideosEmpty = !(await fileExists(OLD_VIDEOS_DIR)) || 
-        (await fs.readdir(OLD_VIDEOS_DIR)).length === 0;
-      
+      const oldGifsEmpty =
+        !(await fileExists(OLD_GIFS_DIR)) || (await fs.readdir(OLD_GIFS_DIR)).length === 0;
+      const oldVideosEmpty =
+        !(await fileExists(OLD_VIDEOS_DIR)) || (await fs.readdir(OLD_VIDEOS_DIR)).length === 0;
+
       if (oldGifsEmpty && oldVideosEmpty) {
         // This shouldn't happen, but if it does, we'd need to be careful
         // Actually, we should keep data/gifs since that's where gifs go now
@@ -187,9 +190,7 @@ async function main() {
   console.log(`summary: ${totalMoved} files moved, ${totalSkipped} skipped, ${totalErrors} errors`);
 }
 
-main().catch((error) => {
+main().catch(error => {
   console.error('migration failed:', error);
   process.exit(1);
 });
-
-

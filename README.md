@@ -4,9 +4,10 @@ a discord bot that turns your videos and images into gifs. that's it. that's the
 
 ## what it does
 
-gronka takes video files or images you send in discord and converts them to gifs. no fancy features, no bloat - just straightforward file conversion. 
+gronka takes video files or images you send in discord and converts them to gifs. no fancy features, no bloat - just straightforward file conversion.
 
 it supports most common video formats (mp4, mov, webm, avi, mkv) and image formats (png, jpg, jpeg, webp)
+
 ## how it works
 
 there are three parts to this thing:
@@ -37,7 +38,6 @@ npm run local
 
 ### using docker
 
-
 ```bash
 # create your .env file first
 docker compose up -d
@@ -58,6 +58,7 @@ everything else is optional. check `.env.example` for what you can tweak (output
 ### optimization settings
 
 when using `/optimize`, you can specify a lossy compression level:
+
 - range: 0-100 (default: 35)
 - lower values (0-30): less compression, higher quality, larger files
 - medium values (30-60): balanced compression and quality
@@ -93,8 +94,6 @@ docker compose --profile webui up -d webui
 ```
 
 then go to `http://localhost:3001`
-
-
 
 ## development
 

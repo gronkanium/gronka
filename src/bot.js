@@ -14,14 +14,33 @@ import crypto from 'crypto';
 import fs from 'fs/promises';
 import path from 'path';
 import { convertToGif, getVideoMetadata, convertImageToGif } from './utils/video-processor.js';
-import { gifExists, getGifPath, cleanupTempFiles, getStorageStats, saveGif, saveVideo, getVideoPath, videoExists, saveImage, getImagePath, imageExists, detectFileType } from './utils/storage.js';
+import {
+  gifExists,
+  getGifPath,
+  cleanupTempFiles,
+  getStorageStats,
+  saveGif,
+  saveVideo,
+  getVideoPath,
+  videoExists,
+  saveImage,
+  getImagePath,
+  imageExists,
+  detectFileType,
+} from './utils/storage.js';
 import { createLogger } from './utils/logger.js';
 import { botConfig } from './utils/config.js';
 import { validateUrl, sanitizeFilename, validateFileExtension } from './utils/validation.js';
 import { ConfigurationError, NetworkError, ValidationError } from './utils/errors.js';
 import { isSocialMediaUrl, downloadFromSocialMedia } from './utils/cobalt.js';
 import { getUserConfig, setUserConfig } from './utils/user-config.js';
-import { trackUser, getUniqueUserCount, initializeUserTracking, trackRecentConversion, getRecentConversions } from './utils/user-tracking.js';
+import {
+  trackUser,
+  getUniqueUserCount,
+  initializeUserTracking,
+  trackRecentConversion,
+  getRecentConversions,
+} from './utils/user-tracking.js';
 import {
   isGifFile,
   extractHashFromCdnUrl,
@@ -172,7 +191,11 @@ async function getRefreshedAttachmentURL(client, attachmentURL) {
           },
         });
 
-        if (response.refreshed_urls && response.refreshed_urls[0] && response.refreshed_urls[0].refreshed) {
+        if (
+          response.refreshed_urls &&
+          response.refreshed_urls[0] &&
+          response.refreshed_urls[0].refreshed
+        ) {
           const refreshedURL = new URL(response.refreshed_urls[0].refreshed);
           refreshedURL.searchParams.set('animated', 'true');
           logger.info(`Successfully refreshed URL: ${refreshedURL.toString()}`);
@@ -194,11 +217,12 @@ async function getRefreshedAttachmentURL(client, attachmentURL) {
  */
 function getRequestHeaders() {
   return {
-    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-    'Accept': '*/*',
+    'User-Agent':
+      'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+    Accept: '*/*',
     'Accept-Language': 'en-US,en;q=0.9',
     'Accept-Encoding': 'identity',
-    'Referer': 'https://discord.com/',
+    Referer: 'https://discord.com/',
   };
 }
 
@@ -297,7 +321,9 @@ async function downloadFileFromUrl(url, isAdminUser = false, client = null) {
       const maxSize = isAdminUser ? Infinity : MAX_VIDEO_SIZE;
       return await downloadFromSocialMedia(COBALT_API_URL, actualUrl, isAdminUser, maxSize);
     } catch (cobaltError) {
-      logger.warn(`Cobalt download failed, falling back to direct download: ${cobaltError.message}`);
+      logger.warn(
+        `Cobalt download failed, falling back to direct download: ${cobaltError.message}`
+      );
       // Fall through to direct download
     }
   }
@@ -351,7 +377,9 @@ async function downloadFileFromUrl(url, isAdminUser = false, client = null) {
       throw new NetworkError('file not found at the provided URL');
     }
     if (error.response?.status === 403) {
-      throw new NetworkError('access denied to the file URL (may be expired or require authentication)');
+      throw new NetworkError(
+        'access denied to the file URL (may be expired or require authentication)'
+      );
     }
     if (error.response?.status === 401) {
       throw new NetworkError('authentication required to access the file URL');
@@ -378,7 +406,9 @@ async function downloadFileFromUrl(url, isAdminUser = false, client = null) {
 
           let filename = 'file';
           if (contentDisposition) {
-            const filenameMatch = contentDisposition.match(/filename[^;=\n]*=((['"]).*?\2|[^;\n]*)/);
+            const filenameMatch = contentDisposition.match(
+              /filename[^;=\n]*=((['"]).*?\2|[^;\n]*)/
+            );
             if (filenameMatch && filenameMatch[1]) {
               filename = sanitizeFilename(filenameMatch[1].replace(/['"]/g, ''));
             }
@@ -426,7 +456,7 @@ async function parseTenorUrl(url) {
     // Check if URL is a Tenor view URL
     const tenorViewPattern = /^https?:\/\/(www\.)?tenor\.com\/view\/.+-gif-(\d+)/i;
     const match = url.match(tenorViewPattern);
-    
+
     if (!match) {
       throw new ValidationError('invalid Tenor URL format');
     }
@@ -446,10 +476,12 @@ async function parseTenorUrl(url) {
       });
 
       const html = response.data;
-      
+
       // Try to find the store-cache script tag with JSON data
       // Match script tag with id="store-cache" (attributes can be in any order)
-      const storeCacheMatch = html.match(/<script[^>]*id=["']store-cache["'][^>]*>(.*?)<\/script>/is);
+      const storeCacheMatch = html.match(
+        /<script[^>]*id=["']store-cache["'][^>]*>(.*?)<\/script>/is
+      );
       if (storeCacheMatch && storeCacheMatch[1]) {
         try {
           const storeData = JSON.parse(storeCacheMatch[1]);
@@ -474,7 +506,9 @@ async function parseTenorUrl(url) {
       }
 
       // Try to find og:image meta tag
-      const ogImageMatch = html.match(/<meta\s+property=["']og:image["']\s+content=["']([^"']+)["']/i);
+      const ogImageMatch = html.match(
+        /<meta\s+property=["']og:image["']\s+content=["']([^"']+)["']/i
+      );
       if (ogImageMatch && ogImageMatch[1]) {
         const gifUrl = ogImageMatch[1];
         logger.info(`Found GIF URL from og:image meta tag: ${gifUrl}`);
@@ -490,7 +524,9 @@ async function parseTenorUrl(url) {
       }
 
       // Try to find in JSON-LD structured data
-      const jsonLdMatch = html.match(/<script[^>]*type=["']application\/ld\+json["'][^>]*>(.*?)<\/script>/is);
+      const jsonLdMatch = html.match(
+        /<script[^>]*type=["']application\/ld\+json["'][^>]*>(.*?)<\/script>/is
+      );
       if (jsonLdMatch) {
         try {
           const jsonLd = JSON.parse(jsonLdMatch[1]);
@@ -507,7 +543,9 @@ async function parseTenorUrl(url) {
         }
       }
     } catch (error) {
-      logger.warn(`Failed to parse Tenor page HTML: ${error.message}, falling back to direct URL pattern`);
+      logger.warn(
+        `Failed to parse Tenor page HTML: ${error.message}, falling back to direct URL pattern`
+      );
     }
 
     // Fall back to direct URL pattern
@@ -644,7 +682,9 @@ async function processConversion(
     // If optimization is requested and original GIF exists, we'll optimize it directly
     // Otherwise, we need to convert first
     const needsConversion = !exists;
-    logger.info(`Starting ${attachmentType} to GIF conversion (hash: ${hash})${options.optimize ? ' with optimization' : ''}${exists ? ' (original GIF exists, will optimize)' : ''}`);
+    logger.info(
+      `Starting ${attachmentType} to GIF conversion (hash: ${hash})${options.optimize ? ' with optimization' : ''}${exists ? ' (original GIF exists, will optimize)' : ''}`
+    );
 
     // Validate file extension
     const allowedVideoExtensions = ['.mp4', '.mov', '.webm', '.avi', '.mkv'];
@@ -706,81 +746,97 @@ async function processConversion(
     // Only convert if the GIF doesn't already exist
     if (needsConversion) {
       if (attachmentType === 'video') {
-      // Build conversion options, using provided options, user config, or defaults
-      const conversionOptions = {
-        width: options.width ?? (userConfig.width !== null ? userConfig.width : Math.min(MAX_GIF_WIDTH, 480)),
-        fps: options.fps ?? (userConfig.fps !== null ? userConfig.fps : DEFAULT_FPS),
-        quality: options.quality ?? (userConfig.quality !== null ? userConfig.quality : 'medium'),
-        startTime: options.startTime ?? null,
-        duration: options.duration ?? null,
-      };
+        // Build conversion options, using provided options, user config, or defaults
+        const conversionOptions = {
+          width:
+            options.width ??
+            (userConfig.width !== null ? userConfig.width : Math.min(MAX_GIF_WIDTH, 480)),
+          fps: options.fps ?? (userConfig.fps !== null ? userConfig.fps : DEFAULT_FPS),
+          quality: options.quality ?? (userConfig.quality !== null ? userConfig.quality : 'medium'),
+          startTime: options.startTime ?? null,
+          duration: options.duration ?? null,
+        };
 
-      // Validate duration against video length if startTime and duration are provided
-      if (conversionOptions.startTime !== null && conversionOptions.duration !== null) {
-        try {
-          const metadata = await getVideoMetadata(tempFilePath);
-          const videoDuration = metadata.format.duration;
-          const requestedEnd = conversionOptions.startTime + conversionOptions.duration;
+        // Validate duration against video length if startTime and duration are provided
+        if (conversionOptions.startTime !== null && conversionOptions.duration !== null) {
+          try {
+            const metadata = await getVideoMetadata(tempFilePath);
+            const videoDuration = metadata.format.duration;
+            const requestedEnd = conversionOptions.startTime + conversionOptions.duration;
 
-          if (requestedEnd > videoDuration) {
-            await interaction.editReply({
-              content: `requested timeframe (${conversionOptions.startTime}s to ${requestedEnd.toFixed(1)}s) exceeds video length (${videoDuration.toFixed(1)}s).`,
-            });
-            return;
+            if (requestedEnd > videoDuration) {
+              await interaction.editReply({
+                content: `requested timeframe (${conversionOptions.startTime}s to ${requestedEnd.toFixed(1)}s) exceeds video length (${videoDuration.toFixed(1)}s).`,
+              });
+              return;
+            }
+          } catch (error) {
+            logger.warn('Failed to get video metadata for timeframe validation:', error.message);
+            // Continue anyway, FFmpeg will handle it
           }
-        } catch (error) {
-          logger.warn('Failed to get video metadata for timeframe validation:', error.message);
-          // Continue anyway, FFmpeg will handle it
         }
-      }
 
-      await convertToGif(tempFilePath, gifPath, conversionOptions);
-    } else {
-      // Check if input is already a GIF
-      const isGif = attachment.contentType === 'image/gif' || ext === '.gif';
-      
-      if (isGif) {
-        // Get GIF dimensions to check if we need to resize
-        try {
-          const metadata = await getVideoMetadata(tempFilePath);
-          const videoStream = metadata.streams?.find(s => s.codec_type === 'video');
-          const gifWidth = videoStream?.width;
-          
-          // Use provided width, user config, or check against limits
-          const targetWidth = options.width ?? (userConfig.width !== null ? userConfig.width : Math.min(MAX_GIF_WIDTH, 720));
-          
-          if (gifWidth && gifWidth <= MAX_GIF_WIDTH && !options.width && (userConfig.width === null || gifWidth <= userConfig.width)) {
-            // GIF is within size limits, copy directly without re-encoding
-            logger.info(
-              `Input GIF is within size limits (${gifWidth}px <= ${MAX_GIF_WIDTH}px), copying directly`
-            );
-            await fs.copyFile(tempFilePath, gifPath);
-          } else {
-            // GIF exceeds size limits or custom width requested, resize with convertImageToGif
-            logger.info(
-              `Input GIF exceeds size limits or custom width requested (${gifWidth || 'unknown'}px), resizing to ${targetWidth}px`
-            );
+        await convertToGif(tempFilePath, gifPath, conversionOptions);
+      } else {
+        // Check if input is already a GIF
+        const isGif = attachment.contentType === 'image/gif' || ext === '.gif';
+
+        if (isGif) {
+          // Get GIF dimensions to check if we need to resize
+          try {
+            const metadata = await getVideoMetadata(tempFilePath);
+            const videoStream = metadata.streams?.find(s => s.codec_type === 'video');
+            const gifWidth = videoStream?.width;
+
+            // Use provided width, user config, or check against limits
+            const targetWidth =
+              options.width ??
+              (userConfig.width !== null ? userConfig.width : Math.min(MAX_GIF_WIDTH, 720));
+
+            if (
+              gifWidth &&
+              gifWidth <= MAX_GIF_WIDTH &&
+              !options.width &&
+              (userConfig.width === null || gifWidth <= userConfig.width)
+            ) {
+              // GIF is within size limits, copy directly without re-encoding
+              logger.info(
+                `Input GIF is within size limits (${gifWidth}px <= ${MAX_GIF_WIDTH}px), copying directly`
+              );
+              await fs.copyFile(tempFilePath, gifPath);
+            } else {
+              // GIF exceeds size limits or custom width requested, resize with convertImageToGif
+              logger.info(
+                `Input GIF exceeds size limits or custom width requested (${gifWidth || 'unknown'}px), resizing to ${targetWidth}px`
+              );
+              await convertImageToGif(tempFilePath, gifPath, {
+                width: targetWidth,
+                quality:
+                  options.quality ?? (userConfig.quality !== null ? userConfig.quality : 'medium'),
+              });
+            }
+          } catch (error) {
+            // If metadata extraction fails, fall back to normal conversion
+            logger.warn(`Failed to get GIF metadata, falling back to conversion: ${error.message}`);
             await convertImageToGif(tempFilePath, gifPath, {
-              width: targetWidth,
-              quality: options.quality ?? (userConfig.quality !== null ? userConfig.quality : 'medium'),
+              width:
+                options.width ??
+                (userConfig.width !== null ? userConfig.width : Math.min(MAX_GIF_WIDTH, 720)),
+              quality:
+                options.quality ?? (userConfig.quality !== null ? userConfig.quality : 'medium'),
             });
           }
-        } catch (error) {
-          // If metadata extraction fails, fall back to normal conversion
-          logger.warn(`Failed to get GIF metadata, falling back to conversion: ${error.message}`);
+        } else {
+          // Not a GIF, proceed with normal conversion
           await convertImageToGif(tempFilePath, gifPath, {
-            width: options.width ?? (userConfig.width !== null ? userConfig.width : Math.min(MAX_GIF_WIDTH, 720)),
-            quality: options.quality ?? (userConfig.quality !== null ? userConfig.quality : 'medium'),
+            width:
+              options.width ??
+              (userConfig.width !== null ? userConfig.width : Math.min(MAX_GIF_WIDTH, 720)),
+            quality:
+              options.quality ?? (userConfig.quality !== null ? userConfig.quality : 'medium'),
           });
         }
-      } else {
-        // Not a GIF, proceed with normal conversion
-        await convertImageToGif(tempFilePath, gifPath, {
-          width: options.width ?? (userConfig.width !== null ? userConfig.width : Math.min(MAX_GIF_WIDTH, 720)),
-          quality: options.quality ?? (userConfig.quality !== null ? userConfig.quality : 'medium'),
-        });
       }
-    }
     } else {
       // GIF already exists, read it directly
       logger.info(`Using existing GIF (hash: ${hash}) for user ${userId}`);
@@ -810,15 +866,20 @@ async function processConversion(
       // Check if optimized GIF already exists
       const optimizedExists = await gifExists(optimizedHashValue, GIF_STORAGE_PATH);
       if (optimizedExists) {
-        logger.info(`Optimized GIF already exists (hash: ${optimizedHashValue}) for user ${userId}`);
+        logger.info(
+          `Optimized GIF already exists (hash: ${optimizedHashValue}) for user ${userId}`
+        );
         const optimizedBuffer = await fs.readFile(optimizedGifPath);
         optimizedSize = optimizedBuffer.length;
         finalHash = optimizedHashValue;
         _finalGifPath = optimizedGifPath;
       } else {
         // Optimize the GIF with specified lossy level
-        const optimizeOptions = options.lossy !== undefined && options.lossy !== null ? { lossy: options.lossy } : {};
-        logger.info(`Optimizing GIF: ${gifPath} -> ${optimizedGifPath}${options.lossy !== undefined && options.lossy !== null ? ` (lossy: ${options.lossy})` : ''}`);
+        const optimizeOptions =
+          options.lossy !== undefined && options.lossy !== null ? { lossy: options.lossy } : {};
+        logger.info(
+          `Optimizing GIF: ${gifPath} -> ${optimizedGifPath}${options.lossy !== undefined && options.lossy !== null ? ` (lossy: ${options.lossy})` : ''}`
+        );
         await optimizeGif(gifPath, optimizedGifPath, optimizeOptions);
 
         // Read optimized file and get its size
@@ -839,7 +900,9 @@ async function processConversion(
       // Check if optimized GIF already exists
       const optimizedExists = await gifExists(optimizedHashValue, GIF_STORAGE_PATH);
       if (optimizedExists) {
-        logger.info(`Auto-optimized GIF already exists (hash: ${optimizedHashValue}) for user ${userId}`);
+        logger.info(
+          `Auto-optimized GIF already exists (hash: ${optimizedHashValue}) for user ${userId}`
+        );
         const optimizedBuffer = await fs.readFile(optimizedGifPath);
         optimizedSize = optimizedBuffer.length;
         finalHash = optimizedHashValue;
@@ -1101,11 +1164,11 @@ async function handleModalSubmit(interaction) {
   }
 
   const customId = interaction.customId;
-  
+
   // Handle optimize modal
   if (customId.startsWith('optimize_modal_')) {
     const userId = interaction.user.id;
-    
+
     // Retrieve cached attachment info
     const cachedData = modalAttachmentCache.get(customId);
     if (!cachedData) {
@@ -1116,16 +1179,16 @@ async function handleModalSubmit(interaction) {
       });
       return;
     }
-    
+
     // Clean up cache entry
     modalAttachmentCache.delete(customId);
-    
+
     const { attachment, adminUser, preDownloadedBuffer } = cachedData;
-    
+
     // Parse lossy level
     const lossyValue = interaction.fields.getTextInputValue('lossy_level') || null;
     let lossyLevel = null;
-    
+
     if (lossyValue && lossyValue.trim() !== '') {
       const parsed = parseInt(lossyValue.trim(), 10);
       if (isNaN(parsed) || parsed < 0 || parsed > 100) {
@@ -1137,15 +1200,15 @@ async function handleModalSubmit(interaction) {
       }
       lossyLevel = parsed;
     }
-    
+
     // Defer reply since optimization may take time
     await interaction.deferReply();
-    
+
     // Process optimization
     await processOptimization(interaction, attachment, adminUser, preDownloadedBuffer, lossyLevel);
     return;
   }
-  
+
   if (!customId.startsWith('gif_advanced_')) {
     return;
   }
@@ -1192,7 +1255,11 @@ async function handleModalSubmit(interaction) {
   }
 
   // Duration
-  if (durationValue && durationValue.trim() !== '' && durationValue.trim().toLowerCase() !== 'max') {
+  if (
+    durationValue &&
+    durationValue.trim() !== '' &&
+    durationValue.trim().toLowerCase() !== 'max'
+  ) {
     const duration = parseFloat(durationValue.trim());
     if (isNaN(duration) || duration <= 0) {
       await interaction.reply({
@@ -1299,8 +1366,10 @@ async function handleModalSubmit(interaction) {
       };
 
       // Determine attachment type based on content type
-      logger.info(`File data from URL: filename=${fileData.filename}, contentType=${fileData.contentType}, size=${fileData.size}`);
-      
+      logger.info(
+        `File data from URL: filename=${fileData.filename}, contentType=${fileData.contentType}, size=${fileData.size}`
+      );
+
       if (fileData.contentType && ALLOWED_VIDEO_TYPES.includes(fileData.contentType)) {
         attachmentType = 'video';
         logger.info(
@@ -1332,7 +1401,7 @@ async function handleModalSubmit(interaction) {
         const ext = path.extname(fileData.filename).toLowerCase();
         const videoExts = ['.mp4', '.mov', '.webm', '.avi', '.mkv'];
         const imageExts = ['.png', '.jpg', '.jpeg', '.webp', '.gif'];
-        
+
         if (videoExts.includes(ext)) {
           logger.info(`Inferred video type from extension ${ext}, proceeding with conversion`);
           attachmentType = 'video';
@@ -1356,10 +1425,11 @@ async function handleModalSubmit(interaction) {
             return;
           }
         } else {
-          logger.warn(`Invalid attachment type for user ${userId}: contentType=${fileData.contentType}, filename=${fileData.filename}, ext=${ext}`);
+          logger.warn(
+            `Invalid attachment type for user ${userId}: contentType=${fileData.contentType}, filename=${fileData.filename}, ext=${ext}`
+          );
           await interaction.editReply({
-            content:
-              `unsupported file format. received content-type: ${fileData.contentType || 'unknown'}, filename: ${fileData.filename}. please provide a video (mp4, mov, webm, avi, mkv) or image (png, jpg, jpeg, webp, gif).`,
+            content: `unsupported file format. received content-type: ${fileData.contentType || 'unknown'}, filename: ${fileData.filename}. please provide a video (mp4, mov, webm, avi, mkv) or image (png, jpg, jpeg, webp, gif).`,
           });
           return;
         }
@@ -1793,7 +1863,7 @@ async function handleDownloadContextMenuCommand(interaction) {
       if (fileType === 'gif') {
         logger.info(`Saving GIF (hash: ${hash})`);
         filePath = await saveGif(fileData.buffer, hash, GIF_STORAGE_PATH);
-        
+
         // Auto-optimize if enabled in user config
         if (userConfig.autoOptimize) {
           const _originalSize = fileData.buffer.length;
@@ -1803,17 +1873,21 @@ async function handleDownloadContextMenuCommand(interaction) {
           optimizedHash.update('35'); // Default lossy level
           const optimizedHashValue = optimizedHash.digest('hex');
           const optimizedGifPath = getGifPath(optimizedHashValue, GIF_STORAGE_PATH);
-          
+
           // Check if optimized GIF already exists
           const optimizedExists = await gifExists(optimizedHashValue, GIF_STORAGE_PATH);
           if (optimizedExists) {
-            logger.info(`Auto-optimized GIF already exists (hash: ${optimizedHashValue}) for user ${userId}`);
+            logger.info(
+              `Auto-optimized GIF already exists (hash: ${optimizedHashValue}) for user ${userId}`
+            );
             filePath = optimizedGifPath;
             hash = optimizedHashValue;
             cdnPath = '/gifs';
           } else {
             // Auto-optimize the GIF with default lossy level
-            logger.info(`Auto-optimizing downloaded GIF: ${filePath} -> ${optimizedGifPath} (lossy: 35)`);
+            logger.info(
+              `Auto-optimizing downloaded GIF: ${filePath} -> ${optimizedGifPath} (lossy: 35)`
+            );
             await optimizeGif(filePath, optimizedGifPath, { lossy: 35 });
             filePath = optimizedGifPath;
             hash = optimizedHashValue;
@@ -1834,13 +1908,13 @@ async function handleDownloadContextMenuCommand(interaction) {
       // Get final file size
       const finalStats = await fs.stat(filePath);
       const finalSizeMB = (finalStats.size / (1024 * 1024)).toFixed(2);
-      
+
       logger.info(
         `Successfully saved ${fileType} (hash: ${hash}, size: ${finalSizeMB}MB) for user ${userId}${userConfig.autoOptimize && fileType === 'gif' ? ' [AUTO-OPTIMIZED]' : ''}`
       );
 
       let replyContent = `${fileType} downloaded : ${fileUrl}\n-# ${fileType} size: ${finalSizeMB} mb`;
-      
+
       // Show optimization info if auto-optimized
       if (userConfig.autoOptimize && fileType === 'gif') {
         const originalSize = fileData.buffer.length;
@@ -1848,7 +1922,7 @@ async function handleDownloadContextMenuCommand(interaction) {
         const reductionText = reduction >= 0 ? `-${reduction}%` : `+${Math.abs(reduction)}%`;
         replyContent = `${fileType} downloaded : ${fileUrl}\n-# ${fileType} size: ${formatSizeMb(finalStats.size)} (${reductionText})`;
       }
-      
+
       await interaction.editReply({
         content: replyContent,
       });
@@ -1983,7 +2057,7 @@ async function handleDownloadCommand(interaction) {
       if (fileType === 'gif') {
         logger.info(`Saving GIF (hash: ${hash})`);
         filePath = await saveGif(fileData.buffer, hash, GIF_STORAGE_PATH);
-        
+
         // Auto-optimize if enabled in user config
         if (userConfig.autoOptimize) {
           const _originalSize = fileData.buffer.length;
@@ -1993,17 +2067,21 @@ async function handleDownloadCommand(interaction) {
           optimizedHash.update('35'); // Default lossy level
           const optimizedHashValue = optimizedHash.digest('hex');
           const optimizedGifPath = getGifPath(optimizedHashValue, GIF_STORAGE_PATH);
-          
+
           // Check if optimized GIF already exists
           const optimizedExists = await gifExists(optimizedHashValue, GIF_STORAGE_PATH);
           if (optimizedExists) {
-            logger.info(`Auto-optimized GIF already exists (hash: ${optimizedHashValue}) for user ${userId}`);
+            logger.info(
+              `Auto-optimized GIF already exists (hash: ${optimizedHashValue}) for user ${userId}`
+            );
             filePath = optimizedGifPath;
             hash = optimizedHashValue;
             cdnPath = '/gifs';
           } else {
             // Auto-optimize the GIF with default lossy level
-            logger.info(`Auto-optimizing downloaded GIF: ${filePath} -> ${optimizedGifPath} (lossy: 35)`);
+            logger.info(
+              `Auto-optimizing downloaded GIF: ${filePath} -> ${optimizedGifPath} (lossy: 35)`
+            );
             await optimizeGif(filePath, optimizedGifPath, { lossy: 35 });
             filePath = optimizedGifPath;
             hash = optimizedHashValue;
@@ -2024,13 +2102,13 @@ async function handleDownloadCommand(interaction) {
       // Get final file size
       const finalStats = await fs.stat(filePath);
       const finalSizeMB = (finalStats.size / (1024 * 1024)).toFixed(2);
-      
+
       logger.info(
         `Successfully saved ${fileType} (hash: ${hash}, size: ${finalSizeMB}MB) for user ${userId}${userConfig.autoOptimize && fileType === 'gif' ? ' [AUTO-OPTIMIZED]' : ''}`
       );
 
       let replyContent = `${fileType} downloaded : ${fileUrl}\n-# ${fileType} size: ${finalSizeMB} mb`;
-      
+
       // Show optimization info if auto-optimized
       if (userConfig.autoOptimize && fileType === 'gif') {
         const originalSize = fileData.buffer.length;
@@ -2038,7 +2116,7 @@ async function handleDownloadCommand(interaction) {
         const reductionText = reduction >= 0 ? `-${reduction}%` : `+${Math.abs(reduction)}%`;
         replyContent = `${fileType} downloaded : ${fileUrl}\n-# ${fileType} size: ${formatSizeMb(finalStats.size)} (${reductionText})`;
       }
-      
+
       await interaction.editReply({
         content: replyContent,
       });
@@ -2137,7 +2215,8 @@ async function handleConfigCommand(interaction) {
 
       if (Object.keys(updates).length === 0) {
         await interaction.reply({
-          content: 'please specify at least one setting to update (fps, width, quality, or auto_optimize).',
+          content:
+            'please specify at least one setting to update (fps, width, quality, or auto_optimize).',
           flags: MessageFlags.Ephemeral,
         });
         return;
@@ -2172,7 +2251,9 @@ async function handleConfigCommand(interaction) {
         flags: MessageFlags.Ephemeral,
       });
 
-      logger.info(`User ${userId} (${interaction.user.tag}) updated their config: ${JSON.stringify(updates)}`);
+      logger.info(
+        `User ${userId} (${interaction.user.tag}) updated their config: ${JSON.stringify(updates)}`
+      );
     } catch (error) {
       logger.error(`Failed to update config for user ${userId}:`, error);
       await interaction.reply({
@@ -2503,7 +2584,13 @@ async function handleOptimizeCommand(interaction) {
     await interaction.deferReply();
   }
 
-  await processOptimization(interaction, finalAttachment, adminUser, preDownloadedBuffer, lossyLevel);
+  await processOptimization(
+    interaction,
+    finalAttachment,
+    adminUser,
+    preDownloadedBuffer,
+    lossyLevel
+  );
 }
 
 /**
@@ -2514,7 +2601,13 @@ async function handleOptimizeCommand(interaction) {
  * @param {Buffer} [preDownloadedBuffer] - Optional pre-downloaded buffer
  * @param {number} [lossyLevel] - Lossy compression level (0-100, default: 35)
  */
-async function processOptimization(interaction, attachment, adminUser, preDownloadedBuffer = null, lossyLevel = null) {
+async function processOptimization(
+  interaction,
+  attachment,
+  adminUser,
+  preDownloadedBuffer = null,
+  lossyLevel = null
+) {
   const userId = interaction.user.id;
   const tempFiles = [];
 
@@ -2550,7 +2643,9 @@ async function processOptimization(interaction, attachment, adminUser, preDownlo
 
     // Optimize the GIF with specified lossy level
     const optimizeOptions = lossyLevel !== null ? { lossy: lossyLevel } : {};
-    logger.info(`Optimizing GIF: ${tempInputPath} -> ${optimizedGifPath}${lossyLevel !== null ? ` (lossy: ${lossyLevel})` : ''}`);
+    logger.info(
+      `Optimizing GIF: ${tempInputPath} -> ${optimizedGifPath}${lossyLevel !== null ? ` (lossy: ${lossyLevel})` : ''}`
+    );
     await optimizeGif(tempInputPath, optimizedGifPath, optimizeOptions);
 
     // Read optimized file and get its size
@@ -2668,7 +2763,11 @@ async function handleInfoCommand(interaction) {
       // Download the GIF
       logger.info(`Downloading GIF from attachment: ${attachment.name}`);
       const fileData = await downloadFileFromUrl(attachment.url, adminUser, interaction.client);
-      const tempFilePath = path.join(GIF_STORAGE_PATH, 'temp', `info_${Date.now()}_${attachment.name}`);
+      const tempFilePath = path.join(
+        GIF_STORAGE_PATH,
+        'temp',
+        `info_${Date.now()}_${attachment.name}`
+      );
       await fs.mkdir(path.dirname(tempFilePath), { recursive: true });
       await fs.writeFile(tempFilePath, fileData.buffer);
       tempFiles.push(tempFilePath);
@@ -2713,7 +2812,11 @@ async function handleInfoCommand(interaction) {
           return;
         }
 
-        const tempFilePath = path.join(GIF_STORAGE_PATH, 'temp', `info_${Date.now()}_${fileData.filename}`);
+        const tempFilePath = path.join(
+          GIF_STORAGE_PATH,
+          'temp',
+          `info_${Date.now()}_${fileData.filename}`
+        );
         await fs.mkdir(path.dirname(tempFilePath), { recursive: true });
         await fs.writeFile(tempFilePath, fileData.buffer);
         tempFiles.push(tempFilePath);
@@ -2729,9 +2832,17 @@ async function handleInfoCommand(interaction) {
     // Extract information
     const width = videoStream?.width || 'unknown';
     const height = videoStream?.height || 'unknown';
-    const duration = metadata.format?.duration ? parseFloat(metadata.format.duration).toFixed(2) : 'unknown';
-    const frameCount = videoStream?.nb_frames || (duration !== 'unknown' && videoStream?.r_frame_rate ? 
-      Math.round(parseFloat(duration) * parseFloat(videoStream.r_frame_rate.split('/')[0]) / parseFloat(videoStream.r_frame_rate.split('/')[1] || 1)) : 'unknown');
+    const duration = metadata.format?.duration
+      ? parseFloat(metadata.format.duration).toFixed(2)
+      : 'unknown';
+    const frameCount =
+      videoStream?.nb_frames ||
+      (duration !== 'unknown' && videoStream?.r_frame_rate
+        ? Math.round(
+            (parseFloat(duration) * parseFloat(videoStream.r_frame_rate.split('/')[0])) /
+              parseFloat(videoStream.r_frame_rate.split('/')[1] || 1)
+          )
+        : 'unknown');
     const fileSizeMB = (fileSize / (1024 * 1024)).toFixed(2);
     const fileSizeFormatted = fileSizeMB + ' mb';
 

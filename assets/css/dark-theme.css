@@ -30,7 +30,12 @@ a:hover {
 }
 
 /* Headings */
-h1, h2, h3, h4, h5, h6 {
+h1,
+h2,
+h3,
+h4,
+h5,
+h6 {
   color: #ffffff;
 }
 
@@ -106,7 +111,9 @@ code {
   display: flex;
   align-items: center;
   gap: 0.25rem;
-  transition: background-color 0.2s, border-color 0.2s;
+  transition:
+    background-color 0.2s,
+    border-color 0.2s;
   z-index: 10;
   opacity: 0.8;
 }
@@ -183,7 +190,7 @@ code {
   display: none;
 }
 
-.site-nav label[for="nav-trigger"] {
+.site-nav label[for='nav-trigger'] {
   display: none;
 }
 
@@ -398,4 +405,3 @@ table td {
 .wrapper {
   background-color: transparent;
 }
-

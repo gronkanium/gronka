@@ -161,7 +161,7 @@ test('parseTenorUrl - throws error for invalid Tenor URL format', async () => {
   const invalidUrl = 'https://example.com/not-a-tenor-url';
 
   await assert.rejects(async () => await parseTenorUrl(invalidUrl), {
-    name: 'Error',
+    name: 'ValidationError',
     message: 'invalid Tenor URL format',
   });
 });

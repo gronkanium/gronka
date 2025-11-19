@@ -33,7 +33,7 @@ function escapeShellArg(arg) {
 export function isGifFile(filename, contentType) {
   const ext = path.extname(filename).toLowerCase();
   const isGifExt = ext === '.gif';
-  const isGifContentType = contentType && contentType.toLowerCase() === 'image/gif';
+  const isGifContentType = contentType ? contentType.toLowerCase() === 'image/gif' : false;
 
   return isGifExt || isGifContentType;
 }

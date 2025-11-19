@@ -11,6 +11,9 @@ test:
     - master
   before_script:
     - npm ci
+  variables:
+    DISCORD_TOKEN: 'ci-test-token'
+    CLIENT_ID: 'ci-test-client-id'
   script:
     - npm run validate
     - npm test

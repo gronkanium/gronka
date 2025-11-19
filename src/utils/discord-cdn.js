@@ -10,6 +10,10 @@ const logger = createLogger('discord-cdn');
 export function isDiscordCdnUrl(url) {
   try {
     const urlObj = new URL(url);
+    // Only allow http and https protocols
+    if (urlObj.protocol !== 'http:' && urlObj.protocol !== 'https:') {
+      return false;
+    }
     return (
       urlObj.hostname === 'cdn.discordapp.com' ||
       urlObj.hostname === 'media.discordapp.net' ||
@@ -35,6 +39,10 @@ export function isAttachmentExpired(url) {
     }
     // Parse hex expiry timestamp and compare with current time
     const expiryTime = parseInt(`0x${expiry}`, 16) * 1000;
+    // If parsing failed (NaN), consider it expired
+    if (isNaN(expiryTime) || !isFinite(expiryTime)) {
+      return true;
+    }
     return Date.now() >= expiryTime;
   } catch {
     return true;

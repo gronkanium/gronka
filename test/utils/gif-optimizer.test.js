@@ -23,7 +23,8 @@ test('isGifFile - returns false for non-GIF files', () => {
   assert.strictEqual(isGifFile('file.png', ''), false);
   assert.strictEqual(isGifFile('file.jpg', ''), false);
   assert.strictEqual(isGifFile('file.mp4', ''), false);
-  assert.strictEqual(isGifFile('file.gif', 'image/png'), false);
+  // Extension wins - if extension is .gif, it returns true even with wrong content type
+  assert.strictEqual(isGifFile('file.gif', 'image/png'), true);
 });
 
 test('isGifFile - returns true if either extension or content type matches', () => {
@@ -113,7 +114,7 @@ test('formatSizeMb - handles zero bytes', () => {
 
 test('formatSizeMb - handles small sizes', () => {
   assert.strictEqual(formatSizeMb(512 * 1024), '0.5mb');
-  assert.strictEqual(formatSizeMb(256 * 1024), '0.2mb');
+  assert.strictEqual(formatSizeMb(256 * 1024), '0.3mb'); // 0.25MB rounds to 0.3MB
 });
 
 test('formatSizeMb - handles large sizes', () => {

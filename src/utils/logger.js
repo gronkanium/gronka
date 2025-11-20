@@ -1,5 +1,4 @@
-import fs from 'fs/promises';
-import path from 'path';
+import { insertLog, initDatabase } from './database.js';
 
 const LOG_LEVELS = {
   DEBUG: 0,
@@ -15,60 +14,32 @@ const LOG_LEVEL_NAMES = {
   3: 'ERROR',
 };
 
+// Track database initialization promise
+let dbInitPromise = null;
+
 // Format timestamp to seconds precision (removes milliseconds)
 export function formatTimestampSeconds(date = new Date()) {
   return date.toISOString().replace(/\.\d{3}Z$/, 'Z');
 }
 
 class Logger {
-  constructor(component, logDir = './logs', logLevel = 'INFO', rotation = 'daily') {
+  constructor(component, logLevel = 'INFO') {
     this.component = component;
-    this.logDir = path.resolve(process.cwd(), logDir);
-    this.rotation = rotation;
-    this.currentDate = this.getDateString();
-    this.currentLogFile = null;
-    this.combinedLogFile = null;
 
     const levelName = logLevel.toUpperCase();
     this.logLevel = LOG_LEVELS[levelName] !== undefined ? LOG_LEVELS[levelName] : LOG_LEVELS.INFO;
 
-    this.init();
-  }
-
-  getDateString() {
-    const now = new Date();
-    return now.toISOString().split('T')[0];
-  }
-
-  async init() {
-    try {
-      await fs.mkdir(this.logDir, { recursive: true });
-      await this.initializeLogFiles();
-    } catch (error) {
-      console.error(`Failed to initialize logger for ${this.component}:`, error);
-    }
-  }
-
-  async initializeLogFiles() {
-    const dateStr = this.getDateString();
-
-    if (this.rotation === 'daily') {
-      this.currentLogFile = path.join(this.logDir, `${this.component}-${dateStr}.log`);
-      this.combinedLogFile = path.join(this.logDir, `combined-${dateStr}.log`);
-    } else {
-      this.currentLogFile = path.join(this.logDir, `${this.component}.log`);
-      this.combinedLogFile = path.join(this.logDir, 'combined.log');
-    }
-
-    this.currentDate = dateStr;
-  }
-
-  async checkRotation() {
-    if (this.rotation === 'daily') {
-      const today = this.getDateString();
-      if (today !== this.currentDate) {
-        await this.initializeLogFiles();
-      }
+    // Initialize database if not already done
+    // Skip database initialization if GRONKA_DB_PATH is set (tests use temp DB)
+    // or if we're in a test environment where database might not be available
+    if (!dbInitPromise && !process.env.SKIP_DB_INIT) {
+      dbInitPromise = initDatabase().catch(error => {
+        // Silently fail in test environments to avoid cluttering test output
+        if (!process.env.NODE_ENV || process.env.NODE_ENV !== 'test') {
+          console.error(`Failed to initialize database for logger:`, error);
+        }
+        return null; // Return null on error so we don't retry infinitely
+      });
     }
   }
 
@@ -83,31 +54,38 @@ class Logger {
     return `[${timestamp}] [${levelStr}] ${message}${formattedArgs}`;
   }
 
-  async writeToFile(filePath, message) {
-    try {
-      await fs.appendFile(filePath, message + '\n', 'utf8');
-    } catch (error) {
-      console.error(`Failed to write to log file ${filePath}:`, error);
-    }
-  }
-
   async log(level, message, ...args) {
     if (level < this.logLevel) {
       return;
     }
 
-    await this.checkRotation();
-
+    const timestamp = Date.now();
+    const levelName = LOG_LEVEL_NAMES[level];
     const formattedMessage = this.formatMessage(level, message, ...args);
 
+    // Always output to console
     console.log(formattedMessage);
 
-    if (this.currentLogFile) {
-      await this.writeToFile(this.currentLogFile, formattedMessage);
-    }
+    // Store in database
+    // Combine message and args into the message field
+    const fullMessage =
+      args.length > 0
+        ? `${message} ${args.map(arg => (typeof arg === 'object' ? JSON.stringify(arg) : String(arg))).join(' ')}`
+        : message;
 
-    if (this.combinedLogFile) {
-      await this.writeToFile(this.combinedLogFile, formattedMessage);
+    // Write to database (wait for initialization if needed)
+    try {
+      if (dbInitPromise) {
+        const initResult = await dbInitPromise;
+        // If initialization failed, initResult will be null
+        if (initResult === null) {
+          return; // Skip database logging if init failed
+        }
+      }
+      insertLog(timestamp, this.component, levelName, fullMessage);
+    } catch (error) {
+      // Don't fail if database write fails, but log to console
+      console.error(`Failed to write log to database:`, error);
     }
   }
 
@@ -129,8 +107,6 @@ class Logger {
 }
 
 export function createLogger(component) {
-  const logDir = process.env.LOG_DIR || './logs';
   const logLevel = process.env.LOG_LEVEL || 'INFO';
-  const rotation = process.env.LOG_ROTATION || 'daily';
-  return new Logger(component, logDir, logLevel, rotation);
+  return new Logger(component, logLevel);
 }

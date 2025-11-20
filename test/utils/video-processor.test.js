@@ -4,9 +4,10 @@ import { convertToGif } from '../../src/utils/video-processor.js';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { mkdirSync, rmSync, writeFileSync } from 'node:fs';
+import os from 'node:os';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const testTempPath = path.join(__dirname, '../../temp/test-video-processor');
+const testTempPath = path.join(os.tmpdir(), 'gronka-test-video-processor');
 
 // Setup test temp directory
 test.before(() => {

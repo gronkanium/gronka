@@ -244,14 +244,21 @@ async function processDownload(interaction, url) {
             hash = optimizedHashValue;
             cdnPath = '/gifs';
           } else {
-            // Auto-optimize the GIF with default lossy level
-            logger.info(
-              `Auto-optimizing downloaded GIF: ${filePath} -> ${optimizedGifPath} (lossy: 35)`
-            );
-            await optimizeGif(filePath, optimizedGifPath, { lossy: 35 });
-            filePath = optimizedGifPath;
-            hash = optimizedHashValue;
-            cdnPath = '/gifs';
+            // Check if filePath is a URL (R2-stored files return URLs, not local paths)
+            if (filePath.startsWith('http://') || filePath.startsWith('https://')) {
+              logger.warn(
+                `Auto-optimization skipped: GIF is stored in R2 (URL: ${filePath}). File must be available locally for optimization. User can manually optimize later if needed.`
+              );
+            } else {
+              // Auto-optimize the GIF with default lossy level
+              logger.info(
+                `Auto-optimizing downloaded GIF: ${filePath} -> ${optimizedGifPath} (lossy: 35)`
+              );
+              await optimizeGif(filePath, optimizedGifPath, { lossy: 35 });
+              filePath = optimizedGifPath;
+              hash = optimizedHashValue;
+              cdnPath = '/gifs';
+            }
           }
         }
       } else if (fileType === 'video') {

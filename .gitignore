@@ -57,6 +57,8 @@ _site/
 .jekyll-metadata
 vendor/
 .bundle/
+_posts/
+posts/
 
 # Jekyll site files (exclude these, keep changelog/posts)
 _data/
@@ -70,8 +72,7 @@ terms.md
 aspirations.md
 index.md
 
-# Changelog - draft posts (keep _posts/ tracked, but ignore drafts)
-_posts/*-draft.md
+# Changelog - draft posts
 _drafts/
 changelog/*-draft.html
 

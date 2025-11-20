@@ -406,7 +406,7 @@ async function downloadFromCobalt(cobaltResponse, isAdminUser = false, maxSize =
   try {
     const response = await axios.get(videoUrl, {
       responseType: 'arraybuffer',
-      timeout: 120000, // 2 minute timeout for video downloads
+      timeout: 300000, // 5 minute timeout for video downloads
       maxContentLength: isAdminUser ? Infinity : maxSize,
       maxRedirects: 5,
       validateStatus: status => status >= 200 && status < 400,

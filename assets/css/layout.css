@@ -1,0 +1,42 @@
+/**
+ * Layout styles for dark theme
+ */
+
+/* Base colors */
+body {
+  color: #e0e0e0;
+  background-color: #1a1a1a;
+  border-top: none !important;
+  overflow-x: hidden;
+}
+
+html {
+  border-top: none !important;
+  overflow-x: hidden;
+}
+
+/* Page content */
+.page-content {
+  background-color: #1a1a1a;
+  overflow-x: hidden;
+  word-wrap: break-word;
+}
+
+/* Badge wrapping - prevent horizontal overflow on mobile */
+.page-content p:first-of-type {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  align-items: center;
+}
+
+.page-content p:first-of-type img {
+  max-width: 100%;
+  height: auto;
+  flex-shrink: 0;
+}
+
+/* Wrapper */
+.wrapper {
+  background-color: transparent;
+}

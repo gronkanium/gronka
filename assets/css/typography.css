@@ -1,0 +1,43 @@
+/**
+ * Typography styles for dark theme
+ */
+
+/* Links */
+a {
+  color: #4a9eff;
+}
+
+a:visited {
+  color: #7ba3d4;
+}
+
+a:hover {
+  color: #6bb3ff;
+  text-decoration: underline;
+}
+
+/* Headings */
+h1,
+h2,
+h3,
+h4,
+h5,
+h6 {
+  color: #ffffff;
+}
+
+/* Blockquotes */
+blockquote {
+  color: #b0b0b0;
+  border-left: 4px solid #444;
+}
+
+/* Post meta */
+.post-meta {
+  color: #b0b0b0;
+}
+
+/* Icons */
+.svg-icon {
+  fill: #b0b0b0;
+}

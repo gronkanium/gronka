@@ -3,7 +3,7 @@ import { promisify } from 'util';
 import fs from 'fs/promises';
 import path from 'path';
 import { createLogger } from './logger.js';
-import { gifExists } from './storage.js';
+import { getGifPath } from './storage.js';
 import { ValidationError } from './errors.js';
 
 const execAsync = promisify(exec);
@@ -77,13 +77,22 @@ export function extractHashFromCdnUrl(url) {
 }
 
 /**
- * Check if a GIF exists locally in storage
+ * Check if a GIF exists locally in storage (bypasses R2 check)
  * @param {string} hash - Hash of the GIF file
  * @param {string} storagePath - Base storage path
- * @returns {Promise<boolean>} True if GIF exists locally
+ * @returns {Promise<boolean>} True if GIF exists locally on disk
  */
 export async function checkLocalGif(hash, storagePath) {
-  return await gifExists(hash, storagePath);
+  // Check local filesystem directly, ignoring R2
+  // This is used by optimization to determine if we can use a local file
+  // instead of downloading from R2/CDN
+  try {
+    const gifPath = getGifPath(hash, storagePath);
+    await fs.access(gifPath);
+    return true;
+  } catch {
+    return false;
+  }
 }
 
 /**

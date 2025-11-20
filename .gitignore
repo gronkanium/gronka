@@ -72,8 +72,7 @@ terms.md
 aspirations.md
 index.md
 
-# Changelog - draft posts (keep _posts/ tracked, but ignore drafts)
-_posts/*-draft.md
+# Changelog - draft posts
 _drafts/
 changelog/*-draft.html
 
@@ -90,4 +89,3 @@ coverage/
 scripts/setup-glab-auth.sh
 scripts/ci-status.sh
 scripts/check-ci.sh
-_posts/2025-11-20-cobalt-rate-limits.md

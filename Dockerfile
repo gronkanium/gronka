@@ -26,9 +26,8 @@ WORKDIR /app
 COPY package*.json ./
 
 # Install all dependencies (including devDependencies for building webui)
-# Build native modules (better-sqlite3) after installation
-RUN npm ci --ignore-scripts && \
-    npm rebuild better-sqlite3
+# Allow install scripts to run so better-sqlite3 compiles natively
+RUN npm ci
 
 # Copy vite config (needed for webui build)
 COPY vite.config.js ./

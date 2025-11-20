@@ -98,7 +98,8 @@ client.on(Events.InteractionCreate, async interaction => {
     `Received interaction: ${interaction.type} from user ${interaction.user.id} (${interaction.user.tag})`
   );
   // Track user interaction
-  await trackUser(interaction.user.id);
+  const username = interaction.user.tag || interaction.user.username || 'unknown';
+  await trackUser(interaction.user.id, username);
 
   // Handle button interactions
   if (interaction.isButton()) {

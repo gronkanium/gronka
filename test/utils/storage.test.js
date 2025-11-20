@@ -1,3 +1,9 @@
+// Disable R2 for tests BEFORE importing storage module
+process.env.R2_ACCOUNT_ID = '';
+process.env.R2_ACCESS_KEY_ID = '';
+process.env.R2_SECRET_ACCESS_KEY = '';
+process.env.R2_BUCKET_NAME = '';
+
 import { test } from 'node:test';
 import assert from 'node:assert';
 import {
@@ -19,9 +25,10 @@ import {
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { mkdirSync, rmSync, writeFileSync } from 'node:fs';
+import os from 'node:os';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const testStoragePath = path.join(__dirname, '../../temp/test-storage-storage');
+const testStoragePath = path.join(os.tmpdir(), 'gronka-test-storage');
 
 // Setup test storage directory
 test.before(() => {
@@ -275,8 +282,21 @@ test('cleanupTempFiles - handles empty array', async () => {
 });
 
 test('getStorageStats - returns zero stats for empty storage', async () => {
-  const emptyPath = path.join(testStoragePath, 'empty');
+  const emptyPath = path.join(testStoragePath, 'empty-stats');
+  // Remove old directory if exists
+  try {
+    rmSync(emptyPath, { recursive: true, force: true });
+  } catch {
+    // Ignore
+  }
+
   mkdirSync(emptyPath, { recursive: true });
+  mkdirSync(path.join(emptyPath, 'gifs'), { recursive: true });
+  mkdirSync(path.join(emptyPath, 'videos'), { recursive: true });
+  mkdirSync(path.join(emptyPath, 'images'), { recursive: true });
+
+  // Clear stats cache to ensure fresh calculation
+  invalidateStatsCache(emptyPath);
 
   const stats = await getStorageStats(emptyPath);
   assert.strictEqual(stats.totalGifs, 0);

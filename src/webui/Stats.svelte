@@ -48,7 +48,7 @@
       </div>
       <div class="stat-item">
         <dt>Total</dt>
-        <dd>{stats.disk_usage_formatted || '0.00 MB'}</dd>
+        <dd>{((stats.total_gifs || 0) + (stats.total_videos || 0) + (stats.total_images || 0)).toLocaleString()} ({stats.disk_usage_formatted || '0.00 MB'})</dd>
       </div>
     </dl>
   {/if}

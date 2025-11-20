@@ -1,12 +1,16 @@
 FROM node:20-slim
 
 # Install FFmpeg, Docker CLI, and required dependencies
+# Also install build tools for native modules (better-sqlite3)
 RUN apt-get update && apt-get install -y \
     ffmpeg \
     ca-certificates \
     curl \
     gnupg \
     lsb-release \
+    python3 \
+    make \
+    g++ \
     && install -m 0755 -d /etc/apt/keyrings \
     && curl -fsSL https://download.docker.com/linux/debian/gpg | gpg --dearmor -o /etc/apt/keyrings/docker.gpg \
     && chmod a+r /etc/apt/keyrings/docker.gpg \
@@ -22,7 +26,9 @@ WORKDIR /app
 COPY package*.json ./
 
 # Install all dependencies (including devDependencies for building webui)
-RUN npm ci --ignore-scripts
+# Build native modules (better-sqlite3) after installation
+RUN npm ci --ignore-scripts && \
+    npm rebuild better-sqlite3
 
 # Copy vite config (needed for webui build)
 COPY vite.config.js ./
@@ -34,7 +40,13 @@ COPY src/ ./src/
 RUN npm run build:webui
 
 # Remove devDependencies to reduce image size (keep only production deps)
+# Note: better-sqlite3 is a production dependency, so its bindings remain after prune
 RUN npm prune --production
+
+# Remove build tools to reduce image size (they're no longer needed after native modules are built)
+RUN apt-get remove -y python3 make g++ && \
+    apt-get autoremove -y && \
+    rm -rf /var/lib/apt/lists/*
 
 # Create necessary directories
 RUN mkdir -p data temp

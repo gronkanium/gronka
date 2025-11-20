@@ -1,4 +1,4 @@
-import { S3Client, HeadObjectCommand } from '@aws-sdk/client-s3';
+import { S3Client, HeadObjectCommand, ListObjectsV2Command } from '@aws-sdk/client-s3';
 import { Upload } from '@aws-sdk/lib-storage';
 import { createLogger } from './logger.js';
 
@@ -167,13 +167,12 @@ export function getR2PublicUrl(key, config) {
  * @param {Buffer} buffer - GIF buffer
  * @param {string} hash - MD5 hash of the GIF
  * @param {Object} config - R2 configuration
- * @param {string|null} [userId=null] - Optional Discord user ID to attach as metadata
+ * @param {Object} [metadata={}] - Optional metadata to attach to the object
  * @returns {Promise<string>} Public URL of uploaded GIF
  */
-export async function uploadGifToR2(buffer, hash, config, userId = null) {
+export async function uploadGifToR2(buffer, hash, config, metadata = {}) {
   const safeHash = hash.replace(/[^a-f0-9]/gi, '');
   const key = `gifs/${safeHash}.gif`;
-  const metadata = userId ? { 'user-id': userId } : {};
   return await uploadToR2(buffer, key, 'image/gif', config, metadata);
 }
 
@@ -183,10 +182,10 @@ export async function uploadGifToR2(buffer, hash, config, userId = null) {
  * @param {string} hash - SHA-256 hash of the video
  * @param {string} extension - File extension (e.g., '.mp4', '.webm')
  * @param {Object} config - R2 configuration
- * @param {string|null} [userId=null] - Optional Discord user ID to attach as metadata
+ * @param {Object} [metadata={}] - Optional metadata to attach to the object
  * @returns {Promise<string>} Public URL of uploaded video
  */
-export async function uploadVideoToR2(buffer, hash, extension, config, userId = null) {
+export async function uploadVideoToR2(buffer, hash, extension, config, metadata = {}) {
   const safeHash = hash.replace(/[^a-f0-9]/gi, '');
   const safeExt = extension.replace(/[^a-zA-Z0-9.]/gi, '');
   const ext = safeExt.startsWith('.') ? safeExt : `.${safeExt}`;
@@ -202,7 +201,6 @@ export async function uploadVideoToR2(buffer, hash, extension, config, userId = 
   };
   const contentType = contentTypes[ext.toLowerCase()] || 'video/mp4';
 
-  const metadata = userId ? { 'user-id': userId } : {};
   return await uploadToR2(buffer, key, contentType, config, metadata);
 }
 
@@ -212,10 +210,10 @@ export async function uploadVideoToR2(buffer, hash, extension, config, userId = 
  * @param {string} hash - SHA-256 hash of the image
  * @param {string} extension - File extension (e.g., '.png', '.jpg')
  * @param {Object} config - R2 configuration
- * @param {string|null} [userId=null] - Optional Discord user ID to attach as metadata
+ * @param {Object} [metadata={}] - Optional metadata to attach to the object
  * @returns {Promise<string>} Public URL of uploaded image
  */
-export async function uploadImageToR2(buffer, hash, extension, config, userId = null) {
+export async function uploadImageToR2(buffer, hash, extension, config, metadata = {}) {
   const safeHash = hash.replace(/[^a-f0-9]/gi, '');
   const safeExt = extension.replace(/[^a-zA-Z0-9.]/gi, '');
   const ext = safeExt.startsWith('.') ? safeExt : `.${safeExt}`;
@@ -230,7 +228,6 @@ export async function uploadImageToR2(buffer, hash, extension, config, userId = 
   };
   const contentType = contentTypes[ext.toLowerCase()] || 'image/png';
 
-  const metadata = userId ? { 'user-id': userId } : {};
   return await uploadToR2(buffer, key, contentType, config, metadata);
 }
 
@@ -274,4 +271,52 @@ export async function imageExistsInR2(hash, extension, config) {
   const ext = safeExt.startsWith('.') ? safeExt : `.${safeExt}`;
   const key = `images/${safeHash}${ext}`;
   return await fileExistsInR2(key, config);
+}
+
+/**
+ * List objects in R2 with a given prefix
+ * @param {string} prefix - Prefix to filter objects (e.g., 'images/', 'gifs/', 'videos/')
+ * @param {Object} config - R2 configuration
+ * @returns {Promise<Array<{key: string, size: number}>>} Array of objects with key and size
+ */
+export async function listObjectsInR2(prefix, config) {
+  const client = getR2Client(config);
+  const { bucketName } = config;
+
+  if (!bucketName) {
+    logger.warn(`Cannot list R2 objects: bucketName not configured`);
+    return [];
+  }
+
+  try {
+    const objects = [];
+    let continuationToken = undefined;
+
+    do {
+      const command = new ListObjectsV2Command({
+        Bucket: bucketName,
+        Prefix: prefix,
+        ContinuationToken: continuationToken,
+      });
+
+      const response = await client.send(command);
+
+      if (response.Contents) {
+        for (const object of response.Contents) {
+          objects.push({
+            key: object.Key,
+            size: object.Size || 0,
+          });
+        }
+      }
+
+      continuationToken = response.NextContinuationToken;
+    } while (continuationToken);
+
+    logger.debug(`Listed ${objects.length} objects from R2 with prefix: ${prefix}`);
+    return objects;
+  } catch (error) {
+    logger.error(`Failed to list objects from R2 (prefix: ${prefix}):`, error.message);
+    return [];
+  }
 }

@@ -1,6 +1,7 @@
 <script>
   import Stats from './Stats.svelte';
   import Health from './Health.svelte';
+  import Operations from './Operations.svelte';
 </script>
 
 <main>
@@ -10,6 +11,7 @@
   <div class="content">
     <Stats />
     <Health />
+    <Operations />
   </div>
 </main>
 
@@ -52,9 +54,14 @@
     grid-template-columns: 1fr 1fr;
     align-items: start;
     gap: 2rem;
+    row-gap: 1rem;
     max-width: 1200px;
     width: 100%;
     margin: 0 auto;
+  }
+
+  .content > :global(section:last-child) {
+    margin-top: 0;
   }
 
   @media (max-width: 768px) {

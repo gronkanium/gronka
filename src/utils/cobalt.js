@@ -86,7 +86,28 @@ async function callCobaltApi(apiUrl, url) {
       const status = error.response.status;
       const data = error.response.data;
       logger.error(`Cobalt API error response: status=${status}, data=${JSON.stringify(data)}`);
-      const message = data?.text || data?.message || data?.error || `Cobalt API error: ${status}`;
+
+      // Extract error message, ensuring it's always a string
+      let message = null;
+      if (typeof data?.text === 'string') {
+        message = data.text;
+      } else if (typeof data?.message === 'string') {
+        message = data.message;
+      } else if (typeof data?.error === 'string') {
+        message = data.error;
+      } else if (data?.error && typeof data.error === 'object') {
+        // If error is an object, try to extract message or stringify it
+        message = data.error.message || data.error.text || JSON.stringify(data.error);
+      } else if (data) {
+        // If data exists but doesn't have standard error fields, stringify it
+        message = typeof data === 'string' ? data : JSON.stringify(data);
+      }
+
+      // Fallback to status code if no message found
+      if (!message) {
+        message = `Cobalt API error: ${status}`;
+      }
+
       throw new NetworkError(message);
     }
     if (error.code === 'ECONNABORTED') {

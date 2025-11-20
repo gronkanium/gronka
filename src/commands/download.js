@@ -9,6 +9,7 @@ import { isSocialMediaUrl, downloadFromSocialMedia } from '../utils/cobalt.js';
 import { checkRateLimit, isAdmin } from '../utils/rate-limit.js';
 import { getUserConfig } from '../utils/user-config.js';
 import { generateHash } from '../utils/file-downloader.js';
+import { createOperation, updateOperationStatus } from '../utils/operations-tracker.js';
 import {
   gifExists,
   getGifPath,
@@ -34,16 +35,51 @@ const {
 } = botConfig;
 
 /**
+ * Check if a URL is from YouTube
+ * @param {string} url - URL to check
+ * @returns {boolean} True if URL is from YouTube
+ */
+function isYouTubeUrl(url) {
+  try {
+    const urlObj = new URL(url);
+    const hostname = urlObj.hostname.toLowerCase().replace(/^www\./, '');
+    return (
+      hostname === 'youtube.com' ||
+      hostname === 'youtu.be' ||
+      hostname === 'm.youtube.com' ||
+      hostname.endsWith('.youtube.com')
+    );
+  } catch {
+    return false;
+  }
+}
+
+/**
  * Process download from URL
  * @param {Interaction} interaction - Discord interaction
  * @param {string} url - URL to download from
  */
 async function processDownload(interaction, url) {
   const userId = interaction.user.id;
+  const username = interaction.user.tag || interaction.user.username || 'unknown';
   const adminUser = isAdmin(userId);
   const userConfig = await getUserConfig(userId);
 
+  // Create operation tracking
+  const operationId = createOperation('download', userId, username);
+
+  // Build metadata object for R2 uploads
+  const buildMetadata = () => ({
+    'user-id': userId,
+    'upload-timestamp': new Date().toISOString(),
+    'operation-type': 'download',
+    username: username,
+  });
+
   try {
+    // Update operation to running
+    updateOperationStatus(operationId, 'running');
+
     logger.info(`Downloading file from Cobalt: ${url}`);
     const maxSize = adminUser ? Infinity : MAX_VIDEO_SIZE;
     const fileData = await downloadFromSocialMedia(COBALT_API_URL, url, adminUser, maxSize);
@@ -97,14 +133,22 @@ async function processDownload(interaction, url) {
         fileUrl = `${CDN_BASE_URL.replace('/gifs', cdnPath)}/${filename}`;
       }
       logger.info(`${fileType} already exists (hash: ${hash}) for user ${userId}`);
+      // Get file size for existing file
+      let existingSize = fileData.buffer.length;
+      if (!filePath.startsWith('http://') && !filePath.startsWith('https://')) {
+        const stats = await fs.stat(filePath);
+        existingSize = stats.size;
+      }
+      updateOperationStatus(operationId, 'success', { fileSize: existingSize });
       await interaction.editReply({
         content: `${fileType} already exists : ${fileUrl}`,
       });
+      return;
     } else {
       // Save file based on type
       if (fileType === 'gif') {
         logger.info(`Saving GIF (hash: ${hash})`);
-        filePath = await saveGif(fileData.buffer, hash, GIF_STORAGE_PATH, userId);
+        filePath = await saveGif(fileData.buffer, hash, GIF_STORAGE_PATH, buildMetadata());
 
         // Auto-optimize if enabled in user config
         if (userConfig.autoOptimize) {
@@ -138,10 +182,10 @@ async function processDownload(interaction, url) {
         }
       } else if (fileType === 'video') {
         logger.info(`Saving video (hash: ${hash}, extension: ${ext})`);
-        filePath = await saveVideo(fileData.buffer, hash, ext, GIF_STORAGE_PATH, userId);
+        filePath = await saveVideo(fileData.buffer, hash, ext, GIF_STORAGE_PATH, buildMetadata());
       } else if (fileType === 'image') {
         logger.info(`Saving image (hash: ${hash}, extension: ${ext})`);
-        filePath = await saveImage(fileData.buffer, hash, ext, GIF_STORAGE_PATH, userId);
+        filePath = await saveImage(fileData.buffer, hash, ext, GIF_STORAGE_PATH, buildMetadata());
       }
 
       // filePath might be a local path or R2 URL
@@ -167,6 +211,9 @@ async function processDownload(interaction, url) {
         `Successfully saved ${fileType} (hash: ${hash}, size: ${finalSizeMB}MB) for user ${userId}${userConfig.autoOptimize && fileType === 'gif' ? ' [AUTO-OPTIMIZED]' : ''}`
       );
 
+      // Update operation to success with file size
+      updateOperationStatus(operationId, 'success', { fileSize: finalSize });
+
       let replyContent = `${fileType} downloaded : ${fileUrl}\n-# ${fileType} size: ${finalSizeMB} mb`;
 
       // Show optimization info if auto-optimized
@@ -183,8 +230,30 @@ async function processDownload(interaction, url) {
     }
   } catch (error) {
     logger.error(`Download failed for user ${userId}:`, error);
+
+    // Safely extract error message, handling cases where it might be an object or undefined
+    let errorMessage = 'an error occurred while downloading the file.';
+    if (error) {
+      if (typeof error.message === 'string' && error.message) {
+        errorMessage = error.message;
+      } else if (typeof error === 'string') {
+        errorMessage = error;
+      } else if (error.response?.data) {
+        // Try to extract message from axios error response
+        const data = error.response.data;
+        if (typeof data?.text === 'string') {
+          errorMessage = data.text;
+        } else if (typeof data?.message === 'string') {
+          errorMessage = data.message;
+        } else if (typeof data?.error === 'string') {
+          errorMessage = data.error;
+        }
+      }
+    }
+
+    updateOperationStatus(operationId, 'error', { error: errorMessage });
     await interaction.editReply({
-      content: error.message || 'an error occurred while downloading the file.',
+      content: errorMessage,
     });
   }
 }
@@ -255,6 +324,16 @@ export async function handleDownloadContextMenuCommand(interaction) {
     return;
   }
 
+  // Check if URL is from YouTube (blacklisted)
+  if (isYouTubeUrl(url)) {
+    logger.warn(`User ${userId} attempted to download from YouTube (blacklisted)`);
+    await interaction.reply({
+      content: 'youtube downloads are disabled.',
+      flags: MessageFlags.Ephemeral,
+    });
+    return;
+  }
+
   // Check if Cobalt is enabled
   if (!COBALT_ENABLED) {
     await interaction.reply({
@@ -319,6 +398,16 @@ export async function handleDownloadCommand(interaction) {
     logger.warn(`Invalid URL for user ${userId}: ${urlValidation.error}`);
     await interaction.reply({
       content: `invalid URL: ${urlValidation.error}`,
+      flags: MessageFlags.Ephemeral,
+    });
+    return;
+  }
+
+  // Check if URL is from YouTube (blacklisted)
+  if (isYouTubeUrl(url)) {
+    logger.warn(`User ${userId} attempted to download from YouTube (blacklisted)`);
+    await interaction.reply({
+      content: 'youtube downloads are disabled.',
       flags: MessageFlags.Ephemeral,
     });
     return;

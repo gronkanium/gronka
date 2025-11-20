@@ -24,6 +24,11 @@ plugins:
 # excerpt settings
 excerpt_separator: "<!--more-->"
 
+# feed settings
+feed:
+  excerpt_only: false
+  limit: 20
+
 # collections
 collections:
   docs:

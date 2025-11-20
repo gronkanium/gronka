@@ -1,9 +1,16 @@
 import express from 'express';
 import path from 'path';
 import axios from 'axios';
+import http from 'http';
+import { WebSocketServer } from 'ws';
 import { createLogger } from './utils/logger.js';
 import { webuiConfig } from './utils/config.js';
 import { ConfigurationError } from './utils/errors.js';
+import { setBroadcastCallback } from './utils/operations-tracker.js';
+
+// In-memory storage for operations (mirror of bot's operations)
+const operations = [];
+const MAX_OPERATIONS = 100;
 
 // Initialize logger
 const logger = createLogger('webui');
@@ -179,6 +186,22 @@ app.get('/api/health', async (req, res) => {
   }
 });
 
+// Endpoint for bot to send operation updates
+app.post('/api/operations', express.json(), (req, res) => {
+  try {
+    const operation = req.body;
+    if (!operation || !operation.id) {
+      return res.status(400).json({ error: 'invalid operation data' });
+    }
+    // Broadcast the operation update to all connected websocket clients
+    broadcastOperation(operation);
+    res.json({ success: true });
+  } catch (error) {
+    logger.error('Error handling operation update:', error);
+    res.status(500).json({ error: 'failed to process operation update' });
+  }
+});
+
 // Crypto prices endpoint with caching
 app.get('/api/crypto-prices', async (req, res) => {
   try {
@@ -234,10 +257,83 @@ try {
   process.exit(1);
 }
 
+// Create HTTP server from Express app
+const server = http.createServer(app);
+
+// Create WebSocket server
+const wss = new WebSocketServer({ server, path: '/api/ws' });
+
+// Store connected clients
+const clients = new Set();
+
+// Store operation in memory
+function storeOperation(operation) {
+  const index = operations.findIndex(op => op.id === operation.id);
+  if (index !== -1) {
+    // Update existing operation
+    operations[index] = operation;
+  } else {
+    // Add new operation at the beginning
+    operations.unshift(operation);
+    // Keep only last 100 operations
+    if (operations.length > MAX_OPERATIONS) {
+      operations.pop();
+    }
+  }
+}
+
+// Broadcast function to send updates to all connected clients
+function broadcastOperation(operation) {
+  // Store the operation
+  storeOperation(operation);
+
+  // Broadcast to all connected clients
+  const message = JSON.stringify({ type: 'operation', data: operation });
+  clients.forEach(client => {
+    if (client.readyState === 1) {
+      // WebSocket.OPEN = 1
+      try {
+        client.send(message);
+      } catch (error) {
+        logger.error('Error sending websocket message:', error);
+      }
+    }
+  });
+}
+
+// Set the broadcast callback in operations tracker
+setBroadcastCallback(broadcastOperation);
+
+// Handle WebSocket connections
+wss.on('connection', ws => {
+  logger.debug('WebSocket client connected');
+  clients.add(ws);
+
+  // Send initial operations list to newly connected client
+  try {
+    ws.send(JSON.stringify({ type: 'operations', data: [...operations] }));
+  } catch (error) {
+    logger.error('Error sending initial operations:', error);
+  }
+
+  // Handle client disconnect
+  ws.on('close', () => {
+    logger.debug('WebSocket client disconnected');
+    clients.delete(ws);
+  });
+
+  // Handle errors
+  ws.on('error', error => {
+    logger.error('WebSocket error:', error);
+    clients.delete(ws);
+  });
+});
+
 // Start server
-app.listen(WEBUI_PORT, WEBUI_HOST, () => {
+server.listen(WEBUI_PORT, WEBUI_HOST, () => {
   logger.info(`webui server running on http://${WEBUI_HOST}:${WEBUI_PORT}`);
   logger.info(`dashboard: http://${WEBUI_HOST}:${WEBUI_PORT}`);
+  logger.info(`websocket: ws://${WEBUI_HOST}:${WEBUI_PORT}/api/ws`);
   logger.info(`main server: ${MAIN_SERVER_URL}`);
 });
 
@@ -248,10 +344,26 @@ app.on('error', error => {
 
 process.on('SIGTERM', () => {
   logger.info('SIGTERM received, shutting down gracefully...');
-  process.exit(0);
+  // Close WebSocket server
+  wss.close(() => {
+    logger.info('WebSocket server closed');
+  });
+  // Close HTTP server
+  server.close(() => {
+    logger.info('HTTP server closed');
+    process.exit(0);
+  });
 });
 
 process.on('SIGINT', () => {
   logger.info('SIGINT received, shutting down gracefully...');
-  process.exit(0);
+  // Close WebSocket server
+  wss.close(() => {
+    logger.info('WebSocket server closed');
+  });
+  // Close HTTP server
+  server.close(() => {
+    logger.info('HTTP server closed');
+    process.exit(0);
+  });
 });

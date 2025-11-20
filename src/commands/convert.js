@@ -24,6 +24,7 @@ import { gifExists, getGifPath, cleanupTempFiles, saveGif } from '../utils/stora
 import { getUserConfig } from '../utils/user-config.js';
 import { trackRecentConversion } from '../utils/user-tracking.js';
 import { optimizeGif, calculateSizeReduction, formatSizeMb } from '../utils/gif-optimizer.js';
+import { createOperation, updateOperationStatus } from '../utils/operations-tracker.js';
 
 const logger = createLogger('convert');
 
@@ -53,7 +54,19 @@ export async function processConversion(
   options = {}
 ) {
   const userId = interaction.user.id;
+  const username = interaction.user.tag || interaction.user.username || 'unknown';
   const tempFiles = [];
+
+  // Create operation tracking
+  const operationId = createOperation('convert', userId, username);
+
+  // Build metadata object for R2 uploads
+  const buildMetadata = () => ({
+    'user-id': userId,
+    'upload-timestamp': new Date().toISOString(),
+    'operation-type': 'convert',
+    username: username,
+  });
 
   // Load user config
   const userConfig = await getUserConfig(userId);
@@ -70,11 +83,18 @@ export async function processConversion(
     // Generate hash
     const hash = generateHash(fileBuffer);
 
+    // Update operation to running
+    updateOperationStatus(operationId, 'running');
+
     // Check if GIF already exists
     const exists = await gifExists(hash, GIF_STORAGE_PATH);
     if (exists && !options.optimize) {
       const gifUrl = `${CDN_BASE_URL}/${hash}.gif`;
       logger.info(`GIF already exists (hash: ${hash}) for user ${userId}`);
+      // Get file size for existing GIF
+      const gifPath = getGifPath(hash, GIF_STORAGE_PATH);
+      const stats = await fs.stat(gifPath);
+      updateOperationStatus(operationId, 'success', { fileSize: stats.size });
       await interaction.editReply({
         content: `gif already exists : ${gifUrl}`,
       });
@@ -251,7 +271,7 @@ export async function processConversion(
     // Upload initial GIF to R2 if not already uploaded (always upload to ensure it's in R2)
     let initialGifUrl = null;
     try {
-      initialGifUrl = await saveGif(gifBuffer, hash, GIF_STORAGE_PATH, userId);
+      initialGifUrl = await saveGif(gifBuffer, hash, GIF_STORAGE_PATH, buildMetadata());
     } catch (error) {
       logger.warn(`Failed to upload initial GIF to R2, continuing:`, error.message);
     }
@@ -285,7 +305,12 @@ export async function processConversion(
         finalHash = optimizedHashValue;
         _finalGifPath = optimizedGifPath;
         // Upload optimized version to R2 if not already there
-        finalGifUrl = await saveGif(optimizedBuffer, optimizedHashValue, GIF_STORAGE_PATH, userId);
+        finalGifUrl = await saveGif(
+          optimizedBuffer,
+          optimizedHashValue,
+          GIF_STORAGE_PATH,
+          buildMetadata()
+        );
       } else {
         // Optimize the GIF with specified lossy level
         const optimizeOptions =
@@ -301,7 +326,12 @@ export async function processConversion(
         finalHash = optimizedHashValue;
         _finalGifPath = optimizedGifPath;
         // Upload optimized version to R2
-        finalGifUrl = await saveGif(optimizedBuffer, optimizedHashValue, GIF_STORAGE_PATH, userId);
+        finalGifUrl = await saveGif(
+          optimizedBuffer,
+          optimizedHashValue,
+          GIF_STORAGE_PATH,
+          buildMetadata()
+        );
       }
     } else if (userConfig.autoOptimize) {
       // Auto-optimize if enabled in user config
@@ -324,7 +354,12 @@ export async function processConversion(
         _finalGifPath = optimizedGifPath;
         wasAutoOptimized = true;
         // Upload optimized version to R2 if not already there
-        finalGifUrl = await saveGif(optimizedBuffer, optimizedHashValue, GIF_STORAGE_PATH, userId);
+        finalGifUrl = await saveGif(
+          optimizedBuffer,
+          optimizedHashValue,
+          GIF_STORAGE_PATH,
+          buildMetadata()
+        );
       } else {
         // Auto-optimize the GIF with default lossy level
         logger.info(`Auto-optimizing GIF: ${gifPath} -> ${optimizedGifPath} (lossy: 35)`);
@@ -337,7 +372,12 @@ export async function processConversion(
         _finalGifPath = optimizedGifPath;
         wasAutoOptimized = true;
         // Upload optimized version to R2
-        finalGifUrl = await saveGif(optimizedBuffer, optimizedHashValue, GIF_STORAGE_PATH, userId);
+        finalGifUrl = await saveGif(
+          optimizedBuffer,
+          optimizedHashValue,
+          GIF_STORAGE_PATH,
+          buildMetadata()
+        );
       }
     }
 
@@ -358,6 +398,9 @@ export async function processConversion(
       `Successfully created GIF (hash: ${finalHash}, size: ${(optimizedSize / (1024 * 1024)).toFixed(2)}MB) for user ${userId}${options.optimize ? ' [OPTIMIZED]' : ''}${wasAutoOptimized ? ' [AUTO-OPTIMIZED]' : ''}`
     );
 
+    // Update operation to success with file size
+    updateOperationStatus(operationId, 'success', { fileSize: optimizedSize });
+
     // Format response message
     if (options.optimize || wasAutoOptimized) {
       const reduction = calculateSizeReduction(originalSize, optimizedSize);
@@ -374,6 +417,7 @@ export async function processConversion(
     }
   } catch (error) {
     logger.error(`Conversion failed for user ${userId} (${interaction.user.tag}):`, error);
+    updateOperationStatus(operationId, 'error', { error: error.message || 'unknown error' });
     await interaction.editReply({
       content: 'an error occurred',
     });

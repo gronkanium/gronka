@@ -21,7 +21,8 @@ import {
   calculateSizeReduction,
   formatSizeMb,
 } from '../utils/gif-optimizer.js';
-import { getGifPath, cleanupTempFiles } from '../utils/storage.js';
+import { getGifPath, cleanupTempFiles, saveGif } from '../utils/storage.js';
+import { createOperation, updateOperationStatus } from '../utils/operations-tracker.js';
 
 const logger = createLogger('optimize');
 
@@ -43,9 +44,24 @@ export async function processOptimization(
   lossyLevel = null
 ) {
   const userId = interaction.user.id;
+  const username = interaction.user.tag || interaction.user.username || 'unknown';
   const tempFiles = [];
 
+  // Create operation tracking
+  const operationId = createOperation('optimize', userId, username);
+
+  // Build metadata object for R2 uploads
+  const buildMetadata = () => ({
+    'user-id': userId,
+    'upload-timestamp': new Date().toISOString(),
+    'operation-type': 'optimize',
+    username: username,
+  });
+
   try {
+    // Update operation to running
+    updateOperationStatus(operationId, 'running');
+
     // Download file if not already downloaded
     let fileBuffer = preDownloadedBuffer;
     if (!fileBuffer) {
@@ -86,17 +102,38 @@ export async function processOptimization(
     const optimizedBuffer = await fs.readFile(optimizedGifPath);
     const optimizedSize = optimizedBuffer.length;
 
+    // Upload optimized GIF to R2 if configured (this will also handle local storage)
+    let optimizedUrl;
+    try {
+      optimizedUrl = await saveGif(
+        optimizedBuffer,
+        optimizedHash,
+        GIF_STORAGE_PATH,
+        buildMetadata()
+      );
+      // If R2 is configured, saveGif returns the R2 URL, otherwise it returns the local path
+      if (!optimizedUrl.startsWith('http://') && !optimizedUrl.startsWith('https://')) {
+        // Local path, construct URL
+        const filename = path.basename(optimizedGifPath);
+        optimizedUrl = `${CDN_BASE_URL}/${filename}`;
+      }
+    } catch (error) {
+      logger.warn(`Failed to upload optimized GIF to R2, using local path:`, error.message);
+      // Fallback to local URL
+      const filename = path.basename(optimizedGifPath);
+      optimizedUrl = `${CDN_BASE_URL}/${filename}`;
+    }
+
     // Calculate size reduction
     const reduction = calculateSizeReduction(originalSize, optimizedSize);
     const optimizedSizeMb = formatSizeMb(optimizedSize);
 
-    // Generate CDN URL
-    const filename = path.basename(optimizedGifPath);
-    const optimizedUrl = `${CDN_BASE_URL}/${filename}`;
-
     logger.info(
       `GIF optimization completed: ${originalSize} bytes -> ${optimizedSize} bytes (${reduction}% reduction) for user ${userId}`
     );
+
+    // Update operation to success with file size
+    updateOperationStatus(operationId, 'success', { fileSize: optimizedSize });
 
     // Format response message
     const reductionText = reduction >= 0 ? `-${reduction}%` : `+${Math.abs(reduction)}%`;
@@ -105,6 +142,7 @@ export async function processOptimization(
     });
   } catch (error) {
     logger.error(`GIF optimization failed for user ${userId}:`, error);
+    updateOperationStatus(operationId, 'error', { error: error.message || 'unknown error' });
     await interaction.editReply({
       content: error.message || 'an error occurred while optimizing the gif.',
     });
@@ -193,7 +231,7 @@ export async function handleOptimizeContextMenuCommand(interaction, modalAttachm
     }
 
     try {
-      // Check if it's a cdn.gronka.p1x.dev or cdn.p1x.dev URL and try to use local file
+      // Check if it's a cdn.gronka.p1x.dev URL and try to use local file
       const hash = extractHashFromCdnUrl(url);
       let useLocalFile = false;
       let localFilePath = null;
@@ -373,7 +411,7 @@ export async function handleOptimizeCommand(interaction) {
     await interaction.deferReply();
 
     try {
-      // Check if it's a cdn.gronka.p1x.dev or cdn.p1x.dev URL and try to use local file
+      // Check if it's a cdn.gronka.p1x.dev URL and try to use local file
       const hash = extractHashFromCdnUrl(url);
       let useLocalFile = false;
       let localFilePath = null;

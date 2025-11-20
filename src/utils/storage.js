@@ -1,7 +1,7 @@
 import fs from 'fs/promises';
 import path from 'path';
 import { createLogger } from './logger.js';
-import { r2Config } from './config.js';
+import { r2Config, botConfig } from './config.js';
 import {
   uploadGifToR2,
   uploadVideoToR2,
@@ -10,9 +10,70 @@ import {
   videoExistsInR2,
   imageExistsInR2,
   getR2PublicUrl,
+  listObjectsInR2,
 } from './r2-storage.js';
 
 const logger = createLogger('storage');
+
+// Stats cache: Map<storagePath, {stats, timestamp}>
+const statsCache = new Map();
+
+/**
+ * Get cached stats if available and not expired
+ * @param {string} storagePath - Storage path used as cache key
+ * @returns {Object|null} Cached stats or null if not available/expired
+ */
+function getCachedStats(storagePath) {
+  const cacheEntry = statsCache.get(storagePath);
+  if (!cacheEntry) {
+    return null;
+  }
+
+  const ttl = botConfig.statsCacheTtl;
+  if (ttl === 0) {
+    // Caching disabled
+    return null;
+  }
+
+  const age = Date.now() - cacheEntry.timestamp;
+  if (age >= ttl) {
+    // Cache expired
+    statsCache.delete(storagePath);
+    return null;
+  }
+
+  logger.debug(`Using cached stats for ${storagePath} (age: ${Math.round(age / 1000)}s)`);
+  return cacheEntry.stats;
+}
+
+/**
+ * Store stats in cache
+ * @param {string} storagePath - Storage path used as cache key
+ * @param {Object} stats - Stats object to cache
+ */
+function setCachedStats(storagePath, stats) {
+  const ttl = botConfig.statsCacheTtl;
+  if (ttl === 0) {
+    // Caching disabled
+    return;
+  }
+
+  statsCache.set(storagePath, {
+    stats,
+    timestamp: Date.now(),
+  });
+  logger.debug(`Cached stats for ${storagePath}`);
+}
+
+/**
+ * Invalidate stats cache for a storage path
+ * @param {string} storagePath - Storage path to invalidate
+ */
+export function invalidateStatsCache(storagePath) {
+  if (statsCache.delete(storagePath)) {
+    logger.debug(`Invalidated stats cache for ${storagePath}`);
+  }
+}
 
 /**
  * Get the storage path for GIFs
@@ -113,10 +174,10 @@ export function getGifPath(hash, storagePath) {
  * @param {Buffer} buffer - GIF file buffer
  * @param {string} hash - MD5 hash of the video
  * @param {string} storagePath - Base storage path (for local fallback)
- * @param {string|null} [userId=null] - Optional Discord user ID to attach as metadata
+ * @param {Object} [metadata={}] - Optional metadata to attach to the object
  * @returns {Promise<string>} Public URL or path to saved GIF file
  */
-export async function saveGif(buffer, hash, storagePath, userId = null) {
+export async function saveGif(buffer, hash, storagePath, metadata = {}) {
   // Upload to R2 if configured
   if (
     r2Config.accountId &&
@@ -140,10 +201,12 @@ export async function saveGif(buffer, hash, storagePath, userId = null) {
       logger.info(
         `Uploading GIF to R2 (hash: ${hash.substring(0, 8)}..., size: ${(buffer.length / (1024 * 1024)).toFixed(2)}MB)`
       );
-      const publicUrl = await uploadGifToR2(buffer, hash, r2Config, userId);
+      const publicUrl = await uploadGifToR2(buffer, hash, r2Config, metadata);
       logger.info(
         `Saved GIF to R2: ${publicUrl} (size: ${(buffer.length / (1024 * 1024)).toFixed(2)}MB)`
       );
+      // Invalidate stats cache since we added a new file
+      invalidateStatsCache(storagePath);
       return publicUrl;
     } catch (error) {
       logger.error(`Failed to upload GIF to R2, falling back to local storage:`, error.message);
@@ -161,6 +224,9 @@ export async function saveGif(buffer, hash, storagePath, userId = null) {
 
   await fs.writeFile(gifPath, buffer);
   logger.debug(`Saved GIF: ${gifPath} (size: ${(buffer.length / (1024 * 1024)).toFixed(2)}MB)`);
+
+  // Invalidate stats cache since we added a new file
+  invalidateStatsCache(storagePath);
 
   return gifPath;
 }
@@ -252,10 +318,10 @@ export async function videoExists(hash, extension, storagePath) {
  * @param {string} hash - SHA-256 hash of the video
  * @param {string} extension - File extension (e.g., '.mp4', '.webm')
  * @param {string} storagePath - Base storage path (for local fallback)
- * @param {string|null} [userId=null] - Optional Discord user ID to attach as metadata
+ * @param {Object} [metadata={}] - Optional metadata to attach to the object
  * @returns {Promise<string>} Public URL or path to saved video file
  */
-export async function saveVideo(buffer, hash, extension, storagePath, userId = null) {
+export async function saveVideo(buffer, hash, extension, storagePath, metadata = {}) {
   // Upload to R2 if configured
   if (
     r2Config.accountId &&
@@ -264,10 +330,12 @@ export async function saveVideo(buffer, hash, extension, storagePath, userId = n
     r2Config.bucketName
   ) {
     try {
-      const publicUrl = await uploadVideoToR2(buffer, hash, extension, r2Config, userId);
+      const publicUrl = await uploadVideoToR2(buffer, hash, extension, r2Config, metadata);
       logger.debug(
         `Saved video to R2: ${publicUrl} (size: ${(buffer.length / (1024 * 1024)).toFixed(2)}MB)`
       );
+      // Invalidate stats cache since we added a new file
+      invalidateStatsCache(storagePath);
       return publicUrl;
     } catch (error) {
       logger.error(`Failed to upload video to R2, falling back to local storage:`, error.message);
@@ -284,6 +352,9 @@ export async function saveVideo(buffer, hash, extension, storagePath, userId = n
 
   await fs.writeFile(videoPath, buffer);
   logger.debug(`Saved video: ${videoPath} (size: ${(buffer.length / (1024 * 1024)).toFixed(2)}MB)`);
+
+  // Invalidate stats cache since we added a new file
+  invalidateStatsCache(storagePath);
 
   return videoPath;
 }
@@ -339,10 +410,10 @@ export async function imageExists(hash, extension, storagePath) {
  * @param {string} hash - SHA-256 hash of the image
  * @param {string} extension - File extension (e.g., '.png', '.jpg')
  * @param {string} storagePath - Base storage path (for local fallback)
- * @param {string|null} [userId=null] - Optional Discord user ID to attach as metadata
+ * @param {Object} [metadata={}] - Optional metadata to attach to the object
  * @returns {Promise<string>} Public URL or path to saved image file
  */
-export async function saveImage(buffer, hash, extension, storagePath, userId = null) {
+export async function saveImage(buffer, hash, extension, storagePath, metadata = {}) {
   // Upload to R2 if configured
   if (
     r2Config.accountId &&
@@ -351,10 +422,12 @@ export async function saveImage(buffer, hash, extension, storagePath, userId = n
     r2Config.bucketName
   ) {
     try {
-      const publicUrl = await uploadImageToR2(buffer, hash, extension, r2Config, userId);
+      const publicUrl = await uploadImageToR2(buffer, hash, extension, r2Config, metadata);
       logger.debug(
         `Saved image to R2: ${publicUrl} (size: ${(buffer.length / (1024 * 1024)).toFixed(2)}MB)`
       );
+      // Invalidate stats cache since we added a new file
+      invalidateStatsCache(storagePath);
       return publicUrl;
     } catch (error) {
       logger.error(`Failed to upload image to R2, falling back to local storage:`, error.message);
@@ -372,6 +445,9 @@ export async function saveImage(buffer, hash, extension, storagePath, userId = n
   await fs.writeFile(imagePath, buffer);
   logger.debug(`Saved image: ${imagePath} (size: ${(buffer.length / (1024 * 1024)).toFixed(2)}MB)`);
 
+  // Invalidate stats cache since we added a new file
+  invalidateStatsCache(storagePath);
+
   return imagePath;
 }
 
@@ -383,7 +459,16 @@ export async function saveImage(buffer, hash, extension, storagePath, userId = n
 export async function getStorageStats(storagePath) {
   try {
     logger.debug(`Getting storage stats for: ${storagePath}`);
-    const basePath = getStoragePath(storagePath);
+
+    // Check cache first
+    const cachedStats = getCachedStats(storagePath);
+    if (cachedStats) {
+      return cachedStats;
+    }
+
+    // Check if R2 is configured
+    const useR2 =
+      r2Config.accountId && r2Config.accessKeyId && r2Config.secretAccessKey && r2Config.bucketName;
 
     let totalGifs = 0;
     let totalVideos = 0;
@@ -393,83 +478,169 @@ export async function getStorageStats(storagePath) {
     let videosSize = 0;
     let imagesSize = 0;
 
-    // Scan gifs subdirectory
-    try {
-      const gifsPath = path.join(basePath, 'gifs');
-      const gifFiles = await fs.readdir(gifsPath);
-      const gifFilesOnly = gifFiles.filter(f => f.endsWith('.gif'));
-      totalGifs = gifFilesOnly.length;
+    if (useR2) {
+      logger.debug('R2 configured, querying R2 for storage stats');
 
-      for (const file of gifFilesOnly) {
-        try {
-          const filePath = path.join(gifsPath, file);
-          const stats = await fs.stat(filePath);
-          const fileSize = stats.size;
-          gifsSize += fileSize;
-          totalSize += fileSize;
-        } catch (error) {
-          logger.warn(`Failed to stat GIF file ${file}:`, error.message);
+      // Single LIST call to get all objects (consolidated from 3 separate calls)
+      try {
+        const allObjects = await listObjectsInR2('', r2Config);
+        logger.debug(`Listed ${allObjects.length} total objects from R2`);
+
+        // Filter and process GIFs
+        const gifFilesOnly = allObjects.filter(
+          obj => obj.key.startsWith('gifs/') && obj.key.endsWith('.gif')
+        );
+        totalGifs = gifFilesOnly.length;
+        logger.debug(`Found ${totalGifs} GIFs in R2`);
+        for (const obj of gifFilesOnly) {
+          gifsSize += obj.size;
+          totalSize += obj.size;
+        }
+
+        // Filter and process videos
+        const videoExtensions = ['.mp4', '.webm', '.mov', '.avi', '.mkv'];
+        const videoFilesOnly = allObjects.filter(obj => {
+          if (!obj.key.startsWith('videos/')) return false;
+          const ext = path.extname(obj.key).toLowerCase();
+          return videoExtensions.includes(ext);
+        });
+        totalVideos = videoFilesOnly.length;
+        logger.debug(`Found ${totalVideos} videos in R2`);
+        for (const obj of videoFilesOnly) {
+          videosSize += obj.size;
+          totalSize += obj.size;
+        }
+
+        // Filter and process images
+        const imageExtensions = ['.png', '.jpg', '.jpeg', '.webp'];
+        const imageFilesOnly = allObjects.filter(obj => {
+          if (!obj.key.startsWith('images/')) return false;
+          const ext = path.extname(obj.key).toLowerCase();
+          return imageExtensions.includes(ext);
+        });
+        totalImages = imageFilesOnly.length;
+        logger.debug(`Found ${totalImages} images in R2`);
+        for (const obj of imageFilesOnly) {
+          imagesSize += obj.size;
+          totalSize += obj.size;
+        }
+      } catch (error) {
+        logger.warn(`Failed to list objects from R2:`, error.message);
+      }
+    } else {
+      // Fallback to local filesystem
+      logger.debug('R2 not configured, using local filesystem for storage stats');
+      const basePath = getStoragePath(storagePath);
+
+      // Scan gifs subdirectory
+      try {
+        const gifsPath = path.join(basePath, 'gifs');
+        const gifFiles = await fs.readdir(gifsPath);
+        const gifFilesOnly = gifFiles.filter(f => f.endsWith('.gif'));
+        totalGifs = gifFilesOnly.length;
+
+        for (const file of gifFilesOnly) {
+          try {
+            const filePath = path.join(gifsPath, file);
+            const stats = await fs.stat(filePath);
+            const fileSize = stats.size;
+            gifsSize += fileSize;
+            totalSize += fileSize;
+          } catch (error) {
+            logger.warn(`Failed to stat GIF file ${file}:`, error.message);
+          }
+        }
+      } catch (error) {
+        if (error.code !== 'ENOENT') {
+          logger.warn(`Failed to read gifs directory:`, error.message);
         }
       }
-    } catch (error) {
-      if (error.code !== 'ENOENT') {
-        logger.warn(`Failed to read gifs directory:`, error.message);
-      }
-    }
 
-    // Scan videos subdirectory
-    try {
-      const videosPath = path.join(basePath, 'videos');
-      const videoFiles = await fs.readdir(videosPath);
-      const videoExtensions = ['.mp4', '.webm', '.mov', '.avi', '.mkv'];
-      const videoFilesOnly = videoFiles.filter(f => {
-        const ext = path.extname(f).toLowerCase();
-        return videoExtensions.includes(ext);
-      });
-      totalVideos = videoFilesOnly.length;
+      // Scan videos subdirectory
+      try {
+        const videosPath = path.join(basePath, 'videos');
+        const videoFiles = await fs.readdir(videosPath);
+        const videoExtensions = ['.mp4', '.webm', '.mov', '.avi', '.mkv'];
+        const videoFilesOnly = videoFiles.filter(f => {
+          const ext = path.extname(f).toLowerCase();
+          return videoExtensions.includes(ext);
+        });
+        totalVideos = videoFilesOnly.length;
 
-      for (const file of videoFilesOnly) {
-        try {
-          const filePath = path.join(videosPath, file);
-          const stats = await fs.stat(filePath);
-          const fileSize = stats.size;
-          videosSize += fileSize;
-          totalSize += fileSize;
-        } catch (error) {
-          logger.warn(`Failed to stat video file ${file}:`, error.message);
+        for (const file of videoFilesOnly) {
+          try {
+            const filePath = path.join(videosPath, file);
+            const stats = await fs.stat(filePath);
+            const fileSize = stats.size;
+            videosSize += fileSize;
+            totalSize += fileSize;
+          } catch (error) {
+            logger.warn(`Failed to stat video file ${file}:`, error.message);
+          }
+        }
+      } catch (error) {
+        if (error.code !== 'ENOENT') {
+          logger.warn(`Failed to read videos directory:`, error.message);
         }
       }
-    } catch (error) {
-      if (error.code !== 'ENOENT') {
-        logger.warn(`Failed to read videos directory:`, error.message);
-      }
-    }
 
-    // Scan images subdirectory
-    try {
-      const imagesPath = path.join(basePath, 'images');
-      const imageFiles = await fs.readdir(imagesPath);
-      const imageExtensions = ['.png', '.jpg', '.jpeg', '.webp'];
-      const imageFilesOnly = imageFiles.filter(f => {
-        const ext = path.extname(f).toLowerCase();
-        return imageExtensions.includes(ext);
-      });
-      totalImages = imageFilesOnly.length;
+      // Scan images subdirectory
+      try {
+        const imagesPath = path.join(basePath, 'images');
+        const imageFiles = await fs.readdir(imagesPath);
+        logger.debug(`Found ${imageFiles.length} entries in images directory`);
+        const imageExtensions = ['.png', '.jpg', '.jpeg', '.webp'];
+        const imageFilesOnly = [];
 
-      for (const file of imageFilesOnly) {
-        try {
-          const filePath = path.join(imagesPath, file);
-          const stats = await fs.stat(filePath);
-          const fileSize = stats.size;
-          imagesSize += fileSize;
-          totalSize += fileSize;
-        } catch (error) {
-          logger.warn(`Failed to stat image file ${file}:`, error.message);
+        // Filter and verify each entry is actually a file
+        for (const file of imageFiles) {
+          try {
+            const filePath = path.join(imagesPath, file);
+            const stats = await fs.stat(filePath);
+
+            // Only count regular files, not directories or symlinks
+            if (!stats.isFile()) {
+              logger.debug(
+                `Skipping non-file entry in images directory: ${file} (isDirectory: ${stats.isDirectory()})`
+              );
+              continue;
+            }
+
+            const ext = path.extname(file).toLowerCase();
+            if (imageExtensions.includes(ext)) {
+              imageFilesOnly.push(file);
+              logger.debug(
+                `Found image file: ${file} (extension: ${ext}, size: ${stats.size} bytes)`
+              );
+            } else {
+              logger.debug(`Skipping file with non-image extension: ${file} (extension: ${ext})`);
+            }
+          } catch (error) {
+            logger.warn(`Failed to stat entry ${file} in images directory:`, error.message);
+          }
         }
-      }
-    } catch (error) {
-      if (error.code !== 'ENOENT') {
-        logger.warn(`Failed to read images directory:`, error.message);
+
+        totalImages = imageFilesOnly.length;
+        logger.debug(`Total image files found: ${totalImages}`);
+
+        // Calculate total size for image files
+        for (const file of imageFilesOnly) {
+          try {
+            const filePath = path.join(imagesPath, file);
+            const stats = await fs.stat(filePath);
+            const fileSize = stats.size;
+            imagesSize += fileSize;
+            totalSize += fileSize;
+          } catch (error) {
+            logger.warn(`Failed to stat image file ${file}:`, error.message);
+          }
+        }
+      } catch (error) {
+        if (error.code !== 'ENOENT') {
+          logger.warn(`Failed to read images directory:`, error.message);
+        } else {
+          logger.debug(`Images directory does not exist: ${path.join(basePath, 'images')}`);
+        }
       }
     }
 
@@ -490,6 +661,10 @@ export async function getStorageStats(storagePath) {
     logger.debug(
       `Storage stats: ${stats.totalGifs} GIFs, ${stats.totalVideos} videos, ${stats.totalImages} images, ${stats.diskUsageFormatted}`
     );
+
+    // Cache the results
+    setCachedStats(storagePath, stats);
+
     return stats;
   } catch (error) {
     logger.error(`Failed to get storage stats:`, error);

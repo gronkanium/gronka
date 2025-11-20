@@ -164,10 +164,6 @@ npm run format         # auto-format code
 
 the project uses eslint and prettier. run `npm run validate` before committing if you care about that stuff.
 
-## inspiration
-
-this is basically a spiritual successor to esmbot.
-
 ## license
 
 MIT

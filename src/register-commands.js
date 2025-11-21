@@ -60,13 +60,13 @@ const commands = [
         name: 'file',
         description: 'the video or image file to convert',
         type: 11, // ATTACHMENT type
-        required: true,
+        required: false,
       },
       {
         name: 'url',
         description: 'url to a video or image file to convert',
         type: 3, // STRING type
-        required: true,
+        required: false,
       },
       {
         name: 'optimize',

@@ -254,8 +254,6 @@ export function startQueueProcessor(processCallback) {
         return;
       }
 
-      logger.info(`Processing ${pending.length} pending request(s)`);
-
       // Process requests one at a time to avoid overwhelming the system
       for (const item of pending) {
         if (item.status !== 'pending') {

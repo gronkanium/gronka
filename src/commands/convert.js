@@ -268,20 +268,23 @@ export async function processConversion(
     let gifBuffer = await fs.readFile(gifPath);
     const originalSize = gifBuffer.length;
 
-    // Upload initial GIF to R2 if not already uploaded (always upload to ensure it's in R2)
-    let initialGifUrl = null;
-    try {
-      initialGifUrl = await saveGif(gifBuffer, hash, GIF_STORAGE_PATH, buildMetadata());
-    } catch (error) {
-      logger.warn(`Failed to upload initial GIF to R2, continuing:`, error.message);
-    }
-
     // Check if optimization is requested
     let finalHash = hash;
     let _finalGifPath = gifPath;
     let optimizedSize = originalSize;
     let wasAutoOptimized = false;
-    let finalGifUrl = initialGifUrl;
+    let finalGifUrl = null;
+
+    // Only upload initial GIF to R2 if optimization is NOT going to happen
+    // (if optimization or auto-optimization is enabled, we'll upload the optimized version instead)
+    const willOptimize = options.optimize || userConfig.autoOptimize;
+    if (!willOptimize) {
+      try {
+        finalGifUrl = await saveGif(gifBuffer, hash, GIF_STORAGE_PATH, buildMetadata());
+      } catch (error) {
+        logger.warn(`Failed to upload initial GIF to R2, continuing:`, error.message);
+      }
+    }
 
     if (options.optimize) {
       // Generate hash for optimized file (include lossy level in hash for uniqueness)

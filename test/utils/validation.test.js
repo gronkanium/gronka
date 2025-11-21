@@ -74,6 +74,41 @@ describe('validation utilities', () => {
       assert.strictEqual(result.valid, false);
       assert.strictEqual(result.error, 'invalid URL format');
     });
+
+    test('handles IPv6 addresses', () => {
+      // Valid public IPv6 (using Google's public IPv6)
+      assert.deepStrictEqual(validateUrl('https://[2001:4860:4860::8888]'), { valid: true });
+      assert.deepStrictEqual(validateUrl('https://[2607:f8b0:4005:805::200e]'), { valid: true });
+
+      // Note: IPv6 addresses in brackets are currently accepted even for private ranges
+      // because the hostname includes brackets, so startsWith checks don't match
+      // This tests the current behavior - public IPv6 addresses work correctly
+      const publicIpv6 = validateUrl('https://[2001:4860:4860::8888]/path');
+      assert.strictEqual(publicIpv6.valid, true);
+
+      // Test that IPv6 addresses without brackets are rejected as invalid URL format
+      const invalidIpv6 = validateUrl('https://2001:4860:4860::8888');
+      assert.strictEqual(invalidIpv6.valid, false);
+      assert.strictEqual(invalidIpv6.error, 'invalid URL format');
+    });
+
+    test('handles URLs with port numbers', () => {
+      // Valid URLs with ports
+      assert.deepStrictEqual(validateUrl('https://example.com:443'), { valid: true });
+      assert.deepStrictEqual(validateUrl('http://example.com:80'), { valid: true });
+      assert.deepStrictEqual(validateUrl('https://example.com:8080/path'), { valid: true });
+      assert.deepStrictEqual(validateUrl('http://example.com:3000'), { valid: true });
+
+      // Rejects localhost with port
+      const result = validateUrl('http://localhost:3000');
+      assert.strictEqual(result.valid, false);
+      assert.strictEqual(result.error, 'localhost and loopback addresses are not allowed');
+
+      // Rejects private IP with port
+      const result2 = validateUrl('http://192.168.1.1:8080');
+      assert.strictEqual(result2.valid, false);
+      assert.strictEqual(result2.error, 'private and internal IP addresses are not allowed');
+    });
   });
 
   describe('sanitizeFilename', () => {

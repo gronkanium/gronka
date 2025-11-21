@@ -191,6 +191,27 @@ describe('database utilities', () => {
         assert.ok(logs.length > 0, `Should have ${level} logs`);
       });
     });
+
+    test('handles null vs undefined metadata', () => {
+      const timestamp = Date.now();
+      const component = 'test';
+      const level = 'INFO';
+
+      // Insert log with null metadata
+      insertLog(timestamp, component, level, 'Message with null', null);
+      const logsWithNull = getLogs({ component, limit: 1 });
+      assert.strictEqual(logsWithNull[0].metadata, null);
+
+      // Insert log with undefined metadata (should default to null)
+      insertLog(timestamp + 1, component, level, 'Message with undefined', undefined);
+      const logsWithUndefined = getLogs({ component, limit: 1 });
+      assert.strictEqual(logsWithUndefined[0].metadata, null);
+
+      // Insert log without metadata parameter (should default to null)
+      insertLog(timestamp + 2, component, level, 'Message without metadata');
+      const logsWithout = getLogs({ component, limit: 1 });
+      assert.strictEqual(logsWithout[0].metadata, null);
+    });
   });
 
   describe('getLogs', () => {
@@ -289,6 +310,57 @@ describe('database utilities', () => {
       for (let i = 0; i < logs.length - 1; i++) {
         assert.ok(logs[i].timestamp <= logs[i + 1].timestamp);
       }
+    });
+
+    test('respects offset parameter for pagination', () => {
+      const now = Date.now();
+      const uniqueComponent = 'test-pagination-' + now;
+      for (let i = 0; i < 5; i++) {
+        insertLog(now + i * 100, uniqueComponent, 'INFO', `Message ${i}`);
+      }
+
+      const firstPage = getLogs({ component: uniqueComponent, limit: 2, offset: 0 });
+      const secondPage = getLogs({ component: uniqueComponent, limit: 2, offset: 2 });
+      const thirdPage = getLogs({ component: uniqueComponent, limit: 2, offset: 4 });
+
+      assert.strictEqual(firstPage.length, 2);
+      assert.strictEqual(secondPage.length, 2);
+      assert.ok(thirdPage.length >= 1);
+
+      // Verify pages don't overlap
+      assert.notStrictEqual(firstPage[0].timestamp, secondPage[0].timestamp);
+      if (thirdPage.length > 0) {
+        assert.notStrictEqual(secondPage[0].timestamp, thirdPage[0].timestamp);
+      }
+    });
+
+    test('filters with combined component, level, and time range', () => {
+      const now = Date.now();
+      const startTime = now - 1000;
+      const endTime = now + 1000;
+
+      // Insert logs with different components, levels, and times
+      insertLog(now - 2000, 'test', 'ERROR', 'Old error'); // Outside time range
+      insertLog(now, 'test', 'ERROR', 'Recent error'); // Inside time range
+      insertLog(now, 'test', 'INFO', 'Recent info'); // Wrong level
+      insertLog(now, 'other', 'ERROR', 'Other component error'); // Wrong component
+      insertLog(now, 'test', 'ERROR', 'Recent error 2'); // Should match
+
+      const logs = getLogs({
+        component: 'test',
+        level: 'ERROR',
+        startTime,
+        endTime,
+        limit: 10,
+      });
+
+      assert.ok(logs.length >= 2);
+      logs.forEach(log => {
+        assert.strictEqual(log.component, 'test');
+        assert.strictEqual(log.level, 'ERROR');
+        assert.ok(log.timestamp >= startTime);
+        assert.ok(log.timestamp <= endTime);
+      });
     });
   });
 

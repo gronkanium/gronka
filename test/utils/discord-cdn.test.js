@@ -42,6 +42,21 @@ describe('discord cdn utilities', () => {
       assert.strictEqual(isDiscordCdnUrl('ftp://cdn.discordapp.com/file.png'), false);
     });
 
+    test('handles http protocol (non-HTTPS)', () => {
+      assert.strictEqual(
+        isDiscordCdnUrl('http://cdn.discordapp.com/attachments/123/456/file.png'),
+        true
+      );
+      assert.strictEqual(
+        isDiscordCdnUrl('http://media.discordapp.net/attachments/123/456/file.png'),
+        true
+      );
+      assert.strictEqual(
+        isDiscordCdnUrl('http://cdn-123.discordapp.com/attachments/123/456/file.png'),
+        true
+      );
+    });
+
     test('handles URLs with paths and query strings', () => {
       assert.strictEqual(
         isDiscordCdnUrl('https://cdn.discordapp.com/attachments/123/456/file.png?ex=abc&is=xyz'),
@@ -126,6 +141,27 @@ describe('discord cdn utilities', () => {
       const url = `https://cdn.discordapp.com/attachments/123/456/file.png?ex=${futureHex}`;
 
       assert.strictEqual(isAttachmentExpired(url), false);
+    });
+
+    test('returns true for expiry parameter with non-hex characters', () => {
+      // Non-hex characters in expiry parameter should be treated as invalid
+      assert.strictEqual(
+        isAttachmentExpired('https://cdn.discordapp.com/attachments/123/456/file.png?ex=ghijklmn'),
+        true
+      );
+      assert.strictEqual(
+        isAttachmentExpired('https://cdn.discordapp.com/attachments/123/456/file.png?ex=xyz123'),
+        true
+      );
+      assert.strictEqual(
+        isAttachmentExpired('https://cdn.discordapp.com/attachments/123/456/file.png?ex=nothex'),
+        true
+      );
+      // Mix of valid hex and invalid characters
+      assert.strictEqual(
+        isAttachmentExpired('https://cdn.discordapp.com/attachments/123/456/file.png?ex=abc123xyz'),
+        true
+      );
     });
   });
 

@@ -8,6 +8,8 @@ import {
   getUser,
   getUniqueUserCount,
   getLogs,
+  getProcessedUrl,
+  insertProcessedUrl,
 } from '../../src/utils/database.js';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -287,6 +289,162 @@ describe('database utilities', () => {
       for (let i = 0; i < logs.length - 1; i++) {
         assert.ok(logs[i].timestamp <= logs[i + 1].timestamp);
       }
+    });
+  });
+
+  describe('getProcessedUrl', () => {
+    test('returns null for non-existent URL hash', () => {
+      const urlHash = 'nonexistent-' + Date.now();
+      const result = getProcessedUrl(urlHash);
+      assert.strictEqual(result, null);
+    });
+
+    test('returns processed URL record when exists', () => {
+      const urlHash = 'test-url-hash-' + Date.now();
+      const fileHash = 'test-file-hash-123';
+      const fileType = 'gif';
+      const fileExtension = '.gif';
+      const fileUrl = 'https://cdn.example.com/gifs/test.gif';
+      const processedAt = Date.now();
+      const userId = 'test-user-123';
+
+      insertProcessedUrl(urlHash, fileHash, fileType, fileExtension, fileUrl, processedAt, userId);
+
+      const result = getProcessedUrl(urlHash);
+      assert.ok(result, 'Should return processed URL record');
+      assert.strictEqual(result.url_hash, urlHash);
+      assert.strictEqual(result.file_hash, fileHash);
+      assert.strictEqual(result.file_type, fileType);
+      assert.strictEqual(result.file_extension, fileExtension);
+      assert.strictEqual(result.file_url, fileUrl);
+      assert.strictEqual(result.processed_at, processedAt);
+      assert.strictEqual(result.user_id, userId);
+    });
+
+    test('handles missing database gracefully', async () => {
+      closeDatabase();
+      const result = getProcessedUrl('test-hash');
+      assert.strictEqual(result, null);
+      await initDatabase();
+    });
+  });
+
+  describe('insertProcessedUrl', () => {
+    test('inserts new processed URL record', () => {
+      const urlHash = 'test-insert-' + Date.now();
+      const fileHash = 'file-hash-456';
+      const fileType = 'video';
+      const fileExtension = '.mp4';
+      const fileUrl = 'https://cdn.example.com/videos/test.mp4';
+      const processedAt = Date.now();
+      const userId = 'user-456';
+
+      insertProcessedUrl(urlHash, fileHash, fileType, fileExtension, fileUrl, processedAt, userId);
+
+      const result = getProcessedUrl(urlHash);
+      assert.ok(result, 'Should exist after insert');
+      assert.strictEqual(result.url_hash, urlHash);
+      assert.strictEqual(result.file_hash, fileHash);
+      assert.strictEqual(result.file_type, fileType);
+      assert.strictEqual(result.file_extension, fileExtension);
+      assert.strictEqual(result.file_url, fileUrl);
+      assert.strictEqual(result.processed_at, processedAt);
+      assert.strictEqual(result.user_id, userId);
+    });
+
+    test('updates existing processed URL record', () => {
+      const urlHash = 'test-update-' + Date.now();
+      const fileHash1 = 'file-hash-1';
+      const fileHash2 = 'file-hash-2';
+      const fileUrl1 = 'https://cdn.example.com/gifs/old.gif';
+      const fileUrl2 = 'https://cdn.example.com/gifs/new.gif';
+      const processedAt1 = Date.now();
+      const processedAt2 = processedAt1 + 1000;
+
+      // Insert first record
+      insertProcessedUrl(urlHash, fileHash1, 'gif', '.gif', fileUrl1, processedAt1, 'user-1');
+
+      // Update with new info
+      insertProcessedUrl(urlHash, fileHash2, 'gif', '.gif', fileUrl2, processedAt2, 'user-2');
+
+      const result = getProcessedUrl(urlHash);
+      assert.ok(result, 'Should exist');
+      assert.strictEqual(result.file_hash, fileHash2, 'Should have updated file hash');
+      assert.strictEqual(result.file_url, fileUrl2, 'Should have updated file URL');
+      assert.strictEqual(result.processed_at, processedAt2, 'Should have updated timestamp');
+      assert.strictEqual(result.user_id, 'user-2', 'Should have updated user ID');
+    });
+
+    test('handles null userId', () => {
+      const urlHash = 'test-null-user-' + Date.now();
+      const fileHash = 'file-hash-null';
+      const fileUrl = 'https://cdn.example.com/videos/test.mp4';
+      const processedAt = Date.now();
+
+      insertProcessedUrl(urlHash, fileHash, 'video', '.mp4', fileUrl, processedAt, null);
+
+      const result = getProcessedUrl(urlHash);
+      assert.ok(result, 'Should exist');
+      assert.strictEqual(result.user_id, null);
+    });
+
+    test('handles different file types', () => {
+      const testCases = [
+        { type: 'gif', ext: '.gif', url: 'https://cdn.example.com/gifs/test.gif' },
+        { type: 'video', ext: '.mp4', url: 'https://cdn.example.com/videos/test.mp4' },
+        { type: 'image', ext: '.png', url: 'https://cdn.example.com/images/test.png' },
+      ];
+
+      testCases.forEach((testCase, index) => {
+        const urlHash = `test-type-${testCase.type}-${Date.now()}-${index}`;
+        const fileHash = `file-hash-${testCase.type}`;
+
+        insertProcessedUrl(
+          urlHash,
+          fileHash,
+          testCase.type,
+          testCase.ext,
+          testCase.url,
+          Date.now(),
+          'test-user'
+        );
+
+        const result = getProcessedUrl(urlHash);
+        assert.ok(result, `Should exist for ${testCase.type}`);
+        assert.strictEqual(result.file_type, testCase.type);
+        assert.strictEqual(result.file_extension, testCase.ext);
+        assert.strictEqual(result.file_url, testCase.url);
+      });
+    });
+
+    test('handles R2 URLs correctly', () => {
+      const urlHash = 'test-r2-' + Date.now();
+      const fileHash = 'file-hash-r2';
+      const r2Url = 'https://r2.example.com/gifs/test.gif';
+      const processedAt = Date.now();
+
+      insertProcessedUrl(urlHash, fileHash, 'gif', '.gif', r2Url, processedAt, 'user-r2');
+
+      const result = getProcessedUrl(urlHash);
+      assert.ok(result, 'Should exist');
+      assert.strictEqual(result.file_url, r2Url);
+      assert.ok(result.file_url.startsWith('https://'), 'Should be a URL');
+    });
+
+    test('handles missing database gracefully', async () => {
+      closeDatabase();
+      assert.doesNotThrow(() => {
+        insertProcessedUrl(
+          'test-hash',
+          'file-hash',
+          'gif',
+          '.gif',
+          'https://example.com/test.gif',
+          Date.now(),
+          'user'
+        );
+      });
+      await initDatabase();
     });
   });
 });

@@ -6,7 +6,7 @@ description: Terms of use for gronka Discord bot. Acceptable use policy, user re
 
 # Terms of Use
 
-**Last Updated:** {{ "now" | date: "%B %d, %Y" }}
+**Last Updated:** November 15, 2025
 
 ## Agreement to Terms
 

@@ -15,8 +15,9 @@ import {
   notifyDownloadFailed,
 } from './utils/deferred-download-notifier.js';
 import { isAdmin } from './utils/rate-limit.js';
-import { queueCobaltRequest } from './utils/cobalt-queue.js';
+import { queueCobaltRequest, hashUrl } from './utils/cobalt-queue.js';
 import { downloadFromSocialMedia } from './utils/cobalt.js';
+import { getProcessedUrl, insertProcessedUrl, initDatabase } from './utils/database.js';
 import fs from 'fs/promises';
 import path from 'path';
 import crypto from 'crypto';
@@ -36,7 +37,7 @@ import {
   initializeR2UsageCache,
 } from './utils/storage.js';
 import { getUserConfig } from './utils/user-config.js';
-import { optimizeGif, calculateSizeReduction, formatSizeMb } from './utils/gif-optimizer.js';
+import { optimizeGif } from './utils/gif-optimizer.js';
 
 // Initialize logger
 const logger = createLogger('bot');
@@ -155,6 +156,23 @@ async function handleButtonInteraction(interaction) {
     logger.info(`User ${userId} (${username}) requested deferred download: ${url}`);
 
     try {
+      // Initialize database if needed
+      await initDatabase();
+
+      // Check if URL has already been processed
+      const urlHash = hashUrl(url);
+      const processedUrl = getProcessedUrl(urlHash);
+      if (processedUrl) {
+        logger.info(
+          `Deferred download: URL already processed (hash: ${urlHash.substring(0, 8)}...), returning existing file URL immediately: ${processedUrl.file_url}`
+        );
+        await interaction.update({
+          content: processedUrl.file_url,
+          components: [],
+        });
+        return;
+      }
+
       // Add to deferred queue
       const requestId = await addToQueue({
         url,
@@ -212,12 +230,39 @@ async function processDeferredDownload(queueItem) {
   try {
     updateOperationStatus(operationId, 'running');
 
+    // Initialize database if needed
+    await initDatabase();
+
+    // Check if URL has already been processed
+    const urlHash = hashUrl(url);
+    const processedUrl = getProcessedUrl(urlHash);
+    if (processedUrl) {
+      logger.info(
+        `Deferred download: URL already processed (hash: ${urlHash.substring(0, 8)}...), returning existing file URL: ${processedUrl.file_url}`
+      );
+      updateOperationStatus(operationId, 'success', { fileSize: 0 });
+      await notifyDownloadComplete(client, queueItem, processedUrl.file_url);
+      return processedUrl.file_url;
+    }
+
     const maxSize = adminUser ? Infinity : botConfig.maxVideoSize;
 
     // Download via queue with retry logic
-    const fileData = await queueCobaltRequest(url, async () => {
-      return await downloadFromSocialMedia(botConfig.cobaltApiUrl, url, adminUser, maxSize);
-    });
+    let fileData;
+    try {
+      fileData = await queueCobaltRequest(url, async () => {
+        return await downloadFromSocialMedia(botConfig.cobaltApiUrl, url, adminUser, maxSize);
+      });
+    } catch (error) {
+      // Handle cached URL error
+      if (error.message && error.message.startsWith('URL_ALREADY_PROCESSED:')) {
+        const fileUrl = error.message.split(':')[1];
+        updateOperationStatus(operationId, 'success', { fileSize: 0 });
+        await notifyDownloadComplete(client, queueItem, fileUrl);
+        return fileUrl;
+      }
+      throw error;
+    }
 
     // Handle multiple photos
     if (Array.isArray(fileData)) {
@@ -266,9 +311,12 @@ async function processDeferredDownload(queueItem) {
         photoCount: photoResults.length,
       });
 
-      const totalSizeMB = (totalSize / (1024 * 1024)).toFixed(2);
+      // Note: For multiple photos, we don't record the URL in processed_urls
+      // because each photo has its own URL, and we can't track which photo came from which picker selection
+      // The file hash deduplication handles this case
+
       const photoUrls = photoResults.map(p => p.url).join('\n');
-      const resultMessage = `downloaded ${photoResults.length} photos:\n${photoUrls}\n-# total size: ${totalSizeMB} mb`;
+      const resultMessage = photoUrls;
 
       await notifyDownloadComplete(client, queueItem, resultMessage);
       return resultMessage;
@@ -327,8 +375,12 @@ async function processDeferredDownload(queueItem) {
         }
       }
 
+      // Record processed URL in database (file exists but URL might not be recorded yet)
+      insertProcessedUrl(urlHash, hash, fileType, ext, fileUrl, Date.now(), userId);
+      logger.debug(`Recorded processed URL in database (urlHash: ${urlHash.substring(0, 8)}...)`);
+
       updateOperationStatus(operationId, 'success', { fileSize: existingSize });
-      const resultMessage = `${fileType} already exists: ${fileUrl}`;
+      const resultMessage = fileUrl;
 
       await notifyDownloadComplete(client, queueItem, resultMessage);
       return resultMessage;
@@ -393,18 +445,13 @@ async function processDeferredDownload(queueItem) {
       finalSize = finalStats.size;
     }
 
-    const finalSizeMB = (finalSize / (1024 * 1024)).toFixed(2);
+    // Record processed URL in database
+    insertProcessedUrl(urlHash, hash, fileType, ext, fileUrl, Date.now(), userId);
+    logger.debug(`Recorded processed URL in database (urlHash: ${urlHash.substring(0, 8)}...)`);
 
     updateOperationStatus(operationId, 'success', { fileSize: finalSize });
 
-    let resultMessage = `${fileType} downloaded: ${fileUrl}\n-# ${fileType} size: ${finalSizeMB} mb`;
-
-    if (userConfig.autoOptimize && fileType === 'gif') {
-      const originalSize = fileData.buffer.length;
-      const reduction = calculateSizeReduction(originalSize, finalSize);
-      const reductionText = reduction >= 0 ? `-${reduction}%` : `+${Math.abs(reduction)}%`;
-      resultMessage = `${fileType} downloaded: ${fileUrl}\n-# ${fileType} size: ${formatSizeMb(finalSize)} (${reductionText})`;
-    }
+    const resultMessage = fileUrl;
 
     await notifyDownloadComplete(client, queueItem, resultMessage);
     return resultMessage;

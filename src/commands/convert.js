@@ -23,7 +23,7 @@ import { convertToGif, getVideoMetadata, convertImageToGif } from '../utils/vide
 import { gifExists, getGifPath, cleanupTempFiles, saveGif } from '../utils/storage.js';
 import { getUserConfig } from '../utils/user-config.js';
 import { trackRecentConversion } from '../utils/user-tracking.js';
-import { optimizeGif, calculateSizeReduction, formatSizeMb } from '../utils/gif-optimizer.js';
+import { optimizeGif } from '../utils/gif-optimizer.js';
 import { createOperation, updateOperationStatus } from '../utils/operations-tracker.js';
 import { notifyCommandSuccess, notifyCommandFailure } from '../utils/ntfy-notifier.js';
 
@@ -90,15 +90,26 @@ export async function processConversion(
     // Check if GIF already exists
     const exists = await gifExists(hash, GIF_STORAGE_PATH);
     if (exists && !options.optimize) {
-      const gifUrl = `${CDN_BASE_URL}/${hash}.gif`;
       logger.info(`GIF already exists (hash: ${hash}) for user ${userId}`);
       // Get file size for existing GIF
       const gifPath = getGifPath(hash, GIF_STORAGE_PATH);
-      const stats = await fs.stat(gifPath);
-      updateOperationStatus(operationId, 'success', { fileSize: stats.size });
+      let gifUrl;
+      let fileSize = 0;
+      if (gifPath.startsWith('http://') || gifPath.startsWith('https://')) {
+        // Already an R2 URL
+        gifUrl = gifPath;
+        // Can't stat R2 URLs, use 0 as placeholder
+        fileSize = 0;
+      } else {
+        // Local path, construct URL
+        gifUrl = `${CDN_BASE_URL}/${hash}.gif`;
+        const stats = await fs.stat(gifPath);
+        fileSize = stats.size;
+      }
+      updateOperationStatus(operationId, 'success', { fileSize });
       recordRateLimit(userId);
       await interaction.editReply({
-        content: `gif already exists : ${gifUrl}`,
+        content: gifUrl,
       });
       return;
     }
@@ -406,20 +417,9 @@ export async function processConversion(
     // Update operation to success with file size
     updateOperationStatus(operationId, 'success', { fileSize: optimizedSize });
 
-    // Format response message
-    if (options.optimize || wasAutoOptimized) {
-      const reduction = calculateSizeReduction(originalSize, optimizedSize);
-      const optimizedSizeMb = formatSizeMb(optimizedSize);
-      const reductionText = reduction >= 0 ? `-${reduction}%` : `+${Math.abs(reduction)}%`;
-      await interaction.editReply({
-        content: `gif created : ${gifUrl}\n-# gif size: ${optimizedSizeMb} (${reductionText})`,
-      });
-    } else {
-      const gifSizeMB = (optimizedSize / (1024 * 1024)).toFixed(2);
-      await interaction.editReply({
-        content: `gif created : ${gifUrl}\n-# gif size: ${gifSizeMB} mb`,
-      });
-    }
+    await interaction.editReply({
+      content: gifUrl,
+    });
 
     // Send success notification
     await notifyCommandSuccess(username, 'convert');

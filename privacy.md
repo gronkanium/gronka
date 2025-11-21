@@ -6,7 +6,7 @@ description: Privacy policy for gronka Discord bot. Learn how we handle your dat
 
 # Privacy Policy
 
-**Last Updated:** {{ "now" | date: "%B %d, %Y" }}
+**Last Updated:** November 15, 2025
 
 ## Introduction
 

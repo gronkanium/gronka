@@ -26,7 +26,13 @@ before(async () => {
   if (fs.existsSync(tempDbPath)) {
     fs.unlinkSync(tempDbPath);
   }
+  // Ensure database is initialized before tests run
   await initDatabase();
+  // Verify database is actually initialized
+  if (!getProcessedUrl('test-verify-' + Date.now())) {
+    // If table doesn't exist, reinitialize
+    await initDatabase();
+  }
 });
 
 after(() => {
@@ -86,6 +92,9 @@ describe('cobalt-queue utilities', () => {
 
   describe('queueCobaltRequest with processed URLs', () => {
     test('returns cached URL when URL already processed', async () => {
+      // Ensure database is initialized
+      await initDatabase();
+
       const url = 'https://x.com/user/status/123456789';
       const urlHash = hashUrl(url);
       const fileHash = 'test-file-hash-123';
@@ -121,6 +130,9 @@ describe('cobalt-queue utilities', () => {
     });
 
     test('proceeds with download when URL not processed', async () => {
+      // Ensure database is initialized
+      await initDatabase();
+
       const url = 'https://x.com/user/status/fresh-' + Date.now();
       const urlHash = hashUrl(url);
 
@@ -154,6 +166,9 @@ describe('cobalt-queue utilities', () => {
     });
 
     test('handles concurrent requests for same unprocessed URL', async () => {
+      // Ensure database is initialized
+      await initDatabase();
+
       const url = 'https://x.com/user/status/concurrent-' + Date.now();
 
       // Mock download function that takes some time

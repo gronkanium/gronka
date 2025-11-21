@@ -7,7 +7,6 @@ import { handleStatsCommand } from './commands/stats.js';
 import { handleDownloadCommand, handleDownloadContextMenuCommand } from './commands/download.js';
 import { handleOptimizeCommand, handleOptimizeContextMenuCommand } from './commands/optimize.js';
 import { handleConvertCommand, handleConvertContextMenu } from './commands/convert.js';
-import { handleAdvancedContextMenuCommand } from './commands/convert-advanced.js';
 import { handleInfoCommand } from './commands/info.js';
 import { handleModalSubmit } from './handlers/modals.js';
 import { initQueue, startQueueProcessor, addToQueue } from './utils/deferred-download-queue.js';
@@ -113,9 +112,7 @@ client.on(Events.InteractionCreate, async interaction => {
     await handleModalSubmit(interaction, modalAttachmentCache);
   } else if (interaction.isMessageContextMenuCommand()) {
     // Route to appropriate handler based on command name
-    if (interaction.commandName === 'convert to gif (advanced)') {
-      await handleAdvancedContextMenuCommand(interaction, modalAttachmentCache);
-    } else if (interaction.commandName === 'download') {
+    if (interaction.commandName === 'download') {
       await handleDownloadContextMenuCommand(interaction);
     } else if (interaction.commandName === 'optimize') {
       await handleOptimizeContextMenuCommand(interaction, modalAttachmentCache);

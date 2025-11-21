@@ -97,19 +97,29 @@ npm run docker:restart     # Restart all containers
 npm run docker:register    # Register Discord commands in container
 ```
 
+### Docker Services
+
+The Docker Compose setup includes several services:
+
+- **app** - Main service running both the Discord bot and CDN server
+- **cobalt** - Self-hosted API for downloading media from social platforms (Twitter/X, TikTok, Instagram, YouTube, Reddit, Facebook, Threads). Runs by default on port 9000
+- **giflossy** - Service used for GIF optimization via docker exec. Used internally by the bot for the `/optimize` command
+- **watchtower** - Automatically updates the cobalt image. Runs cleanup and updates every 15 minutes
+- **webui** - Optional dashboard for viewing statistics (requires profile, runs on port 3001)
+
+All services except `webui` start automatically when running `docker compose up`. The `webui` service requires a profile to be enabled.
+
 ### Docker Compose Profiles
 
-Optional services are available via Docker Compose profiles:
+Only the `webui` service uses Docker Compose profiles. All other services (app, cobalt, giflossy, watchtower) start automatically when running `docker compose up`.
 
-- **webui** - Dashboard for viewing stats (runs on port 3001)
-
-To start optional services:
+To start the optional webui service:
 
 ```bash
 # Start webui
 docker compose --profile webui up -d webui
 
-# Start all services including profiles
+# Start all services including webui
 docker compose --profile webui up -d
 ```
 
@@ -202,6 +212,12 @@ See `package.json` for a full list of available npm scripts. Common ones include
 - `npm run test:watch` - Run tests in watch mode
 - `npm run migrate:storage` - Migrate storage to R2
 - `npm run upload:404` - Upload 404 image to R2
+- `npm run user:stats` - Generate user statistics report from database
+
+### Documentation
+
+- `npm run jekyll:serve` - Serve the Jekyll documentation site (port 5173)
+- `npm run jekyll:build` - Build the Jekyll documentation site
 
 ### Docker
 

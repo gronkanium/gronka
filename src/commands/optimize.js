@@ -12,7 +12,7 @@ import { createLogger } from '../utils/logger.js';
 import { botConfig } from '../utils/config.js';
 import { validateUrl } from '../utils/validation.js';
 import { downloadImage, downloadFileFromUrl, parseTenorUrl } from '../utils/file-downloader.js';
-import { checkRateLimit, isAdmin } from '../utils/rate-limit.js';
+import { checkRateLimit, isAdmin, recordRateLimit } from '../utils/rate-limit.js';
 import {
   isGifFile,
   extractHashFromCdnUrl,
@@ -23,6 +23,7 @@ import {
 } from '../utils/gif-optimizer.js';
 import { getGifPath, cleanupTempFiles, saveGif } from '../utils/storage.js';
 import { createOperation, updateOperationStatus } from '../utils/operations-tracker.js';
+import { notifyCommandSuccess, notifyCommandFailure } from '../utils/ntfy-notifier.js';
 
 const logger = createLogger('optimize');
 
@@ -140,12 +141,21 @@ export async function processOptimization(
     await interaction.editReply({
       content: `gif optimized: ${optimizedUrl}\n-# gif size ${optimizedSizeMb} (${reductionText})`,
     });
+
+    // Send success notification
+    await notifyCommandSuccess(username, 'optimize');
+
+    // Record rate limit after successful optimization
+    recordRateLimit(userId);
   } catch (error) {
     logger.error(`GIF optimization failed for user ${userId}:`, error);
     updateOperationStatus(operationId, 'error', { error: error.message || 'unknown error' });
     await interaction.editReply({
       content: error.message || 'an error occurred while optimizing the gif.',
     });
+
+    // Send failure notification
+    await notifyCommandFailure(username, 'optimize');
   } finally {
     // Clean up temp files
     await cleanupTempFiles(tempFiles);

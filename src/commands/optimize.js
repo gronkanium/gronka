@@ -19,7 +19,6 @@ import {
   checkLocalGif,
   optimizeGif,
   calculateSizeReduction,
-  formatSizeMb,
 } from '../utils/gif-optimizer.js';
 import { getGifPath, cleanupTempFiles, saveGif } from '../utils/storage.js';
 import { createOperation, updateOperationStatus } from '../utils/operations-tracker.js';
@@ -127,7 +126,6 @@ export async function processOptimization(
 
     // Calculate size reduction
     const reduction = calculateSizeReduction(originalSize, optimizedSize);
-    const optimizedSizeMb = formatSizeMb(optimizedSize);
 
     logger.info(
       `GIF optimization completed: ${originalSize} bytes -> ${optimizedSize} bytes (${reduction}% reduction) for user ${userId}`
@@ -136,10 +134,8 @@ export async function processOptimization(
     // Update operation to success with file size
     updateOperationStatus(operationId, 'success', { fileSize: optimizedSize });
 
-    // Format response message
-    const reductionText = reduction >= 0 ? `-${reduction}%` : `+${Math.abs(reduction)}%`;
     await interaction.editReply({
-      content: `gif optimized: ${optimizedUrl}\n-# gif size ${optimizedSizeMb} (${reductionText})`,
+      content: optimizedUrl,
     });
 
     // Send success notification

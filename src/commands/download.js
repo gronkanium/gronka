@@ -22,9 +22,10 @@ import {
   saveImage,
   detectFileType,
 } from '../utils/storage.js';
-import { optimizeGif, calculateSizeReduction, formatSizeMb } from '../utils/gif-optimizer.js';
-import { queueCobaltRequest } from '../utils/cobalt-queue.js';
+import { optimizeGif } from '../utils/gif-optimizer.js';
+import { queueCobaltRequest, hashUrl } from '../utils/cobalt-queue.js';
 import { notifyCommandSuccess, notifyCommandFailure } from '../utils/ntfy-notifier.js';
+import { getProcessedUrl, insertProcessedUrl, initDatabase } from '../utils/database.js';
 
 const logger = createLogger('download');
 
@@ -82,13 +83,49 @@ async function processDownload(interaction, url) {
     // Update operation to running
     updateOperationStatus(operationId, 'running');
 
+    // Initialize database if needed
+    await initDatabase();
+
+    // Check if URL has already been processed
+    const urlHash = hashUrl(url);
+    const processedUrl = getProcessedUrl(urlHash);
+    if (processedUrl) {
+      logger.info(
+        `URL already processed (hash: ${urlHash.substring(0, 8)}...), returning existing file URL: ${processedUrl.file_url}`
+      );
+      const fileUrl = processedUrl.file_url;
+      updateOperationStatus(operationId, 'success', { fileSize: 0 });
+      recordRateLimit(userId);
+      await interaction.editReply({
+        content: fileUrl,
+      });
+      await notifyCommandSuccess(username, 'download');
+      return;
+    }
+
     logger.info(`Downloading file from Cobalt: ${url}`);
     const maxSize = adminUser ? Infinity : MAX_VIDEO_SIZE;
 
     // Wrap Cobalt download in queue to handle concurrency and deduplication
-    const fileData = await queueCobaltRequest(url, async () => {
-      return await downloadFromSocialMedia(COBALT_API_URL, url, adminUser, maxSize);
-    });
+    let fileData;
+    try {
+      fileData = await queueCobaltRequest(url, async () => {
+        return await downloadFromSocialMedia(COBALT_API_URL, url, adminUser, maxSize);
+      });
+    } catch (error) {
+      // Handle cached URL error
+      if (error.message && error.message.startsWith('URL_ALREADY_PROCESSED:')) {
+        const fileUrl = error.message.split(':')[1];
+        updateOperationStatus(operationId, 'success', { fileSize: 0 });
+        recordRateLimit(userId);
+        await interaction.editReply({
+          content: fileUrl,
+        });
+        await notifyCommandSuccess(username, 'download');
+        return;
+      }
+      throw error;
+    }
 
     // Check if we got multiple photos (array) or single file
     if (Array.isArray(fileData)) {
@@ -142,9 +179,12 @@ async function processDownload(interaction, url) {
       });
 
       // Build reply with all photo URLs
-      const totalSizeMB = (totalSize / (1024 * 1024)).toFixed(2);
       const photoUrls = photoResults.map(p => p.url).join('\n');
-      const replyContent = `downloaded ${photoResults.length} photos:\n${photoUrls}\n-# total size: ${totalSizeMB} mb`;
+      const replyContent = photoUrls;
+
+      // Note: For multiple photos, we don't record the URL in processed_urls
+      // because each photo has its own URL, and we can't track which photo came from which picker selection
+      // The file hash deduplication handles this case
 
       recordRateLimit(userId);
       await interaction.editReply({
@@ -215,10 +255,15 @@ async function processDownload(interaction, url) {
           logger.debug(`File exists in R2 but not locally, using buffer size: ${existingSize}`);
         }
       }
+
+      // Record processed URL in database (file exists but URL might not be recorded yet)
+      insertProcessedUrl(urlHash, hash, fileType, ext, fileUrl, Date.now(), userId);
+      logger.debug(`Recorded processed URL in database (urlHash: ${urlHash.substring(0, 8)}...)`);
+
       updateOperationStatus(operationId, 'success', { fileSize: existingSize });
       recordRateLimit(userId);
       await interaction.editReply({
-        content: `${fileType} already exists : ${fileUrl}`,
+        content: fileUrl,
       });
 
       // Send success notification
@@ -298,21 +343,15 @@ async function processDownload(interaction, url) {
         `Successfully saved ${fileType} (hash: ${hash}, size: ${finalSizeMB}MB) for user ${userId}${userConfig.autoOptimize && fileType === 'gif' ? ' [AUTO-OPTIMIZED]' : ''}`
       );
 
+      // Record processed URL in database
+      insertProcessedUrl(urlHash, hash, fileType, ext, fileUrl, Date.now(), userId);
+      logger.debug(`Recorded processed URL in database (urlHash: ${urlHash.substring(0, 8)}...)`);
+
       // Update operation to success with file size
       updateOperationStatus(operationId, 'success', { fileSize: finalSize });
 
-      let replyContent = `${fileType} downloaded : ${fileUrl}\n-# ${fileType} size: ${finalSizeMB} mb`;
-
-      // Show optimization info if auto-optimized
-      if (userConfig.autoOptimize && fileType === 'gif') {
-        const originalSize = fileData.buffer.length;
-        const reduction = calculateSizeReduction(originalSize, finalSize);
-        const reductionText = reduction >= 0 ? `-${reduction}%` : `+${Math.abs(reduction)}%`;
-        replyContent = `${fileType} downloaded : ${fileUrl}\n-# ${fileType} size: ${formatSizeMb(finalSize)} (${reductionText})`;
-      }
-
       await interaction.editReply({
-        content: replyContent,
+        content: fileUrl,
       });
 
       // Send success notification

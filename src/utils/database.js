@@ -86,6 +86,22 @@ export async function initDatabase() {
         CREATE INDEX IF NOT EXISTS idx_logs_level ON logs(level);
         CREATE INDEX IF NOT EXISTS idx_logs_component_timestamp ON logs(component, timestamp);
       `);
+
+      // Create processed_urls table
+      db.exec(`
+        CREATE TABLE IF NOT EXISTS processed_urls (
+          url_hash TEXT PRIMARY KEY,
+          file_hash TEXT NOT NULL,
+          file_type TEXT NOT NULL,
+          file_extension TEXT,
+          file_url TEXT NOT NULL,
+          processed_at INTEGER NOT NULL,
+          user_id TEXT
+        );
+
+        CREATE INDEX IF NOT EXISTS idx_processed_urls_file_hash ON processed_urls(file_hash);
+        CREATE INDEX IF NOT EXISTS idx_processed_urls_processed_at ON processed_urls(processed_at);
+      `);
     } catch (error) {
       initPromise = null; // Reset on error so it can be retried
       throw error;
@@ -104,6 +120,7 @@ export function closeDatabase() {
     db.close();
     db = null;
   }
+  initPromise = null; // Reset init promise so database can be reinitialized
 }
 
 /**
@@ -258,4 +275,61 @@ export function getLogs(options = {}) {
 
   const stmt = db.prepare(query);
   return stmt.all(...params);
+}
+
+/**
+ * Get processed URL record by URL hash
+ * @param {string} urlHash - SHA-256 hash of the URL
+ * @returns {Object|null} Processed URL record or null if not found
+ */
+export function getProcessedUrl(urlHash) {
+  if (!db) {
+    console.error('Database not initialized. Call initDatabase() first.');
+    return null;
+  }
+
+  const stmt = db.prepare('SELECT * FROM processed_urls WHERE url_hash = ?');
+  return stmt.get(urlHash) || null;
+}
+
+/**
+ * Insert or update a processed URL record
+ * @param {string} urlHash - SHA-256 hash of the URL
+ * @param {string} fileHash - File content hash (MD5 or SHA-256)
+ * @param {string} fileType - File type ('gif', 'video', or 'image')
+ * @param {string} fileExtension - File extension (e.g., '.mp4', '.gif')
+ * @param {string} fileUrl - Final CDN URL or path
+ * @param {number} processedAt - Unix timestamp in milliseconds
+ * @param {string} [userId] - Discord user ID who requested it
+ * @returns {void}
+ */
+export function insertProcessedUrl(
+  urlHash,
+  fileHash,
+  fileType,
+  fileExtension,
+  fileUrl,
+  processedAt,
+  userId = null
+) {
+  if (!db) {
+    console.error('Database not initialized. Call initDatabase() first.');
+    return;
+  }
+
+  // Check if record exists
+  const existing = getProcessedUrl(urlHash);
+  if (existing) {
+    // Update existing record (in case file URL or other info changed)
+    const updateStmt = db.prepare(
+      'UPDATE processed_urls SET file_hash = ?, file_type = ?, file_extension = ?, file_url = ?, processed_at = ?, user_id = ? WHERE url_hash = ?'
+    );
+    updateStmt.run(fileHash, fileType, fileExtension, fileUrl, processedAt, userId, urlHash);
+  } else {
+    // Insert new record
+    const insertStmt = db.prepare(
+      'INSERT INTO processed_urls (url_hash, file_hash, file_type, file_extension, file_url, processed_at, user_id) VALUES (?, ?, ?, ?, ?, ?, ?)'
+    );
+    insertStmt.run(urlHash, fileHash, fileType, fileExtension, fileUrl, processedAt, userId);
+  }
 }

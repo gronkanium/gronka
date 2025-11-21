@@ -1,5 +1,7 @@
 import crypto from 'crypto';
 import { createLogger } from './logger.js';
+import { getProcessedUrl } from './database.js';
+import { initDatabase } from './database.js';
 
 const logger = createLogger('cobalt-queue');
 
@@ -20,7 +22,7 @@ let activeRequests = 0;
  * @param {string} url - URL to hash
  * @returns {string} URL hash
  */
-function hashUrl(url) {
+export function hashUrl(url) {
   return crypto.createHash('sha256').update(url).digest('hex');
 }
 
@@ -70,6 +72,20 @@ async function executeRequest(request) {
  */
 export async function queueCobaltRequest(url, downloadFn) {
   const urlHash = hashUrl(url);
+
+  // Initialize database if needed
+  await initDatabase();
+
+  // Check if this URL has already been processed
+  const processedUrl = getProcessedUrl(urlHash);
+  if (processedUrl) {
+    logger.info(
+      `URL already processed (hash: ${urlHash.substring(0, 8)}...), returning existing file URL: ${processedUrl.file_url}`
+    );
+    // Return early with cached info - this will be caught by download handlers
+    // We return null to indicate no download needed, and the handlers will check getProcessedUrl again
+    throw new Error(`URL_ALREADY_PROCESSED:${processedUrl.file_url}`);
+  }
 
   // Check if this URL is already being downloaded
   if (inProgressDownloads.has(urlHash)) {

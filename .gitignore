@@ -60,7 +60,7 @@ vendor/
 _posts/
 posts/
 
-# Jekyll site files (exclude these, keep changelog/posts)
+# Jekyll site files
 _data/
 _layouts/
 _includes/
@@ -74,7 +74,7 @@ index.md
 favicon.png
 robots.txt
 @blog
-blog/
+/blog/
 
 # Changelog - draft posts
 _drafts/

@@ -177,6 +177,43 @@ function getStoragePath() {
 const storagePath = getStoragePath();
 
 /**
+ * Restrict endpoint to localhost/internal network only
+ * @param {Request} req - Express request
+ * @param {Response} res - Express response
+ * @param {Function} next - Next middleware
+ */
+function restrictToInternal(req, res, next) {
+  const ip = req.ip || '';
+  const ipStr = String(ip);
+
+  // Allow localhost (IPv4 and IPv6)
+  if (
+    ipStr === '127.0.0.1' ||
+    ipStr === '::1' ||
+    ipStr === '::ffff:127.0.0.1' ||
+    ipStr === 'localhost'
+  ) {
+    return next();
+  }
+
+  // Allow Docker internal network IPs
+  if (
+    ipStr.startsWith('172.') ||
+    ipStr.startsWith('192.168.') ||
+    ipStr.startsWith('10.') ||
+    ipStr.includes('::ffff:172.') ||
+    ipStr.includes('::ffff:192.168.') ||
+    ipStr.includes('::ffff:10.')
+  ) {
+    return next();
+  }
+
+  // Block external/public requests
+  logger.warn(`blocked external access to ${req.path} from ${ipStr}`);
+  return res.status(403).json({ error: 'access denied' });
+}
+
+/**
  * Basic authentication middleware for sensitive endpoints
  * @param {Request} req - Express request
  * @param {Response} res - Express response
@@ -213,16 +250,12 @@ const publicPath = path.resolve(process.cwd(), 'src', 'public');
 app.get('/', (req, res) => {
   logger.debug('Root endpoint requested');
   res.json({
-    service: 'gronka cdn',
+    service: 'gronka api',
     endpoints: {
-      health: '/health',
-      stats: '/stats',
-      gifs: '/gifs/{hash}.gif',
-      videos: '/videos/{hash}.{ext}',
-      images: '/images/{hash}.{ext}',
       terms: '/terms',
       privacy: '/privacy',
     },
+    note: 'files are served from r2, not locally',
   });
 });
 
@@ -282,8 +315,8 @@ async function checkStorageAccess(dirPath) {
   }
 }
 
-// Enhanced health check endpoint
-app.get('/health', async (req, res) => {
+// Enhanced health check endpoint - restricted to internal network
+app.get('/health', restrictToInternal, async (req, res) => {
   const uptime = process.uptime();
   logger.debug('Health check requested');
 
@@ -353,8 +386,8 @@ app.get('/api/health', (req, res) => {
   });
 });
 
-// Stats endpoint (optional) - protected with basic auth if configured
-app.get('/stats', statsLimiter, basicAuth, async (req, res) => {
+// Stats endpoint (optional) - restricted to internal network and protected with basic auth if configured
+app.get('/stats', restrictToInternal, statsLimiter, basicAuth, async (req, res) => {
   try {
     logger.debug('Stats requested');
     const stats = await getStorageStats(GIF_STORAGE_PATH);
@@ -454,10 +487,8 @@ try {
 
 // Start server
 app.listen(SERVER_PORT, HOST, () => {
-  logger.info(`cdn server running on http://${HOST}:${SERVER_PORT}`);
-  logger.info(`serving gifs from: ${storagePath}`);
-  logger.info(`health check: http://${HOST}:${SERVER_PORT}/health`);
-  logger.info(`stats: http://${HOST}:${SERVER_PORT}/stats`);
+  logger.info(`server running on http://${HOST}:${SERVER_PORT}`);
+  logger.info(`storage path: ${storagePath}`);
 });
 
 // Handle errors

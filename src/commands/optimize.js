@@ -11,7 +11,7 @@ import crypto from 'crypto';
 import { createLogger } from '../utils/logger.js';
 import { botConfig } from '../utils/config.js';
 import { validateUrl } from '../utils/validation.js';
-import { downloadImage, downloadFileFromUrl } from '../utils/file-downloader.js';
+import { downloadImage, downloadFileFromUrl, parseTenorUrl } from '../utils/file-downloader.js';
 import { checkRateLimit, isAdmin } from '../utils/rate-limit.js';
 import {
   isGifFile,
@@ -246,9 +246,27 @@ export async function handleOptimizeContextMenuCommand(interaction, modalAttachm
       }
 
       if (!useLocalFile) {
+        // Check if URL is a Tenor GIF link and parse it
+        let actualUrl = url;
+        const isTenorUrl = /^https?:\/\/(www\.)?tenor\.com\/view\/.+-gif-\d+/i.test(url);
+        if (isTenorUrl) {
+          logger.info(`Detected Tenor URL, parsing to extract GIF URL: ${url}`);
+          try {
+            actualUrl = await parseTenorUrl(url);
+            logger.info(`Resolved Tenor URL to: ${actualUrl}`);
+          } catch (error) {
+            logger.error(`Failed to parse Tenor URL for user ${userId}:`, error);
+            await interaction.reply({
+              content: error.message || 'failed to parse Tenor URL.',
+              flags: MessageFlags.Ephemeral,
+            });
+            return;
+          }
+        }
+
         // Download the GIF
-        logger.info(`Downloading GIF from URL: ${url}`);
-        const fileData = await downloadFileFromUrl(url, adminUser, interaction.client);
+        logger.info(`Downloading GIF from URL: ${actualUrl}`);
+        const fileData = await downloadFileFromUrl(actualUrl, adminUser, interaction.client);
 
         // Validate it's a GIF
         if (!isGifFile(fileData.filename, fileData.contentType)) {
@@ -426,9 +444,26 @@ export async function handleOptimizeCommand(interaction) {
       }
 
       if (!useLocalFile) {
+        // Check if URL is a Tenor GIF link and parse it
+        let actualUrl = url;
+        const isTenorUrl = /^https?:\/\/(www\.)?tenor\.com\/view\/.+-gif-\d+/i.test(url);
+        if (isTenorUrl) {
+          logger.info(`Detected Tenor URL, parsing to extract GIF URL: ${url}`);
+          try {
+            actualUrl = await parseTenorUrl(url);
+            logger.info(`Resolved Tenor URL to: ${actualUrl}`);
+          } catch (error) {
+            logger.error(`Failed to parse Tenor URL for user ${userId}:`, error);
+            await interaction.editReply({
+              content: error.message || 'failed to parse Tenor URL.',
+            });
+            return;
+          }
+        }
+
         // Download the GIF
-        logger.info(`Downloading GIF from URL: ${url}`);
-        const fileData = await downloadFileFromUrl(url, adminUser, interaction.client);
+        logger.info(`Downloading GIF from URL: ${actualUrl}`);
+        const fileData = await downloadFileFromUrl(actualUrl, adminUser, interaction.client);
 
         // Validate it's a GIF
         if (!isGifFile(fileData.filename, fileData.contentType)) {

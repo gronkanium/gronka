@@ -141,7 +141,7 @@ function getBotConfig() {
     cdnBaseUrl: getStringEnv('CDN_BASE_URL', 'https://cdn.gronka.p1x.dev/gifs'),
     maxGifWidth: parseIntEnv('MAX_GIF_WIDTH', 720, 1, 4096),
     maxGifDuration: parseIntEnv('MAX_GIF_DURATION', 30, 1, 300),
-    defaultFps: parseIntEnv('DEFAULT_FPS', 15, 1, 120),
+    defaultFps: parseIntEnv('DEFAULT_FPS', 30, 1, 120),
     maxVideoSize: 500 * 1024 * 1024, // 500MB
     maxImageSize: 50 * 1024 * 1024, // 50MB
     rateLimitCooldown: 30000, // 30 seconds

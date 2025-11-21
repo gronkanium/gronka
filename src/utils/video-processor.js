@@ -60,7 +60,7 @@ async function checkFFmpegInstalled() {
  * @param {string} outputPath - Path to output GIF file
  * @param {Object} options - Conversion options
  * @param {number} options.width - Output width in pixels (default: 480)
- * @param {number} options.fps - Frames per second (default: 15)
+ * @param {number} options.fps - Frames per second (default: 30)
  * @param {number|null} options.startTime - Trim start time in seconds (optional)
  * @param {number|null} options.duration - Trim duration in seconds (optional)
  * @param {string} options.quality - Quality preset: 'low', 'medium', 'high' (default: 'medium')
@@ -69,7 +69,7 @@ async function checkFFmpegInstalled() {
 export async function convertToGif(inputPath, outputPath, options = {}) {
   // Validate and sanitize numeric parameters
   const width = validateNumericParameter(options.width ?? 480, 'width', 1, 4096);
-  const fps = validateNumericParameter(options.fps ?? 15, 'fps', 0.1, 120);
+  const fps = validateNumericParameter(options.fps ?? 30, 'fps', 0.1, 120);
   const startTime = validateNumericParameter(
     options.startTime ?? null,
     'startTime',

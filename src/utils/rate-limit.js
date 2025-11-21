@@ -30,9 +30,15 @@ export function checkRateLimit(userId) {
   }
 
   const lastUse = rateLimit.get(userId);
-  if (lastUse && Date.now() - lastUse < RATE_LIMIT_COOLDOWN) {
+  const now = Date.now();
+
+  // If user was recently rate limited, return true
+  if (lastUse && now - lastUse < RATE_LIMIT_COOLDOWN) {
     return true;
   }
+
+  // Record this check as the new last use timestamp
+  rateLimit.set(userId, now);
   return false;
 }
 

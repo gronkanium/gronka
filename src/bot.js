@@ -8,6 +8,7 @@ import { handleDownloadCommand, handleDownloadContextMenuCommand } from './comma
 import { handleOptimizeCommand, handleOptimizeContextMenuCommand } from './commands/optimize.js';
 import { handleConvertCommand, handleConvertContextMenu } from './commands/convert.js';
 import { handleAdvancedContextMenuCommand } from './commands/convert-advanced.js';
+import { handleInfoCommand } from './commands/info.js';
 import { handleModalSubmit } from './handlers/modals.js';
 import { initQueue, startQueueProcessor, addToQueue } from './utils/deferred-download-queue.js';
 import {
@@ -33,6 +34,7 @@ import {
   saveVideo,
   saveImage,
   detectFileType,
+  initializeR2UsageCache,
 } from './utils/storage.js';
 import { getUserConfig } from './utils/user-config.js';
 import { optimizeGif, calculateSizeReduction, formatSizeMb } from './utils/gif-optimizer.js';
@@ -91,6 +93,9 @@ client.once(Events.ClientReady, async readyClient => {
   logger.info(`bot logged in as ${readyClient.user.tag}`);
   logger.info(`gif storage: ${GIF_STORAGE_PATH}`);
   logger.info(`cdn url: ${CDN_BASE_URL}`);
+
+  // Initialize R2 usage cache on startup (if R2 is configured)
+  await initializeR2UsageCache();
 });
 
 client.on(Events.InteractionCreate, async interaction => {
@@ -128,6 +133,8 @@ client.on(Events.InteractionCreate, async interaction => {
       await handleOptimizeCommand(interaction);
     } else if (commandName === 'convert') {
       await handleConvertCommand(interaction);
+    } else if (commandName === 'info') {
+      await handleInfoCommand(interaction);
     }
   }
 });

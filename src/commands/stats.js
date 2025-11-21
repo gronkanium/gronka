@@ -3,16 +3,10 @@ import { createLogger } from '../utils/logger.js';
 import { botConfig } from '../utils/config.js';
 import { getStorageStats } from '../utils/storage.js';
 import { getUniqueUserCount } from '../utils/user-tracking.js';
-import { getUserConfig } from '../utils/user-config.js';
 
 const logger = createLogger('stats');
 
-const {
-  gifStoragePath: GIF_STORAGE_PATH,
-  maxGifWidth: MAX_GIF_WIDTH,
-  maxGifDuration: MAX_GIF_DURATION,
-  defaultFps: DEFAULT_FPS,
-} = botConfig;
+const { gifStoragePath: GIF_STORAGE_PATH } = botConfig;
 
 /**
  * Format uptime in a human-readable format
@@ -49,11 +43,6 @@ export async function handleStatsCommand(interaction, botStartTime) {
     const guildCount = client.guilds.cache.size;
     const userCount = await getUniqueUserCount();
 
-    // Get user's configured FPS
-    const userId = interaction.user.id;
-    const userConfig = await getUserConfig(userId);
-    const currentFps = userConfig.fps !== null ? userConfig.fps : DEFAULT_FPS;
-
     const embed = new EmbedBuilder()
       .setTitle('bot statistics')
       .setColor(0x5865f2)
@@ -66,11 +55,6 @@ export async function handleStatsCommand(interaction, botStartTime) {
         {
           name: 'file storage',
           value: `total gifs: \`${storageStats.totalGifs.toLocaleString()}\`\ntotal videos: \`${storageStats.totalVideos.toLocaleString()}\`\ntotal images: \`${storageStats.totalImages.toLocaleString()}\`\ndisk usage: \`${storageStats.diskUsageFormatted}\``,
-          inline: false,
-        },
-        {
-          name: 'configuration',
-          value: `max width: \`${MAX_GIF_WIDTH}px\`\nmax duration: \`${MAX_GIF_DURATION}s\`\nfps: \`${currentFps}\``,
           inline: false,
         }
       );

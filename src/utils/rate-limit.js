@@ -30,9 +30,27 @@ export function checkRateLimit(userId) {
   }
 
   const lastUse = rateLimit.get(userId);
-  if (lastUse && Date.now() - lastUse < RATE_LIMIT_COOLDOWN) {
+  const now = Date.now();
+
+  // If user was recently rate limited, return true
+  if (lastUse && now - lastUse < RATE_LIMIT_COOLDOWN) {
     return true;
   }
-  rateLimit.set(userId, Date.now());
+
+  // Record this check as the new last use timestamp
+  rateLimit.set(userId, now);
   return false;
+}
+
+/**
+ * Record that a user has successfully completed an operation (for rate limiting)
+ * @param {string} userId - Discord user ID
+ */
+export function recordRateLimit(userId) {
+  // Admins bypass rate limiting, so don't record for them
+  if (isAdmin(userId)) {
+    return;
+  }
+
+  rateLimit.set(userId, Date.now());
 }

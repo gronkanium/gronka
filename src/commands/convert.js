@@ -12,7 +12,7 @@ import {
   parseTenorUrl,
   generateHash,
 } from '../utils/file-downloader.js';
-import { checkRateLimit, isAdmin } from '../utils/rate-limit.js';
+import { checkRateLimit, isAdmin, recordRateLimit } from '../utils/rate-limit.js';
 import {
   ALLOWED_VIDEO_TYPES,
   ALLOWED_IMAGE_TYPES,
@@ -25,6 +25,7 @@ import { getUserConfig } from '../utils/user-config.js';
 import { trackRecentConversion } from '../utils/user-tracking.js';
 import { optimizeGif, calculateSizeReduction, formatSizeMb } from '../utils/gif-optimizer.js';
 import { createOperation, updateOperationStatus } from '../utils/operations-tracker.js';
+import { notifyCommandSuccess, notifyCommandFailure } from '../utils/ntfy-notifier.js';
 
 const logger = createLogger('convert');
 
@@ -95,6 +96,7 @@ export async function processConversion(
       const gifPath = getGifPath(hash, GIF_STORAGE_PATH);
       const stats = await fs.stat(gifPath);
       updateOperationStatus(operationId, 'success', { fileSize: stats.size });
+      recordRateLimit(userId);
       await interaction.editReply({
         content: `gif already exists : ${gifUrl}`,
       });
@@ -418,12 +420,21 @@ export async function processConversion(
         content: `gif created : ${gifUrl}\n-# gif size: ${gifSizeMB} mb`,
       });
     }
+
+    // Send success notification
+    await notifyCommandSuccess(username, 'convert');
+
+    // Record rate limit after successful conversion
+    recordRateLimit(userId);
   } catch (error) {
     logger.error(`Conversion failed for user ${userId} (${interaction.user.tag}):`, error);
     updateOperationStatus(operationId, 'error', { error: error.message || 'unknown error' });
     await interaction.editReply({
       content: 'an error occurred',
     });
+
+    // Send failure notification
+    await notifyCommandFailure(username, 'convert');
   } finally {
     // Clean up temp files
     if (tempFiles.length > 0) {

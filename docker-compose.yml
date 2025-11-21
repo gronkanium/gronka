@@ -24,6 +24,7 @@ services:
       - R2_SECRET_ACCESS_KEY=${R2_SECRET_ACCESS_KEY:-}
       - R2_BUCKET_NAME=${R2_BUCKET_NAME:-}
       - R2_PUBLIC_DOMAIN=${R2_PUBLIC_DOMAIN:-cdn.gronka.p1x.dev}
+      - NTFY_TOPIC=${NTFY_TOPIC:-}
     volumes:
       - ./data:/app/data
       - ./temp:/app/temp

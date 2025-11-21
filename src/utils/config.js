@@ -148,6 +148,8 @@ function getBotConfig() {
     cobaltApiUrl: getStringEnv('COBALT_API_URL', 'http://cobalt:9000'),
     cobaltEnabled: getStringEnv('COBALT_ENABLED', 'true').toLowerCase() === 'true',
     statsCacheTtl: parseIntEnv('STATS_CACHE_TTL', 300000, 0), // 5 minutes default, 0 to disable
+    ntfyTopic: getStringEnv('NTFY_TOPIC', ''),
+    ntfyEnabled: getStringEnv('NTFY_TOPIC', '') !== '',
   };
 
   // Validate CDN_BASE_URL format

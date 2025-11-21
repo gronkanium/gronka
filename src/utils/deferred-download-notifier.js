@@ -1,4 +1,5 @@
 import { createLogger } from './logger.js';
+import { notifyDeferredDownload } from './ntfy-notifier.js';
 
 const logger = createLogger('deferred-notifier');
 
@@ -64,6 +65,9 @@ export async function notifyDownloadComplete(client, queueItem, result) {
       logger.error(`Failed to notify user ${queueItem.userId} about completed download`);
     }
   }
+
+  // Send ntfy notification
+  await notifyDeferredDownload(queueItem.username, 'success');
 }
 
 /**
@@ -84,4 +88,7 @@ export async function notifyDownloadFailed(client, queueItem, errorMessage) {
     logger.info('DM failed, attempting follow-up message');
     await sendFollowUpMessage(client, queueItem.interactionToken, message);
   }
+
+  // Send ntfy notification
+  await notifyDeferredDownload(queueItem.username, 'failed');
 }

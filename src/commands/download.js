@@ -6,7 +6,7 @@ import { createLogger } from '../utils/logger.js';
 import { botConfig } from '../utils/config.js';
 import { validateUrl } from '../utils/validation.js';
 import { isSocialMediaUrl, downloadFromSocialMedia, RateLimitError } from '../utils/cobalt.js';
-import { checkRateLimit, isAdmin } from '../utils/rate-limit.js';
+import { checkRateLimit, isAdmin, recordRateLimit } from '../utils/rate-limit.js';
 import { getUserConfig } from '../utils/user-config.js';
 import { generateHash } from '../utils/file-downloader.js';
 import { createOperation, updateOperationStatus } from '../utils/operations-tracker.js';
@@ -24,6 +24,7 @@ import {
 } from '../utils/storage.js';
 import { optimizeGif, calculateSizeReduction, formatSizeMb } from '../utils/gif-optimizer.js';
 import { queueCobaltRequest } from '../utils/cobalt-queue.js';
+import { notifyCommandSuccess, notifyCommandFailure } from '../utils/ntfy-notifier.js';
 
 const logger = createLogger('download');
 
@@ -145,6 +146,7 @@ async function processDownload(interaction, url) {
       const photoUrls = photoResults.map(p => p.url).join('\n');
       const replyContent = `downloaded ${photoResults.length} photos:\n${photoUrls}\n-# total size: ${totalSizeMB} mb`;
 
+      recordRateLimit(userId);
       await interaction.editReply({
         content: replyContent,
       });
@@ -214,9 +216,13 @@ async function processDownload(interaction, url) {
         }
       }
       updateOperationStatus(operationId, 'success', { fileSize: existingSize });
+      recordRateLimit(userId);
       await interaction.editReply({
         content: `${fileType} already exists : ${fileUrl}`,
       });
+
+      // Send success notification
+      await notifyCommandSuccess(username, 'download');
       return;
     } else {
       // Save file based on type
@@ -308,6 +314,12 @@ async function processDownload(interaction, url) {
       await interaction.editReply({
         content: replyContent,
       });
+
+      // Send success notification
+      await notifyCommandSuccess(username, 'download');
+
+      // Record rate limit after successful download
+      recordRateLimit(userId);
     }
   } catch (error) {
     logger.error(`Download failed for user ${userId}:`, error);
@@ -335,6 +347,9 @@ async function processDownload(interaction, url) {
           "download failed due to rate limiting. would you like to try again later? you'll receive a notification when it's ready.",
         components: [row],
       });
+
+      // Send failure notification for rate limit
+      await notifyCommandFailure(username, 'download');
       return;
     }
 
@@ -362,6 +377,9 @@ async function processDownload(interaction, url) {
     await interaction.editReply({
       content: errorMessage,
     });
+
+    // Send failure notification
+    await notifyCommandFailure(username, 'download');
   }
 }
 

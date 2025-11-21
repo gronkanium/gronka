@@ -330,7 +330,10 @@ describe('database utilities', () => {
   });
 
   describe('insertProcessedUrl', () => {
-    test('inserts new processed URL record', () => {
+    test('inserts new processed URL record', async () => {
+      // Ensure database is initialized
+      await initDatabase();
+
       const urlHash = 'test-insert-' + Date.now();
       const fileHash = 'file-hash-456';
       const fileType = 'video';
@@ -352,7 +355,10 @@ describe('database utilities', () => {
       assert.strictEqual(result.user_id, userId);
     });
 
-    test('updates existing processed URL record', () => {
+    test('updates existing processed URL record', async () => {
+      // Ensure database is initialized
+      await initDatabase();
+
       const urlHash = 'test-update-' + Date.now();
       const fileHash1 = 'file-hash-1';
       const fileHash2 = 'file-hash-2';
@@ -375,7 +381,10 @@ describe('database utilities', () => {
       assert.strictEqual(result.user_id, 'user-2', 'Should have updated user ID');
     });
 
-    test('handles null userId', () => {
+    test('handles null userId', async () => {
+      // Ensure database is initialized
+      await initDatabase();
+
       const urlHash = 'test-null-user-' + Date.now();
       const fileHash = 'file-hash-null';
       const fileUrl = 'https://cdn.example.com/videos/test.mp4';
@@ -388,7 +397,10 @@ describe('database utilities', () => {
       assert.strictEqual(result.user_id, null);
     });
 
-    test('handles different file types', () => {
+    test('handles different file types', async () => {
+      // Ensure database is initialized
+      await initDatabase();
+
       const testCases = [
         { type: 'gif', ext: '.gif', url: 'https://cdn.example.com/gifs/test.gif' },
         { type: 'video', ext: '.mp4', url: 'https://cdn.example.com/videos/test.mp4' },
@@ -417,7 +429,10 @@ describe('database utilities', () => {
       });
     });
 
-    test('handles R2 URLs correctly', () => {
+    test('handles R2 URLs correctly', async () => {
+      // Ensure database is initialized
+      await initDatabase();
+
       const urlHash = 'test-r2-' + Date.now();
       const fileHash = 'file-hash-r2';
       const r2Url = 'https://r2.example.com/gifs/test.gif';

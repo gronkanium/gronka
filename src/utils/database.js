@@ -120,6 +120,7 @@ export function closeDatabase() {
     db.close();
     db = null;
   }
+  initPromise = null; // Reset init promise so database can be reinitialized
 }
 
 /**

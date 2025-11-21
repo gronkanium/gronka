@@ -147,6 +147,15 @@ const commands = [
     integration_types: [1], // USER_INSTALL - allows users to install the bot directly
     contexts: [0, 1, 2], // GUILD (0), BOT_DM (1), PRIVATE_CHANNEL (2) - enables command usage in all contexts
   },
+  {
+    name: 'info',
+    description: 'view system information, cache stats, and storage usage',
+    type: 1, // CHAT_INPUT type (slash command)
+    default_member_permissions: null, // Available to everyone
+    dm_permission: true, // Enable in DMs
+    integration_types: [1], // USER_INSTALL - allows users to install the bot directly
+    contexts: [0, 1, 2], // GUILD (0), BOT_DM (1), PRIVATE_CHANNEL (2) - enables command usage in all contexts
+  },
 ];
 
 // Construct and prepare an instance of the REST module
@@ -175,6 +184,7 @@ const rest = new REST({ version: '10' }).setToken(DISCORD_TOKEN);
     console.log('  • /optimize');
     console.log('  • /stats');
     console.log('  • /download');
+    console.log('  • /info');
 
     console.log('\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
     console.log('note: commands may take up to 1 hour to appear in discord');

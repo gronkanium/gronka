@@ -18,6 +18,11 @@ const logger = createLogger('storage');
 // Stats cache: Map<storagePath, {stats, timestamp}>
 const statsCache = new Map();
 
+// R2 usage cache: {usageBytes, timestamp} - single value, not per-path
+// 24 hour TTL (86400000 ms)
+const R2_CACHE_TTL = 24 * 60 * 60 * 1000;
+let r2UsageCache = null;
+
 /**
  * Get cached stats if available and not expired
  * @param {string} storagePath - Storage path used as cache key
@@ -72,6 +77,104 @@ function setCachedStats(storagePath, stats) {
 export function invalidateStatsCache(storagePath) {
   if (statsCache.delete(storagePath)) {
     logger.debug(`Invalidated stats cache for ${storagePath}`);
+  }
+}
+
+/**
+ * Get cached R2 usage if available and not expired
+ * @returns {number|null} Cached usage in bytes or null if not available/expired
+ */
+function getR2UsageCache() {
+  if (!r2UsageCache) {
+    return null;
+  }
+
+  const age = Date.now() - r2UsageCache.timestamp;
+  if (age >= R2_CACHE_TTL) {
+    // Cache expired
+    r2UsageCache = null;
+    return null;
+  }
+
+  logger.debug(`Using cached R2 usage (age: ${Math.round(age / 1000)}s)`);
+  return r2UsageCache.usageBytes;
+}
+
+/**
+ * Store R2 usage in cache
+ * @param {number} usageBytes - R2 usage in bytes
+ */
+function setR2UsageCache(usageBytes) {
+  r2UsageCache = {
+    usageBytes,
+    timestamp: Date.now(),
+  };
+  logger.debug(`Cached R2 usage: ${formatFileSize(usageBytes)}`);
+}
+
+/**
+ * Increment R2 usage cache by file size (no API call)
+ * @param {number} fileSizeBytes - File size in bytes to add
+ */
+export function incrementR2UsageCache(fileSizeBytes) {
+  if (!r2UsageCache) {
+    logger.debug('R2 usage cache not initialized, skipping increment');
+    return;
+  }
+
+  const age = Date.now() - r2UsageCache.timestamp;
+  if (age >= R2_CACHE_TTL) {
+    logger.debug('R2 usage cache expired, skipping increment');
+    r2UsageCache = null;
+    return;
+  }
+
+  r2UsageCache.usageBytes += fileSizeBytes;
+  logger.debug(
+    `Incremented R2 usage cache: ${formatFileSize(r2UsageCache.usageBytes)} (+${formatFileSize(fileSizeBytes)})`
+  );
+}
+
+/**
+ * Initialize R2 usage cache by fetching from R2 if needed
+ * @returns {Promise<void>}
+ */
+export async function initializeR2UsageCache() {
+  // Check if R2 is configured
+  if (
+    !r2Config.accountId ||
+    !r2Config.accessKeyId ||
+    !r2Config.secretAccessKey ||
+    !r2Config.bucketName
+  ) {
+    logger.debug('R2 not configured, skipping R2 usage cache initialization');
+    return;
+  }
+
+  // Check if cache exists and is valid
+  const cachedUsage = getR2UsageCache();
+  if (cachedUsage !== null) {
+    logger.info(`R2 usage cache already initialized: ${formatFileSize(cachedUsage)}`);
+    return;
+  }
+
+  // Fetch from R2
+  logger.info('Initializing R2 usage cache (this may take a moment)...');
+  try {
+    const allObjects = await listObjectsInR2('', r2Config);
+    logger.debug(`Listed ${allObjects.length} total objects from R2`);
+
+    let totalUsage = 0;
+    for (const obj of allObjects) {
+      totalUsage += obj.size || 0;
+    }
+
+    setR2UsageCache(totalUsage);
+    logger.info(`R2 usage cache initialized: ${formatFileSize(totalUsage)}`);
+  } catch (error) {
+    logger.error(`Failed to initialize R2 usage cache:`, error.message);
+    // Set cache to 0 as fallback
+    setR2UsageCache(0);
   }
 }
 
@@ -205,6 +308,8 @@ export async function saveGif(buffer, hash, storagePath, metadata = {}) {
       logger.info(
         `Saved GIF to R2: ${publicUrl} (size: ${(buffer.length / (1024 * 1024)).toFixed(2)}MB)`
       );
+      // Increment R2 usage cache
+      incrementR2UsageCache(buffer.length);
       // Invalidate stats cache since we added a new file
       invalidateStatsCache(storagePath);
       return publicUrl;
@@ -334,6 +439,8 @@ export async function saveVideo(buffer, hash, extension, storagePath, metadata =
       logger.debug(
         `Saved video to R2: ${publicUrl} (size: ${(buffer.length / (1024 * 1024)).toFixed(2)}MB)`
       );
+      // Increment R2 usage cache
+      incrementR2UsageCache(buffer.length);
       // Invalidate stats cache since we added a new file
       invalidateStatsCache(storagePath);
       return publicUrl;
@@ -426,6 +533,8 @@ export async function saveImage(buffer, hash, extension, storagePath, metadata =
       logger.debug(
         `Saved image to R2: ${publicUrl} (size: ${(buffer.length / (1024 * 1024)).toFixed(2)}MB)`
       );
+      // Increment R2 usage cache
+      incrementR2UsageCache(buffer.length);
       // Invalidate stats cache since we added a new file
       invalidateStatsCache(storagePath);
       return publicUrl;
@@ -682,4 +791,71 @@ export async function getStorageStats(storagePath) {
       imagesDiskUsageFormatted: '0.00 MB',
     };
   }
+}
+
+/**
+ * Get cache statistics for statsCache
+ * @returns {Object} Cache statistics
+ */
+export function getCacheStats() {
+  const ttl = botConfig.statsCacheTtl;
+  const entries = Array.from(statsCache.entries());
+  const now = Date.now();
+
+  const entryAges = entries.map(([_, entry]) => now - entry.timestamp);
+  const oldestAge = entryAges.length > 0 ? Math.max(...entryAges) : 0;
+  const newestAge = entryAges.length > 0 ? Math.min(...entryAges) : 0;
+
+  return {
+    size: statsCache.size,
+    ttl: ttl === 0 ? null : ttl,
+    ttlFormatted: ttl === 0 ? 'disabled' : `${Math.round(ttl / 1000)}s`,
+    enabled: ttl !== 0,
+    oldestEntryAge: oldestAge,
+    oldestEntryAgeFormatted: oldestAge > 0 ? `${Math.round(oldestAge / 1000)}s` : 'N/A',
+    newestEntryAge: newestAge,
+    newestEntryAgeFormatted: newestAge > 0 ? `${Math.round(newestAge / 1000)}s` : 'N/A',
+  };
+}
+
+/**
+ * Get R2 cache statistics
+ * @returns {Object} R2 cache statistics with usage info
+ */
+export function getR2CacheStats() {
+  const R2_FREE_LIMIT_GB = 10;
+  const R2_FREE_LIMIT_BYTES = R2_FREE_LIMIT_GB * 1024 * 1024 * 1024;
+
+  if (!r2UsageCache) {
+    return {
+      initialized: false,
+      usageBytes: 0,
+      usageFormatted: '0.00 MB',
+      freeBytes: R2_FREE_LIMIT_BYTES,
+      freeFormatted: `${R2_FREE_LIMIT_GB} GB`,
+      limitBytes: R2_FREE_LIMIT_BYTES,
+      limitFormatted: `${R2_FREE_LIMIT_GB} GB`,
+      percentageUsed: 0,
+      cacheAge: null,
+      cacheAgeFormatted: 'N/A',
+    };
+  }
+
+  const age = Date.now() - r2UsageCache.timestamp;
+  const usageBytes = r2UsageCache.usageBytes;
+  const freeBytes = Math.max(0, R2_FREE_LIMIT_BYTES - usageBytes);
+  const percentageUsed = (usageBytes / R2_FREE_LIMIT_BYTES) * 100;
+
+  return {
+    initialized: true,
+    usageBytes,
+    usageFormatted: formatFileSize(usageBytes),
+    freeBytes,
+    freeFormatted: formatFileSize(freeBytes),
+    limitBytes: R2_FREE_LIMIT_BYTES,
+    limitFormatted: `${R2_FREE_LIMIT_GB} GB`,
+    percentageUsed: Math.min(100, percentageUsed.toFixed(2)),
+    cacheAge: age,
+    cacheAgeFormatted: age < 60000 ? `${Math.round(age / 1000)}s` : `${Math.round(age / 60000)}m`,
+  };
 }

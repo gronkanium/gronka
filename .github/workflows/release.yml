@@ -14,6 +14,8 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
@@ -31,10 +33,14 @@ jobs:
       - name: Verify version matches package.json
         run: |
           PACKAGE_VERSION=$(node -p "require('./package.json').version")
-          if [ "$PACKAGE_VERSION" != "${{ steps.get_version.outputs.version }}" ]; then
-            echo "Error: Tag version (${{ steps.get_version.outputs.version }}) does not match package.json version ($PACKAGE_VERSION)"
+          TAG_VERSION="${{ steps.get_version.outputs.version }}"
+          echo "Tag version: $TAG_VERSION"
+          echo "Package.json version: $PACKAGE_VERSION"
+          if [ "$PACKAGE_VERSION" != "$TAG_VERSION" ]; then
+            echo "Error: Tag version ($TAG_VERSION) does not match package.json version ($PACKAGE_VERSION)"
             exit 1
           fi
+          echo "Version check passed"
 
       - name: Generate release notes
         id: release_notes
@@ -65,6 +71,8 @@ jobs:
       - name: Create source archive
         run: |
           ARCHIVE_NAME="gronka-${{ steps.get_version.outputs.version }}.tar.gz"
+          # Create archive in a temp location to avoid "file changed as we read it" warning
+          mkdir -p /tmp/release
           tar --exclude='.git' \
               --exclude='node_modules' \
               --exclude='data' \
@@ -73,7 +81,10 @@ jobs:
               --exclude='_site' \
               --exclude='.vscode' \
               --exclude='.idea' \
-              -czf "$ARCHIVE_NAME" .
+              --exclude='*.tar.gz' \
+              --exclude='*.sha256' \
+              -czf "/tmp/release/$ARCHIVE_NAME" .
+          mv "/tmp/release/$ARCHIVE_NAME" "$ARCHIVE_NAME"
           echo "archive=$ARCHIVE_NAME" >> $GITHUB_OUTPUT
 
       - name: Generate checksums

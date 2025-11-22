@@ -92,7 +92,9 @@ export async function uploadToR2(buffer, key, contentType, config, metadata = {}
       logger.info(`Upload completed: ETag=${result.ETag}, Location=${result.Location || 'N/A'}`);
     }
 
-    // Verify the file exists after upload
+    // Verify the file exists after upload with a HEAD request
+    // This extra class B operation ensures the upload actually succeeded and the file is immediately accessible
+    // R2 uploads can sometimes appear successful but fail silently, so verification prevents returning broken URLs
     try {
       const { HeadObjectCommand } = await import('@aws-sdk/client-s3');
       await client.send(

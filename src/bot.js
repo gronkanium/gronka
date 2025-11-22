@@ -95,6 +95,7 @@ client.once(Events.ClientReady, async readyClient => {
   logger.info(`cdn url: ${CDN_BASE_URL}`);
 
   // Initialize R2 usage cache on startup (if R2 is configured)
+  // This caches R2 stats to limit class A operations (LIST requests) for the /stats Discord command
   await initializeR2UsageCache();
 });
 

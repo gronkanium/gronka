@@ -6,6 +6,7 @@ import { initDatabase } from './database.js';
 const logger = createLogger('cobalt-queue');
 
 // Maximum concurrent Cobalt API requests
+// Limited to 2 to avoid overwhelming the Cobalt API and prevent rate limiting
 const MAX_CONCURRENT_REQUESTS = 2;
 
 // Track in-progress downloads by URL hash
@@ -88,6 +89,8 @@ export async function queueCobaltRequest(url, downloadFn) {
   }
 
   // Check if this URL is already being downloaded
+  // URL deduplication: if multiple users request the same URL simultaneously, we reuse the existing download
+  // instead of making duplicate API calls, which saves bandwidth and prevents redundant processing
   if (inProgressDownloads.has(urlHash)) {
     logger.info(
       `URL already in progress, waiting for existing download: ${url.substring(0, 50)}...`

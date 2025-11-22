@@ -16,6 +16,8 @@ import {
 const logger = createLogger('storage');
 
 // Stats cache: Map<storagePath, {stats, timestamp}>
+// Caches storage statistics to avoid expensive recalculations (filesystem scans or R2 LIST operations)
+// TTL is configurable via STATS_CACHE_TTL env var (default 5 minutes, 0 to disable)
 const statsCache = new Map();
 
 // R2 usage cache: {usageBytes, timestamp} - single value, not per-path
@@ -137,6 +139,7 @@ export function incrementR2UsageCache(fileSizeBytes) {
 
 /**
  * Initialize R2 usage cache by fetching from R2 if needed
+ * This caches R2 stats on startup to limit class A operations (LIST requests) for the /stats Discord command
  * @returns {Promise<void>}
  */
 export async function initializeR2UsageCache() {
@@ -591,6 +594,7 @@ export async function getStorageStats(storagePath) {
       logger.debug('R2 configured, querying R2 for storage stats');
 
       // Single LIST call to get all objects (consolidated from 3 separate calls)
+      // This limits class A operations by making one LIST request instead of three separate calls for gifs/videos/images
       try {
         const allObjects = await listObjectsInR2('', r2Config);
         logger.debug(`Listed ${allObjects.length} total objects from R2`);

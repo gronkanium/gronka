@@ -340,19 +340,28 @@ export async function insertProcessedUrl(
     return;
   }
 
-  // Check if record exists
-  const existing = await getProcessedUrl(urlHash);
-  if (existing) {
-    // Update existing record (in case file URL or other info changed)
-    const updateStmt = db.prepare(
-      'UPDATE processed_urls SET file_hash = ?, file_type = ?, file_extension = ?, file_url = ?, processed_at = ?, user_id = ? WHERE url_hash = ?'
-    );
-    updateStmt.run(fileHash, fileType, fileExtension, fileUrl, processedAt, userId, urlHash);
-  } else {
-    // Insert new record
-    const insertStmt = db.prepare(
-      'INSERT INTO processed_urls (url_hash, file_hash, file_type, file_extension, file_url, processed_at, user_id) VALUES (?, ?, ?, ?, ?, ?, ?)'
-    );
-    insertStmt.run(urlHash, fileHash, fileType, fileExtension, fileUrl, processedAt, userId);
+  try {
+    // Check if record exists
+    const existing = await getProcessedUrl(urlHash);
+    if (existing) {
+      // Update existing record (in case file URL or other info changed)
+      const updateStmt = db.prepare(
+        'UPDATE processed_urls SET file_hash = ?, file_type = ?, file_extension = ?, file_url = ?, processed_at = ?, user_id = ? WHERE url_hash = ?'
+      );
+      updateStmt.run(fileHash, fileType, fileExtension, fileUrl, processedAt, userId, urlHash);
+    } else {
+      // Insert new record
+      const insertStmt = db.prepare(
+        'INSERT INTO processed_urls (url_hash, file_hash, file_type, file_extension, file_url, processed_at, user_id) VALUES (?, ?, ?, ?, ?, ?, ?)'
+      );
+      insertStmt.run(urlHash, fileHash, fileType, fileExtension, fileUrl, processedAt, userId);
+    }
+  } catch (error) {
+    // Log error but don't throw - allows graceful degradation if database is read-only
+    console.error(`Failed to insert/update processed URL in database: ${error.message}`);
+    // Re-throw if it's not a read-only error, as that indicates a real problem
+    if (error.code !== 'SQLITE_READONLY') {
+      throw error;
+    }
   }
 }

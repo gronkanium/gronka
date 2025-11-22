@@ -365,13 +365,13 @@ describe('database utilities', () => {
   });
 
   describe('getProcessedUrl', () => {
-    test('returns null for non-existent URL hash', () => {
+    test('returns null for non-existent URL hash', async () => {
       const urlHash = 'nonexistent-' + Date.now();
-      const result = getProcessedUrl(urlHash);
+      const result = await getProcessedUrl(urlHash);
       assert.strictEqual(result, null);
     });
 
-    test('returns processed URL record when exists', () => {
+    test('returns processed URL record when exists', async () => {
       const urlHash = 'test-url-hash-' + Date.now();
       const fileHash = 'test-file-hash-123';
       const fileType = 'gif';
@@ -380,9 +380,17 @@ describe('database utilities', () => {
       const processedAt = Date.now();
       const userId = 'test-user-123';
 
-      insertProcessedUrl(urlHash, fileHash, fileType, fileExtension, fileUrl, processedAt, userId);
+      await insertProcessedUrl(
+        urlHash,
+        fileHash,
+        fileType,
+        fileExtension,
+        fileUrl,
+        processedAt,
+        userId
+      );
 
-      const result = getProcessedUrl(urlHash);
+      const result = await getProcessedUrl(urlHash);
       assert.ok(result, 'Should return processed URL record');
       assert.strictEqual(result.url_hash, urlHash);
       assert.strictEqual(result.file_hash, fileHash);
@@ -395,7 +403,7 @@ describe('database utilities', () => {
 
     test('handles missing database gracefully', async () => {
       closeDatabase();
-      const result = getProcessedUrl('test-hash');
+      const result = await getProcessedUrl('test-hash');
       assert.strictEqual(result, null);
       await initDatabase();
     });
@@ -414,9 +422,17 @@ describe('database utilities', () => {
       const processedAt = Date.now();
       const userId = 'user-456';
 
-      insertProcessedUrl(urlHash, fileHash, fileType, fileExtension, fileUrl, processedAt, userId);
+      await insertProcessedUrl(
+        urlHash,
+        fileHash,
+        fileType,
+        fileExtension,
+        fileUrl,
+        processedAt,
+        userId
+      );
 
-      const result = getProcessedUrl(urlHash);
+      const result = await getProcessedUrl(urlHash);
       assert.ok(result, 'Should exist after insert');
       assert.strictEqual(result.url_hash, urlHash);
       assert.strictEqual(result.file_hash, fileHash);
@@ -440,12 +456,12 @@ describe('database utilities', () => {
       const processedAt2 = processedAt1 + 1000;
 
       // Insert first record
-      insertProcessedUrl(urlHash, fileHash1, 'gif', '.gif', fileUrl1, processedAt1, 'user-1');
+      await insertProcessedUrl(urlHash, fileHash1, 'gif', '.gif', fileUrl1, processedAt1, 'user-1');
 
       // Update with new info
-      insertProcessedUrl(urlHash, fileHash2, 'gif', '.gif', fileUrl2, processedAt2, 'user-2');
+      await insertProcessedUrl(urlHash, fileHash2, 'gif', '.gif', fileUrl2, processedAt2, 'user-2');
 
-      const result = getProcessedUrl(urlHash);
+      const result = await getProcessedUrl(urlHash);
       assert.ok(result, 'Should exist');
       assert.strictEqual(result.file_hash, fileHash2, 'Should have updated file hash');
       assert.strictEqual(result.file_url, fileUrl2, 'Should have updated file URL');
@@ -462,9 +478,9 @@ describe('database utilities', () => {
       const fileUrl = 'https://cdn.example.com/videos/test.mp4';
       const processedAt = Date.now();
 
-      insertProcessedUrl(urlHash, fileHash, 'video', '.mp4', fileUrl, processedAt, null);
+      await insertProcessedUrl(urlHash, fileHash, 'video', '.mp4', fileUrl, processedAt, null);
 
-      const result = getProcessedUrl(urlHash);
+      const result = await getProcessedUrl(urlHash);
       assert.ok(result, 'Should exist');
       assert.strictEqual(result.user_id, null);
     });
@@ -479,11 +495,11 @@ describe('database utilities', () => {
         { type: 'image', ext: '.png', url: 'https://cdn.example.com/images/test.png' },
       ];
 
-      testCases.forEach((testCase, index) => {
+      for (const [index, testCase] of testCases.entries()) {
         const urlHash = `test-type-${testCase.type}-${Date.now()}-${index}`;
         const fileHash = `file-hash-${testCase.type}`;
 
-        insertProcessedUrl(
+        await insertProcessedUrl(
           urlHash,
           fileHash,
           testCase.type,
@@ -493,12 +509,12 @@ describe('database utilities', () => {
           'test-user'
         );
 
-        const result = getProcessedUrl(urlHash);
+        const result = await getProcessedUrl(urlHash);
         assert.ok(result, `Should exist for ${testCase.type}`);
         assert.strictEqual(result.file_type, testCase.type);
         assert.strictEqual(result.file_extension, testCase.ext);
         assert.strictEqual(result.file_url, testCase.url);
-      });
+      }
     });
 
     test('handles R2 URLs correctly', async () => {
@@ -510,9 +526,9 @@ describe('database utilities', () => {
       const r2Url = 'https://r2.example.com/gifs/test.gif';
       const processedAt = Date.now();
 
-      insertProcessedUrl(urlHash, fileHash, 'gif', '.gif', r2Url, processedAt, 'user-r2');
+      await insertProcessedUrl(urlHash, fileHash, 'gif', '.gif', r2Url, processedAt, 'user-r2');
 
-      const result = getProcessedUrl(urlHash);
+      const result = await getProcessedUrl(urlHash);
       assert.ok(result, 'Should exist');
       assert.strictEqual(result.file_url, r2Url);
       assert.ok(result.file_url.startsWith('https://'), 'Should be a URL');
@@ -520,7 +536,8 @@ describe('database utilities', () => {
 
     test('handles missing database gracefully', async () => {
       closeDatabase();
-      assert.doesNotThrow(() => {
+      // Should not throw even if database is closed
+      await assert.doesNotReject(
         insertProcessedUrl(
           'test-hash',
           'file-hash',
@@ -529,8 +546,8 @@ describe('database utilities', () => {
           'https://example.com/test.gif',
           Date.now(),
           'user'
-        );
-      });
+        )
+      );
       await initDatabase();
     });
   });

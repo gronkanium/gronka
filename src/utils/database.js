@@ -278,13 +278,34 @@ export function getLogs(options = {}) {
 }
 
 /**
+ * Ensure database is initialized before performing operations
+ * @returns {Promise<void>}
+ */
+async function ensureDbInitialized() {
+  if (db) {
+    return; // Already initialized
+  }
+
+  // If initialization is in progress, wait for it
+  if (initPromise) {
+    await initPromise;
+    return;
+  }
+
+  // Start initialization if not already started
+  await initDatabase();
+}
+
+/**
  * Get processed URL record by URL hash
  * @param {string} urlHash - SHA-256 hash of the URL
- * @returns {Object|null} Processed URL record or null if not found
+ * @returns {Promise<Object|null>} Processed URL record or null if not found
  */
-export function getProcessedUrl(urlHash) {
+export async function getProcessedUrl(urlHash) {
+  await ensureDbInitialized();
+
   if (!db) {
-    console.error('Database not initialized. Call initDatabase() first.');
+    console.error('Database initialization failed.');
     return null;
   }
 
@@ -301,9 +322,9 @@ export function getProcessedUrl(urlHash) {
  * @param {string} fileUrl - Final CDN URL or path
  * @param {number} processedAt - Unix timestamp in milliseconds
  * @param {string} [userId] - Discord user ID who requested it
- * @returns {void}
+ * @returns {Promise<void>}
  */
-export function insertProcessedUrl(
+export async function insertProcessedUrl(
   urlHash,
   fileHash,
   fileType,
@@ -312,13 +333,15 @@ export function insertProcessedUrl(
   processedAt,
   userId = null
 ) {
+  await ensureDbInitialized();
+
   if (!db) {
-    console.error('Database not initialized. Call initDatabase() first.');
+    console.error('Database initialization failed. Cannot insert processed URL.');
     return;
   }
 
   // Check if record exists
-  const existing = getProcessedUrl(urlHash);
+  const existing = await getProcessedUrl(urlHash);
   if (existing) {
     // Update existing record (in case file URL or other info changed)
     const updateStmt = db.prepare(

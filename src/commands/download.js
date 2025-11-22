@@ -88,7 +88,7 @@ async function processDownload(interaction, url) {
 
     // Check if URL has already been processed
     const urlHash = hashUrl(url);
-    const processedUrl = getProcessedUrl(urlHash);
+    const processedUrl = await getProcessedUrl(urlHash);
     if (processedUrl) {
       logger.info(
         `URL already processed (hash: ${urlHash.substring(0, 8)}...), returning existing file URL: ${processedUrl.file_url}`
@@ -257,7 +257,7 @@ async function processDownload(interaction, url) {
       }
 
       // Record processed URL in database (file exists but URL might not be recorded yet)
-      insertProcessedUrl(urlHash, hash, fileType, ext, fileUrl, Date.now(), userId);
+      await insertProcessedUrl(urlHash, hash, fileType, ext, fileUrl, Date.now(), userId);
       logger.debug(`Recorded processed URL in database (urlHash: ${urlHash.substring(0, 8)}...)`);
 
       updateOperationStatus(operationId, 'success', { fileSize: existingSize });
@@ -344,7 +344,7 @@ async function processDownload(interaction, url) {
       );
 
       // Record processed URL in database
-      insertProcessedUrl(urlHash, hash, fileType, ext, fileUrl, Date.now(), userId);
+      await insertProcessedUrl(urlHash, hash, fileType, ext, fileUrl, Date.now(), userId);
       logger.debug(`Recorded processed URL in database (urlHash: ${urlHash.substring(0, 8)}...)`);
 
       // Update operation to success with file size

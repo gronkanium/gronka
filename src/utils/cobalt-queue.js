@@ -77,7 +77,7 @@ export async function queueCobaltRequest(url, downloadFn) {
   await initDatabase();
 
   // Check if this URL has already been processed
-  const processedUrl = getProcessedUrl(urlHash);
+  const processedUrl = await getProcessedUrl(urlHash);
   if (processedUrl) {
     logger.info(
       `URL already processed (hash: ${urlHash.substring(0, 8)}...), returning existing file URL: ${processedUrl.file_url}`

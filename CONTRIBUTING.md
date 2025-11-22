@@ -3,10 +3,10 @@
 This project consists of multiple components that can run independently or together:
 
 - **Discord Bot** (`src/bot.js`) - Handles Discord interactions and converts files to GIFs
-- **CDN Server** (`src/server.js`) - Serves converted GIFs and provides API endpoints
+- **Local Server** (`src/server.js`) - Provides health checks, stats API, and serves static HTML pages (terms, privacy). The file serving routes (/gifs/_, /videos/_, /images/\*) have been removed - files are intended to be served via R2 storage. When R2 is configured, files are saved to R2 and served via the R2 public domain.
 - **WebUI** (`src/webui-server.js`) - Optional dashboard for viewing statistics
 
-When running in Docker, the main `app` service runs both the bot and CDN server together. The webui is an optional service that can be enabled via Docker Compose profiles.
+When running in Docker, the main `app` service runs both the bot and local server together. The local server provides health checks and stats API endpoints. Files are stored in R2 when configured (recommended), or saved to local disk if R2 is not configured. The file serving routes from the server have been removed - files should be served via R2 or an external CDN. The webui is an optional service that can be enabled via Docker Compose profiles.
 
 ## Dependency Management
 
@@ -87,7 +87,7 @@ This will check:
 
 ### Building and Running
 
-The project uses Docker Compose with multiple services. The main app service runs both the Discord bot and CDN server:
+The project uses Docker Compose with multiple services. The main app service runs both the Discord bot and local server:
 
 ```bash
 npm run docker:up          # Start all services (app only by default)
@@ -101,7 +101,7 @@ npm run docker:register    # Register Discord commands in container
 
 The Docker Compose setup includes several services:
 
-- **app** - Main service running both the Discord bot and CDN server
+- **app** - Main service running both the Discord bot and local server. The local server provides health checks and stats API. Files are stored in R2 when configured (recommended) and served via the R2 public domain. The file serving routes (/gifs/_, /videos/_, /images/\*) have been removed from the server.
 - **cobalt** - Self-hosted API for downloading media from social platforms (Twitter/X, TikTok, Instagram, YouTube, Reddit, Facebook, Threads). Runs by default on port 9000
 - **giflossy** - Service used for GIF optimization via docker exec. Used internally by the bot for the `/optimize` command
 - **watchtower** - Automatically updates the cobalt image. Runs cleanup and updates every 15 minutes
@@ -197,9 +197,9 @@ See `package.json` for a full list of available npm scripts. Common ones include
 ### Main Entry Points
 
 - `npm start` - Start the Discord bot (`src/bot.js`)
-- `npm run server` - Start the CDN server (`src/server.js`)
+- `npm run server` - Start the local server (`src/server.js`). Provides health checks and stats API. File serving routes have been removed - files should be served via R2 or external CDN.
 - `npm run webui` - Start the webui server (`src/webui-server.js`)
-- `npm run local` - Run both bot and server concurrently
+- `npm run local` - Run both bot and local server concurrently (useful for local development without R2)
 - `npm run dev` - Start bot with watch mode (auto-restart on changes)
 
 ### Development

@@ -23,17 +23,23 @@ export function isAdmin(userId) {
  * @returns {boolean} True if user should wait
  */
 export function checkRateLimit(userId) {
-  // Admins bypass rate limiting
-  if (isAdmin(userId)) {
-    logger.info(`Rate limit bypassed for admin user ${userId}`);
-    return false;
-  }
-
   const lastUse = rateLimit.get(userId);
   const now = Date.now();
 
+  // Check if user would be rate limited
+  const wouldBeRateLimited = lastUse && now - lastUse < RATE_LIMIT_COOLDOWN;
+
+  // Admins bypass rate limiting
+  if (isAdmin(userId)) {
+    // Only log if there was an actual rate limit to bypass
+    if (wouldBeRateLimited) {
+      logger.info(`Rate limit bypassed for admin user ${userId}`);
+    }
+    return false;
+  }
+
   // If user was recently rate limited, return true
-  if (lastUse && now - lastUse < RATE_LIMIT_COOLDOWN) {
+  if (wouldBeRateLimited) {
     return true;
   }
 

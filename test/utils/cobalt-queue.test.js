@@ -48,46 +48,44 @@ after(() => {
 });
 
 describe('cobalt-queue utilities', () => {
-  describe('hashUrl', () => {
-    test('generates consistent hash for same URL', () => {
-      const url = 'https://example.com/video.mp4';
-      const hash1 = hashUrl(url);
-      const hash2 = hashUrl(url);
+  test('hashUrl - generates consistent hash for same URL', () => {
+    const url = 'https://example.com/video.mp4';
+    const hash1 = hashUrl(url);
+    const hash2 = hashUrl(url);
 
-      assert.strictEqual(hash1, hash2, 'Same URL should produce same hash');
-      assert.strictEqual(typeof hash1, 'string', 'Hash should be a string');
-      assert.strictEqual(hash1.length, 64, 'SHA-256 hash should be 64 characters');
-    });
+    assert.strictEqual(hash1, hash2, 'Same URL should produce same hash');
+    assert.strictEqual(typeof hash1, 'string', 'Hash should be a string');
+    assert.strictEqual(hash1.length, 64, 'SHA-256 hash should be 64 characters');
+  });
 
-    test('generates different hashes for different URLs', () => {
-      const url1 = 'https://example.com/video1.mp4';
-      const url2 = 'https://example.com/video2.mp4';
-      const hash1 = hashUrl(url1);
-      const hash2 = hashUrl(url2);
+  test('hashUrl - generates different hashes for different URLs', () => {
+    const url1 = 'https://example.com/video1.mp4';
+    const url2 = 'https://example.com/video2.mp4';
+    const hash1 = hashUrl(url1);
+    const hash2 = hashUrl(url2);
 
-      assert.notStrictEqual(hash1, hash2, 'Different URLs should produce different hashes');
-    });
+    assert.notStrictEqual(hash1, hash2, 'Different URLs should produce different hashes');
+  });
 
-    test('handles URLs with query parameters correctly', () => {
-      const url1 = 'https://x.com/user/status/123';
-      const url2 = 'https://x.com/user/status/123?s=46';
-      const hash1 = hashUrl(url1);
-      const hash2 = hashUrl(url2);
+  test('hashUrl - handles URLs with query parameters correctly', () => {
+    const url1 = 'https://x.com/user/status/123';
+    const url2 = 'https://x.com/user/status/123?s=46';
+    const hash1 = hashUrl(url1);
+    const hash2 = hashUrl(url2);
 
-      assert.notStrictEqual(
-        hash1,
-        hash2,
-        'URLs with different query parameters should produce different hashes'
-      );
-    });
+    assert.notStrictEqual(
+      hash1,
+      hash2,
+      'URLs with different query parameters should produce different hashes'
+    );
+  });
 
-    test('generates valid hex hash', () => {
-      const url = 'https://example.com/test';
-      const hash = hashUrl(url);
+  test('hashUrl - generates valid hex hash', () => {
+    const url = 'https://example.com/test';
+    const hash = hashUrl(url);
 
-      // Check if hash is valid hex
-      assert.ok(/^[a-f0-9]{64}$/.test(hash), 'Hash should be valid hex string');
-    });
+    // Check if hash is valid hex
+    assert.ok(/^[a-f0-9]{64}$/.test(hash), 'Hash should be valid hex string');
   });
 
   describe('queueCobaltRequest with processed URLs', () => {

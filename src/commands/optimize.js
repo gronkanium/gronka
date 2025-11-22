@@ -97,7 +97,7 @@ export async function processOptimization(
     }
 
     // Generate hash for the original file
-    const _originalHash = crypto.createHash('md5').update(fileBuffer).digest('hex');
+    const _originalHash = crypto.createHash('sha256').update(fileBuffer).digest('hex');
     const originalSize = fileBuffer.length;
 
     // Save original to temp directory for optimization
@@ -109,7 +109,7 @@ export async function processOptimization(
     tempFiles.push(tempInputPath);
 
     // Generate hash for optimized file (include lossy level in hash for uniqueness)
-    const hash = crypto.createHash('md5');
+    const hash = crypto.createHash('sha256');
     hash.update(fileBuffer);
     hash.update('optimized');
     if (lossyLevel !== null) {

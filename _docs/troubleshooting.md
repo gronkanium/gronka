@@ -212,26 +212,6 @@ should return:
 
 if failing, check server logs for errors.
 
-## cloudflare tunnel issues
-
-### tunnel not connecting
-
-1. verify tunnel token is correct
-2. check cloudflared logs:
-
-```bash
-docker compose logs cloudflared
-```
-
-3. ensure `config/cloudflared-config.yml` has correct hostname
-
-### dns not resolving
-
-1. verify dns record exists in cloudflare dashboard
-2. check cname points to tunnel uuid
-3. ensure proxy is enabled (orange cloud)
-4. wait for dns propagation (can take up to 24 hours)
-
 ## rate limiting
 
 ### commands rate limited

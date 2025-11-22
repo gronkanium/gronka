@@ -7,7 +7,7 @@ description: complete technical documentation for gronka
 
 ## project overview
 
-discord bot that converts video attachments to gif format via right-click context menu. stores them on a server and returns a cdn url. videos are processed using ffmpeg, deduplicated via md5 hashing, and served through cloudflare tunnels. also supports optimizing existing gifs to reduce file size using configurable lossy compression.
+discord bot that converts video attachments to gif format via right-click context menu. stores them on a server and returns a cdn url. videos are processed using ffmpeg, deduplicated via md5 hashing, and served through cloudflare r2. also supports optimizing existing gifs to reduce file size using configurable lossy compression.
 
 ---
 
@@ -35,14 +35,13 @@ discord bot that converts video attachments to gif format via right-click contex
 ### system dependencies
 
 - ffmpeg: video processing and gif conversion
-- cloudflared: cloudflare tunnel daemon for secure ingress
 
 ### infrastructure
 
 - discord bot: context menu commands + message content intent
 - web server: express.js serving static files
-- cdn: cloudflare tunnel (cdn.site.com)
-- storage: local filesystem for gif files
+- cdn: cloudflare r2 (optional, configurable public domain)
+- storage: cloudflare r2 or local filesystem for gif files
 - cobalt.tools: optional api service for downloading videos from social media platforms (powers `/download` command)
 
 ---
@@ -403,7 +402,7 @@ setTimeout(() => ffmpegProcess.kill(), 120000);
 ### caching
 
 - gifs are immutable (hash-based filenames)
-- cloudflare caches at edge locations globally
+- cloudflare r2 provides edge caching when configured
 - browser caching: 7 days via `Cache-Control`
 - deduplication prevents redundant conversions
 

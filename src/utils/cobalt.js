@@ -86,6 +86,42 @@ function sleep(ms) {
 }
 
 /**
+ * Parse Retry-After header value to milliseconds
+ * @param {string|number} retryAfter - Retry-After header value (seconds as number/string, or HTTP date string)
+ * @returns {number|null} Milliseconds to wait, or null if invalid
+ */
+function parseRetryAfter(retryAfter) {
+  if (retryAfter == null) {
+    return null;
+  }
+
+  // If it's a number (seconds), convert to milliseconds
+  if (typeof retryAfter === 'number') {
+    return retryAfter * 1000;
+  }
+
+  // If it's a string that's a number (seconds)
+  const seconds = parseInt(retryAfter, 10);
+  if (!isNaN(seconds) && seconds > 0) {
+    return seconds * 1000;
+  }
+
+  // Try to parse as HTTP date
+  try {
+    const date = new Date(retryAfter);
+    if (!isNaN(date.getTime())) {
+      const now = Date.now();
+      const waitMs = date.getTime() - now;
+      return waitMs > 0 ? waitMs : null;
+    }
+  } catch {
+    // Invalid date format
+  }
+
+  return null;
+}
+
+/**
  * Social media domains that Cobalt can handle
  */
 const SOCIAL_MEDIA_DOMAINS = [
@@ -221,9 +257,23 @@ async function callCobaltApi(apiUrl, url, retryCount = 0, maxRetries = 3) {
         message = `Cobalt API error: ${status}`;
       }
 
-      // If this is a rate limit error after all retries, throw RateLimitError
+      // If this is a rate limit error after all retries, throw RateLimitError with retry timing
+      // The deferred queue will use this timing to wait before retrying
       if (errorAnalysis.isRateLimit) {
-        throw new RateLimitError(message);
+        // Extract Retry-After header if available (can be seconds or HTTP date)
+        const retryAfterHeader = error.response?.headers?.['retry-after'];
+        let retryAfterMs = parseRetryAfter(retryAfterHeader);
+
+        // Default to 5 minutes if not provided or invalid
+        const DEFAULT_RETRY_AFTER_MS = 5 * 60 * 1000; // 5 minutes
+        if (retryAfterMs == null || retryAfterMs <= 0) {
+          retryAfterMs = DEFAULT_RETRY_AFTER_MS;
+          logger.warn(`No valid Retry-After header, using default ${DEFAULT_RETRY_AFTER_MS}ms`);
+        } else {
+          logger.info(`Extracted Retry-After: ${retryAfterMs}ms from header: ${retryAfterHeader}`);
+        }
+
+        throw new RateLimitError(message, retryAfterMs);
       }
 
       throw new NetworkError(message);

@@ -1,6 +1,7 @@
 import fs from 'fs/promises';
 import path from 'path';
 import { createLogger } from './logger.js';
+import { RateLimitError } from './cobalt.js';
 
 const logger = createLogger('deferred-queue');
 
@@ -11,6 +12,9 @@ const QUEUE_FILE_PATH = path.join(process.cwd(), 'data', 'deferred-downloads.jso
 let queue = [];
 
 // Processing interval (2 minutes)
+// Deferred downloads are processed in batches every 2 minutes instead of immediately
+// This prevents overwhelming the system with many simultaneous downloads and allows for better resource management
+// Note: Items that are rate limited will be skipped until their rate limit expires, regardless of this interval
 const PROCESS_INTERVAL_MS = 2 * 60 * 1000;
 
 // Processing state
@@ -78,7 +82,9 @@ export async function addToQueue(request) {
     isAdmin: request.isAdmin || false,
     addedAt: new Date().toISOString(),
     retryCount: 0,
-    status: 'pending', // pending, processing, completed, failed, cancelled
+    status: 'pending', // pending, processing, completed, failed, cancelled, rate_limited
+    rateLimitedAt: null, // ISO timestamp when rate limited
+    retryAfter: null, // Milliseconds to wait before retrying
   };
 
   queue.push(queueItem);
@@ -138,15 +144,65 @@ export function getRequest(requestId) {
 
 /**
  * Get all pending requests (including failed ones that haven't exceeded retry limit)
- * @returns {Array} Array of pending queue items
+ * Excludes items that are still rate limited (checks rateLimitedAt + retryAfter against current time)
+ * Automatically converts expired rate_limited items back to pending status
+ * @returns {Promise<Array>} Array of pending queue items ready to be processed
  */
-export function getPendingRequests() {
+export async function getPendingRequests() {
   const MAX_RETRIES = 10; // Try up to 10 times over 20 minutes
-  return queue.filter(
-    item =>
-      item.status === 'pending' ||
-      (item.status === 'failed' && (item.retryCount || 0) < MAX_RETRIES)
-  );
+  const now = Date.now();
+  let needsSave = false;
+
+  const pending = queue.filter(item => {
+    // Include pending items
+    if (item.status === 'pending') {
+      return true;
+    }
+
+    // Include failed items that haven't exceeded retry limit
+    if (item.status === 'failed' && (item.retryCount || 0) < MAX_RETRIES) {
+      return true;
+    }
+
+    // Include rate_limited items that have expired
+    if (item.status === 'rate_limited') {
+      if (item.rateLimitedAt && item.retryAfter) {
+        const rateLimitedAtMs = new Date(item.rateLimitedAt).getTime();
+        const retryAfterMs = item.retryAfter;
+        const expiresAt = rateLimitedAtMs + retryAfterMs;
+
+        if (now >= expiresAt) {
+          // Rate limit has expired, convert back to pending
+          item.status = 'pending';
+          needsSave = true;
+          logger.info(
+            `Rate limit expired for ${item.id}, converting back to pending (was rate limited for ${Math.round(retryAfterMs / 1000)}s)`
+          );
+          return true;
+        } else {
+          // Still rate limited, skip
+          const remainingSeconds = Math.round((expiresAt - now) / 1000);
+          logger.debug(`Skipping ${item.id}, still rate limited (${remainingSeconds}s remaining)`);
+          return false;
+        }
+      } else {
+        // Missing rate limit info, treat as expired and convert to pending
+        logger.warn(`Rate limited item ${item.id} missing timing info, converting to pending`);
+        item.status = 'pending';
+        needsSave = true;
+        return true;
+      }
+    }
+
+    return false;
+  });
+
+  // Save queue if we converted any rate_limited items to pending
+  if (needsSave) {
+    await saveQueue();
+  }
+
+  return pending;
 }
 
 /**
@@ -168,6 +224,8 @@ export async function updateRequestStatus(requestId, status, metadata = {}) {
 
 /**
  * Process a single queue item
+ * Handles RateLimitError by storing rate limit timing and setting status to 'rate_limited'
+ * Applies exponential backoff for repeated rate limits (5min, 10min, 20min)
  * @param {Object} item - Queue item to process
  * @param {Function} processCallback - Async callback to process the download
  * @returns {Promise<boolean>} True if successful, false otherwise
@@ -193,6 +251,35 @@ export async function processQueueItem(item, processCallback) {
     return true;
   } catch (error) {
     logger.error(`Failed to process deferred download ${item.id}: ${error.message}`);
+
+    // Check if this is a rate limit error
+    if (error instanceof RateLimitError) {
+      const retryAfterMs = error.retryAfter || 5 * 60 * 1000; // Default 5 minutes if not provided
+      const now = Date.now();
+
+      item.rateLimitedAt = new Date(now).toISOString();
+      item.retryAfter = retryAfterMs;
+      item.error = error.message;
+      item.lastAttempt = new Date().toISOString();
+
+      // Apply exponential backoff for repeated rate limits
+      const rateLimitCount = (item.rateLimitCount || 0) + 1;
+      item.rateLimitCount = rateLimitCount;
+
+      // Exponential backoff: 5min, 10min, 20min
+      const backoffMultiplier = Math.min(Math.pow(2, rateLimitCount - 1), 4); // Cap at 4x
+      const adjustedRetryAfter = retryAfterMs * backoffMultiplier;
+      item.retryAfter = adjustedRetryAfter;
+
+      const retryAfterSeconds = Math.round(adjustedRetryAfter / 1000);
+      logger.warn(
+        `Rate limit error for ${item.id}, will retry after ${retryAfterSeconds}s (rate limit #${rateLimitCount})`
+      );
+
+      item.status = 'rate_limited';
+      await saveQueue();
+      return false;
+    }
 
     // Increment retry count
     item.retryCount = (item.retryCount || 0) + 1;
@@ -247,7 +334,7 @@ export function startQueueProcessor(processCallback) {
     isProcessing = true;
 
     try {
-      const pending = getPendingRequests();
+      const pending = await getPendingRequests();
 
       if (pending.length === 0) {
         logger.debug('No pending requests to process');
@@ -255,7 +342,9 @@ export function startQueueProcessor(processCallback) {
       }
 
       // Process requests one at a time to avoid overwhelming the system
+      // getPendingRequests() already filters out rate_limited items that haven't expired
       for (const item of pending) {
+        // Only process items that are pending (rate_limited items are filtered out by getPendingRequests)
         if (item.status !== 'pending') {
           continue;
         }
@@ -265,11 +354,16 @@ export function startQueueProcessor(processCallback) {
 
       // Clean up old completed/failed_permanent/cancelled requests (older than 24 hours)
       // Keep failed items with retry count < max to keep retrying
+      // Keep rate_limited items (they will be processed when their rate limit expires)
       const cutoffTime = Date.now() - 24 * 60 * 60 * 1000;
       const originalLength = queue.length;
       queue = queue.filter(item => {
-        if (item.status === 'pending' || item.status === 'processing') {
-          return true; // Keep pending/processing
+        if (
+          item.status === 'pending' ||
+          item.status === 'processing' ||
+          item.status === 'rate_limited'
+        ) {
+          return true; // Keep pending/processing/rate_limited
         }
         if (item.status === 'failed') {
           // Keep failed items that are still retryable
@@ -312,13 +406,15 @@ export function stopQueueProcessor() {
 
 /**
  * Get queue statistics
- * @returns {Object} Queue stats
+ * Includes count of rate_limited items (items waiting for rate limit to expire)
+ * @returns {Object} Queue stats with counts for each status
  */
 export function getQueueStats() {
   return {
     total: queue.length,
     pending: queue.filter(item => item.status === 'pending').length,
     processing: queue.filter(item => item.status === 'processing').length,
+    rate_limited: queue.filter(item => item.status === 'rate_limited').length,
     completed: queue.filter(item => item.status === 'completed').length,
     failed: queue.filter(item => item.status === 'failed').length,
     failed_permanent: queue.filter(item => item.status === 'failed_permanent').length,

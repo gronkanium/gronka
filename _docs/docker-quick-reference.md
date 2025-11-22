@@ -1,8 +1,9 @@
 ---
+layout: doc
 title: docker quick reference
-topic: reference
-chapter: 1
 description: quick reference for common docker commands
+topic: reference
+chapter: 4
 ---
 
 quick reference for common docker commands.
@@ -19,18 +20,14 @@ docker compose restart app    # restart app container
 
 ## additional services
 
-for services with profiles (webui, tunnel), use docker compose directly:
+for services with profiles (webui), use docker compose directly:
 
 ```bash
 # start webui
 docker compose --profile webui up -d
 
-# start tunnel
-docker compose --profile tunnel up -d
-
 # view specific service logs
 docker compose logs -f webui
-docker compose logs -f cloudflared
 ```
 
 ## common tasks
@@ -41,7 +38,7 @@ docker compose logs -f cloudflared
 # if container is running
 docker compose exec app npm run register-commands
 
-# if container is not running
+# if container is not running (one-off command)
 docker compose run --rm app npm run register-commands
 ```
 

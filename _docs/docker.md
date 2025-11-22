@@ -12,7 +12,6 @@ deploy gronka using docker and docker compose.
 - docker engine 20.10+
 - docker compose 2.0+
 - discord bot token and client id
-- (optional) cloudflare tunnel token for public access
 
 ## quick start
 
@@ -34,9 +33,6 @@ ADMIN_USER_IDS=123456789012345678,987654321098765432
 # optional: stats endpoint authentication
 STATS_USERNAME=admin
 STATS_PASSWORD=your_secure_password_here
-
-# optional: cloudflare tunnel
-CLOUDFLARE_TUNNEL_TOKEN=your_tunnel_token
 
 # optional: cobalt api for social media downloads
 COBALT_API_URL=http://cobalt:9000
@@ -94,31 +90,6 @@ once running, open http://localhost:3001 in your browser.
 docker compose logs -f webui
 ```
 
-## cloudflare tunnel
-
-to enable the cloudflare tunnel service:
-
-1. **get your cloudflare tunnel token:**
-   - go to cloudflare zero trust dashboard
-   - create or select a tunnel
-   - copy the tunnel token
-
-2. **update `.env` file:**
-
-   ```env
-   CLOUDFLARE_TUNNEL_TOKEN=your_tunnel_token
-   ```
-
-3. **update `config/cloudflared-config.yml`:**
-   - set your hostname (e.g., `cdn.yourdomain.com`)
-   - the service url is already configured to point to the app container
-
-4. **start with tunnel profile:**
-
-   ```bash
-   docker compose --profile tunnel up -d
-   ```
-
 ## configuration
 
 ### environment variables
@@ -136,7 +107,6 @@ to enable the cloudflare tunnel service:
 | `ADMIN_USER_IDS`          | comma-separated discord user ids with admin privileges | _optional_                   |
 | `STATS_USERNAME`          | username for basic auth on `/stats` endpoint           | _optional_ (recommended)     |
 | `STATS_PASSWORD`          | password for basic auth on `/stats` endpoint           | _optional_ (recommended)     |
-| `CLOUDFLARE_TUNNEL_TOKEN` | cloudflare tunnel token                                | _optional_                   |
 | `COBALT_API_URL`          | cobalt api url for social media downloads              | `http://cobalt:9000`         |
 | `COBALT_ENABLED`           | enable cobalt integration                              | `true`                       |
 
@@ -205,17 +175,6 @@ ffmpeg is included in the docker image. if you encounter issues:
 ```bash
 docker compose exec app ffmpeg -version
 ```
-
-### cloudflared connection issues
-
-1. verify tunnel token is correct
-2. check cloudflared logs:
-
-   ```bash
-   docker compose logs cloudflared
-   ```
-
-3. ensure `config/cloudflared-config.yml` has correct hostname
 
 ### permission issues
 

@@ -392,7 +392,7 @@ async function processDeferredDownload(queueItem) {
       filePath = await saveGif(fileData.buffer, hash, botConfig.gifStoragePath, buildMetadata());
 
       if (userConfig.autoOptimize) {
-        const optimizedHash = crypto.createHash('md5');
+        const optimizedHash = crypto.createHash('sha256');
         optimizedHash.update(fileData.buffer);
         optimizedHash.update('optimized');
         optimizedHash.update('35');

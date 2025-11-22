@@ -333,7 +333,7 @@ export async function processConversion(
 
     if (shouldOptimize) {
       // Generate hash for optimized file (include lossy level in hash for uniqueness)
-      const optimizedHash = crypto.createHash('md5');
+      const optimizedHash = crypto.createHash('sha256');
       optimizedHash.update(gifBuffer);
       optimizedHash.update('optimized');
       if (options.lossy !== undefined && options.lossy !== null) {
@@ -383,7 +383,7 @@ export async function processConversion(
       }
     } else if (userConfig.autoOptimize) {
       // Auto-optimize if enabled in user config
-      const optimizedHash = crypto.createHash('md5');
+      const optimizedHash = crypto.createHash('sha256');
       optimizedHash.update(gifBuffer);
       optimizedHash.update('optimized');
       optimizedHash.update('35'); // Default lossy level

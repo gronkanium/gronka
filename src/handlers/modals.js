@@ -34,7 +34,7 @@ export async function handleModalSubmit(interaction, modalAttachmentCache) {
     // Clean up cache entry
     modalAttachmentCache.delete(customId);
 
-    const { attachment, adminUser, preDownloadedBuffer } = cachedData;
+    const { attachment, adminUser, preDownloadedBuffer, originalUrl } = cachedData;
 
     // Parse lossy level
     const lossyValue = interaction.fields.getTextInputValue('lossy_level') || null;
@@ -56,7 +56,14 @@ export async function handleModalSubmit(interaction, modalAttachmentCache) {
     await interaction.deferReply();
 
     // Process optimization
-    await processOptimization(interaction, attachment, adminUser, preDownloadedBuffer, lossyLevel);
+    await processOptimization(
+      interaction,
+      attachment,
+      adminUser,
+      preDownloadedBuffer,
+      lossyLevel,
+      originalUrl || null
+    );
     return;
   }
 }

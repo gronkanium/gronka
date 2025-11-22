@@ -23,6 +23,8 @@ import {
 import { getGifPath, cleanupTempFiles, saveGif } from '../utils/storage.js';
 import { createOperation, updateOperationStatus } from '../utils/operations-tracker.js';
 import { notifyCommandSuccess, notifyCommandFailure } from '../utils/ntfy-notifier.js';
+import { hashUrl } from '../utils/cobalt-queue.js';
+import { insertProcessedUrl, initDatabase, getProcessedUrl } from '../utils/database.js';
 
 const logger = createLogger('optimize');
 
@@ -35,13 +37,15 @@ const { gifStoragePath: GIF_STORAGE_PATH, cdnBaseUrl: CDN_BASE_URL } = botConfig
  * @param {boolean} adminUser - Whether the user is an admin
  * @param {Buffer} [preDownloadedBuffer] - Optional pre-downloaded buffer
  * @param {number} [lossyLevel] - Lossy compression level (0-100, default: 35)
+ * @param {string} [originalUrl] - Original URL if this optimization came from a URL (not Discord attachment or CDN)
  */
 export async function processOptimization(
   interaction,
   attachment,
   adminUser,
   preDownloadedBuffer = null,
-  lossyLevel = null
+  lossyLevel = null,
+  originalUrl = null
 ) {
   const userId = interaction.user.id;
   const username = interaction.user.tag || interaction.user.username || 'unknown';
@@ -59,8 +63,31 @@ export async function processOptimization(
   });
 
   try {
+    // Initialize database if needed (for URL tracking)
+    if (originalUrl) {
+      await initDatabase();
+    }
+
     // Update operation to running
     updateOperationStatus(operationId, 'running');
+
+    // Check if URL has already been processed (only for external URL-based optimizations)
+    if (originalUrl) {
+      const urlHash = hashUrl(originalUrl);
+      const processedUrl = await getProcessedUrl(urlHash);
+      if (processedUrl) {
+        logger.info(
+          `URL already processed (hash: ${urlHash.substring(0, 8)}...), returning existing file URL: ${processedUrl.file_url}`
+        );
+        updateOperationStatus(operationId, 'success', { fileSize: 0 });
+        recordRateLimit(userId);
+        await interaction.editReply({
+          content: processedUrl.file_url,
+        });
+        await notifyCommandSuccess(username, 'optimize');
+        return;
+      }
+    }
 
     // Download file if not already downloaded
     let fileBuffer = preDownloadedBuffer;
@@ -126,6 +153,21 @@ export async function processOptimization(
 
     // Calculate size reduction
     const reduction = calculateSizeReduction(originalSize, optimizedSize);
+
+    // Record processed URL in database if this came from an external URL
+    if (originalUrl) {
+      const urlHash = hashUrl(originalUrl);
+      await insertProcessedUrl(
+        urlHash,
+        optimizedHash,
+        'gif',
+        '.gif',
+        optimizedUrl,
+        Date.now(),
+        userId
+      );
+      logger.debug(`Recorded processed URL in database (urlHash: ${urlHash.substring(0, 8)}...)`);
+    }
 
     logger.info(
       `GIF optimization completed: ${originalSize} bytes -> ${optimizedSize} bytes (${reduction}% reduction) for user ${userId}`
@@ -213,6 +255,7 @@ export async function handleOptimizeContextMenuCommand(interaction, modalAttachm
   // Determine attachment and validate it's a GIF
   let attachment = null;
   let preDownloadedBuffer = null;
+  let originalUrlForConversion = null;
 
   if (gifAttachment) {
     // Validate it's actually a GIF
@@ -297,8 +340,10 @@ export async function handleOptimizeContextMenuCommand(interaction, modalAttachm
           size: fileData.size,
           contentType: fileData.contentType,
         };
+        // Store original URL for database tracking (only for external URLs, not CDN)
+        originalUrlForConversion = actualUrl;
       } else {
-        // Use local file
+        // Use local file (CDN URL - don't track as it's already processed)
         const stats = await fs.stat(localFilePath);
         attachment = {
           url: url,
@@ -307,6 +352,7 @@ export async function handleOptimizeContextMenuCommand(interaction, modalAttachm
           contentType: 'image/gif',
         };
         preDownloadedBuffer = await fs.readFile(localFilePath);
+        // Don't set originalUrlForConversion for CDN URLs
       }
     } catch (error) {
       logger.error(`Failed to process URL for user ${userId}:`, error);
@@ -350,6 +396,7 @@ export async function handleOptimizeContextMenuCommand(interaction, modalAttachm
     attachmentType: 'gif',
     adminUser,
     preDownloadedBuffer,
+    originalUrl: originalUrlForConversion,
     timestamp: Date.now(),
   });
 
@@ -413,6 +460,7 @@ export async function handleOptimizeCommand(interaction) {
 
   let finalAttachment = attachment;
   let preDownloadedBuffer = null;
+  let originalUrlForConversion = null;
 
   // Validate attachment is a GIF
   if (attachment) {
@@ -500,8 +548,10 @@ export async function handleOptimizeCommand(interaction) {
           size: fileData.size,
           contentType: fileData.contentType,
         };
+        // Store original URL for database tracking (only for external URLs, not CDN)
+        originalUrlForConversion = actualUrl;
       } else {
-        // Use local file
+        // Use local file (CDN URL - don't track as it's already processed)
         const stats = await fs.stat(localFilePath);
         finalAttachment = {
           url: url,
@@ -510,6 +560,7 @@ export async function handleOptimizeCommand(interaction) {
           contentType: 'image/gif',
         };
         preDownloadedBuffer = await fs.readFile(localFilePath);
+        // Don't set originalUrlForConversion for CDN URLs
       }
     } catch (error) {
       logger.error(`Failed to download file from URL for user ${userId}:`, error);
@@ -531,6 +582,7 @@ export async function handleOptimizeCommand(interaction) {
     finalAttachment,
     adminUser,
     preDownloadedBuffer,
-    lossyLevel
+    lossyLevel,
+    originalUrlForConversion
   );
 }

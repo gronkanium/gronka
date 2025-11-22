@@ -26,6 +26,8 @@ import { trackRecentConversion } from '../utils/user-tracking.js';
 import { optimizeGif } from '../utils/gif-optimizer.js';
 import { createOperation, updateOperationStatus } from '../utils/operations-tracker.js';
 import { notifyCommandSuccess, notifyCommandFailure } from '../utils/ntfy-notifier.js';
+import { hashUrl } from '../utils/cobalt-queue.js';
+import { insertProcessedUrl, initDatabase, getProcessedUrl } from '../utils/database.js';
 
 const logger = createLogger('convert');
 
@@ -45,6 +47,7 @@ const {
  * @param {boolean} adminUser - Whether the user is an admin
  * @param {Buffer} [preDownloadedBuffer] - Optional pre-downloaded buffer (to avoid double download)
  * @param {Object} [options] - Optional conversion options (startTime, duration, width, fps, quality)
+ * @param {string} [originalUrl] - Original URL if this conversion came from a URL (not Discord attachment)
  */
 export async function processConversion(
   interaction,
@@ -52,7 +55,8 @@ export async function processConversion(
   attachmentType,
   adminUser,
   preDownloadedBuffer = null,
-  options = {}
+  options = {},
+  originalUrl = null
 ) {
   const userId = interaction.user.id;
   const username = interaction.user.tag || interaction.user.username || 'unknown';
@@ -73,6 +77,11 @@ export async function processConversion(
   const userConfig = await getUserConfig(userId);
 
   try {
+    // Initialize database if needed (for URL tracking)
+    if (originalUrl) {
+      await initDatabase();
+    }
+
     // Download file (video or image) if not already downloaded
     // Admins bypass size limits in download
     const fileBuffer =
@@ -86,6 +95,24 @@ export async function processConversion(
 
     // Update operation to running
     updateOperationStatus(operationId, 'running');
+
+    // Check if URL has already been processed (only for URL-based conversions)
+    if (originalUrl) {
+      const urlHash = hashUrl(originalUrl);
+      const processedUrl = await getProcessedUrl(urlHash);
+      if (processedUrl) {
+        logger.info(
+          `URL already processed (hash: ${urlHash.substring(0, 8)}...), returning existing file URL: ${processedUrl.file_url}`
+        );
+        updateOperationStatus(operationId, 'success', { fileSize: 0 });
+        recordRateLimit(userId);
+        await interaction.editReply({
+          content: processedUrl.file_url,
+        });
+        await notifyCommandSuccess(username, 'convert');
+        return;
+      }
+    }
 
     // Check if GIF already exists
     const exists = await gifExists(hash, GIF_STORAGE_PATH);
@@ -412,6 +439,13 @@ export async function processConversion(
     // Track recent conversion
     trackRecentConversion(userId, gifUrl);
 
+    // Record processed URL in database if this came from a URL
+    if (originalUrl) {
+      const urlHash = hashUrl(originalUrl);
+      await insertProcessedUrl(urlHash, finalHash, 'gif', '.gif', gifUrl, Date.now(), userId);
+      logger.debug(`Recorded processed URL in database (urlHash: ${urlHash.substring(0, 8)}...)`);
+    }
+
     logger.info(
       `Successfully created GIF (hash: ${finalHash}, size: ${(optimizedSize / (1024 * 1024)).toFixed(2)}MB) for user ${userId}${options.optimize ? ' [OPTIMIZED]' : ''}${wasAutoOptimized ? ' [AUTO-OPTIMIZED]' : ''}`
     );
@@ -504,6 +538,7 @@ export async function handleConvertContextMenu(interaction) {
   let attachment = null;
   let attachmentType = null;
   let preDownloadedBuffer = null;
+  let originalUrlForConversion = null;
 
   if (videoAttachment) {
     attachment = videoAttachment;
@@ -585,6 +620,8 @@ export async function handleConvertContextMenu(interaction) {
         size: fileData.size,
         contentType: fileData.contentType,
       };
+      // Store original URL for database tracking
+      originalUrlForConversion = actualUrl;
 
       // Determine attachment type based on content type
       if (fileData.contentType && ALLOWED_VIDEO_TYPES.includes(fileData.contentType)) {
@@ -646,7 +683,15 @@ export async function handleConvertContextMenu(interaction) {
     await interaction.deferReply();
   }
 
-  await processConversion(interaction, attachment, attachmentType, adminUser, preDownloadedBuffer);
+  await processConversion(
+    interaction,
+    attachment,
+    attachmentType,
+    adminUser,
+    preDownloadedBuffer,
+    {},
+    originalUrlForConversion
+  );
 }
 
 /**
@@ -699,6 +744,7 @@ export async function handleConvertCommand(interaction) {
   let finalAttachment = attachment;
   let attachmentType = null;
   let preDownloadedBuffer = null;
+  let originalUrlForConversion = null;
 
   // If URL is provided, download the file first
   if (url) {
@@ -748,6 +794,8 @@ export async function handleConvertCommand(interaction) {
         size: fileData.size,
         contentType: fileData.contentType,
       };
+      // Store original URL for database tracking
+      originalUrlForConversion = actualUrl;
     } catch (error) {
       logger.error(`Failed to download file from URL for user ${userId}:`, error);
       await interaction.editReply({
@@ -836,6 +884,7 @@ export async function handleConvertCommand(interaction) {
     {
       optimize,
       lossy: lossy !== null ? lossy : undefined,
-    }
+    },
+    url ? originalUrlForConversion : null
   );
 }

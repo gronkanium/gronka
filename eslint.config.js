@@ -14,7 +14,6 @@ export default [
       'coverage/**',
       '.vscode/**',
       '.idea/**',
-      'config/cloudflared-config.yml',
       'src/public/assets/**',
       '**/*.svelte',
       'vendor/**',

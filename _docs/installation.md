@@ -33,27 +33,15 @@ nano .env  # Fill in tokens
 # 5. Register Discord commands
 node src/register-commands.js
 
-# 6. Install Cloudflare tunnel
-wget https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-amd64.deb
-sudo dpkg -i cloudflared-linux-amd64.deb
-cloudflared tunnel login
-cloudflared tunnel create gif-cdn
-
-# 7. Configure tunnel
-nano ~/.cloudflared/config.yml  # Add ingress rules
-
-# 8. Setup DNS (via Cloudflare dashboard)
-
-# 9. Start services
+# 6. Start services
 node src/server.js &  # CDN server
-cloudflared tunnel run gif-cdn &  # Tunnel
 node src/bot.js  # Discord bot
 
-# 10. Setup systemd services (production)
+# 7. Setup systemd services (production)
 sudo nano /etc/systemd/system/gif-bot.service
 sudo nano /etc/systemd/system/gif-cdn.service
-sudo systemctl enable gif-bot gif-cdn cloudflared
-sudo systemctl start gif-bot gif-cdn cloudflared
+sudo systemctl enable gif-bot gif-cdn
+sudo systemctl start gif-bot gif-cdn
 ```
 
 ## discord application setup
@@ -125,68 +113,4 @@ TUNNEL_ID=abc123def-456g-789h-012i-345jkl678mno
 - Never commit `.env` to git (add to `.gitignore`)
 - Regenerate bot token if compromised
 - Use environment variables in production (not `.env` files)
-
-## cloudflare tunnel setup
-
-**Purpose**: Expose local server to internet without port forwarding
-
-**Installation** (Ubuntu/Debian):
-
-```bash
-wget https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-amd64.deb
-sudo dpkg -i cloudflared-linux-amd64.deb
-```
-
-**Authentication**:
-
-```bash
-cloudflared tunnel login
-# Opens browser to authenticate with Cloudflare account
-```
-
-**Tunnel Creation**:
-
-```bash
-cloudflared tunnel create gif-cdn
-# Creates tunnel and credentials file
-```
-
-**Configuration File** (`~/.cloudflared/config.yml`):
-
-```yaml
-tunnel: <TUNNEL_UUID>
-credentials-file: /home/user/.cloudflared/<TUNNEL_UUID>.json
-
-ingress:
-  - hostname: cdn.site.com
-    service: http://localhost:3000
-  - service: http_status:404 # Catch-all
-```
-
-**DNS Configuration** (Cloudflare Dashboard):
-
-1. Navigate to DNS settings for `site.com`
-2. Add CNAME record:
-   - **Type**: CNAME
-   - **Name**: cdn
-   - **Target**: `<TUNNEL_UUID>.cfargotunnel.com`
-   - **Proxy status**: Proxied (orange cloud)
-   - **TTL**: Auto
-
-**Running as System Service**:
-
-```bash
-sudo cloudflared service install
-sudo systemctl enable cloudflared
-sudo systemctl start cloudflared
-sudo systemctl status cloudflared
-```
-
-**Benefits**:
-
-- No open ports on firewall
-- Automatic HTTPS with Cloudflare certificate
-- DDoS protection from Cloudflare
-- Global CDN edge caching
-- Access from anywhere without VPN
 

@@ -215,10 +215,10 @@ currently, there is no rate limiting on api endpoints. consider adding rate limi
 
 when exposing the server publicly:
 
-- use cloudflare tunnel or reverse proxy
+- use a reverse proxy (nginx, caddy, etc.)
 - enable authentication on `/stats` endpoint
 - consider adding rate limiting
-- use https (via cloudflare or reverse proxy)
+- use https (via reverse proxy or cloudflare r2 public domain)
 
-the server binds to `0.0.0.0` by default, making it accessible from the network. for local development, this is fine. for production, use a reverse proxy or cloudflare tunnel.
+the server binds to `0.0.0.0` by default, making it accessible from the network. for local development, this is fine. for production, use a reverse proxy or configure cloudflare r2 with a public domain.
 

@@ -307,22 +307,6 @@ when set, enables notifications for completed downloads and errors.
 NTFY_TOPIC=gronka-notifications
 ```
 
-## cloudflare tunnel
-
-### `CLOUDFLARE_TUNNEL_TOKEN`
-
-cloudflare tunnel token for public access.
-
-**optional**
-
-used with the tunnel docker profile to expose the server publicly.
-
-**example:**
-
-```env
-CLOUDFLARE_TUNNEL_TOKEN=your_tunnel_token
-```
-
 ## example configuration
 
 complete example `.env` file:

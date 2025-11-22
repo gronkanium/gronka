@@ -12,9 +12,8 @@ node_modules/
 # AWS/R2 credentials
 .aws/
 
-# Cloudflare tunnel credentials
+# Config files that may contain secrets
 config/credentials.json
-config/cloudflared-config.yml
 
 # GIF storage (optional - you may want to track empty directory)
 data/gifs/*.gif

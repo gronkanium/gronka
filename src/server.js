@@ -25,8 +25,8 @@ const {
 
 const app = express();
 
-// Trust proxy for proper IP detection in Docker network and Cloudflare tunnel
-// Set to 1 to trust one proxy (Cloudflare tunnel)
+// Trust proxy for proper IP detection in Docker network
+// Set to 1 to trust one proxy
 // This prevents the express-rate-limit security warning while still allowing proper IP detection
 app.set('trust proxy', 1);
 

@@ -46,10 +46,6 @@ Dockerfile
 .dockerignore
 DOCKER-QUICK-REF.md
 
-# Config files that may contain secrets
-config/credentials.json
-config/cloudflared-config.yml
-
 # Test files
 test/
 tests/

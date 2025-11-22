@@ -69,7 +69,7 @@ const commands = [
       {
         name: 'lossy',
         description:
-          'lossy compression (0-100, default: 35). higher = more compression, lower quality. requires optimize',
+          'lossy compression (0-100, default: 35). higher = more compression, lower quality',
         type: 10, // NUMBER type
         required: false,
         min_value: 0,

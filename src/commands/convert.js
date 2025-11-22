@@ -319,7 +319,10 @@ export async function processConversion(
 
     // Only upload initial GIF to R2 if optimization is NOT going to happen
     // (if optimization or auto-optimization is enabled, we'll upload the optimized version instead)
-    const willOptimize = options.optimize || userConfig.autoOptimize;
+    // If lossy is provided, treat it as an implicit optimization request
+    const shouldOptimize =
+      options.optimize || (options.lossy !== undefined && options.lossy !== null);
+    const willOptimize = shouldOptimize || userConfig.autoOptimize;
     if (!willOptimize) {
       try {
         finalGifUrl = await saveGif(gifBuffer, hash, GIF_STORAGE_PATH, buildMetadata());
@@ -328,7 +331,7 @@ export async function processConversion(
       }
     }
 
-    if (options.optimize) {
+    if (shouldOptimize) {
       // Generate hash for optimized file (include lossy level in hash for uniqueness)
       const optimizedHash = crypto.createHash('md5');
       optimizedHash.update(gifBuffer);

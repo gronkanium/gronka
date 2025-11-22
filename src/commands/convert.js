@@ -155,6 +155,7 @@ export async function processConversion(
           await interaction.editReply({
             content: `video is too long (${Math.ceil(duration)}s). maximum duration: ${MAX_GIF_DURATION}s`,
           });
+          await notifyCommandFailure(username, 'convert');
           return;
         }
       } catch (error) {
@@ -203,6 +204,7 @@ export async function processConversion(
               await interaction.editReply({
                 content: `requested timeframe (${conversionOptions.startTime}s to ${requestedEnd.toFixed(1)}s) exceeds video length (${videoDuration.toFixed(1)}s).`,
               });
+              await notifyCommandFailure(username, 'convert');
               return;
             }
           } catch (error) {
@@ -457,6 +459,7 @@ export async function handleConvertContextMenu(interaction) {
   }
 
   const userId = interaction.user.id;
+  const username = interaction.user.tag || interaction.user.username || 'unknown';
   const adminUser = isAdmin(userId);
 
   logger.info(
@@ -515,6 +518,7 @@ export async function handleConvertContextMenu(interaction) {
         content: validation.error,
         flags: MessageFlags.Ephemeral,
       });
+      await notifyCommandFailure(username, 'convert');
       return;
     }
   } else if (imageAttachment) {
@@ -530,6 +534,7 @@ export async function handleConvertContextMenu(interaction) {
         content: validation.error,
         flags: MessageFlags.Ephemeral,
       });
+      await notifyCommandFailure(username, 'convert');
       return;
     }
   } else if (url) {
@@ -541,6 +546,7 @@ export async function handleConvertContextMenu(interaction) {
         content: `invalid URL: ${urlValidation.error}`,
         flags: MessageFlags.Ephemeral,
       });
+      await notifyCommandFailure(username, 'convert');
       return;
     }
 
@@ -561,6 +567,7 @@ export async function handleConvertContextMenu(interaction) {
           await interaction.editReply({
             content: error.message || 'failed to parse Tenor URL.',
           });
+          await notifyCommandFailure(username, 'convert');
           return;
         }
       }
@@ -591,6 +598,7 @@ export async function handleConvertContextMenu(interaction) {
           await interaction.editReply({
             content: validation.error,
           });
+          await notifyCommandFailure(username, 'convert');
           return;
         }
       } else if (fileData.contentType && ALLOWED_IMAGE_TYPES.includes(fileData.contentType)) {
@@ -604,6 +612,7 @@ export async function handleConvertContextMenu(interaction) {
           await interaction.editReply({
             content: validation.error,
           });
+          await notifyCommandFailure(username, 'convert');
           return;
         }
       } else {
@@ -612,6 +621,7 @@ export async function handleConvertContextMenu(interaction) {
           content:
             'unsupported file format. please provide a video (mp4, mov, webm, avi, mkv) or image (png, jpg, jpeg, webp, gif).',
         });
+        await notifyCommandFailure(username, 'convert');
         return;
       }
     } catch (error) {
@@ -627,6 +637,7 @@ export async function handleConvertContextMenu(interaction) {
       content: 'no video or image attachment or URL found in this message.',
       flags: MessageFlags.Ephemeral,
     });
+    await notifyCommandFailure(username, 'convert');
     return;
   }
 
@@ -644,6 +655,7 @@ export async function handleConvertContextMenu(interaction) {
  */
 export async function handleConvertCommand(interaction) {
   const userId = interaction.user.id;
+  const username = interaction.user.tag || interaction.user.username || 'unknown';
   const adminUser = isAdmin(userId);
 
   logger.info(
@@ -698,6 +710,7 @@ export async function handleConvertCommand(interaction) {
         content: `invalid URL: ${urlValidation.error}`,
         flags: MessageFlags.Ephemeral,
       });
+      await notifyCommandFailure(username, 'convert');
       return;
     }
 
@@ -740,6 +753,7 @@ export async function handleConvertCommand(interaction) {
       await interaction.editReply({
         content: error.message || 'failed to download file from URL.',
       });
+      await notifyCommandFailure(username, 'convert');
       return;
     }
   }
@@ -763,6 +777,7 @@ export async function handleConvertCommand(interaction) {
           flags: MessageFlags.Ephemeral,
         });
       }
+      await notifyCommandFailure(username, 'convert');
       return;
     }
   } else if (
@@ -786,6 +801,7 @@ export async function handleConvertCommand(interaction) {
           flags: MessageFlags.Ephemeral,
         });
       }
+      await notifyCommandFailure(username, 'convert');
       return;
     }
   } else {
@@ -802,6 +818,7 @@ export async function handleConvertCommand(interaction) {
         flags: MessageFlags.Ephemeral,
       });
     }
+    await notifyCommandFailure(username, 'convert');
     return;
   }
 

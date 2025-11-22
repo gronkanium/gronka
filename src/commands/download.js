@@ -436,6 +436,7 @@ export async function handleDownloadContextMenuCommand(interaction) {
   }
 
   const userId = interaction.user.id;
+  const username = interaction.user.tag || interaction.user.username || 'unknown';
   const adminUser = isAdmin(userId);
 
   logger.info(
@@ -474,6 +475,7 @@ export async function handleDownloadContextMenuCommand(interaction) {
       content: 'no URL found in this message.',
       flags: MessageFlags.Ephemeral,
     });
+    await notifyCommandFailure(username, 'download');
     return;
   }
 
@@ -504,6 +506,7 @@ export async function handleDownloadContextMenuCommand(interaction) {
       content: 'cobalt is not enabled.',
       flags: MessageFlags.Ephemeral,
     });
+    await notifyCommandFailure(username, 'download');
     return;
   }
 
@@ -513,6 +516,7 @@ export async function handleDownloadContextMenuCommand(interaction) {
       content: 'url is not from a supported social media platform.',
       flags: MessageFlags.Ephemeral,
     });
+    await notifyCommandFailure(username, 'download');
     return;
   }
 
@@ -528,6 +532,7 @@ export async function handleDownloadContextMenuCommand(interaction) {
  */
 export async function handleDownloadCommand(interaction) {
   const userId = interaction.user.id;
+  const username = interaction.user.tag || interaction.user.username || 'unknown';
   const adminUser = isAdmin(userId);
 
   logger.info(
@@ -553,6 +558,7 @@ export async function handleDownloadCommand(interaction) {
       content: 'please provide a URL to download from.',
       flags: MessageFlags.Ephemeral,
     });
+    await notifyCommandFailure(username, 'download');
     return;
   }
 
@@ -583,6 +589,7 @@ export async function handleDownloadCommand(interaction) {
       content: 'cobalt is not enabled. please enable it to use the download command.',
       flags: MessageFlags.Ephemeral,
     });
+    await notifyCommandFailure(username, 'download');
     return;
   }
 
@@ -591,6 +598,7 @@ export async function handleDownloadCommand(interaction) {
       content: 'url is not from a supported social media platform.',
       flags: MessageFlags.Ephemeral,
     });
+    await notifyCommandFailure(username, 'download');
     return;
   }
 

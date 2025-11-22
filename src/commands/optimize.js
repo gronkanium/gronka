@@ -173,6 +173,7 @@ export async function handleOptimizeContextMenuCommand(interaction, modalAttachm
   }
 
   const userId = interaction.user.id;
+  const username = interaction.user.tag || interaction.user.username || 'unknown';
   const adminUser = isAdmin(userId);
 
   logger.info(
@@ -221,6 +222,7 @@ export async function handleOptimizeContextMenuCommand(interaction, modalAttachm
         content: 'this command only works on gif files.',
         flags: MessageFlags.Ephemeral,
       });
+      await notifyCommandFailure(username, 'optimize');
       return;
     }
     attachment = gifAttachment;
@@ -233,6 +235,7 @@ export async function handleOptimizeContextMenuCommand(interaction, modalAttachm
         content: `invalid URL: ${urlValidation.error}`,
         flags: MessageFlags.Ephemeral,
       });
+      await notifyCommandFailure(username, 'optimize');
       return;
     }
 
@@ -266,6 +269,7 @@ export async function handleOptimizeContextMenuCommand(interaction, modalAttachm
               content: error.message || 'failed to parse Tenor URL.',
               flags: MessageFlags.Ephemeral,
             });
+            await notifyCommandFailure(username, 'optimize');
             return;
           }
         }
@@ -280,6 +284,7 @@ export async function handleOptimizeContextMenuCommand(interaction, modalAttachm
             content: 'this command only works on gif files.',
             flags: MessageFlags.Ephemeral,
           });
+          await notifyCommandFailure(username, 'optimize');
           return;
         }
 
@@ -309,6 +314,7 @@ export async function handleOptimizeContextMenuCommand(interaction, modalAttachm
         content: error.message || 'failed to process gif from URL.',
         flags: MessageFlags.Ephemeral,
       });
+      await notifyCommandFailure(username, 'optimize');
       return;
     }
   } else {
@@ -317,6 +323,7 @@ export async function handleOptimizeContextMenuCommand(interaction, modalAttachm
       content: 'no gif attachment or URL found in this message.',
       flags: MessageFlags.Ephemeral,
     });
+    await notifyCommandFailure(username, 'optimize');
     return;
   }
 
@@ -355,6 +362,7 @@ export async function handleOptimizeContextMenuCommand(interaction, modalAttachm
  */
 export async function handleOptimizeCommand(interaction) {
   const userId = interaction.user.id;
+  const username = interaction.user.tag || interaction.user.username || 'unknown';
   const adminUser = isAdmin(userId);
 
   logger.info(
@@ -414,6 +422,7 @@ export async function handleOptimizeCommand(interaction) {
         content: 'this command only works on gif files.',
         flags: MessageFlags.Ephemeral,
       });
+      await notifyCommandFailure(username, 'optimize');
       return;
     }
   }
@@ -428,6 +437,7 @@ export async function handleOptimizeCommand(interaction) {
         content: `invalid URL: ${urlValidation.error}`,
         flags: MessageFlags.Ephemeral,
       });
+      await notifyCommandFailure(username, 'optimize');
       return;
     }
 
@@ -463,6 +473,7 @@ export async function handleOptimizeCommand(interaction) {
             await interaction.editReply({
               content: error.message || 'failed to parse Tenor URL.',
             });
+            await notifyCommandFailure(username, 'optimize');
             return;
           }
         }
@@ -476,6 +487,7 @@ export async function handleOptimizeCommand(interaction) {
           await interaction.editReply({
             content: 'this command only works on gif files.',
           });
+          await notifyCommandFailure(username, 'optimize');
           return;
         }
 
@@ -504,6 +516,7 @@ export async function handleOptimizeCommand(interaction) {
       await interaction.editReply({
         content: error.message || 'failed to download file from URL.',
       });
+      await notifyCommandFailure(username, 'optimize');
       return;
     }
   }

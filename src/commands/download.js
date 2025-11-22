@@ -278,7 +278,7 @@ async function processDownload(interaction, url) {
         // Auto-optimize if enabled in user config
         if (userConfig.autoOptimize) {
           const _originalSize = fileData.buffer.length;
-          const optimizedHash = crypto.createHash('md5');
+          const optimizedHash = crypto.createHash('sha256');
           optimizedHash.update(fileData.buffer);
           optimizedHash.update('optimized');
           optimizedHash.update('35'); // Default lossy level

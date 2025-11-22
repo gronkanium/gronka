@@ -3,11 +3,10 @@
  */
 
 /* Code blocks */
-pre,
-code {
-  border: 1px solid #444;
-  background-color: #2a2a2a;
-  color: #e0e0e0;
+pre {
+  border: 1px solid #444 !important;
+  background-color: #2a2a2a !important;
+  color: #e0e0e0 !important;
   overflow-x: visible;
   overflow-y: visible;
   white-space: pre-wrap;
@@ -15,12 +14,45 @@ code {
   max-width: 100%;
 }
 
-pre {
-  overflow-x: visible;
-  overflow-y: visible;
-  white-space: pre-wrap;
-  word-wrap: break-word;
-  max-width: 100%;
+pre code {
+  display: block;
+  border: 0;
+  padding-right: 0;
+  padding-left: 0;
+  background-color: transparent !important;
+  color: #e0e0e0 !important;
+}
+
+/* Inline code - allows wrapping with text */
+p code,
+li code,
+td code,
+article code:not(pre code) {
+  display: inline !important;
+  white-space: normal !important;
+  border: 1px solid #444;
+  background-color: #2a2a2a;
+  color: #e0e0e0;
+  padding: 1px 5px;
+  border-radius: 3px;
+}
+
+/* Blog post inline code - specific override for article content */
+article code:not(pre code),
+article p code:not(pre code),
+.post-content code:not(pre code),
+.post-content p code:not(pre code),
+.page-content code:not(pre code),
+.page-content p code:not(pre code) {
+  display: inline !important;
+  white-space: normal !important;
+  word-break: normal !important;
+  overflow-wrap: normal !important;
+  word-wrap: normal !important;
+  max-width: none !important;
+  min-width: 0 !important;
+  width: auto !important;
+  flex-shrink: 0 !important;
 }
 
 /* Hide scrollbars */

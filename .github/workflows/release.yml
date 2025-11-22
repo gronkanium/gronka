@@ -142,6 +142,6 @@ jobs:
             gronka-${{ steps.get_version.outputs.version }}.tar.gz
             gronka-${{ steps.get_version.outputs.version }}.tar.gz.sha256
           draft: false
-          prerelease: ${{ contains(steps.get_version.outputs.version, '-') || startsWith(steps.get_version.outputs.version, '0.') && steps.get_version.outputs.version != '0.0.0' }}
+          prerelease: ${{ contains(steps.get_version.outputs.version, '-') }}
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

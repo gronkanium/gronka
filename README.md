@@ -44,7 +44,7 @@ there are three parts to this thing:
 you'll need node.js 20+ and ffmpeg installed. then:
 
 ```bash
-git clone https://github.com/p2xai/gronka.git
+git clone https://github.com/thedorekaczynski/gronka.git
 cd gronka
 npm install
 cp .env.example .env

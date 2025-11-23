@@ -26,7 +26,7 @@ discord bot token from the developer portal.
 **example:**
 
 ```env
-DISCORD_TOKEN=MTIzNDU2Nzg5MDEyMzQ1Njc4OQ.GaBcDe.FgHiJkLmNoPqRsTuVwXyZaBcDeFgHiJkLmNo
+DISCORD_TOKEN=MTIzNDU2Nzg5MDEdMzQ1Njc4OQ.GaBcDe.FgHiJkLmNoPqRsTuVwXyadASaBcDeFgHiJkLmNo
 ```
 
 ### `CLIENT_ID`

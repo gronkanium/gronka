@@ -118,7 +118,7 @@ we may temporarily suspend service to address security issues if needed.
 for security-related questions or concerns:
 
 - **email**: gronkasupport@proton.me
-- **github**: [https://github.com/p2xai/gronka](https://github.com/p2xai/gronka)
+- **github**: [https://github.com/thedorekaczynski/gronka](https://github.com/thedorekaczynski/gronka)
 
 use email for security vulnerability reports. don't disclose vulnerabilities publicly until they're resolved.
 

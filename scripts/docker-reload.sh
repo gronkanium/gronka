@@ -45,7 +45,7 @@ docker container prune -f >/dev/null 2>&1 || true
 docker network prune -f >/dev/null 2>&1 || true
 
 # Step 4: Rebuild images
-info "Rebuilding images (this may take a while)..."
+info "Rebuilding images (this will take a while)..."
 if ! docker compose build --no-cache --pull; then
   error "Failed to build docker images"
 fi

@@ -1,0 +1,16 @@
+version: 2
+updates:
+  - package-ecosystem: 'npm'
+    directory: '/'
+    schedule:
+      interval: 'weekly'
+    open-pull-requests-limit: 10
+    groups:
+      security-updates:
+        patterns:
+          - '*'
+        update-types:
+          - 'security'
+    commit-message:
+      prefix: 'deps'
+      include: 'scope'

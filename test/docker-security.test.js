@@ -726,7 +726,10 @@ describe('docker security tests', () => {
       const potentiallyUntrusted = [];
       for (const image of images) {
         for (const pattern of untrustedPatterns) {
-          if (pattern.test(image) && !image.startsWith('ghcr.io') && !image.includes('/')) {
+          // Check for ghcr.io with proper format (ghcr.io/owner/repo)
+          // Not just any string starting with 'ghcr.io'
+          const isGhcrImage = image.startsWith('ghcr.io/') && image.split('/').length >= 3;
+          if (pattern.test(image) && !isGhcrImage && !image.includes('/')) {
             potentiallyUntrusted.push(image);
           }
         }
@@ -1344,7 +1347,9 @@ async function glob(pattern, options = {}) {
 
 function convertGlobToRegex(pattern) {
   // Simple glob to regex conversion for **/*.js pattern
+  // Escape backslashes first, then other special characters
   const escaped = pattern
+    .replace(/\\/g, '\\\\') // Escape backslashes first
     .replace(/\./g, '\\.')
     .replace(/\*\*/g, '___DOUBLE_STAR___')
     .replace(/\*/g, '[^/]*')

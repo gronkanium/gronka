@@ -1,28 +1,10 @@
-import { exec } from 'child_process';
-import { promisify } from 'util';
+import { spawn } from 'child_process';
 import fs from 'fs/promises';
 import path from 'path';
 import { createLogger } from './logger.js';
 import { getGifPath } from './storage.js';
 import { ValidationError } from './errors.js';
-
-const execAsync = promisify(exec);
 const logger = createLogger('gif-optimizer');
-
-/**
- * Escape a string for safe use in shell command arguments
- * Prevents command injection by properly quoting and escaping special characters
- * @param {string} arg - Argument to escape
- * @returns {string} Escaped argument safe for shell use
- */
-function escapeShellArg(arg) {
-  if (typeof arg !== 'string') {
-    throw new ValidationError('Argument must be a string');
-  }
-  // Replace single quotes with '\'' (exit quote, literal quote, enter quote)
-  // Then wrap entire string in single quotes to prevent shell expansion
-  return `'${arg.replace(/'/g, "'\\''")}'`;
-}
 
 /**
  * Check if a file is a GIF based on extension and content type
@@ -164,18 +146,53 @@ export async function optimizeGif(inputPath, outputPath, options = {}) {
 
   // Use docker run with --volumes-from to inherit volumes
   // gifsicle command: gifsicle --optimize=3 --lossy=35 input.gif -o output.gif (default lossy: 35)
-  // SECURITY: Escape paths to prevent command injection
-  const escapedInputPath = escapeShellArg(inputDockerPath);
-  const escapedOutputPath = escapeShellArg(outputDockerPath);
-  const escapedContainerName = escapeShellArg(containerName);
-
-  const command = `docker run --rm --volumes-from ${escapedContainerName} dylanninin/giflossy:latest /bin/gifsicle --optimize=${optimizeLevel} --lossy=${lossy} ${escapedInputPath} -o ${escapedOutputPath}`;
+  // SECURITY: Use spawn with array arguments to prevent command injection
+  // This avoids shell execution and passes arguments directly to docker
+  const dockerArgs = [
+    'run',
+    '--rm',
+    '--volumes-from',
+    containerName,
+    'dylanninin/giflossy:latest',
+    '/bin/gifsicle',
+    `--optimize=${optimizeLevel}`,
+    `--lossy=${lossy}`,
+    inputDockerPath,
+    '-o',
+    outputDockerPath,
+  ];
 
   try {
-    logger.debug(`Executing: ${command}`);
-    const { stdout, stderr } = await execAsync(command, {
-      timeout: 300000, // 5 minute timeout
-      maxBuffer: 10 * 1024 * 1024, // 10MB buffer
+    logger.debug(`Executing: docker ${dockerArgs.join(' ')}`);
+    const { stdout, stderr } = await new Promise((resolve, reject) => {
+      const child = spawn('docker', dockerArgs, {
+        timeout: 300000, // 5 minute timeout
+        maxBuffer: 10 * 1024 * 1024, // 10MB buffer
+      });
+
+      let stdoutData = '';
+      let stderrData = '';
+
+      child.stdout.on('data', data => {
+        stdoutData += data.toString();
+      });
+
+      child.stderr.on('data', data => {
+        stderrData += data.toString();
+      });
+
+      child.on('error', reject);
+
+      child.on('close', code => {
+        if (code !== 0) {
+          const error = new Error(`docker process exited with code ${code}`);
+          error.code = code;
+          error.stderr = stderrData;
+          reject(error);
+        } else {
+          resolve({ stdout: stdoutData, stderr: stderrData });
+        }
+      });
     });
 
     if (stderr && !stderr.includes('warning')) {

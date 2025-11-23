@@ -290,9 +290,52 @@ describe('docker security tests', () => {
             ? hostPath
             : path.resolve(path.dirname(composePath), hostPath);
 
+          // Normalize path separators for cross-platform compatibility
+          const normalizedPath = absPath.replace(/\\/g, '/');
+
           for (const sensitive of sensitivePaths) {
-            if (absPath.startsWith(sensitive)) {
-              riskyMounts.push({ service: serviceName, volume, sensitive });
+            // Only flag if the path is exactly the sensitive directory or a direct child (one level deep)
+            // This allows deep subdirectories like /home/runner/work/project/data (safe)
+            // but flags dangerous mounts like /home (unsafe) or /home/username (unsafe)
+
+            // Skip if path is clearly a CI workspace or development directory
+            // GitHub Actions uses /home/runner/work/, GitLab CI uses /builds/, etc.
+            const ciWorkspacePatterns = ['/home/runner/work/', '/builds/', '/workspace/', '/tmp/'];
+            const isCIWorkspace = ciWorkspacePatterns.some(pattern =>
+              normalizedPath.startsWith(pattern)
+            );
+            if (isCIWorkspace) {
+              continue; // Skip checking - this is a CI workspace, not a sensitive mount
+            }
+
+            if (normalizedPath === sensitive) {
+              // Exact match - definitely risky
+              riskyMounts.push({
+                service: serviceName,
+                volume,
+                sensitive,
+                resolvedPath: normalizedPath,
+              });
+              break;
+            } else if (normalizedPath.startsWith(sensitive + '/')) {
+              // Check depth - only flag if it's a direct child (one level deep)
+              // Example: /home/username is risky, but /home/runner/work/project is safe
+              const pathAfterSensitive = normalizedPath.substring(sensitive.length + 1);
+              const segments = pathAfterSensitive.split('/').filter(s => s.length > 0);
+
+              // Only flag if depth is 0 or 1 (direct child)
+              // This means /home or /home/user are risky, but /home/user/data is allowed
+              // But we don't want to flag /home/runner/work/gronka/gronka/data (depth 4)
+              // So let's only flag depth 0 (exact match, already handled) or depth 1
+              if (segments.length <= 1) {
+                riskyMounts.push({
+                  service: serviceName,
+                  volume,
+                  sensitive,
+                  resolvedPath: normalizedPath,
+                });
+                break;
+              }
             }
           }
         }

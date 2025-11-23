@@ -11,7 +11,6 @@ const siteDir = path.resolve(path.join(__dirname, '..', '_site'));
 const port = process.env.PORT || 4000;
 const host = process.env.HOST || '0.0.0.0';
 
-
 /**
  * Validate and normalize file path to prevent path traversal
  * @param {string} urlPath - URL path from request

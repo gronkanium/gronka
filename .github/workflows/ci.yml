@@ -71,6 +71,9 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      - name: Install FFmpeg
+        run: sudo apt-get update && sudo apt-get install -y ffmpeg
+
       - name: Run validation
         run: npm run validate
         env:
@@ -99,6 +102,9 @@ jobs:
 
       - name: Install dependencies
         run: npm ci
+
+      - name: Install FFmpeg
+        run: sudo apt-get update && sudo apt-get install -y ffmpeg
 
       - name: Run validation
         run: npm run validate

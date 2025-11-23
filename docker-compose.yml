@@ -108,9 +108,11 @@ services:
 
   # watchtower updates the cobalt image automatically
   watchtower:
-    image: ghcr.io/containrrr/watchtower
+    image: ghcr.io/containrrr/watchtower:latest
     restart: unless-stopped
     command: --cleanup --scope cobalt --interval 900 --include-restarting
+    environment:
+      - DOCKER_API_VERSION=1.52
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
     networks:

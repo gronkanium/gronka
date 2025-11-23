@@ -5,17 +5,48 @@ on:
     branches:
       - main
       - master
+    paths-ignore:
+      - '**.md'
+      - '.github/workflows/**'
+      - '_config.yml'
+      - '_site/**'
+      - '_posts/**'
+      - '_docs/**'
+      - '_includes/**'
+      - '_layouts/**'
+      - '_sass/**'
+      - 'assets/**'
+      - 'blog/**'
+      - 'docs/**'
   pull_request:
     branches:
       - main
       - master
+    paths-ignore:
+      - '**.md'
+      - '.github/workflows/**'
+      - '_config.yml'
+      - '_site/**'
+      - '_posts/**'
+      - '_docs/**'
+      - '_includes/**'
+      - '_layouts/**'
+      - '_sass/**'
+      - 'assets/**'
+      - 'blog/**'
+      - 'docs/**'
   schedule:
     - cron: '0 0 * * 0'
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
   analyze:
     name: Analyze
     runs-on: ubuntu-latest
+    if: github.actor != 'dependabot[bot]'
     permissions:
       actions: read
       contents: read

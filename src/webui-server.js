@@ -270,10 +270,21 @@ app.get('/api/logs', (req, res) => {
 
     // Handle multiple levels (comma-separated)
     if (level) {
-      if (level.includes(',')) {
-        options.level = level.split(',').map(l => l.trim());
+      if (Array.isArray(level)) {
+        // Multiple level parameters: flatten and trim all values
+        options.level = level.flatMap(l =>
+          typeof l === 'string'
+            ? l.split(',').map(sub => sub.trim())
+            : []
+        );
+      } else if (typeof level === 'string') {
+        if (level.includes(',')) {
+          options.level = level.split(',').map(l => l.trim());
+        } else {
+          options.level = level.trim();
+        }
       } else {
-        options.level = level;
+        // Unexpected type, ignore or reject (here we ignore)
       }
     }
 

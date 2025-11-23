@@ -312,7 +312,6 @@ export async function processConversion(
 
     // Check if optimization is requested
     let finalHash = hash;
-    let _finalGifPath = gifPath;
     let optimizedSize = originalSize;
     let wasAutoOptimized = false;
     let finalGifUrl = null;
@@ -351,7 +350,6 @@ export async function processConversion(
         const optimizedBuffer = await fs.readFile(optimizedGifPath);
         optimizedSize = optimizedBuffer.length;
         finalHash = optimizedHashValue;
-        _finalGifPath = optimizedGifPath;
         // Upload optimized version to R2 if not already there
         finalGifUrl = await saveGif(
           optimizedBuffer,
@@ -372,7 +370,6 @@ export async function processConversion(
         const optimizedBuffer = await fs.readFile(optimizedGifPath);
         optimizedSize = optimizedBuffer.length;
         finalHash = optimizedHashValue;
-        _finalGifPath = optimizedGifPath;
         // Upload optimized version to R2
         finalGifUrl = await saveGif(
           optimizedBuffer,
@@ -399,7 +396,6 @@ export async function processConversion(
         const optimizedBuffer = await fs.readFile(optimizedGifPath);
         optimizedSize = optimizedBuffer.length;
         finalHash = optimizedHashValue;
-        _finalGifPath = optimizedGifPath;
         wasAutoOptimized = true;
         // Upload optimized version to R2 if not already there
         finalGifUrl = await saveGif(
@@ -417,7 +413,6 @@ export async function processConversion(
         const optimizedBuffer = await fs.readFile(optimizedGifPath);
         optimizedSize = optimizedBuffer.length;
         finalHash = optimizedHashValue;
-        _finalGifPath = optimizedGifPath;
         wasAutoOptimized = true;
         // Upload optimized version to R2
         finalGifUrl = await saveGif(

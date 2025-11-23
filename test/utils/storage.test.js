@@ -25,28 +25,28 @@ import {
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { mkdirSync, rmSync, writeFileSync } from 'node:fs';
-import os from 'node:os';
+import tmp from 'tmp';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const testStoragePath = path.join(os.tmpdir(), 'gronka-test-storage');
+let testStoragePath;
+let tmpDirCleanup;
 
 // Setup test storage directory
 test.before(() => {
-  try {
-    mkdirSync(testStoragePath, { recursive: true });
-    mkdirSync(path.join(testStoragePath, 'gifs'), { recursive: true });
-    mkdirSync(path.join(testStoragePath, 'videos'), { recursive: true });
-    mkdirSync(path.join(testStoragePath, 'images'), { recursive: true });
-  } catch {
-    // Directory might already exist
-  }
+  // Use tmp package to create secure temporary directory
+  const tmpDir = tmp.dirSync({ prefix: 'gronka-test-storage-', unsafeCleanup: true });
+  testStoragePath = tmpDir.name;
+  tmpDirCleanup = tmpDir.removeCallback;
+
+  mkdirSync(path.join(testStoragePath, 'gifs'), { recursive: true });
+  mkdirSync(path.join(testStoragePath, 'videos'), { recursive: true });
+  mkdirSync(path.join(testStoragePath, 'images'), { recursive: true });
 });
 
 test.after(() => {
-  try {
-    rmSync(testStoragePath, { recursive: true, force: true });
-  } catch {
-    // Ignore cleanup errors
+  // Clean up temporary directory
+  if (tmpDirCleanup) {
+    tmpDirCleanup();
   }
 });
 

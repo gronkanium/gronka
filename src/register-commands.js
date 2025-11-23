@@ -45,18 +45,18 @@ const commands = [
   },
   {
     name: 'convert',
-    description: 'convert a video or image to gif',
+    description: 'convert a video (max 100mb) or image (max 50mb) to gif',
     type: 1, // CHAT_INPUT type (slash command)
     options: [
       {
         name: 'file',
-        description: 'the video or image file to convert',
+        description: 'the video (max 100mb) or image (max 50mb) file to convert',
         type: 11, // ATTACHMENT type
         required: false,
       },
       {
         name: 'url',
-        description: 'url to a video or image file to convert',
+        description: 'url to a video (max 100mb) or image (max 50mb) file to convert',
         type: 3, // STRING type
         required: false,
       },
@@ -83,18 +83,18 @@ const commands = [
   },
   {
     name: 'optimize',
-    description: 'optimize a gif file to reduce its size',
+    description: 'optimize a gif file (max 50mb) to reduce its size',
     type: 1, // CHAT_INPUT type (slash command)
     options: [
       {
         name: 'file',
-        description: 'the gif file to optimize',
+        description: 'the gif file to optimize (max 50mb)',
         type: 11, // ATTACHMENT type
         required: false,
       },
       {
         name: 'url',
-        description: 'url to a gif file to optimize',
+        description: 'url to a gif file to optimize (max 50mb)',
         type: 3, // STRING type
         required: false,
       },

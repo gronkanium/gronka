@@ -13,10 +13,11 @@ const host = process.env.HOST || '0.0.0.0';
 
 /**
  * Escape HTML special characters to prevent XSS
+ * Enhanced version that also escapes forward slashes to prevent breaking out of script contexts
  * @param {string} str - String to escape
  * @returns {string} HTML-escaped string
  */
-function escapeHtml(str) {
+function escapeHtmlStrict(str) {
   if (typeof str !== 'string') {
     return String(str);
   }
@@ -25,7 +26,8 @@ function escapeHtml(str) {
     .replace(/</g, '&lt;')
     .replace(/>/g, '&gt;')
     .replace(/"/g, '&quot;')
-    .replace(/'/g, '&#039;');
+    .replace(/'/g, '&#x27;')
+    .replace(/\//g, '&#x2F;');
 }
 
 /**
@@ -151,12 +153,12 @@ const server = http.createServer((req, res) => {
   } else {
     res.writeHead(404, { 'Content-Type': 'text/html' });
     // Escape user input to prevent XSS
-    const escapedUrl = escapeHtml(req.url);
+    const escapedUrl = escapeHtmlStrict(req.url);
     res.end(`
       <!DOCTYPE html>
       <html>
         <head><title>404 Not Found</title></head>
-        <body><h1>404 Not Found</h1><p>The requested URL ${escapedUrl} was not found.</p></body>
+        <body><h1>404 Not Found</h1><p>The requested URL <code>${escapedUrl}</code> was not found.</p></body>
       </html>
     `);
   }

@@ -5,6 +5,7 @@ import crypto from 'crypto';
 import { createLogger } from '../utils/logger.js';
 import { botConfig } from '../utils/config.js';
 import { validateUrl, validateFileExtension } from '../utils/validation.js';
+import { ValidationError } from '../utils/errors.js';
 import {
   downloadVideo,
   downloadImage,
@@ -38,6 +39,50 @@ const {
   maxGifDuration: MAX_GIF_DURATION,
   defaultFps: DEFAULT_FPS,
 } = botConfig;
+
+// Video file signature constants
+const ALLOWED_VIDEO_SIGNATURES = {
+  mp4: Buffer.from([0x00, 0x00, 0x00, 0x18, 0x66, 0x74, 0x79, 0x70]), // MP4
+  webm: Buffer.from([0x1A, 0x45, 0xDF, 0xA3]), // WebM
+  avi: Buffer.from('RIFF'),
+  mov: Buffer.from([0x00, 0x00, 0x00, 0x14, 0x66, 0x74, 0x79, 0x70]), // MOV
+};
+
+const MAX_VIDEO_SIZE = 100 * 1024 * 1024; // 100MB limit for videos
+
+/**
+ * Validate video buffer before writing to filesystem
+ * Checks file signature (magic bytes), size limits, and basic structure
+ * @param {Buffer} buffer - File buffer to validate
+ * @throws {ValidationError} If buffer is invalid
+ */
+function validateVideoBuffer(buffer) {
+  // Check buffer exists and has minimum size
+  if (!buffer || buffer.length < 12) {
+    throw new ValidationError('invalid or empty file buffer');
+  }
+
+  // Check file size limit
+  if (buffer.length > MAX_VIDEO_SIZE) {
+    throw new ValidationError(
+      `file too large. maximum size for video files is ${MAX_VIDEO_SIZE / 1024 / 1024}mb.`
+    );
+  }
+
+  // Verify video file signature (magic bytes)
+  const header = buffer.slice(0, 12);
+  const isValidVideo = Object.entries(ALLOWED_VIDEO_SIGNATURES).some(([_format, signature]) => {
+    return header.slice(0, signature.length).equals(signature);
+  });
+
+  if (!isValidVideo) {
+    throw new ValidationError(
+      'file is not a valid video format. supported formats: mp4, webm, avi, mov.'
+    );
+  }
+
+  return true;
+}
 
 /**
  * Process conversion from attachment to GIF
@@ -179,6 +224,18 @@ export async function processConversion(
     const resolvedFilePath = path.resolve(tempFilePath);
     if (!resolvedFilePath.startsWith(resolvedTempDir)) {
       throw new Error('Invalid temp file path detected');
+    }
+
+    // Validate file buffer before writing to filesystem (only for videos)
+    if (attachmentType === 'video') {
+      try {
+        validateVideoBuffer(fileBuffer);
+      } catch (error) {
+        if (error instanceof ValidationError) {
+          throw error;
+        }
+        throw new ValidationError('file validation failed: ' + error.message);
+      }
     }
 
     await fs.writeFile(tempFilePath, fileBuffer);
@@ -476,7 +533,7 @@ export async function processConversion(
     logger.error(`Conversion failed for user ${userId} (${interaction.user.tag}):`, error);
     updateOperationStatus(operationId, 'error', { error: error.message || 'unknown error' });
     await interaction.editReply({
-      content: 'an error occurred',
+      content: error.message || 'an error occurred while converting the file.',
     });
 
     // Send failure notification

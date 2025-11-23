@@ -3,6 +3,7 @@ import path from 'path';
 import axios from 'axios';
 import http from 'http';
 import { WebSocketServer } from 'ws';
+import rateLimit from 'express-rate-limit';
 import { createLogger } from './utils/logger.js';
 import { webuiConfig } from './utils/config.js';
 import { ConfigurationError } from './utils/errors.js';
@@ -14,6 +15,15 @@ const MAX_OPERATIONS = 100;
 
 // Initialize logger
 const logger = createLogger('webui');
+
+// Rate limiter for file-serving routes to prevent abuse
+const fileServerLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  max: 100, // Limit each IP to 100 requests per windowMs
+  message: 'too many requests, please try again later',
+  standardHeaders: true, // Return rate limit info in the `RateLimit-*` headers
+  legacyHeaders: false, // Disable the `X-RateLimit-*` headers
+});
 
 // Configuration from centralized config
 const {
@@ -144,8 +154,8 @@ app.use(
   })
 );
 
-// Dashboard route
-app.get('/', (req, res) => {
+// Dashboard route - rate limited to prevent abuse
+app.get('/', fileServerLimiter, (req, res) => {
   logger.info('Dashboard page requested');
   res.sendFile(path.join(publicPath, 'index.html'));
 });
@@ -233,7 +243,8 @@ app.get('/api/crypto-prices', async (req, res) => {
 
 // SPA fallback - serve index.html for all non-API, non-asset routes
 // This must be placed AFTER all API routes so they are matched first
-app.get('*', (req, res) => {
+// Rate limited to prevent abuse
+app.get('*', fileServerLimiter, (req, res) => {
   // Skip if this is an API route or asset request (shouldn't reach here, but safety check)
   if (req.path.startsWith('/api') || req.path.startsWith('/assets')) {
     return res.status(404).json({ error: 'not found' });

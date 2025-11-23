@@ -167,8 +167,20 @@ export async function processConversion(
     const tempDir = path.join(process.cwd(), 'temp');
     await fs.mkdir(tempDir, { recursive: true });
 
+    // Generate safe temp file path - validate to prevent path injection
     const filePrefix = attachmentType === 'video' ? 'video' : 'image';
-    const tempFilePath = path.join(tempDir, `${filePrefix}_${Date.now()}${ext}`);
+    // Sanitize extension to prevent path traversal
+    const safeExt = ext.replace(/[^a-zA-Z0-9.]/g, '');
+    const tempFileName = `${filePrefix}_${Date.now()}${safeExt}`;
+    const tempFilePath = path.join(tempDir, tempFileName);
+
+    // Validate path stays within temp directory to prevent path traversal
+    const resolvedTempDir = path.resolve(tempDir);
+    const resolvedFilePath = path.resolve(tempFilePath);
+    if (!resolvedFilePath.startsWith(resolvedTempDir)) {
+      throw new Error('Invalid temp file path detected');
+    }
+
     await fs.writeFile(tempFilePath, fileBuffer);
     tempFiles.push(tempFilePath);
 

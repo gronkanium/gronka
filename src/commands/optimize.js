@@ -104,7 +104,17 @@ export async function processOptimization(
     const tempDir = path.join(process.cwd(), 'temp');
     await fs.mkdir(tempDir, { recursive: true });
 
-    const tempInputPath = path.join(tempDir, `gif_input_${Date.now()}.gif`);
+    // Generate safe temp file path - validate to prevent path injection
+    const tempFileName = `gif_input_${Date.now()}.gif`;
+    const tempInputPath = path.join(tempDir, tempFileName);
+
+    // Validate path stays within temp directory to prevent path traversal
+    const resolvedTempDir = path.resolve(tempDir);
+    const resolvedInputPath = path.resolve(tempInputPath);
+    if (!resolvedInputPath.startsWith(resolvedTempDir)) {
+      throw new Error('Invalid temp file path detected');
+    }
+
     await fs.writeFile(tempInputPath, fileBuffer);
     tempFiles.push(tempInputPath);
 

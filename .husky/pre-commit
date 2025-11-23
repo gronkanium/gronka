@@ -1,6 +1,51 @@
-# Check if package-lock.json is in sync with package.json
-npm run check:sync
+#!/usr/bin/env bash
+set -e
 
-# Run linting and formatting checks
-npm run lint
-npm run format:check
+# Detect WSL (Linux kernel + Windows paths)
+if grep -qi "microsoft" /proc/version 2>/dev/null; then
+  IS_WSL=1
+else
+  IS_WSL=0
+fi
+
+# Ensure PATH includes common *nix node locations
+# Don't source .bashrc as it may contain bash-specific commands that fail in /bin/sh
+export PATH="$PATH:/usr/local/bin:/opt/homebrew/bin:$HOME/.local/bin"
+
+# If node is still not found, try Windows Node path under WSL
+if ! command -v node >/dev/null 2>&1; then
+  if [ "$IS_WSL" -eq 1 ]; then
+    # Typical Windows Node path as seen in your PATH
+    WIN_NODE_DIR="/mnt/c/Program Files/nodejs"
+    if [ -x "$WIN_NODE_DIR/node.exe" ]; then
+      export PATH="$PATH:$WIN_NODE_DIR"
+    fi
+  fi
+fi
+
+# Try nvm if still no node
+if ! command -v node >/dev/null 2>&1; then
+  if [ -s "$HOME/.nvm/nvm.sh" ]; then
+    export NVM_DIR="$HOME/.nvm"
+    # shellcheck disable=SC1090
+    . "$NVM_DIR/nvm.sh"
+  fi
+fi
+
+# Final check: if no node, skip hook instead of failing commit
+if ! command -v node >/dev/null 2>&1; then
+  echo "husky pre-commit: 'node' not found in PATH, skipping checks."
+  exit 0
+fi
+
+# Use project-local npm from node_modules/.bin if possible
+if [ -x "./node_modules/.bin/npm" ]; then
+  NPM_CMD="./node_modules/.bin/npm"
+else
+  NPM_CMD="npm"
+fi
+
+# Run checks
+$NPM_CMD run check:sync
+$NPM_CMD run lint
+$NPM_CMD run format:check

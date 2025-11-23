@@ -44,14 +44,19 @@ class Logger {
   }
 
   // Sanitize user input to prevent log injection
-  // Removes newlines, carriage returns, and other control characters
-  // that could be used to forge log entries
+  // Removes newlines, carriage returns, ANSI escape codes, and all control characters
+  // that could be used to forge log entries or manipulate log output
   sanitizeLogInput(input) {
     if (typeof input === 'string') {
-      // Remove newlines, carriage returns, and other control characters
-      // Replace with space to preserve readability while preventing injection
-      // eslint-disable-next-line no-control-regex
-      return input.replace(/[\n\r\t\x00-\x1F\x7F]/g, ' ').trim();
+      // Remove ANSI escape codes (used for colored terminal output)
+      // Remove newlines, carriage returns, tabs, and ALL other control characters
+      // (0x00-0x1F and 0x7F-0x9F) to prevent log injection and log forging attacks
+      return input
+        // eslint-disable-next-line no-control-regex
+        .replace(/\x1B\[[0-9;]*[a-zA-Z]/g, '') // Remove ANSI escape codes
+        // eslint-disable-next-line no-control-regex
+        .replace(/[\x00-\x1F\x7F-\x9F]/g, ' ') // Remove all control chars
+        .trim();
     }
     return input;
   }
@@ -84,11 +89,9 @@ class Logger {
     const formattedMessage = this.formatMessage(level, message, ...args);
 
     // Always output to console
-    // Additional sanitization applied here to prevent log injection
-    // (formattedMessage is already sanitized in formatMessage, but this ensures
-    // all user-controlled content is safe for console output)
-    const safeMessage = this.sanitizeLogInput(formattedMessage);
-    console.log(safeMessage);
+    // formattedMessage is already sanitized in formatMessage, so no need for
+    // redundant double-sanitization
+    console.log(formattedMessage);
 
     // Store in database
     // Combine message and args into the message field

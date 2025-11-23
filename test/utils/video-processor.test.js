@@ -3,26 +3,25 @@ import assert from 'node:assert';
 import { convertToGif } from '../../src/utils/video-processor.js';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { mkdirSync, rmSync, writeFileSync } from 'node:fs';
-import os from 'node:os';
+import { writeFileSync } from 'node:fs';
+import tmp from 'tmp';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const testTempPath = path.join(os.tmpdir(), 'gronka-test-video-processor');
+let testTempPath;
+let tmpDirCleanup;
 
 // Setup test temp directory
 test.before(() => {
-  try {
-    mkdirSync(testTempPath, { recursive: true });
-  } catch {
-    // Directory might already exist
-  }
+  // Use tmp package to create secure temporary directory
+  const tmpDir = tmp.dirSync({ prefix: 'gronka-test-video-processor-', unsafeCleanup: true });
+  testTempPath = tmpDir.name;
+  tmpDirCleanup = tmpDir.removeCallback;
 });
 
 test.after(() => {
-  try {
-    rmSync(testTempPath, { recursive: true, force: true });
-  } catch {
-    // Ignore cleanup errors
+  // Clean up temporary directory
+  if (tmpDirCleanup) {
+    tmpDirCleanup();
   }
 });
 

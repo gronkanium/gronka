@@ -985,7 +985,7 @@ describe('docker security tests', () => {
       const riskyMounts = [];
       for (const [serviceName, service] of Object.entries(composeConfig)) {
         for (const volume of service.volumes) {
-          if (volume.includes('/proc') && volume.includes('/proc')) {
+          if (volume.includes('/proc')) {
             riskyMounts.push({ service: serviceName, volume });
           }
         }

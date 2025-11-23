@@ -43,15 +43,31 @@ class Logger {
     }
   }
 
+  // Sanitize user input to prevent log injection
+  sanitizeLogInput(input) {
+    if (typeof input === 'string') {
+      // Remove newlines and carriage returns to prevent log injection
+      return input.replace(/[\n\r]/g, '');
+    }
+    return input;
+  }
+
   formatMessage(level, message, ...args) {
     const timestamp = formatTimestampSeconds();
     const levelStr = LOG_LEVEL_NAMES[level].padEnd(5);
+    // Sanitize message and args to prevent log injection
+    const sanitizedMessage = this.sanitizeLogInput(message);
     const formattedArgs =
       args.length > 0
         ? ' ' +
-          args.map(arg => (typeof arg === 'object' ? JSON.stringify(arg) : String(arg))).join(' ')
+          args
+            .map(arg => {
+              const str = typeof arg === 'object' ? JSON.stringify(arg) : String(arg);
+              return this.sanitizeLogInput(str);
+            })
+            .join(' ')
         : '';
-    return `[${timestamp}] [${levelStr}] ${message}${formattedArgs}`;
+    return `[${timestamp}] [${levelStr}] ${sanitizedMessage}${formattedArgs}`;
   }
 
   async log(level, message, ...args) {
@@ -68,10 +84,17 @@ class Logger {
 
     // Store in database
     // Combine message and args into the message field
+    // Sanitize to prevent log injection
+    const sanitizedMessage = this.sanitizeLogInput(message);
     const fullMessage =
       args.length > 0
-        ? `${message} ${args.map(arg => (typeof arg === 'object' ? JSON.stringify(arg) : String(arg))).join(' ')}`
-        : message;
+        ? `${sanitizedMessage} ${args
+            .map(arg => {
+              const str = typeof arg === 'object' ? JSON.stringify(arg) : String(arg);
+              return this.sanitizeLogInput(str);
+            })
+            .join(' ')}`
+        : sanitizedMessage;
 
     // Write to database (wait for initialization if needed)
     try {

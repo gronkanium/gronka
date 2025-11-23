@@ -132,8 +132,7 @@ export async function convertToGif(inputPath, outputPath, options = {}) {
 
     // Two-pass conversion for better quality
     // Pass 1: Generate palette
-    // eslint-disable-next-line no-unused-vars
-    const pass1 = ffmpeg(inputPath)
+    ffmpeg(inputPath)
       .inputOptions(
         [
           startTime !== null ? `-ss ${startTime}` : null,

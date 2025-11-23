@@ -344,14 +344,14 @@ export async function handleOptimizeContextMenuCommand(interaction, modalAttachm
         originalUrlForConversion = actualUrl;
       } else {
         // Use local file (CDN URL - don't track as it's already processed)
-        const stats = await fs.stat(localFilePath);
+        // Read file first to avoid race condition between stat and readFile
+        preDownloadedBuffer = await fs.readFile(localFilePath);
         attachment = {
           url: url,
           name: path.basename(localFilePath),
-          size: stats.size,
+          size: preDownloadedBuffer.length,
           contentType: 'image/gif',
         };
-        preDownloadedBuffer = await fs.readFile(localFilePath);
         // Don't set originalUrlForConversion for CDN URLs
       }
     } catch (error) {
@@ -552,14 +552,14 @@ export async function handleOptimizeCommand(interaction) {
         originalUrlForConversion = actualUrl;
       } else {
         // Use local file (CDN URL - don't track as it's already processed)
-        const stats = await fs.stat(localFilePath);
+        // Read file first to avoid race condition between stat and readFile
+        preDownloadedBuffer = await fs.readFile(localFilePath);
         finalAttachment = {
           url: url,
           name: path.basename(localFilePath),
-          size: stats.size,
+          size: preDownloadedBuffer.length,
           contentType: 'image/gif',
         };
-        preDownloadedBuffer = await fs.readFile(localFilePath);
         // Don't set originalUrlForConversion for CDN URLs
       }
     } catch (error) {

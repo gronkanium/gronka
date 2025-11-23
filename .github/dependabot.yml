@@ -9,8 +9,6 @@ updates:
       security-updates:
         patterns:
           - '*'
-        update-types:
-          - 'security'
     commit-message:
       prefix: 'deps'
       include: 'scope'

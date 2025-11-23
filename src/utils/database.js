@@ -214,9 +214,10 @@ export function getUniqueUserCount() {
  * Query logs with optional filters
  * @param {Object} options - Query options
  * @param {string} [options.component] - Filter by component
- * @param {string} [options.level] - Filter by level
+ * @param {string|string[]} [options.level] - Filter by level (single or array)
  * @param {number} [options.startTime] - Start timestamp (inclusive)
  * @param {number} [options.endTime] - End timestamp (inclusive)
+ * @param {string} [options.search] - Search in message (case-insensitive)
  * @param {number} [options.limit] - Maximum number of results
  * @param {number} [options.offset] - Offset for pagination
  * @param {boolean} [options.orderDesc=true] - Order by timestamp descending
@@ -233,6 +234,7 @@ export function getLogs(options = {}) {
     level = null,
     startTime = null,
     endTime = null,
+    search = null,
     limit = null,
     offset = null,
     orderDesc = true,
@@ -247,8 +249,16 @@ export function getLogs(options = {}) {
   }
 
   if (level) {
-    query += ' AND level = ?';
-    params.push(level);
+    if (Array.isArray(level)) {
+      // Multiple levels
+      const placeholders = level.map(() => '?').join(',');
+      query += ` AND level IN (${placeholders})`;
+      params.push(...level);
+    } else {
+      // Single level
+      query += ' AND level = ?';
+      params.push(level);
+    }
   }
 
   if (startTime !== null) {
@@ -259,6 +269,11 @@ export function getLogs(options = {}) {
   if (endTime !== null) {
     query += ' AND timestamp <= ?';
     params.push(endTime);
+  }
+
+  if (search) {
+    query += ' AND message LIKE ?';
+    params.push(`%${search}%`);
   }
 
   query += ` ORDER BY timestamp ${orderDesc ? 'DESC' : 'ASC'}`;
@@ -275,6 +290,168 @@ export function getLogs(options = {}) {
 
   const stmt = db.prepare(query);
   return stmt.all(...params);
+}
+
+/**
+ * Get total count of logs matching filters
+ * @param {Object} options - Query options (same as getLogs)
+ * @returns {number} Total count of matching logs
+ */
+export function getLogsCount(options = {}) {
+  if (!db) {
+    console.error('Database not initialized. Call initDatabase() first.');
+    return 0;
+  }
+
+  const {
+    component = null,
+    level = null,
+    startTime = null,
+    endTime = null,
+    search = null,
+  } = options;
+
+  let query = 'SELECT COUNT(*) as count FROM logs WHERE 1=1';
+  const params = [];
+
+  if (component) {
+    query += ' AND component = ?';
+    params.push(component);
+  }
+
+  if (level) {
+    if (Array.isArray(level)) {
+      const placeholders = level.map(() => '?').join(',');
+      query += ` AND level IN (${placeholders})`;
+      params.push(...level);
+    } else {
+      query += ' AND level = ?';
+      params.push(level);
+    }
+  }
+
+  if (startTime !== null) {
+    query += ' AND timestamp >= ?';
+    params.push(startTime);
+  }
+
+  if (endTime !== null) {
+    query += ' AND timestamp <= ?';
+    params.push(endTime);
+  }
+
+  if (search) {
+    query += ' AND message LIKE ?';
+    params.push(`%${search}%`);
+  }
+
+  const stmt = db.prepare(query);
+  const result = stmt.get(...params);
+  return result ? result.count : 0;
+}
+
+/**
+ * Get all unique components from logs
+ * @returns {string[]} Array of component names
+ */
+export function getLogComponents() {
+  if (!db) {
+    console.error('Database not initialized. Call initDatabase() first.');
+    return [];
+  }
+
+  const stmt = db.prepare('SELECT DISTINCT component FROM logs ORDER BY component');
+  const results = stmt.all();
+  return results.map(r => r.component);
+}
+
+/**
+ * Get log metrics for dashboard
+ * @param {Object} options - Options
+ * @param {number} [options.timeRange] - Time range in milliseconds (default: last 24 hours)
+ * @returns {Object} Metrics object
+ */
+export function getLogMetrics(options = {}) {
+  if (!db) {
+    console.error('Database not initialized. Call initDatabase() first.');
+    return {
+      total: 0,
+      byLevel: {},
+      byComponent: {},
+      errorCount1h: 0,
+      errorCount24h: 0,
+      warnCount1h: 0,
+      warnCount24h: 0,
+    };
+  }
+
+  const now = Date.now();
+  const timeRange = options.timeRange || 24 * 60 * 60 * 1000; // 24 hours
+  const oneHourAgo = now - 60 * 60 * 1000;
+  const startTime = now - timeRange;
+
+  // Total logs in time range
+  const totalStmt = db.prepare('SELECT COUNT(*) as count FROM logs WHERE timestamp >= ?');
+  const totalResult = totalStmt.get(startTime);
+  const total = totalResult ? totalResult.count : 0;
+
+  // Logs by level in time range
+  const levelStmt = db.prepare(
+    'SELECT level, COUNT(*) as count FROM logs WHERE timestamp >= ? GROUP BY level'
+  );
+  const levelResults = levelStmt.all(startTime);
+  const byLevel = {};
+  levelResults.forEach(row => {
+    byLevel[row.level] = row.count;
+  });
+
+  // Logs by component in time range
+  const componentStmt = db.prepare(
+    'SELECT component, COUNT(*) as count FROM logs WHERE timestamp >= ? GROUP BY component ORDER BY count DESC'
+  );
+  const componentResults = componentStmt.all(startTime);
+  const byComponent = {};
+  componentResults.forEach(row => {
+    byComponent[row.component] = row.count;
+  });
+
+  // Error count in last hour
+  const errorCount1hStmt = db.prepare(
+    'SELECT COUNT(*) as count FROM logs WHERE level = ? AND timestamp >= ?'
+  );
+  const errorCount1h = errorCount1hStmt.get('ERROR', oneHourAgo)?.count || 0;
+
+  // Error count in last 24 hours
+  const errorCount24h = byLevel['ERROR'] || 0;
+
+  // Warning count in last hour
+  const warnCount1h = errorCount1hStmt.get('WARN', oneHourAgo)?.count || 0;
+
+  // Warning count in last 24 hours
+  const warnCount24h = byLevel['WARN'] || 0;
+
+  // Recent errors timeline (last 24 hours, grouped by hour)
+  const errorTimelineStmt = db.prepare(`
+    SELECT 
+      (timestamp / 3600000) * 3600000 as hour,
+      COUNT(*) as count
+    FROM logs 
+    WHERE level = 'ERROR' AND timestamp >= ?
+    GROUP BY hour
+    ORDER BY hour ASC
+  `);
+  const errorTimeline = errorTimelineStmt.all(startTime);
+
+  return {
+    total,
+    byLevel,
+    byComponent,
+    errorCount1h,
+    errorCount24h,
+    warnCount1h,
+    warnCount24h,
+    errorTimeline,
+  };
 }
 
 /**

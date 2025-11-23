@@ -17,6 +17,17 @@ const LOG_LEVEL_NAMES = {
 // Track database initialization promise
 let dbInitPromise = null;
 
+// Callback for broadcasting logs to WebSocket clients
+let logBroadcastCallback = null;
+
+/**
+ * Set callback for broadcasting logs
+ * @param {Function} callback - Function to call with log entry
+ */
+export function setLogBroadcastCallback(callback) {
+  logBroadcastCallback = callback;
+}
+
 // Format timestamp to seconds precision (removes milliseconds)
 export function formatTimestampSeconds(date = new Date()) {
   return date.toISOString().replace(/\.\d{3}Z$/, 'Z');
@@ -119,6 +130,21 @@ class Logger {
         }
       }
       insertLog(timestamp, this.component, levelName, fullMessage);
+
+      // Broadcast log to WebSocket clients if callback is set
+      if (logBroadcastCallback) {
+        try {
+          logBroadcastCallback({
+            timestamp,
+            component: this.component,
+            level: levelName,
+            message: fullMessage,
+          });
+        } catch (error) {
+          // Don't fail if broadcast fails
+          console.error(`Failed to broadcast log:`, error);
+        }
+      }
     } catch (error) {
       // Don't fail if database write fails, but log to console
       console.error(`Failed to write log to database:`, error);

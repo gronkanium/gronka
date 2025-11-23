@@ -129,6 +129,26 @@ services:
   #   networks:
   #     - gronka-network
 
+  # dozzle - real-time docker container log viewer
+  dozzle:
+    image: amir20/dozzle:latest
+    container_name: dozzle
+    restart: unless-stopped
+    ports:
+      - '8080:8080'
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    environment:
+      - DOZZLE_LEVEL=info
+      - DOZZLE_TAILSIZE=300
+      - DOZZLE_FILTER=name=gronka,name=gronka-webui,name=cobalt,name=giflossy
+    networks:
+      - gronka-network
+    profiles:
+      - logs
+    # Note: Start with: docker compose --profile logs up
+    # Access at http://localhost:8080
+
 networks:
   gronka-network:
     driver: bridge

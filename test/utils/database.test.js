@@ -8,6 +8,9 @@ import {
   getUser,
   getUniqueUserCount,
   getLogs,
+  getLogsCount,
+  getLogComponents,
+  getLogMetrics,
   getProcessedUrl,
   insertProcessedUrl,
 } from '../../src/utils/database.js';
@@ -360,6 +363,273 @@ describe('database utilities', () => {
         assert.strictEqual(log.level, 'ERROR');
         assert.ok(log.timestamp >= startTime);
         assert.ok(log.timestamp <= endTime);
+      });
+    });
+
+    test('filters by multiple levels', () => {
+      const now = Date.now();
+      const uniqueComponent = 'test-multi-level-' + now;
+
+      insertLog(now, uniqueComponent, 'ERROR', 'Error message');
+      insertLog(now + 1, uniqueComponent, 'WARN', 'Warning message');
+      insertLog(now + 2, uniqueComponent, 'INFO', 'Info message');
+      insertLog(now + 3, uniqueComponent, 'DEBUG', 'Debug message');
+
+      const logs = getLogs({
+        component: uniqueComponent,
+        level: ['ERROR', 'WARN'],
+        limit: 10,
+      });
+
+      assert.ok(logs.length >= 2, 'Should have at least 2 logs');
+      logs.forEach(log => {
+        assert.ok(log.level === 'ERROR' || log.level === 'WARN');
+      });
+    });
+
+    test('filters by search term', () => {
+      const now = Date.now();
+      const uniqueComponent = 'test-search-' + now;
+
+      insertLog(now, uniqueComponent, 'INFO', 'This is a unique search term test');
+      insertLog(now + 1, uniqueComponent, 'INFO', 'This is another message');
+      insertLog(now + 2, uniqueComponent, 'INFO', 'Contains the word unique');
+
+      const logs = getLogs({
+        component: uniqueComponent,
+        search: 'unique',
+        limit: 10,
+      });
+
+      assert.ok(logs.length >= 2, 'Should find logs with search term');
+      logs.forEach(log => {
+        assert.ok(log.message.toLowerCase().includes('unique'));
+      });
+    });
+
+    test('search is case-insensitive', () => {
+      const now = Date.now();
+      const uniqueComponent = 'test-case-' + now;
+
+      insertLog(now, uniqueComponent, 'INFO', 'Message with UPPERCASE word');
+      insertLog(now + 1, uniqueComponent, 'INFO', 'Message with lowercase word');
+
+      const logsUpper = getLogs({
+        component: uniqueComponent,
+        search: 'WORD',
+        limit: 10,
+      });
+
+      const logsLower = getLogs({
+        component: uniqueComponent,
+        search: 'word',
+        limit: 10,
+      });
+
+      assert.ok(logsUpper.length >= 2, 'Should find with uppercase search');
+      assert.ok(logsLower.length >= 2, 'Should find with lowercase search');
+    });
+  });
+
+  describe('getLogsCount', () => {
+    test('returns correct count without filters', () => {
+      const count = getLogsCount();
+      assert.strictEqual(typeof count, 'number');
+      assert.ok(count >= 0);
+    });
+
+    test('returns correct count with component filter', () => {
+      const now = Date.now();
+      const uniqueComponent = 'test-count-component-' + now;
+
+      insertLog(now, uniqueComponent, 'INFO', 'Message 1');
+      insertLog(now + 1, uniqueComponent, 'INFO', 'Message 2');
+      insertLog(now + 2, uniqueComponent, 'INFO', 'Message 3');
+
+      const count = getLogsCount({ component: uniqueComponent });
+      assert.ok(count >= 3, 'Should count at least 3 logs');
+    });
+
+    test('returns correct count with level filter', () => {
+      const now = Date.now();
+      const uniqueComponent = 'test-count-level-' + now;
+
+      insertLog(now, uniqueComponent, 'ERROR', 'Error 1');
+      insertLog(now + 1, uniqueComponent, 'ERROR', 'Error 2');
+      insertLog(now + 2, uniqueComponent, 'INFO', 'Info 1');
+
+      const errorCount = getLogsCount({
+        component: uniqueComponent,
+        level: 'ERROR',
+      });
+
+      assert.ok(errorCount >= 2, 'Should count at least 2 errors');
+    });
+
+    test('returns correct count with multiple level filter', () => {
+      const now = Date.now();
+      const uniqueComponent = 'test-count-multi-' + now;
+
+      insertLog(now, uniqueComponent, 'ERROR', 'Error 1');
+      insertLog(now + 1, uniqueComponent, 'WARN', 'Warn 1');
+      insertLog(now + 2, uniqueComponent, 'INFO', 'Info 1');
+      insertLog(now + 3, uniqueComponent, 'DEBUG', 'Debug 1');
+
+      const count = getLogsCount({
+        component: uniqueComponent,
+        level: ['ERROR', 'WARN'],
+      });
+
+      assert.ok(count >= 2, 'Should count at least 2 logs');
+    });
+
+    test('returns correct count with time range', () => {
+      const now = Date.now();
+      const startTime = now - 1000;
+      const endTime = now + 1000;
+      const uniqueComponent = 'test-count-time-' + now;
+
+      insertLog(now - 2000, uniqueComponent, 'INFO', 'Old message');
+      insertLog(now, uniqueComponent, 'INFO', 'Recent message 1');
+      insertLog(now + 500, uniqueComponent, 'INFO', 'Recent message 2');
+
+      const count = getLogsCount({
+        component: uniqueComponent,
+        startTime,
+        endTime,
+      });
+
+      assert.ok(count >= 2, 'Should count recent logs only');
+    });
+
+    test('returns correct count with search filter', () => {
+      const now = Date.now();
+      const uniqueComponent = 'test-count-search-' + now;
+
+      insertLog(now, uniqueComponent, 'INFO', 'Message with keyword');
+      insertLog(now + 1, uniqueComponent, 'INFO', 'Another with keyword');
+      insertLog(now + 2, uniqueComponent, 'INFO', 'Different message');
+
+      const count = getLogsCount({
+        component: uniqueComponent,
+        search: 'keyword',
+      });
+
+      assert.ok(count >= 2, 'Should count messages with keyword');
+    });
+  });
+
+  describe('getLogComponents', () => {
+    test('returns array of components', () => {
+      const components = getLogComponents();
+      assert.ok(Array.isArray(components));
+    });
+
+    test('returns unique components', () => {
+      const now = Date.now();
+      const comp1 = 'test-comp-1-' + now;
+      const comp2 = 'test-comp-2-' + now;
+
+      insertLog(now, comp1, 'INFO', 'Message 1');
+      insertLog(now + 1, comp1, 'INFO', 'Message 2');
+      insertLog(now + 2, comp2, 'INFO', 'Message 3');
+
+      const components = getLogComponents();
+      const uniqueSet = new Set(components);
+
+      assert.strictEqual(components.length, uniqueSet.size, 'All components should be unique');
+    });
+
+    test('includes newly added components', () => {
+      const now = Date.now();
+      const uniqueComponent = 'test-new-component-' + now;
+
+      insertLog(now, uniqueComponent, 'INFO', 'Test message');
+
+      const components = getLogComponents();
+      assert.ok(components.includes(uniqueComponent), 'Should include new component');
+    });
+  });
+
+  describe('getLogMetrics', () => {
+    test('returns metrics object with expected structure', () => {
+      const metrics = getLogMetrics();
+
+      assert.ok(typeof metrics === 'object');
+      assert.ok(typeof metrics.total === 'number');
+      assert.ok(typeof metrics.byLevel === 'object');
+      assert.ok(typeof metrics.byComponent === 'object');
+      assert.ok(typeof metrics.errorCount1h === 'number');
+      assert.ok(typeof metrics.errorCount24h === 'number');
+      assert.ok(typeof metrics.warnCount1h === 'number');
+      assert.ok(typeof metrics.warnCount24h === 'number');
+      assert.ok(Array.isArray(metrics.errorTimeline));
+    });
+
+    test('counts errors correctly in last hour', () => {
+      const now = Date.now();
+      const uniqueComponent = 'test-metrics-1h-' + now;
+
+      // Recent error (within last hour)
+      insertLog(now - 30 * 60 * 1000, uniqueComponent, 'ERROR', 'Recent error');
+      // Old error (more than hour ago)
+      insertLog(now - 90 * 60 * 1000, uniqueComponent, 'ERROR', 'Old error');
+
+      const metrics = getLogMetrics();
+      assert.ok(metrics.errorCount1h >= 1, 'Should count recent errors');
+    });
+
+    test('counts logs by level', () => {
+      const now = Date.now();
+      const uniqueComponent = 'test-metrics-level-' + now;
+
+      insertLog(now, uniqueComponent, 'ERROR', 'Error 1');
+      insertLog(now + 1, uniqueComponent, 'WARN', 'Warning 1');
+      insertLog(now + 2, uniqueComponent, 'INFO', 'Info 1');
+
+      const metrics = getLogMetrics();
+
+      assert.ok(metrics.byLevel.ERROR >= 1, 'Should have error count');
+      assert.ok(metrics.byLevel.WARN >= 1, 'Should have warning count');
+      assert.ok(metrics.byLevel.INFO >= 1, 'Should have info count');
+    });
+
+    test('counts logs by component', () => {
+      const now = Date.now();
+      const comp1 = 'test-metrics-comp1-' + now;
+      const comp2 = 'test-metrics-comp2-' + now;
+
+      insertLog(now, comp1, 'INFO', 'Message 1');
+      insertLog(now + 1, comp2, 'INFO', 'Message 2');
+
+      const metrics = getLogMetrics();
+
+      assert.ok(metrics.byComponent[comp1] >= 1, 'Should count component 1');
+      assert.ok(metrics.byComponent[comp2] >= 1, 'Should count component 2');
+    });
+
+    test('respects custom time range', () => {
+      const now = Date.now();
+      const uniqueComponent = 'test-metrics-range-' + now;
+      const oneHour = 60 * 60 * 1000;
+
+      // Insert log within 1 hour
+      insertLog(now - oneHour / 2, uniqueComponent, 'ERROR', 'Recent error');
+      // Insert log outside 1 hour
+      insertLog(now - oneHour * 2, uniqueComponent, 'ERROR', 'Old error');
+
+      const metrics = getLogMetrics({ timeRange: oneHour });
+
+      // The recent error should be counted, old one shouldn't
+      assert.ok(metrics.total >= 1, 'Should count logs in time range');
+    });
+
+    test('error timeline has correct structure', () => {
+      const metrics = getLogMetrics();
+
+      metrics.errorTimeline.forEach(point => {
+        assert.ok(typeof point.hour === 'number', 'Timeline point should have hour');
+        assert.ok(typeof point.count === 'number', 'Timeline point should have count');
       });
     });
   });

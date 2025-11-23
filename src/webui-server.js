@@ -4,10 +4,11 @@ import axios from 'axios';
 import http from 'http';
 import { WebSocketServer } from 'ws';
 import rateLimit from 'express-rate-limit';
-import { createLogger } from './utils/logger.js';
+import { createLogger, setLogBroadcastCallback } from './utils/logger.js';
 import { webuiConfig } from './utils/config.js';
 import { ConfigurationError } from './utils/errors.js';
 import { setBroadcastCallback } from './utils/operations-tracker.js';
+import { getLogs, getLogsCount, getLogComponents, getLogMetrics } from './utils/database.js';
 
 // In-memory storage for operations (mirror of bot's operations)
 const operations = [];
@@ -241,6 +242,106 @@ app.get('/api/crypto-prices', async (req, res) => {
   }
 });
 
+// Logs endpoint with filtering and pagination
+app.get('/api/logs', (req, res) => {
+  try {
+    const {
+      component,
+      level,
+      startTime,
+      endTime,
+      search,
+      limit = 100,
+      offset = 0,
+      orderDesc = 'true',
+    } = req.query;
+
+    // Parse query parameters
+    const options = {
+      orderDesc: orderDesc === 'true',
+      limit: parseInt(limit, 10) || 100,
+      offset: parseInt(offset, 10) || 0,
+    };
+
+    if (component) options.component = component;
+    if (search) options.search = search;
+    if (startTime) options.startTime = parseInt(startTime, 10);
+    if (endTime) options.endTime = parseInt(endTime, 10);
+
+    // Handle multiple levels (comma-separated)
+    if (level) {
+      if (Array.isArray(level)) {
+        // Multiple level parameters: flatten and trim all values
+        options.level = level.flatMap(l =>
+          typeof l === 'string'
+            ? l.split(',').map(sub => sub.trim())
+            : []
+        );
+      } else if (typeof level === 'string') {
+        if (level.includes(',')) {
+          options.level = level.split(',').map(l => l.trim());
+        } else {
+          options.level = level.trim();
+        }
+      } else {
+        // Unexpected type, ignore or reject (here we ignore)
+      }
+    }
+
+    // Get logs and total count
+    const logs = getLogs(options);
+    const total = getLogsCount(options);
+
+    res.json({
+      logs,
+      total,
+      limit: options.limit,
+      offset: options.offset,
+    });
+  } catch (error) {
+    logger.error('Failed to fetch logs:', error);
+    res.status(500).json({
+      error: 'failed to fetch logs',
+      message: error.message,
+    });
+  }
+});
+
+// Log metrics endpoint
+app.get('/api/logs/metrics', (req, res) => {
+  try {
+    const { timeRange } = req.query;
+    const options = {};
+
+    if (timeRange) {
+      options.timeRange = parseInt(timeRange, 10);
+    }
+
+    const metrics = getLogMetrics(options);
+    res.json(metrics);
+  } catch (error) {
+    logger.error('Failed to fetch log metrics:', error);
+    res.status(500).json({
+      error: 'failed to fetch log metrics',
+      message: error.message,
+    });
+  }
+});
+
+// Log components endpoint
+app.get('/api/logs/components', (req, res) => {
+  try {
+    const components = getLogComponents();
+    res.json({ components });
+  } catch (error) {
+    logger.error('Failed to fetch log components:', error);
+    res.status(500).json({
+      error: 'failed to fetch log components',
+      message: error.message,
+    });
+  }
+});
+
 // SPA fallback - serve index.html for all non-API, non-asset routes
 // This must be placed AFTER all API routes so they are matched first
 // Rate limited to prevent abuse
@@ -312,8 +413,26 @@ function broadcastOperation(operation) {
   });
 }
 
+// Broadcast function to send log updates to all connected clients
+export function broadcastLog(logEntry) {
+  const message = JSON.stringify({ type: 'log', data: logEntry });
+  clients.forEach(client => {
+    if (client.readyState === 1) {
+      // WebSocket.OPEN = 1
+      try {
+        client.send(message);
+      } catch (error) {
+        logger.error('Error sending log websocket message:', error);
+      }
+    }
+  });
+}
+
 // Set the broadcast callback in operations tracker
 setBroadcastCallback(broadcastOperation);
+
+// Set the log broadcast callback
+setLogBroadcastCallback(broadcastLog);
 
 // Handle WebSocket connections
 wss.on('connection', ws => {

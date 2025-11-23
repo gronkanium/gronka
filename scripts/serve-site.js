@@ -4,31 +4,13 @@ import http from 'http';
 import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
-
+import escape from 'escape-html';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const siteDir = path.resolve(path.join(__dirname, '..', '_site'));
 const port = process.env.PORT || 4000;
 const host = process.env.HOST || '0.0.0.0';
 
-/**
- * Escape HTML special characters to prevent XSS
- * Enhanced version that also escapes forward slashes to prevent breaking out of script contexts
- * @param {string} str - String to escape
- * @returns {string} HTML-escaped string
- */
-function escapeHtmlStrict(str) {
-  if (typeof str !== 'string') {
-    return String(str);
-  }
-  return str
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;')
-    .replace(/'/g, '&#x27;')
-    .replace(/\//g, '&#x2F;');
-}
 
 /**
  * Validate and normalize file path to prevent path traversal
@@ -153,7 +135,7 @@ const server = http.createServer((req, res) => {
   } else {
     res.writeHead(404, { 'Content-Type': 'text/html' });
     // Escape user input to prevent XSS
-    const escapedUrl = escapeHtmlStrict(req.url);
+    const escapedUrl = escape(req.url);
     res.end(`
       <!DOCTYPE html>
       <html>

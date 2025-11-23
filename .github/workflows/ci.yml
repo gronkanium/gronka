@@ -75,7 +75,7 @@ jobs:
         run: sudo apt-get update && sudo apt-get install -y ffmpeg
 
       - name: Run validation
-        run: npm run validate
+        run: npm run check:sync && npm run lint
         env:
           DISCORD_TOKEN: 'ci-test-token'
           CLIENT_ID: 'ci-test-client-id'
@@ -107,7 +107,7 @@ jobs:
         run: sudo apt-get update && sudo apt-get install -y ffmpeg
 
       - name: Run validation
-        run: npm run validate
+        run: npm run check:sync && npm run lint
         env:
           DISCORD_TOKEN: 'ci-test-token'
           CLIENT_ID: 'ci-test-client-id'

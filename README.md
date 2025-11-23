@@ -114,6 +114,18 @@ when using `/optimize`, you can specify a lossy compression level:
 
 for context menu optimization, a modal will appear to let you enter the lossy level.
 
+### file size limits
+
+gronka has file size limits to ensure system stability and prevent abuse:
+
+- **gif optimization** (`/optimize`): maximum 50mb
+- **video conversion** (`/convert`): maximum 100mb for video files
+- **image conversion** (`/convert`): maximum 50mb for image files
+- **video download** (`/download`): maximum 500mb
+- **image download** (`/download`): maximum 50mb
+
+when a file exceeds these limits, you'll receive a clear error message indicating which limit was exceeded and what the maximum size is for that file type. admins can bypass these limits for downloads, but conversion and optimization limits still apply for security reasons.
+
 ## using gronka
 
 ### commands

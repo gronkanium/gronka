@@ -11,6 +11,7 @@ import crypto from 'crypto';
 import { createLogger } from '../utils/logger.js';
 import { botConfig } from '../utils/config.js';
 import { validateUrl } from '../utils/validation.js';
+import { ValidationError } from '../utils/errors.js';
 import { downloadImage, downloadFileFromUrl, parseTenorUrl } from '../utils/file-downloader.js';
 import { checkRateLimit, isAdmin, recordRateLimit } from '../utils/rate-limit.js';
 import {
@@ -29,6 +30,44 @@ import { insertProcessedUrl, initDatabase, getProcessedUrl } from '../utils/data
 const logger = createLogger('optimize');
 
 const { gifStoragePath: GIF_STORAGE_PATH, cdnBaseUrl: CDN_BASE_URL } = botConfig;
+
+// GIF file signature constants
+const ALLOWED_GIF_SIGNATURES = [
+  Buffer.from('GIF87a'), // GIF87a signature
+  Buffer.from('GIF89a'), // GIF89a signature
+];
+
+const MAX_FILE_SIZE = 50 * 1024 * 1024; // 50MB limit
+
+/**
+ * Validate GIF buffer before writing to filesystem
+ * Checks file signature (magic bytes), size limits, and basic structure
+ * @param {Buffer} buffer - File buffer to validate
+ * @throws {ValidationError} If buffer is invalid
+ */
+function validateGifBuffer(buffer) {
+  // Check buffer exists and has minimum size
+  if (!buffer || buffer.length < 6) {
+    throw new ValidationError('invalid or empty file buffer');
+  }
+
+  // Check file size limit
+  if (buffer.length > MAX_FILE_SIZE) {
+    throw new ValidationError(
+      `file too large. maximum size for gif files is ${MAX_FILE_SIZE / 1024 / 1024}mb.`
+    );
+  }
+
+  // Verify GIF file signature (magic bytes)
+  const signature = buffer.slice(0, 6);
+  const isValidGif = ALLOWED_GIF_SIGNATURES.some(validSig => signature.equals(validSig));
+
+  if (!isValidGif) {
+    throw new ValidationError('file is not a valid gif format. please provide a gif file.');
+  }
+
+  return true;
+}
 
 /**
  * Process GIF optimization
@@ -113,6 +152,16 @@ export async function processOptimization(
     const resolvedInputPath = path.resolve(tempInputPath);
     if (!resolvedInputPath.startsWith(resolvedTempDir)) {
       throw new Error('Invalid temp file path detected');
+    }
+
+    // Validate file buffer before writing to filesystem
+    try {
+      validateGifBuffer(fileBuffer);
+    } catch (error) {
+      if (error instanceof ValidationError) {
+        throw error;
+      }
+      throw new ValidationError('file validation failed: ' + error.message);
     }
 
     await fs.writeFile(tempInputPath, fileBuffer);

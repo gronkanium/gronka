@@ -109,6 +109,7 @@ function validateVideoBuffer(buffer) {
  * @param {Buffer} [preDownloadedBuffer] - Optional pre-downloaded buffer (to avoid double download)
  * @param {Object} [options] - Optional conversion options (startTime, duration, width, fps, quality)
  * @param {string} [originalUrl] - Original URL if this conversion came from a URL (not Discord attachment)
+ * @param {string} [commandSource] - Command source ('slash' or 'context-menu')
  */
 export async function processConversion(
   interaction,
@@ -117,7 +118,8 @@ export async function processConversion(
   adminUser,
   preDownloadedBuffer = null,
   options = {},
-  originalUrl = null
+  originalUrl = null,
+  commandSource = null
 ) {
   const userId = interaction.user.id;
   const username = interaction.user.tag || interaction.user.username || 'unknown';
@@ -137,6 +139,9 @@ export async function processConversion(
       contentType: attachment.contentType || null,
       url: attachment.url || null,
     };
+  }
+  if (commandSource) {
+    operationContext.commandSource = commandSource;
   }
 
   // Create operation tracking with context
@@ -666,12 +671,11 @@ export async function processConversion(
     // Track recent conversion
     trackRecentConversion(userId, gifUrl);
 
-    // Record processed URL in database if this came from a URL
-    if (originalUrl) {
-      const urlHash = hashUrl(originalUrl);
-      await insertProcessedUrl(urlHash, finalHash, 'gif', '.gif', gifUrl, Date.now(), userId);
-      logger.debug(`Recorded processed URL in database (urlHash: ${urlHash.substring(0, 8)}...)`);
-    }
+    // Record processed URL in database for all conversions
+    // For URL-based operations, use hash of original URL; for attachments, use file hash
+    const urlHash = originalUrl ? hashUrl(originalUrl) : finalHash;
+    await insertProcessedUrl(urlHash, finalHash, 'gif', '.gif', gifUrl, Date.now(), userId, optimizedSize);
+    logger.debug(`Recorded processed URL in database (urlHash: ${urlHash.substring(0, 8)}...)`);
 
     logger.info(
       `Successfully created GIF (hash: ${finalHash}, size: ${(optimizedSize / (1024 * 1024)).toFixed(2)}MB) for user ${userId}${options.optimize ? ' [OPTIMIZED]' : ''}${wasAutoOptimized ? ' [AUTO-OPTIMIZED]' : ''}`
@@ -945,7 +949,8 @@ export async function handleConvertContextMenu(interaction) {
     adminUser,
     preDownloadedBuffer,
     {},
-    originalUrlForConversion
+    originalUrlForConversion,
+    'context-menu'
   );
 }
 
@@ -1140,6 +1145,7 @@ export async function handleConvertCommand(interaction) {
       optimize,
       lossy: lossy !== null ? lossy : undefined,
     },
-    url ? originalUrlForConversion : null
+    url ? originalUrlForConversion : null,
+    'slash'
   );
 }

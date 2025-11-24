@@ -96,12 +96,24 @@ export async function initDatabase() {
           file_extension TEXT,
           file_url TEXT NOT NULL,
           processed_at INTEGER NOT NULL,
-          user_id TEXT
+          user_id TEXT,
+          file_size INTEGER
         );
 
         CREATE INDEX IF NOT EXISTS idx_processed_urls_file_hash ON processed_urls(file_hash);
         CREATE INDEX IF NOT EXISTS idx_processed_urls_processed_at ON processed_urls(processed_at);
+        CREATE INDEX IF NOT EXISTS idx_processed_urls_user_id ON processed_urls(user_id);
       `);
+
+      // Add file_size column if it doesn't exist (for existing databases)
+      try {
+        db.exec(`ALTER TABLE processed_urls ADD COLUMN file_size INTEGER`);
+      } catch (error) {
+        // Column already exists, ignore error
+        if (!error.message.includes('duplicate column name')) {
+          console.error('Failed to add file_size column:', error);
+        }
+      }
 
       // Create operation_logs table for detailed operation tracking
       db.exec(`
@@ -602,6 +614,7 @@ export async function getProcessedUrl(urlHash) {
  * @param {string} fileUrl - Final CDN URL or path
  * @param {number} processedAt - Unix timestamp in milliseconds
  * @param {string} [userId] - Discord user ID who requested it
+ * @param {number} [fileSize] - File size in bytes
  * @returns {Promise<void>}
  */
 export async function insertProcessedUrl(
@@ -611,7 +624,8 @@ export async function insertProcessedUrl(
   fileExtension,
   fileUrl,
   processedAt,
-  userId = null
+  userId = null,
+  fileSize = null
 ) {
   await ensureDbInitialized();
 
@@ -626,15 +640,15 @@ export async function insertProcessedUrl(
     if (existing) {
       // Update existing record (in case file URL or other info changed)
       const updateStmt = db.prepare(
-        'UPDATE processed_urls SET file_hash = ?, file_type = ?, file_extension = ?, file_url = ?, processed_at = ?, user_id = ? WHERE url_hash = ?'
+        'UPDATE processed_urls SET file_hash = ?, file_type = ?, file_extension = ?, file_url = ?, processed_at = ?, user_id = ?, file_size = ? WHERE url_hash = ?'
       );
-      updateStmt.run(fileHash, fileType, fileExtension, fileUrl, processedAt, userId, urlHash);
+      updateStmt.run(fileHash, fileType, fileExtension, fileUrl, processedAt, userId, fileSize, urlHash);
     } else {
       // Insert new record
       const insertStmt = db.prepare(
-        'INSERT INTO processed_urls (url_hash, file_hash, file_type, file_extension, file_url, processed_at, user_id) VALUES (?, ?, ?, ?, ?, ?, ?)'
+        'INSERT INTO processed_urls (url_hash, file_hash, file_type, file_extension, file_url, processed_at, user_id, file_size) VALUES (?, ?, ?, ?, ?, ?, ?, ?)'
       );
-      insertStmt.run(urlHash, fileHash, fileType, fileExtension, fileUrl, processedAt, userId);
+      insertStmt.run(urlHash, fileHash, fileType, fileExtension, fileUrl, processedAt, userId, fileSize);
     }
   } catch (error) {
     // Log error but don't throw - allows graceful degradation if database is read-only
@@ -665,7 +679,7 @@ export async function getUserMedia(userId, options = {}) {
   const { limit = null, offset = null } = options;
 
   let query =
-    'SELECT file_url, file_type, file_extension, processed_at FROM processed_urls WHERE user_id = ? ORDER BY processed_at DESC';
+    'SELECT file_url, file_type, file_extension, processed_at, file_size FROM processed_urls WHERE user_id = ? ORDER BY processed_at DESC';
   const params = [userId];
 
   if (limit !== null) {
@@ -814,6 +828,14 @@ export function getOperationTrace(operationId) {
     }
   }
 
+  // Determine input type from context
+  let inputType = null;
+  if (context.originalUrl) {
+    inputType = 'url';
+  } else if (context.attachment) {
+    inputType = 'file';
+  }
+
   return {
     operationId,
     context: {
@@ -823,6 +845,8 @@ export function getOperationTrace(operationId) {
       operationType: context.operationType || null,
       userId: context.userId || null,
       username: username || null,
+      commandSource: context.commandSource || null,
+      inputType: context.inputType || inputType || null,
     },
     logs: parsedLogs,
     totalSteps: parsedLogs.length,

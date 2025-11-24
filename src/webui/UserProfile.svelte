@@ -12,6 +12,7 @@
   let mediaLimit = 25;
   let mediaOffset = 0;
   let mediaLoading = false;
+  let mediaError = null;
   let loading = true;
   let error = null;
   let selectedOperationId = null;
@@ -58,14 +59,19 @@
     if (!userId) return;
 
     mediaLoading = true;
+    mediaError = null;
     try {
       const response = await fetch(`/api/users/${userId}/media?limit=${mediaLimit}&offset=${mediaOffset}`);
-      if (!response.ok) throw new Error('failed to fetch user media');
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.message || `failed to fetch user media: ${response.status} ${response.statusText}`);
+      }
       const data = await response.json();
       media = data.media || [];
       mediaTotal = data.total || 0;
     } catch (err) {
       console.error('Failed to fetch user media:', err);
+      mediaError = err.message || 'failed to fetch user media';
       media = [];
       mediaTotal = 0;
     } finally {
@@ -232,28 +238,28 @@
 
       <div class="stats-grid">
         <div class="stat-card">
-          <div class="stat-value">{metrics?.total_commands || 0}</div>
           <div class="stat-label">total commands</div>
+          <div class="stat-value">{metrics?.total_commands || 0}</div>
         </div>
         <div class="stat-card">
-          <div class="stat-value success">{metrics?.successful_commands || 0}</div>
           <div class="stat-label">successful</div>
+          <div class="stat-value success">{metrics?.successful_commands || 0}</div>
         </div>
         <div class="stat-card">
-          <div class="stat-value error">{metrics?.failed_commands || 0}</div>
           <div class="stat-label">failed</div>
+          <div class="stat-value error">{metrics?.failed_commands || 0}</div>
         </div>
         <div class="stat-card">
-          <div class="stat-value">{calculateSuccessRate()}%</div>
           <div class="stat-label">success rate</div>
+          <div class="stat-value">{calculateSuccessRate()}%</div>
         </div>
         <div class="stat-card">
-          <div class="stat-value">{formatBytes(metrics?.total_file_size || 0)}</div>
           <div class="stat-label">data processed</div>
+          <div class="stat-value">{formatBytes(metrics?.total_file_size || 0)}</div>
         </div>
         <div class="stat-card">
-          <div class="stat-value">{formatRelativeTime(metrics?.last_command_at)}</div>
           <div class="stat-label">last active</div>
+          <div class="stat-value">{formatRelativeTime(metrics?.last_command_at)}</div>
         </div>
       </div>
 
@@ -329,6 +335,30 @@
             <div class="trace-context">
               <h4>context</h4>
               <div class="context-grid">
+                <div class="context-item highlight">
+                  <span class="context-label">command source:</span>
+                  <span class="context-value">
+                    {#if operationTrace.context.commandSource === 'slash'}
+                      <span class="badge badge-slash">slash command</span>
+                    {:else if operationTrace.context.commandSource === 'context-menu'}
+                      <span class="badge badge-context">context menu</span>
+                    {:else}
+                      <span class="badge badge-unknown">unknown</span>
+                    {/if}
+                  </span>
+                </div>
+                <div class="context-item highlight">
+                  <span class="context-label">input type:</span>
+                  <span class="context-value">
+                    {#if operationTrace.context.inputType === 'url'}
+                      <span class="badge badge-url">url</span>
+                    {:else if operationTrace.context.inputType === 'file'}
+                      <span class="badge badge-file">file</span>
+                    {:else}
+                      <span class="badge badge-unknown">unknown</span>
+                    {/if}
+                  </span>
+                </div>
                 {#if operationTrace.context.originalUrl}
                   <div class="context-item">
                     <span class="context-label">original url:</span>
@@ -428,9 +458,14 @@
       </div>
     {/if}
 
-    {#if !mediaLoading && media.length > 0}
-      <div class="media-section">
-        <h3>user media</h3>
+    <div class="media-section">
+      <h3>user media</h3>
+      {#if mediaLoading}
+        <div class="loading-inline">loading media...</div>
+      {:else if mediaError}
+        <div class="error-inline">error: {mediaError}</div>
+        <button class="retry-btn" on:click={fetchUserMedia}>retry</button>
+      {:else if media.length > 0}
         <div class="media-table-container">
           <table class="media-table">
             <thead>
@@ -451,7 +486,7 @@
                   </td>
                   <td class="type-cell">{item.file_type || 'N/A'}</td>
                   <td class="date-cell">{formatTimestamp(item.processed_at)}</td>
-                  <td class="size-cell">N/A</td>
+                  <td class="size-cell">{item.file_size ? formatBytes(item.file_size) : 'N/A'}</td>
                 </tr>
               {/each}
             </tbody>
@@ -472,13 +507,10 @@
             </div>
           </div>
         {/if}
-      </div>
-    {:else if mediaLoading}
-      <div class="media-section">
-        <h3>user media</h3>
-        <div class="loading-inline">loading media...</div>
-      </div>
-    {/if}
+      {:else}
+        <div class="empty-state">no media found</div>
+      {/if}
+    </div>
 
     {#if activity.length > 0}
       <div class="activity-section">
@@ -566,23 +598,37 @@
 
   .stats-grid {
     display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
-    gap: 0.75rem;
+    grid-template-columns: repeat(auto-fit, minmax(110px, 1fr));
+    gap: 0.5rem;
     margin-bottom: 1rem;
   }
 
   .stat-card {
-    padding: 0.75rem;
+    display: flex;
+    flex-direction: column;
+    padding: 0.5rem;
     background-color: #1a1a1a;
     border: 1px solid #333;
     border-radius: 3px;
+    position: relative;
+  }
+
+  .stat-label {
+    font-size: 0.8rem;
+    color: #aaa;
+    align-self: flex-start;
+    margin-bottom: auto;
   }
 
   .stat-value {
     font-size: 1.5rem;
     font-weight: 600;
     color: #51cf66;
-    margin-bottom: 0.25rem;
+    flex-grow: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    text-align: center;
   }
 
   .stat-value.success {
@@ -591,11 +637,6 @@
 
   .stat-value.error {
     color: #ff6b6b;
-  }
-
-  .stat-label {
-    font-size: 0.8rem;
-    color: #aaa;
   }
 
   .commands-breakdown {
@@ -954,6 +995,34 @@
     padding: 0.5rem 0;
   }
 
+  .empty-state {
+    color: #888;
+    font-size: 0.85rem;
+    padding: 1rem 0;
+    text-align: center;
+  }
+
+  .error-inline {
+    color: #ff6b6b;
+    font-size: 0.85rem;
+    padding: 0.5rem 0;
+  }
+
+  .retry-btn {
+    margin-top: 0.5rem;
+    padding: 0.4rem 0.8rem;
+    font-size: 0.85rem;
+    background-color: #444;
+    color: #fff;
+    border: 1px solid #555;
+    cursor: pointer;
+    border-radius: 3px;
+  }
+
+  .retry-btn:hover {
+    background-color: #555;
+  }
+
   @media (max-width: 768px) {
     .stats-grid {
       grid-template-columns: repeat(2, 1fr);
@@ -1056,6 +1125,48 @@
 
   .context-value a:hover {
     text-decoration: underline;
+  }
+
+  .context-item.highlight {
+    background-color: #2a2a2a;
+    padding: 0.75rem;
+    border-radius: 3px;
+    border-left: 3px solid #51cf66;
+  }
+
+  .badge {
+    display: inline-block;
+    padding: 0.25rem 0.5rem;
+    border-radius: 3px;
+    font-size: 0.85rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+  }
+
+  .badge-slash {
+    background-color: rgba(81, 207, 102, 0.2);
+    color: #51cf66;
+  }
+
+  .badge-context {
+    background-color: rgba(116, 192, 252, 0.2);
+    color: #74c0fc;
+  }
+
+  .badge-url {
+    background-color: rgba(255, 217, 61, 0.2);
+    color: #ffd93d;
+  }
+
+  .badge-file {
+    background-color: rgba(255, 107, 107, 0.2);
+    color: #ff6b6b;
+  }
+
+  .badge-unknown {
+    background-color: rgba(136, 136, 136, 0.2);
+    color: #888;
   }
 
   .trace-steps {

@@ -472,15 +472,19 @@ app.get('/api/users/:userId/activity', (req, res) => {
     const { userId } = req.params;
     const { limit = 100, offset = 0 } = req.query;
 
-    // Get logs related to this user
+    // Get logs related to this user, only from bot component (user actions)
     const logs = getLogs({
       search: userId,
+      component: 'bot', // Only show bot component logs (user commands and actions)
       limit: parseInt(limit, 10),
       offset: parseInt(offset, 10),
       orderDesc: true,
     });
 
-    const total = getLogsCount({ search: userId });
+    const total = getLogsCount({
+      search: userId,
+      component: 'bot', // Only count bot component logs
+    });
 
     res.json({
       activity: logs,
@@ -501,6 +505,8 @@ app.get('/api/users/:userId/media', async (req, res) => {
     const { userId } = req.params;
     const { limit = 25, offset = 0 } = req.query;
 
+    logger.debug(`Fetching media for user ${userId} (limit: ${limit}, offset: ${offset})`);
+
     // Get media files for this user
     const media = await getUserMedia(userId, {
       limit: parseInt(limit, 10),
@@ -509,12 +515,14 @@ app.get('/api/users/:userId/media', async (req, res) => {
 
     const total = await getUserMediaCount(userId);
 
+    logger.debug(`Found ${media.length} media items (total: ${total}) for user ${userId}`);
+
     res.json({
       media,
       total,
     });
   } catch (error) {
-    logger.error('Failed to fetch user media:', error);
+    logger.error(`Failed to fetch user media for user ${req.params.userId}:`, error);
     res.status(500).json({
       error: 'failed to fetch user media',
       message: error.message,

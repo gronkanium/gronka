@@ -47,7 +47,7 @@ try {
 Write-Info-Message "Current repository commit: $currentCommitShort"
 
 # Check if containers are running
-$containers = @("gronka", "gronka-webui")
+$containers = @("gronka")
 $allUpToDate = $true
 
 foreach ($container in $containers) {

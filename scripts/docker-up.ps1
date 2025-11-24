@@ -1,6 +1,5 @@
 $ErrorActionPreference = "Stop"
 
-$PROFILES = @("--profile", "webui")
 $TIMEOUT = 120
 
 function Write-Error-Message {
@@ -20,7 +19,7 @@ function Write-Warn-Message {
 }
 
 function Get-ContainerStatus {
-    $psOutput = docker compose ps 2>$null
+    $psOutput = docker compose ps --format "{{.Status}}" 2>$null
     if (-not $psOutput) {
         return "0:0:0"
     }
@@ -30,16 +29,17 @@ function Get-ContainerStatus {
     $restarting = 0
     
     foreach ($line in $psOutput) {
-        if ($line -match "running") {
+        $status = $line.ToString().ToLower()
+        if ($status -match "running|up") {
             $running++
-        } elseif ($line -match "Exited") {
+        } elseif ($status -match "exited|stopped") {
             $exited++
-        } elseif ($line -match "restarting") {
+        } elseif ($status -match "restarting") {
             $restarting++
         }
     }
     
-    return "$running:$exited:$restarting"
+    return "${running}:${exited}:${restarting}"
 }
 
 # Check if docker daemon is available
@@ -49,10 +49,10 @@ try {
     Write-Error-Message "Docker daemon is not running or not accessible"
 }
 
-Write-Info-Message "Starting docker compose services with profiles: webui"
+Write-Info-Message "Starting docker compose services"
 
 # Start containers
-& docker compose @PROFILES up -d
+docker compose up -d
 if ($LASTEXITCODE -ne 0) {
     Write-Error-Message "Failed to start docker compose services"
 }
@@ -69,23 +69,30 @@ $ELAPSED = 0
 while ($ELAPSED -lt $MAX_WAIT) {
     $STATUS = Get-ContainerStatus
     $parts = $STATUS -split ":"
+    if ($parts.Length -ne 3) {
+        Write-Warn-Message "Unexpected status format: $STATUS"
+        Start-Sleep -Seconds 2
+        $ELAPSED += 2
+        continue
+    }
+    
     $RUNNING = [int]$parts[0]
     $EXITED = [int]$parts[1]
     $RESTARTING = [int]$parts[2]
     
+    # Count total services
+    $totalServicesOutput = docker compose ps --format "{{.Name}}" 2>$null
+    $TOTAL_SERVICES = ($totalServicesOutput | Where-Object { $_ -ne "" -and $_ -ne $null }).Count
+    if (-not $TOTAL_SERVICES) {
+        $TOTAL_SERVICES = 0
+    }
+    
     # Check for exited containers (failed)
     if ($EXITED -gt 0) {
-        $exitedContainers = docker compose ps --format "{{.Name}}: {{.Status}}" 2>$null | Select-String "Exited"
+        $exitedContainers = docker compose ps --format "{{.Name}}: {{.Status}}" 2>$null | Select-String -Pattern "Exited|exited|Stopped|stopped"
         if ($exitedContainers) {
             Write-Error-Message "Some containers exited: $exitedContainers"
         }
-    }
-    
-    # Count total services
-    $totalServicesOutput = docker compose ps --format "{{.Name}}" 2>$null
-    $TOTAL_SERVICES = ($totalServicesOutput | Where-Object { $_ -ne "" }).Count
-    if (-not $TOTAL_SERVICES) {
-        $TOTAL_SERVICES = 0
     }
     
     # If all running and none restarting/exited, we're good
@@ -96,9 +103,9 @@ while ($ELAPSED -lt $MAX_WAIT) {
         $HAS_HEALTHCHECK = $false
         $containerNames = docker compose ps --format "{{.Name}}" 2>$null
         foreach ($name in $containerNames) {
-            if ($name) {
+            if ($name -and $name.ToString().Trim() -ne "") {
                 $healthOutput = docker inspect $name --format '{{.State.Health}}' 2>$null
-                if ($healthOutput -match "Status") {
+                if ($healthOutput -and $healthOutput -match "Status") {
                     $HAS_HEALTHCHECK = $true
                     break
                 }
@@ -112,9 +119,9 @@ while ($ELAPSED -lt $MAX_WAIT) {
             # Check final health status
             $UNHEALTHY = 0
             foreach ($name in $containerNames) {
-                if ($name) {
+                if ($name -and $name.ToString().Trim() -ne "") {
                     $health = docker inspect $name --format '{{.State.Health.Status}}' 2>$null
-                    if ($health -eq "unhealthy") {
+                    if ($health -and $health.ToString().Trim() -eq "unhealthy") {
                         $UNHEALTHY++
                     }
                 }
@@ -127,7 +134,13 @@ while ($ELAPSED -lt $MAX_WAIT) {
             }
         }
         
+        Write-Info-Message "Startup complete"
         exit 0
+    }
+    
+    # Show progress every 10 seconds
+    if ($ELAPSED -gt 0 -and ($ELAPSED % 10) -eq 0) {
+        Write-Host "Waiting... (${ELAPSED}s/${MAX_WAIT}s) - Running: $RUNNING, Total: $TOTAL_SERVICES" -ForegroundColor Yellow
     }
     
     Start-Sleep -Seconds 2

@@ -28,6 +28,9 @@ services:
       - R2_BUCKET_NAME=${R2_BUCKET_NAME:-}
       - R2_PUBLIC_DOMAIN=${R2_PUBLIC_DOMAIN:-cdn.gronka.p1x.dev}
       - NTFY_TOPIC=${NTFY_TOPIC:-}
+      - WEBUI_PORT=3001
+      - WEBUI_HOST=0.0.0.0
+      - MAIN_SERVER_URL=http://localhost:3000
     volumes:
       - ./data:/app/data
       - ./temp:/app/temp
@@ -35,6 +38,7 @@ services:
       - /var/run/docker.sock:/var/run/docker.sock
     ports:
       - '3000:3000'
+      - '3001:3001'
     networks:
       - gronka-network
     healthcheck:
@@ -49,35 +53,6 @@ services:
       timeout: 3s
       retries: 3
       start_period: 10s
-
-  webui:
-    build:
-      context: .
-      dockerfile: Dockerfile
-      args:
-        BUILD_TIMESTAMP: ${BUILD_TIMESTAMP:-}
-        GIT_COMMIT: ${GIT_COMMIT:-}
-    container_name: gronka-webui
-    restart: unless-stopped
-    environment:
-      - WEBUI_PORT=3001
-      - WEBUI_HOST=0.0.0.0
-      - MAIN_SERVER_URL=http://app:3000
-      - STATS_USERNAME=${STATS_USERNAME:-}
-      - STATS_PASSWORD=${STATS_PASSWORD:-}
-    volumes:
-      - ./data:/app/data
-    ports:
-      # Accessible from all interfaces on host machine (server-ip:3001)
-      - '3001:3001'
-    networks:
-      - gronka-network
-    depends_on:
-      app:
-        condition: service_healthy
-    profiles:
-      - webui
-    # Note: Start with: docker compose --profile webui up
 
   cobalt:
     image: ghcr.io/imputnet/cobalt:11

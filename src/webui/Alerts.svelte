@@ -122,6 +122,22 @@
     return severity ? severity.toLowerCase() : 'unknown';
   }
 
+  function getFormattedMetadata(alert) {
+    if (!alert.metadata) return {};
+    try {
+      const parsed = JSON.parse(alert.metadata);
+      return {
+        ...parsed,
+        duration:
+          parsed.duration !== undefined
+            ? formatDuration(parsed.duration)
+            : parsed.duration,
+      };
+    } catch (err) {
+      return {};
+    }
+  }
+
   // Check if alert matches current filters
   function matchesFilters(alert) {
     if (selectedSeverity && alert.severity !== selectedSeverity) {
@@ -258,8 +274,7 @@
             {/if}
             <details class="alert-metadata">
               <summary>metadata</summary>
-              {@const formattedMetadata = {...parsedMetadata, duration: parsedMetadata.duration !== undefined ? formatDuration(parsedMetadata.duration) : parsedMetadata.duration}}
-              <pre>{JSON.stringify(formattedMetadata, null, 2)}</pre>
+              <pre>{JSON.stringify(getFormattedMetadata(alert), null, 2)}</pre>
             </details>
           {/if}
         </div>

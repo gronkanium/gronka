@@ -5,7 +5,13 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres (attempts) to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [0.11.2-prerelease] - 2025-11-24
+## [0.11.2] - 2025-11-24
+
+### Security
+
+- Fixed insecure temporary file creation in test files
+  - Replaced `os.tmpdir()` with `tmp` library for secure temporary file handling
+  - Resolves CodeQL alerts #61, #60, #59 (CWE-377, CWE-378)
 
 ### Added
 
@@ -28,6 +34,7 @@ and this project adheres (attempts) to [Semantic Versioning](https://semver.org/
 - Improved code formatting in bot.js, convert.js, download.js, database.js, optimize.js, modals.js, and webui-server.js
 - Updated index.html formatting
 - Enhanced operation context tracking with commandSource metadata
+- Added rule to use `tmp` library for all temporary file operations
 
 ### Fixed
 
@@ -206,7 +213,7 @@ and this project adheres (attempts) to [Semantic Versioning](https://semver.org/
   - Pre-commit validation
   - Docker buildx setup for cache support
 
-[0.11.2-prerelease]: https://github.com/thedorekaczynski/gronka/compare/v0.11.1-prerelease...v0.11.2-prerelease
+[0.11.2]: https://github.com/thedorekaczynski/gronka/compare/v0.11.1-prerelease...v0.11.2
 [0.11.1-prerelease]: https://github.com/thedorekaczynski/gronka/compare/v0.11.0-prerelease...v0.11.1-prerelease
 [0.11.0-prerelease]: https://github.com/thedorekaczynski/gronka/compare/v0.10.0...v0.11.0-prerelease
 [0.10.0]: https://github.com/thedorekaczynski/gronka/compare/v0.9.0...v0.10.0

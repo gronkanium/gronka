@@ -777,6 +777,19 @@ export function getOperationTrace(operationId) {
   const createdLog = parsedLogs.find(log => log.step === 'created');
   const context = createdLog?.metadata || {};
 
+  // Try to enrich username from users table if we have userId but no username
+  let username = context.username;
+  if ((!username || username === 'unknown' || username === null) && context.userId) {
+    try {
+      const user = getUser(context.userId);
+      if (user && user.username) {
+        username = user.username;
+      }
+    } catch (_error) {
+      // Silently fail - username will remain null
+    }
+  }
+
   return {
     operationId,
     context: {
@@ -785,7 +798,7 @@ export function getOperationTrace(operationId) {
       commandOptions: context.commandOptions || null,
       operationType: context.operationType || null,
       userId: context.userId || null,
-      username: context.username || null,
+      username: username || null,
     },
     logs: parsedLogs,
     totalSteps: parsedLogs.length,
@@ -1015,27 +1028,55 @@ export function getRecentOperations(limit = 100) {
           operationType = 'download';
         } else {
           operationType = 'unknown';
+          // Log when we can't determine operation type
+          if (process.env.NODE_ENV !== 'production') {
+            console.warn(
+              `[getRecentOperations] Could not determine operation type for ${operationId}, step names: ${stepNames}`
+            );
+          }
         }
       }
 
       // Determine username with fallback logic
       let username = context.username;
-      if (!username || username === 'unknown') {
-        // Try to get username from users table if we have a userId
-        if (context.userId) {
+      // Always try to enrich username from users table if we have a userId
+      // This handles cases where metadata was null or username wasn't stored
+      if (context.userId) {
+        // If username is missing or unknown, try to get it from users table
+        if (!username || username === 'unknown' || username === null) {
           try {
             const user = getUser(context.userId);
             if (user && user.username) {
               username = user.username;
+            } else {
+              // Log when user not found (only in non-production)
+              if (process.env.NODE_ENV !== 'production') {
+                console.warn(
+                  `[getRecentOperations] User not found for userId ${context.userId} in operation ${operationId}`
+                );
+              }
             }
-          } catch (_error) {
-            // Silently fail - username will remain null or 'unknown'
+          } catch (error) {
+            // Log error when lookup fails
+            if (process.env.NODE_ENV !== 'production') {
+              console.warn(
+                `[getRecentOperations] Failed to lookup user ${context.userId} for operation ${operationId}:`,
+                error.message
+              );
+            }
           }
         }
-        // If still no username, use null (will display as 'unknown' in UI)
-        if (!username || username === 'unknown') {
-          username = null;
+      } else {
+        // Log when userId is missing (only in non-production)
+        if (process.env.NODE_ENV !== 'production' && !createdLog.metadata) {
+          console.warn(
+            `[getRecentOperations] No userId found for operation ${operationId} (metadata was null)`
+          );
         }
+      }
+      // If still no username after all attempts, use null (will display as 'unknown' in UI)
+      if (!username || username === 'unknown') {
+        username = null;
       }
 
       // Reconstruct operation object

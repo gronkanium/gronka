@@ -1,6 +1,5 @@
 $ErrorActionPreference = "Stop"
 
-$PROFILES = @("--profile", "webui")
 $TIMEOUT = 120
 
 function Write-Error-Message {
@@ -39,7 +38,7 @@ function Get-ContainerStatus {
         }
     }
     
-    return "$running:$exited:$restarting"
+    return "${running}:${exited}:${restarting}"
 }
 
 # Check if docker daemon is available
@@ -52,8 +51,8 @@ try {
 Write-Info-Message "Restarting docker compose services..."
 
 # Step 1: Restart containers
-Write-Info-Message "Restarting containers with profiles: webui"
-& docker compose @PROFILES restart
+Write-Info-Message "Restarting containers"
+docker compose restart
 if ($LASTEXITCODE -ne 0) {
     Write-Error-Message "Failed to restart containers"
 }

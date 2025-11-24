@@ -561,9 +561,9 @@
   .filters {
     display: flex;
     flex-wrap: wrap;
-    gap: 1rem;
+    gap: 0.75rem;
     margin-bottom: 1rem;
-    padding: 0.75rem;
+    padding: 0.5rem;
     background-color: #1a1a1a;
     border: 1px solid #333;
     border-radius: 3px;
@@ -576,7 +576,7 @@
   }
 
   .filter-group label {
-    font-size: 0.85rem;
+    font-size: 0.8rem;
     color: #aaa;
     white-space: nowrap;
   }
@@ -586,8 +586,8 @@
     background-color: #2a2a2a;
     border: 1px solid #444;
     color: #fff;
-    padding: 0.4rem 0.6rem;
-    font-size: 0.85rem;
+    padding: 0.3rem 0.5rem;
+    font-size: 0.8rem;
     border-radius: 3px;
   }
 
@@ -615,7 +615,7 @@
     display: flex;
     align-items: center;
     gap: 0.3rem;
-    font-size: 0.85rem;
+    font-size: 0.8rem;
     color: #aaa;
     cursor: pointer;
   }
@@ -635,10 +635,10 @@
   .component-checkbox-list {
     display: flex;
     flex-wrap: wrap;
-    gap: 0.5rem;
+    gap: 0.3rem;
     max-height: 120px;
     overflow-y: auto;
-    padding: 0.5rem;
+    padding: 0.4rem;
     background-color: #2a2a2a;
     border: 1px solid #444;
     border-radius: 3px;
@@ -647,11 +647,11 @@
   .component-checkbox {
     display: flex;
     align-items: center;
-    gap: 0.4rem;
-    font-size: 0.85rem;
+    gap: 0.3rem;
+    font-size: 0.75rem;
     color: #aaa;
     cursor: pointer;
-    padding: 0.3rem 0.6rem;
+    padding: 0.2rem 0.4rem;
     background-color: #1a1a1a;
     border: 1px solid #333;
     border-radius: 3px;
@@ -674,12 +674,12 @@
 
   .level-toggles {
     display: flex;
-    gap: 0.25rem;
+    gap: 0.15rem;
   }
 
   .level-btn {
-    padding: 0.4rem 0.8rem;
-    font-size: 0.8rem;
+    padding: 0.25rem 0.5rem;
+    font-size: 0.75rem;
     border: 1px solid #444;
     background-color: #2a2a2a;
     color: #888;
@@ -687,8 +687,10 @@
     border-radius: 3px;
     text-transform: uppercase;
     font-weight: 500;
-    min-width: 70px;
+    min-width: 50px;
     text-align: center;
+    white-space: nowrap;
+    overflow: hidden;
   }
 
   .level-btn:hover {
@@ -717,8 +719,8 @@
   }
 
   .btn-small {
-    padding: 0.4rem 0.8rem;
-    font-size: 0.85rem;
+    padding: 0.3rem 0.6rem;
+    font-size: 0.75rem;
     background-color: #444;
     color: #fff;
     border: 1px solid #555;
@@ -745,7 +747,7 @@
     display: flex;
     align-items: center;
     gap: 0.4rem;
-    font-size: 0.85rem;
+    font-size: 0.8rem;
     color: #aaa;
     cursor: pointer;
   }

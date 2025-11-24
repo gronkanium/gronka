@@ -120,48 +120,6 @@ app.use((req, res, next) => {
   next();
 });
 
-// Request logging middleware
-app.use((req, res, next) => {
-  const startTime = Date.now();
-  let logged = false;
-
-  // Log response when finished (most reliable method)
-  const logResponse = () => {
-    if (logged) return;
-    logged = true;
-    const duration = Date.now() - startTime;
-    const statusCode = res.statusCode || 200;
-    logger.info(
-      `${req.method} ${req.path} - ${statusCode} - ${duration}ms - ${req.ip || req.connection.remoteAddress}`
-    );
-  };
-
-  // Intercept response methods as backup (in case finish event doesn't fire)
-  const originalSend = res.send;
-  const originalSendFile = res.sendFile;
-  const originalJson = res.json;
-
-  res.send = function (_data) {
-    logResponse();
-    return originalSend.apply(this, arguments);
-  };
-
-  res.sendFile = function (...args) {
-    logResponse();
-    return originalSendFile.apply(this, args);
-  };
-
-  res.json = function (_data) {
-    logResponse();
-    return originalJson.apply(this, arguments);
-  };
-
-  // Primary logging on response finish (catches all cases)
-  res.on('finish', logResponse);
-
-  next();
-});
-
 // Get absolute path to public directory
 const publicPath = path.resolve(process.cwd(), 'src', 'public');
 logger.debug(`Serving static files from: ${publicPath}`);
@@ -185,7 +143,6 @@ app.use(
 
 // Dashboard route - rate limited to prevent abuse
 app.get('/', fileServerLimiter, (req, res) => {
-  logger.info('Dashboard page requested');
   res.sendFile(path.join(publicPath, 'index.html'));
 });
 
@@ -686,27 +643,41 @@ function reconstructOperationFromTrace(trace) {
       operationType = 'download';
     } else {
       operationType = 'unknown';
+      // Log when we can't determine operation type
+      logger.debug(
+        `Could not determine operation type for ${trace.operationId}, step names: ${stepNames}`
+      );
     }
   }
 
   // Determine username with fallback logic
   let username = context.username;
-  if (!username || username === 'unknown') {
-    // Try to get username from users table if we have a userId
-    if (context.userId) {
+  // Always try to enrich username from users table if we have a userId
+  // This handles cases where metadata was null or username wasn't stored
+  if (context.userId) {
+    // If username is missing or unknown, try to get it from users table
+    if (!username || username === 'unknown' || username === null) {
       try {
         const user = getUser(context.userId);
         if (user && user.username) {
           username = user.username;
+        } else {
+          logger.debug(
+            `User not found for userId ${context.userId} in operation ${trace.operationId}`
+          );
         }
-      } catch (_error) {
-        // Silently fail - username will remain null or 'unknown'
+      } catch (error) {
+        logger.debug(
+          `Failed to lookup user ${context.userId} for operation ${trace.operationId}: ${error.message}`
+        );
       }
     }
-    // If still no username, use null (will display as 'unknown' in UI)
-    if (!username || username === 'unknown') {
-      username = null;
-    }
+  } else {
+    logger.debug(`No userId found for operation ${trace.operationId} (metadata may be null)`);
+  }
+  // If still no username after all attempts, use null (will display as 'unknown' in UI)
+  if (!username || username === 'unknown') {
+    username = null;
   }
 
   // Reconstruct operation object
@@ -912,22 +883,24 @@ let pingInterval = null;
 
 // Helper function to enrich operation with username from database
 function enrichOperationUsername(operation) {
-  if (
-    (!operation.username || operation.username === 'unknown' || operation.username === null) &&
-    operation.userId
-  ) {
-    try {
-      const user = getUser(operation.userId);
-      if (user && user.username) {
-        operation.username = user.username;
-        return true; // Username was enriched
-      } else {
-        // User not found in database - this is expected for some operations
-        // The username will remain as null/unknown
+  // Always try to enrich if we have a userId, even if username is already set
+  // This ensures we get the latest username from the database
+  if (operation.userId) {
+    // Only enrich if username is missing, unknown, or null
+    if (!operation.username || operation.username === 'unknown' || operation.username === null) {
+      try {
+        const user = getUser(operation.userId);
+        if (user && user.username) {
+          operation.username = user.username;
+          return true; // Username was enriched
+        } else {
+          // User not found in database - this is expected for some operations
+          // The username will remain as null/unknown
+        }
+      } catch (error) {
+        // Silently fail - operation will keep original username
+        logger.debug(`Failed to enrich username for operation ${operation.id}: ${error.message}`);
       }
-    } catch (error) {
-      // Silently fail - operation will keep original username
-      logger.debug(`Failed to enrich username for operation ${operation.id}: ${error.message}`);
     }
   }
   return false; // Username was not enriched

@@ -18,12 +18,12 @@ try {
     Write-Error-Message "Docker daemon is not running or not accessible"
 }
 
-# Check if webui container is running
-$containerName = "gronka-webui"
+# Check if app container is running
+$containerName = "gronka"
 $containerExists = docker ps -a --filter "name=$containerName" --format "{{.Names}}" | Select-String -Pattern $containerName
 
 if (-not $containerExists) {
-    Write-Error-Message "Container $containerName is not running. Please start it first with: docker compose --profile webui up -d"
+    Write-Error-Message "Container $containerName is not running. Please start it first with: docker compose up -d"
 }
 
 # Build webui locally

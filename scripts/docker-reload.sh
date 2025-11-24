@@ -1,7 +1,6 @@
 #!/bin/bash
 set -euo pipefail
 
-PROFILES="--profile webui"
 
 # Colors for output
 RED='\033[0;31m'
@@ -31,7 +30,7 @@ info "Reloading docker compose services..."
 
 # Step 1: Stop and remove containers, and remove associated images
 info "Stopping containers and removing images..."
-if ! docker compose $PROFILES down --rmi all --remove-orphans; then
+if ! docker compose down --rmi all --remove-orphans; then
   error "Failed to stop containers and remove images"
 fi
 
@@ -54,9 +53,9 @@ if ! docker compose build --no-cache --pull; then
   error "Failed to build docker images"
 fi
 
-# Step 5: Start containers with profiles
-info "Starting containers with profiles: webui"
-if ! docker compose $PROFILES up -d; then
+# Step 5: Start containers
+info "Starting containers"
+if ! docker compose up -d; then
   error "Failed to start docker compose services"
 fi
 

@@ -20,10 +20,10 @@ if ! docker info >/dev/null 2>&1; then
   error "Docker daemon is not running or not accessible"
 fi
 
-# Check if webui container is running
-CONTAINER_NAME="gronka-webui"
+# Check if app container is running
+CONTAINER_NAME="gronka"
 if ! docker ps --filter "name=${CONTAINER_NAME}" --format "{{.Names}}" | grep -q "${CONTAINER_NAME}"; then
-  error "Container ${CONTAINER_NAME} is not running. Please start it first with: docker compose --profile webui up -d"
+  error "Container ${CONTAINER_NAME} is not running. Please start it first with: docker compose up -d"
 fi
 
 # Build webui locally

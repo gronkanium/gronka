@@ -1,7 +1,6 @@
 #!/bin/bash
 set -euo pipefail
 
-PROFILES="--profile webui"
 TIMEOUT=120
 
 # Colors for output
@@ -28,10 +27,10 @@ if ! docker info >/dev/null 2>&1; then
   error "Docker daemon is not running or not accessible"
 fi
 
-info "Starting docker compose services with profiles: webui"
+info "Starting docker compose services"
 
 # Start containers
-if ! docker compose $PROFILES up -d; then
+if ! docker compose up -d; then
   error "Failed to start docker compose services"
 fi
 

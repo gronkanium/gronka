@@ -32,6 +32,15 @@ RUN npm ci
 # Copy vite config (needed for webui build)
 COPY vite.config.js ./
 
+# Build timestamp to force invalidation of COPY layer on rebuilds
+# This ensures source code changes are always picked up, especially on Windows
+ARG BUILD_TIMESTAMP
+ENV BUILD_TIMESTAMP=${BUILD_TIMESTAMP}
+
+# Git commit hash for version tracking
+ARG GIT_COMMIT
+ENV GIT_COMMIT=${GIT_COMMIT}
+
 # Copy application code
 COPY src/ ./src/
 

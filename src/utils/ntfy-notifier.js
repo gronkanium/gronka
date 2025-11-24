@@ -1,15 +1,57 @@
 import { createLogger } from './logger.js';
 import { botConfig } from './config.js';
+import { insertAlert } from './database.js';
 
 const logger = createLogger('ntfy');
+let broadcastCallback = null;
 
 /**
  * Send notification to ntfy.sh
  * @param {string} title - Notification title
  * @param {string} message - Notification message
+ * @param {Object} [options] - Additional options
+ * @param {string} [options.severity] - Alert severity (info, warning, error)
+ * @param {string} [options.component] - Component name
+ * @param {string} [options.operationId] - Related operation ID
+ * @param {string} [options.userId] - Related user ID
+ * @param {Object} [options.metadata] - Additional metadata
  * @returns {Promise<void>}
  */
-export async function sendNtfyNotification(title, message) {
+export async function sendNtfyNotification(title, message, options = {}) {
+  const {
+    severity = 'info',
+    component = 'bot',
+    operationId = null,
+    userId = null,
+    metadata = null,
+  } = options;
+
+  // Log to database regardless of ntfy.sh status
+  let alertRecord = null;
+  try {
+    alertRecord = insertAlert({
+      severity,
+      component,
+      title,
+      message,
+      operationId,
+      userId,
+      metadata,
+    });
+
+    // Broadcast alert if callback is set (for webui)
+    if (broadcastCallback && alertRecord) {
+      try {
+        broadcastCallback(alertRecord);
+      } catch (error) {
+        logger.error('Error broadcasting alert:', error);
+      }
+    }
+  } catch (error) {
+    logger.error('Failed to log alert to database:', error);
+  }
+
+  // Send to ntfy.sh if enabled
   if (!botConfig.ntfyEnabled || !botConfig.ntfyTopic) {
     return;
   }
@@ -39,28 +81,83 @@ export async function sendNtfyNotification(title, message) {
  * Send command success notification
  * @param {string} username - Username
  * @param {string} command - Command name (convert, optimize, download)
+ * @param {Object} [options] - Additional options (operationId, userId, metadata)
  * @returns {Promise<void>}
  */
-export async function notifyCommandSuccess(username, command) {
-  await sendNtfyNotification('Command Success', `${username}: ${command} success`);
+export async function notifyCommandSuccess(username, command, options = {}) {
+  await sendNtfyNotification('command success', `${username}: ${command} success`, {
+    severity: 'info',
+    component: 'bot',
+    ...options,
+    metadata: {
+      command,
+      username,
+      ...options.metadata,
+    },
+  });
 }
 
 /**
  * Send command failure notification
  * @param {string} username - Username
  * @param {string} command - Command name (convert, optimize, download)
+ * @param {Object} [options] - Additional options (operationId, userId, metadata, error)
  * @returns {Promise<void>}
  */
-export async function notifyCommandFailure(username, command) {
-  await sendNtfyNotification('Command Failed', `${username}: ${command} failed`);
+export async function notifyCommandFailure(username, command, options = {}) {
+  const message = options.error
+    ? `${username}: ${command} failed - ${options.error}`
+    : `${username}: ${command} failed`;
+
+  await sendNtfyNotification('command failed', message, {
+    severity: 'error',
+    component: 'bot',
+    ...options,
+    metadata: {
+      command,
+      username,
+      error: options.error,
+      ...options.metadata,
+    },
+  });
 }
 
 /**
  * Send deferred download notification
  * @param {string} username - Username
  * @param {string} status - Status (success or failed)
+ * @param {Object} [options] - Additional options (operationId, userId, metadata)
  * @returns {Promise<void>}
  */
-export async function notifyDeferredDownload(username, status) {
-  await sendNtfyNotification('Deferred Download', `${username}: deferred download ${status}`);
+export async function notifyDeferredDownload(username, status, options = {}) {
+  const severity = status === 'success' ? 'info' : 'warning';
+  await sendNtfyNotification('deferred download', `${username}: deferred download ${status}`, {
+    severity,
+    component: 'deferred-queue',
+    ...options,
+    metadata: {
+      username,
+      status,
+      ...options.metadata,
+    },
+  });
+}
+
+/**
+ * Send generic notification with full options
+ * @param {string} title - Notification title
+ * @param {string} message - Notification message
+ * @param {Object} options - Full options
+ * @returns {Promise<void>}
+ */
+export async function notify(title, message, options = {}) {
+  await sendNtfyNotification(title, message, options);
+}
+
+/**
+ * Set broadcast callback for alert notifications
+ * @param {Function} callback - Callback function to broadcast alerts
+ */
+export function setBroadcastCallback(callback) {
+  broadcastCallback = callback;
 }

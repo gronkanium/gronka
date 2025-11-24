@@ -27,21 +27,14 @@ try {
 
 Write-Info-Message "Reloading docker compose services..."
 
-# Step 1: Stop and remove containers
-Write-Info-Message "Stopping containers..."
-& docker compose @PROFILES down --remove-orphans
+# Step 1: Stop and remove containers, and remove associated images
+Write-Info-Message "Stopping containers and removing images..."
+& docker compose @PROFILES down --rmi all --remove-orphans
 if ($LASTEXITCODE -ne 0) {
-    Write-Error-Message "Failed to stop containers"
+    Write-Error-Message "Failed to stop containers and remove images"
 }
 
-# Step 2: Remove images (ignore errors if they don't exist)
-Write-Info-Message "Removing old images..."
-$oldErrorAction = $ErrorActionPreference
-$ErrorActionPreference = "Continue"
-docker rmi esm-app esm-webui 2>$null | Out-Null
-$ErrorActionPreference = $oldErrorAction
-
-# Step 3: Prune containers and networks
+# Step 2: Prune containers and networks
 Write-Info-Message "Cleaning up unused containers and networks..."
 $oldErrorAction = $ErrorActionPreference
 $ErrorActionPreference = "Continue"
@@ -49,7 +42,23 @@ docker container prune -f 2>$null | Out-Null
 docker network prune -f 2>$null | Out-Null
 $ErrorActionPreference = $oldErrorAction
 
-# Step 4: Rebuild images
+# Step 3: Get git commit hash and build timestamp
+try {
+    $gitCommit = git rev-parse HEAD 2>$null
+    if (-not $gitCommit) {
+        $gitCommit = ""
+    }
+} catch {
+    $gitCommit = ""
+}
+
+$buildTimestamp = [int][double]::Parse((Get-Date -UFormat %s))
+
+# Set as environment variables for docker-compose.yml to use
+$env:GIT_COMMIT = $gitCommit
+$env:BUILD_TIMESTAMP = $buildTimestamp
+
+# Step 4: Rebuild images with build args
 Write-Info-Message "Rebuilding images (this will take a while)..."
 docker compose build --no-cache --pull
 if ($LASTEXITCODE -ne 0) {

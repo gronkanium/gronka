@@ -1,6 +1,6 @@
 {
   "name": "gronka",
-  "version": "0.10.0",
+  "version": "0.11.0",
   "description": "Discord bot that converts video attachments to GIF format",
   "main": "src/bot.js",
   "type": "module",
@@ -20,6 +20,8 @@
     "docker:logs": "docker compose logs -f",
     "docker:reload": "node scripts/docker-reload.js",
     "docker:restart": "node scripts/docker-restart.js",
+    "docker:copy-webui": "node scripts/docker-copy-webui.js",
+    "docker:verify": "node scripts/docker-verify.js",
     "docker:register": "docker compose exec app npm run register-commands",
     "check:sync": "node scripts/check-lock-sync.js",
     "migrate:storage": "node scripts/migrate-storage.js",
@@ -56,12 +58,13 @@
     "better-sqlite3": "^12.4.6",
     "discord.js": "^14.25.1",
     "dotenv": "^17.2.3",
+    "escape-html": "^1.0.3",
     "express": "^5.1.0",
     "express-rate-limit": "^8.2.1",
     "fluent-ffmpeg": "^2.1.2",
+    "lucide-svelte": "^0.554.0",
     "marked": "^17.0.1",
-    "ws": "^8.18.0",
-    "escape-html": "^1.0.3"
+    "ws": "^8.18.0"
   },
   "devDependencies": {
     "@eslint/js": "^9.39.1",
@@ -70,6 +73,7 @@
     "cross-env": "^10.1.0",
     "eslint": "^9.39.1",
     "eslint-config-prettier": "^10.1.8",
+    "http-proxy-middleware": "^3.0.3",
     "husky": "^9.1.7",
     "nodemon": "^3.1.11",
     "prettier": "^3.6.2",

@@ -315,6 +315,7 @@
 
   <div class="filters">
     <div class="filter-group component-filters">
+      <!-- svelte-ignore a11y_label_has_associated_control -->
       <label>components:</label>
       <div class="component-filter-mode">
         <label class="mode-toggle">
@@ -393,6 +394,7 @@
     </div>
 
     <div class="filter-group">
+      <!-- svelte-ignore a11y_label_has_associated_control -->
       <label>level:</label>
       <div class="level-toggles">
         <button

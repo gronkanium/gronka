@@ -10,6 +10,15 @@ export const currentRoute = writable({
   params: {},
 });
 
+/**
+ * Sanitize property key to prevent prototype pollution attacks
+ * Prepends '$' to user-controlled keys to prevent access to built-in properties
+ */
+function sanitizePropertyKey(key) {
+  // Prepend '$' to prevent access to prototype properties like __proto__, constructor, etc.
+  return `$${key}`;
+}
+
 // Parse hash and update route
 function parseHash() {
   const hash = window.location.hash.slice(1) || '/';
@@ -33,7 +42,9 @@ function parseHash() {
     queryString.split('&').forEach(param => {
       const [key, value] = param.split('=');
       if (key && value) {
-        params[decodeURIComponent(key)] = decodeURIComponent(value);
+        // Sanitize key to prevent prototype pollution attacks
+        const sanitizedKey = sanitizePropertyKey(decodeURIComponent(key));
+        params[sanitizedKey] = decodeURIComponent(value);
       }
     });
   }

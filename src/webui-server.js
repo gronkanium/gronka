@@ -656,7 +656,7 @@ function reconstructOperationFromTrace(trace) {
   // This handles cases where metadata was null or username wasn't stored
   if (context.userId) {
     // If username is missing or unknown, try to get it from users table
-    if (!username || username === 'unknown' || username === null) {
+    if (!username || username === 'unknown') {
       try {
         const user = getUser(context.userId);
         if (user && user.username) {
@@ -886,8 +886,8 @@ function enrichOperationUsername(operation) {
   // Always try to enrich if we have a userId, even if username is already set
   // This ensures we get the latest username from the database
   if (operation.userId) {
-    // Only enrich if username is missing, unknown, or null
-    if (!operation.username || operation.username === 'unknown' || operation.username === null) {
+    // Only enrich if username is missing or unknown
+    if (!operation.username || operation.username === 'unknown') {
       try {
         const user = getUser(operation.userId);
         if (user && user.username) {

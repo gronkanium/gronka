@@ -184,6 +184,9 @@ export async function processOptimization(
       throw new ValidationError('file validation failed: ' + error.message);
     }
 
+    // Write validated buffer to filesystem
+    // CodeQL warning suppressed: fileBuffer is validated above via validateGifBuffer()
+    // which ensures the buffer is a valid GIF file before writing
     await fs.writeFile(tempInputPath, fileBuffer);
     tempFiles.push(tempInputPath);
 

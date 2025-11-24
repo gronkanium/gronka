@@ -181,6 +181,27 @@ function connect() {
 }
 
 /**
+ * Sanitize user input to prevent log injection
+ * Removes newlines, carriage returns, ANSI escape codes, and all control characters
+ */
+function sanitizeLogInput(input) {
+  if (typeof input === 'string') {
+    // Remove ANSI escape codes (used for colored terminal output)
+    // Remove newlines, carriage returns, tabs, and ALL other control characters
+    // (0x00-0x1F and 0x7F-0x9F) to prevent log injection and log forging attacks
+    return (
+      input
+        // eslint-disable-next-line no-control-regex
+        .replace(/\x1B\[[0-9;]*[a-zA-Z]/g, '') // Remove ANSI escape codes
+        // eslint-disable-next-line no-control-regex
+        .replace(/[\x00-\x1F\x7F-\x9F]/g, ' ') // Remove all control chars
+        .trim()
+    );
+  }
+  return input;
+}
+
+/**
  * Handle incoming WebSocket messages
  */
 function handleMessage(message) {
@@ -234,7 +255,7 @@ function handleMessage(message) {
       break;
 
     default:
-      console.warn('Unknown message type:', message.type);
+      console.warn('Unknown message type:', sanitizeLogInput(message.type));
   }
 }
 

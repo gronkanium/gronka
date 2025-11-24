@@ -777,9 +777,33 @@ export function getOperationTrace(operationId) {
   const createdLog = parsedLogs.find(log => log.step === 'created');
   const context = createdLog?.metadata || {};
 
+  // Find the latest status update to determine final operation status
+  const statusUpdateLogs = parsedLogs.filter(log => log.step === 'status_update');
+  const latestStatusLog =
+    statusUpdateLogs.length > 0 ? statusUpdateLogs[statusUpdateLogs.length - 1] : createdLog;
+
+  // Apply status inference to logs: if operation is complete and step is still 'running',
+  // update it to match the final status
+  const finalStatus = latestStatusLog?.status;
+  if (finalStatus === 'success' || finalStatus === 'error') {
+    parsedLogs.forEach(log => {
+      // Only update execution step logs (not 'created', 'status_update', or 'error' logs)
+      if (
+        log.step !== 'created' &&
+        log.step !== 'status_update' &&
+        log.step !== 'error' &&
+        log.status === 'running'
+      ) {
+        // If operation succeeded, running steps should be marked as success
+        // If operation failed, running steps should be marked as error
+        log.status = finalStatus === 'success' ? 'success' : 'error';
+      }
+    });
+  }
+
   // Try to enrich username from users table if we have userId but no username
   let username = context.username;
-  if ((!username || username === 'unknown' || username === null) && context.userId) {
+  if ((!username || username === 'unknown') && context.userId) {
     try {
       const user = getUser(context.userId);
       if (user && user.username) {
@@ -1043,7 +1067,7 @@ export function getRecentOperations(limit = 100) {
       // This handles cases where metadata was null or username wasn't stored
       if (context.userId) {
         // If username is missing or unknown, try to get it from users table
-        if (!username || username === 'unknown' || username === null) {
+        if (!username || username === 'unknown') {
           try {
             const user = getUser(context.userId);
             if (user && user.username) {

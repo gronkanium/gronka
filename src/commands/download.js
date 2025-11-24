@@ -66,8 +66,9 @@ function isYouTubeUrl(url) {
  * Process download from URL
  * @param {Interaction} interaction - Discord interaction
  * @param {string} url - URL to download from
+ * @param {string} [commandSource] - Command source ('slash' or 'context-menu')
  */
-async function processDownload(interaction, url) {
+async function processDownload(interaction, url, commandSource = null) {
   const userId = interaction.user.id;
   const username = interaction.user.tag || interaction.user.username || 'unknown';
   const adminUser = isAdmin(userId);
@@ -77,6 +78,9 @@ async function processDownload(interaction, url) {
   const operationContext = {
     originalUrl: url,
   };
+  if (commandSource) {
+    operationContext.commandSource = commandSource;
+  }
 
   // Create operation tracking with context
   const operationId = createOperation('download', userId, username, operationContext);
@@ -305,7 +309,7 @@ async function processDownload(interaction, url) {
       }
 
       // Record processed URL in database (file exists but URL might not be recorded yet)
-      await insertProcessedUrl(urlHash, hash, fileType, ext, fileUrl, Date.now(), userId);
+      await insertProcessedUrl(urlHash, hash, fileType, ext, fileUrl, Date.now(), userId, existingSize);
       logger.debug(`Recorded processed URL in database (urlHash: ${urlHash.substring(0, 8)}...)`);
 
       updateOperationStatus(operationId, 'success', { fileSize: existingSize });
@@ -392,7 +396,7 @@ async function processDownload(interaction, url) {
       );
 
       // Record processed URL in database
-      await insertProcessedUrl(urlHash, hash, fileType, ext, fileUrl, Date.now(), userId);
+      await insertProcessedUrl(urlHash, hash, fileType, ext, fileUrl, Date.now(), userId, finalSize);
       logger.debug(`Recorded processed URL in database (urlHash: ${urlHash.substring(0, 8)}...)`);
 
       // Update operation to success with file size
@@ -591,7 +595,7 @@ export async function handleDownloadContextMenuCommand(interaction) {
   // Defer reply since downloading may take time
   await interaction.deferReply();
 
-  await processDownload(interaction, url);
+  await processDownload(interaction, url, 'context-menu');
 }
 
 /**
@@ -673,5 +677,5 @@ export async function handleDownloadCommand(interaction) {
   // Defer reply since downloading may take time
   await interaction.deferReply();
 
-  await processDownload(interaction, url);
+  await processDownload(interaction, url, 'slash');
 }

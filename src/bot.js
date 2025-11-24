@@ -377,7 +377,7 @@ async function processDeferredDownload(queueItem) {
       }
 
       // Record processed URL in database (file exists but URL might not be recorded yet)
-      await insertProcessedUrl(urlHash, hash, fileType, ext, fileUrl, Date.now(), userId);
+      await insertProcessedUrl(urlHash, hash, fileType, ext, fileUrl, Date.now(), userId, existingSize);
       logger.debug(`Recorded processed URL in database (urlHash: ${urlHash.substring(0, 8)}...)`);
 
       updateOperationStatus(operationId, 'success', { fileSize: existingSize });
@@ -447,7 +447,7 @@ async function processDeferredDownload(queueItem) {
     }
 
     // Record processed URL in database
-    await insertProcessedUrl(urlHash, hash, fileType, ext, fileUrl, Date.now(), userId);
+    await insertProcessedUrl(urlHash, hash, fileType, ext, fileUrl, Date.now(), userId, finalSize);
     logger.debug(`Recorded processed URL in database (urlHash: ${urlHash.substring(0, 8)}...)`);
 
     updateOperationStatus(operationId, 'success', { fileSize: finalSize });

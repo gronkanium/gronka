@@ -150,5 +150,73 @@ describe('logger utilities', () => {
       assert.strictEqual(logs1[0].component, 'component-1');
       assert.strictEqual(logs2[0].component, 'component-2');
     });
+
+    test('logger sanitizes log messages before writing', async () => {
+      const logger = createLogger('test-sanitize');
+      const maliciousInput = 'Normal log\n[2024-01-01] [INFO] Fake log entry';
+
+      await logger.info(maliciousInput);
+      await new Promise(resolve => setTimeout(resolve, 100));
+
+      const logs = getLogs({ component: 'test-sanitize', limit: 1 });
+      assert.ok(logs.length > 0);
+      const log = logs[0];
+      // Verify newline was removed and log injection prevented
+      assert.ok(!log.message.includes('\n'));
+      assert.ok(log.message.includes('Normal log'));
+      assert.ok(!log.message.includes('[2024-01-01]'));
+    });
+
+    test('logger sanitizes control characters in log output', async () => {
+      const logger = createLogger('test-control-chars');
+      const inputWithControlChars = 'Text\x00\x01\x02\x03\x7F\x80\x9F';
+
+      await logger.info(inputWithControlChars);
+      await new Promise(resolve => setTimeout(resolve, 100));
+
+      const logs = getLogs({ component: 'test-control-chars', limit: 1 });
+      assert.ok(logs.length > 0);
+      const log = logs[0];
+      // Verify control characters were removed
+      // eslint-disable-next-line no-control-regex
+      const controlCharRegex = /[\x00-\x1F\x7F-\x9F]/;
+      assert.ok(
+        !controlCharRegex.test(log.message),
+        `Log message contains control characters: ${log.message}`
+      );
+      assert.ok(log.message.includes('Text'));
+    });
+
+    test('logger sanitizes ANSI escape codes in log output', async () => {
+      const logger = createLogger('test-ansi');
+      const inputWithAnsi = '\x1B[31mRed text\x1B[0m';
+
+      await logger.info(inputWithAnsi);
+      await new Promise(resolve => setTimeout(resolve, 100));
+
+      const logs = getLogs({ component: 'test-ansi', limit: 1 });
+      assert.ok(logs.length > 0);
+      const log = logs[0];
+      // Verify ANSI codes were removed
+      assert.ok(!log.message.includes('\x1B'));
+      assert.ok(log.message.includes('Red text'));
+    });
+
+    test('logger sanitizes arguments in log messages', async () => {
+      const logger = createLogger('test-sanitize-args');
+      const maliciousArg = 'Arg\nwith\nnewlines';
+
+      await logger.info('Test message', maliciousArg);
+      await new Promise(resolve => setTimeout(resolve, 100));
+
+      const logs = getLogs({ component: 'test-sanitize-args', limit: 1 });
+      assert.ok(logs.length > 0);
+      const log = logs[0];
+      // Verify arguments were sanitized
+      assert.ok(!log.message.includes('\n'));
+      assert.ok(log.message.includes('Arg'));
+      assert.ok(log.message.includes('with'));
+      assert.ok(log.message.includes('newlines'));
+    });
   });
 });

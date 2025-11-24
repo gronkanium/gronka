@@ -5,6 +5,58 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres (attempts) to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.11.4-prerelease] - 2025-11-24
+
+### Added
+
+- Discord attachment support for files under 8MB
+  - Files smaller than 8MB are now sent as Discord attachments instead of URLs
+  - Provides better user experience with direct file previews in Discord
+  - Automatic detection based on file size using `shouldUploadToDiscord()` helper
+  - All commands (download, convert, optimize) support Discord attachments
+  - Enhanced storage functions return buffer and upload method information
+- Stuck operations cleanup system
+  - Automatic cleanup runs every 5 minutes to detect and resolve stuck operations
+  - Configurable timeout (default 10 minutes) for stuck operation detection
+  - Users receive DM notifications when their stuck operations are cleaned up
+  - New `cleanupStuckOperations()` function in operations-tracker.js
+  - Manual cleanup script: `fix-stuck-operations.js` (accessible via `npm run fix:stuck-ops`)
+  - Enhanced database functions: `getStuckOperations()`, `markOperationAsFailed()`
+- Fast Docker reload scripts
+  - Cross-platform fast reload for development (JS wrapper, PowerShell, Bash)
+  - New npm script: `docker:reload:fast` for faster iteration cycles
+  - Platform detection and appropriate script execution
+- Dockerfile cache strategy documentation
+  - Added comments throughout Dockerfile explaining cache invalidation points
+  - Documents which layers are cached and when they invalidate
+  - Helps with build optimization understanding
+- Log metrics test suite
+  - Comprehensive tests for `getLogMetrics()` function
+  - Tests component filtering, level aggregation, and edge cases
+
+### Changed
+
+- Storage function return format
+  - `saveGif()`, `saveVideo()`, and `saveImage()` now return `{ url, buffer, method }` object
+  - `url`: File URL or local path
+  - `buffer`: File buffer for Discord attachments
+  - `method`: 'discord' or 'r2' based on file size
+  - **BREAKING**: Code using these functions must be updated to use `.url` property
+- Rate limiting improvements
+  - Localhost (IPv4 and IPv6) now bypasses rate limiting for development
+  - Health check endpoint (`/health`) excluded from rate limiting
+  - Rate limiter middleware moved after `/health` route
+  - Improved skip logic for internal network requests
+- Deferred download notifications
+  - Updated to support Discord attachments via `AttachmentBuilder`
+  - Can now send files as attachments or URLs based on size
+
+### Fixed
+
+- Test suite updates for new storage return format
+  - Updated `storage.test.js` to use `.url` property from storage function returns
+  - Fixed `database.test.js` metadata parsing (getLogs already parses JSON)
+
 ## [0.11.3-prerelease] - 2025-11-24
 
 ### Added

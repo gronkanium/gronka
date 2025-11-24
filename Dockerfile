@@ -1,5 +1,6 @@
 FROM node:20-slim
 
+# Cache strategy: Base image and system packages are cached unless base image changes
 # Install FFmpeg, Docker CLI, and required dependencies
 # Also install build tools for native modules (better-sqlite3)
 RUN apt-get update && apt-get install -y \
@@ -22,6 +23,8 @@ RUN apt-get update && apt-get install -y \
 # Set working directory
 WORKDIR /app
 
+# Cache strategy: Copy package files before source code to maximize cache hits
+# Dependencies layer is cached unless package.json or package-lock.json changes
 # Copy package files
 COPY package*.json ./
 
@@ -29,11 +32,13 @@ COPY package*.json ./
 # Allow install scripts to run so better-sqlite3 compiles natively
 RUN npm ci
 
+# Cache strategy: vite.config.js is cached unless it changes
 # Copy vite config (needed for webui build)
 COPY vite.config.js ./
 
 # Build timestamp to force invalidation of COPY layer on rebuilds
 # This ensures source code changes are always picked up, especially on Windows
+# Cache strategy: BUILD_TIMESTAMP can be used to force cache invalidation when needed
 ARG BUILD_TIMESTAMP
 ENV BUILD_TIMESTAMP=${BUILD_TIMESTAMP}
 
@@ -41,6 +46,8 @@ ENV BUILD_TIMESTAMP=${BUILD_TIMESTAMP}
 ARG GIT_COMMIT
 ENV GIT_COMMIT=${GIT_COMMIT}
 
+# Cache strategy: Source code changes frequently, so cache typically breaks here
+# Subsequent layers (build:webui, etc.) will rebuild when src/ changes
 # Copy application code
 COPY src/ ./src/
 

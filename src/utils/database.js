@@ -399,7 +399,25 @@ export function getLogs(options = {}) {
   }
 
   const stmt = db.prepare(query);
-  return stmt.all(...params);
+  const rawLogs = stmt.all(...params);
+
+  // Parse metadata JSON strings into objects
+  return rawLogs.map(log => {
+    let metadata = null;
+    if (log.metadata) {
+      try {
+        metadata = JSON.parse(log.metadata);
+      } catch (error) {
+        console.error('Failed to parse metadata for log:', error);
+        // Keep as string if parsing fails
+        metadata = log.metadata;
+      }
+    }
+    return {
+      ...log,
+      metadata,
+    };
+  });
 }
 
 /**
@@ -547,8 +565,8 @@ export function getLogMetrics(options = {}) {
     byLevel[row.level] = row.count;
   });
 
-  // Logs by component in time range
-  const componentQuery = `SELECT component, COUNT(*) as count FROM logs WHERE timestamp >= ?${exclusionClause} GROUP BY component ORDER BY count DESC`;
+  // Logs by component in time range (only ERROR and WARN levels)
+  const componentQuery = `SELECT component, COUNT(*) as count FROM logs WHERE timestamp >= ? AND (level = 'ERROR' OR level = 'WARN')${exclusionClause} GROUP BY component ORDER BY count DESC`;
   const componentStmt = db.prepare(componentQuery);
   const componentResults = componentStmt.all(startTime, ...exclusionParams);
   const byComponent = {};
@@ -1669,4 +1687,86 @@ export function getAlertsCount(options = {}) {
   const stmt = db.prepare(query);
   const result = stmt.get(...params);
   return result ? result.count : 0;
+}
+
+/**
+ * Get operations that are stuck in running status
+ * @param {number} maxAgeMinutes - Maximum age in minutes before an operation is considered stuck
+ * @returns {Array} Array of operation IDs that are stuck
+ */
+export function getStuckOperations(maxAgeMinutes = 10) {
+  if (!db) {
+    console.error('Database not initialized. Call initDatabase() first.');
+    return [];
+  }
+
+  const now = Date.now();
+  const maxAge = maxAgeMinutes * 60 * 1000; // Convert minutes to milliseconds
+  const cutoffTime = now - maxAge;
+
+  // Find operations where the latest status_update has status='running' and is older than cutoff
+  // We need to:
+  // 1. Get all status_update logs with status='running'
+  // 2. For each operation_id, get the latest timestamp
+  // 3. Filter where latest timestamp < cutoffTime
+  const stmt = db.prepare(`
+    SELECT operation_id, MAX(timestamp) as latest_timestamp
+    FROM operation_logs
+    WHERE step = 'status_update' AND status = 'running'
+    GROUP BY operation_id
+    HAVING latest_timestamp < ?
+  `);
+  const results = stmt.all(cutoffTime);
+
+  // Also check if there are any operations that have a 'running' status_update
+  // but no subsequent 'success' or 'error' status_update
+  const stuckOperationIds = results.map(row => row.operation_id);
+
+  // Verify these operations don't have a more recent success/error status
+  const verifiedStuck = [];
+  for (const operationId of stuckOperationIds) {
+    // Get the latest status_update for this operation
+    const latestStatusStmt = db.prepare(`
+      SELECT status, timestamp
+      FROM operation_logs
+      WHERE operation_id = ? AND step = 'status_update'
+      ORDER BY timestamp DESC
+      LIMIT 1
+    `);
+    const latestStatus = latestStatusStmt.get(operationId);
+
+    // Only include if latest status is still 'running' and is old enough
+    if (latestStatus && latestStatus.status === 'running' && latestStatus.timestamp < cutoffTime) {
+      verifiedStuck.push(operationId);
+    }
+  }
+
+  return verifiedStuck;
+}
+
+/**
+ * Mark an operation as failed by inserting a status_update log
+ * @param {string} operationId - Operation ID to mark as failed
+ * @param {string} errorMessage - Error message to include
+ * @returns {void}
+ */
+export function markOperationAsFailed(
+  operationId,
+  errorMessage = 'Operation timed out - marked as failed due to inactivity'
+) {
+  if (!db) {
+    console.error('Database not initialized. Call initDatabase() first.');
+    return;
+  }
+
+  // Insert a status_update log marking the operation as error
+  insertOperationLog(operationId, 'status_update', 'error', {
+    message: errorMessage,
+    metadata: {
+      previousStatus: 'running',
+      newStatus: 'error',
+      reason: 'timeout',
+      autoMarked: true,
+    },
+  });
 }

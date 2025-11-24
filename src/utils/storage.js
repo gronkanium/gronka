@@ -15,6 +15,18 @@ import {
 
 const logger = createLogger('storage');
 
+// Discord upload threshold: files smaller than this will be sent as Discord attachments
+const DISCORD_UPLOAD_THRESHOLD = 8 * 1024 * 1024; // 8MB in bytes
+
+/**
+ * Check if a file should be sent as a Discord attachment based on size
+ * @param {Buffer} buffer - File buffer to check
+ * @returns {boolean} True if file should be sent as Discord attachment (< 8MB)
+ */
+export function shouldUploadToDiscord(buffer) {
+  return buffer.length < DISCORD_UPLOAD_THRESHOLD;
+}
+
 // Stats cache: Map<storagePath, {stats, timestamp}>
 // Caches storage statistics to avoid expensive recalculations (filesystem scans or R2 LIST operations)
 // TTL is configurable via STATS_CACHE_TTL env var (default 5 minutes, 0 to disable)
@@ -309,9 +321,11 @@ export function getGifPath(hash, storagePath) {
  * @param {string} hash - MD5 hash of the video
  * @param {string} storagePath - Base storage path (for local fallback)
  * @param {Object} [metadata={}] - Optional metadata to attach to the object
- * @returns {Promise<string>} Public URL or path to saved GIF file
+ * @returns {Promise<{url: string, method: string, buffer: Buffer}>} Object with URL, upload method, and buffer
  */
 export async function saveGif(buffer, hash, storagePath, metadata = {}) {
+  const method = shouldUploadToDiscord(buffer) ? 'discord' : 'r2';
+
   // Upload to R2 if configured
   if (
     r2Config.accountId &&
@@ -328,7 +342,7 @@ export async function saveGif(buffer, hash, storagePath, metadata = {}) {
         const key = `gifs/${safeHash}.gif`;
         const publicUrl = getR2PublicUrl(key, r2Config);
         logger.info(`GIF already exists in R2: ${publicUrl}`);
-        return publicUrl;
+        return { url: publicUrl, method, buffer };
       }
 
       // Upload to R2
@@ -343,7 +357,7 @@ export async function saveGif(buffer, hash, storagePath, metadata = {}) {
       incrementR2UsageCache(buffer.length);
       // Invalidate stats cache since we added a new file
       invalidateStatsCache(storagePath);
-      return publicUrl;
+      return { url: publicUrl, method, buffer };
     } catch (error) {
       logger.error(`Failed to upload GIF to R2, falling back to local storage:`, error.message);
       logger.error(`R2 upload error details:`, error);
@@ -364,7 +378,7 @@ export async function saveGif(buffer, hash, storagePath, metadata = {}) {
   // Invalidate stats cache since we added a new file
   invalidateStatsCache(storagePath);
 
-  return gifPath;
+  return { url: gifPath, method, buffer };
 }
 
 /**
@@ -486,9 +500,11 @@ export async function videoExists(hash, extension, storagePath) {
  * @param {string} extension - File extension (e.g., '.mp4', '.webm')
  * @param {string} storagePath - Base storage path (for local fallback)
  * @param {Object} [metadata={}] - Optional metadata to attach to the object
- * @returns {Promise<string>} Public URL or path to saved video file
+ * @returns {Promise<{url: string, method: string, buffer: Buffer}>} Object with URL, upload method, and buffer
  */
 export async function saveVideo(buffer, hash, extension, storagePath, metadata = {}) {
+  const method = shouldUploadToDiscord(buffer) ? 'discord' : 'r2';
+
   // Upload to R2 if configured
   if (
     r2Config.accountId &&
@@ -505,7 +521,7 @@ export async function saveVideo(buffer, hash, extension, storagePath, metadata =
       incrementR2UsageCache(buffer.length);
       // Invalidate stats cache since we added a new file
       invalidateStatsCache(storagePath);
-      return publicUrl;
+      return { url: publicUrl, method, buffer };
     } catch (error) {
       logger.error(`Failed to upload video to R2, falling back to local storage:`, error.message);
       // Fall through to local storage
@@ -525,7 +541,7 @@ export async function saveVideo(buffer, hash, extension, storagePath, metadata =
   // Invalidate stats cache since we added a new file
   invalidateStatsCache(storagePath);
 
-  return videoPath;
+  return { url: videoPath, method, buffer };
 }
 
 /**
@@ -580,9 +596,11 @@ export async function imageExists(hash, extension, storagePath) {
  * @param {string} extension - File extension (e.g., '.png', '.jpg')
  * @param {string} storagePath - Base storage path (for local fallback)
  * @param {Object} [metadata={}] - Optional metadata to attach to the object
- * @returns {Promise<string>} Public URL or path to saved image file
+ * @returns {Promise<{url: string, method: string, buffer: Buffer}>} Object with URL, upload method, and buffer
  */
 export async function saveImage(buffer, hash, extension, storagePath, metadata = {}) {
+  const method = shouldUploadToDiscord(buffer) ? 'discord' : 'r2';
+
   // Upload to R2 if configured
   if (
     r2Config.accountId &&
@@ -599,7 +617,7 @@ export async function saveImage(buffer, hash, extension, storagePath, metadata =
       incrementR2UsageCache(buffer.length);
       // Invalidate stats cache since we added a new file
       invalidateStatsCache(storagePath);
-      return publicUrl;
+      return { url: publicUrl, method, buffer };
     } catch (error) {
       logger.error(`Failed to upload image to R2, falling back to local storage:`, error.message);
       // Fall through to local storage
@@ -619,7 +637,7 @@ export async function saveImage(buffer, hash, extension, storagePath, metadata =
   // Invalidate stats cache since we added a new file
   invalidateStatsCache(storagePath);
 
-  return imagePath;
+  return { url: imagePath, method, buffer };
 }
 
 /**

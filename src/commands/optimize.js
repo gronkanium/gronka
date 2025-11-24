@@ -4,6 +4,7 @@ import {
   TextInputBuilder,
   TextInputStyle,
   ActionRowBuilder,
+  AttachmentBuilder,
 } from 'discord.js';
 import fs from 'fs/promises';
 import path from 'path';
@@ -218,13 +219,16 @@ export async function processOptimization(
 
     // Upload optimized GIF to R2 if configured (this will also handle local storage)
     let optimizedUrl;
+    let optimizedUploadMethod = 'r2';
     try {
-      optimizedUrl = await saveGif(
+      const saveResult = await saveGif(
         optimizedBuffer,
         optimizedHash,
         GIF_STORAGE_PATH,
         buildMetadata()
       );
+      optimizedUrl = saveResult.url;
+      optimizedUploadMethod = saveResult.method;
       // If R2 is configured, saveGif returns the R2 URL, otherwise it returns the local path
       if (!optimizedUrl.startsWith('http://') && !optimizedUrl.startsWith('https://')) {
         // Local path, construct URL
@@ -263,9 +267,18 @@ export async function processOptimization(
     // Update operation to success with file size
     updateOperationStatus(operationId, 'success', { fileSize: optimizedSize });
 
-    await interaction.editReply({
-      content: optimizedUrl,
-    });
+    // Send as Discord attachment if < 8MB, otherwise send URL
+    if (optimizedUploadMethod === 'discord') {
+      const safeHash = optimizedHash.replace(/[^a-f0-9]/gi, '');
+      const filename = `${safeHash}.gif`;
+      await interaction.editReply({
+        files: [new AttachmentBuilder(optimizedBuffer, { name: filename })],
+      });
+    } else {
+      await interaction.editReply({
+        content: optimizedUrl,
+      });
+    }
 
     // Send success notification
     await notifyCommandSuccess(username, 'optimize');

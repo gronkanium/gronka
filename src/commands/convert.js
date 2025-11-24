@@ -1,4 +1,4 @@
-import { MessageFlags } from 'discord.js';
+import { MessageFlags, AttachmentBuilder } from 'discord.js';
 import fs from 'fs/promises';
 import path from 'path';
 import crypto from 'crypto';
@@ -546,6 +546,8 @@ export async function processConversion(
     let optimizedSize = originalSize;
     let wasAutoOptimized = false;
     let finalGifUrl = null;
+    let finalGifBuffer = gifBuffer;
+    let finalUploadMethod = 'r2';
 
     // Only upload initial GIF to R2 if optimization is NOT going to happen
     // (if optimization or auto-optimization is enabled, we'll upload the optimized version instead)
@@ -555,7 +557,10 @@ export async function processConversion(
     const willOptimize = shouldOptimize || userConfig.autoOptimize;
     if (!willOptimize) {
       try {
-        finalGifUrl = await saveGif(gifBuffer, hash, GIF_STORAGE_PATH, buildMetadata());
+        const saveResult = await saveGif(gifBuffer, hash, GIF_STORAGE_PATH, buildMetadata());
+        finalGifUrl = saveResult.url;
+        finalGifBuffer = saveResult.buffer;
+        finalUploadMethod = saveResult.method;
       } catch (error) {
         logger.warn(`Failed to upload initial GIF to R2, continuing:`, error.message);
       }
@@ -590,12 +595,15 @@ export async function processConversion(
         optimizedSize = optimizedBuffer.length;
         finalHash = optimizedHashValue;
         // Upload optimized version to R2 if not already there
-        finalGifUrl = await saveGif(
+        const saveResult = await saveGif(
           optimizedBuffer,
           optimizedHashValue,
           GIF_STORAGE_PATH,
           buildMetadata()
         );
+        finalGifUrl = saveResult.url;
+        finalGifBuffer = saveResult.buffer;
+        finalUploadMethod = saveResult.method;
         logOperationStep(operationId, 'optimization_complete', 'success', {
           message: 'Optimized GIF found in cache',
           metadata: {
@@ -618,12 +626,15 @@ export async function processConversion(
         optimizedSize = optimizedBuffer.length;
         finalHash = optimizedHashValue;
         // Upload optimized version to R2
-        finalGifUrl = await saveGif(
+        const saveResult = await saveGif(
           optimizedBuffer,
           optimizedHashValue,
           GIF_STORAGE_PATH,
           buildMetadata()
         );
+        finalGifUrl = saveResult.url;
+        finalGifBuffer = saveResult.buffer;
+        finalUploadMethod = saveResult.method;
         logOperationStep(operationId, 'optimization_complete', 'success', {
           message: 'GIF optimization completed',
           metadata: {
@@ -653,12 +664,15 @@ export async function processConversion(
         finalHash = optimizedHashValue;
         wasAutoOptimized = true;
         // Upload optimized version to R2 if not already there
-        finalGifUrl = await saveGif(
+        const saveResult = await saveGif(
           optimizedBuffer,
           optimizedHashValue,
           GIF_STORAGE_PATH,
           buildMetadata()
         );
+        finalGifUrl = saveResult.url;
+        finalGifBuffer = saveResult.buffer;
+        finalUploadMethod = saveResult.method;
       } else {
         // Auto-optimize the GIF with default lossy level
         logger.info(`Auto-optimizing GIF: ${gifPath} -> ${optimizedGifPath} (lossy: 35)`);
@@ -670,12 +684,15 @@ export async function processConversion(
         finalHash = optimizedHashValue;
         wasAutoOptimized = true;
         // Upload optimized version to R2
-        finalGifUrl = await saveGif(
+        const saveResult = await saveGif(
           optimizedBuffer,
           optimizedHashValue,
           GIF_STORAGE_PATH,
           buildMetadata()
         );
+        finalGifUrl = saveResult.url;
+        finalGifBuffer = saveResult.buffer;
+        finalUploadMethod = saveResult.method;
       }
     }
 
@@ -684,6 +701,10 @@ export async function processConversion(
     if (finalGifUrl && (finalGifUrl.startsWith('http://') || finalGifUrl.startsWith('https://'))) {
       // Already an R2 URL
       gifUrl = finalGifUrl;
+    } else if (finalGifUrl) {
+      // Local path, construct URL
+      const filename = path.basename(finalGifUrl);
+      gifUrl = `${CDN_BASE_URL}/${filename}`;
     } else {
       // Fallback to constructing URL from CDN_BASE_URL
       gifUrl = `${CDN_BASE_URL}/${finalHash}.gif`;
@@ -714,9 +735,18 @@ export async function processConversion(
     // Update operation to success with file size
     updateOperationStatus(operationId, 'success', { fileSize: optimizedSize });
 
-    await interaction.editReply({
-      content: gifUrl,
-    });
+    // Send as Discord attachment if < 8MB, otherwise send URL
+    if (finalUploadMethod === 'discord') {
+      const safeHash = finalHash.replace(/[^a-f0-9]/gi, '');
+      const filename = `${safeHash}.gif`;
+      await interaction.editReply({
+        files: [new AttachmentBuilder(finalGifBuffer, { name: filename })],
+      });
+    } else {
+      await interaction.editReply({
+        content: gifUrl,
+      });
+    }
 
     // Send success notification
     await notifyCommandSuccess(username, 'convert');

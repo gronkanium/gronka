@@ -1,4 +1,10 @@
-import { MessageFlags, ActionRowBuilder, ButtonBuilder, ButtonStyle } from 'discord.js';
+import {
+  MessageFlags,
+  ActionRowBuilder,
+  ButtonBuilder,
+  ButtonStyle,
+  AttachmentBuilder,
+} from 'discord.js';
 import fs from 'fs/promises';
 import path from 'path';
 import crypto from 'crypto';
@@ -26,6 +32,7 @@ import {
   saveVideo,
   saveImage,
   detectFileType,
+  shouldUploadToDiscord,
 } from '../utils/storage.js';
 import { optimizeGif } from '../utils/gif-optimizer.js';
 import { queueCobaltRequest, hashUrl } from '../utils/cobalt-queue.js';
@@ -209,7 +216,14 @@ async function processDownload(interaction, url, commandSource = null) {
         } else {
           // Save the photo
           logger.info(`Saving photo ${i + 1} (hash: ${hash}, extension: ${ext})`);
-          filePath = await saveImage(photo.buffer, hash, ext, GIF_STORAGE_PATH, buildMetadata());
+          const saveResult = await saveImage(
+            photo.buffer,
+            hash,
+            ext,
+            GIF_STORAGE_PATH,
+            buildMetadata()
+          );
+          filePath = saveResult.url;
 
           if (filePath.startsWith('http://') || filePath.startsWith('https://')) {
             fileUrl = filePath;
@@ -332,9 +346,14 @@ async function processDownload(interaction, url, commandSource = null) {
       return;
     } else {
       // Save file based on type
+      let finalBuffer = fileData.buffer;
+      let finalUploadMethod = 'r2';
       if (fileType === 'gif') {
         logger.info(`Saving GIF (hash: ${hash})`);
-        filePath = await saveGif(fileData.buffer, hash, GIF_STORAGE_PATH, buildMetadata());
+        const saveResult = await saveGif(fileData.buffer, hash, GIF_STORAGE_PATH, buildMetadata());
+        filePath = saveResult.url;
+        finalBuffer = saveResult.buffer;
+        finalUploadMethod = saveResult.method;
 
         // Auto-optimize if enabled in user config
         if (userConfig.autoOptimize) {
@@ -355,6 +374,9 @@ async function processDownload(interaction, url, commandSource = null) {
             filePath = optimizedGifPath;
             hash = optimizedHashValue;
             cdnPath = '/gifs';
+            // Read optimized buffer and re-check upload method
+            finalBuffer = await fs.readFile(optimizedGifPath);
+            finalUploadMethod = shouldUploadToDiscord(finalBuffer) ? 'discord' : 'r2';
           } else {
             // Check if filePath is a URL (R2-stored files return URLs, not local paths)
             if (filePath.startsWith('http://') || filePath.startsWith('https://')) {
@@ -370,15 +392,36 @@ async function processDownload(interaction, url, commandSource = null) {
               filePath = optimizedGifPath;
               hash = optimizedHashValue;
               cdnPath = '/gifs';
+              // Read optimized buffer and re-check upload method
+              finalBuffer = await fs.readFile(optimizedGifPath);
+              finalUploadMethod = shouldUploadToDiscord(finalBuffer) ? 'discord' : 'r2';
             }
           }
         }
       } else if (fileType === 'video') {
         logger.info(`Saving video (hash: ${hash}, extension: ${ext})`);
-        filePath = await saveVideo(fileData.buffer, hash, ext, GIF_STORAGE_PATH, buildMetadata());
+        const saveResult = await saveVideo(
+          fileData.buffer,
+          hash,
+          ext,
+          GIF_STORAGE_PATH,
+          buildMetadata()
+        );
+        filePath = saveResult.url;
+        finalBuffer = saveResult.buffer;
+        finalUploadMethod = saveResult.method;
       } else if (fileType === 'image') {
         logger.info(`Saving image (hash: ${hash}, extension: ${ext})`);
-        filePath = await saveImage(fileData.buffer, hash, ext, GIF_STORAGE_PATH, buildMetadata());
+        const saveResult = await saveImage(
+          fileData.buffer,
+          hash,
+          ext,
+          GIF_STORAGE_PATH,
+          buildMetadata()
+        );
+        filePath = saveResult.url;
+        finalBuffer = saveResult.buffer;
+        finalUploadMethod = saveResult.method;
       }
 
       // filePath might be a local path or R2 URL
@@ -388,7 +431,7 @@ async function processDownload(interaction, url, commandSource = null) {
         // Already an R2 URL
         fileUrl = filePath;
         // Get size from buffer since we can't stat R2 files
-        finalSize = fileData.buffer.length;
+        finalSize = finalBuffer.length;
       } else {
         // Local path, construct URL
         const filename = path.basename(filePath);
@@ -420,9 +463,18 @@ async function processDownload(interaction, url, commandSource = null) {
       // Update operation to success with file size
       updateOperationStatus(operationId, 'success', { fileSize: finalSize });
 
-      await interaction.editReply({
-        content: fileUrl,
-      });
+      // Send as Discord attachment if < 8MB, otherwise send URL
+      if (finalUploadMethod === 'discord') {
+        const safeHash = hash.replace(/[^a-f0-9]/gi, '');
+        const filename = `${safeHash}${ext}`;
+        await interaction.editReply({
+          files: [new AttachmentBuilder(finalBuffer, { name: filename })],
+        });
+      } else {
+        await interaction.editReply({
+          content: fileUrl,
+        });
+      }
 
       // Send success notification
       await notifyCommandSuccess(username, 'download');

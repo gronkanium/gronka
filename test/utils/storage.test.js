@@ -167,7 +167,8 @@ test('gifExists - returns true for existing GIF', async () => {
 test('saveGif - saves GIF file and returns path', async () => {
   const hash = 'testgif456';
   const buffer = Buffer.from('fake gif content');
-  const savedPath = await saveGif(buffer, hash, testStoragePath);
+  const saveResult = await saveGif(buffer, hash, testStoragePath);
+  const savedPath = saveResult.url;
 
   // Hash is sanitized (hex characters only), so testgif456 becomes ef456
   assert(savedPath.includes('ef456'));
@@ -206,7 +207,8 @@ test('videoExists - returns true for existing video', async () => {
 test('saveVideo - saves video file and returns path', async () => {
   const hash = 'testvideo456';
   const buffer = Buffer.from('fake video content');
-  const savedPath = await saveVideo(buffer, hash, '.webm', testStoragePath);
+  const saveResult = await saveVideo(buffer, hash, '.webm', testStoragePath);
+  const savedPath = saveResult.url;
 
   // Hash is sanitized (hex characters only), so testvideo456 becomes ede456
   assert(savedPath.includes('ede456'));
@@ -235,7 +237,8 @@ test('imageExists - returns true for existing image', async () => {
 test('saveImage - saves image file and returns path', async () => {
   const hash = 'testimage456';
   const buffer = Buffer.from('fake image content');
-  const savedPath = await saveImage(buffer, hash, '.jpg', testStoragePath);
+  const saveResult = await saveImage(buffer, hash, '.jpg', testStoragePath);
+  const savedPath = saveResult.url;
 
   // Hash is sanitized (hex characters only), so testimage456 becomes eae456
   assert(savedPath.includes('eae456'));

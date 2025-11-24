@@ -1,9 +1,26 @@
 import { createLogger } from './logger.js';
 import { botConfig } from './config.js';
 import { insertAlert } from './database.js';
+import { getOperation } from './operations-tracker.js';
 
 const logger = createLogger('ntfy');
 let broadcastCallback = null;
+
+/**
+ * Format duration in milliseconds to a human-readable string
+ * @param {number} ms - Duration in milliseconds
+ * @returns {string} Formatted duration (e.g., "1.2s", "5.3m")
+ */
+function formatDuration(ms) {
+  if (!ms || ms === 0) return '';
+  if (ms < 1000) return `${ms}ms`;
+  const seconds = ms / 1000;
+  if (seconds < 60) return `${seconds.toFixed(1)}s`;
+  const minutes = seconds / 60;
+  if (minutes < 60) return `${minutes.toFixed(1)}m`;
+  const hours = minutes / 60;
+  return `${hours.toFixed(1)}h`;
+}
 
 /**
  * Send notification to ntfy.sh
@@ -14,7 +31,7 @@ let broadcastCallback = null;
  * @param {string} [options.component] - Component name
  * @param {string} [options.operationId] - Related operation ID
  * @param {string} [options.userId] - Related user ID
- * @param {Object} [options.metadata] - Additional metadata
+ * @param {Object} [options.metadata] - Additional metadata (duration will be automatically added if operationId is provided)
  * @returns {Promise<void>}
  */
 export async function sendNtfyNotification(title, message, options = {}) {
@@ -26,6 +43,16 @@ export async function sendNtfyNotification(title, message, options = {}) {
     metadata = null,
   } = options;
 
+  // Calculate duration if operationId is provided
+  let finalMetadata = metadata ? { ...metadata } : {};
+  if (operationId) {
+    const operation = getOperation(operationId);
+    if (operation && operation.startTime) {
+      const duration = Date.now() - operation.startTime;
+      finalMetadata.duration = duration;
+    }
+  }
+
   // Log to database regardless of ntfy.sh status
   let alertRecord = null;
   try {
@@ -36,7 +63,7 @@ export async function sendNtfyNotification(title, message, options = {}) {
       message,
       operationId,
       userId,
-      metadata,
+      metadata: Object.keys(finalMetadata).length > 0 ? finalMetadata : null,
     });
 
     // Broadcast alert if callback is set (for webui)
@@ -57,6 +84,15 @@ export async function sendNtfyNotification(title, message, options = {}) {
   }
 
   try {
+    // Append duration to message if available
+    let notificationMessage = message;
+    if (finalMetadata.duration !== undefined) {
+      const formattedDuration = formatDuration(finalMetadata.duration);
+      if (formattedDuration) {
+        notificationMessage = `${message} (${formattedDuration})`;
+      }
+    }
+
     const url = `https://ntfy.sh/${botConfig.ntfyTopic}`;
     const response = await fetch(url, {
       method: 'POST',
@@ -64,7 +100,7 @@ export async function sendNtfyNotification(title, message, options = {}) {
         Title: title,
         'Content-Type': 'text/plain',
       },
-      body: message,
+      body: notificationMessage,
     });
 
     if (!response.ok) {
@@ -82,6 +118,7 @@ export async function sendNtfyNotification(title, message, options = {}) {
  * @param {string} username - Username
  * @param {string} command - Command name (convert, optimize, download)
  * @param {Object} [options] - Additional options (operationId, userId, metadata)
+ * @param {string} [options.operationId] - Operation ID (duration will be automatically calculated and added to metadata)
  * @returns {Promise<void>}
  */
 export async function notifyCommandSuccess(username, command, options = {}) {
@@ -102,6 +139,7 @@ export async function notifyCommandSuccess(username, command, options = {}) {
  * @param {string} username - Username
  * @param {string} command - Command name (convert, optimize, download)
  * @param {Object} [options] - Additional options (operationId, userId, metadata, error)
+ * @param {string} [options.operationId] - Operation ID (duration will be automatically calculated and added to metadata)
  * @returns {Promise<void>}
  */
 export async function notifyCommandFailure(username, command, options = {}) {
@@ -127,6 +165,7 @@ export async function notifyCommandFailure(username, command, options = {}) {
  * @param {string} username - Username
  * @param {string} status - Status (success or failed)
  * @param {Object} [options] - Additional options (operationId, userId, metadata)
+ * @param {string} [options.operationId] - Operation ID (duration will be automatically calculated and added to metadata)
  * @returns {Promise<void>}
  */
 export async function notifyDeferredDownload(username, status, options = {}) {

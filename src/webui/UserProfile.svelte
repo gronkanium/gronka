@@ -6,6 +6,11 @@
   let user = null;
   let metrics = null;
   let operations = [];
+  let operationsTotal = 0;
+  let operationsLimit = 7;
+  let operationsOffset = 0;
+  let operationsLoading = false;
+  let operationsError = null;
   let activity = [];
   let media = [];
   let mediaTotal = 0;
@@ -35,10 +40,7 @@
       metrics = profileData.metrics;
 
       // Fetch user operations
-      const opsResponse = await fetch(`/api/users/${userId}/operations?limit=50`);
-      if (!opsResponse.ok) throw new Error('failed to fetch operations');
-      const opsData = await opsResponse.json();
-      operations = opsData.operations || [];
+      await fetchUserOperations();
 
       // Fetch user activity (limited to 10 most recent)
       const activityResponse = await fetch(`/api/users/${userId}/activity?limit=10`);
@@ -52,6 +54,30 @@
       error = err.message;
     } finally {
       loading = false;
+    }
+  }
+
+  async function fetchUserOperations() {
+    if (!userId) return;
+
+    operationsLoading = true;
+    operationsError = null;
+    try {
+      const response = await fetch(`/api/users/${userId}/operations?limit=${operationsLimit}&offset=${operationsOffset}`);
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.message || `failed to fetch user operations: ${response.status} ${response.statusText}`);
+      }
+      const data = await response.json();
+      operations = data.operations || [];
+      operationsTotal = data.total || 0;
+    } catch (err) {
+      console.error('Failed to fetch user operations:', err);
+      operationsError = err.message || 'failed to fetch user operations';
+      operations = [];
+      operationsTotal = 0;
+    } finally {
+      operationsLoading = false;
     }
   }
 
@@ -90,6 +116,20 @@
     if (mediaOffset + mediaLimit < mediaTotal) {
       mediaOffset += mediaLimit;
       fetchUserMedia();
+    }
+  }
+
+  function handleOperationsPrevPage() {
+    if (operationsOffset > 0) {
+      operationsOffset = Math.max(0, operationsOffset - operationsLimit);
+      fetchUserOperations();
+    }
+  }
+
+  function handleOperationsNextPage() {
+    if (operationsOffset + operationsLimit < operationsTotal) {
+      operationsOffset += operationsLimit;
+      fetchUserOperations();
     }
   }
 
@@ -194,12 +234,9 @@
         // Filter operations for this user
         const userOps = wsOps.filter(op => op.userId === userId);
         if (userOps.length > 0) {
-          // Merge with existing operations, avoiding duplicates
-          const existingIds = new Set(operations.map(op => op.id));
-          const newOps = userOps.filter(op => !existingIds.has(op.id));
-          if (newOps.length > 0) {
-            operations = [...newOps, ...operations].slice(0, 50);
-          }
+          // Refresh current page when new operations arrive via WebSocket
+          // This ensures pagination stays in sync with real-time updates
+          fetchUserOperations();
         }
       }
     });
@@ -212,8 +249,9 @@
 
   $: if (userId) {
     fetchUserProfile();
-    // Reset media pagination when userId changes
+    // Reset pagination when userId changes
     mediaOffset = 0;
+    operationsOffset = 0;
   }
 </script>
 
@@ -285,9 +323,14 @@
       </div>
     </div>
 
-    {#if operations.length > 0}
-      <div class="operations-section">
-        <h3>recent operations</h3>
+    <div class="operations-section">
+      <h3>recent operations</h3>
+      {#if operationsLoading}
+        <div class="loading-inline">loading operations...</div>
+      {:else if operationsError}
+        <div class="error-inline">error: {operationsError}</div>
+        <button class="retry-btn" on:click={fetchUserOperations}>retry</button>
+      {:else if operations.length > 0}
         <div class="operations-table-container">
           <table class="operations-table">
             <thead>
@@ -322,8 +365,25 @@
             </tbody>
           </table>
         </div>
-      </div>
-    {/if}
+        {#if operationsTotal > operationsLimit}
+          <div class="operations-pagination">
+            <div class="pagination-info">
+              showing {operationsOffset + 1}-{Math.min(operationsOffset + operationsLimit, operationsTotal)} of {operationsTotal}
+            </div>
+            <div class="pagination-controls">
+              <button on:click={handleOperationsPrevPage} disabled={operationsOffset === 0}>
+                previous
+              </button>
+              <button on:click={handleOperationsNextPage} disabled={operationsOffset + operationsLimit >= operationsTotal}>
+                next
+              </button>
+            </div>
+          </div>
+        {/if}
+      {:else}
+        <div class="empty-state">no operations found</div>
+      {/if}
+    </div>
 
     {#if selectedOperationId && operationTrace}
       <div class="trace-section">
@@ -398,9 +458,9 @@
             </div>
 
             <div class="trace-steps">
-              <h4>execution steps ({operationTrace.logs.filter(log => log.status !== 'error').length})</h4>
+              <h4>execution steps ({operationTrace.logs.filter(log => log.step !== 'created' && log.step !== 'status_update' && log.step !== 'error').length})</h4>
               <div class="steps-list">
-                {#each operationTrace.logs.filter(log => log.status !== 'error') as log}
+                {#each operationTrace.logs.filter(log => log.step !== 'created' && log.step !== 'status_update' && log.step !== 'error') as log}
                   <div class="trace-step" class:error={log.status === 'error'}>
                     <div class="step-header">
                       <span class="step-name">{log.step}</span>
@@ -937,7 +997,8 @@
     font-size: 0.8rem;
   }
 
-  .media-pagination {
+  .media-pagination,
+  .operations-pagination {
     display: flex;
     justify-content: space-between;
     align-items: center;
@@ -1056,7 +1117,8 @@
       max-width: 200px;
     }
 
-    .media-pagination {
+    .media-pagination,
+    .operations-pagination {
       flex-direction: column;
       gap: 0.5rem;
       align-items: flex-start;

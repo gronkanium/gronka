@@ -218,6 +218,16 @@ export function getRecentOperations(limit = null) {
 }
 
 /**
+ * Get an operation by ID
+ * @param {string} operationId - Operation ID
+ * @returns {Object|null} Operation object or null if not found
+ */
+export function getOperation(operationId) {
+  const operation = operations.find(op => op.id === operationId);
+  return operation || null;
+}
+
+/**
  * Log a detailed operation step
  * @param {string} operationId - Operation ID
  * @param {string} step - Step name (e.g., 'download_start', 'processing', 'upload')

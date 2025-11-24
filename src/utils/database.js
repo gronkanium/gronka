@@ -329,6 +329,7 @@ export function getLogs(options = {}) {
     offset = null,
     orderDesc = true,
     excludedComponents = null,
+    excludeComponentLevels = null, // Array of {component, level} objects to exclude
   } = options;
 
   let query = 'SELECT * FROM logs WHERE 1=1';
@@ -343,6 +344,18 @@ export function getLogs(options = {}) {
     const placeholders = excludedComponents.map(() => '?').join(',');
     query += ` AND component NOT IN (${placeholders})`;
     params.push(...excludedComponents);
+  }
+
+  // Exclude specific component+level combinations (e.g., webui INFO logs)
+  if (
+    excludeComponentLevels &&
+    Array.isArray(excludeComponentLevels) &&
+    excludeComponentLevels.length > 0
+  ) {
+    excludeComponentLevels.forEach(({ component: comp, level: lvl }) => {
+      query += ' AND NOT (component = ? AND level = ?)';
+      params.push(comp, lvl);
+    });
   }
 
   if (level) {
@@ -407,6 +420,7 @@ export function getLogsCount(options = {}) {
     endTime = null,
     search = null,
     excludedComponents = null,
+    excludeComponentLevels = null, // Array of {component, level} objects to exclude
   } = options;
 
   let query = 'SELECT COUNT(*) as count FROM logs WHERE 1=1';
@@ -421,6 +435,18 @@ export function getLogsCount(options = {}) {
     const placeholders = excludedComponents.map(() => '?').join(',');
     query += ` AND component NOT IN (${placeholders})`;
     params.push(...excludedComponents);
+  }
+
+  // Exclude specific component+level combinations (e.g., webui INFO logs)
+  if (
+    excludeComponentLevels &&
+    Array.isArray(excludeComponentLevels) &&
+    excludeComponentLevels.length > 0
+  ) {
+    excludeComponentLevels.forEach(({ component: comp, level: lvl }) => {
+      query += ' AND NOT (component = ? AND level = ?)';
+      params.push(comp, lvl);
+    });
   }
 
   if (level) {
@@ -831,6 +857,17 @@ export function getOperationTrace(operationId) {
         log.status = finalStatus === 'success' ? 'success' : 'error';
       }
     });
+  }
+
+  // Update 'created' step status to 'success' once operation has execution steps
+  // (i.e., when there are logs other than 'created', 'status_update', and 'error')
+  if (createdLog) {
+    const hasExecutionSteps = parsedLogs.some(
+      log => log.step !== 'created' && log.step !== 'status_update' && log.step !== 'error'
+    );
+    if (hasExecutionSteps && createdLog.status === 'pending') {
+      createdLog.status = 'success';
+    }
   }
 
   // Try to enrich username from users table if we have userId but no username

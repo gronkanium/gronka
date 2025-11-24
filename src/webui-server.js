@@ -77,6 +77,11 @@ function getAuthHeaders() {
 
 // Crypto price cache
 const CACHE_TTL = 60 * 1000; // 60 seconds
+
+// Stats cache to reduce load on main server
+const STATS_CACHE_TTL = 30 * 1000; // 30 seconds - match Monitoring page refresh interval
+let statsCache = null;
+let statsCacheTimestamp = 0;
 let cryptoPriceCache = {
   data: null,
   timestamp: null,
@@ -149,14 +154,39 @@ app.get('/', fileServerLimiter, (req, res) => {
 // Proxy endpoint to fetch stats from main server
 app.get('/api/stats', async (req, res) => {
   try {
+    // Check cache first
+    const now = Date.now();
+    if (statsCache && now - statsCacheTimestamp < STATS_CACHE_TTL) {
+      logger.debug('Returning cached stats');
+      return res.json(statsCache);
+    }
+
     logger.debug('Fetching stats from main server');
-    const response = await axios.get(`${MAIN_SERVER_URL}/stats`, {
+    const response = await axios.get(`${MAIN_SERVER_URL}/api/stats`, {
       timeout: 5000,
       headers: getAuthHeaders(),
     });
+
+    // Cache the response
+    statsCache = response.data;
+    statsCacheTimestamp = now;
+
     res.json(response.data);
   } catch (error) {
+    // If we have cached data and the request failed, return cached data
+    if (statsCache && error.response?.status === 429) {
+      logger.warn('Rate limited by main server, returning cached stats');
+      return res.json(statsCache);
+    }
+
     logger.error('Failed to fetch stats from main server:', error);
+
+    // If we have stale cache, return it anyway as fallback
+    if (statsCache) {
+      logger.warn('Returning stale cached stats due to error');
+      return res.json(statsCache);
+    }
+
     res.status(500).json({
       error: 'failed to fetch stats',
       message: error.message,
@@ -304,6 +334,10 @@ app.get('/api/logs', (req, res) => {
       }
     }
 
+    // Always exclude webui INFO logs from the logs list (to mute HTTP request noise)
+    // But keep ERROR/WARN logs from webui visible
+    options.excludeComponentLevels = [{ component: 'webui', level: 'INFO' }];
+
     // Get logs and total count
     const logs = getLogs(options);
     const total = getLogsCount(options);
@@ -424,38 +458,38 @@ app.get('/api/users/:userId', (req, res) => {
 app.get('/api/users/:userId/operations', (req, res) => {
   try {
     const { userId } = req.params;
-    const { limit = 50 } = req.query;
+    const { limit = 50, offset = 0 } = req.query;
     const limitNum = parseInt(limit, 10);
+    const offsetNum = parseInt(offset, 10);
 
     // Filter operations by user from in-memory store
     let userOps = operations.filter(op => op.userId === userId);
 
-    // If we don't have enough operations in memory, query database
-    if (userOps.length < limitNum) {
-      try {
-        // Get recent operations from database and filter by user
-        const dbOps = getRecentOperations(limitNum * 2) // Get more to account for filtering
-          .filter(op => op.userId === userId)
-          .slice(0, limitNum);
+    // Get operations from database to ensure we have all of them for counting
+    try {
+      // Get a large number of operations from database to account for filtering
+      const dbOps = getRecentOperations(1000) // Get enough to account for filtering
+        .filter(op => op.userId === userId);
 
-        // Merge with in-memory operations, avoiding duplicates
-        const existingIds = new Set(userOps.map(op => op.id));
-        const newOps = dbOps.filter(op => !existingIds.has(op.id));
-        userOps = [...userOps, ...newOps]
-          .sort((a, b) => b.timestamp - a.timestamp) // Sort by most recent
-          .slice(0, limitNum);
-      } catch (error) {
-        logger.error('Failed to fetch user operations from database:', error);
-        // Continue with in-memory operations only
-      }
-    } else {
-      // Limit to requested amount
-      userOps = userOps.slice(0, limitNum);
+      // Merge with in-memory operations, avoiding duplicates
+      const existingIds = new Set(userOps.map(op => op.id));
+      const newOps = dbOps.filter(op => !existingIds.has(op.id));
+      userOps = [...userOps, ...newOps].sort((a, b) => b.timestamp - a.timestamp); // Sort by most recent
+    } catch (error) {
+      logger.error('Failed to fetch user operations from database:', error);
+      // Continue with in-memory operations only
+      userOps = userOps.sort((a, b) => b.timestamp - a.timestamp);
     }
 
+    // Get total count before applying pagination
+    const total = userOps.length;
+
+    // Apply pagination (offset and limit)
+    const paginatedOps = userOps.slice(offsetNum, offsetNum + limitNum);
+
     res.json({
-      operations: userOps,
-      total: userOps.length,
+      operations: paginatedOps,
+      total: total,
     });
   } catch (error) {
     logger.error('Failed to fetch user operations:', error);
@@ -749,7 +783,9 @@ app.get('/api/metrics/errors', (req, res) => {
   try {
     const { timeRange } = req.query;
     const options = {
-      excludedComponents: ['webui'], // Exclude webui HTTP request logs from monitoring
+      // Don't exclude webui from error/warning counts - we want to see those!
+      // Only exclude webui INFO logs from totals/aggregations to reduce noise
+      excludedComponents: null,
     };
 
     if (timeRange) {

@@ -1,4 +1,4 @@
-import { Client, GatewayIntentBits, Events } from 'discord.js';
+import { Client, GatewayIntentBits, Events, AttachmentBuilder } from 'discord.js';
 import { createLogger } from './utils/logger.js';
 import { botConfig } from './utils/config.js';
 import { ConfigurationError } from './utils/errors.js';
@@ -22,7 +22,11 @@ import fs from 'fs/promises';
 import path from 'path';
 import crypto from 'crypto';
 import { generateHash } from './utils/file-downloader.js';
-import { createOperation, updateOperationStatus } from './utils/operations-tracker.js';
+import {
+  createOperation,
+  updateOperationStatus,
+  cleanupStuckOperations,
+} from './utils/operations-tracker.js';
 import {
   gifExists,
   getGifPath,
@@ -35,6 +39,7 @@ import {
   saveImage,
   detectFileType,
   initializeR2UsageCache,
+  shouldUploadToDiscord,
 } from './utils/storage.js';
 import { getUserConfig } from './utils/user-config.js';
 import { optimizeGif } from './utils/gif-optimizer.js';
@@ -97,6 +102,18 @@ client.once(Events.ClientReady, async readyClient => {
   // Initialize R2 usage cache on startup (if R2 is configured)
   // This caches R2 stats to limit class A operations (LIST requests) for the /stats Discord command
   await initializeR2UsageCache();
+
+  // Clean up stuck operations every 5 minutes
+  setInterval(
+    async () => {
+      try {
+        await cleanupStuckOperations(10, readyClient); // 10 minute timeout, pass client for DM notifications
+      } catch (error) {
+        logger.error('Error in stuck operations cleanup:', error);
+      }
+    },
+    5 * 60 * 1000
+  ); // Run cleanup every 5 minutes
 });
 
 client.on(Events.InteractionCreate, async interaction => {
@@ -287,13 +304,14 @@ async function processDeferredDownload(queueItem) {
             fileUrl = `${botConfig.cdnBaseUrl.replace('/gifs', '/images')}/${filename}`;
           }
         } else {
-          const filePath = await saveImage(
+          const saveResult = await saveImage(
             photo.buffer,
             hash,
             ext,
             botConfig.gifStoragePath,
             buildMetadata()
           );
+          const filePath = saveResult.url;
 
           if (filePath.startsWith('http://') || filePath.startsWith('https://')) {
             fileUrl = filePath;
@@ -337,21 +355,38 @@ async function processDeferredDownload(queueItem) {
 
     let exists = false;
     let filePath = null;
+    let finalBuffer = fileData.buffer;
+    let finalUploadMethod = 'r2';
 
     if (fileType === 'gif') {
       exists = await gifExists(hash, botConfig.gifStoragePath);
       if (exists) {
         filePath = getGifPath(hash, botConfig.gifStoragePath);
+        // Read existing file to check size
+        if (!filePath.startsWith('http://') && !filePath.startsWith('https://')) {
+          finalBuffer = await fs.readFile(filePath);
+          finalUploadMethod = shouldUploadToDiscord(finalBuffer) ? 'discord' : 'r2';
+        }
       }
     } else if (fileType === 'video') {
       exists = await videoExists(hash, ext, botConfig.gifStoragePath);
       if (exists) {
         filePath = getVideoPath(hash, ext, botConfig.gifStoragePath);
+        // Read existing file to check size
+        if (!filePath.startsWith('http://') && !filePath.startsWith('https://')) {
+          finalBuffer = await fs.readFile(filePath);
+          finalUploadMethod = shouldUploadToDiscord(finalBuffer) ? 'discord' : 'r2';
+        }
       }
     } else if (fileType === 'image') {
       exists = await imageExists(hash, ext, botConfig.gifStoragePath);
       if (exists) {
         filePath = getImagePath(hash, ext, botConfig.gifStoragePath);
+        // Read existing file to check size
+        if (!filePath.startsWith('http://') && !filePath.startsWith('https://')) {
+          finalBuffer = await fs.readFile(filePath);
+          finalUploadMethod = shouldUploadToDiscord(finalBuffer) ? 'discord' : 'r2';
+        }
       }
     }
 
@@ -398,7 +433,15 @@ async function processDeferredDownload(queueItem) {
 
     // Save file
     if (fileType === 'gif') {
-      filePath = await saveGif(fileData.buffer, hash, botConfig.gifStoragePath, buildMetadata());
+      const saveResult = await saveGif(
+        fileData.buffer,
+        hash,
+        botConfig.gifStoragePath,
+        buildMetadata()
+      );
+      filePath = saveResult.url;
+      finalBuffer = saveResult.buffer;
+      finalUploadMethod = saveResult.method;
 
       if (userConfig.autoOptimize) {
         const optimizedHash = crypto.createHash('sha256');
@@ -412,6 +455,11 @@ async function processDeferredDownload(queueItem) {
         if (optimizedExists) {
           filePath = optimizedGifPath;
           hash = optimizedHashValue;
+          // Read optimized buffer and re-check upload method
+          if (!filePath.startsWith('http://') && !filePath.startsWith('https://')) {
+            finalBuffer = await fs.readFile(optimizedGifPath);
+            finalUploadMethod = shouldUploadToDiscord(finalBuffer) ? 'discord' : 'r2';
+          }
         } else {
           // Check if filePath is a URL (R2-stored files return URLs, not local paths)
           if (filePath.startsWith('http://') || filePath.startsWith('https://')) {
@@ -422,32 +470,41 @@ async function processDeferredDownload(queueItem) {
             await optimizeGif(filePath, optimizedGifPath, { lossy: 35 });
             filePath = optimizedGifPath;
             hash = optimizedHashValue;
+            // Read optimized buffer and re-check upload method
+            finalBuffer = await fs.readFile(optimizedGifPath);
+            finalUploadMethod = shouldUploadToDiscord(finalBuffer) ? 'discord' : 'r2';
           }
         }
       }
     } else if (fileType === 'video') {
-      filePath = await saveVideo(
+      const saveResult = await saveVideo(
         fileData.buffer,
         hash,
         ext,
         botConfig.gifStoragePath,
         buildMetadata()
       );
+      filePath = saveResult.url;
+      finalBuffer = saveResult.buffer;
+      finalUploadMethod = saveResult.method;
     } else if (fileType === 'image') {
-      filePath = await saveImage(
+      const saveResult = await saveImage(
         fileData.buffer,
         hash,
         ext,
         botConfig.gifStoragePath,
         buildMetadata()
       );
+      filePath = saveResult.url;
+      finalBuffer = saveResult.buffer;
+      finalUploadMethod = saveResult.method;
     }
 
     let fileUrl;
     let finalSize;
     if (filePath.startsWith('http://') || filePath.startsWith('https://')) {
       fileUrl = filePath;
-      finalSize = fileData.buffer.length;
+      finalSize = finalBuffer.length;
     } else {
       const filename = path.basename(filePath);
       fileUrl = `${botConfig.cdnBaseUrl.replace('/gifs', cdnPath)}/${filename}`;
@@ -461,10 +518,17 @@ async function processDeferredDownload(queueItem) {
 
     updateOperationStatus(operationId, 'success', { fileSize: finalSize });
 
-    const resultMessage = fileUrl;
-
-    await notifyDownloadComplete(client, queueItem, resultMessage);
-    return resultMessage;
+    // Send as Discord attachment if < 8MB, otherwise send URL
+    if (finalUploadMethod === 'discord') {
+      const safeHash = hash.replace(/[^a-f0-9]/gi, '');
+      const filename = `${safeHash}${ext}`;
+      const attachment = new AttachmentBuilder(finalBuffer, { name: filename });
+      await notifyDownloadComplete(client, queueItem, null, attachment);
+      return `File sent as attachment: ${filename}`;
+    } else {
+      await notifyDownloadComplete(client, queueItem, fileUrl);
+      return fileUrl;
+    }
   } catch (error) {
     logger.error(`Deferred download failed for user ${userId}: ${error.message}`);
     updateOperationStatus(operationId, 'error', { error: error.message });

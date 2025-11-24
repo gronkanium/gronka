@@ -4,11 +4,23 @@
  */
 
 import axios from 'axios';
-import { insertOperationLog, insertOrUpdateUserMetrics, getUserMetrics } from './database.js';
+import {
+  insertOperationLog,
+  insertOrUpdateUserMetrics,
+  getUserMetrics,
+  getStuckOperations,
+  markOperationAsFailed,
+  getOperationTrace,
+  getRecentOperations as getRecentOperationsFromDb,
+} from './database.js';
+import { createLogger } from './logger.js';
 
 // In-memory storage for operations (FIFO queue, max 100)
 const operations = [];
 const MAX_OPERATIONS = 100;
+
+// Logger for application logs
+const logger = createLogger('bot');
 
 // Callback for broadcasting updates (set by webui-server)
 let broadcastCallback = null;
@@ -148,6 +160,9 @@ export function createOperation(type, userId, username, context = {}) {
     console.error('Failed to log operation creation:', error);
   }
 
+  // Log to application logs with operation ID
+  logger.info(`Operation ${type} created [op: ${operation.id}]`);
+
   broadcastUpdate(operation);
   return operation.id;
 }
@@ -186,13 +201,21 @@ export function updateOperationStatus(operationId, status, data = {}) {
 
   // Log status update
   try {
+    const metadata = { previousStatus, newStatus: status, ...data };
+    // Include duration in metadata when operation completes
+    if ((status === 'success' || status === 'error') && operation.performanceMetrics.duration) {
+      metadata.duration = operation.performanceMetrics.duration;
+    }
     insertOperationLog(operationId, 'status_update', status, {
       message: `Status changed from ${previousStatus} to ${status}`,
-      metadata: { previousStatus, newStatus: status, ...data },
+      metadata,
     });
   } catch (error) {
     console.error('Failed to log operation status update:', error);
   }
+
+  // Log to application logs with operation ID
+  logger.info(`Operation status updated to ${status} [op: ${operationId}]`);
 
   // Update user metrics on operation completion
   if (status === 'success' || status === 'error') {
@@ -272,6 +295,9 @@ export function logOperationStep(operationId, step, status, data = {}) {
     console.error('Failed to log operation step:', error);
   }
 
+  // Log to application logs with operation ID
+  logger.info(`Operation step ${step} ${status} [op: ${operationId}]`);
+
   // Broadcast update if significant change
   if (status === 'error' || data.broadcast) {
     broadcastUpdate(operation);
@@ -308,6 +334,9 @@ export function logOperationError(operationId, error, data = {}) {
   } catch (err) {
     console.error('Failed to log operation error:', err);
   }
+
+  // Log to application logs with operation ID
+  logger.error(`Operation error: ${errorMessage} [op: ${operationId}]`);
 
   broadcastUpdate(operation);
 }
@@ -384,5 +413,122 @@ async function updateUserMetricsForOperation(operation) {
     }
   } catch (error) {
     console.error('Failed to update user metrics:', error);
+  }
+}
+
+/**
+ * Clean up operations that are stuck in running status
+ * Queries database for stuck operations and marks them as failed
+ * Also updates in-memory operations if they exist and broadcasts updates
+ * @param {number} [maxAgeMinutes=10] - Maximum age in minutes before an operation is considered stuck
+ * @param {Object} [client] - Optional Discord client for sending DM notifications to users
+ * @returns {Promise<number>} Number of operations cleaned up
+ */
+export async function cleanupStuckOperations(maxAgeMinutes = 10, client = null) {
+  try {
+    // Query database for stuck operations
+    const stuckOperationIds = getStuckOperations(maxAgeMinutes);
+
+    if (stuckOperationIds.length === 0) {
+      return 0;
+    }
+
+    let cleanedCount = 0;
+    for (const operationId of stuckOperationIds) {
+      try {
+        // Mark as failed in database first
+        markOperationAsFailed(operationId);
+
+        // Reconstruct operation from database to get the latest status
+        // This ensures we have the complete, up-to-date operation object that matches webui format
+        // We use getRecentOperationsFromDb and filter to get the specific operation
+        const recentOps = getRecentOperationsFromDb(1000);
+        const reconstructedOp = recentOps.find(op => op.id === operationId);
+
+        if (reconstructedOp) {
+          // Update in-memory operation if it exists
+          const inMemoryOp = operations.find(op => op.id === operationId);
+          if (inMemoryOp) {
+            // Update in-memory operation with reconstructed data
+            Object.assign(inMemoryOp, reconstructedOp);
+          }
+
+          // Always broadcast the reconstructed operation to ensure webui gets the update
+          broadcastUpdate(reconstructedOp);
+        } else {
+          // Fallback: if reconstruction fails, build minimal operation from trace
+          const trace = getOperationTrace(operationId);
+          if (trace) {
+            const userId = trace?.context?.userId;
+            const operationType = trace?.context?.operationType || 'operation';
+            const createdLog = trace.logs.find(log => log.step === 'created');
+
+            const fallbackOp = {
+              id: operationId,
+              type: operationType,
+              status: 'error',
+              userId: userId || null,
+              username: trace?.context?.username || null,
+              fileSize: null,
+              timestamp: Date.now(),
+              startTime: createdLog?.timestamp || Date.now(),
+              error: 'Operation timed out - marked as failed due to inactivity',
+              stackTrace: null,
+              filePaths: [],
+              performanceMetrics: {
+                duration: createdLog ? Date.now() - createdLog.timestamp : null,
+                steps: [],
+              },
+            };
+
+            // Update in-memory operation if it exists
+            const inMemoryOp = operations.find(op => op.id === operationId);
+            if (inMemoryOp) {
+              Object.assign(inMemoryOp, fallbackOp);
+            }
+
+            broadcastUpdate(fallbackOp);
+          }
+        }
+
+        // Get user info for DM notification
+        const trace = getOperationTrace(operationId);
+        const userId = trace?.context?.userId;
+        const operationType = trace?.context?.operationType || 'operation';
+
+        // Send DM notification to user if client is provided
+        if (client && userId) {
+          try {
+            const user = await client.users.fetch(userId);
+            const errorMessage = `your ${operationType} operation timed out after ${maxAgeMinutes} minutes and was automatically cancelled. please try again.`;
+            await user.send(errorMessage);
+            logger.debug(
+              `Sent timeout notification DM to user ${userId} for operation ${operationId}`
+            );
+          } catch (dmError) {
+            // DM might fail if user has DMs disabled, log but don't fail the cleanup
+            logger.debug(
+              `Could not send timeout notification DM to user ${userId}: ${dmError.message}`
+            );
+          }
+        }
+
+        cleanedCount++;
+        logger.info(
+          `Marked stuck operation ${operationId} as failed (type: ${operationType}, user: ${userId || 'unknown'})`
+        );
+      } catch (error) {
+        logger.error(`Failed to clean up stuck operation ${operationId}:`, error);
+      }
+    }
+
+    if (cleanedCount > 0) {
+      logger.info(`Cleaned up ${cleanedCount} stuck operation(s)`);
+    }
+
+    return cleanedCount;
+  } catch (error) {
+    logger.error('Error cleaning up stuck operations:', error);
+    return 0;
   }
 }

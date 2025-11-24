@@ -52,11 +52,21 @@ const generalLimiter = rateLimit({
   standardHeaders: true,
   legacyHeaders: false,
   skip: req => {
-    // Skip rate limiting only for requests from internal Docker network
+    // Skip rate limiting only for requests from internal Docker network or localhost
     // Use req.ip which is properly handled by express 'trust proxy' setting
     // Do NOT trust X-Forwarded-For directly as it can be spoofed by attackers
     const ip = req.ip || '';
     const ipStr = String(ip);
+
+    // Allow skip for localhost (IPv4 and IPv6)
+    if (
+      ipStr === '127.0.0.1' ||
+      ipStr === '::1' ||
+      ipStr === '::ffff:127.0.0.1' ||
+      ipStr === 'localhost'
+    ) {
+      return true;
+    }
 
     // Only allow skip for known Docker network IPs (private ranges used by Docker)
     // This includes: 172.16.0.0/12, 192.168.0.0/16, 10.0.0.0/8
@@ -92,11 +102,21 @@ const statsLimiter = rateLimit({
   standardHeaders: true,
   legacyHeaders: false,
   skip: req => {
-    // Skip rate limiting only for requests from internal Docker network
+    // Skip rate limiting only for requests from internal Docker network or localhost
     // Use req.ip which is properly handled by express 'trust proxy' setting
     // Do NOT trust X-Forwarded-For directly as it can be spoofed by attackers
     const ip = req.ip || '';
     const ipStr = String(ip);
+
+    // Allow skip for localhost (IPv4 and IPv6)
+    if (
+      ipStr === '127.0.0.1' ||
+      ipStr === '::1' ||
+      ipStr === '::ffff:127.0.0.1' ||
+      ipStr === 'localhost'
+    ) {
+      return true;
+    }
 
     // Only allow skip for known Docker network IPs (private ranges used by Docker)
     // This includes: 172.16.0.0/12, 192.168.0.0/16, 10.0.0.0/8
@@ -115,9 +135,6 @@ const statsLimiter = rateLimit({
     return false;
   },
 });
-
-// Apply general rate limiting to all requests
-app.use(generalLimiter);
 
 // Get absolute path to GIF storage
 function getStoragePath() {
@@ -269,6 +286,7 @@ async function checkStorageAccess(dirPath) {
 }
 
 // Enhanced health check endpoint - restricted to internal network
+// Placed before rate limiter to exclude from rate limiting
 app.get('/health', restrictToInternal, async (req, res) => {
   const uptime = process.uptime();
   logger.debug('Health check requested');
@@ -327,6 +345,9 @@ app.get('/health', restrictToInternal, async (req, res) => {
 
   res.json(health);
 });
+
+// Apply general rate limiting to all requests (after /health route)
+app.use(generalLimiter);
 
 // API health endpoint (for dashboard)
 app.get('/api/health', (req, res) => {

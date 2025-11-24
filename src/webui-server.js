@@ -82,6 +82,10 @@ const CACHE_TTL = 60 * 1000; // 60 seconds
 const STATS_CACHE_TTL = 30 * 1000; // 30 seconds - match Monitoring page refresh interval
 let statsCache = null;
 let statsCacheTimestamp = 0;
+// Health cache to reduce load on main server
+const HEALTH_CACHE_TTL = 30 * 1000; // 30 seconds - match stats cache TTL
+let healthCache = null;
+let healthCacheTimestamp = 0;
 let cryptoPriceCache = {
   data: null,
   timestamp: null,
@@ -197,14 +201,39 @@ app.get('/api/stats', async (req, res) => {
 // Proxy endpoint to fetch health from main server
 app.get('/api/health', async (req, res) => {
   try {
+    // Check cache first
+    const now = Date.now();
+    if (healthCache && now - healthCacheTimestamp < HEALTH_CACHE_TTL) {
+      logger.debug('Returning cached health');
+      return res.json(healthCache);
+    }
+
     logger.debug('Fetching health from main server');
     const response = await axios.get(`${MAIN_SERVER_URL}/health`, {
       timeout: 5000,
       headers: getAuthHeaders(),
     });
+
+    // Cache the response
+    healthCache = response.data;
+    healthCacheTimestamp = now;
+
     res.json(response.data);
   } catch (error) {
+    // If we have cached data and the request failed, return cached data
+    if (healthCache && error.response?.status === 429) {
+      logger.warn('Rate limited by main server, returning cached health');
+      return res.json(healthCache);
+    }
+
     logger.error('Failed to fetch health from main server:', error);
+
+    // If we have stale cache, return it anyway as fallback
+    if (healthCache) {
+      logger.warn('Returning stale cached health due to error');
+      return res.json(healthCache);
+    }
+
     res.status(500).json({
       error: 'failed to fetch health',
       message: error.message,

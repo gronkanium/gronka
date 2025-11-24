@@ -499,7 +499,7 @@
                 {#if log.metadata}
                   <details>
                     <summary>view</summary>
-                    <pre>{log.metadata}</pre>
+                    <pre>{typeof log.metadata === 'string' ? log.metadata : JSON.stringify(log.metadata, null, 2)}</pre>
                   </details>
                 {:else}
                   <span class="no-data">-</span>

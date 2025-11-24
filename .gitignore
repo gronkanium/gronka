@@ -97,6 +97,9 @@ src/public/assets/
 # Test coverage
 coverage/
 
+# Code scanning results
+code-scanning-issues.json
+
 scripts/setup-glab-auth.sh
 scripts/ci-status.sh
 scripts/check-ci.sh

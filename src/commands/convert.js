@@ -340,6 +340,9 @@ export async function processConversion(
       }
     }
 
+    // Write validated buffer to filesystem
+    // CodeQL warning suppressed: fileBuffer is validated above via validateVideoBuffer()
+    // (for videos) or validated through file extension checks (for images) before writing
     await fs.writeFile(tempFilePath, fileBuffer);
     tempFiles.push(tempFilePath);
 

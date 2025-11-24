@@ -1,17 +1,157 @@
 <script>
+  import { onMount, onDestroy } from 'svelte';
+  import { currentRoute, initRouter, navigate } from './router.js';
+  import { useWebSocket, ensureConnected, connected as wsConnected } from './websocket-store.js';
+  import { BarChart3, Users as UsersIcon, Settings, FileText, TrendingUp, Bell, ChevronLeft, ChevronRight } from 'lucide-svelte';
   import Stats from './Stats.svelte';
   import Health from './Health.svelte';
   import Operations from './Operations.svelte';
+  import Logs from './Logs.svelte';
+  import Users from './Users.svelte';
+  import UserProfile from './UserProfile.svelte';
+  import Monitoring from './Monitoring.svelte';
+  import Alerts from './Alerts.svelte';
+
+  let sidebarOpen = true;
+  let wsCleanup = null;
+  let connectionCheckInterval = null;
+
+  onMount(() => {
+    initRouter();
+    // Initialize websocket connection at app level to persist across page navigations
+    wsCleanup = useWebSocket();
+    
+    // Periodically check connection and reconnect if needed
+    connectionCheckInterval = setInterval(() => {
+      ensureConnected();
+    }, 5000); // Check every 5 seconds
+  });
+
+  onDestroy(() => {
+    // Cleanup websocket when app is destroyed
+    if (connectionCheckInterval) {
+      clearInterval(connectionCheckInterval);
+    }
+    if (wsCleanup) {
+      wsCleanup();
+    }
+  });
+
+  function toggleSidebar() {
+    sidebarOpen = !sidebarOpen;
+  }
+
+  function navigateTo(page) {
+    navigate(page);
+  }
+
+  $: activePage = $currentRoute.page;
 </script>
 
-<main>
-  <header>
-    <h1>gronka</h1>
-  </header>
-  <div class="content">
-    <Stats />
-    <Health />
-    <Operations />
+<main class:sidebar-open={sidebarOpen}>
+  <nav class="sidebar" class:open={sidebarOpen}>
+    <div class="sidebar-header">
+      <h1>gronka</h1>
+      <button class="toggle-btn" on:click={toggleSidebar}>
+        {#if sidebarOpen}
+          <ChevronLeft size={16} />
+        {:else}
+          <ChevronRight size={16} />
+        {/if}
+      </button>
+    </div>
+    <ul class="nav-menu">
+      <li class:active={activePage === 'dashboard'}>
+        <button on:click={() => navigateTo('dashboard')}>
+          <span class="icon"><BarChart3 size={20} /></span>
+          {#if sidebarOpen}<span class="label">dashboard</span>{/if}
+        </button>
+      </li>
+      <li class:active={activePage === 'users'}>
+        <button on:click={() => navigateTo('users')}>
+          <span class="icon"><UsersIcon size={20} /></span>
+          {#if sidebarOpen}<span class="label">users</span>{/if}
+        </button>
+      </li>
+      <li class:active={activePage === 'operations'}>
+        <button on:click={() => navigateTo('operations')}>
+          <span class="icon"><Settings size={20} /></span>
+          {#if sidebarOpen}<span class="label">operations</span>{/if}
+        </button>
+      </li>
+      <li class:active={activePage === 'logs'}>
+        <button on:click={() => navigateTo('logs')}>
+          <span class="icon"><FileText size={20} /></span>
+          {#if sidebarOpen}<span class="label">logs</span>{/if}
+        </button>
+      </li>
+      <li class:active={activePage === 'monitoring'}>
+        <button on:click={() => navigateTo('monitoring')}>
+          <span class="icon"><TrendingUp size={20} /></span>
+          {#if sidebarOpen}<span class="label">monitoring</span>{/if}
+        </button>
+      </li>
+      <li class:active={activePage === 'alerts'}>
+        <button on:click={() => navigateTo('alerts')}>
+          <span class="icon"><Bell size={20} /></span>
+          {#if sidebarOpen}<span class="label">alerts</span>{/if}
+        </button>
+      </li>
+    </ul>
+  </nav>
+
+  <div class="main-content">
+    {#if activePage === 'dashboard'}
+      <div class="page-header">
+        <h2>dashboard</h2>
+      </div>
+      <div class="dashboard-grid">
+        <Stats />
+        <Health />
+      </div>
+    {:else if activePage === 'users'}
+      <div class="page-header">
+        <h2>users</h2>
+      </div>
+      <div class="page-content">
+        <Users />
+      </div>
+    {:else if activePage === 'user-profile'}
+      <div class="page-header">
+        <h2>user profile</h2>
+      </div>
+      <div class="page-content">
+        <UserProfile />
+      </div>
+    {:else if activePage === 'operations'}
+      <div class="page-header">
+        <h2>operations</h2>
+      </div>
+      <div class="page-content">
+        <Operations />
+      </div>
+    {:else if activePage === 'logs'}
+      <div class="page-header">
+        <h2>logs</h2>
+      </div>
+      <div class="page-content">
+        <Logs />
+      </div>
+    {:else if activePage === 'monitoring'}
+      <div class="page-header">
+        <h2>monitoring</h2>
+      </div>
+      <div class="page-content">
+        <Monitoring />
+      </div>
+    {:else if activePage === 'alerts'}
+      <div class="page-header">
+        <h2>alerts</h2>
+      </div>
+      <div class="page-content">
+        <Alerts />
+      </div>
+    {/if}
   </div>
 </main>
 
@@ -32,46 +172,174 @@
   main {
     min-height: 100vh;
     display: flex;
+  }
+
+  .sidebar {
+    background-color: #0d0d0d;
+    border-right: 1px solid #333;
+    transition: width 0.3s ease;
+    width: 60px;
+    min-height: 100vh;
+    position: sticky;
+    top: 0;
+    display: flex;
     flex-direction: column;
   }
 
-  header {
+  .sidebar.open {
+    width: 220px;
+  }
+
+  .sidebar-header {
+    padding: 1.5rem 1rem;
+    border-bottom: 1px solid #333;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+  }
+
+  .sidebar-header h1 {
+    margin: 0;
+    font-size: 1.25rem;
+    font-weight: 500;
+    color: #fff;
+    white-space: nowrap;
+    overflow: hidden;
+    opacity: 0;
+    transition: opacity 0.3s ease;
+  }
+
+  .sidebar.open .sidebar-header h1 {
+    opacity: 1;
+  }
+
+  .toggle-btn {
+    background: none;
+    border: none;
+    color: #aaa;
+    font-size: 1rem;
+    cursor: pointer;
+    padding: 0.25rem;
+    transition: color 0.2s;
+  }
+
+  .toggle-btn:hover {
+    color: #fff;
+  }
+
+  .nav-menu {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+    flex: 1;
+  }
+
+  .nav-menu li {
+    margin: 0;
+  }
+
+  .nav-menu button {
+    width: 100%;
+    background: none;
+    border: none;
+    color: #aaa;
+    padding: 1rem;
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    cursor: pointer;
+    transition: background-color 0.2s, color 0.2s;
+    text-align: left;
+    font-size: 0.95rem;
+  }
+
+  .nav-menu button:hover {
+    background-color: #1a1a1a;
+    color: #fff;
+  }
+
+  .nav-menu li.active button {
+    background-color: #2a2a2a;
+    color: #fff;
+    border-left: 3px solid #51cf66;
+  }
+
+  .nav-menu .icon {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 1.5rem;
+    color: inherit;
+  }
+
+  .nav-menu .label {
+    white-space: nowrap;
+  }
+
+  .main-content {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+  }
+
+  .page-header {
     padding: 2rem;
     border-bottom: 1px solid #333;
   }
 
-  header h1 {
+  .page-header h2 {
     margin: 0;
     font-size: 1.5rem;
     font-weight: 500;
     color: #fff;
   }
 
-  .content {
+  .page-content {
     flex: 1;
     padding: 2rem;
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-    align-items: start;
-    gap: 2rem;
-    row-gap: 1rem;
-    max-width: 1200px;
-    width: 100%;
-    margin: 0 auto;
+    overflow-y: auto;
   }
 
-  .content > :global(section:last-child) {
-    margin-top: 0;
+  .dashboard-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 2rem;
+    padding: 2rem;
+  }
+
+  @media (max-width: 1024px) {
+    .dashboard-grid {
+      grid-template-columns: 1fr;
+    }
   }
 
   @media (max-width: 768px) {
-    .content {
-      grid-template-columns: 1fr;
+    .sidebar {
+      position: fixed;
+      z-index: 1000;
+    }
+
+    .sidebar:not(.open) {
+      width: 0;
+      overflow: hidden;
+    }
+
+    .main-content {
+      width: 100%;
+    }
+
+    .page-header {
       padding: 1rem;
     }
 
-    header {
+    .page-content {
       padding: 1rem;
+    }
+
+    .dashboard-grid {
+      padding: 1rem;
+      gap: 1rem;
     }
   }
 </style>

@@ -1,0 +1,838 @@
+<script>
+  import { onMount } from 'svelte';
+  import { currentRoute, navigate } from './router.js';
+  import { userMetrics as wsUserMetrics, operations as wsOperations, connected as wsConnected } from './websocket-store.js';
+
+  let user = null;
+  let metrics = null;
+  let operations = [];
+  let activity = [];
+  let media = [];
+  let mediaTotal = 0;
+  let mediaLimit = 25;
+  let mediaOffset = 0;
+  let mediaLoading = false;
+  let loading = true;
+  let error = null;
+
+  $: userId = $currentRoute.params.userId;
+
+  async function fetchUserProfile() {
+    if (!userId) return;
+
+    loading = true;
+    error = null;
+    try {
+      // Fetch user profile
+      const profileResponse = await fetch(`/api/users/${userId}`);
+      if (!profileResponse.ok) throw new Error('failed to fetch user profile');
+      const profileData = await profileResponse.json();
+      user = profileData.user;
+      metrics = profileData.metrics;
+
+      // Fetch user operations
+      const opsResponse = await fetch(`/api/users/${userId}/operations?limit=50`);
+      if (!opsResponse.ok) throw new Error('failed to fetch operations');
+      const opsData = await opsResponse.json();
+      operations = opsData.operations || [];
+
+      // Fetch user activity (limited to 10 most recent)
+      const activityResponse = await fetch(`/api/users/${userId}/activity?limit=10`);
+      if (!activityResponse.ok) throw new Error('failed to fetch activity');
+      const activityData = await activityResponse.json();
+      activity = (activityData.activity || []).slice(0, 10);
+
+      // Fetch user media
+      await fetchUserMedia();
+    } catch (err) {
+      error = err.message;
+    } finally {
+      loading = false;
+    }
+  }
+
+  async function fetchUserMedia() {
+    if (!userId) return;
+
+    mediaLoading = true;
+    try {
+      const response = await fetch(`/api/users/${userId}/media?limit=${mediaLimit}&offset=${mediaOffset}`);
+      if (!response.ok) throw new Error('failed to fetch user media');
+      const data = await response.json();
+      media = data.media || [];
+      mediaTotal = data.total || 0;
+    } catch (err) {
+      console.error('Failed to fetch user media:', err);
+      media = [];
+      mediaTotal = 0;
+    } finally {
+      mediaLoading = false;
+    }
+  }
+
+  function handleMediaPrevPage() {
+    if (mediaOffset > 0) {
+      mediaOffset = Math.max(0, mediaOffset - mediaLimit);
+      fetchUserMedia();
+    }
+  }
+
+  function handleMediaNextPage() {
+    if (mediaOffset + mediaLimit < mediaTotal) {
+      mediaOffset += mediaLimit;
+      fetchUserMedia();
+    }
+  }
+
+  function truncateUrl(url) {
+    if (!url) return 'N/A';
+    if (url.length <= 40) return url;
+    return url.substring(0, 37) + '...';
+  }
+
+  function formatBytes(bytes) {
+    if (!bytes) return '0 B';
+    const k = 1024;
+    const sizes = ['B', 'KB', 'MB', 'GB'];
+    const i = Math.floor(Math.log(bytes) / Math.log(k));
+    return `${parseFloat((bytes / Math.pow(k, i)).toFixed(2))} ${sizes[i]}`;
+  }
+
+  function formatTimestamp(timestamp) {
+    if (!timestamp) return 'N/A';
+    const date = new Date(timestamp);
+    return date.toLocaleString();
+  }
+
+  function formatRelativeTime(timestamp) {
+    if (!timestamp) return 'N/A';
+    const now = Date.now();
+    const diff = now - timestamp;
+    const seconds = Math.floor(diff / 1000);
+    const minutes = Math.floor(seconds / 60);
+    const hours = Math.floor(minutes / 60);
+    const days = Math.floor(hours / 24);
+
+    if (seconds < 60) return `${seconds}s ago`;
+    if (minutes < 60) return `${minutes}m ago`;
+    if (hours < 24) return `${hours}h ago`;
+    if (days < 7) return `${days}d ago`;
+    return formatTimestamp(timestamp);
+  }
+
+  function calculateSuccessRate() {
+    if (!metrics || !metrics.total_commands) return 0;
+    return ((metrics.successful_commands / metrics.total_commands) * 100).toFixed(1);
+  }
+
+  function goBack() {
+    navigate('users');
+  }
+
+  onMount(() => {
+    fetchUserProfile();
+    
+    // Subscribe to WebSocket user metrics (connection managed by App.svelte)
+    const unsubscribeMetrics = wsUserMetrics.subscribe(metricsMap => {
+      if (userId && metricsMap.has(userId)) {
+        const updatedMetrics = metricsMap.get(userId);
+        if (updatedMetrics) {
+          metrics = updatedMetrics;
+        }
+      }
+    });
+    
+    // Subscribe to WebSocket operations (filtered by current userId)
+    const unsubscribeOperations = wsOperations.subscribe(wsOps => {
+      if (userId) {
+        // Filter operations for this user
+        const userOps = wsOps.filter(op => op.userId === userId);
+        if (userOps.length > 0) {
+          // Merge with existing operations, avoiding duplicates
+          const existingIds = new Set(operations.map(op => op.id));
+          const newOps = userOps.filter(op => !existingIds.has(op.id));
+          if (newOps.length > 0) {
+            operations = [...newOps, ...operations].slice(0, 50);
+          }
+        }
+      }
+    });
+    
+    return () => {
+      unsubscribeMetrics();
+      unsubscribeOperations();
+    };
+  });
+
+  $: if (userId) {
+    fetchUserProfile();
+    // Reset media pagination when userId changes
+    mediaOffset = 0;
+  }
+</script>
+
+{#if loading}
+  <div class="loading">loading user profile...</div>
+{:else if error}
+  <div class="error">error: {error}</div>
+  <button on:click={fetchUserProfile}>retry</button>
+{:else if !user && !metrics}
+  <div class="empty">user not found</div>
+  <button on:click={goBack}>back to users</button>
+{:else}
+  <div class="profile-container">
+    <div class="profile-header-section">
+      <div class="profile-header">
+        <button class="back-btn" on:click={goBack}>← back to users</button>
+        <div class="header-info">
+          <h2>{metrics?.username || user?.username || 'unknown user'}</h2>
+          <div class="user-id">user id: {userId}</div>
+        </div>
+      </div>
+
+      <div class="stats-grid">
+        <div class="stat-card">
+          <div class="stat-value">{metrics?.total_commands || 0}</div>
+          <div class="stat-label">total commands</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-value success">{metrics?.successful_commands || 0}</div>
+          <div class="stat-label">successful</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-value error">{metrics?.failed_commands || 0}</div>
+          <div class="stat-label">failed</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-value">{calculateSuccessRate()}%</div>
+          <div class="stat-label">success rate</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-value">{formatBytes(metrics?.total_file_size || 0)}</div>
+          <div class="stat-label">data processed</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-value">{formatRelativeTime(metrics?.last_command_at)}</div>
+          <div class="stat-label">last active</div>
+        </div>
+      </div>
+
+      <div class="commands-breakdown">
+        <div class="breakdown-grid">
+          <div class="breakdown-item">
+            <span class="label">convert</span>
+            <span class="value">{metrics?.total_convert || 0}</span>
+          </div>
+          <div class="breakdown-item">
+            <span class="label">download</span>
+            <span class="value">{metrics?.total_download || 0}</span>
+          </div>
+          <div class="breakdown-item">
+            <span class="label">optimize</span>
+            <span class="value">{metrics?.total_optimize || 0}</span>
+          </div>
+          <div class="breakdown-item">
+            <span class="label">info</span>
+            <span class="value">{metrics?.total_info || 0}</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    {#if operations.length > 0}
+      <div class="operations-section">
+        <h3>recent operations</h3>
+        <div class="operations-table-container">
+          <table class="operations-table">
+            <thead>
+              <tr>
+                <th>type</th>
+                <th>status</th>
+                <th>time</th>
+                <th>file size</th>
+                <th>error</th>
+              </tr>
+            </thead>
+            <tbody>
+              {#each operations as operation}
+                <tr class:error={operation.status === 'error'}>
+                  <td class="op-type">{operation.type}</td>
+                  <td><span class="operation-status status-{operation.status}">{operation.status}</span></td>
+                  <td class="op-time">{formatRelativeTime(operation.timestamp)}</td>
+                  <td class="op-size">{operation.fileSize ? formatBytes(operation.fileSize) : '—'}</td>
+                  <td class="op-error">{operation.error || '—'}</td>
+                </tr>
+              {/each}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    {/if}
+
+    {#if !mediaLoading && media.length > 0}
+      <div class="media-section">
+        <h3>user media</h3>
+        <div class="media-table-container">
+          <table class="media-table">
+            <thead>
+              <tr>
+                <th>url</th>
+                <th>file type</th>
+                <th>date</th>
+                <th>size</th>
+              </tr>
+            </thead>
+            <tbody>
+              {#each media as item}
+                <tr>
+                  <td class="url-cell">
+                    <a href={item.file_url} target="_blank" rel="noopener noreferrer" title={item.file_url}>
+                      {truncateUrl(item.file_url)}
+                    </a>
+                  </td>
+                  <td class="type-cell">{item.file_type || 'N/A'}</td>
+                  <td class="date-cell">{formatTimestamp(item.processed_at)}</td>
+                  <td class="size-cell">N/A</td>
+                </tr>
+              {/each}
+            </tbody>
+          </table>
+        </div>
+        {#if mediaTotal > mediaLimit}
+          <div class="media-pagination">
+            <div class="pagination-info">
+              showing {mediaOffset + 1}-{Math.min(mediaOffset + mediaLimit, mediaTotal)} of {mediaTotal}
+            </div>
+            <div class="pagination-controls">
+              <button on:click={handleMediaPrevPage} disabled={mediaOffset === 0}>
+                previous
+              </button>
+              <button on:click={handleMediaNextPage} disabled={mediaOffset + mediaLimit >= mediaTotal}>
+                next
+              </button>
+            </div>
+          </div>
+        {/if}
+      </div>
+    {:else if mediaLoading}
+      <div class="media-section">
+        <h3>user media</h3>
+        <div class="loading-inline">loading media...</div>
+      </div>
+    {/if}
+
+    {#if activity.length > 0}
+      <div class="activity-section">
+        <h3>activity timeline</h3>
+        <div class="activity-table-container">
+          <table class="activity-table">
+            <thead>
+              <tr>
+                <th>time</th>
+                <th>level</th>
+                <th>message</th>
+              </tr>
+            </thead>
+            <tbody>
+              {#each activity as log}
+                <tr>
+                  <td class="activity-time">{formatRelativeTime(log.timestamp)}</td>
+                  <td><span class="activity-level level-{log.level.toLowerCase()}">{log.level}</span></td>
+                  <td class="activity-message">{log.message}</td>
+                </tr>
+              {/each}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    {/if}
+  </div>
+{/if}
+
+<style>
+  .profile-container {
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+  }
+
+  .profile-header-section {
+    padding: 1rem;
+    background-color: #222;
+    border: 1px solid #333;
+    border-radius: 4px;
+  }
+
+  .profile-header {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+    margin-bottom: 1rem;
+  }
+
+  .header-info {
+    display: flex;
+    flex-direction: column;
+    gap: 0.25rem;
+  }
+
+  .back-btn {
+    align-self: flex-start;
+    background: none;
+    border: 1px solid #444;
+    color: #aaa;
+    padding: 0.5rem 1rem;
+    cursor: pointer;
+    font-size: 0.9rem;
+    border-radius: 3px;
+  }
+
+  .back-btn:hover {
+    background-color: #2a2a2a;
+    color: #fff;
+  }
+
+  .profile-header h2 {
+    margin: 0;
+    font-size: 1.5rem;
+    font-weight: 500;
+    color: #fff;
+  }
+
+  .user-id {
+    font-size: 0.85rem;
+    color: #888;
+    font-family: monospace;
+  }
+
+  .stats-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+    gap: 0.75rem;
+    margin-bottom: 1rem;
+  }
+
+  .stat-card {
+    padding: 0.75rem;
+    background-color: #1a1a1a;
+    border: 1px solid #333;
+    border-radius: 3px;
+  }
+
+  .stat-value {
+    font-size: 1.5rem;
+    font-weight: 600;
+    color: #51cf66;
+    margin-bottom: 0.25rem;
+  }
+
+  .stat-value.success {
+    color: #51cf66;
+  }
+
+  .stat-value.error {
+    color: #ff6b6b;
+  }
+
+  .stat-label {
+    font-size: 0.8rem;
+    color: #aaa;
+  }
+
+  .commands-breakdown {
+    margin-top: 0.5rem;
+  }
+
+  .breakdown-grid {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 0.5rem;
+  }
+
+  .breakdown-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 0.5rem;
+    background-color: #1a1a1a;
+    border-radius: 3px;
+  }
+
+  .breakdown-item .label {
+    color: #aaa;
+    font-size: 0.8rem;
+  }
+
+  .breakdown-item .value {
+    color: #fff;
+    font-weight: 500;
+    font-size: 0.95rem;
+  }
+
+  .operations-section,
+  .activity-section,
+  .media-section {
+    padding: 1rem;
+    background-color: #222;
+    border: 1px solid #333;
+    border-radius: 4px;
+  }
+
+  .operations-section h3,
+  .activity-section h3,
+  .media-section h3 {
+    margin: 0 0 0.75rem 0;
+    font-size: 1rem;
+    font-weight: 500;
+    color: #fff;
+  }
+
+  .operations-table-container {
+    overflow-x: auto;
+  }
+
+  .operations-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.85rem;
+  }
+
+  .operations-table thead {
+    background-color: #2a2a2a;
+  }
+
+  .operations-table th {
+    padding: 0.5rem;
+    text-align: left;
+    font-weight: 500;
+    color: #aaa;
+    border-bottom: 1px solid #333;
+    font-size: 0.8rem;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+  }
+
+  .operations-table tbody tr {
+    border-bottom: 1px solid #2a2a2a;
+  }
+
+  .operations-table tbody tr:hover {
+    background-color: #2a2a2a;
+  }
+
+  .operations-table tbody tr.error {
+    background-color: rgba(255, 107, 107, 0.05);
+  }
+
+  .operations-table td {
+    padding: 0.5rem;
+    color: #e0e0e0;
+  }
+
+  .op-type {
+    font-weight: 500;
+    text-transform: capitalize;
+  }
+
+  .op-time {
+    color: #888;
+    font-size: 0.8rem;
+  }
+
+  .op-size {
+    color: #aaa;
+    font-size: 0.8rem;
+  }
+
+  .op-error {
+    color: #ff6b6b;
+    font-size: 0.8rem;
+    font-family: monospace;
+    max-width: 300px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .operation-status {
+    padding: 0.15rem 0.5rem;
+    border-radius: 3px;
+    font-size: 0.75rem;
+    font-weight: 500;
+    text-transform: uppercase;
+    display: inline-block;
+  }
+
+  .status-pending {
+    background-color: rgba(136, 136, 136, 0.2);
+    color: #888;
+  }
+
+  .status-running {
+    background-color: rgba(81, 207, 102, 0.2);
+    color: #51cf66;
+  }
+
+  .status-success {
+    background-color: rgba(81, 207, 102, 0.2);
+    color: #51cf66;
+  }
+
+  .status-error {
+    background-color: rgba(255, 107, 107, 0.2);
+    color: #ff6b6b;
+  }
+
+  .activity-table-container {
+    overflow-x: auto;
+  }
+
+  .activity-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.85rem;
+  }
+
+  .activity-table thead {
+    background-color: #2a2a2a;
+  }
+
+  .activity-table th {
+    padding: 0.5rem;
+    text-align: left;
+    font-weight: 500;
+    color: #aaa;
+    border-bottom: 1px solid #333;
+    font-size: 0.8rem;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+  }
+
+  .activity-table tbody tr {
+    border-bottom: 1px solid #2a2a2a;
+  }
+
+  .activity-table tbody tr:hover {
+    background-color: #2a2a2a;
+  }
+
+  .activity-table td {
+    padding: 0.5rem;
+    color: #e0e0e0;
+  }
+
+  .activity-time {
+    color: #888;
+    font-size: 0.8rem;
+    font-family: monospace;
+    white-space: nowrap;
+  }
+
+  .activity-level {
+    padding: 0.15rem 0.4rem;
+    border-radius: 3px;
+    font-size: 0.7rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    display: inline-block;
+  }
+
+  .level-error {
+    background-color: rgba(255, 107, 107, 0.2);
+    color: #ff6b6b;
+  }
+
+  .level-warn {
+    background-color: rgba(255, 217, 61, 0.2);
+    color: #ffd93d;
+  }
+
+  .level-info {
+    background-color: rgba(81, 207, 102, 0.2);
+    color: #51cf66;
+  }
+
+  .level-debug {
+    background-color: rgba(136, 136, 136, 0.2);
+    color: #888;
+  }
+
+  .activity-message {
+    color: #e0e0e0;
+    font-size: 0.8rem;
+    font-family: monospace;
+    max-width: 500px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .media-table-container {
+    overflow-x: auto;
+    margin-bottom: 1rem;
+  }
+
+  .media-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.9rem;
+  }
+
+  .media-table thead {
+    background-color: #2a2a2a;
+  }
+
+  .media-table th {
+    padding: 0.5rem;
+    text-align: left;
+    font-weight: 500;
+    color: #aaa;
+    border-bottom: 1px solid #333;
+    font-size: 0.8rem;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+  }
+
+  .media-table tbody tr {
+    border-bottom: 1px solid #2a2a2a;
+  }
+
+  .media-table tbody tr:hover {
+    background-color: #2a2a2a;
+  }
+
+  .media-table td {
+    padding: 0.5rem;
+    color: #e0e0e0;
+    font-size: 0.85rem;
+  }
+
+  .url-cell {
+    max-width: 300px;
+  }
+
+  .url-cell a {
+    color: #51cf66;
+    text-decoration: none;
+    word-break: break-all;
+  }
+
+  .url-cell a:hover {
+    text-decoration: underline;
+    color: #69db7c;
+  }
+
+  .type-cell {
+    text-transform: capitalize;
+    color: #aaa;
+  }
+
+  .date-cell {
+    color: #888;
+    font-size: 0.8rem;
+  }
+
+  .size-cell {
+    color: #888;
+    font-size: 0.8rem;
+  }
+
+  .media-pagination {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 0.5rem 0;
+    margin-top: 0.75rem;
+    border-top: 1px solid #333;
+  }
+
+  .pagination-info {
+    font-size: 0.85rem;
+    color: #aaa;
+  }
+
+  .pagination-controls {
+    display: flex;
+    gap: 0.5rem;
+  }
+
+  .pagination-controls button {
+    padding: 0.4rem 0.8rem;
+    font-size: 0.85rem;
+    background-color: #444;
+    color: #fff;
+    border: 1px solid #555;
+    cursor: pointer;
+    border-radius: 3px;
+  }
+
+  .pagination-controls button:hover:not(:disabled) {
+    background-color: #555;
+  }
+
+  .pagination-controls button:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+  }
+
+  .loading,
+  .error {
+    padding: 2rem;
+    text-align: center;
+  }
+
+  .loading {
+    color: #888;
+  }
+
+  .error {
+    color: #ff6b6b;
+  }
+
+  .loading-inline {
+    color: #888;
+    font-size: 0.85rem;
+    padding: 0.5rem 0;
+  }
+
+  @media (max-width: 768px) {
+    .stats-grid {
+      grid-template-columns: repeat(2, 1fr);
+    }
+
+    .breakdown-grid {
+      grid-template-columns: repeat(2, 1fr);
+    }
+
+    .operations-table,
+    .activity-table,
+    .media-table {
+      font-size: 0.75rem;
+    }
+
+    .operations-table th,
+    .operations-table td,
+    .activity-table th,
+    .activity-table td,
+    .media-table th,
+    .media-table td {
+      padding: 0.4rem 0.25rem;
+    }
+
+    .url-cell {
+      max-width: 150px;
+    }
+
+    .op-error,
+    .activity-message {
+      max-width: 200px;
+    }
+
+    .media-pagination {
+      flex-direction: column;
+      gap: 0.5rem;
+      align-items: flex-start;
+    }
+  }
+</style>
+

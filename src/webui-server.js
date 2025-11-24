@@ -7,8 +7,35 @@ import rateLimit from 'express-rate-limit';
 import { createLogger, setLogBroadcastCallback } from './utils/logger.js';
 import { webuiConfig } from './utils/config.js';
 import { ConfigurationError } from './utils/errors.js';
-import { setBroadcastCallback } from './utils/operations-tracker.js';
-import { getLogs, getLogsCount, getLogComponents, getLogMetrics } from './utils/database.js';
+import {
+  setBroadcastCallback,
+  setUserMetricsBroadcastCallback,
+} from './utils/operations-tracker.js';
+import { setBroadcastCallback as setAlertBroadcastCallback } from './utils/ntfy-notifier.js';
+import {
+  initDatabase,
+  getLogs,
+  getLogsCount,
+  getLogComponents,
+  getLogMetrics,
+  getAllUsersMetrics,
+  getUserMetricsCount,
+  getUserMetrics,
+  getUser,
+  getOperationLogs,
+  getSystemMetrics,
+  getLatestSystemMetrics,
+  getAlerts,
+  getAlertsCount,
+  getUserMedia,
+  getUserMediaCount,
+} from './utils/database.js';
+import {
+  collectSystemMetrics,
+  startMetricsCollection,
+  stopMetricsCollection,
+  setBroadcastCallback as setSystemMetricsBroadcastCallback,
+} from './utils/system-metrics.js';
 
 // In-memory storage for operations (mirror of bot's operations)
 const operations = [];
@@ -213,6 +240,22 @@ app.post('/api/operations', express.json(), (req, res) => {
   }
 });
 
+// Endpoint for bot to send user metrics updates
+app.post('/api/user-metrics', express.json(), (req, res) => {
+  try {
+    const { userId, metrics } = req.body;
+    if (!userId || !metrics) {
+      return res.status(400).json({ error: 'invalid user metrics data' });
+    }
+    // Broadcast the user metrics update to all connected websocket clients
+    broadcastUserMetrics(userId, metrics);
+    res.json({ success: true });
+  } catch (error) {
+    logger.error('Error handling user metrics update:', error);
+    res.status(500).json({ error: 'failed to process user metrics update' });
+  }
+});
+
 // Crypto prices endpoint with caching
 app.get('/api/crypto-prices', async (req, res) => {
   try {
@@ -273,9 +316,7 @@ app.get('/api/logs', (req, res) => {
       if (Array.isArray(level)) {
         // Multiple level parameters: flatten and trim all values
         options.level = level.flatMap(l =>
-          typeof l === 'string'
-            ? l.split(',').map(sub => sub.trim())
-            : []
+          typeof l === 'string' ? l.split(',').map(sub => sub.trim()) : []
         );
       } else if (typeof level === 'string') {
         if (level.includes(',')) {
@@ -342,10 +383,280 @@ app.get('/api/logs/components', (req, res) => {
   }
 });
 
+// Users list endpoint
+app.get('/api/users', (req, res) => {
+  try {
+    const {
+      search,
+      sortBy = 'total_commands',
+      sortDesc = 'true',
+      limit = 50,
+      offset = 0,
+    } = req.query;
+
+    const options = {
+      search,
+      sortBy,
+      sortDesc: sortDesc === 'true',
+      limit: parseInt(limit, 10),
+      offset: parseInt(offset, 10),
+    };
+
+    const users = getAllUsersMetrics(options);
+    const total = getUserMetricsCount({ search });
+
+    res.json({
+      users,
+      total,
+      limit: options.limit,
+      offset: options.offset,
+    });
+  } catch (error) {
+    logger.error('Failed to fetch users:', error);
+    res.status(500).json({
+      error: 'failed to fetch users',
+      message: error.message,
+    });
+  }
+});
+
+// User profile endpoint
+app.get('/api/users/:userId', (req, res) => {
+  try {
+    const { userId } = req.params;
+
+    const userMetrics = getUserMetrics(userId);
+    const userInfo = getUser(userId);
+
+    if (!userMetrics && !userInfo) {
+      return res.status(404).json({ error: 'user not found' });
+    }
+
+    res.json({
+      user: userInfo,
+      metrics: userMetrics,
+    });
+  } catch (error) {
+    logger.error('Failed to fetch user profile:', error);
+    res.status(500).json({
+      error: 'failed to fetch user profile',
+      message: error.message,
+    });
+  }
+});
+
+// User operations endpoint (from recent operations in memory)
+app.get('/api/users/:userId/operations', (req, res) => {
+  try {
+    const { userId } = req.params;
+    const { limit = 50 } = req.query;
+
+    // Filter operations by user from in-memory store
+    const userOps = operations.filter(op => op.userId === userId).slice(0, parseInt(limit, 10));
+
+    res.json({
+      operations: userOps,
+      total: userOps.length,
+    });
+  } catch (error) {
+    logger.error('Failed to fetch user operations:', error);
+    res.status(500).json({
+      error: 'failed to fetch user operations',
+      message: error.message,
+    });
+  }
+});
+
+// User activity timeline (from logs)
+app.get('/api/users/:userId/activity', (req, res) => {
+  try {
+    const { userId } = req.params;
+    const { limit = 100, offset = 0 } = req.query;
+
+    // Get logs related to this user
+    const logs = getLogs({
+      search: userId,
+      limit: parseInt(limit, 10),
+      offset: parseInt(offset, 10),
+      orderDesc: true,
+    });
+
+    const total = getLogsCount({ search: userId });
+
+    res.json({
+      activity: logs,
+      total,
+    });
+  } catch (error) {
+    logger.error('Failed to fetch user activity:', error);
+    res.status(500).json({
+      error: 'failed to fetch user activity',
+      message: error.message,
+    });
+  }
+});
+
+// User media endpoint (from processed_urls)
+app.get('/api/users/:userId/media', async (req, res) => {
+  try {
+    const { userId } = req.params;
+    const { limit = 25, offset = 0 } = req.query;
+
+    // Get media files for this user
+    const media = await getUserMedia(userId, {
+      limit: parseInt(limit, 10),
+      offset: parseInt(offset, 10),
+    });
+
+    const total = await getUserMediaCount(userId);
+
+    res.json({
+      media,
+      total,
+    });
+  } catch (error) {
+    logger.error('Failed to fetch user media:', error);
+    res.status(500).json({
+      error: 'failed to fetch user media',
+      message: error.message,
+    });
+  }
+});
+
+// Operation details endpoint
+app.get('/api/operations/:operationId', (req, res) => {
+  try {
+    const { operationId } = req.params;
+
+    // Get operation from in-memory store
+    const operation = operations.find(op => op.id === operationId);
+
+    if (!operation) {
+      return res.status(404).json({ error: 'operation not found' });
+    }
+
+    // Get detailed logs from database
+    const logs = getOperationLogs(operationId);
+
+    res.json({
+      operation,
+      logs,
+    });
+  } catch (error) {
+    logger.error('Failed to fetch operation details:', error);
+    res.status(500).json({
+      error: 'failed to fetch operation details',
+      message: error.message,
+    });
+  }
+});
+
+// Error metrics endpoint
+app.get('/api/metrics/errors', (req, res) => {
+  try {
+    const { timeRange } = req.query;
+    const options = {};
+
+    if (timeRange) {
+      options.timeRange = parseInt(timeRange, 10);
+    }
+
+    const metrics = getLogMetrics(options);
+
+    res.json(metrics);
+  } catch (error) {
+    logger.error('Failed to fetch error metrics:', error);
+    res.status(500).json({
+      error: 'failed to fetch error metrics',
+      message: error.message,
+    });
+  }
+});
+
+// System metrics endpoint
+app.get('/api/metrics/system', async (req, res) => {
+  try {
+    const { limit = 100, startTime, endTime } = req.query;
+
+    const options = {
+      limit: parseInt(limit, 10),
+    };
+
+    if (startTime) options.startTime = parseInt(startTime, 10);
+    if (endTime) options.endTime = parseInt(endTime, 10);
+
+    const metrics = getSystemMetrics(options);
+
+    // Also get current metrics
+    const current = await collectSystemMetrics();
+
+    res.json({
+      current,
+      history: metrics,
+    });
+  } catch (error) {
+    logger.error('Failed to fetch system metrics:', error);
+    res.status(500).json({
+      error: 'failed to fetch system metrics',
+      message: error.message,
+    });
+  }
+});
+
+// System metrics current endpoint
+app.get('/api/metrics/system/current', async (req, res) => {
+  try {
+    const metrics = await collectSystemMetrics();
+
+    res.json(metrics);
+  } catch (error) {
+    logger.error('Failed to fetch current system metrics:', error);
+    res.status(500).json({
+      error: 'failed to fetch current system metrics',
+      message: error.message,
+    });
+  }
+});
+
+// Alerts endpoint
+app.get('/api/alerts', (req, res) => {
+  try {
+    const { severity, component, startTime, endTime, search, limit = 100, offset = 0 } = req.query;
+
+    const options = {
+      severity,
+      component,
+      search,
+      limit: parseInt(limit, 10),
+      offset: parseInt(offset, 10),
+    };
+
+    if (startTime) options.startTime = parseInt(startTime, 10);
+    if (endTime) options.endTime = parseInt(endTime, 10);
+
+    const alerts = getAlerts(options);
+    const total = getAlertsCount(options);
+
+    res.json({
+      alerts,
+      total,
+      limit: options.limit,
+      offset: options.offset,
+    });
+  } catch (error) {
+    logger.error('Failed to fetch alerts:', error);
+    res.status(500).json({
+      error: 'failed to fetch alerts',
+      message: error.message,
+    });
+  }
+});
+
 // SPA fallback - serve index.html for all non-API, non-asset routes
 // This must be placed AFTER all API routes so they are matched first
 // Rate limited to prevent abuse
-app.get('*', fileServerLimiter, (req, res) => {
+// Express 5 uses /*splat syntax for wildcard routes
+app.get('/*splat', fileServerLimiter, (req, res) => {
   // Skip if this is an API route or asset request (shouldn't reach here, but safety check)
   if (req.path.startsWith('/api') || req.path.startsWith('/assets')) {
     return res.status(404).json({ error: 'not found' });
@@ -377,6 +688,11 @@ const wss = new WebSocketServer({ server, path: '/api/ws' });
 
 // Store connected clients
 const clients = new Set();
+
+// Ping/pong heartbeat configuration
+const PING_INTERVAL = 30000; // 30 seconds
+// PONG_TIMEOUT removed - not currently used
+let pingInterval = null;
 
 // Store operation in memory
 function storeOperation(operation) {
@@ -428,22 +744,174 @@ export function broadcastLog(logEntry) {
   });
 }
 
+// Broadcast function to send system metrics updates
+export function broadcastSystemMetrics(metrics) {
+  const message = JSON.stringify({ type: 'system_metrics', data: metrics });
+  clients.forEach(client => {
+    if (client.readyState === 1) {
+      try {
+        client.send(message);
+      } catch (error) {
+        logger.error('Error sending system metrics websocket message:', error);
+      }
+    }
+  });
+}
+
+// Broadcast function to send alert notifications
+export function broadcastAlert(alert) {
+  const message = JSON.stringify({ type: 'alert', data: alert });
+  clients.forEach(client => {
+    if (client.readyState === 1) {
+      try {
+        client.send(message);
+      } catch (error) {
+        logger.error('Error sending alert websocket message:', error);
+      }
+    }
+  });
+}
+
+// Broadcast function to send user metrics updates
+export function broadcastUserMetrics(userId, metrics) {
+  const message = JSON.stringify({ type: 'user_metrics', data: { userId, metrics } });
+  clients.forEach(client => {
+    if (client.readyState === 1) {
+      try {
+        client.send(message);
+      } catch (error) {
+        logger.error('Error sending user metrics websocket message:', error);
+      }
+    }
+  });
+}
+
 // Set the broadcast callback in operations tracker
 setBroadcastCallback(broadcastOperation);
 
 // Set the log broadcast callback
 setLogBroadcastCallback(broadcastLog);
 
+// Set the system metrics broadcast callback
+setSystemMetricsBroadcastCallback(broadcastSystemMetrics);
+
+// Set the alert broadcast callback
+setAlertBroadcastCallback(broadcastAlert);
+
+// Set the user metrics broadcast callback
+setUserMetricsBroadcastCallback(broadcastUserMetrics);
+
+// Clean up dead connections
+function cleanupDeadConnections() {
+  const deadClients = [];
+  clients.forEach(client => {
+    if (client.readyState !== 1) {
+      // WebSocket.OPEN = 1, any other state means disconnected
+      deadClients.push(client);
+    }
+  });
+
+  deadClients.forEach(client => {
+    logger.debug('Removing dead WebSocket connection');
+    clients.delete(client);
+    try {
+      client.terminate();
+    } catch (_err) {
+      // Ignore errors when terminating
+    }
+  });
+
+  if (deadClients.length > 0) {
+    logger.debug(`Cleaned up ${deadClients.length} dead WebSocket connection(s)`);
+  }
+}
+
+// Send ping to all connected clients and remove those that don't respond
+function pingClients() {
+  const clientsToRemove = [];
+
+  clients.forEach(client => {
+    if (client.readyState === 1) {
+      // WebSocket.OPEN = 1
+      // Check if client is still alive (isAlive flag set by pong handler)
+      if (client.isAlive === false) {
+        // Client didn't respond to previous ping
+        logger.debug('WebSocket client did not respond to ping, removing');
+        clientsToRemove.push(client);
+        return;
+      }
+
+      // Mark as not alive, will be set to true when pong is received
+      client.isAlive = false;
+
+      try {
+        // Send ping frame
+        client.ping();
+      } catch (err) {
+        logger.error('Error sending ping to WebSocket client:', err);
+        clientsToRemove.push(client);
+      }
+    } else {
+      // Not open, mark for removal
+      clientsToRemove.push(client);
+    }
+  });
+
+  // Remove dead clients
+  clientsToRemove.forEach(client => {
+    clients.delete(client);
+    try {
+      client.terminate();
+    } catch (_err) {
+      // Ignore errors when terminating
+    }
+  });
+
+  // Also clean up any other dead connections
+  cleanupDeadConnections();
+}
+
 // Handle WebSocket connections
-wss.on('connection', ws => {
+wss.on('connection', async ws => {
   logger.debug('WebSocket client connected');
   clients.add(ws);
 
-  // Send initial operations list to newly connected client
+  // Mark client as alive initially
+  ws.isAlive = true;
+
+  // Handle pong response - mark client as alive
+  ws.on('pong', () => {
+    ws.isAlive = true;
+  });
+
+  // Send initial data to newly connected client
   try {
+    // Send initial operations list
     ws.send(JSON.stringify({ type: 'operations', data: [...operations] }));
+
+    // Send latest system metrics
+    try {
+      const latestMetrics = await getLatestSystemMetrics();
+      if (latestMetrics) {
+        ws.send(JSON.stringify({ type: 'system_metrics', data: latestMetrics }));
+      }
+    } catch (error) {
+      logger.error('Error sending initial system metrics:', error);
+    }
+
+    // Send recent alerts (last 10)
+    try {
+      const recentAlerts = getAlerts({ limit: 10, offset: 0 });
+      if (recentAlerts && recentAlerts.length > 0) {
+        recentAlerts.forEach(alert => {
+          ws.send(JSON.stringify({ type: 'alert', data: alert }));
+        });
+      }
+    } catch (error) {
+      logger.error('Error sending initial alerts:', error);
+    }
   } catch (error) {
-    logger.error('Error sending initial operations:', error);
+    logger.error('Error sending initial data:', error);
   }
 
   // Handle client disconnect
@@ -459,13 +927,34 @@ wss.on('connection', ws => {
   });
 });
 
-// Start server
-server.listen(WEBUI_PORT, WEBUI_HOST, () => {
-  logger.info(`webui server running on http://${WEBUI_HOST}:${WEBUI_PORT}`);
-  logger.info(`dashboard: http://${WEBUI_HOST}:${WEBUI_PORT}`);
-  logger.info(`websocket: ws://${WEBUI_HOST}:${WEBUI_PORT}/api/ws`);
-  logger.info(`main server: ${MAIN_SERVER_URL}`);
-});
+// Initialize database and start server
+(async () => {
+  try {
+    await initDatabase();
+    logger.info('database initialized');
+  } catch (error) {
+    logger.error('failed to initialize database:', error);
+    process.exit(1);
+  }
+
+  // Start server
+  server.listen(WEBUI_PORT, WEBUI_HOST, () => {
+    logger.info(`webui server running on http://${WEBUI_HOST}:${WEBUI_PORT}`);
+    logger.info(`dashboard: http://${WEBUI_HOST}:${WEBUI_PORT}`);
+    logger.info(`websocket: ws://${WEBUI_HOST}:${WEBUI_PORT}/api/ws`);
+    logger.info(`main server: ${MAIN_SERVER_URL}`);
+
+    // Start system metrics collection (every 60 seconds)
+    startMetricsCollection(60000);
+    logger.info('started system metrics collection');
+
+    // Start ping/pong heartbeat (every 30 seconds)
+    pingInterval = setInterval(() => {
+      pingClients();
+    }, PING_INTERVAL);
+    logger.info('started WebSocket ping/pong heartbeat');
+  });
+})();
 
 // Handle errors
 app.on('error', error => {
@@ -474,6 +963,13 @@ app.on('error', error => {
 
 process.on('SIGTERM', () => {
   logger.info('SIGTERM received, shutting down gracefully...');
+  // Stop metrics collection
+  stopMetricsCollection();
+  // Stop ping interval
+  if (pingInterval) {
+    clearInterval(pingInterval);
+    pingInterval = null;
+  }
   // Close WebSocket server
   wss.close(() => {
     logger.info('WebSocket server closed');
@@ -487,6 +983,13 @@ process.on('SIGTERM', () => {
 
 process.on('SIGINT', () => {
   logger.info('SIGINT received, shutting down gracefully...');
+  // Stop metrics collection
+  stopMetricsCollection();
+  // Stop ping interval
+  if (pingInterval) {
+    clearInterval(pingInterval);
+    pingInterval = null;
+  }
   // Close WebSocket server
   wss.close(() => {
     logger.info('WebSocket server closed');

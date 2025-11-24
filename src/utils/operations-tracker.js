@@ -71,6 +71,7 @@ async function broadcastUpdate(operation) {
  * @param {string} [context.originalUrl] - Original URL if this came from a URL
  * @param {Object} [context.attachment] - Attachment details (name, size, contentType, url)
  * @param {Object} [context.commandOptions] - Command options (optimize, lossy, etc.)
+ * @param {string} [context.commandSource] - Command source ('slash' or 'context-menu')
  * @returns {string} Operation ID
  */
 export function createOperation(type, userId, username, context = {}) {
@@ -100,6 +101,14 @@ export function createOperation(type, userId, username, context = {}) {
     operations.pop();
   }
 
+  // Determine input type from context
+  let inputType = null;
+  if (context.originalUrl) {
+    inputType = 'url';
+  } else if (context.attachment) {
+    inputType = 'file';
+  }
+
   // Build metadata for operation creation log
   const metadata = {
     operationType: type,
@@ -121,6 +130,12 @@ export function createOperation(type, userId, username, context = {}) {
   }
   if (context.commandOptions) {
     metadata.commandOptions = context.commandOptions;
+  }
+  if (context.commandSource) {
+    metadata.commandSource = context.commandSource;
+  }
+  if (inputType) {
+    metadata.inputType = inputType;
   }
 
   // Log operation creation with full context

@@ -81,6 +81,7 @@ function validateGifBuffer(buffer) {
  * @param {Buffer} [preDownloadedBuffer] - Optional pre-downloaded buffer
  * @param {number} [lossyLevel] - Lossy compression level (0-100, default: 35)
  * @param {string} [originalUrl] - Original URL if this optimization came from a URL (not Discord attachment or CDN)
+ * @param {string} [commandSource] - Command source ('slash' or 'context-menu')
  */
 export async function processOptimization(
   interaction,
@@ -88,7 +89,8 @@ export async function processOptimization(
   adminUser,
   preDownloadedBuffer = null,
   lossyLevel = null,
-  originalUrl = null
+  originalUrl = null,
+  commandSource = null
 ) {
   const userId = interaction.user.id;
   const username = interaction.user.tag || interaction.user.username || 'unknown';
@@ -108,6 +110,9 @@ export async function processOptimization(
       contentType: attachment.contentType || null,
       url: attachment.url || null,
     };
+  }
+  if (commandSource) {
+    operationContext.commandSource = commandSource;
   }
 
   // Create operation tracking with context
@@ -236,20 +241,20 @@ export async function processOptimization(
     // Calculate size reduction
     const reduction = calculateSizeReduction(originalSize, optimizedSize);
 
-    // Record processed URL in database if this came from an external URL
-    if (originalUrl) {
-      const urlHash = hashUrl(originalUrl);
-      await insertProcessedUrl(
-        urlHash,
-        optimizedHash,
-        'gif',
-        '.gif',
-        optimizedUrl,
-        Date.now(),
-        userId
-      );
-      logger.debug(`Recorded processed URL in database (urlHash: ${urlHash.substring(0, 8)}...)`);
-    }
+    // Record processed URL in database for all optimizations
+    // For URL-based operations, use hash of original URL; for attachments, use file hash
+    const urlHash = originalUrl ? hashUrl(originalUrl) : optimizedHash;
+    await insertProcessedUrl(
+      urlHash,
+      optimizedHash,
+      'gif',
+      '.gif',
+      optimizedUrl,
+      Date.now(),
+      userId,
+      optimizedSize
+    );
+    logger.debug(`Recorded processed URL in database (urlHash: ${urlHash.substring(0, 8)}...)`);
 
     logger.info(
       `GIF optimization completed: ${originalSize} bytes -> ${optimizedSize} bytes (${reduction}% reduction) for user ${userId}`
@@ -691,6 +696,7 @@ export async function handleOptimizeCommand(interaction) {
     adminUser,
     preDownloadedBuffer,
     lossyLevel,
-    originalUrlForConversion
+    originalUrlForConversion,
+    'slash'
   );
 }

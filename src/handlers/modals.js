@@ -62,7 +62,8 @@ export async function handleModalSubmit(interaction, modalAttachmentCache) {
       adminUser,
       preDownloadedBuffer,
       lossyLevel,
-      originalUrl || null
+      originalUrl || null,
+      'context-menu'
     );
     return;
   }

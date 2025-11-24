@@ -474,7 +474,7 @@
   }
 
   th {
-    padding: 0.75rem 0.5rem;
+    padding: 0.75rem 1rem;
     text-align: left;
     font-weight: 500;
     color: #aaa;
@@ -482,6 +482,22 @@
     font-size: 0.85rem;
     text-transform: uppercase;
     letter-spacing: 0.5px;
+  }
+
+  th:first-child {
+    text-align: left;
+  }
+
+  th:nth-child(2),
+  th:nth-child(3),
+  th:nth-child(4),
+  th:nth-child(5),
+  th:nth-child(6) {
+    text-align: right;
+  }
+
+  th:last-child {
+    text-align: center;
   }
 
   th button {
@@ -492,6 +508,8 @@
     font: inherit;
     padding: 0;
     text-transform: inherit;
+    width: 100%;
+    text-align: inherit;
   }
 
   th button:hover {
@@ -507,12 +525,13 @@
   }
 
   td {
-    padding: 0.75rem 0.5rem;
+    padding: 0.75rem 1rem;
     color: #e0e0e0;
   }
 
   .username-cell {
     font-weight: 500;
+    text-align: left;
   }
 
   .number-cell {
@@ -616,7 +635,19 @@
 
     th,
     td {
-      padding: 0.5rem 0.25rem;
+      padding: 0.5rem 0.5rem;
+    }
+
+    th:nth-child(2),
+    th:nth-child(3),
+    th:nth-child(4),
+    th:nth-child(5),
+    th:nth-child(6) {
+      text-align: right;
+    }
+
+    th:last-child {
+      text-align: center;
     }
   }
 </style>

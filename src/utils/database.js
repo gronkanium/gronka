@@ -316,6 +316,7 @@ export function getLogs(options = {}) {
     limit = null,
     offset = null,
     orderDesc = true,
+    excludedComponents = null,
   } = options;
 
   let query = 'SELECT * FROM logs WHERE 1=1';
@@ -324,6 +325,12 @@ export function getLogs(options = {}) {
   if (component) {
     query += ' AND component = ?';
     params.push(component);
+  }
+
+  if (excludedComponents && Array.isArray(excludedComponents) && excludedComponents.length > 0) {
+    const placeholders = excludedComponents.map(() => '?').join(',');
+    query += ` AND component NOT IN (${placeholders})`;
+    params.push(...excludedComponents);
   }
 
   if (level) {
@@ -387,6 +394,7 @@ export function getLogsCount(options = {}) {
     startTime = null,
     endTime = null,
     search = null,
+    excludedComponents = null,
   } = options;
 
   let query = 'SELECT COUNT(*) as count FROM logs WHERE 1=1';
@@ -395,6 +403,12 @@ export function getLogsCount(options = {}) {
   if (component) {
     query += ' AND component = ?';
     params.push(component);
+  }
+
+  if (excludedComponents && Array.isArray(excludedComponents) && excludedComponents.length > 0) {
+    const placeholders = excludedComponents.map(() => '?').join(',');
+    query += ` AND component NOT IN (${placeholders})`;
+    params.push(...excludedComponents);
   }
 
   if (level) {
@@ -447,6 +461,7 @@ export function getLogComponents() {
  * Get log metrics for dashboard
  * @param {Object} options - Options
  * @param {number} [options.timeRange] - Time range in milliseconds (default: last 24 hours)
+ * @param {string[]} [options.excludedComponents] - Components to exclude from metrics
  * @returns {Object} Metrics object
  */
 export function getLogMetrics(options = {}) {
@@ -463,62 +478,72 @@ export function getLogMetrics(options = {}) {
     };
   }
 
+  const { timeRange: timeRangeOption, excludedComponents = null } = options;
+
   const now = Date.now();
-  const timeRange = options.timeRange || 24 * 60 * 60 * 1000; // 24 hours
+  const timeRange = timeRangeOption || 24 * 60 * 60 * 1000; // 24 hours
   const oneHourAgo = now - 60 * 60 * 1000;
   const startTime = now - timeRange;
 
+  // Build exclusion clause if needed
+  let exclusionClause = '';
+  let exclusionParams = [];
+  if (excludedComponents && Array.isArray(excludedComponents) && excludedComponents.length > 0) {
+    const placeholders = excludedComponents.map(() => '?').join(',');
+    exclusionClause = ` AND component NOT IN (${placeholders})`;
+    exclusionParams = excludedComponents;
+  }
+
   // Total logs in time range
-  const totalStmt = db.prepare('SELECT COUNT(*) as count FROM logs WHERE timestamp >= ?');
-  const totalResult = totalStmt.get(startTime);
+  const totalQuery = `SELECT COUNT(*) as count FROM logs WHERE timestamp >= ?${exclusionClause}`;
+  const totalStmt = db.prepare(totalQuery);
+  const totalResult = totalStmt.get(startTime, ...exclusionParams);
   const total = totalResult ? totalResult.count : 0;
 
   // Logs by level in time range
-  const levelStmt = db.prepare(
-    'SELECT level, COUNT(*) as count FROM logs WHERE timestamp >= ? GROUP BY level'
-  );
-  const levelResults = levelStmt.all(startTime);
+  const levelQuery = `SELECT level, COUNT(*) as count FROM logs WHERE timestamp >= ?${exclusionClause} GROUP BY level`;
+  const levelStmt = db.prepare(levelQuery);
+  const levelResults = levelStmt.all(startTime, ...exclusionParams);
   const byLevel = {};
   levelResults.forEach(row => {
     byLevel[row.level] = row.count;
   });
 
   // Logs by component in time range
-  const componentStmt = db.prepare(
-    'SELECT component, COUNT(*) as count FROM logs WHERE timestamp >= ? GROUP BY component ORDER BY count DESC'
-  );
-  const componentResults = componentStmt.all(startTime);
+  const componentQuery = `SELECT component, COUNT(*) as count FROM logs WHERE timestamp >= ?${exclusionClause} GROUP BY component ORDER BY count DESC`;
+  const componentStmt = db.prepare(componentQuery);
+  const componentResults = componentStmt.all(startTime, ...exclusionParams);
   const byComponent = {};
   componentResults.forEach(row => {
     byComponent[row.component] = row.count;
   });
 
   // Error count in last hour
-  const errorCount1hStmt = db.prepare(
-    'SELECT COUNT(*) as count FROM logs WHERE level = ? AND timestamp >= ?'
-  );
-  const errorCount1h = errorCount1hStmt.get('ERROR', oneHourAgo)?.count || 0;
+  const errorCount1hQuery = `SELECT COUNT(*) as count FROM logs WHERE level = ? AND timestamp >= ?${exclusionClause}`;
+  const errorCount1hStmt = db.prepare(errorCount1hQuery);
+  const errorCount1h = errorCount1hStmt.get('ERROR', oneHourAgo, ...exclusionParams)?.count || 0;
 
   // Error count in last 24 hours
   const errorCount24h = byLevel['ERROR'] || 0;
 
   // Warning count in last hour
-  const warnCount1h = errorCount1hStmt.get('WARN', oneHourAgo)?.count || 0;
+  const warnCount1h = errorCount1hStmt.get('WARN', oneHourAgo, ...exclusionParams)?.count || 0;
 
   // Warning count in last 24 hours
   const warnCount24h = byLevel['WARN'] || 0;
 
   // Recent errors timeline (last 24 hours, grouped by hour)
-  const errorTimelineStmt = db.prepare(`
+  const errorTimelineQuery = `
     SELECT 
       (timestamp / 3600000) * 3600000 as hour,
       COUNT(*) as count
     FROM logs 
-    WHERE level = 'ERROR' AND timestamp >= ?
+    WHERE level = 'ERROR' AND timestamp >= ?${exclusionClause}
     GROUP BY hour
     ORDER BY hour ASC
-  `);
-  const errorTimeline = errorTimelineStmt.all(startTime);
+  `;
+  const errorTimelineStmt = db.prepare(errorTimelineQuery);
+  const errorTimeline = errorTimelineStmt.all(startTime, ...exclusionParams);
 
   return {
     total,
@@ -714,6 +739,327 @@ export function getOperationLogs(operationId) {
     'SELECT * FROM operation_logs WHERE operation_id = ? ORDER BY timestamp ASC'
   );
   return stmt.all(operationId);
+}
+
+/**
+ * Get full operation trace with parsed metadata
+ * @param {string} operationId - Operation ID
+ * @returns {Object|null} Operation trace with parsed metadata or null if not found
+ */
+export function getOperationTrace(operationId) {
+  if (!db) {
+    console.error('Database not initialized. Call initDatabase() first.');
+    return null;
+  }
+
+  const logs = getOperationLogs(operationId);
+  if (logs.length === 0) {
+    return null;
+  }
+
+  // Parse metadata from all logs
+  const parsedLogs = logs.map(log => {
+    let metadata = null;
+    if (log.metadata) {
+      try {
+        metadata = JSON.parse(log.metadata);
+      } catch (error) {
+        console.error('Failed to parse metadata for operation log:', error);
+      }
+    }
+    return {
+      ...log,
+      metadata,
+    };
+  });
+
+  // Extract context from first log (created step)
+  const createdLog = parsedLogs.find(log => log.step === 'created');
+  const context = createdLog?.metadata || {};
+
+  return {
+    operationId,
+    context: {
+      originalUrl: context.originalUrl || null,
+      attachment: context.attachment || null,
+      commandOptions: context.commandOptions || null,
+      operationType: context.operationType || null,
+      userId: context.userId || null,
+      username: context.username || null,
+    },
+    logs: parsedLogs,
+    totalSteps: parsedLogs.length,
+    errorSteps: parsedLogs.filter(log => log.status === 'error'),
+  };
+}
+
+/**
+ * Get failed operations by user with context
+ * @param {string} userId - User ID
+ * @param {number} [limit] - Maximum number of results
+ * @returns {Array} Array of failed operation traces
+ */
+export function getFailedOperationsByUser(userId, limit = 50) {
+  if (!db) {
+    console.error('Database not initialized. Call initDatabase() first.');
+    return [];
+  }
+
+  // Get all operation IDs that have error status
+  const errorLogsStmt = db.prepare(`
+    SELECT DISTINCT operation_id 
+    FROM operation_logs 
+    WHERE status = 'error' 
+    ORDER BY timestamp DESC
+    LIMIT ?
+  `);
+  const errorOperationIds = errorLogsStmt.all(limit).map(row => row.operation_id);
+
+  // Get traces for each operation and filter by user
+  const traces = errorOperationIds
+    .map(opId => getOperationTrace(opId))
+    .filter(trace => trace && trace.context.userId === userId);
+
+  return traces;
+}
+
+/**
+ * Search operations by URL pattern
+ * @param {string} urlPattern - URL pattern to search for (SQL LIKE pattern)
+ * @param {number} [limit] - Maximum number of results
+ * @returns {Array} Array of operation traces matching the URL pattern
+ */
+export function searchOperationsByUrl(urlPattern, limit = 50) {
+  if (!db) {
+    console.error('Database not initialized. Call initDatabase() first.');
+    return [];
+  }
+
+  // Get all operation logs that have metadata containing the URL pattern
+  const stmt = db.prepare(`
+    SELECT DISTINCT operation_id 
+    FROM operation_logs 
+    WHERE metadata LIKE ? 
+    ORDER BY timestamp DESC
+    LIMIT ?
+  `);
+  const matchingOperationIds = stmt.all(`%${urlPattern}%`, limit).map(row => row.operation_id);
+
+  // Get traces and filter by actual URL match in context
+  const traces = matchingOperationIds
+    .map(opId => getOperationTrace(opId))
+    .filter(trace => {
+      if (!trace) return false;
+      const url = trace.context.originalUrl;
+      return url && url.includes(urlPattern);
+    });
+
+  return traces;
+}
+
+/**
+ * Get recent operations reconstructed from database logs
+ * @param {number} [limit=100] - Maximum number of operations to return
+ * @returns {Array} Array of operation objects in webui format
+ */
+export function getRecentOperations(limit = 100) {
+  if (!db) {
+    console.error('Database not initialized. Call initDatabase() first.');
+    return [];
+  }
+
+  // Get distinct operation IDs ordered by most recent timestamp
+  const stmt = db.prepare(`
+    SELECT DISTINCT operation_id, MAX(timestamp) as latest_timestamp
+    FROM operation_logs
+    GROUP BY operation_id
+    ORDER BY latest_timestamp DESC
+    LIMIT ?
+  `);
+  const operationIds = stmt.all(limit).map(row => row.operation_id);
+
+  // Reconstruct each operation from its logs
+  const reconstructedOperations = operationIds
+    .map(operationId => {
+      const logs = getOperationLogs(operationId);
+      if (logs.length === 0) {
+        return null;
+      }
+
+      // Parse metadata from all logs
+      const parsedLogs = logs.map(log => {
+        let metadata = null;
+        if (log.metadata) {
+          try {
+            metadata = JSON.parse(log.metadata);
+          } catch (error) {
+            console.error('Failed to parse metadata for operation log:', error);
+          }
+        }
+        return {
+          ...log,
+          metadata,
+        };
+      });
+
+      // Find the 'created' log to extract initial context
+      const createdLog = parsedLogs.find(log => log.step === 'created');
+      if (!createdLog) {
+        return null; // Skip operations without a created log
+      }
+
+      const context = createdLog.metadata || {};
+
+      // Find the latest status update
+      const statusUpdateLogs = parsedLogs.filter(log => log.step === 'status_update');
+      const latestStatusLog =
+        statusUpdateLogs.length > 0 ? statusUpdateLogs[statusUpdateLogs.length - 1] : createdLog;
+
+      // Extract fileSize, error, stackTrace from status update logs and error logs
+      let fileSize = null;
+      let error = null;
+      let stackTrace = null;
+
+      // Check error logs first (they have the most complete error info)
+      const errorLogs = parsedLogs.filter(log => log.step === 'error');
+      if (errorLogs.length > 0) {
+        const latestErrorLog = errorLogs[errorLogs.length - 1];
+        if (latestErrorLog.message && error === null) {
+          error = latestErrorLog.message;
+        }
+        if (latestErrorLog.stack_trace && stackTrace === null) {
+          stackTrace = latestErrorLog.stack_trace;
+        }
+      }
+
+      // Look through status updates for these fields (newest first)
+      for (const log of statusUpdateLogs.reverse()) {
+        if (log.metadata) {
+          if (log.metadata.fileSize !== undefined && fileSize === null) {
+            fileSize = log.metadata.fileSize;
+          }
+          if (log.metadata.error !== undefined && error === null) {
+            error = log.metadata.error;
+          }
+          if (log.metadata.stackTrace !== undefined && stackTrace === null) {
+            stackTrace = log.metadata.stackTrace;
+          }
+        }
+        // Also check direct fields
+        if (log.stack_trace && stackTrace === null) {
+          stackTrace = log.stack_trace;
+        }
+      }
+
+      // Build filePaths array from all logs that have file_path
+      const filePaths = [];
+      parsedLogs.forEach(log => {
+        if (log.file_path && !filePaths.includes(log.file_path)) {
+          filePaths.push(log.file_path);
+        }
+      });
+
+      // Build performance metrics steps
+      const steps = parsedLogs
+        .filter(
+          log => log.step !== 'created' && log.step !== 'status_update' && log.step !== 'error'
+        )
+        .map(log => {
+          let stepStatus = log.status;
+
+          // If operation is complete and step is still 'running', infer completion status
+          const finalStatus = latestStatusLog.status;
+          if ((finalStatus === 'success' || finalStatus === 'error') && stepStatus === 'running') {
+            // If operation succeeded, running steps should be marked as success
+            // If operation failed, running steps should be marked as error
+            stepStatus = finalStatus === 'success' ? 'success' : 'error';
+          }
+
+          return {
+            step: log.step,
+            status: stepStatus,
+            timestamp: log.timestamp,
+            duration: log.timestamp - createdLog.timestamp,
+            ...(log.metadata || {}),
+          };
+        });
+
+      // Calculate duration if operation is complete
+      let duration = null;
+      const finalStatus = latestStatusLog.status;
+      if ((finalStatus === 'success' || finalStatus === 'error') && createdLog.timestamp) {
+        const endTimestamp = latestStatusLog.timestamp;
+        duration = endTimestamp - createdLog.timestamp;
+      }
+
+      // Get most recent timestamp
+      const latestTimestamp = Math.max(...parsedLogs.map(log => log.timestamp));
+
+      // Determine operation type with fallback logic
+      let operationType = context.operationType;
+      if (!operationType || operationType === 'unknown') {
+        // Infer operation type from step names
+        const stepNames = parsedLogs
+          .map(log => log.step)
+          .join(' ')
+          .toLowerCase();
+        if (
+          stepNames.includes('conversion') ||
+          stepNames.includes('gif') ||
+          stepNames.includes('convert')
+        ) {
+          operationType = 'convert';
+        } else if (stepNames.includes('optimization') || stepNames.includes('optimize')) {
+          operationType = 'optimize';
+        } else if (stepNames.includes('download') && !stepNames.includes('conversion')) {
+          operationType = 'download';
+        } else {
+          operationType = 'unknown';
+        }
+      }
+
+      // Determine username with fallback logic
+      let username = context.username;
+      if (!username || username === 'unknown') {
+        // Try to get username from users table if we have a userId
+        if (context.userId) {
+          try {
+            const user = getUser(context.userId);
+            if (user && user.username) {
+              username = user.username;
+            }
+          } catch (_error) {
+            // Silently fail - username will remain null or 'unknown'
+          }
+        }
+        // If still no username, use null (will display as 'unknown' in UI)
+        if (!username || username === 'unknown') {
+          username = null;
+        }
+      }
+
+      // Reconstruct operation object
+      return {
+        id: operationId,
+        type: operationType,
+        status: latestStatusLog.status || 'pending',
+        userId: context.userId || null,
+        username: username,
+        fileSize: fileSize,
+        timestamp: latestTimestamp,
+        startTime: createdLog.timestamp,
+        error: error,
+        stackTrace: stackTrace,
+        filePaths: filePaths,
+        performanceMetrics: {
+          duration: duration,
+          steps: steps,
+        },
+      };
+    })
+    .filter(op => op !== null); // Remove any null operations
+
+  return reconstructedOperations;
 }
 
 /**

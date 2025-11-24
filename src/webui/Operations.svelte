@@ -120,7 +120,7 @@
                   <span class="status-icon success">✓</span>
                 {:else if operation.status === 'error'}
                   <span class="status-icon error">
-                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="#ff6b6b" stroke="#fff" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="#ff6b6b" stroke="#fff" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
                       <path d="M12 2C6.477 2 2 6.477 2 12s4.477 10 10 10 10-4.477 10-10S17.523 2 12 2z"/>
                       <path d="M15 9l-6 6M9 9l6 6" stroke="#fff" stroke-width="2" stroke-linecap="round"/>
                     </svg>
@@ -270,17 +270,21 @@
   .status-cell {
     text-align: center;
     width: 60px;
+    vertical-align: middle;
   }
 
   .status-icon {
-    display: inline-block;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
     width: 20px;
     height: 20px;
-    line-height: 20px;
+    line-height: 1;
     text-align: center;
     border-radius: 50%;
     font-size: 14px;
     font-weight: bold;
+    vertical-align: middle;
   }
 
   .status-icon.success {
@@ -291,7 +295,7 @@
   .status-icon.error {
     background-color: transparent;
     color: #fff;
-    display: flex;
+    display: inline-flex;
     align-items: center;
     justify-content: center;
   }
@@ -299,16 +303,20 @@
   .status-icon.error svg {
     display: block;
     fill: #ff6b6b;
+    width: 20px;
+    height: 20px;
   }
 
   .spinner {
-    width: 16px;
-    height: 16px;
+    width: 20px;
+    height: 20px;
     border: 2px solid #444;
     border-top-color: #51cf66;
     border-radius: 50%;
     animation: spin 0.8s linear infinite;
     margin: 0 auto;
+    display: inline-block;
+    vertical-align: middle;
   }
 
   @keyframes spin {

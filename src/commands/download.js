@@ -9,7 +9,12 @@ import { isSocialMediaUrl, downloadFromSocialMedia, RateLimitError } from '../ut
 import { checkRateLimit, isAdmin, recordRateLimit } from '../utils/rate-limit.js';
 import { getUserConfig } from '../utils/user-config.js';
 import { generateHash } from '../utils/file-downloader.js';
-import { createOperation, updateOperationStatus } from '../utils/operations-tracker.js';
+import {
+  createOperation,
+  updateOperationStatus,
+  logOperationStep,
+  logOperationError,
+} from '../utils/operations-tracker.js';
 import {
   gifExists,
   getGifPath,
@@ -68,8 +73,13 @@ async function processDownload(interaction, url) {
   const adminUser = isAdmin(userId);
   const userConfig = await getUserConfig(userId);
 
-  // Create operation tracking
-  const operationId = createOperation('download', userId, username);
+  // Build operation context
+  const operationContext = {
+    originalUrl: url,
+  };
+
+  // Create operation tracking with context
+  const operationId = createOperation('download', userId, username, operationContext);
 
   // Build metadata object for R2 uploads
   const buildMetadata = () => ({
@@ -86,6 +96,11 @@ async function processDownload(interaction, url) {
     // Initialize database if needed
     await initDatabase();
 
+    logOperationStep(operationId, 'url_validation', 'running', {
+      message: 'Validating URL',
+      metadata: { url },
+    });
+
     // Check if URL has already been processed
     const urlHash = hashUrl(url);
     const processedUrl = await getProcessedUrl(urlHash);
@@ -93,6 +108,14 @@ async function processDownload(interaction, url) {
       logger.info(
         `URL already processed (hash: ${urlHash.substring(0, 8)}...), returning existing file URL: ${processedUrl.file_url}`
       );
+      logOperationStep(operationId, 'url_validation', 'success', {
+        message: 'URL validation complete',
+        metadata: { url },
+      });
+      logOperationStep(operationId, 'url_cache_hit', 'success', {
+        message: 'URL already processed, returning cached result',
+        metadata: { url, cachedUrl: processedUrl.file_url },
+      });
       const fileUrl = processedUrl.file_url;
       updateOperationStatus(operationId, 'success', { fileSize: 0 });
       recordRateLimit(userId);
@@ -103,7 +126,25 @@ async function processDownload(interaction, url) {
       return;
     }
 
+    logOperationStep(operationId, 'url_validation', 'success', {
+      message: 'URL validation complete',
+      metadata: { url },
+    });
+    logOperationStep(operationId, 'url_cache_miss', 'running', {
+      message: 'URL not found in cache, proceeding with download',
+      metadata: { url },
+    });
+    logOperationStep(operationId, 'url_cache_miss', 'success', {
+      message: 'URL cache check complete, proceeding with download',
+      metadata: { url },
+    });
+
     logger.info(`Downloading file from Cobalt: ${url}`);
+    logOperationStep(operationId, 'download_start', 'running', {
+      message: 'Starting download from Cobalt',
+      metadata: { url, maxSize: adminUser ? 'unlimited' : MAX_VIDEO_SIZE },
+    });
+
     const maxSize = adminUser ? Infinity : MAX_VIDEO_SIZE;
 
     // Wrap Cobalt download in queue to handle concurrency and deduplication
@@ -111,6 +152,13 @@ async function processDownload(interaction, url) {
     try {
       fileData = await queueCobaltRequest(url, async () => {
         return await downloadFromSocialMedia(COBALT_API_URL, url, adminUser, maxSize);
+      });
+      logOperationStep(operationId, 'download_complete', 'success', {
+        message: 'File downloaded successfully',
+        metadata: {
+          url,
+          fileCount: Array.isArray(fileData) ? fileData.length : 1,
+        },
       });
     } catch (error) {
       // Handle cached URL error
@@ -363,9 +411,22 @@ async function processDownload(interaction, url) {
   } catch (error) {
     logger.error(`Download failed for user ${userId}:`, error);
 
+    // Build comprehensive error metadata
+    const errorMetadata = {
+      originalUrl: url,
+      errorMessage: error.message || 'unknown error',
+      errorName: error.name || 'Error',
+      errorCode: error.code || null,
+      isRateLimit: error instanceof RateLimitError,
+    };
+
     // Check if this is a rate limit error after retries
     if (error instanceof RateLimitError) {
       logger.warn(`Rate limit error for user ${userId}, showing deferred download option`);
+
+      logOperationError(operationId, error, {
+        metadata: errorMetadata,
+      });
 
       // Create buttons for user to choose
       const row = new ActionRowBuilder().addComponents(
@@ -412,7 +473,14 @@ async function processDownload(interaction, url) {
       }
     }
 
-    updateOperationStatus(operationId, 'error', { error: errorMessage });
+    logOperationError(operationId, error, {
+      metadata: errorMetadata,
+    });
+
+    updateOperationStatus(operationId, 'error', {
+      error: errorMessage,
+      stackTrace: error.stack || null,
+    });
     await interaction.editReply({
       content: errorMessage,
     });

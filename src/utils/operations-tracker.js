@@ -66,9 +66,13 @@ async function broadcastUpdate(operation) {
  * @param {string} type - Operation type ('convert', 'download', 'optimize', 'info')
  * @param {string} userId - Discord user ID
  * @param {string} username - Discord username
+ * @param {Object} [context] - Initial operation context
+ * @param {string} [context.originalUrl] - Original URL if this came from a URL
+ * @param {Object} [context.attachment] - Attachment details (name, size, contentType, url)
+ * @param {Object} [context.commandOptions] - Command options (optimize, lossy, etc.)
  * @returns {string} Operation ID
  */
-export function createOperation(type, userId, username) {
+export function createOperation(type, userId, username, context = {}) {
   const operation = {
     id: `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
     type,
@@ -95,10 +99,34 @@ export function createOperation(type, userId, username) {
     operations.pop();
   }
 
-  // Log operation creation
+  // Build metadata for operation creation log
+  const metadata = {
+    operationType: type,
+    userId,
+    username,
+  };
+
+  // Add context to metadata if provided
+  if (context.originalUrl) {
+    metadata.originalUrl = context.originalUrl;
+  }
+  if (context.attachment) {
+    metadata.attachment = {
+      name: context.attachment.name || null,
+      size: context.attachment.size || null,
+      contentType: context.attachment.contentType || null,
+      url: context.attachment.url || null,
+    };
+  }
+  if (context.commandOptions) {
+    metadata.commandOptions = context.commandOptions;
+  }
+
+  // Log operation creation with full context
   try {
     insertOperationLog(operation.id, 'created', 'pending', {
       message: `Operation ${type} created for user ${username}`,
+      metadata,
     });
   } catch (error) {
     console.error('Failed to log operation creation:', error);

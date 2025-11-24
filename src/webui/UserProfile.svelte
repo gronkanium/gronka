@@ -14,6 +14,9 @@
   let mediaLoading = false;
   let loading = true;
   let error = null;
+  let selectedOperationId = null;
+  let operationTrace = null;
+  let traceLoading = false;
 
   $: userId = $currentRoute.params.userId;
 
@@ -107,17 +110,26 @@
   function formatRelativeTime(timestamp) {
     if (!timestamp) return 'N/A';
     const now = Date.now();
-    const diff = now - timestamp;
+    // Convert timestamp to milliseconds if it's in seconds (timestamp < year 2000 in ms)
+    const timestampMs = timestamp < 946684800000 ? timestamp * 1000 : timestamp;
+    const diff = now - timestampMs;
+    
+    // Handle negative differences (future timestamps or clock skew)
+    if (diff < 0) {
+      return 'just now';
+    }
+    
     const seconds = Math.floor(diff / 1000);
     const minutes = Math.floor(seconds / 60);
     const hours = Math.floor(minutes / 60);
     const days = Math.floor(hours / 24);
 
+    if (seconds < 1) return 'just now';
     if (seconds < 60) return `${seconds}s ago`;
     if (minutes < 60) return `${minutes}m ago`;
     if (hours < 24) return `${hours}h ago`;
     if (days < 7) return `${days}d ago`;
-    return formatTimestamp(timestamp);
+    return formatTimestamp(timestampMs);
   }
 
   function calculateSuccessRate() {
@@ -127,6 +139,34 @@
 
   function goBack() {
     navigate('users');
+  }
+
+  async function fetchOperationTrace(operationId) {
+    if (selectedOperationId === operationId && operationTrace) {
+      // Already loaded, just toggle
+      selectedOperationId = null;
+      operationTrace = null;
+      return;
+    }
+
+    selectedOperationId = operationId;
+    traceLoading = true;
+    try {
+      const response = await fetch(`/api/operations/${operationId}`);
+      if (!response.ok) throw new Error('failed to fetch operation trace');
+      const data = await response.json();
+      operationTrace = data.trace;
+    } catch (err) {
+      console.error('Failed to fetch operation trace:', err);
+      operationTrace = null;
+    } finally {
+      traceLoading = false;
+    }
+  }
+
+  function formatMetadata(metadata) {
+    if (!metadata) return null;
+    return JSON.stringify(metadata, null, 2);
   }
 
   onMount(() => {
@@ -251,21 +291,140 @@
                 <th>time</th>
                 <th>file size</th>
                 <th>error</th>
+                <th>actions</th>
               </tr>
             </thead>
             <tbody>
               {#each operations as operation}
-                <tr class:error={operation.status === 'error'}>
+                <tr class:error={operation.status === 'error'} class:selected={selectedOperationId === operation.id}>
                   <td class="op-type">{operation.type}</td>
                   <td><span class="operation-status status-{operation.status}">{operation.status}</span></td>
                   <td class="op-time">{formatRelativeTime(operation.timestamp)}</td>
                   <td class="op-size">{operation.fileSize ? formatBytes(operation.fileSize) : '—'}</td>
                   <td class="op-error">{operation.error || '—'}</td>
+                  <td class="op-actions">
+                    <button 
+                      class="trace-btn" 
+                      on:click={() => fetchOperationTrace(operation.id)}
+                      title="view detailed trace"
+                    >
+                      {selectedOperationId === operation.id ? 'hide trace' : 'view trace'}
+                    </button>
+                  </td>
                 </tr>
               {/each}
             </tbody>
           </table>
         </div>
+      </div>
+    {/if}
+
+    {#if selectedOperationId && operationTrace}
+      <div class="trace-section">
+        <h3>operation trace: {selectedOperationId}</h3>
+        {#if traceLoading}
+          <div class="loading">loading trace...</div>
+        {:else if operationTrace}
+          <div class="trace-container">
+            <div class="trace-context">
+              <h4>context</h4>
+              <div class="context-grid">
+                {#if operationTrace.context.originalUrl}
+                  <div class="context-item">
+                    <span class="context-label">original url:</span>
+                    <span class="context-value">
+                      <a href={operationTrace.context.originalUrl} target="_blank" rel="noopener noreferrer">
+                        {truncateUrl(operationTrace.context.originalUrl)}
+                      </a>
+                    </span>
+                  </div>
+                {/if}
+                {#if operationTrace.context.attachment}
+                  <div class="context-item">
+                    <span class="context-label">attachment:</span>
+                    <span class="context-value">
+                      {operationTrace.context.attachment.name || 'N/A'} 
+                      {operationTrace.context.attachment.size ? `(${formatBytes(operationTrace.context.attachment.size)})` : ''}
+                    </span>
+                  </div>
+                  {#if operationTrace.context.attachment.contentType}
+                    <div class="context-item">
+                      <span class="context-label">content type:</span>
+                      <span class="context-value">{operationTrace.context.attachment.contentType}</span>
+                    </div>
+                  {/if}
+                {/if}
+                {#if operationTrace.context.commandOptions}
+                  <div class="context-item">
+                    <span class="context-label">command options:</span>
+                    <span class="context-value">{formatMetadata(operationTrace.context.commandOptions)}</span>
+                  </div>
+                {/if}
+                <div class="context-item">
+                  <span class="context-label">operation type:</span>
+                  <span class="context-value">{operationTrace.context.operationType || 'N/A'}</span>
+                </div>
+              </div>
+            </div>
+
+            <div class="trace-steps">
+              <h4>execution steps ({operationTrace.logs.filter(log => log.status !== 'error').length})</h4>
+              <div class="steps-list">
+                {#each operationTrace.logs.filter(log => log.status !== 'error') as log}
+                  <div class="trace-step" class:error={log.status === 'error'}>
+                    <div class="step-header">
+                      <span class="step-name">{log.step}</span>
+                      <span class="step-status status-{log.status}">{log.status}</span>
+                      <span class="step-time">{formatRelativeTime(log.timestamp)}</span>
+                    </div>
+                    {#if log.message}
+                      <div class="step-message">{log.message}</div>
+                    {/if}
+                    {#if log.metadata}
+                      <details class="step-metadata">
+                        <summary>metadata</summary>
+                        <pre class="metadata-content">{formatMetadata(log.metadata)}</pre>
+                      </details>
+                    {/if}
+                    {#if log.stack_trace}
+                      <details class="step-stack">
+                        <summary>stack trace</summary>
+                        <pre class="stack-content">{log.stack_trace}</pre>
+                      </details>
+                    {/if}
+                    {#if log.file_path}
+                      <div class="step-file">file: {log.file_path}</div>
+                    {/if}
+                  </div>
+                {/each}
+              </div>
+            </div>
+
+            {#if operationTrace.errorSteps.length > 0}
+              <div class="trace-errors">
+                <h4>errors ({operationTrace.errorSteps.length})</h4>
+                {#each operationTrace.errorSteps as errorLog}
+                  <div class="error-item">
+                    <div class="error-step">{errorLog.step}</div>
+                    <div class="error-message">{errorLog.message}</div>
+                    {#if errorLog.metadata}
+                      <details class="error-metadata">
+                        <summary>error details</summary>
+                        <pre class="metadata-content">{formatMetadata(errorLog.metadata)}</pre>
+                      </details>
+                    {/if}
+                    {#if errorLog.stack_trace}
+                      <details class="error-stack">
+                        <summary>stack trace</summary>
+                        <pre class="stack-content">{errorLog.stack_trace}</pre>
+                      </details>
+                    {/if}
+                  </div>
+                {/each}
+              </div>
+            {/if}
+          </div>
+        {/if}
       </div>
     {/if}
 
@@ -833,6 +992,266 @@
       gap: 0.5rem;
       align-items: flex-start;
     }
+  }
+  .trace-section {
+    padding: 1rem;
+    background-color: #222;
+    border: 1px solid #333;
+    border-radius: 4px;
+  }
+
+  .trace-section h3 {
+    margin: 0 0 1rem 0;
+    font-size: 1.2rem;
+    font-weight: 500;
+    color: #fff;
+  }
+
+  .trace-container {
+    display: flex;
+    flex-direction: column;
+    gap: 1.5rem;
+  }
+
+  .trace-context {
+    padding: 1rem;
+    background-color: #1a1a1a;
+    border: 1px solid #333;
+    border-radius: 3px;
+  }
+
+  .trace-context h4 {
+    margin: 0 0 0.75rem 0;
+    font-size: 1rem;
+    font-weight: 500;
+    color: #fff;
+  }
+
+  .context-grid {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+  }
+
+  .context-item {
+    display: flex;
+    gap: 0.5rem;
+    font-size: 0.9rem;
+  }
+
+  .context-label {
+    color: #888;
+    min-width: 120px;
+  }
+
+  .context-value {
+    color: #ccc;
+    word-break: break-all;
+  }
+
+  .context-value a {
+    color: #51cf66;
+    text-decoration: none;
+  }
+
+  .context-value a:hover {
+    text-decoration: underline;
+  }
+
+  .trace-steps {
+    padding: 1rem;
+    background-color: #1a1a1a;
+    border: 1px solid #333;
+    border-radius: 3px;
+  }
+
+  .trace-steps h4 {
+    margin: 0 0 0.75rem 0;
+    font-size: 1rem;
+    font-weight: 500;
+    color: #fff;
+  }
+
+  .steps-list {
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+  }
+
+  .trace-step {
+    padding: 0.75rem;
+    background-color: #111;
+    border: 1px solid #333;
+    border-radius: 3px;
+    border-left: 3px solid #51cf66;
+  }
+
+  .trace-step.error {
+    border-left-color: #ff6b6b;
+  }
+
+  .step-header {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    margin-bottom: 0.5rem;
+  }
+
+  .step-name {
+    font-weight: 500;
+    color: #fff;
+    font-family: monospace;
+    font-size: 0.9rem;
+  }
+
+  .step-status {
+    padding: 0.2rem 0.5rem;
+    border-radius: 3px;
+    font-size: 0.75rem;
+    font-weight: 500;
+  }
+
+  .step-status.status-success {
+    background-color: #2d5016;
+    color: #51cf66;
+  }
+
+  .step-status.status-error {
+    background-color: #5a1a1a;
+    color: #ff6b6b;
+  }
+
+  .step-status.status-running {
+    background-color: #2d3a50;
+    color: #74c0fc;
+  }
+
+  .step-time {
+    margin-left: auto;
+    font-size: 0.8rem;
+    color: #888;
+  }
+
+  .step-message {
+    margin-top: 0.5rem;
+    color: #ccc;
+    font-size: 0.9rem;
+  }
+
+  .step-file {
+    margin-top: 0.5rem;
+    font-size: 0.85rem;
+    color: #888;
+    font-family: monospace;
+  }
+
+  .step-metadata,
+  .step-stack {
+    margin-top: 0.5rem;
+  }
+
+  .step-metadata summary,
+  .step-stack summary {
+    cursor: pointer;
+    color: #74c0fc;
+    font-size: 0.85rem;
+    user-select: none;
+  }
+
+  .step-metadata summary:hover,
+  .step-stack summary:hover {
+    color: #99d9ff;
+  }
+
+  .metadata-content,
+  .stack-content {
+    margin-top: 0.5rem;
+    padding: 0.75rem;
+    background-color: #000;
+    border: 1px solid #333;
+    border-radius: 3px;
+    font-size: 0.8rem;
+    color: #ccc;
+    overflow-x: auto;
+    white-space: pre-wrap;
+    word-break: break-all;
+  }
+
+  .trace-errors {
+    padding: 1rem;
+    background-color: #2a1a1a;
+    border: 1px solid #5a3333;
+    border-radius: 3px;
+  }
+
+  .trace-errors h4 {
+    margin: 0 0 0.75rem 0;
+    font-size: 1rem;
+    font-weight: 500;
+    color: #ff6b6b;
+  }
+
+  .error-item {
+    padding: 0.75rem;
+    margin-bottom: 0.5rem;
+    background-color: #1a0a0a;
+    border: 1px solid #5a3333;
+    border-radius: 3px;
+  }
+
+  .error-step {
+    font-weight: 500;
+    color: #ff6b6b;
+    font-family: monospace;
+    font-size: 0.9rem;
+    margin-bottom: 0.25rem;
+  }
+
+  .error-message {
+    color: #ffaaaa;
+    font-size: 0.9rem;
+    margin-bottom: 0.5rem;
+  }
+
+  .error-metadata,
+  .error-stack {
+    margin-top: 0.5rem;
+  }
+
+  .error-metadata summary,
+  .error-stack summary {
+    cursor: pointer;
+    color: #ff6b6b;
+    font-size: 0.85rem;
+    user-select: none;
+  }
+
+  .error-metadata summary:hover,
+  .error-stack summary:hover {
+    color: #ff8888;
+  }
+
+  .op-actions {
+    text-align: center;
+  }
+
+  .trace-btn {
+    background-color: #2d3a50;
+    border: 1px solid #444;
+    color: #74c0fc;
+    padding: 0.3rem 0.6rem;
+    cursor: pointer;
+    font-size: 0.8rem;
+    border-radius: 3px;
+  }
+
+  .trace-btn:hover {
+    background-color: #3d4a60;
+    color: #99d9ff;
+  }
+
+  tr.selected {
+    background-color: #2a2a2a;
   }
 </style>
 

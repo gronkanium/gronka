@@ -39,7 +39,7 @@ CURRENT_COMMIT_SHORT=$(git rev-parse --short HEAD 2>/dev/null || echo "unknown")
 info "Current repository commit: ${CURRENT_COMMIT_SHORT}"
 
 # Check if containers are running
-CONTAINERS=("gronka" "gronka-webui")
+CONTAINERS=("gronka")
 ALL_UP_TO_DATE=true
 
 for CONTAINER in "${CONTAINERS[@]}"; do

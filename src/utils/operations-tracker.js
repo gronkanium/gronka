@@ -15,7 +15,8 @@ let broadcastCallback = null;
 let userMetricsBroadcastCallback = null;
 
 // WebUI URL for sending operation updates (from bot to webui)
-const WEBUI_URL = process.env.WEBUI_URL || process.env.WEBUI_SERVER_URL || 'http://webui:3001';
+// Since webui is now in the same container, use localhost (fallback for HTTP mode)
+const WEBUI_URL = process.env.WEBUI_URL || process.env.WEBUI_SERVER_URL || 'http://localhost:3001';
 
 /**
  * Set the broadcast callback for websocket updates

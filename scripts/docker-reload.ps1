@@ -1,6 +1,5 @@
 $ErrorActionPreference = "Stop"
 
-$PROFILES = @("--profile", "webui")
 
 function Write-Error-Message {
     param([string]$message)
@@ -29,7 +28,7 @@ Write-Info-Message "Reloading docker compose services..."
 
 # Step 1: Stop and remove containers, and remove associated images
 Write-Info-Message "Stopping containers and removing images..."
-& docker compose @PROFILES down --rmi all --remove-orphans
+docker compose down --rmi all --remove-orphans
 if ($LASTEXITCODE -ne 0) {
     Write-Error-Message "Failed to stop containers and remove images"
 }
@@ -65,9 +64,9 @@ if ($LASTEXITCODE -ne 0) {
     Write-Error-Message "Failed to build docker images"
 }
 
-# Step 5: Start containers with profiles
-Write-Info-Message "Starting containers with profiles: webui"
-& docker compose @PROFILES up -d
+# Step 5: Start containers
+Write-Info-Message "Starting containers"
+docker compose up -d
 if ($LASTEXITCODE -ne 0) {
     Write-Error-Message "Failed to start docker compose services"
 }

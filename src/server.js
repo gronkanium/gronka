@@ -52,7 +52,7 @@ const generalLimiter = rateLimit({
   standardHeaders: true,
   legacyHeaders: false,
   skip: req => {
-    // Skip rate limiting only for requests from internal Docker network (webui container)
+    // Skip rate limiting only for requests from internal Docker network
     // Use req.ip which is properly handled by express 'trust proxy' setting
     // Do NOT trust X-Forwarded-For directly as it can be spoofed by attackers
     const ip = req.ip || '';
@@ -92,7 +92,7 @@ const statsLimiter = rateLimit({
   standardHeaders: true,
   legacyHeaders: false,
   skip: req => {
-    // Skip rate limiting only for requests from internal Docker network (webui container)
+    // Skip rate limiting only for requests from internal Docker network
     // Use req.ip which is properly handled by express 'trust proxy' setting
     // Do NOT trust X-Forwarded-For directly as it can be spoofed by attackers
     const ip = req.ip || '';
@@ -118,53 +118,6 @@ const statsLimiter = rateLimit({
 
 // Apply general rate limiting to all requests
 app.use(generalLimiter);
-
-// Request logging middleware
-app.use((req, res, next) => {
-  // Skip logging for health check requests
-  if (req.path === '/health') {
-    return next();
-  }
-
-  const startTime = Date.now();
-  let logged = false;
-
-  // Log response when finished (most reliable method)
-  const logResponse = () => {
-    if (logged) return;
-    logged = true;
-    const duration = Date.now() - startTime;
-    const statusCode = res.statusCode || 200;
-    logger.info(
-      `${req.method} ${req.path} - ${statusCode} - ${duration}ms - ${req.ip || req.connection.remoteAddress}`
-    );
-  };
-
-  // Intercept response methods as backup (in case finish event doesn't fire)
-  const originalSend = res.send;
-  const originalSendFile = res.sendFile;
-  const originalJson = res.json;
-
-  res.send = function (_data) {
-    logResponse();
-    return originalSend.apply(this, arguments);
-  };
-
-  res.sendFile = function (...args) {
-    logResponse();
-    return originalSendFile.apply(this, args);
-  };
-
-  res.json = function (_data) {
-    logResponse();
-    return originalJson.apply(this, arguments);
-  };
-
-  // Primary logging on response finish (catches all cases)
-  res.on('finish', logResponse);
-
-  next();
-});
 
 // Get absolute path to GIF storage
 function getStoragePath() {

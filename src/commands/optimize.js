@@ -22,7 +22,11 @@ import {
   calculateSizeReduction,
 } from '../utils/gif-optimizer.js';
 import { getGifPath, cleanupTempFiles, saveGif } from '../utils/storage.js';
-import { createOperation, updateOperationStatus } from '../utils/operations-tracker.js';
+import {
+  createOperation,
+  updateOperationStatus,
+  logOperationError,
+} from '../utils/operations-tracker.js';
 import { notifyCommandSuccess, notifyCommandFailure } from '../utils/ntfy-notifier.js';
 import { hashUrl } from '../utils/cobalt-queue.js';
 import { insertProcessedUrl, initDatabase, getProcessedUrl } from '../utils/database.js';
@@ -90,8 +94,24 @@ export async function processOptimization(
   const username = interaction.user.tag || interaction.user.username || 'unknown';
   const tempFiles = [];
 
-  // Create operation tracking
-  const operationId = createOperation('optimize', userId, username);
+  // Build operation context
+  const operationContext = {
+    commandOptions: { lossy: lossyLevel },
+  };
+  if (originalUrl) {
+    operationContext.originalUrl = originalUrl;
+  }
+  if (attachment) {
+    operationContext.attachment = {
+      name: attachment.name || null,
+      size: attachment.size || null,
+      contentType: attachment.contentType || null,
+      url: attachment.url || null,
+    };
+  }
+
+  // Create operation tracking with context
+  const operationId = createOperation('optimize', userId, username, operationContext);
 
   // Build metadata object for R2 uploads
   const buildMetadata = () => ({
@@ -246,7 +266,33 @@ export async function processOptimization(
     recordRateLimit(userId);
   } catch (error) {
     logger.error(`GIF optimization failed for user ${userId}:`, error);
-    updateOperationStatus(operationId, 'error', { error: error.message || 'unknown error' });
+
+    // Build comprehensive error metadata
+    const errorMetadata = {
+      originalUrl: originalUrl || null,
+      attachment: attachment
+        ? {
+            name: attachment.name || null,
+            size: attachment.size || null,
+            contentType: attachment.contentType || null,
+            url: attachment.url || null,
+          }
+        : null,
+      commandOptions: { lossy: lossyLevel },
+      errorMessage: error.message || 'unknown error',
+      errorName: error.name || 'Error',
+      errorCode: error.code || null,
+    };
+
+    // Log detailed error with full context
+    logOperationError(operationId, error, {
+      metadata: errorMetadata,
+    });
+
+    updateOperationStatus(operationId, 'error', {
+      error: error.message || 'unknown error',
+      stackTrace: error.stack || null,
+    });
     await interaction.editReply({
       content: error.message || 'an error occurred while optimizing the gif.',
     });

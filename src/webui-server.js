@@ -22,13 +22,14 @@ import {
   getUserMetricsCount,
   getUserMetrics,
   getUser,
-  getOperationLogs,
+  getOperationTrace,
   getSystemMetrics,
   getLatestSystemMetrics,
   getAlerts,
   getAlertsCount,
   getUserMedia,
   getUserMediaCount,
+  getRecentOperations,
 } from './utils/database.js';
 import {
   collectSystemMetrics,
@@ -297,6 +298,7 @@ app.get('/api/logs', (req, res) => {
       limit = 100,
       offset = 0,
       orderDesc = 'true',
+      excludedComponents,
     } = req.query;
 
     // Parse query parameters
@@ -326,6 +328,22 @@ app.get('/api/logs', (req, res) => {
         }
       } else {
         // Unexpected type, ignore or reject (here we ignore)
+      }
+    }
+
+    // Handle excluded components (comma-separated)
+    if (excludedComponents) {
+      if (Array.isArray(excludedComponents)) {
+        // Multiple excluded component parameters: flatten and trim all values
+        options.excludedComponents = excludedComponents.flatMap(c =>
+          typeof c === 'string' ? c.split(',').map(sub => sub.trim()) : []
+        );
+      } else if (typeof excludedComponents === 'string') {
+        if (excludedComponents.includes(',')) {
+          options.excludedComponents = excludedComponents.split(',').map(c => c.trim());
+        } else {
+          options.excludedComponents = [excludedComponents.trim()];
+        }
       }
     }
 
@@ -445,14 +463,38 @@ app.get('/api/users/:userId', (req, res) => {
   }
 });
 
-// User operations endpoint (from recent operations in memory)
+// User operations endpoint (from recent operations in memory and database)
 app.get('/api/users/:userId/operations', (req, res) => {
   try {
     const { userId } = req.params;
     const { limit = 50 } = req.query;
+    const limitNum = parseInt(limit, 10);
 
     // Filter operations by user from in-memory store
-    const userOps = operations.filter(op => op.userId === userId).slice(0, parseInt(limit, 10));
+    let userOps = operations.filter(op => op.userId === userId);
+
+    // If we don't have enough operations in memory, query database
+    if (userOps.length < limitNum) {
+      try {
+        // Get recent operations from database and filter by user
+        const dbOps = getRecentOperations(limitNum * 2) // Get more to account for filtering
+          .filter(op => op.userId === userId)
+          .slice(0, limitNum);
+
+        // Merge with in-memory operations, avoiding duplicates
+        const existingIds = new Set(userOps.map(op => op.id));
+        const newOps = dbOps.filter(op => !existingIds.has(op.id));
+        userOps = [...userOps, ...newOps]
+          .sort((a, b) => b.timestamp - a.timestamp) // Sort by most recent
+          .slice(0, limitNum);
+      } catch (error) {
+        logger.error('Failed to fetch user operations from database:', error);
+        // Continue with in-memory operations only
+      }
+    } else {
+      // Limit to requested amount
+      userOps = userOps.slice(0, limitNum);
+    }
 
     res.json({
       operations: userOps,
@@ -523,24 +565,196 @@ app.get('/api/users/:userId/media', async (req, res) => {
   }
 });
 
+/**
+ * Reconstruct operation object from database trace
+ * @param {Object} trace - Operation trace from database
+ * @returns {Object|null} Reconstructed operation object or null
+ */
+function reconstructOperationFromTrace(trace) {
+  if (!trace || !trace.logs || trace.logs.length === 0) {
+    return null;
+  }
+
+  const createdLog = trace.logs.find(log => log.step === 'created');
+  if (!createdLog) {
+    return null;
+  }
+
+  const context = trace.context || {};
+  const parsedLogs = trace.logs;
+
+  // Find the latest status update
+  const statusUpdateLogs = parsedLogs.filter(log => log.step === 'status_update');
+  const latestStatusLog =
+    statusUpdateLogs.length > 0 ? statusUpdateLogs[statusUpdateLogs.length - 1] : createdLog;
+
+  // Extract fileSize, error, stackTrace from status update logs and error logs
+  let fileSize = null;
+  let error = null;
+  let stackTrace = null;
+
+  // Check error logs first (they have the most complete error info)
+  const errorLogs = parsedLogs.filter(log => log.step === 'error');
+  if (errorLogs.length > 0) {
+    const latestErrorLog = errorLogs[errorLogs.length - 1];
+    if (latestErrorLog.message && error === null) {
+      error = latestErrorLog.message;
+    }
+    if (latestErrorLog.stack_trace && stackTrace === null) {
+      stackTrace = latestErrorLog.stack_trace;
+    }
+  }
+
+  // Look through status updates for these fields (newest first)
+  for (const log of statusUpdateLogs.reverse()) {
+    if (log.metadata) {
+      if (log.metadata.fileSize !== undefined && fileSize === null) {
+        fileSize = log.metadata.fileSize;
+      }
+      if (log.metadata.error !== undefined && error === null) {
+        error = log.metadata.error;
+      }
+      if (log.metadata.stackTrace !== undefined && stackTrace === null) {
+        stackTrace = log.metadata.stackTrace;
+      }
+    }
+    // Also check direct fields
+    if (log.stack_trace && stackTrace === null) {
+      stackTrace = log.stack_trace;
+    }
+  }
+
+  // Build filePaths array from all logs that have file_path
+  const filePaths = [];
+  parsedLogs.forEach(log => {
+    if (log.file_path && !filePaths.includes(log.file_path)) {
+      filePaths.push(log.file_path);
+    }
+  });
+
+  // Build performance metrics steps
+  const steps = parsedLogs
+    .filter(log => log.step !== 'created' && log.step !== 'status_update' && log.step !== 'error')
+    .map(log => {
+      let stepStatus = log.status;
+
+      // If operation is complete and step is still 'running', infer completion status
+      const finalStatus = latestStatusLog.status;
+      if ((finalStatus === 'success' || finalStatus === 'error') && stepStatus === 'running') {
+        // If operation succeeded, running steps should be marked as success
+        // If operation failed, running steps should be marked as error
+        stepStatus = finalStatus === 'success' ? 'success' : 'error';
+      }
+
+      return {
+        step: log.step,
+        status: stepStatus,
+        timestamp: log.timestamp,
+        duration: log.timestamp - createdLog.timestamp,
+        ...(log.metadata || {}),
+      };
+    });
+
+  // Calculate duration if operation is complete
+  let duration = null;
+  const finalStatus = latestStatusLog.status;
+  if ((finalStatus === 'success' || finalStatus === 'error') && createdLog.timestamp) {
+    const endTimestamp = latestStatusLog.timestamp;
+    duration = endTimestamp - createdLog.timestamp;
+  }
+
+  // Get most recent timestamp
+  const latestTimestamp = Math.max(...parsedLogs.map(log => log.timestamp));
+
+  // Determine operation type with fallback logic
+  let operationType = context.operationType;
+  if (!operationType || operationType === 'unknown') {
+    // Infer operation type from step names
+    const stepNames = parsedLogs
+      .map(log => log.step)
+      .join(' ')
+      .toLowerCase();
+    if (
+      stepNames.includes('conversion') ||
+      stepNames.includes('gif') ||
+      stepNames.includes('convert')
+    ) {
+      operationType = 'convert';
+    } else if (stepNames.includes('optimization') || stepNames.includes('optimize')) {
+      operationType = 'optimize';
+    } else if (stepNames.includes('download') && !stepNames.includes('conversion')) {
+      operationType = 'download';
+    } else {
+      operationType = 'unknown';
+    }
+  }
+
+  // Determine username with fallback logic
+  let username = context.username;
+  if (!username || username === 'unknown') {
+    // Try to get username from users table if we have a userId
+    if (context.userId) {
+      try {
+        const user = getUser(context.userId);
+        if (user && user.username) {
+          username = user.username;
+        }
+      } catch (_error) {
+        // Silently fail - username will remain null or 'unknown'
+      }
+    }
+    // If still no username, use null (will display as 'unknown' in UI)
+    if (!username || username === 'unknown') {
+      username = null;
+    }
+  }
+
+  // Reconstruct operation object
+  return {
+    id: trace.operationId,
+    type: operationType,
+    status: latestStatusLog.status || 'pending',
+    userId: context.userId || null,
+    username: username,
+    fileSize: fileSize,
+    timestamp: latestTimestamp,
+    startTime: createdLog.timestamp,
+    error: error,
+    stackTrace: stackTrace,
+    filePaths: filePaths,
+    performanceMetrics: {
+      duration: duration,
+      steps: steps,
+    },
+  };
+}
+
 // Operation details endpoint
 app.get('/api/operations/:operationId', (req, res) => {
   try {
     const { operationId } = req.params;
 
     // Get operation from in-memory store
-    const operation = operations.find(op => op.id === operationId);
+    let operation = operations.find(op => op.id === operationId);
 
+    // If not in memory, try to reconstruct from database
     if (!operation) {
+      const trace = getOperationTrace(operationId);
+      if (trace) {
+        operation = reconstructOperationFromTrace(trace);
+      }
+    }
+
+    // Get detailed trace from database with parsed metadata
+    const trace = getOperationTrace(operationId);
+
+    if (!operation && !trace) {
       return res.status(404).json({ error: 'operation not found' });
     }
 
-    // Get detailed logs from database
-    const logs = getOperationLogs(operationId);
-
     res.json({
-      operation,
-      logs,
+      operation: operation || null,
+      trace: trace || null,
     });
   } catch (error) {
     logger.error('Failed to fetch operation details:', error);
@@ -555,7 +769,9 @@ app.get('/api/operations/:operationId', (req, res) => {
 app.get('/api/metrics/errors', (req, res) => {
   try {
     const { timeRange } = req.query;
-    const options = {};
+    const options = {
+      excludedComponents: ['webui'], // Exclude webui HTTP request logs from monitoring
+    };
 
     if (timeRange) {
       options.timeRange = parseInt(timeRange, 10);
@@ -694,8 +910,34 @@ const PING_INTERVAL = 30000; // 30 seconds
 // PONG_TIMEOUT removed - not currently used
 let pingInterval = null;
 
+// Helper function to enrich operation with username from database
+function enrichOperationUsername(operation) {
+  if (
+    (!operation.username || operation.username === 'unknown' || operation.username === null) &&
+    operation.userId
+  ) {
+    try {
+      const user = getUser(operation.userId);
+      if (user && user.username) {
+        operation.username = user.username;
+        return true; // Username was enriched
+      } else {
+        // User not found in database - this is expected for some operations
+        // The username will remain as null/unknown
+      }
+    } catch (error) {
+      // Silently fail - operation will keep original username
+      logger.debug(`Failed to enrich username for operation ${operation.id}: ${error.message}`);
+    }
+  }
+  return false; // Username was not enriched
+}
+
 // Store operation in memory
 function storeOperation(operation) {
+  // Enrich operation with username if missing
+  enrichOperationUsername(operation);
+
   const index = operations.findIndex(op => op.id === operation.id);
   if (index !== -1) {
     // Update existing operation
@@ -886,8 +1128,14 @@ wss.on('connection', async ws => {
 
   // Send initial data to newly connected client
   try {
+    // Enrich any operations that might have missing usernames before sending
+    const enrichedOps = operations.map(op => {
+      const enriched = { ...op };
+      enrichOperationUsername(enriched);
+      return enriched;
+    });
     // Send initial operations list
-    ws.send(JSON.stringify({ type: 'operations', data: [...operations] }));
+    ws.send(JSON.stringify({ type: 'operations', data: enrichedOps }));
 
     // Send latest system metrics
     try {
@@ -932,6 +1180,28 @@ wss.on('connection', async ws => {
   try {
     await initDatabase();
     logger.info('database initialized');
+
+    // Load recent operations from database
+    try {
+      const recentOps = getRecentOperations(MAX_OPERATIONS);
+      if (recentOps.length > 0) {
+        // Enrich operations with usernames if missing
+        let enrichedCount = 0;
+        recentOps.forEach(op => {
+          if (enrichOperationUsername(op)) {
+            enrichedCount++;
+          }
+        });
+        // Add operations to in-memory store (most recent first)
+        operations.push(...recentOps);
+        logger.info(
+          `loaded ${recentOps.length} operations from database${enrichedCount > 0 ? `, enriched ${enrichedCount} usernames` : ''}`
+        );
+      }
+    } catch (error) {
+      logger.error('failed to load operations from database:', error);
+      // Continue startup even if loading operations fails
+    }
   } catch (error) {
     logger.error('failed to initialize database:', error);
     process.exit(1);

@@ -25,7 +25,12 @@ import { gifExists, getGifPath, cleanupTempFiles, saveGif } from '../utils/stora
 import { getUserConfig } from '../utils/user-config.js';
 import { trackRecentConversion } from '../utils/user-tracking.js';
 import { optimizeGif } from '../utils/gif-optimizer.js';
-import { createOperation, updateOperationStatus } from '../utils/operations-tracker.js';
+import {
+  createOperation,
+  updateOperationStatus,
+  logOperationStep,
+  logOperationError,
+} from '../utils/operations-tracker.js';
 import { notifyCommandSuccess, notifyCommandFailure } from '../utils/ntfy-notifier.js';
 import { hashUrl } from '../utils/cobalt-queue.js';
 import { insertProcessedUrl, initDatabase, getProcessedUrl } from '../utils/database.js';
@@ -41,11 +46,13 @@ const {
 } = botConfig;
 
 // Video file signature constants
-const ALLOWED_VIDEO_SIGNATURES = {
-  mp4: Buffer.from([0x00, 0x00, 0x00, 0x18, 0x66, 0x74, 0x79, 0x70]), // MP4
+// ftyp box type signature (used by MP4 and MOV)
+const FTYP_BOX_TYPE = Buffer.from([0x66, 0x74, 0x79, 0x70]); // "ftyp" in ASCII
+
+// Fixed signatures for formats that don't use ftyp boxes
+const FIXED_VIDEO_SIGNATURES = {
   webm: Buffer.from([0x1a, 0x45, 0xdf, 0xa3]), // WebM
   avi: Buffer.from('RIFF'),
-  mov: Buffer.from([0x00, 0x00, 0x00, 0x14, 0x66, 0x74, 0x79, 0x70]), // MOV
 };
 
 const MAX_VIDEO_SIZE = 100 * 1024 * 1024; // 100MB limit for videos
@@ -69,13 +76,22 @@ function validateVideoBuffer(buffer) {
     );
   }
 
-  // Verify video file signature (magic bytes)
+  // Check for MP4/MOV files by looking for ftyp box type
+  // MP4/MOV files have a box structure where:
+  // - First 4 bytes: box size (can vary)
+  // - Bytes 4-7: box type "ftyp" (0x66, 0x74, 0x79, 0x70)
+  // Some variants might have ftyp at offset 0
+  const isMp4OrMov =
+    (buffer.length >= 8 && buffer.slice(4, 8).equals(FTYP_BOX_TYPE)) ||
+    (buffer.length >= 4 && buffer.slice(0, 4).equals(FTYP_BOX_TYPE));
+
+  // Check for fixed signatures (WebM, AVI)
   const header = buffer.slice(0, 12);
-  const isValidVideo = Object.entries(ALLOWED_VIDEO_SIGNATURES).some(([_format, signature]) => {
+  const hasFixedSignature = Object.entries(FIXED_VIDEO_SIGNATURES).some(([_format, signature]) => {
     return header.slice(0, signature.length).equals(signature);
   });
 
-  if (!isValidVideo) {
+  if (!isMp4OrMov && !hasFixedSignature) {
     throw new ValidationError(
       'file is not a valid video format. supported formats: mp4, webm, avi, mov.'
     );
@@ -107,8 +123,24 @@ export async function processConversion(
   const username = interaction.user.tag || interaction.user.username || 'unknown';
   const tempFiles = [];
 
-  // Create operation tracking
-  const operationId = createOperation('convert', userId, username);
+  // Build operation context
+  const operationContext = {
+    commandOptions: options,
+  };
+  if (originalUrl) {
+    operationContext.originalUrl = originalUrl;
+  }
+  if (attachment) {
+    operationContext.attachment = {
+      name: attachment.name || null,
+      size: attachment.size || null,
+      contentType: attachment.contentType || null,
+      url: attachment.url || null,
+    };
+  }
+
+  // Create operation tracking with context
+  const operationId = createOperation('convert', userId, username, operationContext);
 
   // Build metadata object for R2 uploads
   const buildMetadata = () => ({
@@ -125,21 +157,57 @@ export async function processConversion(
     // Initialize database if needed (for URL tracking)
     if (originalUrl) {
       await initDatabase();
+      logOperationStep(operationId, 'url_validation', 'running', {
+        message: 'Validating and processing URL',
+        metadata: { originalUrl },
+      });
     }
 
     // Download file (video or image) if not already downloaded
     // Admins bypass size limits in download
+    if (!preDownloadedBuffer) {
+      logOperationStep(operationId, 'download_start', 'running', {
+        message: `Starting download from ${attachment.url}`,
+        metadata: {
+          sourceUrl: attachment.url,
+          attachmentType,
+          expectedSize: attachment.size || null,
+        },
+      });
+    }
+
     const fileBuffer =
       preDownloadedBuffer ||
       (attachmentType === 'video'
         ? await downloadVideo(attachment.url, adminUser)
         : await downloadImage(attachment.url, adminUser));
 
+    if (!preDownloadedBuffer) {
+      logOperationStep(operationId, 'download_complete', 'success', {
+        message: 'File downloaded successfully',
+        metadata: {
+          downloadedSize: fileBuffer.length,
+          sourceUrl: attachment.url,
+        },
+      });
+    }
+
     // Generate hash
     const hash = generateHash(fileBuffer);
 
     // Update operation to running
     updateOperationStatus(operationId, 'running');
+
+    logOperationStep(operationId, 'validation_start', 'running', {
+      message: 'Validating file',
+      metadata: {
+        hash: hash.substring(0, 8) + '...',
+        attachmentType,
+        fileName: attachment.name,
+        fileSize: attachment.size,
+        contentType: attachment.contentType,
+      },
+    });
 
     // Check if URL has already been processed (only for URL-based conversions)
     if (originalUrl) {
@@ -149,6 +217,14 @@ export async function processConversion(
         logger.info(
           `URL already processed (hash: ${urlHash.substring(0, 8)}...), returning existing file URL: ${processedUrl.file_url}`
         );
+        logOperationStep(operationId, 'url_validation', 'success', {
+          message: 'URL validation complete',
+          metadata: { originalUrl },
+        });
+        logOperationStep(operationId, 'url_cache_hit', 'success', {
+          message: 'URL already processed, returning cached result',
+          metadata: { originalUrl, cachedUrl: processedUrl.file_url },
+        });
         updateOperationStatus(operationId, 'success', { fileSize: 0 });
         recordRateLimit(userId);
         await interaction.editReply({
@@ -157,12 +233,28 @@ export async function processConversion(
         await notifyCommandSuccess(username, 'convert');
         return;
       }
+      logOperationStep(operationId, 'url_validation', 'success', {
+        message: 'URL validation complete',
+        metadata: { originalUrl },
+      });
+      logOperationStep(operationId, 'url_cache_miss', 'running', {
+        message: 'URL not found in cache, proceeding with conversion',
+        metadata: { originalUrl },
+      });
+      logOperationStep(operationId, 'url_cache_miss', 'success', {
+        message: 'URL cache check complete, proceeding with conversion',
+        metadata: { originalUrl },
+      });
     }
 
     // Check if GIF already exists
     const exists = await gifExists(hash, GIF_STORAGE_PATH);
     if (exists && !options.optimize) {
       logger.info(`GIF already exists (hash: ${hash}) for user ${userId}`);
+      logOperationStep(operationId, 'gif_cache_hit', 'success', {
+        message: 'GIF already exists, returning cached result',
+        metadata: { hash: hash.substring(0, 8) + '...' },
+      });
       // Get file size for existing GIF
       const gifPath = getGifPath(hash, GIF_STORAGE_PATH);
       let gifUrl;
@@ -185,6 +277,16 @@ export async function processConversion(
       });
       return;
     }
+
+    logOperationStep(operationId, 'validation_complete', 'success', {
+      message: 'File validation passed',
+      metadata: {
+        hash: hash.substring(0, 8) + '...',
+        attachmentType,
+        needsConversion: !exists,
+        willOptimize: options.optimize || false,
+      },
+    });
 
     // If optimization is requested and original GIF exists, we'll optimize it directly
     // Otherwise, we need to convert first
@@ -277,6 +379,16 @@ export async function processConversion(
 
     // Only convert if the GIF doesn't already exist
     if (needsConversion) {
+      logOperationStep(operationId, 'conversion_start', 'running', {
+        message: `Starting ${attachmentType} to GIF conversion`,
+        metadata: {
+          inputFile: attachment.name,
+          inputSize: attachment.size,
+          inputType: attachment.contentType,
+          hash: hash.substring(0, 8) + '...',
+        },
+      });
+
       if (attachmentType === 'video') {
         // Build conversion options, using provided options, user config, or defaults
         const conversionOptions = {
@@ -310,6 +422,13 @@ export async function processConversion(
         }
 
         await convertToGif(tempFilePath, gifPath, conversionOptions);
+        logOperationStep(operationId, 'conversion_complete', 'success', {
+          message: 'Video to GIF conversion completed',
+          metadata: {
+            conversionOptions,
+            outputPath: gifPath,
+          },
+        });
       } else {
         // Check if input is already a GIF
         const isGif = attachment.contentType === 'image/gif' || ext === '.gif';
@@ -337,6 +456,10 @@ export async function processConversion(
                 `Input GIF is within size limits (${gifWidth}px <= ${MAX_GIF_WIDTH}px), copying directly`
               );
               await fs.copyFile(tempFilePath, gifPath);
+              logOperationStep(operationId, 'conversion_complete', 'success', {
+                message: 'GIF copied directly (within size limits)',
+                metadata: { gifWidth, maxWidth: MAX_GIF_WIDTH },
+              });
             } else {
               // GIF exceeds size limits or custom width requested, resize with convertImageToGif
               logger.info(
@@ -346,6 +469,10 @@ export async function processConversion(
                 width: targetWidth,
                 quality:
                   options.quality ?? (userConfig.quality !== null ? userConfig.quality : 'medium'),
+              });
+              logOperationStep(operationId, 'conversion_complete', 'success', {
+                message: 'GIF resized and converted',
+                metadata: { originalWidth: gifWidth, targetWidth },
               });
             }
           } catch (error) {
@@ -358,6 +485,9 @@ export async function processConversion(
               quality:
                 options.quality ?? (userConfig.quality !== null ? userConfig.quality : 'medium'),
             });
+            logOperationStep(operationId, 'conversion_complete', 'success', {
+              message: 'Image to GIF conversion completed (fallback)',
+            });
           }
         } else {
           // Not a GIF, proceed with normal conversion
@@ -367,6 +497,9 @@ export async function processConversion(
               (userConfig.width !== null ? userConfig.width : Math.min(MAX_GIF_WIDTH, 720)),
             quality:
               options.quality ?? (userConfig.quality !== null ? userConfig.quality : 'medium'),
+          });
+          logOperationStep(operationId, 'conversion_complete', 'success', {
+            message: 'Image to GIF conversion completed',
           });
         }
       }
@@ -400,6 +533,14 @@ export async function processConversion(
     }
 
     if (shouldOptimize) {
+      logOperationStep(operationId, 'optimization_start', 'running', {
+        message: 'Starting GIF optimization',
+        metadata: {
+          originalSize,
+          lossy: options.lossy !== undefined && options.lossy !== null ? options.lossy : null,
+        },
+      });
+
       // Generate hash for optimized file (include lossy level in hash for uniqueness)
       const optimizedHash = crypto.createHash('sha256');
       optimizedHash.update(gifBuffer);
@@ -426,6 +567,14 @@ export async function processConversion(
           GIF_STORAGE_PATH,
           buildMetadata()
         );
+        logOperationStep(operationId, 'optimization_complete', 'success', {
+          message: 'Optimized GIF found in cache',
+          metadata: {
+            originalSize,
+            optimizedSize,
+            reduction: `${((1 - optimizedSize / originalSize) * 100).toFixed(1)}%`,
+          },
+        });
       } else {
         // Optimize the GIF with specified lossy level
         const optimizeOptions =
@@ -446,6 +595,14 @@ export async function processConversion(
           GIF_STORAGE_PATH,
           buildMetadata()
         );
+        logOperationStep(operationId, 'optimization_complete', 'success', {
+          message: 'GIF optimization completed',
+          metadata: {
+            originalSize,
+            optimizedSize,
+            reduction: `${((1 - optimizedSize / originalSize) * 100).toFixed(1)}%`,
+          },
+        });
       }
     } else if (userConfig.autoOptimize) {
       // Auto-optimize if enabled in user config
@@ -531,7 +688,35 @@ export async function processConversion(
     recordRateLimit(userId);
   } catch (error) {
     logger.error(`Conversion failed for user ${userId} (${interaction.user.tag}):`, error);
-    updateOperationStatus(operationId, 'error', { error: error.message || 'unknown error' });
+
+    // Build comprehensive error metadata
+    const errorMetadata = {
+      originalUrl: originalUrl || null,
+      attachment: attachment
+        ? {
+            name: attachment.name || null,
+            size: attachment.size || null,
+            contentType: attachment.contentType || null,
+            url: attachment.url || null,
+          }
+        : null,
+      commandOptions: options,
+      attachmentType,
+      errorMessage: error.message || 'unknown error',
+      errorName: error.name || 'Error',
+      errorCode: error.code || null,
+    };
+
+    // Log detailed error with full context
+    logOperationError(operationId, error, {
+      metadata: errorMetadata,
+    });
+
+    updateOperationStatus(operationId, 'error', {
+      error: error.message || 'unknown error',
+      stackTrace: error.stack || null,
+    });
+
     await interaction.editReply({
       content: error.message || 'an error occurred while converting the file.',
     });

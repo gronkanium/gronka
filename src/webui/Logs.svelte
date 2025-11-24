@@ -45,6 +45,7 @@
       if (selectedComponent) params.append('component', selectedComponent);
       if (selectedLevels.length > 0) params.append('level', selectedLevels.join(','));
       if (searchQuery) params.append('search', searchQuery);
+      if (excludedComponents.length > 0) params.append('excludedComponents', excludedComponents.join(','));
 
       // Add time range filters
       if (timeRange) {
@@ -78,14 +79,7 @@
       if (!response.ok) throw new Error('Failed to fetch logs');
       
       const data = await response.json();
-      let fetchedLogs = data.logs || [];
-      
-      // Filter out excluded components client-side
-      if (excludedComponents.length > 0) {
-        fetchedLogs = fetchedLogs.filter(log => !excludedComponents.includes(log.component));
-      }
-      
-      logs = fetchedLogs;
+      logs = data.logs || [];
       // Note: total count may be approximate when using exclusion filter
       total = data.total || 0;
     } catch (err) {

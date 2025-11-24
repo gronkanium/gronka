@@ -3,8 +3,8 @@ import assert from 'node:assert';
 import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
-import { tmpdir } from 'os';
 import escape from 'escape-html';
+import tmp from 'tmp';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -14,11 +14,13 @@ const __dirname = path.dirname(__filename);
 
 describe('serve-site security', () => {
   let tempSiteDir;
+  let tmpDirCleanup;
 
   before(() => {
     // Create temporary site directory for testing
-    tempSiteDir = path.join(tmpdir(), 'gronka-test-site');
-    fs.mkdirSync(tempSiteDir, { recursive: true });
+    const tmpDir = tmp.dirSync({ prefix: 'gronka-test-site-', unsafeCleanup: true });
+    tempSiteDir = tmpDir.name;
+    tmpDirCleanup = tmpDir.removeCallback;
 
     // Create test files
     fs.writeFileSync(path.join(tempSiteDir, 'index.html'), '<html><body>Index</body></html>');
@@ -32,8 +34,8 @@ describe('serve-site security', () => {
 
   after(() => {
     // Clean up temp directory
-    if (fs.existsSync(tempSiteDir)) {
-      fs.rmSync(tempSiteDir, { recursive: true, force: true });
+    if (tmpDirCleanup) {
+      tmpDirCleanup();
     }
   });
 

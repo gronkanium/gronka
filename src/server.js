@@ -87,7 +87,7 @@ const generalLimiter = rateLimit({
 
 const statsLimiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutes
-  max: 10, // Very strict limit for sensitive stats endpoint
+  max: 60, // Allow dashboard polling (30s interval = ~30 requests per 15 min, with buffer)
   message: 'too many requests from this IP, please try again later',
   standardHeaders: true,
   legacyHeaders: false,
@@ -367,7 +367,33 @@ app.get('/stats', restrictToInternal, statsLimiter, basicAuth, async (req, res) 
 app.get('/api/stats', statsLimiter, basicAuth, async (req, res) => {
   try {
     logger.debug('API stats requested');
+
+    // Validate GIF_STORAGE_PATH before proceeding
+    if (
+      !GIF_STORAGE_PATH ||
+      typeof GIF_STORAGE_PATH !== 'string' ||
+      GIF_STORAGE_PATH.trim() === ''
+    ) {
+      logger.error('Invalid GIF_STORAGE_PATH configuration:', { GIF_STORAGE_PATH });
+      return res.status(500).json({
+        error: 'failed to get stats',
+        message: 'Storage path is not configured',
+        storage_path: null,
+      });
+    }
+
+    logger.debug(`Fetching stats for storage path: ${GIF_STORAGE_PATH}`);
     const stats = await getStorageStats(GIF_STORAGE_PATH);
+
+    if (!stats) {
+      logger.error('getStorageStats returned null or undefined');
+      return res.status(500).json({
+        error: 'failed to get stats',
+        message: 'Stats retrieval returned no data',
+        storage_path: storagePath,
+      });
+    }
+
     res.json({
       total_gifs: stats.totalGifs,
       total_videos: stats.totalVideos,
@@ -379,10 +405,16 @@ app.get('/api/stats', statsLimiter, basicAuth, async (req, res) => {
       storage_path: storagePath,
     });
   } catch (error) {
-    logger.error('Failed to get API stats:', error);
+    logger.error('Failed to get API stats:', {
+      error: error.message,
+      stack: error.stack,
+      storage_path: GIF_STORAGE_PATH,
+      storage_path_type: typeof GIF_STORAGE_PATH,
+    });
     res.status(500).json({
       error: 'failed to get stats',
       message: error.message,
+      storage_path: storagePath,
     });
   }
 });

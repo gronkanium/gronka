@@ -20,6 +20,10 @@ const logger = createLogger('storage');
 // TTL is configurable via STATS_CACHE_TTL env var (default 5 minutes, 0 to disable)
 const statsCache = new Map();
 
+// Mutex to prevent concurrent stats calculations for the same storage path
+// Map<storagePath, Promise<stats>>
+const statsCalculationPromises = new Map();
+
 // R2 usage cache: {usageBytes, timestamp} - single value, not per-path
 // 24 hour TTL (86400000 ms)
 const R2_CACHE_TTL = 24 * 60 * 60 * 1000;
@@ -187,11 +191,35 @@ export async function initializeR2UsageCache() {
  * @returns {string} Full path to GIF storage directory
  */
 function getStoragePath(storagePath) {
-  if (path.isAbsolute(storagePath)) {
-    return storagePath;
+  // Validate input
+  if (!storagePath || typeof storagePath !== 'string') {
+    logger.error('Invalid storagePath provided to getStoragePath:', {
+      storagePath,
+      type: typeof storagePath,
+    });
+    throw new Error('Storage path must be a non-empty string');
   }
-  // Relative path - resolve from project root
-  return path.resolve(process.cwd(), storagePath);
+
+  const trimmedPath = storagePath.trim();
+  if (trimmedPath === '') {
+    logger.error('Empty storagePath provided to getStoragePath');
+    throw new Error('Storage path cannot be empty');
+  }
+
+  try {
+    if (path.isAbsolute(trimmedPath)) {
+      return trimmedPath;
+    }
+    // Relative path - resolve from project root
+    return path.resolve(process.cwd(), trimmedPath);
+  } catch (error) {
+    logger.error('Failed to resolve storage path:', {
+      error: error.message,
+      storagePath: trimmedPath,
+      cwd: process.cwd(),
+    });
+    throw new Error(`Failed to resolve storage path: ${error.message}`);
+  }
 }
 
 /**
@@ -367,12 +395,43 @@ export async function cleanupTempFiles(tempFiles) {
  * @returns {string} Formatted size string (e.g., "1536 MB" or "1.5 GB")
  */
 export function formatFileSize(bytes) {
-  const mb = bytes / (1024 * 1024);
-  if (mb >= 1024) {
-    const gb = mb / 1024;
-    return `${gb.toFixed(2)} GB`;
+  // Validate input
+  if (bytes === null || bytes === undefined) {
+    logger.warn('formatFileSize called with null/undefined, returning 0.00 MB');
+    return '0.00 MB';
   }
-  return `${mb.toFixed(2)} MB`;
+
+  // Convert to number if it's a string
+  const numBytes = typeof bytes === 'string' ? parseFloat(bytes) : Number(bytes);
+
+  // Check for invalid numbers
+  if (isNaN(numBytes) || !isFinite(numBytes)) {
+    logger.warn('formatFileSize called with invalid number:', { bytes, numBytes });
+    return '0.00 MB';
+  }
+
+  // Handle negative numbers
+  if (numBytes < 0) {
+    logger.warn('formatFileSize called with negative number:', { bytes, numBytes });
+    return '0.00 MB';
+  }
+
+  // Handle zero
+  if (numBytes === 0) {
+    return '0.00 MB';
+  }
+
+  try {
+    const mb = numBytes / (1024 * 1024);
+    if (mb >= 1024) {
+      const gb = mb / 1024;
+      return `${gb.toFixed(2)} GB`;
+    }
+    return `${mb.toFixed(2)} MB`;
+  } catch (error) {
+    logger.error('Error formatting file size:', { error: error.message, bytes, numBytes });
+    return '0.00 MB';
+  }
 }
 
 /**
@@ -570,14 +629,108 @@ export async function saveImage(buffer, hash, extension, storagePath, metadata =
  */
 export async function getStorageStats(storagePath) {
   try {
+    // Validate storagePath parameter
+    if (!storagePath || typeof storagePath !== 'string' || storagePath.trim() === '') {
+      logger.error('getStorageStats called with invalid storagePath:', {
+        storagePath,
+        type: typeof storagePath,
+      });
+      throw new Error('Storage path must be a non-empty string');
+    }
+
     logger.debug(`Getting storage stats for: ${storagePath}`);
 
     // Check cache first
-    const cachedStats = getCachedStats(storagePath);
-    if (cachedStats) {
-      return cachedStats;
+    try {
+      const cachedStats = getCachedStats(storagePath);
+      if (cachedStats) {
+        logger.debug('Returning cached stats');
+        return cachedStats;
+      }
+    } catch (error) {
+      logger.warn('Error checking stats cache, continuing with fresh calculation:', error.message);
     }
 
+    // Check if there's already a calculation in progress for this storage path
+    // This prevents concurrent filesystem scans that could cause issues
+    const existingCalculation = statsCalculationPromises.get(storagePath);
+    if (existingCalculation) {
+      logger.debug(`Stats calculation already in progress for ${storagePath}, waiting for result`);
+      return await existingCalculation;
+    }
+
+    // Start a new calculation and store the promise
+    // Add timeout to prevent hanging (30 seconds should be more than enough)
+    const calculationPromise = Promise.race([
+      calculateStorageStats(storagePath),
+      new Promise((_, reject) =>
+        setTimeout(() => reject(new Error('Stats calculation timeout')), 30000)
+      ),
+    ]);
+    statsCalculationPromises.set(storagePath, calculationPromise);
+
+    try {
+      const result = await calculationPromise;
+      return result;
+    } catch (error) {
+      // If calculation failed, log and return safe defaults
+      logger.error('Stats calculation failed or timed out:', {
+        error: error.message,
+        storagePath,
+      });
+      // Return safe defaults - don't rethrow to avoid breaking the caller
+      return {
+        totalGifs: 0,
+        totalVideos: 0,
+        totalImages: 0,
+        diskUsageBytes: 0,
+        diskUsageFormatted: '0.00 MB',
+        gifsDiskUsageBytes: 0,
+        gifsDiskUsageFormatted: '0.00 MB',
+        videosDiskUsageBytes: 0,
+        videosDiskUsageFormatted: '0.00 MB',
+        imagesDiskUsageBytes: 0,
+        imagesDiskUsageFormatted: '0.00 MB',
+      };
+    } finally {
+      // Clean up the promise from the map once done
+      statsCalculationPromises.delete(storagePath);
+    }
+  } catch (error) {
+    // Make sure to clean up on error too
+    statsCalculationPromises.delete(storagePath);
+    logger.error(`Failed to get storage stats:`, {
+      error: error.message,
+      stack: error.stack,
+      storagePath,
+      storagePathType: typeof storagePath,
+    });
+
+    // Return safe defaults
+    return {
+      totalGifs: 0,
+      totalVideos: 0,
+      totalImages: 0,
+      diskUsageBytes: 0,
+      diskUsageFormatted: '0.00 MB',
+      gifsDiskUsageBytes: 0,
+      gifsDiskUsageFormatted: '0.00 MB',
+      videosDiskUsageBytes: 0,
+      videosDiskUsageFormatted: '0.00 MB',
+      imagesDiskUsageBytes: 0,
+      imagesDiskUsageFormatted: '0.00 MB',
+    };
+  }
+}
+
+/**
+ * Internal function to actually calculate storage stats
+ * This is separated to allow mutex protection in getStorageStats
+ * @param {string} storagePath - Base storage path
+ * @returns {Promise<Object>} Stats object
+ */
+async function calculateStorageStats(storagePath) {
+  try {
     // Check if R2 is configured
     const useR2 =
       r2Config.accountId && r2Config.accessKeyId && r2Config.secretAccessKey && r2Config.bucketName;
@@ -643,7 +796,20 @@ export async function getStorageStats(storagePath) {
     } else {
       // Fallback to local filesystem
       logger.debug('R2 not configured, using local filesystem for storage stats');
-      const basePath = getStoragePath(storagePath);
+
+      // Validate and resolve storage path with error handling
+      let basePath;
+      try {
+        basePath = getStoragePath(storagePath);
+        logger.debug(`Resolved storage path to: ${basePath}`);
+      } catch (error) {
+        logger.error('Failed to resolve storage path in getStorageStats:', {
+          error: error.message,
+          stack: error.stack,
+          storagePath,
+        });
+        throw error; // Re-throw to be caught by outer try-catch
+      }
 
       // Scan gifs subdirectory
       try {
@@ -757,30 +923,67 @@ export async function getStorageStats(storagePath) {
       }
     }
 
-    const stats = {
-      totalGifs,
-      totalVideos,
-      totalImages,
-      diskUsageBytes: totalSize,
-      diskUsageFormatted: formatFileSize(totalSize),
-      gifsDiskUsageBytes: gifsSize,
-      gifsDiskUsageFormatted: formatFileSize(gifsSize),
-      videosDiskUsageBytes: videosSize,
-      videosDiskUsageFormatted: formatFileSize(videosSize),
-      imagesDiskUsageBytes: imagesSize,
-      imagesDiskUsageFormatted: formatFileSize(imagesSize),
-    };
+    // Build stats object with safe formatting
+    let stats;
+    try {
+      stats = {
+        totalGifs,
+        totalVideos,
+        totalImages,
+        diskUsageBytes: totalSize,
+        diskUsageFormatted: formatFileSize(totalSize),
+        gifsDiskUsageBytes: gifsSize,
+        gifsDiskUsageFormatted: formatFileSize(gifsSize),
+        videosDiskUsageBytes: videosSize,
+        videosDiskUsageFormatted: formatFileSize(videosSize),
+        imagesDiskUsageBytes: imagesSize,
+        imagesDiskUsageFormatted: formatFileSize(imagesSize),
+      };
+    } catch (error) {
+      logger.error('Error formatting file sizes in getStorageStats:', {
+        error: error.message,
+        totalSize,
+        gifsSize,
+        videosSize,
+        imagesSize,
+      });
+      // Use safe defaults if formatting fails
+      stats = {
+        totalGifs,
+        totalVideos,
+        totalImages,
+        diskUsageBytes: totalSize,
+        diskUsageFormatted: '0.00 MB',
+        gifsDiskUsageBytes: gifsSize,
+        gifsDiskUsageFormatted: '0.00 MB',
+        videosDiskUsageBytes: videosSize,
+        videosDiskUsageFormatted: '0.00 MB',
+        imagesDiskUsageBytes: imagesSize,
+        imagesDiskUsageFormatted: '0.00 MB',
+      };
+    }
 
     logger.debug(
       `Storage stats: ${stats.totalGifs} GIFs, ${stats.totalVideos} videos, ${stats.totalImages} images, ${stats.diskUsageFormatted}`
     );
 
-    // Cache the results
-    setCachedStats(storagePath, stats);
+    // Cache the results (with error handling)
+    try {
+      setCachedStats(storagePath, stats);
+    } catch (error) {
+      logger.warn('Failed to cache stats, continuing anyway:', error.message);
+    }
 
     return stats;
   } catch (error) {
-    logger.error(`Failed to get storage stats:`, error);
+    logger.error(`Failed to get storage stats:`, {
+      error: error.message,
+      stack: error.stack,
+      storagePath,
+      storagePathType: typeof storagePath,
+    });
+
+    // Return safe defaults
     return {
       totalGifs: 0,
       totalVideos: 0,

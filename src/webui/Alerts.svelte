@@ -107,6 +107,17 @@
     return formatTimestamp(timestamp);
   }
 
+  function formatDuration(ms) {
+    if (!ms || ms === 0) return 'N/A';
+    if (ms < 1000) return `${ms}ms`;
+    const seconds = ms / 1000;
+    if (seconds < 60) return `${seconds.toFixed(1)}s`;
+    const minutes = seconds / 60;
+    if (minutes < 60) return `${minutes.toFixed(1)}m`;
+    const hours = minutes / 60;
+    return `${hours.toFixed(1)}h`;
+  }
+
   function getSeverityClass(severity) {
     return severity ? severity.toLowerCase() : 'unknown';
   }
@@ -241,9 +252,14 @@
             <div class="alert-meta">user id: <code>{alert.user_id}</code></div>
           {/if}
           {#if alert.metadata}
+            {@const parsedMetadata = JSON.parse(alert.metadata)}
+            {#if parsedMetadata.duration !== undefined}
+              <div class="alert-meta">duration: <code>{formatDuration(parsedMetadata.duration)}</code></div>
+            {/if}
             <details class="alert-metadata">
               <summary>metadata</summary>
-              <pre>{JSON.stringify(JSON.parse(alert.metadata), null, 2)}</pre>
+              {@const formattedMetadata = {...parsedMetadata, duration: parsedMetadata.duration !== undefined ? formatDuration(parsedMetadata.duration) : parsedMetadata.duration}}
+              <pre>{JSON.stringify(formattedMetadata, null, 2)}</pre>
             </details>
           {/if}
         </div>

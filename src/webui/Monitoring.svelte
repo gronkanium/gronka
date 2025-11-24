@@ -14,26 +14,105 @@
     levels: false
   };
 
+  // Cache keys for localStorage
+  const CACHE_KEYS = {
+    errorMetrics: 'monitoring_error_metrics',
+    storageStats: 'monitoring_storage_stats',
+  };
+  const CACHE_TTL = 5 * 60 * 1000; // 5 minutes
+
   // Reactive operations count from WebSocket
   $: operations = $wsOperations || [];
   $: activeOperations = operations.filter(op => op.status === 'running' || op.status === 'pending').length;
   $: completedOperations = operations.filter(op => op.status === 'success' || op.status === 'error').length;
 
+  // Load cached data from localStorage
+  function loadCachedData() {
+    try {
+      // Load error metrics
+      const cachedErrorMetrics = localStorage.getItem(CACHE_KEYS.errorMetrics);
+      if (cachedErrorMetrics) {
+        const parsed = JSON.parse(cachedErrorMetrics);
+        if (parsed.data && parsed.timestamp && (Date.now() - parsed.timestamp) < CACHE_TTL) {
+          errorMetrics = parsed.data;
+          console.log('[Monitoring] Loaded cached error metrics:', parsed.data);
+        } else {
+          // Clear stale cache
+          localStorage.removeItem(CACHE_KEYS.errorMetrics);
+        }
+      }
+
+      // Load storage stats
+      const cachedStorageStats = localStorage.getItem(CACHE_KEYS.storageStats);
+      if (cachedStorageStats) {
+        const parsed = JSON.parse(cachedStorageStats);
+        if (parsed.data && parsed.timestamp && (Date.now() - parsed.timestamp) < CACHE_TTL) {
+          storageStats = parsed.data;
+        } else {
+          // Clear stale cache
+          localStorage.removeItem(CACHE_KEYS.storageStats);
+        }
+      }
+    } catch (err) {
+      console.warn('Failed to load cached data:', err);
+      // Clear corrupted cache
+      try {
+        localStorage.removeItem(CACHE_KEYS.errorMetrics);
+        localStorage.removeItem(CACHE_KEYS.storageStats);
+      } catch (clearErr) {
+        // Ignore errors when clearing cache
+      }
+    }
+  }
+
+  // Save data to localStorage cache
+  function saveToCache(key, data) {
+    try {
+      localStorage.setItem(key, JSON.stringify({
+        data,
+        timestamp: Date.now(),
+      }));
+    } catch (err) {
+      console.warn('Failed to save to cache:', err);
+    }
+  }
+
   async function fetchErrorMetrics() {
     try {
       const response = await fetch('/api/metrics/errors');
       if (!response.ok) throw new Error('failed to fetch error metrics');
-      errorMetrics = await response.json();
+      const data = await response.json();
+      console.log('Error metrics API response:', data);
+      console.log('Error counts:', {
+        errorCount1h: data.errorCount1h,
+        errorCount24h: data.errorCount24h,
+        warnCount1h: data.warnCount1h,
+        warnCount24h: data.warnCount24h,
+        total: data.total,
+        byLevel: data.byLevel
+      });
+      errorMetrics = data;
+      saveToCache(CACHE_KEYS.errorMetrics, data);
     } catch (err) {
       console.error('Failed to fetch error metrics:', err);
+      // If fetch fails and we have no cached data, keep existing or set to null
+      if (!errorMetrics) {
+        errorMetrics = null;
+      }
     }
   }
 
   async function fetchStorageStats() {
     try {
-      storageStats = await fetchStats();
+      const data = await fetchStats();
+      storageStats = data;
+      saveToCache(CACHE_KEYS.storageStats, data);
     } catch (err) {
       console.error('Failed to fetch storage stats:', err);
+      // If fetch fails and we have no cached data, keep existing or set to null
+      if (!storageStats) {
+        storageStats = null;
+      }
     }
   }
 
@@ -101,7 +180,28 @@
     showDetails = { ...showDetails };
   }
 
+  // Reactive statement to log error metrics when they change (for debugging)
+  $: if (errorMetrics) {
+    console.log('[Monitoring] Error metrics updated:', {
+      errorCount1h: errorMetrics.errorCount1h,
+      errorCount24h: errorMetrics.errorCount24h,
+      warnCount1h: errorMetrics.warnCount1h,
+      warnCount24h: errorMetrics.warnCount24h,
+      total: errorMetrics.total,
+      byLevel: errorMetrics.byLevel
+    });
+  }
+
   onMount(() => {
+    // Load cached data immediately for instant display
+    loadCachedData();
+    
+    // If we have cached data, we can show it immediately
+    if (errorMetrics || storageStats) {
+      loading = false;
+    }
+    
+    // Fetch fresh data in the background
     fetchMetrics();
     const interval = setInterval(fetchMetrics, 30000); // Refresh every 30s
     
@@ -205,9 +305,9 @@
           <span>errors</span>
         </div>
         <div class="metric-body">
-          <div class="metric-value error">{errorMetrics?.errorCount1h || 0}</div>
+          <div class="metric-value error">{errorMetrics?.errorCount1h ?? 0}</div>
           <div class="metric-label">last hour</div>
-          <div class="metric-secondary">{errorMetrics?.errorCount24h || 0} (24h)</div>
+          <div class="metric-secondary">{errorMetrics?.errorCount24h ?? 0} (24h)</div>
         </div>
       </div>
 
@@ -217,9 +317,9 @@
           <span>warnings</span>
         </div>
         <div class="metric-body">
-          <div class="metric-value warning">{errorMetrics?.warnCount1h || 0}</div>
+          <div class="metric-value warning">{errorMetrics?.warnCount1h ?? 0}</div>
           <div class="metric-label">last hour</div>
-          <div class="metric-secondary">{errorMetrics?.warnCount24h || 0} (24h)</div>
+          <div class="metric-secondary">{errorMetrics?.warnCount24h ?? 0} (24h)</div>
         </div>
       </div>
 
@@ -444,14 +544,43 @@
     font-weight: 600;
     color: #fff;
     line-height: 1.2;
+    display: block;
+    margin: 0;
+    padding: 0;
+    text-align: left;
+    box-sizing: border-box;
+    width: auto;
+    height: auto;
   }
 
+  .metric-card.errors .metric-value.error,
   .metric-value.error {
+    font-size: 1.75rem;
+    font-weight: 600;
     color: #ff6b6b;
+    line-height: 1.2;
+    display: block;
+    margin: 0;
+    padding: 0;
+    text-align: left;
+    box-sizing: border-box;
+    width: auto;
+    height: auto;
   }
 
+  .metric-card.warnings .metric-value.warning,
   .metric-value.warning {
+    font-size: 1.75rem;
+    font-weight: 600;
     color: #ffd93d;
+    line-height: 1.2;
+    display: block;
+    margin: 0;
+    padding: 0;
+    text-align: left;
+    box-sizing: border-box;
+    width: auto;
+    height: auto;
   }
 
   .metric-value.status-good {

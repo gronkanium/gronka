@@ -5,6 +5,81 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres (attempts) to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.11.3-prerelease] - 2025-11-24
+
+### Added
+
+- Docker webui rebuild scripts
+  - Added `docker:rebuild-webui` npm script
+  - Cross-platform scripts (JS wrapper, bash, PowerShell) for rebuilding webui in Docker containers
+  - Installs devDependencies and builds webui inside container
+- Operation duration tracking in notifications
+  - Automatic duration calculation and display in ntfy notifications
+  - Duration formatting (ms, seconds, minutes, hours)
+  - Duration display in Alerts.svelte metadata
+- Stats caching improvements
+  - Added 30-second cache for stats API endpoint in webui-server.js
+  - Added localStorage caching (5min TTL) for error metrics and storage stats in Monitoring.svelte
+  - Reduces load on main server and improves dashboard responsiveness
+- User operations pagination
+  - Added pagination support for user operations in UserProfile.svelte
+  - Offset and limit parameters for efficient data loading
+  - Real-time WebSocket updates refresh current page
+- getOperation() function in operations-tracker.js for retrieving operations by ID
+
+### Changed
+
+- Social media URL cache behavior
+  - Skip cache for social media URLs if cached result is not a GIF
+  - Allows social media URLs to be processed fresh through Cobalt for conversion
+  - Improves conversion quality for social media content
+- Storage stats calculation improvements
+  - Added mutex to prevent concurrent filesystem scans for the same storage path
+  - Added 30-second timeout protection for stats calculations
+  - Enhanced error handling with safe default values
+  - Improved input validation for storage paths
+- File size formatting improvements
+  - Added comprehensive input validation (null, undefined, NaN, negative numbers)
+  - Better error handling and logging for edge cases
+  - Returns safe defaults instead of throwing errors
+- Storage path validation
+  - Enhanced getStoragePath() with input validation and error handling
+  - Better error messages and logging
+- Database query improvements
+  - Added excludeComponentLevels parameter for filtering specific component+level combinations
+  - Allows fine-grained log filtering (e.g., exclude webui INFO logs but keep ERROR/WARN)
+- Operation trace improvements
+  - Update 'created' step status to 'success' when execution steps exist
+  - Better status tracking for operation lifecycle
+- Stats endpoint improvements
+  - Enhanced validation and error handling
+  - Better error messages and logging
+  - Safe default values on errors
+- Rate limiting adjustments
+  - Increased stats endpoint rate limit from 10 to 60 requests per 15min
+  - Supports dashboard polling at 30s intervals
+- Stats API endpoint path
+  - Fixed webui-server.js to use `/api/stats` instead of `/stats`
+  - Matches main server API structure
+- WebUI logs filtering
+  - Exclude webui INFO logs from logs list to reduce noise
+  - Keep ERROR/WARN logs from webui visible for monitoring
+- Error metrics endpoint
+  - Don't exclude webui from error/warning counts
+  - Only exclude webui INFO logs from totals/aggregations
+- User operations endpoint
+  - Improved database querying to fetch all operations for accurate counting
+  - Better pagination support with offset and limit
+
+### Fixed
+
+- Stats endpoint validation and error handling
+- Storage path validation edge cases
+- File size formatting edge cases (null, undefined, NaN, negative numbers)
+- Concurrent stats calculation race conditions
+- Stats API endpoint path mismatch between webui-server and main server
+- Rate limiting too strict for dashboard polling
+
 ## [0.11.2] - 2025-11-24
 
 ### Security
@@ -213,6 +288,7 @@ and this project adheres (attempts) to [Semantic Versioning](https://semver.org/
   - Pre-commit validation
   - Docker buildx setup for cache support
 
+[0.11.3-prerelease]: https://github.com/thedorekaczynski/gronka/compare/v0.11.2...v0.11.3-prerelease
 [0.11.2]: https://github.com/thedorekaczynski/gronka/compare/v0.11.1-prerelease...v0.11.2
 [0.11.1-prerelease]: https://github.com/thedorekaczynski/gronka/compare/v0.11.0-prerelease...v0.11.1-prerelease
 [0.11.0-prerelease]: https://github.com/thedorekaczynski/gronka/compare/v0.10.0...v0.11.0-prerelease

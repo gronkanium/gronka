@@ -1,18 +1,20 @@
 <script>
-  import { onMount, onDestroy } from 'svelte';
+  import { onMount } from 'svelte';
+  import { logs as wsLogs, connected as wsConnected } from './websocket-store.js';
 
   let logs = [];
   let total = 0;
   let loading = true;
   let error = null;
-  let ws = null;
-  let connected = false;
 
   // Filters
   let selectedComponent = '';
+  let excludedComponents = [];
   let selectedLevels = ['ERROR', 'WARN', 'INFO'];
   let searchQuery = '';
   let autoScroll = false;
+  let timeRange = '';
+  let componentFilterMode = 'all'; // 'include', 'exclude', or 'all'
 
   // Pagination
   let limit = 50;
@@ -44,11 +46,47 @@
       if (selectedLevels.length > 0) params.append('level', selectedLevels.join(','));
       if (searchQuery) params.append('search', searchQuery);
 
+      // Add time range filters
+      if (timeRange) {
+        const now = Date.now();
+        let startTime;
+        
+        switch (timeRange) {
+          case '1h':
+            startTime = now - 60 * 60 * 1000;
+            break;
+          case '6h':
+            startTime = now - 6 * 60 * 60 * 1000;
+            break;
+          case '24h':
+            startTime = now - 24 * 60 * 60 * 1000;
+            break;
+          case '7d':
+            startTime = now - 7 * 24 * 60 * 60 * 1000;
+            break;
+          case '30d':
+            startTime = now - 30 * 24 * 60 * 60 * 1000;
+            break;
+        }
+        
+        if (startTime) {
+          params.append('startTime', startTime.toString());
+        }
+      }
+
       const response = await fetch(`/api/logs?${params}`);
       if (!response.ok) throw new Error('Failed to fetch logs');
       
       const data = await response.json();
-      logs = data.logs || [];
+      let fetchedLogs = data.logs || [];
+      
+      // Filter out excluded components client-side
+      if (excludedComponents.length > 0) {
+        fetchedLogs = fetchedLogs.filter(log => !excludedComponents.includes(log.component));
+      }
+      
+      logs = fetchedLogs;
+      // Note: total count may be approximate when using exclusion filter
       total = data.total || 0;
     } catch (err) {
       error = err.message;
@@ -81,6 +119,30 @@
 
   function handleComponentChange(event) {
     selectedComponent = event.target.value;
+    // Clear excluded components when including a component
+    if (selectedComponent) {
+      excludedComponents = [];
+      componentFilterMode = 'include';
+    }
+    offset = 0;
+    fetchLogs();
+  }
+
+  function handleExcludedComponentToggle(component) {
+    if (excludedComponents.includes(component)) {
+      excludedComponents = excludedComponents.filter(c => c !== component);
+      // If no excluded components left, switch to 'all' mode
+      if (excludedComponents.length === 0) {
+        componentFilterMode = 'all';
+      }
+    } else {
+      excludedComponents = [...excludedComponents, component];
+      componentFilterMode = 'exclude';
+      // Clear selected component when excluding components
+      if (selectedComponent === component) {
+        selectedComponent = '';
+      }
+    }
     offset = 0;
     fetchLogs();
   }
@@ -92,10 +154,55 @@
 
   function handleClearFilters() {
     selectedComponent = '';
+    excludedComponents = [];
+    componentFilterMode = 'all';
     selectedLevels = ['ERROR', 'WARN', 'INFO'];
     searchQuery = '';
+    timeRange = '';
     offset = 0;
     fetchLogs();
+  }
+
+  function handleTimeRangeChange(event) {
+    timeRange = event.target.value;
+    offset = 0;
+    fetchLogs();
+  }
+
+  function exportLogs(format) {
+    if (logs.length === 0) return;
+
+    if (format === 'json') {
+      const dataStr = JSON.stringify(logs, null, 2);
+      const dataBlob = new Blob([dataStr], { type: 'application/json' });
+      downloadBlob(dataBlob, `logs-${Date.now()}.json`);
+    } else if (format === 'csv') {
+      const headers = ['timestamp', 'level', 'component', 'message'];
+      const csvContent = [
+        headers.join(','),
+        ...logs.map(log =>
+          headers
+            .map(h => {
+              const value = h === 'timestamp' ? new Date(log[h]).toISOString() : (log[h] || '');
+              return `"${String(value).replace(/"/g, '""')}"`;
+            })
+            .join(',')
+        ),
+      ].join('\n');
+      const dataBlob = new Blob([csvContent], { type: 'text/csv' });
+      downloadBlob(dataBlob, `logs-${Date.now()}.csv`);
+    }
+  }
+
+  function downloadBlob(blob, filename) {
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
   }
 
   function handlePrevPage() {
@@ -112,86 +219,183 @@
     }
   }
 
-  function connectWebSocket() {
-    const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-    const wsUrl = `${protocol}//${window.location.host}/api/ws`;
+  // Check if a log entry matches current filters
+  function matchesFilters(logEntry) {
+    if (selectedComponent && logEntry.component !== selectedComponent) {
+      return false;
+    }
+    if (excludedComponents.length > 0 && excludedComponents.includes(logEntry.component)) {
+      return false;
+    }
+    if (selectedLevels.length > 0 && !selectedLevels.includes(logEntry.level)) {
+      return false;
+    }
+    if (searchQuery) {
+      const query = searchQuery.toLowerCase();
+      const matchesSearch =
+        (logEntry.message && logEntry.message.toLowerCase().includes(query)) ||
+        (logEntry.component && logEntry.component.toLowerCase().includes(query));
+      if (!matchesSearch) {
+        return false;
+      }
+    }
+    if (timeRange) {
+      const now = Date.now();
+      let startTime;
+      switch (timeRange) {
+        case '1h':
+          startTime = now - 60 * 60 * 1000;
+          break;
+        case '6h':
+          startTime = now - 6 * 60 * 60 * 1000;
+          break;
+        case '24h':
+          startTime = now - 24 * 60 * 60 * 1000;
+          break;
+        case '7d':
+          startTime = now - 7 * 24 * 60 * 60 * 1000;
+          break;
+        case '30d':
+          startTime = now - 30 * 24 * 60 * 60 * 1000;
+          break;
+      }
+      if (startTime && logEntry.timestamp < startTime) {
+        return false;
+      }
+    }
+    return true;
+  }
 
-    try {
-      ws = new WebSocket(wsUrl);
+  // Handle new logs from WebSocket
+  function handleNewLog(newLog) {
+    // Only add if it matches current filters
+    if (!matchesFilters(newLog)) {
+      return;
+    }
 
-      ws.onopen = () => {
-        connected = true;
-      };
-
-      ws.onmessage = event => {
-        try {
-          const message = JSON.parse(event.data);
-          if (message.type === 'log') {
-            // Add new log at the beginning if we're on the first page
-            if (offset === 0 && autoScroll) {
-              logs = [message.data, ...logs];
-              // Keep only limit logs
-              if (logs.length > limit) {
-                logs = logs.slice(0, limit);
-              }
-              total += 1;
-            }
-          }
-        } catch (err) {
-          console.error('Error parsing websocket message:', err);
-        }
-      };
-
-      ws.onerror = err => {
-        console.error('WebSocket error:', err);
-        connected = false;
-      };
-
-      ws.onclose = () => {
-        connected = false;
-        // Attempt to reconnect after 3 seconds
-        setTimeout(() => {
-          if (!ws || ws.readyState === WebSocket.CLOSED) {
-            connectWebSocket();
-          }
-        }, 3000);
-      };
-    } catch (err) {
-      console.error('Error creating WebSocket:', err);
-      connected = false;
+    // If we're on the first page, add to the list
+    if (offset === 0) {
+      logs = [newLog, ...logs];
+      // Keep only limit logs
+      if (logs.length > limit) {
+        logs = logs.slice(0, limit);
+      }
+      total += 1;
+    } else {
+      // If we're on a later page, just update the total
+      total += 1;
     }
   }
 
   onMount(() => {
     fetchLogs();
     fetchComponents();
-    connectWebSocket();
-  });
-
-  onDestroy(() => {
-    if (ws) {
-      ws.close();
-    }
+    
+    // Subscribe to WebSocket logs (connection managed by App.svelte)
+    const unsubscribe = wsLogs.subscribe(newLogs => {
+      // Only process new logs that aren't already in our list
+      if (newLogs.length > 0) {
+        const latestLog = newLogs[0];
+        const exists = logs.some(log => log.id === latestLog.id || 
+          (log.timestamp === latestLog.timestamp && log.message === latestLog.message));
+        
+        if (!exists) {
+          handleNewLog(latestLog);
+        }
+      }
+    });
+    
+    return () => {
+      unsubscribe();
+    };
   });
 </script>
 
 <section class="logs">
   <div class="header">
     <h2>logs</h2>
-    <div class="ws-status" class:connected>
-      {connected ? '● live' : '○ disconnected'}
+    <div class="ws-status" class:connected={$wsConnected}>
+      {$wsConnected ? '● live' : '○ disconnected'}
     </div>
   </div>
 
   <div class="filters">
-    <div class="filter-group">
-      <label for="component-filter">component:</label>
-      <select id="component-filter" value={selectedComponent} on:change={handleComponentChange}>
-        <option value="">all</option>
-        {#each components as component}
-          <option value={component}>{component}</option>
-        {/each}
-      </select>
+    <div class="filter-group component-filters">
+      <label>components:</label>
+      <div class="component-filter-mode">
+        <label class="mode-toggle">
+          <input 
+            type="radio" 
+            name="component-mode" 
+            value="include" 
+            checked={componentFilterMode === 'include'}
+            on:change={() => { 
+              componentFilterMode = 'include';
+              excludedComponents = [];
+              selectedComponent = '';
+              offset = 0;
+              fetchLogs();
+            }}
+          />
+          <span>include</span>
+        </label>
+        <label class="mode-toggle">
+          <input 
+            type="radio" 
+            name="component-mode" 
+            value="exclude" 
+            checked={componentFilterMode === 'exclude'}
+            on:change={() => { 
+              componentFilterMode = 'exclude';
+              selectedComponent = '';
+              offset = 0;
+              fetchLogs();
+            }}
+          />
+          <span>exclude</span>
+        </label>
+        <label class="mode-toggle">
+          <input 
+            type="radio" 
+            name="component-mode" 
+            value="all" 
+            checked={componentFilterMode === 'all'}
+            on:change={() => { 
+              componentFilterMode = 'all';
+              selectedComponent = '';
+              excludedComponents = [];
+              offset = 0;
+              fetchLogs();
+            }}
+          />
+          <span>all</span>
+        </label>
+      </div>
+      <div class="component-checkboxes">
+        {#if componentFilterMode === 'include'}
+          <!-- Include mode: single select dropdown -->
+          <select id="component-filter" value={selectedComponent} on:change={handleComponentChange}>
+            <option value="">all</option>
+            {#each components as component}
+              <option value={component}>{component}</option>
+            {/each}
+          </select>
+        {:else if componentFilterMode === 'exclude'}
+          <!-- Exclude mode: checkboxes -->
+          <div class="component-checkbox-list">
+            {#each components as component}
+              <label class="component-checkbox">
+                <input 
+                  type="checkbox" 
+                  checked={excludedComponents.includes(component)}
+                  on:change={() => handleExcludedComponentToggle(component)}
+                />
+                <span>{component}</span>
+              </label>
+            {/each}
+          </div>
+        {/if}
+      </div>
     </div>
 
     <div class="filter-group">
@@ -240,12 +444,28 @@
       <button class="btn-small" on:click={handleSearch}>search</button>
     </div>
 
+    <div class="filter-group">
+      <label for="time-range-filter">time range:</label>
+      <select id="time-range-filter" value={timeRange} on:change={handleTimeRangeChange}>
+        <option value="">all time</option>
+        <option value="1h">last hour</option>
+        <option value="6h">last 6 hours</option>
+        <option value="24h">last 24 hours</option>
+        <option value="7d">last 7 days</option>
+        <option value="30d">last 30 days</option>
+      </select>
+    </div>
+
     <div class="filter-actions">
       <button class="btn-small" on:click={handleClearFilters}>clear filters</button>
       <label class="auto-scroll-toggle">
         <input type="checkbox" bind:checked={autoScroll} />
         auto-scroll
       </label>
+      <div class="export-buttons">
+        <button class="btn-small" on:click={() => exportLogs('json')}>export json</button>
+        <button class="btn-small" on:click={() => exportLogs('csv')}>export csv</button>
+      </div>
     </div>
   </div>
 
@@ -265,6 +485,7 @@
             <th class="level-col">level</th>
             <th class="component-col">component</th>
             <th class="message-col">message</th>
+            <th class="metadata-col">metadata</th>
           </tr>
         </thead>
         <tbody>
@@ -278,6 +499,16 @@
               </td>
               <td class="component-cell">{log.component}</td>
               <td class="message-cell">{log.message}</td>
+              <td class="metadata-cell">
+                {#if log.metadata}
+                  <details>
+                    <summary>view</summary>
+                    <pre>{log.metadata}</pre>
+                  </details>
+                {:else}
+                  <span class="no-data">-</span>
+                {/if}
+              </td>
             </tr>
           {/each}
         </tbody>
@@ -374,6 +605,79 @@
     min-width: 200px;
   }
 
+  .component-filters {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 0.5rem;
+  }
+
+  .component-filter-mode {
+    display: flex;
+    gap: 0.5rem;
+    align-items: center;
+  }
+
+  .mode-toggle {
+    display: flex;
+    align-items: center;
+    gap: 0.3rem;
+    font-size: 0.85rem;
+    color: #aaa;
+    cursor: pointer;
+  }
+
+  .mode-toggle input[type="radio"] {
+    cursor: pointer;
+  }
+
+  .mode-toggle input[type="radio"]:checked + span {
+    color: #51cf66;
+  }
+
+  .component-checkboxes {
+    width: 100%;
+  }
+
+  .component-checkbox-list {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+    max-height: 120px;
+    overflow-y: auto;
+    padding: 0.5rem;
+    background-color: #2a2a2a;
+    border: 1px solid #444;
+    border-radius: 3px;
+  }
+
+  .component-checkbox {
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+    font-size: 0.85rem;
+    color: #aaa;
+    cursor: pointer;
+    padding: 0.3rem 0.6rem;
+    background-color: #1a1a1a;
+    border: 1px solid #333;
+    border-radius: 3px;
+    white-space: nowrap;
+  }
+
+  .component-checkbox:hover {
+    background-color: #2a2a2a;
+    border-color: #555;
+  }
+
+  .component-checkbox input[type="checkbox"] {
+    cursor: pointer;
+  }
+
+  .component-checkbox input[type="checkbox"]:checked + span {
+    color: #ff6b6b;
+    font-weight: 500;
+  }
+
   .level-toggles {
     display: flex;
     gap: 0.25rem;
@@ -389,6 +693,8 @@
     border-radius: 3px;
     text-transform: uppercase;
     font-weight: 500;
+    min-width: 70px;
+    text-align: center;
   }
 
   .level-btn:hover {
@@ -448,6 +754,49 @@
     font-size: 0.85rem;
     color: #aaa;
     cursor: pointer;
+  }
+
+  .export-buttons {
+    display: flex;
+    gap: 0.5rem;
+  }
+
+  .metadata-col {
+    width: 100px;
+  }
+
+  .metadata-cell {
+    font-size: 0.8rem;
+  }
+
+  .metadata-cell details {
+    cursor: pointer;
+  }
+
+  .metadata-cell summary {
+    color: #51cf66;
+    user-select: none;
+  }
+
+  .metadata-cell summary:hover {
+    color: #6de380;
+  }
+
+  .metadata-cell pre {
+    margin-top: 0.5rem;
+    padding: 0.5rem;
+    background-color: #0d0d0d;
+    border: 1px solid #333;
+    border-radius: 3px;
+    overflow-x: auto;
+    white-space: pre-wrap;
+    word-wrap: break-word;
+    max-width: 400px;
+    font-size: 0.75rem;
+  }
+
+  .metadata-cell .no-data {
+    color: #555;
   }
 
   .logs-container {

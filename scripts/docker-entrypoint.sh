@@ -95,16 +95,26 @@ trap 'cleanup' TERM INT
 if [ -n "$WEBUI_PORT" ]; then
     # WebUI mode: only start webui-server.js
     log_info "Detected webui service, starting webui server only..."
+    
+    # Check if node_modules exists and has required dependencies
+    if [ ! -d "node_modules" ] || [ ! -d "node_modules/express" ]; then
+        log_error "node_modules not found or incomplete. Please rebuild the container."
+        exit 1
+    fi
+    
     log_info "Starting webui server..."
-    node src/webui-server.js &
+    # Run in foreground first to capture any immediate errors, then background it
+    node src/webui-server.js > /tmp/webui.log 2>&1 &
     WEBUI_PID=$!
     
-    # Give webui a moment to start
-    sleep 2
+    # Give webui more time to start and show any errors
+    sleep 5
     
     # Check if webui started successfully
     if ! is_process_running "$WEBUI_PID"; then
         log_error "WebUI process failed to start"
+        log_error "Last 20 lines of output:"
+        tail -n 20 /tmp/webui.log 2>/dev/null || echo "No log file available"
         exit 1
     fi
     
@@ -115,6 +125,8 @@ if [ -n "$WEBUI_PORT" ]; then
     while true; do
         if ! is_process_running "$WEBUI_PID"; then
             log_error "WebUI process exited unexpectedly (PID: $WEBUI_PID)"
+            log_error "Last 20 lines of output:"
+            tail -n 20 /tmp/webui.log 2>/dev/null || echo "No log file available"
             cleanup
             exit 1
         fi

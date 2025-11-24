@@ -3,6 +3,9 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
+      args:
+        BUILD_TIMESTAMP: ${BUILD_TIMESTAMP:-}
+        GIT_COMMIT: ${GIT_COMMIT:-}
     container_name: gronka
     restart: unless-stopped
     environment:
@@ -51,6 +54,9 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
+      args:
+        BUILD_TIMESTAMP: ${BUILD_TIMESTAMP:-}
+        GIT_COMMIT: ${GIT_COMMIT:-}
     container_name: gronka-webui
     restart: unless-stopped
     environment:
@@ -59,6 +65,8 @@ services:
       - MAIN_SERVER_URL=http://app:3000
       - STATS_USERNAME=${STATS_USERNAME:-}
       - STATS_PASSWORD=${STATS_PASSWORD:-}
+    volumes:
+      - ./data:/app/data
     ports:
       # Accessible from all interfaces on host machine (server-ip:3001)
       - '3001:3001'

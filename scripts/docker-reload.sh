@@ -29,22 +29,26 @@ fi
 
 info "Reloading docker compose services..."
 
-# Step 1: Stop and remove containers
-info "Stopping containers..."
-if ! docker compose $PROFILES down --remove-orphans; then
-  error "Failed to stop containers"
+# Step 1: Stop and remove containers, and remove associated images
+info "Stopping containers and removing images..."
+if ! docker compose $PROFILES down --rmi all --remove-orphans; then
+  error "Failed to stop containers and remove images"
 fi
 
-# Step 2: Remove images (ignore errors if they don't exist)
-info "Removing old images..."
-docker rmi esm-app esm-webui 2>/dev/null || true
-
-# Step 3: Prune containers and networks
+# Step 2: Prune containers and networks
 info "Cleaning up unused containers and networks..."
 docker container prune -f >/dev/null 2>&1 || true
 docker network prune -f >/dev/null 2>&1 || true
 
-# Step 4: Rebuild images
+# Step 3: Get git commit hash and build timestamp
+GIT_COMMIT=$(git rev-parse HEAD 2>/dev/null || echo "")
+BUILD_TIMESTAMP=$(date +%s)
+
+# Export as environment variables for docker-compose.yml to use
+export GIT_COMMIT
+export BUILD_TIMESTAMP
+
+# Step 4: Rebuild images with build args
 info "Rebuilding images (this will take a while)..."
 if ! docker compose build --no-cache --pull; then
   error "Failed to build docker images"

@@ -102,6 +102,84 @@ export async function initDatabase() {
         CREATE INDEX IF NOT EXISTS idx_processed_urls_file_hash ON processed_urls(file_hash);
         CREATE INDEX IF NOT EXISTS idx_processed_urls_processed_at ON processed_urls(processed_at);
       `);
+
+      // Create operation_logs table for detailed operation tracking
+      db.exec(`
+        CREATE TABLE IF NOT EXISTS operation_logs (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          operation_id TEXT NOT NULL,
+          timestamp INTEGER NOT NULL,
+          step TEXT NOT NULL,
+          status TEXT NOT NULL,
+          message TEXT,
+          file_path TEXT,
+          stack_trace TEXT,
+          metadata TEXT
+        );
+
+        CREATE INDEX IF NOT EXISTS idx_operation_logs_operation_id ON operation_logs(operation_id);
+        CREATE INDEX IF NOT EXISTS idx_operation_logs_timestamp ON operation_logs(timestamp);
+        CREATE INDEX IF NOT EXISTS idx_operation_logs_status ON operation_logs(status);
+      `);
+
+      // Create user_metrics table for aggregated statistics
+      db.exec(`
+        CREATE TABLE IF NOT EXISTS user_metrics (
+          user_id TEXT PRIMARY KEY,
+          username TEXT NOT NULL,
+          total_commands INTEGER DEFAULT 0,
+          successful_commands INTEGER DEFAULT 0,
+          failed_commands INTEGER DEFAULT 0,
+          total_convert INTEGER DEFAULT 0,
+          total_download INTEGER DEFAULT 0,
+          total_optimize INTEGER DEFAULT 0,
+          total_info INTEGER DEFAULT 0,
+          total_file_size INTEGER DEFAULT 0,
+          last_command_at INTEGER,
+          updated_at INTEGER NOT NULL
+        );
+
+        CREATE INDEX IF NOT EXISTS idx_user_metrics_total_commands ON user_metrics(total_commands);
+        CREATE INDEX IF NOT EXISTS idx_user_metrics_last_command_at ON user_metrics(last_command_at);
+      `);
+
+      // Create system_metrics table for health monitoring
+      db.exec(`
+        CREATE TABLE IF NOT EXISTS system_metrics (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          timestamp INTEGER NOT NULL,
+          cpu_usage REAL,
+          memory_usage REAL,
+          memory_total REAL,
+          disk_usage REAL,
+          disk_total REAL,
+          process_uptime INTEGER,
+          process_memory REAL,
+          metadata TEXT
+        );
+
+        CREATE INDEX IF NOT EXISTS idx_system_metrics_timestamp ON system_metrics(timestamp);
+      `);
+
+      // Create alerts table for notification history
+      db.exec(`
+        CREATE TABLE IF NOT EXISTS alerts (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          timestamp INTEGER NOT NULL,
+          severity TEXT NOT NULL,
+          component TEXT NOT NULL,
+          title TEXT NOT NULL,
+          message TEXT NOT NULL,
+          operation_id TEXT,
+          user_id TEXT,
+          metadata TEXT
+        );
+
+        CREATE INDEX IF NOT EXISTS idx_alerts_timestamp ON alerts(timestamp);
+        CREATE INDEX IF NOT EXISTS idx_alerts_severity ON alerts(severity);
+        CREATE INDEX IF NOT EXISTS idx_alerts_component ON alerts(component);
+        CREATE INDEX IF NOT EXISTS idx_alerts_operation_id ON alerts(operation_id);
+      `);
     } catch (error) {
       initPromise = null; // Reset on error so it can be retried
       throw error;
@@ -541,4 +619,564 @@ export async function insertProcessedUrl(
       throw error;
     }
   }
+}
+
+/**
+ * Get processed URLs (media files) for a specific user
+ * @param {string} userId - Discord user ID
+ * @param {Object} options - Query options
+ * @param {number} [options.limit] - Maximum number of results
+ * @param {number} [options.offset] - Number of results to skip
+ * @returns {Promise<Array>} Array of processed URL records
+ */
+export async function getUserMedia(userId, options = {}) {
+  await ensureDbInitialized();
+
+  if (!db) {
+    console.error('Database initialization failed.');
+    return [];
+  }
+
+  const { limit = null, offset = null } = options;
+
+  let query =
+    'SELECT file_url, file_type, file_extension, processed_at FROM processed_urls WHERE user_id = ? ORDER BY processed_at DESC';
+  const params = [userId];
+
+  if (limit !== null) {
+    query += ' LIMIT ?';
+    params.push(limit);
+  }
+
+  if (offset !== null) {
+    query += ' OFFSET ?';
+    params.push(offset);
+  }
+
+  const stmt = db.prepare(query);
+  return stmt.all(...params);
+}
+
+/**
+ * Get total count of processed URLs (media files) for a specific user
+ * @param {string} userId - Discord user ID
+ * @returns {Promise<number>} Total count of media files for the user
+ */
+export async function getUserMediaCount(userId) {
+  await ensureDbInitialized();
+
+  if (!db) {
+    console.error('Database initialization failed.');
+    return 0;
+  }
+
+  const stmt = db.prepare('SELECT COUNT(*) as count FROM processed_urls WHERE user_id = ?');
+  const result = stmt.get(userId);
+  return result ? result.count : 0;
+}
+
+/**
+ * Insert an operation log entry
+ * @param {string} operationId - Operation ID
+ * @param {string} step - Step name (e.g., 'download_start', 'processing', 'complete')
+ * @param {string} status - Status ('pending', 'running', 'success', 'error')
+ * @param {Object} [data] - Optional data (message, filePath, stackTrace, metadata)
+ * @returns {void}
+ */
+export function insertOperationLog(operationId, step, status, data = {}) {
+  if (!db) {
+    console.error('Database not initialized. Call initDatabase() first.');
+    return;
+  }
+
+  const timestamp = Date.now();
+  const { message = null, filePath = null, stackTrace = null, metadata = null } = data;
+  const metadataStr = metadata ? JSON.stringify(metadata) : null;
+
+  const stmt = db.prepare(
+    'INSERT INTO operation_logs (operation_id, timestamp, step, status, message, file_path, stack_trace, metadata) VALUES (?, ?, ?, ?, ?, ?, ?, ?)'
+  );
+  stmt.run(operationId, timestamp, step, status, message, filePath, stackTrace, metadataStr);
+}
+
+/**
+ * Get operation logs for a specific operation
+ * @param {string} operationId - Operation ID
+ * @returns {Array} Array of operation log entries
+ */
+export function getOperationLogs(operationId) {
+  if (!db) {
+    console.error('Database not initialized. Call initDatabase() first.');
+    return [];
+  }
+
+  const stmt = db.prepare(
+    'SELECT * FROM operation_logs WHERE operation_id = ? ORDER BY timestamp ASC'
+  );
+  return stmt.all(operationId);
+}
+
+/**
+ * Insert or update user metrics
+ * @param {string} userId - Discord user ID
+ * @param {string} username - Discord username
+ * @param {Object} metrics - Metrics to update
+ * @returns {void}
+ */
+export function insertOrUpdateUserMetrics(userId, username, metrics) {
+  if (!db) {
+    console.error('Database not initialized. Call initDatabase() first.');
+    return;
+  }
+
+  const timestamp = Date.now();
+
+  // Check if user metrics exist
+  const getStmt = db.prepare('SELECT * FROM user_metrics WHERE user_id = ?');
+  const existing = getStmt.get(userId);
+
+  if (existing) {
+    // Build update query dynamically based on provided metrics
+    const updates = [];
+    const params = [];
+
+    if (metrics.totalCommands !== undefined) {
+      updates.push('total_commands = total_commands + ?');
+      params.push(metrics.totalCommands);
+    }
+    if (metrics.successfulCommands !== undefined) {
+      updates.push('successful_commands = successful_commands + ?');
+      params.push(metrics.successfulCommands);
+    }
+    if (metrics.failedCommands !== undefined) {
+      updates.push('failed_commands = failed_commands + ?');
+      params.push(metrics.failedCommands);
+    }
+    if (metrics.totalConvert !== undefined) {
+      updates.push('total_convert = total_convert + ?');
+      params.push(metrics.totalConvert);
+    }
+    if (metrics.totalDownload !== undefined) {
+      updates.push('total_download = total_download + ?');
+      params.push(metrics.totalDownload);
+    }
+    if (metrics.totalOptimize !== undefined) {
+      updates.push('total_optimize = total_optimize + ?');
+      params.push(metrics.totalOptimize);
+    }
+    if (metrics.totalInfo !== undefined) {
+      updates.push('total_info = total_info + ?');
+      params.push(metrics.totalInfo);
+    }
+    if (metrics.totalFileSize !== undefined) {
+      updates.push('total_file_size = total_file_size + ?');
+      params.push(metrics.totalFileSize);
+    }
+    if (metrics.lastCommandAt !== undefined) {
+      updates.push('last_command_at = ?');
+      params.push(metrics.lastCommandAt);
+    }
+
+    updates.push('username = ?', 'updated_at = ?');
+    params.push(username, timestamp, userId);
+
+    const updateStmt = db.prepare(
+      `UPDATE user_metrics SET ${updates.join(', ')} WHERE user_id = ?`
+    );
+    updateStmt.run(...params);
+  } else {
+    // Insert new user metrics
+    const insertStmt = db.prepare(
+      'INSERT INTO user_metrics (user_id, username, total_commands, successful_commands, failed_commands, total_convert, total_download, total_optimize, total_info, total_file_size, last_command_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
+    );
+    insertStmt.run(
+      userId,
+      username,
+      metrics.totalCommands || 0,
+      metrics.successfulCommands || 0,
+      metrics.failedCommands || 0,
+      metrics.totalConvert || 0,
+      metrics.totalDownload || 0,
+      metrics.totalOptimize || 0,
+      metrics.totalInfo || 0,
+      metrics.totalFileSize || 0,
+      metrics.lastCommandAt || timestamp,
+      timestamp
+    );
+  }
+}
+
+/**
+ * Get user metrics by user ID
+ * @param {string} userId - Discord user ID
+ * @returns {Object|null} User metrics or null if not found
+ */
+export function getUserMetrics(userId) {
+  if (!db) {
+    console.error('Database not initialized. Call initDatabase() first.');
+    return null;
+  }
+
+  const stmt = db.prepare('SELECT * FROM user_metrics WHERE user_id = ?');
+  return stmt.get(userId) || null;
+}
+
+/**
+ * Get all users with metrics
+ * @param {Object} options - Query options
+ * @param {string} [options.search] - Search in username
+ * @param {string} [options.sortBy] - Sort field (default: 'total_commands')
+ * @param {boolean} [options.sortDesc] - Sort descending (default: true)
+ * @param {number} [options.limit] - Limit results
+ * @param {number} [options.offset] - Offset for pagination
+ * @returns {Array} Array of user metrics
+ */
+export function getAllUsersMetrics(options = {}) {
+  if (!db) {
+    console.error('Database not initialized. Call initDatabase() first.');
+    return [];
+  }
+
+  const {
+    search = null,
+    sortBy = 'total_commands',
+    sortDesc = true,
+    limit = null,
+    offset = null,
+  } = options;
+
+  // Whitelist allowed sort columns to prevent SQL injection
+  const allowedSortColumns = [
+    'user_id',
+    'username',
+    'total_commands',
+    'successful_commands',
+    'failed_commands',
+    'total_convert',
+    'total_download',
+    'total_optimize',
+    'total_info',
+    'total_file_size',
+    'last_command_at',
+    'updated_at',
+  ];
+
+  const safeSortBy = allowedSortColumns.includes(sortBy) ? sortBy : 'total_commands';
+
+  let query = 'SELECT * FROM user_metrics WHERE 1=1';
+  const params = [];
+
+  if (search) {
+    query += ' AND username LIKE ?';
+    params.push(`%${search}%`);
+  }
+
+  query += ` ORDER BY ${safeSortBy} ${sortDesc ? 'DESC' : 'ASC'}`;
+
+  if (limit !== null) {
+    query += ' LIMIT ?';
+    params.push(limit);
+  }
+
+  if (offset !== null) {
+    query += ' OFFSET ?';
+    params.push(offset);
+  }
+
+  const stmt = db.prepare(query);
+  return stmt.all(...params);
+}
+
+/**
+ * Get count of users with metrics
+ * @param {Object} options - Query options
+ * @param {string} [options.search] - Search in username
+ * @returns {number} Total count
+ */
+export function getUserMetricsCount(options = {}) {
+  if (!db) {
+    console.error('Database not initialized. Call initDatabase() first.');
+    return 0;
+  }
+
+  const { search = null } = options;
+
+  let query = 'SELECT COUNT(*) as count FROM user_metrics WHERE 1=1';
+  const params = [];
+
+  if (search) {
+    query += ' AND username LIKE ?';
+    params.push(`%${search}%`);
+  }
+
+  const stmt = db.prepare(query);
+  const result = stmt.get(...params);
+  return result ? result.count : 0;
+}
+
+/**
+ * Insert system metrics snapshot
+ * @param {Object} metrics - System metrics
+ * @returns {void}
+ */
+export function insertSystemMetrics(metrics) {
+  if (!db) {
+    console.error('Database not initialized. Call initDatabase() first.');
+    return;
+  }
+
+  const timestamp = Date.now();
+  const {
+    cpuUsage = null,
+    memoryUsage = null,
+    memoryTotal = null,
+    diskUsage = null,
+    diskTotal = null,
+    processUptime = null,
+    processMemory = null,
+    metadata = null,
+  } = metrics;
+
+  const metadataStr = metadata ? JSON.stringify(metadata) : null;
+
+  const stmt = db.prepare(
+    'INSERT INTO system_metrics (timestamp, cpu_usage, memory_usage, memory_total, disk_usage, disk_total, process_uptime, process_memory, metadata) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)'
+  );
+  stmt.run(
+    timestamp,
+    cpuUsage,
+    memoryUsage,
+    memoryTotal,
+    diskUsage,
+    diskTotal,
+    processUptime,
+    processMemory,
+    metadataStr
+  );
+}
+
+/**
+ * Get system metrics
+ * @param {Object} options - Query options
+ * @param {number} [options.limit] - Limit results (default: 100)
+ * @param {number} [options.startTime] - Start timestamp
+ * @param {number} [options.endTime] - End timestamp
+ * @returns {Array} Array of system metrics
+ */
+export function getSystemMetrics(options = {}) {
+  if (!db) {
+    console.error('Database not initialized. Call initDatabase() first.');
+    return [];
+  }
+
+  const { limit = 100, startTime = null, endTime = null } = options;
+
+  let query = 'SELECT * FROM system_metrics WHERE 1=1';
+  const params = [];
+
+  if (startTime !== null) {
+    query += ' AND timestamp >= ?';
+    params.push(startTime);
+  }
+
+  if (endTime !== null) {
+    query += ' AND timestamp <= ?';
+    params.push(endTime);
+  }
+
+  query += ' ORDER BY timestamp DESC LIMIT ?';
+  params.push(limit);
+
+  const stmt = db.prepare(query);
+  return stmt.all(...params);
+}
+
+/**
+ * Get latest system metrics
+ * @returns {Object|null} Latest system metrics or null
+ */
+export function getLatestSystemMetrics() {
+  if (!db) {
+    console.error('Database not initialized. Call initDatabase() first.');
+    return null;
+  }
+
+  const stmt = db.prepare('SELECT * FROM system_metrics ORDER BY timestamp DESC LIMIT 1');
+  return stmt.get() || null;
+}
+
+/**
+ * Insert an alert/notification entry
+ * @param {Object} alert - Alert data
+ * @returns {void}
+ */
+export function insertAlert(alert) {
+  if (!db) {
+    console.error('Database not initialized. Call initDatabase() first.');
+    return;
+  }
+
+  const timestamp = Date.now();
+  const {
+    severity,
+    component,
+    title,
+    message,
+    operationId = null,
+    userId = null,
+    metadata = null,
+  } = alert;
+
+  const metadataStr = metadata ? JSON.stringify(metadata) : null;
+
+  const stmt = db.prepare(
+    'INSERT INTO alerts (timestamp, severity, component, title, message, operation_id, user_id, metadata) VALUES (?, ?, ?, ?, ?, ?, ?, ?)'
+  );
+  const result = stmt.run(
+    timestamp,
+    severity,
+    component,
+    title,
+    message,
+    operationId,
+    userId,
+    metadataStr
+  );
+
+  // Return the inserted alert record
+  return {
+    id: result.lastInsertRowid,
+    timestamp,
+    severity,
+    component,
+    title,
+    message,
+    operationId,
+    userId,
+    metadata: metadata ? JSON.parse(metadataStr) : null,
+  };
+}
+
+/**
+ * Get alerts with filtering
+ * @param {Object} options - Query options
+ * @param {string} [options.severity] - Filter by severity
+ * @param {string} [options.component] - Filter by component
+ * @param {number} [options.startTime] - Start timestamp
+ * @param {number} [options.endTime] - End timestamp
+ * @param {string} [options.search] - Search in title/message
+ * @param {number} [options.limit] - Limit results
+ * @param {number} [options.offset] - Offset for pagination
+ * @returns {Array} Array of alerts
+ */
+export function getAlerts(options = {}) {
+  if (!db) {
+    console.error('Database not initialized. Call initDatabase() first.');
+    return [];
+  }
+
+  const {
+    severity = null,
+    component = null,
+    startTime = null,
+    endTime = null,
+    search = null,
+    limit = null,
+    offset = null,
+  } = options;
+
+  let query = 'SELECT * FROM alerts WHERE 1=1';
+  const params = [];
+
+  if (severity) {
+    query += ' AND severity = ?';
+    params.push(severity);
+  }
+
+  if (component) {
+    query += ' AND component = ?';
+    params.push(component);
+  }
+
+  if (startTime !== null) {
+    query += ' AND timestamp >= ?';
+    params.push(startTime);
+  }
+
+  if (endTime !== null) {
+    query += ' AND timestamp <= ?';
+    params.push(endTime);
+  }
+
+  if (search) {
+    query += ' AND (title LIKE ? OR message LIKE ?)';
+    params.push(`%${search}%`, `%${search}%`);
+  }
+
+  query += ' ORDER BY timestamp DESC';
+
+  if (limit !== null) {
+    query += ' LIMIT ?';
+    params.push(limit);
+  }
+
+  if (offset !== null) {
+    query += ' OFFSET ?';
+    params.push(offset);
+  }
+
+  const stmt = db.prepare(query);
+  return stmt.all(...params);
+}
+
+/**
+ * Get count of alerts matching filters
+ * @param {Object} options - Query options (same as getAlerts)
+ * @returns {number} Total count
+ */
+export function getAlertsCount(options = {}) {
+  if (!db) {
+    console.error('Database not initialized. Call initDatabase() first.');
+    return 0;
+  }
+
+  const {
+    severity = null,
+    component = null,
+    startTime = null,
+    endTime = null,
+    search = null,
+  } = options;
+
+  let query = 'SELECT COUNT(*) as count FROM alerts WHERE 1=1';
+  const params = [];
+
+  if (severity) {
+    query += ' AND severity = ?';
+    params.push(severity);
+  }
+
+  if (component) {
+    query += ' AND component = ?';
+    params.push(component);
+  }
+
+  if (startTime !== null) {
+    query += ' AND timestamp >= ?';
+    params.push(startTime);
+  }
+
+  if (endTime !== null) {
+    query += ' AND timestamp <= ?';
+    params.push(endTime);
+  }
+
+  if (search) {
+    query += ' AND (title LIKE ? OR message LIKE ?)';
+    params.push(`%${search}%`, `%${search}%`);
+  }
+
+  const stmt = db.prepare(query);
+  const result = stmt.get(...params);
+  return result ? result.count : 0;
 }

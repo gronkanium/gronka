@@ -1,10 +1,11 @@
 <script>
-  import { onMount, onDestroy } from 'svelte';
+  import { onMount } from 'svelte';
+  import { ChevronDown, ChevronRight } from 'lucide-svelte';
+  import { operations as wsOperations, connected as wsConnected } from './websocket-store.js';
 
   let operations = [];
-  let ws = null;
-  let connected = false;
   let error = null;
+  let expandedOperations = new Set();
 
   function formatFileSize(bytes) {
     if (bytes === null || bytes === undefined) return 'N/A';
@@ -50,77 +51,31 @@
     return 'unknown';
   }
 
-  function connectWebSocket() {
-    const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-    const wsUrl = `${protocol}//${window.location.host}/api/ws`;
-
-    try {
-      ws = new WebSocket(wsUrl);
-
-      ws.onopen = () => {
-        connected = true;
-        error = null;
-      };
-
-      ws.onmessage = event => {
-        try {
-          const message = JSON.parse(event.data);
-          if (message.type === 'operations') {
-            // Initial operations list
-            operations = message.data || [];
-          } else if (message.type === 'operation') {
-            // Single operation update
-            const updatedOperation = message.data;
-            const index = operations.findIndex(op => op.id === updatedOperation.id);
-            if (index !== -1) {
-              // Update existing operation
-              operations[index] = updatedOperation;
-              // Trigger reactivity
-              operations = [...operations];
-            } else {
-              // Add new operation at the beginning (newest first)
-              operations = [updatedOperation, ...operations];
-              // Keep only last 100 operations
-              if (operations.length > 100) {
-                operations = operations.slice(0, 100);
-              }
-            }
-          }
-        } catch (err) {
-          console.error('Error parsing websocket message:', err);
-        }
-      };
-
-      ws.onerror = err => {
-        console.error('WebSocket error:', err);
-        error = 'connection error';
-        connected = false;
-      };
-
-      ws.onclose = () => {
-        connected = false;
-        // Attempt to reconnect after 3 seconds
-        setTimeout(() => {
-          if (!ws || ws.readyState === WebSocket.CLOSED) {
-            connectWebSocket();
-          }
-        }, 3000);
-      };
-    } catch (err) {
-      console.error('Error creating WebSocket:', err);
-      error = 'failed to connect';
-      connected = false;
+  function toggleExpanded(operationId) {
+    if (expandedOperations.has(operationId)) {
+      expandedOperations.delete(operationId);
+    } else {
+      expandedOperations.add(operationId);
     }
+    expandedOperations = new Set(expandedOperations);
+  }
+
+  function formatDuration(ms) {
+    if (!ms) return 'N/A';
+    if (ms < 1000) return `${ms}ms`;
+    if (ms < 60000) return `${(ms / 1000).toFixed(2)}s`;
+    return `${(ms / 60000).toFixed(2)}m`;
   }
 
   onMount(() => {
-    connectWebSocket();
-  });
-
-  onDestroy(() => {
-    if (ws) {
-      ws.close();
-    }
+    // Subscribe to WebSocket operations (connection managed by App.svelte)
+    const unsubscribe = wsOperations.subscribe(wsOps => {
+      operations = wsOps || [];
+    });
+    
+    return () => {
+      unsubscribe();
+    };
   });
 </script>
 
@@ -128,7 +83,7 @@
   <h2>Recent Operations</h2>
   {#if error}
     <div class="error">Error: {error}</div>
-  {:else if !connected}
+  {:else if !$wsConnected}
     <div class="loading">Connecting...</div>
   {:else if operations.length === 0}
     <div class="empty">No operations yet</div>
@@ -137,6 +92,7 @@
       <table>
         <thead>
           <tr>
+            <th>Expand</th>
             <th>Status</th>
             <th>Type</th>
             <th>Username</th>
@@ -147,7 +103,16 @@
         </thead>
         <tbody>
           {#each operations as operation (operation.id)}
-            <tr>
+            <tr class="operation-row" class:expanded={expandedOperations.has(operation.id)}>
+              <td class="expand-cell">
+                <button class="expand-btn" on:click={() => toggleExpanded(operation.id)}>
+                  {#if expandedOperations.has(operation.id)}
+                    <ChevronDown size={16} />
+                  {:else}
+                    <ChevronRight size={16} />
+                  {/if}
+                </button>
+              </td>
               <td class="status-cell">
                 {#if operation.status === 'pending' || operation.status === 'running'}
                   <div class="spinner"></div>
@@ -170,6 +135,75 @@
               <td class="size-cell">{formatFileSize(operation.fileSize)}</td>
               <td class="timestamp-cell">{formatTimestamp(operation.timestamp)}</td>
             </tr>
+            {#if expandedOperations.has(operation.id)}
+              <tr class="details-row">
+                <td colspan="7" class="details-cell">
+                  <div class="operation-details">
+                    <div class="details-section">
+                      <h4>operation info</h4>
+                      <div class="info-grid">
+                        <div class="info-item">
+                          <span class="label">id:</span>
+                          <span class="value monospace">{operation.id}</span>
+                        </div>
+                        <div class="info-item">
+                          <span class="label">status:</span>
+                          <span class="value status-{operation.status}">{operation.status}</span>
+                        </div>
+                        {#if operation.performanceMetrics?.duration}
+                          <div class="info-item">
+                            <span class="label">duration:</span>
+                            <span class="value">{formatDuration(operation.performanceMetrics.duration)}</span>
+                          </div>
+                        {/if}
+                      </div>
+                    </div>
+
+                    {#if operation.filePaths && operation.filePaths.length > 0}
+                      <div class="details-section">
+                        <h4>file paths</h4>
+                        <ul class="file-paths-list">
+                          {#each operation.filePaths as filePath}
+                            <li class="monospace">{filePath}</li>
+                          {/each}
+                        </ul>
+                      </div>
+                    {/if}
+
+                    {#if operation.error}
+                      <div class="details-section error-section">
+                        <h4>error</h4>
+                        <div class="error-message monospace">{operation.error}</div>
+                      </div>
+                    {/if}
+
+                    {#if operation.stackTrace}
+                      <div class="details-section">
+                        <h4>stack trace</h4>
+                        <pre class="stack-trace">{operation.stackTrace}</pre>
+                      </div>
+                    {/if}
+
+                    {#if operation.performanceMetrics?.steps && operation.performanceMetrics.steps.length > 0}
+                      <div class="details-section">
+                        <h4>performance steps</h4>
+                        <div class="steps-list">
+                          {#each operation.performanceMetrics.steps as step}
+                            <div class="step-item">
+                              <span class="step-name">{step.step}</span>
+                              <span class="step-status status-{step.status}">{step.status}</span>
+                              {#if step.duration}
+                                <span class="step-duration">{formatDuration(step.duration)}</span>
+                              {/if}
+                            </div>
+                          {/each}
+                        </div>
+                      </div>
+                    {/if}
+                  </div>
+                </td>
+              </tr>
+            {/if}
           {/each}
         </tbody>
       </table>
@@ -324,6 +358,177 @@
     text-align: center;
   }
 
+  .expand-cell {
+    width: 40px;
+    text-align: center;
+  }
+
+  .expand-btn {
+    background: none;
+    border: none;
+    color: #aaa;
+    cursor: pointer;
+    font-size: 0.9rem;
+    padding: 0.25rem;
+  }
+
+  .expand-btn:hover {
+    color: #fff;
+  }
+
+  .operation-row.expanded {
+    background-color: #2a2a2a;
+  }
+
+  .details-row {
+    background-color: #1a1a1a;
+  }
+
+  .details-cell {
+    padding: 0 !important;
+  }
+
+  .operation-details {
+    padding: 1.5rem;
+    display: flex;
+    flex-direction: column;
+    gap: 1.5rem;
+  }
+
+  .details-section {
+    border: 1px solid #333;
+    padding: 1rem;
+    border-radius: 3px;
+    background-color: #222;
+  }
+
+  .details-section h4 {
+    margin: 0 0 0.75rem 0;
+    font-size: 0.9rem;
+    font-weight: 500;
+    color: #51cf66;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+  }
+
+  .info-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 0.75rem;
+  }
+
+  .info-item {
+    display: flex;
+    gap: 0.5rem;
+  }
+
+  .info-item .label {
+    color: #aaa;
+    font-size: 0.85rem;
+  }
+
+  .info-item .value {
+    color: #fff;
+    font-size: 0.85rem;
+    font-weight: 500;
+  }
+
+  .monospace {
+    font-family: monospace;
+    font-size: 0.85rem;
+  }
+
+  .status-pending {
+    color: #888;
+  }
+
+  .status-running {
+    color: #51cf66;
+  }
+
+  .status-success {
+    color: #51cf66;
+  }
+
+  .status-error {
+    color: #ff6b6b;
+  }
+
+  .file-paths-list {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+  }
+
+  .file-paths-list li {
+    padding: 0.5rem;
+    background-color: #1a1a1a;
+    border-left: 2px solid #51cf66;
+    color: #aaa;
+  }
+
+  .error-section {
+    background-color: rgba(255, 107, 107, 0.1);
+    border-color: #ff6b6b;
+  }
+
+  .error-message {
+    padding: 0.75rem;
+    background-color: rgba(0, 0, 0, 0.3);
+    border-radius: 3px;
+    color: #ff6b6b;
+  }
+
+  .stack-trace {
+    margin: 0;
+    padding: 0.75rem;
+    background-color: #0d0d0d;
+    border-radius: 3px;
+    color: #e0e0e0;
+    font-size: 0.75rem;
+    overflow-x: auto;
+    white-space: pre-wrap;
+    word-wrap: break-word;
+  }
+
+  .steps-list {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+  }
+
+  .step-item {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    padding: 0.75rem;
+    background-color: #1a1a1a;
+    border-radius: 3px;
+  }
+
+  .step-name {
+    flex: 1;
+    color: #e0e0e0;
+    font-size: 0.85rem;
+  }
+
+  .step-status {
+    padding: 0.2rem 0.5rem;
+    border-radius: 3px;
+    font-size: 0.75rem;
+    font-weight: 600;
+    text-transform: uppercase;
+  }
+
+  .step-duration {
+    color: #aaa;
+    font-size: 0.85rem;
+    font-family: monospace;
+  }
+
   @media (max-width: 768px) {
     table {
       font-size: 0.8rem;
@@ -336,6 +541,20 @@
 
     .userid-cell {
       font-size: 0.75rem;
+    }
+
+    .operation-details {
+      padding: 1rem;
+    }
+
+    .info-grid {
+      grid-template-columns: 1fr;
+    }
+
+    .step-item {
+      flex-direction: column;
+      align-items: flex-start;
+      gap: 0.5rem;
     }
   }
 </style>

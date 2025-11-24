@@ -642,13 +642,31 @@ export async function insertProcessedUrl(
       const updateStmt = db.prepare(
         'UPDATE processed_urls SET file_hash = ?, file_type = ?, file_extension = ?, file_url = ?, processed_at = ?, user_id = ?, file_size = ? WHERE url_hash = ?'
       );
-      updateStmt.run(fileHash, fileType, fileExtension, fileUrl, processedAt, userId, fileSize, urlHash);
+      updateStmt.run(
+        fileHash,
+        fileType,
+        fileExtension,
+        fileUrl,
+        processedAt,
+        userId,
+        fileSize,
+        urlHash
+      );
     } else {
       // Insert new record
       const insertStmt = db.prepare(
         'INSERT INTO processed_urls (url_hash, file_hash, file_type, file_extension, file_url, processed_at, user_id, file_size) VALUES (?, ?, ?, ?, ?, ?, ?, ?)'
       );
-      insertStmt.run(urlHash, fileHash, fileType, fileExtension, fileUrl, processedAt, userId, fileSize);
+      insertStmt.run(
+        urlHash,
+        fileHash,
+        fileType,
+        fileExtension,
+        fileUrl,
+        processedAt,
+        userId,
+        fileSize
+      );
     }
   } catch (error) {
     // Log error but don't throw - allows graceful degradation if database is read-only

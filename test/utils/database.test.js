@@ -173,9 +173,9 @@ describe('database utilities', () => {
       const logs = getLogs({ component, limit: 1 });
       const log = logs[0];
       assert.ok(log.metadata, 'Metadata should exist');
-      const parsedMetadata = JSON.parse(log.metadata);
-      assert.strictEqual(parsedMetadata.key, 'value');
-      assert.strictEqual(parsedMetadata.number, 123);
+      // getLogs already parses metadata from JSON string to object
+      assert.strictEqual(log.metadata.key, 'value');
+      assert.strictEqual(log.metadata.number, 123);
     });
 
     test('handles all log levels', () => {

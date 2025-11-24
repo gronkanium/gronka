@@ -674,7 +674,16 @@ export async function processConversion(
     // Record processed URL in database for all conversions
     // For URL-based operations, use hash of original URL; for attachments, use file hash
     const urlHash = originalUrl ? hashUrl(originalUrl) : finalHash;
-    await insertProcessedUrl(urlHash, finalHash, 'gif', '.gif', gifUrl, Date.now(), userId, optimizedSize);
+    await insertProcessedUrl(
+      urlHash,
+      finalHash,
+      'gif',
+      '.gif',
+      gifUrl,
+      Date.now(),
+      userId,
+      optimizedSize
+    );
     logger.debug(`Recorded processed URL in database (urlHash: ${urlHash.substring(0, 8)}...)`);
 
     logger.info(

@@ -57,7 +57,14 @@ export async function sendFollowUpMessage(client, interactionToken, content, att
  * @param {string} [userId] - User ID
  * @returns {Promise<void>}
  */
-export async function notifyDownloadComplete(client, queueItem, result, attachment = null, operationId = null, userId = null) {
+export async function notifyDownloadComplete(
+  client,
+  queueItem,
+  result,
+  attachment = null,
+  operationId = null,
+  userId = null
+) {
   const message = result
     ? `your deferred download is ready:\n${result}`
     : 'your deferred download is ready:';
@@ -93,7 +100,13 @@ export async function notifyDownloadComplete(client, queueItem, result, attachme
  * @param {string} [userId] - User ID
  * @returns {Promise<void>}
  */
-export async function notifyDownloadFailed(client, queueItem, errorMessage, operationId = null, userId = null) {
+export async function notifyDownloadFailed(
+  client,
+  queueItem,
+  errorMessage,
+  operationId = null,
+  userId = null
+) {
   const message = `your deferred download failed: ${errorMessage}`;
 
   // Try to send DM first
@@ -106,5 +119,9 @@ export async function notifyDownloadFailed(client, queueItem, errorMessage, oper
   }
 
   // Send ntfy notification
-  await notifyDeferredDownload(queueItem.username, 'failed', { operationId, userId, error: errorMessage });
+  await notifyDeferredDownload(queueItem.username, 'failed', {
+    operationId,
+    userId,
+    error: errorMessage,
+  });
 }

@@ -523,7 +523,11 @@ async function processDownload(interaction, url, commandSource = null) {
       });
 
       // Send failure notification for rate limit
-      await notifyCommandFailure(username, 'download', { operationId, userId, error: 'rate limited' });
+      await notifyCommandFailure(username, 'download', {
+        operationId,
+        userId,
+        error: 'rate limited',
+      });
       return;
     }
 
@@ -617,7 +621,10 @@ export async function handleDownloadContextMenuCommand(interaction) {
       content: 'no URL found in this message.',
       flags: MessageFlags.Ephemeral,
     });
-    await notifyCommandFailure(username, 'download', { userId, error: 'no URL found in this message' });
+    await notifyCommandFailure(username, 'download', {
+      userId,
+      error: 'no URL found in this message',
+    });
     return;
   }
 
@@ -658,7 +665,10 @@ export async function handleDownloadContextMenuCommand(interaction) {
       content: 'url is not from a supported social media platform.',
       flags: MessageFlags.Ephemeral,
     });
-    await notifyCommandFailure(username, 'download', { userId, error: 'url is not from a supported social media platform' });
+    await notifyCommandFailure(username, 'download', {
+      userId,
+      error: 'url is not from a supported social media platform',
+    });
     return;
   }
 
@@ -740,7 +750,10 @@ export async function handleDownloadCommand(interaction) {
       content: 'url is not from a supported social media platform.',
       flags: MessageFlags.Ephemeral,
     });
-    await notifyCommandFailure(username, 'download', { userId, error: 'url is not from a supported social media platform' });
+    await notifyCommandFailure(username, 'download', {
+      userId,
+      error: 'url is not from a supported social media platform',
+    });
     return;
   }
 

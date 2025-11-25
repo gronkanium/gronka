@@ -261,7 +261,14 @@ async function processDeferredDownload(queueItem) {
         `Deferred download: URL already processed (hash: ${urlHash.substring(0, 8)}...), returning existing file URL: ${processedUrl.file_url}`
       );
       updateOperationStatus(operationId, 'success', { fileSize: 0 });
-      await notifyDownloadComplete(client, queueItem, processedUrl.file_url, null, operationId, userId);
+      await notifyDownloadComplete(
+        client,
+        queueItem,
+        processedUrl.file_url,
+        null,
+        operationId,
+        userId
+      );
       return processedUrl.file_url;
     }
 

@@ -74,6 +74,24 @@ class Logger {
     return input;
   }
 
+  /**
+   * Explicitly sanitize a string for console output to prevent log injection
+   * This function is designed to be recognized by CodeQL as a sanitization step
+   * @param {string} message - The message to sanitize
+   * @returns {string} - Sanitized message safe for console output
+   */
+  sanitizeForConsoleOutput(message) {
+    if (typeof message !== 'string') {
+      return String(message);
+    }
+    // Remove newlines and carriage returns first
+    let sanitized = message.replace(/\n|\r/g, '');
+    // Remove all control characters (0x00-0x1F and 0x7F-0x9F)
+    // eslint-disable-next-line no-control-regex
+    sanitized = sanitized.replace(/[\x00-\x1F\x7F-\x9F]/g, ' ');
+    return sanitized;
+  }
+
   formatMessage(level, message, ...args) {
     const timestamp = formatTimestampSeconds();
     const levelStr = LOG_LEVEL_NAMES[level].padEnd(5);
@@ -103,16 +121,8 @@ class Logger {
 
     // Always output to console
     // Explicitly sanitize formattedMessage to prevent log injection
-    // Remove newlines and carriage returns to prevent log injection (CodeQL recognizes this pattern)
-    // formatMessage already sanitizes, but apply sanitization inline so CodeQL can track it
-    const sanitizedForConsole =
-      typeof formattedMessage === 'string'
-        ? formattedMessage.replace(/\n|\r/g, '').replace(
-            // eslint-disable-next-line no-control-regex
-            /[\x00-\x1F\x7F-\x9F]/g,
-            ' '
-          )
-        : String(formattedMessage);
+    // Use dedicated sanitization function so CodeQL can track the sanitization flow
+    const sanitizedForConsole = this.sanitizeForConsoleOutput(formattedMessage);
     console.log(sanitizedForConsole);
 
     // Store in database

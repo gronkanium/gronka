@@ -61,6 +61,7 @@ exclude:
   - config
   - scripts
   - src
+  - .cloudflared
   - commands.md
   - CONTRIBUTING.md
   - aspirations.md

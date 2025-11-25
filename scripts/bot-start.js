@@ -104,7 +104,7 @@ if (withWebui) {
   if (!env.SERVER_PORT) {
     env.SERVER_PORT = '3000';
   }
-  
+
   // WebUI defaults
   if (!env.WEBUI_PORT) {
     env.WEBUI_PORT = '3001';
@@ -112,7 +112,7 @@ if (withWebui) {
   if (!env.WEBUI_HOST) {
     env.WEBUI_HOST = '127.0.0.1';
   }
-  
+
   // Main server URL for webui (derived from SERVER_PORT)
   env.MAIN_SERVER_URL = `http://localhost:${env.SERVER_PORT}`;
 }
@@ -155,26 +155,26 @@ function cleanup() {
 
 if (withWebui) {
   console.log('starting services with webui...\n');
-  
+
   // Start main server first (webui depends on it)
   const serverPath = join(__dirname, '..', 'src', 'server.js');
   console.log(`starting server on port ${env.SERVER_PORT}...`);
   startProcess('server', serverPath);
-  
+
   // Wait a moment for server to start before starting webui
   setTimeout(() => {
     // Start webui server
     const webuiPath = join(__dirname, '..', 'src', 'webui-server.js');
     console.log(`starting webui on ${env.WEBUI_HOST}:${env.WEBUI_PORT}...`);
     startProcess('webui', webuiPath);
-    
+
     // Wait a moment for webui to start before starting bot
     setTimeout(() => {
       // Start bot
       const botPath = join(__dirname, '..', 'src', 'bot.js');
       console.log('starting bot...\n');
       startProcess('bot', botPath);
-      
+
       console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
       console.log('all services started');
       console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');

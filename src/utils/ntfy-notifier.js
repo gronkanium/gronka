@@ -88,7 +88,7 @@ export async function sendNtfyNotification(title, message, options = {}) {
     let notificationMessage = message;
     const username = finalMetadata.username || '';
     const operation = finalMetadata.command || finalMetadata.operation || '';
-    
+
     if (finalMetadata.duration !== undefined) {
       const formattedDuration = formatDuration(finalMetadata.duration);
       if (formattedDuration && username && operation) {

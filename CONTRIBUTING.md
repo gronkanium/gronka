@@ -213,6 +213,12 @@ See `package.json` for a full list of available npm scripts. Common ones include
 - `npm run migrate:storage` - Migrate storage to R2
 - `npm run upload:404` - Upload 404 image to R2
 - `npm run user:stats` - Generate user statistics report from database
+- `npm run bot:test` - Start test bot (uses TEST\_\* prefixed environment variables)
+- `npm run bot:prod` - Start prod bot (uses PROD\_\* prefixed environment variables)
+- `npm run bot:test:dev` - Start test bot with hot reload (watch mode)
+- `npm run bot:prod:dev` - Start prod bot with hot reload (watch mode)
+- `npm run bot:register:test` - Register Discord commands for test bot
+- `npm run bot:register:prod` - Register Discord commands for prod bot
 
 ### Documentation
 

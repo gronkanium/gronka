@@ -54,8 +54,48 @@ edit `.env` and add your discord token and client id. then:
 
 ```bash
 npm run register-commands
-npm run local
+npm run local:up
 ```
+
+#### local development suite
+
+the project includes a comprehensive local development suite similar to the docker scripts:
+
+```bash
+npm run local:up        # start all services (bot, server, cobalt)
+npm run local:down      # stop all services
+npm run local:logs      # view logs from all services
+npm run local:restart   # restart all services
+npm run local:verify    # verify all services are running
+npm run local:register  # register discord commands (uses default bot)
+```
+
+#### running test and prod bots
+
+you can run both test and prod bots simultaneously for local development. configure them in your `.env` file:
+
+```bash
+# test bot credentials
+TEST_DISCORD_TOKEN=your_test_bot_token
+TEST_CLIENT_ID=your_test_bot_client_id
+
+# prod bot credentials
+PROD_DISCORD_TOKEN=your_prod_bot_token
+PROD_CLIENT_ID=your_prod_bot_client_id
+```
+
+then use the bot-specific scripts:
+
+```bash
+npm run bot:test        # start test bot
+npm run bot:prod        # start prod bot
+npm run bot:test:dev    # start test bot with watch mode
+npm run bot:prod:dev    # start prod bot with watch mode
+npm run bot:register:test  # register commands for test bot
+npm run bot:register:prod  # register commands for prod bot
+```
+
+you can also use prefixed environment variables for bot-specific configuration (e.g., `TEST_ADMIN_USER_IDS`, `PROD_CDN_BASE_URL`).
 
 ### using docker
 
@@ -74,7 +114,12 @@ you need these two things in your `.env`:
 - `DISCORD_TOKEN` - get this from the discord developer portal
 - `CLIENT_ID` - same place
 
-everything else is optional. check `.env.example` for what you can tweak (output quality, file size limits, that kind of stuff).
+for running test and prod bots simultaneously, you can also use:
+
+- `TEST_DISCORD_TOKEN` / `TEST_CLIENT_ID` - test bot credentials
+- `PROD_DISCORD_TOKEN` / `PROD_CLIENT_ID` - prod bot credentials
+
+everything else is optional. you can also use prefixed versions of any config var (e.g., `TEST_ADMIN_USER_IDS`, `PROD_CDN_BASE_URL`) for bot-specific configuration.
 
 ### r2 storage
 

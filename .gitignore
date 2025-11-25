@@ -30,6 +30,7 @@ data/configs/
 # Temporary files
 *.tmp
 temp/
+.local-dev-pids.json
 
 # Logs
 *.log
@@ -59,7 +60,6 @@ _site/
 .jekyll-metadata
 vendor/
 .bundle/
-_posts/
 posts/
 
 # Jekyll site files

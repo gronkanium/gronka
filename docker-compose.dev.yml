@@ -11,4 +11,6 @@ services:
       - ./src:/app/src
       # Keep data and temp volumes from base compose file
       - ./data:/app/data
+      - ./data-test:/app/data-test
+      - ./data-prod:/app/data-prod
       - ./temp:/app/temp

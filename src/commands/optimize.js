@@ -23,6 +23,7 @@ import {
   calculateSizeReduction,
 } from '../utils/gif-optimizer.js';
 import { getGifPath, cleanupTempFiles, saveGif } from '../utils/storage.js';
+import { uploadGifToR2 } from '../utils/r2-storage.js';
 import {
   createOperation,
   updateOperationStatus,
@@ -31,10 +32,65 @@ import {
 import { notifyCommandSuccess, notifyCommandFailure } from '../utils/ntfy-notifier.js';
 import { hashUrl } from '../utils/cobalt-queue.js';
 import { insertProcessedUrl, initDatabase, getProcessedUrl } from '../utils/database.js';
+import { r2Config } from '../utils/config.js';
 
 const logger = createLogger('optimize');
 
 const { gifStoragePath: GIF_STORAGE_PATH, cdnBaseUrl: CDN_BASE_URL } = botConfig;
+
+/**
+ * Safely reply to an interaction with error handling
+ * @param {Interaction} interaction - Discord interaction
+ * @param {Object} options - Reply options
+ * @returns {Promise<boolean>} True if reply was successful, false otherwise
+ */
+async function safeReply(interaction, options) {
+  if (interaction.replied || interaction.deferred) {
+    logger.debug(`Interaction already responded to, skipping reply`);
+    return false;
+  }
+
+  try {
+    await interaction.reply(options);
+    return true;
+  } catch (error) {
+    // Handle expired interactions (code 10062) or already acknowledged (code 40060)
+    if (error.code === 10062 || error.code === 40060) {
+      logger.debug(`Interaction expired or already acknowledged: ${error.message}`);
+    } else {
+      logger.error(`Failed to reply to interaction:`, error);
+    }
+    return false;
+  }
+}
+
+/**
+ * Safely show a modal with error handling
+ * @param {Interaction} interaction - Discord interaction
+ * @param {ModalBuilder} modal - Modal to show
+ * @returns {Promise<boolean>} True if modal was shown successfully, false otherwise
+ */
+async function safeShowModal(interaction, modal) {
+  if (interaction.replied || interaction.deferred) {
+    logger.debug(`Interaction already responded to, cannot show modal`);
+    return false;
+  }
+
+  try {
+    await interaction.showModal(modal);
+    return true;
+  } catch (error) {
+    // Handle expired interactions (code 10062) or already acknowledged (code 40060)
+    if (error.code === 10062 || error.code === 40060) {
+      logger.debug(
+        `Interaction expired or already acknowledged when showing modal: ${error.message}`
+      );
+    } else {
+      logger.error(`Failed to show modal:`, error);
+    }
+    return false;
+  }
+}
 
 // GIF file signature constants
 const ALLOWED_GIF_SIGNATURES = [
@@ -149,7 +205,7 @@ export async function processOptimization(
         await interaction.editReply({
           content: processedUrl.file_url,
         });
-        await notifyCommandSuccess(username, 'optimize');
+        await notifyCommandSuccess(username, 'optimize', { operationId, userId });
         return;
       }
     }
@@ -271,9 +327,53 @@ export async function processOptimization(
     if (optimizedUploadMethod === 'discord') {
       const safeHash = optimizedHash.replace(/[^a-f0-9]/gi, '');
       const filename = `${safeHash}.gif`;
-      await interaction.editReply({
-        files: [new AttachmentBuilder(optimizedBuffer, { name: filename })],
-      });
+      try {
+        await interaction.editReply({
+          files: [new AttachmentBuilder(optimizedBuffer, { name: filename })],
+        });
+      } catch (discordError) {
+        // Discord upload failed, fallback to R2
+        logger.warn(
+          `Discord attachment upload failed, falling back to R2: ${discordError.message}`
+        );
+        try {
+          const r2Url = await uploadGifToR2(
+            optimizedBuffer,
+            optimizedHash,
+            r2Config,
+            buildMetadata()
+          );
+
+          if (r2Url) {
+            // Update database with R2 URL
+            const urlHash = originalUrl ? hashUrl(originalUrl) : optimizedHash;
+            await insertProcessedUrl(
+              urlHash,
+              optimizedHash,
+              'gif',
+              '.gif',
+              r2Url,
+              Date.now(),
+              userId,
+              optimizedSize
+            );
+            await interaction.editReply({
+              content: r2Url,
+            });
+          } else {
+            // If R2 upload also fails, use the original optimizedUrl
+            await interaction.editReply({
+              content: optimizedUrl,
+            });
+          }
+        } catch (r2Error) {
+          logger.error(`R2 fallback upload also failed: ${r2Error.message}`);
+          // Last resort: use the original optimizedUrl
+          await interaction.editReply({
+            content: optimizedUrl,
+          });
+        }
+      }
     } else {
       await interaction.editReply({
         content: optimizedUrl,
@@ -281,7 +381,7 @@ export async function processOptimization(
     }
 
     // Send success notification
-    await notifyCommandSuccess(username, 'optimize');
+    await notifyCommandSuccess(username, 'optimize', { operationId, userId });
 
     // Record rate limit after successful optimization
     recordRateLimit(userId);
@@ -319,7 +419,11 @@ export async function processOptimization(
     });
 
     // Send failure notification
-    await notifyCommandFailure(username, 'optimize');
+    await notifyCommandFailure(username, 'optimize', {
+      operationId,
+      userId,
+      error: error.message || 'unknown error',
+    });
   } finally {
     // Clean up temp files
     await cleanupTempFiles(tempFiles);
@@ -351,7 +455,7 @@ export async function handleOptimizeContextMenuCommand(interaction, modalAttachm
   // Check rate limit (admins bypass this check)
   if (checkRateLimit(userId)) {
     logger.warn(`User ${userId} (${interaction.user.tag}) is rate limited`);
-    await interaction.reply({
+    await safeReply(interaction, {
       content: 'please wait 30 seconds before optimizing another gif.',
       flags: MessageFlags.Ephemeral,
     });
@@ -387,11 +491,14 @@ export async function handleOptimizeContextMenuCommand(interaction, modalAttachm
     // Validate it's actually a GIF
     if (!isGifFile(gifAttachment.name, gifAttachment.contentType)) {
       logger.warn(`Attachment is not a GIF for user ${userId}`);
-      await interaction.reply({
+      await safeReply(interaction, {
         content: 'this command only works on gif files.',
         flags: MessageFlags.Ephemeral,
       });
-      await notifyCommandFailure(username, 'optimize');
+      await notifyCommandFailure(username, 'optimize', {
+        userId,
+        error: 'attachment is not a GIF',
+      });
       return;
     }
     attachment = gifAttachment;
@@ -400,11 +507,14 @@ export async function handleOptimizeContextMenuCommand(interaction, modalAttachm
     const urlValidation = validateUrl(url);
     if (!urlValidation.valid) {
       logger.warn(`Invalid URL for user ${userId}: ${urlValidation.error}`);
-      await interaction.reply({
+      await safeReply(interaction, {
         content: `invalid URL: ${urlValidation.error}`,
         flags: MessageFlags.Ephemeral,
       });
-      await notifyCommandFailure(username, 'optimize');
+      await notifyCommandFailure(username, 'optimize', {
+        userId,
+        error: `invalid URL: ${urlValidation.error}`,
+      });
       return;
     }
 
@@ -434,11 +544,14 @@ export async function handleOptimizeContextMenuCommand(interaction, modalAttachm
             logger.info(`Resolved Tenor URL to: ${actualUrl}`);
           } catch (error) {
             logger.error(`Failed to parse Tenor URL for user ${userId}:`, error);
-            await interaction.reply({
+            await safeReply(interaction, {
               content: error.message || 'failed to parse Tenor URL.',
               flags: MessageFlags.Ephemeral,
             });
-            await notifyCommandFailure(username, 'optimize');
+            await notifyCommandFailure(username, 'optimize', {
+              userId,
+              error: error.message || 'failed to parse Tenor URL',
+            });
             return;
           }
         }
@@ -449,11 +562,14 @@ export async function handleOptimizeContextMenuCommand(interaction, modalAttachm
 
         // Validate it's a GIF
         if (!isGifFile(fileData.filename, fileData.contentType)) {
-          await interaction.reply({
+          await safeReply(interaction, {
             content: 'this command only works on gif files.',
             flags: MessageFlags.Ephemeral,
           });
-          await notifyCommandFailure(username, 'optimize');
+          await notifyCommandFailure(username, 'optimize', {
+            userId,
+            error: 'downloaded file is not a GIF',
+          });
           return;
         }
 
@@ -482,20 +598,26 @@ export async function handleOptimizeContextMenuCommand(interaction, modalAttachm
       }
     } catch (error) {
       logger.error(`Failed to process URL for user ${userId}:`, error);
-      await interaction.reply({
+      await safeReply(interaction, {
         content: error.message || 'failed to process gif from URL.',
         flags: MessageFlags.Ephemeral,
       });
-      await notifyCommandFailure(username, 'optimize');
+      await notifyCommandFailure(username, 'optimize', {
+        userId,
+        error: error.message || 'failed to process gif from URL',
+      });
       return;
     }
   } else {
     logger.warn(`No GIF attachment or URL found for user ${userId}`);
-    await interaction.reply({
+    await safeReply(interaction, {
       content: 'no gif attachment or URL found in this message.',
       flags: MessageFlags.Ephemeral,
     });
-    await notifyCommandFailure(username, 'optimize');
+    await notifyCommandFailure(username, 'optimize', {
+      userId,
+      error: 'no gif attachment or URL found',
+    });
     return;
   }
 
@@ -526,7 +648,12 @@ export async function handleOptimizeContextMenuCommand(interaction, modalAttachm
     timestamp: Date.now(),
   });
 
-  await interaction.showModal(modal);
+  const modalShown = await safeShowModal(interaction, modal);
+  if (!modalShown) {
+    // If modal couldn't be shown, clean up cache entry
+    modalAttachmentCache.delete(modalId);
+    logger.warn(`Failed to show modal for user ${userId}, cleaned up cache entry`);
+  }
 }
 
 /**
@@ -545,7 +672,7 @@ export async function handleOptimizeCommand(interaction) {
   // Check rate limit (admins bypass this check)
   if (checkRateLimit(userId)) {
     logger.warn(`User ${userId} (${interaction.user.tag}) is rate limited`);
-    await interaction.reply({
+    await safeReply(interaction, {
       content: 'please wait 30 seconds before optimizing another gif.',
       flags: MessageFlags.Ephemeral,
     });
@@ -559,7 +686,7 @@ export async function handleOptimizeCommand(interaction) {
 
   // Validate lossy level if provided
   if (lossyLevel !== null && (lossyLevel < 0 || lossyLevel > 100)) {
-    await interaction.reply({
+    await safeReply(interaction, {
       content: 'lossy level must be between 0 and 100.',
       flags: MessageFlags.Ephemeral,
     });
@@ -568,7 +695,7 @@ export async function handleOptimizeCommand(interaction) {
 
   if (!attachment && !url) {
     logger.warn(`No attachment or URL provided for user ${userId}`);
-    await interaction.reply({
+    await safeReply(interaction, {
       content: 'please provide either a gif attachment or a URL to a gif file.',
       flags: MessageFlags.Ephemeral,
     });
@@ -577,7 +704,7 @@ export async function handleOptimizeCommand(interaction) {
 
   if (attachment && url) {
     logger.warn(`Both attachment and URL provided for user ${userId}`);
-    await interaction.reply({
+    await safeReply(interaction, {
       content: 'please provide either a file attachment or a URL, not both.',
       flags: MessageFlags.Ephemeral,
     });
@@ -592,11 +719,14 @@ export async function handleOptimizeCommand(interaction) {
   if (attachment) {
     if (!isGifFile(attachment.name, attachment.contentType)) {
       logger.warn(`Attachment is not a GIF for user ${userId}`);
-      await interaction.reply({
+      await safeReply(interaction, {
         content: 'this command only works on gif files.',
         flags: MessageFlags.Ephemeral,
       });
-      await notifyCommandFailure(username, 'optimize');
+      await notifyCommandFailure(username, 'optimize', {
+        userId,
+        error: 'attachment is not a GIF',
+      });
       return;
     }
   }
@@ -607,16 +737,37 @@ export async function handleOptimizeCommand(interaction) {
     const urlValidation = validateUrl(url);
     if (!urlValidation.valid) {
       logger.warn(`Invalid URL for user ${userId}: ${urlValidation.error}`);
-      await interaction.reply({
+      await safeReply(interaction, {
         content: `invalid URL: ${urlValidation.error}`,
         flags: MessageFlags.Ephemeral,
       });
-      await notifyCommandFailure(username, 'optimize');
+      await notifyCommandFailure(username, 'optimize', {
+        userId,
+        error: `invalid URL: ${urlValidation.error}`,
+      });
+      return;
+    }
+
+    // Check if interaction is already responded to or expired before deferring
+    if (interaction.replied || interaction.deferred) {
+      logger.debug(`Interaction already responded to before deferring in handleOptimizeCommand`);
       return;
     }
 
     // Defer reply since downloading may take time
-    await interaction.deferReply();
+    try {
+      await interaction.deferReply();
+    } catch (error) {
+      // Handle expired interactions (code 10062) or already acknowledged (code 40060)
+      if (error.code === 10062 || error.code === 40060) {
+        logger.debug(
+          `Interaction expired or already acknowledged when deferring: ${error.message}`
+        );
+      } else {
+        logger.error(`Failed to defer reply:`, error);
+      }
+      return;
+    }
 
     try {
       // Check if it's a cdn.gronka.p1x.dev URL and try to use local file
@@ -647,7 +798,10 @@ export async function handleOptimizeCommand(interaction) {
             await interaction.editReply({
               content: error.message || 'failed to parse Tenor URL.',
             });
-            await notifyCommandFailure(username, 'optimize');
+            await notifyCommandFailure(username, 'optimize', {
+              userId,
+              error: error.message || 'failed to parse Tenor URL',
+            });
             return;
           }
         }
@@ -661,7 +815,10 @@ export async function handleOptimizeCommand(interaction) {
           await interaction.editReply({
             content: 'this command only works on gif files.',
           });
-          await notifyCommandFailure(username, 'optimize');
+          await notifyCommandFailure(username, 'optimize', {
+            userId,
+            error: 'downloaded file is not a GIF',
+          });
           return;
         }
 
@@ -693,14 +850,37 @@ export async function handleOptimizeCommand(interaction) {
       await interaction.editReply({
         content: error.message || 'failed to download file from URL.',
       });
-      await notifyCommandFailure(username, 'optimize');
+      await notifyCommandFailure(username, 'optimize', {
+        userId,
+        error: error.message || 'failed to download file from URL',
+      });
       return;
     }
   }
 
   // Defer reply if not already deferred (for attachment case)
   if (!url) {
-    await interaction.deferReply();
+    // Check if interaction is already responded to or expired before deferring
+    if (interaction.replied || interaction.deferred) {
+      logger.debug(
+        `Interaction already responded to before deferring in handleOptimizeCommand (attachment case)`
+      );
+      return;
+    }
+
+    try {
+      await interaction.deferReply();
+    } catch (error) {
+      // Handle expired interactions (code 10062) or already acknowledged (code 40060)
+      if (error.code === 10062 || error.code === 40060) {
+        logger.debug(
+          `Interaction expired or already acknowledged when deferring (attachment case): ${error.message}`
+        );
+      } else {
+        logger.error(`Failed to defer reply (attachment case):`, error);
+      }
+      return;
+    }
   }
 
   await processOptimization(

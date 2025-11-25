@@ -162,7 +162,7 @@ These Terms of Use are governed by and construed in accordance with applicable l
 
 ## Dispute Resolution
 
-Any disputes arising from these terms or your use of the service should be resolved through good faith communication via the GitHub repository.
+Any disputes arising from these terms or your use of the service should be resolved through good faith communication via the [GitHub repository](https://github.com/thedorekaczynski/gronka).
 
 ## Severability
 
@@ -177,7 +177,7 @@ These Terms of Use, together with our Privacy Policy, constitute the entire agre
 For questions about these Terms of Use, please contact us:
 
 - **Email**: gronkasupport@proton.me
-- **GitHub**: [https://github.com/p2xai/gronka](https://github.com/p2xai/gronka)
+- **GitHub**: [https://github.com/thedorekaczynski/gronka](https://github.com/thedorekaczynski/gronka)
 
 ## Third-Party Services
 
@@ -193,8 +193,6 @@ Your use of these third-party services is subject to their respective terms and 
 
 You must be at least 13 years old to use this service. If you are under 18, you represent that you have parental or guardian consent to use the service.
 
-
 ---
 
-*By using gronka, you acknowledge that you have read, understood, and agree to be bound by these Terms of Use.*
-
+_By using gronka, you acknowledge that you have read, understood, and agree to be bound by these Terms of Use._

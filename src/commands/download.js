@@ -34,10 +34,12 @@ import {
   detectFileType,
   shouldUploadToDiscord,
 } from '../utils/storage.js';
+import { uploadGifToR2, uploadVideoToR2, uploadImageToR2 } from '../utils/r2-storage.js';
 import { optimizeGif } from '../utils/gif-optimizer.js';
 import { queueCobaltRequest, hashUrl } from '../utils/cobalt-queue.js';
 import { notifyCommandSuccess, notifyCommandFailure } from '../utils/ntfy-notifier.js';
 import { getProcessedUrl, insertProcessedUrl, initDatabase } from '../utils/database.js';
+import { r2Config } from '../utils/config.js';
 
 const logger = createLogger('download');
 
@@ -133,7 +135,7 @@ async function processDownload(interaction, url, commandSource = null) {
       await interaction.editReply({
         content: fileUrl,
       });
-      await notifyCommandSuccess(username, 'download');
+      await notifyCommandSuccess(username, 'download', { operationId, userId });
       return;
     }
 
@@ -180,7 +182,7 @@ async function processDownload(interaction, url, commandSource = null) {
         await interaction.editReply({
           content: fileUrl,
         });
-        await notifyCommandSuccess(username, 'download');
+        await notifyCommandSuccess(username, 'download', { operationId, userId });
         return;
       }
       throw error;
@@ -342,7 +344,7 @@ async function processDownload(interaction, url, commandSource = null) {
       });
 
       // Send success notification
-      await notifyCommandSuccess(username, 'download');
+      await notifyCommandSuccess(username, 'download', { operationId, userId });
       return;
     } else {
       // Save file based on type
@@ -467,9 +469,54 @@ async function processDownload(interaction, url, commandSource = null) {
       if (finalUploadMethod === 'discord') {
         const safeHash = hash.replace(/[^a-f0-9]/gi, '');
         const filename = `${safeHash}${ext}`;
-        await interaction.editReply({
-          files: [new AttachmentBuilder(finalBuffer, { name: filename })],
-        });
+        try {
+          await interaction.editReply({
+            files: [new AttachmentBuilder(finalBuffer, { name: filename })],
+          });
+        } catch (discordError) {
+          // Discord upload failed, fallback to R2
+          logger.warn(
+            `Discord attachment upload failed, falling back to R2: ${discordError.message}`
+          );
+          try {
+            let r2Url;
+            if (fileType === 'gif') {
+              r2Url = await uploadGifToR2(finalBuffer, hash, r2Config, buildMetadata());
+            } else if (fileType === 'video') {
+              r2Url = await uploadVideoToR2(finalBuffer, hash, ext, r2Config, buildMetadata());
+            } else if (fileType === 'image') {
+              r2Url = await uploadImageToR2(finalBuffer, hash, ext, r2Config, buildMetadata());
+            }
+
+            if (r2Url) {
+              // Update database with R2 URL
+              await insertProcessedUrl(
+                urlHash,
+                hash,
+                fileType,
+                ext,
+                r2Url,
+                Date.now(),
+                userId,
+                finalSize
+              );
+              await interaction.editReply({
+                content: r2Url,
+              });
+            } else {
+              // If R2 upload also fails, use the original fileUrl
+              await interaction.editReply({
+                content: fileUrl,
+              });
+            }
+          } catch (r2Error) {
+            logger.error(`R2 fallback upload also failed: ${r2Error.message}`);
+            // Last resort: use the original fileUrl
+            await interaction.editReply({
+              content: fileUrl,
+            });
+          }
+        }
       } else {
         await interaction.editReply({
           content: fileUrl,
@@ -477,7 +524,7 @@ async function processDownload(interaction, url, commandSource = null) {
       }
 
       // Send success notification
-      await notifyCommandSuccess(username, 'download');
+      await notifyCommandSuccess(username, 'download', { operationId, userId });
 
       // Record rate limit after successful download
       recordRateLimit(userId);
@@ -523,7 +570,11 @@ async function processDownload(interaction, url, commandSource = null) {
       });
 
       // Send failure notification for rate limit
-      await notifyCommandFailure(username, 'download');
+      await notifyCommandFailure(username, 'download', {
+        operationId,
+        userId,
+        error: 'rate limited',
+      });
       return;
     }
 
@@ -560,7 +611,7 @@ async function processDownload(interaction, url, commandSource = null) {
     });
 
     // Send failure notification
-    await notifyCommandFailure(username, 'download');
+    await notifyCommandFailure(username, 'download', { operationId, userId, error: errorMessage });
   }
 }
 
@@ -617,7 +668,10 @@ export async function handleDownloadContextMenuCommand(interaction) {
       content: 'no URL found in this message.',
       flags: MessageFlags.Ephemeral,
     });
-    await notifyCommandFailure(username, 'download');
+    await notifyCommandFailure(username, 'download', {
+      userId,
+      error: 'no URL found in this message',
+    });
     return;
   }
 
@@ -648,7 +702,7 @@ export async function handleDownloadContextMenuCommand(interaction) {
       content: 'cobalt is not enabled.',
       flags: MessageFlags.Ephemeral,
     });
-    await notifyCommandFailure(username, 'download');
+    await notifyCommandFailure(username, 'download', { userId, error: 'cobalt is not enabled' });
     return;
   }
 
@@ -658,7 +712,10 @@ export async function handleDownloadContextMenuCommand(interaction) {
       content: 'url is not from a supported social media platform.',
       flags: MessageFlags.Ephemeral,
     });
-    await notifyCommandFailure(username, 'download');
+    await notifyCommandFailure(username, 'download', {
+      userId,
+      error: 'url is not from a supported social media platform',
+    });
     return;
   }
 
@@ -700,7 +757,7 @@ export async function handleDownloadCommand(interaction) {
       content: 'please provide a URL to download from.',
       flags: MessageFlags.Ephemeral,
     });
-    await notifyCommandFailure(username, 'download');
+    await notifyCommandFailure(username, 'download', { userId, error: 'no URL provided' });
     return;
   }
 
@@ -731,7 +788,7 @@ export async function handleDownloadCommand(interaction) {
       content: 'cobalt is not enabled. please enable it to use the download command.',
       flags: MessageFlags.Ephemeral,
     });
-    await notifyCommandFailure(username, 'download');
+    await notifyCommandFailure(username, 'download', { userId, error: 'cobalt is not enabled' });
     return;
   }
 
@@ -740,7 +797,10 @@ export async function handleDownloadCommand(interaction) {
       content: 'url is not from a supported social media platform.',
       flags: MessageFlags.Ephemeral,
     });
-    await notifyCommandFailure(username, 'download');
+    await notifyCommandFailure(username, 'download', {
+      userId,
+      error: 'url is not from a supported social media platform',
+    });
     return;
   }
 

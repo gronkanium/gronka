@@ -84,8 +84,10 @@ export async function sendNtfyNotification(title, message, options = {}) {
   }
 
   try {
-    // Append duration to message if available
+    // Build message with format: username: command success (duration)
     let notificationMessage = message;
+
+    // Append duration in parentheses if available
     if (finalMetadata.duration !== undefined) {
       const formattedDuration = formatDuration(finalMetadata.duration);
       if (formattedDuration) {
@@ -93,12 +95,14 @@ export async function sendNtfyNotification(title, message, options = {}) {
       }
     }
 
+    // Log the notification message for debugging
+    logger.debug('Sending ntfy notification:', notificationMessage);
+
     const url = `https://ntfy.sh/${botConfig.ntfyTopic}`;
     const response = await fetch(url, {
       method: 'POST',
       headers: {
         Title: title,
-        'Content-Type': 'text/plain',
       },
       body: notificationMessage,
     });
@@ -176,6 +180,7 @@ export async function notifyDeferredDownload(username, status, options = {}) {
     ...options,
     metadata: {
       username,
+      operation: 'deferred-download',
       status,
       ...options.metadata,
     },

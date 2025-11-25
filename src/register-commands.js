@@ -4,16 +4,32 @@ import dotenv from 'dotenv';
 // Load environment variables
 dotenv.config();
 
-const DISCORD_TOKEN = process.env.DISCORD_TOKEN;
-const CLIENT_ID = process.env.CLIENT_ID;
+// Get prefix from command line argument (TEST or PROD) or use default
+const prefixArg = process.argv[2]?.toUpperCase();
+const usePrefix = prefixArg && ['TEST', 'PROD'].includes(prefixArg);
+
+// Get token and client ID based on prefix
+let DISCORD_TOKEN, CLIENT_ID;
+
+if (usePrefix) {
+  const envPrefix = `${prefixArg}_`;
+  DISCORD_TOKEN = process.env[`${envPrefix}DISCORD_TOKEN`];
+  CLIENT_ID = process.env[`${envPrefix}CLIENT_ID`];
+} else {
+  // Default behavior: use standard env vars
+  DISCORD_TOKEN = process.env.DISCORD_TOKEN;
+  CLIENT_ID = process.env.CLIENT_ID;
+}
 
 if (!DISCORD_TOKEN) {
-  console.error('discord_token is not set in environment variables');
+  const varName = usePrefix ? `${prefixArg}_DISCORD_TOKEN` : 'DISCORD_TOKEN';
+  console.error(`${varName} is not set in environment variables`);
   process.exit(1);
 }
 
 if (!CLIENT_ID) {
-  console.error('client_id is not set in environment variables');
+  const varName = usePrefix ? `${prefixArg}_CLIENT_ID` : 'CLIENT_ID';
+  console.error(`${varName} is not set in environment variables`);
   process.exit(1);
 }
 
@@ -177,8 +193,9 @@ const rest = new REST({ version: '10' }).setToken(DISCORD_TOKEN);
     console.log('  • /download');
     console.log('  • /info');
 
+    const botType = usePrefix ? ` (${prefixArg} bot)` : '';
     console.log('\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
-    console.log('note: commands may take up to 1 hour to appear in discord');
+    console.log(`note: commands may take up to 1 hour to appear in discord${botType}`);
     console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n');
   } catch (error) {
     console.error('an error occurred:', error);

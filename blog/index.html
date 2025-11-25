@@ -1,0 +1,32 @@
+---
+layout: default
+title: blog
+---
+
+<h1>blog</h1>
+
+<p>updates, new features, fixes, and other changes to gronka.</p>
+
+<p>subscribe via <a href="/feed.xml">rss</a>.</p>
+
+<h2>recent updates</h2>
+
+{% if site.posts.size > 0 %}
+<ul class="post-list">
+  {% for post in site.posts %}
+  <li>
+    <span class="post-meta">{{ post.date | date: "%B %d, %Y" }}</span>
+    <h2>
+      <a class="post-link" href="{{ post.url | relative_url }}">{{ post.title | escape }}</a>
+    </h2>
+    {% if post.excerpt %}
+    <div class="post-excerpt">{{ post.excerpt | strip_html | truncatewords: 30 }}</div>
+    {% elsif post.content %}
+    <div class="post-excerpt">{{ post.content | strip_html | truncatewords: 30 }}</div>
+    {% endif %}
+  </li>
+  {% endfor %}
+</ul>
+{% else %}
+<p>no updates yet.</p>
+{% endif %}

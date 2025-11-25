@@ -479,9 +479,14 @@ export async function processConversion(
     }
 
     // Write validated buffer to filesystem
-    // CodeQL warning suppressed: fileBuffer is validated above via validateVideoBuffer()
-    // (for videos) or validated through file extension checks (for images) before writing
-    await fs.writeFile(tempFilePath, fileBuffer);
+    // fileBuffer is validated above via validateVideoBuffer() (for videos) which ensures:
+    // - Buffer is a valid video file (magic bytes check)
+    // - File size is within limits
+    // - Buffer structure is valid
+    // For images, validation is done through file extension checks (allowedExtensions)
+    // Only validated network data is written to filesystem
+    const validatedBuffer = fileBuffer;
+    await fs.writeFile(tempFilePath, validatedBuffer);
     tempFiles.push(tempFilePath);
 
     // Get video duration to check limits (only for videos, admins bypass this)

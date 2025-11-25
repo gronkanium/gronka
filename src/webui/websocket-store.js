@@ -254,8 +254,11 @@ function handleMessage(message) {
       });
       break;
 
-    default:
-      console.warn('Unknown message type:', sanitizeLogInput(message.type));
+    default: {
+      // Sanitize user-provided message type to prevent log injection
+      const sanitizedType = sanitizeLogInput(message.type);
+      console.warn('Unknown message type:', sanitizedType);
+    }
   }
 }
 

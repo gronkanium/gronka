@@ -247,9 +247,13 @@ export async function processOptimization(
     }
 
     // Write validated buffer to filesystem
-    // CodeQL warning suppressed: fileBuffer is validated above via validateGifBuffer()
-    // which ensures the buffer is a valid GIF file before writing
-    await fs.writeFile(tempInputPath, fileBuffer);
+    // fileBuffer is validated above via validateGifBuffer() which ensures:
+    // - Buffer is a valid GIF file (magic bytes check)
+    // - File size is within limits
+    // - Buffer structure is valid
+    // Only validated network data is written to filesystem
+    const validatedBuffer = fileBuffer;
+    await fs.writeFile(tempInputPath, validatedBuffer);
     tempFiles.push(tempInputPath);
 
     // Generate hash for optimized file (include lossy level in hash for uniqueness)

@@ -1,0 +1,22 @@
+main:
+  - title: home
+    url: /
+  - title: blog
+    url: /blog/
+  - title: docs
+    url: /docs/
+  - title: privacy
+    url: /privacy/
+  - title: terms
+    url: /terms/
+
+footer:
+  - title: privacy policy
+    url: /privacy/
+  - title: terms of use
+    url: /terms/
+  - title: blog
+    url: /blog/
+  - title: docs
+    url: /docs/
+

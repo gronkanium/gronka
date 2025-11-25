@@ -1,0 +1,106 @@
+- name: convert
+  type: slash
+  description: convert a video or image to gif
+  usage: "/convert [file|url]"
+  examples:
+    - "/convert file:<attachment>"
+    - "/convert url:https://example.com/video.mp4"
+  context_menu: true
+  context_menu_name: convert to gif
+  context_menu_advanced: true
+  options:
+    - name: file
+      type: attachment
+      description: the video or image file to convert
+      required: false
+    - name: url
+      type: string
+      description: url to a video or image file to convert
+      required: false
+  supported_formats:
+    video: [mp4, mov, webm, avi, mkv]
+    image: [png, jpg, jpeg, webp, gif]
+
+- name: optimize
+  type: slash
+  description: optimize a gif file to reduce its size
+  usage: "/optimize [file|url] [lossy]"
+  examples:
+    - "/optimize file:<attachment>"
+    - "/optimize url:https://example.com/gif.gif lossy:50"
+  context_menu: true
+  context_menu_name: optimize
+  options:
+    - name: file
+      type: attachment
+      description: the gif file to optimize
+      required: false
+    - name: url
+      type: string
+      description: url to a gif file to optimize
+      required: false
+    - name: lossy
+      type: number
+      description: "lossy compression level (0-100, default: 35). higher = more compression, lower quality"
+      required: false
+      min: 0
+      max: 100
+  lossy_ranges:
+    - range: "0-30"
+      description: less compression, higher quality, larger files
+    - range: "30-60"
+      description: balanced compression and quality
+    - range: "60-100"
+      description: more compression, lower quality, smaller files
+
+- name: stats
+  type: slash
+  description: view bot statistics and gif storage information
+  usage: "/stats"
+  examples:
+    - "/stats"
+  context_menu: false
+
+- name: download
+  type: slash
+  description: download a video from social media using cobalt (no conversion)
+  usage: "/download url:<url>"
+  examples:
+    - "/download url:https://twitter.com/example/status/123"
+  context_menu: true
+  context_menu_name: download
+  options:
+    - name: url
+      type: string
+      description: url to a social media video to download
+      required: true
+
+- name: config
+  type: slash
+  description: view or modify your personal configuration settings (admin only)
+  usage: "/config [view|set]"
+  examples:
+    - "/config view"
+    - "/config set fps:20 width:500 quality:high"
+  context_menu: false
+  admin_only: true
+  subcommands:
+    - name: view
+      description: view your current configuration
+    - name: set
+      description: set configuration values
+      options:
+        - name: fps
+          type: number
+          description: frames per second for gif conversion (max 30 for admins, max 15 for others)
+          required: false
+        - name: width
+          type: number
+          description: width in pixels for gif conversion (1-4096)
+          required: false
+        - name: quality
+          type: string
+          description: quality preset for gif conversion
+          required: false
+          choices: [low, medium, high]
+

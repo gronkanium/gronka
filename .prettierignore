@@ -15,4 +15,6 @@ coverage/
 .cloudflared/
 _layouts/
 _posts/
+.github/ISSUE_TEMPLATE/
+wiki/
 

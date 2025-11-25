@@ -392,13 +392,49 @@ async function downloadPhotosFromPicker(pickerArray, isAdminUser = false, maxSiz
 }
 
 /**
+ * Replace hostname in URL with hostname from API URL
+ * This is needed when Cobalt returns tunnel URLs with Docker hostnames (e.g., "cobalt")
+ * that aren't resolvable from outside the Docker network
+ * @param {string} url - URL to fix
+ * @param {string} apiUrl - Cobalt API URL to extract hostname from
+ * @returns {string} URL with replaced hostname
+ */
+function replaceTunnelHostname(url, apiUrl) {
+  try {
+    const urlObj = new URL(url);
+    const apiUrlObj = new URL(apiUrl);
+
+    // Replace hostname if it's different from the API URL hostname
+    if (urlObj.hostname !== apiUrlObj.hostname) {
+      urlObj.hostname = apiUrlObj.hostname;
+      // Also replace port if API URL has a specific port
+      if (apiUrlObj.port) {
+        urlObj.port = apiUrlObj.port;
+      }
+      logger.info(`Replacing tunnel hostname: ${url} -> ${urlObj.toString()}`);
+      return urlObj.toString();
+    }
+    return url;
+  } catch (error) {
+    logger.warn(`Failed to replace tunnel hostname: ${error.message}, using original URL`);
+    return url;
+  }
+}
+
+/**
  * Download video from Cobalt response
  * @param {Object} cobaltResponse - Response from Cobalt API
  * @param {boolean} isAdminUser - Whether the user is an admin (allows larger files)
  * @param {number} maxSize - Maximum file size in bytes
+ * @param {string} apiUrl - Cobalt API URL (used to fix tunnel hostnames)
  * @returns {Promise<Object|Array>} Object with buffer, contentType, size, and filename (or array of objects for picker)
  */
-async function downloadFromCobalt(cobaltResponse, isAdminUser = false, maxSize = Infinity) {
+async function downloadFromCobalt(
+  cobaltResponse,
+  isAdminUser = false,
+  maxSize = Infinity,
+  apiUrl = null
+) {
   // Cobalt API returns different response formats depending on the platform
 
   // Check for picker response (e.g., TikTok slideshows with photos)
@@ -435,6 +471,23 @@ async function downloadFromCobalt(cobaltResponse, isAdminUser = false, maxSize =
         filename = textMatch[1].trim();
       }
     }
+  } else if (cobaltResponse.status === 'tunnel') {
+    // Handle tunnel response - Cobalt returns a tunnel URL that needs to be accessed
+    logger.info('Detected tunnel response from Cobalt');
+    if (cobaltResponse.url) {
+      videoUrl = cobaltResponse.url;
+      // Replace Docker hostname with API URL hostname if needed
+      if (apiUrl) {
+        videoUrl = replaceTunnelHostname(videoUrl, apiUrl);
+      }
+    } else {
+      throw new NetworkError('Cobalt tunnel response missing URL');
+    }
+
+    // Get filename from response if available
+    if (cobaltResponse.filename) {
+      filename = cobaltResponse.filename;
+    }
   } else if (cobaltResponse.status === 'error') {
     throw new NetworkError(cobaltResponse.text || 'Cobalt API returned an error');
   } else {
@@ -443,6 +496,10 @@ async function downloadFromCobalt(cobaltResponse, isAdminUser = false, maxSize =
     for (const key of possibleKeys) {
       if (cobaltResponse[key]) {
         videoUrl = cobaltResponse[key];
+        // If we have an API URL and the video URL looks like a tunnel URL, fix the hostname
+        if (apiUrl && videoUrl.includes('/tunnel')) {
+          videoUrl = replaceTunnelHostname(videoUrl, apiUrl);
+        }
         break;
       }
     }
@@ -549,7 +606,7 @@ export async function downloadFromSocialMedia(
     const cobaltResponse = await callCobaltApi(apiUrl, url);
     logger.info(`Cobalt API response: ${JSON.stringify(cobaltResponse)}`);
     logger.info('Cobalt API call successful, downloading media');
-    const result = await downloadFromCobalt(cobaltResponse, isAdminUser, maxSize);
+    const result = await downloadFromCobalt(cobaltResponse, isAdminUser, maxSize, apiUrl);
 
     // Check if result is an array (multiple photos) or single object
     if (Array.isArray(result)) {

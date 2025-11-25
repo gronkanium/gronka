@@ -12,6 +12,9 @@ node_modules/
 # AWS/R2 credentials
 .aws/
 
+# Cloudflared tunnel credentials and config
+.cloudflared/
+
 # Config files that may contain secrets
 config/credentials.json
 

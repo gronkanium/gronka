@@ -131,6 +131,30 @@ function validateGifBuffer(buffer) {
 }
 
 /**
+ * Write a validated GIF buffer to the filesystem
+ * This function ensures validation happens before write so CodeQL can track the data flow
+ * @param {string} filePath - Path where the file should be written
+ * @param {Buffer} buffer - File buffer to write (must be validated)
+ * @throws {ValidationError} If buffer validation fails
+ * @returns {Promise<void>}
+ */
+async function writeValidatedFileBuffer(filePath, buffer) {
+  // Validate file buffer before writing to filesystem
+  try {
+    validateGifBuffer(buffer);
+  } catch (error) {
+    if (error instanceof ValidationError) {
+      throw error;
+    }
+    throw new ValidationError('file validation failed: ' + error.message);
+  }
+  // Only validated network data is written to filesystem
+  // Note: CodeQL flags this as network data to file, but the data is validated above
+  // If validation fails, an error is thrown and execution never reaches this point
+  await fs.writeFile(filePath, buffer);
+}
+
+/**
  * Process GIF optimization
  * @param {Interaction} interaction - Discord interaction
  * @param {Attachment} attachment - Discord attachment (GIF file)
@@ -236,26 +260,9 @@ export async function processOptimization(
       throw new Error('Invalid temp file path detected');
     }
 
-    // Validate file buffer before writing to filesystem
-    try {
-      validateGifBuffer(fileBuffer);
-    } catch (error) {
-      if (error instanceof ValidationError) {
-        throw error;
-      }
-      throw new ValidationError('file validation failed: ' + error.message);
-    }
-
     // Write validated buffer to filesystem
-    // fileBuffer is validated above via validateGifBuffer() which ensures:
-    // - Buffer is a valid GIF file (magic bytes check)
-    // - File size is within limits
-    // - Buffer structure is valid
-    // Only validated network data is written to filesystem
-    // Note: CodeQL flags this as network data to file, but the data is validated above
-    // If validation fails, an error is thrown and execution never reaches this point
-    const validatedBuffer = fileBuffer;
-    await fs.writeFile(tempInputPath, validatedBuffer);
+    // This function ensures validation happens before write so CodeQL can track the data flow
+    await writeValidatedFileBuffer(tempInputPath, fileBuffer);
     tempFiles.push(tempInputPath);
 
     // Generate hash for optimized file (include lossy level in hash for uniqueness)

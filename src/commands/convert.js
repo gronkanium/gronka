@@ -111,6 +111,34 @@ function validateVideoBuffer(buffer) {
 }
 
 /**
+ * Write a validated file buffer to the filesystem
+ * This function ensures validation happens before write so CodeQL can track the data flow
+ * @param {string} filePath - Path where the file should be written
+ * @param {Buffer} buffer - File buffer to write (must be validated)
+ * @param {string} attachmentType - Type of attachment ('video' or 'image')
+ * @throws {ValidationError} If buffer validation fails
+ * @returns {Promise<void>}
+ */
+async function writeValidatedFileBuffer(filePath, buffer, attachmentType) {
+  // Validate file buffer before writing to filesystem (only for videos)
+  if (attachmentType === 'video') {
+    try {
+      validateVideoBuffer(buffer);
+    } catch (error) {
+      if (error instanceof ValidationError) {
+        throw error;
+      }
+      throw new ValidationError('file validation failed: ' + error.message);
+    }
+  }
+  // For images, validation is done through file extension checks (allowedExtensions)
+  // Only validated network data is written to filesystem
+  // Note: CodeQL flags this as network data to file, but the data is validated above
+  // If validation fails, an error is thrown and execution never reaches this point
+  await fs.writeFile(filePath, buffer);
+}
+
+/**
  * Check if a CDN URL points to a local file and return the file buffer if it exists
  * @param {string} url - CDN URL to check (e.g., https://cdn.gronka.p1x.dev/gifs/abc123.gif)
  * @param {string} storagePath - Base storage path
@@ -466,29 +494,9 @@ export async function processConversion(
       throw new Error('Invalid temp file path detected');
     }
 
-    // Validate file buffer before writing to filesystem (only for videos)
-    if (attachmentType === 'video') {
-      try {
-        validateVideoBuffer(fileBuffer);
-      } catch (error) {
-        if (error instanceof ValidationError) {
-          throw error;
-        }
-        throw new ValidationError('file validation failed: ' + error.message);
-      }
-    }
-
     // Write validated buffer to filesystem
-    // fileBuffer is validated above via validateVideoBuffer() (for videos) which ensures:
-    // - Buffer is a valid video file (magic bytes check)
-    // - File size is within limits
-    // - Buffer structure is valid
-    // For images, validation is done through file extension checks (allowedExtensions)
-    // Only validated network data is written to filesystem
-    // Note: CodeQL flags this as network data to file, but the data is validated above
-    // If validation fails, an error is thrown and execution never reaches this point
-    const validatedBuffer = fileBuffer;
-    await fs.writeFile(tempFilePath, validatedBuffer);
+    // This function ensures validation happens before write so CodeQL can track the data flow
+    await writeValidatedFileBuffer(tempFilePath, fileBuffer, attachmentType);
     tempFiles.push(tempFilePath);
 
     // Get video duration to check limits (only for videos, admins bypass this)

@@ -123,18 +123,21 @@ export async function optimizeGif(inputPath, outputPath, options = {}) {
 
   // Validate input file exists
   try {
-    await fs.access(inputPath);
-  } catch {
+    const inputStats = await fs.stat(inputPath);
+    logger.debug(`Input file exists: ${inputPath} (size: ${inputStats.size} bytes)`);
+  } catch (error) {
+    logger.error(`Input file not found: ${inputPath} - ${error.message}`);
     throw new ValidationError(`Input GIF file not found: ${inputPath}`);
   }
 
-  // Ensure output directory exists
-  const outputDir = path.dirname(outputPath);
-  await fs.mkdir(outputDir, { recursive: true });
-
-  // Get absolute paths - these are container paths inside /app
+  // Get absolute paths first (before directory creation)
   const inputAbsPath = path.resolve(inputPath);
   const outputAbsPath = path.resolve(outputPath);
+
+  // Ensure output directory exists on host
+  const outputDir = path.dirname(outputPath);
+  await fs.mkdir(outputDir, { recursive: true });
+  logger.debug(`Created output directory on host: ${outputDir}`);
 
   // Map container paths to paths inside the giflossy container
   // Both containers will use the same paths since we'll inherit volumes
@@ -142,11 +145,58 @@ export async function optimizeGif(inputPath, outputPath, options = {}) {
   let inputDockerPath = inputAbsPath;
   let outputDockerPath = outputAbsPath;
 
-  if (inputAbsPath.startsWith(cwd)) {
-    inputDockerPath = inputAbsPath.replace(cwd, '/app');
+  // Convert paths to Docker container paths
+  // Normalize backslashes to forward slashes for cross-platform compatibility
+  const normalizedCwd = cwd.replace(/\\/g, '/');
+  const normalizedInputPath = inputAbsPath.replace(/\\/g, '/');
+  const normalizedOutputPath = outputAbsPath.replace(/\\/g, '/');
+
+  // Simple replacement: if path starts with cwd, replace cwd with /app
+  // Handle Windows drive letters by checking both full path and path without drive
+  if (normalizedInputPath.startsWith(normalizedCwd)) {
+    inputDockerPath = normalizedInputPath.replace(normalizedCwd, '/app');
+  } else if (/^[A-Z]:/i.test(normalizedCwd)) {
+    // Windows: try matching without drive letter (e.g., "C:/gronka" -> "/gronka")
+    const pathWithoutDrive = normalizedCwd.substring(2); // Remove "C:"
+    const normalizedPathWithoutDrive = pathWithoutDrive.startsWith('/')
+      ? pathWithoutDrive
+      : '/' + pathWithoutDrive;
+    if (normalizedInputPath.startsWith(normalizedPathWithoutDrive)) {
+      inputDockerPath = normalizedInputPath.replace(normalizedPathWithoutDrive, '/app');
+    } else {
+      // Fallback: assume it's already a container path or relative
+      inputDockerPath = normalizedInputPath.startsWith('/')
+        ? normalizedInputPath
+        : '/app/' + normalizedInputPath;
+    }
+  } else {
+    // Unix path or already container path
+    inputDockerPath = normalizedInputPath.startsWith('/')
+      ? normalizedInputPath
+      : '/app/' + normalizedInputPath;
   }
-  if (outputAbsPath.startsWith(cwd)) {
-    outputDockerPath = outputAbsPath.replace(cwd, '/app');
+
+  if (normalizedOutputPath.startsWith(normalizedCwd)) {
+    outputDockerPath = normalizedOutputPath.replace(normalizedCwd, '/app');
+  } else if (/^[A-Z]:/i.test(normalizedCwd)) {
+    // Windows: try matching without drive letter
+    const pathWithoutDrive = normalizedCwd.substring(2);
+    const normalizedPathWithoutDrive = pathWithoutDrive.startsWith('/')
+      ? pathWithoutDrive
+      : '/' + pathWithoutDrive;
+    if (normalizedOutputPath.startsWith(normalizedPathWithoutDrive)) {
+      outputDockerPath = normalizedOutputPath.replace(normalizedPathWithoutDrive, '/app');
+    } else {
+      // Fallback: assume it's already a container path or relative
+      outputDockerPath = normalizedOutputPath.startsWith('/')
+        ? normalizedOutputPath
+        : '/app/' + normalizedOutputPath;
+    }
+  } else {
+    // Unix path or already container path
+    outputDockerPath = normalizedOutputPath.startsWith('/')
+      ? normalizedOutputPath
+      : '/app/' + normalizedOutputPath;
   }
 
   // Use --volumes-from to inherit all volumes from the current container
@@ -154,11 +204,31 @@ export async function optimizeGif(inputPath, outputPath, options = {}) {
   // Container name is 'gronka' as defined in docker-compose.yml
   const containerName = 'gronka';
 
-  // Validate paths don't contain shell metacharacters (additional safety check)
-  // Paths are already validated via path.resolve() and normalized, but add extra validation
-  const shellMetaChars = /[;&|`$(){}[\]*?~<>\\\n\r\t\0]/;
-  if (shellMetaChars.test(inputDockerPath) || shellMetaChars.test(outputDockerPath)) {
-    throw new ValidationError('Invalid characters in file paths');
+  // Validate paths don't contain dangerous characters
+  // Since we use spawn() with array arguments, shell injection isn't possible
+  // Only check for null bytes and control characters that could cause issues
+  const dangerousChars = /[\0\n\r]/;
+
+  if (dangerousChars.test(inputDockerPath)) {
+    const match = inputDockerPath.match(dangerousChars);
+    const charCode = match[0].charCodeAt(0);
+    logger.error(
+      `Invalid characters in input path: ${inputDockerPath}, found character code: ${charCode}`
+    );
+    throw new ValidationError(
+      `Invalid characters in file paths: input path contains invalid character (code: ${charCode})`
+    );
+  }
+
+  if (dangerousChars.test(outputDockerPath)) {
+    const match = outputDockerPath.match(dangerousChars);
+    const charCode = match[0].charCodeAt(0);
+    logger.error(
+      `Invalid characters in output path: ${outputDockerPath}, found character code: ${charCode}`
+    );
+    throw new ValidationError(
+      `Invalid characters in file paths: output path contains invalid character (code: ${charCode})`
+    );
   }
 
   // SECURITY: Escape paths and container name for shell safety
@@ -175,22 +245,68 @@ export async function optimizeGif(inputPath, outputPath, options = {}) {
   // SECURITY: Use spawn with array arguments to prevent command injection
   // This avoids shell execution and passes arguments directly to docker
   // (We use the raw values since spawn doesn't need shell escaping)
+
+  // Ensure output directory exists inside the Docker container
+  // This is necessary when the storage path is outside mounted volumes
+  // We create the directory in the new container by wrapping the command in a shell
+  const outputDirDockerPath = path.dirname(outputDockerPath).replace(/\\/g, '/');
+
+  // Build the gifsicle command with proper escaping
+  // We need to escape the paths for use in a shell command
+  const escapedInputPath = inputDockerPath.replace(/'/g, "'\\''");
+  const escapedOutputPath = outputDockerPath.replace(/'/g, "'\\''");
+  const escapedOutputDir = outputDirDockerPath.replace(/'/g, "'\\''");
+
+  // Create directory and run gifsicle in one command
+  // The entire command must be a single string argument to sh -c
+  // Using proper shell escaping: wrap the entire command in single quotes, escape internal single quotes
+  const shellCommand = `mkdir -p '${escapedOutputDir}' && /bin/gifsicle --optimize=${optimizeLevel} --lossy=${lossy} '${escapedInputPath}' -o '${escapedOutputPath}'`;
+
   const dockerArgs = [
     'run',
     '--rm',
     '--volumes-from',
     containerName,
     'dylanninin/giflossy:latest',
-    '/bin/gifsicle',
-    `--optimize=${optimizeLevel}`,
-    `--lossy=${lossy}`,
-    inputDockerPath,
-    '-o',
-    outputDockerPath,
+    'sh',
+    '-c',
+    shellCommand, // Single string argument - spawn will pass this correctly
   ];
 
   try {
-    logger.debug(`Executing: docker ${dockerArgs.join(' ')}`);
+    // Verify input file still exists before running docker command
+    try {
+      await fs.access(inputPath);
+      logger.debug(`Input file verified before docker command: ${inputPath}`);
+    } catch (error) {
+      logger.error(`Input file disappeared before docker command: ${inputPath} - ${error.message}`);
+      throw new ValidationError(`Input GIF file not accessible: ${inputPath}`);
+    }
+
+    // Verify gronka container is running (needed for --volumes-from)
+    // This is a best-effort check - if it fails, we'll still try the command
+    try {
+      const { exec } = await import('child_process');
+      const { promisify } = await import('util');
+      const execPromise = promisify(exec);
+      await execPromise(`docker ps --filter name=${containerName} --format "{{.Names}}"`);
+      logger.debug(`Container ${containerName} is running`);
+    } catch (error) {
+      logger.warn(`Could not verify container ${containerName} is running: ${error.message}`);
+      logger.warn(`This may cause issues if --volumes-from cannot access volumes`);
+    }
+
+    logger.info(`Path conversion - cwd: ${cwd}, normalizedCwd: ${normalizedCwd}`);
+    logger.info(`Path conversion - input: ${inputAbsPath} -> ${inputDockerPath}`);
+    logger.info(`Path conversion - output: ${outputAbsPath} -> ${outputDockerPath}`);
+    logger.info(`Output directory created on host: ${outputDir}`);
+    logger.info(`Creating output directory in container: ${outputDirDockerPath}`);
+    logger.info(`Shell command: ${shellCommand}`);
+    logger.info(`Docker args count: ${dockerArgs.length}`);
+    logger.info(`Docker args: ${JSON.stringify(dockerArgs)}`);
+    logger.info(
+      `Executing: docker ${dockerArgs.map(arg => (arg.includes(' ') ? `"${arg}"` : arg)).join(' ')}`
+    );
     const { stdout, stderr } = await new Promise((resolve, reject) => {
       const child = spawn('docker', dockerArgs, {
         timeout: 300000, // 5 minute timeout
@@ -215,6 +331,7 @@ export async function optimizeGif(inputPath, outputPath, options = {}) {
           const error = new Error(`docker process exited with code ${code}`);
           error.code = code;
           error.stderr = stderrData;
+          error.stdout = stdoutData;
           reject(error);
         } else {
           resolve({ stdout: stdoutData, stderr: stderrData });
@@ -222,30 +339,78 @@ export async function optimizeGif(inputPath, outputPath, options = {}) {
       });
     });
 
-    if (stderr && !stderr.includes('warning')) {
-      logger.warn(`giflossy stderr: ${stderr}`);
+    // Log all output for debugging
+    logger.info(`Docker command completed. Exit code would be 0 (success).`);
+    if (stdout) {
+      logger.info(`giflossy stdout: ${stdout}`);
+    } else {
+      logger.info(`giflossy stdout: (empty)`);
     }
 
-    if (stdout) {
-      logger.debug(`giflossy stdout: ${stdout}`);
+    if (stderr) {
+      if (stderr.includes('warning')) {
+        logger.info(`giflossy stderr (warnings): ${stderr}`);
+      } else {
+        logger.warn(`giflossy stderr: ${stderr}`);
+      }
+    } else {
+      logger.info(`giflossy stderr: (empty)`);
     }
 
     // Verify output file was created
     try {
       await fs.access(outputPath);
       logger.info(`GIF optimization completed: ${outputPath}`);
-    } catch {
+    } catch (error) {
+      logger.error(`Output file not found at: ${outputPath}`);
+      logger.error(`File access error: ${error.message}`);
+      // Check if directory exists
+      try {
+        const dirStats = await fs.stat(outputDir);
+        logger.info(
+          `Output directory exists: ${outputDir} (isDirectory: ${dirStats.isDirectory()})`
+        );
+      } catch (_dirError) {
+        logger.error(`Output directory does not exist: ${outputDir}`);
+      }
       throw new ValidationError('Optimized GIF file was not created');
     }
   } catch (error) {
-    logger.error(`GIF optimization failed: ${error.message}`);
+    // Log detailed error information for debugging (not shown to user)
+    if (error.stderr) {
+      logger.error(`GIF optimization stderr: ${error.stderr}`);
+
+      // Check for common errors and provide helpful messages
+      if (error.stderr.includes('No such file or directory')) {
+        if (error.stderr.includes('/app/temp/')) {
+          logger.error(`Input file not found in container. This usually means:`);
+          logger.error(`  1. The ${containerName} container is not running`);
+          logger.error(`  2. The volume mount for ./temp is not configured correctly`);
+          logger.error(`  3. The file path conversion is incorrect`);
+          logger.error(`  Input file on host: ${inputPath}`);
+          logger.error(`  Expected in container: ${inputDockerPath}`);
+        } else if (error.stderr.includes('/app/data')) {
+          logger.error(`Output directory not accessible in container. This usually means:`);
+          logger.error(`  1. The ${containerName} container is not running`);
+          logger.error(`  2. The volume mount for the storage path is not configured correctly`);
+          logger.error(`  Output path on host: ${outputPath}`);
+          logger.error(`  Expected in container: ${outputDockerPath}`);
+        }
+      }
+    }
+    logger.error(
+      `GIF optimization failed: ${error.message}${error.stderr ? ` - ${error.stderr}` : ''}`
+    );
+
     if (error.code === 'ENOENT') {
       throw new ValidationError('docker command not found. Is Docker installed?');
     }
     if (error.code === 'ETIMEDOUT' || error.signal === 'SIGTERM') {
       throw new ValidationError('GIF optimization timed out');
     }
-    throw new ValidationError(`GIF optimization failed: ${error.message}`);
+
+    // Return generic error message to user (detailed errors logged above)
+    throw new ValidationError('GIF optimization failed. Please try again.');
   }
 }
 

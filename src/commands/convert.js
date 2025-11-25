@@ -485,8 +485,9 @@ export async function processConversion(
     // - Buffer structure is valid
     // For images, validation is done through file extension checks (allowedExtensions)
     // Only validated network data is written to filesystem
+    // Note: CodeQL flags this as network data to file, but the data is validated above
+    // If validation fails, an error is thrown and execution never reaches this point
     const validatedBuffer = fileBuffer;
-    // codeql[js/http-to-file-access] - Network data is validated before write: validateVideoBuffer() checks magic bytes, file size, and structure
     await fs.writeFile(tempFilePath, validatedBuffer);
     tempFiles.push(tempFilePath);
 

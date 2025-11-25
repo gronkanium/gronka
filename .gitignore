@@ -65,20 +65,14 @@ vendor/
 posts/
 
 # Jekyll site files
-_data/
-_layouts/
 _includes/
 _config.yml
 Gemfile
-Gemfile.lock
-privacy.md
-terms.md
 aspirations.md
 index.md
 favicon.png
 robots.txt
 @blog
-/blog/
 
 # Changelog - draft posts
 _drafts/

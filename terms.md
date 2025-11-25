@@ -193,8 +193,6 @@ Your use of these third-party services is subject to their respective terms and 
 
 You must be at least 13 years old to use this service. If you are under 18, you represent that you have parental or guardian consent to use the service.
 
-
 ---
 
-*By using gronka, you acknowledge that you have read, understood, and agree to be bound by these Terms of Use.*
-
+_By using gronka, you acknowledge that you have read, understood, and agree to be bound by these Terms of Use._

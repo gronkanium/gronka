@@ -126,5 +126,4 @@ We aim to comply with applicable data protection laws, including GDPR for EU use
 
 ---
 
-*This privacy policy is effective as of the date listed above and applies to all users of the gronka Discord bot service.*
-
+_This privacy policy is effective as of the date listed above and applies to all users of the gronka Discord bot service._

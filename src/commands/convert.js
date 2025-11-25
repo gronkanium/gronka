@@ -556,7 +556,7 @@ export async function processConversion(
             options.width ??
             (userConfig.width !== null ? userConfig.width : Math.min(MAX_GIF_WIDTH, 480)),
           fps: options.fps ?? (userConfig.fps !== null ? userConfig.fps : DEFAULT_FPS),
-          quality: options.quality ?? (userConfig.quality !== null ? userConfig.quality : 'medium'),
+          quality: options.quality ?? (userConfig.quality !== null ? userConfig.quality : 'high'),
           startTime: options.startTime ?? null,
           duration: options.duration ?? null,
         };

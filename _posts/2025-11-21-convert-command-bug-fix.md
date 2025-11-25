@@ -3,7 +3,7 @@ layout: post
 title: convert command bug fix
 date: 2025-11-21
 description: Fixed a critical bug in the /convert command that made both file and url parameters required, preventing users from using the command for 19 hours.
-author: p2xai
+author: thedorekaczynski
 tags:
   - bug-fix
   - changelog

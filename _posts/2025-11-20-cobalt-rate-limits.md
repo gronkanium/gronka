@@ -3,7 +3,7 @@ layout: post
 title: cobalt rate limits and implementation
 date: 2025-11-20
 description: Understanding the limitations of gronka's cobalt integration, including IP-based rate limiting, platform-specific restrictions, and service disruption scenarios.
-author: p2xai
+author: thedorekaczynski
 tags:
   - technical
   - limitations

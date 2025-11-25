@@ -3,7 +3,7 @@ layout: post
 title: development cycle for gronka
 date: 2025-11-24
 description: An overview of the current development cycle, CI/CD workflows, versioning strategy, and release process for the gronka Discord bot.
-author: p2xai
+author: thedorekaczynski
 tags:
   - development
   - cicd
@@ -97,7 +97,7 @@ tests run automatically in CI/CD pipelines and must pass before merging code.
 
 gronka uses two git remotes:
 
-- **gitlab** (`git@192.168.0.20:p2xai/gronka.git`) - primary development remote with CI/CD
+- **gitlab** (`git@192.168.0.20:thedorekaczynski/gronka.git`) - primary development remote with CI/CD
 - **origin** (`https://github.com/thedorekaczynski/gronka.git`) - github mirror
 
 always specify the remote explicitly when pushing:

@@ -158,14 +158,14 @@ if (withWebui) {
 
   // Start main server first (webui depends on it)
   const serverPath = join(__dirname, '..', 'src', 'server.js');
-  console.log(`starting server on port ${env.SERVER_PORT}...`);
+  console.log('starting server...');
   startProcess('server', serverPath);
 
   // Wait a moment for server to start before starting webui
   setTimeout(() => {
     // Start webui server
     const webuiPath = join(__dirname, '..', 'src', 'webui-server.js');
-    console.log(`starting webui on ${env.WEBUI_HOST}:${env.WEBUI_PORT}...`);
+    console.log('starting webui...');
     startProcess('webui', webuiPath);
 
     // Wait a moment for webui to start before starting bot
@@ -178,8 +178,8 @@ if (withWebui) {
       console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
       console.log('all services started');
       console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
-      console.log(`  server: http://localhost:${env.SERVER_PORT}`);
-      console.log(`  webui:  http://${env.WEBUI_HOST}:${env.WEBUI_PORT}`);
+      console.log('  server: running');
+      console.log('  webui:  running');
       console.log(`  bot:    running (${prefix} mode)`);
       console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n');
     }, 1000);

@@ -131,7 +131,8 @@ async function checkAndReadLocalFileFromCdnUrl(url, storagePath) {
       const hash = gifPathMatch[1];
       const filePath = getGifPath(hash, storagePath);
       try {
-        await fs.access(filePath);
+        // Read file directly to avoid TOCTOU race condition
+        // readFile will throw if file doesn't exist or is inaccessible
         const buffer = await fs.readFile(filePath);
         return {
           exists: true,
@@ -153,7 +154,8 @@ async function checkAndReadLocalFileFromCdnUrl(url, storagePath) {
       const extension = `.${videoPathMatch[2]}`;
       const filePath = getVideoPath(hash, extension, storagePath);
       try {
-        await fs.access(filePath);
+        // Read file directly to avoid TOCTOU race condition
+        // readFile will throw if file doesn't exist or is inaccessible
         const buffer = await fs.readFile(filePath);
         // Determine content type from extension
         const contentTypeMap = {
@@ -182,7 +184,8 @@ async function checkAndReadLocalFileFromCdnUrl(url, storagePath) {
       const extension = `.${imagePathMatch[2]}`;
       const filePath = getImagePath(hash, extension, storagePath);
       try {
-        await fs.access(filePath);
+        // Read file directly to avoid TOCTOU race condition
+        // readFile will throw if file doesn't exist or is inaccessible
         const buffer = await fs.readFile(filePath);
         // Determine content type from extension
         const contentTypeMap = {

@@ -5,6 +5,41 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres (attempts) to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.12.1-beta] - 2025-11-25
+
+### Added
+
+- GitHub issue templates
+  - Added issue templates for bug reports, feature requests, and other common issue types
+
+### Changed
+
+- Reorganized webui files into structured folders
+  - Improved code organization and maintainability
+- Updated repository references from p2xai to thedorekaczynski
+  - Updated all repository references to reflect new organization name
+
+### Fixed
+
+- CodeQL false positives suppression
+  - Suppressed false positive alerts for log injection and network-to-file access
+- CodeQL security issues
+  - Resolved log injection vulnerabilities
+  - Fixed network data validation issues
+- CodeQL-recognized sanitization patterns
+  - Applied CodeQL-recognized sanitization patterns for log injection prevention
+- CodeQL security vulnerabilities and warnings
+  - Resolved additional CodeQL security vulnerabilities and warnings
+
+### Dependencies
+
+- Bumped body-parser from 2.2.0 to 2.2.1
+
+### Removed
+
+- Deleted wiki-repo
+  - Removed wiki repository from project structure
+
 ## [0.12.0-prerelease] - 2025-11-25
 
 ### Added
@@ -428,6 +463,7 @@ and this project adheres (attempts) to [Semantic Versioning](https://semver.org/
   - Pre-commit validation
   - Docker buildx setup for cache support
 
+[0.12.1-beta]: https://github.com/thedorekaczynski/gronka/compare/v0.12.0-prerelease...v0.12.1-beta
 [0.12.0-prerelease]: https://github.com/thedorekaczynski/gronka/compare/v0.11.4-prerelease...v0.12.0-prerelease
 [0.11.3-prerelease]: https://github.com/thedorekaczynski/gronka/compare/v0.11.2...v0.11.3-prerelease
 [0.11.2]: https://github.com/thedorekaczynski/gronka/compare/v0.11.1-prerelease...v0.11.2

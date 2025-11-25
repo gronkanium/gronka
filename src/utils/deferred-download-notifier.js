@@ -53,9 +53,11 @@ export async function sendFollowUpMessage(client, interactionToken, content, att
  * @param {Object} queueItem - Queue item with download details
  * @param {string|null} result - Result message or URL (null if sending attachment)
  * @param {AttachmentBuilder} [attachment] - Optional file attachment
+ * @param {string} [operationId] - Operation ID for duration tracking
+ * @param {string} [userId] - User ID
  * @returns {Promise<void>}
  */
-export async function notifyDownloadComplete(client, queueItem, result, attachment = null) {
+export async function notifyDownloadComplete(client, queueItem, result, attachment = null, operationId = null, userId = null) {
   const message = result
     ? `your deferred download is ready:\n${result}`
     : 'your deferred download is ready:';
@@ -79,7 +81,7 @@ export async function notifyDownloadComplete(client, queueItem, result, attachme
   }
 
   // Send ntfy notification
-  await notifyDeferredDownload(queueItem.username, 'success');
+  await notifyDeferredDownload(queueItem.username, 'success', { operationId, userId });
 }
 
 /**
@@ -87,9 +89,11 @@ export async function notifyDownloadComplete(client, queueItem, result, attachme
  * @param {Client} client - Discord client
  * @param {Object} queueItem - Queue item with download details
  * @param {string} errorMessage - Error message
+ * @param {string} [operationId] - Operation ID for duration tracking
+ * @param {string} [userId] - User ID
  * @returns {Promise<void>}
  */
-export async function notifyDownloadFailed(client, queueItem, errorMessage) {
+export async function notifyDownloadFailed(client, queueItem, errorMessage, operationId = null, userId = null) {
   const message = `your deferred download failed: ${errorMessage}`;
 
   // Try to send DM first
@@ -102,5 +106,5 @@ export async function notifyDownloadFailed(client, queueItem, errorMessage) {
   }
 
   // Send ntfy notification
-  await notifyDeferredDownload(queueItem.username, 'failed');
+  await notifyDeferredDownload(queueItem.username, 'failed', { operationId, userId, error: errorMessage });
 }

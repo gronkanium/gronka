@@ -255,7 +255,7 @@ export async function processConversion(
           await interaction.editReply({
             content: processedUrl.file_url,
           });
-          await notifyCommandSuccess(username, 'convert');
+          await notifyCommandSuccess(username, 'convert', { operationId, userId });
           return;
         }
       }
@@ -382,7 +382,7 @@ export async function processConversion(
           await interaction.editReply({
             content: `video is too long (${Math.ceil(duration)}s). maximum duration: ${MAX_GIF_DURATION}s`,
           });
-          await notifyCommandFailure(username, 'convert');
+          await notifyCommandFailure(username, 'convert', { operationId, userId, error: `video is too long (${Math.ceil(duration)}s)` });
           return;
         }
       } catch (error) {
@@ -441,7 +441,7 @@ export async function processConversion(
               await interaction.editReply({
                 content: `requested timeframe (${conversionOptions.startTime}s to ${requestedEnd.toFixed(1)}s) exceeds video length (${videoDuration.toFixed(1)}s).`,
               });
-              await notifyCommandFailure(username, 'convert');
+              await notifyCommandFailure(username, 'convert', { operationId, userId, error: `requested timeframe exceeds video length` });
               return;
             }
           } catch (error) {
@@ -749,7 +749,7 @@ export async function processConversion(
     }
 
     // Send success notification
-    await notifyCommandSuccess(username, 'convert');
+    await notifyCommandSuccess(username, 'convert', { operationId, userId });
 
     // Record rate limit after successful conversion
     recordRateLimit(userId);
@@ -789,7 +789,7 @@ export async function processConversion(
     });
 
     // Send failure notification
-    await notifyCommandFailure(username, 'convert');
+    await notifyCommandFailure(username, 'convert', { operationId, userId, error: error.message || 'unknown error' });
   } finally {
     // Clean up temp files
     if (tempFiles.length > 0) {

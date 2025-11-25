@@ -84,23 +84,46 @@ export async function sendNtfyNotification(title, message, options = {}) {
   }
 
   try {
-    // Append duration to message if available
+    // Build message with format: username operation formattedDuration
     let notificationMessage = message;
+    const username = finalMetadata.username || '';
+    const operation = finalMetadata.command || finalMetadata.operation || '';
+    
     if (finalMetadata.duration !== undefined) {
       const formattedDuration = formatDuration(finalMetadata.duration);
-      if (formattedDuration) {
-        notificationMessage = `${message} (${formattedDuration})`;
+      if (formattedDuration && username && operation) {
+        // Format: "username operation formattedDuration" (e.g., "ronny convert 5.2s")
+        notificationMessage = `${username} ${operation} ${formattedDuration}`;
+      } else if (formattedDuration) {
+        // Fallback: append duration if username/operation not available
+        notificationMessage = `${message} ${formattedDuration}`;
       }
+    } else if (username && operation) {
+      // If no duration but we have username and operation, use that format
+      notificationMessage = `${username} ${operation}`;
     }
+
+    // Build JSON payload with message and metadata
+    const payload = {
+      message: notificationMessage,
+      metadata: {
+        ...finalMetadata,
+        operationId: operationId || null,
+        userId: userId || null,
+      },
+    };
+
+    // Log the JSON payload for debugging
+    logger.debug('Sending ntfy notification:', JSON.stringify(payload, null, 2));
 
     const url = `https://ntfy.sh/${botConfig.ntfyTopic}`;
     const response = await fetch(url, {
       method: 'POST',
       headers: {
         Title: title,
-        'Content-Type': 'text/plain',
+        'Content-Type': 'application/json',
       },
-      body: notificationMessage,
+      body: JSON.stringify(payload),
     });
 
     if (!response.ok) {
@@ -176,6 +199,7 @@ export async function notifyDeferredDownload(username, status, options = {}) {
     ...options,
     metadata: {
       username,
+      operation: 'deferred-download',
       status,
       ...options.metadata,
     },

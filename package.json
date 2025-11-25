@@ -23,6 +23,8 @@
     "local:register": "node src/register-commands.js",
     "bot:test": "node scripts/bot-start.js TEST",
     "bot:prod": "node scripts/bot-start.js PROD",
+    "bot:test:webui": "node scripts/bot-start.js TEST --with-webui",
+    "bot:prod:webui": "node scripts/bot-start.js PROD --with-webui",
     "bot:test:dev": "nodemon --watch src --exec \"node scripts/bot-start.js TEST\"",
     "bot:prod:dev": "nodemon --watch src --exec \"node scripts/bot-start.js PROD\"",
     "bot:register:test": "node src/register-commands.js TEST",

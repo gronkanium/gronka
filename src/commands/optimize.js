@@ -149,7 +149,7 @@ export async function processOptimization(
         await interaction.editReply({
           content: processedUrl.file_url,
         });
-        await notifyCommandSuccess(username, 'optimize');
+        await notifyCommandSuccess(username, 'optimize', { operationId, userId });
         return;
       }
     }
@@ -281,7 +281,7 @@ export async function processOptimization(
     }
 
     // Send success notification
-    await notifyCommandSuccess(username, 'optimize');
+    await notifyCommandSuccess(username, 'optimize', { operationId, userId });
 
     // Record rate limit after successful optimization
     recordRateLimit(userId);
@@ -319,7 +319,7 @@ export async function processOptimization(
     });
 
     // Send failure notification
-    await notifyCommandFailure(username, 'optimize');
+    await notifyCommandFailure(username, 'optimize', { operationId, userId, error: error.message || 'unknown error' });
   } finally {
     // Clean up temp files
     await cleanupTempFiles(tempFiles);
@@ -391,7 +391,7 @@ export async function handleOptimizeContextMenuCommand(interaction, modalAttachm
         content: 'this command only works on gif files.',
         flags: MessageFlags.Ephemeral,
       });
-      await notifyCommandFailure(username, 'optimize');
+      await notifyCommandFailure(username, 'optimize', { userId, error: 'attachment is not a GIF' });
       return;
     }
     attachment = gifAttachment;
@@ -404,7 +404,7 @@ export async function handleOptimizeContextMenuCommand(interaction, modalAttachm
         content: `invalid URL: ${urlValidation.error}`,
         flags: MessageFlags.Ephemeral,
       });
-      await notifyCommandFailure(username, 'optimize');
+      await notifyCommandFailure(username, 'optimize', { userId, error: `invalid URL: ${urlValidation.error}` });
       return;
     }
 
@@ -438,7 +438,7 @@ export async function handleOptimizeContextMenuCommand(interaction, modalAttachm
               content: error.message || 'failed to parse Tenor URL.',
               flags: MessageFlags.Ephemeral,
             });
-            await notifyCommandFailure(username, 'optimize');
+            await notifyCommandFailure(username, 'optimize', { userId, error: error.message || 'failed to parse Tenor URL' });
             return;
           }
         }
@@ -453,7 +453,7 @@ export async function handleOptimizeContextMenuCommand(interaction, modalAttachm
             content: 'this command only works on gif files.',
             flags: MessageFlags.Ephemeral,
           });
-          await notifyCommandFailure(username, 'optimize');
+          await notifyCommandFailure(username, 'optimize', { userId, error: 'downloaded file is not a GIF' });
           return;
         }
 
@@ -486,7 +486,7 @@ export async function handleOptimizeContextMenuCommand(interaction, modalAttachm
         content: error.message || 'failed to process gif from URL.',
         flags: MessageFlags.Ephemeral,
       });
-      await notifyCommandFailure(username, 'optimize');
+      await notifyCommandFailure(username, 'optimize', { userId, error: error.message || 'failed to process gif from URL' });
       return;
     }
   } else {
@@ -495,7 +495,7 @@ export async function handleOptimizeContextMenuCommand(interaction, modalAttachm
       content: 'no gif attachment or URL found in this message.',
       flags: MessageFlags.Ephemeral,
     });
-    await notifyCommandFailure(username, 'optimize');
+    await notifyCommandFailure(username, 'optimize', { userId, error: 'no gif attachment or URL found' });
     return;
   }
 
@@ -596,7 +596,7 @@ export async function handleOptimizeCommand(interaction) {
         content: 'this command only works on gif files.',
         flags: MessageFlags.Ephemeral,
       });
-      await notifyCommandFailure(username, 'optimize');
+      await notifyCommandFailure(username, 'optimize', { userId, error: 'attachment is not a GIF' });
       return;
     }
   }
@@ -611,7 +611,7 @@ export async function handleOptimizeCommand(interaction) {
         content: `invalid URL: ${urlValidation.error}`,
         flags: MessageFlags.Ephemeral,
       });
-      await notifyCommandFailure(username, 'optimize');
+      await notifyCommandFailure(username, 'optimize', { userId, error: `invalid URL: ${urlValidation.error}` });
       return;
     }
 
@@ -647,7 +647,7 @@ export async function handleOptimizeCommand(interaction) {
             await interaction.editReply({
               content: error.message || 'failed to parse Tenor URL.',
             });
-            await notifyCommandFailure(username, 'optimize');
+            await notifyCommandFailure(username, 'optimize', { userId, error: error.message || 'failed to parse Tenor URL' });
             return;
           }
         }
@@ -661,7 +661,7 @@ export async function handleOptimizeCommand(interaction) {
           await interaction.editReply({
             content: 'this command only works on gif files.',
           });
-          await notifyCommandFailure(username, 'optimize');
+          await notifyCommandFailure(username, 'optimize', { userId, error: 'downloaded file is not a GIF' });
           return;
         }
 
@@ -693,7 +693,7 @@ export async function handleOptimizeCommand(interaction) {
       await interaction.editReply({
         content: error.message || 'failed to download file from URL.',
       });
-      await notifyCommandFailure(username, 'optimize');
+      await notifyCommandFailure(username, 'optimize', { userId, error: error.message || 'failed to download file from URL' });
       return;
     }
   }

@@ -120,9 +120,11 @@ client.on(Events.InteractionCreate, async interaction => {
   logger.debug(
     `Received interaction: ${interaction.type} from user ${interaction.user.id} (${interaction.user.tag})`
   );
-  // Track user interaction
+  // Track user interaction (non-blocking to avoid interaction timeout)
   const username = interaction.user.tag || interaction.user.username || 'unknown';
-  await trackUser(interaction.user.id, username);
+  trackUser(interaction.user.id, username).catch(error => {
+    logger.debug(`Failed to track user ${interaction.user.id}: ${error.message}`);
+  });
 
   // Handle button interactions
   if (interaction.isButton()) {
@@ -259,7 +261,7 @@ async function processDeferredDownload(queueItem) {
         `Deferred download: URL already processed (hash: ${urlHash.substring(0, 8)}...), returning existing file URL: ${processedUrl.file_url}`
       );
       updateOperationStatus(operationId, 'success', { fileSize: 0 });
-      await notifyDownloadComplete(client, queueItem, processedUrl.file_url);
+      await notifyDownloadComplete(client, queueItem, processedUrl.file_url, null, operationId, userId);
       return processedUrl.file_url;
     }
 
@@ -276,7 +278,7 @@ async function processDeferredDownload(queueItem) {
       if (error.message && error.message.startsWith('URL_ALREADY_PROCESSED:')) {
         const fileUrl = error.message.split(':')[1];
         updateOperationStatus(operationId, 'success', { fileSize: 0 });
-        await notifyDownloadComplete(client, queueItem, fileUrl);
+        await notifyDownloadComplete(client, queueItem, fileUrl, null, operationId, userId);
         return fileUrl;
       }
       throw error;
@@ -337,7 +339,7 @@ async function processDeferredDownload(queueItem) {
       const photoUrls = photoResults.map(p => p.url).join('\n');
       const resultMessage = photoUrls;
 
-      await notifyDownloadComplete(client, queueItem, resultMessage);
+      await notifyDownloadComplete(client, queueItem, resultMessage, null, operationId, userId);
       return resultMessage;
     }
 
@@ -427,7 +429,7 @@ async function processDeferredDownload(queueItem) {
       updateOperationStatus(operationId, 'success', { fileSize: existingSize });
       const resultMessage = fileUrl;
 
-      await notifyDownloadComplete(client, queueItem, resultMessage);
+      await notifyDownloadComplete(client, queueItem, resultMessage, null, operationId, userId);
       return resultMessage;
     }
 
@@ -523,17 +525,17 @@ async function processDeferredDownload(queueItem) {
       const safeHash = hash.replace(/[^a-f0-9]/gi, '');
       const filename = `${safeHash}${ext}`;
       const attachment = new AttachmentBuilder(finalBuffer, { name: filename });
-      await notifyDownloadComplete(client, queueItem, null, attachment);
+      await notifyDownloadComplete(client, queueItem, null, attachment, operationId, userId);
       return `File sent as attachment: ${filename}`;
     } else {
-      await notifyDownloadComplete(client, queueItem, fileUrl);
+      await notifyDownloadComplete(client, queueItem, fileUrl, null, operationId, userId);
       return fileUrl;
     }
   } catch (error) {
     logger.error(`Deferred download failed for user ${userId}: ${error.message}`);
     updateOperationStatus(operationId, 'error', { error: error.message });
 
-    await notifyDownloadFailed(client, queueItem, error.message);
+    await notifyDownloadFailed(client, queueItem, error.message, operationId, userId);
     throw error;
   }
 }

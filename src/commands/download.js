@@ -133,7 +133,7 @@ async function processDownload(interaction, url, commandSource = null) {
       await interaction.editReply({
         content: fileUrl,
       });
-      await notifyCommandSuccess(username, 'download');
+      await notifyCommandSuccess(username, 'download', { operationId, userId });
       return;
     }
 
@@ -180,7 +180,7 @@ async function processDownload(interaction, url, commandSource = null) {
         await interaction.editReply({
           content: fileUrl,
         });
-        await notifyCommandSuccess(username, 'download');
+        await notifyCommandSuccess(username, 'download', { operationId, userId });
         return;
       }
       throw error;
@@ -342,7 +342,7 @@ async function processDownload(interaction, url, commandSource = null) {
       });
 
       // Send success notification
-      await notifyCommandSuccess(username, 'download');
+      await notifyCommandSuccess(username, 'download', { operationId, userId });
       return;
     } else {
       // Save file based on type
@@ -477,7 +477,7 @@ async function processDownload(interaction, url, commandSource = null) {
       }
 
       // Send success notification
-      await notifyCommandSuccess(username, 'download');
+      await notifyCommandSuccess(username, 'download', { operationId, userId });
 
       // Record rate limit after successful download
       recordRateLimit(userId);
@@ -523,7 +523,7 @@ async function processDownload(interaction, url, commandSource = null) {
       });
 
       // Send failure notification for rate limit
-      await notifyCommandFailure(username, 'download');
+      await notifyCommandFailure(username, 'download', { operationId, userId, error: 'rate limited' });
       return;
     }
 
@@ -560,7 +560,7 @@ async function processDownload(interaction, url, commandSource = null) {
     });
 
     // Send failure notification
-    await notifyCommandFailure(username, 'download');
+    await notifyCommandFailure(username, 'download', { operationId, userId, error: errorMessage });
   }
 }
 
@@ -617,7 +617,7 @@ export async function handleDownloadContextMenuCommand(interaction) {
       content: 'no URL found in this message.',
       flags: MessageFlags.Ephemeral,
     });
-    await notifyCommandFailure(username, 'download');
+    await notifyCommandFailure(username, 'download', { userId, error: 'no URL found in this message' });
     return;
   }
 
@@ -648,7 +648,7 @@ export async function handleDownloadContextMenuCommand(interaction) {
       content: 'cobalt is not enabled.',
       flags: MessageFlags.Ephemeral,
     });
-    await notifyCommandFailure(username, 'download');
+    await notifyCommandFailure(username, 'download', { userId, error: 'cobalt is not enabled' });
     return;
   }
 
@@ -658,7 +658,7 @@ export async function handleDownloadContextMenuCommand(interaction) {
       content: 'url is not from a supported social media platform.',
       flags: MessageFlags.Ephemeral,
     });
-    await notifyCommandFailure(username, 'download');
+    await notifyCommandFailure(username, 'download', { userId, error: 'url is not from a supported social media platform' });
     return;
   }
 
@@ -700,7 +700,7 @@ export async function handleDownloadCommand(interaction) {
       content: 'please provide a URL to download from.',
       flags: MessageFlags.Ephemeral,
     });
-    await notifyCommandFailure(username, 'download');
+    await notifyCommandFailure(username, 'download', { userId, error: 'no URL provided' });
     return;
   }
 
@@ -731,7 +731,7 @@ export async function handleDownloadCommand(interaction) {
       content: 'cobalt is not enabled. please enable it to use the download command.',
       flags: MessageFlags.Ephemeral,
     });
-    await notifyCommandFailure(username, 'download');
+    await notifyCommandFailure(username, 'download', { userId, error: 'cobalt is not enabled' });
     return;
   }
 
@@ -740,7 +740,7 @@ export async function handleDownloadCommand(interaction) {
       content: 'url is not from a supported social media platform.',
       flags: MessageFlags.Ephemeral,
     });
-    await notifyCommandFailure(username, 'download');
+    await notifyCommandFailure(username, 'download', { userId, error: 'url is not from a supported social media platform' });
     return;
   }
 

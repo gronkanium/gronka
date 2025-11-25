@@ -1,7 +1,0 @@
-tunnel: gronka-waptop
-credentials-file: .cloudflared/gronka-waptop.json
-
-ingress:
-  - hostname: gronka.p1x.dev
-    service: http://localhost:5173
-  - service: http_status:404

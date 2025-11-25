@@ -5,6 +5,64 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres (attempts) to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.12.0-prerelease] - 2025-11-25
+
+### Added
+
+- Test and production bot support with environment variable prefixes
+  - Support for `TEST_*` and `PROD_*` prefixed environment variables for running separate test and production bots
+  - New `bot-start.js` script that handles TEST/PROD prefixes and maps prefixed env vars to standard names
+  - `register-commands.js` now supports TEST/PROD prefixes for command registration
+  - Separate database files: `gronka-test.db` and `gronka-prod.db` for isolated data storage
+  - New npm scripts for bot management:
+    - `bot:test` / `bot:prod` - Start test or production bot
+    - `bot:test:webui` / `bot:prod:webui` - Start bot with webui server
+    - `bot:test:dev` / `bot:prod:dev` - Start bot with watch mode for development
+    - `bot:register:test` / `bot:register:prod` - Register Discord commands for test or production bot
+  - Support for prefixed configuration variables (e.g., `TEST_ADMIN_USER_IDS`, `PROD_CDN_BASE_URL`, `TEST_R2_BUCKET_NAME`)
+  - Allows running both test and production bots simultaneously with independent configurations
+- Local development scripts
+  - Cross-platform scripts for managing local development environment
+  - Similar to docker scripts but for local development
+  - Scripts for starting, stopping, restarting, and verifying local services
+- Wiki documentation and cloudflared configuration
+  - Added wiki documentation structure
+  - Cloudflared tunnel configuration for local development
+
+### Security
+
+- Shell metacharacter validation in optimize command
+  - Added validation to prevent command injection via file paths in gif-optimizer.js
+  - Checks for dangerous shell metacharacters in input and output paths
+  - Throws ValidationError if invalid characters are detected
+
+### Fixed
+
+- Ntfy.sh notifications now properly contain duration metadata
+  - Fixed operation ID handling through the notification pipeline
+  - Duration information now correctly passed to ntfy notifications
+- CSS asset loading through cloudflared tunnel
+  - Fixed 404 errors for CSS assets when using cloudflared tunnel
+  - Updated to use relative_url for CSS assets
+- Privacy and terms documentation updates
+  - Updated documentation for accuracy
+
+### Changed
+
+- **BREAKING**: Default upload strategy changed from R2-first to Discord-first
+  - Files now default to Discord attachments for better user experience
+  - Falls back to R2 storage for files larger than 8MB
+  - Affects all commands: convert, download, optimize
+  - Provides direct file previews in Discord for smaller files
+- Docker configuration updates
+  - Updated docker-compose.yml with new environment variable structure
+  - Added data-test and data-prod volume mounts for separate test/prod data storage
+  - Updated default environment variable handling for PROD/TEST prefixes
+- Jekyll posts now tracked in git
+- Updated .gitignore to exclude prod/test data folders
+- Improved markdown formatting across documentation files
+- Removed .cloudflared/config.yml from git tracking (now in .gitignore)
+
 ## [0.11.4-prerelease] - 2025-11-24
 
 ### Added
@@ -370,6 +428,7 @@ and this project adheres (attempts) to [Semantic Versioning](https://semver.org/
   - Pre-commit validation
   - Docker buildx setup for cache support
 
+[0.12.0-prerelease]: https://github.com/thedorekaczynski/gronka/compare/v0.11.4-prerelease...v0.12.0-prerelease
 [0.11.3-prerelease]: https://github.com/thedorekaczynski/gronka/compare/v0.11.2...v0.11.3-prerelease
 [0.11.2]: https://github.com/thedorekaczynski/gronka/compare/v0.11.1-prerelease...v0.11.2
 [0.11.2-prerelease]: https://github.com/thedorekaczynski/gronka/compare/v0.11.1-prerelease...v0.11.2-prerelease

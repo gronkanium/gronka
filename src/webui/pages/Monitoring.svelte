@@ -1,8 +1,8 @@
 <script>
   import { onMount } from 'svelte';
   import { Cpu, HardDrive, Disc, Clock, Activity, AlertTriangle, AlertCircle, TrendingUp, TrendingDown, ChevronDown, ChevronUp, Wifi, WifiOff } from 'lucide-svelte';
-  import { systemMetrics as wsSystemMetrics, operations as wsOperations, connected as wsConnected } from './websocket-store.js';
-  import { fetchStats } from './api.js';
+  import { systemMetrics as wsSystemMetrics, operations as wsOperations, connected as wsConnected } from '../stores/websocket-store.js';
+  import { fetchStats } from '../utils/api.js';
 
   let systemMetrics = null;
   let errorMetrics = null;

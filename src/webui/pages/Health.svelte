@@ -1,6 +1,6 @@
 <script>
   import { onMount, tick } from 'svelte';
-  import { fetchHealth, formatUptime, fetchCryptoPrices, formatPrice } from './api.js';
+  import { fetchHealth, formatUptime, fetchCryptoPrices, formatPrice } from '../utils/api.js';
 
   let health = null;
   let loading = true;

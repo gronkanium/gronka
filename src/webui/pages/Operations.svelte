@@ -1,7 +1,7 @@
 <script>
   import { onMount } from 'svelte';
   import { ChevronDown, ChevronRight } from 'lucide-svelte';
-  import { operations as wsOperations, connected as wsConnected } from './websocket-store.js';
+  import { operations as wsOperations, connected as wsConnected } from '../stores/websocket-store.js';
 
   let operations = [];
   let error = null;

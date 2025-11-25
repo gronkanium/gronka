@@ -1,7 +1,7 @@
 <script>
   import { onMount } from 'svelte';
-  import { navigate } from './router.js';
-  import { userMetrics as wsUserMetrics, connected as wsConnected } from './websocket-store.js';
+  import { navigate } from '../utils/router.js';
+  import { userMetrics as wsUserMetrics, connected as wsConnected } from '../stores/websocket-store.js';
 
   let users = [];
   let total = 0;

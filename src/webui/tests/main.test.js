@@ -1,6 +1,6 @@
 // Test version of main.js - try mounting with App.test.svelte
 import { mount } from 'svelte';
-import App from './App.svelte';
+import App from '../App.svelte';
 
 // Wait for DOM to be ready
 function init() {

@@ -63,7 +63,7 @@ async function checkFFmpegInstalled() {
  * @param {number} options.fps - Frames per second (default: 30)
  * @param {number|null} options.startTime - Trim start time in seconds (optional)
  * @param {number|null} options.duration - Trim duration in seconds (optional)
- * @param {string} options.quality - Quality preset: 'low', 'medium', 'high' (default: 'medium')
+ * @param {string} options.quality - Quality preset: 'low', 'medium', 'high' (default: 'high')
  * @returns {Promise<void>}
  */
 export async function convertToGif(inputPath, outputPath, options = {}) {
@@ -84,7 +84,7 @@ export async function convertToGif(inputPath, outputPath, options = {}) {
     Infinity,
     true
   );
-  const quality = options.quality || 'medium';
+  const quality = options.quality || 'high';
 
   // Validate quality preset
   const validQualities = ['low', 'medium', 'high'];
@@ -115,14 +115,15 @@ export async function convertToGif(inputPath, outputPath, options = {}) {
   const outputDir = path.dirname(outputPath);
   await fs.mkdir(outputDir, { recursive: true });
 
-  // Quality presets for dithering
+  // Quality presets for dithering - using floyd_steinberg for better quality and less fringing
+  // Floyd-Steinberg produces much smoother results than Bayer dithering
   const qualityPresets = {
-    low: 'bayer:bayer_scale=5',
-    medium: 'bayer:bayer_scale=3',
-    high: 'bayer:bayer_scale=1',
+    low: 'floyd_steinberg:diff_mode=rectangle',
+    medium: 'floyd_steinberg:diff_mode=rectangle',
+    high: 'floyd_steinberg:diff_mode=rectangle',
   };
 
-  const dither = qualityPresets[quality] || qualityPresets.medium;
+  const dither = qualityPresets[quality] || qualityPresets.high;
 
   return new Promise((resolve, reject) => {
     // Create temporary palette file in temp directory (same directory as input)
@@ -139,7 +140,11 @@ export async function convertToGif(inputPath, outputPath, options = {}) {
           duration !== null ? `-t ${duration}` : null,
         ].filter(Boolean)
       )
-      .videoFilters([`fps=${fps}`, `scale=${width}:-1:flags=lanczos`, 'palettegen=max_colors=256'])
+      .videoFilters([
+        `fps=${fps}`,
+        `scale=${width}:-1:flags=lanczos`,
+        'palettegen=max_colors=256:stats_mode=single:reserve_transparent=0',
+      ])
       .outputOptions(['-y']) // Overwrite output file
       .output(palettePath)
       .on('error', (err, stdout, stderr) => {
@@ -216,13 +221,13 @@ export async function getVideoMetadata(inputPath) {
  * @param {string} outputPath - Path to output GIF file
  * @param {Object} options - Conversion options
  * @param {number} options.width - Output width in pixels (default: 720)
- * @param {string} options.quality - Quality preset: 'low', 'medium', 'high' (default: 'medium')
+ * @param {string} options.quality - Quality preset: 'low', 'medium', 'high' (default: 'high')
  * @returns {Promise<void>}
  */
 export async function convertImageToGif(inputPath, outputPath, options = {}) {
   // Validate and sanitize numeric parameters
   const width = validateNumericParameter(options.width ?? 720, 'width', 1, 4096);
-  const quality = options.quality || 'medium';
+  const quality = options.quality || 'high';
 
   // Validate quality preset
   const validQualities = ['low', 'medium', 'high'];
@@ -253,14 +258,15 @@ export async function convertImageToGif(inputPath, outputPath, options = {}) {
   const outputDir = path.dirname(outputPath);
   await fs.mkdir(outputDir, { recursive: true });
 
-  // Quality presets for dithering
+  // Quality presets for dithering - using floyd_steinberg for better quality and less fringing
+  // Floyd-Steinberg produces much smoother results than Bayer dithering
   const qualityPresets = {
-    low: 'bayer:bayer_scale=5',
-    medium: 'bayer:bayer_scale=3',
-    high: 'bayer:bayer_scale=1',
+    low: 'floyd_steinberg:diff_mode=rectangle',
+    medium: 'floyd_steinberg:diff_mode=rectangle',
+    high: 'floyd_steinberg:diff_mode=rectangle',
   };
 
-  const dither = qualityPresets[quality] || qualityPresets.medium;
+  const dither = qualityPresets[quality] || qualityPresets.high;
 
   return new Promise((resolve, reject) => {
     // Create temporary palette file in temp directory (same directory as input)
@@ -271,7 +277,10 @@ export async function convertImageToGif(inputPath, outputPath, options = {}) {
     // Two-pass conversion for better quality
     // Pass 1: Generate palette
     ffmpeg(inputPath)
-      .videoFilters([`scale=${width}:-1:flags=lanczos`, 'palettegen=max_colors=256'])
+      .videoFilters([
+        `scale=${width}:-1:flags=lanczos`,
+        'palettegen=max_colors=256:stats_mode=single:reserve_transparent=0',
+      ])
       .outputOptions([
         '-y', // Overwrite output file
         '-update',

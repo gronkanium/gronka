@@ -4,7 +4,7 @@ get gronka up and running in minutes.
 
 ```bash
 # 1. Clone the repository
-git clone https://github.com/p2xai/gronka.git
+git clone https://github.com/thedorekaczynski/gronka.git
 cd gronka
 
 # 2. Create .env file

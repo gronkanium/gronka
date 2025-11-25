@@ -3,7 +3,7 @@ layout: post
 title: what is gronka?
 date: 2025-11-19
 description: The story behind gronka - a Discord bot for downloading and converting media to GIFs. Learn about its origins, purpose, and the archivist mindset that drives it.
-author: p2xai
+author: thedorekaczynski
 tags:
   - about
   - history

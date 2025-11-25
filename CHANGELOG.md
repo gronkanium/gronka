@@ -169,6 +169,36 @@ and this project adheres (attempts) to [Semantic Versioning](https://semver.org/
 - Test failures: simplified fetch-code-scanning-issues tests and fixed Linux path handling
 - Stop tracking code-scanning-issues.json in git (now properly ignored)
 
+## [0.11.2-prerelease] - 2025-11-24
+
+### Added
+
+- Comprehensive test suite with 130 new tests
+  - Logger sanitization tests (17 tests)
+  - Serve-site security tests (22 tests)
+  - WebUI rate limit tests (12 tests)
+  - Video-processor validation tests (29 tests)
+  - Docker-verify wrapper tests (12 tests)
+  - Docker-copy-webui wrapper tests (12 tests)
+  - Fetch-code-scanning-issues tests (22 tests)
+  - Enhanced existing logger tests with sanitization (4 new tests)
+- Command source tracking in operations
+  - Track whether commands come from slash commands or context menus
+  - Display command source in WebUI user profiles
+- User metrics broadcast callback support in operations-tracker.js
+
+### Changed
+
+- Improved code formatting in bot.js, convert.js, download.js, database.js, optimize.js, modals.js, and webui-server.js
+- Updated index.html formatting
+- Enhanced operation context tracking with commandSource metadata
+
+### Fixed
+
+- Logger test: sanitization only removes control characters, not text content
+- Test failures: simplified fetch-code-scanning-issues tests and fixed Linux path handling
+- Stop tracking code-scanning-issues.json in git (now properly ignored)
+
 ## [0.11.1-prerelease] - 2025-11-24
 
 ### Security
@@ -342,6 +372,7 @@ and this project adheres (attempts) to [Semantic Versioning](https://semver.org/
 
 [0.11.3-prerelease]: https://github.com/thedorekaczynski/gronka/compare/v0.11.2...v0.11.3-prerelease
 [0.11.2]: https://github.com/thedorekaczynski/gronka/compare/v0.11.1-prerelease...v0.11.2
+[0.11.2-prerelease]: https://github.com/thedorekaczynski/gronka/compare/v0.11.1-prerelease...v0.11.2-prerelease
 [0.11.1-prerelease]: https://github.com/thedorekaczynski/gronka/compare/v0.11.0-prerelease...v0.11.1-prerelease
 [0.11.0-prerelease]: https://github.com/thedorekaczynski/gronka/compare/v0.10.0...v0.11.0-prerelease
 [0.10.0]: https://github.com/thedorekaczynski/gronka/compare/v0.9.0...v0.10.0

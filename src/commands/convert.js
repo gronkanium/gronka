@@ -21,7 +21,15 @@ import {
   validateImageAttachment,
 } from '../utils/attachment-helpers.js';
 import { convertToGif, getVideoMetadata, convertImageToGif } from '../utils/video-processor.js';
-import { gifExists, getGifPath, cleanupTempFiles, saveGif } from '../utils/storage.js';
+import {
+  gifExists,
+  getGifPath,
+  getVideoPath,
+  getImagePath,
+  cleanupTempFiles,
+  saveGif,
+} from '../utils/storage.js';
+import { uploadGifToR2 } from '../utils/r2-storage.js';
 import { getUserConfig } from '../utils/user-config.js';
 import { trackRecentConversion } from '../utils/user-tracking.js';
 import { optimizeGif } from '../utils/gif-optimizer.js';
@@ -35,6 +43,7 @@ import { notifyCommandSuccess, notifyCommandFailure } from '../utils/ntfy-notifi
 import { hashUrl } from '../utils/cobalt-queue.js';
 import { insertProcessedUrl, initDatabase, getProcessedUrl } from '../utils/database.js';
 import { isSocialMediaUrl } from '../utils/cobalt.js';
+import { r2Config } from '../utils/config.js';
 
 const logger = createLogger('convert');
 
@@ -99,6 +108,106 @@ function validateVideoBuffer(buffer) {
   }
 
   return true;
+}
+
+/**
+ * Check if a CDN URL points to a local file and return the file buffer if it exists
+ * @param {string} url - CDN URL to check (e.g., https://cdn.gronka.p1x.dev/gifs/abc123.gif)
+ * @param {string} storagePath - Base storage path
+ * @returns {Promise<{exists: boolean, buffer?: Buffer, filePath?: string, contentType?: string, filename?: string}>}
+ */
+async function checkAndReadLocalFileFromCdnUrl(url, storagePath) {
+  try {
+    const urlObj = new URL(url);
+
+    // Check if it's a p1x.dev subdomain URL
+    if (!urlObj.hostname.endsWith('.p1x.dev')) {
+      return { exists: false };
+    }
+
+    // Parse path patterns: /gifs/{hash}.gif, /videos/{hash}.{ext}, /images/{hash}.{ext}
+    const gifPathMatch = urlObj.pathname.match(/^\/gifs\/([a-f0-9]+)\.gif$/i);
+    if (gifPathMatch && gifPathMatch[1]) {
+      const hash = gifPathMatch[1];
+      const filePath = getGifPath(hash, storagePath);
+      try {
+        await fs.access(filePath);
+        const buffer = await fs.readFile(filePath);
+        return {
+          exists: true,
+          buffer,
+          filePath,
+          contentType: 'image/gif',
+          filename: `${hash}.gif`,
+        };
+      } catch {
+        return { exists: false };
+      }
+    }
+
+    const videoPathMatch = urlObj.pathname.match(
+      /^\/videos\/([a-f0-9]+)\.(mp4|webm|mov|avi|mkv)$/i
+    );
+    if (videoPathMatch && videoPathMatch[1] && videoPathMatch[2]) {
+      const hash = videoPathMatch[1];
+      const extension = `.${videoPathMatch[2]}`;
+      const filePath = getVideoPath(hash, extension, storagePath);
+      try {
+        await fs.access(filePath);
+        const buffer = await fs.readFile(filePath);
+        // Determine content type from extension
+        const contentTypeMap = {
+          '.mp4': 'video/mp4',
+          '.webm': 'video/webm',
+          '.mov': 'video/quicktime',
+          '.avi': 'video/x-msvideo',
+          '.mkv': 'video/x-matroska',
+        };
+        const contentType = contentTypeMap[extension.toLowerCase()] || 'video/mp4';
+        return {
+          exists: true,
+          buffer,
+          filePath,
+          contentType,
+          filename: `${hash}${extension}`,
+        };
+      } catch {
+        return { exists: false };
+      }
+    }
+
+    const imagePathMatch = urlObj.pathname.match(/^\/images\/([a-f0-9]+)\.(png|jpg|jpeg|webp)$/i);
+    if (imagePathMatch && imagePathMatch[1] && imagePathMatch[2]) {
+      const hash = imagePathMatch[1];
+      const extension = `.${imagePathMatch[2]}`;
+      const filePath = getImagePath(hash, extension, storagePath);
+      try {
+        await fs.access(filePath);
+        const buffer = await fs.readFile(filePath);
+        // Determine content type from extension
+        const contentTypeMap = {
+          '.png': 'image/png',
+          '.jpg': 'image/jpeg',
+          '.jpeg': 'image/jpeg',
+          '.webp': 'image/webp',
+        };
+        const contentType = contentTypeMap[extension.toLowerCase()] || 'image/png';
+        return {
+          exists: true,
+          buffer,
+          filePath,
+          contentType,
+          filename: `${hash}${extension}`,
+        };
+      } catch {
+        return { exists: false };
+      }
+    }
+
+    return { exists: false };
+  } catch {
+    return { exists: false };
+  }
 }
 
 /**
@@ -747,9 +856,48 @@ export async function processConversion(
     if (finalUploadMethod === 'discord') {
       const safeHash = finalHash.replace(/[^a-f0-9]/gi, '');
       const filename = `${safeHash}.gif`;
-      await interaction.editReply({
-        files: [new AttachmentBuilder(finalGifBuffer, { name: filename })],
-      });
+      try {
+        await interaction.editReply({
+          files: [new AttachmentBuilder(finalGifBuffer, { name: filename })],
+        });
+      } catch (discordError) {
+        // Discord upload failed, fallback to R2
+        logger.warn(
+          `Discord attachment upload failed, falling back to R2: ${discordError.message}`
+        );
+        try {
+          const r2Url = await uploadGifToR2(finalGifBuffer, finalHash, r2Config, buildMetadata());
+
+          if (r2Url) {
+            // Update database with R2 URL
+            const urlHash = originalUrl ? hashUrl(originalUrl) : finalHash;
+            await insertProcessedUrl(
+              urlHash,
+              finalHash,
+              'gif',
+              '.gif',
+              r2Url,
+              Date.now(),
+              userId,
+              optimizedSize
+            );
+            await interaction.editReply({
+              content: r2Url,
+            });
+          } else {
+            // If R2 upload also fails, use the original gifUrl
+            await interaction.editReply({
+              content: gifUrl,
+            });
+          }
+        } catch (r2Error) {
+          logger.error(`R2 fallback upload also failed: ${r2Error.message}`);
+          // Last resort: use the original gifUrl
+          await interaction.editReply({
+            content: gifUrl,
+          });
+        }
+      }
     } else {
       await interaction.editReply({
         content: gifUrl,
@@ -920,42 +1068,61 @@ export async function handleConvertContextMenu(interaction) {
     await interaction.deferReply();
 
     try {
-      // Check if URL is a Tenor GIF link and parse it
-      let actualUrl = url;
-      const isTenorUrl = /^https?:\/\/(www\.)?tenor\.com\/view\/.+-gif-\d+/i.test(url);
-      if (isTenorUrl) {
-        logger.info(`Detected Tenor URL, parsing to extract GIF URL: ${url}`);
-        try {
-          actualUrl = await parseTenorUrl(url);
-          logger.info(`Resolved Tenor URL to: ${actualUrl}`);
-        } catch (error) {
-          logger.error(`Failed to parse Tenor URL for user ${userId}:`, error);
-          await interaction.editReply({
-            content: error.message || 'failed to parse Tenor URL.',
-          });
-          await notifyCommandFailure(username, 'convert');
-          return;
-        }
+      // Check if it's a cdn.gronka.p1x.dev URL and try to use local file
+      const localFileCheck = await checkAndReadLocalFileFromCdnUrl(url, GIF_STORAGE_PATH);
+      let useLocalFile = false;
+
+      if (localFileCheck.exists) {
+        useLocalFile = true;
+        logger.info(`Using local file for cdn URL: ${localFileCheck.filePath}`);
+        preDownloadedBuffer = localFileCheck.buffer;
+        attachment = {
+          url: url,
+          name: localFileCheck.filename,
+          size: localFileCheck.buffer.length,
+          contentType: localFileCheck.contentType,
+        };
+        // Don't set originalUrlForConversion for CDN URLs (they're already processed)
       }
 
-      logger.info(`Downloading file from URL: ${actualUrl}`);
-      const fileData = await downloadFileFromUrl(actualUrl, adminUser, interaction.client);
+      if (!useLocalFile) {
+        // Check if URL is a Tenor GIF link and parse it
+        let actualUrl = url;
+        const isTenorUrl = /^https?:\/\/(www\.)?tenor\.com\/view\/.+-gif-\d+/i.test(url);
+        if (isTenorUrl) {
+          logger.info(`Detected Tenor URL, parsing to extract GIF URL: ${url}`);
+          try {
+            actualUrl = await parseTenorUrl(url);
+            logger.info(`Resolved Tenor URL to: ${actualUrl}`);
+          } catch (error) {
+            logger.error(`Failed to parse Tenor URL for user ${userId}:`, error);
+            await interaction.editReply({
+              content: error.message || 'failed to parse Tenor URL.',
+            });
+            await notifyCommandFailure(username, 'convert');
+            return;
+          }
+        }
 
-      // Store the buffer to avoid double download
-      preDownloadedBuffer = fileData.buffer;
+        logger.info(`Downloading file from URL: ${actualUrl}`);
+        const fileData = await downloadFileFromUrl(actualUrl, adminUser, interaction.client);
 
-      // Create a pseudo-attachment object
-      attachment = {
-        url: actualUrl,
-        name: fileData.filename,
-        size: fileData.size,
-        contentType: fileData.contentType,
-      };
-      // Store original URL for database tracking
-      originalUrlForConversion = actualUrl;
+        // Store the buffer to avoid double download
+        preDownloadedBuffer = fileData.buffer;
+
+        // Create a pseudo-attachment object
+        attachment = {
+          url: actualUrl,
+          name: fileData.filename,
+          size: fileData.size,
+          contentType: fileData.contentType,
+        };
+        // Store original URL for database tracking
+        originalUrlForConversion = actualUrl;
+      }
 
       // Determine attachment type based on content type
-      if (fileData.contentType && ALLOWED_VIDEO_TYPES.includes(fileData.contentType)) {
+      if (attachment.contentType && ALLOWED_VIDEO_TYPES.includes(attachment.contentType)) {
         attachmentType = 'video';
         logger.info(
           `Processing video from URL: ${attachment.name} (${(attachment.size / (1024 * 1024)).toFixed(2)}MB)`
@@ -969,7 +1136,7 @@ export async function handleConvertContextMenu(interaction) {
           await notifyCommandFailure(username, 'convert');
           return;
         }
-      } else if (fileData.contentType && ALLOWED_IMAGE_TYPES.includes(fileData.contentType)) {
+      } else if (attachment.contentType && ALLOWED_IMAGE_TYPES.includes(attachment.contentType)) {
         attachmentType = 'image';
         logger.info(
           `Processing image from URL: ${attachment.name} (${(attachment.size / (1024 * 1024)).toFixed(2)}MB)`
@@ -1096,38 +1263,57 @@ export async function handleConvertCommand(interaction) {
     await interaction.deferReply();
 
     try {
-      // Check if URL is a Tenor GIF link and parse it
-      let actualUrl = url;
-      const isTenorUrl = /^https?:\/\/(www\.)?tenor\.com\/view\/.+-gif-\d+/i.test(url);
-      if (isTenorUrl) {
-        logger.info(`Detected Tenor URL, parsing to extract GIF URL: ${url}`);
-        try {
-          actualUrl = await parseTenorUrl(url);
-          logger.info(`Resolved Tenor URL to: ${actualUrl}`);
-        } catch (error) {
-          logger.error(`Failed to parse Tenor URL for user ${userId}:`, error);
-          await interaction.editReply({
-            content: error.message || 'failed to parse Tenor URL.',
-          });
-          return;
-        }
+      // Check if it's a cdn.gronka.p1x.dev URL and try to use local file
+      const localFileCheck = await checkAndReadLocalFileFromCdnUrl(url, GIF_STORAGE_PATH);
+      let useLocalFile = false;
+
+      if (localFileCheck.exists) {
+        useLocalFile = true;
+        logger.info(`Using local file for cdn URL: ${localFileCheck.filePath}`);
+        preDownloadedBuffer = localFileCheck.buffer;
+        finalAttachment = {
+          url: url,
+          name: localFileCheck.filename,
+          size: localFileCheck.buffer.length,
+          contentType: localFileCheck.contentType,
+        };
+        // Don't set originalUrlForConversion for CDN URLs (they're already processed)
       }
 
-      logger.info(`Downloading file from URL: ${actualUrl}`);
-      const fileData = await downloadFileFromUrl(actualUrl, adminUser, interaction.client);
+      if (!useLocalFile) {
+        // Check if URL is a Tenor GIF link and parse it
+        let actualUrl = url;
+        const isTenorUrl = /^https?:\/\/(www\.)?tenor\.com\/view\/.+-gif-\d+/i.test(url);
+        if (isTenorUrl) {
+          logger.info(`Detected Tenor URL, parsing to extract GIF URL: ${url}`);
+          try {
+            actualUrl = await parseTenorUrl(url);
+            logger.info(`Resolved Tenor URL to: ${actualUrl}`);
+          } catch (error) {
+            logger.error(`Failed to parse Tenor URL for user ${userId}:`, error);
+            await interaction.editReply({
+              content: error.message || 'failed to parse Tenor URL.',
+            });
+            return;
+          }
+        }
 
-      // Store the buffer to avoid double download
-      preDownloadedBuffer = fileData.buffer;
+        logger.info(`Downloading file from URL: ${actualUrl}`);
+        const fileData = await downloadFileFromUrl(actualUrl, adminUser, interaction.client);
 
-      // Create a pseudo-attachment object
-      finalAttachment = {
-        url: actualUrl,
-        name: fileData.filename,
-        size: fileData.size,
-        contentType: fileData.contentType,
-      };
-      // Store original URL for database tracking
-      originalUrlForConversion = actualUrl;
+        // Store the buffer to avoid double download
+        preDownloadedBuffer = fileData.buffer;
+
+        // Create a pseudo-attachment object
+        finalAttachment = {
+          url: actualUrl,
+          name: fileData.filename,
+          size: fileData.size,
+          contentType: fileData.contentType,
+        };
+        // Store original URL for database tracking
+        originalUrlForConversion = actualUrl;
+      }
     } catch (error) {
       logger.error(`Failed to download file from URL for user ${userId}:`, error);
       await interaction.editReply({

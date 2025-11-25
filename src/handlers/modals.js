@@ -24,10 +24,28 @@ export async function handleModalSubmit(interaction, modalAttachmentCache) {
     const cachedData = modalAttachmentCache.get(customId);
     if (!cachedData) {
       logger.warn(`No cached data found for optimize modal ${customId} from user ${userId}`);
-      await interaction.reply({
-        content: 'modal session expired. please try again.',
-        flags: MessageFlags.Ephemeral,
-      });
+
+      // Check if interaction is already responded to or expired
+      if (interaction.replied || interaction.deferred) {
+        logger.debug(`Interaction already responded to for modal ${customId}`);
+        return;
+      }
+
+      try {
+        await interaction.reply({
+          content: 'modal session expired. please try again.',
+          flags: MessageFlags.Ephemeral,
+        });
+      } catch (error) {
+        // Handle expired interactions (code 10062) or already acknowledged (code 40060)
+        if (error.code === 10062 || error.code === 40060) {
+          logger.debug(
+            `Interaction expired or already acknowledged for modal ${customId}: ${error.message}`
+          );
+        } else {
+          logger.error(`Failed to reply to modal interaction ${customId}:`, error);
+        }
+      }
       return;
     }
 
@@ -43,17 +61,54 @@ export async function handleModalSubmit(interaction, modalAttachmentCache) {
     if (lossyValue && lossyValue.trim() !== '') {
       const parsed = parseInt(lossyValue.trim(), 10);
       if (isNaN(parsed) || parsed < 0 || parsed > 100) {
-        await interaction.reply({
-          content: 'invalid lossy level. must be a number between 0 and 100.',
-          flags: MessageFlags.Ephemeral,
-        });
+        // Check if interaction is already responded to or expired
+        if (interaction.replied || interaction.deferred) {
+          logger.debug(
+            `Interaction already responded to for invalid lossy level in modal ${customId}`
+          );
+          return;
+        }
+
+        try {
+          await interaction.reply({
+            content: 'invalid lossy level. must be a number between 0 and 100.',
+            flags: MessageFlags.Ephemeral,
+          });
+        } catch (error) {
+          // Handle expired interactions (code 10062) or already acknowledged (code 40060)
+          if (error.code === 10062 || error.code === 40060) {
+            logger.debug(
+              `Interaction expired or already acknowledged for invalid lossy level in modal ${customId}: ${error.message}`
+            );
+          } else {
+            logger.error(`Failed to reply to modal interaction ${customId}:`, error);
+          }
+        }
         return;
       }
       lossyLevel = parsed;
     }
 
+    // Check if interaction is already responded to or expired before deferring
+    if (interaction.replied || interaction.deferred) {
+      logger.debug(`Interaction already responded to before deferring in modal ${customId}`);
+      return;
+    }
+
     // Defer reply since optimization may take time
-    await interaction.deferReply();
+    try {
+      await interaction.deferReply();
+    } catch (error) {
+      // Handle expired interactions (code 10062) or already acknowledged (code 40060)
+      if (error.code === 10062 || error.code === 40060) {
+        logger.debug(
+          `Interaction expired or already acknowledged when deferring modal ${customId}: ${error.message}`
+        );
+      } else {
+        logger.error(`Failed to defer reply for modal interaction ${customId}:`, error);
+      }
+      return;
+    }
 
     // Process optimization
     await processOptimization(

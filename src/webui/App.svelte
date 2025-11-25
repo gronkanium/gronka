@@ -1,16 +1,16 @@
 <script>
   import { onMount, onDestroy } from 'svelte';
-  import { currentRoute, initRouter, navigate } from './router.js';
-  import { useWebSocket, ensureConnected, connected as wsConnected } from './websocket-store.js';
+  import { currentRoute, initRouter, navigate } from './utils/router.js';
+  import { useWebSocket, ensureConnected, connected as wsConnected } from './stores/websocket-store.js';
   import { BarChart3, Users as UsersIcon, Settings, FileText, TrendingUp, Bell, ChevronLeft, ChevronRight } from 'lucide-svelte';
-  import Stats from './Stats.svelte';
-  import Health from './Health.svelte';
-  import Operations from './Operations.svelte';
-  import Logs from './Logs.svelte';
-  import Users from './Users.svelte';
-  import UserProfile from './UserProfile.svelte';
-  import Monitoring from './Monitoring.svelte';
-  import Alerts from './Alerts.svelte';
+  import Stats from './pages/Stats.svelte';
+  import Health from './pages/Health.svelte';
+  import Operations from './pages/Operations.svelte';
+  import Logs from './pages/Logs.svelte';
+  import Users from './pages/Users.svelte';
+  import UserProfile from './pages/UserProfile.svelte';
+  import Monitoring from './pages/Monitoring.svelte';
+  import Alerts from './pages/Alerts.svelte';
 
   let sidebarOpen = true;
   let wsCleanup = null;

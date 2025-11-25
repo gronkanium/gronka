@@ -1,6 +1,6 @@
 <script>
   import { onMount } from 'svelte';
-  import { fetchStats } from './api.js';
+  import { fetchStats } from '../utils/api.js';
 
   let stats = null;
   let loading = true;

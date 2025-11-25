@@ -1,7 +1,7 @@
 <script>
   import { onMount } from 'svelte';
-  import { currentRoute, navigate } from './router.js';
-  import { userMetrics as wsUserMetrics, operations as wsOperations, connected as wsConnected } from './websocket-store.js';
+  import { currentRoute, navigate } from '../utils/router.js';
+  import { userMetrics as wsUserMetrics, operations as wsOperations, connected as wsConnected } from '../stores/websocket-store.js';
 
   let user = null;
   let metrics = null;

@@ -1,6 +1,6 @@
 <script>
   import { onMount } from 'svelte';
-  import { alerts as wsAlerts, connected as wsConnected } from './websocket-store.js';
+  import { alerts as wsAlerts, connected as wsConnected } from '../stores/websocket-store.js';
 
   let alerts = [];
   let total = 0;

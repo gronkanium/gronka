@@ -312,6 +312,13 @@ export function getGifPath(hash, storagePath) {
   const basePath = getStoragePath(storagePath);
   // Ensure hash is safe (alphanumeric only)
   const safeHash = hash.replace(/[^a-f0-9]/gi, '');
+  // Check if basePath already ends with 'gifs' to avoid double gifs/gifs
+  const normalizedBasePath = basePath.replace(/\\/g, '/');
+  if (normalizedBasePath.endsWith('/gifs') || normalizedBasePath.endsWith('\\gifs')) {
+    // Storage path already includes 'gifs', don't add it again
+    return path.join(basePath, `${safeHash}.gif`);
+  }
+  // Storage path doesn't include 'gifs', add it
   return path.join(basePath, 'gifs', `${safeHash}.gif`);
 }
 
@@ -326,8 +333,9 @@ export function getGifPath(hash, storagePath) {
 export async function saveGif(buffer, hash, storagePath, metadata = {}) {
   const method = shouldUploadToDiscord(buffer) ? 'discord' : 'r2';
 
-  // Upload to R2 if configured
+  // Only upload to R2 if file is >= 8MB (Discord limit)
   if (
+    method === 'r2' &&
     r2Config.accountId &&
     r2Config.accessKeyId &&
     r2Config.secretAccessKey &&
@@ -345,7 +353,7 @@ export async function saveGif(buffer, hash, storagePath, metadata = {}) {
         return { url: publicUrl, method, buffer };
       }
 
-      // Upload to R2
+      // Upload to R2 for large files
       logger.info(
         `Uploading GIF to R2 (hash: ${hash.substring(0, 8)}..., size: ${(buffer.length / (1024 * 1024)).toFixed(2)}MB)`
       );
@@ -365,7 +373,7 @@ export async function saveGif(buffer, hash, storagePath, metadata = {}) {
     }
   }
 
-  // Fallback to local disk
+  // Save to local disk (for Discord uploads < 8MB, or as fallback)
   const _basePath = getStoragePath(storagePath);
   const gifPath = getGifPath(hash, storagePath);
 
@@ -505,8 +513,9 @@ export async function videoExists(hash, extension, storagePath) {
 export async function saveVideo(buffer, hash, extension, storagePath, metadata = {}) {
   const method = shouldUploadToDiscord(buffer) ? 'discord' : 'r2';
 
-  // Upload to R2 if configured
+  // Only upload to R2 if file is >= 8MB (Discord limit)
   if (
+    method === 'r2' &&
     r2Config.accountId &&
     r2Config.accessKeyId &&
     r2Config.secretAccessKey &&
@@ -528,7 +537,7 @@ export async function saveVideo(buffer, hash, extension, storagePath, metadata =
     }
   }
 
-  // Fallback to local disk
+  // Save to local disk (for Discord uploads < 8MB, or as fallback)
   const _basePath = getStoragePath(storagePath);
   const videoPath = getVideoPath(hash, extension, storagePath);
 
@@ -601,8 +610,9 @@ export async function imageExists(hash, extension, storagePath) {
 export async function saveImage(buffer, hash, extension, storagePath, metadata = {}) {
   const method = shouldUploadToDiscord(buffer) ? 'discord' : 'r2';
 
-  // Upload to R2 if configured
+  // Only upload to R2 if file is >= 8MB (Discord limit)
   if (
+    method === 'r2' &&
     r2Config.accountId &&
     r2Config.accessKeyId &&
     r2Config.secretAccessKey &&
@@ -624,7 +634,7 @@ export async function saveImage(buffer, hash, extension, storagePath, metadata =
     }
   }
 
-  // Fallback to local disk
+  // Save to local disk (for Discord uploads < 8MB, or as fallback)
   const _basePath = getStoragePath(storagePath);
   const imagePath = getImagePath(hash, extension, storagePath);
 

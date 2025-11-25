@@ -84,46 +84,27 @@ export async function sendNtfyNotification(title, message, options = {}) {
   }
 
   try {
-    // Build message with format: username operation formattedDuration
+    // Build message with format: username: command success (duration)
     let notificationMessage = message;
-    const username = finalMetadata.username || '';
-    const operation = finalMetadata.command || finalMetadata.operation || '';
 
+    // Append duration in parentheses if available
     if (finalMetadata.duration !== undefined) {
       const formattedDuration = formatDuration(finalMetadata.duration);
-      if (formattedDuration && username && operation) {
-        // Format: "username operation formattedDuration" (e.g., "ronny convert 5.2s")
-        notificationMessage = `${username} ${operation} ${formattedDuration}`;
-      } else if (formattedDuration) {
-        // Fallback: append duration if username/operation not available
-        notificationMessage = `${message} ${formattedDuration}`;
+      if (formattedDuration) {
+        notificationMessage = `${message} (${formattedDuration})`;
       }
-    } else if (username && operation) {
-      // If no duration but we have username and operation, use that format
-      notificationMessage = `${username} ${operation}`;
     }
 
-    // Build JSON payload with message and metadata
-    const payload = {
-      message: notificationMessage,
-      metadata: {
-        ...finalMetadata,
-        operationId: operationId || null,
-        userId: userId || null,
-      },
-    };
-
-    // Log the JSON payload for debugging
-    logger.debug('Sending ntfy notification:', JSON.stringify(payload, null, 2));
+    // Log the notification message for debugging
+    logger.debug('Sending ntfy notification:', notificationMessage);
 
     const url = `https://ntfy.sh/${botConfig.ntfyTopic}`;
     const response = await fetch(url, {
       method: 'POST',
       headers: {
         Title: title,
-        'Content-Type': 'application/json',
       },
-      body: JSON.stringify(payload),
+      body: notificationMessage,
     });
 
     if (!response.ok) {

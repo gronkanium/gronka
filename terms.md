@@ -162,7 +162,7 @@ These Terms of Use are governed by and construed in accordance with applicable l
 
 ## Dispute Resolution
 
-Any disputes arising from these terms or your use of the service should be resolved through good faith communication via the GitHub repository.
+Any disputes arising from these terms or your use of the service should be resolved through good faith communication via the [GitHub repository](https://github.com/thedorekaczynski/gronka).
 
 ## Severability
 
@@ -177,7 +177,7 @@ These Terms of Use, together with our Privacy Policy, constitute the entire agre
 For questions about these Terms of Use, please contact us:
 
 - **Email**: gronkasupport@proton.me
-- **GitHub**: [https://github.com/p2xai/gronka](https://github.com/p2xai/gronka)
+- **GitHub**: [https://github.com/thedorekaczynski/gronka](https://github.com/thedorekaczynski/gronka)
 
 ## Third-Party Services
 

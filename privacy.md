@@ -18,15 +18,14 @@ This privacy policy describes how gronka ("we", "our", or "the service") handles
 
 When you use gronka, we may receive the following information from Discord:
 
-- **User Information**: Your Discord user ID, username, and avatar (as provided by Discord's API)
-- **Server Information**: Server ID and name where the bot is used
+- **User Information**: Your Discord user ID and username (as provided by Discord's API)
 - **Message Content**: Video and image files you submit for conversion
 - **Command Usage**: Information about when and how you use bot commands
 
 ### Automatically Collected Data
 
-- **File Hashes**: MD5 hashes of processed files for deduplication purposes
-- **Usage Statistics**: Aggregated metrics about bot usage (number of conversions, file sizes, etc.)
+- **File Hashes**: SHA-256 hashes of processed files for deduplication purposes
+- **Usage Statistics**: User-specific metrics about bot usage (number of conversions, file sizes, command usage, etc.)
 - **Error Logs**: Technical information when errors occur (does not include personal data)
 
 ## How We Use Your Information
@@ -37,20 +36,21 @@ We use the collected information to:
 - Store converted GIFs and serve them via our CDN
 - Prevent duplicate processing of identical files
 - Monitor service health and diagnose technical issues
-- Generate anonymous usage statistics
+- Generate usage statistics for service monitoring
 
 ## Data Storage
 
 ### File Storage
 
 - Converted GIF files are stored on our servers
-- Files are identified by MD5 hash, not by user information
+- Files are identified by SHA-256 hash
+- Files may be linked to user information through processing records for operational purposes
 - Files may be cached indefinitely for CDN performance
 
 ### Logs
 
-- Server logs may contain Discord user IDs and server IDs for operational purposes
-- Logs are retained for troubleshooting and may be kept for up to 90 days
+- Server logs may contain Discord user IDs for operational purposes
+- Logs are retained for troubleshooting and may be kept indefinitely unless manually deleted
 - Error logs do not contain file contents or personal messages
 
 ## Data Sharing
@@ -69,7 +69,7 @@ You have the right to:
 - **Deletion**: Request deletion of your data (subject to technical limitations)
 - **Opt-Out**: Stop using the bot at any time
 
-To exercise these rights, contact us via email at gronkasupport@proton.me or through the GitHub repository.
+To exercise these rights, contact us via email at gronkasupport@proton.me or through the [GitHub repository](https://github.com/thedorekaczynski/gronka).
 
 ## Data Security
 
@@ -96,7 +96,7 @@ Your continued use of the service after changes constitutes acceptance of the up
 If you have questions about this privacy policy, please contact us:
 
 - **Email**: gronkasupport@proton.me
-- **GitHub**: [https://github.com/p2xai/gronka](https://github.com/p2xai/gronka)
+- **GitHub**: [https://github.com/thedorekaczynski/gronka](https://github.com/thedorekaczynski/gronka)
 
 ## Third-Party Services
 
@@ -111,8 +111,10 @@ These services have their own privacy policies governing data handling.
 ## Data Retention
 
 - **GIF Files**: Retained indefinitely unless manually deleted
-- **Logs**: Retained for up to 90 days
-- **Statistics**: Aggregated data may be retained indefinitely in anonymized form
+- **Logs**: Retained indefinitely unless manually deleted
+- **Statistics**: User-specific statistics are retained indefinitely
+- **Processed URLs**: Records linking URLs to files and user IDs are retained indefinitely
+- **User Data**: User IDs, usernames, and usage timestamps are retained indefinitely
 
 ## International Data Transfers
 

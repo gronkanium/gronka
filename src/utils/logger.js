@@ -104,8 +104,8 @@ class Logger {
     // Always output to console
     // Explicitly sanitize formattedMessage to prevent log injection
     // (formatMessage already sanitizes, but this ensures CodeQL recognizes the sanitization)
-    const sanitizedFormattedMessage = this.sanitizeLogInput(formattedMessage);
-    console.log(sanitizedFormattedMessage);
+    // Apply sanitization inline to ensure CodeQL recognizes it
+    console.log(this.sanitizeLogInput(formattedMessage));
 
     // Store in database
     // Combine message and args into the message field

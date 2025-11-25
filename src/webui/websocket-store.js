@@ -256,8 +256,8 @@ function handleMessage(message) {
 
     default: {
       // Sanitize user-provided message type to prevent log injection
-      const sanitizedType = sanitizeLogInput(message.type);
-      console.warn('Unknown message type:', sanitizedType);
+      // Apply sanitization inline to ensure CodeQL recognizes it
+      console.warn('Unknown message type:', sanitizeLogInput(message.type));
     }
   }
 }

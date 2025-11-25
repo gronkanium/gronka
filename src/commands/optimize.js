@@ -253,6 +253,7 @@ export async function processOptimization(
     // - Buffer structure is valid
     // Only validated network data is written to filesystem
     const validatedBuffer = fileBuffer;
+    // codeql[js/http-to-file-access] - Network data is validated before write: validateGifBuffer() checks magic bytes, file size, and GIF signature
     await fs.writeFile(tempInputPath, validatedBuffer);
     tempFiles.push(tempInputPath);
 

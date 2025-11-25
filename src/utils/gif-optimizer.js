@@ -205,29 +205,26 @@ export async function optimizeGif(inputPath, outputPath, options = {}) {
   const containerName = 'gronka';
 
   // Validate paths don't contain dangerous characters
-  // Since we use spawn() with array arguments, shell injection isn't possible
-  // Only check for null bytes and control characters that could cause issues
-  const dangerousChars = /[\0\n\r]/;
+  // Check for shell metacharacters that could be used for command injection
+  const shellMetaChars = /[;&|`$(){}[\]*?~<>\\\n\r\t\0]/;
 
-  if (dangerousChars.test(inputDockerPath)) {
-    const match = inputDockerPath.match(dangerousChars);
-    const charCode = match[0].charCodeAt(0);
+  if (shellMetaChars.test(inputDockerPath)) {
+    const match = inputDockerPath.match(shellMetaChars);
     logger.error(
-      `Invalid characters in input path: ${inputDockerPath}, found character code: ${charCode}`
+      `Invalid characters in input path: ${inputDockerPath}, found shell metacharacter: ${match[0]}`
     );
     throw new ValidationError(
-      `Invalid characters in file paths: input path contains invalid character (code: ${charCode})`
+      `Invalid characters in file paths: input path contains shell metacharacter (${match[0]})`
     );
   }
 
-  if (dangerousChars.test(outputDockerPath)) {
-    const match = outputDockerPath.match(dangerousChars);
-    const charCode = match[0].charCodeAt(0);
+  if (shellMetaChars.test(outputDockerPath)) {
+    const match = outputDockerPath.match(shellMetaChars);
     logger.error(
-      `Invalid characters in output path: ${outputDockerPath}, found character code: ${charCode}`
+      `Invalid characters in output path: ${outputDockerPath}, found shell metacharacter: ${match[0]}`
     );
     throw new ValidationError(
-      `Invalid characters in file paths: output path contains invalid character (code: ${charCode})`
+      `Invalid characters in file paths: output path contains shell metacharacter (${match[0]})`
     );
   }
 

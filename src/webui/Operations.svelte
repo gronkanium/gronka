@@ -6,6 +6,14 @@
   let operations = [];
   let error = null;
   let expandedOperations = new Set();
+  
+  // Pagination
+  let limit = 7;
+  let offset = 0;
+  
+  // Reactive paginated operations list
+  $: total = operations.length;
+  $: paginatedOperations = operations.slice(offset, offset + limit);
 
   function formatFileSize(bytes) {
     if (bytes === null || bytes === undefined) return 'N/A';
@@ -67,6 +75,18 @@
     return `${(ms / 60000).toFixed(2)}m`;
   }
 
+  function handlePrevPage() {
+    if (offset > 0) {
+      offset = Math.max(0, offset - limit);
+    }
+  }
+
+  function handleNextPage() {
+    if (offset + limit < total) {
+      offset += limit;
+    }
+  }
+
   onMount(() => {
     // Subscribe to WebSocket operations (connection managed by App.svelte)
     const unsubscribe = wsOperations.subscribe(wsOps => {
@@ -102,7 +122,7 @@
           </tr>
         </thead>
         <tbody>
-          {#each operations as operation (operation.id)}
+          {#each paginatedOperations as operation (operation.id)}
             <tr class="operation-row" class:expanded={expandedOperations.has(operation.id)}>
               <td class="expand-cell">
                 <button class="expand-btn" on:click={() => toggleExpanded(operation.id)}>
@@ -208,6 +228,21 @@
         </tbody>
       </table>
     </div>
+    {#if total > limit}
+      <div class="pagination">
+        <div class="pagination-info">
+          showing {offset + 1}-{Math.min(offset + limit, total)} of {total}
+        </div>
+        <div class="pagination-controls">
+          <button on:click={handlePrevPage} disabled={offset === 0}>
+            previous
+          </button>
+          <button on:click={handleNextPage} disabled={offset + limit >= total}>
+            next
+          </button>
+        </div>
+      </div>
+    {/if}
   {/if}
 </section>
 
@@ -535,6 +570,44 @@
     color: #aaa;
     font-size: 0.85rem;
     font-family: monospace;
+  }
+
+  .pagination {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 0.5rem 0;
+    margin-top: 0.75rem;
+    border-top: 1px solid #333;
+  }
+
+  .pagination-info {
+    font-size: 0.85rem;
+    color: #aaa;
+  }
+
+  .pagination-controls {
+    display: flex;
+    gap: 0.5rem;
+  }
+
+  .pagination-controls button {
+    padding: 0.4rem 0.8rem;
+    font-size: 0.85rem;
+    background-color: #444;
+    color: #fff;
+    border: 1px solid #555;
+    cursor: pointer;
+    border-radius: 3px;
+  }
+
+  .pagination-controls button:hover:not(:disabled) {
+    background-color: #555;
+  }
+
+  .pagination-controls button:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
   }
 
   @media (max-width: 768px) {

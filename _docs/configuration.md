@@ -46,6 +46,66 @@ discord application/client id.
 CLIENT_ID=1234567890123456789
 ```
 
+## test and prod bot configuration
+
+for local development, you can run both test and prod bots simultaneously using prefixed environment variables.
+
+### `TEST_DISCORD_TOKEN` / `TEST_CLIENT_ID`
+
+credentials for the test bot instance.
+
+**usage:** use with `npm run bot:test` or `npm run bot:test:dev`
+
+**example:**
+
+```env
+TEST_DISCORD_TOKEN=your_test_bot_token_here
+TEST_CLIENT_ID=your_test_bot_client_id_here
+```
+
+### `PROD_DISCORD_TOKEN` / `PROD_CLIENT_ID`
+
+credentials for the prod bot instance.
+
+**usage:** use with `npm run bot:prod` or `npm run bot:prod:dev`
+
+**example:**
+
+```env
+PROD_DISCORD_TOKEN=your_prod_bot_token_here
+PROD_CLIENT_ID=your_prod_bot_client_id_here
+```
+
+### prefixed configuration variables
+
+you can use prefixed versions of any configuration variable for bot-specific settings:
+
+- `TEST_*` prefix for test bot (e.g., `TEST_ADMIN_USER_IDS`, `TEST_CDN_BASE_URL`)
+- `PROD_*` prefix for prod bot (e.g., `PROD_ADMIN_USER_IDS`, `PROD_CDN_BASE_URL`)
+
+**supported prefixed variables:**
+
+- `TEST_ADMIN_USER_IDS` / `PROD_ADMIN_USER_IDS`
+- `TEST_CDN_BASE_URL` / `PROD_CDN_BASE_URL`
+- `TEST_GIF_STORAGE_PATH` / `PROD_GIF_STORAGE_PATH`
+- `TEST_COBALT_API_URL` / `PROD_COBALT_API_URL`
+- `TEST_COBALT_ENABLED` / `PROD_COBALT_ENABLED`
+- `TEST_R2_*` / `PROD_R2_*` (all r2 variables)
+- and any other configuration variable
+
+**example:**
+
+```env
+# test bot uses separate storage and admin users
+TEST_GIF_STORAGE_PATH=./data-test
+TEST_ADMIN_USER_IDS=123456789,987654321
+
+# prod bot uses production settings
+PROD_GIF_STORAGE_PATH=./data-prod
+PROD_CDN_BASE_URL=https://cdn.prod.example.com/gifs
+PROD_ADMIN_USER_IDS=111222333
+```
+
 ## storage configuration
 
 ### `GIF_STORAGE_PATH`
@@ -312,11 +372,24 @@ NTFY_TOPIC=gronka-notifications
 complete example `.env` file:
 
 ```env
-# required
+# required (for default bot)
 DISCORD_TOKEN=your_discord_token
 CLIENT_ID=your_client_id
 
-# storage
+# test bot configuration (for local development)
+TEST_DISCORD_TOKEN=your_test_bot_token
+TEST_CLIENT_ID=your_test_bot_client_id
+TEST_GIF_STORAGE_PATH=./data-test
+TEST_ADMIN_USER_IDS=123456789,987654321
+
+# prod bot configuration (for local development)
+PROD_DISCORD_TOKEN=your_prod_bot_token
+PROD_CLIENT_ID=your_prod_bot_client_id
+PROD_GIF_STORAGE_PATH=./data-prod
+PROD_CDN_BASE_URL=https://cdn.prod.example.com/gifs
+PROD_ADMIN_USER_IDS=111222333
+
+# storage (default, used if prefixed version not set)
 GIF_STORAGE_PATH=./data
 CDN_BASE_URL=https://cdn.example.com/gifs
 
@@ -338,14 +411,24 @@ STATS_USERNAME=admin
 STATS_PASSWORD=secure_password
 STATS_CACHE_TTL=300000
 
-# cobalt
-COBALT_API_URL=http://cobalt:9000
+# cobalt (for local dev, use http://localhost:9000)
+COBALT_API_URL=http://localhost:9000
 COBALT_ENABLED=true
 
-# admin
+# admin (default)
 ADMIN_USER_IDS=123456789012345678
 
 # notifications
 NTFY_TOPIC=gronka-notifications
+
+# logging
+LOG_DIR=./logs
+LOG_LEVEL=INFO
+LOG_ROTATION=daily
+
+# webui
+WEBUI_PORT=3001
+WEBUI_HOST=127.0.0.1
+MAIN_SERVER_URL=http://localhost:3000
 ```
 

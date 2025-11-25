@@ -1,0 +1,23 @@
+<head>
+  <meta charset="utf-8">
+  <meta http-equiv="X-UA-Compatible" content="IE=edge">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  {%- if page.url == '/' or page.url == '/index.html' -%}
+    <title>{{ site.title }}</title>
+    {%- seo title=false -%}
+  {%- else -%}
+    {%- seo -%}
+  {%- endif -%}
+  {%- include structured-data.html -%}
+  <link rel="stylesheet" href="{{ "/assets/main.css" | relative_url }}">
+  <link rel="stylesheet" href="{{ "/assets/css/typography.css" | relative_url }}">
+  <link rel="stylesheet" href="{{ "/assets/css/layout.css" | relative_url }}">
+  <link rel="stylesheet" href="{{ "/assets/css/components.css" | relative_url }}">
+  <link rel="stylesheet" href="{{ "/assets/css/syntax.css" | relative_url }}">
+  <link rel="icon" type="image/png" href="{{ "/assets/favicon.png" | relative_url }}">
+  {%- feed_meta -%}
+  {%- if jekyll.environment == 'production' and site.google_analytics -%}
+    {%- include google-analytics.html -%}
+  {%- endif -%}
+</head>
+

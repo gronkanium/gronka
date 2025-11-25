@@ -142,8 +142,8 @@ export async function optimizeGif(inputPath, outputPath, options = {}) {
   // Map container paths to paths inside the giflossy container
   // Both containers will use the same paths since we'll inherit volumes
   const cwd = process.cwd(); // This is /app inside the container
-  let inputDockerPath = inputAbsPath;
-  let outputDockerPath = outputAbsPath;
+  let inputDockerPath;
+  let outputDockerPath;
 
   // Convert paths to Docker container paths
   // Normalize backslashes to forward slashes for cross-platform compatibility

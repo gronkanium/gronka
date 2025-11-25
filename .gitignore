@@ -1,5 +1,7 @@
 # Data folder
 /data/
+data-prod/
+data-test/
 
 # Dependencies
 node_modules/

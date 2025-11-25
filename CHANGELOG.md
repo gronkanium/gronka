@@ -29,6 +29,13 @@ and this project adheres (attempts) to [Semantic Versioning](https://semver.org/
   - Added wiki documentation structure
   - Cloudflared tunnel configuration for local development
 
+### Security
+
+- Shell metacharacter validation in optimize command
+  - Added validation to prevent command injection via file paths in gif-optimizer.js
+  - Checks for dangerous shell metacharacters in input and output paths
+  - Throws ValidationError if invalid characters are detected
+
 ### Fixed
 
 - Ntfy.sh notifications now properly contain duration metadata
@@ -42,9 +49,19 @@ and this project adheres (attempts) to [Semantic Versioning](https://semver.org/
 
 ### Changed
 
+- **BREAKING**: Default upload strategy changed from R2-first to Discord-first
+  - Files now default to Discord attachments for better user experience
+  - Falls back to R2 storage for files larger than 8MB
+  - Affects all commands: convert, download, optimize
+  - Provides direct file previews in Discord for smaller files
+- Docker configuration updates
+  - Updated docker-compose.yml with new environment variable structure
+  - Added data-test and data-prod volume mounts for separate test/prod data storage
+  - Updated default environment variable handling for PROD/TEST prefixes
 - Jekyll posts now tracked in git
 - Updated .gitignore to exclude prod/test data folders
 - Improved markdown formatting across documentation files
+- Removed .cloudflared/config.yml from git tracking (now in .gitignore)
 
 ## [0.11.4-prerelease] - 2025-11-24
 

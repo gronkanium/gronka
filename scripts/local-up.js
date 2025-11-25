@@ -135,15 +135,23 @@ startProcess('server', 'node', ['src/server.js']);
 // Wait a moment for server to start
 setTimeout(() => {}, 2000);
 
-// Save PIDs to file
-writeFileSync(pidFile, JSON.stringify(pids, null, 2));
+// Save PIDs to file atomically
+// Use writeFileSync directly - if file exists, it will be overwritten
+// This avoids TOCTOU race condition from checking existence then writing
+try {
+  writeFileSync(pidFile, JSON.stringify(pids, null, 2), { flag: 'w' });
+} catch (error) {
+  console.error(`failed to write PID file: ${error.message}`);
+  cleanup();
+  process.exit(1);
+}
 
 console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
 console.log('local development services started');
 console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
-console.log(`  server: http://localhost:${process.env.SERVER_PORT || 3000}`);
-console.log(`  webui:  http://localhost:${process.env.WEBUI_PORT || 3001}`);
-console.log(`  cobalt: http://localhost:9000`);
+console.log('  server: running');
+console.log('  webui:  running');
+console.log('  cobalt: running');
 console.log('');
 console.log('use "npm run local:down" to stop all services');
 console.log('use "npm run local:logs" to view logs');

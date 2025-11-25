@@ -143,7 +143,7 @@ export async function convertToGif(inputPath, outputPath, options = {}) {
       .videoFilters([
         `fps=${fps}`,
         `scale=${width}:-1:flags=lanczos`,
-        'palettegen=max_colors=256:stats_mode=single:reserve_transparent=0',
+        'palettegen=max_colors=256:reserve_transparent=0',
       ])
       .outputOptions(['-y']) // Overwrite output file
       .output(palettePath)
@@ -279,7 +279,7 @@ export async function convertImageToGif(inputPath, outputPath, options = {}) {
     ffmpeg(inputPath)
       .videoFilters([
         `scale=${width}:-1:flags=lanczos`,
-        'palettegen=max_colors=256:stats_mode=single:reserve_transparent=0',
+        'palettegen=max_colors=256:reserve_transparent=0',
       ])
       .outputOptions([
         '-y', // Overwrite output file

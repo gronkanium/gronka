@@ -1,10 +1,11 @@
 #!/usr/bin/env node
 
 import { spawn, execSync } from 'child_process';
-import { writeFileSync, readFileSync, existsSync, unlinkSync } from 'fs';
+import { writeFileSync, readFileSync, existsSync, unlinkSync, renameSync } from 'fs';
 import { fileURLToPath } from 'url';
 import { dirname, join } from 'path';
 import dotenv from 'dotenv';
+import { randomBytes } from 'crypto';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -135,13 +136,26 @@ startProcess('server', 'node', ['src/server.js']);
 // Wait a moment for server to start
 setTimeout(() => {}, 2000);
 
-// Save PIDs to file atomically
-// Use writeFileSync directly - if file exists, it will be overwritten
-// This avoids TOCTOU race condition from checking existence then writing
+// Save PIDs to file atomically using temporary file + rename
+// This avoids TOCTOU race condition by ensuring atomic write operation
+// Write to temp file in same directory, then rename atomically
+let tmpFile;
 try {
-  writeFileSync(pidFile, JSON.stringify(pids, null, 2), { flag: 'w' });
+  tmpFile = join(projectRoot, `.local-dev-pids-${randomBytes(8).toString('hex')}.tmp`);
+  writeFileSync(tmpFile, JSON.stringify(pids, null, 2), { mode: 0o644 });
+  renameSync(tmpFile, pidFile); // Atomic rename operation
 } catch (error) {
   console.error(`failed to write PID file: ${error.message}`);
+  // Clean up temp file if it exists
+  if (tmpFile) {
+    try {
+      if (existsSync(tmpFile)) {
+        unlinkSync(tmpFile);
+      }
+    } catch {
+      // Ignore cleanup errors
+    }
+  }
   cleanup();
   process.exit(1);
 }

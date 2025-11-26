@@ -39,10 +39,21 @@ export async function downloadVideo(url, isAdminUser = false) {
       maxRedirects: 5,
       headers: getRequestHeaders(),
     });
-    return Buffer.from(response.data);
+    const buffer = Buffer.from(response.data);
+
+    // Validate buffer size (axios maxContentLength may not work if server doesn't send Content-Length header)
+    if (!isAdminUser && buffer.length > MAX_VIDEO_SIZE) {
+      throw new ValidationError(
+        `video file is too large (max ${MAX_VIDEO_SIZE / (1024 * 1024)}mb)`
+      );
+    }
+
+    return buffer;
   } catch (error) {
     if (error.response?.status === 413 && !isAdminUser) {
-      throw new ValidationError('video file is too large (max 500mb)');
+      throw new ValidationError(
+        `video file is too large (max ${MAX_VIDEO_SIZE / (1024 * 1024)}mb)`
+      );
     }
     throw new NetworkError(`failed to download video: ${error.message}`);
   }
@@ -69,10 +80,21 @@ export async function downloadImage(url, isAdminUser = false) {
       maxRedirects: 5,
       headers: getRequestHeaders(),
     });
-    return Buffer.from(response.data);
+    const buffer = Buffer.from(response.data);
+
+    // Validate buffer size (axios maxContentLength may not work if server doesn't send Content-Length header)
+    if (!isAdminUser && buffer.length > MAX_IMAGE_SIZE) {
+      throw new ValidationError(
+        `image file is too large (max ${MAX_IMAGE_SIZE / (1024 * 1024)}mb)`
+      );
+    }
+
+    return buffer;
   } catch (error) {
     if (error.response?.status === 413 && !isAdminUser) {
-      throw new ValidationError('image file is too large (max 50mb)');
+      throw new ValidationError(
+        `image file is too large (max ${MAX_IMAGE_SIZE / (1024 * 1024)}mb)`
+      );
     }
     throw new NetworkError(`failed to download image: ${error.message}`);
   }
@@ -131,7 +153,38 @@ export async function downloadFileFromUrl(url, isAdminUser = false, client = nul
     });
 
     const buffer = Buffer.from(response.data);
+
+    // Validate buffer size (axios maxContentLength may not work if server doesn't send Content-Length header)
+    // Determine appropriate limit based on content type
     const contentType = response.headers['content-type'] || '';
+    const isVideo =
+      contentType.startsWith('video/') ||
+      contentType.includes('video') ||
+      /\.(mp4|webm|mov|avi|mkv|flv|wmv|m4v)$/i.test(url);
+    const isImage =
+      contentType.startsWith('image/') ||
+      contentType.includes('image') ||
+      /\.(jpg|jpeg|png|gif|webp|bmp|svg)$/i.test(url);
+
+    if (!isAdminUser) {
+      if (isVideo && buffer.length > MAX_VIDEO_SIZE) {
+        throw new ValidationError(
+          `file is too large (max ${MAX_VIDEO_SIZE / (1024 * 1024)}mb for videos)`
+        );
+      }
+      if (isImage && buffer.length > MAX_IMAGE_SIZE) {
+        throw new ValidationError(
+          `file is too large (max ${MAX_IMAGE_SIZE / (1024 * 1024)}mb for images)`
+        );
+      }
+      // For unknown types, use the larger limit (video limit)
+      if (!isVideo && !isImage && buffer.length > Math.max(MAX_VIDEO_SIZE, MAX_IMAGE_SIZE)) {
+        throw new ValidationError(
+          `file is too large (max ${Math.max(MAX_VIDEO_SIZE, MAX_IMAGE_SIZE) / (1024 * 1024)}mb)`
+        );
+      }
+    }
+
     const contentDisposition = response.headers['content-disposition'] || '';
 
     // Extract filename from Content-Disposition header or URL
@@ -163,7 +216,9 @@ export async function downloadFileFromUrl(url, isAdminUser = false, client = nul
     };
   } catch (error) {
     if (error.response?.status === 413 && !isAdminUser) {
-      throw new ValidationError('file is too large (max 500mb for videos, 50mb for images)');
+      throw new ValidationError(
+        `file is too large (max ${MAX_VIDEO_SIZE / (1024 * 1024)}mb for videos, ${MAX_IMAGE_SIZE / (1024 * 1024)}mb for images)`
+      );
     }
     if (error.response?.status === 404) {
       throw new NetworkError('file not found at the provided URL');
@@ -193,7 +248,37 @@ export async function downloadFileFromUrl(url, isAdminUser = false, client = nul
             headers: getRequestHeaders(),
           });
           const buffer = Buffer.from(retryResponse.data);
+
+          // Validate buffer size (axios maxContentLength may not work if server doesn't send Content-Length header)
           const contentType = retryResponse.headers['content-type'] || '';
+          const isVideo =
+            contentType.startsWith('video/') ||
+            contentType.includes('video') ||
+            /\.(mp4|webm|mov|avi|mkv|flv|wmv|m4v)$/i.test(refreshedUrl);
+          const isImage =
+            contentType.startsWith('image/') ||
+            contentType.includes('image') ||
+            /\.(jpg|jpeg|png|gif|webp|bmp|svg)$/i.test(refreshedUrl);
+
+          if (!isAdminUser) {
+            if (isVideo && buffer.length > MAX_VIDEO_SIZE) {
+              throw new ValidationError(
+                `file is too large (max ${MAX_VIDEO_SIZE / (1024 * 1024)}mb for videos)`
+              );
+            }
+            if (isImage && buffer.length > MAX_IMAGE_SIZE) {
+              throw new ValidationError(
+                `file is too large (max ${MAX_IMAGE_SIZE / (1024 * 1024)}mb for images)`
+              );
+            }
+            // For unknown types, use the larger limit (video limit)
+            if (!isVideo && !isImage && buffer.length > Math.max(MAX_VIDEO_SIZE, MAX_IMAGE_SIZE)) {
+              throw new ValidationError(
+                `file is too large (max ${Math.max(MAX_VIDEO_SIZE, MAX_IMAGE_SIZE) / (1024 * 1024)}mb)`
+              );
+            }
+          }
+
           const contentDisposition = retryResponse.headers['content-disposition'] || '';
 
           let filename = 'file';

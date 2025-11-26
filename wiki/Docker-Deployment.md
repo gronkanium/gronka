@@ -243,6 +243,158 @@ admin users can:
 - upload images larger than normal limits
 - convert videos longer than 30 seconds
 
+## accessing restricted content
+
+cobalt can access content requiring authentication from services like twitter, instagram, and reddit by using authentication cookies stored in a `cookies.json` file.
+
+### purpose
+
+some content on social media platforms requires authentication to view, even if it's publicly accessible. this includes:
+
+- content that requires login to view
+- private or protected content (if you have access)
+- content that platforms restrict to authenticated users
+
+without cookies, cobalt will return errors like `content.post.age` or `content.video.age` when attempting to access restricted content.
+
+### setup instructions
+
+1. **create cookies.json file:**
+
+   copy the example file and customize it with your authentication cookies:
+
+   ```bash
+   cp cookies.example.json cookies.json
+   ```
+
+2. **obtain cookies from your browser:**
+
+   you need to extract cookies from your browser after logging into the services you want to support. here are some methods:
+
+   - **chrome/edge:** open developer tools (f12) → application tab → cookies → select domain → copy cookie values
+   - **firefox:** open developer tools (f12) → storage tab → cookies → select domain → copy cookie values
+   - **browser extensions:** use cookie export extensions to export cookies in json format
+
+3. **populate cookies.json:**
+
+   edit `cookies.json` and add the relevant cookies for each service. the file uses a domain-based structure where each service domain contains an array of cookie objects.
+
+   **important:** only include cookies for services you actually use. you don't need to populate all services.
+
+4. **file location:**
+
+   place `cookies.json` in the project root directory (same directory as `docker-compose.yml`). the docker volume mount will make it available to the cobalt container.
+
+5. **restart cobalt:**
+
+   after creating or updating `cookies.json`, restart the cobalt container:
+
+   ```bash
+   docker compose restart cobalt
+   ```
+
+### configuration
+
+the `docker-compose.yml` file is pre-configured with:
+
+- **COOKIE_PATH environment variable:** set to `/cookies.json` (path inside the container)
+- **volume mount:** `./cookies.json:/cookies.json` (mounts your local file into the container)
+
+cobalt will automatically:
+- load cookies on startup and log success/failure
+- update cookies dynamically when services return new authentication cookies
+- handle cookie rotation and session management
+
+### supported services
+
+cobalt's cookie system supports authentication for:
+
+- **twitter:** uses guest tokens and cookie-based authentication with CSRF protection (`auth_token`, `ct0`, `guest_id`)
+- **instagram:** implements web cookies with CSRF protection and bearer tokens (`sessionid`, `csrftoken`)
+- **reddit:** uses OAuth token management with automatic refresh (`reddit_session`)
+
+other services may also support cookie-based authentication. refer to the [cobalt documentation](https://github.com/imputnet/cobalt) for the latest supported services.
+
+### error handling
+
+when cookies are missing or invalid, cobalt will:
+
+- return specific error codes:
+  - `content.post.age` - post requires authentication
+  - `content.video.age` - video requires authentication
+- log warnings in the container logs about missing or invalid cookies
+- attempt to use guest tokens when available (for some services)
+
+### verifying cookies are loaded
+
+check cobalt container logs to verify cookies loaded successfully:
+
+```bash
+docker compose logs cobalt | grep -i cookie
+```
+
+you should see messages indicating whether cookies were loaded successfully or if there were any errors.
+
+### security considerations
+
+**critical security notes:**
+
+- **never commit `cookies.json` to git** - it contains sensitive authentication tokens
+- the file is already in `.gitignore` to prevent accidental commits
+- **file permissions:** on linux/mac, restrict access to the file:
+  ```bash
+  chmod 600 cookies.json
+  ```
+- **cookie rotation:** cookies may expire or be rotated by services. if you encounter authentication errors, update your cookies.json with fresh cookies
+- **sharing:** never share your `cookies.json` file with others - it contains your personal authentication tokens
+
+cobalt automatically updates cookies when services return new authentication cookies in response headers, helping maintain session state.
+
+### troubleshooting
+
+**cookies not loading:**
+
+1. verify the file exists in the project root:
+   ```bash
+   ls -la cookies.json
+   ```
+
+2. check file format is valid json:
+   ```bash
+   cat cookies.json | jq .
+   ```
+
+3. verify volume mount in docker-compose:
+   ```bash
+   docker compose config | grep -A 2 cookies.json
+   ```
+
+4. check cobalt logs for errors:
+   ```bash
+   docker compose logs cobalt
+   ```
+
+**still getting authentication errors:**
+
+- verify cookies are current and not expired
+- ensure you're logged into the service in your browser when extracting cookies
+- check that cookie names match the expected format (see `cookies.example.json`)
+- some services may require additional cookies beyond the basic ones
+
+**cookies updated but not working:**
+
+- restart the cobalt container after updating cookies:
+  ```bash
+  docker compose restart cobalt
+  ```
+
+- check that the volume mount is working:
+  ```bash
+  docker compose exec cobalt cat /cookies.json
+  ```
+
+for more information, see the [cobalt documentation](https://github.com/imputnet/cobalt) and [cobalt wiki](https://github.com/imputnet/cobalt/wiki).
+
 ## cleanup
 
 to remove all containers:

@@ -70,15 +70,17 @@ services:
       # Replace with your public API URL if you have one, or leave as internal Docker network URL
       # For internal use only, this can be http://cobalt:9000
       API_URL: ${COBALT_API_URL:-http://cobalt:9000}
-      # Uncomment if you want to use cookies for fetching data from services
-      # COOKIE_PATH: "/cookies.json"
+      # Path to cookies.json file for authenticating with services (Twitter, Instagram, Reddit, etc.)
+      # Required for accessing content that requires authentication
+      COOKIE_PATH: '/cookies.json'
     labels:
       - com.centurylinklabs.watchtower.scope=cobalt
     networks:
       - gronka-network
-    # Uncomment only if you use the COOKIE_PATH variable
-    # volumes:
-    #   - ./cookies.json:/cookies.json
+    volumes:
+      # Mount cookies.json from project root to enable authentication for restricted content
+      # Create cookies.json from cookies.example.json and add your service authentication cookies
+      - ./cookies.json:/cookies.json
 
   giflossy:
     image: dylanninin/giflossy:latest

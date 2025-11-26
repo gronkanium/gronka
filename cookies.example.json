@@ -1,0 +1,56 @@
+{
+  "twitter": [
+    {
+      "name": "auth_token",
+      "value": "your_auth_token_here",
+      "domain": ".twitter.com",
+      "path": "/",
+      "secure": true,
+      "httpOnly": true
+    },
+    {
+      "name": "ct0",
+      "value": "your_csrf_token_here",
+      "domain": ".twitter.com",
+      "path": "/",
+      "secure": true,
+      "httpOnly": false
+    },
+    {
+      "name": "guest_id",
+      "value": "your_guest_id_here",
+      "domain": ".twitter.com",
+      "path": "/",
+      "secure": true,
+      "httpOnly": false
+    }
+  ],
+  "instagram": [
+    {
+      "name": "sessionid",
+      "value": "your_session_id_here",
+      "domain": ".instagram.com",
+      "path": "/",
+      "secure": true,
+      "httpOnly": true
+    },
+    {
+      "name": "csrftoken",
+      "value": "your_csrf_token_here",
+      "domain": ".instagram.com",
+      "path": "/",
+      "secure": true,
+      "httpOnly": false
+    }
+  ],
+  "reddit": [
+    {
+      "name": "reddit_session",
+      "value": "your_reddit_session_here",
+      "domain": ".reddit.com",
+      "path": "/",
+      "secure": true,
+      "httpOnly": true
+    }
+  ]
+}

@@ -5,6 +5,58 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres (attempts) to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.12.3-beta] - 2025-11-26
+
+### Added
+
+- Cookie authentication support for Cobalt restricted content
+  - Added cookies.example.json with Twitter, Instagram, and Reddit cookie format examples
+  - Updated docker-compose.yml to enable COOKIE_PATH and volume mount for cookies.json
+  - Comprehensive documentation in Docker-Deployment.md covering setup, supported services, error handling, and security considerations
+  - Enables Cobalt to access content requiring authentication from social media platforms
+- R2 moderation system for managing user uploads
+  - New moderation page in WebUI for viewing and managing user uploads stored in R2
+  - Support for filtering and searching user media by file type
+  - Pagination support for user list and media display
+- Comprehensive test suite additions
+  - Added tests for operations tracker, deferred download notifier, and operations search APIs
+  - Improved test coverage for operation duration and status tracking
+- Buffer size validation for video downloads
+  - Added validation to ensure video buffers meet size requirements before processing
+- Info-level logging for Discord uploads
+  - Enhanced logging to include URLs when files are uploaded to Discord
+
+### Changed
+
+- Pre-commit hook improvements
+  - Hook now automatically fixes formatting and linting issues when possible
+  - Improved developer experience with auto-fix capabilities
+- Video download limit reduction
+  - Reduced maximum video download size from 500MB to 100MB
+  - Updated tests to reflect new limit
+- Pagination improvements
+  - Added pagination to moderation page user list
+  - Improved media pagination in moderation interface
+- GitHub repository URL updates
+  - Updated repository references to reflect current GitHub organization
+
+### Fixed
+
+- Discord URL tracking in database
+  - Fixed issue where Discord attachment URLs were not being saved to database when files uploaded to Discord
+  - Now properly captures Discord attachment URLs for tracking
+- Operation duration calculation
+  - Ensured operation duration is always at least 1ms to prevent zero-duration operations
+  - Fixed test timing issues related to duration calculations
+- Test mocks and assertions
+  - Corrected test mocks for Discord.js Collection API
+  - Fixed duration assertion issues in test suite
+- R2 URL database storage
+  - Fixed issue where R2 URLs were being saved to database even when files were not actually uploaded to R2
+  - Only saves R2 URLs when files are successfully uploaded
+- Log verbosity reduction
+  - Reduced unnecessary log verbosity in various components
+
 ## [0.12.2-beta] - 2025-11-25
 
 ### Added
@@ -508,6 +560,7 @@ and this project adheres (attempts) to [Semantic Versioning](https://semver.org/
   - Pre-commit validation
   - Docker buildx setup for cache support
 
+[0.12.3-beta]: https://github.com/thedorekaczynski/gronka/compare/v0.12.2-beta...v0.12.3-beta
 [0.12.2-beta]: https://github.com/thedorekaczynski/gronka/compare/v0.12.1-beta...v0.12.2-beta
 [0.12.1-beta]: https://github.com/thedorekaczynski/gronka/compare/v0.12.0-prerelease...v0.12.1-beta
 [0.12.0-prerelease]: https://github.com/thedorekaczynski/gronka/compare/v0.11.4-prerelease...v0.12.0-prerelease

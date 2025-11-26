@@ -64,17 +64,6 @@ when you use `/download` with a social media url:
 
 the bot handles both video and image downloads. for platforms that return multiple images (like instagram carousels), all images are downloaded and stored.
 
-## deferred downloads
-
-for large files or slow downloads, the bot uses a deferred download queue:
-
-1. the bot immediately responds that the download is queued
-2. the download happens in the background
-3. you receive a notification when the download completes
-4. the notification includes a link to the downloaded file
-
-this prevents discord command timeouts for long-running downloads.
-
 ## url processing
 
 the bot tracks processed urls to avoid re-downloading the same content:
@@ -102,7 +91,6 @@ the bot tracks processed urls to avoid re-downloading the same content:
 ### slow downloads
 
 - cobalt downloads can take time depending on file size
-- use deferred downloads for large files
 - check your network connection
 - verify cobalt has sufficient resources
 

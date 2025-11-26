@@ -544,6 +544,7 @@ export async function processConversion(
             logger.debug(
               `Recorded Discord attachment URL in database for cached GIF (urlHash: ${urlHash.substring(0, 8)}..., url: ${discordUrl.substring(0, 50)}...)`
             );
+            logger.info(`Uploaded to Discord: ${discordUrl}`);
           } else {
             logger.warn(
               `Failed to capture Discord attachment URL for cached GIF - message: ${message ? 'exists' : 'null'}, attachments: ${message?.attachments?.size || 0}, messageId: ${message?.id || 'none'}`
@@ -1098,6 +1099,7 @@ export async function processConversion(
           logger.debug(
             `Recorded Discord attachment URL in database (urlHash: ${urlHash.substring(0, 8)}..., url: ${discordUrl.substring(0, 50)}...)`
           );
+          logger.info(`Uploaded to Discord: ${discordUrl}`);
         } else {
           logger.warn(
             `Failed to capture Discord attachment URL - message: ${message ? 'exists' : 'null'}, attachments: ${message?.attachments?.size || 0}, messageId: ${message?.id || 'none'}`

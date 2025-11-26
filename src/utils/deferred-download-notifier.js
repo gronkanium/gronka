@@ -9,18 +9,18 @@ const logger = createLogger('deferred-notifier');
  * @param {string} userId - User ID to DM
  * @param {string} content - Message content
  * @param {AttachmentBuilder} [attachment] - Optional file attachment
- * @returns {Promise<boolean>} True if DM sent successfully
+ * @returns {Promise<Message|null>} Message if sent successfully, null otherwise
  */
 export async function sendDMToUser(client, userId, content, attachment = null) {
   try {
     const user = await client.users.fetch(userId);
     const messageOptions = attachment ? { files: [attachment] } : { content };
-    await user.send(messageOptions);
+    const message = await user.send(messageOptions);
     logger.info(`Sent DM to user ${userId}`);
-    return true;
+    return message;
   } catch (error) {
     logger.warn(`Failed to send DM to user ${userId}: ${error.message}`);
-    return false;
+    return null;
   }
 }
 
@@ -30,20 +30,25 @@ export async function sendDMToUser(client, userId, content, attachment = null) {
  * @param {string} interactionToken - Interaction token
  * @param {string} content - Message content
  * @param {AttachmentBuilder} [attachment] - Optional file attachment
- * @returns {Promise<boolean>} True if message sent successfully
+ * @returns {Promise<Message|null>} Message if sent successfully, null otherwise
  */
 export async function sendFollowUpMessage(client, interactionToken, content, attachment = null) {
   try {
     // Use the REST API to send a follow-up message
     const body = attachment ? { files: [attachment] } : { content };
-    await client.rest.post(`/webhooks/${client.application.id}/${interactionToken}`, {
-      body,
-    });
+    const response = await client.rest.post(
+      `/webhooks/${client.application.id}/${interactionToken}`,
+      {
+        body,
+      }
+    );
     logger.info('Sent follow-up message via webhook');
-    return true;
+    // REST API returns message data, convert to Message object if possible
+    // For now, return the response data - caller can extract attachment URL from it
+    return response;
   } catch (error) {
     logger.warn(`Failed to send follow-up message: ${error.message}`);
-    return false;
+    return null;
   }
 }
 
@@ -55,7 +60,7 @@ export async function sendFollowUpMessage(client, interactionToken, content, att
  * @param {AttachmentBuilder} [attachment] - Optional file attachment
  * @param {string} [operationId] - Operation ID for duration tracking
  * @param {string} [userId] - User ID
- * @returns {Promise<void>}
+ * @returns {Promise<string|null>} Discord attachment URL if captured, null otherwise
  */
 export async function notifyDownloadComplete(
   client,
@@ -70,25 +75,44 @@ export async function notifyDownloadComplete(
     : 'your deferred download is ready:';
 
   // Try to send DM first
-  const dmSent = await sendDMToUser(client, queueItem.userId, message, attachment);
+  const dmMessage = await sendDMToUser(client, queueItem.userId, message, attachment);
+  let discordUrl = null;
 
-  if (!dmSent) {
+  if (dmMessage) {
+    // Extract attachment URL from DM message
+    if (dmMessage.attachments && dmMessage.attachments.size > 0) {
+      const discordAttachment = dmMessage.attachments.first();
+      if (discordAttachment && discordAttachment.url) {
+        discordUrl = discordAttachment.url;
+      }
+    }
+  } else {
     // If DM fails, try to send follow-up to original interaction
     logger.info('DM failed, attempting follow-up message');
-    const followUpSent = await sendFollowUpMessage(
+    const followUpResponse = await sendFollowUpMessage(
       client,
       queueItem.interactionToken,
       message,
       attachment
     );
 
-    if (!followUpSent) {
+    if (followUpResponse) {
+      // Extract attachment URL from follow-up response
+      if (followUpResponse.attachments && followUpResponse.attachments.length > 0) {
+        const discordAttachment = followUpResponse.attachments[0];
+        if (discordAttachment && discordAttachment.url) {
+          discordUrl = discordAttachment.url;
+        }
+      }
+    } else {
       logger.error(`Failed to notify user ${queueItem.userId} about completed download`);
     }
   }
 
   // Send ntfy notification
   await notifyDeferredDownload(queueItem.username, 'success', { operationId, userId });
+
+  return discordUrl;
 }
 
 /**

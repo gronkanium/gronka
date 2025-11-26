@@ -226,6 +226,29 @@ See `package.json` for a full list of available npm scripts. Common ones include
 - `npm run jekyll:build` - Build the Jekyll documentation site
 - `npm run site:start` - Start Jekyll server and Cloudflared tunnel together (serves at gronka.p1x.dev)
 - `npm run site:stop` - Stop the Jekyll site services (if running in background)
+- `npm run wiki:sync` - Sync local wiki files to GitHub Wiki (converts Obsidian-style links and pushes to GitHub)
+
+### Wiki Documentation
+
+The project maintains wiki documentation in two places:
+
+1. **Local Wiki** (`wiki/` directory) - Uses Obsidian-style links (`[[Page-Name]]`) for local editing
+2. **GitHub Wiki** - Public wiki accessible on GitHub, uses standard markdown links
+
+When you update wiki files in the `wiki/` directory, sync them to GitHub Wiki using:
+
+```bash
+npm run wiki:sync
+```
+
+This script will:
+
+- Convert Obsidian-style links (`[[Page-Name]]`) to GitHub Wiki format (`[Page-Name](Page-Name)`)
+- Clone the GitHub Wiki repository
+- Copy all converted files
+- Commit and push changes to GitHub
+
+**Note:** You need Git installed and appropriate permissions to push to the GitHub Wiki repository.
 
 ### Docker
 

@@ -61,6 +61,7 @@
     "site:start": "npx concurrently \"npm run jekyll:serve\" \"npm run tunnel:gronka-waptop\"",
     "site:stop": "scripts\\stop-jekyll-tunnel.bat",
     "site:deploy": "powershell -File scripts/deploy-jekyll.ps1",
+    "wiki:sync": "node scripts/sync-wiki-to-github.js",
     "prepare": "husky"
   },
   "keywords": [

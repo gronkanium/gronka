@@ -302,6 +302,9 @@
     display: flex;
     flex-direction: column;
     gap: 1.5rem;
+    max-width: 1400px;
+    margin-left: auto;
+    margin-right: auto;
   }
 
   .filters {

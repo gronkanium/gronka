@@ -15,9 +15,31 @@ describe('deferred download notifier', () => {
 
   beforeEach(() => {
     // Reset mocks before each test
+    // Mock Discord.js Collection-like object with first() method
+    const createMockCollection = () => {
+      const map = new Map();
+      const collection = {
+        get size() {
+          return map.size;
+        },
+        first: () => {
+          if (map.size > 0) {
+            return Array.from(map.values())[0];
+          }
+          return null;
+        },
+        set: (key, value) => {
+          map.set(key, value);
+        },
+        get: key => map.get(key),
+        has: key => map.has(key),
+      };
+      return collection;
+    };
+
     mockMessage = {
       id: 'msg123',
-      attachments: new Map(),
+      attachments: createMockCollection(),
     };
 
     mockUser = {
@@ -185,11 +207,8 @@ describe('deferred download notifier', () => {
         attachment: 'data',
       };
 
-      // Mock attachment URL extraction
-      mockMessage.attachments.set('0', {
-        url: 'https://cdn.discordapp.com/attachments/123/456/file.gif',
-        name: 'file.gif',
-      });
+      // The mockUser.send will automatically add attachment when files are provided
+      // So we don't need to manually set it here - it's handled in beforeEach
 
       const discordUrl = await notifyDownloadComplete(mockClient, queueItem, null, mockAttachment);
 
@@ -208,23 +227,17 @@ describe('deferred download notifier', () => {
       };
       const result = 'https://example.com/file.gif';
 
-      // Mock follow-up response with attachment
+      // Mock follow-up response without attachment (since no attachment was passed)
       mockRest.post = async (_url, _options) => {
         return {
           id: 'webhook-msg123',
-          attachments: [
-            {
-              url: 'https://cdn.discordapp.com/attachments/123/456/file.gif',
-              name: 'file.gif',
-            },
-          ],
+          attachments: [],
         };
       };
 
       const discordUrl = await notifyDownloadComplete(mockClient, queueItem, result);
 
-      // Should try follow-up and extract URL if attachment present
-      // In this case, result is a URL, so discordUrl should be null
+      // Should try follow-up but no attachment was sent, so discordUrl should be null
       assert.strictEqual(discordUrl, null);
     });
 
@@ -381,11 +394,8 @@ describe('deferred download notifier', () => {
         attachment: 'data',
       };
 
-      // Set up mock to return message with attachment
-      mockMessage.attachments.set('0', {
-        url: 'https://cdn.discordapp.com/attachments/123/456/file.gif',
-        name: 'file.gif',
-      });
+      // The mockUser.send will automatically add attachment when files are provided
+      // So we don't need to manually set it here - it's handled in beforeEach
 
       const discordUrl = await notifyDownloadComplete(mockClient, queueItem, null, mockAttachment);
 

@@ -171,7 +171,7 @@ export function createOperation(type, userId, username, context = {}) {
   }
 
   // Log to application logs with operation ID
-  logger.info(`Operation ${type} created [op: ${operation.id}]`);
+  logger.debug(`Operation ${type} created [op: ${operation.id}]`);
 
   broadcastUpdate(operation);
   return operation.id;
@@ -225,7 +225,7 @@ export function updateOperationStatus(operationId, status, data = {}) {
   }
 
   // Log to application logs with operation ID
-  logger.info(`Operation status updated to ${status} [op: ${operationId}]`);
+  logger.debug(`Operation status updated to ${status} [op: ${operationId}]`);
 
   // Update user metrics on operation completion
   if (status === 'success' || status === 'error') {
@@ -306,7 +306,7 @@ export function logOperationStep(operationId, step, status, data = {}) {
   }
 
   // Log to application logs with operation ID
-  logger.info(`Operation step ${step} ${status} [op: ${operationId}]`);
+  logger.debug(`Operation step ${step} ${status} [op: ${operationId}]`);
 
   // Broadcast update if significant change
   if (status === 'error' || data.broadcast) {

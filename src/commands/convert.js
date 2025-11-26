@@ -486,9 +486,70 @@ export async function processConversion(
         const safeHash = hash.replace(/[^a-f0-9]/gi, '');
         const filename = `${safeHash}.gif`;
         try {
-          await interaction.editReply({
+          const message = await interaction.editReply({
             files: [new AttachmentBuilder(gifBuffer, { name: filename })],
           });
+
+          // Capture Discord attachment URL and save to database
+          // Try to get attachments from the returned message first
+          let discordUrl = null;
+          if (message && message.attachments && message.attachments.size > 0) {
+            const discordAttachment = message.attachments.first();
+            if (discordAttachment && discordAttachment.url) {
+              discordUrl = discordAttachment.url;
+              logger.debug(
+                `Captured Discord attachment URL for cached GIF from editReply: ${discordUrl.substring(0, 60)}...`
+              );
+            }
+          }
+
+          // If attachments weren't in the response, try fetching the message
+          if (!discordUrl && message && message.id && interaction.channel) {
+            try {
+              const fetchedMessage = await interaction.channel.messages.fetch(message.id);
+              if (
+                fetchedMessage &&
+                fetchedMessage.attachments &&
+                fetchedMessage.attachments.size > 0
+              ) {
+                const discordAttachment = fetchedMessage.attachments.first();
+                if (discordAttachment && discordAttachment.url) {
+                  discordUrl = discordAttachment.url;
+                  logger.debug(
+                    `Captured Discord attachment URL for cached GIF from fetched message: ${discordUrl.substring(0, 60)}...`
+                  );
+                }
+              }
+            } catch (fetchError) {
+              logger.warn(
+                `Failed to fetch message to get attachment URL for cached GIF: ${fetchError.message}`
+              );
+            }
+          }
+
+          // Save Discord attachment URL to database if we got one
+          if (discordUrl) {
+            // For cached files, use the hash as urlHash since there's no originalUrl
+            const urlHash = hash;
+            await insertProcessedUrl(
+              urlHash,
+              hash,
+              'gif',
+              '.gif',
+              discordUrl,
+              Date.now(),
+              userId,
+              fileSize
+            );
+            logger.debug(
+              `Recorded Discord attachment URL in database for cached GIF (urlHash: ${urlHash.substring(0, 8)}..., url: ${discordUrl.substring(0, 50)}...)`
+            );
+          } else {
+            logger.warn(
+              `Failed to capture Discord attachment URL for cached GIF - message: ${message ? 'exists' : 'null'}, attachments: ${message?.attachments?.size || 0}, messageId: ${message?.id || 'none'}`
+            );
+          }
+
           logOperationStep(operationId, 'discord_upload', 'success', {
             message: 'Cached GIF uploaded to Discord successfully',
           });
@@ -953,20 +1014,22 @@ export async function processConversion(
     // Track recent conversion
     trackRecentConversion(userId, gifUrl);
 
-    // Record processed URL in database for all conversions
-    // For URL-based operations, use hash of original URL; for attachments, use file hash
-    const urlHash = originalUrl ? hashUrl(originalUrl) : finalHash;
-    await insertProcessedUrl(
-      urlHash,
-      finalHash,
-      'gif',
-      '.gif',
-      gifUrl,
-      Date.now(),
-      userId,
-      optimizedSize
-    );
-    logger.debug(`Recorded processed URL in database (urlHash: ${urlHash.substring(0, 8)}...)`);
+    // Record processed URL in database only for R2 uploads
+    // Discord uploads are tracked separately when we capture the attachment URL
+    if (finalUploadMethod === 'r2') {
+      const urlHash = originalUrl ? hashUrl(originalUrl) : finalHash;
+      await insertProcessedUrl(
+        urlHash,
+        finalHash,
+        'gif',
+        '.gif',
+        gifUrl,
+        Date.now(),
+        userId,
+        optimizedSize
+      );
+      logger.debug(`Recorded processed URL in database (urlHash: ${urlHash.substring(0, 8)}...)`);
+    }
 
     logger.info(
       `Successfully created GIF (hash: ${finalHash}, size: ${(optimizedSize / (1024 * 1024)).toFixed(2)}MB) for user ${userId}${options.optimize ? ' [OPTIMIZED]' : ''}${wasAutoOptimized ? ' [AUTO-OPTIMIZED]' : ''}`
@@ -980,9 +1043,66 @@ export async function processConversion(
       const safeHash = finalHash.replace(/[^a-f0-9]/gi, '');
       const filename = `${safeHash}.gif`;
       try {
-        await interaction.editReply({
+        const message = await interaction.editReply({
           files: [new AttachmentBuilder(finalGifBuffer, { name: filename })],
         });
+
+        // Capture Discord attachment URL and save to database
+        // Try to get attachments from the returned message first
+        let discordUrl = null;
+        if (message && message.attachments && message.attachments.size > 0) {
+          const discordAttachment = message.attachments.first();
+          if (discordAttachment && discordAttachment.url) {
+            discordUrl = discordAttachment.url;
+            logger.debug(
+              `Captured Discord attachment URL from editReply response: ${discordUrl.substring(0, 60)}...`
+            );
+          }
+        }
+
+        // If attachments weren't in the response, try fetching the message
+        if (!discordUrl && message && message.id && interaction.channel) {
+          try {
+            const fetchedMessage = await interaction.channel.messages.fetch(message.id);
+            if (
+              fetchedMessage &&
+              fetchedMessage.attachments &&
+              fetchedMessage.attachments.size > 0
+            ) {
+              const discordAttachment = fetchedMessage.attachments.first();
+              if (discordAttachment && discordAttachment.url) {
+                discordUrl = discordAttachment.url;
+                logger.debug(
+                  `Captured Discord attachment URL from fetched message: ${discordUrl.substring(0, 60)}...`
+                );
+              }
+            }
+          } catch (fetchError) {
+            logger.warn(`Failed to fetch message to get attachment URL: ${fetchError.message}`);
+          }
+        }
+
+        // Save Discord attachment URL to database if we got one
+        if (discordUrl) {
+          const urlHash = originalUrl ? hashUrl(originalUrl) : finalHash;
+          await insertProcessedUrl(
+            urlHash,
+            finalHash,
+            'gif',
+            '.gif',
+            discordUrl,
+            Date.now(),
+            userId,
+            optimizedSize
+          );
+          logger.debug(
+            `Recorded Discord attachment URL in database (urlHash: ${urlHash.substring(0, 8)}..., url: ${discordUrl.substring(0, 50)}...)`
+          );
+        } else {
+          logger.warn(
+            `Failed to capture Discord attachment URL - message: ${message ? 'exists' : 'null'}, attachments: ${message?.attachments?.size || 0}, messageId: ${message?.id || 'none'}`
+          );
+        }
       } catch (discordError) {
         // Discord upload failed, fallback to R2
         logger.warn(

@@ -5,6 +5,17 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres (attempts) to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Removed
+
+- Deferred downloads feature
+  - Removed deferred download queue system that was never used in practice
+  - Removed deferred download notification handlers
+  - Removed "try again later" button UI from rate limit error messages
+  - Rate limit errors now show a simple error message instructing users to try again later
+  - Simplifies codebase by removing unused functionality that added unnecessary complexity
+
 ## [0.12.3-beta] - 2025-11-26
 
 ### Added
@@ -19,7 +30,7 @@ and this project adheres (attempts) to [Semantic Versioning](https://semver.org/
   - Support for filtering and searching user media by file type
   - Pagination support for user list and media display
 - Comprehensive test suite additions
-  - Added tests for operations tracker, deferred download notifier, and operations search APIs
+  - Added tests for operations tracker and operations search APIs
   - Improved test coverage for operation duration and status tracking
 - Buffer size validation for video downloads
   - Added validation to ensure video buffers meet size requirements before processing

@@ -5,6 +5,51 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres (attempts) to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.12.2-beta] - 2025-11-25
+
+### Added
+
+- Discord upload support for cached GIFs
+  - Cached GIFs under 8MB are now uploaded as Discord attachments instead of URLs
+  - Provides better user experience with direct file previews for cached conversions
+  - Automatic fallback to R2 URL if Discord upload fails
+- Operations search and debug page
+  - New advanced operations search endpoint with filtering capabilities
+  - New OperationsDebug page in WebUI for searching and filtering operations
+  - Support for filtering by operation ID, status, type, user, URL pattern, date range, duration, and file size
+  - Related operations endpoint for finding operations with matching URLs
+
+### Changed
+
+- Default quality setting changed from medium to high
+  - All new conversions now default to high quality unless user specifies otherwise
+  - Applies to convert and optimize commands
+- Pre-commit hook optimization
+  - Hook now only checks staged files instead of all files
+  - Faster commit times by skipping checks on unchanged files
+  - Only runs check:sync when package files are staged
+  - Only runs linting on JavaScript/TypeScript files
+  - Only runs formatting checks on Prettier-supported files
+- GIF quality improvements
+  - Use floyd-steinberg dithering for better color accuracy
+  - Improved palette generation for better visual quality
+- Operations tracking enhancements
+  - Multi-instance support for operations tracking (supports multiple WebUI instances)
+  - Enhanced logging with detailed operation steps for optimize command
+  - Better operation step tracking with metadata
+- WebUI styling improvements
+  - Improved log level toggle button styling and compactness
+  - Better table layout and spacing in user profile operations table
+  - Enhanced error display formatting
+  - Improved trace step display with better empty state handling
+
+### Fixed
+
+- Palette generation compatibility
+  - Removed stats_mode=single from palettegen to fix compatibility issues with some FFmpeg versions
+- GIF optimizer logging verbosity
+  - Reduced logging verbosity by changing info-level logs to debug for path conversion details
+
 ## [0.12.1-beta] - 2025-11-25
 
 ### Added
@@ -463,6 +508,7 @@ and this project adheres (attempts) to [Semantic Versioning](https://semver.org/
   - Pre-commit validation
   - Docker buildx setup for cache support
 
+[0.12.2-beta]: https://github.com/thedorekaczynski/gronka/compare/v0.12.1-beta...v0.12.2-beta
 [0.12.1-beta]: https://github.com/thedorekaczynski/gronka/compare/v0.12.0-prerelease...v0.12.1-beta
 [0.12.0-prerelease]: https://github.com/thedorekaczynski/gronka/compare/v0.11.4-prerelease...v0.12.0-prerelease
 [0.11.3-prerelease]: https://github.com/thedorekaczynski/gronka/compare/v0.11.2...v0.11.3-prerelease

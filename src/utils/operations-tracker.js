@@ -32,7 +32,8 @@ const instancePort = parseInt(process.env.WEBUI_PORT || '3001', 10);
 
 // WebUI URL for sending operation updates (from bot to webui)
 // Since webui is now in the same container, use localhost (fallback for HTTP mode)
-const WEBUI_URL = process.env.WEBUI_URL || process.env.WEBUI_SERVER_URL || `http://localhost:${instancePort}`;
+const WEBUI_URL =
+  process.env.WEBUI_URL || process.env.WEBUI_SERVER_URL || `http://localhost:${instancePort}`;
 
 /**
  * Set the broadcast callback for websocket updates

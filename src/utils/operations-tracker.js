@@ -206,7 +206,7 @@ export function updateOperationStatus(operationId, status, data = {}) {
 
   // Calculate duration if operation is complete
   if ((status === 'success' || status === 'error') && operation.startTime) {
-    operation.performanceMetrics.duration = Date.now() - operation.startTime;
+    operation.performanceMetrics.duration = Math.max(1, Date.now() - operation.startTime);
   }
 
   // Log status update

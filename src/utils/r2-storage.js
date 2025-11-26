@@ -1,4 +1,9 @@
-import { S3Client, HeadObjectCommand, ListObjectsV2Command, GetObjectCommand } from '@aws-sdk/client-s3';
+import {
+  S3Client,
+  HeadObjectCommand,
+  ListObjectsV2Command,
+  GetObjectCommand,
+} from '@aws-sdk/client-s3';
 import { Upload } from '@aws-sdk/lib-storage';
 import { createLogger } from './logger.js';
 
@@ -268,14 +273,14 @@ export async function downloadGifFromR2(hash, config) {
     });
 
     const response = await client.send(command);
-    
+
     // Convert stream to buffer
     const chunks = [];
     for await (const chunk of response.Body) {
       chunks.push(chunk);
     }
     const buffer = Buffer.concat(chunks);
-    
+
     logger.info(`Downloaded GIF from R2: ${key} (${(buffer.length / (1024 * 1024)).toFixed(2)}MB)`);
     return buffer;
   } catch (error) {

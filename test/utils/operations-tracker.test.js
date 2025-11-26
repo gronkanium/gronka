@@ -200,7 +200,16 @@ describe('operations tracker', () => {
 
       const operation = getOperation(operationId);
       assert.ok(operation.performanceMetrics.duration > 0);
-      assert.ok(operation.performanceMetrics.duration >= Date.now() - startTime);
+      // Duration should be approximately equal to elapsed time (within 100ms tolerance)
+      const elapsedTime = Date.now() - startTime;
+      assert.ok(
+        operation.performanceMetrics.duration <= elapsedTime + 100,
+        `Duration ${operation.performanceMetrics.duration} should be <= ${elapsedTime + 100}`
+      );
+      assert.ok(
+        operation.performanceMetrics.duration >= elapsedTime - 100,
+        `Duration ${operation.performanceMetrics.duration} should be >= ${elapsedTime - 100}`
+      );
     });
 
     test('handles non-existent operation gracefully', () => {

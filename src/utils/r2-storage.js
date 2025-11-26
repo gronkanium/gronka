@@ -3,6 +3,7 @@ import {
   HeadObjectCommand,
   ListObjectsV2Command,
   GetObjectCommand,
+  DeleteObjectCommand,
 } from '@aws-sdk/client-s3';
 import { Upload } from '@aws-sdk/lib-storage';
 import { createLogger } from './logger.js';
@@ -365,4 +366,60 @@ export async function listObjectsInR2(prefix, config) {
     logger.error(`Failed to list objects from R2 (prefix: ${prefix}):`, error.message);
     return [];
   }
+}
+
+/**
+ * Delete a file from R2
+ * @param {string} key - R2 object key (path in bucket)
+ * @param {Object} config - R2 configuration
+ * @returns {Promise<boolean>} True if file was deleted, false if not found
+ */
+export async function deleteFromR2(key, config) {
+  const client = getR2Client(config);
+  const { bucketName } = config;
+
+  if (!bucketName) {
+    logger.warn('Cannot delete from R2: bucketName not configured');
+    return false;
+  }
+
+  try {
+    const command = new DeleteObjectCommand({
+      Bucket: bucketName,
+      Key: key,
+    });
+
+    await client.send(command);
+    logger.info(`Deleted file from R2: ${key}`);
+    return true;
+  } catch (error) {
+    if (error.name === 'NotFound' || error.$metadata?.httpStatusCode === 404) {
+      logger.debug(`File not found in R2 (already deleted?): ${key}`);
+      return false;
+    }
+    logger.error(`Failed to delete file from R2 (${key}):`, error.message);
+    throw error;
+  }
+}
+
+/**
+ * Extract R2 object key from public URL
+ * @param {string} url - Public R2 URL (e.g., https://cdn.gronka.p1x.dev/gifs/abc123.gif)
+ * @param {Object} config - R2 configuration
+ * @returns {string|null} R2 object key (e.g., gifs/abc123.gif) or null if URL is not an R2 URL
+ */
+export function extractR2KeyFromUrl(url, config) {
+  const { publicDomain } = config;
+  if (!publicDomain || !url || typeof url !== 'string') {
+    return null;
+  }
+
+  const r2UrlPrefix = `https://${publicDomain}/`;
+  if (!url.startsWith(r2UrlPrefix)) {
+    return null;
+  }
+
+  // Extract the key (everything after the domain)
+  const key = url.slice(r2UrlPrefix.length);
+  return key || null;
 }

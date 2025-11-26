@@ -2,6 +2,7 @@ import Database from 'better-sqlite3';
 import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
+import { r2Config } from './config.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -774,6 +775,138 @@ export async function getUserMediaCount(userId) {
   const stmt = db.prepare('SELECT COUNT(*) as count FROM processed_urls WHERE user_id = ?');
   const result = stmt.get(userId);
   return result ? result.count : 0;
+}
+
+/**
+ * Get R2 public domain for URL pattern matching
+ * @returns {string} R2 public domain (e.g., 'cdn.gronka.p1x.dev')
+ */
+function getR2PublicDomain() {
+  return r2Config.publicDomain || 'cdn.gronka.p1x.dev';
+}
+
+/**
+ * Get R2 media files for a specific user
+ * @param {string} userId - Discord user ID
+ * @param {Object} options - Query options
+ * @param {number} [options.limit] - Maximum number of results
+ * @param {number} [options.offset] - Number of results to skip
+ * @param {string} [options.fileType] - Filter by file type ('gif', 'video', 'image')
+ * @returns {Promise<Array>} Array of R2 media file records
+ */
+export async function getUserR2Media(userId, options = {}) {
+  await ensureDbInitialized();
+
+  if (!db) {
+    console.error('Database initialization failed.');
+    return [];
+  }
+
+  const { limit = null, offset = null, fileType = null } = options;
+  const publicDomain = getR2PublicDomain();
+  const r2UrlPrefix = `https://${publicDomain}/`;
+
+  let query =
+    'SELECT url_hash, file_url, file_type, file_extension, processed_at, file_size FROM processed_urls WHERE user_id = ? AND file_url LIKE ?';
+  const params = [userId, `${r2UrlPrefix}%`];
+
+  if (fileType) {
+    query += ' AND file_type = ?';
+    params.push(fileType);
+  }
+
+  query += ' ORDER BY processed_at DESC';
+
+  if (limit !== null) {
+    query += ' LIMIT ?';
+    params.push(limit);
+  }
+
+  if (offset !== null) {
+    query += ' OFFSET ?';
+    params.push(offset);
+  }
+
+  const stmt = db.prepare(query);
+  return stmt.all(...params);
+}
+
+/**
+ * Get total count of R2 media files for a specific user
+ * @param {string} userId - Discord user ID
+ * @param {string} [fileType] - Filter by file type ('gif', 'video', 'image')
+ * @returns {Promise<number>} Total count of R2 media files for the user
+ */
+export async function getUserR2MediaCount(userId, fileType = null) {
+  await ensureDbInitialized();
+
+  if (!db) {
+    console.error('Database initialization failed.');
+    return 0;
+  }
+
+  const publicDomain = getR2PublicDomain();
+  const r2UrlPrefix = `https://${publicDomain}/`;
+
+  let query = 'SELECT COUNT(*) as count FROM processed_urls WHERE user_id = ? AND file_url LIKE ?';
+  const params = [userId, `${r2UrlPrefix}%`];
+
+  if (fileType) {
+    query += ' AND file_type = ?';
+    params.push(fileType);
+  }
+
+  const stmt = db.prepare(query);
+  const result = stmt.get(...params);
+  return result ? result.count : 0;
+}
+
+/**
+ * Delete a processed URL record by url_hash
+ * @param {string} urlHash - URL hash (primary key)
+ * @returns {Promise<boolean>} True if record was deleted, false if not found
+ */
+export async function deleteProcessedUrl(urlHash) {
+  await ensureDbInitialized();
+
+  if (!db) {
+    console.error('Database initialization failed.');
+    return false;
+  }
+
+  try {
+    const stmt = db.prepare('DELETE FROM processed_urls WHERE url_hash = ?');
+    const result = stmt.run(urlHash);
+    return result.changes > 0;
+  } catch (error) {
+    console.error('Failed to delete processed URL:', error);
+    return false;
+  }
+}
+
+/**
+ * Delete all R2 media records for a user from database
+ * @param {string} userId - Discord user ID
+ * @returns {Promise<number>} Number of records deleted
+ */
+export async function deleteUserR2Media(userId) {
+  await ensureDbInitialized();
+
+  if (!db) {
+    console.error('Database initialization failed.');
+    return 0;
+  }
+
+  try {
+    const publicDomain = getR2PublicDomain();
+    const r2UrlPrefix = `https://${publicDomain}/`;
+    const stmt = db.prepare('DELETE FROM processed_urls WHERE user_id = ? AND file_url LIKE ?');
+    const result = stmt.run(userId, `${r2UrlPrefix}%`);
+    return result.changes;
+  } catch (error) {
+    console.error('Failed to delete user R2 media:', error);
+    return 0;
+  }
 }
 
 /**

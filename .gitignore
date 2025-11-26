@@ -11,6 +11,9 @@ node_modules/
 .env.local
 .env.*.local
 
+# Cobalt authentication cookies (contains sensitive tokens)
+cookies.json
+
 # AWS/R2 credentials
 .aws/
 

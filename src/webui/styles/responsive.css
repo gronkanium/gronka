@@ -1,0 +1,164 @@
+/* Responsive Design System */
+
+/* Breakpoints */
+:root {
+  --breakpoint-mobile: 480px;
+  --breakpoint-tablet: 768px;
+  --breakpoint-desktop: 1024px;
+
+  /* Spacing */
+  --spacing-xs: 0.25rem;
+  --spacing-sm: 0.5rem;
+  --spacing-md: 1rem;
+  --spacing-lg: 1.5rem;
+  --spacing-xl: 2rem;
+
+  /* Mobile spacing (smaller) */
+  --spacing-mobile-xs: 0.25rem;
+  --spacing-mobile-sm: 0.5rem;
+  --spacing-mobile-md: 0.75rem;
+  --spacing-mobile-lg: 1rem;
+  --spacing-mobile-xl: 1.5rem;
+
+  /* Font sizes */
+  --font-size-xs: 0.75rem;
+  --font-size-sm: 0.85rem;
+  --font-size-base: 0.9rem;
+  --font-size-md: 1rem;
+  --font-size-lg: 1.25rem;
+  --font-size-xl: 1.5rem;
+
+  /* Mobile font sizes */
+  --font-size-mobile-xs: 0.7rem;
+  --font-size-mobile-sm: 0.8rem;
+  --font-size-mobile-base: 0.85rem;
+  --font-size-mobile-md: 0.9rem;
+  --font-size-mobile-lg: 1rem;
+
+  /* Container widths */
+  --container-max-width: 1400px;
+  --container-padding-mobile: 1rem;
+  --container-padding-desktop: 2rem;
+
+  /* Touch targets */
+  --touch-target-min: 44px;
+}
+
+/* Utility Classes */
+
+/* Hide/Show at breakpoints */
+.hide-mobile {
+  display: block;
+}
+
+.show-mobile {
+  display: none;
+}
+
+@media (max-width: 767px) {
+  .hide-mobile {
+    display: none;
+  }
+
+  .show-mobile {
+    display: block;
+  }
+}
+
+/* Responsive padding */
+.responsive-padding {
+  padding: var(--container-padding-desktop);
+}
+
+@media (max-width: 767px) {
+  .responsive-padding {
+    padding: var(--container-padding-mobile);
+  }
+}
+
+/* Responsive text */
+.responsive-text {
+  font-size: var(--font-size-base);
+}
+
+@media (max-width: 767px) {
+  .responsive-text {
+    font-size: var(--font-size-mobile-base);
+  }
+}
+
+/* Responsive container */
+.responsive-container {
+  max-width: var(--container-max-width);
+  margin: 0 auto;
+  padding: 0 var(--container-padding-desktop);
+}
+
+@media (max-width: 767px) {
+  .responsive-container {
+    padding: 0 var(--container-padding-mobile);
+  }
+}
+
+/* Scrollable container */
+.scrollable-container {
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: thin;
+  scrollbar-color: #444 #1a1a1a;
+}
+
+.scrollable-container::-webkit-scrollbar {
+  height: 8px;
+}
+
+.scrollable-container::-webkit-scrollbar-track {
+  background: #1a1a1a;
+}
+
+.scrollable-container::-webkit-scrollbar-thumb {
+  background: #444;
+  border-radius: 4px;
+}
+
+.scrollable-container::-webkit-scrollbar-thumb:hover {
+  background: #555;
+}
+
+/* Touch-friendly buttons */
+.touch-target {
+  min-width: var(--touch-target-min);
+  min-height: var(--touch-target-min);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* Responsive grid */
+.responsive-grid {
+  display: grid;
+  gap: var(--spacing-lg);
+}
+
+@media (max-width: 767px) {
+  .responsive-grid {
+    gap: var(--spacing-mobile-md);
+  }
+}
+
+/* Responsive flex */
+.responsive-flex {
+  display: flex;
+  gap: var(--spacing-md);
+}
+
+@media (max-width: 767px) {
+  .responsive-flex {
+    flex-direction: column;
+    gap: var(--spacing-mobile-sm);
+  }
+
+  .responsive-flex-row-mobile {
+    flex-direction: row;
+  }
+}

@@ -3,6 +3,8 @@
   import { ChevronDown, ChevronRight, Search, Filter, X, Download, Calendar, Clock, FileText } from 'lucide-svelte';
   import { operations as wsOperations, connected as wsConnected } from '../stores/websocket-store.js';
   import { navigate } from '../utils/router.js';
+  import ResponsiveFilterPanel from '../components/ResponsiveFilterPanel.svelte';
+  import ResponsiveSearchBar from '../components/ResponsiveSearchBar.svelte';
 
   let operations = [];
   let filteredOperations = [];
@@ -294,27 +296,20 @@
   </div>
 
   <div class="search-section">
-    <div class="search-bar">
-      <Search size={18} />
-      <input
-        type="text"
-        placeholder="Search by operation ID..."
-        bind:value={searchOperationId}
-        on:input={() => { offset = 0; lastFilterKey = ''; }}
-      />
-    </div>
-    <button class="filter-toggle" on:click={() => filtersOpen = !filtersOpen}>
-      <Filter size={18} />
-      <span>filters</span>
-    </button>
+    <ResponsiveSearchBar
+      placeholder="Search by operation ID..."
+      bind:value={searchOperationId}
+      onSearch={() => { offset = 0; applyFilters(); }}
+    />
   </div>
 
-  {#if filtersOpen}
-    <div class="filters-panel">
-      <div class="filters-header">
-        <h3>filters</h3>
-        <button class="clear-btn" on:click={clearFilters}>clear all</button>
-      </div>
+  <ResponsiveFilterPanel
+    title="filters"
+    defaultOpen={filtersOpen}
+  >
+    <div class="filters-header-actions">
+      <button class="clear-btn" on:click={clearFilters}>clear all</button>
+    </div>
       
       <div class="filters-grid">
         <div class="filter-group">
@@ -448,8 +443,7 @@
           />
         </div>
       </div>
-    </div>
-  {/if}
+  </ResponsiveFilterPanel>
 
   {#if errorAnalysis && !errorAnalysisLoading}
     <div class="error-analysis-section">
@@ -735,15 +729,6 @@
     border-radius: 3px;
   }
 
-  .search-bar input {
-    flex: 1;
-    background: none;
-    border: none;
-    color: #fff;
-    font-size: 0.9rem;
-    outline: none;
-  }
-
   .filter-toggle {
     display: flex;
     align-items: center;
@@ -769,17 +754,10 @@
     margin-bottom: 1rem;
   }
 
-  .filters-header {
+  .filters-header-actions {
     display: flex;
-    justify-content: space-between;
-    align-items: center;
+    justify-content: flex-end;
     margin-bottom: 1rem;
-  }
-
-  .filters-header h3 {
-    margin: 0;
-    font-size: 1rem;
-    color: #fff;
   }
 
   .clear-btn {
@@ -1486,17 +1464,138 @@
   }
 
   @media (max-width: 768px) {
+    section {
+      padding: 0.75rem;
+    }
+    
+    .header-row {
+      flex-direction: column;
+      align-items: flex-start;
+      gap: 0.5rem;
+    }
+    
+    .header-row h2 {
+      font-size: 1rem;
+    }
+    
+    .back-btn {
+      font-size: 0.8rem;
+      padding: 0.4rem 0.8rem;
+      min-height: 44px;
+    }
+    
+    .search-section {
+      margin-bottom: 0.75rem;
+    }
+    
     .filters-grid {
       grid-template-columns: 1fr;
     }
 
+    .table-container {
+      overflow-x: auto;
+      -webkit-overflow-scrolling: touch;
+    }
+    
     table {
       font-size: 0.8rem;
+      min-width: 800px;
     }
 
     th,
     td {
       padding: 0.5rem 0.25rem;
+      font-size: 0.75rem;
+    }
+    
+    .status-cell {
+      width: 50px;
+    }
+    
+    .expand-cell {
+      width: 35px;
+    }
+    
+    .expand-btn {
+      min-width: 44px;
+      min-height: 44px;
+    }
+    
+    .action-btn {
+      min-width: 44px;
+      min-height: 44px;
+      padding: 0.5rem;
+    }
+    
+    .operation-details {
+      padding: 1rem;
+      gap: 1rem;
+    }
+    
+    .details-section {
+      padding: 0.75rem;
+    }
+    
+    .details-section h4 {
+      font-size: 0.85rem;
+    }
+    
+    .info-grid {
+      grid-template-columns: 1fr;
+      gap: 0.5rem;
+    }
+    
+    .timeline-viz {
+      height: 60px;
+      overflow-x: auto;
+      -webkit-overflow-scrolling: touch;
+    }
+    
+    .timeline-bar {
+      min-width: 50px;
+    }
+    
+    .timeline-label {
+      font-size: 0.6rem;
+    }
+    
+    .timeline-duration {
+      font-size: 0.55rem;
+    }
+    
+    .trace-entry {
+      padding: 0.5rem;
+    }
+    
+    .trace-time {
+      font-size: 0.7rem;
+    }
+    
+    .trace-step {
+      font-size: 0.8rem;
+    }
+    
+    .trace-message {
+      font-size: 0.8rem;
+    }
+    
+    .pagination {
+      flex-direction: column;
+      gap: 0.75rem;
+      align-items: stretch;
+    }
+    
+    .pagination-controls {
+      width: 100%;
+    }
+    
+    .pagination-controls button {
+      flex: 1;
+      min-height: 44px;
+    }
+    
+    .fixed-corner-image {
+      display: none;
     }
   }
 

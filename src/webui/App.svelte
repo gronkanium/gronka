@@ -6,6 +6,7 @@
   import Stats from './pages/Stats.svelte';
   import Health from './pages/Health.svelte';
   import Operations from './pages/Operations.svelte';
+  import OperationsDebug from './pages/OperationsDebug.svelte';
   import Logs from './pages/Logs.svelte';
   import Users from './pages/Users.svelte';
   import UserProfile from './pages/UserProfile.svelte';
@@ -129,6 +130,10 @@
       </div>
       <div class="page-content">
         <Operations />
+      </div>
+    {:else if activePage === 'operations-debug'}
+      <div class="page-content">
+        <OperationsDebug />
       </div>
     {:else if activePage === 'logs'}
       <div class="page-header">

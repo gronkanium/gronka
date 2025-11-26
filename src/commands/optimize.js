@@ -28,6 +28,7 @@ import {
   createOperation,
   updateOperationStatus,
   logOperationError,
+  logOperationStep,
 } from '../utils/operations-tracker.js';
 import { notifyCommandSuccess, notifyCommandFailure } from '../utils/ntfy-notifier.js';
 import { hashUrl } from '../utils/cobalt-queue.js';
@@ -238,7 +239,22 @@ export async function processOptimization(
     let fileBuffer = preDownloadedBuffer;
     if (!fileBuffer) {
       logger.info(`Downloading GIF: ${attachment.name}`);
+      logOperationStep(operationId, 'download_start', 'running', {
+        message: `Starting download from ${attachment.url}`,
+        metadata: {
+          sourceUrl: attachment.url,
+          attachmentType: attachment.contentType || 'image/gif',
+          expectedSize: attachment.size || null,
+        },
+      });
       fileBuffer = await downloadImage(attachment.url, adminUser);
+      logOperationStep(operationId, 'download_complete', 'success', {
+        message: 'File downloaded successfully',
+        metadata: {
+          downloadedSize: fileBuffer.length,
+          sourceUrl: attachment.url,
+        },
+      });
     }
 
     // Generate hash for the original file
@@ -260,10 +276,29 @@ export async function processOptimization(
       throw new Error('Invalid temp file path detected');
     }
 
+    // Log validation start
+    logOperationStep(operationId, 'validation_start', 'running', {
+      message: 'Validating GIF file',
+      metadata: {
+        fileName: attachment.name || 'unknown',
+        fileSize: originalSize,
+        contentType: attachment.contentType || 'image/gif',
+      },
+    });
+
     // Write validated buffer to filesystem
     // This function ensures validation happens before write so CodeQL can track the data flow
     await writeValidatedFileBuffer(tempInputPath, fileBuffer);
     tempFiles.push(tempInputPath);
+
+    // Log validation complete
+    logOperationStep(operationId, 'validation_complete', 'success', {
+      message: 'GIF file validation passed',
+      metadata: {
+        fileName: attachment.name || 'unknown',
+        fileSize: originalSize,
+      },
+    });
 
     // Generate hash for optimized file (include lossy level in hash for uniqueness)
     const hash = crypto.createHash('sha256');
@@ -277,14 +312,35 @@ export async function processOptimization(
 
     // Optimize the GIF with specified lossy level
     const optimizeOptions = lossyLevel !== null ? { lossy: lossyLevel } : {};
-    logger.info(
+    logger.debug(
       `Optimizing GIF: ${tempInputPath} -> ${optimizedGifPath}${lossyLevel !== null ? ` (lossy: ${lossyLevel})` : ''}`
     );
+
+    logOperationStep(operationId, 'optimization_start', 'running', {
+      message: 'Starting GIF optimization',
+      metadata: {
+        inputFile: attachment.name || 'unknown',
+        inputSize: originalSize,
+        inputType: attachment.contentType || 'image/gif',
+        lossyLevel: lossyLevel !== null ? lossyLevel : null,
+      },
+    });
+
     await optimizeGif(tempInputPath, optimizedGifPath, optimizeOptions);
 
     // Read optimized file and get its size
     const optimizedBuffer = await fs.readFile(optimizedGifPath);
     const optimizedSize = optimizedBuffer.length;
+
+    logOperationStep(operationId, 'optimization_complete', 'success', {
+      message: 'GIF optimization completed',
+      metadata: {
+        originalSize: originalSize,
+        optimizedSize: optimizedSize,
+        sizeReduction: calculateSizeReduction(originalSize, optimizedSize),
+        lossyLevel: lossyLevel !== null ? lossyLevel : null,
+      },
+    });
 
     // Upload optimized GIF to R2 if configured (this will also handle local storage)
     let optimizedUrl;

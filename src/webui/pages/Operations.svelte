@@ -1,7 +1,8 @@
 <script>
   import { onMount } from 'svelte';
-  import { ChevronDown, ChevronRight } from 'lucide-svelte';
+  import { ChevronDown, ChevronRight, Search } from 'lucide-svelte';
   import { operations as wsOperations, connected as wsConnected } from '../stores/websocket-store.js';
+  import { navigate } from '../utils/router.js';
 
   let operations = [];
   let error = null;
@@ -100,7 +101,13 @@
 </script>
 
 <section class="operations">
-  <h2>Recent Operations</h2>
+  <div class="header-row">
+    <h2>Recent Operations</h2>
+    <button class="advanced-search-btn" on:click={() => navigate('operations-debug')}>
+      <Search size={16} />
+      <span>advanced search</span>
+    </button>
+  </div>
   {#if error}
     <div class="error">Error: {error}</div>
   {:else if !$wsConnected}
@@ -255,13 +262,38 @@
     margin-top: 0;
   }
 
+  .header-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 0.75rem;
+    border-bottom: 1px solid #333;
+    padding-bottom: 0.5rem;
+  }
+
   h2 {
-    margin: 0 0 0.75rem 0;
+    margin: 0;
     font-size: 1.25rem;
     font-weight: 500;
     color: #fff;
-    border-bottom: 1px solid #333;
-    padding-bottom: 0.5rem;
+  }
+
+  .advanced-search-btn {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.5rem 1rem;
+    background-color: #444;
+    color: #fff;
+    border: 1px solid #555;
+    border-radius: 3px;
+    cursor: pointer;
+    font-size: 0.85rem;
+    transition: background-color 0.2s;
+  }
+
+  .advanced-search-btn:hover {
+    background-color: #555;
   }
 
   .table-container {

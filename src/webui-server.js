@@ -30,6 +30,8 @@ import {
   getUserMedia,
   getUserMediaCount,
   getRecentOperations,
+  searchOperationsByUrl,
+  getFailedOperationsByUser,
 } from './utils/database.js';
 import {
   collectSystemMetrics,
@@ -771,7 +773,151 @@ function reconstructOperationFromTrace(trace) {
   };
 }
 
-// Operation details endpoint
+// Operations search endpoint - MUST come before /api/operations/:operationId
+// Otherwise Express will match "search" as an operationId parameter
+app.get('/api/operations/search', (req, res) => {
+  try {
+    const {
+      operationId,
+      status,
+      type,
+      userId,
+      username,
+      urlPattern,
+      dateFrom,
+      dateTo,
+      minDuration,
+      maxDuration,
+      minFileSize,
+      maxFileSize,
+      failedOnly,
+      limit = 100,
+      offset = 0,
+    } = req.query;
+
+    // Start with WebSocket operations (real-time)
+    let allOperations = [...operations];
+
+    // Get operations from database (historical)
+    try {
+      const dbLimit = parseInt(limit, 10) + parseInt(offset, 10) + 100; // Get extra for filtering
+      const dbOps = getRecentOperations(dbLimit);
+      
+      // Merge with in-memory operations, avoiding duplicates
+      const existingIds = new Set(allOperations.map(op => op.id));
+      const newOps = dbOps.filter(op => !existingIds.has(op.id));
+      allOperations = [...allOperations, ...newOps];
+    } catch (error) {
+      logger.error('Failed to fetch operations from database:', error);
+      // Continue with in-memory operations only
+    }
+
+    // Apply filters
+    let filtered = allOperations;
+
+    // Operation ID search (exact match)
+    if (operationId) {
+      filtered = filtered.filter(op => op.id === operationId);
+    }
+
+    // Status filter
+    if (status) {
+      const statusArray = Array.isArray(status) ? status : [status];
+      filtered = filtered.filter(op => statusArray.includes(op.status));
+    }
+
+    // Type filter
+    if (type) {
+      const typeArray = Array.isArray(type) ? type : [type];
+      filtered = filtered.filter(op => typeArray.includes(op.type));
+    }
+
+    // User ID filter
+    if (userId) {
+      filtered = filtered.filter(op => op.userId === userId);
+    }
+
+    // Username filter
+    if (username) {
+      const usernameLower = username.toLowerCase();
+      filtered = filtered.filter(
+        op => op.username && op.username.toLowerCase().includes(usernameLower)
+      );
+    }
+
+    // URL pattern search (requires getting traces from database)
+    if (urlPattern) {
+      try {
+        const urlTraces = searchOperationsByUrl(urlPattern, 1000);
+        const urlOperationIds = new Set(urlTraces.map(trace => trace.operationId));
+        filtered = filtered.filter(op => urlOperationIds.has(op.id));
+      } catch (error) {
+        logger.error('Failed to search operations by URL:', error);
+        // Continue without URL filter if search fails
+      }
+    }
+
+    // Failed only filter
+    if (failedOnly === 'true') {
+      filtered = filtered.filter(op => op.status === 'error');
+    }
+
+    // Date range filter
+    if (dateFrom) {
+      const fromTimestamp = parseInt(dateFrom, 10);
+      filtered = filtered.filter(op => op.timestamp >= fromTimestamp);
+    }
+    if (dateTo) {
+      const toTimestamp = parseInt(dateTo, 10);
+      filtered = filtered.filter(op => op.timestamp <= toTimestamp);
+    }
+
+    // Duration filter
+    if (minDuration) {
+      const minDur = parseInt(minDuration, 10);
+      filtered = filtered.filter(
+        op => op.performanceMetrics?.duration && op.performanceMetrics.duration >= minDur
+      );
+    }
+    if (maxDuration) {
+      const maxDur = parseInt(maxDuration, 10);
+      filtered = filtered.filter(
+        op => op.performanceMetrics?.duration && op.performanceMetrics.duration <= maxDur
+      );
+    }
+
+    // File size filter
+    if (minFileSize) {
+      const minSize = parseInt(minFileSize, 10);
+      filtered = filtered.filter(op => op.fileSize && op.fileSize >= minSize);
+    }
+    if (maxFileSize) {
+      const maxSize = parseInt(maxFileSize, 10);
+      filtered = filtered.filter(op => op.fileSize && op.fileSize <= maxSize);
+    }
+
+    // Sort by timestamp (most recent first)
+    filtered.sort((a, b) => b.timestamp - a.timestamp);
+
+    // Apply pagination
+    const limitNum = parseInt(limit, 10);
+    const offsetNum = parseInt(offset, 10);
+    const paginated = filtered.slice(offsetNum, offsetNum + limitNum);
+
+    res.json({
+      operations: paginated,
+      total: filtered.length,
+    });
+  } catch (error) {
+    logger.error('Failed to search operations:', error);
+    res.status(500).json({
+      error: 'failed to search operations',
+      message: error.message,
+    });
+  }
+});
+
+// Operation details endpoint - MUST come after /api/operations/search
 app.get('/api/operations/:operationId', (req, res) => {
   try {
     const { operationId } = req.params;
@@ -790,6 +936,16 @@ app.get('/api/operations/:operationId', (req, res) => {
     // Get detailed trace from database with parsed metadata
     const trace = getOperationTrace(operationId);
 
+    // Debug logging
+    if (trace) {
+      const executionStepsCount = trace.logs.filter(
+        log => log.step !== 'created' && log.step !== 'status_update' && log.step !== 'error'
+      ).length;
+      logger.debug(`Trace retrieved for operation ${operationId}: ${trace.logs.length} total logs, ${executionStepsCount} execution steps`);
+    } else {
+      logger.debug(`No trace found for operation ${operationId}`);
+    }
+
     if (!operation && !trace) {
       return res.status(404).json({ error: 'operation not found' });
     }
@@ -802,6 +958,149 @@ app.get('/api/operations/:operationId', (req, res) => {
     logger.error('Failed to fetch operation details:', error);
     res.status(500).json({
       error: 'failed to fetch operation details',
+      message: error.message,
+    });
+  }
+});
+
+// Operation trace endpoint
+app.get('/api/operations/:operationId/trace', (req, res) => {
+  try {
+    const { operationId } = req.params;
+    const trace = getOperationTrace(operationId);
+
+    if (!trace) {
+      return res.status(404).json({ error: 'operation trace not found' });
+    }
+
+    res.json({ trace });
+  } catch (error) {
+    logger.error('Failed to fetch operation trace:', error);
+    res.status(500).json({
+      error: 'failed to fetch operation trace',
+      message: error.message,
+    });
+  }
+});
+
+// Related operations endpoint
+app.get('/api/operations/:operationId/related', (req, res) => {
+  try {
+    const { operationId } = req.params;
+    const trace = getOperationTrace(operationId);
+
+    if (!trace) {
+      return res.status(404).json({ error: 'operation not found' });
+    }
+
+    const context = trace.context || {};
+    const userId = context.userId;
+    const originalUrl = context.originalUrl;
+
+    // Get all operations
+    let allOperations = [...operations];
+    try {
+      const dbOps = getRecentOperations(1000);
+      const existingIds = new Set(allOperations.map(op => op.id));
+      const newOps = dbOps.filter(op => !existingIds.has(op.id));
+      allOperations = [...allOperations, ...newOps];
+    } catch (error) {
+      logger.error('Failed to fetch operations from database:', error);
+    }
+
+    // Find related operations (same user or same URL)
+    const related = [];
+    const seenIds = new Set([operationId]);
+    
+    for (const op of allOperations) {
+      if (seenIds.has(op.id)) continue;
+      
+      let isRelated = false;
+      
+      // Match by user ID
+      if (userId && op.userId === userId) {
+        isRelated = true;
+      }
+      
+      // Match by URL - get trace to check originalUrl
+      if (originalUrl && !isRelated) {
+        try {
+          const opTrace = getOperationTrace(op.id);
+          if (opTrace && opTrace.context && opTrace.context.originalUrl === originalUrl) {
+            isRelated = true;
+          }
+        } catch (error) {
+          // Skip if trace lookup fails
+        }
+      }
+      
+      if (isRelated) {
+        related.push(op);
+        seenIds.add(op.id);
+        if (related.length >= 10) break; // Limit to 10
+      }
+    }
+
+    // Sort by timestamp
+    related.sort((a, b) => b.timestamp - a.timestamp);
+
+    res.json({ operations: related });
+  } catch (error) {
+    logger.error('Failed to fetch related operations:', error);
+    res.status(500).json({
+      error: 'failed to fetch related operations',
+      message: error.message,
+    });
+  }
+});
+
+// Error analysis endpoint
+app.get('/api/operations/errors/analysis', (req, res) => {
+  try {
+    // Get all operations with errors
+    let allOperations = [...operations];
+    try {
+      const dbOps = getRecentOperations(1000);
+      const existingIds = new Set(allOperations.map(op => op.id));
+      const newOps = dbOps.filter(op => !existingIds.has(op.id));
+      allOperations = [...allOperations, ...newOps];
+    } catch (error) {
+      logger.error('Failed to fetch operations from database:', error);
+    }
+
+    // Filter to only error operations
+    const errorOps = allOperations.filter(op => op.status === 'error' && op.error);
+
+    // Group by error message pattern (normalize for grouping)
+    const errorGroups = new Map();
+    
+    errorOps.forEach(op => {
+      const errorMsg = op.error || 'unknown error';
+      // Normalize error message for grouping (remove specific details like IDs, timestamps)
+      const normalized = errorMsg
+        .replace(/\d+/g, 'N')
+        .replace(/[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}/gi, 'UUID')
+        .substring(0, 200); // Limit length
+      
+      if (!errorGroups.has(normalized)) {
+        errorGroups.set(normalized, {
+          pattern: errorMsg.substring(0, 150), // Use first 150 chars of original as pattern
+          count: 0,
+        });
+      }
+      errorGroups.get(normalized).count++;
+    });
+
+    // Convert to array and sort by count
+    const groups = Array.from(errorGroups.values())
+      .sort((a, b) => b.count - a.count)
+      .slice(0, 20); // Top 20 error patterns
+
+    res.json({ groups });
+  } catch (error) {
+    logger.error('Failed to analyze errors:', error);
+    res.status(500).json({
+      error: 'failed to analyze errors',
       message: error.message,
     });
   }
@@ -1074,8 +1373,8 @@ export function broadcastUserMetrics(userId, metrics) {
   });
 }
 
-// Set the broadcast callback in operations tracker
-setBroadcastCallback(broadcastOperation);
+// Set the broadcast callback in operations tracker (with instance port)
+setBroadcastCallback(broadcastOperation, WEBUI_PORT);
 
 // Set the log broadcast callback
 setLogBroadcastCallback(broadcastLog);
@@ -1086,8 +1385,8 @@ setSystemMetricsBroadcastCallback(broadcastSystemMetrics);
 // Set the alert broadcast callback
 setAlertBroadcastCallback(broadcastAlert);
 
-// Set the user metrics broadcast callback
-setUserMetricsBroadcastCallback(broadcastUserMetrics);
+// Set the user metrics broadcast callback (with instance port)
+setUserMetricsBroadcastCallback(broadcastUserMetrics, WEBUI_PORT);
 
 // Clean up dead connections
 function cleanupDeadConnections() {

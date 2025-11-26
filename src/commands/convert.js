@@ -28,8 +28,14 @@ import {
   getImagePath,
   cleanupTempFiles,
   saveGif,
+  shouldUploadToDiscord,
 } from '../utils/storage.js';
-import { uploadGifToR2 } from '../utils/r2-storage.js';
+import {
+  uploadGifToR2,
+  downloadGifFromR2,
+  gifExistsInR2,
+  getR2PublicUrl,
+} from '../utils/r2-storage.js';
 import { getUserConfig } from '../utils/user-config.js';
 import { trackRecentConversion } from '../utils/user-tracking.js';
 import { optimizeGif } from '../utils/gif-optimizer.js';
@@ -418,30 +424,130 @@ export async function processConversion(
     if (exists && !options.optimize) {
       logger.info(`GIF already exists (hash: ${hash}) for user ${userId}`);
       logOperationStep(operationId, 'gif_cache_hit', 'success', {
-        message: 'GIF already exists, returning cached result',
+        message: 'GIF already exists, checking if should upload to Discord',
         metadata: { hash: hash.substring(0, 8) + '...' },
       });
-      // Get file size for existing GIF
-      const gifPath = getGifPath(hash, GIF_STORAGE_PATH);
-      let gifUrl;
+
+      // Read the GIF file from R2 or local disk
+      let gifBuffer = null;
       let fileSize = 0;
-      if (gifPath.startsWith('http://') || gifPath.startsWith('https://')) {
-        // Already an R2 URL
-        gifUrl = gifPath;
-        // Can't stat R2 URLs, use 0 as placeholder
-        fileSize = 0;
-      } else {
-        // Local path, construct URL
-        gifUrl = `${CDN_BASE_URL}/${hash}.gif`;
-        const stats = await fs.stat(gifPath);
-        fileSize = stats.size;
+      let existsInR2 = false;
+
+      // Check if file exists in R2
+      if (
+        r2Config.accountId &&
+        r2Config.accessKeyId &&
+        r2Config.secretAccessKey &&
+        r2Config.bucketName
+      ) {
+        existsInR2 = await gifExistsInR2(hash, r2Config);
+        if (existsInR2) {
+          try {
+            gifBuffer = await downloadGifFromR2(hash, r2Config);
+            fileSize = gifBuffer.length;
+          } catch (error) {
+            logger.warn(`Failed to download GIF from R2, trying local disk: ${error.message}`);
+            existsInR2 = false;
+          }
+        }
       }
-      updateOperationStatus(operationId, 'success', { fileSize });
-      recordRateLimit(userId);
-      await interaction.editReply({
-        content: gifUrl,
-      });
-      return;
+
+      // If not in R2 or download failed, try local disk
+      if (!gifBuffer) {
+        const gifPath = getGifPath(hash, GIF_STORAGE_PATH);
+        try {
+          gifBuffer = await fs.readFile(gifPath);
+          fileSize = gifBuffer.length;
+        } catch (error) {
+          logger.error(`Failed to read GIF from local disk: ${error.message}`);
+          // Fallback: return R2 URL if it exists in R2, otherwise construct CDN URL
+          const gifUrl = existsInR2
+            ? getR2PublicUrl(`gifs/${hash.replace(/[^a-f0-9]/gi, '')}.gif`, r2Config)
+            : `${CDN_BASE_URL}/${hash}.gif`;
+          updateOperationStatus(operationId, 'success', { fileSize: 0 });
+          recordRateLimit(userId);
+          await interaction.editReply({
+            content: gifUrl,
+          });
+          return;
+        }
+      }
+
+      // Check if file should be uploaded to Discord (< 8MB)
+      if (shouldUploadToDiscord(gifBuffer)) {
+        logger.info(
+          `Cached GIF is small enough for Discord (${(fileSize / (1024 * 1024)).toFixed(2)}MB), uploading to Discord`
+        );
+        logOperationStep(operationId, 'discord_upload', 'running', {
+          message: 'Uploading cached GIF to Discord',
+          metadata: { fileSize },
+        });
+
+        const safeHash = hash.replace(/[^a-f0-9]/gi, '');
+        const filename = `${safeHash}.gif`;
+        try {
+          await interaction.editReply({
+            files: [new AttachmentBuilder(gifBuffer, { name: filename })],
+          });
+          logOperationStep(operationId, 'discord_upload', 'success', {
+            message: 'Cached GIF uploaded to Discord successfully',
+          });
+          updateOperationStatus(operationId, 'success', { fileSize });
+          recordRateLimit(userId);
+          await notifyCommandSuccess(username, 'convert', { operationId, userId });
+          return;
+        } catch (discordError) {
+          // Discord upload failed, fallback to R2 URL
+          logger.warn(
+            `Discord attachment upload failed for cached GIF, falling back to R2 URL: ${discordError.message}`
+          );
+          logOperationStep(operationId, 'discord_upload', 'error', {
+            message: 'Discord upload failed, falling back to R2 URL',
+            metadata: { error: discordError.message },
+          });
+
+          // Upload to R2 as fallback
+          try {
+            const r2Url = await uploadGifToR2(gifBuffer, hash, r2Config, buildMetadata());
+            if (r2Url) {
+              updateOperationStatus(operationId, 'success', { fileSize });
+              recordRateLimit(userId);
+              await interaction.editReply({
+                content: r2Url,
+              });
+              await notifyCommandSuccess(username, 'convert', { operationId, userId });
+              return;
+            }
+          } catch (r2Error) {
+            logger.error(`R2 fallback upload also failed: ${r2Error.message}`);
+          }
+
+          // Last resort: construct CDN URL
+          const gifUrl = `${CDN_BASE_URL}/${hash}.gif`;
+          updateOperationStatus(operationId, 'success', { fileSize });
+          recordRateLimit(userId);
+          await interaction.editReply({
+            content: gifUrl,
+          });
+          await notifyCommandSuccess(username, 'convert', { operationId, userId });
+          return;
+        }
+      } else {
+        // File is >= 8MB, return R2 URL or CDN URL
+        logger.info(
+          `Cached GIF is too large for Discord (${(fileSize / (1024 * 1024)).toFixed(2)}MB), returning URL`
+        );
+        const gifUrl = existsInR2
+          ? getR2PublicUrl(`gifs/${hash.replace(/[^a-f0-9]/gi, '')}.gif`, r2Config)
+          : `${CDN_BASE_URL}/${hash}.gif`;
+        updateOperationStatus(operationId, 'success', { fileSize });
+        recordRateLimit(userId);
+        await interaction.editReply({
+          content: gifUrl,
+        });
+        await notifyCommandSuccess(username, 'convert', { operationId, userId });
+        return;
+      }
     }
 
     logOperationStep(operationId, 'validation_complete', 'success', {
@@ -632,7 +738,7 @@ export async function processConversion(
               await convertImageToGif(tempFilePath, gifPath, {
                 width: targetWidth,
                 quality:
-                  options.quality ?? (userConfig.quality !== null ? userConfig.quality : 'medium'),
+                  options.quality ?? (userConfig.quality !== null ? userConfig.quality : 'high'),
               });
               logOperationStep(operationId, 'conversion_complete', 'success', {
                 message: 'GIF resized and converted',
@@ -647,7 +753,7 @@ export async function processConversion(
                 options.width ??
                 (userConfig.width !== null ? userConfig.width : Math.min(MAX_GIF_WIDTH, 720)),
               quality:
-                options.quality ?? (userConfig.quality !== null ? userConfig.quality : 'medium'),
+                options.quality ?? (userConfig.quality !== null ? userConfig.quality : 'high'),
             });
             logOperationStep(operationId, 'conversion_complete', 'success', {
               message: 'Image to GIF conversion completed (fallback)',
@@ -659,8 +765,7 @@ export async function processConversion(
             width:
               options.width ??
               (userConfig.width !== null ? userConfig.width : Math.min(MAX_GIF_WIDTH, 720)),
-            quality:
-              options.quality ?? (userConfig.quality !== null ? userConfig.quality : 'medium'),
+            quality: options.quality ?? (userConfig.quality !== null ? userConfig.quality : 'high'),
           });
           logOperationStep(operationId, 'conversion_complete', 'success', {
             message: 'Image to GIF conversion completed',

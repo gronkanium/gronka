@@ -201,6 +201,13 @@
       const response = await fetch(`/api/operations/${operationId}`);
       if (!response.ok) throw new Error('failed to fetch operation trace');
       const data = await response.json();
+      console.log('Operation trace API response:', {
+        operationId,
+        hasTrace: !!data.trace,
+        traceLogsCount: data.trace?.logs?.length || 0,
+        executionStepsCount: data.trace?.logs?.filter(log => log.step !== 'created' && log.step !== 'status_update' && log.step !== 'error').length || 0,
+        trace: data.trace,
+      });
       operationTrace = data.trace;
     } catch (err) {
       console.error('Failed to fetch operation trace:', err);
@@ -335,22 +342,24 @@
           <table class="operations-table">
             <thead>
               <tr>
-                <th>type</th>
-                <th>status</th>
-                <th>time</th>
-                <th>file size</th>
-                <th>error</th>
-                <th>actions</th>
+                <th class="col-type">type</th>
+                <th class="col-status">status</th>
+                <th class="col-time">time</th>
+                <th class="col-size">file size</th>
+                <th class="col-error">error</th>
+                <th class="col-actions">actions</th>
               </tr>
             </thead>
             <tbody>
               {#each operations as operation}
                 <tr class:error={operation.status === 'error'} class:selected={selectedOperationId === operation.id}>
                   <td class="op-type">{operation.type}</td>
-                  <td><span class="operation-status status-{operation.status}">{operation.status}</span></td>
+                  <td class="op-status">
+                    <span class="operation-status status-{operation.status}">{operation.status}</span>
+                  </td>
                   <td class="op-time">{formatRelativeTime(operation.timestamp)}</td>
                   <td class="op-size">{operation.fileSize ? formatBytes(operation.fileSize) : '—'}</td>
-                  <td class="op-error">{operation.error || '—'}</td>
+                  <td class="op-error" class:has-error={operation.error}>{operation.error || '—'}</td>
                   <td class="op-actions">
                     <button 
                       class="trace-btn" 
@@ -458,36 +467,46 @@
             </div>
 
             <div class="trace-steps">
-              <h4>execution steps ({operationTrace.logs.filter(log => log.step !== 'created' && log.step !== 'status_update' && log.step !== 'error').length})</h4>
-              <div class="steps-list">
-                {#each operationTrace.logs.filter(log => log.step !== 'created' && log.step !== 'status_update' && log.step !== 'error') as log}
-                  <div class="trace-step" class:error={log.status === 'error'}>
-                    <div class="step-header">
-                      <span class="step-name">{log.step}</span>
-                      <span class="step-status status-{log.status}">{log.status}</span>
-                      <span class="step-time">{formatRelativeTime(log.timestamp)}</span>
+              {#if operationTrace.logs}
+                {@const executionSteps = operationTrace.logs.filter(log => log.step !== 'created' && log.step !== 'status_update' && log.step !== 'error')}
+                <h4>execution steps ({executionSteps.length})</h4>
+                {#if executionSteps.length > 0}
+                  <div class="steps-list">
+                    {#each executionSteps as log}
+                    <div class="trace-step" class:error={log.status === 'error'}>
+                      <div class="step-header">
+                        <span class="step-name">{log.step}</span>
+                        <span class="step-status status-{log.status}">{log.status}</span>
+                        <span class="step-time">{formatRelativeTime(log.timestamp)}</span>
+                      </div>
+                      {#if log.message}
+                        <div class="step-message">{log.message}</div>
+                      {/if}
+                      {#if log.metadata}
+                        <details class="step-metadata">
+                          <summary>metadata</summary>
+                          <pre class="metadata-content">{formatMetadata(log.metadata)}</pre>
+                        </details>
+                      {/if}
+                      {#if log.stack_trace}
+                        <details class="step-stack">
+                          <summary>stack trace</summary>
+                          <pre class="stack-content">{log.stack_trace}</pre>
+                        </details>
+                      {/if}
+                      {#if log.file_path}
+                        <div class="step-file">file: {log.file_path}</div>
+                      {/if}
                     </div>
-                    {#if log.message}
-                      <div class="step-message">{log.message}</div>
-                    {/if}
-                    {#if log.metadata}
-                      <details class="step-metadata">
-                        <summary>metadata</summary>
-                        <pre class="metadata-content">{formatMetadata(log.metadata)}</pre>
-                      </details>
-                    {/if}
-                    {#if log.stack_trace}
-                      <details class="step-stack">
-                        <summary>stack trace</summary>
-                        <pre class="stack-content">{log.stack_trace}</pre>
-                      </details>
-                    {/if}
-                    {#if log.file_path}
-                      <div class="step-file">file: {log.file_path}</div>
-                    {/if}
+                    {/each}
                   </div>
-                {/each}
-              </div>
+                {:else}
+                  <div class="empty-state">no execution steps available for this operation</div>
+                {/if}
+              {:else}
+                <h4>execution steps (0)</h4>
+                <div class="empty-state">no execution steps available for this operation</div>
+              {/if}
             </div>
 
             {#if operationTrace.errorSteps.length > 0}
@@ -755,6 +774,7 @@
     width: 100%;
     border-collapse: collapse;
     font-size: 0.85rem;
+    table-layout: fixed;
   }
 
   .operations-table thead {
@@ -770,6 +790,36 @@
     font-size: 0.8rem;
     text-transform: uppercase;
     letter-spacing: 0.5px;
+    vertical-align: middle;
+  }
+
+  .operations-table th.col-type {
+    width: 10%;
+  }
+
+  .operations-table th.col-status {
+    width: 12%;
+  }
+
+  .operations-table th.col-time {
+    width: 10%;
+  }
+
+  .operations-table th.col-size {
+    width: 12%;
+  }
+
+  .operations-table th.col-error {
+    width: 36%;
+    padding: 0.5rem;
+    padding-left: 0.5rem;
+    padding-right: 0.5rem;
+    text-align: left !important;
+    margin: 0;
+  }
+
+  .operations-table th.col-actions {
+    width: 20%;
   }
 
   .operations-table tbody tr {
@@ -784,34 +834,64 @@
     background-color: rgba(255, 107, 107, 0.05);
   }
 
+  .operations-table tbody tr.error td {
+    text-align: left;
+  }
+
   .operations-table td {
     padding: 0.5rem;
     color: #e0e0e0;
+    vertical-align: middle;
+    text-align: left;
+    margin: 0;
+    border: none;
+    box-sizing: border-box;
+  }
+
+  .operations-table td > * {
+    vertical-align: middle;
   }
 
   .op-type {
     font-weight: 500;
     text-transform: capitalize;
+    text-align: left;
+  }
+
+  .op-status {
+    text-align: left;
   }
 
   .op-time {
     color: #888;
     font-size: 0.8rem;
+    text-align: left;
   }
 
   .op-size {
     color: #aaa;
     font-size: 0.8rem;
+    text-align: left;
   }
 
-  .op-error {
-    color: #ff6b6b;
+  .operations-table td.op-error {
+    text-align: left !important;
+    padding: 0.5rem;
+    padding-left: 0.5rem;
+    padding-right: 0.5rem;
+    margin: 0;
+    color: #aaa;
     font-size: 0.8rem;
     font-family: monospace;
-    max-width: 300px;
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
+    line-height: 1.4;
+    text-indent: 0;
+  }
+
+  .operations-table td.op-error.has-error {
+    color: #ff6b6b;
   }
 
   .operation-status {
@@ -821,6 +901,8 @@
     font-weight: 500;
     text-transform: uppercase;
     display: inline-block;
+    vertical-align: middle;
+    line-height: 1.4;
   }
 
   .status-pending {
@@ -1406,6 +1488,11 @@
 
   .op-actions {
     text-align: center;
+    vertical-align: middle;
+  }
+
+  .op-actions .trace-btn {
+    vertical-align: middle;
   }
 
   .trace-btn {

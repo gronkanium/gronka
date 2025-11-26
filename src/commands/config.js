@@ -49,7 +49,7 @@ export async function handleConfigCommand(interaction) {
           },
           {
             name: 'quality',
-            value: userConfig.quality !== null ? userConfig.quality : 'default (medium)',
+            value: userConfig.quality !== null ? userConfig.quality : 'default (high)',
             inline: true,
           },
           {

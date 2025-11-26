@@ -1,4 +1,4 @@
-import { S3Client, HeadObjectCommand, ListObjectsV2Command } from '@aws-sdk/client-s3';
+import { S3Client, HeadObjectCommand, ListObjectsV2Command, GetObjectCommand } from '@aws-sdk/client-s3';
 import { Upload } from '@aws-sdk/lib-storage';
 import { createLogger } from './logger.js';
 
@@ -243,6 +243,45 @@ export async function gifExistsInR2(hash, config) {
   const safeHash = hash.replace(/[^a-f0-9]/gi, '');
   const key = `gifs/${safeHash}.gif`;
   return await fileExistsInR2(key, config);
+}
+
+/**
+ * Download GIF from R2
+ * @param {string} hash - MD5 hash of the GIF
+ * @param {Object} config - R2 configuration
+ * @returns {Promise<Buffer>} GIF file buffer
+ */
+export async function downloadGifFromR2(hash, config) {
+  const client = getR2Client(config);
+  const { bucketName } = config;
+  const safeHash = hash.replace(/[^a-f0-9]/gi, '');
+  const key = `gifs/${safeHash}.gif`;
+
+  if (!bucketName) {
+    throw new Error('R2 bucketName not configured');
+  }
+
+  try {
+    const command = new GetObjectCommand({
+      Bucket: bucketName,
+      Key: key,
+    });
+
+    const response = await client.send(command);
+    
+    // Convert stream to buffer
+    const chunks = [];
+    for await (const chunk of response.Body) {
+      chunks.push(chunk);
+    }
+    const buffer = Buffer.concat(chunks);
+    
+    logger.info(`Downloaded GIF from R2: ${key} (${(buffer.length / (1024 * 1024)).toFixed(2)}MB)`);
+    return buffer;
+  } catch (error) {
+    logger.error(`Failed to download GIF from R2 (${key}):`, error.message);
+    throw error;
+  }
 }
 
 /**

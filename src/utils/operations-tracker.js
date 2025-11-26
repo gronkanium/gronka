@@ -22,28 +22,36 @@ const MAX_OPERATIONS = 100;
 // Logger for application logs
 const logger = createLogger('bot');
 
-// Callback for broadcasting updates (set by webui-server)
-let broadcastCallback = null;
-let userMetricsBroadcastCallback = null;
+// Callback registry for broadcasting updates (set by webui-server)
+// Keyed by WebUI port to support multiple instances
+const broadcastCallbacks = new Map();
+const userMetricsBroadcastCallbacks = new Map();
+
+// Store current bot instance's WebUI port (mapped from TEST_WEBUI_PORT or PROD_WEBUI_PORT by bot-start.js)
+const instancePort = parseInt(process.env.WEBUI_PORT || '3001', 10);
 
 // WebUI URL for sending operation updates (from bot to webui)
 // Since webui is now in the same container, use localhost (fallback for HTTP mode)
-const WEBUI_URL = process.env.WEBUI_URL || process.env.WEBUI_SERVER_URL || 'http://localhost:3001';
+const WEBUI_URL = process.env.WEBUI_URL || process.env.WEBUI_SERVER_URL || `http://localhost:${instancePort}`;
 
 /**
  * Set the broadcast callback for websocket updates
  * @param {Function} callback - Function to call when operations change
+ * @param {number} [port] - WebUI port to register this callback for (defaults to current instance port)
  */
-export function setBroadcastCallback(callback) {
-  broadcastCallback = callback;
+export function setBroadcastCallback(callback, port = null) {
+  const targetPort = port || instancePort;
+  broadcastCallbacks.set(targetPort, callback);
 }
 
 /**
  * Set the broadcast callback for user metrics updates
  * @param {Function} callback - Function to call when user metrics change
+ * @param {number} [port] - WebUI port to register this callback for (defaults to current instance port)
  */
-export function setUserMetricsBroadcastCallback(callback) {
-  userMetricsBroadcastCallback = callback;
+export function setUserMetricsBroadcastCallback(callback, port = null) {
+  const targetPort = port || instancePort;
+  userMetricsBroadcastCallbacks.set(targetPort, callback);
 }
 
 /**
@@ -51,10 +59,11 @@ export function setUserMetricsBroadcastCallback(callback) {
  * @param {Object} operation - Operation object to broadcast
  */
 async function broadcastUpdate(operation) {
-  // If callback is set (webui-server), use it (same process)
-  if (broadcastCallback) {
+  // Try to find callback for this instance's port (same process)
+  const callback = broadcastCallbacks.get(instancePort);
+  if (callback) {
     try {
-      broadcastCallback(operation);
+      callback(operation);
     } catch (error) {
       console.error('Error broadcasting operation update:', error);
     }
@@ -383,10 +392,11 @@ async function updateUserMetricsForOperation(operation) {
     }
 
     // Broadcast user metrics update
-    if (userMetricsBroadcastCallback) {
+    const userMetricsCallback = userMetricsBroadcastCallbacks.get(instancePort);
+    if (userMetricsCallback) {
       // Callback is set (webui-server in same process)
       try {
-        userMetricsBroadcastCallback(operation.userId, updatedMetrics);
+        userMetricsCallback(operation.userId, updatedMetrics);
       } catch (error) {
         console.error('Error broadcasting user metrics:', error);
       }

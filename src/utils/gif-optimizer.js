@@ -293,15 +293,15 @@ export async function optimizeGif(inputPath, outputPath, options = {}) {
       logger.warn(`This may cause issues if --volumes-from cannot access volumes`);
     }
 
-    logger.info(`Path conversion - cwd: ${cwd}, normalizedCwd: ${normalizedCwd}`);
-    logger.info(`Path conversion - input: ${inputAbsPath} -> ${inputDockerPath}`);
-    logger.info(`Path conversion - output: ${outputAbsPath} -> ${outputDockerPath}`);
-    logger.info(`Output directory created on host: ${outputDir}`);
-    logger.info(`Creating output directory in container: ${outputDirDockerPath}`);
-    logger.info(`Shell command: ${shellCommand}`);
-    logger.info(`Docker args count: ${dockerArgs.length}`);
-    logger.info(`Docker args: ${JSON.stringify(dockerArgs)}`);
-    logger.info(
+    logger.debug(`Path conversion - cwd: ${cwd}, normalizedCwd: ${normalizedCwd}`);
+    logger.debug(`Path conversion - input: ${inputAbsPath} -> ${inputDockerPath}`);
+    logger.debug(`Path conversion - output: ${outputAbsPath} -> ${outputDockerPath}`);
+    logger.debug(`Output directory created on host: ${outputDir}`);
+    logger.debug(`Creating output directory in container: ${outputDirDockerPath}`);
+    logger.debug(`Shell command: ${shellCommand}`);
+    logger.debug(`Docker args count: ${dockerArgs.length}`);
+    logger.debug(`Docker args: ${JSON.stringify(dockerArgs)}`);
+    logger.debug(
       `Executing: docker ${dockerArgs.map(arg => (arg.includes(' ') ? `"${arg}"` : arg)).join(' ')}`
     );
     const { stdout, stderr } = await new Promise((resolve, reject) => {
@@ -341,7 +341,7 @@ export async function optimizeGif(inputPath, outputPath, options = {}) {
     if (stdout) {
       logger.info(`giflossy stdout: ${stdout}`);
     } else {
-      logger.info(`giflossy stdout: (empty)`);
+      logger.debug(`giflossy stdout: (empty)`);
     }
 
     if (stderr) {

@@ -398,32 +398,32 @@
       <label>level:</label>
       <div class="level-toggles">
         <button
-          class="level-btn error"
+          class="level-btn-icon-text error"
           class:active={selectedLevels.includes('ERROR')}
           on:click={() => handleLevelToggle('ERROR')}
         >
-          error
+          <span class="level-icon">●</span><span class="level-text">err</span>
         </button>
         <button
-          class="level-btn warn"
+          class="level-btn-icon-text warn"
           class:active={selectedLevels.includes('WARN')}
           on:click={() => handleLevelToggle('WARN')}
         >
-          warn
+          <span class="level-icon">●</span><span class="level-text">wrn</span>
         </button>
         <button
-          class="level-btn info"
+          class="level-btn-icon-text info"
           class:active={selectedLevels.includes('INFO')}
           on:click={() => handleLevelToggle('INFO')}
         >
-          info
+          <span class="level-icon">●</span><span class="level-text">inf</span>
         </button>
         <button
-          class="level-btn debug"
+          class="level-btn-icon-text debug"
           class:active={selectedLevels.includes('DEBUG')}
           on:click={() => handleLevelToggle('DEBUG')}
         >
-          debug
+          <span class="level-icon">●</span><span class="level-text">dbg</span>
         </button>
       </div>
     </div>
@@ -677,47 +677,593 @@
   .level-toggles {
     display: flex;
     gap: 0.15rem;
+    align-items: center;
   }
 
   .level-btn {
-    padding: 0.25rem 0.5rem;
-    font-size: 0.75rem;
-    border: 1px solid #444;
-    background-color: #2a2a2a;
-    color: #888;
+    padding: 0.15rem 0.3rem !important;
+    font-size: 0.65rem !important;
+    border: 1px solid #444 !important;
+    background-color: #2a2a2a !important;
+    color: #888 !important;
     cursor: pointer;
-    border-radius: 3px;
-    text-transform: uppercase;
-    font-weight: 500;
-    min-width: 50px;
-    text-align: center;
-    white-space: nowrap;
-    overflow: hidden;
+    border-radius: 3px !important;
+    text-transform: uppercase !important;
+    font-weight: 500 !important;
+    height: 20px !important;
+    min-height: 20px !important;
+    max-height: 20px !important;
+    line-height: 1 !important;
+    box-sizing: border-box !important;
+    text-align: center !important;
+    white-space: nowrap !important;
+    overflow: hidden !important;
+    text-overflow: ellipsis !important;
+    display: inline-flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    width: 40px !important;
+    min-width: 40px !important;
+    max-width: 40px !important;
+    flex-shrink: 0 !important;
+    margin: 0 !important;
   }
 
   .level-btn:hover {
-    background-color: #333;
+    background-color: #333 !important;
+    height: 20px !important;
+    min-height: 20px !important;
+    max-height: 20px !important;
+    width: 40px !important;
+    min-width: 40px !important;
+    max-width: 40px !important;
   }
 
   .level-btn.active {
-    border-color: currentColor;
-    background-color: rgba(255, 255, 255, 0.1);
+    border-color: currentColor !important;
+    background-color: rgba(255, 255, 255, 0.1) !important;
+    height: 20px !important;
+    min-height: 20px !important;
+    max-height: 20px !important;
+    width: 40px !important;
+    min-width: 40px !important;
+    max-width: 40px !important;
   }
 
   .level-btn.error.active {
-    color: #ff6b6b;
+    color: #ff6b6b !important;
+    height: 20px !important;
+    min-height: 20px !important;
+    max-height: 20px !important;
+    width: 40px !important;
+    min-width: 40px !important;
+    max-width: 40px !important;
   }
 
   .level-btn.warn.active {
-    color: #ffd93d;
+    color: #ffd93d !important;
+    height: 20px !important;
+    min-height: 20px !important;
+    max-height: 20px !important;
+    width: 40px !important;
+    min-width: 40px !important;
+    max-width: 40px !important;
   }
 
   .level-btn.info.active {
-    color: #51cf66;
+    color: #51cf66 !important;
+    height: 20px !important;
+    min-height: 20px !important;
+    max-height: 20px !important;
+    width: 40px !important;
+    min-width: 40px !important;
+    max-width: 40px !important;
   }
 
   .level-btn.debug.active {
+    color: #888 !important;
+    height: 20px !important;
+    min-height: 20px !important;
+    max-height: 20px !important;
+    width: 40px !important;
+    min-width: 40px !important;
+    max-width: 40px !important;
+  }
+
+  /* Style Demo Section */
+  .style-demo-section {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 0.75rem;
+    padding: 1rem;
+    background-color: #1a1a1a;
+    border: 1px solid #444;
+    border-radius: 3px;
+    margin-bottom: 0.75rem;
+  }
+
+  .style-demo-container {
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+    width: 100%;
+  }
+
+  .style-demo-item {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+  }
+
+  .style-demo-label {
+    font-size: 0.75rem;
     color: #888;
+    font-weight: 500;
+  }
+
+  /* Option 1: Icon-only buttons */
+  .style-option-1 {
+    gap: 0.25rem;
+  }
+
+  .level-btn-icon-only {
+    width: 20px !important;
+    height: 20px !important;
+    min-width: 20px !important;
+    max-width: 20px !important;
+    min-height: 20px !important;
+    max-height: 20px !important;
+    padding: 0 !important;
+    border: 1px solid #444 !important;
+    background-color: #2a2a2a !important;
+    cursor: pointer;
+    border-radius: 50% !important;
+    font-size: 0.65rem !important;
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    color: #666 !important;
+    transition: background-color 0.2s;
+    box-sizing: border-box !important;
+    flex-shrink: 0 !important;
+    margin: 0 !important;
+  }
+
+  .level-btn-icon-only:hover {
+    background-color: #333 !important;
+    width: 20px !important;
+    height: 20px !important;
+    min-width: 20px !important;
+    max-width: 20px !important;
+    min-height: 20px !important;
+    max-height: 20px !important;
+  }
+
+  .level-btn-icon-only.error {
+    border-color: #ff6b6b;
+    color: #ff6b6b;
+  }
+
+  .level-btn-icon-only.warn {
+    border-color: #ffd93d;
+    color: #ffd93d;
+  }
+
+  .level-btn-icon-only.info {
+    border-color: #51cf66;
+    color: #51cf66;
+  }
+
+  .level-btn-icon-only.debug {
+    border-color: #888;
+    color: #888;
+  }
+
+  .level-btn-icon-only.active {
+    background-color: rgba(255, 255, 255, 0.15) !important;
+    box-shadow: 0 0 4px currentColor !important;
+    width: 20px !important;
+    height: 20px !important;
+    min-width: 20px !important;
+    max-width: 20px !important;
+    min-height: 20px !important;
+    max-height: 20px !important;
+  }
+
+  /* Option 2: Compact badges */
+  .style-option-2 {
+    gap: 0.15rem;
+  }
+
+  .level-btn-compact {
+    padding: 0.15rem 0.3rem !important;
+    font-size: 0.65rem !important;
+    border: 1px solid #444 !important;
+    background-color: #2a2a2a !important;
+    color: #888 !important;
+    cursor: pointer;
+    border-radius: 2px !important;
+    text-transform: uppercase !important;
+    font-weight: 500 !important;
+    white-space: nowrap !important;
+    transition: background-color 0.2s, border-color 0.2s, color 0.2s;
+    height: 20px !important;
+    min-height: 20px !important;
+    max-height: 20px !important;
+    line-height: 1 !important;
+    box-sizing: border-box !important;
+    display: inline-flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    width: 40px !important;
+    min-width: 40px !important;
+    max-width: 40px !important;
+    flex-shrink: 0 !important;
+    margin: 0 !important;
+  }
+
+  .level-btn-compact:hover {
+    background-color: #333 !important;
+    height: 20px !important;
+    min-height: 20px !important;
+    max-height: 20px !important;
+    width: 40px !important;
+    min-width: 40px !important;
+    max-width: 40px !important;
+  }
+
+  .level-btn-compact.active {
+    border-color: currentColor !important;
+    background-color: rgba(255, 255, 255, 0.1) !important;
+    height: 20px !important;
+    min-height: 20px !important;
+    max-height: 20px !important;
+    width: 40px !important;
+    min-width: 40px !important;
+    max-width: 40px !important;
+  }
+
+  .level-btn-compact.error.active {
+    color: #ff6b6b !important;
+    height: 20px !important;
+    min-height: 20px !important;
+    max-height: 20px !important;
+    width: 40px !important;
+    min-width: 40px !important;
+    max-width: 40px !important;
+  }
+
+  .level-btn-compact.warn.active {
+    color: #ffd93d !important;
+    height: 20px !important;
+    min-height: 20px !important;
+    max-height: 20px !important;
+    width: 40px !important;
+    min-width: 40px !important;
+    max-width: 40px !important;
+  }
+
+  .level-btn-compact.info.active {
+    color: #51cf66 !important;
+    height: 20px !important;
+    min-height: 20px !important;
+    max-height: 20px !important;
+    width: 40px !important;
+    min-width: 40px !important;
+    max-width: 40px !important;
+  }
+
+  .level-btn-compact.debug.active {
+    color: #888 !important;
+    height: 20px !important;
+    min-height: 20px !important;
+    max-height: 20px !important;
+    width: 40px !important;
+    min-width: 40px !important;
+    max-width: 40px !important;
+  }
+
+  /* Option 4: Segmented control */
+  .style-option-4 {
+    gap: 0;
+    border: 1px solid #444;
+    border-radius: 3px;
+    display: inline-flex;
+    overflow: hidden;
+  }
+
+  .level-btn-segmented {
+    padding: 0.15rem 0.3rem !important;
+    font-size: 0.65rem !important;
+    border: none !important;
+    border-right: 1px solid #444 !important;
+    background-color: #2a2a2a !important;
+    color: #888 !important;
+    cursor: pointer;
+    text-transform: uppercase !important;
+    font-weight: 500 !important;
+    white-space: nowrap !important;
+    transition: background-color 0.2s, color 0.2s;
+    height: 20px !important;
+    min-height: 20px !important;
+    max-height: 20px !important;
+    line-height: 1 !important;
+    box-sizing: border-box !important;
+    display: inline-flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    width: 40px !important;
+    min-width: 40px !important;
+    max-width: 40px !important;
+    flex-shrink: 0 !important;
+    margin: 0 !important;
+  }
+
+  .level-btn-segmented:last-child {
+    border-right: none;
+  }
+
+  .level-btn-segmented:hover {
+    background-color: #333 !important;
+    height: 20px !important;
+    min-height: 20px !important;
+    max-height: 20px !important;
+    width: 40px !important;
+    min-width: 40px !important;
+    max-width: 40px !important;
+  }
+
+  .level-btn-segmented.active {
+    background-color: rgba(255, 255, 255, 0.1) !important;
+    height: 20px !important;
+    min-height: 20px !important;
+    max-height: 20px !important;
+    width: 40px !important;
+    min-width: 40px !important;
+    max-width: 40px !important;
+  }
+
+  .level-btn-segmented.error.active {
+    color: #ff6b6b !important;
+    background-color: rgba(255, 107, 107, 0.15) !important;
+    height: 20px !important;
+    min-height: 20px !important;
+    max-height: 20px !important;
+    width: 40px !important;
+    min-width: 40px !important;
+    max-width: 40px !important;
+  }
+
+  .level-btn-segmented.warn.active {
+    color: #ffd93d !important;
+    background-color: rgba(255, 217, 61, 0.15) !important;
+    height: 20px !important;
+    min-height: 20px !important;
+    max-height: 20px !important;
+    width: 40px !important;
+    min-width: 40px !important;
+    max-width: 40px !important;
+  }
+
+  .level-btn-segmented.info.active {
+    color: #51cf66 !important;
+    background-color: rgba(81, 207, 102, 0.15) !important;
+    height: 20px !important;
+    min-height: 20px !important;
+    max-height: 20px !important;
+    width: 40px !important;
+    min-width: 40px !important;
+    max-width: 40px !important;
+  }
+
+  .level-btn-segmented.debug.active {
+    color: #888 !important;
+    background-color: rgba(136, 136, 136, 0.15) !important;
+    height: 20px !important;
+    min-height: 20px !important;
+    max-height: 20px !important;
+    width: 40px !important;
+    min-width: 40px !important;
+    max-width: 40px !important;
+  }
+
+  /* Option 5: Minimal pills */
+  .style-option-5 {
+    gap: 0.15rem;
+  }
+
+  .level-btn-minimal {
+    padding: 0.15rem 0.3rem !important;
+    font-size: 0.65rem !important;
+    border: 1px solid #444 !important;
+    background-color: #2a2a2a !important;
+    color: #888 !important;
+    cursor: pointer;
+    border-radius: 8px !important;
+    text-transform: uppercase !important;
+    font-weight: 500 !important;
+    white-space: nowrap !important;
+    transition: background-color 0.2s, border-color 0.2s, color 0.2s;
+    height: 20px !important;
+    min-height: 20px !important;
+    max-height: 20px !important;
+    line-height: 1 !important;
+    box-sizing: border-box !important;
+    display: inline-flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    width: 40px !important;
+    min-width: 40px !important;
+    max-width: 40px !important;
+    flex-shrink: 0 !important;
+    margin: 0 !important;
+  }
+
+  .level-btn-minimal:hover {
+    background-color: #333 !important;
+    height: 20px !important;
+    min-height: 20px !important;
+    max-height: 20px !important;
+    width: 40px !important;
+    min-width: 40px !important;
+    max-width: 40px !important;
+  }
+
+  .level-btn-minimal.active {
+    border-color: currentColor !important;
+    background-color: rgba(255, 255, 255, 0.1) !important;
+    height: 20px !important;
+    min-height: 20px !important;
+    max-height: 20px !important;
+    width: 40px !important;
+    min-width: 40px !important;
+    max-width: 40px !important;
+  }
+
+  .level-btn-minimal.error.active {
+    color: #ff6b6b !important;
+    height: 20px !important;
+    min-height: 20px !important;
+    max-height: 20px !important;
+    width: 40px !important;
+    min-width: 40px !important;
+    max-width: 40px !important;
+  }
+
+  .level-btn-minimal.warn.active {
+    color: #ffd93d !important;
+    height: 20px !important;
+    min-height: 20px !important;
+    max-height: 20px !important;
+    width: 40px !important;
+    min-width: 40px !important;
+    max-width: 40px !important;
+  }
+
+  .level-btn-minimal.info.active {
+    color: #51cf66 !important;
+    height: 20px !important;
+    min-height: 20px !important;
+    max-height: 20px !important;
+    width: 40px !important;
+    min-width: 40px !important;
+    max-width: 40px !important;
+  }
+
+  .level-btn-minimal.debug.active {
+    color: #888 !important;
+    height: 20px !important;
+    min-height: 20px !important;
+    max-height: 20px !important;
+    width: 40px !important;
+    min-width: 40px !important;
+    max-width: 40px !important;
+  }
+
+  /* Option 6: Icon + text compact */
+  .style-option-6 {
+    gap: 0.15rem;
+  }
+
+  .level-btn-icon-text {
+    padding: 0.2rem 0.4rem !important;
+    font-size: 0.7rem !important;
+    border: 1px solid #444 !important;
+    background-color: #2a2a2a !important;
+    color: #888 !important;
+    cursor: pointer;
+    border-radius: 3px !important;
+    font-weight: 500 !important;
+    white-space: nowrap !important;
+    display: inline-flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    gap: 0.25rem !important;
+    transition: background-color 0.2s, border-color 0.2s, color 0.2s;
+    height: 24px !important;
+    min-height: 24px !important;
+    max-height: 24px !important;
+    line-height: 1 !important;
+    box-sizing: border-box !important;
+    width: 44px !important;
+    min-width: 44px !important;
+    max-width: 44px !important;
+    flex-shrink: 0 !important;
+    margin: 0 !important;
+  }
+
+  .level-btn-icon-text:hover {
+    background-color: #333 !important;
+    height: 24px !important;
+    min-height: 24px !important;
+    max-height: 24px !important;
+    width: 44px !important;
+    min-width: 44px !important;
+    max-width: 44px !important;
+  }
+
+  .level-btn-icon-text .level-icon {
+    font-size: 0.6rem !important;
+    line-height: 1 !important;
+    display: flex !important;
+    align-items: center !important;
+  }
+
+  .level-btn-icon-text .level-text {
+    text-transform: lowercase !important;
+    font-size: 0.65rem !important;
+    line-height: 1 !important;
+  }
+
+  .level-btn-icon-text.active {
+    border-color: currentColor !important;
+    background-color: rgba(255, 255, 255, 0.1) !important;
+    height: 24px !important;
+    min-height: 24px !important;
+    max-height: 24px !important;
+    width: 44px !important;
+    min-width: 44px !important;
+    max-width: 44px !important;
+  }
+
+  .level-btn-icon-text.error.active {
+    color: #ff6b6b !important;
+    height: 24px !important;
+    min-height: 24px !important;
+    max-height: 24px !important;
+    width: 44px !important;
+    min-width: 44px !important;
+    max-width: 44px !important;
+  }
+
+  .level-btn-icon-text.warn.active {
+    color: #ffd93d !important;
+    height: 24px !important;
+    min-height: 24px !important;
+    max-height: 24px !important;
+    width: 44px !important;
+    min-width: 44px !important;
+    max-width: 44px !important;
+  }
+
+  .level-btn-icon-text.info.active {
+    color: #51cf66 !important;
+    height: 24px !important;
+    min-height: 24px !important;
+    max-height: 24px !important;
+    width: 44px !important;
+    min-width: 44px !important;
+    max-width: 44px !important;
+  }
+
+  .level-btn-icon-text.debug.active {
+    color: #888 !important;
+    height: 24px !important;
+    min-height: 24px !important;
+    max-height: 24px !important;
+    width: 44px !important;
+    min-width: 44px !important;
+    max-width: 44px !important;
   }
 
   .btn-small {
@@ -870,19 +1416,30 @@
     white-space: nowrap;
   }
 
+  .level-cell {
+    padding: 0.3rem 0.3rem !important;
+    text-align: left;
+  }
+
   .level-badge {
     display: inline-block;
-    padding: 0.2rem 0.5rem;
-    border-radius: 3px;
-    font-size: 0.75rem;
-    font-weight: 600;
+    padding: 0.05rem 0.2rem;
+    border-radius: 2px;
+    font-size: 0.65rem;
+    font-weight: 500;
     text-transform: uppercase;
-    letter-spacing: 0.5px;
+    letter-spacing: 0.3px;
+    line-height: 1.2;
   }
 
   .level-badge.error {
     background-color: rgba(255, 107, 107, 0.2);
     color: #ff6b6b;
+    padding: 0.02rem 0.15rem !important;
+    font-size: 0.6rem !important;
+    line-height: 1.1 !important;
+    border-radius: 2px;
+    font-weight: 500;
   }
 
   .level-badge.warn {
@@ -910,6 +1467,7 @@
     word-break: break-word;
     font-family: monospace;
     font-size: 0.85rem;
+    text-align: left;
   }
 
   .pagination {

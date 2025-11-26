@@ -542,6 +542,20 @@ async function processDeferredDownload(queueItem) {
       );
       if (discordUrl) {
         logger.info(`Uploaded to Discord: ${discordUrl}`);
+        // Update database with Discord URL since file was uploaded to Discord, not saved to R2/CDN
+        await insertProcessedUrl(
+          urlHash,
+          hash,
+          fileType,
+          ext,
+          discordUrl,
+          Date.now(),
+          userId,
+          finalSize
+        );
+        logger.debug(
+          `Updated processed URL in database with Discord URL (urlHash: ${urlHash.substring(0, 8)}...)`
+        );
       }
       return `File sent as attachment: ${filename}`;
     } else {

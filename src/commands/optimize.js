@@ -432,6 +432,20 @@ export async function processOptimization(
         // Log Discord upload with URL if captured
         if (discordUrl) {
           logger.info(`Uploaded to Discord: ${discordUrl}`);
+          // Update database with Discord URL since file was uploaded to Discord, not saved to R2/CDN
+          await insertProcessedUrl(
+            urlHash,
+            optimizedHash,
+            'gif',
+            '.gif',
+            discordUrl,
+            Date.now(),
+            userId,
+            optimizedSize
+          );
+          logger.debug(
+            `Updated processed URL in database with Discord URL (urlHash: ${urlHash.substring(0, 8)}...)`
+          );
         }
       } catch (discordError) {
         // Discord upload failed, fallback to R2

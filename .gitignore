@@ -80,6 +80,7 @@ changelog/*-draft.html
 
 # Build assets (generated files)
 src/public/assets/
+src/public/index.html
 
 # Build tools cache
 .vite/

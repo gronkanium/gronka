@@ -165,6 +165,29 @@ export async function notifyCommandFailure(username, command, options = {}) {
 }
 
 /**
+ * Send deferred download notification
+ * @param {string} username - Username
+ * @param {string} status - Status (success or failed)
+ * @param {Object} [options] - Additional options (operationId, userId, metadata)
+ * @param {string} [options.operationId] - Operation ID (duration will be automatically calculated and added to metadata)
+ * @returns {Promise<void>}
+ */
+export async function notifyDeferredDownload(username, status, options = {}) {
+  const severity = status === 'success' ? 'info' : 'warning';
+  await sendNtfyNotification('deferred download', `${username}: deferred download ${status}`, {
+    severity,
+    component: 'deferred-queue',
+    ...options,
+    metadata: {
+      username,
+      operation: 'deferred-download',
+      status,
+      ...options.metadata,
+    },
+  });
+}
+
+/**
  * Send generic notification with full options
  * @param {string} title - Notification title
  * @param {string} message - Notification message

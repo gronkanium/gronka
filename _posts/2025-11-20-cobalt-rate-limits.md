@@ -13,7 +13,15 @@ tags:
 
 ## rate limit handling
 
-when rate limit errors occur, the system extracts the `Retry-After` header from the response if available, otherwise defaulting to a 5-minute wait period. the download command will fail with a rate limit error message, and users are instructed to try again later.
+the deferred download queue implements rate limit detection and waiting to avoid repeatedly hitting 429 errors. on rate limit errors, the system extracts the `Retry-After` header from the response if available, otherwise defaulting to a 5-minute wait period.
+
+queue items are marked with a `rate_limited` status and stored with timing information indicating when the rate limit occurred and how long to wait before retrying.
+
+the queue processor checks expiration times before attempting to process items. items that are still within their rate limit window are skipped entirely, preventing unnecessary api calls. when the rate limit expires, items are automatically converted back to `pending` status and will be processed in the next queue cycle.
+
+for repeated rate limit errors on the same item, exponential backoff is applied. the first rate limit uses the original retry time, the second doubles it, and the third quadruples it, capped at 4x the original duration. this prevents persistent rate limit violations from consuming resources while still allowing eventual retry.
+
+the system respects rate limit timing rather than blindly retrying every 2 minutes. this reduces api load and improves the likelihood of successful downloads once rate limits clear.
 
 ## limitations
 
@@ -23,7 +31,7 @@ despite the improved rate limit handling, several fundamental limitations remain
 
 when multiple users download from the same social media platform, all requests originate from the same server ip address. social media platforms implement ip-based rate limiting that affects all requests from that ip, regardless of which user initiated the download.
 
-if the server ip gets rate limited by a platform like twitter/x, all users attempting downloads from that platform will fail simultaneously. users will receive an error message and must wait before trying again.
+if the server ip gets rate limited by a platform like twitter/x, all users attempting downloads from that platform will fail simultaneously. the deferred download queue will wait for the rate limit to expire based on the `Retry-After` header or default timing, but all queued items for that platform will remain blocked until the rate limit window resets.
 
 there is no technical recourse once the server ip is blocked beyond waiting for the limit to expire.
 
@@ -41,7 +49,9 @@ some platforms may implement stricter limits during peak usage times or for spec
 
 ### retry exhaustion
 
-downloads that fail due to rate limiting will return an error to the user immediately. users must manually retry the download after waiting for the rate limit to expire.
+the deferred download queue retries failed downloads up to 10 times. rate-limited items are not counted toward this limit, as they are handled separately with their own timing. however, if rate limiting persists and the exponential backoff extends beyond a reasonable timeframe, or if non-rate-limit errors accumulate, downloads will permanently fail and users will be notified of the failure.
+
+there is no mechanism to indefinitely retry downloads, as this would consume resources on requests that may never succeed. the 10-retry limit applies to general failures, while rate-limited items can wait longer but are still subject to practical limits.
 
 ### error ambiguity
 
@@ -53,6 +63,6 @@ when content genuinely does not exist, the system correctly stops retrying. howe
 
 ### service disruption scope
 
-if a server ip gets rate limited by a major platform like twitter or tiktok during peak usage, the impact is immediate and affects all users. all download attempts from that platform will fail until the rate limit expires.
+if a server ip gets rate limited by a major platform like twitter or tiktok during peak usage, the impact is immediate and affects all users. the deferred download queue will wait for the rate limit to expire, but all queued items for that platform will remain blocked until the platform allows requests from the ip again.
 
-this creates a single point of failure where one platform's rate limits can disable download functionality for all users, regardless of which specific content they are trying to access. there is no automatic retry mechanism - users must wait and manually retry their downloads.
+this creates a single point of failure where one platform's rate limits can disable download functionality for all users, regardless of which specific content they are trying to access. the improved waiting mechanism prevents unnecessary retries, but cannot eliminate the fundamental limitation of shared ip-based rate limits.

@@ -5,6 +5,9 @@ const logger = createLogger('attachment-helpers');
 
 const { maxVideoSize: MAX_VIDEO_SIZE, maxImageSize: MAX_IMAGE_SIZE } = botConfig;
 
+// Export size limits for use in tests
+export { MAX_VIDEO_SIZE, MAX_IMAGE_SIZE };
+
 // Allowed video content types
 export const ALLOWED_VIDEO_TYPES = [
   'video/mp4',

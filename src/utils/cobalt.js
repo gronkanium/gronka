@@ -1,6 +1,6 @@
 import axios from 'axios';
 import { createLogger } from './logger.js';
-import { NetworkError } from './errors.js';
+import { NetworkError, ValidationError } from './errors.js';
 
 const logger = createLogger('cobalt');
 
@@ -316,6 +316,14 @@ async function downloadPhoto(photoUrl, index, isAdminUser = false, maxSize = Inf
     });
 
     const buffer = Buffer.from(response.data);
+
+    // Validate buffer size (axios maxContentLength may not work if server doesn't send Content-Length header)
+    if (!isAdminUser && buffer.length > maxSize) {
+      throw new ValidationError(
+        `photo ${index + 1} file is too large (max ${maxSize / (1024 * 1024)}mb)`
+      );
+    }
+
     let contentType = response.headers['content-type'] || 'image/jpeg';
 
     // Extract filename from Content-Disposition if available
@@ -526,6 +534,12 @@ async function downloadFromCobalt(
     });
 
     const buffer = Buffer.from(response.data);
+
+    // Validate buffer size (axios maxContentLength may not work if server doesn't send Content-Length header)
+    if (!isAdminUser && buffer.length > maxSize) {
+      throw new ValidationError(`file is too large (max ${maxSize / (1024 * 1024)}mb)`);
+    }
+
     let contentType = response.headers['content-type'] || 'video/mp4';
 
     // Extract filename from Content-Disposition if available

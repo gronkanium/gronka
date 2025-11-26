@@ -1,6 +1,12 @@
 #!/usr/bin/env bash
 set -e
 
+# Allow skipping hooks with environment variable
+if [ "$SKIP_HOOKS" = "1" ]; then
+  echo "Skipping git hooks (SKIP_HOOKS=1)"
+  exit 0
+fi
+
 # Detect WSL (Linux kernel + Windows paths)
 if grep -qi "microsoft" /proc/version 2>/dev/null; then
   IS_WSL=1
@@ -75,24 +81,46 @@ fi
 if [ -n "$JS_FILES" ]; then
   # Convert newline-separated list to space-separated and run eslint
   JS_FILE_ARGS=$(echo "$JS_FILES" | tr '\n' ' ')
+  echo "Running ESLint with auto-fix on staged files..."
   if [ -x "./node_modules/.bin/eslint" ]; then
+    # Try to auto-fix issues first
+    ./node_modules/.bin/eslint --fix $JS_FILE_ARGS || true
+    # Then check for remaining issues (fail only on unfixable errors)
     ./node_modules/.bin/eslint --max-warnings=0 $JS_FILE_ARGS
   else
+    # Try to auto-fix issues first
+    npx eslint --fix $JS_FILE_ARGS || true
+    # Then check for remaining issues (fail only on unfixable errors)
     npx eslint --max-warnings=0 $JS_FILE_ARGS
   fi
+  # Stage any files that were auto-fixed (check for unstaged changes)
+  echo "$JS_FILES" | while read -r file; do
+    if [ -n "$file" ] && ! git diff --quiet "$file" 2>/dev/null; then
+      # File has unstaged changes (was modified by eslint --fix), stage it
+      git add "$file" 2>/dev/null || true
+    fi
+  done
 else
   echo "No JavaScript/TypeScript files staged, skipping lint"
 fi
 
-# Run Prettier check only if there are prettier-supported files staged
+# Run Prettier auto-fix only if there are prettier-supported files staged
 if [ -n "$PRETTIER_FILES" ]; then
   # Convert newline-separated list to space-separated and run prettier
   PRETTIER_FILE_ARGS=$(echo "$PRETTIER_FILES" | tr '\n' ' ')
+  echo "Running Prettier to auto-format staged files..."
   if [ -x "./node_modules/.bin/prettier" ]; then
-    ./node_modules/.bin/prettier --check $PRETTIER_FILE_ARGS
+    ./node_modules/.bin/prettier --write $PRETTIER_FILE_ARGS
   else
-    npx prettier --check $PRETTIER_FILE_ARGS
+    npx prettier --write $PRETTIER_FILE_ARGS
   fi
+  # Stage the formatted files
+  echo "$PRETTIER_FILES" | while read -r file; do
+    if [ -n "$file" ]; then
+      git add "$file" 2>/dev/null || true
+    fi
+  done
+  echo "Prettier formatting complete. Formatted files have been staged."
 else
   echo "No prettier-supported files staged, skipping format check"
 fi

@@ -2,6 +2,10 @@
   import { onMount } from 'svelte';
 
   let users = [];
+  let usersTotal = 0;
+  let usersLoading = false;
+  let usersLimit = 50;
+  let usersOffset = 0;
   let selectedUserId = null;
   let selectedUser = null;
   let media = [];
@@ -17,10 +21,11 @@
   let selectedFiles = new Set();
 
   async function fetchUsers() {
+    usersLoading = true;
     try {
       const params = new URLSearchParams({
-        limit: '1000',
-        offset: '0',
+        limit: usersLimit.toString(),
+        offset: usersOffset.toString(),
       });
 
       if (searchQuery) params.append('search', searchQuery);
@@ -30,8 +35,11 @@
 
       const data = await response.json();
       users = data.users || [];
+      usersTotal = data.total || 0;
     } catch (err) {
       console.error('Failed to fetch users:', err);
+    } finally {
+      usersLoading = false;
     }
   }
 
@@ -83,7 +91,22 @@
   }
 
   function handleSearch() {
+    usersOffset = 0;
     fetchUsers();
+  }
+
+  function handleUsersPrevPage() {
+    if (usersOffset > 0) {
+      usersOffset = Math.max(0, usersOffset - usersLimit);
+      fetchUsers();
+    }
+  }
+
+  function handleUsersNextPage() {
+    if (usersOffset + usersLimit < usersTotal) {
+      usersOffset += usersLimit;
+      fetchUsers();
+    }
   }
 
   function handleFileTypeFilter() {
@@ -290,7 +313,9 @@
       </div>
     </div>
 
-    {#if users.length > 0}
+    {#if usersLoading}
+      <div class="loading">loading users...</div>
+    {:else if users.length > 0}
       <div class="users-list">
         {#each users as user}
           <button
@@ -303,6 +328,21 @@
           </button>
         {/each}
       </div>
+      {#if usersTotal > usersLimit}
+        <div class="users-pagination">
+          <div class="pagination-info">
+            showing {usersOffset + 1}-{Math.min(usersOffset + usersLimit, usersTotal)} of {usersTotal}
+          </div>
+          <div class="pagination-controls">
+            <button on:click={handleUsersPrevPage} disabled={usersOffset === 0}>
+              previous
+            </button>
+            <button on:click={handleUsersNextPage} disabled={usersOffset + usersLimit >= usersTotal}>
+              next
+            </button>
+          </div>
+        </div>
+      {/if}
     {:else}
       <div class="empty">no users found</div>
     {/if}
@@ -409,21 +449,34 @@
           </table>
         </div>
 
-        {#if total > limit}
-          <div class="pagination">
-            <div class="pagination-info">
-              showing {offset + 1}-{Math.min(offset + limit, total)} of {total}
-            </div>
-            <div class="pagination-controls">
-              <button on:click={handlePrevPage} disabled={offset === 0 || deleting}>
-                previous
-              </button>
-              <button on:click={handleNextPage} disabled={offset + limit >= total || deleting}>
-                next
-              </button>
-            </div>
+        <div class="pagination">
+          <div class="pagination-info">
+            showing {offset + 1}-{Math.min(offset + limit, total)} of {total}
           </div>
-        {/if}
+          <div class="pagination-controls">
+            <select
+              bind:value={limit}
+              on:change={() => {
+                offset = 0;
+                selectedFiles.clear();
+                fetchR2Media();
+              }}
+              disabled={deleting}
+              class="page-size-select"
+            >
+              <option value="10">10 per page</option>
+              <option value="25">25 per page</option>
+              <option value="50">50 per page</option>
+              <option value="100">100 per page</option>
+            </select>
+            <button on:click={handlePrevPage} disabled={offset === 0 || deleting}>
+              previous
+            </button>
+            <button on:click={handleNextPage} disabled={offset + limit >= total || deleting}>
+              next
+            </button>
+          </div>
+        </div>
       {/if}
     </div>
   {:else}
@@ -543,6 +596,44 @@
     font-size: 0.85rem;
     opacity: 0.7;
     margin-left: 0.5rem;
+  }
+
+  .users-pagination {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-top: 1rem;
+    padding: 0.75rem 0;
+    border-top: 1px solid #333;
+  }
+
+  .users-pagination .pagination-info {
+    font-size: 0.85rem;
+    color: #aaa;
+  }
+
+  .users-pagination .pagination-controls {
+    display: flex;
+    gap: 0.5rem;
+  }
+
+  .users-pagination .pagination-controls button {
+    padding: 0.4rem 0.8rem;
+    font-size: 0.85rem;
+    background-color: #444;
+    color: #fff;
+    border: 1px solid #555;
+    cursor: pointer;
+    border-radius: 3px;
+  }
+
+  .users-pagination .pagination-controls button:hover:not(:disabled) {
+    background-color: #555;
+  }
+
+  .users-pagination .pagination-controls button:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
   }
 
   .media-section {
@@ -789,6 +880,22 @@
   }
 
   .pagination-controls button:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+  }
+
+  .page-size-select {
+    padding: 0.4rem 0.6rem;
+    font-size: 0.85rem;
+    background-color: #2a2a2a;
+    border: 1px solid #444;
+    color: #fff;
+    border-radius: 3px;
+    cursor: pointer;
+    margin-right: 0.5rem;
+  }
+
+  .page-size-select:disabled {
     opacity: 0.5;
     cursor: not-allowed;
   }

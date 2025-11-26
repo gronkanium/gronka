@@ -5,6 +5,7 @@ import {
   validateImageAttachment,
   ALLOWED_VIDEO_TYPES,
   ALLOWED_IMAGE_TYPES,
+  MAX_VIDEO_SIZE,
 } from '../../src/utils/attachment-helpers.js';
 
 // Mock attachment objects
@@ -41,27 +42,25 @@ test('validateVideoAttachment - rejects attachments without content type', () =>
 });
 
 test('validateVideoAttachment - rejects files exceeding size limit for non-admins', () => {
-  const maxSize = 500 * 1024 * 1024; // 500MB
-  const oversizedFile = maxSize + 1;
+  const oversizedFile = MAX_VIDEO_SIZE + 1;
   const attachment = createAttachment('video/mp4', oversizedFile);
   const result = validateVideoAttachment(attachment, false);
 
   assert.strictEqual(result.valid, false);
   assert(result.error.includes('too large'));
-  assert(result.error.includes('500mb'));
+  const expectedSizeMb = MAX_VIDEO_SIZE / (1024 * 1024);
+  assert(result.error.includes(`${expectedSizeMb}mb`));
 });
 
 test('validateVideoAttachment - accepts files at size limit', () => {
-  const maxSize = 500 * 1024 * 1024; // 500MB
-  const attachment = createAttachment('video/mp4', maxSize);
+  const attachment = createAttachment('video/mp4', MAX_VIDEO_SIZE);
   const result = validateVideoAttachment(attachment, false);
 
   assert.strictEqual(result.valid, true);
 });
 
 test('validateVideoAttachment - allows oversized files for admins', () => {
-  const maxSize = 500 * 1024 * 1024; // 500MB
-  const oversizedFile = maxSize + 1024 * 1024 * 100; // 100MB over limit
+  const oversizedFile = MAX_VIDEO_SIZE + 1024 * 1024 * 100; // 100MB over limit
   const attachment = createAttachment('video/mp4', oversizedFile);
   const result = validateVideoAttachment(attachment, true);
 

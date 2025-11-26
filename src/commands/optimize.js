@@ -397,9 +397,42 @@ export async function processOptimization(
       const safeHash = optimizedHash.replace(/[^a-f0-9]/gi, '');
       const filename = `${safeHash}.gif`;
       try {
-        await interaction.editReply({
+        const message = await interaction.editReply({
           files: [new AttachmentBuilder(optimizedBuffer, { name: filename })],
         });
+
+        // Capture Discord attachment URL and log
+        let discordUrl = null;
+        if (message && message.attachments && message.attachments.size > 0) {
+          const discordAttachment = message.attachments.first();
+          if (discordAttachment && discordAttachment.url) {
+            discordUrl = discordAttachment.url;
+          }
+        }
+
+        // If attachments weren't in the response, try fetching the message
+        if (!discordUrl && message && message.id && interaction.channel) {
+          try {
+            const fetchedMessage = await interaction.channel.messages.fetch(message.id);
+            if (
+              fetchedMessage &&
+              fetchedMessage.attachments &&
+              fetchedMessage.attachments.size > 0
+            ) {
+              const discordAttachment = fetchedMessage.attachments.first();
+              if (discordAttachment && discordAttachment.url) {
+                discordUrl = discordAttachment.url;
+              }
+            }
+          } catch (fetchError) {
+            logger.warn(`Failed to fetch message to get attachment URL: ${fetchError.message}`);
+          }
+        }
+
+        // Log Discord upload with URL if captured
+        if (discordUrl) {
+          logger.info(`Uploaded to Discord: ${discordUrl}`);
+        }
       } catch (discordError) {
         // Discord upload failed, fallback to R2
         logger.warn(

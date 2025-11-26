@@ -532,7 +532,17 @@ async function processDeferredDownload(queueItem) {
       const safeHash = hash.replace(/[^a-f0-9]/gi, '');
       const filename = `${safeHash}${ext}`;
       const attachment = new AttachmentBuilder(finalBuffer, { name: filename });
-      await notifyDownloadComplete(client, queueItem, null, attachment, operationId, userId);
+      const discordUrl = await notifyDownloadComplete(
+        client,
+        queueItem,
+        null,
+        attachment,
+        operationId,
+        userId
+      );
+      if (discordUrl) {
+        logger.info(`Uploaded to Discord: ${discordUrl}`);
+      }
       return `File sent as attachment: ${filename}`;
     } else {
       await notifyDownloadComplete(client, queueItem, fileUrl, null, operationId, userId);

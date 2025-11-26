@@ -31,7 +31,6 @@ import {
   getUserMediaCount,
   getRecentOperations,
   searchOperationsByUrl,
-  getFailedOperationsByUser,
 } from './utils/database.js';
 import {
   collectSystemMetrics,
@@ -802,7 +801,7 @@ app.get('/api/operations/search', (req, res) => {
     try {
       const dbLimit = parseInt(limit, 10) + parseInt(offset, 10) + 100; // Get extra for filtering
       const dbOps = getRecentOperations(dbLimit);
-      
+
       // Merge with in-memory operations, avoiding duplicates
       const existingIds = new Set(allOperations.map(op => op.id));
       const newOps = dbOps.filter(op => !existingIds.has(op.id));
@@ -941,7 +940,9 @@ app.get('/api/operations/:operationId', (req, res) => {
       const executionStepsCount = trace.logs.filter(
         log => log.step !== 'created' && log.step !== 'status_update' && log.step !== 'error'
       ).length;
-      logger.debug(`Trace retrieved for operation ${operationId}: ${trace.logs.length} total logs, ${executionStepsCount} execution steps`);
+      logger.debug(
+        `Trace retrieved for operation ${operationId}: ${trace.logs.length} total logs, ${executionStepsCount} execution steps`
+      );
     } else {
       logger.debug(`No trace found for operation ${operationId}`);
     }
@@ -1011,17 +1012,17 @@ app.get('/api/operations/:operationId/related', (req, res) => {
     // Find related operations (same user or same URL)
     const related = [];
     const seenIds = new Set([operationId]);
-    
+
     for (const op of allOperations) {
       if (seenIds.has(op.id)) continue;
-      
+
       let isRelated = false;
-      
+
       // Match by user ID
       if (userId && op.userId === userId) {
         isRelated = true;
       }
-      
+
       // Match by URL - get trace to check originalUrl
       if (originalUrl && !isRelated) {
         try {
@@ -1029,11 +1030,11 @@ app.get('/api/operations/:operationId/related', (req, res) => {
           if (opTrace && opTrace.context && opTrace.context.originalUrl === originalUrl) {
             isRelated = true;
           }
-        } catch (error) {
+        } catch (_error) {
           // Skip if trace lookup fails
         }
       }
-      
+
       if (isRelated) {
         related.push(op);
         seenIds.add(op.id);
@@ -1073,7 +1074,7 @@ app.get('/api/operations/errors/analysis', (req, res) => {
 
     // Group by error message pattern (normalize for grouping)
     const errorGroups = new Map();
-    
+
     errorOps.forEach(op => {
       const errorMsg = op.error || 'unknown error';
       // Normalize error message for grouping (remove specific details like IDs, timestamps)
@@ -1081,7 +1082,7 @@ app.get('/api/operations/errors/analysis', (req, res) => {
         .replace(/\d+/g, 'N')
         .replace(/[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}/gi, 'UUID')
         .substring(0, 200); // Limit length
-      
+
       if (!errorGroups.has(normalized)) {
         errorGroups.set(normalized, {
           pattern: errorMsg.substring(0, 150), // Use first 150 chars of original as pattern

@@ -169,9 +169,13 @@ describe('operations tracker', () => {
       assert.ok(operation.performanceMetrics.duration > 0);
     });
 
-    test('updates operation status to error with error message', () => {
+    test('updates operation status to error with error message', async () => {
       const operationId = createOperation('convert', 'user1', 'User1');
       const errorMessage = 'Conversion failed';
+
+      // Wait a bit to ensure duration > 0
+      await new Promise(resolve => setTimeout(resolve, 10));
+
       updateOperationStatus(operationId, 'error', { error: errorMessage });
 
       const operation = getOperation(operationId);

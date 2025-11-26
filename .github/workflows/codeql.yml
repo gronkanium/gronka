@@ -19,6 +19,7 @@ on:
       - 'blog/**'
       - 'docs/**'
       - 'src/webui/**'
+      - 'test/**'
   pull_request:
     branches:
       - main
@@ -37,6 +38,7 @@ on:
       - 'blog/**'
       - 'docs/**'
       - 'src/webui/**'
+      - 'test/**'
   schedule:
     - cron: '0 0 * * 0'
 

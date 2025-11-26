@@ -6,6 +6,7 @@ import {
   notifyDownloadComplete,
   notifyDownloadFailed,
 } from '../../src/utils/deferred-download-notifier.js';
+import { isDiscordCdnUrl } from '../../src/utils/discord-cdn.js';
 
 describe('deferred download notifier', () => {
   let mockClient;
@@ -400,7 +401,7 @@ describe('deferred download notifier', () => {
       const discordUrl = await notifyDownloadComplete(mockClient, queueItem, null, mockAttachment);
 
       assert.ok(discordUrl);
-      assert.ok(discordUrl.includes('cdn.discordapp.com'));
+      assert.ok(isDiscordCdnUrl(discordUrl));
     });
 
     test('extracts attachment URL from follow-up response', async () => {

@@ -1167,6 +1167,18 @@
   }
 
   @media (max-width: 768px) {
+    .table-container {
+      overflow-x: auto;
+      -webkit-overflow-scrolling: touch;
+    }
+    
+    table {
+      min-width: 600px;
+    }
+    
+    button {
+      min-height: 44px;
+    }
     .stats-grid {
       grid-template-columns: repeat(2, 1fr);
     }

@@ -18,14 +18,14 @@
           </div>
 
           <div class="post-nav">
-            {%- if page.previous -%}
-              <a href="{{ page.previous.url | relative_url }}" class="post-nav-link post-nav-prev">
-                ← {{ page.previous.title }}
-              </a>
-            {%- endif -%}
             {%- if page.next -%}
               <a href="{{ page.next.url | relative_url }}" class="post-nav-link post-nav-next">
-                {{ page.next.title }} →
+                ← {{ page.next.title }}
+              </a>
+            {%- endif -%}
+            {%- if page.previous -%}
+              <a href="{{ page.previous.url | relative_url }}" class="post-nav-link post-nav-prev">
+                {{ page.previous.title }} →
               </a>
             {%- endif -%}
           </div>

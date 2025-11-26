@@ -142,7 +142,7 @@ function getBotConfig() {
     maxGifWidth: parseIntEnv('MAX_GIF_WIDTH', 720, 1, 4096),
     maxGifDuration: parseIntEnv('MAX_GIF_DURATION', 30, 1, 300),
     defaultFps: parseIntEnv('DEFAULT_FPS', 30, 1, 120),
-    maxVideoSize: 500 * 1024 * 1024, // 500MB
+    maxVideoSize: parseIntEnv('MAX_VIDEO_SIZE', 100 * 1024 * 1024, 1), // 100MB default, configurable via MAX_VIDEO_SIZE env var
     maxImageSize: 50 * 1024 * 1024, // 50MB
     rateLimitCooldown: 30000, // 30 seconds
     cobaltApiUrl: getStringEnv('COBALT_API_URL', 'http://cobalt:9000'),

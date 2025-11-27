@@ -10,7 +10,6 @@ services:
       # Mount source code for development (overrides the COPY in Dockerfile)
       - ./src:/app/src
       # Keep data and temp volumes from base compose file
-      - ./data:/app/data
       - ./data-test:/app/data-test
       - ./data-prod:/app/data-prod
       - ./temp:/app/temp

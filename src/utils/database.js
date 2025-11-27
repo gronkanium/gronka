@@ -13,7 +13,7 @@ const projectRoot = path.resolve(__dirname, '../..');
  * @returns {string} Database file path
  */
 function getDbPath() {
-  return process.env.GRONKA_DB_PATH || path.join(projectRoot, 'data', 'gronka.db');
+  return process.env.GRONKA_DB_PATH || path.join(projectRoot, 'data-prod', 'gronka.db');
 }
 
 let db = null;

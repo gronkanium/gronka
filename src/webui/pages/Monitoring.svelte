@@ -749,6 +749,34 @@
   }
 
   @media (max-width: 768px) {
+    section {
+      padding: 0.75rem;
+    }
+    
+    .metrics-grid {
+      grid-template-columns: 1fr;
+      gap: 1rem;
+    }
+    
+    .metric-card {
+      padding: 1rem;
+    }
+    
+    .metric-value {
+      font-size: 1.5rem;
+    }
+    
+    .metric-label {
+      font-size: 0.85rem;
+    }
+    
+    .details-section {
+      padding: 0.75rem;
+    }
+    
+    button {
+      min-height: 44px;
+    }
     .status-bar {
       grid-template-columns: repeat(2, 1fr);
     }

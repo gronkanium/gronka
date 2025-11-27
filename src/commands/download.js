@@ -1,4 +1,10 @@
-import { MessageFlags, AttachmentBuilder } from 'discord.js';
+import {
+  MessageFlags,
+  ActionRowBuilder,
+  ButtonBuilder,
+  ButtonStyle,
+  AttachmentBuilder,
+} from 'discord.js';
 import fs from 'fs/promises';
 import path from 'path';
 import crypto from 'crypto';
@@ -584,14 +590,30 @@ async function processDownload(interaction, url, commandSource = null) {
 
     // Check if this is a rate limit error after retries
     if (error instanceof RateLimitError) {
+      logger.warn(`Rate limit error for user ${userId}, showing deferred download option`);
+
       logOperationError(operationId, error, {
         metadata: errorMetadata,
       });
 
+      // Create buttons for user to choose
+      const row = new ActionRowBuilder().addComponents(
+        new ButtonBuilder()
+          .setCustomId(`defer_download:${Buffer.from(url).toString('base64')}`)
+          .setLabel('try again later')
+          .setStyle(ButtonStyle.Primary),
+        new ButtonBuilder()
+          .setCustomId('cancel_download')
+          .setLabel('cancel')
+          .setStyle(ButtonStyle.Secondary)
+      );
+
       updateOperationStatus(operationId, 'error', { error: 'rate limited' });
 
       await interaction.editReply({
-        content: 'download failed due to rate limiting. please try again later.',
+        content:
+          "download failed due to rate limiting. would you like to try again later? you'll receive a notification when it's ready.",
+        components: [row],
       });
 
       // Send failure notification for rate limit

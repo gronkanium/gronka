@@ -128,5 +128,34 @@
   button:active {
     background-color: #333;
   }
+  
+  @media (max-width: 768px) {
+    section {
+      padding: 0.75rem;
+    }
+    
+    h2 {
+      font-size: 1rem;
+    }
+    
+    .stat-item {
+      flex-direction: column;
+      align-items: flex-start;
+      gap: 0.25rem;
+    }
+    
+    dt {
+      font-size: 0.85rem;
+    }
+    
+    dd {
+      font-size: 0.9rem;
+    }
+    
+    button {
+      width: 100%;
+      min-height: 44px;
+    }
+  }
 </style>
 

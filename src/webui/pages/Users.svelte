@@ -2,6 +2,7 @@
   import { onMount } from 'svelte';
   import { navigate } from '../utils/router.js';
   import { userMetrics as wsUserMetrics, connected as wsConnected } from '../stores/websocket-store.js';
+  import ResponsiveGrid from '../components/ResponsiveGrid.svelte';
 
   let users = [];
   let total = 0;
@@ -180,7 +181,7 @@
 </script>
 
 <div class="users-container">
-  <div class="stats-summary">
+  <ResponsiveGrid columns={{ mobile: 1, tablet: 2, desktop: 3 }} gap="1rem">
     <div class="stat-card">
       <div class="stat-value">{total}</div>
       <div class="stat-label">total users</div>
@@ -193,9 +194,9 @@
       <div class="stat-value">{formatBytes(users.reduce((sum, u) => sum + (u.total_file_size || 0), 0))}</div>
       <div class="stat-label">total data processed</div>
     </div>
-  </div>
+  </ResponsiveGrid>
 
-  <div class="leaderboards">
+  <ResponsiveGrid columns={{ mobile: 1, tablet: 1, desktop: 3 }} gap="1rem">
     <div class="leaderboard-card">
       <h3>most active users</h3>
       <ul>
@@ -234,7 +235,7 @@
         {/each}
       </ul>
     </div>
-  </div>
+  </ResponsiveGrid>
 
   <div class="users-table-section">
     <div class="table-header">
@@ -334,11 +335,6 @@
     gap: 2rem;
   }
 
-  .stats-summary {
-    display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-    gap: 1rem;
-  }
 
   .stat-card {
     padding: 1.5rem;
@@ -359,11 +355,6 @@
     color: #aaa;
   }
 
-  .leaderboards {
-    display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
-    gap: 1rem;
-  }
 
   .leaderboard-card {
     padding: 1.5rem;
@@ -621,21 +612,58 @@
   }
 
   @media (max-width: 768px) {
-    .leaderboards {
-      grid-template-columns: 1fr;
+    .users-container {
+      gap: 1rem;
     }
-
+    
+    .stat-card {
+      padding: 1rem;
+    }
+    
+    .stat-value {
+      font-size: 1.5rem;
+    }
+    
+    .stat-label {
+      font-size: 0.85rem;
+    }
+    
+    .leaderboard-card {
+      padding: 1rem;
+    }
+    
+    .leaderboard-card h3 {
+      font-size: 0.9rem;
+    }
+    
+    .search-box {
+      flex-direction: column;
+    }
+    
     .search-box input {
-      min-width: 150px;
+      min-width: 0;
+      width: 100%;
+    }
+    
+    .search-box button {
+      width: 100%;
+      min-height: 44px;
     }
 
+    .table-container {
+      overflow-x: auto;
+      -webkit-overflow-scrolling: touch;
+    }
+    
     table {
       font-size: 0.8rem;
+      min-width: 700px;
     }
 
     th,
     td {
       padding: 0.5rem 0.5rem;
+      font-size: 0.75rem;
     }
 
     th:nth-child(2),
@@ -648,6 +676,27 @@
 
     th:last-child {
       text-align: center;
+    }
+    
+    .view-btn {
+      min-width: 44px;
+      min-height: 44px;
+      padding: 0.5rem 1rem;
+    }
+    
+    .pagination {
+      flex-direction: column;
+      gap: 0.75rem;
+      align-items: stretch;
+    }
+    
+    .pagination-controls {
+      width: 100%;
+    }
+    
+    .pagination-controls button {
+      flex: 1;
+      min-height: 44px;
     }
   }
 </style>

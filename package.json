@@ -87,6 +87,7 @@
     "fluent-ffmpeg": "^2.1.2",
     "lucide-svelte": "^0.554.0",
     "marked": "^17.0.1",
+    "tmp": "^0.2.5",
     "ws": "^8.18.0"
   },
   "devDependencies": {
@@ -101,7 +102,6 @@
     "nodemon": "^3.1.11",
     "prettier": "^3.6.2",
     "svelte": "^5.43.14",
-    "tmp": "^0.2.5",
     "vite": "^7.2.4"
   }
 }

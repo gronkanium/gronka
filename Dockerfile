@@ -64,7 +64,7 @@ RUN apt-get remove -y python3 make g++ && \
     rm -rf /var/lib/apt/lists/*
 
 # Create necessary directories
-RUN mkdir -p data temp
+RUN mkdir -p data data-prod/gifs data-test/gifs temp
 
 # Expose server port
 EXPOSE 3000

@@ -643,31 +643,96 @@
   }
 
   @media (max-width: 768px) {
+    section {
+      padding: 0.75rem;
+    }
+    
+    .header-row {
+      flex-direction: column;
+      align-items: flex-start;
+      gap: 0.5rem;
+    }
+    
+    .header-row h2 {
+      font-size: 1rem;
+    }
+    
+    .advanced-search-btn {
+      width: 100%;
+      justify-content: center;
+      min-height: 44px;
+    }
+    
+    .table-container {
+      overflow-x: auto;
+      -webkit-overflow-scrolling: touch;
+    }
+    
     table {
       font-size: 0.8rem;
+      min-width: 600px;
     }
 
     th,
     td {
       padding: 0.5rem 0.25rem;
+      font-size: 0.75rem;
     }
 
     .userid-cell {
-      font-size: 0.75rem;
+      font-size: 0.7rem;
+    }
+    
+    .status-cell {
+      width: 50px;
+    }
+    
+    .expand-cell {
+      width: 35px;
+    }
+    
+    .expand-btn {
+      min-width: 44px;
+      min-height: 44px;
     }
 
     .operation-details {
       padding: 1rem;
+      gap: 1rem;
+    }
+    
+    .details-section {
+      padding: 0.75rem;
+    }
+    
+    .details-section h4 {
+      font-size: 0.85rem;
     }
 
     .info-grid {
       grid-template-columns: 1fr;
+      gap: 0.5rem;
     }
 
     .step-item {
       flex-direction: column;
       align-items: flex-start;
       gap: 0.5rem;
+    }
+    
+    .pagination {
+      flex-direction: column;
+      gap: 0.75rem;
+      align-items: stretch;
+    }
+    
+    .pagination-controls {
+      width: 100%;
+    }
+    
+    .pagination-controls button {
+      flex: 1;
+      min-height: 44px;
     }
   }
 </style>

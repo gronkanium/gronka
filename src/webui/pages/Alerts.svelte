@@ -552,6 +552,14 @@
   }
 
   @media (max-width: 768px) {
+    .table-container {
+      overflow-x: auto;
+      -webkit-overflow-scrolling: touch;
+    }
+    
+    button {
+      min-height: 44px;
+    }
     .filters {
       flex-direction: column;
       align-items: stretch;

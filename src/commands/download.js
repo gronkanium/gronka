@@ -1,13 +1,11 @@
 import { MessageFlags, AttachmentBuilder } from 'discord.js';
 import fs from 'fs/promises';
 import path from 'path';
-import crypto from 'crypto';
 import { createLogger } from '../utils/logger.js';
 import { botConfig } from '../utils/config.js';
 import { validateUrl } from '../utils/validation.js';
 import { isSocialMediaUrl, downloadFromSocialMedia, RateLimitError } from '../utils/cobalt.js';
 import { checkRateLimit, isAdmin, recordRateLimit } from '../utils/rate-limit.js';
-import { getUserConfig } from '../utils/user-config.js';
 import { generateHash } from '../utils/file-downloader.js';
 import {
   createOperation,
@@ -26,10 +24,8 @@ import {
   saveVideo,
   saveImage,
   detectFileType,
-  shouldUploadToDiscord,
 } from '../utils/storage.js';
 import { uploadGifToR2, uploadVideoToR2, uploadImageToR2 } from '../utils/r2-storage.js';
-import { optimizeGif } from '../utils/gif-optimizer.js';
 import { queueCobaltRequest, hashUrl } from '../utils/cobalt-queue.js';
 import { notifyCommandSuccess, notifyCommandFailure } from '../utils/ntfy-notifier.js';
 import { getProcessedUrl, insertProcessedUrl, initDatabase } from '../utils/database.js';
@@ -85,7 +81,6 @@ async function processDownload(
   const userId = interaction.user.id;
   const username = interaction.user.tag || interaction.user.username || 'unknown';
   const adminUser = isAdmin(userId);
-  const userConfig = await getUserConfig(userId);
 
   // Build operation context
   const operationContext = {
@@ -562,50 +557,6 @@ async function processDownload(
           finalBuffer = saveResult.buffer;
           finalUploadMethod = saveResult.method;
         }
-
-        // Auto-optimize if enabled in user config
-        if (userConfig.autoOptimize) {
-          const _originalSize = fileData.buffer.length;
-          const optimizedHash = crypto.createHash('sha256');
-          optimizedHash.update(fileData.buffer);
-          optimizedHash.update('optimized');
-          optimizedHash.update('35'); // Default lossy level
-          const optimizedHashValue = optimizedHash.digest('hex');
-          const optimizedGifPath = getGifPath(optimizedHashValue, GIF_STORAGE_PATH);
-
-          // Check if optimized GIF already exists
-          const optimizedExists = await gifExists(optimizedHashValue, GIF_STORAGE_PATH);
-          if (optimizedExists) {
-            logger.info(
-              `Auto-optimized GIF already exists (hash: ${optimizedHashValue}) for user ${userId}`
-            );
-            filePath = optimizedGifPath;
-            hash = optimizedHashValue;
-            cdnPath = '/gifs';
-            // Read optimized buffer and re-check upload method
-            finalBuffer = await fs.readFile(optimizedGifPath);
-            finalUploadMethod = shouldUploadToDiscord(finalBuffer) ? 'discord' : 'r2';
-          } else {
-            // Check if filePath is a URL (R2-stored files return URLs, not local paths)
-            if (filePath.startsWith('http://') || filePath.startsWith('https://')) {
-              logger.warn(
-                `Auto-optimization skipped: GIF is stored in R2 (URL: ${filePath}). File must be available locally for optimization. User can manually optimize later if needed.`
-              );
-            } else {
-              // Auto-optimize the GIF with default lossy level
-              logger.info(
-                `Auto-optimizing downloaded GIF: ${filePath} -> ${optimizedGifPath} (lossy: 35)`
-              );
-              await optimizeGif(filePath, optimizedGifPath, { lossy: 35 });
-              filePath = optimizedGifPath;
-              hash = optimizedHashValue;
-              cdnPath = '/gifs';
-              // Read optimized buffer and re-check upload method
-              finalBuffer = await fs.readFile(optimizedGifPath);
-              finalUploadMethod = shouldUploadToDiscord(finalBuffer) ? 'discord' : 'r2';
-            }
-          }
-        }
       } else if (fileType === 'video') {
         // Check if file has .gif extension - if so, trim as GIF (not video)
         // This handles cases where files have .gif extension but video/mp4 content-type
@@ -978,7 +929,7 @@ async function processDownload(
       const finalSizeMB = (finalSize / (1024 * 1024)).toFixed(2);
 
       logger.info(
-        `Successfully saved ${fileType} (hash: ${hash}, size: ${finalSizeMB}MB) for user ${userId}${userConfig.autoOptimize && fileType === 'gif' ? ' [AUTO-OPTIMIZED]' : ''}`
+        `Successfully saved ${fileType} (hash: ${hash}, size: ${finalSizeMB}MB) for user ${userId}`
       );
 
       // Record processed URL in database

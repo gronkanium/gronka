@@ -58,7 +58,7 @@ async function migrateGifsToR2() {
     }
 
     // Get the gifs directory path
-    // serverConfig.gifStoragePath may be the base path (./data) or already include gifs (./data/gifs)
+    // serverConfig.gifStoragePath may be the base path (./data-prod) or already include gifs (./data-prod/gifs)
     // Check if it already ends with 'gifs' to handle both cases
     const storagePath = getStoragePath(serverConfig.gifStoragePath);
     const gifsDir =

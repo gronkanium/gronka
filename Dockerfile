@@ -64,7 +64,7 @@ RUN apt-get remove -y python3 make g++ && \
     rm -rf /var/lib/apt/lists/*
 
 # Create necessary directories
-RUN mkdir -p data data-prod/gifs data-test/gifs temp
+RUN mkdir -p data-prod/gifs data-test/gifs temp
 
 # Expose server port
 EXPOSE 3000
@@ -72,7 +72,6 @@ EXPOSE 3000
 # Set environment variables
 ENV NODE_ENV=production
 ENV SERVER_PORT=3000
-ENV GIF_STORAGE_PATH=./data
 
 # Copy entrypoint script
 COPY scripts/docker-entrypoint.sh /usr/local/bin/

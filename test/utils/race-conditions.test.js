@@ -138,7 +138,7 @@ describe('race conditions', () => {
 
       // Make 5 concurrent requests for different URLs
       const promises = Array.from({ length: 5 }, (_, i) =>
-        queueCobaltRequest(`${baseUrl}${i}-${Date.now()}`, () => downloadFn(`${baseUrl}${i}`))
+        queueCobaltRequest(`${baseUrl}${i}-${Date.now()}`, downloadFn)
       );
 
       // All should resolve

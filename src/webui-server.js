@@ -5,7 +5,7 @@ import http from 'http';
 import { WebSocketServer } from 'ws';
 import rateLimit from 'express-rate-limit';
 import { createLogger, setLogBroadcastCallback } from './utils/logger.js';
-import { webuiConfig, r2Config } from './utils/config.js';
+import { webuiConfig, r2Config, botConfig } from './utils/config.js';
 import { ConfigurationError } from './utils/errors.js';
 import { deleteFromR2, extractR2KeyFromUrl } from './utils/r2-storage.js';
 import {
@@ -86,11 +86,12 @@ function getAuthHeaders() {
 const CACHE_TTL = 60 * 1000; // 60 seconds
 
 // Stats cache to reduce load on main server
-const STATS_CACHE_TTL = 30 * 1000; // 30 seconds - match Monitoring page refresh interval
+// Use botConfig.statsCacheTtl (default 5 minutes) but cap at 30 seconds for webui refresh interval
+const STATS_CACHE_TTL = Math.min(botConfig.statsCacheTtl || 300000, 30 * 1000);
 let statsCache = null;
 let statsCacheTimestamp = 0;
 // Health cache to reduce load on main server
-const HEALTH_CACHE_TTL = 30 * 1000; // 30 seconds - match stats cache TTL
+const HEALTH_CACHE_TTL = STATS_CACHE_TTL; // Match stats cache TTL
 let healthCache = null;
 let healthCacheTimestamp = 0;
 let cryptoPriceCache = {

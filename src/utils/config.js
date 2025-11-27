@@ -125,6 +125,29 @@ function validateUrlFormat(url) {
   }
 }
 
+/**
+ * Get and validate GIF quality from environment variable
+ * @param {string} name - Environment variable name
+ * @param {string} defaultValue - Default value if not set
+ * @returns {string} Valid quality value: 'low', 'medium', or 'high'
+ */
+function getGifQualityEnv(name, defaultValue) {
+  const value = process.env[name];
+  if (!value) {
+    return defaultValue;
+  }
+
+  const trimmed = value.trim().toLowerCase();
+  const validQualities = ['low', 'medium', 'high'];
+  if (!validQualities.includes(trimmed)) {
+    throw new ConfigurationError(
+      `${name} must be one of: ${validQualities.join(', ')}, got: ${value}`,
+      'INVALID_GIF_QUALITY'
+    );
+  }
+  return trimmed;
+}
+
 // Bot configuration - lazy loaded to avoid requiring DISCORD_TOKEN for webui
 let _botConfig = null;
 function getBotConfig() {
@@ -137,13 +160,12 @@ function getBotConfig() {
     ),
     clientId: requireStringEnv('CLIENT_ID', 'Discord application/client ID'),
     adminUserIds: parseIdList('ADMIN_USER_IDS'),
-    gifStoragePath: getStringEnv('GIF_STORAGE_PATH', './data'),
+    gifStoragePath: getStringEnv('GIF_STORAGE_PATH', './data-prod/gifs'),
     cdnBaseUrl: getStringEnv('CDN_BASE_URL', 'https://cdn.gronka.p1x.dev/gifs'),
-    maxGifWidth: parseIntEnv('MAX_GIF_WIDTH', 720, 1, 4096),
     maxGifDuration: parseIntEnv('MAX_GIF_DURATION', 30, 1, 300),
-    defaultFps: parseIntEnv('DEFAULT_FPS', 30, 1, 120),
+    gifQuality: getGifQualityEnv('GIF_QUALITY', 'high'),
     maxVideoSize: parseIntEnv('MAX_VIDEO_SIZE', 100 * 1024 * 1024, 1), // 100MB default, configurable via MAX_VIDEO_SIZE env var
-    maxImageSize: 50 * 1024 * 1024, // 50MB
+    maxImageSize: parseIntEnv('MAX_IMAGE_SIZE', 50 * 1024 * 1024, 1), // 50MB default, configurable via MAX_IMAGE_SIZE env var
     rateLimitCooldown: 30000, // 30 seconds
     cobaltApiUrl: getStringEnv('COBALT_API_URL', 'http://cobalt:9000'),
     cobaltEnabled: getStringEnv('COBALT_ENABLED', 'true').toLowerCase() === 'true',

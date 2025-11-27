@@ -19,6 +19,7 @@ import {
   ALLOWED_IMAGE_TYPES,
   validateVideoAttachment,
   validateImageAttachment,
+  MAX_VIDEO_SIZE,
 } from '../utils/attachment-helpers.js';
 import { convertToGif, getVideoMetadata, convertImageToGif } from '../utils/video-processor.js';
 import {
@@ -36,7 +37,6 @@ import {
   gifExistsInR2,
   getR2PublicUrl,
 } from '../utils/r2-storage.js';
-import { getUserConfig } from '../utils/user-config.js';
 import { trackRecentConversion } from '../utils/user-tracking.js';
 import { optimizeGif } from '../utils/gif-optimizer.js';
 import {
@@ -55,9 +55,7 @@ const logger = createLogger('convert');
 const {
   gifStoragePath: GIF_STORAGE_PATH,
   cdnBaseUrl: CDN_BASE_URL,
-  maxGifWidth: MAX_GIF_WIDTH,
   maxGifDuration: MAX_GIF_DURATION,
-  defaultFps: DEFAULT_FPS,
 } = botConfig;
 
 // Video file signature constants
@@ -69,8 +67,6 @@ const FIXED_VIDEO_SIGNATURES = {
   webm: Buffer.from([0x1a, 0x45, 0xdf, 0xa3]), // WebM
   avi: Buffer.from('RIFF'),
 };
-
-const MAX_VIDEO_SIZE = 100 * 1024 * 1024; // 100MB limit for videos
 
 /**
  * Validate video buffer before writing to filesystem
@@ -300,9 +296,6 @@ export async function processConversion(
     'operation-type': 'convert',
     username: username,
   });
-
-  // Load user config
-  const userConfig = await getUserConfig(userId);
 
   try {
     // Initialize database if needed (for URL tracking)
@@ -720,13 +713,47 @@ export async function processConversion(
       });
 
       if (attachmentType === 'video') {
-        // Build conversion options, using provided options, user config, or defaults
+        // Extract original dimensions and fps from video metadata
+        let originalWidth = 480; // Safe fallback
+        let originalFps = 30; // Safe fallback
+
+        try {
+          const metadata = await getVideoMetadata(tempFilePath);
+          const videoStream = metadata.streams?.find(s => s.codec_type === 'video');
+          if (videoStream) {
+            if (
+              videoStream.width &&
+              typeof videoStream.width === 'number' &&
+              videoStream.width > 0
+            ) {
+              originalWidth = videoStream.width;
+            }
+            // Extract fps from r_frame_rate or avg_frame_rate
+            const fpsStr = videoStream.r_frame_rate || videoStream.avg_frame_rate;
+            if (fpsStr && typeof fpsStr === 'string' && fpsStr.includes('/')) {
+              const [num, den] = fpsStr.split('/').map(Number);
+              if (den && den > 0 && num > 0) {
+                const calculatedFps = num / den;
+                if (calculatedFps > 0.1 && calculatedFps <= 120) {
+                  originalFps = calculatedFps;
+                }
+              }
+            } else if (typeof fpsStr === 'number' && fpsStr > 0.1 && fpsStr <= 120) {
+              originalFps = fpsStr;
+            }
+          }
+        } catch (error) {
+          logger.warn(
+            'Failed to extract video metadata for dimensions, using fallbacks:',
+            error.message
+          );
+        }
+
+        // Build conversion options, using provided options or original dimensions
         const conversionOptions = {
-          width:
-            options.width ??
-            (userConfig.width !== null ? userConfig.width : Math.min(MAX_GIF_WIDTH, 480)),
-          fps: options.fps ?? (userConfig.fps !== null ? userConfig.fps : DEFAULT_FPS),
-          quality: options.quality ?? (userConfig.quality !== null ? userConfig.quality : 'high'),
+          width: options.width ?? originalWidth,
+          fps: options.fps ?? originalFps,
+          quality: options.quality ?? botConfig.gifQuality,
           startTime: options.startTime ?? null,
           duration: options.duration ?? null,
         };
@@ -768,68 +795,67 @@ export async function processConversion(
         const isGif = attachment.contentType === 'image/gif' || ext === '.gif';
 
         if (isGif) {
-          // Get GIF dimensions to check if we need to resize
+          // Get GIF dimensions - use original unless explicitly requested to resize
+          let originalWidth = 720; // Safe fallback
+
           try {
             const metadata = await getVideoMetadata(tempFilePath);
             const videoStream = metadata.streams?.find(s => s.codec_type === 'video');
-            const gifWidth = videoStream?.width;
-
-            // Use provided width, user config, or check against limits
-            const targetWidth =
-              options.width ??
-              (userConfig.width !== null ? userConfig.width : Math.min(MAX_GIF_WIDTH, 720));
-
             if (
-              gifWidth &&
-              gifWidth <= MAX_GIF_WIDTH &&
-              !options.width &&
-              (userConfig.width === null || gifWidth <= userConfig.width)
+              videoStream?.width &&
+              typeof videoStream.width === 'number' &&
+              videoStream.width > 0
             ) {
-              // GIF is within size limits, copy directly without re-encoding
-              logger.info(
-                `Input GIF is within size limits (${gifWidth}px <= ${MAX_GIF_WIDTH}px), copying directly`
-              );
-              await fs.copyFile(tempFilePath, gifPath);
-              logOperationStep(operationId, 'conversion_complete', 'success', {
-                message: 'GIF copied directly (within size limits)',
-                metadata: { gifWidth, maxWidth: MAX_GIF_WIDTH },
-              });
-            } else {
-              // GIF exceeds size limits or custom width requested, resize with convertImageToGif
-              logger.info(
-                `Input GIF exceeds size limits or custom width requested (${gifWidth || 'unknown'}px), resizing to ${targetWidth}px`
-              );
-              await convertImageToGif(tempFilePath, gifPath, {
-                width: targetWidth,
-                quality:
-                  options.quality ?? (userConfig.quality !== null ? userConfig.quality : 'high'),
-              });
-              logOperationStep(operationId, 'conversion_complete', 'success', {
-                message: 'GIF resized and converted',
-                metadata: { originalWidth: gifWidth, targetWidth },
-              });
+              originalWidth = videoStream.width;
             }
           } catch (error) {
-            // If metadata extraction fails, fall back to normal conversion
-            logger.warn(`Failed to get GIF metadata, falling back to conversion: ${error.message}`);
+            logger.warn(`Failed to get GIF metadata, using fallback: ${error.message}`);
+          }
+
+          // If no explicit width requested, copy directly (preserve original)
+          if (!options.width) {
+            logger.info(
+              `Input GIF, copying directly (preserving original dimensions: ${originalWidth}px)`
+            );
+            await fs.copyFile(tempFilePath, gifPath);
+            logOperationStep(operationId, 'conversion_complete', 'success', {
+              message: 'GIF copied directly (preserving original dimensions)',
+              metadata: { originalWidth },
+            });
+          } else {
+            // Custom width requested, resize with convertImageToGif
+            logger.info(`Input GIF, resizing to requested width: ${options.width}px`);
             await convertImageToGif(tempFilePath, gifPath, {
-              width:
-                options.width ??
-                (userConfig.width !== null ? userConfig.width : Math.min(MAX_GIF_WIDTH, 720)),
-              quality:
-                options.quality ?? (userConfig.quality !== null ? userConfig.quality : 'high'),
+              width: options.width,
+              quality: options.quality ?? botConfig.gifQuality,
             });
             logOperationStep(operationId, 'conversion_complete', 'success', {
-              message: 'Image to GIF conversion completed (fallback)',
+              message: 'GIF resized and converted',
+              metadata: { originalWidth, targetWidth: options.width },
             });
           }
         } else {
-          // Not a GIF, proceed with normal conversion
+          // Not a GIF, extract original width from image metadata
+          let originalWidth = 720; // Safe fallback
+
+          try {
+            const metadata = await getVideoMetadata(tempFilePath);
+            const videoStream = metadata.streams?.find(s => s.codec_type === 'video');
+            if (
+              videoStream?.width &&
+              typeof videoStream.width === 'number' &&
+              videoStream.width > 0
+            ) {
+              originalWidth = videoStream.width;
+            }
+          } catch (error) {
+            logger.warn(`Failed to get image metadata, using fallback: ${error.message}`);
+          }
+
+          // Not a GIF, proceed with normal conversion using original dimensions
           await convertImageToGif(tempFilePath, gifPath, {
-            width:
-              options.width ??
-              (userConfig.width !== null ? userConfig.width : Math.min(MAX_GIF_WIDTH, 720)),
-            quality: options.quality ?? (userConfig.quality !== null ? userConfig.quality : 'high'),
+            width: options.width ?? originalWidth,
+            quality: options.quality ?? botConfig.gifQuality,
           });
           logOperationStep(operationId, 'conversion_complete', 'success', {
             message: 'Image to GIF conversion completed',
@@ -858,7 +884,7 @@ export async function processConversion(
     // If lossy is provided, treat it as an implicit optimization request
     const shouldOptimize =
       options.optimize || (options.lossy !== undefined && options.lossy !== null);
-    const willOptimize = shouldOptimize || userConfig.autoOptimize;
+    const willOptimize = shouldOptimize;
     if (!willOptimize) {
       try {
         const saveResult = await saveGif(gifBuffer, hash, GIF_STORAGE_PATH, buildMetadata());
@@ -947,56 +973,6 @@ export async function processConversion(
             reduction: `${((1 - optimizedSize / originalSize) * 100).toFixed(1)}%`,
           },
         });
-      }
-    } else if (userConfig.autoOptimize) {
-      // Auto-optimize if enabled in user config
-      const optimizedHash = crypto.createHash('sha256');
-      optimizedHash.update(gifBuffer);
-      optimizedHash.update('optimized');
-      optimizedHash.update('35'); // Default lossy level
-      const optimizedHashValue = optimizedHash.digest('hex');
-      const optimizedGifPath = getGifPath(optimizedHashValue, GIF_STORAGE_PATH);
-
-      // Check if optimized GIF already exists
-      const optimizedExists = await gifExists(optimizedHashValue, GIF_STORAGE_PATH);
-      if (optimizedExists) {
-        logger.info(
-          `Auto-optimized GIF already exists (hash: ${optimizedHashValue}) for user ${userId}`
-        );
-        const optimizedBuffer = await fs.readFile(optimizedGifPath);
-        optimizedSize = optimizedBuffer.length;
-        finalHash = optimizedHashValue;
-        wasAutoOptimized = true;
-        // Upload optimized version to R2 if not already there
-        const saveResult = await saveGif(
-          optimizedBuffer,
-          optimizedHashValue,
-          GIF_STORAGE_PATH,
-          buildMetadata()
-        );
-        finalGifUrl = saveResult.url;
-        finalGifBuffer = saveResult.buffer;
-        finalUploadMethod = saveResult.method;
-      } else {
-        // Auto-optimize the GIF with default lossy level
-        logger.info(`Auto-optimizing GIF: ${gifPath} -> ${optimizedGifPath} (lossy: 35)`);
-        await optimizeGif(gifPath, optimizedGifPath, { lossy: 35 });
-
-        // Read optimized file and get its size
-        const optimizedBuffer = await fs.readFile(optimizedGifPath);
-        optimizedSize = optimizedBuffer.length;
-        finalHash = optimizedHashValue;
-        wasAutoOptimized = true;
-        // Upload optimized version to R2
-        const saveResult = await saveGif(
-          optimizedBuffer,
-          optimizedHashValue,
-          GIF_STORAGE_PATH,
-          buildMetadata()
-        );
-        finalGifUrl = saveResult.url;
-        finalGifBuffer = saveResult.buffer;
-        finalUploadMethod = saveResult.method;
       }
     }
 

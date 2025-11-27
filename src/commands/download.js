@@ -499,8 +499,8 @@ async function processDownload(
             const filename = path.basename(filePath);
             fileUrl = `${CDN_BASE_URL.replace('/gifs', cdnPath)}/${filename}`;
           }
-          // Use 'gif' as fileType for database if we treated it as GIF
-          const dbFileType = typeof treatAsGif !== 'undefined' && treatAsGif ? 'gif' : fileType;
+          // Use 'gif' as fileType for database (we're in the GIF block)
+          const dbFileType = 'gif';
           logger.info(`${dbFileType} already exists (hash: ${hash}) for user ${userId}`);
           // Get file size for existing file
           let existingSize = finalBuffer.length;
@@ -516,8 +516,8 @@ async function processDownload(
           }
 
           // Record processed URL in database (file exists but URL might not be recorded yet)
-          // Use .gif extension if we treated it as GIF
-          const dbExt = typeof treatAsGif !== 'undefined' && treatAsGif ? '.gif' : ext;
+          // Use .gif extension (we're in the GIF block)
+          const dbExt = '.gif';
           await insertProcessedUrl(
             urlHash,
             hash,
@@ -543,20 +543,12 @@ async function processDownload(
           return;
         }
 
-        // If we treated video with .gif extension as GIF, save as GIF
-        if (typeof treatAsGif !== 'undefined' && treatAsGif) {
-          logger.info(`Saving GIF (hash: ${hash}) - converted from video with .gif extension`);
-          const saveResult = await saveGif(finalBuffer, hash, GIF_STORAGE_PATH, buildMetadata());
-          filePath = saveResult.url;
-          finalBuffer = saveResult.buffer;
-          finalUploadMethod = saveResult.method;
-        } else {
-          logger.info(`Saving GIF (hash: ${hash})`);
-          const saveResult = await saveGif(finalBuffer, hash, GIF_STORAGE_PATH, buildMetadata());
-          filePath = saveResult.url;
-          finalBuffer = saveResult.buffer;
-          finalUploadMethod = saveResult.method;
-        }
+        // Save as GIF (we're in the GIF block)
+        logger.info(`Saving GIF (hash: ${hash})`);
+        const saveResult = await saveGif(finalBuffer, hash, GIF_STORAGE_PATH, buildMetadata());
+        filePath = saveResult.url;
+        finalBuffer = saveResult.buffer;
+        finalUploadMethod = saveResult.method;
       } else if (fileType === 'video') {
         // Check if file has .gif extension - if so, trim as GIF (not video)
         // This handles cases where files have .gif extension but video/mp4 content-type

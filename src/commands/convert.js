@@ -1,4 +1,9 @@
 import { MessageFlags, AttachmentBuilder } from 'discord.js';
+import {
+  safeInteractionReply,
+  safeInteractionEditReply,
+  safeInteractionDeferReply,
+} from '../utils/interaction-helpers.js';
 import fs from 'fs/promises';
 import path from 'path';
 import crypto from 'crypto';
@@ -47,7 +52,8 @@ import {
 } from '../utils/operations-tracker.js';
 import { notifyCommandSuccess, notifyCommandFailure } from '../utils/ntfy-notifier.js';
 import { hashUrl } from '../utils/cobalt-queue.js';
-import { insertProcessedUrl, initDatabase, getProcessedUrl } from '../utils/database.js';
+import { insertProcessedUrl, getProcessedUrl } from '../utils/database.js';
+import { initializeDatabaseWithErrorHandling } from '../utils/database-init.js';
 import { r2Config } from '../utils/config.js';
 
 const logger = createLogger('convert');
@@ -300,7 +306,17 @@ export async function processConversion(
   try {
     // Initialize database if needed (for URL tracking)
     if (originalUrl) {
-      await initDatabase();
+      const dbInitSuccess = await initializeDatabaseWithErrorHandling({
+        operationId,
+        userId,
+        username,
+        commandName: 'convert',
+        interaction,
+        context: { originalUrl },
+      });
+      if (!dbInitSuccess) {
+        return; // Exit early - operation is already marked as error
+      }
       logOperationStep(operationId, 'url_validation', 'running', {
         message: 'Validating and processing URL',
         metadata: { originalUrl },
@@ -381,7 +397,7 @@ export async function processConversion(
           });
           updateOperationStatus(operationId, 'success', { fileSize: 0 });
           recordRateLimit(userId);
-          await interaction.editReply({
+          await safeInteractionEditReply(interaction, {
             content: processedUrl.file_url,
           });
           await notifyCommandSuccess(username, 'convert', { operationId, userId });
@@ -461,7 +477,7 @@ export async function processConversion(
             : `${CDN_BASE_URL}/${hash}.gif`;
           updateOperationStatus(operationId, 'success', { fileSize: 0 });
           recordRateLimit(userId);
-          await interaction.editReply({
+          await safeInteractionEditReply(interaction, {
             content: gifUrl,
           });
           return;
@@ -481,7 +497,7 @@ export async function processConversion(
         const safeHash = hash.replace(/[^a-f0-9]/gi, '');
         const filename = `${safeHash}.gif`;
         try {
-          const message = await interaction.editReply({
+          const message = await safeInteractionEditReply(interaction, {
             files: [new AttachmentBuilder(gifBuffer, { name: filename })],
           });
 
@@ -569,7 +585,7 @@ export async function processConversion(
             if (r2Url) {
               updateOperationStatus(operationId, 'success', { fileSize });
               recordRateLimit(userId);
-              await interaction.editReply({
+              await safeInteractionEditReply(interaction, {
                 content: r2Url,
               });
               await notifyCommandSuccess(username, 'convert', { operationId, userId });
@@ -583,7 +599,7 @@ export async function processConversion(
           const gifUrl = `${CDN_BASE_URL}/${hash}.gif`;
           updateOperationStatus(operationId, 'success', { fileSize });
           recordRateLimit(userId);
-          await interaction.editReply({
+          await safeInteractionEditReply(interaction, {
             content: gifUrl,
           });
           await notifyCommandSuccess(username, 'convert', { operationId, userId });
@@ -599,7 +615,7 @@ export async function processConversion(
           : `${CDN_BASE_URL}/${hash}.gif`;
         updateOperationStatus(operationId, 'success', { fileSize });
         recordRateLimit(userId);
-        await interaction.editReply({
+        await safeInteractionEditReply(interaction, {
           content: gifUrl,
         });
         await notifyCommandSuccess(username, 'convert', { operationId, userId });
@@ -669,7 +685,7 @@ export async function processConversion(
         const duration = metadata.format.duration;
 
         if (duration > MAX_GIF_DURATION) {
-          await interaction.editReply({
+          await safeInteractionEditReply(interaction, {
             content: `video is too long (${Math.ceil(duration)}s). maximum duration: ${MAX_GIF_DURATION}s`,
           });
           await notifyCommandFailure(username, 'convert', {
@@ -766,7 +782,7 @@ export async function processConversion(
             const requestedEnd = conversionOptions.startTime + conversionOptions.duration;
 
             if (requestedEnd > videoDuration) {
-              await interaction.editReply({
+              await safeInteractionEditReply(interaction, {
                 content: `requested timeframe (${conversionOptions.startTime}s to ${requestedEnd.toFixed(1)}s) exceeds video length (${videoDuration.toFixed(1)}s).`,
               });
               await notifyCommandFailure(username, 'convert', {
@@ -1104,25 +1120,25 @@ export async function processConversion(
               userId,
               optimizedSize
             );
-            await interaction.editReply({
+            await safeInteractionEditReply(interaction, {
               content: r2Url,
             });
           } else {
             // If R2 upload also fails, use the original gifUrl
-            await interaction.editReply({
+            await safeInteractionEditReply(interaction, {
               content: gifUrl,
             });
           }
         } catch (r2Error) {
           logger.error(`R2 fallback upload also failed: ${r2Error.message}`);
           // Last resort: use the original gifUrl
-          await interaction.editReply({
+          await safeInteractionEditReply(interaction, {
             content: gifUrl,
           });
         }
       }
     } else {
-      await interaction.editReply({
+      await safeInteractionEditReply(interaction, {
         content: gifUrl,
       });
     }
@@ -1163,7 +1179,7 @@ export async function processConversion(
       stackTrace: error.stack || null,
     });
 
-    await interaction.editReply({
+    await safeInteractionEditReply(interaction, {
       content: error.message || 'an error occurred while converting the file.',
     });
 
@@ -1205,7 +1221,7 @@ export async function handleConvertContextMenu(interaction) {
   // Check rate limit (admins bypass this check)
   if (checkRateLimit(userId)) {
     logger.warn(`User ${userId} (${interaction.user.tag}) is rate limited`);
-    await interaction.reply({
+    await safeInteractionReply(interaction, {
       content: 'please wait 30 seconds before converting another video or image.',
       flags: MessageFlags.Ephemeral,
     });
@@ -1251,7 +1267,7 @@ export async function handleConvertContextMenu(interaction) {
     const validation = validateVideoAttachment(videoAttachment, adminUser);
     if (!validation.valid) {
       logger.warn(`Video validation failed for user ${userId}: ${validation.error}`);
-      await interaction.reply({
+      await safeInteractionReply(interaction, {
         content: validation.error,
         flags: MessageFlags.Ephemeral,
       });
@@ -1267,7 +1283,7 @@ export async function handleConvertContextMenu(interaction) {
     const validation = validateImageAttachment(imageAttachment, adminUser);
     if (!validation.valid) {
       logger.warn(`Image validation failed for user ${userId}: ${validation.error}`);
-      await interaction.reply({
+      await safeInteractionReply(interaction, {
         content: validation.error,
         flags: MessageFlags.Ephemeral,
       });
@@ -1279,7 +1295,7 @@ export async function handleConvertContextMenu(interaction) {
     const urlValidation = validateUrl(url);
     if (!urlValidation.valid) {
       logger.warn(`Invalid URL for user ${userId}: ${urlValidation.error}`);
-      await interaction.reply({
+      await safeInteractionReply(interaction, {
         content: `invalid URL: ${urlValidation.error}`,
         flags: MessageFlags.Ephemeral,
       });
@@ -1288,7 +1304,7 @@ export async function handleConvertContextMenu(interaction) {
     }
 
     // Defer reply since downloading may take time
-    await interaction.deferReply();
+    await safeInteractionDeferReply(interaction);
 
     try {
       // Check if it's a cdn.gronka.p1x.dev URL and try to use local file
@@ -1319,7 +1335,7 @@ export async function handleConvertContextMenu(interaction) {
             logger.info(`Resolved Tenor URL to: ${actualUrl}`);
           } catch (error) {
             logger.error(`Failed to parse Tenor URL for user ${userId}:`, error);
-            await interaction.editReply({
+            await safeInteractionEditReply(interaction, {
               content: error.message || 'failed to parse Tenor URL.',
             });
             await notifyCommandFailure(username, 'convert');
@@ -1353,7 +1369,7 @@ export async function handleConvertContextMenu(interaction) {
         const validation = validateVideoAttachment(attachment, adminUser);
         if (!validation.valid) {
           logger.warn(`Video validation failed for user ${userId}: ${validation.error}`);
-          await interaction.editReply({
+          await safeInteractionEditReply(interaction, {
             content: validation.error,
           });
           await notifyCommandFailure(username, 'convert');
@@ -1367,7 +1383,7 @@ export async function handleConvertContextMenu(interaction) {
         const validation = validateImageAttachment(attachment, adminUser);
         if (!validation.valid) {
           logger.warn(`Image validation failed for user ${userId}: ${validation.error}`);
-          await interaction.editReply({
+          await safeInteractionEditReply(interaction, {
             content: validation.error,
           });
           await notifyCommandFailure(username, 'convert');
@@ -1375,7 +1391,7 @@ export async function handleConvertContextMenu(interaction) {
         }
       } else {
         logger.warn(`Invalid attachment type for user ${userId}`);
-        await interaction.editReply({
+        await safeInteractionEditReply(interaction, {
           content:
             'unsupported file format. please provide a video (mp4, mov, webm, avi, mkv) or image (png, jpg, jpeg, webp, gif).',
         });
@@ -1384,14 +1400,14 @@ export async function handleConvertContextMenu(interaction) {
       }
     } catch (error) {
       logger.error(`Failed to download file from URL for user ${userId}:`, error);
-      await interaction.editReply({
+      await safeInteractionEditReply(interaction, {
         content: error.message || 'failed to download file from URL.',
       });
       return;
     }
   } else {
     logger.warn(`No video or image attachment or URL found for user ${userId}`);
-    await interaction.reply({
+    await safeInteractionReply(interaction, {
       content: 'no video or image attachment or URL found in this message.',
       flags: MessageFlags.Ephemeral,
     });
@@ -1401,7 +1417,7 @@ export async function handleConvertContextMenu(interaction) {
 
   // Defer reply if not already deferred (for attachment case)
   if (!url) {
-    await interaction.deferReply();
+    await safeInteractionDeferReply(interaction);
   }
 
   await processConversion(
@@ -1432,7 +1448,7 @@ export async function handleConvertCommand(interaction) {
   // Check rate limit (admins bypass this check)
   if (checkRateLimit(userId)) {
     logger.warn(`User ${userId} (${interaction.user.tag}) is rate limited`);
-    await interaction.reply({
+    await safeInteractionReply(interaction, {
       content: 'please wait 30 seconds before converting another video or image.',
       flags: MessageFlags.Ephemeral,
     });
@@ -1453,7 +1469,7 @@ export async function handleConvertCommand(interaction) {
       logger.warn(
         `Invalid time range for user ${userId}: end_time (${endTime}) must be greater than start_time (${startTime})`
       );
-      await interaction.reply({
+      await safeInteractionReply(interaction, {
         content: 'end_time must be greater than start_time.',
         flags: MessageFlags.Ephemeral,
       });
@@ -1463,7 +1479,7 @@ export async function handleConvertCommand(interaction) {
 
   if (!attachment && !url) {
     logger.warn(`No attachment or URL provided for user ${userId}`);
-    await interaction.reply({
+    await safeInteractionReply(interaction, {
       content: 'please provide either a video/image attachment or a URL to a video/image file.',
       flags: MessageFlags.Ephemeral,
     });
@@ -1472,7 +1488,7 @@ export async function handleConvertCommand(interaction) {
 
   if (attachment && url) {
     logger.warn(`Both attachment and URL provided for user ${userId}`);
-    await interaction.reply({
+    await safeInteractionReply(interaction, {
       content: 'please provide either a file attachment or a URL, not both.',
       flags: MessageFlags.Ephemeral,
     });
@@ -1490,7 +1506,7 @@ export async function handleConvertCommand(interaction) {
     const urlValidation = validateUrl(url);
     if (!urlValidation.valid) {
       logger.warn(`Invalid URL for user ${userId}: ${urlValidation.error}`);
-      await interaction.reply({
+      await safeInteractionReply(interaction, {
         content: `invalid URL: ${urlValidation.error}`,
         flags: MessageFlags.Ephemeral,
       });
@@ -1499,7 +1515,7 @@ export async function handleConvertCommand(interaction) {
     }
 
     // Defer reply since downloading may take time
-    await interaction.deferReply();
+    await safeInteractionDeferReply(interaction);
 
     try {
       // Check if it's a cdn.gronka.p1x.dev URL and try to use local file
@@ -1530,7 +1546,7 @@ export async function handleConvertCommand(interaction) {
             logger.info(`Resolved Tenor URL to: ${actualUrl}`);
           } catch (error) {
             logger.error(`Failed to parse Tenor URL for user ${userId}:`, error);
-            await interaction.editReply({
+            await safeInteractionEditReply(interaction, {
               content: error.message || 'failed to parse Tenor URL.',
             });
             return;
@@ -1555,7 +1571,7 @@ export async function handleConvertCommand(interaction) {
       }
     } catch (error) {
       logger.error(`Failed to download file from URL for user ${userId}:`, error);
-      await interaction.editReply({
+      await safeInteractionEditReply(interaction, {
         content: error.message || 'failed to download file from URL.',
       });
       await notifyCommandFailure(username, 'convert');
@@ -1573,11 +1589,11 @@ export async function handleConvertCommand(interaction) {
     if (!validation.valid) {
       logger.warn(`Video validation failed for user ${userId}: ${validation.error}`);
       if (url) {
-        await interaction.editReply({
+        await safeInteractionEditReply(interaction, {
           content: validation.error,
         });
       } else {
-        await interaction.reply({
+        await safeInteractionReply(interaction, {
           content: validation.error,
           flags: MessageFlags.Ephemeral,
         });
@@ -1597,11 +1613,11 @@ export async function handleConvertCommand(interaction) {
     if (!validation.valid) {
       logger.warn(`Image validation failed for user ${userId}: ${validation.error}`);
       if (url) {
-        await interaction.editReply({
+        await safeInteractionEditReply(interaction, {
           content: validation.error,
         });
       } else {
-        await interaction.reply({
+        await safeInteractionReply(interaction, {
           content: validation.error,
           flags: MessageFlags.Ephemeral,
         });
@@ -1614,11 +1630,11 @@ export async function handleConvertCommand(interaction) {
     const errorMsg =
       'unsupported file format. please provide a video (mp4, mov, webm, avi, mkv) or image (png, jpg, jpeg, webp, gif).';
     if (url) {
-      await interaction.editReply({
+      await safeInteractionEditReply(interaction, {
         content: errorMsg,
       });
     } else {
-      await interaction.reply({
+      await safeInteractionReply(interaction, {
         content: errorMsg,
         flags: MessageFlags.Ephemeral,
       });
@@ -1629,7 +1645,7 @@ export async function handleConvertCommand(interaction) {
 
   // Defer reply if not already deferred (for attachment case)
   if (!url) {
-    await interaction.deferReply();
+    await safeInteractionDeferReply(interaction);
   }
 
   // Convert start_time/end_time to startTime/duration format

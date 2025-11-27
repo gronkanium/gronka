@@ -28,9 +28,15 @@ import {
 import { uploadGifToR2, uploadVideoToR2, uploadImageToR2 } from '../utils/r2-storage.js';
 import { queueCobaltRequest, hashUrl } from '../utils/cobalt-queue.js';
 import { notifyCommandSuccess, notifyCommandFailure } from '../utils/ntfy-notifier.js';
-import { getProcessedUrl, insertProcessedUrl, initDatabase } from '../utils/database.js';
+import { getProcessedUrl, insertProcessedUrl } from '../utils/database.js';
+import { initializeDatabaseWithErrorHandling } from '../utils/database-init.js';
 import { r2Config } from '../utils/config.js';
 import { trimVideo, trimGif } from '../utils/video-processor.js';
+import {
+  safeInteractionReply,
+  safeInteractionEditReply,
+  safeInteractionDeferReply,
+} from '../utils/interaction-helpers.js';
 import tmp from 'tmp';
 
 const logger = createLogger('download');
@@ -102,11 +108,21 @@ async function processDownload(
   });
 
   try {
+    // Initialize database if needed (do this before setting status to running)
+    const dbInitSuccess = await initializeDatabaseWithErrorHandling({
+      operationId,
+      userId,
+      username,
+      commandName: 'download',
+      interaction,
+      context: { url },
+    });
+    if (!dbInitSuccess) {
+      return; // Exit early - operation is already marked as error
+    }
+
     // Update operation to running
     updateOperationStatus(operationId, 'running');
-
-    // Initialize database if needed
-    await initDatabase();
 
     logOperationStep(operationId, 'url_validation', 'running', {
       message: 'Validating URL',
@@ -137,7 +153,7 @@ async function processDownload(
           const fileUrl = processedUrl.file_url;
           updateOperationStatus(operationId, 'success', { fileSize: 0 });
           recordRateLimit(userId);
-          await interaction.editReply({
+          await safeInteractionEditReply(interaction, {
             content: fileUrl,
           });
           await notifyCommandSuccess(username, 'download', { operationId, userId });
@@ -208,7 +224,7 @@ async function processDownload(
           const fileUrl = urlMatch[1];
           updateOperationStatus(operationId, 'success', { fileSize: 0 });
           recordRateLimit(userId);
-          await interaction.editReply({
+          await safeInteractionEditReply(interaction, {
             content: fileUrl,
           });
           await notifyCommandSuccess(username, 'download', { operationId, userId });
@@ -285,7 +301,7 @@ async function processDownload(
       // The file hash deduplication handles this case
 
       recordRateLimit(userId);
-      await interaction.editReply({
+      await safeInteractionEditReply(interaction, {
         content: replyContent,
       });
       return;
@@ -377,7 +393,7 @@ async function processDownload(
 
       updateOperationStatus(operationId, 'success', { fileSize: existingSize });
       recordRateLimit(userId);
-      await interaction.editReply({
+      await safeInteractionEditReply(interaction, {
         content: fileUrl,
       });
 
@@ -476,11 +492,11 @@ async function processDownload(
             finalBuffer = fileData.buffer;
             // Clean up temp files on error
             try {
-              await fs.unlink(inputGifPath).catch(() => {});
-              await fs.unlink(outputGifPath).catch(() => {});
+              await fs.unlink(inputGifPath);
+              await fs.unlink(outputGifPath);
               tmpDir.removeCallback();
-            } catch {
-              // Ignore cleanup errors
+            } catch (cleanupError) {
+              logger.warn(`Failed to clean up temp files: ${cleanupError.message}`);
             }
           }
         } else {
@@ -534,7 +550,7 @@ async function processDownload(
 
           updateOperationStatus(operationId, 'success', { fileSize: existingSize });
           recordRateLimit(userId);
-          await interaction.editReply({
+          await safeInteractionEditReply(interaction, {
             content: fileUrl,
           });
 
@@ -638,11 +654,11 @@ async function processDownload(
             finalBuffer = fileData.buffer;
             // Clean up temp files on error
             try {
-              await fs.unlink(inputGifPath).catch(() => {});
-              await fs.unlink(outputGifPath).catch(() => {});
+              await fs.unlink(inputGifPath);
+              await fs.unlink(outputGifPath);
               tmpDir.removeCallback();
-            } catch {
-              // Ignore cleanup errors
+            } catch (cleanupError) {
+              logger.warn(`Failed to clean up temp files: ${cleanupError.message}`);
             }
           }
 
@@ -693,7 +709,7 @@ async function processDownload(
 
               updateOperationStatus(operationId, 'success', { fileSize: existingSize });
               recordRateLimit(userId);
-              await interaction.editReply({
+              await safeInteractionEditReply(interaction, {
                 content: fileUrl,
               });
 
@@ -803,11 +819,11 @@ async function processDownload(
             finalBuffer = fileData.buffer;
             // Clean up temp files on error
             try {
-              await fs.unlink(inputVideoPath).catch(() => {});
-              await fs.unlink(outputVideoPath).catch(() => {});
+              await fs.unlink(inputVideoPath);
+              await fs.unlink(outputVideoPath);
               tmpDir.removeCallback();
-            } catch {
-              // Ignore cleanup errors
+            } catch (cleanupError) {
+              logger.warn(`Failed to clean up temp files: ${cleanupError.message}`);
             }
           }
         } else {
@@ -863,7 +879,7 @@ async function processDownload(
 
           updateOperationStatus(operationId, 'success', { fileSize: existingSize });
           recordRateLimit(userId);
-          await interaction.editReply({
+          await safeInteractionEditReply(interaction, {
             content: fileUrl,
           });
 
@@ -947,7 +963,7 @@ async function processDownload(
         const safeHash = hash.replace(/[^a-f0-9]/gi, '');
         const filename = `${safeHash}${dbExt}`;
         try {
-          const message = await interaction.editReply({
+          const message = await safeInteractionEditReply(interaction, {
             files: [new AttachmentBuilder(finalBuffer, { name: filename })],
           });
 
@@ -1024,25 +1040,25 @@ async function processDownload(
                 userId,
                 finalSize
               );
-              await interaction.editReply({
+              await safeInteractionEditReply(interaction, {
                 content: r2Url,
               });
             } else {
               // If R2 upload also fails, use the original fileUrl
-              await interaction.editReply({
+              await safeInteractionEditReply(interaction, {
                 content: fileUrl,
               });
             }
           } catch (r2Error) {
             logger.error(`R2 fallback upload also failed: ${r2Error.message}`);
             // Last resort: use the original fileUrl
-            await interaction.editReply({
+            await safeInteractionEditReply(interaction, {
               content: fileUrl,
             });
           }
         }
       } else {
-        await interaction.editReply({
+        await safeInteractionEditReply(interaction, {
           content: fileUrl,
         });
       }
@@ -1093,7 +1109,7 @@ async function processDownload(
       error: errorMessage,
       stackTrace: error.stack || null,
     });
-    await interaction.editReply({
+    await safeInteractionEditReply(interaction, {
       content: errorMessage,
     });
 
@@ -1126,7 +1142,7 @@ export async function handleDownloadContextMenuCommand(interaction) {
   // Check rate limit (admins bypass this check)
   if (checkRateLimit(userId)) {
     logger.warn(`User ${userId} (${interaction.user.tag}) is rate limited`);
-    await interaction.reply({
+    await safeInteractionReply(interaction, {
       content: 'please wait 30 seconds before downloading another video.',
       flags: MessageFlags.Ephemeral,
     });
@@ -1151,7 +1167,7 @@ export async function handleDownloadContextMenuCommand(interaction) {
   // Check if URL was found
   if (!url) {
     logger.warn(`No URL found in message for user ${userId}`);
-    await interaction.reply({
+    await safeInteractionReply(interaction, {
       content: 'no URL found in this message.',
       flags: MessageFlags.Ephemeral,
     });
@@ -1166,7 +1182,7 @@ export async function handleDownloadContextMenuCommand(interaction) {
   const urlValidation = validateUrl(url);
   if (!urlValidation.valid) {
     logger.warn(`Invalid URL for user ${userId}: ${urlValidation.error}`);
-    await interaction.reply({
+    await safeInteractionReply(interaction, {
       content: `invalid URL: ${urlValidation.error}`,
       flags: MessageFlags.Ephemeral,
     });
@@ -1176,7 +1192,7 @@ export async function handleDownloadContextMenuCommand(interaction) {
   // Check if URL is from YouTube (blacklisted)
   if (isYouTubeUrl(url)) {
     logger.warn(`User ${userId} attempted to download from YouTube (blacklisted)`);
-    await interaction.reply({
+    await safeInteractionReply(interaction, {
       content: 'youtube downloads are disabled.',
       flags: MessageFlags.Ephemeral,
     });
@@ -1185,7 +1201,7 @@ export async function handleDownloadContextMenuCommand(interaction) {
 
   // Check if Cobalt is enabled
   if (!COBALT_ENABLED) {
-    await interaction.reply({
+    await safeInteractionReply(interaction, {
       content: 'cobalt is not enabled.',
       flags: MessageFlags.Ephemeral,
     });
@@ -1195,7 +1211,7 @@ export async function handleDownloadContextMenuCommand(interaction) {
 
   // Check if URL is from social media
   if (!isSocialMediaUrl(url)) {
-    await interaction.reply({
+    await safeInteractionReply(interaction, {
       content: 'url is not from a supported social media platform.',
       flags: MessageFlags.Ephemeral,
     });
@@ -1207,7 +1223,7 @@ export async function handleDownloadContextMenuCommand(interaction) {
   }
 
   // Defer reply since downloading may take time
-  await interaction.deferReply();
+  await safeInteractionDeferReply(interaction);
 
   await processDownload(interaction, url, 'context-menu');
 }
@@ -1228,7 +1244,7 @@ export async function handleDownloadCommand(interaction) {
   // Check rate limit (admins bypass this check)
   if (checkRateLimit(userId)) {
     logger.warn(`User ${userId} (${interaction.user.tag}) is rate limited`);
-    await interaction.reply({
+    await safeInteractionReply(interaction, {
       content: 'please wait 30 seconds before downloading another video.',
       flags: MessageFlags.Ephemeral,
     });
@@ -1246,7 +1262,7 @@ export async function handleDownloadCommand(interaction) {
       logger.warn(
         `Invalid time range for user ${userId}: end_time (${endTime}) must be greater than start_time (${startTime})`
       );
-      await interaction.reply({
+      await safeInteractionReply(interaction, {
         content: 'end_time must be greater than start_time.',
         flags: MessageFlags.Ephemeral,
       });
@@ -1281,7 +1297,7 @@ export async function handleDownloadCommand(interaction) {
 
   if (!url) {
     logger.warn(`No URL provided for user ${userId}`);
-    await interaction.reply({
+    await safeInteractionReply(interaction, {
       content: 'please provide a URL to download from.',
       flags: MessageFlags.Ephemeral,
     });
@@ -1293,7 +1309,7 @@ export async function handleDownloadCommand(interaction) {
   const urlValidation = validateUrl(url);
   if (!urlValidation.valid) {
     logger.warn(`Invalid URL for user ${userId}: ${urlValidation.error}`);
-    await interaction.reply({
+    await safeInteractionReply(interaction, {
       content: `invalid URL: ${urlValidation.error}`,
       flags: MessageFlags.Ephemeral,
     });
@@ -1303,7 +1319,7 @@ export async function handleDownloadCommand(interaction) {
   // Check if URL is from YouTube (blacklisted)
   if (isYouTubeUrl(url)) {
     logger.warn(`User ${userId} attempted to download from YouTube (blacklisted)`);
-    await interaction.reply({
+    await safeInteractionReply(interaction, {
       content: 'youtube downloads are disabled.',
       flags: MessageFlags.Ephemeral,
     });
@@ -1312,7 +1328,7 @@ export async function handleDownloadCommand(interaction) {
 
   // Check if Cobalt is enabled and URL is from social media
   if (!COBALT_ENABLED) {
-    await interaction.reply({
+    await safeInteractionReply(interaction, {
       content: 'cobalt is not enabled. please enable it to use the download command.',
       flags: MessageFlags.Ephemeral,
     });
@@ -1321,7 +1337,7 @@ export async function handleDownloadCommand(interaction) {
   }
 
   if (!isSocialMediaUrl(url)) {
-    await interaction.reply({
+    await safeInteractionReply(interaction, {
       content: 'url is not from a supported social media platform.',
       flags: MessageFlags.Ephemeral,
     });
@@ -1333,7 +1349,7 @@ export async function handleDownloadCommand(interaction) {
   }
 
   // Defer reply since downloading may take time
-  await interaction.deferReply();
+  await safeInteractionDeferReply(interaction);
 
   await processDownload(interaction, url, 'slash', trimStartTime, trimDuration);
 }

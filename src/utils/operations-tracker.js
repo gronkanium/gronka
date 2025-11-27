@@ -160,14 +160,22 @@ export function createOperation(type, userId, username, context = {}) {
     metadata.inputType = inputType;
   }
 
-  // Log operation creation with full context
+  // Log operation creation to database (non-blocking - in-memory operation already created)
+  // This ensures operations are tracked even if database is unavailable
   try {
-    insertOperationLog(operation.id, 'created', 'pending', {
-      message: `Operation ${type} created for user ${username}`,
-      metadata,
-    });
+    // Wrap in additional try-catch to handle any errors from insertOperationLog itself
+    try {
+      insertOperationLog(operation.id, 'created', 'pending', {
+        message: `Operation ${type} created for user ${username}`,
+        metadata,
+      });
+    } catch (dbError) {
+      // Database operation failed, but in-memory operation is already created
+      console.error('Failed to log operation creation to database:', dbError);
+    }
   } catch (error) {
-    console.error('Failed to log operation creation:', error);
+    // Catch any other unexpected errors
+    console.error('Unexpected error during operation creation logging:', error);
   }
 
   // Log to application logs with operation ID
@@ -209,19 +217,27 @@ export function updateOperationStatus(operationId, status, data = {}) {
     operation.performanceMetrics.duration = Math.max(1, Date.now() - operation.startTime);
   }
 
-  // Log status update
+  // Log status update to database (non-blocking - in-memory update already completed)
+  // This ensures operation status is always updated even if database is unavailable
   try {
     const metadata = { previousStatus, newStatus: status, ...data };
     // Include duration in metadata when operation completes
     if ((status === 'success' || status === 'error') && operation.performanceMetrics.duration) {
       metadata.duration = operation.performanceMetrics.duration;
     }
-    insertOperationLog(operationId, 'status_update', status, {
-      message: `Status changed from ${previousStatus} to ${status}`,
-      metadata,
-    });
+    // Wrap in additional try-catch to handle any errors from insertOperationLog itself
+    try {
+      insertOperationLog(operationId, 'status_update', status, {
+        message: `Status changed from ${previousStatus} to ${status}`,
+        metadata,
+      });
+    } catch (dbError) {
+      // Database operation failed, but in-memory status is already updated
+      console.error('Failed to log operation status update to database:', dbError);
+    }
   } catch (error) {
-    console.error('Failed to log operation status update:', error);
+    // Catch any other unexpected errors
+    console.error('Unexpected error during operation status update logging:', error);
   }
 
   // Log to application logs with operation ID
@@ -293,16 +309,24 @@ export function logOperationStep(operationId, step, status, data = {}) {
     }
   }
 
-  // Log to database
+  // Log to database (non-blocking - in-memory step already added)
+  // This ensures operation steps are tracked even if database is unavailable
   try {
-    insertOperationLog(operationId, step, status, {
-      message: data.message || `Step ${step} ${status}`,
-      filePath: data.filePath || null,
-      stackTrace: data.stackTrace || null,
-      metadata: data.metadata || null,
-    });
+    // Wrap in additional try-catch to handle any errors from insertOperationLog itself
+    try {
+      insertOperationLog(operationId, step, status, {
+        message: data.message || `Step ${step} ${status}`,
+        filePath: data.filePath || null,
+        stackTrace: data.stackTrace || null,
+        metadata: data.metadata || null,
+      });
+    } catch (dbError) {
+      // Database operation failed, but in-memory step is already added
+      console.error('Failed to log operation step to database:', dbError);
+    }
   } catch (error) {
-    console.error('Failed to log operation step:', error);
+    // Catch any other unexpected errors
+    console.error('Unexpected error during operation step logging:', error);
   }
 
   // Log to application logs with operation ID
@@ -333,16 +357,24 @@ export function logOperationError(operationId, error, data = {}) {
   operation.error = errorMessage;
   operation.stackTrace = stackTrace;
 
-  // Log to database
+  // Log to database (non-blocking - in-memory error already set)
+  // This ensures operation errors are tracked even if database is unavailable
   try {
-    insertOperationLog(operationId, 'error', 'error', {
-      message: errorMessage,
-      filePath: data.filePath || null,
-      stackTrace: stackTrace,
-      metadata: data.metadata || null,
-    });
+    // Wrap in additional try-catch to handle any errors from insertOperationLog itself
+    try {
+      insertOperationLog(operationId, 'error', 'error', {
+        message: errorMessage,
+        filePath: data.filePath || null,
+        stackTrace: stackTrace,
+        metadata: data.metadata || null,
+      });
+    } catch (dbError) {
+      // Database operation failed, but in-memory error is already set
+      console.error('Failed to log operation error to database:', dbError);
+    }
   } catch (err) {
-    console.error('Failed to log operation error:', err);
+    // Catch any other unexpected errors
+    console.error('Unexpected error during operation error logging:', err);
   }
 
   // Log to application logs with operation ID
@@ -437,28 +469,68 @@ async function updateUserMetricsForOperation(operation) {
  */
 export async function cleanupStuckOperations(maxAgeMinutes = 10, client = null) {
   try {
+    const now = Date.now();
+    const maxAge = maxAgeMinutes * 60 * 1000; // Convert minutes to milliseconds
+    const cutoffTime = now - maxAge;
+
     // Query database for stuck operations
     const stuckOperationIds = getStuckOperations(maxAgeMinutes);
 
-    if (stuckOperationIds.length === 0) {
+    // Also check in-memory operations for stuck ones (in case database init failed)
+    // This catches operations that were created but never logged to database
+    const inMemoryStuckOps = operations.filter(op => {
+      // Check if operation is in 'running' or 'pending' status and is old enough
+      if (op.status !== 'running' && op.status !== 'pending') {
+        return false;
+      }
+      // Check if operation timestamp is older than cutoff
+      // Use timestamp (last status update) or startTime (operation creation) whichever is more recent
+      const lastUpdate = op.timestamp || op.startTime || 0;
+      return lastUpdate < cutoffTime;
+    });
+
+    // Combine database and in-memory stuck operations, removing duplicates
+    const allStuckOperationIds = new Set(stuckOperationIds);
+    for (const op of inMemoryStuckOps) {
+      allStuckOperationIds.add(op.id);
+    }
+
+    if (allStuckOperationIds.size === 0) {
       return 0;
     }
 
     let cleanedCount = 0;
-    for (const operationId of stuckOperationIds) {
+    for (const operationId of allStuckOperationIds) {
       try {
-        // Mark as failed in database first
-        markOperationAsFailed(operationId);
+        // Check if operation exists in memory (might be in-memory only if db init failed)
+        const inMemoryOp = operations.find(op => op.id === operationId);
+
+        // Mark as failed in database (may fail silently if db not initialized)
+        try {
+          markOperationAsFailed(operationId);
+        } catch (dbError) {
+          // Database operation failed - that's okay, we'll update in-memory directly
+          logger.debug(
+            `Could not mark operation ${operationId} as failed in database: ${dbError.message}`
+          );
+        }
 
         // Reconstruct operation from database to get the latest status
         // This ensures we have the complete, up-to-date operation object that matches webui format
         // We use getRecentOperationsFromDb and filter to get the specific operation
-        const recentOps = getRecentOperationsFromDb(1000);
-        const reconstructedOp = recentOps.find(op => op.id === operationId);
+        let reconstructedOp = null;
+        try {
+          const recentOps = getRecentOperationsFromDb(1000);
+          reconstructedOp = recentOps.find(op => op.id === operationId);
+        } catch (dbError) {
+          // Database query failed - that's okay, we'll use in-memory operation
+          logger.debug(
+            `Could not reconstruct operation ${operationId} from database: ${dbError.message}`
+          );
+        }
 
         if (reconstructedOp) {
           // Update in-memory operation if it exists
-          const inMemoryOp = operations.find(op => op.id === operationId);
           if (inMemoryOp) {
             // Update in-memory operation with reconstructed data
             Object.assign(inMemoryOp, reconstructedOp);
@@ -466,9 +538,30 @@ export async function cleanupStuckOperations(maxAgeMinutes = 10, client = null) 
 
           // Always broadcast the reconstructed operation to ensure webui gets the update
           broadcastUpdate(reconstructedOp);
+        } else if (inMemoryOp) {
+          // Operation exists only in memory (database init likely failed)
+          // Update it directly to error status
+          inMemoryOp.status = 'error';
+          inMemoryOp.timestamp = Date.now();
+          inMemoryOp.error = 'Operation timed out - marked as failed due to inactivity';
+          if (inMemoryOp.startTime) {
+            inMemoryOp.performanceMetrics.duration = Math.max(1, Date.now() - inMemoryOp.startTime);
+          }
+
+          // Broadcast the updated operation
+          broadcastUpdate(inMemoryOp);
         } else {
-          // Fallback: if reconstruction fails, build minimal operation from trace
-          const trace = getOperationTrace(operationId);
+          // Fallback: if reconstruction fails, try to get trace from database
+          let trace = null;
+          try {
+            trace = getOperationTrace(operationId);
+          } catch (dbError) {
+            // Database query failed - that's okay, we'll use in-memory operation
+            logger.debug(
+              `Could not get trace for operation ${operationId} from database: ${dbError.message}`
+            );
+          }
+
           if (trace) {
             const userId = trace?.context?.userId;
             const operationType = trace?.context?.operationType || 'operation';
@@ -503,9 +596,25 @@ export async function cleanupStuckOperations(maxAgeMinutes = 10, client = null) 
         }
 
         // Get user info for DM notification
-        const trace = getOperationTrace(operationId);
-        const userId = trace?.context?.userId;
-        const operationType = trace?.context?.operationType || 'operation';
+        let trace = null;
+        let userId = null;
+        let operationType = 'operation';
+
+        // Try to get trace from database, but fall back to in-memory operation if db fails
+        try {
+          trace = getOperationTrace(operationId);
+          userId = trace?.context?.userId;
+          operationType = trace?.context?.operationType || 'operation';
+        } catch (dbError) {
+          // Database query failed - use in-memory operation if available
+          if (inMemoryOp) {
+            userId = inMemoryOp.userId;
+            operationType = inMemoryOp.type || 'operation';
+          }
+          logger.debug(
+            `Could not get trace for DM notification for operation ${operationId}: ${dbError.message}`
+          );
+        }
 
         // Send DM notification to user if client is provided
         if (client && userId) {

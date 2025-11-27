@@ -383,6 +383,7 @@ export async function saveGif(buffer, hash, storagePath, metadata = {}) {
   // Ensure directory exists
   await fs.mkdir(path.dirname(gifPath), { recursive: true });
 
+  // Write file (fs.writeFile overwrites if file exists, so no TOCTOU issue)
   await fs.writeFile(gifPath, buffer);
   logger.debug(`Saved GIF: ${gifPath} (size: ${(buffer.length / (1024 * 1024)).toFixed(2)}MB)`);
 
@@ -525,8 +526,25 @@ export async function saveVideo(buffer, hash, extension, storagePath, metadata =
     r2Config.bucketName
   ) {
     try {
+      // Check if file already exists in R2 specifically (not local disk)
+      const existsInR2 = await videoExistsInR2(hash, extension, r2Config);
+      if (existsInR2) {
+        // File already exists in R2, return the public URL
+        const safeHash = hash.replace(/[^a-f0-9]/gi, '');
+        const safeExt = extension.replace(/[^a-zA-Z0-9.]/gi, '');
+        const ext = safeExt.startsWith('.') ? safeExt : `.${safeExt}`;
+        const key = `videos/${safeHash}${ext}`;
+        const publicUrl = getR2PublicUrl(key, r2Config);
+        logger.info(`Video already exists in R2: ${publicUrl}`);
+        return { url: publicUrl, method, buffer };
+      }
+
+      // Upload to R2 for large files
+      logger.info(
+        `Uploading video to R2 (hash: ${hash.substring(0, 8)}..., size: ${(buffer.length / (1024 * 1024)).toFixed(2)}MB)`
+      );
       const publicUrl = await uploadVideoToR2(buffer, hash, extension, r2Config, metadata);
-      logger.debug(
+      logger.info(
         `Saved video to R2: ${publicUrl} (size: ${(buffer.length / (1024 * 1024)).toFixed(2)}MB)`
       );
       // Increment R2 usage cache
@@ -536,6 +554,7 @@ export async function saveVideo(buffer, hash, extension, storagePath, metadata =
       return { url: publicUrl, method, buffer };
     } catch (error) {
       logger.error(`Failed to upload video to R2, falling back to local storage:`, error.message);
+      logger.error(`R2 upload error details:`, error);
       // Fall through to local storage
     }
   }
@@ -547,6 +566,7 @@ export async function saveVideo(buffer, hash, extension, storagePath, metadata =
   // Ensure directory exists
   await fs.mkdir(path.dirname(videoPath), { recursive: true });
 
+  // Write file (fs.writeFile overwrites if file exists, so no TOCTOU issue)
   await fs.writeFile(videoPath, buffer);
   logger.debug(`Saved video: ${videoPath} (size: ${(buffer.length / (1024 * 1024)).toFixed(2)}MB)`);
 
@@ -622,8 +642,25 @@ export async function saveImage(buffer, hash, extension, storagePath, metadata =
     r2Config.bucketName
   ) {
     try {
+      // Check if file already exists in R2 specifically (not local disk)
+      const existsInR2 = await imageExistsInR2(hash, extension, r2Config);
+      if (existsInR2) {
+        // File already exists in R2, return the public URL
+        const safeHash = hash.replace(/[^a-f0-9]/gi, '');
+        const safeExt = extension.replace(/[^a-zA-Z0-9.]/gi, '');
+        const ext = safeExt.startsWith('.') ? safeExt : `.${safeExt}`;
+        const key = `images/${safeHash}${ext}`;
+        const publicUrl = getR2PublicUrl(key, r2Config);
+        logger.info(`Image already exists in R2: ${publicUrl}`);
+        return { url: publicUrl, method, buffer };
+      }
+
+      // Upload to R2 for large files
+      logger.info(
+        `Uploading image to R2 (hash: ${hash.substring(0, 8)}..., size: ${(buffer.length / (1024 * 1024)).toFixed(2)}MB)`
+      );
       const publicUrl = await uploadImageToR2(buffer, hash, extension, r2Config, metadata);
-      logger.debug(
+      logger.info(
         `Saved image to R2: ${publicUrl} (size: ${(buffer.length / (1024 * 1024)).toFixed(2)}MB)`
       );
       // Increment R2 usage cache
@@ -633,6 +670,7 @@ export async function saveImage(buffer, hash, extension, storagePath, metadata =
       return { url: publicUrl, method, buffer };
     } catch (error) {
       logger.error(`Failed to upload image to R2, falling back to local storage:`, error.message);
+      logger.error(`R2 upload error details:`, error);
       // Fall through to local storage
     }
   }
@@ -644,6 +682,7 @@ export async function saveImage(buffer, hash, extension, storagePath, metadata =
   // Ensure directory exists
   await fs.mkdir(path.dirname(imagePath), { recursive: true });
 
+  // Write file (fs.writeFile overwrites if file exists, so no TOCTOU issue)
   await fs.writeFile(imagePath, buffer);
   logger.debug(`Saved image: ${imagePath} (size: ${(buffer.length / (1024 * 1024)).toFixed(2)}MB)`);
 

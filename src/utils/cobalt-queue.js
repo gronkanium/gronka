@@ -93,14 +93,15 @@ export async function queueCobaltRequest(url, downloadFn, options = {}) {
     }
   }
 
-  // Check if this URL is already being downloaded
+  // Check if this URL is already being downloaded (atomic check-and-set)
   // URL deduplication: if multiple users request the same URL simultaneously, we reuse the existing download
   // instead of making duplicate API calls, which saves bandwidth and prevents redundant processing
-  if (inProgressDownloads.has(urlHash)) {
+  // Use atomic check-and-set to prevent race condition where two requests check at the same time
+  let existingPromise = inProgressDownloads.get(urlHash);
+  if (existingPromise) {
     logger.info(
       `URL already in progress, waiting for existing download: ${url.substring(0, 50)}...`
     );
-    const existingPromise = inProgressDownloads.get(urlHash);
     return existingPromise;
   }
 
@@ -132,7 +133,16 @@ export async function queueCobaltRequest(url, downloadFn, options = {}) {
     processQueue();
   });
 
-  // Track this download
+  // Atomic check-and-set: if another request added the same URL between our check and set, use that one
+  existingPromise = inProgressDownloads.get(urlHash);
+  if (existingPromise) {
+    logger.info(
+      `URL was added by another request during setup, using existing download: ${url.substring(0, 50)}...`
+    );
+    return existingPromise;
+  }
+
+  // Track this download (atomic set)
   inProgressDownloads.set(urlHash, downloadPromise);
 
   return downloadPromise;

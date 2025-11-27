@@ -63,11 +63,17 @@ test-utils:
     policy: pull
   script:
     - set +e
-    - rm -rf test-utils.xml
+    - rm -rf test-utils.xml test-utils.tap
+    - echo "Running tests and capturing output..."
     - npx cross-env R2_ACCOUNT_ID= R2_ACCESS_KEY_ID= R2_SECRET_ACCESS_KEY= R2_BUCKET_NAME= node --test --test-reporter tap test/utils/ > test-utils.tap 2>&1
     - TEST_EXIT_CODE=$?
+    - echo "Test execution completed with exit code: $TEST_EXIT_CODE"
     - echo "TAP file size:$(wc -c < test-utils.tap) bytes"
-    - head -20 test-utils.tap || true
+    - echo "First 50 lines of TAP output:"
+    - head -50 test-utils.tap || true
+    - echo "Checking if TAP file contains valid TAP format..."
+    - grep -E "^(TAP version|ok |not ok |#)" test-utils.tap | head -10 || echo "No TAP format markers found"
+    - echo "Converting TAP to JUnit XML..."
     - npx tap-junit test-utils.tap -o test-utils.xml 2>&1 || TAP_JUNIT_FAILED=true
     - if [ -d test-utils.xml ]; then rm -rf test-utils.xml; fi
     - XML_SIZE=$([ -f test-utils.xml ] && wc -c < test-utils.xml || echo "0")
@@ -86,6 +92,7 @@ test-utils:
     when: always
     paths:
       - test-utils.xml
+      - test-utils.tap
     reports:
       junit: test-utils.xml
   dependencies:
@@ -108,11 +115,17 @@ test-commands:
     policy: pull
   script:
     - set +e
-    - rm -rf test-commands.xml
+    - rm -rf test-commands.xml test-commands.tap
+    - echo "Running tests and capturing output..."
     - npx cross-env R2_ACCOUNT_ID= R2_ACCESS_KEY_ID= R2_SECRET_ACCESS_KEY= R2_BUCKET_NAME= node --test --test-reporter tap test/commands/ > test-commands.tap 2>&1
     - TEST_EXIT_CODE=$?
+    - echo "Test execution completed with exit code: $TEST_EXIT_CODE"
     - echo "TAP file size:$(wc -c < test-commands.tap) bytes"
-    - head -20 test-commands.tap || true
+    - echo "First 50 lines of TAP output:"
+    - head -50 test-commands.tap || true
+    - echo "Checking if TAP file contains valid TAP format..."
+    - grep -E "^(TAP version|ok |not ok |#)" test-commands.tap | head -10 || echo "No TAP format markers found"
+    - echo "Converting TAP to JUnit XML..."
     - npx tap-junit test-commands.tap -o test-commands.xml 2>&1 || TAP_JUNIT_FAILED=true
     - if [ -d test-commands.xml ]; then rm -rf test-commands.xml; fi
     - XML_SIZE=$([ -f test-commands.xml ] && wc -c < test-commands.xml || echo "0")
@@ -131,6 +144,7 @@ test-commands:
     when: always
     paths:
       - test-commands.xml
+      - test-commands.tap
     reports:
       junit: test-commands.xml
   dependencies:
@@ -153,11 +167,17 @@ test-scripts:
     policy: pull
   script:
     - set +e
-    - rm -rf test-scripts.xml
+    - rm -rf test-scripts.xml test-scripts.tap
+    - echo "Running tests and capturing output..."
     - npx cross-env R2_ACCOUNT_ID= R2_ACCESS_KEY_ID= R2_SECRET_ACCESS_KEY= R2_BUCKET_NAME= node --test --test-reporter tap test/scripts/ > test-scripts.tap 2>&1
     - TEST_EXIT_CODE=$?
+    - echo "Test execution completed with exit code: $TEST_EXIT_CODE"
     - echo "TAP file size:$(wc -c < test-scripts.tap) bytes"
-    - head -20 test-scripts.tap || true
+    - echo "First 50 lines of TAP output:"
+    - head -50 test-scripts.tap || true
+    - echo "Checking if TAP file contains valid TAP format..."
+    - grep -E "^(TAP version|ok |not ok |#)" test-scripts.tap | head -10 || echo "No TAP format markers found"
+    - echo "Converting TAP to JUnit XML..."
     - npx tap-junit test-scripts.tap -o test-scripts.xml 2>&1 || TAP_JUNIT_FAILED=true
     - if [ -d test-scripts.xml ]; then rm -rf test-scripts.xml; fi
     - XML_SIZE=$([ -f test-scripts.xml ] && wc -c < test-scripts.xml || echo "0")
@@ -176,6 +196,7 @@ test-scripts:
     when: always
     paths:
       - test-scripts.xml
+      - test-scripts.tap
     reports:
       junit: test-scripts.xml
   dependencies:
@@ -198,11 +219,17 @@ test-integration:
     policy: pull
   script:
     - set +e
-    - rm -rf test-integration.xml
+    - rm -rf test-integration.xml test-integration.tap
+    - echo "Running tests and capturing output..."
     - npx cross-env R2_ACCOUNT_ID= R2_ACCESS_KEY_ID= R2_SECRET_ACCESS_KEY= R2_BUCKET_NAME= node --test --test-reporter tap test/webui-server-*.test.js test/docker-security.test.js > test-integration.tap 2>&1
     - TEST_EXIT_CODE=$?
+    - echo "Test execution completed with exit code: $TEST_EXIT_CODE"
     - echo "TAP file size:$(wc -c < test-integration.tap) bytes"
-    - head -20 test-integration.tap || true
+    - echo "First 50 lines of TAP output:"
+    - head -50 test-integration.tap || true
+    - echo "Checking if TAP file contains valid TAP format..."
+    - grep -E "^(TAP version|ok |not ok |#)" test-integration.tap | head -10 || echo "No TAP format markers found"
+    - echo "Converting TAP to JUnit XML..."
     - npx tap-junit test-integration.tap -o test-integration.xml 2>&1 || TAP_JUNIT_FAILED=true
     - if [ -d test-integration.xml ]; then rm -rf test-integration.xml; fi
     - XML_SIZE=$([ -f test-integration.xml ] && wc -c < test-integration.xml || echo "0")
@@ -221,6 +248,7 @@ test-integration:
     when: always
     paths:
       - test-integration.xml
+      - test-integration.tap
     reports:
       junit: test-integration.xml
   dependencies:

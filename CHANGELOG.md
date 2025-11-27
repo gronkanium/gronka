@@ -5,6 +5,19 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres (attempts) to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Removed
+
+- Deferred downloads feature
+  - Removed deferred download queue system that was never used in practice
+  - Removed deferred download notification handlers
+  - Removed "try again later" button UI from rate limit error messages
+  - Removed test suite for deferred download functionality (453 test lines)
+  - Rate limit errors now show a simple error message instructing users to try again later
+  - Removed 1556 lines of code across 7 files (queue system, notifiers, tests, and related integrations)
+  - Simplifies codebase by removing unused functionality that added unnecessary complexity
+
 ## [0.12.3-beta] - 2025-11-26
 
 ### Added

@@ -11,12 +11,21 @@ convert a video or image to gif.
 - `file` (attachment, optional) - the video or image file to convert
 - `url` (string, optional) - url to a video or image file to convert
 - `optimize` (boolean, optional) - optimize the gif after conversion to reduce file size
+- `lossy` (number, optional) - lossy compression level (0-100, default: 35)
+- `start_time` (number, optional) - start time in seconds for trimming video before conversion (only applies to video inputs, ignored for images)
+- `end_time` (number, optional) - end time in seconds for trimming video before conversion (only applies to video inputs, ignored for images)
 
 **usage:**
 
 - provide either a file attachment or a url (or both)
 - if both are provided, the file attachment takes precedence
 - the `optimize` flag applies lossy compression after conversion
+- **for videos**: time parameters (`start_time`, `end_time`) trim the video first, then convert to gif
+  - if only `start_time` is provided, conversion starts at that time and continues to end of video
+  - if only `end_time` is provided, conversion starts at beginning and ends at that time
+  - if both are provided, conversion uses the specified range
+  - `end_time` must be greater than `start_time` if both are provided
+- **for images**: time parameters are ignored (images don't have a time dimension)
 
 **examples:**
 
@@ -24,6 +33,8 @@ convert a video or image to gif.
 /convert file:<attach video>
 /convert url:https://example.com/video.mp4
 /convert file:<attach image> optimize:true
+/convert url:https://example.com/video.mp4 start_time:30 end_time:60
+/convert file:<attach video> start_time:10
 ```
 
 ### `/download`
@@ -33,6 +44,8 @@ download media from a social media url or direct url.
 **parameters:**
 
 - `url` (string, required) - url to download media from
+- `start_time` (number, optional) - start time in seconds (accepted but not used for downloads)
+- `end_time` (number, optional) - end time in seconds (accepted but not used for downloads)
 
 **usage:**
 
@@ -40,6 +53,7 @@ download media from a social media url or direct url.
 - also works with direct media urls
 - downloads and stores the media without conversion
 - use `/convert` afterwards if you want to convert to gif
+- time parameters are accepted for consistency but are not used for downloads (use `/convert` for video trimming)
 
 **examples:**
 

@@ -754,6 +754,30 @@ export async function handleDownloadCommand(interaction) {
 
   // Get URL from command options
   const url = interaction.options.getString('url');
+  const startTime = interaction.options.getNumber('start_time');
+  const endTime = interaction.options.getNumber('end_time');
+
+  // Validate time parameters if provided (for consistency, though not used for downloads)
+  if (startTime !== null && endTime !== null) {
+    if (endTime <= startTime) {
+      logger.warn(
+        `Invalid time range for user ${userId}: end_time (${endTime}) must be greater than start_time (${startTime})`
+      );
+      await interaction.reply({
+        content: 'end_time must be greater than start_time.',
+        flags: MessageFlags.Ephemeral,
+      });
+      return;
+    }
+  }
+
+  // Note: Time parameters are accepted but not used for downloads.
+  // Users should use /convert for video trimming.
+  if (startTime !== null || endTime !== null) {
+    logger.info(
+      `Time parameters provided for download command (ignored): start_time=${startTime}, end_time=${endTime}`
+    );
+  }
 
   if (!url) {
     logger.warn(`No URL provided for user ${userId}`);

@@ -7,6 +7,16 @@ and this project adheres (attempts) to [Semantic Versioning](https://semver.org/
 
 ## [Unreleased]
 
+### Added
+
+- Video trimming support for `/convert` command
+  - Added optional `start_time` and `end_time` parameters (in seconds) to `/convert` slash command
+  - Allows users to specify time ranges for video trimming before conversion to GIF
+  - Parameters only apply to video inputs and are ignored for images
+  - Supports decimal values for precise timing (e.g., 2.5 to 10.252 seconds)
+  - Time parameters also added to `/download` command for consistency (accepted but not used)
+  - Context menu commands remain unchanged for simplicity
+
 ### Removed
 
 - Deferred downloads feature

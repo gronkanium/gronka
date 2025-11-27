@@ -1,10 +1,11 @@
 - name: convert
   type: slash
   description: convert a video or image to gif
-  usage: '/convert [file|url]'
+  usage: '/convert [file|url] [start_time] [end_time]'
   examples:
     - '/convert file:<attachment>'
     - '/convert url:https://example.com/video.mp4'
+    - '/convert url:https://example.com/video.mp4 start_time:30 end_time:60'
   context_menu: true
   context_menu_name: convert to gif
   context_menu_advanced: true
@@ -17,6 +18,16 @@
       type: string
       description: url to a video or image file to convert
       required: false
+    - name: start_time
+      type: number
+      description: start time in seconds for trimming video before conversion (optional, only applies to video inputs, ignored for images)
+      required: false
+      min: 0
+    - name: end_time
+      type: number
+      description: end time in seconds for trimming video before conversion (optional, only applies to video inputs, ignored for images)
+      required: false
+      min: 0
   supported_formats:
     video: [mp4, mov, webm, avi, mkv]
     image: [png, jpg, jpeg, webp, gif]
@@ -64,7 +75,7 @@
 - name: download
   type: slash
   description: download a video from social media using cobalt (no conversion)
-  usage: '/download url:<url>'
+  usage: '/download url:<url> [start_time] [end_time]'
   examples:
     - '/download url:https://twitter.com/example/status/123'
   context_menu: true
@@ -74,6 +85,16 @@
       type: string
       description: url to a social media video to download
       required: true
+    - name: start_time
+      type: number
+      description: start time in seconds (accepted but not used for downloads)
+      required: false
+      min: 0
+    - name: end_time
+      type: number
+      description: end time in seconds (accepted but not used for downloads)
+      required: false
+      min: 0
 
 - name: config
   type: slash

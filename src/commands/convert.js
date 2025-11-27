@@ -1466,6 +1466,22 @@ export async function handleConvertCommand(interaction) {
   const url = interaction.options.getString('url');
   const optimize = interaction.options.getBoolean('optimize') ?? false;
   const lossy = interaction.options.getNumber('lossy');
+  const startTime = interaction.options.getNumber('start_time');
+  const endTime = interaction.options.getNumber('end_time');
+
+  // Validate time parameters if provided
+  if (startTime !== null && endTime !== null) {
+    if (endTime <= startTime) {
+      logger.warn(
+        `Invalid time range for user ${userId}: end_time (${endTime}) must be greater than start_time (${startTime})`
+      );
+      await interaction.reply({
+        content: 'end_time must be greater than start_time.',
+        flags: MessageFlags.Ephemeral,
+      });
+      return;
+    }
+  }
 
   if (!attachment && !url) {
     logger.warn(`No attachment or URL provided for user ${userId}`);
@@ -1638,6 +1654,30 @@ export async function handleConvertCommand(interaction) {
     await interaction.deferReply();
   }
 
+  // Convert start_time/end_time to startTime/duration format
+  // Only apply time parameters for videos, not images
+  let conversionStartTime = null;
+  let conversionDuration = null;
+
+  if (attachmentType === 'video') {
+    if (startTime !== null && endTime !== null) {
+      // Both provided: use range
+      conversionStartTime = startTime;
+      conversionDuration = endTime - startTime;
+    } else if (startTime !== null) {
+      // Only start_time: start at that time, continue to end
+      conversionStartTime = startTime;
+      conversionDuration = null;
+    } else if (endTime !== null) {
+      // Only end_time: start at beginning, end at that time
+      conversionStartTime = null;
+      conversionDuration = endTime;
+    }
+  } else if ((startTime !== null || endTime !== null) && attachmentType === 'image') {
+    // Time parameters don't apply to images
+    logger.info(`Time parameters provided for image conversion, ignoring them`);
+  }
+
   await processConversion(
     interaction,
     finalAttachment,
@@ -1647,6 +1687,8 @@ export async function handleConvertCommand(interaction) {
     {
       optimize,
       lossy: lossy !== null ? lossy : undefined,
+      startTime: conversionStartTime,
+      duration: conversionDuration,
     },
     url ? originalUrlForConversion : null,
     'slash'

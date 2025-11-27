@@ -3,6 +3,7 @@
  * Tracks convert, download, and optimize operations with status updates
  */
 
+import crypto from 'crypto';
 import axios from 'axios';
 import {
   insertOperationLog,
@@ -97,8 +98,10 @@ async function broadcastUpdate(operation) {
  * @returns {string} Operation ID
  */
 export function createOperation(type, userId, username, context = {}) {
+  // Use cryptographically secure random bytes for operation ID
+  const randomBytes = crypto.randomBytes(6).toString('hex');
   const operation = {
-    id: `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+    id: `${Date.now()}-${randomBytes}`,
     type,
     status: 'pending',
     userId,

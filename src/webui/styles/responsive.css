@@ -37,6 +37,8 @@
 
   /* Container widths */
   --container-max-width: 1400px;
+  --container-max-width-narrow: 1200px;
+  --container-max-width-wide: 1600px;
   --container-padding-mobile: 1rem;
   --container-padding-desktop: 2rem;
 
@@ -160,5 +162,76 @@
 
   .responsive-flex-row-mobile {
     flex-direction: row;
+  }
+}
+
+/* Constrained content container */
+.content-container {
+  max-width: var(--container-max-width);
+  margin: 0 auto;
+  width: 100%;
+  padding: 0 var(--container-padding-desktop);
+}
+
+@media (max-width: 767px) {
+  .content-container {
+    padding: 0 var(--container-padding-mobile);
+    max-width: 100%;
+  }
+}
+
+/* Narrow content container */
+.content-container-narrow {
+  max-width: var(--container-max-width-narrow);
+  margin: 0 auto;
+  width: 100%;
+  padding: 0 var(--container-padding-desktop);
+}
+
+@media (max-width: 767px) {
+  .content-container-narrow {
+    padding: 0 var(--container-padding-mobile);
+    max-width: 100%;
+  }
+}
+
+/* Wide content container */
+.content-container-wide {
+  max-width: var(--container-max-width-wide);
+  margin: 0 auto;
+  width: 100%;
+  padding: 0 var(--container-padding-desktop);
+}
+
+@media (max-width: 767px) {
+  .content-container-wide {
+    padding: 0 var(--container-padding-mobile);
+    max-width: 100%;
+  }
+}
+
+/* Centered content utility */
+.content-centered {
+  margin-left: auto;
+  margin-right: auto;
+}
+
+/* Table container with max-width */
+.table-container-constrained {
+  max-width: 100%;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+/* Card container with max-width */
+.card-container {
+  max-width: var(--container-max-width);
+  margin: 0 auto;
+  width: 100%;
+}
+
+@media (max-width: 767px) {
+  .card-container {
+    max-width: 100%;
   }
 }

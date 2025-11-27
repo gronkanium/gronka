@@ -341,6 +341,7 @@
     background-color: #222;
     border: 1px solid #333;
     border-radius: 4px;
+    min-width: 0;
   }
 
   .stat-value {
@@ -361,6 +362,8 @@
     background-color: #222;
     border: 1px solid #333;
     border-radius: 4px;
+    min-width: 0;
+    max-width: 100%;
   }
 
   .leaderboard-card h3 {
@@ -411,6 +414,9 @@
     border: 1px solid #333;
     border-radius: 4px;
     padding: 1.5rem;
+    width: 100%;
+    max-width: 100%;
+    overflow-x: auto;
   }
 
   .table-header {
@@ -458,6 +464,7 @@
     width: 100%;
     border-collapse: collapse;
     font-size: 0.9rem;
+    table-layout: auto;
   }
 
   thead {
@@ -473,10 +480,13 @@
     font-size: 0.85rem;
     text-transform: uppercase;
     letter-spacing: 0.5px;
+    white-space: nowrap;
   }
 
   th:first-child {
     text-align: left;
+    min-width: 120px;
+    max-width: 200px;
   }
 
   th:nth-child(2),
@@ -485,10 +495,15 @@
   th:nth-child(5),
   th:nth-child(6) {
     text-align: right;
+    min-width: 80px;
+    max-width: 150px;
   }
 
   th:last-child {
     text-align: center;
+    width: 100px;
+    min-width: 100px;
+    max-width: 100px;
   }
 
   th button {
@@ -518,16 +533,23 @@
   td {
     padding: 0.75rem 1rem;
     color: #e0e0e0;
+    word-wrap: break-word;
+    overflow-wrap: break-word;
   }
 
   .username-cell {
     font-weight: 500;
     text-align: left;
+    max-width: 200px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
   }
 
   .number-cell {
     text-align: right;
     font-family: monospace;
+    max-width: 150px;
   }
 
   .number-cell.success {

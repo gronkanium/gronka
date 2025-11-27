@@ -4,6 +4,7 @@ import { readFileSync } from 'fs';
 import { fileURLToPath } from 'url';
 import { dirname, join } from 'path';
 import { createLogger } from '../utils/logger.js';
+import { safeInteractionReply } from '../utils/interaction-helpers.js';
 import { getR2CacheStats } from '../utils/storage.js';
 import { r2Config } from '../utils/config.js';
 
@@ -106,10 +107,10 @@ export async function handleInfoCommand(interaction) {
         }
       );
 
-    await interaction.reply({ embeds: [embed] });
+    await safeInteractionReply(interaction, { embeds: [embed] });
   } catch (error) {
     logger.error('Failed to get info:', error);
-    await interaction.reply({
+    await safeInteractionReply(interaction, {
       content: 'an error occurred while fetching system information.',
       flags: MessageFlags.Ephemeral,
     });

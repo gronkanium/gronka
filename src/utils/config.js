@@ -211,6 +211,10 @@ export const r2Config = {
 };
 
 // Server configuration
+// Note: serverConfig.gifStoragePath defaults to './data' (base path without 'gifs' subdirectory)
+// while botConfig.gifStoragePath defaults to './data-prod/gifs' (includes 'gifs' subdirectory).
+// This difference is intentional - the server uses a base path that getGifPath() will append 'gifs' to,
+// while the bot uses a path that already includes 'gifs'. The getGifPath() function handles both cases.
 export const serverConfig = {
   gifStoragePath: getStringEnv('GIF_STORAGE_PATH', './data'),
   serverPort: parseIntEnv('SERVER_PORT', 3000, 1, 65535),

@@ -1,6 +1,7 @@
 import { MessageFlags } from 'discord.js';
 import { createLogger } from '../utils/logger.js';
 import { processOptimization } from '../commands/optimize.js';
+import { safeInteractionReply, safeInteractionDeferReply } from '../utils/interaction-helpers.js';
 
 const logger = createLogger('modals');
 
@@ -32,7 +33,7 @@ export async function handleModalSubmit(interaction, modalAttachmentCache) {
       }
 
       try {
-        await interaction.reply({
+        await safeInteractionReply(interaction, {
           content: 'modal session expired. please try again.',
           flags: MessageFlags.Ephemeral,
         });
@@ -70,7 +71,7 @@ export async function handleModalSubmit(interaction, modalAttachmentCache) {
         }
 
         try {
-          await interaction.reply({
+          await safeInteractionReply(interaction, {
             content: 'invalid lossy level. must be a number between 0 and 100.',
             flags: MessageFlags.Ephemeral,
           });
@@ -97,7 +98,7 @@ export async function handleModalSubmit(interaction, modalAttachmentCache) {
 
     // Defer reply since optimization may take time
     try {
-      await interaction.deferReply();
+      await safeInteractionDeferReply(interaction);
     } catch (error) {
       // Handle expired interactions (code 10062) or already acknowledged (code 40060)
       if (error.code === 10062 || error.code === 40060) {

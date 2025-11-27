@@ -10,12 +10,34 @@ and this project adheres (attempts) to [Semantic Versioning](https://semver.org/
 ### Added
 
 - Video trimming support for `/convert` command
-  - Added optional `start_time` and `end_time` parameters (in seconds) to `/convert` slash command
-  - Allows users to specify time ranges for video trimming before conversion to GIF
-  - Parameters only apply to video inputs and are ignored for images
-  - Supports decimal values for precise timing (e.g., 2.5 to 10.252 seconds)
-  - Time parameters also added to `/download` command for consistency (accepted but not used)
-  - Context menu commands remain unchanged for simplicity
+
+### Changed
+
+- Docker production configuration now explicitly uses data-prod directories
+  - Updated docker-compose.yml to set `GRONKA_DB_PATH` using `PROD_GRONKA_DB_PATH` environment variable (defaults to `./data-prod/gronka.db`)
+  - Updated docker-compose.yml to set `GIF_STORAGE_PATH` using `PROD_GIF_STORAGE_PATH` environment variable (defaults to `./data-prod/gifs`)
+  - Production Docker containers now write to `data-prod` directory instead of deprecated `data` directory
+  - Ensures production data is isolated from test data and prevents test users from polluting production database
+- Simplified docker-up script
+  - Removed container status verification loop from docker-up.ps1
+  - Script now starts containers and exits immediately without verification delays
+  - Faster startup experience for development
+
+### Fixed
+
+- Fixed missing `tmp` package in production Docker builds
+  - Moved `tmp` package from devDependencies to dependencies in package.json
+  - Package is required by production code (`src/commands/download.js`) but was being removed by `npm prune --production`
+  - Resolves bootloop issue where containers failed to start with "Cannot find package 'tmp'" error
+- Fixed webui health check 500 error
+  - Created missing `data-prod/gifs` directory in Dockerfile
+  - Health check endpoint now passes when storage directory exists
+  - Updated Dockerfile to create both `data-prod/gifs` and `data-test/gifs` directories for future builds
+- Fixed storage directory creation for test and production environments
+  - Updated server health check to automatically create storage directory if it doesn't exist
+  - Server now creates `data-test/gifs` or `data-prod/gifs` directories automatically on startup
+  - Prevents 500 errors on `/api/health` endpoint when directories are missing
+  - Works for both `bot:test:webui` and `bot:prod:webui` commands
 
 ### Removed
 

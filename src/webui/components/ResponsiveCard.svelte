@@ -36,12 +36,22 @@
     display: flex;
     flex-direction: column;
     gap: 1rem;
+    max-width: 100%;
+    width: 100%;
+    min-width: 0;
+    box-sizing: border-box;
   }
   
   @media (max-width: 767px) {
     .responsive-card {
       padding: 1rem;
       gap: 0.75rem;
+    }
+  }
+  
+  @media (min-width: 1024px) {
+    .responsive-card {
+      max-width: 1400px;
     }
   }
   
@@ -100,6 +110,9 @@
   .card-content {
     flex: 1;
     min-width: 0;
+    max-width: 100%;
+    overflow-wrap: break-word;
+    word-wrap: break-word;
   }
 </style>
 

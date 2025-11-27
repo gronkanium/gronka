@@ -59,6 +59,14 @@
     padding: 1rem;
     border: 1px solid #333;
     background-color: #222;
+    max-width: 100%;
+    width: 100%;
+  }
+  
+  @media (min-width: 1024px) {
+    section {
+      max-width: 1400px;
+    }
   }
 
   h2 {
@@ -81,6 +89,7 @@
     align-items: baseline;
     padding: 0.5rem 0;
     border-bottom: 1px solid #2a2a2a;
+    min-width: 0;
   }
 
   .stat-item:last-child {

@@ -569,6 +569,7 @@
     background-color: #1a1a1a;
     border: 1px solid #333;
     border-radius: 3px;
+    max-width: 100%;
   }
 
   .filter-group {
@@ -1346,12 +1347,15 @@
   .logs-container {
     overflow-x: auto;
     margin-bottom: 1rem;
+    max-width: 100%;
+    width: 100%;
   }
 
   table {
     width: 100%;
     border-collapse: collapse;
     font-size: 0.85rem;
+    table-layout: auto;
   }
 
   thead {
@@ -1369,22 +1373,36 @@
     font-size: 0.8rem;
     text-transform: uppercase;
     letter-spacing: 0.5px;
+    white-space: nowrap;
   }
 
   .timestamp-col {
     width: 180px;
+    min-width: 150px;
+    max-width: 200px;
   }
 
   .level-col {
     width: 80px;
+    min-width: 80px;
+    max-width: 100px;
   }
 
   .component-col {
     width: 120px;
+    min-width: 100px;
+    max-width: 200px;
   }
 
   .message-col {
     width: auto;
+    min-width: 200px;
+  }
+
+  .metadata-col {
+    width: 100px;
+    min-width: 100px;
+    max-width: 150px;
   }
 
   tbody tr {
@@ -1399,6 +1417,8 @@
     padding: 0.6rem 0.5rem;
     color: #e0e0e0;
     vertical-align: top;
+    word-wrap: break-word;
+    overflow-wrap: break-word;
   }
 
   .log-row.error {
@@ -1460,6 +1480,10 @@
   .component-cell {
     color: #aaa;
     font-size: 0.85rem;
+    max-width: 200px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
   }
 
   .message-cell {
@@ -1468,6 +1492,7 @@
     font-family: monospace;
     font-size: 0.85rem;
     text-align: left;
+    max-width: 600px;
   }
 
   .pagination {

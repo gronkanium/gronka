@@ -335,6 +335,9 @@
   .page-header {
     padding: 2rem;
     border-bottom: 1px solid #333;
+    max-width: 1400px;
+    margin: 0 auto;
+    width: 100%;
   }
 
   .page-header h2 {
@@ -348,6 +351,9 @@
     flex: 1;
     padding: 2rem;
     overflow-y: auto;
+    max-width: 1400px;
+    margin: 0 auto;
+    width: 100%;
   }
 
   .dashboard-grid {
@@ -355,6 +361,9 @@
     grid-template-columns: 1fr 1fr;
     gap: 2rem;
     padding: 2rem;
+    max-width: 1400px;
+    margin: 0 auto;
+    width: 100%;
   }
 
   @media (max-width: 1024px) {
@@ -385,15 +394,18 @@
 
     .page-header {
       padding: 1rem;
+      max-width: 100%;
     }
 
     .page-content {
       padding: 1rem;
+      max-width: 100%;
     }
 
     .dashboard-grid {
       padding: 1rem;
       gap: 1rem;
+      max-width: 100%;
     }
     
     /* Add overlay when sidebar is open on mobile */

@@ -34,7 +34,7 @@ import { queueCobaltRequest, hashUrl } from '../utils/cobalt-queue.js';
 import { notifyCommandSuccess, notifyCommandFailure } from '../utils/ntfy-notifier.js';
 import { getProcessedUrl, insertProcessedUrl, initDatabase } from '../utils/database.js';
 import { r2Config } from '../utils/config.js';
-import { trimVideo } from '../utils/video-processor.js';
+import { trimVideo, trimGif } from '../utils/video-processor.js';
 import tmp from 'tmp';
 
 const logger = createLogger('download');
@@ -314,9 +314,10 @@ async function processDownload(
       cdnPath = '/images';
     }
 
-    // Check if video trimming is requested
+    // Check if video or GIF trimming is requested
     // If so, skip checking for original file existence (we need the trimmed version)
-    const needsTrimming = fileType === 'video' && (startTime !== null || duration !== null);
+    const needsTrimming =
+      (fileType === 'video' || fileType === 'gif') && (startTime !== null || duration !== null);
 
     // Check if file already exists and get appropriate path
     // Skip this check if trimming is needed (we'll check for trimmed file later)
@@ -392,12 +393,175 @@ async function processDownload(
       // Save file based on type
       let finalBuffer = fileData.buffer;
       let finalUploadMethod = 'r2';
+      // Determine the extension to use for saving
+      // If video was trimmed, use .mp4 extension (trimVideo outputs MP4 format)
+      let saveExt = ext;
+      // Track if we're treating a video with .gif extension as a GIF
+      let treatAsGif = false;
       if (fileType === 'gif') {
-        logger.info(`Saving GIF (hash: ${hash})`);
-        const saveResult = await saveGif(fileData.buffer, hash, GIF_STORAGE_PATH, buildMetadata());
-        filePath = saveResult.url;
-        finalBuffer = saveResult.buffer;
-        finalUploadMethod = saveResult.method;
+        // Check if GIF trimming is requested
+        if (startTime !== null || duration !== null) {
+          logger.info(
+            `Trimming GIF (hash: ${hash}, extension: ${ext}, startTime: ${startTime}, duration: ${duration})`
+          );
+          logOperationStep(operationId, 'gif_trim', 'running', {
+            message: 'Trimming GIF',
+            metadata: { startTime, duration },
+          });
+
+          // Create temporary files for input and output
+          const tmpDir = tmp.dirSync({ unsafeCleanup: true });
+          const inputGifPath = path.join(tmpDir.name, `input${ext}`);
+          const outputGifPath = path.join(tmpDir.name, 'output.gif');
+
+          try {
+            // Write original GIF to temp file
+            await fs.writeFile(inputGifPath, fileData.buffer);
+
+            // Trim the GIF
+            await trimGif(inputGifPath, outputGifPath, {
+              startTime,
+              duration,
+            });
+
+            // Read trimmed GIF
+            const trimmedBuffer = await fs.readFile(outputGifPath);
+
+            // Generate new hash for trimmed GIF (since content changed)
+            hash = generateHash(trimmedBuffer);
+
+            // Check if trimmed GIF already exists
+            const trimmedExists = await gifExists(hash, GIF_STORAGE_PATH);
+            if (trimmedExists) {
+              filePath = getGifPath(hash, GIF_STORAGE_PATH);
+              exists = true;
+              logger.info(
+                `Trimmed GIF already exists (hash: ${hash}) for user ${userId} with requested parameters (startTime: ${startTime}, duration: ${duration})`
+              );
+              // Clean up temp files since we're using existing file
+              try {
+                await fs.unlink(inputGifPath);
+                await fs.unlink(outputGifPath);
+                tmpDir.removeCallback();
+              } catch (cleanupError) {
+                logger.warn(`Failed to clean up temp files: ${cleanupError.message}`);
+              }
+            } else {
+              // Use trimmed buffer for saving
+              finalBuffer = trimmedBuffer;
+            }
+
+            logOperationStep(operationId, 'gif_trim', 'success', {
+              message: 'GIF trimmed successfully',
+              metadata: {
+                startTime,
+                duration,
+                originalSize: fileData.buffer.length,
+                trimmedSize: trimmedBuffer.length,
+                alreadyExists: trimmedExists,
+              },
+            });
+
+            // Clean up temp files
+            try {
+              await fs.unlink(inputGifPath);
+              await fs.unlink(outputGifPath);
+              tmpDir.removeCallback();
+            } catch (cleanupError) {
+              logger.warn(`Failed to clean up temp files: ${cleanupError.message}`);
+            }
+          } catch (trimError) {
+            logOperationStep(operationId, 'gif_trim', 'error', {
+              message: 'GIF trimming failed',
+              metadata: { error: trimError.message },
+            });
+            logger.error(`GIF trimming failed: ${trimError.message}`);
+            // Fall back to saving original GIF without trimming
+            logger.info(`Falling back to saving original GIF without trimming`);
+            finalBuffer = fileData.buffer;
+            // Clean up temp files on error
+            try {
+              await fs.unlink(inputGifPath).catch(() => {});
+              await fs.unlink(outputGifPath).catch(() => {});
+              tmpDir.removeCallback();
+            } catch {
+              // Ignore cleanup errors
+            }
+          }
+        } else {
+          finalBuffer = fileData.buffer;
+        }
+
+        // If trimmed GIF already exists, return early (similar to original file exists check)
+        if (exists && filePath) {
+          // filePath might be a local path or R2 URL
+          let fileUrl;
+          if (filePath.startsWith('http://') || filePath.startsWith('https://')) {
+            // Already an R2 URL
+            fileUrl = filePath;
+          } else {
+            // Local path, construct URL
+            const filename = path.basename(filePath);
+            fileUrl = `${CDN_BASE_URL.replace('/gifs', cdnPath)}/${filename}`;
+          }
+          // Use 'gif' as fileType for database if we treated it as GIF
+          const dbFileType = typeof treatAsGif !== 'undefined' && treatAsGif ? 'gif' : fileType;
+          logger.info(`${dbFileType} already exists (hash: ${hash}) for user ${userId}`);
+          // Get file size for existing file
+          let existingSize = finalBuffer.length;
+          if (!filePath.startsWith('http://') && !filePath.startsWith('https://')) {
+            // Try to stat local file, but it might only exist in R2
+            try {
+              const stats = await fs.stat(filePath);
+              existingSize = stats.size;
+            } catch {
+              // File only exists in R2, use buffer size as approximation
+              logger.debug(`File exists in R2 but not locally, using buffer size: ${existingSize}`);
+            }
+          }
+
+          // Record processed URL in database (file exists but URL might not be recorded yet)
+          // Use .gif extension if we treated it as GIF
+          const dbExt = typeof treatAsGif !== 'undefined' && treatAsGif ? '.gif' : ext;
+          await insertProcessedUrl(
+            urlHash,
+            hash,
+            dbFileType,
+            dbExt,
+            fileUrl,
+            Date.now(),
+            userId,
+            existingSize
+          );
+          logger.debug(
+            `Recorded processed URL in database (urlHash: ${urlHash.substring(0, 8)}...)`
+          );
+
+          updateOperationStatus(operationId, 'success', { fileSize: existingSize });
+          recordRateLimit(userId);
+          await interaction.editReply({
+            content: fileUrl,
+          });
+
+          // Send success notification
+          await notifyCommandSuccess(username, 'download', { operationId, userId });
+          return;
+        }
+
+        // If we treated video with .gif extension as GIF, save as GIF
+        if (typeof treatAsGif !== 'undefined' && treatAsGif) {
+          logger.info(`Saving GIF (hash: ${hash}) - converted from video with .gif extension`);
+          const saveResult = await saveGif(finalBuffer, hash, GIF_STORAGE_PATH, buildMetadata());
+          filePath = saveResult.url;
+          finalBuffer = saveResult.buffer;
+          finalUploadMethod = saveResult.method;
+        } else {
+          logger.info(`Saving GIF (hash: ${hash})`);
+          const saveResult = await saveGif(finalBuffer, hash, GIF_STORAGE_PATH, buildMetadata());
+          filePath = saveResult.url;
+          finalBuffer = saveResult.buffer;
+          finalUploadMethod = saveResult.method;
+        }
 
         // Auto-optimize if enabled in user config
         if (userConfig.autoOptimize) {
@@ -443,8 +607,169 @@ async function processDownload(
           }
         }
       } else if (fileType === 'video') {
-        // Check if video trimming is requested
-        if (startTime !== null || duration !== null) {
+        // Check if file has .gif extension - if so, trim as GIF (not video)
+        // This handles cases where files have .gif extension but video/mp4 content-type
+        if (ext === '.gif' && (startTime !== null || duration !== null)) {
+          logger.info(
+            `Trimming GIF (detected as video but has .gif extension) (hash: ${hash}, extension: ${ext}, startTime: ${startTime}, duration: ${duration})`
+          );
+          logOperationStep(operationId, 'gif_trim', 'running', {
+            message: 'Trimming GIF (from video source)',
+            metadata: { startTime, duration },
+          });
+
+          // Create temporary files for input and output
+          const tmpDir = tmp.dirSync({ unsafeCleanup: true });
+          const inputGifPath = path.join(tmpDir.name, `input${ext}`);
+          const outputGifPath = path.join(tmpDir.name, 'output.gif');
+
+          try {
+            // Write original file to temp file
+            await fs.writeFile(inputGifPath, fileData.buffer);
+
+            // Trim as GIF (even though content is video, output should be GIF)
+            await trimGif(inputGifPath, outputGifPath, {
+              startTime,
+              duration,
+            });
+
+            // Read trimmed GIF
+            const trimmedBuffer = await fs.readFile(outputGifPath);
+
+            // Generate new hash for trimmed GIF
+            hash = generateHash(trimmedBuffer);
+
+            // We're treating this as a GIF now (even though it was detected as video)
+            // Update cdnPath and use .gif extension for saving
+            cdnPath = '/gifs';
+            treatAsGif = true;
+
+            // Check if trimmed GIF already exists
+            const trimmedExists = await gifExists(hash, GIF_STORAGE_PATH);
+            if (trimmedExists) {
+              filePath = getGifPath(hash, GIF_STORAGE_PATH);
+              exists = true;
+              logger.info(
+                `Trimmed GIF already exists (hash: ${hash}) for user ${userId} with requested parameters (startTime: ${startTime}, duration: ${duration})`
+              );
+              // Clean up temp files since we're using existing file
+              try {
+                await fs.unlink(inputGifPath);
+                await fs.unlink(outputGifPath);
+                tmpDir.removeCallback();
+              } catch (cleanupError) {
+                logger.warn(`Failed to clean up temp files: ${cleanupError.message}`);
+              }
+            } else {
+              // Use trimmed buffer for saving
+              finalBuffer = trimmedBuffer;
+            }
+
+            logOperationStep(operationId, 'gif_trim', 'success', {
+              message: 'GIF trimmed successfully (from video source)',
+              metadata: {
+                startTime,
+                duration,
+                originalSize: fileData.buffer.length,
+                trimmedSize: trimmedBuffer.length,
+                alreadyExists: trimmedExists,
+              },
+            });
+
+            // Clean up temp files
+            try {
+              await fs.unlink(inputGifPath);
+              await fs.unlink(outputGifPath);
+              tmpDir.removeCallback();
+            } catch (cleanupError) {
+              logger.warn(`Failed to clean up temp files: ${cleanupError.message}`);
+            }
+          } catch (trimError) {
+            logOperationStep(operationId, 'gif_trim', 'error', {
+              message: 'GIF trimming failed',
+              metadata: { error: trimError.message },
+            });
+            logger.error(`GIF trimming failed: ${trimError.message}`);
+            // Fall back to saving original file without trimming
+            logger.info(`Falling back to saving original file without trimming`);
+            finalBuffer = fileData.buffer;
+            // Clean up temp files on error
+            try {
+              await fs.unlink(inputGifPath).catch(() => {});
+              await fs.unlink(outputGifPath).catch(() => {});
+              tmpDir.removeCallback();
+            } catch {
+              // Ignore cleanup errors
+            }
+          }
+
+          // If we trimmed as GIF (even though detected as video), handle it as GIF
+          if (treatAsGif) {
+            // Check if trimmed GIF already exists and return early
+            if (exists && filePath) {
+              // filePath might be a local path or R2 URL
+              let fileUrl;
+              if (filePath.startsWith('http://') || filePath.startsWith('https://')) {
+                // Already an R2 URL
+                fileUrl = filePath;
+              } else {
+                // Local path, construct URL
+                const filename = path.basename(filePath);
+                fileUrl = `${CDN_BASE_URL.replace('/gifs', cdnPath)}/${filename}`;
+              }
+              logger.info(`GIF already exists (hash: ${hash}) for user ${userId}`);
+              // Get file size for existing file
+              let existingSize = finalBuffer.length;
+              if (!filePath.startsWith('http://') && !filePath.startsWith('https://')) {
+                // Try to stat local file, but it might only exist in R2
+                try {
+                  const stats = await fs.stat(filePath);
+                  existingSize = stats.size;
+                } catch {
+                  // File only exists in R2, use buffer size as approximation
+                  logger.debug(
+                    `File exists in R2 but not locally, using buffer size: ${existingSize}`
+                  );
+                }
+              }
+
+              // Record processed URL in database
+              await insertProcessedUrl(
+                urlHash,
+                hash,
+                'gif',
+                '.gif',
+                fileUrl,
+                Date.now(),
+                userId,
+                existingSize
+              );
+              logger.debug(
+                `Recorded processed URL in database (urlHash: ${urlHash.substring(0, 8)}...)`
+              );
+
+              updateOperationStatus(operationId, 'success', { fileSize: existingSize });
+              recordRateLimit(userId);
+              await interaction.editReply({
+                content: fileUrl,
+              });
+
+              // Send success notification
+              await notifyCommandSuccess(username, 'download', { operationId, userId });
+              return;
+            }
+
+            // Save the trimmed GIF
+            logger.info(`Saving GIF (hash: ${hash}) - trimmed from video with .gif extension`);
+            const saveResult = await saveGif(finalBuffer, hash, GIF_STORAGE_PATH, buildMetadata());
+            filePath = saveResult.url;
+            finalBuffer = saveResult.buffer;
+            finalUploadMethod = saveResult.method;
+            // Note: We continue below to handle optimization and upload, but skip video-specific logic
+          }
+          // Close the if (ext === '.gif' && ...) block
+        } else if (startTime !== null || duration !== null) {
+          // Regular video trimming (not .gif extension)
           logger.info(
             `Trimming video (hash: ${hash}, extension: ${ext}, startTime: ${startTime}, duration: ${duration})`
           );
@@ -454,9 +779,10 @@ async function processDownload(
           });
 
           // Create temporary files for input and output
+          // Always use .mp4 extension for video output (trimVideo outputs MP4 format)
           const tmpDir = tmp.dirSync({ unsafeCleanup: true });
           const inputVideoPath = path.join(tmpDir.name, `input${ext}`);
-          const outputVideoPath = path.join(tmpDir.name, `output${ext}`);
+          const outputVideoPath = path.join(tmpDir.name, 'output.mp4');
 
           try {
             // Write original video to temp file
@@ -482,9 +808,11 @@ async function processDownload(
             // This checks if we've previously created a video with this exact content (hash).
             // If the user requested different trim parameters, the hash will be different,
             // so we won't return the wrong cached version.
-            const trimmedExists = await videoExists(hash, ext, GIF_STORAGE_PATH);
+            // Always use .mp4 extension for trimmed videos (output format is MP4)
+            const videoExt = '.mp4';
+            const trimmedExists = await videoExists(hash, videoExt, GIF_STORAGE_PATH);
             if (trimmedExists) {
-              filePath = getVideoPath(hash, ext, GIF_STORAGE_PATH);
+              filePath = getVideoPath(hash, videoExt, GIF_STORAGE_PATH);
               exists = true;
               logger.info(
                 `Trimmed video already exists (hash: ${hash}) for user ${userId} with requested parameters (startTime: ${startTime}, duration: ${duration})`
@@ -543,6 +871,11 @@ async function processDownload(
           finalBuffer = fileData.buffer;
         }
 
+        // Update saveExt for trimmed videos (but not if we're treating as GIF)
+        if (fileType === 'video' && (startTime !== null || duration !== null) && !treatAsGif) {
+          saveExt = '.mp4';
+        }
+
         // If trimmed file already exists, return early (similar to original file exists check)
         if (exists && filePath) {
           // filePath might be a local path or R2 URL
@@ -570,11 +903,12 @@ async function processDownload(
           }
 
           // Record processed URL in database (file exists but URL might not be recorded yet)
+          // Use saveExt for trimmed videos, ext for others
           await insertProcessedUrl(
             urlHash,
             hash,
             fileType,
-            ext,
+            saveExt,
             fileUrl,
             Date.now(),
             userId,
@@ -595,17 +929,21 @@ async function processDownload(
           return;
         }
 
-        logger.info(`Saving video (hash: ${hash}, extension: ${ext})`);
-        const saveResult = await saveVideo(
-          finalBuffer,
-          hash,
-          ext,
-          GIF_STORAGE_PATH,
-          buildMetadata()
-        );
-        filePath = saveResult.url;
-        finalBuffer = saveResult.buffer;
-        finalUploadMethod = saveResult.method;
+        // Skip video saving if we already saved it as GIF (when treatAsGif is true)
+        if (!treatAsGif) {
+          logger.info(`Saving ${fileType} (hash: ${hash}, extension: ${saveExt})`);
+          const saveResult = await saveVideo(
+            finalBuffer,
+            hash,
+            saveExt,
+            GIF_STORAGE_PATH,
+            buildMetadata()
+          );
+          filePath = saveResult.url;
+          finalBuffer = saveResult.buffer;
+          finalUploadMethod = saveResult.method;
+        }
+        // If treatAsGif is true, we already saved it as GIF above, so skip video saving
       } else if (fileType === 'image') {
         logger.info(`Saving image (hash: ${hash}, extension: ${ext})`);
         const saveResult = await saveImage(
@@ -644,11 +982,13 @@ async function processDownload(
       );
 
       // Record processed URL in database
+      // Use saveExt for trimmed videos, ext for others
+      const dbExt = fileType === 'video' ? saveExt : ext;
       await insertProcessedUrl(
         urlHash,
         hash,
         fileType,
-        ext,
+        dbExt,
         fileUrl,
         Date.now(),
         userId,
@@ -662,7 +1002,7 @@ async function processDownload(
       // Send as Discord attachment if < 8MB, otherwise send URL
       if (finalUploadMethod === 'discord') {
         const safeHash = hash.replace(/[^a-f0-9]/gi, '');
-        const filename = `${safeHash}${ext}`;
+        const filename = `${safeHash}${dbExt}`;
         try {
           const message = await interaction.editReply({
             files: [new AttachmentBuilder(finalBuffer, { name: filename })],
@@ -704,7 +1044,7 @@ async function processDownload(
               urlHash,
               hash,
               fileType,
-              ext,
+              dbExt,
               discordUrl,
               Date.now(),
               userId,
@@ -724,7 +1064,7 @@ async function processDownload(
             if (fileType === 'gif') {
               r2Url = await uploadGifToR2(finalBuffer, hash, r2Config, buildMetadata());
             } else if (fileType === 'video') {
-              r2Url = await uploadVideoToR2(finalBuffer, hash, ext, r2Config, buildMetadata());
+              r2Url = await uploadVideoToR2(finalBuffer, hash, saveExt, r2Config, buildMetadata());
             } else if (fileType === 'image') {
               r2Url = await uploadImageToR2(finalBuffer, hash, ext, r2Config, buildMetadata());
             }
@@ -735,7 +1075,7 @@ async function processDownload(
                 urlHash,
                 hash,
                 fileType,
-                ext,
+                dbExt,
                 r2Url,
                 Date.now(),
                 userId,

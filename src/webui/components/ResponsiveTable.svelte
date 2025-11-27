@@ -170,12 +170,19 @@
     border-collapse: collapse;
     font-size: 0.9rem;
     min-width: 600px;
+    table-layout: auto;
   }
   
   @media (max-width: 767px) {
     table {
       font-size: 0.8rem;
       min-width: 500px;
+    }
+  }
+  
+  @media (min-width: 1024px) {
+    table {
+      max-width: 100%;
     }
   }
   
@@ -196,6 +203,8 @@
     text-transform: uppercase;
     letter-spacing: 0.5px;
     white-space: nowrap;
+    min-width: 80px;
+    max-width: 300px;
   }
   
   @media (max-width: 767px) {
@@ -235,11 +244,21 @@
   td {
     padding: 0.75rem 0.5rem;
     color: #e0e0e0;
+    word-wrap: break-word;
+    overflow-wrap: break-word;
+    max-width: 300px;
   }
   
   @media (max-width: 767px) {
     td {
       padding: 0.5rem 0.25rem;
+      max-width: 200px;
+    }
+  }
+  
+  @media (min-width: 1024px) {
+    td {
+      max-width: 400px;
     }
   }
   

@@ -22,6 +22,14 @@ and this project adheres (attempts) to [Semantic Versioning](https://semver.org/
   - Removed container status verification loop from docker-up.ps1
   - Script now starts containers and exits immediately without verification delays
   - Faster startup experience for development
+- WebUI layout improvements for better readability and visual hierarchy
+  - Added max-width constraints (1400px) to main content areas to prevent edge-to-edge stretching
+  - Centered content on large screens with automatic margins
+  - Improved table column sizing with min/max width constraints for better readability
+  - Enhanced responsive design with better breakpoint handling
+  - Optimized card and section layouts across all pages (Users, Operations, Logs, Monitoring, Stats, Health)
+  - Better text overflow handling with ellipsis and word wrapping
+  - Improved spacing and visual hierarchy throughout the interface
 
 ### Fixed
 

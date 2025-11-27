@@ -434,6 +434,14 @@
     background-color: #1a1a1a;
     border: 1px solid #333;
     border-radius: 4px;
+    max-width: 100%;
+  }
+  
+  @media (min-width: 1024px) {
+    .status-bar {
+      grid-template-columns: repeat(5, 1fr);
+      max-width: 1400px;
+    }
   }
 
   .status-item {
@@ -511,6 +519,20 @@
     display: grid;
     grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
     gap: 0.75rem;
+    max-width: 100%;
+  }
+  
+  @media (min-width: 1024px) {
+    .metrics-grid {
+      grid-template-columns: repeat(3, 1fr);
+      max-width: 1400px;
+    }
+  }
+  
+  @media (min-width: 1400px) {
+    .metrics-grid {
+      grid-template-columns: repeat(4, 1fr);
+    }
   }
 
   .metric-card {
@@ -521,6 +543,8 @@
     display: flex;
     flex-direction: column;
     gap: 0.5rem;
+    min-width: 0;
+    max-width: 100%;
   }
 
   .metric-header {
@@ -615,6 +639,13 @@
     border: 1px solid #333;
     border-radius: 4px;
     overflow: hidden;
+    max-width: 100%;
+  }
+  
+  @media (min-width: 1024px) {
+    .activity-section {
+      max-width: 1400px;
+    }
   }
 
   .activity-header {

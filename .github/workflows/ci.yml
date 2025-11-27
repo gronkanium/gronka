@@ -139,6 +139,7 @@ jobs:
       - name: Ensure test report exists
         if: always()
         run: |
+          rm -rf test-utils.xml
           if [ ! -f test-utils.xml ]; then
             echo '<?xml version="1.0" encoding="UTF-8"?><testsuites></testsuites>' > test-utils.xml
           fi
@@ -192,6 +193,7 @@ jobs:
       - name: Ensure test report exists
         if: always()
         run: |
+          rm -rf test-commands.xml
           if [ ! -f test-commands.xml ]; then
             echo '<?xml version="1.0" encoding="UTF-8"?><testsuites></testsuites>' > test-commands.xml
           fi
@@ -245,6 +247,7 @@ jobs:
       - name: Ensure test report exists
         if: always()
         run: |
+          rm -rf test-scripts.xml
           if [ ! -f test-scripts.xml ]; then
             echo '<?xml version="1.0" encoding="UTF-8"?><testsuites></testsuites>' > test-scripts.xml
           fi
@@ -298,6 +301,7 @@ jobs:
       - name: Ensure test report exists
         if: always()
         run: |
+          rm -rf test-integration.xml
           if [ ! -f test-integration.xml ]; then
             echo '<?xml version="1.0" encoding="UTF-8"?><testsuites></testsuites>' > test-integration.xml
           fi

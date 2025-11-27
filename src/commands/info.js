@@ -97,11 +97,14 @@ export async function handleInfoCommand(interaction) {
           name: 'runtime information',
           value: `node.js: \`${nodeVersion}\`\nprocess uptime: \`${processUptime}\`\nbot version: \`${botVersion}\``,
           inline: false,
+        },
+        {
+          name: '\u200b',
+          value:
+            '[join our server for questions or feature requests](https://discord.gg/MHM2m4keTX)',
+          inline: false,
         }
-      )
-      .setFooter({
-        text: '[join our server for questions or feature requests](https://discord.gg/MHM2m4keTX)',
-      });
+      );
 
     await interaction.reply({ embeds: [embed] });
   } catch (error) {

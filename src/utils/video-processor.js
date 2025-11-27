@@ -272,31 +272,46 @@ export async function trimVideo(inputPath, outputPath, options = {}) {
   return new Promise((resolve, reject) => {
     const ffmpegCommand = ffmpeg(inputPath);
 
-    // Add input options for trimming
-    const inputOptions = [];
+    // For accurate trimming, we need to re-encode instead of using -c copy
+    // Stream copy (-c copy) can only cut at keyframes, which can cause:
+    // 1. Inaccurate trim points
+    // 2. Corrupted files when trim points don't align with keyframes
+    // 3. Empty or unplayable files
+    // Re-encoding ensures frame-accurate trimming and valid output files
+
+    // Add start time as input option (before -i) for faster seeking
+    // Then decode and trim accurately
     if (startTime !== null) {
-      inputOptions.push(`-ss ${startTime}`);
+      ffmpegCommand.inputOptions([`-ss ${startTime}`]);
     }
+
+    // Build output options with re-encoding for accurate trimming
+    const outputOptions = [
+      '-c:v',
+      'libx264', // Re-encode video with H.264 (widely compatible)
+      '-preset',
+      'fast', // Faster encoding, good quality balance
+      '-crf',
+      '23', // Good quality (lower = better, 18-28 is typical range)
+      '-c:a',
+      'aac', // Re-encode audio to AAC (widely compatible)
+      '-b:a',
+      '192k', // Audio bitrate
+      '-movflags',
+      '+faststart', // Enable fast start for web playback
+      '-avoid_negative_ts',
+      'make_zero', // Handle timestamp issues
+    ];
+
+    // Add duration as output option
     if (duration !== null) {
-      inputOptions.push(`-t ${duration}`);
+      outputOptions.push('-t', `${duration}`);
     }
 
-    if (inputOptions.length > 0) {
-      ffmpegCommand.inputOptions(inputOptions);
-    }
+    outputOptions.push('-y'); // Overwrite output file
 
-    // Copy all streams (video, audio, subtitles, etc.) to preserve original quality
-    // Use -c copy for faster processing without re-encoding, but it's less precise for trimming
-    // For more precise trimming, we'll use -c copy but with -ss before -i for seeking
-    // However, for duration-based trimming we need re-encoding, so we'll use a hybrid approach
     ffmpegCommand
-      .outputOptions([
-        '-c',
-        'copy', // Copy codecs (fast, no quality loss)
-        '-avoid_negative_ts',
-        'make_zero', // Handle timestamp issues
-        '-y', // Overwrite output file
-      ])
+      .outputOptions(outputOptions)
       .output(outputPath)
       .on('error', (err, stdout, stderr) => {
         logger.error('FFmpeg video trim failed:', stderr);

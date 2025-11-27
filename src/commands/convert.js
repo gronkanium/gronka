@@ -48,7 +48,6 @@ import {
 import { notifyCommandSuccess, notifyCommandFailure } from '../utils/ntfy-notifier.js';
 import { hashUrl } from '../utils/cobalt-queue.js';
 import { insertProcessedUrl, initDatabase, getProcessedUrl } from '../utils/database.js';
-import { isSocialMediaUrl } from '../utils/cobalt.js';
 import { r2Config } from '../utils/config.js';
 
 const logger = createLogger('convert');
@@ -366,35 +365,26 @@ export async function processConversion(
       const urlHash = hashUrl(originalUrl);
       const processedUrl = await getProcessedUrl(urlHash);
       if (processedUrl) {
-        // Skip cache for social media URLs if cached result is not a GIF
-        // This allows social media URLs to be processed fresh through Cobalt for conversion
-        const isSocialMedia = isSocialMediaUrl(originalUrl);
+        // Convert command expects GIF output - only use cache if cached result is a GIF
+        // Skip cache if cached type is not 'gif' (e.g., if it was previously downloaded as video)
         const isCachedGif =
           processedUrl.file_type === 'gif' || processedUrl.file_extension === '.gif';
 
-        if (isSocialMedia && !isCachedGif) {
+        if (isCachedGif) {
           logger.info(
-            `URL is social media and cached result is not a GIF (type: ${processedUrl.file_type}, ext: ${processedUrl.file_extension}), skipping cache to process through Cobalt`
-          );
-          logOperationStep(operationId, 'url_validation', 'success', {
-            message: 'URL validation complete',
-            metadata: { originalUrl },
-          });
-          logOperationStep(operationId, 'url_cache_skip', 'success', {
-            message: 'Skipping cache for social media URL to process through Cobalt',
-            metadata: { originalUrl, cachedType: processedUrl.file_type },
-          });
-        } else {
-          logger.info(
-            `URL already processed (hash: ${urlHash.substring(0, 8)}...), returning existing file URL: ${processedUrl.file_url}`
+            `URL already processed as GIF (hash: ${urlHash.substring(0, 8)}...), returning existing file URL: ${processedUrl.file_url}`
           );
           logOperationStep(operationId, 'url_validation', 'success', {
             message: 'URL validation complete',
             metadata: { originalUrl },
           });
           logOperationStep(operationId, 'url_cache_hit', 'success', {
-            message: 'URL already processed, returning cached result',
-            metadata: { originalUrl, cachedUrl: processedUrl.file_url },
+            message: 'URL already processed as GIF, returning cached result',
+            metadata: {
+              originalUrl,
+              cachedUrl: processedUrl.file_url,
+              cachedType: processedUrl.file_type,
+            },
           });
           updateOperationStatus(operationId, 'success', { fileSize: 0 });
           recordRateLimit(userId);
@@ -403,6 +393,18 @@ export async function processConversion(
           });
           await notifyCommandSuccess(username, 'convert', { operationId, userId });
           return;
+        } else {
+          logger.info(
+            `URL cache exists but file type is ${processedUrl.file_type} (not GIF), skipping cache to convert to GIF`
+          );
+          logOperationStep(operationId, 'url_validation', 'success', {
+            message: 'URL validation complete',
+            metadata: { originalUrl },
+          });
+          logOperationStep(operationId, 'url_cache_mismatch', 'running', {
+            message: 'URL cached with different file type, converting to GIF instead',
+            metadata: { originalUrl, cachedType: processedUrl.file_type },
+          });
         }
       }
       logOperationStep(operationId, 'url_validation', 'success', {

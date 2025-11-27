@@ -65,12 +65,11 @@ test-utils:
     - set +e
     - npx cross-env R2_ACCOUNT_ID= R2_ACCESS_KEY_ID= R2_SECRET_ACCESS_KEY= R2_BUCKET_NAME= node --test --test-reporter tap test/utils/ > test-utils.tap
     - TEST_EXIT_CODE=$?
-    - npx tap-junit test-utils.tap -o test-utils.xml
+    - if ! npx tap-junit test-utils.tap -o test-utils.xml 2>/dev/null; then echo '<?xml version="1.0" encoding="UTF-8"?><testsuites></testsuites>' > test-utils.xml; fi
     - exit $TEST_EXIT_CODE
   artifacts:
     when: always
     paths:
-      - test-utils.tap
       - test-utils.xml
     reports:
       junit: test-utils.xml
@@ -96,12 +95,11 @@ test-commands:
     - set +e
     - npx cross-env R2_ACCOUNT_ID= R2_ACCESS_KEY_ID= R2_SECRET_ACCESS_KEY= R2_BUCKET_NAME= node --test --test-reporter tap test/commands/ > test-commands.tap
     - TEST_EXIT_CODE=$?
-    - npx tap-junit test-commands.tap -o test-commands.xml
+    - if ! npx tap-junit test-commands.tap -o test-commands.xml 2>/dev/null; then echo '<?xml version="1.0" encoding="UTF-8"?><testsuites></testsuites>' > test-commands.xml; fi
     - exit $TEST_EXIT_CODE
   artifacts:
     when: always
     paths:
-      - test-commands.tap
       - test-commands.xml
     reports:
       junit: test-commands.xml
@@ -127,12 +125,11 @@ test-scripts:
     - set +e
     - npx cross-env R2_ACCOUNT_ID= R2_ACCESS_KEY_ID= R2_SECRET_ACCESS_KEY= R2_BUCKET_NAME= node --test --test-reporter tap test/scripts/ > test-scripts.tap
     - TEST_EXIT_CODE=$?
-    - npx tap-junit test-scripts.tap -o test-scripts.xml
+    - if ! npx tap-junit test-scripts.tap -o test-scripts.xml 2>/dev/null; then echo '<?xml version="1.0" encoding="UTF-8"?><testsuites></testsuites>' > test-scripts.xml; fi
     - exit $TEST_EXIT_CODE
   artifacts:
     when: always
     paths:
-      - test-scripts.tap
       - test-scripts.xml
     reports:
       junit: test-scripts.xml
@@ -158,12 +155,11 @@ test-integration:
     - set +e
     - npx cross-env R2_ACCOUNT_ID= R2_ACCESS_KEY_ID= R2_SECRET_ACCESS_KEY= R2_BUCKET_NAME= node --test --test-reporter tap test/webui-server-*.test.js test/docker-security.test.js > test-integration.tap
     - TEST_EXIT_CODE=$?
-    - npx tap-junit test-integration.tap -o test-integration.xml
+    - if ! npx tap-junit test-integration.tap -o test-integration.xml 2>/dev/null; then echo '<?xml version="1.0" encoding="UTF-8"?><testsuites></testsuites>' > test-integration.xml; fi
     - exit $TEST_EXIT_CODE
   artifacts:
     when: always
     paths:
-      - test-integration.tap
       - test-integration.xml
     reports:
       junit: test-integration.xml

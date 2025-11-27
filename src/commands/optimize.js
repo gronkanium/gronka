@@ -34,6 +34,11 @@ import { notifyCommandSuccess, notifyCommandFailure } from '../utils/ntfy-notifi
 import { hashUrl } from '../utils/cobalt-queue.js';
 import { insertProcessedUrl, initDatabase, getProcessedUrl } from '../utils/database.js';
 import { r2Config } from '../utils/config.js';
+import {
+  safeInteractionReply,
+  safeInteractionEditReply,
+  safeInteractionDeferReply,
+} from '../utils/interaction-helpers.js';
 
 const logger = createLogger('optimize');
 
@@ -52,7 +57,7 @@ async function safeReply(interaction, options) {
   }
 
   try {
-    await interaction.reply(options);
+    await safeInteractionReply(interaction, options);
     return true;
   } catch (error) {
     // Handle expired interactions (code 10062) or already acknowledged (code 40060)
@@ -211,7 +216,32 @@ export async function processOptimization(
   try {
     // Initialize database if needed (for URL tracking)
     if (originalUrl) {
-      await initDatabase();
+      try {
+        await initDatabase();
+      } catch (dbInitError) {
+        // Database initialization failed - update operation status immediately
+        logger.error(`Database initialization failed for optimization: ${dbInitError.message}`);
+        logOperationError(operationId, dbInitError, {
+          metadata: {
+            originalUrl,
+            errorType: 'database_initialization_failure',
+            errorCode: dbInitError.code || null,
+          },
+        });
+        updateOperationStatus(operationId, 'error', {
+          error: `Database initialization failed: ${dbInitError.message}`,
+          stackTrace: dbInitError.stack || null,
+        });
+        await safeInteractionEditReply(interaction, {
+          content: 'an error occurred while initializing the database. please try again later.',
+        });
+        await notifyCommandFailure(username, 'optimize', {
+          operationId,
+          userId,
+          error: `Database initialization failed: ${dbInitError.message}`,
+        });
+        return; // Exit early - operation is already marked as error
+      }
     }
 
     // Update operation to running
@@ -233,7 +263,7 @@ export async function processOptimization(
           );
           updateOperationStatus(operationId, 'success', { fileSize: 0 });
           recordRateLimit(userId);
-          await interaction.editReply({
+          await safeInteractionEditReply(interaction, {
             content: processedUrl.file_url,
           });
           await notifyCommandSuccess(username, 'optimize', { operationId, userId });
@@ -409,7 +439,7 @@ export async function processOptimization(
       const safeHash = optimizedHash.replace(/[^a-f0-9]/gi, '');
       const filename = `${safeHash}.gif`;
       try {
-        const message = await interaction.editReply({
+        const message = await safeInteractionEditReply(interaction, {
           files: [new AttachmentBuilder(optimizedBuffer, { name: filename })],
         });
 
@@ -485,25 +515,25 @@ export async function processOptimization(
               userId,
               optimizedSize
             );
-            await interaction.editReply({
+            await safeInteractionEditReply(interaction, {
               content: r2Url,
             });
           } else {
             // If R2 upload also fails, use the original optimizedUrl
-            await interaction.editReply({
+            await safeInteractionEditReply(interaction, {
               content: optimizedUrl,
             });
           }
         } catch (r2Error) {
           logger.error(`R2 fallback upload also failed: ${r2Error.message}`);
           // Last resort: use the original optimizedUrl
-          await interaction.editReply({
+          await safeInteractionEditReply(interaction, {
             content: optimizedUrl,
           });
         }
       }
     } else {
-      await interaction.editReply({
+      await safeInteractionEditReply(interaction, {
         content: optimizedUrl,
       });
     }
@@ -542,7 +572,7 @@ export async function processOptimization(
       error: error.message || 'unknown error',
       stackTrace: error.stack || null,
     });
-    await interaction.editReply({
+    await safeInteractionEditReply(interaction, {
       content: error.message || 'an error occurred while optimizing the gif.',
     });
 
@@ -884,7 +914,7 @@ export async function handleOptimizeCommand(interaction) {
 
     // Defer reply since downloading may take time
     try {
-      await interaction.deferReply();
+      await safeInteractionDeferReply(interaction);
     } catch (error) {
       // Handle expired interactions (code 10062) or already acknowledged (code 40060)
       if (error.code === 10062 || error.code === 40060) {
@@ -923,7 +953,7 @@ export async function handleOptimizeCommand(interaction) {
             logger.info(`Resolved Tenor URL to: ${actualUrl}`);
           } catch (error) {
             logger.error(`Failed to parse Tenor URL for user ${userId}:`, error);
-            await interaction.editReply({
+            await safeInteractionEditReply(interaction, {
               content: error.message || 'failed to parse Tenor URL.',
             });
             await notifyCommandFailure(username, 'optimize', {
@@ -940,7 +970,7 @@ export async function handleOptimizeCommand(interaction) {
 
         // Validate it's a GIF
         if (!isGifFile(fileData.filename, fileData.contentType)) {
-          await interaction.editReply({
+          await safeInteractionEditReply(interaction, {
             content: 'this command only works on gif files.',
           });
           await notifyCommandFailure(username, 'optimize', {
@@ -975,7 +1005,7 @@ export async function handleOptimizeCommand(interaction) {
       }
     } catch (error) {
       logger.error(`Failed to download file from URL for user ${userId}:`, error);
-      await interaction.editReply({
+      await safeInteractionEditReply(interaction, {
         content: error.message || 'failed to download file from URL.',
       });
       await notifyCommandFailure(username, 'optimize', {
@@ -997,7 +1027,7 @@ export async function handleOptimizeCommand(interaction) {
     }
 
     try {
-      await interaction.deferReply();
+      await safeInteractionDeferReply(interaction);
     } catch (error) {
       // Handle expired interactions (code 10062) or already acknowledged (code 40060)
       if (error.code === 10062 || error.code === 40060) {

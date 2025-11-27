@@ -24,11 +24,43 @@ let initPromise = null;
  * @returns {void}
  */
 function ensureDataDir() {
+  const dataDir = path.dirname(getDbPath());
+
   try {
-    const dataDir = path.dirname(getDbPath());
+    // Check if path exists and what it is
+    try {
+      const stats = fs.statSync(dataDir);
+      if (stats.isFile()) {
+        // Path exists as a file, not a directory - this is an error condition
+        throw new Error(
+          `Data directory path exists as a file instead of directory: ${dataDir}. ` +
+            `Please remove the file or use a different path.`
+        );
+      }
+      // Path exists as a directory, we're good
+      return;
+    } catch (statError) {
+      // Path doesn't exist, we'll create it below
+      if (statError.code !== 'ENOENT') {
+        throw statError;
+      }
+    }
+
+    // Create the directory
     fs.mkdirSync(dataDir, { recursive: true });
   } catch (error) {
-    if (error.code !== 'EEXIST') {
+    // Handle specific error codes
+    if (error.code === 'EEXIST') {
+      // Directory already exists (shouldn't happen after stat check, but handle it)
+      return;
+    } else if (error.code === 'ENOTDIR') {
+      // Path exists but is not a directory (shouldn't happen after stat check, but handle it)
+      throw new Error(
+        `Data directory path exists but is not a directory: ${dataDir}. ` +
+          `Please remove the file or use a different path.`
+      );
+    } else {
+      // Re-throw other errors
       throw error;
     }
   }

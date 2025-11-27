@@ -1,5 +1,6 @@
 import { EmbedBuilder, MessageFlags } from 'discord.js';
 import { createLogger } from '../utils/logger.js';
+import { safeInteractionReply } from '../utils/interaction-helpers.js';
 import { botConfig } from '../utils/config.js';
 import { getStorageStats } from '../utils/storage.js';
 import { getUniqueUserCount } from '../utils/user-tracking.js';
@@ -59,10 +60,10 @@ export async function handleStatsCommand(interaction, botStartTime) {
         }
       );
 
-    await interaction.reply({ embeds: [embed] });
+    await safeInteractionReply(interaction, { embeds: [embed] });
   } catch (error) {
     logger.error('Failed to get stats:', error);
-    await interaction.reply({
+    await safeInteractionReply(interaction, {
       content: 'an error occurred while fetching statistics.',
       flags: MessageFlags.Ephemeral,
     });

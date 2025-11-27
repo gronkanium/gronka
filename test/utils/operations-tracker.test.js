@@ -282,11 +282,14 @@ describe('operations tracker', () => {
       await new Promise(resolve => setTimeout(resolve, 10));
 
       logOperationStep(operationId, 'processing', 'running');
+      const afterLogTime = Date.now();
 
       const operation = getOperation(operationId);
       const step = operation.performanceMetrics.steps[0];
       assert.ok(step.duration > 0);
-      assert.ok(step.duration >= Date.now() - startTime);
+      // Duration should be between the wait time (10ms) and the time after logging
+      assert.ok(step.duration >= 10);
+      assert.ok(step.duration <= afterLogTime - startTime);
     });
 
     test('handles non-existent operation gracefully', () => {
@@ -296,13 +299,13 @@ describe('operations tracker', () => {
     });
 
     test('broadcasts update on error status', () => {
+      const operationId = createOperation('convert', 'user1', 'User1');
       let broadcastCalled = false;
       setBroadcastCallback(op => {
         broadcastCalled = true;
         assert.strictEqual(op.id, operationId);
       });
 
-      const operationId = createOperation('convert', 'user1', 'User1');
       logOperationStep(operationId, 'error_step', 'error');
 
       assert.ok(broadcastCalled);
@@ -346,6 +349,7 @@ describe('operations tracker', () => {
     });
 
     test('broadcasts update when error is logged', () => {
+      const operationId = createOperation('convert', 'user1', 'User1');
       let broadcastCalled = false;
       setBroadcastCallback(op => {
         broadcastCalled = true;
@@ -353,7 +357,6 @@ describe('operations tracker', () => {
         assert.strictEqual(op.error, 'Test error');
       });
 
-      const operationId = createOperation('convert', 'user1', 'User1');
       logOperationError(operationId, new Error('Test error'));
 
       assert.ok(broadcastCalled);

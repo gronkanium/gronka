@@ -64,7 +64,7 @@ test-utils:
   script:
     - set +e
     - rm -rf test-utils.xml
-    - npx cross-env R2_ACCOUNT_ID= R2_ACCESS_KEY_ID= R2_SECRET_ACCESS_KEY= R2_BUCKET_NAME= node --test --test-reporter tap test/utils/ > test-utils.tap
+    - npx cross-env R2_ACCOUNT_ID= R2_ACCESS_KEY_ID= R2_SECRET_ACCESS_KEY= R2_BUCKET_NAME= node --test --test-reporter tap test/utils/ > test-utils.tap 2>&1
     - TEST_EXIT_CODE=$?
     - echo "TAP file size:$(wc -c < test-utils.tap) bytes"
     - head -20 test-utils.tap || true
@@ -109,7 +109,7 @@ test-commands:
   script:
     - set +e
     - rm -rf test-commands.xml
-    - npx cross-env R2_ACCOUNT_ID= R2_ACCESS_KEY_ID= R2_SECRET_ACCESS_KEY= R2_BUCKET_NAME= node --test --test-reporter tap test/commands/ > test-commands.tap
+    - npx cross-env R2_ACCOUNT_ID= R2_ACCESS_KEY_ID= R2_SECRET_ACCESS_KEY= R2_BUCKET_NAME= node --test --test-reporter tap test/commands/ > test-commands.tap 2>&1
     - TEST_EXIT_CODE=$?
     - echo "TAP file size:$(wc -c < test-commands.tap) bytes"
     - head -20 test-commands.tap || true
@@ -154,7 +154,7 @@ test-scripts:
   script:
     - set +e
     - rm -rf test-scripts.xml
-    - npx cross-env R2_ACCOUNT_ID= R2_ACCESS_KEY_ID= R2_SECRET_ACCESS_KEY= R2_BUCKET_NAME= node --test --test-reporter tap test/scripts/ > test-scripts.tap
+    - npx cross-env R2_ACCOUNT_ID= R2_ACCESS_KEY_ID= R2_SECRET_ACCESS_KEY= R2_BUCKET_NAME= node --test --test-reporter tap test/scripts/ > test-scripts.tap 2>&1
     - TEST_EXIT_CODE=$?
     - echo "TAP file size:$(wc -c < test-scripts.tap) bytes"
     - head -20 test-scripts.tap || true
@@ -199,7 +199,7 @@ test-integration:
   script:
     - set +e
     - rm -rf test-integration.xml
-    - npx cross-env R2_ACCOUNT_ID= R2_ACCESS_KEY_ID= R2_SECRET_ACCESS_KEY= R2_BUCKET_NAME= node --test --test-reporter tap test/webui-server-*.test.js test/docker-security.test.js > test-integration.tap
+    - npx cross-env R2_ACCOUNT_ID= R2_ACCESS_KEY_ID= R2_SECRET_ACCESS_KEY= R2_BUCKET_NAME= node --test --test-reporter tap test/webui-server-*.test.js test/docker-security.test.js > test-integration.tap 2>&1
     - TEST_EXIT_CODE=$?
     - echo "TAP file size:$(wc -c < test-integration.tap) bytes"
     - head -20 test-integration.tap || true

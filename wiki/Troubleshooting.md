@@ -124,7 +124,11 @@ for unsupported platforms, use `/convert` with a direct media url.
 
 ### download timeout
 
-large files may timeout. check bot logs for errors and try again later.
+large files may timeout. the bot uses deferred downloads for this:
+
+1. download is queued
+2. you receive a notification when complete
+3. check bot logs for errors
 
 ## storage issues
 

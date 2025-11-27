@@ -13,6 +13,7 @@
   import Monitoring from './pages/Monitoring.svelte';
   import Alerts from './pages/Alerts.svelte';
   import Moderation from './pages/Moderation.svelte';
+  import './styles/responsive.css';
 
   let sidebarOpen = true;
   let wsCleanup = null;
@@ -108,6 +109,16 @@
     </ul>
   </nav>
 
+  <!-- Mobile sidebar toggle button -->
+  <button 
+    class="mobile-sidebar-toggle" 
+    class:hidden={sidebarOpen}
+    on:click={toggleSidebar}
+    aria-label="Toggle sidebar"
+  >
+    <ChevronRight size={20} />
+  </button>
+
   <div class="main-content">
     {#if activePage === 'dashboard'}
       <div class="page-header">
@@ -175,6 +186,7 @@
 </main>
 
 <style>
+  :global(html),
   :global(body) {
     margin: 0;
     padding: 0;
@@ -182,10 +194,28 @@
     background-color: #1a1a1a;
     color: #e0e0e0;
     line-height: 1.6;
+    /* Hide scrollbars */
+    scrollbar-width: none; /* Firefox */
+    -ms-overflow-style: none; /* IE and Edge */
+  }
+
+  :global(html)::-webkit-scrollbar,
+  :global(body)::-webkit-scrollbar {
+    display: none; /* Chrome, Safari, Opera */
   }
 
   :global(*) {
     box-sizing: border-box;
+  }
+  
+  /* Hide scrollbars for all scrollable elements */
+  :global(*) {
+    scrollbar-width: none; /* Firefox */
+    -ms-overflow-style: none; /* IE and Edge */
+  }
+  
+  :global(*)::-webkit-scrollbar {
+    display: none; /* Chrome, Safari, Opera */
   }
 
   main {
@@ -337,15 +367,20 @@
     .sidebar {
       position: fixed;
       z-index: 1000;
+      height: 100vh;
+      left: 0;
+      top: 0;
     }
 
     .sidebar:not(.open) {
       width: 0;
       overflow: hidden;
+      border-right: none;
     }
 
     .main-content {
       width: 100%;
+      margin-left: 0;
     }
 
     .page-header {
@@ -359,6 +394,54 @@
     .dashboard-grid {
       padding: 1rem;
       gap: 1rem;
+    }
+    
+    /* Add overlay when sidebar is open on mobile */
+    .sidebar.open::after {
+      content: '';
+      position: fixed;
+      top: 0;
+      left: 220px;
+      right: 0;
+      bottom: 0;
+      background-color: rgba(0, 0, 0, 0.5);
+      z-index: -1;
+    }
+    
+    /* Mobile sidebar toggle button */
+    .mobile-sidebar-toggle {
+      position: fixed;
+      top: 1rem;
+      left: 1rem;
+      width: 44px;
+      height: 44px;
+      background-color: #0d0d0d;
+      border: 1px solid #333;
+      border-radius: 4px;
+      color: #fff;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      z-index: 1001;
+      transition: opacity 0.2s, transform 0.2s;
+      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+    }
+    
+    .mobile-sidebar-toggle:hover {
+      background-color: #1a1a1a;
+      transform: scale(1.05);
+    }
+    
+    .mobile-sidebar-toggle.hidden {
+      display: none;
+    }
+  }
+  
+  /* Hide mobile toggle on desktop */
+  @media (min-width: 769px) {
+    .mobile-sidebar-toggle {
+      display: none;
     }
   }
 </style>

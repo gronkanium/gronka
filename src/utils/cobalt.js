@@ -258,6 +258,7 @@ async function callCobaltApi(apiUrl, url, retryCount = 0, maxRetries = 3) {
       }
 
       // If this is a rate limit error after all retries, throw RateLimitError with retry timing
+      // The deferred queue will use this timing to wait before retrying
       if (errorAnalysis.isRateLimit) {
         // Extract Retry-After header if available (can be seconds or HTTP date)
         const retryAfterHeader = error.response?.headers?.['retry-after'];

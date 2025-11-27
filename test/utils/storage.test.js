@@ -76,6 +76,15 @@ test('detectFileType - uses content type when extension is ambiguous', () => {
   assert.strictEqual(detectFileType('.unknown', 'image/png'), 'image');
 });
 
+test('detectFileType - prioritizes content-type over extension', () => {
+  // Content-type takes precedence over extension (more reliable)
+  // This handles cases where files have incorrect extensions (e.g., .gif extension but video/mp4 content-type)
+  assert.strictEqual(detectFileType('.gif', 'video/mp4'), 'video');
+  assert.strictEqual(detectFileType('.mp4', 'image/gif'), 'gif');
+  assert.strictEqual(detectFileType('.gif', 'image/gif'), 'gif');
+  assert.strictEqual(detectFileType('.mp4', 'video/mp4'), 'video');
+});
+
 test('detectFileType - defaults to video for unknown types', () => {
   assert.strictEqual(detectFileType('.unknown'), 'video');
   assert.strictEqual(detectFileType('.txt'), 'video');

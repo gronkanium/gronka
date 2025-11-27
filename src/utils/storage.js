@@ -243,7 +243,24 @@ function getStoragePath(storagePath) {
 export function detectFileType(extension, contentType = '') {
   const ext = extension.toLowerCase();
 
-  // Check extension first
+  // Check content-type first if provided (more reliable than extension)
+  // This handles cases where files have incorrect extensions (e.g., .gif filename but video/mp4 content-type)
+  if (contentType) {
+    const contentTypeLower = contentType.toLowerCase();
+    if (contentTypeLower.startsWith('video/')) {
+      return 'video';
+    }
+    // Only return 'gif' or 'image' if content-type matches
+    // This prevents misidentifying videos with .gif extensions
+    if (contentTypeLower.startsWith('image/gif')) {
+      return 'gif';
+    }
+    if (contentTypeLower.startsWith('image/')) {
+      return 'image';
+    }
+  }
+
+  // Fall back to extension if content-type is not available or doesn't match known types
   if (ext === '.gif') {
     return 'gif';
   }
@@ -256,20 +273,6 @@ export function detectFileType(extension, contentType = '') {
   const imageExtensions = ['.png', '.jpg', '.jpeg', '.webp'];
   if (imageExtensions.includes(ext)) {
     return 'image';
-  }
-
-  // Fall back to content type if extension is ambiguous
-  if (contentType) {
-    const contentTypeLower = contentType.toLowerCase();
-    if (contentTypeLower.startsWith('image/gif')) {
-      return 'gif';
-    }
-    if (contentTypeLower.startsWith('video/')) {
-      return 'video';
-    }
-    if (contentTypeLower.startsWith('image/')) {
-      return 'image';
-    }
   }
 
   // Default to video if unknown (for backward compatibility)

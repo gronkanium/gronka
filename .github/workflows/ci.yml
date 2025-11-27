@@ -1,5 +1,10 @@
 name: CI
 
+permissions:
+  contents: read
+  checks: write
+  pull-requests: write
+
 on:
   push:
     branches:
@@ -120,10 +125,25 @@ jobs:
         run: sudo apt-get update && sudo apt-get install -y ffmpeg
 
       - name: Run utility tests
-        run: npx cross-env R2_ACCOUNT_ID= R2_ACCESS_KEY_ID= R2_SECRET_ACCESS_KEY= R2_BUCKET_NAME= node --test test/utils/
+        run: |
+          set +e
+          npx cross-env R2_ACCOUNT_ID= R2_ACCESS_KEY_ID= R2_SECRET_ACCESS_KEY= R2_BUCKET_NAME= node --test --test-reporter tap test/utils/ > test-utils.tap
+          TEST_EXIT_CODE=$?
+          npx tap-junit test-utils.tap -o test-utils.xml || echo "No tests to convert"
+          exit $TEST_EXIT_CODE
         env:
           DISCORD_TOKEN: 'ci-test-token'
           CLIENT_ID: 'ci-test-client-id'
+        id: test-utils-run
+
+      - name: Publish test report
+        if: always()
+        uses: dorny/test-reporter@v1
+        with:
+          name: Utility Tests
+          path: test-utils.xml
+          reporter: java-junit
+          fail-on-error: false
 
   # Test stage - Command handlers
   test-commands:
@@ -147,10 +167,25 @@ jobs:
         run: sudo apt-get update && sudo apt-get install -y ffmpeg
 
       - name: Run command tests
-        run: npx cross-env R2_ACCOUNT_ID= R2_ACCESS_KEY_ID= R2_SECRET_ACCESS_KEY= R2_BUCKET_NAME= node --test test/commands/
+        run: |
+          set +e
+          npx cross-env R2_ACCOUNT_ID= R2_ACCESS_KEY_ID= R2_SECRET_ACCESS_KEY= R2_BUCKET_NAME= node --test --test-reporter tap test/commands/ > test-commands.tap
+          TEST_EXIT_CODE=$?
+          npx tap-junit test-commands.tap -o test-commands.xml || echo "No tests to convert"
+          exit $TEST_EXIT_CODE
         env:
           DISCORD_TOKEN: 'ci-test-token'
           CLIENT_ID: 'ci-test-client-id'
+        id: test-commands-run
+
+      - name: Publish test report
+        if: always()
+        uses: dorny/test-reporter@v1
+        with:
+          name: Command Tests
+          path: test-commands.xml
+          reporter: java-junit
+          fail-on-error: false
 
   # Test stage - Scripts
   test-scripts:
@@ -174,10 +209,25 @@ jobs:
         run: sudo apt-get update && sudo apt-get install -y ffmpeg
 
       - name: Run script tests
-        run: npx cross-env R2_ACCOUNT_ID= R2_ACCESS_KEY_ID= R2_SECRET_ACCESS_KEY= R2_BUCKET_NAME= node --test test/scripts/
+        run: |
+          set +e
+          npx cross-env R2_ACCOUNT_ID= R2_ACCESS_KEY_ID= R2_SECRET_ACCESS_KEY= R2_BUCKET_NAME= node --test --test-reporter tap test/scripts/ > test-scripts.tap
+          TEST_EXIT_CODE=$?
+          npx tap-junit test-scripts.tap -o test-scripts.xml || echo "No tests to convert"
+          exit $TEST_EXIT_CODE
         env:
           DISCORD_TOKEN: 'ci-test-token'
           CLIENT_ID: 'ci-test-client-id'
+        id: test-scripts-run
+
+      - name: Publish test report
+        if: always()
+        uses: dorny/test-reporter@v1
+        with:
+          name: Script Tests
+          path: test-scripts.xml
+          reporter: java-junit
+          fail-on-error: false
 
   # Test stage - Integration/server components
   test-integration:
@@ -201,10 +251,25 @@ jobs:
         run: sudo apt-get update && sudo apt-get install -y ffmpeg
 
       - name: Run integration tests
-        run: npx cross-env R2_ACCOUNT_ID= R2_ACCESS_KEY_ID= R2_SECRET_ACCESS_KEY= R2_BUCKET_NAME= node --test test/webui-server-*.test.js test/docker-security.test.js
+        run: |
+          set +e
+          npx cross-env R2_ACCOUNT_ID= R2_ACCESS_KEY_ID= R2_SECRET_ACCESS_KEY= R2_BUCKET_NAME= node --test --test-reporter tap test/webui-server-*.test.js test/docker-security.test.js > test-integration.tap
+          TEST_EXIT_CODE=$?
+          npx tap-junit test-integration.tap -o test-integration.xml || echo "No tests to convert"
+          exit $TEST_EXIT_CODE
         env:
           DISCORD_TOKEN: 'ci-test-token'
           CLIENT_ID: 'ci-test-client-id'
+        id: test-integration-run
+
+      - name: Publish test report
+        if: always()
+        uses: dorny/test-reporter@v1
+        with:
+          name: Integration Tests
+          path: test-integration.xml
+          reporter: java-junit
+          fail-on-error: false
 
   dependabot-checks:
     runs-on: ubuntu-latest

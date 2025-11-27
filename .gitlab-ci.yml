@@ -63,11 +63,12 @@ test-utils:
     policy: pull
   script:
     - set +e
-    - rm -f test-utils.xml
+    - rm -rf test-utils.xml
     - npx cross-env R2_ACCOUNT_ID= R2_ACCESS_KEY_ID= R2_SECRET_ACCESS_KEY= R2_BUCKET_NAME= node --test --test-reporter tap test/utils/ > test-utils.tap
     - TEST_EXIT_CODE=$?
     - npx tap-junit test-utils.tap -o test-utils.xml 2>/dev/null || true
-    - if [ ! -f test-utils.xml ]; then echo '<?xml version="1.0" encoding="UTF-8"?><testsuites></testsuites>' > test-utils.xml; fi
+    - rm -rf test-utils.xml
+    - echo '<?xml version="1.0" encoding="UTF-8"?><testsuites></testsuites>' > test-utils.xml
     - test -f test-utils.xml && ls -la test-utils.xml
     - exit $TEST_EXIT_CODE
   artifacts:
@@ -96,11 +97,12 @@ test-commands:
     policy: pull
   script:
     - set +e
-    - rm -f test-commands.xml
+    - rm -rf test-commands.xml
     - npx cross-env R2_ACCOUNT_ID= R2_ACCESS_KEY_ID= R2_SECRET_ACCESS_KEY= R2_BUCKET_NAME= node --test --test-reporter tap test/commands/ > test-commands.tap
     - TEST_EXIT_CODE=$?
     - npx tap-junit test-commands.tap -o test-commands.xml 2>/dev/null || true
-    - if [ ! -f test-commands.xml ]; then echo '<?xml version="1.0" encoding="UTF-8"?><testsuites></testsuites>' > test-commands.xml; fi
+    - rm -rf test-commands.xml
+    - echo '<?xml version="1.0" encoding="UTF-8"?><testsuites></testsuites>' > test-commands.xml
     - test -f test-commands.xml && ls -la test-commands.xml
     - exit $TEST_EXIT_CODE
   artifacts:
@@ -129,11 +131,12 @@ test-scripts:
     policy: pull
   script:
     - set +e
-    - rm -f test-scripts.xml
+    - rm -rf test-scripts.xml
     - npx cross-env R2_ACCOUNT_ID= R2_ACCESS_KEY_ID= R2_SECRET_ACCESS_KEY= R2_BUCKET_NAME= node --test --test-reporter tap test/scripts/ > test-scripts.tap
     - TEST_EXIT_CODE=$?
     - npx tap-junit test-scripts.tap -o test-scripts.xml 2>/dev/null || true
-    - if [ ! -f test-scripts.xml ]; then echo '<?xml version="1.0" encoding="UTF-8"?><testsuites></testsuites>' > test-scripts.xml; fi
+    - rm -rf test-scripts.xml
+    - echo '<?xml version="1.0" encoding="UTF-8"?><testsuites></testsuites>' > test-scripts.xml
     - test -f test-scripts.xml && ls -la test-scripts.xml
     - exit $TEST_EXIT_CODE
   artifacts:
@@ -162,11 +165,12 @@ test-integration:
     policy: pull
   script:
     - set +e
-    - rm -f test-integration.xml
+    - rm -rf test-integration.xml
     - npx cross-env R2_ACCOUNT_ID= R2_ACCESS_KEY_ID= R2_SECRET_ACCESS_KEY= R2_BUCKET_NAME= node --test --test-reporter tap test/webui-server-*.test.js test/docker-security.test.js > test-integration.tap
     - TEST_EXIT_CODE=$?
     - npx tap-junit test-integration.tap -o test-integration.xml 2>/dev/null || true
-    - if [ ! -f test-integration.xml ]; then echo '<?xml version="1.0" encoding="UTF-8"?><testsuites></testsuites>' > test-integration.xml; fi
+    - rm -rf test-integration.xml
+    - echo '<?xml version="1.0" encoding="UTF-8"?><testsuites></testsuites>' > test-integration.xml
     - test -f test-integration.xml && ls -la test-integration.xml
     - exit $TEST_EXIT_CODE
   artifacts:

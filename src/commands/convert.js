@@ -1458,6 +1458,7 @@ export async function handleConvertCommand(interaction) {
   // Get attachment or URL from command options
   const attachment = interaction.options.getAttachment('file');
   const url = interaction.options.getString('url');
+  const quality = interaction.options.getString('quality');
   const optimize = interaction.options.getBoolean('optimize') ?? false;
   const lossy = interaction.options.getNumber('lossy');
   const startTime = interaction.options.getNumber('start_time');
@@ -1679,6 +1680,7 @@ export async function handleConvertCommand(interaction) {
     adminUser,
     preDownloadedBuffer,
     {
+      quality: quality || undefined,
       optimize,
       lossy: lossy !== null ? lossy : undefined,
       startTime: conversionStartTime,

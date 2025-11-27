@@ -108,7 +108,7 @@ describe('operations tracker', () => {
         commandOptions: {
           optimize: true,
           lossy: false,
-          quality: 'high',
+          quality: 'medium',
         },
         commandSource: 'slash',
       };

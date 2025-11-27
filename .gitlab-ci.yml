@@ -25,10 +25,6 @@ setup-dependencies:
       - node_modules/
     key: ${CI_COMMIT_REF_SLUG}
     policy: push
-  artifacts:
-    paths:
-      - node_modules/
-    expire_in: 1 hour
 
 # Validate stage - Code quality checks
 validate-code:

@@ -163,7 +163,7 @@ function getBotConfig() {
     gifStoragePath: getStringEnv('GIF_STORAGE_PATH', './data-prod/gifs'),
     cdnBaseUrl: getStringEnv('CDN_BASE_URL', 'https://cdn.gronka.p1x.dev/gifs'),
     maxGifDuration: parseIntEnv('MAX_GIF_DURATION', 30, 1, 300),
-    gifQuality: getGifQualityEnv('GIF_QUALITY', 'high'),
+    gifQuality: getGifQualityEnv('GIF_QUALITY', 'medium'),
     maxVideoSize: parseIntEnv('MAX_VIDEO_SIZE', 100 * 1024 * 1024, 1), // 100MB default, configurable via MAX_VIDEO_SIZE env var
     maxImageSize: parseIntEnv('MAX_IMAGE_SIZE', 50 * 1024 * 1024, 1), // 50MB default, configurable via MAX_IMAGE_SIZE env var
     rateLimitCooldown: 30000, // 30 seconds

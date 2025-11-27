@@ -63,7 +63,7 @@ async function checkFFmpegInstalled() {
  * @param {number} options.fps - Frames per second (default: 30)
  * @param {number|null} options.startTime - Trim start time in seconds (optional)
  * @param {number|null} options.duration - Trim duration in seconds (optional)
- * @param {string} options.quality - Quality preset: 'low', 'medium', 'high' (default: 'high')
+ * @param {string} options.quality - Quality preset: 'low', 'medium', 'high' (optional, uses botConfig.gifQuality default: 'medium')
  * @returns {Promise<void>}
  */
 export async function convertToGif(inputPath, outputPath, options = {}) {
@@ -84,7 +84,7 @@ export async function convertToGif(inputPath, outputPath, options = {}) {
     Infinity,
     true
   );
-  const quality = options.quality || 'high';
+  const quality = options.quality;
 
   // Validate quality preset
   const validQualities = ['low', 'medium', 'high'];
@@ -123,7 +123,7 @@ export async function convertToGif(inputPath, outputPath, options = {}) {
     high: 'floyd_steinberg:diff_mode=rectangle',
   };
 
-  const dither = qualityPresets[quality] || qualityPresets.high;
+  const dither = qualityPresets[quality] || qualityPresets.medium;
 
   return new Promise((resolve, reject) => {
     // Create temporary palette file in temp directory (same directory as input)
@@ -432,13 +432,13 @@ export async function trimGif(inputPath, outputPath, options = {}) {
  * @param {string} outputPath - Path to output GIF file
  * @param {Object} options - Conversion options
  * @param {number} options.width - Output width in pixels (default: 720)
- * @param {string} options.quality - Quality preset: 'low', 'medium', 'high' (default: 'high')
+ * @param {string} options.quality - Quality preset: 'low', 'medium', 'high' (optional, uses botConfig.gifQuality default: 'medium')
  * @returns {Promise<void>}
  */
 export async function convertImageToGif(inputPath, outputPath, options = {}) {
   // Validate and sanitize numeric parameters
   const width = validateNumericParameter(options.width ?? 720, 'width', 1, 4096);
-  const quality = options.quality || 'high';
+  const quality = options.quality;
 
   // Validate quality preset
   const validQualities = ['low', 'medium', 'high'];
@@ -477,7 +477,7 @@ export async function convertImageToGif(inputPath, outputPath, options = {}) {
     high: 'floyd_steinberg:diff_mode=rectangle',
   };
 
-  const dither = qualityPresets[quality] || qualityPresets.high;
+  const dither = qualityPresets[quality] || qualityPresets.medium;
 
   return new Promise((resolve, reject) => {
     // Create temporary palette file in temp directory (same directory as input)

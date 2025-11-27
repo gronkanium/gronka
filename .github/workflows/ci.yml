@@ -54,7 +54,7 @@ jobs:
           fail-on-severity: moderate
           config-file: ./.github/dependency-review-config.yml
 
-  test:
+  ci-pipeline:
     runs-on: ubuntu-latest
     if: github.actor != 'dependabot[bot]'
 

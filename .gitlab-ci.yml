@@ -1,10 +1,10 @@
 image: node:20
 
 stages:
-  - test
+  - ci
 
-test:
-  stage: test
+ci-pipeline:
+  stage: ci
   only:
     - merge_requests
     - main

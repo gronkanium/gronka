@@ -448,7 +448,7 @@ describe('docker security tests', () => {
         // cobalt uses read_only: true as an example
         // Services that don't need to write to root filesystem should be read-only
         if (serviceName !== 'cobalt' && !service.read_only && serviceName !== 'app') {
-          // app needs write access for data/temp/logs, so skip it
+          // app needs write access for data-prod/data-test/temp/logs, so skip it
           writableServices.push(serviceName);
         }
       }

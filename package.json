@@ -1,6 +1,6 @@
 {
   "name": "gronka",
-  "version": "0.12.3-beta",
+  "version": "0.12.4",
   "description": "Discord bot that converts video attachments to GIF format",
   "main": "src/bot.js",
   "type": "module",
@@ -48,6 +48,7 @@
     "fix:deps": "npm install",
     "validate": "npm run check:sync && npm run lint && npm run format:check",
     "test": "cross-env R2_ACCOUNT_ID= R2_ACCESS_KEY_ID= R2_SECRET_ACCESS_KEY= R2_BUCKET_NAME= node --test test/",
+    "test:clean": "node scripts/test-clean.js",
     "test:watch": "cross-env R2_ACCOUNT_ID= R2_ACCESS_KEY_ID= R2_SECRET_ACCESS_KEY= R2_BUCKET_NAME= node --test --watch test/",
     "lint": "eslint . --max-warnings=0",
     "lint:warn": "eslint .",
@@ -86,6 +87,7 @@
     "fluent-ffmpeg": "^2.1.2",
     "lucide-svelte": "^0.554.0",
     "marked": "^17.0.1",
+    "tmp": "^0.2.5",
     "ws": "^8.18.0"
   },
   "devDependencies": {
@@ -100,7 +102,6 @@
     "nodemon": "^3.1.11",
     "prettier": "^3.6.2",
     "svelte": "^5.43.14",
-    "tmp": "^0.2.5",
     "vite": "^7.2.4"
   }
 }

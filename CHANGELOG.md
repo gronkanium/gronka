@@ -7,6 +7,67 @@ and this project adheres (attempts) to [Semantic Versioning](https://semver.org/
 
 ## [Unreleased]
 
+## [0.12.4] - 2025-11-27
+
+### Added
+
+- GIF and video trimming functionality
+  - Added `start_time` and `end_time` parameters to `/convert` and `/download` commands
+  - Support for trimming GIFs and videos before processing
+  - Comprehensive test coverage for trimming functionality
+- Video trimming support for `/convert` command
+
+### Changed
+
+- CI/CD pipeline improvements
+  - Restructured GitLab CI with multiple descriptive stages (setup, validate, test:utils, test:commands, test:scripts, test:integration)
+  - Restructured GitHub Actions to match GitLab CI structure with segmented test execution
+  - Tests now run in parallel across separate jobs for better visibility and faster feedback
+  - Improved test organization and categorization
+- Docker production configuration now explicitly uses data-prod directories
+  - Updated docker-compose.yml to set `GRONKA_DB_PATH` using `PROD_GRONKA_DB_PATH` environment variable (defaults to `./data-prod/gronka.db`)
+  - Updated docker-compose.yml to set `GIF_STORAGE_PATH` using `PROD_GIF_STORAGE_PATH` environment variable (defaults to `./data-prod/gifs`)
+  - Production Docker containers now write to `data-prod` directory instead of deprecated `data` directory
+  - Ensures production data is isolated from test data and prevents test users from polluting production database
+- Simplified docker-up script
+  - Removed container status verification loop from docker-up.ps1
+  - Script now starts containers and exits immediately without verification delays
+  - Faster startup experience for development
+- WebUI layout improvements for better readability and visual hierarchy
+  - Added max-width constraints (1400px) to main content areas to prevent edge-to-edge stretching
+  - Centered content on large screens with automatic margins
+  - Improved table column sizing with min/max width constraints for better readability
+  - Enhanced responsive design with better breakpoint handling
+  - Optimized card and section layouts across all pages (Users, Operations, Logs, Monitoring, Stats, Health)
+  - Better text overflow handling with ellipsis and word wrapping
+  - Improved spacing and visual hierarchy throughout the interface
+- Code refactoring and cleanup
+  - Replaced MAX_GIF_WIDTH and DEFAULT_FPS with GIF_QUALITY preset system
+  - Cleanup of unused code and configuration inconsistencies
+  - Improved code organization and maintainability
+
+### Fixed
+
+- Fixed useless conditional checks flagged by GitHub Advanced Security
+  - Removed always-false conditionals related to `treatAsGif` variable in GIF handling code
+  - Simplified code logic in download command
+- Fixed missing `tmp` package in production Docker builds
+  - Moved `tmp` package from devDependencies to dependencies in package.json
+  - Package is required by production code (`src/commands/download.js`) but was being removed by `npm prune --production`
+  - Resolves bootloop issue where containers failed to start with "Cannot find package 'tmp'" error
+- Fixed webui health check 500 error
+  - Created missing `data-prod/gifs` directory in Dockerfile
+  - Health check endpoint now passes when storage directory exists
+  - Updated Dockerfile to create both `data-prod/gifs` and `data-test/gifs` directories for future builds
+- Fixed storage directory creation for test and production environments
+  - Updated server health check to automatically create storage directory if it doesn't exist
+  - Server now creates `data-test/gifs` or `data-prod/gifs` directories automatically on startup
+  - Prevents 500 errors on `/api/health` endpoint when directories are missing
+  - Works for both `bot:test:webui` and `bot:prod:webui` commands
+- Fixed video trimming and file type cache validation issues
+- Fixed operations tracker test failures - fixed duration calculation test and variable initialization order
+- Fixed CI/CD test job failures - use npx cross-env in test jobs to fix command not found error
+
 ### Removed
 
 - Deferred downloads feature
@@ -573,6 +634,7 @@ and this project adheres (attempts) to [Semantic Versioning](https://semver.org/
   - Pre-commit validation
   - Docker buildx setup for cache support
 
+[0.12.4]: https://github.com/thedorekaczynski/gronka/compare/v0.12.3-beta...v0.12.4
 [0.12.3-beta]: https://github.com/thedorekaczynski/gronka/compare/v0.12.2-beta...v0.12.3-beta
 [0.12.2-beta]: https://github.com/thedorekaczynski/gronka/compare/v0.12.1-beta...v0.12.2-beta
 [0.12.1-beta]: https://github.com/thedorekaczynski/gronka/compare/v0.12.0-prerelease...v0.12.1-beta

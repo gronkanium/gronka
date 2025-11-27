@@ -91,6 +91,20 @@ const commands = [
         min_value: 0,
         max_value: 100,
       },
+      {
+        name: 'start_time',
+        description: 'start time in seconds for trimming (videos only)',
+        type: 10, // NUMBER type
+        required: false,
+        min_value: 0,
+      },
+      {
+        name: 'end_time',
+        description: 'end time in seconds for trimming (videos only)',
+        type: 10, // NUMBER type
+        required: false,
+        min_value: 0,
+      },
     ],
     default_member_permissions: null, // Available to everyone
     dm_permission: true, // Enable in DMs
@@ -148,6 +162,20 @@ const commands = [
         description: 'url to a social media video to download',
         type: 3, // STRING type
         required: true,
+      },
+      {
+        name: 'start_time',
+        description: 'start time in seconds for video trimming (optional, not used for downloads)',
+        type: 10, // NUMBER type
+        required: false,
+        min_value: 0,
+      },
+      {
+        name: 'end_time',
+        description: 'end time in seconds for video trimming (optional, not used for downloads)',
+        type: 10, // NUMBER type
+        required: false,
+        min_value: 0,
       },
     ],
     default_member_permissions: null, // Available to everyone

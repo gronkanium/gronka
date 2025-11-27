@@ -69,23 +69,28 @@ async function executeRequest(request) {
  * Queue a Cobalt download request with URL deduplication and concurrency limiting
  * @param {string} url - URL to download
  * @param {Function} downloadFn - Async function that performs the actual download
+ * @param {Object} [options] - Optional parameters
+ * @param {boolean} [options.skipCache] - Skip URL cache check (useful when trimming/modifying the result)
  * @returns {Promise} Promise that resolves with download result
  */
-export async function queueCobaltRequest(url, downloadFn) {
+export async function queueCobaltRequest(url, downloadFn, options = {}) {
+  const { skipCache = false } = options;
   const urlHash = hashUrl(url);
 
   // Initialize database if needed
   await initDatabase();
 
-  // Check if this URL has already been processed
-  const processedUrl = await getProcessedUrl(urlHash);
-  if (processedUrl) {
-    logger.info(
-      `URL already processed (hash: ${urlHash.substring(0, 8)}...), returning existing file URL: ${processedUrl.file_url}`
-    );
-    // Return early with cached info - this will be caught by download handlers
-    // We return null to indicate no download needed, and the handlers will check getProcessedUrl again
-    throw new Error(`URL_ALREADY_PROCESSED:${processedUrl.file_url}`);
+  // Check if this URL has already been processed (unless cache check is skipped)
+  if (!skipCache) {
+    const processedUrl = await getProcessedUrl(urlHash);
+    if (processedUrl) {
+      logger.info(
+        `URL already processed (hash: ${urlHash.substring(0, 8)}...), returning existing file URL: ${processedUrl.file_url}`
+      );
+      // Return early with cached info - this will be caught by download handlers
+      // We return null to indicate no download needed, and the handlers will check getProcessedUrl again
+      throw new Error(`URL_ALREADY_PROCESSED:${processedUrl.file_url}`);
+    }
   }
 
   // Check if this URL is already being downloaded

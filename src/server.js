@@ -272,12 +272,29 @@ async function getDiskSpace(dirPath) {
 }
 
 /**
+ * Ensure storage directory exists
+ * @param {string} dirPath - Directory path to ensure
+ * @returns {Promise<void>}
+ */
+async function ensureStorageDir(dirPath) {
+  try {
+    await fs.mkdir(dirPath, { recursive: true });
+  } catch (error) {
+    if (error.code !== 'EEXIST') {
+      throw error;
+    }
+  }
+}
+
+/**
  * Check storage directory accessibility
  * @param {string} dirPath - Directory path to check
  * @returns {Promise<Object>} Accessibility info
  */
 async function checkStorageAccess(dirPath) {
   try {
+    // Ensure directory exists before checking access
+    await ensureStorageDir(dirPath);
     await fs.access(dirPath, fs.constants.R_OK | fs.constants.W_OK);
     return { accessible: true, error: null };
   } catch (error) {

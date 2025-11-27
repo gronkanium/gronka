@@ -222,16 +222,28 @@ export async function processOptimization(
       const urlHash = hashUrl(originalUrl);
       const processedUrl = await getProcessedUrl(urlHash);
       if (processedUrl) {
-        logger.info(
-          `URL already processed (hash: ${urlHash.substring(0, 8)}...), returning existing file URL: ${processedUrl.file_url}`
-        );
-        updateOperationStatus(operationId, 'success', { fileSize: 0 });
-        recordRateLimit(userId);
-        await interaction.editReply({
-          content: processedUrl.file_url,
-        });
-        await notifyCommandSuccess(username, 'optimize', { operationId, userId });
-        return;
+        // Optimize command expects GIF input/output - only use cache if cached result is a GIF
+        // Skip cache if cached type is not 'gif' (e.g., if it was previously downloaded as video)
+        const isCachedGif =
+          processedUrl.file_type === 'gif' || processedUrl.file_extension === '.gif';
+
+        if (isCachedGif) {
+          logger.info(
+            `URL already processed as GIF (hash: ${urlHash.substring(0, 8)}...), returning existing file URL: ${processedUrl.file_url}`
+          );
+          updateOperationStatus(operationId, 'success', { fileSize: 0 });
+          recordRateLimit(userId);
+          await interaction.editReply({
+            content: processedUrl.file_url,
+          });
+          await notifyCommandSuccess(username, 'optimize', { operationId, userId });
+          return;
+        } else {
+          logger.info(
+            `URL cache exists but file type is ${processedUrl.file_type} (not GIF), skipping cache for optimization`
+          );
+          // Continue to download and optimize the file
+        }
       }
     }
 

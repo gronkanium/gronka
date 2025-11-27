@@ -48,6 +48,7 @@
     "fix:deps": "npm install",
     "validate": "npm run check:sync && npm run lint && npm run format:check",
     "test": "cross-env R2_ACCOUNT_ID= R2_ACCESS_KEY_ID= R2_SECRET_ACCESS_KEY= R2_BUCKET_NAME= node --test test/",
+    "test:clean": "node scripts/test-clean.js",
     "test:watch": "cross-env R2_ACCOUNT_ID= R2_ACCESS_KEY_ID= R2_SECRET_ACCESS_KEY= R2_BUCKET_NAME= node --test --watch test/",
     "lint": "eslint . --max-warnings=0",
     "lint:warn": "eslint .",

@@ -250,19 +250,19 @@ export async function trimVideo(inputPath, outputPath, options = {}) {
     `Starting video trim: ${inputPath} -> ${outputPath} (startTime: ${startTime}, duration: ${duration})`
   );
 
-  // Check if FFmpeg is installed
-  const ffmpegInstalled = await checkFFmpegInstalled();
-  if (!ffmpegInstalled) {
-    logger.error('FFmpeg is not installed');
-    throw new Error('FFmpeg is not installed. Please install FFmpeg to use this feature.');
-  }
-
   // Validate input file exists
   try {
     await fs.access(inputPath);
   } catch {
     logger.error(`Input video file not found: ${inputPath}`);
     throw new Error(`Input video file not found: ${inputPath}`);
+  }
+
+  // Check if FFmpeg is installed
+  const ffmpegInstalled = await checkFFmpegInstalled();
+  if (!ffmpegInstalled) {
+    logger.error('FFmpeg is not installed');
+    throw new Error('FFmpeg is not installed. Please install FFmpeg to use this feature.');
   }
 
   // Ensure output directory exists
@@ -360,19 +360,19 @@ export async function trimGif(inputPath, outputPath, options = {}) {
     `Starting GIF trim: ${inputPath} -> ${outputPath} (startTime: ${startTime}, duration: ${duration})`
   );
 
-  // Check if FFmpeg is installed
-  const ffmpegInstalled = await checkFFmpegInstalled();
-  if (!ffmpegInstalled) {
-    logger.error('FFmpeg is not installed');
-    throw new Error('FFmpeg is not installed. Please install FFmpeg to use this feature.');
-  }
-
   // Validate input file exists
   try {
     await fs.access(inputPath);
   } catch {
     logger.error(`Input GIF file not found: ${inputPath}`);
     throw new Error(`Input GIF file not found: ${inputPath}`);
+  }
+
+  // Check if FFmpeg is installed
+  const ffmpegInstalled = await checkFFmpegInstalled();
+  if (!ffmpegInstalled) {
+    logger.error('FFmpeg is not installed');
+    throw new Error('FFmpeg is not installed. Please install FFmpeg to use this feature.');
   }
 
   // Ensure output directory exists

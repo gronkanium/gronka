@@ -16,8 +16,8 @@ setup-dependencies:
     - main
     - master
   variables:
-    DISCORD_TOKEN: "ci-test-token"
-    CLIENT_ID: "ci-test-client-id"
+    DISCORD_TOKEN: 'ci-test-token'
+    CLIENT_ID: 'ci-test-client-id'
   script:
     - npm ci
   cache:
@@ -34,8 +34,8 @@ validate-code:
     - main
     - master
   variables:
-    DISCORD_TOKEN: "ci-test-token"
-    CLIENT_ID: "ci-test-client-id"
+    DISCORD_TOKEN: 'ci-test-token'
+    CLIENT_ID: 'ci-test-client-id'
   cache:
     paths:
       - node_modules/
@@ -54,8 +54,8 @@ test-utils:
     - main
     - master
   variables:
-    DISCORD_TOKEN: "ci-test-token"
-    CLIENT_ID: "ci-test-client-id"
+    DISCORD_TOKEN: 'ci-test-token'
+    CLIENT_ID: 'ci-test-client-id'
   cache:
     paths:
       - node_modules/
@@ -99,8 +99,8 @@ test-commands:
     - main
     - master
   variables:
-    DISCORD_TOKEN: "ci-test-token"
-    CLIENT_ID: "ci-test-client-id"
+    DISCORD_TOKEN: 'ci-test-token'
+    CLIENT_ID: 'ci-test-client-id'
   cache:
     paths:
       - node_modules/
@@ -144,8 +144,8 @@ test-scripts:
     - main
     - master
   variables:
-    DISCORD_TOKEN: "ci-test-token"
-    CLIENT_ID: "ci-test-client-id"
+    DISCORD_TOKEN: 'ci-test-token'
+    CLIENT_ID: 'ci-test-client-id'
   cache:
     paths:
       - node_modules/
@@ -189,8 +189,8 @@ test-integration:
     - main
     - master
   variables:
-    DISCORD_TOKEN: "ci-test-token"
-    CLIENT_ID: "ci-test-client-id"
+    DISCORD_TOKEN: 'ci-test-token'
+    CLIENT_ID: 'ci-test-client-id'
   cache:
     paths:
       - node_modules/

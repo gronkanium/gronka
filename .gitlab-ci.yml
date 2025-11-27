@@ -1,10 +1,10 @@
 image: node:20
 
 stages:
-  - ci
+  - will-this-break-shit
 
-ci-pipeline:
-  stage: ci
+gronka-tests:
+  stage: will-this-break-shit
   only:
     - merge_requests
     - main

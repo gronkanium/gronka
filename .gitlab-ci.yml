@@ -1,6 +1,5 @@
 image: node:20
 
-
 stages:
   - setup
   - validate
@@ -8,7 +7,6 @@ stages:
   - test:commands
   - test:scripts
   - test:integration
-
 
 # Setup stage - Install dependencies
 setup-dependencies:
@@ -18,8 +16,8 @@ setup-dependencies:
     - main
     - master
   variables:
-    DISCORD_TOKEN: 'ci-test-token'
-    CLIENT_ID: 'ci-test-client-id'
+    DISCORD_TOKEN: "ci-test-token"
+    CLIENT_ID: "ci-test-client-id"
   script:
     - npm ci
   cache:
@@ -27,7 +25,6 @@ setup-dependencies:
       - node_modules/
     key: ${CI_COMMIT_REF_SLUG}
     policy: push
-
 
 # Validate stage - Code quality checks
 validate-code:
@@ -37,8 +34,8 @@ validate-code:
     - main
     - master
   variables:
-    DISCORD_TOKEN: 'ci-test-token'
-    CLIENT_ID: 'ci-test-client-id'
+    DISCORD_TOKEN: "ci-test-token"
+    CLIENT_ID: "ci-test-client-id"
   cache:
     paths:
       - node_modules/
@@ -49,7 +46,6 @@ validate-code:
   dependencies:
     - setup-dependencies
 
-
 # Test stage - Utility functions
 test-utils:
   stage: test:utils
@@ -58,8 +54,8 @@ test-utils:
     - main
     - master
   variables:
-    DISCORD_TOKEN: 'ci-test-token'
-    CLIENT_ID: 'ci-test-client-id'
+    DISCORD_TOKEN: "ci-test-token"
+    CLIENT_ID: "ci-test-client-id"
   cache:
     paths:
       - node_modules/
@@ -95,7 +91,6 @@ test-utils:
   dependencies:
     - setup-dependencies
 
-
 # Test stage - Command handlers
 test-commands:
   stage: test:commands
@@ -104,8 +99,8 @@ test-commands:
     - main
     - master
   variables:
-    DISCORD_TOKEN: 'ci-test-token'
-    CLIENT_ID: 'ci-test-client-id'
+    DISCORD_TOKEN: "ci-test-token"
+    CLIENT_ID: "ci-test-client-id"
   cache:
     paths:
       - node_modules/
@@ -141,7 +136,6 @@ test-commands:
   dependencies:
     - setup-dependencies
 
-
 # Test stage - Scripts
 test-scripts:
   stage: test:scripts
@@ -150,8 +144,8 @@ test-scripts:
     - main
     - master
   variables:
-    DISCORD_TOKEN: 'ci-test-token'
-    CLIENT_ID: 'ci-test-client-id'
+    DISCORD_TOKEN: "ci-test-token"
+    CLIENT_ID: "ci-test-client-id"
   cache:
     paths:
       - node_modules/
@@ -187,7 +181,6 @@ test-scripts:
   dependencies:
     - setup-dependencies
 
-
 # Test stage - Integration/server components
 test-integration:
   stage: test:integration
@@ -196,8 +189,8 @@ test-integration:
     - main
     - master
   variables:
-    DISCORD_TOKEN: 'ci-test-token'
-    CLIENT_ID: 'ci-test-client-id'
+    DISCORD_TOKEN: "ci-test-token"
+    CLIENT_ID: "ci-test-client-id"
   cache:
     paths:
       - node_modules/

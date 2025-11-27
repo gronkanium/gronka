@@ -54,10 +54,10 @@ jobs:
           fail-on-severity: moderate
           config-file: ./.github/dependency-review-config.yml
 
-  test:
+  # Setup stage - Install dependencies
+  setup-dependencies:
     runs-on: ubuntu-latest
     if: github.actor != 'dependabot[bot]'
-
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -74,14 +74,134 @@ jobs:
       - name: Install FFmpeg
         run: sudo apt-get update && sudo apt-get install -y ffmpeg
 
+  # Validate stage - Code quality checks
+  validate-code:
+    runs-on: ubuntu-latest
+    if: github.actor != 'dependabot[bot]'
+    needs: setup-dependencies
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
       - name: Run validation
-        run: npm run check:sync && npm run lint
+        run: npm run validate
         env:
           DISCORD_TOKEN: 'ci-test-token'
           CLIENT_ID: 'ci-test-client-id'
 
-      - name: Run tests
-        run: npm test
+  # Test stage - Utility functions
+  test-utils:
+    runs-on: ubuntu-latest
+    if: github.actor != 'dependabot[bot]'
+    needs: setup-dependencies
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Install FFmpeg
+        run: sudo apt-get update && sudo apt-get install -y ffmpeg
+
+      - name: Run utility tests
+        run: npx cross-env R2_ACCOUNT_ID= R2_ACCESS_KEY_ID= R2_SECRET_ACCESS_KEY= R2_BUCKET_NAME= node --test test/utils/
+        env:
+          DISCORD_TOKEN: 'ci-test-token'
+          CLIENT_ID: 'ci-test-client-id'
+
+  # Test stage - Command handlers
+  test-commands:
+    runs-on: ubuntu-latest
+    if: github.actor != 'dependabot[bot]'
+    needs: setup-dependencies
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Install FFmpeg
+        run: sudo apt-get update && sudo apt-get install -y ffmpeg
+
+      - name: Run command tests
+        run: npx cross-env R2_ACCOUNT_ID= R2_ACCESS_KEY_ID= R2_SECRET_ACCESS_KEY= R2_BUCKET_NAME= node --test test/commands/
+        env:
+          DISCORD_TOKEN: 'ci-test-token'
+          CLIENT_ID: 'ci-test-client-id'
+
+  # Test stage - Scripts
+  test-scripts:
+    runs-on: ubuntu-latest
+    if: github.actor != 'dependabot[bot]'
+    needs: setup-dependencies
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Install FFmpeg
+        run: sudo apt-get update && sudo apt-get install -y ffmpeg
+
+      - name: Run script tests
+        run: npx cross-env R2_ACCOUNT_ID= R2_ACCESS_KEY_ID= R2_SECRET_ACCESS_KEY= R2_BUCKET_NAME= node --test test/scripts/
+        env:
+          DISCORD_TOKEN: 'ci-test-token'
+          CLIENT_ID: 'ci-test-client-id'
+
+  # Test stage - Integration/server components
+  test-integration:
+    runs-on: ubuntu-latest
+    if: github.actor != 'dependabot[bot]'
+    needs: setup-dependencies
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Install FFmpeg
+        run: sudo apt-get update && sudo apt-get install -y ffmpeg
+
+      - name: Run integration tests
+        run: npx cross-env R2_ACCOUNT_ID= R2_ACCESS_KEY_ID= R2_SECRET_ACCESS_KEY= R2_BUCKET_NAME= node --test test/webui-server-*.test.js test/docker-security.test.js
         env:
           DISCORD_TOKEN: 'ci-test-token'
           CLIENT_ID: 'ci-test-client-id'
@@ -107,7 +227,7 @@ jobs:
         run: sudo apt-get update && sudo apt-get install -y ffmpeg
 
       - name: Run validation
-        run: npm run check:sync && npm run lint
+        run: npm run validate
         env:
           DISCORD_TOKEN: 'ci-test-token'
           CLIENT_ID: 'ci-test-client-id'

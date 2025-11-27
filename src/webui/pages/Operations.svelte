@@ -304,6 +304,7 @@
     width: 100%;
     border-collapse: collapse;
     font-size: 0.9rem;
+    table-layout: auto;
   }
 
   thead {
@@ -319,6 +320,44 @@
     font-size: 0.85rem;
     text-transform: uppercase;
     letter-spacing: 0.5px;
+    white-space: nowrap;
+  }
+
+  th:nth-child(1) {
+    width: 50px;
+    min-width: 50px;
+    max-width: 50px;
+  }
+
+  th:nth-child(2) {
+    width: 80px;
+    min-width: 80px;
+    max-width: 80px;
+  }
+
+  th:nth-child(3) {
+    min-width: 100px;
+    max-width: 150px;
+  }
+
+  th:nth-child(4) {
+    min-width: 120px;
+    max-width: 200px;
+  }
+
+  th:nth-child(5) {
+    min-width: 100px;
+    max-width: 150px;
+  }
+
+  th:nth-child(6) {
+    min-width: 100px;
+    max-width: 150px;
+  }
+
+  th:nth-child(7) {
+    min-width: 120px;
+    max-width: 200px;
   }
 
   tbody tr {
@@ -332,11 +371,15 @@
   td {
     padding: 0.75rem 0.5rem;
     color: #e0e0e0;
+    word-wrap: break-word;
+    overflow-wrap: break-word;
   }
 
   .status-cell {
     text-align: center;
     width: 60px;
+    min-width: 60px;
+    max-width: 60px;
     vertical-align: middle;
   }
 
@@ -396,25 +439,40 @@
     text-transform: capitalize;
     color: #fff;
     font-weight: 500;
+    max-width: 150px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
   }
 
   .username-cell {
     color: #e0e0e0;
+    max-width: 200px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
   }
 
   .userid-cell {
     color: #888;
     font-family: monospace;
     font-size: 0.85rem;
+    max-width: 150px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
   }
 
   .size-cell {
     color: #aaa;
+    max-width: 150px;
   }
 
   .timestamp-cell {
     color: #aaa;
     font-size: 0.85rem;
+    max-width: 200px;
+    white-space: nowrap;
   }
 
   .loading {
@@ -468,6 +526,8 @@
     display: flex;
     flex-direction: column;
     gap: 1.5rem;
+    max-width: 100%;
+    overflow-x: auto;
   }
 
   .details-section {
@@ -490,6 +550,7 @@
     display: grid;
     grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
     gap: 0.75rem;
+    max-width: 100%;
   }
 
   .info-item {

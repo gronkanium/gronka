@@ -1,22 +1,127 @@
 image: node:20
 
 stages:
-  - test
+  - setup
+  - validate
+  - test:utils
+  - test:commands
+  - test:scripts
+  - test:integration
 
-test:
-  stage: test
+# Setup stage - Install dependencies
+setup-dependencies:
+  stage: setup
   only:
     - merge_requests
     - main
     - master
-  before_script:
-    - npm ci
   variables:
     DISCORD_TOKEN: 'ci-test-token'
     CLIENT_ID: 'ci-test-client-id'
   script:
-    - npm run validate
-    - npm test
+    - npm ci
   cache:
     paths:
       - node_modules/
+    key: ${CI_COMMIT_REF_SLUG}
+    policy: push
+
+# Validate stage - Code quality checks
+validate-code:
+  stage: validate
+  only:
+    - merge_requests
+    - main
+    - master
+  variables:
+    DISCORD_TOKEN: 'ci-test-token'
+    CLIENT_ID: 'ci-test-client-id'
+  cache:
+    paths:
+      - node_modules/
+    key: ${CI_COMMIT_REF_SLUG}
+    policy: pull
+  script:
+    - npm run validate
+  dependencies:
+    - setup-dependencies
+
+# Test stage - Utility functions
+test-utils:
+  stage: test:utils
+  only:
+    - merge_requests
+    - main
+    - master
+  variables:
+    DISCORD_TOKEN: 'ci-test-token'
+    CLIENT_ID: 'ci-test-client-id'
+  cache:
+    paths:
+      - node_modules/
+    key: ${CI_COMMIT_REF_SLUG}
+    policy: pull
+  script:
+    - npx cross-env R2_ACCOUNT_ID= R2_ACCESS_KEY_ID= R2_SECRET_ACCESS_KEY= R2_BUCKET_NAME= node --test test/utils/
+  dependencies:
+    - setup-dependencies
+
+# Test stage - Command handlers
+test-commands:
+  stage: test:commands
+  only:
+    - merge_requests
+    - main
+    - master
+  variables:
+    DISCORD_TOKEN: 'ci-test-token'
+    CLIENT_ID: 'ci-test-client-id'
+  cache:
+    paths:
+      - node_modules/
+    key: ${CI_COMMIT_REF_SLUG}
+    policy: pull
+  script:
+    - npx cross-env R2_ACCOUNT_ID= R2_ACCESS_KEY_ID= R2_SECRET_ACCESS_KEY= R2_BUCKET_NAME= node --test test/commands/
+  dependencies:
+    - setup-dependencies
+
+# Test stage - Scripts
+test-scripts:
+  stage: test:scripts
+  only:
+    - merge_requests
+    - main
+    - master
+  variables:
+    DISCORD_TOKEN: 'ci-test-token'
+    CLIENT_ID: 'ci-test-client-id'
+  cache:
+    paths:
+      - node_modules/
+    key: ${CI_COMMIT_REF_SLUG}
+    policy: pull
+  script:
+    - npx cross-env R2_ACCOUNT_ID= R2_ACCESS_KEY_ID= R2_SECRET_ACCESS_KEY= R2_BUCKET_NAME= node --test test/scripts/
+  dependencies:
+    - setup-dependencies
+
+# Test stage - Integration/server components
+test-integration:
+  stage: test:integration
+  only:
+    - merge_requests
+    - main
+    - master
+  variables:
+    DISCORD_TOKEN: 'ci-test-token'
+    CLIENT_ID: 'ci-test-client-id'
+  cache:
+    paths:
+      - node_modules/
+    key: ${CI_COMMIT_REF_SLUG}
+    policy: pull
+  script:
+    - npx cross-env R2_ACCOUNT_ID= R2_ACCESS_KEY_ID= R2_SECRET_ACCESS_KEY= R2_BUCKET_NAME= node --test test/webui-server-*.test.js test/docker-security.test.js
+  dependencies:
+    - setup-dependencies

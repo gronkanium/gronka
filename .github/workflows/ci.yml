@@ -125,37 +125,10 @@ jobs:
         run: sudo apt-get update && sudo apt-get install -y ffmpeg
 
       - name: Run utility tests
-        id: test
-        continue-on-error: true
-        run: |
-          npx cross-env R2_ACCOUNT_ID= R2_ACCESS_KEY_ID= R2_SECRET_ACCESS_KEY= R2_BUCKET_NAME= node --test --test-reporter tap test/utils/ > test-utils.tap
-          TEST_EXIT=$?
-          npx tap-junit test-utils.tap -o test-utils.xml || true
-          echo "test_exit=$TEST_EXIT" >> $GITHUB_OUTPUT
+        run: npx cross-env R2_ACCOUNT_ID= R2_ACCESS_KEY_ID= R2_SECRET_ACCESS_KEY= R2_BUCKET_NAME= node --test test/utils/
         env:
           DISCORD_TOKEN: 'ci-test-token'
           CLIENT_ID: 'ci-test-client-id'
-
-      - name: Ensure test report exists
-        if: always()
-        run: |
-          rm -rf test-utils.xml
-          if [ ! -f test-utils.xml ]; then
-            echo '<?xml version="1.0" encoding="UTF-8"?><testsuites></testsuites>' > test-utils.xml
-          fi
-
-      - name: Fail if tests failed
-        if: always() && steps.test.outputs.test_exit != '0'
-        run: exit 1
-
-      - name: Publish test report
-        if: always()
-        uses: dorny/test-reporter@v1
-        with:
-          name: Utility Tests
-          path: test-utils.xml
-          reporter: java-junit
-          fail-on-error: false
 
   # Test stage - Command handlers
   test-commands:
@@ -179,37 +152,10 @@ jobs:
         run: sudo apt-get update && sudo apt-get install -y ffmpeg
 
       - name: Run command tests
-        id: test
-        continue-on-error: true
-        run: |
-          npx cross-env R2_ACCOUNT_ID= R2_ACCESS_KEY_ID= R2_SECRET_ACCESS_KEY= R2_BUCKET_NAME= node --test --test-reporter tap test/commands/ > test-commands.tap
-          TEST_EXIT=$?
-          npx tap-junit test-commands.tap -o test-commands.xml || true
-          echo "test_exit=$TEST_EXIT" >> $GITHUB_OUTPUT
+        run: npx cross-env R2_ACCOUNT_ID= R2_ACCESS_KEY_ID= R2_SECRET_ACCESS_KEY= R2_BUCKET_NAME= node --test test/commands/
         env:
           DISCORD_TOKEN: 'ci-test-token'
           CLIENT_ID: 'ci-test-client-id'
-
-      - name: Ensure test report exists
-        if: always()
-        run: |
-          rm -rf test-commands.xml
-          if [ ! -f test-commands.xml ]; then
-            echo '<?xml version="1.0" encoding="UTF-8"?><testsuites></testsuites>' > test-commands.xml
-          fi
-
-      - name: Fail if tests failed
-        if: always() && steps.test.outputs.test_exit != '0'
-        run: exit 1
-
-      - name: Publish test report
-        if: always()
-        uses: dorny/test-reporter@v1
-        with:
-          name: Command Tests
-          path: test-commands.xml
-          reporter: java-junit
-          fail-on-error: false
 
   # Test stage - Scripts
   test-scripts:
@@ -233,37 +179,10 @@ jobs:
         run: sudo apt-get update && sudo apt-get install -y ffmpeg
 
       - name: Run script tests
-        id: test
-        continue-on-error: true
-        run: |
-          npx cross-env R2_ACCOUNT_ID= R2_ACCESS_KEY_ID= R2_SECRET_ACCESS_KEY= R2_BUCKET_NAME= node --test --test-reporter tap test/scripts/ > test-scripts.tap
-          TEST_EXIT=$?
-          npx tap-junit test-scripts.tap -o test-scripts.xml || true
-          echo "test_exit=$TEST_EXIT" >> $GITHUB_OUTPUT
+        run: npx cross-env R2_ACCOUNT_ID= R2_ACCESS_KEY_ID= R2_SECRET_ACCESS_KEY= R2_BUCKET_NAME= node --test test/scripts/
         env:
           DISCORD_TOKEN: 'ci-test-token'
           CLIENT_ID: 'ci-test-client-id'
-
-      - name: Ensure test report exists
-        if: always()
-        run: |
-          rm -rf test-scripts.xml
-          if [ ! -f test-scripts.xml ]; then
-            echo '<?xml version="1.0" encoding="UTF-8"?><testsuites></testsuites>' > test-scripts.xml
-          fi
-
-      - name: Fail if tests failed
-        if: always() && steps.test.outputs.test_exit != '0'
-        run: exit 1
-
-      - name: Publish test report
-        if: always()
-        uses: dorny/test-reporter@v1
-        with:
-          name: Script Tests
-          path: test-scripts.xml
-          reporter: java-junit
-          fail-on-error: false
 
   # Test stage - Integration/server components
   test-integration:
@@ -287,37 +206,10 @@ jobs:
         run: sudo apt-get update && sudo apt-get install -y ffmpeg
 
       - name: Run integration tests
-        id: test
-        continue-on-error: true
-        run: |
-          npx cross-env R2_ACCOUNT_ID= R2_ACCESS_KEY_ID= R2_SECRET_ACCESS_KEY= R2_BUCKET_NAME= node --test --test-reporter tap test/webui-server-*.test.js test/docker-security.test.js > test-integration.tap
-          TEST_EXIT=$?
-          npx tap-junit test-integration.tap -o test-integration.xml || true
-          echo "test_exit=$TEST_EXIT" >> $GITHUB_OUTPUT
+        run: npx cross-env R2_ACCOUNT_ID= R2_ACCESS_KEY_ID= R2_SECRET_ACCESS_KEY= R2_BUCKET_NAME= node --test test/webui-server-*.test.js test/docker-security.test.js
         env:
           DISCORD_TOKEN: 'ci-test-token'
           CLIENT_ID: 'ci-test-client-id'
-
-      - name: Ensure test report exists
-        if: always()
-        run: |
-          rm -rf test-integration.xml
-          if [ ! -f test-integration.xml ]; then
-            echo '<?xml version="1.0" encoding="UTF-8"?><testsuites></testsuites>' > test-integration.xml
-          fi
-
-      - name: Fail if tests failed
-        if: always() && steps.test.outputs.test_exit != '0'
-        run: exit 1
-
-      - name: Publish test report
-        if: always()
-        uses: dorny/test-reporter@v1
-        with:
-          name: Integration Tests
-          path: test-integration.xml
-          reporter: java-junit
-          fail-on-error: false
 
   dependabot-checks:
     runs-on: ubuntu-latest

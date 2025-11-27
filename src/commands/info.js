@@ -98,7 +98,10 @@ export async function handleInfoCommand(interaction) {
           value: `node.js: \`${nodeVersion}\`\nprocess uptime: \`${processUptime}\`\nbot version: \`${botVersion}\``,
           inline: false,
         }
-      );
+      )
+      .setFooter({
+        text: '[join our server for questions or feature requests](https://discord.gg/MHM2m4keTX)',
+      });
 
     await interaction.reply({ embeds: [embed] });
   } catch (error) {

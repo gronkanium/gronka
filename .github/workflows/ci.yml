@@ -125,10 +125,13 @@ jobs:
         run: sudo apt-get update && sudo apt-get install -y ffmpeg
 
       - name: Run utility tests
+        id: test
         continue-on-error: true
         run: |
-          npx cross-env R2_ACCOUNT_ID= R2_ACCESS_KEY_ID= R2_SECRET_ACCESS_KEY= R2_BUCKET_NAME= node --test --test-reporter tap test/utils/ > test-utils.tap || true
+          npx cross-env R2_ACCOUNT_ID= R2_ACCESS_KEY_ID= R2_SECRET_ACCESS_KEY= R2_BUCKET_NAME= node --test --test-reporter tap test/utils/ > test-utils.tap
+          TEST_EXIT=$?
           npx tap-junit test-utils.tap -o test-utils.xml || true
+          echo "test_exit=$TEST_EXIT" >> $GITHUB_OUTPUT
         env:
           DISCORD_TOKEN: 'ci-test-token'
           CLIENT_ID: 'ci-test-client-id'
@@ -139,6 +142,10 @@ jobs:
           if [ ! -f test-utils.xml ]; then
             echo '<?xml version="1.0" encoding="UTF-8"?><testsuites></testsuites>' > test-utils.xml
           fi
+
+      - name: Fail if tests failed
+        if: always() && steps.test.outputs.test_exit != '0'
+        run: exit 1
 
       - name: Publish test report
         if: always()
@@ -171,10 +178,13 @@ jobs:
         run: sudo apt-get update && sudo apt-get install -y ffmpeg
 
       - name: Run command tests
+        id: test
         continue-on-error: true
         run: |
-          npx cross-env R2_ACCOUNT_ID= R2_ACCESS_KEY_ID= R2_SECRET_ACCESS_KEY= R2_BUCKET_NAME= node --test --test-reporter tap test/commands/ > test-commands.tap || true
+          npx cross-env R2_ACCOUNT_ID= R2_ACCESS_KEY_ID= R2_SECRET_ACCESS_KEY= R2_BUCKET_NAME= node --test --test-reporter tap test/commands/ > test-commands.tap
+          TEST_EXIT=$?
           npx tap-junit test-commands.tap -o test-commands.xml || true
+          echo "test_exit=$TEST_EXIT" >> $GITHUB_OUTPUT
         env:
           DISCORD_TOKEN: 'ci-test-token'
           CLIENT_ID: 'ci-test-client-id'
@@ -185,6 +195,10 @@ jobs:
           if [ ! -f test-commands.xml ]; then
             echo '<?xml version="1.0" encoding="UTF-8"?><testsuites></testsuites>' > test-commands.xml
           fi
+
+      - name: Fail if tests failed
+        if: always() && steps.test.outputs.test_exit != '0'
+        run: exit 1
 
       - name: Publish test report
         if: always()
@@ -217,18 +231,27 @@ jobs:
         run: sudo apt-get update && sudo apt-get install -y ffmpeg
 
       - name: Run script tests
+        id: test
+        continue-on-error: true
         run: |
-          set +e
           npx cross-env R2_ACCOUNT_ID= R2_ACCESS_KEY_ID= R2_SECRET_ACCESS_KEY= R2_BUCKET_NAME= node --test --test-reporter tap test/scripts/ > test-scripts.tap
-          TEST_EXIT_CODE=$?
-          if ! npx tap-junit test-scripts.tap -o test-scripts.xml 2>/dev/null; then
-            echo '<?xml version="1.0" encoding="UTF-8"?><testsuites></testsuites>' > test-scripts.xml
-          fi
-          exit $TEST_EXIT_CODE
+          TEST_EXIT=$?
+          npx tap-junit test-scripts.tap -o test-scripts.xml || true
+          echo "test_exit=$TEST_EXIT" >> $GITHUB_OUTPUT
         env:
           DISCORD_TOKEN: 'ci-test-token'
           CLIENT_ID: 'ci-test-client-id'
-        id: test-scripts-run
+
+      - name: Ensure test report exists
+        if: always()
+        run: |
+          if [ ! -f test-scripts.xml ]; then
+            echo '<?xml version="1.0" encoding="UTF-8"?><testsuites></testsuites>' > test-scripts.xml
+          fi
+
+      - name: Fail if tests failed
+        if: always() && steps.test.outputs.test_exit != '0'
+        run: exit 1
 
       - name: Publish test report
         if: always()
@@ -261,18 +284,27 @@ jobs:
         run: sudo apt-get update && sudo apt-get install -y ffmpeg
 
       - name: Run integration tests
+        id: test
+        continue-on-error: true
         run: |
-          set +e
           npx cross-env R2_ACCOUNT_ID= R2_ACCESS_KEY_ID= R2_SECRET_ACCESS_KEY= R2_BUCKET_NAME= node --test --test-reporter tap test/webui-server-*.test.js test/docker-security.test.js > test-integration.tap
-          TEST_EXIT_CODE=$?
-          if ! npx tap-junit test-integration.tap -o test-integration.xml 2>/dev/null; then
-            echo '<?xml version="1.0" encoding="UTF-8"?><testsuites></testsuites>' > test-integration.xml
-          fi
-          exit $TEST_EXIT_CODE
+          TEST_EXIT=$?
+          npx tap-junit test-integration.tap -o test-integration.xml || true
+          echo "test_exit=$TEST_EXIT" >> $GITHUB_OUTPUT
         env:
           DISCORD_TOKEN: 'ci-test-token'
           CLIENT_ID: 'ci-test-client-id'
-        id: test-integration-run
+
+      - name: Ensure test report exists
+        if: always()
+        run: |
+          if [ ! -f test-integration.xml ]; then
+            echo '<?xml version="1.0" encoding="UTF-8"?><testsuites></testsuites>' > test-integration.xml
+          fi
+
+      - name: Fail if tests failed
+        if: always() && steps.test.outputs.test_exit != '0'
+        run: exit 1
 
       - name: Publish test report
         if: always()

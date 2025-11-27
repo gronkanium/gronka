@@ -34,6 +34,8 @@ import { queueCobaltRequest, hashUrl } from '../utils/cobalt-queue.js';
 import { notifyCommandSuccess, notifyCommandFailure } from '../utils/ntfy-notifier.js';
 import { getProcessedUrl, insertProcessedUrl, initDatabase } from '../utils/database.js';
 import { r2Config } from '../utils/config.js';
+import { trimVideo } from '../utils/video-processor.js';
+import tmp from 'tmp';
 
 const logger = createLogger('download');
 
@@ -70,8 +72,16 @@ function isYouTubeUrl(url) {
  * @param {Interaction} interaction - Discord interaction
  * @param {string} url - URL to download from
  * @param {string} [commandSource] - Command source ('slash' or 'context-menu')
+ * @param {number|null} [startTime] - Start time in seconds for video trimming (optional)
+ * @param {number|null} [duration] - Duration in seconds for video trimming (optional)
  */
-async function processDownload(interaction, url, commandSource = null) {
+async function processDownload(
+  interaction,
+  url,
+  commandSource = null,
+  startTime = null,
+  duration = null
+) {
   const userId = interaction.user.id;
   const username = interaction.user.tag || interaction.user.username || 'unknown';
   const adminUser = isAdmin(userId);
@@ -109,28 +119,36 @@ async function processDownload(interaction, url, commandSource = null) {
     });
 
     // Check if URL has already been processed
+    // Skip URL cache if time parameters are provided (trimmed videos are different from untrimmed, crazy right?)
     const urlHash = hashUrl(url);
-    const processedUrl = await getProcessedUrl(urlHash);
-    if (processedUrl) {
+    let processedUrl = null;
+    if (startTime === null && duration === null) {
+      processedUrl = await getProcessedUrl(urlHash);
+      if (processedUrl) {
+        logger.info(
+          `URL already processed (hash: ${urlHash.substring(0, 8)}...), returning existing file URL: ${processedUrl.file_url}`
+        );
+        logOperationStep(operationId, 'url_validation', 'success', {
+          message: 'URL validation complete',
+          metadata: { url },
+        });
+        logOperationStep(operationId, 'url_cache_hit', 'success', {
+          message: 'URL already processed, returning cached result',
+          metadata: { url, cachedUrl: processedUrl.file_url },
+        });
+        const fileUrl = processedUrl.file_url;
+        updateOperationStatus(operationId, 'success', { fileSize: 0 });
+        recordRateLimit(userId);
+        await interaction.editReply({
+          content: fileUrl,
+        });
+        await notifyCommandSuccess(username, 'download', { operationId, userId });
+        return;
+      }
+    } else {
       logger.info(
-        `URL already processed (hash: ${urlHash.substring(0, 8)}...), returning existing file URL: ${processedUrl.file_url}`
+        `Skipping URL cache check due to time parameters (startTime: ${startTime}, duration: ${duration})`
       );
-      logOperationStep(operationId, 'url_validation', 'success', {
-        message: 'URL validation complete',
-        metadata: { url },
-      });
-      logOperationStep(operationId, 'url_cache_hit', 'success', {
-        message: 'URL already processed, returning cached result',
-        metadata: { url, cachedUrl: processedUrl.file_url },
-      });
-      const fileUrl = processedUrl.file_url;
-      updateOperationStatus(operationId, 'success', { fileSize: 0 });
-      recordRateLimit(userId);
-      await interaction.editReply({
-        content: fileUrl,
-      });
-      await notifyCommandSuccess(username, 'download', { operationId, userId });
-      return;
     }
 
     logOperationStep(operationId, 'url_validation', 'success', {
@@ -273,23 +291,30 @@ async function processDownload(interaction, url, commandSource = null) {
       cdnPath = '/images';
     }
 
+    // Check if video trimming is requested
+    // If so, skip checking for original file existence (we need the trimmed version)
+    const needsTrimming = fileType === 'video' && (startTime !== null || duration !== null);
+
     // Check if file already exists and get appropriate path
+    // Skip this check if trimming is needed (we'll check for trimmed file later)
     let exists = false;
     let filePath = null;
-    if (fileType === 'gif') {
-      exists = await gifExists(hash, GIF_STORAGE_PATH);
-      if (exists) {
-        filePath = getGifPath(hash, GIF_STORAGE_PATH);
-      }
-    } else if (fileType === 'video') {
-      exists = await videoExists(hash, ext, GIF_STORAGE_PATH);
-      if (exists) {
-        filePath = getVideoPath(hash, ext, GIF_STORAGE_PATH);
-      }
-    } else if (fileType === 'image') {
-      exists = await imageExists(hash, ext, GIF_STORAGE_PATH);
-      if (exists) {
-        filePath = getImagePath(hash, ext, GIF_STORAGE_PATH);
+    if (!needsTrimming) {
+      if (fileType === 'gif') {
+        exists = await gifExists(hash, GIF_STORAGE_PATH);
+        if (exists) {
+          filePath = getGifPath(hash, GIF_STORAGE_PATH);
+        }
+      } else if (fileType === 'video') {
+        exists = await videoExists(hash, ext, GIF_STORAGE_PATH);
+        if (exists) {
+          filePath = getVideoPath(hash, ext, GIF_STORAGE_PATH);
+        }
+      } else if (fileType === 'image') {
+        exists = await imageExists(hash, ext, GIF_STORAGE_PATH);
+        if (exists) {
+          filePath = getImagePath(hash, ext, GIF_STORAGE_PATH);
+        }
       }
     }
 
@@ -395,9 +420,161 @@ async function processDownload(interaction, url, commandSource = null) {
           }
         }
       } else if (fileType === 'video') {
+        // Check if video trimming is requested
+        if (startTime !== null || duration !== null) {
+          logger.info(
+            `Trimming video (hash: ${hash}, extension: ${ext}, startTime: ${startTime}, duration: ${duration})`
+          );
+          logOperationStep(operationId, 'video_trim', 'running', {
+            message: 'Trimming video',
+            metadata: { startTime, duration },
+          });
+
+          // Create temporary files for input and output
+          const tmpDir = tmp.dirSync({ unsafeCleanup: true });
+          const inputVideoPath = path.join(tmpDir.name, `input${ext}`);
+          const outputVideoPath = path.join(tmpDir.name, `output${ext}`);
+
+          try {
+            // Write original video to temp file
+            await fs.writeFile(inputVideoPath, fileData.buffer);
+
+            // Trim the video
+            await trimVideo(inputVideoPath, outputVideoPath, {
+              startTime,
+              duration,
+            });
+
+            // Read trimmed video
+            const trimmedBuffer = await fs.readFile(outputVideoPath);
+
+            // Generate new hash for trimmed video (since content changed)
+            // Note: Hash is based on actual video content, not trim parameters.
+            // Different trim parameters → different content → different hash.
+            // Same trim parameters → same content → same hash → cache hit.
+            // This ensures we always return the correct trimmed version for the requested parameters.
+            hash = generateHash(trimmedBuffer);
+
+            // Check if trimmed video already exists
+            // This checks if we've previously created a video with this exact content (hash).
+            // If the user requested different trim parameters, the hash will be different,
+            // so we won't return the wrong cached version.
+            const trimmedExists = await videoExists(hash, ext, GIF_STORAGE_PATH);
+            if (trimmedExists) {
+              filePath = getVideoPath(hash, ext, GIF_STORAGE_PATH);
+              exists = true;
+              logger.info(
+                `Trimmed video already exists (hash: ${hash}) for user ${userId} with requested parameters (startTime: ${startTime}, duration: ${duration})`
+              );
+              // Clean up temp files since we're using existing file
+              try {
+                await fs.unlink(inputVideoPath);
+                await fs.unlink(outputVideoPath);
+                tmpDir.removeCallback();
+              } catch (cleanupError) {
+                logger.warn(`Failed to clean up temp files: ${cleanupError.message}`);
+              }
+            } else {
+              // Use trimmed buffer for saving
+              finalBuffer = trimmedBuffer;
+            }
+
+            logOperationStep(operationId, 'video_trim', 'success', {
+              message: 'Video trimmed successfully',
+              metadata: {
+                startTime,
+                duration,
+                originalSize: fileData.buffer.length,
+                trimmedSize: trimmedBuffer.length,
+                alreadyExists: trimmedExists,
+              },
+            });
+
+            // Clean up temp files
+            try {
+              await fs.unlink(inputVideoPath);
+              await fs.unlink(outputVideoPath);
+              tmpDir.removeCallback();
+            } catch (cleanupError) {
+              logger.warn(`Failed to clean up temp files: ${cleanupError.message}`);
+            }
+          } catch (trimError) {
+            logOperationStep(operationId, 'video_trim', 'error', {
+              message: 'Video trimming failed',
+              metadata: { error: trimError.message },
+            });
+            logger.error(`Video trimming failed: ${trimError.message}`);
+            // Fall back to saving original video without trimming
+            logger.info(`Falling back to saving original video without trimming`);
+            finalBuffer = fileData.buffer;
+            // Clean up temp files on error
+            try {
+              await fs.unlink(inputVideoPath).catch(() => {});
+              await fs.unlink(outputVideoPath).catch(() => {});
+              tmpDir.removeCallback();
+            } catch {
+              // Ignore cleanup errors
+            }
+          }
+        } else {
+          finalBuffer = fileData.buffer;
+        }
+
+        // If trimmed file already exists, return early (similar to original file exists check)
+        if (exists && filePath) {
+          // filePath might be a local path or R2 URL
+          let fileUrl;
+          if (filePath.startsWith('http://') || filePath.startsWith('https://')) {
+            // Already an R2 URL
+            fileUrl = filePath;
+          } else {
+            // Local path, construct URL
+            const filename = path.basename(filePath);
+            fileUrl = `${CDN_BASE_URL.replace('/gifs', cdnPath)}/${filename}`;
+          }
+          logger.info(`${fileType} already exists (hash: ${hash}) for user ${userId}`);
+          // Get file size for existing file
+          let existingSize = finalBuffer.length;
+          if (!filePath.startsWith('http://') && !filePath.startsWith('https://')) {
+            // Try to stat local file, but it might only exist in R2
+            try {
+              const stats = await fs.stat(filePath);
+              existingSize = stats.size;
+            } catch {
+              // File only exists in R2, use buffer size as approximation
+              logger.debug(`File exists in R2 but not locally, using buffer size: ${existingSize}`);
+            }
+          }
+
+          // Record processed URL in database (file exists but URL might not be recorded yet)
+          await insertProcessedUrl(
+            urlHash,
+            hash,
+            fileType,
+            ext,
+            fileUrl,
+            Date.now(),
+            userId,
+            existingSize
+          );
+          logger.debug(
+            `Recorded processed URL in database (urlHash: ${urlHash.substring(0, 8)}...)`
+          );
+
+          updateOperationStatus(operationId, 'success', { fileSize: existingSize });
+          recordRateLimit(userId);
+          await interaction.editReply({
+            content: fileUrl,
+          });
+
+          // Send success notification
+          await notifyCommandSuccess(username, 'download', { operationId, userId });
+          return;
+        }
+
         logger.info(`Saving video (hash: ${hash}, extension: ${ext})`);
         const saveResult = await saveVideo(
-          fileData.buffer,
+          finalBuffer,
           hash,
           ext,
           GIF_STORAGE_PATH,
@@ -757,7 +934,7 @@ export async function handleDownloadCommand(interaction) {
   const startTime = interaction.options.getNumber('start_time');
   const endTime = interaction.options.getNumber('end_time');
 
-  // Validate time parameters if provided (for consistency, though not used for downloads)
+  // Validate time parameters if provided
   if (startTime !== null && endTime !== null) {
     if (endTime <= startTime) {
       logger.warn(
@@ -771,11 +948,28 @@ export async function handleDownloadCommand(interaction) {
     }
   }
 
-  // Note: Time parameters are accepted but not used for downloads.
-  // Users should use /convert for video trimming.
-  if (startTime !== null || endTime !== null) {
+  // Convert start_time/end_time to startTime/duration format for video trimming
+  // Only apply time parameters for videos (they will be ignored for images/gifs)
+  let trimStartTime = null;
+  let trimDuration = null;
+
+  if (startTime !== null && endTime !== null) {
+    // Both provided: use range
+    trimStartTime = startTime;
+    trimDuration = endTime - startTime;
+  } else if (startTime !== null) {
+    // Only start_time: start at that time, continue to end
+    trimStartTime = startTime;
+    trimDuration = null;
+  } else if (endTime !== null) {
+    // Only end_time: start at beginning, end at that time
+    trimStartTime = null;
+    trimDuration = endTime;
+  }
+
+  if (trimStartTime !== null || trimDuration !== null) {
     logger.info(
-      `Time parameters provided for download command (ignored): start_time=${startTime}, end_time=${endTime}`
+      `Time parameters provided for download command: startTime=${trimStartTime}, duration=${trimDuration}`
     );
   }
 
@@ -835,5 +1029,5 @@ export async function handleDownloadCommand(interaction) {
   // Defer reply since downloading may take time
   await interaction.deferReply();
 
-  await processDownload(interaction, url, 'slash');
+  await processDownload(interaction, url, 'slash', trimStartTime, trimDuration);
 }

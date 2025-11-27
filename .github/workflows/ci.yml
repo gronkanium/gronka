@@ -129,7 +129,9 @@ jobs:
           set +e
           npx cross-env R2_ACCOUNT_ID= R2_ACCESS_KEY_ID= R2_SECRET_ACCESS_KEY= R2_BUCKET_NAME= node --test --test-reporter tap test/utils/ > test-utils.tap
           TEST_EXIT_CODE=$?
-          npx tap-junit test-utils.tap -o test-utils.xml || echo "No tests to convert"
+          if ! npx tap-junit test-utils.tap -o test-utils.xml 2>/dev/null; then
+            echo '<?xml version="1.0" encoding="UTF-8"?><testsuites></testsuites>' > test-utils.xml
+          fi
           exit $TEST_EXIT_CODE
         env:
           DISCORD_TOKEN: 'ci-test-token'
@@ -171,7 +173,9 @@ jobs:
           set +e
           npx cross-env R2_ACCOUNT_ID= R2_ACCESS_KEY_ID= R2_SECRET_ACCESS_KEY= R2_BUCKET_NAME= node --test --test-reporter tap test/commands/ > test-commands.tap
           TEST_EXIT_CODE=$?
-          npx tap-junit test-commands.tap -o test-commands.xml || echo "No tests to convert"
+          if ! npx tap-junit test-commands.tap -o test-commands.xml 2>/dev/null; then
+            echo '<?xml version="1.0" encoding="UTF-8"?><testsuites></testsuites>' > test-commands.xml
+          fi
           exit $TEST_EXIT_CODE
         env:
           DISCORD_TOKEN: 'ci-test-token'
@@ -213,7 +217,9 @@ jobs:
           set +e
           npx cross-env R2_ACCOUNT_ID= R2_ACCESS_KEY_ID= R2_SECRET_ACCESS_KEY= R2_BUCKET_NAME= node --test --test-reporter tap test/scripts/ > test-scripts.tap
           TEST_EXIT_CODE=$?
-          npx tap-junit test-scripts.tap -o test-scripts.xml || echo "No tests to convert"
+          if ! npx tap-junit test-scripts.tap -o test-scripts.xml 2>/dev/null; then
+            echo '<?xml version="1.0" encoding="UTF-8"?><testsuites></testsuites>' > test-scripts.xml
+          fi
           exit $TEST_EXIT_CODE
         env:
           DISCORD_TOKEN: 'ci-test-token'
@@ -255,7 +261,9 @@ jobs:
           set +e
           npx cross-env R2_ACCOUNT_ID= R2_ACCESS_KEY_ID= R2_SECRET_ACCESS_KEY= R2_BUCKET_NAME= node --test --test-reporter tap test/webui-server-*.test.js test/docker-security.test.js > test-integration.tap
           TEST_EXIT_CODE=$?
-          npx tap-junit test-integration.tap -o test-integration.xml || echo "No tests to convert"
+          if ! npx tap-junit test-integration.tap -o test-integration.xml 2>/dev/null; then
+            echo '<?xml version="1.0" encoding="UTF-8"?><testsuites></testsuites>' > test-integration.xml
+          fi
           exit $TEST_EXIT_CODE
         env:
           DISCORD_TOKEN: 'ci-test-token'

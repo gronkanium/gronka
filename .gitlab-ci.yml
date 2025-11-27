@@ -1,5 +1,6 @@
 image: node:20
 
+
 stages:
   - setup
   - validate
@@ -7,6 +8,7 @@ stages:
   - test:commands
   - test:scripts
   - test:integration
+
 
 # Setup stage - Install dependencies
 setup-dependencies:
@@ -25,6 +27,7 @@ setup-dependencies:
       - node_modules/
     key: ${CI_COMMIT_REF_SLUG}
     policy: push
+
 
 # Validate stage - Code quality checks
 validate-code:
@@ -46,6 +49,7 @@ validate-code:
   dependencies:
     - setup-dependencies
 
+
 # Test stage - Utility functions
 test-utils:
   stage: test:utils
@@ -66,14 +70,19 @@ test-utils:
     - rm -rf test-utils.xml
     - npx cross-env R2_ACCOUNT_ID= R2_ACCESS_KEY_ID= R2_SECRET_ACCESS_KEY= R2_BUCKET_NAME= node --test --test-reporter tap test/utils/ > test-utils.tap
     - TEST_EXIT_CODE=$?
-    - echo "TAP file size: $(wc -c < test-utils.tap) bytes"
+    - echo "TAP file size:$(wc -c < test-utils.tap) bytes"
     - head -20 test-utils.tap || true
     - npx tap-junit test-utils.tap -o test-utils.xml 2>&1 || TAP_JUNIT_FAILED=true
     - if [ -d test-utils.xml ]; then rm -rf test-utils.xml; fi
     - XML_SIZE=$([ -f test-utils.xml ] && wc -c < test-utils.xml || echo "0")
     - HAS_TESTS=$([ -f test-utils.xml ] && grep -c "<testsuite" test-utils.xml 2>/dev/null || echo "0")
     - echo "XML file size:" "$XML_SIZE" "bytes, test suites:" "$HAS_TESTS"
-    - test "$XML_SIZE" -lt 200 && TAP_JUNIT_FAILED=true || test "$HAS_TESTS" -eq "0" && TAP_JUNIT_FAILED=true || echo "XML validation passed"
+    - |
+      if [ "$XML_SIZE" -lt 200 ] || [ "$HAS_TESTS" -eq "0" ]; then
+        TAP_JUNIT_FAILED=true
+      else
+        echo "XML validation passed"
+      fi
     - if [ ! -f test-utils.xml ] || [ "$TAP_JUNIT_FAILED" = "true" ]; then echo '<?xml version="1.0" encoding="UTF-8"?><testsuites></testsuites>' > test-utils.xml; fi
     - test -f test-utils.xml && ls -la test-utils.xml
     - exit $TEST_EXIT_CODE
@@ -85,6 +94,7 @@ test-utils:
       junit: test-utils.xml
   dependencies:
     - setup-dependencies
+
 
 # Test stage - Command handlers
 test-commands:
@@ -106,14 +116,19 @@ test-commands:
     - rm -rf test-commands.xml
     - npx cross-env R2_ACCOUNT_ID= R2_ACCESS_KEY_ID= R2_SECRET_ACCESS_KEY= R2_BUCKET_NAME= node --test --test-reporter tap test/commands/ > test-commands.tap
     - TEST_EXIT_CODE=$?
-    - echo "TAP file size: $(wc -c < test-commands.tap) bytes"
+    - echo "TAP file size:$(wc -c < test-commands.tap) bytes"
     - head -20 test-commands.tap || true
     - npx tap-junit test-commands.tap -o test-commands.xml 2>&1 || TAP_JUNIT_FAILED=true
     - if [ -d test-commands.xml ]; then rm -rf test-commands.xml; fi
     - XML_SIZE=$([ -f test-commands.xml ] && wc -c < test-commands.xml || echo "0")
     - HAS_TESTS=$([ -f test-commands.xml ] && grep -c "<testsuite" test-commands.xml 2>/dev/null || echo "0")
     - echo "XML file size:" "$XML_SIZE" "bytes, test suites:" "$HAS_TESTS"
-    - test "$XML_SIZE" -lt 200 && TAP_JUNIT_FAILED=true || test "$HAS_TESTS" -eq "0" && TAP_JUNIT_FAILED=true || echo "XML validation passed"
+    - |
+      if [ "$XML_SIZE" -lt 200 ] || [ "$HAS_TESTS" -eq "0" ]; then
+        TAP_JUNIT_FAILED=true
+      else
+        echo "XML validation passed"
+      fi
     - if [ ! -f test-commands.xml ] || [ "$TAP_JUNIT_FAILED" = "true" ]; then echo '<?xml version="1.0" encoding="UTF-8"?><testsuites></testsuites>' > test-commands.xml; fi
     - test -f test-commands.xml && ls -la test-commands.xml
     - exit $TEST_EXIT_CODE
@@ -125,6 +140,7 @@ test-commands:
       junit: test-commands.xml
   dependencies:
     - setup-dependencies
+
 
 # Test stage - Scripts
 test-scripts:
@@ -146,14 +162,19 @@ test-scripts:
     - rm -rf test-scripts.xml
     - npx cross-env R2_ACCOUNT_ID= R2_ACCESS_KEY_ID= R2_SECRET_ACCESS_KEY= R2_BUCKET_NAME= node --test --test-reporter tap test/scripts/ > test-scripts.tap
     - TEST_EXIT_CODE=$?
-    - echo "TAP file size: $(wc -c < test-scripts.tap) bytes"
+    - echo "TAP file size:$(wc -c < test-scripts.tap) bytes"
     - head -20 test-scripts.tap || true
     - npx tap-junit test-scripts.tap -o test-scripts.xml 2>&1 || TAP_JUNIT_FAILED=true
     - if [ -d test-scripts.xml ]; then rm -rf test-scripts.xml; fi
     - XML_SIZE=$([ -f test-scripts.xml ] && wc -c < test-scripts.xml || echo "0")
     - HAS_TESTS=$([ -f test-scripts.xml ] && grep -c "<testsuite" test-scripts.xml 2>/dev/null || echo "0")
     - echo "XML file size:" "$XML_SIZE" "bytes, test suites:" "$HAS_TESTS"
-    - test "$XML_SIZE" -lt 200 && TAP_JUNIT_FAILED=true || test "$HAS_TESTS" -eq "0" && TAP_JUNIT_FAILED=true || echo "XML validation passed"
+    - |
+      if [ "$XML_SIZE" -lt 200 ] || [ "$HAS_TESTS" -eq "0" ]; then
+        TAP_JUNIT_FAILED=true
+      else
+        echo "XML validation passed"
+      fi
     - if [ ! -f test-scripts.xml ] || [ "$TAP_JUNIT_FAILED" = "true" ]; then echo '<?xml version="1.0" encoding="UTF-8"?><testsuites></testsuites>' > test-scripts.xml; fi
     - test -f test-scripts.xml && ls -la test-scripts.xml
     - exit $TEST_EXIT_CODE
@@ -165,6 +186,7 @@ test-scripts:
       junit: test-scripts.xml
   dependencies:
     - setup-dependencies
+
 
 # Test stage - Integration/server components
 test-integration:
@@ -186,14 +208,19 @@ test-integration:
     - rm -rf test-integration.xml
     - npx cross-env R2_ACCOUNT_ID= R2_ACCESS_KEY_ID= R2_SECRET_ACCESS_KEY= R2_BUCKET_NAME= node --test --test-reporter tap test/webui-server-*.test.js test/docker-security.test.js > test-integration.tap
     - TEST_EXIT_CODE=$?
-    - echo "TAP file size: $(wc -c < test-integration.tap) bytes"
+    - echo "TAP file size:$(wc -c < test-integration.tap) bytes"
     - head -20 test-integration.tap || true
     - npx tap-junit test-integration.tap -o test-integration.xml 2>&1 || TAP_JUNIT_FAILED=true
     - if [ -d test-integration.xml ]; then rm -rf test-integration.xml; fi
     - XML_SIZE=$([ -f test-integration.xml ] && wc -c < test-integration.xml || echo "0")
     - HAS_TESTS=$([ -f test-integration.xml ] && grep -c "<testsuite" test-integration.xml 2>/dev/null || echo "0")
     - echo "XML file size:" "$XML_SIZE" "bytes, test suites:" "$HAS_TESTS"
-    - test "$XML_SIZE" -lt 200 && TAP_JUNIT_FAILED=true || test "$HAS_TESTS" -eq "0" && TAP_JUNIT_FAILED=true || echo "XML validation passed"
+    - |
+      if [ "$XML_SIZE" -lt 200 ] || [ "$HAS_TESTS" -eq "0" ]; then
+        TAP_JUNIT_FAILED=true
+      else
+        echo "XML validation passed"
+      fi
     - if [ ! -f test-integration.xml ] || [ "$TAP_JUNIT_FAILED" = "true" ]; then echo '<?xml version="1.0" encoding="UTF-8"?><testsuites></testsuites>' > test-integration.xml; fi
     - test -f test-integration.xml && ls -la test-integration.xml
     - exit $TEST_EXIT_CODE

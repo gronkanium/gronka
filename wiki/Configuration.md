@@ -185,6 +185,26 @@ default frames per second for gif conversion.
 DEFAULT_FPS=15
 ```
 
+### `RATE_LIMIT`
+
+cooldown period in seconds between commands per user.
+
+**default:** `10`
+
+**range:** 1+
+
+**notes:**
+
+- rate limiting prevents abuse by enforcing a cooldown between commands
+- admin users (configured via `ADMIN_USER_IDS`) bypass rate limiting
+- rate limits apply per user, not per server
+
+**example:**
+
+```env
+RATE_LIMIT=10
+```
+
 ## server configuration
 
 ### `SERVER_PORT`
@@ -323,6 +343,7 @@ R2_PUBLIC_DOMAIN=https://cdn.example.com
 MAX_GIF_WIDTH=720
 MAX_GIF_DURATION=30
 DEFAULT_FPS=30
+RATE_LIMIT=10
 
 # server
 SERVER_PORT=3000

@@ -1221,8 +1221,9 @@ export async function handleConvertContextMenu(interaction) {
   // Check rate limit (admins bypass this check)
   if (checkRateLimit(userId)) {
     logger.warn(`User ${userId} (${interaction.user.tag}) is rate limited`);
+    const rateLimitSeconds = botConfig.rateLimitCooldown / 1000;
     await safeInteractionReply(interaction, {
-      content: 'please wait 30 seconds before converting another video or image.',
+      content: `please wait ${rateLimitSeconds} seconds before converting another video or image.`,
       flags: MessageFlags.Ephemeral,
     });
     return;
@@ -1448,8 +1449,9 @@ export async function handleConvertCommand(interaction) {
   // Check rate limit (admins bypass this check)
   if (checkRateLimit(userId)) {
     logger.warn(`User ${userId} (${interaction.user.tag}) is rate limited`);
+    const rateLimitSeconds = botConfig.rateLimitCooldown / 1000;
     await safeInteractionReply(interaction, {
-      content: 'please wait 30 seconds before converting another video or image.',
+      content: `please wait ${rateLimitSeconds} seconds before converting another video or image.`,
       flags: MessageFlags.Ephemeral,
     });
     return;

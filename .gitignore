@@ -20,7 +20,7 @@ cookies.json
 .cloudflared/
 
 # Config files that may contain secrets
-config/credentials.json
+config/
 
 
 # Temporary files
@@ -97,3 +97,4 @@ code-scanning-issues.json
 scripts/setup-glab-auth.sh
 scripts/ci-status.sh
 scripts/check-ci.sh
+scripts/update-jekyll-site.sh

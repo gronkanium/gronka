@@ -186,7 +186,7 @@ test('convertToGif - uses default values', async () => {
   // Skip actual conversion attempts in CI to avoid hangs
   if (process.env.CI !== 'true' && process.env.GITLAB_CI !== 'true') {
     try {
-      await convertToGif(inputPath, outputPath, {});
+      await convertToGif(inputPath, outputPath, { quality: 'medium' });
     } catch (error) {
       // Should fail with FFmpeg error or file not found, not validation error
       assert(!error.message.includes('must be'));
@@ -198,7 +198,7 @@ test('convertToGif - validates input file exists', async () => {
   const nonExistentPath = path.join(testTempPath, 'nonexistent.mp4');
   const outputPath = path.join(testTempPath, 'output.gif');
 
-  await assert.rejects(async () => await convertToGif(nonExistentPath, outputPath), {
+  await assert.rejects(async () => await convertToGif(nonExistentPath, outputPath, { quality: 'medium' }), {
     message: /(Input video file not found|FFmpeg is not installed)/,
   });
 });

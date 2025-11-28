@@ -10,10 +10,20 @@ const projectRoot = path.resolve(__dirname, '../..');
 
 /**
  * Get the database path (supports environment variable override for testing)
+ * Always defaults to data-test directory when GRONKA_DB_PATH is unset to prevent
+ * accidental writes to production database
  * @returns {string} Database file path
  */
 function getDbPath() {
-  return process.env.GRONKA_DB_PATH || path.join(projectRoot, 'data-prod', 'gronka.db');
+  // If explicitly set, use it (allows tests to override with temp directories)
+  if (process.env.GRONKA_DB_PATH) {
+    return process.env.GRONKA_DB_PATH;
+  }
+
+  // Always use data-test when GRONKA_DB_PATH is unset to prevent accidental
+  // writes to production database. Production code should always set GRONKA_DB_PATH
+  // explicitly via environment variable.
+  return path.join(projectRoot, 'data-test', 'gronka.db');
 }
 
 let db = null;

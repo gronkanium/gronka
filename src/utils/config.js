@@ -160,7 +160,7 @@ function getBotConfig() {
     ),
     clientId: requireStringEnv('CLIENT_ID', 'Discord application/client ID'),
     adminUserIds: parseIdList('ADMIN_USER_IDS'),
-    gifStoragePath: getStringEnv('GIF_STORAGE_PATH', './data-prod/gifs'),
+    gifStoragePath: getStringEnv('GIF_STORAGE_PATH', './data-test/gifs'),
     cdnBaseUrl: getStringEnv('CDN_BASE_URL', 'https://cdn.gronka.p1x.dev/gifs'),
     maxGifDuration: parseIntEnv('MAX_GIF_DURATION', 30, 1, 300),
     gifQuality: getGifQualityEnv('GIF_QUALITY', 'medium'),
@@ -211,12 +211,13 @@ export const r2Config = {
 };
 
 // Server configuration
-// Note: serverConfig.gifStoragePath defaults to './data' (base path without 'gifs' subdirectory)
-// while botConfig.gifStoragePath defaults to './data-prod/gifs' (includes 'gifs' subdirectory).
+// Note: serverConfig.gifStoragePath defaults to './data-test' (base path without 'gifs' subdirectory)
+// while botConfig.gifStoragePath defaults to './data-test/gifs' (includes 'gifs' subdirectory).
 // This difference is intentional - the server uses a base path that getGifPath() will append 'gifs' to,
 // while the bot uses a path that already includes 'gifs'. The getGifPath() function handles both cases.
+// Both default to 'data-test' to prevent accidental writes to production data.
 export const serverConfig = {
-  gifStoragePath: getStringEnv('GIF_STORAGE_PATH', './data'),
+  gifStoragePath: getStringEnv('GIF_STORAGE_PATH', './data-test'),
   serverPort: parseIntEnv('SERVER_PORT', 3000, 1, 65535),
   serverHost: getStringEnv('SERVER_HOST', '0.0.0.0'),
   statsUsername: getStringEnv('STATS_USERNAME', null),

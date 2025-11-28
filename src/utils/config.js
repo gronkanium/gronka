@@ -166,7 +166,7 @@ function getBotConfig() {
     gifQuality: getGifQualityEnv('GIF_QUALITY', 'medium'),
     maxVideoSize: parseIntEnv('MAX_VIDEO_SIZE', 100 * 1024 * 1024, 1), // 100MB default, configurable via MAX_VIDEO_SIZE env var
     maxImageSize: parseIntEnv('MAX_IMAGE_SIZE', 50 * 1024 * 1024, 1), // 50MB default, configurable via MAX_IMAGE_SIZE env var
-    rateLimitCooldown: 30000, // 30 seconds
+    rateLimitCooldown: parseIntEnv('RATE_LIMIT', 10, 1) * 1000, // Default 10 seconds, configurable via RATE_LIMIT env var (in seconds)
     cobaltApiUrl: getStringEnv('COBALT_API_URL', 'http://cobalt:9000'),
     cobaltEnabled: getStringEnv('COBALT_ENABLED', 'true').toLowerCase() === 'true',
     statsCacheTtl: parseIntEnv('STATS_CACHE_TTL', 300000, 0), // 5 minutes default, 0 to disable

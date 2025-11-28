@@ -1159,8 +1159,9 @@ export async function handleDownloadContextMenuCommand(interaction) {
   // Check rate limit (admins bypass this check)
   if (checkRateLimit(userId)) {
     logger.warn(`User ${userId} (${interaction.user.tag}) is rate limited`);
+    const rateLimitSeconds = botConfig.rateLimitCooldown / 1000;
     await safeInteractionReply(interaction, {
-      content: 'please wait 30 seconds before downloading another video.',
+      content: `please wait ${rateLimitSeconds} seconds before downloading another video.`,
       flags: MessageFlags.Ephemeral,
     });
     return;
@@ -1261,8 +1262,9 @@ export async function handleDownloadCommand(interaction) {
   // Check rate limit (admins bypass this check)
   if (checkRateLimit(userId)) {
     logger.warn(`User ${userId} (${interaction.user.tag}) is rate limited`);
+    const rateLimitSeconds = botConfig.rateLimitCooldown / 1000;
     await safeInteractionReply(interaction, {
-      content: 'please wait 30 seconds before downloading another video.',
+      content: `please wait ${rateLimitSeconds} seconds before downloading another video.`,
       flags: MessageFlags.Ephemeral,
     });
     return;

@@ -613,8 +613,9 @@ export async function handleOptimizeContextMenuCommand(interaction, modalAttachm
   // Check rate limit (admins bypass this check)
   if (checkRateLimit(userId)) {
     logger.warn(`User ${userId} (${interaction.user.tag}) is rate limited`);
+    const rateLimitSeconds = botConfig.rateLimitCooldown / 1000;
     await safeReply(interaction, {
-      content: 'please wait 30 seconds before optimizing another gif.',
+      content: `please wait ${rateLimitSeconds} seconds before optimizing another gif.`,
       flags: MessageFlags.Ephemeral,
     });
     return;
@@ -830,8 +831,9 @@ export async function handleOptimizeCommand(interaction) {
   // Check rate limit (admins bypass this check)
   if (checkRateLimit(userId)) {
     logger.warn(`User ${userId} (${interaction.user.tag}) is rate limited`);
+    const rateLimitSeconds = botConfig.rateLimitCooldown / 1000;
     await safeReply(interaction, {
-      content: 'please wait 30 seconds before optimizing another gif.',
+      content: `please wait ${rateLimitSeconds} seconds before optimizing another gif.`,
       flags: MessageFlags.Ephemeral,
     });
     return;

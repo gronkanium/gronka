@@ -4,14 +4,9 @@ description: a discord bot that downloads media from social media and urls, then
 image: https://cdn.discordapp.com/attachments/1335451213285822485/1440055450132414736/content.png?ex=691cc3a6&is=691b7226&hm=864a8c2f8d7ee5aaa7dac42318d3364032d9d29099057b1c7a3e0fb41a4063dd&
 ---
 
-![Node.js](https://img.shields.io/badge/Node.js-20+-339933?logo=node.js&logoColor=white)
 ![Discord.js](https://img.shields.io/badge/Discord.js-14.14-5865F2?logo=discord&logoColor=white)
-![Docker](https://img.shields.io/badge/Docker-Ready-2496ED?logo=docker&logoColor=white)
 [![Add to Discord](https://img.shields.io/badge/Add_to_Discord-5865F2?logo=discord&logoColor=white)](https://discord.com/oauth2/authorize?client_id=1439329052002357599)
-[![Docs](https://img.shields.io/badge/read-docs-blue)]({{ "/docs/" | relative_url }})
-[![FFmpeg](https://img.shields.io/badge/FFmpeg-007808?logo=ffmpeg&logoColor=white)](https://ffmpeg.org/)
 [![GitHub](https://img.shields.io/badge/GitHub-181717?logo=github&logoColor=white)](https://github.com/thedorekaczynski/gronka)
-[![wakatime](https://wakatime.com/badge/github/thedorekaczynski/gronka.svg)](https://wakatime.com/badge/github/thedorekaczynski/gronka)
 
 a discord bot that downloads media from social media platforms and urls, then converts it to gifs. that's it.
 

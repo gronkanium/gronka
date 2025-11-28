@@ -7,6 +7,24 @@ and this project adheres (attempts) to [Semantic Versioning](https://semver.org/
 
 ## [Unreleased]
 
+### Changed
+
+- Refactored database.js into modular structure
+  - Broke down monolithic `src/utils/database.js` (1948 lines) into focused modules organized in `src/utils/database/` subdirectory
+  - Created separate modules for different database concerns:
+    - `database/connection.js` - Database connection state management and shared utilities
+    - `database/init.js` - Database initialization and schema management
+    - `database/logs.js` - Log-related operations (insertLog, getLogs, getLogsCount, getLogComponents, getLogMetrics)
+    - `database/users.js` - User-related operations (insertOrUpdateUser, getUser, getUniqueUserCount)
+    - `database/processed-urls.js` - Processed URL operations (getProcessedUrl, insertProcessedUrl, getUserMedia, getUserR2Media, deleteProcessedUrl, deleteUserR2Media)
+    - `database/operations.js` - Operation tracking (insertOperationLog, getOperationLogs, getOperationTrace, getRecentOperations, getStuckOperations, markOperationAsFailed)
+    - `database/metrics.js` - Metrics operations (insertOrUpdateUserMetrics, getUserMetrics, getAllUsersMetrics, insertSystemMetrics, getSystemMetrics)
+    - `database/alerts.js` - Alert operations (insertAlert, getAlerts, getAlertsCount)
+  - Maintained backward compatibility by keeping main `src/utils/database.js` as a barrel export that re-exports all functions from submodules
+  - All existing imports continue to work without modification
+  - Improved code organization, maintainability, and testability
+  - No breaking changes - function signatures remain identical
+
 ## [0.12.5] - 2025-11-27
 
 ### Added

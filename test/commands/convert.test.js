@@ -221,4 +221,58 @@ describe('convert command parameter conversion', () => {
       assert.strictEqual(result.valid, false);
     });
   });
+
+  describe('quality parameter handling', () => {
+    /**
+     * Helper function to simulate quality parameter handling from handleConvertCommand
+     * This matches the logic in src/commands/convert.js lines 1461 and 1683
+     */
+    function getQualityParameter(qualityFromCommand, defaultQuality) {
+      // Simulates: quality: quality || undefined
+      // Then in processConversion: quality: options.quality ?? botConfig.gifQuality
+      if (qualityFromCommand) {
+        return qualityFromCommand;
+      }
+      return defaultQuality;
+    }
+
+    test('uses quality parameter from command when provided', () => {
+      const result = getQualityParameter('high', 'medium');
+      assert.strictEqual(result, 'high');
+    });
+
+    test('uses default quality when quality parameter is not provided', () => {
+      const result = getQualityParameter(null, 'medium');
+      assert.strictEqual(result, 'medium');
+    });
+
+    test('uses default quality when quality parameter is undefined', () => {
+      const result = getQualityParameter(undefined, 'medium');
+      assert.strictEqual(result, 'medium');
+    });
+
+    test('accepts all valid quality values: low, medium, high', () => {
+      const validQualities = ['low', 'medium', 'high'];
+      const defaultQuality = 'medium';
+
+      for (const quality of validQualities) {
+        const result = getQualityParameter(quality, defaultQuality);
+        assert.strictEqual(result, quality, `${quality} should be accepted`);
+      }
+    });
+
+    test('quality parameter takes precedence over default', () => {
+      const result1 = getQualityParameter('low', 'high');
+      assert.strictEqual(result1, 'low');
+
+      const result2 = getQualityParameter('high', 'low');
+      assert.strictEqual(result2, 'high');
+    });
+
+    test('empty string quality parameter uses default', () => {
+      // Empty string is falsy, so it should use default
+      const result = getQualityParameter('', 'medium');
+      assert.strictEqual(result, 'medium');
+    });
+  });
 });

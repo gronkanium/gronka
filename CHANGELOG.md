@@ -7,16 +7,14 @@ and this project adheres (attempts) to [Semantic Versioning](https://semver.org/
 
 ## [Unreleased]
 
+## [0.12.5] - 2025-11-27
+
 ### Added
 
 - Quality parameter to `/convert` command
   - Added `quality` option to `/convert` command with choices: low, medium, high
   - Allows users to specify GIF quality preset per conversion
   - Defaults to medium quality when not specified
-- JUnit test reports for GitLab CI
-  - Added `tap-junit` package for converting TAP test output to JUnit XML format
-  - Test reports now available in GitLab CI for better test result visualization
-  - Enhanced debugging with TAP file artifacts for test jobs
 
 ### Changed
 
@@ -27,21 +25,10 @@ and this project adheres (attempts) to [Semantic Versioning](https://semver.org/
 
 ### Fixed
 
-- Test reporting improvements in CI/CD
-  - Fixed stdout and stderr capture in GitLab CI test jobs for complete test output
-  - Fixed JUnit XML file creation and validation issues in GitLab CI
-  - Fixed tap-junit directory/file handling to ensure proper XML file creation
-  - Improved test output handling and artifact generation
 - Code scanning issues
   - Fixed code scanning alerts and warnings
 - Code cleanup
   - Removed unused imports in race-conditions test
-
-### Removed
-
-- Test reporting from GitHub Actions workflows
-  - Removed JUnit test reports from GitHub CI workflows to simplify pipeline
-  - GitLab CI retains full test reporting capabilities
 
 ## [0.12.4] - 2025-11-27
 
@@ -670,6 +657,7 @@ and this project adheres (attempts) to [Semantic Versioning](https://semver.org/
   - Pre-commit validation
   - Docker buildx setup for cache support
 
+[0.12.5]: https://github.com/thedorekaczynski/gronka/compare/v0.12.4...v0.12.5
 [0.12.4]: https://github.com/thedorekaczynski/gronka/compare/v0.12.3-beta...v0.12.4
 [0.12.3-beta]: https://github.com/thedorekaczynski/gronka/compare/v0.12.2-beta...v0.12.3-beta
 [0.12.2-beta]: https://github.com/thedorekaczynski/gronka/compare/v0.12.1-beta...v0.12.2-beta

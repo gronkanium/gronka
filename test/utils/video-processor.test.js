@@ -198,9 +198,12 @@ test('convertToGif - validates input file exists', async () => {
   const nonExistentPath = path.join(testTempPath, 'nonexistent.mp4');
   const outputPath = path.join(testTempPath, 'output.gif');
 
-  await assert.rejects(async () => await convertToGif(nonExistentPath, outputPath, { quality: 'medium' }), {
-    message: /(Input video file not found|FFmpeg is not installed)/,
-  });
+  await assert.rejects(
+    async () => await convertToGif(nonExistentPath, outputPath, { quality: 'medium' }),
+    {
+      message: /(Input video file not found|FFmpeg is not installed)/,
+    }
+  );
 });
 
 test('convertToGif - handles string numbers for numeric parameters', async () => {

@@ -206,6 +206,7 @@ async function processDownload(
         },
         {
           skipCache: startTime !== null || duration !== null,
+          expectedFileType: 'video',
         }
       );
       logOperationStep(operationId, 'download_complete', 'success', {
@@ -222,6 +223,22 @@ async function processDownload(
         const urlMatch = error.message.match(/^URL_ALREADY_PROCESSED:(.+)$/);
         if (urlMatch && urlMatch[1]) {
           const fileUrl = urlMatch[1];
+
+          // Safety check: verify the cached entry is actually a video (defense in depth)
+          // This should not happen with expectedFileType filtering, but check anyway
+          const processedUrl = await getProcessedUrl(urlHash);
+          if (processedUrl && processedUrl.file_type !== 'video') {
+            logger.warn(
+              `Cached entry file type mismatch (expected: video, got: ${processedUrl.file_type}), proceeding with download`
+            );
+            logOperationStep(operationId, 'url_cache_mismatch', 'running', {
+              message: 'Cached entry file type mismatch, downloading video instead',
+              metadata: { url, cachedType: processedUrl.file_type },
+            });
+            // Re-throw to proceed with download
+            throw new Error('Cached entry file type mismatch, proceeding with download');
+          }
+
           updateOperationStatus(operationId, 'success', { fileSize: 0 });
           recordRateLimit(userId);
           await safeInteractionEditReply(interaction, {

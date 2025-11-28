@@ -29,12 +29,17 @@ const broadcastCallbacks = new Map();
 const userMetricsBroadcastCallbacks = new Map();
 
 // Store current bot instance's WebUI port (mapped from TEST_WEBUI_PORT or PROD_WEBUI_PORT by bot-start.js)
-const instancePort = parseInt(process.env.WEBUI_PORT || '3001', 10);
+// Use a getter function to read from process.env dynamically (allows tests to change it)
+function getInstancePort() {
+  return parseInt(process.env.WEBUI_PORT || '3001', 10);
+}
 
 // WebUI URL for sending operation updates (from bot to webui)
 // Since webui is now in the same container, use localhost (fallback for HTTP mode)
-const WEBUI_URL =
-  process.env.WEBUI_URL || process.env.WEBUI_SERVER_URL || `http://localhost:${instancePort}`;
+function getWebuiUrl() {
+  const port = getInstancePort();
+  return process.env.WEBUI_URL || process.env.WEBUI_SERVER_URL || `http://localhost:${port}`;
+}
 
 /**
  * Set the broadcast callback for websocket updates
@@ -42,7 +47,7 @@ const WEBUI_URL =
  * @param {number} [port] - WebUI port to register this callback for (defaults to current instance port)
  */
 export function setBroadcastCallback(callback, port = null) {
-  const targetPort = port || instancePort;
+  const targetPort = port || getInstancePort();
   broadcastCallbacks.set(targetPort, callback);
 }
 
@@ -52,7 +57,7 @@ export function setBroadcastCallback(callback, port = null) {
  * @param {number} [port] - WebUI port to register this callback for (defaults to current instance port)
  */
 export function setUserMetricsBroadcastCallback(callback, port = null) {
-  const targetPort = port || instancePort;
+  const targetPort = port || getInstancePort();
   userMetricsBroadcastCallbacks.set(targetPort, callback);
 }
 
@@ -62,7 +67,8 @@ export function setUserMetricsBroadcastCallback(callback, port = null) {
  */
 async function broadcastUpdate(operation) {
   // Try to find callback for this instance's port (same process)
-  const callback = broadcastCallbacks.get(instancePort);
+  const currentPort = getInstancePort();
+  const callback = broadcastCallbacks.get(currentPort);
   if (callback) {
     try {
       callback(operation);
@@ -72,7 +78,7 @@ async function broadcastUpdate(operation) {
   } else {
     // Otherwise, send HTTP request to webui server (separate container)
     try {
-      await axios.post(`${WEBUI_URL}/api/operations`, operation, {
+      await axios.post(`${getWebuiUrl()}/api/operations`, operation, {
         timeout: 1000,
         headers: { 'Content-Type': 'application/json' },
       });
@@ -428,7 +434,8 @@ async function updateUserMetricsForOperation(operation) {
     }
 
     // Broadcast user metrics update
-    const userMetricsCallback = userMetricsBroadcastCallbacks.get(instancePort);
+    const currentPort = getInstancePort();
+    const userMetricsCallback = userMetricsBroadcastCallbacks.get(currentPort);
     if (userMetricsCallback) {
       // Callback is set (webui-server in same process)
       try {
@@ -440,7 +447,7 @@ async function updateUserMetricsForOperation(operation) {
       // No callback, send HTTP request to webui server (separate container)
       try {
         await axios.post(
-          `${WEBUI_URL}/api/user-metrics`,
+          `${getWebuiUrl()}/api/user-metrics`,
           {
             userId: operation.userId,
             metrics: updatedMetrics,

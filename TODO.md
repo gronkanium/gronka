@@ -20,7 +20,7 @@ several utility files have grown too large and should be broken down into smalle
 
 ### primary targets
 
-- **`src/utils/database.js`** (1947 lines) - break into separate modules for different database concerns:
+- **`src/utils/database.js`** (1947 lines) - DONE - broken into separate modules for different database concerns:
   - `src/utils/database/logs.js` - log-related operations (insertLog, getLogs, getLogsCount, getLogComponents, getLogMetrics)
   - `src/utils/database/users.js` - user-related operations (insertOrUpdateUser, getUser, getUniqueUserCount)
   - `src/utils/database/processed-urls.js` - processed URL operations (getProcessedUrl, insertProcessedUrl, getUserMedia, getUserR2Media, deleteProcessedUrl, deleteUserR2Media)
@@ -28,7 +28,16 @@ several utility files have grown too large and should be broken down into smalle
   - `src/utils/database/metrics.js` - metrics operations (insertOrUpdateUserMetrics, getUserMetrics, getAllUsersMetrics, insertSystemMetrics, getSystemMetrics)
   - `src/utils/database/alerts.js` - alert operations (insertAlert, getAlerts, getAlertsCount)
   - `src/utils/database/init.js` - database initialization and connection management (initDatabase, closeDatabase, getDbPath, ensureDataDir)
-  - keep main `src/utils/database.js` as a barrel export that re-exports from submodules for backward compatibility
+  - main `src/utils/database.js` is a barrel export that re-exports from submodules for backward compatibility
+
+- **`src/utils/video-processor.js`** (549 lines) - DONE - broken into separate modules for different video processing operations:
+  - `src/utils/video-processor/utils.js` - shared utilities (validateNumericParameter, checkFFmpegInstalled)
+  - `src/utils/video-processor/convert-to-gif.js` - video to GIF conversion
+  - `src/utils/video-processor/convert-image-to-gif.js` - image to GIF conversion
+  - `src/utils/video-processor/trim-video.js` - video trimming
+  - `src/utils/video-processor/trim-gif.js` - GIF trimming
+  - `src/utils/video-processor/metadata.js` - video metadata extraction
+  - main `src/utils/video-processor.js` is a barrel export that re-exports from submodules for backward compatibility
 
 - **`test/utils/video-processor.test.js`** (662 lines) - split into separate test files for different function groups:
   - `test/utils/video-processor/convert-to-gif.test.js` - tests for convertToGif function

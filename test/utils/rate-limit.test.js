@@ -1,6 +1,7 @@
 import { test, describe } from 'node:test';
 import assert from 'node:assert';
 import { isAdmin, checkRateLimit } from '../../src/utils/rate-limit.js';
+import { botConfig } from '../../src/utils/config.js';
 
 // Note: These tests rely on the current ADMIN_USER_IDS env variable
 // If ADMIN_USER_IDS is set, we test with those values
@@ -80,24 +81,52 @@ describe('rate limit utilities', () => {
     });
 
     test('resets after cooldown period', async () => {
-      // Skip this test in CI environments - it requires waiting 30+ seconds
+      // Skip this test in CI environments - it requires waiting for the cooldown period
       // and can cause CI pipelines to timeout
       if (process.env.CI === 'true' || process.env.GITLAB_CI === 'true') {
         return;
       }
 
       const userId = 'test-cooldown-user-' + Date.now();
+      const cooldownMs = botConfig.rateLimitCooldown;
+      const startTime = Date.now();
 
-      // First request
-      assert.strictEqual(checkRateLimit(userId), false);
-      // Second request is rate limited
-      assert.strictEqual(checkRateLimit(userId), true);
+      // First request should not be rate limited
+      assert.strictEqual(checkRateLimit(userId), false, 'First request should not be rate limited');
 
-      // Wait for cooldown (30 seconds + small buffer)
-      await new Promise(resolve => setTimeout(resolve, 31000));
+      // Immediate second request should be rate limited
+      assert.strictEqual(
+        checkRateLimit(userId),
+        true,
+        'Immediate second request should be rate limited'
+      );
 
-      // After cooldown, should not be rate limited
-      assert.strictEqual(checkRateLimit(userId), false);
+      // Wait for half the cooldown period - should still be rate limited
+      const halfCooldown = cooldownMs / 2;
+      await new Promise(resolve => setTimeout(resolve, halfCooldown + 50)); // +50ms buffer for timing
+      const elapsedAfterHalf = Date.now() - startTime;
+      assert.strictEqual(
+        checkRateLimit(userId),
+        true,
+        `Should still be rate limited during cooldown (elapsed: ${elapsedAfterHalf}ms, cooldown: ${cooldownMs}ms)`
+      );
+
+      // Wait for the remaining half of cooldown + buffer to ensure it has fully elapsed
+      await new Promise(resolve => setTimeout(resolve, halfCooldown + 100));
+      const totalElapsed = Date.now() - startTime;
+
+      // After full cooldown, should not be rate limited
+      assert.strictEqual(
+        checkRateLimit(userId),
+        false,
+        `Should not be rate limited after cooldown (elapsed: ${totalElapsed}ms, cooldown: ${cooldownMs}ms)`
+      );
+
+      // Verify the elapsed time is at least the cooldown period
+      assert.ok(
+        totalElapsed >= cooldownMs,
+        `Total elapsed time (${totalElapsed}ms) should be at least the cooldown period (${cooldownMs}ms)`
+      );
     });
   });
 });

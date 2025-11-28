@@ -1,31 +1,26 @@
 #!/usr/bin/env node
 
-import { execSync } from 'child_process';
-import { platform } from 'os';
-import { fileURLToPath } from 'url';
-import { dirname, join } from 'path';
+import { checkDockerDaemon, info, error, execOrError, isContainerRunning } from './utils.js';
 
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = dirname(__filename);
+checkDockerDaemon();
 
-const isWindows = platform() === 'win32';
-
-if (isWindows) {
-  try {
-    execSync('powershell -File scripts/docker-copy-webui.ps1', {
-      stdio: 'inherit',
-      cwd: join(__dirname, '..'),
-    });
-  } catch {
-    process.exit(1);
-  }
-} else {
-  try {
-    execSync('bash scripts/docker-copy-webui.sh', {
-      stdio: 'inherit',
-      cwd: join(__dirname, '..'),
-    });
-  } catch {
-    process.exit(1);
-  }
+// Check if app container is running
+const containerName = 'gronka';
+if (!isContainerRunning(containerName)) {
+  error(
+    `Container ${containerName} is not running. Please start it first with: docker compose up -d`
+  );
 }
+
+// Build webui locally
+info('Building webui locally...');
+execOrError('npm run build:webui', 'Failed to build webui locally');
+
+// Copy built files to container
+info('Copying built files to container...');
+execOrError(
+  `docker cp src/public/. ${containerName}:/app/src/public/`,
+  'Failed to copy files to container'
+);
+
+info('Files copied successfully. The webui should now reflect the latest changes.');

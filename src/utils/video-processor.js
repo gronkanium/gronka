@@ -115,11 +115,11 @@ export async function convertToGif(inputPath, outputPath, options = {}) {
   const outputDir = path.dirname(outputPath);
   await fs.mkdir(outputDir, { recursive: true });
 
-  // Quality presets for dithering - using floyd_steinberg for better quality and less fringing
-  // Floyd-Steinberg produces much smoother results than Bayer dithering
+  // Quality presets for dithering - performance-optimized presets
+  // Low and medium use faster Bayer dithering, high uses slower but best quality Floyd-Steinberg
   const qualityPresets = {
-    low: 'floyd_steinberg:diff_mode=rectangle',
-    medium: 'floyd_steinberg:diff_mode=rectangle',
+    low: 'bayer:bayer_scale=3',
+    medium: 'bayer:bayer_scale=1',
     high: 'floyd_steinberg:diff_mode=rectangle',
   };
 
@@ -469,11 +469,11 @@ export async function convertImageToGif(inputPath, outputPath, options = {}) {
   const outputDir = path.dirname(outputPath);
   await fs.mkdir(outputDir, { recursive: true });
 
-  // Quality presets for dithering - using floyd_steinberg for better quality and less fringing
-  // Floyd-Steinberg produces much smoother results than Bayer dithering
+  // Quality presets for dithering - performance-optimized presets
+  // Low and medium use faster Bayer dithering, high uses slower but best quality Floyd-Steinberg
   const qualityPresets = {
-    low: 'floyd_steinberg:diff_mode=rectangle',
-    medium: 'floyd_steinberg:diff_mode=rectangle',
+    low: 'bayer:bayer_scale=3',
+    medium: 'bayer:bayer_scale=1',
     high: 'floyd_steinberg:diff_mode=rectangle',
   };
 

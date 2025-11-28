@@ -71,10 +71,11 @@ async function executeRequest(request) {
  * @param {Function} downloadFn - Async function that performs the actual download
  * @param {Object} [options] - Optional parameters
  * @param {boolean} [options.skipCache] - Skip URL cache check (useful when trimming/modifying the result)
+ * @param {string} [options.expectedFileType] - Expected file type ('video', 'gif', 'image'). If provided, only use cache if file type matches
  * @returns {Promise} Promise that resolves with download result
  */
 export async function queueCobaltRequest(url, downloadFn, options = {}) {
-  const { skipCache = false } = options;
+  const { skipCache = false, expectedFileType = null } = options;
   const urlHash = hashUrl(url);
 
   // Initialize database if needed
@@ -84,12 +85,20 @@ export async function queueCobaltRequest(url, downloadFn, options = {}) {
   if (!skipCache) {
     const processedUrl = await getProcessedUrl(urlHash);
     if (processedUrl) {
-      logger.info(
-        `URL already processed (hash: ${urlHash.substring(0, 8)}...), returning existing file URL: ${processedUrl.file_url}`
-      );
-      // Return early with cached info - this will be caught by download handlers
-      // We return null to indicate no download needed, and the handlers will check getProcessedUrl again
-      throw new Error(`URL_ALREADY_PROCESSED:${processedUrl.file_url}`);
+      // If expectedFileType is provided, only use cache if file type matches
+      if (expectedFileType && processedUrl.file_type !== expectedFileType) {
+        logger.info(
+          `URL cache exists but file type mismatch (expected: ${expectedFileType}, cached: ${processedUrl.file_type}), skipping cache`
+        );
+        // Skip cache and proceed with download
+      } else {
+        logger.info(
+          `URL already processed (hash: ${urlHash.substring(0, 8)}...), returning existing file URL: ${processedUrl.file_url}`
+        );
+        // Return early with cached info - this will be caught by download handlers
+        // We return null to indicate no download needed, and the handlers will check getProcessedUrl again
+        throw new Error(`URL_ALREADY_PROCESSED:${processedUrl.file_url}`);
+      }
     }
   }
 

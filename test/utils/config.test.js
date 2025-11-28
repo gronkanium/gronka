@@ -18,8 +18,10 @@ describe('GIF_QUALITY configuration', () => {
     // Test that gifQuality is accessible and returns a string
     const quality = botConfig.gifQuality;
     assert.strictEqual(typeof quality, 'string');
-    assert.ok(['low', 'medium', 'high'].includes(quality), 
-      `gifQuality should be one of: low, medium, high, got: ${quality}`);
+    assert.ok(
+      ['low', 'medium', 'high'].includes(quality),
+      `gifQuality should be one of: low, medium, high, got: ${quality}`
+    );
   });
 
   test('default value is "medium" when GIF_QUALITY is not explicitly set', () => {
@@ -41,11 +43,13 @@ describe('GIF_QUALITY configuration', () => {
   test('invalid values should be rejected by validation logic', () => {
     const invalidValues = ['invalid', 'very-high', 'lowest', '', '1', 'true', 'false'];
     const validValues = ['low', 'medium', 'high'];
-    
+
     for (const value of invalidValues) {
       const normalized = value.trim().toLowerCase();
-      assert.ok(!validValues.includes(normalized), 
-        `${value} should be rejected (normalized to ${normalized})`);
+      assert.ok(
+        !validValues.includes(normalized),
+        `${value} should be rejected (normalized to ${normalized})`
+      );
     }
   });
 
@@ -57,11 +61,14 @@ describe('GIF_QUALITY configuration', () => {
       { input: '  low  ', expected: 'low' },
       { input: '  MEDIUM  ', expected: 'medium' },
     ];
-    
+
     for (const testCase of testCases) {
       const normalized = testCase.input.trim().toLowerCase();
-      assert.strictEqual(normalized, testCase.expected, 
-        `${testCase.input} should normalize to ${testCase.expected}`);
+      assert.strictEqual(
+        normalized,
+        testCase.expected,
+        `${testCase.input} should normalize to ${testCase.expected}`
+      );
     }
   });
 
@@ -77,7 +84,9 @@ describe('GIF_QUALITY configuration', () => {
     // Test that the actual config value is valid
     const quality = botConfig.gifQuality;
     const validValues = ['low', 'medium', 'high'];
-    assert.ok(validValues.includes(quality), 
-      `botConfig.gifQuality should be one of ${validValues.join(', ')}, got: ${quality}`);
+    assert.ok(
+      validValues.includes(quality),
+      `botConfig.gifQuality should be one of ${validValues.join(', ')}, got: ${quality}`
+    );
   });
 });

@@ -308,6 +308,86 @@ cooldown period in seconds between commands per user.
 
 ```env
 RATE_LIMIT=10
+# or for test/prod bots
+TEST_RATE_LIMIT=5
+PROD_RATE_LIMIT=10
+```
+
+## file size limits
+
+### `MAX_VIDEO_SIZE`
+
+maximum video file size in bytes for downloads and conversions.
+
+**default:** `104857600` (100MB)
+
+**range:** 1+
+
+**notes:**
+
+- applies to video files downloaded via `/download` or converted via `/convert`
+- admin users can bypass this limit for downloads
+- conversion limits still apply for security reasons
+- value is in bytes (e.g., 100MB = 104857600)
+
+**example:**
+
+```env
+MAX_VIDEO_SIZE=104857600
+# or for test/prod bots
+TEST_MAX_VIDEO_SIZE=52428800
+PROD_MAX_VIDEO_SIZE=104857600
+```
+
+### `MAX_IMAGE_SIZE`
+
+maximum image file size in bytes for downloads and conversions.
+
+**default:** `52428800` (50MB)
+
+**range:** 1+
+
+**notes:**
+
+- applies to image files downloaded via `/download` or converted via `/convert`
+- admin users can bypass this limit for downloads
+- conversion limits still apply for security reasons
+- value is in bytes (e.g., 50MB = 52428800)
+
+**example:**
+
+```env
+MAX_IMAGE_SIZE=52428800
+# or for test/prod bots
+TEST_MAX_IMAGE_SIZE=26214400
+PROD_MAX_IMAGE_SIZE=52428800
+```
+
+### `GIF_QUALITY`
+
+gif conversion quality setting.
+
+**default:** `medium`
+
+**options:**
+
+- `low` - faster conversion, lower quality, smaller file size
+- `medium` - balanced quality and file size (recommended)
+- `high` - slower conversion, higher quality, larger file size
+
+**notes:**
+
+- affects the quality of converted gifs
+- higher quality takes longer to process
+- lower quality produces smaller files
+
+**example:**
+
+```env
+GIF_QUALITY=medium
+# or for test/prod bots
+TEST_GIF_QUALITY=low
+PROD_GIF_QUALITY=high
 ```
 
 ## server configuration
@@ -318,10 +398,58 @@ port for the express server.
 
 **default:** `3000`
 
+**range:** 1-65535
+
 **example:**
 
 ```env
 SERVER_PORT=3000
+# or for test/prod bots
+TEST_SERVER_PORT=3000
+PROD_SERVER_PORT=3000
+```
+
+### `SERVER_HOST`
+
+host/address for the express server to bind to.
+
+**default:** `0.0.0.0`
+
+**notes:**
+
+- `0.0.0.0` binds to all network interfaces (accessible from network)
+- `127.0.0.1` or `localhost` binds to localhost only (local access only)
+- use `127.0.0.1` for security if you don't need network access
+
+**example:**
+
+```env
+SERVER_HOST=0.0.0.0
+# or for test/prod bots
+TEST_SERVER_HOST=127.0.0.1
+PROD_SERVER_HOST=0.0.0.0
+```
+
+### `CORS_ORIGIN`
+
+explicit cors origin override.
+
+**optional**
+
+**notes:**
+
+- if not set, cors origin is automatically derived from `CDN_BASE_URL`
+- set this to override the automatic derivation
+- use `*` to allow all origins (not recommended for production)
+- should be a valid url origin (e.g., `https://example.com`)
+
+**example:**
+
+```env
+CORS_ORIGIN=https://example.com
+# or for test/prod bots
+TEST_CORS_ORIGIN=http://localhost:3000
+PROD_CORS_ORIGIN=https://cdn.example.com
 ```
 
 ### `STATS_USERNAME`
@@ -360,6 +488,197 @@ cache ttl for stats in milliseconds.
 
 ```env
 STATS_CACHE_TTL=600000
+# or for test/prod bots
+TEST_STATS_CACHE_TTL=0
+PROD_STATS_CACHE_TTL=300000
+```
+
+## webui configuration
+
+### `WEBUI_PORT`
+
+port for the webui dashboard server.
+
+**default:** `3001`
+
+**range:** 1-65535
+
+**notes:**
+
+- webui provides a dashboard for viewing stats and logs
+- typically only accessible from localhost for security
+- can be started with `npm run bot:test:webui` or `npm run bot:prod:webui`
+
+**example:**
+
+```env
+WEBUI_PORT=3001
+# or for test/prod bots
+TEST_WEBUI_PORT=3002
+PROD_WEBUI_PORT=3001
+```
+
+### `WEBUI_HOST`
+
+host/address for the webui server to bind to.
+
+**default:** `127.0.0.1`
+
+**notes:**
+
+- `127.0.0.1` binds to localhost only (recommended for security)
+- `0.0.0.0` binds to all network interfaces (not recommended)
+- webui should typically only be accessible locally
+
+**example:**
+
+```env
+WEBUI_HOST=127.0.0.1
+# or for test/prod bots
+TEST_WEBUI_HOST=127.0.0.1
+PROD_WEBUI_HOST=127.0.0.1
+```
+
+### `MAIN_SERVER_URL`
+
+url of the main express server that webui connects to.
+
+**default:** `http://localhost:3000`
+
+**notes:**
+
+- webui uses this url to fetch stats and health information
+- should match your `SERVER_PORT` configuration
+- must be a valid http or https url
+
+**example:**
+
+```env
+MAIN_SERVER_URL=http://localhost:3000
+# or for test/prod bots
+TEST_MAIN_SERVER_URL=http://localhost:3000
+PROD_MAIN_SERVER_URL=http://localhost:3000
+```
+
+### `WEBUI_URL` / `WEBUI_SERVER_URL`
+
+alternative webui url configuration.
+
+**optional**
+
+**notes:**
+
+- used internally by operations tracker
+- if not set, defaults to `http://localhost:{WEBUI_PORT}`
+- typically not needed unless using custom webui setup
+
+**example:**
+
+```env
+WEBUI_URL=http://localhost:3001
+# or
+WEBUI_SERVER_URL=http://localhost:3001
+```
+
+## database configuration
+
+### `GRONKA_DB_PATH`
+
+explicit database file path override.
+
+**optional**
+
+**notes:**
+
+- if not set, database path is automatically derived from `GIF_STORAGE_PATH`
+- test bot defaults to `{GIF_STORAGE_PATH}/gronka-test.db`
+- prod bot defaults to `{GIF_STORAGE_PATH}/gronka-prod.db`
+- set this to use a custom database location
+
+**example:**
+
+```env
+GRONKA_DB_PATH=./data-prod/gronka.db
+# or for test/prod bots
+TEST_GRONKA_DB_PATH=./data-test/gronka-test.db
+PROD_GRONKA_DB_PATH=./data-prod/gronka-prod.db
+```
+
+## logging configuration
+
+### `LOG_DIR`
+
+directory for log files.
+
+**default:** `./logs`
+
+**notes:**
+
+- log files are stored in this directory
+- ensure the directory exists and is writable
+- logs are rotated based on `LOG_ROTATION` setting
+
+**example:**
+
+```env
+LOG_DIR=./logs
+# or for test/prod bots
+TEST_LOG_DIR=./logs-test
+PROD_LOG_DIR=./logs-prod
+```
+
+### `LOG_LEVEL`
+
+logging verbosity level.
+
+**default:** `INFO`
+
+**options:**
+
+- `DEBUG` - most verbose, includes all debug information
+- `INFO` - standard logging, includes informational messages
+- `WARN` - warnings and errors only
+- `ERROR` - errors only
+
+**notes:**
+
+- higher levels (DEBUG, INFO) produce more log output
+- lower levels (WARN, ERROR) produce less output
+- use DEBUG for troubleshooting, INFO for normal operation
+
+**example:**
+
+```env
+LOG_LEVEL=INFO
+# or for test/prod bots
+TEST_LOG_LEVEL=DEBUG
+PROD_LOG_LEVEL=INFO
+```
+
+### `LOG_ROTATION`
+
+log file rotation strategy.
+
+**default:** `daily`
+
+**options:**
+
+- `daily` - rotate log files daily
+- `none` - no rotation, single log file
+
+**notes:**
+
+- daily rotation helps manage log file sizes
+- rotated logs are kept in the same directory with date suffixes
+- use `none` if you prefer manual log management
+
+**example:**
+
+```env
+LOG_ROTATION=daily
+# or for test/prod bots
+TEST_LOG_ROTATION=daily
+PROD_LOG_ROTATION=daily
 ```
 
 ## cobalt integration
@@ -459,14 +778,68 @@ when you start a bot with `npm run bot:test` or `npm run bot:prod`, the bot-star
 
 all environment variables support the `TEST_` and `PROD_` prefixes, including:
 
+**required variables:**
 - `TEST_DISCORD_TOKEN` / `PROD_DISCORD_TOKEN`
 - `TEST_CLIENT_ID` / `PROD_CLIENT_ID`
+
+**storage configuration:**
 - `TEST_GIF_STORAGE_PATH` / `PROD_GIF_STORAGE_PATH`
-- `TEST_GRONKA_DB_PATH` / `PROD_GRONKA_DB_PATH`
 - `TEST_CDN_BASE_URL` / `PROD_CDN_BASE_URL`
-- `TEST_ADMIN_USER_IDS` / `PROD_ADMIN_USER_IDS`
+- `TEST_GRONKA_DB_PATH` / `PROD_GRONKA_DB_PATH`
+
+**file size limits:**
+- `TEST_MAX_VIDEO_SIZE` / `PROD_MAX_VIDEO_SIZE`
+- `TEST_MAX_IMAGE_SIZE` / `PROD_MAX_IMAGE_SIZE`
+- `TEST_GIF_QUALITY` / `PROD_GIF_QUALITY`
+
+**processing options:**
+- `TEST_MAX_GIF_WIDTH` / `PROD_MAX_GIF_WIDTH`
+- `TEST_MAX_GIF_DURATION` / `PROD_MAX_GIF_DURATION`
+- `TEST_DEFAULT_FPS` / `PROD_DEFAULT_FPS`
+- `TEST_RATE_LIMIT` / `PROD_RATE_LIMIT`
+
+**server configuration:**
+- `TEST_SERVER_PORT` / `PROD_SERVER_PORT`
+- `TEST_SERVER_HOST` / `PROD_SERVER_HOST`
+- `TEST_CORS_ORIGIN` / `PROD_CORS_ORIGIN`
+- `TEST_STATS_USERNAME` / `PROD_STATS_USERNAME`
+- `TEST_STATS_PASSWORD` / `PROD_STATS_PASSWORD`
+- `TEST_STATS_CACHE_TTL` / `PROD_STATS_CACHE_TTL`
+
+**webui configuration:**
+- `TEST_WEBUI_PORT` / `PROD_WEBUI_PORT`
+- `TEST_WEBUI_HOST` / `PROD_WEBUI_HOST`
+- `TEST_MAIN_SERVER_URL` / `PROD_MAIN_SERVER_URL`
+
+**database configuration:**
+- `TEST_GRONKA_DB_PATH` / `PROD_GRONKA_DB_PATH`
+
+**logging configuration:**
+- `TEST_LOG_DIR` / `PROD_LOG_DIR`
+- `TEST_LOG_LEVEL` / `PROD_LOG_LEVEL`
+- `TEST_LOG_ROTATION` / `PROD_LOG_ROTATION`
+
+**r2 storage:**
+- `TEST_R2_ACCOUNT_ID` / `PROD_R2_ACCOUNT_ID`
+- `TEST_R2_ACCESS_KEY_ID` / `PROD_R2_ACCESS_KEY_ID`
+- `TEST_R2_SECRET_ACCESS_KEY` / `PROD_R2_SECRET_ACCESS_KEY`
 - `TEST_R2_BUCKET_NAME` / `PROD_R2_BUCKET_NAME`
-- and any other configuration variable
+- `TEST_R2_PUBLIC_DOMAIN` / `PROD_R2_PUBLIC_DOMAIN`
+- `TEST_R2_TEMP_UPLOADS_ENABLED` / `PROD_R2_TEMP_UPLOADS_ENABLED`
+- `TEST_R2_TEMP_UPLOAD_TTL_HOURS` / `PROD_R2_TEMP_UPLOAD_TTL_HOURS`
+- `TEST_R2_CLEANUP_ENABLED` / `PROD_R2_CLEANUP_ENABLED`
+- `TEST_R2_CLEANUP_INTERVAL_MS` / `PROD_R2_CLEANUP_INTERVAL_MS`
+- `TEST_R2_CLEANUP_LOG_LEVEL` / `PROD_R2_CLEANUP_LOG_LEVEL`
+
+**cobalt integration:**
+- `TEST_COBALT_API_URL` / `PROD_COBALT_API_URL`
+- `TEST_COBALT_ENABLED` / `PROD_COBALT_ENABLED`
+
+**admin and notifications:**
+- `TEST_ADMIN_USER_IDS` / `PROD_ADMIN_USER_IDS`
+- `TEST_NTFY_TOPIC` / `PROD_NTFY_TOPIC`
+
+and any other configuration variable
 
 ### database separation
 
@@ -526,11 +899,30 @@ MAX_GIF_DURATION=30
 DEFAULT_FPS=30
 RATE_LIMIT=10
 
+# file size limits
+MAX_VIDEO_SIZE=104857600
+MAX_IMAGE_SIZE=52428800
+GIF_QUALITY=medium
+
 # server
 SERVER_PORT=3000
+SERVER_HOST=0.0.0.0
 STATS_USERNAME=admin
 STATS_PASSWORD=secure_password
 STATS_CACHE_TTL=300000
+
+# webui
+WEBUI_PORT=3001
+WEBUI_HOST=127.0.0.1
+MAIN_SERVER_URL=http://localhost:3000
+
+# database
+GRONKA_DB_PATH=./data-prod/gronka.db
+
+# logging
+LOG_DIR=./logs
+LOG_LEVEL=INFO
+LOG_ROTATION=daily
 
 # cobalt
 COBALT_API_URL=http://cobalt:9000
@@ -541,4 +933,96 @@ ADMIN_USER_IDS=123456789012345678
 
 # notifications
 NTFY_TOPIC=gronka-notifications
+```
+
+## example test/prod bot configuration
+
+complete example `.env` file for running both test and production bots:
+
+```env
+# test bot credentials
+TEST_DISCORD_TOKEN=test_bot_token_here
+TEST_CLIENT_ID=test_client_id_here
+
+# prod bot credentials
+PROD_DISCORD_TOKEN=prod_bot_token_here
+PROD_CLIENT_ID=prod_client_id_here
+
+# test bot storage and database
+TEST_GIF_STORAGE_PATH=./data-test
+TEST_CDN_BASE_URL=http://localhost:3000/gifs
+TEST_GRONKA_DB_PATH=./data-test/gronka-test.db
+TEST_ADMIN_USER_IDS=123456789012345678
+
+# prod bot storage and database
+PROD_GIF_STORAGE_PATH=./data-prod
+PROD_CDN_BASE_URL=https://cdn.example.com/gifs
+PROD_GRONKA_DB_PATH=./data-prod/gronka-prod.db
+PROD_ADMIN_USER_IDS=987654321098765432
+
+# test bot file size limits
+TEST_MAX_VIDEO_SIZE=52428800
+TEST_MAX_IMAGE_SIZE=26214400
+TEST_GIF_QUALITY=low
+
+# prod bot file size limits
+PROD_MAX_VIDEO_SIZE=104857600
+PROD_MAX_IMAGE_SIZE=52428800
+PROD_GIF_QUALITY=medium
+
+# test bot processing
+TEST_MAX_GIF_WIDTH=480
+TEST_MAX_GIF_DURATION=15
+TEST_DEFAULT_FPS=15
+TEST_RATE_LIMIT=5
+
+# prod bot processing
+PROD_MAX_GIF_WIDTH=720
+PROD_MAX_GIF_DURATION=30
+PROD_DEFAULT_FPS=30
+PROD_RATE_LIMIT=10
+
+# test bot server
+TEST_SERVER_PORT=3000
+TEST_SERVER_HOST=127.0.0.1
+TEST_STATS_USERNAME=test_admin
+TEST_STATS_PASSWORD=test_password
+
+# prod bot server
+PROD_SERVER_PORT=3000
+PROD_SERVER_HOST=0.0.0.0
+PROD_STATS_USERNAME=admin
+PROD_STATS_PASSWORD=secure_password
+
+# test bot webui
+TEST_WEBUI_PORT=3002
+TEST_WEBUI_HOST=127.0.0.1
+TEST_MAIN_SERVER_URL=http://localhost:3000
+
+# prod bot webui
+PROD_WEBUI_PORT=3001
+PROD_WEBUI_HOST=127.0.0.1
+PROD_MAIN_SERVER_URL=http://localhost:3000
+
+# test bot logging
+TEST_LOG_DIR=./logs-test
+TEST_LOG_LEVEL=DEBUG
+TEST_LOG_ROTATION=daily
+
+# prod bot logging
+PROD_LOG_DIR=./logs-prod
+PROD_LOG_LEVEL=INFO
+PROD_LOG_ROTATION=daily
+
+# test bot r2 (optional)
+TEST_R2_BUCKET_NAME=gronka-test-media
+TEST_R2_PUBLIC_DOMAIN=https://test-cdn.example.com
+
+# prod bot r2 (optional)
+PROD_R2_BUCKET_NAME=gronka-prod-media
+PROD_R2_PUBLIC_DOMAIN=https://cdn.example.com
+
+# shared cobalt (or use prefixed versions)
+COBALT_API_URL=http://cobalt:9000
+COBALT_ENABLED=true
 ```

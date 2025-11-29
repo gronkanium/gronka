@@ -171,6 +171,29 @@ export function getR2PublicUrl(key, config) {
 }
 
 /**
+ * Generate R2 key from hash and file type
+ * @param {string} hash - File hash (MD5 or SHA-256)
+ * @param {string} fileType - File type ('gif', 'video', or 'image')
+ * @param {string} extension - File extension (e.g., '.gif', '.mp4', '.png')
+ * @returns {string} R2 object key (e.g., 'gifs/abc123.gif')
+ */
+export function getR2KeyFromHash(hash, fileType, extension) {
+  const safeHash = hash.replace(/[^a-f0-9]/gi, '');
+  const safeExt = extension.replace(/[^a-zA-Z0-9.]/gi, '');
+  const ext = safeExt.startsWith('.') ? safeExt : `.${safeExt}`;
+
+  if (fileType === 'gif') {
+    return `gifs/${safeHash}.gif`;
+  } else if (fileType === 'video') {
+    return `videos/${safeHash}${ext}`;
+  } else if (fileType === 'image') {
+    return `images/${safeHash}${ext}`;
+  } else {
+    throw new Error(`Unknown file type: ${fileType}`);
+  }
+}
+
+/**
  * Upload GIF to R2
  * @param {Buffer} buffer - GIF buffer
  * @param {string} hash - MD5 hash of the GIF
@@ -422,4 +445,43 @@ export function extractR2KeyFromUrl(url, config) {
   // Extract the key (everything after the domain)
   const key = url.slice(r2UrlPrefix.length);
   return key || null;
+}
+
+/**
+ * Format R2 URL with disclaimer if temporary uploads are enabled
+ * @param {string} url - URL to format (may be R2 URL or other URL)
+ * @param {Object} config - R2 configuration
+ * @returns {string} URL with disclaimer appended if applicable, or original URL
+ */
+export function formatR2UrlWithDisclaimer(url, config) {
+  // Return original URL if not a string or empty
+  if (!url || typeof url !== 'string') {
+    return url;
+  }
+
+  // Return original URL if temporary uploads are not enabled
+  if (!config.tempUploadsEnabled) {
+    return url;
+  }
+
+  // Check if URL is an R2 URL
+  const r2Key = extractR2KeyFromUrl(url, config);
+  if (!r2Key) {
+    // Not an R2 URL, return as-is
+    return url;
+  }
+
+  // Format TTL message (e.g., "72 hours" or "3 days")
+  const ttlHours = config.tempUploadTtlHours || 72;
+  let ttlMessage;
+  if (ttlHours >= 24 && ttlHours % 24 === 0) {
+    const days = ttlHours / 24;
+    ttlMessage = days === 1 ? '1 day' : `${days} days`;
+  } else {
+    ttlMessage = ttlHours === 1 ? '1 hour' : `${ttlHours} hours`;
+  }
+
+  // Format URL with disclaimer
+  const disclaimer = `\n-# this link will expire in ${ttlMessage}, please save and reupload to discord to keep forever`;
+  return url + disclaimer;
 }

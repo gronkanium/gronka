@@ -11,6 +11,8 @@ import { handleInfoCommand } from './commands/info.js';
 import { handleModalSubmit } from './handlers/modals.js';
 import { cleanupStuckOperations } from './utils/operations-tracker.js';
 import { initializeR2UsageCache } from './utils/storage.js';
+import { r2Config } from './utils/config.js';
+import { startCleanupJob, stopCleanupJob } from './utils/r2-cleanup.js';
 
 // Initialize logger
 const logger = createLogger('bot');
@@ -49,6 +51,9 @@ const client = new Client({
 // Track bot start time for uptime
 let botStartTime = null;
 
+// Track R2 cleanup job interval ID for graceful shutdown
+let cleanupJobIntervalId = null;
+
 // Event handlers
 client.once(Events.ClientReady, async readyClient => {
   botStartTime = Date.now();
@@ -74,6 +79,28 @@ client.once(Events.ClientReady, async readyClient => {
     },
     5 * 60 * 1000
   ); // Run cleanup every 5 minutes
+
+  // Start R2 cleanup job if enabled
+  if (r2Config.cleanupEnabled && r2Config.tempUploadsEnabled) {
+    try {
+      cleanupJobIntervalId = startCleanupJob(
+        r2Config,
+        r2Config.cleanupIntervalMs,
+        r2Config.cleanupLogLevel
+      );
+      logger.info(
+        `Started R2 cleanup job (interval: ${r2Config.cleanupIntervalMs}ms, log level: ${r2Config.cleanupLogLevel})`
+      );
+    } catch (error) {
+      logger.error(`Failed to start R2 cleanup job: ${error.message}`, error);
+    }
+  } else {
+    if (r2Config.cleanupEnabled && !r2Config.tempUploadsEnabled) {
+      logger.warn(
+        'R2 cleanup job is enabled but temporary uploads tracking is disabled. Cleanup job will not run.'
+      );
+    }
+  }
 });
 
 client.on(Events.InteractionCreate, async interaction => {
@@ -140,13 +167,14 @@ client.login(DISCORD_TOKEN).catch(error => {
   process.exit(1);
 });
 
-// Log shutdown
-process.on('SIGTERM', () => {
-  logger.info('SIGTERM received, shutting down gracefully...');
+// Graceful shutdown handlers
+function gracefulShutdown(signal) {
+  logger.info(`${signal} received, shutting down gracefully...`);
+  if (cleanupJobIntervalId) {
+    stopCleanupJob(cleanupJobIntervalId);
+  }
   process.exit(0);
-});
+}
 
-process.on('SIGINT', () => {
-  logger.info('SIGINT received, shutting down gracefully...');
-  process.exit(0);
-});
+process.on('SIGTERM', () => gracefulShutdown('SIGTERM'));
+process.on('SIGINT', () => gracefulShutdown('SIGINT'));

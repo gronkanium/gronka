@@ -7,6 +7,15 @@ and this project adheres (attempts) to [Semantic Versioning](https://semver.org/
 
 ## [Unreleased]
 
+## [0.12.5-nightly] - 2025-11-28
+
+### Added
+
+- Quality parameter to `/convert` command
+  - Added `quality` option to `/convert` command with choices: low, medium, high
+  - Allows users to specify GIF quality preset per conversion
+  - Defaults to medium quality when not specified
+
 ### Changed
 
 - Refactored database.js into modular structure
@@ -37,18 +46,6 @@ and this project adheres (attempts) to [Semantic Versioning](https://semver.org/
   - All existing imports continue to work without modification
   - Improved code organization, maintainability, and testability
   - No breaking changes - function signatures remain identical
-
-## [0.12.5] - 2025-11-27
-
-### Added
-
-- Quality parameter to `/convert` command
-  - Added `quality` option to `/convert` command with choices: low, medium, high
-  - Allows users to specify GIF quality preset per conversion
-  - Defaults to medium quality when not specified
-
-### Changed
-
 - Default GIF quality changed from high back to medium
   - Quality default reverted to medium for better balance between file size and quality
   - Applies to all conversions when quality parameter is not specified
@@ -688,7 +685,7 @@ and this project adheres (attempts) to [Semantic Versioning](https://semver.org/
   - Pre-commit validation
   - Docker buildx setup for cache support
 
-[0.12.5]: https://github.com/thedorekaczynski/gronka/compare/v0.12.4...v0.12.5
+[0.12.5-nightly]: https://github.com/thedorekaczynski/gronka/compare/v0.12.4...v0.12.5-nightly
 [0.12.4]: https://github.com/thedorekaczynski/gronka/compare/v0.12.3-beta...v0.12.4
 [0.12.3-beta]: https://github.com/thedorekaczynski/gronka/compare/v0.12.2-beta...v0.12.3-beta
 [0.12.2-beta]: https://github.com/thedorekaczynski/gronka/compare/v0.12.1-beta...v0.12.2-beta

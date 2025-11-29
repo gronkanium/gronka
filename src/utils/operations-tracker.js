@@ -133,6 +133,7 @@ export function createFailedOperation(
     },
     earlyFailure: true, // Flag to identify early failures
     errorType, // Store error type for filtering
+    originalUrl: context.originalUrl || null, // Store original URL if available
   };
 
   // Add to front of array
@@ -251,6 +252,7 @@ export function createOperation(type, userId, username, context = {}) {
       duration: null,
       steps: [],
     },
+    originalUrl: context.originalUrl || null, // Store original URL if available
   };
 
   // Add to front of array

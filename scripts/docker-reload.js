@@ -1,6 +1,10 @@
 #!/usr/bin/env node
 
 import { spawn } from 'child_process';
+import { existsSync, mkdirSync } from 'fs';
+import { join } from 'path';
+import { fileURLToPath } from 'url';
+import { dirname } from 'path';
 import {
   checkDockerDaemon,
   info,
@@ -10,7 +14,12 @@ import {
   exec,
   getGitCommit,
   getTimestamp,
+  sleep,
 } from './utils.js';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = dirname(__filename);
+const projectRoot = join(__dirname, '..');
 
 /**
  * Check if Docker Desktop is running (Windows/WSL2 specific)
@@ -123,10 +132,54 @@ function imagesExistLocally(images) {
 }
 
 /**
- * Start Docker containers
+ * Start Docker containers with retry logic for WSL2 mount errors
+ * @param {number} retries - Number of retry attempts
  * @returns {Promise<{success: boolean, error?: string}>} Start result
  */
-function startContainers() {
+async function startContainers(retries = 3) {
+  let attempt = 0;
+
+  while (attempt < retries) {
+    attempt++;
+    const result = await tryStartContainers();
+
+    if (result.success) {
+      return result;
+    }
+
+    // Check if it's a mount error (WSL2 issue)
+    const errorMessage = result.error || '';
+    const isMountError =
+      errorMessage.includes('error while creating mount source path') ||
+      errorMessage.includes('file exists') ||
+      errorMessage.includes('docker-desktop-bind-mounts');
+
+    if (isMountError && attempt < retries) {
+      warn(
+        `Mount error detected (WSL2 issue). Retrying in 3 seconds... (${retries - attempt} attempts remaining)`
+      );
+      await sleep(3000);
+
+      // Try to clean up by running down again
+      warn('Attempting to clean up stale mounts...');
+      exec('docker compose down', { stdio: 'ignore', throwOnError: false });
+      await sleep(2000);
+      continue;
+    }
+
+    // Not a mount error or out of retries
+    return result;
+  }
+
+  // Should never reach here, but return failure just in case
+  return { success: false, error: 'Failed to start containers after all retries' };
+}
+
+/**
+ * Try to start Docker containers (single attempt)
+ * @returns {Promise<{success: boolean, error?: string}>} Start result
+ */
+function tryStartContainers() {
   return new Promise(resolve => {
     // docker compose up -d will use existing images if they're present
     // It only tries to pull if images are missing
@@ -199,6 +252,25 @@ execOrError(
 info('Cleaning up unused containers and networks...');
 exec('docker container prune -f', { stdio: 'ignore', throwOnError: false });
 exec('docker network prune -f', { stdio: 'ignore', throwOnError: false });
+
+// Step 2.5: Wait a moment for Docker Desktop to clean up mount points (WSL2 fix)
+info('Waiting for Docker Desktop to clean up mount points...');
+await sleep(2000);
+
+// Step 2.6: Ensure local directories exist (prevents WSL2 mount errors)
+info('Ensuring local directories exist...');
+const requiredDirs = ['data-test', 'data-prod', 'temp', 'logs'];
+for (const dir of requiredDirs) {
+  const dirPath = join(projectRoot, dir);
+  if (!existsSync(dirPath)) {
+    try {
+      mkdirSync(dirPath, { recursive: true });
+      info(`  Created directory: ${dir}`);
+    } catch (error) {
+      warn(`  Warning: Could not create directory ${dir}: ${error.message}`);
+    }
+  }
+}
 
 // Step 3: Get git commit hash and build timestamp
 const gitCommit = getGitCommit();
@@ -292,6 +364,21 @@ info('Rebuilding images (this will take a while)...');
         );
       }
     } else if (!startResult.success) {
+      // Check if it's a mount error and provide WSL2-specific troubleshooting
+      const errorMessage = startResult.error || '';
+      if (
+        errorMessage.includes('error while creating mount source path') ||
+        errorMessage.includes('file exists') ||
+        errorMessage.includes('docker-desktop-bind-mounts')
+      ) {
+        warn('This appears to be a WSL2/Docker Desktop mount error.');
+        warn('Troubleshooting steps:');
+        warn('  1. Restart Docker Desktop');
+        warn('  2. Wait 10-15 seconds after restart');
+        warn('  3. Try running: docker compose down');
+        warn('  4. Wait a few seconds, then try: docker compose up -d');
+        warn('  5. If still failing, restart WSL2: wsl --shutdown (from Windows PowerShell)');
+      }
       error(`Failed to start docker compose services.\nError: ${startResult.error}`);
     }
 

@@ -448,11 +448,61 @@ export function getRecentOperations(limit = 100) {
           duration: duration,
           steps: steps,
         },
+        originalUrl: context.originalUrl || null, // Extract original URL from context
       };
     })
     .filter(op => op !== null); // Remove any null operations
 
   return reconstructedOperations;
+}
+
+/**
+ * Update metadata for a specific operation log entry
+ * @param {string} operationId - Operation ID
+ * @param {string} step - Step name (e.g., 'created')
+ * @param {Object} newMetadata - New metadata object to merge with existing metadata
+ * @returns {boolean} True if update was successful, false otherwise
+ */
+export function updateOperationLogMetadata(operationId, step, newMetadata) {
+  const db = getDb();
+  if (!db) {
+    console.error('Database not initialized. Call initDatabase() first.');
+    return false;
+  }
+
+  // Get the existing log entry
+  const stmt = db.prepare(
+    'SELECT * FROM operation_logs WHERE operation_id = ? AND step = ? ORDER BY timestamp ASC LIMIT 1'
+  );
+  const existingLog = stmt.get(operationId, step);
+
+  if (!existingLog) {
+    console.error(`Operation log not found: ${operationId}, step: ${step}`);
+    return false;
+  }
+
+  // Parse existing metadata
+  let existingMetadata = {};
+  if (existingLog.metadata) {
+    try {
+      existingMetadata = JSON.parse(existingLog.metadata);
+    } catch (error) {
+      console.error('Failed to parse existing metadata:', error);
+      existingMetadata = {};
+    }
+  }
+
+  // Merge with new metadata (newMetadata takes precedence)
+  const mergedMetadata = { ...existingMetadata, ...newMetadata };
+  const metadataStr = JSON.stringify(mergedMetadata);
+
+  // Update the log entry
+  const updateStmt = db.prepare(
+    'UPDATE operation_logs SET metadata = ? WHERE operation_id = ? AND step = ? AND timestamp = ?'
+  );
+  updateStmt.run(metadataStr, operationId, step, existingLog.timestamp);
+
+  return true;
 }
 
 /**

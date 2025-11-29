@@ -51,6 +51,9 @@ ENV GIT_COMMIT=${GIT_COMMIT}
 # Copy application code
 COPY src/ ./src/
 
+# Copy scripts directory (needed for build-webui.js)
+COPY scripts/ ./scripts/
+
 # Build webui frontend
 RUN npm run build:webui
 

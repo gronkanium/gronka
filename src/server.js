@@ -223,7 +223,7 @@ function basicAuth(req, res, next) {
  * @param {Response} res - Express response
  * @param {Function} next - Next middleware
  */
-function bearerTokenAuth(req, res, next) {
+function _bearerTokenAuth(req, res, next) {
   if (!STATS_API_TOKEN) {
     // No token configured, deny access for security
     return res

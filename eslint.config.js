@@ -67,4 +67,26 @@ export default [
       },
     },
   },
+  {
+    files: ['functions/**/*.js'],
+    languageOptions: {
+      globals: {
+        Request: 'readonly',
+        Response: 'readonly',
+        Headers: 'readonly',
+        fetch: 'readonly',
+        URL: 'readonly',
+        URLSearchParams: 'readonly',
+        ReadableStream: 'readonly',
+        WritableStream: 'readonly',
+        TransformStream: 'readonly',
+        crypto: 'readonly',
+        caches: 'readonly',
+        TextEncoder: 'readonly',
+        TextDecoder: 'readonly',
+        AbortController: 'readonly',
+        AbortSignal: 'readonly',
+      },
+    },
+  },
 ];

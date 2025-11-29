@@ -1,7 +1,7 @@
 ## prerequisites
 
 - [ ] Ubuntu 20.04+ or Debian 11+ server
-- [ ] Node.js 18+ installed
+- [ ] Node.js 20+ installed
 - [ ] FFmpeg installed (`sudo apt install ffmpeg`)
 - [ ] Domain name configured in Cloudflare
 - [ ] Discord bot created and token obtained

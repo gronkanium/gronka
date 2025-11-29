@@ -82,6 +82,76 @@ curl -u admin:password http://localhost:3000/stats
 
 stats are cached for 5 minutes by default (configurable via `STATS_CACHE_TTL`). set to `0` to disable caching.
 
+### `GET /api/stats/24h`
+
+get 24-hour activity statistics for jekyll site footer.
+
+**authentication:**
+
+if `STATS_USERNAME` and `STATS_PASSWORD` are configured, basic auth is required.
+
+**purpose:**
+
+returns statistics about user activity in the past 24 hours, including unique users, total files processed, and total data processed. this endpoint is designed for use by the jekyll site stats polling script.
+
+**response:**
+
+```json
+{
+  "unique_users": 42,
+  "total_files": 123,
+  "total_data_bytes": 1234567890,
+  "total_data_formatted": "1.15 GB",
+  "period": "24 hours",
+  "last_updated": 1234567890
+}
+```
+
+**response fields:**
+
+- `unique_users` (number): number of unique users who processed files in the last 24 hours
+- `total_files` (number): total number of files processed in the last 24 hours
+- `total_data_bytes` (number): total data processed in bytes
+- `total_data_formatted` (string): human-readable data size (e.g., "1.15 GB")
+- `period` (string): always "24 hours"
+- `last_updated` (number): unix timestamp of when stats were calculated
+
+**status codes:**
+
+- `200` - success
+- `401` - unauthorized (if auth is required but not provided)
+- `429` - too many requests (rate limit exceeded)
+- `500` - server error
+
+**rate limiting:**
+
+60 requests per 15 minutes (should be plenty for hourly polling)
+
+**example:**
+
+```bash
+# without auth (if not configured)
+curl http://localhost:3000/api/stats/24h
+
+# with auth
+curl -u admin:password http://localhost:3000/api/stats/24h
+
+# with verbose output for debugging
+curl -v -u admin:password http://localhost:3000/api/stats/24h
+```
+
+**use cases:**
+
+- jekyll site footer statistics display
+- automated stats polling via `scripts/update-jekyll-stats.js`
+- monitoring 24-hour activity trends
+
+**notes:**
+
+- stats are calculated in real-time from the database
+- the 24-hour window is based on the current time when the request is made
+- this endpoint is separate from `/stats` which shows storage statistics
+
 ### `GET /gifs/{hash}.gif`
 
 serve a gif file.
@@ -209,14 +279,14 @@ cors is enabled for all endpoints, allowing cross-origin requests. this is usefu
 
 ## rate limiting
 
-currently, there is no rate limiting on api endpoints. consider adding rate limiting if exposing the server publicly.
+most api endpoints do not have rate limiting. the `/api/stats/24h` endpoint has rate limiting of 60 requests per 15 minutes. consider adding rate limiting to other endpoints if exposing the server publicly.
 
 ## security
 
 when exposing the server publicly:
 
 - use a reverse proxy (nginx, caddy, etc.)
-- enable authentication on `/stats` endpoint
+- enable authentication on `/stats` and `/api/stats/24h` endpoints
 - consider adding rate limiting
 - use https (via reverse proxy or cloudflare r2 public domain)
 

@@ -76,6 +76,21 @@ async function broadcastUpdate(operation) {
       console.error('Error broadcasting operation update:', error);
     }
   } else {
+    // Prevent test operations from being sent to webui-server via HTTP POST
+    // Check if we're in test mode by checking NODE_ENV or database path
+    const isTestMode =
+      process.env.NODE_ENV === 'test' ||
+      (process.env.GRONKA_DB_PATH &&
+        (process.env.GRONKA_DB_PATH.includes('test') ||
+          process.env.GRONKA_DB_PATH.includes('tmp') ||
+          process.env.GRONKA_DB_PATH.includes('temp')));
+
+    if (isTestMode) {
+      // In test mode, skip HTTP POST to prevent test operations from reaching production webui-server
+      logger.debug('Skipping HTTP POST for operation update in test mode');
+      return;
+    }
+
     // Otherwise, send HTTP request to webui server (separate container)
     try {
       await axios.post(`${getWebuiUrl()}/api/operations`, operation, {

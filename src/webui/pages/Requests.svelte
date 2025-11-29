@@ -84,6 +84,12 @@
     return `${(bytes / (1024 * 1024)).toFixed(2)} MB`;
   }
 
+  function truncateUrl(url, maxLength = 50) {
+    if (!url) return 'N/A';
+    if (url.length <= maxLength) return url;
+    return url.substring(0, maxLength - 3) + '...';
+  }
+
   async function fetchRequests() {
     loading = true;
     error = null;
@@ -405,6 +411,7 @@
             <th>Expand</th>
             <th>Status</th>
             <th>Type</th>
+            <th>URL</th>
             <th>Username</th>
             <th>User ID</th>
             <th>Error Type</th>
@@ -440,6 +447,15 @@
                 {/if}
               </td>
               <td class="type-cell">{request.type || 'N/A'}</td>
+              <td class="url-cell">
+                {#if request.originalUrl}
+                  <a href={request.originalUrl} target="_blank" rel="noopener noreferrer" class="url-link" title={request.originalUrl}>
+                    {truncateUrl(request.originalUrl)}
+                  </a>
+                {:else}
+                  N/A
+                {/if}
+              </td>
               <td class="username-cell">{request.username || 'N/A'}</td>
               <td class="userid-cell">{request.userId || 'N/A'}</td>
               <td class="error-type-cell">
@@ -453,7 +469,7 @@
             </tr>
             {#if expandedRequests.has(request.id)}
               <tr class="details-row">
-                <td colspan="7" class="details-cell">
+                <td colspan="8" class="details-cell">
                   <div class="operation-details">
                     <div class="details-section">
                       <h4>operation info</h4>
@@ -466,6 +482,16 @@
                           <span class="label">status:</span>
                           <span class="value status-{request.status}">{request.status}</span>
                         </div>
+                        {#if request.originalUrl}
+                          <div class="info-item url-info-item">
+                            <span class="label">url:</span>
+                            <span class="value">
+                              <a href={request.originalUrl} target="_blank" rel="noopener noreferrer" class="url-link-full monospace" title={request.originalUrl}>
+                                {request.originalUrl}
+                              </a>
+                            </span>
+                          </div>
+                        {/if}
                         {#if request.performanceMetrics?.duration}
                           <div class="info-item">
                             <span class="label">duration:</span>
@@ -770,6 +796,42 @@
     text-transform: capitalize;
     color: #fff;
     font-weight: 500;
+  }
+
+  .url-cell {
+    max-width: 200px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .url-link {
+    color: #51cf66;
+    text-decoration: none;
+    font-family: monospace;
+    font-size: 0.85rem;
+    word-break: break-all;
+  }
+
+  .url-link:hover {
+    text-decoration: underline;
+    color: #69db7c;
+  }
+
+  .url-link-full {
+    color: #51cf66;
+    text-decoration: none;
+    word-break: break-all;
+    display: inline-block;
+    max-width: 100%;
+  }
+
+  .url-link-full:hover {
+    text-decoration: underline;
+    color: #69db7c;
+  }
+
+  .url-info-item {
+    grid-column: 1 / -1;
   }
 
   .username-cell {

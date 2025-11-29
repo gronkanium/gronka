@@ -1,3 +1,12 @@
+---
+layout: doc
+title: logging platform
+permalink: /docs/logging-platform/
+topic: guides
+chapter: 7
+description: centralized logging, monitoring, and metrics dashboard
+---
+
 # logging platform
 
 gronka now includes a built-in logging platform for viewing, searching, and monitoring logs in real-time. this replaces the need to manually check the database or rely on ntfy.sh notifications.
@@ -17,7 +26,6 @@ gronka now includes a built-in logging platform for viewing, searching, and moni
 the logging platform is integrated into the webui dashboard:
 
 1. start the webui service:
-
    ```bash
    docker compose --profile webui up
    ```
@@ -97,7 +105,6 @@ GET /api/logs
 ```
 
 query parameters:
-
 - `component` - filter by component name
 - `level` - filter by level (comma-separated for multiple)
 - `search` - search in messages
@@ -107,7 +114,6 @@ query parameters:
 - `offset` - pagination offset (default: 0)
 
 example:
-
 ```bash
 curl "http://localhost:3001/api/logs?level=ERROR,WARN&limit=50"
 ```
@@ -119,11 +125,9 @@ GET /api/logs/metrics
 ```
 
 query parameters:
-
 - `timeRange` - time range in milliseconds (default: 24 hours)
 
 example:
-
 ```bash
 curl "http://localhost:3001/api/logs/metrics"
 ```
@@ -153,7 +157,6 @@ this starts both the webui and dozzle services.
 open [http://localhost:8080](http://localhost:8080) in your browser.
 
 dozzle provides:
-
 - real-time container log streaming
 - multi-container view
 - log search and filtering
@@ -182,7 +185,6 @@ CREATE TABLE logs (
 ```
 
 indexes are created for efficient querying:
-
 - `timestamp` - fast time-range queries
 - `component` - fast component filtering
 - `level` - fast level filtering
@@ -229,14 +231,12 @@ SKIP_DB_INIT=false
 ### logs not appearing
 
 1. check database initialization:
-
    ```bash
    # verify logs table exists
    sqlite3 data/gronka.db "SELECT COUNT(*) FROM logs;"
    ```
 
 2. check log level:
-
    ```bash
    # ensure LOG_LEVEL is not too restrictive
    echo $LOG_LEVEL
@@ -249,13 +249,11 @@ SKIP_DB_INIT=false
 ### websocket disconnected
 
 1. check webui server is running:
-
    ```bash
    docker compose ps webui
    ```
 
 2. check network connectivity:
-
    ```bash
    # test websocket endpoint
    curl -i -N -H "Connection: Upgrade" \
@@ -271,7 +269,6 @@ SKIP_DB_INIT=false
 ### dozzle not starting
 
 1. check docker socket permissions:
-
    ```bash
    # on linux, ensure socket is accessible
    ls -l /var/run/docker.sock
@@ -292,7 +289,6 @@ the logging platform is designed for minimal performance impact:
 - **efficient storage** - sqlite wal mode for concurrent access
 
 typical performance:
-
 - log write: <1ms
 - log query (100 results): <10ms
 - metrics query: <50ms
@@ -324,6 +320,7 @@ set up alerts based on error rates (future feature).
 
 ## further reading
 
-- [[API-Endpoints|api endpoints]]
-- [[Docker-Deployment|docker deployment]]
-- [[Troubleshooting|troubleshooting]]
+- [api endpoints](/docs/api-endpoints/)
+- [docker deployment](/docs/docker/)
+- [troubleshooting](/docs/troubleshooting/)
+

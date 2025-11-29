@@ -7,6 +7,7 @@ stages:
   - test:commands
   - test:scripts
   - test:integration
+  - release
 
 # Setup stage - Install dependencies
 setup-dependencies:
@@ -275,3 +276,158 @@ test-integration:
     - npx cross-env R2_ACCOUNT_ID= R2_ACCESS_KEY_ID= R2_SECRET_ACCESS_KEY= R2_BUCKET_NAME= node --test test/webui-server-*.test.js test/docker-security.test.js
   dependencies:
     - setup-dependencies
+
+# Release stage - Create release for stable versions
+create-release:
+  stage: release
+  image: docker:24
+  services:
+    - docker:24-dind
+  rules:
+    - if: $CI_COMMIT_TAG =~ /^v[0-9]+\.[0-9]+\.[0-9]+$/
+  variables:
+    DOCKER_DRIVER: overlay2
+    DOCKER_TLS_CERTDIR: '/certs'
+  before_script:
+    - apk add --no-cache nodejs npm git bash curl
+    - docker login -u $CI_REGISTRY_USER -p $CI_REGISTRY_PASSWORD $CI_REGISTRY
+    - |
+      # Extract version from tag
+      TAG_NAME=$CI_COMMIT_TAG
+      VERSION=${TAG_NAME#v}
+      echo "Tag: $TAG_NAME"
+      echo "Version: $VERSION"
+      echo "VERSION=$VERSION" >> build.env
+      echo "TAG_NAME=$TAG_NAME" >> build.env
+      echo "ARCHIVE_NAME=gronka-$VERSION.tar.gz" >> build.env
+  script:
+    # Verify version matches package.json
+    - |
+      source build.env
+      PACKAGE_VERSION=$(node -p "require('./package.json').version")
+      echo "Tag version: $VERSION"
+      echo "Package.json version: $PACKAGE_VERSION"
+      if [ "$PACKAGE_VERSION" != "$VERSION" ]; then
+        echo "Error: Tag version ($VERSION) does not match package.json version ($PACKAGE_VERSION)"
+        exit 1
+      fi
+      echo "Version check passed"
+
+    # Generate release notes
+    - |
+      source build.env
+      if [ -f "CHANGELOG.md" ]; then
+        NOTES=$(awk "/^## \[?$VERSION\]?/,/^## /" CHANGELOG.md | head -n -1 || echo "See CHANGELOG.md for details")
+      else
+        NOTES="Release $TAG_NAME"
+      fi
+
+      if [ -z "$NOTES" ] || [ "$NOTES" = "See CHANGELOG.md for details" ] || [ "$NOTES" = "Release $TAG_NAME" ]; then
+        PREV_TAG=$(git describe --tags --abbrev=0 HEAD^ 2>/dev/null || echo "")
+        if [ -n "$PREV_TAG" ]; then
+          NOTES=$(git log ${PREV_TAG}..HEAD --pretty=format:"- %s" --no-merges || echo "Release $TAG_NAME")
+        fi
+      fi
+
+      echo "$NOTES" > release_notes.txt
+      echo "" >> release_notes.txt
+      echo "## Installation" >> release_notes.txt
+      echo "" >> release_notes.txt
+      echo "### Docker (Recommended)" >> release_notes.txt
+      echo '```bash' >> release_notes.txt
+      echo "docker pull $CI_REGISTRY_IMAGE:$VERSION" >> release_notes.txt
+      echo '```' >> release_notes.txt
+      echo "" >> release_notes.txt
+      echo "### Source Code" >> release_notes.txt
+      echo "Download the source archive below or clone the repository:" >> release_notes.txt
+      echo '```bash' >> release_notes.txt
+      echo "git clone $CI_REPOSITORY_URL" >> release_notes.txt
+      echo "cd gronka" >> release_notes.txt
+      echo "git checkout $TAG_NAME" >> release_notes.txt
+      echo '```' >> release_notes.txt
+
+    # Create source archive
+    - |
+      source build.env
+      ARCHIVE_NAME="gronka-$VERSION.tar.gz"
+      mkdir -p /tmp/release
+      tar --exclude='.git' \
+          --exclude='node_modules' \
+          --exclude='data' \
+          --exclude='temp' \
+          --exclude='logs' \
+          --exclude='_site' \
+          --exclude='.vscode' \
+          --exclude='.idea' \
+          --exclude='*.tar.gz' \
+          --exclude='*.sha256' \
+          -czf "/tmp/release/$ARCHIVE_NAME" .
+      mv "/tmp/release/$ARCHIVE_NAME" "$ARCHIVE_NAME"
+      echo "Created archive: $ARCHIVE_NAME"
+
+    # Generate checksums
+    - |
+      source build.env
+      ARCHIVE_NAME="gronka-$VERSION.tar.gz"
+      sha256sum "$ARCHIVE_NAME" > "${ARCHIVE_NAME}.sha256"
+      echo "Generated checksum: ${ARCHIVE_NAME}.sha256"
+
+    # Build and push Docker image
+    - |
+      source build.env
+      apk add --no-cache docker-cli-buildx || true
+      docker buildx version || docker buildx install || true
+      docker buildx create --use --name builder || docker buildx use builder || true
+      docker buildx build \
+        --platform linux/amd64 \
+        --tag $CI_REGISTRY_IMAGE:$VERSION \
+        --tag $CI_REGISTRY_IMAGE:latest \
+        --push \
+        --cache-from type=registry,ref=$CI_REGISTRY_IMAGE:latest \
+        --cache-to type=inline \
+        .
+      echo "Built and pushed Docker image: $CI_REGISTRY_IMAGE:$VERSION and $CI_REGISTRY_IMAGE:latest"
+
+    # Prepare release description file
+    - |
+      source build.env
+      cat release_notes.txt > release_description.txt
+      echo "Release description prepared"
+
+    # Create release using GitLab API with proper asset URLs
+    - |
+      source build.env
+      apk add --no-cache jq curl
+
+      # Read release description and escape for JSON
+      RELEASE_DESC=$(cat release_description.txt | jq -Rs .)
+
+      # Create release with assets using GitLab API
+      curl --request POST \
+           --header "JOB-TOKEN: $CI_JOB_TOKEN" \
+           --header "Content-Type: application/json" \
+           --data "{
+             \"name\": \"Release ${CI_COMMIT_TAG}\",
+             \"tag_name\": \"${CI_COMMIT_TAG}\",
+             \"description\": ${RELEASE_DESC},
+             \"assets\": {
+               \"links\": [
+                 {
+                   \"name\": \"Source Archive (tar.gz)\",
+                   \"url\": \"${CI_JOB_URL}/artifacts/raw/${ARCHIVE_NAME}\"
+                 },
+                 {
+                   \"name\": \"SHA256 Checksum\",
+                   \"url\": \"${CI_JOB_URL}/artifacts/raw/${ARCHIVE_NAME}.sha256\"
+                 }
+               ]
+             }
+           }" \
+           "${CI_API_V4_URL}/projects/${CI_PROJECT_ID}/releases" || echo "Release may already exist, continuing..."
+  artifacts:
+    paths:
+      - gronka-*.tar.gz
+      - gronka-*.tar.gz.sha256
+      - release_notes.txt
+      - release_description.txt
+    expire_in: 1 week

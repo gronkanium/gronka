@@ -14,10 +14,16 @@ yarn-error.log*
 .gitignore
 .gitattributes
 
+# CI/CD
+.github/
+.gitlab-ci.yml
+
 # Documentation
+docs/
+_posts/
+wiki/
 README.md
 CONTRIBUTING.md
-docs/
 *.md
 
 # Logs
@@ -31,6 +37,7 @@ temp/
 # IDE
 .vscode/
 .idea/
+.cursor/
 *.swp
 *.swo
 *~

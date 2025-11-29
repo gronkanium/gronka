@@ -71,7 +71,15 @@ checkDockerDaemon();
   process.env.COMPOSE_DOCKER_CLI_BUILD = '1';
 
   info('Rebuilding images with cache (this should be much faster)...');
+  const buildStartTime = Date.now();
   execOrError('docker compose build', 'Failed to build docker images');
+  const buildEndTime = Date.now();
+  const buildDuration = ((buildEndTime - buildStartTime) / 1000).toFixed(2);
+
+  // Show build timing if DEBUG is enabled or if build took longer than 30 seconds
+  if (process.env.DEBUG || buildDuration > 30) {
+    info(`Build completed in ${buildDuration}s (context scanning + transfer + build)`);
+  }
 
   // Step 5: Start containers with retry logic for WSL2 mount errors
   info('Starting containers');

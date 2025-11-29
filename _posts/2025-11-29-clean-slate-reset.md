@@ -14,7 +14,7 @@ tags:
 
 # clean slate reset: all media deleted
 
-hey everyone. so, uh, we deleted everything. all the gifs, videos, images - gone. poof. vanished into the digital void.
+we performed a complete clean slate reset of the gronka instance. all stored media has been deleted.
 
 ## what happened
 
@@ -27,25 +27,19 @@ we performed a complete clean slate reset of the gronka instance. this means:
 
 ## why did we do this?
 
-look, we could give you some corporate-speak about "infrastructure improvements" or "storage optimization" or "data migration," but let's be real here.
+we performed this reset for several reasons:
 
-the truth is we wanted a fresh start. maybe there was some technical debt. maybe storage costs were getting out of hand. maybe we just felt like it. the point is, we hit the reset button and here we are.
-
-**the official (and slightly more legitimate) reasons:**
-
-1. **storage costs** - r2 storage was accumulating files and costs were creeping up. starting fresh gives us a clean baseline.
+1. **storage costs** - r2 storage was accumulating files and costs were increasing. starting fresh provides a clean baseline.
 
 2. **database optimization** - the database had grown over time with various schema changes and migrations. a clean reset ensures we're working with the latest schema from the start.
 
-3. **testing infrastructure** - we needed to test the new clean slate reset script we just built. what better way to test it than to actually use it?
+3. **testing infrastructure** - we needed to test the new clean slate reset script. this provided an opportunity to validate the process.
 
 4. **fresh metrics** - starting from zero gives us clean metrics and usage statistics going forward.
 
-5. **because we can** - sometimes you just need to nuke everything and start over. this is one of those times.
-
 ## what this means for you
 
-if you had gifs or media stored through gronka, they're gone. sorry about that. we don't have backups (because that would defeat the purpose of a clean slate, wouldn't it?).
+if you had gifs or media stored through gronka, they're gone. we don't have backups.
 
 **going forward:**
 
@@ -53,7 +47,7 @@ if you had gifs or media stored through gronka, they're gone. sorry about that. 
 - all features remain available - nothing has changed in terms of functionality
 - your discord commands still work - `/convert`, `/download`, `/optimize` all work as before
 - fresh start for everyone - we're all starting from zero together
-- r2 expiration is now live - any media uploaded to r2 storage will be automatically deleted after 72 hours. download your stuff if you want to keep it longer than that
+- r2 expiration is now live - any media uploaded to r2 storage will be automatically deleted after 72 hours. download your files if you want to keep them longer than that
 
 ## technical details
 
@@ -68,27 +62,18 @@ we used a new `reset-clean-slate.js` script that automates this entire process. 
 
 ## lessons learned
 
-if there's one thing we learned from this, it's that maybe we should have warned people first. or at least made backups. but hey, live and learn, right?
-
-**what we'll do differently next time:**
-
-- maybe give advance notice (probably not, but we'll consider it)
-- document the reset process better (we did add a script, so that's something)
-- consider incremental cleanup instead of nuclear option (nah, full reset is more fun)
+we recognize that advance notice would have been preferable. going forward, we'll consider providing advance notice for similar operations and continue to document the reset process.
 
 ## moving forward
 
-gronka is still here, still working, still ready to convert your videos to gifs. we just don't have any of the old stuff anymore. think of it as a digital spring cleaning, except it's november and we threw everything away.
+gronka is still fully functional and ready to convert your videos to gifs. all previous conversions have been removed from the system.
 
-if you need something converted, just use the bot like normal. it'll work fine. you just won't find any of your old conversions in the system anymore. and remember, any new stuff you upload to r2 will only stick around for 72 hours before it gets automatically deleted. so if you want to keep your conversions longer, make sure to download them within that window.
+if you need something converted, use the bot as normal. it will work fine. you just won't find any of your old conversions in the system anymore. remember, any new files you upload to r2 will only remain for 72 hours before being automatically deleted. if you want to keep your conversions longer, make sure to download them within that window.
 
 ## questions?
 
-if you have questions, concerns, or just want to complain about us deleting your stuff, feel free to open an issue on github. we probably won't be able to restore anything (because it's gone), but we're happy to explain why we did what we did.
-
-or don't. we get it. sometimes you just need to delete everything and start fresh. we did.
+if you have questions or concerns, feel free to open an issue on github. we won't be able to restore anything, but we're happy to explain why we did what we did.
 
 ---
 
-**tl;dr:** we deleted everything. it's gone. start over. the bot still works. r2 expiration is now live (72 hours). sorry not sorry.
-
+**tl;dr:** we deleted all stored media. the bot still works. r2 expiration is now live (72 hours).

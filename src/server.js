@@ -4,7 +4,8 @@ import fs from 'fs/promises';
 import { exec } from 'child_process';
 import { promisify } from 'util';
 import rateLimit from 'express-rate-limit';
-import { getStorageStats } from './utils/storage.js';
+import { getStorageStats, formatFileSize } from './utils/storage.js';
+import { get24HourStats } from './utils/database/stats.js';
 import { createLogger, formatTimestampSeconds } from './utils/logger.js';
 import { serverConfig, r2Config } from './utils/config.js';
 import { ConfigurationError } from './utils/errors.js';
@@ -22,6 +23,9 @@ const {
   statsUsername: STATS_USERNAME,
   statsPassword: STATS_PASSWORD,
 } = serverConfig;
+
+// Stats API token for /api/stats/24h endpoint (used by Cloudflare Pages)
+const STATS_API_TOKEN = process.env.STATS_API_TOKEN || '';
 
 const app = express();
 
@@ -213,6 +217,37 @@ function basicAuth(req, res, next) {
   return res.status(401).json({ error: 'invalid credentials' });
 }
 
+/**
+ * Bearer token authentication middleware for stats API
+ * @param {Request} req - Express request
+ * @param {Response} res - Express response
+ * @param {Function} next - Next middleware
+ */
+function bearerTokenAuth(req, res, next) {
+  if (!STATS_API_TOKEN) {
+    // No token configured, deny access for security
+    return res
+      .status(401)
+      .json({ error: 'authentication required', message: 'STATS_API_TOKEN not configured' });
+  }
+
+  const authHeader = req.headers.authorization;
+
+  if (!authHeader || !authHeader.startsWith('Bearer ')) {
+    return res
+      .status(401)
+      .json({ error: 'authentication required', message: 'Bearer token required' });
+  }
+
+  const token = authHeader.substring(7); // Remove 'Bearer ' prefix
+
+  if (token === STATS_API_TOKEN) {
+    return next();
+  }
+
+  return res.status(401).json({ error: 'invalid credentials', message: 'Invalid bearer token' });
+}
+
 // Get absolute path to public directory
 const publicPath = path.resolve(process.cwd(), 'src', 'public');
 
@@ -394,6 +429,33 @@ app.get('/stats', restrictToInternal, statsLimiter, basicAuth, async (req, res) 
     });
   } catch (error) {
     logger.error('Failed to get stats:', error);
+    res.status(500).json({
+      error: 'failed to get stats',
+      message: error.message,
+    });
+  }
+});
+
+// 24-hour stats endpoint for Jekyll site (protected with basic auth)
+app.get('/api/stats/24h', statsLimiter, basicAuth, async (req, res) => {
+  try {
+    logger.debug('24-hour stats API requested');
+
+    const stats = await get24HourStats();
+
+    res.json({
+      unique_users: stats.unique_users,
+      total_files: stats.total_files,
+      total_data_bytes: stats.total_data_bytes,
+      total_data_formatted: formatFileSize(stats.total_data_bytes),
+      period: '24 hours',
+      last_updated: stats.timestamp,
+    });
+  } catch (error) {
+    logger.error('Failed to get 24-hour stats:', {
+      error: error.message,
+      stack: error.stack,
+    });
     res.status(500).json({
       error: 'failed to get stats',
       message: error.message,

@@ -267,11 +267,37 @@ port for the express server.
 SERVER_PORT=3000
 ```
 
+### `BOT_API_URL`
+
+url of the bot server api endpoint for jekyll stats polling.
+
+**required for jekyll stats feature**
+
+**format:** `http://IP_ADDRESS:PORT` or `http://localhost:3000`
+
+**default:** `http://localhost:3000`
+
+**notes:**
+- use the local network ip address of the bot server, not `localhost`
+- the bot server must be accessible from the jekyll server over the network
+- used by `scripts/update-jekyll-stats.js` to fetch stats from `/api/stats/24h` endpoint
+
+**example:**
+
+```env
+BOT_API_URL=http://192.168.0.212:3000
+```
+
 ### `STATS_USERNAME`
 
-username for basic auth on `/stats` endpoint.
+username for basic auth on `/stats` and `/api/stats/24h` endpoints.
 
-**optional**
+**optional** (required if bot server has basic auth enabled)
+
+**notes:**
+- used for both `/stats` endpoint (storage stats) and `/api/stats/24h` endpoint (24-hour activity stats)
+- must match the `STATS_USERNAME` configured on the bot server
+- if set, `STATS_PASSWORD` should also be set
 
 **example:**
 
@@ -281,9 +307,14 @@ STATS_USERNAME=admin
 
 ### `STATS_PASSWORD`
 
-password for basic auth on `/stats` endpoint.
+password for basic auth on `/stats` and `/api/stats/24h` endpoints.
 
 **optional** (recommended if `STATS_USERNAME` is set)
+
+**notes:**
+- used for both `/stats` endpoint (storage stats) and `/api/stats/24h` endpoint (24-hour activity stats)
+- must match the `STATS_PASSWORD` configured on the bot server
+- should be set if `STATS_USERNAME` is configured
 
 **example:**
 

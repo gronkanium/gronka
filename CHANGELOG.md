@@ -7,8 +7,11 @@ and this project adheres (attempts) to [Semantic Versioning](https://semver.org/
 
 ## [Unreleased]
 
+## [0.12.5] - 2025-11-29
+
 ### Added
 
+- Quality parameter to `/convert` command
 - Jekyll site footer statistics display
   - 24-hour activity statistics displayed in Jekyll site footer
   - Shows unique users, total files processed, and total data processed in the past 24 hours
@@ -18,12 +21,6 @@ and this project adheres (attempts) to [Semantic Versioning](https://semver.org/
   - New environment variable `BOT_API_URL` for configuring bot server API URL
   - Stats display with proper singular/plural grammar handling
   - Graceful error handling - site builds even if stats update fails
-
-## [0.12.5-nightly] - 2025-11-28
-
-### Added
-
-- Quality parameter to `/convert` command
   - Added `quality` option to `/convert` command with choices: low, medium, high
   - Allows users to specify GIF quality preset per conversion
   - Defaults to medium quality when not specified
@@ -697,7 +694,7 @@ and this project adheres (attempts) to [Semantic Versioning](https://semver.org/
   - Pre-commit validation
   - Docker buildx setup for cache support
 
-[0.12.5-nightly]: https://github.com/thedorekaczynski/gronka/compare/v0.12.4...v0.12.5-nightly
+[0.12.5]: https://github.com/thedorekaczynski/gronka/compare/v0.12.4...v0.12.5
 [0.12.4]: https://github.com/thedorekaczynski/gronka/compare/v0.12.3-beta...v0.12.4
 [0.12.3-beta]: https://github.com/thedorekaczynski/gronka/compare/v0.12.2-beta...v0.12.3-beta
 [0.12.2-beta]: https://github.com/thedorekaczynski/gronka/compare/v0.12.1-beta...v0.12.2-beta

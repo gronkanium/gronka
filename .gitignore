@@ -59,7 +59,6 @@ vendor/
 posts/
 
 # Jekyll site files
-_includes/
 _config.yml
 Gemfile
 aspirations.md

@@ -1,0 +1,67 @@
+{%- assign cmd = include.command -%}
+<div class="command-card">
+  <h2>{{ cmd.name }}</h2>
+  <p class="command-description">{{ cmd.description }}</p>
+
+  <div class="command-details">
+    <h3>usage</h3>
+    <code>{{ cmd.usage }}</code>
+
+    {%- if cmd.examples.size > 0 -%}
+    <h3>examples</h3>
+    <ul>
+      {%- for example in cmd.examples -%}
+      <li><code>{{ example }}</code></li>
+      {%- endfor -%}
+    </ul>
+    {%- endif -%} {%- if cmd.options.size > 0 -%}
+    <h3>options</h3>
+    <ul>
+      {%- for option in cmd.options -%}
+      <li>
+        <strong>{{ option.name }}</strong> ({{ option.type }}) {%- if option.required -%}
+        <span class="required">required</span>
+        {%- else -%}
+        <span class="optional">optional</span>
+        {%- endif -%}
+        <br />
+        <span class="option-description">{{ option.description }}</span>
+        {%- if option.min and option.max -%}
+        <br />
+        <span class="option-range">range: {{ option.min }}-{{ option.max }}</span>
+        {%- endif -%}
+      </li>
+      {%- endfor -%}
+    </ul>
+    {%- endif -%} {%- if cmd.supported_formats -%}
+    <h3>supported formats</h3>
+    <ul>
+      {%- if cmd.supported_formats.video -%}
+      <li>
+        <strong>video:</strong>
+        {{ cmd.supported_formats.video | join: ", " }}
+      </li>
+      {%- endif -%} {%- if cmd.supported_formats.image -%}
+      <li>
+        <strong>image:</strong>
+        {{ cmd.supported_formats.image | join: ", " }}
+      </li>
+      {%- endif -%}
+    </ul>
+    {%- endif -%} {%- if cmd.lossy_ranges -%}
+    <h3>lossy compression levels</h3>
+    <ul>
+      {%- for range in cmd.lossy_ranges -%}
+      <li><strong>{{ range.range }}:</strong> {{ range.description }}</li>
+      {%- endfor -%}
+    </ul>
+    {%- endif -%} {%- if cmd.context_menu -%}
+    <p class="context-menu-note">
+      also available as context menu: {%- if cmd.context_menu_name -%} "{{ cmd.context_menu_name }}"
+      {%- else -%} right-click on message {%- endif -%}
+    </p>
+    {%- endif -%} {%- if cmd.admin_only -%}
+    <p class="admin-note"><strong>admin only</strong></p>
+    {%- endif -%}
+  </div>
+</div>

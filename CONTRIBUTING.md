@@ -224,9 +224,12 @@ See `package.json` for a full list of available npm scripts. Common ones include
 
 - `npm run jekyll:serve` - Serve the Jekyll documentation site locally (port 4000)
 - `npm run jekyll:build` - Build the Jekyll documentation site
+- `npm run jekyll:update-stats` - Update Jekyll site statistics from bot API (fetches 24-hour stats and writes to `_data/stats.json`)
 - `npm run site:start` - Start Jekyll server and Cloudflared tunnel together (serves at gronka.p1x.dev)
 - `npm run site:stop` - Stop the Jekyll site services (if running in background)
 - `npm run wiki:sync` - Sync local wiki files to GitHub Wiki (converts Obsidian-style links and pushes to GitHub)
+
+**Note:** The `scripts/update-jekyll-site.sh` script automatically runs `jekyll:update-stats` before building the site, ensuring fresh statistics are included in each build.
 
 ### Wiki Documentation
 

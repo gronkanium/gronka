@@ -7,6 +7,18 @@ and this project adheres (attempts) to [Semantic Versioning](https://semver.org/
 
 ## [Unreleased]
 
+### Added
+
+- Jekyll site footer statistics display
+  - 24-hour activity statistics displayed in Jekyll site footer
+  - Shows unique users, total files processed, and total data processed in the past 24 hours
+  - Automatic stats polling via `scripts/update-jekyll-stats.js`
+  - Integration with `scripts/update-jekyll-site.sh` to update stats before each build
+  - New API endpoint `/api/stats/24h` for fetching 24-hour activity statistics
+  - New environment variable `BOT_API_URL` for configuring bot server API URL
+  - Stats display with proper singular/plural grammar handling
+  - Graceful error handling - site builds even if stats update fails
+
 ## [0.12.5-nightly] - 2025-11-28
 
 ### Added

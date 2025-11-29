@@ -38,6 +38,7 @@ import {
   deleteUserR2Media,
   getProcessedUrl,
 } from './utils/database.js';
+import { getDbPath } from './utils/database/connection.js';
 import {
   collectSystemMetrics,
   startMetricsCollection,
@@ -256,6 +257,29 @@ app.post('/api/operations', express.json(), (req, res) => {
     if (!operation || !operation.id) {
       return res.status(400).json({ error: 'invalid operation data' });
     }
+
+    // Filter out test operations to prevent them from appearing in production webUI
+    // Check if this is a test operation by:
+    // 1. Checking if userId matches known test user patterns (e.g., user 86, or test-like IDs)
+    // 2. Checking if database path indicates test mode
+    const dbPath = getDbPath();
+    const isTestDatabase =
+      dbPath && (dbPath.includes('test') || dbPath.includes('tmp') || dbPath.includes('temp'));
+
+    // User 86 is a known test user, reject operations from it
+    if (operation.userId === '86' || String(operation.userId) === '86') {
+      logger.debug(`Rejecting operation ${operation.id} from test user 86`);
+      return res.status(400).json({ error: 'test operations not allowed in production' });
+    }
+
+    // If database path indicates test mode, reject operations to prevent cross-contamination
+    if (isTestDatabase) {
+      logger.warn(
+        `Rejecting operation ${operation.id} - webui-server is using test database: ${dbPath}`
+      );
+      return res.status(400).json({ error: 'test database detected - operations rejected' });
+    }
+
     // Broadcast the operation update to all connected websocket clients
     broadcastOperation(operation);
     res.json({ success: true });
@@ -278,6 +302,94 @@ app.post('/api/user-metrics', express.json(), (req, res) => {
   } catch (error) {
     logger.error('Error handling user metrics update:', error);
     res.status(500).json({ error: 'failed to process user metrics update' });
+  }
+});
+
+// Restrict endpoint to localhost/internal network only (for admin operations)
+function restrictToInternal(req, res, next) {
+  const ip = req.ip || req.socket.remoteAddress || '';
+  const ipStr = String(ip);
+
+  // Allow localhost (IPv4 and IPv6)
+  if (
+    ipStr === '127.0.0.1' ||
+    ipStr === '::1' ||
+    ipStr === '::ffff:127.0.0.1' ||
+    ipStr === 'localhost' ||
+    ipStr.includes('127.0.0.1')
+  ) {
+    return next();
+  }
+
+  // Allow Docker internal network IPs
+  if (
+    ipStr.startsWith('172.') ||
+    ipStr.startsWith('192.168.') ||
+    ipStr.startsWith('10.') ||
+    ipStr.includes('::ffff:172.') ||
+    ipStr.includes('::ffff:192.168.') ||
+    ipStr.includes('::ffff:10.')
+  ) {
+    return next();
+  }
+
+  // Block external/public requests
+  return res.status(403).json({ error: 'access denied - internal network only' });
+}
+
+// Admin endpoint to clear test operations from memory (non-destructive)
+// Only accessible from localhost/internal network
+app.post('/api/admin/operations/clear', restrictToInternal, express.json(), (req, res) => {
+  try {
+    const { userId, clearAll } = req.body;
+
+    let removedCount = 0;
+
+    if (clearAll === true) {
+      // Clear all operations from memory
+      removedCount = operations.length;
+      operations.length = 0;
+      logger.info(`Cleared all ${removedCount} operations from memory (admin request)`);
+    } else if (userId) {
+      // Remove operations from specific user ID (e.g., test user 86)
+      const initialLength = operations.length;
+      const filtered = operations.filter(op => String(op.userId) !== String(userId));
+      removedCount = initialLength - filtered.length;
+      operations.length = 0;
+      operations.push(...filtered);
+      logger.info(`Removed ${removedCount} operations from user ${userId} (admin request)`);
+    } else {
+      // Default: remove known test users (user 86)
+      const testUserIds = ['86'];
+      const initialLength = operations.length;
+      const filtered = operations.filter(op => !testUserIds.includes(String(op.userId)));
+      removedCount = initialLength - filtered.length;
+      operations.length = 0;
+      operations.push(...filtered);
+      logger.info(`Removed ${removedCount} test operations (default: user 86) (admin request)`);
+    }
+
+    // Broadcast empty operations list to all connected clients to refresh their view
+    const message = JSON.stringify({ type: 'operations', data: [...operations] });
+    clients.forEach(client => {
+      if (client.readyState === 1) {
+        try {
+          client.send(message);
+        } catch (error) {
+          logger.error('Error sending operations update to client:', error);
+        }
+      }
+    });
+
+    res.json({
+      success: true,
+      removedCount,
+      remainingCount: operations.length,
+      message: `Removed ${removedCount} operation(s) from memory`,
+    });
+  } catch (error) {
+    logger.error('Error clearing operations:', error);
+    res.status(500).json({ error: 'failed to clear operations', message: error.message });
   }
 });
 
@@ -1958,8 +2070,24 @@ wss.on('connection', async ws => {
 // Initialize database and start server
 (async () => {
   try {
+    // Log and validate database path before initialization
+    const dbPath = getDbPath();
+    logger.info(`using database: ${dbPath}`);
+
+    // Check if database path indicates test mode (should not happen in production)
+    const isTestDatabase =
+      dbPath && (dbPath.includes('test') || dbPath.includes('tmp') || dbPath.includes('temp'));
+    if (isTestDatabase) {
+      logger.warn(
+        `WARNING: webui-server is using a test database path: ${dbPath}. This may cause test operations to appear in production webUI.`
+      );
+    }
+
     await initDatabase();
     logger.info('database initialized');
+
+    // Clear in-memory operations before loading from database to prevent stale test operations
+    operations.length = 0;
 
     // Load recent operations from database
     try {

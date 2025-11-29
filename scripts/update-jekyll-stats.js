@@ -2,10 +2,14 @@ import fs from 'fs/promises';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import axios from 'axios';
+import dotenv from 'dotenv';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const projectRoot = path.resolve(__dirname, '..');
+
+// Load environment variables from .env file
+dotenv.config({ path: path.join(projectRoot, '.env') });
 
 // Configuration
 const BOT_API_URL = process.env.BOT_API_URL || 'http://localhost:3000';

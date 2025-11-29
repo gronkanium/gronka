@@ -141,6 +141,102 @@ public domain for your r2 bucket.
 R2_PUBLIC_DOMAIN=https://cdn.example.com
 ```
 
+### `R2_TEMP_UPLOADS_ENABLED`
+
+enable automatic tracking and cleanup of temporary r2 uploads.
+
+**default:** `false`
+
+**notes:**
+
+- when enabled, all new r2 uploads are tracked with a ttl
+- existing files uploaded before enabling remain permanent
+- requires `R2_CLEANUP_ENABLED=true` for automatic deletion
+- can be enabled without cleanup for tracking only
+
+**example:**
+
+```env
+R2_TEMP_UPLOADS_ENABLED=true
+```
+
+### `R2_TEMP_UPLOAD_TTL_HOURS`
+
+time-to-live in hours for temporary r2 uploads.
+
+**default:** `72`
+
+**range:** 1-8760 (1 hour to 1 year)
+
+**notes:**
+
+- files are automatically deleted after this period
+- each upload has its own ttl (reference counting)
+- files are only deleted when all uploads have expired
+
+**example:**
+
+```env
+R2_TEMP_UPLOAD_TTL_HOURS=72
+```
+
+### `R2_CLEANUP_ENABLED`
+
+enable background cleanup job to delete expired r2 files.
+
+**default:** `false`
+
+**notes:**
+
+- requires `R2_TEMP_UPLOADS_ENABLED=true` to function
+- cleanup job runs periodically based on `R2_CLEANUP_INTERVAL_MS`
+- failed deletions are retried on each run
+- admin alerts are sent after 5 failed attempts
+
+**example:**
+
+```env
+R2_CLEANUP_ENABLED=true
+```
+
+### `R2_CLEANUP_INTERVAL_MS`
+
+cleanup job run interval in milliseconds.
+
+**default:** `3600000` (1 hour)
+
+**range:** 60000-86400000 (1 minute to 1 day)
+
+**notes:**
+
+- how often the cleanup job checks for expired files
+- shorter intervals check more frequently but use more resources
+- longer intervals reduce resource usage but delay deletion
+
+**example:**
+
+```env
+R2_CLEANUP_INTERVAL_MS=3600000
+```
+
+### `R2_CLEANUP_LOG_LEVEL`
+
+logging verbosity for cleanup job.
+
+**default:** `detailed`
+
+**options:**
+
+- `minimal` - errors and summary only
+- `detailed` - each file deletion attempt and result
+- `debug` - everything including timing and batch info
+
+**example:**
+
+```env
+R2_CLEANUP_LOG_LEVEL=detailed
+```
+
 ## processing options
 
 ### `MAX_GIF_WIDTH`
@@ -338,6 +434,13 @@ R2_ACCESS_KEY_ID=your_access_key
 R2_SECRET_ACCESS_KEY=your_secret_key
 R2_BUCKET_NAME=gronka-media
 R2_PUBLIC_DOMAIN=https://cdn.example.com
+
+# r2 temporary uploads (optional)
+R2_TEMP_UPLOADS_ENABLED=false
+R2_TEMP_UPLOAD_TTL_HOURS=72
+R2_CLEANUP_ENABLED=false
+R2_CLEANUP_INTERVAL_MS=3600000
+R2_CLEANUP_LOG_LEVEL=detailed
 
 # processing
 MAX_GIF_WIDTH=720

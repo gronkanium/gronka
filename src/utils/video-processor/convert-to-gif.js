@@ -70,8 +70,8 @@ export async function convertToGif(inputPath, outputPath, options = {}) {
   // Quality presets for dithering - performance-optimized presets
   // Low and medium use faster Bayer dithering, high uses slower but best quality Floyd-Steinberg
   const qualityPresets = {
-    low: 'bayer:bayer_scale=3',
-    medium: 'bayer:bayer_scale=1',
+    low: 'bayer:bayer_scale=5',
+    medium: 'sierra2_4a',
     high: 'floyd_steinberg:diff_mode=rectangle',
   };
 

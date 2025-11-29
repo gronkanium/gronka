@@ -73,8 +73,8 @@ docker compose up -d
 
 ```bash
 # on linux/mac
-sudo chown -R $USER:$USER data temp logs
-chmod -R 755 data temp logs
+sudo chown -R $USER:$USER data-prod data-test temp logs
+chmod -R 755 data-prod data-test temp logs
 ```
 
 ## cleanup

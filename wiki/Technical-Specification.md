@@ -79,7 +79,7 @@ flow:
 4. defer reply (conversion takes time)
 5. download video to temp location
 6. generate md5 hash of video bytes
-7. check if `/data/gifs/{hash}.gif` exists
+7. check if gif exists in storage (path configured via `GIF_STORAGE_PATH`, typically `./data-prod/gifs/{hash}.gif` or `./data-test/gifs/{hash}.gif`)
 8. if exists: return existing url
 9. if not: convert video → gif, save, return new url
 10. clean up temp files
@@ -225,7 +225,8 @@ deduplication logic:
 
 ```javascript
 const hash = crypto.createHash('md5').update(videoBuffer).digest('hex');
-const gifPath = `/data/gifs/${hash}.gif`;
+// path is configured via GIF_STORAGE_PATH (e.g., ./data-prod or ./data-test)
+const gifPath = path.join(GIF_STORAGE_PATH, 'gifs', `${hash}.gif`);
 
 if (
   await fs
@@ -407,6 +408,109 @@ setTimeout(() => ffmpegProcess.kill(), 120000);
 | 100-1k | add worker processes, redis queue            |
 | 1k-10k | object storage (s3), cdn, load balancer      |
 | 10k+   | microservices, kubernetes, distributed queue |
+
+---
+
+## test and production bot architecture
+
+gronka supports running separate test and production bot instances simultaneously, providing isolated testing environments.
+
+### architecture overview
+
+the bot-start script (`scripts/bot-start.js`) handles bot initialization:
+
+1. **prefix detection**: reads `TEST` or `PROD` prefix from command line argument
+2. **environment mapping**: maps prefixed environment variables to standard names
+3. **database path resolution**: sets bot-specific database path
+4. **process spawning**: starts bot with mapped configuration
+
+### environment variable mapping
+
+prefixed variables are mapped to standard names:
+
+```javascript
+// example: TEST_DISCORD_TOKEN → DISCORD_TOKEN
+const envPrefix = 'TEST_'; // or 'PROD_'
+const tokenKey = `${envPrefix}DISCORD_TOKEN`;
+env.DISCORD_TOKEN = env[tokenKey];
+```
+
+supported mappings include all configuration variables:
+- `TEST_DISCORD_TOKEN` / `PROD_DISCORD_TOKEN` → `DISCORD_TOKEN`
+- `TEST_GIF_STORAGE_PATH` / `PROD_GIF_STORAGE_PATH` → `GIF_STORAGE_PATH`
+- `TEST_GRONKA_DB_PATH` / `PROD_GRONKA_DB_PATH` → `GRONKA_DB_PATH`
+- and all other configuration variables
+
+### database separation
+
+each bot uses a separate database file:
+
+- **test bot**: `gronka-test.db` in `data-test/` (or path from `TEST_GRONKA_DB_PATH`)
+- **prod bot**: `gronka-prod.db` in `data-prod/` (or path from `PROD_GRONKA_DB_PATH`)
+
+database path resolution:
+
+```javascript
+// if GRONKA_DB_PATH is explicitly set via prefix, use it
+if (env[`${envPrefix}GRONKA_DB_PATH`]) {
+  env.GRONKA_DB_PATH = env[`${envPrefix}GRONKA_DB_PATH`];
+} else {
+  // derive from storage path or use default with prefix
+  const storagePath = env.GIF_STORAGE_PATH || `./data-${prefix.toLowerCase()}`;
+  const dbFileName = `gronka-${prefix.toLowerCase()}.db`;
+  env.GRONKA_DB_PATH = path.join(storagePath, dbFileName);
+}
+```
+
+### storage separation
+
+each bot maintains separate storage directories:
+
+- **test bot**: `data-test/` (or path from `TEST_GIF_STORAGE_PATH`)
+- **prod bot**: `data-prod/` (or path from `PROD_GIF_STORAGE_PATH`)
+
+this ensures complete data isolation between test and production environments.
+
+### running both bots
+
+both bots can run simultaneously as separate node processes:
+
+```bash
+# terminal 1
+npm run bot:test
+
+# terminal 2
+npm run bot:prod
+```
+
+each bot:
+- connects to discord with its own token
+- uses its own database file
+- stores files in its own directory
+- has independent configuration
+
+### command registration
+
+each bot registers commands separately using its own application id:
+
+```bash
+npm run bot:register:test  # registers commands for test bot
+npm run bot:register:prod  # registers commands for prod bot
+```
+
+commands are registered globally per bot, so they appear in all servers where that bot is present.
+
+### development workflow
+
+recommended workflow:
+
+1. configure both bots with prefixed variables in `.env`
+2. start test bot in development mode: `npm run bot:test:dev`
+3. test changes using test bot
+4. verify production bot continues running normally
+5. deploy verified changes to production
+
+this provides a safe testing environment without affecting production data or users.
 
 ---
 

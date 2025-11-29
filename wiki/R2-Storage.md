@@ -60,7 +60,7 @@ when r2 is configured:
 
 when r2 is not configured:
 
-1. files are stored locally in the `data` directory
+1. files are stored locally in the configured storage directory (typically `data-prod` or `data-test`, set via `GIF_STORAGE_PATH`)
 2. files are served via the local express server
 3. deduplication still works using file hashes
 

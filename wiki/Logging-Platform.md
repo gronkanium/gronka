@@ -168,7 +168,13 @@ use webui logs for application monitoring and dozzle for container-level debuggi
 
 ## database storage
 
-all logs are stored in the sqlite database at `data/gronka.db` in the `logs` table:
+all logs are stored in the sqlite database. the database location depends on your configuration:
+
+- production: typically `data-prod/gronka.db` (or `data-prod/gronka-prod.db` when using prod bot)
+- testing: typically `data-test/gronka.db` (or `data-test/gronka-test.db` when using test bot)
+- can be overridden via `GRONKA_DB_PATH` environment variable
+
+the `logs` table structure:
 
 ```sql
 CREATE TABLE logs (
@@ -195,8 +201,10 @@ by default, all logs are retained indefinitely. if you need to clean up old logs
 ### manual cleanup
 
 ```bash
-# connect to database
-sqlite3 data/gronka.db
+# connect to database (adjust path based on your configuration)
+sqlite3 data-prod/gronka.db
+# or for test bot
+sqlite3 data-test/gronka-test.db
 
 # delete logs older than 30 days
 DELETE FROM logs WHERE timestamp < (strftime('%s', 'now', '-30 days') * 1000);
@@ -231,8 +239,10 @@ SKIP_DB_INIT=false
 1. check database initialization:
 
    ```bash
-   # verify logs table exists
-   sqlite3 data/gronka.db "SELECT COUNT(*) FROM logs;"
+   # verify logs table exists (adjust path based on your configuration)
+   sqlite3 data-prod/gronka.db "SELECT COUNT(*) FROM logs;"
+   # or for test bot
+   sqlite3 data-test/gronka-test.db "SELECT COUNT(*) FROM logs;"
    ```
 
 2. check log level:

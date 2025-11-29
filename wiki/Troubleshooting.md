@@ -140,15 +140,17 @@ check storage path permissions:
 # docker
 docker compose exec app ls -la /app/data
 
-# local
-ls -la ./data
+# local (check your configured storage path)
+ls -la ./data-prod
+# or for test bot
+ls -la ./data-test
 ```
 
 fix permissions:
 
 ```bash
-sudo chown -R $USER:$USER data
-chmod -R 755 data
+sudo chown -R $USER:$USER data-prod data-test
+chmod -R 755 data-prod data-test
 ```
 
 ### r2 upload failures
@@ -241,8 +243,8 @@ docker compose config
 fix volume permissions:
 
 ```bash
-sudo chown -R $USER:$USER data temp logs
-chmod -R 755 data temp logs
+sudo chown -R $USER:$USER data-prod data-test temp logs
+chmod -R 755 data-prod data-test temp logs
 ```
 
 ### code changes not reflected

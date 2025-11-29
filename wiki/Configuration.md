@@ -44,12 +44,21 @@ CLIENT_ID=1234567890123456789
 
 path to store gifs, videos, and images locally.
 
-**default:** `./data`
+**default:** `./data-prod` (production) or `./data-test` (testing)
+
+**notes:**
+
+- for production deployments, use `./data-prod` or a custom path
+- for testing, use `./data-test` to avoid conflicts with production data
+- when using test/prod bot prefixes, each bot can have its own storage path via `TEST_GIF_STORAGE_PATH` or `PROD_GIF_STORAGE_PATH`
 
 **example:**
 
 ```env
 GIF_STORAGE_PATH=/var/www/gifs
+# or for test bot
+TEST_GIF_STORAGE_PATH=./data-test
+PROD_GIF_STORAGE_PATH=./data-prod
 ```
 
 ### `CDN_BASE_URL`
@@ -415,6 +424,75 @@ when set, enables notifications for completed downloads and errors.
 NTFY_TOPIC=gronka-notifications
 ```
 
+## test and production bot configuration
+
+gronka supports running separate test and production bots simultaneously using prefixed environment variables. any environment variable can be prefixed with `TEST_` or `PROD_` to create bot-specific configuration.
+
+### prefixed variables
+
+to configure separate test and production bots, prefix any environment variable with `TEST_` or `PROD_`:
+
+```env
+# test bot configuration
+TEST_DISCORD_TOKEN=test_bot_token
+TEST_CLIENT_ID=test_client_id
+TEST_GIF_STORAGE_PATH=./data-test
+TEST_ADMIN_USER_IDS=123456789012345678
+
+# prod bot configuration
+PROD_DISCORD_TOKEN=prod_bot_token
+PROD_CLIENT_ID=prod_client_id
+PROD_GIF_STORAGE_PATH=./data-prod
+PROD_ADMIN_USER_IDS=987654321098765432
+```
+
+### how it works
+
+when you start a bot with `npm run bot:test` or `npm run bot:prod`, the bot-start script:
+
+1. reads prefixed environment variables (e.g., `TEST_DISCORD_TOKEN`)
+2. maps them to standard variable names (e.g., `DISCORD_TOKEN`)
+3. sets bot-specific database paths (`gronka-test.db` or `gronka-prod.db`)
+4. starts the bot with the mapped configuration
+
+### supported prefixes
+
+all environment variables support the `TEST_` and `PROD_` prefixes, including:
+
+- `TEST_DISCORD_TOKEN` / `PROD_DISCORD_TOKEN`
+- `TEST_CLIENT_ID` / `PROD_CLIENT_ID`
+- `TEST_GIF_STORAGE_PATH` / `PROD_GIF_STORAGE_PATH`
+- `TEST_GRONKA_DB_PATH` / `PROD_GRONKA_DB_PATH`
+- `TEST_CDN_BASE_URL` / `PROD_CDN_BASE_URL`
+- `TEST_ADMIN_USER_IDS` / `PROD_ADMIN_USER_IDS`
+- `TEST_R2_BUCKET_NAME` / `PROD_R2_BUCKET_NAME`
+- and any other configuration variable
+
+### database separation
+
+each bot uses a separate database file:
+
+- test bot: `gronka-test.db` (in `data-test/` or path specified by `TEST_GRONKA_DB_PATH`)
+- prod bot: `gronka-prod.db` (in `data-prod/` or path specified by `PROD_GRONKA_DB_PATH`)
+
+if `GRONKA_DB_PATH` is not explicitly set via prefix, it's automatically derived from the storage path.
+
+### running the bots
+
+```bash
+# start test bot
+npm run bot:test
+
+# start prod bot
+npm run bot:prod
+
+# register commands
+npm run bot:register:test
+npm run bot:register:prod
+```
+
+for more details, see the [[Test-Bot|test bot documentation]].
+
 ## example configuration
 
 complete example `.env` file:
@@ -425,7 +503,7 @@ DISCORD_TOKEN=your_discord_token
 CLIENT_ID=your_client_id
 
 # storage
-GIF_STORAGE_PATH=./data
+GIF_STORAGE_PATH=./data-prod
 CDN_BASE_URL=https://cdn.example.com/gifs
 
 # r2 (optional)

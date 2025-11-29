@@ -15,7 +15,7 @@ DISCORD_TOKEN=your_discord_bot_token
 CLIENT_ID=your_discord_client_id
 CDN_BASE_URL=http://localhost:3000/gifs
 SERVER_PORT=3000
-GIF_STORAGE_PATH=./data
+GIF_STORAGE_PATH=./data-prod
 MAX_GIF_WIDTH=720
 MAX_GIF_DURATION=30
 DEFAULT_FPS=15
@@ -94,7 +94,7 @@ docker compose logs -f webui
 | `CLIENT_ID`        | discord application id                                 | _required_                   |
 | `CDN_BASE_URL`     | base url for serving gifs                              | `http://localhost:3000/gifs` |
 | `SERVER_PORT`      | express server port                                    | `3000`                       |
-| `GIF_STORAGE_PATH` | path to gif storage                                    | `./data`                     |
+| `GIF_STORAGE_PATH` | path to gif storage                                    | `./data-prod` or `./data-test` |
 | `MAX_GIF_WIDTH`    | maximum gif width                                      | `720`                        |
 | `MAX_GIF_DURATION` | maximum video duration (seconds)                       | `30`                         |
 | `DEFAULT_FPS`      | default frames per second                              | `15`                         |
@@ -108,9 +108,11 @@ docker compose logs -f webui
 
 the following directories are mounted as volumes for persistence:
 
-- `./data` → `/app/data` - gif storage
+- `./data-prod` or `./data-test` → `/app/data` - gif storage (configured via `GIF_STORAGE_PATH`)
 - `./temp` → `/app/temp` - temporary files
 - `./logs` → `/app/logs` - application logs
+
+**note:** use `./data-prod` for production and `./data-test` for testing to keep data separate.
 
 ### ports
 
@@ -177,8 +179,8 @@ if you encounter permission issues with mounted volumes:
 
 ```bash
 # on linux/mac
-sudo chown -R $USER:$USER data temp logs
-chmod -R 755 data temp logs
+sudo chown -R $USER:$USER data-prod data-test temp logs
+chmod -R 755 data-prod data-test temp logs
 ```
 
 ## updating

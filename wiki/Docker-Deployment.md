@@ -104,6 +104,15 @@ docker compose logs -f webui
 | `COBALT_API_URL`   | cobalt api url for social media downloads              | `http://cobalt:9000`         |
 | `COBALT_ENABLED`   | enable cobalt integration                              | `true`                       |
 
+**important:** docker deployment has limited support for `PROD_*` prefixed variables. only 4 variables support the `PROD_*` prefix in docker:
+
+- `PROD_DISCORD_TOKEN` (falls back to `DISCORD_TOKEN`)
+- `PROD_CLIENT_ID` (falls back to `CLIENT_ID`)
+- `PROD_GRONKA_DB_PATH` (falls back to `./data-prod/gronka.db`)
+- `PROD_GIF_STORAGE_PATH` (falls back to `./data-prod/gifs`)
+
+all other variables must use standard names (e.g., `MAX_GIF_DURATION`, not `PROD_MAX_GIF_DURATION`). this is different from local deployments where all variables support the `PROD_*` prefix. see the [[Configuration#local-vs-docker-deployment-variable-handling|configuration documentation]] for details.
+
 ### volumes
 
 the following directories are mounted as volumes for persistence:

@@ -866,6 +866,112 @@ npm run bot:register:prod
 
 for more details, see the [[Test-Bot|test bot documentation]].
 
+## local vs docker deployment variable handling
+
+there is an important difference in how environment variables are handled between local deployments (using `npm run bot:prod:webui`) and docker deployments (using `npm run docker:up`).
+
+### local deployment (`npm run bot:prod:webui`)
+
+when you run `npm run bot:prod:webui`, it uses the `bot-start.js` script which:
+
+1. loads environment variables from your `.env` file
+2. automatically maps **all** `PROD_*` prefixed variables to standard names
+3. supports `PROD_*` prefix for **37+ configuration variables**
+4. runs the bot, server, and webui as separate node processes with mapped variables
+
+**all variables support the `PROD_*` prefix** when using local deployment commands:
+
+```bash
+npm run bot:prod          # uses PROD_* variables
+npm run bot:prod:webui    # uses PROD_* variables
+npm run bot:test          # uses TEST_* variables
+npm run bot:test:webui    # uses TEST_* variables
+```
+
+**example:** if you set `PROD_MAX_GIF_DURATION=60` in your `.env`, the bot will use 60 seconds when started with `npm run bot:prod:webui`.
+
+### docker deployment (`npm run docker:up`)
+
+when you run `npm run docker:up`, it uses `docker-compose.yml` which:
+
+1. sets environment variables directly in the container
+2. **only supports `PROD_*` prefix for 4 variables:**
+   - `PROD_DISCORD_TOKEN` (falls back to `DISCORD_TOKEN`)
+   - `PROD_CLIENT_ID` (falls back to `CLIENT_ID`)
+   - `PROD_GRONKA_DB_PATH` (falls back to `./data-prod/gronka.db`)
+   - `PROD_GIF_STORAGE_PATH` (falls back to `./data-prod/gifs`)
+3. all other variables use **standard names without prefix support**
+4. the container runs bot/server/webui directly without using `bot-start.js`
+
+**why the difference?**
+
+the docker container uses `docker-entrypoint.sh` which directly executes `node src/bot.js`, `node src/server.js`, and `node src/webui-server.js`. it does not use the `bot-start.js` script that performs prefix mapping. instead, variables are set directly in `docker-compose.yml` using docker's variable substitution syntax.
+
+### variables that support `PROD_*` prefix in docker
+
+only these 4 variables support the `PROD_*` prefix in docker:
+
+```env
+# docker-compose.yml uses these with PROD_ prefix support
+PROD_DISCORD_TOKEN=${PROD_DISCORD_TOKEN:-${DISCORD_TOKEN}}
+PROD_CLIENT_ID=${PROD_CLIENT_ID:-${CLIENT_ID}}
+PROD_GRONKA_DB_PATH=${PROD_GRONKA_DB_PATH:-./data-prod/gronka.db}
+PROD_GIF_STORAGE_PATH=${PROD_GIF_STORAGE_PATH:-./data-prod/gifs}
+```
+
+### variables that do not support `PROD_*` prefix in docker
+
+all other variables in `docker-compose.yml` use standard names and do not support the `PROD_*` prefix:
+
+```env
+# these use standard names (no PROD_ prefix support)
+CDN_BASE_URL=${CDN_BASE_URL:-https://cdn.gronka.p1x.dev/gifs}
+MAX_GIF_DURATION=${MAX_GIF_DURATION:-30}
+GIF_QUALITY=${GIF_QUALITY:-medium}
+ADMIN_USER_IDS=${ADMIN_USER_IDS:-}
+STATS_USERNAME=${STATS_USERNAME:-}
+R2_ACCOUNT_ID=${R2_ACCOUNT_ID:-}
+# ... and many others
+```
+
+if you need different values for docker deployment, you must set the standard variable names directly.
+
+### practical implications
+
+**for local development:**
+- you can use `PROD_*` prefixed variables for any configuration
+- perfect for running test and prod bots simultaneously with different configs
+
+**for docker deployment:**
+- use `PROD_*` prefix only for: `DISCORD_TOKEN`, `CLIENT_ID`, `GRONKA_DB_PATH`, `GIF_STORAGE_PATH`
+- use standard variable names for all other configuration
+- if you need different configs, you may need separate docker-compose files or environment files
+
+### example: same config, different methods
+
+**local deployment with `npm run bot:prod:webui`:**
+```env
+PROD_DISCORD_TOKEN=prod_token
+PROD_CLIENT_ID=prod_client_id
+PROD_MAX_GIF_DURATION=60
+PROD_GIF_QUALITY=high
+PROD_R2_BUCKET_NAME=prod-bucket
+```
+
+**docker deployment with `npm run docker:up`:**
+```env
+PROD_DISCORD_TOKEN=prod_token           # supports PROD_ prefix
+PROD_CLIENT_ID=prod_client_id          # supports PROD_ prefix
+PROD_GIF_STORAGE_PATH=./data-prod      # supports PROD_ prefix
+PROD_GRONKA_DB_PATH=./data-prod/gronka.db  # supports PROD_ prefix
+
+MAX_GIF_DURATION=60                    # standard name (no prefix)
+GIF_QUALITY=high                       # standard name (no prefix)
+R2_BUCKET_NAME=prod-bucket             # standard name (no prefix)
+```
+
+notice that `MAX_GIF_DURATION`, `GIF_QUALITY`, and `R2_BUCKET_NAME` use standard names in docker, not `PROD_*` prefixes.
+
 ## example configuration
 
 complete example `.env` file:

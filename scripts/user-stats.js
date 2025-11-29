@@ -7,15 +7,8 @@
  */
 
 import Database from 'better-sqlite3';
-import path from 'path';
-import { fileURLToPath } from 'url';
-
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
-const projectRoot = path.resolve(__dirname, '..');
-
-// Get database path
-const dbPath = process.env.GRONKA_DB_PATH || path.join(projectRoot, 'data-test', 'gronka.db');
+import { getDbPath, ensureDataDir } from '../src/utils/database/connection.js';
+import { initDatabase } from '../src/utils/database/init.js';
 
 /**
  * Extract user ID from log message
@@ -37,9 +30,17 @@ function extractUserId(message) {
 /**
  * Generate user statistics report
  */
-function generateReport() {
+async function generateReport() {
   let db;
   try {
+    // Ensure database directory exists
+    ensureDataDir();
+
+    // Initialize database if needed (creates tables if they don't exist)
+    await initDatabase();
+
+    // Get database path using the same logic as the main application
+    const dbPath = getDbPath();
     db = new Database(dbPath);
 
     // Get all users
@@ -154,4 +155,7 @@ function generateReport() {
 }
 
 // Run the report
-generateReport();
+generateReport().catch(error => {
+  console.error('Error generating report:', error);
+  process.exit(1);
+});

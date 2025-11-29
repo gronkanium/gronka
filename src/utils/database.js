@@ -53,3 +53,16 @@ export {
 
 // Alerts operations
 export { insertAlert, getAlerts, getAlertsCount } from './database/alerts.js';
+
+// Temporary uploads operations
+export {
+  insertTemporaryUpload,
+  getExpiredTemporaryUploads,
+  getTemporaryUploadsByR2Key,
+  markTemporaryUploadDeleted,
+  markTemporaryUploadDeletionFailed,
+  getFailedDeletions,
+  deleteTemporaryUpload,
+  deleteTemporaryUploadsByR2Key,
+  getExpiredR2Keys,
+} from './database/temporary-uploads.js';

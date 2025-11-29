@@ -1,37 +1,34 @@
 ---
 layout: post
-title: r2 upload expiration policy
+title: file retention policy update
 date: 2025-11-27
-description: Future policy change for R2 uploads - files will be automatically deleted after 72 hours maximum retention period. Currently uploads remain persistent.
+description: Files uploaded through gronka will now be automatically deleted after 72 hours. Download or save files you want to keep before they expire.
 author: thedorekaczynski
 tags:
   - announcement
-  - r2
-  - storage
   - policy
+  - storage
 ---
 
-# r2 upload expiration policy
+# file retention policy update
 
-this is a notice about a future change to how r2 uploads are handled, this is not currently active and uploads remain persistent for the foreseeable future
-
-## current state
-
-uploads to cloudflare r2 are currently persistent, files uploaded through gronka remain available indefinitely, there is no automatic deletion or expiration
-
-## future policy
-
-going forward, r2 uploads will have a maximum retention period of 72 hours, after which files will be automatically deleted from storage
-
-this change will be implemented at a later date, it is not active now and there is no timeline for when it will be implemented
-
-## why
-
-storage costs accumulate over time, and most uploads are accessed shortly after creation, implementing a 72-hour retention period balances availability with cost management
+starting now, files uploaded through gronka will be automatically deleted after 72 hours (3 days).
 
 ## what this means
 
-when this policy is implemented, any file uploaded to r2 will be deleted 72 hours after upload, users should download or save files they want to keep before the retention period expires
+any file you upload, convert, or download through gronka will be available for 72 hours, then automatically removed from storage. this applies to gifs, videos, and images.
 
-for now, nothing changes, uploads remain persistent as they always have been
+if you want to keep a file longer, make sure to download or save it within 72 hours of uploading it.
+
+## why
+
+storage costs add up over time, and most files are accessed right after they're created. the 72-hour window gives plenty of time to grab files you want while keeping things manageable.
+
+## existing files
+
+files uploaded before this policy went into effect remain available - this only applies to new uploads from now on.
+
+## what you should do
+
+if you use gronka and want to keep files longer than 72 hours, download them to your device within 3 days of uploading. the bot will still provide links for 72 hours, but after that the files will be gone.
 

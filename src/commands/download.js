@@ -25,7 +25,14 @@ import {
   saveImage,
   detectFileType,
 } from '../utils/storage.js';
-import { uploadGifToR2, uploadVideoToR2, uploadImageToR2 } from '../utils/r2-storage.js';
+import {
+  uploadGifToR2,
+  uploadVideoToR2,
+  uploadImageToR2,
+  extractR2KeyFromUrl,
+  formatR2UrlWithDisclaimer,
+} from '../utils/r2-storage.js';
+import { trackTemporaryUpload } from '../utils/storage.js';
 import { queueCobaltRequest, hashUrl } from '../utils/cobalt-queue.js';
 import { notifyCommandSuccess, notifyCommandFailure } from '../utils/ntfy-notifier.js';
 import { getProcessedUrl, insertProcessedUrl } from '../utils/database.js';
@@ -154,7 +161,7 @@ async function processDownload(
           updateOperationStatus(operationId, 'success', { fileSize: 0 });
           recordRateLimit(userId);
           await safeInteractionEditReply(interaction, {
-            content: fileUrl,
+            content: formatR2UrlWithDisclaimer(fileUrl, r2Config),
           });
           await notifyCommandSuccess(username, 'download', { operationId, userId });
           return;
@@ -242,7 +249,7 @@ async function processDownload(
           updateOperationStatus(operationId, 'success', { fileSize: 0 });
           recordRateLimit(userId);
           await safeInteractionEditReply(interaction, {
-            content: fileUrl,
+            content: formatR2UrlWithDisclaimer(fileUrl, r2Config),
           });
           await notifyCommandSuccess(username, 'download', { operationId, userId });
           return;
@@ -411,7 +418,7 @@ async function processDownload(
       updateOperationStatus(operationId, 'success', { fileSize: existingSize });
       recordRateLimit(userId);
       await safeInteractionEditReply(interaction, {
-        content: fileUrl,
+        content: formatR2UrlWithDisclaimer(fileUrl, r2Config),
       });
 
       // Send success notification
@@ -568,7 +575,7 @@ async function processDownload(
           updateOperationStatus(operationId, 'success', { fileSize: existingSize });
           recordRateLimit(userId);
           await safeInteractionEditReply(interaction, {
-            content: fileUrl,
+            content: formatR2UrlWithDisclaimer(fileUrl, r2Config),
           });
 
           // Send success notification
@@ -727,7 +734,7 @@ async function processDownload(
               updateOperationStatus(operationId, 'success', { fileSize: existingSize });
               recordRateLimit(userId);
               await safeInteractionEditReply(interaction, {
-                content: fileUrl,
+                content: formatR2UrlWithDisclaimer(fileUrl, r2Config),
               });
 
               // Send success notification
@@ -897,7 +904,7 @@ async function processDownload(
           updateOperationStatus(operationId, 'success', { fileSize: existingSize });
           recordRateLimit(userId);
           await safeInteractionEditReply(interaction, {
-            content: fileUrl,
+            content: formatR2UrlWithDisclaimer(fileUrl, r2Config),
           });
 
           // Send success notification
@@ -971,6 +978,14 @@ async function processDownload(
         finalSize
       );
       logger.debug(`Recorded processed URL in database (urlHash: ${urlHash.substring(0, 8)}...)`);
+
+      // Track temporary upload if file was uploaded to R2
+      if (finalUploadMethod === 'r2' && fileUrl && fileUrl.startsWith('https://')) {
+        const r2Key = extractR2KeyFromUrl(fileUrl, r2Config);
+        if (r2Key) {
+          await trackTemporaryUpload(urlHash, r2Key);
+        }
+      }
 
       // Update operation to success with file size
       updateOperationStatus(operationId, 'success', { fileSize: finalSize });
@@ -1057,26 +1072,31 @@ async function processDownload(
                 userId,
                 finalSize
               );
+              // Track temporary upload
+              const r2Key = extractR2KeyFromUrl(r2Url, r2Config);
+              if (r2Key) {
+                await trackTemporaryUpload(urlHash, r2Key);
+              }
               await safeInteractionEditReply(interaction, {
-                content: r2Url,
+                content: formatR2UrlWithDisclaimer(r2Url, r2Config),
               });
             } else {
               // If R2 upload also fails, use the original fileUrl
               await safeInteractionEditReply(interaction, {
-                content: fileUrl,
+                content: formatR2UrlWithDisclaimer(fileUrl, r2Config),
               });
             }
           } catch (r2Error) {
             logger.error(`R2 fallback upload also failed: ${r2Error.message}`);
             // Last resort: use the original fileUrl
             await safeInteractionEditReply(interaction, {
-              content: fileUrl,
+              content: formatR2UrlWithDisclaimer(fileUrl, r2Config),
             });
           }
         }
       } else {
         await safeInteractionEditReply(interaction, {
-          content: fileUrl,
+          content: formatR2UrlWithDisclaimer(fileUrl, r2Config),
         });
       }
 

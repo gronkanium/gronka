@@ -23,7 +23,12 @@ import {
   calculateSizeReduction,
 } from '../utils/gif-optimizer.js';
 import { getGifPath, cleanupTempFiles, saveGif } from '../utils/storage.js';
-import { uploadGifToR2 } from '../utils/r2-storage.js';
+import {
+  uploadGifToR2,
+  extractR2KeyFromUrl,
+  formatR2UrlWithDisclaimer,
+} from '../utils/r2-storage.js';
+import { trackTemporaryUpload } from '../utils/storage.js';
 import {
   createOperation,
   updateOperationStatus,
@@ -31,7 +36,7 @@ import {
   logOperationStep,
 } from '../utils/operations-tracker.js';
 import { notifyCommandSuccess, notifyCommandFailure } from '../utils/ntfy-notifier.js';
-import { hashUrl } from '../utils/cobalt-queue.js';
+import { hashUrlWithParams } from '../utils/cobalt-queue.js';
 import { insertProcessedUrl, initDatabase, getProcessedUrl } from '../utils/database.js';
 import { r2Config } from '../utils/config.js';
 import {
@@ -247,9 +252,14 @@ export async function processOptimization(
     // Update operation to running
     updateOperationStatus(operationId, 'running');
 
+    // Build optimize options once for reuse throughout the function
+    const optimizeOptions =
+      lossyLevel !== null && lossyLevel !== undefined ? { lossy: lossyLevel } : {};
+
     // Check if URL has already been processed (only for external URL-based optimizations)
     if (originalUrl) {
-      const urlHash = hashUrl(originalUrl);
+      // Use composite hash that includes lossy parameter for cache key
+      const urlHash = hashUrlWithParams(originalUrl, optimizeOptions);
       const processedUrl = await getProcessedUrl(urlHash);
       if (processedUrl) {
         // Optimize command expects GIF input/output - only use cache if cached result is a GIF
@@ -353,7 +363,6 @@ export async function processOptimization(
     const optimizedGifPath = getGifPath(optimizedHash, GIF_STORAGE_PATH);
 
     // Optimize the GIF with specified lossy level
-    const optimizeOptions = lossyLevel !== null ? { lossy: lossyLevel } : {};
     logger.debug(
       `Optimizing GIF: ${tempInputPath} -> ${optimizedGifPath}${lossyLevel !== null ? ` (lossy: ${lossyLevel})` : ''}`
     );
@@ -413,8 +422,8 @@ export async function processOptimization(
     const reduction = calculateSizeReduction(originalSize, optimizedSize);
 
     // Record processed URL in database for all optimizations
-    // For URL-based operations, use hash of original URL; for attachments, use file hash
-    const urlHash = originalUrl ? hashUrl(originalUrl) : optimizedHash;
+    // For URL-based operations, use composite hash that includes lossy parameter; for attachments, use file hash
+    const urlHash = originalUrl ? hashUrlWithParams(originalUrl, optimizeOptions) : optimizedHash;
     await insertProcessedUrl(
       urlHash,
       optimizedHash,
@@ -426,6 +435,14 @@ export async function processOptimization(
       optimizedSize
     );
     logger.debug(`Recorded processed URL in database (urlHash: ${urlHash.substring(0, 8)}...)`);
+
+    // Track temporary upload if file was uploaded to R2
+    if (optimizedUploadMethod === 'r2' && optimizedUrl && optimizedUrl.startsWith('https://')) {
+      const r2Key = extractR2KeyFromUrl(optimizedUrl, r2Config);
+      if (r2Key) {
+        await trackTemporaryUpload(urlHash, r2Key);
+      }
+    }
 
     logger.info(
       `GIF optimization completed: ${originalSize} bytes -> ${optimizedSize} bytes (${reduction}% reduction) for user ${userId}`
@@ -504,7 +521,10 @@ export async function processOptimization(
 
           if (r2Url) {
             // Update database with R2 URL
-            const urlHash = originalUrl ? hashUrl(originalUrl) : optimizedHash;
+            // Use composite hash that includes lossy parameter for cache key
+            const urlHash = originalUrl
+              ? hashUrlWithParams(originalUrl, optimizeOptions)
+              : optimizedHash;
             await insertProcessedUrl(
               urlHash,
               optimizedHash,
@@ -516,25 +536,25 @@ export async function processOptimization(
               optimizedSize
             );
             await safeInteractionEditReply(interaction, {
-              content: r2Url,
+              content: formatR2UrlWithDisclaimer(r2Url, r2Config),
             });
           } else {
             // If R2 upload also fails, use the original optimizedUrl
             await safeInteractionEditReply(interaction, {
-              content: optimizedUrl,
+              content: formatR2UrlWithDisclaimer(optimizedUrl, r2Config),
             });
           }
         } catch (r2Error) {
           logger.error(`R2 fallback upload also failed: ${r2Error.message}`);
           // Last resort: use the original optimizedUrl
           await safeInteractionEditReply(interaction, {
-            content: optimizedUrl,
+            content: formatR2UrlWithDisclaimer(optimizedUrl, r2Config),
           });
         }
       }
     } else {
       await safeInteractionEditReply(interaction, {
-        content: optimizedUrl,
+        content: formatR2UrlWithDisclaimer(optimizedUrl, r2Config),
       });
     }
 

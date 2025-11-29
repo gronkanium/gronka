@@ -144,6 +144,8 @@ to enable r2, add these to your `.env`:
 
 r2 is optional but recommended for production deployments. files are automatically uploaded to r2 when configured, and the bot will check r2 first before downloading or converting to avoid duplicates.
 
+optional: you can enable automatic cleanup of r2 uploads after a configurable time period (default: 72 hours) to manage storage costs. see the [r2 storage documentation](/wiki/R2-Storage#temporary-uploads) for details.
+
 ### cobalt integration
 
 gronka uses [cobalt.tools](https://cobalt.tools), a self-hosted api for downloading media from social platforms. when enabled, the `/download` command automatically detects social media urls and downloads the media directly to your storage.

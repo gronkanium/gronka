@@ -12,6 +12,7 @@ import {
   getR2PublicUrl,
   listObjectsInR2,
 } from './r2-storage.js';
+import { insertTemporaryUpload } from './database.js';
 
 const logger = createLogger('storage');
 
@@ -1135,4 +1136,41 @@ export function getR2CacheStats() {
     cacheAge: age,
     cacheAgeFormatted: age < 60000 ? `${Math.round(age / 1000)}s` : `${Math.round(age / 60000)}m`,
   };
+}
+
+/**
+ * Track a temporary R2 upload for automatic cleanup
+ * This should be called after processed_urls record is created (since FK constraint requires it)
+ * @param {string} urlHash - URL hash from processed_urls table (required for FK)
+ * @param {string} r2Key - R2 object key (e.g., 'gifs/abc123.gif')
+ * @param {number} [uploadedAt] - Unix timestamp in milliseconds (defaults to now)
+ * @returns {Promise<void>}
+ */
+export async function trackTemporaryUpload(urlHash, r2Key, uploadedAt = null) {
+  // Check if temporary uploads are enabled
+  if (!r2Config.tempUploadsEnabled) {
+    return; // Tracking disabled, skip
+  }
+
+  if (!urlHash || !r2Key) {
+    logger.warn('Cannot track temporary upload: urlHash or r2Key is missing', {
+      urlHash: urlHash ? 'present' : 'missing',
+      r2Key: r2Key ? 'present' : 'missing',
+    });
+    return;
+  }
+
+  try {
+    const now = uploadedAt || Date.now();
+    const ttlMs = r2Config.tempUploadTtlHours * 60 * 60 * 1000;
+    const expiresAt = now + ttlMs;
+
+    await insertTemporaryUpload(urlHash, r2Key, now, expiresAt);
+    logger.debug(
+      `Tracked temporary R2 upload: urlHash=${urlHash.substring(0, 8)}..., r2Key=${r2Key}, expiresAt=${new Date(expiresAt).toISOString()}`
+    );
+  } catch (error) {
+    // Log error but don't throw - tracking failure shouldn't break upload flow
+    logger.error(`Failed to track temporary upload: ${error.message}`, error);
+  }
 }

@@ -170,6 +170,28 @@ export async function initDatabase() {
         CREATE INDEX IF NOT EXISTS idx_alerts_component ON alerts(component);
         CREATE INDEX IF NOT EXISTS idx_alerts_operation_id ON alerts(operation_id);
       `);
+
+      // Create temporary_uploads table for tracking temporary R2 uploads with TTL
+      newDb.exec(`
+        CREATE TABLE IF NOT EXISTS temporary_uploads (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          url_hash TEXT NOT NULL,
+          r2_key TEXT NOT NULL,
+          uploaded_at INTEGER NOT NULL,
+          expires_at INTEGER NOT NULL,
+          deleted_at INTEGER,
+          deletion_failed INTEGER DEFAULT 0,
+          deletion_error TEXT,
+          FOREIGN KEY (url_hash) REFERENCES processed_urls(url_hash),
+          UNIQUE(url_hash, r2_key)
+        );
+
+        CREATE INDEX IF NOT EXISTS idx_temporary_uploads_expires_at ON temporary_uploads(expires_at);
+        CREATE INDEX IF NOT EXISTS idx_temporary_uploads_r2_key ON temporary_uploads(r2_key);
+        CREATE INDEX IF NOT EXISTS idx_temporary_uploads_url_hash ON temporary_uploads(url_hash);
+        CREATE INDEX IF NOT EXISTS idx_temporary_uploads_deleted_at ON temporary_uploads(deleted_at);
+        CREATE INDEX IF NOT EXISTS idx_temporary_uploads_deletion_failed ON temporary_uploads(deletion_failed);
+      `);
     } catch (error) {
       setInitPromise(null); // Reset on error so it can be retried
       setDb(null);

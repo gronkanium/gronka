@@ -53,6 +53,7 @@ if you had gifs or media stored through gronka, they're gone. sorry about that. 
 - all features remain available - nothing has changed in terms of functionality
 - your discord commands still work - `/convert`, `/download`, `/optimize` all work as before
 - fresh start for everyone - we're all starting from zero together
+- r2 expiration is now live - any media uploaded to r2 storage will be automatically deleted after 72 hours. download your stuff if you want to keep it longer than that
 
 ## technical details
 
@@ -79,7 +80,7 @@ if there's one thing we learned from this, it's that maybe we should have warned
 
 gronka is still here, still working, still ready to convert your videos to gifs. we just don't have any of the old stuff anymore. think of it as a digital spring cleaning, except it's november and we threw everything away.
 
-if you need something converted, just use the bot like normal. it'll work fine. you just won't find any of your old conversions in the system anymore.
+if you need something converted, just use the bot like normal. it'll work fine. you just won't find any of your old conversions in the system anymore. and remember, any new stuff you upload to r2 will only stick around for 72 hours before it gets automatically deleted. so if you want to keep your conversions longer, make sure to download them within that window.
 
 ## questions?
 
@@ -89,5 +90,5 @@ or don't. we get it. sometimes you just need to delete everything and start fres
 
 ---
 
-**tl;dr:** we deleted everything. it's gone. start over. the bot still works. sorry not sorry.
+**tl;dr:** we deleted everything. it's gone. start over. the bot still works. r2 expiration is now live (72 hours). sorry not sorry.
 

@@ -1,8 +1,8 @@
 {
-  "unique_users": 1,
-  "total_files": 1,
-  "total_data_bytes": 2124783,
-  "total_data_formatted": "2.03 MB",
+  "unique_users": 4,
+  "total_files": 7,
+  "total_data_bytes": 20906945,
+  "total_data_formatted": "19.94 MB",
   "period": "24 hours",
-  "last_updated": 1764435355250
+  "last_updated": 1764443569238
 }

@@ -34,6 +34,7 @@ yes, it can convert gifs to gifs. don't ask why, just embrace it.
 - [[Quick-Start]] - get up and running in minutes
 - [[Installation]] - detailed installation instructions
 - [[Configuration]] - configure environment variables
+- [[Test-Bot]] - run separate test and production bots
 
 ## user guide
 
@@ -42,6 +43,7 @@ yes, it can convert gifs to gifs. don't ask why, just embrace it.
 - [[Docker-Quick-Reference]] - quick docker commands
 - [[R2-Storage]] - configure cloudflare r2 storage
 - [[Cobalt-Integration]] - set up social media downloads
+- [[Test-Bot]] - test and production bot separation
 
 ## reference
 

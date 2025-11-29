@@ -208,6 +208,11 @@ export const r2Config = {
   secretAccessKey: getStringEnv('R2_SECRET_ACCESS_KEY', ''),
   bucketName: getStringEnv('R2_BUCKET_NAME', ''),
   publicDomain: getStringEnv('R2_PUBLIC_DOMAIN', 'cdn.gronka.p1x.dev'),
+  tempUploadsEnabled: getStringEnv('R2_TEMP_UPLOADS_ENABLED', 'false').toLowerCase() === 'true',
+  tempUploadTtlHours: parseIntEnv('R2_TEMP_UPLOAD_TTL_HOURS', 72, 1, 8760), // Max 1 year
+  cleanupEnabled: getStringEnv('R2_CLEANUP_ENABLED', 'false').toLowerCase() === 'true',
+  cleanupIntervalMs: parseIntEnv('R2_CLEANUP_INTERVAL_MS', 3600000, 60000, 86400000), // 1 hour default, min 1 minute, max 1 day
+  cleanupLogLevel: getStringEnv('R2_CLEANUP_LOG_LEVEL', 'detailed').toLowerCase(),
 };
 
 // Server configuration
@@ -271,6 +276,15 @@ if (!validRotations.includes(loggerConfig.logRotation)) {
   throw new ConfigurationError(
     `LOG_ROTATION must be one of: ${validRotations.join(', ')}, got: ${loggerConfig.logRotation}`,
     'INVALID_LOG_ROTATION'
+  );
+}
+
+// Validate R2 cleanup log level
+const validCleanupLogLevels = ['minimal', 'detailed', 'debug'];
+if (!validCleanupLogLevels.includes(r2Config.cleanupLogLevel)) {
+  throw new ConfigurationError(
+    `R2_CLEANUP_LOG_LEVEL must be one of: ${validCleanupLogLevels.join(', ')}, got: ${r2Config.cleanupLogLevel}`,
+    'INVALID_CLEANUP_LOG_LEVEL'
   );
 }
 

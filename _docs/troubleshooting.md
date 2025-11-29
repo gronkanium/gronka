@@ -262,6 +262,139 @@ docker compose build --no-cache
 docker compose up -d
 ```
 
+## jekyll stats issues
+
+### stats not updating
+
+1. **check bot server is running:**
+   ```bash
+   curl http://YOUR_BOT_SERVER_LOCAL_IP:3000/health
+   ```
+
+2. **check api endpoint:**
+   ```bash
+   curl http://YOUR_BOT_SERVER_LOCAL_IP:3000/api/stats/24h
+   # or with auth
+   curl -u "username:password" http://YOUR_BOT_SERVER_LOCAL_IP:3000/api/stats/24h
+   ```
+
+3. **check network connectivity:**
+   ```bash
+   ping YOUR_BOT_SERVER_LOCAL_IP
+   ```
+
+4. **check file permissions:**
+   ```bash
+   ls -la _data/stats.json
+   # ensure the script can write to _data directory
+   ```
+
+5. **check logs:**
+   ```bash
+   tail -f logs/jekyll-update.log
+   ```
+
+6. **check environment variables:**
+   ```bash
+   # verify BOT_API_URL is set correctly
+   grep BOT_API_URL .env
+   ```
+
+### stats show zero or old data
+
+1. **verify bot has processed files:**
+   - check bot database has recent entries in `processed_urls` table
+   - verify files were processed within the last 24 hours
+
+2. **check time window:**
+   - stats are for last 24 hours from current time
+   - if no activity in last 24 hours, stats will be zero
+
+3. **verify file was updated:**
+   ```bash
+   # check modification time
+   ls -l _data/stats.json
+   # should be recent if stats update ran
+   ```
+
+4. **check jekyll rebuild:**
+   - stats file must exist before jekyll builds
+   - verify `scripts/update-jekyll-site.sh` ran the stats update step
+
+5. **verify api response:**
+   ```bash
+   # test the endpoint directly
+   curl http://YOUR_BOT_SERVER_LOCAL_IP:3000/api/stats/24h
+   ```
+
+### authentication errors
+
+1. **verify credentials match:**
+   - `STATS_USERNAME` and `STATS_PASSWORD` on jekyll server must match bot server
+   - check both `.env` files have the same values
+
+2. **check bot server config:**
+   - verify `STATS_USERNAME` and `STATS_PASSWORD` are set on bot server
+   - if not set on bot server, omit them from jekyll server `.env`
+
+3. **test with curl:**
+   ```bash
+   # test authentication
+   curl -u "username:password" http://YOUR_BOT_SERVER_LOCAL_IP:3000/api/stats/24h
+   ```
+
+4. **check basic auth:**
+   - ensure both username and password are provided if auth is enabled
+   - verify no extra spaces or special characters in credentials
+
+### script fails but build continues
+
+this is expected behavior - the update script is designed to continue even if stats update fails. check:
+
+1. **logs:**
+   ```bash
+   # review update script logs
+   tail -f logs/jekyll-update.log
+   # look for warning messages about stats update
+   ```
+
+2. **network issues:**
+   - bot server may be temporarily unavailable
+   - check bot server is running and accessible
+
+3. **api errors:**
+   - check bot server logs for api endpoint errors
+   - verify `/api/stats/24h` endpoint is working
+
+4. **last known stats:**
+   - jekyll will use the last successfully updated stats file
+   - check `_data/stats.json` modification time
+
+### stats not appearing in footer
+
+1. **check stats file exists:**
+   ```bash
+   cat _data/stats.json
+   ```
+
+2. **verify jekyll build:**
+   ```bash
+   # rebuild jekyll
+   bundle exec jekyll build
+   # check footer in built site
+   grep "past 24 hours" _site/index.html
+   ```
+
+3. **check footer template:**
+   - verify `_includes/footer.html` has the stats display code
+   - check for syntax errors in liquid template
+
+4. **verify stats data format:**
+   ```bash
+   # stats.json should have these fields
+   cat _data/stats.json | jq .
+   ```
+
 ## getting help
 
 if you're still having issues:
@@ -275,4 +408,5 @@ common log locations:
 
 - docker: `docker compose logs -f`
 - local: `logs/combined.log` and `logs/error.log`
+- jekyll updates: `logs/jekyll-update.log`
 

@@ -10,6 +10,7 @@ convert a video or image to gif.
 
 - `file` (attachment, optional) - the video or image file to convert
 - `url` (string, optional) - url to a video or image file to convert
+- `quality` (string, optional) - gif quality preset: `low`, `medium`, or `high` (default: `medium`)
 - `optimize` (boolean, optional) - optimize the gif after conversion to reduce file size
 - `lossy` (number, optional) - lossy compression level (0-100, default: 35)
 - `start_time` (number, optional) - start time in seconds for trimming video before conversion (only applies to video inputs, ignored for images)
@@ -44,22 +45,29 @@ download media from a social media url or direct url.
 **parameters:**
 
 - `url` (string, required) - url to download media from
-- `start_time` (number, optional) - start time in seconds (accepted but not used for downloads)
-- `end_time` (number, optional) - end time in seconds (accepted but not used for downloads)
+- `start_time` (number, optional) - start time in seconds for video trimming (only applies to videos, ignored for images/gifs)
+- `end_time` (number, optional) - end time in seconds for video trimming (only applies to videos, ignored for images/gifs)
 
 **usage:**
 
 - works with social media platforms (twitter, tiktok, instagram, etc.) if cobalt is enabled
 - also works with direct media urls
 - downloads and stores the media without conversion
+- **for videos**: time parameters (`start_time`, `end_time`) trim the video before saving
+  - if only `start_time` is provided, video is trimmed from that time to the end
+  - if only `end_time` is provided, video is trimmed from beginning to that time
+  - if both are provided, video is trimmed to the specified range
+  - `end_time` must be greater than `start_time` if both are provided
+- **for images/gifs**: time parameters are ignored (images/gifs don't have a time dimension)
 - use `/convert` afterwards if you want to convert to gif
-- time parameters are accepted for consistency but are not used for downloads (use `/convert` for video trimming)
 
 **examples:**
 
 ```
 /download url:https://twitter.com/user/status/123
 /download url:https://example.com/video.mp4
+/download url:https://example.com/video.mp4 start_time:30 end_time:60
+/download url:https://example.com/video.mp4 start_time:10
 ```
 
 ### `/optimize`
@@ -181,7 +189,7 @@ optimize a gif from a message.
 
 commands are rate limited to prevent abuse:
 
-- 30-second cooldown between commands per user
+- 10-second cooldown between commands per user (configurable via `RATE_LIMIT`)
 - admin users (configured via `ADMIN_USER_IDS`) bypass rate limiting
 - rate limits apply per user, not per server
 
@@ -189,8 +197,9 @@ commands are rate limited to prevent abuse:
 
 default file size limits:
 
-- videos: 500mb maximum
-- images: 50mb maximum
+- videos: 100mb maximum for downloads and conversions (configurable via `MAX_VIDEO_SIZE`)
+- images: 50mb maximum (configurable via `MAX_IMAGE_SIZE`)
+- gif optimization: 50mb maximum
 - gif duration: 30 seconds maximum (configurable via `MAX_GIF_DURATION`)
 
 admin users can bypass these limits.

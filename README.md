@@ -177,7 +177,7 @@ gronka has file size limits to ensure system stability and prevent abuse:
 - **gif optimization** (`/optimize`): maximum 50mb
 - **video conversion** (`/convert`): maximum 100mb for video files
 - **image conversion** (`/convert`): maximum 50mb for image files
-- **video download** (`/download`): maximum 500mb
+- **video download** (`/download`): maximum 100mb
 - **image download** (`/download`): maximum 50mb
 
 when a file exceeds these limits, you'll receive a clear error message indicating which limit was exceeded and what the maximum size is for that file type. admins can bypass these limits for downloads, but conversion and optimization limits still apply for security reasons.
@@ -187,9 +187,10 @@ when a file exceeds these limits, you'll receive a clear error message indicatin
 ### commands
 
 - `/download` - download media from a social media url (stores video/image without conversion)
-- `/convert` - attach a file or paste a url to download and convert to gif
+- `/convert` - attach a file or paste a url to download and convert to gif (supports quality preset: low/medium/high, and optional optimization)
 - `/optimize` - optimize an existing gif to reduce file size (supports custom lossy level 0-100)
 - `/stats` - see storage statistics and how many files gronka has stored
+- `/info` - view bot information, system status, and configuration
 - right-click a message → apps → "convert to gif" - quick convert from any message
 - right-click a message → apps → "download" - download media from message urls
 - right-click a message → apps → "optimize" - optimize a gif from any message

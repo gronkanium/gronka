@@ -8,7 +8,7 @@ discord bot that converts video attachments to gif format via right-click contex
 
 ### core technologies
 
-- runtime: node.js v18+ (lts)
+- runtime: node.js v20+ (lts)
 - package manager: npm or pnpm
 - primary language: javascript (es6+) or typescript
 

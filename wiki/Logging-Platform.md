@@ -22,7 +22,7 @@ the logging platform is integrated into the webui dashboard:
    docker compose --profile webui up
    ```
 
-2. access the webui at `http://localhost:3001`
+2. access the webui at [http://localhost:3001](http://localhost:3001)
 
 3. click the "logs" tab to view application logs
 
@@ -150,7 +150,7 @@ this starts both the webui and dozzle services.
 
 ### accessing dozzle
 
-open `http://localhost:8080` in your browser.
+open [http://localhost:8080](http://localhost:8080) in your browser.
 
 dozzle provides:
 

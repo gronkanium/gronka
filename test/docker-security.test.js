@@ -677,7 +677,7 @@ describe('docker security tests', () => {
       );
 
       // giflossy should only have necessary volume mounts
-      const requiredMounts = ['data', 'temp'];
+      const requiredMounts = ['temp'];
       const mountPaths = composeConfig.giflossy.volumes.join(' ');
 
       // Check that volumes array exists and has entries

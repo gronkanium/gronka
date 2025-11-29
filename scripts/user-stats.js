@@ -15,7 +15,7 @@ const __dirname = path.dirname(__filename);
 const projectRoot = path.resolve(__dirname, '..');
 
 // Get database path
-const dbPath = process.env.GRONKA_DB_PATH || path.join(projectRoot, 'data', 'gronka.db');
+const dbPath = process.env.GRONKA_DB_PATH || path.join(projectRoot, 'data-test', 'gronka.db');
 
 /**
  * Extract user ID from log message

@@ -16,8 +16,8 @@ mkdir gronka && cd gronka
 npm install discord.js axios fluent-ffmpeg express dotenv
 
 # 3. Create directories
-mkdir -p data/gifs
-chmod 755 data/gifs
+mkdir -p data-test/gifs
+chmod 755 data-test/gifs
 
 # 4. Configure environment
 cp .env.example .env

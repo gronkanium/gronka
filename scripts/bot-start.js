@@ -93,7 +93,7 @@ if (env[dbPathKey]) {
   env.GRONKA_DB_PATH = env[dbPathKey];
 } else {
   // Derive database path from storage path or use default with prefix
-  const storagePath = env.GIF_STORAGE_PATH || './data';
+  const storagePath = env.GIF_STORAGE_PATH || './data-test';
   const dbFileName = `gronka-${prefix.toLowerCase()}.db`;
   env.GRONKA_DB_PATH = path.join(storagePath, dbFileName);
 }

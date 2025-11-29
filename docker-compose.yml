@@ -32,7 +32,6 @@ services:
       - WEBUI_HOST=0.0.0.0
       - MAIN_SERVER_URL=http://localhost:3000
     volumes:
-      - ./data:/app/data
       - ./data-test:/app/data-test
       - ./data-prod:/app/data-prod
       - ./temp:/app/temp
@@ -87,7 +86,6 @@ services:
     container_name: giflossy
     restart: unless-stopped
     volumes:
-      - ./data:/app/data
       - ./data-test:/app/data-test
       - ./data-prod:/app/data-prod
       - ./temp:/app/temp

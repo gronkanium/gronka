@@ -41,7 +41,7 @@ sudo systemctl start gif-bot gif-cdn
 
 ### step 1: create application
 
-1. Go to https://discord.com/developers/applications
+1. Go to [https://discord.com/developers/applications](https://discord.com/developers/applications)
 2. Click "New Application"
 3. Name it (e.g., "GIF Converter")
 4. Accept ToS

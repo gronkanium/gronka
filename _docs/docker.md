@@ -80,7 +80,7 @@ docker compose --profile webui up -d
 
 ### access the dashboard
 
-once running, open http://localhost:3001 in your browser.
+once running, open [http://localhost:3001](http://localhost:3001) in your browser.
 
 **important:** the web ui port is only accessible from localhost on your host machine. it is not exposed to the internet.
 

@@ -18,7 +18,7 @@ discord bot token from the developer portal.
 
 **where to get it:**
 
-1. go to https://discord.com/developers/applications
+1. go to [https://discord.com/developers/applications](https://discord.com/developers/applications)
 2. select your application
 3. go to "bot" section
 4. click "reset token" or "copy" to get your token
@@ -35,7 +35,7 @@ discord application/client id.
 
 **where to get it:**
 
-1. go to https://discord.com/developers/applications
+1. go to [https://discord.com/developers/applications](https://discord.com/developers/applications)
 2. select your application
 3. go to "general information"
 4. copy the "application id"

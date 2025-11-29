@@ -41,7 +41,11 @@ import {
   downloadGifFromR2,
   gifExistsInR2,
   getR2PublicUrl,
+  extractR2KeyFromUrl,
+  formatR2UrlWithDisclaimer,
 } from '../utils/r2-storage.js';
+import { trackTemporaryUpload } from '../utils/storage.js';
+import { r2Config } from '../utils/config.js';
 import { trackRecentConversion } from '../utils/user-tracking.js';
 import { optimizeGif } from '../utils/gif-optimizer.js';
 import {
@@ -51,10 +55,9 @@ import {
   logOperationError,
 } from '../utils/operations-tracker.js';
 import { notifyCommandSuccess, notifyCommandFailure } from '../utils/ntfy-notifier.js';
-import { hashUrl } from '../utils/cobalt-queue.js';
+import { hashUrlWithParams } from '../utils/cobalt-queue.js';
 import { insertProcessedUrl, getProcessedUrl } from '../utils/database.js';
 import { initializeDatabaseWithErrorHandling } from '../utils/database-init.js';
-import { r2Config } from '../utils/config.js';
 
 const logger = createLogger('convert');
 
@@ -371,7 +374,8 @@ export async function processConversion(
 
     // Check if URL has already been processed (only for URL-based conversions)
     if (originalUrl) {
-      const urlHash = hashUrl(originalUrl);
+      // Use composite hash that includes conversion parameters for cache key
+      const urlHash = hashUrlWithParams(originalUrl, options);
       const processedUrl = await getProcessedUrl(urlHash);
       if (processedUrl) {
         // Convert command expects GIF output - only use cache if cached result is a GIF
@@ -478,7 +482,7 @@ export async function processConversion(
           updateOperationStatus(operationId, 'success', { fileSize: 0 });
           recordRateLimit(userId);
           await safeInteractionEditReply(interaction, {
-            content: gifUrl,
+            content: formatR2UrlWithDisclaimer(gifUrl, r2Config),
           });
           return;
         }
@@ -586,7 +590,7 @@ export async function processConversion(
               updateOperationStatus(operationId, 'success', { fileSize });
               recordRateLimit(userId);
               await safeInteractionEditReply(interaction, {
-                content: r2Url,
+                content: formatR2UrlWithDisclaimer(r2Url, r2Config),
               });
               await notifyCommandSuccess(username, 'convert', { operationId, userId });
               return;
@@ -600,7 +604,7 @@ export async function processConversion(
           updateOperationStatus(operationId, 'success', { fileSize });
           recordRateLimit(userId);
           await safeInteractionEditReply(interaction, {
-            content: gifUrl,
+            content: formatR2UrlWithDisclaimer(gifUrl, r2Config),
           });
           await notifyCommandSuccess(username, 'convert', { operationId, userId });
           return;
@@ -616,7 +620,7 @@ export async function processConversion(
         updateOperationStatus(operationId, 'success', { fileSize });
         recordRateLimit(userId);
         await safeInteractionEditReply(interaction, {
-          content: gifUrl,
+          content: formatR2UrlWithDisclaimer(gifUrl, r2Config),
         });
         await notifyCommandSuccess(username, 'convert', { operationId, userId });
         return;
@@ -1012,7 +1016,8 @@ export async function processConversion(
     // Record processed URL in database only for R2 uploads
     // Discord uploads are tracked separately when we capture the attachment URL
     if (finalUploadMethod === 'r2') {
-      const urlHash = originalUrl ? hashUrl(originalUrl) : finalHash;
+      // Use composite hash that includes conversion parameters for cache key
+      const urlHash = originalUrl ? hashUrlWithParams(originalUrl, options) : finalHash;
       await insertProcessedUrl(
         urlHash,
         finalHash,
@@ -1024,6 +1029,12 @@ export async function processConversion(
         optimizedSize
       );
       logger.debug(`Recorded processed URL in database (urlHash: ${urlHash.substring(0, 8)}...)`);
+
+      // Track temporary upload
+      const r2Key = extractR2KeyFromUrl(gifUrl, r2Config);
+      if (r2Key) {
+        await trackTemporaryUpload(urlHash, r2Key);
+      }
     }
 
     logger.info(
@@ -1079,7 +1090,8 @@ export async function processConversion(
 
         // Save Discord attachment URL to database if we got one
         if (discordUrl) {
-          const urlHash = originalUrl ? hashUrl(originalUrl) : finalHash;
+          // Use composite hash that includes conversion parameters for cache key
+          const urlHash = originalUrl ? hashUrlWithParams(originalUrl, options) : finalHash;
           await insertProcessedUrl(
             urlHash,
             finalHash,
@@ -1109,7 +1121,8 @@ export async function processConversion(
 
           if (r2Url) {
             // Update database with R2 URL
-            const urlHash = originalUrl ? hashUrl(originalUrl) : finalHash;
+            // Use composite hash that includes conversion parameters for cache key
+            const urlHash = originalUrl ? hashUrlWithParams(originalUrl, options) : finalHash;
             await insertProcessedUrl(
               urlHash,
               finalHash,
@@ -1120,26 +1133,31 @@ export async function processConversion(
               userId,
               optimizedSize
             );
+            // Track temporary upload
+            const r2Key = extractR2KeyFromUrl(r2Url, r2Config);
+            if (r2Key) {
+              await trackTemporaryUpload(urlHash, r2Key);
+            }
             await safeInteractionEditReply(interaction, {
-              content: r2Url,
+              content: formatR2UrlWithDisclaimer(r2Url, r2Config),
             });
           } else {
             // If R2 upload also fails, use the original gifUrl
             await safeInteractionEditReply(interaction, {
-              content: gifUrl,
+              content: formatR2UrlWithDisclaimer(gifUrl, r2Config),
             });
           }
         } catch (r2Error) {
           logger.error(`R2 fallback upload also failed: ${r2Error.message}`);
           // Last resort: use the original gifUrl
           await safeInteractionEditReply(interaction, {
-            content: gifUrl,
+            content: formatR2UrlWithDisclaimer(gifUrl, r2Config),
           });
         }
       }
     } else {
       await safeInteractionEditReply(interaction, {
-        content: gifUrl,
+        content: formatR2UrlWithDisclaimer(gifUrl, r2Config),
       });
     }
 

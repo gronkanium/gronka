@@ -43,8 +43,8 @@ export function checkRateLimit(userId) {
     return true;
   }
 
-  // Record this check as the new last use timestamp
-  rateLimit.set(userId, now);
+  // User is not rate limited - return false
+  // Note: Rate limit is only recorded on successful operations via recordRateLimit()
   return false;
 }
 

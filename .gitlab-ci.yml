@@ -290,7 +290,54 @@ create-release:
     DOCKER_TLS_CERTDIR: '/certs'
   before_script:
     - apk add --no-cache nodejs npm git bash curl
-    - docker login -u $CI_REGISTRY_USER -p $CI_REGISTRY_PASSWORD $CI_REGISTRY
+    - |
+      # Debug: Show Docker environment
+      echo "=== Docker Environment Debug ==="
+      echo "DOCKER_HOST: ${DOCKER_HOST:-not set}"
+      echo "DOCKER_TLS_CERTDIR: ${DOCKER_TLS_CERTDIR:-not set}"
+      echo "DOCKER_DRIVER: ${DOCKER_DRIVER:-not set}"
+      ls -la /certs/ 2>/dev/null || echo "No /certs directory found"
+      echo "================================"
+    - |
+      # Wait for Docker daemon to be ready
+      echo "Waiting for Docker daemon to be ready..."
+      MAX_RETRIES=30
+      RETRY_COUNT=0
+      while [ $RETRY_COUNT -lt $MAX_RETRIES ]; do
+        if docker info >/dev/null 2>&1; then
+          echo "Docker daemon is ready!"
+          docker info | head -20
+          break
+        else
+          RETRY_COUNT=$((RETRY_COUNT + 1))
+          echo "Docker daemon not ready yet (attempt $RETRY_COUNT/$MAX_RETRIES), waiting 2 seconds..."
+          sleep 2
+        fi
+      done
+      if [ $RETRY_COUNT -eq $MAX_RETRIES ]; then
+        echo "ERROR: Docker daemon failed to become ready after $MAX_RETRIES attempts"
+        docker info || true
+        exit 1
+      fi
+    - |
+      # Docker login with retry logic
+      echo "Logging in to Docker registry..."
+      MAX_LOGIN_RETRIES=5
+      LOGIN_RETRY_COUNT=0
+      while [ $LOGIN_RETRY_COUNT -lt $MAX_LOGIN_RETRIES ]; do
+        if docker login -u $CI_REGISTRY_USER -p $CI_REGISTRY_PASSWORD $CI_REGISTRY 2>&1; then
+          echo "Successfully logged in to Docker registry"
+          break
+        else
+          LOGIN_RETRY_COUNT=$((LOGIN_RETRY_COUNT + 1))
+          if [ $LOGIN_RETRY_COUNT -eq $MAX_LOGIN_RETRIES ]; then
+            echo "ERROR: Failed to login to Docker registry after $MAX_LOGIN_RETRIES attempts"
+            exit 1
+          fi
+          echo "Docker login failed (attempt $LOGIN_RETRY_COUNT/$MAX_LOGIN_RETRIES), retrying in 2 seconds..."
+          sleep 2
+        fi
+      done
     - |
       # Extract version from tag
       TAG_NAME=$CI_COMMIT_TAG

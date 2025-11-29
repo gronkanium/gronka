@@ -9,6 +9,7 @@ import { checkRateLimit, isAdmin, recordRateLimit } from '../utils/rate-limit.js
 import { generateHash } from '../utils/file-downloader.js';
 import {
   createOperation,
+  createFailedOperation,
   updateOperationStatus,
   logOperationStep,
   logOperationError,
@@ -1180,8 +1181,12 @@ export async function handleDownloadContextMenuCommand(interaction) {
   if (checkRateLimit(userId)) {
     logger.warn(`User ${userId} (${interaction.user.tag}) is rate limited`);
     const rateLimitSeconds = botConfig.rateLimitCooldown / 1000;
+    const errorMessage = `please wait ${rateLimitSeconds} seconds before downloading another video.`;
+    createFailedOperation('download', userId, username, errorMessage, 'rate_limit', {
+      commandSource: 'context-menu',
+    });
     await safeInteractionReply(interaction, {
-      content: `please wait ${rateLimitSeconds} seconds before downloading another video.`,
+      content: errorMessage,
       flags: MessageFlags.Ephemeral,
     });
     return;
@@ -1205,13 +1210,17 @@ export async function handleDownloadContextMenuCommand(interaction) {
   // Check if URL was found
   if (!url) {
     logger.warn(`No URL found in message for user ${userId}`);
+    const errorMessage = 'no URL found in this message.';
+    createFailedOperation('download', userId, username, errorMessage, 'missing_url', {
+      commandSource: 'context-menu',
+    });
     await safeInteractionReply(interaction, {
-      content: 'no URL found in this message.',
+      content: errorMessage,
       flags: MessageFlags.Ephemeral,
     });
     await notifyCommandFailure(username, 'download', {
       userId,
-      error: 'no URL found in this message',
+      error: errorMessage,
     });
     return;
   }
@@ -1239,23 +1248,33 @@ export async function handleDownloadContextMenuCommand(interaction) {
 
   // Check if Cobalt is enabled
   if (!COBALT_ENABLED) {
+    const errorMessage = 'cobalt is not enabled.';
+    createFailedOperation('download', userId, username, errorMessage, 'cobalt_disabled', {
+      originalUrl: url,
+      commandSource: 'context-menu',
+    });
     await safeInteractionReply(interaction, {
-      content: 'cobalt is not enabled.',
+      content: errorMessage,
       flags: MessageFlags.Ephemeral,
     });
-    await notifyCommandFailure(username, 'download', { userId, error: 'cobalt is not enabled' });
+    await notifyCommandFailure(username, 'download', { userId, error: errorMessage });
     return;
   }
 
   // Check if URL is from social media
   if (!isSocialMediaUrl(url)) {
+    const errorMessage = 'url is not from a supported social media platform.';
+    createFailedOperation('download', userId, username, errorMessage, 'invalid_social_media_url', {
+      originalUrl: url,
+      commandSource: 'context-menu',
+    });
     await safeInteractionReply(interaction, {
-      content: 'url is not from a supported social media platform.',
+      content: errorMessage,
       flags: MessageFlags.Ephemeral,
     });
     await notifyCommandFailure(username, 'download', {
       userId,
-      error: 'url is not from a supported social media platform',
+      error: errorMessage,
     });
     return;
   }
@@ -1283,8 +1302,12 @@ export async function handleDownloadCommand(interaction) {
   if (checkRateLimit(userId)) {
     logger.warn(`User ${userId} (${interaction.user.tag}) is rate limited`);
     const rateLimitSeconds = botConfig.rateLimitCooldown / 1000;
+    const errorMessage = `please wait ${rateLimitSeconds} seconds before downloading another video.`;
+    createFailedOperation('download', userId, username, errorMessage, 'rate_limit', {
+      commandSource: 'slash',
+    });
     await safeInteractionReply(interaction, {
-      content: `please wait ${rateLimitSeconds} seconds before downloading another video.`,
+      content: errorMessage,
       flags: MessageFlags.Ephemeral,
     });
     return;
@@ -1301,8 +1324,13 @@ export async function handleDownloadCommand(interaction) {
       logger.warn(
         `Invalid time range for user ${userId}: end_time (${endTime}) must be greater than start_time (${startTime})`
       );
+      const errorMessage = 'end_time must be greater than start_time.';
+      createFailedOperation('download', userId, username, errorMessage, 'invalid_time_range', {
+        commandSource: 'slash',
+        commandOptions: { startTime, endTime },
+      });
       await safeInteractionReply(interaction, {
-        content: 'end_time must be greater than start_time.',
+        content: errorMessage,
         flags: MessageFlags.Ephemeral,
       });
       return;
@@ -1336,11 +1364,15 @@ export async function handleDownloadCommand(interaction) {
 
   if (!url) {
     logger.warn(`No URL provided for user ${userId}`);
+    const errorMessage = 'please provide a URL to download from.';
+    createFailedOperation('download', userId, username, errorMessage, 'missing_url', {
+      commandSource: 'slash',
+    });
     await safeInteractionReply(interaction, {
-      content: 'please provide a URL to download from.',
+      content: errorMessage,
       flags: MessageFlags.Ephemeral,
     });
-    await notifyCommandFailure(username, 'download', { userId, error: 'no URL provided' });
+    await notifyCommandFailure(username, 'download', { userId, error: errorMessage });
     return;
   }
 
@@ -1348,8 +1380,13 @@ export async function handleDownloadCommand(interaction) {
   const urlValidation = validateUrl(url);
   if (!urlValidation.valid) {
     logger.warn(`Invalid URL for user ${userId}: ${urlValidation.error}`);
+    const errorMessage = `invalid URL: ${urlValidation.error}`;
+    createFailedOperation('download', userId, username, errorMessage, 'invalid_url', {
+      originalUrl: url,
+      commandSource: 'slash',
+    });
     await safeInteractionReply(interaction, {
-      content: `invalid URL: ${urlValidation.error}`,
+      content: errorMessage,
       flags: MessageFlags.Ephemeral,
     });
     return;
@@ -1358,8 +1395,13 @@ export async function handleDownloadCommand(interaction) {
   // Check if URL is from YouTube (blacklisted)
   if (isYouTubeUrl(url)) {
     logger.warn(`User ${userId} attempted to download from YouTube (blacklisted)`);
+    const errorMessage = 'youtube downloads are disabled.';
+    createFailedOperation('download', userId, username, errorMessage, 'youtube_blacklist', {
+      originalUrl: url,
+      commandSource: 'slash',
+    });
     await safeInteractionReply(interaction, {
-      content: 'youtube downloads are disabled.',
+      content: errorMessage,
       flags: MessageFlags.Ephemeral,
     });
     return;
@@ -1367,22 +1409,32 @@ export async function handleDownloadCommand(interaction) {
 
   // Check if Cobalt is enabled and URL is from social media
   if (!COBALT_ENABLED) {
+    const errorMessage = 'cobalt is not enabled. please enable it to use the download command.';
+    createFailedOperation('download', userId, username, errorMessage, 'cobalt_disabled', {
+      originalUrl: url,
+      commandSource: 'slash',
+    });
     await safeInteractionReply(interaction, {
-      content: 'cobalt is not enabled. please enable it to use the download command.',
+      content: errorMessage,
       flags: MessageFlags.Ephemeral,
     });
-    await notifyCommandFailure(username, 'download', { userId, error: 'cobalt is not enabled' });
+    await notifyCommandFailure(username, 'download', { userId, error: errorMessage });
     return;
   }
 
   if (!isSocialMediaUrl(url)) {
+    const errorMessage = 'url is not from a supported social media platform.';
+    createFailedOperation('download', userId, username, errorMessage, 'invalid_social_media_url', {
+      originalUrl: url,
+      commandSource: 'slash',
+    });
     await safeInteractionReply(interaction, {
-      content: 'url is not from a supported social media platform.',
+      content: errorMessage,
       flags: MessageFlags.Ephemeral,
     });
     await notifyCommandFailure(username, 'download', {
       userId,
-      error: 'url is not from a supported social media platform',
+      error: errorMessage,
     });
     return;
   }

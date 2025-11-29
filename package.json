@@ -10,7 +10,7 @@
     "webui": "node src/webui-server.js",
     "webui:dev": "concurrently \"cross-env WEBUI_PORT=3002 node src/webui-server.js\" \"vite\"",
     "webui:dev:server": "cross-env WEBUI_PORT=3002 node src/webui-server.js",
-    "build:webui": "vite build",
+    "build:webui": "node scripts/build-webui.js",
     "register-commands": "node src/register-commands.js",
     "dev": "node --watch src/bot.js",
     "local": "concurrently \"npm run server\" \"npm start\"",

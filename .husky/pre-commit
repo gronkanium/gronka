@@ -125,7 +125,7 @@ else
   echo "No prettier-supported files staged, skipping format check"
 fi
 
-# Validate Jekyll YAML front matter for blog posts
+# Validate Jekyll YAML front matter for blog posts (only when _posts/*.md files are staged)
 JEKYLL_POSTS=$(echo "$STAGED_FILES" | grep -E '^_posts/.*\.md$' || true)
 
 if [ -n "$JEKYLL_POSTS" ]; then
@@ -136,6 +136,4 @@ if [ -n "$JEKYLL_POSTS" ]; then
   else
     $NPM_CMD run jekyll:validate -- $JEKYLL_POST_ARGS
   fi
-else
-  echo "No Jekyll blog posts staged, skipping YAML validation"
 fi

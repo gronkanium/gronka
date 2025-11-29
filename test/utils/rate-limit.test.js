@@ -1,6 +1,6 @@
 import { test, describe } from 'node:test';
 import assert from 'node:assert';
-import { isAdmin, checkRateLimit } from '../../src/utils/rate-limit.js';
+import { isAdmin, checkRateLimit, recordRateLimit } from '../../src/utils/rate-limit.js';
 import { botConfig } from '../../src/utils/config.js';
 
 // Note: These tests rely on the current ADMIN_USER_IDS env variable
@@ -41,9 +41,11 @@ describe('rate limit utilities', () => {
 
     test('returns true when rate limited', () => {
       const userId = 'test-user-2-' + Date.now();
-      // First request should not be rate limited
+      // First request should not be rate limited (no previous successful operation)
       assert.strictEqual(checkRateLimit(userId), false);
-      // Immediate second request should be rate limited
+      // Record a successful operation to set rate limit
+      recordRateLimit(userId);
+      // Immediate check after successful operation should be rate limited
       const result = checkRateLimit(userId);
       assert.strictEqual(result, true);
     });
@@ -71,11 +73,15 @@ describe('rate limit utilities', () => {
       const userId1 = 'user-1-' + Date.now();
       const userId2 = 'user-2-' + Date.now();
 
-      // Both users can make first request
+      // Both users can make first request (no previous successful operations)
       assert.strictEqual(checkRateLimit(userId1), false);
       assert.strictEqual(checkRateLimit(userId2), false);
 
-      // Both users get rate limited on second request
+      // Record successful operations for both users
+      recordRateLimit(userId1);
+      recordRateLimit(userId2);
+
+      // Both users should be rate limited after successful operations
       assert.strictEqual(checkRateLimit(userId1), true);
       assert.strictEqual(checkRateLimit(userId2), true);
     });
@@ -91,14 +97,17 @@ describe('rate limit utilities', () => {
       const cooldownMs = botConfig.rateLimitCooldown;
       const startTime = Date.now();
 
-      // First request should not be rate limited
+      // First request should not be rate limited (no previous successful operation)
       assert.strictEqual(checkRateLimit(userId), false, 'First request should not be rate limited');
 
-      // Immediate second request should be rate limited
+      // Record a successful operation to set rate limit
+      recordRateLimit(userId);
+
+      // Immediate check after successful operation should be rate limited
       assert.strictEqual(
         checkRateLimit(userId),
         true,
-        'Immediate second request should be rate limited'
+        'Immediate check after successful operation should be rate limited'
       );
 
       // Wait for half the cooldown period - should still be rate limited

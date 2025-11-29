@@ -50,6 +50,7 @@ import { trackRecentConversion } from '../utils/user-tracking.js';
 import { optimizeGif } from '../utils/gif-optimizer.js';
 import {
   createOperation,
+  createFailedOperation,
   updateOperationStatus,
   logOperationStep,
   logOperationError,
@@ -1240,8 +1241,12 @@ export async function handleConvertContextMenu(interaction) {
   if (checkRateLimit(userId)) {
     logger.warn(`User ${userId} (${interaction.user.tag}) is rate limited`);
     const rateLimitSeconds = botConfig.rateLimitCooldown / 1000;
+    const errorMessage = `please wait ${rateLimitSeconds} seconds before converting another video or image.`;
+    createFailedOperation('convert', userId, username, errorMessage, 'rate_limit', {
+      commandSource: 'context-menu',
+    });
     await safeInteractionReply(interaction, {
-      content: `please wait ${rateLimitSeconds} seconds before converting another video or image.`,
+      content: errorMessage,
       flags: MessageFlags.Ephemeral,
     });
     return;
@@ -1286,6 +1291,15 @@ export async function handleConvertContextMenu(interaction) {
     const validation = validateVideoAttachment(videoAttachment, adminUser);
     if (!validation.valid) {
       logger.warn(`Video validation failed for user ${userId}: ${validation.error}`);
+      createFailedOperation('convert', userId, username, validation.error, 'invalid_attachment', {
+        attachment: {
+          name: videoAttachment.name,
+          size: videoAttachment.size,
+          contentType: videoAttachment.contentType,
+          url: videoAttachment.url,
+        },
+        commandSource: 'context-menu',
+      });
       await safeInteractionReply(interaction, {
         content: validation.error,
         flags: MessageFlags.Ephemeral,
@@ -1302,6 +1316,15 @@ export async function handleConvertContextMenu(interaction) {
     const validation = validateImageAttachment(imageAttachment, adminUser);
     if (!validation.valid) {
       logger.warn(`Image validation failed for user ${userId}: ${validation.error}`);
+      createFailedOperation('convert', userId, username, validation.error, 'invalid_attachment', {
+        attachment: {
+          name: imageAttachment.name,
+          size: imageAttachment.size,
+          contentType: imageAttachment.contentType,
+          url: imageAttachment.url,
+        },
+        commandSource: 'context-menu',
+      });
       await safeInteractionReply(interaction, {
         content: validation.error,
         flags: MessageFlags.Ephemeral,
@@ -1314,8 +1337,13 @@ export async function handleConvertContextMenu(interaction) {
     const urlValidation = validateUrl(url);
     if (!urlValidation.valid) {
       logger.warn(`Invalid URL for user ${userId}: ${urlValidation.error}`);
+      const errorMessage = `invalid URL: ${urlValidation.error}`;
+      createFailedOperation('convert', userId, username, errorMessage, 'invalid_url', {
+        originalUrl: url,
+        commandSource: 'context-menu',
+      });
       await safeInteractionReply(interaction, {
-        content: `invalid URL: ${urlValidation.error}`,
+        content: errorMessage,
         flags: MessageFlags.Ephemeral,
       });
       await notifyCommandFailure(username, 'convert');
@@ -1426,8 +1454,12 @@ export async function handleConvertContextMenu(interaction) {
     }
   } else {
     logger.warn(`No video or image attachment or URL found for user ${userId}`);
+    const errorMessage = 'no video or image attachment or URL found in this message.';
+    createFailedOperation('convert', userId, username, errorMessage, 'missing_input', {
+      commandSource: 'context-menu',
+    });
     await safeInteractionReply(interaction, {
-      content: 'no video or image attachment or URL found in this message.',
+      content: errorMessage,
       flags: MessageFlags.Ephemeral,
     });
     await notifyCommandFailure(username, 'convert');
@@ -1490,8 +1522,13 @@ export async function handleConvertCommand(interaction) {
       logger.warn(
         `Invalid time range for user ${userId}: end_time (${endTime}) must be greater than start_time (${startTime})`
       );
+      const errorMessage = 'end_time must be greater than start_time.';
+      createFailedOperation('convert', userId, username, errorMessage, 'invalid_time_range', {
+        commandSource: 'slash',
+        commandOptions: { startTime, endTime },
+      });
       await safeInteractionReply(interaction, {
-        content: 'end_time must be greater than start_time.',
+        content: errorMessage,
         flags: MessageFlags.Ephemeral,
       });
       return;
@@ -1500,8 +1537,13 @@ export async function handleConvertCommand(interaction) {
 
   if (!attachment && !url) {
     logger.warn(`No attachment or URL provided for user ${userId}`);
+    const errorMessage =
+      'please provide either a video/image attachment or a URL to a video/image file.';
+    createFailedOperation('convert', userId, username, errorMessage, 'missing_input', {
+      commandSource: 'slash',
+    });
     await safeInteractionReply(interaction, {
-      content: 'please provide either a video/image attachment or a URL to a video/image file.',
+      content: errorMessage,
       flags: MessageFlags.Ephemeral,
     });
     return;
@@ -1509,8 +1551,12 @@ export async function handleConvertCommand(interaction) {
 
   if (attachment && url) {
     logger.warn(`Both attachment and URL provided for user ${userId}`);
+    const errorMessage = 'please provide either a file attachment or a URL, not both.';
+    createFailedOperation('convert', userId, username, errorMessage, 'multiple_inputs', {
+      commandSource: 'slash',
+    });
     await safeInteractionReply(interaction, {
-      content: 'please provide either a file attachment or a URL, not both.',
+      content: errorMessage,
       flags: MessageFlags.Ephemeral,
     });
     return;
@@ -1527,8 +1573,13 @@ export async function handleConvertCommand(interaction) {
     const urlValidation = validateUrl(url);
     if (!urlValidation.valid) {
       logger.warn(`Invalid URL for user ${userId}: ${urlValidation.error}`);
+      const errorMessage = `invalid URL: ${urlValidation.error}`;
+      createFailedOperation('convert', userId, username, errorMessage, 'invalid_url', {
+        originalUrl: url,
+        commandSource: 'slash',
+      });
       await safeInteractionReply(interaction, {
-        content: `invalid URL: ${urlValidation.error}`,
+        content: errorMessage,
         flags: MessageFlags.Ephemeral,
       });
       await notifyCommandFailure(username, 'convert');

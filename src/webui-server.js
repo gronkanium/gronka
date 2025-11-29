@@ -1166,6 +1166,189 @@ app.get('/api/operations/search', (req, res) => {
   }
 });
 
+// Requests endpoint - shows all user requests including early failures
+app.get('/api/requests', (req, res) => {
+  try {
+    const {
+      operationId,
+      userId,
+      username,
+      status,
+      type,
+      errorType,
+      earlyFailure,
+      earlyFailureOnly,
+      failedOnly,
+      dateFrom,
+      dateTo,
+      minDuration,
+      maxDuration,
+      minFileSize,
+      maxFileSize,
+      limit = 100,
+      offset = 0,
+    } = req.query;
+
+    // Start with WebSocket operations (real-time)
+    let allOperations = [...operations];
+
+    // Get operations from database (historical)
+    try {
+      const dbLimit = parseInt(limit, 10) + parseInt(offset, 10) + 100; // Get extra for filtering
+      const dbOps = getRecentOperations(dbLimit);
+
+      // Merge with in-memory operations, avoiding duplicates
+      const existingIds = new Set(allOperations.map(op => op.id));
+      const newOps = dbOps.filter(op => !existingIds.has(op.id));
+      allOperations = [...allOperations, ...newOps];
+    } catch (error) {
+      logger.error('Failed to fetch operations from database:', error);
+      // Continue with in-memory operations only
+    }
+
+    // Apply filters
+    let filtered = allOperations;
+
+    // Operation ID filter
+    if (operationId) {
+      filtered = filtered.filter(op => op.id === operationId);
+    }
+
+    // User ID filter
+    if (userId) {
+      filtered = filtered.filter(op => op.userId === userId);
+    }
+
+    // Username filter
+    if (username) {
+      const usernameLower = username.toLowerCase();
+      filtered = filtered.filter(
+        op => op.username && op.username.toLowerCase().includes(usernameLower)
+      );
+    }
+
+    // Status filter
+    if (status) {
+      const statusArray = Array.isArray(status) ? status : [status];
+      filtered = filtered.filter(op => statusArray.includes(op.status));
+    }
+
+    // Type filter
+    if (type) {
+      const typeArray = Array.isArray(type) ? type : [type];
+      filtered = filtered.filter(op => typeArray.includes(op.type));
+    }
+
+    // Failed only filter
+    if (failedOnly === 'true') {
+      filtered = filtered.filter(op => op.status === 'error');
+    }
+
+    // Early failure only filter
+    if (earlyFailureOnly === 'true') {
+      filtered = filtered.filter(op => op.earlyFailure === true);
+    }
+
+    // Error type filter (for early failures)
+    if (errorType) {
+      // First check if errorType is directly on the operation object (from in-memory)
+      // Then check database traces for historical operations
+      const directMatches = filtered.filter(op => op.errorType === errorType);
+      const needsDbCheck = filtered.filter(op => !op.errorType && op.status === 'error');
+
+      if (needsDbCheck.length > 0) {
+        try {
+          const traces = needsDbCheck
+            .map(op => {
+              try {
+                return getOperationTrace(op.id);
+              } catch {
+                return null;
+              }
+            })
+            .filter(Boolean);
+
+          const dbMatchingIds = new Set();
+          traces.forEach(trace => {
+            const createdLog = trace.logs.find(log => log.step === 'created');
+            if (createdLog?.metadata?.errorType === errorType) {
+              dbMatchingIds.add(trace.operationId);
+            }
+          });
+
+          // Combine direct matches with database matches
+          const dbMatches = needsDbCheck.filter(op => dbMatchingIds.has(op.id));
+          filtered = [...directMatches, ...dbMatches];
+        } catch (error) {
+          logger.error('Failed to filter by error type:', error);
+          // Fall back to direct matches only
+          filtered = directMatches;
+        }
+      } else {
+        filtered = directMatches;
+      }
+    }
+
+    // Early failure filter (legacy support)
+    if (earlyFailure === 'true') {
+      filtered = filtered.filter(op => op.earlyFailure === true || op.status === 'error');
+    }
+
+    // Date range filter
+    if (dateFrom) {
+      const fromTimestamp = parseInt(dateFrom, 10);
+      filtered = filtered.filter(op => op.timestamp >= fromTimestamp);
+    }
+    if (dateTo) {
+      const toTimestamp = parseInt(dateTo, 10);
+      filtered = filtered.filter(op => op.timestamp <= toTimestamp);
+    }
+
+    // Duration filters
+    if (minDuration) {
+      const minDur = parseInt(minDuration, 10);
+      filtered = filtered.filter(
+        op => op.performanceMetrics?.duration && op.performanceMetrics.duration >= minDur
+      );
+    }
+    if (maxDuration) {
+      const maxDur = parseInt(maxDuration, 10);
+      filtered = filtered.filter(
+        op => op.performanceMetrics?.duration && op.performanceMetrics.duration <= maxDur
+      );
+    }
+
+    // File size filters
+    if (minFileSize) {
+      const minSize = parseInt(minFileSize, 10);
+      filtered = filtered.filter(op => op.fileSize && op.fileSize >= minSize);
+    }
+    if (maxFileSize) {
+      const maxSize = parseInt(maxFileSize, 10);
+      filtered = filtered.filter(op => op.fileSize && op.fileSize <= maxSize);
+    }
+
+    // Sort by timestamp (most recent first)
+    filtered.sort((a, b) => b.timestamp - a.timestamp);
+
+    // Apply pagination
+    const limitNum = parseInt(limit, 10);
+    const offsetNum = parseInt(offset, 10);
+    const paginated = filtered.slice(offsetNum, offsetNum + limitNum);
+
+    res.json({
+      requests: paginated,
+      total: filtered.length,
+    });
+  } catch (error) {
+    logger.error('Failed to fetch requests:', error);
+    res.status(500).json({
+      error: 'failed to fetch requests',
+      message: error.message,
+    });
+  }
+});
+
 // Operation details endpoint - MUST come after /api/operations/search
 app.get('/api/operations/:operationId', (req, res) => {
   try {

@@ -12,7 +12,7 @@ if (!isContainerRunning(containerName)) {
   );
 }
 
-// Build webui locally
+// Always build webui locally to ensure we have the latest version
 info('Building webui locally...');
 execOrError('npm run build:webui', 'Failed to build webui locally');
 

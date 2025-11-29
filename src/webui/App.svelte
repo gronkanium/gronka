@@ -2,11 +2,12 @@
   import { onMount, onDestroy } from 'svelte';
   import { currentRoute, initRouter, navigate } from './utils/router.js';
   import { useWebSocket, ensureConnected, connected as wsConnected } from './stores/websocket-store.js';
-  import { BarChart3, Users as UsersIcon, Settings, FileText, TrendingUp, Bell, ChevronLeft, ChevronRight, Shield } from 'lucide-svelte';
+  import { BarChart3, Users as UsersIcon, Settings, FileText, TrendingUp, Bell, ChevronLeft, ChevronRight, Shield, List } from 'lucide-svelte';
   import Stats from './pages/Stats.svelte';
   import Health from './pages/Health.svelte';
   import Operations from './pages/Operations.svelte';
   import OperationsDebug from './pages/OperationsDebug.svelte';
+  import Requests from './pages/Requests.svelte';
   import Logs from './pages/Logs.svelte';
   import Users from './pages/Users.svelte';
   import UserProfile from './pages/UserProfile.svelte';
@@ -82,6 +83,12 @@
           {#if sidebarOpen}<span class="label">operations</span>{/if}
         </button>
       </li>
+      <li class:active={activePage === 'requests'}>
+        <button on:click={() => navigateTo('requests')}>
+          <span class="icon"><List size={20} /></span>
+          {#if sidebarOpen}<span class="label">requests</span>{/if}
+        </button>
+      </li>
       <li class:active={activePage === 'logs'}>
         <button on:click={() => navigateTo('logs')}>
           <span class="icon"><FileText size={20} /></span>
@@ -152,6 +159,13 @@
     {:else if activePage === 'operations-debug'}
       <div class="page-content">
         <OperationsDebug />
+      </div>
+    {:else if activePage === 'requests'}
+      <div class="page-header">
+        <h2>requests</h2>
+      </div>
+      <div class="page-content">
+        <Requests />
       </div>
     {:else if activePage === 'logs'}
       <div class="page-header">

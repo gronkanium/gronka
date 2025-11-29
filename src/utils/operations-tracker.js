@@ -92,6 +92,135 @@ async function broadcastUpdate(operation) {
 }
 
 /**
+ * Create a failed operation for early validation failures
+ * @param {string} type - Operation type ('convert', 'download', 'optimize', 'info')
+ * @param {string} userId - Discord user ID
+ * @param {string} username - Discord username
+ * @param {string} errorMessage - Error message to display
+ * @param {string} errorType - Error type (e.g., 'rate_limit', 'invalid_url', 'missing_attachment', etc.)
+ * @param {Object} [context] - Additional context
+ * @param {string} [context.originalUrl] - Original URL if this came from a URL
+ * @param {Object} [context.attachment] - Attachment details (name, size, contentType, url)
+ * @param {Object} [context.commandOptions] - Command options (optimize, lossy, etc.)
+ * @param {string} [context.commandSource] - Command source ('slash' or 'context-menu')
+ * @returns {string} Operation ID
+ */
+export function createFailedOperation(
+  type,
+  userId,
+  username,
+  errorMessage,
+  errorType,
+  context = {}
+) {
+  // Use cryptographically secure random bytes for operation ID
+  const randomBytes = crypto.randomBytes(6).toString('hex');
+  const operation = {
+    id: `${Date.now()}-${randomBytes}`,
+    type,
+    status: 'error',
+    userId,
+    username,
+    fileSize: null,
+    timestamp: Date.now(),
+    startTime: Date.now(),
+    error: errorMessage,
+    stackTrace: null,
+    filePaths: [],
+    performanceMetrics: {
+      duration: 0, // Early failures have no duration
+      steps: [],
+    },
+    earlyFailure: true, // Flag to identify early failures
+    errorType, // Store error type for filtering
+  };
+
+  // Add to front of array
+  operations.unshift(operation);
+
+  // Remove oldest if over limit
+  if (operations.length > MAX_OPERATIONS) {
+    operations.pop();
+  }
+
+  // Determine input type from context
+  let inputType = null;
+  if (context.originalUrl) {
+    inputType = 'url';
+  } else if (context.attachment) {
+    inputType = 'file';
+  }
+
+  // Build metadata for operation creation log
+  const metadata = {
+    operationType: type,
+    userId,
+    username,
+    errorType,
+    earlyFailure: true,
+  };
+
+  // Add context to metadata if provided
+  if (context.originalUrl) {
+    metadata.originalUrl = context.originalUrl;
+  }
+  if (context.attachment) {
+    metadata.attachment = {
+      name: context.attachment.name || null,
+      size: context.attachment.size || null,
+      contentType: context.attachment.contentType || null,
+      url: context.attachment.url || null,
+    };
+  }
+  if (context.commandOptions) {
+    metadata.commandOptions = context.commandOptions;
+  }
+  if (context.commandSource) {
+    metadata.commandSource = context.commandSource;
+  }
+  if (inputType) {
+    metadata.inputType = inputType;
+  }
+
+  // Log operation creation to database (non-blocking - in-memory operation already created)
+  // This ensures operations are tracked even if database is unavailable
+  try {
+    // Wrap in additional try-catch to handle any errors from insertOperationLog itself
+    try {
+      insertOperationLog(operation.id, 'created', 'error', {
+        message: `Operation ${type} failed early: ${errorMessage}`,
+        metadata,
+      });
+      // Also log the error immediately
+      insertOperationLog(operation.id, 'error', 'error', {
+        message: errorMessage,
+        metadata: {
+          errorType,
+          earlyFailure: true,
+        },
+      });
+    } catch (dbError) {
+      // Database operation failed, but in-memory operation is already created
+      console.error('Failed to log failed operation creation to database:', dbError);
+    }
+  } catch (error) {
+    // Catch any other unexpected errors
+    console.error('Unexpected error during failed operation creation logging:', error);
+  }
+
+  // Log to application logs with operation ID
+  logger.debug(`Failed operation ${type} created [op: ${operation.id}]: ${errorMessage}`);
+
+  // Update user metrics (fire and forget)
+  updateUserMetricsForOperation(operation).catch(error => {
+    console.error('Failed to update user metrics for failed operation:', error);
+  });
+
+  broadcastUpdate(operation);
+  return operation.id;
+}
+
+/**
  * Create a new operation
  * @param {string} type - Operation type ('convert', 'download', 'optimize', 'info')
  * @param {string} userId - Discord user ID

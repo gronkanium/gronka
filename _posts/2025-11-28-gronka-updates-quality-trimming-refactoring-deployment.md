@@ -1,6 +1,6 @@
 ---
 layout: post
-title: gronka updates: quality controls, trimming, refactoring, and deployment guide
+title: "gronka updates: quality controls, trimming, refactoring, and deployment guide"
 date: 2025-11-28
 description: Comprehensive guide to recent gronka updates including quality parameter for GIF conversion, video and GIF trimming functionality, code refactoring improvements, media format handling, testing strategy, WebUI enhancements, best practices, and Docker deployment deep dive.
 author: thedorekaczynski

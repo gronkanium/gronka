@@ -38,6 +38,7 @@ export {
   getRecentOperations,
   getStuckOperations,
   markOperationAsFailed,
+  updateOperationLogMetadata,
 } from './database/operations.js';
 
 // Metrics operations

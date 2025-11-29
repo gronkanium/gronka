@@ -1019,6 +1019,7 @@ function reconstructOperationFromTrace(trace) {
       duration: duration,
       steps: steps,
     },
+    originalUrl: context.originalUrl || null, // Extract original URL from context
   };
 }
 

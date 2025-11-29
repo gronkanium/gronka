@@ -61,6 +61,7 @@
     "format:check": "prettier --check .",
     "jekyll:serve": "bundle exec jekyll serve --port 5173 --host 0.0.0.0",
     "jekyll:build": "bundle exec jekyll build",
+    "jekyll:update-stats": "node scripts/update-jekyll-stats.js",
     "tunnel:gronka-waptop": "cloudflared tunnel --config .cloudflared/config.yml --loglevel debug run",
     "site:start": "npx concurrently \"npm run jekyll:serve\" \"npm run tunnel:gronka-waptop\"",
     "site:stop": "scripts\\stop-jekyll-tunnel.bat",

@@ -38,6 +38,11 @@
           {%- endif -%}
         </p>
         <p id="render-time" style="margin-top: 0.5rem; margin-bottom: 0; font-size: 0.875rem; color: #b0b0b0; display: block; white-space: normal;">rendered in: --</p>
+        {%- if site.data.stats -%}
+          <p style="margin-top: 0.5rem; margin-bottom: 0; font-size: 0.875rem; color: #b0b0b0; display: block; white-space: normal;">
+            In the past 24 hours, {{ site.data.stats.unique_users | default: 0 }} users have processed {{ site.data.stats.total_files | default: 0 }} files amounting to {{ site.data.stats.total_data_formatted | default: "0.00 MB" }}
+          </p>
+        {%- endif -%}
         <script>
           (function() {
             function updateRenderTime() {

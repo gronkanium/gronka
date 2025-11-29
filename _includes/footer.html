@@ -40,7 +40,10 @@
         <p id="render-time" style="margin-top: 0.5rem; margin-bottom: 0; font-size: 0.875rem; color: #b0b0b0; display: block; white-space: normal;">rendered in: --</p>
         {%- if site.data.stats -%}
           <p style="margin-top: 0.5rem; margin-bottom: 0; font-size: 0.875rem; color: #b0b0b0; display: block; white-space: normal;">
-            In the past 24 hours, {{ site.data.stats.unique_users | default: 0 }} users have processed {{ site.data.stats.total_files | default: 0 }} files amounting to {{ site.data.stats.total_data_formatted | default: "0.00 MB" }}
+            {%- assign user_count = site.data.stats.unique_users | default: 0 -%}
+            {%- assign file_count = site.data.stats.total_files | default: 0 -%}
+            {%- assign data_size = site.data.stats.total_data_formatted | default: "0.00 MB" -%}
+            In the past 24 hours, {{ user_count }} {% if user_count == 1 %}user has{% else %}users have{% endif %} processed {{ file_count }} {% if file_count == 1 %}file{% else %}files{% endif %} amounting to {{ data_size }}
           </p>
         {%- endif -%}
         <script>

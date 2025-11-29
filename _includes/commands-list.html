@@ -1,0 +1,19 @@
+{%- if site.data.commands.size > 0 -%}
+<div class="commands-list">
+  {%- for command in site.data.commands -%}
+  <div class="command-item">
+    <h3>
+      <code>/{{ command.name }}</code>
+      {%- if command.context_menu -%}
+      <span class="context-menu-badge">context menu</span>
+      {%- endif -%} {%- if command.admin_only -%}
+      <span class="admin-badge">admin</span>
+      {%- endif -%}
+    </h3>
+    <p>{{ command.description }}</p>
+    <p class="command-usage"><code>{{ command.usage }}</code></p>
+    <a href="{{ '/commands/' | append: command.name | relative_url }}">view details</a>
+  </div>
+  {%- endfor -%}
+</div>
+{%- endif -%}

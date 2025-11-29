@@ -1,0 +1,164 @@
+<footer class="site-footer h-card">
+  <data class="u-url" href="{{ "/" | relative_url }}"></data>
+
+  <div class="wrapper">
+
+    <div class="footer-col-wrapper">
+      <div class="footer-col footer-col-1">
+      </div>
+
+      <div class="footer-col footer-col-2">
+        <p>
+          <a href="{{ "/" | relative_url }}" class="footer-link">{{ site.title | escape }}</a> &ndash;
+          <a href="https://github.com/p2xai/gronka" target="_blank" rel="noopener noreferrer" aria-label="GitHub repository" class="github-link">
+            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-github" viewBox="0 0 16 16">
+              <path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27s1.36.09 2 .27c1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.01 8.01 0 0 0 16 8c0-4.42-3.58-8-8-8"/>
+            </svg>
+          </a>
+        </p>
+        <p style="margin-top: 0.5rem; margin-bottom: 0; white-space: nowrap;">
+          {%- if site.data.navigation.footer -%}
+            {%- assign footer_items = site.data.navigation.footer -%}
+            {%- for item in footer_items -%}
+              {%- if forloop.first == false -%}
+                <span style="color: #b0b0b0; margin: 0 0.5rem;">&middot;</span>
+              {%- endif -%}
+              {%- if item.external -%}
+                <a href="{{ item.url }}" target="_blank" rel="noopener noreferrer" class="footer-link">{{ item.title | escape }}</a>
+              {%- else -%}
+                <a href="{{ item.url | relative_url }}" class="footer-link">{{ item.title | escape }}</a>
+              {%- endif -%}
+            {%- endfor -%}
+          {%- else -%}
+            <a href="{{ '/privacy/' | relative_url }}" class="footer-link">Privacy Policy</a>
+            <span style="color: #b0b0b0; margin: 0 0.5rem;">&middot;</span>
+            <a href="{{ '/terms/' | relative_url }}" class="footer-link">Terms of Use</a>
+            <span style="color: #b0b0b0; margin: 0 0.5rem;">&middot;</span>
+            <a href="{{ '/blog/' | relative_url }}" class="footer-link">Blog</a>
+          {%- endif -%}
+        </p>
+        <p id="render-time" style="margin-top: 0.5rem; margin-bottom: 0; font-size: 0.875rem; color: #b0b0b0; display: block; white-space: normal;">rendered in: --</p>
+        <script>
+          (function() {
+            function updateRenderTime() {
+              var element = document.getElementById('render-time');
+              if (!element) {
+                console.warn('render-time element not found');
+                return;
+              }
+              
+              var renderTime = 0;
+              
+              // Try Performance Navigation Timing API (legacy)
+              if (window.performance && window.performance.timing) {
+                var timing = window.performance.timing;
+                if (timing.loadEventEnd > 0 && timing.navigationStart > 0) {
+                  renderTime = (timing.loadEventEnd - timing.navigationStart) / 1000;
+                }
+              }
+              
+              // Try Performance Navigation Timing API v2
+              if (renderTime === 0 && window.performance && window.performance.getEntriesByType) {
+                try {
+                  var navTiming = window.performance.getEntriesByType('navigation')[0];
+                  if (navTiming && navTiming.loadEventEnd > 0) {
+                    renderTime = navTiming.loadEventEnd / 1000;
+                  }
+                } catch (e) {
+                  // Ignore errors
+                }
+              }
+              
+              // Fallback: use performance.now() if page just loaded
+              if (renderTime === 0 && window.performance && window.performance.now) {
+                var now = window.performance.now();
+                if (now > 0 && now < 60000) { // Reasonable range (less than 1 minute)
+                  renderTime = now / 1000;
+                }
+              }
+              
+              if (renderTime > 0) {
+                element.textContent = 'rendered in: ' + renderTime.toFixed(3) + 's';
+              } else {
+                element.textContent = 'rendered in: --';
+              }
+            }
+            
+            // Try immediately if page is already loaded
+            if (document.readyState === 'complete' || document.readyState === 'interactive') {
+              setTimeout(updateRenderTime, 0);
+            }
+            
+            // Also try on load event
+            window.addEventListener('load', function() {
+              setTimeout(updateRenderTime, 0);
+            });
+          })();
+        </script>
+        <script>
+          (function() {
+            function initCopyButtons() {
+              if (!navigator.clipboard) {
+                return;
+              }
+
+              var codeBlocks = document.querySelectorAll('pre code');
+              codeBlocks.forEach(function(codeBlock) {
+                var pre = codeBlock.parentElement;
+                if (pre.tagName !== 'PRE') {
+                  return;
+                }
+
+                if (pre.parentElement && pre.parentElement.classList.contains('code-block-wrapper')) {
+                  return;
+                }
+
+                var wrapper = document.createElement('div');
+                wrapper.className = 'code-block-wrapper';
+                pre.parentNode.insertBefore(wrapper, pre);
+                wrapper.appendChild(pre);
+
+                var copyButton = document.createElement('button');
+                copyButton.className = 'copy-button';
+                copyButton.setAttribute('aria-label', 'Copy code');
+                copyButton.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="5" width="10" height="10" rx="2" ry="2"></rect><path d="M11 5V3a2 2 0 0 0-2-2H3a2 2 0 0 0-2 2v6a2 2 0 0 0 2 2h2"></path></svg>';
+
+                copyButton.addEventListener('click', function() {
+                  var codeText = codeBlock.textContent || codeBlock.innerText;
+                  
+                  navigator.clipboard.writeText(codeText).then(function() {
+                    copyButton.classList.add('copy-button-copied');
+                    var originalHTML = copyButton.innerHTML;
+                    copyButton.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="4 8 7 11 12 4"></polyline></svg> Copied!';
+                    
+                    setTimeout(function() {
+                      copyButton.classList.remove('copy-button-copied');
+                      copyButton.innerHTML = originalHTML;
+                    }, 2000);
+                  }).catch(function(err) {
+                    console.error('Failed to copy code: ', err);
+                  });
+                });
+
+                wrapper.appendChild(copyButton);
+              });
+            }
+
+            if (document.readyState === 'loading') {
+              document.addEventListener('DOMContentLoaded', initCopyButtons);
+            } else {
+              initCopyButtons();
+            }
+          })();
+        </script>
+      </div>
+
+      <div class="footer-col footer-col-3">
+        {%- include social.html -%}
+      </div>
+    </div>
+
+  </div>
+
+</footer>
+

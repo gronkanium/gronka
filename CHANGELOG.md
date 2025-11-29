@@ -24,6 +24,19 @@ and this project adheres (attempts) to [Semantic Versioning](https://semver.org/
   - All existing imports continue to work without modification
   - Improved code organization, maintainability, and testability
   - No breaking changes - function signatures remain identical
+- Refactored video-processor.js into modular structure
+  - Broke down monolithic `src/utils/video-processor.js` (549 lines) into focused modules organized in `src/utils/video-processor/` subdirectory
+  - Created separate modules for different video processing operations:
+    - `video-processor/utils.js` - Shared utilities (validateNumericParameter, checkFFmpegInstalled)
+    - `video-processor/convert-to-gif.js` - Video to GIF conversion
+    - `video-processor/convert-image-to-gif.js` - Image to GIF conversion
+    - `video-processor/trim-video.js` - Video trimming functionality
+    - `video-processor/trim-gif.js` - GIF trimming functionality
+    - `video-processor/metadata.js` - Video metadata extraction
+  - Maintained backward compatibility by keeping main `src/utils/video-processor.js` as a barrel export that re-exports all functions from submodules
+  - All existing imports continue to work without modification
+  - Improved code organization, maintainability, and testability
+  - No breaking changes - function signatures remain identical
 
 ## [0.12.5] - 2025-11-27
 

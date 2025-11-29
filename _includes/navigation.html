@@ -1,0 +1,26 @@
+{%- if include.nav_data -%} {%- assign nav_items = site.data.navigation[include.nav_data] -%} {%- if
+nav_items.size > 0 -%}
+<nav class="{{ include.nav_data }}-nav">
+  <ul>
+    {%- for item in nav_items -%}
+    <li>
+      {%- if item.external -%}
+      <a href="{{ item.url }}" target="_blank" rel="noopener noreferrer">
+        {{ item.title | escape }}
+      </a>
+      {%- else -%}
+      <a href="{{ item.url | relative_url }}">{{ item.title | escape }}</a>
+      {%- endif -%} {%- if item.children.size > 0 -%}
+      <ul>
+        {%- for child in item.children -%}
+        <li>
+          <a href="{{ child.url | relative_url }}">{{ child.title | escape }}</a>
+        </li>
+        {%- endfor -%}
+      </ul>
+      {%- endif -%}
+    </li>
+    {%- endfor -%}
+  </ul>
+</nav>
+{%- endif -%} {%- endif -%}

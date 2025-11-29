@@ -1,0 +1,56 @@
+{%- if site.docs.size > 0 -%} {%- assign getting_started = site.docs | where: "topic",
+"getting-started" | sort: "chapter" -%} {%- assign guides = site.docs | where: "topic", "guides" |
+sort: "chapter" -%} {%- assign reference = site.docs | where: "topic", "reference" | sort: "chapter"
+-%} {%- assign current_topic = page.topic -%}
+
+<nav class="doc-navigation">
+  <h2>documentation</h2>
+
+  {%- if getting_started.size > 0 -%}
+  <div class="doc-topic">
+    <h3 class="doc-topic-header">getting started</h3>
+    <ul class="doc-topic-list">
+      {%- for doc in getting_started -%}
+      <li>
+        {%- if doc.url == page.url -%}
+        <strong class="doc-current">{{ doc.title | escape }}</strong>
+        {%- else -%}
+        <a href="{{ doc.url | relative_url }}">{{ doc.title | escape }}</a>
+        {%- endif -%}
+      </li>
+      {%- endfor -%}
+    </ul>
+  </div>
+  {%- endif -%} {%- if guides.size > 0 -%}
+  <div class="doc-topic">
+    <h3 class="doc-topic-header">guides</h3>
+    <ul class="doc-topic-list">
+      {%- for doc in guides -%}
+      <li>
+        {%- if doc.url == page.url -%}
+        <strong class="doc-current">{{ doc.title | escape }}</strong>
+        {%- else -%}
+        <a href="{{ doc.url | relative_url }}">{{ doc.title | escape }}</a>
+        {%- endif -%}
+      </li>
+      {%- endfor -%}
+    </ul>
+  </div>
+  {%- endif -%} {%- if reference.size > 0 -%}
+  <div class="doc-topic">
+    <h3 class="doc-topic-header">reference</h3>
+    <ul class="doc-topic-list">
+      {%- for doc in reference -%}
+      <li>
+        {%- if doc.url == page.url -%}
+        <strong class="doc-current">{{ doc.title | escape }}</strong>
+        {%- else -%}
+        <a href="{{ doc.url | relative_url }}">{{ doc.title | escape }}</a>
+        {%- endif -%}
+      </li>
+      {%- endfor -%}
+    </ul>
+  </div>
+  {%- endif -%}
+</nav>
+{%- endif -%}

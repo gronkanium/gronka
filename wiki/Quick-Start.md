@@ -44,6 +44,22 @@ npm run register-commands
 npm run local
 ```
 
+## test and production bots
+
+for local development, you can run separate test and production bots simultaneously:
+
+```bash
+# configure both bots in .env with TEST_* and PROD_* prefixes
+# then start them separately:
+
+npm run bot:test        # start test bot
+npm run bot:prod        # start prod bot
+npm run bot:register:test  # register test bot commands
+npm run bot:register:prod  # register prod bot commands
+```
+
+see the [[Test-Bot|test bot documentation]] for complete setup instructions.
+
 ## next steps
 
 - read the [[Installation|installation guide]] for detailed setup

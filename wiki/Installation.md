@@ -16,8 +16,8 @@ mkdir gronka && cd gronka
 npm install discord.js axios fluent-ffmpeg express dotenv
 
 # 3. Create directories
-mkdir -p data-test/gifs
-chmod 755 data-test/gifs
+mkdir -p data-prod/gifs data-test/gifs
+chmod 755 data-prod/gifs data-test/gifs
 
 # 4. Configure environment
 cp .env.example .env
@@ -84,8 +84,8 @@ General Information → Application ID → save to `.env` as `CLIENT_ID`
 DISCORD_TOKEN=YOUR_BOT_TOKEN_HERE.abcdefghijklmnopqrstuvwxyz
 CLIENT_ID=987654321098765432
 
-# Storage
-GIF_STORAGE_PATH=/var/www/gifs
+# Storage (use data-prod for production, data-test for testing)
+GIF_STORAGE_PATH=./data-prod
 MAX_STORAGE_GB=50
 
 # CDN
@@ -106,3 +106,41 @@ TUNNEL_ID=abc123def-456g-789h-012i-345jkl678mno
 - Never commit `.env` to git (add to `.gitignore`)
 - Regenerate bot token if compromised
 - Use environment variables in production (not `.env` files)
+
+## test and production bot setup
+
+gronka supports running separate test and production bots simultaneously. this is useful for testing changes without affecting production.
+
+### basic setup
+
+configure your `.env` file with prefixed variables:
+
+```bash
+# test bot credentials
+TEST_DISCORD_TOKEN=your_test_bot_token
+TEST_CLIENT_ID=your_test_bot_client_id
+TEST_GIF_STORAGE_PATH=./data-test
+
+# prod bot credentials
+PROD_DISCORD_TOKEN=your_prod_bot_token
+PROD_CLIENT_ID=your_prod_bot_client_id
+PROD_GIF_STORAGE_PATH=./data-prod
+```
+
+### running the bots
+
+```bash
+# start test bot
+npm run bot:test
+
+# start prod bot
+npm run bot:prod
+
+# register commands for each bot
+npm run bot:register:test
+npm run bot:register:prod
+```
+
+each bot uses a separate database file (`gronka-test.db` and `gronka-prod.db`) and storage directory (`data-test/` and `data-prod/`).
+
+for complete documentation, see the [[Test-Bot|test bot guide]].

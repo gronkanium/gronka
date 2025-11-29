@@ -18,6 +18,7 @@
 - [[API-Endpoints]]
 - [[Technical-Specification]]
 - [[Logging-Platform]]
+- [[Jekyll-Stats]]
 
 ## troubleshooting
 

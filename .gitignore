@@ -43,8 +43,8 @@ Thumbs.db
 *.swp
 *.swo
 
-# Git hooks
-.husky/
+# Git hooks (husky hooks should be committed)
+# .husky/
 
 # Documentation
 docs/

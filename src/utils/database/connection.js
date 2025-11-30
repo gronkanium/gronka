@@ -1,4 +1,4 @@
-import fs from 'fs';
+import fs from 'fs/promises';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import { r2Config } from '../config.js';
@@ -9,6 +9,10 @@ const projectRoot = path.resolve(__dirname, '../../..');
 
 let db = null;
 let initPromise = null;
+
+// Prepared statement cache: Map<sql, Statement>
+// Caches frequently used prepared statements to avoid re-preparing them
+const stmtCache = new Map();
 
 /**
  * Get the database path (supports environment variable override for testing)
@@ -29,16 +33,16 @@ export function getDbPath() {
 }
 
 /**
- * Ensure data directory exists
- * @returns {void}
+ * Ensure data directory exists (async)
+ * @returns {Promise<void>}
  */
-export function ensureDataDir() {
+export async function ensureDataDir() {
   const dataDir = path.dirname(getDbPath());
 
   try {
     // Check if path exists and what it is
     try {
-      const stats = fs.statSync(dataDir);
+      const stats = await fs.stat(dataDir);
       if (stats.isFile()) {
         // Path exists as a file, not a directory - this is an error condition
         throw new Error(
@@ -56,7 +60,7 @@ export function ensureDataDir() {
     }
 
     // Create the directory
-    fs.mkdirSync(dataDir, { recursive: true });
+    await fs.mkdir(dataDir, { recursive: true });
   } catch (error) {
     // Handle specific error codes
     if (error.code === 'EEXIST') {
@@ -89,6 +93,10 @@ export function getDb() {
  * @returns {void}
  */
 export function setDb(database) {
+  // Clear statement cache when database changes
+  if (db !== database) {
+    clearStatementCache();
+  }
   db = database;
 }
 
@@ -139,4 +147,42 @@ export async function waitForInit() {
  */
 export function getR2PublicDomain() {
   return r2Config.publicDomain || 'cdn.gronka.p1x.dev';
+}
+
+/**
+ * Get a cached prepared statement or create and cache it
+ * @param {string} sql - SQL query string
+ * @returns {Statement} Prepared statement
+ */
+export function getCachedStatement(sql) {
+  if (!db) {
+    throw new Error('Database not initialized. Call initDatabase() first.');
+  }
+
+  // Check cache first
+  let stmt = stmtCache.get(sql);
+  if (stmt) {
+    return stmt;
+  }
+
+  // Create and cache the statement
+  stmt = db.prepare(sql);
+  stmtCache.set(sql, stmt);
+  return stmt;
+}
+
+/**
+ * Clear the prepared statement cache
+ * @returns {void}
+ */
+export function clearStatementCache() {
+  stmtCache.clear();
+}
+
+/**
+ * Get cache size (for debugging/monitoring)
+ * @returns {number} Number of cached statements
+ */
+export function getStatementCacheSize() {
+  return stmtCache.size;
 }

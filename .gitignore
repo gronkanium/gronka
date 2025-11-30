@@ -98,3 +98,17 @@ scripts/setup-glab-auth.sh
 scripts/ci-status.sh
 scripts/check-ci.sh
 scripts/update-jekyll-site.sh
+
+# Rewrite-related files (TypeScript rewrite, not part of main codebase)
+apps/
+packages/
+tsconfig.json
+pnpm-workspace.yaml
+docker-compose.rewrite.yml
+REWRITE_STATUS.md
+README.REWRITE.md
+MIGRATION.md
+.npmrc
+
+# Generated stats file (created during build)
+_data/stats.json

@@ -45,13 +45,13 @@ function validateConfig() {
 
   if (missing.length > 0) {
     console.error('❌ Missing required environment variables:');
-    missing.forEach((varName) => {
+    missing.forEach(varName => {
       console.error(`   - ${varName}`);
     });
     console.error('');
     console.error('Please add these to your .env file:');
     console.error('');
-    missing.forEach((varName) => {
+    missing.forEach(varName => {
       console.error(`${varName}=your_value_here`);
     });
     console.error('');
@@ -72,4 +72,3 @@ function validateConfig() {
 
 // Run validation
 validateConfig();
-

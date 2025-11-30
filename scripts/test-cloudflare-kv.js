@@ -55,7 +55,7 @@ async function testKVRead() {
     return false;
   } catch (error) {
     if (error.response?.status === 404) {
-      console.log('⚠️  KV key not found (this is okay if stats haven\'t been synced yet)');
+      console.log("⚠️  KV key not found (this is okay if stats haven't been synced yet)");
       return true; // Not an error, just no data yet
     }
     console.error('❌ KV read failed:', error.message);
@@ -159,7 +159,7 @@ async function main() {
 
   if (missing.length > 0) {
     console.error('❌ Missing required environment variables:');
-    missing.forEach((varName) => console.error(`   - ${varName}`));
+    missing.forEach(varName => console.error(`   - ${varName}`));
     console.error('\nRun: npm run validate:cloudflare');
     process.exit(1);
   }
@@ -178,14 +178,16 @@ async function main() {
   console.log(`  Pages:    ${results.pages ? '✅' : '❌'}`);
   console.log('='.repeat(50));
 
-  const allPassed = Object.values(results).every((r) => r);
+  const allPassed = Object.values(results).every(r => r);
   if (allPassed) {
     console.log('\n✅ All tests passed! Your Cloudflare configuration is working.');
     process.exit(0);
   } else {
     console.log('\n❌ Some tests failed. Check the errors above.');
     console.log('\nTroubleshooting:');
-    console.log('1. Verify API token has correct permissions (Workers KV Storage: Edit, Pages: Edit)');
+    console.log(
+      '1. Verify API token has correct permissions (Workers KV Storage: Edit, Pages: Edit)'
+    );
     console.log('2. Verify KV namespace ID is correct');
     console.log('3. Verify Pages project name matches exactly');
     console.log('4. Check wiki/Cloudflare-Pages-Deployment.md for detailed setup instructions');
@@ -194,8 +196,7 @@ async function main() {
 }
 
 // Run tests
-main().catch((error) => {
+main().catch(error => {
   console.error('Unexpected error:', error);
   process.exit(1);
 });
-

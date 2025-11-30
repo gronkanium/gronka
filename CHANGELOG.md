@@ -7,6 +7,38 @@ and this project adheres (attempts) to [Semantic Versioning](https://semver.org/
 
 ## [Unreleased]
 
+## [0.13.0-prerelease] - 2025-11-30
+
+### Added
+
+- Cloudflare KV and Pages integration for stats
+  - Cloudflare KV storage for stats synchronization
+  - Automated stats sync from bot server to Cloudflare KV
+  - Cloudflare Pages build integration to fetch stats from KV
+  - New scripts: `sync-stats-to-kv.js`, `fetch-stats-from-kv.js`
+  - Validation and testing scripts: `validate-cloudflare-config.js`, `test-cloudflare-kv.js`
+  - New npm scripts: `kv:sync-stats`, `kv:fetch-stats`, `validate:cloudflare`, `test:cloudflare`
+  - Comprehensive documentation in `wiki/Cloudflare-Pages-Deployment.md`
+  - Stats automatically update in Jekyll site footer via Cloudflare Pages builds
+
+### Changed
+
+- Refactored webui-server.js into modular structure
+  - Broke down monolithic `src/webui-server.js` into focused modules organized in `src/webui-server/` subdirectory
+  - Created separate modules for different webui concerns:
+    - `webui-server/app.js` - Express app setup and configuration
+    - `webui-server/index.js` - Main entry point and server startup
+    - `webui-server/cache/` - Caching utilities (crypto-cache, stats-cache)
+    - `webui-server/middleware/` - Express middleware (security, static file serving)
+    - `webui-server/operations/` - Operation-related utilities (enrichment, reconstruction, storage)
+    - `webui-server/routes/` - API route handlers (alerts, logs, metrics, moderation, operations, proxy, users)
+    - `webui-server/utils/` - Utility functions (auth, validation)
+    - `webui-server/websocket/` - WebSocket server implementation (broadcast, handlers, server)
+  - Maintained backward compatibility by keeping main `src/webui-server.js` as a thin wrapper that imports from the modular structure
+  - All existing npm scripts and imports continue to work without modification
+  - Improved code organization, maintainability, and testability
+  - No breaking changes - API and functionality remain identical
+
 ## [0.12.5] - 2025-11-29
 
 ### Added

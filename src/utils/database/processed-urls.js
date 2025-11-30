@@ -1,5 +1,51 @@
-import { getDb, getR2PublicDomain } from './connection.js';
+import { getDb, getR2PublicDomain, getCachedStatement } from './connection.js';
 import { ensureDbInitialized } from './init.js';
+
+// Query result cache for getProcessedUrl (in-memory layer on top of DB)
+const processedUrlCache = new Map(); // Map<urlHash, {data, timestamp}>
+const PROCESSED_URL_CACHE_TTL = 5 * 60 * 1000; // 5 minutes
+
+/**
+ * Get cached processed URL if available and not expired
+ * @param {string} urlHash - URL hash
+ * @returns {Object|null} Cached processed URL or null
+ */
+function getCachedProcessedUrl(urlHash) {
+  const cached = processedUrlCache.get(urlHash);
+  if (!cached) {
+    return null;
+  }
+  const age = Date.now() - cached.timestamp;
+  if (age >= PROCESSED_URL_CACHE_TTL) {
+    processedUrlCache.delete(urlHash);
+    return null;
+  }
+  return cached.data;
+}
+
+/**
+ * Cache processed URL
+ * @param {string} urlHash - URL hash
+ * @param {Object|null} processedUrl - Processed URL object to cache
+ */
+function setCachedProcessedUrl(urlHash, processedUrl) {
+  processedUrlCache.set(urlHash, {
+    data: processedUrl,
+    timestamp: Date.now(),
+  });
+}
+
+/**
+ * Invalidate processed URL cache
+ * @param {string} urlHash - URL hash to invalidate (or null to clear all)
+ */
+export function invalidateProcessedUrlCache(urlHash = null) {
+  if (urlHash) {
+    processedUrlCache.delete(urlHash);
+  } else {
+    processedUrlCache.clear();
+  }
+}
 
 /**
  * Get processed URL record by URL hash
@@ -15,8 +61,19 @@ export async function getProcessedUrl(urlHash) {
     return null;
   }
 
-  const stmt = db.prepare('SELECT * FROM processed_urls WHERE url_hash = ?');
-  return stmt.get(urlHash) || null;
+  // Check in-memory cache first
+  const cached = getCachedProcessedUrl(urlHash);
+  if (cached !== null) {
+    return cached;
+  }
+
+  const stmt = getCachedStatement('SELECT * FROM processed_urls WHERE url_hash = ?');
+  const processedUrl = stmt.get(urlHash) || null;
+
+  // Cache result (even null to avoid repeated queries for non-existent URLs)
+  setCachedProcessedUrl(urlHash, processedUrl);
+
+  return processedUrl;
 }
 
 /**
@@ -54,7 +111,7 @@ export async function insertProcessedUrl(
     const existing = await getProcessedUrl(urlHash);
     if (existing) {
       // Update existing record (in case file URL or other info changed)
-      const updateStmt = db.prepare(
+      const updateStmt = getCachedStatement(
         'UPDATE processed_urls SET file_hash = ?, file_type = ?, file_extension = ?, file_url = ?, processed_at = ?, user_id = ?, file_size = ? WHERE url_hash = ?'
       );
       updateStmt.run(
@@ -67,9 +124,11 @@ export async function insertProcessedUrl(
         fileSize,
         urlHash
       );
+      // Invalidate cache
+      invalidateProcessedUrlCache(urlHash);
     } else {
       // Insert new record
-      const insertStmt = db.prepare(
+      const insertStmt = getCachedStatement(
         'INSERT INTO processed_urls (url_hash, file_hash, file_type, file_extension, file_url, processed_at, user_id, file_size) VALUES (?, ?, ?, ?, ?, ?, ?, ?)'
       );
       insertStmt.run(
@@ -82,6 +141,8 @@ export async function insertProcessedUrl(
         userId,
         fileSize
       );
+      // Invalidate cache (though entry didn't exist before, clear to be safe)
+      invalidateProcessedUrlCache(urlHash);
     }
   } catch (error) {
     // Log error but don't throw - allows graceful degradation if database is read-only
@@ -144,7 +205,7 @@ export async function getUserMediaCount(userId) {
     return 0;
   }
 
-  const stmt = db.prepare('SELECT COUNT(*) as count FROM processed_urls WHERE user_id = ?');
+  const stmt = getCachedStatement('SELECT COUNT(*) as count FROM processed_urls WHERE user_id = ?');
   const result = stmt.get(userId);
   return result ? result.count : 0;
 }
@@ -242,7 +303,7 @@ export async function deleteProcessedUrl(urlHash) {
   }
 
   try {
-    const stmt = db.prepare('DELETE FROM processed_urls WHERE url_hash = ?');
+    const stmt = getCachedStatement('DELETE FROM processed_urls WHERE url_hash = ?');
     const result = stmt.run(urlHash);
     return result.changes > 0;
   } catch (error) {
@@ -268,7 +329,9 @@ export async function deleteUserR2Media(userId) {
   try {
     const publicDomain = getR2PublicDomain();
     const r2UrlPrefix = `https://${publicDomain}/`;
-    const stmt = db.prepare('DELETE FROM processed_urls WHERE user_id = ? AND file_url LIKE ?');
+    const stmt = getCachedStatement(
+      'DELETE FROM processed_urls WHERE user_id = ? AND file_url LIKE ?'
+    );
     const result = stmt.run(userId, `${r2UrlPrefix}%`);
     return result.changes;
   } catch (error) {

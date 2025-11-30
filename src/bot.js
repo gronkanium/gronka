@@ -13,6 +13,7 @@ import { cleanupStuckOperations } from './utils/operations-tracker.js';
 import { initializeR2UsageCache } from './utils/storage.js';
 import { r2Config } from './utils/config.js';
 import { startCleanupJob, stopCleanupJob } from './utils/r2-cleanup.js';
+import { initDatabase } from './utils/database.js';
 
 // Initialize logger
 const logger = createLogger('bot');
@@ -160,12 +161,23 @@ try {
   process.exit(1);
 }
 
-// Start bot
-logger.info('Starting Discord bot...');
-client.login(DISCORD_TOKEN).catch(error => {
-  logger.error('an error occurred:', error);
-  process.exit(1);
-});
+// Initialize database early before starting bot
+// This prevents lazy initialization overhead during command execution
+async function startBot() {
+  try {
+    logger.info('Initializing database...');
+    await initDatabase();
+    logger.info('Database initialized');
+
+    logger.info('Starting Discord bot...');
+    await client.login(DISCORD_TOKEN);
+  } catch (error) {
+    logger.error('an error occurred:', error);
+    process.exit(1);
+  }
+}
+
+startBot();
 
 // Graceful shutdown handlers
 function gracefulShutdown(signal) {

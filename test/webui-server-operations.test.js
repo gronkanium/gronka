@@ -6,6 +6,7 @@ import {
   createOperation,
   updateOperationStatus,
   getRecentOperations as getRecentOperationsFromTracker,
+  flushAllOperationLogs,
 } from '../src/utils/operations-tracker.js';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -410,7 +411,8 @@ describe('operations search API', () => {
       updateOperationStatus(op1, 'success', { fileSize: 1024 });
       updateOperationStatus(op2, 'running');
 
-      await new Promise(resolve => setTimeout(resolve, 100));
+      // Flush operation logs to ensure they're written to database
+      await flushAllOperationLogs();
 
       const response = await fetch(`http://localhost:${serverPort}/api/operations/search`);
       const data = await response.json();
@@ -439,7 +441,8 @@ describe('operations search API', () => {
       updateOperationStatus(op1, 'success');
       updateOperationStatus(op2, 'error');
 
-      await new Promise(resolve => setTimeout(resolve, 100));
+      // Flush operation logs to ensure they're written to database
+      await flushAllOperationLogs();
 
       const response = await fetch(
         `http://localhost:${serverPort}/api/operations/search?status=success`
@@ -458,7 +461,8 @@ describe('operations search API', () => {
       updateOperationStatus(op1, 'success');
       updateOperationStatus(op2, 'error');
 
-      await new Promise(resolve => setTimeout(resolve, 100));
+      // Flush operation logs to ensure they're written to database
+      await flushAllOperationLogs();
 
       const response = await fetch(
         `http://localhost:${serverPort}/api/operations/search?status=success&status=error`
@@ -473,7 +477,8 @@ describe('operations search API', () => {
       createOperation('convert', 'user1', 'User1');
       createOperation('download', 'user2', 'User2');
 
-      await new Promise(resolve => setTimeout(resolve, 100));
+      // Flush operation logs to ensure they're written to database
+      await flushAllOperationLogs();
 
       const response = await fetch(
         `http://localhost:${serverPort}/api/operations/search?type=convert`
@@ -491,7 +496,8 @@ describe('operations search API', () => {
       createOperation('convert', userId, 'User1');
       createOperation('download', 'user456', 'User2');
 
-      await new Promise(resolve => setTimeout(resolve, 100));
+      // Flush operation logs to ensure they're written to database
+      await flushAllOperationLogs();
 
       const response = await fetch(
         `http://localhost:${serverPort}/api/operations/search?userId=${userId}`
@@ -508,7 +514,8 @@ describe('operations search API', () => {
       createOperation('convert', 'user1', 'TestUser');
       createOperation('download', 'user2', 'OtherUser');
 
-      await new Promise(resolve => setTimeout(resolve, 100));
+      // Flush operation logs to ensure they're written to database
+      await flushAllOperationLogs();
 
       const response = await fetch(
         `http://localhost:${serverPort}/api/operations/search?username=TestUser`
@@ -527,7 +534,8 @@ describe('operations search API', () => {
       updateOperationStatus(op1, 'success');
       updateOperationStatus(op2, 'error');
 
-      await new Promise(resolve => setTimeout(resolve, 100));
+      // Flush operation logs to ensure they're written to database
+      await flushAllOperationLogs();
 
       const response = await fetch(
         `http://localhost:${serverPort}/api/operations/search?failedOnly=true`
@@ -543,7 +551,8 @@ describe('operations search API', () => {
     test('filters by date range', async () => {
       const now = Date.now();
       createOperation('convert', 'user1', 'User1');
-      await new Promise(resolve => setTimeout(resolve, 100));
+      // Flush operation logs to ensure they're written to database
+      await flushAllOperationLogs();
       createOperation('download', 'user2', 'User2');
 
       const dateFrom = now - 1000;
@@ -566,7 +575,8 @@ describe('operations search API', () => {
       await new Promise(resolve => setTimeout(resolve, 50));
       updateOperationStatus(op1, 'success');
 
-      await new Promise(resolve => setTimeout(resolve, 100));
+      // Flush operation logs to ensure they're written to database
+      await flushAllOperationLogs();
 
       const op = getRecentOperationsFromTracker(1)[0];
       const duration = op.performanceMetrics.duration;
@@ -588,7 +598,8 @@ describe('operations search API', () => {
       const op1 = createOperation('convert', 'user1', 'User1');
       updateOperationStatus(op1, 'success', { fileSize: 1024000 });
 
-      await new Promise(resolve => setTimeout(resolve, 100));
+      // Flush operation logs to ensure they're written to database
+      await flushAllOperationLogs();
 
       const response = await fetch(
         `http://localhost:${serverPort}/api/operations/search?minFileSize=1024&maxFileSize=2048000`
@@ -610,7 +621,8 @@ describe('operations search API', () => {
         createOperation('convert', `user${i}`, `User${i}`);
       }
 
-      await new Promise(resolve => setTimeout(resolve, 100));
+      // Flush operation logs to ensure they're written to database
+      await flushAllOperationLogs();
 
       const response1 = await fetch(
         `http://localhost:${serverPort}/api/operations/search?limit=2&offset=0`
@@ -641,7 +653,8 @@ describe('operations search API', () => {
       const opId = createOperation('convert', 'user1', 'User1');
       updateOperationStatus(opId, 'success', { fileSize: 1024 });
 
-      await new Promise(resolve => setTimeout(resolve, 100));
+      // Flush operation logs to ensure they're written to database
+      await flushAllOperationLogs();
 
       const response = await fetch(`http://localhost:${serverPort}/api/operations/${opId}`);
       const data = await response.json();
@@ -665,7 +678,8 @@ describe('operations search API', () => {
       const opId = createOperation('convert', 'user1', 'User1');
       updateOperationStatus(opId, 'success');
 
-      await new Promise(resolve => setTimeout(resolve, 100));
+      // Flush operation logs to ensure they're written to database
+      await flushAllOperationLogs();
 
       const response = await fetch(`http://localhost:${serverPort}/api/operations/${opId}`);
       const data = await response.json();
@@ -681,7 +695,8 @@ describe('operations search API', () => {
       const opId = createOperation('convert', 'user1', 'User1');
       updateOperationStatus(opId, 'success');
 
-      await new Promise(resolve => setTimeout(resolve, 100));
+      // Flush operation logs to ensure they're written to database
+      await flushAllOperationLogs();
 
       const response = await fetch(`http://localhost:${serverPort}/api/operations/${opId}/trace`);
       const data = await response.json();
@@ -709,7 +724,8 @@ describe('operations search API', () => {
       const _op2 = createOperation('download', userId, 'User1');
       const _op3 = createOperation('optimize', 'user456', 'User2');
 
-      await new Promise(resolve => setTimeout(resolve, 100));
+      // Flush operation logs to ensure they're written to database
+      await flushAllOperationLogs();
 
       const response = await fetch(`http://localhost:${serverPort}/api/operations/${op1}/related`);
       const data = await response.json();
@@ -728,7 +744,8 @@ describe('operations search API', () => {
         originalUrl: 'https://example.com/other.mp4',
       });
 
-      await new Promise(resolve => setTimeout(resolve, 100));
+      // Flush operation logs to ensure they're written to database
+      await flushAllOperationLogs();
 
       const response = await fetch(`http://localhost:${serverPort}/api/operations/${op1}/related`);
       const data = await response.json();
@@ -758,7 +775,8 @@ describe('operations search API', () => {
         createOperation('convert', userId, 'User1');
       }
 
-      await new Promise(resolve => setTimeout(resolve, 100));
+      // Flush operation logs to ensure they're written to database
+      await flushAllOperationLogs();
 
       const response = await fetch(`http://localhost:${serverPort}/api/operations/${op1}/related`);
       const data = await response.json();
@@ -775,7 +793,8 @@ describe('operations search API', () => {
       updateOperationStatus(_op1, 'error', { error: 'Test error 1' });
       updateOperationStatus(_op2, 'error', { error: 'Test error 2' });
 
-      await new Promise(resolve => setTimeout(resolve, 100));
+      // Flush operation logs to ensure they're written to database
+      await flushAllOperationLogs();
 
       const response = await fetch(`http://localhost:${serverPort}/api/operations/errors/analysis`);
       const data = await response.json();
@@ -790,7 +809,8 @@ describe('operations search API', () => {
       updateOperationStatus(_op1, 'error', { error: 'Network error' });
       updateOperationStatus(_op2, 'error', { error: 'Network error' });
 
-      await new Promise(resolve => setTimeout(resolve, 100));
+      // Flush operation logs to ensure they're written to database
+      await flushAllOperationLogs();
 
       const response = await fetch(`http://localhost:${serverPort}/api/operations/errors/analysis`);
       const data = await response.json();
@@ -807,7 +827,8 @@ describe('operations search API', () => {
         updateOperationStatus(op, 'error', { error: `Error ${i}` });
       }
 
-      await new Promise(resolve => setTimeout(resolve, 100));
+      // Flush operation logs to ensure they're written to database
+      await flushAllOperationLogs();
 
       const response = await fetch(`http://localhost:${serverPort}/api/operations/errors/analysis`);
       const data = await response.json();
@@ -825,7 +846,8 @@ describe('operations search API', () => {
       const _op2 = createOperation('download', 'user5', 'User5');
       updateOperationStatus(_op2, 'error', { error: 'Rare error' });
 
-      await new Promise(resolve => setTimeout(resolve, 100));
+      // Flush operation logs to ensure they're written to database
+      await flushAllOperationLogs();
 
       const response = await fetch(`http://localhost:${serverPort}/api/operations/errors/analysis`);
       const data = await response.json();

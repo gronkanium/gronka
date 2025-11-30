@@ -1,4 +1,4 @@
-import { getDb } from './connection.js';
+import { getDb, getCachedStatement } from './connection.js';
 
 /**
  * Insert a log entry into the database
@@ -18,7 +18,7 @@ export function insertLog(timestamp, component, level, message, metadata = null)
 
   const metadataStr = metadata ? JSON.stringify(metadata) : null;
 
-  const stmt = db.prepare(
+  const stmt = getCachedStatement(
     'INSERT INTO logs (timestamp, component, level, message, metadata) VALUES (?, ?, ?, ?, ?)'
   );
   stmt.run(timestamp, component, level, message, metadataStr);
@@ -235,7 +235,7 @@ export function getLogComponents() {
     return [];
   }
 
-  const stmt = db.prepare('SELECT DISTINCT component FROM logs ORDER BY component');
+  const stmt = getCachedStatement('SELECT DISTINCT component FROM logs ORDER BY component');
   const results = stmt.all();
   return results.map(r => r.component);
 }

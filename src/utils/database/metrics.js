@@ -1,4 +1,4 @@
-import { getDb } from './connection.js';
+import { getDb, getCachedStatement } from './connection.js';
 
 /**
  * Insert or update user metrics
@@ -17,7 +17,7 @@ export function insertOrUpdateUserMetrics(userId, username, metrics) {
   const timestamp = Date.now();
 
   // Check if user metrics exist
-  const getStmt = db.prepare('SELECT * FROM user_metrics WHERE user_id = ?');
+  const getStmt = getCachedStatement('SELECT * FROM user_metrics WHERE user_id = ?');
   const existing = getStmt.get(userId);
 
   if (existing) {
@@ -71,7 +71,7 @@ export function insertOrUpdateUserMetrics(userId, username, metrics) {
     updateStmt.run(...params);
   } else {
     // Insert new user metrics
-    const insertStmt = db.prepare(
+    const insertStmt = getCachedStatement(
       'INSERT INTO user_metrics (user_id, username, total_commands, successful_commands, failed_commands, total_convert, total_download, total_optimize, total_info, total_file_size, last_command_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
     );
     insertStmt.run(
@@ -103,7 +103,7 @@ export function getUserMetrics(userId) {
     return null;
   }
 
-  const stmt = db.prepare('SELECT * FROM user_metrics WHERE user_id = ?');
+  const stmt = getCachedStatement('SELECT * FROM user_metrics WHERE user_id = ?');
   return stmt.get(userId) || null;
 }
 

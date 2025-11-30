@@ -14,6 +14,105 @@ import {
   getOperationTrace,
   getRecentOperations as getRecentOperationsFromDb,
 } from './database.js';
+
+/**
+ * Queue an operation log entry for batched writing
+ * @param {string} operationId - Operation ID
+ * @param {string} step - Step name
+ * @param {string} status - Status
+ * @param {Object} data - Data object
+ */
+function queueOperationLog(operationId, step, status, data) {
+  operationLogQueue.push({ operationId, step, status, data });
+
+  // Flush immediately if queue is full
+  if (operationLogQueue.length >= MAX_QUEUE_SIZE) {
+    flushOperationLogs();
+  } else {
+    // Schedule flush if not already scheduled
+    if (!flushTimer && !isFlushing) {
+      flushTimer = setTimeout(() => {
+        flushOperationLogs();
+      }, FLUSH_INTERVAL_MS);
+    }
+  }
+}
+
+/**
+ * Flush queued operation logs to database asynchronously
+ */
+async function flushOperationLogs() {
+  if (isFlushing || operationLogQueue.length === 0) {
+    return;
+  }
+
+  isFlushing = true;
+  if (flushTimer) {
+    clearTimeout(flushTimer);
+    flushTimer = null;
+  }
+
+  // Copy queue and clear it immediately to allow new entries
+  const logsToFlush = [...operationLogQueue];
+  operationLogQueue.length = 0;
+
+  // Flush in background (don't await to avoid blocking)
+  // eslint-disable-next-line no-undef
+  setImmediate(async () => {
+    try {
+      for (const logEntry of logsToFlush) {
+        try {
+          insertOperationLog(logEntry.operationId, logEntry.step, logEntry.status, logEntry.data);
+        } catch (error) {
+          // Log error but continue with other entries
+          console.error('Failed to flush operation log entry:', error);
+        }
+      }
+    } catch (error) {
+      console.error('Error flushing operation logs:', error);
+    } finally {
+      isFlushing = false;
+      // If new entries were added while flushing, schedule another flush
+      if (operationLogQueue.length > 0) {
+        if (!flushTimer) {
+          flushTimer = setTimeout(() => {
+            flushOperationLogs();
+          }, FLUSH_INTERVAL_MS);
+        }
+      }
+    }
+  });
+}
+
+/**
+ * Force flush all queued operation logs (for shutdown)
+ * @returns {Promise<void>}
+ */
+export async function flushAllOperationLogs() {
+  if (flushTimer) {
+    clearTimeout(flushTimer);
+    flushTimer = null;
+  }
+
+  // Wait for current flush to complete
+  while (isFlushing) {
+    await new Promise(resolve => setTimeout(resolve, 10));
+  }
+
+  // Flush remaining logs synchronously
+  if (operationLogQueue.length > 0) {
+    const logsToFlush = [...operationLogQueue];
+    operationLogQueue.length = 0;
+
+    for (const logEntry of logsToFlush) {
+      try {
+        insertOperationLog(logEntry.operationId, logEntry.step, logEntry.status, logEntry.data);
+      } catch (error) {
+        console.error('Failed to flush operation log entry during shutdown:', error);
+      }
+    }
+  }
+}
 import { createLogger } from './logger.js';
 
 // In-memory storage for operations (FIFO queue, max 100)
@@ -22,6 +121,13 @@ const MAX_OPERATIONS = 100;
 
 // Logger for application logs
 const logger = createLogger('bot');
+
+// Batched operation log queue for non-blocking writes
+const operationLogQueue = [];
+const MAX_QUEUE_SIZE = 10; // Flush when queue reaches this size
+const FLUSH_INTERVAL_MS = 100; // Flush every 100ms
+let flushTimer = null;
+let isFlushing = false;
 
 // Callback registry for broadcasting updates (set by webui-server)
 // Keyed by WebUI port to support multiple instances
@@ -198,31 +304,20 @@ export function createFailedOperation(
     metadata.inputType = inputType;
   }
 
-  // Log operation creation to database (non-blocking - in-memory operation already created)
+  // Queue log entries for batched writing (non-blocking)
   // This ensures operations are tracked even if database is unavailable
-  try {
-    // Wrap in additional try-catch to handle any errors from insertOperationLog itself
-    try {
-      insertOperationLog(operation.id, 'created', 'error', {
-        message: `Operation ${type} failed early: ${errorMessage}`,
-        metadata,
-      });
-      // Also log the error immediately
-      insertOperationLog(operation.id, 'error', 'error', {
-        message: errorMessage,
-        metadata: {
-          errorType,
-          earlyFailure: true,
-        },
-      });
-    } catch (dbError) {
-      // Database operation failed, but in-memory operation is already created
-      console.error('Failed to log failed operation creation to database:', dbError);
-    }
-  } catch (error) {
-    // Catch any other unexpected errors
-    console.error('Unexpected error during failed operation creation logging:', error);
-  }
+  queueOperationLog(operation.id, 'created', 'error', {
+    message: `Operation ${type} failed early: ${errorMessage}`,
+    metadata,
+  });
+  // Also queue the error log
+  queueOperationLog(operation.id, 'error', 'error', {
+    message: errorMessage,
+    metadata: {
+      errorType,
+      earlyFailure: true,
+    },
+  });
 
   // Log to application logs with operation ID
   logger.debug(`Failed operation ${type} created [op: ${operation.id}]: ${errorMessage}`);
@@ -315,23 +410,12 @@ export function createOperation(type, userId, username, context = {}) {
     metadata.inputType = inputType;
   }
 
-  // Log operation creation to database (non-blocking - in-memory operation already created)
+  // Queue log entry for batched writing (non-blocking)
   // This ensures operations are tracked even if database is unavailable
-  try {
-    // Wrap in additional try-catch to handle any errors from insertOperationLog itself
-    try {
-      insertOperationLog(operation.id, 'created', 'pending', {
-        message: `Operation ${type} created for user ${username}`,
-        metadata,
-      });
-    } catch (dbError) {
-      // Database operation failed, but in-memory operation is already created
-      console.error('Failed to log operation creation to database:', dbError);
-    }
-  } catch (error) {
-    // Catch any other unexpected errors
-    console.error('Unexpected error during operation creation logging:', error);
-  }
+  queueOperationLog(operation.id, 'created', 'pending', {
+    message: `Operation ${type} created for user ${username}`,
+    metadata,
+  });
 
   // Log to application logs with operation ID
   logger.debug(`Operation ${type} created [op: ${operation.id}]`);
@@ -372,28 +456,17 @@ export function updateOperationStatus(operationId, status, data = {}) {
     operation.performanceMetrics.duration = Math.max(1, Date.now() - operation.startTime);
   }
 
-  // Log status update to database (non-blocking - in-memory update already completed)
+  // Queue log entry for batched writing (non-blocking)
   // This ensures operation status is always updated even if database is unavailable
-  try {
-    const metadata = { previousStatus, newStatus: status, ...data };
-    // Include duration in metadata when operation completes
-    if ((status === 'success' || status === 'error') && operation.performanceMetrics.duration) {
-      metadata.duration = operation.performanceMetrics.duration;
-    }
-    // Wrap in additional try-catch to handle any errors from insertOperationLog itself
-    try {
-      insertOperationLog(operationId, 'status_update', status, {
-        message: `Status changed from ${previousStatus} to ${status}`,
-        metadata,
-      });
-    } catch (dbError) {
-      // Database operation failed, but in-memory status is already updated
-      console.error('Failed to log operation status update to database:', dbError);
-    }
-  } catch (error) {
-    // Catch any other unexpected errors
-    console.error('Unexpected error during operation status update logging:', error);
+  const metadata = { previousStatus, newStatus: status, ...data };
+  // Include duration in metadata when operation completes
+  if ((status === 'success' || status === 'error') && operation.performanceMetrics.duration) {
+    metadata.duration = operation.performanceMetrics.duration;
   }
+  queueOperationLog(operationId, 'status_update', status, {
+    message: `Status changed from ${previousStatus} to ${status}`,
+    metadata,
+  });
 
   // Log to application logs with operation ID
   logger.debug(`Operation status updated to ${status} [op: ${operationId}]`);
@@ -464,25 +537,14 @@ export function logOperationStep(operationId, step, status, data = {}) {
     }
   }
 
-  // Log to database (non-blocking - in-memory step already added)
+  // Queue log entry for batched writing (non-blocking)
   // This ensures operation steps are tracked even if database is unavailable
-  try {
-    // Wrap in additional try-catch to handle any errors from insertOperationLog itself
-    try {
-      insertOperationLog(operationId, step, status, {
-        message: data.message || `Step ${step} ${status}`,
-        filePath: data.filePath || null,
-        stackTrace: data.stackTrace || null,
-        metadata: data.metadata || null,
-      });
-    } catch (dbError) {
-      // Database operation failed, but in-memory step is already added
-      console.error('Failed to log operation step to database:', dbError);
-    }
-  } catch (error) {
-    // Catch any other unexpected errors
-    console.error('Unexpected error during operation step logging:', error);
-  }
+  queueOperationLog(operationId, step, status, {
+    message: data.message || `Step ${step} ${status}`,
+    filePath: data.filePath || null,
+    stackTrace: data.stackTrace || null,
+    metadata: data.metadata || null,
+  });
 
   // Log to application logs with operation ID
   logger.debug(`Operation step ${step} ${status} [op: ${operationId}]`);
@@ -512,25 +574,14 @@ export function logOperationError(operationId, error, data = {}) {
   operation.error = errorMessage;
   operation.stackTrace = stackTrace;
 
-  // Log to database (non-blocking - in-memory error already set)
+  // Queue log entry for batched writing (non-blocking)
   // This ensures operation errors are tracked even if database is unavailable
-  try {
-    // Wrap in additional try-catch to handle any errors from insertOperationLog itself
-    try {
-      insertOperationLog(operationId, 'error', 'error', {
-        message: errorMessage,
-        filePath: data.filePath || null,
-        stackTrace: stackTrace,
-        metadata: data.metadata || null,
-      });
-    } catch (dbError) {
-      // Database operation failed, but in-memory error is already set
-      console.error('Failed to log operation error to database:', dbError);
-    }
-  } catch (err) {
-    // Catch any other unexpected errors
-    console.error('Unexpected error during operation error logging:', err);
-  }
+  queueOperationLog(operationId, 'error', 'error', {
+    message: errorMessage,
+    filePath: data.filePath || null,
+    stackTrace: stackTrace,
+    metadata: data.metadata || null,
+  });
 
   // Log to application logs with operation ID
   logger.error(`Operation error: ${errorMessage} [op: ${operationId}]`);

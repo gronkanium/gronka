@@ -27,7 +27,7 @@ export async function initDatabase() {
   // Start initialization
   const newInitPromise = (async () => {
     try {
-      ensureDataDir();
+      await ensureDataDir();
 
       const newDb = new Database(getDbPath());
       setDb(newDb);
@@ -110,6 +110,9 @@ export async function initDatabase() {
         CREATE INDEX IF NOT EXISTS idx_operation_logs_operation_id ON operation_logs(operation_id);
         CREATE INDEX IF NOT EXISTS idx_operation_logs_timestamp ON operation_logs(timestamp);
         CREATE INDEX IF NOT EXISTS idx_operation_logs_status ON operation_logs(status);
+        CREATE INDEX IF NOT EXISTS idx_operation_logs_step ON operation_logs(step);
+        CREATE INDEX IF NOT EXISTS idx_operation_logs_operation_id_timestamp ON operation_logs(operation_id, timestamp);
+        CREATE INDEX IF NOT EXISTS idx_operation_logs_step_status ON operation_logs(step, status);
       `);
 
       // Create user_metrics table for aggregated statistics

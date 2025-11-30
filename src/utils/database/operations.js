@@ -1,5 +1,45 @@
-import { getDb } from './connection.js';
+import { getDb, getCachedStatement } from './connection.js';
 import { getUser } from './users.js';
+
+// Query result cache for getRecentOperations
+const recentOperationsCache = {
+  data: null,
+  timestamp: 0,
+  ttl: 30 * 1000, // 30 seconds
+};
+
+/**
+ * Get cached recent operations if available and not expired
+ * @returns {Array|null} Cached operations or null
+ */
+function getCachedRecentOperations() {
+  if (!recentOperationsCache.data) {
+    return null;
+  }
+  const age = Date.now() - recentOperationsCache.timestamp;
+  if (age >= recentOperationsCache.ttl) {
+    recentOperationsCache.data = null;
+    return null;
+  }
+  return recentOperationsCache.data;
+}
+
+/**
+ * Cache recent operations
+ * @param {Array} operations - Operations to cache
+ */
+function setCachedRecentOperations(operations) {
+  recentOperationsCache.data = operations;
+  recentOperationsCache.timestamp = Date.now();
+}
+
+/**
+ * Invalidate recent operations cache
+ */
+export function invalidateRecentOperationsCache() {
+  recentOperationsCache.data = null;
+  recentOperationsCache.timestamp = 0;
+}
 
 /**
  * Insert an operation log entry
@@ -20,7 +60,7 @@ export function insertOperationLog(operationId, step, status, data = {}) {
   const { message = null, filePath = null, stackTrace = null, metadata = null } = data;
   const metadataStr = metadata ? JSON.stringify(metadata) : null;
 
-  const stmt = db.prepare(
+  const stmt = getCachedStatement(
     'INSERT INTO operation_logs (operation_id, timestamp, step, status, message, file_path, stack_trace, metadata) VALUES (?, ?, ?, ?, ?, ?, ?, ?)'
   );
   stmt.run(operationId, timestamp, step, status, message, filePath, stackTrace, metadataStr);
@@ -38,7 +78,7 @@ export function getOperationLogs(operationId) {
     return [];
   }
 
-  const stmt = db.prepare(
+  const stmt = getCachedStatement(
     'SELECT * FROM operation_logs WHERE operation_id = ? ORDER BY timestamp ASC'
   );
   return stmt.all(operationId);
@@ -169,7 +209,7 @@ export function getFailedOperationsByUser(userId, limit = 50) {
   }
 
   // Get all operation IDs that have error status
-  const errorLogsStmt = db.prepare(`
+  const errorLogsStmt = getCachedStatement(`
     SELECT DISTINCT operation_id 
     FROM operation_logs 
     WHERE status = 'error' 
@@ -200,7 +240,7 @@ export function searchOperationsByUrl(urlPattern, limit = 50) {
   }
 
   // Get all operation logs that have metadata containing the URL pattern
-  const stmt = db.prepare(`
+  const stmt = getCachedStatement(`
     SELECT DISTINCT operation_id 
     FROM operation_logs 
     WHERE metadata LIKE ? 
@@ -233,8 +273,16 @@ export function getRecentOperations(limit = 100) {
     return [];
   }
 
+  // Check cache first (only for default limit of 100)
+  if (limit === 100) {
+    const cached = getCachedRecentOperations();
+    if (cached) {
+      return cached;
+    }
+  }
+
   // Get distinct operation IDs ordered by most recent timestamp
-  const stmt = db.prepare(`
+  const stmt = getCachedStatement(`
     SELECT DISTINCT operation_id, MAX(timestamp) as latest_timestamp
     FROM operation_logs
     GROUP BY operation_id
@@ -453,6 +501,11 @@ export function getRecentOperations(limit = 100) {
     })
     .filter(op => op !== null); // Remove any null operations
 
+  // Cache result if using default limit
+  if (limit === 100) {
+    setCachedRecentOperations(reconstructedOperations);
+  }
+
   return reconstructedOperations;
 }
 
@@ -471,7 +524,7 @@ export function updateOperationLogMetadata(operationId, step, newMetadata) {
   }
 
   // Get the existing log entry
-  const stmt = db.prepare(
+  const stmt = getCachedStatement(
     'SELECT * FROM operation_logs WHERE operation_id = ? AND step = ? ORDER BY timestamp ASC LIMIT 1'
   );
   const existingLog = stmt.get(operationId, step);
@@ -497,7 +550,7 @@ export function updateOperationLogMetadata(operationId, step, newMetadata) {
   const metadataStr = JSON.stringify(mergedMetadata);
 
   // Update the log entry
-  const updateStmt = db.prepare(
+  const updateStmt = getCachedStatement(
     'UPDATE operation_logs SET metadata = ? WHERE operation_id = ? AND step = ? AND timestamp = ?'
   );
   updateStmt.run(metadataStr, operationId, step, existingLog.timestamp);
@@ -526,7 +579,7 @@ export function getStuckOperations(maxAgeMinutes = 10) {
   // 1. Get all status_update logs with status='running'
   // 2. For each operation_id, get the latest timestamp
   // 3. Filter where latest timestamp < cutoffTime
-  const stmt = db.prepare(`
+  const stmt = getCachedStatement(`
     SELECT operation_id, MAX(timestamp) as latest_timestamp
     FROM operation_logs
     WHERE step = 'status_update' AND status = 'running'
@@ -543,7 +596,7 @@ export function getStuckOperations(maxAgeMinutes = 10) {
   const verifiedStuck = [];
   for (const operationId of stuckOperationIds) {
     // Get the latest status_update for this operation
-    const latestStatusStmt = db.prepare(`
+    const latestStatusStmt = getCachedStatement(`
       SELECT status, timestamp
       FROM operation_logs
       WHERE operation_id = ? AND step = 'status_update'

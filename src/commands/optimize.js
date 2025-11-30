@@ -38,7 +38,7 @@ import {
 } from '../utils/operations-tracker.js';
 import { notifyCommandSuccess, notifyCommandFailure } from '../utils/ntfy-notifier.js';
 import { hashUrlWithParams } from '../utils/cobalt-queue.js';
-import { insertProcessedUrl, initDatabase, getProcessedUrl } from '../utils/database.js';
+import { insertProcessedUrl, getProcessedUrl } from '../utils/database.js';
 import { r2Config } from '../utils/config.js';
 import {
   safeInteractionReply,
@@ -219,37 +219,10 @@ export async function processOptimization(
     username: username,
   });
 
-  try {
-    // Initialize database if needed (for URL tracking)
-    if (originalUrl) {
-      try {
-        await initDatabase();
-      } catch (dbInitError) {
-        // Database initialization failed - update operation status immediately
-        logger.error(`Database initialization failed for optimization: ${dbInitError.message}`);
-        logOperationError(operationId, dbInitError, {
-          metadata: {
-            originalUrl,
-            errorType: 'database_initialization_failure',
-            errorCode: dbInitError.code || null,
-          },
-        });
-        updateOperationStatus(operationId, 'error', {
-          error: `Database initialization failed: ${dbInitError.message}`,
-          stackTrace: dbInitError.stack || null,
-        });
-        await safeInteractionEditReply(interaction, {
-          content: 'an error occurred while initializing the database. please try again later.',
-        });
-        await notifyCommandFailure(username, 'optimize', {
-          operationId,
-          userId,
-          error: `Database initialization failed: ${dbInitError.message}`,
-        });
-        return; // Exit early - operation is already marked as error
-      }
-    }
+  // Database is initialized early at startup, no need to initialize here
+  // URL tracking will work automatically if originalUrl is provided
 
+  try {
     // Update operation to running
     updateOperationStatus(operationId, 'running');
 

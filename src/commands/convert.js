@@ -59,6 +59,7 @@ import { notifyCommandSuccess, notifyCommandFailure } from '../utils/ntfy-notifi
 import { hashUrlWithParams } from '../utils/cobalt-queue.js';
 import { insertProcessedUrl, getProcessedUrl } from '../utils/database.js';
 import { initializeDatabaseWithErrorHandling } from '../utils/database-init.js';
+import { triggerStatsSync } from '../utils/kv-stats-sync.js';
 
 const logger = createLogger('convert');
 
@@ -1167,6 +1168,9 @@ export async function processConversion(
 
     // Record rate limit after successful conversion
     recordRateLimit(userId);
+
+    // Trigger stats sync to KV (with debouncing)
+    await triggerStatsSync();
   } catch (error) {
     logger.error(`Conversion failed for user ${userId} (${interaction.user.tag}):`, error);
 

@@ -65,6 +65,8 @@
     "jekyll:update-stats": "node scripts/update-jekyll-stats.js",
     "kv:sync-stats": "node scripts/sync-stats-to-kv.js",
     "kv:fetch-stats": "node scripts/fetch-stats-from-kv.js",
+    "validate:cloudflare": "node scripts/validate-cloudflare-config.js",
+    "test:cloudflare": "node scripts/test-cloudflare-kv.js",
     "tunnel:gronka-waptop": "cloudflared tunnel --config .cloudflared/config.yml --loglevel debug run",
     "site:start": "npx concurrently \"npm run jekyll:serve\" \"npm run tunnel:gronka-waptop\"",
     "site:stop": "scripts\\stop-jekyll-tunnel.bat",

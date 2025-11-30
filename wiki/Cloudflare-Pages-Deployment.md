@@ -202,18 +202,20 @@ During Cloudflare Pages build:
 
 ### Stats Not Updating
 
-1. **Check bot server logs** - Look for errors in `sync-stats-to-kv.js`
-2. **Verify environment variables** - Ensure all required vars are set
-3. **Test sync manually** - Run `npm run kv:sync-stats` and check output
-4. **Check KV namespace** - Verify namespace ID is correct
-5. **Check API token permissions** - Ensure token has KV write and Pages deploy permissions
+1. **Validate configuration** - Run `npm run validate:cloudflare` to check environment variables
+2. **Test connection** - Run `npm run test:cloudflare` to verify API access and permissions
+3. **Check bot server logs** - Look for errors in `sync-stats-to-kv.js`
+4. **Test sync manually** - Run `npm run kv:sync-stats` and check output
+5. **Check KV namespace** - Verify namespace ID is correct
+6. **Check API token permissions** - Ensure token has KV write and Pages deploy permissions
 
 ### Build Failing
 
 1. **Check build logs** - Look for errors in Cloudflare Pages build logs
 2. **Verify Pages environment variables** - Ensure all vars are set in Pages dashboard
-3. **Test fetch script** - Run `npm run kv:fetch-stats` locally
-4. **Check KV binding** - Verify KV namespace is bound to Pages project
+3. **Test connection** - Run `npm run test:cloudflare` to verify KV read access
+4. **Test fetch script** - Run `npm run kv:fetch-stats` locally
+5. **Check KV binding** - Verify KV namespace is bound to Pages project
 
 ### Stats Not Appearing in Footer
 
@@ -231,6 +233,12 @@ During Cloudflare Pages build:
 ## Manual Commands
 
 ```bash
+# Validate Cloudflare configuration
+npm run validate:cloudflare
+
+# Test Cloudflare KV and Pages connection
+npm run test:cloudflare
+
 # Sync stats to KV manually
 npm run kv:sync-stats
 
@@ -240,6 +248,27 @@ npm run kv:fetch-stats
 # Build Jekyll site locally with KV stats
 npm run kv:fetch-stats && npm run jekyll:build
 ```
+
+### Validation and Testing
+
+Before running sync or fetch commands, you can validate your configuration:
+
+1. **Validate environment variables:**
+   ```bash
+   npm run validate:cloudflare
+   ```
+   This checks that all required Cloudflare environment variables are set in your `.env` file.
+
+2. **Test Cloudflare connection:**
+   ```bash
+   npm run test:cloudflare
+   ```
+   This tests:
+   - KV read access
+   - KV write access
+   - Pages project access
+   
+   Use this to verify your API token has correct permissions and all IDs are correct.
 
 ## Security Notes
 

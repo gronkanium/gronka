@@ -49,12 +49,12 @@ for (const [name, pid] of Object.entries(pids)) {
   }
 }
 
-// Check server health endpoint
-const serverPort = process.env.SERVER_PORT || 3000;
-console.log(`\nchecking server health (http://localhost:${serverPort}/health)...`);
+// Check webui health endpoint
+const webuiPort = process.env.WEBUI_PORT || 3001;
+console.log(`\nchecking webui health (http://localhost:${webuiPort}/api/health)...`);
 
 const healthCheck = new Promise((resolve, reject) => {
-  const req = http.get(`http://localhost:${serverPort}/health`, res => {
+  const req = http.get(`http://localhost:${webuiPort}/api/health`, res => {
     if (res.statusCode === 200) {
       resolve(true);
     } else {
@@ -72,9 +72,9 @@ const healthCheck = new Promise((resolve, reject) => {
 (async () => {
   try {
     await healthCheck;
-    console.log('✓ server health check passed');
+    console.log('✓ webui health check passed');
   } catch (error) {
-    console.error(`✗ server health check failed: ${error.message}`);
+    console.error(`✗ webui health check failed: ${error.message}`);
     allGood = false;
   }
 

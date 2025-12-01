@@ -1,158 +1,24 @@
-the express server provides http endpoints for serving files and checking status. file serving endpoints (`/gifs/*`, `/videos/*`, `/images/*`) are only available when using local storage (not r2). status and stats endpoints (`/health`, `/stats`, `/api/stats/24h`, `/api/health`) work regardless of storage configuration.
+# api endpoints
+
+gronka has a minimal http server built into the bot process that provides a stats endpoint for jekyll site integration. files are served directly from r2 or discord (no local file serving).
+
+## architecture
+
+as of version 0.13.0, the standalone express server (`src/server.js`) has been removed. the bot now includes a minimal http server that only serves `/api/stats/24h` for jekyll site integration.
+
+- **bot process**: discord bot + minimal stats http server (port 3000)
+- **webui process**: dashboard interface (port 3001) - calculates stats directly from database/filesystem
+- **files**: served directly from r2 or discord attachments (no http endpoints)
 
 ## base url
 
-all endpoints are relative to the server base url. default port is 3000.
+the stats endpoint runs on port 3000 (configurable via `SERVER_PORT`):
 
 ```
 http://localhost:3000
 ```
 
 ## endpoints
-
-### `GET /health`
-
-check if the server is running. restricted to internal network (localhost and docker networks).
-
-**response:**
-
-```json
-{
-  "status": "ok",
-  "uptime": 12345,
-  "timestamp": 1234567890,
-  "components": {
-    "server": { "status": "ok" },
-    "storage": { "status": "ok", "path": "/path/to/storage" },
-    "ffmpeg": { "status": "ok", "available": true },
-    "disk": { "status": "ok", "available": true }
-  }
-}
-```
-
-**status codes:**
-
-- `200` - server is healthy
-- `403` - access denied (external request)
-- `503` - server is degraded (some components failing)
-- `500` - server error
-
-**example:**
-
-```bash
-curl http://localhost:3000/health
-```
-
-### `GET /stats`
-
-get storage statistics.
-
-**authentication:**
-
-if `STATS_USERNAME` and `STATS_PASSWORD` are configured, basic auth is required.
-
-**response:**
-
-```json
-{
-  "total_gifs": 1234,
-  "total_videos": 567,
-  "total_images": 890,
-  "disk_usage_formatted": "1.15 GB",
-  "gifs_disk_usage_formatted": "500.00 MB",
-  "videos_disk_usage_formatted": "400.00 MB",
-  "images_disk_usage_formatted": "250.00 MB",
-  "storage_path": "/path/to/storage"
-}
-```
-
-**status codes:**
-
-- `200` - success
-- `401` - unauthorized (if auth is required)
-- `500` - server error
-
-**example:**
-
-```bash
-# without auth
-curl http://localhost:3000/stats
-
-# with auth
-curl -u admin:password http://localhost:3000/stats
-```
-
-**caching:**
-
-stats are cached for 5 minutes by default (configurable via `STATS_CACHE_TTL`). set to `0` to disable caching.
-
-### `GET /api/health`
-
-check api health status (for dashboard).
-
-**response:**
-
-```json
-{
-  "status": "ok",
-  "uptime": 12345,
-  "timestamp": 1234567890
-}
-```
-
-**status codes:**
-
-- `200` - api is healthy
-
-**example:**
-
-```bash
-curl http://localhost:3000/api/health
-```
-
-### `GET /api/stats`
-
-get storage statistics (for dashboard).
-
-**authentication:**
-
-if `STATS_USERNAME` and `STATS_PASSWORD` are configured, basic auth is required.
-
-**response:**
-
-```json
-{
-  "total_gifs": 1234,
-  "total_videos": 567,
-  "total_images": 890,
-  "disk_usage_formatted": "1.15 GB",
-  "gifs_disk_usage_formatted": "500.00 MB",
-  "videos_disk_usage_formatted": "400.00 MB",
-  "images_disk_usage_formatted": "250.00 MB",
-  "storage_path": "/path/to/storage"
-}
-```
-
-**status codes:**
-
-- `200` - success
-- `401` - unauthorized (if auth is required)
-- `500` - server error
-
-**example:**
-
-```bash
-# without auth
-curl http://localhost:3000/api/stats
-
-# with auth
-curl -u admin:password http://localhost:3000/api/stats
-```
-
-**notes:**
-
-- this endpoint is for dashboard use and is publicly accessible (not restricted to internal network)
-- similar to `/stats` but without internal network restriction
 
 ### `GET /api/stats/24h`
 
@@ -192,12 +58,7 @@ returns statistics about user activity in the past 24 hours, including unique us
 
 - `200` - success
 - `401` - unauthorized (if auth is required but not provided)
-- `429` - too many requests (rate limit exceeded)
 - `500` - server error
-
-**rate limiting:**
-
-60 requests per 15 minutes (should be plenty for hourly polling)
 
 **example:**
 
@@ -222,146 +83,46 @@ curl -v -u admin:password http://localhost:3000/api/stats/24h
 
 - stats are calculated in real-time from the database
 - the 24-hour window is based on the current time when the request is made
-- this endpoint is separate from `/stats` which shows storage statistics
 
-### `GET /gifs/{hash}.gif`
+## webui endpoints
 
-serve a gif file.
+the webui dashboard (port 3001) has its own health and stats endpoints for internal use:
 
-**parameters:**
+- `GET /api/health` - webui health check
+- `GET /api/stats` - storage statistics (calculated directly from database/filesystem)
 
-- `hash` - md5 hash of the gif file (filename without extension)
-
-**response:**
-
-- content-type: `image/gif`
-- file content
-
-**status codes:**
-
-- `200` - file found
-- `404` - file not found
-- `500` - server error
-
-**example:**
-
-```bash
-curl http://localhost:3000/gifs/abc123def456.gif
-```
-
-**caching:**
-
-files are served with cache headers for 7 days. files are immutable (hash-based names).
-
-### `GET /videos/{hash}.{ext}`
-
-serve a video file.
-
-**parameters:**
-
-- `hash` - md5 hash of the video file
-- `ext` - file extension (mp4, mov, webm, etc.)
-
-**response:**
-
-- content-type: appropriate video mime type
-- file content
-
-**status codes:**
-
-- `200` - file found
-- `404` - file not found
-- `500` - server error
-
-**example:**
-
-```bash
-curl http://localhost:3000/videos/abc123def456.mp4
-```
-
-### `GET /images/{hash}.{ext}`
-
-serve an image file.
-
-**parameters:**
-
-- `hash` - md5 hash of the image file
-- `ext` - file extension (png, jpg, jpeg, webp, gif)
-
-**response:**
-
-- content-type: appropriate image mime type
-- file content
-
-**status codes:**
-
-- `200` - file found
-- `404` - file not found
-- `500` - server error
-
-**example:**
-
-```bash
-curl http://localhost:3000/images/abc123def456.jpg
-```
-
-### `GET /`
-
-get api information.
-
-**response:**
-
-```json
-{
-  "service": "gronka api",
-  "endpoints": {
-    "terms": "/terms",
-    "privacy": "/privacy"
-  },
-  "note": "files are served from r2, not locally"
-}
-```
-
-**status codes:**
-
-- `200` - success
-
-**example:**
-
-```bash
-curl http://localhost:3000/
-```
+these are for dashboard use only and are not intended for external consumption.
 
 ## r2 storage
 
-when r2 is configured, files are served directly from your r2 public domain instead of these endpoints. the `/health` and `/stats` endpoints still work, but file serving is handled by r2.
-
-r2 file urls follow the same pattern:
+when r2 is configured, files are served directly from your r2 public domain:
 
 - `{R2_PUBLIC_DOMAIN}/gifs/{hash}.gif`
 - `{R2_PUBLIC_DOMAIN}/videos/{hash}.{ext}`
 - `{R2_PUBLIC_DOMAIN}/images/{hash}.{ext}`
 
-## cors
+## discord attachments
 
-cors is enabled for all endpoints, allowing cross-origin requests. this is useful for embedding files in web pages.
-
-## rate limiting
-
-api endpoints have rate limiting enabled:
-
-- general endpoints: 50 requests per 15 minutes per ip
-- stats endpoints: 60 requests per 15 minutes per ip
-- rate limiting is bypassed for requests from localhost and internal docker networks (172.x.x.x, 192.168.x.x, 10.x.x.x)
-- consider using a reverse proxy with additional rate limiting if exposing the server publicly
+files smaller than 8mb are uploaded as discord attachments and served directly from discord's cdn.
 
 ## security
 
-when exposing the server publicly:
+when exposing the stats endpoint publicly:
 
 - use a reverse proxy (nginx, caddy, etc.)
-- enable authentication on `/stats` endpoint
-- consider adding rate limiting
-- use https (via reverse proxy or cloudflare r2 public domain)
+- enable authentication with `STATS_USERNAME` and `STATS_PASSWORD`
+- use https (via reverse proxy)
+- consider additional rate limiting at the reverse proxy level
 
-the server binds to `0.0.0.0` by default, making it accessible from the network. for local development, this is fine. for production, use a reverse proxy or configure cloudflare r2 with a public domain.
+the stats server binds to `0.0.0.0` by default (configurable via `SERVER_HOST`), making it accessible from the network.
+
+## migration notes
+
+if upgrading from version < 0.13.0:
+
+- the standalone `src/server.js` has been removed
+- file serving endpoints (`/gifs/*`, `/videos/*`, `/images/*`) are gone - files are now served from r2 or discord only
+- health and storage stats endpoints (`/health`, `/stats`, `/api/stats`, `/api/health`) have been removed or moved to webui
+- only `/api/stats/24h` remains for jekyll integration
+- the bot now starts the stats http server automatically
+- docker healthcheck changed from http check to process check

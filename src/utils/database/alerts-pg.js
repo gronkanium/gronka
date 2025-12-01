@@ -1,5 +1,6 @@
-import { getPostgresConnection } from './connection-pg.js';
-import { ensurePostgresInitialized } from './init-pg.js';
+import { getPostgresConnection } from './connection.js';
+import { ensurePostgresInitialized } from './init.js';
+import { convertTimestampsInArray, convertTimestampsToNumbers } from './helpers-pg.js';
 
 /**
  * Insert an alert/notification entry
@@ -35,10 +36,12 @@ export async function insertAlert(alert) {
   `;
 
   const inserted = result[0];
-  return {
+  const alertRecord = {
     ...inserted,
     metadata: metadata ? JSON.parse(metadataStr) : null,
   };
+  // Convert timestamp fields from strings to numbers
+  return convertTimestampsToNumbers(alertRecord, ['timestamp']);
 }
 
 /**
@@ -112,7 +115,9 @@ export async function getAlerts(options = {}) {
     params.push(offset);
   }
 
-  return await sql.unsafe(query, params);
+  const alerts = await sql.unsafe(query, params);
+  // Convert timestamp fields from strings to numbers
+  return convertTimestampsInArray(alerts, ['timestamp']);
 }
 
 /**

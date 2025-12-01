@@ -4,13 +4,12 @@ import {
   setPostgresConnection,
   getPostgresInitPromise,
   setPostgresInitPromise,
-} from './connection-pg.js';
+} from './connection.js';
 import {
   getTableDefinitions,
   getIndexDefinitions,
   addFileSizeColumnIfNeeded,
 } from './schema-pg.js';
-import { setDb, setDbType } from './connection.js';
 
 /**
  * Initialize PostgreSQL database and create tables
@@ -34,8 +33,6 @@ export async function initPostgresDatabase() {
       // Initialize connection
       const connection = await initPostgresConnection();
       setPostgresConnection(connection);
-      setDb(connection);
-      setDbType('postgres');
 
       // Create tables
       const tables = getTableDefinitions();
@@ -57,7 +54,6 @@ export async function initPostgresDatabase() {
     } catch (error) {
       setPostgresInitPromise(null); // Reset on error so it can be retried
       setPostgresConnection(null);
-      setDb(null);
       throw error;
     }
   })();
@@ -105,10 +101,9 @@ async function resetSerialSequences(sql) {
  * @returns {Promise<void>}
  */
 export async function closePostgresDatabase() {
-  const { closePostgresConnection } = await import('./connection-pg.js');
+  const { closePostgresConnection } = await import('./connection.js');
   await closePostgresConnection();
   setPostgresConnection(null);
-  setDb(null);
   setPostgresInitPromise(null);
 }
 

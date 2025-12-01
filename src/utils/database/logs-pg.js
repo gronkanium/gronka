@@ -1,5 +1,6 @@
-import { getPostgresConnection } from './connection-pg.js';
-import { ensurePostgresInitialized } from './init-pg.js';
+import { getPostgresConnection } from './connection.js';
+import { ensurePostgresInitialized } from './init.js';
+import { convertTimestampsInArray } from './helpers-pg.js';
 
 /**
  * Insert a log entry into the database
@@ -133,8 +134,8 @@ export async function getLogs(options = {}) {
 
   const rawLogs = await sql.unsafe(query, params);
 
-  // Parse metadata JSON strings into objects
-  return rawLogs.map(log => {
+  // Parse metadata JSON strings into objects and convert timestamps to numbers
+  const logs = rawLogs.map(log => {
     let metadata = null;
     if (log.metadata) {
       try {
@@ -149,6 +150,9 @@ export async function getLogs(options = {}) {
       metadata,
     };
   });
+
+  // Convert timestamp fields from strings to numbers
+  return convertTimestampsInArray(logs, ['timestamp']);
 }
 
 /**
@@ -349,7 +353,7 @@ export async function getLogMetrics(options = {}) {
     warnCount1h,
     warnCount24h,
     errorTimeline: errorTimeline.map(row => ({
-      hour: parseInt(row.hour, 10),
+      hour: typeof row.hour === 'string' ? parseInt(row.hour, 10) : row.hour,
       count: parseInt(row.count, 10),
     })),
   };

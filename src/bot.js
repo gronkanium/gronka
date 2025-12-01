@@ -1,6 +1,7 @@
 import { Client, GatewayIntentBits, Events } from 'discord.js';
+import express from 'express';
 import { createLogger } from './utils/logger.js';
-import { botConfig } from './utils/config.js';
+import { botConfig, serverConfig } from './utils/config.js';
 import { ConfigurationError } from './utils/errors.js';
 import { trackUser, initializeUserTracking } from './utils/user-tracking.js';
 import { handleStatsCommand } from './commands/stats.js';
@@ -10,10 +11,11 @@ import { handleConvertCommand, handleConvertContextMenu } from './commands/conve
 import { handleInfoCommand } from './commands/info.js';
 import { handleModalSubmit } from './handlers/modals.js';
 import { cleanupStuckOperations } from './utils/operations-tracker.js';
-import { initializeR2UsageCache } from './utils/storage.js';
+import { initializeR2UsageCache, formatFileSize } from './utils/storage.js';
 import { r2Config } from './utils/config.js';
 import { startCleanupJob, stopCleanupJob } from './utils/r2-cleanup.js';
 import { initDatabase } from './utils/database.js';
+import { get24HourStats } from './utils/database/stats.js';
 
 // Initialize logger
 const logger = createLogger('bot');
@@ -25,6 +27,13 @@ const {
   gifStoragePath: GIF_STORAGE_PATH,
   cdnBaseUrl: CDN_BASE_URL,
 } = botConfig;
+
+const {
+  serverPort: SERVER_PORT,
+  serverHost: SERVER_HOST,
+  statsUsername: STATS_USERNAME,
+  statsPassword: STATS_PASSWORD,
+} = serverConfig;
 
 // Store attachment info for modal submissions: customId -> { attachment, attachmentType, adminUser, preDownloadedBuffer }
 const modalAttachmentCache = new Map();
@@ -54,6 +63,92 @@ let botStartTime = null;
 
 // Track R2 cleanup job interval ID for graceful shutdown
 let cleanupJobIntervalId = null;
+
+// HTTP server for stats endpoint (minimal, only for Jekyll stats site)
+let httpServer = null;
+
+/**
+ * Basic authentication middleware for stats endpoint
+ */
+function basicAuth(req, res, next) {
+  if (!STATS_USERNAME || !STATS_PASSWORD) {
+    // No auth configured, allow access
+    return next();
+  }
+
+  const authHeader = req.headers.authorization;
+
+  if (!authHeader || !authHeader.startsWith('Basic ')) {
+    res.set('WWW-Authenticate', 'Basic realm="Stats API"');
+    return res.status(401).json({ error: 'authentication required' });
+  }
+
+  const credentials = Buffer.from(authHeader.substring(6), 'base64').toString('utf-8');
+  const [username, password] = credentials.split(':');
+
+  if (username === STATS_USERNAME && password === STATS_PASSWORD) {
+    return next();
+  }
+
+  res.set('WWW-Authenticate', 'Basic realm="Stats API"');
+  return res.status(401).json({ error: 'invalid credentials' });
+}
+
+/**
+ * Start minimal HTTP server for stats endpoint
+ * Only serves /api/stats/24h for Jekyll stats site integration
+ */
+function startStatsServer() {
+  const app = express();
+
+  // Trust proxy for proper IP detection
+  app.set('trust proxy', 1);
+
+  // Security headers
+  app.use((req, res, next) => {
+    res.set('X-Content-Type-Options', 'nosniff');
+    res.set('X-Frame-Options', 'DENY');
+    res.set('X-XSS-Protection', '1; mode=block');
+    next();
+  });
+
+  // 24-hour stats endpoint for Jekyll site (protected with basic auth)
+  app.get('/api/stats/24h', basicAuth, async (req, res) => {
+    try {
+      logger.debug('24-hour stats API requested');
+
+      const stats = await get24HourStats();
+
+      res.json({
+        unique_users: stats.unique_users,
+        total_files: stats.total_files,
+        total_data_bytes: stats.total_data_bytes,
+        total_data_formatted: formatFileSize(stats.total_data_bytes),
+        period: '24 hours',
+        last_updated: stats.timestamp,
+      });
+    } catch (error) {
+      logger.error('Failed to get 24-hour stats:', {
+        error: error.message,
+        stack: error.stack,
+      });
+      res.status(500).json({
+        error: 'failed to get stats',
+        message: error.message,
+      });
+    }
+  });
+
+  // Start server
+  httpServer = app.listen(SERVER_PORT, SERVER_HOST, () => {
+    logger.info(`stats server running on http://${SERVER_HOST}:${SERVER_PORT}`);
+    logger.info(`stats endpoint: http://${SERVER_HOST}:${SERVER_PORT}/api/stats/24h`);
+  });
+
+  httpServer.on('error', error => {
+    logger.error('Stats server error:', error);
+  });
+}
 
 // Event handlers
 client.once(Events.ClientReady, async readyClient => {
@@ -169,6 +264,11 @@ async function startBot() {
     await initDatabase();
     logger.info('Database initialized');
 
+    // Start stats HTTP server (minimal, only for /api/stats/24h endpoint)
+    if (SERVER_PORT) {
+      startStatsServer();
+    }
+
     logger.info('Starting Discord bot...');
     await client.login(DISCORD_TOKEN);
   } catch (error) {
@@ -185,7 +285,15 @@ function gracefulShutdown(signal) {
   if (cleanupJobIntervalId) {
     stopCleanupJob(cleanupJobIntervalId);
   }
-  process.exit(0);
+  if (httpServer) {
+    httpServer.close(() => {
+      logger.info('HTTP server closed');
+    });
+  }
+  // Give servers time to close before exiting
+  setTimeout(() => {
+    process.exit(0);
+  }, 1000);
 }
 
 process.on('SIGTERM', () => gracefulShutdown('SIGTERM'));

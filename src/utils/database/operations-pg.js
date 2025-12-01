@@ -1,6 +1,7 @@
-import { getPostgresConnection } from './connection-pg.js';
-import { ensurePostgresInitialized } from './init-pg.js';
+import { getPostgresConnection } from './connection.js';
+import { ensurePostgresInitialized } from './init.js';
 import { getUser } from './users-pg.js';
+import { convertTimestampsInArray, convertTimestampsToNumbers } from './helpers-pg.js';
 
 // Query result cache for getRecentOperations
 const recentOperationsCache = {
@@ -83,11 +84,13 @@ export async function getOperationLogs(operationId) {
     return [];
   }
 
-  return await sql`
+  const logs = await sql`
     SELECT * FROM operation_logs
     WHERE operation_id = ${operationId}
     ORDER BY timestamp ASC
   `;
+  // Convert timestamp fields from strings to numbers
+  return convertTimestampsInArray(logs, ['timestamp']);
 }
 
 /**
@@ -313,7 +316,7 @@ export async function getRecentOperations(limit = 100) {
       continue;
     }
 
-    // Parse metadata from all logs
+    // Parse metadata from all logs and ensure timestamps are numbers
     const parsedLogs = logs.map(log => {
       let metadata = null;
       if (log.metadata) {
@@ -323,10 +326,12 @@ export async function getRecentOperations(limit = 100) {
           console.error('Failed to parse metadata for operation log:', error);
         }
       }
-      return {
+      const logWithMetadata = {
         ...log,
         metadata,
       };
+      // Ensure timestamp is a number (should already be converted by getOperationLogs, but double-check)
+      return convertTimestampsToNumbers(logWithMetadata, ['timestamp']);
     });
 
     // Find the 'created' log to extract initial context
@@ -470,12 +475,26 @@ export async function getRecentOperations(limit = 100) {
     });
   }
 
+  // Convert timestamps in final reconstructed operations
+  const convertedOperations = reconstructedOperations.map(op =>
+    convertTimestampsToNumbers(op, ['timestamp', 'startTime', 'latestTimestamp'])
+  );
+
+  // Also convert timestamps in performanceMetrics.steps
+  convertedOperations.forEach(op => {
+    if (op.performanceMetrics?.steps) {
+      op.performanceMetrics.steps = op.performanceMetrics.steps.map(step =>
+        convertTimestampsToNumbers(step, ['timestamp'])
+      );
+    }
+  });
+
   // Cache result if using default limit
   if (limit === 100) {
-    setCachedRecentOperations(reconstructedOperations);
+    setCachedRecentOperations(convertedOperations);
   }
 
-  return reconstructedOperations;
+  return convertedOperations;
 }
 
 /**

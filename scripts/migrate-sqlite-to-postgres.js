@@ -95,9 +95,9 @@ async function migrateTable(sqliteDb, pgSql, tableName, transformRow = null) {
         );
       }
       inserted++;
-    } catch (_error) {
-      errors.push({ row, error: _error.message });
-      console.error(`  Error inserting row: ${_error.message}`);
+    } catch (error) {
+      errors.push({ row, error: error.message });
+      console.error(`  Error inserting row: ${error.message}`);
     }
   }
 
@@ -193,7 +193,7 @@ async function main() {
 
     // Verify data integrity
     console.log('\nVerifying data integrity...');
-    for (const table of Object.keys(results)) {
+    for (const [table, _result] of Object.entries(results)) {
       const sqliteCount = sqliteDb.prepare(`SELECT COUNT(*) as count FROM ${table}`).get().count;
       const pgCountResult = await pgSql.unsafe(`SELECT COUNT(*) as count FROM ${table}`);
       const pgCount = parseInt(pgCountResult[0]?.count || 0, 10);
@@ -204,13 +204,19 @@ async function main() {
       }
     }
 
+    // Reset SERIAL sequences to match migrated data (fixes duplicate key errors)
+    if (!dryRun) {
+      console.log('\nResetting SERIAL sequences...');
+      await resetSerialSequences(pgSql);
+    }
+
     if (dryRun) {
       console.log('\nDry run completed. No data was actually migrated.');
     } else {
       console.log('\nMigration completed successfully!');
     }
-  } catch (_error) {
-    console.error('\nMigration failed:', _error);
+  } catch (error) {
+    console.error('\nMigration failed:', error);
     process.exit(1);
   } finally {
     sqliteDb.close();
@@ -218,7 +224,41 @@ async function main() {
   }
 }
 
-main().catch(_error => {
-  console.error('Fatal error:', _error);
+/**
+ * Reset SERIAL sequences to match the maximum ID in each table
+ * This fixes duplicate key errors after data migration
+ * @param {Object} pgSql - The postgres.js client instance
+ * @returns {Promise<void>}
+ */
+async function resetSerialSequences(pgSql) {
+  const tablesWithSerial = [
+    { table: 'logs', sequence: 'logs_id_seq', column: 'id' },
+    { table: 'operation_logs', sequence: 'operation_logs_id_seq', column: 'id' },
+    { table: 'system_metrics', sequence: 'system_metrics_id_seq', column: 'id' },
+    { table: 'alerts', sequence: 'alerts_id_seq', column: 'id' },
+    { table: 'temporary_uploads', sequence: 'temporary_uploads_id_seq', column: 'id' },
+  ];
+
+  for (const { table, sequence, column } of tablesWithSerial) {
+    try {
+      // Get the maximum ID from the table
+      const maxQuery = `SELECT COALESCE(MAX(${column}), 0) as max_id FROM ${table}`;
+      const maxResult = await pgSql.unsafe(maxQuery);
+      const maxId = parseInt(maxResult[0]?.max_id || 0, 10);
+
+      // Reset the sequence to max_id + 1 (or 1 if table is empty)
+      // Use setval with false to set the current value without incrementing
+      const nextVal = maxId > 0 ? maxId + 1 : 1;
+      await pgSql.unsafe(`SELECT setval('${sequence}', ${nextVal}, false)`);
+      console.log(`  ${table}: Reset sequence ${sequence} to ${nextVal}`);
+    } catch (error) {
+      // If sequence doesn't exist yet, that's okay - it will be created on first insert
+      console.warn(`  ${table}: Could not reset sequence ${sequence}: ${error.message}`);
+    }
+  }
+}
+
+main().catch(error => {
+  console.error('Fatal error:', error);
   process.exit(1);
 });

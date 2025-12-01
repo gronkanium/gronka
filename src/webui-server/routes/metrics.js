@@ -8,7 +8,7 @@ const logger = createLogger('webui');
 const router = express.Router();
 
 // Error metrics endpoint
-router.get('/api/metrics/errors', (req, res) => {
+router.get('/api/metrics/errors', async (req, res) => {
   try {
     const { timeRange } = req.query;
     const options = {
@@ -21,7 +21,7 @@ router.get('/api/metrics/errors', (req, res) => {
       options.timeRange = parseInt(timeRange, 10);
     }
 
-    const metrics = getLogMetrics(options);
+    const metrics = await getLogMetrics(options);
 
     res.json(metrics);
   } catch (error) {
@@ -45,7 +45,7 @@ router.get('/api/metrics/system', async (req, res) => {
     if (startTime) options.startTime = parseInt(startTime, 10);
     if (endTime) options.endTime = parseInt(endTime, 10);
 
-    const metrics = getSystemMetrics(options);
+    const metrics = await getSystemMetrics(options);
 
     // Also get current metrics
     const current = await collectSystemMetrics();

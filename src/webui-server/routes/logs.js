@@ -6,7 +6,7 @@ const logger = createLogger('webui');
 const router = express.Router();
 
 // Logs endpoint with filtering and pagination
-router.get('/api/logs', (req, res) => {
+router.get('/api/logs', async (req, res) => {
   try {
     const {
       component,
@@ -71,8 +71,8 @@ router.get('/api/logs', (req, res) => {
     options.excludeComponentLevels = [{ component: 'webui', level: 'INFO' }];
 
     // Get logs and total count
-    const logs = getLogs(options);
-    const total = getLogsCount(options);
+    const logs = await getLogs(options);
+    const total = await getLogsCount(options);
 
     res.json({
       logs,
@@ -90,7 +90,7 @@ router.get('/api/logs', (req, res) => {
 });
 
 // Log metrics endpoint
-router.get('/api/logs/metrics', (req, res) => {
+router.get('/api/logs/metrics', async (req, res) => {
   try {
     const { timeRange } = req.query;
     const options = {};
@@ -99,7 +99,7 @@ router.get('/api/logs/metrics', (req, res) => {
       options.timeRange = parseInt(timeRange, 10);
     }
 
-    const metrics = getLogMetrics(options);
+    const metrics = await getLogMetrics(options);
     res.json(metrics);
   } catch (error) {
     logger.error('Failed to fetch log metrics:', error);
@@ -111,9 +111,9 @@ router.get('/api/logs/metrics', (req, res) => {
 });
 
 // Log components endpoint
-router.get('/api/logs/components', (req, res) => {
+router.get('/api/logs/components', async (req, res) => {
   try {
-    const components = getLogComponents();
+    const components = await getLogComponents();
     res.json({ components });
   } catch (error) {
     logger.error('Failed to fetch log components:', error);

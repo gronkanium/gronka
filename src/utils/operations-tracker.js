@@ -632,10 +632,10 @@ async function updateUserMetricsForOperation(operation) {
   }
 
   try {
-    insertOrUpdateUserMetrics(operation.userId, operation.username, metrics);
+    await insertOrUpdateUserMetrics(operation.userId, operation.username, metrics);
 
     // Get updated metrics for broadcasting
-    const updatedMetrics = getUserMetrics(operation.userId);
+    const updatedMetrics = await getUserMetrics(operation.userId);
     if (!updatedMetrics) {
       return; // User metrics not found, skip broadcast
     }

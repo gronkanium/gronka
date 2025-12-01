@@ -6,7 +6,7 @@ const logger = createLogger('webui');
 const router = express.Router();
 
 // Alerts endpoint
-router.get('/api/alerts', (req, res) => {
+router.get('/api/alerts', async (req, res) => {
   try {
     const { severity, component, startTime, endTime, search, limit = 100, offset = 0 } = req.query;
 
@@ -21,8 +21,8 @@ router.get('/api/alerts', (req, res) => {
     if (startTime) options.startTime = parseInt(startTime, 10);
     if (endTime) options.endTime = parseInt(endTime, 10);
 
-    const alerts = getAlerts(options);
-    const total = getAlertsCount(options);
+    const alerts = await getAlerts(options);
+    const total = await getAlertsCount(options);
 
     res.json({
       alerts,

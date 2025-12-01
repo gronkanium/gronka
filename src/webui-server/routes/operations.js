@@ -141,7 +141,7 @@ router.post('/api/admin/operations/clear', restrictToInternal, express.json(), (
 
 // Operations search endpoint - MUST come before /api/operations/:operationId
 // Otherwise Express will match "search" as an operationId parameter
-router.get('/api/operations/search', (req, res) => {
+router.get('/api/operations/search', async (req, res) => {
   try {
     const {
       operationId,
@@ -167,7 +167,7 @@ router.get('/api/operations/search', (req, res) => {
     // Get operations from database (historical)
     try {
       const dbLimit = parseInt(limit, 10) + parseInt(offset, 10) + 100; // Get extra for filtering
-      const dbOps = getRecentOperations(dbLimit);
+      const dbOps = await getRecentOperations(dbLimit);
 
       // Merge with in-memory operations, avoiding duplicates
       const existingIds = new Set(allOperations.map(op => op.id));
@@ -214,7 +214,7 @@ router.get('/api/operations/search', (req, res) => {
     // URL pattern search (requires getting traces from database)
     if (urlPattern) {
       try {
-        const urlTraces = searchOperationsByUrl(urlPattern, 1000);
+        const urlTraces = await searchOperationsByUrl(urlPattern, 1000);
         const urlOperationIds = new Set(urlTraces.map(trace => trace.operationId));
         filtered = filtered.filter(op => urlOperationIds.has(op.id));
       } catch (error) {
@@ -284,7 +284,7 @@ router.get('/api/operations/search', (req, res) => {
 });
 
 // Requests endpoint - shows all user requests including early failures
-router.get('/api/requests', (req, res) => {
+router.get('/api/requests', async (req, res) => {
   try {
     const {
       operationId,
@@ -312,7 +312,7 @@ router.get('/api/requests', (req, res) => {
     // Get operations from database (historical)
     try {
       const dbLimit = parseInt(limit, 10) + parseInt(offset, 10) + 100; // Get extra for filtering
-      const dbOps = getRecentOperations(dbLimit);
+      const dbOps = await getRecentOperations(dbLimit);
 
       // Merge with in-memory operations, avoiding duplicates
       const existingIds = new Set(allOperations.map(op => op.id));
@@ -375,18 +375,19 @@ router.get('/api/requests', (req, res) => {
 
       if (needsDbCheck.length > 0) {
         try {
-          const traces = needsDbCheck
-            .map(op => {
+          const traces = await Promise.all(
+            needsDbCheck.map(async op => {
               try {
-                return getOperationTrace(op.id);
+                return await getOperationTrace(op.id);
               } catch {
                 return null;
               }
             })
-            .filter(Boolean);
+          );
+          const validTraces = traces.filter(Boolean);
 
           const dbMatchingIds = new Set();
-          traces.forEach(trace => {
+          validTraces.forEach(trace => {
             const createdLog = trace.logs.find(log => log.step === 'created');
             if (createdLog?.metadata?.errorType === errorType) {
               dbMatchingIds.add(trace.operationId);
@@ -467,7 +468,7 @@ router.get('/api/requests', (req, res) => {
 });
 
 // Operation details endpoint - MUST come after /api/operations/search
-router.get('/api/operations/:operationId', (req, res) => {
+router.get('/api/operations/:operationId', async (req, res) => {
   try {
     const { operationId } = req.params;
 
@@ -476,14 +477,14 @@ router.get('/api/operations/:operationId', (req, res) => {
 
     // If not in memory, try to reconstruct from database
     if (!operation) {
-      const trace = getOperationTrace(operationId);
+      const trace = await getOperationTrace(operationId);
       if (trace) {
         operation = reconstructOperationFromTrace(trace);
       }
     }
 
     // Get detailed trace from database with parsed metadata
-    const trace = getOperationTrace(operationId);
+    const trace = await getOperationTrace(operationId);
 
     // Debug logging
     if (trace) {
@@ -515,10 +516,10 @@ router.get('/api/operations/:operationId', (req, res) => {
 });
 
 // Operation trace endpoint
-router.get('/api/operations/:operationId/trace', (req, res) => {
+router.get('/api/operations/:operationId/trace', async (req, res) => {
   try {
     const { operationId } = req.params;
-    const trace = getOperationTrace(operationId);
+    const trace = await getOperationTrace(operationId);
 
     if (!trace) {
       return res.status(404).json({ error: 'operation trace not found' });
@@ -535,10 +536,10 @@ router.get('/api/operations/:operationId/trace', (req, res) => {
 });
 
 // Related operations endpoint
-router.get('/api/operations/:operationId/related', (req, res) => {
+router.get('/api/operations/:operationId/related', async (req, res) => {
   try {
     const { operationId } = req.params;
-    const trace = getOperationTrace(operationId);
+    const trace = await getOperationTrace(operationId);
 
     if (!trace) {
       return res.status(404).json({ error: 'operation not found' });
@@ -551,7 +552,7 @@ router.get('/api/operations/:operationId/related', (req, res) => {
     // Get all operations
     let allOperations = [...operations];
     try {
-      const dbOps = getRecentOperations(1000);
+      const dbOps = await getRecentOperations(1000);
       const existingIds = new Set(allOperations.map(op => op.id));
       const newOps = dbOps.filter(op => !existingIds.has(op.id));
       allOperations = [...allOperations, ...newOps];
@@ -576,7 +577,7 @@ router.get('/api/operations/:operationId/related', (req, res) => {
       // Match by URL - get trace to check originalUrl
       if (originalUrl && !isRelated) {
         try {
-          const opTrace = getOperationTrace(op.id);
+          const opTrace = await getOperationTrace(op.id);
           if (opTrace && opTrace.context && opTrace.context.originalUrl === originalUrl) {
             isRelated = true;
           }
@@ -606,12 +607,12 @@ router.get('/api/operations/:operationId/related', (req, res) => {
 });
 
 // Error analysis endpoint
-router.get('/api/operations/errors/analysis', (req, res) => {
+router.get('/api/operations/errors/analysis', async (req, res) => {
   try {
     // Get all operations with errors
     let allOperations = [...operations];
     try {
-      const dbOps = getRecentOperations(1000);
+      const dbOps = await getRecentOperations(1000);
       const existingIds = new Set(allOperations.map(op => op.id));
       const newOps = dbOps.filter(op => !existingIds.has(op.id));
       allOperations = [...allOperations, ...newOps];

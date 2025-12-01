@@ -26,7 +26,12 @@ import {
   validateImageAttachment,
   MAX_VIDEO_SIZE,
 } from '../utils/attachment-helpers.js';
-import { convertToGif, getVideoMetadata, convertImageToGif } from '../utils/video-processor.js';
+import {
+  convertToGif,
+  getVideoMetadata,
+  convertImageToGif,
+  calculateOptimalFps,
+} from '../utils/video-processor.js';
 import {
   gifExists,
   getGifPath,
@@ -735,12 +740,14 @@ export async function processConversion(
       });
 
       if (attachmentType === 'video') {
-        // Extract original dimensions and fps from video metadata
+        // Extract original dimensions, fps, and duration from video metadata
         let originalWidth = 480; // Safe fallback
         let originalFps = 30; // Safe fallback
+        let videoDuration = null; // Full video duration
 
         try {
           const metadata = await getVideoMetadata(tempFilePath);
+          videoDuration = metadata.format.duration;
           const videoStream = metadata.streams?.find(s => s.codec_type === 'video');
           if (videoStream) {
             if (
@@ -771,25 +778,53 @@ export async function processConversion(
           );
         }
 
-        // Build conversion options, using provided options or original dimensions
+        // Determine effective duration for FPS calculation
+        // Use trimmed duration if provided, otherwise use full video duration
+        let effectiveDuration = null;
+        if (options.duration !== null && options.duration !== undefined) {
+          effectiveDuration = options.duration;
+        } else if (videoDuration !== null && videoDuration !== undefined) {
+          effectiveDuration = videoDuration;
+        }
+
+        // Calculate optimal FPS using adaptive algorithm
+        const optimalFps = calculateOptimalFps(originalFps, effectiveDuration, options.fps ?? null);
+
+        // Build conversion options, using provided options or calculated optimal values
         const conversionOptions = {
           width: options.width ?? originalWidth,
-          fps: options.fps ?? originalFps,
+          fps: optimalFps,
           quality: options.quality ?? botConfig.gifQuality,
           startTime: options.startTime ?? null,
           duration: options.duration ?? null,
         };
 
+        // Log FPS adjustment if it differs from original
+        if (optimalFps !== originalFps && (options.fps === null || options.fps === undefined)) {
+          logOperationStep(operationId, 'fps_adjustment', 'success', {
+            message: `FPS adjusted for optimal file size`,
+            metadata: {
+              originalFps: originalFps.toFixed(2),
+              optimalFps: optimalFps.toFixed(2),
+              effectiveDuration: effectiveDuration ? effectiveDuration.toFixed(2) : 'unknown',
+              reasoning:
+                effectiveDuration !== null
+                  ? `Duration ${effectiveDuration.toFixed(2)}s adjusted FPS from ${originalFps.toFixed(2)} to ${optimalFps.toFixed(2)} for balanced quality/size`
+                  : `Adjusted FPS from ${originalFps.toFixed(2)} to ${optimalFps.toFixed(2)}`,
+            },
+          });
+        }
+
         // Validate duration against video length if startTime and duration are provided
         if (conversionOptions.startTime !== null && conversionOptions.duration !== null) {
           try {
             const metadata = await getVideoMetadata(tempFilePath);
-            const videoDuration = metadata.format.duration;
+            const fullVideoDuration = metadata.format.duration;
             const requestedEnd = conversionOptions.startTime + conversionOptions.duration;
 
-            if (requestedEnd > videoDuration) {
+            if (requestedEnd > fullVideoDuration) {
               await safeInteractionEditReply(interaction, {
-                content: `requested timeframe (${conversionOptions.startTime}s to ${requestedEnd.toFixed(1)}s) exceeds video length (${videoDuration.toFixed(1)}s).`,
+                content: `requested timeframe (${conversionOptions.startTime}s to ${requestedEnd.toFixed(1)}s) exceeds video length (${fullVideoDuration.toFixed(1)}s).`,
               });
               await notifyCommandFailure(username, 'convert', {
                 operationId,
@@ -1519,6 +1554,7 @@ export async function handleConvertCommand(interaction) {
   const lossy = interaction.options.getNumber('lossy');
   const startTime = interaction.options.getNumber('start_time');
   const endTime = interaction.options.getNumber('end_time');
+  const fps = interaction.options.getNumber('fps');
 
   // Validate time parameters if provided
   if (startTime !== null && endTime !== null) {
@@ -1760,6 +1796,7 @@ export async function handleConvertCommand(interaction) {
       lossy: lossy !== null ? lossy : undefined,
       startTime: conversionStartTime,
       duration: conversionDuration,
+      fps: fps !== null ? fps : undefined,
     },
     url ? originalUrlForConversion : null,
     'slash'

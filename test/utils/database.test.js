@@ -60,14 +60,14 @@ describe('database utilities', () => {
   });
 
   describe('insertOrUpdateUser', () => {
-    test('inserts new user', () => {
+    test('inserts new user', async () => {
       const userId = 'test-user-1';
       const username = 'TestUser';
       const timestamp = Date.now();
 
-      insertOrUpdateUser(userId, username, timestamp);
+      await insertOrUpdateUser(userId, username, timestamp);
 
-      const user = getUser(userId);
+      const user = await getUser(userId);
       assert.ok(user, 'User should exist');
       assert.strictEqual(user.user_id, userId);
       assert.strictEqual(user.username, username);
@@ -75,17 +75,17 @@ describe('database utilities', () => {
       assert.strictEqual(user.last_used, timestamp);
     });
 
-    test('updates existing user', () => {
+    test('updates existing user', async () => {
       const userId = 'test-user-2';
       const username1 = 'TestUser1';
       const username2 = 'TestUser2';
       const timestamp1 = Date.now();
       const timestamp2 = timestamp1 + 1000;
 
-      insertOrUpdateUser(userId, username1, timestamp1);
-      insertOrUpdateUser(userId, username2, timestamp2);
+      await insertOrUpdateUser(userId, username1, timestamp1);
+      await insertOrUpdateUser(userId, username2, timestamp2);
 
-      const user = getUser(userId);
+      const user = await getUser(userId);
       assert.ok(user, 'User should exist');
       assert.strictEqual(user.user_id, userId);
       assert.strictEqual(user.username, username2);
@@ -93,66 +93,66 @@ describe('database utilities', () => {
       assert.strictEqual(user.last_used, timestamp2);
     });
 
-    test('handles invalid userId gracefully', () => {
-      assert.doesNotThrow(() => {
-        insertOrUpdateUser(null, 'TestUser', Date.now());
-        insertOrUpdateUser('', 'TestUser', Date.now());
-        insertOrUpdateUser(123, 'TestUser', Date.now());
+    test('handles invalid userId gracefully', async () => {
+      await assert.doesNotReject(async () => {
+        await insertOrUpdateUser(null, 'TestUser', Date.now());
+        await insertOrUpdateUser('', 'TestUser', Date.now());
+        await insertOrUpdateUser(123, 'TestUser', Date.now());
       });
     });
   });
 
   describe('getUser', () => {
-    test('returns user for existing user_id', () => {
+    test('returns user for existing user_id', async () => {
       const userId = 'test-user-3';
       const username = 'TestUser3';
       const timestamp = Date.now();
 
-      insertOrUpdateUser(userId, username, timestamp);
-      const user = getUser(userId);
+      await insertOrUpdateUser(userId, username, timestamp);
+      const user = await getUser(userId);
 
       assert.ok(user, 'User should exist');
       assert.strictEqual(user.user_id, userId);
       assert.strictEqual(user.username, username);
     });
 
-    test('returns null for non-existent user', () => {
-      const user = getUser('non-existent-user');
+    test('returns null for non-existent user', async () => {
+      const user = await getUser('non-existent-user');
       assert.strictEqual(user, null);
     });
   });
 
   describe('getUniqueUserCount', () => {
-    test('returns correct count', () => {
-      const countBefore = getUniqueUserCount();
+    test('returns correct count', async () => {
+      const countBefore = await getUniqueUserCount();
 
-      insertOrUpdateUser('test-count-1', 'User1', Date.now());
-      insertOrUpdateUser('test-count-2', 'User2', Date.now());
-      insertOrUpdateUser('test-count-3', 'User3', Date.now());
+      await insertOrUpdateUser('test-count-1', 'User1', Date.now());
+      await insertOrUpdateUser('test-count-2', 'User2', Date.now());
+      await insertOrUpdateUser('test-count-3', 'User3', Date.now());
 
-      const countAfter = getUniqueUserCount();
+      const countAfter = await getUniqueUserCount();
       assert.strictEqual(countAfter, countBefore + 3);
     });
 
-    test('returns 0 for empty database', () => {
+    test('returns 0 for empty database', async () => {
       // This test assumes a clean database, which isn't guaranteed
       // So we just check it returns a number
-      const count = getUniqueUserCount();
+      const count = await getUniqueUserCount();
       assert.strictEqual(typeof count, 'number');
       assert.ok(count >= 0);
     });
   });
 
   describe('insertLog', () => {
-    test('inserts log entry', () => {
+    test('inserts log entry', async () => {
       const timestamp = Date.now();
       const component = 'test';
       const level = 'INFO';
       const message = 'Test log message';
 
-      insertLog(timestamp, component, level, message);
+      await insertLog(timestamp, component, level, message);
 
-      const logs = getLogs({ component, limit: 1 });
+      const logs = await getLogs({ component, limit: 1 });
       assert.ok(logs.length > 0, 'Log should exist');
       const log = logs[0];
       assert.strictEqual(log.component, component);
@@ -161,16 +161,16 @@ describe('database utilities', () => {
       assert.strictEqual(log.timestamp, timestamp);
     });
 
-    test('inserts log with metadata', () => {
+    test('inserts log with metadata', async () => {
       const timestamp = Date.now();
       const component = 'test';
       const level = 'INFO';
       const message = 'Test log with metadata';
       const metadata = { key: 'value', number: 123 };
 
-      insertLog(timestamp, component, level, message, metadata);
+      await insertLog(timestamp, component, level, message, metadata);
 
-      const logs = getLogs({ component, limit: 1 });
+      const logs = await getLogs({ component, limit: 1 });
       const log = logs[0];
       assert.ok(log.metadata, 'Metadata should exist');
       // getLogs already parses metadata from JSON string to object
@@ -178,55 +178,55 @@ describe('database utilities', () => {
       assert.strictEqual(log.metadata.number, 123);
     });
 
-    test('handles all log levels', () => {
+    test('handles all log levels', async () => {
       const levels = ['DEBUG', 'INFO', 'WARN', 'ERROR'];
       const timestamp = Date.now();
 
-      levels.forEach(level => {
-        insertLog(timestamp, 'test', level, `Test ${level} message`);
-      });
+      for (const level of levels) {
+        await insertLog(timestamp, 'test', level, `Test ${level} message`);
+      }
 
-      levels.forEach(level => {
-        const logs = getLogs({ component: 'test', level, limit: 10 });
+      for (const level of levels) {
+        const logs = await getLogs({ component: 'test', level, limit: 10 });
         assert.ok(logs.length > 0, `Should have ${level} logs`);
-      });
+      }
     });
 
-    test('handles null vs undefined metadata', () => {
+    test('handles null vs undefined metadata', async () => {
       const timestamp = Date.now();
       const component = 'test';
       const level = 'INFO';
 
       // Insert log with null metadata
-      insertLog(timestamp, component, level, 'Message with null', null);
-      const logsWithNull = getLogs({ component, limit: 1 });
+      await insertLog(timestamp, component, level, 'Message with null', null);
+      const logsWithNull = await getLogs({ component, limit: 1 });
       assert.strictEqual(logsWithNull[0].metadata, null);
 
       // Insert log with undefined metadata (should default to null)
-      insertLog(timestamp + 1, component, level, 'Message with undefined', undefined);
-      const logsWithUndefined = getLogs({ component, limit: 1 });
+      await insertLog(timestamp + 1, component, level, 'Message with undefined', undefined);
+      const logsWithUndefined = await getLogs({ component, limit: 1 });
       assert.strictEqual(logsWithUndefined[0].metadata, null);
 
       // Insert log without metadata parameter (should default to null)
-      insertLog(timestamp + 2, component, level, 'Message without metadata');
-      const logsWithout = getLogs({ component, limit: 1 });
+      await insertLog(timestamp + 2, component, level, 'Message without metadata');
+      const logsWithout = await getLogs({ component, limit: 1 });
       assert.strictEqual(logsWithout[0].metadata, null);
     });
   });
 
   describe('getLogs', () => {
-    test('returns all logs when no filters specified', () => {
-      const logs = getLogs({ limit: 10 });
+    test('returns all logs when no filters specified', async () => {
+      const logs = await getLogs({ limit: 10 });
       assert.ok(Array.isArray(logs));
       assert.ok(logs.length <= 10);
     });
 
-    test('filters by component', () => {
-      insertLog(Date.now(), 'bot', 'INFO', 'Bot test message');
-      insertLog(Date.now(), 'server', 'INFO', 'Server test message');
+    test('filters by component', async () => {
+      await insertLog(Date.now(), 'bot', 'INFO', 'Bot test message');
+      await insertLog(Date.now(), 'server', 'INFO', 'Server test message');
 
-      const botLogs = getLogs({ component: 'bot', limit: 10 });
-      const serverLogs = getLogs({ component: 'server', limit: 10 });
+      const botLogs = await getLogs({ component: 'bot', limit: 10 });
+      const serverLogs = await getLogs({ component: 'server', limit: 10 });
 
       assert.ok(botLogs.length > 0, 'Should have bot logs');
       assert.ok(serverLogs.length > 0, 'Should have server logs');
@@ -240,12 +240,12 @@ describe('database utilities', () => {
       });
     });
 
-    test('filters by level', () => {
-      insertLog(Date.now(), 'test', 'ERROR', 'Error message');
-      insertLog(Date.now(), 'test', 'INFO', 'Info message');
+    test('filters by level', async () => {
+      await insertLog(Date.now(), 'test', 'ERROR', 'Error message');
+      await insertLog(Date.now(), 'test', 'INFO', 'Info message');
 
-      const errorLogs = getLogs({ component: 'test', level: 'ERROR', limit: 10 });
-      const infoLogs = getLogs({ component: 'test', level: 'INFO', limit: 10 });
+      const errorLogs = await getLogs({ component: 'test', level: 'ERROR', limit: 10 });
+      const infoLogs = await getLogs({ component: 'test', level: 'INFO', limit: 10 });
 
       errorLogs.forEach(log => {
         assert.strictEqual(log.level, 'ERROR');
@@ -256,14 +256,14 @@ describe('database utilities', () => {
       });
     });
 
-    test('filters by time range', () => {
+    test('filters by time range', async () => {
       const now = Date.now();
       const startTime = now - 5000;
       const endTime = now + 5000;
 
-      insertLog(now, 'test', 'INFO', 'Time filtered message');
+      await insertLog(now, 'test', 'INFO', 'Time filtered message');
 
-      const logs = getLogs({
+      const logs = await getLogs({
         component: 'test',
         startTime,
         endTime,
@@ -276,52 +276,52 @@ describe('database utilities', () => {
       });
     });
 
-    test('respects limit', () => {
+    test('respects limit', async () => {
       // Insert multiple logs
       for (let i = 0; i < 5; i++) {
-        insertLog(Date.now() + i, 'test', 'INFO', `Message ${i}`);
+        await insertLog(Date.now() + i, 'test', 'INFO', `Message ${i}`);
       }
 
-      const logs = getLogs({ component: 'test', limit: 3 });
+      const logs = await getLogs({ component: 'test', limit: 3 });
       assert.strictEqual(logs.length, 3);
     });
 
-    test('orders by timestamp descending by default', () => {
+    test('orders by timestamp descending by default', async () => {
       const now = Date.now();
-      insertLog(now, 'test', 'INFO', 'Message 1');
-      insertLog(now + 100, 'test', 'INFO', 'Message 2');
-      insertLog(now + 200, 'test', 'INFO', 'Message 3');
+      await insertLog(now, 'test', 'INFO', 'Message 1');
+      await insertLog(now + 100, 'test', 'INFO', 'Message 2');
+      await insertLog(now + 200, 'test', 'INFO', 'Message 3');
 
-      const logs = getLogs({ component: 'test', limit: 3 });
+      const logs = await getLogs({ component: 'test', limit: 3 });
       assert.ok(logs.length > 0);
       for (let i = 0; i < logs.length - 1; i++) {
         assert.ok(logs[i].timestamp >= logs[i + 1].timestamp);
       }
     });
 
-    test('orders by timestamp ascending when specified', () => {
+    test('orders by timestamp ascending when specified', async () => {
       const now = Date.now();
-      insertLog(now, 'test', 'INFO', 'Message 1');
-      insertLog(now + 100, 'test', 'INFO', 'Message 2');
-      insertLog(now + 200, 'test', 'INFO', 'Message 3');
+      await insertLog(now, 'test', 'INFO', 'Message 1');
+      await insertLog(now + 100, 'test', 'INFO', 'Message 2');
+      await insertLog(now + 200, 'test', 'INFO', 'Message 3');
 
-      const logs = getLogs({ component: 'test', orderDesc: false, limit: 3 });
+      const logs = await getLogs({ component: 'test', orderDesc: false, limit: 3 });
       assert.ok(logs.length > 0);
       for (let i = 0; i < logs.length - 1; i++) {
         assert.ok(logs[i].timestamp <= logs[i + 1].timestamp);
       }
     });
 
-    test('respects offset parameter for pagination', () => {
+    test('respects offset parameter for pagination', async () => {
       const now = Date.now();
       const uniqueComponent = 'test-pagination-' + now;
       for (let i = 0; i < 5; i++) {
-        insertLog(now + i * 100, uniqueComponent, 'INFO', `Message ${i}`);
+        await insertLog(now + i * 100, uniqueComponent, 'INFO', `Message ${i}`);
       }
 
-      const firstPage = getLogs({ component: uniqueComponent, limit: 2, offset: 0 });
-      const secondPage = getLogs({ component: uniqueComponent, limit: 2, offset: 2 });
-      const thirdPage = getLogs({ component: uniqueComponent, limit: 2, offset: 4 });
+      const firstPage = await getLogs({ component: uniqueComponent, limit: 2, offset: 0 });
+      const secondPage = await getLogs({ component: uniqueComponent, limit: 2, offset: 2 });
+      const thirdPage = await getLogs({ component: uniqueComponent, limit: 2, offset: 4 });
 
       assert.strictEqual(firstPage.length, 2);
       assert.strictEqual(secondPage.length, 2);
@@ -334,19 +334,19 @@ describe('database utilities', () => {
       }
     });
 
-    test('filters with combined component, level, and time range', () => {
+    test('filters with combined component, level, and time range', async () => {
       const now = Date.now();
       const startTime = now - 1000;
       const endTime = now + 1000;
 
       // Insert logs with different components, levels, and times
-      insertLog(now - 2000, 'test', 'ERROR', 'Old error'); // Outside time range
-      insertLog(now, 'test', 'ERROR', 'Recent error'); // Inside time range
-      insertLog(now, 'test', 'INFO', 'Recent info'); // Wrong level
-      insertLog(now, 'other', 'ERROR', 'Other component error'); // Wrong component
-      insertLog(now, 'test', 'ERROR', 'Recent error 2'); // Should match
+      await insertLog(now - 2000, 'test', 'ERROR', 'Old error'); // Outside time range
+      await insertLog(now, 'test', 'ERROR', 'Recent error'); // Inside time range
+      await insertLog(now, 'test', 'INFO', 'Recent info'); // Wrong level
+      await insertLog(now, 'other', 'ERROR', 'Other component error'); // Wrong component
+      await insertLog(now, 'test', 'ERROR', 'Recent error 2'); // Should match
 
-      const logs = getLogs({
+      const logs = await getLogs({
         component: 'test',
         level: 'ERROR',
         startTime,

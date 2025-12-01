@@ -51,7 +51,7 @@ describe('user tracking utilities', () => {
 
       await trackUser(userId, username);
 
-      const user = getUser(userId);
+      const user = await getUser(userId);
       assert.ok(user, 'User should be tracked');
       assert.strictEqual(user.user_id, userId);
       assert.strictEqual(user.username, username);
@@ -65,7 +65,7 @@ describe('user tracking utilities', () => {
 
       await trackUser(userId);
 
-      const user = getUser(userId);
+      const user = await getUser(userId);
       assert.ok(user, 'User should be tracked');
       assert.strictEqual(user.user_id, userId);
       assert.strictEqual(user.username, 'unknown');
@@ -76,7 +76,7 @@ describe('user tracking utilities', () => {
       const username = 'TestUser3';
 
       await trackUser(userId, username);
-      const user1 = getUser(userId);
+      const user1 = await getUser(userId);
       const firstUsed = user1.first_used;
       const lastUsed1 = user1.last_used;
 
@@ -84,7 +84,7 @@ describe('user tracking utilities', () => {
       await new Promise(resolve => setTimeout(resolve, 10));
 
       await trackUser(userId, username);
-      const user2 = getUser(userId);
+      const user2 = await getUser(userId);
 
       assert.strictEqual(user2.first_used, firstUsed, 'first_used should not change');
       assert.ok(user2.last_used > lastUsed1, 'last_used should be updated');
@@ -96,11 +96,11 @@ describe('user tracking utilities', () => {
       const username2 = 'TestUser4b';
 
       await trackUser(userId, username1);
-      const user1 = getUser(userId);
+      const user1 = await getUser(userId);
       assert.strictEqual(user1.username, username1);
 
       await trackUser(userId, username2);
-      const user2 = getUser(userId);
+      const user2 = await getUser(userId);
       assert.strictEqual(user2.username, username2);
     });
 

@@ -128,7 +128,7 @@ describe('logger sanitization', () => {
       await logger.info(maliciousInput);
       await new Promise(resolve => setTimeout(resolve, 100));
 
-      const logs = getLogs({ component: 'test-injection', limit: 1 });
+      const logs = await getLogs({ component: 'test-injection', limit: 1 });
       assert.ok(logs.length > 0);
       const log = logs[0];
       // Verify newline was removed (preventing log injection)
@@ -146,7 +146,7 @@ describe('logger sanitization', () => {
       await logger.info(maliciousInput);
       await new Promise(resolve => setTimeout(resolve, 100));
 
-      const logs = getLogs({ component: 'test-injection-ansi', limit: 1 });
+      const logs = await getLogs({ component: 'test-injection-ansi', limit: 1 });
       assert.ok(logs.length > 0);
       const log = logs[0];
       // Verify ANSI codes were removed
@@ -202,7 +202,7 @@ describe('logger sanitization', () => {
 
       await new Promise(resolve => setTimeout(resolve, 100));
 
-      const logs = getLogs({ component: 'test-all-methods', limit: 10 });
+      const logs = await getLogs({ component: 'test-all-methods', limit: 10 });
       assert.ok(logs.length >= 3); // At least INFO, WARN, ERROR (DEBUG may be filtered)
 
       // Verify all log entries are sanitized

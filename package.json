@@ -84,10 +84,10 @@
   "author": "thedorekaczynski",
   "license": "MIT",
   "dependencies": {
-    "@aws-sdk/client-s3": "^3.937.0",
-    "@aws-sdk/lib-storage": "^3.937.0",
+    "@aws-sdk/client-s3": "^3.940.0",
+    "@aws-sdk/lib-storage": "^3.940.0",
     "axios": "^1.6.0",
-    "better-sqlite3": "^12.4.6",
+    "better-sqlite3": "^12.5.0",
     "discord.js": "^14.25.1",
     "postgres": "^3.4.5",
     "dotenv": "^17.2.3",
@@ -95,7 +95,7 @@
     "express": "^5.1.0",
     "express-rate-limit": "^8.2.1",
     "fluent-ffmpeg": "^2.1.2",
-    "lucide-svelte": "^0.554.0",
+    "lucide-svelte": "^0.555.0",
     "marked": "^17.0.1",
     "tmp": "^0.2.5",
     "ws": "^8.18.0"
@@ -110,8 +110,8 @@
     "http-proxy-middleware": "^3.0.3",
     "husky": "^9.1.7",
     "nodemon": "^3.1.11",
-    "prettier": "^3.6.2",
-    "svelte": "^5.43.14",
-    "vite": "^7.2.4"
+    "prettier": "^3.7.3",
+    "svelte": "^5.45.2",
+    "vite": "^7.2.6"
   }
 }

@@ -16,7 +16,7 @@ const logger = createLogger('webui');
 const router = express.Router();
 
 // Users list endpoint
-router.get('/api/users', (req, res) => {
+router.get('/api/users', async (req, res) => {
   try {
     const {
       search,
@@ -34,12 +34,34 @@ router.get('/api/users', (req, res) => {
       offset: parseInt(offset, 10),
     };
 
-    const users = getAllUsersMetrics(options);
-    const total = getUserMetricsCount({ search });
+    let users, total;
+    try {
+      users = await getAllUsersMetrics(options);
+      logger.info(
+        `getAllUsersMetrics returned: type=${typeof users}, isArray=${Array.isArray(users)}, length=${users?.length}, value=${JSON.stringify(users).substring(0, 200)}`
+      );
+    } catch (error) {
+      logger.error('Error calling getAllUsersMetrics:', error);
+      users = [];
+    }
+
+    try {
+      total = await getUserMetricsCount({ search });
+      logger.info(`getUserMetricsCount returned: type=${typeof total}, value=${total}`);
+    } catch (error) {
+      logger.error('Error calling getUserMetricsCount:', error);
+      total = 0;
+    }
+
+    // Ensure users is always an array
+    const usersArray = Array.isArray(users) ? users : [];
+    const totalCount = typeof total === 'number' ? total : 0;
+
+    logger.info(`Sending response: users.length=${usersArray.length}, total=${totalCount}`);
 
     res.json({
-      users,
-      total,
+      users: usersArray,
+      total: totalCount,
       limit: options.limit,
       offset: options.offset,
     });
@@ -53,12 +75,12 @@ router.get('/api/users', (req, res) => {
 });
 
 // User profile endpoint
-router.get('/api/users/:userId', (req, res) => {
+router.get('/api/users/:userId', async (req, res) => {
   try {
     const { userId } = req.params;
 
-    const userMetrics = getUserMetrics(userId);
-    const userInfo = getUser(userId);
+    const userMetrics = await getUserMetrics(userId);
+    const userInfo = await getUser(userId);
 
     if (!userMetrics && !userInfo) {
       return res.status(404).json({ error: 'user not found' });
@@ -78,7 +100,7 @@ router.get('/api/users/:userId', (req, res) => {
 });
 
 // User operations endpoint (from recent operations in memory and database)
-router.get('/api/users/:userId/operations', (req, res) => {
+router.get('/api/users/:userId/operations', async (req, res) => {
   try {
     const { userId } = req.params;
     const { limit = 50, offset = 0 } = req.query;
@@ -91,7 +113,7 @@ router.get('/api/users/:userId/operations', (req, res) => {
     // Get operations from database to ensure we have all of them for counting
     try {
       // Get a large number of operations from database to account for filtering
-      const dbOps = getRecentOperations(1000) // Get enough to account for filtering
+      const dbOps = (await getRecentOperations(1000)) // Get enough to account for filtering
         .filter(op => op.userId === userId);
 
       // Merge with in-memory operations, avoiding duplicates
@@ -124,13 +146,13 @@ router.get('/api/users/:userId/operations', (req, res) => {
 });
 
 // User activity timeline (from logs)
-router.get('/api/users/:userId/activity', (req, res) => {
+router.get('/api/users/:userId/activity', async (req, res) => {
   try {
     const { userId } = req.params;
     const { limit = 100, offset = 0 } = req.query;
 
     // Get logs related to this user, only from bot component (user actions)
-    const logs = getLogs({
+    const logs = await getLogs({
       search: userId,
       component: 'bot', // Only show bot component logs (user commands and actions)
       limit: parseInt(limit, 10),
@@ -138,7 +160,7 @@ router.get('/api/users/:userId/activity', (req, res) => {
       orderDesc: true,
     });
 
-    const total = getLogsCount({
+    const total = await getLogsCount({
       search: userId,
       component: 'bot', // Only count bot component logs
     });

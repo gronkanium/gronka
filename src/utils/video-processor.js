@@ -15,3 +15,6 @@ export { trimGif } from './video-processor/trim-gif.js';
 
 // Video metadata
 export { getVideoMetadata } from './video-processor/metadata.js';
+
+// FPS calculator
+export { calculateOptimalFps } from './video-processor/fps-calculator.js';

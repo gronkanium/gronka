@@ -125,6 +125,14 @@ const commands = [
         required: false,
         min_value: 0,
       },
+      {
+        name: 'fps',
+        description: 'frames per second for gif output (default: adaptive based on video duration)',
+        type: 10, // NUMBER type
+        required: false,
+        min_value: 0.1,
+        max_value: 120,
+      },
     ],
     default_member_permissions: null, // Available to everyone
     dm_permission: true, // Enable in DMs

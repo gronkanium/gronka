@@ -36,28 +36,28 @@ after(() => {
 });
 
 describe('getLogMetrics', () => {
-  test('byComponent only includes ERROR and WARN levels, excludes INFO', () => {
+  test('byComponent only includes ERROR and WARN levels, excludes INFO', async () => {
     const now = Date.now();
     const uniqueId = now;
     const component = `webui-test-${uniqueId}`;
 
     // Insert multiple INFO logs (should NOT be counted in byComponent)
     for (let i = 0; i < 10; i++) {
-      insertLog(now + i * 1000, component, 'INFO', `Info message ${i}`);
+      await insertLog(now + i * 1000, component, 'INFO', `Info message ${i}`);
     }
 
     // Insert ERROR logs (should be counted)
-    insertLog(now + 10000, component, 'ERROR', 'Error message 1');
-    insertLog(now + 11000, component, 'ERROR', 'Error message 2');
+    await insertLog(now + 10000, component, 'ERROR', 'Error message 1');
+    await insertLog(now + 11000, component, 'ERROR', 'Error message 2');
 
     // Insert WARN logs (should be counted)
-    insertLog(now + 12000, component, 'WARN', 'Warning message 1');
+    await insertLog(now + 12000, component, 'WARN', 'Warning message 1');
 
     // Insert DEBUG logs (should NOT be counted)
-    insertLog(now + 13000, component, 'DEBUG', 'Debug message');
+    await insertLog(now + 13000, component, 'DEBUG', 'Debug message');
 
     // Use a small time range (1 hour) to only count recent logs
-    const metrics = getLogMetrics({
+    const metrics = await getLogMetrics({
       timeRange: 60 * 60 * 1000, // 1 hour
     });
 
@@ -82,7 +82,7 @@ describe('getLogMetrics', () => {
     }
   });
 
-  test('byComponent counts errors and warnings from multiple components', () => {
+  test('byComponent counts errors and warnings from multiple components', async () => {
     const now = Date.now();
     const uniqueId = now;
 
@@ -92,19 +92,19 @@ describe('getLogMetrics', () => {
 
     // webui component: many INFO, few ERROR
     for (let i = 0; i < 20; i++) {
-      insertLog(now + i * 100, webuiComponent, 'INFO', `webui info ${i}`);
+      await insertLog(now + i * 100, webuiComponent, 'INFO', `webui info ${i}`);
     }
-    insertLog(now + 2000, webuiComponent, 'ERROR', 'webui error');
-    insertLog(now + 2100, webuiComponent, 'WARN', 'webui warning');
+    await insertLog(now + 2000, webuiComponent, 'ERROR', 'webui error');
+    await insertLog(now + 2100, webuiComponent, 'WARN', 'webui warning');
 
     // bot component: some INFO, many ERROR
-    insertLog(now + 3000, botComponent, 'INFO', 'bot info');
-    insertLog(now + 3100, botComponent, 'ERROR', 'bot error 1');
-    insertLog(now + 3200, botComponent, 'ERROR', 'bot error 2');
-    insertLog(now + 3300, botComponent, 'ERROR', 'bot error 3');
+    await insertLog(now + 3000, botComponent, 'INFO', 'bot info');
+    await insertLog(now + 3100, botComponent, 'ERROR', 'bot error 1');
+    await insertLog(now + 3200, botComponent, 'ERROR', 'bot error 2');
+    await insertLog(now + 3300, botComponent, 'ERROR', 'bot error 3');
 
     // Use a small time range (1 hour) to only count recent logs
-    const metrics = getLogMetrics({
+    const metrics = await getLogMetrics({
       timeRange: 60 * 60 * 1000, // 1 hour
     });
 
@@ -127,22 +127,22 @@ describe('getLogMetrics', () => {
     }
   });
 
-  test('byComponent correctly excludes INFO logs even when component has many', () => {
+  test('byComponent correctly excludes INFO logs even when component has many', async () => {
     const now = Date.now();
     const uniqueId = now;
     const component = `webui-test-${uniqueId}`;
 
     // Simulate the reported issue: webui has many INFO logs
     for (let i = 0; i < 50; i++) {
-      insertLog(now + i * 100, component, 'INFO', `Info log ${i}`);
+      await insertLog(now + i * 100, component, 'INFO', `Info log ${i}`);
     }
 
     // Add just a few actual errors
-    insertLog(now + 5000, component, 'ERROR', 'Actual error 1');
-    insertLog(now + 5100, component, 'ERROR', 'Actual error 2');
+    await insertLog(now + 5000, component, 'ERROR', 'Actual error 1');
+    await insertLog(now + 5100, component, 'ERROR', 'Actual error 2');
 
     // Use a small time range (1 hour) to only count recent logs
-    const metrics = getLogMetrics({
+    const metrics = await getLogMetrics({
       timeRange: 60 * 60 * 1000, // 1 hour
     });
 
@@ -156,18 +156,18 @@ describe('getLogMetrics', () => {
     }
   });
 
-  test('byLevel still includes all log levels', () => {
+  test('byLevel still includes all log levels', async () => {
     const now = Date.now();
     const uniqueId = now;
     const component = `test-${uniqueId}`;
 
-    insertLog(now, component, 'INFO', 'Info message');
-    insertLog(now + 1000, component, 'ERROR', 'Error message');
-    insertLog(now + 2000, component, 'WARN', 'Warning message');
-    insertLog(now + 3000, component, 'DEBUG', 'Debug message');
+    await insertLog(now, component, 'INFO', 'Info message');
+    await insertLog(now + 1000, component, 'ERROR', 'Error message');
+    await insertLog(now + 2000, component, 'WARN', 'Warning message');
+    await insertLog(now + 3000, component, 'DEBUG', 'Debug message');
 
     // Use a small time range (1 hour) to only count recent logs
-    const metrics = getLogMetrics({
+    const metrics = await getLogMetrics({
       timeRange: 60 * 60 * 1000, // 1 hour
     });
 

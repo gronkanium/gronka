@@ -6,13 +6,23 @@ import {
   setInitPromise,
   getDbPath,
   ensureDataDir,
+  // getDbType,  // removed from import for unused warning, if not used elsewhere in this file
+  isPostgres,
 } from './connection.js';
+import { initPostgresDatabase, ensurePostgresInitialized } from './init-pg.js';
 
 /**
  * Initialize the database and create tables
+ * Routes to SQLite or PostgreSQL based on DATABASE_TYPE
  * @returns {Promise<void>}
  */
 export async function initDatabase() {
+  // Check database type and route accordingly
+  if (isPostgres()) {
+    return await initPostgresDatabase();
+  }
+
+  // SQLite initialization (existing code)
   const db = getDb();
   if (db) {
     return; // Already initialized
@@ -86,10 +96,10 @@ export async function initDatabase() {
       // Add file_size column if it doesn't exist (for existing databases)
       try {
         newDb.exec(`ALTER TABLE processed_urls ADD COLUMN file_size INTEGER`);
-      } catch (error) {
+      } catch (_error) {
         // Column already exists, ignore error
-        if (!error.message.includes('duplicate column name')) {
-          console.error('Failed to add file_size column:', error);
+        if (!_error.message.includes('duplicate column name')) {
+          console.error('Failed to add file_size column:', _error);
         }
       }
 
@@ -195,10 +205,10 @@ export async function initDatabase() {
         CREATE INDEX IF NOT EXISTS idx_temporary_uploads_deleted_at ON temporary_uploads(deleted_at);
         CREATE INDEX IF NOT EXISTS idx_temporary_uploads_deletion_failed ON temporary_uploads(deletion_failed);
       `);
-    } catch (error) {
+    } catch (_error) {
       setInitPromise(null); // Reset on error so it can be retried
       setDb(null);
-      throw error;
+      throw _error;
     }
   })();
 
@@ -208,9 +218,17 @@ export async function initDatabase() {
 
 /**
  * Close the database connection
- * @returns {void}
+ * Routes to SQLite or PostgreSQL based on DATABASE_TYPE
+ * @returns {Promise<void>}
  */
-export function closeDatabase() {
+export async function closeDatabase() {
+  // Check database type and route accordingly
+  if (isPostgres()) {
+    const { closePostgresDatabase } = await import('./init-pg.js');
+    return await closePostgresDatabase();
+  }
+
+  // SQLite close (existing code)
   const db = getDb();
   if (db) {
     db.close();
@@ -221,9 +239,16 @@ export function closeDatabase() {
 
 /**
  * Ensure database is initialized before performing operations
+ * Routes to SQLite or PostgreSQL based on DATABASE_TYPE
  * @returns {Promise<void>}
  */
 export async function ensureDbInitialized() {
+  // Check database type and route accordingly
+  if (isPostgres()) {
+    return await ensurePostgresInitialized();
+  }
+
+  // SQLite initialization (existing code)
   const db = getDb();
   if (db) {
     return; // Already initialized

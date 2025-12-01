@@ -8,6 +8,9 @@ services:
         GIT_COMMIT: ${GIT_COMMIT:-}
     container_name: gronka
     restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
     environment:
       - DISCORD_TOKEN=${PROD_DISCORD_TOKEN:-${DISCORD_TOKEN}}
       - CLIENT_ID=${PROD_CLIENT_ID:-${CLIENT_ID}}
@@ -31,6 +34,13 @@ services:
       - WEBUI_PORT=3001
       - WEBUI_HOST=0.0.0.0
       - MAIN_SERVER_URL=http://localhost:3000
+      - DATABASE_TYPE=${DATABASE_TYPE:-sqlite}
+      - POSTGRES_HOST=${POSTGRES_HOST:-postgres}
+      - POSTGRES_PORT=${POSTGRES_PORT:-5432}
+      - POSTGRES_USER=${POSTGRES_USER:-gronka}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-gronka}
+      - POSTGRES_DB=${POSTGRES_DB:-gronka}
+      - DATABASE_URL=${DATABASE_URL:-}
     volumes:
       - ./data-test:/app/data-test
       - ./data-prod:/app/data-prod
@@ -53,6 +63,28 @@ services:
       interval: 30s
       timeout: 3s
       retries: 3
+      start_period: 10s
+
+  postgres:
+    image: postgres:16-alpine
+    container_name: gronka-postgres
+    restart: unless-stopped
+    environment:
+      - POSTGRES_USER=${POSTGRES_USER:-gronka}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-gronka}
+      - POSTGRES_DB=${POSTGRES_DB:-gronka}
+      - PGDATA=/var/lib/postgresql/data/pgdata
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    ports:
+      - '${POSTGRES_PORT:-5432}:5432'
+    networks:
+      - gronka-network
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U ${POSTGRES_USER:-gronka} -d ${POSTGRES_DB:-gronka}']
+      interval: 10s
+      timeout: 5s
+      retries: 5
       start_period: 10s
 
   cobalt:
@@ -115,6 +147,10 @@ services:
   #     - com.centurylinklabs.watchtower.scope=cobalt
   #   networks:
   #     - gronka-network
+
+volumes:
+  postgres-data:
+    driver: local
 
 networks:
   gronka-network:

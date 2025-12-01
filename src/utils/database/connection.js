@@ -9,6 +9,7 @@ const projectRoot = path.resolve(__dirname, '../../..');
 
 let db = null;
 let initPromise = null;
+let dbType = null;
 
 // Prepared statement cache: Map<sql, Statement>
 // Caches frequently used prepared statements to avoid re-preparing them
@@ -80,8 +81,38 @@ export async function ensureDataDir() {
 }
 
 /**
+ * Get the database type (sqlite or postgres)
+ * @returns {string|null} Database type or null if not determined
+ */
+export function getDbType() {
+  if (dbType) {
+    return dbType;
+  }
+
+  // Determine from environment variable
+  const envType = process.env.DATABASE_TYPE?.toLowerCase();
+  if (envType === 'postgres' || envType === 'postgresql') {
+    dbType = 'postgres';
+    return dbType;
+  }
+
+  // Default to sqlite
+  dbType = 'sqlite';
+  return dbType;
+}
+
+/**
+ * Set the database type (internal use)
+ * @param {string} type - Database type ('sqlite' or 'postgres')
+ * @returns {void}
+ */
+export function setDbType(type) {
+  dbType = type;
+}
+
+/**
  * Get the database connection
- * @returns {Database|null} Database connection or null if not initialized
+ * @returns {Database|postgres.Sql|null} Database connection or null if not initialized
  */
 export function getDb() {
   return db;
@@ -123,6 +154,22 @@ export function setInitPromise(promise) {
  */
 export function isDbInitialized() {
   return db !== null;
+}
+
+/**
+ * Check if using PostgreSQL
+ * @returns {boolean} True if using PostgreSQL
+ */
+export function isPostgres() {
+  return getDbType() === 'postgres';
+}
+
+/**
+ * Check if using SQLite
+ * @returns {boolean} True if using SQLite
+ */
+export function isSqlite() {
+  return getDbType() === 'sqlite';
 }
 
 /**

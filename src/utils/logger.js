@@ -148,7 +148,7 @@ class Logger {
           return; // Skip database logging if init failed
         }
       }
-      insertLog(timestamp, this.component, levelName, fullMessage);
+      await insertLog(timestamp, this.component, levelName, fullMessage);
 
       // Broadcast log to WebSocket clients if callback is set
       if (logBroadcastCallback) {

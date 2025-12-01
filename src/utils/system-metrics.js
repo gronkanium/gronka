@@ -192,7 +192,7 @@ export async function collectAndStoreMetrics() {
   try {
     const metrics = await collectSystemMetrics();
     if (metrics) {
-      insertSystemMetrics(metrics);
+      await insertSystemMetrics(metrics);
       logger.debug('System metrics collected and stored');
 
       // Broadcast metrics update if callback is set

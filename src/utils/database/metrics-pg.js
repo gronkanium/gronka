@@ -141,27 +141,41 @@ export async function getAllUsersMetrics(options = {}) {
 
   const safeSortBy = allowedSortColumns.includes(sortBy) ? sortBy : 'total_commands';
 
-  let query = 'SELECT * FROM user_metrics WHERE 1=1';
-  const params = [];
+  try {
+    // Build query using sql.unsafe() for dynamic ORDER BY (column names are whitelisted)
+    let query = 'SELECT * FROM user_metrics';
+    const params = [];
 
-  if (search) {
-    query += ` AND username ILIKE $${params.length + 1}`;
-    params.push(`%${search}%`);
+    if (search) {
+      query += ` WHERE username ILIKE $${params.length + 1}`;
+      params.push(`%${search}%`);
+    }
+
+    // ORDER BY with sanitized column name (already whitelisted)
+    query += ` ORDER BY ${safeSortBy} ${sortDesc ? 'DESC' : 'ASC'}`;
+
+    if (limit !== null && limit !== undefined) {
+      query += ` LIMIT $${params.length + 1}`;
+      params.push(limit);
+    }
+
+    if (offset !== null && offset !== undefined) {
+      query += ` OFFSET $${params.length + 1}`;
+      params.push(offset);
+    }
+
+    const result = await sql.unsafe(query, params);
+
+    // Ensure we return an array
+    if (!Array.isArray(result)) {
+      console.error('getAllUsersMetrics: query did not return an array:', typeof result, result);
+      return [];
+    }
+    return result;
+  } catch (error) {
+    console.error('Error in getAllUsersMetrics:', error);
+    throw error;
   }
-
-  query += ` ORDER BY ${safeSortBy} ${sortDesc ? 'DESC' : 'ASC'}`;
-
-  if (limit !== null) {
-    query += ` LIMIT $${params.length + 1}`;
-    params.push(limit);
-  }
-
-  if (offset !== null) {
-    query += ` OFFSET $${params.length + 1}`;
-    params.push(offset);
-  }
-
-  return await sql.unsafe(query, params);
 }
 
 /**
@@ -181,16 +195,25 @@ export async function getUserMetricsCount(options = {}) {
 
   const { search = null } = options;
 
-  let query = 'SELECT COUNT(*) as count FROM user_metrics WHERE 1=1';
-  const params = [];
+  try {
+    let result;
+    if (search) {
+      result =
+        await sql`SELECT COUNT(*) as count FROM user_metrics WHERE username ILIKE ${`%${search}%`}`;
+    } else {
+      result = await sql`SELECT COUNT(*) as count FROM user_metrics`;
+    }
 
-  if (search) {
-    query += ` AND username ILIKE $${params.length + 1}`;
-    params.push(`%${search}%`);
+    // Ensure result is an array and extract count
+    if (!Array.isArray(result) || result.length === 0) {
+      return 0;
+    }
+    const count = result[0]?.count;
+    return parseInt(count || 0, 10);
+  } catch (error) {
+    console.error('Error in getUserMetricsCount:', error);
+    throw error;
   }
-
-  const result = await sql.unsafe(query, params);
-  return parseInt(result[0]?.count || 0, 10);
 }
 
 /**

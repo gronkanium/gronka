@@ -51,6 +51,9 @@ export async function initPostgresDatabase() {
 
       // Add file_size column if needed (for migration compatibility)
       await addFileSizeColumnIfNeeded(connection);
+
+      // Reset SERIAL sequences to match existing data (fixes duplicate key errors after migration)
+      await resetSerialSequences(connection);
     } catch (error) {
       setPostgresInitPromise(null); // Reset on error so it can be retried
       setPostgresConnection(null);
@@ -61,6 +64,40 @@ export async function initPostgresDatabase() {
 
   setPostgresInitPromise(newInitPromise);
   return newInitPromise;
+}
+
+/**
+ * Reset SERIAL sequences to match the maximum ID in each table
+ * This fixes duplicate key errors after data migration
+ * @param {Object} sql - The postgres.js client instance
+ * @returns {Promise<void>}
+ */
+async function resetSerialSequences(sql) {
+  const tablesWithSerial = [
+    { table: 'logs', sequence: 'logs_id_seq', column: 'id' },
+    { table: 'operation_logs', sequence: 'operation_logs_id_seq', column: 'id' },
+    { table: 'system_metrics', sequence: 'system_metrics_id_seq', column: 'id' },
+    { table: 'alerts', sequence: 'alerts_id_seq', column: 'id' },
+    { table: 'temporary_uploads', sequence: 'temporary_uploads_id_seq', column: 'id' },
+  ];
+
+  for (const { table, sequence, column } of tablesWithSerial) {
+    try {
+      // Get the maximum ID from the table using sql.unsafe for dynamic table/column names
+      const maxQuery = `SELECT COALESCE(MAX(${column}), 0) as max_id FROM ${table}`;
+      const maxResult = await sql.unsafe(maxQuery);
+      const maxId = parseInt(maxResult[0]?.max_id || 0, 10);
+
+      // Reset the sequence to max_id + 1 (or 1 if table is empty)
+      // Use setval with false to set the current value without incrementing
+      const nextVal = maxId > 0 ? maxId + 1 : 1;
+      await sql.unsafe(`SELECT setval('${sequence}', ${nextVal}, false)`);
+    } catch (error) {
+      // If sequence doesn't exist yet or table doesn't exist, that's okay
+      // It will be created on first insert
+      console.warn(`Could not reset sequence ${sequence} for table ${table}:`, error.message);
+    }
+  }
 }
 
 /**

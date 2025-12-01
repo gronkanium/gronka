@@ -52,9 +52,9 @@ export async function initPostgresConnection() {
       await sql`SELECT 1`;
 
       return sql;
-    } catch (_error) {
+    } catch (error) {
       sql = null;
-      throw new Error(`Failed to initialize PostgreSQL connection: ${_error.message}`);
+      throw new Error(`Failed to initialize PostgreSQL connection: ${error.message}`);
     }
   })();
 

@@ -277,7 +277,10 @@ describe('operations tracker', () => {
 
     test('calculates step duration from start time', async () => {
       const operationId = createOperation('convert', 'user1', 'User1');
-      const startTime = getOperation(operationId).startTime;
+      const operationBefore = getOperation(operationId);
+      assert.ok(operationBefore, 'Operation should exist');
+      assert.ok(operationBefore.startTime, 'Operation should have startTime');
+      const startTime = operationBefore.startTime;
 
       await new Promise(resolve => setTimeout(resolve, 10));
 
@@ -285,11 +288,18 @@ describe('operations tracker', () => {
       const afterLogTime = Date.now();
 
       const operation = getOperation(operationId);
+      assert.ok(operation, 'Operation should still exist');
+      assert.ok(operation.performanceMetrics.steps.length > 0, 'Step should be added');
       const step = operation.performanceMetrics.steps[0];
-      assert.ok(step.duration > 0);
+      assert.ok(step, 'Step should exist');
+      assert.ok(step.duration !== null && step.duration !== undefined, 'Step should have duration');
+      assert.ok(step.duration > 0, 'Duration should be positive');
       // Duration should be between the wait time (10ms) and the time after logging
-      assert.ok(step.duration >= 10);
-      assert.ok(step.duration <= afterLogTime - startTime);
+      assert.ok(step.duration >= 10, `Duration ${step.duration} should be at least 10ms`);
+      assert.ok(
+        step.duration <= afterLogTime - startTime,
+        `Duration ${step.duration} should not exceed total elapsed time`
+      );
     });
 
     test('handles non-existent operation gracefully', () => {

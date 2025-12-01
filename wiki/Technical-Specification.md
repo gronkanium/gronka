@@ -247,9 +247,19 @@ disk space management (optional enhancement):
 
 ---
 
-### 4. cdn server (server.js)
+### 4. cdn server (deprecated as of v0.13.0)
 
-purpose: serve gif files over http with proper caching headers
+note: the standalone cdn server (`server.js`) has been removed. files are now served directly from r2 or discord, and the bot includes a minimal stats http server for jekyll integration.
+
+**migration:**
+
+- files < 8mb: uploaded as discord attachments, served from discord cdn
+- files >= 8mb: uploaded to r2, served from r2 public domain
+- stats endpoint: moved to bot process (`/api/stats/24h` only)
+
+**old implementation (deprecated):**
+
+purpose: served gif files over http with proper caching headers
 
 express configuration:
 

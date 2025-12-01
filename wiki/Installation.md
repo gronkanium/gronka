@@ -26,15 +26,18 @@ nano .env  # Fill in tokens
 # 5. Register Discord commands
 node src/register-commands.js
 
-# 6. Start services
-node src/server.js &  # CDN server
-node src/bot.js  # Discord bot
+# 6. Start services (as of v0.13.0, only bot is needed - includes stats server)
+node src/bot.js  # Discord bot (includes stats HTTP server)
+
+# optional: start webui dashboard
+node src/webui-server.js &
 
 # 7. Setup systemd services (production)
 sudo nano /etc/systemd/system/gif-bot.service
-sudo nano /etc/systemd/system/gif-cdn.service
-sudo systemctl enable gif-bot gif-cdn
-sudo systemctl start gif-bot gif-cdn
+sudo systemctl enable gif-bot
+sudo systemctl start gif-bot
+
+# note: gif-cdn.service is no longer needed as of v0.13.0
 ```
 
 ## discord application setup

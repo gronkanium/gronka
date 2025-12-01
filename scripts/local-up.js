@@ -51,7 +51,7 @@ console.log('starting local development services...\n');
 const pids = {};
 
 // Function to start a process and track its PID
-function startProcess(name, command, args, options = {}) {
+function _startProcess(name, command, args, options = {}) {
   console.log(`starting ${name}...`);
   const proc = spawn(command, args, {
     stdio: 'inherit',
@@ -130,12 +130,6 @@ try {
   console.warn('  you may need to start it manually: docker compose up -d cobalt\n');
 }
 
-// Start Express server
-startProcess('server', 'node', ['src/server.js']);
-
-// Wait a moment for server to start
-setTimeout(() => {}, 2000);
-
 // Save PIDs to file atomically using temporary file + rename
 // This avoids TOCTOU race condition by ensuring atomic write operation
 // Write to temp file in same directory, then rename atomically
@@ -163,10 +157,10 @@ try {
 console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
 console.log('local development services started');
 console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
-console.log('  server: running');
 console.log('  webui:  running');
 console.log('  cobalt: running');
 console.log('');
+console.log('note: to start the bot, use "npm run bot:test" or "npm run bot:prod"');
 console.log('use "npm run local:down" to stop all services');
 console.log('use "npm run local:logs" to view logs');
 console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n');

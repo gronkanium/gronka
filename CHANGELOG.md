@@ -7,6 +7,86 @@ and this project adheres (attempts) to [Semantic Versioning](https://semver.org/
 
 ## [Unreleased]
 
+### Added
+
+- Enhanced clean-slate reset script to wipe both PostgreSQL and SQLite databases
+  - Updated `scripts/reset-clean-slate.js` to drop all PostgreSQL tables when PostgreSQL is configured
+  - Script now handles both database types: drops PostgreSQL tables and deletes SQLite database files
+  - Added `wipePostgresDatabase()` function that connects to PostgreSQL and drops all tables in correct order
+  - Supports both `DATABASE_URL` and individual PostgreSQL connection parameters
+  - Gracefully handles cases where PostgreSQL is not configured or connection fails
+  - Updated messaging to clearly indicate both databases are being wiped
+- Minimal HTTP stats server built into bot process
+  - Bot now includes a lightweight Express server for `/api/stats/24h` endpoint
+  - Only serves stats endpoint for Jekyll site integration
+  - No file serving - all files served from R2 or Discord
+  - Supports basic authentication via `STATS_USERNAME` and `STATS_PASSWORD`
+  - Configurable via `SERVER_PORT` and `SERVER_HOST` environment variables
+
+### Changed
+
+- **BREAKING**: Removed standalone server.js and simplified architecture
+  - Architecture reduced from 3 processes to 2 processes (bot + webui)
+  - Removed `src/server.js` - functionality moved to bot process
+  - Bot process now includes minimal HTTP server for stats endpoint only
+  - WebUI now calculates stats directly from database and filesystem instead of proxying HTTP requests
+  - Docker healthcheck changed from HTTP check to process-based check
+  - Updated all startup scripts: `docker-entrypoint.sh`, `bot-start.js`, `local-up.js`, `local-verify.js`
+  - Removed `npm run server` script from package.json
+  - Files no longer served via HTTP - only from R2 or Discord attachments
+  - Migration: existing deployments will automatically work with new architecture, no manual changes needed
+- Removed `MAIN_SERVER_URL` configuration variable
+  - WebUI no longer needs `MAIN_SERVER_URL` environment variable
+  - Stats and health data calculated directly instead of via HTTP proxy
+  - Simplified configuration and eliminated port mismatch issues
+  - Removed from `webuiConfig` in `src/utils/config.js`
+- Simplified server configuration
+  - `SERVER_PORT` and `SERVER_HOST` now only used for bot's minimal stats HTTP server
+  - Removed unused `CORS_ORIGIN` from server config
+  - Configuration is now focused on stats endpoint only
+
+### Documentation
+
+- Updated wiki documentation for new architecture
+  - Rewrote `wiki/API-Endpoints.md` to reflect new stats-only HTTP server
+  - Updated `wiki/Configuration.md` with simplified server configuration
+  - Updated `wiki/Installation.md` to remove server.js startup instructions
+  - Updated `wiki/Technical-Specification.md` to mark CDN server as deprecated
+  - Updated `wiki/Jekyll-Stats.md` to reflect bot's built-in stats endpoint
+  - Added migration notes and version information throughout documentation
+
+### Fixed
+
+- Fixed PostgreSQL test failures after SQLite to PostgreSQL migration
+  - Fixed timestamp comparison issues by switching from strict equality to approximate matching (1 second tolerance)
+  - Fixed duplicate key violations in logs by ensuring unique timestamps and component names for each test
+  - Fixed user count mismatches by using unique user IDs per test run to prevent conflicts with previous test data
+  - Fixed connection handling in `insertProcessedUrl` to gracefully handle closed database connections
+  - Added cache invalidation in test setup to prevent stale data from previous test runs
+  - Updated test files: `test/utils/database.test.js`, `test/utils/user-tracking.test.js`, `test/utils/log-metrics.test.js`
+  - Updated database function: `src/utils/database/processed-urls-pg.js` for better error handling
+- Fixed WebUI "invalid date" errors for timestamps after PostgreSQL migration
+  - PostgreSQL's `postgres.js` library returns BIGINT values as strings instead of numbers
+  - WebUI was showing "invalid date" because `new Date(timestamp)` failed when timestamp was a string
+  - Created helper functions in `src/utils/database/helpers-pg.js` to convert timestamp fields from strings to numbers
+  - Updated all PostgreSQL query functions to convert timestamps before returning:
+    - `logs-pg.js` - Converts `timestamp` in `getLogs()` and `getLogMetrics()`
+    - `alerts-pg.js` - Converts `timestamp` in `getAlerts()` and `insertAlert()`
+    - `operations-pg.js` - Converts `timestamp` in `getOperationLogs()`, `getOperationTrace()`, and `getRecentOperations()` (including nested timestamps in performance metrics steps)
+    - `metrics-pg.js` - Converts `timestamp` in `getSystemMetrics()`, `getLatestSystemMetrics()`, and `last_command_at`/`updated_at` in `getUserMetrics()` and `getAllUsersMetrics()`
+    - `users-pg.js` - Converts `first_used` and `last_used` in `getUser()`
+    - `processed-urls-pg.js` - Converts `processed_at` in `getProcessedUrl()`, `getUserMedia()`, and `getUserR2Media()`
+  - All timestamps are now returned as numbers, allowing `new Date()` to parse them correctly
+  - WebUI now displays timestamps correctly instead of showing "invalid date"
+- Fixed WebUI API empty responses after Postgres migration
+  - Fixed critical async/await bug in `src/webui-server/index.js` where `getRecentOperations()` was called without `await` during server startup
+  - Operations were not loading from Postgres database at startup, causing empty responses
+  - Added proper validation to ensure operations array is valid before processing
+  - Enhanced error handling in route handlers (`users.js`, `logs.js`, `metrics.js`) with null/undefined checks
+  - Added comprehensive error logging with stack traces for debugging database query failures
+  - All endpoints now properly handle async database queries and return correct data types (arrays/numbers instead of empty objects)
+  - WebUI API endpoints now return proper JSON responses with data instead of empty `{}` objects
+
 ## [0.13.0] - 2025-12-01
 
 ### Added

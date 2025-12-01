@@ -1,34 +1,28 @@
-import Database from 'better-sqlite3';
 import {
-  getDb,
-  setDb,
-  getInitPromise,
-  setInitPromise,
-  getDbPath,
-  ensureDataDir,
-  isPostgres,
+  initPostgresConnection,
+  getPostgresConnection,
+  setPostgresConnection,
+  getPostgresInitPromise,
+  setPostgresInitPromise,
 } from './connection.js';
-import { initPostgresDatabase, ensurePostgresInitialized } from './init-pg.js';
+import {
+  getTableDefinitions,
+  getIndexDefinitions,
+  addFileSizeColumnIfNeeded,
+} from './schema-pg.js';
 
 /**
- * Initialize the database and create tables
- * Routes to SQLite or PostgreSQL based on DATABASE_TYPE
+ * Initialize PostgreSQL database and create tables
  * @returns {Promise<void>}
  */
-export async function initDatabase() {
-  // Check database type and route accordingly
-  if (isPostgres()) {
-    return await initPostgresDatabase();
-  }
-
-  // SQLite initialization (existing code)
-  const db = getDb();
-  if (db) {
+export async function initPostgresDatabase() {
+  const sql = getPostgresConnection();
+  if (sql) {
     return; // Already initialized
   }
 
   // If initialization is in progress, wait for it
-  const initPromise = getInitPromise();
+  const initPromise = getPostgresInitPromise();
   if (initPromise) {
     return initPromise;
   }
@@ -36,230 +30,100 @@ export async function initDatabase() {
   // Start initialization
   const newInitPromise = (async () => {
     try {
-      await ensureDataDir();
+      // Initialize connection
+      const connection = await initPostgresConnection();
+      setPostgresConnection(connection);
 
-      const newDb = new Database(getDbPath());
-      setDb(newDb);
-
-      // Enable WAL mode for better concurrency
-      newDb.pragma('journal_mode = WAL');
-
-      // Create users table
-      newDb.exec(`
-        CREATE TABLE IF NOT EXISTS users (
-          user_id TEXT PRIMARY KEY,
-          username TEXT NOT NULL,
-          first_used INTEGER NOT NULL,
-          last_used INTEGER NOT NULL
-        );
-
-        CREATE INDEX IF NOT EXISTS idx_users_user_id ON users(user_id);
-        CREATE INDEX IF NOT EXISTS idx_users_last_used ON users(last_used);
-      `);
-
-      // Create logs table
-      newDb.exec(`
-        CREATE TABLE IF NOT EXISTS logs (
-          id INTEGER PRIMARY KEY AUTOINCREMENT,
-          timestamp INTEGER NOT NULL,
-          component TEXT NOT NULL,
-          level TEXT NOT NULL,
-          message TEXT NOT NULL,
-          metadata TEXT
-        );
-
-        CREATE INDEX IF NOT EXISTS idx_logs_timestamp ON logs(timestamp);
-        CREATE INDEX IF NOT EXISTS idx_logs_component ON logs(component);
-        CREATE INDEX IF NOT EXISTS idx_logs_level ON logs(level);
-        CREATE INDEX IF NOT EXISTS idx_logs_component_timestamp ON logs(component, timestamp);
-      `);
-
-      // Create processed_urls table
-      newDb.exec(`
-        CREATE TABLE IF NOT EXISTS processed_urls (
-          url_hash TEXT PRIMARY KEY,
-          file_hash TEXT NOT NULL,
-          file_type TEXT NOT NULL,
-          file_extension TEXT,
-          file_url TEXT NOT NULL,
-          processed_at INTEGER NOT NULL,
-          user_id TEXT,
-          file_size INTEGER
-        );
-
-        CREATE INDEX IF NOT EXISTS idx_processed_urls_file_hash ON processed_urls(file_hash);
-        CREATE INDEX IF NOT EXISTS idx_processed_urls_processed_at ON processed_urls(processed_at);
-        CREATE INDEX IF NOT EXISTS idx_processed_urls_user_id ON processed_urls(user_id);
-      `);
-
-      // Add file_size column if it doesn't exist (for existing databases)
-      try {
-        newDb.exec(`ALTER TABLE processed_urls ADD COLUMN file_size INTEGER`);
-      } catch (error) {
-        // Column already exists, ignore error
-        if (!error.message.includes('duplicate column name')) {
-          console.error('Failed to add file_size column:', error);
-        }
+      // Create tables
+      const tables = getTableDefinitions();
+      for (const table of tables) {
+        await connection.unsafe(table.sql);
       }
 
-      // Create operation_logs table for detailed operation tracking
-      newDb.exec(`
-        CREATE TABLE IF NOT EXISTS operation_logs (
-          id INTEGER PRIMARY KEY AUTOINCREMENT,
-          operation_id TEXT NOT NULL,
-          timestamp INTEGER NOT NULL,
-          step TEXT NOT NULL,
-          status TEXT NOT NULL,
-          message TEXT,
-          file_path TEXT,
-          stack_trace TEXT,
-          metadata TEXT
-        );
+      // Create indexes
+      const indexes = getIndexDefinitions();
+      for (const index of indexes) {
+        await connection.unsafe(index.sql);
+      }
 
-        CREATE INDEX IF NOT EXISTS idx_operation_logs_operation_id ON operation_logs(operation_id);
-        CREATE INDEX IF NOT EXISTS idx_operation_logs_timestamp ON operation_logs(timestamp);
-        CREATE INDEX IF NOT EXISTS idx_operation_logs_status ON operation_logs(status);
-        CREATE INDEX IF NOT EXISTS idx_operation_logs_step ON operation_logs(step);
-        CREATE INDEX IF NOT EXISTS idx_operation_logs_operation_id_timestamp ON operation_logs(operation_id, timestamp);
-        CREATE INDEX IF NOT EXISTS idx_operation_logs_step_status ON operation_logs(step, status);
-      `);
+      // Add file_size column if needed (for migration compatibility)
+      await addFileSizeColumnIfNeeded(connection);
 
-      // Create user_metrics table for aggregated statistics
-      newDb.exec(`
-        CREATE TABLE IF NOT EXISTS user_metrics (
-          user_id TEXT PRIMARY KEY,
-          username TEXT NOT NULL,
-          total_commands INTEGER DEFAULT 0,
-          successful_commands INTEGER DEFAULT 0,
-          failed_commands INTEGER DEFAULT 0,
-          total_convert INTEGER DEFAULT 0,
-          total_download INTEGER DEFAULT 0,
-          total_optimize INTEGER DEFAULT 0,
-          total_info INTEGER DEFAULT 0,
-          total_file_size INTEGER DEFAULT 0,
-          last_command_at INTEGER,
-          updated_at INTEGER NOT NULL
-        );
-
-        CREATE INDEX IF NOT EXISTS idx_user_metrics_total_commands ON user_metrics(total_commands);
-        CREATE INDEX IF NOT EXISTS idx_user_metrics_last_command_at ON user_metrics(last_command_at);
-      `);
-
-      // Create system_metrics table for health monitoring
-      newDb.exec(`
-        CREATE TABLE IF NOT EXISTS system_metrics (
-          id INTEGER PRIMARY KEY AUTOINCREMENT,
-          timestamp INTEGER NOT NULL,
-          cpu_usage REAL,
-          memory_usage REAL,
-          memory_total REAL,
-          disk_usage REAL,
-          disk_total REAL,
-          process_uptime INTEGER,
-          process_memory REAL,
-          metadata TEXT
-        );
-
-        CREATE INDEX IF NOT EXISTS idx_system_metrics_timestamp ON system_metrics(timestamp);
-      `);
-
-      // Create alerts table for notification history
-      newDb.exec(`
-        CREATE TABLE IF NOT EXISTS alerts (
-          id INTEGER PRIMARY KEY AUTOINCREMENT,
-          timestamp INTEGER NOT NULL,
-          severity TEXT NOT NULL,
-          component TEXT NOT NULL,
-          title TEXT NOT NULL,
-          message TEXT NOT NULL,
-          operation_id TEXT,
-          user_id TEXT,
-          metadata TEXT
-        );
-
-        CREATE INDEX IF NOT EXISTS idx_alerts_timestamp ON alerts(timestamp);
-        CREATE INDEX IF NOT EXISTS idx_alerts_severity ON alerts(severity);
-        CREATE INDEX IF NOT EXISTS idx_alerts_component ON alerts(component);
-        CREATE INDEX IF NOT EXISTS idx_alerts_operation_id ON alerts(operation_id);
-      `);
-
-      // Create temporary_uploads table for tracking temporary R2 uploads with TTL
-      newDb.exec(`
-        CREATE TABLE IF NOT EXISTS temporary_uploads (
-          id INTEGER PRIMARY KEY AUTOINCREMENT,
-          url_hash TEXT NOT NULL,
-          r2_key TEXT NOT NULL,
-          uploaded_at INTEGER NOT NULL,
-          expires_at INTEGER NOT NULL,
-          deleted_at INTEGER,
-          deletion_failed INTEGER DEFAULT 0,
-          deletion_error TEXT,
-          FOREIGN KEY (url_hash) REFERENCES processed_urls(url_hash),
-          UNIQUE(url_hash, r2_key)
-        );
-
-        CREATE INDEX IF NOT EXISTS idx_temporary_uploads_expires_at ON temporary_uploads(expires_at);
-        CREATE INDEX IF NOT EXISTS idx_temporary_uploads_r2_key ON temporary_uploads(r2_key);
-        CREATE INDEX IF NOT EXISTS idx_temporary_uploads_url_hash ON temporary_uploads(url_hash);
-        CREATE INDEX IF NOT EXISTS idx_temporary_uploads_deleted_at ON temporary_uploads(deleted_at);
-        CREATE INDEX IF NOT EXISTS idx_temporary_uploads_deletion_failed ON temporary_uploads(deletion_failed);
-      `);
+      // Reset SERIAL sequences to match existing data (fixes duplicate key errors after migration)
+      await resetSerialSequences(connection);
     } catch (error) {
-      setInitPromise(null); // Reset on error so it can be retried
-      setDb(null);
+      setPostgresInitPromise(null); // Reset on error so it can be retried
+      setPostgresConnection(null);
       throw error;
     }
   })();
 
-  setInitPromise(newInitPromise);
+  setPostgresInitPromise(newInitPromise);
   return newInitPromise;
 }
 
 /**
- * Close the database connection
- * Routes to SQLite or PostgreSQL based on DATABASE_TYPE
+ * Reset SERIAL sequences to match the maximum ID in each table
+ * This fixes duplicate key errors after data migration
+ * @param {Object} sql - The postgres.js client instance
  * @returns {Promise<void>}
  */
-export async function closeDatabase() {
-  // Check database type and route accordingly
-  if (isPostgres()) {
-    const { closePostgresDatabase } = await import('./init-pg.js');
-    return await closePostgresDatabase();
-  }
+async function resetSerialSequences(sql) {
+  const tablesWithSerial = [
+    { table: 'logs', sequence: 'logs_id_seq', column: 'id' },
+    { table: 'operation_logs', sequence: 'operation_logs_id_seq', column: 'id' },
+    { table: 'system_metrics', sequence: 'system_metrics_id_seq', column: 'id' },
+    { table: 'alerts', sequence: 'alerts_id_seq', column: 'id' },
+    { table: 'temporary_uploads', sequence: 'temporary_uploads_id_seq', column: 'id' },
+  ];
 
-  // SQLite close (existing code)
-  const db = getDb();
-  if (db) {
-    db.close();
-    setDb(null);
+  for (const { table, sequence, column } of tablesWithSerial) {
+    try {
+      // Get the maximum ID from the table using sql.unsafe for dynamic table/column names
+      const maxQuery = `SELECT COALESCE(MAX(${column}), 0) as max_id FROM ${table}`;
+      const maxResult = await sql.unsafe(maxQuery);
+      const maxId = parseInt(maxResult[0]?.max_id || 0, 10);
+
+      // Reset the sequence to max_id + 1 (or 1 if table is empty)
+      // Use setval with false to set the current value without incrementing
+      const nextVal = maxId > 0 ? maxId + 1 : 1;
+      await sql.unsafe(`SELECT setval('${sequence}', ${nextVal}, false)`);
+    } catch (error) {
+      // If sequence doesn't exist yet or table doesn't exist, that's okay
+      // It will be created on first insert
+      console.warn(`Could not reset sequence ${sequence} for table ${table}:`, error.message);
+    }
   }
-  setInitPromise(null); // Reset init promise so database can be reinitialized
 }
 
 /**
- * Ensure database is initialized before performing operations
- * Routes to SQLite or PostgreSQL based on DATABASE_TYPE
+ * Close PostgreSQL database connection
  * @returns {Promise<void>}
  */
-export async function ensureDbInitialized() {
-  // Check database type and route accordingly
-  if (isPostgres()) {
-    return await ensurePostgresInitialized();
-  }
+export async function closePostgresDatabase() {
+  const { closePostgresConnection } = await import('./connection.js');
+  await closePostgresConnection();
+  setPostgresConnection(null);
+  setPostgresInitPromise(null);
+}
 
-  // SQLite initialization (existing code)
-  const db = getDb();
-  if (db) {
+/**
+ * Ensure PostgreSQL database is initialized before performing operations
+ * @returns {Promise<void>}
+ */
+export async function ensurePostgresInitialized() {
+  const sql = getPostgresConnection();
+  if (sql) {
     return; // Already initialized
   }
 
   // If initialization is in progress, wait for it
-  const initPromise = getInitPromise();
+  const initPromise = getPostgresInitPromise();
   if (initPromise) {
     await initPromise;
     return;
   }
 
   // Start initialization if not already started
-  await initDatabase();
+  await initPostgresDatabase();
 }

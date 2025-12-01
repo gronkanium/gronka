@@ -21,7 +21,18 @@ router.get('/api/metrics/errors', async (req, res) => {
       options.timeRange = parseInt(timeRange, 10);
     }
 
-    const metrics = await getLogMetrics(options);
+    let metrics;
+    try {
+      metrics = await getLogMetrics(options);
+      if (metrics === undefined || metrics === null) {
+        logger.warn('getLogMetrics returned undefined or null, defaulting to empty object');
+        metrics = {};
+      }
+    } catch (error) {
+      logger.error('Error calling getLogMetrics:', error);
+      logger.error('Error stack:', error.stack);
+      metrics = {};
+    }
 
     res.json(metrics);
   } catch (error) {
@@ -45,14 +56,40 @@ router.get('/api/metrics/system', async (req, res) => {
     if (startTime) options.startTime = parseInt(startTime, 10);
     if (endTime) options.endTime = parseInt(endTime, 10);
 
-    const metrics = await getSystemMetrics(options);
+    let metrics, current;
+    try {
+      metrics = await getSystemMetrics(options);
+      if (metrics === undefined || metrics === null) {
+        logger.warn('getSystemMetrics returned undefined or null, defaulting to empty array');
+        metrics = [];
+      }
+      if (!Array.isArray(metrics)) {
+        logger.warn(
+          `getSystemMetrics returned non-array: ${typeof metrics}, defaulting to empty array`
+        );
+        metrics = [];
+      }
+    } catch (error) {
+      logger.error('Error calling getSystemMetrics:', error);
+      logger.error('Error stack:', error.stack);
+      metrics = [];
+    }
 
-    // Also get current metrics
-    const current = await collectSystemMetrics();
+    try {
+      current = await collectSystemMetrics();
+      if (current === undefined || current === null) {
+        logger.warn('collectSystemMetrics returned undefined or null, defaulting to empty object');
+        current = {};
+      }
+    } catch (error) {
+      logger.error('Error calling collectSystemMetrics:', error);
+      logger.error('Error stack:', error.stack);
+      current = {};
+    }
 
     res.json({
-      current,
-      history: metrics,
+      current: current || {},
+      history: Array.isArray(metrics) ? metrics : [],
     });
   } catch (error) {
     logger.error('Failed to fetch system metrics:', error);

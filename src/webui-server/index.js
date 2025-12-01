@@ -37,16 +37,12 @@ let server = null;
 let wss = null;
 
 // Configuration from centralized config
-const {
-  webuiPort: WEBUI_PORT,
-  webuiHost: WEBUI_HOST,
-  mainServerUrl: MAIN_SERVER_URL,
-} = webuiConfig;
+const { webuiPort: WEBUI_PORT, webuiHost: WEBUI_HOST } = webuiConfig;
 
 // Validate configuration
 try {
   // Config validation happens during import
-  if (!WEBUI_PORT || !MAIN_SERVER_URL) {
+  if (!WEBUI_PORT) {
     throw new ConfigurationError('Required WebUI configuration missing');
   }
 } catch (error) {
@@ -99,8 +95,8 @@ const broadcastUserMetricsWrapper = (userId, metrics) => {
 
     // Load recent operations from database
     try {
-      const recentOps = getRecentOperations(MAX_OPERATIONS);
-      if (recentOps.length > 0) {
+      const recentOps = await getRecentOperations(MAX_OPERATIONS);
+      if (recentOps && Array.isArray(recentOps) && recentOps.length > 0) {
         // Enrich operations with usernames if missing
         let enrichedCount = 0;
         recentOps.forEach(op => {
@@ -113,6 +109,8 @@ const broadcastUserMetricsWrapper = (userId, metrics) => {
         logger.info(
           `loaded ${recentOps.length} operations from database${enrichedCount > 0 ? `, enriched ${enrichedCount} usernames` : ''}`
         );
+      } else {
+        logger.info('no operations found in database or invalid response format');
       }
     } catch (error) {
       logger.error('failed to load operations from database:', error);
@@ -156,7 +154,6 @@ const broadcastUserMetricsWrapper = (userId, metrics) => {
     logger.info(`webui server running on http://${WEBUI_HOST}:${WEBUI_PORT}`);
     logger.info(`dashboard: http://${WEBUI_HOST}:${WEBUI_PORT}`);
     logger.info(`websocket: ws://${WEBUI_HOST}:${WEBUI_PORT}/api/ws`);
-    logger.info(`main server: ${MAIN_SERVER_URL}`);
 
     // Start system metrics collection (every 60 seconds)
     startMetricsCollection(60000);

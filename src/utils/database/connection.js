@@ -1,235 +1,136 @@
-import fs from 'fs/promises';
-import path from 'path';
-import { fileURLToPath } from 'url';
-import { r2Config } from '../config.js';
+import postgres from 'postgres';
 
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
-const projectRoot = path.resolve(__dirname, '../../..');
-
-let db = null;
+let sql = null;
 let initPromise = null;
-let dbType = null;
-
-// Prepared statement cache: Map<sql, Statement>
-// Caches frequently used prepared statements to avoid re-preparing them
-const stmtCache = new Map();
 
 /**
- * Get the database path (supports environment variable override for testing)
- * Always defaults to data-test directory when GRONKA_DB_PATH is unset to prevent
- * accidental writes to production database
- * @returns {string} Database file path
+ * Get PostgreSQL connection configuration from environment variables
+ * @returns {Object} PostgreSQL connection configuration
  */
-export function getDbPath() {
-  // If explicitly set, use it (allows tests to override with temp directories)
-  if (process.env.GRONKA_DB_PATH) {
-    return process.env.GRONKA_DB_PATH;
+export function getPostgresConfig() {
+  // Support DATABASE_URL for full connection string
+  if (process.env.DATABASE_URL) {
+    return process.env.DATABASE_URL;
   }
 
-  // Always use data-test when GRONKA_DB_PATH is unset to prevent accidental
-  // writes to production database. Production code should always set GRONKA_DB_PATH
-  // explicitly via environment variable.
-  return path.join(projectRoot, 'data-test', 'gronka.db');
+  // Support individual connection parameters
+  const config = {
+    host: process.env.POSTGRES_HOST || 'localhost',
+    port: parseInt(process.env.POSTGRES_PORT || '5432', 10),
+    database: process.env.POSTGRES_DB || 'gronka',
+    username: process.env.POSTGRES_USER || 'gronka',
+    password: process.env.POSTGRES_PASSWORD || 'gronka',
+    max: parseInt(process.env.POSTGRES_MAX_CONNECTIONS || '20', 10),
+    idle_timeout: parseInt(process.env.POSTGRES_IDLE_TIMEOUT || '30', 10),
+    connect_timeout: parseInt(process.env.POSTGRES_CONNECT_TIMEOUT || '10', 10),
+  };
+
+  return config;
 }
 
 /**
- * Ensure data directory exists (async)
- * @returns {Promise<void>}
+ * Initialize PostgreSQL connection pool
+ * @returns {Promise<postgres.Sql>} PostgreSQL connection pool
  */
-export async function ensureDataDir() {
-  const dataDir = path.dirname(getDbPath());
-
-  try {
-    // Check if path exists and what it is
-    try {
-      const stats = await fs.stat(dataDir);
-      if (stats.isFile()) {
-        // Path exists as a file, not a directory - this is an error condition
-        throw new Error(
-          `Data directory path exists as a file instead of directory: ${dataDir}. ` +
-            `Please remove the file or use a different path.`
-        );
-      }
-      // Path exists as a directory, we're good
-      return;
-    } catch (statError) {
-      // Path doesn't exist, we'll create it below
-      if (statError.code !== 'ENOENT') {
-        throw statError;
-      }
-    }
-
-    // Create the directory
-    await fs.mkdir(dataDir, { recursive: true });
-  } catch (error) {
-    // Handle specific error codes
-    if (error.code === 'EEXIST') {
-      // Directory already exists (shouldn't happen after stat check, but handle it)
-      return;
-    } else if (error.code === 'ENOTDIR') {
-      // Path exists but is not a directory (shouldn't happen after stat check, but handle it)
-      throw new Error(
-        `Data directory path exists but is not a directory: ${dataDir}. ` +
-          `Please remove the file or use a different path.`
-      );
-    } else {
-      // Re-throw other errors
-      throw error;
-    }
-  }
-}
-
-/**
- * Get the database type (sqlite or postgres)
- * @returns {string|null} Database type or null if not determined
- */
-export function getDbType() {
-  if (dbType) {
-    return dbType;
-  }
-
-  // Determine from environment variable
-  const envType = process.env.DATABASE_TYPE?.toLowerCase();
-  if (envType === 'postgres' || envType === 'postgresql') {
-    dbType = 'postgres';
-    return dbType;
-  }
-
-  // Default to sqlite
-  dbType = 'sqlite';
-  return dbType;
-}
-
-/**
- * Set the database type (internal use)
- * @param {string} type - Database type ('sqlite' or 'postgres')
- * @returns {void}
- */
-export function setDbType(type) {
-  dbType = type;
-}
-
-/**
- * Get the database connection
- * @returns {Database|postgres.Sql|null} Database connection or null if not initialized
- */
-export function getDb() {
-  return db;
-}
-
-/**
- * Set the database connection (internal use by init.js)
- * @param {Database|null} database - Database connection to set
- * @returns {void}
- */
-export function setDb(database) {
-  // Clear statement cache when database changes
-  if (db !== database) {
-    clearStatementCache();
-  }
-  db = database;
-}
-
-/**
- * Get the initialization promise (internal use by init.js)
- * @returns {Promise|null} Initialization promise or null
- */
-export function getInitPromise() {
-  return initPromise;
-}
-
-/**
- * Set the initialization promise (internal use by init.js)
- * @param {Promise|null} promise - Initialization promise to set
- * @returns {void}
- */
-export function setInitPromise(promise) {
-  initPromise = promise;
-}
-
-/**
- * Check if database is initialized
- * @returns {boolean} True if database is initialized
- */
-export function isDbInitialized() {
-  return db !== null;
-}
-
-/**
- * Check if using PostgreSQL
- * @returns {boolean} True if using PostgreSQL
- */
-export function isPostgres() {
-  return getDbType() === 'postgres';
-}
-
-/**
- * Check if using SQLite
- * @returns {boolean} True if using SQLite
- */
-export function isSqlite() {
-  return getDbType() === 'sqlite';
-}
-
-/**
- * Get the initialization promise (for waiting on initialization)
- * @returns {Promise|null} Initialization promise or null
- */
-export async function waitForInit() {
-  if (db) {
-    return; // Already initialized
+export async function initPostgresConnection() {
+  if (sql) {
+    return sql;
   }
 
   // If initialization is in progress, wait for it
   if (initPromise) {
-    await initPromise;
-    return;
+    return initPromise;
   }
+
+  // Start initialization
+  const newInitPromise = (async () => {
+    try {
+      const config = getPostgresConfig();
+      sql = postgres(config);
+
+      // Test the connection
+      await sql`SELECT 1`;
+
+      return sql;
+    } catch (error) {
+      sql = null;
+      throw new Error(`Failed to initialize PostgreSQL connection: ${error.message}`);
+    }
+  })();
+
+  initPromise = newInitPromise;
+  return newInitPromise;
 }
 
 /**
- * Get R2 public domain for URL pattern matching
- * @returns {string} R2 public domain (e.g., 'cdn.gronka.p1x.dev')
+ * Get PostgreSQL connection pool
+ * @returns {postgres.Sql|null} PostgreSQL connection pool or null if not initialized
  */
-export function getR2PublicDomain() {
-  return r2Config.publicDomain || 'cdn.gronka.p1x.dev';
+export function getPostgresConnection() {
+  return sql;
 }
 
 /**
- * Get a cached prepared statement or create and cache it
- * @param {string} sql - SQL query string
- * @returns {Statement} Prepared statement
- */
-export function getCachedStatement(sql) {
-  if (!db) {
-    throw new Error('Database not initialized. Call initDatabase() first.');
-  }
-
-  // Check cache first
-  let stmt = stmtCache.get(sql);
-  if (stmt) {
-    return stmt;
-  }
-
-  // Create and cache the statement
-  stmt = db.prepare(sql);
-  stmtCache.set(sql, stmt);
-  return stmt;
-}
-
-/**
- * Clear the prepared statement cache
+ * Set PostgreSQL connection pool (internal use)
+ * @param {postgres.Sql|null} connection - PostgreSQL connection pool to set
  * @returns {void}
  */
-export function clearStatementCache() {
-  stmtCache.clear();
+export function setPostgresConnection(connection) {
+  sql = connection;
+  if (connection === null) {
+    initPromise = null;
+  }
 }
 
 /**
- * Get cache size (for debugging/monitoring)
- * @returns {number} Number of cached statements
+ * Get the initialization promise (internal use)
+ * @returns {Promise|null} Initialization promise or null
  */
-export function getStatementCacheSize() {
-  return stmtCache.size;
+export function getPostgresInitPromise() {
+  return initPromise;
+}
+
+/**
+ * Set the initialization promise (internal use)
+ * @param {Promise|null} promise - Initialization promise to set
+ * @returns {void}
+ */
+export function setPostgresInitPromise(promise) {
+  initPromise = promise;
+}
+
+/**
+ * Check if PostgreSQL connection is initialized
+ * @returns {boolean} True if connection is initialized
+ */
+export function isPostgresInitialized() {
+  return sql !== null;
+}
+
+/**
+ * Close PostgreSQL connection pool
+ * @returns {Promise<void>}
+ */
+export async function closePostgresConnection() {
+  if (sql) {
+    await sql.end({ timeout: 5 });
+    sql = null;
+    initPromise = null;
+  }
+}
+
+/**
+ * Health check for PostgreSQL connection
+ * @returns {Promise<boolean>} True if connection is healthy
+ */
+export async function checkPostgresHealth() {
+  try {
+    if (!sql) {
+      return false;
+    }
+    await sql`SELECT 1`;
+    return true;
+  } catch (_error) {
+    return false;
+  }
 }

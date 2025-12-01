@@ -31,11 +31,6 @@ cleanup() {
     log_info "Shutting down gracefully..."
     
     # Send SIGTERM to all processes
-    if is_process_running "$SERVER_PID"; then
-        log_info "Stopping server process (PID: $SERVER_PID)..."
-        kill -TERM "$SERVER_PID" 2>/dev/null || true
-    fi
-    
     if is_process_running "$BOT_PID"; then
         log_info "Stopping bot process (PID: $BOT_PID)..."
         kill -TERM "$BOT_PID" 2>/dev/null || true
@@ -48,18 +43,13 @@ cleanup() {
     
     # Wait for processes to terminate (max 10 seconds)
     for i in $(seq 1 10); do
-        if ! is_process_running "$SERVER_PID" && ! is_process_running "$BOT_PID" && ! is_process_running "$WEBUI_PID"; then
+        if ! is_process_running "$BOT_PID" && ! is_process_running "$WEBUI_PID"; then
             break
         fi
         sleep 1
     done
     
     # Force kill if still running
-    if is_process_running "$SERVER_PID"; then
-        log_warn "Server process did not terminate, forcing kill..."
-        kill -KILL "$SERVER_PID" 2>/dev/null || true
-    fi
-    
     if is_process_running "$BOT_PID"; then
         log_warn "Bot process did not terminate, forcing kill..."
         kill -KILL "$BOT_PID" 2>/dev/null || true
@@ -70,7 +60,7 @@ cleanup() {
         kill -KILL "$WEBUI_PID" 2>/dev/null || true
     fi
     
-    wait "$SERVER_PID" "$BOT_PID" "$WEBUI_PID" 2>/dev/null || true
+    wait "$BOT_PID" "$WEBUI_PID" 2>/dev/null || true
     
     log_info "Shutdown complete"
     exit 0
@@ -79,23 +69,7 @@ cleanup() {
 # Trap signals for graceful shutdown
 trap 'cleanup' TERM INT
 
-# Start the Express server in the background
-log_info "Starting Express server..."
-node src/server.js &
-SERVER_PID=$!
-
-# Give server a moment to start
-sleep 2
-
-# Check if server started successfully
-if ! is_process_running "$SERVER_PID"; then
-    log_error "Server process failed to start"
-    exit 1
-fi
-
-log_info "Server started (PID: $SERVER_PID)"
-
-# Start the Discord bot in the background
+# Start the Discord bot in the background (includes stats HTTP server)
 log_info "Starting Discord bot..."
 node src/bot.js &
 BOT_PID=$!
@@ -132,15 +106,8 @@ fi
 log_info "WebUI started (PID: $WEBUI_PID)"
 log_info "All processes running. Monitoring..."
 
-# Monitor all three processes
+# Monitor both processes
 while true; do
-    # Check if server process is still running
-    if ! is_process_running "$SERVER_PID"; then
-        log_error "Server process exited unexpectedly (PID: $SERVER_PID)"
-        cleanup
-        exit 1
-    fi
-    
     # Check if bot process is still running
     if ! is_process_running "$BOT_PID"; then
         log_error "Bot process exited unexpectedly (PID: $BOT_PID)"

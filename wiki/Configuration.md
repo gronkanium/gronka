@@ -394,13 +394,21 @@ PROD_GIF_QUALITY=high
 
 ## server configuration
 
+note: as of version 0.13.0, the standalone express server (`src/server.js`) has been removed. these settings now configure the minimal http stats server built into the bot process, which only serves `/api/stats/24h` for jekyll integration.
+
 ### `SERVER_PORT`
 
-port for the express server.
+port for the stats http server (built into bot process).
 
 **default:** `3000`
 
 **range:** 1-65535
+
+**notes:**
+
+- the bot process includes a minimal http server for stats
+- only serves `/api/stats/24h` endpoint for jekyll integration
+- no file serving - files are served from r2 or discord
 
 **example:**
 
@@ -413,7 +421,7 @@ PROD_SERVER_PORT=3000
 
 ### `SERVER_HOST`
 
-host/address for the express server to bind to.
+host/address for the stats http server to bind to.
 
 **default:** `0.0.0.0`
 
@@ -422,6 +430,7 @@ host/address for the express server to bind to.
 - `0.0.0.0` binds to all network interfaces (accessible from network)
 - `127.0.0.1` or `localhost` binds to localhost only (local access only)
 - use `127.0.0.1` for security if you don't need network access
+- applies to the stats server built into the bot process
 
 **example:**
 
@@ -572,22 +581,18 @@ TEST_WEBUI_HOST=127.0.0.1
 PROD_WEBUI_HOST=127.0.0.1
 ```
 
-### `MAIN_SERVER_URL`
+### `MAIN_SERVER_URL` (removed)
 
-url of the main express server that webui connects to.
+this configuration variable has been removed in version 0.13.0. the webui now calculates stats directly from the database and filesystem instead of proxying requests to a separate server.
 
-**default:** `http://localhost:3000`
+**migration:**
 
-**notes:**
+if upgrading from < 0.13.0, you can safely remove `MAIN_SERVER_URL` from your `.env` file. it is no longer used.
 
-- webui uses this url to fetch stats and health information
-- should match your `SERVER_PORT` configuration
-- must be a valid http or https url
-
-**example:**
+**old example (deprecated):**
 
 ```env
-MAIN_SERVER_URL=http://localhost:3000
+# MAIN_SERVER_URL=http://localhost:3000 (no longer needed)
 # or for test/prod bots
 TEST_MAIN_SERVER_URL=http://localhost:3000
 PROD_MAIN_SERVER_URL=http://localhost:3000
@@ -834,7 +839,6 @@ all environment variables support the `TEST_` and `PROD_` prefixes, including:
 **server configuration:**
 - `TEST_SERVER_PORT` / `PROD_SERVER_PORT`
 - `TEST_SERVER_HOST` / `PROD_SERVER_HOST`
-- `TEST_CORS_ORIGIN` / `PROD_CORS_ORIGIN`
 - `TEST_STATS_USERNAME` / `PROD_STATS_USERNAME`
 - `TEST_STATS_PASSWORD` / `PROD_STATS_PASSWORD`
 - `TEST_STATS_CACHE_TTL` / `PROD_STATS_CACHE_TTL`
@@ -842,7 +846,6 @@ all environment variables support the `TEST_` and `PROD_` prefixes, including:
 **webui configuration:**
 - `TEST_WEBUI_PORT` / `PROD_WEBUI_PORT`
 - `TEST_WEBUI_HOST` / `PROD_WEBUI_HOST`
-- `TEST_MAIN_SERVER_URL` / `PROD_MAIN_SERVER_URL`
 
 **database configuration:**
 - `TEST_GRONKA_DB_PATH` / `PROD_GRONKA_DB_PATH`
@@ -938,7 +941,9 @@ when you run `npm run docker:up`, it uses `docker-compose.yml` which:
 
 **why the difference?**
 
-the docker container uses `docker-entrypoint.sh` which directly executes `node src/bot.js`, `node src/server.js`, and `node src/webui-server.js`. it does not use the `bot-start.js` script that performs prefix mapping. instead, variables are set directly in `docker-compose.yml` using docker's variable substitution syntax.
+the docker container uses `docker-entrypoint.sh` which directly executes `node src/bot.js` and `node src/webui-server.js`. it does not use the `bot-start.js` script that performs prefix mapping. instead, variables are set directly in `docker-compose.yml` using docker's variable substitution syntax.
+
+note: as of version 0.13.0, `src/server.js` has been removed. the bot process now includes a minimal stats http server.
 
 ### variables that support `PROD_*` prefix in docker
 
@@ -1053,7 +1058,6 @@ STATS_CACHE_TTL=300000
 # webui
 WEBUI_PORT=3001
 WEBUI_HOST=127.0.0.1
-MAIN_SERVER_URL=http://localhost:3000
 
 # database
 GRONKA_DB_PATH=./data-prod/gronka.db
@@ -1136,12 +1140,10 @@ PROD_STATS_PASSWORD=secure_password
 # test bot webui
 TEST_WEBUI_PORT=3002
 TEST_WEBUI_HOST=127.0.0.1
-TEST_MAIN_SERVER_URL=http://localhost:3000
 
 # prod bot webui
 PROD_WEBUI_PORT=3001
 PROD_WEBUI_HOST=127.0.0.1
-PROD_MAIN_SERVER_URL=http://localhost:3000
 
 # test bot logging
 TEST_LOG_DIR=./logs-test

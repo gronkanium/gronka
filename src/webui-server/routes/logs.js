@@ -71,12 +71,42 @@ router.get('/api/logs', async (req, res) => {
     options.excludeComponentLevels = [{ component: 'webui', level: 'INFO' }];
 
     // Get logs and total count
-    const logs = await getLogs(options);
-    const total = await getLogsCount(options);
+    let logs, total;
+    try {
+      logs = await getLogs(options);
+      if (logs === undefined || logs === null) {
+        logger.warn('getLogs returned undefined or null, defaulting to empty array');
+        logs = [];
+      }
+      if (!Array.isArray(logs)) {
+        logger.warn(`getLogs returned non-array: ${typeof logs}, defaulting to empty array`);
+        logs = [];
+      }
+    } catch (error) {
+      logger.error('Error calling getLogs:', error);
+      logger.error('Error stack:', error.stack);
+      logs = [];
+    }
+
+    try {
+      total = await getLogsCount(options);
+      if (total === undefined || total === null) {
+        logger.warn('getLogsCount returned undefined or null, defaulting to 0');
+        total = 0;
+      }
+      if (typeof total !== 'number') {
+        logger.warn(`getLogsCount returned non-number: ${typeof total}, defaulting to 0`);
+        total = 0;
+      }
+    } catch (error) {
+      logger.error('Error calling getLogsCount:', error);
+      logger.error('Error stack:', error.stack);
+      total = 0;
+    }
 
     res.json({
-      logs,
-      total,
+      logs: Array.isArray(logs) ? logs : [],
+      total: typeof total === 'number' ? total : 0,
       limit: options.limit,
       offset: options.offset,
     });

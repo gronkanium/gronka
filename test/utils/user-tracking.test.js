@@ -8,6 +8,7 @@ import {
   getRecentConversions,
 } from '../../src/utils/user-tracking.js';
 import { initDatabase, closeDatabase, getUser } from '../../src/utils/database.js';
+import { invalidateUserCache } from '../../src/utils/database/users-pg.js';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import fs from 'node:fs';
@@ -27,6 +28,8 @@ before(async () => {
   if (fs.existsSync(tempDbPath)) {
     fs.unlinkSync(tempDbPath);
   }
+  // Clear user cache to avoid stale data from previous test runs
+  invalidateUserCache();
   await initDatabase();
   await initializeUserTracking();
 });
@@ -46,8 +49,10 @@ after(() => {
 describe('user tracking utilities', () => {
   describe('trackUser', () => {
     test('tracks new user with username', async () => {
-      const userId = 'test-track-1';
+      const uniqueId = Date.now();
+      const userId = `test-track-1-${uniqueId}`;
       const username = 'TestUser1';
+      const beforeTimestamp = Date.now();
 
       await trackUser(userId, username);
 
@@ -57,7 +62,21 @@ describe('user tracking utilities', () => {
       assert.strictEqual(user.username, username);
       assert.ok(user.first_used > 0);
       assert.ok(user.last_used > 0);
-      assert.strictEqual(user.first_used, user.last_used);
+      // trackUser generates its own timestamp, so check it's within reasonable range
+      const afterTimestamp = Date.now();
+      assert.ok(
+        user.first_used >= beforeTimestamp && user.first_used <= afterTimestamp,
+        `first_used should be between ${beforeTimestamp} and ${afterTimestamp}, got ${user.first_used}`
+      );
+      assert.ok(
+        user.last_used >= beforeTimestamp && user.last_used <= afterTimestamp,
+        `last_used should be between ${beforeTimestamp} and ${afterTimestamp}, got ${user.last_used}`
+      );
+      // For new users, first_used and last_used should be the same (within 100ms tolerance)
+      assert.ok(
+        Math.abs(user.first_used - user.last_used) < 100,
+        `first_used and last_used should be approximately equal for new user`
+      );
     });
 
     test('tracks user without username (uses default)', async () => {
@@ -116,17 +135,19 @@ describe('user tracking utilities', () => {
   describe('getUniqueUserCount', () => {
     test('returns correct count', async () => {
       const countBefore = await getUniqueUserCount();
+      const uniqueId = Date.now();
 
-      await trackUser('test-count-1', 'User1');
-      await trackUser('test-count-2', 'User2');
-      await trackUser('test-count-3', 'User3');
+      await trackUser(`test-count-1-${uniqueId}`, 'User1');
+      await trackUser(`test-count-2-${uniqueId}`, 'User2');
+      await trackUser(`test-count-3-${uniqueId}`, 'User3');
 
       const countAfter = await getUniqueUserCount();
       assert.strictEqual(countAfter, countBefore + 3);
     });
 
     test('does not increase count for existing users', async () => {
-      const userId = 'test-count-existing';
+      const uniqueId = Date.now();
+      const userId = `test-count-existing-${uniqueId}`;
       const countBefore = await getUniqueUserCount();
 
       await trackUser(userId, 'User');

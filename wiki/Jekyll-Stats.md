@@ -177,7 +177,7 @@ this is expected behavior - the update script is designed to continue even if st
 - **stats data file**: `_data/stats.json` (created/updated by polling script)
 - **footer template**: `_includes/footer.html` (displays stats)
 - **update script**: `scripts/update-jekyll-site.sh` (integrates stats update)
-- **api endpoint**: `src/server.js` (bot server, `/api/stats/24h`)
+- **api endpoint**: bot process includes minimal http server for `/api/stats/24h` (as of v0.13.0, no longer a separate server)
 - **database function**: `src/utils/database/stats.js` (queries sqlite)
 - **log file**: `logs/jekyll-update.log` (update script logs)
 

@@ -119,13 +119,8 @@ if (env[dbPathKey]) {
   env.GRONKA_DB_PATH = path.join(storagePath, dbFileName);
 }
 
-// Set defaults for server and webui if not provided
+// Set defaults for webui if not provided
 if (withWebui) {
-  // Server defaults
-  if (!env.SERVER_PORT) {
-    env.SERVER_PORT = '3000';
-  }
-
   // WebUI defaults
   if (!env.WEBUI_PORT) {
     env.WEBUI_PORT = '3001';
@@ -133,9 +128,6 @@ if (withWebui) {
   if (!env.WEBUI_HOST) {
     env.WEBUI_HOST = '127.0.0.1';
   }
-
-  // Main server URL for webui (derived from SERVER_PORT)
-  env.MAIN_SERVER_URL = `http://localhost:${env.SERVER_PORT}`;
 }
 
 // Store processes for cleanup
@@ -177,36 +169,29 @@ function cleanup() {
 if (withWebui) {
   console.log('starting services with webui...\n');
 
-  // Start main server first (webui depends on it)
-  const serverPath = join(__dirname, '..', 'src', 'server.js');
-  console.log('starting server...');
-  startProcess('server', serverPath);
+  // Start bot first (includes stats HTTP server)
+  const botPath = join(__dirname, '..', 'src', 'bot.js');
+  console.log('starting bot...');
+  startProcess('bot', botPath);
 
-  // Wait a moment for server to start before starting webui
+  // Wait a moment for bot to start before starting webui
   setTimeout(() => {
     // Start webui server
     const webuiPath = join(__dirname, '..', 'src', 'webui-server.js');
-    console.log('starting webui...');
+    console.log('starting webui...\n');
     startProcess('webui', webuiPath);
 
-    // Wait a moment for webui to start before starting bot
     setTimeout(() => {
-      // Start bot
-      const botPath = join(__dirname, '..', 'src', 'bot.js');
-      console.log('starting bot...\n');
-      startProcess('bot', botPath);
-
       console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
       console.log('all services started');
       console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
-      console.log('  server: running');
       console.log('  webui:  running');
       console.log(`  bot:    running (${prefix} mode)`);
       console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n');
     }, 1000);
   }, 2000);
 } else {
-  // Start only the bot
+  // Start only the bot (includes stats HTTP server)
   const botPath = join(__dirname, '..', 'src', 'bot.js');
   startProcess('bot', botPath);
 }

@@ -14,33 +14,48 @@ services:
     environment:
       - DISCORD_TOKEN=${PROD_DISCORD_TOKEN:-${DISCORD_TOKEN}}
       - CLIENT_ID=${PROD_CLIENT_ID:-${CLIENT_ID}}
-      - CDN_BASE_URL=${CDN_BASE_URL:-https://cdn.gronka.p1x.dev/gifs}
-      - SERVER_PORT=3000
+      - CDN_BASE_URL=${PROD_CDN_BASE_URL:-${TEST_CDN_BASE_URL:-${CDN_BASE_URL:-https://cdn.gronka.p1x.dev/gifs}}}
+      - SERVER_PORT=${PROD_SERVER_PORT:-${TEST_SERVER_PORT:-${SERVER_PORT:-3000}}}
       - GRONKA_DB_PATH=${PROD_GRONKA_DB_PATH:-./data-prod/gronka.db}
       - GIF_STORAGE_PATH=${PROD_GIF_STORAGE_PATH:-./data-prod/gifs}
-      - MAX_GIF_DURATION=${MAX_GIF_DURATION:-30}
-      - GIF_QUALITY=${GIF_QUALITY:-medium}
-      - ADMIN_USER_IDS=${ADMIN_USER_IDS:-}
-      - STATS_USERNAME=${STATS_USERNAME:-}
-      - STATS_PASSWORD=${STATS_PASSWORD:-}
-      - COBALT_API_URL=${COBALT_API_URL:-http://cobalt:9000}
-      - COBALT_ENABLED=${COBALT_ENABLED:-true}
-      - R2_ACCOUNT_ID=${R2_ACCOUNT_ID:-}
-      - R2_ACCESS_KEY_ID=${R2_ACCESS_KEY_ID:-}
-      - R2_SECRET_ACCESS_KEY=${R2_SECRET_ACCESS_KEY:-}
-      - R2_BUCKET_NAME=${R2_BUCKET_NAME:-}
-      - R2_PUBLIC_DOMAIN=${R2_PUBLIC_DOMAIN:-cdn.gronka.p1x.dev}
-      - NTFY_TOPIC=${NTFY_TOPIC:-}
-      - WEBUI_PORT=3001
-      - WEBUI_HOST=0.0.0.0
-      - MAIN_SERVER_URL=http://localhost:3000
-      - DATABASE_TYPE=${DATABASE_TYPE:-sqlite}
-      - POSTGRES_HOST=${POSTGRES_HOST:-postgres}
-      - POSTGRES_PORT=${POSTGRES_PORT:-5432}
-      - POSTGRES_USER=${POSTGRES_USER:-gronka}
-      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-gronka}
-      - POSTGRES_DB=${POSTGRES_DB:-gronka}
-      - DATABASE_URL=${DATABASE_URL:-}
+      - MAX_GIF_WIDTH=${PROD_MAX_GIF_WIDTH:-${TEST_MAX_GIF_WIDTH:-${MAX_GIF_WIDTH:-}}}
+      - MAX_GIF_DURATION=${PROD_MAX_GIF_DURATION:-${TEST_MAX_GIF_DURATION:-${MAX_GIF_DURATION:-30}}}
+      - DEFAULT_FPS=${PROD_DEFAULT_FPS:-${TEST_DEFAULT_FPS:-${DEFAULT_FPS:-}}}
+      - MAX_VIDEO_SIZE=${PROD_MAX_VIDEO_SIZE:-${TEST_MAX_VIDEO_SIZE:-${MAX_VIDEO_SIZE:-}}}
+      - MAX_IMAGE_SIZE=${PROD_MAX_IMAGE_SIZE:-${TEST_MAX_IMAGE_SIZE:-${MAX_IMAGE_SIZE:-}}}
+      - GIF_QUALITY=${PROD_GIF_QUALITY:-${TEST_GIF_QUALITY:-${GIF_QUALITY:-medium}}}
+      - ADMIN_USER_IDS=${PROD_ADMIN_USER_IDS:-${TEST_ADMIN_USER_IDS:-${ADMIN_USER_IDS:-}}}
+      - STATS_USERNAME=${PROD_STATS_USERNAME:-${TEST_STATS_USERNAME:-${STATS_USERNAME:-}}}
+      - STATS_PASSWORD=${PROD_STATS_PASSWORD:-${TEST_STATS_PASSWORD:-${STATS_PASSWORD:-}}}
+      - STATS_CACHE_TTL=${PROD_STATS_CACHE_TTL:-${TEST_STATS_CACHE_TTL:-${STATS_CACHE_TTL:-}}}
+      - COBALT_API_URL=${PROD_COBALT_API_URL:-${TEST_COBALT_API_URL:-${COBALT_API_URL:-http://cobalt:9000}}}
+      - COBALT_ENABLED=${PROD_COBALT_ENABLED:-${TEST_COBALT_ENABLED:-${COBALT_ENABLED:-true}}}
+      - R2_ACCOUNT_ID=${PROD_R2_ACCOUNT_ID:-${TEST_R2_ACCOUNT_ID:-${R2_ACCOUNT_ID:-}}}
+      - R2_ACCESS_KEY_ID=${PROD_R2_ACCESS_KEY_ID:-${TEST_R2_ACCESS_KEY_ID:-${R2_ACCESS_KEY_ID:-}}}
+      - R2_SECRET_ACCESS_KEY=${PROD_R2_SECRET_ACCESS_KEY:-${TEST_R2_SECRET_ACCESS_KEY:-${R2_SECRET_ACCESS_KEY:-}}}
+      - R2_BUCKET_NAME=${PROD_R2_BUCKET_NAME:-${TEST_R2_BUCKET_NAME:-${R2_BUCKET_NAME:-}}}
+      - R2_PUBLIC_DOMAIN=${PROD_R2_PUBLIC_DOMAIN:-${TEST_R2_PUBLIC_DOMAIN:-${R2_PUBLIC_DOMAIN:-cdn.gronka.p1x.dev}}}
+      - R2_TEMP_UPLOADS_ENABLED=${PROD_R2_TEMP_UPLOADS_ENABLED:-${TEST_R2_TEMP_UPLOADS_ENABLED:-${R2_TEMP_UPLOADS_ENABLED:-}}}
+      - R2_TEMP_UPLOAD_TTL_HOURS=${PROD_R2_TEMP_UPLOAD_TTL_HOURS:-${TEST_R2_TEMP_UPLOAD_TTL_HOURS:-${R2_TEMP_UPLOAD_TTL_HOURS:-}}}
+      - R2_CLEANUP_ENABLED=${PROD_R2_CLEANUP_ENABLED:-${TEST_R2_CLEANUP_ENABLED:-${R2_CLEANUP_ENABLED:-}}}
+      - R2_CLEANUP_INTERVAL_MS=${PROD_R2_CLEANUP_INTERVAL_MS:-${TEST_R2_CLEANUP_INTERVAL_MS:-${R2_CLEANUP_INTERVAL_MS:-}}}
+      - R2_CLEANUP_LOG_LEVEL=${PROD_R2_CLEANUP_LOG_LEVEL:-${TEST_R2_CLEANUP_LOG_LEVEL:-${R2_CLEANUP_LOG_LEVEL:-}}}
+      - NTFY_TOPIC=${PROD_NTFY_TOPIC:-${TEST_NTFY_TOPIC:-${NTFY_TOPIC:-}}}
+      - LOG_LEVEL=${PROD_LOG_LEVEL:-${TEST_LOG_LEVEL:-${LOG_LEVEL:-}}}
+      - LOG_DIR=${PROD_LOG_DIR:-${TEST_LOG_DIR:-${LOG_DIR:-}}}
+      - LOG_ROTATION=${PROD_LOG_ROTATION:-${TEST_LOG_ROTATION:-${LOG_ROTATION:-}}}
+      - SERVER_HOST=${PROD_SERVER_HOST:-${TEST_SERVER_HOST:-${SERVER_HOST:-}}}
+      - CORS_ORIGIN=${PROD_CORS_ORIGIN:-${TEST_CORS_ORIGIN:-${CORS_ORIGIN:-}}}
+      - WEBUI_PORT=${PROD_WEBUI_PORT:-${TEST_WEBUI_PORT:-${WEBUI_PORT:-3001}}}
+      - WEBUI_HOST=${PROD_WEBUI_HOST:-${TEST_WEBUI_HOST:-${WEBUI_HOST:-0.0.0.0}}}
+      - MAIN_SERVER_URL=${PROD_MAIN_SERVER_URL:-${TEST_MAIN_SERVER_URL:-${MAIN_SERVER_URL:-http://localhost:3000}}}
+      - DATABASE_TYPE=${PROD_DATABASE_TYPE:-${TEST_DATABASE_TYPE:-${DATABASE_TYPE:-sqlite}}}
+      - POSTGRES_HOST=${PROD_POSTGRES_HOST:-${TEST_POSTGRES_HOST:-${POSTGRES_HOST:-postgres}}}
+      - POSTGRES_PORT=${PROD_POSTGRES_PORT:-${TEST_POSTGRES_PORT:-${POSTGRES_PORT:-5432}}}
+      - POSTGRES_USER=${PROD_POSTGRES_USER:-${TEST_POSTGRES_USER:-${POSTGRES_USER:-gronka}}}
+      - POSTGRES_PASSWORD=${PROD_POSTGRES_PASSWORD:-${TEST_POSTGRES_PASSWORD:-${POSTGRES_PASSWORD:-gronka}}}
+      - POSTGRES_DB=${PROD_POSTGRES_DB:-${TEST_POSTGRES_DB:-${POSTGRES_DB:-gronka}}}
+      - DATABASE_URL=${PROD_DATABASE_URL:-${TEST_DATABASE_URL:-${DATABASE_URL:-}}}
     volumes:
       - ./data-test:/app/data-test
       - ./data-prod:/app/data-prod
@@ -48,18 +63,12 @@ services:
       - ./logs:/app/logs
       - /var/run/docker.sock:/var/run/docker.sock
     ports:
-      - '3000:3000'
-      - '3001:3001'
+      - '${PROD_SERVER_PORT:-${TEST_SERVER_PORT:-${SERVER_PORT:-3000}}}:${PROD_SERVER_PORT:-${TEST_SERVER_PORT:-${SERVER_PORT:-3000}}}'
+      - '${PROD_WEBUI_PORT:-${TEST_WEBUI_PORT:-${WEBUI_PORT:-3001}}}:${PROD_WEBUI_PORT:-${TEST_WEBUI_PORT:-${WEBUI_PORT:-3001}}}'
     networks:
       - gronka-network
     healthcheck:
-      test:
-        [
-          'CMD',
-          'node',
-          '-e',
-          "require('http').get('http://localhost:3000/health', (r) => {process.exit(r.statusCode === 200 ? 0 : 1)})",
-        ]
+      test: ['CMD-SHELL', 'pgrep -f "node.*src/bot.js" > /dev/null || exit 1']
       interval: 30s
       timeout: 3s
       retries: 3
@@ -70,14 +79,14 @@ services:
     container_name: gronka-postgres
     restart: unless-stopped
     environment:
-      - POSTGRES_USER=${POSTGRES_USER:-gronka}
-      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-gronka}
-      - POSTGRES_DB=${POSTGRES_DB:-gronka}
+      - POSTGRES_USER=${PROD_POSTGRES_USER:-${TEST_POSTGRES_USER:-${POSTGRES_USER:-gronka}}}
+      - POSTGRES_PASSWORD=${PROD_POSTGRES_PASSWORD:-${TEST_POSTGRES_PASSWORD:-${POSTGRES_PASSWORD:-gronka}}}
+      - POSTGRES_DB=${PROD_POSTGRES_DB:-${TEST_POSTGRES_DB:-${POSTGRES_DB:-gronka}}}
       - PGDATA=/var/lib/postgresql/data/pgdata
     volumes:
       - postgres-data:/var/lib/postgresql/data
     ports:
-      - '${POSTGRES_PORT:-5432}:5432'
+      - '${PROD_POSTGRES_PORT:-${TEST_POSTGRES_PORT:-${POSTGRES_PORT:-5432}}}:5432'
     networks:
       - gronka-network
     healthcheck:
@@ -100,7 +109,7 @@ services:
     environment:
       # Replace with your public API URL if you have one, or leave as internal Docker network URL
       # For internal use only, this can be http://cobalt:9000
-      API_URL: ${COBALT_API_URL:-http://cobalt:9000}
+      API_URL: ${PROD_COBALT_API_URL:-${TEST_COBALT_API_URL:-${COBALT_API_URL:-http://cobalt:9000}}}
       # Path to cookies.json file for authenticating with services (Twitter, Instagram, Reddit, etc.)
       # Required for accessing content that requires authentication
       COOKIE_PATH: '/cookies.json'

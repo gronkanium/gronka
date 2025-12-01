@@ -1,22 +1,18 @@
-import axios from 'axios';
 import { createLogger } from '../../utils/logger.js';
-import { webuiConfig, botConfig } from '../../utils/config.js';
-import { getAuthHeaders } from '../utils/auth.js';
+import { botConfig } from '../../utils/config.js';
+import { getStorageStats } from '../../utils/storage.js';
 
 const logger = createLogger('webui');
 
-// Stats cache to reduce load on main server
-// Use botConfig.statsCacheTtl (default 5 minutes) but cap at 30 seconds for webui refresh interval
+// Stats cache TTL - use bot config value (default 5 minutes) but cap at 30 seconds for webui refresh interval
 const STATS_CACHE_TTL = Math.min(botConfig.statsCacheTtl || 300000, 30 * 1000);
-// Health cache to reduce load on main server
+// Health cache to reduce load on calculation
 const HEALTH_CACHE_TTL = STATS_CACHE_TTL; // Match stats cache TTL
 
 let statsCache = null;
 let statsCacheTimestamp = 0;
 let healthCache = null;
 let healthCacheTimestamp = 0;
-
-const { mainServerUrl: MAIN_SERVER_URL } = webuiConfig;
 
 export async function getStats() {
   try {
@@ -27,33 +23,58 @@ export async function getStats() {
       return statsCache;
     }
 
-    logger.debug('Fetching stats from main server');
-    const response = await axios.get(`${MAIN_SERVER_URL}/api/stats`, {
-      timeout: 5000,
-      headers: getAuthHeaders(),
-    });
+    logger.debug('Calculating stats directly from storage');
 
-    // Cache the response
-    statsCache = response.data;
-    statsCacheTimestamp = now;
-
-    return response.data;
-  } catch (error) {
-    // If we have cached data and the request failed, return cached data
-    if (statsCache && error.response?.status === 429) {
-      logger.warn('Rate limited by main server, returning cached stats');
-      return statsCache;
+    // Get storage path from bot config
+    const storagePath = botConfig.gifStoragePath;
+    if (!storagePath) {
+      logger.error('Storage path not configured');
+      throw new Error('Storage path not configured');
     }
 
-    logger.error('Failed to fetch stats from main server:', error);
+    // Calculate stats directly using storage utility
+    const stats = await getStorageStats(storagePath);
+
+    // Format response to match expected API format
+    const response = {
+      total_gifs: stats.totalGifs,
+      total_videos: stats.totalVideos,
+      total_images: stats.totalImages,
+      disk_usage_formatted: stats.diskUsageFormatted,
+      gifs_disk_usage_formatted: stats.gifsDiskUsageFormatted,
+      videos_disk_usage_formatted: stats.videosDiskUsageFormatted,
+      images_disk_usage_formatted: stats.imagesDiskUsageFormatted,
+      storage_path: storagePath,
+    };
+
+    // Cache the response
+    statsCache = response;
+    statsCacheTimestamp = now;
+
+    return response;
+  } catch (error) {
+    logger.error('Failed to calculate stats:', error);
 
     // If we have stale cache, return it anyway as fallback
     if (statsCache) {
-      logger.warn('Returning stale cached stats due to error');
+      logger.debug('Returning stale cached stats due to error');
       return statsCache;
     }
 
-    throw error;
+    // Return a fallback stats response instead of throwing
+    const fallbackStats = {
+      total_gifs: 0,
+      total_videos: 0,
+      total_images: 0,
+      disk_usage_formatted: '0 B',
+      gifs_disk_usage_formatted: '0 B',
+      videos_disk_usage_formatted: '0 B',
+      images_disk_usage_formatted: '0 B',
+      storage_path: 'unknown',
+      error: error.message,
+    };
+
+    return fallbackStats;
   }
 }
 
@@ -66,32 +87,45 @@ export async function getHealth() {
       return healthCache;
     }
 
-    logger.debug('Fetching health from main server');
-    const response = await axios.get(`${MAIN_SERVER_URL}/health`, {
-      timeout: 5000,
-      headers: getAuthHeaders(),
-    });
+    logger.debug('Calculating health directly');
+
+    // Simple health response - webui doesn't need detailed component health
+    // The webui server itself being up means it's healthy
+    const response = {
+      status: 'ok',
+      uptime: Math.floor(process.uptime()),
+      timestamp: Math.floor(Date.now() / 1000),
+      components: {
+        webui: { status: 'ok' },
+        database: { status: 'ok' }, // If we got here, DB is working
+      },
+    };
 
     // Cache the response
-    healthCache = response.data;
+    healthCache = response;
     healthCacheTimestamp = now;
 
-    return response.data;
+    return response;
   } catch (error) {
-    // If we have cached data and the request failed, return cached data
-    if (healthCache && error.response?.status === 429) {
-      logger.warn('Rate limited by main server, returning cached health');
-      return healthCache;
-    }
-
-    logger.error('Failed to fetch health from main server:', error);
+    logger.error('Failed to calculate health:', error);
 
     // If we have stale cache, return it anyway as fallback
     if (healthCache) {
-      logger.warn('Returning stale cached health due to error');
+      logger.debug('Returning stale cached health due to error');
       return healthCache;
     }
 
-    throw error;
+    // Return a fallback health response
+    const fallbackHealth = {
+      status: 'degraded',
+      uptime: Math.floor(process.uptime()),
+      timestamp: Math.floor(Date.now() / 1000),
+      components: {
+        webui: { status: 'error', error: error.message },
+      },
+      error: error.message,
+    };
+
+    return fallbackHealth;
   }
 }

@@ -89,7 +89,7 @@ function parseIdList(name) {
  * Get CORS origin from CDN_BASE_URL or explicit CORS_ORIGIN
  * @returns {string} CORS origin value
  */
-function getCorsOrigin() {
+function _getCorsOrigin() {
   const explicitOrigin = process.env.CORS_ORIGIN;
   if (explicitOrigin) {
     return explicitOrigin.trim();
@@ -215,44 +215,22 @@ export const r2Config = {
   cleanupLogLevel: getStringEnv('R2_CLEANUP_LOG_LEVEL', 'detailed').toLowerCase(),
 };
 
-// Server configuration
-// Note: serverConfig.gifStoragePath defaults to './data-test' (base path without 'gifs' subdirectory)
-// while botConfig.gifStoragePath defaults to './data-test/gifs' (includes 'gifs' subdirectory).
-// This difference is intentional - the server uses a base path that getGifPath() will append 'gifs' to,
-// while the bot uses a path that already includes 'gifs'. The getGifPath() function handles both cases.
-// Both default to 'data-test' to prevent accidental writes to production data.
+// Server configuration (minimal - only for stats HTTP endpoint in bot)
+// Note: The main server.js has been removed. These settings are now used by the
+// minimal HTTP server in bot.js that serves /api/stats/24h for Jekyll integration.
 export const serverConfig = {
-  gifStoragePath: getStringEnv('GIF_STORAGE_PATH', './data-test'),
   serverPort: parseIntEnv('SERVER_PORT', 3000, 1, 65535),
   serverHost: getStringEnv('SERVER_HOST', '0.0.0.0'),
   statsUsername: getStringEnv('STATS_USERNAME', null),
   statsPassword: getStringEnv('STATS_PASSWORD', null),
-  corsOrigin: getCorsOrigin(),
-  cdnBaseUrl: getStringEnv('CDN_BASE_URL', 'https://cdn.gronka.p1x.dev/gifs'),
 };
 
-// Validate CDN_BASE_URL format for server
-if (!validateUrlFormat(serverConfig.cdnBaseUrl)) {
-  throw new ConfigurationError(
-    `CDN_BASE_URL must be a valid URL, got: ${serverConfig.cdnBaseUrl}`,
-    'INVALID_URL'
-  );
-}
-
 // WebUI configuration
+// Note: MAIN_SERVER_URL has been removed - WebUI now calculates stats directly
 export const webuiConfig = {
   webuiPort: parseIntEnv('WEBUI_PORT', 3001, 1, 65535),
   webuiHost: getStringEnv('WEBUI_HOST', '127.0.0.1'),
-  mainServerUrl: getStringEnv('MAIN_SERVER_URL', 'http://localhost:3000'),
 };
-
-// Validate MAIN_SERVER_URL format
-if (!validateUrlFormat(webuiConfig.mainServerUrl)) {
-  throw new ConfigurationError(
-    `MAIN_SERVER_URL must be a valid URL, got: ${webuiConfig.mainServerUrl}`,
-    'INVALID_URL'
-  );
-}
 
 // Logger configuration
 export const loggerConfig = {

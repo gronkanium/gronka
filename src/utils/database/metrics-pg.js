@@ -1,5 +1,6 @@
-import { getPostgresConnection } from './connection-pg.js';
-import { ensurePostgresInitialized } from './init-pg.js';
+import { getPostgresConnection } from './connection.js';
+import { ensurePostgresInitialized } from './init.js';
+import { convertTimestampsInArray, convertTimestampsToNumbers } from './helpers-pg.js';
 
 /**
  * Insert or update user metrics
@@ -93,7 +94,11 @@ export async function getUserMetrics(userId) {
   }
 
   const result = await sql`SELECT * FROM user_metrics WHERE user_id = ${userId}`;
-  return result.length > 0 ? result[0] : null;
+  if (result.length === 0) {
+    return null;
+  }
+  // Convert timestamp fields from strings to numbers
+  return convertTimestampsToNumbers(result[0], ['last_command_at', 'updated_at']);
 }
 
 /**
@@ -171,7 +176,8 @@ export async function getAllUsersMetrics(options = {}) {
       console.error('getAllUsersMetrics: query did not return an array:', typeof result, result);
       return [];
     }
-    return result;
+    // Convert timestamp fields from strings to numbers
+    return convertTimestampsInArray(result, ['last_command_at', 'updated_at']);
   } catch (error) {
     console.error('Error in getAllUsersMetrics:', error);
     throw error;
@@ -285,7 +291,9 @@ export async function getSystemMetrics(options = {}) {
   query += ` ORDER BY timestamp DESC LIMIT $${params.length + 1}`;
   params.push(limit);
 
-  return await sql.unsafe(query, params);
+  const metrics = await sql.unsafe(query, params);
+  // Convert timestamp fields from strings to numbers
+  return convertTimestampsInArray(metrics, ['timestamp']);
 }
 
 /**
@@ -302,5 +310,9 @@ export async function getLatestSystemMetrics() {
   }
 
   const result = await sql`SELECT * FROM system_metrics ORDER BY timestamp DESC LIMIT 1`;
-  return result.length > 0 ? result[0] : null;
+  if (result.length === 0) {
+    return null;
+  }
+  // Convert timestamp fields from strings to numbers
+  return convertTimestampsToNumbers(result[0], ['timestamp']);
 }

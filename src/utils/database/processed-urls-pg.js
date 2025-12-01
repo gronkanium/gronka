@@ -1,6 +1,7 @@
-import { getPostgresConnection } from './connection-pg.js';
-import { getR2PublicDomain } from './connection.js';
-import { ensurePostgresInitialized } from './init-pg.js';
+import { getPostgresConnection } from './connection.js';
+import { r2Config } from '../config.js';
+import { ensurePostgresInitialized } from './init.js';
+import { convertTimestampsToNumbers, convertTimestampsInArray } from './helpers-pg.js';
 
 // Query result cache for getProcessedUrl (in-memory layer on top of DB)
 const processedUrlCache = new Map(); // Map<urlHash, {data, timestamp}>
@@ -71,10 +72,15 @@ export async function getProcessedUrl(urlHash) {
   const result = await sql`SELECT * FROM processed_urls WHERE url_hash = ${urlHash}`;
   const processedUrl = result.length > 0 ? result[0] : null;
 
-  // Cache result (even null to avoid repeated queries for non-existent URLs)
-  setCachedProcessedUrl(urlHash, processedUrl);
+  // Convert timestamp fields from strings to numbers
+  const convertedUrl = processedUrl
+    ? convertTimestampsToNumbers(processedUrl, ['processed_at'])
+    : null;
 
-  return processedUrl;
+  // Cache result (even null to avoid repeated queries for non-existent URLs)
+  setCachedProcessedUrl(urlHash, convertedUrl);
+
+  return convertedUrl;
 }
 
 /**
@@ -135,7 +141,17 @@ export async function insertProcessedUrl(
       invalidateProcessedUrlCache(urlHash);
     }
   } catch (error) {
-    // Log error but don't throw - allows graceful degradation
+    // Handle connection errors gracefully (e.g., when database is closed)
+    if (
+      error.message &&
+      (error.message.includes('CONNECTION_ENDED') || error.message.includes('connection'))
+    ) {
+      console.error(
+        `Database connection not available. Cannot insert processed URL: ${error.message}`
+      );
+      return; // Return gracefully instead of throwing
+    }
+    // Log other errors but don't throw - allows graceful degradation
     console.error(`Failed to insert/update processed URL in database: ${error.message}`);
     throw error;
   }
@@ -213,7 +229,7 @@ export async function getUserR2Media(userId, options = {}) {
   }
 
   const { limit = null, offset = null, fileType = null } = options;
-  const publicDomain = getR2PublicDomain();
+  const publicDomain = r2Config.publicDomain;
   const r2UrlPrefix = `https://${publicDomain}/`;
 
   let query = `SELECT url_hash, file_url, file_type, file_extension, processed_at, file_size FROM processed_urls WHERE user_id = $1 AND file_url LIKE $2`;
@@ -236,7 +252,9 @@ export async function getUserR2Media(userId, options = {}) {
     params.push(offset);
   }
 
-  return await sql.unsafe(query, params);
+  const results = await sql.unsafe(query, params);
+  // Convert timestamp fields from strings to numbers
+  return convertTimestampsInArray(results, ['processed_at']);
 }
 
 /**
@@ -254,7 +272,7 @@ export async function getUserR2MediaCount(userId, fileType = null) {
     return 0;
   }
 
-  const publicDomain = getR2PublicDomain();
+  const publicDomain = r2Config.publicDomain;
   const r2UrlPrefix = `https://${publicDomain}/`;
 
   let query = `SELECT COUNT(*) as count FROM processed_urls WHERE user_id = $1 AND file_url LIKE $2`;
@@ -307,7 +325,7 @@ export async function deleteUserR2Media(userId) {
   }
 
   try {
-    const publicDomain = getR2PublicDomain();
+    const publicDomain = r2Config.publicDomain;
     const r2UrlPrefix = `https://${publicDomain}/`;
     const result = await sql`
       DELETE FROM processed_urls

@@ -1,5 +1,6 @@
-import { getPostgresConnection } from './connection-pg.js';
-import { ensurePostgresInitialized } from './init-pg.js';
+import { getPostgresConnection } from './connection.js';
+import { ensurePostgresInitialized } from './init.js';
+import { convertTimestampsToNumbers } from './helpers-pg.js';
 
 // Query result cache for getUser
 const userCache = new Map(); // Map<userId, {data, timestamp}>
@@ -113,10 +114,13 @@ export async function getUser(userId) {
   const result = await sql`SELECT * FROM users WHERE user_id = ${userId}`;
   const user = result.length > 0 ? result[0] : null;
 
-  // Cache result (even null to avoid repeated queries for non-existent users)
-  setCachedUser(userId, user);
+  // Convert timestamp fields from strings to numbers
+  const convertedUser = user ? convertTimestampsToNumbers(user, ['first_used', 'last_used']) : null;
 
-  return user;
+  // Cache result (even null to avoid repeated queries for non-existent users)
+  setCachedUser(userId, convertedUser);
+
+  return convertedUser;
 }
 
 /**

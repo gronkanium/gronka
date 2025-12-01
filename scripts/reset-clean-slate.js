@@ -7,6 +7,8 @@ import { dirname, join } from 'path';
 import { r2Config } from '../src/utils/config.js';
 import { listObjectsInR2, deleteFromR2 } from '../src/utils/r2-storage.js';
 import { createInterface } from 'readline';
+import postgres from 'postgres';
+import { getPostgresConfig } from '../src/utils/database/connection.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -262,6 +264,34 @@ function deleteLocalData() {
 }
 
 /**
+ * Check if PostgreSQL is configured
+ */
+function isPostgresConfigured() {
+  // Check if DATABASE_TYPE is explicitly set to postgres
+  if (process.env.DATABASE_TYPE === 'postgres') {
+    return true;
+  }
+
+  // Check for DATABASE_URL
+  if (process.env.DATABASE_URL) {
+    return true;
+  }
+
+  // Check for individual PostgreSQL connection parameters
+  // At minimum, we need host and database to be configured
+  const hasHost = process.env.POSTGRES_HOST;
+  const hasDb = process.env.POSTGRES_DB;
+
+  // Also check for TEST_ and PROD_ prefixed vars
+  const hasTestHost = process.env.TEST_POSTGRES_HOST;
+  const hasTestDb = process.env.TEST_POSTGRES_DB;
+  const hasProdHost = process.env.PROD_POSTGRES_HOST;
+  const hasProdDb = process.env.PROD_POSTGRES_DB;
+
+  return !!(hasHost && hasDb) || !!(hasTestHost && hasTestDb) || !!(hasProdHost && hasProdDb);
+}
+
+/**
  * Check if R2 is configured
  */
 function isR2Configured() {
@@ -300,6 +330,108 @@ async function getAllR2Objects() {
   }
 
   return allObjects;
+}
+
+/**
+ * Wipe PostgreSQL database by dropping all tables
+ */
+async function wipePostgresDatabase() {
+  console.log('\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+  console.log('wiping postgresql database...\n');
+
+  if (!isPostgresConfigured()) {
+    console.log(
+      '  postgresql is not configured (DATABASE_TYPE not set to postgres or missing connection vars)'
+    );
+    console.log('  skipping postgresql cleanup');
+    return { wiped: false, reason: 'not configured', tablesDropped: 0 };
+  }
+
+  let sql = null;
+  try {
+    // Get PostgreSQL configuration
+    const config = getPostgresConfig();
+    const dbName =
+      typeof config === 'string'
+        ? config.match(/\/\/(?:[^:]+:)?[^@]+@[^/]+\/([^?]+)/)?.[1] || 'unknown'
+        : config.database || 'unknown';
+
+    console.log(`  database: ${dbName}`);
+
+    if (dryRun) {
+      console.log('  [DRY RUN] would connect and drop all tables');
+      return { wiped: true, reason: 'dry run', tablesDropped: 8, dryRun: true };
+    }
+
+    // Connect to PostgreSQL
+    console.log('  connecting to postgresql...');
+    sql = postgres(config);
+
+    // Test connection
+    await sql`SELECT 1`;
+    console.log('  connected successfully\n');
+
+    // List of tables to drop (in order to respect foreign key constraints)
+    // Using CASCADE to automatically drop dependent objects
+    const tables = [
+      'temporary_uploads',
+      'alerts',
+      'system_metrics',
+      'operation_logs',
+      'user_metrics',
+      'processed_urls',
+      'logs',
+      'users',
+    ];
+
+    let dropped = 0;
+    let failed = 0;
+
+    for (const table of tables) {
+      try {
+        // Check if table exists before dropping
+        const tableExists = await sql`
+          SELECT EXISTS (
+            SELECT FROM information_schema.tables 
+            WHERE table_schema = 'public' 
+            AND table_name = ${table}
+          )
+        `;
+
+        if (tableExists[0]?.exists) {
+          await sql.unsafe(`DROP TABLE IF EXISTS ${table} CASCADE`);
+          console.log(`  dropped table: ${table}`);
+          dropped++;
+        } else {
+          console.log(`  skipped table: ${table} (does not exist)`);
+        }
+      } catch (error) {
+        console.warn(`  warning: failed to drop table ${table}: ${error.message}`);
+        failed++;
+      }
+    }
+
+    console.log(`\n  postgresql cleanup complete: ${dropped} table(s) dropped`);
+
+    if (failed > 0) {
+      console.warn(`  warning: ${failed} table(s) failed to drop`);
+    }
+
+    return { wiped: true, tablesDropped: dropped, tablesFailed: failed };
+  } catch (error) {
+    console.warn(`  warning: failed to connect to postgresql: ${error.message}`);
+    console.warn('  skipping postgresql cleanup');
+    return { wiped: false, reason: error.message, tablesDropped: 0 };
+  } finally {
+    // Close connection if it was opened
+    if (sql) {
+      try {
+        await sql.end({ timeout: 5 });
+      } catch {
+        // Ignore errors when closing
+      }
+    }
+  }
 }
 
 /**
@@ -424,12 +556,15 @@ async function main() {
 
   console.log('\nthis will delete:');
   console.log('  - all local data directories (data-prod/, data-test/, temp/, logs/)');
+  console.log('  - sqlite database files (included in data directories)');
+  console.log('  - postgresql database tables (if configured)');
   console.log('  - all files in r2 bucket (if configured)');
   console.log('  - stop any running bot/server processes');
   console.log('\nthis will preserve:');
   console.log('  - .env file (configuration and credentials)');
   console.log('  - codebase and dependencies');
   console.log('  - r2 bucket itself (only contents deleted)');
+  console.log('  - postgresql database itself (only tables deleted)');
 
   // Get summary of what will be deleted
   const localDirsSummary = dataDirs
@@ -447,6 +582,12 @@ async function main() {
   console.log(
     `  local directories to delete: ${localDirsSummary.length} (${localDirsSummary.join(', ')})`
   );
+
+  if (isPostgresConfigured()) {
+    console.log('  postgresql database: will drop all tables');
+  } else {
+    console.log('  postgresql database: not configured (skipped)');
+  }
 
   if (isR2Configured()) {
     console.log(`  r2 bucket: ${r2Config.bucketName} (will list objects to get count)`);
@@ -505,7 +646,10 @@ async function main() {
   // Stop processes
   await stopProcesses();
 
-  // Delete local data
+  // Wipe PostgreSQL database
+  const postgresResults = await wipePostgresDatabase();
+
+  // Delete local data (includes SQLite database files)
   const localResults = deleteLocalData();
 
   // Delete R2 objects
@@ -520,7 +664,22 @@ async function main() {
     console.log('\n[DRY RUN] no changes were made');
   } else {
     const localDeleted = localResults.filter(r => r.deleted).length;
-    console.log(`\nlocal data: ${localDeleted} of ${dataDirs.length} directory(ies) deleted`);
+    console.log(
+      `\nlocal data (sqlite): ${localDeleted} of ${dataDirs.length} directory(ies) deleted`
+    );
+
+    if (postgresResults.wiped) {
+      if (postgresResults.dryRun) {
+        console.log('postgresql database: [DRY RUN] would drop all tables');
+      } else {
+        console.log(`postgresql database: ${postgresResults.tablesDropped} table(s) dropped`);
+        if (postgresResults.tablesFailed && postgresResults.tablesFailed > 0) {
+          console.log(`  (${postgresResults.tablesFailed} failed - check logs above)`);
+        }
+      }
+    } else {
+      console.log(`postgresql database: skipped (${postgresResults.reason})`);
+    }
 
     if (r2Results.total > 0) {
       console.log(`r2 storage: ${r2Results.deleted} of ${r2Results.total} object(s) deleted`);

@@ -1,5 +1,5 @@
-import { getPostgresConnection } from './connection-pg.js';
-import { ensurePostgresInitialized } from './init-pg.js';
+import { getPostgresConnection } from './connection.js';
+import { ensurePostgresInitialized } from './init.js';
 import { createLogger } from '../logger.js';
 
 // Lazy logger creation

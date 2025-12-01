@@ -7,6 +7,59 @@ and this project adheres (attempts) to [Semantic Versioning](https://semver.org/
 
 ## [Unreleased]
 
+## [0.13.0] - 2025-12-01
+
+### Added
+
+- PostgreSQL database support with full backwards compatibility
+  - Complete PostgreSQL migration implementation alongside existing SQLite support
+  - Database abstraction layer automatically routes to PostgreSQL or SQLite based on `DATABASE_TYPE` environment variable
+  - PostgreSQL connection pooling and async query support
+  - New PostgreSQL-specific modules in `src/utils/database/`:
+    - `connection-pg.js` - PostgreSQL connection management
+    - `init-pg.js` - PostgreSQL schema initialization
+    - `logs-pg.js`, `users-pg.js`, `operations-pg.js`, `metrics-pg.js`, `alerts-pg.js`, `processed-urls-pg.js`, `temporary-uploads-pg.js` - PostgreSQL implementations
+  - Migration script: `scripts/migrate-sqlite-to-postgres.js` for seamless data migration
+  - PostgreSQL debugging and testing utilities:
+    - `scripts/debug-postgres-queries.js` - Query debugging tool
+    - `scripts/reset-postgres-sequences.js` - Sequence reset utility
+    - `scripts/test-database-wrapper.js` - Database wrapper testing
+    - `scripts/test-get24HourStats.js` - Stats testing utility
+    - `scripts/test-getAllUsersMetrics.js` - Metrics testing utility
+  - SQLite remains fully supported and is the default when `DATABASE_TYPE` is not set
+  - All existing code works with both database backends without modification
+
+### Changed
+
+- **Critical fix**: Fixed async database write issues
+  - Resolved critical bug where code was still using synchronous SQLite writes even after switching to PostgreSQL
+  - Updated all database operations to use async PostgreSQL API consistently
+  - Fixed database operation failures caused by sync/async mismatch
+  - All webui-server routes and operations now use async database calls
+  - Operations tracker and stats utilities updated for PostgreSQL async support
+- Updated all tests to use async database API
+  - Fixed test failures caused by synchronous database calls
+  - Updated `test/utils/database.test.js`, `test/utils/user-tracking.test.js`, `test/utils/log-metrics.test.js`, `test/utils/logger.test.js`, `test/utils/logger-sanitization.test.js`, `test/webui-server-operations.test.js`
+  - All tests now properly await async database operations
+  - Added defensive assertions to `test/utils/operations-tracker.test.js` for better reliability
+
+### Dependencies
+
+- Security updates (from dependabot PR #12):
+  - `@aws-sdk/client-s3`: `3.937.0` → `3.940.0`
+  - `@aws-sdk/lib-storage`: `3.937.0` → `3.940.0`
+  - `better-sqlite3`: `12.4.6` → `12.5.0`
+  - `lucide-svelte`: `0.554.0` → `0.555.0`
+  - `prettier`: `3.6.2` → `3.7.3`
+  - `svelte`: `5.43.14` → `5.45.2`
+  - `vite`: `7.2.4` → `7.2.6`
+
+### Fixed
+
+- Fixed failing CI test in `operations-tracker.test.js`
+  - Added defensive assertions to ensure operation and step exist before accessing properties
+  - Improved test reliability with better error messages
+
 ## [0.13.0-prerelease] - 2025-11-30
 
 ### Added
@@ -726,6 +779,7 @@ and this project adheres (attempts) to [Semantic Versioning](https://semver.org/
   - Pre-commit validation
   - Docker buildx setup for cache support
 
+[0.13.0]: https://github.com/thedorekaczynski/gronka/compare/v0.13.0-prerelease...v0.13.0
 [0.12.5]: https://github.com/thedorekaczynski/gronka/compare/v0.12.4...v0.12.5
 [0.12.4]: https://github.com/thedorekaczynski/gronka/compare/v0.12.3-beta...v0.12.4
 [0.12.3-beta]: https://github.com/thedorekaczynski/gronka/compare/v0.12.2-beta...v0.12.3-beta

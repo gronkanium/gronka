@@ -1,6 +1,6 @@
 {
   "name": "gronka",
-  "version": "0.13.0-prerelease",
+  "version": "0.13.0",
   "description": "Discord bot that converts video attachments to GIF format",
   "main": "src/bot.js",
   "type": "module",

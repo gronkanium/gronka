@@ -97,15 +97,14 @@ before(async () => {
       } = req.query;
 
       // Start with in-memory operations from tracker
-      const { getRecentOperations: getRecentOpsFromTracker } = await import(
-        '../src/utils/operations-tracker.js'
-      );
+      const { getRecentOperations: getRecentOpsFromTracker } =
+        await import('../src/utils/operations-tracker.js');
       let allOperations = getRecentOpsFromTracker();
 
       // Get operations from database
       try {
         const dbLimit = parseInt(limit, 10) + parseInt(offset, 10) + 100;
-        const dbOps = getRecentOperations(dbLimit);
+        const dbOps = await getRecentOperations(dbLimit);
         const existingIds = new Set(allOperations.map(op => op.id));
         const newOps = dbOps.filter(op => !existingIds.has(op.id));
         allOperations = [...allOperations, ...newOps];
@@ -143,7 +142,7 @@ before(async () => {
 
       if (urlPattern) {
         try {
-          const urlTraces = searchOperationsByUrl(urlPattern, 1000);
+          const urlTraces = await searchOperationsByUrl(urlPattern, 1000);
           const urlOperationIds = new Set(urlTraces.map(trace => trace.operationId));
           filtered = filtered.filter(op => urlOperationIds.has(op.id));
         } catch (_error) {
@@ -213,13 +212,13 @@ before(async () => {
       let operation = getOperation(operationId);
 
       if (!operation) {
-        const trace = getOperationTrace(operationId);
+        const trace = await getOperationTrace(operationId);
         if (trace) {
           operation = reconstructOperationFromTrace(trace);
         }
       }
 
-      const trace = getOperationTrace(operationId);
+      const trace = await getOperationTrace(operationId);
 
       if (!operation && !trace) {
         return res.status(404).json({ error: 'operation not found' });
@@ -238,10 +237,10 @@ before(async () => {
   });
 
   // Operation trace endpoint
-  testApp.get('/api/operations/:operationId/trace', (req, res) => {
+  testApp.get('/api/operations/:operationId/trace', async (req, res) => {
     try {
       const { operationId } = req.params;
-      const trace = getOperationTrace(operationId);
+      const trace = await getOperationTrace(operationId);
 
       if (!trace) {
         return res.status(404).json({ error: 'operation trace not found' });
@@ -260,7 +259,7 @@ before(async () => {
   testApp.get('/api/operations/:operationId/related', async (req, res) => {
     try {
       const { operationId } = req.params;
-      const trace = getOperationTrace(operationId);
+      const trace = await getOperationTrace(operationId);
 
       if (!trace) {
         return res.status(404).json({ error: 'operation not found' });
@@ -270,12 +269,11 @@ before(async () => {
       const userId = context.userId;
       const originalUrl = context.originalUrl;
 
-      const { getRecentOperations: getRecentOpsFromTracker } = await import(
-        '../src/utils/operations-tracker.js'
-      );
+      const { getRecentOperations: getRecentOpsFromTracker } =
+        await import('../src/utils/operations-tracker.js');
       let allOperations = getRecentOpsFromTracker();
       try {
-        const dbOps = getRecentOperations(1000);
+        const dbOps = await getRecentOperations(1000);
         const existingIds = new Set(allOperations.map(op => op.id));
         const newOps = dbOps.filter(op => !existingIds.has(op.id));
         allOperations = [...allOperations, ...newOps];
@@ -297,7 +295,7 @@ before(async () => {
 
         if (originalUrl && !isRelated) {
           try {
-            const opTrace = getOperationTrace(op.id);
+            const opTrace = await getOperationTrace(op.id);
             if (opTrace && opTrace.context && opTrace.context.originalUrl === originalUrl) {
               isRelated = true;
             }
@@ -327,9 +325,8 @@ before(async () => {
   // Error analysis endpoint
   testApp.get('/api/operations/errors/analysis', async (req, res) => {
     try {
-      const { getRecentOperations: getRecentOpsFromTracker } = await import(
-        '../src/utils/operations-tracker.js'
-      );
+      const { getRecentOperations: getRecentOpsFromTracker } =
+        await import('../src/utils/operations-tracker.js');
       let allOperations = getRecentOpsFromTracker();
       try {
         const dbOps = getRecentOperations(1000);

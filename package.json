@@ -89,6 +89,7 @@
     "axios": "^1.6.0",
     "better-sqlite3": "^12.4.6",
     "discord.js": "^14.25.1",
+    "postgres": "^3.4.5",
     "dotenv": "^17.2.3",
     "escape-html": "^1.0.3",
     "express": "^5.1.0",

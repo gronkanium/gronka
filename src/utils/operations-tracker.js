@@ -62,7 +62,12 @@ async function flushOperationLogs() {
     try {
       for (const logEntry of logsToFlush) {
         try {
-          insertOperationLog(logEntry.operationId, logEntry.step, logEntry.status, logEntry.data);
+          await insertOperationLog(
+            logEntry.operationId,
+            logEntry.step,
+            logEntry.status,
+            logEntry.data
+          );
         } catch (error) {
           // Log error but continue with other entries
           console.error('Failed to flush operation log entry:', error);
@@ -106,7 +111,12 @@ export async function flushAllOperationLogs() {
 
     for (const logEntry of logsToFlush) {
       try {
-        insertOperationLog(logEntry.operationId, logEntry.step, logEntry.status, logEntry.data);
+        await insertOperationLog(
+          logEntry.operationId,
+          logEntry.step,
+          logEntry.status,
+          logEntry.data
+        );
       } catch (error) {
         console.error('Failed to flush operation log entry during shutdown:', error);
       }

@@ -39,7 +39,7 @@ export async function trackUser(userId, username = null) {
   const usernameToStore = username || 'unknown';
 
   const timestamp = Date.now();
-  insertOrUpdateUser(userId, usernameToStore, timestamp);
+  await insertOrUpdateUser(userId, usernameToStore, timestamp);
 }
 
 /**
@@ -53,7 +53,7 @@ export async function getUniqueUserCount() {
     dbInitialized = true;
   }
 
-  return dbGetUniqueUserCount();
+  return await dbGetUniqueUserCount();
 }
 
 /**

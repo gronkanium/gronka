@@ -72,7 +72,7 @@ describe('logger utilities', () => {
       // Wait a bit for async database write
       await new Promise(resolve => setTimeout(resolve, 100));
 
-      const logs = getLogs({ component: 'test-logger', limit: 1 });
+      const logs = await getLogs({ component: 'test-logger', limit: 1 });
       assert.ok(logs.length > 0, 'Log should be written to database');
       const log = logs[0];
       assert.strictEqual(log.component, 'test-logger');
@@ -90,7 +90,7 @@ describe('logger utilities', () => {
 
       await new Promise(resolve => setTimeout(resolve, 100));
 
-      const allLogs = getLogs({ component: 'test-level', limit: 10 });
+      const allLogs = await getLogs({ component: 'test-level', limit: 10 });
       const infoLogs = allLogs.filter(log => log.level === 'INFO');
       const warnLogs = allLogs.filter(log => log.level === 'WARN');
       const errorLogs = allLogs.filter(log => log.level === 'ERROR');
@@ -110,7 +110,7 @@ describe('logger utilities', () => {
 
       await new Promise(resolve => setTimeout(resolve, 100));
 
-      const logs = getLogs({ component: 'test-args', limit: 1 });
+      const logs = await getLogs({ component: 'test-args', limit: 1 });
       const log = logs[0];
       assert.ok(log.message.includes('Message'));
       assert.ok(log.message.includes('arg1'));
@@ -125,7 +125,7 @@ describe('logger utilities', () => {
 
       await new Promise(resolve => setTimeout(resolve, 100));
 
-      const logs = getLogs({ component: 'test-object', limit: 1 });
+      const logs = await getLogs({ component: 'test-object', limit: 1 });
       const log = logs[0];
       assert.ok(log.message.includes('Message'));
       // Object should be JSON stringified
@@ -142,8 +142,8 @@ describe('logger utilities', () => {
 
       await new Promise(resolve => setTimeout(resolve, 100));
 
-      const logs1 = getLogs({ component: 'component-1', limit: 1 });
-      const logs2 = getLogs({ component: 'component-2', limit: 1 });
+      const logs1 = await getLogs({ component: 'component-1', limit: 1 });
+      const logs2 = await getLogs({ component: 'component-2', limit: 1 });
 
       assert.ok(logs1.length > 0);
       assert.ok(logs2.length > 0);
@@ -158,7 +158,7 @@ describe('logger utilities', () => {
       await logger.info(maliciousInput);
       await new Promise(resolve => setTimeout(resolve, 100));
 
-      const logs = getLogs({ component: 'test-sanitize', limit: 1 });
+      const logs = await getLogs({ component: 'test-sanitize', limit: 1 });
       assert.ok(logs.length > 0);
       const log = logs[0];
       // Verify newline was removed (preventing log injection)
@@ -176,7 +176,7 @@ describe('logger utilities', () => {
       await logger.info(inputWithControlChars);
       await new Promise(resolve => setTimeout(resolve, 100));
 
-      const logs = getLogs({ component: 'test-control-chars', limit: 1 });
+      const logs = await getLogs({ component: 'test-control-chars', limit: 1 });
       assert.ok(logs.length > 0);
       const log = logs[0];
       // Verify control characters were removed
@@ -196,7 +196,7 @@ describe('logger utilities', () => {
       await logger.info(inputWithAnsi);
       await new Promise(resolve => setTimeout(resolve, 100));
 
-      const logs = getLogs({ component: 'test-ansi', limit: 1 });
+      const logs = await getLogs({ component: 'test-ansi', limit: 1 });
       assert.ok(logs.length > 0);
       const log = logs[0];
       // Verify ANSI codes were removed
@@ -211,7 +211,7 @@ describe('logger utilities', () => {
       await logger.info('Test message', maliciousArg);
       await new Promise(resolve => setTimeout(resolve, 100));
 
-      const logs = getLogs({ component: 'test-sanitize-args', limit: 1 });
+      const logs = await getLogs({ component: 'test-sanitize-args', limit: 1 });
       assert.ok(logs.length > 0);
       const log = logs[0];
       // Verify arguments were sanitized

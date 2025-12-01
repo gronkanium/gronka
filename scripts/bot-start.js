@@ -85,6 +85,13 @@ const prefixMappings = [
   'WEBUI_HOST',
   'MAIN_SERVER_URL',
   'GRONKA_DB_PATH',
+  'DATABASE_TYPE',
+  'POSTGRES_HOST',
+  'POSTGRES_PORT',
+  'POSTGRES_USER',
+  'POSTGRES_PASSWORD',
+  'POSTGRES_DB',
+  'DATABASE_URL',
 ];
 
 for (const key of prefixMappings) {

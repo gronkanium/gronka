@@ -6,7 +6,6 @@ import {
   setInitPromise,
   getDbPath,
   ensureDataDir,
-  // getDbType,  // removed from import for unused warning, if not used elsewhere in this file
   isPostgres,
 } from './connection.js';
 import { initPostgresDatabase, ensurePostgresInitialized } from './init-pg.js';
@@ -96,10 +95,10 @@ export async function initDatabase() {
       // Add file_size column if it doesn't exist (for existing databases)
       try {
         newDb.exec(`ALTER TABLE processed_urls ADD COLUMN file_size INTEGER`);
-      } catch (_error) {
+      } catch (error) {
         // Column already exists, ignore error
-        if (!_error.message.includes('duplicate column name')) {
-          console.error('Failed to add file_size column:', _error);
+        if (!error.message.includes('duplicate column name')) {
+          console.error('Failed to add file_size column:', error);
         }
       }
 
@@ -205,10 +204,10 @@ export async function initDatabase() {
         CREATE INDEX IF NOT EXISTS idx_temporary_uploads_deleted_at ON temporary_uploads(deleted_at);
         CREATE INDEX IF NOT EXISTS idx_temporary_uploads_deletion_failed ON temporary_uploads(deletion_failed);
       `);
-    } catch (_error) {
+    } catch (error) {
       setInitPromise(null); // Reset on error so it can be retried
       setDb(null);
-      throw _error;
+      throw error;
     }
   })();
 

@@ -89,7 +89,7 @@
     "discord.js": "^14.25.1",
     "dotenv": "^17.2.3",
     "escape-html": "^1.0.3",
-    "express": "^5.1.0",
+    "express": "^5.2.1",
     "express-rate-limit": "^8.2.1",
     "fluent-ffmpeg": "^2.1.2",
     "lucide-svelte": "^0.555.0",

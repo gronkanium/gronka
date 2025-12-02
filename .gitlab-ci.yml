@@ -1,56 +1,12 @@
 image: node:20
 
 stages:
-  - setup
   - validate
   - test:utils
   - test:commands
   - test:scripts
   - test:integration
   - release
-
-# Setup stage - Install dependencies
-setup-dependencies:
-  stage: setup
-  rules:
-    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
-      changes:
-        - src/**/*
-        - test/**/*
-        - scripts/**/*
-        - package.json
-        - package-lock.json
-        - .env.example
-        - eslint.config.js
-        - vite.config.js
-        - svelte.config.js
-        - docker-compose*.yml
-        - Dockerfile
-        - .gitlab-ci.yml
-    - if: $CI_COMMIT_BRANCH == "main" || $CI_COMMIT_BRANCH == "master"
-      changes:
-        - src/**/*
-        - test/**/*
-        - scripts/**/*
-        - package.json
-        - package-lock.json
-        - .env.example
-        - eslint.config.js
-        - vite.config.js
-        - svelte.config.js
-        - docker-compose*.yml
-        - Dockerfile
-        - .gitlab-ci.yml
-  variables:
-    DISCORD_TOKEN: 'ci-test-token'
-    CLIENT_ID: 'ci-test-client-id'
-  script:
-    - npm ci
-  cache:
-    paths:
-      - node_modules/
-    key: ${CI_COMMIT_REF_SLUG}
-    policy: push
 
 # Validate stage - Code quality checks
 validate-code:
@@ -91,11 +47,9 @@ validate-code:
     paths:
       - node_modules/
     key: ${CI_COMMIT_REF_SLUG}
-    policy: pull
   script:
+    - npm ci
     - npm run validate
-  dependencies:
-    - setup-dependencies
 
 # Test stage - Utility functions
 test-utils:
@@ -148,11 +102,16 @@ test-utils:
     paths:
       - node_modules/
     key: ${CI_COMMIT_REF_SLUG}
-    policy: pull
   script:
+    - |
+      # Wait for PostgreSQL to be ready
+      until PGPASSWORD=$POSTGRES_PASSWORD psql -h $POSTGRES_HOST -U $POSTGRES_USER -d $POSTGRES_DB -c '\q' 2>/dev/null; do
+        echo "Waiting for PostgreSQL to be ready..."
+        sleep 2
+      done
+      echo "PostgreSQL is ready!"
+    - npm ci
     - npx cross-env R2_ACCOUNT_ID= R2_ACCESS_KEY_ID= R2_SECRET_ACCESS_KEY= R2_BUCKET_NAME= node --test test/utils/
-  dependencies:
-    - setup-dependencies
 
 # Test stage - Command handlers
 test-commands:
@@ -205,11 +164,16 @@ test-commands:
     paths:
       - node_modules/
     key: ${CI_COMMIT_REF_SLUG}
-    policy: pull
   script:
+    - |
+      # Wait for PostgreSQL to be ready
+      until PGPASSWORD=$POSTGRES_PASSWORD psql -h $POSTGRES_HOST -U $POSTGRES_USER -d $POSTGRES_DB -c '\q' 2>/dev/null; do
+        echo "Waiting for PostgreSQL to be ready..."
+        sleep 2
+      done
+      echo "PostgreSQL is ready!"
+    - npm ci
     - npx cross-env R2_ACCOUNT_ID= R2_ACCESS_KEY_ID= R2_SECRET_ACCESS_KEY= R2_BUCKET_NAME= node --test test/commands/
-  dependencies:
-    - setup-dependencies
 
 # Test stage - Scripts
 test-scripts:
@@ -262,11 +226,16 @@ test-scripts:
     paths:
       - node_modules/
     key: ${CI_COMMIT_REF_SLUG}
-    policy: pull
   script:
+    - |
+      # Wait for PostgreSQL to be ready
+      until PGPASSWORD=$POSTGRES_PASSWORD psql -h $POSTGRES_HOST -U $POSTGRES_USER -d $POSTGRES_DB -c '\q' 2>/dev/null; do
+        echo "Waiting for PostgreSQL to be ready..."
+        sleep 2
+      done
+      echo "PostgreSQL is ready!"
+    - npm ci
     - npx cross-env R2_ACCOUNT_ID= R2_ACCESS_KEY_ID= R2_SECRET_ACCESS_KEY= R2_BUCKET_NAME= node --test test/scripts/
-  dependencies:
-    - setup-dependencies
 
 # Test stage - Integration/server components
 test-integration:
@@ -319,11 +288,16 @@ test-integration:
     paths:
       - node_modules/
     key: ${CI_COMMIT_REF_SLUG}
-    policy: pull
   script:
+    - |
+      # Wait for PostgreSQL to be ready
+      until PGPASSWORD=$POSTGRES_PASSWORD psql -h $POSTGRES_HOST -U $POSTGRES_USER -d $POSTGRES_DB -c '\q' 2>/dev/null; do
+        echo "Waiting for PostgreSQL to be ready..."
+        sleep 2
+      done
+      echo "PostgreSQL is ready!"
+    - npm ci
     - npx cross-env R2_ACCOUNT_ID= R2_ACCESS_KEY_ID= R2_SECRET_ACCESS_KEY= R2_BUCKET_NAME= node --test test/webui-server-*.test.js test/docker-security.test.js
-  dependencies:
-    - setup-dependencies
 
 # Release stage - Create release for stable versions
 create-release:

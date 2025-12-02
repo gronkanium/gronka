@@ -119,7 +119,7 @@ async function main() {
   for (const operation of allOperations) {
     try {
       // Only process operations with invalid_social_media_url error
-      const trace = getOperationTrace(operation.id);
+      const trace = await getOperationTrace(operation.id);
       if (!trace) {
         skippedCount++;
         continue;
@@ -149,7 +149,9 @@ async function main() {
       }
 
       // Update the created log metadata
-      const success = updateOperationLogMetadata(operation.id, 'created', { originalUrl: url });
+      const success = await updateOperationLogMetadata(operation.id, 'created', {
+        originalUrl: url,
+      });
       if (success) {
         updatedCount++;
         console.log(`  ✓ ${operation.id} - Updated with URL: ${url}`);

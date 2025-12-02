@@ -93,11 +93,13 @@ export function setupWebSocketHandlers(wss, clients) {
     // Send initial data to newly connected client
     try {
       // Enrich any operations that might have missing usernames before sending
-      const enrichedOps = operations.map(op => {
-        const enriched = { ...op };
-        enrichOperationUsername(enriched);
-        return enriched;
-      });
+      const enrichedOps = await Promise.all(
+        operations.map(async op => {
+          const enriched = { ...op };
+          await enrichOperationUsername(enriched);
+          return enriched;
+        })
+      );
       // Send initial operations list
       ws.send(JSON.stringify({ type: 'operations', data: enrichedOps }));
 
@@ -113,7 +115,7 @@ export function setupWebSocketHandlers(wss, clients) {
 
       // Send recent alerts (last 10)
       try {
-        const recentAlerts = getAlerts({ limit: 10, offset: 0 });
+        const recentAlerts = await getAlerts({ limit: 10, offset: 0 });
         if (recentAlerts && recentAlerts.length > 0) {
           recentAlerts.forEach(alert => {
             ws.send(JSON.stringify({ type: 'alert', data: alert }));

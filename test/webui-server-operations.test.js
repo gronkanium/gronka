@@ -1,7 +1,7 @@
 import { test, describe, before, after, beforeEach } from 'node:test';
 import assert from 'node:assert';
 import express from 'express';
-import { initDatabase, closeDatabase, getOperationTrace } from '../src/utils/database.js';
+import { initDatabase, getOperationTrace, truncateAllTables } from '../src/utils/database.js';
 import {
   createOperation,
   updateOperationStatus,
@@ -30,6 +30,8 @@ before(async () => {
   process.env.GRONKA_DB_PATH = tempDbPath;
   process.env.WEBUI_PORT = '3001';
   await initDatabase();
+  // Truncate all tables to ensure clean state (important for parallel test execution)
+  await truncateAllTables();
 
   // Create test Express app with operations endpoints
   testApp = express();
@@ -379,11 +381,15 @@ before(async () => {
   });
 });
 
-after(() => {
+after(async () => {
+  // Flush any pending operation logs before ending
+  await flushAllOperationLogs();
+
   if (testServer) {
     testServer.close();
   }
-  closeDatabase();
+  // Don't close database here - it's shared across parallel test files
+  // Connection will be cleaned up when Node.js exits
   if (tempDbDir && fs.existsSync(tempDbDir)) {
     try {
       fs.rmSync(tempDbDir, { recursive: true, force: true });

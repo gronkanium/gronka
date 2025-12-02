@@ -65,10 +65,18 @@ export async function initPostgresDatabase() {
 /**
  * Reset SERIAL sequences to match the maximum ID in each table
  * This fixes duplicate key errors after data migration
+ * NOTE: Skipped in test mode to prevent race conditions with parallel test execution
  * @param {Object} sql - The postgres.js client instance
  * @returns {Promise<void>}
  */
 async function resetSerialSequences(sql) {
+  // Skip sequence reset in test mode - it can cause race conditions
+  // with parallel test execution and tests don't need it (they create fresh data)
+  const { isTestMode } = await import('./connection.js');
+  if (isTestMode()) {
+    return;
+  }
+
   const tablesWithSerial = [
     { table: 'logs', sequence: 'logs_id_seq', column: 'id' },
     { table: 'operation_logs', sequence: 'operation_logs_id_seq', column: 'id' },

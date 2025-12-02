@@ -63,13 +63,19 @@ function isRunningInDocker() {
  * @returns {string} Default host ('postgres' in Docker, 'localhost' otherwise)
  */
 function getDefaultPostgresHost() {
-  // If explicitly set in environment, use that
-  if (process.env.POSTGRES_HOST) {
-    return process.env.POSTGRES_HOST;
+  // Always prioritize auto-detection to support both Docker and local/WSL environments
+  // This ensures PROD_POSTGRES_HOST=postgres (meant for Docker) works correctly
+  // when production scripts are run locally on WSL
+  const autoDetectedHost = isRunningInDocker() ? 'postgres' : 'localhost';
+
+  // Log if POSTGRES_HOST is set but being overridden by auto-detection
+  if (process.env.POSTGRES_HOST && process.env.POSTGRES_HOST !== autoDetectedHost) {
+    console.log(
+      `[PostgreSQL] Auto-detected environment: using ${autoDetectedHost} (POSTGRES_HOST=${process.env.POSTGRES_HOST} ignored)`
+    );
   }
 
-  // Auto-detect: use 'postgres' in Docker, 'localhost' otherwise
-  return isRunningInDocker() ? 'postgres' : 'localhost';
+  return autoDetectedHost;
 }
 
 /**
@@ -90,15 +96,13 @@ export function getPostgresConfig() {
   }
 
   // Get default host (auto-detects Docker vs local)
-  const defaultHost = getDefaultPostgresHost();
-
-  // Debug: log what we're using
+  // This now handles POSTGRES_HOST internally and prioritizes auto-detection
   const resolvedHost = useTestConfig
-    ? process.env.TEST_POSTGRES_HOST || process.env.POSTGRES_HOST || defaultHost
-    : process.env.POSTGRES_HOST || defaultHost;
+    ? process.env.TEST_POSTGRES_HOST || getDefaultPostgresHost()
+    : getDefaultPostgresHost();
 
   console.log(
-    `[PostgreSQL] Host resolution: POSTGRES_HOST=${process.env.POSTGRES_HOST}, defaultHost=${defaultHost}, resolved=${resolvedHost}`
+    `[PostgreSQL] Host resolution: POSTGRES_HOST=${process.env.POSTGRES_HOST}, auto-detected=${resolvedHost}`
   );
 
   // Support individual connection parameters

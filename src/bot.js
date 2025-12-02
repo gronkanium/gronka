@@ -273,6 +273,8 @@ async function startBot() {
     await client.login(DISCORD_TOKEN);
   } catch (error) {
     logger.error('an error occurred:', error);
+    logger.error('error message:', error.message);
+    logger.error('error stack:', error.stack);
     process.exit(1);
   }
 }

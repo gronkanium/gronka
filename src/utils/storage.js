@@ -1144,9 +1144,18 @@ export function getR2CacheStats() {
  * @param {string} urlHash - URL hash from processed_urls table (required for FK)
  * @param {string} r2Key - R2 object key (e.g., 'gifs/abc123.gif')
  * @param {number} [uploadedAt] - Unix timestamp in milliseconds (defaults to now)
+ * @param {boolean} [isAdmin=false] - Whether the user is an admin (admins have permanent uploads)
  * @returns {Promise<void>}
  */
-export async function trackTemporaryUpload(urlHash, r2Key, uploadedAt = null) {
+export async function trackTemporaryUpload(urlHash, r2Key, uploadedAt = null, isAdmin = false) {
+  // Skip tracking for admin users - they have permanent uploads
+  if (isAdmin) {
+    logger.debug(
+      `Skipping temporary upload tracking for admin user: urlHash=${urlHash.substring(0, 8)}..., r2Key=${r2Key}`
+    );
+    return;
+  }
+
   // Check if temporary uploads are enabled
   if (!r2Config.tempUploadsEnabled) {
     return; // Tracking disabled, skip

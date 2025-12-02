@@ -1035,7 +1035,7 @@ export async function processConversion(
       // Track temporary upload
       const r2Key = extractR2KeyFromUrl(gifUrl, r2Config);
       if (r2Key) {
-        await trackTemporaryUpload(urlHash, r2Key);
+        await trackTemporaryUpload(urlHash, r2Key, null, adminUser);
       }
     }
 
@@ -1138,7 +1138,7 @@ export async function processConversion(
             // Track temporary upload
             const r2Key = extractR2KeyFromUrl(r2Url, r2Config);
             if (r2Key) {
-              await trackTemporaryUpload(urlHash, r2Key);
+              await trackTemporaryUpload(urlHash, r2Key, null, adminUser);
             }
             await safeInteractionEditReply(interaction, {
               content: formatR2UrlWithDisclaimer(r2Url, r2Config),

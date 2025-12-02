@@ -2,7 +2,7 @@ import http from 'http';
 import { createLogger } from '../utils/logger.js';
 import { webuiConfig } from '../utils/config.js';
 import { ConfigurationError } from '../utils/errors.js';
-import { getDbPath } from '../utils/database/connection.js';
+import { getPostgresConfig } from '../utils/database/connection.js';
 import { initDatabase, getRecentOperations } from '../utils/database.js';
 import { startMetricsCollection, stopMetricsCollection } from '../utils/system-metrics.js';
 import {
@@ -74,16 +74,18 @@ const broadcastUserMetricsWrapper = (userId, metrics) => {
 // Initialize database and start server
 (async () => {
   try {
-    // Log and validate database path before initialization
-    const dbPath = getDbPath();
-    logger.info(`using database: ${dbPath}`);
+    // Log and validate database configuration before initialization
+    const dbConfig = getPostgresConfig();
+    // Extract database name or connection string
+    const dbInfo = typeof dbConfig === 'string' ? dbConfig : dbConfig.database;
+    logger.info(`using database: ${dbInfo}`);
 
-    // Check if database path indicates test mode (should not happen in production)
+    // Check if database indicates test mode (should not happen in production)
     const isTestDatabase =
-      dbPath && (dbPath.includes('test') || dbPath.includes('tmp') || dbPath.includes('temp'));
+      dbInfo && (dbInfo.includes('test') || dbInfo.includes('tmp') || dbInfo.includes('temp'));
     if (isTestDatabase) {
       logger.warn(
-        `WARNING: webui-server is using a test database path: ${dbPath}. This may cause test operations to appear in production webUI.`
+        `WARNING: webui-server is using a test database: ${dbInfo}. This may cause test operations to appear in production webUI.`
       );
     }
 

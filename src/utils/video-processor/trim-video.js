@@ -83,11 +83,11 @@ export async function trimVideo(inputPath, outputPath, options = {}) {
       '-preset',
       'fast', // Faster encoding, good quality balance
       '-crf',
-      '23', // Good quality (lower = better, 18-28 is typical range)
+      '26', // Optimized for file size while maintaining good quality (18-28 range)
       '-c:a',
       'aac', // Re-encode audio to AAC (widely compatible)
       '-b:a',
-      '192k', // Audio bitrate
+      '128k', // Audio bitrate - optimized for web, good quality
       '-movflags',
       '+faststart', // Enable fast start for web playback
       '-avoid_negative_ts',

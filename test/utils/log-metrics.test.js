@@ -1,6 +1,11 @@
 import { test, describe, before, after } from 'node:test';
 import assert from 'node:assert';
-import { initDatabase, closeDatabase, insertLog, getLogMetrics } from '../../src/utils/database.js';
+import { initDatabase, insertLog, getLogMetrics } from '../../src/utils/database.js';
+import {
+  getUniqueTestComponent,
+  getUniqueTestTimestamp,
+  ensureLogsTableSchema,
+} from '../../src/utils/database/test-helpers.js';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import fs from 'fs';
@@ -21,10 +26,15 @@ before(async () => {
     fs.unlinkSync(tempDbPath);
   }
   await initDatabase();
+  // Ensure logs table has correct schema (SERIAL PRIMARY KEY on id)
+  await ensureLogsTableSchema();
+  // NOTE: Do NOT truncate tables here - it causes race conditions with parallel tests
+  // Instead, we use unique component names and timestamps for test isolation
 });
 
-after(() => {
-  closeDatabase();
+after(async () => {
+  // Don't close database here - it's shared across parallel test files
+  // Connection will be cleaned up when Node.js exits
   // Clean up test database
   if (fs.existsSync(tempDbPath)) {
     try {
@@ -37,24 +47,24 @@ after(() => {
 
 describe('getLogMetrics', () => {
   test('byComponent only includes ERROR and WARN levels, excludes INFO', async () => {
-    const now = Date.now();
-    const uniqueId = now;
-    const component = `webui-test-${uniqueId}`;
+    // Use unique timestamps and component to avoid collisions with parallel tests
+    const baseTimestamp = getUniqueTestTimestamp();
+    const component = getUniqueTestComponent('webui-test');
 
     // Insert multiple INFO logs (should NOT be counted in byComponent)
     for (let i = 0; i < 10; i++) {
-      await insertLog(now + i * 1000, component, 'INFO', `Info message ${i}`);
+      await insertLog(baseTimestamp + i * 1000, component, 'INFO', `Info message ${i}`);
     }
 
     // Insert ERROR logs (should be counted)
-    await insertLog(now + 10000, component, 'ERROR', 'Error message 1');
-    await insertLog(now + 11000, component, 'ERROR', 'Error message 2');
+    await insertLog(baseTimestamp + 10000, component, 'ERROR', 'Error message 1');
+    await insertLog(baseTimestamp + 11000, component, 'ERROR', 'Error message 2');
 
     // Insert WARN logs (should be counted)
-    await insertLog(now + 12000, component, 'WARN', 'Warning message 1');
+    await insertLog(baseTimestamp + 12000, component, 'WARN', 'Warning message 1');
 
     // Insert DEBUG logs (should NOT be counted)
-    await insertLog(now + 13000, component, 'DEBUG', 'Debug message');
+    await insertLog(baseTimestamp + 13000, component, 'DEBUG', 'Debug message');
 
     // Use a small time range (1 hour) to only count recent logs
     const metrics = await getLogMetrics({
@@ -83,25 +93,24 @@ describe('getLogMetrics', () => {
   });
 
   test('byComponent counts errors and warnings from multiple components', async () => {
-    const now = Date.now();
-    const uniqueId = now;
+    // Use unique timestamps and components to avoid conflicts with parallel tests
+    const baseTimestamp = getUniqueTestTimestamp();
 
-    // Use unique component names to avoid conflicts with other tests
-    const webuiComponent = `webui-test-${uniqueId}`;
-    const botComponent = `bot-test-${uniqueId}`;
+    const webuiComponent = getUniqueTestComponent('webui-test');
+    const botComponent = getUniqueTestComponent('bot-test');
 
     // webui component: many INFO, few ERROR
     for (let i = 0; i < 20; i++) {
-      await insertLog(now + i * 100, webuiComponent, 'INFO', `webui info ${i}`);
+      await insertLog(baseTimestamp + i * 100, webuiComponent, 'INFO', `webui info ${i}`);
     }
-    await insertLog(now + 2000, webuiComponent, 'ERROR', 'webui error');
-    await insertLog(now + 2100, webuiComponent, 'WARN', 'webui warning');
+    await insertLog(baseTimestamp + 2000, webuiComponent, 'ERROR', 'webui error');
+    await insertLog(baseTimestamp + 2100, webuiComponent, 'WARN', 'webui warning');
 
     // bot component: some INFO, many ERROR
-    await insertLog(now + 3000, botComponent, 'INFO', 'bot info');
-    await insertLog(now + 3100, botComponent, 'ERROR', 'bot error 1');
-    await insertLog(now + 3200, botComponent, 'ERROR', 'bot error 2');
-    await insertLog(now + 3300, botComponent, 'ERROR', 'bot error 3');
+    await insertLog(baseTimestamp + 3000, botComponent, 'INFO', 'bot info');
+    await insertLog(baseTimestamp + 3100, botComponent, 'ERROR', 'bot error 1');
+    await insertLog(baseTimestamp + 3200, botComponent, 'ERROR', 'bot error 2');
+    await insertLog(baseTimestamp + 3300, botComponent, 'ERROR', 'bot error 3');
 
     // Use a small time range (1 hour) to only count recent logs
     const metrics = await getLogMetrics({
@@ -128,18 +137,18 @@ describe('getLogMetrics', () => {
   });
 
   test('byComponent correctly excludes INFO logs even when component has many', async () => {
-    const now = Date.now();
-    const uniqueId = now;
-    const component = `webui-test-${uniqueId}`;
+    // Use unique timestamps and component to avoid conflicts with parallel tests
+    const baseTimestamp = getUniqueTestTimestamp();
+    const component = getUniqueTestComponent('webui-test-many');
 
     // Simulate the reported issue: webui has many INFO logs
     for (let i = 0; i < 50; i++) {
-      await insertLog(now + i * 100, component, 'INFO', `Info log ${i}`);
+      await insertLog(baseTimestamp + i * 100, component, 'INFO', `Info log ${i}`);
     }
 
     // Add just a few actual errors
-    await insertLog(now + 5000, component, 'ERROR', 'Actual error 1');
-    await insertLog(now + 5100, component, 'ERROR', 'Actual error 2');
+    await insertLog(baseTimestamp + 5000, component, 'ERROR', 'Actual error 1');
+    await insertLog(baseTimestamp + 5100, component, 'ERROR', 'Actual error 2');
 
     // Use a small time range (1 hour) to only count recent logs
     const metrics = await getLogMetrics({
@@ -157,14 +166,14 @@ describe('getLogMetrics', () => {
   });
 
   test('byLevel still includes all log levels', async () => {
-    const now = Date.now();
-    const uniqueId = now;
-    const component = `test-${uniqueId}`;
+    // Use unique timestamps and component to avoid collisions with parallel tests
+    const baseTimestamp = getUniqueTestTimestamp();
+    const component = getUniqueTestComponent('test-bylevel');
 
-    await insertLog(now, component, 'INFO', 'Info message');
-    await insertLog(now + 1000, component, 'ERROR', 'Error message');
-    await insertLog(now + 2000, component, 'WARN', 'Warning message');
-    await insertLog(now + 3000, component, 'DEBUG', 'Debug message');
+    await insertLog(baseTimestamp, component, 'INFO', 'Info message');
+    await insertLog(baseTimestamp + 1000, component, 'ERROR', 'Error message');
+    await insertLog(baseTimestamp + 2000, component, 'WARN', 'Warning message');
+    await insertLog(baseTimestamp + 3000, component, 'DEBUG', 'Debug message');
 
     // Use a small time range (1 hour) to only count recent logs
     const metrics = await getLogMetrics({

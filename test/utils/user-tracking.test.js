@@ -7,7 +7,7 @@ import {
   trackRecentConversion,
   getRecentConversions,
 } from '../../src/utils/user-tracking.js';
-import { initDatabase, closeDatabase, getUser } from '../../src/utils/database.js';
+import { initDatabase, getUser } from '../../src/utils/database.js';
 import { invalidateUserCache } from '../../src/utils/database/users-pg.js';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -34,8 +34,9 @@ before(async () => {
   await initializeUserTracking();
 });
 
-after(() => {
-  closeDatabase();
+after(async () => {
+  // Don't close database here - it's shared across parallel test files
+  // Connection will be cleaned up when Node.js exits
   // Clean up test database
   if (fs.existsSync(tempDbPath)) {
     try {

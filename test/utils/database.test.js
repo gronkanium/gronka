@@ -12,6 +12,10 @@ import {
   insertProcessedUrl,
 } from '../../src/utils/database.js';
 import { invalidateUserCache } from '../../src/utils/database/users-pg.js';
+import {
+  getUniqueTestComponent,
+  ensureLogsTableSchema,
+} from '../../src/utils/database/test-helpers.js';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import fs from 'node:fs';
@@ -34,10 +38,15 @@ before(async () => {
   // Clear user cache to avoid stale data from previous test runs
   invalidateUserCache();
   await initDatabase();
+  // Ensure logs table has correct schema (SERIAL PRIMARY KEY on id)
+  await ensureLogsTableSchema();
+  // NOTE: Do NOT truncate tables here - it causes race conditions with parallel tests
+  // Instead, we use unique component names and timestamps for test isolation
 });
 
-after(() => {
-  closeDatabase();
+after(async () => {
+  // Don't close database here - it's shared across parallel test files
+  // Connection will be cleaned up when Node.js exits
   // Clean up test database
   if (fs.existsSync(tempDbPath)) {
     try {
@@ -180,7 +189,8 @@ describe('database utilities', () => {
   describe('insertLog', () => {
     test('inserts log entry', async () => {
       const timestamp = Date.now();
-      const component = 'test';
+      // Use unique component to avoid collisions with parallel tests
+      const component = getUniqueTestComponent('test-insert');
       const level = 'INFO';
       const message = 'Test log message';
 
@@ -197,7 +207,8 @@ describe('database utilities', () => {
 
     test('inserts log with metadata', async () => {
       const timestamp = Date.now();
-      const component = 'test';
+      // Use unique component to avoid collisions with parallel tests
+      const component = getUniqueTestComponent('test-metadata-insert');
       const level = 'INFO';
       const message = 'Test log with metadata';
       const metadata = { key: 'value', number: 123 };
@@ -214,21 +225,30 @@ describe('database utilities', () => {
 
     test('handles all log levels', async () => {
       const levels = ['DEBUG', 'INFO', 'WARN', 'ERROR'];
-      const timestamp = Date.now();
+      const baseTimestamp = Date.now();
+      // Use unique component to avoid collisions with parallel tests
+      const uniqueComponent = getUniqueTestComponent('test-levels');
 
-      for (const level of levels) {
-        await insertLog(timestamp, 'test', level, `Test ${level} message`);
+      for (let i = 0; i < levels.length; i++) {
+        // Use different timestamps for each level to avoid primary key collisions
+        await insertLog(
+          baseTimestamp + i * 100,
+          uniqueComponent,
+          levels[i],
+          `Test ${levels[i]} message`
+        );
       }
 
       for (const level of levels) {
-        const logs = await getLogs({ component: 'test', level, limit: 10 });
+        const logs = await getLogs({ component: uniqueComponent, level, limit: 10 });
         assert.ok(logs.length > 0, `Should have ${level} logs`);
       }
     });
 
     test('handles null vs undefined metadata', async () => {
       const timestamp = Date.now();
-      const component = 'test';
+      // Use unique component to avoid collisions with parallel tests
+      const component = getUniqueTestComponent('test-metadata');
       const level = 'INFO';
 
       // Insert log with null metadata
@@ -237,12 +257,12 @@ describe('database utilities', () => {
       assert.strictEqual(logsWithNull[0].metadata, null);
 
       // Insert log with undefined metadata (should default to null)
-      await insertLog(timestamp + 1, component, level, 'Message with undefined', undefined);
+      await insertLog(timestamp + 100, component, level, 'Message with undefined', undefined);
       const logsWithUndefined = await getLogs({ component, limit: 1 });
       assert.strictEqual(logsWithUndefined[0].metadata, null);
 
       // Insert log without metadata parameter (should default to null)
-      await insertLog(timestamp + 2, component, level, 'Message without metadata');
+      await insertLog(timestamp + 200, component, level, 'Message without metadata');
       const logsWithout = await getLogs({ component, limit: 1 });
       assert.strictEqual(logsWithout[0].metadata, null);
     });
@@ -258,31 +278,36 @@ describe('database utilities', () => {
     test('filters by component', async () => {
       const baseTimestamp = Date.now();
       const uniqueId = baseTimestamp;
-      await insertLog(baseTimestamp, `bot-${uniqueId}`, 'INFO', 'Bot test message');
-      await insertLog(baseTimestamp + 100, `server-${uniqueId}`, 'INFO', 'Server test message');
+      const botComponent = `bot-${uniqueId}`;
+      const serverComponent = `server-${uniqueId}`;
 
-      const botLogs = await getLogs({ component: `bot-${uniqueId}`, limit: 10 });
-      const serverLogs = await getLogs({ component: `server-${uniqueId}`, limit: 10 });
+      await insertLog(baseTimestamp, botComponent, 'INFO', 'Bot test message');
+      await insertLog(baseTimestamp + 100, serverComponent, 'INFO', 'Server test message');
+
+      const botLogs = await getLogs({ component: botComponent, limit: 10 });
+      const serverLogs = await getLogs({ component: serverComponent, limit: 10 });
 
       assert.ok(botLogs.length > 0, 'Should have bot logs');
       assert.ok(serverLogs.length > 0, 'Should have server logs');
 
       botLogs.forEach(log => {
-        assert.strictEqual(log.component, 'bot');
+        assert.strictEqual(log.component, botComponent);
       });
 
       serverLogs.forEach(log => {
-        assert.strictEqual(log.component, 'server');
+        assert.strictEqual(log.component, serverComponent);
       });
     });
 
     test('filters by level', async () => {
       const baseTimestamp = Date.now();
-      await insertLog(baseTimestamp, 'test', 'ERROR', 'Error message');
-      await insertLog(baseTimestamp + 100, 'test', 'INFO', 'Info message');
+      const testComponent = `test-level-${baseTimestamp}`;
 
-      const errorLogs = await getLogs({ component: 'test', level: 'ERROR', limit: 10 });
-      const infoLogs = await getLogs({ component: 'test', level: 'INFO', limit: 10 });
+      await insertLog(baseTimestamp, testComponent, 'ERROR', 'Error message');
+      await insertLog(baseTimestamp + 100, testComponent, 'INFO', 'Info message');
+
+      const errorLogs = await getLogs({ component: testComponent, level: 'ERROR', limit: 10 });
+      const infoLogs = await getLogs({ component: testComponent, level: 'INFO', limit: 10 });
 
       errorLogs.forEach(log => {
         assert.strictEqual(log.level, 'ERROR');
@@ -297,11 +322,12 @@ describe('database utilities', () => {
       const now = Date.now();
       const startTime = now - 5000;
       const endTime = now + 5000;
+      const testComponent = `test-time-${now}`;
 
-      await insertLog(now, 'test', 'INFO', 'Time filtered message');
+      await insertLog(now, testComponent, 'INFO', 'Time filtered message');
 
       const logs = await getLogs({
-        component: 'test',
+        component: testComponent,
         startTime,
         endTime,
         limit: 10,
@@ -314,22 +340,28 @@ describe('database utilities', () => {
     });
 
     test('respects limit', async () => {
-      // Insert multiple logs
+      const now = Date.now();
+      // Use unique component to avoid collisions with parallel tests
+      const testComponent = getUniqueTestComponent('test-limit');
+
+      // Insert multiple logs with larger timestamp offsets to avoid collisions
       for (let i = 0; i < 5; i++) {
-        await insertLog(Date.now() + i, 'test', 'INFO', `Message ${i}`);
+        await insertLog(now + i * 100, testComponent, 'INFO', `Message ${i}`);
       }
 
-      const logs = await getLogs({ component: 'test', limit: 3 });
+      const logs = await getLogs({ component: testComponent, limit: 3 });
       assert.strictEqual(logs.length, 3);
     });
 
     test('orders by timestamp descending by default', async () => {
       const now = Date.now();
-      await insertLog(now, 'test', 'INFO', 'Message 1');
-      await insertLog(now + 100, 'test', 'INFO', 'Message 2');
-      await insertLog(now + 200, 'test', 'INFO', 'Message 3');
+      // Use unique component to avoid collisions with parallel tests
+      const testComponent = getUniqueTestComponent('test-order-desc');
+      await insertLog(now, testComponent, 'INFO', 'Message 1');
+      await insertLog(now + 100, testComponent, 'INFO', 'Message 2');
+      await insertLog(now + 200, testComponent, 'INFO', 'Message 3');
 
-      const logs = await getLogs({ component: 'test', limit: 3 });
+      const logs = await getLogs({ component: testComponent, limit: 3 });
       assert.ok(logs.length > 0);
       for (let i = 0; i < logs.length - 1; i++) {
         assert.ok(logs[i].timestamp >= logs[i + 1].timestamp);
@@ -338,11 +370,13 @@ describe('database utilities', () => {
 
     test('orders by timestamp ascending when specified', async () => {
       const now = Date.now();
-      await insertLog(now, 'test', 'INFO', 'Message 1');
-      await insertLog(now + 100, 'test', 'INFO', 'Message 2');
-      await insertLog(now + 200, 'test', 'INFO', 'Message 3');
+      // Use unique component to avoid collisions with parallel tests
+      const testComponent = getUniqueTestComponent('test-order-asc');
+      await insertLog(now, testComponent, 'INFO', 'Message 1');
+      await insertLog(now + 100, testComponent, 'INFO', 'Message 2');
+      await insertLog(now + 200, testComponent, 'INFO', 'Message 3');
 
-      const logs = await getLogs({ component: 'test', orderDesc: false, limit: 3 });
+      const logs = await getLogs({ component: testComponent, orderDesc: false, limit: 3 });
       assert.ok(logs.length > 0);
       for (let i = 0; i < logs.length - 1; i++) {
         assert.ok(logs[i].timestamp <= logs[i + 1].timestamp);
@@ -375,16 +409,19 @@ describe('database utilities', () => {
       const now = Date.now();
       const startTime = now - 1000;
       const endTime = now + 1000;
+      // Use unique components to avoid collisions with parallel tests
+      const testComponent = getUniqueTestComponent('test-combined');
+      const otherComponent = getUniqueTestComponent('other-combined');
 
       // Insert logs with different components, levels, and times
-      await insertLog(now - 2000, 'test', 'ERROR', 'Old error'); // Outside time range
-      await insertLog(now, 'test', 'ERROR', 'Recent error'); // Inside time range
-      await insertLog(now, 'test', 'INFO', 'Recent info'); // Wrong level
-      await insertLog(now, 'other', 'ERROR', 'Other component error'); // Wrong component
-      await insertLog(now, 'test', 'ERROR', 'Recent error 2'); // Should match
+      await insertLog(now - 2000, testComponent, 'ERROR', 'Old error'); // Outside time range
+      await insertLog(now, testComponent, 'ERROR', 'Recent error'); // Inside time range
+      await insertLog(now + 50, testComponent, 'INFO', 'Recent info'); // Wrong level
+      await insertLog(now + 100, otherComponent, 'ERROR', 'Other component error'); // Wrong component
+      await insertLog(now + 150, testComponent, 'ERROR', 'Recent error 2'); // Should match
 
       const logs = await getLogs({
-        component: 'test',
+        component: testComponent,
         level: 'ERROR',
         startTime,
         endTime,
@@ -393,7 +430,7 @@ describe('database utilities', () => {
 
       assert.ok(logs.length >= 2);
       logs.forEach(log => {
-        assert.strictEqual(log.component, 'test');
+        assert.strictEqual(log.component, testComponent);
         assert.strictEqual(log.level, 'ERROR');
         assert.ok(log.timestamp >= startTime);
         assert.ok(log.timestamp <= endTime);

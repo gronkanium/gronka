@@ -2,24 +2,70 @@ import postgres from 'postgres';
 
 let sql = null;
 let initPromise = null;
+let currentDatabaseName = null;
+
+/**
+ * Check if we're running in test mode
+ * @returns {boolean} True if running in test mode
+ */
+export function isTestMode() {
+  // Check if TEST_POSTGRES_DB is explicitly set
+  if (process.env.TEST_POSTGRES_DB) {
+    return true;
+  }
+
+  // Check if TEST_DATABASE_URL is set
+  if (process.env.TEST_DATABASE_URL) {
+    return true;
+  }
+
+  // Detect if running via node --test
+  const isNodeTest = process.argv.some(arg => arg === '--test' || arg.includes('node:test'));
+  if (isNodeTest) {
+    return true;
+  }
+
+  return false;
+}
 
 /**
  * Get PostgreSQL connection configuration from environment variables
  * @returns {Object} PostgreSQL connection configuration
  */
 export function getPostgresConfig() {
+  const useTestConfig = isTestMode();
+
   // Support DATABASE_URL for full connection string
-  if (process.env.DATABASE_URL) {
+  // Check test version first if in test mode
+  if (useTestConfig && process.env.TEST_DATABASE_URL) {
+    return process.env.TEST_DATABASE_URL;
+  }
+
+  if (!useTestConfig && process.env.DATABASE_URL) {
     return process.env.DATABASE_URL;
   }
 
   // Support individual connection parameters
+  // Use TEST_ prefixed variables if in test mode, with fallback to regular variables
   const config = {
-    host: process.env.POSTGRES_HOST || 'localhost',
-    port: parseInt(process.env.POSTGRES_PORT || '5432', 10),
-    database: process.env.POSTGRES_DB || 'gronka',
-    username: process.env.POSTGRES_USER || 'gronka',
-    password: process.env.POSTGRES_PASSWORD || 'gronka',
+    host: useTestConfig
+      ? process.env.TEST_POSTGRES_HOST || process.env.POSTGRES_HOST || 'localhost'
+      : process.env.POSTGRES_HOST || 'localhost',
+    port: parseInt(
+      useTestConfig
+        ? process.env.TEST_POSTGRES_PORT || process.env.POSTGRES_PORT || '5432'
+        : process.env.POSTGRES_PORT || '5432',
+      10
+    ),
+    database: useTestConfig
+      ? process.env.TEST_POSTGRES_DB || process.env.POSTGRES_DB || 'gronka'
+      : process.env.POSTGRES_DB || 'gronka',
+    username: useTestConfig
+      ? process.env.TEST_POSTGRES_USER || process.env.POSTGRES_USER || 'gronka'
+      : process.env.POSTGRES_USER || 'gronka',
+    password: useTestConfig
+      ? process.env.TEST_POSTGRES_PASSWORD || process.env.POSTGRES_PASSWORD || 'gronka'
+      : process.env.POSTGRES_PASSWORD || 'gronka',
     max: parseInt(process.env.POSTGRES_MAX_CONNECTIONS || '20', 10),
     idle_timeout: parseInt(process.env.POSTGRES_IDLE_TIMEOUT || '30', 10),
     connect_timeout: parseInt(process.env.POSTGRES_CONNECT_TIMEOUT || '10', 10),
@@ -46,20 +92,92 @@ export async function initPostgresConnection() {
   const newInitPromise = (async () => {
     try {
       const config = getPostgresConfig();
+      const testMode = isTestMode();
+
+      // Extract database name for logging and verification
+      const dbName = typeof config === 'string' ? extractDbFromUrl(config) : config.database;
+      currentDatabaseName = dbName;
+
+      // Safety check: prevent tests from accidentally writing to production database
+      if (testMode && dbName === 'gronka') {
+        throw new Error(
+          'SAFETY: Tests are attempting to connect to production database "gronka". ' +
+            'Set TEST_POSTGRES_DB=gronka_test or use a different database name for tests.'
+        );
+      }
+
+      // Log connection info (useful for debugging test database issues)
+      const mode = testMode ? 'TEST' : 'PROD';
+      const host = typeof config === 'string' ? 'from URL' : config.host;
+      console.log(`[PostgreSQL] Connecting to database "${dbName}" on ${host} (${mode} mode)`);
+
       sql = postgres(config);
 
       // Test the connection
       await sql`SELECT 1`;
 
+      console.log(`[PostgreSQL] Connected successfully to "${dbName}"`);
+
       return sql;
     } catch (error) {
       sql = null;
+      currentDatabaseName = null;
       throw new Error(`Failed to initialize PostgreSQL connection: ${error.message}`);
     }
   })();
 
   initPromise = newInitPromise;
   return newInitPromise;
+}
+
+/**
+ * Extract database name from a PostgreSQL connection URL
+ * @param {string} url - PostgreSQL connection URL
+ * @returns {string} Database name
+ */
+function extractDbFromUrl(url) {
+  try {
+    const parsed = new URL(url);
+    return parsed.pathname.slice(1) || 'unknown';
+  } catch {
+    return 'unknown';
+  }
+}
+
+/**
+ * Get the current database name (for verification in tests)
+ * @returns {string|null} Current database name or null if not connected
+ */
+export function getCurrentDatabaseName() {
+  return currentDatabaseName;
+}
+
+/**
+ * Assert that we're connected to a test database (not production)
+ * Call this at the start of test files that use the database to fail fast if misconfigured
+ * @throws {Error} If connected to production database or not in test mode
+ */
+export function assertTestDatabase() {
+  if (!isTestMode()) {
+    throw new Error(
+      'SAFETY: assertTestDatabase() called but not in test mode. ' +
+        'Run tests with TEST_POSTGRES_DB set or via "npm run test:safe".'
+    );
+  }
+
+  if (currentDatabaseName === 'gronka') {
+    throw new Error(
+      'SAFETY: Tests are connected to production database "gronka". ' +
+        'Set TEST_POSTGRES_DB=gronka_test to use the test database.'
+    );
+  }
+
+  if (currentDatabaseName && !currentDatabaseName.includes('test')) {
+    console.warn(
+      `[PostgreSQL] Warning: Database "${currentDatabaseName}" doesn't contain "test" in its name. ` +
+        'Consider using a name like "gronka_test" for clarity.'
+    );
+  }
 }
 
 /**
@@ -116,6 +234,7 @@ export async function closePostgresConnection() {
     await sql.end({ timeout: 5 });
     sql = null;
     initPromise = null;
+    currentDatabaseName = null;
   }
 }
 

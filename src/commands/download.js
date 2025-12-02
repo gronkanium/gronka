@@ -985,7 +985,7 @@ async function processDownload(
       if (finalUploadMethod === 'r2' && fileUrl && fileUrl.startsWith('https://')) {
         const r2Key = extractR2KeyFromUrl(fileUrl, r2Config);
         if (r2Key) {
-          await trackTemporaryUpload(urlHash, r2Key);
+          await trackTemporaryUpload(urlHash, r2Key, null, adminUser);
         }
       }
 
@@ -1077,7 +1077,7 @@ async function processDownload(
               // Track temporary upload
               const r2Key = extractR2KeyFromUrl(r2Url, r2Config);
               if (r2Key) {
-                await trackTemporaryUpload(urlHash, r2Key);
+                await trackTemporaryUpload(urlHash, r2Key, null, adminUser);
               }
               await safeInteractionEditReply(interaction, {
                 content: formatR2UrlWithDisclaimer(r2Url, r2Config),

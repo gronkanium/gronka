@@ -75,7 +75,16 @@ export async function convertToGif(inputPath, outputPath, options = {}) {
     high: 'floyd_steinberg:diff_mode=rectangle',
   };
 
+  // Quality-specific palette generation for file size optimization
+  // Lower color counts reduce file size with minimal quality impact
+  const palettePresets = {
+    low: 'palettegen=max_colors=128:reserve_transparent=0:stats_mode=diff',
+    medium: 'palettegen=max_colors=192:reserve_transparent=0:stats_mode=diff',
+    high: 'palettegen=max_colors=256:reserve_transparent=0:stats_mode=diff',
+  };
+
   const dither = qualityPresets[quality] || qualityPresets.medium;
+  const paletteGen = palettePresets[quality] || palettePresets.medium;
 
   return new Promise((resolve, reject) => {
     // Create temporary palette file in temp directory (same directory as input)
@@ -92,11 +101,7 @@ export async function convertToGif(inputPath, outputPath, options = {}) {
           duration !== null ? `-t ${duration}` : null,
         ].filter(Boolean)
       )
-      .videoFilters([
-        `fps=${fps}`,
-        `scale=${width}:-1:flags=lanczos`,
-        'palettegen=max_colors=256:reserve_transparent=0',
-      ])
+      .videoFilters([`fps=${fps}`, `scale=${width}:-1:flags=lanczos`, paletteGen])
       .outputOptions(['-y']) // Overwrite output file
       .output(palettePath)
       .on('error', (err, stdout, stderr) => {

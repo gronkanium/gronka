@@ -160,6 +160,34 @@ npm run format         # auto-format code
 
 the project uses eslint and prettier. run `npm run validate` before committing if you care about that stuff.
 
+## built with
+
+gronka uses a mix of open-source tools and services.
+
+**core:**
+- node.js 20+ - runtime environment
+- discord.js 14 - discord bot library
+- express.js - http server and api
+- javascript - the programming language everything is written in
+
+**media processing:**
+- ffmpeg - video and image conversion
+- fluent-ffmpeg - node wrapper for ffmpeg commands
+- cobalt api - social media platform downloads
+- giflossy - gif compression and optimization
+
+**storage and database:**
+- postgresql 16 - stores operations, users, and metadata
+- cloudflare r2 - file storage and cdn for converted media
+
+**frontend:**
+- svelte - webui framework
+- vite - build tool and dev server
+
+**infrastructure:**
+- docker - containers and deployment
+- axios - http requests
+
 ## license
 
 MIT

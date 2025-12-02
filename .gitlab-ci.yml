@@ -100,6 +100,8 @@ validate-code:
 # Test stage - Utility functions
 test-utils:
   stage: test:utils
+  services:
+    - postgres:16-alpine
   rules:
     - if: $CI_PIPELINE_SOURCE == "merge_request_event"
       changes:
@@ -132,6 +134,16 @@ test-utils:
   variables:
     DISCORD_TOKEN: 'ci-test-token'
     CLIENT_ID: 'ci-test-client-id'
+    POSTGRES_DB: gronka_test
+    POSTGRES_USER: gronka
+    POSTGRES_PASSWORD: gronka
+    POSTGRES_HOST: postgres
+    POSTGRES_PORT: '5432'
+    TEST_POSTGRES_DB: gronka_test
+    TEST_POSTGRES_USER: gronka
+    TEST_POSTGRES_PASSWORD: gronka
+    TEST_POSTGRES_HOST: postgres
+    TEST_POSTGRES_PORT: '5432'
   cache:
     paths:
       - node_modules/
@@ -145,6 +157,8 @@ test-utils:
 # Test stage - Command handlers
 test-commands:
   stage: test:commands
+  services:
+    - postgres:16-alpine
   rules:
     - if: $CI_PIPELINE_SOURCE == "merge_request_event"
       changes:
@@ -177,6 +191,16 @@ test-commands:
   variables:
     DISCORD_TOKEN: 'ci-test-token'
     CLIENT_ID: 'ci-test-client-id'
+    POSTGRES_DB: gronka_test
+    POSTGRES_USER: gronka
+    POSTGRES_PASSWORD: gronka
+    POSTGRES_HOST: postgres
+    POSTGRES_PORT: '5432'
+    TEST_POSTGRES_DB: gronka_test
+    TEST_POSTGRES_USER: gronka
+    TEST_POSTGRES_PASSWORD: gronka
+    TEST_POSTGRES_HOST: postgres
+    TEST_POSTGRES_PORT: '5432'
   cache:
     paths:
       - node_modules/
@@ -190,6 +214,8 @@ test-commands:
 # Test stage - Scripts
 test-scripts:
   stage: test:scripts
+  services:
+    - postgres:16-alpine
   rules:
     - if: $CI_PIPELINE_SOURCE == "merge_request_event"
       changes:
@@ -222,6 +248,16 @@ test-scripts:
   variables:
     DISCORD_TOKEN: 'ci-test-token'
     CLIENT_ID: 'ci-test-client-id'
+    POSTGRES_DB: gronka_test
+    POSTGRES_USER: gronka
+    POSTGRES_PASSWORD: gronka
+    POSTGRES_HOST: postgres
+    POSTGRES_PORT: '5432'
+    TEST_POSTGRES_DB: gronka_test
+    TEST_POSTGRES_USER: gronka
+    TEST_POSTGRES_PASSWORD: gronka
+    TEST_POSTGRES_HOST: postgres
+    TEST_POSTGRES_PORT: '5432'
   cache:
     paths:
       - node_modules/
@@ -235,6 +271,8 @@ test-scripts:
 # Test stage - Integration/server components
 test-integration:
   stage: test:integration
+  services:
+    - postgres:16-alpine
   rules:
     - if: $CI_PIPELINE_SOURCE == "merge_request_event"
       changes:
@@ -267,6 +305,16 @@ test-integration:
   variables:
     DISCORD_TOKEN: 'ci-test-token'
     CLIENT_ID: 'ci-test-client-id'
+    POSTGRES_DB: gronka_test
+    POSTGRES_USER: gronka
+    POSTGRES_PASSWORD: gronka
+    POSTGRES_HOST: postgres
+    POSTGRES_PORT: '5432'
+    TEST_POSTGRES_DB: gronka_test
+    TEST_POSTGRES_USER: gronka
+    TEST_POSTGRES_PASSWORD: gronka
+    TEST_POSTGRES_HOST: postgres
+    TEST_POSTGRES_PORT: '5432'
   cache:
     paths:
       - node_modules/

@@ -6,9 +6,9 @@ const logger = createLogger('webui');
 /**
  * Reconstruct operation object from database trace
  * @param {Object} trace - Operation trace from database
- * @returns {Object|null} Reconstructed operation object or null
+ * @returns {Promise<Object|null>} Reconstructed operation object or null
  */
-export function reconstructOperationFromTrace(trace) {
+export async function reconstructOperationFromTrace(trace) {
   if (!trace || !trace.logs || trace.logs.length === 0) {
     return null;
   }
@@ -139,7 +139,7 @@ export function reconstructOperationFromTrace(trace) {
     // If username is missing or unknown, try to get it from users table
     if (!username || username === 'unknown') {
       try {
-        const user = getUser(context.userId);
+        const user = await getUser(context.userId);
         if (user && user.username) {
           username = user.username;
         } else {

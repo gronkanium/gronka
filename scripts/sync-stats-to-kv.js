@@ -2,8 +2,6 @@ import { fileURLToPath } from 'url';
 import path from 'path';
 import dotenv from 'dotenv';
 import axios from 'axios';
-import { get24HourStats } from '../src/utils/database/stats.js';
-import { formatFileSize } from '../src/utils/storage.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -11,6 +9,37 @@ const projectRoot = path.resolve(__dirname, '..');
 
 // Load environment variables
 dotenv.config({ path: path.join(projectRoot, '.env') });
+
+// FORCE PRODUCTION MODE - this script must ALWAYS use production database
+// This ensures public website stats show real production data, never test data
+process.env.FORCE_PRODUCTION_MODE = 'true';
+
+// Map PROD_ prefixed environment variables to standard names
+const envPrefix = 'PROD_';
+const prefixMappings = [
+  'POSTGRES_HOST',
+  'POSTGRES_PORT',
+  'POSTGRES_USER',
+  'POSTGRES_PASSWORD',
+  'POSTGRES_DB',
+  'DATABASE_URL',
+  'CLOUDFLARE_API_TOKEN',
+  'CLOUDFLARE_ACCOUNT_ID',
+  'CLOUDFLARE_KV_NAMESPACE_ID',
+  'CLOUDFLARE_PAGES_PROJECT_NAME',
+];
+
+for (const key of prefixMappings) {
+  const prefixedKey = `${envPrefix}${key}`;
+  if (process.env[prefixedKey] !== undefined) {
+    process.env[key] = process.env[prefixedKey];
+  }
+}
+
+console.log('[kv:sync-stats] Using PROD_ environment variables (FORCE_PRODUCTION_MODE=true)');
+console.log(
+  `[kv:sync-stats] Database: ${process.env.POSTGRES_DB || 'default'} @ ${process.env.POSTGRES_HOST || 'localhost'}`
+);
 
 // Configuration
 const CLOUDFLARE_API_TOKEN = process.env.CLOUDFLARE_API_TOKEN;
@@ -74,9 +103,10 @@ async function readStatsFromKV() {
 /**
  * Write stats to KV
  * @param {Object} stats - Stats object to write
+ * @param {Function} formatFileSize - Function to format file sizes
  * @returns {Promise<void>}
  */
-async function writeStatsToKV(stats) {
+async function writeStatsToKV(stats, formatFileSize) {
   const url = `${CLOUDFLARE_API_BASE}/accounts/${CLOUDFLARE_ACCOUNT_ID}/storage/kv/namespaces/${CLOUDFLARE_KV_NAMESPACE_ID}/values/${KV_KEY}`;
 
   const statsData = {
@@ -96,7 +126,7 @@ async function writeStatsToKV(stats) {
       headers: getApiHeaders(),
       timeout: 10000,
     });
-    console.log('Stats written to KV successfully');
+    console.log('      ✓ Stats written successfully');
   } catch (error) {
     throw new Error(`Failed to write to KV: ${error.message}`);
   }
@@ -150,7 +180,7 @@ async function triggerPagesRebuild() {
     );
 
     if (deployResponse.status === 200 || deployResponse.status === 201) {
-      console.log('Cloudflare Pages rebuild triggered successfully');
+      console.log('      ✓ Rebuild triggered successfully');
       return;
     }
 
@@ -170,25 +200,37 @@ async function triggerPagesRebuild() {
  */
 async function main() {
   try {
-    console.log('Syncing stats to Cloudflare KV...');
+    console.log('='.repeat(60));
+    console.log('Syncing stats to Cloudflare KV (PRODUCTION DATA ONLY)');
+    console.log('='.repeat(60));
 
     // Validate configuration
     validateConfig();
 
+    // Dynamically import database modules AFTER FORCE_PRODUCTION_MODE is set
+    // This ensures the connection is made in production mode
+    const { get24HourStats } = await import('../src/utils/database/stats.js');
+    const { formatFileSize } = await import('../src/utils/storage.js');
+
     // Fetch current stats from database
-    console.log('Fetching stats from database...');
+    console.log('\n[1/4] Fetching stats from production database...');
+    console.log(`      Database: ${process.env.POSTGRES_DB || 'default'}`);
+    console.log(
+      `      Host: ${process.env.POSTGRES_HOST || 'localhost'}:${process.env.POSTGRES_PORT || '5432'}`
+    );
     const currentStats = await get24HourStats();
 
     if (!currentStats) {
       throw new Error('Failed to fetch stats from database');
     }
 
+    console.log(`      ✓ Fetched successfully`);
     console.log(
-      `Current stats: ${currentStats.unique_users} users, ${currentStats.total_files} files, ${formatFileSize(currentStats.total_data_bytes)}`
+      `      Stats: ${currentStats.unique_users} users, ${currentStats.total_files} files, ${formatFileSize(currentStats.total_data_bytes)}`
     );
 
     // Read existing stats from KV
-    console.log('Reading stats from KV...');
+    console.log('\n[2/4] Reading existing stats from Cloudflare KV...');
     const kvStats = await readStatsFromKV();
 
     if (kvStats && kvStats.data) {
@@ -198,31 +240,44 @@ async function main() {
         total_data_bytes: kvStats.data.total_data_bytes || 0,
       };
 
+      console.log(`      ✓ Found existing KV stats`);
       console.log(
-        `KV stats: ${existingStats.unique_users} users, ${existingStats.total_files} files, ${formatFileSize(existingStats.total_data_bytes)}`
+        `      KV stats: ${existingStats.unique_users} users, ${existingStats.total_files} files, ${formatFileSize(existingStats.total_data_bytes)}`
       );
 
       // Check if stats have changed
       if (!statsChanged(currentStats, existingStats)) {
-        console.log('Stats unchanged, skipping KV write and rebuild');
+        console.log('\n      → Stats unchanged, skipping KV write and rebuild');
+        console.log('='.repeat(60));
         process.exit(0);
       }
 
-      console.log('Stats have changed, updating KV and triggering rebuild...');
+      console.log('      → Stats have changed, will update KV and trigger rebuild');
     } else {
-      console.log('No existing stats in KV, writing initial stats...');
+      console.log('      ✓ No existing stats in KV, will write initial stats');
     }
 
     // Write stats to KV
-    await writeStatsToKV(currentStats);
+    console.log('\n[3/4] Writing updated stats to Cloudflare KV...');
+    await writeStatsToKV(currentStats, formatFileSize);
 
     // Trigger rebuild
+    console.log('\n[4/4] Triggering Cloudflare Pages rebuild...');
     await triggerPagesRebuild();
 
+    console.log('\n' + '='.repeat(60));
     console.log('Stats sync completed successfully!');
+    console.log('='.repeat(60));
     process.exit(0);
   } catch (error) {
-    console.error('Error syncing stats to KV:', error.message);
+    console.error('\n' + '='.repeat(60));
+    console.error('ERROR syncing stats to KV:');
+    console.error(error.message);
+    if (error.stack) {
+      console.error('\nStack trace:');
+      console.error(error.stack);
+    }
+    console.error('='.repeat(60));
     process.exit(1);
   }
 }

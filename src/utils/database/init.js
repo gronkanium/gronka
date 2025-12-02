@@ -16,15 +16,18 @@ import {
  * @returns {Promise<void>}
  */
 export async function initPostgresDatabase() {
+  // If initialization is in progress, wait for it
+  // This MUST be checked first to prevent race conditions in parallel tests
+  const initPromise = getPostgresInitPromise();
+  if (initPromise) {
+    await initPromise;
+    return;
+  }
+
+  // If already initialized, return immediately
   const sql = getPostgresConnection();
   if (sql) {
     return; // Already initialized
-  }
-
-  // If initialization is in progress, wait for it
-  const initPromise = getPostgresInitPromise();
-  if (initPromise) {
-    return initPromise;
   }
 
   // Start initialization

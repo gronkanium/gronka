@@ -108,6 +108,20 @@ jobs:
     runs-on: ubuntu-latest
     if: github.actor != 'dependabot[bot]'
     needs: setup-dependencies
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_DB: gronka_test
+          POSTGRES_USER: gronka
+          POSTGRES_PASSWORD: gronka
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 5432:5432
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -129,12 +143,36 @@ jobs:
         env:
           DISCORD_TOKEN: 'ci-test-token'
           CLIENT_ID: 'ci-test-client-id'
+          POSTGRES_DB: gronka_test
+          POSTGRES_USER: gronka
+          POSTGRES_PASSWORD: gronka
+          POSTGRES_HOST: localhost
+          POSTGRES_PORT: '5432'
+          TEST_POSTGRES_DB: gronka_test
+          TEST_POSTGRES_USER: gronka
+          TEST_POSTGRES_PASSWORD: gronka
+          TEST_POSTGRES_HOST: localhost
+          TEST_POSTGRES_PORT: '5432'
 
   # Test stage - Command handlers
   test-commands:
     runs-on: ubuntu-latest
     if: github.actor != 'dependabot[bot]'
     needs: setup-dependencies
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_DB: gronka_test
+          POSTGRES_USER: gronka
+          POSTGRES_PASSWORD: gronka
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 5432:5432
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -156,12 +194,36 @@ jobs:
         env:
           DISCORD_TOKEN: 'ci-test-token'
           CLIENT_ID: 'ci-test-client-id'
+          POSTGRES_DB: gronka_test
+          POSTGRES_USER: gronka
+          POSTGRES_PASSWORD: gronka
+          POSTGRES_HOST: localhost
+          POSTGRES_PORT: '5432'
+          TEST_POSTGRES_DB: gronka_test
+          TEST_POSTGRES_USER: gronka
+          TEST_POSTGRES_PASSWORD: gronka
+          TEST_POSTGRES_HOST: localhost
+          TEST_POSTGRES_PORT: '5432'
 
   # Test stage - Scripts
   test-scripts:
     runs-on: ubuntu-latest
     if: github.actor != 'dependabot[bot]'
     needs: setup-dependencies
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_DB: gronka_test
+          POSTGRES_USER: gronka
+          POSTGRES_PASSWORD: gronka
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 5432:5432
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -183,12 +245,36 @@ jobs:
         env:
           DISCORD_TOKEN: 'ci-test-token'
           CLIENT_ID: 'ci-test-client-id'
+          POSTGRES_DB: gronka_test
+          POSTGRES_USER: gronka
+          POSTGRES_PASSWORD: gronka
+          POSTGRES_HOST: localhost
+          POSTGRES_PORT: '5432'
+          TEST_POSTGRES_DB: gronka_test
+          TEST_POSTGRES_USER: gronka
+          TEST_POSTGRES_PASSWORD: gronka
+          TEST_POSTGRES_HOST: localhost
+          TEST_POSTGRES_PORT: '5432'
 
   # Test stage - Integration/server components
   test-integration:
     runs-on: ubuntu-latest
     if: github.actor != 'dependabot[bot]'
     needs: setup-dependencies
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_DB: gronka_test
+          POSTGRES_USER: gronka
+          POSTGRES_PASSWORD: gronka
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 5432:5432
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -210,6 +296,16 @@ jobs:
         env:
           DISCORD_TOKEN: 'ci-test-token'
           CLIENT_ID: 'ci-test-client-id'
+          POSTGRES_DB: gronka_test
+          POSTGRES_USER: gronka
+          POSTGRES_PASSWORD: gronka
+          POSTGRES_HOST: localhost
+          POSTGRES_PORT: '5432'
+          TEST_POSTGRES_DB: gronka_test
+          TEST_POSTGRES_USER: gronka
+          TEST_POSTGRES_PASSWORD: gronka
+          TEST_POSTGRES_HOST: localhost
+          TEST_POSTGRES_PORT: '5432'
 
   dependabot-checks:
     runs-on: ubuntu-latest

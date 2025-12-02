@@ -6,193 +6,155 @@ description: Terms of use for gronka Discord bot. Acceptable use policy, user re
 
 # Terms of Use
 
-**Last Updated:** November 15, 2025
+**Last Updated:** December 2, 2025
 
 ## Agreement to Terms
 
-By using gronka ("the service", "the bot", "we", "our"), you agree to be bound by these Terms of Use. If you do not agree to these terms, you must not use the service.
+By using gronka, you agree to these terms. If you don't agree, don't use the service.
 
-## Description of Service
+## What gronka Does
 
-gronka is a Discord bot that converts video and image files to GIF format. The service processes files you submit, stores the converted GIFs, and provides access to them via a CDN.
+gronka is a Discord bot that:
+
+- converts videos and images to GIF format
+- downloads media from social platforms (twitter/x, tiktok, instagram, reddit, facebook, threads)
+- stores and serves converted files via CDN
+
+available commands: `/convert`, `/download`, `/info`, plus context menu actions for quick access.
 
 ## Acceptable Use
 
-### Permitted Uses
+you can use gronka to convert and download media for personal or commercial use, as long as you:
 
-You may use gronka to:
+- have the right to use and convert the content you submit
+- comply with copyright laws and platform terms of service
+- don't upload illegal, harmful, or malicious content
+- don't use the service to harass others or violate privacy rights
 
-- Convert video and image files to GIF format for personal or commercial use
-- Share converted GIFs through Discord or other platforms
-- Use the service in Discord servers you manage or participate in
+### Fair Use
 
-### Prohibited Uses
+use the service responsibly. there are no hard limits for normal use, but:
 
-You must not use gronka to:
+- don't spam commands or intentionally abuse the service
+- don't use it for data storage or archival purposes
+- excessive or abusive use may result in rate limiting or bans
 
-- **Illegal Content**: Process, store, or distribute illegal content, including but not limited to:
-  - Copyrighted material without authorization
-  - Content that violates intellectual property rights
-  - Material that is illegal in your jurisdiction
-- **Harmful Content**: Upload or process content that is:
-  - Malicious, abusive, or harassing
-  - Contains malware, viruses, or other harmful code
-  - Violates Discord's Terms of Service or Community Guidelines
-- **Abuse**: Engage in activities that:
-  - Overload or disrupt the service
-  - Attempt to gain unauthorized access to systems
-  - Use automated tools to spam commands
-- **Privacy Violations**: Process content that:
-  - Contains personal information of others without consent
-  - Violates privacy rights
-  - Includes sensitive data (passwords, credit cards, etc.)
+running this service costs money. please be reasonable with your usage.
 
-## Fair Use Policy
+we may suspend or ban users who violate these terms or abuse the service, without notice or explanation.
 
-You are free to upload and process files through this service for legitimate use. There are no hard limits on upload volume for normal use.
+## Service Limits
 
-Operating this service incurs ongoing costs. Please use it responsibly and avoid unnecessary or excessive usage.
+current limits:
 
-Spamming, intentionally uploading excessive files or data, or any activity that degrades service performance or availability is prohibited. We reserve the right to determine what constitutes abuse or excessive use.
+- videos: 100mb maximum
+- images: 50mb maximum
+- rate limit: 10 seconds between commands per user
+- admin users bypass these limits
 
-The service is intended solely for legitimate video-to-GIF conversion purposes. Any use of the service for data storage, archival, or other non-intended purposes is strictly prohibited. This includes repurposing processed media files or the service infrastructure for storage of information or data in any form.
+limits may change without notice to ensure service stability.
 
-We may suspend or permanently ban any user at any time, without notice or explanation, for violations of this policy or for any other reason we deem necessary. Banned users have no right to appeal or request reinstatement.
+## How It Works
 
-This service is provided at our discretion. Continued access is not guaranteed, and we are not obligated to provide service to any user.
+gronka uses:
 
-## User Responsibilities
+- **discord.js** for bot functionality
+- **ffmpeg** for video/image conversion
+- **cloudflare r2** (optional) for file storage and CDN
+- **cobalt.tools** for social media downloads (see below)
 
-### Content Ownership
+files are stored either on cloudflare r2 or local storage, depending on configuration.
 
-- You are solely responsible for the content you submit
-- You must have the right to convert and distribute any content you submit
-- You represent that your use of the service complies with all applicable laws
+## Cobalt.tools Integration
 
-### Account Security
+gronka uses cobalt.tools, a third-party open-source service, to download media from social platforms.
 
-- You are responsible for maintaining the security of your Discord account
-- The bot does not store or have access to your Discord credentials
+**important licensing information:**
 
-## Service Availability
+- **gronka** is licensed under the MIT License (permissive)
+- **cobalt.tools** is licensed under the AGPL-3.0 (copyleft)
 
-### No Guarantees
+these are separate services with different licenses. when you use the `/download` command with social media urls, you're using cobalt.tools functionality through our integration.
 
-- We do not guarantee uninterrupted or error-free service
-- The service may be unavailable due to maintenance, updates, or technical issues
-- We reserve the right to modify or discontinue the service at any time
+by using `/download`, you acknowledge that:
 
-### Service Limits
+- the download is performed by cobalt.tools, not directly by gronka
+- your use is subject to cobalt.tools' terms and the AGPL-3.0 license
+- we're not responsible for cobalt.tools' availability or functionality
 
-We may implement usage limits including but not limited to:
+for more information, visit [cobalt.tools](https://cobalt.tools) or the [cobalt source repository](https://github.com/imputnet/cobalt).
 
-- File size restrictions
-- Rate limiting on commands
-- Storage quotas
-- Processing time limits
+## Your Responsibilities
 
-## Intellectual Property
-
-### Your Content
-
-- You retain ownership of content you submit
-- By using the service, you grant us a license to store, process, and serve your converted files
-- You grant us the right to use your content as necessary to provide the service
-
-### Our Content
-
-- The gronka bot, website, and related materials are our intellectual property
-- The source code is publicly available and provided under the [MIT License]({{ '/LICENSE' | relative_url }})
-- You may copy, modify, and distribute the code in accordance with the MIT License terms
+- you're responsible for the content you submit
+- you must have permission to use and convert any content you upload
+- you're responsible for securing your discord account
+- you bear all risk for how you use the service and downloaded content
 
 ## Disclaimers
 
-### No Warranties
+we provide this service "as-is" with no warranties of any kind. this means:
 
-THE SERVICE IS PROVIDED "AS IS" AND "AS AVAILABLE" WITHOUT WARRANTIES OF ANY KIND, EITHER EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO:
+- no guarantee of uptime or availability
+- no warranty of fitness for any purpose
+- no guarantee that converted files will be error-free
+- we may modify or discontinue the service at any time
 
-- WARRANTIES OF MERCHANTABILITY
-- FITNESS FOR A PARTICULAR PURPOSE
-- NON-INFRINGEMENT
-- ACCURACY OR RELIABILITY
-
-### Limitation of Liability
-
-TO THE MAXIMUM EXTENT PERMITTED BY LAW, WE SHALL NOT BE LIABLE FOR:
-
-- ANY INDIRECT, INCIDENTAL, SPECIAL, CONSEQUENTIAL, OR PUNITIVE DAMAGES
-- LOSS OF DATA, PROFITS, OR BUSINESS OPPORTUNITIES
-- SERVICE INTERRUPTIONS OR FAILURES
-- ERRORS OR OMISSIONS IN CONVERTED FILES
-
-## Indemnification
-
-You agree to indemnify and hold us harmless from any claims, damages, losses, or expenses (including legal fees) arising from:
-
-- Your use of the service
-- Content you submit or process
-- Violation of these terms
-
-## Termination
-
-### By You
-
-You may stop using the service at any time by:
-
-- Removing the bot from your Discord server
-- Ceasing to use bot commands
-
-### By Us
-
-We may suspend or terminate your access to the service if:
-
-- You violate these Terms of Use
-- You engage in abusive or illegal behavior
-- Required by law or legal process
-
-## Changes to Terms
-
-We reserve the right to modify these terms at any time. Changes will be effective immediately upon posting. Your continued use of the service after changes constitutes acceptance of the updated terms.
-
-We will notify users of material changes by updating the "Last Updated" date at the top of this document.
-
-## Governing Law
-
-These Terms of Use are governed by and construed in accordance with applicable laws, without regard to conflict of law principles.
-
-## Dispute Resolution
-
-Any disputes arising from these terms or your use of the service should be resolved through good faith communication via the [GitHub repository](https://github.com/thedorekaczynski/gronka).
-
-## Severability
-
-If any provision of these terms is found to be unenforceable, the remaining provisions will remain in full effect.
-
-## Entire Agreement
-
-These Terms of Use, together with our Privacy Policy, constitute the entire agreement between you and us regarding the use of the service.
-
-## Contact Information
-
-For questions about these Terms of Use, please contact us:
-
-- **Email**: gronkasupport@proton.me
-- **GitHub**: [https://github.com/thedorekaczynski/gronka](https://github.com/thedorekaczynski/gronka)
+we're not liable for any damages, data loss, or issues arising from your use of the service.
 
 ## Third-Party Services
 
-This service integrates with:
+this service uses:
 
-- **Discord**: Bot platform and API provider (subject to Discord's Terms of Service)
-- **Cloudflare**: CDN and infrastructure services
-- **Other Services**: As necessary for operation
+- **discord** - bot platform (subject to discord's terms)
+- **cloudflare** - CDN and storage
+- **cobalt.tools** - social media downloads (AGPL-3.0 licensed)
 
-Your use of these third-party services is subject to their respective terms and conditions.
+your use of these services is subject to their respective terms.
+
+## Intellectual Property
+
+- you keep ownership of content you submit
+- by using the service, you grant us permission to store, process, and serve your files
+- gronka's source code is available under the MIT License at [github.com/thedorekaczynski/gronka](https://github.com/thedorekaczynski/gronka)
+
+## Termination
+
+you can stop using gronka anytime by removing the bot or not using commands.
+
+we can terminate your access if you violate these terms, abuse the service, or for any reason we deem necessary.
+
+## Changes to Terms
+
+we may update these terms at any time. changes take effect immediately when posted. continued use means you accept the updated terms.
+
+check the "last updated" date at the top to see when terms were last modified.
+
+## Privacy
+
+we collect minimal data to operate the service:
+
+- discord user ids for rate limiting and tracking
+- file hashes to avoid duplicate processing
+- operation logs for debugging
+
+we don't sell or share your data. see our privacy policy for details.
 
 ## Age Requirements
 
-You must be at least 13 years old to use this service. If you are under 18, you represent that you have parental or guardian consent to use the service.
+you must be at least 13 years old to use this service. if you're under 18, you need parental consent.
+
+## Governing Law & Disputes
+
+these terms are governed by applicable laws. if you have disputes or issues, please contact us through github or email for good faith resolution.
+
+## Contact
+
+for questions or issues:
+
+- **email**: gronkasupport@proton.me
+- **github**: [https://github.com/thedorekaczynski/gronka](https://github.com/thedorekaczynski/gronka)
 
 ---
 
-_By using gronka, you acknowledge that you have read, understood, and agree to be bound by these Terms of Use._
+_by using gronka, you acknowledge that you have read and agree to these terms._

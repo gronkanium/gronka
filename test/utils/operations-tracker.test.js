@@ -13,20 +13,8 @@ import {
   flushAllOperationLogs,
 } from '../../src/utils/operations-tracker.js';
 import { initDatabase, insertOperationLog, insertOrUpdateUser } from '../../src/utils/database.js';
-import path from 'node:path';
-import { fileURLToPath } from 'node:url';
-import fs from 'node:fs';
-import tmp from 'tmp';
 
-const __dirname = path.dirname(fileURLToPath(import.meta.url));
-let tempDbDir;
-let tempDbPath;
-
-// Set environment variable to use temp database for tests
 before(async () => {
-  tempDbDir = tmp.dirSync({ prefix: 'gronka-test-ops-tracker-', unsafeCleanup: true }).name;
-  tempDbPath = path.join(tempDbDir, 'operations-tracker-test.db');
-  process.env.GRONKA_DB_PATH = tempDbPath;
   process.env.WEBUI_PORT = '3001';
   await initDatabase();
 });
@@ -37,14 +25,6 @@ after(async () => {
 
   // Don't close database here - it's shared across parallel test files
   // Connection will be cleaned up when Node.js exits
-  // Clean up temp directory
-  if (tempDbDir && fs.existsSync(tempDbDir)) {
-    try {
-      fs.rmSync(tempDbDir, { recursive: true, force: true });
-    } catch {
-      // Ignore cleanup errors
-    }
-  }
 });
 
 describe('operations tracker', () => {

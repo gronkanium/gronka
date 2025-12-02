@@ -414,7 +414,7 @@ export async function processOptimization(
     if (optimizedUploadMethod === 'r2' && optimizedUrl && optimizedUrl.startsWith('https://')) {
       const r2Key = extractR2KeyFromUrl(optimizedUrl, r2Config);
       if (r2Key) {
-        await trackTemporaryUpload(urlHash, r2Key);
+        await trackTemporaryUpload(urlHash, r2Key, null, adminUser);
       }
     }
 

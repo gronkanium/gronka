@@ -1,6 +1,6 @@
 import express from 'express';
 import { createLogger } from '../../utils/logger.js';
-import { getDbPath } from '../../utils/database/connection.js';
+import { getPostgresConfig } from '../../utils/database/connection.js';
 import {
   getOperationTrace,
   getRecentOperations,
@@ -32,10 +32,12 @@ router.post('/api/operations', express.json(), (req, res) => {
     // Filter out test operations to prevent them from appearing in production webUI
     // Check if this is a test operation by:
     // 1. Checking if userId matches known test user patterns (e.g., user 86, or test-like IDs)
-    // 2. Checking if database path indicates test mode
-    const dbPath = getDbPath();
+    // 2. Checking if database indicates test mode
+    const dbConfig = getPostgresConfig();
+    // Extract database name or connection string
+    const dbInfo = typeof dbConfig === 'string' ? dbConfig : dbConfig.database;
     const isTestDatabase =
-      dbPath && (dbPath.includes('test') || dbPath.includes('tmp') || dbPath.includes('temp'));
+      dbInfo && (dbInfo.includes('test') || dbInfo.includes('tmp') || dbInfo.includes('temp'));
 
     // User 86 is a known test user, reject operations from it
     if (operation.userId === '86' || String(operation.userId) === '86') {
@@ -46,7 +48,7 @@ router.post('/api/operations', express.json(), (req, res) => {
     // If database path indicates test mode, reject operations to prevent cross-contamination
     if (isTestDatabase) {
       logger.warn(
-        `Rejecting operation ${operation.id} - webui-server is using test database: ${dbPath}`
+        `Rejecting operation ${operation.id} - webui-server is using test database: ${dbInfo}`
       );
       return res.status(400).json({ error: 'test database detected - operations rejected' });
     }

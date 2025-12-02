@@ -2,39 +2,14 @@ import { test, describe, before, after } from 'node:test';
 import assert from 'node:assert';
 import { createLogger } from '../../src/utils/logger.js';
 import { initDatabase, getLogs } from '../../src/utils/database.js';
-import path from 'node:path';
-import { fileURLToPath } from 'node:url';
-import fs from 'node:fs';
-import os from 'node:os';
-
-const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const tempDbDir = path.join(os.tmpdir(), 'gronka-test-db');
-const tempDbPath = path.join(tempDbDir, 'logger-sanitization-test.db');
-
-// Set environment variable to use temp database for tests
-process.env.GRONKA_DB_PATH = tempDbPath;
 
 before(async () => {
-  // Create temp directory for test database
-  fs.mkdirSync(tempDbDir, { recursive: true });
-  // Remove test database if it exists
-  if (fs.existsSync(tempDbPath)) {
-    fs.unlinkSync(tempDbPath);
-  }
   await initDatabase();
 });
 
 after(async () => {
   // Don't close database here - it's shared across parallel test files
   // Connection will be cleaned up when Node.js exits
-  // Clean up test database
-  if (fs.existsSync(tempDbPath)) {
-    try {
-      fs.unlinkSync(tempDbPath);
-    } catch {
-      // Ignore cleanup errors
-    }
-  }
 });
 
 describe('logger sanitization', () => {

@@ -6,25 +6,8 @@ import {
   getUniqueTestComponent,
   ensureLogsTableSchema,
 } from '../../src/utils/database/test-helpers.js';
-import path from 'node:path';
-import { fileURLToPath } from 'node:url';
-import fs from 'node:fs';
-import os from 'node:os';
-
-const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const tempDbDir = path.join(os.tmpdir(), 'gronka-test-db');
-const tempDbPath = path.join(tempDbDir, 'logger-test.db');
-
-// Set environment variable to use temp database for tests
-process.env.GRONKA_DB_PATH = tempDbPath;
 
 before(async () => {
-  // Create temp directory for test database
-  fs.mkdirSync(tempDbDir, { recursive: true });
-  // Remove test database if it exists
-  if (fs.existsSync(tempDbPath)) {
-    fs.unlinkSync(tempDbPath);
-  }
   await initDatabase();
   // Ensure logs table has correct schema (SERIAL PRIMARY KEY on id)
   await ensureLogsTableSchema();
@@ -33,14 +16,6 @@ before(async () => {
 after(async () => {
   // Don't close database here - it's shared across parallel test files
   // Connection will be cleaned up when Node.js exits
-  // Clean up test database
-  if (fs.existsSync(tempDbPath)) {
-    try {
-      fs.unlinkSync(tempDbPath);
-    } catch {
-      // Ignore cleanup errors
-    }
-  }
 });
 
 describe('logger utilities', () => {

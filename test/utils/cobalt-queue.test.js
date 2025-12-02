@@ -2,45 +2,15 @@ import { test, describe, before, after } from 'node:test';
 import assert from 'node:assert';
 import { hashUrl, queueCobaltRequest } from '../../src/utils/cobalt-queue.js';
 import { initDatabase, insertProcessedUrl, getProcessedUrl } from '../../src/utils/database.js';
-import path from 'node:path';
-import { fileURLToPath } from 'node:url';
-import fs from 'node:fs';
-import os from 'node:os';
-
-const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const tempDbDir = path.join(os.tmpdir(), 'gronka-test-cobalt-queue');
-const tempDbPath = path.join(tempDbDir, 'cobalt-queue-test.db');
-
-// Set environment variable to use temp database for tests
-process.env.GRONKA_DB_PATH = tempDbPath;
 
 before(async () => {
-  // Create temp directory for test database
-  fs.mkdirSync(tempDbDir, { recursive: true });
-  // Remove test database if it exists
-  if (fs.existsSync(tempDbPath)) {
-    fs.unlinkSync(tempDbPath);
-  }
   // Ensure database is initialized before tests run
   await initDatabase();
-  // Verify database is actually initialized
-  if (!(await getProcessedUrl('test-verify-' + Date.now()))) {
-    // If table doesn't exist, reinitialize
-    await initDatabase();
-  }
 });
 
 after(async () => {
   // Don't close database here - it's shared across parallel test files
   // Connection will be cleaned up when Node.js exits
-  // Clean up test database
-  if (fs.existsSync(tempDbPath)) {
-    try {
-      fs.unlinkSync(tempDbPath);
-    } catch {
-      // Ignore cleanup errors
-    }
-  }
 });
 
 describe('cobalt-queue utilities', () => {

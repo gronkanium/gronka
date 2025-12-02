@@ -15,13 +15,9 @@ export async function get24HourStats() {
     const sql = getPostgresConnection();
 
     if (!sql) {
-      console.error('PostgreSQL initialization failed.');
-      return {
-        unique_users: 0,
-        total_files: 0,
-        total_data_bytes: 0,
-        timestamp: now,
-      };
+      const errorMsg = 'PostgreSQL initialization failed - cannot fetch stats';
+      console.error(errorMsg);
+      throw new Error(errorMsg);
     }
 
     // Count unique users in last 24 hours
@@ -65,11 +61,8 @@ export async function get24HourStats() {
     };
   } catch (error) {
     console.error('Failed to get 24-hour stats:', error);
-    return {
-      unique_users: 0,
-      total_files: 0,
-      total_data_bytes: 0,
-      timestamp: Date.now(),
-    };
+    // Re-throw the error instead of silently returning zeros
+    // This ensures scripts fail loudly when database connection fails
+    throw error;
   }
 }

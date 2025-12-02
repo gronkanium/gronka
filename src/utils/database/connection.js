@@ -9,6 +9,12 @@ let currentDatabaseName = null;
  * @returns {boolean} True if running in test mode
  */
 export function isTestMode() {
+  // If FORCE_PRODUCTION_MODE is set, always return false (never test mode)
+  // This allows scripts to explicitly force production database connection
+  if (process.env.FORCE_PRODUCTION_MODE === 'true') {
+    return false;
+  }
+
   // Check if TEST_POSTGRES_DB is explicitly set
   if (process.env.TEST_POSTGRES_DB) {
     return true;

@@ -10,13 +10,9 @@ import {
   cleanupStuckOperations,
   setBroadcastCallback,
   setUserMetricsBroadcastCallback,
+  flushAllOperationLogs,
 } from '../../src/utils/operations-tracker.js';
-import {
-  initDatabase,
-  closeDatabase,
-  insertOperationLog,
-  insertOrUpdateUser,
-} from '../../src/utils/database.js';
+import { initDatabase, insertOperationLog, insertOrUpdateUser } from '../../src/utils/database.js';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import fs from 'node:fs';
@@ -35,8 +31,12 @@ before(async () => {
   await initDatabase();
 });
 
-after(() => {
-  closeDatabase();
+after(async () => {
+  // Flush any pending operation logs before ending
+  await flushAllOperationLogs();
+
+  // Don't close database here - it's shared across parallel test files
+  // Connection will be cleaned up when Node.js exits
   // Clean up temp directory
   if (tempDbDir && fs.existsSync(tempDbDir)) {
     try {

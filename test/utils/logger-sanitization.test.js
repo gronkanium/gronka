@@ -1,7 +1,7 @@
 import { test, describe, before, after } from 'node:test';
 import assert from 'node:assert';
 import { createLogger } from '../../src/utils/logger.js';
-import { initDatabase, closeDatabase, getLogs } from '../../src/utils/database.js';
+import { initDatabase, getLogs } from '../../src/utils/database.js';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import fs from 'node:fs';
@@ -24,8 +24,9 @@ before(async () => {
   await initDatabase();
 });
 
-after(() => {
-  closeDatabase();
+after(async () => {
+  // Don't close database here - it's shared across parallel test files
+  // Connection will be cleaned up when Node.js exits
   // Clean up test database
   if (fs.existsSync(tempDbPath)) {
     try {

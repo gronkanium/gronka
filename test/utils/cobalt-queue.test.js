@@ -1,12 +1,7 @@
 import { test, describe, before, after } from 'node:test';
 import assert from 'node:assert';
 import { hashUrl, queueCobaltRequest } from '../../src/utils/cobalt-queue.js';
-import {
-  initDatabase,
-  closeDatabase,
-  insertProcessedUrl,
-  getProcessedUrl,
-} from '../../src/utils/database.js';
+import { initDatabase, insertProcessedUrl, getProcessedUrl } from '../../src/utils/database.js';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import fs from 'node:fs';
@@ -35,8 +30,9 @@ before(async () => {
   }
 });
 
-after(() => {
-  closeDatabase();
+after(async () => {
+  // Don't close database here - it's shared across parallel test files
+  // Connection will be cleaned up when Node.js exits
   // Clean up test database
   if (fs.existsSync(tempDbPath)) {
     try {

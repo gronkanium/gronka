@@ -1,4 +1,5 @@
 import postgres from 'postgres';
+import fs from 'fs';
 
 let sql = null;
 let initPromise = null;
@@ -35,6 +36,43 @@ export function isTestMode() {
 }
 
 /**
+ * Check if we're running inside a Docker container
+ * @returns {boolean} True if running in Docker
+ */
+function isRunningInDocker() {
+  try {
+    // Check for .dockerenv file (most reliable indicator)
+    if (fs.existsSync('/.dockerenv')) {
+      return true;
+    }
+
+    // Check for docker in /proc/1/cgroup (backup method)
+    try {
+      const cgroup = fs.readFileSync('/proc/1/cgroup', 'utf8');
+      return cgroup.includes('docker') || cgroup.includes('kubepods');
+    } catch {
+      return false;
+    }
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Get default PostgreSQL host based on environment
+ * @returns {string} Default host ('postgres' in Docker, 'localhost' otherwise)
+ */
+function getDefaultPostgresHost() {
+  // If explicitly set in environment, use that
+  if (process.env.POSTGRES_HOST) {
+    return process.env.POSTGRES_HOST;
+  }
+
+  // Auto-detect: use 'postgres' in Docker, 'localhost' otherwise
+  return isRunningInDocker() ? 'postgres' : 'localhost';
+}
+
+/**
  * Get PostgreSQL connection configuration from environment variables
  * @returns {Object} PostgreSQL connection configuration
  */
@@ -51,12 +89,22 @@ export function getPostgresConfig() {
     return process.env.DATABASE_URL;
   }
 
+  // Get default host (auto-detects Docker vs local)
+  const defaultHost = getDefaultPostgresHost();
+
+  // Debug: log what we're using
+  const resolvedHost = useTestConfig
+    ? process.env.TEST_POSTGRES_HOST || process.env.POSTGRES_HOST || defaultHost
+    : process.env.POSTGRES_HOST || defaultHost;
+
+  console.log(
+    `[PostgreSQL] Host resolution: POSTGRES_HOST=${process.env.POSTGRES_HOST}, defaultHost=${defaultHost}, resolved=${resolvedHost}`
+  );
+
   // Support individual connection parameters
   // Use TEST_ prefixed variables if in test mode, with fallback to regular variables
   const config = {
-    host: useTestConfig
-      ? process.env.TEST_POSTGRES_HOST || process.env.POSTGRES_HOST || 'localhost'
-      : process.env.POSTGRES_HOST || 'localhost',
+    host: resolvedHost,
     port: parseInt(
       useTestConfig
         ? process.env.TEST_POSTGRES_PORT || process.env.POSTGRES_PORT || '5432'

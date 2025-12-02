@@ -168,7 +168,7 @@ gronka uses a mix of open-source tools and services.
 - node.js 20+ - runtime environment
 - discord.js 14 - discord bot library
 - express.js - http server and api
-- javascript - the programming language everything is written in
+- javascript - the programming language
 
 **media processing:**
 - ffmpeg - video and image conversion

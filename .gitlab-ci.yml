@@ -55,7 +55,11 @@ validate-code:
 test-utils:
   stage: test:utils
   services:
-    - postgres:16-alpine
+    - name: postgres:16-alpine
+      variables:
+        POSTGRES_DB: gronka_test
+        POSTGRES_USER: gronka
+        POSTGRES_PASSWORD: gronka
   rules:
     - if: $CI_PIPELINE_SOURCE == "merge_request_event"
       changes:
@@ -105,10 +109,17 @@ test-utils:
   script:
     - apt-get update -qq && apt-get install -y -qq postgresql-client
     - |
-      # Wait for PostgreSQL to be ready
+      # Wait for PostgreSQL to be ready with timeout
+      MAX_WAIT=60
+      ELAPSED=0
       until PGPASSWORD=$POSTGRES_PASSWORD psql -h $POSTGRES_HOST -U $POSTGRES_USER -d $POSTGRES_DB -c '\q' 2>/dev/null; do
-        echo "Waiting for PostgreSQL to be ready..."
+        if [ $ELAPSED -ge $MAX_WAIT ]; then
+          echo "ERROR: PostgreSQL did not become ready in $MAX_WAIT seconds"
+          exit 1
+        fi
+        echo "Waiting for PostgreSQL to be ready... ($ELAPSED/$MAX_WAIT seconds)"
         sleep 2
+        ELAPSED=$((ELAPSED + 2))
       done
       echo "PostgreSQL is ready!"
     - npm ci
@@ -118,7 +129,11 @@ test-utils:
 test-commands:
   stage: test:commands
   services:
-    - postgres:16-alpine
+    - name: postgres:16-alpine
+      variables:
+        POSTGRES_DB: gronka_test
+        POSTGRES_USER: gronka
+        POSTGRES_PASSWORD: gronka
   rules:
     - if: $CI_PIPELINE_SOURCE == "merge_request_event"
       changes:
@@ -168,10 +183,17 @@ test-commands:
   script:
     - apt-get update -qq && apt-get install -y -qq postgresql-client
     - |
-      # Wait for PostgreSQL to be ready
+      # Wait for PostgreSQL to be ready with timeout
+      MAX_WAIT=60
+      ELAPSED=0
       until PGPASSWORD=$POSTGRES_PASSWORD psql -h $POSTGRES_HOST -U $POSTGRES_USER -d $POSTGRES_DB -c '\q' 2>/dev/null; do
-        echo "Waiting for PostgreSQL to be ready..."
+        if [ $ELAPSED -ge $MAX_WAIT ]; then
+          echo "ERROR: PostgreSQL did not become ready in $MAX_WAIT seconds"
+          exit 1
+        fi
+        echo "Waiting for PostgreSQL to be ready... ($ELAPSED/$MAX_WAIT seconds)"
         sleep 2
+        ELAPSED=$((ELAPSED + 2))
       done
       echo "PostgreSQL is ready!"
     - npm ci
@@ -181,7 +203,11 @@ test-commands:
 test-scripts:
   stage: test:scripts
   services:
-    - postgres:16-alpine
+    - name: postgres:16-alpine
+      variables:
+        POSTGRES_DB: gronka_test
+        POSTGRES_USER: gronka
+        POSTGRES_PASSWORD: gronka
   rules:
     - if: $CI_PIPELINE_SOURCE == "merge_request_event"
       changes:
@@ -231,10 +257,17 @@ test-scripts:
   script:
     - apt-get update -qq && apt-get install -y -qq postgresql-client
     - |
-      # Wait for PostgreSQL to be ready
+      # Wait for PostgreSQL to be ready with timeout
+      MAX_WAIT=60
+      ELAPSED=0
       until PGPASSWORD=$POSTGRES_PASSWORD psql -h $POSTGRES_HOST -U $POSTGRES_USER -d $POSTGRES_DB -c '\q' 2>/dev/null; do
-        echo "Waiting for PostgreSQL to be ready..."
+        if [ $ELAPSED -ge $MAX_WAIT ]; then
+          echo "ERROR: PostgreSQL did not become ready in $MAX_WAIT seconds"
+          exit 1
+        fi
+        echo "Waiting for PostgreSQL to be ready... ($ELAPSED/$MAX_WAIT seconds)"
         sleep 2
+        ELAPSED=$((ELAPSED + 2))
       done
       echo "PostgreSQL is ready!"
     - npm ci
@@ -244,7 +277,11 @@ test-scripts:
 test-integration:
   stage: test:integration
   services:
-    - postgres:16-alpine
+    - name: postgres:16-alpine
+      variables:
+        POSTGRES_DB: gronka_test
+        POSTGRES_USER: gronka
+        POSTGRES_PASSWORD: gronka
   rules:
     - if: $CI_PIPELINE_SOURCE == "merge_request_event"
       changes:
@@ -294,10 +331,17 @@ test-integration:
   script:
     - apt-get update -qq && apt-get install -y -qq postgresql-client
     - |
-      # Wait for PostgreSQL to be ready
+      # Wait for PostgreSQL to be ready with timeout
+      MAX_WAIT=60
+      ELAPSED=0
       until PGPASSWORD=$POSTGRES_PASSWORD psql -h $POSTGRES_HOST -U $POSTGRES_USER -d $POSTGRES_DB -c '\q' 2>/dev/null; do
-        echo "Waiting for PostgreSQL to be ready..."
+        if [ $ELAPSED -ge $MAX_WAIT ]; then
+          echo "ERROR: PostgreSQL did not become ready in $MAX_WAIT seconds"
+          exit 1
+        fi
+        echo "Waiting for PostgreSQL to be ready... ($ELAPSED/$MAX_WAIT seconds)"
         sleep 2
+        ELAPSED=$((ELAPSED + 2))
       done
       echo "PostgreSQL is ready!"
     - npm ci

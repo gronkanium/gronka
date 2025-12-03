@@ -448,28 +448,24 @@ env.DISCORD_TOKEN = env[tokenKey];
 supported mappings include all configuration variables:
 - `TEST_DISCORD_TOKEN` / `PROD_DISCORD_TOKEN` → `DISCORD_TOKEN`
 - `TEST_GIF_STORAGE_PATH` / `PROD_GIF_STORAGE_PATH` → `GIF_STORAGE_PATH`
-- `TEST_GRONKA_DB_PATH` / `PROD_GRONKA_DB_PATH` → `GRONKA_DB_PATH`
+- `TEST_POSTGRES_DB` / `PROD_POSTGRES_DB` → `POSTGRES_DB`
 - and all other configuration variables
 
 ### database separation
 
-each bot uses a separate database file:
+each bot uses a separate PostgreSQL database:
 
-- **test bot**: `gronka-test.db` in `data-test/` (or path from `TEST_GRONKA_DB_PATH`)
-- **prod bot**: `gronka-prod.db` in `data-prod/` (or path from `PROD_GRONKA_DB_PATH`)
+- **test bot**: `gronka_test` database (configured via `TEST_POSTGRES_DB`)
+- **prod bot**: `gronka` database (configured via `PROD_POSTGRES_DB`)
 
-database path resolution:
+both bots connect to the same PostgreSQL server but use different database names for complete isolation:
 
 ```javascript
-// if GRONKA_DB_PATH is explicitly set via prefix, use it
-if (env[`${envPrefix}GRONKA_DB_PATH`]) {
-  env.GRONKA_DB_PATH = env[`${envPrefix}GRONKA_DB_PATH`];
-} else {
-  // derive from storage path or use default with prefix
-  const storagePath = env.GIF_STORAGE_PATH || `./data-${prefix.toLowerCase()}`;
-  const dbFileName = `gronka-${prefix.toLowerCase()}.db`;
-  env.GRONKA_DB_PATH = path.join(storagePath, dbFileName);
+// database name is set directly from prefixed variables
+if (env[`${envPrefix}POSTGRES_DB`]) {
+  env.POSTGRES_DB = env[`${envPrefix}POSTGRES_DB`];
 }
+// defaults: 'gronka_test' for test, 'gronka' for prod
 ```
 
 ### storage separation

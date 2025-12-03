@@ -620,26 +620,35 @@ WEBUI_SERVER_URL=http://localhost:3001
 
 ## database configuration
 
-### `GRONKA_DB_PATH`
+gronka uses PostgreSQL for all database operations. Configure PostgreSQL connection parameters:
 
-explicit database file path override.
+- `POSTGRES_HOST` - PostgreSQL server hostname (default: `postgres` in Docker, `localhost` locally)
+- `POSTGRES_PORT` - PostgreSQL server port (default: `5432`)
+- `POSTGRES_USER` - PostgreSQL username (default: `gronka`)
+- `POSTGRES_PASSWORD` - PostgreSQL password (default: `gronka`)
+- `POSTGRES_DB` - PostgreSQL database name (default: `gronka`)
+- `DATABASE_URL` - Full PostgreSQL connection string (optional, overrides individual parameters)
 
-**optional**
-
-**notes:**
-
-- if not set, database path is automatically derived from `GIF_STORAGE_PATH`
-- test bot defaults to `{GIF_STORAGE_PATH}/gronka-test.db`
-- prod bot defaults to `{GIF_STORAGE_PATH}/gronka-prod.db`
-- set this to use a custom database location
+for test/prod isolation, use prefixed variables:
+- `TEST_POSTGRES_DB` - Test database name (e.g., `gronka_test`)
+- `PROD_POSTGRES_DB` - Production database name (e.g., `gronka`)
 
 **example:**
 
 ```env
-GRONKA_DB_PATH=./data-prod/gronka.db
-# or for test/prod bots
-TEST_GRONKA_DB_PATH=./data-test/gronka-test.db
-PROD_GRONKA_DB_PATH=./data-prod/gronka-prod.db
+# production
+POSTGRES_HOST=postgres
+POSTGRES_PORT=5432
+POSTGRES_USER=gronka
+POSTGRES_PASSWORD=your_password
+POSTGRES_DB=gronka
+
+# or use connection string
+DATABASE_URL=postgresql://gronka:password@postgres:5432/gronka
+
+# test/prod separation
+TEST_POSTGRES_DB=gronka_test
+PROD_POSTGRES_DB=gronka
 ```
 
 ## logging configuration
@@ -823,7 +832,6 @@ all environment variables support the `TEST_` and `PROD_` prefixes, including:
 **storage configuration:**
 - `TEST_GIF_STORAGE_PATH` / `PROD_GIF_STORAGE_PATH`
 - `TEST_CDN_BASE_URL` / `PROD_CDN_BASE_URL`
-- `TEST_GRONKA_DB_PATH` / `PROD_GRONKA_DB_PATH`
 
 **file size limits:**
 - `TEST_MAX_VIDEO_SIZE` / `PROD_MAX_VIDEO_SIZE`
@@ -848,7 +856,11 @@ all environment variables support the `TEST_` and `PROD_` prefixes, including:
 - `TEST_WEBUI_HOST` / `PROD_WEBUI_HOST`
 
 **database configuration:**
-- `TEST_GRONKA_DB_PATH` / `PROD_GRONKA_DB_PATH`
+- `TEST_POSTGRES_DB` / `PROD_POSTGRES_DB`
+- `TEST_POSTGRES_HOST` / `PROD_POSTGRES_HOST`
+- `TEST_POSTGRES_USER` / `PROD_POSTGRES_USER`
+- `TEST_POSTGRES_PASSWORD` / `PROD_POSTGRES_PASSWORD`
+- `TEST_DATABASE_URL` / `PROD_DATABASE_URL`
 
 **logging configuration:**
 - `TEST_LOG_DIR` / `PROD_LOG_DIR`
@@ -879,12 +891,12 @@ and any other configuration variable
 
 ### database separation
 
-each bot uses a separate database file:
+each bot uses a separate PostgreSQL database:
 
-- test bot: `gronka-test.db` (in `data-test/` or path specified by `TEST_GRONKA_DB_PATH`)
-- prod bot: `gronka-prod.db` (in `data-prod/` or path specified by `PROD_GRONKA_DB_PATH`)
+- test bot: `gronka_test` (configured via `TEST_POSTGRES_DB`)
+- prod bot: `gronka` (configured via `PROD_POSTGRES_DB`)
 
-if `GRONKA_DB_PATH` is not explicitly set via prefix, it's automatically derived from the storage path.
+the bots connect to the same PostgreSQL server but use different database names for isolation.
 
 ### running the bots
 
@@ -934,7 +946,7 @@ when you run `npm run docker:up`, it uses `docker-compose.yml` which:
 2. **only supports `PROD_*` prefix for 4 variables:**
    - `PROD_DISCORD_TOKEN` (falls back to `DISCORD_TOKEN`)
    - `PROD_CLIENT_ID` (falls back to `CLIENT_ID`)
-   - `PROD_GRONKA_DB_PATH` (falls back to `./data-prod/gronka.db`)
+   - `PROD_POSTGRES_DB` (falls back to `POSTGRES_DB`)
    - `PROD_GIF_STORAGE_PATH` (falls back to `./data-prod/gifs`)
 3. all other variables use **standard names without prefix support**
 4. the container runs bot/server/webui directly without using `bot-start.js`
@@ -981,7 +993,7 @@ if you need different values for docker deployment, you must set the standard va
 - perfect for running test and prod bots simultaneously with different configs
 
 **for docker deployment:**
-- use `PROD_*` prefix only for: `DISCORD_TOKEN`, `CLIENT_ID`, `GRONKA_DB_PATH`, `GIF_STORAGE_PATH`
+- use `PROD_*` prefix only for: `DISCORD_TOKEN`, `CLIENT_ID`, `POSTGRES_DB`, `GIF_STORAGE_PATH`
 - use standard variable names for all other configuration
 - if you need different configs, you may need separate docker-compose files or environment files
 
@@ -1091,16 +1103,16 @@ TEST_CLIENT_ID=test_client_id_here
 PROD_DISCORD_TOKEN=prod_bot_token_here
 PROD_CLIENT_ID=prod_client_id_here
 
-# test bot storage and database
+# test bot configuration
 TEST_GIF_STORAGE_PATH=./data-test
 TEST_CDN_BASE_URL=http://localhost:3000/gifs
-TEST_GRONKA_DB_PATH=./data-test/gronka-test.db
+TEST_POSTGRES_DB=gronka_test
 TEST_ADMIN_USER_IDS=123456789012345678
 
-# prod bot storage and database
+# prod bot configuration
 PROD_GIF_STORAGE_PATH=./data-prod
 PROD_CDN_BASE_URL=https://cdn.example.com/gifs
-PROD_GRONKA_DB_PATH=./data-prod/gronka-prod.db
+PROD_POSTGRES_DB=gronka
 PROD_ADMIN_USER_IDS=987654321098765432
 
 # test bot file size limits

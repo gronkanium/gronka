@@ -2,7 +2,7 @@ FROM node:20-slim
 
 # Cache strategy: Base image and system packages are cached unless base image changes
 # Install FFmpeg, Docker CLI, and required dependencies
-# Also install build tools for native modules (better-sqlite3)
+# Also install build tools for potential native npm modules
 RUN apt-get update && apt-get install -y \
     ffmpeg \
     ca-certificates \
@@ -29,7 +29,6 @@ WORKDIR /app
 COPY package*.json ./
 
 # Install all dependencies (including devDependencies for building webui)
-# Allow install scripts to run so better-sqlite3 compiles natively
 RUN npm ci
 
 # Cache strategy: vite.config.js is cached unless it changes
@@ -58,7 +57,6 @@ COPY scripts/ ./scripts/
 RUN npm run build:webui
 
 # Remove devDependencies to reduce image size (keep only production deps)
-# Note: better-sqlite3 is a production dependency, so its bindings remain after prune
 RUN npm prune --production
 
 # Remove build tools to reduce image size (they're no longer needed after native modules are built)

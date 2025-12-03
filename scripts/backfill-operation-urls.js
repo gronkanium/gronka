@@ -107,7 +107,7 @@ async function main() {
 
   console.log('Fetching all operations from database...');
   // Get a large number of operations to check
-  const allOperations = getRecentOperations(10000);
+  const allOperations = await getRecentOperations(10000);
 
   console.log(`Found ${allOperations.length} operations to check.`);
 

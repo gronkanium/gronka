@@ -1,0 +1,26 @@
+# cloudflare pages headers configuration
+# this file ensures proper routing and security headers for the jekyll site
+
+# docs section - ensure proper routing
+/docs/*
+  X-Robots-Tag: index, follow
+  Cache-Control: public, max-age=300
+
+# all pages - security headers
+/*
+  X-Frame-Options: DENY
+  X-Content-Type-Options: nosniff
+  X-XSS-Protection: 1; mode=block
+  Referrer-Policy: strict-origin-when-cross-origin
+  Permissions-Policy: geolocation=(), microphone=(), camera=()
+
+# static assets - longer cache
+/assets/*
+  Cache-Control: public, max-age=31536000, immutable
+
+# api endpoints - no cache
+/api/*
+  Cache-Control: no-cache, no-store, must-revalidate
+  Pragma: no-cache
+  Expires: 0
+

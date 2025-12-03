@@ -58,6 +58,11 @@ defaults:
     values:
       layout: post
 
+# include cloudflare pages configuration files
+include:
+  - _headers
+  - _redirects
+
 # exclude
 exclude:
   - node_modules

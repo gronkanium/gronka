@@ -1,5 +1,23 @@
 #!/usr/bin/env node
 
+/**
+ * Reset script to return gronka to a clean slate
+ *
+ * Usage:
+ *   node scripts/reset-clean-slate.js [options]
+ *
+ * Options:
+ *   --dry-run, -n         Show what would be deleted without making changes
+ *   --yes, -y             Skip confirmation prompts
+ *   --stop-docker, -d     Automatically stop docker containers (deprecated)
+ *   --db-only             Only wipe database, skip local directories and R2 cleanup
+ *
+ * Examples:
+ *   npm run reset:clean-slate -- --dry-run
+ *   npm run reset:clean-slate -- --db-only --yes
+ *   npm run reset:clean-slate -- --yes
+ */
+
 import { execSync } from 'child_process';
 import { readFileSync, existsSync, unlinkSync, rmSync, statSync } from 'fs';
 import { fileURLToPath } from 'url';
@@ -19,7 +37,7 @@ const pidFile = join(projectRoot, '.local-dev-pids.json');
 const args = process.argv.slice(2);
 const dryRun = args.includes('--dry-run') || args.includes('-n');
 const skipConfirm = args.includes('--yes') || args.includes('-y');
-const stopDocker = args.includes('--stop-docker') || args.includes('-d');
+const dbOnly = args.includes('--db-only');
 
 // Directories to delete
 const dataDirs = ['data-prod', 'data-test', 'temp', 'logs'];
@@ -126,6 +144,131 @@ function stopDockerContainers() {
     console.warn(`  warning: failed to stop docker containers: ${error.message}`);
     console.warn('  you may need to manually run: docker compose down');
   }
+}
+
+/**
+ * Start only the PostgreSQL container
+ */
+function startPostgresContainer() {
+  console.log('\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+  console.log('starting postgresql container...\n');
+
+  if (dryRun) {
+    console.log('  [DRY RUN] would run: docker compose up -d postgres');
+    return { started: true, dryRun: true };
+  }
+
+  try {
+    console.log('  running: docker compose up -d postgres');
+    execSync('docker compose up -d postgres', {
+      cwd: projectRoot,
+      stdio: 'inherit',
+    });
+    console.log('  postgresql container started');
+
+    // Wait for PostgreSQL to be healthy
+    const healthy = waitForPostgresHealthy();
+    if (!healthy) {
+      console.warn('  warning: postgresql container started but health check failed');
+      return { started: true, healthy: false };
+    }
+
+    console.log('  postgresql is healthy and ready\n');
+    return { started: true, healthy: true };
+  } catch (error) {
+    console.warn(`  warning: failed to start postgresql container: ${error.message}`);
+    console.warn('  database cleanup will be skipped');
+    return { started: false, error: error.message };
+  }
+}
+
+/**
+ * Stop only the PostgreSQL container
+ */
+function stopPostgresContainer() {
+  console.log('\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+  console.log('stopping postgresql container...\n');
+
+  if (dryRun) {
+    console.log('  [DRY RUN] would run: docker compose stop postgres');
+    return;
+  }
+
+  try {
+    console.log('  running: docker compose stop postgres');
+    execSync('docker compose stop postgres', {
+      cwd: projectRoot,
+      stdio: 'inherit',
+    });
+    console.log('  postgresql container stopped');
+  } catch (error) {
+    console.warn(`  warning: failed to stop postgresql container: ${error.message}`);
+    console.warn('  you may need to manually run: docker compose stop postgres');
+  }
+}
+
+/**
+ * Wait for PostgreSQL container to be healthy
+ * @param {number} maxAttempts - Maximum number of attempts (default: 30)
+ * @param {number} delayMs - Delay between attempts in milliseconds (default: 1000)
+ * @returns {boolean} - True if container is healthy, false otherwise
+ */
+function waitForPostgresHealthy(maxAttempts = 30, delayMs = 1000) {
+  console.log('  waiting for postgresql to be healthy...');
+
+  for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+    try {
+      // Check container health status
+      const output = execSync('docker compose ps postgres --format json', {
+        cwd: projectRoot,
+        encoding: 'utf8',
+        stdio: ['ignore', 'pipe', 'ignore'],
+      });
+
+      if (output && output.trim()) {
+        try {
+          const container = JSON.parse(output.trim());
+          const health = container.Health || container.health;
+
+          if (health === 'healthy') {
+            return true;
+          }
+
+          // Also check State for running status
+          const state = container.State || container.state;
+          if (state === 'running' && attempt >= 10) {
+            // If running for 10+ seconds without health status, assume ok
+            console.log('  container is running (health check not available, proceeding)');
+            return true;
+          }
+        } catch (_parseError) {
+          // If JSON parsing fails, try fallback method
+        }
+      }
+
+      // Fallback: try to connect to postgres directly
+      if (attempt >= 10) {
+        try {
+          execSync('docker compose exec -T postgres pg_isready -U gronka', {
+            cwd: projectRoot,
+            stdio: 'ignore',
+          });
+          return true;
+        } catch {
+          // Not ready yet
+        }
+      }
+
+      // Wait before next attempt
+      if (attempt < maxAttempts) {
+        execSync(`node -e "setTimeout(() => {}, ${delayMs})"`, { stdio: 'ignore' });
+      }
+    } catch (_error) {
+      // Continue trying
+    }
+  }
+
+  return false;
 }
 
 /**
@@ -554,17 +697,30 @@ async function main() {
     console.log('\n⚠️  DRY RUN MODE - no changes will be made\n');
   }
 
-  console.log('\nthis will delete:');
-  console.log('  - all local data directories (data-prod/, data-test/, temp/, logs/)');
-  console.log('  - sqlite database files (included in data directories)');
-  console.log('  - postgresql database tables (if configured)');
-  console.log('  - all files in r2 bucket (if configured)');
-  console.log('  - stop any running bot/server processes');
-  console.log('\nthis will preserve:');
-  console.log('  - .env file (configuration and credentials)');
-  console.log('  - codebase and dependencies');
-  console.log('  - r2 bucket itself (only contents deleted)');
-  console.log('  - postgresql database itself (only tables deleted)');
+  if (dbOnly) {
+    console.log('\n⚠️  DATABASE-ONLY MODE\n');
+    console.log('\nthis will delete:');
+    console.log('  - postgresql database tables (if configured)');
+    console.log('  - sqlite database files (if sqlite is in use)');
+    console.log('  - stop any running bot/server processes');
+    console.log('\nthis will preserve:');
+    console.log('  - all local data directories (data-prod/, data-test/, temp/, logs/)');
+    console.log('  - all files in r2 bucket');
+    console.log('  - .env file (configuration and credentials)');
+    console.log('  - codebase and dependencies');
+  } else {
+    console.log('\nthis will delete:');
+    console.log('  - all local data directories (data-prod/, data-test/, temp/, logs/)');
+    console.log('  - sqlite database files (included in data directories)');
+    console.log('  - postgresql database tables (if configured)');
+    console.log('  - all files in r2 bucket (if configured)');
+    console.log('  - stop any running bot/server processes');
+    console.log('\nthis will preserve:');
+    console.log('  - .env file (configuration and credentials)');
+    console.log('  - codebase and dependencies');
+    console.log('  - r2 bucket itself (only contents deleted)');
+    console.log('  - postgresql database itself (only tables deleted)');
+  }
 
   // Get summary of what will be deleted
   const localDirsSummary = dataDirs
@@ -579,9 +735,12 @@ async function main() {
 
   console.log('\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
   console.log('summary:');
-  console.log(
-    `  local directories to delete: ${localDirsSummary.length} (${localDirsSummary.join(', ')})`
-  );
+
+  if (!dbOnly) {
+    console.log(
+      `  local directories to delete: ${localDirsSummary.length} (${localDirsSummary.join(', ')})`
+    );
+  }
 
   if (isPostgresConfigured()) {
     console.log('  postgresql database: will drop all tables');
@@ -589,10 +748,12 @@ async function main() {
     console.log('  postgresql database: not configured (skipped)');
   }
 
-  if (isR2Configured()) {
-    console.log(`  r2 bucket: ${r2Config.bucketName} (will list objects to get count)`);
-  } else {
-    console.log('  r2 bucket: not configured (skipped)');
+  if (!dbOnly) {
+    if (isR2Configured()) {
+      console.log(`  r2 bucket: ${r2Config.bucketName} (will list objects to get count)`);
+    } else {
+      console.log('  r2 bucket: not configured (skipped)');
+    }
   }
 
   if (existsSync(pidFile)) {
@@ -605,16 +766,17 @@ async function main() {
     console.log(
       `  docker containers: ${dockerStatus.containers.length} running (${dockerStatus.containers.map(c => c.name).join(', ')})`
     );
-    if (!stopDocker) {
-      console.log(
-        '\n  ⚠️  warning: docker containers are running and may have data directories mounted'
-      );
-      console.log('  this could prevent deletion of data directories');
-      console.log('  use --stop-docker flag to automatically stop containers, or run:');
-      console.log('    docker compose down');
-    }
   } else {
     console.log('  docker containers: none running');
+  }
+
+  if (isPostgresConfigured()) {
+    console.log('\n  note: postgresql container will be started for database cleanup');
+    console.log('  all containers will be stopped after reset completes');
+  }
+
+  if (dbOnly) {
+    console.log('\n  note: database-only mode - local directories and R2 will not be touched');
   }
 
   // Confirmation
@@ -626,34 +788,51 @@ async function main() {
     }
   }
 
-  // Stop Docker containers if requested or if they're running
+  // Stop Docker containers first (we'll start postgres separately if needed)
   if (dockerStatus.running) {
-    if (stopDocker) {
-      stopDockerContainers();
-    } else {
-      console.log('\n⚠️  warning: docker containers are still running');
-      console.log('  data directories may be locked and deletion may fail');
-      console.log('  consider stopping them first: docker compose down');
-      const proceed = await askConfirmation('  proceed anyway? (yes/no): ');
-      if (!proceed) {
-        console.log('\nreset cancelled');
-        console.log('  run with --stop-docker to automatically stop containers');
-        process.exit(0);
-      }
-    }
+    stopDockerContainers();
   }
 
   // Stop processes
   await stopProcesses();
 
-  // Wipe PostgreSQL database
-  const postgresResults = await wipePostgresDatabase();
+  // PostgreSQL cleanup handling
+  let postgresResults = { wiped: false, reason: 'not configured', tablesDropped: 0 };
+  let postgresStarted = false;
 
-  // Delete local data (includes SQLite database files)
-  const localResults = deleteLocalData();
+  if (isPostgresConfigured()) {
+    // Start PostgreSQL container for cleanup
+    const startResult = startPostgresContainer();
+    postgresStarted = startResult.started && startResult.healthy !== false;
 
-  // Delete R2 objects
-  const r2Results = await deleteR2Objects();
+    if (postgresStarted) {
+      try {
+        // Wipe PostgreSQL database
+        postgresResults = await wipePostgresDatabase();
+      } finally {
+        // Always stop postgres after cleanup, even if it fails
+        stopPostgresContainer();
+      }
+    } else {
+      postgresResults = {
+        wiped: false,
+        reason: 'failed to start postgres container',
+        tablesDropped: 0,
+      };
+    }
+  }
+
+  // Delete local data (includes SQLite database files) - skip in db-only mode
+  let localResults = [];
+  if (!dbOnly) {
+    localResults = deleteLocalData();
+  }
+
+  // Delete R2 objects - skip in db-only mode
+  let r2Results = { deleted: 0, failed: 0, total: 0 };
+  if (!dbOnly) {
+    r2Results = await deleteR2Objects();
+  }
 
   // Final summary
   console.log('\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
@@ -663,37 +842,61 @@ async function main() {
   if (dryRun) {
     console.log('\n[DRY RUN] no changes were made');
   } else {
-    const localDeleted = localResults.filter(r => r.deleted).length;
-    console.log(
-      `\nlocal data (sqlite): ${localDeleted} of ${dataDirs.length} directory(ies) deleted`
-    );
+    if (dbOnly) {
+      console.log('\n[DATABASE-ONLY MODE]');
+    }
+
+    if (!dbOnly) {
+      const localDeleted = localResults.filter(r => r.deleted).length;
+      console.log(
+        `\nlocal data (sqlite): ${localDeleted} of ${dataDirs.length} directory(ies) deleted`
+      );
+    }
 
     if (postgresResults.wiped) {
       if (postgresResults.dryRun) {
         console.log('postgresql database: [DRY RUN] would drop all tables');
       } else {
-        console.log(`postgresql database: ${postgresResults.tablesDropped} table(s) dropped`);
+        const prefix = dbOnly ? '\n' : '';
+        console.log(
+          `${prefix}postgresql database: ${postgresResults.tablesDropped} table(s) dropped`
+        );
         if (postgresResults.tablesFailed && postgresResults.tablesFailed > 0) {
           console.log(`  (${postgresResults.tablesFailed} failed - check logs above)`);
         }
       }
     } else {
-      console.log(`postgresql database: skipped (${postgresResults.reason})`);
+      const prefix = dbOnly ? '\n' : '';
+      console.log(`${prefix}postgresql database: skipped (${postgresResults.reason})`);
     }
 
-    if (r2Results.total > 0) {
-      console.log(`r2 storage: ${r2Results.deleted} of ${r2Results.total} object(s) deleted`);
-      if (r2Results.failed > 0) {
-        console.log(`  (${r2Results.failed} failed - check logs above)`);
+    if (!dbOnly) {
+      if (r2Results.total > 0) {
+        console.log(`r2 storage: ${r2Results.deleted} of ${r2Results.total} object(s) deleted`);
+        if (r2Results.failed > 0) {
+          console.log(`  (${r2Results.failed} failed - check logs above)`);
+        }
+      } else {
+        console.log('r2 storage: skipped (not configured or empty)');
       }
-    } else {
-      console.log('r2 storage: skipped (not configured or empty)');
+    }
+
+    if (dbOnly) {
+      console.log('\nlocal directories and r2 storage: preserved (database-only mode)');
     }
   }
 
   console.log('\nclean slate reset complete!');
 
-  if (dockerStatus.running && stopDocker) {
+  if (isPostgresConfigured()) {
+    if (dryRun) {
+      console.log('\nnote: in actual run, all docker containers will be stopped');
+    } else {
+      console.log('\nnote: all docker containers have been stopped');
+    }
+    console.log('  to start services, run: docker compose up -d');
+    console.log('  or: npm run docker:reload');
+  } else if (dockerStatus.running) {
     console.log('\nnote: docker containers were stopped during reset');
     console.log('  to restart them, run: docker compose up -d');
     console.log('  or: npm run docker:reload');

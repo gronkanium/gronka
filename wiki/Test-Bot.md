@@ -45,22 +45,22 @@ PROD_GIF_STORAGE_PATH=./data-prod
 
 ### database configuration
 
-each bot uses a separate database file:
+each bot uses a separate PostgreSQL database:
 
-- test bot: `gronka-test.db` (stored in the directory specified by `TEST_GIF_STORAGE_PATH` or `TEST_GRONKA_DB_PATH`)
-- prod bot: `gronka-prod.db` (stored in the directory specified by `PROD_GIF_STORAGE_PATH` or `PROD_GRONKA_DB_PATH`)
+- test bot: `gronka_test` (configured via `TEST_POSTGRES_DB`)
+- prod bot: `gronka` (configured via `PROD_POSTGRES_DB`)
 
-you can explicitly set the database path:
+configure PostgreSQL database names:
 
 ```env
 # test bot database
-TEST_GRONKA_DB_PATH=./data-test/gronka-test.db
+TEST_POSTGRES_DB=gronka_test
 
 # prod bot database
-PROD_GRONKA_DB_PATH=./data-prod/gronka-prod.db
+PROD_POSTGRES_DB=gronka
 ```
 
-if not explicitly set, the database path is automatically derived from the storage path.
+both bots connect to the same PostgreSQL server but use different database names for isolation.
 
 ### other prefixed variables
 
@@ -91,7 +91,7 @@ all standard environment variables support the `TEST_` and `PROD_` prefixes:
 **storage configuration:**
 - `TEST_GIF_STORAGE_PATH` / `PROD_GIF_STORAGE_PATH`
 - `TEST_CDN_BASE_URL` / `PROD_CDN_BASE_URL`
-- `TEST_GRONKA_DB_PATH` / `PROD_GRONKA_DB_PATH`
+- `TEST_POSTGRES_DB` / `PROD_POSTGRES_DB`
 
 **file size limits:**
 - `TEST_MAX_VIDEO_SIZE` / `PROD_MAX_VIDEO_SIZE`
@@ -118,7 +118,10 @@ all standard environment variables support the `TEST_` and `PROD_` prefixes:
 - `TEST_MAIN_SERVER_URL` / `PROD_MAIN_SERVER_URL`
 
 **database configuration:**
-- `TEST_GRONKA_DB_PATH` / `PROD_GRONKA_DB_PATH`
+- `TEST_POSTGRES_DB` / `PROD_POSTGRES_DB`
+- `TEST_POSTGRES_HOST` / `PROD_POSTGRES_HOST`
+- `TEST_POSTGRES_USER` / `PROD_POSTGRES_USER`
+- `TEST_POSTGRES_PASSWORD` / `PROD_POSTGRES_PASSWORD`
 
 **logging configuration:**
 - `TEST_LOG_DIR` / `PROD_LOG_DIR`

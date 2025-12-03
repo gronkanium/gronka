@@ -19,7 +19,7 @@ async function main() {
   console.log(
     `Finding operations stuck in running status (older than ${MAX_AGE_MINUTES} minutes)...`
   );
-  const stuckOperationIds = getStuckOperations(MAX_AGE_MINUTES);
+  const stuckOperationIds = await getStuckOperations(MAX_AGE_MINUTES);
 
   if (stuckOperationIds.length === 0) {
     console.log('No stuck operations found.');
@@ -28,7 +28,7 @@ async function main() {
 
   console.log(`Found ${stuckOperationIds.length} stuck operation(s):`);
   for (const operationId of stuckOperationIds) {
-    const trace = getOperationTrace(operationId);
+    const trace = await getOperationTrace(operationId);
     const username = trace?.context?.username || 'unknown';
     const operationType = trace?.context?.operationType || 'unknown';
     const timestamp = trace?.logs?.[0]?.timestamp || 'unknown';
@@ -43,10 +43,10 @@ async function main() {
 
   for (const operationId of stuckOperationIds) {
     try {
-      markOperationAsFailed(operationId);
+      await markOperationAsFailed(operationId);
 
       // Reconstruct operation from database to get updated status
-      const recentOps = getRecentOperations(1000);
+      const recentOps = await getRecentOperations(1000);
       const reconstructedOp = recentOps.find(op => op.id === operationId);
 
       if (reconstructedOp) {

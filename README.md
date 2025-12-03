@@ -4,12 +4,12 @@
 ![Discord.js](https://img.shields.io/badge/Discord.js-14.14-5865F2?logo=discord&logoColor=white)
 ![Docker](https://img.shields.io/badge/Docker-Ready-2496ED?logo=docker&logoColor=white)
 [![Add to Discord](https://img.shields.io/badge/Add_to_Discord-5865F2?logo=discord&logoColor=white)](https://discord.com/oauth2/authorize?client_id=1439329052002357599)
-[![Docs](https://img.shields.io/badge/read-docs-blue)](https://gronka.p1x.dev/docs/)
+[![Docs](https://img.shields.io/badge/read-docs-blue)](https://github.com/thedorekaczynski/gronka/wiki)
 [![FFmpeg](https://img.shields.io/badge/FFmpeg-007808?logo=ffmpeg&logoColor=white)](https://ffmpeg.org/)
 [![GitHub](https://img.shields.io/badge/GitHub-181717?logo=github&logoColor=white)](https://github.com/thedorekaczynski/gronka)
 [![wakatime](https://wakatime.com/badge/github/thedorekaczynski/gronka.svg)](https://wakatime.com/badge/github/thedorekaczynski/gronka)
 
-a discord bot that downloads media from social media platforms and urls, then converts it to gifs. that's it.
+a discord bot that downloads media from social media platforms and urls, then converts it to gifs.
 
 ## what it does
 
@@ -36,15 +36,15 @@ convert downloaded media or files you upload to gifs:
 - video formats: mp4, mov, webm, avi, mkv
 - image formats: png, jpg, jpeg, webp, gif
 
-yes, it can convert gifs to gifs. don't ask why, just embrace it.
+gifs can also be converted to gifs with different quality settings or optimizations.
 
 ## how it works
 
-there are three parts to this thing:
+gronka consists of three components:
 
 1. **discord bot** - the part that lives in your server, downloads media, and does the converting
 2. **r2 storage** - stores and serves videos, images, and gifs via cloudflare r2 (optional, falls back to local storage)
-3. **webui** (optional) - a simple dashboard if you want to see stats
+3. **webui** (optional) - a simple dashboard to view statistics
 
 ## getting started
 
@@ -208,7 +208,7 @@ gronka stores all downloaded media: videos, images, and gifs. when using r2, fil
 
 ### dashboard
 
-if you want to see pretty stats:
+to view the statistics dashboard:
 
 ```bash
 docker compose --profile webui up -d webui
@@ -229,7 +229,7 @@ npm run lint           # check code style
 npm run format         # auto-format code
 ```
 
-the project uses eslint and prettier. run `npm run validate` before committing if you care about that stuff.
+the project uses eslint and prettier. run `npm run validate` before committing to ensure code quality.
 
 ## license
 

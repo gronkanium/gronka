@@ -3,8 +3,6 @@ main:
     url: /
   - title: blog
     url: /blog/
-  - title: docs
-    url: /docs/
   - title: privacy
     url: /privacy/
   - title: terms
@@ -17,5 +15,3 @@ footer:
     url: /terms/
   - title: blog
     url: /blog/
-  - title: docs
-    url: /docs/

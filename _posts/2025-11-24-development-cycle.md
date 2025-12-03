@@ -59,7 +59,7 @@ npm run bot:register:test # register test bot commands
 npm run bot:register:prod # register prod bot commands
 ```
 
-each bot uses a separate database file (`gronka-test.db` and `gronka-prod.db`) and can have independent configuration using prefixed environment variables (e.g., `TEST_ADMIN_USER_IDS`, `PROD_CDN_BASE_URL`). see the [configuration documentation](/docs/configuration/) for full details on prefixed variables.
+each bot uses a separate database file (`gronka-test.db` and `gronka-prod.db`) and can have independent configuration using prefixed environment variables (e.g., `TEST_ADMIN_USER_IDS`, `PROD_CDN_BASE_URL`). see the [configuration documentation](https://github.com/thedorekaczynski/gronka/wiki/Configuration) for full details on prefixed variables.
 
 ### code quality checks
 

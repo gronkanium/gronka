@@ -721,10 +721,10 @@ gronka continues to evolve with regular updates and improvements. upcoming featu
 ### resources
 
 - [github repository](https://github.com/thedorekaczynski/gronka)
-- [documentation](/docs/)
+- [documentation](https://github.com/thedorekaczynski/gronka/wiki)
 - [changelog](https://github.com/thedorekaczynski/gronka/blob/main/CHANGELOG.md)
-- [docker deployment guide](/docs/docker-deployment/)
-- [configuration guide](/docs/configuration/)
+- [docker deployment guide](https://github.com/thedorekaczynski/gronka/wiki/Docker-Deployment)
+- [configuration guide](https://github.com/thedorekaczynski/gronka/wiki/Configuration)
 
 stay updated by following the repository and checking the changelog for new releases.
 

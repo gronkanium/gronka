@@ -7,9 +7,40 @@ and this project adheres (attempts) to [Semantic Versioning](https://semver.org/
 
 ## [Unreleased]
 
+## [0.14.0] - 2025-12-03
+
+### Removed
+
+- **BREAKING**: Removed all SQLite database support
+  - SQLite is no longer supported as a database backend
+  - PostgreSQL is now the only supported database
+  - Removed `GRONKA_DB_PATH` environment variable (no longer needed with PostgreSQL)
+  - Removed `DATABASE_TYPE` environment variable (no longer needed - always PostgreSQL)
+  - Removed SQLite-related code from `scripts/bot-start.js`
+  - Removed SQLite references from `docker-compose.yml`
+  - Removed SQLite references from test scripts in `package.json`
+  - Removed legacy file-based database path logic
+  - Test/prod database isolation now done via PostgreSQL database names (`TEST_POSTGRES_DB` vs `POSTGRES_DB`)
+  - Migration: users must migrate to PostgreSQL before upgrading to v0.14.0 (see v0.13.0 changelog for migration script)
+
+### Changed
+
+- Simplified database configuration
+  - Database configuration now exclusively uses PostgreSQL connection parameters
+  - Test mode detection simplified to use `NODE_ENV` instead of database file paths
+  - Removed database file path checks from `src/utils/logger.js` and `src/utils/operations-tracker.js`
+
+### Documentation
+
+- Updated all documentation to remove SQLite references
+  - Removed `GRONKA_DB_PATH` configuration from all wiki pages
+  - Updated blog posts with SQLite deprecation notices
+  - Clarified that PostgreSQL is now required
+  - Updated configuration examples to show PostgreSQL-only setup
+
 ### Added
 
-- Enhanced clean-slate reset script to wipe both PostgreSQL and SQLite databases
+- Enhanced clean-slate reset script to wipe PostgreSQL databases
   - Updated `scripts/reset-clean-slate.js` to drop all PostgreSQL tables when PostgreSQL is configured
   - Script now handles both database types: drops PostgreSQL tables and deletes SQLite database files
   - Added `wipePostgresDatabase()` function that connects to PostgreSQL and drops all tables in correct order
@@ -91,9 +122,9 @@ and this project adheres (attempts) to [Semantic Versioning](https://semver.org/
 
 ### Added
 
-- PostgreSQL database support with full backwards compatibility
-  - Complete PostgreSQL migration implementation alongside existing SQLite support
-  - Database abstraction layer automatically routes to PostgreSQL or SQLite based on `DATABASE_TYPE` environment variable
+- PostgreSQL database support with SQLite deprecation path
+  - Complete PostgreSQL migration implementation
+  - Database abstraction layer to route to PostgreSQL
   - PostgreSQL connection pooling and async query support
   - New PostgreSQL-specific modules in `src/utils/database/`:
     - `connection-pg.js` - PostgreSQL connection management
@@ -106,8 +137,7 @@ and this project adheres (attempts) to [Semantic Versioning](https://semver.org/
     - `scripts/test-database-wrapper.js` - Database wrapper testing
     - `scripts/test-get24HourStats.js` - Stats testing utility
     - `scripts/test-getAllUsersMetrics.js` - Metrics testing utility
-  - SQLite remains fully supported and is the default when `DATABASE_TYPE` is not set
-  - All existing code works with both database backends without modification
+  - **Note**: SQLite was deprecated in this version and removed completely in v0.14.0
 
 ### Changed
 
@@ -128,11 +158,18 @@ and this project adheres (attempts) to [Semantic Versioning](https://semver.org/
 - Security updates (from dependabot PR #12):
   - `@aws-sdk/client-s3`: `3.937.0` → `3.940.0`
   - `@aws-sdk/lib-storage`: `3.937.0` → `3.940.0`
-  - `better-sqlite3`: `12.4.6` → `12.5.0`
+  - `better-sqlite3`: `12.4.6` → `12.5.0` (removed in v0.14.0)
   - `lucide-svelte`: `0.554.0` → `0.555.0`
   - `prettier`: `3.6.2` → `3.7.3`
   - `svelte`: `5.43.14` → `5.45.2`
   - `vite`: `7.2.4` → `7.2.6`
+
+### Deprecated
+
+- SQLite database support (removed completely in v0.14.0)
+  - All users should migrate to PostgreSQL using the provided migration script
+  - `GRONKA_DB_PATH` environment variable (replaced by PostgreSQL connection parameters)
+  - `DATABASE_TYPE` environment variable (PostgreSQL becomes the only option)
 
 ### Fixed
 

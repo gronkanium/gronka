@@ -22,6 +22,8 @@ tags:
   - discord-bot
 ---
 
+> **update (december 2025)**: some configuration examples in this post reference `GRONKA_DB_PATH`, a sqlite-related environment variable. as of version 0.14.0, sqlite has been removed and gronka now exclusively uses postgresql. replace any `GRONKA_DB_PATH` references with postgresql configuration (`POSTGRES_DB`, `POSTGRES_HOST`, etc.).
+
 # gronka updates: quality controls, trimming, refactoring, and deployment guide
 
 this post covers recent updates to gronka, including new features in versions 0.12.4 and 0.12.5-nightly. we'll dive into quality controls for gif conversion, trimming functionality, code architecture improvements, media format handling, testing strategies, webui enhancements, best practices, and docker deployment.

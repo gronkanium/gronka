@@ -193,13 +193,8 @@ async function broadcastUpdate(operation) {
     }
   } else {
     // Prevent test operations from being sent to webui-server via HTTP POST
-    // Check if we're in test mode by checking NODE_ENV or database path
-    const isTestMode =
-      process.env.NODE_ENV === 'test' ||
-      (process.env.GRONKA_DB_PATH &&
-        (process.env.GRONKA_DB_PATH.includes('test') ||
-          process.env.GRONKA_DB_PATH.includes('tmp') ||
-          process.env.GRONKA_DB_PATH.includes('temp')));
+    // Check if we're in test mode by checking NODE_ENV
+    const isTestMode = process.env.NODE_ENV === 'test';
 
     if (isTestMode) {
       // In test mode, skip HTTP POST to prevent test operations from reaching production webui-server
@@ -691,7 +686,7 @@ export async function cleanupStuckOperations(maxAgeMinutes = 10, client = null) 
     const cutoffTime = now - maxAge;
 
     // Query database for stuck operations
-    const stuckOperationIds = getStuckOperations(maxAgeMinutes);
+    const stuckOperationIds = await getStuckOperations(maxAgeMinutes);
 
     // Also check in-memory operations for stuck ones (in case database init failed)
     // This catches operations that were created but never logged to database
@@ -724,7 +719,7 @@ export async function cleanupStuckOperations(maxAgeMinutes = 10, client = null) 
 
         // Mark as failed in database (may fail silently if db not initialized)
         try {
-          markOperationAsFailed(operationId);
+          await markOperationAsFailed(operationId);
         } catch (dbError) {
           // Database operation failed - that's okay, we'll update in-memory directly
           logger.debug(
@@ -737,7 +732,7 @@ export async function cleanupStuckOperations(maxAgeMinutes = 10, client = null) 
         // We use getRecentOperationsFromDb and filter to get the specific operation
         let reconstructedOp = null;
         try {
-          const recentOps = getRecentOperationsFromDb(1000);
+          const recentOps = await getRecentOperationsFromDb(1000);
           reconstructedOp = recentOps.find(op => op.id === operationId);
         } catch (dbError) {
           // Database query failed - that's okay, we'll use in-memory operation
@@ -771,7 +766,7 @@ export async function cleanupStuckOperations(maxAgeMinutes = 10, client = null) 
           // Fallback: if reconstruction fails, try to get trace from database
           let trace = null;
           try {
-            trace = getOperationTrace(operationId);
+            trace = await getOperationTrace(operationId);
           } catch (dbError) {
             // Database query failed - that's okay, we'll use in-memory operation
             logger.debug(

@@ -169,16 +169,18 @@ export async function initPostgresConnection() {
       const host = typeof config === 'string' ? 'from URL' : config.host;
       console.log(`[PostgreSQL] Connecting to database "${dbName}" on ${host} (${mode} mode)`);
 
-      // Add onnotice handler to suppress verbose NOTICE logs in test mode
+      // Add onnotice handler to suppress verbose NOTICE logs
+      // Suppress in test mode and when FORCE_PRODUCTION_MODE is set (e.g., sync scripts)
+      const suppressNotices = testMode || process.env.FORCE_PRODUCTION_MODE === 'true';
       const connectionOptions =
         typeof config === 'string'
           ? {
               connection: config,
-              onnotice: testMode ? () => {} : undefined, // Silent in tests, default in production
+              onnotice: suppressNotices ? () => {} : undefined,
             }
           : {
               ...config,
-              onnotice: testMode ? () => {} : undefined, // Silent in tests, default in production
+              onnotice: suppressNotices ? () => {} : undefined,
             };
 
       sql = postgres(connectionOptions);

@@ -91,15 +91,15 @@ function hasInvalidSocialMediaUrlError(trace) {
 
 async function main() {
   // Check if we're in production mode
-  const dbPath = process.env.GRONKA_DB_PATH || process.env.PROD_GRONKA_DB_PATH;
-  if (!dbPath && process.env.NODE_ENV !== 'test') {
-    console.warn('⚠️  WARNING: GRONKA_DB_PATH not set. This script will use the test database.');
-    console.warn('   Set PROD_GRONKA_DB_PATH or GRONKA_DB_PATH to use production database.');
-    console.warn(
-      '   Example: PROD_GRONKA_DB_PATH=./data-prod/gronka.db node scripts/backfill-operation-urls.js\n'
-    );
-  } else if (dbPath) {
-    console.log(`Using database: ${dbPath}`);
+  const postgresDb = process.env.POSTGRES_DB || process.env.PROD_POSTGRES_DB || 'gronka';
+  const postgresHost = process.env.POSTGRES_HOST || process.env.PROD_POSTGRES_HOST || 'localhost';
+
+  if (postgresDb.includes('test') && process.env.NODE_ENV !== 'test') {
+    console.warn('WARNING: Using test database. This script will modify the test database.');
+    console.warn('   Set PROD_POSTGRES_DB or POSTGRES_DB to use production database.');
+    console.warn('   Example: PROD_POSTGRES_DB=gronka node scripts/backfill-operation-urls.js\n');
+  } else {
+    console.log(`Using PostgreSQL database: ${postgresDb} on ${postgresHost}`);
   }
 
   console.log('Initializing database...');

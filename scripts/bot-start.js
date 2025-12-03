@@ -4,7 +4,6 @@ import { spawn } from 'child_process';
 import dotenv from 'dotenv';
 import { fileURLToPath } from 'url';
 import { dirname, join } from 'path';
-import path from 'path';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -84,8 +83,6 @@ const prefixMappings = [
   'WEBUI_PORT',
   'WEBUI_HOST',
   'MAIN_SERVER_URL',
-  'GRONKA_DB_PATH',
-  'DATABASE_TYPE',
   'POSTGRES_HOST',
   'POSTGRES_PORT',
   'POSTGRES_USER',
@@ -104,19 +101,6 @@ for (const key of prefixMappings) {
 // For local dev, override COBALT_API_URL to use localhost
 if (!env.COBALT_API_URL || env.COBALT_API_URL.includes('cobalt:9000')) {
   env.COBALT_API_URL = 'http://localhost:9000';
-}
-
-// Set separate database path for test/prod bots
-// If GRONKA_DB_PATH is explicitly set via prefix, use it
-// Otherwise, derive it from GIF_STORAGE_PATH or use default with prefix
-const dbPathKey = `${envPrefix}GRONKA_DB_PATH`;
-if (env[dbPathKey]) {
-  env.GRONKA_DB_PATH = env[dbPathKey];
-} else {
-  // Derive database path from storage path or use default with prefix
-  const storagePath = env.GIF_STORAGE_PATH || './data-test';
-  const dbFileName = `gronka-${prefix.toLowerCase()}.db`;
-  env.GRONKA_DB_PATH = path.join(storagePath, dbFileName);
 }
 
 // Set defaults for webui if not provided

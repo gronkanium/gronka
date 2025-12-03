@@ -41,8 +41,7 @@ class Logger {
     this.logLevel = LOG_LEVELS[levelName] !== undefined ? LOG_LEVELS[levelName] : LOG_LEVELS.INFO;
 
     // Initialize database if not already done
-    // Skip database initialization if GRONKA_DB_PATH is set (tests use temp DB)
-    // or if we're in a test environment where database might not be available
+    // Skip if we're in a test environment where database might not be available
     if (!dbInitPromise && !process.env.SKIP_DB_INIT) {
       dbInitPromise = initDatabase().catch(error => {
         // Silently fail in test environments to avoid cluttering test output

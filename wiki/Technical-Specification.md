@@ -101,25 +101,32 @@ default options:
 ```javascript
 {
   width: 480,
-  fps: 15,
+  fps: 30,
   startTime: null,
   duration: null,
   quality: 'medium'
 }
 ```
 
+notes on fps handling:
+
+- by default, the bot preserves the source video's fps (up to 30fps maximum)
+- fps is automatically capped at 30fps for high framerate videos (e.g., 60fps → 30fps)
+- this cap is due to gif format limitations (frame delays use centiseconds)
+- users can manually specify fps, but values >30fps may have timing issues
+
 ffmpeg command structure:
 
 ```bash
 ffmpeg -i input.mp4 \
-  -vf "fps=15,scale=480:-1:flags=lanczos,split[s0][s1];[s0]palettegen[p];[s1][p]paletteuse" \
+  -vf "fps=30,scale=480:-1:flags=lanczos,split[s0][s1];[s0]palettegen[p];[s1][p]paletteuse" \
   -loop 0 \
   output.gif
 ```
 
 filter explanation:
 
-- `fps=15` - reduce to 15 fps
+- `fps=30` - cap framerate at 30 fps (gif format limitation)
 - `scale=480:-1` - width 480px, maintain aspect ratio
 - `flags=lanczos` - high-quality scaling algorithm
 - `palettegen` - generate optimal 256-color palette

@@ -771,10 +771,19 @@ export async function processConversion(
           );
         }
 
+        // Cap FPS to 30fps maximum (GIF format limitation)
+        // GIF uses frame delays in centiseconds and cannot properly represent >30fps
+        const cappedFps = Math.min(originalFps, 30);
+        if (originalFps > 30) {
+          logger.info(
+            `Capping FPS from ${originalFps.toFixed(1)}fps to 30fps (GIF format limitation)`
+          );
+        }
+
         // Build conversion options, using provided options or original dimensions
         const conversionOptions = {
           width: options.width ?? originalWidth,
-          fps: options.fps ?? originalFps,
+          fps: options.fps ?? cappedFps,
           quality: options.quality ?? botConfig.gifQuality,
           startTime: options.startTime ?? null,
           duration: options.duration ?? null,

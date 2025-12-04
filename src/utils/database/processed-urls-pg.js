@@ -1,7 +1,12 @@
 import { getPostgresConnection } from './connection.js';
 import { r2Config } from '../config.js';
 import { ensurePostgresInitialized } from './init.js';
-import { convertTimestampsToNumbers, convertTimestampsInArray } from './helpers-pg.js';
+import {
+  convertTimestampsToNumbers,
+  convertTimestampsInArray,
+  convertBigIntToNumbers,
+  convertBigIntInArray,
+} from './helpers-pg.js';
 
 // Query result cache for getProcessedUrl (in-memory layer on top of DB)
 const processedUrlCache = new Map(); // Map<urlHash, {data, timestamp}>
@@ -72,10 +77,13 @@ export async function getProcessedUrl(urlHash) {
   const result = await sql`SELECT * FROM processed_urls WHERE url_hash = ${urlHash}`;
   const processedUrl = result.length > 0 ? result[0] : null;
 
-  // Convert timestamp fields from strings to numbers
-  const convertedUrl = processedUrl
+  // Convert timestamp and numeric BIGINT fields from strings to numbers
+  let convertedUrl = processedUrl
     ? convertTimestampsToNumbers(processedUrl, ['processed_at'])
     : null;
+  if (convertedUrl) {
+    convertedUrl = convertBigIntToNumbers(convertedUrl, ['file_size']);
+  }
 
   // Cache result (even null to avoid repeated queries for non-existent URLs)
   setCachedProcessedUrl(urlHash, convertedUrl);
@@ -189,7 +197,11 @@ export async function getUserMedia(userId, options = {}) {
     params.push(offset);
   }
 
-  return await sql.unsafe(query, params);
+  const results = await sql.unsafe(query, params);
+  // Convert timestamp and numeric BIGINT fields from strings to numbers
+  let converted = convertTimestampsInArray(results, ['processed_at']);
+  converted = convertBigIntInArray(converted, ['file_size']);
+  return converted;
 }
 
 /**
@@ -253,8 +265,10 @@ export async function getUserR2Media(userId, options = {}) {
   }
 
   const results = await sql.unsafe(query, params);
-  // Convert timestamp fields from strings to numbers
-  return convertTimestampsInArray(results, ['processed_at']);
+  // Convert timestamp and numeric BIGINT fields from strings to numbers
+  let converted = convertTimestampsInArray(results, ['processed_at']);
+  converted = convertBigIntInArray(converted, ['file_size']);
+  return converted;
 }
 
 /**

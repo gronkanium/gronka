@@ -510,25 +510,25 @@ export async function processOptimization(
               optimizedSize
             );
             await safeInteractionEditReply(interaction, {
-              content: formatR2UrlWithDisclaimer(r2Url, r2Config),
+              content: formatR2UrlWithDisclaimer(r2Url, r2Config, adminUser),
             });
           } else {
             // If R2 upload also fails, use the original optimizedUrl
             await safeInteractionEditReply(interaction, {
-              content: formatR2UrlWithDisclaimer(optimizedUrl, r2Config),
+              content: formatR2UrlWithDisclaimer(optimizedUrl, r2Config, adminUser),
             });
           }
         } catch (r2Error) {
           logger.error(`R2 fallback upload also failed: ${r2Error.message}`);
           // Last resort: use the original optimizedUrl
           await safeInteractionEditReply(interaction, {
-            content: formatR2UrlWithDisclaimer(optimizedUrl, r2Config),
+            content: formatR2UrlWithDisclaimer(optimizedUrl, r2Config, adminUser),
           });
         }
       }
     } else {
       await safeInteractionEditReply(interaction, {
-        content: formatR2UrlWithDisclaimer(optimizedUrl, r2Config),
+        content: formatR2UrlWithDisclaimer(optimizedUrl, r2Config, adminUser),
       });
     }
 

@@ -8,7 +8,7 @@ image: https://cdn.discordapp.com/attachments/1335451213285822485/14400554501324
 [![Add to Discord](https://img.shields.io/badge/Add_to_Discord-5865F2?logo=discord&logoColor=white)](https://discord.com/oauth2/authorize?client_id=1439329052002357599)
 [![GitHub](https://img.shields.io/badge/GitHub-181717?logo=github&logoColor=white)](https://github.com/thedorekaczynski/gronka)
 
-a discord bot that downloads media from social media platforms and urls, then converts it to gifs. that's it.
+a discord bot that downloads media from social media platforms and urls, then converts it to gifs.
 
 ## what it does
 
@@ -33,11 +33,11 @@ convert downloaded media or files you upload to gifs:
 - video formats: mp4, mov, webm, avi, mkv
 - image formats: png, jpg, jpeg, webp, gif
 
-yes, it can convert gifs to gifs. don't ask why, just embrace it.
+gifs can also be converted to gifs with different quality settings or optimizations.
 
 ## how it works
 
-there are three parts to this thing:
+gronka consists of three components:
 
 1. **discord bot** - the part that lives in your server, downloads media, and does the converting
 2. **r2 storage** - stores and serves videos, images, and gifs via cloudflare r2 (optional, falls back to local storage)
@@ -81,7 +81,7 @@ you need these two things in your `.env`:
 - `DISCORD_TOKEN` - get this from the discord developer portal
 - `CLIENT_ID` - same place
 
-everything else is optional. check `.env.example` for what you can tweak (output quality, file size limits, that kind of stuff).
+everything else is optional. check `.env.example` for additional configuration options including output quality, file size limits, and storage settings.
 
 ### r2 storage
 
@@ -158,7 +158,7 @@ npm run lint           # check code style
 npm run format         # auto-format code
 ```
 
-the project uses eslint and prettier. run `npm run validate` before committing if you care about that stuff.
+the project uses eslint and prettier. run `npm run validate` before committing to ensure code quality.
 
 ## built with
 

@@ -15,7 +15,6 @@ import {
 import { initDatabase, insertOperationLog, insertOrUpdateUser } from '../../src/utils/database.js';
 
 before(async () => {
-  process.env.WEBUI_PORT = '3001';
   await initDatabase();
 });
 
@@ -419,14 +418,14 @@ describe('operations tracker', () => {
 
       setBroadcastCallback(() => {
         callback1Called = true;
-      }, 3001);
+      }, 3101);
 
       setBroadcastCallback(() => {
         // Callback for different port
-      }, 3002);
+      }, 3102);
 
       createOperation('convert', 'user1', 'User1');
-      // Should call callback for current instance port (3001)
+      // Should call callback for current instance port (3101)
       assert.ok(callback1Called);
     });
   });

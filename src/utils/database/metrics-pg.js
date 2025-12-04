@@ -1,6 +1,26 @@
 import { getPostgresConnection } from './connection.js';
 import { ensurePostgresInitialized } from './init.js';
-import { convertTimestampsInArray, convertTimestampsToNumbers } from './helpers-pg.js';
+import {
+  convertTimestampsInArray,
+  convertTimestampsToNumbers,
+  convertBigIntToNumbers,
+  convertBigIntInArray,
+} from './helpers-pg.js';
+
+// Define numeric fields in user_metrics table that need conversion from BIGINT strings to numbers
+const USER_METRICS_NUMERIC_FIELDS = [
+  'total_commands',
+  'successful_commands',
+  'failed_commands',
+  'total_convert',
+  'total_download',
+  'total_optimize',
+  'total_info',
+  'total_file_size',
+];
+
+// Define timestamp fields in user_metrics table
+const USER_METRICS_TIMESTAMP_FIELDS = ['last_command_at', 'updated_at'];
 
 /**
  * Insert or update user metrics
@@ -98,7 +118,10 @@ export async function getUserMetrics(userId) {
     return null;
   }
   // Convert timestamp fields from strings to numbers
-  return convertTimestampsToNumbers(result[0], ['last_command_at', 'updated_at']);
+  let converted = convertTimestampsToNumbers(result[0], USER_METRICS_TIMESTAMP_FIELDS);
+  // Convert numeric BIGINT fields from strings to numbers
+  converted = convertBigIntToNumbers(converted, USER_METRICS_NUMERIC_FIELDS);
+  return converted;
 }
 
 /**
@@ -177,7 +200,10 @@ export async function getAllUsersMetrics(options = {}) {
       return [];
     }
     // Convert timestamp fields from strings to numbers
-    return convertTimestampsInArray(result, ['last_command_at', 'updated_at']);
+    let converted = convertTimestampsInArray(result, USER_METRICS_TIMESTAMP_FIELDS);
+    // Convert numeric BIGINT fields from strings to numbers
+    converted = convertBigIntInArray(converted, USER_METRICS_NUMERIC_FIELDS);
+    return converted;
   } catch (error) {
     console.error('Error in getAllUsersMetrics:', error);
     throw error;
@@ -293,7 +319,10 @@ export async function getSystemMetrics(options = {}) {
 
   const metrics = await sql.unsafe(query, params);
   // Convert timestamp fields from strings to numbers
-  return convertTimestampsInArray(metrics, ['timestamp']);
+  let converted = convertTimestampsInArray(metrics, ['timestamp']);
+  // Convert numeric BIGINT fields from strings to numbers
+  converted = convertBigIntInArray(converted, ['process_uptime']);
+  return converted;
 }
 
 /**
@@ -314,5 +343,8 @@ export async function getLatestSystemMetrics() {
     return null;
   }
   // Convert timestamp fields from strings to numbers
-  return convertTimestampsToNumbers(result[0], ['timestamp']);
+  let converted = convertTimestampsToNumbers(result[0], ['timestamp']);
+  // Convert numeric BIGINT fields from strings to numbers
+  converted = convertBigIntToNumbers(converted, ['process_uptime']);
+  return converted;
 }

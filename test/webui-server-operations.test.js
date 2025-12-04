@@ -18,7 +18,6 @@ let serverPort;
 // We'll create a test server that mimics the operations endpoints
 
 before(async () => {
-  process.env.WEBUI_PORT = '3001';
   await initDatabase();
   // Truncate all tables to ensure clean state (important for parallel test execution)
   await truncateAllTables();

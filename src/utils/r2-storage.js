@@ -451,9 +451,10 @@ export function extractR2KeyFromUrl(url, config) {
  * Format R2 URL with disclaimer if temporary uploads are enabled
  * @param {string} url - URL to format (may be R2 URL or other URL)
  * @param {Object} config - R2 configuration
+ * @param {boolean} [isAdmin=false] - Whether the user is an admin (admins get permanent uploads with no disclaimer)
  * @returns {string} URL with disclaimer appended if applicable, or original URL
  */
-export function formatR2UrlWithDisclaimer(url, config) {
+export function formatR2UrlWithDisclaimer(url, config, isAdmin = false) {
   // Return original URL if not a string or empty
   if (!url || typeof url !== 'string') {
     return url;
@@ -461,6 +462,11 @@ export function formatR2UrlWithDisclaimer(url, config) {
 
   // Return original URL if temporary uploads are not enabled
   if (!config.tempUploadsEnabled) {
+    return url;
+  }
+
+  // Skip disclaimer for admin users (they have permanent uploads)
+  if (isAdmin) {
     return url;
   }
 
@@ -484,4 +490,56 @@ export function formatR2UrlWithDisclaimer(url, config) {
   // Format URL with disclaimer
   const disclaimer = `\n-# this link will expire in ${ttlMessage}, please save and reupload to discord to keep forever`;
   return url + disclaimer;
+}
+
+/**
+ * Format multiple R2 URLs with a single disclaimer at the end
+ * @param {string[]} urls - Array of URLs to format
+ * @param {Object} config - R2 configuration
+ * @param {boolean} [isAdmin=false] - Whether the user is an admin (admins get permanent uploads with no disclaimer)
+ * @returns {string} URLs joined with newlines and a single disclaimer if any R2 URLs exist
+ */
+export function formatMultipleR2UrlsWithDisclaimer(urls, config, isAdmin = false) {
+  // Return empty string if no URLs
+  if (!urls || !Array.isArray(urls) || urls.length === 0) {
+    return '';
+  }
+
+  // Return URLs as-is if temporary uploads are not enabled
+  if (!config.tempUploadsEnabled) {
+    return urls.join('\n');
+  }
+
+  // Skip disclaimer for admin users (they have permanent uploads)
+  if (isAdmin) {
+    return urls.join('\n');
+  }
+
+  // Filter for R2 URLs only
+  const r2Urls = urls.filter(url => {
+    if (!url || typeof url !== 'string') {
+      return false;
+    }
+    const r2Key = extractR2KeyFromUrl(url, config);
+    return r2Key !== null;
+  });
+
+  // If no R2 URLs, return plain URLs
+  if (r2Urls.length === 0) {
+    return urls.join('\n');
+  }
+
+  // Format TTL message (e.g., "72 hours" or "3 days")
+  const ttlHours = config.tempUploadTtlHours || 72;
+  let ttlMessage;
+  if (ttlHours >= 24 && ttlHours % 24 === 0) {
+    const days = ttlHours / 24;
+    ttlMessage = days === 1 ? '1 day' : `${days} days`;
+  } else {
+    ttlMessage = ttlHours === 1 ? '1 hour' : `${ttlHours} hours`;
+  }
+
+  // Format all URLs with a single disclaimer at the end
+  const disclaimer = `-# this link will expire in ${ttlMessage}, please save and reupload to discord to keep forever`;
+  return urls.join('\n') + '\n' + disclaimer;
 }

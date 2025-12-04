@@ -1,6 +1,10 @@
 import { getPostgresConnection } from './connection.js';
 import { ensurePostgresInitialized } from './init.js';
 import { createLogger } from '../logger.js';
+import { convertTimestampsToNumbers, convertTimestampsInArray } from './helpers-pg.js';
+
+// Define timestamp fields in temporary_uploads table that need conversion from BIGINT strings to numbers
+const TEMPORARY_UPLOADS_TIMESTAMP_FIELDS = ['uploaded_at', 'expires_at', 'deleted_at'];
 
 // Lazy logger creation
 let logger = null;
@@ -52,7 +56,8 @@ export async function insertTemporaryUpload(urlHash, r2Key, uploadedAt, expiresA
         SELECT * FROM temporary_uploads
         WHERE url_hash = ${urlHash} AND r2_key = ${r2Key}
       `;
-      return updated[0];
+      // Convert timestamp BIGINT fields from strings to numbers
+      return convertTimestampsToNumbers(updated[0], TEMPORARY_UPLOADS_TIMESTAMP_FIELDS);
     } else {
       // Insert new record
       const result = await sql`
@@ -63,7 +68,8 @@ export async function insertTemporaryUpload(urlHash, r2Key, uploadedAt, expiresA
       getLogger().debug(
         `Inserted new temporary upload record: id=${result[0].id}, url_hash=${urlHash.substring(0, 8)}..., r2_key=${r2Key}`
       );
-      return result[0];
+      // Convert timestamp BIGINT fields from strings to numbers
+      return convertTimestampsToNumbers(result[0], TEMPORARY_UPLOADS_TIMESTAMP_FIELDS);
     }
   } catch (error) {
     getLogger().error(`Failed to insert/update temporary upload: ${error.message}`);
@@ -86,11 +92,13 @@ export async function getExpiredTemporaryUploads(now) {
   }
 
   try {
-    return await sql`
+    const results = await sql`
       SELECT * FROM temporary_uploads
       WHERE expires_at < ${now} AND deleted_at IS NULL
       ORDER BY expires_at ASC
     `;
+    // Convert timestamp BIGINT fields from strings to numbers
+    return convertTimestampsInArray(results, TEMPORARY_UPLOADS_TIMESTAMP_FIELDS);
   } catch (error) {
     getLogger().error(`Failed to get expired temporary uploads: ${error.message}`);
     return [];
@@ -112,7 +120,9 @@ export async function getTemporaryUploadsByR2Key(r2Key) {
   }
 
   try {
-    return await sql`SELECT * FROM temporary_uploads WHERE r2_key = ${r2Key}`;
+    const results = await sql`SELECT * FROM temporary_uploads WHERE r2_key = ${r2Key}`;
+    // Convert timestamp BIGINT fields from strings to numbers
+    return convertTimestampsInArray(results, TEMPORARY_UPLOADS_TIMESTAMP_FIELDS);
   } catch (error) {
     getLogger().error(`Failed to get temporary uploads by R2 key: ${error.message}`);
     return [];
@@ -190,11 +200,13 @@ export async function getFailedDeletions() {
   }
 
   try {
-    return await sql`
+    const results = await sql`
       SELECT * FROM temporary_uploads
       WHERE deletion_failed > 0 AND deleted_at IS NULL
       ORDER BY deletion_failed DESC, expires_at ASC
     `;
+    // Convert timestamp BIGINT fields from strings to numbers
+    return convertTimestampsInArray(results, TEMPORARY_UPLOADS_TIMESTAMP_FIELDS);
   } catch (error) {
     getLogger().error(`Failed to get failed deletions: ${error.message}`);
     return [];

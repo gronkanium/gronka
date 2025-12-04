@@ -68,8 +68,8 @@ The bot automatically syncs stats after file processing (with debouncing), but y
 Add to crontab (`crontab -e`):
 
 ```bash
-# Sync stats to KV every 3 hours
-0 */3 * * * cd /path/to/gronka && npm run kv:sync-stats >> logs/kv-sync.log 2>&1
+# Sync stats to KV every 12 hours
+0 */12 * * * cd /path/to/gronka && npm run kv:sync-stats >> logs/kv-sync.log 2>&1
 ```
 
 **Option B: Systemd Timer (Linux)**
@@ -82,7 +82,7 @@ Description=Gronka KV Stats Sync Timer
 Requires=gronka-kv-sync.service
 
 [Timer]
-OnCalendar=*-*-* 00,03,06,09,12,15,18,21:00:00
+OnCalendar=*-*-* 00,12:00:00
 Persistent=true
 
 [Install]
@@ -183,7 +183,7 @@ When a user converts or downloads a file:
 
 ### Periodic Sync
 
-Every 3 hours (via cron/scheduler):
+Every 12 hours (via cron/scheduler):
 1. `sync-stats-to-kv.js` runs
 2. Fetches stats from database
 3. Compares with KV

@@ -484,7 +484,7 @@ export async function processConversion(
           updateOperationStatus(operationId, 'success', { fileSize: 0 });
           recordRateLimit(userId);
           await safeInteractionEditReply(interaction, {
-            content: formatR2UrlWithDisclaimer(gifUrl, r2Config),
+            content: formatR2UrlWithDisclaimer(gifUrl, r2Config, adminUser),
           });
           return;
         }
@@ -622,7 +622,7 @@ export async function processConversion(
         updateOperationStatus(operationId, 'success', { fileSize });
         recordRateLimit(userId);
         await safeInteractionEditReply(interaction, {
-          content: formatR2UrlWithDisclaimer(gifUrl, r2Config),
+          content: formatR2UrlWithDisclaimer(gifUrl, r2Config, adminUser),
         });
         await notifyCommandSuccess(username, 'convert', { operationId, userId });
         return;
@@ -1150,25 +1150,25 @@ export async function processConversion(
               await trackTemporaryUpload(urlHash, r2Key, null, adminUser);
             }
             await safeInteractionEditReply(interaction, {
-              content: formatR2UrlWithDisclaimer(r2Url, r2Config),
+              content: formatR2UrlWithDisclaimer(r2Url, r2Config, adminUser),
             });
           } else {
             // If R2 upload also fails, use the original gifUrl
             await safeInteractionEditReply(interaction, {
-              content: formatR2UrlWithDisclaimer(gifUrl, r2Config),
+              content: formatR2UrlWithDisclaimer(gifUrl, r2Config, adminUser),
             });
           }
         } catch (r2Error) {
           logger.error(`R2 fallback upload also failed: ${r2Error.message}`);
           // Last resort: use the original gifUrl
           await safeInteractionEditReply(interaction, {
-            content: formatR2UrlWithDisclaimer(gifUrl, r2Config),
+            content: formatR2UrlWithDisclaimer(gifUrl, r2Config, adminUser),
           });
         }
       }
     } else {
       await safeInteractionEditReply(interaction, {
-        content: formatR2UrlWithDisclaimer(gifUrl, r2Config),
+        content: formatR2UrlWithDisclaimer(gifUrl, r2Config, adminUser),
       });
     }
 

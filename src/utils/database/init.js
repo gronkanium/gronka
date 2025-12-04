@@ -43,11 +43,16 @@ export async function initPostgresDatabase() {
         try {
           await connection.unsafe(table.sql);
         } catch (error) {
-          // Handle duplicate type error that can occur in parallel test execution
-          // When a table is dropped but the type remains, recreate both
-          if (error.code === '42710' || error.message?.includes('pg_type_typname_nsp_index')) {
+          // Handle duplicate type/table errors that can occur in parallel test execution
+          // 42710: duplicate type error
+          // 42P07: duplicate table/relation error
+          if (
+            error.code === '42710' ||
+            error.code === '42P07' ||
+            error.message?.includes('pg_type_typname_nsp_index')
+          ) {
             console.warn(
-              `[Database Init] Type conflict for table "${table.name}", dropping table and type, then recreating...`
+              `[Database Init] Conflict for table "${table.name}" (${error.code || 'unknown'}), dropping and recreating...`
             );
             // Drop the table first, then the type, then recreate
             // PostgreSQL won't allow dropping a type that a table depends on

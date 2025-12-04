@@ -46,7 +46,7 @@ export async function ensureLogsTableSchema() {
     console.warn('[Test Helper] Logs table has incorrect schema, recreating...');
     await sql`DROP TABLE IF EXISTS logs CASCADE`;
     await sql`
-      CREATE TABLE logs (
+      CREATE TABLE IF NOT EXISTS logs (
         id SERIAL PRIMARY KEY,
         timestamp BIGINT NOT NULL,
         component TEXT NOT NULL,

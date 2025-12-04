@@ -65,10 +65,24 @@ export async function initPostgresDatabase() {
         }
       }
 
-      // Create indexes
+      // Create indexes with error handling for race conditions
       const indexes = getIndexDefinitions();
       for (const index of indexes) {
-        await connection.unsafe(index.sql);
+        try {
+          await connection.unsafe(index.sql);
+        } catch (error) {
+          // Handle index conflicts in parallel test execution
+          // 23505: unique constraint violation (race condition in pg_class catalog)
+          // 42P07: relation already exists (race condition despite IF NOT EXISTS)
+          if (error.code === '23505' || error.code === '42P07') {
+            // Index already exists or is being created, this is safe to ignore
+            console.warn(
+              `[Database Init] Index "${index.name}" already exists (${error.code}), skipping...`
+            );
+          } else {
+            throw error;
+          }
+        }
       }
 
       // Add file_size column if needed (for migration compatibility)

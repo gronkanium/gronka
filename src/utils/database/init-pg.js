@@ -34,10 +34,25 @@ export async function initPostgresDatabase() {
       const connection = await initPostgresConnection();
       setPostgresConnection(connection);
 
-      // Create tables
+      // Create tables with error handling for type conflicts
       const tables = getTableDefinitions();
       for (const table of tables) {
-        await connection.unsafe(table.sql);
+        try {
+          await connection.unsafe(table.sql);
+        } catch (error) {
+          // Handle duplicate type error that can occur in parallel test execution
+          // When a table is dropped but the type remains, recreate both
+          if (error.code === '42710' || error.message?.includes('pg_type_typname_nsp_index')) {
+            console.warn(
+              `[Database Init] Type conflict for table "${table.name}", dropping type and recreating...`
+            );
+            // Drop the conflicting type and retry table creation
+            await connection.unsafe(`DROP TYPE IF EXISTS ${table.name} CASCADE`);
+            await connection.unsafe(table.sql);
+          } else {
+            throw error;
+          }
+        }
       }
 
       // Create indexes

@@ -1,6 +1,6 @@
 # gronka
 
-a discord bot that downloads media from social media platforms and urls, then converts it to gifs. that's it.
+a discord bot that downloads media from social media platforms and urls, then converts it to gifs.
 
 ## what it does
 
@@ -27,7 +27,7 @@ convert downloaded media or files you upload to gifs:
 - video formats: mp4, mov, webm, avi, mkv
 - image formats: png, jpg, jpeg, webp, gif
 
-yes, it can convert gifs to gifs. don't ask why, just embrace it.
+gifs can also be converted to gifs with different quality settings or optimizations.
 
 ## getting started
 
@@ -63,11 +63,11 @@ yes, it can convert gifs to gifs. don't ask why, just embrace it.
 
 ## how it works
 
-there are three parts to this thing:
+gronka consists of three components:
 
 1. **discord bot** - the part that lives in your server, downloads media, and does the converting
 2. **r2 storage** - stores and serves videos, images, and gifs via cloudflare r2 (optional, falls back to local storage)
-3. **webui** (optional) - a simple dashboard if you want to see stats
+3. **webui** (optional) - a simple dashboard to view statistics
 
 ## license
 

@@ -371,29 +371,117 @@ async function downloadPhoto(photoUrl, index, isAdminUser = false, maxSize = Inf
 }
 
 /**
- * Download multiple photos from picker array
+ * Download a single video from a URL (used in picker responses)
+ * @param {string} videoUrl - Video URL to download
+ * @param {number} index - Index of the video (for filename)
+ * @param {boolean} isAdminUser - Whether the user is an admin (allows larger files)
+ * @param {number} maxSize - Maximum file size in bytes
+ * @returns {Promise<Object>} Object with buffer, contentType, size, and filename
+ */
+async function downloadVideo(videoUrl, index, isAdminUser = false, maxSize = Infinity) {
+  try {
+    const response = await axios.get(videoUrl, {
+      responseType: 'arraybuffer',
+      timeout: 300000, // 5 minute timeout for video downloads
+      maxContentLength: isAdminUser ? Infinity : maxSize,
+      maxRedirects: 5,
+      validateStatus: status => status >= 200 && status < 400,
+      headers: {
+        'User-Agent':
+          'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+        Accept: 'video/*,*/*',
+        Referer: videoUrl,
+      },
+    });
+
+    const buffer = Buffer.from(response.data);
+
+    // Validate buffer size (axios maxContentLength may not work if server doesn't send Content-Length header)
+    if (!isAdminUser && buffer.length > maxSize) {
+      throw new ValidationError(
+        `video ${index + 1} file is too large (max ${maxSize / (1024 * 1024)}mb)`
+      );
+    }
+
+    let contentType = response.headers['content-type'] || 'video/mp4';
+
+    // Extract filename from Content-Disposition if available
+    let filename = `video_${index + 1}.mp4`;
+    const contentDisposition = response.headers['content-disposition'] || '';
+    if (contentDisposition) {
+      const filenameMatch = contentDisposition.match(/filename[^;=\n]*=((['"]).*?\2|[^;\n]*)/);
+      if (filenameMatch && filenameMatch[1]) {
+        filename = filenameMatch[1].replace(/['"]/g, '');
+      }
+    } else {
+      // Try to infer extension from content type
+      const extMap = {
+        'video/mp4': '.mp4',
+        'video/quicktime': '.mov',
+        'video/webm': '.webm',
+        'video/x-msvideo': '.avi',
+        'video/x-matroska': '.mkv',
+      };
+      const ext = extMap[contentType] || '.mp4';
+      filename = `video_${index + 1}${ext}`;
+    }
+
+    logger.info(
+      `Downloaded video ${index + 1}: ${filename}, size: ${buffer.length} bytes, content-type: ${contentType}`
+    );
+
+    return {
+      buffer,
+      contentType,
+      size: buffer.length,
+      filename,
+    };
+  } catch (error) {
+    if (error.response?.status === 413 && !isAdminUser) {
+      throw new NetworkError(`Video ${index + 1} file is too large`);
+    }
+    if (error.response?.status === 404) {
+      throw new NetworkError(`Video ${index + 1} not found at URL`);
+    }
+    if (error.code === 'ECONNABORTED') {
+      throw new NetworkError(`Video ${index + 1} download timed out`);
+    }
+    throw new NetworkError(`Failed to download video ${index + 1}: ${error.message}`);
+  }
+}
+
+/**
+ * Download multiple media files (photos and videos) from picker array
  * @param {Array} pickerArray - Array of picker items from Cobalt response
  * @param {boolean} isAdminUser - Whether the user is an admin (allows larger files)
  * @param {number} maxSize - Maximum file size in bytes
  * @returns {Promise<Array>} Array of objects with buffer, contentType, size, and filename
  */
-async function downloadPhotosFromPicker(pickerArray, isAdminUser = false, maxSize = Infinity) {
-  // Filter for photo items only
-  const photoItems = pickerArray.filter(item => item.type === 'photo' && item.url);
-
-  if (photoItems.length === 0) {
-    throw new NetworkError('No photos found in picker response');
-  }
-
-  logger.info(`Found ${photoItems.length} photos in picker response`);
-
-  // Download all photos
-  const downloadPromises = photoItems.map((item, index) =>
-    downloadPhoto(item.url, index, isAdminUser, maxSize)
+async function downloadMediaFromPicker(pickerArray, isAdminUser = false, maxSize = Infinity) {
+  // Filter for photo and video items
+  const mediaItems = pickerArray.filter(
+    item => (item.type === 'photo' || item.type === 'video') && item.url
   );
 
+  if (mediaItems.length === 0) {
+    throw new NetworkError('No media files (photos or videos) found in picker response');
+  }
+
+  logger.info(
+    `Found ${mediaItems.length} media items in picker response (${mediaItems.filter(i => i.type === 'photo').length} photos, ${mediaItems.filter(i => i.type === 'video').length} videos)`
+  );
+
+  // Download all media items
+  const downloadPromises = mediaItems.map((item, index) => {
+    if (item.type === 'photo') {
+      return downloadPhoto(item.url, index, isAdminUser, maxSize);
+    } else {
+      return downloadVideo(item.url, index, isAdminUser, maxSize);
+    }
+  });
+
   const results = await Promise.all(downloadPromises);
-  logger.info(`Successfully downloaded ${results.length} photos from picker`);
+  logger.info(`Successfully downloaded ${results.length} media items from picker`);
 
   return results;
 }
@@ -444,14 +532,14 @@ async function downloadFromCobalt(
 ) {
   // Cobalt API returns different response formats depending on the platform
 
-  // Check for picker response (e.g., TikTok slideshows with photos)
+  // Check for picker response (e.g., Twitter with multiple photos/videos)
   if (
     cobaltResponse.status === 'picker' &&
     cobaltResponse.picker &&
     Array.isArray(cobaltResponse.picker)
   ) {
-    logger.info('Detected picker response with photos');
-    return await downloadPhotosFromPicker(cobaltResponse.picker, isAdminUser, maxSize);
+    logger.info('Detected picker response with media files');
+    return await downloadMediaFromPicker(cobaltResponse.picker, isAdminUser, maxSize);
   }
 
   // Check for direct video URL

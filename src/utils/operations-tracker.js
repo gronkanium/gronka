@@ -182,10 +182,22 @@ export function setUserMetricsBroadcastCallback(callback, port = null) {
  * @param {Object} operation - Operation object to broadcast
  */
 async function broadcastUpdate(operation) {
+  const isTestMode = process.env.NODE_ENV === 'test';
+
   // Try to find callback for this instance's port (same process)
   const currentPort = getInstancePort();
   const callback = broadcastCallbacks.get(currentPort);
   if (callback) {
+    // Safety check: prevent test operations from calling production port callbacks
+    // Production ports are 3000 (server) and 3001 (webui)
+    // Test ports are 3100 (server) and 3101 (webui)
+    if (isTestMode && (currentPort === 3000 || currentPort === 3001)) {
+      logger.debug(
+        `Skipping broadcast to production port ${currentPort} in test mode (test operations should use test ports 3100/3101)`
+      );
+      return;
+    }
+
     try {
       callback(operation);
     } catch (error) {
@@ -193,9 +205,6 @@ async function broadcastUpdate(operation) {
     }
   } else {
     // Prevent test operations from being sent to webui-server via HTTP POST
-    // Check if we're in test mode by checking NODE_ENV
-    const isTestMode = process.env.NODE_ENV === 'test';
-
     if (isTestMode) {
       // In test mode, skip HTTP POST to prevent test operations from reaching production webui-server
       logger.debug('Skipping HTTP POST for operation update in test mode');

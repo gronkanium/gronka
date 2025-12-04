@@ -32,6 +32,7 @@ import {
   uploadImageToR2,
   extractR2KeyFromUrl,
   formatR2UrlWithDisclaimer,
+  formatMultipleR2UrlsWithDisclaimer,
 } from '../utils/r2-storage.js';
 import { trackTemporaryUpload } from '../utils/storage.js';
 import { queueCobaltRequest, hashUrl } from '../utils/cobalt-queue.js';
@@ -163,7 +164,7 @@ async function processDownload(
           updateOperationStatus(operationId, 'success', { fileSize: 0 });
           recordRateLimit(userId);
           await safeInteractionEditReply(interaction, {
-            content: formatR2UrlWithDisclaimer(fileUrl, r2Config),
+            content: formatR2UrlWithDisclaimer(fileUrl, r2Config, adminUser),
           });
           await notifyCommandSuccess(username, 'download', { operationId, userId });
           return;
@@ -251,7 +252,7 @@ async function processDownload(
           updateOperationStatus(operationId, 'success', { fileSize: 0 });
           recordRateLimit(userId);
           await safeInteractionEditReply(interaction, {
-            content: formatR2UrlWithDisclaimer(fileUrl, r2Config),
+            content: formatR2UrlWithDisclaimer(fileUrl, r2Config, adminUser),
           });
           await notifyCommandSuccess(username, 'download', { operationId, userId });
           return;
@@ -260,76 +261,262 @@ async function processDownload(
       throw error;
     }
 
-    // Check if we got multiple photos (array) or single file
+    // Check if we got multiple media files (array) or single file
     if (Array.isArray(fileData)) {
-      // Handle multiple photos from picker
-      logger.info(`Processing ${fileData.length} photos from picker`);
-      const photoResults = [];
+      // Handle multiple media files from picker (photos and videos)
+      logger.info(`Processing ${fileData.length} media files from picker`);
+      const mediaResults = [];
       let totalSize = 0;
 
+      // First pass: calculate total size
       for (let i = 0; i < fileData.length; i++) {
-        const photo = fileData[i];
-        const hash = generateHash(photo.buffer);
-        const ext = path.extname(photo.filename).toLowerCase() || '.jpg';
-        const _fileType = detectFileType(ext, photo.contentType);
+        const media = fileData[i];
+        totalSize += media.size;
+      }
 
-        // Check if photo already exists
-        const exists = await imageExists(hash, ext, GIF_STORAGE_PATH);
+      const DISCORD_SIZE_LIMIT = 8 * 1024 * 1024; // 8MB
+
+      // Determine which files should go to Discord vs R2 (greedy packing)
+      const shouldUploadToDiscord = [];
+      if (totalSize < DISCORD_SIZE_LIMIT) {
+        // All files fit in Discord
+        logger.info(
+          `Total size: ${(totalSize / (1024 * 1024)).toFixed(2)}MB, sending all files as Discord attachments`
+        );
+        for (let i = 0; i < fileData.length; i++) {
+          shouldUploadToDiscord[i] = true;
+        }
+      } else {
+        // Greedily pack files up to 8MB for Discord, rest go to R2
+        let accumulatedSize = 0;
+        let discordCount = 0;
+        for (let i = 0; i < fileData.length; i++) {
+          if (accumulatedSize + fileData[i].size < DISCORD_SIZE_LIMIT) {
+            shouldUploadToDiscord[i] = true;
+            accumulatedSize += fileData[i].size;
+            discordCount++;
+          } else {
+            shouldUploadToDiscord[i] = false;
+          }
+        }
+        logger.info(
+          `Total size: ${(totalSize / (1024 * 1024)).toFixed(2)}MB, packing ${discordCount} file(s) for Discord (${(accumulatedSize / (1024 * 1024)).toFixed(2)}MB), ${fileData.length - discordCount} file(s) for R2`
+        );
+      }
+
+      // Second pass: save all files
+      for (let i = 0; i < fileData.length; i++) {
+        const media = fileData[i];
+        const hash = generateHash(media.buffer);
+        const ext = path.extname(media.filename).toLowerCase() || '.jpg';
+        const fileType = detectFileType(ext, media.contentType);
+
         let filePath;
         let fileUrl;
+        let exists = false;
+        let method = 'discord';
 
-        if (exists) {
-          filePath = getImagePath(hash, ext, GIF_STORAGE_PATH);
-          if (filePath.startsWith('http://') || filePath.startsWith('https://')) {
-            fileUrl = filePath;
-          } else {
-            const filename = path.basename(filePath);
-            fileUrl = `${CDN_BASE_URL.replace('/gifs', '/images')}/${filename}`;
+        // Check if file already exists based on type
+        if (fileType === 'video') {
+          exists = await videoExists(hash, ext, GIF_STORAGE_PATH);
+          if (exists) {
+            filePath = getVideoPath(hash, ext, GIF_STORAGE_PATH);
           }
-          logger.info(`Photo ${i + 1} already exists (hash: ${hash})`);
-        } else {
-          // Save the photo
-          logger.info(`Saving photo ${i + 1} (hash: ${hash}, extension: ${ext})`);
-          const saveResult = await saveImage(
-            photo.buffer,
-            hash,
-            ext,
-            GIF_STORAGE_PATH,
-            buildMetadata()
-          );
-          filePath = saveResult.url;
-
-          if (filePath.startsWith('http://') || filePath.startsWith('https://')) {
-            fileUrl = filePath;
-          } else {
-            const filename = path.basename(filePath);
-            fileUrl = `${CDN_BASE_URL.replace('/gifs', '/images')}/${filename}`;
+        } else if (fileType === 'image') {
+          exists = await imageExists(hash, ext, GIF_STORAGE_PATH);
+          if (exists) {
+            filePath = getImagePath(hash, ext, GIF_STORAGE_PATH);
           }
-          logger.info(`Successfully saved photo ${i + 1} (hash: ${hash})`);
+        } else if (fileType === 'gif') {
+          exists = await gifExists(hash, GIF_STORAGE_PATH);
+          if (exists) {
+            filePath = getGifPath(hash, GIF_STORAGE_PATH);
+          }
         }
 
-        photoResults.push({ url: fileUrl, size: photo.size });
-        totalSize += photo.size;
+        if (exists && filePath) {
+          // Determine method based on whether it's a URL (R2) or local path (discord)
+          method =
+            filePath.startsWith('http://') || filePath.startsWith('https://') ? 'r2' : 'discord';
+
+          if (method === 'r2') {
+            fileUrl = filePath;
+          } else {
+            const filename = path.basename(filePath);
+            const cdnPath =
+              fileType === 'video' ? '/videos' : fileType === 'image' ? '/images' : '/gifs';
+            fileUrl = `${CDN_BASE_URL.replace('/gifs', cdnPath)}/${filename}`;
+          }
+          logger.info(
+            `Media ${i + 1} already exists (hash: ${hash}, type: ${fileType}, method: ${method})`
+          );
+        } else {
+          // Save the file based on type
+          logger.info(
+            `Saving media ${i + 1} (hash: ${hash}, extension: ${ext}, type: ${fileType})`
+          );
+          let saveResult;
+
+          if (fileType === 'video') {
+            saveResult = await saveVideo(
+              media.buffer,
+              hash,
+              ext,
+              GIF_STORAGE_PATH,
+              buildMetadata()
+            );
+          } else if (fileType === 'image') {
+            saveResult = await saveImage(
+              media.buffer,
+              hash,
+              ext,
+              GIF_STORAGE_PATH,
+              buildMetadata()
+            );
+          } else if (fileType === 'gif') {
+            saveResult = await saveGif(media.buffer, hash, GIF_STORAGE_PATH, buildMetadata());
+          }
+
+          filePath = saveResult.url;
+          method = saveResult.method;
+
+          if (filePath.startsWith('http://') || filePath.startsWith('https://')) {
+            fileUrl = filePath;
+          } else {
+            const filename = path.basename(filePath);
+            const cdnPath =
+              fileType === 'video' ? '/videos' : fileType === 'image' ? '/images' : '/gifs';
+            fileUrl = `${CDN_BASE_URL.replace('/gifs', cdnPath)}/${filename}`;
+          }
+          logger.info(
+            `Successfully saved media ${i + 1} (hash: ${hash}, type: ${fileType}, method: ${method})`
+          );
+        }
+
+        mediaResults.push({
+          url: fileUrl,
+          size: media.size,
+          buffer: media.buffer,
+          filename: media.filename,
+          hash: hash,
+          ext: ext,
+          fileType: fileType,
+          method: method,
+        });
+      }
+
+      // Third pass: re-upload to R2 if file was saved locally but should be on R2
+      for (let i = 0; i < mediaResults.length; i++) {
+        if (!shouldUploadToDiscord[i] && mediaResults[i].method === 'discord') {
+          // File was saved locally but should be on R2, re-upload
+          const result = mediaResults[i];
+          logger.info(
+            `Re-uploading media ${i + 1} to R2 (hash: ${result.hash}, type: ${result.fileType})`
+          );
+
+          let r2Url;
+          if (result.fileType === 'video') {
+            r2Url = await uploadVideoToR2(
+              result.buffer,
+              result.hash,
+              result.ext,
+              r2Config,
+              buildMetadata()
+            );
+          } else if (result.fileType === 'image') {
+            r2Url = await uploadImageToR2(
+              result.buffer,
+              result.hash,
+              result.ext,
+              r2Config,
+              buildMetadata()
+            );
+          } else if (result.fileType === 'gif') {
+            r2Url = await uploadGifToR2(result.buffer, result.hash, r2Config, buildMetadata());
+          }
+
+          if (r2Url) {
+            mediaResults[i].url = r2Url;
+            mediaResults[i].method = 'r2';
+            logger.info(`Successfully re-uploaded media ${i + 1} to R2: ${r2Url}`);
+          }
+        }
       }
 
       // Update operation to success
       updateOperationStatus(operationId, 'success', {
         fileSize: totalSize,
-        photoCount: photoResults.length,
+        mediaCount: mediaResults.length,
       });
-
-      // Build reply with all photo URLs
-      const photoUrls = photoResults.map(p => p.url).join('\n');
-      const replyContent = photoUrls;
-
-      // Note: For multiple photos, we don't record the URL in processed_urls
-      // because each photo has its own URL, and we can't track which photo came from which picker selection
-      // The file hash deduplication handles this case
 
       recordRateLimit(userId);
-      await safeInteractionEditReply(interaction, {
-        content: replyContent,
+
+      // Separate files by intended upload method
+      const discordFiles = mediaResults.filter((r, i) => shouldUploadToDiscord[i]);
+      const r2Files = mediaResults.filter((r, i) => !shouldUploadToDiscord[i]);
+
+      // Prepare Discord attachments
+      const attachments = discordFiles.map(result => {
+        const safeHash = result.hash.replace(/[^a-f0-9]/gi, '');
+        const filename = `${safeHash}${result.ext}`;
+        return new AttachmentBuilder(result.buffer, { name: filename });
       });
+
+      // Prepare R2 URLs with single disclaimer
+      const r2Urls = r2Files.map(r => r.url);
+      const content = formatMultipleR2UrlsWithDisclaimer(r2Urls, r2Config, adminUser);
+
+      // Send single message with both attachments and URLs
+      logger.info(
+        `Sending message with ${attachments.length} Discord attachment(s) and ${r2Urls.length} R2 URL(s)`
+      );
+      const message = await safeInteractionEditReply(interaction, {
+        files: attachments.length > 0 ? attachments : undefined,
+        content: content || undefined,
+      });
+
+      // Capture Discord attachment URLs for database tracking
+      if (message && message.attachments && message.attachments.size > 0) {
+        const attachmentArray = Array.from(message.attachments.values());
+        for (let i = 0; i < discordFiles.length && i < attachmentArray.length; i++) {
+          const discordAttachment = attachmentArray[i];
+          if (discordAttachment && discordAttachment.url) {
+            await insertProcessedUrl(
+              urlHash,
+              discordFiles[i].hash,
+              discordFiles[i].fileType,
+              discordFiles[i].ext,
+              discordAttachment.url,
+              Date.now(),
+              userId,
+              discordFiles[i].size
+            );
+          }
+        }
+      }
+
+      // Record R2 uploads in database
+      for (const result of r2Files) {
+        await insertProcessedUrl(
+          urlHash,
+          result.hash,
+          result.fileType,
+          result.ext,
+          result.url,
+          Date.now(),
+          userId,
+          result.size
+        );
+
+        // Track temporary upload
+        const r2Key = extractR2KeyFromUrl(result.url, r2Config);
+        if (r2Key) {
+          await trackTemporaryUpload(urlHash, r2Key, null, adminUser);
+        }
+      }
+
+      // Send success notification
+      await notifyCommandSuccess(username, 'download', { operationId, userId });
       return;
     }
 
@@ -420,7 +607,7 @@ async function processDownload(
       updateOperationStatus(operationId, 'success', { fileSize: existingSize });
       recordRateLimit(userId);
       await safeInteractionEditReply(interaction, {
-        content: formatR2UrlWithDisclaimer(fileUrl, r2Config),
+        content: formatR2UrlWithDisclaimer(fileUrl, r2Config, adminUser),
       });
 
       // Send success notification
@@ -577,7 +764,7 @@ async function processDownload(
           updateOperationStatus(operationId, 'success', { fileSize: existingSize });
           recordRateLimit(userId);
           await safeInteractionEditReply(interaction, {
-            content: formatR2UrlWithDisclaimer(fileUrl, r2Config),
+            content: formatR2UrlWithDisclaimer(fileUrl, r2Config, adminUser),
           });
 
           // Send success notification
@@ -736,7 +923,7 @@ async function processDownload(
               updateOperationStatus(operationId, 'success', { fileSize: existingSize });
               recordRateLimit(userId);
               await safeInteractionEditReply(interaction, {
-                content: formatR2UrlWithDisclaimer(fileUrl, r2Config),
+                content: formatR2UrlWithDisclaimer(fileUrl, r2Config, adminUser),
               });
 
               // Send success notification
@@ -906,7 +1093,7 @@ async function processDownload(
           updateOperationStatus(operationId, 'success', { fileSize: existingSize });
           recordRateLimit(userId);
           await safeInteractionEditReply(interaction, {
-            content: formatR2UrlWithDisclaimer(fileUrl, r2Config),
+            content: formatR2UrlWithDisclaimer(fileUrl, r2Config, adminUser),
           });
 
           // Send success notification
@@ -1080,25 +1267,25 @@ async function processDownload(
                 await trackTemporaryUpload(urlHash, r2Key, null, adminUser);
               }
               await safeInteractionEditReply(interaction, {
-                content: formatR2UrlWithDisclaimer(r2Url, r2Config),
+                content: formatR2UrlWithDisclaimer(r2Url, r2Config, adminUser),
               });
             } else {
               // If R2 upload also fails, use the original fileUrl
               await safeInteractionEditReply(interaction, {
-                content: formatR2UrlWithDisclaimer(fileUrl, r2Config),
+                content: formatR2UrlWithDisclaimer(fileUrl, r2Config, adminUser),
               });
             }
           } catch (r2Error) {
             logger.error(`R2 fallback upload also failed: ${r2Error.message}`);
             // Last resort: use the original fileUrl
             await safeInteractionEditReply(interaction, {
-              content: formatR2UrlWithDisclaimer(fileUrl, r2Config),
+              content: formatR2UrlWithDisclaimer(fileUrl, r2Config, adminUser),
             });
           }
         }
       } else {
         await safeInteractionEditReply(interaction, {
-          content: formatR2UrlWithDisclaimer(fileUrl, r2Config),
+          content: formatR2UrlWithDisclaimer(fileUrl, r2Config, adminUser),
         });
       }
 

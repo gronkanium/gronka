@@ -16,6 +16,7 @@ export default [
       'src/public/assets/**',
       '**/*.svelte',
       'vendor/**',
+      '_site/**',
     ],
   },
   eslint.configs.recommended,

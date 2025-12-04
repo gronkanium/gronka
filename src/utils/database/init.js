@@ -47,9 +47,11 @@ export async function initPostgresDatabase() {
           // When a table is dropped but the type remains, recreate both
           if (error.code === '42710' || error.message?.includes('pg_type_typname_nsp_index')) {
             console.warn(
-              `[Database Init] Type conflict for table "${table.name}", dropping type and recreating...`
+              `[Database Init] Type conflict for table "${table.name}", dropping table and type, then recreating...`
             );
-            // Drop the conflicting type and retry table creation
+            // Drop the table first, then the type, then recreate
+            // PostgreSQL won't allow dropping a type that a table depends on
+            await connection.unsafe(`DROP TABLE IF EXISTS ${table.name} CASCADE`);
             await connection.unsafe(`DROP TYPE IF EXISTS ${table.name} CASCADE`);
             await connection.unsafe(table.sql);
           } else {

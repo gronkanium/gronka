@@ -4,10 +4,10 @@
 ![Discord.js](https://img.shields.io/badge/Discord.js-14.14-5865F2?logo=discord&logoColor=white)
 ![Docker](https://img.shields.io/badge/Docker-Ready-2496ED?logo=docker&logoColor=white)
 [![Add to Discord](https://img.shields.io/badge/Add_to_Discord-5865F2?logo=discord&logoColor=white)](https://discord.com/oauth2/authorize?client_id=1439329052002357599)
-[![Docs](https://img.shields.io/badge/read-docs-blue)](https://github.com/thedorekaczynski/gronka/wiki)
+[![Docs](https://img.shields.io/badge/read-docs-blue)](https://github.com/gronkanium/gronka/wiki)
 [![FFmpeg](https://img.shields.io/badge/FFmpeg-007808?logo=ffmpeg&logoColor=white)](https://ffmpeg.org/)
-[![GitHub](https://img.shields.io/badge/GitHub-181717?logo=github&logoColor=white)](https://github.com/thedorekaczynski/gronka)
-[![wakatime](https://wakatime.com/badge/github/thedorekaczynski/gronka.svg)](https://wakatime.com/badge/github/thedorekaczynski/gronka)
+[![GitHub](https://img.shields.io/badge/GitHub-181717?logo=github&logoColor=white)](https://github.com/gronkanium/gronka)
+[![wakatime](https://wakatime.com/badge/github/gronkanium/gronka.svg)](https://wakatime.com/badge/github/gronkanium/gronka)
 
 a discord bot that downloads media from social media platforms and urls, then converts it to gifs.
 
@@ -53,7 +53,7 @@ gronka consists of three components:
 you'll need node.js 20+ and ffmpeg installed. then:
 
 ```bash
-git clone https://github.com/thedorekaczynski/gronka.git
+git clone https://github.com/gronkanium/gronka.git
 cd gronka
 npm install
 cp .env.example .env

@@ -59,7 +59,7 @@ npm run bot:register:test # register test bot commands
 npm run bot:register:prod # register prod bot commands
 ```
 
-each bot uses a separate database file (`gronka-test.db` and `gronka-prod.db`) and can have independent configuration using prefixed environment variables (e.g., `TEST_ADMIN_USER_IDS`, `PROD_CDN_BASE_URL`). see the [configuration documentation](https://github.com/thedorekaczynski/gronka/wiki/Configuration) for full details on prefixed variables.
+each bot uses a separate database file (`gronka-test.db` and `gronka-prod.db`) and can have independent configuration using prefixed environment variables (e.g., `TEST_ADMIN_USER_IDS`, `PROD_CDN_BASE_URL`). see the [configuration documentation](https://github.com/gronkanium/gronka/wiki/Configuration) for full details on prefixed variables.
 
 ### code quality checks
 
@@ -98,7 +98,7 @@ tests run automatically in CI/CD pipelines and must pass before merging code.
 gronka uses two git remotes:
 
 - **gitlab** (`git@192.168.0.20:thedorekaczynski/gronka.git`) - primary development remote with CI/CD
-- **origin** (`https://github.com/thedorekaczynski/gronka.git`) - github mirror
+- **origin** (`https://github.com/gronkanium/gronka.git`) - github mirror
 
 always specify the remote explicitly when pushing:
 

@@ -1,9 +1,9 @@
 blank_issues_enabled: false
 contact_links:
   - name: documentation
-    url: https://thedorekaczynski.github.io/gronka/docs/
+    url: https://gronkanium.github.io/gronka/docs/
     about: check the documentation for installation guides, configuration, and usage
   - name: wiki
-    url: https://github.com/thedorekaczynski/gronka/wiki
+    url: https://github.com/gronkanium/gronka/wiki
     about: browse the wiki for additional guides and information
 

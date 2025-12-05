@@ -1,6 +1,6 @@
 {
   "name": "gronka",
-  "version": "0.14.1",
+  "version": "0.14.2",
   "description": "Discord bot that converts video attachments to GIF format",
   "main": "src/bot.js",
   "type": "module",
@@ -80,7 +80,7 @@
     "video",
     "converter"
   ],
-  "author": "thedorekaczynski",
+  "author": "gronkanium",
   "license": "MIT",
   "dependencies": {
     "@aws-sdk/client-s3": "^3.943.0",

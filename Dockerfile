@@ -1,53 +1,26 @@
-FROM node:20-slim
+# Stage 1: Builder - Install dependencies and build application
+FROM node:20-slim AS builder
 
-# Cache strategy: Base image and system packages are cached unless base image changes
-# Install FFmpeg, Docker CLI, and required dependencies
-# Also install build tools for potential native npm modules
+# Install build tools for native npm modules
 RUN apt-get update && apt-get install -y \
-    ffmpeg \
-    ca-certificates \
-    curl \
-    gnupg \
-    lsb-release \
     python3 \
     make \
     g++ \
-    && install -m 0755 -d /etc/apt/keyrings \
-    && curl -fsSL https://download.docker.com/linux/debian/gpg | gpg --dearmor -o /etc/apt/keyrings/docker.gpg \
-    && chmod a+r /etc/apt/keyrings/docker.gpg \
-    && echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.gpg] https://download.docker.com/linux/debian $(lsb_release -cs) stable" | tee /etc/apt/sources.list.d/docker.list > /dev/null \
-    && apt-get update \
-    && apt-get install -y docker-ce-cli \
     && rm -rf /var/lib/apt/lists/*
 
 # Set working directory
 WORKDIR /app
 
-# Cache strategy: Copy package files before source code to maximize cache hits
-# Dependencies layer is cached unless package.json or package-lock.json changes
-# Copy package files
+# Copy package files for dependency installation
 COPY package*.json ./
 
 # Install all dependencies (including devDependencies for building webui)
 RUN npm ci
 
-# Cache strategy: vite.config.js is cached unless it changes
 # Copy vite config (needed for webui build)
 COPY vite.config.js ./
 
-# Build timestamp to force invalidation of COPY layer on rebuilds
-# This ensures source code changes are always picked up, especially on Windows
-# Cache strategy: BUILD_TIMESTAMP can be used to force cache invalidation when needed
-ARG BUILD_TIMESTAMP
-ENV BUILD_TIMESTAMP=${BUILD_TIMESTAMP}
-
-# Git commit hash for version tracking
-ARG GIT_COMMIT
-ENV GIT_COMMIT=${GIT_COMMIT}
-
-# Cache strategy: Source code changes frequently, so cache typically breaks here
-# Subsequent layers (build:webui, etc.) will rebuild when src/ changes
-# Copy application code
+# Copy application source code
 COPY src/ ./src/
 
 # Copy scripts directory (needed for build-webui.js)
@@ -56,27 +29,51 @@ COPY scripts/ ./scripts/
 # Build webui frontend
 RUN npm run build:webui
 
-# Remove devDependencies to reduce image size (keep only production deps)
+# Remove devDependencies to keep only production dependencies
 RUN npm prune --production
 
-# Remove build tools to reduce image size (they're no longer needed after native modules are built)
-RUN apt-get remove -y python3 make g++ && \
-    apt-get autoremove -y && \
-    rm -rf /var/lib/apt/lists/*
+# Stage 2: Runtime - Minimal production image
+FROM node:20-slim AS runtime
+
+# Copy Docker CLI binary from official Docker image (lightweight alternative to docker-ce-cli)
+COPY --from=docker:cli /usr/local/bin/docker /usr/local/bin/docker
+
+# Install only runtime dependencies: FFmpeg and ca-certificates
+RUN apt-get update && apt-get install -y \
+    ffmpeg \
+    ca-certificates \
+    && rm -rf /var/lib/apt/lists/*
+
+# Set working directory
+WORKDIR /app
+
+# Build arguments for metadata
+ARG BUILD_TIMESTAMP
+ARG GIT_COMMIT
+
+# Set environment variables
+ENV BUILD_TIMESTAMP=${BUILD_TIMESTAMP}
+ENV GIT_COMMIT=${GIT_COMMIT}
+ENV NODE_ENV=production
+ENV SERVER_PORT=3000
+
+# Copy production dependencies from builder
+COPY --from=builder /app/node_modules ./node_modules
+
+# Copy application code and built webui from builder
+COPY --from=builder /app/src ./src
+COPY --from=builder /app/scripts ./scripts
+COPY --from=builder /app/package*.json ./
 
 # Create necessary directories
 RUN mkdir -p data-prod/gifs data-test/gifs temp
 
-# Expose server port
-EXPOSE 3000
-
-# Set environment variables
-ENV NODE_ENV=production
-ENV SERVER_PORT=3000
-
 # Copy entrypoint script
 COPY scripts/docker-entrypoint.sh /usr/local/bin/
 RUN chmod +x /usr/local/bin/docker-entrypoint.sh
+
+# Expose server ports
+EXPOSE 3000
 
 # Health check
 HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \

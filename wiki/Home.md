@@ -57,9 +57,9 @@ gifs can also be converted to gifs with different quality settings or optimizati
 
 ## resources
 
-- [github repository](https://github.com/thedorekaczynski/gronka)
-- [issues](https://github.com/thedorekaczynski/gronka/issues)
-- [changelog](https://github.com/thedorekaczynski/gronka/blob/main/CHANGELOG.md)
+- [github repository](https://github.com/gronkanium/gronka)
+- [issues](https://github.com/gronkanium/gronka/issues)
+- [changelog](https://github.com/gronkanium/gronka/blob/main/CHANGELOG.md)
 
 ## how it works
 

@@ -7,7 +7,7 @@ import { dirname, join } from 'path';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
-const repoOwner = 'thedorekaczynski';
+const repoOwner = 'gronkanium';
 const repoName = 'gronka';
 const outputFile = join(__dirname, '..', 'code-scanning-issues.json');
 

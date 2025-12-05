@@ -13,7 +13,7 @@ const __dirname = path.dirname(__filename);
 const projectRoot = path.resolve(__dirname, '..');
 const wikiDir = path.join(projectRoot, 'wiki');
 
-const GITHUB_WIKI_URL = 'https://github.com/thedorekaczynski/gronka.wiki.git';
+const GITHUB_WIKI_URL = 'https://github.com/gronkanium/gronka.wiki.git';
 
 /**
  * Check if git is available

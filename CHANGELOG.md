@@ -7,6 +7,19 @@ and this project adheres (attempts) to [Semantic Versioning](https://semver.org/
 
 ## [Unreleased]
 
+## [0.14.2] - 2025-12-05
+
+### Changed
+
+- optimized Dockerfile with multi-stage build to reduce image size and build time
+  - separated builder stage (with build tools) from runtime stage (production-only dependencies)
+  - replaced docker-ce-cli package installation with lightweight Docker CLI binary copy from official Docker image
+  - eliminated unnecessary Docker repository setup (gnupg, lsb-release, curl for repo key)
+  - build tools (python3, make, g++) no longer included in final runtime image
+  - devDependencies automatically excluded through stage separation
+  - improved layer caching strategy for faster rebuilds
+  - no functional changes, fully backward compatible
+
 ## [0.14.0] - 2025-12-03
 
 ### Removed
@@ -896,17 +909,17 @@ and this project adheres (attempts) to [Semantic Versioning](https://semver.org/
   - Pre-commit validation
   - Docker buildx setup for cache support
 
-[0.13.0]: https://github.com/thedorekaczynski/gronka/compare/v0.13.0-prerelease...v0.13.0
-[0.12.5]: https://github.com/thedorekaczynski/gronka/compare/v0.12.4...v0.12.5
-[0.12.4]: https://github.com/thedorekaczynski/gronka/compare/v0.12.3-beta...v0.12.4
-[0.12.3-beta]: https://github.com/thedorekaczynski/gronka/compare/v0.12.2-beta...v0.12.3-beta
-[0.12.2-beta]: https://github.com/thedorekaczynski/gronka/compare/v0.12.1-beta...v0.12.2-beta
-[0.12.1-beta]: https://github.com/thedorekaczynski/gronka/compare/v0.12.0-prerelease...v0.12.1-beta
-[0.12.0-prerelease]: https://github.com/thedorekaczynski/gronka/compare/v0.11.4-prerelease...v0.12.0-prerelease
-[0.11.3-prerelease]: https://github.com/thedorekaczynski/gronka/compare/v0.11.2...v0.11.3-prerelease
-[0.11.2]: https://github.com/thedorekaczynski/gronka/compare/v0.11.1-prerelease...v0.11.2
-[0.11.2-prerelease]: https://github.com/thedorekaczynski/gronka/compare/v0.11.1-prerelease...v0.11.2-prerelease
-[0.11.1-prerelease]: https://github.com/thedorekaczynski/gronka/compare/v0.11.0-prerelease...v0.11.1-prerelease
-[0.11.0-prerelease]: https://github.com/thedorekaczynski/gronka/compare/v0.10.0...v0.11.0-prerelease
-[0.10.0]: https://github.com/thedorekaczynski/gronka/compare/v0.9.0...v0.10.0
-[0.9.0]: https://github.com/thedorekaczynski/gronka/releases/tag/v0.9.0
+[0.13.0]: https://github.com/gronkanium/gronka/compare/v0.13.0-prerelease...v0.13.0
+[0.12.5]: https://github.com/gronkanium/gronka/compare/v0.12.4...v0.12.5
+[0.12.4]: https://github.com/gronkanium/gronka/compare/v0.12.3-beta...v0.12.4
+[0.12.3-beta]: https://github.com/gronkanium/gronka/compare/v0.12.2-beta...v0.12.3-beta
+[0.12.2-beta]: https://github.com/gronkanium/gronka/compare/v0.12.1-beta...v0.12.2-beta
+[0.12.1-beta]: https://github.com/gronkanium/gronka/compare/v0.12.0-prerelease...v0.12.1-beta
+[0.12.0-prerelease]: https://github.com/gronkanium/gronka/compare/v0.11.4-prerelease...v0.12.0-prerelease
+[0.11.3-prerelease]: https://github.com/gronkanium/gronka/compare/v0.11.2...v0.11.3-prerelease
+[0.11.2]: https://github.com/gronkanium/gronka/compare/v0.11.1-prerelease...v0.11.2
+[0.11.2-prerelease]: https://github.com/gronkanium/gronka/compare/v0.11.1-prerelease...v0.11.2-prerelease
+[0.11.1-prerelease]: https://github.com/gronkanium/gronka/compare/v0.11.0-prerelease...v0.11.1-prerelease
+[0.11.0-prerelease]: https://github.com/gronkanium/gronka/compare/v0.10.0...v0.11.0-prerelease
+[0.10.0]: https://github.com/gronkanium/gronka/compare/v0.9.0...v0.10.0
+[0.9.0]: https://github.com/gronkanium/gronka/releases/tag/v0.9.0

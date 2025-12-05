@@ -32,15 +32,15 @@ describe('fetch-code-scanning-issues.js', () => {
 
   describe('API endpoint construction', () => {
     test('constructs correct API endpoint', () => {
-      const repoOwner = 'thedorekaczynski';
+      const repoOwner = 'gronkanium';
       const repoName = 'gronka';
       const apiEndpoint = `/repos/${repoOwner}/${repoName}/code-scanning/alerts`;
 
-      assert.strictEqual(apiEndpoint, '/repos/thedorekaczynski/gronka/code-scanning/alerts');
+      assert.strictEqual(apiEndpoint, '/repos/gronkanium/gronka/code-scanning/alerts');
     });
 
     test('constructs endpoint with query parameters', () => {
-      const apiEndpoint = '/repos/thedorekaczynski/gronka/code-scanning/alerts';
+      const apiEndpoint = '/repos/gronkanium/gronka/code-scanning/alerts';
       const queryParams = 'state=open&per_page=100&page=1';
       const fullEndpoint = `${apiEndpoint}?${queryParams}`;
 

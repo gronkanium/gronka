@@ -116,7 +116,7 @@ your use of these services is subject to their respective terms.
 
 - you keep ownership of content you submit
 - by using the service, you grant us permission to store, process, and serve your files
-- gronka's source code is available under the MIT License at [github.com/thedorekaczynski/gronka](https://github.com/thedorekaczynski/gronka)
+- gronka's source code is available under the MIT License at [github.com/gronkanium/gronka](https://github.com/gronkanium/gronka)
 
 ## Termination
 
@@ -153,7 +153,7 @@ these terms are governed by applicable laws. if you have disputes or issues, ple
 for questions or issues:
 
 - **email**: gronkasupport@proton.me
-- **github**: [https://github.com/thedorekaczynski/gronka](https://github.com/thedorekaczynski/gronka)
+- **github**: [https://github.com/gronkanium/gronka](https://github.com/gronkanium/gronka)
 
 ---
 

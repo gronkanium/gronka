@@ -7,7 +7,6 @@
 [![Docs](https://img.shields.io/badge/read-docs-blue)](https://github.com/gronkanium/gronka/wiki)
 [![FFmpeg](https://img.shields.io/badge/FFmpeg-007808?logo=ffmpeg&logoColor=white)](https://ffmpeg.org/)
 [![GitHub](https://img.shields.io/badge/GitHub-181717?logo=github&logoColor=white)](https://github.com/gronkanium/gronka)
-[![wakatime](https://wakatime.com/badge/github/gronkanium/gronka.svg)](https://wakatime.com/badge/github/gronkanium/gronka)
 
 a discord bot that downloads media from social media platforms and urls, then converts it to gifs.
 

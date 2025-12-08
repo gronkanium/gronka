@@ -38,10 +38,13 @@ FROM node:20-slim AS runtime
 # Copy Docker CLI binary from official Docker image (lightweight alternative to docker-ce-cli)
 COPY --from=docker:cli /usr/local/bin/docker /usr/local/bin/docker
 
-# Install only runtime dependencies: FFmpeg and ca-certificates
+# Install runtime dependencies: FFmpeg, ca-certificates, and yt-dlp
 RUN apt-get update && apt-get install -y \
     ffmpeg \
     ca-certificates \
+    python3 \
+    python3-pip \
+    && pip3 install --break-system-packages yt-dlp \
     && rm -rf /var/lib/apt/lists/*
 
 # Set working directory

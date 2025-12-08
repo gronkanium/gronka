@@ -169,6 +169,11 @@ function getBotConfig() {
     rateLimitCooldown: parseIntEnv('RATE_LIMIT', 10, 1) * 1000, // Default 10 seconds, configurable via RATE_LIMIT env var (in seconds)
     cobaltApiUrl: getStringEnv('COBALT_API_URL', 'http://cobalt:9000'),
     cobaltEnabled: getStringEnv('COBALT_ENABLED', 'true').toLowerCase() === 'true',
+    ytdlpEnabled: getStringEnv('YTDLP_ENABLED', 'true').toLowerCase() === 'true',
+    ytdlpQuality: getStringEnv(
+      'YTDLP_QUALITY',
+      'bestvideo[height<=1080][ext=mp4]+bestaudio[ext=m4a]/best[height<=1080][ext=mp4]/best[height<=1080]'
+    ),
     statsCacheTtl: parseIntEnv('STATS_CACHE_TTL', 300000, 0), // 5 minutes default, 0 to disable
     ntfyTopic: getStringEnv('NTFY_TOPIC', ''),
     ntfyEnabled: getStringEnv('NTFY_TOPIC', '') !== '',

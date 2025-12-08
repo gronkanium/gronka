@@ -5,6 +5,7 @@ import { createLogger } from '../utils/logger.js';
 import { botConfig } from '../utils/config.js';
 import { validateUrl } from '../utils/validation.js';
 import { isSocialMediaUrl, downloadFromSocialMedia, RateLimitError } from '../utils/cobalt.js';
+import { isYouTubeUrl, downloadFromYouTube, YtdlpRateLimitError } from '../utils/ytdlp.js';
 import { checkRateLimit, isAdmin, recordRateLimit } from '../utils/rate-limit.js';
 import { generateHash } from '../utils/file-downloader.js';
 import {
@@ -57,27 +58,9 @@ const {
   maxVideoSize: MAX_VIDEO_SIZE,
   cobaltApiUrl: COBALT_API_URL,
   cobaltEnabled: COBALT_ENABLED,
+  ytdlpEnabled: YTDLP_ENABLED,
+  ytdlpQuality: YTDLP_QUALITY,
 } = botConfig;
-
-/**
- * Check if a URL is from YouTube
- * @param {string} url - URL to check
- * @returns {boolean} True if URL is from YouTube
- */
-function isYouTubeUrl(url) {
-  try {
-    const urlObj = new URL(url);
-    const hostname = urlObj.hostname.toLowerCase().replace(/^www\./, '');
-    return (
-      hostname === 'youtube.com' ||
-      hostname === 'youtu.be' ||
-      hostname === 'm.youtube.com' ||
-      hostname.endsWith('.youtube.com')
-    );
-  } catch {
-    return false;
-  }
-}
 
 /**
  * Process download from URL
@@ -197,36 +180,71 @@ async function processDownload(
       metadata: { url },
     });
 
-    logger.info(`Downloading file from Cobalt: ${url}`);
-    logOperationStep(operationId, 'download_start', 'running', {
-      message: 'Starting download from Cobalt',
-      metadata: { url, maxSize: adminUser ? 'unlimited' : MAX_VIDEO_SIZE },
-    });
-
     const maxSize = adminUser ? Infinity : MAX_VIDEO_SIZE;
+    const isYouTube = isYouTubeUrl(url);
 
-    // Wrap Cobalt download in queue to handle concurrency and deduplication
-    // If time parameters are provided, skip URL cache check (we need to download to trim)
+    // Determine download method based on URL type
+    let downloadMethod;
+    if (isYouTube && YTDLP_ENABLED) {
+      downloadMethod = 'ytdlp';
+      logger.info(`Downloading from YouTube via yt-dlp: ${url}`);
+      logOperationStep(operationId, 'download_start', 'running', {
+        message: 'Starting download from YouTube via yt-dlp',
+        metadata: { url, maxSize: adminUser ? 'unlimited' : MAX_VIDEO_SIZE },
+      });
+    } else {
+      downloadMethod = 'cobalt';
+      logger.info(`Downloading file from Cobalt: ${url}`);
+      logOperationStep(operationId, 'download_start', 'running', {
+        message: 'Starting download from Cobalt',
+        metadata: { url, maxSize: adminUser ? 'unlimited' : MAX_VIDEO_SIZE },
+      });
+    }
+
+    // Download based on method
     let fileData;
     try {
-      fileData = await queueCobaltRequest(
-        url,
-        async () => {
-          return await downloadFromSocialMedia(COBALT_API_URL, url, adminUser, maxSize);
-        },
-        {
-          skipCache: startTime !== null || duration !== null,
-          expectedFileType: 'video',
-        }
-      );
-      logOperationStep(operationId, 'download_complete', 'success', {
-        message: 'File downloaded successfully',
-        metadata: {
+      if (downloadMethod === 'ytdlp') {
+        // Download from YouTube using yt-dlp
+        fileData = await downloadFromYouTube(
           url,
-          fileCount: Array.isArray(fileData) ? fileData.length : 1,
-        },
-      });
+          adminUser,
+          maxSize,
+          adminUser ? null : YTDLP_QUALITY
+        );
+        logOperationStep(operationId, 'download_complete', 'success', {
+          message: 'File downloaded successfully via yt-dlp',
+          metadata: {
+            url,
+            fileCount: 1,
+          },
+        });
+      } else {
+        // Wrap Cobalt download in queue to handle concurrency and deduplication
+        // If time parameters are provided, skip URL cache check (we need to download to trim)
+        fileData = await queueCobaltRequest(
+          url,
+          async () => {
+            return await downloadFromSocialMedia(COBALT_API_URL, url, adminUser, maxSize);
+          },
+          {
+            skipCache: startTime !== null || duration !== null,
+            expectedFileType: 'video',
+          }
+        );
+        logOperationStep(operationId, 'download_complete', 'success', {
+          message: 'File downloaded successfully',
+          metadata: {
+            url,
+            fileCount: Array.isArray(fileData) ? fileData.length : 1,
+          },
+        });
+      }
     } catch (error) {
+      // Handle yt-dlp rate limit error
+      if (error instanceof YtdlpRateLimitError) {
+        throw error;
+      }
       // Handle cached URL error (only when no time parameters - should not happen if skipCache is true)
       if (error.message && error.message.startsWith('URL_ALREADY_PROCESSED:')) {
         // Extract URL properly (URL may contain colons, so use regex to extract everything after the prefix)
@@ -1427,18 +1445,30 @@ export async function handleDownloadContextMenuCommand(interaction) {
     return;
   }
 
-  // Check if URL is from YouTube (blacklisted)
-  if (isYouTubeUrl(url)) {
-    logger.warn(`User ${userId} attempted to download from YouTube (blacklisted)`);
+  // Check if URL is from YouTube
+  const isYouTube = isYouTubeUrl(url);
+
+  // Check if URL is from YouTube but yt-dlp is disabled
+  if (isYouTube && !YTDLP_ENABLED) {
+    logger.warn(`User ${userId} attempted to download from YouTube (yt-dlp disabled)`);
+    const errorMessage = 'youtube downloads are disabled.';
+    createFailedOperation('download', userId, username, errorMessage, 'ytdlp_disabled', {
+      originalUrl: url,
+      commandSource: 'context-menu',
+    });
     await safeInteractionReply(interaction, {
-      content: 'youtube downloads are disabled.',
+      content: errorMessage,
       flags: MessageFlags.Ephemeral,
     });
     return;
   }
 
-  // Check if Cobalt is enabled
-  if (!COBALT_ENABLED) {
+  // Check if downloader is available for the URL type
+  if (isYouTube) {
+    // YouTube requires yt-dlp (already checked above that it's enabled)
+    logger.info(`YouTube URL detected, will use yt-dlp for download`);
+  } else if (!COBALT_ENABLED) {
+    // Non-YouTube URLs require Cobalt
     const errorMessage = 'cobalt is not enabled.';
     createFailedOperation('download', userId, username, errorMessage, 'cobalt_disabled', {
       originalUrl: url,
@@ -1450,10 +1480,8 @@ export async function handleDownloadContextMenuCommand(interaction) {
     });
     await notifyCommandFailure(username, 'download', { userId, error: errorMessage });
     return;
-  }
-
-  // Check if URL is from social media
-  if (!isSocialMediaUrl(url)) {
+  } else if (!isSocialMediaUrl(url)) {
+    // Non-YouTube URLs must be from supported social media platforms
     const errorMessage = 'url is not from a supported social media platform.';
     createFailedOperation('download', userId, username, errorMessage, 'invalid_social_media_url', {
       originalUrl: url,
@@ -1583,11 +1611,14 @@ export async function handleDownloadCommand(interaction) {
     return;
   }
 
-  // Check if URL is from YouTube (blacklisted)
-  if (isYouTubeUrl(url)) {
-    logger.warn(`User ${userId} attempted to download from YouTube (blacklisted)`);
+  // Check if URL is from YouTube
+  const isYouTube = isYouTubeUrl(url);
+
+  // Check if URL is from YouTube but yt-dlp is disabled
+  if (isYouTube && !YTDLP_ENABLED) {
+    logger.warn(`User ${userId} attempted to download from YouTube (yt-dlp disabled)`);
     const errorMessage = 'youtube downloads are disabled.';
-    createFailedOperation('download', userId, username, errorMessage, 'youtube_blacklist', {
+    createFailedOperation('download', userId, username, errorMessage, 'ytdlp_disabled', {
       originalUrl: url,
       commandSource: 'slash',
     });
@@ -1598,8 +1629,12 @@ export async function handleDownloadCommand(interaction) {
     return;
   }
 
-  // Check if Cobalt is enabled and URL is from social media
-  if (!COBALT_ENABLED) {
+  // Check if downloader is available for the URL type
+  if (isYouTube) {
+    // YouTube requires yt-dlp (already checked above that it's enabled)
+    logger.info(`YouTube URL detected, will use yt-dlp for download`);
+  } else if (!COBALT_ENABLED) {
+    // Non-YouTube URLs require Cobalt
     const errorMessage = 'cobalt is not enabled. please enable it to use the download command.';
     createFailedOperation('download', userId, username, errorMessage, 'cobalt_disabled', {
       originalUrl: url,
@@ -1611,9 +1646,8 @@ export async function handleDownloadCommand(interaction) {
     });
     await notifyCommandFailure(username, 'download', { userId, error: errorMessage });
     return;
-  }
-
-  if (!isSocialMediaUrl(url)) {
+  } else if (!isSocialMediaUrl(url)) {
+    // Non-YouTube URLs must be from supported social media platforms
     const errorMessage = 'url is not from a supported social media platform.';
     createFailedOperation('download', userId, username, errorMessage, 'invalid_social_media_url', {
       originalUrl: url,

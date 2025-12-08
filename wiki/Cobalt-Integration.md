@@ -1,14 +1,17 @@
-gronka uses cobalt.tools, a self-hosted api for downloading media from social platforms. when enabled, the `/download` command automatically detects social media urls and downloads the media directly to your storage.
+gronka uses multiple downloaders for social media content. cobalt.tools handles most platforms, while yt-dlp is used specifically for youtube downloads (due to better reliability and youtube's anti-bot measures).
 
 ## supported platforms
 
+### via cobalt
 - twitter/x
 - tiktok
 - instagram
-- youtube
 - reddit
 - facebook
 - threads
+
+### via yt-dlp
+- youtube (youtube.com, youtu.be, m.youtube.com)
 
 ## setup
 
@@ -46,6 +49,31 @@ COBALT_ENABLED=true
 
 if running cobalt on a different host or port, adjust `COBALT_API_URL` accordingly.
 
+### yt-dlp configuration (for youtube)
+
+yt-dlp is bundled in the docker image and enabled by default. configure with these environment variables:
+
+```env
+YTDLP_ENABLED=true
+YTDLP_QUALITY=bestvideo[height<=1080][ext=mp4]+bestaudio[ext=m4a]/best[height<=1080][ext=mp4]/best[height<=1080]
+```
+
+- `YTDLP_ENABLED`: enable/disable youtube downloads (default: true)
+- `YTDLP_QUALITY`: yt-dlp format string for video quality (default: 1080p max)
+
+admin users automatically get higher quality (no height restriction).
+
+for local development without docker, install yt-dlp:
+
+```bash
+# linux/macos
+pip install yt-dlp
+
+# or with package manager
+brew install yt-dlp  # macos
+apt install yt-dlp   # debian/ubuntu
+```
+
 ### step 3: test the integration
 
 1. start cobalt and gronka
@@ -56,9 +84,13 @@ if running cobalt on a different host or port, adjust `COBALT_API_URL` according
 
 when you use `/download` with a social media url:
 
-1. the bot detects the url is from a supported platform
-2. it sends a request to your cobalt api instance
-3. cobalt downloads the media from the platform
+1. the bot detects which platform the url is from
+2. for youtube urls:
+   - yt-dlp downloads the video directly
+   - supports various quality options
+3. for other platforms:
+   - the bot sends a request to your cobalt api instance
+   - cobalt downloads the media from the platform
 4. the bot receives the media and stores it in your configured storage (r2 or local)
 5. you receive a link to the stored file
 
@@ -105,6 +137,27 @@ the bot tracks processed urls to avoid re-downloading the same content:
 - use deferred downloads for large files
 - check your network connection
 - verify cobalt has sufficient resources
+
+### yt-dlp issues (youtube)
+
+- **"yt-dlp is not installed"**: ensure yt-dlp is installed in your environment
+  - docker: rebuild the image to get the latest version
+  - local: `pip install --upgrade yt-dlp`
+- **rate limit errors**: youtube may temporarily block requests
+  - wait a few minutes before retrying
+  - consider using cookies for authentication (advanced)
+- **video unavailable**: the video may be private, age-restricted, or deleted
+- **format errors**: try adjusting `YTDLP_QUALITY` to a simpler format like `best`
+
+to test yt-dlp directly:
+
+```bash
+# in docker
+docker exec gronka yt-dlp --version
+
+# locally
+yt-dlp --version
+```
 
 ### unsupported platforms
 

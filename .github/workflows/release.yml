@@ -53,9 +53,9 @@ jobs:
           VERSION=${{ steps.get_version.outputs.version }}
 
           # Try to get changelog if it exists
+
           if [ -f "CHANGELOG.md" ]; then
-            # Extract section for this version (basic implementation)
-            NOTES=$(awk "/^## \[?$VERSION\]?/,/^## /" CHANGELOG.md | head -n -1 || echo "See CHANGELOG.md for details")
+            NOTES=$(node scripts/extract-release-notes.js CHANGELOG.md "$VERSION")
           else
             NOTES="Release $TAG_NAME"
           fi

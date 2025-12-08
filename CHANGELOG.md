@@ -7,6 +7,22 @@ and this project adheres (attempts) to [Semantic Versioning](https://semver.org/
 
 ## [Unreleased]
 
+## [0.15.1] - 2025-12-08
+
+### Added
+
+- Added unit tests for `yt-dlp` integration and cleanup utilities
+- Added configurable `DISCORD_SIZE_LIMIT` to configuration
+- Added `scripts/fix-docker-credentials.sh` script for Docker credential management
+
+### Changed
+
+- Updated CodeQL actions to v4
+- Enforced consistent LF line endings via `.gitattributes`
+- Applied Prettier formatting to codebase (78 files)
+- Fixed executable permissions for shell scripts
+- Updated documentation with yt-dlp prerequisites
+
 ## [0.15.0] - 2025-12-08
 
 ### Added

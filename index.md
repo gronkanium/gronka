@@ -47,7 +47,7 @@ gronka consists of three components:
 
 ### running it locally
 
-you'll need node.js 20+ and ffmpeg installed. then:
+you'll need node.js 20+, ffmpeg, and yt-dlp installed. then:
 
 ```bash
 git clone https://github.com/thedorekaczynski/gronka.git
@@ -174,6 +174,7 @@ gronka uses a mix of open-source tools and services.
 - ffmpeg - video and image conversion
 - fluent-ffmpeg - node wrapper for ffmpeg commands
 - cobalt api - social media platform downloads
+- yt-dlp - youtube downloader
 - giflossy - gif compression and optimization
 
 **storage and database:**

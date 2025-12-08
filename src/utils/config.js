@@ -177,6 +177,7 @@ function getBotConfig() {
     statsCacheTtl: parseIntEnv('STATS_CACHE_TTL', 300000, 0), // 5 minutes default, 0 to disable
     ntfyTopic: getStringEnv('NTFY_TOPIC', ''),
     ntfyEnabled: getStringEnv('NTFY_TOPIC', '') !== '',
+    discordSizeLimit: parseIntEnv('DISCORD_SIZE_LIMIT', 8 * 1024 * 1024, 1), // 8MB default, Discord's attachment limit
   };
 
   // Validate CDN_BASE_URL format

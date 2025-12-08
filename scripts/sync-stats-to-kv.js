@@ -1,5 +1,6 @@
 import { fileURLToPath } from 'url';
 import path from 'path';
+import fs from 'fs';
 import dotenv from 'dotenv';
 import axios from 'axios';
 
@@ -7,14 +8,26 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const projectRoot = path.resolve(__dirname, '..');
 
-// Load environment variables
-dotenv.config({ path: path.join(projectRoot, '.env') });
+// Load environment variables from .env file if it exists
+// Inside Docker, .env may not be mounted, so we rely on environment variables
+// that docker-compose.yml sets (which reads from host .env)
+const envPath = path.join(projectRoot, '.env');
+try {
+  if (fs.existsSync(envPath)) {
+    dotenv.config({ path: envPath });
+  }
+} catch (_error) {
+  // .env file doesn't exist or can't be read, that's okay
+  // Environment variables may be set by docker-compose.yml or system
+}
 
 // FORCE PRODUCTION MODE - this script must ALWAYS use production database
 // This ensures public website stats show real production data, never test data
 process.env.FORCE_PRODUCTION_MODE = 'true';
 
 // Map PROD_ prefixed environment variables to standard names
+// Inside Docker, variables may already be set as standard names (from docker-compose.yml)
+// So we only map PROD_* if standard name is not already set
 const envPrefix = 'PROD_';
 const prefixMappings = [
   'POSTGRES_HOST',
@@ -31,7 +44,9 @@ const prefixMappings = [
 
 for (const key of prefixMappings) {
   const prefixedKey = `${envPrefix}${key}`;
-  if (process.env[prefixedKey] !== undefined) {
+  // Only map PROD_* to standard name if standard name is not already set
+  // This allows docker-compose.yml to set standard names directly
+  if (process.env[prefixedKey] !== undefined && process.env[key] === undefined) {
     process.env[key] = process.env[prefixedKey];
   }
 }

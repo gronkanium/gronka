@@ -115,3 +115,4 @@ _data/stats.json
 
 scripts/fix-docker-credentials.sh
 AGENTS.md
+.agent/

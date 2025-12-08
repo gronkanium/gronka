@@ -112,3 +112,5 @@ MIGRATION.md
 
 # Generated stats file (created during build)
 _data/stats.json
+
+scripts/fix-docker-credentials.sh

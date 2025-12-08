@@ -7,6 +7,23 @@ and this project adheres (attempts) to [Semantic Versioning](https://semver.org/
 
 ## [Unreleased]
 
+## [0.15.0] - 2025-12-08
+
+### Added
+
+- yt-dlp integration for YouTube downloads
+  - Added new utility module `src/utils/ytdlp.js` for YouTube video downloads via yt-dlp
+  - Added `YTDLP_ENABLED` and `YTDLP_QUALITY` configuration options
+  - YouTube downloads now use yt-dlp instead of being blacklisted
+  - Supports quality selection (1080p max for regular users, unlimited for admins)
+  - Added yt-dlp installation to Dockerfile runtime stage
+
+### Changed
+
+- YouTube URLs now use yt-dlp for downloads instead of being blacklisted
+- Updated download command to route YouTube URLs to yt-dlp
+- Updated wiki documentation to reflect yt-dlp integration for YouTube
+
 ## [0.14.3] - 2025-12-06
 
 ### Added
@@ -960,6 +977,7 @@ and this project adheres (attempts) to [Semantic Versioning](https://semver.org/
   - Pre-commit validation
   - Docker buildx setup for cache support
 
+[0.15.0]: https://github.com/gronkanium/gronka/compare/v0.14.3...v0.15.0
 [0.13.0]: https://github.com/gronkanium/gronka/compare/v0.13.0-prerelease...v0.13.0
 [0.12.5]: https://github.com/gronkanium/gronka/compare/v0.12.4...v0.12.5
 [0.12.4]: https://github.com/gronkanium/gronka/compare/v0.12.3-beta...v0.12.4

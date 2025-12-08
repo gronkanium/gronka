@@ -476,6 +476,12 @@ export function getVideoPath(hash, extension, storagePath) {
   const safeExt = extension.replace(/[^a-zA-Z0-9.]/gi, '');
   // Remove leading dot if present and add it back
   const ext = safeExt.startsWith('.') ? safeExt : `.${safeExt}`;
+  // Check if basePath ends with 'gifs' - if so, go up one level to avoid gifs/videos nesting
+  const normalizedBasePath = basePath.replace(/\\/g, '/');
+  if (normalizedBasePath.endsWith('/gifs') || normalizedBasePath.endsWith('\\gifs')) {
+    // Storage path ends with 'gifs', go up one directory level
+    return path.join(path.dirname(basePath), 'videos', `${safeHash}${ext}`);
+  }
   return path.join(basePath, 'videos', `${safeHash}${ext}`);
 }
 
@@ -592,6 +598,12 @@ export function getImagePath(hash, extension, storagePath) {
   const safeExt = extension.replace(/[^a-zA-Z0-9.]/gi, '');
   // Remove leading dot if present and add it back
   const ext = safeExt.startsWith('.') ? safeExt : `.${safeExt}`;
+  // Check if basePath ends with 'gifs' - if so, go up one level to avoid gifs/images nesting
+  const normalizedBasePath = basePath.replace(/\\/g, '/');
+  if (normalizedBasePath.endsWith('/gifs') || normalizedBasePath.endsWith('\\gifs')) {
+    // Storage path ends with 'gifs', go up one directory level
+    return path.join(path.dirname(basePath), 'images', `${safeHash}${ext}`);
+  }
   return path.join(basePath, 'images', `${safeHash}${ext}`);
 }
 

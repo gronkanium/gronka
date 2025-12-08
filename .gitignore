@@ -114,3 +114,4 @@ MIGRATION.md
 _data/stats.json
 
 scripts/fix-docker-credentials.sh
+AGENTS.md

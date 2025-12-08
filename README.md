@@ -49,7 +49,7 @@ gronka consists of three components:
 
 ### running it locally
 
-you'll need node.js 20+ and ffmpeg installed. then:
+you'll need node.js 20+, ffmpeg, and yt-dlp installed. then:
 
 ```bash
 git clone https://github.com/gronkanium/gronka.git

@@ -63,9 +63,16 @@ function isRunningInDocker() {
  * @returns {string} Default host ('postgres' in Docker, 'localhost' otherwise)
  */
 function getDefaultPostgresHost() {
-  // Always prioritize auto-detection to support both Docker and local/WSL environments
-  // This ensures PROD_POSTGRES_HOST=postgres (meant for Docker) works correctly
-  // when production scripts are run locally on WSL
+  // When FORCE_PRODUCTION_MODE is set, respect POSTGRES_HOST if explicitly provided
+  // This allows production scripts to connect to the correct host even when running locally
+  if (process.env.FORCE_PRODUCTION_MODE === 'true' && process.env.POSTGRES_HOST) {
+    console.log(
+      `[PostgreSQL] Using explicit POSTGRES_HOST=${process.env.POSTGRES_HOST} (FORCE_PRODUCTION_MODE=true)`
+    );
+    return process.env.POSTGRES_HOST;
+  }
+
+  // Otherwise, use auto-detection to support both Docker and local/WSL environments
   const autoDetectedHost = isRunningInDocker() ? 'postgres' : 'localhost';
 
   // Log if POSTGRES_HOST is set but being overridden by auto-detection

@@ -7,6 +7,33 @@ and this project adheres (attempts) to [Semantic Versioning](https://semver.org/
 
 ## [Unreleased]
 
+## [0.14.3] - 2025-12-06
+
+### Added
+
+- Docker support for Cloudflare KV stats sync
+  - Added Cloudflare environment variables to docker-compose.yml (API_TOKEN, ACCOUNT_ID, KV_NAMESPACE_ID, PAGES_PROJECT_NAME)
+  - Added `kv:sync-stats:docker` npm script for running KV sync from within Docker containers
+  - Improved sync-stats-to-kv.js to handle Docker environment where .env file may not be mounted
+  - Enhanced PROD\_\* variable mapping to work with docker-compose.yml environment variable structure
+
+### Changed
+
+- Improved PostgreSQL connection handling for production scripts
+  - Enhanced `getDefaultPostgresHost()` to respect explicit POSTGRES_HOST when FORCE_PRODUCTION_MODE is set
+  - Allows production scripts (like KV sync) to connect to correct host even when running locally
+  - Better logging for host resolution decisions
+
+### Dependencies
+
+- Security updates (from dependabot)
+  - `@aws-sdk/client-s3`: `3.940.0` → `3.946.0`
+  - `@aws-sdk/lib-storage`: `3.940.0` → `3.946.0`
+  - `prettier`: `3.7.3` → `3.7.4`
+  - `svelte`: `5.45.2` → `5.45.6`
+  - `lucide-svelte`: `0.555.0` → `0.556.0`
+  - `vite`: `7.2.6` → `7.2.7`
+
 ## [0.14.2] - 2025-12-05
 
 ### Changed
@@ -19,6 +46,30 @@ and this project adheres (attempts) to [Semantic Versioning](https://semver.org/
   - devDependencies automatically excluded through stage separation
   - improved layer caching strategy for faster rebuilds
   - no functional changes, fully backward compatible
+
+### Fixed
+
+- Fixed PostgreSQL initialization race conditions in parallel test execution
+  - Added error handling for index conflicts (error 23505) during database initialization
+  - Added error handling for table conflicts (error 42P07) when tables already exist
+  - Fixed order of operations: drop tables before dropping types to prevent dependency errors
+  - Made database initialization fully idempotent for parallel test runs
+  - Fixed GitHub Actions test jobs by adding missing WEBUI_PORT=3101 environment variable
+
+### Changed
+
+- Migrated GitHub repository to gronkanium organization
+  - Updated all GitHub references from thedorekaczynski to gronkanium organization
+  - Updated package.json author field, README badges, and documentation links
+  - Updated CHANGELOG version comparison links and Jekyll site references
+  - GitLab remote remains unchanged as primary development remote
+
+### Fixed
+
+- Fixed Jekyll site routing and documentation structure
+  - Removed \_redirects and \_headers files to fix redirect loop on privacy/terms pages
+  - Removed docs from Jekyll site, using GitHub wiki exclusively for documentation
+  - Added Cloudflare Pages routing configuration for /docs/ path
 
 ## [0.14.0] - 2025-12-03
 

@@ -7,6 +7,11 @@ and this project adheres (attempts) to [Semantic Versioning](https://semver.org/
 
 ## [Unreleased]
 
+### Fixed
+
+- Fixed release notes generation workflow to correctly extract notes from CHANGELOG.md
+- Added `scripts/extract-release-notes.js` for reliable changelog parsing
+
 ## [0.15.1] - 2025-12-08
 
 ### Added

@@ -60,7 +60,28 @@ const {
   cobaltEnabled: COBALT_ENABLED,
   ytdlpEnabled: YTDLP_ENABLED,
   ytdlpQuality: YTDLP_QUALITY,
+  discordSizeLimit: DISCORD_SIZE_LIMIT,
 } = botConfig;
+
+/**
+ * Clean up temporary files and directory
+ * @param {Object} tmpDir - tmp directory object with removeCallback
+ * @param {string[]} files - Array of file paths to delete
+ */
+async function cleanupTempFiles(tmpDir, files = []) {
+  for (const file of files) {
+    try {
+      await fs.unlink(file);
+    } catch {
+      // File may not exist, ignore
+    }
+  }
+  try {
+    tmpDir.removeCallback();
+  } catch (cleanupError) {
+    logger.warn(`Failed to clean up temp directory: ${cleanupError.message}`);
+  }
+}
 
 /**
  * Process download from URL
@@ -291,8 +312,6 @@ async function processDownload(
         const media = fileData[i];
         totalSize += media.size;
       }
-
-      const DISCORD_SIZE_LIMIT = 8 * 1024 * 1024; // 8MB
 
       // Determine which files should go to Discord vs R2 (greedy packing)
       const shouldUploadToDiscord = [];
@@ -681,13 +700,7 @@ async function processDownload(
                 `Trimmed GIF already exists (hash: ${hash}) for user ${userId} with requested parameters (startTime: ${startTime}, duration: ${duration})`
               );
               // Clean up temp files since we're using existing file
-              try {
-                await fs.unlink(inputGifPath);
-                await fs.unlink(outputGifPath);
-                tmpDir.removeCallback();
-              } catch (cleanupError) {
-                logger.warn(`Failed to clean up temp files: ${cleanupError.message}`);
-              }
+              await cleanupTempFiles(tmpDir, [inputGifPath, outputGifPath]);
             } else {
               // Use trimmed buffer for saving
               finalBuffer = trimmedBuffer;
@@ -705,13 +718,7 @@ async function processDownload(
             });
 
             // Clean up temp files
-            try {
-              await fs.unlink(inputGifPath);
-              await fs.unlink(outputGifPath);
-              tmpDir.removeCallback();
-            } catch (cleanupError) {
-              logger.warn(`Failed to clean up temp files: ${cleanupError.message}`);
-            }
+            await cleanupTempFiles(tmpDir, [inputGifPath, outputGifPath]);
           } catch (trimError) {
             logOperationStep(operationId, 'gif_trim', 'error', {
               message: 'GIF trimming failed',
@@ -722,13 +729,7 @@ async function processDownload(
             logger.info(`Falling back to saving original GIF without trimming`);
             finalBuffer = fileData.buffer;
             // Clean up temp files on error
-            try {
-              await fs.unlink(inputGifPath);
-              await fs.unlink(outputGifPath);
-              tmpDir.removeCallback();
-            } catch (cleanupError) {
-              logger.warn(`Failed to clean up temp files: ${cleanupError.message}`);
-            }
+            await cleanupTempFiles(tmpDir, [inputGifPath, outputGifPath]);
           }
         } else {
           finalBuffer = fileData.buffer;
@@ -843,13 +844,7 @@ async function processDownload(
                 `Trimmed GIF already exists (hash: ${hash}) for user ${userId} with requested parameters (startTime: ${startTime}, duration: ${duration})`
               );
               // Clean up temp files since we're using existing file
-              try {
-                await fs.unlink(inputGifPath);
-                await fs.unlink(outputGifPath);
-                tmpDir.removeCallback();
-              } catch (cleanupError) {
-                logger.warn(`Failed to clean up temp files: ${cleanupError.message}`);
-              }
+              await cleanupTempFiles(tmpDir, [inputGifPath, outputGifPath]);
             } else {
               // Use trimmed buffer for saving
               finalBuffer = trimmedBuffer;
@@ -867,13 +862,7 @@ async function processDownload(
             });
 
             // Clean up temp files
-            try {
-              await fs.unlink(inputGifPath);
-              await fs.unlink(outputGifPath);
-              tmpDir.removeCallback();
-            } catch (cleanupError) {
-              logger.warn(`Failed to clean up temp files: ${cleanupError.message}`);
-            }
+            await cleanupTempFiles(tmpDir, [inputGifPath, outputGifPath]);
           } catch (trimError) {
             logOperationStep(operationId, 'gif_trim', 'error', {
               message: 'GIF trimming failed',
@@ -884,13 +873,7 @@ async function processDownload(
             logger.info(`Falling back to saving original file without trimming`);
             finalBuffer = fileData.buffer;
             // Clean up temp files on error
-            try {
-              await fs.unlink(inputGifPath);
-              await fs.unlink(outputGifPath);
-              tmpDir.removeCallback();
-            } catch (cleanupError) {
-              logger.warn(`Failed to clean up temp files: ${cleanupError.message}`);
-            }
+            await cleanupTempFiles(tmpDir, [inputGifPath, outputGifPath]);
           }
 
           // If we trimmed as GIF (even though detected as video), handle it as GIF
@@ -1008,13 +991,7 @@ async function processDownload(
                 `Trimmed video already exists (hash: ${hash}) for user ${userId} with requested parameters (startTime: ${startTime}, duration: ${duration})`
               );
               // Clean up temp files since we're using existing file
-              try {
-                await fs.unlink(inputVideoPath);
-                await fs.unlink(outputVideoPath);
-                tmpDir.removeCallback();
-              } catch (cleanupError) {
-                logger.warn(`Failed to clean up temp files: ${cleanupError.message}`);
-              }
+              await cleanupTempFiles(tmpDir, [inputVideoPath, outputVideoPath]);
             } else {
               // Use trimmed buffer for saving
               finalBuffer = trimmedBuffer;
@@ -1032,13 +1009,7 @@ async function processDownload(
             });
 
             // Clean up temp files
-            try {
-              await fs.unlink(inputVideoPath);
-              await fs.unlink(outputVideoPath);
-              tmpDir.removeCallback();
-            } catch (cleanupError) {
-              logger.warn(`Failed to clean up temp files: ${cleanupError.message}`);
-            }
+            await cleanupTempFiles(tmpDir, [inputVideoPath, outputVideoPath]);
           } catch (trimError) {
             logOperationStep(operationId, 'video_trim', 'error', {
               message: 'Video trimming failed',
@@ -1049,13 +1020,7 @@ async function processDownload(
             logger.info(`Falling back to saving original video without trimming`);
             finalBuffer = fileData.buffer;
             // Clean up temp files on error
-            try {
-              await fs.unlink(inputVideoPath);
-              await fs.unlink(outputVideoPath);
-              tmpDir.removeCallback();
-            } catch (cleanupError) {
-              logger.warn(`Failed to clean up temp files: ${cleanupError.message}`);
-            }
+            await cleanupTempFiles(tmpDir, [inputVideoPath, outputVideoPath]);
           }
         } else {
           finalBuffer = fileData.buffer;

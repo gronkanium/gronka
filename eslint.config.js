@@ -17,6 +17,8 @@ export default [
       '**/*.svelte',
       'vendor/**',
       '_site/**',
+      '.env',
+      '.env.*',
     ],
   },
   eslint.configs.recommended,

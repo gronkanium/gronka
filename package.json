@@ -1,6 +1,6 @@
 {
   "name": "gronka",
-  "version": "0.14.2",
+  "version": "0.14.3",
   "description": "Discord bot that converts video attachments to GIF format",
   "main": "src/bot.js",
   "type": "module",
@@ -63,6 +63,7 @@
     "jekyll:build": "bundle exec jekyll build",
     "jekyll:update-stats": "node scripts/update-jekyll-stats.js",
     "kv:sync-stats": "node scripts/sync-stats-to-kv.js",
+    "kv:sync-stats:docker": "docker compose exec app npm run kv:sync-stats",
     "kv:fetch-stats": "node scripts/fetch-stats-from-kv.js",
     "validate:cloudflare": "node scripts/validate-cloudflare-config.js",
     "test:cloudflare": "node scripts/test-cloudflare-kv.js",

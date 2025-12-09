@@ -1,7 +1,7 @@
 {
   "name": "gronka",
   "version": "0.15.1",
-  "description": "Discord bot that converts video attachments to GIF format",
+  "description": "discord bot that downloads, optimizes, and converts media from social media",
   "main": "src/bot.js",
   "type": "module",
   "scripts": {
@@ -43,6 +43,7 @@
     "upload:404": "node scripts/upload-404-to-r2.js",
     "user:stats": "node scripts/user-stats.js",
     "fix:stuck-ops": "node scripts/fix-stuck-operations.js",
+    "fix:creds": "bash scripts/fix-docker-credentials.sh",
     "fetch:security": "node scripts/fetch-code-scanning-issues.js",
     "reset:clean-slate": "node scripts/reset-clean-slate.js",
     "fix:deps": "npm install",

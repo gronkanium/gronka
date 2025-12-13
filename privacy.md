@@ -24,7 +24,7 @@ When you use gronka, we may receive the following information from Discord:
 
 ### Automatically Collected Data
 
-- **File Hashes**: SHA-256 hashes of processed files for deduplication purposes
+- **File Hashes**: BLAKE3 hashes of processed files for deduplication purposes
 - **Usage Statistics**: User-specific metrics about bot usage (number of conversions, file sizes, command usage, etc.)
 - **Error Logs**: Technical information when errors occur (does not include personal data)
 
@@ -43,7 +43,7 @@ We use the collected information to:
 ### File Storage
 
 - Converted GIF files are stored on our servers
-- Files are identified by SHA-256 hash
+- Files are identified by BLAKE3 hash
 - Files may be linked to user information through processing records for operational purposes
 - Files may be cached indefinitely for CDN performance
 

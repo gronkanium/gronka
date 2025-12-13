@@ -438,9 +438,9 @@ export async function parseTenorUrl(url) {
 }
 
 /**
- * Generate SHA-256 hash of buffer
+ * Generate BLAKE3 hash of buffer
  * @param {Buffer} buffer - Data buffer
- * @returns {string} SHA-256 hash in hex format
+ * @returns {string} BLAKE3 hash in hex format
  */
 export function generateHash(buffer) {
   return hashBytesHex(buffer);

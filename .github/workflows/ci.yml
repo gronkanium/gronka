@@ -126,7 +126,7 @@ jobs:
         run: sudo apt-get update && sudo apt-get install -y ffmpeg
 
       - name: Run database-dependent utility tests
-        run: npx cross-env WEBUI_PORT=3101 R2_ACCOUNT_ID= R2_ACCESS_KEY_ID= R2_SECRET_ACCESS_KEY= R2_BUCKET_NAME= node --test test/utils/database.test.js test/utils/logger.test.js test/utils/logger-sanitization.test.js test/utils/user-tracking.test.js test/utils/cobalt-queue.test.js test/utils/operations-tracker.test.js test/utils/log-metrics.test.js
+        run: npx cross-env WEBUI_PORT=3101 R2_ACCOUNT_ID= R2_ACCESS_KEY_ID= R2_SECRET_ACCESS_KEY= R2_BUCKET_NAME= node --test test/utils/database.test.js test/utils/logger.test.js test/utils/logger-sanitization.test.js test/utils/user-tracking.test.js test/utils/cobalt-queue.test.js test/utils/operations-tracker.test.js test/utils/log-metrics.test.js test/utils/race-conditions.test.js
         env:
           DISCORD_TOKEN: 'ci-test-token'
           CLIENT_ID: 'ci-test-client-id'
@@ -162,7 +162,7 @@ jobs:
         run: sudo apt-get update && sudo apt-get install -y ffmpeg
 
       - name: Run non-database utility tests
-        run: npx cross-env WEBUI_PORT=3101 R2_ACCOUNT_ID= R2_ACCESS_KEY_ID= R2_SECRET_ACCESS_KEY= R2_BUCKET_NAME= node --test test/utils/storage.test.js test/utils/race-conditions.test.js test/utils/config.test.js test/utils/validation.test.js test/utils/video-processor-validation.test.js test/utils/video-processor.test.js test/utils/gif-optimizer.test.js test/utils/file-downloader.test.js test/utils/discord-cdn.test.js test/utils/attachment-helpers.test.js test/utils/interaction-helpers.test.js test/utils/rate-limit.test.js test/utils/ytdlp.test.js test/utils/cobalt-picker.test.js
+        run: npx cross-env WEBUI_PORT=3101 R2_ACCOUNT_ID= R2_ACCESS_KEY_ID= R2_SECRET_ACCESS_KEY= R2_BUCKET_NAME= node --test test/utils/storage.test.js test/utils/config.test.js test/utils/validation.test.js test/utils/video-processor-validation.test.js test/utils/video-processor.test.js test/utils/gif-optimizer.test.js test/utils/file-downloader.test.js test/utils/discord-cdn.test.js test/utils/attachment-helpers.test.js test/utils/interaction-helpers.test.js test/utils/rate-limit.test.js test/utils/ytdlp.test.js test/utils/cobalt-picker.test.js
         env:
           DISCORD_TOKEN: 'ci-test-token'
           CLIENT_ID: 'ci-test-client-id'

@@ -41,7 +41,6 @@ import { notifyCommandSuccess, notifyCommandFailure } from '../utils/ntfy-notifi
 import { getProcessedUrl, insertProcessedUrl } from '../utils/database.js';
 import { initializeDatabaseWithErrorHandling } from '../utils/database-init.js';
 import { r2Config } from '../utils/config.js';
-import { triggerStatsSync } from '../utils/kv-stats-sync.js';
 import { trimVideo, trimGif } from '../utils/video-processor.js';
 import {
   safeInteractionReply,
@@ -1277,9 +1276,6 @@ async function processDownload(
 
       // Record rate limit after successful download
       recordRateLimit(userId);
-
-      // Trigger stats sync to KV (with debouncing)
-      await triggerStatsSync();
     }
   } catch (error) {
     logger.error(`Download failed for user ${userId}:`, error);

@@ -6,7 +6,6 @@ import {
 } from '../utils/interaction-helpers.js';
 import fs from 'fs/promises';
 import path from 'path';
-import crypto from 'crypto';
 import { createLogger } from '../utils/logger.js';
 import { botConfig } from '../utils/config.js';
 import { validateUrl, validateFileExtension } from '../utils/validation.js';
@@ -59,6 +58,8 @@ import { notifyCommandSuccess, notifyCommandFailure } from '../utils/ntfy-notifi
 import { hashUrlWithParams } from '../utils/cobalt-queue.js';
 import { insertProcessedUrl, getProcessedUrl } from '../utils/database.js';
 import { initializeDatabaseWithErrorHandling } from '../utils/database-init.js';
+import { hashPartsHex } from '../utils/hashing.js';
+
 
 const logger = createLogger('convert');
 
@@ -936,13 +937,11 @@ export async function processConversion(
       });
 
       // Generate hash for optimized file (include lossy level in hash for uniqueness)
-      const optimizedHash = crypto.createHash('sha256');
-      optimizedHash.update(gifBuffer);
-      optimizedHash.update('optimized');
-      if (options.lossy !== undefined && options.lossy !== null) {
-        optimizedHash.update(options.lossy.toString());
-      }
-      const optimizedHashValue = optimizedHash.digest('hex');
+      const optimizedHashValue = hashPartsHex([
+        gifBuffer,
+        'optimized',
+        options.lossy !== undefined && options.lossy !== null ? String(options.lossy) : null,
+      ]);
       const optimizedGifPath = getGifPath(optimizedHashValue, GIF_STORAGE_PATH);
 
       // Check if optimized GIF already exists

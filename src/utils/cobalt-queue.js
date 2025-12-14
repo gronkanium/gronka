@@ -1,7 +1,7 @@
-import crypto from 'crypto';
 import { createLogger } from './logger.js';
 import { getProcessedUrl } from './database.js';
 import { initDatabase } from './database.js';
+import { hashStringHex } from './hashing.js';
 
 const logger = createLogger('cobalt-queue');
 
@@ -24,7 +24,7 @@ let activeRequests = 0;
  * @returns {string} URL hash
  */
 export function hashUrl(url) {
-  return crypto.createHash('sha256').update(url).digest('hex');
+  return hashStringHex(url);
 }
 
 /**
@@ -88,7 +88,7 @@ export function hashUrlWithParams(url, options = {}) {
 
   // Create composite hash: URL + parameters
   const compositeString = `${url}|${paramsString}`;
-  return crypto.createHash('sha256').update(compositeString).digest('hex');
+  return hashStringHex(compositeString);
 }
 
 /**

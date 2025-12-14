@@ -172,7 +172,7 @@ export function getR2PublicUrl(key, config) {
 
 /**
  * Generate R2 key from hash and file type
- * @param {string} hash - File hash (MD5 or SHA-256)
+ * @param {string} hash - File hash (BLAKE3)
  * @param {string} fileType - File type ('gif', 'video', or 'image')
  * @param {string} extension - File extension (e.g., '.gif', '.mp4', '.png')
  * @returns {string} R2 object key (e.g., 'gifs/abc123.gif')
@@ -210,7 +210,7 @@ export async function uploadGifToR2(buffer, hash, config, metadata = {}) {
 /**
  * Upload video to R2
  * @param {Buffer} buffer - Video buffer
- * @param {string} hash - SHA-256 hash of the video
+ * @param {string} hash - BLAKE3 hash of the video
  * @param {string} extension - File extension (e.g., '.mp4', '.webm')
  * @param {Object} config - R2 configuration
  * @param {Object} [metadata={}] - Optional metadata to attach to the object
@@ -238,7 +238,7 @@ export async function uploadVideoToR2(buffer, hash, extension, config, metadata 
 /**
  * Upload image to R2
  * @param {Buffer} buffer - Image buffer
- * @param {string} hash - SHA-256 hash of the image
+ * @param {string} hash - BLAKE3 hash of the image
  * @param {string} extension - File extension (e.g., '.png', '.jpg')
  * @param {Object} config - R2 configuration
  * @param {Object} [metadata={}] - Optional metadata to attach to the object
@@ -315,7 +315,7 @@ export async function downloadGifFromR2(hash, config) {
 
 /**
  * Check if video exists in R2
- * @param {string} hash - SHA-256 hash of the video
+ * @param {string} hash - BLAKE3 hash of the video
  * @param {string} extension - File extension
  * @param {Object} config - R2 configuration
  * @returns {Promise<boolean>} True if video exists
@@ -330,7 +330,7 @@ export async function videoExistsInR2(hash, extension, config) {
 
 /**
  * Check if image exists in R2
- * @param {string} hash - SHA-256 hash of the image
+ * @param {string} hash - BLAKE3 hash of the image
  * @param {string} extension - File extension
  * @param {Object} config - R2 configuration
  * @returns {Promise<boolean>} True if image exists

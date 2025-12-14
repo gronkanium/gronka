@@ -56,7 +56,7 @@ export function invalidateProcessedUrlCache(urlHash = null) {
 
 /**
  * Get processed URL record by URL hash
- * @param {string} urlHash - SHA-256 hash of the URL
+ * @param {string} urlHash - BLAKE3 hash of the URL
  * @returns {Promise<Object|null>} Processed URL record or null if not found
  */
 export async function getProcessedUrl(urlHash) {
@@ -93,8 +93,8 @@ export async function getProcessedUrl(urlHash) {
 
 /**
  * Insert or update a processed URL record
- * @param {string} urlHash - SHA-256 hash of the URL
- * @param {string} fileHash - File content hash (MD5 or SHA-256)
+ * @param {string} urlHash - BLAKE3 hash of the URL
+ * @param {string} fileHash - File content hash (BLAKE3)
  * @param {string} fileType - File type ('gif', 'video', or 'image')
  * @param {string} fileExtension - File extension (e.g., '.mp4', '.gif')
  * @param {string} fileUrl - Final CDN URL or path

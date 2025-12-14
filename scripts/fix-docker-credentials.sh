@@ -60,3 +60,5 @@ echo "  2. Try your docker build/pull commands again"
 echo ""
 echo "Note: Credentials will be stored in plain text in the config file,"
 echo "      which works reliably in WSL2 but is less secure than encrypted storage."
+
+

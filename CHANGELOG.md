@@ -12,6 +12,13 @@ and this project adheres (attempts) to [Semantic Versioning](https://semver.org/
 - Fixed release notes generation workflow to correctly extract notes from CHANGELOG.md
 - Added `scripts/extract-release-notes.js` for reliable changelog parsing
 
+### Added
+
+- Docker credential fix script for WSL2
+  - Added `scripts/fix-docker-credentials.sh` to fix Docker credential storage issues in WSL2
+  - Fixes Windows credential manager errors and GPG decryption failures
+  - Added `fix:creds` npm script for easy access
+
 ## [0.15.1] - 2025-12-08
 
 ### Added

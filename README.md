@@ -221,7 +221,6 @@ useful commands:
 
 ```bash
 npm start              # start the bot
-npm run server         # start the local server (only needed if not using r2)
 npm run local          # run both at once
 npm run dev            # bot with hot reload
 npm run lint           # check code style

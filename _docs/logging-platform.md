@@ -18,7 +18,7 @@ gronka now includes a built-in logging platform for viewing, searching, and moni
 - **full-text search** - search through log messages
 - **metrics dashboard** - view error rates, warnings, and trends
 - **pagination** - easily browse through historical logs
-- **log retention** - all logs stored in sqlite database
+- **log retention** - all logs stored in postgresql database
 - **docker logs viewer** - optional dozzle integration for container logs
 
 ## accessing the logging platform
@@ -171,12 +171,12 @@ use webui logs for application monitoring and dozzle for container-level debuggi
 
 ## database storage
 
-all logs are stored in the sqlite database at `data/gronka.db` in the `logs` table:
+all logs are stored in the postgresql database in the `logs` table:
 
 ```sql
 CREATE TABLE logs (
-  id INTEGER PRIMARY KEY AUTOINCREMENT,
-  timestamp INTEGER NOT NULL,
+  id SERIAL PRIMARY KEY,
+  timestamp BIGINT NOT NULL,
   component TEXT NOT NULL,
   level TEXT NOT NULL,
   message TEXT NOT NULL,
@@ -197,14 +197,14 @@ by default, all logs are retained indefinitely. if you need to clean up old logs
 ### manual cleanup
 
 ```bash
-# connect to database
-sqlite3 data/gronka.db
+# connect to postgresql database
+psql -h localhost -U gronka -d gronka
 
 # delete logs older than 30 days
-DELETE FROM logs WHERE timestamp < (strftime('%s', 'now', '-30 days') * 1000);
+DELETE FROM logs WHERE timestamp < EXTRACT(EPOCH FROM NOW() - INTERVAL '30 days')::BIGINT * 1000;
 
-# vacuum to reclaim space
-VACUUM;
+# analyze to update statistics
+ANALYZE logs;
 ```
 
 ### automated cleanup (future)
@@ -233,7 +233,7 @@ SKIP_DB_INIT=false
 1. check database initialization:
    ```bash
    # verify logs table exists
-   sqlite3 data/gronka.db "SELECT COUNT(*) FROM logs;"
+   psql -h localhost -U gronka -d gronka -c "SELECT COUNT(*) FROM logs;"
    ```
 
 2. check log level:
@@ -286,7 +286,7 @@ the logging platform is designed for minimal performance impact:
 - **async writes** - log writes don't block application code
 - **indexed queries** - database queries are optimized with indexes
 - **pagination** - large result sets are paginated
-- **efficient storage** - sqlite wal mode for concurrent access
+- **efficient storage** - postgresql connection pooling for concurrent access
 
 typical performance:
 - log write: <1ms
@@ -312,7 +312,7 @@ export metrics for prometheus monitoring (future feature).
 
 ### grafana
 
-visualize logs in grafana using sqlite data source (future feature).
+visualize logs in grafana using postgresql data source (future feature).
 
 ### alerting
 

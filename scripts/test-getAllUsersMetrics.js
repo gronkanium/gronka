@@ -8,7 +8,6 @@ import dotenv from 'dotenv';
 dotenv.config();
 
 // Set test environment
-process.env.DATABASE_TYPE = 'postgres';
 process.env.POSTGRES_HOST = 'localhost';
 process.env.POSTGRES_PORT = '5432';
 process.env.POSTGRES_USER = 'gronka';

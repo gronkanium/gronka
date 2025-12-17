@@ -47,7 +47,7 @@ concurrency:
 
 jobs:
   dependency-review:
-    runs-on: ubuntu-latest
+    runs-on: blacksmith-4vcpu-ubuntu-2404
     if: github.event_name == 'pull_request'
     steps:
       - name: Checkout code
@@ -61,7 +61,7 @@ jobs:
 
   # Validate stage - Code quality checks
   validate-code:
-    runs-on: ubuntu-latest
+    runs-on: blacksmith-4vcpu-ubuntu-2404
     if: github.actor != 'dependabot[bot]'
     steps:
       - name: Checkout code
@@ -93,7 +93,7 @@ jobs:
 
   # Test stage - Utility functions
   test-utils:
-    runs-on: ubuntu-latest
+    runs-on: blacksmith-4vcpu-ubuntu-2404
     if: github.actor != 'dependabot[bot]'
     services:
       postgres:
@@ -143,7 +143,7 @@ jobs:
 
   # Test stage - Command handlers
   test-commands:
-    runs-on: ubuntu-latest
+    runs-on: blacksmith-4vcpu-ubuntu-2404
     if: github.actor != 'dependabot[bot]'
     services:
       postgres:
@@ -193,7 +193,7 @@ jobs:
 
   # Test stage - Scripts
   test-scripts:
-    runs-on: ubuntu-latest
+    runs-on: blacksmith-4vcpu-ubuntu-2404
     if: github.actor != 'dependabot[bot]'
     services:
       postgres:
@@ -243,7 +243,7 @@ jobs:
 
   # Test stage - Integration/server components
   test-integration:
-    runs-on: ubuntu-latest
+    runs-on: blacksmith-4vcpu-ubuntu-2404
     if: github.actor != 'dependabot[bot]'
     services:
       postgres:
@@ -292,7 +292,7 @@ jobs:
           TEST_POSTGRES_PORT: '5432'
 
   dependabot-checks:
-    runs-on: ubuntu-latest
+    runs-on: blacksmith-4vcpu-ubuntu-2404
     if: github.actor == 'dependabot[bot]'
 
     steps:

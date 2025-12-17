@@ -463,7 +463,7 @@ export function formatFileSize(bytes) {
 
 /**
  * Get the full file path for a video by hash and extension
- * @param {string} hash - SHA-256 hash of the video
+ * @param {string} hash - BLAKE3 hash of the video
  * @param {string} extension - File extension (e.g., '.mp4', '.webm')
  * @param {string} storagePath - Base storage path
  * @returns {string} Full path to video file
@@ -487,7 +487,7 @@ export function getVideoPath(hash, extension, storagePath) {
 
 /**
  * Check if a video with the given hash and extension already exists
- * @param {string} hash - SHA-256 hash of the video
+ * @param {string} hash - BLAKE3 hash of the video
  * @param {string} extension - File extension
  * @param {string} storagePath - Base storage path (kept for backward compatibility)
  * @returns {Promise<boolean>} True if video exists
@@ -515,7 +515,7 @@ export async function videoExists(hash, extension, storagePath) {
 /**
  * Save a video buffer to R2 or disk
  * @param {Buffer} buffer - Video file buffer
- * @param {string} hash - SHA-256 hash of the video
+ * @param {string} hash - BLAKE3 hash of the video
  * @param {string} extension - File extension (e.g., '.mp4', '.webm')
  * @param {string} storagePath - Base storage path (for local fallback)
  * @param {Object} [metadata={}] - Optional metadata to attach to the object
@@ -585,7 +585,7 @@ export async function saveVideo(buffer, hash, extension, storagePath, metadata =
 
 /**
  * Get the full file path for an image by hash and extension
- * @param {string} hash - SHA-256 hash of the image
+ * @param {string} hash - BLAKE3 hash of the image
  * @param {string} extension - File extension (e.g., '.png', '.jpg')
  * @param {string} storagePath - Base storage path
  * @returns {string} Full path to image file
@@ -609,7 +609,7 @@ export function getImagePath(hash, extension, storagePath) {
 
 /**
  * Check if an image with the given hash and extension already exists
- * @param {string} hash - SHA-256 hash of the image
+ * @param {string} hash - BLAKE3 hash of the image
  * @param {string} extension - File extension
  * @param {string} storagePath - Base storage path (kept for backward compatibility)
  * @returns {Promise<boolean>} True if image exists
@@ -637,7 +637,7 @@ export async function imageExists(hash, extension, storagePath) {
 /**
  * Save an image buffer to R2 or disk
  * @param {Buffer} buffer - Image file buffer
- * @param {string} hash - SHA-256 hash of the image
+ * @param {string} hash - BLAKE3 hash of the image
  * @param {string} extension - File extension (e.g., '.png', '.jpg')
  * @param {string} storagePath - Base storage path (for local fallback)
  * @param {Object} [metadata={}] - Optional metadata to attach to the object

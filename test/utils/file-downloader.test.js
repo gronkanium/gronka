@@ -5,12 +5,12 @@ import axios from 'axios';
 
 describe('file downloader utilities', () => {
   describe('generateHash', () => {
-    test('generates SHA-256 hash', () => {
+    test('generates a stable 64-hex content hash', () => {
       const buffer = Buffer.from('test content');
       const hash = generateHash(buffer);
 
       assert.strictEqual(typeof hash, 'string');
-      assert.strictEqual(hash.length, 64); // SHA-256 produces 64 hex characters
+      assert.strictEqual(hash.length, 64); // 32-byte hash as 64 hex chars
     });
 
     test('produces consistent hashes', () => {

@@ -48,29 +48,6 @@ Thumbs.db
 
 # Documentation
 docs/
-_docs/
-# Jekyll
-_site/
-.sass-cache/
-.jekyll-cache/
-.jekyll-metadata
-vendor/
-.bundle/
-posts/
-
-# Jekyll site files
-_config.yml
-Gemfile
-aspirations.md
-index.md
-favicon.png
-robots.txt
-_site.backup
-@blog
-
-# Changelog - draft posts
-_drafts/
-changelog/*-draft.html
 
 # Build assets (generated files)
 src/public/assets/
@@ -97,7 +74,6 @@ code-scanning-issues.json
 scripts/setup-glab-auth.sh
 scripts/ci-status.sh
 scripts/check-ci.sh
-scripts/update-jekyll-site.sh
 
 # Rewrite-related files (TypeScript rewrite, not part of main codebase)
 apps/
@@ -109,9 +85,6 @@ REWRITE_STATUS.md
 README.REWRITE.md
 MIGRATION.md
 .npmrc
-
-# Generated stats file (created during build)
-_data/stats.json
 
 scripts/fix-docker-credentials.sh
 AGENTS.md

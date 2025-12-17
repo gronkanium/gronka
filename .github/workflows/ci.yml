@@ -125,6 +125,19 @@ jobs:
       - name: Install FFmpeg
         run: sudo apt-get update && sudo apt-get install -y ffmpeg
 
+      - name: Install PostgreSQL client
+        run: sudo apt-get install -y postgresql-client
+
+      - name: Reset test database schema
+        run: |
+          PGPASSWORD=gronka psql -h localhost -U gronka -d gronka_test -c 'DROP SCHEMA IF EXISTS public CASCADE; CREATE SCHEMA public;'
+        env:
+          PGHOST: localhost
+          PGPORT: '5432'
+          PGDATABASE: gronka_test
+          PGUSER: gronka
+          PGPASSWORD: gronka
+
       - name: Run utility tests
         run: npx cross-env WEBUI_PORT=3101 R2_ACCOUNT_ID= R2_ACCESS_KEY_ID= R2_SECRET_ACCESS_KEY= R2_BUCKET_NAME= node --test test/utils/
         env:
@@ -140,6 +153,11 @@ jobs:
           TEST_POSTGRES_PASSWORD: gronka
           TEST_POSTGRES_HOST: localhost
           TEST_POSTGRES_PORT: '5432'
+          PGUSER: gronka
+          PGPASSWORD: gronka
+          PGHOST: localhost
+          PGPORT: '5432'
+          PGDATABASE: gronka_test
 
   # Test stage - Command handlers
   test-commands:
@@ -175,6 +193,19 @@ jobs:
       - name: Install FFmpeg
         run: sudo apt-get update && sudo apt-get install -y ffmpeg
 
+      - name: Install PostgreSQL client
+        run: sudo apt-get install -y postgresql-client
+
+      - name: Reset test database schema
+        run: |
+          PGPASSWORD=gronka psql -h localhost -U gronka -d gronka_test -c 'DROP SCHEMA IF EXISTS public CASCADE; CREATE SCHEMA public;'
+        env:
+          PGHOST: localhost
+          PGPORT: '5432'
+          PGDATABASE: gronka_test
+          PGUSER: gronka
+          PGPASSWORD: gronka
+
       - name: Run command tests
         run: npx cross-env WEBUI_PORT=3101 R2_ACCOUNT_ID= R2_ACCESS_KEY_ID= R2_SECRET_ACCESS_KEY= R2_BUCKET_NAME= node --test test/commands/
         env:
@@ -190,6 +221,11 @@ jobs:
           TEST_POSTGRES_PASSWORD: gronka
           TEST_POSTGRES_HOST: localhost
           TEST_POSTGRES_PORT: '5432'
+          PGUSER: gronka
+          PGPASSWORD: gronka
+          PGHOST: localhost
+          PGPORT: '5432'
+          PGDATABASE: gronka_test
 
   # Test stage - Scripts
   test-scripts:
@@ -225,6 +261,19 @@ jobs:
       - name: Install FFmpeg
         run: sudo apt-get update && sudo apt-get install -y ffmpeg
 
+      - name: Install PostgreSQL client
+        run: sudo apt-get install -y postgresql-client
+
+      - name: Reset test database schema
+        run: |
+          PGPASSWORD=gronka psql -h localhost -U gronka -d gronka_test -c 'DROP SCHEMA IF EXISTS public CASCADE; CREATE SCHEMA public;'
+        env:
+          PGHOST: localhost
+          PGPORT: '5432'
+          PGDATABASE: gronka_test
+          PGUSER: gronka
+          PGPASSWORD: gronka
+
       - name: Run script tests
         run: npx cross-env WEBUI_PORT=3101 R2_ACCOUNT_ID= R2_ACCESS_KEY_ID= R2_SECRET_ACCESS_KEY= R2_BUCKET_NAME= node --test test/scripts/
         env:
@@ -240,6 +289,11 @@ jobs:
           TEST_POSTGRES_PASSWORD: gronka
           TEST_POSTGRES_HOST: localhost
           TEST_POSTGRES_PORT: '5432'
+          PGUSER: gronka
+          PGPASSWORD: gronka
+          PGHOST: localhost
+          PGPORT: '5432'
+          PGDATABASE: gronka_test
 
   # Test stage - Integration/server components
   test-integration:
@@ -275,6 +329,19 @@ jobs:
       - name: Install FFmpeg
         run: sudo apt-get update && sudo apt-get install -y ffmpeg
 
+      - name: Install PostgreSQL client
+        run: sudo apt-get install -y postgresql-client
+
+      - name: Reset test database schema
+        run: |
+          PGPASSWORD=gronka psql -h localhost -U gronka -d gronka_test -c 'DROP SCHEMA IF EXISTS public CASCADE; CREATE SCHEMA public;'
+        env:
+          PGHOST: localhost
+          PGPORT: '5432'
+          PGDATABASE: gronka_test
+          PGUSER: gronka
+          PGPASSWORD: gronka
+
       - name: Run integration tests
         run: npx cross-env WEBUI_PORT=3101 R2_ACCOUNT_ID= R2_ACCESS_KEY_ID= R2_SECRET_ACCESS_KEY= R2_BUCKET_NAME= node --test test/webui-server-*.test.js test/docker-security.test.js
         env:
@@ -290,6 +357,11 @@ jobs:
           TEST_POSTGRES_PASSWORD: gronka
           TEST_POSTGRES_HOST: localhost
           TEST_POSTGRES_PORT: '5432'
+          PGUSER: gronka
+          PGPASSWORD: gronka
+          PGHOST: localhost
+          PGPORT: '5432'
+          PGDATABASE: gronka_test
 
   dependabot-checks:
     runs-on: blacksmith-4vcpu-ubuntu-2404

@@ -441,28 +441,6 @@ TEST_SERVER_HOST=127.0.0.1
 PROD_SERVER_HOST=0.0.0.0
 ```
 
-### `CORS_ORIGIN`
-
-explicit cors origin override.
-
-**optional**
-
-**notes:**
-
-- if not set, cors origin is automatically derived from `CDN_BASE_URL`
-- set this to override the automatic derivation
-- use `*` to allow all origins (not recommended for production)
-- should be a valid url origin (e.g., `https://example.com`)
-
-**example:**
-
-```env
-CORS_ORIGIN=https://example.com
-# or for test/prod bots
-TEST_CORS_ORIGIN=http://localhost:3000
-PROD_CORS_ORIGIN=https://cdn.example.com
-```
-
 ### `BOT_API_URL`
 
 url of the bot server api endpoint for jekyll stats polling.
@@ -579,23 +557,6 @@ WEBUI_HOST=127.0.0.1
 # or for test/prod bots
 TEST_WEBUI_HOST=127.0.0.1
 PROD_WEBUI_HOST=127.0.0.1
-```
-
-### `MAIN_SERVER_URL` (removed)
-
-this configuration variable has been removed in version 0.13.0. the webui now calculates stats directly from the database and filesystem instead of proxying requests to a separate server.
-
-**migration:**
-
-if upgrading from < 0.13.0, you can safely remove `MAIN_SERVER_URL` from your `.env` file. it is no longer used.
-
-**old example (deprecated):**
-
-```env
-# MAIN_SERVER_URL=http://localhost:3000 (no longer needed)
-# or for test/prod bots
-TEST_MAIN_SERVER_URL=http://localhost:3000
-PROD_MAIN_SERVER_URL=http://localhost:3000
 ```
 
 ### `WEBUI_URL` / `WEBUI_SERVER_URL`
@@ -959,13 +920,12 @@ note: as of version 0.13.0, `src/server.js` has been removed. the bot process no
 
 ### variables that support `PROD_*` prefix in docker
 
-only these 4 variables support the `PROD_*` prefix in docker:
+only these 3 variables support the `PROD_*` prefix in docker:
 
 ```env
 # docker-compose.yml uses these with PROD_ prefix support
 PROD_DISCORD_TOKEN=${PROD_DISCORD_TOKEN:-${DISCORD_TOKEN}}
 PROD_CLIENT_ID=${PROD_CLIENT_ID:-${CLIENT_ID}}
-PROD_GRONKA_DB_PATH=${PROD_GRONKA_DB_PATH:-./data-prod/gronka.db}
 PROD_GIF_STORAGE_PATH=${PROD_GIF_STORAGE_PATH:-./data-prod/gifs}
 ```
 
@@ -993,7 +953,7 @@ if you need different values for docker deployment, you must set the standard va
 - perfect for running test and prod bots simultaneously with different configs
 
 **for docker deployment:**
-- use `PROD_*` prefix only for: `DISCORD_TOKEN`, `CLIENT_ID`, `POSTGRES_DB`, `GIF_STORAGE_PATH`
+- use `PROD_*` prefix only for: `DISCORD_TOKEN`, `CLIENT_ID`, `GIF_STORAGE_PATH`
 - use standard variable names for all other configuration
 - if you need different configs, you may need separate docker-compose files or environment files
 
@@ -1013,7 +973,6 @@ PROD_R2_BUCKET_NAME=prod-bucket
 PROD_DISCORD_TOKEN=prod_token           # supports PROD_ prefix
 PROD_CLIENT_ID=prod_client_id          # supports PROD_ prefix
 PROD_GIF_STORAGE_PATH=./data-prod      # supports PROD_ prefix
-PROD_GRONKA_DB_PATH=./data-prod/gronka.db  # supports PROD_ prefix
 
 MAX_GIF_DURATION=60                    # standard name (no prefix)
 GIF_QUALITY=high                       # standard name (no prefix)
@@ -1071,8 +1030,12 @@ STATS_CACHE_TTL=300000
 WEBUI_PORT=3001
 WEBUI_HOST=127.0.0.1
 
-# database
-GRONKA_DB_PATH=./data-prod/gronka.db
+# database (postgresql)
+POSTGRES_HOST=localhost
+POSTGRES_PORT=5432
+POSTGRES_USER=gronka
+POSTGRES_PASSWORD=gronka
+POSTGRES_DB=gronka
 
 # logging
 LOG_DIR=./logs

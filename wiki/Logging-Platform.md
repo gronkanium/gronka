@@ -9,7 +9,7 @@ gronka now includes a built-in logging platform for viewing, searching, and moni
 - **full-text search** - search through log messages
 - **metrics dashboard** - view error rates, warnings, and trends
 - **pagination** - easily browse through historical logs
-- **log retention** - all logs stored in sqlite database
+- **log retention** - all logs stored in postgresql database
 - **docker logs viewer** - optional dozzle integration for container logs
 
 ## accessing the logging platform
@@ -168,18 +168,18 @@ use webui logs for application monitoring and dozzle for container-level debuggi
 
 ## database storage
 
-all logs are stored in the sqlite database. the database location depends on your configuration:
+all logs are stored in the postgresql database. the database connection is configured via postgresql connection parameters:
 
-- production: typically `data-prod/gronka.db` (or `data-prod/gronka-prod.db` when using prod bot)
-- testing: typically `data-test/gronka.db` (or `data-test/gronka-test.db` when using test bot)
-- can be overridden via `GRONKA_DB_PATH` environment variable
+- production: configured via `POSTGRES_*` environment variables or `DATABASE_URL`
+- testing: configured via `TEST_POSTGRES_*` environment variables or `TEST_DATABASE_URL`
+- database name: `POSTGRES_DB` (production) or `TEST_POSTGRES_DB` (testing)
 
 the `logs` table structure:
 
 ```sql
 CREATE TABLE logs (
-  id INTEGER PRIMARY KEY AUTOINCREMENT,
-  timestamp INTEGER NOT NULL,
+  id SERIAL PRIMARY KEY,
+  timestamp BIGINT NOT NULL,
   component TEXT NOT NULL,
   level TEXT NOT NULL,
   message TEXT NOT NULL,
@@ -201,16 +201,16 @@ by default, all logs are retained indefinitely. if you need to clean up old logs
 ### manual cleanup
 
 ```bash
-# connect to database (adjust path based on your configuration)
-sqlite3 data-prod/gronka.db
-# or for test bot
-sqlite3 data-test/gronka-test.db
+# connect to postgresql database
+psql -h localhost -U gronka -d gronka
+# or for test database
+psql -h localhost -U gronka -d gronka_test
 
 # delete logs older than 30 days
-DELETE FROM logs WHERE timestamp < (strftime('%s', 'now', '-30 days') * 1000);
+DELETE FROM logs WHERE timestamp < EXTRACT(EPOCH FROM NOW() - INTERVAL '30 days')::BIGINT * 1000;
 
-# vacuum to reclaim space
-VACUUM;
+# analyze to update statistics
+ANALYZE logs;
 ```
 
 ### automated cleanup (future)
@@ -239,10 +239,10 @@ SKIP_DB_INIT=false
 1. check database initialization:
 
    ```bash
-   # verify logs table exists (adjust path based on your configuration)
-   sqlite3 data-prod/gronka.db "SELECT COUNT(*) FROM logs;"
-   # or for test bot
-   sqlite3 data-test/gronka-test.db "SELECT COUNT(*) FROM logs;"
+   # verify logs table exists and has data
+   psql -h localhost -U gronka -d gronka -c "SELECT COUNT(*) FROM logs;"
+   # or for test database
+   psql -h localhost -U gronka -d gronka_test -c "SELECT COUNT(*) FROM logs;"
    ```
 
 2. check log level:
@@ -299,7 +299,7 @@ the logging platform is designed for minimal performance impact:
 - **async writes** - log writes don't block application code
 - **indexed queries** - database queries are optimized with indexes
 - **pagination** - large result sets are paginated
-- **efficient storage** - sqlite wal mode for concurrent access
+- **efficient storage** - postgresql connection pooling for concurrent access
 
 typical performance:
 
@@ -326,7 +326,7 @@ export metrics for prometheus monitoring (future feature).
 
 ### grafana
 
-visualize logs in grafana using sqlite data source (future feature).
+visualize logs in grafana using postgresql data source (future feature).
 
 ### alerting
 

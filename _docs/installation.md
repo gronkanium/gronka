@@ -34,7 +34,6 @@ nano .env  # Fill in tokens
 node src/register-commands.js
 
 # 6. Start services
-node src/server.js &  # CDN server
 node src/bot.js  # Discord bot
 
 # 7. Setup systemd services (production)

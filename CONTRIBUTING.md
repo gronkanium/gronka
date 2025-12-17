@@ -2,11 +2,10 @@
 
 This project consists of multiple components that can run independently or together:
 
-- **Discord Bot** (`src/bot.js`) - Handles Discord interactions and converts files to GIFs
-- **Local Server** (`src/server.js`) - Provides health checks, stats API, and serves static HTML pages (terms, privacy). The file serving routes (/gifs/_, /videos/_, /images/\*) have been removed - files are intended to be served via R2 storage. When R2 is configured, files are saved to R2 and served via the R2 public domain.
+- **Discord Bot** (`src/bot.js`) - Handles Discord interactions and converts files to GIFs. The bot includes a minimal HTTP server that serves `/api/stats/24h` for Jekyll site integration.
 - **WebUI** (`src/webui-server.js`) - Optional dashboard for viewing statistics
 
-When running in Docker, the main `app` service runs both the bot and local server together. The local server provides health checks and stats API endpoints. Files are stored in R2 when configured (recommended), or saved to local disk if R2 is not configured. The file serving routes from the server have been removed - files should be served via R2 or an external CDN. The webui is an optional service that can be enabled via Docker Compose profiles.
+When running in Docker, the main `app` service runs the bot (which includes the minimal stats HTTP server). Files are stored in R2 when configured (recommended), or saved to local disk if R2 is not configured. Files are served from R2 or Discord attachments. The webui is an optional service that can be enabled via Docker Compose profiles.
 
 ## Dependency Management
 
@@ -197,7 +196,6 @@ See `package.json` for a full list of available npm scripts. Common ones include
 ### Main Entry Points
 
 - `npm start` - Start the Discord bot (`src/bot.js`)
-- `npm run server` - Start the local server (`src/server.js`). Provides health checks and stats API. File serving routes have been removed - files should be served via R2 or external CDN.
 - `npm run webui` - Start the webui server (`src/webui-server.js`)
 - `npm run local` - Run both bot and local server concurrently (useful for local development without R2)
 - `npm run dev` - Start bot with watch mode (auto-restart on changes)

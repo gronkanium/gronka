@@ -4,7 +4,7 @@ jekyll site footer statistics display system. shows 24-hour activity stats in th
 
 the system has three parts:
 
-1. **bot server api endpoint** (`/api/stats/24h`): exposes 24-hour statistics from the sqlite database
+1. **bot server api endpoint** (`/api/stats/24h`): exposes 24-hour statistics from the postgresql database
 2. **polling script** (`scripts/update-jekyll-stats.js`): fetches stats from bot api and writes to `_data/stats.json`
 3. **jekyll footer** (`_includes/footer.html`): displays stats from the json data file
 
@@ -178,7 +178,7 @@ this is expected behavior - the update script is designed to continue even if st
 - **footer template**: `_includes/footer.html` (displays stats)
 - **update script**: `scripts/update-jekyll-site.sh` (integrates stats update)
 - **api endpoint**: bot process includes minimal http server for `/api/stats/24h` (as of v0.13.0, no longer a separate server)
-- **database function**: `src/utils/database/stats.js` (queries sqlite)
+- **database function**: `src/utils/database/stats.js` (queries postgresql)
 - **log file**: `logs/jekyll-update.log` (update script logs)
 
 ## api endpoint

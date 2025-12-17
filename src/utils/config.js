@@ -86,32 +86,6 @@ function parseIdList(name) {
 }
 
 /**
- * Get CORS origin from CDN_BASE_URL or explicit CORS_ORIGIN
- * @returns {string} CORS origin value
- */
-function _getCorsOrigin() {
-  const explicitOrigin = process.env.CORS_ORIGIN;
-  if (explicitOrigin) {
-    return explicitOrigin.trim();
-  }
-
-  const cdnBaseUrl = getStringEnv('CDN_BASE_URL', 'https://cdn.gronka.p1x.dev/gifs');
-  try {
-    const url = new URL(cdnBaseUrl);
-    // If localhost, allow all origins
-    if (url.hostname === 'localhost' || url.hostname === '127.0.0.1') {
-      return '*';
-    }
-    // Extract origin (protocol + hostname + port if not default)
-    const origin = `${url.protocol}//${url.hostname}${url.port ? `:${url.port}` : ''}`;
-    return origin;
-  } catch {
-    // If URL parsing fails, default to '*' for safety
-    return '*';
-  }
-}
-
-/**
  * Validate URL format
  * @param {string} url - URL to validate
  * @returns {boolean} True if URL is valid

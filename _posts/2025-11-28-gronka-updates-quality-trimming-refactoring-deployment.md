@@ -546,7 +546,6 @@ production configuration uses prefixed variables:
 ```bash
 PROD_DISCORD_TOKEN=your_production_token
 PROD_CLIENT_ID=your_production_client_id
-PROD_GRONKA_DB_PATH=./data-prod/gronka.db
 PROD_GIF_STORAGE_PATH=./data-prod/gifs
 ```
 
@@ -616,7 +615,6 @@ DISCORD_TOKEN / PROD_DISCORD_TOKEN
 CLIENT_ID / PROD_CLIENT_ID
 
 # storage configuration
-GRONKA_DB_PATH / PROD_GRONKA_DB_PATH
 GIF_STORAGE_PATH / PROD_GIF_STORAGE_PATH
 
 # r2 storage (optional)

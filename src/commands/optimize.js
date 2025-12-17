@@ -8,7 +8,6 @@ import {
 } from 'discord.js';
 import fs from 'fs/promises';
 import path from 'path';
-import crypto from 'crypto';
 import { createLogger } from '../utils/logger.js';
 import { botConfig } from '../utils/config.js';
 import { validateUrl } from '../utils/validation.js';
@@ -40,6 +39,7 @@ import { notifyCommandSuccess, notifyCommandFailure } from '../utils/ntfy-notifi
 import { hashUrlWithParams } from '../utils/cobalt-queue.js';
 import { insertProcessedUrl, getProcessedUrl } from '../utils/database.js';
 import { r2Config } from '../utils/config.js';
+import { hashPartsHex } from '../utils/hashing.js';
 import {
   safeInteractionReply,
   safeInteractionEditReply,
@@ -283,8 +283,6 @@ export async function processOptimization(
       });
     }
 
-    // Generate hash for the original file
-    const _originalHash = crypto.createHash('sha256').update(fileBuffer).digest('hex');
     const originalSize = fileBuffer.length;
 
     // Save original to temp directory for optimization
@@ -327,13 +325,11 @@ export async function processOptimization(
     });
 
     // Generate hash for optimized file (include lossy level in hash for uniqueness)
-    const hash = crypto.createHash('sha256');
-    hash.update(fileBuffer);
-    hash.update('optimized');
-    if (lossyLevel !== null) {
-      hash.update(lossyLevel.toString());
-    }
-    const optimizedHash = hash.digest('hex');
+    const optimizedHash = hashPartsHex([
+      fileBuffer,
+      'optimized',
+      lossyLevel !== null && lossyLevel !== undefined ? String(lossyLevel) : null,
+    ]);
     const optimizedGifPath = getGifPath(optimizedHash, GIF_STORAGE_PATH);
 
     // Optimize the GIF with specified lossy level

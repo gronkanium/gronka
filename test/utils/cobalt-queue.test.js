@@ -21,7 +21,7 @@ describe('cobalt-queue utilities', () => {
 
     assert.strictEqual(hash1, hash2, 'Same URL should produce same hash');
     assert.strictEqual(typeof hash1, 'string', 'Hash should be a string');
-    assert.strictEqual(hash1.length, 64, 'SHA-256 hash should be 64 characters');
+    assert.strictEqual(hash1.length, 64, 'Hash should be 64 hex characters');
   });
 
   test('hashUrl - generates different hashes for different URLs', () => {

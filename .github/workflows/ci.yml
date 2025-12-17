@@ -13,15 +13,6 @@ on:
     paths-ignore:
       - '**.md'
       - '.github/workflows/**'
-      - '_config.yml'
-      - '_site/**'
-      - '_posts/**'
-      - '_docs/**'
-      - '_includes/**'
-      - '_layouts/**'
-      - '_sass/**'
-      - 'assets/**'
-      - 'blog/**'
       - 'docs/**'
   pull_request:
     branches:
@@ -30,15 +21,6 @@ on:
     paths-ignore:
       - '**.md'
       - '.github/workflows/**'
-      - '_config.yml'
-      - '_site/**'
-      - '_posts/**'
-      - '_docs/**'
-      - '_includes/**'
-      - '_layouts/**'
-      - '_sass/**'
-      - 'assets/**'
-      - 'blog/**'
       - 'docs/**'
 
 concurrency:
@@ -84,12 +66,6 @@ jobs:
 
       - name: Check formatting
         run: npm run format:check || echo "::warning::Formatting check failed"
-
-      - name: Validate Jekyll
-        run: npm run jekyll:validate
-        env:
-          DISCORD_TOKEN: 'ci-test-token'
-          CLIENT_ID: 'ci-test-client-id'
 
   # Test stage - Utility functions
   test-utils:

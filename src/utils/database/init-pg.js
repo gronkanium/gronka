@@ -71,10 +71,18 @@ export async function initPostgresDatabase() {
           // Handle index conflicts in parallel test execution
           // 23505: unique constraint violation (race condition in pg_class catalog)
           // 42P07: relation already exists (race condition despite IF NOT EXISTS)
-          if (error.code === '23505' || error.code === '42P07') {
+          // pg_class_relname_nsp_index: PostgreSQL catalog constraint violation
+          // This can happen even with IF NOT EXISTS when there's a race condition
+          const isCatalogError =
+            error.code === '23505' ||
+            error.code === '42P07' ||
+            error.message?.includes('pg_class_relname_nsp_index') ||
+            error.message?.includes('duplicate key value violates unique constraint');
+
+          if (isCatalogError) {
             // Index already exists or is being created, this is safe to ignore
             console.warn(
-              `[Database Init] Index "${index.name}" already exists (${error.code}), skipping...`
+              `[Database Init] Index "${index.name}" already exists or catalog conflict (${error.code || 'unknown'}), skipping...`
             );
           } else {
             throw error;

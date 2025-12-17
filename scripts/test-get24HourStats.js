@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 
 /**
- * Simple helper to test get24HourStats() with the current DATABASE_TYPE.
+ * Simple helper to test get24HourStats().
  * Logs the returned shape and values without modifying any data.
  */
 
@@ -11,8 +11,6 @@ dotenv.config();
 async function main() {
   try {
     const { get24HourStats } = await import('../src/utils/database/stats.js');
-
-    console.log('testing get24HourStats with DATABASE_TYPE =', process.env.DATABASE_TYPE);
 
     const stats = await get24HourStats();
 

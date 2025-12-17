@@ -460,6 +460,5 @@ LOG_ROTATION=daily
 # webui
 WEBUI_PORT=3001
 WEBUI_HOST=127.0.0.1
-MAIN_SERVER_URL=http://localhost:3000
 ```
 

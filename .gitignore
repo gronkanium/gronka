@@ -53,6 +53,12 @@ docs/
 src/public/assets/
 src/public/index.html
 
+# Jekyll build artifacts
+.bundle/
+_site/
+.jekyll-cache/
+vendor/
+
 # Build tools cache
 .vite/
 .eslintcache

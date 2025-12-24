@@ -28,6 +28,7 @@
     "bot:prod:dev": "nodemon --watch src --exec \"node scripts/bot-start.js PROD\"",
     "bot:register:test": "node src/register-commands.js TEST",
     "bot:register:prod": "node src/register-commands.js PROD",
+    "bot:status": "node scripts/update-bot-status.js",
     "docker:up": "node scripts/docker-up.js",
     "docker:down": "docker compose down",
     "docker:logs": "docker compose logs -f",

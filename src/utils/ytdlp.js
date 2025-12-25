@@ -68,9 +68,12 @@ function getContentType(ext) {
  * @param {string} outputDir - Directory to save the file
  * @param {string} quality - Quality format string for yt-dlp
  * @param {number} timeout - Timeout in milliseconds
+ * @param {number} maxDuration - Maximum video duration in seconds (default: 180 = 3 minutes)
+ * @param {number|null} startTime - Start time in seconds for segment download
+ * @param {number|null} duration - Duration in seconds for segment download
  * @returns {Promise<string>} Path to downloaded file
  */
-function executeYtdlp(url, outputDir, quality, timeout = 300000) {
+function executeYtdlp(url, outputDir, quality, timeout = 300000, maxDuration = 180, startTime = null, duration = null) {
   return new Promise((resolve, reject) => {
     const outputTemplate = path.join(outputDir, '%(title)s.%(ext)s');
 
@@ -83,13 +86,32 @@ function executeYtdlp(url, outputDir, quality, timeout = 300000) {
       quality,
       '--merge-output-format',
       'mp4',
+    ];
+
+    // only filter by duration if:
+    // - maxDuration is not Infinity AND
+    // - no time-based segment download requested (startTime or duration specified)
+    if (maxDuration !== Infinity && startTime === null && duration === null) {
+      args.push('--match-filter', `duration <= ${maxDuration}`);
+    }
+
+    // use yt-dlp's --download-sections to download ONLY the requested segment
+    // this prevents downloading huge files when user only wants a small clip
+    if (startTime !== null || duration !== null) {
+      const start = startTime || 0;
+      const end = duration !== null ? start + duration : 'inf';
+      args.push('--download-sections', `*${start}-${end}`);
+      args.push('--force-keyframes-at-cuts'); // cleaner segment extraction
+    }
+
+    args.push(
       '-o',
       outputTemplate,
       '--restrict-filenames',
       '--print',
       'after_move:filepath',
-      url,
-    ];
+      url
+    );
 
     logger.info(`Executing yt-dlp with args: ${args.join(' ')}`);
 
@@ -201,6 +223,11 @@ function executeYtdlp(url, outputDir, quality, timeout = 300000) {
           reject(new ValidationError('invalid YouTube URL'));
         } else if (errorOutput.includes('No video formats found')) {
           reject(new NetworkError('no downloadable video formats found'));
+        } else if (
+          errorOutput.includes('does not pass filter') ||
+          errorOutput.includes('duration >')
+        ) {
+          reject(new ValidationError('video duration exceeds the maximum allowed (3 minutes)'));
         } else {
           reject(new NetworkError(`yt-dlp failed: ${errorOutput.substring(0, 200)}`));
         }
@@ -224,15 +251,21 @@ function executeYtdlp(url, outputDir, quality, timeout = 300000) {
  * @param {boolean} isAdminUser - Whether the user is an admin (allows larger files and higher quality)
  * @param {number} maxSize - Maximum file size in bytes
  * @param {string} quality - Quality preference (default from config)
+ * @param {number} maxDuration - Maximum video duration in seconds (default: 180 = 3 minutes, admins bypass this)
+ * @param {number|null} startTime - Start time in seconds for segment download
+ * @param {number|null} duration - Duration in seconds for segment download
  * @returns {Promise<Object>} Object with buffer, contentType, size, and filename
  */
 export async function downloadFromYouTube(
   url,
   isAdminUser = false,
   maxSize = Infinity,
-  quality = null
+  quality = null,
+  maxDuration = 180,
+  startTime = null,
+  duration = null
 ) {
-  logger.info(`Downloading from YouTube: ${url} (admin: ${isAdminUser})`);
+  logger.info(`Downloading from YouTube: ${url} (admin: ${isAdminUser}, maxDuration: ${maxDuration}, startTime: ${startTime}, duration: ${duration})`);
 
   // Use appropriate quality based on user type
   // Admin users get best quality, regular users get 1080p max
@@ -246,8 +279,8 @@ export async function downloadFromYouTube(
   const tmpDir = tmp.dirSync({ unsafeCleanup: true });
 
   try {
-    // Execute yt-dlp
-    const outputPath = await executeYtdlp(url, tmpDir.name, effectiveQuality);
+    // Execute yt-dlp with duration limit and optional segment download
+    const outputPath = await executeYtdlp(url, tmpDir.name, effectiveQuality, 300000, maxDuration, startTime, duration);
 
     // Read the downloaded file
     const buffer = await fs.readFile(outputPath);

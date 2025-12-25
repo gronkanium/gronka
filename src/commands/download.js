@@ -225,18 +225,33 @@ async function processDownload(
     let fileData;
     try {
       if (downloadMethod === 'ytdlp') {
-        // Download from YouTube using yt-dlp
+        // if trimming is requested, yt-dlp will download ONLY the requested segment using --download-sections
+        // this avoids downloading huge files and then trimming them
+        // otherwise, enforce 3-minute limit to prevent large downloads
+        const skipDurationLimit = startTime !== null || duration !== null;
+        const maxDuration = skipDurationLimit || adminUser ? Infinity : 180;
+
         fileData = await downloadFromYouTube(
           url,
           adminUser,
           maxSize,
-          adminUser ? null : YTDLP_QUALITY
+          adminUser ? null : YTDLP_QUALITY,
+          maxDuration,
+          startTime,
+          duration
         );
+
+        const trimmedByYtdlp = startTime !== null || duration !== null;
         logOperationStep(operationId, 'download_complete', 'success', {
-          message: 'File downloaded successfully via yt-dlp',
+          message: trimmedByYtdlp
+            ? 'file segment downloaded successfully via yt-dlp (already trimmed)'
+            : 'file downloaded successfully via yt-dlp',
           metadata: {
             url,
             fileCount: 1,
+            trimmedByYtdlp,
+            startTime,
+            duration,
           },
         });
       } else {
@@ -575,12 +590,19 @@ async function processDownload(
     }
 
     // Check if video or GIF trimming is requested
-    // If so, skip checking for original file existence (we need the trimmed version)
+    // note: for YouTube downloads with time parameters, yt-dlp already trimmed the video
+    // using --download-sections, so we don't need to trim again with ffmpeg
+    const alreadyTrimmedByYtdlp =
+      downloadMethod === 'ytdlp' && (startTime !== null || duration !== null);
     const needsTrimming =
-      (fileType === 'video' || fileType === 'gif') && (startTime !== null || duration !== null);
+      (fileType === 'video' || fileType === 'gif') &&
+      (startTime !== null || duration !== null) &&
+      !alreadyTrimmedByYtdlp;
 
     // Check if file already exists and get appropriate path
-    // Skip this check if trimming is needed (we'll check for trimmed file later)
+    // for yt-dlp downloads with time params, the buffer is already the trimmed segment,
+    // so we should check if this trimmed version exists (based on hash of the trimmed buffer)
+    // for downloads that need ffmpeg trimming, skip this check (we'll check for trimmed file later)
     let exists = false;
     let filePath = null;
     if (!needsTrimming) {

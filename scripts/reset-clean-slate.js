@@ -410,11 +410,6 @@ function deleteLocalData() {
  * Check if PostgreSQL is configured
  */
 function isPostgresConfigured() {
-  // Check if DATABASE_TYPE is explicitly set to postgres
-  if (process.env.DATABASE_TYPE === 'postgres') {
-    return true;
-  }
-
   // Check for DATABASE_URL
   if (process.env.DATABASE_URL) {
     return true;
@@ -483,9 +478,7 @@ async function wipePostgresDatabase() {
   console.log('wiping postgresql database...\n');
 
   if (!isPostgresConfigured()) {
-    console.log(
-      '  postgresql is not configured (DATABASE_TYPE not set to postgres or missing connection vars)'
-    );
+    console.log('  postgresql is not configured (missing connection vars)');
     console.log('  skipping postgresql cleanup');
     return { wiped: false, reason: 'not configured', tablesDropped: 0 };
   }

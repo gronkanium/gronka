@@ -114,6 +114,17 @@ export function getPostgresConfig() {
 
   // Support individual connection parameters
   // Use TEST_ prefixed variables if in test mode, with fallback to regular variables
+  const username = useTestConfig
+    ? process.env.TEST_POSTGRES_USER || process.env.POSTGRES_USER || 'gronka'
+    : process.env.POSTGRES_USER || 'gronka';
+
+  // Ensure username is always set (prevent postgres.js from defaulting to system user)
+  if (!username || username.trim() === '') {
+    throw new Error(
+      'PostgreSQL username is required. Set POSTGRES_USER or TEST_POSTGRES_USER environment variable.'
+    );
+  }
+
   const config = {
     host: resolvedHost,
     port: parseInt(
@@ -125,9 +136,7 @@ export function getPostgresConfig() {
     database: useTestConfig
       ? process.env.TEST_POSTGRES_DB || process.env.POSTGRES_DB || 'gronka'
       : process.env.POSTGRES_DB || 'gronka',
-    username: useTestConfig
-      ? process.env.TEST_POSTGRES_USER || process.env.POSTGRES_USER || 'gronka'
-      : process.env.POSTGRES_USER || 'gronka',
+    username: username,
     password: useTestConfig
       ? process.env.TEST_POSTGRES_PASSWORD || process.env.POSTGRES_PASSWORD || 'gronka'
       : process.env.POSTGRES_PASSWORD || 'gronka',
@@ -179,16 +188,42 @@ export async function initPostgresConnection() {
       // Add onnotice handler to suppress verbose NOTICE logs
       // Suppress in test mode and when FORCE_PRODUCTION_MODE is set (e.g., sync scripts)
       const suppressNotices = testMode || process.env.FORCE_PRODUCTION_MODE === 'true';
-      const connectionOptions =
-        typeof config === 'string'
-          ? {
-              connection: config,
-              onnotice: suppressNotices ? () => {} : undefined,
-            }
-          : {
-              ...config,
-              onnotice: suppressNotices ? () => {} : undefined,
-            };
+
+      // Ensure username is set when using connection string
+      let connectionOptions;
+      if (typeof config === 'string') {
+        // Parse connection string to ensure username is present
+        try {
+          const url = new URL(config);
+          if (!url.username || url.username.trim() === '') {
+            throw new Error(
+              'PostgreSQL connection string must include username. ' +
+                'Format: postgresql://username:password@host:port/database'
+            );
+          }
+        } catch (error) {
+          if (error.message.includes('username')) {
+            throw error;
+          }
+          // If URL parsing fails for other reasons, let postgres.js handle it
+        }
+        connectionOptions = {
+          connection: config,
+          onnotice: suppressNotices ? () => {} : undefined,
+        };
+      } else {
+        // Ensure username is set in config object
+        if (!config.username || config.username.trim() === '') {
+          throw new Error(
+            'PostgreSQL username is required in connection config. ' +
+              'Set POSTGRES_USER or TEST_POSTGRES_USER environment variable.'
+          );
+        }
+        connectionOptions = {
+          ...config,
+          onnotice: suppressNotices ? () => {} : undefined,
+        };
+      }
 
       sql = postgres(connectionOptions);
 

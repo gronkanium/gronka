@@ -16,8 +16,9 @@ function getPostgresConfig() {
     return process.env.DATABASE_URL;
   }
 
-  // Support TEST_ prefix for test database
-  const prefix = process.env.TEST_DATABASE_TYPE ? 'TEST_' : '';
+  // Support TEST_ prefix for test database (check for TEST_POSTGRES_* vars)
+  const hasTestVars = process.env.TEST_POSTGRES_HOST || process.env.TEST_POSTGRES_DB;
+  const prefix = hasTestVars ? 'TEST_' : '';
   const hostKey = `${prefix}POSTGRES_HOST`;
   const portKey = `${prefix}POSTGRES_PORT`;
   const dbKey = `${prefix}POSTGRES_DB`;

@@ -219,6 +219,12 @@ async function main() {
     console.log('Syncing stats to Cloudflare KV (PRODUCTION DATA ONLY)');
     console.log('='.repeat(60));
 
+    // Check for force rebuild flag
+    const forceRebuild = process.env.FORCE_REBUILD === 'true' || process.env.FORCE_REBUILD === '1';
+    if (forceRebuild) {
+      console.log('\n[FORCE_REBUILD] enabled - will trigger rebuild even if stats unchanged');
+    }
+
     // Validate configuration
     validateConfig();
 
@@ -262,12 +268,18 @@ async function main() {
 
       // Check if stats have changed
       if (!statsChanged(currentStats, existingStats)) {
-        console.log('\n      → Stats unchanged, skipping KV write and rebuild');
-        console.log('='.repeat(60));
-        process.exit(0);
+        if (!forceRebuild) {
+          console.log('\n      → Stats unchanged, skipping KV write and rebuild');
+          console.log('='.repeat(60));
+          process.exit(0);
+        } else {
+          console.log(
+            '\n      → Stats unchanged, but FORCE_REBUILD is enabled - will update KV and trigger rebuild'
+          );
+        }
+      } else {
+        console.log('      → Stats have changed, will update KV and trigger rebuild');
       }
-
-      console.log('      → Stats have changed, will update KV and trigger rebuild');
     } else {
       console.log('      ✓ No existing stats in KV, will write initial stats');
     }

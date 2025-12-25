@@ -22,11 +22,76 @@ export class RateLimitError extends NetworkError {
  * @param {Object} errorObj - Full axios error object
  * @returns {Object} { isRateLimit: boolean, isNotFound: boolean }
  */
+/**
+ * Map of Cobalt API error codes to user-friendly messages
+ */
+const COBALT_ERROR_MESSAGES = {
+  // Content errors
+  'error.api.content.post.unavailable': 'this post is unavailable or has been deleted',
+  'error.api.content.post.age': 'this post is age-restricted and cannot be downloaded',
+  'error.api.content.video.unavailable': 'this video is unavailable or has been deleted',
+  'error.api.content.too_large': 'this content is too large to download',
+
+  // Fetch errors
+  'error.api.fetch.empty': 'unable to fetch content (it may be deleted, private, or rate-limited)',
+  'error.api.fetch.fail': 'failed to fetch content from the platform',
+  'error.api.fetch.rate': 'rate limited by the platform, please try again later',
+
+  // Link/Service errors
+  'error.api.link.invalid': 'invalid or unsupported url format',
+  'error.api.link.unsupported': 'this service is not supported', // Will be customized with service name
+
+  // Generic errors
+  'error.api.generic': 'an error occurred while processing your request',
+  'error.api.auth.jwt.missing': 'authentication required',
+  'error.api.auth.jwt.invalid': 'invalid authentication token',
+};
+
+/**
+ * Get user-friendly error message for a Cobalt API error code
+ * @param {string} errorCode - The error code from Cobalt API
+ * @param {Object} context - Additional context (e.g., service name)
+ * @returns {string} User-friendly error message
+ */
+function getCobaltErrorMessage(errorCode, context = {}) {
+  if (!errorCode) {
+    return null;
+  }
+
+  // Handle error.api.link.unsupported with service context
+  if (errorCode === 'error.api.link.unsupported' && context?.service) {
+    return `the service "${context.service}" is not supported by cobalt`;
+  }
+
+  return COBALT_ERROR_MESSAGES[errorCode] || null;
+}
+
 function analyzeError(data, responseTime, errorObj) {
-  const result = { isRateLimit: false, isNotFound: false };
+  const result = {
+    isRateLimit: false,
+    isNotFound: false,
+    userMessage: null,
+    errorCode: null,
+    context: null
+  };
+
+  // Extract error code from response (can be in data.code or data.error.code)
+  const errorCode = data?.code || data?.error?.code;
+  const errorContext = data?.context || data?.error?.context;
+
+  if (errorCode) {
+    result.errorCode = errorCode;
+    result.context = errorContext;
+
+    // Get user-friendly message
+    const friendlyMessage = getCobaltErrorMessage(errorCode, errorContext);
+    if (friendlyMessage) {
+      result.userMessage = friendlyMessage;
+    }
+  }
 
   // Check for explicit rate limit indicators
-  if (data?.error?.code && data.error.code.includes('rate')) {
+  if (errorCode && errorCode.includes('rate')) {
     result.isRateLimit = true;
     return result;
   }
@@ -37,8 +102,33 @@ function analyzeError(data, responseTime, errorObj) {
     return result;
   }
 
+  // Handle specific error codes
+  switch (errorCode) {
+    case 'error.api.content.post.unavailable':
+    case 'error.api.content.video.unavailable':
+      result.isNotFound = true;
+      return result;
+
+    case 'error.api.content.post.age':
+      result.isNotFound = true; // Don't retry age-restricted content
+      return result;
+
+    case 'error.api.link.invalid':
+    case 'error.api.link.unsupported':
+      result.isNotFound = true; // Don't retry invalid/unsupported URLs
+      return result;
+
+    case 'error.api.fetch.rate':
+      result.isRateLimit = true;
+      return result;
+
+    case 'error.api.fetch.fail':
+      // Fetch failures could be temporary, but don't classify as rate limit
+      return result;
+  }
+
   // error.api.fetch.empty is ambiguous - use heuristics
-  if (data?.error?.code === 'error.api.fetch.empty' || data?.code === 'error.api.fetch.empty') {
+  if (errorCode === 'error.api.fetch.empty') {
     // Check response text for clues
     const errorText = (data?.error?.text || data?.text || '').toLowerCase();
 
@@ -202,7 +292,7 @@ async function callCobaltApi(apiUrl, url, retryCount = 0, maxRetries = 3) {
 
     logger.info(`Cobalt API response status: ${response.status}`);
     if (response.status !== 200) {
-      throw new NetworkError(`Cobalt API returned status ${response.status}`);
+      throw new NetworkError(`cobalt api returned status ${response.status}`);
     }
 
     return response.data;
@@ -219,10 +309,19 @@ async function callCobaltApi(apiUrl, url, retryCount = 0, maxRetries = 3) {
       // Analyze error to determine if it's rate limiting or not found
       const errorAnalysis = analyzeError(data, responseTime, error);
 
+      // Log error details
+      if (errorAnalysis.errorCode) {
+        logger.error(`Cobalt error code: ${errorAnalysis.errorCode}`);
+        if (errorAnalysis.context) {
+          logger.error(`Error context: ${JSON.stringify(errorAnalysis.context)}`);
+        }
+      }
+
       // If content doesn't exist, don't retry
       if (errorAnalysis.isNotFound) {
-        logger.error('Content appears to be deleted, unavailable, or does not exist');
-        throw new NetworkError('content not found, deleted, or unavailable');
+        const notFoundMessage = errorAnalysis.userMessage || 'content not found, deleted, or unavailable';
+        logger.error(`Content error: ${notFoundMessage}`);
+        throw new NetworkError(notFoundMessage);
       }
 
       // If rate limited and we have retries left, retry with backoff
@@ -236,9 +335,15 @@ async function callCobaltApi(apiUrl, url, retryCount = 0, maxRetries = 3) {
         return callCobaltApi(apiUrl, url, retryCount + 1, maxRetries);
       }
 
-      // Extract error message, ensuring it's always a string
+      // Determine the message to show to the user
       let message = null;
-      if (typeof data?.text === 'string') {
+
+      // First priority: Use our user-friendly message if available
+      if (errorAnalysis.userMessage) {
+        message = errorAnalysis.userMessage;
+      }
+      // Second priority: Extract error message from response
+      else if (typeof data?.text === 'string') {
         message = data.text;
       } else if (typeof data?.message === 'string') {
         message = data.message;
@@ -279,14 +384,14 @@ async function callCobaltApi(apiUrl, url, retryCount = 0, maxRetries = 3) {
     }
     if (error.code === 'ECONNABORTED') {
       logger.error('Cobalt API request timed out');
-      throw new NetworkError('Cobalt API request timed out');
+      throw new NetworkError('cobalt api request timed out');
     }
     if (error.code === 'ECONNREFUSED') {
       logger.error('Cobalt service connection refused - is it running?');
-      throw new NetworkError('Cobalt service is not available');
+      throw new NetworkError('cobalt service is not available');
     }
     logger.error(`Cobalt API call failed: ${error.message}, code: ${error.code}`);
-    throw new NetworkError(`Failed to call Cobalt API: ${error.message}`);
+    throw new NetworkError(`failed to call cobalt api: ${error.message}`);
   }
 }
 
@@ -358,15 +463,15 @@ async function downloadPhoto(photoUrl, index, isAdminUser = false, maxSize = Inf
     };
   } catch (error) {
     if (error.response?.status === 413 && !isAdminUser) {
-      throw new NetworkError(`Photo ${index + 1} file is too large`);
+      throw new NetworkError(`photo ${index + 1} file is too large`);
     }
     if (error.response?.status === 404) {
-      throw new NetworkError(`Photo ${index + 1} not found at URL`);
+      throw new NetworkError(`photo ${index + 1} not found at url`);
     }
     if (error.code === 'ECONNABORTED') {
-      throw new NetworkError(`Photo ${index + 1} download timed out`);
+      throw new NetworkError(`photo ${index + 1} download timed out`);
     }
-    throw new NetworkError(`Failed to download photo ${index + 1}: ${error.message}`);
+    throw new NetworkError(`failed to download photo ${index + 1}: ${error.message}`);
   }
 }
 
@@ -438,15 +543,15 @@ async function downloadVideo(videoUrl, index, isAdminUser = false, maxSize = Inf
     };
   } catch (error) {
     if (error.response?.status === 413 && !isAdminUser) {
-      throw new NetworkError(`Video ${index + 1} file is too large`);
+      throw new NetworkError(`video ${index + 1} file is too large`);
     }
     if (error.response?.status === 404) {
-      throw new NetworkError(`Video ${index + 1} not found at URL`);
+      throw new NetworkError(`video ${index + 1} not found at url`);
     }
     if (error.code === 'ECONNABORTED') {
-      throw new NetworkError(`Video ${index + 1} download timed out`);
+      throw new NetworkError(`video ${index + 1} download timed out`);
     }
-    throw new NetworkError(`Failed to download video ${index + 1}: ${error.message}`);
+    throw new NetworkError(`failed to download video ${index + 1}: ${error.message}`);
   }
 }
 
@@ -464,7 +569,7 @@ async function downloadMediaFromPicker(pickerArray, isAdminUser = false, maxSize
   );
 
   if (mediaItems.length === 0) {
-    throw new NetworkError('No media files (photos or videos) found in picker response');
+    throw new NetworkError('no media files (photos or videos) found in picker response');
   }
 
   logger.info(
@@ -576,7 +681,7 @@ async function downloadFromCobalt(
         videoUrl = replaceTunnelHostname(videoUrl, apiUrl);
       }
     } else {
-      throw new NetworkError('Cobalt tunnel response missing URL');
+      throw new NetworkError('cobalt tunnel response missing url');
     }
 
     // Get filename from response if available
@@ -584,7 +689,7 @@ async function downloadFromCobalt(
       filename = cobaltResponse.filename;
     }
   } else if (cobaltResponse.status === 'error') {
-    throw new NetworkError(cobaltResponse.text || 'Cobalt API returned an error');
+    throw new NetworkError(cobaltResponse.text || 'cobalt api returned an error');
   } else {
     // Try to find video URL in response object
     const possibleKeys = ['url', 'video', 'videoUrl', 'downloadUrl', 'directUrl'];
@@ -601,7 +706,7 @@ async function downloadFromCobalt(
   }
 
   if (!videoUrl) {
-    throw new NetworkError('Cobalt API did not return a video URL');
+    throw new NetworkError('cobalt api did not return a video url');
   }
 
   // Download the video
@@ -675,15 +780,15 @@ async function downloadFromCobalt(
     };
   } catch (error) {
     if (error.response?.status === 413 && !isAdminUser) {
-      throw new NetworkError('Video file is too large');
+      throw new NetworkError('video file is too large');
     }
     if (error.response?.status === 404) {
-      throw new NetworkError('Video file not found at Cobalt URL');
+      throw new NetworkError('video file not found at cobalt url');
     }
     if (error.code === 'ECONNABORTED') {
-      throw new NetworkError('Video download timed out');
+      throw new NetworkError('video download timed out');
     }
-    throw new NetworkError(`Failed to download video from Cobalt: ${error.message}`);
+    throw new NetworkError(`failed to download video from cobalt: ${error.message}`);
   }
 }
 

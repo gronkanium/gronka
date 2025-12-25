@@ -107,7 +107,6 @@ all standard environment variables support the `TEST_` and `PROD_` prefixes:
 **server configuration:**
 - `TEST_SERVER_PORT` / `PROD_SERVER_PORT`
 - `TEST_SERVER_HOST` / `PROD_SERVER_HOST`
-- `TEST_CORS_ORIGIN` / `PROD_CORS_ORIGIN`
 - `TEST_STATS_USERNAME` / `PROD_STATS_USERNAME`
 - `TEST_STATS_PASSWORD` / `PROD_STATS_PASSWORD`
 - `TEST_STATS_CACHE_TTL` / `PROD_STATS_CACHE_TTL`
@@ -115,7 +114,6 @@ all standard environment variables support the `TEST_` and `PROD_` prefixes:
 **webui configuration:**
 - `TEST_WEBUI_PORT` / `PROD_WEBUI_PORT`
 - `TEST_WEBUI_HOST` / `PROD_WEBUI_HOST`
-- `TEST_MAIN_SERVER_URL` / `PROD_MAIN_SERVER_URL`
 
 **database configuration:**
 - `TEST_POSTGRES_DB` / `PROD_POSTGRES_DB`
@@ -304,21 +302,17 @@ PROD_GIF_QUALITY=medium
 
 # test bot server configuration
 TEST_SERVER_HOST=127.0.0.1
-TEST_CORS_ORIGIN=http://localhost:3000
 
 # prod bot server configuration
 PROD_SERVER_HOST=0.0.0.0
-PROD_CORS_ORIGIN=https://cdn.example.com
 
 # test bot webui configuration
 TEST_WEBUI_PORT=3002
 TEST_WEBUI_HOST=127.0.0.1
-TEST_MAIN_SERVER_URL=http://localhost:3000
 
 # prod bot webui configuration
 PROD_WEBUI_PORT=3001
 PROD_WEBUI_HOST=127.0.0.1
-PROD_MAIN_SERVER_URL=http://localhost:3000
 
 # test bot logging
 TEST_LOG_DIR=./logs-test

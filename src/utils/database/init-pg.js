@@ -40,13 +40,20 @@ export async function initPostgresDatabase() {
         try {
           await connection.unsafe(table.sql);
         } catch (error) {
-          // Handle duplicate type error that can occur in parallel test execution
-          // When a table is dropped but the type remains, recreate both
-          if (error.code === '42710' || error.message?.includes('pg_type_typname_nsp_index')) {
+          // Handle duplicate type/table errors that can occur in parallel test execution
+          // 42710: duplicate type error
+          // 42P07: duplicate table/relation error
+          if (
+            error.code === '42710' ||
+            error.code === '42P07' ||
+            error.message?.includes('pg_type_typname_nsp_index')
+          ) {
             console.warn(
-              `[Database Init] Type conflict for table "${table.name}", dropping type and recreating...`
+              `[Database Init] Conflict for table "${table.name}" (${error.code || 'unknown'}), dropping and recreating...`
             );
-            // Drop the conflicting type and retry table creation
+            // Drop the table first, then the type, then recreate
+            // PostgreSQL won't allow dropping a type that a table depends on
+            await connection.unsafe(`DROP TABLE IF EXISTS ${table.name} CASCADE`);
             await connection.unsafe(`DROP TYPE IF EXISTS ${table.name} CASCADE`);
             await connection.unsafe(table.sql);
           } else {
@@ -55,10 +62,32 @@ export async function initPostgresDatabase() {
         }
       }
 
-      // Create indexes
+      // Create indexes with error handling for race conditions
       const indexes = getIndexDefinitions();
       for (const index of indexes) {
-        await connection.unsafe(index.sql);
+        try {
+          await connection.unsafe(index.sql);
+        } catch (error) {
+          // Handle index conflicts in parallel test execution
+          // 23505: unique constraint violation (race condition in pg_class catalog)
+          // 42P07: relation already exists (race condition despite IF NOT EXISTS)
+          // pg_class_relname_nsp_index: PostgreSQL catalog constraint violation
+          // This can happen even with IF NOT EXISTS when there's a race condition
+          const isCatalogError =
+            error.code === '23505' ||
+            error.code === '42P07' ||
+            error.message?.includes('pg_class_relname_nsp_index') ||
+            error.message?.includes('duplicate key value violates unique constraint');
+
+          if (isCatalogError) {
+            // Index already exists or is being created, this is safe to ignore
+            console.warn(
+              `[Database Init] Index "${index.name}" already exists or catalog conflict (${error.code || 'unknown'}), skipping...`
+            );
+          } else {
+            throw error;
+          }
+        }
       }
 
       // Add file_size column if needed (for migration compatibility)

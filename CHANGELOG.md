@@ -7,6 +7,13 @@ and this project adheres (attempts) to [Semantic Versioning](https://semver.org/
 
 ## [Unreleased]
 
+### Changed
+
+- Migrated GitHub Actions workflows to Blacksmith for improved CI/CD automation
+  - Updated `.github/workflows/ci.yml` to use Blacksmith
+  - Updated `.github/workflows/codeql.yml` to use Blacksmith
+  - Updated `.github/workflows/release.yml` to use Blacksmith
+
 ### Fixed
 
 - Fixed release notes generation workflow to correctly extract notes from CHANGELOG.md

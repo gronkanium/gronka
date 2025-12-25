@@ -119,7 +119,6 @@
       <table>
         <thead>
           <tr>
-            <th>Expand</th>
             <th>Status</th>
             <th>Type</th>
             <th>Username</th>
@@ -164,7 +163,7 @@
             </tr>
             {#if expandedOperations.has(operation.id)}
               <tr class="details-row">
-                <td colspan="7" class="details-cell">
+                <td colspan="6" class="details-cell">
                   <div class="operation-details">
                     <div class="details-section">
                       <h4>operation info</h4>
@@ -324,25 +323,24 @@
   }
 
   th:nth-child(1) {
-    width: 50px;
-    min-width: 50px;
-    max-width: 50px;
-  }
-
-  th:nth-child(2) {
     width: 80px;
     min-width: 80px;
     max-width: 80px;
   }
 
-  th:nth-child(3) {
+  th:nth-child(2) {
     min-width: 100px;
     max-width: 150px;
   }
 
-  th:nth-child(4) {
+  th:nth-child(3) {
     min-width: 120px;
     max-width: 200px;
+  }
+
+  th:nth-child(4) {
+    min-width: 100px;
+    max-width: 150px;
   }
 
   th:nth-child(5) {
@@ -351,11 +349,6 @@
   }
 
   th:nth-child(6) {
-    min-width: 100px;
-    max-width: 150px;
-  }
-
-  th:nth-child(7) {
     min-width: 120px;
     max-width: 200px;
   }
@@ -492,7 +485,7 @@
   }
 
   .expand-cell {
-    width: 40px;
+    width: 70px;
     text-align: center;
   }
 

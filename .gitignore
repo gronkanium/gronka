@@ -37,6 +37,7 @@ logs/
 Thumbs.db
 
 # IDE
+.claude/
 .vscode/
 .idea/
 .cursor/
@@ -95,3 +96,4 @@ MIGRATION.md
 scripts/fix-docker-credentials.sh
 AGENTS.md
 .agent/
+CLAUDE.md

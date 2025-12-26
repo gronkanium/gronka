@@ -72,7 +72,7 @@ function analyzeError(data, responseTime, errorObj) {
     isNotFound: false,
     userMessage: null,
     errorCode: null,
-    context: null
+    context: null,
   };
 
   // Extract error code from response (can be in data.code or data.error.code)
@@ -319,7 +319,8 @@ async function callCobaltApi(apiUrl, url, retryCount = 0, maxRetries = 3) {
 
       // If content doesn't exist, don't retry
       if (errorAnalysis.isNotFound) {
-        const notFoundMessage = errorAnalysis.userMessage || 'content not found, deleted, or unavailable';
+        const notFoundMessage =
+          errorAnalysis.userMessage || 'content not found, deleted, or unavailable';
         logger.error(`Content error: ${notFoundMessage}`);
         throw new NetworkError(notFoundMessage);
       }

@@ -104,12 +104,64 @@ function startStatsServer() {
   // Trust proxy for proper IP detection
   app.set('trust proxy', 1);
 
+  // Parse JSON bodies for status endpoint
+  app.use(express.json());
+
   // Security headers
   app.use((req, res, next) => {
     res.set('X-Content-Type-Options', 'nosniff');
     res.set('X-Frame-Options', 'DENY');
     res.set('X-XSS-Protection', '1; mode=block');
     next();
+  });
+
+  // Bot status update endpoint (protected with basic auth)
+  // Used by npm run bot:status script to update presence without creating a new Discord connection
+  app.post('/api/bot/status', basicAuth, async (req, res) => {
+    try {
+      const { status, activity } = req.body;
+
+      if (!client.isReady()) {
+        return res.status(503).json({ error: 'bot is not ready' });
+      }
+
+      const validStatuses = ['online', 'idle', 'dnd', 'invisible'];
+      if (status && !validStatuses.includes(status)) {
+        return res.status(400).json({
+          error: `invalid status "${status}". Must be one of: ${validStatuses.join(', ')}`,
+        });
+      }
+
+      const presenceOptions = {};
+      if (status) {
+        presenceOptions.status = status;
+      }
+      if (activity) {
+        presenceOptions.activities = [
+          {
+            name: activity,
+            type: 4, // ActivityType.Custom
+          },
+        ];
+      }
+
+      await client.user.setPresence(presenceOptions);
+
+      const statusMsg = activity
+        ? `Status updated to "${status || 'current'}" with activity: "${activity}"`
+        : `Status updated to "${status}"`;
+      logger.info(statusMsg);
+
+      res.json({
+        success: true,
+        status: status || 'unchanged',
+        activity: activity || null,
+        botTag: client.user.tag,
+      });
+    } catch (error) {
+      logger.error('Failed to update bot status:', error);
+      res.status(500).json({ error: error.message });
+    }
   });
 
   // 24-hour stats endpoint for Jekyll site (protected with basic auth)

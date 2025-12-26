@@ -7,17 +7,13 @@ permissions:
 
 on:
   push:
-    branches:
-      - main
-      - master
+    branches: [main, master]
     paths-ignore:
       - '**.md'
       - '.github/workflows/**'
       - 'docs/**'
   pull_request:
-    branches:
-      - main
-      - master
+    branches: [main, master]
     paths-ignore:
       - '**.md'
       - '.github/workflows/**'
@@ -27,47 +23,40 @@ concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
+env:
+  DISCORD_TOKEN: 'ci-test-token'
+  CLIENT_ID: 'ci-test-client-id'
+  POSTGRES_DB: gronka_test
+  POSTGRES_USER: gronka
+  POSTGRES_PASSWORD: gronka
+  POSTGRES_HOST: localhost
+  POSTGRES_PORT: '5432'
+
 jobs:
   dependency-review:
     runs-on: blacksmith-4vcpu-ubuntu-2404
     if: github.event_name == 'pull_request'
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-
-      - name: Dependency Review
-        uses: actions/dependency-review-action@v4
+      - uses: actions/checkout@v4
+      - uses: actions/dependency-review-action@v4
         with:
           fail-on-severity: moderate
           config-file: ./.github/dependency-review-config.yml
 
-  # Validate stage - Code quality checks
   validate-code:
     runs-on: blacksmith-4vcpu-ubuntu-2404
     if: github.actor != 'dependabot[bot]'
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
         with:
           node-version: '20'
           cache: 'npm'
+      - run: npm ci
+      - run: npm run check:sync
+      - run: npm run lint
+      - run: npm run format:check || echo "::warning::Formatting check failed"
 
-      - name: Install dependencies
-        run: npm ci
-
-      - name: Check lock sync
-        run: npm run check:sync
-
-      - name: Lint
-        run: npm run lint
-
-      - name: Check formatting
-        run: npm run format:check || echo "::warning::Formatting check failed"
-
-  # Test stage - Utility functions
   test-utils:
     runs-on: blacksmith-4vcpu-ubuntu-2404
     if: github.actor != 'dependabot[bot]'
@@ -86,56 +75,16 @@ jobs:
         ports:
           - 5432:5432
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
         with:
           node-version: '20'
           cache: 'npm'
+      - run: npm ci
+      - run: sudo apt-get update && sudo apt-get install -y ffmpeg postgresql-client
+      - run: PGPASSWORD=gronka psql -h localhost -U gronka -d gronka_test -c 'DROP SCHEMA IF EXISTS public CASCADE; CREATE SCHEMA public;'
+      - run: npx cross-env WEBUI_PORT=3101 R2_ACCOUNT_ID= R2_ACCESS_KEY_ID= R2_SECRET_ACCESS_KEY= R2_BUCKET_NAME= node --test test/utils/
 
-      - name: Install dependencies
-        run: npm ci
-
-      - name: Install FFmpeg
-        run: sudo apt-get update && sudo apt-get install -y ffmpeg
-
-      - name: Install PostgreSQL client
-        run: sudo apt-get install -y postgresql-client
-
-      - name: Reset test database schema
-        run: |
-          PGPASSWORD=gronka psql -h localhost -U gronka -d gronka_test -c 'DROP SCHEMA IF EXISTS public CASCADE; CREATE SCHEMA public;'
-        env:
-          PGHOST: localhost
-          PGPORT: '5432'
-          PGDATABASE: gronka_test
-          PGUSER: gronka
-          PGPASSWORD: gronka
-
-      - name: Run utility tests
-        run: npx cross-env WEBUI_PORT=3101 R2_ACCOUNT_ID= R2_ACCESS_KEY_ID= R2_SECRET_ACCESS_KEY= R2_BUCKET_NAME= node --test test/utils/
-        env:
-          DISCORD_TOKEN: 'ci-test-token'
-          CLIENT_ID: 'ci-test-client-id'
-          POSTGRES_DB: gronka_test
-          POSTGRES_USER: gronka
-          POSTGRES_PASSWORD: gronka
-          POSTGRES_HOST: localhost
-          POSTGRES_PORT: '5432'
-          TEST_POSTGRES_DB: gronka_test
-          TEST_POSTGRES_USER: gronka
-          TEST_POSTGRES_PASSWORD: gronka
-          TEST_POSTGRES_HOST: localhost
-          TEST_POSTGRES_PORT: '5432'
-          PGUSER: gronka
-          PGPASSWORD: gronka
-          PGHOST: localhost
-          PGPORT: '5432'
-          PGDATABASE: gronka_test
-
-  # Test stage - Command handlers
   test-commands:
     runs-on: blacksmith-4vcpu-ubuntu-2404
     if: github.actor != 'dependabot[bot]'
@@ -154,56 +103,16 @@ jobs:
         ports:
           - 5432:5432
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
         with:
           node-version: '20'
           cache: 'npm'
+      - run: npm ci
+      - run: sudo apt-get update && sudo apt-get install -y ffmpeg postgresql-client
+      - run: PGPASSWORD=gronka psql -h localhost -U gronka -d gronka_test -c 'DROP SCHEMA IF EXISTS public CASCADE; CREATE SCHEMA public;'
+      - run: npx cross-env WEBUI_PORT=3101 R2_ACCOUNT_ID= R2_ACCESS_KEY_ID= R2_SECRET_ACCESS_KEY= R2_BUCKET_NAME= node --test test/commands/
 
-      - name: Install dependencies
-        run: npm ci
-
-      - name: Install FFmpeg
-        run: sudo apt-get update && sudo apt-get install -y ffmpeg
-
-      - name: Install PostgreSQL client
-        run: sudo apt-get install -y postgresql-client
-
-      - name: Reset test database schema
-        run: |
-          PGPASSWORD=gronka psql -h localhost -U gronka -d gronka_test -c 'DROP SCHEMA IF EXISTS public CASCADE; CREATE SCHEMA public;'
-        env:
-          PGHOST: localhost
-          PGPORT: '5432'
-          PGDATABASE: gronka_test
-          PGUSER: gronka
-          PGPASSWORD: gronka
-
-      - name: Run command tests
-        run: npx cross-env WEBUI_PORT=3101 R2_ACCOUNT_ID= R2_ACCESS_KEY_ID= R2_SECRET_ACCESS_KEY= R2_BUCKET_NAME= node --test test/commands/
-        env:
-          DISCORD_TOKEN: 'ci-test-token'
-          CLIENT_ID: 'ci-test-client-id'
-          POSTGRES_DB: gronka_test
-          POSTGRES_USER: gronka
-          POSTGRES_PASSWORD: gronka
-          POSTGRES_HOST: localhost
-          POSTGRES_PORT: '5432'
-          TEST_POSTGRES_DB: gronka_test
-          TEST_POSTGRES_USER: gronka
-          TEST_POSTGRES_PASSWORD: gronka
-          TEST_POSTGRES_HOST: localhost
-          TEST_POSTGRES_PORT: '5432'
-          PGUSER: gronka
-          PGPASSWORD: gronka
-          PGHOST: localhost
-          PGPORT: '5432'
-          PGDATABASE: gronka_test
-
-  # Test stage - Scripts
   test-scripts:
     runs-on: blacksmith-4vcpu-ubuntu-2404
     if: github.actor != 'dependabot[bot]'
@@ -222,56 +131,16 @@ jobs:
         ports:
           - 5432:5432
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
         with:
           node-version: '20'
           cache: 'npm'
+      - run: npm ci
+      - run: sudo apt-get update && sudo apt-get install -y ffmpeg postgresql-client
+      - run: PGPASSWORD=gronka psql -h localhost -U gronka -d gronka_test -c 'DROP SCHEMA IF EXISTS public CASCADE; CREATE SCHEMA public;'
+      - run: npx cross-env WEBUI_PORT=3101 R2_ACCOUNT_ID= R2_ACCESS_KEY_ID= R2_SECRET_ACCESS_KEY= R2_BUCKET_NAME= node --test test/scripts/
 
-      - name: Install dependencies
-        run: npm ci
-
-      - name: Install FFmpeg
-        run: sudo apt-get update && sudo apt-get install -y ffmpeg
-
-      - name: Install PostgreSQL client
-        run: sudo apt-get install -y postgresql-client
-
-      - name: Reset test database schema
-        run: |
-          PGPASSWORD=gronka psql -h localhost -U gronka -d gronka_test -c 'DROP SCHEMA IF EXISTS public CASCADE; CREATE SCHEMA public;'
-        env:
-          PGHOST: localhost
-          PGPORT: '5432'
-          PGDATABASE: gronka_test
-          PGUSER: gronka
-          PGPASSWORD: gronka
-
-      - name: Run script tests
-        run: npx cross-env WEBUI_PORT=3101 R2_ACCOUNT_ID= R2_ACCESS_KEY_ID= R2_SECRET_ACCESS_KEY= R2_BUCKET_NAME= node --test test/scripts/
-        env:
-          DISCORD_TOKEN: 'ci-test-token'
-          CLIENT_ID: 'ci-test-client-id'
-          POSTGRES_DB: gronka_test
-          POSTGRES_USER: gronka
-          POSTGRES_PASSWORD: gronka
-          POSTGRES_HOST: localhost
-          POSTGRES_PORT: '5432'
-          TEST_POSTGRES_DB: gronka_test
-          TEST_POSTGRES_USER: gronka
-          TEST_POSTGRES_PASSWORD: gronka
-          TEST_POSTGRES_HOST: localhost
-          TEST_POSTGRES_PORT: '5432'
-          PGUSER: gronka
-          PGPASSWORD: gronka
-          PGHOST: localhost
-          PGPORT: '5432'
-          PGDATABASE: gronka_test
-
-  # Test stage - Integration/server components
   test-integration:
     runs-on: blacksmith-4vcpu-ubuntu-2404
     if: github.actor != 'dependabot[bot]'
@@ -290,77 +159,25 @@ jobs:
         ports:
           - 5432:5432
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
         with:
           node-version: '20'
           cache: 'npm'
-
-      - name: Install dependencies
-        run: npm ci
-
-      - name: Install FFmpeg
-        run: sudo apt-get update && sudo apt-get install -y ffmpeg
-
-      - name: Install PostgreSQL client
-        run: sudo apt-get install -y postgresql-client
-
-      - name: Reset test database schema
-        run: |
-          PGPASSWORD=gronka psql -h localhost -U gronka -d gronka_test -c 'DROP SCHEMA IF EXISTS public CASCADE; CREATE SCHEMA public;'
-        env:
-          PGHOST: localhost
-          PGPORT: '5432'
-          PGDATABASE: gronka_test
-          PGUSER: gronka
-          PGPASSWORD: gronka
-
-      - name: Run integration tests
-        run: npx cross-env WEBUI_PORT=3101 R2_ACCOUNT_ID= R2_ACCESS_KEY_ID= R2_SECRET_ACCESS_KEY= R2_BUCKET_NAME= node --test test/webui-server-*.test.js test/docker-security.test.js
-        env:
-          DISCORD_TOKEN: 'ci-test-token'
-          CLIENT_ID: 'ci-test-client-id'
-          POSTGRES_DB: gronka_test
-          POSTGRES_USER: gronka
-          POSTGRES_PASSWORD: gronka
-          POSTGRES_HOST: localhost
-          POSTGRES_PORT: '5432'
-          TEST_POSTGRES_DB: gronka_test
-          TEST_POSTGRES_USER: gronka
-          TEST_POSTGRES_PASSWORD: gronka
-          TEST_POSTGRES_HOST: localhost
-          TEST_POSTGRES_PORT: '5432'
-          PGUSER: gronka
-          PGPASSWORD: gronka
-          PGHOST: localhost
-          PGPORT: '5432'
-          PGDATABASE: gronka_test
+      - run: npm ci
+      - run: sudo apt-get update && sudo apt-get install -y ffmpeg postgresql-client
+      - run: PGPASSWORD=gronka psql -h localhost -U gronka -d gronka_test -c 'DROP SCHEMA IF EXISTS public CASCADE; CREATE SCHEMA public;'
+      - run: npx cross-env WEBUI_PORT=3101 R2_ACCOUNT_ID= R2_ACCESS_KEY_ID= R2_SECRET_ACCESS_KEY= R2_BUCKET_NAME= node --test test/webui-server-*.test.js test/docker-security.test.js
 
   dependabot-checks:
     runs-on: blacksmith-4vcpu-ubuntu-2404
     if: github.actor == 'dependabot[bot]'
-
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
         with:
           node-version: '20'
           cache: 'npm'
-
-      - name: Install dependencies
-        run: npm ci
-
-      - name: Install FFmpeg
-        run: sudo apt-get update && sudo apt-get install -y ffmpeg
-
-      - name: Run validation
-        run: npm run validate
-        env:
-          DISCORD_TOKEN: 'ci-test-token'
-          CLIENT_ID: 'ci-test-client-id'
+      - run: npm ci
+      - run: sudo apt-get update && sudo apt-get install -y ffmpeg
+      - run: npm run validate

@@ -26,7 +26,9 @@ try {
   // Regex to match the version header.
   // Matches: ## [1.0.0] or ## 1.0.0
   // We want to be somewhat flexible but accurate.
-  const versionRegex = new RegExp(`^##\\s+\\[?${cleanVersion.replace(/\./g, '\\.')}\\]?`);
+  // Escape all regex special characters to prevent regex injection
+  const escapedVersion = cleanVersion.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const versionRegex = new RegExp(`^##\\s+\\[?${escapedVersion}\\]?`);
 
   // Regex to match the start of the NEXT version section
   // Matches any line starting with ## followed by text (not strictly ###)

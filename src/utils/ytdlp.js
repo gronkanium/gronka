@@ -5,6 +5,7 @@ import path from 'path';
 import tmp from 'tmp';
 import { createLogger } from './logger.js';
 import { NetworkError, ValidationError } from './errors.js';
+import { trimVideo } from './video-processor/trim-video.js';
 
 const logger = createLogger('ytdlp');
 
@@ -73,7 +74,15 @@ function getContentType(ext) {
  * @param {number|null} duration - Duration in seconds for segment download
  * @returns {Promise<string>} Path to downloaded file
  */
-function executeYtdlp(url, outputDir, quality, timeout = 300000, maxDuration = 180, startTime = null, duration = null) {
+function executeYtdlp(
+  url,
+  outputDir,
+  quality,
+  timeout = 300000,
+  maxDuration = 180,
+  startTime = null,
+  duration = null
+) {
   return new Promise((resolve, reject) => {
     const outputTemplate = path.join(outputDir, '%(title)s.%(ext)s');
 
@@ -104,14 +113,7 @@ function executeYtdlp(url, outputDir, quality, timeout = 300000, maxDuration = 1
       args.push('--force-keyframes-at-cuts'); // cleaner segment extraction
     }
 
-    args.push(
-      '-o',
-      outputTemplate,
-      '--restrict-filenames',
-      '--print',
-      'after_move:filepath',
-      url
-    );
+    args.push('-o', outputTemplate, '--restrict-filenames', '--print', 'after_move:filepath', url);
 
     logger.info(`Executing yt-dlp with args: ${args.join(' ')}`);
 
@@ -140,6 +142,18 @@ function executeYtdlp(url, outputDir, quality, timeout = 300000, maxDuration = 1
       clearTimeout(timeoutId);
 
       if (code === 0) {
+        // Check if video was filtered out due to duration limit
+        // yt-dlp exits with code 0 when --match-filter skips a video
+        const combinedOutput = stdout + stderr;
+        if (
+          combinedOutput.includes('does not pass filter') ||
+          combinedOutput.includes('Video is longer than') ||
+          combinedOutput.includes('Skipping')
+        ) {
+          reject(new ValidationError('video duration exceeds the maximum allowed (3 minutes)'));
+          return;
+        }
+
         // yt-dlp prints the output file path via --print after_move:filepath
         // Filter out any progress messages and get only valid file paths
         const lines = stdout
@@ -162,11 +176,25 @@ function executeYtdlp(url, outputDir, quality, timeout = 300000, maxDuration = 1
         const outputPath = lines.length > 0 ? lines[lines.length - 1] : null;
 
         if (outputPath && outputPath.length > 0) {
-          // Verify the file actually exists
+          // Verify the file actually exists and has valid content
           try {
             const stats = fsSync.statSync(outputPath);
             if (stats.isFile()) {
-              logger.info(`yt-dlp download complete: ${outputPath}`);
+              // Check for minimum file size - a valid video should be at least 1KB
+              // A 200-byte file is just container headers with no actual video data
+              const MIN_VALID_VIDEO_SIZE = 1024; // 1KB minimum
+              if (stats.size < MIN_VALID_VIDEO_SIZE) {
+                logger.error(
+                  `yt-dlp produced a suspiciously small file (${stats.size} bytes), likely a failed segment download`
+                );
+                reject(
+                  new NetworkError(
+                    `yt-dlp segment download failed: output file too small (${stats.size} bytes)`
+                  )
+                );
+                return;
+              }
+              logger.info(`yt-dlp download complete: ${outputPath} (${stats.size} bytes)`);
               resolve(outputPath);
             } else {
               reject(new NetworkError(`yt-dlp output path is not a file: ${outputPath}`));
@@ -176,7 +204,22 @@ function executeYtdlp(url, outputDir, quality, timeout = 300000, maxDuration = 1
             const files = fsSync.readdirSync(outputDir);
             if (files.length > 0) {
               const actualPath = path.join(outputDir, files[0]);
-              logger.info(`yt-dlp download complete (found file): ${actualPath}`);
+              const fallbackStats = fsSync.statSync(actualPath);
+              const MIN_VALID_VIDEO_SIZE = 1024;
+              if (fallbackStats.size < MIN_VALID_VIDEO_SIZE) {
+                logger.error(
+                  `yt-dlp produced a suspiciously small file (${fallbackStats.size} bytes), likely a failed segment download`
+                );
+                reject(
+                  new NetworkError(
+                    `yt-dlp segment download failed: output file too small (${fallbackStats.size} bytes)`
+                  )
+                );
+                return;
+              }
+              logger.info(
+                `yt-dlp download complete (found file): ${actualPath} (${fallbackStats.size} bytes)`
+              );
               resolve(actualPath);
             } else {
               reject(
@@ -192,10 +235,33 @@ function executeYtdlp(url, outputDir, quality, timeout = 300000, maxDuration = 1
             const files = fsSync.readdirSync(outputDir);
             if (files.length > 0) {
               const actualPath = path.join(outputDir, files[0]);
-              logger.info(`yt-dlp download complete (fallback): ${actualPath}`);
+              const fallbackStats = fsSync.statSync(actualPath);
+              const MIN_VALID_VIDEO_SIZE = 1024;
+              if (fallbackStats.size < MIN_VALID_VIDEO_SIZE) {
+                logger.error(
+                  `yt-dlp produced a suspiciously small file (${fallbackStats.size} bytes), likely a failed segment download`
+                );
+                reject(
+                  new NetworkError(
+                    `yt-dlp segment download failed: output file too small (${fallbackStats.size} bytes)`
+                  )
+                );
+                return;
+              }
+              logger.info(
+                `yt-dlp download complete (fallback): ${actualPath} (${fallbackStats.size} bytes)`
+              );
               resolve(actualPath);
             } else {
-              reject(new NetworkError('yt-dlp did not return output file path'));
+              // No files in output directory after successful exit - video was likely filtered out
+              // This happens when --match-filter skips the video (--quiet may suppress the message)
+              if (maxDuration !== Infinity && startTime === null && duration === null) {
+                reject(
+                  new ValidationError('video duration exceeds the maximum allowed (3 minutes)')
+                );
+              } else {
+                reject(new NetworkError('yt-dlp did not return output file path'));
+              }
             }
           } catch (readError) {
             reject(
@@ -246,6 +312,68 @@ function executeYtdlp(url, outputDir, quality, timeout = 300000, maxDuration = 1
 }
 
 /**
+ * Get video duration from YouTube using yt-dlp metadata fetch (fast, no download)
+ * @param {string} url - YouTube URL to check
+ * @param {number} timeout - Timeout in milliseconds (default: 15000 = 15 seconds)
+ * @returns {Promise<number>} Video duration in seconds
+ */
+function getVideoDuration(url, timeout = 15000) {
+  return new Promise((resolve, reject) => {
+    const args = ['--no-playlist', '--no-warnings', '--print', 'duration', url];
+
+    const ytdlp = spawn('yt-dlp', args, {
+      timeout: timeout,
+      stdio: ['ignore', 'pipe', 'pipe'],
+    });
+
+    let stdout = '';
+    let stderr = '';
+
+    ytdlp.stdout.on('data', data => {
+      stdout += data.toString();
+    });
+
+    ytdlp.stderr.on('data', data => {
+      stderr += data.toString();
+    });
+
+    const timeoutId = setTimeout(() => {
+      ytdlp.kill('SIGKILL');
+      reject(new NetworkError('duration check timed out'));
+    }, timeout);
+
+    ytdlp.on('close', code => {
+      clearTimeout(timeoutId);
+
+      if (code === 0) {
+        const duration = parseFloat(stdout.trim());
+        if (isNaN(duration)) {
+          reject(new NetworkError('could not parse video duration'));
+        } else {
+          resolve(duration);
+        }
+      } else {
+        const errorOutput = stderr || stdout;
+        if (errorOutput.includes('Video unavailable') || errorOutput.includes('Private video')) {
+          reject(new NetworkError('video is unavailable or private'));
+        } else if (errorOutput.includes('Sign in to confirm your age')) {
+          reject(new NetworkError('video requires age verification'));
+        } else {
+          reject(
+            new NetworkError(`failed to get video duration: ${errorOutput.substring(0, 100)}`)
+          );
+        }
+      }
+    });
+
+    ytdlp.on('error', err => {
+      clearTimeout(timeoutId);
+      reject(new NetworkError(`duration check failed: ${err.message}`));
+    });
+  });
+}
+
+/**
  * Download video from YouTube using yt-dlp
  * @param {string} url - YouTube URL to download
  * @param {boolean} isAdminUser - Whether the user is an admin (allows larger files and higher quality)
@@ -265,7 +393,35 @@ export async function downloadFromYouTube(
   startTime = null,
   duration = null
 ) {
-  logger.info(`Downloading from YouTube: ${url} (admin: ${isAdminUser}, maxDuration: ${maxDuration}, startTime: ${startTime}, duration: ${duration})`);
+  logger.info(
+    `Downloading from YouTube: ${url} (admin: ${isAdminUser}, maxDuration: ${maxDuration}, startTime: ${startTime}, duration: ${duration})`
+  );
+
+  // Fast duration pre-check for non-admin users (skip if using segment download with explicit duration)
+  // This prevents waiting for a full download attempt just to find out the video is too long
+  const needsDurationCheck = maxDuration !== Infinity && startTime === null && duration === null;
+  if (needsDurationCheck) {
+    try {
+      const videoDuration = await getVideoDuration(url);
+      logger.info(`Video duration: ${videoDuration}s (max: ${maxDuration}s)`);
+
+      if (videoDuration > maxDuration) {
+        const minutes = Math.floor(videoDuration / 60);
+        const seconds = Math.round(videoDuration % 60);
+        throw new ValidationError(
+          `video is ${minutes}m ${seconds}s long, maximum allowed is ${Math.floor(maxDuration / 60)} minutes`
+        );
+      }
+    } catch (error) {
+      // If it's already a ValidationError (duration exceeded), re-throw it
+      if (error instanceof ValidationError) {
+        throw error;
+      }
+      // For other errors (network issues, etc.), log and continue with download
+      // The download will fail with its own error if there's a real problem
+      logger.warn(`Duration pre-check failed, proceeding with download: ${error.message}`);
+    }
+  }
 
   // Use appropriate quality based on user type
   // Admin users get best quality, regular users get 1080p max
@@ -277,10 +433,67 @@ export async function downloadFromYouTube(
 
   // Create temporary directory for download
   const tmpDir = tmp.dirSync({ unsafeCleanup: true });
+  const useSegmentDownload = startTime !== null || duration !== null;
 
   try {
-    // Execute yt-dlp with duration limit and optional segment download
-    const outputPath = await executeYtdlp(url, tmpDir.name, effectiveQuality, 300000, maxDuration, startTime, duration);
+    let outputPath;
+    let usedFallback = false;
+
+    if (useSegmentDownload) {
+      // Try segment download first (using --download-sections)
+      try {
+        outputPath = await executeYtdlp(
+          url,
+          tmpDir.name,
+          effectiveQuality,
+          300000,
+          maxDuration,
+          startTime,
+          duration
+        );
+      } catch (segmentError) {
+        // Check if this is a segment download failure (too small file)
+        if (segmentError.message && segmentError.message.includes('output file too small')) {
+          logger.warn(
+            `Segment download failed, falling back to full download + FFmpeg trim: ${segmentError.message}`
+          );
+          usedFallback = true;
+
+          // Download the full video without segment parameters
+          outputPath = await executeYtdlp(
+            url,
+            tmpDir.name,
+            effectiveQuality,
+            300000,
+            maxDuration,
+            null,
+            null
+          );
+
+          // Trim the video using FFmpeg
+          const trimmedPath = path.join(tmpDir.name, 'trimmed_output.mp4');
+          await trimVideo(outputPath, trimmedPath, { startTime, duration });
+
+          // Use the trimmed file
+          outputPath = trimmedPath;
+          logger.info(`Fallback trim completed: ${outputPath}`);
+        } else {
+          // Re-throw other errors
+          throw segmentError;
+        }
+      }
+    } else {
+      // No segment download requested, proceed normally
+      outputPath = await executeYtdlp(
+        url,
+        tmpDir.name,
+        effectiveQuality,
+        300000,
+        maxDuration,
+        startTime,
+        duration
+      );
+    }
 
     // Read the downloaded file
     const buffer = await fs.readFile(outputPath);
@@ -299,7 +512,7 @@ export async function downloadFromYouTube(
     const contentType = getContentType(ext);
 
     logger.info(
-      `Successfully downloaded YouTube video, size: ${buffer.length} bytes, content-type: ${contentType}, extension: ${ext}`
+      `Successfully downloaded YouTube video${usedFallback ? ' (via fallback)' : ''}, size: ${buffer.length} bytes, content-type: ${contentType}, extension: ${ext}`
     );
 
     return {

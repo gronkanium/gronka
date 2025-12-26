@@ -31,6 +31,12 @@ env:
   POSTGRES_PASSWORD: gronka
   POSTGRES_HOST: localhost
   POSTGRES_PORT: '5432'
+  # PG* vars for psql client
+  PGUSER: gronka
+  PGPASSWORD: gronka
+  PGHOST: localhost
+  PGPORT: '5432'
+  PGDATABASE: gronka_test
 
 jobs:
   dependency-review:
@@ -82,7 +88,7 @@ jobs:
           cache: 'npm'
       - run: npm ci
       - run: sudo apt-get update && sudo apt-get install -y ffmpeg postgresql-client
-      - run: PGPASSWORD=gronka psql -h localhost -U gronka -d gronka_test -c 'DROP SCHEMA IF EXISTS public CASCADE; CREATE SCHEMA public;'
+      - run: psql -c 'DROP SCHEMA IF EXISTS public CASCADE; CREATE SCHEMA public;'
       - run: npx cross-env WEBUI_PORT=3101 R2_ACCOUNT_ID= R2_ACCESS_KEY_ID= R2_SECRET_ACCESS_KEY= R2_BUCKET_NAME= node --test test/utils/
 
   test-commands:
@@ -110,7 +116,7 @@ jobs:
           cache: 'npm'
       - run: npm ci
       - run: sudo apt-get update && sudo apt-get install -y ffmpeg postgresql-client
-      - run: PGPASSWORD=gronka psql -h localhost -U gronka -d gronka_test -c 'DROP SCHEMA IF EXISTS public CASCADE; CREATE SCHEMA public;'
+      - run: psql -c 'DROP SCHEMA IF EXISTS public CASCADE; CREATE SCHEMA public;'
       - run: npx cross-env WEBUI_PORT=3101 R2_ACCOUNT_ID= R2_ACCESS_KEY_ID= R2_SECRET_ACCESS_KEY= R2_BUCKET_NAME= node --test test/commands/
 
   test-scripts:
@@ -138,7 +144,7 @@ jobs:
           cache: 'npm'
       - run: npm ci
       - run: sudo apt-get update && sudo apt-get install -y ffmpeg postgresql-client
-      - run: PGPASSWORD=gronka psql -h localhost -U gronka -d gronka_test -c 'DROP SCHEMA IF EXISTS public CASCADE; CREATE SCHEMA public;'
+      - run: psql -c 'DROP SCHEMA IF EXISTS public CASCADE; CREATE SCHEMA public;'
       - run: npx cross-env WEBUI_PORT=3101 R2_ACCOUNT_ID= R2_ACCESS_KEY_ID= R2_SECRET_ACCESS_KEY= R2_BUCKET_NAME= node --test test/scripts/
 
   test-integration:
@@ -166,7 +172,7 @@ jobs:
           cache: 'npm'
       - run: npm ci
       - run: sudo apt-get update && sudo apt-get install -y ffmpeg postgresql-client
-      - run: PGPASSWORD=gronka psql -h localhost -U gronka -d gronka_test -c 'DROP SCHEMA IF EXISTS public CASCADE; CREATE SCHEMA public;'
+      - run: psql -c 'DROP SCHEMA IF EXISTS public CASCADE; CREATE SCHEMA public;'
       - run: npx cross-env WEBUI_PORT=3101 R2_ACCOUNT_ID= R2_ACCESS_KEY_ID= R2_SECRET_ACCESS_KEY= R2_BUCKET_NAME= node --test test/webui-server-*.test.js test/docker-security.test.js
 
   dependabot-checks:

@@ -29,6 +29,7 @@
     "bot:register:test": "node src/register-commands.js TEST",
     "bot:register:prod": "node src/register-commands.js PROD",
     "bot:status": "node scripts/update-bot-status.js",
+    "bot:status:docker": "node scripts/update-bot-status.js --docker",
     "docker:up": "node scripts/docker-up.js",
     "docker:down": "docker compose down",
     "docker:logs": "docker compose logs -f",

@@ -60,7 +60,6 @@ import { insertProcessedUrl, getProcessedUrl } from '../utils/database.js';
 import { initializeDatabaseWithErrorHandling } from '../utils/database-init.js';
 import { hashPartsHex } from '../utils/hashing.js';
 
-
 const logger = createLogger('convert');
 
 const {

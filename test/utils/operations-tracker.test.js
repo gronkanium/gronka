@@ -414,19 +414,34 @@ describe('operations tracker', () => {
     });
 
     test('supports multiple instance ports', () => {
-      let callback1Called = false;
+      // Save original WEBUI_PORT and set to 3101 for this test
+      const originalPort = process.env.WEBUI_PORT;
+      process.env.WEBUI_PORT = '3101';
 
-      setBroadcastCallback(() => {
-        callback1Called = true;
-      }, 3101);
+      try {
+        let callback1Called = false;
+        let callback2Called = false;
 
-      setBroadcastCallback(() => {
-        // Callback for different port
-      }, 3102);
+        setBroadcastCallback(() => {
+          callback1Called = true;
+        }, 3101);
 
-      createOperation('convert', 'user1', 'User1');
-      // Should call callback for current instance port (3101)
-      assert.ok(callback1Called);
+        setBroadcastCallback(() => {
+          callback2Called = true;
+        }, 3102);
+
+        createOperation('convert', 'user1', 'User1');
+        // Should call callback for current instance port (3101), not 3102
+        assert.ok(callback1Called, 'Callback for port 3101 should be called');
+        assert.ok(!callback2Called, 'Callback for port 3102 should not be called');
+      } finally {
+        // Restore original port
+        if (originalPort !== undefined) {
+          process.env.WEBUI_PORT = originalPort;
+        } else {
+          delete process.env.WEBUI_PORT;
+        }
+      }
     });
   });
 

@@ -461,6 +461,7 @@ export async function getRecentOperations(limit = 100) {
       status: latestStatusLog.status,
       userId: context.userId || null,
       username: username || null,
+      originalUrl: context.originalUrl || null,
       fileSize,
       timestamp: createdLog.timestamp,
       startTime: createdLog.timestamp,

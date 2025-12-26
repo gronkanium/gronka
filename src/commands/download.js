@@ -365,7 +365,7 @@ async function processDownload(
         let filePath;
         let fileUrl;
         let exists = false;
-        let method = 'discord';
+        let method;
 
         // Check if file already exists based on type
         if (fileType === 'video') {

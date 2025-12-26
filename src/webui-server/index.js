@@ -101,11 +101,11 @@ const broadcastUserMetricsWrapper = (userId, metrics) => {
       if (recentOps && Array.isArray(recentOps) && recentOps.length > 0) {
         // Enrich operations with usernames if missing
         let enrichedCount = 0;
-        recentOps.forEach(op => {
-          if (enrichOperationUsername(op)) {
+        for (const op of recentOps) {
+          if (await enrichOperationUsername(op)) {
             enrichedCount++;
           }
-        });
+        }
         // Add operations to in-memory store (most recent first)
         operations.push(...recentOps);
         logger.info(

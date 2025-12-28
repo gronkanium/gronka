@@ -16,19 +16,35 @@ export function isTestMode() {
     return false;
   }
 
-  // Check if TEST_POSTGRES_DB is explicitly set
+  // Docker containers are always production mode
+  // (TEST_POSTGRES_DB may exist in .env but should be ignored in Docker)
+  if (isRunningInDocker()) {
+    return false;
+  }
+
+  // NODE_ENV=production means production mode
+  if (process.env.NODE_ENV === 'production') {
+    return false;
+  }
+
+  // Detect if running via node --test
+  const isNodeTest = process.argv.some(arg => arg === '--test' || arg.includes('node:test'));
+  if (isNodeTest) {
+    return true;
+  }
+
+  // Check if NODE_ENV=test
+  if (process.env.NODE_ENV === 'test') {
+    return true;
+  }
+
+  // Check if TEST_POSTGRES_DB is explicitly set (for local test runs)
   if (process.env.TEST_POSTGRES_DB) {
     return true;
   }
 
   // Check if TEST_DATABASE_URL is set
   if (process.env.TEST_DATABASE_URL) {
-    return true;
-  }
-
-  // Detect if running via node --test
-  const isNodeTest = process.argv.some(arg => arg === '--test' || arg.includes('node:test'));
-  if (isNodeTest) {
     return true;
   }
 

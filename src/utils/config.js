@@ -1,8 +1,75 @@
 import dotenv from 'dotenv';
+import fs from 'fs';
 import { ConfigurationError } from './errors.js';
 
 // Load environment variables
 dotenv.config();
+
+/**
+ * Check if we're running inside a Docker container
+ * @returns {boolean} True if running in Docker
+ */
+function isRunningInDocker() {
+  try {
+    if (fs.existsSync('/.dockerenv')) {
+      return true;
+    }
+    try {
+      const cgroup = fs.readFileSync('/proc/1/cgroup', 'utf8');
+      return cgroup.includes('docker') || cgroup.includes('kubepods');
+    } catch {
+      return false;
+    }
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Determine the environment prefix for env vars (PROD_, TEST_, or empty)
+ * Priority:
+ * 1. Explicit ENV_PREFIX if set
+ * 2. PROD_ if running in Docker or NODE_ENV=production
+ * 3. TEST_ if NODE_ENV=test
+ * 4. Empty string (no prefix) as fallback
+ * @returns {string} Environment prefix
+ */
+function getEnvPrefix() {
+  // Allow explicit override
+  if (process.env.ENV_PREFIX) {
+    const prefix = process.env.ENV_PREFIX.toUpperCase();
+    return prefix.endsWith('_') ? prefix : `${prefix}_`;
+  }
+
+  // Docker or production mode -> PROD_
+  if (isRunningInDocker() || process.env.NODE_ENV === 'production') {
+    return 'PROD_';
+  }
+
+  // Test mode -> TEST_
+  if (process.env.NODE_ENV === 'test') {
+    return 'TEST_';
+  }
+
+  // Default: no prefix (for backwards compatibility)
+  return '';
+}
+
+/**
+ * Get environment variable with prefix support
+ * Tries prefixed version first, then falls back to non-prefixed
+ * @param {string} name - Base environment variable name (without prefix)
+ * @returns {string|undefined} Environment variable value
+ */
+function getEnvWithPrefix(name) {
+  const prefix = getEnvPrefix();
+  // Try prefixed version first
+  if (prefix && process.env[`${prefix}${name}`]) {
+    return process.env[`${prefix}${name}`];
+  }
+  // Fall back to non-prefixed
+  return process.env[name];
+}
 
 /**
  * Validate and parse integer environment variable
@@ -41,21 +108,6 @@ function parseIntEnv(name, defaultValue, min = -Infinity, max = Infinity) {
   }
 
   return parsed;
-}
-
-/**
- * Validate required string environment variable
- * @param {string} name - Environment variable name
- * @param {string} description - Description for error message
- * @returns {string} Environment variable value
- * @throws {ConfigurationError} If variable is not set
- */
-function requireStringEnv(name, description) {
-  const value = process.env[name];
-  if (!value || value.trim() === '') {
-    throw new ConfigurationError(`${name} is required: ${description}`, 'MISSING_REQUIRED_VAR');
-  }
-  return value.trim();
 }
 
 /**
@@ -127,12 +179,38 @@ let _botConfig = null;
 function getBotConfig() {
   if (_botConfig) return _botConfig;
 
+  // Get environment prefix for logging
+  const prefix = getEnvPrefix();
+  const tokenVar = prefix ? `${prefix}DISCORD_TOKEN` : 'DISCORD_TOKEN';
+  const clientVar = prefix ? `${prefix}CLIENT_ID` : 'CLIENT_ID';
+
+  // Get Discord credentials with prefix support
+  const discordToken = getEnvWithPrefix('DISCORD_TOKEN');
+  const clientId = getEnvWithPrefix('CLIENT_ID');
+
+  if (!discordToken || discordToken.trim() === '') {
+    throw new ConfigurationError(
+      `${tokenVar} is required: Discord bot token from https://discord.com/developers/applications`,
+      'MISSING_REQUIRED_VAR'
+    );
+  }
+
+  if (!clientId || clientId.trim() === '') {
+    throw new ConfigurationError(
+      `${clientVar} is required: Discord application/client ID`,
+      'MISSING_REQUIRED_VAR'
+    );
+  }
+
+  if (prefix) {
+    console.log(
+      `[Config] Using ${prefix} environment prefix (detected: ${isRunningInDocker() ? 'Docker' : process.env.NODE_ENV || 'default'})`
+    );
+  }
+
   _botConfig = {
-    discordToken: requireStringEnv(
-      'DISCORD_TOKEN',
-      'Discord bot token from https://discord.com/developers/applications'
-    ),
-    clientId: requireStringEnv('CLIENT_ID', 'Discord application/client ID'),
+    discordToken: discordToken.trim(),
+    clientId: clientId.trim(),
     adminUserIds: parseIdList('ADMIN_USER_IDS'),
     gifStoragePath: getStringEnv('GIF_STORAGE_PATH', './data-test/gifs'),
     cdnBaseUrl: getStringEnv('CDN_BASE_URL', 'https://cdn.gronka.p1x.dev/gifs'),

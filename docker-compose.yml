@@ -11,52 +11,14 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
+    env_file:
+      - .env
     environment:
-      - DISCORD_TOKEN=${DISCORD_TOKEN}
-      - CLIENT_ID=${CLIENT_ID}
-      - CDN_BASE_URL=${CDN_BASE_URL:-https://cdn.gronka.p1x.dev/gifs}
-      - SERVER_PORT=${SERVER_PORT:-3000}
-      - GIF_STORAGE_PATH=${GIF_STORAGE_PATH:-./data-prod/gifs}
-      - MAX_GIF_WIDTH=${MAX_GIF_WIDTH:-}
-      - MAX_GIF_DURATION=${MAX_GIF_DURATION:-30}
-      - DEFAULT_FPS=${DEFAULT_FPS:-}
-      - MAX_VIDEO_SIZE=${MAX_VIDEO_SIZE:-}
-      - MAX_IMAGE_SIZE=${MAX_IMAGE_SIZE:-}
-      - GIF_QUALITY=${GIF_QUALITY:-medium}
-      - ADMIN_USER_IDS=${ADMIN_USER_IDS:-}
-      - STATS_USERNAME=${STATS_USERNAME:-}
-      - STATS_PASSWORD=${STATS_PASSWORD:-}
-      - STATS_CACHE_TTL=${STATS_CACHE_TTL:-}
-      - COBALT_API_URL=${COBALT_API_URL:-http://cobalt:9000}
-      - COBALT_ENABLED=${COBALT_ENABLED:-true}
-      - R2_ACCOUNT_ID=${R2_ACCOUNT_ID:-}
-      - R2_ACCESS_KEY_ID=${R2_ACCESS_KEY_ID:-}
-      - R2_SECRET_ACCESS_KEY=${R2_SECRET_ACCESS_KEY:-}
-      - R2_BUCKET_NAME=${R2_BUCKET_NAME:-}
-      - R2_PUBLIC_DOMAIN=${R2_PUBLIC_DOMAIN:-cdn.gronka.p1x.dev}
-      - R2_TEMP_UPLOADS_ENABLED=${R2_TEMP_UPLOADS_ENABLED:-}
-      - R2_TEMP_UPLOAD_TTL_HOURS=${R2_TEMP_UPLOAD_TTL_HOURS:-}
-      - R2_CLEANUP_ENABLED=${R2_CLEANUP_ENABLED:-}
-      - R2_CLEANUP_INTERVAL_MS=${R2_CLEANUP_INTERVAL_MS:-}
-      - R2_CLEANUP_LOG_LEVEL=${R2_CLEANUP_LOG_LEVEL:-}
-      - NTFY_TOPIC=${NTFY_TOPIC:-}
-      - CLOUDFLARE_API_TOKEN=${CLOUDFLARE_API_TOKEN:-}
-      - CLOUDFLARE_ACCOUNT_ID=${CLOUDFLARE_ACCOUNT_ID:-}
-      - CLOUDFLARE_KV_NAMESPACE_ID=${CLOUDFLARE_KV_NAMESPACE_ID:-}
-      - CLOUDFLARE_PAGES_PROJECT_NAME=${CLOUDFLARE_PAGES_PROJECT_NAME:-}
-      - LOG_LEVEL=${LOG_LEVEL:-}
-      - LOG_DIR=${LOG_DIR:-}
-      - LOG_ROTATION=${LOG_ROTATION:-}
-      - SERVER_HOST=${SERVER_HOST:-}
-      - WEBUI_PORT=${WEBUI_PORT:-3001}
-      - WEBUI_HOST=${WEBUI_HOST:-0.0.0.0}
-      - POSTGRES_HOST=${POSTGRES_HOST:-postgres}
-      - POSTGRES_PORT=${POSTGRES_PORT:-5432}
-      - POSTGRES_USER=${POSTGRES_USER:-gronka}
-      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-gronka}
-      - POSTGRES_DB=${POSTGRES_DB:-gronka}
-      - DATABASE_URL=${DATABASE_URL:-}
+      # Docker-specific overrides (these take precedence over .env)
+      - COBALT_API_URL=http://cobalt:9000
+      - POSTGRES_HOST=postgres
     volumes:
+      - ./.env:/app/.env:ro
       - ./data-test:/app/data-test
       - ./data-prod:/app/data-prod
       - ./temp:/app/temp

@@ -1,5 +1,5 @@
 import postgres from 'postgres';
-import fs from 'fs';
+import { isRunningInDocker } from '../config.js';
 
 let sql = null;
 let initPromise = null;
@@ -49,29 +49,6 @@ export function isTestMode() {
   }
 
   return false;
-}
-
-/**
- * Check if we're running inside a Docker container
- * @returns {boolean} True if running in Docker
- */
-function isRunningInDocker() {
-  try {
-    // Check for .dockerenv file (most reliable indicator)
-    if (fs.existsSync('/.dockerenv')) {
-      return true;
-    }
-
-    // Check for docker in /proc/1/cgroup (backup method)
-    try {
-      const cgroup = fs.readFileSync('/proc/1/cgroup', 'utf8');
-      return cgroup.includes('docker') || cgroup.includes('kubepods');
-    } catch {
-      return false;
-    }
-  } catch {
-    return false;
-  }
 }
 
 /**

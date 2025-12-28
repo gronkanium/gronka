@@ -9,7 +9,7 @@ dotenv.config();
  * Check if we're running inside a Docker container
  * @returns {boolean} True if running in Docker
  */
-function isRunningInDocker() {
+export function isRunningInDocker() {
   try {
     if (fs.existsSync('/.dockerenv')) {
       return true;
@@ -72,15 +72,15 @@ function getEnvWithPrefix(name) {
 }
 
 /**
- * Validate and parse integer environment variable
- * @param {string} name - Environment variable name
+ * Validate and parse integer environment variable with prefix support
+ * @param {string} name - Environment variable name (without prefix)
  * @param {number} defaultValue - Default value if not set
  * @param {number} min - Minimum allowed value
  * @param {number} max - Maximum allowed value
  * @returns {number} Parsed integer value
  */
 function parseIntEnv(name, defaultValue, min = -Infinity, max = Infinity) {
-  const value = process.env[name];
+  const value = getEnvWithPrefix(name);
   if (!value) {
     return defaultValue;
   }
@@ -111,23 +111,23 @@ function parseIntEnv(name, defaultValue, min = -Infinity, max = Infinity) {
 }
 
 /**
- * Get optional string environment variable with default
- * @param {string} name - Environment variable name
+ * Get optional string environment variable with default and prefix support
+ * @param {string} name - Environment variable name (without prefix)
  * @param {string} defaultValue - Default value if not set
  * @returns {string} Environment variable value or default
  */
 function getStringEnv(name, defaultValue) {
-  const value = process.env[name];
+  const value = getEnvWithPrefix(name);
   return value ? value.trim() : defaultValue;
 }
 
 /**
- * Parse comma-separated list of IDs from environment variable
- * @param {string} name - Environment variable name
+ * Parse comma-separated list of IDs from environment variable with prefix support
+ * @param {string} name - Environment variable name (without prefix)
  * @returns {string[]} Array of trimmed IDs
  */
 function parseIdList(name) {
-  const value = process.env[name];
+  const value = getEnvWithPrefix(name);
   if (!value || value.trim() === '') {
     return [];
   }
@@ -152,13 +152,13 @@ function validateUrlFormat(url) {
 }
 
 /**
- * Get and validate GIF quality from environment variable
- * @param {string} name - Environment variable name
+ * Get and validate GIF quality from environment variable with prefix support
+ * @param {string} name - Environment variable name (without prefix)
  * @param {string} defaultValue - Default value if not set
  * @returns {string} Valid quality value: 'low', 'medium', or 'high'
  */
 function getGifQualityEnv(name, defaultValue) {
-  const value = process.env[name];
+  const value = getEnvWithPrefix(name);
   if (!value) {
     return defaultValue;
   }

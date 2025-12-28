@@ -20,6 +20,19 @@ import { get24HourStats } from './utils/database/stats.js';
 // Initialize logger
 const logger = createLogger('bot');
 
+// Global error handlers for unhandled rejections and exceptions
+process.on('unhandledRejection', (reason, promise) => {
+  logger.error('Unhandled Promise Rejection:', {
+    reason: String(reason),
+    promise: String(promise),
+  });
+});
+
+process.on('uncaughtException', error => {
+  logger.error('Uncaught Exception:', error);
+  process.exit(1);
+});
+
 // Configuration from centralized config
 const {
   discordToken: DISCORD_TOKEN,

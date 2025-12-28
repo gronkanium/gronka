@@ -32,6 +32,19 @@ import { enrichOperationUsername } from './operations/enrichment.js';
 
 const logger = createLogger('webui');
 
+// Global error handlers for unhandled rejections and exceptions
+process.on('unhandledRejection', (reason, promise) => {
+  logger.error('Unhandled Promise Rejection:', {
+    reason: String(reason),
+    promise: String(promise),
+  });
+});
+
+process.on('uncaughtException', error => {
+  logger.error('Uncaught Exception:', error);
+  process.exit(1);
+});
+
 // Store server and wss references for graceful shutdown
 let server = null;
 let wss = null;

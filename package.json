@@ -79,8 +79,8 @@
   "author": "gronkanium",
   "license": "MIT",
   "dependencies": {
-    "@aws-sdk/client-s3": "^3.956.0",
-    "@aws-sdk/lib-storage": "^3.956.0",
+    "@aws-sdk/client-s3": "^3.958.0",
+    "@aws-sdk/lib-storage": "^3.958.0",
     "@noble/hashes": "^2.0.1",
     "axios": "^1.6.0",
     "discord.js": "^14.25.1",
@@ -106,7 +106,7 @@
     "husky": "^9.1.7",
     "nodemon": "^3.1.11",
     "prettier": "^3.7.4",
-    "svelte": "^5.46.0",
+    "svelte": "^5.46.1",
     "vite": "^7.3.0"
   }
 }

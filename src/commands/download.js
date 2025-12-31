@@ -36,7 +36,7 @@ import {
   formatMultipleR2UrlsWithDisclaimer,
 } from '../utils/r2-storage.js';
 import { trackTemporaryUpload } from '../utils/storage.js';
-import { queueCobaltRequest, hashUrl } from '../utils/cobalt-queue.js';
+import { queueCobaltRequest, hashUrlWithParams } from '../utils/cobalt-queue.js';
 import { notifyCommandSuccess, notifyCommandFailure } from '../utils/ntfy-notifier.js';
 import { getProcessedUrl, insertProcessedUrl } from '../utils/database.js';
 import { initializeDatabaseWithErrorHandling } from '../utils/database-init.js';
@@ -143,48 +143,50 @@ async function processDownload(
     });
 
     // Check if URL has already been processed
-    // Skip URL cache if time parameters are provided (trimmed videos are different from untrimmed)
-    // Also skip cache if cached result is not a video (e.g., if it was converted to GIF)
-    const urlHash = hashUrl(url);
+    // Use time-parameterized hash so that same URL with different time params has different cache keys
+    // This ensures trimmed versions don't get confused with untrimmed versions
+    const urlHash = hashUrlWithParams(url, { startTime, duration });
     let processedUrl = null;
-    if (startTime === null && duration === null) {
-      processedUrl = await getProcessedUrl(urlHash);
-      if (processedUrl) {
-        // Only use cached URL if it's a video (download command expects video, not GIF/image)
-        if (processedUrl.file_type === 'video') {
-          logger.info(
-            `URL already processed as video (hash: ${urlHash.substring(0, 8)}...), returning existing file URL: ${processedUrl.file_url}`
-          );
-          logOperationStep(operationId, 'url_validation', 'success', {
-            message: 'URL validation complete',
-            metadata: { url },
-          });
-          logOperationStep(operationId, 'url_cache_hit', 'success', {
-            message: 'URL already processed as video, returning cached result',
-            metadata: { url, cachedUrl: processedUrl.file_url, cachedType: processedUrl.file_type },
-          });
-          const fileUrl = processedUrl.file_url;
-          updateOperationStatus(operationId, 'success', { fileSize: 0 });
-          recordRateLimit(userId);
-          await safeInteractionEditReply(interaction, {
-            content: formatR2UrlWithDisclaimer(fileUrl, r2Config, adminUser),
-          });
-          await notifyCommandSuccess(username, 'download', { operationId, userId });
-          return;
-        } else {
-          logger.info(
-            `URL cache exists but file type is ${processedUrl.file_type} (not video), skipping cache to download video`
-          );
-          logOperationStep(operationId, 'url_cache_mismatch', 'running', {
-            message: 'URL cached with different file type, downloading video instead',
-            metadata: { url, cachedType: processedUrl.file_type },
-          });
-        }
+
+    // Check cache for this specific URL + time params combination
+    processedUrl = await getProcessedUrl(urlHash);
+    if (processedUrl) {
+      // Only use cached URL if it's a video (download command expects video, not GIF/image)
+      if (processedUrl.file_type === 'video') {
+        logger.info(
+          `URL already processed as video (hash: ${urlHash.substring(0, 8)}..., startTime: ${startTime}, duration: ${duration}), returning existing file URL: ${processedUrl.file_url}`
+        );
+        logOperationStep(operationId, 'url_validation', 'success', {
+          message: 'URL validation complete',
+          metadata: { url },
+        });
+        logOperationStep(operationId, 'url_cache_hit', 'success', {
+          message: 'URL already processed as video, returning cached result',
+          metadata: {
+            url,
+            cachedUrl: processedUrl.file_url,
+            cachedType: processedUrl.file_type,
+            startTime,
+            duration,
+          },
+        });
+        const fileUrl = processedUrl.file_url;
+        updateOperationStatus(operationId, 'success', { fileSize: 0 });
+        recordRateLimit(userId);
+        await safeInteractionEditReply(interaction, {
+          content: formatR2UrlWithDisclaimer(fileUrl, r2Config, adminUser),
+        });
+        await notifyCommandSuccess(username, 'download', { operationId, userId });
+        return;
+      } else {
+        logger.info(
+          `URL cache exists but file type is ${processedUrl.file_type} (not video), skipping cache to download video`
+        );
+        logOperationStep(operationId, 'url_cache_mismatch', 'running', {
+          message: 'URL cached with different file type, downloading video instead',
+          metadata: { url, cachedType: processedUrl.file_type },
+        });
       }
-    } else {
-      logger.info(
-        `Skipping URL cache check due to time parameters (startTime: ${startTime}, duration: ${duration})`
-      );
     }
 
     logOperationStep(operationId, 'url_validation', 'success', {

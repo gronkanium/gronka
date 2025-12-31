@@ -24,6 +24,7 @@ concurrency:
   cancel-in-progress: true
 
 env:
+  NODE_ENV: test
   DISCORD_TOKEN: 'ci-test-token'
   CLIENT_ID: 'ci-test-client-id'
   POSTGRES_DB: gronka_test
@@ -31,7 +32,7 @@ env:
   POSTGRES_PASSWORD: gronka
   POSTGRES_HOST: localhost
   POSTGRES_PORT: '5432'
-  # PG* vars for psql client
+  # PG* vars for psql client (ensures psql commands use correct user)
   PGUSER: gronka
   PGPASSWORD: gronka
   PGHOST: localhost

@@ -64,6 +64,26 @@ function getContentType(ext) {
 }
 
 /**
+ * Convert seconds to HH:MM:SS.ss format for yt-dlp --download-sections
+ * yt-dlp can misinterpret plain numbers >= 60 as MM:SS format,
+ * so we use explicit timestamp format to avoid ambiguity.
+ * @param {number|string} seconds - Time in seconds or 'inf' for infinity
+ * @returns {string} Formatted timestamp (e.g., "00:01:23.50" or "inf")
+ */
+export function formatTimestamp(seconds) {
+  if (seconds === 'inf') return 'inf';
+  const totalSeconds = Number(seconds);
+  if (isNaN(totalSeconds)) return 'inf';
+
+  const hours = Math.floor(totalSeconds / 3600);
+  const mins = Math.floor((totalSeconds % 3600) / 60);
+  const secs = totalSeconds % 60;
+
+  // Format as HH:MM:SS.ss (with 2 decimal places for sub-second precision)
+  return `${hours.toString().padStart(2, '0')}:${mins.toString().padStart(2, '0')}:${secs.toFixed(2).padStart(5, '0')}`;
+}
+
+/**
  * Execute yt-dlp command and return the output file path
  * @param {string} url - YouTube URL to download
  * @param {string} outputDir - Directory to save the file
@@ -106,10 +126,14 @@ function executeYtdlp(
 
     // use yt-dlp's --download-sections to download ONLY the requested segment
     // this prevents downloading huge files when user only wants a small clip
+    // IMPORTANT: Use explicit HH:MM:SS.ss format to avoid yt-dlp misinterpreting
+    // plain numbers >= 60 as MM:SS format (e.g., 123 interpreted as 1:23 = 83 seconds)
     if (startTime !== null || duration !== null) {
       const start = startTime || 0;
       const end = duration !== null ? start + duration : 'inf';
-      args.push('--download-sections', `*${start}-${end}`);
+      const startFormatted = formatTimestamp(start);
+      const endFormatted = formatTimestamp(end);
+      args.push('--download-sections', `*${startFormatted}-${endFormatted}`);
       args.push('--force-keyframes-at-cuts'); // cleaner segment extraction
     }
 

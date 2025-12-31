@@ -128,9 +128,11 @@ function executeYtdlp(
     // this prevents downloading huge files when user only wants a small clip
     // IMPORTANT: Use explicit HH:MM:SS.ss format to avoid yt-dlp misinterpreting
     // plain numbers >= 60 as MM:SS format (e.g., 123 interpreted as 1:23 = 83 seconds)
+    // NOTE: We always require explicit duration - 'inf' doesn't work reliably with HH:MM:SS format
+    // The caller (downloadFromYouTube) calculates the actual duration when only startTime is provided
     if (startTime !== null || duration !== null) {
       const start = startTime || 0;
-      const end = duration !== null ? start + duration : 'inf';
+      const end = start + (duration || 0);
       const startFormatted = formatTimestamp(start);
       const endFormatted = formatTimestamp(end);
       args.push('--download-sections', `*${startFormatted}-${endFormatted}`);
@@ -421,19 +423,37 @@ export async function downloadFromYouTube(
     `Downloading from YouTube: ${url} (admin: ${isAdminUser}, maxDuration: ${maxDuration}, startTime: ${startTime}, duration: ${duration})`
   );
 
+  // Effective duration for segment download - will be calculated if only startTime is provided
+  let effectiveDuration = duration;
+
   // Fast duration pre-check for non-admin users (skip if using segment download with explicit duration)
-  // This prevents waiting for a full download attempt just to find out the video is too long
-  const needsDurationCheck = maxDuration !== Infinity && startTime === null && duration === null;
+  // Also needed when only startTime is provided (to calculate duration to end of video)
+  const needsDurationCheck =
+    (maxDuration !== Infinity && startTime === null && duration === null) ||
+    (startTime !== null && duration === null);
+
   if (needsDurationCheck) {
     try {
       const videoDuration = await getVideoDuration(url);
       logger.info(`Video duration: ${videoDuration}s (max: ${maxDuration}s)`);
 
-      if (videoDuration > maxDuration) {
-        const minutes = Math.floor(videoDuration / 60);
-        const seconds = Math.round(videoDuration % 60);
-        throw new ValidationError(
-          `video is ${minutes}m ${seconds}s long, maximum allowed is ${Math.floor(maxDuration / 60)} minutes`
+      // Check duration limit (only when not using segment download)
+      if (maxDuration !== Infinity && startTime === null && duration === null) {
+        if (videoDuration > maxDuration) {
+          const minutes = Math.floor(videoDuration / 60);
+          const seconds = Math.round(videoDuration % 60);
+          throw new ValidationError(
+            `video is ${minutes}m ${seconds}s long, maximum allowed is ${Math.floor(maxDuration / 60)} minutes`
+          );
+        }
+      }
+
+      // Calculate effective duration when only startTime is provided (download from startTime to end)
+      // yt-dlp's "*HH:MM:SS-inf" format doesn't work reliably, so we calculate the actual end time
+      if (startTime !== null && duration === null) {
+        effectiveDuration = videoDuration - startTime;
+        logger.info(
+          `Calculated effective duration: ${effectiveDuration}s (video: ${videoDuration}s - start: ${startTime}s)`
         );
       }
     } catch (error) {
@@ -457,7 +477,7 @@ export async function downloadFromYouTube(
 
   // Create temporary directory for download
   const tmpDir = tmp.dirSync({ unsafeCleanup: true });
-  const useSegmentDownload = startTime !== null || duration !== null;
+  const useSegmentDownload = startTime !== null || effectiveDuration !== null;
 
   try {
     let outputPath;
@@ -473,7 +493,7 @@ export async function downloadFromYouTube(
           300000,
           maxDuration,
           startTime,
-          duration
+          effectiveDuration
         );
       } catch (segmentError) {
         // Check if this is a segment download failure (too small file)
@@ -496,7 +516,7 @@ export async function downloadFromYouTube(
 
           // Trim the video using FFmpeg
           const trimmedPath = path.join(tmpDir.name, 'trimmed_output.mp4');
-          await trimVideo(outputPath, trimmedPath, { startTime, duration });
+          await trimVideo(outputPath, trimmedPath, { startTime, duration: effectiveDuration });
 
           // Use the trimmed file
           outputPath = trimmedPath;

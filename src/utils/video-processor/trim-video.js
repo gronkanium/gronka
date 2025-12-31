@@ -108,9 +108,27 @@ export async function trimVideo(inputPath, outputPath, options = {}) {
         logger.error('FFmpeg video trim failed:', stderr);
         reject(new Error(`Video trimming failed: ${err.message}`));
       })
-      .on('end', () => {
-        logger.debug(`Video trim completed: ${outputPath}`);
-        resolve();
+      .on('end', async () => {
+        // Validate output file size - a valid video should be at least 1KB
+        try {
+          const stats = await fs.stat(outputPath);
+          const MIN_VALID_VIDEO_SIZE = 1024;
+          if (stats.size < MIN_VALID_VIDEO_SIZE) {
+            logger.error(
+              `FFmpeg produced a suspiciously small file (${stats.size} bytes), likely a failed trim`
+            );
+            reject(
+              new Error(
+                `Video trimming produced invalid output (${stats.size} bytes), file too small`
+              )
+            );
+            return;
+          }
+          logger.debug(`Video trim completed: ${outputPath} (${stats.size} bytes)`);
+          resolve();
+        } catch (statError) {
+          reject(new Error(`Failed to verify trimmed video: ${statError.message}`));
+        }
       })
       .run();
   });

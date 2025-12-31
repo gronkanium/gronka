@@ -542,6 +542,14 @@ export async function downloadFromYouTube(
     // Read the downloaded file
     const buffer = await fs.readFile(outputPath);
 
+    // Check minimum file size - a valid video should be at least 1KB
+    const MIN_VALID_VIDEO_SIZE = 1024;
+    if (buffer.length < MIN_VALID_VIDEO_SIZE) {
+      throw new NetworkError(
+        `downloaded video is too small (${buffer.length} bytes), likely a failed download or corrupt file`
+      );
+    }
+
     // Check file size
     if (!isAdminUser && buffer.length > maxSize) {
       throw new ValidationError(

@@ -128,6 +128,11 @@ function startStatsServer() {
     next();
   });
 
+  // Health check endpoint (no auth required)
+  app.get('/health', (req, res) => {
+    res.status(200).json({ status: 'ok' });
+  });
+
   // Bot status update endpoint (protected with basic auth)
   // Used by npm run bot:status script to update presence without creating a new Discord connection
   app.post('/api/bot/status', basicAuth, async (req, res) => {

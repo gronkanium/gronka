@@ -107,9 +107,10 @@ export function getPostgresConfig() {
 
   // Support individual connection parameters
   // Use TEST_ prefixed variables if in test mode, with fallback to regular variables
+  // Priority: TEST_POSTGRES_USER > POSTGRES_USER > PGUSER > 'gronka' (hard default)
   const username = useTestConfig
-    ? process.env.TEST_POSTGRES_USER || process.env.POSTGRES_USER || 'gronka'
-    : process.env.POSTGRES_USER || 'gronka';
+    ? process.env.TEST_POSTGRES_USER || process.env.POSTGRES_USER || process.env.PGUSER || 'gronka'
+    : process.env.POSTGRES_USER || process.env.PGUSER || 'gronka';
 
   // Ensure username is always set (prevent postgres.js from defaulting to system user)
   if (!username || username.trim() === '') {
@@ -118,21 +119,30 @@ export function getPostgresConfig() {
     );
   }
 
+  const database = useTestConfig
+    ? process.env.TEST_POSTGRES_DB || process.env.POSTGRES_DB || process.env.PGDATABASE || 'gronka'
+    : process.env.POSTGRES_DB || process.env.PGDATABASE || 'gronka';
+
+  const password = useTestConfig
+    ? process.env.TEST_POSTGRES_PASSWORD ||
+      process.env.POSTGRES_PASSWORD ||
+      process.env.PGPASSWORD ||
+      'gronka'
+    : process.env.POSTGRES_PASSWORD || process.env.PGPASSWORD || 'gronka';
+
+  const port = parseInt(
+    useTestConfig
+      ? process.env.TEST_POSTGRES_PORT || process.env.POSTGRES_PORT || process.env.PGPORT || '5432'
+      : process.env.POSTGRES_PORT || process.env.PGPORT || '5432',
+    10
+  );
+
   const config = {
     host: resolvedHost,
-    port: parseInt(
-      useTestConfig
-        ? process.env.TEST_POSTGRES_PORT || process.env.POSTGRES_PORT || '5432'
-        : process.env.POSTGRES_PORT || '5432',
-      10
-    ),
-    database: useTestConfig
-      ? process.env.TEST_POSTGRES_DB || process.env.POSTGRES_DB || 'gronka'
-      : process.env.POSTGRES_DB || 'gronka',
+    port: port,
+    database: database,
     username: username,
-    password: useTestConfig
-      ? process.env.TEST_POSTGRES_PASSWORD || process.env.POSTGRES_PASSWORD || 'gronka'
-      : process.env.POSTGRES_PASSWORD || 'gronka',
+    password: password,
     max: parseInt(process.env.POSTGRES_MAX_CONNECTIONS || '20', 10),
     idle_timeout: parseInt(process.env.POSTGRES_IDLE_TIMEOUT || '30', 10),
     connect_timeout: parseInt(process.env.POSTGRES_CONNECT_TIMEOUT || '10', 10),

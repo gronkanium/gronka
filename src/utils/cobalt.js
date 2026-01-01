@@ -759,6 +759,7 @@ async function downloadFromCobalt(
         mkv: 'video/x-matroska',
         mp3: 'audio/mpeg',
         m4a: 'audio/mp4',
+        gif: 'image/gif',
       };
       if (extToMime[ext]) {
         contentType = extToMime[ext];

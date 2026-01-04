@@ -42,7 +42,7 @@ these aren't considered security vulnerabilities:
 ### data protection
 
 - files are stored on cloudflare r2 or local filesystem with proper access controls
-- files are identified by MD5 hash for deduplication and integrity checking
+- files are identified by BLAKE3 hash for deduplication and integrity checking
 - storage access is restricted to necessary operations only
 - user data isn't directly linked to stored files
 

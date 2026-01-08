@@ -8,7 +8,7 @@ separating test and production bots provides several benefits:
 
 - **isolated testing** - test new features without affecting production
 - **independent configuration** - different settings for test and prod (admin users, storage paths, etc.)
-- **separate databases** - test bot uses `gronka-test.db`, prod bot uses `gronka-prod.db`
+- **separate databases** - test bot uses `gronka_test` database, prod bot uses `gronka` database
 - **isolated storage** - test bot uses `data-test/`, prod bot uses `data-prod/`
 - **simultaneous operation** - run both bots at the same time for parallel testing
 - **safe development** - test changes without risk to production data
@@ -217,7 +217,7 @@ npm run bot:prod
 ```
 
 both bots will run independently with their own:
-- database files
+- postgresql databases
 - storage directories
 - configuration settings
 - discord connections
@@ -231,10 +231,10 @@ test and production bots maintain complete data separation:
 - **test bot**: stores files in `data-test/` (or path specified by `TEST_GIF_STORAGE_PATH`)
 - **prod bot**: stores files in `data-prod/` (or path specified by `PROD_GIF_STORAGE_PATH`)
 
-### database files
+### postgresql databases
 
-- **test bot**: `gronka-test.db` in the test storage directory
-- **prod bot**: `gronka-prod.db` in the prod storage directory
+- **test bot**: `gronka_test` database (configured via `TEST_POSTGRES_DB`)
+- **prod bot**: `gronka` database (configured via `PROD_POSTGRES_DB`)
 
 ### r2 buckets
 
@@ -365,8 +365,8 @@ npm run bot:register:prod
 
 if you see database errors, verify each bot is using its own database:
 
-- test bot should use `gronka-test.db`
-- prod bot should use `gronka-prod.db`
+- test bot should use `gronka_test` database
+- prod bot should use `gronka` database
 
 check the database path in your configuration or logs.
 

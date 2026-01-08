@@ -779,7 +779,7 @@ when you start a bot with `npm run bot:test` or `npm run bot:prod`, the bot-star
 
 1. reads prefixed environment variables (e.g., `TEST_DISCORD_TOKEN`)
 2. maps them to standard variable names (e.g., `DISCORD_TOKEN`)
-3. sets bot-specific database paths (`gronka-test.db` or `gronka-prod.db`)
+3. sets bot-specific postgresql database names (`gronka_test` or `gronka`)
 4. starts the bot with the mapped configuration
 
 ### supported prefixes

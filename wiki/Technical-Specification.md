@@ -1,6 +1,6 @@
 ## project overview
 
-discord bot that converts video attachments to gif format via right-click context menu. stores them on a server and returns a cdn url. videos are processed using ffmpeg, deduplicated via md5 hashing, and served through cloudflare r2. also supports optimizing existing gifs to reduce file size using configurable lossy compression.
+discord bot that converts video attachments to gif format via right-click context menu. stores them on a server and returns a cdn url. videos are processed using ffmpeg, deduplicated via blake3 hashing, and served through cloudflare r2. also supports optimizing existing gifs to reduce file size using configurable lossy compression.
 
 ---
 
@@ -9,19 +9,21 @@ discord bot that converts video attachments to gif format via right-click contex
 ### core technologies
 
 - runtime: node.js v20+ (lts)
-- package manager: npm or pnpm
-- primary language: javascript (es6+) or typescript
+- package manager: npm
+- language: javascript (es6+ with esm modules)
 
 ### dependencies
 
 ```json
 {
-  "discord.js": "^14.14.1",
+  "discord.js": "^14.25.1",
   "axios": "^1.6.0",
   "fluent-ffmpeg": "^2.1.2",
-  "express": "^4.18.2",
-  "dotenv": "^16.3.1",
-  "crypto": "built-in"
+  "express": "^5.2.1",
+  "dotenv": "^17.2.3",
+  "@noble/hashes": "^2.0.1",
+  "@aws-sdk/client-s3": "^3.958.0",
+  "postgres": "^3.4.5"
 }
 ```
 
@@ -49,7 +51,7 @@ key functions:
 
 - `handleContextMenuCommand(interaction)` - main entry point for right-click commands
 - `downloadVideo(url)` - download video from discord cdn
-- `generateHash(buffer)` - create md5 hash for deduplication
+- `generateHash(buffer)` - create blake3 hash for deduplication
 - `checkGifExists(hash)` - verify if gif already exists
 - `respondToUser(interaction, url)` - send cdn url back to discord
 
@@ -78,7 +80,7 @@ flow:
 3. extract video attachment from `targetMessage`
 4. defer reply (conversion takes time)
 5. download video to temp location
-6. generate md5 hash of video bytes
+6. generate blake3 hash of video bytes
 7. check if gif exists in storage (path configured via `GIF_STORAGE_PATH`, typically `./data-prod/gifs/{hash}.gif` or `./data-test/gifs/{hash}.gif`)
 8. if exists: return existing url
 9. if not: convert video → gif, save, return new url
@@ -223,7 +225,7 @@ async function cleanupTempFiles()
 
 storage strategy:
 
-- filename format: `{md5hash}.gif`
+- filename format: `{blake3hash}.gif`
 - location: `/var/www/gifs/` or configurable via env
 - no subdirectories (flat structure for simplicity)
 - optional: add date-based subdirs for large scale (`/2024/11/abc123.gif`)
@@ -231,7 +233,7 @@ storage strategy:
 deduplication logic:
 
 ```javascript
-const hash = crypto.createHash('md5').update(videoBuffer).digest('hex');
+const hash = hashBytesHex(videoBuffer); // uses @noble/hashes blake3
 // path is configured via GIF_STORAGE_PATH (e.g., ./data-prod or ./data-test)
 const gifPath = path.join(GIF_STORAGE_PATH, 'gifs', `${hash}.gif`);
 
@@ -271,7 +273,7 @@ purpose: served gif files over http with proper caching headers
 express configuration:
 
 ```javascript
-const express = require('express');
+import express from 'express';
 const app = express();
 
 app.use(
@@ -498,7 +500,7 @@ npm run bot:prod
 
 each bot:
 - connects to discord with its own token
-- uses its own database file
+- uses its own postgresql database
 - stores files in its own directory
 - has independent configuration
 

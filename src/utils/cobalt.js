@@ -232,6 +232,8 @@ function parseRetryAfter(retryAfter) {
 const SOCIAL_MEDIA_DOMAINS = [
   'twitter.com',
   'x.com',
+  'vxtwitter.com',
+  'fixvx.com',
   'tiktok.com',
   'vm.tiktok.com',
   'instagram.com',
@@ -251,7 +253,42 @@ const SOCIAL_MEDIA_DOMAINS = [
 ];
 
 /**
- * Check if a URL is from a social media platform
+ * Twitter mirror domains that need to be rewritten to canonical URLs
+ * Maps mirror hostname -> canonical hostname
+ */
+const TWITTER_MIRRORS = {
+  'fxtwitter.com': 'twitter.com',
+  'nitter.net': 'twitter.com',
+  'nitter.poast.org': 'twitter.com',
+  'nitter.privacydev.net': 'twitter.com',
+  'cunnyx.com': 'twitter.com',
+  'fxembed.com': 'twitter.com',
+  'fixupx.com': 'twitter.com',
+  'twittpr.com': 'twitter.com',
+};
+
+/**
+ * Rewrite mirror URLs to their canonical form
+ * @param {string} url - URL to potentially rewrite
+ * @returns {string} Canonical URL (or original if not a mirror)
+ */
+export function rewriteMirrorUrl(url) {
+  try {
+    const urlObj = new URL(url);
+    const hostname = urlObj.hostname.toLowerCase().replace(/^www\./, '');
+    const canonical = TWITTER_MIRRORS[hostname];
+    if (canonical) {
+      urlObj.hostname = canonical;
+      return urlObj.toString();
+    }
+    return url;
+  } catch {
+    return url;
+  }
+}
+
+/**
+ * Check if a URL is from a social media platform (including mirrors)
  * @param {string} url - URL to check
  * @returns {boolean} True if URL is from a social media platform
  */
@@ -259,6 +296,11 @@ export function isSocialMediaUrl(url) {
   try {
     const urlObj = new URL(url);
     const hostname = urlObj.hostname.toLowerCase().replace(/^www\./, '');
+
+    // Check if it's a known mirror
+    if (TWITTER_MIRRORS[hostname]) {
+      return true;
+    }
 
     return SOCIAL_MEDIA_DOMAINS.some(domain => {
       const normalizedDomain = domain.replace(/^www\./, '');
@@ -823,10 +865,16 @@ export async function downloadFromSocialMedia(
   isAdminUser = false,
   maxSize = Infinity
 ) {
-  logger.info(`Attempting to download from social media URL via Cobalt: ${url}`);
+  // Rewrite mirror URLs to canonical form before sending to Cobalt
+  const canonicalUrl = rewriteMirrorUrl(url);
+  if (canonicalUrl !== url) {
+    logger.info(`Rewrote mirror URL: ${url} -> ${canonicalUrl}`);
+  }
+
+  logger.info(`Attempting to download from social media URL via Cobalt: ${canonicalUrl}`);
 
   try {
-    const cobaltResponse = await callCobaltApi(apiUrl, url);
+    const cobaltResponse = await callCobaltApi(apiUrl, canonicalUrl);
     logger.info(`Cobalt API response: ${JSON.stringify(cobaltResponse)}`);
     logger.info('Cobalt API call successful, downloading media');
     const result = await downloadFromCobalt(cobaltResponse, isAdminUser, maxSize, apiUrl);

@@ -72,7 +72,7 @@ files in r2 are organized by type:
 - `videos/{hash}.{ext}` - original video files
 - `images/{hash}.{ext}` - image files
 
-each file is named using its md5 hash, ensuring automatic deduplication.
+each file is named using its blake3 hash (64 hex chars), ensuring automatic deduplication. blake3 is significantly faster than sha256/md5 for large file hashing.
 
 ## migration
 

@@ -13,7 +13,7 @@
 mkdir gronka && cd gronka
 
 # 2. Install dependencies
-npm install discord.js axios fluent-ffmpeg express dotenv
+npm install
 
 # 3. Create directories
 mkdir -p data-prod/gifs data-test/gifs
@@ -144,6 +144,6 @@ npm run bot:register:test
 npm run bot:register:prod
 ```
 
-each bot uses a separate database file (`gronka-test.db` and `gronka-prod.db`) and storage directory (`data-test/` and `data-prod/`).
+each bot uses a separate postgresql database (`gronka_test` and `gronka`) and storage directory (`data-test/` and `data-prod/`).
 
 for complete documentation, see the [[Test-Bot|test bot guide]].

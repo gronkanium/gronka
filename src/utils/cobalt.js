@@ -254,18 +254,34 @@ const SOCIAL_MEDIA_DOMAINS = [
 
 /**
  * Twitter mirror domains that need to be rewritten to canonical URLs
- * Maps mirror hostname -> canonical hostname
+ * These support subdomains like t., g., d., m. for different embed modes
  */
-const TWITTER_MIRRORS = {
-  'fxtwitter.com': 'twitter.com',
-  'nitter.net': 'twitter.com',
-  'nitter.poast.org': 'twitter.com',
-  'nitter.privacydev.net': 'twitter.com',
-  'cunnyx.com': 'twitter.com',
-  'fxembed.com': 'twitter.com',
-  'fixupx.com': 'twitter.com',
-  'twittpr.com': 'twitter.com',
-};
+const TWITTER_MIRRORS = [
+  'fxtwitter.com',
+  'twittpr.com',
+  'fixupx.com',
+  'xfixup.com',
+  'nitter.net',
+  'nitter.poast.org',
+  'nitter.privacydev.net',
+  'cunnyx.com',
+  'fxembed.com',
+];
+
+/**
+ * Check if hostname matches a mirror domain (including subdomains)
+ * @param {string} hostname - Hostname to check
+ * @returns {string|null} Matching mirror domain or null
+ */
+function matchMirrorDomain(hostname) {
+  const normalized = hostname.toLowerCase().replace(/^www\./, '');
+  for (const mirror of TWITTER_MIRRORS) {
+    if (normalized === mirror || normalized.endsWith(`.${mirror}`)) {
+      return mirror;
+    }
+  }
+  return null;
+}
 
 /**
  * Rewrite mirror URLs to their canonical form
@@ -275,10 +291,10 @@ const TWITTER_MIRRORS = {
 export function rewriteMirrorUrl(url) {
   try {
     const urlObj = new URL(url);
-    const hostname = urlObj.hostname.toLowerCase().replace(/^www\./, '');
-    const canonical = TWITTER_MIRRORS[hostname];
-    if (canonical) {
-      urlObj.hostname = canonical;
+    const mirror = matchMirrorDomain(urlObj.hostname);
+    if (mirror) {
+      // Strip subdomains (t., g., d., m.) and use canonical domain
+      urlObj.hostname = 'twitter.com';
       return urlObj.toString();
     }
     return url;
@@ -297,8 +313,8 @@ export function isSocialMediaUrl(url) {
     const urlObj = new URL(url);
     const hostname = urlObj.hostname.toLowerCase().replace(/^www\./, '');
 
-    // Check if it's a known mirror
-    if (TWITTER_MIRRORS[hostname]) {
+    // Check if it's a known mirror (including subdomains)
+    if (matchMirrorDomain(hostname)) {
       return true;
     }
 

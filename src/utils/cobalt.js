@@ -48,6 +48,17 @@ const COBALT_ERROR_MESSAGES = {
 };
 
 /**
+ * Check if a service name matches a supported domain
+ * @param {string} serviceName - Service name from Cobalt (e.g., "Instagram")
+ * @returns {boolean} True if the service is in our supported list
+ */
+function isServiceSupported(serviceName) {
+  if (!serviceName) return false;
+  const lowerService = serviceName.toLowerCase();
+  return SOCIAL_MEDIA_DOMAINS.some(domain => domain.toLowerCase().includes(lowerService));
+}
+
+/**
  * Get user-friendly error message for a Cobalt API error code
  * @param {string} errorCode - The error code from Cobalt API
  * @param {Object} context - Additional context (e.g., service name)
@@ -60,6 +71,10 @@ function getCobaltErrorMessage(errorCode, context = {}) {
 
   // Handle error.api.link.unsupported with service context
   if (errorCode === 'error.api.link.unsupported' && context?.service) {
+    // If the service IS actually supported, the real issue is content accessibility
+    if (isServiceSupported(context.service)) {
+      return `unable to access this ${context.service} content (it may be private, deleted, or restricted)`;
+    }
     return `the service "${context.service}" is not supported by cobalt`;
   }
 

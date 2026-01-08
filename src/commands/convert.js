@@ -34,6 +34,7 @@ import {
   cleanupTempFiles,
   saveGif,
   shouldUploadToDiscord,
+  detectFileType,
 } from '../utils/storage.js';
 import {
   uploadGifToR2,
@@ -1414,8 +1415,12 @@ export async function handleConvertContextMenu(interaction) {
         originalUrlForConversion = actualUrl;
       }
 
-      // Determine attachment type based on content type
-      if (attachment.contentType && ALLOWED_VIDEO_TYPES.includes(attachment.contentType)) {
+      // Determine attachment type using extension-based detection
+      // This handles Twitter GIFs which are mp4 files with .gif extension
+      const fileExt = path.extname(attachment.name || '').toLowerCase();
+      const detectedType = detectFileType(fileExt, attachment.contentType || '');
+
+      if (detectedType === 'video') {
         attachmentType = 'video';
         logger.info(
           `Processing video from URL: ${attachment.name} (${(attachment.size / (1024 * 1024)).toFixed(2)}MB)`
@@ -1429,12 +1434,17 @@ export async function handleConvertContextMenu(interaction) {
           await notifyCommandFailure(username, 'convert');
           return;
         }
-      } else if (attachment.contentType && ALLOWED_IMAGE_TYPES.includes(attachment.contentType)) {
+      } else if (detectedType === 'image' || detectedType === 'gif') {
         attachmentType = 'image';
         logger.info(
           `Processing image from URL: ${attachment.name} (${(attachment.size / (1024 * 1024)).toFixed(2)}MB)`
         );
-        const validation = validateImageAttachment(attachment, adminUser);
+        // For GIF files with wrong content-type, create a corrected attachment object
+        const attachmentForValidation =
+          detectedType === 'gif' && !ALLOWED_IMAGE_TYPES.includes(attachment.contentType)
+            ? { ...attachment, contentType: 'image/gif' }
+            : attachment;
+        const validation = validateImageAttachment(attachmentForValidation, adminUser);
         if (!validation.valid) {
           logger.warn(`Image validation failed for user ${userId}: ${validation.error}`);
           await safeInteractionEditReply(interaction, {
@@ -1442,6 +1452,10 @@ export async function handleConvertContextMenu(interaction) {
           });
           await notifyCommandFailure(username, 'convert');
           return;
+        }
+        // Update the contentType for downstream processing if it was a GIF
+        if (detectedType === 'gif') {
+          attachment.contentType = 'image/gif';
         }
       } else {
         logger.warn(`Invalid attachment type for user ${userId}`);
@@ -1659,7 +1673,15 @@ export async function handleConvertCommand(interaction) {
   }
 
   // Determine attachment type and validate
-  if (finalAttachment.contentType && ALLOWED_VIDEO_TYPES.includes(finalAttachment.contentType)) {
+  // Use extension-based detection like the download command does
+  // This handles Twitter GIFs which are mp4 files with .gif extension
+  const fileExt = path.extname(finalAttachment.name || '').toLowerCase();
+  const detectedType = detectFileType(fileExt, finalAttachment.contentType || '');
+
+  // Map detected type to attachment type
+  // detectFileType returns 'gif', 'video', or 'image'
+  // For convert command, we treat 'gif' as 'image' since GIFs are processed as images
+  if (detectedType === 'video') {
     attachmentType = 'video';
     logger.info(
       `Processing video: ${finalAttachment.name} (${(finalAttachment.size / (1024 * 1024)).toFixed(2)}MB)`
@@ -1680,15 +1702,18 @@ export async function handleConvertCommand(interaction) {
       await notifyCommandFailure(username, 'convert');
       return;
     }
-  } else if (
-    finalAttachment.contentType &&
-    ALLOWED_IMAGE_TYPES.includes(finalAttachment.contentType)
-  ) {
+  } else if (detectedType === 'image' || detectedType === 'gif') {
     attachmentType = 'image';
     logger.info(
       `Processing image: ${finalAttachment.name} (${(finalAttachment.size / (1024 * 1024)).toFixed(2)}MB)`
     );
-    const validation = validateImageAttachment(finalAttachment, adminUser);
+    // For GIF files with wrong content-type (e.g., video/mp4 from Twitter),
+    // create a corrected attachment object for validation
+    const attachmentForValidation =
+      detectedType === 'gif' && !ALLOWED_IMAGE_TYPES.includes(finalAttachment.contentType)
+        ? { ...finalAttachment, contentType: 'image/gif' }
+        : finalAttachment;
+    const validation = validateImageAttachment(attachmentForValidation, adminUser);
     if (!validation.valid) {
       logger.warn(`Image validation failed for user ${userId}: ${validation.error}`);
       if (url) {
@@ -1703,6 +1728,10 @@ export async function handleConvertCommand(interaction) {
       }
       await notifyCommandFailure(username, 'convert');
       return;
+    }
+    // Update the contentType for downstream processing if it was a GIF
+    if (detectedType === 'gif') {
+      finalAttachment.contentType = 'image/gif';
     }
   } else {
     logger.warn(`Invalid attachment type for user ${userId}`);

@@ -60,6 +60,7 @@ import { hashUrlWithParams } from '../utils/cobalt-queue.js';
 import { insertProcessedUrl, getProcessedUrl } from '../utils/database.js';
 import { initializeDatabaseWithErrorHandling } from '../utils/database-init.js';
 import { hashPartsHex } from '../utils/hashing.js';
+import { parseTimestamp } from '../utils/timestamp.js';
 
 const logger = createLogger('convert');
 
@@ -1534,8 +1535,44 @@ export async function handleConvertCommand(interaction) {
   const quality = interaction.options.getString('quality');
   const optimize = interaction.options.getBoolean('optimize') ?? false;
   const lossy = interaction.options.getNumber('lossy');
-  const startTime = interaction.options.getNumber('start_time');
-  const endTime = interaction.options.getNumber('end_time');
+  const startTimeRaw = interaction.options.getString('start_time');
+  const endTimeRaw = interaction.options.getString('end_time');
+
+  // Parse timestamp strings to seconds
+  const startTimeParsed = parseTimestamp(startTimeRaw);
+  const endTimeParsed = parseTimestamp(endTimeRaw);
+
+  // Validate timestamp formats
+  if (startTimeParsed.error) {
+    logger.warn(`Invalid start_time format for user ${userId}: ${startTimeParsed.error}`);
+    const errorMessage = `invalid start_time: ${startTimeParsed.error}`;
+    createFailedOperation('convert', userId, username, errorMessage, 'invalid_timestamp', {
+      commandSource: 'slash',
+      commandOptions: { startTime: startTimeRaw },
+    });
+    await safeInteractionReply(interaction, {
+      content: errorMessage,
+      flags: MessageFlags.Ephemeral,
+    });
+    return;
+  }
+
+  if (endTimeParsed.error) {
+    logger.warn(`Invalid end_time format for user ${userId}: ${endTimeParsed.error}`);
+    const errorMessage = `invalid end_time: ${endTimeParsed.error}`;
+    createFailedOperation('convert', userId, username, errorMessage, 'invalid_timestamp', {
+      commandSource: 'slash',
+      commandOptions: { endTime: endTimeRaw },
+    });
+    await safeInteractionReply(interaction, {
+      content: errorMessage,
+      flags: MessageFlags.Ephemeral,
+    });
+    return;
+  }
+
+  const startTime = startTimeParsed.seconds;
+  const endTime = endTimeParsed.seconds;
 
   // Validate time parameters if provided
   if (startTime !== null && endTime !== null) {

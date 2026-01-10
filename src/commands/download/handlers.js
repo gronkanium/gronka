@@ -15,6 +15,7 @@ import {
   safeInteractionDeferReply,
 } from '../../utils/interaction-helpers.js';
 import { processDownload } from './process-download.js';
+import { parseTimestamp } from '../../utils/timestamp.js';
 
 const logger = createLogger('download:handlers');
 
@@ -144,8 +145,44 @@ export async function handleDownloadCommand(interaction) {
 
   // Get command options
   const url = interaction.options.getString('url');
-  const startTime = interaction.options.getNumber('start_time');
-  const endTime = interaction.options.getNumber('end_time');
+  const startTimeRaw = interaction.options.getString('start_time');
+  const endTimeRaw = interaction.options.getString('end_time');
+
+  // Parse timestamp strings to seconds
+  const startTimeParsed = parseTimestamp(startTimeRaw);
+  const endTimeParsed = parseTimestamp(endTimeRaw);
+
+  // Validate timestamp formats
+  if (startTimeParsed.error) {
+    logger.warn(`Invalid start_time format for user ${userId}: ${startTimeParsed.error}`);
+    const errorMessage = `invalid start_time: ${startTimeParsed.error}`;
+    createFailedOperation('download', userId, username, errorMessage, 'invalid_timestamp', {
+      commandSource: 'slash',
+      commandOptions: { startTime: startTimeRaw },
+    });
+    await safeInteractionReply(interaction, {
+      content: errorMessage,
+      flags: MessageFlags.Ephemeral,
+    });
+    return;
+  }
+
+  if (endTimeParsed.error) {
+    logger.warn(`Invalid end_time format for user ${userId}: ${endTimeParsed.error}`);
+    const errorMessage = `invalid end_time: ${endTimeParsed.error}`;
+    createFailedOperation('download', userId, username, errorMessage, 'invalid_timestamp', {
+      commandSource: 'slash',
+      commandOptions: { endTime: endTimeRaw },
+    });
+    await safeInteractionReply(interaction, {
+      content: errorMessage,
+      flags: MessageFlags.Ephemeral,
+    });
+    return;
+  }
+
+  const startTime = startTimeParsed.seconds;
+  const endTime = endTimeParsed.seconds;
 
   // Validate time parameters
   if (startTime !== null && endTime !== null && endTime <= startTime) {

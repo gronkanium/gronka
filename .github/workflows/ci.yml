@@ -27,7 +27,6 @@ env:
   NODE_ENV: test
   DISCORD_TOKEN: 'ci-test-token'
   CLIENT_ID: 'ci-test-client-id'
-  POSTGRES_DB: gronka_test
   POSTGRES_USER: gronka
   POSTGRES_PASSWORD: gronka
   POSTGRES_HOST: localhost
@@ -37,7 +36,6 @@ env:
   PGPASSWORD: gronka
   PGHOST: localhost
   PGPORT: '5432'
-  PGDATABASE: gronka_test
 
 jobs:
   dependency-review:
@@ -67,11 +65,14 @@ jobs:
   test-utils:
     runs-on: blacksmith-4vcpu-ubuntu-2404
     if: github.actor != 'dependabot[bot]'
+    env:
+      POSTGRES_DB: gronka_test_utils
+      PGDATABASE: gronka_test_utils
     services:
       postgres:
         image: postgres:16-alpine
         env:
-          POSTGRES_DB: gronka_test
+          POSTGRES_DB: gronka_test_utils
           POSTGRES_USER: gronka
           POSTGRES_PASSWORD: gronka
         options: >-
@@ -89,17 +90,19 @@ jobs:
           cache: 'npm'
       - run: npm ci
       - run: sudo apt-get update && sudo apt-get install -y ffmpeg postgresql-client
-      - run: psql -c 'DROP SCHEMA IF EXISTS public CASCADE; CREATE SCHEMA public;'
       - run: npx cross-env WEBUI_PORT=3101 R2_ACCOUNT_ID= R2_ACCESS_KEY_ID= R2_SECRET_ACCESS_KEY= R2_BUCKET_NAME= node --test test/utils/
 
   test-commands:
     runs-on: blacksmith-4vcpu-ubuntu-2404
     if: github.actor != 'dependabot[bot]'
+    env:
+      POSTGRES_DB: gronka_test_commands
+      PGDATABASE: gronka_test_commands
     services:
       postgres:
         image: postgres:16-alpine
         env:
-          POSTGRES_DB: gronka_test
+          POSTGRES_DB: gronka_test_commands
           POSTGRES_USER: gronka
           POSTGRES_PASSWORD: gronka
         options: >-
@@ -117,17 +120,19 @@ jobs:
           cache: 'npm'
       - run: npm ci
       - run: sudo apt-get update && sudo apt-get install -y ffmpeg postgresql-client
-      - run: psql -c 'DROP SCHEMA IF EXISTS public CASCADE; CREATE SCHEMA public;'
       - run: npx cross-env WEBUI_PORT=3101 R2_ACCOUNT_ID= R2_ACCESS_KEY_ID= R2_SECRET_ACCESS_KEY= R2_BUCKET_NAME= node --test test/commands/
 
   test-scripts:
     runs-on: blacksmith-4vcpu-ubuntu-2404
     if: github.actor != 'dependabot[bot]'
+    env:
+      POSTGRES_DB: gronka_test_scripts
+      PGDATABASE: gronka_test_scripts
     services:
       postgres:
         image: postgres:16-alpine
         env:
-          POSTGRES_DB: gronka_test
+          POSTGRES_DB: gronka_test_scripts
           POSTGRES_USER: gronka
           POSTGRES_PASSWORD: gronka
         options: >-
@@ -145,17 +150,19 @@ jobs:
           cache: 'npm'
       - run: npm ci
       - run: sudo apt-get update && sudo apt-get install -y ffmpeg postgresql-client
-      - run: psql -c 'DROP SCHEMA IF EXISTS public CASCADE; CREATE SCHEMA public;'
       - run: npx cross-env WEBUI_PORT=3101 R2_ACCOUNT_ID= R2_ACCESS_KEY_ID= R2_SECRET_ACCESS_KEY= R2_BUCKET_NAME= node --test test/scripts/
 
   test-integration:
     runs-on: blacksmith-4vcpu-ubuntu-2404
     if: github.actor != 'dependabot[bot]'
+    env:
+      POSTGRES_DB: gronka_test_integration
+      PGDATABASE: gronka_test_integration
     services:
       postgres:
         image: postgres:16-alpine
         env:
-          POSTGRES_DB: gronka_test
+          POSTGRES_DB: gronka_test_integration
           POSTGRES_USER: gronka
           POSTGRES_PASSWORD: gronka
         options: >-
@@ -173,7 +180,6 @@ jobs:
           cache: 'npm'
       - run: npm ci
       - run: sudo apt-get update && sudo apt-get install -y ffmpeg postgresql-client
-      - run: psql -c 'DROP SCHEMA IF EXISTS public CASCADE; CREATE SCHEMA public;'
       - run: npx cross-env WEBUI_PORT=3101 R2_ACCOUNT_ID= R2_ACCESS_KEY_ID= R2_SECRET_ACCESS_KEY= R2_BUCKET_NAME= node --test test/webui-server-*.test.js test/docker-security.test.js
 
   dependabot-checks:

@@ -7,24 +7,46 @@ and this project adheres (attempts) to [Semantic Versioning](https://semver.org/
 
 ## [Unreleased]
 
-### Changed
-
-- Migrated GitHub Actions workflows to Blacksmith for improved CI/CD automation
-  - Updated `.github/workflows/ci.yml` to use Blacksmith
-  - Updated `.github/workflows/codeql.yml` to use Blacksmith
-  - Updated `.github/workflows/release.yml` to use Blacksmith
-
-### Fixed
-
-- Fixed release notes generation workflow to correctly extract notes from CHANGELOG.md
-- Added `scripts/extract-release-notes.js` for reliable changelog parsing
+## [0.16.0] - 2025-01-09
 
 ### Added
 
-- Docker credential fix script for WSL2
-  - Added `scripts/fix-docker-credentials.sh` to fix Docker credential storage issues in WSL2
-  - Fixes Windows credential manager errors and GPG decryption failures
-  - Added `fix:creds` npm script for easy access
+- Support MM:SS and HH:MM:SS timestamp formats for `start_time`/`end_time` parameters ([`fa6ac91`](https://github.com/gronkanium/gronka/commit/fa6ac91))
+- Support for Twitter mirror URLs (fxtwitter, vxtwitter, fixupx, etc.) ([`21ed212`](https://github.com/gronkanium/gronka/commit/21ed212))
+- Health endpoint for Docker healthcheck ([`0b75e0e`](https://github.com/gronkanium/gronka/commit/0b75e0e))
+- Bot status update via HTTP API instead of new Discord connection ([`232a4c0`](https://github.com/gronkanium/gronka/commit/232a4c0))
+- Comprehensive error handling for Cobalt API and 3-minute YouTube duration limit ([`0d2a317`](https://github.com/gronkanium/gronka/commit/0d2a317))
+- Docker credential fix script for WSL2 ([`211ff72`](https://github.com/gronkanium/gronka/commit/211ff72))
+
+### Fixed
+
+- Support Twitter mirror subdomains (t., g., d., m.) ([`ea36a38`](https://github.com/gronkanium/gronka/commit/ea36a38))
+- Improve error message for inaccessible social media content ([`7419748`](https://github.com/gronkanium/gronka/commit/7419748))
+- Use extension-based file type detection in convert command ([`110aad5`](https://github.com/gronkanium/gronka/commit/110aad5))
+- Route GIF files to `/gifs/` folder instead of `/videos/` ([`70e1f35`](https://github.com/gronkanium/gronka/commit/70e1f35))
+- Robust caching and file validation for trimmed downloads ([`a76321c`](https://github.com/gronkanium/gronka/commit/a76321c))
+- Calculate actual end time for single `start_time` parameter ([`b429b0f`](https://github.com/gronkanium/gronka/commit/b429b0f))
+- Use explicit HH:MM:SS format for yt-dlp `--download-sections` ([`999a255`](https://github.com/gronkanium/gronka/commit/999a255))
+- Improve YouTube duration limit handling ([`f4a6c0f`](https://github.com/gronkanium/gronka/commit/f4a6c0f))
+- Extend env prefix support to all config vars and add global error handlers ([`4011f82`](https://github.com/gronkanium/gronka/commit/4011f82))
+- Resolve CodeQL warnings and fix CI postgres env vars ([`fbc25cf`](https://github.com/gronkanium/gronka/commit/fbc25cf))
+- Release notes generation workflow ([`cebda7a`](https://github.com/gronkanium/gronka/commit/cebda7a))
+
+### Changed
+
+- Migrate from SHA-256 to BLAKE3 for hashing ([`f1b0b2e`](https://github.com/gronkanium/gronka/commit/f1b0b2e))
+- Modularize download command into focused modules ([`47c5649`](https://github.com/gronkanium/gronka/commit/47c5649))
+- Add environment prefix support for `PROD_`/`TEST_` env vars ([`8b3ab1f`](https://github.com/gronkanium/gronka/commit/8b3ab1f))
+- Separate Jekyll site to independent repository ([`fbbb4a0`](https://github.com/gronkanium/gronka/commit/fbbb4a0))
+- Remove legacy server and CORS config ([`e5fec38`](https://github.com/gronkanium/gronka/commit/e5fec38))
+- Remove automatic rebuild triggers from convert and download commands ([`19fbb21`](https://github.com/gronkanium/gronka/commit/19fbb21))
+- Migrate GitHub Actions workflows to Blacksmith ([`2888c20`](https://github.com/gronkanium/gronka/commit/2888c20))
+- Simplify CI configs and remove env var duplication ([`1933407`](https://github.com/gronkanium/gronka/commit/1933407))
+
+### Dependencies
+
+- Security updates via dependabot ([`b149b14`](https://github.com/gronkanium/gronka/commit/b149b14), [`3b228fc`](https://github.com/gronkanium/gronka/commit/3b228fc), [`25eba62`](https://github.com/gronkanium/gronka/commit/25eba62), [`a4c84fd`](https://github.com/gronkanium/gronka/commit/a4c84fd))
+- Bump qs from 6.14.0 to 6.14.1 ([`6bb1c24`](https://github.com/gronkanium/gronka/commit/6bb1c24))
 
 ## [0.15.1] - 2025-12-08
 

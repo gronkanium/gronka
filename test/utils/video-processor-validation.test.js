@@ -1,5 +1,6 @@
 import { test, describe } from 'node:test';
 import assert from 'node:assert';
+import { sanitizeFFmpegStderr } from '../../src/utils/video-processor/utils.js';
 
 // Extract validateNumericParameter logic for testing
 // This matches the implementation in video-processor.js
@@ -225,6 +226,77 @@ describe('video-processor validation', () => {
         // Even if something coerces to a number, we validate it's actually numeric
         assert.throws(() => validateNumericParameter('10abc', 'test'), /must be a valid number/);
       });
+    });
+  });
+
+  describe('sanitizeFFmpegStderr', () => {
+    test('returns placeholder for null/undefined input', () => {
+      assert.strictEqual(sanitizeFFmpegStderr(null), '[no stderr output]');
+      assert.strictEqual(sanitizeFFmpegStderr(undefined), '[no stderr output]');
+      assert.strictEqual(sanitizeFFmpegStderr(''), '[no stderr output]');
+    });
+
+    test('returns placeholder for non-string input', () => {
+      assert.strictEqual(sanitizeFFmpegStderr(123), '[no stderr output]');
+      assert.strictEqual(sanitizeFFmpegStderr({}), '[no stderr output]');
+      assert.strictEqual(sanitizeFFmpegStderr([]), '[no stderr output]');
+    });
+
+    test('preserves printable ASCII characters', () => {
+      const input = 'FFmpeg error: Invalid data found when processing input';
+      const result = sanitizeFFmpegStderr(input);
+      assert.strictEqual(result, input);
+    });
+
+    test('removes binary/non-printable characters', () => {
+      // Create string with binary data mixed in
+      const binaryData = Buffer.from([0x00, 0x01, 0x80, 0xff]).toString('binary');
+      const input = `Error: ${binaryData} something went wrong`;
+      const result = sanitizeFFmpegStderr(input);
+      // Binary chars should be removed, leaving readable text
+      assert.ok(!result.includes('\x00'));
+      assert.ok(!result.includes('\x01'));
+      assert.ok(result.includes('Error'));
+      assert.ok(result.includes('something went wrong'));
+    });
+
+    test('collapses multiple spaces and newlines', () => {
+      const input = 'Error:   multiple   spaces\n\n\nand newlines';
+      const result = sanitizeFFmpegStderr(input);
+      assert.ok(!result.includes('   ')); // No triple spaces
+      assert.ok(!result.includes('\n')); // Newlines converted to separators
+    });
+
+    test('truncates long output', () => {
+      const longString = 'x'.repeat(3000);
+      const result = sanitizeFFmpegStderr(longString);
+      assert.ok(result.length < 3000);
+      assert.ok(result.endsWith('... [truncated]'));
+    });
+
+    test('respects custom maxLength', () => {
+      const input = 'x'.repeat(100);
+      const result = sanitizeFFmpegStderr(input, 50);
+      assert.ok(result.length <= 50 + '... [truncated]'.length);
+      assert.ok(result.endsWith('... [truncated]'));
+    });
+
+    test('returns special message for all-binary content', () => {
+      // String that is only binary/non-printable chars
+      const binaryOnly = Buffer.from([0x00, 0x01, 0x02, 0x80, 0xff]).toString('binary');
+      const result = sanitizeFFmpegStderr(binaryOnly);
+      assert.strictEqual(result, '[stderr contained only binary/non-printable data]');
+    });
+
+    test('handles typical FFmpeg error output', () => {
+      const typicalError = `ffmpeg version 5.1.2 Copyright (c) 2000-2022 the FFmpeg developers
+[h264 @ 0x55555558e080] error while decoding MB 45 30, bytestream -5
+Error while decoding stream #0:0: Invalid data found when processing input`;
+      const result = sanitizeFFmpegStderr(typicalError);
+      assert.ok(result.includes('ffmpeg version'));
+      assert.ok(result.includes('Invalid data found'));
+      // Newlines should be converted to separators
+      assert.ok(result.includes(' | '));
     });
   });
 });

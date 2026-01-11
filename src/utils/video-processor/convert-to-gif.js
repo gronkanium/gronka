@@ -2,7 +2,7 @@ import ffmpeg from 'fluent-ffmpeg';
 import fs from 'fs/promises';
 import path from 'path';
 import { createLogger } from '../logger.js';
-import { validateNumericParameter, checkFFmpegInstalled } from './utils.js';
+import { validateNumericParameter, checkFFmpegInstalled, sanitizeFFmpegStderr } from './utils.js';
 
 const logger = createLogger('convert-to-gif');
 
@@ -105,7 +105,7 @@ export async function convertToGif(inputPath, outputPath, options = {}) {
       .outputOptions(['-y']) // Overwrite output file
       .output(palettePath)
       .on('error', (err, stdout, stderr) => {
-        logger.error('FFmpeg pass 1 (palette) failed:', stderr);
+        logger.error('FFmpeg pass 1 (palette) failed:', sanitizeFFmpegStderr(stderr));
         reject(new Error(`Palette generation failed: ${err.message}`));
       })
       .on('end', () => {
@@ -130,7 +130,7 @@ export async function convertToGif(inputPath, outputPath, options = {}) {
           ])
           .output(outputPath)
           .on('error', async (err, stdout, stderr) => {
-            logger.error('FFmpeg pass 2 (conversion) failed:', stderr);
+            logger.error('FFmpeg pass 2 (conversion) failed:', sanitizeFFmpegStderr(stderr));
             // Clean up palette file on error
             try {
               await fs.unlink(palettePath);

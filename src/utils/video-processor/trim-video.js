@@ -2,7 +2,7 @@ import ffmpeg from 'fluent-ffmpeg';
 import fs from 'fs/promises';
 import path from 'path';
 import { createLogger } from '../logger.js';
-import { validateNumericParameter, checkFFmpegInstalled } from './utils.js';
+import { validateNumericParameter, checkFFmpegInstalled, sanitizeFFmpegStderr } from './utils.js';
 
 const logger = createLogger('trim-video');
 
@@ -105,7 +105,7 @@ export async function trimVideo(inputPath, outputPath, options = {}) {
       .outputOptions(outputOptions)
       .output(outputPath)
       .on('error', (err, stdout, stderr) => {
-        logger.error('FFmpeg video trim failed:', stderr);
+        logger.error('FFmpeg video trim failed:', sanitizeFFmpegStderr(stderr));
         reject(new Error(`Video trimming failed: ${err.message}`));
       })
       .on('end', async () => {

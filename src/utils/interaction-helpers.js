@@ -3,6 +3,42 @@ import { createLogger } from './logger.js';
 const logger = createLogger('interaction-helpers');
 
 /**
+ * Sanitize Discord.js errors before logging to prevent huge requestBody data in database
+ * Discord errors can contain full file buffers in requestBody which can be megabytes
+ * @param {Error} error - Discord.js error object
+ * @returns {Object} Sanitized error object safe for logging
+ */
+function sanitizeDiscordError(error) {
+  if (!error || typeof error !== 'object') {
+    return error;
+  }
+
+  // Extract only the useful fields, excluding requestBody which contains file data
+  const sanitized = {
+    message: error.message,
+    code: error.code,
+    status: error.status,
+    method: error.method,
+    url: error.url,
+  };
+
+  // Include rawError message if present, but not the full rawError object
+  if (error.rawError?.message) {
+    sanitized.rawErrorMessage = error.rawError.message;
+    sanitized.rawErrorCode = error.rawError.code;
+  }
+
+  // Remove undefined fields
+  Object.keys(sanitized).forEach(key => {
+    if (sanitized[key] === undefined) {
+      delete sanitized[key];
+    }
+  });
+
+  return sanitized;
+}
+
+/**
  * Safely reply to a Discord interaction, handling expired/already-acknowledged interactions
  * @param {Interaction} interaction - Discord interaction
  * @param {Object} options - Reply options (content, embeds, etc.)
@@ -22,7 +58,7 @@ export async function safeInteractionReply(interaction, options) {
     if (error.code === 10062 || error.code === 40060) {
       logger.debug(`Interaction expired or already acknowledged when replying: ${error.message}`);
     } else {
-      logger.error(`Failed to reply to interaction:`, error);
+      logger.error(`Failed to reply to interaction:`, sanitizeDiscordError(error));
     }
     return false;
   }
@@ -50,7 +86,7 @@ export async function safeInteractionEditReply(interaction, options) {
         `Interaction expired or already acknowledged when editing reply: ${error.message}`
       );
     } else {
-      logger.error(`Failed to edit interaction reply:`, error);
+      logger.error(`Failed to edit interaction reply:`, sanitizeDiscordError(error));
     }
     return false;
   }
@@ -78,7 +114,7 @@ export async function safeInteractionFollowUp(interaction, options) {
         `Interaction expired or already acknowledged when following up: ${error.message}`
       );
     } else {
-      logger.error(`Failed to follow up on interaction:`, error);
+      logger.error(`Failed to follow up on interaction:`, sanitizeDiscordError(error));
     }
     return false;
   }
@@ -106,7 +142,7 @@ export async function safeInteractionDeferReply(interaction, options = {}) {
         `Interaction expired or already acknowledged when deferring reply: ${error.message}`
       );
     } else {
-      logger.error(`Failed to defer interaction reply:`, error);
+      logger.error(`Failed to defer interaction reply:`, sanitizeDiscordError(error));
     }
     return false;
   }

@@ -2,7 +2,7 @@
   import { onMount, onDestroy } from 'svelte';
   import { currentRoute, initRouter, navigate } from './utils/router.js';
   import { useWebSocket, ensureConnected, connected as wsConnected } from './stores/websocket-store.js';
-  import { BarChart3, Users as UsersIcon, Settings, FileText, TrendingUp, Bell, ChevronLeft, ChevronRight, Shield, List } from 'lucide-svelte';
+  import { BarChart3, Users as UsersIcon, Settings, FileText, TrendingUp, Bell, ChevronLeft, ChevronRight, Shield, List, PieChart } from 'lucide-svelte';
   import Stats from './pages/Stats.svelte';
   import Health from './pages/Health.svelte';
   import Operations from './pages/Operations.svelte';
@@ -14,6 +14,7 @@
   import Monitoring from './pages/Monitoring.svelte';
   import Alerts from './pages/Alerts.svelte';
   import Moderation from './pages/Moderation.svelte';
+  import Analytics from './pages/Analytics.svelte';
   import './styles/responsive.css';
 
   let sidebarOpen = true;
@@ -69,6 +70,12 @@
         <button on:click={() => navigateTo('dashboard')}>
           <span class="icon"><BarChart3 size={20} /></span>
           {#if sidebarOpen}<span class="label">dashboard</span>{/if}
+        </button>
+      </li>
+      <li class:active={activePage === 'analytics'}>
+        <button on:click={() => navigateTo('analytics')}>
+          <span class="icon"><PieChart size={20} /></span>
+          {#if sidebarOpen}<span class="label">analytics</span>{/if}
         </button>
       </li>
       <li class:active={activePage === 'users'}>
@@ -134,6 +141,13 @@
       <div class="dashboard-grid">
         <Stats />
         <Health />
+      </div>
+    {:else if activePage === 'analytics'}
+      <div class="page-header">
+        <h2>analytics</h2>
+      </div>
+      <div class="page-content">
+        <Analytics />
       </div>
     {:else if activePage === 'users'}
       <div class="page-header">

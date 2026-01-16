@@ -83,6 +83,7 @@
     "@aws-sdk/lib-storage": "^3.966.0",
     "@noble/hashes": "^2.0.1",
     "axios": "^1.6.0",
+    "chart.js": "^4.5.1",
     "discord.js": "^14.25.1",
     "dotenv": "^17.2.3",
     "escape-html": "^1.0.3",

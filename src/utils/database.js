@@ -17,6 +17,7 @@ export * from './database/operations-pg.js';
 export * from './database/metrics-pg.js';
 export * from './database/alerts-pg.js';
 export * from './database/temporary-uploads-pg.js';
+export * from './database/analytics-pg.js';
 
 // Test helpers (for cleaning database state in tests)
 export * from './database/test-helpers.js';

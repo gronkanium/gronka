@@ -1530,13 +1530,24 @@ export async function handleConvertCommand(interaction) {
   }
 
   // Get attachment or URL from command options
-  const attachment = interaction.options.getAttachment('file');
-  const url = interaction.options.getString('url');
-  const quality = interaction.options.getString('quality');
-  const optimize = interaction.options.getBoolean('optimize') ?? false;
-  const lossy = interaction.options.getNumber('lossy');
-  const startTimeRaw = interaction.options.getString('start_time');
-  const endTimeRaw = interaction.options.getString('end_time');
+  // Wrap in try-catch to handle Discord option type mismatches (cached command data)
+  let attachment, url, quality, optimize, lossy, startTimeRaw, endTimeRaw;
+  try {
+    attachment = interaction.options.getAttachment('file');
+    url = interaction.options.getString('url');
+    quality = interaction.options.getString('quality');
+    optimize = interaction.options.getBoolean('optimize') ?? false;
+    lossy = interaction.options.getNumber('lossy');
+    startTimeRaw = interaction.options.getString('start_time');
+    endTimeRaw = interaction.options.getString('end_time');
+  } catch (optionError) {
+    logger.error(`Failed to parse command options for user ${userId}: ${optionError.message}`);
+    await safeInteractionReply(interaction, {
+      content: 'failed to parse command options. please try again.',
+      flags: MessageFlags.Ephemeral,
+    });
+    return;
+  }
 
   // Parse timestamp strings to seconds
   const startTimeParsed = parseTimestamp(startTimeRaw);

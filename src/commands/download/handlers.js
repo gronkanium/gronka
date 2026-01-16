@@ -144,9 +144,20 @@ export async function handleDownloadCommand(interaction) {
   }
 
   // Get command options
-  const url = interaction.options.getString('url');
-  const startTimeRaw = interaction.options.getString('start_time');
-  const endTimeRaw = interaction.options.getString('end_time');
+  // Wrap in try-catch to handle Discord option type mismatches (cached command data)
+  let url, startTimeRaw, endTimeRaw;
+  try {
+    url = interaction.options.getString('url');
+    startTimeRaw = interaction.options.getString('start_time');
+    endTimeRaw = interaction.options.getString('end_time');
+  } catch (optionError) {
+    logger.error(`Failed to parse command options for user ${userId}: ${optionError.message}`);
+    await safeInteractionReply(interaction, {
+      content: 'failed to parse command options. please try again.',
+      flags: MessageFlags.Ephemeral,
+    });
+    return;
+  }
 
   // Parse timestamp strings to seconds
   const startTimeParsed = parseTimestamp(startTimeRaw);

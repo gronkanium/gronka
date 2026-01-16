@@ -853,9 +853,20 @@ export async function handleOptimizeCommand(interaction) {
   }
 
   // Get attachment or URL from command options
-  const attachment = interaction.options.getAttachment('file');
-  const url = interaction.options.getString('url');
-  const lossyLevel = interaction.options.getNumber('lossy');
+  // Wrap in try-catch to handle Discord option type mismatches (cached command data)
+  let attachment, url, lossyLevel;
+  try {
+    attachment = interaction.options.getAttachment('file');
+    url = interaction.options.getString('url');
+    lossyLevel = interaction.options.getNumber('lossy');
+  } catch (optionError) {
+    logger.error(`Failed to parse command options for user ${userId}: ${optionError.message}`);
+    await safeReply(interaction, {
+      content: 'failed to parse command options. please try again.',
+      flags: MessageFlags.Ephemeral,
+    });
+    return;
+  }
 
   // Validate lossy level if provided
   if (lossyLevel !== null && (lossyLevel < 0 || lossyLevel > 100)) {

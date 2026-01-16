@@ -76,12 +76,14 @@ test('detectFileType - uses content type when extension is ambiguous', () => {
   assert.strictEqual(detectFileType('.unknown', 'image/png'), 'image');
 });
 
-test('detectFileType - prioritizes content-type over extension', () => {
-  // Content-type takes precedence over extension (more reliable)
-  // This handles cases where files have incorrect extensions (e.g., .gif extension but video/mp4 content-type)
-  assert.strictEqual(detectFileType('.gif', 'video/mp4'), 'video');
-  assert.strictEqual(detectFileType('.mp4', 'image/gif'), 'gif');
+test('detectFileType - prioritizes content-type over extension (except GIFs)', () => {
+  // .gif extension ALWAYS takes priority to ensure GIFs go to /gifs/ folder
+  // (some sources incorrectly serve GIFs as video/mp4)
+  assert.strictEqual(detectFileType('.gif', 'video/mp4'), 'gif');
   assert.strictEqual(detectFileType('.gif', 'image/gif'), 'gif');
+
+  // For non-GIF files, content-type takes precedence over extension
+  assert.strictEqual(detectFileType('.mp4', 'image/gif'), 'gif');
   assert.strictEqual(detectFileType('.mp4', 'video/mp4'), 'video');
 });
 

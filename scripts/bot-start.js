@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 
-import { spawn } from 'child_process';
+import { spawn, execSync } from 'child_process';
 import dotenv from 'dotenv';
 import { fileURLToPath } from 'url';
 import { dirname, join } from 'path';
@@ -10,6 +10,74 @@ const __dirname = dirname(__filename);
 
 // Load environment variables
 dotenv.config();
+
+/**
+ * Check if a Docker container is running
+ * @param {string} containerName - Name of the container to check
+ * @returns {boolean} True if running
+ */
+function isContainerRunning(containerName) {
+  try {
+    const output = execSync(`docker inspect -f '{{.State.Running}}' ${containerName} 2>/dev/null`, {
+      encoding: 'utf-8',
+      stdio: ['pipe', 'pipe', 'pipe'],
+    });
+    return output.trim() === 'true';
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Check if required services are running
+ * @returns {{ postgres: boolean, cobalt: boolean }}
+ */
+function checkServices() {
+  return {
+    postgres: isContainerRunning('gronka-postgres'),
+    cobalt: isContainerRunning('cobalt'),
+  };
+}
+
+// Check if Docker services are running
+const services = checkServices();
+const autoStart = process.argv.includes('--auto-services');
+
+if (!services.postgres || !services.cobalt) {
+  const missing = [];
+  if (!services.postgres) missing.push('postgres');
+  if (!services.cobalt) missing.push('cobalt');
+
+  if (autoStart) {
+    console.log(`Starting required services (${missing.join(', ')})...`);
+    try {
+      execSync('npm run docker:services:up', {
+        stdio: 'inherit',
+        cwd: join(__dirname, '..'),
+      });
+      console.log('');
+    } catch {
+      console.error('Failed to start services. Please run: npm run docker:services:up');
+      process.exit(1);
+    }
+  } else {
+    console.error('');
+    console.error('\x1b[33m⚠ Required Docker services are not running:\x1b[0m');
+    missing.forEach(s => console.error(`  - ${s}`));
+    console.error('');
+    console.error('To start services, run one of:');
+    console.error('  npm run docker:services:up     # Start services, then run bot');
+    console.error(
+      `  npm run ${process.argv[2]?.toLowerCase() === 'prod' ? 'bot:prod' : 'bot:test'} -- --auto-services  # Auto-start services`
+    );
+    console.error('');
+    console.error('Or use Docker for everything:');
+    console.error('  npm run docker:reload          # Rebuild and start all containers');
+    console.error('  npm run docker:up              # Start all containers');
+    console.error('');
+    process.exit(1);
+  }
+}
 
 // Get prefix from command line argument (TEST or PROD)
 const prefix = process.argv[2]?.toUpperCase();

@@ -1,0 +1,62 @@
+# Services-only compose file for local bot development
+# Starts only the dependency services (postgres, cobalt, giflossy) without the main app
+# Usage: docker compose -f docker-compose.services.yml up -d
+# Or use: npm run docker:services:up
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: gronka-postgres
+    restart: unless-stopped
+    environment:
+      - POSTGRES_USER=${POSTGRES_USER:-gronka}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-gronka}
+      - POSTGRES_DB=${POSTGRES_DB:-gronka}
+      - PGDATA=/var/lib/postgresql/data/pgdata
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    ports:
+      - '${POSTGRES_PORT:-5432}:5432'
+    networks:
+      - gronka-network
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U ${POSTGRES_USER:-gronka} -d ${POSTGRES_DB:-gronka}']
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+
+  cobalt:
+    image: ghcr.io/imputnet/cobalt:11
+    init: true
+    read_only: true
+    restart: unless-stopped
+    container_name: cobalt
+    ports:
+      - 9000:9000/tcp
+    environment:
+      API_URL: ${COBALT_API_URL:-http://localhost:9000}
+      COOKIE_PATH: '/cookies.json'
+    networks:
+      - gronka-network
+    volumes:
+      - ./cookies.json:/cookies.json
+
+  giflossy:
+    image: dylanninin/giflossy:latest
+    container_name: giflossy
+    restart: unless-stopped
+    volumes:
+      - ./data-test:/app/data-test
+      - ./data-prod:/app/data-prod
+      - ./temp:/app/temp
+    networks:
+      - gronka-network
+
+volumes:
+  postgres-data:
+    driver: local
+
+networks:
+  gronka-network:
+    driver: bridge

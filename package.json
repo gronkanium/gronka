@@ -70,7 +70,6 @@
     "test:cloudflare": "node scripts/test-cloudflare-kv.js",
     "tunnel:gronka-waptop": "cloudflared tunnel --config .cloudflared/config.yml --loglevel debug run",
     "wiki:sync": "node scripts/sync-wiki-to-github.js",
-    "release:notes": "node scripts/generate-release-notes.js",
     "prepare": "husky"
   },
   "keywords": [

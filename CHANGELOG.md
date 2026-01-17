@@ -7,6 +7,28 @@ and this project adheres (attempts) to [Semantic Versioning](https://semver.org/
 
 ## [Unreleased]
 
+### Added
+
+- Docker services-only mode for local bot development ([`71e3f84`](https://github.com/gronkanium/gronka/commit/71e3f84))
+  - New `docker-compose.services.yml` for running just postgres, cobalt, and giflossy
+  - New npm scripts: `docker:services:up`, `docker:services:down`, `docker:services:logs`
+  - Bot startup now checks if required services are running and provides helpful error messages
+- Analytics dashboard with KPI tracking and visualization ([`9b10097`](https://github.com/gronkanium/gronka/commit/9b10097))
+- GitHub Sponsors funding configuration ([`24eee1d`](https://github.com/gronkanium/gronka/commit/24eee1d))
+
+### Fixed
+
+- Handle Discord command option type mismatch errors gracefully ([`f970645`](https://github.com/gronkanium/gronka/commit/f970645))
+- Sanitize FFmpeg stderr and Discord errors before logging ([`4d9d45b`](https://github.com/gronkanium/gronka/commit/4d9d45b))
+- Use unique database per test job to prevent index conflicts ([`8f7a2e4`](https://github.com/gronkanium/gronka/commit/8f7a2e4))
+- Fix flaky timing test and update file type detection test ([`af9b756`](https://github.com/gronkanium/gronka/commit/af9b756))
+
+### Dependencies
+
+- Security updates via dependabot ([`35dfaae`](https://github.com/gronkanium/gronka/commit/35dfaae))
+- Bump svelte from 5.46.1 to 5.46.4 ([`f90a910`](https://github.com/gronkanium/gronka/commit/f90a910))
+- Bump devalue from 5.5.0 to 5.6.2 ([`ef98e7f`](https://github.com/gronkanium/gronka/commit/ef98e7f))
+
 ## [0.16.0] - 2025-01-09
 
 ### Added

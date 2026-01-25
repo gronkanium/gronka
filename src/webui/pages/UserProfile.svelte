@@ -72,7 +72,6 @@
       operations = data.operations || [];
       operationsTotal = data.total || 0;
     } catch (err) {
-      console.error('Failed to fetch user operations:', err);
       operationsError = err.message || 'failed to fetch user operations';
       operations = [];
       operationsTotal = 0;
@@ -96,7 +95,6 @@
       media = data.media || [];
       mediaTotal = data.total || 0;
     } catch (err) {
-      console.error('Failed to fetch user media:', err);
       mediaError = err.message || 'failed to fetch user media';
       media = [];
       mediaTotal = 0;
@@ -201,16 +199,8 @@
       const response = await fetch(`/api/operations/${operationId}`);
       if (!response.ok) throw new Error('failed to fetch operation trace');
       const data = await response.json();
-      console.log('Operation trace API response:', {
-        operationId,
-        hasTrace: !!data.trace,
-        traceLogsCount: data.trace?.logs?.length || 0,
-        executionStepsCount: data.trace?.logs?.filter(log => log.step !== 'created' && log.step !== 'status_update' && log.step !== 'error').length || 0,
-        trace: data.trace,
-      });
       operationTrace = data.trace;
     } catch (err) {
-      console.error('Failed to fetch operation trace:', err);
       operationTrace = null;
     } finally {
       traceLoading = false;

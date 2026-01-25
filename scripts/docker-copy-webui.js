@@ -2,6 +2,8 @@
 
 import { checkDockerDaemon, info, error, execOrError, isContainerRunning } from './utils.js';
 
+const skipBuild = process.argv.includes('--skip-build');
+
 checkDockerDaemon();
 
 // Check if app container is running
@@ -12,9 +14,12 @@ if (!isContainerRunning(containerName)) {
   );
 }
 
-// Always build webui locally to ensure we have the latest version
-info('Building webui locally...');
-execOrError('npm run build:webui', 'Failed to build webui locally');
+if (skipBuild) {
+  info('Skipping build (--skip-build flag provided)');
+} else {
+  info('Building webui locally...');
+  execOrError('npm run build:webui', 'Failed to build webui locally');
+}
 
 // Copy built files to container
 info('Copying built files to container...');

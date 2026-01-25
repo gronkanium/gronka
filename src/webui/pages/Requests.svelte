@@ -162,7 +162,6 @@
       total = data.total || 0;
     } catch (err) {
       error = err.message;
-      console.error('Error fetching requests:', err);
     } finally {
       loading = false;
     }

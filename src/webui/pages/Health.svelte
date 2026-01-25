@@ -50,7 +50,7 @@
         }, 300);
       }
     } catch (err) {
-      console.error('Failed to load crypto prices:', err);
+      // Silently handle error - prices will remain at previous values
     }
   }
 

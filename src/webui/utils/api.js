@@ -68,16 +68,11 @@ export function formatServerStartTime(uptimeSeconds) {
 }
 
 export async function fetchCryptoPrices() {
-  try {
-    const response = await fetch('/api/crypto-prices');
-    if (!response.ok) {
-      throw new Error(`HTTP error! status: ${response.status}`);
-    }
-    return await response.json();
-  } catch (error) {
-    console.error('Failed to fetch crypto prices:', error);
-    throw error;
+  const response = await fetch('/api/crypto-prices');
+  if (!response.ok) {
+    throw new Error(`HTTP error! status: ${response.status}`);
   }
+  return await response.json();
 }
 
 export function formatPrice(price) {

@@ -107,7 +107,6 @@
     } catch (err) {
       error = err.message;
       filteredOperations = [];
-      console.error('Error applying filters:', err);
     } finally {
       loading = false;
     }
@@ -128,7 +127,6 @@
       operationTraces.set(operationId, trace);
       return trace;
     } catch (err) {
-      console.error('Failed to load trace:', err);
       return null;
     }
   }
@@ -142,7 +140,6 @@
       }
       errorAnalysis = await response.json();
     } catch (err) {
-      console.error('Failed to load error analysis:', err);
       errorAnalysis = null;
     } finally {
       errorAnalysisLoading = false;
@@ -268,7 +265,7 @@
     }
   }
 
-  $: paginatedOperations = filteredOperations.slice(offset, offset + limit);
+  $: paginatedOperations = filteredOperations;
   $: total = filteredOperations.length;
 
   onMount(() => {

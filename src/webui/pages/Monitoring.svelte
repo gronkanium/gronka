@@ -35,7 +35,6 @@
         const parsed = JSON.parse(cachedErrorMetrics);
         if (parsed.data && parsed.timestamp && (Date.now() - parsed.timestamp) < CACHE_TTL) {
           errorMetrics = parsed.data;
-          console.log('[Monitoring] Loaded cached error metrics:', parsed.data);
         } else {
           // Clear stale cache
           localStorage.removeItem(CACHE_KEYS.errorMetrics);
@@ -54,8 +53,7 @@
         }
       }
     } catch (err) {
-      console.warn('Failed to load cached data:', err);
-      // Clear corrupted cache
+      // Clear corrupted cache silently
       try {
         localStorage.removeItem(CACHE_KEYS.errorMetrics);
         localStorage.removeItem(CACHE_KEYS.storageStats);
@@ -73,7 +71,7 @@
         timestamp: Date.now(),
       }));
     } catch (err) {
-      console.warn('Failed to save to cache:', err);
+      // Silently handle cache save errors
     }
   }
 
@@ -82,19 +80,9 @@
       const response = await fetch('/api/metrics/errors');
       if (!response.ok) throw new Error('failed to fetch error metrics');
       const data = await response.json();
-      console.log('Error metrics API response:', data);
-      console.log('Error counts:', {
-        errorCount1h: data.errorCount1h,
-        errorCount24h: data.errorCount24h,
-        warnCount1h: data.warnCount1h,
-        warnCount24h: data.warnCount24h,
-        total: data.total,
-        byLevel: data.byLevel
-      });
       errorMetrics = data;
       saveToCache(CACHE_KEYS.errorMetrics, data);
     } catch (err) {
-      console.error('Failed to fetch error metrics:', err);
       // If fetch fails and we have no cached data, keep existing or set to null
       if (!errorMetrics) {
         errorMetrics = null;
@@ -108,7 +96,6 @@
       storageStats = data;
       saveToCache(CACHE_KEYS.storageStats, data);
     } catch (err) {
-      console.error('Failed to fetch storage stats:', err);
       // If fetch fails and we have no cached data, keep existing or set to null
       if (!storageStats) {
         storageStats = null;
@@ -178,18 +165,6 @@
   function toggleDetails(section) {
     showDetails[section] = !showDetails[section];
     showDetails = { ...showDetails };
-  }
-
-  // Reactive statement to log error metrics when they change (for debugging)
-  $: if (errorMetrics) {
-    console.log('[Monitoring] Error metrics updated:', {
-      errorCount1h: errorMetrics.errorCount1h,
-      errorCount24h: errorMetrics.errorCount24h,
-      warnCount1h: errorMetrics.warnCount1h,
-      warnCount24h: errorMetrics.warnCount24h,
-      total: errorMetrics.total,
-      byLevel: errorMetrics.byLevel
-    });
   }
 
   onMount(() => {

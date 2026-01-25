@@ -97,7 +97,7 @@
       const data = await response.json();
       components = data.components || [];
     } catch (err) {
-      console.error('Error fetching components:', err);
+      // Silently handle error - components list will remain empty
     }
   }
 

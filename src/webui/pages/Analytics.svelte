@@ -95,7 +95,6 @@
       updateCharts();
     } catch (err) {
       error = err.message;
-      console.error('Analytics fetch error:', err);
     } finally {
       loading = false;
     }

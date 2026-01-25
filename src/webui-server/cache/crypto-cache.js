@@ -21,13 +21,14 @@ function isCacheValid() {
 async function fetchCryptoPricesFromAPI() {
   try {
     const response = await axios.get(
-      'https://api.coingecko.com/api/v3/simple/price?ids=bitcoin,ethereum&vs_currencies=usd',
+      'https://api.coingecko.com/api/v3/simple/price?ids=bitcoin,ethereum,monero&vs_currencies=usd',
       { timeout: 5000 }
     );
     const data = response.data;
     return {
       bitcoin: data.bitcoin?.usd || null,
       ethereum: data.ethereum?.usd || null,
+      monero: data.monero?.usd || null,
     };
   } catch (error) {
     logger.error('Failed to fetch crypto prices from CoinGecko:', error);
@@ -59,6 +60,7 @@ export async function getCryptoPrices() {
     return {
       bitcoin: null,
       ethereum: null,
+      monero: null,
     };
   }
 }

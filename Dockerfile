@@ -2,7 +2,7 @@
 FROM node:20-slim AS builder
 
 # Install build tools for native npm modules
-RUN apt-get update && apt-get install -y \
+RUN apt-get update && apt-get install -y --no-install-recommends \
     python3 \
     make \
     g++ \
@@ -39,7 +39,7 @@ FROM node:20-slim AS runtime
 COPY --from=docker:cli /usr/local/bin/docker /usr/local/bin/docker
 
 # Install runtime dependencies: FFmpeg, ca-certificates, and yt-dlp
-RUN apt-get update && apt-get install -y \
+RUN apt-get update && apt-get install -y --no-install-recommends \
     ffmpeg \
     ca-certificates \
     python3 \

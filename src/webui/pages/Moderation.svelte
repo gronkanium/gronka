@@ -37,7 +37,7 @@
       users = data.users || [];
       usersTotal = data.total || 0;
     } catch (err) {
-      console.error('Failed to fetch users:', err);
+      // Error handled silently - users list will remain empty
     } finally {
       usersLoading = false;
     }
@@ -187,7 +187,6 @@
     deleting = true;
     try {
       const urlHashesArray = Array.from(selectedFiles);
-      console.log('Bulk delete: sending request', { urlHashes: urlHashesArray, count: urlHashesArray.length });
 
       const response = await fetch('/api/moderation/files/bulk', {
         method: 'DELETE',
@@ -199,24 +198,18 @@
         }),
       });
 
-      console.log('Bulk delete: response status', response.status, response.statusText);
-
       if (!response.ok) {
         let errorMessage = 'failed to delete files';
         try {
           const data = await response.json();
           errorMessage = data.message || data.error || errorMessage;
-          console.error('Bulk delete: error response', data);
         } catch (parseError) {
-          const text = await response.text();
-          console.error('Bulk delete: failed to parse error response', text);
           errorMessage = `HTTP ${response.status}: ${response.statusText}`;
         }
         throw new Error(errorMessage);
       }
 
       const data = await response.json();
-      console.log('Bulk delete: success response', data);
       const { results } = data;
 
       if (results && results.failed && results.failed.length > 0) {
@@ -229,7 +222,6 @@
       selectedFiles.clear();
       await fetchR2Media();
     } catch (err) {
-      console.error('Bulk delete: error', err);
       alert(`Failed to delete files: ${err.message}`);
     } finally {
       deleting = false;

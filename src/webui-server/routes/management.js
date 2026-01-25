@@ -1,6 +1,7 @@
 import express from 'express';
 import path from 'path';
 import fs from 'fs';
+import rateLimit from 'express-rate-limit';
 import { createLogger } from '../../utils/logger.js';
 import { r2Config, loggerConfig } from '../../utils/config.js';
 import {
@@ -10,6 +11,15 @@ import {
 
 const logger = createLogger('webui');
 const router = express.Router();
+
+// Rate limiter for management routes
+const managementLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 50,
+  message: 'too many requests, please try again later',
+  standardHeaders: true,
+  legacyHeaders: false,
+});
 
 // Get stats about admin uploads (untracked R2 files)
 router.get('/api/management/admin-uploads/stats', async (req, res) => {
@@ -80,7 +90,7 @@ router.post('/api/management/admin-uploads/cleanup', express.json(), async (req,
 });
 
 // Download an archive file
-router.get('/api/management/admin-uploads/archive/:filename', (req, res) => {
+router.get('/api/management/admin-uploads/archive/:filename', managementLimiter, (req, res) => {
   try {
     const { filename } = req.params;
 
@@ -92,24 +102,22 @@ router.get('/api/management/admin-uploads/archive/:filename', (req, res) => {
       });
     }
 
-    // Resolve paths and verify file is within allowed directory (prevent path traversal)
+    // Get list of valid archive files from directory (whitelist approach)
     const baseDir = path.resolve(loggerConfig.logDir);
-    const filePath = path.resolve(baseDir, filename);
+    const validFiles = fs
+      .readdirSync(baseDir)
+      .filter(f => f.match(/^admin-uploads-archive-[\w-]+\.zip$/));
 
-    if (!filePath.startsWith(baseDir + path.sep)) {
-      return res.status(400).json({
-        success: false,
-        error: 'invalid filename',
-      });
-    }
-
-    // Check file exists
-    if (!fs.existsSync(filePath)) {
+    // Check requested file exists in whitelist
+    if (!validFiles.includes(filename)) {
       return res.status(404).json({
         success: false,
         error: 'archive not found',
       });
     }
+
+    // Build path from validated filename
+    const filePath = path.join(baseDir, filename);
 
     // Send file for download
     res.download(filePath, filename, err => {

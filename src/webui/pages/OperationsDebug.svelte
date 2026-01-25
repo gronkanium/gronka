@@ -265,7 +265,7 @@
     }
   }
 
-  $: paginatedOperations = filteredOperations.slice(offset, offset + limit);
+  $: paginatedOperations = filteredOperations;
   $: total = filteredOperations.length;
 
   onMount(() => {

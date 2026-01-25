@@ -92,7 +92,16 @@ router.get('/api/management/admin-uploads/archive/:filename', (req, res) => {
       });
     }
 
-    const filePath = path.join(loggerConfig.logDir, filename);
+    // Resolve paths and verify file is within allowed directory (prevent path traversal)
+    const baseDir = path.resolve(loggerConfig.logDir);
+    const filePath = path.resolve(baseDir, filename);
+
+    if (!filePath.startsWith(baseDir + path.sep)) {
+      return res.status(400).json({
+        success: false,
+        error: 'invalid filename',
+      });
+    }
 
     // Check file exists
     if (!fs.existsSync(filePath)) {

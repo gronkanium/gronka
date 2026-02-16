@@ -275,7 +275,10 @@ describe('operations tracker', () => {
       assert.ok(step.duration > 0, 'Duration should be positive');
       // Duration should be approximately the wait time (10ms), but allow margin for CI timing variance
       // setTimeout isn't guaranteed to be precise, especially on busy CI runners
-      assert.ok(step.duration >= 5, `Duration ${step.duration} should be at least 5ms (allowing timing variance)`);
+      assert.ok(
+        step.duration >= 5,
+        `Duration ${step.duration} should be at least 5ms (allowing timing variance)`
+      );
       assert.ok(
         step.duration <= afterLogTime - startTime,
         `Duration ${step.duration} should not exceed total elapsed time`

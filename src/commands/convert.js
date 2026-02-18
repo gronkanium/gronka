@@ -1287,7 +1287,7 @@ export async function handleConvertContextMenu(interaction) {
 
   // Determine attachment type and validate
   let attachment = null;
-  let attachmentType = null;
+  let attachmentType;
   let preDownloadedBuffer = null;
   let originalUrlForConversion = null;
 
@@ -1632,7 +1632,7 @@ export async function handleConvertCommand(interaction) {
   }
 
   let finalAttachment = attachment;
-  let attachmentType = null;
+  let attachmentType;
   let preDownloadedBuffer = null;
   let originalUrlForConversion = null;
 

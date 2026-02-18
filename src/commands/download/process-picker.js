@@ -118,8 +118,8 @@ async function processPickerItem({ media, index, metadata, userId: _userId }) {
   const ext = path.extname(media.filename).toLowerCase() || '.jpg';
   const fileType = detectFileType(ext, media.contentType);
 
-  let filePath = null;
-  let fileUrl = null;
+  let filePath;
+  let fileUrl;
   let exists = false;
   let method = null;
 

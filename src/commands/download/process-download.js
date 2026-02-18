@@ -320,7 +320,9 @@ async function downloadFile({
             message: 'Cached entry file type mismatch, downloading video instead',
             metadata: { url, cachedType: processedUrl.file_type },
           });
-          throw new Error('Cached entry file type mismatch, proceeding with download');
+          throw new Error('Cached entry file type mismatch, proceeding with download', {
+            cause: error,
+          });
         }
 
         updateOperationStatus(operationId, 'success', { fileSize: 0 });

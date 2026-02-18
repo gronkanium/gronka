@@ -791,12 +791,11 @@ async function main() {
 
   // PostgreSQL cleanup handling
   let postgresResults = { wiped: false, reason: 'not configured', tablesDropped: 0 };
-  let postgresStarted = false;
 
   if (isPostgresConfigured()) {
     // Start PostgreSQL container for cleanup
     const startResult = startPostgresContainer();
-    postgresStarted = startResult.started && startResult.healthy !== false;
+    const postgresStarted = startResult.started && startResult.healthy !== false;
 
     if (postgresStarted) {
       try {

@@ -8,7 +8,6 @@ import { handleStatsCommand } from './commands/stats.js';
 import { handleDownloadCommand, handleDownloadContextMenuCommand } from './commands/download.js';
 import { handleOptimizeCommand, handleOptimizeContextMenuCommand } from './commands/optimize.js';
 import { handleConvertCommand, handleConvertContextMenu } from './commands/convert.js';
-import { handleInfoCommand } from './commands/info.js';
 import { handleModalSubmit } from './handlers/modals.js';
 import { cleanupStuckOperations } from './utils/operations-tracker.js';
 import { initializeR2UsageCache, formatFileSize } from './utils/storage.js';
@@ -301,8 +300,6 @@ client.on(Events.InteractionCreate, async interaction => {
       await handleOptimizeCommand(interaction);
     } else if (commandName === 'convert') {
       await handleConvertCommand(interaction);
-    } else if (commandName === 'info') {
-      await handleInfoCommand(interaction);
     }
   }
 });

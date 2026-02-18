@@ -76,7 +76,6 @@ export function getTableDefinitions() {
           total_convert BIGINT DEFAULT 0,
           total_download BIGINT DEFAULT 0,
           total_optimize BIGINT DEFAULT 0,
-          total_info BIGINT DEFAULT 0,
           total_file_size BIGINT DEFAULT 0,
           last_command_at BIGINT,
           updated_at BIGINT NOT NULL

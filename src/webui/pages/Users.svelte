@@ -123,7 +123,6 @@
           total_convert: metrics.total_convert || 0,
           total_download: metrics.total_download || 0,
           total_optimize: metrics.total_optimize || 0,
-          total_info: metrics.total_info || 0,
           total_file_size: metrics.total_file_size || 0,
           last_command_at: metrics.last_command_at || null,
           updated_at: metrics.updated_at || Date.now(),

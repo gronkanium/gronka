@@ -1,9 +1,16 @@
 import { EmbedBuilder, MessageFlags } from 'discord.js';
+import { readFileSync } from 'fs';
+import { fileURLToPath } from 'url';
+import { dirname, join } from 'path';
 import { createLogger } from '../utils/logger.js';
 import { safeInteractionReply } from '../utils/interaction-helpers.js';
 import { botConfig } from '../utils/config.js';
 import { getStorageStats } from '../utils/storage.js';
 import { getUniqueUserCount } from '../utils/user-tracking.js';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = dirname(__filename);
+const packageJson = JSON.parse(readFileSync(join(__dirname, '../../package.json'), 'utf-8'));
 
 const logger = createLogger('stats');
 
@@ -44,13 +51,15 @@ export async function handleStatsCommand(interaction, botStartTime) {
     const guildCount = client.guilds.cache.size;
     const userCount = await getUniqueUserCount();
 
+    const botVersion = packageJson.version || 'unknown';
+
     const embed = new EmbedBuilder()
       .setTitle('bot statistics')
       .setColor(0x5865f2)
       .addFields(
         {
           name: 'bot info',
-          value: `uptime: \`${formatUptime(uptime)}\`\nguilds: \`${guildCount.toLocaleString()}\`\nusers: \`${userCount.toLocaleString()}\``,
+          value: `version: \`${botVersion}\`\nuptime: \`${formatUptime(uptime)}\`\nguilds: \`${guildCount.toLocaleString()}\`\nusers: \`${userCount.toLocaleString()}\``,
           inline: false,
         },
         {

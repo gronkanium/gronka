@@ -60,8 +60,7 @@ export async function getUsageAnalytics(options = {}) {
       COUNT(DISTINCT user_id) as active_users,
       COUNT(*) FILTER (WHERE operation_type = 'convert') as convert_count,
       COUNT(*) FILTER (WHERE operation_type = 'download') as download_count,
-      COUNT(*) FILTER (WHERE operation_type = 'optimize') as optimize_count,
-      COUNT(*) FILTER (WHERE operation_type = 'info') as info_count
+      COUNT(*) FILTER (WHERE operation_type = 'optimize') as optimize_count
     FROM operation_status
     WHERE created_at IS NOT NULL
     GROUP BY bucket
@@ -83,7 +82,6 @@ export async function getUsageAnalytics(options = {}) {
       convert: Number(row.convert_count || 0),
       download: Number(row.download_count || 0),
       optimize: Number(row.optimize_count || 0),
-      info: Number(row.info_count || 0),
     },
   }));
 
@@ -336,8 +334,7 @@ export async function getUserAnalytics(options = {}) {
     SELECT
       SUM(total_convert) as convert,
       SUM(total_download) as download,
-      SUM(total_optimize) as optimize,
-      SUM(total_info) as info
+      SUM(total_optimize) as optimize
     FROM user_metrics
     WHERE last_command_at >= ${startTime}
   `;
@@ -345,14 +342,12 @@ export async function getUserAnalytics(options = {}) {
   const convert = Number(commandDistResult[0]?.convert || 0);
   const download = Number(commandDistResult[0]?.download || 0);
   const optimize = Number(commandDistResult[0]?.optimize || 0);
-  const info = Number(commandDistResult[0]?.info || 0);
-  const totalCommands = convert + download + optimize + info;
+  const totalCommands = convert + download + optimize;
 
   const commandDistribution = {
     convert: totalCommands > 0 ? Math.round((convert / totalCommands) * 1000) / 10 : 0,
     download: totalCommands > 0 ? Math.round((download / totalCommands) * 1000) / 10 : 0,
     optimize: totalCommands > 0 ? Math.round((optimize / totalCommands) * 1000) / 10 : 0,
-    info: totalCommands > 0 ? Math.round((info / totalCommands) * 1000) / 10 : 0,
   };
 
   return {

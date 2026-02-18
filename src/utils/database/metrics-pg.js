@@ -15,7 +15,6 @@ const USER_METRICS_NUMERIC_FIELDS = [
   'total_convert',
   'total_download',
   'total_optimize',
-  'total_info',
   'total_file_size',
 ];
 
@@ -72,10 +71,6 @@ export async function insertOrUpdateUserMetrics(userId, username, metrics) {
       updates.push(`total_optimize = total_optimize + $${params.length + 1}`);
       params.push(metrics.totalOptimize);
     }
-    if (metrics.totalInfo !== undefined) {
-      updates.push(`total_info = total_info + $${params.length + 1}`);
-      params.push(metrics.totalInfo);
-    }
     if (metrics.totalFileSize !== undefined) {
       updates.push(`total_file_size = total_file_size + $${params.length + 1}`);
       params.push(metrics.totalFileSize);
@@ -93,8 +88,8 @@ export async function insertOrUpdateUserMetrics(userId, username, metrics) {
   } else {
     // Insert new user metrics
     await sql`
-      INSERT INTO user_metrics (user_id, username, total_commands, successful_commands, failed_commands, total_convert, total_download, total_optimize, total_info, total_file_size, last_command_at, updated_at)
-      VALUES (${userId}, ${username}, ${metrics.totalCommands || 0}, ${metrics.successfulCommands || 0}, ${metrics.failedCommands || 0}, ${metrics.totalConvert || 0}, ${metrics.totalDownload || 0}, ${metrics.totalOptimize || 0}, ${metrics.totalInfo || 0}, ${metrics.totalFileSize || 0}, ${metrics.lastCommandAt || timestamp}, ${timestamp})
+      INSERT INTO user_metrics (user_id, username, total_commands, successful_commands, failed_commands, total_convert, total_download, total_optimize, total_file_size, last_command_at, updated_at)
+      VALUES (${userId}, ${username}, ${metrics.totalCommands || 0}, ${metrics.successfulCommands || 0}, ${metrics.failedCommands || 0}, ${metrics.totalConvert || 0}, ${metrics.totalDownload || 0}, ${metrics.totalOptimize || 0}, ${metrics.totalFileSize || 0}, ${metrics.lastCommandAt || timestamp}, ${timestamp})
     `;
   }
 }
@@ -161,7 +156,6 @@ export async function getAllUsersMetrics(options = {}) {
     'total_convert',
     'total_download',
     'total_optimize',
-    'total_info',
     'total_file_size',
     'last_command_at',
     'updated_at',

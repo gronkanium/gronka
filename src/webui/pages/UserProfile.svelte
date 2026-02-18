@@ -312,10 +312,6 @@
             <span class="label">optimize</span>
             <span class="value">{metrics?.total_optimize || 0}</span>
           </div>
-          <div class="breakdown-item">
-            <span class="label">info</span>
-            <span class="value">{metrics?.total_info || 0}</span>
-          </div>
         </div>
       </div>
     </div>
@@ -714,7 +710,7 @@
 
   .breakdown-grid {
     display: grid;
-    grid-template-columns: repeat(4, 1fr);
+    grid-template-columns: repeat(3, 1fr);
     gap: 0.5rem;
   }
 

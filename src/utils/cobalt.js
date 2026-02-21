@@ -783,88 +783,120 @@ async function downloadFromCobalt(
     throw new NetworkError('cobalt api did not return a video url');
   }
 
-  // Download the video
-  try {
-    const response = await axios.get(videoUrl, {
-      responseType: 'arraybuffer',
-      timeout: 300000, // 5 minute timeout for video downloads
-      maxContentLength: isAdminUser ? Infinity : maxSize,
-      maxRedirects: 5,
-      validateStatus: status => status >= 200 && status < 400,
-      headers: {
+  // Download the video with retry logic for tunnel URLs
+  const isTunnelUrl = videoUrl.includes('/tunnel');
+  const maxDownloadRetries = isTunnelUrl ? 3 : 1;
+
+  for (let attempt = 1; attempt <= maxDownloadRetries; attempt++) {
+    try {
+      // Build headers - don't send Referer for internal tunnel URLs
+      const headers = {
         'User-Agent':
           'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-        Accept: '*/*',
-        Referer: videoUrl,
-      },
-    });
-
-    const buffer = Buffer.from(response.data);
-
-    // Validate buffer size (axios maxContentLength may not work if server doesn't send Content-Length header)
-    if (!isAdminUser && buffer.length > maxSize) {
-      throw new ValidationError(`file is too large (max ${maxSize / (1024 * 1024)}mb)`);
-    }
-
-    let contentType = response.headers['content-type'] || 'video/mp4';
-
-    // Extract filename from Content-Disposition if available
-    const contentDisposition = response.headers['content-disposition'] || '';
-    if (contentDisposition) {
-      const filenameMatch = contentDisposition.match(/filename[^;=\n]*=((['"]).*?\2|[^;\n]*)/);
-      if (filenameMatch && filenameMatch[1]) {
-        filename = filenameMatch[1].replace(/['"]/g, '');
-      }
-    }
-
-    // If content type is generic or missing, try to infer from filename
-    if (
-      !contentType ||
-      contentType === 'application/octet-stream' ||
-      contentType === 'binary/octet-stream'
-    ) {
-      const ext = filename.toLowerCase().split('.').pop();
-      const extToMime = {
-        mp4: 'video/mp4',
-        mov: 'video/quicktime',
-        webm: 'video/webm',
-        avi: 'video/x-msvideo',
-        mkv: 'video/x-matroska',
-        mp3: 'audio/mpeg',
-        m4a: 'audio/mp4',
-        gif: 'image/gif',
+        Accept: 'video/*,audio/*,*/*',
       };
-      if (extToMime[ext]) {
-        contentType = extToMime[ext];
-        logger.info(`Inferred content type from filename extension: ${contentType}`);
-      } else {
-        logger.warn(`Could not infer content type from extension ${ext}, using default video/mp4`);
-        contentType = 'video/mp4';
+
+      // Only add Referer for external URLs, not internal tunnel requests
+      if (!isTunnelUrl) {
+        headers.Referer = videoUrl;
       }
-    }
 
-    logger.info(
-      `Downloaded file: ${filename}, size: ${buffer.length} bytes, content-type: ${contentType}`
-    );
+      const response = await axios.get(videoUrl, {
+        responseType: 'arraybuffer',
+        timeout: 300000, // 5 minute timeout for video downloads
+        maxContentLength: isAdminUser ? Infinity : maxSize,
+        maxRedirects: 5,
+        validateStatus: status => status >= 200 && status < 400,
+        headers,
+      });
 
-    return {
-      buffer,
-      contentType,
-      size: buffer.length,
-      filename,
-    };
-  } catch (error) {
-    if (error.response?.status === 413 && !isAdminUser) {
-      throw new NetworkError('video file is too large');
+      const buffer = Buffer.from(response.data);
+
+      // Validate buffer size (axios maxContentLength may not work if server doesn't send Content-Length header)
+      if (!isAdminUser && buffer.length > maxSize) {
+        throw new ValidationError(`file is too large (max ${maxSize / (1024 * 1024)}mb)`);
+      }
+
+      let contentType = response.headers['content-type'] || 'video/mp4';
+
+      // Extract filename from Content-Disposition if available
+      const contentDisposition = response.headers['content-disposition'] || '';
+      if (contentDisposition) {
+        const filenameMatch = contentDisposition.match(/filename[^;=\n]*=((['"]).*?\2|[^;\n]*)/);
+        if (filenameMatch && filenameMatch[1]) {
+          filename = filenameMatch[1].replace(/['"]/g, '');
+        }
+      }
+
+      // If content type is generic or missing, try to infer from filename
+      if (
+        !contentType ||
+        contentType === 'application/octet-stream' ||
+        contentType === 'binary/octet-stream'
+      ) {
+        const ext = filename.toLowerCase().split('.').pop();
+        const extToMime = {
+          mp4: 'video/mp4',
+          mov: 'video/quicktime',
+          webm: 'video/webm',
+          avi: 'video/x-msvideo',
+          mkv: 'video/x-matroska',
+          mp3: 'audio/mpeg',
+          m4a: 'audio/mp4',
+          gif: 'image/gif',
+        };
+        if (extToMime[ext]) {
+          contentType = extToMime[ext];
+          logger.info(`Inferred content type from filename extension: ${contentType}`);
+        } else {
+          logger.warn(
+            `Could not infer content type from extension ${ext}, using default video/mp4`
+          );
+          contentType = 'video/mp4';
+        }
+      }
+
+      logger.info(
+        `Downloaded file: ${filename}, size: ${buffer.length} bytes, content-type: ${contentType}`
+      );
+
+      return {
+        buffer,
+        contentType,
+        size: buffer.length,
+        filename,
+      };
+    } catch (error) {
+      // Non-retryable errors - throw immediately
+      if (error.response?.status === 413 && !isAdminUser) {
+        throw new NetworkError('video file is too large');
+      }
+      if (error.response?.status === 404) {
+        throw new NetworkError('video file not found at cobalt url');
+      }
+      if (error.code === 'ECONNABORTED') {
+        throw new NetworkError('video download timed out');
+      }
+
+      // For tunnel URLs, retry on 5xx errors (server-side issues)
+      const status = error.response?.status;
+      const isServerError = status >= 500 && status < 600;
+
+      if (isTunnelUrl && isServerError && attempt < maxDownloadRetries) {
+        const delayMs = Math.pow(2, attempt - 1) * 1000; // 1s, 2s, 4s backoff
+        logger.warn(
+          `Tunnel download failed with status ${status}, retrying in ${delayMs}ms (attempt ${attempt}/${maxDownloadRetries})`
+        );
+        await sleep(delayMs);
+        continue;
+      }
+
+      throw new NetworkError(`failed to download video from cobalt: ${error.message}`);
     }
-    if (error.response?.status === 404) {
-      throw new NetworkError('video file not found at cobalt url');
-    }
-    if (error.code === 'ECONNABORTED') {
-      throw new NetworkError('video download timed out');
-    }
-    throw new NetworkError(`failed to download video from cobalt: ${error.message}`);
   }
+
+  // Should not reach here, but just in case
+  throw new NetworkError('failed to download video from cobalt after all retries');
 }
 
 /**

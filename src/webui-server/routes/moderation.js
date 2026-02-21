@@ -8,10 +8,103 @@ import {
   deleteProcessedUrl,
   deleteUserR2Media,
   getProcessedUrl,
+  getModerationStats,
+  getRecentR2Uploads,
+  getR2UploadsCount,
+  getUsersWithR2Uploads,
+  getUsersWithR2UploadsCount,
 } from '../../utils/database.js';
 
 const logger = createLogger('webui');
 const router = express.Router();
+
+// Get moderation dashboard statistics
+router.get('/api/moderation/stats', async (req, res) => {
+  try {
+    logger.debug('Fetching moderation stats');
+    const stats = await getModerationStats();
+    logger.debug('Moderation stats fetched', { stats });
+    res.json(stats);
+  } catch (error) {
+    logger.error('Failed to fetch moderation stats:', error);
+    res.status(500).json({
+      error: 'failed to fetch moderation stats',
+      message: error.message,
+    });
+  }
+});
+
+// Get recent R2 uploads across all users
+router.get('/api/moderation/recent-uploads', async (req, res) => {
+  try {
+    const { limit = 25, offset = 0, fileType = null } = req.query;
+
+    logger.debug(
+      `Fetching recent R2 uploads (limit: ${limit}, offset: ${offset}, fileType: ${fileType})`
+    );
+
+    const uploads = await getRecentR2Uploads({
+      limit: parseInt(limit, 10),
+      offset: parseInt(offset, 10),
+      fileType: fileType || null,
+    });
+
+    const total = await getR2UploadsCount(fileType || null);
+
+    logger.debug(`Found ${uploads.length} recent uploads (total: ${total})`);
+
+    res.json({
+      uploads,
+      total,
+    });
+  } catch (error) {
+    logger.error('Failed to fetch recent R2 uploads:', error);
+    res.status(500).json({
+      error: 'failed to fetch recent uploads',
+      message: error.message,
+    });
+  }
+});
+
+// Get users with R2 uploads (only users who have uploaded files)
+router.get('/api/moderation/users-with-uploads', async (req, res) => {
+  try {
+    const {
+      search = null,
+      sortBy = 'upload_count',
+      sortDesc = 'true',
+      limit = 50,
+      offset = 0,
+    } = req.query;
+
+    logger.debug(
+      `Fetching users with R2 uploads (search: ${search}, sortBy: ${sortBy}, sortDesc: ${sortDesc}, limit: ${limit}, offset: ${offset})`
+    );
+
+    const users = await getUsersWithR2Uploads({
+      search: search || null,
+      sortBy,
+      sortDesc: sortDesc === 'true',
+      limit: parseInt(limit, 10),
+      offset: parseInt(offset, 10),
+    });
+
+    const total = await getUsersWithR2UploadsCount(search || null);
+
+    logger.debug(`Found ${users.length} users with uploads (total: ${total})`);
+
+    res.json({
+      users,
+      total,
+    });
+  } catch (error) {
+    logger.error('Failed to fetch users with R2 uploads:', error);
+    res.status(500).json({
+      error: 'failed to fetch users with uploads',
+      message: error.message,
+    });
+  }
+});
 
 // Get R2 media files for a user
 router.get('/api/moderation/users/:userId/r2-media', async (req, res) => {

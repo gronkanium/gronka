@@ -231,7 +231,7 @@ function getStoragePath(storagePath) {
       storagePath: trimmedPath,
       cwd: process.cwd(),
     });
-    throw new Error(`Failed to resolve storage path: ${error.message}`);
+    throw new Error(`Failed to resolve storage path: ${error.message}`, { cause: error });
   }
 }
 

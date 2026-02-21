@@ -54,7 +54,7 @@ export async function sendNtfyNotification(title, message, options = {}) {
   }
 
   // Log to database regardless of ntfy.sh status
-  let alertRecord = null;
+  let alertRecord;
   try {
     alertRecord = await insertAlert({
       severity,

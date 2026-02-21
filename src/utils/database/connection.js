@@ -239,7 +239,9 @@ export async function initPostgresConnection() {
     } catch (error) {
       sql = null;
       currentDatabaseName = null;
-      throw new Error(`Failed to initialize PostgreSQL connection: ${error.message}`);
+      throw new Error(`Failed to initialize PostgreSQL connection: ${error.message}`, {
+        cause: error,
+      });
     }
   })();
 

@@ -636,7 +636,7 @@ export async function handleOptimizeContextMenuCommand(interaction, modalAttachm
   }
 
   // Determine attachment and validate it's a GIF
-  let attachment = null;
+  let attachment;
   let preDownloadedBuffer = null;
   let originalUrlForConversion = null;
 

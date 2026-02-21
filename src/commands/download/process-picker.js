@@ -120,8 +120,8 @@ async function processPickerItem({ media, index, metadata, userId: _userId }) {
 
   let filePath;
   let fileUrl;
-  let exists = false;
-  let method = null;
+  let exists;
+  let method;
 
   // Check if file already exists based on type
   const existsResult = await checkFileExists(hash, ext, fileType);

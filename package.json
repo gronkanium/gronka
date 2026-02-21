@@ -83,20 +83,20 @@
   "author": "gronkanium",
   "license": "MIT",
   "dependencies": {
-    "@aws-sdk/client-s3": "^3.985.0",
-    "@aws-sdk/lib-storage": "^3.985.0",
+    "@aws-sdk/client-s3": "^3.990.0",
+    "@aws-sdk/lib-storage": "^3.990.0",
     "@noble/hashes": "^2.0.1",
     "archiver": "^7.0.1",
     "axios": "^1.13.5",
     "chart.js": "^4.5.1",
     "discord.js": "^14.25.1",
-    "dotenv": "^17.2.4",
+    "dotenv": "^17.3.1",
     "escape-html": "^1.0.3",
     "express": "^5.2.1",
     "express-rate-limit": "^8.2.1",
     "fluent-ffmpeg": "^2.1.2",
-    "lucide-svelte": "^0.563.0",
-    "marked": "^17.0.1",
+    "lucide-svelte": "^0.564.0",
+    "marked": "^17.0.2",
     "postgres": "^3.4.8",
     "tmp": "^0.2.5",
     "ws": "^8.19.0"
@@ -114,5 +114,9 @@
     "prettier": "^3.8.1",
     "svelte": "^5.53.0",
     "vite": "^7.3.1"
+  },
+  "overrides": {
+    "undici": ">=6.23.0",
+    "minimatch": ">=10.2.1"
   }
 }

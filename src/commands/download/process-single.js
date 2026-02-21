@@ -161,8 +161,6 @@ export async function processSingleFile({
       if (trimResult.treatAsGif) {
         hash = trimResult.hash;
         finalBuffer = trimResult.buffer;
-        cdnPath = '/gifs';
-        treatAsGif = true;
 
         if (trimResult.exists && trimResult.filePath) {
           return await handleExistingFile({

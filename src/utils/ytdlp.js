@@ -496,8 +496,14 @@ export async function downloadFromYouTube(
           effectiveDuration
         );
       } catch (segmentError) {
-        // Check if this is a segment download failure (too small file)
-        if (segmentError.message && segmentError.message.includes('output file too small')) {
+        // Check if this is a segment download failure that should trigger fallback
+        // - "output file too small": segment download produced corrupt/empty file
+        // - "ffmpeg exited with code 1": yt-dlp's internal ffmpeg call failed (common with --force-keyframes-at-cuts)
+        const shouldFallback =
+          segmentError.message &&
+          (segmentError.message.includes('output file too small') ||
+            segmentError.message.includes('ffmpeg exited with code'));
+        if (shouldFallback) {
           logger.warn(
             `Segment download failed, falling back to full download + FFmpeg trim: ${segmentError.message}`
           );

@@ -212,7 +212,7 @@ function getBotConfig() {
     discordToken: discordToken.trim(),
     clientId: clientId.trim(),
     adminUserIds: parseIdList('ADMIN_USER_IDS'),
-    gifStoragePath: getStringEnv('GIF_STORAGE_PATH', './data-test/gifs'),
+    gifStoragePath: getStringEnv('GIF_STORAGE_PATH', './data-prod'),
     cdnBaseUrl: getStringEnv('CDN_BASE_URL', 'https://cdn.gronka.p1x.dev/gifs'),
     maxGifDuration: parseIntEnv('MAX_GIF_DURATION', 30, 1, 300),
     gifQuality: getGifQualityEnv('GIF_QUALITY', 'medium'),

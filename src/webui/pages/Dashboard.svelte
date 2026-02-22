@@ -67,10 +67,10 @@
 
     try {
       const [statsData, healthData, systemData, analyticsData] = await Promise.all([
-        fetchStats(),
-        fetchHealth(),
-        fetch('/api/metrics/system/current').then(r => r.ok ? r.json() : null),
-        fetch('/api/analytics/usage?interval=hourly&startTime=' + (Date.now() - 24 * 60 * 60 * 1000)).then(r => r.ok ? r.json() : null),
+        fetchStats().catch(() => null),
+        fetchHealth().catch(() => null),
+        fetch('/api/metrics/system/current').then(r => r.ok ? r.json() : null).catch(() => null),
+        fetch('/api/analytics/usage?interval=hourly&startTime=' + (Date.now() - 24 * 60 * 60 * 1000)).then(r => r.ok ? r.json() : null).catch(() => null),
       ]);
 
       stats = statsData;

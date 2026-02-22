@@ -75,21 +75,40 @@ describe('validation utilities', () => {
       assert.strictEqual(result.error, 'invalid URL format');
     });
 
-    test('handles IPv6 addresses', () => {
-      // Valid public IPv6 (using Google's public IPv6)
+    test('allows public IPv6 addresses', () => {
       assert.deepStrictEqual(validateUrl('https://[2001:4860:4860::8888]'), { valid: true });
       assert.deepStrictEqual(validateUrl('https://[2607:f8b0:4005:805::200e]'), { valid: true });
+      assert.deepStrictEqual(validateUrl('https://[2001:4860:4860::8888]/path'), { valid: true });
+    });
 
-      // Note: IPv6 addresses in brackets are currently accepted even for private ranges
-      // because the hostname includes brackets, so startsWith checks don't match
-      // This tests the current behavior - public IPv6 addresses work correctly
-      const publicIpv6 = validateUrl('https://[2001:4860:4860::8888]/path');
-      assert.strictEqual(publicIpv6.valid, true);
+    test('rejects private IPv6 ranges', () => {
+      // Loopback ::1
+      assert.strictEqual(validateUrl('http://[::1]').valid, false);
 
-      // Test that IPv6 addresses without brackets are rejected as invalid URL format
-      const invalidIpv6 = validateUrl('https://2001:4860:4860::8888');
-      assert.strictEqual(invalidIpv6.valid, false);
-      assert.strictEqual(invalidIpv6.error, 'invalid URL format');
+      // Unique-local fc00::/7 — fc prefix (fc00:: through fcff::)
+      assert.strictEqual(validateUrl('http://[fc00::1]').valid, false);
+      assert.strictEqual(validateUrl('http://[fcff::1]').valid, false);
+
+      // Unique-local fc00::/7 — fd prefix (fd00:: through fdff::), previously missed
+      assert.strictEqual(validateUrl('http://[fd00::1]').valid, false);
+      assert.strictEqual(validateUrl('http://[fd12:3456:789a::1]').valid, false);
+      assert.strictEqual(validateUrl('http://[fdff::1]').valid, false);
+
+      // Link-local fe80::/10
+      assert.strictEqual(validateUrl('http://[fe80::1]').valid, false);
+      assert.strictEqual(validateUrl('http://[fe80::dead:beef]').valid, false);
+
+      // IPv4-mapped loopback ::ffff:127.0.0.1
+      assert.strictEqual(validateUrl('http://[::ffff:127.0.0.1]').valid, false);
+
+      // Unspecified ::
+      assert.strictEqual(validateUrl('http://[::]').valid, false);
+    });
+
+    test('rejects bare IPv6 without brackets as invalid URL', () => {
+      const result = validateUrl('https://2001:4860:4860::8888');
+      assert.strictEqual(result.valid, false);
+      assert.strictEqual(result.error, 'invalid URL format');
     });
 
     test('handles URLs with port numbers', () => {

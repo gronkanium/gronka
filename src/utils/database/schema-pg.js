@@ -178,6 +178,10 @@ export function getIndexDefinitions() {
       sql: 'CREATE INDEX IF NOT EXISTS idx_processed_urls_user_id ON processed_urls(user_id);',
     },
     {
+      name: 'idx_processed_urls_user_id_processed_at',
+      sql: 'CREATE INDEX IF NOT EXISTS idx_processed_urls_user_id_processed_at ON processed_urls(user_id, processed_at DESC);',
+    },
+    {
       name: 'idx_operation_logs_operation_id',
       sql: 'CREATE INDEX IF NOT EXISTS idx_operation_logs_operation_id ON operation_logs(operation_id);',
     },
@@ -200,6 +204,10 @@ export function getIndexDefinitions() {
     {
       name: 'idx_operation_logs_step_status',
       sql: 'CREATE INDEX IF NOT EXISTS idx_operation_logs_step_status ON operation_logs(step, status);',
+    },
+    {
+      name: 'idx_operation_logs_operation_id_step',
+      sql: 'CREATE INDEX IF NOT EXISTS idx_operation_logs_operation_id_step ON operation_logs(operation_id, step);',
     },
     {
       name: 'idx_user_metrics_total_commands',

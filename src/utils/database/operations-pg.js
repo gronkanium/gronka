@@ -308,16 +308,36 @@ export async function getRecentOperations(limit = 100) {
   `;
   const operationIds = operationIdsResult.map(row => row.operation_id);
 
+  if (operationIds.length === 0) {
+    if (limit === 100) setCachedRecentOperations([]);
+    return [];
+  }
+
+  // Fetch all logs for all operations in a single query instead of N+1 calls
+  const allLogsRaw = await sql`
+    SELECT * FROM operation_logs
+    WHERE operation_id = ANY(${operationIds})
+    ORDER BY timestamp ASC
+  `;
+
+  // Group logs by operation_id
+  const logsByOperationId = new Map();
+  for (const log of allLogsRaw) {
+    const key = log.operation_id;
+    if (!logsByOperationId.has(key)) logsByOperationId.set(key, []);
+    logsByOperationId.get(key).push(log);
+  }
+
   // Reconstruct each operation from its logs
   const reconstructedOperations = [];
   for (const operationId of operationIds) {
-    const logs = await getOperationLogs(operationId);
-    if (logs.length === 0) {
+    const rawLogs = logsByOperationId.get(operationId);
+    if (!rawLogs || rawLogs.length === 0) {
       continue;
     }
 
     // Parse metadata from all logs and ensure timestamps are numbers
-    const parsedLogs = logs.map(log => {
+    const parsedLogs = rawLogs.map(log => {
       let metadata = null;
       if (log.metadata) {
         try {
@@ -330,7 +350,6 @@ export async function getRecentOperations(limit = 100) {
         ...log,
         metadata,
       };
-      // Ensure timestamp is a number (should already be converted by getOperationLogs, but double-check)
       return convertTimestampsToNumbers(logWithMetadata, ['timestamp']);
     });
 
@@ -572,37 +591,20 @@ export async function getStuckOperations(maxAgeMinutes = 10) {
   const maxAge = maxAgeMinutes * 60 * 1000;
   const cutoffTime = now - maxAge;
 
-  // Find operations where the latest status_update has status='running' and is older than cutoff
+  // Find operations where the most recent status_update is still 'running' and is older than cutoff.
+  // DISTINCT ON gives us the latest status_update per operation in one query.
   const results = await sql`
-    SELECT operation_id, MAX(timestamp) as latest_timestamp
-    FROM operation_logs
-    WHERE step = 'status_update' AND status = 'running'
-    GROUP BY operation_id
-    HAVING MAX(timestamp) < ${cutoffTime}
+    SELECT operation_id
+    FROM (
+      SELECT DISTINCT ON (operation_id) operation_id, status, timestamp
+      FROM operation_logs
+      WHERE step = 'status_update'
+      ORDER BY operation_id, timestamp DESC
+    ) latest_updates
+    WHERE status = 'running' AND timestamp < ${cutoffTime}
   `;
 
-  const stuckOperationIds = results.map(row => row.operation_id);
-
-  // Verify these operations don't have a more recent success/error status
-  const verifiedStuck = [];
-  for (const operationId of stuckOperationIds) {
-    const latestStatusResult = await sql`
-      SELECT status, timestamp
-      FROM operation_logs
-      WHERE operation_id = ${operationId} AND step = 'status_update'
-      ORDER BY timestamp DESC
-      LIMIT 1
-    `;
-
-    if (latestStatusResult.length > 0) {
-      const latestStatus = latestStatusResult[0];
-      if (latestStatus.status === 'running' && latestStatus.timestamp < cutoffTime) {
-        verifiedStuck.push(operationId);
-      }
-    }
-  }
-
-  return verifiedStuck;
+  return results.map(row => row.operation_id);
 }
 
 /**

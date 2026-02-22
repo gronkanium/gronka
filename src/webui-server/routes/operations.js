@@ -477,16 +477,13 @@ router.get('/api/operations/:operationId', async (req, res) => {
     // Get operation from in-memory store
     let operation = operations.find(op => op.id === operationId);
 
-    // If not in memory, try to reconstruct from database
-    if (!operation) {
-      const trace = await getOperationTrace(operationId);
-      if (trace) {
-        operation = reconstructOperationFromTrace(trace);
-      }
-    }
-
-    // Get detailed trace from database with parsed metadata
+    // Fetch trace once (used both for reconstruction and the response)
     const trace = await getOperationTrace(operationId);
+
+    // If not in memory, reconstruct from trace
+    if (!operation && trace) {
+      operation = reconstructOperationFromTrace(trace);
+    }
 
     // Debug logging
     if (trace) {
@@ -576,16 +573,9 @@ router.get('/api/operations/:operationId/related', async (req, res) => {
         isRelated = true;
       }
 
-      // Match by URL - get trace to check originalUrl
-      if (originalUrl && !isRelated) {
-        try {
-          const opTrace = await getOperationTrace(op.id);
-          if (opTrace && opTrace.context && opTrace.context.originalUrl === originalUrl) {
-            isRelated = true;
-          }
-        } catch (_error) {
-          // Skip if trace lookup fails
-        }
+      // Match by URL - originalUrl is already on the operation object from getRecentOperations
+      if (originalUrl && !isRelated && op.originalUrl === originalUrl) {
+        isRelated = true;
       }
 
       if (isRelated) {

@@ -39,16 +39,17 @@ export async function getUsageAnalytics(options = {}) {
       bucketSize = 24 * 60 * 60 * 1000;
   }
 
-  // Get operations grouped by time bucket with status counts
+  // Get operations grouped by time bucket with status counts.
+  // Uses conditional aggregation instead of correlated subqueries for efficiency.
   const operationsQuery = await sql`
     WITH operation_status AS (
       SELECT
         operation_id,
-        (SELECT timestamp FROM operation_logs ol2 WHERE ol2.operation_id = ol.operation_id AND ol2.step = 'created' LIMIT 1) as created_at,
-        (SELECT status FROM operation_logs ol2 WHERE ol2.operation_id = ol.operation_id ORDER BY timestamp DESC LIMIT 1) as final_status,
-        (SELECT (metadata::jsonb->>'userId')::text FROM operation_logs ol2 WHERE ol2.operation_id = ol.operation_id AND ol2.step = 'created' LIMIT 1) as user_id,
-        (SELECT (metadata::jsonb->>'operationType')::text FROM operation_logs ol2 WHERE ol2.operation_id = ol.operation_id AND ol2.step = 'created' LIMIT 1) as operation_type
-      FROM operation_logs ol
+        MIN(CASE WHEN step = 'created' THEN timestamp END) as created_at,
+        (array_agg(status ORDER BY timestamp DESC))[1] as final_status,
+        MAX(CASE WHEN step = 'created' THEN (metadata::jsonb->>'userId')::text END) as user_id,
+        MAX(CASE WHEN step = 'created' THEN (metadata::jsonb->>'operationType')::text END) as operation_type
+      FROM operation_logs
       WHERE timestamp >= ${startTime} AND timestamp <= ${endTime}
       GROUP BY operation_id
     )
@@ -135,8 +136,8 @@ export async function getPerformanceAnalytics(options = {}) {
       SELECT
         operation_id,
         MAX(timestamp) - MIN(timestamp) as duration,
-        (SELECT (metadata::jsonb->>'operationType')::text FROM operation_logs ol2 WHERE ol2.operation_id = ol.operation_id AND ol2.step = 'created' LIMIT 1) as operation_type
-      FROM operation_logs ol
+        MAX(CASE WHEN step = 'created' THEN (metadata::jsonb->>'operationType')::text END) as operation_type
+      FROM operation_logs
       WHERE timestamp >= ${startTime} AND timestamp <= ${endTime}
       GROUP BY operation_id
       HAVING COUNT(*) > 1 AND MAX(timestamp) - MIN(timestamp) > 0
@@ -156,8 +157,8 @@ export async function getPerformanceAnalytics(options = {}) {
       SELECT
         operation_id,
         MAX(timestamp) - MIN(timestamp) as duration,
-        (SELECT (metadata::jsonb->>'operationType')::text FROM operation_logs ol2 WHERE ol2.operation_id = ol.operation_id AND ol2.step = 'created' LIMIT 1) as operation_type
-      FROM operation_logs ol
+        MAX(CASE WHEN step = 'created' THEN (metadata::jsonb->>'operationType')::text END) as operation_type
+      FROM operation_logs
       WHERE timestamp >= ${startTime} AND timestamp <= ${endTime}
       GROUP BY operation_id
       HAVING COUNT(*) > 1 AND MAX(timestamp) - MIN(timestamp) > 0
@@ -186,9 +187,9 @@ export async function getPerformanceAnalytics(options = {}) {
     WITH operation_status AS (
       SELECT
         operation_id,
-        (SELECT status FROM operation_logs ol2 WHERE ol2.operation_id = ol.operation_id ORDER BY timestamp DESC LIMIT 1) as final_status,
-        (SELECT (metadata::jsonb->>'operationType')::text FROM operation_logs ol2 WHERE ol2.operation_id = ol.operation_id AND ol2.step = 'created' LIMIT 1) as operation_type
-      FROM operation_logs ol
+        (array_agg(status ORDER BY timestamp DESC))[1] as final_status,
+        MAX(CASE WHEN step = 'created' THEN (metadata::jsonb->>'operationType')::text END) as operation_type
+      FROM operation_logs
       WHERE timestamp >= ${startTime} AND timestamp <= ${endTime}
       GROUP BY operation_id
     )

@@ -7,6 +7,20 @@ import { collectSystemMetrics } from '../../utils/system-metrics.js';
 const logger = createLogger('webui');
 const router = express.Router();
 
+// Cache for collectSystemMetrics — disk I/O is expensive, 5s TTL is fine for a dashboard
+const systemMetricsCache = { data: null, timestamp: 0 };
+const SYSTEM_METRICS_TTL = 5 * 1000;
+
+async function getCachedSystemMetrics() {
+  if (systemMetricsCache.data && Date.now() - systemMetricsCache.timestamp < SYSTEM_METRICS_TTL) {
+    return systemMetricsCache.data;
+  }
+  const data = await collectSystemMetrics();
+  systemMetricsCache.data = data;
+  systemMetricsCache.timestamp = Date.now();
+  return data;
+}
+
 // Error metrics endpoint
 router.get('/api/metrics/errors', async (req, res) => {
   try {
@@ -76,7 +90,7 @@ router.get('/api/metrics/system', async (req, res) => {
     }
 
     try {
-      current = await collectSystemMetrics();
+      current = await getCachedSystemMetrics();
       if (current === undefined || current === null) {
         logger.warn('collectSystemMetrics returned undefined or null, defaulting to empty object');
         current = {};
@@ -103,7 +117,7 @@ router.get('/api/metrics/system', async (req, res) => {
 // System metrics current endpoint
 router.get('/api/metrics/system/current', async (req, res) => {
   try {
-    const metrics = await collectSystemMetrics();
+    const metrics = await getCachedSystemMetrics();
 
     res.json(metrics);
   } catch (error) {

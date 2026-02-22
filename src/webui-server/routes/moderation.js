@@ -8,6 +8,7 @@ import {
   deleteProcessedUrl,
   deleteUserR2Media,
   getProcessedUrl,
+  getProcessedUrlsBatch,
   getModerationStats,
   getRecentR2Uploads,
   getR2UploadsCount,
@@ -172,10 +173,12 @@ router.delete('/api/moderation/files/bulk', express.json(), async (req, res) => 
       failed: [],
     };
 
+    // Batch-fetch all records in one query instead of N individual lookups
+    const recordMap = await getProcessedUrlsBatch(urlHashes);
+
     for (const urlHash of urlHashes) {
       try {
-        // Get the processed URL record
-        const record = await getProcessedUrl(urlHash);
+        const record = recordMap.get(urlHash);
         if (!record) {
           results.failed.push({ urlHash, error: 'record not found' });
           continue;

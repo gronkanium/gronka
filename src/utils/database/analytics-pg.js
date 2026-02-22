@@ -283,7 +283,7 @@ export async function getUserAnalytics(options = {}) {
 
   const {
     startTime = Date.now() - 7 * 24 * 60 * 60 * 1000,
-    _endTime = Date.now(),
+    endTime = Date.now(),
     limit = 10,
   } = options;
 
@@ -311,6 +311,7 @@ export async function getUserAnalytics(options = {}) {
       failed_commands
     FROM user_metrics
     WHERE last_command_at >= ${startTime}
+      AND last_command_at <= ${endTime}
     ORDER BY total_commands DESC
     LIMIT ${limit}
   `;
@@ -338,6 +339,7 @@ export async function getUserAnalytics(options = {}) {
       SUM(total_optimize) as optimize
     FROM user_metrics
     WHERE last_command_at >= ${startTime}
+      AND last_command_at <= ${endTime}
   `;
 
   const convert = Number(commandDistResult[0]?.convert || 0);

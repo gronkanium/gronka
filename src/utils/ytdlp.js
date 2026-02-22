@@ -150,13 +150,18 @@ function executeYtdlp(
 
     let stdout = '';
     let stderr = '';
+    const MAX_OUTPUT_BUFFER = 1024 * 1024; // 1 MB cap — prevents OOM on verbose/long downloads
 
     ytdlp.stdout.on('data', data => {
-      stdout += data.toString();
+      if (stdout.length < MAX_OUTPUT_BUFFER) {
+        stdout += data.toString();
+      }
     });
 
     ytdlp.stderr.on('data', data => {
-      stderr += data.toString();
+      if (stderr.length < MAX_OUTPUT_BUFFER) {
+        stderr += data.toString();
+      }
     });
 
     const timeoutId = setTimeout(() => {
@@ -354,13 +359,18 @@ function getVideoDuration(url, timeout = 15000) {
 
     let stdout = '';
     let stderr = '';
+    const MAX_OUTPUT_BUFFER = 1024 * 1024; // 1 MB cap — prevents OOM on verbose/long downloads
 
     ytdlp.stdout.on('data', data => {
-      stdout += data.toString();
+      if (stdout.length < MAX_OUTPUT_BUFFER) {
+        stdout += data.toString();
+      }
     });
 
     ytdlp.stderr.on('data', data => {
-      stderr += data.toString();
+      if (stderr.length < MAX_OUTPUT_BUFFER) {
+        stderr += data.toString();
+      }
     });
 
     const timeoutId = setTimeout(() => {

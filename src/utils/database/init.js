@@ -46,6 +46,7 @@ export async function initPostgresDatabase() {
           // Handle duplicate type/table errors that can occur in parallel test execution
           // 42710: duplicate type error
           // 42P07: duplicate table/relation error
+          // 23505 + pg_class_relname_nsp_index: race condition — IF NOT EXISTS check not atomic
           if (
             error.code === '42710' ||
             error.code === '42P07' ||
@@ -59,6 +60,15 @@ export async function initPostgresDatabase() {
             await connection.unsafe(`DROP TABLE IF EXISTS ${table.name} CASCADE`);
             await connection.unsafe(`DROP TYPE IF EXISTS ${table.name} CASCADE`);
             await connection.unsafe(table.sql);
+          } else if (
+            error.code === '23505' &&
+            error.message?.includes('pg_class_relname_nsp_index')
+          ) {
+            // Race condition: another process just created this table between our IF NOT EXISTS
+            // check and the actual CREATE. The table exists now — nothing to do.
+            console.warn(
+              `[Database Init] Race condition for table "${table.name}" (23505/pg_class), skipping...`
+            );
           } else {
             throw error;
           }

@@ -40,20 +40,39 @@ export async function safeInteractionEditReply(interaction, options) {
     return false;
   }
 
-  try {
-    const message = await interaction.editReply(options);
-    return message;
-  } catch (error) {
-    // Handle expired interactions (code 10062) or already acknowledged (code 40060)
-    if (error.code === 10062 || error.code === 40060) {
-      logger.debug(
-        `Interaction expired or already acknowledged when editing reply: ${error.message}`
-      );
-    } else {
+  const MAX_RETRIES = 3;
+  for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
+    try {
+      const message = await interaction.editReply(options);
+      return message;
+    } catch (error) {
+      // Handle expired interactions (code 10062) or already acknowledged (code 40060) - no retry
+      if (error.code === 10062 || error.code === 40060) {
+        logger.debug(
+          `Interaction expired or already acknowledged when editing reply: ${error.message}`
+        );
+        return false;
+      }
+
+      // Retry on socket/network errors (e.g. UND_ERR_SOCKET "other side closed")
+      // Discord closes idle HTTP connections after ~15-30s; a retry opens a fresh connection
+      if (
+        (error.code === 'UND_ERR_SOCKET' || error.code === 'UND_ERR_CONNECT_TIMEOUT') &&
+        attempt < MAX_RETRIES
+      ) {
+        logger.warn(
+          `Socket error on attempt ${attempt}/${MAX_RETRIES} when editing reply, retrying in ${attempt}s...`
+        );
+        await new Promise(resolve => setTimeout(resolve, attempt * 1000));
+        continue;
+      }
+
       logger.error(`Failed to edit interaction reply:`, error);
+      return false;
     }
-    return false;
   }
+
+  return false;
 }
 
 /**

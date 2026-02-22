@@ -1,4 +1,5 @@
 <script>
+  import { onMount } from 'svelte';
   import { ChevronDown, ChevronRight } from 'lucide-svelte';
   
   export let columns = [];

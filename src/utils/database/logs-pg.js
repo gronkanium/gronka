@@ -239,11 +239,19 @@ export async function getLogsCount(options = {}) {
   return parseInt(result[0]?.count || 0, 10);
 }
 
+// Cache for getLogComponents — component list changes very rarely, 1hr TTL
+const logComponentsCache = { data: null, timestamp: 0 };
+const LOG_COMPONENTS_TTL = 60 * 60 * 1000;
+
 /**
  * Get all unique components from logs
  * @returns {Promise<string[]>} Array of component names
  */
 export async function getLogComponents() {
+  if (logComponentsCache.data && Date.now() - logComponentsCache.timestamp < LOG_COMPONENTS_TTL) {
+    return logComponentsCache.data;
+  }
+
   await ensurePostgresInitialized();
 
   const sql = getPostgresConnection();
@@ -253,7 +261,10 @@ export async function getLogComponents() {
   }
 
   const results = await sql`SELECT DISTINCT component FROM logs ORDER BY component`;
-  return results.map(r => r.component);
+  const components = results.map(r => r.component);
+  logComponentsCache.data = components;
+  logComponentsCache.timestamp = Date.now();
+  return components;
 }
 
 /**

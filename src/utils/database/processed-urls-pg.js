@@ -59,6 +59,53 @@ export function invalidateProcessedUrlCache(urlHash = null) {
  * @param {string} urlHash - BLAKE3 hash of the URL
  * @returns {Promise<Object|null>} Processed URL record or null if not found
  */
+/**
+ * Get multiple processed URL records by URL hashes in a single query
+ * @param {string[]} urlHashes - Array of URL hashes to look up
+ * @returns {Promise<Map<string, Object>>} Map of urlHash → record (missing hashes absent)
+ */
+export async function getProcessedUrlsBatch(urlHashes) {
+  if (!urlHashes || urlHashes.length === 0) return new Map();
+
+  await ensurePostgresInitialized();
+
+  const sql = getPostgresConnection();
+  if (!sql) {
+    console.error('PostgreSQL not initialized.');
+    return new Map();
+  }
+
+  // Check cache first, collect uncached hashes
+  const result = new Map();
+  const uncached = [];
+  for (const urlHash of urlHashes) {
+    const cached = getCachedProcessedUrl(urlHash);
+    if (cached !== null) {
+      result.set(urlHash, cached);
+    } else {
+      uncached.push(urlHash);
+    }
+  }
+
+  if (uncached.length > 0) {
+    const rows = await sql`SELECT * FROM processed_urls WHERE url_hash = ANY(${uncached})`;
+    for (const row of rows) {
+      let converted = convertTimestampsToNumbers(row, ['processed_at']);
+      converted = convertBigIntToNumbers(converted, ['file_size']);
+      setCachedProcessedUrl(row.url_hash, converted);
+      result.set(row.url_hash, converted);
+    }
+    // Cache null for hashes that had no DB record
+    for (const urlHash of uncached) {
+      if (!result.has(urlHash)) {
+        setCachedProcessedUrl(urlHash, null);
+      }
+    }
+  }
+
+  return result;
+}
+
 export async function getProcessedUrl(urlHash) {
   await ensurePostgresInitialized();
 

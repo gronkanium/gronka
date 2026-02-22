@@ -54,7 +54,14 @@ export function validateUrl(url) {
     }
 
     // Block IPv6 private ranges
-    if (hostname.startsWith('fc00:') || hostname.startsWith('fe80:') || hostname.startsWith('::')) {
+    // Strip brackets that Node's URL parser may leave on IPv6 literals
+    const ipv6Host = hostname.startsWith('[') ? hostname.slice(1, -1) : hostname;
+    if (
+      ipv6Host.startsWith('fc') || // fc00::/7 unique-local (fc00:: – fbff::)
+      ipv6Host.startsWith('fd') || // fc00::/7 unique-local (fd00:: – fdff::)
+      ipv6Host.startsWith('fe80:') || // fe80::/10 link-local
+      ipv6Host.startsWith('::') // loopback (::1), unspecified (::), IPv4-mapped (::ffff:...)
+    ) {
       return {
         valid: false,
         error: 'private IPv6 addresses are not allowed',

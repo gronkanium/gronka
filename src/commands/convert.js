@@ -402,7 +402,7 @@ export async function processConversion(
               cachedType: processedUrl.file_type,
             },
           });
-          updateOperationStatus(operationId, 'success', { fileSize: 0 });
+          updateOperationStatus(operationId, 'success', { fileSize: processedUrl.file_size || 0 });
           recordRateLimit(userId);
           await safeInteractionEditReply(interaction, {
             content: processedUrl.file_url,
@@ -413,10 +413,6 @@ export async function processConversion(
           logger.info(
             `URL cache exists but file type is ${processedUrl.file_type} (not GIF), skipping cache to convert to GIF`
           );
-          logOperationStep(operationId, 'url_validation', 'success', {
-            message: 'URL validation complete',
-            metadata: { originalUrl },
-          });
           logOperationStep(operationId, 'url_cache_mismatch', 'running', {
             message: 'URL cached with different file type, converting to GIF instead',
             metadata: { originalUrl, cachedType: processedUrl.file_type },

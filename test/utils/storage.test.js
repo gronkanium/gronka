@@ -12,6 +12,7 @@ import {
   getVideoPath,
   getImagePath,
   formatFileSize,
+  shouldUploadToDiscord,
   gifExists,
   saveGif,
   cleanupTempFiles,
@@ -394,4 +395,31 @@ test('getStorageStats - only counts valid file types', async () => {
   assert(stats.totalGifs >= 1);
   assert(stats.totalVideos >= 2);
   assert(stats.totalImages >= 2);
+});
+
+test('shouldUploadToDiscord - returns true for files under 8MB', () => {
+  assert.strictEqual(shouldUploadToDiscord(Buffer.alloc(0)), true);
+  assert.strictEqual(shouldUploadToDiscord(Buffer.alloc(1024)), true);
+  assert.strictEqual(shouldUploadToDiscord(Buffer.alloc(8 * 1024 * 1024 - 1)), true);
+});
+
+test('shouldUploadToDiscord - returns false for files 8MB and above', () => {
+  assert.strictEqual(shouldUploadToDiscord(Buffer.alloc(8 * 1024 * 1024)), false);
+  assert.strictEqual(shouldUploadToDiscord(Buffer.alloc(8 * 1024 * 1024 + 1)), false);
+  assert.strictEqual(shouldUploadToDiscord(Buffer.alloc(50 * 1024 * 1024)), false);
+});
+
+test('formatFileSize - handles null and undefined', () => {
+  assert.strictEqual(formatFileSize(null), '0.00 MB');
+  assert.strictEqual(formatFileSize(undefined), '0.00 MB');
+});
+
+test('formatFileSize - handles negative values', () => {
+  const result = formatFileSize(-1024);
+  assert(typeof result === 'string');
+  assert(result.length > 0);
+});
+
+test('formatFileSize - handles string numbers', () => {
+  assert.strictEqual(formatFileSize('1048576'), '1.00 MB');
 });

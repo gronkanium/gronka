@@ -5,6 +5,14 @@
   // Active section
   let activeSection = 'cleanup';
 
+  // === Bot control state ===
+  let botStatus = 'online';
+  let botActivity = '';
+  let statusUpdating = false;
+  let statusFeedback = null;
+  let showRestartConfirm = false;
+  let restarting = false;
+
   // === File list state ===
   let files = [];
   let selectedKeys = new Set();
@@ -125,6 +133,43 @@
       cleanupError = err.message;
     } finally {
       cleanupInProgress = false;
+    }
+  }
+
+  async function updateBotStatus() {
+    if (statusUpdating) return;
+    statusUpdating = true;
+    statusFeedback = null;
+    try {
+      const response = await fetch('/api/management/bot/status', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          status: botStatus,
+          activity: botActivity || undefined,
+        }),
+      });
+      const data = await response.json();
+      if (data.success) {
+        statusFeedback = { type: 'success', message: 'presence updated' };
+      } else {
+        throw new Error(data.message || data.error || 'update failed');
+      }
+    } catch (err) {
+      statusFeedback = { type: 'error', message: err.message };
+    } finally {
+      statusUpdating = false;
+    }
+  }
+
+  async function confirmRestart() {
+    if (restarting) return;
+    showRestartConfirm = false;
+    restarting = true;
+    try {
+      await fetch('/api/management/bot/restart', { method: 'POST' });
+    } catch {
+      // Expected — the server exits, so the request may fail
     }
   }
 
@@ -310,13 +355,63 @@
     <!-- Bot Control Section -->
     <div class="section-content">
       <div class="section-header">
-        <p class="section-desc">Control the Discord bot process.</p>
+        <p class="section-desc">Control the Discord bot's presence and restart the process.</p>
       </div>
 
-      <div class="actions">
-        <button class="btn-disabled" disabled title="Coming soon">
-          restart bot (coming soon)
-        </button>
+      <!-- Presence controls -->
+      <div class="bot-control-group">
+        <h4 class="control-label">presence</h4>
+        <div class="controls-bar">
+          <div class="age-control">
+            <label for="botStatus">status</label>
+            <select id="botStatus" bind:value={botStatus}>
+              <option value="online">online</option>
+              <option value="idle">idle</option>
+              <option value="dnd">dnd</option>
+              <option value="invisible">invisible</option>
+            </select>
+          </div>
+          <input
+            type="text"
+            class="activity-input"
+            bind:value={botActivity}
+            placeholder="custom activity text"
+          />
+          <button
+            class="btn-primary"
+            on:click={updateBotStatus}
+            disabled={statusUpdating}
+          >
+            {statusUpdating ? 'updating...' : 'update'}
+          </button>
+        </div>
+        {#if statusFeedback}
+          <div class="feedback" class:feedback-success={statusFeedback.type === 'success'} class:feedback-error={statusFeedback.type === 'error'}>
+            {statusFeedback.message}
+          </div>
+        {/if}
+      </div>
+
+      <!-- Restart control -->
+      <div class="bot-control-group">
+        <h4 class="control-label">restart</h4>
+        <div class="actions">
+          {#if restarting}
+            <button class="btn-primary" disabled>restarting...</button>
+          {:else if showRestartConfirm}
+            <div class="confirm-box">
+              <span class="confirm-text">
+                restart the bot? the dashboard will briefly disconnect.
+              </span>
+              <button class="btn-danger" on:click={confirmRestart}>confirm</button>
+              <button class="btn-secondary" on:click={() => showRestartConfirm = false}>cancel</button>
+            </div>
+          {:else}
+            <button class="btn-danger" on:click={() => showRestartConfirm = true}>
+              restart bot
+            </button>
+          {/if}
+        </div>
       </div>
     </div>
   {/if}
@@ -593,16 +688,6 @@
     background-color: #fa5252;
   }
 
-  .btn-disabled {
-    padding: 0.6rem 1.2rem;
-    font-size: 0.9rem;
-    background-color: #333;
-    color: #666;
-    border: 1px solid #444;
-    cursor: not-allowed;
-    border-radius: 4px;
-  }
-
   .btn-small {
     padding: 0.4rem 0.8rem;
     font-size: 0.85rem;
@@ -749,6 +834,48 @@
     text-align: center;
     color: #666;
     font-size: 0.9rem;
+  }
+
+  /* Bot control */
+  .bot-control-group {
+    margin-bottom: 1.5rem;
+  }
+
+  .control-label {
+    margin: 0 0 0.75rem 0;
+    font-size: 0.85rem;
+    font-weight: 500;
+    color: #aaa;
+    text-transform: lowercase;
+  }
+
+  .activity-input {
+    flex: 1;
+    padding: 0.4rem 0.6rem;
+    font-size: 0.85rem;
+    background-color: #2a2a2a;
+    color: #fff;
+    border: 1px solid #444;
+    border-radius: 4px;
+  }
+
+  .activity-input::placeholder {
+    color: #666;
+  }
+
+  .feedback {
+    margin-top: 0.5rem;
+    font-size: 0.8rem;
+    padding: 0.4rem 0.6rem;
+    border-radius: 4px;
+  }
+
+  .feedback-success {
+    color: #51cf66;
+  }
+
+  .feedback-error {
+    color: #ff6b6b;
   }
 
   @media (max-width: 768px) {

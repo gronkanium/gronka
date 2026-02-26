@@ -3,7 +3,8 @@ import path from 'path';
 import fs from 'fs';
 import rateLimit from 'express-rate-limit';
 import { createLogger } from '../../utils/logger.js';
-import { r2Config, loggerConfig } from '../../utils/config.js';
+import { r2Config, loggerConfig, serverConfig } from '../../utils/config.js';
+import { getAuthHeaders } from '../utils/auth.js';
 import {
   getAdminUploadStats,
   getUntrackedR2Files,
@@ -178,14 +179,38 @@ router.get('/api/management/admin-uploads/archive/:filename', managementLimiter,
   }
 });
 
-// Bot restart placeholder (not implemented)
-router.post('/api/management/bot/restart', express.json(), (req, res) => {
-  logger.info('Bot restart requested (not implemented)');
-  res.status(501).json({
-    success: false,
-    error: 'not implemented',
-    message: 'Bot restart functionality is not yet implemented',
-  });
+// Proxy presence update to the bot's HTTP server
+router.post('/api/management/bot/status', express.json(), async (req, res) => {
+  try {
+    const { status, activity } = req.body;
+    const botUrl = `http://127.0.0.1:${serverConfig.serverPort}/api/bot/status`;
+
+    const response = await fetch(botUrl, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        ...getAuthHeaders(),
+      },
+      body: JSON.stringify({ status, activity }),
+    });
+
+    const data = await response.json();
+    res.status(response.status).json(data);
+  } catch (error) {
+    logger.error('Failed to update bot status:', error);
+    res.status(502).json({
+      success: false,
+      error: 'failed to reach bot process',
+      message: error.message,
+    });
+  }
+});
+
+// Restart the bot by exiting the webui process; Docker restarts the container
+router.post('/api/management/bot/restart', express.json(), (_req, res) => {
+  logger.info('Bot restart requested — exiting webui process');
+  res.json({ success: true });
+  setTimeout(() => process.exit(0), 500);
 });
 
 /**

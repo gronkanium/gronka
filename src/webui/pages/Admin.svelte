@@ -455,6 +455,7 @@
                         alt="thumbnail"
                         class="thumbnail"
                         loading="lazy"
+                        referrerpolicy="no-referrer"
                       />
                     </a>
                   {:else}
@@ -495,6 +496,7 @@
                       alt="thumbnail"
                       class="grid-thumbnail"
                       loading="lazy"
+                      referrerpolicy="no-referrer"
                     />
                   {:else}
                     <div class="grid-placeholder">VID</div>

@@ -56,6 +56,7 @@ export async function handleStatsCommand(interaction, botStartTime) {
     const embed = new EmbedBuilder()
       .setTitle('bot statistics')
       .setColor(0x5865f2)
+      .setDescription('[join our server](https://discord.gg/aSYfuz6xuY)')
       .addFields(
         {
           name: 'bot info',

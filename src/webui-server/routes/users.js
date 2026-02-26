@@ -3,6 +3,7 @@ import { createLogger } from '../../utils/logger.js';
 import {
   getAllUsersMetrics,
   getUserMetricsCount,
+  getUniqueUserCount,
   getUserMetrics,
   getUser,
   getUserMedia,
@@ -51,14 +52,19 @@ router.get('/api/users', async (req, res) => {
     }
 
     try {
-      total = await getUserMetricsCount({ search });
-      logger.debug(`getUserMetricsCount returned: type=${typeof total}, value=${total}`);
+      if (search) {
+        total = await getUserMetricsCount({ search });
+        logger.debug(`getUserMetricsCount returned: type=${typeof total}, value=${total}`);
+      } else {
+        total = await getUniqueUserCount();
+        logger.debug(`getUniqueUserCount returned: type=${typeof total}, value=${total}`);
+      }
       if (total === undefined || total === null) {
-        logger.warn('getUserMetricsCount returned undefined or null, defaulting to 0');
+        logger.warn('count function returned undefined or null, defaulting to 0');
         total = 0;
       }
     } catch (error) {
-      logger.error('Error calling getUserMetricsCount:', error);
+      logger.error('Error calling count function:', error);
       logger.error('Error stack:', error.stack);
       total = 0;
     }

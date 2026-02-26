@@ -119,8 +119,8 @@ the bot tracks processed urls to avoid re-downloading the same content:
 
 ### cobalt not responding
 
-- verify cobalt container is running: `docker ps | grep cobalt`
-- check cobalt logs: `docker logs cobalt`
+- verify cobalt container is running: `docker ps | grep gronka-cobalt`
+- check cobalt logs: `docker logs gronka-cobalt`
 - test cobalt directly: `curl http://localhost:9000/api/info`
 - verify `COBALT_API_URL` matches your cobalt instance
 

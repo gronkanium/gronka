@@ -110,12 +110,12 @@ process.on('SIGTERM', () => {
 // Start cobalt docker container if not running
 console.log('checking cobalt container...');
 try {
-  const cobaltStatus = execSync('docker ps --filter name=cobalt --format "{{.Names}}"', {
+  const cobaltStatus = execSync('docker ps --filter name=gronka-cobalt --format "{{.Names}}"', {
     encoding: 'utf8',
     stdio: 'pipe',
   }).trim();
 
-  if (!cobaltStatus.includes('cobalt')) {
+  if (!cobaltStatus.includes('gronka-cobalt')) {
     console.log('starting cobalt container...');
     execSync('docker compose up -d cobalt', {
       stdio: 'inherit',

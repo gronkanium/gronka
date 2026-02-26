@@ -1,5 +1,5 @@
 services:
-  app:
+  gronka:
     build:
       context: .
       dockerfile: Dockerfile
@@ -14,7 +14,6 @@ services:
     env_file:
       - .env
     environment:
-      # Docker-specific overrides (these take precedence over .env)
       - COBALT_API_URL=http://cobalt:9000
       - POSTGRES_HOST=postgres
     volumes:
@@ -69,10 +68,8 @@ services:
     init: true
     read_only: true
     restart: unless-stopped
-    container_name: cobalt
+    container_name: gronka-cobalt
     ports:
-      # Exposed for internal Docker network access
-      # If you want to restrict to localhost only, use: - 127.0.0.1:9000:9000/tcp
       - 9000:9000/tcp
     environment:
       API_URL: ${COBALT_API_URL:-http://cobalt:9000}
@@ -90,7 +87,7 @@ services:
 
   giflossy:
     image: dylanninin/giflossy:latest
-    container_name: giflossy
+    container_name: gronka-giflossy
     restart: unless-stopped
     volumes:
       - ./data-test:/app/data-test

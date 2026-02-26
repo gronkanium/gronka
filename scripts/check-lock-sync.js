@@ -29,8 +29,7 @@ try {
     process.exit(0);
   } catch {
     console.error('✗ package-lock.json is out of sync with package.json');
-    console.error('\nTo fix this, run: npm run fix:deps');
-    console.error('Or manually run: npm install\n');
+    console.error('\nTo fix this, run: npm install\n');
     process.exit(1);
   }
 } catch (error) {

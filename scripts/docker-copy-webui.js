@@ -6,7 +6,7 @@ const skipBuild = process.argv.includes('--skip-build');
 
 checkDockerDaemon();
 
-// Check if app container is running
+// Check if gronka container is running
 const containerName = 'gronka';
 if (!isContainerRunning(containerName)) {
   error(

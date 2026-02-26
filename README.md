@@ -112,7 +112,7 @@ you can also use prefixed environment variables for bot-specific configuration (
 docker compose up -d
 
 # register discord commands (only need to do this once)
-docker compose run --rm app npm run register-commands
+docker compose run --rm gronka npm run register-commands
 ```
 
 ## configuration

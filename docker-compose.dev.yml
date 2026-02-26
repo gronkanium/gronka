@@ -1,15 +1,11 @@
 # Development override for docker-compose.yml
-# This file mounts the source code as a volume so changes are reflected immediately
+# Mounts source code so changes are reflected immediately
 # Usage: docker compose -f docker-compose.yml -f docker-compose.dev.yml up
 
-version: '3.8'
-
 services:
-  app:
+  gronka:
     volumes:
-      # Mount source code for development (overrides the COPY in Dockerfile)
       - ./src:/app/src
-      # Keep data and temp volumes from base compose file
       - ./data-test:/app/data-test
       - ./data-prod:/app/data-prod
       - ./temp:/app/temp

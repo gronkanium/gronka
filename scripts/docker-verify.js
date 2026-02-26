@@ -88,6 +88,6 @@ if (allUpToDate) {
   process.exit(0);
 } else {
   warn('Some containers may not be running the latest code');
-  info('To update, run: npm run docker:reload');
+  info('To update, run: npm run docker:rebuild');
   process.exit(1);
 }

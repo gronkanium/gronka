@@ -16,7 +16,7 @@ ps aux | grep node
 
 ```bash
 # docker
-docker compose logs -f app
+docker compose logs -f gronka
 
 # local
 tail -f logs/combined.log
@@ -36,7 +36,7 @@ look for "bot logged in as" message in logs. if missing:
 
 ```bash
 # docker
-docker compose run --rm app npm run register-commands
+docker compose run --rm gronka npm run register-commands
 
 # local
 npm run register-commands
@@ -56,7 +56,7 @@ ensure the bot has "use application commands" permission in your server.
 
 ```bash
 # docker (ffmpeg is included)
-docker compose exec app ffmpeg -version
+docker compose exec gronka ffmpeg -version
 
 # local
 ffmpeg -version
@@ -98,10 +98,10 @@ ffmpeg -i test.mp4 -vf "fps=15,scale=480:-1" test.gif
 
 ```bash
 # check cobalt is running
-docker ps | grep cobalt
+docker ps | grep gronka-cobalt
 
 # check cobalt logs
-docker logs cobalt
+docker logs gronka-cobalt
 
 # test cobalt directly
 curl http://localhost:9000/api/info
@@ -139,7 +139,7 @@ check storage path permissions:
 
 ```bash
 # docker
-docker compose exec app ls -la /app/data
+docker compose exec gronka ls -la /app/data
 
 # local (check your configured storage path)
 ls -la ./data-prod
@@ -167,7 +167,7 @@ check disk usage:
 
 ```bash
 # docker
-docker compose exec app df -h
+docker compose exec gronka df -h
 
 # local
 df -h

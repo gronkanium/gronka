@@ -81,12 +81,12 @@ const healthCheck = new Promise((resolve, reject) => {
   // Check cobalt container
   console.log('\nchecking cobalt container...');
   try {
-    const cobaltStatus = execSync('docker ps --filter name=cobalt --format "{{.Names}}"', {
+    const cobaltStatus = execSync('docker ps --filter name=gronka-cobalt --format "{{.Names}}"', {
       encoding: 'utf8',
       stdio: 'pipe',
     }).trim();
 
-    if (cobaltStatus.includes('cobalt')) {
+    if (cobaltStatus.includes('gronka-cobalt')) {
       console.log('✓ cobalt container is running');
     } else {
       console.error('✗ cobalt container is not running');

@@ -7,7 +7,7 @@ docker compose up -d          # start services
 docker compose down           # stop all services
 docker compose logs -f        # view logs (follow mode)
 docker compose ps             # check container status
-docker compose restart app    # restart app container
+docker compose restart gronka    # restart gronka container
 ```
 
 ## additional services
@@ -28,10 +28,10 @@ docker compose logs -f webui
 
 ```bash
 # if container is running
-docker compose exec app npm run register-commands
+docker compose exec gronka npm run register-commands
 
 # if container is not running (one-off command)
-docker compose run --rm app npm run register-commands
+docker compose run --rm gronka npm run register-commands
 ```
 
 ### check container status
@@ -43,7 +43,7 @@ docker compose ps
 ### restart after environment variable changes
 
 ```bash
-docker compose restart app
+docker compose restart gronka
 ```
 
 ## troubleshooting

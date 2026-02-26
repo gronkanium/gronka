@@ -7,27 +7,50 @@ and this project adheres (attempts) to [Semantic Versioning](https://semver.org/
 
 ## [Unreleased]
 
+## [0.16.1] - 2026-02-26
+
 ### Added
 
-- Docker services-only mode for local bot development ([`71e3f84`](https://github.com/gronkanium/gronka/commit/71e3f84))
-  - New `docker-compose.services.yml` for running just postgres, cobalt, and giflossy
-  - New npm scripts: `docker:services:up`, `docker:services:down`, `docker:services:logs`
-  - Bot startup now checks if required services are running and provides helpful error messages
+- Admin management panel and dashboard ([`87f6b94`](https://github.com/gronkanium/gronka/commit/87f6b94))
+- Moderation dashboard overhaul with stats, recent uploads, and cobalt retry logic ([`498f625`](https://github.com/gronkanium/gronka/commit/498f625))
 - Analytics dashboard with KPI tracking and visualization ([`9b10097`](https://github.com/gronkanium/gronka/commit/9b10097))
+- Monero price display on health page ([`1e30151`](https://github.com/gronkanium/gronka/commit/1e30151))
+- Docker services-only mode for local bot development ([`71e3f84`](https://github.com/gronkanium/gronka/commit/71e3f84))
 - GitHub Sponsors funding configuration ([`24eee1d`](https://github.com/gronkanium/gronka/commit/24eee1d))
 
 ### Fixed
 
+- Pin undici ~6.23.0 and add socket error retry to editReply ([`1a51c4f`](https://github.com/gronkanium/gronka/commit/1a51c4f))
+- IPv6 SSRF hardening and two real bugs in URL validation ([`85f62f2`](https://github.com/gronkanium/gronka/commit/85f62f2))
+- Cap yt-dlp buffers, fix cache-hit fileSize, deduplicate logging ([`f32bd61`](https://github.com/gronkanium/gronka/commit/f32bd61))
+- Missing onMount import in ResponsiveTable, harden Dashboard loading ([`20eec9d`](https://github.com/gronkanium/gronka/commit/20eec9d))
+- Remove unused concurrency queue logic from cobalt-queue ([`a2e5847`](https://github.com/gronkanium/gronka/commit/a2e5847))
 - Handle Discord command option type mismatch errors gracefully ([`f970645`](https://github.com/gronkanium/gronka/commit/f970645))
 - Sanitize FFmpeg stderr and Discord errors before logging ([`4d9d45b`](https://github.com/gronkanium/gronka/commit/4d9d45b))
-- Use unique database per test job to prevent index conflicts ([`8f7a2e4`](https://github.com/gronkanium/gronka/commit/8f7a2e4))
-- Fix flaky timing test and update file type detection test ([`af9b756`](https://github.com/gronkanium/gronka/commit/af9b756))
+- Align table headers with body columns on operations page ([`8cd08bf`](https://github.com/gronkanium/gronka/commit/8cd08bf))
+- Fix rollup path traversal vulnerability (GHSA-mw96-cpmx-2vgc) via npm audit fix
+
+### Changed
+
+- Rename Docker `app` service to `gronka` for consistency across all compose files, scripts, and docs
+- Consistent container naming: `cobalt` → `gronka-cobalt`, `giflossy` → `gronka-giflossy`
+- Clean up npm scripts: remove redundant aliases, rename `docker:reload` → `docker:rebuild`, group webui docker scripts under `docker:webui:*`
+- Remove deprecated `version: '3.8'` from docker-compose.dev.yml
+- Refactor CI workflow: collapse 4 duplicate test jobs into matrix strategy, add descriptive job names
+- Merge `/info` command into `/stats`, remove info tracking ([`7dfd69a`](https://github.com/gronkanium/gronka/commit/7dfd69a))
+
+### Performance
+
+- Eliminate N+1 queries and correlated subqueries in webui API ([`c8957e2`](https://github.com/gronkanium/gronka/commit/c8957e2))
 
 ### Dependencies
 
-- Security updates via dependabot ([`35dfaae`](https://github.com/gronkanium/gronka/commit/35dfaae))
-- Bump svelte from 5.46.1 to 5.46.4 ([`f90a910`](https://github.com/gronkanium/gronka/commit/f90a910))
-- Bump devalue from 5.5.0 to 5.6.2 ([`ef98e7f`](https://github.com/gronkanium/gronka/commit/ef98e7f))
+- Security updates via dependabot (svelte, qs, axios, lodash, devalue, and 30+ transitive deps)
+- Bump svelte from 5.46.1 to 5.53.3
+- Bump axios from 1.13.2 to 1.13.5 ([`81df795`](https://github.com/gronkanium/gronka/commit/81df795))
+- Bump qs from 6.14.0 to 6.14.2
+- Bump lodash from 4.17.21 to 4.17.23 ([`4f97ddb`](https://github.com/gronkanium/gronka/commit/4f97ddb))
+- Bump aws-sdk to 3.995.0, lucide-svelte to 0.575.0, marked to 17.0.3, eslint to 10.0.1 ([`fb6f33b`](https://github.com/gronkanium/gronka/commit/fb6f33b))
 
 ## [0.16.0] - 2025-01-09
 

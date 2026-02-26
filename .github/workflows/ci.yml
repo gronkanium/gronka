@@ -31,7 +31,6 @@ env:
   POSTGRES_PASSWORD: gronka
   POSTGRES_HOST: localhost
   POSTGRES_PORT: '5432'
-  # PG* vars for psql client (ensures psql commands use correct user)
   PGUSER: gronka
   PGPASSWORD: gronka
   PGHOST: localhost
@@ -39,6 +38,7 @@ env:
 
 jobs:
   dependency-review:
+    name: Dependency Review
     runs-on: blacksmith-4vcpu-ubuntu-2404
     if: github.event_name == 'pull_request'
     steps:
@@ -49,6 +49,7 @@ jobs:
           config-file: ./.github/dependency-review-config.yml
 
   validate-code:
+    name: Lint & Format
     runs-on: blacksmith-4vcpu-ubuntu-2404
     if: github.actor != 'dependabot[bot]'
     steps:
@@ -62,17 +63,34 @@ jobs:
       - run: npm run lint
       - run: npm run format:check || echo "::warning::Formatting check failed"
 
-  test-utils:
+  test:
+    name: Test (${{ matrix.suite }})
     runs-on: blacksmith-4vcpu-ubuntu-2404
     if: github.actor != 'dependabot[bot]'
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - suite: utils
+            db: gronka_test_utils
+            path: test/utils/
+          - suite: commands
+            db: gronka_test_commands
+            path: test/commands/
+          - suite: scripts
+            db: gronka_test_scripts
+            path: test/scripts/
+          - suite: integration
+            db: gronka_test_integration
+            path: test/webui-server-*.test.js test/docker-security.test.js
     env:
-      POSTGRES_DB: gronka_test_utils
-      PGDATABASE: gronka_test_utils
+      POSTGRES_DB: ${{ matrix.db }}
+      PGDATABASE: ${{ matrix.db }}
     services:
       postgres:
         image: postgres:16-alpine
         env:
-          POSTGRES_DB: gronka_test_utils
+          POSTGRES_DB: ${{ matrix.db }}
           POSTGRES_USER: gronka
           POSTGRES_PASSWORD: gronka
         options: >-
@@ -90,99 +108,10 @@ jobs:
           cache: 'npm'
       - run: npm ci
       - run: sudo apt-get update && sudo apt-get install -y ffmpeg postgresql-client
-      - run: npx cross-env WEBUI_PORT=3101 R2_ACCOUNT_ID= R2_ACCESS_KEY_ID= R2_SECRET_ACCESS_KEY= R2_BUCKET_NAME= node --test test/utils/
-
-  test-commands:
-    runs-on: blacksmith-4vcpu-ubuntu-2404
-    if: github.actor != 'dependabot[bot]'
-    env:
-      POSTGRES_DB: gronka_test_commands
-      PGDATABASE: gronka_test_commands
-    services:
-      postgres:
-        image: postgres:16-alpine
-        env:
-          POSTGRES_DB: gronka_test_commands
-          POSTGRES_USER: gronka
-          POSTGRES_PASSWORD: gronka
-        options: >-
-          --health-cmd pg_isready
-          --health-interval 10s
-          --health-timeout 5s
-          --health-retries 5
-        ports:
-          - 5432:5432
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
-        with:
-          node-version: '20'
-          cache: 'npm'
-      - run: npm ci
-      - run: sudo apt-get update && sudo apt-get install -y ffmpeg postgresql-client
-      - run: npx cross-env WEBUI_PORT=3101 R2_ACCOUNT_ID= R2_ACCESS_KEY_ID= R2_SECRET_ACCESS_KEY= R2_BUCKET_NAME= node --test test/commands/
-
-  test-scripts:
-    runs-on: blacksmith-4vcpu-ubuntu-2404
-    if: github.actor != 'dependabot[bot]'
-    env:
-      POSTGRES_DB: gronka_test_scripts
-      PGDATABASE: gronka_test_scripts
-    services:
-      postgres:
-        image: postgres:16-alpine
-        env:
-          POSTGRES_DB: gronka_test_scripts
-          POSTGRES_USER: gronka
-          POSTGRES_PASSWORD: gronka
-        options: >-
-          --health-cmd pg_isready
-          --health-interval 10s
-          --health-timeout 5s
-          --health-retries 5
-        ports:
-          - 5432:5432
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
-        with:
-          node-version: '20'
-          cache: 'npm'
-      - run: npm ci
-      - run: sudo apt-get update && sudo apt-get install -y ffmpeg postgresql-client
-      - run: npx cross-env WEBUI_PORT=3101 R2_ACCOUNT_ID= R2_ACCESS_KEY_ID= R2_SECRET_ACCESS_KEY= R2_BUCKET_NAME= node --test test/scripts/
-
-  test-integration:
-    runs-on: blacksmith-4vcpu-ubuntu-2404
-    if: github.actor != 'dependabot[bot]'
-    env:
-      POSTGRES_DB: gronka_test_integration
-      PGDATABASE: gronka_test_integration
-    services:
-      postgres:
-        image: postgres:16-alpine
-        env:
-          POSTGRES_DB: gronka_test_integration
-          POSTGRES_USER: gronka
-          POSTGRES_PASSWORD: gronka
-        options: >-
-          --health-cmd pg_isready
-          --health-interval 10s
-          --health-timeout 5s
-          --health-retries 5
-        ports:
-          - 5432:5432
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
-        with:
-          node-version: '20'
-          cache: 'npm'
-      - run: npm ci
-      - run: sudo apt-get update && sudo apt-get install -y ffmpeg postgresql-client
-      - run: npx cross-env WEBUI_PORT=3101 R2_ACCOUNT_ID= R2_ACCESS_KEY_ID= R2_SECRET_ACCESS_KEY= R2_BUCKET_NAME= node --test test/webui-server-*.test.js test/docker-security.test.js
+      - run: npx cross-env WEBUI_PORT=3101 R2_ACCOUNT_ID= R2_ACCESS_KEY_ID= R2_SECRET_ACCESS_KEY= R2_BUCKET_NAME= node --test ${{ matrix.path }}
 
   dependabot-checks:
+    name: Dependabot Validate
     runs-on: blacksmith-4vcpu-ubuntu-2404
     if: github.actor == 'dependabot[bot]'
     steps:

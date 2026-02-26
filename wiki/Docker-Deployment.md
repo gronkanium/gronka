@@ -47,7 +47,7 @@ this will:
 3. **register discord commands:**
 
 ```bash
-docker compose run --rm app npm run register-commands
+docker compose run --rm gronka npm run register-commands
 ```
 
 4. **view logs:**
@@ -135,10 +135,10 @@ to register the discord slash commands, run:
 
 ```bash
 # if container is running
-docker compose exec app npm run register-commands
+docker compose exec gronka npm run register-commands
 
 # if container is not running (one-off command)
-docker compose run --rm app npm run register-commands
+docker compose run --rm gronka npm run register-commands
 ```
 
 you should register commands:
@@ -179,7 +179,7 @@ the application includes health checks:
 ffmpeg is included in the docker image. if you encounter issues:
 
 ```bash
-docker compose exec app ffmpeg -version
+docker compose exec gronka ffmpeg -version
 ```
 
 ### permission issues
@@ -209,7 +209,7 @@ docker compose up -d
 for environment variable changes, restart the container:
 
 ```bash
-docker compose restart app
+docker compose restart gronka
 ```
 
 ### updating from git
@@ -242,7 +242,7 @@ admin users can bypass rate limiting and file size/duration restrictions.
 3. **restart the container:**
 
    ```bash
-   docker compose restart app
+   docker compose restart gronka
    ```
 
 ### admin privileges

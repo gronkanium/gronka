@@ -15,7 +15,7 @@ cp .env.example .env
 docker compose up -d
 
 # 4. Register Discord commands (one-time setup)
-docker compose run --rm app npm run register-commands
+docker compose run --rm gronka npm run register-commands
 ```
 
 ## using docker with webui

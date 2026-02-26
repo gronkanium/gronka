@@ -447,8 +447,8 @@ describe('docker security tests', () => {
       for (const [serviceName, service] of Object.entries(composeConfig)) {
         // cobalt uses read_only: true as an example
         // Services that don't need to write to root filesystem should be read-only
-        if (serviceName !== 'cobalt' && !service.read_only && serviceName !== 'app') {
-          // app needs write access for data-prod/data-test/temp/logs, so skip it
+        if (serviceName !== 'cobalt' && !service.read_only && serviceName !== 'gronka') {
+          // gronka needs write access for data-prod/data-test/temp/logs, so skip it
           writableServices.push(serviceName);
         }
       }

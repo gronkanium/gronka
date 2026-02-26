@@ -1,7 +1,6 @@
-# Services-only compose file for local bot development
-# Starts only the dependency services (postgres, cobalt, giflossy) without the main app
+# Dependencies only (no bot) for local development
 # Usage: docker compose -f docker-compose.services.yml up -d
-# Or use: npm run docker:services:up
+# Or: npm run docker:services:up
 
 services:
   postgres:
@@ -31,7 +30,7 @@ services:
     init: true
     read_only: true
     restart: unless-stopped
-    container_name: cobalt
+    container_name: gronka-cobalt
     ports:
       - 9000:9000/tcp
     environment:
@@ -44,7 +43,7 @@ services:
 
   giflossy:
     image: dylanninin/giflossy:latest
-    container_name: giflossy
+    container_name: gronka-giflossy
     restart: unless-stopped
     volumes:
       - ./data-test:/app/data-test

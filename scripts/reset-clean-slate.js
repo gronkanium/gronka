@@ -887,11 +887,11 @@ async function main() {
       console.log('\nnote: all docker containers have been stopped');
     }
     console.log('  to start services, run: docker compose up -d');
-    console.log('  or: npm run docker:reload');
+    console.log('  or: npm run docker:rebuild');
   } else if (dockerStatus.running) {
     console.log('\nnote: docker containers were stopped during reset');
     console.log('  to restart them, run: docker compose up -d');
-    console.log('  or: npm run docker:reload');
+    console.log('  or: npm run docker:rebuild');
   }
 }
 

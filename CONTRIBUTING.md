@@ -32,10 +32,8 @@ npm run check:sync
 If the lock file is out of sync, fix it by running:
 
 ```bash
-npm run fix:deps
+npm install
 ```
-
-This will update `package-lock.json` to match `package.json`.
 
 ### Git Hooks
 
@@ -86,12 +84,13 @@ This will check:
 
 ### Building and Running
 
-The project uses Docker Compose with multiple services. The main app service runs both the Discord bot and local server:
+The project uses Docker Compose with multiple services. The main `gronka` service runs both the Discord bot and local server:
 
 ```bash
-npm run docker:up          # Start all services (app only by default)
+npm run docker:up          # Start all services
 npm run docker:down        # Stop all containers
-npm run docker:reload      # Reload containers (rebuild and restart)
+npm run docker:rebuild     # Full rebuild from scratch
+npm run docker:rebuild:fast # Rebuild with cache (faster)
 npm run docker:restart     # Restart all containers
 npm run docker:register    # Register Discord commands in container
 ```
@@ -100,42 +99,24 @@ npm run docker:register    # Register Discord commands in container
 
 The Docker Compose setup includes several services:
 
-- **app** - Main service running both the Discord bot and local server. The local server provides health checks and stats API. Files are stored in R2 when configured (recommended) and served via the R2 public domain. The file serving routes (/gifs/_, /videos/_, /images/\*) have been removed from the server.
-- **cobalt** - Self-hosted API for downloading media from social platforms (Twitter/X, TikTok, Instagram, YouTube, Reddit, Facebook, Threads). Runs by default on port 9000
-- **giflossy** - Service used for GIF optimization via docker exec. Used internally by the bot for the `/optimize` command
-- **watchtower** - Automatically updates the cobalt image. Runs cleanup and updates every 15 minutes
-- **webui** - Optional dashboard for viewing statistics (requires profile, runs on port 3001)
-
-All services except `webui` start automatically when running `docker compose up`. The `webui` service requires a profile to be enabled.
-
-### Docker Compose Profiles
-
-Only the `webui` service uses Docker Compose profiles. All other services (app, cobalt, giflossy, watchtower) start automatically when running `docker compose up`.
-
-To start the optional webui service:
-
-```bash
-# Start webui
-docker compose --profile webui up -d webui
-
-# Start all services including webui
-docker compose --profile webui up -d
-```
+- **gronka** - Main service running both the Discord bot and local server. Health checks, stats API, and file storage via R2.
+- **cobalt** - Self-hosted API for downloading media from social platforms (Twitter/X, TikTok, Instagram, YouTube, Reddit, Facebook, Threads). Port 9000.
+- **giflossy** - GIF optimization via docker exec, used by the `/optimize` command.
+- **watchtower** - Automatically updates the cobalt image every 15 minutes.
 
 ### Common Docker Commands
 
 ```bash
 npm run docker:logs        # View logs for all services
 npm run docker:down        # Stop all containers
-npm run docker:reload      # Reload containers (rebuild and restart)
+npm run docker:rebuild     # Full rebuild from scratch
 npm run docker:restart     # Restart all containers
 npm run docker:register    # Register Discord commands in container
 
 # Manual docker compose commands
-docker compose ps           # Check container status
-docker compose exec app sh  # Open shell in app container
-docker compose logs -f app  # View logs for app service only
-docker compose logs -f webui # View logs for webui service only
+docker compose ps               # Check container status
+docker compose exec gronka sh   # Open shell in gronka container
+docker compose logs -f gronka   # View logs for gronka service only
 ```
 
 ### Troubleshooting Docker Build Issues
@@ -152,7 +133,7 @@ npm error `npm ci` can only install packages when your package.json and package-
 
 1. On your local machine, run:
    ```bash
-   npm run fix:deps
+   npm install
    ```
 2. Commit the updated `package-lock.json`:
    ```bash
@@ -162,7 +143,7 @@ npm error `npm ci` can only install packages when your package.json and package-
 3. Push and rebuild:
    ```bash
    git push
-   npm run docker:reload
+   npm run docker:rebuild
    ```
 
 #### Missing Environment Variables
@@ -248,7 +229,8 @@ This script will:
 
 - `npm run docker:up` - Start Docker containers
 - `npm run docker:down` - Stop all containers
-- `npm run docker:reload` - Reload containers (rebuild and restart)
+- `npm run docker:rebuild` - Full rebuild from scratch
+- `npm run docker:rebuild:fast` - Rebuild with cache (faster)
 - `npm run docker:restart` - Restart all containers
 - `npm run docker:logs` - View logs for all services
 - `npm run docker:register` - Register Discord commands in container

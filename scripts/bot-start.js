@@ -72,7 +72,7 @@ if (!services.postgres || !services.cobalt) {
     );
     console.error('');
     console.error('Or use Docker for everything:');
-    console.error('  npm run docker:reload          # Rebuild and start all containers');
+    console.error('  npm run docker:rebuild         # Rebuild and start all containers');
     console.error('  npm run docker:up              # Start all containers');
     console.error('');
     process.exit(1);

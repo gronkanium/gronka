@@ -180,16 +180,16 @@ describe('docker security tests', () => {
   });
 
   describe('docker socket exposure', () => {
-    test('app service should not mount docker socket (security risk)', () => {
-      if (!composeConfig?.app) {
+    test('gronka service should not mount docker socket (security risk)', () => {
+      if (!composeConfig?.gronka) {
         assert.fail('Could not parse docker-compose.yml');
       }
 
       // Docker socket mount is a critical security risk
       // If present, document it as a known risk that needs mitigation
-      if (composeConfig.app.docker_socket) {
+      if (composeConfig.gronka.docker_socket) {
         console.warn(
-          'SECURITY WARNING: app service mounts docker socket. ' +
+          'SECURITY WARNING: gronka service mounts docker socket. ' +
             'This allows container escape if compromised. Consider using Docker-in-Docker or ' +
             'a more restricted API endpoint instead of full socket access.'
         );
@@ -197,7 +197,7 @@ describe('docker security tests', () => {
 
       // This test documents the risk - in production, you might want to fail if socket is mounted
       // Uncomment the assertion below if you want tests to fail when socket is mounted:
-      // assert.strictEqual(composeConfig.app.docker_socket, false,
+      // assert.strictEqual(composeConfig.gronka.docker_socket, false,
       //   'docker socket mount detected - this is a security risk');
     });
 
@@ -1172,18 +1172,18 @@ describe('docker security tests', () => {
       }
     });
 
-    test('app service docker socket access should be documented as security risk', () => {
-      if (!composeConfig?.app) {
+    test('gronka service docker socket access should be documented as security risk', () => {
+      if (!composeConfig?.gronka) {
         assert.fail('Could not parse docker-compose.yml');
       }
 
-      if (composeConfig.app.docker_socket) {
-        // This is a known risk for the app service (needed for gif-optimizer)
+      if (composeConfig.gronka.docker_socket) {
+        // This is a known risk for the gronka service (needed for gif-optimizer)
         // Document it but verify it's intentional
         console.warn(
-          'KNOWN RISK: app service has docker socket access for gif-optimizer. ' +
+          'KNOWN RISK: gronka service has docker socket access for gif-optimizer. ' +
             'If compromised, attacker could escape container and control host Docker. ' +
-            'Mitigation: Ensure app service code is secure, use proper input validation, and limit network exposure.'
+            'Mitigation: Ensure gronka service code is secure, use proper input validation, and limit network exposure.'
         );
       }
     });

@@ -5,7 +5,7 @@ This project consists of multiple components that can run independently or toget
 - **Discord Bot** (`src/bot.js`) - Handles Discord interactions and converts files to GIFs. The bot includes a minimal HTTP server that serves `/api/stats/24h` for Jekyll site integration.
 - **WebUI** (`src/webui-server.js`) - Optional dashboard for viewing statistics
 
-When running in Docker, the main `app` service runs the bot (which includes the minimal stats HTTP server). Files are stored in R2 when configured (recommended), or saved to local disk if R2 is not configured. Files are served from R2 or Discord attachments. The webui is an optional service that can be enabled via Docker Compose profiles.
+When running in Docker, the main `gronka` service runs the bot (which includes the minimal stats HTTP server). Files are stored in R2 when configured (recommended), or saved to local disk if R2 is not configured. Files are served from R2 or Discord attachments. The webui is an optional service that can be enabled via Docker Compose profiles.
 
 ## Dependency Management
 

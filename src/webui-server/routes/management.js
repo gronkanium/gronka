@@ -70,6 +70,8 @@ router.get('/api/management/admin-uploads/files', async (req, res) => {
         size: file.size,
         sizeFormatted: formatBytes(file.size),
         lastModified: file.lastModified.toISOString(),
+        fileType: getFileTypeFromKey(file.key),
+        fileUrl: `https://${r2Config.publicDomain}/${file.key}`,
       }));
 
     res.json({
@@ -212,6 +214,13 @@ router.post('/api/management/bot/restart', express.json(), (_req, res) => {
   res.json({ success: true });
   setTimeout(() => process.exit(0), 500);
 });
+
+function getFileTypeFromKey(key) {
+  if (key.startsWith('gifs/')) return 'gif';
+  if (key.startsWith('videos/')) return 'video';
+  if (key.startsWith('images/')) return 'image';
+  return 'unknown';
+}
 
 /**
  * Format bytes to human readable string

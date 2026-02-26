@@ -1,6 +1,6 @@
 <script>
-  import { onMount } from 'svelte';
-  import { Archive, Bot, RefreshCw } from 'lucide-svelte';
+  import { onMount, onDestroy } from 'svelte';
+  import { Archive, Bot, RefreshCw, List, Grid } from 'lucide-svelte';
 
   // Active section
   let activeSection = 'cleanup';
@@ -20,6 +20,12 @@
   let filesLoading = true;
   let filesError = null;
 
+  // === Filter & sort state ===
+  let typeFilter = 'all';
+  let sortColumn = 'lastModified';
+  let sortDirection = 'desc';
+  let viewMode = 'table';
+
   // === Cleanup state ===
   let cleanupInProgress = false;
   let cleanupResult = null;
@@ -28,7 +34,32 @@
   let showConfirmation = false;
 
   // === Derived values ===
-  $: allSelected = files.length > 0 && selectedKeys.size === files.length;
+  $: typeCounts = files.reduce(
+    (acc, f) => {
+      if (acc[f.fileType] !== undefined) acc[f.fileType]++;
+      return acc;
+    },
+    { gif: 0, video: 0, image: 0 }
+  );
+
+  $: filteredFiles = typeFilter === 'all' ? files : files.filter(f => f.fileType === typeFilter);
+
+  $: sortedFiles = [...filteredFiles].sort((a, b) => {
+    let cmp = 0;
+    if (sortColumn === 'key') {
+      cmp = a.key.localeCompare(b.key);
+    } else if (sortColumn === 'fileType') {
+      cmp = a.fileType.localeCompare(b.fileType);
+    } else if (sortColumn === 'size') {
+      cmp = a.size - b.size;
+    } else if (sortColumn === 'lastModified') {
+      cmp = new Date(a.lastModified) - new Date(b.lastModified);
+    }
+    return sortDirection === 'asc' ? cmp : -cmp;
+  });
+
+  $: allFilteredSelected =
+    filteredFiles.length > 0 && filteredFiles.every(f => selectedKeys.has(f.key));
   $: selectedFiles = files.filter(f => selectedKeys.has(f.key));
   $: selectedSize = selectedFiles.reduce((sum, f) => sum + f.size, 0);
   $: selectedSizeFormatted = formatBytes(selectedSize);
@@ -51,6 +82,24 @@
     return `${days} days ago`;
   }
 
+  function canShowThumbnail(file) {
+    return file.fileType === 'image' || file.fileType === 'gif';
+  }
+
+  function handleSort(column) {
+    if (sortColumn === column) {
+      sortDirection = sortDirection === 'asc' ? 'desc' : 'asc';
+    } else {
+      sortColumn = column;
+      sortDirection = column === 'size' || column === 'lastModified' ? 'desc' : 'asc';
+    }
+  }
+
+  function sortIndicator(column) {
+    if (sortColumn !== column) return '';
+    return sortDirection === 'asc' ? ' \u25B2' : ' \u25BC';
+  }
+
   async function fetchFiles() {
     filesLoading = true;
     filesError = null;
@@ -63,7 +112,6 @@
       const data = await response.json();
       if (data.success) {
         files = data.files;
-        // Select all by default
         selectedKeys = new Set(files.map(f => f.key));
       } else {
         throw new Error(data.message || 'failed to fetch files');
@@ -76,10 +124,13 @@
   }
 
   function toggleAll() {
-    if (allSelected) {
-      selectedKeys = new Set();
+    const filteredKeys = filteredFiles.map(f => f.key);
+    if (allFilteredSelected) {
+      const next = new Set(selectedKeys);
+      for (const key of filteredKeys) next.delete(key);
+      selectedKeys = next;
     } else {
-      selectedKeys = new Set(files.map(f => f.key));
+      selectedKeys = new Set([...selectedKeys, ...filteredKeys]);
     }
   }
 
@@ -91,6 +142,37 @@
       next.add(key);
     }
     selectedKeys = next;
+  }
+
+  function selectByType(type) {
+    const keysOfType = files.filter(f => f.fileType === type).map(f => f.key);
+    const allAlreadySelected = keysOfType.every(k => selectedKeys.has(k));
+    const next = new Set(selectedKeys);
+    if (allAlreadySelected) {
+      for (const key of keysOfType) next.delete(key);
+    } else {
+      for (const key of keysOfType) next.add(key);
+    }
+    selectedKeys = next;
+  }
+
+  function clearSelection() {
+    selectedKeys = new Set();
+  }
+
+  function handleKeydown(e) {
+    if (e.key === 'Escape' && selectedKeys.size > 0) {
+      clearSelection();
+    }
+  }
+
+  function setViewMode(mode) {
+    viewMode = mode;
+    try {
+      localStorage.setItem('admin-cleanup-view', mode);
+    } catch {
+      // localStorage unavailable
+    }
   }
 
   function handleCleanupClick() {
@@ -174,7 +256,20 @@
   }
 
   onMount(() => {
+    try {
+      const saved = localStorage.getItem('admin-cleanup-view');
+      if (saved === 'table' || saved === 'grid') viewMode = saved;
+    } catch {
+      // localStorage unavailable
+    }
     fetchFiles();
+    window.addEventListener('keydown', handleKeydown);
+  });
+
+  onDestroy(() => {
+    if (typeof window !== 'undefined') {
+      window.removeEventListener('keydown', handleKeydown);
+    }
   });
 </script>
 
@@ -183,7 +278,7 @@
     <button
       class="section-tab"
       class:active={activeSection === 'cleanup'}
-      on:click={() => activeSection = 'cleanup'}
+      on:click={() => (activeSection = 'cleanup')}
     >
       <Archive size={16} />
       <span>admin cleanup</span>
@@ -191,7 +286,7 @@
     <button
       class="section-tab"
       class:active={activeSection === 'bot'}
-      on:click={() => activeSection = 'bot'}
+      on:click={() => (activeSection = 'bot')}
     >
       <Bot size={16} />
       <span>bot control</span>
@@ -203,9 +298,8 @@
     <div class="section-content">
       <div class="section-header">
         <p class="section-desc">
-          Admin uploads are not tracked for automatic expiration.
-          Use this tool to archive and clean up old admin uploads.
-          Files are downloaded locally before being deleted from R2.
+          Admin uploads are not tracked for automatic expiration. Use this tool to archive and clean
+          up old admin uploads. Files are downloaded locally before being deleted from R2.
         </p>
       </div>
 
@@ -223,6 +317,34 @@
             <option value={30}>30 days</option>
           </select>
         </div>
+        <div class="age-control">
+          <label for="typeFilter">type</label>
+          <select id="typeFilter" bind:value={typeFilter}>
+            <option value="all">all ({files.length})</option>
+            <option value="gif">gif ({typeCounts.gif})</option>
+            <option value="video">video ({typeCounts.video})</option>
+            <option value="image">image ({typeCounts.image})</option>
+          </select>
+        </div>
+        <div class="controls-spacer"></div>
+        <div class="view-toggle">
+          <button
+            class="view-btn"
+            class:active={viewMode === 'table'}
+            on:click={() => setViewMode('table')}
+            title="Table view"
+          >
+            <List size={14} />
+          </button>
+          <button
+            class="view-btn"
+            class:active={viewMode === 'grid'}
+            on:click={() => setViewMode('grid')}
+            title="Grid view"
+          >
+            <Grid size={14} />
+          </button>
+        </div>
         <button class="btn-icon" on:click={fetchFiles} disabled={filesLoading} title="refresh">
           <RefreshCw size={14} />
         </button>
@@ -238,53 +360,163 @@
       {:else if files.length === 0}
         <div class="empty-state">no expired files found (older than {maxAgeDays} days)</div>
       {:else}
-        <!-- Summary bar -->
+        <!-- Summary bar with type chips -->
         <div class="summary-bar">
-          <span class="summary-count">
-            {files.length} expired {files.length === 1 ? 'file' : 'files'} ({totalSizeFormatted})
-          </span>
-          <span class="summary-selected">
-            {selectedKeys.size} selected ({selectedSizeFormatted})
-          </span>
-        </div>
-
-        <!-- File list -->
-        <div class="file-list">
-          <div class="file-header">
-            <label class="checkbox-cell">
-              <input
-                type="checkbox"
-                checked={allSelected}
-                on:change={toggleAll}
-              />
-            </label>
-            <span class="col-name">file</span>
-            <span class="col-size">size</span>
-            <span class="col-age">age</span>
+          <div class="summary-left">
+            <span class="summary-count">
+              {filteredFiles.length} expired {filteredFiles.length === 1 ? 'file' : 'files'} ({totalSizeFormatted})
+            </span>
+            <div class="type-chips">
+              {#if typeCounts.gif > 0}
+                <button
+                  class="type-chip gif"
+                  on:click={() => selectByType('gif')}
+                  title="Select all GIFs"
+                >
+                  GIF: {typeCounts.gif}
+                </button>
+              {/if}
+              {#if typeCounts.video > 0}
+                <button
+                  class="type-chip video"
+                  on:click={() => selectByType('video')}
+                  title="Select all videos"
+                >
+                  VID: {typeCounts.video}
+                </button>
+              {/if}
+              {#if typeCounts.image > 0}
+                <button
+                  class="type-chip image"
+                  on:click={() => selectByType('image')}
+                  title="Select all images"
+                >
+                  IMG: {typeCounts.image}
+                </button>
+              {/if}
+            </div>
           </div>
-
-          {#each files as file (file.key)}
-            <label class="file-row" class:selected={selectedKeys.has(file.key)}>
-              <span class="checkbox-cell">
-                <input
-                  type="checkbox"
-                  checked={selectedKeys.has(file.key)}
-                  on:change={() => toggleKey(file.key)}
-                />
-              </span>
-              <span class="col-name" title={file.key}>{file.key}</span>
-              <span class="col-size">{file.sizeFormatted}</span>
-              <span class="col-age">{formatAge(file.lastModified)}</span>
-            </label>
-          {/each}
+          <div class="summary-right">
+            <span class="summary-selected">
+              {selectedKeys.size} selected ({selectedSizeFormatted})
+            </span>
+            {#if selectedKeys.size > 0}
+              <button class="btn-clear" on:click={clearSelection}>clear</button>
+            {/if}
+          </div>
         </div>
+
+        {#if filteredFiles.length === 0}
+          <div class="empty-state">no {typeFilter} files found</div>
+        {:else if viewMode === 'table'}
+          <!-- Table view -->
+          <div class="file-list">
+            <div class="file-header">
+              <label class="checkbox-cell">
+                <input type="checkbox" checked={allFilteredSelected} on:change={toggleAll} />
+              </label>
+              <span class="col-preview hide-mobile">preview</span>
+              <button class="col-name col-sortable" on:click={() => handleSort('key')}>
+                file{sortIndicator('key')}
+              </button>
+              <button
+                class="col-type col-sortable hide-mobile"
+                on:click={() => handleSort('fileType')}
+              >
+                type{sortIndicator('fileType')}
+              </button>
+              <button class="col-size col-sortable" on:click={() => handleSort('size')}>
+                size{sortIndicator('size')}
+              </button>
+              <button class="col-age col-sortable" on:click={() => handleSort('lastModified')}>
+                age{sortIndicator('lastModified')}
+              </button>
+            </div>
+
+            {#each sortedFiles as file (file.key)}
+              <label class="file-row" class:selected={selectedKeys.has(file.key)}>
+                <span class="checkbox-cell">
+                  <input
+                    type="checkbox"
+                    checked={selectedKeys.has(file.key)}
+                    on:change={() => toggleKey(file.key)}
+                  />
+                </span>
+                <span class="col-preview hide-mobile">
+                  {#if canShowThumbnail(file)}
+                    <a
+                      href={file.fileUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      on:click|stopPropagation
+                    >
+                      <img
+                        src={file.fileUrl}
+                        alt="thumbnail"
+                        class="thumbnail"
+                        loading="lazy"
+                      />
+                    </a>
+                  {:else}
+                    <div class="thumbnail-placeholder">VID</div>
+                  {/if}
+                </span>
+                <span class="col-name" title={file.key}>{file.key}</span>
+                <span class="col-type hide-mobile">
+                  <span class="type-badge-small {file.fileType}">{file.fileType}</span>
+                </span>
+                <span class="col-size">{file.sizeFormatted}</span>
+                <span class="col-age">{formatAge(file.lastModified)}</span>
+              </label>
+            {/each}
+          </div>
+        {:else}
+          <!-- Grid view -->
+          <div class="file-grid">
+            {#each sortedFiles as file (file.key)}
+              <label class="grid-card" class:selected={selectedKeys.has(file.key)}>
+                <div class="grid-checkbox">
+                  <input
+                    type="checkbox"
+                    checked={selectedKeys.has(file.key)}
+                    on:change={() => toggleKey(file.key)}
+                  />
+                </div>
+                <a
+                  href={file.fileUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  class="grid-preview"
+                  on:click|stopPropagation
+                >
+                  {#if canShowThumbnail(file)}
+                    <img
+                      src={file.fileUrl}
+                      alt="thumbnail"
+                      class="grid-thumbnail"
+                      loading="lazy"
+                    />
+                  {:else}
+                    <div class="grid-placeholder">VID</div>
+                  {/if}
+                </a>
+                <div class="grid-info">
+                  <span class="type-badge-small {file.fileType}">{file.fileType}</span>
+                  <span class="grid-size">{file.sizeFormatted}</span>
+                </div>
+                <div class="grid-name" title={file.key}>{file.key}</div>
+              </label>
+            {/each}
+          </div>
+        {/if}
 
         <!-- Actions -->
         <div class="actions">
           {#if showConfirmation}
             <div class="confirm-box">
               <span class="confirm-text">
-                archive & delete {selectedKeys.size} {selectedKeys.size === 1 ? 'file' : 'files'} ({selectedSizeFormatted})?
+                archive & delete {selectedKeys.size}
+                {selectedKeys.size === 1 ? 'file' : 'files'} ({selectedSizeFormatted})?
               </span>
               <button class="btn-danger" on:click={confirmCleanup}>confirm</button>
               <button class="btn-secondary" on:click={cancelCleanup}>cancel</button>
@@ -350,7 +582,6 @@
         </div>
       {/if}
     </div>
-
   {:else if activeSection === 'bot'}
     <!-- Bot Control Section -->
     <div class="section-content">
@@ -377,16 +608,16 @@
             bind:value={botActivity}
             placeholder="custom activity text"
           />
-          <button
-            class="btn-primary"
-            on:click={updateBotStatus}
-            disabled={statusUpdating}
-          >
+          <button class="btn-primary" on:click={updateBotStatus} disabled={statusUpdating}>
             {statusUpdating ? 'updating...' : 'update'}
           </button>
         </div>
         {#if statusFeedback}
-          <div class="feedback" class:feedback-success={statusFeedback.type === 'success'} class:feedback-error={statusFeedback.type === 'error'}>
+          <div
+            class="feedback"
+            class:feedback-success={statusFeedback.type === 'success'}
+            class:feedback-error={statusFeedback.type === 'error'}
+          >
             {statusFeedback.message}
           </div>
         {/if}
@@ -404,10 +635,12 @@
                 restart the bot? the dashboard will briefly disconnect.
               </span>
               <button class="btn-danger" on:click={confirmRestart}>confirm</button>
-              <button class="btn-secondary" on:click={() => showRestartConfirm = false}>cancel</button>
+              <button class="btn-secondary" on:click={() => (showRestartConfirm = false)}
+                >cancel</button
+              >
             </div>
           {:else}
-            <button class="btn-danger" on:click={() => showRestartConfirm = true}>
+            <button class="btn-danger" on:click={() => (showRestartConfirm = true)}>
               restart bot
             </button>
           {/if}
@@ -484,6 +717,10 @@
     margin-bottom: 1rem;
   }
 
+  .controls-spacer {
+    flex: 1;
+  }
+
   .age-control {
     display: flex;
     align-items: center;
@@ -500,6 +737,41 @@
     border: 1px solid #444;
     border-radius: 4px;
     cursor: pointer;
+  }
+
+  .view-toggle {
+    display: flex;
+    border: 1px solid #444;
+    border-radius: 4px;
+    overflow: hidden;
+  }
+
+  .view-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 32px;
+    height: 32px;
+    padding: 0;
+    background-color: #2a2a2a;
+    border: none;
+    color: #888;
+    cursor: pointer;
+    transition: all 0.2s;
+  }
+
+  .view-btn:not(:last-child) {
+    border-right: 1px solid #444;
+  }
+
+  .view-btn:hover {
+    background-color: #333;
+    color: #fff;
+  }
+
+  .view-btn.active {
+    background-color: #51cf66;
+    color: #000;
   }
 
   .btn-icon {
@@ -537,6 +809,21 @@
     border-radius: 4px;
     margin-bottom: 0.75rem;
     font-size: 0.85rem;
+    gap: 0.75rem;
+  }
+
+  .summary-left {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    flex-wrap: wrap;
+  }
+
+  .summary-right {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    flex-shrink: 0;
   }
 
   .summary-count {
@@ -548,12 +835,125 @@
     font-weight: 500;
   }
 
+  .type-chips {
+    display: flex;
+    gap: 0.4rem;
+  }
+
+  .type-chip {
+    padding: 0.2rem 0.5rem;
+    border-radius: 3px;
+    font-size: 0.75rem;
+    font-weight: 600;
+    cursor: pointer;
+    border: 1px solid transparent;
+    transition: all 0.15s;
+  }
+
+  .type-chip.gif {
+    background-color: rgba(147, 51, 234, 0.2);
+    color: #a78bfa;
+    border-color: rgba(147, 51, 234, 0.3);
+  }
+
+  .type-chip.gif:hover {
+    background-color: rgba(147, 51, 234, 0.35);
+  }
+
+  .type-chip.video {
+    background-color: rgba(59, 130, 246, 0.2);
+    color: #60a5fa;
+    border-color: rgba(59, 130, 246, 0.3);
+  }
+
+  .type-chip.video:hover {
+    background-color: rgba(59, 130, 246, 0.35);
+  }
+
+  .type-chip.image {
+    background-color: rgba(34, 197, 94, 0.2);
+    color: #4ade80;
+    border-color: rgba(34, 197, 94, 0.3);
+  }
+
+  .type-chip.image:hover {
+    background-color: rgba(34, 197, 94, 0.35);
+  }
+
+  .btn-clear {
+    padding: 0.15rem 0.5rem;
+    font-size: 0.75rem;
+    background-color: transparent;
+    color: #888;
+    border: 1px solid #555;
+    border-radius: 3px;
+    cursor: pointer;
+  }
+
+  .btn-clear:hover {
+    background-color: #333;
+    color: #fff;
+  }
+
+  /* Type badges */
+  .type-badge-small {
+    padding: 0.2rem 0.5rem;
+    border-radius: 3px;
+    font-size: 0.75rem;
+    font-weight: 600;
+    text-transform: uppercase;
+  }
+
+  .type-badge-small.gif {
+    background-color: rgba(147, 51, 234, 0.2);
+    color: #a78bfa;
+  }
+
+  .type-badge-small.video {
+    background-color: rgba(59, 130, 246, 0.2);
+    color: #60a5fa;
+  }
+
+  .type-badge-small.image {
+    background-color: rgba(34, 197, 94, 0.2);
+    color: #4ade80;
+  }
+
+  /* Thumbnails */
+  .col-preview {
+    flex-shrink: 0;
+    width: 60px;
+    text-align: center;
+  }
+
+  .thumbnail {
+    width: 60px;
+    height: 60px;
+    object-fit: cover;
+    border-radius: 3px;
+    background-color: #1a1a1a;
+    display: block;
+  }
+
+  .thumbnail-placeholder {
+    width: 60px;
+    height: 60px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background-color: #1a1a1a;
+    border-radius: 3px;
+    font-size: 0.7rem;
+    font-weight: 600;
+    color: #60a5fa;
+  }
+
   /* File list */
   .file-list {
     border: 1px solid #333;
     border-radius: 4px;
     margin-bottom: 1rem;
-    max-height: 400px;
+    max-height: 500px;
     overflow-y: auto;
   }
 
@@ -570,6 +970,22 @@
     position: sticky;
     top: 0;
     z-index: 1;
+  }
+
+  .col-sortable {
+    background: none;
+    border: none;
+    color: #888;
+    font-size: 0.8rem;
+    text-transform: lowercase;
+    cursor: pointer;
+    padding: 0;
+    text-align: inherit;
+    font-family: inherit;
+  }
+
+  .col-sortable:hover {
+    color: #fff;
   }
 
   .file-row {
@@ -614,6 +1030,13 @@
     white-space: nowrap;
     font-family: monospace;
     font-size: 0.8rem;
+    text-align: left;
+  }
+
+  .col-type {
+    flex-shrink: 0;
+    width: 70px;
+    text-align: center;
   }
 
   .col-size {
@@ -630,6 +1053,92 @@
     text-align: right;
     color: #888;
     font-size: 0.8rem;
+  }
+
+  /* Grid view */
+  .file-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+    gap: 0.75rem;
+    margin-bottom: 1rem;
+  }
+
+  .grid-card {
+    position: relative;
+    background-color: #2a2a2a;
+    border: 1px solid #333;
+    border-radius: 4px;
+    overflow: hidden;
+    cursor: pointer;
+    transition: border-color 0.15s;
+  }
+
+  .grid-card:hover {
+    border-color: #555;
+  }
+
+  .grid-card.selected {
+    border-color: #51cf66;
+  }
+
+  .grid-checkbox {
+    position: absolute;
+    top: 6px;
+    left: 6px;
+    z-index: 1;
+  }
+
+  .grid-checkbox input[type='checkbox'] {
+    cursor: pointer;
+    accent-color: #51cf66;
+  }
+
+  .grid-preview {
+    display: block;
+    width: 100%;
+    height: 120px;
+    background-color: #1a1a1a;
+  }
+
+  .grid-thumbnail {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    display: block;
+  }
+
+  .grid-placeholder {
+    width: 100%;
+    height: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 0.85rem;
+    font-weight: 600;
+    color: #60a5fa;
+  }
+
+  .grid-info {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 0.4rem 0.5rem;
+    gap: 0.25rem;
+  }
+
+  .grid-size {
+    font-size: 0.7rem;
+    color: #888;
+  }
+
+  .grid-name {
+    padding: 0 0.5rem 0.4rem;
+    font-size: 0.7rem;
+    font-family: monospace;
+    color: #888;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
   }
 
   /* Buttons */
@@ -893,10 +1402,20 @@
       padding: 1rem;
     }
 
+    .controls-bar {
+      flex-wrap: wrap;
+    }
+
     .summary-bar {
       flex-direction: column;
-      gap: 0.25rem;
+      gap: 0.5rem;
       align-items: flex-start;
+    }
+
+    .summary-left {
+      flex-direction: column;
+      align-items: flex-start;
+      gap: 0.4rem;
     }
 
     .actions {
@@ -914,8 +1433,16 @@
       gap: 0.5rem;
     }
 
+    .hide-mobile {
+      display: none;
+    }
+
     .col-age {
       display: none;
+    }
+
+    .file-grid {
+      grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
     }
   }
 </style>

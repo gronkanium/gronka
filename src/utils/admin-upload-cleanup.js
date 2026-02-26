@@ -223,10 +223,11 @@ async function deleteR2File(key, config) {
  * Downloads files older than maxAgeDays, creates a zip archive, then deletes from R2
  * @param {Object} config - R2 configuration
  * @param {number} [maxAgeDays=3] - Max age in days before files are archived
+ * @param {Object} [options] - Additional options
+ * @param {string[]} [options.keys] - Specific R2 keys to archive+delete (skips discovery when provided)
  * @returns {Promise<{archived: number, deleted: number, failed: number, archivePath: string|null, errors: Array}>}
  */
-export async function archiveAndCleanupAdminUploads(config, maxAgeDays = 3) {
-  const cutoffDate = new Date(Date.now() - maxAgeDays * 24 * 60 * 60 * 1000);
+export async function archiveAndCleanupAdminUploads(config, maxAgeDays = 3, options = {}) {
   const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
   const logsDir = loggerConfig.logDir;
 
@@ -238,13 +239,22 @@ export async function archiveAndCleanupAdminUploads(config, maxAgeDays = 3) {
     errors: [],
   };
 
-  // Get untracked files
-  const untrackedFiles = await getUntrackedR2Files(config);
+  let expiredFiles;
 
-  // Filter to expired files
-  const expiredFiles = untrackedFiles.filter(
-    file => file.lastModified && file.lastModified < cutoffDate
-  );
+  if (options.keys && options.keys.length > 0) {
+    // Use specific keys provided by the caller
+    const keySet = new Set(options.keys);
+    const untrackedFiles = await getUntrackedR2Files(config);
+    expiredFiles = untrackedFiles.filter(file => keySet.has(file.key));
+    logger.info(`Cleaning up ${expiredFiles.length} specifically selected files`);
+  } else {
+    // Default: discover all expired untracked files
+    const cutoffDate = new Date(Date.now() - maxAgeDays * 24 * 60 * 60 * 1000);
+    const untrackedFiles = await getUntrackedR2Files(config);
+    expiredFiles = untrackedFiles.filter(
+      file => file.lastModified && file.lastModified < cutoffDate
+    );
+  }
 
   if (expiredFiles.length === 0) {
     logger.info('No expired admin uploads to archive');

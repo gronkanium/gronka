@@ -6,6 +6,7 @@ import { createLogger } from '../../utils/logger.js';
 import { r2Config, loggerConfig } from '../../utils/config.js';
 import {
   getAdminUploadStats,
+  getUntrackedR2Files,
   archiveAndCleanupAdminUploads,
 } from '../../utils/admin-upload-cleanup.js';
 
@@ -52,14 +53,50 @@ router.get('/api/management/admin-uploads/stats', async (req, res) => {
   }
 });
 
+// List individual untracked R2 files (expired by maxAgeDays)
+router.get('/api/management/admin-uploads/files', async (req, res) => {
+  try {
+    const maxAgeDays = parseInt(req.query.maxAgeDays, 10) || 3;
+    const cutoffDate = new Date(Date.now() - maxAgeDays * 24 * 60 * 60 * 1000);
+
+    logger.debug(`Fetching admin upload file list (maxAgeDays: ${maxAgeDays})`);
+
+    const untrackedFiles = await getUntrackedR2Files(r2Config);
+    const expiredFiles = untrackedFiles
+      .filter(file => file.lastModified && file.lastModified < cutoffDate)
+      .map(file => ({
+        key: file.key,
+        size: file.size,
+        sizeFormatted: formatBytes(file.size),
+        lastModified: file.lastModified.toISOString(),
+      }));
+
+    res.json({
+      success: true,
+      files: expiredFiles,
+      maxAgeDays,
+    });
+  } catch (error) {
+    logger.error('Failed to list admin upload files:', error);
+    res.status(500).json({
+      success: false,
+      error: 'failed to list admin upload files',
+      message: error.message,
+    });
+  }
+});
+
 // Trigger cleanup of old admin uploads (archive + delete)
 router.post('/api/management/admin-uploads/cleanup', express.json(), async (req, res) => {
   try {
     const maxAgeDays = parseInt(req.body.maxAgeDays, 10) || 3;
+    const keys = Array.isArray(req.body.keys) ? req.body.keys : undefined;
 
-    logger.info(`Starting admin upload cleanup (maxAgeDays: ${maxAgeDays})`);
+    logger.info(
+      `Starting admin upload cleanup (maxAgeDays: ${maxAgeDays}, keys: ${keys ? keys.length : 'all'})`
+    );
 
-    const result = await archiveAndCleanupAdminUploads(r2Config, maxAgeDays);
+    const result = await archiveAndCleanupAdminUploads(r2Config, maxAgeDays, { keys });
 
     // Extract filename for download URL
     const archiveFilename = result.archivePath ? path.basename(result.archivePath) : null;

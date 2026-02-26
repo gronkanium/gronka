@@ -1,41 +1,102 @@
 <script>
   import { onMount } from 'svelte';
-  import { Archive, Bot } from 'lucide-svelte';
+  import { Archive, Bot, RefreshCw } from 'lucide-svelte';
 
   // Active section
   let activeSection = 'cleanup';
 
-  // === Management State (Admin uploads cleanup) ===
-  let cleanupStats = null;
-  let cleanupLoading = true;
-  let cleanupError = null;
+  // === File list state ===
+  let files = [];
+  let selectedKeys = new Set();
+  let maxAgeDays = 3;
+  let filesLoading = true;
+  let filesError = null;
+
+  // === Cleanup state ===
   let cleanupInProgress = false;
   let cleanupResult = null;
+  let cleanupError = null;
   let lastCleanup = null;
+  let showConfirmation = false;
 
-  // === Management Functions (Admin uploads cleanup) ===
-  async function fetchCleanupStats() {
-    cleanupLoading = true;
-    cleanupError = null;
+  // === Derived values ===
+  $: allSelected = files.length > 0 && selectedKeys.size === files.length;
+  $: selectedFiles = files.filter(f => selectedKeys.has(f.key));
+  $: selectedSize = selectedFiles.reduce((sum, f) => sum + f.size, 0);
+  $: selectedSizeFormatted = formatBytes(selectedSize);
+  $: totalSize = files.reduce((sum, f) => sum + f.size, 0);
+  $: totalSizeFormatted = formatBytes(totalSize);
+
+  function formatBytes(bytes) {
+    if (bytes === 0) return '0 B';
+    const k = 1024;
+    const sizes = ['B', 'KB', 'MB', 'GB', 'TB'];
+    const i = Math.floor(Math.log(bytes) / Math.log(k));
+    return `${parseFloat((bytes / Math.pow(k, i)).toFixed(2))} ${sizes[i]}`;
+  }
+
+  function formatAge(isoDate) {
+    const diff = Date.now() - new Date(isoDate).getTime();
+    const days = Math.floor(diff / (1000 * 60 * 60 * 24));
+    if (days === 0) return 'today';
+    if (days === 1) return '1 day ago';
+    return `${days} days ago`;
+  }
+
+  async function fetchFiles() {
+    filesLoading = true;
+    filesError = null;
+    files = [];
+    selectedKeys = new Set();
+    showConfirmation = false;
     try {
-      const response = await fetch('/api/management/admin-uploads/stats');
-      if (!response.ok) throw new Error('failed to fetch stats');
+      const response = await fetch(`/api/management/admin-uploads/files?maxAgeDays=${maxAgeDays}`);
+      if (!response.ok) throw new Error('failed to fetch files');
       const data = await response.json();
       if (data.success) {
-        cleanupStats = data.stats;
+        files = data.files;
+        // Select all by default
+        selectedKeys = new Set(files.map(f => f.key));
       } else {
-        throw new Error(data.message || 'failed to fetch stats');
+        throw new Error(data.message || 'failed to fetch files');
       }
     } catch (err) {
-      cleanupError = err.message;
+      filesError = err.message;
     } finally {
-      cleanupLoading = false;
+      filesLoading = false;
     }
   }
 
-  async function handleCleanup() {
-    if (cleanupInProgress) return;
+  function toggleAll() {
+    if (allSelected) {
+      selectedKeys = new Set();
+    } else {
+      selectedKeys = new Set(files.map(f => f.key));
+    }
+  }
 
+  function toggleKey(key) {
+    const next = new Set(selectedKeys);
+    if (next.has(key)) {
+      next.delete(key);
+    } else {
+      next.add(key);
+    }
+    selectedKeys = next;
+  }
+
+  function handleCleanupClick() {
+    if (selectedKeys.size === 0) return;
+    showConfirmation = true;
+  }
+
+  function cancelCleanup() {
+    showConfirmation = false;
+  }
+
+  async function confirmCleanup() {
+    if (cleanupInProgress) return;
+    showConfirmation = false;
     cleanupInProgress = true;
     cleanupResult = null;
     cleanupError = null;
@@ -44,7 +105,10 @@
       const response = await fetch('/api/management/admin-uploads/cleanup', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ maxAgeDays: 3 }),
+        body: JSON.stringify({
+          maxAgeDays,
+          keys: [...selectedKeys],
+        }),
       });
 
       if (!response.ok) throw new Error('cleanup request failed');
@@ -53,7 +117,7 @@
       if (data.success) {
         cleanupResult = data.result;
         lastCleanup = new Date().toLocaleString();
-        await fetchCleanupStats();
+        await fetchFiles();
       } else {
         throw new Error(data.message || 'cleanup failed');
       }
@@ -65,7 +129,7 @@
   }
 
   onMount(() => {
-    fetchCleanupStats();
+    fetchFiles();
   });
 </script>
 
@@ -95,53 +159,104 @@
       <div class="section-header">
         <p class="section-desc">
           Admin uploads are not tracked for automatic expiration.
-          Use this tool to archive and clean up old admin uploads (older than 3 days).
+          Use this tool to archive and clean up old admin uploads.
           Files are downloaded locally before being deleted from R2.
         </p>
       </div>
 
-      {#if cleanupLoading}
-        <div class="loading">loading stats...</div>
-      {:else if cleanupError}
-        <div class="error-box">
-          <span class="error-text">error: {cleanupError}</span>
-          <button class="btn-small" on:click={fetchCleanupStats}>retry</button>
+      <!-- Controls bar -->
+      <div class="controls-bar">
+        <div class="age-control">
+          <label for="maxAgeDays">older than</label>
+          <select id="maxAgeDays" bind:value={maxAgeDays} on:change={fetchFiles}>
+            <option value={1}>1 day</option>
+            <option value={2}>2 days</option>
+            <option value={3}>3 days</option>
+            <option value={5}>5 days</option>
+            <option value={7}>7 days</option>
+            <option value={14}>14 days</option>
+            <option value={30}>30 days</option>
+          </select>
         </div>
-      {:else if cleanupStats}
-        <div class="stats-grid">
-          <div class="stat-item">
-            <span class="stat-label">untracked files</span>
-            <span class="stat-value">{cleanupStats.totalFiles}</span>
-          </div>
-          <div class="stat-item">
-            <span class="stat-label">total size</span>
-            <span class="stat-value">{cleanupStats.totalSizeFormatted}</span>
-          </div>
-          <div class="stat-item highlight">
-            <span class="stat-label">expired files (&gt;{cleanupStats.maxAgeDays} days)</span>
-            <span class="stat-value">{cleanupStats.expiredFiles}</span>
-          </div>
-          <div class="stat-item highlight">
-            <span class="stat-label">expired size</span>
-            <span class="stat-value">{cleanupStats.expiredSizeFormatted}</span>
-          </div>
+        <button class="btn-icon" on:click={fetchFiles} disabled={filesLoading} title="refresh">
+          <RefreshCw size={14} />
+        </button>
+      </div>
+
+      {#if filesLoading}
+        <div class="loading">loading files...</div>
+      {:else if filesError}
+        <div class="error-box">
+          <span class="error-text">error: {filesError}</span>
+          <button class="btn-small" on:click={fetchFiles}>retry</button>
+        </div>
+      {:else if files.length === 0}
+        <div class="empty-state">no expired files found (older than {maxAgeDays} days)</div>
+      {:else}
+        <!-- Summary bar -->
+        <div class="summary-bar">
+          <span class="summary-count">
+            {files.length} expired {files.length === 1 ? 'file' : 'files'} ({totalSizeFormatted})
+          </span>
+          <span class="summary-selected">
+            {selectedKeys.size} selected ({selectedSizeFormatted})
+          </span>
         </div>
 
+        <!-- File list -->
+        <div class="file-list">
+          <div class="file-header">
+            <label class="checkbox-cell">
+              <input
+                type="checkbox"
+                checked={allSelected}
+                on:change={toggleAll}
+              />
+            </label>
+            <span class="col-name">file</span>
+            <span class="col-size">size</span>
+            <span class="col-age">age</span>
+          </div>
+
+          {#each files as file (file.key)}
+            <label class="file-row" class:selected={selectedKeys.has(file.key)}>
+              <span class="checkbox-cell">
+                <input
+                  type="checkbox"
+                  checked={selectedKeys.has(file.key)}
+                  on:change={() => toggleKey(file.key)}
+                />
+              </span>
+              <span class="col-name" title={file.key}>{file.key}</span>
+              <span class="col-size">{file.sizeFormatted}</span>
+              <span class="col-age">{formatAge(file.lastModified)}</span>
+            </label>
+          {/each}
+        </div>
+
+        <!-- Actions -->
         <div class="actions">
-          <button
-            class="btn-primary"
-            on:click={handleCleanup}
-            disabled={cleanupInProgress || cleanupStats.expiredFiles === 0}
-          >
-            {#if cleanupInProgress}
-              archiving...
-            {:else}
-              archive & cleanup
-            {/if}
-          </button>
-          <button class="btn-secondary" on:click={fetchCleanupStats}>
-            refresh stats
-          </button>
+          {#if showConfirmation}
+            <div class="confirm-box">
+              <span class="confirm-text">
+                archive & delete {selectedKeys.size} {selectedKeys.size === 1 ? 'file' : 'files'} ({selectedSizeFormatted})?
+              </span>
+              <button class="btn-danger" on:click={confirmCleanup}>confirm</button>
+              <button class="btn-secondary" on:click={cancelCleanup}>cancel</button>
+            </div>
+          {:else}
+            <button
+              class="btn-primary"
+              on:click={handleCleanupClick}
+              disabled={cleanupInProgress || selectedKeys.size === 0}
+            >
+              {#if cleanupInProgress}
+                archiving...
+              {:else}
+                archive & cleanup ({selectedKeys.size})
+              {/if}
+            </button>
+          {/if}
         </div>
 
         {#if cleanupResult}
@@ -182,6 +297,12 @@
             last cleanup: {lastCleanup}
           </div>
         {/if}
+      {/if}
+
+      {#if cleanupError}
+        <div class="error-box">
+          <span class="error-text">error: {cleanupError}</span>
+        </div>
       {/if}
     </div>
 
@@ -260,39 +381,160 @@
     line-height: 1.5;
   }
 
-  /* Stats grid */
-  .stats-grid {
-    display: grid;
-    grid-template-columns: repeat(2, 1fr);
-    gap: 1rem;
-    margin-bottom: 1.5rem;
+  /* Controls bar */
+  .controls-bar {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    margin-bottom: 1rem;
   }
 
-  .stat-item {
+  .age-control {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    font-size: 0.85rem;
+    color: #aaa;
+  }
+
+  .age-control select {
+    padding: 0.4rem 0.6rem;
+    font-size: 0.85rem;
+    background-color: #2a2a2a;
+    color: #fff;
+    border: 1px solid #444;
+    border-radius: 4px;
+    cursor: pointer;
+  }
+
+  .btn-icon {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 32px;
+    height: 32px;
+    padding: 0;
+    background-color: #2a2a2a;
+    color: #aaa;
+    border: 1px solid #444;
+    border-radius: 4px;
+    cursor: pointer;
+  }
+
+  .btn-icon:hover:not(:disabled) {
+    background-color: #333;
+    color: #fff;
+  }
+
+  .btn-icon:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+  }
+
+  /* Summary bar */
+  .summary-bar {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 0.6rem 0.75rem;
     background-color: #2a2a2a;
     border: 1px solid #333;
     border-radius: 4px;
-    padding: 1rem;
+    margin-bottom: 0.75rem;
+    font-size: 0.85rem;
+  }
+
+  .summary-count {
+    color: #888;
+  }
+
+  .summary-selected {
+    color: #51cf66;
+    font-weight: 500;
+  }
+
+  /* File list */
+  .file-list {
+    border: 1px solid #333;
+    border-radius: 4px;
+    margin-bottom: 1rem;
+    max-height: 400px;
+    overflow-y: auto;
+  }
+
+  .file-header {
     display: flex;
-    flex-direction: column;
-    gap: 0.25rem;
-  }
-
-  .stat-item.highlight {
-    border-color: #51cf66;
-    background-color: rgba(81, 207, 102, 0.1);
-  }
-
-  .stat-label {
+    align-items: center;
+    gap: 0.75rem;
+    padding: 0.5rem 0.75rem;
+    background-color: #2a2a2a;
+    border-bottom: 1px solid #333;
     font-size: 0.8rem;
     color: #888;
     text-transform: lowercase;
+    position: sticky;
+    top: 0;
+    z-index: 1;
   }
 
-  .stat-value {
-    font-size: 1.5rem;
-    font-weight: 600;
-    color: #fff;
+  .file-row {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    padding: 0.5rem 0.75rem;
+    border-bottom: 1px solid #2a2a2a;
+    font-size: 0.85rem;
+    color: #ccc;
+    cursor: pointer;
+    transition: background-color 0.1s;
+  }
+
+  .file-row:hover {
+    background-color: #2a2a2a;
+  }
+
+  .file-row.selected {
+    background-color: rgba(81, 207, 102, 0.05);
+  }
+
+  .file-row:last-child {
+    border-bottom: none;
+  }
+
+  .checkbox-cell {
+    flex-shrink: 0;
+    display: flex;
+    align-items: center;
+  }
+
+  .checkbox-cell input[type='checkbox'] {
+    cursor: pointer;
+    accent-color: #51cf66;
+  }
+
+  .col-name {
+    flex: 1;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-family: monospace;
+    font-size: 0.8rem;
+  }
+
+  .col-size {
+    flex-shrink: 0;
+    width: 80px;
+    text-align: right;
+    color: #888;
+    font-size: 0.8rem;
+  }
+
+  .col-age {
+    flex-shrink: 0;
+    width: 100px;
+    text-align: right;
+    color: #888;
+    font-size: 0.8rem;
   }
 
   /* Buttons */
@@ -336,6 +578,21 @@
     background-color: #555;
   }
 
+  .btn-danger {
+    padding: 0.6rem 1.2rem;
+    font-size: 0.9rem;
+    background-color: #ff6b6b;
+    color: #fff;
+    border: none;
+    cursor: pointer;
+    border-radius: 4px;
+    font-weight: 500;
+  }
+
+  .btn-danger:hover {
+    background-color: #fa5252;
+  }
+
   .btn-disabled {
     padding: 0.6rem 1.2rem;
     font-size: 0.9rem;
@@ -358,6 +615,24 @@
 
   .btn-small:hover {
     background-color: #555;
+  }
+
+  /* Confirmation */
+  .confirm-box {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    padding: 0.75rem 1rem;
+    background-color: rgba(255, 107, 107, 0.1);
+    border: 1px solid #ff6b6b;
+    border-radius: 4px;
+    flex: 1;
+  }
+
+  .confirm-text {
+    flex: 1;
+    font-size: 0.9rem;
+    color: #ff6b6b;
   }
 
   /* Result box */
@@ -469,6 +744,13 @@
     color: #888;
   }
 
+  .empty-state {
+    padding: 2rem;
+    text-align: center;
+    color: #666;
+    font-size: 0.9rem;
+  }
+
   @media (max-width: 768px) {
     .section-tabs {
       flex-wrap: wrap;
@@ -484,17 +766,29 @@
       padding: 1rem;
     }
 
-    .stats-grid {
-      grid-template-columns: 1fr;
+    .summary-bar {
+      flex-direction: column;
+      gap: 0.25rem;
+      align-items: flex-start;
     }
 
     .actions {
       flex-direction: column;
     }
 
+    .confirm-box {
+      flex-direction: column;
+      align-items: stretch;
+      text-align: center;
+    }
+
     .result-stats {
       flex-direction: column;
       gap: 0.5rem;
+    }
+
+    .col-age {
+      display: none;
     }
   }
 </style>

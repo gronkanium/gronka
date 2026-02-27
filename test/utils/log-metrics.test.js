@@ -158,19 +158,19 @@ describe('getLogMetrics', () => {
     // byLevel should include all levels
     assert.ok(metrics.byLevel, 'byLevel should exist');
     assert.ok(
-      metrics.byLevel['INFO'] !== undefined || metrics.byLevel['INFO'] >= 0,
+      metrics.byLevel['INFO'] !== undefined && metrics.byLevel['INFO'] >= 0,
       'byLevel should include INFO'
     );
     assert.ok(
-      metrics.byLevel['ERROR'] !== undefined || metrics.byLevel['ERROR'] >= 0,
+      metrics.byLevel['ERROR'] !== undefined && metrics.byLevel['ERROR'] >= 0,
       'byLevel should include ERROR'
     );
     assert.ok(
-      metrics.byLevel['WARN'] !== undefined || metrics.byLevel['WARN'] >= 0,
+      metrics.byLevel['WARN'] !== undefined && metrics.byLevel['WARN'] >= 0,
       'byLevel should include WARN'
     );
     assert.ok(
-      metrics.byLevel['DEBUG'] !== undefined || metrics.byLevel['DEBUG'] >= 0,
+      metrics.byLevel['DEBUG'] !== undefined && metrics.byLevel['DEBUG'] >= 0,
       'byLevel should include DEBUG'
     );
   });

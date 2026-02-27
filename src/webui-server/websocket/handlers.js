@@ -1,3 +1,4 @@
+import WebSocket from 'ws';
 import { createLogger } from '../../utils/logger.js';
 import { operations } from '../operations/storage.js';
 import { enrichOperationUsername } from '../operations/enrichment.js';
@@ -10,8 +11,7 @@ const logger = createLogger('webui');
 export function cleanupDeadConnections(clients) {
   const deadClients = [];
   clients.forEach(client => {
-    if (client.readyState !== 1) {
-      // WebSocket.OPEN = 1, any other state means disconnected
+    if (client.readyState !== WebSocket.OPEN) {
       deadClients.push(client);
     }
   });
@@ -36,8 +36,7 @@ export function pingClients(clients) {
   const clientsToRemove = [];
 
   clients.forEach(client => {
-    if (client.readyState === 1) {
-      // WebSocket.OPEN = 1
+    if (client.readyState === WebSocket.OPEN) {
       // Check if client is still alive (isAlive flag set by pong handler)
       if (client.isAlive === false) {
         // Client didn't respond to previous ping

@@ -1,3 +1,4 @@
+import WebSocket from 'ws';
 import { createLogger } from '../../utils/logger.js';
 
 const logger = createLogger('webui');
@@ -6,8 +7,7 @@ const logger = createLogger('webui');
 export function broadcastOperation(clients, operation) {
   const message = JSON.stringify({ type: 'operation', data: operation });
   clients.forEach(client => {
-    if (client.readyState === 1) {
-      // WebSocket.OPEN = 1
+    if (client.readyState === WebSocket.OPEN) {
       try {
         client.send(message);
       } catch (error) {
@@ -21,8 +21,7 @@ export function broadcastOperation(clients, operation) {
 export function broadcastLog(clients, logEntry) {
   const message = JSON.stringify({ type: 'log', data: logEntry });
   clients.forEach(client => {
-    if (client.readyState === 1) {
-      // WebSocket.OPEN = 1
+    if (client.readyState === WebSocket.OPEN) {
       try {
         client.send(message);
       } catch (error) {
@@ -36,7 +35,7 @@ export function broadcastLog(clients, logEntry) {
 export function broadcastSystemMetrics(clients, metrics) {
   const message = JSON.stringify({ type: 'system_metrics', data: metrics });
   clients.forEach(client => {
-    if (client.readyState === 1) {
+    if (client.readyState === WebSocket.OPEN) {
       try {
         client.send(message);
       } catch (error) {
@@ -50,7 +49,7 @@ export function broadcastSystemMetrics(clients, metrics) {
 export function broadcastAlert(clients, alert) {
   const message = JSON.stringify({ type: 'alert', data: alert });
   clients.forEach(client => {
-    if (client.readyState === 1) {
+    if (client.readyState === WebSocket.OPEN) {
       try {
         client.send(message);
       } catch (error) {
@@ -64,7 +63,7 @@ export function broadcastAlert(clients, alert) {
 export function broadcastUserMetrics(clients, userId, metrics) {
   const message = JSON.stringify({ type: 'user_metrics', data: { userId, metrics } });
   clients.forEach(client => {
-    if (client.readyState === 1) {
+    if (client.readyState === WebSocket.OPEN) {
       try {
         client.send(message);
       } catch (error) {

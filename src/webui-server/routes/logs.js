@@ -1,6 +1,7 @@
 import express from 'express';
 import { createLogger } from '../../utils/logger.js';
 import { getLogs, getLogsCount, getLogComponents, getLogMetrics } from '../../utils/database.js';
+import { parseIntSafe } from '../utils/validation.js';
 
 const logger = createLogger('webui');
 const router = express.Router();
@@ -23,14 +24,14 @@ router.get('/api/logs', async (req, res) => {
     // Parse query parameters
     const options = {
       orderDesc: orderDesc === 'true',
-      limit: parseInt(limit, 10) || 100,
-      offset: parseInt(offset, 10) || 0,
+      limit: parseIntSafe(limit, 100),
+      offset: parseIntSafe(offset, 0),
     };
 
     if (component) options.component = component;
     if (search) options.search = search;
-    if (startTime) options.startTime = parseInt(startTime, 10);
-    if (endTime) options.endTime = parseInt(endTime, 10);
+    if (startTime) options.startTime = parseIntSafe(startTime, 0);
+    if (endTime) options.endTime = parseIntSafe(endTime, 0);
 
     // Handle multiple levels (comma-separated)
     if (level) {
@@ -126,7 +127,7 @@ router.get('/api/logs/metrics', async (req, res) => {
     const options = {};
 
     if (timeRange) {
-      options.timeRange = parseInt(timeRange, 10);
+      options.timeRange = parseIntSafe(timeRange, 3600000);
     }
 
     const metrics = await getLogMetrics(options);

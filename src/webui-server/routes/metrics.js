@@ -2,6 +2,7 @@ import express from 'express';
 import { createLogger } from '../../utils/logger.js';
 import { getLogMetrics } from '../../utils/database.js';
 import { getSystemMetrics } from '../../utils/database.js';
+import { parseIntSafe } from '../utils/validation.js';
 import { collectSystemMetrics } from '../../utils/system-metrics.js';
 
 const logger = createLogger('webui');
@@ -32,7 +33,7 @@ router.get('/api/metrics/errors', async (req, res) => {
     };
 
     if (timeRange) {
-      options.timeRange = parseInt(timeRange, 10);
+      options.timeRange = parseIntSafe(timeRange, 3600000);
     }
 
     let metrics;
@@ -64,11 +65,11 @@ router.get('/api/metrics/system', async (req, res) => {
     const { limit = 100, startTime, endTime } = req.query;
 
     const options = {
-      limit: parseInt(limit, 10),
+      limit: parseIntSafe(limit, 100),
     };
 
-    if (startTime) options.startTime = parseInt(startTime, 10);
-    if (endTime) options.endTime = parseInt(endTime, 10);
+    if (startTime) options.startTime = parseIntSafe(startTime, 0);
+    if (endTime) options.endTime = parseIntSafe(endTime, 0);
 
     let metrics, current;
     try {

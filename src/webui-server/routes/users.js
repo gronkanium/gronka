@@ -12,6 +12,7 @@ import {
 } from '../../utils/database.js';
 import { getLogs, getLogsCount } from '../../utils/database.js';
 import { operations } from '../operations/storage.js';
+import { parseIntSafe } from '../utils/validation.js';
 
 const logger = createLogger('webui');
 const router = express.Router();
@@ -31,8 +32,8 @@ router.get('/api/users', async (req, res) => {
       search,
       sortBy,
       sortDesc: sortDesc === 'true',
-      limit: parseInt(limit, 10),
-      offset: parseInt(offset, 10),
+      limit: parseIntSafe(limit, 50),
+      offset: parseIntSafe(offset, 0),
     };
 
     let users, total;
@@ -137,8 +138,8 @@ router.get('/api/users/:userId/operations', async (req, res) => {
   try {
     const { userId } = req.params;
     const { limit = 50, offset = 0 } = req.query;
-    const limitNum = parseInt(limit, 10);
-    const offsetNum = parseInt(offset, 10);
+    const limitNum = parseIntSafe(limit, 50);
+    const offsetNum = parseIntSafe(offset, 0);
 
     // Filter operations by user from in-memory store
     let userOps = operations.filter(op => op.userId === userId);
@@ -188,8 +189,8 @@ router.get('/api/users/:userId/activity', async (req, res) => {
     const logs = await getLogs({
       search: userId,
       component: 'bot', // Only show bot component logs (user commands and actions)
-      limit: parseInt(limit, 10),
-      offset: parseInt(offset, 10),
+      limit: parseIntSafe(limit, 50),
+      offset: parseIntSafe(offset, 0),
       orderDesc: true,
     });
 
@@ -221,8 +222,8 @@ router.get('/api/users/:userId/media', async (req, res) => {
 
     // Get media files for this user
     const media = await getUserMedia(userId, {
-      limit: parseInt(limit, 10),
-      offset: parseInt(offset, 10),
+      limit: parseIntSafe(limit, 50),
+      offset: parseIntSafe(offset, 0),
     });
 
     const total = await getUserMediaCount(userId);

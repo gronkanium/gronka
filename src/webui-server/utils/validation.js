@@ -1,3 +1,16 @@
+/**
+ * Safely parse an integer from a query parameter with a fallback default.
+ * Returns the default value if the input is undefined, null, or not a valid integer.
+ * @param {*} value - The value to parse
+ * @param {number} defaultValue - Fallback value if parsing fails
+ * @returns {number}
+ */
+export function parseIntSafe(value, defaultValue) {
+  if (value === undefined || value === null) return defaultValue;
+  const parsed = parseInt(value, 10);
+  return Number.isNaN(parsed) ? defaultValue : parsed;
+}
+
 // Restrict endpoint to localhost/internal network only (for admin operations)
 export function restrictToInternal(req, res, next) {
   const ip = req.ip || req.socket.remoteAddress || '';

@@ -9,7 +9,7 @@ import {
 import { operations, storeOperation } from '../operations/storage.js';
 import { reconstructOperationFromTrace } from '../operations/reconstruction.js';
 import { broadcastOperation, broadcastUserMetrics } from '../websocket/broadcast.js';
-import { restrictToInternal } from '../utils/validation.js';
+import { restrictToInternal, parseIntSafe } from '../utils/validation.js';
 
 const logger = createLogger('webui');
 const router = express.Router();
@@ -168,7 +168,7 @@ router.get('/api/operations/search', async (req, res) => {
 
     // Get operations from database (historical)
     try {
-      const dbLimit = parseInt(limit, 10) + parseInt(offset, 10) + 100; // Get extra for filtering
+      const dbLimit = parseIntSafe(limit, 100) + parseIntSafe(offset, 0) + 100; // Get extra for filtering
       const dbOps = await getRecentOperations(dbLimit);
 
       // Merge with in-memory operations, avoiding duplicates
@@ -232,23 +232,23 @@ router.get('/api/operations/search', async (req, res) => {
 
     // Date range filter
     if (dateFrom) {
-      const fromTimestamp = parseInt(dateFrom, 10);
+      const fromTimestamp = parseIntSafe(dateFrom, 0);
       filtered = filtered.filter(op => op.timestamp >= fromTimestamp);
     }
     if (dateTo) {
-      const toTimestamp = parseInt(dateTo, 10);
+      const toTimestamp = parseIntSafe(dateTo, 0);
       filtered = filtered.filter(op => op.timestamp <= toTimestamp);
     }
 
     // Duration filter
     if (minDuration) {
-      const minDur = parseInt(minDuration, 10);
+      const minDur = parseIntSafe(minDuration, 0);
       filtered = filtered.filter(
         op => op.performanceMetrics?.duration && op.performanceMetrics.duration >= minDur
       );
     }
     if (maxDuration) {
-      const maxDur = parseInt(maxDuration, 10);
+      const maxDur = parseIntSafe(maxDuration, 0);
       filtered = filtered.filter(
         op => op.performanceMetrics?.duration && op.performanceMetrics.duration <= maxDur
       );
@@ -256,11 +256,11 @@ router.get('/api/operations/search', async (req, res) => {
 
     // File size filter
     if (minFileSize) {
-      const minSize = parseInt(minFileSize, 10);
+      const minSize = parseIntSafe(minFileSize, 0);
       filtered = filtered.filter(op => op.fileSize && op.fileSize >= minSize);
     }
     if (maxFileSize) {
-      const maxSize = parseInt(maxFileSize, 10);
+      const maxSize = parseIntSafe(maxFileSize, 0);
       filtered = filtered.filter(op => op.fileSize && op.fileSize <= maxSize);
     }
 
@@ -268,8 +268,8 @@ router.get('/api/operations/search', async (req, res) => {
     filtered.sort((a, b) => b.timestamp - a.timestamp);
 
     // Apply pagination
-    const limitNum = parseInt(limit, 10);
-    const offsetNum = parseInt(offset, 10);
+    const limitNum = parseIntSafe(limit, 100);
+    const offsetNum = parseIntSafe(offset, 0);
     const paginated = filtered.slice(offsetNum, offsetNum + limitNum);
 
     res.json({
@@ -313,7 +313,7 @@ router.get('/api/requests', async (req, res) => {
 
     // Get operations from database (historical)
     try {
-      const dbLimit = parseInt(limit, 10) + parseInt(offset, 10) + 100; // Get extra for filtering
+      const dbLimit = parseIntSafe(limit, 100) + parseIntSafe(offset, 0) + 100; // Get extra for filtering
       const dbOps = await getRecentOperations(dbLimit);
 
       // Merge with in-memory operations, avoiding duplicates
@@ -416,23 +416,23 @@ router.get('/api/requests', async (req, res) => {
 
     // Date range filter
     if (dateFrom) {
-      const fromTimestamp = parseInt(dateFrom, 10);
+      const fromTimestamp = parseIntSafe(dateFrom, 0);
       filtered = filtered.filter(op => op.timestamp >= fromTimestamp);
     }
     if (dateTo) {
-      const toTimestamp = parseInt(dateTo, 10);
+      const toTimestamp = parseIntSafe(dateTo, 0);
       filtered = filtered.filter(op => op.timestamp <= toTimestamp);
     }
 
     // Duration filters
     if (minDuration) {
-      const minDur = parseInt(minDuration, 10);
+      const minDur = parseIntSafe(minDuration, 0);
       filtered = filtered.filter(
         op => op.performanceMetrics?.duration && op.performanceMetrics.duration >= minDur
       );
     }
     if (maxDuration) {
-      const maxDur = parseInt(maxDuration, 10);
+      const maxDur = parseIntSafe(maxDuration, 0);
       filtered = filtered.filter(
         op => op.performanceMetrics?.duration && op.performanceMetrics.duration <= maxDur
       );
@@ -440,11 +440,11 @@ router.get('/api/requests', async (req, res) => {
 
     // File size filters
     if (minFileSize) {
-      const minSize = parseInt(minFileSize, 10);
+      const minSize = parseIntSafe(minFileSize, 0);
       filtered = filtered.filter(op => op.fileSize && op.fileSize >= minSize);
     }
     if (maxFileSize) {
-      const maxSize = parseInt(maxFileSize, 10);
+      const maxSize = parseIntSafe(maxFileSize, 0);
       filtered = filtered.filter(op => op.fileSize && op.fileSize <= maxSize);
     }
 
@@ -452,8 +452,8 @@ router.get('/api/requests', async (req, res) => {
     filtered.sort((a, b) => b.timestamp - a.timestamp);
 
     // Apply pagination
-    const limitNum = parseInt(limit, 10);
-    const offsetNum = parseInt(offset, 10);
+    const limitNum = parseIntSafe(limit, 100);
+    const offsetNum = parseIntSafe(offset, 0);
     const paginated = filtered.slice(offsetNum, offsetNum + limitNum);
 
     res.json({

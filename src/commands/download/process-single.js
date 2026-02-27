@@ -67,7 +67,6 @@ export async function processSingleFile({
   let cdnPath = getCdnPath(fileType);
   let finalBuffer = fileData.buffer;
   let saveExt = ext;
-  let treatAsGif = false;
 
   // Check if trimming is needed
   const shouldTrim = needsTrimming(fileType, startTime, duration, downloadMethod);
@@ -232,24 +231,21 @@ export async function processSingleFile({
       }
     }
 
-    // Save the video (skip if we already saved as GIF)
-    if (!treatAsGif) {
-      logger.info(`Saving video (hash: ${hash}, extension: ${saveExt})`);
-      const saveResult = await saveVideo(finalBuffer, hash, saveExt, GIF_STORAGE_PATH, metadata);
-      return await finalizeSave({
-        interaction,
-        saveResult,
-        fileType: 'video',
-        hash,
-        ext: saveExt,
-        urlHash,
-        userId,
-        username,
-        adminUser,
-        operationId,
-        cdnPath: '/videos',
-      });
-    }
+    logger.info(`Saving video (hash: ${hash}, extension: ${saveExt})`);
+    const saveResult = await saveVideo(finalBuffer, hash, saveExt, GIF_STORAGE_PATH, metadata);
+    return await finalizeSave({
+      interaction,
+      saveResult,
+      fileType: 'video',
+      hash,
+      ext: saveExt,
+      urlHash,
+      userId,
+      username,
+      adminUser,
+      operationId,
+      cdnPath: '/videos',
+    });
   }
 
   // Handle image

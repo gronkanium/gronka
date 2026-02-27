@@ -478,7 +478,7 @@ export function formatR2UrlWithDisclaimer(url, config, isAdmin = false) {
   }
 
   // Format TTL message (e.g., "72 hours" or "3 days")
-  const ttlHours = config.tempUploadTtlHours || 72;
+  const ttlHours = config.tempUploadTtlHours ?? 72;
   let ttlMessage;
   if (ttlHours >= 24 && ttlHours % 24 === 0) {
     const days = ttlHours / 24;
@@ -530,7 +530,7 @@ export function formatMultipleR2UrlsWithDisclaimer(urls, config, isAdmin = false
   }
 
   // Format TTL message (e.g., "72 hours" or "3 days")
-  const ttlHours = config.tempUploadTtlHours || 72;
+  const ttlHours = config.tempUploadTtlHours ?? 72;
   let ttlMessage;
   if (ttlHours >= 24 && ttlHours % 24 === 0) {
     const days = ttlHours / 24;

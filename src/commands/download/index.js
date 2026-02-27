@@ -3,7 +3,7 @@
  *
  * This module handles downloading media from social media platforms.
  * It supports:
- * - Twitter/X, TikTok, Instagram, YouTube, Reddit, Facebook, Threads
+ * - Twitter/X, TikTok, Instagram, YouTube, Reddit
  * - Video trimming via start_time/end_time parameters
  * - GIF trimming
  * - Multiple media files from picker responses

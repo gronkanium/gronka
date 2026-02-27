@@ -118,8 +118,6 @@ check if the platform is supported by cobalt:
 - instagram
 - youtube
 - reddit
-- facebook
-- threads
 
 for unsupported platforms, use `/convert` with a direct media url.
 

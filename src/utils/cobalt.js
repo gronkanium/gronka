@@ -245,11 +245,6 @@ const SOCIAL_MEDIA_DOMAINS = [
   'reddit.com',
   'www.reddit.com',
   'v.redd.it',
-  'facebook.com',
-  'www.facebook.com',
-  'fb.watch',
-  'threads.net',
-  'www.threads.net',
 ];
 
 /**

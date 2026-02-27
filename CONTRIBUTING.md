@@ -100,7 +100,7 @@ npm run docker:register    # Register Discord commands in container
 The Docker Compose setup includes several services:
 
 - **gronka** - Main service running both the Discord bot and local server. Health checks, stats API, and file storage via R2.
-- **cobalt** - Self-hosted API for downloading media from social platforms (Twitter/X, TikTok, Instagram, YouTube, Reddit, Facebook, Threads). Port 9000.
+- **cobalt** - Self-hosted API for downloading media from social platforms (Twitter/X, TikTok, Instagram, YouTube, Reddit). Port 9000.
 - **giflossy** - GIF optimization via docker exec, used by the `/optimize` command.
 - **watchtower** - Automatically updates the cobalt image every 15 minutes.
 

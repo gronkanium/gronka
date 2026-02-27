@@ -1053,7 +1053,7 @@ and this project adheres (attempts) to [Semantic Versioning](https://semver.org/
   - Public domain serving via R2
 - Cobalt integration
   - Self-hosted API for downloading media from social platforms
-  - Support for Twitter/X, TikTok, Instagram, YouTube, Reddit, Facebook, Threads
+  - Support for Twitter/X, TikTok, Instagram, YouTube, Reddit
   - Automatic media detection and download
 - Local server
   - Health check endpoint

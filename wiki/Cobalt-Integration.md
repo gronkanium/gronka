@@ -7,8 +7,6 @@ gronka uses multiple downloaders for social media content. cobalt.tools handles 
 - tiktok
 - instagram
 - reddit
-- facebook
-- threads
 
 ### via yt-dlp
 - youtube (youtube.com, youtu.be, m.youtube.com)

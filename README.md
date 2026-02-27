@@ -23,8 +23,6 @@ download media from social platforms using the `/download` command:
 - instagram
 - youtube
 - reddit
-- facebook
-- threads
 
 you can also download media from direct urls using `/convert` with a url parameter. the bot handles videos and images from most common sources.
 
@@ -149,7 +147,7 @@ optional: you can enable automatic cleanup of r2 uploads after a configurable ti
 
 gronka uses [cobalt.tools](https://cobalt.tools), a self-hosted api for downloading media from social platforms. when enabled, the `/download` command automatically detects social media urls and downloads the media directly to your storage.
 
-supported platforms: twitter/x, tiktok, instagram, youtube, reddit, facebook, threads.
+supported platforms: twitter/x, tiktok, instagram, youtube, reddit.
 
 to enable cobalt, add these to your `.env`:
 

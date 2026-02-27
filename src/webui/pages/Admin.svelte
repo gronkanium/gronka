@@ -20,6 +20,9 @@
   let filesLoading = true;
   let filesError = null;
 
+  // === Hover state for GIF playback ===
+  let hoveredKey = null;
+
   // === Filter & sort state ===
   let typeFilter = 'all';
   let sortColumn = 'lastModified';
@@ -434,7 +437,12 @@
             </div>
 
             {#each sortedFiles as file (file.key)}
-              <label class="file-row" class:selected={selectedKeys.has(file.key)}>
+              <label
+                class="file-row"
+                class:selected={selectedKeys.has(file.key)}
+                on:mouseenter={() => (hoveredKey = file.key)}
+                on:mouseleave={() => (hoveredKey = null)}
+              >
                 <span class="checkbox-cell">
                   <input
                     type="checkbox"
@@ -450,13 +458,17 @@
                       rel="noopener noreferrer"
                       on:click|stopPropagation
                     >
-                      <img
-                        src={file.fileUrl}
-                        alt="thumbnail"
-                        class="thumbnail"
-                        loading="lazy"
-                        referrerpolicy="no-referrer"
-                      />
+                      {#if file.fileType === 'gif' && hoveredKey !== file.key}
+                        <div class="thumbnail-placeholder gif-preview">GIF</div>
+                      {:else}
+                        <img
+                          src={file.fileUrl}
+                          alt="thumbnail"
+                          class="thumbnail"
+                          loading="lazy"
+                          referrerpolicy="no-referrer"
+                        />
+                      {/if}
                     </a>
                   {:else}
                     <div class="thumbnail-placeholder">VID</div>
@@ -475,7 +487,12 @@
           <!-- Grid view -->
           <div class="file-grid">
             {#each sortedFiles as file (file.key)}
-              <label class="grid-card" class:selected={selectedKeys.has(file.key)}>
+              <label
+                class="grid-card"
+                class:selected={selectedKeys.has(file.key)}
+                on:mouseenter={() => (hoveredKey = file.key)}
+                on:mouseleave={() => (hoveredKey = null)}
+              >
                 <div class="grid-checkbox">
                   <input
                     type="checkbox"
@@ -491,13 +508,17 @@
                   on:click|stopPropagation
                 >
                   {#if canShowThumbnail(file)}
-                    <img
-                      src={file.fileUrl}
-                      alt="thumbnail"
-                      class="grid-thumbnail"
-                      loading="lazy"
-                      referrerpolicy="no-referrer"
-                    />
+                    {#if file.fileType === 'gif' && hoveredKey !== file.key}
+                      <div class="grid-placeholder gif-preview">GIF</div>
+                    {:else}
+                      <img
+                        src={file.fileUrl}
+                        alt="thumbnail"
+                        class="grid-thumbnail"
+                        loading="lazy"
+                        referrerpolicy="no-referrer"
+                      />
+                    {/if}
                   {:else}
                     <div class="grid-placeholder">VID</div>
                   {/if}
@@ -950,6 +971,10 @@
     color: #60a5fa;
   }
 
+  .thumbnail-placeholder.gif-preview {
+    color: #a78bfa;
+  }
+
   /* File list */
   .file-list {
     border: 1px solid #333;
@@ -1118,6 +1143,10 @@
     font-size: 0.85rem;
     font-weight: 600;
     color: #60a5fa;
+  }
+
+  .grid-placeholder.gif-preview {
+    color: #a78bfa;
   }
 
   .grid-info {

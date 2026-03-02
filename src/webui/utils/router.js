@@ -68,22 +68,21 @@ export function initRouter() {
 // Navigate to a new route
 export function navigate(page, params = {}) {
   let hash = `#/${page}`;
-  const remainingParams = { ...params };
 
   // Add path parameters
-  if (remainingParams.userId) {
-    hash = `#/users/${remainingParams.userId}`;
-    delete remainingParams.userId;
-  } else if (remainingParams.operationId) {
-    hash = `#/operations/${remainingParams.operationId}`;
-    delete remainingParams.operationId;
+  if (params.userId) {
+    hash = `#/users/${params.userId}`;
+    delete params.userId;
+  } else if (params.operationId) {
+    hash = `#/operations/${params.operationId}`;
+    delete params.operationId;
   }
 
   // Add query parameters
-  const queryParams = Object.keys(remainingParams);
+  const queryParams = Object.keys(params);
   if (queryParams.length > 0) {
     const queryString = queryParams
-      .map(key => `${encodeURIComponent(key)}=${encodeURIComponent(remainingParams[key])}`)
+      .map(key => `${encodeURIComponent(key)}=${encodeURIComponent(params[key])}`)
       .join('&');
     hash += `?${queryString}`;
   }

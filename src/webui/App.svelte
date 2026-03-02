@@ -3,7 +3,8 @@
   import { currentRoute, initRouter, navigate } from './utils/router.js';
   import { useWebSocket, ensureConnected, connected as wsConnected } from './stores/websocket-store.js';
   import { BarChart3, Users as UsersIcon, Settings, FileText, TrendingUp, Bell, ChevronLeft, ChevronRight, Shield, List, PieChart, Wrench } from 'lucide-svelte';
-  import Dashboard from './pages/Dashboard.svelte';
+  import Stats from './pages/Stats.svelte';
+  import Health from './pages/Health.svelte';
   import Operations from './pages/Operations.svelte';
   import OperationsDebug from './pages/OperationsDebug.svelte';
   import Requests from './pages/Requests.svelte';
@@ -127,12 +128,6 @@
         </button>
       </li>
     </ul>
-    <div class="sidebar-footer">
-      <div class="connection-status" class:connected={$wsConnected}>
-        <span class="status-dot"></span>
-        {#if sidebarOpen}<span class="status-text">{$wsConnected ? 'live' : 'offline'}</span>{/if}
-      </div>
-    </div>
   </nav>
 
   <!-- Mobile sidebar toggle button -->
@@ -150,8 +145,9 @@
       <div class="page-header">
         <h2>dashboard</h2>
       </div>
-      <div class="page-content">
-        <Dashboard />
+      <div class="dashboard-grid">
+        <Stats />
+        <Health />
       </div>
     {:else if activePage === 'analytics'}
       <div class="page-header">
@@ -371,51 +367,6 @@
     white-space: nowrap;
   }
 
-  .sidebar-footer {
-    padding: 1rem;
-    border-top: 1px solid #333;
-    margin-top: auto;
-  }
-
-  .connection-status {
-    display: flex;
-    align-items: center;
-    gap: 0.5rem;
-    padding: 0.5rem;
-    border-radius: 6px;
-    background: rgba(255, 107, 107, 0.1);
-    justify-content: center;
-  }
-
-  .connection-status.connected {
-    background: rgba(81, 207, 102, 0.1);
-  }
-
-  .status-dot {
-    width: 8px;
-    height: 8px;
-    border-radius: 50%;
-    background: #ff6b6b;
-    flex-shrink: 0;
-  }
-
-  .connection-status.connected .status-dot {
-    background: #51cf66;
-    box-shadow: 0 0 6px rgba(81, 207, 102, 0.5);
-  }
-
-  .status-text {
-    font-size: 0.7rem;
-    text-transform: uppercase;
-    letter-spacing: 0.5px;
-    color: #888;
-    white-space: nowrap;
-  }
-
-  .connection-status.connected .status-text {
-    color: #51cf66;
-  }
-
   .main-content {
     flex: 1;
     display: flex;
@@ -447,6 +398,21 @@
     width: 100%;
   }
 
+  .dashboard-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 2rem;
+    padding: 2rem;
+    max-width: 1400px;
+    margin: 0 auto;
+    width: 100%;
+  }
+
+  @media (max-width: 1024px) {
+    .dashboard-grid {
+      grid-template-columns: 1fr;
+    }
+  }
 
   @media (max-width: 768px) {
     .sidebar {
@@ -478,6 +444,12 @@
       max-width: 100%;
     }
 
+    .dashboard-grid {
+      padding: 1rem;
+      gap: 1rem;
+      max-width: 100%;
+    }
+    
     /* Add overlay when sidebar is open on mobile */
     .sidebar.open::after {
       content: '';

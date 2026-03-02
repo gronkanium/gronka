@@ -1,5 +1,5 @@
 <script>
-  import { onMount, onDestroy } from 'svelte';
+  import { onMount, onDestroy, tick } from 'svelte';
   import { Chart, registerables } from 'chart.js';
   import { operations as wsOperations, connected as wsConnected } from '../stores/websocket-store.js';
   import { fetchStats, fetchHealth, formatUptime, fetchCryptoPrices, formatPrice } from '../utils/api.js';

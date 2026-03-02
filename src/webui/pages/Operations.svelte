@@ -1,7 +1,7 @@
 <script>
   import { onMount } from 'svelte';
   import { ChevronDown, ChevronRight, Search } from 'lucide-svelte';
-  import { operations as wsOperations, connected as wsConnected, reconnect as wsReconnect } from '../stores/websocket-store.js';
+  import { operations as wsOperations, connected as wsConnected } from '../stores/websocket-store.js';
   import { navigate } from '../utils/router.js';
 
   let operations = [];
@@ -110,7 +110,6 @@
   </div>
   {#if error}
     <div class="error">Error: {error}</div>
-    <button on:click={wsReconnect}>retry</button>
   {:else if !$wsConnected}
     <div class="loading">Connecting...</div>
   {:else if operations.length === 0}

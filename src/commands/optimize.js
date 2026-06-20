@@ -11,7 +11,7 @@ import path from 'path';
 import { createLogger } from '../utils/logger.js';
 import { botConfig } from '../utils/config.js';
 import { validateUrl } from '../utils/validation.js';
-import { ValidationError } from '../utils/errors.js';
+import { AppError, ValidationError } from '../utils/errors.js';
 import { downloadImage, downloadFileFromUrl, parseTenorUrl } from '../utils/file-downloader.js';
 import { checkRateLimit, isAdmin, recordRateLimit } from '../utils/rate-limit.js';
 import {
@@ -562,8 +562,12 @@ export async function processOptimization(
       error: error.message || 'unknown error',
       stackTrace: error.stack || null,
     });
+    // Only show curated AppError messages; anything unexpected gets a generic line.
     await safeInteractionEditReply(interaction, {
-      content: error.message || 'an error occurred while optimizing the gif.',
+      content:
+        error instanceof AppError && error.message
+          ? error.message
+          : 'an error occurred while optimizing the gif.',
     });
 
     // Send failure notification

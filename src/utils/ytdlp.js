@@ -294,8 +294,29 @@ function executeYtdlp(
           errorOutput.includes('duration >')
         ) {
           reject(new ValidationError('video duration exceeds the maximum allowed (3 minutes)'));
+        } else if (
+          // X/Twitter: deleted or removed posts
+          errorOutput.includes('BounceDeleted') ||
+          /tweet (was )?(deleted|not found|unavailable)/i.test(errorOutput) ||
+          errorOutput.includes('account is no longer available') ||
+          /account .*(suspended|deactivated)/i.test(errorOutput)
+        ) {
+          reject(new NetworkError('this post is unavailable or has been deleted'));
+        } else if (
+          // X/Twitter: private, protected, or auth-gated posts
+          errorOutput.includes('NSFW tweet requires authentication') ||
+          errorOutput.includes('protected') ||
+          errorOutput.includes('login required') ||
+          errorOutput.includes('Requested content is not available')
+        ) {
+          reject(new NetworkError('this post is private and cannot be downloaded'));
         } else {
-          reject(new NetworkError(`yt-dlp failed: ${errorOutput.substring(0, 200)}`));
+          // Never surface raw yt-dlp stderr to users; full output is logged above.
+          reject(
+            new NetworkError(
+              'could not download this content. it may be deleted, private, age-restricted, or unsupported.'
+            )
+          );
         }
       }
     });

@@ -4,6 +4,7 @@ import path from 'path';
 import { createLogger } from '../utils/logger.js';
 import { botConfig } from '../utils/config.js';
 import { validateUrl } from '../utils/validation.js';
+import { AppError } from '../utils/errors.js';
 import { isSocialMediaUrl, downloadFromSocialMedia, RateLimitError } from '../utils/cobalt.js';
 import {
   isYouTubeUrl,
@@ -781,8 +782,6 @@ async function processDownload(
               logger.info(
                 `Trimmed GIF already exists (hash: ${hash}) for user ${userId} with requested parameters (startTime: ${startTime}, duration: ${duration})`
               );
-              // Clean up temp files since we're using existing file
-              await cleanupTempFiles(tmpDir, [inputGifPath, outputGifPath]);
             } else {
               // Use trimmed buffer for saving
               finalBuffer = trimmedBuffer;
@@ -925,8 +924,6 @@ async function processDownload(
               logger.info(
                 `Trimmed GIF already exists (hash: ${hash}) for user ${userId} with requested parameters (startTime: ${startTime}, duration: ${duration})`
               );
-              // Clean up temp files since we're using existing file
-              await cleanupTempFiles(tmpDir, [inputGifPath, outputGifPath]);
             } else {
               // Use trimmed buffer for saving
               finalBuffer = trimmedBuffer;
@@ -1072,8 +1069,6 @@ async function processDownload(
               logger.info(
                 `Trimmed video already exists (hash: ${hash}) for user ${userId} with requested parameters (startTime: ${startTime}, duration: ${duration})`
               );
-              // Clean up temp files since we're using existing file
-              await cleanupTempFiles(tmpDir, [inputVideoPath, outputVideoPath]);
             } else {
               // Use trimmed buffer for saving
               finalBuffer = trimmedBuffer;
@@ -1400,11 +1395,20 @@ async function processDownload(
       error: errorMessage,
       stackTrace: error.stack || null,
     });
+
+    // Only show curated, user-facing messages. Our downloaders (cobalt, yt-dlp)
+    // throw AppError subclasses with friendly messages; any other (unexpected)
+    // error falls back to a generic line so internals never leak to Discord.
+    const userMessage =
+      error instanceof AppError && error.message
+        ? error.message
+        : 'could not download this content. it may be deleted, private, age-restricted, or unsupported.';
+
     await safeInteractionEditReply(interaction, {
-      content: errorMessage,
+      content: userMessage,
     });
 
-    // Send failure notification
+    // Send failure notification (raw message for admin diagnostics)
     await notifyCommandFailure(username, 'download', { operationId, userId, error: errorMessage });
   }
 }

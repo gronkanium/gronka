@@ -55,7 +55,8 @@ export async function downloadVideo(url, isAdminUser = false) {
         `video file is too large (max ${MAX_VIDEO_SIZE / (1024 * 1024)}mb)`
       );
     }
-    throw new NetworkError(`failed to download video: ${error.message}`);
+    logger.warn(`Video download failed: ${error.message}`);
+    throw new NetworkError('failed to download the video. it may be unavailable.');
   }
 }
 
@@ -96,7 +97,8 @@ export async function downloadImage(url, isAdminUser = false) {
         `image file is too large (max ${MAX_IMAGE_SIZE / (1024 * 1024)}mb)`
       );
     }
-    throw new NetworkError(`failed to download image: ${error.message}`);
+    logger.warn(`Image download failed: ${error.message}`);
+    throw new NetworkError('failed to download the image. it may be unavailable.');
   }
 }
 
@@ -319,7 +321,8 @@ export async function downloadFileFromUrl(url, isAdminUser = false, client = nul
     if (error.code === 'ECONNABORTED') {
       throw new NetworkError('request timed out while downloading file');
     }
-    throw new NetworkError(`failed to download file from URL: ${error.message}`);
+    logger.warn(`File download from URL failed: ${error.message}`);
+    throw new NetworkError('failed to download the file from the provided url.');
   }
 }
 
@@ -433,7 +436,8 @@ export async function parseTenorUrl(url) {
     if (error instanceof ValidationError) {
       throw error;
     }
-    throw new NetworkError(`failed to parse Tenor URL: ${error.message}`);
+    logger.warn(`Tenor URL parse failed: ${error.message}`);
+    throw new NetworkError('failed to parse the tenor url.');
   }
 }
 

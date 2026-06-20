@@ -9,7 +9,7 @@ import path from 'path';
 import { createLogger } from '../utils/logger.js';
 import { botConfig } from '../utils/config.js';
 import { validateUrl, validateFileExtension } from '../utils/validation.js';
-import { ValidationError } from '../utils/errors.js';
+import { AppError, ValidationError } from '../utils/errors.js';
 import {
   downloadVideo,
   downloadImage,
@@ -1205,8 +1205,12 @@ export async function processConversion(
       stackTrace: error.stack || null,
     });
 
+    // Only show curated AppError messages; anything unexpected gets a generic line.
     await safeInteractionEditReply(interaction, {
-      content: error.message || 'an error occurred while converting the file.',
+      content:
+        error instanceof AppError && error.message
+          ? error.message
+          : 'an error occurred while converting the file.',
     });
 
     // Send failure notification

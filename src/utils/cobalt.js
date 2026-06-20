@@ -211,12 +211,7 @@ function parseRetryAfter(retryAfter) {
   return null;
 }
 
-/**
- * Social media domains that Cobalt can handle
- */
-/**
- * Social media domains that Cobalt can handle
- */
+// X/Twitter status-URL tracking params and host aliases used for normalization
 const X_STATUS_TRACKING_PARAMS = ['s', 't', 'src'];
 const X_HOST_ALIASES = new Set([
   'x.com',
@@ -258,6 +253,9 @@ export function normalizeSocialMediaUrlForCobalt(url) {
   }
 }
 
+/**
+ * Social media domains that Cobalt can handle
+ */
 const SOCIAL_MEDIA_DOMAINS = [
   'twitter.com',
   'x.com',
@@ -442,7 +440,7 @@ async function callCobaltApi(apiUrl, url, retryCount = 0, maxRetries = 3) {
       throw new NetworkError('cobalt service is not available');
     }
     logger.error(`Cobalt API call failed: ${error.message}, code: ${error.code}`);
-    throw new NetworkError(`failed to call cobalt api: ${error.message}`);
+    throw new NetworkError('failed to reach the download service. please try again later.');
   }
 }
 
@@ -522,7 +520,8 @@ async function downloadPhoto(photoUrl, index, isAdminUser = false, maxSize = Inf
     if (error.code === 'ECONNABORTED') {
       throw new NetworkError(`photo ${index + 1} download timed out`);
     }
-    throw new NetworkError(`failed to download photo ${index + 1}: ${error.message}`);
+    logger.warn(`Photo ${index + 1} download failed: ${error.message}`);
+    throw new NetworkError(`photo ${index + 1} could not be downloaded`);
   }
 }
 
@@ -602,7 +601,8 @@ async function downloadVideo(videoUrl, index, isAdminUser = false, maxSize = Inf
     if (error.code === 'ECONNABORTED') {
       throw new NetworkError(`video ${index + 1} download timed out`);
     }
-    throw new NetworkError(`failed to download video ${index + 1}: ${error.message}`);
+    logger.warn(`Video ${index + 1} download failed: ${error.message}`);
+    throw new NetworkError(`video ${index + 1} could not be downloaded`);
   }
 }
 
@@ -839,7 +839,8 @@ async function downloadFromCobalt(
     if (error.code === 'ECONNABORTED') {
       throw new NetworkError('video download timed out');
     }
-    throw new NetworkError(`failed to download video from cobalt: ${error.message}`);
+    logger.warn(`Cobalt video download failed: ${error.message}`);
+    throw new NetworkError('the download failed. the content may be unavailable.');
   }
 }
 

@@ -384,7 +384,7 @@ function getVideoDuration(url, timeout = 15000) {
  * @param {number|null} duration - Duration in seconds for segment download
  * @returns {Promise<Object>} Object with buffer, contentType, size, and filename
  */
-export async function downloadFromYouTube(
+export async function downloadWithYtdlp(
   url,
   isAdminUser = false,
   maxSize = Infinity,
@@ -394,7 +394,7 @@ export async function downloadFromYouTube(
   duration = null
 ) {
   logger.info(
-    `Downloading from YouTube: ${url} (admin: ${isAdminUser}, maxDuration: ${maxDuration}, startTime: ${startTime}, duration: ${duration})`
+    `Downloading via yt-dlp: ${url} (admin: ${isAdminUser}, maxDuration: ${maxDuration}, startTime: ${startTime}, duration: ${duration})`
   );
 
   // Fast duration pre-check for non-admin users (skip if using segment download with explicit duration)
@@ -512,7 +512,7 @@ export async function downloadFromYouTube(
     const contentType = getContentType(ext);
 
     logger.info(
-      `Successfully downloaded YouTube video${usedFallback ? ' (via fallback)' : ''}, size: ${buffer.length} bytes, content-type: ${contentType}, extension: ${ext}`
+      `Successfully downloaded media via yt-dlp${usedFallback ? ' (via fallback)' : ''}, size: ${buffer.length} bytes, content-type: ${contentType}, extension: ${ext}`
     );
 
     return {
@@ -522,7 +522,7 @@ export async function downloadFromYouTube(
       filename, // Only used for extension extraction in download command, not user-facing
     };
   } catch (error) {
-    logger.error(`YouTube download failed: ${error.message}`);
+    logger.error(`yt-dlp download failed: ${error.message}`);
     throw error;
   } finally {
     // Clean up temp directory
@@ -532,6 +532,22 @@ export async function downloadFromYouTube(
       logger.warn(`Failed to clean up temp directory: ${cleanupError.message}`);
     }
   }
+}
+
+/**
+ * Download media from YouTube using yt-dlp.
+ * This wrapper preserves the older function name for current callers.
+ */
+export async function downloadFromYouTube(
+  url,
+  isAdminUser = false,
+  maxSize = Infinity,
+  quality = null,
+  maxDuration = 180,
+  startTime = null,
+  duration = null
+) {
+  return downloadWithYtdlp(url, isAdminUser, maxSize, quality, maxDuration, startTime, duration);
 }
 
 /**

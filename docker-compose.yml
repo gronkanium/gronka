@@ -12,8 +12,8 @@ services:
       postgres:
         condition: service_healthy
     environment:
-      - DISCORD_TOKEN=${DISCORD_TOKEN}
-      - CLIENT_ID=${CLIENT_ID}
+      - DISCORD_TOKEN=${PROD_DISCORD_TOKEN}
+      - CLIENT_ID=${PROD_CLIENT_ID}
       - CDN_BASE_URL=${CDN_BASE_URL:-https://cdn.gronka.p1x.dev/gifs}
       - SERVER_PORT=${SERVER_PORT:-3000}
       - GIF_STORAGE_PATH=${GIF_STORAGE_PATH:-./data-prod/gifs}
@@ -50,11 +50,11 @@ services:
       - SERVER_HOST=${SERVER_HOST:-}
       - WEBUI_PORT=${WEBUI_PORT:-3001}
       - WEBUI_HOST=${WEBUI_HOST:-0.0.0.0}
-      - POSTGRES_HOST=${POSTGRES_HOST:-postgres}
-      - POSTGRES_PORT=${POSTGRES_PORT:-5432}
-      - POSTGRES_USER=${POSTGRES_USER:-gronka}
-      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-gronka}
-      - POSTGRES_DB=${POSTGRES_DB:-gronka}
+      - POSTGRES_HOST=${PROD_POSTGRES_HOST:-postgres}
+      - POSTGRES_PORT=${PROD_POSTGRES_PORT:-5432}
+      - POSTGRES_USER=${PROD_POSTGRES_USER:-gronka}
+      - POSTGRES_PASSWORD=${PROD_POSTGRES_PASSWORD:-gronka}
+      - POSTGRES_DB=${PROD_POSTGRES_DB:-gronka}
       - DATABASE_URL=${DATABASE_URL:-}
     volumes:
       - ./data-test:/app/data-test
@@ -79,9 +79,9 @@ services:
     container_name: gronka-postgres
     restart: unless-stopped
     environment:
-      - POSTGRES_USER=${POSTGRES_USER:-gronka}
-      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-gronka}
-      - POSTGRES_DB=${POSTGRES_DB:-gronka}
+      - POSTGRES_USER=${PROD_POSTGRES_USER:-gronka}
+      - POSTGRES_PASSWORD=${PROD_POSTGRES_PASSWORD:-gronka}
+      - POSTGRES_DB=${PROD_POSTGRES_DB:-gronka}
       - PGDATA=/var/lib/postgresql/data/pgdata
     volumes:
       - postgres-data:/var/lib/postgresql/data
@@ -90,7 +90,8 @@ services:
     networks:
       - gronka-network
     healthcheck:
-      test: ['CMD-SHELL', 'pg_isready -U ${POSTGRES_USER:-gronka} -d ${POSTGRES_DB:-gronka}']
+      test:
+        ['CMD-SHELL', 'pg_isready -U ${PROD_POSTGRES_USER:-gronka} -d ${PROD_POSTGRES_DB:-gronka}']
       interval: 10s
       timeout: 5s
       retries: 5

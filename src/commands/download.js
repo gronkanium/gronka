@@ -5,7 +5,12 @@ import { createLogger } from '../utils/logger.js';
 import { botConfig } from '../utils/config.js';
 import { validateUrl } from '../utils/validation.js';
 import { isSocialMediaUrl, downloadFromSocialMedia, RateLimitError } from '../utils/cobalt.js';
-import { isYouTubeUrl, downloadFromYouTube, YtdlpRateLimitError } from '../utils/ytdlp.js';
+import {
+  isYouTubeUrl,
+  downloadFromYouTube,
+  downloadWithYtdlp,
+  YtdlpRateLimitError,
+} from '../utils/ytdlp.js';
 import { checkRateLimit, isAdmin, recordRateLimit } from '../utils/rate-limit.js';
 import { generateHash } from '../utils/file-downloader.js';
 import {
@@ -50,6 +55,21 @@ import {
 import tmp from 'tmp';
 
 const logger = createLogger('download');
+
+function isTwitterXUrl(url) {
+  try {
+    const hostname = new URL(url).hostname.toLowerCase().replace(/^www\./, '');
+    return (
+      hostname === 'x.com' ||
+      hostname === 'twitter.com' ||
+      hostname === 'mobile.twitter.com' ||
+      hostname.endsWith('.x.com') ||
+      hostname.endsWith('.twitter.com')
+    );
+  } catch {
+    return false;
+  }
+}
 
 const {
   gifStoragePath: GIF_STORAGE_PATH,
@@ -255,25 +275,66 @@ async function processDownload(
           },
         });
       } else {
-        // Wrap Cobalt download in queue to handle concurrency and deduplication
-        // If time parameters are provided, skip URL cache check (we need to download to trim)
-        fileData = await queueCobaltRequest(
-          url,
-          async () => {
-            return await downloadFromSocialMedia(COBALT_API_URL, url, adminUser, maxSize);
-          },
-          {
-            skipCache: startTime !== null || duration !== null,
-            expectedFileType: 'video',
-          }
-        );
-        logOperationStep(operationId, 'download_complete', 'success', {
-          message: 'File downloaded successfully',
-          metadata: {
+        try {
+          // Wrap Cobalt download in queue to handle concurrency and deduplication
+          // If time parameters are provided, skip URL cache check (we need to download to trim)
+          fileData = await queueCobaltRequest(
             url,
-            fileCount: Array.isArray(fileData) ? fileData.length : 1,
-          },
-        });
+            async () => {
+              return await downloadFromSocialMedia(COBALT_API_URL, url, adminUser, maxSize);
+            },
+            {
+              skipCache: startTime !== null || duration !== null,
+              expectedFileType: 'video',
+            }
+          );
+          logOperationStep(operationId, 'download_complete', 'success', {
+            message: 'File downloaded successfully',
+            metadata: {
+              url,
+              fileCount: Array.isArray(fileData) ? fileData.length : 1,
+            },
+          });
+        } catch (cobaltError) {
+          if (!isTwitterXUrl(url) || !YTDLP_ENABLED) {
+            throw cobaltError;
+          }
+
+          logger.warn(
+            'Cobalt failed for X/Twitter URL, falling back to yt-dlp: ' + cobaltError.message
+          );
+
+          logOperationStep(operationId, 'download_fallback', 'running', {
+            message: 'Cobalt failed for X/Twitter URL, retrying with yt-dlp',
+            metadata: { url, reason: cobaltError.message },
+          });
+
+          const skipDurationLimit = startTime !== null || duration !== null;
+          const maxDuration = skipDurationLimit || adminUser ? Infinity : 180;
+
+          fileData = await downloadWithYtdlp(
+            url,
+            adminUser,
+            maxSize,
+            adminUser ? null : YTDLP_QUALITY,
+            maxDuration,
+            startTime,
+            duration
+          );
+
+          logOperationStep(operationId, 'download_fallback', 'success', {
+            message: 'yt-dlp fallback succeeded for X/Twitter URL',
+            metadata: { url },
+          });
+          logOperationStep(operationId, 'download_complete', 'success', {
+            message: 'file downloaded successfully via yt-dlp fallback',
+            metadata: {
+              url,
+              fileCount: 1,
+              fallbackFrom: 'cobalt',
+            },
+          });
+        }
       }
     } catch (error) {
       // Handle yt-dlp rate limit error
@@ -962,7 +1023,7 @@ async function processDownload(
             // Note: We continue below to handle optimization and upload, but skip video-specific logic
           }
           // Close the if (ext === '.gif' && ...) block
-        } else if (startTime !== null || duration !== null) {
+        } else if (!alreadyTrimmedByYtdlp && (startTime !== null || duration !== null)) {
           // Regular video trimming (not .gif extension)
           logger.info(
             `Trimming video (hash: ${hash}, extension: ${ext}, startTime: ${startTime}, duration: ${duration})`

@@ -214,6 +214,50 @@ function parseRetryAfter(retryAfter) {
 /**
  * Social media domains that Cobalt can handle
  */
+/**
+ * Social media domains that Cobalt can handle
+ */
+const X_STATUS_TRACKING_PARAMS = ['s', 't', 'src'];
+const X_HOST_ALIASES = new Set([
+  'x.com',
+  'www.x.com',
+  'mobile.x.com',
+  'twitter.com',
+  'www.twitter.com',
+  'mobile.twitter.com',
+]);
+
+/**
+ * Normalize social media URLs before sending them to Cobalt.
+ * X/Twitter share links commonly include tracking params like ?s=46 which are
+ * not needed for fetching and can make public-post handling less reliable.
+ * @param {string} url - Original URL
+ * @returns {string} Normalized URL
+ */
+export function normalizeSocialMediaUrlForCobalt(url) {
+  try {
+    const urlObj = new URL(url);
+    const hostname = urlObj.hostname.toLowerCase();
+
+    if (X_HOST_ALIASES.has(hostname) && /^\/(?:[^/]+|i)\/status\/\d+\/?$/i.test(urlObj.pathname)) {
+      urlObj.hostname = 'twitter.com';
+      urlObj.hash = '';
+
+      for (const param of X_STATUS_TRACKING_PARAMS) {
+        urlObj.searchParams.delete(param);
+      }
+
+      if ([...urlObj.searchParams.keys()].length === 0) {
+        urlObj.search = '';
+      }
+    }
+
+    return urlObj.toString();
+  } catch {
+    return url;
+  }
+}
+
 const SOCIAL_MEDIA_DOMAINS = [
   'twitter.com',
   'x.com',
@@ -264,8 +308,14 @@ export function isSocialMediaUrl(url) {
  */
 async function callCobaltApi(apiUrl, url, retryCount = 0, maxRetries = 3) {
   const attemptNum = retryCount + 1;
+  const normalizedUrl = normalizeSocialMediaUrlForCobalt(url);
+
+  if (normalizedUrl !== url) {
+    logger.info(`Normalized social media URL for Cobalt: ${url} -> ${normalizedUrl}`);
+  }
+
   logger.info(
-    `Calling Cobalt API at ${apiUrl} with URL: ${url} (attempt ${attemptNum}/${maxRetries})`
+    `Calling Cobalt API at ${apiUrl} with URL: ${normalizedUrl} (attempt ${attemptNum}/${maxRetries})`
   );
 
   const startTime = Date.now();
@@ -274,7 +324,7 @@ async function callCobaltApi(apiUrl, url, retryCount = 0, maxRetries = 3) {
     const response = await axios.post(
       apiUrl,
       {
-        url: url,
+        url: normalizedUrl,
         videoQuality: 'max',
         audioFormat: 'mp3',
         downloadMode: 'auto',

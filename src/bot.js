@@ -204,88 +204,96 @@ function startStatsServer() {
 
 // Event handlers
 client.once(Events.ClientReady, async readyClient => {
-  botStartTime = Date.now();
-  await initializeUserTracking();
+  try {
+    botStartTime = Date.now();
+    await initializeUserTracking();
 
-  readyClient.user.setPresence({ status: 'dnd' });
-  logger.info(`bot logged in as ${readyClient.user.tag}`);
-  logger.info(`gif storage: ${GIF_STORAGE_PATH}`);
-  logger.info(`cdn url: ${CDN_BASE_URL}`);
+    readyClient.user.setPresence({ status: 'dnd' });
+    logger.info(`bot logged in as ${readyClient.user.tag}`);
+    logger.info(`gif storage: ${GIF_STORAGE_PATH}`);
+    logger.info(`cdn url: ${CDN_BASE_URL}`);
 
-  // Initialize R2 usage cache on startup (if R2 is configured)
-  // This caches R2 stats to limit class A operations (LIST requests) for the /stats Discord command
-  await initializeR2UsageCache();
+    // Initialize R2 usage cache on startup (if R2 is configured)
+    // This caches R2 stats to limit class A operations (LIST requests) for the /stats Discord command
+    await initializeR2UsageCache();
 
-  // Clean up stuck operations every 5 minutes
-  setInterval(
-    async () => {
+    // Clean up stuck operations every 5 minutes
+    setInterval(
+      async () => {
+        try {
+          await cleanupStuckOperations(10, readyClient); // 10 minute timeout, pass client for DM notifications
+        } catch (error) {
+          logger.error('Error in stuck operations cleanup:', error);
+        }
+      },
+      5 * 60 * 1000
+    ); // Run cleanup every 5 minutes
+
+    // Start R2 cleanup job if enabled
+    if (r2Config.cleanupEnabled && r2Config.tempUploadsEnabled) {
       try {
-        await cleanupStuckOperations(10, readyClient); // 10 minute timeout, pass client for DM notifications
+        cleanupJobIntervalId = startCleanupJob(
+          r2Config,
+          r2Config.cleanupIntervalMs,
+          r2Config.cleanupLogLevel
+        );
+        logger.info(
+          `Started R2 cleanup job (interval: ${r2Config.cleanupIntervalMs}ms, log level: ${r2Config.cleanupLogLevel})`
+        );
       } catch (error) {
-        logger.error('Error in stuck operations cleanup:', error);
+        logger.error(`Failed to start R2 cleanup job: ${error.message}`, error);
       }
-    },
-    5 * 60 * 1000
-  ); // Run cleanup every 5 minutes
-
-  // Start R2 cleanup job if enabled
-  if (r2Config.cleanupEnabled && r2Config.tempUploadsEnabled) {
-    try {
-      cleanupJobIntervalId = startCleanupJob(
-        r2Config,
-        r2Config.cleanupIntervalMs,
-        r2Config.cleanupLogLevel
-      );
-      logger.info(
-        `Started R2 cleanup job (interval: ${r2Config.cleanupIntervalMs}ms, log level: ${r2Config.cleanupLogLevel})`
-      );
-    } catch (error) {
-      logger.error(`Failed to start R2 cleanup job: ${error.message}`, error);
+    } else {
+      if (r2Config.cleanupEnabled && !r2Config.tempUploadsEnabled) {
+        logger.warn(
+          'R2 cleanup job is enabled but temporary uploads tracking is disabled. Cleanup job will not run.'
+        );
+      }
     }
-  } else {
-    if (r2Config.cleanupEnabled && !r2Config.tempUploadsEnabled) {
-      logger.warn(
-        'R2 cleanup job is enabled but temporary uploads tracking is disabled. Cleanup job will not run.'
-      );
-    }
+  } catch (error) {
+    logger.error('Unhandled error during ClientReady initialization:', error);
   }
 });
 
 client.on(Events.InteractionCreate, async interaction => {
-  logger.debug(
-    `Received interaction: ${interaction.type} from user ${interaction.user.id} (${interaction.user.tag})`
-  );
-  // Track user interaction (non-blocking to avoid interaction timeout)
-  const username = interaction.user.tag || interaction.user.username || 'unknown';
-  trackUser(interaction.user.id, username).catch(error => {
-    logger.debug(`Failed to track user ${interaction.user.id}: ${error.message}`);
-  });
+  try {
+    logger.debug(
+      `Received interaction: ${interaction.type} from user ${interaction.user.id} (${interaction.user.tag})`
+    );
+    // Track user interaction (non-blocking to avoid interaction timeout)
+    const username = interaction.user.tag || interaction.user.username || 'unknown';
+    trackUser(interaction.user.id, username).catch(error => {
+      logger.debug(`Failed to track user ${interaction.user.id}: ${error.message}`);
+    });
 
-  if (interaction.isModalSubmit()) {
-    await handleModalSubmit(interaction, modalAttachmentCache);
-  } else if (interaction.isMessageContextMenuCommand()) {
-    // Route to appropriate handler based on command name
-    if (interaction.commandName === 'download') {
-      await handleDownloadContextMenuCommand(interaction);
-    } else if (interaction.commandName === 'optimize') {
-      await handleOptimizeContextMenuCommand(interaction, modalAttachmentCache);
-    } else if (interaction.commandName === 'convert to gif') {
-      await handleConvertContextMenu(interaction);
-    }
-  } else if (interaction.isChatInputCommand()) {
-    const commandName = interaction.commandName;
+    if (interaction.isModalSubmit()) {
+      await handleModalSubmit(interaction, modalAttachmentCache);
+    } else if (interaction.isMessageContextMenuCommand()) {
+      // Route to appropriate handler based on command name
+      if (interaction.commandName === 'download') {
+        await handleDownloadContextMenuCommand(interaction);
+      } else if (interaction.commandName === 'optimize') {
+        await handleOptimizeContextMenuCommand(interaction, modalAttachmentCache);
+      } else if (interaction.commandName === 'convert to gif') {
+        await handleConvertContextMenu(interaction);
+      }
+    } else if (interaction.isChatInputCommand()) {
+      const commandName = interaction.commandName;
 
-    if (commandName === 'stats') {
-      await handleStatsCommand(interaction, botStartTime);
-    } else if (commandName === 'download') {
-      await handleDownloadCommand(interaction);
-    } else if (commandName === 'optimize') {
-      await handleOptimizeCommand(interaction);
-    } else if (commandName === 'convert') {
-      await handleConvertCommand(interaction);
-    } else if (commandName === 'info') {
-      await handleInfoCommand(interaction);
+      if (commandName === 'stats') {
+        await handleStatsCommand(interaction, botStartTime);
+      } else if (commandName === 'download') {
+        await handleDownloadCommand(interaction);
+      } else if (commandName === 'optimize') {
+        await handleOptimizeCommand(interaction);
+      } else if (commandName === 'convert') {
+        await handleConvertCommand(interaction);
+      } else if (commandName === 'info') {
+        await handleInfoCommand(interaction);
+      }
     }
+  } catch (error) {
+    logger.error('Unhandled error in interaction handler:', error);
   }
 });
 
@@ -352,3 +360,9 @@ function gracefulShutdown(signal) {
 
 process.on('SIGTERM', () => gracefulShutdown('SIGTERM'));
 process.on('SIGINT', () => gracefulShutdown('SIGINT'));
+process.on('unhandledRejection', error => {
+  logger.error('Unhandled promise rejection:', error);
+});
+process.on('uncaughtException', error => {
+  logger.error('Uncaught exception:', error);
+});

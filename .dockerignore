@@ -32,7 +32,11 @@ logs/
 
 # Data directories (will be mounted as volumes)
 data/
+data-*/
 temp/
+
+# Ruby/Jekyll vendor
+vendor/
 
 # IDE
 .vscode/

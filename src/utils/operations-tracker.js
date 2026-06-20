@@ -823,7 +823,7 @@ export async function cleanupStuckOperations(maxAgeMinutes = 10, client = null) 
 
         // Try to get trace from database, but fall back to in-memory operation if db fails
         try {
-          trace = getOperationTrace(operationId);
+          trace = await getOperationTrace(operationId);
           userId = trace?.context?.userId;
           operationType = trace?.context?.operationType || 'operation';
         } catch (dbError) {

@@ -9,7 +9,8 @@ import path from 'path';
 import { createLogger } from '../utils/logger.js';
 import { botConfig } from '../utils/config.js';
 import { validateUrl, validateFileExtension } from '../utils/validation.js';
-import { AppError, ValidationError } from '../utils/errors.js';
+import { writeValidatedFileBuffer } from './shared/buffer-validation.js';
+import { replyWithCuratedError, curatedErrorMessage } from './shared/command-errors.js';
 import {
   downloadVideo,
   downloadImage,
@@ -23,7 +24,6 @@ import {
   ALLOWED_IMAGE_TYPES,
   validateVideoAttachment,
   validateImageAttachment,
-  MAX_VIDEO_SIZE,
 } from '../utils/attachment-helpers.js';
 import { convertToGif, getVideoMetadata, convertImageToGif } from '../utils/video-processor.js';
 import {
@@ -67,87 +67,6 @@ const {
   cdnBaseUrl: CDN_BASE_URL,
   maxGifDuration: MAX_GIF_DURATION,
 } = botConfig;
-
-// Video file signature constants
-// ftyp box type signature (used by MP4 and MOV)
-const FTYP_BOX_TYPE = Buffer.from([0x66, 0x74, 0x79, 0x70]); // "ftyp" in ASCII
-
-// Fixed signatures for formats that don't use ftyp boxes
-const FIXED_VIDEO_SIGNATURES = {
-  webm: Buffer.from([0x1a, 0x45, 0xdf, 0xa3]), // WebM
-  avi: Buffer.from('RIFF'),
-};
-
-/**
- * Validate video buffer before writing to filesystem
- * Checks file signature (magic bytes), size limits, and basic structure
- * @param {Buffer} buffer - File buffer to validate
- * @throws {ValidationError} If buffer is invalid
- */
-function validateVideoBuffer(buffer) {
-  // Check buffer exists and has minimum size
-  if (!buffer || buffer.length < 12) {
-    throw new ValidationError('invalid or empty file buffer');
-  }
-
-  // Check file size limit
-  if (buffer.length > MAX_VIDEO_SIZE) {
-    throw new ValidationError(
-      `file too large. maximum size for video files is ${MAX_VIDEO_SIZE / 1024 / 1024}mb.`
-    );
-  }
-
-  // Check for MP4/MOV files by looking for ftyp box type
-  // MP4/MOV files have a box structure where:
-  // - First 4 bytes: box size (can vary)
-  // - Bytes 4-7: box type "ftyp" (0x66, 0x74, 0x79, 0x70)
-  // Some variants might have ftyp at offset 0
-  const isMp4OrMov =
-    (buffer.length >= 8 && buffer.slice(4, 8).equals(FTYP_BOX_TYPE)) ||
-    (buffer.length >= 4 && buffer.slice(0, 4).equals(FTYP_BOX_TYPE));
-
-  // Check for fixed signatures (WebM, AVI)
-  const header = buffer.slice(0, 12);
-  const hasFixedSignature = Object.entries(FIXED_VIDEO_SIGNATURES).some(([_format, signature]) => {
-    return header.slice(0, signature.length).equals(signature);
-  });
-
-  if (!isMp4OrMov && !hasFixedSignature) {
-    throw new ValidationError(
-      'file is not a valid video format. supported formats: mp4, webm, avi, mov.'
-    );
-  }
-
-  return true;
-}
-
-/**
- * Write a validated file buffer to the filesystem
- * This function ensures validation happens before write so CodeQL can track the data flow
- * @param {string} filePath - Path where the file should be written
- * @param {Buffer} buffer - File buffer to write (must be validated)
- * @param {string} attachmentType - Type of attachment ('video' or 'image')
- * @throws {ValidationError} If buffer validation fails
- * @returns {Promise<void>}
- */
-async function writeValidatedFileBuffer(filePath, buffer, attachmentType) {
-  // Validate file buffer before writing to filesystem (only for videos)
-  if (attachmentType === 'video') {
-    try {
-      validateVideoBuffer(buffer);
-    } catch (error) {
-      if (error instanceof ValidationError) {
-        throw error;
-      }
-      throw new ValidationError('file validation failed: ' + error.message);
-    }
-  }
-  // For images, validation is done through file extension checks (allowedExtensions)
-  // Only validated network data is written to filesystem
-  // Note: CodeQL flags this as network data to file, but the data is validated above
-  // If validation fails, an error is thrown and execution never reaches this point
-  await fs.writeFile(filePath, buffer);
-}
 
 /**
  * Check if a CDN URL points to a local file and return the file buffer if it exists
@@ -1206,12 +1125,7 @@ export async function processConversion(
     });
 
     // Only show curated AppError messages; anything unexpected gets a generic line.
-    await safeInteractionEditReply(interaction, {
-      content:
-        error instanceof AppError && error.message
-          ? error.message
-          : 'an error occurred while converting the file.',
-    });
+    await replyWithCuratedError(interaction, error, 'an error occurred while converting the file.');
 
     // Send failure notification
     await notifyCommandFailure(username, 'convert', {
@@ -1394,7 +1308,7 @@ export async function handleConvertContextMenu(interaction) {
           } catch (error) {
             logger.error(`Failed to parse Tenor URL for user ${userId}:`, error);
             await safeInteractionEditReply(interaction, {
-              content: error instanceof AppError ? error.message : 'failed to parse Tenor URL.',
+              content: curatedErrorMessage(error, 'failed to parse Tenor URL.'),
             });
             await notifyCommandFailure(username, 'convert');
             return;
@@ -1459,7 +1373,7 @@ export async function handleConvertContextMenu(interaction) {
     } catch (error) {
       logger.error(`Failed to download file from URL for user ${userId}:`, error);
       await safeInteractionEditReply(interaction, {
-        content: error instanceof AppError ? error.message : 'failed to download file from URL.',
+        content: curatedErrorMessage(error, 'failed to download file from URL.'),
       });
       return;
     }
@@ -1630,7 +1544,7 @@ export async function handleConvertCommand(interaction) {
           } catch (error) {
             logger.error(`Failed to parse Tenor URL for user ${userId}:`, error);
             await safeInteractionEditReply(interaction, {
-              content: error instanceof AppError ? error.message : 'failed to parse Tenor URL.',
+              content: curatedErrorMessage(error, 'failed to parse Tenor URL.'),
             });
             return;
           }
@@ -1655,7 +1569,7 @@ export async function handleConvertCommand(interaction) {
     } catch (error) {
       logger.error(`Failed to download file from URL for user ${userId}:`, error);
       await safeInteractionEditReply(interaction, {
-        content: error instanceof AppError ? error.message : 'failed to download file from URL.',
+        content: curatedErrorMessage(error, 'failed to download file from URL.'),
       });
       await notifyCommandFailure(username, 'convert');
       return;

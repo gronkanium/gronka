@@ -4,7 +4,7 @@ import path from 'path';
 import { createLogger } from '../utils/logger.js';
 import { botConfig } from '../utils/config.js';
 import { validateUrl } from '../utils/validation.js';
-import { AppError } from '../utils/errors.js';
+import { replyWithCuratedError } from './shared/command-errors.js';
 import { isSocialMediaUrl, downloadFromSocialMedia, RateLimitError } from '../utils/cobalt.js';
 import {
   isYouTubeUrl,
@@ -1400,17 +1400,12 @@ async function processDownload(
       stackTrace: error.stack || null,
     });
 
-    // Only show curated, user-facing messages. Our downloaders (cobalt, yt-dlp)
-    // throw AppError subclasses with friendly messages; any other (unexpected)
-    // error falls back to a generic line so internals never leak to Discord.
-    const userMessage =
-      error instanceof AppError && error.message
-        ? error.message
-        : 'could not download this content. it may be deleted, private, age-restricted, or unsupported.';
-
-    await safeInteractionEditReply(interaction, {
-      content: userMessage,
-    });
+    // Only show curated, user-facing messages; raw internals never reach Discord.
+    await replyWithCuratedError(
+      interaction,
+      error,
+      'could not download this content. it may be deleted, private, age-restricted, or unsupported.'
+    );
 
     // Send failure notification (raw message for admin diagnostics)
     await notifyCommandFailure(username, 'download', { operationId, userId, error: errorMessage });

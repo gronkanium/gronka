@@ -11,7 +11,8 @@ import path from 'path';
 import { createLogger } from '../utils/logger.js';
 import { botConfig } from '../utils/config.js';
 import { validateUrl } from '../utils/validation.js';
-import { AppError, ValidationError } from '../utils/errors.js';
+import { writeValidatedFileBuffer } from './shared/buffer-validation.js';
+import { replyWithCuratedError, curatedErrorMessage } from './shared/command-errors.js';
 import { downloadImage, downloadFileFromUrl, parseTenorUrl } from '../utils/file-downloader.js';
 import { checkRateLimit, isAdmin, recordRateLimit } from '../utils/rate-limit.js';
 import {
@@ -102,68 +103,6 @@ async function safeShowModal(interaction, modal) {
     }
     return false;
   }
-}
-
-// GIF file signature constants
-const ALLOWED_GIF_SIGNATURES = [
-  Buffer.from('GIF87a'), // GIF87a signature
-  Buffer.from('GIF89a'), // GIF89a signature
-];
-
-const MAX_FILE_SIZE = 50 * 1024 * 1024; // 50MB limit
-
-/**
- * Validate GIF buffer before writing to filesystem
- * Checks file signature (magic bytes), size limits, and basic structure
- * @param {Buffer} buffer - File buffer to validate
- * @throws {ValidationError} If buffer is invalid
- */
-function validateGifBuffer(buffer) {
-  // Check buffer exists and has minimum size
-  if (!buffer || buffer.length < 6) {
-    throw new ValidationError('invalid or empty file buffer');
-  }
-
-  // Check file size limit
-  if (buffer.length > MAX_FILE_SIZE) {
-    throw new ValidationError(
-      `file too large. maximum size for gif files is ${MAX_FILE_SIZE / 1024 / 1024}mb.`
-    );
-  }
-
-  // Verify GIF file signature (magic bytes)
-  const signature = buffer.slice(0, 6);
-  const isValidGif = ALLOWED_GIF_SIGNATURES.some(validSig => signature.equals(validSig));
-
-  if (!isValidGif) {
-    throw new ValidationError('file is not a valid gif format. please provide a gif file.');
-  }
-
-  return true;
-}
-
-/**
- * Write a validated GIF buffer to the filesystem
- * This function ensures validation happens before write so CodeQL can track the data flow
- * @param {string} filePath - Path where the file should be written
- * @param {Buffer} buffer - File buffer to write (must be validated)
- * @throws {ValidationError} If buffer validation fails
- * @returns {Promise<void>}
- */
-async function writeValidatedFileBuffer(filePath, buffer) {
-  // Validate file buffer before writing to filesystem
-  try {
-    validateGifBuffer(buffer);
-  } catch (error) {
-    if (error instanceof ValidationError) {
-      throw error;
-    }
-    throw new ValidationError('file validation failed: ' + error.message);
-  }
-  // Only validated network data is written to filesystem
-  // Note: CodeQL flags this as network data to file, but the data is validated above
-  // If validation fails, an error is thrown and execution never reaches this point
-  await fs.writeFile(filePath, buffer);
 }
 
 /**
@@ -563,12 +502,7 @@ export async function processOptimization(
       stackTrace: error.stack || null,
     });
     // Only show curated AppError messages; anything unexpected gets a generic line.
-    await safeInteractionEditReply(interaction, {
-      content:
-        error instanceof AppError && error.message
-          ? error.message
-          : 'an error occurred while optimizing the gif.',
-    });
+    await replyWithCuratedError(interaction, error, 'an error occurred while optimizing the gif.');
 
     // Send failure notification
     await notifyCommandFailure(username, 'optimize', {
@@ -717,7 +651,7 @@ export async function handleOptimizeContextMenuCommand(interaction, modalAttachm
           } catch (error) {
             logger.error(`Failed to parse Tenor URL for user ${userId}:`, error);
             await safeReply(interaction, {
-              content: error instanceof AppError ? error.message : 'failed to parse Tenor URL.',
+              content: curatedErrorMessage(error, 'failed to parse Tenor URL.'),
               flags: MessageFlags.Ephemeral,
             });
             await notifyCommandFailure(username, 'optimize', {
@@ -771,7 +705,7 @@ export async function handleOptimizeContextMenuCommand(interaction, modalAttachm
     } catch (error) {
       logger.error(`Failed to process URL for user ${userId}:`, error);
       await safeReply(interaction, {
-        content: error instanceof AppError ? error.message : 'failed to process gif from URL.',
+        content: curatedErrorMessage(error, 'failed to process gif from URL.'),
         flags: MessageFlags.Ephemeral,
       });
       await notifyCommandFailure(username, 'optimize', {
@@ -1001,7 +935,7 @@ export async function handleOptimizeCommand(interaction) {
           } catch (error) {
             logger.error(`Failed to parse Tenor URL for user ${userId}:`, error);
             await safeInteractionEditReply(interaction, {
-              content: error instanceof AppError ? error.message : 'failed to parse Tenor URL.',
+              content: curatedErrorMessage(error, 'failed to parse Tenor URL.'),
             });
             await notifyCommandFailure(username, 'optimize', {
               userId,
@@ -1053,7 +987,7 @@ export async function handleOptimizeCommand(interaction) {
     } catch (error) {
       logger.error(`Failed to download file from URL for user ${userId}:`, error);
       await safeInteractionEditReply(interaction, {
-        content: error instanceof AppError ? error.message : 'failed to download file from URL.',
+        content: curatedErrorMessage(error, 'failed to download file from URL.'),
       });
       await notifyCommandFailure(username, 'optimize', {
         userId,

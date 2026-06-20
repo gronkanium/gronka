@@ -466,6 +466,11 @@ describe('operations tracker', () => {
 
   describe('cleanupStuckOperations', () => {
     test('returns 0 when no stuck operations exist', async () => {
+      // The test database persists between runs and may already contain stuck
+      // operations from earlier tests/runs. Clean those first so the precondition
+      // ("no stuck operations exist") actually holds, then assert a second pass
+      // finds nothing left to clean.
+      await cleanupStuckOperations(10);
       const cleaned = await cleanupStuckOperations(10);
       assert.strictEqual(cleaned, 0);
     });

@@ -218,8 +218,13 @@ async function broadcastUpdate(operation) {
         headers: { 'Content-Type': 'application/json' },
       });
     } catch (error) {
-      // Silently fail if webui is not available (it's optional)
-      if (error.code !== 'ECONNREFUSED' && error.code !== 'ETIMEDOUT') {
+      // Silently fail if webui is not available (it's optional). Axios timeouts
+      // surface as ECONNABORTED, so treat those as "unavailable" too.
+      if (
+        error.code !== 'ECONNREFUSED' &&
+        error.code !== 'ETIMEDOUT' &&
+        error.code !== 'ECONNABORTED'
+      ) {
         console.error('Error sending operation update to webui:', error.message);
       }
     }
@@ -654,6 +659,9 @@ async function updateUserMetricsForOperation(operation) {
       } catch (error) {
         console.error('Error broadcasting user metrics:', error);
       }
+    } else if (process.env.NODE_ENV === 'test') {
+      // In test mode, skip HTTP POST to avoid hitting the production webui-server
+      logger.debug('Skipping HTTP POST for user metrics update in test mode');
     } else {
       // No callback, send HTTP request to webui server (separate container)
       try {
@@ -669,8 +677,13 @@ async function updateUserMetricsForOperation(operation) {
           }
         );
       } catch (error) {
-        // Silently fail if webui is not available (it's optional)
-        if (error.code !== 'ECONNREFUSED' && error.code !== 'ETIMEDOUT') {
+        // Silently fail if webui is not available (it's optional). Axios timeouts
+        // surface as ECONNABORTED, so treat those as "unavailable" too.
+        if (
+          error.code !== 'ECONNREFUSED' &&
+          error.code !== 'ETIMEDOUT' &&
+          error.code !== 'ECONNABORTED'
+        ) {
           console.error('Error sending user metrics update to webui:', error.message);
         }
       }

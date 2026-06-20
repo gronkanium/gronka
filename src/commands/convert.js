@@ -1394,7 +1394,7 @@ export async function handleConvertContextMenu(interaction) {
           } catch (error) {
             logger.error(`Failed to parse Tenor URL for user ${userId}:`, error);
             await safeInteractionEditReply(interaction, {
-              content: error.message || 'failed to parse Tenor URL.',
+              content: error instanceof AppError ? error.message : 'failed to parse Tenor URL.',
             });
             await notifyCommandFailure(username, 'convert');
             return;
@@ -1459,7 +1459,7 @@ export async function handleConvertContextMenu(interaction) {
     } catch (error) {
       logger.error(`Failed to download file from URL for user ${userId}:`, error);
       await safeInteractionEditReply(interaction, {
-        content: error.message || 'failed to download file from URL.',
+        content: error instanceof AppError ? error.message : 'failed to download file from URL.',
       });
       return;
     }
@@ -1630,7 +1630,7 @@ export async function handleConvertCommand(interaction) {
           } catch (error) {
             logger.error(`Failed to parse Tenor URL for user ${userId}:`, error);
             await safeInteractionEditReply(interaction, {
-              content: error.message || 'failed to parse Tenor URL.',
+              content: error instanceof AppError ? error.message : 'failed to parse Tenor URL.',
             });
             return;
           }
@@ -1655,7 +1655,7 @@ export async function handleConvertCommand(interaction) {
     } catch (error) {
       logger.error(`Failed to download file from URL for user ${userId}:`, error);
       await safeInteractionEditReply(interaction, {
-        content: error.message || 'failed to download file from URL.',
+        content: error instanceof AppError ? error.message : 'failed to download file from URL.',
       });
       await notifyCommandFailure(username, 'convert');
       return;

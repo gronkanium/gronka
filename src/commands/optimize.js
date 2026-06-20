@@ -717,7 +717,7 @@ export async function handleOptimizeContextMenuCommand(interaction, modalAttachm
           } catch (error) {
             logger.error(`Failed to parse Tenor URL for user ${userId}:`, error);
             await safeReply(interaction, {
-              content: error.message || 'failed to parse Tenor URL.',
+              content: error instanceof AppError ? error.message : 'failed to parse Tenor URL.',
               flags: MessageFlags.Ephemeral,
             });
             await notifyCommandFailure(username, 'optimize', {
@@ -771,7 +771,7 @@ export async function handleOptimizeContextMenuCommand(interaction, modalAttachm
     } catch (error) {
       logger.error(`Failed to process URL for user ${userId}:`, error);
       await safeReply(interaction, {
-        content: error.message || 'failed to process gif from URL.',
+        content: error instanceof AppError ? error.message : 'failed to process gif from URL.',
         flags: MessageFlags.Ephemeral,
       });
       await notifyCommandFailure(username, 'optimize', {
@@ -1001,7 +1001,7 @@ export async function handleOptimizeCommand(interaction) {
           } catch (error) {
             logger.error(`Failed to parse Tenor URL for user ${userId}:`, error);
             await safeInteractionEditReply(interaction, {
-              content: error.message || 'failed to parse Tenor URL.',
+              content: error instanceof AppError ? error.message : 'failed to parse Tenor URL.',
             });
             await notifyCommandFailure(username, 'optimize', {
               userId,
@@ -1053,7 +1053,7 @@ export async function handleOptimizeCommand(interaction) {
     } catch (error) {
       logger.error(`Failed to download file from URL for user ${userId}:`, error);
       await safeInteractionEditReply(interaction, {
-        content: error.message || 'failed to download file from URL.',
+        content: error instanceof AppError ? error.message : 'failed to download file from URL.',
       });
       await notifyCommandFailure(username, 'optimize', {
         userId,

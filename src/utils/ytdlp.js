@@ -222,11 +222,8 @@ function executeYtdlp(
               );
               resolve(actualPath);
             } else {
-              reject(
-                new NetworkError(
-                  `yt-dlp output file not found at ${outputPath}: ${statError.message}`
-                )
-              );
+              logger.error(`yt-dlp output file not found at ${outputPath}: ${statError.message}`);
+              reject(new NetworkError('the download failed. the content may be unavailable.'));
             }
           }
         } else {
@@ -264,11 +261,10 @@ function executeYtdlp(
               }
             }
           } catch (readError) {
-            reject(
-              new NetworkError(
-                `yt-dlp did not return output file path and could not read output directory: ${readError.message}`
-              )
+            logger.error(
+              `yt-dlp did not return output file path and could not read output directory: ${readError.message}`
             );
+            reject(new NetworkError('the download failed. the content may be unavailable.'));
           }
         }
       } else {
@@ -326,7 +322,8 @@ function executeYtdlp(
       if (err.code === 'ENOENT') {
         reject(new NetworkError('yt-dlp is not installed or not in PATH'));
       } else {
-        reject(new NetworkError(`yt-dlp process error: ${err.message}`));
+        logger.error(`yt-dlp process error: ${err.message}`);
+        reject(new NetworkError('the download failed. please try again later.'));
       }
     });
   });

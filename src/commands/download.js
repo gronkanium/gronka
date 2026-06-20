@@ -323,6 +323,10 @@ async function processDownload(
             duration
           );
 
+          // yt-dlp already trimmed via --download-sections; mark the method so the
+          // ffmpeg trim step below is skipped (otherwise it re-trims the segment).
+          downloadMethod = 'ytdlp';
+
           logOperationStep(operationId, 'download_fallback', 'success', {
             message: 'yt-dlp fallback succeeded for X/Twitter URL',
             metadata: { url },

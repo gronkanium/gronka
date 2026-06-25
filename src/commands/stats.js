@@ -1,9 +1,16 @@
 import { EmbedBuilder, MessageFlags } from 'discord.js';
+import { readFileSync } from 'fs';
+import { fileURLToPath } from 'url';
+import { dirname, join } from 'path';
 import { createLogger } from '../utils/logger.js';
 import { safeInteractionReply } from '../utils/interaction-helpers.js';
 import { botConfig } from '../utils/config.js';
 import { getStorageStats } from '../utils/storage.js';
 import { getUniqueUserCount } from '../utils/user-tracking.js';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = dirname(__filename);
+const packageJson = JSON.parse(readFileSync(join(__dirname, '../../package.json'), 'utf-8'));
 
 const logger = createLogger('stats');
 
@@ -58,7 +65,8 @@ export async function handleStatsCommand(interaction, botStartTime) {
           value: `total gifs: \`${storageStats.totalGifs.toLocaleString()}\`\ntotal videos: \`${storageStats.totalVideos.toLocaleString()}\`\ntotal images: \`${storageStats.totalImages.toLocaleString()}\`\ndisk usage: \`${storageStats.diskUsageFormatted}\``,
           inline: false,
         }
-      );
+      )
+      .setFooter({ text: `gronka v${packageJson.version}` });
 
     await safeInteractionReply(interaction, { embeds: [embed] });
   } catch (error) {

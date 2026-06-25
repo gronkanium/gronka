@@ -23,12 +23,7 @@ import {
   calculateSizeReduction,
 } from '../utils/gif-optimizer.js';
 import { getGifPath, cleanupTempFiles, saveGif } from '../utils/storage.js';
-import {
-  uploadGifToR2,
-  extractR2KeyFromUrl,
-  formatR2UrlWithDisclaimer,
-} from '../utils/r2-storage.js';
-import { trackTemporaryUpload } from '../utils/storage.js';
+import { uploadGifToR2, formatR2UrlWithDisclaimer } from '../utils/r2-storage.js';
 import {
   createOperation,
   createFailedOperation,
@@ -38,7 +33,8 @@ import {
 } from '../utils/operations-tracker.js';
 import { notifyCommandSuccess, notifyCommandFailure } from '../utils/ntfy-notifier.js';
 import { hashUrlWithParams } from '../utils/cobalt-queue.js';
-import { insertProcessedUrl, getProcessedUrl } from '../utils/database.js';
+import { getProcessedUrl } from '../utils/database.js';
+import { recordProcessedUrl, trackR2UploadIfApplicable } from './shared/url-cache.js';
 import { r2Config } from '../utils/config.js';
 import { hashPartsHex } from '../utils/hashing.js';
 import {
@@ -333,24 +329,19 @@ export async function processOptimization(
     // Record processed URL in database for all optimizations
     // For URL-based operations, use composite hash that includes lossy parameter; for attachments, use file hash
     const urlHash = originalUrl ? hashUrlWithParams(originalUrl, optimizeOptions) : optimizedHash;
-    await insertProcessedUrl(
+    await recordProcessedUrl({
       urlHash,
-      optimizedHash,
-      'gif',
-      '.gif',
-      optimizedUrl,
-      Date.now(),
+      contentHash: optimizedHash,
+      fileType: 'gif',
+      fileExtension: '.gif',
+      fileUrl: optimizedUrl,
       userId,
-      optimizedSize
-    );
-    logger.debug(`Recorded processed URL in database (urlHash: ${urlHash.substring(0, 8)}...)`);
+      fileSize: optimizedSize,
+    });
 
     // Track temporary upload if file was uploaded to R2
-    if (optimizedUploadMethod === 'r2' && optimizedUrl && optimizedUrl.startsWith('https://')) {
-      const r2Key = extractR2KeyFromUrl(optimizedUrl, r2Config);
-      if (r2Key) {
-        await trackTemporaryUpload(urlHash, r2Key, null, adminUser);
-      }
+    if (optimizedUploadMethod === 'r2') {
+      await trackR2UploadIfApplicable(urlHash, optimizedUrl, adminUser);
     }
 
     logger.info(
@@ -401,19 +392,15 @@ export async function processOptimization(
         if (discordUrl) {
           logger.info(`Uploaded to Discord: ${discordUrl}`);
           // Update database with Discord URL since file was uploaded to Discord, not saved to R2/CDN
-          await insertProcessedUrl(
+          await recordProcessedUrl({
             urlHash,
-            optimizedHash,
-            'gif',
-            '.gif',
-            discordUrl,
-            Date.now(),
+            contentHash: optimizedHash,
+            fileType: 'gif',
+            fileExtension: '.gif',
+            fileUrl: discordUrl,
             userId,
-            optimizedSize
-          );
-          logger.debug(
-            `Updated processed URL in database with Discord URL (urlHash: ${urlHash.substring(0, 8)}...)`
-          );
+            fileSize: optimizedSize,
+          });
         }
       } catch (discordError) {
         // Discord upload failed, fallback to R2
@@ -434,16 +421,15 @@ export async function processOptimization(
             const urlHash = originalUrl
               ? hashUrlWithParams(originalUrl, optimizeOptions)
               : optimizedHash;
-            await insertProcessedUrl(
+            await recordProcessedUrl({
               urlHash,
-              optimizedHash,
-              'gif',
-              '.gif',
-              r2Url,
-              Date.now(),
+              contentHash: optimizedHash,
+              fileType: 'gif',
+              fileExtension: '.gif',
+              fileUrl: r2Url,
               userId,
-              optimizedSize
-            );
+              fileSize: optimizedSize,
+            });
             await safeInteractionEditReply(interaction, {
               content: formatR2UrlWithDisclaimer(r2Url, r2Config, adminUser),
             });

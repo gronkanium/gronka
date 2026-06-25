@@ -37,14 +37,13 @@ import {
   uploadGifToR2,
   uploadVideoToR2,
   uploadImageToR2,
-  extractR2KeyFromUrl,
   formatR2UrlWithDisclaimer,
   formatMultipleR2UrlsWithDisclaimer,
 } from '../utils/r2-storage.js';
-import { trackTemporaryUpload } from '../utils/storage.js';
 import { queueCobaltRequest, hashUrl } from '../utils/cobalt-queue.js';
 import { notifyCommandSuccess, notifyCommandFailure } from '../utils/ntfy-notifier.js';
-import { getProcessedUrl, insertProcessedUrl } from '../utils/database.js';
+import { getProcessedUrl } from '../utils/database.js';
+import { recordProcessedUrl, trackR2UploadIfApplicable } from './shared/url-cache.js';
 import { initializeDatabaseWithErrorHandling } from '../utils/database-init.js';
 import { r2Config } from '../utils/config.js';
 import { trimVideo, trimGif } from '../utils/video-processor.js';
@@ -598,38 +597,31 @@ async function processDownload(
         for (let i = 0; i < discordFiles.length && i < attachmentArray.length; i++) {
           const discordAttachment = attachmentArray[i];
           if (discordAttachment && discordAttachment.url) {
-            await insertProcessedUrl(
+            await recordProcessedUrl({
               urlHash,
-              discordFiles[i].hash,
-              discordFiles[i].fileType,
-              discordFiles[i].ext,
-              discordAttachment.url,
-              Date.now(),
+              contentHash: discordFiles[i].hash,
+              fileType: discordFiles[i].fileType,
+              fileExtension: discordFiles[i].ext,
+              fileUrl: discordAttachment.url,
               userId,
-              discordFiles[i].size
-            );
+              fileSize: discordFiles[i].size,
+            });
           }
         }
       }
 
       // Record R2 uploads in database
       for (const result of r2Files) {
-        await insertProcessedUrl(
+        await recordProcessedUrl({
           urlHash,
-          result.hash,
-          result.fileType,
-          result.ext,
-          result.url,
-          Date.now(),
+          contentHash: result.hash,
+          fileType: result.fileType,
+          fileExtension: result.ext,
+          fileUrl: result.url,
           userId,
-          result.size
-        );
-
-        // Track temporary upload
-        const r2Key = extractR2KeyFromUrl(result.url, r2Config);
-        if (r2Key) {
-          await trackTemporaryUpload(urlHash, r2Key, null, adminUser);
-        }
+          fileSize: result.size,
+        });
+        await trackR2UploadIfApplicable(urlHash, result.url, adminUser);
       }
 
       // Send success notification
@@ -716,17 +708,15 @@ async function processDownload(
       }
 
       // Record processed URL in database (file exists but URL might not be recorded yet)
-      await insertProcessedUrl(
+      await recordProcessedUrl({
         urlHash,
-        hash,
+        contentHash: hash,
         fileType,
-        ext,
+        fileExtension: ext,
         fileUrl,
-        Date.now(),
         userId,
-        existingSize
-      );
-      logger.debug(`Recorded processed URL in database (urlHash: ${urlHash.substring(0, 8)}...)`);
+        fileSize: existingSize,
+      });
 
       updateOperationStatus(operationId, 'success', { fileSize: existingSize });
       recordRateLimit(userId);
@@ -851,19 +841,15 @@ async function processDownload(
           // Record processed URL in database (file exists but URL might not be recorded yet)
           // Use .gif extension (we're in the GIF block)
           const dbExt = '.gif';
-          await insertProcessedUrl(
+          await recordProcessedUrl({
             urlHash,
-            hash,
-            dbFileType,
-            dbExt,
+            contentHash: hash,
+            fileType: dbFileType,
+            fileExtension: dbExt,
             fileUrl,
-            Date.now(),
             userId,
-            existingSize
-          );
-          logger.debug(
-            `Recorded processed URL in database (urlHash: ${urlHash.substring(0, 8)}...)`
-          );
+            fileSize: existingSize,
+          });
 
           updateOperationStatus(operationId, 'success', { fileSize: existingSize });
           recordRateLimit(userId);
@@ -990,19 +976,15 @@ async function processDownload(
               }
 
               // Record processed URL in database
-              await insertProcessedUrl(
+              await recordProcessedUrl({
                 urlHash,
-                hash,
-                'gif',
-                '.gif',
+                contentHash: hash,
+                fileType: 'gif',
+                fileExtension: '.gif',
                 fileUrl,
-                Date.now(),
                 userId,
-                existingSize
-              );
-              logger.debug(
-                `Recorded processed URL in database (urlHash: ${urlHash.substring(0, 8)}...)`
-              );
+                fileSize: existingSize,
+              });
 
               updateOperationStatus(operationId, 'success', { fileSize: existingSize });
               recordRateLimit(userId);
@@ -1140,19 +1122,15 @@ async function processDownload(
 
           // Record processed URL in database (file exists but URL might not be recorded yet)
           // Use saveExt for trimmed videos, ext for others
-          await insertProcessedUrl(
+          await recordProcessedUrl({
             urlHash,
-            hash,
+            contentHash: hash,
             fileType,
-            saveExt,
+            fileExtension: saveExt,
             fileUrl,
-            Date.now(),
             userId,
-            existingSize
-          );
-          logger.debug(
-            `Recorded processed URL in database (urlHash: ${urlHash.substring(0, 8)}...)`
-          );
+            fileSize: existingSize,
+          });
 
           updateOperationStatus(operationId, 'success', { fileSize: existingSize });
           recordRateLimit(userId);
@@ -1220,24 +1198,19 @@ async function processDownload(
       // Record processed URL in database
       // Use saveExt for trimmed videos, ext for others
       const dbExt = fileType === 'video' ? saveExt : ext;
-      await insertProcessedUrl(
+      await recordProcessedUrl({
         urlHash,
-        hash,
+        contentHash: hash,
         fileType,
-        dbExt,
+        fileExtension: dbExt,
         fileUrl,
-        Date.now(),
         userId,
-        finalSize
-      );
-      logger.debug(`Recorded processed URL in database (urlHash: ${urlHash.substring(0, 8)}...)`);
+        fileSize: finalSize,
+      });
 
       // Track temporary upload if file was uploaded to R2
-      if (finalUploadMethod === 'r2' && fileUrl && fileUrl.startsWith('https://')) {
-        const r2Key = extractR2KeyFromUrl(fileUrl, r2Config);
-        if (r2Key) {
-          await trackTemporaryUpload(urlHash, r2Key, null, adminUser);
-        }
+      if (finalUploadMethod === 'r2') {
+        await trackR2UploadIfApplicable(urlHash, fileUrl, adminUser);
       }
 
       // Update operation to success with file size
@@ -1284,19 +1257,15 @@ async function processDownload(
           if (discordUrl) {
             logger.info(`Uploaded to Discord: ${discordUrl}`);
             // Update database with Discord URL since file was uploaded to Discord, not saved to R2/CDN
-            await insertProcessedUrl(
+            await recordProcessedUrl({
               urlHash,
-              hash,
+              contentHash: hash,
               fileType,
-              dbExt,
-              discordUrl,
-              Date.now(),
+              fileExtension: dbExt,
+              fileUrl: discordUrl,
               userId,
-              finalSize
-            );
-            logger.debug(
-              `Updated processed URL in database with Discord URL (urlHash: ${urlHash.substring(0, 8)}...)`
-            );
+              fileSize: finalSize,
+            });
           }
         } catch (discordError) {
           // Discord upload failed, fallback to R2
@@ -1315,21 +1284,16 @@ async function processDownload(
 
             if (r2Url) {
               // Update database with R2 URL
-              await insertProcessedUrl(
+              await recordProcessedUrl({
                 urlHash,
-                hash,
+                contentHash: hash,
                 fileType,
-                dbExt,
-                r2Url,
-                Date.now(),
+                fileExtension: dbExt,
+                fileUrl: r2Url,
                 userId,
-                finalSize
-              );
-              // Track temporary upload
-              const r2Key = extractR2KeyFromUrl(r2Url, r2Config);
-              if (r2Key) {
-                await trackTemporaryUpload(urlHash, r2Key, null, adminUser);
-              }
+                fileSize: finalSize,
+              });
+              await trackR2UploadIfApplicable(urlHash, r2Url, adminUser);
               await safeInteractionEditReply(interaction, {
                 content: formatR2UrlWithDisclaimer(r2Url, r2Config, adminUser),
               });

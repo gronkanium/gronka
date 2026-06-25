@@ -40,10 +40,8 @@ import {
   downloadGifFromR2,
   gifExistsInR2,
   getR2PublicUrl,
-  extractR2KeyFromUrl,
   formatR2UrlWithDisclaimer,
 } from '../utils/r2-storage.js';
-import { trackTemporaryUpload } from '../utils/storage.js';
 import { r2Config } from '../utils/config.js';
 import { trackRecentConversion } from '../utils/user-tracking.js';
 import { optimizeGif } from '../utils/gif-optimizer.js';
@@ -56,7 +54,8 @@ import {
 } from '../utils/operations-tracker.js';
 import { notifyCommandSuccess, notifyCommandFailure } from '../utils/ntfy-notifier.js';
 import { hashUrlWithParams } from '../utils/cobalt-queue.js';
-import { insertProcessedUrl, getProcessedUrl } from '../utils/database.js';
+import { getProcessedUrl } from '../utils/database.js';
+import { recordProcessedUrl, trackR2UploadIfApplicable } from './shared/url-cache.js';
 import { initializeDatabaseWithErrorHandling } from '../utils/database-init.js';
 import { hashPartsHex } from '../utils/hashing.js';
 
@@ -466,19 +465,15 @@ export async function processConversion(
           if (discordUrl) {
             // For cached files, use the hash as urlHash since there's no originalUrl
             const urlHash = hash;
-            await insertProcessedUrl(
+            await recordProcessedUrl({
               urlHash,
-              hash,
-              'gif',
-              '.gif',
-              discordUrl,
-              Date.now(),
+              contentHash: hash,
+              fileType: 'gif',
+              fileExtension: '.gif',
+              fileUrl: discordUrl,
               userId,
-              fileSize
-            );
-            logger.debug(
-              `Recorded Discord attachment URL in database for cached GIF (urlHash: ${urlHash.substring(0, 8)}..., url: ${discordUrl.substring(0, 50)}...)`
-            );
+              fileSize,
+            });
             logger.info(`Uploaded to Discord: ${discordUrl}`);
           } else {
             logger.warn(
@@ -945,23 +940,16 @@ export async function processConversion(
     if (finalUploadMethod === 'r2') {
       // Use composite hash that includes conversion parameters for cache key
       const urlHash = originalUrl ? hashUrlWithParams(originalUrl, options) : finalHash;
-      await insertProcessedUrl(
+      await recordProcessedUrl({
         urlHash,
-        finalHash,
-        'gif',
-        '.gif',
-        gifUrl,
-        Date.now(),
+        contentHash: finalHash,
+        fileType: 'gif',
+        fileExtension: '.gif',
+        fileUrl: gifUrl,
         userId,
-        optimizedSize
-      );
-      logger.debug(`Recorded processed URL in database (urlHash: ${urlHash.substring(0, 8)}...)`);
-
-      // Track temporary upload
-      const r2Key = extractR2KeyFromUrl(gifUrl, r2Config);
-      if (r2Key) {
-        await trackTemporaryUpload(urlHash, r2Key, null, adminUser);
-      }
+        fileSize: optimizedSize,
+      });
+      await trackR2UploadIfApplicable(urlHash, gifUrl, adminUser);
     }
 
     logger.info(
@@ -1019,19 +1007,15 @@ export async function processConversion(
         if (discordUrl) {
           // Use composite hash that includes conversion parameters for cache key
           const urlHash = originalUrl ? hashUrlWithParams(originalUrl, options) : finalHash;
-          await insertProcessedUrl(
+          await recordProcessedUrl({
             urlHash,
-            finalHash,
-            'gif',
-            '.gif',
-            discordUrl,
-            Date.now(),
+            contentHash: finalHash,
+            fileType: 'gif',
+            fileExtension: '.gif',
+            fileUrl: discordUrl,
             userId,
-            optimizedSize
-          );
-          logger.debug(
-            `Recorded Discord attachment URL in database (urlHash: ${urlHash.substring(0, 8)}..., url: ${discordUrl.substring(0, 50)}...)`
-          );
+            fileSize: optimizedSize,
+          });
           logger.info(`Uploaded to Discord: ${discordUrl}`);
         } else {
           logger.warn(
@@ -1050,21 +1034,16 @@ export async function processConversion(
             // Update database with R2 URL
             // Use composite hash that includes conversion parameters for cache key
             const urlHash = originalUrl ? hashUrlWithParams(originalUrl, options) : finalHash;
-            await insertProcessedUrl(
+            await recordProcessedUrl({
               urlHash,
-              finalHash,
-              'gif',
-              '.gif',
-              r2Url,
-              Date.now(),
+              contentHash: finalHash,
+              fileType: 'gif',
+              fileExtension: '.gif',
+              fileUrl: r2Url,
               userId,
-              optimizedSize
-            );
-            // Track temporary upload
-            const r2Key = extractR2KeyFromUrl(r2Url, r2Config);
-            if (r2Key) {
-              await trackTemporaryUpload(urlHash, r2Key, null, adminUser);
-            }
+              fileSize: optimizedSize,
+            });
+            await trackR2UploadIfApplicable(urlHash, r2Url, adminUser);
             await safeInteractionEditReply(interaction, {
               content: formatR2UrlWithDisclaimer(r2Url, r2Config, adminUser),
             });

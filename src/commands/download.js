@@ -30,6 +30,7 @@ import {
   saveImage,
   detectFileType,
 } from '../utils/storage.js';
+import { cleanupTempFiles as storageCleanupTempFiles } from '../utils/storage.js';
 import {
   uploadGifToR2,
   uploadVideoToR2,
@@ -86,13 +87,7 @@ const {
  * @param {string[]} files - Array of file paths to delete
  */
 async function cleanupTempFiles(tmpDir, files = []) {
-  for (const file of files) {
-    try {
-      await fs.unlink(file);
-    } catch {
-      // File may not exist, ignore
-    }
-  }
+  await storageCleanupTempFiles(files);
   try {
     tmpDir.removeCallback();
   } catch (cleanupError) {

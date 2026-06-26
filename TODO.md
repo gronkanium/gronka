@@ -130,9 +130,20 @@ similarly stripped of the temp path. Raw detail remains in `logger.error` for de
   `tmpDir.removeCallback()` locally. (`5e088a2`)
 - A **live** Discord smoke test (real upload/URL, which the faked-interaction E2E can't cover):
   normal download, multi-image tweet (picker path), video→gif convert, Tenor optimize, deleted tweet.
-  — ✅ **Completed 2026-06-26**: verified manually via the E2E suite (`npm run test:e2e`) covering all
-  four command paths (single, picker, deleted error, cached). Live real-Discord upload path is the
-  owner's responsibility since it requires a running bot.
+  — covered by the E2E suite in `test/commands/download-e2e.test.js` for the four command paths
+  (single, picker, deleted error, cached). Live real-Discord upload is manual by nature.
+
+## Backlog
+
+- **Live Discord smoke test** — the faked-interaction E2E (`test:e2e`) covers command logic but
+  NOT the actual Discord upload/URL round-trip. Before cutting the next release, run these
+  manually against the live bot (`gronka#3227`):
+  1. `/download` a normal video (e.g. TikTok) — confirm Discord attachment arrives
+  2. `/download` a multi-image tweet — confirm picker → multiple attachments
+  3. `/convert` a video to GIF — confirm `.gif` attachment
+  4. `/optimize` an existing GIF with lossy=35 — confirm smaller `.gif` returned
+  5. `/download` a deleted tweet — confirm curated "unavailable or deleted" error
+     Re-run after any change to upload, R2, or storage layer.
 
 ## Reference
 

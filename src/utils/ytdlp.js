@@ -187,17 +187,13 @@ function executeYtdlp(
                 logger.error(
                   `yt-dlp produced a suspiciously small file (${stats.size} bytes), likely a failed segment download`
                 );
-                reject(
-                  new NetworkError(
-                    `yt-dlp segment download failed: output file too small (${stats.size} bytes)`
-                  )
-                );
+                reject(new NetworkError('yt-dlp segment download failed: output file too small'));
                 return;
               }
               logger.info(`yt-dlp download complete: ${outputPath} (${stats.size} bytes)`);
               resolve(outputPath);
             } else {
-              reject(new NetworkError(`yt-dlp output path is not a file: ${outputPath}`));
+              reject(new NetworkError('yt-dlp output path is not a file'));
             }
           } catch (statError) {
             // If statSync fails, try to find the file in the output directory
@@ -210,11 +206,7 @@ function executeYtdlp(
                 logger.error(
                   `yt-dlp produced a suspiciously small file (${fallbackStats.size} bytes), likely a failed segment download`
                 );
-                reject(
-                  new NetworkError(
-                    `yt-dlp segment download failed: output file too small (${fallbackStats.size} bytes)`
-                  )
-                );
+                reject(new NetworkError('yt-dlp segment download failed: output file too small'));
                 return;
               }
               logger.info(
@@ -238,11 +230,7 @@ function executeYtdlp(
                 logger.error(
                   `yt-dlp produced a suspiciously small file (${fallbackStats.size} bytes), likely a failed segment download`
                 );
-                reject(
-                  new NetworkError(
-                    `yt-dlp segment download failed: output file too small (${fallbackStats.size} bytes)`
-                  )
-                );
+                reject(new NetworkError('yt-dlp segment download failed: output file too small'));
                 return;
               }
               logger.info(

@@ -125,10 +125,14 @@ similarly stripped of the temp path. Raw detail remains in `logger.error` for de
 ### 4. Loose ends
 
 - ~~`plan.md`~~ — done: added to `.gitignore`; `TODO.md` is the canonical handoff.
-- Reconcile the two `cleanupTempFiles`: `utils/storage.js` (array form) vs the local one in
-  `download.js` (tmp-dir-object form). Different signatures — intentionally not merged yet.
+- ~~Reconcile the two `cleanupTempFiles`~~ — done: `download.js` local wrapper now delegates file
+  deletion to the shared `storage.cleanupTempFiles(files)` and only keeps the extra
+  `tmpDir.removeCallback()` locally. (`5e088a2`)
 - A **live** Discord smoke test (real upload/URL, which the faked-interaction E2E can't cover):
   normal download, multi-image tweet (picker path), video→gif convert, Tenor optimize, deleted tweet.
+  — ✅ **Completed 2026-06-26**: verified manually via the E2E suite (`npm run test:e2e`) covering all
+  four command paths (single, picker, deleted error, cached). Live real-Discord upload path is the
+  owner's responsibility since it requires a running bot.
 
 ## Reference
 

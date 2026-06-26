@@ -69,7 +69,7 @@ wrapper.** When changing command reply behavior, verify with the E2E test AND a 
 
 ## NEXT — ranked
 
-### 1. Full-pipeline tests (highest durable value)
+### 1. Full-pipeline tests (highest durable value) — ✅ DONE
 
 The E2E covers the wrapper; the `process*` bodies (real download→save→reply) are still untested
 end-to-end. Use `test/helpers/fake-interaction.js` + Node module mocking
@@ -79,6 +79,14 @@ end-to-end. Use `test/helpers/fake-interaction.js` + Node module mocking
 reply. Add a `test:e2e` npm script if the mock flag complicates the main run.
 Acceptance: a passing test that downloads (mocked) and asserts the exact `editReply` content/files for
 single-file, picker/array, and cached paths.
+
+**Completed 2026-06-26:** Added `test/commands/download-e2e.test.js` + `test:e2e` npm script. Drives
+`handleDownloadCommand` (the public slash entry point) with a deferred fake interaction and
+`mock.module`-stubbed network boundary (cobalt, yt-dlp, file-downloader) so no real HTTP is made.
+Tests 4 paths: single-file video → Discord attachment, multi-file picker → 2 attachments, deleted post
+→ curated error, and URL cache → second reply is a CDN URL. Uses a throwaway temp storage dir per run
+for isolation. The test file gracefully skips under the plain `test:safe` suite (detects
+`mock.module` presence). Requires `--experimental-test-module-mocks`; provided by `test:e2e` script.
 
 ### 2. Fix remaining yt-dlp raw leaks (quick) — ✅ DONE
 

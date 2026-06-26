@@ -11,7 +11,7 @@ import {
   downloadWithYtdlp,
   YtdlpRateLimitError,
 } from '../utils/ytdlp.js';
-import { checkRateLimit, isAdmin, recordRateLimit } from '../utils/rate-limit.js';
+import { isAdmin, recordRateLimit } from '../utils/rate-limit.js';
 import { generateHash } from '../utils/file-downloader.js';
 import {
   createFailedOperation,
@@ -42,6 +42,7 @@ import { notifyCommandSuccess, notifyCommandFailure } from '../utils/ntfy-notifi
 import { getProcessedUrl } from '../utils/database.js';
 import { recordProcessedUrl, trackR2UploadIfApplicable } from './shared/url-cache.js';
 import { runMediaCommand } from './shared/run-media-command.js';
+import { replyIfRateLimited } from './shared/command-guards.js';
 import { r2Config } from '../utils/config.js';
 import { trimVideo, trimGif } from '../utils/video-processor.js';
 import {
@@ -1336,18 +1337,13 @@ export async function handleDownloadContextMenuCommand(interaction) {
     `User ${userId} (${interaction.user.tag}) initiated download via context menu${adminUser ? ' [ADMIN]' : ''}`
   );
 
-  // Check rate limit (admins bypass this check)
-  if (checkRateLimit(userId)) {
-    logger.warn(`User ${userId} (${interaction.user.tag}) is rate limited`);
-    const rateLimitSeconds = botConfig.rateLimitCooldown / 1000;
-    const errorMessage = `please wait ${rateLimitSeconds} seconds before downloading another video.`;
-    createFailedOperation('download', userId, username, errorMessage, 'rate_limit', {
+  if (
+    await replyIfRateLimited(interaction, {
+      type: 'download',
+      action: 'downloading another video',
       commandSource: 'context-menu',
-    });
-    await safeInteractionReply(interaction, {
-      content: errorMessage,
-      flags: MessageFlags.Ephemeral,
-    });
+    })
+  ) {
     return;
   }
 
@@ -1467,18 +1463,13 @@ export async function handleDownloadCommand(interaction) {
     `User ${userId} (${interaction.user.tag}) initiated download${adminUser ? ' [ADMIN]' : ''}`
   );
 
-  // Check rate limit (admins bypass this check)
-  if (checkRateLimit(userId)) {
-    logger.warn(`User ${userId} (${interaction.user.tag}) is rate limited`);
-    const rateLimitSeconds = botConfig.rateLimitCooldown / 1000;
-    const errorMessage = `please wait ${rateLimitSeconds} seconds before downloading another video.`;
-    createFailedOperation('download', userId, username, errorMessage, 'rate_limit', {
+  if (
+    await replyIfRateLimited(interaction, {
+      type: 'download',
+      action: 'downloading another video',
       commandSource: 'slash',
-    });
-    await safeInteractionReply(interaction, {
-      content: errorMessage,
-      flags: MessageFlags.Ephemeral,
-    });
+    })
+  ) {
     return;
   }
 

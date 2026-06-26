@@ -18,7 +18,7 @@ import {
   parseTenorUrl,
   generateHash,
 } from '../utils/file-downloader.js';
-import { checkRateLimit, isAdmin, recordRateLimit } from '../utils/rate-limit.js';
+import { isAdmin, recordRateLimit } from '../utils/rate-limit.js';
 import {
   ALLOWED_VIDEO_TYPES,
   ALLOWED_IMAGE_TYPES,
@@ -54,6 +54,7 @@ import { hashUrlWithParams } from '../utils/cobalt-queue.js';
 import { getProcessedUrl } from '../utils/database.js';
 import { recordProcessedUrl, trackR2UploadIfApplicable } from './shared/url-cache.js';
 import { runMediaCommand } from './shared/run-media-command.js';
+import { replyIfRateLimited } from './shared/command-guards.js';
 import { initializeDatabaseWithErrorHandling } from '../utils/database-init.js';
 import { hashPartsHex } from '../utils/hashing.js';
 
@@ -1088,18 +1089,13 @@ export async function handleConvertContextMenu(interaction) {
     `User ${userId} (${interaction.user.tag}) initiated conversion${adminUser ? ' [ADMIN]' : ''}`
   );
 
-  // Check rate limit (admins bypass this check)
-  if (checkRateLimit(userId)) {
-    logger.warn(`User ${userId} (${interaction.user.tag}) is rate limited`);
-    const rateLimitSeconds = botConfig.rateLimitCooldown / 1000;
-    const errorMessage = `please wait ${rateLimitSeconds} seconds before converting another video or image.`;
-    createFailedOperation('convert', userId, username, errorMessage, 'rate_limit', {
+  if (
+    await replyIfRateLimited(interaction, {
+      type: 'convert',
+      action: 'converting another video or image',
       commandSource: 'context-menu',
-    });
-    await safeInteractionReply(interaction, {
-      content: errorMessage,
-      flags: MessageFlags.Ephemeral,
-    });
+    })
+  ) {
     return;
   }
 
@@ -1347,14 +1343,13 @@ export async function handleConvertCommand(interaction) {
     `User ${userId} (${interaction.user.tag}) initiated conversion via slash command${adminUser ? ' [ADMIN]' : ''}`
   );
 
-  // Check rate limit (admins bypass this check)
-  if (checkRateLimit(userId)) {
-    logger.warn(`User ${userId} (${interaction.user.tag}) is rate limited`);
-    const rateLimitSeconds = botConfig.rateLimitCooldown / 1000;
-    await safeInteractionReply(interaction, {
-      content: `please wait ${rateLimitSeconds} seconds before converting another video or image.`,
-      flags: MessageFlags.Ephemeral,
-    });
+  if (
+    await replyIfRateLimited(interaction, {
+      type: 'convert',
+      action: 'converting another video or image',
+      commandSource: 'slash',
+    })
+  ) {
     return;
   }
 

@@ -14,7 +14,7 @@ import { validateUrl } from '../utils/validation.js';
 import { writeValidatedFileBuffer } from './shared/buffer-validation.js';
 import { curatedErrorMessage } from './shared/command-errors.js';
 import { downloadImage, downloadFileFromUrl, parseTenorUrl } from '../utils/file-downloader.js';
-import { checkRateLimit, isAdmin, recordRateLimit } from '../utils/rate-limit.js';
+import { isAdmin, recordRateLimit } from '../utils/rate-limit.js';
 import {
   isGifFile,
   extractHashFromCdnUrl,
@@ -34,6 +34,7 @@ import { hashUrlWithParams } from '../utils/cobalt-queue.js';
 import { getProcessedUrl } from '../utils/database.js';
 import { recordProcessedUrl, trackR2UploadIfApplicable } from './shared/url-cache.js';
 import { runMediaCommand } from './shared/run-media-command.js';
+import { replyIfRateLimited } from './shared/command-guards.js';
 import { r2Config } from '../utils/config.js';
 import { hashPartsHex } from '../utils/hashing.js';
 import {
@@ -467,18 +468,13 @@ export async function handleOptimizeContextMenuCommand(interaction, modalAttachm
     `User ${userId} (${interaction.user.tag}) initiated optimization via context menu${adminUser ? ' [ADMIN]' : ''}`
   );
 
-  // Check rate limit (admins bypass this check)
-  if (checkRateLimit(userId)) {
-    logger.warn(`User ${userId} (${interaction.user.tag}) is rate limited`);
-    const rateLimitSeconds = botConfig.rateLimitCooldown / 1000;
-    const errorMessage = `please wait ${rateLimitSeconds} seconds before optimizing another gif.`;
-    createFailedOperation('optimize', userId, username, errorMessage, 'rate_limit', {
+  if (
+    await replyIfRateLimited(interaction, {
+      type: 'optimize',
+      action: 'optimizing another gif',
       commandSource: 'context-menu',
-    });
-    await safeReply(interaction, {
-      content: errorMessage,
-      flags: MessageFlags.Ephemeral,
-    });
+    })
+  ) {
     return;
   }
 
@@ -708,14 +704,13 @@ export async function handleOptimizeCommand(interaction) {
     `User ${userId} (${interaction.user.tag}) initiated optimization via slash command${adminUser ? ' [ADMIN]' : ''}`
   );
 
-  // Check rate limit (admins bypass this check)
-  if (checkRateLimit(userId)) {
-    logger.warn(`User ${userId} (${interaction.user.tag}) is rate limited`);
-    const rateLimitSeconds = botConfig.rateLimitCooldown / 1000;
-    await safeReply(interaction, {
-      content: `please wait ${rateLimitSeconds} seconds before optimizing another gif.`,
-      flags: MessageFlags.Ephemeral,
-    });
+  if (
+    await replyIfRateLimited(interaction, {
+      type: 'optimize',
+      action: 'optimizing another gif',
+      commandSource: 'slash',
+    })
+  ) {
     return;
   }
 

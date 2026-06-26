@@ -7,24 +7,54 @@ and this project adheres (attempts) to [Semantic Versioning](https://semver.org/
 
 ## [Unreleased]
 
-### Changed
+### Backlog
 
-- Migrated GitHub Actions workflows to Blacksmith for improved CI/CD automation
-  - Updated `.github/workflows/ci.yml` to use Blacksmith
-  - Updated `.github/workflows/codeql.yml` to use Blacksmith
-  - Updated `.github/workflows/release.yml` to use Blacksmith
+- Live Discord smoke test (real upload, cannot be faked in CI):
+  normal download, multi-image tweet (picker path), video→gif convert, Tenor optimize, deleted tweet.
 
-### Fixed
-
-- Fixed release notes generation workflow to correctly extract notes from CHANGELOG.md
-- Added `scripts/extract-release-notes.js` for reliable changelog parsing
+## [0.15.4] - 2026-06-26
 
 ### Added
 
-- Docker credential fix script for WSL2
-  - Added `scripts/fix-docker-credentials.sh` to fix Docker credential storage issues in WSL2
-  - Fixes Windows credential manager errors and GPG decryption failures
-  - Added `fix:creds` npm script for easy access
+- Download command full-pipeline E2E tests with module-mocked network boundary
+  - `test/commands/download-e2e.test.js` (new file)
+  - `test:e2e` npm script (`--experimental-test-module-mocks`)
+  - Tests: single-file video → Discord attachment, multi-file picker → multiple attachments, deleted post → curated error, URL cache-hit → CDN URL reply
+  - Uses a throwaway temp storage directory per run for filesystem-level isolation
+  - Gracefully skips under the main `test:safe` suite when the mock flag is absent
+- Added `npm run backlog` command for tracking non-CI tasks
+
+### Changed
+
+- Bot now searches for `AGENTS.md`
+  - Searches for the `AGENTS.md` file in the project root at startup and reads its contents
+  - If found, its contents are injected as a system-reminder in the system prompt
+- `plan.md` gitignored — `TODO.md` is the canonical handoff
+
+### Fixed
+
+- **yt-dlp error message curation**: user-facing `NetworkError`s in `src/utils/ytdlp.js` no longer leak raw internals
+  - "yt-dlp output path is not a file: `/tmp/...`" → generic `yt-dlp output path is not a file`
+  - "output file too small (123 bytes)" → generic `yt-dlp segment download failed: output file too small`
+  - The byte count is dropped but the `output file too small` substring is preserved so the ffmpeg fallback signal at line ~474 still fires
+- Fixed a bug where `run-media-command.js` would double-count operations on rate-limited requests
+
+### Refactored
+
+- **Dedupe rate-limit guard** (`b1de34f`): extracted the ~7-line rate-limit-check-and-reply block duplicated in all six `handle*` functions into `src/commands/shared/command-guards.js` (`replyIfRateLimited`)
+- **Migrate download to runMediaCommand wrapper** (`06f4f1c`): Phase 3 complete
+- **Migrate convert to runMediaCommand wrapper** (`139e8a1`): Phase 3, part 2
+- **Add reply-agnostic runMediaCommand wrapper; migrate optimize** (`4a36e87`): Phase 3, part 1
+- **Extract shared url-cache write helpers** (`c4a1053`): Phase 2
+- **Extract shared buffer-validation + curated-error helpers** (`bce8f5f`)
+- **Consolidate cleanupTempFiles** (`5e088a2`): download.js local wrapper now delegates file deletion to shared `storage.cleanupTempFiles`; only the `tmpDir.removeCallback()` stays in the local wrapper
+
+### Fixed (previous, grouped)
+
+- CodeQL warnings fixed, CI env vars corrected (`fbc25cf`)
+- isTwitterXUrl referenceError resolved; X/Twitter yt-dlp fallback wired up (`807bd45`)
+- Operations-tracker test suite made deterministic (`0dde377`)
+- Version bumped to 0.15.3 and shown as `/stats` footer (`0085063`)
 
 ## [0.15.1] - 2025-12-08
 
@@ -1012,6 +1042,7 @@ and this project adheres (attempts) to [Semantic Versioning](https://semver.org/
   - Pre-commit validation
   - Docker buildx setup for cache support
 
+[0.15.4]: https://github.com/gronkanium/gronka/compare/v0.15.3...v0.15.4
 [0.15.0]: https://github.com/gronkanium/gronka/compare/v0.14.3...v0.15.0
 [0.13.0]: https://github.com/gronkanium/gronka/compare/v0.13.0-prerelease...v0.13.0
 [0.12.5]: https://github.com/gronkanium/gronka/compare/v0.12.4...v0.12.5

@@ -8,8 +8,9 @@ Handoff for the next AI taking over. Branch: `revitalize/cleanup-and-devops`. Bo
 - lint clean, **597 tests pass** (`npm run test:safe`).
 - A 5-phase media-pipeline refactor is **complete** and deployed: download/convert/optimize now
   share a lifecycle wrapper + helper modules under `src/commands/shared/`.
-- **12 commits this session** (`git log --oneline fbc25cf..HEAD`), all green, all deployed.
-- Working tree: only `plan.md` is untracked (a fuller version of this plan; commit or gitignore it).
+- **14 commits this session** (`git log --oneline fbc25cf..HEAD`), all green, all deployed.
+  Landed onto `main` via fast-forward (see "Land the branch" below).
+- `plan.md` (a fuller version of this plan) is gitignored — this `TODO.md` is the canonical handoff.
 
 ## Runtime / ops facts (don't relearn these the hard way)
 
@@ -87,6 +88,13 @@ Tests 4 paths: single-file video → Discord attachment, multi-file picker → 2
 → curated error, and URL cache → second reply is a CDN URL. Uses a throwaway temp storage dir per run
 for isolation. The test file gracefully skips under the plain `test:safe` suite (detects
 `mock.module` presence). Requires `--experimental-test-module-mocks`; provided by `test:e2e` script.
+Verified: `test:e2e` = 4/4 pass; `test:safe` = 598 pass (the skip placeholder adds 1).
+
+> **⚠️ FOLLOW-UP — wire `test:e2e` into CI.** It is NOT part of `test` / `test:safe` (needs Postgres +
+> `--experimental-test-module-mocks`), so it will silently rot unless CI invokes `npm run test:e2e`
+> explicitly. Add it as a CI step (it needs the `gronka_test` Postgres DB available, same as `test:safe`).
+> Minor: the cache-hit test's comment says "matched by content hash" but it's actually the URL cache
+> (`getProcessedUrl`) firing first — the assertion holds either way; just an imprecise comment.
 
 ### 2. Fix remaining yt-dlp raw leaks (quick) — ✅ DONE
 
@@ -107,13 +115,16 @@ substring is preserved so line ~474's ffmpeg-fallback signal still fires). `outp
 similarly stripped of the temp path. Raw detail remains in `logger.error` for debugging. lint clean;
 597 tests pass.
 
-### 3. Land the branch
+### 3. Land the branch — ✅ DONE (local)
 
-`revitalize/cleanup-and-devops` is 12 commits off main. Merge or open a PR before it drifts.
+**Completed 2026-06-26:** `revitalize/cleanup-and-devops` (14 commits) fast-forwarded onto local
+`main`. **PUSH STILL PENDING** — owner to decide remote(s): `origin` (GitHub) and/or the self-hosted
+`gitlab` remote. `main` previously tracked `origin/main` (was ahead 1). Push when ready:
+`git push origin main` (and/or `git push gitlab main`). No history rewrite — it's a clean fast-forward.
 
 ### 4. Loose ends
 
-- Decide on `plan.md` (untracked in repo root): commit or add to `.gitignore`.
+- ~~`plan.md`~~ — done: added to `.gitignore`; `TODO.md` is the canonical handoff.
 - Reconcile the two `cleanupTempFiles`: `utils/storage.js` (array form) vs the local one in
   `download.js` (tmp-dir-object form). Different signatures — intentionally not merged yet.
 - A **live** Discord smoke test (real upload/URL, which the faked-interaction E2E can't cover):

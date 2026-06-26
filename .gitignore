@@ -97,3 +97,4 @@ scripts/fix-docker-credentials.sh
 AGENTS.md
 .agent/
 CLAUDE.md
+plan.md

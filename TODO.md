@@ -1,16 +1,19 @@
 # Gronka — Handoff / TODO
 
-Handoff for the next AI taking over. Branch: `revitalize/cleanup-and-devops`. Bot is live
+Handoff for the next AI taking over. Branch: **`main`** (landed and pushed; this is canonical now
+— see "Repo history / fork note" below for a real gotcha about GitHub `main`). Bot is live
 (`gronka#3227`) and healthy on the latest image. Version 0.15.3.
 
-## TL;DR current state
+## TL;DR current state (last updated 2026-07-01)
 
-- lint clean, **597 tests pass** (`npm run test:safe`).
+- lint clean, **598 tests pass** (`npm run test:safe`); `npm run test:e2e` = 4/4 pass separately.
 - A 5-phase media-pipeline refactor is **complete** and deployed: download/convert/optimize now
   share a lifecycle wrapper + helper modules under `src/commands/shared/`.
-- **14 commits this session** (`git log --oneline fbc25cf..HEAD`), all green, all deployed.
-  Landed onto `main` via fast-forward (see "Land the branch" below).
+- All refactor work landed onto `main` and pushed to GitHub (`origin`). Old GitHub `main` (a ~400
+  commit independent 3-month history) was archived to `main-github-archive`, not deleted.
 - `plan.md` (a fuller version of this plan) is gitignored — this `TODO.md` is the canonical handoff.
+- **npm dependencies updated 2026-07-01** (`d4d0d45`): 47 → 4 vulnerabilities. See "Backlog" below
+  for the 4 remaining (accepted risk, upstream-only).
 
 ## Runtime / ops facts (don't relearn these the hard way)
 
@@ -115,12 +118,25 @@ substring is preserved so line ~474's ffmpeg-fallback signal still fires). `outp
 similarly stripped of the temp path. Raw detail remains in `logger.error` for debugging. lint clean;
 597 tests pass.
 
-### 3. Land the branch — ✅ DONE (local)
+### 3. Land the branch — ✅ DONE and PUSHED
 
-**Completed 2026-06-26:** `revitalize/cleanup-and-devops` (14 commits) fast-forwarded onto local
-`main`. **PUSH STILL PENDING** — owner to decide remote(s): `origin` (GitHub) and/or the self-hosted
-`gitlab` remote. `main` previously tracked `origin/main` (was ahead 1). Push when ready:
-`git push origin main` (and/or `git push gitlab main`). No history rewrite — it's a clean fast-forward.
+**Completed 2026-06-26.** `revitalize/cleanup-and-devops` was landed onto `main` and pushed to
+GitHub (`origin`). The `revitalize/cleanup-and-devops` branch itself has been deleted (local + remote)
+now that it's merged.
+
+**⚠️ Repo history / fork note — read this if anything about `main`'s history looks confusing.**
+When we went to push, `origin/main` on GitHub turned out to have **diverged ~3 months earlier**
+(fork point `e274043`, 2025-11-22) into its own independent line of ~400 commits (webui dashboard,
+admin cleanup panel, 5 dependabot security bumps, etc.), ending at `d092263` (2026-03-02). Our
+refactor branch was built off an older base and had no idea. A normal push/merge was impossible
+(two genuinely parallel histories, no common recent ancestor). **Resolution:** the old GitHub
+`main` (`d092263`) was renamed to **`main-github-archive`** (nothing deleted — fully recoverable),
+then our branch tip was force-pushed to become the new `main`. This was an explicit, informed
+owner decision ("pure ai slop, gone to void") — not an accident.
+**Known cost:** the 5 dependabot security bumps that only existed on the old line are gone from
+`main`; this is part of why `npm audit` needed a fresh pass (see the security update entry above
+and the `undici`/discord.js note in Backlog). If a webui dashboard / admin cleanup panel feature is
+ever wanted back, it can be cherry-picked from `main-github-archive` — it still exists on GitHub.
 
 ### 4. Loose ends
 
@@ -144,6 +160,20 @@ similarly stripped of the temp path. Raw detail remains in `logger.error` for de
   4. `/optimize` an existing GIF with lossy=35 — confirm smaller `.gif` returned
   5. `/download` a deleted tweet — confirm curated "unavailable or deleted" error
      Re-run after any change to upload, R2, or storage layer.
+
+- **`undici` vuln, upstream-only, accepted risk (2026-07-01, `d4d0d45`)** — `npm audit` shows 4
+  remaining vulnerabilities (3 moderate, 1 high), all a transitive `undici@6.24.1` pinned by
+  `discord.js@14.26.4` (the latest release) via `@discordjs/rest`/`@discordjs/ws`. `npm audit fix
+--force` "fixes" this by downgrading to `discord.js@13.x` — a breaking API change, not applied.
+  `undici` is discord.js's own outbound HTTP/WS client to Discord's API only, not attacker-facing,
+  so practical exploitability is low. **Action:** periodically re-run `npm outdated discord.js` /
+  `npm audit` and take the fix once discord.js bumps its `undici` pin upstream. No code change needed
+  on our side when that happens — just `npm update discord.js`.
+- **TypeScript rewrite attempt was discarded (2026-07-01)** — a `typescript-rewrite` branch had
+  uncommitted scaffolding (`src/types.ts`, `src/utils/config.ts`, `src/utils/errors.ts`,
+  `src/utils/database/*.ts`, plus `typescript`/`tsx`/`@types/*` devDependencies) that was deleted
+  per owner request before it went anywhere. If a TS migration is wanted again, start fresh — don't
+  try to recover those files, they were never committed and are gone.
 
 ## Reference
 

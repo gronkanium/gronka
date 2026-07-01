@@ -2,7 +2,7 @@
 
 Handoff for the next AI taking over. Branch: **`main`** (landed and pushed; this is canonical now
 — see "Repo history / fork note" below for a real gotcha about GitHub `main`). Bot is live
-(`gronka#3227`) and healthy on the latest image. Version 0.15.3.
+(`gronka#3227`) and healthy on the latest image. Version 0.15.5.
 
 ## TL;DR current state (last updated 2026-07-01)
 

@@ -11,6 +11,36 @@ and this project adheres (attempts) to [Semantic Versioning](https://semver.org/
 
 - Live Discord smoke test (real upload, cannot be faked in CI):
   normal download, multi-image tweet (picker path), video→gif convert, Tenor optimize, deleted tweet.
+- Wire `npm run test:e2e` into CI (currently only run manually; needs Postgres + `--experimental-test-module-mocks`).
+- Revisit the `undici`/discord.js transitive vuln once discord.js bumps its `undici` pin upstream (see 0.15.5 note).
+
+## [0.15.5] - 2026-07-01
+
+### Security
+
+- **npm dependency update**: `npm update` bumped all dependencies to the latest semver-compatible
+  versions, resolving 43 of 47 known vulnerabilities (47 → 4; 3 critical and 14 of 15 high fixed).
+  `package.json` unchanged (existing `^` ranges), `package-lock.json` only. (`d4d0d45`)
+- **Remaining 4 vulnerabilities (3 moderate, 1 high) are accepted, upstream-only risk**: a transitive
+  `undici@6.24.1` pinned by `discord.js@14.26.4` (the latest available release) via
+  `@discordjs/rest`/`@discordjs/ws`. `npm audit fix --force` "fixes" this by downgrading to
+  `discord.js@13.x`, a breaking API change — not applied. `undici` here is discord.js's own outbound
+  HTTP/WS client to Discord's API only, not attacker-facing.
+
+### Fixed
+
+- Corrected three inaccurate entries that had been added to this changelog under `[0.15.4]` without
+  matching code ever landing: a claimed `npm run backlog` script (no such script exists), claimed
+  `AGENTS.md`-searching behavior in the bot (no such file or code exists in this repo), and a claimed
+  "double-count operations on rate-limited requests" fix that doesn't correspond to any change in
+  `run-media-command.js`/`command-guards.js`. Removed all three from the `[0.15.4]` entry below since
+  they never happened.
+- Bumped `package.json`/`package-lock.json` version from `0.15.3` straight to `0.15.5` — the
+  `[0.15.4]` entry below had been written and dated (`a04aac8`, 2026-06-26) but the version bump
+  itself was never applied to `package.json`, so it had drifted out of sync with the changelog. Since
+  this bot is deployed via Docker (not published to npm) and both `0.15.4`'s and `0.15.5`'s changes
+  are already fully present in this commit, there is no meaningful distinct `0.15.4` build to bump
+  to separately.
 
 ## [0.15.4] - 2026-06-26
 
@@ -22,13 +52,9 @@ and this project adheres (attempts) to [Semantic Versioning](https://semver.org/
   - Tests: single-file video → Discord attachment, multi-file picker → multiple attachments, deleted post → curated error, URL cache-hit → CDN URL reply
   - Uses a throwaway temp storage directory per run for filesystem-level isolation
   - Gracefully skips under the main `test:safe` suite when the mock flag is absent
-- Added `npm run backlog` command for tracking non-CI tasks
 
 ### Changed
 
-- Bot now searches for `AGENTS.md`
-  - Searches for the `AGENTS.md` file in the project root at startup and reads its contents
-  - If found, its contents are injected as a system-reminder in the system prompt
 - `plan.md` gitignored — `TODO.md` is the canonical handoff
 
 ### Fixed
@@ -37,7 +63,6 @@ and this project adheres (attempts) to [Semantic Versioning](https://semver.org/
   - "yt-dlp output path is not a file: `/tmp/...`" → generic `yt-dlp output path is not a file`
   - "output file too small (123 bytes)" → generic `yt-dlp segment download failed: output file too small`
   - The byte count is dropped but the `output file too small` substring is preserved so the ffmpeg fallback signal at line ~474 still fires
-- Fixed a bug where `run-media-command.js` would double-count operations on rate-limited requests
 
 ### Refactored
 

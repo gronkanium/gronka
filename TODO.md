@@ -168,12 +168,45 @@ ever wanted back, it can be cherry-picked from `main-github-archive` — it stil
   `undici` is discord.js's own outbound HTTP/WS client to Discord's API only, not attacker-facing,
   so practical exploitability is low. **Action:** periodically re-run `npm outdated discord.js` /
   `npm audit` and take the fix once discord.js bumps its `undici` pin upstream. No code change needed
-  on our side when that happens — just `npm update discord.js`.
+  on our side when that happens — just `npm update discord.js`. **Note:** `package.json` now has
+  `"overrides": { "undici": "~6.24.1" }` (added `d8a733e`, see next item) — this does NOT fix these
+  4 CVEs (6.24.1 is still in the vulnerable range), it only prevents a _different_ class of future
+  breakage (an uncontrolled major-version jump). Both notes stay independently relevant.
+- **Cherry-picked `undici` override + `editReply` socket retry from the archived branch
+  (2026-07-01, `d8a733e`)** — see "Repo history / fork note" above for why an archived branch
+  exists at all. Pulled forward one real, incident-driven fix from `main-github-archive` (original:
+  `1a51c4f`, 2026-02-22): an unpinned `undici` had once resolved to a breaking major version (7.x),
+  causing every `interaction.editReply()` to fail with `UND_ERR_SOCKET` — bot stuck on "thinking" in
+  Discord. Added `overrides.undici: "~6.24.1"` (pinned to our current verified-safe version, not the
+  archive's stale `~6.23.0`) and 3-attempt retry logic in `safeInteractionEditReply` for transient
+  socket/timeout errors only (expired/already-acknowledged interactions still fail immediately).
+  Did NOT bring forward that commit's `minimatch` override (unneeded now, would conflict with tools
+  needing minimatch 3.x) or its `sanitizeDiscordError` call (from a separate, later, unrelated commit
+  on that branch — out of scope). **If mining the archive for more fixes**, check `git log
+origin/main-github-archive` — there may be other real incident fixes worth the same treatment,
+  but verify each one against current code before porting (things drift after ~5 months).
 - **TypeScript rewrite attempt was discarded (2026-07-01)** — a `typescript-rewrite` branch had
   uncommitted scaffolding (`src/types.ts`, `src/utils/config.ts`, `src/utils/errors.ts`,
   `src/utils/database/*.ts`, plus `typescript`/`tsx`/`@types/*` devDependencies) that was deleted
   per owner request before it went anywhere. If a TS migration is wanted again, start fresh — don't
   try to recover those files, they were never committed and are gone.
+- **Docker Desktop LAN-access networking issue (2026-07-01) — STATUS UNCERTAIN, verify from a real
+  second device.** The webui (port 3001) was reachable via `localhost` but timed out from the LAN IP
+  (`192.168.0.212`) from a different machine. Initial theory: Windows' `netsh interface portproxy`
+  table (which forwards host traffic into the WSL2 VM Docker Desktop runs on) had a stale internal
+  WSL2 IP that doesn't always refresh after a restart. Did a full restart to test the theory:
+  `Stop-Process -Name "Docker Desktop" -Force`, `wsl --shutdown`, relaunch Docker Desktop (briefly
+  stops all containers, including the live bot, while it reinitializes) — check with `netsh
+interface portproxy show all` vs `wsl -d docker-desktop -- ip addr show eth0`.
+  **After the restart, the portproxy table's IP correctly matched the current WSL2 VM IP, yet
+  `Invoke-WebRequest http://192.168.0.212:3001` from the SAME host still timed out.** This does NOT
+  necessarily mean the fix failed — Windows frequently can't "hairpin" back to its own LAN IP even
+  when a genuinely separate device works fine (NAT loopback limitation), so a same-host self-test is
+  not reliable evidence either way here. **Never independently confirmed from an actual second
+  device.** If this resurfaces: test from a real second machine first before assuming the portproxy
+  theory was wrong; if it's still broken from a real second device too, the root cause is something
+  else (check Windows Firewall profile matching on whichever NIC is currently active, or try a full
+  Windows reboot rather than just Docker Desktop/WSL2 restart).
 
 ## Reference
 

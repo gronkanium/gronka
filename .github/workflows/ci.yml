@@ -40,7 +40,7 @@ env:
 
 jobs:
   dependency-review:
-    runs-on: blacksmith-4vcpu-ubuntu-2404
+    runs-on: ubuntu-latest
     if: github.event_name == 'pull_request'
     steps:
       - uses: actions/checkout@v4
@@ -50,7 +50,7 @@ jobs:
           config-file: ./.github/dependency-review-config.yml
 
   validate-code:
-    runs-on: blacksmith-4vcpu-ubuntu-2404
+    runs-on: ubuntu-latest
     if: github.actor != 'dependabot[bot]'
     steps:
       - uses: actions/checkout@v4
@@ -64,7 +64,7 @@ jobs:
       - run: npm run format:check || echo "::warning::Formatting check failed"
 
   test-utils:
-    runs-on: blacksmith-4vcpu-ubuntu-2404
+    runs-on: ubuntu-latest
     if: github.actor != 'dependabot[bot]'
     services:
       postgres:
@@ -92,7 +92,7 @@ jobs:
       - run: npx cross-env WEBUI_PORT=3101 R2_ACCOUNT_ID= R2_ACCESS_KEY_ID= R2_SECRET_ACCESS_KEY= R2_BUCKET_NAME= node --test test/utils/
 
   test-commands:
-    runs-on: blacksmith-4vcpu-ubuntu-2404
+    runs-on: ubuntu-latest
     if: github.actor != 'dependabot[bot]'
     services:
       postgres:
@@ -120,7 +120,7 @@ jobs:
       - run: npx cross-env WEBUI_PORT=3101 R2_ACCOUNT_ID= R2_ACCESS_KEY_ID= R2_SECRET_ACCESS_KEY= R2_BUCKET_NAME= node --test test/commands/
 
   test-scripts:
-    runs-on: blacksmith-4vcpu-ubuntu-2404
+    runs-on: ubuntu-latest
     if: github.actor != 'dependabot[bot]'
     services:
       postgres:
@@ -148,7 +148,7 @@ jobs:
       - run: npx cross-env WEBUI_PORT=3101 R2_ACCOUNT_ID= R2_ACCESS_KEY_ID= R2_SECRET_ACCESS_KEY= R2_BUCKET_NAME= node --test test/scripts/
 
   test-integration:
-    runs-on: blacksmith-4vcpu-ubuntu-2404
+    runs-on: ubuntu-latest
     if: github.actor != 'dependabot[bot]'
     services:
       postgres:
@@ -176,7 +176,7 @@ jobs:
       - run: npx cross-env WEBUI_PORT=3101 R2_ACCOUNT_ID= R2_ACCESS_KEY_ID= R2_SECRET_ACCESS_KEY= R2_BUCKET_NAME= node --test test/webui-server-*.test.js test/docker-security.test.js
 
   dependabot-checks:
-    runs-on: blacksmith-4vcpu-ubuntu-2404
+    runs-on: ubuntu-latest
     if: github.actor == 'dependabot[bot]'
     steps:
       - uses: actions/checkout@v4

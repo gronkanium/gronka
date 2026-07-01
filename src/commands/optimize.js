@@ -499,7 +499,8 @@ export async function handleOptimizeContextMenuCommand(interaction, modalAttachm
   }
 
   // Determine attachment and validate it's a GIF
-  let attachment = null;
+  // No initializer: every branch below either reassigns this before it's read or returns early.
+  let attachment;
   let preDownloadedBuffer = null;
   let originalUrlForConversion = null;
 

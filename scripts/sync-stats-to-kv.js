@@ -111,7 +111,7 @@ async function readStatsFromKV() {
       // Key doesn't exist yet, that's okay
       return null;
     }
-    throw new Error(`Failed to read from KV: ${error.message}`);
+    throw new Error(`Failed to read from KV: ${error.message}`, { cause: error });
   }
 }
 
@@ -143,7 +143,7 @@ async function writeStatsToKV(stats, formatFileSize) {
     });
     console.log('      ✓ Stats written successfully');
   } catch (error) {
-    throw new Error(`Failed to write to KV: ${error.message}`);
+    throw new Error(`Failed to write to KV: ${error.message}`, { cause: error });
   }
 }
 
@@ -203,10 +203,11 @@ async function triggerPagesRebuild() {
   } catch (error) {
     if (error.response?.status === 404) {
       throw new Error(
-        `Project "${CLOUDFLARE_PAGES_PROJECT_NAME}" not found. Check CLOUDFLARE_PAGES_PROJECT_NAME.`
+        `Project "${CLOUDFLARE_PAGES_PROJECT_NAME}" not found. Check CLOUDFLARE_PAGES_PROJECT_NAME.`,
+        { cause: error }
       );
     }
-    throw new Error(`Failed to trigger rebuild: ${error.message}`);
+    throw new Error(`Failed to trigger rebuild: ${error.message}`, { cause: error });
   }
 }
 

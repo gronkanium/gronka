@@ -125,9 +125,8 @@ async function processDownload(
       // Skip URL cache if time parameters are provided (trimmed videos are different from untrimmed)
       // Also skip cache if cached result is not a video (e.g., if it was converted to GIF)
       const urlHash = hashUrl(url);
-      let processedUrl = null;
       if (startTime === null && duration === null) {
-        processedUrl = await getProcessedUrl(urlHash);
+        const processedUrl = await getProcessedUrl(urlHash);
         if (processedUrl) {
           // Only use cached URL if it's a video (download command expects video, not GIF/image)
           if (processedUrl.file_type === 'video') {
@@ -327,7 +326,9 @@ async function processDownload(
                 metadata: { url, cachedType: processedUrl.file_type },
               });
               // Re-throw to proceed with download
-              throw new Error('Cached entry file type mismatch, proceeding with download');
+              throw new Error('Cached entry file type mismatch, proceeding with download', {
+                cause: error,
+              });
             }
 
             updateOperationStatus(operationId, 'success', { fileSize: 0 });

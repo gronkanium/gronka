@@ -151,6 +151,34 @@ ever wanted back, it can be cherry-picked from `main-github-archive` — it stil
 
 ## Backlog
 
+- **Code review pass findings (2026-07-01)** — reviewed `src/commands/shared/*` (clean, no issues)
+  and `download.js`/`convert.js`/`optimize.js` (~4,800 lines). Two real bugs found and fixed
+  (`14c9b31`): (1) `finalBuffer` not reassigned to trimmed content when a trimmed file already
+  existed on disk, in 3 places in `download.js` — wrong size reported/recorded in the narrow case
+  where the cached file is R2-only and `fs.stat` fails; (2) `convert.js`'s Discord-attachment-upload
+  path used raw `interaction.editReply()` instead of `safeInteractionEditReply`, missing the retry
+  logic and inconsistent with the rest of the file. Also removed dead code (`wasAutoOptimized`,
+  always `false`, never reassigned). **Not yet applied — real, verified findings that need a
+  design call, not auto-fixed:**
+  - `safeInteractionReply`/`safeInteractionFollowUp`/`safeInteractionDeferReply` in
+    `interaction-helpers.js` don't have the socket-error retry that `safeInteractionEditReply` has
+    (added `d8a733e`). Same failure mode possible, just less likely (they fire immediately, not
+    after a long-running op where Discord's idle-connection timeout is more likely to hit).
+  - `download.js` has 4 near-identical ~45-line "file already exists → build URL → stat → record →
+    reply → notify → return" blocks (~648-692, 777-828, 916-963, 1068-1116) that could be one
+    shared helper.
+  - The "capture Discord attachment URL, with fallback to fetching the message" block is
+    duplicated near-verbatim across all three command files (~6 occurrences total) — candidate
+    for a `shared/` helper.
+  - Tenor-URL resolution (regex check + `parseTenorUrl` + logging) duplicated 4x across
+    `convert.js`/`optimize.js`.
+  - `download.js`'s multi-file picker save/upload/record loops run sequentially (`await` inside
+    `for`) despite each iteration being independent — candidate for `Promise.all`/`allSettled` to
+    cut wall-clock time roughly proportional to file count. Would need to confirm ordering/partial-
+    failure semantics don't matter before applying.
+  - `convert.js`/`optimize.js` recompute `hashUrlWithParams(originalUrl, options)` from the same
+    inputs at multiple call sites instead of hoisting to one `const`.
+
 - **Live Discord smoke test** — the faked-interaction E2E (`test:e2e`) covers command logic but
   NOT the actual Discord upload/URL round-trip. Before cutting the next release, run these
   manually against the live bot (`gronka#3227`):

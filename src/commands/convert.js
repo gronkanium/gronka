@@ -788,7 +788,6 @@ export async function processConversion(
       // Check if optimization is requested
       let finalHash = hash;
       let optimizedSize = originalSize;
-      let wasAutoOptimized = false;
       let finalGifUrl = null;
       let finalGifBuffer = gifBuffer;
       let finalUploadMethod = 'r2';
@@ -926,7 +925,7 @@ export async function processConversion(
       }
 
       logger.info(
-        `Successfully created GIF (hash: ${finalHash}, size: ${(optimizedSize / (1024 * 1024)).toFixed(2)}MB) for user ${userId}${options.optimize ? ' [OPTIMIZED]' : ''}${wasAutoOptimized ? ' [AUTO-OPTIMIZED]' : ''}`
+        `Successfully created GIF (hash: ${finalHash}, size: ${(optimizedSize / (1024 * 1024)).toFixed(2)}MB) for user ${userId}${options.optimize ? ' [OPTIMIZED]' : ''}`
       );
 
       // Update operation to success with file size
@@ -937,9 +936,14 @@ export async function processConversion(
         const safeHash = finalHash.replace(/[^a-f0-9]/gi, '');
         const filename = `${safeHash}.gif`;
         try {
-          const message = await interaction.editReply({
+          const message = await safeInteractionEditReply(interaction, {
             files: [new AttachmentBuilder(finalGifBuffer, { name: filename })],
           });
+          if (!message) {
+            // safeInteractionEditReply already retried transient socket errors and logged the
+            // failure; throw here to preserve the existing R2-fallback path below.
+            throw new Error('Discord editReply failed or interaction expired');
+          }
 
           // Capture Discord attachment URL and save to database
           // Try to get attachments from the returned message first

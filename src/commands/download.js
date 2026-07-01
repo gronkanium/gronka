@@ -730,6 +730,10 @@ async function processDownload(
 
               // Generate new hash for trimmed GIF (since content changed)
               hash = generateHash(trimmedBuffer);
+              // Always reflect the trimmed content, even if a file with this hash already exists
+              // on disk - the early-return path below falls back to finalBuffer.length as a size
+              // estimate, which must be the trimmed size, not the original untrimmed size.
+              finalBuffer = trimmedBuffer;
 
               // Check if trimmed GIF already exists
               const trimmedExists = await gifExists(hash, GIF_STORAGE_PATH);
@@ -739,9 +743,6 @@ async function processDownload(
                 logger.info(
                   `Trimmed GIF already exists (hash: ${hash}) for user ${userId} with requested parameters (startTime: ${startTime}, duration: ${duration})`
                 );
-              } else {
-                // Use trimmed buffer for saving
-                finalBuffer = trimmedBuffer;
               }
 
               logOperationStep(operationId, 'gif_trim', 'success', {
@@ -865,6 +866,9 @@ async function processDownload(
 
               // Generate new hash for trimmed GIF
               hash = generateHash(trimmedBuffer);
+              // Always reflect the trimmed content, even if a file with this hash already exists
+              // on disk - see the analogous fix in the GIF-trim branch above for why.
+              finalBuffer = trimmedBuffer;
 
               // We're treating this as a GIF now (even though it was detected as video)
               // Update cdnPath and use .gif extension for saving
@@ -879,9 +883,6 @@ async function processDownload(
                 logger.info(
                   `Trimmed GIF already exists (hash: ${hash}) for user ${userId} with requested parameters (startTime: ${startTime}, duration: ${duration})`
                 );
-              } else {
-                // Use trimmed buffer for saving
-                finalBuffer = trimmedBuffer;
               }
 
               logOperationStep(operationId, 'gif_trim', 'success', {
@@ -1011,6 +1012,9 @@ async function processDownload(
               // Same trim parameters → same content → same hash → cache hit.
               // This ensures we always return the correct trimmed version for the requested parameters.
               hash = generateHash(trimmedBuffer);
+              // Always reflect the trimmed content, even if a file with this hash already exists
+              // on disk - see the analogous fix in the GIF-trim branch above for why.
+              finalBuffer = trimmedBuffer;
 
               // Check if trimmed video already exists
               // This checks if we've previously created a video with this exact content (hash).
@@ -1025,9 +1029,6 @@ async function processDownload(
                 logger.info(
                   `Trimmed video already exists (hash: ${hash}) for user ${userId} with requested parameters (startTime: ${startTime}, duration: ${duration})`
                 );
-              } else {
-                // Use trimmed buffer for saving
-                finalBuffer = trimmedBuffer;
               }
 
               logOperationStep(operationId, 'video_trim', 'success', {

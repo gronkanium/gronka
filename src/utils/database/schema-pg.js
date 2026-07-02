@@ -84,23 +84,6 @@ export function getTableDefinitions() {
       `,
     },
     {
-      name: 'system_metrics',
-      sql: `
-        CREATE TABLE IF NOT EXISTS system_metrics (
-          id SERIAL PRIMARY KEY,
-          timestamp BIGINT NOT NULL,
-          cpu_usage DOUBLE PRECISION,
-          memory_usage DOUBLE PRECISION,
-          memory_total DOUBLE PRECISION,
-          disk_usage DOUBLE PRECISION,
-          disk_total DOUBLE PRECISION,
-          process_uptime BIGINT,
-          process_memory DOUBLE PRECISION,
-          metadata TEXT
-        );
-      `,
-    },
-    {
       name: 'alerts',
       sql: `
         CREATE TABLE IF NOT EXISTS alerts (
@@ -219,10 +202,6 @@ export function getIndexDefinitions() {
     {
       name: 'idx_user_metrics_last_command_at',
       sql: 'CREATE INDEX IF NOT EXISTS idx_user_metrics_last_command_at ON user_metrics(last_command_at);',
-    },
-    {
-      name: 'idx_system_metrics_timestamp',
-      sql: 'CREATE INDEX IF NOT EXISTS idx_system_metrics_timestamp ON system_metrics(timestamp);',
     },
     {
       name: 'idx_alerts_timestamp',

@@ -1,7 +1,6 @@
 import { createLogger } from '../../utils/logger.js';
 import { operations } from '../operations/storage.js';
 import { enrichOperationUsername } from '../operations/enrichment.js';
-import { getLatestSystemMetrics } from '../../utils/database.js';
 import { getAlerts } from '../../utils/database.js';
 
 const logger = createLogger('webui');
@@ -102,16 +101,6 @@ export function setupWebSocketHandlers(wss, clients) {
       );
       // Send initial operations list
       ws.send(JSON.stringify({ type: 'operations', data: enrichedOps }));
-
-      // Send latest system metrics
-      try {
-        const latestMetrics = await getLatestSystemMetrics();
-        if (latestMetrics) {
-          ws.send(JSON.stringify({ type: 'system_metrics', data: latestMetrics }));
-        }
-      } catch (error) {
-        logger.error('Error sending initial system metrics:', error);
-      }
 
       // Send recent alerts (last 10)
       try {

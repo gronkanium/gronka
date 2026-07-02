@@ -22,7 +22,6 @@ export const connectionHealth = writable({
 // Data stores for different message types
 export const operations = writable([]);
 export const logs = writable([]);
-export const systemMetrics = writable(null);
 export const alerts = writable([]);
 export const userMetrics = writable(new Map()); // Map<userId, metrics>
 
@@ -213,11 +212,6 @@ function handleMessage(message) {
       logs.update(logList => {
         return [message.data, ...logList].slice(0, 1000); // Keep last 1000 logs
       });
-      break;
-
-    case 'system_metrics':
-      // System metrics update
-      systemMetrics.set(message.data);
       break;
 
     case 'alert':

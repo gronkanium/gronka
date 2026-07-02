@@ -289,7 +289,7 @@
 
 <section class="operations-debug">
   <div class="header-row">
-    <h2>Operations Debug & Tracing</h2>
+    <h2>operations debug & tracing</h2>
     <button class="back-btn" on:click={() => navigate('operations')}>
       ← back to operations
     </button>
@@ -297,7 +297,7 @@
 
   <div class="search-section">
     <ResponsiveSearchBar
-      placeholder="Search by operation ID..."
+      placeholder="search by operation ID..."
       bind:value={searchOperationId}
       onSearch={() => { offset = 0; applyFilters(); }}
     />
@@ -351,7 +351,7 @@
           <label>user id</label>
           <input
             type="text"
-            placeholder="Filter by user ID..."
+            placeholder="filter by user ID..."
             bind:value={searchUserId}
             on:input={() => { offset = 0; applyFilters(); }}
           />
@@ -362,7 +362,7 @@
           <label>username</label>
           <input
             type="text"
-            placeholder="Filter by username..."
+            placeholder="filter by username..."
             bind:value={searchUsername}
             on:input={() => { offset = 0; applyFilters(); }}
           />
@@ -404,7 +404,7 @@
           <label>min duration (ms)</label>
           <input
             type="number"
-            placeholder="Min duration..."
+            placeholder="min duration..."
             bind:value={minDuration}
             on:input={() => { offset = 0; applyFilters(); }}
           />
@@ -415,7 +415,7 @@
           <label>max duration (ms)</label>
           <input
             type="number"
-            placeholder="Max duration..."
+            placeholder="max duration..."
             bind:value={maxDuration}
             on:input={() => { offset = 0; applyFilters(); }}
           />
@@ -426,7 +426,7 @@
           <label>min file size (bytes)</label>
           <input
             type="number"
-            placeholder="Min file size..."
+            placeholder="min file size..."
             bind:value={minFileSize}
             on:input={() => { offset = 0; applyFilters(); }}
           />
@@ -437,7 +437,7 @@
           <label>max file size (bytes)</label>
           <input
             type="number"
-            placeholder="Max file size..."
+            placeholder="max file size..."
             bind:value={maxFileSize}
             on:input={() => { offset = 0; applyFilters(); }}
           />
@@ -460,11 +460,11 @@
   {/if}
 
   {#if loading}
-    <div class="loading">Loading operations...</div>
+    <div class="loading">loading operations...</div>
   {:else if error}
-    <div class="error">Error: {error}</div>
+    <div class="error">error: {error}</div>
   {:else if filteredOperations.length === 0}
-    <div class="empty">No operations found</div>
+    <div class="empty">no operations found</div>
   {:else}
     <div class="table-container">
       <table>
@@ -500,9 +500,9 @@
                   <span class="status-icon success">✓</span>
                 {:else if operation.status === 'error'}
                   <span class="status-icon error">
-                    <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="#ff6b6b" stroke="#fff" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="var(--danger)" stroke="var(--text-bright)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
                       <path d="M12 2C6.477 2 2 6.477 2 12s4.477 10 10 10 10-4.477 10-10S17.523 2 12 2z"/>
-                      <path d="M15 9l-6 6M9 9l6 6" stroke="#fff" stroke-width="2" stroke-linecap="round"/>
+                      <path d="M15 9l-6 6M9 9l6 6" stroke="var(--text-bright)" stroke-width="2" stroke-linecap="round"/>
                     </svg>
                   </span>
                 {:else}
@@ -569,7 +569,7 @@
                         </div>
                       {:else}
                         <div class="details-section">
-                          <p>No trace data available</p>
+                          <p>no trace data available</p>
                         </div>
                       {/if}
                     {:catch err}
@@ -666,8 +666,8 @@
 
   section {
     padding: 1rem;
-    border: 1px solid #333;
-    background-color: #222;
+    border: 1px solid var(--border);
+    background-color: var(--surface);
     grid-column: 1 / -1;
     margin-top: 0;
     max-width: 1400px;
@@ -686,7 +686,7 @@
     justify-content: space-between;
     align-items: center;
     margin-bottom: 0.75rem;
-    border-bottom: 1px solid #333;
+    border-bottom: 1px solid var(--border);
     padding-bottom: 0.5rem;
   }
 
@@ -694,22 +694,22 @@
     margin: 0;
     font-size: 1.25rem;
     font-weight: 500;
-    color: #fff;
+    color: var(--text-bright);
   }
 
   .back-btn {
     padding: 0.5rem 1rem;
-    background-color: #444;
-    color: #fff;
-    border: 1px solid #555;
-    border-radius: 3px;
+    background-color: var(--surface-3);
+    color: var(--text-bright);
+    border: 1px solid var(--border-2);
+    border-radius: var(--radius);
     cursor: pointer;
     font-size: 0.85rem;
     transition: background-color 0.2s;
   }
 
   .back-btn:hover {
-    background-color: #555;
+    background-color: var(--border-2);
   }
 
   .search-section {
@@ -724,9 +724,9 @@
     align-items: center;
     gap: 0.5rem;
     padding: 0.5rem;
-    background-color: #1a1a1a;
-    border: 1px solid #333;
-    border-radius: 3px;
+    background-color: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
   }
 
   .filter-toggle {
@@ -734,23 +734,23 @@
     align-items: center;
     gap: 0.5rem;
     padding: 0.5rem 1rem;
-    background-color: #444;
-    color: #fff;
-    border: 1px solid #555;
-    border-radius: 3px;
+    background-color: var(--surface-3);
+    color: var(--text-bright);
+    border: 1px solid var(--border-2);
+    border-radius: var(--radius);
     cursor: pointer;
     font-size: 0.85rem;
   }
 
   .filter-toggle:hover {
-    background-color: #555;
+    background-color: var(--border-2);
   }
 
   .filters-panel {
     padding: 1rem;
-    background-color: #1a1a1a;
-    border: 1px solid #333;
-    border-radius: 3px;
+    background-color: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
     margin-bottom: 1rem;
   }
 
@@ -762,16 +762,16 @@
 
   .clear-btn {
     padding: 0.25rem 0.75rem;
-    background-color: #444;
-    color: #fff;
-    border: 1px solid #555;
-    border-radius: 3px;
+    background-color: var(--surface-3);
+    color: var(--text-bright);
+    border: 1px solid var(--border-2);
+    border-radius: var(--radius);
     cursor: pointer;
     font-size: 0.85rem;
   }
 
   .clear-btn:hover {
-    background-color: #555;
+    background-color: var(--border-2);
   }
 
   .filters-grid {
@@ -787,7 +787,7 @@
   }
 
   .filter-group label {
-    color: #aaa;
+    color: var(--text-muted);
     font-size: 0.85rem;
     display: flex;
     align-items: center;
@@ -798,10 +798,10 @@
   .filter-group input[type="number"],
   .filter-group input[type="date"] {
     padding: 0.5rem;
-    background-color: #222;
-    border: 1px solid #333;
-    border-radius: 3px;
-    color: #fff;
+    background-color: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    color: var(--text-bright);
     font-size: 0.85rem;
   }
 
@@ -820,16 +820,16 @@
 
   .error-analysis-section {
     padding: 1rem;
-    background-color: #1a1a1a;
-    border: 1px solid #ff6b6b;
-    border-radius: 3px;
+    background-color: var(--bg);
+    border: 1px solid var(--danger);
+    border-radius: var(--radius);
     margin-bottom: 1rem;
   }
 
   .error-analysis-section h3 {
     margin: 0 0 0.75rem 0;
     font-size: 0.9rem;
-    color: #ff6b6b;
+    color: var(--danger);
     text-transform: uppercase;
   }
 
@@ -841,21 +841,21 @@
 
   .error-group {
     padding: 0.75rem;
-    background-color: #222;
-    border-radius: 3px;
+    background-color: var(--surface);
+    border-radius: var(--radius);
     display: flex;
     justify-content: space-between;
     align-items: center;
   }
 
   .error-pattern {
-    color: #fff;
+    color: var(--text-bright);
     font-size: 0.85rem;
     font-family: monospace;
   }
 
   .error-count {
-    color: #ff6b6b;
+    color: var(--danger);
     font-size: 0.85rem;
     font-weight: 600;
   }
@@ -877,31 +877,31 @@
   }
 
   thead {
-    background-color: #2a2a2a;
+    background-color: var(--surface-2);
   }
 
   th {
     padding: 0.75rem 0.5rem;
     text-align: left;
     font-weight: 500;
-    color: #aaa;
-    border-bottom: 1px solid #333;
+    color: var(--text-muted);
+    border-bottom: 1px solid var(--border);
     font-size: 0.85rem;
     text-transform: uppercase;
     letter-spacing: 0.5px;
   }
 
   tbody tr {
-    border-bottom: 1px solid #2a2a2a;
+    border-bottom: 1px solid var(--surface-2);
   }
 
   tbody tr:hover {
-    background-color: #2a2a2a;
+    background-color: var(--surface-2);
   }
 
   td {
     padding: 0.75rem 0.5rem;
-    color: #e0e0e0;
+    color: var(--text);
   }
 
   .status-cell {
@@ -919,19 +919,19 @@
     line-height: 1;
     text-align: center;
     border-radius: 50%;
-    font-size: 14px;
+    font-size: 0.875rem;
     font-weight: bold;
     vertical-align: middle;
   }
 
   .status-icon.success {
-    background-color: #51cf66;
+    background-color: var(--success);
     color: #000;
   }
 
   .status-icon.error {
     background-color: transparent;
-    color: #fff;
+    color: var(--text-bright);
     display: inline-flex;
     align-items: center;
     justify-content: center;
@@ -939,7 +939,7 @@
 
   .status-icon.error svg {
     display: block;
-    fill: #ff6b6b;
+    fill: var(--danger);
     width: 20px;
     height: 20px;
   }
@@ -947,8 +947,8 @@
   .spinner {
     width: 20px;
     height: 20px;
-    border: 2px solid #444;
-    border-top-color: #51cf66;
+    border: 2px solid var(--surface-3);
+    border-top-color: var(--success);
     border-radius: 50%;
     animation: spin 0.8s linear infinite;
     margin: 0 auto;
@@ -964,32 +964,32 @@
 
   .type-cell {
     text-transform: capitalize;
-    color: #fff;
+    color: var(--text-bright);
     font-weight: 500;
   }
 
   .username-cell {
-    color: #e0e0e0;
+    color: var(--text);
   }
 
   .userid-cell {
-    color: #888;
+    color: var(--text-dim);
     font-family: monospace;
     font-size: 0.85rem;
   }
 
   .size-cell {
-    color: #aaa;
+    color: var(--text-muted);
   }
 
   .duration-cell {
-    color: #aaa;
+    color: var(--text-muted);
     font-family: monospace;
     font-size: 0.85rem;
   }
 
   .timestamp-cell {
-    color: #aaa;
+    color: var(--text-muted);
     font-size: 0.85rem;
   }
 
@@ -1000,7 +1000,7 @@
   .action-btn {
     background: none;
     border: none;
-    color: #aaa;
+    color: var(--text-muted);
     cursor: pointer;
     padding: 0.25rem;
     display: inline-flex;
@@ -1009,23 +1009,23 @@
   }
 
   .action-btn:hover {
-    color: #fff;
+    color: var(--text-bright);
   }
 
   .loading {
-    color: #888;
+    color: var(--text-dim);
     padding: 1rem 0;
     text-align: center;
   }
 
   .error {
-    color: #ff6b6b;
+    color: var(--danger);
     padding: 1rem 0;
     text-align: center;
   }
 
   .empty {
-    color: #888;
+    color: var(--text-dim);
     padding: 1rem 0;
     text-align: center;
   }
@@ -1038,22 +1038,22 @@
   .expand-btn {
     background: none;
     border: none;
-    color: #aaa;
+    color: var(--text-muted);
     cursor: pointer;
     font-size: 0.9rem;
     padding: 0.25rem;
   }
 
   .expand-btn:hover {
-    color: #fff;
+    color: var(--text-bright);
   }
 
   .operation-row.expanded {
-    background-color: #2a2a2a;
+    background-color: var(--surface-2);
   }
 
   .details-row {
-    background-color: #1a1a1a;
+    background-color: var(--bg);
   }
 
   .details-cell {
@@ -1084,10 +1084,10 @@
   }
 
   .details-section {
-    border: 1px solid #333;
+    border: 1px solid var(--border);
     padding: 1rem;
-    border-radius: 3px;
-    background-color: #222;
+    border-radius: var(--radius);
+    background-color: var(--surface);
     max-width: 100%;
     overflow-wrap: break-word;
     word-wrap: break-word;
@@ -1099,7 +1099,7 @@
     margin: 0 0 0.75rem 0;
     font-size: 0.9rem;
     font-weight: 500;
-    color: #51cf66;
+    color: var(--success);
     text-transform: uppercase;
     letter-spacing: 0.5px;
     display: flex;
@@ -1110,7 +1110,7 @@
   .hover-hint {
     font-size: 0.7rem;
     font-weight: 400;
-    color: #666;
+    color: var(--text-dim);
     text-transform: none;
     letter-spacing: normal;
     font-style: italic;
@@ -1124,19 +1124,19 @@
 
   .trace-entry {
     padding: 0.75rem;
-    background-color: #1a1a1a;
-    border-radius: 3px;
-    border-left: 2px solid #51cf66;
+    background-color: var(--bg);
+    border-radius: var(--radius);
+    border-left: 2px solid var(--success);
     text-align: left;
   }
 
   .trace-entry.error {
-    border-left-color: #ff6b6b;
+    border-left-color: var(--danger);
     background-color: rgba(255, 107, 107, 0.1);
   }
 
   .trace-time {
-    color: #888;
+    color: var(--text-dim);
     font-size: 0.75rem;
     font-family: monospace;
     margin-bottom: 0.25rem;
@@ -1144,7 +1144,7 @@
   }
 
   .trace-step {
-    color: #fff;
+    color: var(--text-bright);
     font-size: 0.85rem;
     font-weight: 500;
     margin-bottom: 0.25rem;
@@ -1154,7 +1154,7 @@
   .trace-status {
     display: inline-block;
     padding: 0.2rem 0.5rem;
-    border-radius: 3px;
+    border-radius: var(--radius);
     font-size: 0.75rem;
     font-weight: 600;
     text-transform: uppercase;
@@ -1162,7 +1162,7 @@
   }
 
   .trace-message {
-    color: #aaa;
+    color: var(--text-muted);
     font-size: 0.85rem;
     margin-top: 0.5rem;
     text-align: left;
@@ -1175,9 +1175,9 @@
   .trace-metadata pre {
     margin: 0;
     padding: 0.5rem;
-    background-color: #0d0d0d;
-    border-radius: 3px;
-    color: #e0e0e0;
+    background-color: var(--bg-deep);
+    border-radius: var(--radius);
+    color: var(--text);
     font-size: 0.75rem;
     overflow-x: auto;
     text-align: left;
@@ -1190,15 +1190,15 @@
     display: flex;
     gap: 2px;
     height: 40px;
-    background-color: #1a1a1a;
-    border-radius: 3px;
+    background-color: var(--bg);
+    border-radius: var(--radius);
     overflow: visible;
     max-width: 100%;
     position: relative;
   }
 
   .timeline-bar {
-    background-color: #51cf66;
+    background-color: var(--success);
     display: flex;
     flex-direction: column;
     align-items: center;
@@ -1206,19 +1206,19 @@
     min-width: 30px;
     position: relative;
     transition: background-color 0.2s;
-    border-right: 1px solid #1a1a1a;
+    border-right: 1px solid var(--bg);
   }
 
   .timeline-bar:hover {
-    background-color: #69db7c;
+    background-color: var(--success);
   }
 
   .timeline-bar.error {
-    background-color: #ff6b6b;
+    background-color: var(--danger);
   }
 
   .timeline-bar.error:hover {
-    background-color: #ff8787;
+    background-color: var(--danger);
   }
 
   .timeline-label {
@@ -1244,10 +1244,10 @@
     transform: translateX(-50%);
     margin-bottom: 8px;
     padding: 0.5rem 0.75rem;
-    background-color: #0d0d0d;
-    border: 1px solid #333;
-    border-radius: 4px;
-    color: #fff;
+    background-color: var(--bg-deep);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-lg);
+    color: var(--text-bright);
     font-size: 0.75rem;
     white-space: nowrap;
     opacity: 0;
@@ -1267,7 +1267,7 @@
     left: 50%;
     transform: translateX(-50%);
     border: 5px solid transparent;
-    border-top-color: #0d0d0d;
+    border-top-color: var(--bg-deep);
   }
 
   .timeline-bar:hover .timeline-tooltip {
@@ -1277,12 +1277,12 @@
   .tooltip-step {
     font-weight: 600;
     margin-bottom: 0.25rem;
-    color: #fff;
+    color: var(--text-bright);
   }
 
   .tooltip-duration {
     font-family: monospace;
-    color: #aaa;
+    color: var(--text-muted);
     font-size: 0.7rem;
   }
 
@@ -1297,8 +1297,8 @@
     align-items: center;
     gap: 1rem;
     padding: 0.75rem;
-    background-color: #1a1a1a;
-    border-radius: 3px;
+    background-color: var(--bg);
+    border-radius: var(--radius);
     max-width: 100%;
     overflow-wrap: break-word;
     word-wrap: break-word;
@@ -1307,7 +1307,7 @@
   .related-op-id {
     font-family: monospace;
     font-size: 0.85rem;
-    color: #aaa;
+    color: var(--text-muted);
     overflow-wrap: break-word;
     word-wrap: break-word;
     max-width: 100%;
@@ -1316,20 +1316,20 @@
 
   .related-op-type {
     text-transform: capitalize;
-    color: #fff;
+    color: var(--text-bright);
     font-weight: 500;
   }
 
   .related-op-status {
     padding: 0.2rem 0.5rem;
-    border-radius: 3px;
+    border-radius: var(--radius);
     font-size: 0.75rem;
     font-weight: 600;
     text-transform: uppercase;
   }
 
   .related-op-time {
-    color: #888;
+    color: var(--text-dim);
     font-size: 0.85rem;
     margin-left: auto;
   }
@@ -1346,12 +1346,12 @@
   }
 
   .info-item .label {
-    color: #aaa;
+    color: var(--text-muted);
     font-size: 0.85rem;
   }
 
   .info-item .value {
-    color: #fff;
+    color: var(--text-bright);
     font-size: 0.85rem;
     font-weight: 500;
     overflow-wrap: break-word;
@@ -1365,19 +1365,19 @@
   }
 
   .status-pending {
-    color: #888;
+    color: var(--text-dim);
   }
 
   .status-running {
-    color: #51cf66;
+    color: var(--success);
   }
 
   .status-success {
-    color: #51cf66;
+    color: var(--success);
   }
 
   .status-error {
-    color: #ff6b6b;
+    color: var(--danger);
   }
 
   .file-paths-list {
@@ -1391,21 +1391,21 @@
 
   .file-paths-list li {
     padding: 0.5rem;
-    background-color: #1a1a1a;
-    border-left: 2px solid #51cf66;
-    color: #aaa;
+    background-color: var(--bg);
+    border-left: 2px solid var(--success);
+    color: var(--text-muted);
   }
 
   .error-section {
     background-color: rgba(255, 107, 107, 0.1);
-    border-color: #ff6b6b;
+    border-color: var(--danger);
   }
 
   .error-message {
     padding: 0.75rem;
     background-color: rgba(0, 0, 0, 0.3);
-    border-radius: 3px;
-    color: #ff6b6b;
+    border-radius: var(--radius);
+    color: var(--danger);
     overflow-wrap: break-word;
     word-wrap: break-word;
     max-width: 100%;
@@ -1414,9 +1414,9 @@
   .stack-trace {
     margin: 0;
     padding: 0.75rem;
-    background-color: #0d0d0d;
-    border-radius: 3px;
-    color: #e0e0e0;
+    background-color: var(--bg-deep);
+    border-radius: var(--radius);
+    color: var(--text);
     font-size: 0.75rem;
     overflow-x: auto;
     white-space: pre-wrap;
@@ -1431,12 +1431,12 @@
     align-items: center;
     padding: 0.5rem 0;
     margin-top: 0.75rem;
-    border-top: 1px solid #333;
+    border-top: 1px solid var(--border);
   }
 
   .pagination-info {
     font-size: 0.85rem;
-    color: #aaa;
+    color: var(--text-muted);
   }
 
   .pagination-controls {
@@ -1447,15 +1447,15 @@
   .pagination-controls button {
     padding: 0.4rem 0.8rem;
     font-size: 0.85rem;
-    background-color: #444;
-    color: #fff;
-    border: 1px solid #555;
+    background-color: var(--surface-3);
+    color: var(--text-bright);
+    border: 1px solid var(--border-2);
     cursor: pointer;
-    border-radius: 3px;
+    border-radius: var(--radius);
   }
 
   .pagination-controls button:hover:not(:disabled) {
-    background-color: #555;
+    background-color: var(--border-2);
   }
 
   .pagination-controls button:disabled {

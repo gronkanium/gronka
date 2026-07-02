@@ -102,18 +102,18 @@
 
 <section class="operations">
   <div class="header-row">
-    <h2>Recent Operations</h2>
+    <h2>recent operations</h2>
     <button class="advanced-search-btn" on:click={() => navigate('operations-debug')}>
       <Search size={16} />
       <span>advanced search</span>
     </button>
   </div>
   {#if error}
-    <div class="error">Error: {error}</div>
+    <div class="error">error: {error}</div>
   {:else if !$wsConnected}
-    <div class="loading">Connecting...</div>
+    <div class="loading">connecting...</div>
   {:else if operations.length === 0}
-    <div class="empty">No operations yet</div>
+    <div class="empty">no operations yet</div>
   {:else}
     <div class="table-container">
       <table>
@@ -146,9 +146,9 @@
                   <span class="status-icon success">✓</span>
                 {:else if operation.status === 'error'}
                   <span class="status-icon error">
-                    <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="#ff6b6b" stroke="#fff" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="var(--danger)" stroke="var(--text-bright)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
                       <path d="M12 2C6.477 2 2 6.477 2 12s4.477 10 10 10 10-4.477 10-10S17.523 2 12 2z"/>
-                      <path d="M15 9l-6 6M9 9l6 6" stroke="#fff" stroke-width="2" stroke-linecap="round"/>
+                      <path d="M15 9l-6 6M9 9l6 6" stroke="var(--text-bright)" stroke-width="2" stroke-linecap="round"/>
                     </svg>
                   </span>
                 {:else}
@@ -255,8 +255,8 @@
 <style>
   section {
     padding: 1rem;
-    border: 1px solid #333;
-    background-color: #222;
+    border: 1px solid var(--border);
+    background-color: var(--surface);
     grid-column: 1 / -1;
     margin-top: 0;
   }
@@ -266,7 +266,7 @@
     justify-content: space-between;
     align-items: center;
     margin-bottom: 0.75rem;
-    border-bottom: 1px solid #333;
+    border-bottom: 1px solid var(--border);
     padding-bottom: 0.5rem;
   }
 
@@ -274,7 +274,7 @@
     margin: 0;
     font-size: 1.25rem;
     font-weight: 500;
-    color: #fff;
+    color: var(--text-bright);
   }
 
   .advanced-search-btn {
@@ -282,17 +282,17 @@
     align-items: center;
     gap: 0.5rem;
     padding: 0.5rem 1rem;
-    background-color: #444;
-    color: #fff;
-    border: 1px solid #555;
-    border-radius: 3px;
+    background-color: var(--surface-3);
+    color: var(--text-bright);
+    border: 1px solid var(--border-2);
+    border-radius: var(--radius);
     cursor: pointer;
     font-size: 0.85rem;
     transition: background-color 0.2s;
   }
 
   .advanced-search-btn:hover {
-    background-color: #555;
+    background-color: var(--border-2);
   }
 
   .table-container {
@@ -307,15 +307,15 @@
   }
 
   thead {
-    background-color: #2a2a2a;
+    background-color: var(--surface-2);
   }
 
   th {
     padding: 0.75rem 0.5rem;
     text-align: left;
     font-weight: 500;
-    color: #aaa;
-    border-bottom: 1px solid #333;
+    color: var(--text-muted);
+    border-bottom: 1px solid var(--border);
     font-size: 0.85rem;
     text-transform: uppercase;
     letter-spacing: 0.5px;
@@ -354,16 +354,16 @@
   }
 
   tbody tr {
-    border-bottom: 1px solid #2a2a2a;
+    border-bottom: 1px solid var(--surface-2);
   }
 
   tbody tr:hover {
-    background-color: #2a2a2a;
+    background-color: var(--surface-2);
   }
 
   td {
     padding: 0.75rem 0.5rem;
-    color: #e0e0e0;
+    color: var(--text);
     word-wrap: break-word;
     overflow-wrap: break-word;
   }
@@ -385,19 +385,19 @@
     line-height: 1;
     text-align: center;
     border-radius: 50%;
-    font-size: 14px;
+    font-size: 0.875rem;
     font-weight: bold;
     vertical-align: middle;
   }
 
   .status-icon.success {
-    background-color: #51cf66;
+    background-color: var(--success);
     color: #000;
   }
 
   .status-icon.error {
     background-color: transparent;
-    color: #fff;
+    color: var(--text-bright);
     display: inline-flex;
     align-items: center;
     justify-content: center;
@@ -405,7 +405,7 @@
 
   .status-icon.error svg {
     display: block;
-    fill: #ff6b6b;
+    fill: var(--danger);
     width: 20px;
     height: 20px;
   }
@@ -413,8 +413,8 @@
   .spinner {
     width: 20px;
     height: 20px;
-    border: 2px solid #444;
-    border-top-color: #51cf66;
+    border: 2px solid var(--surface-3);
+    border-top-color: var(--success);
     border-radius: 50%;
     animation: spin 0.8s linear infinite;
     margin: 0 auto;
@@ -430,7 +430,7 @@
 
   .type-cell {
     text-transform: capitalize;
-    color: #fff;
+    color: var(--text-bright);
     font-weight: 500;
     max-width: 150px;
     overflow: hidden;
@@ -439,7 +439,7 @@
   }
 
   .username-cell {
-    color: #e0e0e0;
+    color: var(--text);
     max-width: 200px;
     overflow: hidden;
     text-overflow: ellipsis;
@@ -447,7 +447,7 @@
   }
 
   .userid-cell {
-    color: #888;
+    color: var(--text-dim);
     font-family: monospace;
     font-size: 0.85rem;
     max-width: 150px;
@@ -457,29 +457,29 @@
   }
 
   .size-cell {
-    color: #aaa;
+    color: var(--text-muted);
     max-width: 150px;
   }
 
   .timestamp-cell {
-    color: #aaa;
+    color: var(--text-muted);
     font-size: 0.85rem;
     max-width: 200px;
     white-space: nowrap;
   }
 
   .loading {
-    color: #888;
+    color: var(--text-dim);
     padding: 1rem 0;
   }
 
   .error {
-    color: #ff6b6b;
+    color: var(--danger);
     padding: 1rem 0;
   }
 
   .empty {
-    color: #888;
+    color: var(--text-dim);
     padding: 1rem 0;
     text-align: center;
   }
@@ -492,22 +492,22 @@
   .expand-btn {
     background: none;
     border: none;
-    color: #aaa;
+    color: var(--text-muted);
     cursor: pointer;
     font-size: 0.9rem;
     padding: 0.25rem;
   }
 
   .expand-btn:hover {
-    color: #fff;
+    color: var(--text-bright);
   }
 
   .operation-row.expanded {
-    background-color: #2a2a2a;
+    background-color: var(--surface-2);
   }
 
   .details-row {
-    background-color: #1a1a1a;
+    background-color: var(--bg);
   }
 
   .details-cell {
@@ -524,17 +524,17 @@
   }
 
   .details-section {
-    border: 1px solid #333;
+    border: 1px solid var(--border);
     padding: 1rem;
-    border-radius: 3px;
-    background-color: #222;
+    border-radius: var(--radius);
+    background-color: var(--surface);
   }
 
   .details-section h4 {
     margin: 0 0 0.75rem 0;
     font-size: 0.9rem;
     font-weight: 500;
-    color: #51cf66;
+    color: var(--success);
     text-transform: uppercase;
     letter-spacing: 0.5px;
   }
@@ -552,12 +552,12 @@
   }
 
   .info-item .label {
-    color: #aaa;
+    color: var(--text-muted);
     font-size: 0.85rem;
   }
 
   .info-item .value {
-    color: #fff;
+    color: var(--text-bright);
     font-size: 0.85rem;
     font-weight: 500;
   }
@@ -568,19 +568,19 @@
   }
 
   .status-pending {
-    color: #888;
+    color: var(--text-dim);
   }
 
   .status-running {
-    color: #51cf66;
+    color: var(--success);
   }
 
   .status-success {
-    color: #51cf66;
+    color: var(--success);
   }
 
   .status-error {
-    color: #ff6b6b;
+    color: var(--danger);
   }
 
   .file-paths-list {
@@ -594,29 +594,29 @@
 
   .file-paths-list li {
     padding: 0.5rem;
-    background-color: #1a1a1a;
-    border-left: 2px solid #51cf66;
-    color: #aaa;
+    background-color: var(--bg);
+    border-left: 2px solid var(--success);
+    color: var(--text-muted);
   }
 
   .error-section {
     background-color: rgba(255, 107, 107, 0.1);
-    border-color: #ff6b6b;
+    border-color: var(--danger);
   }
 
   .error-message {
     padding: 0.75rem;
     background-color: rgba(0, 0, 0, 0.3);
-    border-radius: 3px;
-    color: #ff6b6b;
+    border-radius: var(--radius);
+    color: var(--danger);
   }
 
   .stack-trace {
     margin: 0;
     padding: 0.75rem;
-    background-color: #0d0d0d;
-    border-radius: 3px;
-    color: #e0e0e0;
+    background-color: var(--bg-deep);
+    border-radius: var(--radius);
+    color: var(--text);
     font-size: 0.75rem;
     overflow-x: auto;
     white-space: pre-wrap;
@@ -634,26 +634,26 @@
     align-items: center;
     gap: 1rem;
     padding: 0.75rem;
-    background-color: #1a1a1a;
-    border-radius: 3px;
+    background-color: var(--bg);
+    border-radius: var(--radius);
   }
 
   .step-name {
     flex: 1;
-    color: #e0e0e0;
+    color: var(--text);
     font-size: 0.85rem;
   }
 
   .step-status {
     padding: 0.2rem 0.5rem;
-    border-radius: 3px;
+    border-radius: var(--radius);
     font-size: 0.75rem;
     font-weight: 600;
     text-transform: uppercase;
   }
 
   .step-duration {
-    color: #aaa;
+    color: var(--text-muted);
     font-size: 0.85rem;
     font-family: monospace;
   }
@@ -664,12 +664,12 @@
     align-items: center;
     padding: 0.5rem 0;
     margin-top: 0.75rem;
-    border-top: 1px solid #333;
+    border-top: 1px solid var(--border);
   }
 
   .pagination-info {
     font-size: 0.85rem;
-    color: #aaa;
+    color: var(--text-muted);
   }
 
   .pagination-controls {
@@ -680,15 +680,15 @@
   .pagination-controls button {
     padding: 0.4rem 0.8rem;
     font-size: 0.85rem;
-    background-color: #444;
-    color: #fff;
-    border: 1px solid #555;
+    background-color: var(--surface-3);
+    color: var(--text-bright);
+    border: 1px solid var(--border-2);
     cursor: pointer;
-    border-radius: 3px;
+    border-radius: var(--radius);
   }
 
   .pagination-controls button:hover:not(:disabled) {
-    background-color: #555;
+    background-color: var(--border-2);
   }
 
   .pagination-controls button:disabled {

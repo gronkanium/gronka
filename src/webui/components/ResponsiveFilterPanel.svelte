@@ -56,9 +56,9 @@
 <style>
   .filter-panel {
     padding: 1rem;
-    background-color: #1a1a1a;
-    border: 1px solid #333;
-    border-radius: 3px;
+    background-color: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
     margin-bottom: 1rem;
   }
   
@@ -100,7 +100,7 @@
   .filter-header h3 {
     margin: 0;
     font-size: 1rem;
-    color: #fff;
+    color: var(--text-bright);
     font-weight: 500;
   }
   

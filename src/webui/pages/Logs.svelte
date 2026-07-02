@@ -530,8 +530,8 @@
 <style>
   section {
     padding: 1rem;
-    border: 1px solid #333;
-    background-color: #222;
+    border: 1px solid var(--border);
+    background-color: var(--surface);
     grid-column: 1 / -1;
   }
 
@@ -540,7 +540,7 @@
     justify-content: space-between;
     align-items: center;
     margin-bottom: 0.75rem;
-    border-bottom: 1px solid #333;
+    border-bottom: 1px solid var(--border);
     padding-bottom: 0.5rem;
   }
 
@@ -548,16 +548,16 @@
     margin: 0;
     font-size: 1.25rem;
     font-weight: 500;
-    color: #fff;
+    color: var(--text-bright);
   }
 
   .ws-status {
     font-size: 0.85rem;
-    color: #666;
+    color: var(--text-dim);
   }
 
   .ws-status.connected {
-    color: #51cf66;
+    color: var(--success);
   }
 
   .filters {
@@ -566,9 +566,9 @@
     gap: 0.75rem;
     margin-bottom: 1rem;
     padding: 0.5rem;
-    background-color: #1a1a1a;
-    border: 1px solid #333;
-    border-radius: 3px;
+    background-color: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
     max-width: 100%;
   }
 
@@ -580,18 +580,18 @@
 
   .filter-group label {
     font-size: 0.8rem;
-    color: #aaa;
+    color: var(--text-muted);
     white-space: nowrap;
   }
 
   .filter-group select,
   .filter-group input[type="text"] {
-    background-color: #2a2a2a;
-    border: 1px solid #444;
-    color: #fff;
+    background-color: var(--surface-2);
+    border: 1px solid var(--surface-3);
+    color: var(--text-bright);
     padding: 0.3rem 0.5rem;
     font-size: 0.8rem;
-    border-radius: 3px;
+    border-radius: var(--radius);
   }
 
   .filter-group select {
@@ -619,7 +619,7 @@
     align-items: center;
     gap: 0.3rem;
     font-size: 0.8rem;
-    color: #aaa;
+    color: var(--text-muted);
     cursor: pointer;
   }
 
@@ -628,7 +628,7 @@
   }
 
   .mode-toggle input[type="radio"]:checked + span {
-    color: #51cf66;
+    color: var(--success);
   }
 
   .component-checkboxes {
@@ -642,9 +642,9 @@
     max-height: 120px;
     overflow-y: auto;
     padding: 0.4rem;
-    background-color: #2a2a2a;
-    border: 1px solid #444;
-    border-radius: 3px;
+    background-color: var(--surface-2);
+    border: 1px solid var(--surface-3);
+    border-radius: var(--radius);
   }
 
   .component-checkbox {
@@ -652,18 +652,18 @@
     align-items: center;
     gap: 0.3rem;
     font-size: 0.75rem;
-    color: #aaa;
+    color: var(--text-muted);
     cursor: pointer;
     padding: 0.2rem 0.4rem;
-    background-color: #1a1a1a;
-    border: 1px solid #333;
-    border-radius: 3px;
+    background-color: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
     white-space: nowrap;
   }
 
   .component-checkbox:hover {
-    background-color: #2a2a2a;
-    border-color: #555;
+    background-color: var(--surface-2);
+    border-color: var(--border-2);
   }
 
   .component-checkbox input[type="checkbox"] {
@@ -671,7 +671,7 @@
   }
 
   .component-checkbox input[type="checkbox"]:checked + span {
-    color: #ff6b6b;
+    color: var(--danger);
     font-weight: 500;
   }
 
@@ -684,11 +684,11 @@
   .level-btn {
     padding: 0.15rem 0.3rem !important;
     font-size: 0.65rem !important;
-    border: 1px solid #444 !important;
-    background-color: #2a2a2a !important;
-    color: #888 !important;
+    border: 1px solid var(--surface-3) !important;
+    background-color: var(--surface-2) !important;
+    color: var(--text-dim) !important;
     cursor: pointer;
-    border-radius: 3px !important;
+    border-radius: var(--radius) !important;
     text-transform: uppercase !important;
     font-weight: 500 !important;
     height: 20px !important;
@@ -711,7 +711,7 @@
   }
 
   .level-btn:hover {
-    background-color: #333 !important;
+    background-color: var(--border) !important;
     height: 20px !important;
     min-height: 20px !important;
     max-height: 20px !important;
@@ -732,7 +732,7 @@
   }
 
   .level-btn.error.active {
-    color: #ff6b6b !important;
+    color: var(--danger) !important;
     height: 20px !important;
     min-height: 20px !important;
     max-height: 20px !important;
@@ -742,7 +742,7 @@
   }
 
   .level-btn.warn.active {
-    color: #ffd93d !important;
+    color: var(--warning) !important;
     height: 20px !important;
     min-height: 20px !important;
     max-height: 20px !important;
@@ -752,7 +752,7 @@
   }
 
   .level-btn.info.active {
-    color: #51cf66 !important;
+    color: var(--success) !important;
     height: 20px !important;
     min-height: 20px !important;
     max-height: 20px !important;
@@ -762,7 +762,7 @@
   }
 
   .level-btn.debug.active {
-    color: #888 !important;
+    color: var(--text-dim) !important;
     height: 20px !important;
     min-height: 20px !important;
     max-height: 20px !important;
@@ -777,9 +777,9 @@
     align-items: flex-start;
     gap: 0.75rem;
     padding: 1rem;
-    background-color: #1a1a1a;
-    border: 1px solid #444;
-    border-radius: 3px;
+    background-color: var(--bg);
+    border: 1px solid var(--surface-3);
+    border-radius: var(--radius);
     margin-bottom: 0.75rem;
   }
 
@@ -798,7 +798,7 @@
 
   .style-demo-label {
     font-size: 0.75rem;
-    color: #888;
+    color: var(--text-dim);
     font-weight: 500;
   }
 
@@ -815,15 +815,15 @@
     min-height: 20px !important;
     max-height: 20px !important;
     padding: 0 !important;
-    border: 1px solid #444 !important;
-    background-color: #2a2a2a !important;
+    border: 1px solid var(--surface-3) !important;
+    background-color: var(--surface-2) !important;
     cursor: pointer;
     border-radius: 50% !important;
     font-size: 0.65rem !important;
     display: flex !important;
     align-items: center !important;
     justify-content: center !important;
-    color: #666 !important;
+    color: var(--text-dim) !important;
     transition: background-color 0.2s;
     box-sizing: border-box !important;
     flex-shrink: 0 !important;
@@ -831,7 +831,7 @@
   }
 
   .level-btn-icon-only:hover {
-    background-color: #333 !important;
+    background-color: var(--border) !important;
     width: 20px !important;
     height: 20px !important;
     min-width: 20px !important;
@@ -841,23 +841,23 @@
   }
 
   .level-btn-icon-only.error {
-    border-color: #ff6b6b;
-    color: #ff6b6b;
+    border-color: var(--danger);
+    color: var(--danger);
   }
 
   .level-btn-icon-only.warn {
-    border-color: #ffd93d;
-    color: #ffd93d;
+    border-color: var(--warning);
+    color: var(--warning);
   }
 
   .level-btn-icon-only.info {
-    border-color: #51cf66;
-    color: #51cf66;
+    border-color: var(--success);
+    color: var(--success);
   }
 
   .level-btn-icon-only.debug {
-    border-color: #888;
-    color: #888;
+    border-color: var(--text-dim);
+    color: var(--text-dim);
   }
 
   .level-btn-icon-only.active {
@@ -879,11 +879,11 @@
   .level-btn-compact {
     padding: 0.15rem 0.3rem !important;
     font-size: 0.65rem !important;
-    border: 1px solid #444 !important;
-    background-color: #2a2a2a !important;
-    color: #888 !important;
+    border: 1px solid var(--surface-3) !important;
+    background-color: var(--surface-2) !important;
+    color: var(--text-dim) !important;
     cursor: pointer;
-    border-radius: 2px !important;
+    border-radius: var(--radius) !important;
     text-transform: uppercase !important;
     font-weight: 500 !important;
     white-space: nowrap !important;
@@ -904,7 +904,7 @@
   }
 
   .level-btn-compact:hover {
-    background-color: #333 !important;
+    background-color: var(--border) !important;
     height: 20px !important;
     min-height: 20px !important;
     max-height: 20px !important;
@@ -925,7 +925,7 @@
   }
 
   .level-btn-compact.error.active {
-    color: #ff6b6b !important;
+    color: var(--danger) !important;
     height: 20px !important;
     min-height: 20px !important;
     max-height: 20px !important;
@@ -935,7 +935,7 @@
   }
 
   .level-btn-compact.warn.active {
-    color: #ffd93d !important;
+    color: var(--warning) !important;
     height: 20px !important;
     min-height: 20px !important;
     max-height: 20px !important;
@@ -945,7 +945,7 @@
   }
 
   .level-btn-compact.info.active {
-    color: #51cf66 !important;
+    color: var(--success) !important;
     height: 20px !important;
     min-height: 20px !important;
     max-height: 20px !important;
@@ -955,7 +955,7 @@
   }
 
   .level-btn-compact.debug.active {
-    color: #888 !important;
+    color: var(--text-dim) !important;
     height: 20px !important;
     min-height: 20px !important;
     max-height: 20px !important;
@@ -967,8 +967,8 @@
   /* Option 4: Segmented control */
   .style-option-4 {
     gap: 0;
-    border: 1px solid #444;
-    border-radius: 3px;
+    border: 1px solid var(--surface-3);
+    border-radius: var(--radius);
     display: inline-flex;
     overflow: hidden;
   }
@@ -977,9 +977,9 @@
     padding: 0.15rem 0.3rem !important;
     font-size: 0.65rem !important;
     border: none !important;
-    border-right: 1px solid #444 !important;
-    background-color: #2a2a2a !important;
-    color: #888 !important;
+    border-right: 1px solid var(--surface-3) !important;
+    background-color: var(--surface-2) !important;
+    color: var(--text-dim) !important;
     cursor: pointer;
     text-transform: uppercase !important;
     font-weight: 500 !important;
@@ -1005,7 +1005,7 @@
   }
 
   .level-btn-segmented:hover {
-    background-color: #333 !important;
+    background-color: var(--border) !important;
     height: 20px !important;
     min-height: 20px !important;
     max-height: 20px !important;
@@ -1025,7 +1025,7 @@
   }
 
   .level-btn-segmented.error.active {
-    color: #ff6b6b !important;
+    color: var(--danger) !important;
     background-color: rgba(255, 107, 107, 0.15) !important;
     height: 20px !important;
     min-height: 20px !important;
@@ -1036,7 +1036,7 @@
   }
 
   .level-btn-segmented.warn.active {
-    color: #ffd93d !important;
+    color: var(--warning) !important;
     background-color: rgba(255, 217, 61, 0.15) !important;
     height: 20px !important;
     min-height: 20px !important;
@@ -1047,7 +1047,7 @@
   }
 
   .level-btn-segmented.info.active {
-    color: #51cf66 !important;
+    color: var(--success) !important;
     background-color: rgba(81, 207, 102, 0.15) !important;
     height: 20px !important;
     min-height: 20px !important;
@@ -1058,7 +1058,7 @@
   }
 
   .level-btn-segmented.debug.active {
-    color: #888 !important;
+    color: var(--text-dim) !important;
     background-color: rgba(136, 136, 136, 0.15) !important;
     height: 20px !important;
     min-height: 20px !important;
@@ -1076,11 +1076,11 @@
   .level-btn-minimal {
     padding: 0.15rem 0.3rem !important;
     font-size: 0.65rem !important;
-    border: 1px solid #444 !important;
-    background-color: #2a2a2a !important;
-    color: #888 !important;
+    border: 1px solid var(--surface-3) !important;
+    background-color: var(--surface-2) !important;
+    color: var(--text-dim) !important;
     cursor: pointer;
-    border-radius: 8px !important;
+    border-radius: var(--radius-lg) !important;
     text-transform: uppercase !important;
     font-weight: 500 !important;
     white-space: nowrap !important;
@@ -1101,7 +1101,7 @@
   }
 
   .level-btn-minimal:hover {
-    background-color: #333 !important;
+    background-color: var(--border) !important;
     height: 20px !important;
     min-height: 20px !important;
     max-height: 20px !important;
@@ -1122,7 +1122,7 @@
   }
 
   .level-btn-minimal.error.active {
-    color: #ff6b6b !important;
+    color: var(--danger) !important;
     height: 20px !important;
     min-height: 20px !important;
     max-height: 20px !important;
@@ -1132,7 +1132,7 @@
   }
 
   .level-btn-minimal.warn.active {
-    color: #ffd93d !important;
+    color: var(--warning) !important;
     height: 20px !important;
     min-height: 20px !important;
     max-height: 20px !important;
@@ -1142,7 +1142,7 @@
   }
 
   .level-btn-minimal.info.active {
-    color: #51cf66 !important;
+    color: var(--success) !important;
     height: 20px !important;
     min-height: 20px !important;
     max-height: 20px !important;
@@ -1152,7 +1152,7 @@
   }
 
   .level-btn-minimal.debug.active {
-    color: #888 !important;
+    color: var(--text-dim) !important;
     height: 20px !important;
     min-height: 20px !important;
     max-height: 20px !important;
@@ -1169,11 +1169,11 @@
   .level-btn-icon-text {
     padding: 0.2rem 0.4rem !important;
     font-size: 0.7rem !important;
-    border: 1px solid #444 !important;
-    background-color: #2a2a2a !important;
-    color: #888 !important;
+    border: 1px solid var(--surface-3) !important;
+    background-color: var(--surface-2) !important;
+    color: var(--text-dim) !important;
     cursor: pointer;
-    border-radius: 3px !important;
+    border-radius: var(--radius) !important;
     font-weight: 500 !important;
     white-space: nowrap !important;
     display: inline-flex !important;
@@ -1194,7 +1194,7 @@
   }
 
   .level-btn-icon-text:hover {
-    background-color: #333 !important;
+    background-color: var(--border) !important;
     height: 24px !important;
     min-height: 24px !important;
     max-height: 24px !important;
@@ -1228,7 +1228,7 @@
   }
 
   .level-btn-icon-text.error.active {
-    color: #ff6b6b !important;
+    color: var(--danger) !important;
     height: 24px !important;
     min-height: 24px !important;
     max-height: 24px !important;
@@ -1238,7 +1238,7 @@
   }
 
   .level-btn-icon-text.warn.active {
-    color: #ffd93d !important;
+    color: var(--warning) !important;
     height: 24px !important;
     min-height: 24px !important;
     max-height: 24px !important;
@@ -1248,7 +1248,7 @@
   }
 
   .level-btn-icon-text.info.active {
-    color: #51cf66 !important;
+    color: var(--success) !important;
     height: 24px !important;
     min-height: 24px !important;
     max-height: 24px !important;
@@ -1258,7 +1258,7 @@
   }
 
   .level-btn-icon-text.debug.active {
-    color: #888 !important;
+    color: var(--text-dim) !important;
     height: 24px !important;
     min-height: 24px !important;
     max-height: 24px !important;
@@ -1270,19 +1270,19 @@
   .btn-small {
     padding: 0.3rem 0.6rem;
     font-size: 0.75rem;
-    background-color: #444;
-    color: #fff;
-    border: 1px solid #555;
+    background-color: var(--surface-3);
+    color: var(--text-bright);
+    border: 1px solid var(--border-2);
     cursor: pointer;
-    border-radius: 3px;
+    border-radius: var(--radius);
   }
 
   .btn-small:hover {
-    background-color: #555;
+    background-color: var(--border-2);
   }
 
   .btn-small:active {
-    background-color: #333;
+    background-color: var(--border);
   }
 
   .filter-actions {
@@ -1297,7 +1297,7 @@
     align-items: center;
     gap: 0.4rem;
     font-size: 0.8rem;
-    color: #aaa;
+    color: var(--text-muted);
     cursor: pointer;
   }
 
@@ -1319,20 +1319,20 @@
   }
 
   .metadata-cell summary {
-    color: #51cf66;
+    color: var(--success);
     user-select: none;
   }
 
   .metadata-cell summary:hover {
-    color: #6de380;
+    color: var(--success);
   }
 
   .metadata-cell pre {
     margin-top: 0.5rem;
     padding: 0.5rem;
-    background-color: #0d0d0d;
-    border: 1px solid #333;
-    border-radius: 3px;
+    background-color: var(--bg-deep);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
     overflow-x: auto;
     white-space: pre-wrap;
     word-wrap: break-word;
@@ -1341,7 +1341,7 @@
   }
 
   .metadata-cell .no-data {
-    color: #555;
+    color: var(--border-2);
   }
 
   .logs-container {
@@ -1359,7 +1359,7 @@
   }
 
   thead {
-    background-color: #2a2a2a;
+    background-color: var(--surface-2);
     position: sticky;
     top: 0;
   }
@@ -1368,8 +1368,8 @@
     padding: 0.75rem 0.5rem;
     text-align: left;
     font-weight: 500;
-    color: #aaa;
-    border-bottom: 1px solid #333;
+    color: var(--text-muted);
+    border-bottom: 1px solid var(--border);
     font-size: 0.8rem;
     text-transform: uppercase;
     letter-spacing: 0.5px;
@@ -1406,16 +1406,16 @@
   }
 
   tbody tr {
-    border-bottom: 1px solid #2a2a2a;
+    border-bottom: 1px solid var(--surface-2);
   }
 
   tbody tr:hover {
-    background-color: #2a2a2a;
+    background-color: var(--surface-2);
   }
 
   td {
     padding: 0.6rem 0.5rem;
-    color: #e0e0e0;
+    color: var(--text);
     vertical-align: top;
     word-wrap: break-word;
     overflow-wrap: break-word;
@@ -1430,7 +1430,7 @@
   }
 
   .timestamp-cell {
-    color: #888;
+    color: var(--text-dim);
     font-size: 0.8rem;
     font-family: monospace;
     white-space: nowrap;
@@ -1444,7 +1444,7 @@
   .level-badge {
     display: inline-block;
     padding: 0.05rem 0.2rem;
-    border-radius: 2px;
+    border-radius: var(--radius);
     font-size: 0.65rem;
     font-weight: 500;
     text-transform: uppercase;
@@ -1454,31 +1454,31 @@
 
   .level-badge.error {
     background-color: rgba(255, 107, 107, 0.2);
-    color: #ff6b6b;
+    color: var(--danger);
     padding: 0.02rem 0.15rem !important;
     font-size: 0.6rem !important;
     line-height: 1.1 !important;
-    border-radius: 2px;
+    border-radius: var(--radius);
     font-weight: 500;
   }
 
   .level-badge.warn {
     background-color: rgba(255, 217, 61, 0.2);
-    color: #ffd93d;
+    color: var(--warning);
   }
 
   .level-badge.info {
     background-color: rgba(81, 207, 102, 0.2);
-    color: #51cf66;
+    color: var(--success);
   }
 
   .level-badge.debug {
     background-color: rgba(136, 136, 136, 0.2);
-    color: #888;
+    color: var(--text-dim);
   }
 
   .component-cell {
-    color: #aaa;
+    color: var(--text-muted);
     font-size: 0.85rem;
     max-width: 200px;
     overflow: hidden;
@@ -1487,7 +1487,7 @@
   }
 
   .message-cell {
-    color: #e0e0e0;
+    color: var(--text);
     word-break: break-word;
     font-family: monospace;
     font-size: 0.85rem;
@@ -1500,14 +1500,14 @@
     justify-content: space-between;
     align-items: center;
     padding: 0.75rem;
-    background-color: #1a1a1a;
-    border: 1px solid #333;
-    border-radius: 3px;
+    background-color: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
   }
 
   .pagination-info {
     font-size: 0.85rem;
-    color: #aaa;
+    color: var(--text-muted);
   }
 
   .pagination-controls {
@@ -1518,15 +1518,15 @@
   .pagination-controls button {
     padding: 0.4rem 0.8rem;
     font-size: 0.85rem;
-    background-color: #444;
-    color: #fff;
-    border: 1px solid #555;
+    background-color: var(--surface-3);
+    color: var(--text-bright);
+    border: 1px solid var(--border-2);
     cursor: pointer;
-    border-radius: 3px;
+    border-radius: var(--radius);
   }
 
   .pagination-controls button:hover:not(:disabled) {
-    background-color: #555;
+    background-color: var(--border-2);
   }
 
   .pagination-controls button:disabled {
@@ -1542,15 +1542,15 @@
   }
 
   .loading {
-    color: #888;
+    color: var(--text-dim);
   }
 
   .error {
-    color: #ff6b6b;
+    color: var(--danger);
   }
 
   .empty {
-    color: #888;
+    color: var(--text-dim);
   }
 
   @media (max-width: 768px) {

@@ -501,19 +501,19 @@
     margin: 0 0 0.5rem 0;
     font-size: 1.5rem;
     font-weight: 600;
-    color: #fff;
+    color: var(--text-bright);
   }
 
   .subtitle {
     margin: 0;
-    color: #aaa;
+    color: var(--text-muted);
     font-size: 0.9rem;
   }
 
   .user-selector-section {
-    background-color: #222;
-    border: 1px solid #333;
-    border-radius: 4px;
+    background-color: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-lg);
     padding: 1.5rem;
   }
 
@@ -528,7 +528,7 @@
     margin: 0;
     font-size: 1rem;
     font-weight: 500;
-    color: #fff;
+    color: var(--text-bright);
   }
 
   .search-box {
@@ -538,26 +538,26 @@
 
   .search-box input {
     padding: 0.5rem 0.75rem;
-    background-color: #2a2a2a;
-    border: 1px solid #444;
-    color: #fff;
+    background-color: var(--surface-2);
+    border: 1px solid var(--surface-3);
+    color: var(--text-bright);
     font-size: 0.9rem;
-    border-radius: 3px;
+    border-radius: var(--radius);
     min-width: 250px;
   }
 
   .search-box button {
     padding: 0.5rem 1rem;
-    background-color: #444;
-    color: #fff;
-    border: 1px solid #555;
+    background-color: var(--surface-3);
+    color: var(--text-bright);
+    border: 1px solid var(--border-2);
     cursor: pointer;
     font-size: 0.9rem;
-    border-radius: 3px;
+    border-radius: var(--radius);
   }
 
   .search-box button:hover {
-    background-color: #555;
+    background-color: var(--border-2);
   }
 
   .users-list {
@@ -568,23 +568,23 @@
 
   .user-item {
     padding: 0.5rem 1rem;
-    background-color: #2a2a2a;
-    border: 1px solid #444;
-    color: #e0e0e0;
+    background-color: var(--surface-2);
+    border: 1px solid var(--surface-3);
+    color: var(--text);
     cursor: pointer;
-    border-radius: 3px;
+    border-radius: var(--radius);
     font-size: 0.9rem;
     transition: all 0.2s;
   }
 
   .user-item:hover {
-    background-color: #333;
-    border-color: #555;
+    background-color: var(--border);
+    border-color: var(--border-2);
   }
 
   .user-item.selected {
-    background-color: #51cf66;
-    border-color: #51cf66;
+    background-color: var(--success);
+    border-color: var(--success);
     color: #000;
   }
 
@@ -604,12 +604,12 @@
     align-items: center;
     margin-top: 1rem;
     padding: 0.75rem 0;
-    border-top: 1px solid #333;
+    border-top: 1px solid var(--border);
   }
 
   .users-pagination .pagination-info {
     font-size: 0.85rem;
-    color: #aaa;
+    color: var(--text-muted);
   }
 
   .users-pagination .pagination-controls {
@@ -620,15 +620,15 @@
   .users-pagination .pagination-controls button {
     padding: 0.4rem 0.8rem;
     font-size: 0.85rem;
-    background-color: #444;
-    color: #fff;
-    border: 1px solid #555;
+    background-color: var(--surface-3);
+    color: var(--text-bright);
+    border: 1px solid var(--border-2);
     cursor: pointer;
-    border-radius: 3px;
+    border-radius: var(--radius);
   }
 
   .users-pagination .pagination-controls button:hover:not(:disabled) {
-    background-color: #555;
+    background-color: var(--border-2);
   }
 
   .users-pagination .pagination-controls button:disabled {
@@ -637,9 +637,9 @@
   }
 
   .media-section {
-    background-color: #222;
-    border: 1px solid #333;
-    border-radius: 4px;
+    background-color: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-lg);
     padding: 1.5rem;
   }
 
@@ -656,11 +656,11 @@
     margin: 0;
     font-size: 1rem;
     font-weight: 500;
-    color: #fff;
+    color: var(--text-bright);
   }
 
   .count {
-    color: #aaa;
+    color: var(--text-muted);
     font-weight: normal;
   }
 
@@ -672,26 +672,26 @@
 
   .header-actions select {
     padding: 0.5rem 0.75rem;
-    background-color: #2a2a2a;
-    border: 1px solid #444;
-    color: #fff;
+    background-color: var(--surface-2);
+    border: 1px solid var(--surface-3);
+    color: var(--text-bright);
     font-size: 0.9rem;
-    border-radius: 3px;
+    border-radius: var(--radius);
     cursor: pointer;
   }
 
   .delete-all-btn {
     padding: 0.5rem 1rem;
-    background-color: #ff6b6b;
-    color: #fff;
-    border: 1px solid #ff5252;
+    background-color: var(--danger);
+    color: var(--text-bright);
+    border: 1px solid var(--danger);
     cursor: pointer;
     font-size: 0.9rem;
-    border-radius: 3px;
+    border-radius: var(--radius);
   }
 
   .delete-all-btn:hover:not(:disabled) {
-    background-color: #ff5252;
+    background-color: var(--danger);
   }
 
   .delete-all-btn:disabled {
@@ -705,15 +705,15 @@
     align-items: center;
     margin-bottom: 1rem;
     padding: 0.75rem;
-    background-color: #2a2a2a;
-    border-radius: 3px;
+    background-color: var(--surface-2);
+    border-radius: var(--radius);
   }
 
   .select-all-label {
     display: flex;
     align-items: center;
     gap: 0.5rem;
-    color: #e0e0e0;
+    color: var(--text);
     cursor: pointer;
     font-size: 0.9rem;
   }
@@ -724,16 +724,16 @@
 
   .bulk-delete-btn {
     padding: 0.4rem 0.8rem;
-    background-color: #ff6b6b;
-    color: #fff;
-    border: 1px solid #ff5252;
+    background-color: var(--danger);
+    color: var(--text-bright);
+    border: 1px solid var(--danger);
     cursor: pointer;
     font-size: 0.85rem;
-    border-radius: 3px;
+    border-radius: var(--radius);
   }
 
   .bulk-delete-btn:hover:not(:disabled) {
-    background-color: #ff5252;
+    background-color: var(--danger);
   }
 
   .bulk-delete-btn:disabled {
@@ -753,15 +753,15 @@
   }
 
   thead {
-    background-color: #2a2a2a;
+    background-color: var(--surface-2);
   }
 
   th {
     padding: 0.75rem 1rem;
     text-align: left;
     font-weight: 500;
-    color: #aaa;
-    border-bottom: 1px solid #333;
+    color: var(--text-muted);
+    border-bottom: 1px solid var(--border);
     font-size: 0.85rem;
     text-transform: uppercase;
     letter-spacing: 0.5px;
@@ -778,16 +778,16 @@
   }
 
   tbody tr {
-    border-bottom: 1px solid #2a2a2a;
+    border-bottom: 1px solid var(--surface-2);
   }
 
   tbody tr:hover {
-    background-color: #2a2a2a;
+    background-color: var(--surface-2);
   }
 
   td {
     padding: 0.75rem 1rem;
-    color: #e0e0e0;
+    color: var(--text);
   }
 
   .checkbox-cell {
@@ -803,7 +803,7 @@
   }
 
   .url-cell a {
-    color: #51cf66;
+    color: var(--success);
     text-decoration: none;
   }
 
@@ -817,7 +817,7 @@
 
   .date-cell {
     font-size: 0.85rem;
-    color: #aaa;
+    color: var(--text-muted);
   }
 
   .size-cell {
@@ -831,16 +831,16 @@
 
   .delete-btn {
     padding: 0.4rem 0.8rem;
-    background-color: #ff6b6b;
-    color: #fff;
-    border: 1px solid #ff5252;
+    background-color: var(--danger);
+    color: var(--text-bright);
+    border: 1px solid var(--danger);
     cursor: pointer;
     font-size: 0.85rem;
-    border-radius: 3px;
+    border-radius: var(--radius);
   }
 
   .delete-btn:hover:not(:disabled) {
-    background-color: #ff5252;
+    background-color: var(--danger);
   }
 
   .delete-btn:disabled {
@@ -857,7 +857,7 @@
 
   .pagination-info {
     font-size: 0.85rem;
-    color: #aaa;
+    color: var(--text-muted);
   }
 
   .pagination-controls {
@@ -868,15 +868,15 @@
   .pagination-controls button {
     padding: 0.4rem 0.8rem;
     font-size: 0.85rem;
-    background-color: #444;
-    color: #fff;
-    border: 1px solid #555;
+    background-color: var(--surface-3);
+    color: var(--text-bright);
+    border: 1px solid var(--border-2);
     cursor: pointer;
-    border-radius: 3px;
+    border-radius: var(--radius);
   }
 
   .pagination-controls button:hover:not(:disabled) {
-    background-color: #555;
+    background-color: var(--border-2);
   }
 
   .pagination-controls button:disabled {
@@ -887,10 +887,10 @@
   .page-size-select {
     padding: 0.4rem 0.6rem;
     font-size: 0.85rem;
-    background-color: #2a2a2a;
-    border: 1px solid #444;
-    color: #fff;
-    border-radius: 3px;
+    background-color: var(--surface-2);
+    border: 1px solid var(--surface-3);
+    color: var(--text-bright);
+    border-radius: var(--radius);
     cursor: pointer;
     margin-right: 0.5rem;
   }
@@ -909,16 +909,16 @@
   }
 
   .loading {
-    color: #888;
+    color: var(--text-dim);
   }
 
   .error {
-    color: #ff6b6b;
+    color: var(--danger);
   }
 
   .empty,
   .empty-state {
-    color: #888;
+    color: var(--text-dim);
   }
 
   .empty-state p {
@@ -928,15 +928,15 @@
   .retry-btn {
     margin-top: 1rem;
     padding: 0.5rem 1rem;
-    background-color: #444;
-    color: #fff;
-    border: 1px solid #555;
+    background-color: var(--surface-3);
+    color: var(--text-bright);
+    border: 1px solid var(--border-2);
     cursor: pointer;
-    border-radius: 3px;
+    border-radius: var(--radius);
   }
 
   .retry-btn:hover {
-    background-color: #555;
+    background-color: var(--border-2);
   }
 
   @media (max-width: 768px) {

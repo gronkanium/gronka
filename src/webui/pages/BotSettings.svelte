@@ -91,11 +91,11 @@
   }
 
   .status {
-    color: #aaa;
+    color: var(--text-muted);
   }
 
   .status.error {
-    color: #ff6b6b;
+    color: var(--danger);
   }
 
   .setting-row {
@@ -103,9 +103,9 @@
     align-items: center;
     justify-content: space-between;
     gap: 1rem;
-    background-color: #0d0d0d;
-    border: 1px solid #333;
-    border-radius: 6px;
+    background-color: var(--bg-deep);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-lg);
     padding: 1rem 1.25rem;
   }
 
@@ -116,12 +116,12 @@
   }
 
   .setting-name {
-    color: #fff;
+    color: var(--text-bright);
     font-size: 1rem;
   }
 
   .setting-description {
-    color: #aaa;
+    color: var(--text-muted);
     font-size: 0.85rem;
   }
 
@@ -131,16 +131,16 @@
     height: 26px;
     flex-shrink: 0;
     border-radius: 13px;
-    border: 1px solid #333;
-    background-color: #2a2a2a;
+    border: 1px solid var(--border);
+    background-color: var(--surface-2);
     cursor: pointer;
     padding: 0;
     transition: background-color 0.2s, border-color 0.2s;
   }
 
   .toggle.on {
-    background-color: #51cf66;
-    border-color: #51cf66;
+    background-color: var(--success);
+    border-color: var(--success);
   }
 
   .toggle:disabled {
@@ -155,12 +155,12 @@
     width: 20px;
     height: 20px;
     border-radius: 50%;
-    background-color: #e0e0e0;
+    background-color: var(--text);
     transition: transform 0.2s;
   }
 
   .toggle.on .toggle-knob {
     transform: translateX(22px);
-    background-color: #0d0d0d;
+    background-color: var(--bg-deep);
   }
 </style>

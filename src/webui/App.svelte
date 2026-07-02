@@ -219,8 +219,8 @@
     margin: 0;
     padding: 0;
     font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
-    background-color: #1a1a1a;
-    color: #e0e0e0;
+    background-color: var(--bg);
+    color: var(--text);
     line-height: 1.6;
     /* Hide scrollbars */
     scrollbar-width: none; /* Firefox */
@@ -252,8 +252,8 @@
   }
 
   .sidebar {
-    background-color: #0d0d0d;
-    border-right: 1px solid #333;
+    background-color: var(--bg-deep);
+    border-right: 1px solid var(--border);
     transition: width 0.3s ease;
     width: 60px;
     min-height: 100vh;
@@ -269,7 +269,7 @@
 
   .sidebar-header {
     padding: 1.5rem 1rem;
-    border-bottom: 1px solid #333;
+    border-bottom: 1px solid var(--border);
     display: flex;
     justify-content: space-between;
     align-items: center;
@@ -279,7 +279,7 @@
     margin: 0;
     font-size: 1.25rem;
     font-weight: 500;
-    color: #fff;
+    color: var(--text-bright);
     white-space: nowrap;
     overflow: hidden;
     opacity: 0;
@@ -293,7 +293,7 @@
   .toggle-btn {
     background: none;
     border: none;
-    color: #aaa;
+    color: var(--text-muted);
     font-size: 1rem;
     cursor: pointer;
     padding: 0.25rem;
@@ -301,7 +301,7 @@
   }
 
   .toggle-btn:hover {
-    color: #fff;
+    color: var(--text-bright);
   }
 
   .nav-menu {
@@ -319,7 +319,7 @@
     width: 100%;
     background: none;
     border: none;
-    color: #aaa;
+    color: var(--text-muted);
     padding: 1rem;
     display: flex;
     align-items: center;
@@ -331,14 +331,14 @@
   }
 
   .nav-menu button:hover {
-    background-color: #1a1a1a;
-    color: #fff;
+    background-color: var(--bg);
+    color: var(--text-bright);
   }
 
   .nav-menu li.active button {
-    background-color: #2a2a2a;
-    color: #fff;
-    border-left: 3px solid #51cf66;
+    background-color: var(--surface-2);
+    color: var(--text-bright);
+    border-left: 3px solid var(--success);
   }
 
   .nav-menu .icon {
@@ -362,7 +362,7 @@
 
   .page-header {
     padding: 2rem;
-    border-bottom: 1px solid #333;
+    border-bottom: 1px solid var(--border);
     max-width: 1400px;
     margin: 0 auto;
     width: 100%;
@@ -372,7 +372,7 @@
     margin: 0;
     font-size: 1.5rem;
     font-weight: 500;
-    color: #fff;
+    color: var(--text-bright);
   }
 
   .page-content {
@@ -455,10 +455,10 @@
       left: 1rem;
       width: 44px;
       height: 44px;
-      background-color: #0d0d0d;
-      border: 1px solid #333;
-      border-radius: 4px;
-      color: #fff;
+      background-color: var(--bg-deep);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-lg);
+      color: var(--text-bright);
       display: flex;
       align-items: center;
       justify-content: center;
@@ -469,7 +469,7 @@
     }
     
     .mobile-sidebar-toggle:hover {
-      background-color: #1a1a1a;
+      background-color: var(--bg);
       transform: scale(1.05);
     }
     

@@ -1,0 +1,39 @@
+/*
+ * Design tokens for the webui.
+ * All colors, radii, and shared visual values live here — pages and
+ * components reference these variables instead of hardcoding values.
+ */
+:root {
+  /* surfaces */
+  --bg-deep: #0d0d0d;
+  --bg: #1a1a1a;
+  --surface: #222;
+  --surface-2: #2a2a2a;
+  --surface-3: #444;
+
+  /* borders */
+  --border: #333;
+  --border-2: #555;
+
+  /* text */
+  --text-bright: #fff;
+  --text: #e0e0e0;
+  --text-muted: #aaa;
+  --text-dim: #888;
+
+  /* status */
+  --success: #51cf66;
+  --success-bg: #2d5016;
+  --danger: #ff6b6b;
+  --danger-bg: #5a1a1a;
+  --danger-bg-subtle: #2a1a1a;
+  --danger-border: #5a3333;
+  --warning: #ffd93d;
+  --info: #74c0fc;
+  --info-bg: #2d3a50;
+  --info-bg-hover: #3d4a60;
+
+  /* shape */
+  --radius: 3px;
+  --radius-lg: 4px;
+}

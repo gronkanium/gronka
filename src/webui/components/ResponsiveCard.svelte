@@ -30,9 +30,9 @@
 <style>
   .responsive-card {
     padding: 1.5rem;
-    background-color: #222;
-    border: 1px solid #333;
-    border-radius: 4px;
+    background-color: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-lg);
     display: flex;
     flex-direction: column;
     gap: 1rem;
@@ -60,7 +60,7 @@
     justify-content: space-between;
     align-items: flex-start;
     gap: 1rem;
-    border-bottom: 1px solid #333;
+    border-bottom: 1px solid var(--border);
     padding-bottom: 0.75rem;
   }
   
@@ -80,7 +80,7 @@
     margin: 0;
     font-size: 1rem;
     font-weight: 500;
-    color: #fff;
+    color: var(--text-bright);
   }
   
   @media (max-width: 767px) {
@@ -92,7 +92,7 @@
   .card-subtitle {
     margin: 0.25rem 0 0 0;
     font-size: 0.85rem;
-    color: #aaa;
+    color: var(--text-muted);
   }
   
   @media (max-width: 767px) {

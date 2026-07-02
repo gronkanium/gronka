@@ -1,7 +1,7 @@
 import { test, describe, before, after, beforeEach } from 'node:test';
 import assert from 'node:assert';
 import express from 'express';
-import { initDatabase, getOperationTrace, truncateAllTables } from '../src/utils/database.js';
+import { initDatabase, getOperationTrace } from '../src/utils/database.js';
 import {
   createOperation,
   updateOperationStatus,
@@ -19,8 +19,10 @@ let serverPort;
 
 before(async () => {
   await initDatabase();
-  // Truncate all tables to ensure clean state (important for parallel test execution)
-  await truncateAllTables();
+  // Do NOT truncate tables here: test files run as parallel processes against the
+  // same database, so truncating wipes other files' data mid-run and causes flaky
+  // failures. All assertions in this file are scoped to unique operation IDs, and
+  // the pretest hook (scripts/test-db-reset.js) resets the schema before each run.
 
   // Create test Express app with operations endpoints
   testApp = express();

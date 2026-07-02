@@ -141,7 +141,10 @@ export function getPostgresConfig() {
       ? process.env.TEST_POSTGRES_PASSWORD || process.env.POSTGRES_PASSWORD || 'gronka'
       : process.env.POSTGRES_PASSWORD || 'gronka',
     max: parseInt(process.env.POSTGRES_MAX_CONNECTIONS || '20', 10),
-    idle_timeout: parseInt(process.env.POSTGRES_IDLE_TIMEOUT || '30', 10),
+    // In test mode, close idle connections almost immediately so each test file's
+    // process can exit as soon as its tests finish. The default 30s idle_timeout
+    // otherwise keeps every test process alive ~30s past its last query.
+    idle_timeout: parseInt(process.env.POSTGRES_IDLE_TIMEOUT || (useTestConfig ? '1' : '30'), 10),
     connect_timeout: parseInt(process.env.POSTGRES_CONNECT_TIMEOUT || '10', 10),
   };
 

@@ -137,6 +137,41 @@ describe('webui-server rate limiting', () => {
     });
   });
 
+  describe('api rate limiter application', () => {
+    let app;
+    let server;
+
+    before(async () => {
+      const { createApp } = await import('../src/webui-server/app.js');
+      app = createApp();
+      return new Promise(resolve => {
+        server = app.listen(0, () => {
+          resolve();
+        });
+      });
+    });
+
+    after(() => {
+      if (server) {
+        server.close();
+      }
+    });
+
+    test('api routes pass through the rate limiter', async () => {
+      const port = server.address().port;
+      const response = await fetch(`http://localhost:${port}/api/nonexistent-route`);
+
+      // Unknown /api paths should 404 (not fall through to the SPA)
+      assert.strictEqual(response.status, 404);
+
+      // The rate limiter sets standard RateLimit-* headers on every /api response
+      const hasRateLimitHeader = [...response.headers.keys()].some(name =>
+        name.toLowerCase().startsWith('ratelimit')
+      );
+      assert.ok(hasRateLimitHeader, 'expected RateLimit headers on /api responses');
+    });
+  });
+
   describe('rate limiter message format', () => {
     test('rate limit message is lowercase monotone style', () => {
       const message = 'too many requests, please try again later';

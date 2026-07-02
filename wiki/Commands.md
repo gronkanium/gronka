@@ -60,6 +60,7 @@ download media from a social media url or direct url.
   - `end_time` must be greater than `start_time` if both are provided
 - **for images/gifs**: time parameters are ignored (images/gifs don't have a time dimension)
 - use `/convert` afterwards if you want to convert to gif
+- **url-only mode**: when enabled from the webui settings page, `/download` replies with the direct media url from cobalt (e.g. video.twimg.com) instead of downloading and re-uploading the file. trim requests (`start_time`/`end_time`) and youtube urls (handled by yt-dlp) still use the normal download pipeline, as does any url where cobalt only offers a tunnel response
 
 **examples:**
 

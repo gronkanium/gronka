@@ -57,9 +57,9 @@ gifs can also be converted to gifs with different quality settings or optimizati
 
 ## resources
 
-- [github repository](https://github.com/gronkanium/gronka)
-- [issues](https://github.com/gronkanium/gronka/issues)
-- [changelog](https://github.com/gronkanium/gronka/blob/main/CHANGELOG.md)
+- [github repository](https://github.com/thedorekaczynski/gronka)
+- [issues](https://github.com/thedorekaczynski/gronka/issues)
+- [changelog](https://github.com/thedorekaczynski/gronka/blob/main/CHANGELOG.md)
 
 ## how it works
 
@@ -67,7 +67,7 @@ gronka consists of three components:
 
 1. **discord bot** - the part that lives in your server, downloads media, and does the converting
 2. **r2 storage** - stores and serves videos, images, and gifs via cloudflare r2 (optional, falls back to local storage)
-3. **webui** (optional) - a simple dashboard to view statistics
+3. **webui** (optional) - a dashboard for statistics, logs, operation tracking, moderation, and bot settings (like url-only mode)
 
 ## license
 

@@ -1,56 +1,7 @@
 {
-  "twitter": [
-    {
-      "name": "auth_token",
-      "value": "your_auth_token_here",
-      "domain": ".twitter.com",
-      "path": "/",
-      "secure": true,
-      "httpOnly": true
-    },
-    {
-      "name": "ct0",
-      "value": "your_csrf_token_here",
-      "domain": ".twitter.com",
-      "path": "/",
-      "secure": true,
-      "httpOnly": false
-    },
-    {
-      "name": "guest_id",
-      "value": "your_guest_id_here",
-      "domain": ".twitter.com",
-      "path": "/",
-      "secure": true,
-      "httpOnly": false
-    }
-  ],
+  "twitter": ["auth_token=your_auth_token_here; ct0=your_csrf_token_here"],
   "instagram": [
-    {
-      "name": "sessionid",
-      "value": "your_session_id_here",
-      "domain": ".instagram.com",
-      "path": "/",
-      "secure": true,
-      "httpOnly": true
-    },
-    {
-      "name": "csrftoken",
-      "value": "your_csrf_token_here",
-      "domain": ".instagram.com",
-      "path": "/",
-      "secure": true,
-      "httpOnly": false
-    }
+    "mid=<mid>; ig_did=<ig_did>; csrftoken=<csrftoken>; ds_user_id=<ds_user_id>; sessionid=<sessionid>"
   ],
-  "reddit": [
-    {
-      "name": "reddit_session",
-      "value": "your_reddit_session_here",
-      "domain": ".reddit.com",
-      "path": "/",
-      "secure": true,
-      "httpOnly": true
-    }
-  ]
+  "reddit": ["client_id=<client_id>; client_secret=<client_secret>; refresh_token=<refresh_token>"]
 }

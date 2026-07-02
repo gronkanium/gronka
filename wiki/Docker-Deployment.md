@@ -288,7 +288,15 @@ without cookies, cobalt will return errors like `content.post.age` or `content.v
 
 3. **populate cookies.json:**
 
-   edit `cookies.json` and add the relevant cookies for each service. the file uses a domain-based structure where each service domain contains an array of cookie objects.
+   edit `cookies.json` and add the relevant cookies for each service. cobalt expects each service key to map to an array of **cookie strings** (semicolon-separated `name=value` pairs), not browser-export cookie objects:
+
+   ```json
+   {
+     "twitter": ["auth_token=<your_auth_token>; ct0=<your_ct0>"]
+   }
+   ```
+
+   if you use a browser-export format (an array of `{ "name": ..., "value": ... }` objects), cobalt silently fails to parse it and makes unauthenticated requests, causing `content.post.age` errors on restricted content even though cookies are configured.
 
    **important:** only include cookies for services you actually use. you don't need to populate all services.
 
@@ -320,9 +328,9 @@ cobalt will automatically:
 
 cobalt's cookie system supports authentication for:
 
-- **twitter:** uses guest tokens and cookie-based authentication with CSRF protection (`auth_token`, `ct0`, `guest_id`)
-- **instagram:** implements web cookies with CSRF protection and bearer tokens (`sessionid`, `csrftoken`)
-- **reddit:** uses OAuth token management with automatic refresh (`reddit_session`)
+- **twitter:** cookie string with `auth_token` and `ct0` (cobalt manages guest tokens and CSRF rotation itself)
+- **instagram:** cookie string with `mid`, `ig_did`, `csrftoken`, `ds_user_id`, `sessionid`
+- **reddit:** cookie string with `client_id`, `client_secret`, `refresh_token` (OAuth app credentials, refreshed automatically)
 
 other services may also support cookie-based authentication. refer to the [cobalt documentation](https://github.com/imputnet/cobalt) for the latest supported services.
 

@@ -182,7 +182,7 @@ optimization levels:
 
 implementation:
 
-uses `giflossy` docker container (dylanninin/giflossy) which wraps `gifsicle` for gif optimization:
+uses `gifsicle` (installed in the app container image) for gif optimization:
 
 ```bash
 gifsicle --optimize=3 --lossy=80 input.gif -o output.gif
@@ -201,7 +201,7 @@ optimized gifs are hashed using original file + lossy level, ensuring different 
 error handling:
 
 - validate input file exists and is a gif
-- check docker is available
+- check gifsicle is available
 - validate lossy level range (0-100)
 - handle optimization timeouts (5 minute max)
 - verify output file was created

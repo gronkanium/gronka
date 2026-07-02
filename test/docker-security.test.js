@@ -601,47 +601,25 @@ describe('docker security tests', () => {
       }
     });
 
-    test('gif-optimizer uses proper escaping for docker commands', async () => {
-      // Import the actual escapeShellArg from gif-optimizer
-      // Note: The function is not exported, so we'll test the pattern used
+    test('gif-optimizer avoids shell execution entirely', async () => {
+      // gifsicle is spawned directly with an argument array; no shell is
+      // involved, so there is nothing to inject into.
       const gifOptimizerPath = path.join(__dirname, '..', 'src', 'utils', 'gif-optimizer.js');
       const gifOptimizerContent = await fs.readFile(gifOptimizerPath, 'utf-8');
 
-      // Verify escapeShellArg function exists
       assert.ok(
-        gifOptimizerContent.includes('function escapeShellArg'),
-        'gif-optimizer should have escapeShellArg function'
-      );
-
-      // Verify paths are escaped before use in docker command
-      assert.ok(
-        gifOptimizerContent.includes('escapeShellArg(inputDockerPath)'),
-        'gif-optimizer should escape input path before use in docker command'
+        gifOptimizerContent.includes("spawn('gifsicle'"),
+        'gif-optimizer should spawn gifsicle directly with an argument array'
       );
 
       assert.ok(
-        gifOptimizerContent.includes('escapeShellArg(outputDockerPath)'),
-        'gif-optimizer should escape output path before use in docker command'
+        !gifOptimizerContent.includes("'sh'") && !gifOptimizerContent.includes('sh -c'),
+        'gif-optimizer should not build shell commands'
       );
 
       assert.ok(
-        gifOptimizerContent.includes('escapeShellArg(containerName)'),
-        'gif-optimizer should escape container name before use in docker command'
-      );
-
-      // Verify shell metacharacter validation exists
-      assert.ok(
-        gifOptimizerContent.includes('shellMetaChars'),
-        'gif-optimizer should validate shell metacharacters in paths'
-      );
-
-      // Verify validation happens before command construction
-      const shellMetaCheckIndex = gifOptimizerContent.indexOf('shellMetaChars.test');
-      const escapeShellArgIndex = gifOptimizerContent.indexOf('escapeShellArg(inputDockerPath)');
-
-      assert.ok(
-        shellMetaCheckIndex < escapeShellArgIndex,
-        'Shell metacharacter validation should happen before path escaping'
+        !/\bexec(Sync)?\(/.test(gifOptimizerContent),
+        'gif-optimizer should not use exec (which invokes a shell)'
       );
     });
   });
@@ -660,36 +638,6 @@ describe('docker security tests', () => {
         console.warn(
           'WARNING: network_mode: host detected. This removes network isolation. ' +
             'Use bridge networking with explicit port mappings instead.'
-        );
-      }
-    });
-
-    test('giflossy service isolation is appropriate', () => {
-      if (!composeConfig?.giflossy) {
-        return;
-      }
-
-      // giflossy should not have docker socket access
-      assert.strictEqual(
-        composeConfig.giflossy.docker_socket || false,
-        false,
-        'giflossy should not have docker socket access'
-      );
-
-      // giflossy should only have necessary volume mounts
-      const requiredMounts = ['temp'];
-      const mountPaths = composeConfig.giflossy.volumes.join(' ');
-
-      // Check that volumes array exists and has entries
-      assert.ok(
-        Array.isArray(composeConfig.giflossy.volumes),
-        'giflossy should have volumes array defined'
-      );
-
-      for (const required of requiredMounts) {
-        assert.ok(
-          mountPaths.includes(required),
-          `giflossy should mount ${required} volume (found volumes: ${mountPaths})`
         );
       }
     });
@@ -1077,21 +1025,24 @@ describe('docker security tests', () => {
   });
 
   describe('docker api security', () => {
-    test('docker commands should validate container names to prevent injection', async () => {
-      // Test that container names used in docker commands are sanitized
-      const gifOptimizerPath = path.join(__dirname, '..', 'src', 'utils', 'gif-optimizer.js');
-      const gifOptimizerContent = await fs.readFile(gifOptimizerPath, 'utf-8');
+    test('app source should not invoke the docker CLI', async () => {
+      // GIF optimization uses gifsicle directly; nothing in src should shell
+      // out to docker (which would require socket access from the container)
+      const srcDir = path.join(__dirname, '..', 'src');
+      const files = await glob('**/*.js', { cwd: srcDir, ignore: 'public/**' });
 
-      // Container name should be hardcoded or validated, not user input
-      assert.ok(
-        gifOptimizerContent.includes('containerName') && gifOptimizerContent.includes('gronka'),
-        'Container name should be hardcoded, not from user input'
-      );
+      const offenders = [];
+      for (const file of files) {
+        const content = await fs.readFile(path.join(srcDir, file), 'utf-8');
+        if (/spawn\(\s*'docker'|exec(Sync)?\(\s*[`'"]docker /.test(content)) {
+          offenders.push(file);
+        }
+      }
 
-      // Verify container name is escaped before use in command
-      assert.ok(
-        gifOptimizerContent.includes('escapeShellArg(containerName)'),
-        'Container name must be escaped before use in docker command'
+      assert.strictEqual(
+        offenders.length,
+        0,
+        `Source files invoking the docker CLI: ${offenders.join(', ')}`
       );
     });
 

@@ -322,11 +322,7 @@ info('Rebuilding images (this will take a while)...');
       warn('Checking if required images exist locally...');
 
       // Check if the external images exist locally
-      const externalImages = [
-        'ghcr.io/imputnet/cobalt:11',
-        'dylanninin/giflossy:latest',
-        'ghcr.io/containrrr/watchtower:latest',
-      ];
+      const externalImages = ['ghcr.io/imputnet/cobalt:11', 'ghcr.io/containrrr/watchtower:latest'];
 
       const allImagesExist = imagesExistLocally(externalImages);
 
@@ -355,7 +351,6 @@ info('Rebuilding images (this will take a while)...');
         warn('  1. Restart Docker Desktop');
         warn('  2. Manually pull images:');
         warn('     docker pull ghcr.io/imputnet/cobalt:11');
-        warn('     docker pull dylanninin/giflossy:latest');
         warn('     docker pull ghcr.io/containrrr/watchtower:latest');
         warn('  3. Try: docker logout && docker login');
         warn('  4. Clear credentials: Remove ~/.docker/config.json credential helper section');

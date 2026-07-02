@@ -165,7 +165,8 @@ function getBotConfig() {
   return _botConfig;
 }
 
-// Export as getter property for backward compatibility
+// botConfig is lazy: reading any property triggers getBotConfig(), which requires
+// DISCORD_TOKEN. This lets the webui server import this module without a token set.
 export const botConfig = new Proxy(
   {},
   {
@@ -195,9 +196,8 @@ export const r2Config = {
   cleanupLogLevel: getStringEnv('R2_CLEANUP_LOG_LEVEL', 'detailed').toLowerCase(),
 };
 
-// Server configuration (minimal - only for stats HTTP endpoint in bot)
-// Note: The main server.js has been removed. These settings are now used by the
-// minimal HTTP server in bot.js that serves /api/stats/24h for Jekyll integration.
+// Server configuration for the minimal HTTP server in bot.js
+// (serves /api/stats/24h — used by the Docker healthcheck — and /api/bot/status).
 export const serverConfig = {
   serverPort: parseIntEnv('SERVER_PORT', 3000, 1, 65535),
   serverHost: getStringEnv('SERVER_HOST', '0.0.0.0'),

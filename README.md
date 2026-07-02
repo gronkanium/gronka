@@ -49,7 +49,7 @@ gronka consists of three components:
 
 ### running it locally
 
-you'll need node.js 20+, ffmpeg, and yt-dlp installed. then:
+docker is the supported way to run gronka — the image bundles ffmpeg, gifsicle, and yt-dlp (see [using docker](#using-docker) below). you can run the bot directly for development, but you'll need node.js 20+, ffmpeg, and yt-dlp installed yourself, and `/optimize` requires gifsicle (linux/macOS only; not supported on windows outside docker). then:
 
 ```bash
 git clone https://github.com/thedorekaczynski/gronka.git

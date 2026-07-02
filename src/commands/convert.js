@@ -170,6 +170,68 @@ async function checkAndReadLocalFileFromCdnUrl(url, storagePath) {
 }
 
 /**
+ * Probe a media file's width and fps via ffprobe, with safe fallbacks.
+ * @param {string} filePath - Path to the media file
+ * @param {number} fallbackWidth - Width to assume when probing fails
+ * @returns {Promise<{width: number, fps: number}>}
+ */
+async function probeMediaInfo(filePath, fallbackWidth) {
+  let width = fallbackWidth;
+  let fps = 30;
+
+  try {
+    const metadata = await getVideoMetadata(filePath);
+    const videoStream = metadata.streams?.find(s => s.codec_type === 'video');
+    if (videoStream) {
+      if (typeof videoStream.width === 'number' && videoStream.width > 0) {
+        width = videoStream.width;
+      }
+      // fps comes as a fraction string like "30000/1001"
+      const fpsStr = videoStream.r_frame_rate || videoStream.avg_frame_rate;
+      if (typeof fpsStr === 'string' && fpsStr.includes('/')) {
+        const [num, den] = fpsStr.split('/').map(Number);
+        if (den > 0 && num > 0) {
+          const calculated = num / den;
+          if (calculated > 0.1 && calculated <= 120) {
+            fps = calculated;
+          }
+        }
+      } else if (typeof fpsStr === 'number' && fpsStr > 0.1 && fpsStr <= 120) {
+        fps = fpsStr;
+      }
+    }
+  } catch (error) {
+    logger.warn(`Failed to probe media metadata, using fallbacks: ${error.message}`);
+  }
+
+  return { width, fps };
+}
+
+/**
+ * Resolve the effective settings for a video-to-GIF conversion.
+ * Policy: preserve the source's width and fps unless the user overrides them,
+ * cap fps at 30 (GIF frame delays are centiseconds and can't represent more),
+ * and default quality to the GIF_QUALITY config.
+ * @param {Object} options - User-provided options (width, fps, quality, startTime, duration)
+ * @param {{width: number, fps: number}} probed - Probed source dimensions
+ * @returns {Object} Options object for convertToGif
+ */
+function resolveVideoConversionOptions(options, probed) {
+  const cappedFps = Math.min(probed.fps, 30);
+  if (probed.fps > 30) {
+    logger.info(`Capping FPS from ${probed.fps.toFixed(1)}fps to 30fps (GIF format limitation)`);
+  }
+
+  return {
+    width: options.width ?? probed.width,
+    fps: options.fps ?? cappedFps,
+    quality: options.quality ?? botConfig.gifQuality,
+    startTime: options.startTime ?? null,
+    duration: options.duration ?? null,
+  };
+}
+
+/**
  * Process conversion from attachment to GIF
  * @param {Interaction} interaction - Discord interaction
  * @param {Attachment} attachment - Discord attachment to convert
@@ -618,59 +680,8 @@ export async function processConversion(
         });
 
         if (attachmentType === 'video') {
-          // Extract original dimensions and fps from video metadata
-          let originalWidth = 480; // Safe fallback
-          let originalFps = 30; // Safe fallback
-
-          try {
-            const metadata = await getVideoMetadata(tempFilePath);
-            const videoStream = metadata.streams?.find(s => s.codec_type === 'video');
-            if (videoStream) {
-              if (
-                videoStream.width &&
-                typeof videoStream.width === 'number' &&
-                videoStream.width > 0
-              ) {
-                originalWidth = videoStream.width;
-              }
-              // Extract fps from r_frame_rate or avg_frame_rate
-              const fpsStr = videoStream.r_frame_rate || videoStream.avg_frame_rate;
-              if (fpsStr && typeof fpsStr === 'string' && fpsStr.includes('/')) {
-                const [num, den] = fpsStr.split('/').map(Number);
-                if (den && den > 0 && num > 0) {
-                  const calculatedFps = num / den;
-                  if (calculatedFps > 0.1 && calculatedFps <= 120) {
-                    originalFps = calculatedFps;
-                  }
-                }
-              } else if (typeof fpsStr === 'number' && fpsStr > 0.1 && fpsStr <= 120) {
-                originalFps = fpsStr;
-              }
-            }
-          } catch (error) {
-            logger.warn(
-              'Failed to extract video metadata for dimensions, using fallbacks:',
-              error.message
-            );
-          }
-
-          // Cap FPS to 30fps maximum (GIF format limitation)
-          // GIF uses frame delays in centiseconds and cannot properly represent >30fps
-          const cappedFps = Math.min(originalFps, 30);
-          if (originalFps > 30) {
-            logger.info(
-              `Capping FPS from ${originalFps.toFixed(1)}fps to 30fps (GIF format limitation)`
-            );
-          }
-
-          // Build conversion options, using provided options or original dimensions
-          const conversionOptions = {
-            width: options.width ?? originalWidth,
-            fps: options.fps ?? cappedFps,
-            quality: options.quality ?? botConfig.gifQuality,
-            startTime: options.startTime ?? null,
-            duration: options.duration ?? null,
-          };
+          const probed = await probeMediaInfo(tempFilePath, 480);
+          const conversionOptions = resolveVideoConversionOptions(options, probed);
 
           // Validate duration against video length if startTime and duration are provided
           if (conversionOptions.startTime !== null && conversionOptions.duration !== null) {
@@ -709,22 +720,8 @@ export async function processConversion(
           const isGif = attachment.contentType === 'image/gif' || ext === '.gif';
 
           if (isGif) {
-            // Get GIF dimensions - use original unless explicitly requested to resize
-            let originalWidth = 720; // Safe fallback
-
-            try {
-              const metadata = await getVideoMetadata(tempFilePath);
-              const videoStream = metadata.streams?.find(s => s.codec_type === 'video');
-              if (
-                videoStream?.width &&
-                typeof videoStream.width === 'number' &&
-                videoStream.width > 0
-              ) {
-                originalWidth = videoStream.width;
-              }
-            } catch (error) {
-              logger.warn(`Failed to get GIF metadata, using fallback: ${error.message}`);
-            }
+            // Use original dimensions unless explicitly requested to resize
+            const { width: originalWidth } = await probeMediaInfo(tempFilePath, 720);
 
             // If no explicit width requested, copy directly (preserve original)
             if (!options.width) {
@@ -749,24 +746,9 @@ export async function processConversion(
               });
             }
           } else {
-            // Not a GIF, extract original width from image metadata
-            let originalWidth = 720; // Safe fallback
+            // Not a GIF, convert normally using the source's original width
+            const { width: originalWidth } = await probeMediaInfo(tempFilePath, 720);
 
-            try {
-              const metadata = await getVideoMetadata(tempFilePath);
-              const videoStream = metadata.streams?.find(s => s.codec_type === 'video');
-              if (
-                videoStream?.width &&
-                typeof videoStream.width === 'number' &&
-                videoStream.width > 0
-              ) {
-                originalWidth = videoStream.width;
-              }
-            } catch (error) {
-              logger.warn(`Failed to get image metadata, using fallback: ${error.message}`);
-            }
-
-            // Not a GIF, proceed with normal conversion using original dimensions
             await convertImageToGif(tempFilePath, gifPath, {
               width: options.width ?? originalWidth,
               quality: options.quality ?? botConfig.gifQuality,

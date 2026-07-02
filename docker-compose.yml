@@ -17,9 +17,7 @@ services:
       - CDN_BASE_URL=${CDN_BASE_URL:-https://cdn.gronka.p1x.dev/gifs}
       - SERVER_PORT=${SERVER_PORT:-3000}
       - GIF_STORAGE_PATH=${GIF_STORAGE_PATH:-./data-prod/gifs}
-      - MAX_GIF_WIDTH=${MAX_GIF_WIDTH:-}
       - MAX_GIF_DURATION=${MAX_GIF_DURATION:-30}
-      - DEFAULT_FPS=${DEFAULT_FPS:-}
       - MAX_VIDEO_SIZE=${MAX_VIDEO_SIZE:-}
       - MAX_IMAGE_SIZE=${MAX_IMAGE_SIZE:-}
       - GIF_QUALITY=${GIF_QUALITY:-medium}
@@ -40,10 +38,6 @@ services:
       - R2_CLEANUP_INTERVAL_MS=${R2_CLEANUP_INTERVAL_MS:-}
       - R2_CLEANUP_LOG_LEVEL=${R2_CLEANUP_LOG_LEVEL:-}
       - NTFY_TOPIC=${NTFY_TOPIC:-}
-      - CLOUDFLARE_API_TOKEN=${CLOUDFLARE_API_TOKEN:-}
-      - CLOUDFLARE_ACCOUNT_ID=${CLOUDFLARE_ACCOUNT_ID:-}
-      - CLOUDFLARE_KV_NAMESPACE_ID=${CLOUDFLARE_KV_NAMESPACE_ID:-}
-      - CLOUDFLARE_PAGES_PROJECT_NAME=${CLOUDFLARE_PAGES_PROJECT_NAME:-}
       - LOG_LEVEL=${LOG_LEVEL:-}
       - LOG_DIR=${LOG_DIR:-}
       - LOG_ROTATION=${LOG_ROTATION:-}
@@ -61,7 +55,6 @@ services:
       - ./data-prod:/app/data-prod
       - ./temp:/app/temp
       - ./logs:/app/logs
-      - /var/run/docker.sock:/var/run/docker.sock
     ports:
       - '${SERVER_PORT:-3000}:${SERVER_PORT:-3000}'
       - '${WEBUI_PORT:-3001}:${WEBUI_PORT:-3001}'
@@ -125,18 +118,6 @@ services:
       # Mount cookies.json from project root to enable authentication for restricted content
       # Create cookies.json from cookies.example.json and add your service authentication cookies
       - ./cookies.json:/cookies.json
-
-  giflossy:
-    image: dylanninin/giflossy:latest
-    container_name: giflossy
-    restart: unless-stopped
-    volumes:
-      - ./data-test:/app/data-test
-      - ./data-prod:/app/data-prod
-      - ./temp:/app/temp
-    networks:
-      - gronka-network
-    # Note: This service is used for GIF optimization via docker exec
 
   # watchtower updates the cobalt image automatically
   watchtower:

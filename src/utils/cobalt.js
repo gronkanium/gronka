@@ -5,24 +5,6 @@ import { NetworkError, ValidationError } from './errors.js';
 const logger = createLogger('cobalt');
 
 /**
- * Custom error for rate limiting
- */
-export class RateLimitError extends NetworkError {
-  constructor(message, retryAfter = null) {
-    super(message);
-    this.name = 'RateLimitError';
-    this.retryAfter = retryAfter;
-  }
-}
-
-/**
- * Check if error response indicates rate limiting vs content not found
- * @param {Object} data - Cobalt API error response data
- * @param {number} responseTime - Time taken for request in ms
- * @param {Object} errorObj - Full axios error object
- * @returns {Object} { isRateLimit: boolean, isNotFound: boolean }
- */
-/**
  * Map of Cobalt API error codes to user-friendly messages
  */
 const COBALT_ERROR_MESSAGES = {
@@ -66,7 +48,15 @@ function getCobaltErrorMessage(errorCode, context = {}) {
   return COBALT_ERROR_MESSAGES[errorCode] || null;
 }
 
-function analyzeError(data, responseTime, errorObj) {
+/**
+ * Classify a Cobalt API error response.
+ * Rate limiting is only assumed on explicit signals (HTTP 429 or a rate error code);
+ * everything else is either "not found" (don't retry) or a plain failure.
+ * @param {Object} data - Cobalt API error response data
+ * @param {Object} errorObj - Full axios error object
+ * @returns {Object} { isRateLimit, isNotFound, userMessage, errorCode, context }
+ */
+function analyzeError(data, errorObj) {
   const result = {
     isRateLimit: false,
     isNotFound: false,
@@ -127,12 +117,10 @@ function analyzeError(data, responseTime, errorObj) {
       return result;
   }
 
-  // error.api.fetch.empty is ambiguous - use heuristics
+  // error.api.fetch.empty is ambiguous: treat as "not found" when the response
+  // text says so, otherwise as a plain failure (never guess it's a rate limit).
   if (errorCode === 'error.api.fetch.empty') {
-    // Check response text for clues
     const errorText = (data?.error?.text || data?.text || '').toLowerCase();
-
-    // Explicit "not found" or "doesn't exist" messages
     if (
       errorText.includes('not found') ||
       errorText.includes("doesn't exist") ||
@@ -140,26 +128,7 @@ function analyzeError(data, responseTime, errorObj) {
       errorText.includes('deleted')
     ) {
       result.isNotFound = true;
-      return result;
     }
-
-    // Response timing heuristic:
-    // - Instant failure (< 1s) often means content doesn't exist
-    // - Slower failure (> 2s) suggests rate limiting or network issues
-    if (responseTime < 1000) {
-      logger.info(`Fast failure (${responseTime}ms) suggests content may not exist`);
-      result.isNotFound = true;
-      return result;
-    } else if (responseTime > 2000) {
-      logger.info(`Slow failure (${responseTime}ms) suggests rate limiting`);
-      result.isRateLimit = true;
-      return result;
-    }
-
-    // Default to rate limit for ambiguous cases (conservative approach)
-    // User can still cancel if they know content doesn't exist
-    logger.warn(`Ambiguous error.api.fetch.empty (${responseTime}ms) - assuming rate limit`);
-    result.isRateLimit = true;
     return result;
   }
 
@@ -173,42 +142,6 @@ function analyzeError(data, responseTime, errorObj) {
  */
 function sleep(ms) {
   return new Promise(resolve => setTimeout(resolve, ms));
-}
-
-/**
- * Parse Retry-After header value to milliseconds
- * @param {string|number} retryAfter - Retry-After header value (seconds as number/string, or HTTP date string)
- * @returns {number|null} Milliseconds to wait, or null if invalid
- */
-function parseRetryAfter(retryAfter) {
-  if (retryAfter == null) {
-    return null;
-  }
-
-  // If it's a number (seconds), convert to milliseconds
-  if (typeof retryAfter === 'number') {
-    return retryAfter * 1000;
-  }
-
-  // If it's a string that's a number (seconds)
-  const seconds = parseInt(retryAfter, 10);
-  if (!isNaN(seconds) && seconds > 0) {
-    return seconds * 1000;
-  }
-
-  // Try to parse as HTTP date
-  try {
-    const date = new Date(retryAfter);
-    if (!isNaN(date.getTime())) {
-      const now = Date.now();
-      const waitMs = date.getTime() - now;
-      return waitMs > 0 ? waitMs : null;
-    }
-  } catch {
-    // Invalid date format
-  }
-
-  return null;
 }
 
 // X/Twitter status-URL tracking params and host aliases used for normalization
@@ -316,8 +249,6 @@ async function callCobaltApi(apiUrl, url, retryCount = 0, maxRetries = 3) {
     `Calling Cobalt API at ${apiUrl} with URL: ${normalizedUrl} (attempt ${attemptNum}/${maxRetries})`
   );
 
-  const startTime = Date.now();
-
   try {
     const response = await axios.post(
       apiUrl,
@@ -345,17 +276,13 @@ async function callCobaltApi(apiUrl, url, retryCount = 0, maxRetries = 3) {
 
     return response.data;
   } catch (error) {
-    const responseTime = Date.now() - startTime;
-
     if (error.response) {
       const status = error.response.status;
       const data = error.response.data;
-      logger.error(
-        `Cobalt API error response: status=${status}, data=${JSON.stringify(data)}, responseTime=${responseTime}ms`
-      );
+      logger.error(`Cobalt API error response: status=${status}, data=${JSON.stringify(data)}`);
 
       // Analyze error to determine if it's rate limiting or not found
-      const errorAnalysis = analyzeError(data, responseTime, error);
+      const errorAnalysis = analyzeError(data, error);
 
       // Log error details
       if (errorAnalysis.errorCode) {
@@ -409,24 +336,6 @@ async function callCobaltApi(apiUrl, url, retryCount = 0, maxRetries = 3) {
       // Fallback to status code if no message found
       if (!message) {
         message = `Cobalt API error: ${status}`;
-      }
-
-      // If this is a rate limit error after all retries, throw RateLimitError with retry timing
-      if (errorAnalysis.isRateLimit) {
-        // Extract Retry-After header if available (can be seconds or HTTP date)
-        const retryAfterHeader = error.response?.headers?.['retry-after'];
-        let retryAfterMs = parseRetryAfter(retryAfterHeader);
-
-        // Default to 5 minutes if not provided or invalid
-        const DEFAULT_RETRY_AFTER_MS = 5 * 60 * 1000; // 5 minutes
-        if (retryAfterMs == null || retryAfterMs <= 0) {
-          retryAfterMs = DEFAULT_RETRY_AFTER_MS;
-          logger.warn(`No valid Retry-After header, using default ${DEFAULT_RETRY_AFTER_MS}ms`);
-        } else {
-          logger.info(`Extracted Retry-After: ${retryAfterMs}ms from header: ${retryAfterHeader}`);
-        }
-
-        throw new RateLimitError(message, retryAfterMs);
       }
 
       throw new NetworkError(message);

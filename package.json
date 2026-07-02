@@ -64,10 +64,6 @@
     "format": "prettier --write .",
     "format:write": "prettier --write .",
     "format:check": "prettier --check .",
-    "kv:sync-stats": "node scripts/sync-stats-to-kv.js",
-    "kv:sync-stats:docker": "docker compose exec app npm run kv:sync-stats",
-    "validate:cloudflare": "node scripts/validate-cloudflare-config.js",
-    "test:cloudflare": "node scripts/test-cloudflare-kv.js",
     "tunnel:gronka-waptop": "cloudflared tunnel --config .cloudflared/config.yml --loglevel debug run",
     "wiki:sync": "node scripts/sync-wiki-to-github.js",
     "prepare": "husky"

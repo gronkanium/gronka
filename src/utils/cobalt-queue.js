@@ -200,10 +200,10 @@ export function queueCobaltRequest(url, downloadFn, options = {}) {
 
   // Track this download; remove from the map once it settles either way.
   // The rejection handler here only does cleanup - callers still receive the rejection.
-  inProgressDownloads.set(urlHash, downloadPromise);
+  inProgressDownloads.set(mapKey, downloadPromise);
   downloadPromise.then(
-    () => inProgressDownloads.delete(urlHash),
-    () => inProgressDownloads.delete(urlHash)
+    () => inProgressDownloads.delete(mapKey),
+    () => inProgressDownloads.delete(mapKey)
   );
 
   return downloadPromise;

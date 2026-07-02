@@ -35,12 +35,10 @@ RUN npm prune --production
 # Stage 2: Runtime - Minimal production image
 FROM node:20-slim AS runtime
 
-# Copy Docker CLI binary from official Docker image (lightweight alternative to docker-ce-cli)
-COPY --from=docker:cli /usr/local/bin/docker /usr/local/bin/docker
-
-# Install runtime dependencies: FFmpeg, ca-certificates, and yt-dlp
+# Install runtime dependencies: FFmpeg, gifsicle (GIF optimization), ca-certificates, and yt-dlp
 RUN apt-get update && apt-get install -y \
     ffmpeg \
+    gifsicle \
     ca-certificates \
     python3 \
     python3-pip \

@@ -1,6 +1,7 @@
 import express from 'express';
 import { createLogger } from '../../utils/logger.js';
 import { getAllSettings, setSetting } from '../../utils/database.js';
+import { botConfig } from '../../utils/config.js';
 
 const logger = createLogger('webui');
 const router = express.Router();
@@ -11,6 +12,18 @@ const KNOWN_SETTINGS = {
     type: 'boolean',
     default: 'false',
     description: 'Reply with the direct media URL from cobalt instead of downloading/uploading',
+  },
+  ntfy_topic: {
+    type: 'string',
+    default: botConfig.ntfyTopic || '',
+    description: 'ntfy.sh topic to push command/alert notifications to (blank disables ntfy)',
+    pattern: /^[A-Za-z0-9_-]{0,64}$/,
+  },
+  ntfy_server: {
+    type: 'string',
+    default: 'ntfy.sh',
+    description: 'ntfy server hostname (use your own if self-hosting ntfy)',
+    pattern: /^[A-Za-z0-9.-]{1,253}$/,
   },
 };
 
@@ -65,7 +78,13 @@ router.put('/api/settings/:key', express.json(), async (req, res) => {
       }
       textValue = String(value === true || value === 'true');
     } else {
-      textValue = String(value);
+      textValue = String(value).trim();
+      if (meta.pattern && !meta.pattern.test(textValue)) {
+        return res.status(400).json({
+          error: 'invalid value',
+          message: `"${key}" has an invalid format`,
+        });
+      }
     }
 
     await setSetting(key, textValue);

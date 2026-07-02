@@ -4,6 +4,7 @@ import { getPostgresConfig } from '../../utils/database/connection.js';
 import {
   getOperationTrace,
   getRecentOperations,
+  searchOperations,
   searchOperationsByUrl,
 } from '../../utils/database.js';
 import { operations, storeOperation } from '../operations/storage.js';
@@ -294,8 +295,6 @@ router.get('/api/requests', async (req, res) => {
       username,
       status,
       type,
-      errorType,
-      earlyFailure,
       earlyFailureOnly,
       failedOnly,
       dateFrom,
@@ -308,157 +307,32 @@ router.get('/api/requests', async (req, res) => {
       offset = 0,
     } = req.query;
 
-    // Start with WebSocket operations (real-time)
-    let allOperations = [...operations];
+    const filters = {
+      operationId: operationId || undefined,
+      userId: userId || undefined,
+      username: username || undefined,
+      types: type ? (Array.isArray(type) ? type : [type]) : undefined,
+      statuses: status ? (Array.isArray(status) ? status : [status]) : undefined,
+      failedOnly: failedOnly === 'true',
+      earlyFailureOnly: earlyFailureOnly === 'true',
+      dateFrom: dateFrom ? parseInt(dateFrom, 10) : undefined,
+      dateTo: dateTo ? parseInt(dateTo, 10) : undefined,
+      minDuration: minDuration ? parseInt(minDuration, 10) : undefined,
+      maxDuration: maxDuration ? parseInt(maxDuration, 10) : undefined,
+      minFileSize: minFileSize ? parseInt(minFileSize, 10) : undefined,
+      maxFileSize: maxFileSize ? parseInt(maxFileSize, 10) : undefined,
+    };
 
-    // Get operations from database (historical)
-    try {
-      const dbLimit = parseInt(limit, 10) + parseInt(offset, 10) + 100; // Get extra for filtering
-      const dbOps = await getRecentOperations(dbLimit);
-
-      // Merge with in-memory operations, avoiding duplicates
-      const existingIds = new Set(allOperations.map(op => op.id));
-      const newOps = dbOps.filter(op => !existingIds.has(op.id));
-      allOperations = [...allOperations, ...newOps];
-    } catch (error) {
-      logger.error('Failed to fetch operations from database:', error);
-      // Continue with in-memory operations only
-    }
-
-    // Apply filters
-    let filtered = allOperations;
-
-    // Operation ID filter
-    if (operationId) {
-      filtered = filtered.filter(op => op.id === operationId);
-    }
-
-    // User ID filter
-    if (userId) {
-      filtered = filtered.filter(op => op.userId === userId);
-    }
-
-    // Username filter
-    if (username) {
-      const usernameLower = username.toLowerCase();
-      filtered = filtered.filter(
-        op => op.username && op.username.toLowerCase().includes(usernameLower)
-      );
-    }
-
-    // Status filter
-    if (status) {
-      const statusArray = Array.isArray(status) ? status : [status];
-      filtered = filtered.filter(op => statusArray.includes(op.status));
-    }
-
-    // Type filter
-    if (type) {
-      const typeArray = Array.isArray(type) ? type : [type];
-      filtered = filtered.filter(op => typeArray.includes(op.type));
-    }
-
-    // Failed only filter
-    if (failedOnly === 'true') {
-      filtered = filtered.filter(op => op.status === 'error');
-    }
-
-    // Early failure only filter
-    if (earlyFailureOnly === 'true') {
-      filtered = filtered.filter(op => op.earlyFailure === true);
-    }
-
-    // Error type filter (for early failures)
-    if (errorType) {
-      // First check if errorType is directly on the operation object (from in-memory)
-      // Then check database traces for historical operations
-      const directMatches = filtered.filter(op => op.errorType === errorType);
-      const needsDbCheck = filtered.filter(op => !op.errorType && op.status === 'error');
-
-      if (needsDbCheck.length > 0) {
-        try {
-          const traces = await Promise.all(
-            needsDbCheck.map(async op => {
-              try {
-                return await getOperationTrace(op.id);
-              } catch {
-                return null;
-              }
-            })
-          );
-          const validTraces = traces.filter(Boolean);
-
-          const dbMatchingIds = new Set();
-          validTraces.forEach(trace => {
-            const createdLog = trace.logs.find(log => log.step === 'created');
-            if (createdLog?.metadata?.errorType === errorType) {
-              dbMatchingIds.add(trace.operationId);
-            }
-          });
-
-          // Combine direct matches with database matches
-          const dbMatches = needsDbCheck.filter(op => dbMatchingIds.has(op.id));
-          filtered = [...directMatches, ...dbMatches];
-        } catch (error) {
-          logger.error('Failed to filter by error type:', error);
-          // Fall back to direct matches only
-          filtered = directMatches;
-        }
-      } else {
-        filtered = directMatches;
-      }
-    }
-
-    // Early failure filter (legacy support)
-    if (earlyFailure === 'true') {
-      filtered = filtered.filter(op => op.earlyFailure === true || op.status === 'error');
-    }
-
-    // Date range filter
-    if (dateFrom) {
-      const fromTimestamp = parseInt(dateFrom, 10);
-      filtered = filtered.filter(op => op.timestamp >= fromTimestamp);
-    }
-    if (dateTo) {
-      const toTimestamp = parseInt(dateTo, 10);
-      filtered = filtered.filter(op => op.timestamp <= toTimestamp);
-    }
-
-    // Duration filters
-    if (minDuration) {
-      const minDur = parseInt(minDuration, 10);
-      filtered = filtered.filter(
-        op => op.performanceMetrics?.duration && op.performanceMetrics.duration >= minDur
-      );
-    }
-    if (maxDuration) {
-      const maxDur = parseInt(maxDuration, 10);
-      filtered = filtered.filter(
-        op => op.performanceMetrics?.duration && op.performanceMetrics.duration <= maxDur
-      );
-    }
-
-    // File size filters
-    if (minFileSize) {
-      const minSize = parseInt(minFileSize, 10);
-      filtered = filtered.filter(op => op.fileSize && op.fileSize >= minSize);
-    }
-    if (maxFileSize) {
-      const maxSize = parseInt(maxFileSize, 10);
-      filtered = filtered.filter(op => op.fileSize && op.fileSize <= maxSize);
-    }
-
-    // Sort by timestamp (most recent first)
-    filtered.sort((a, b) => b.timestamp - a.timestamp);
-
-    // Apply pagination
-    const limitNum = parseInt(limit, 10);
-    const offsetNum = parseInt(offset, 10);
-    const paginated = filtered.slice(offsetNum, offsetNum + limitNum);
+    // Filters query the full operation history in SQL (not just the most
+    // recent N operations), so search reliably finds older matches.
+    const { operations: paginated, total } = await searchOperations(filters, {
+      limit: parseInt(limit, 10),
+      offset: parseInt(offset, 10),
+    });
 
     res.json({
       requests: paginated,
-      total: filtered.length,
+      total,
     });
   } catch (error) {
     logger.error('Failed to fetch requests:', error);
@@ -655,6 +529,59 @@ router.get('/api/operations/errors/analysis', async (req, res) => {
     logger.error('Failed to analyze errors:', error);
     res.status(500).json({
       error: 'failed to analyze errors',
+      message: error.message,
+    });
+  }
+});
+
+// Operation performance summary: avg/max duration and success rate by operation type
+router.get('/api/operations/performance/summary', async (req, res) => {
+  try {
+    let allOperations = [...operations];
+    try {
+      const dbOps = await getRecentOperations(1000);
+      const existingIds = new Set(allOperations.map(op => op.id));
+      const newOps = dbOps.filter(op => !existingIds.has(op.id));
+      allOperations = [...allOperations, ...newOps];
+    } catch (error) {
+      logger.error('Failed to fetch operations from database:', error);
+    }
+
+    const finished = allOperations.filter(op => op.status === 'success' || op.status === 'error');
+
+    const byType = new Map();
+    finished.forEach(op => {
+      const type = op.type || 'unknown';
+      if (!byType.has(type)) {
+        byType.set(type, { type, count: 0, successCount: 0, durations: [] });
+      }
+      const entry = byType.get(type);
+      entry.count++;
+      if (op.status === 'success') entry.successCount++;
+      const duration = op.performanceMetrics?.duration;
+      if (typeof duration === 'number' && duration > 0) {
+        entry.durations.push(duration);
+      }
+    });
+
+    const types = Array.from(byType.values())
+      .map(({ type, count, successCount, durations }) => ({
+        type,
+        count,
+        successRate: count > 0 ? successCount / count : null,
+        avgDuration:
+          durations.length > 0
+            ? Math.round(durations.reduce((sum, d) => sum + d, 0) / durations.length)
+            : null,
+        maxDuration: durations.length > 0 ? Math.max(...durations) : null,
+      }))
+      .sort((a, b) => b.count - a.count);
+
+    res.json({ types });
+  } catch (error) {
+    logger.error('Failed to summarize operation performance:', error);
+    res.status(500).json({
+      error: 'failed to summarize operation performance',
       message: error.message,
     });
   }

@@ -7,11 +7,16 @@
   let systemMetrics = null;
   let errorMetrics = null;
   let storageStats = null;
+  let metricsHistory = [];
+  let errorPatterns = [];
+  let performanceByType = [];
   let loading = true;
   let error = null;
   let showDetails = {
     components: false,
-    levels: false
+    levels: false,
+    errorPatterns: false,
+    performance: false
   };
 
   // Cache keys for localStorage
@@ -116,11 +121,87 @@
     }
   }
 
+  async function fetchMetricsHistory() {
+    try {
+      const response = await fetch('/api/metrics/system?limit=60');
+      if (!response.ok) throw new Error('failed to fetch metrics history');
+      const data = await response.json();
+      metricsHistory = (data.history || [])
+        .map(row => {
+          let metadata = {};
+          try {
+            metadata = row.metadata ? JSON.parse(row.metadata) : {};
+          } catch {
+            metadata = {};
+          }
+          return {
+            timestamp: row.timestamp,
+            cpu: row.cpu_usage ?? null,
+            memory: metadata.memoryPercentage ?? null,
+            disk: metadata.diskPercentage ?? null,
+          };
+        })
+        .reverse(); // DB returns newest-first; chart reads left-to-right in time
+    } catch (err) {
+      console.error('Failed to fetch metrics history:', err);
+      metricsHistory = [];
+    }
+  }
+
+  async function fetchErrorPatterns() {
+    try {
+      const response = await fetch('/api/operations/errors/analysis');
+      if (!response.ok) throw new Error('failed to fetch error analysis');
+      const data = await response.json();
+      errorPatterns = data.groups || [];
+    } catch (err) {
+      console.error('Failed to fetch error patterns:', err);
+      errorPatterns = [];
+    }
+  }
+
+  async function fetchPerformanceSummary() {
+    try {
+      const response = await fetch('/api/operations/performance/summary');
+      if (!response.ok) throw new Error('failed to fetch performance summary');
+      const data = await response.json();
+      performanceByType = data.types || [];
+    } catch (err) {
+      console.error('Failed to fetch performance summary:', err);
+      performanceByType = [];
+    }
+  }
+
+  function sparklinePoints(values, width = 300, height = 48) {
+    const valid = values.map(v => (typeof v === 'number' ? v : null));
+    if (valid.every(v => v === null)) return '';
+    const step = valid.length > 1 ? width / (valid.length - 1) : 0;
+    return valid
+      .map((v, i) => {
+        const y = v === null ? height : height - (Math.min(Math.max(v, 0), 100) / 100) * height;
+        return `${(i * step).toFixed(1)},${y.toFixed(1)}`;
+      })
+      .join(' ');
+  }
+
+  function formatDurationShort(ms) {
+    if (!ms) return 'N/A';
+    if (ms < 1000) return `${ms}ms`;
+    if (ms < 60000) return `${(ms / 1000).toFixed(1)}s`;
+    return `${(ms / 60000).toFixed(1)}m`;
+  }
+
   async function fetchMetrics() {
     loading = true;
     error = null;
     try {
-      await Promise.all([fetchErrorMetrics(), fetchStorageStats()]);
+      await Promise.all([
+        fetchErrorMetrics(),
+        fetchStorageStats(),
+        fetchMetricsHistory(),
+        fetchErrorPatterns(),
+        fetchPerformanceSummary(),
+      ]);
     } catch (err) {
       error = err.message;
     } finally {
@@ -285,6 +366,46 @@
       </div>
     </section>
 
+    <!-- System Trend Chart -->
+    {#if metricsHistory.length > 1}
+      <section class="trend-section">
+        <div class="trend-header">
+          <TrendingUp size={16} />
+          <span>system trend ({metricsHistory.length} samples)</span>
+        </div>
+        <div class="trend-chart">
+          <svg viewBox="0 0 300 48" preserveAspectRatio="none">
+            <polyline
+              points={sparklinePoints(metricsHistory.map(m => m.cpu))}
+              fill="none"
+              stroke="var(--success)"
+              stroke-width="1.5"
+              vector-effect="non-scaling-stroke"
+            />
+            <polyline
+              points={sparklinePoints(metricsHistory.map(m => m.memory))}
+              fill="none"
+              stroke="var(--warning)"
+              stroke-width="1.5"
+              vector-effect="non-scaling-stroke"
+            />
+            <polyline
+              points={sparklinePoints(metricsHistory.map(m => m.disk))}
+              fill="none"
+              stroke="var(--danger)"
+              stroke-width="1.5"
+              vector-effect="non-scaling-stroke"
+            />
+          </svg>
+          <div class="trend-legend">
+            <span class="legend-item"><span class="legend-swatch" style="background-color: var(--success)"></span>cpu</span>
+            <span class="legend-item"><span class="legend-swatch" style="background-color: var(--warning)"></span>memory</span>
+            <span class="legend-item"><span class="legend-swatch" style="background-color: var(--danger)"></span>disk</span>
+          </div>
+        </div>
+      </section>
+    {/if}
+
     <!-- Key Metrics Grid -->
     <section class="metrics-grid">
       <div class="metric-card operations">
@@ -415,6 +536,67 @@
         {/if}
       </section>
     {/if}
+
+    {#if errorPatterns.length > 0}
+      <section class="activity-section">
+        <button class="activity-header" on:click={() => toggleDetails('errorPatterns')}>
+          <span>top error patterns</span>
+          {#if showDetails.errorPatterns}
+            <ChevronUp size={16} />
+          {:else}
+            <ChevronDown size={16} />
+          {/if}
+        </button>
+        {#if showDetails.errorPatterns}
+          <div class="activity-content">
+            {#each errorPatterns.slice(0, 10) as group}
+              <div class="activity-item">
+                <span class="activity-name pattern-text">{group.pattern}</span>
+                <span class="activity-count">{group.count}</span>
+                <div class="activity-bar">
+                  <div class="activity-bar-fill error" style="width: {(group.count / errorPatterns[0].count) * 100}%"></div>
+                </div>
+              </div>
+            {/each}
+          </div>
+        {/if}
+      </section>
+    {/if}
+
+    {#if performanceByType.length > 0}
+      <section class="activity-section">
+        <button class="activity-header" on:click={() => toggleDetails('performance')}>
+          <span>operation performance by type</span>
+          {#if showDetails.performance}
+            <ChevronUp size={16} />
+          {:else}
+            <ChevronDown size={16} />
+          {/if}
+        </button>
+        {#if showDetails.performance}
+          <div class="activity-content performance-table">
+            <div class="performance-row performance-header">
+              <span>type</span>
+              <span>count</span>
+              <span>success rate</span>
+              <span>avg duration</span>
+              <span>max duration</span>
+            </div>
+            {#each performanceByType as t}
+              <div class="performance-row">
+                <span class="type-name">{t.type}</span>
+                <span>{t.count}</span>
+                <span class:warning-text={t.successRate !== null && t.successRate < 0.9}>
+                  {t.successRate !== null ? `${(t.successRate * 100).toFixed(0)}%` : 'N/A'}
+                </span>
+                <span>{formatDurationShort(t.avgDuration)}</span>
+                <span>{formatDurationShort(t.maxDuration)}</span>
+              </div>
+            {/each}
+          </div>
+        {/if}
+      </section>
+    {/if}
   {/if}
 </div>
 
@@ -512,6 +694,108 @@
   .status-bar-fill {
     height: 100%;
     transition: width 0.3s ease;
+  }
+
+  /* System Trend Chart */
+  .trend-section {
+    background-color: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-lg);
+    padding: 0.75rem;
+    max-width: 100%;
+  }
+
+  @media (min-width: 1024px) {
+    .trend-section {
+      max-width: 1400px;
+    }
+  }
+
+  .trend-header {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    font-size: 0.85rem;
+    color: var(--text-bright);
+    font-weight: 500;
+    margin-bottom: 0.5rem;
+  }
+
+  .trend-chart svg {
+    width: 100%;
+    height: 60px;
+    display: block;
+  }
+
+  .trend-legend {
+    display: flex;
+    gap: 1rem;
+    margin-top: 0.5rem;
+  }
+
+  .legend-item {
+    display: flex;
+    align-items: center;
+    gap: 0.35rem;
+    font-size: 0.75rem;
+    color: var(--text-muted);
+  }
+
+  .legend-swatch {
+    width: 10px;
+    height: 10px;
+    border-radius: 2px;
+    display: inline-block;
+  }
+
+  .pattern-text {
+    font-family: monospace;
+    font-size: 0.75rem;
+    white-space: normal;
+    word-break: break-word;
+  }
+
+  .activity-bar-fill.error {
+    background-color: var(--danger);
+  }
+
+  .performance-table {
+    gap: 0;
+  }
+
+  .performance-row {
+    display: grid;
+    grid-template-columns: 1.5fr 0.8fr 1fr 1fr 1fr;
+    gap: 0.5rem;
+    padding: 0.4rem 0;
+    font-size: 0.8rem;
+    color: var(--text);
+    border-bottom: 1px solid var(--surface-2);
+  }
+
+  .performance-header {
+    color: var(--text-dim);
+    font-size: 0.7rem;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    border-bottom: 1px solid var(--border);
+  }
+
+  .type-name {
+    color: var(--text-bright);
+    text-transform: capitalize;
+    font-weight: 500;
+  }
+
+  .warning-text {
+    color: var(--warning);
+  }
+
+  @media (max-width: 768px) {
+    .performance-row {
+      grid-template-columns: 1.2fr 0.6fr 0.9fr 0.9fr 0.9fr;
+      font-size: 0.7rem;
+    }
   }
 
   /* Key Metrics Grid */

@@ -2,7 +2,7 @@
   import { onMount, onDestroy } from 'svelte';
   import { currentRoute, initRouter, navigate } from './utils/router.js';
   import { useWebSocket, ensureConnected, connected as wsConnected } from './stores/websocket-store.js';
-  import { BarChart3, Users as UsersIcon, Settings, FileText, TrendingUp, Bell, ChevronLeft, ChevronRight, Shield, List } from 'lucide-svelte';
+  import { BarChart3, Users as UsersIcon, Settings, FileText, TrendingUp, Bell, ChevronLeft, ChevronRight, Shield, List, SlidersHorizontal } from 'lucide-svelte';
   import Stats from './pages/Stats.svelte';
   import Health from './pages/Health.svelte';
   import Operations from './pages/Operations.svelte';
@@ -14,6 +14,7 @@
   import Monitoring from './pages/Monitoring.svelte';
   import Alerts from './pages/Alerts.svelte';
   import Moderation from './pages/Moderation.svelte';
+  import BotSettings from './pages/BotSettings.svelte';
   import './styles/responsive.css';
 
   let sidebarOpen = true;
@@ -113,6 +114,12 @@
           {#if sidebarOpen}<span class="label">moderation</span>{/if}
         </button>
       </li>
+      <li class:active={activePage === 'settings'}>
+        <button on:click={() => navigateTo('settings')}>
+          <span class="icon"><SlidersHorizontal size={20} /></span>
+          {#if sidebarOpen}<span class="label">settings</span>{/if}
+        </button>
+      </li>
     </ul>
   </nav>
 
@@ -194,6 +201,13 @@
       </div>
       <div class="page-content">
         <Moderation />
+      </div>
+    {:else if activePage === 'settings'}
+      <div class="page-header">
+        <h2>settings</h2>
+      </div>
+      <div class="page-content">
+        <BotSettings />
       </div>
     {/if}
   </div>

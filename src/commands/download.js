@@ -4,7 +4,7 @@ import path from 'path';
 import { createLogger } from '../utils/logger.js';
 import { botConfig } from '../utils/config.js';
 import { validateUrl } from '../utils/validation.js';
-import { isSocialMediaUrl, downloadFromSocialMedia } from '../utils/cobalt.js';
+import { isSocialMediaUrl, downloadFromSocialMedia, getCobaltMediaUrls } from '../utils/cobalt.js';
 import {
   isYouTubeUrl,
   downloadFromYouTube,
@@ -40,7 +40,7 @@ import {
 } from '../utils/r2-storage.js';
 import { queueCobaltRequest, hashUrl } from '../utils/cobalt-queue.js';
 import { notifyCommandSuccess, notifyCommandFailure } from '../utils/ntfy-notifier.js';
-import { getProcessedUrl } from '../utils/database.js';
+import { getProcessedUrl, getBooleanSetting } from '../utils/database.js';
 import { recordProcessedUrl, trackR2UploadIfApplicable } from './shared/url-cache.js';
 import { runMediaCommand } from './shared/run-media-command.js';
 import { replyIfRateLimited } from './shared/command-guards.js';
@@ -184,6 +184,56 @@ async function processDownload(
 
       const maxSize = adminUser ? Infinity : MAX_VIDEO_SIZE;
       const isYouTube = isYouTubeUrl(url);
+
+      // URL-only mode (toggleable from the webui): reply with the direct media URL
+      // from cobalt instead of downloading/uploading. Trim requests still need a real
+      // download, and the yt-dlp (YouTube) path has no direct URL to hand out.
+      if (
+        COBALT_ENABLED &&
+        !(isYouTube && YTDLP_ENABLED) &&
+        startTime === null &&
+        duration === null &&
+        (await getBooleanSetting('url_only_mode', false))
+      ) {
+        logOperationStep(operationId, 'url_only_mode', 'running', {
+          message: 'URL-only mode enabled, fetching direct media URL from cobalt',
+          metadata: { url },
+        });
+        try {
+          const { urls, direct } = await getCobaltMediaUrls(COBALT_API_URL, url);
+          if (direct && urls.length > 0) {
+            // Discord message limit is 2000 chars; include as many URLs as fit
+            const lines = [];
+            let totalLength = 0;
+            for (const item of urls) {
+              if (totalLength + item.url.length + 1 > 1990) {
+                break;
+              }
+              lines.push(item.url);
+              totalLength += item.url.length + 1;
+            }
+            logOperationStep(operationId, 'url_only_mode', 'success', {
+              message: `Returning ${lines.length} direct media URL(s) without downloading`,
+              metadata: { url, mediaUrls: lines },
+            });
+            updateOperationStatus(operationId, 'success', { fileSize: 0 });
+            recordRateLimit(userId);
+            await safeInteractionEditReply(interaction, { content: lines.join('\n') });
+            await notifyCommandSuccess(username, 'download', { operationId, userId });
+            return;
+          }
+          logOperationStep(operationId, 'url_only_mode', 'success', {
+            message: 'No direct URL available (tunnel response), falling back to normal download',
+            metadata: { url },
+          });
+        } catch (urlModeError) {
+          logger.warn(`URL-only mode failed, falling back to download: ${urlModeError.message}`);
+          logOperationStep(operationId, 'url_only_mode', 'success', {
+            message: 'URL-only mode failed, falling back to normal download',
+            metadata: { url, reason: urlModeError.message },
+          });
+        }
+      }
 
       // Determine download method based on URL type
       let downloadMethod;

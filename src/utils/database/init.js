@@ -139,10 +139,15 @@ async function resetSerialSequences(sql) {
       const maxResult = await sql.unsafe(maxQuery);
       const maxId = parseInt(maxResult[0]?.max_id || 0, 10);
 
-      // Reset the sequence to max_id + 1 (or 1 if table is empty)
-      // Use setval with false to set the current value without incrementing
+      // Reset the sequence to max_id + 1 (or 1 if table is empty).
+      // GREATEST ensures the sequence only ever moves forward: multiple processes
+      // (bot + webui, or parallel test files) can run this concurrently, and moving
+      // a sequence backwards while another process is inserting hands out
+      // already-used ids and causes duplicate-key errors.
       const nextVal = maxId > 0 ? maxId + 1 : 1;
-      await sql.unsafe(`SELECT setval('${sequence}', ${nextVal}, false)`);
+      await sql.unsafe(
+        `SELECT setval('${sequence}', GREATEST(COALESCE((SELECT last_value FROM ${sequence}), 1), ${nextVal}), false)`
+      );
     } catch (error) {
       // If sequence doesn't exist yet or table doesn't exist, that's okay
       // It will be created on first insert

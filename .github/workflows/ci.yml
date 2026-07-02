@@ -31,6 +31,11 @@ env:
   POSTGRES_PASSWORD: gronka
   POSTGRES_HOST: localhost
   POSTGRES_PORT: '5432'
+  # Explicitly mark test mode. Without this, spawned test-file child processes
+  # fail argv-based test detection, run in "prod mode", and execute the serial
+  # sequence reset concurrently - racing setval() against parallel inserts and
+  # causing intermittent duplicate-key failures.
+  TEST_POSTGRES_DB: gronka_test
   # PG* vars for psql client
   PGUSER: gronka
   PGPASSWORD: gronka

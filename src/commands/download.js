@@ -200,7 +200,15 @@ async function processDownload(
           metadata: { url },
         });
         try {
-          const { urls, direct } = await getCobaltMediaUrls(COBALT_API_URL, url);
+          // Route through the cobalt queue so URL-only lookups respect the same
+          // concurrency limit and dedupe as regular downloads. The dedupeKey keeps
+          // them separate from download requests, whose promises resolve to buffers
+          // rather than URL lists.
+          const { urls, direct } = await queueCobaltRequest(
+            url,
+            () => getCobaltMediaUrls(COBALT_API_URL, url),
+            { skipCache: true, dedupeKey: `urlonly:${hashUrl(url)}` }
+          );
           if (direct && urls.length > 0) {
             // Discord message limit is 2000 chars; include as many URLs as fit
             const lines = [];

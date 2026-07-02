@@ -11,10 +11,16 @@
 
 import dotenv from 'dotenv';
 import postgres from 'postgres';
+import fs from 'fs';
 
 dotenv.config();
 
-const host = process.env.TEST_POSTGRES_HOST || 'localhost';
+// Match the docker-vs-local host detection in src/utils/database/connection.js:
+// inside the app container postgres is the "postgres" compose service, not localhost
+const isInDocker = fs.existsSync('/.dockerenv');
+const host =
+  process.env.TEST_POSTGRES_HOST ||
+  (isInDocker ? process.env.POSTGRES_HOST || 'postgres' : 'localhost');
 const port = parseInt(process.env.TEST_POSTGRES_PORT || process.env.POSTGRES_PORT || '5432', 10);
 const username = process.env.TEST_POSTGRES_USER || process.env.POSTGRES_USER || 'gronka';
 const password = process.env.TEST_POSTGRES_PASSWORD || process.env.POSTGRES_PASSWORD || 'gronka';

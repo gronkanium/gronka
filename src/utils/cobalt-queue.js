@@ -139,15 +139,22 @@ async function executeRequest(request) {
  * @returns {Promise} Promise that resolves with download result
  */
 export function queueCobaltRequest(url, downloadFn, options = {}) {
-  const { skipCache = false, expectedFileType = null } = options;
+  const { skipCache = false, expectedFileType = null, dedupeKey = null } = options;
   const urlHash = hashUrl(url);
+
+  // Deduplication key: skipCache requests (e.g. trims) must not join promises created
+  // by cache-checking requests - those can reject with URL_ALREADY_PROCESSED, which
+  // would make a trim request silently return the cached untrimmed URL. They dedupe
+  // in their own namespace instead. Callers with a different result shape (e.g.
+  // URL-only mode) pass an explicit dedupeKey for the same reason.
+  const mapKey = dedupeKey || `${skipCache ? 'nocache:' : ''}${urlHash}`;
 
   // URL deduplication: if multiple users request the same URL simultaneously, we reuse
   // the existing download instead of making duplicate API calls.
   // The check-and-set must happen synchronously (before any await) - registering after
   // the async DB cache check opened a window where concurrent requests all passed the
   // check before any of them registered, defeating deduplication entirely.
-  const existingPromise = inProgressDownloads.get(urlHash);
+  const existingPromise = inProgressDownloads.get(mapKey);
   if (existingPromise) {
     logger.info(
       `URL already in progress, waiting for existing download: ${url.substring(0, 50)}...`

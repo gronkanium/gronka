@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 
 import { execSync } from 'child_process';
-import { writeFileSync } from 'fs';
+import { writeFileSync, mkdirSync } from 'fs';
 import { fileURLToPath } from 'url';
 import { dirname, join } from 'path';
 
@@ -9,7 +9,9 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 const repoOwner = 'thedorekaczynski';
 const repoName = 'gronka';
-const outputFile = join(__dirname, '..', 'code-scanning-issues.json');
+const outputDir = join(__dirname, '..', 'logs');
+const outputFile = join(outputDir, 'code-scanning-issues.json');
+mkdirSync(outputDir, { recursive: true });
 
 console.log('Fetching code scanning alerts from GitHub...');
 

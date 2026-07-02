@@ -155,7 +155,7 @@ describe('fetch-code-scanning-issues.js', () => {
   describe('file writing', () => {
     test('constructs correct output file path', () => {
       const baseDir = join(__dirname, '..', '..');
-      const outputFile = join(baseDir, 'code-scanning-issues.json');
+      const outputFile = join(baseDir, 'logs', 'code-scanning-issues.json');
 
       assert.ok(outputFile.includes('code-scanning-issues.json'));
       assert.ok(outputFile.includes('gronka') || outputFile.endsWith('code-scanning-issues.json'));

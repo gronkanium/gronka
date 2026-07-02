@@ -75,7 +75,8 @@ vendor/
 # Test coverage
 coverage/
 
-# Code scanning results
+# Code scanning results (script now writes to logs/, entry kept in case an old
+# checkout or stale instructions regenerate it in the root)
 code-scanning-issues.json
 
 scripts/setup-glab-auth.sh

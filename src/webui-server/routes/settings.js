@@ -37,7 +37,8 @@ router.get('/api/settings', async (req, res) => {
 router.put('/api/settings/:key', express.json(), async (req, res) => {
   try {
     const { key } = req.params;
-    const meta = KNOWN_SETTINGS[key];
+    // Object.hasOwn guards against prototype-chain lookups (e.g. "__proto__", "constructor")
+    const meta = Object.hasOwn(KNOWN_SETTINGS, key) ? KNOWN_SETTINGS[key] : undefined;
 
     if (!meta) {
       return res.status(404).json({

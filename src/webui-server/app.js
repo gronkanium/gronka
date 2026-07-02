@@ -24,6 +24,16 @@ const fileServerLimiter = rateLimit({
   legacyHeaders: false, // Disable the `X-RateLimit-*` headers
 });
 
+// Rate limiter for API routes - all handlers hit the database, so every request has a cost.
+// Generous limit: the dashboard gets live data over WebSocket after the initial load.
+const apiLimiter = rateLimit({
+  windowMs: 60 * 1000, // 1 minute
+  max: 300, // Limit each IP to 300 API requests per minute
+  message: 'too many requests, please try again later',
+  standardHeaders: true, // Return rate limit info in the `RateLimit-*` headers
+  legacyHeaders: false, // Disable the `X-RateLimit-*` headers
+});
+
 export function createApp(websocketClients) {
   const app = express();
 
@@ -37,6 +47,9 @@ export function createApp(websocketClients) {
   app.get('/', fileServerLimiter, (req, res) => {
     res.sendFile(path.join(publicPath, 'index.html'));
   });
+
+  // Rate limit all API routes
+  app.use('/api', apiLimiter);
 
   // Register routes
   app.use(proxyRoutes);

@@ -1,5 +1,7 @@
 import { Client, GatewayIntentBits, Events } from 'discord.js';
+import { createHash, timingSafeEqual } from 'crypto';
 import express from 'express';
+import rateLimit from 'express-rate-limit';
 import { createLogger } from './utils/logger.js';
 import { botConfig, serverConfig } from './utils/config.js';
 import { ConfigurationError } from './utils/errors.js';
@@ -68,6 +70,16 @@ let cleanupJobIntervalId = null;
 let httpServer = null;
 
 /**
+ * Constant-time string comparison to prevent timing attacks on credentials.
+ * Hashing both sides first equalizes lengths so timingSafeEqual can be used.
+ */
+function safeCompare(a, b) {
+  const hashA = createHash('sha256').update(String(a)).digest();
+  const hashB = createHash('sha256').update(String(b)).digest();
+  return timingSafeEqual(hashA, hashB);
+}
+
+/**
  * Basic authentication middleware for stats endpoint
  */
 function basicAuth(req, res, next) {
@@ -84,9 +96,11 @@ function basicAuth(req, res, next) {
   }
 
   const credentials = Buffer.from(authHeader.substring(6), 'base64').toString('utf-8');
-  const [username, password] = credentials.split(':');
+  const separatorIndex = credentials.indexOf(':');
+  const username = separatorIndex === -1 ? credentials : credentials.slice(0, separatorIndex);
+  const password = separatorIndex === -1 ? '' : credentials.slice(separatorIndex + 1);
 
-  if (username === STATS_USERNAME && password === STATS_PASSWORD) {
+  if (safeCompare(username, STATS_USERNAME) && safeCompare(password, STATS_PASSWORD)) {
     return next();
   }
 
@@ -103,6 +117,17 @@ function startStatsServer() {
 
   // Trust proxy for proper IP detection
   app.set('trust proxy', 1);
+
+  // Rate limit all stats server routes - they perform authorization and database work
+  app.use(
+    rateLimit({
+      windowMs: 15 * 60 * 1000, // 15 minutes
+      max: 100, // Limit each IP to 100 requests per windowMs
+      message: 'too many requests, please try again later',
+      standardHeaders: true,
+      legacyHeaders: false,
+    })
+  );
 
   // Parse JSON bodies for status endpoint
   app.use(express.json());

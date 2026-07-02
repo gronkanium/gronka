@@ -145,8 +145,8 @@ async function testPagesAccess() {
 async function main() {
   console.log('Cloudflare KV and Pages Connection Test\n');
   console.log('Configuration:');
-  console.log(`  Account ID: ${CLOUDFLARE_ACCOUNT_ID || 'NOT SET'}`);
-  console.log(`  KV Namespace ID: ${CLOUDFLARE_KV_NAMESPACE_ID || 'NOT SET'}`);
+  console.log(`  Account ID: ${CLOUDFLARE_ACCOUNT_ID ? 'SET' : 'NOT SET'}`);
+  console.log(`  KV Namespace ID: ${CLOUDFLARE_KV_NAMESPACE_ID ? 'SET' : 'NOT SET'}`);
   console.log(`  Pages Project: ${CLOUDFLARE_PAGES_PROJECT_NAME || 'NOT SET'}`);
   console.log(`  API Token: ${CLOUDFLARE_API_TOKEN ? 'SET' : 'NOT SET'}\n`);
 

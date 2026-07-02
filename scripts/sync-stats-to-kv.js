@@ -154,8 +154,6 @@ async function writeStatsToKV(stats, formatFileSize) {
  * @returns {boolean} True if stats differ
  */
 function statsChanged(stats1, stats2) {
-  if (!stats1 || !stats2) return true;
-
   // Compare key fields
   return (
     stats1.unique_users !== stats2.unique_users ||

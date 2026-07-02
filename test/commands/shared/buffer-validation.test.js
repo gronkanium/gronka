@@ -1,4 +1,4 @@
-import { test, describe, after } from 'node:test';
+import { test, describe, before, after } from 'node:test';
 import assert from 'node:assert';
 import fs from 'fs/promises';
 import path from 'path';
@@ -17,9 +17,13 @@ const mp4 = () =>
   Buffer.concat([Buffer.from([0, 0, 0, 0x18]), Buffer.from('ftyp'), Buffer.from('mp42')]);
 const webm = () => Buffer.concat([Buffer.from([0x1a, 0x45, 0xdf, 0xa3]), Buffer.alloc(8)]);
 
-const tmpFiles = [];
+// mkdtemp creates a private, unpredictable directory, avoiding insecure use of the shared tmp dir
+let tmpDir;
+before(async () => {
+  tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), 'bv-test-'));
+});
 after(async () => {
-  await Promise.all(tmpFiles.map(f => fs.unlink(f).catch(() => {})));
+  await fs.rm(tmpDir, { recursive: true, force: true });
 });
 
 describe('shared/buffer-validation', () => {
@@ -53,26 +57,23 @@ describe('shared/buffer-validation', () => {
 
   describe('writeValidatedFileBuffer', () => {
     test('writes a valid gif', async () => {
-      const p = path.join(os.tmpdir(), `bv-test-${Date.now()}.gif`);
-      tmpFiles.push(p);
+      const p = path.join(tmpDir, 'valid.gif');
       await writeValidatedFileBuffer(p, gif89a(), 'gif');
       const written = await fs.readFile(p);
       assert.ok(written.equals(gif89a()));
     });
     test('writes a valid video', async () => {
-      const p = path.join(os.tmpdir(), `bv-test-${Date.now()}.mp4`);
-      tmpFiles.push(p);
+      const p = path.join(tmpDir, 'valid.mp4');
       await writeValidatedFileBuffer(p, mp4(), 'video');
       assert.ok((await fs.readFile(p)).equals(mp4()));
     });
     test('writes images without signature validation', async () => {
-      const p = path.join(os.tmpdir(), `bv-test-${Date.now()}.jpg`);
-      tmpFiles.push(p);
+      const p = path.join(tmpDir, 'anything.jpg');
       await writeValidatedFileBuffer(p, Buffer.from('anything'), 'image');
       assert.ok((await fs.readFile(p)).equals(Buffer.from('anything')));
     });
     test('rejects an invalid gif before writing', async () => {
-      const p = path.join(os.tmpdir(), `bv-test-invalid-${Date.now()}.gif`);
+      const p = path.join(tmpDir, 'invalid.gif');
       await assert.rejects(
         () => writeValidatedFileBuffer(p, Buffer.from('NOTGIF'), 'gif'),
         ValidationError

@@ -2,7 +2,7 @@
 
 import fs from 'fs';
 import path from 'path';
-import { execSync } from 'child_process';
+import { execSync, execFileSync } from 'child_process';
 import { fileURLToPath } from 'url';
 import tmp from 'tmp';
 
@@ -111,12 +111,13 @@ function configureGitUser(tempDir) {
       userEmail = process.env.GIT_USER_EMAIL || 'noreply@github.com';
     }
 
-    // Set git config in the temporary directory
-    execSync(`git config user.name "${userName}"`, {
+    // Set git config in the temporary directory. Values are passed as arguments (not
+    // interpolated into a shell string) so they cannot be interpreted by the shell.
+    execFileSync('git', ['config', 'user.name', userName], {
       cwd: tempDir,
       stdio: 'ignore',
     });
-    execSync(`git config user.email "${userEmail}"`, {
+    execFileSync('git', ['config', 'user.email', userEmail], {
       cwd: tempDir,
       stdio: 'ignore',
     });

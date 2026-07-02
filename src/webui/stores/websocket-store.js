@@ -237,16 +237,15 @@ function handleMessage(message) {
       break;
 
     default: {
-      // Sanitize user-provided message type to prevent log injection
-      // Remove newlines and carriage returns to prevent log injection (CodeQL recognizes this pattern)
-      const sanitizedType =
-        typeof message.type === 'string'
-          ? message.type.replace(/\n|\r/g, '').replace(
-              // eslint-disable-next-line no-control-regex
-              /[\x00-\x1F\x7F-\x9F]/g,
-              ' '
-            )
-          : String(message.type);
+      // Sanitize user-provided message type to prevent log injection. The sanitization must be
+      // unconditional — a non-string type would otherwise reach the log unsanitized.
+      const sanitizedType = String(message.type)
+        .replace(/\n|\r/g, '')
+        .replace(
+          // eslint-disable-next-line no-control-regex
+          /[\x00-\x1F\x7F-\x9F]/g,
+          ' '
+        );
       console.warn('Unknown message type:', sanitizedType);
     }
   }

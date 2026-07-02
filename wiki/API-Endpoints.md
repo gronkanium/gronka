@@ -103,7 +103,6 @@ the webui dashboard (port 3001) has its own api used by the dashboard interface:
 - `GET /api/operations`, `GET /api/operations/:operationId` (plus `/trace`, `/related`) - operation tracking and tracing
 - `GET /api/operations/search`, `GET /api/operations/errors/analysis` - operation search and error analysis
 - `GET /api/logs`, `GET /api/logs/components`, `GET /api/logs/metrics` - log viewing
-- `GET /api/metrics/system`, `GET /api/metrics/system/current`, `GET /api/metrics/errors` - system and error metrics
 - `GET /api/alerts` - alerts
 
 **users and moderation:**

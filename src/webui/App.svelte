@@ -2,7 +2,7 @@
   import { onMount, onDestroy } from 'svelte';
   import { currentRoute, initRouter, navigate } from './utils/router.js';
   import { useWebSocket, ensureConnected, connected as wsConnected } from './stores/websocket-store.js';
-  import { BarChart3, Users as UsersIcon, Settings, FileText, TrendingUp, Bell, ChevronLeft, ChevronRight, Shield, List, SlidersHorizontal } from 'lucide-svelte';
+  import { BarChart3, Users as UsersIcon, Settings, FileText, Bell, ChevronLeft, ChevronRight, Shield, List, SlidersHorizontal } from 'lucide-svelte';
   import Stats from './pages/Stats.svelte';
   import Health from './pages/Health.svelte';
   import Operations from './pages/Operations.svelte';
@@ -11,7 +11,6 @@
   import Logs from './pages/Logs.svelte';
   import Users from './pages/Users.svelte';
   import UserProfile from './pages/UserProfile.svelte';
-  import Monitoring from './pages/Monitoring.svelte';
   import Alerts from './pages/Alerts.svelte';
   import Moderation from './pages/Moderation.svelte';
   import BotSettings from './pages/BotSettings.svelte';
@@ -96,12 +95,6 @@
           {#if sidebarOpen}<span class="label">logs</span>{/if}
         </button>
       </li>
-      <li class:active={activePage === 'monitoring'}>
-        <button on:click={() => navigateTo('monitoring')}>
-          <span class="icon"><TrendingUp size={20} /></span>
-          {#if sidebarOpen}<span class="label">monitoring</span>{/if}
-        </button>
-      </li>
       <li class:active={activePage === 'alerts'}>
         <button on:click={() => navigateTo('alerts')}>
           <span class="icon"><Bell size={20} /></span>
@@ -180,13 +173,6 @@
       </div>
       <div class="page-content">
         <Logs />
-      </div>
-    {:else if activePage === 'monitoring'}
-      <div class="page-header">
-        <h2>monitoring</h2>
-      </div>
-      <div class="page-content">
-        <Monitoring />
       </div>
     {:else if activePage === 'alerts'}
       <div class="page-header">

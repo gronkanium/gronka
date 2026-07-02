@@ -80,11 +80,9 @@ class Logger {
    * @returns {string} - Sanitized message safe for console output
    */
   sanitizeForConsoleOutput(message) {
-    if (typeof message !== 'string') {
-      return String(message);
-    }
-    // Remove newlines and carriage returns first
-    let sanitized = message.replace(/\n|\r/g, '');
+    // Sanitize unconditionally — non-string values are stringified first so every path
+    // through this function strips newlines and control characters.
+    let sanitized = String(message).replace(/\n|\r/g, '');
     // Remove all control characters (0x00-0x1F and 0x7F-0x9F)
     // eslint-disable-next-line no-control-regex
     sanitized = sanitized.replace(/[\x00-\x1F\x7F-\x9F]/g, ' ');

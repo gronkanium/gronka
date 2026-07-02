@@ -108,38 +108,50 @@ describe('runMediaCommand (Discord lifecycle E2E)', () => {
 
   test('temp files registered on ctx are cleaned up on success', async () => {
     const { interaction } = createFakeInteraction();
-    const tmpFile = path.join(os.tmpdir(), `rmc-e2e-ok-${Date.now()}.tmp`);
+    // mkdtemp creates a private, unpredictable directory, avoiding insecure use of the shared tmp dir
+    const tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), 'rmc-e2e-ok-'));
+    const tmpFile = path.join(tmpDir, 'file.tmp');
     await fs.writeFile(tmpFile, 'data');
 
-    await runMediaCommand(
-      'convert',
-      interaction,
-      async ctx => {
-        ctx.tempFiles.push(tmpFile);
-        await safeInteractionEditReply(interaction, { content: 'ok' });
-      },
-      { skipDbInit: true }
-    );
+    try {
+      await runMediaCommand(
+        'convert',
+        interaction,
+        async ctx => {
+          ctx.tempFiles.push(tmpFile);
+          await safeInteractionEditReply(interaction, { content: 'ok' });
+        },
+        { skipDbInit: true }
+      );
 
-    await assert.rejects(() => fs.access(tmpFile), 'temp file should be deleted after success');
+      await assert.rejects(() => fs.access(tmpFile), 'temp file should be deleted after success');
+    } finally {
+      await fs.rm(tmpDir, { recursive: true, force: true });
+    }
   });
 
   test('temp files are cleaned up even when the callback throws', async () => {
     const { interaction } = createFakeInteraction();
-    const tmpFile = path.join(os.tmpdir(), `rmc-e2e-err-${Date.now()}.tmp`);
+    // mkdtemp creates a private, unpredictable directory, avoiding insecure use of the shared tmp dir
+    const tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), 'rmc-e2e-err-'));
+    const tmpFile = path.join(tmpDir, 'file.tmp');
     await fs.writeFile(tmpFile, 'data');
 
-    await runMediaCommand(
-      'convert',
-      interaction,
-      async ctx => {
-        ctx.tempFiles.push(tmpFile);
-        throw new ValidationError('boom');
-      },
-      { skipDbInit: true }
-    );
+    try {
+      await runMediaCommand(
+        'convert',
+        interaction,
+        async ctx => {
+          ctx.tempFiles.push(tmpFile);
+          throw new ValidationError('boom');
+        },
+        { skipDbInit: true }
+      );
 
-    await assert.rejects(() => fs.access(tmpFile), 'temp file should be deleted on error too');
+      await assert.rejects(() => fs.access(tmpFile), 'temp file should be deleted on error too');
+    } finally {
+      await fs.rm(tmpDir, { recursive: true, force: true });
+    }
   });
 
   test('ctx exposes the expected helpers to the callback', async () => {

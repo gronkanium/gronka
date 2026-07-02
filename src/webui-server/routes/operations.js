@@ -10,7 +10,6 @@ import {
 import { operations, storeOperation } from '../operations/storage.js';
 import { reconstructOperationFromTrace } from '../operations/reconstruction.js';
 import { broadcastOperation, broadcastUserMetrics } from '../websocket/broadcast.js';
-import { restrictToInternal } from '../utils/validation.js';
 
 const logger = createLogger('webui');
 const router = express.Router();
@@ -81,64 +80,6 @@ router.post('/api/user-metrics', express.json(), (req, res) => {
   } catch (error) {
     logger.error('Error handling user metrics update:', error);
     res.status(500).json({ error: 'failed to process user metrics update' });
-  }
-});
-
-// Admin endpoint to clear test operations from memory (non-destructive)
-// Only accessible from localhost/internal network
-router.post('/api/admin/operations/clear', restrictToInternal, express.json(), (req, res) => {
-  try {
-    const { userId, clearAll } = req.body;
-
-    let removedCount = 0;
-
-    if (clearAll === true) {
-      // Clear all operations from memory
-      removedCount = operations.length;
-      operations.length = 0;
-      logger.info(`Cleared all ${removedCount} operations from memory (admin request)`);
-    } else if (userId) {
-      // Remove operations from specific user ID (e.g., test user 86)
-      const initialLength = operations.length;
-      const filtered = operations.filter(op => String(op.userId) !== String(userId));
-      removedCount = initialLength - filtered.length;
-      operations.length = 0;
-      operations.push(...filtered);
-      logger.info(`Removed ${removedCount} operations from user ${userId} (admin request)`);
-    } else {
-      // Default: remove known test users (user 86)
-      const testUserIds = ['86'];
-      const initialLength = operations.length;
-      const filtered = operations.filter(op => !testUserIds.includes(String(op.userId)));
-      removedCount = initialLength - filtered.length;
-      operations.length = 0;
-      operations.push(...filtered);
-      logger.info(`Removed ${removedCount} test operations (default: user 86) (admin request)`);
-    }
-
-    // Broadcast empty operations list to all connected clients to refresh their view
-    if (clients) {
-      const message = JSON.stringify({ type: 'operations', data: [...operations] });
-      clients.forEach(client => {
-        if (client.readyState === 1) {
-          try {
-            client.send(message);
-          } catch (error) {
-            logger.error('Error sending operations update to client:', error);
-          }
-        }
-      });
-    }
-
-    res.json({
-      success: true,
-      removedCount,
-      remainingCount: operations.length,
-      message: `Removed ${removedCount} operation(s) from memory`,
-    });
-  } catch (error) {
-    logger.error('Error clearing operations:', error);
-    res.status(500).json({ error: 'failed to clear operations', message: error.message });
   }
 });
 
@@ -406,77 +347,6 @@ router.get('/api/operations/:operationId/trace', async (req, res) => {
     logger.error('Failed to fetch operation trace:', error);
     res.status(500).json({
       error: 'failed to fetch operation trace',
-      message: error.message,
-    });
-  }
-});
-
-// Related operations endpoint
-router.get('/api/operations/:operationId/related', async (req, res) => {
-  try {
-    const { operationId } = req.params;
-    const trace = await getOperationTrace(operationId);
-
-    if (!trace) {
-      return res.status(404).json({ error: 'operation not found' });
-    }
-
-    const context = trace.context || {};
-    const userId = context.userId;
-    const originalUrl = context.originalUrl;
-
-    // Get all operations
-    let allOperations = [...operations];
-    try {
-      const dbOps = await getRecentOperations(1000);
-      const existingIds = new Set(allOperations.map(op => op.id));
-      const newOps = dbOps.filter(op => !existingIds.has(op.id));
-      allOperations = [...allOperations, ...newOps];
-    } catch (error) {
-      logger.error('Failed to fetch operations from database:', error);
-    }
-
-    // Find related operations (same user or same URL)
-    const related = [];
-    const seenIds = new Set([operationId]);
-
-    for (const op of allOperations) {
-      if (seenIds.has(op.id)) continue;
-
-      let isRelated = false;
-
-      // Match by user ID
-      if (userId && op.userId === userId) {
-        isRelated = true;
-      }
-
-      // Match by URL - get trace to check originalUrl
-      if (originalUrl && !isRelated) {
-        try {
-          const opTrace = await getOperationTrace(op.id);
-          if (opTrace && opTrace.context && opTrace.context.originalUrl === originalUrl) {
-            isRelated = true;
-          }
-        } catch (_error) {
-          // Skip if trace lookup fails
-        }
-      }
-
-      if (isRelated) {
-        related.push(op);
-        seenIds.add(op.id);
-        if (related.length >= 10) break; // Limit to 10
-      }
-    }
-
-    // Sort by timestamp
-    related.sort((a, b) => b.timestamp - a.timestamp);
-
-    res.json({ operations: related });
-  } catch (error) {
-    logger.error('Failed to fetch related operations:', error);
-    res.status(500).json({
-      error: 'failed to fetch related operations',
       message: error.message,
     });
   }

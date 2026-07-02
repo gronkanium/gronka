@@ -1,6 +1,6 @@
 import express from 'express';
 import { createLogger } from '../../utils/logger.js';
-import { getLogs, getLogsCount, getLogComponents, getLogMetrics } from '../../utils/database.js';
+import { getLogs, getLogsCount, getLogComponents } from '../../utils/database.js';
 
 const logger = createLogger('webui');
 const router = express.Router();
@@ -114,27 +114,6 @@ router.get('/api/logs', async (req, res) => {
     logger.error('Failed to fetch logs:', error);
     res.status(500).json({
       error: 'failed to fetch logs',
-      message: error.message,
-    });
-  }
-});
-
-// Log metrics endpoint
-router.get('/api/logs/metrics', async (req, res) => {
-  try {
-    const { timeRange } = req.query;
-    const options = {};
-
-    if (timeRange) {
-      options.timeRange = parseInt(timeRange, 10);
-    }
-
-    const metrics = await getLogMetrics(options);
-    res.json(metrics);
-  } catch (error) {
-    logger.error('Failed to fetch log metrics:', error);
-    res.status(500).json({
-      error: 'failed to fetch log metrics',
       message: error.message,
     });
   }

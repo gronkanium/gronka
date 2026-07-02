@@ -138,39 +138,23 @@ async function executeRequest(request) {
  * @param {string} [options.expectedFileType] - Expected file type ('video', 'gif', 'image'). If provided, only use cache if file type matches
  * @returns {Promise} Promise that resolves with download result
  */
-export async function queueCobaltRequest(url, downloadFn, options = {}) {
-  const { skipCache = false, expectedFileType = null } = options;
+export function queueCobaltRequest(url, downloadFn, options = {}) {
+  const { skipCache = false, expectedFileType = null, dedupeKey = null } = options;
   const urlHash = hashUrl(url);
 
-  // Initialize database if needed
-  await initDatabase();
+  // Deduplication key: skipCache requests (e.g. trims) must not join promises created
+  // by cache-checking requests - those can reject with URL_ALREADY_PROCESSED, which
+  // would make a trim request silently return the cached untrimmed URL. They dedupe
+  // in their own namespace instead. Callers with a different result shape (e.g.
+  // URL-only mode) pass an explicit dedupeKey for the same reason.
+  const mapKey = dedupeKey || `${skipCache ? 'nocache:' : ''}${urlHash}`;
 
-  // Check if this URL has already been processed (unless cache check is skipped)
-  if (!skipCache) {
-    const processedUrl = await getProcessedUrl(urlHash);
-    if (processedUrl) {
-      // If expectedFileType is provided, only use cache if file type matches
-      if (expectedFileType && processedUrl.file_type !== expectedFileType) {
-        logger.info(
-          `URL cache exists but file type mismatch (expected: ${expectedFileType}, cached: ${processedUrl.file_type}), skipping cache`
-        );
-        // Skip cache and proceed with download
-      } else {
-        logger.info(
-          `URL already processed (hash: ${urlHash.substring(0, 8)}...), returning existing file URL: ${processedUrl.file_url}`
-        );
-        // Return early with cached info - this will be caught by download handlers
-        // We return null to indicate no download needed, and the handlers will check getProcessedUrl again
-        throw new Error(`URL_ALREADY_PROCESSED:${processedUrl.file_url}`);
-      }
-    }
-  }
-
-  // Check if this URL is already being downloaded (atomic check-and-set)
-  // URL deduplication: if multiple users request the same URL simultaneously, we reuse the existing download
-  // instead of making duplicate API calls, which saves bandwidth and prevents redundant processing
-  // Use atomic check-and-set to prevent race condition where two requests check at the same time
-  let existingPromise = inProgressDownloads.get(urlHash);
+  // URL deduplication: if multiple users request the same URL simultaneously, we reuse
+  // the existing download instead of making duplicate API calls.
+  // The check-and-set must happen synchronously (before any await) - registering after
+  // the async DB cache check opened a window where concurrent requests all passed the
+  // check before any of them registered, defeating deduplication entirely.
+  const existingPromise = inProgressDownloads.get(mapKey);
   if (existingPromise) {
     logger.info(
       `URL already in progress, waiting for existing download: ${url.substring(0, 50)}...`
@@ -178,45 +162,49 @@ export async function queueCobaltRequest(url, downloadFn, options = {}) {
     return existingPromise;
   }
 
-  // Create new promise for this download
-  const downloadPromise = new Promise((resolve, reject) => {
-    const request = {
-      url,
-      urlHash,
-      downloadFn,
-      resolve: result => {
-        // Remove from in-progress map
-        inProgressDownloads.delete(urlHash);
-        resolve(result);
-      },
-      reject: error => {
-        // Remove from in-progress map
-        inProgressDownloads.delete(urlHash);
-        reject(error);
-      },
-    };
+  const downloadPromise = (async () => {
+    // Initialize database if needed
+    await initDatabase();
 
-    // Add to queue
-    requestQueue.push(request);
-    logger.info(
-      `Request queued (active: ${activeRequests}/${MAX_CONCURRENT_REQUESTS}, queued: ${requestQueue.length})`
-    );
+    // Check if this URL has already been processed (unless cache check is skipped)
+    if (!skipCache) {
+      const processedUrl = await getProcessedUrl(urlHash);
+      if (processedUrl) {
+        // If expectedFileType is provided, only use cache if file type matches
+        if (expectedFileType && processedUrl.file_type !== expectedFileType) {
+          logger.info(
+            `URL cache exists but file type mismatch (expected: ${expectedFileType}, cached: ${processedUrl.file_type}), skipping cache`
+          );
+          // Skip cache and proceed with download
+        } else {
+          logger.info(
+            `URL already processed (hash: ${urlHash.substring(0, 8)}...), returning existing file URL: ${processedUrl.file_url}`
+          );
+          // Return early with cached info - this will be caught by download handlers
+          // The handlers will check getProcessedUrl again for the actual URL
+          throw new Error(`URL_ALREADY_PROCESSED:${processedUrl.file_url}`);
+        }
+      }
+    }
 
-    // Try to process immediately if capacity available
-    processQueue();
-  });
+    return await new Promise((resolve, reject) => {
+      requestQueue.push({ url, urlHash, downloadFn, resolve, reject });
+      logger.info(
+        `Request queued (active: ${activeRequests}/${MAX_CONCURRENT_REQUESTS}, queued: ${requestQueue.length})`
+      );
 
-  // Atomic check-and-set: if another request added the same URL between our check and set, use that one
-  existingPromise = inProgressDownloads.get(urlHash);
-  if (existingPromise) {
-    logger.info(
-      `URL was added by another request during setup, using existing download: ${url.substring(0, 50)}...`
-    );
-    return existingPromise;
-  }
+      // Try to process immediately if capacity available
+      processQueue();
+    });
+  })();
 
-  // Track this download (atomic set)
+  // Track this download; remove from the map once it settles either way.
+  // The rejection handler here only does cleanup - callers still receive the rejection.
   inProgressDownloads.set(urlHash, downloadPromise);
+  downloadPromise.then(
+    () => inProgressDownloads.delete(urlHash),
+    () => inProgressDownloads.delete(urlHash)
+  );
 
   return downloadPromise;
 }

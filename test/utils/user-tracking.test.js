@@ -109,7 +109,7 @@ describe('user tracking utilities', () => {
   });
 
   describe('getUniqueUserCount', () => {
-    test('returns correct count', async () => {
+    test('count grows when new users are tracked', async () => {
       const countBefore = await getUniqueUserCount();
       const uniqueId = Date.now();
 
@@ -117,25 +117,35 @@ describe('user tracking utilities', () => {
       await trackUser(`test-count-2-${uniqueId}`, 'User2');
       await trackUser(`test-count-3-${uniqueId}`, 'User3');
 
+      // Other test files insert users concurrently (files run as parallel
+      // processes against the same database), so assert a lower bound rather
+      // than an exact delta
       const countAfter = await getUniqueUserCount();
-      assert.strictEqual(countAfter, countBefore + 3);
+      assert.ok(
+        countAfter >= countBefore + 3,
+        `Expected count to grow by at least 3 (before: ${countBefore}, after: ${countAfter})`
+      );
     });
 
-    test('does not increase count for existing users', async () => {
+    test('tracking an existing user is idempotent', async () => {
       const uniqueId = Date.now();
       const userId = `test-count-existing-${uniqueId}`;
-      const countBefore = await getUniqueUserCount();
 
       await trackUser(userId, 'User');
-      const countAfter1 = await getUniqueUserCount();
-      assert.strictEqual(countAfter1, countBefore + 1);
+      const user1 = await getUser(userId);
+      assert.ok(user1, 'User should exist after first track');
 
+      // Global counts race with parallel test files, so verify idempotency
+      // through the user row itself: same identity, first_used unchanged
+      invalidateUserCache();
       await trackUser(userId, 'User');
-      const countAfter2 = await getUniqueUserCount();
+      const user2 = await getUser(userId);
+      assert.ok(user2, 'User should still exist after second track');
+      assert.strictEqual(user2.user_id, userId);
       assert.strictEqual(
-        countAfter2,
-        countBefore + 1,
-        'Count should not increase for existing user'
+        user2.first_used,
+        user1.first_used,
+        'Re-tracking must not create a new user row (first_used should be unchanged)'
       );
     });
   });

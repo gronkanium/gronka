@@ -117,6 +117,16 @@ export function getTableDefinitions() {
       `,
     },
     {
+      name: 'bot_settings',
+      sql: `
+        CREATE TABLE IF NOT EXISTS bot_settings (
+          key TEXT PRIMARY KEY,
+          value TEXT NOT NULL,
+          updated_at BIGINT NOT NULL
+        );
+      `,
+    },
+    {
       name: 'temporary_uploads',
       sql: `
         CREATE TABLE IF NOT EXISTS temporary_uploads (

@@ -845,6 +845,61 @@ async function downloadFromCobalt(
 }
 
 /**
+ * Get direct media URLs from Cobalt without downloading anything.
+ * Only returns URLs that are publicly reachable (redirect/picker responses).
+ * Tunnel responses proxy through the local cobalt instance and are not usable
+ * outside the Docker network, so they are reported as unavailable.
+ * @param {string} apiUrl - Cobalt API URL
+ * @param {string} url - Social media URL
+ * @returns {Promise<{urls: Array<{url: string, type: string, filename: string|null}>, direct: boolean}>}
+ *   direct is false when cobalt only offers a tunnel (caller should fall back to downloading)
+ */
+export async function getCobaltMediaUrls(apiUrl, url) {
+  const cobaltResponse = await callCobaltApi(apiUrl, url);
+  logger.info(`Cobalt API response (url-only mode): ${JSON.stringify(cobaltResponse)}`);
+
+  if (
+    cobaltResponse.status === 'picker' &&
+    cobaltResponse.picker &&
+    Array.isArray(cobaltResponse.picker)
+  ) {
+    const items = cobaltResponse.picker
+      .filter(item => (item.type === 'photo' || item.type === 'video') && item.url)
+      .filter(item => !item.url.includes('/tunnel'))
+      .map(item => ({ url: item.url, type: item.type, filename: null }));
+
+    if (items.length === 0) {
+      return { urls: [], direct: false };
+    }
+    return { urls: items, direct: true };
+  }
+
+  if (cobaltResponse.status === 'redirect' && cobaltResponse.url) {
+    return {
+      urls: [
+        {
+          url: cobaltResponse.url,
+          type: 'video',
+          filename: cobaltResponse.filename || null,
+        },
+      ],
+      direct: true,
+    };
+  }
+
+  if (cobaltResponse.status === 'tunnel') {
+    // Tunnel URLs point at the local cobalt container and are useless to Discord users
+    return { urls: [], direct: false };
+  }
+
+  if (cobaltResponse.status === 'error') {
+    throw new NetworkError(cobaltResponse.text || 'cobalt api returned an error');
+  }
+
+  return { urls: [], direct: false };
+}
+
+/**
  * Download video or photos from social media URL using Cobalt
  * @param {string} apiUrl - Cobalt API URL
  * @param {string} url - Social media URL

@@ -26,28 +26,28 @@
 </script>
 
 <section class="stats">
-  <h2>Statistics</h2>
+  <h2>statistics</h2>
   {#if loading && !stats}
-    <div class="loading">Loading...</div>
+    <div class="loading">loading...</div>
   {:else if error}
-    <div class="error">Error: {error}</div>
-    <button on:click={loadStats}>Retry</button>
+    <div class="error">error: {error}</div>
+    <button on:click={loadStats}>retry</button>
   {:else if stats}
     <dl>
       <div class="stat-item">
-        <dt>GIFs</dt>
+        <dt>gifs</dt>
         <dd>{stats.total_gifs?.toLocaleString() || '0'} ({stats.gifs_disk_usage_formatted || '0.00 MB'})</dd>
       </div>
       <div class="stat-item">
-        <dt>Videos</dt>
+        <dt>videos</dt>
         <dd>{stats.total_videos?.toLocaleString() || '0'} ({stats.videos_disk_usage_formatted || '0.00 MB'})</dd>
       </div>
       <div class="stat-item">
-        <dt>Images</dt>
+        <dt>images</dt>
         <dd>{stats.total_images?.toLocaleString() || '0'} ({stats.images_disk_usage_formatted || '0.00 MB'})</dd>
       </div>
       <div class="stat-item">
-        <dt>Total</dt>
+        <dt>total</dt>
         <dd>{((stats.total_gifs || 0) + (stats.total_videos || 0) + (stats.total_images || 0)).toLocaleString()} ({stats.disk_usage_formatted || '0.00 MB'})</dd>
       </div>
     </dl>
@@ -57,8 +57,8 @@
 <style>
   section {
     padding: 1rem;
-    border: 1px solid #333;
-    background-color: #222;
+    border: 1px solid var(--border);
+    background-color: var(--surface);
     max-width: 100%;
     width: 100%;
   }
@@ -73,8 +73,8 @@
     margin: 0 0 0.75rem 0;
     font-size: 1.25rem;
     font-weight: 500;
-    color: #fff;
-    border-bottom: 1px solid #333;
+    color: var(--text-bright);
+    border-bottom: 1px solid var(--border);
     padding-bottom: 0.5rem;
   }
 
@@ -88,7 +88,7 @@
     justify-content: space-between;
     align-items: baseline;
     padding: 0.5rem 0;
-    border-bottom: 1px solid #2a2a2a;
+    border-bottom: 1px solid var(--surface-2);
     min-width: 0;
   }
 
@@ -98,44 +98,44 @@
 
   dt {
     font-size: 0.9rem;
-    color: #aaa;
+    color: var(--text-muted);
     font-weight: 400;
   }
 
   dd {
     margin: 0;
     font-size: 1rem;
-    color: #fff;
+    color: var(--text-bright);
     font-weight: 500;
   }
 
   .loading {
-    color: #888;
+    color: var(--text-dim);
     padding: 1rem 0;
   }
 
   .error {
-    color: #ff6b6b;
+    color: var(--danger);
     padding: 1rem 0;
     margin-bottom: 1rem;
   }
 
   button {
-    background-color: #444;
-    color: #fff;
-    border: 1px solid #555;
+    background-color: var(--surface-3);
+    color: var(--text-bright);
+    border: 1px solid var(--border-2);
     padding: 0.5rem 1rem;
     cursor: pointer;
     font-size: 0.9rem;
-    border-radius: 3px;
+    border-radius: var(--radius);
   }
 
   button:hover {
-    background-color: #555;
+    background-color: var(--border-2);
   }
 
   button:active {
-    background-color: #333;
+    background-color: var(--border);
   }
   
   @media (max-width: 768px) {

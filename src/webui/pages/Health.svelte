@@ -67,16 +67,16 @@
 </script>
 
 <section class="health">
-  <h2>Health Status</h2>
+  <h2>health status</h2>
   {#if loading && !health}
-    <div class="loading">Loading...</div>
+    <div class="loading">loading...</div>
   {:else if error}
-    <div class="error">Error: {error}</div>
-    <button on:click={loadHealth}>Retry</button>
+    <div class="error">error: {error}</div>
+    <button on:click={loadHealth}>retry</button>
   {:else if health}
     <dl>
       <div class="stat-item">
-        <dt>Status</dt>
+        <dt>status</dt>
         <dd class="status">
           {#if health.status === 'ok'}
             <span class="status-ok">OK</span> <span class="status-code">200</span>
@@ -86,7 +86,7 @@
         </dd>
       </div>
       <div class="stat-item">
-        <dt>Uptime</dt>
+        <dt>uptime</dt>
         <dd>{formatUptime(health.uptime || 0)}</dd>
       </div>
       <div class="stat-item">
@@ -124,8 +124,8 @@
 <style>
   section {
     padding: 1rem;
-    border: 1px solid #333;
-    background-color: #222;
+    border: 1px solid var(--border);
+    background-color: var(--surface);
     max-width: 100%;
     width: 100%;
   }
@@ -140,8 +140,8 @@
     margin: 0 0 0.75rem 0;
     font-size: 1.25rem;
     font-weight: 500;
-    color: #fff;
-    border-bottom: 1px solid #333;
+    color: var(--text-bright);
+    border-bottom: 1px solid var(--border);
     padding-bottom: 0.5rem;
   }
 
@@ -155,7 +155,7 @@
     justify-content: space-between;
     align-items: baseline;
     padding: 0.5rem 0;
-    border-bottom: 1px solid #2a2a2a;
+    border-bottom: 1px solid var(--surface-2);
     min-width: 0;
   }
 
@@ -165,14 +165,14 @@
 
   dt {
     font-size: 0.9rem;
-    color: #aaa;
+    color: var(--text-muted);
     font-weight: 400;
   }
 
   dd {
     margin: 0;
     font-size: 1rem;
-    color: #fff;
+    color: var(--text-bright);
     font-weight: 500;
   }
 
@@ -182,11 +182,11 @@
   }
 
   .status-ok {
-    color: #51cf66;
+    color: var(--success);
   }
 
   .status-code {
-    color: #fff;
+    color: var(--text-bright);
   }
 
   .crypto-icon {
@@ -195,7 +195,7 @@
     display: inline-block;
     vertical-align: middle;
     margin-right: 0.5rem;
-    color: #fff;
+    color: var(--text-bright);
   }
 
   .price-container {
@@ -225,32 +225,32 @@
   }
 
   .loading {
-    color: #888;
+    color: var(--text-dim);
     padding: 1rem 0;
   }
 
   .error {
-    color: #ff6b6b;
+    color: var(--danger);
     padding: 1rem 0;
     margin-bottom: 1rem;
   }
 
   button {
-    background-color: #444;
-    color: #fff;
-    border: 1px solid #555;
+    background-color: var(--surface-3);
+    color: var(--text-bright);
+    border: 1px solid var(--border-2);
     padding: 0.5rem 1rem;
     cursor: pointer;
     font-size: 0.9rem;
-    border-radius: 3px;
+    border-radius: var(--radius);
   }
 
   button:hover {
-    background-color: #555;
+    background-color: var(--border-2);
   }
 
   button:active {
-    background-color: #333;
+    background-color: var(--border);
   }
   
   @media (max-width: 768px) {

@@ -160,10 +160,10 @@
   }
 
   function getHealthColor(percentage) {
-    if (percentage === null || percentage === undefined) return '#888';
-    if (percentage < 70) return '#51cf66';
-    if (percentage < 85) return '#ffd93d';
-    return '#ff6b6b';
+    if (percentage === null || percentage === undefined) return 'var(--text-dim)';
+    if (percentage < 70) return 'var(--success)';
+    if (percentage < 85) return 'var(--warning)';
+    return 'var(--danger)';
   }
 
   function getOverallHealth() {
@@ -431,9 +431,9 @@
     grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
     gap: 0.75rem;
     padding: 0.75rem;
-    background-color: #1a1a1a;
-    border: 1px solid #333;
-    border-radius: 4px;
+    background-color: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-lg);
     max-width: 100%;
   }
   
@@ -449,33 +449,33 @@
     align-items: center;
     gap: 0.5rem;
     padding: 0.5rem;
-    background-color: #222;
-    border-radius: 3px;
-    border-left: 3px solid #444;
+    background-color: var(--surface);
+    border-radius: var(--radius);
+    border-left: 3px solid var(--surface-3);
   }
 
   .status-item.good {
-    border-left-color: #51cf66;
+    border-left-color: var(--success);
   }
 
   .status-item.warning {
-    border-left-color: #ffd93d;
+    border-left-color: var(--warning);
   }
 
   .status-item.critical {
-    border-left-color: #ff6b6b;
+    border-left-color: var(--danger);
   }
 
   .status-item.connected {
-    border-left-color: #51cf66;
+    border-left-color: var(--success);
   }
 
   .status-item.disconnected {
-    border-left-color: #ff6b6b;
+    border-left-color: var(--danger);
   }
 
   .status-icon {
-    color: #888;
+    color: var(--text-dim);
     flex-shrink: 0;
   }
 
@@ -486,7 +486,7 @@
 
   .status-label {
     font-size: 0.7rem;
-    color: #888;
+    color: var(--text-dim);
     text-transform: uppercase;
     letter-spacing: 0.5px;
   }
@@ -494,7 +494,7 @@
   .status-value {
     font-size: 0.9rem;
     font-weight: 600;
-    color: #fff;
+    color: var(--text-bright);
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
@@ -503,8 +503,8 @@
   .status-bar-mini {
     width: 40px;
     height: 4px;
-    background-color: #0d0d0d;
-    border-radius: 2px;
+    background-color: var(--bg-deep);
+    border-radius: var(--radius);
     overflow: hidden;
     flex-shrink: 0;
   }
@@ -537,9 +537,9 @@
 
   .metric-card {
     padding: 0.75rem;
-    background-color: #1a1a1a;
-    border: 1px solid #333;
-    border-radius: 4px;
+    background-color: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-lg);
     display: flex;
     flex-direction: column;
     gap: 0.5rem;
@@ -552,7 +552,7 @@
     align-items: center;
     gap: 0.5rem;
     font-size: 0.75rem;
-    color: #aaa;
+    color: var(--text-muted);
     text-transform: uppercase;
     letter-spacing: 0.5px;
   }
@@ -566,7 +566,7 @@
   .metric-value {
     font-size: 1.75rem;
     font-weight: 600;
-    color: #fff;
+    color: var(--text-bright);
     line-height: 1.2;
     display: block;
     margin: 0;
@@ -581,7 +581,7 @@
   .metric-value.error {
     font-size: 1.75rem;
     font-weight: 600;
-    color: #ff6b6b;
+    color: var(--danger);
     line-height: 1.2;
     display: block;
     margin: 0;
@@ -596,7 +596,7 @@
   .metric-value.warning {
     font-size: 1.75rem;
     font-weight: 600;
-    color: #ffd93d;
+    color: var(--warning);
     line-height: 1.2;
     display: block;
     margin: 0;
@@ -608,25 +608,25 @@
   }
 
   .metric-value.status-good {
-    color: #51cf66;
+    color: var(--success);
   }
 
   .metric-value.status-warning {
-    color: #ffd93d;
+    color: var(--warning);
   }
 
   .metric-value.status-critical {
-    color: #ff6b6b;
+    color: var(--danger);
   }
 
   .metric-label {
     font-size: 0.7rem;
-    color: #888;
+    color: var(--text-dim);
   }
 
   .metric-secondary {
     font-size: 0.65rem;
-    color: #666;
+    color: var(--text-dim);
     font-family: monospace;
     white-space: nowrap;
     overflow: hidden;
@@ -635,9 +635,9 @@
 
   /* Activity Summary */
   .activity-section {
-    background-color: #1a1a1a;
-    border: 1px solid #333;
-    border-radius: 4px;
+    background-color: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-lg);
     overflow: hidden;
     max-width: 100%;
   }
@@ -656,7 +656,7 @@
     padding: 0.75rem;
     background-color: transparent;
     border: none;
-    color: #fff;
+    color: var(--text-bright);
     font-size: 0.85rem;
     font-weight: 500;
     cursor: pointer;
@@ -664,7 +664,7 @@
   }
 
   .activity-header:hover {
-    background-color: #222;
+    background-color: var(--surface);
   }
 
   .activity-content {
@@ -690,12 +690,12 @@
   }
 
   .activity-name {
-    color: #e0e0e0;
+    color: var(--text);
     font-size: 0.8rem;
   }
 
   .activity-count {
-    color: #fff;
+    color: var(--text-bright);
     font-weight: 500;
     font-size: 0.9rem;
   }
@@ -703,14 +703,14 @@
   .activity-bar {
     grid-column: 1 / -1;
     height: 4px;
-    background-color: #0d0d0d;
-    border-radius: 2px;
+    background-color: var(--bg-deep);
+    border-radius: var(--radius);
     overflow: hidden;
   }
 
   .activity-bar-fill {
     height: 100%;
-    background-color: #51cf66;
+    background-color: var(--success);
     transition: width 0.3s ease;
   }
 
@@ -719,36 +719,36 @@
     align-items: center;
     gap: 0.5rem;
     padding: 0.4rem 0.75rem;
-    background-color: #222;
-    border-radius: 3px;
-    border-left: 3px solid #444;
+    background-color: var(--surface);
+    border-radius: var(--radius);
+    border-left: 3px solid var(--surface-3);
   }
 
   .level-badge.level-error {
-    border-left-color: #ff6b6b;
+    border-left-color: var(--danger);
   }
 
   .level-badge.level-warn {
-    border-left-color: #ffd93d;
+    border-left-color: var(--warning);
   }
 
   .level-badge.level-info {
-    border-left-color: #51cf66;
+    border-left-color: var(--success);
   }
 
   .level-badge.level-debug {
-    border-left-color: #888;
+    border-left-color: var(--text-dim);
   }
 
   .level-name {
     font-size: 0.7rem;
     font-weight: 600;
     text-transform: uppercase;
-    color: #aaa;
+    color: var(--text-muted);
   }
 
   .level-count {
-    color: #fff;
+    color: var(--text-bright);
     font-weight: 500;
     font-size: 0.85rem;
   }
@@ -757,26 +757,26 @@
   .error {
     padding: 2rem;
     text-align: center;
-    color: #888;
+    color: var(--text-dim);
   }
 
   .error {
-    color: #ff6b6b;
+    color: var(--danger);
     margin-bottom: 1rem;
   }
 
   button {
-    background-color: #444;
-    color: #fff;
-    border: 1px solid #555;
+    background-color: var(--surface-3);
+    color: var(--text-bright);
+    border: 1px solid var(--border-2);
     padding: 0.5rem 1rem;
     cursor: pointer;
     font-size: 0.9rem;
-    border-radius: 3px;
+    border-radius: var(--radius);
   }
 
   button:hover {
-    background-color: #555;
+    background-color: var(--border-2);
   }
 
   @media (max-width: 768px) {

@@ -187,7 +187,7 @@
   }
   
   thead {
-    background-color: #2a2a2a;
+    background-color: var(--surface-2);
     position: sticky;
     top: 0;
     z-index: 10;
@@ -197,8 +197,8 @@
     padding: 0.75rem 0.5rem;
     text-align: left;
     font-weight: 500;
-    color: #aaa;
-    border-bottom: 1px solid #333;
+    color: var(--text-muted);
+    border-bottom: 1px solid var(--border);
     font-size: 0.85rem;
     text-transform: uppercase;
     letter-spacing: 0.5px;
@@ -220,30 +220,30 @@
   }
   
   th.sortable:hover {
-    background-color: #333;
-    color: #fff;
+    background-color: var(--border);
+    color: var(--text-bright);
   }
   
   .sort-indicator {
     margin-left: 0.25rem;
-    color: #51cf66;
+    color: var(--success);
   }
   
   tbody tr {
-    border-bottom: 1px solid #2a2a2a;
+    border-bottom: 1px solid var(--surface-2);
   }
   
   tbody tr:hover {
-    background-color: #2a2a2a;
+    background-color: var(--surface-2);
   }
   
   tbody tr.expanded {
-    background-color: #2a2a2a;
+    background-color: var(--surface-2);
   }
   
   td {
     padding: 0.75rem 0.5rem;
-    color: #e0e0e0;
+    color: var(--text);
     word-wrap: break-word;
     overflow-wrap: break-word;
     max-width: 300px;
@@ -275,7 +275,7 @@
   .expand-btn {
     background: none;
     border: none;
-    color: #aaa;
+    color: var(--text-muted);
     cursor: pointer;
     font-size: 0.9rem;
     padding: 0.25rem;
@@ -288,11 +288,11 @@
   }
   
   .expand-btn:hover {
-    color: #fff;
+    color: var(--text-bright);
   }
   
   .expanded-row {
-    background-color: #1a1a1a;
+    background-color: var(--bg);
   }
   
   .expanded-content {
@@ -313,9 +313,9 @@
   }
   
   .table-card {
-    background-color: #222;
-    border: 1px solid #333;
-    border-radius: 4px;
+    background-color: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-lg);
     padding: 1rem;
     display: flex;
     flex-direction: column;
@@ -330,7 +330,7 @@
   
   .card-label {
     font-size: 0.75rem;
-    color: #aaa;
+    color: var(--text-muted);
     text-transform: uppercase;
     letter-spacing: 0.5px;
     font-weight: 500;
@@ -338,14 +338,14 @@
   
   .card-value {
     font-size: 0.9rem;
-    color: #e0e0e0;
+    color: var(--text);
     word-break: break-word;
   }
   
   .card-expand {
     margin-top: 0.5rem;
     padding-top: 0.75rem;
-    border-top: 1px solid #333;
+    border-top: 1px solid var(--border);
   }
   
   .card-expand .expand-btn {
@@ -357,7 +357,7 @@
   .card-expanded-content {
     margin-top: 0.75rem;
     padding-top: 0.75rem;
-    border-top: 1px solid #2a2a2a;
+    border-top: 1px solid var(--surface-2);
   }
 </style>
 

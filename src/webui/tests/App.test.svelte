@@ -19,8 +19,8 @@
     margin: 0;
     padding: 0;
     font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
-    background-color: #1a1a1a;
-    color: #e0e0e0;
+    background-color: var(--bg);
+    color: var(--text);
     line-height: 1.6;
   }
 
@@ -36,14 +36,14 @@
 
   header {
     padding: 2rem;
-    border-bottom: 1px solid #333;
+    border-bottom: 1px solid var(--border);
   }
 
   header h1 {
     margin: 0;
     font-size: 1.5rem;
     font-weight: 500;
-    color: #fff;
+    color: var(--text-bright);
   }
 
   .content {

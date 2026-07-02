@@ -628,9 +628,9 @@
 
   .profile-header-section {
     padding: 1rem;
-    background-color: #222;
-    border: 1px solid #333;
-    border-radius: 4px;
+    background-color: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-lg);
   }
 
   .profile-header {
@@ -649,29 +649,29 @@
   .back-btn {
     align-self: flex-start;
     background: none;
-    border: 1px solid #444;
-    color: #aaa;
+    border: 1px solid var(--surface-3);
+    color: var(--text-muted);
     padding: 0.5rem 1rem;
     cursor: pointer;
     font-size: 0.9rem;
-    border-radius: 3px;
+    border-radius: var(--radius);
   }
 
   .back-btn:hover {
-    background-color: #2a2a2a;
-    color: #fff;
+    background-color: var(--surface-2);
+    color: var(--text-bright);
   }
 
   .profile-header h2 {
     margin: 0;
     font-size: 1.5rem;
     font-weight: 500;
-    color: #fff;
+    color: var(--text-bright);
   }
 
   .user-id {
     font-size: 0.85rem;
-    color: #888;
+    color: var(--text-dim);
     font-family: monospace;
   }
 
@@ -686,15 +686,15 @@
     display: flex;
     flex-direction: column;
     padding: 0.5rem;
-    background-color: #1a1a1a;
-    border: 1px solid #333;
-    border-radius: 3px;
+    background-color: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
     position: relative;
   }
 
   .stat-label {
     font-size: 0.8rem;
-    color: #aaa;
+    color: var(--text-muted);
     align-self: flex-start;
     margin-bottom: auto;
   }
@@ -702,7 +702,7 @@
   .stat-value {
     font-size: 1.5rem;
     font-weight: 600;
-    color: #51cf66;
+    color: var(--success);
     flex-grow: 1;
     display: flex;
     align-items: center;
@@ -711,11 +711,11 @@
   }
 
   .stat-value.success {
-    color: #51cf66;
+    color: var(--success);
   }
 
   .stat-value.error {
-    color: #ff6b6b;
+    color: var(--danger);
   }
 
   .commands-breakdown {
@@ -733,17 +733,17 @@
     justify-content: space-between;
     align-items: center;
     padding: 0.5rem;
-    background-color: #1a1a1a;
-    border-radius: 3px;
+    background-color: var(--bg);
+    border-radius: var(--radius);
   }
 
   .breakdown-item .label {
-    color: #aaa;
+    color: var(--text-muted);
     font-size: 0.8rem;
   }
 
   .breakdown-item .value {
-    color: #fff;
+    color: var(--text-bright);
     font-weight: 500;
     font-size: 0.95rem;
   }
@@ -752,9 +752,9 @@
   .activity-section,
   .media-section {
     padding: 1rem;
-    background-color: #222;
-    border: 1px solid #333;
-    border-radius: 4px;
+    background-color: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-lg);
   }
 
   .operations-section h3,
@@ -763,7 +763,7 @@
     margin: 0 0 0.75rem 0;
     font-size: 1rem;
     font-weight: 500;
-    color: #fff;
+    color: var(--text-bright);
   }
 
   .operations-table-container {
@@ -778,15 +778,15 @@
   }
 
   .operations-table thead {
-    background-color: #2a2a2a;
+    background-color: var(--surface-2);
   }
 
   .operations-table th {
     padding: 0.5rem;
     text-align: left;
     font-weight: 500;
-    color: #aaa;
-    border-bottom: 1px solid #333;
+    color: var(--text-muted);
+    border-bottom: 1px solid var(--border);
     font-size: 0.8rem;
     text-transform: uppercase;
     letter-spacing: 0.5px;
@@ -823,11 +823,11 @@
   }
 
   .operations-table tbody tr {
-    border-bottom: 1px solid #2a2a2a;
+    border-bottom: 1px solid var(--surface-2);
   }
 
   .operations-table tbody tr:hover {
-    background-color: #2a2a2a;
+    background-color: var(--surface-2);
   }
 
   .operations-table tbody tr.error {
@@ -840,7 +840,7 @@
 
   .operations-table td {
     padding: 0.5rem;
-    color: #e0e0e0;
+    color: var(--text);
     vertical-align: middle;
     text-align: left;
     margin: 0;
@@ -863,13 +863,13 @@
   }
 
   .op-time {
-    color: #888;
+    color: var(--text-dim);
     font-size: 0.8rem;
     text-align: left;
   }
 
   .op-size {
-    color: #aaa;
+    color: var(--text-muted);
     font-size: 0.8rem;
     text-align: left;
   }
@@ -880,7 +880,7 @@
     padding-left: 0.5rem;
     padding-right: 0.5rem;
     margin: 0;
-    color: #aaa;
+    color: var(--text-muted);
     font-size: 0.8rem;
     font-family: monospace;
     overflow: hidden;
@@ -891,12 +891,12 @@
   }
 
   .operations-table td.op-error.has-error {
-    color: #ff6b6b;
+    color: var(--danger);
   }
 
   .operation-status {
     padding: 0.15rem 0.5rem;
-    border-radius: 3px;
+    border-radius: var(--radius);
     font-size: 0.75rem;
     font-weight: 500;
     text-transform: uppercase;
@@ -907,22 +907,22 @@
 
   .status-pending {
     background-color: rgba(136, 136, 136, 0.2);
-    color: #888;
+    color: var(--text-dim);
   }
 
   .status-running {
     background-color: rgba(81, 207, 102, 0.2);
-    color: #51cf66;
+    color: var(--success);
   }
 
   .status-success {
     background-color: rgba(81, 207, 102, 0.2);
-    color: #51cf66;
+    color: var(--success);
   }
 
   .status-error {
     background-color: rgba(255, 107, 107, 0.2);
-    color: #ff6b6b;
+    color: var(--danger);
   }
 
   .activity-table-container {
@@ -936,35 +936,35 @@
   }
 
   .activity-table thead {
-    background-color: #2a2a2a;
+    background-color: var(--surface-2);
   }
 
   .activity-table th {
     padding: 0.5rem;
     text-align: left;
     font-weight: 500;
-    color: #aaa;
-    border-bottom: 1px solid #333;
+    color: var(--text-muted);
+    border-bottom: 1px solid var(--border);
     font-size: 0.8rem;
     text-transform: uppercase;
     letter-spacing: 0.5px;
   }
 
   .activity-table tbody tr {
-    border-bottom: 1px solid #2a2a2a;
+    border-bottom: 1px solid var(--surface-2);
   }
 
   .activity-table tbody tr:hover {
-    background-color: #2a2a2a;
+    background-color: var(--surface-2);
   }
 
   .activity-table td {
     padding: 0.5rem;
-    color: #e0e0e0;
+    color: var(--text);
   }
 
   .activity-time {
-    color: #888;
+    color: var(--text-dim);
     font-size: 0.8rem;
     font-family: monospace;
     white-space: nowrap;
@@ -972,7 +972,7 @@
 
   .activity-level {
     padding: 0.15rem 0.4rem;
-    border-radius: 3px;
+    border-radius: var(--radius);
     font-size: 0.7rem;
     font-weight: 600;
     text-transform: uppercase;
@@ -981,26 +981,26 @@
 
   .level-error {
     background-color: rgba(255, 107, 107, 0.2);
-    color: #ff6b6b;
+    color: var(--danger);
   }
 
   .level-warn {
     background-color: rgba(255, 217, 61, 0.2);
-    color: #ffd93d;
+    color: var(--warning);
   }
 
   .level-info {
     background-color: rgba(81, 207, 102, 0.2);
-    color: #51cf66;
+    color: var(--success);
   }
 
   .level-debug {
     background-color: rgba(136, 136, 136, 0.2);
-    color: #888;
+    color: var(--text-dim);
   }
 
   .activity-message {
-    color: #e0e0e0;
+    color: var(--text);
     font-size: 0.8rem;
     font-family: monospace;
     max-width: 500px;
@@ -1021,31 +1021,31 @@
   }
 
   .media-table thead {
-    background-color: #2a2a2a;
+    background-color: var(--surface-2);
   }
 
   .media-table th {
     padding: 0.5rem;
     text-align: left;
     font-weight: 500;
-    color: #aaa;
-    border-bottom: 1px solid #333;
+    color: var(--text-muted);
+    border-bottom: 1px solid var(--border);
     font-size: 0.8rem;
     text-transform: uppercase;
     letter-spacing: 0.5px;
   }
 
   .media-table tbody tr {
-    border-bottom: 1px solid #2a2a2a;
+    border-bottom: 1px solid var(--surface-2);
   }
 
   .media-table tbody tr:hover {
-    background-color: #2a2a2a;
+    background-color: var(--surface-2);
   }
 
   .media-table td {
     padding: 0.5rem;
-    color: #e0e0e0;
+    color: var(--text);
     font-size: 0.85rem;
   }
 
@@ -1054,28 +1054,28 @@
   }
 
   .url-cell a {
-    color: #51cf66;
+    color: var(--success);
     text-decoration: none;
     word-break: break-all;
   }
 
   .url-cell a:hover {
     text-decoration: underline;
-    color: #69db7c;
+    color: var(--success);
   }
 
   .type-cell {
     text-transform: capitalize;
-    color: #aaa;
+    color: var(--text-muted);
   }
 
   .date-cell {
-    color: #888;
+    color: var(--text-dim);
     font-size: 0.8rem;
   }
 
   .size-cell {
-    color: #888;
+    color: var(--text-dim);
     font-size: 0.8rem;
   }
 
@@ -1086,12 +1086,12 @@
     align-items: center;
     padding: 0.5rem 0;
     margin-top: 0.75rem;
-    border-top: 1px solid #333;
+    border-top: 1px solid var(--border);
   }
 
   .pagination-info {
     font-size: 0.85rem;
-    color: #aaa;
+    color: var(--text-muted);
   }
 
   .pagination-controls {
@@ -1102,15 +1102,15 @@
   .pagination-controls button {
     padding: 0.4rem 0.8rem;
     font-size: 0.85rem;
-    background-color: #444;
-    color: #fff;
-    border: 1px solid #555;
+    background-color: var(--surface-3);
+    color: var(--text-bright);
+    border: 1px solid var(--border-2);
     cursor: pointer;
-    border-radius: 3px;
+    border-radius: var(--radius);
   }
 
   .pagination-controls button:hover:not(:disabled) {
-    background-color: #555;
+    background-color: var(--border-2);
   }
 
   .pagination-controls button:disabled {
@@ -1125,28 +1125,28 @@
   }
 
   .loading {
-    color: #888;
+    color: var(--text-dim);
   }
 
   .error {
-    color: #ff6b6b;
+    color: var(--danger);
   }
 
   .loading-inline {
-    color: #888;
+    color: var(--text-dim);
     font-size: 0.85rem;
     padding: 0.5rem 0;
   }
 
   .empty-state {
-    color: #888;
+    color: var(--text-dim);
     font-size: 0.85rem;
     padding: 1rem 0;
     text-align: center;
   }
 
   .error-inline {
-    color: #ff6b6b;
+    color: var(--danger);
     font-size: 0.85rem;
     padding: 0.5rem 0;
   }
@@ -1155,15 +1155,15 @@
     margin-top: 0.5rem;
     padding: 0.4rem 0.8rem;
     font-size: 0.85rem;
-    background-color: #444;
-    color: #fff;
-    border: 1px solid #555;
+    background-color: var(--surface-3);
+    color: var(--text-bright);
+    border: 1px solid var(--border-2);
     cursor: pointer;
-    border-radius: 3px;
+    border-radius: var(--radius);
   }
 
   .retry-btn:hover {
-    background-color: #555;
+    background-color: var(--border-2);
   }
 
   @media (max-width: 768px) {
@@ -1220,16 +1220,16 @@
   }
   .trace-section {
     padding: 1rem;
-    background-color: #222;
-    border: 1px solid #333;
-    border-radius: 4px;
+    background-color: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-lg);
   }
 
   .trace-section h3 {
     margin: 0 0 1rem 0;
     font-size: 1.2rem;
     font-weight: 500;
-    color: #fff;
+    color: var(--text-bright);
   }
 
   .trace-container {
@@ -1240,16 +1240,16 @@
 
   .trace-context {
     padding: 1rem;
-    background-color: #1a1a1a;
-    border: 1px solid #333;
-    border-radius: 3px;
+    background-color: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
   }
 
   .trace-context h4 {
     margin: 0 0 0.75rem 0;
     font-size: 1rem;
     font-weight: 500;
-    color: #fff;
+    color: var(--text-bright);
   }
 
   .context-grid {
@@ -1265,17 +1265,17 @@
   }
 
   .context-label {
-    color: #888;
+    color: var(--text-dim);
     min-width: 120px;
   }
 
   .context-value {
-    color: #ccc;
+    color: var(--text);
     word-break: break-all;
   }
 
   .context-value a {
-    color: #51cf66;
+    color: var(--success);
     text-decoration: none;
   }
 
@@ -1284,16 +1284,16 @@
   }
 
   .context-item.highlight {
-    background-color: #2a2a2a;
+    background-color: var(--surface-2);
     padding: 0.75rem;
-    border-radius: 3px;
-    border-left: 3px solid #51cf66;
+    border-radius: var(--radius);
+    border-left: 3px solid var(--success);
   }
 
   .badge {
     display: inline-block;
     padding: 0.25rem 0.5rem;
-    border-radius: 3px;
+    border-radius: var(--radius);
     font-size: 0.85rem;
     font-weight: 600;
     text-transform: uppercase;
@@ -1302,41 +1302,41 @@
 
   .badge-slash {
     background-color: rgba(81, 207, 102, 0.2);
-    color: #51cf66;
+    color: var(--success);
   }
 
   .badge-context {
     background-color: rgba(116, 192, 252, 0.2);
-    color: #74c0fc;
+    color: var(--info);
   }
 
   .badge-url {
     background-color: rgba(255, 217, 61, 0.2);
-    color: #ffd93d;
+    color: var(--warning);
   }
 
   .badge-file {
     background-color: rgba(255, 107, 107, 0.2);
-    color: #ff6b6b;
+    color: var(--danger);
   }
 
   .badge-unknown {
     background-color: rgba(136, 136, 136, 0.2);
-    color: #888;
+    color: var(--text-dim);
   }
 
   .trace-steps {
     padding: 1rem;
-    background-color: #1a1a1a;
-    border: 1px solid #333;
-    border-radius: 3px;
+    background-color: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
   }
 
   .trace-steps h4 {
     margin: 0 0 0.75rem 0;
     font-size: 1rem;
     font-weight: 500;
-    color: #fff;
+    color: var(--text-bright);
   }
 
   .steps-list {
@@ -1347,14 +1347,14 @@
 
   .trace-step {
     padding: 0.75rem;
-    background-color: #111;
-    border: 1px solid #333;
-    border-radius: 3px;
-    border-left: 3px solid #51cf66;
+    background-color: var(--bg-deep);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    border-left: 3px solid var(--success);
   }
 
   .trace-step.error {
-    border-left-color: #ff6b6b;
+    border-left-color: var(--danger);
   }
 
   .step-header {
@@ -1366,49 +1366,49 @@
 
   .step-name {
     font-weight: 500;
-    color: #fff;
+    color: var(--text-bright);
     font-family: monospace;
     font-size: 0.9rem;
   }
 
   .step-status {
     padding: 0.2rem 0.5rem;
-    border-radius: 3px;
+    border-radius: var(--radius);
     font-size: 0.75rem;
     font-weight: 500;
   }
 
   .step-status.status-success {
-    background-color: #2d5016;
-    color: #51cf66;
+    background-color: var(--success-bg);
+    color: var(--success);
   }
 
   .step-status.status-error {
-    background-color: #5a1a1a;
-    color: #ff6b6b;
+    background-color: var(--danger-bg);
+    color: var(--danger);
   }
 
   .step-status.status-running {
-    background-color: #2d3a50;
-    color: #74c0fc;
+    background-color: var(--info-bg);
+    color: var(--info);
   }
 
   .step-time {
     margin-left: auto;
     font-size: 0.8rem;
-    color: #888;
+    color: var(--text-dim);
   }
 
   .step-message {
     margin-top: 0.5rem;
-    color: #ccc;
+    color: var(--text);
     font-size: 0.9rem;
   }
 
   .step-file {
     margin-top: 0.5rem;
     font-size: 0.85rem;
-    color: #888;
+    color: var(--text-dim);
     font-family: monospace;
   }
 
@@ -1420,14 +1420,14 @@
   .step-metadata summary,
   .step-stack summary {
     cursor: pointer;
-    color: #74c0fc;
+    color: var(--info);
     font-size: 0.85rem;
     user-select: none;
   }
 
   .step-metadata summary:hover,
   .step-stack summary:hover {
-    color: #99d9ff;
+    color: var(--info);
   }
 
   .metadata-content,
@@ -1435,10 +1435,10 @@
     margin-top: 0.5rem;
     padding: 0.75rem;
     background-color: #000;
-    border: 1px solid #333;
-    border-radius: 3px;
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
     font-size: 0.8rem;
-    color: #ccc;
+    color: var(--text);
     overflow-x: auto;
     white-space: pre-wrap;
     word-break: break-all;
@@ -1446,36 +1446,36 @@
 
   .trace-errors {
     padding: 1rem;
-    background-color: #2a1a1a;
-    border: 1px solid #5a3333;
-    border-radius: 3px;
+    background-color: var(--danger-bg-subtle);
+    border: 1px solid var(--danger-border);
+    border-radius: var(--radius);
   }
 
   .trace-errors h4 {
     margin: 0 0 0.75rem 0;
     font-size: 1rem;
     font-weight: 500;
-    color: #ff6b6b;
+    color: var(--danger);
   }
 
   .error-item {
     padding: 0.75rem;
     margin-bottom: 0.5rem;
-    background-color: #1a0a0a;
-    border: 1px solid #5a3333;
-    border-radius: 3px;
+    background-color: var(--danger-bg-subtle);
+    border: 1px solid var(--danger-border);
+    border-radius: var(--radius);
   }
 
   .error-step {
     font-weight: 500;
-    color: #ff6b6b;
+    color: var(--danger);
     font-family: monospace;
     font-size: 0.9rem;
     margin-bottom: 0.25rem;
   }
 
   .error-message {
-    color: #ffaaaa;
+    color: var(--danger);
     font-size: 0.9rem;
     margin-bottom: 0.5rem;
   }
@@ -1488,14 +1488,14 @@
   .error-metadata summary,
   .error-stack summary {
     cursor: pointer;
-    color: #ff6b6b;
+    color: var(--danger);
     font-size: 0.85rem;
     user-select: none;
   }
 
   .error-metadata summary:hover,
   .error-stack summary:hover {
-    color: #ff8888;
+    color: var(--danger);
   }
 
   .op-actions {
@@ -1508,22 +1508,22 @@
   }
 
   .trace-btn {
-    background-color: #2d3a50;
-    border: 1px solid #444;
-    color: #74c0fc;
+    background-color: var(--info-bg);
+    border: 1px solid var(--surface-3);
+    color: var(--info);
     padding: 0.3rem 0.6rem;
     cursor: pointer;
     font-size: 0.8rem;
-    border-radius: 3px;
+    border-radius: var(--radius);
   }
 
   .trace-btn:hover {
-    background-color: #3d4a60;
-    color: #99d9ff;
+    background-color: var(--info-bg-hover);
+    color: var(--info);
   }
 
   tr.selected {
-    background-color: #2a2a2a;
+    background-color: var(--surface-2);
   }
 </style>
 

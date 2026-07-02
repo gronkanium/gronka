@@ -53,6 +53,13 @@ if (!mocksSupported) {
     mock.module('../../src/utils/cobalt.js', {
       namedExports: {
         isSocialMediaUrl: url => /^https?:\/\/(www\.|mobile\.)?(x|twitter)\.com\//i.test(url),
+        // Only reached when the url_only_mode DB setting is on; no test enables it,
+        // so throw loudly if a code change starts routing through it unexpectedly.
+        getCobaltMediaUrls: async () => {
+          throw new Error(
+            'getCobaltMediaUrls should not be called (url_only_mode is off in tests)'
+          );
+        },
         downloadFromSocialMedia: async (_apiUrl, url) => {
           if (url.includes('multi')) {
             return [

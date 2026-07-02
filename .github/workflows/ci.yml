@@ -180,6 +180,36 @@ jobs:
       - run: psql -c 'DROP SCHEMA IF EXISTS public CASCADE; CREATE SCHEMA public;'
       - run: npx cross-env WEBUI_PORT=3101 R2_ACCOUNT_ID= R2_ACCESS_KEY_ID= R2_SECRET_ACCESS_KEY= R2_BUCKET_NAME= node --test test/webui-server-*.test.js test/docker-security.test.js
 
+  test-e2e:
+    runs-on: ubuntu-latest
+    if: github.actor != 'dependabot[bot]'
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_DB: gronka_test
+          POSTGRES_USER: gronka
+          POSTGRES_PASSWORD: gronka
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 5432:5432
+    steps:
+      - uses: actions/checkout@v7
+      # Node 24 (matching local dev) guarantees --experimental-test-module-mocks
+      # support; on older runtimes the suite silently skips and the job proves nothing.
+      - uses: actions/setup-node@v6
+        with:
+          node-version: '24'
+          cache: 'npm'
+      - run: npm ci
+      - run: sudo apt-get update && sudo apt-get install -y ffmpeg postgresql-client
+      - run: psql -c 'DROP SCHEMA IF EXISTS public CASCADE; CREATE SCHEMA public;'
+      - run: npm run test:e2e
+
   dependabot-checks:
     runs-on: ubuntu-latest
     if: github.actor == 'dependabot[bot]'

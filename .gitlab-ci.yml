@@ -6,6 +6,7 @@ stages:
   - test:commands
   - test:scripts
   - test:integration
+  - test:e2e
   - release
 
 # Reusable YAML anchors
@@ -136,6 +137,23 @@ test-integration:
     - *wait_for_postgres
     - npm ci
     - npx cross-env R2_ACCOUNT_ID= R2_ACCESS_KEY_ID= R2_SECRET_ACCESS_KEY= R2_BUCKET_NAME= node --test test/webui-server-*.test.js test/docker-security.test.js
+
+test-e2e:
+  stage: test:e2e
+  # node:24 (matching local dev) guarantees --experimental-test-module-mocks support;
+  # on older runtimes the e2e suite silently skips and the job proves nothing.
+  image: node:24
+  <<: *postgres_service
+  <<: *default_rules
+  <<: *test_variables
+  cache:
+    paths:
+      - node_modules/
+    key: ${CI_COMMIT_REF_SLUG}-node24
+  script:
+    - *wait_for_postgres
+    - npm ci
+    - npm run test:e2e
 
 # Release stage
 create-release:

@@ -86,12 +86,32 @@ curl -v -u admin:password http://localhost:3000/api/stats/24h
 
 ## webui endpoints
 
-the webui dashboard (port 3001) has its own health and stats endpoints for internal use:
+the webui dashboard (port 3001) has its own api used by the dashboard interface:
+
+**health and stats:**
 
 - `GET /api/health` - webui health check
 - `GET /api/stats` - storage statistics (calculated directly from database/filesystem)
 
-these are for dashboard use only and are not intended for external consumption.
+**settings:**
+
+- `GET /api/settings` - list bot settings (e.g., `url_only_mode`) with values, types, and descriptions
+- `PUT /api/settings/:key` - update a setting (json body: `{"value": "true"}`); settings are stored in the shared `bot_settings` database table so they take effect in the bot process without a restart
+
+**operations and monitoring:**
+
+- `GET /api/operations`, `GET /api/operations/:operationId` (plus `/trace`, `/related`) - operation tracking and tracing
+- `GET /api/operations/search`, `GET /api/operations/errors/analysis` - operation search and error analysis
+- `GET /api/logs`, `GET /api/logs/components`, `GET /api/logs/metrics` - log viewing
+- `GET /api/metrics/system`, `GET /api/metrics/system/current`, `GET /api/metrics/errors` - system and error metrics
+- `GET /api/alerts` - alerts
+
+**users and moderation:**
+
+- `GET /api/users`, `GET /api/users/:userId` (plus `/activity`, `/media`, `/operations`) - user tracking
+- `DELETE /api/moderation/files/:urlHash`, `/api/moderation/files/bulk`, `/api/moderation/users/:userId/r2-media` - file/user moderation
+
+these are for dashboard use only and are not intended for external consumption. the webui binds to `127.0.0.1` by default.
 
 ## r2 storage
 

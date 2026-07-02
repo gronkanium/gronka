@@ -44,6 +44,9 @@ Thumbs.db
 *.swp
 *.swo
 
+# AI handoff notes (local scratch, not a tracked artifact)
+TODO.md
+
 # Git hooks (husky hooks should be committed)
 # .husky/
 

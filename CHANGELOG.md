@@ -11,8 +11,62 @@ and this project adheres (attempts) to [Semantic Versioning](https://semver.org/
 
 - Live Discord smoke test (real upload, cannot be faked in CI):
   normal download, multi-image tweet (picker path), video→gif convert, Tenor optimize, deleted tweet.
-- Wire `npm run test:e2e` into CI (currently only run manually; needs Postgres + `--experimental-test-module-mocks`).
 - Revisit the `undici`/discord.js transitive vuln once discord.js bumps its `undici` pin upstream (see 0.15.5 note).
+- Redeploy `main` — the running container image predates commit `49c2956` (dead-subsystem
+  removal, gifsicle bundled into the app image).
+
+## [0.15.6] - 2026-07-02
+
+### Added
+
+- webui-toggleable URL-only mode for downloads (`45af667`)
+
+### Security
+
+- CodeQL alerts resolved: rate limiting on webui-server + bot stats API routes, `Object.hasOwn`
+  guard on `KNOWN_SETTINGS` lookup (prototype-pollution-shaped access), timing-safe basic-auth
+  comparison (`4a30404`, `de564a5`)
+- `undici` override bumped to `^6.27.0`, resolving 4 security advisories (`2d24e10`)
+- dependabot security-updates group bump, 10 packages (`3d5a854`)
+
+### Fixed
+
+- Fixed a rotted `test:e2e` suite: `download.js` had picked up a `getCobaltMediaUrls` import
+  (url-only mode) that the e2e module mock for `utils/cobalt.js` didn't provide, so all 4
+  full-pipeline e2e tests failed at import time. Added the missing mock export (`46ab83f`)
+- Cobalt queue dedup entry registered under the wrong key; now registered before the async
+  cache check (`92e6bb7`)
+- Sequence-reset race causing duplicate-key errors in CI (`c981fb4`), plus follow-up queue
+  dedup / test-reset review findings (`35e58ca`)
+- `pgrep` healthcheck replaced with a Node HTTP probe (`98443f8`)
+- Cobalt cookie string format corrected in `cookies.example.json` and docs (`d3c5c78`)
+- 13 lint issues flagged by a newer ESLint ruleset (`0960445`)
+- Stale trimmed-buffer size fallback corrected; `convert.js` now uses `safeInteractionEditReply`
+  for its Discord-attachment-upload path (`14c9b31`)
+- `undici` pinned via `overrides`; socket-error retry added to `safeInteractionEditReply`,
+  cherry-picked from the archived pre-fork history (`d8a733e`)
+
+### Changed
+
+- Wired `npm run test:e2e` into CI: a `test-e2e` job now runs on both GitHub Actions and
+  GitLab CI (Node 24, Postgres service) on every push/MR — previously it was runnable only
+  locally, which is how it rotted unnoticed (`46ab83f`)
+- Removed dead subsystems: Jekyll/Cloudflare KV stats sync, per-call giflossy `docker run`
+  (gifsicle now bundled in the app image, giflossy compose service dropped), cobalt rate-limit
+  heuristics simplified to explicit 429/rate codes, operations tracker slimmed to lifecycle-only
+  logging (`49c2956`)
+- webui restyled onto shared design tokens with consistent text casing (`572efdb`)
+- Test suite overhauled for speed and parallel-run reliability (`38c86c7`)
+- CI: actions bumped to Node24-based majors (`7455e26`); Blacksmith runners reverted to
+  GitHub-hosted `ubuntu-latest` (`9c60bf4`); `workflow_dispatch` added to CodeQL for manual
+  re-runs (`b04ddd8`)
+- Decluttered the project root: `CONTRIBUTING.md`, `CODE_OF_CONDUCT.md`, and `security.md`
+  (renamed `SECURITY.md`) moved into `.github/`, where GitHub surfaces them natively.
+  `npm run fetch:security` now writes to `logs/code-scanning-issues.json` instead of the repo
+  root. The old `plan.md` was archived to `docs/archive/` (gitignored, local-only) (`e40b2fe`)
+- `TODO.md` is now gitignored — it's a local scratch handoff (current state, ranked next
+  steps, backlog), not a tracked project artifact. Trimmed its contents to match: dropped
+  sections that duplicated `CLAUDE.md`'s dev-loop/rules/architecture documentation.
 
 ## [0.15.5] - 2026-07-01
 

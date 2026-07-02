@@ -1,6 +1,6 @@
 {
   "name": "gronka",
-  "version": "0.15.5",
+  "version": "0.15.6",
   "description": "discord bot that downloads, optimizes, and converts media from social media",
   "main": "src/bot.js",
   "type": "module",

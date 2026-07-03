@@ -12,6 +12,26 @@
   let presenceSaving = false;
   let presenceError = null;
   let presenceMessage = null;
+  let currentPresence = null;
+  let currentPresenceLoading = true;
+
+  async function loadPresence() {
+    currentPresenceLoading = true;
+    try {
+      const response = await fetch('/api/bot/status');
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        throw new Error(data.error || data.message || `HTTP error! status: ${response.status}`);
+      }
+      currentPresence = data;
+      presenceStatus = data.status || presenceStatus;
+      presenceActivity = data.activity || '';
+    } catch (err) {
+      console.error('Failed to fetch bot presence:', err);
+    } finally {
+      currentPresenceLoading = false;
+    }
+  }
 
   async function updatePresence() {
     presenceSaving = true;
@@ -33,6 +53,7 @@
       presenceMessage = data.activity
         ? `status set to "${data.status}" with activity "${data.activity}"`
         : `status set to "${data.status}"`;
+      await loadPresence();
     } catch (err) {
       console.error('Failed to update bot presence:', err);
       presenceError = err.message || 'failed to update bot presence';
@@ -96,19 +117,37 @@
     saveSetting(key, inputValue);
   }
 
-  onMount(loadSettings);
+  onMount(() => {
+    loadSettings();
+    loadPresence();
+  });
 </script>
 
 <div class="settings-page">
   <div class="presence-card">
     <div class="setting-info">
       <span class="setting-name">bot presence</span>
-      <span class="setting-description">change the bot's Discord status and activity text on the fly</span>
+      <span class="setting-description"
+        >change the bot's Discord status and activity text on the fly</span
+      >
+      {#if currentPresenceLoading}
+        <span class="current-presence">checking current status...</span>
+      {:else if currentPresence}
+        <span class="current-presence">
+          currently: <span
+            class="presence-dot"
+            class:online={currentPresence.status === 'online'}
+            class:idle={currentPresence.status === 'idle'}
+            class:dnd={currentPresence.status === 'dnd'}
+            class:invisible={currentPresence.status === 'invisible'}
+          ></span>
+          {currentPresence.status}{currentPresence.activity ? ` — ${currentPresence.activity}` : ''}
+        </span>
+      {:else}
+        <span class="current-presence">unable to load current status</span>
+      {/if}
     </div>
-    <form
-      class="presence-form"
-      on:submit|preventDefault={updatePresence}
-    >
+    <form class="presence-form" on:submit|preventDefault={updatePresence}>
       <select bind:value={presenceStatus} disabled={presenceSaving} aria-label="Bot status">
         {#each STATUS_OPTIONS as option (option)}
           <option value={option}>{option}</option>
@@ -157,7 +196,7 @@
         {:else if setting.type === 'string'}
           <form
             class="text-setting"
-            on:submit|preventDefault={(e) => handleTextSubmit(key, e.target.elements.value.value)}
+            on:submit|preventDefault={e => handleTextSubmit(key, e.target.elements.value.value)}
           >
             <input
               type="text"
@@ -202,6 +241,38 @@
     border: 1px solid var(--border);
     border-radius: var(--radius-lg);
     padding: 1rem 1.25rem;
+  }
+
+  .current-presence {
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+    color: var(--text-muted);
+    font-size: 0.85rem;
+  }
+
+  .presence-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background-color: var(--text-muted);
+    flex-shrink: 0;
+  }
+
+  .presence-dot.online {
+    background-color: var(--success);
+  }
+
+  .presence-dot.idle {
+    background-color: #f0b232;
+  }
+
+  .presence-dot.dnd {
+    background-color: var(--danger);
+  }
+
+  .presence-dot.invisible {
+    background-color: var(--text-muted);
   }
 
   .presence-form {
@@ -268,7 +339,9 @@
     background-color: var(--surface-2);
     cursor: pointer;
     padding: 0;
-    transition: background-color 0.2s, border-color 0.2s;
+    transition:
+      background-color 0.2s,
+      border-color 0.2s;
   }
 
   .toggle.on {

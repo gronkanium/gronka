@@ -189,6 +189,22 @@ function startStatsServer() {
     }
   });
 
+  // Current bot presence endpoint (protected with basic auth)
+  app.get('/api/bot/status', basicAuth, (req, res) => {
+    if (!client.isReady()) {
+      return res.status(503).json({ error: 'bot is not ready' });
+    }
+
+    const presence = client.user.presence;
+    const activity = presence.activities.find(a => a.type === 4) || null;
+
+    res.json({
+      status: presence.status,
+      activity: activity ? activity.name : null,
+      botTag: client.user.tag,
+    });
+  });
+
   // 24-hour stats endpoint for Jekyll site (protected with basic auth)
   app.get('/api/stats/24h', basicAuth, async (req, res) => {
     try {

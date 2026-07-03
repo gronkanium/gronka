@@ -22,12 +22,6 @@
   let offset = 0;
   let selectedFiles = new Set();
 
-  // Armed destructive actions: null | 'bulk' | url_hash of a single file
-  let armed = null;
-  // Delete-all-for-user requires typing the username
-  let deleteAllOpen = false;
-  let deleteAllInput = '';
-
   // Transient status line ({ kind: 'success' | 'error', text })
   let status = null;
   let statusTimeout = null;
@@ -95,9 +89,6 @@
 
   function resetSelectionState() {
     selectedFiles = new Set();
-    armed = null;
-    deleteAllOpen = false;
-    deleteAllInput = '';
   }
 
   function handleUserSelect(userId) {
@@ -126,7 +117,6 @@
     offset = event.detail.offset;
     limit = event.detail.limit;
     selectedFiles = new Set();
-    armed = null;
     fetchR2Media();
   }
 
@@ -137,7 +127,6 @@
       selectedFiles.add(urlHash);
     }
     selectedFiles = new Set(selectedFiles);
-    armed = null;
   }
 
   function toggleSelectAll() {
@@ -146,7 +135,6 @@
     } else {
       selectedFiles = new Set(media.map(m => m.url_hash));
     }
-    armed = null;
   }
 
   // Refresh both the media list and the per-user stats after any deletion
@@ -156,12 +144,6 @@
   }
 
   async function deleteFile(urlHash) {
-    if (armed !== urlHash) {
-      armed = urlHash;
-      return;
-    }
-    armed = null;
-
     deleting = true;
     try {
       const response = await fetch(`/api/moderation/files/${urlHash}`, {
@@ -186,11 +168,6 @@
 
   async function bulkDelete() {
     if (selectedFiles.size === 0) return;
-    if (armed !== 'bulk') {
-      armed = 'bulk';
-      return;
-    }
-    armed = null;
 
     deleting = true;
     try {
@@ -238,15 +215,8 @@
 
   async function deleteAllForUser() {
     if (!selectedUserId) return;
-    const expected = selectedUser?.username || selectedUserId;
-    if (deleteAllInput !== expected) {
-      showStatus('error', 'username does not match — nothing deleted');
-      return;
-    }
 
     deleting = true;
-    deleteAllOpen = false;
-    deleteAllInput = '';
     try {
       const response = await fetch(`/api/moderation/users/${selectedUserId}/r2-media`, {
         method: 'DELETE',
@@ -342,46 +312,13 @@
           </select>
           <button
             class="delete-all-btn"
-            on:click={() => {
-              deleteAllOpen = !deleteAllOpen;
-              deleteAllInput = '';
-            }}
+            on:click={deleteAllForUser}
             disabled={deleting || total === 0}
           >
             delete all for user
           </button>
         </div>
       </div>
-
-      {#if deleteAllOpen}
-        <div class="delete-all-confirm">
-          <span>
-            this deletes all {total} r2 file(s) for this user and cannot be undone — type
-            <strong>{selectedUser?.username || selectedUserId}</strong> to confirm:
-          </span>
-          <input
-            type="text"
-            bind:value={deleteAllInput}
-            placeholder={selectedUser?.username || selectedUserId}
-          />
-          <button
-            class="delete-btn"
-            disabled={deleting || deleteAllInput !== (selectedUser?.username || selectedUserId)}
-            on:click={deleteAllForUser}
-          >
-            confirm delete all
-          </button>
-          <button
-            class="btn-small"
-            on:click={() => {
-              deleteAllOpen = false;
-              deleteAllInput = '';
-            }}
-          >
-            cancel
-          </button>
-        </div>
-      {/if}
 
       {#if loading}
         <div class="loading">loading r2 files...</div>
@@ -401,15 +338,8 @@
             <span>select page ({selectedFiles.size} selected)</span>
           </label>
           {#if selectedFiles.size > 0}
-            <button
-              class="bulk-delete-btn"
-              class:armed={armed === 'bulk'}
-              on:click={bulkDelete}
-              disabled={deleting}
-            >
-              {armed === 'bulk'
-                ? `click again to delete ${selectedFiles.size} file(s)`
-                : `delete selected (${selectedFiles.size})`}
+            <button class="bulk-delete-btn" on:click={bulkDelete} disabled={deleting}>
+              delete selected ({selectedFiles.size})
             </button>
           {/if}
         </div>
@@ -453,11 +383,10 @@
                 </a>
                 <button
                   class="delete-btn"
-                  class:armed={armed === item.url_hash}
                   on:click={() => deleteFile(item.url_hash)}
                   disabled={deleting}
                 >
-                  {armed === item.url_hash ? 'confirm?' : 'delete'}
+                  delete
                 </button>
               </div>
             </div>
@@ -650,43 +579,6 @@
     cursor: not-allowed;
   }
 
-  .delete-all-confirm {
-    display: flex;
-    flex-wrap: wrap;
-    align-items: center;
-    gap: 0.75rem;
-    padding: 0.75rem 1rem;
-    margin-bottom: 1rem;
-    background-color: rgba(255, 107, 107, 0.08);
-    border: 1px solid var(--danger);
-    border-radius: var(--radius);
-    font-size: 0.9rem;
-    color: var(--text);
-  }
-
-  .delete-all-confirm input {
-    padding: 0.4rem 0.6rem;
-    background-color: var(--surface-2);
-    border: 1px solid var(--surface-3);
-    color: var(--text-bright);
-    font-size: 0.85rem;
-    border-radius: var(--radius);
-  }
-
-  .btn-small {
-    padding: 0.4rem 0.8rem;
-    font-size: 0.85rem;
-    background-color: var(--surface-3);
-    color: var(--text-bright);
-    border: 1px solid var(--border-2);
-    cursor: pointer;
-    border-radius: var(--radius);
-  }
-
-  .btn-small:hover {
-    background-color: var(--border-2);
-  }
-
   .bulk-actions {
     display: flex;
     justify-content: space-between;
@@ -723,11 +615,6 @@
   .bulk-delete-btn:disabled {
     opacity: 0.5;
     cursor: not-allowed;
-  }
-
-  .bulk-delete-btn.armed {
-    background-color: var(--bg-deep);
-    color: var(--danger);
   }
 
   .media-grid {
@@ -833,12 +720,6 @@
   .delete-btn:disabled {
     opacity: 0.5;
     cursor: not-allowed;
-  }
-
-  .delete-btn.armed {
-    background-color: var(--bg-deep);
-    color: var(--danger);
-    font-weight: 600;
   }
 
   .loading,

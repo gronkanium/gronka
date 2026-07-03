@@ -120,6 +120,14 @@ function connect() {
     return;
   }
 
+  // Close out any existing connection (e.g. one still CONNECTING) before opening a new
+  // one — otherwise a reconnect triggered while a prior attempt is in flight (flaky network
+  // toggling online/offline, a stale-check firing mid-retry) leaks an open EventSource.
+  if (es) {
+    es.close();
+    es = null;
+  }
+
   try {
     es = new EventSource('/api/events');
 
@@ -135,9 +143,14 @@ function connect() {
       console.log('SSE connected');
     };
 
+    // The server also sends a heartbeat as a named event (not a bare comment) purely so this
+    // handler can mark the stream as alive — heartbeats don't otherwise carry data.
+    es.addEventListener('heartbeat', () => {
+      lastMessageTime = Date.now();
+      updateHealthMetrics();
+    });
+
     es.onmessage = event => {
-      // Update last message time (any message, including heartbeat comments
-      // which don't reach onmessage, but any real event does)
       lastMessageTime = Date.now();
       messageCount++;
       updateHealthMetrics();

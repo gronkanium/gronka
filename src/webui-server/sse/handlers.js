@@ -33,7 +33,9 @@ export function cleanupDeadConnections(clients) {
   }
 }
 
-// Send a heartbeat comment to all connected clients and remove those that are no longer writable
+// Send a heartbeat to all connected clients and remove those that are no longer writable.
+// Sent as a named event (not a bare comment) so the client's EventSource can observe it via
+// addEventListener and use it to tell a quiet-but-healthy stream apart from a dead one.
 export function heartbeatClients(clients) {
   clients.forEach(client => {
     if (client.writableEnded || client.destroyed) {
@@ -42,8 +44,7 @@ export function heartbeatClients(clients) {
     }
 
     try {
-      // SSE comment line - ignored by the client, but keeps the connection alive
-      client.write(': heartbeat\n\n');
+      client.write('event: heartbeat\ndata: {}\n\n');
     } catch (error) {
       logger.error('Error sending SSE heartbeat:', error);
       clients.delete(client);

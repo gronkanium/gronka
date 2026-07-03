@@ -11,6 +11,7 @@ import logsRoutes from './routes/logs.js';
 import moderationRoutes from './routes/moderation.js';
 import alertsRoutes from './routes/alerts.js';
 import settingsRoutes from './routes/settings.js';
+import botStatusRoutes from './routes/bot-status.js';
 
 const logger = createLogger('webui');
 
@@ -58,6 +59,7 @@ export function createApp(websocketClients) {
   app.use(moderationRoutes);
   app.use(alertsRoutes);
   app.use(settingsRoutes);
+  app.use(botStatusRoutes);
 
   // Set WebSocket clients in operations routes for broadcasting
   if (websocketClients) {

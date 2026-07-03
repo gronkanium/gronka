@@ -6,6 +6,41 @@
   let error = null;
   let saving = {};
 
+  const STATUS_OPTIONS = ['online', 'idle', 'dnd', 'invisible'];
+  let presenceStatus = 'online';
+  let presenceActivity = '';
+  let presenceSaving = false;
+  let presenceError = null;
+  let presenceMessage = null;
+
+  async function updatePresence() {
+    presenceSaving = true;
+    presenceError = null;
+    presenceMessage = null;
+    try {
+      const response = await fetch('/api/bot/status', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          status: presenceStatus,
+          activity: presenceActivity.trim() || undefined,
+        }),
+      });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        throw new Error(data.error || data.message || `HTTP error! status: ${response.status}`);
+      }
+      presenceMessage = data.activity
+        ? `status set to "${data.status}" with activity "${data.activity}"`
+        : `status set to "${data.status}"`;
+    } catch (err) {
+      console.error('Failed to update bot presence:', err);
+      presenceError = err.message || 'failed to update bot presence';
+    } finally {
+      presenceSaving = false;
+    }
+  }
+
   async function loadSettings() {
     loading = true;
     error = null;
@@ -65,6 +100,38 @@
 </script>
 
 <div class="settings-page">
+  <div class="presence-card">
+    <div class="setting-info">
+      <span class="setting-name">bot presence</span>
+      <span class="setting-description">change the bot's Discord status and activity text on the fly</span>
+    </div>
+    <form
+      class="presence-form"
+      on:submit|preventDefault={updatePresence}
+    >
+      <select bind:value={presenceStatus} disabled={presenceSaving} aria-label="Bot status">
+        {#each STATUS_OPTIONS as option (option)}
+          <option value={option}>{option}</option>
+        {/each}
+      </select>
+      <input
+        type="text"
+        placeholder="activity text (optional)"
+        bind:value={presenceActivity}
+        disabled={presenceSaving}
+        aria-label="Bot activity text"
+      />
+      <button type="submit" class="save-btn" disabled={presenceSaving}>
+        {presenceSaving ? 'updating...' : 'update'}
+      </button>
+    </form>
+    {#if presenceError}
+      <p class="status error">{presenceError}</p>
+    {:else if presenceMessage}
+      <p class="status success">{presenceMessage}</p>
+    {/if}
+  </div>
+
   {#if loading}
     <p class="status">loading settings...</p>
   {:else}
@@ -121,6 +188,47 @@
 
   .status.error {
     color: var(--danger);
+  }
+
+  .status.success {
+    color: var(--success);
+  }
+
+  .presence-card {
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+    background-color: var(--bg-deep);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-lg);
+    padding: 1rem 1.25rem;
+  }
+
+  .presence-form {
+    display: flex;
+    gap: 0.5rem;
+    flex-wrap: wrap;
+  }
+
+  .presence-form select,
+  .presence-form input {
+    background-color: var(--surface-2);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    color: var(--text-bright);
+    padding: 0.4rem 0.6rem;
+    font-size: 0.9rem;
+  }
+
+  .presence-form input {
+    flex: 1;
+    min-width: 200px;
+  }
+
+  .presence-form select:disabled,
+  .presence-form input:disabled {
+    opacity: 0.6;
+    cursor: wait;
   }
 
   .setting-row {

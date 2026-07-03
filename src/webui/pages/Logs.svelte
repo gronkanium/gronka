@@ -11,11 +11,9 @@
 
   // Filters
   let selectedComponent = '';
-  let excludedComponents = [];
   let selectedLevels = ['ERROR', 'WARN', 'INFO'];
   let searchQuery = '';
   let timeRange = '';
-  let liveUpdates = true;
 
   // Pagination
   let limit = 50;
@@ -27,10 +25,10 @@
   let expandedIds = new Set();
 
   const levelDefs = [
-    { level: 'ERROR', label: 'err', cls: 'error' },
-    { level: 'WARN', label: 'wrn', cls: 'warn' },
-    { level: 'INFO', label: 'inf', cls: 'info' },
-    { level: 'DEBUG', label: 'dbg', cls: 'debug' },
+    { level: 'ERROR', label: 'error', cls: 'error' },
+    { level: 'WARN', label: 'warn', cls: 'warn' },
+    { level: 'INFO', label: 'info', cls: 'info' },
+    { level: 'DEBUG', label: 'debug', cls: 'debug' },
   ];
 
   function getLevelClass(level) {
@@ -49,8 +47,6 @@
       if (selectedComponent) params.append('component', selectedComponent);
       if (selectedLevels.length > 0) params.append('level', selectedLevels.join(','));
       if (searchQuery) params.append('search', searchQuery);
-      if (excludedComponents.length > 0)
-        params.append('excludedComponents', excludedComponents.join(','));
 
       const startTime = timeRangeToStartTime(timeRange);
       if (startTime) params.append('startTime', startTime.toString());
@@ -95,24 +91,11 @@
   }
 
   function handleComponentChange() {
-    // Including a specific component makes exclusions moot
-    if (selectedComponent) excludedComponents = [];
-    refetch();
-  }
-
-  function handleExcludedComponentToggle(component) {
-    if (excludedComponents.includes(component)) {
-      excludedComponents = excludedComponents.filter(c => c !== component);
-    } else {
-      excludedComponents = [...excludedComponents, component];
-      if (selectedComponent === component) selectedComponent = '';
-    }
     refetch();
   }
 
   function handleClearFilters() {
     selectedComponent = '';
-    excludedComponents = [];
     selectedLevels = ['ERROR', 'WARN', 'INFO'];
     searchQuery = '';
     timeRange = '';
@@ -180,7 +163,6 @@
   // Check if a log entry matches current filters (for live WS inserts)
   function matchesFilters(logEntry) {
     if (selectedComponent && logEntry.component !== selectedComponent) return false;
-    if (excludedComponents.includes(logEntry.component)) return false;
     if (selectedLevels.length > 0 && !selectedLevels.includes(logEntry.level)) return false;
     const startTime = timeRangeToStartTime(timeRange);
     if (startTime && logEntry.timestamp < startTime) return false;
@@ -208,7 +190,6 @@
 
     // Subscribe to WebSocket logs (connection managed by App.svelte)
     const unsubscribe = wsLogs.subscribe(newLogs => {
-      if (!liveUpdates) return;
       // The store prepends new logs; walk from the front until we hit one we know
       for (const incoming of newLogs) {
         const exists = logs.some(
@@ -228,107 +209,70 @@
 </script>
 
 <section class="logs">
-  <div class="filters">
-    <div class="filter-group">
-      <label for="component-filter">component:</label>
-      <select id="component-filter" bind:value={selectedComponent} on:change={handleComponentChange}>
-        <option value="">all</option>
-        {#each components as component}
-          <option value={component}>{component}</option>
-        {/each}
-      </select>
-    </div>
-
-    <div class="filter-group">
-      <!-- svelte-ignore a11y_label_has_associated_control -->
-      <label>level:</label>
-      <div class="level-toggles">
-        {#each levelDefs as def}
-          <button
-            class="level-btn {def.cls}"
-            class:active={selectedLevels.includes(def.level)}
-            on:click={() => handleLevelToggle(def.level)}
-          >
-            <span class="level-icon">●</span><span class="level-text">{def.label}</span>
-          </button>
-        {/each}
-      </div>
-    </div>
-
-    <div class="filter-group search-group">
-      <label for="search-input">search:</label>
+  <div class="toolbar">
+    <div class="search-box">
+      <svg class="icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+        <circle cx="11" cy="11" r="7" />
+        <line x1="21" y1="21" x2="16.65" y2="16.65" />
+      </svg>
       <input
-        id="search-input"
         type="text"
+        aria-label="search logs"
         bind:value={searchQuery}
         on:keydown={e => e.key === 'Enter' && refetch()}
-        placeholder="search messages..."
+        placeholder="search logs…"
       />
-      <button class="btn-small" on:click={refetch}>search</button>
+      {#if searchQuery}
+        <button class="clear-search" title="clear search" on:click={() => { searchQuery = ''; refetch(); }}>×</button>
+      {/if}
     </div>
 
-    <div class="filter-group">
-      <label for="time-range-filter">time range:</label>
-      <select id="time-range-filter" bind:value={timeRange} on:change={refetch}>
-        <option value="">all time</option>
-        <option value="1h">last hour</option>
-        <option value="6h">last 6 hours</option>
-        <option value="24h">last 24 hours</option>
-        <option value="7d">last 7 days</option>
-        <option value="30d">last 30 days</option>
-      </select>
+    <div class="levels" role="group" aria-label="log levels">
+      {#each levelDefs as def}
+        <button
+          class="level {def.cls}"
+          class:on={selectedLevels.includes(def.level)}
+          aria-pressed={selectedLevels.includes(def.level)}
+          on:click={() => handleLevelToggle(def.level)}
+        >
+          <span class="dot"></span>{def.label}
+        </button>
+      {/each}
     </div>
 
-    <div class="filter-actions">
-      <label class="live-toggle" title="pause/resume live log streaming">
-        <input type="checkbox" bind:checked={liveUpdates} />
-        <span class="ws-status" class:connected={$wsConnected && liveUpdates}>
-          {#if !$wsConnected}
-            ○ disconnected
-          {:else if liveUpdates}
-            ● live
-          {:else}
-            ⏸ paused
-          {/if}
-        </span>
-      </label>
-      <button class="btn-small" on:click={handleClearFilters}>clear filters</button>
-      <div class="export-buttons">
-        <button class="btn-small" on:click={() => exportPage('json')} title="exports the current page only">export page json</button>
-        <button class="btn-small" on:click={() => exportPage('csv')} title="exports the current page only">export page csv</button>
-      </div>
-    </div>
+    <select class="control" aria-label="component" bind:value={selectedComponent} on:change={handleComponentChange}>
+      <option value="">all components</option>
+      {#each components as component}
+        <option value={component}>{component}</option>
+      {/each}
+    </select>
 
-    {#if !selectedComponent && components.length > 0}
-      <details class="exclude-details" open={excludedComponents.length > 0}>
-        <summary>
-          exclude components{excludedComponents.length > 0
-            ? ` (${excludedComponents.length} excluded)`
-            : ''}
-        </summary>
-        <div class="component-checkbox-list">
-          {#each components as component}
-            <label class="component-checkbox">
-              <input
-                type="checkbox"
-                checked={excludedComponents.includes(component)}
-                on:change={() => handleExcludedComponentToggle(component)}
-              />
-              <span>{component}</span>
-            </label>
-          {/each}
-        </div>
-      </details>
-    {/if}
+    <select class="control" aria-label="time range" bind:value={timeRange} on:change={refetch}>
+      <option value="">all time</option>
+      <option value="1h">last hour</option>
+      <option value="6h">last 6 hours</option>
+      <option value="24h">last 24 hours</option>
+      <option value="7d">last 7 days</option>
+      <option value="30d">last 30 days</option>
+    </select>
+
+    <div class="toolbar-right">
+      <span class="status" class:live={$wsConnected} title={$wsConnected ? 'streaming live' : 'reconnecting…'}>
+        <span class="dot"></span>{$wsConnected ? 'live' : 'offline'}
+      </span>
+      <button class="control ghost" on:click={handleClearFilters}>clear</button>
+      <button class="control ghost" on:click={() => exportPage('json')} title="export current page as JSON">json</button>
+      <button class="control ghost" on:click={() => exportPage('csv')} title="export current page as CSV">csv</button>
+    </div>
   </div>
 
   {#if loading && logs.length === 0}
-    <div class="loading">loading logs...</div>
+    <div class="state-msg loading">loading logs...</div>
   {:else if error}
-    <div class="error">error: {error}</div>
+    <div class="state-msg state-error">error: {error}</div>
     <button on:click={fetchLogs}>retry</button>
   {:else if logs.length === 0}
-    <div class="empty">no logs found</div>
+    <div class="state-msg empty">no logs found</div>
   {:else}
     <div class="logs-container">
       <table>
@@ -402,224 +346,210 @@
     grid-column: 1 / -1;
   }
 
-  .filters {
+  /* One cohesive toolbar: every control shares height, surface, radius.
+     Color appears only as small accent dots — never as filled boxes. */
+  .toolbar {
     display: flex;
     flex-wrap: wrap;
-    gap: 0.75rem;
+    align-items: center;
+    gap: 0.5rem;
     margin-bottom: 1rem;
-    padding: 0.5rem;
+    padding: 0.6rem 0.7rem;
     background-color: var(--bg);
     border: 1px solid var(--border);
     border-radius: var(--radius);
     max-width: 100%;
-    align-items: center;
   }
 
-  .filter-group {
-    display: flex;
-    align-items: center;
-    gap: 0.5rem;
-  }
-
-  .filter-group label {
-    font-size: 0.8rem;
-    color: var(--text-muted);
-    white-space: nowrap;
-  }
-
-  .filter-group select,
-  .filter-group input[type='text'] {
-    background-color: var(--surface-2);
-    border: 1px solid var(--surface-3);
-    color: var(--text-bright);
-    padding: 0.3rem 0.5rem;
-    font-size: 0.8rem;
+  /* Shared control baseline */
+  .control,
+  .search-box,
+  .levels,
+  .status {
+    height: 32px;
+    box-sizing: border-box;
     border-radius: var(--radius);
+    font-size: 0.78rem;
   }
 
-  .filter-group select {
-    min-width: 120px;
-  }
-
-  .search-group input[type='text'] {
-    min-width: 200px;
-  }
-
-  .level-toggles {
-    display: flex;
-    gap: 0.15rem;
-    align-items: center;
-  }
-
-  .level-btn {
-    padding: 0.2rem 0.4rem;
-    font-size: 0.7rem;
-    border: 1px solid var(--surface-3);
-    background-color: var(--surface-2);
-    color: var(--text-dim);
-    cursor: pointer;
-    border-radius: var(--radius);
-    font-weight: 500;
-    white-space: nowrap;
+  .control {
     display: inline-flex;
     align-items: center;
-    justify-content: center;
-    gap: 0.25rem;
-    transition:
-      background-color 0.2s,
-      border-color 0.2s,
-      color 0.2s;
-    height: 24px;
-    line-height: 1;
-    box-sizing: border-box;
-    width: 44px;
-    flex-shrink: 0;
-  }
-
-  .level-btn:hover {
-    background-color: var(--border);
-  }
-
-  .level-btn .level-icon {
-    font-size: 0.6rem;
-    line-height: 1;
-    display: flex;
-    align-items: center;
-  }
-
-  .level-btn .level-text {
-    text-transform: lowercase;
-    font-size: 0.65rem;
-    line-height: 1;
-  }
-
-  .level-btn.active {
-    border-color: currentColor;
-    background-color: rgba(255, 255, 255, 0.1);
-  }
-
-  .level-btn.error.active {
-    color: var(--danger);
-  }
-
-  .level-btn.warn.active {
-    color: var(--warning);
-  }
-
-  .level-btn.info.active {
-    color: var(--success);
-  }
-
-  .level-btn.debug.active {
-    color: var(--text-dim);
-  }
-
-  .btn-small {
-    padding: 0.3rem 0.6rem;
-    font-size: 0.75rem;
-    background-color: var(--surface-3);
-    color: var(--text-bright);
-    border: 1px solid var(--border-2);
-    cursor: pointer;
-    border-radius: var(--radius);
-  }
-
-  .btn-small:hover {
-    background-color: var(--border-2);
-  }
-
-  .btn-small:active {
-    background-color: var(--border);
-  }
-
-  .filter-actions {
-    display: flex;
-    align-items: center;
-    gap: 1rem;
-    margin-left: auto;
-  }
-
-  .live-toggle {
-    display: flex;
-    align-items: center;
-    gap: 0.4rem;
-    font-size: 0.8rem;
-    cursor: pointer;
-  }
-
-  .live-toggle input[type='checkbox'] {
-    cursor: pointer;
-  }
-
-  .ws-status {
-    font-size: 0.85rem;
-    color: var(--text-dim);
-    white-space: nowrap;
-  }
-
-  .ws-status.connected {
-    color: var(--success);
-  }
-
-  .export-buttons {
-    display: flex;
-    gap: 0.5rem;
-  }
-
-  .exclude-details {
-    flex-basis: 100%;
-  }
-
-  .exclude-details summary {
-    cursor: pointer;
-    font-size: 0.8rem;
-    color: var(--text-muted);
-    user-select: none;
-  }
-
-  .exclude-details summary:hover {
-    color: var(--text-bright);
-  }
-
-  .component-checkbox-list {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 0.3rem;
-    max-height: 120px;
-    overflow-y: auto;
-    padding: 0.4rem;
-    margin-top: 0.4rem;
+    padding: 0 0.6rem;
     background-color: var(--surface-2);
     border: 1px solid var(--surface-3);
-    border-radius: var(--radius);
+    color: var(--text-bright);
+    cursor: pointer;
+    white-space: nowrap;
+    transition:
+      background-color 0.15s,
+      border-color 0.15s,
+      color 0.15s;
   }
 
-  .component-checkbox {
+  .control:hover {
+    background-color: var(--border);
+  }
+
+  select.control {
+    min-width: 130px;
+  }
+
+  .control.ghost {
+    background-color: transparent;
+    border-color: transparent;
+    color: var(--text-muted);
+  }
+
+  .control.ghost:hover {
+    background-color: var(--surface-2);
+    color: var(--text-bright);
+  }
+
+  /* Search — the primary control, grows to fill the row */
+  .search-box {
+    flex: 1 1 240px;
+    min-width: 180px;
     display: flex;
     align-items: center;
-    gap: 0.3rem;
-    font-size: 0.75rem;
-    color: var(--text-muted);
-    cursor: pointer;
-    padding: 0.2rem 0.4rem;
-    background-color: var(--bg);
-    border: 1px solid var(--border);
-    border-radius: var(--radius);
-    white-space: nowrap;
+    gap: 0.45rem;
+    padding: 0 0.55rem;
+    background-color: var(--surface-2);
+    border: 1px solid var(--surface-3);
+    transition: border-color 0.15s;
   }
 
-  .component-checkbox:hover {
-    background-color: var(--surface-2);
+  .search-box:focus-within {
     border-color: var(--border-2);
   }
 
-  .component-checkbox input[type='checkbox'] {
-    cursor: pointer;
+  .search-box .icon {
+    color: var(--text-dim);
+    flex-shrink: 0;
   }
 
-  .component-checkbox input[type='checkbox']:checked + span {
-    color: var(--danger);
-    font-weight: 500;
+  .search-box input {
+    flex: 1;
+    min-width: 0;
+    background: none;
+    border: none;
+    outline: none;
+    color: var(--text-bright);
+    font-size: 0.8rem;
+  }
+
+  .search-box input::placeholder {
+    color: var(--text-dim);
+  }
+
+  .clear-search {
+    background: none;
+    border: none;
+    color: var(--text-dim);
+    cursor: pointer;
+    font-size: 1.1rem;
+    line-height: 1;
+    padding: 0 0.1rem;
+  }
+
+  .clear-search:hover {
+    color: var(--text-bright);
+  }
+
+  /* Level toggles — a connected segmented control, no loud color blocks */
+  .levels {
+    display: inline-flex;
+    border: 1px solid var(--surface-3);
+    overflow: hidden;
+  }
+
+  .level {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+    padding: 0 0.6rem;
+    background-color: var(--surface-2);
+    border: none;
+    border-right: 1px solid var(--surface-3);
+    color: var(--text-dim);
+    font-size: 0.75rem;
+    cursor: pointer;
+    opacity: 0.55;
+    transition:
+      opacity 0.15s,
+      background-color 0.15s,
+      color 0.15s;
+  }
+
+  .level:last-child {
+    border-right: none;
+  }
+
+  .level:hover {
+    background-color: var(--border);
+  }
+
+  .level.on {
+    opacity: 1;
+    color: var(--text-bright);
+    background-color: var(--surface-3);
+  }
+
+  .level .dot {
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+    background-color: var(--text-dim);
+    flex-shrink: 0;
+  }
+
+  .level.on.error .dot {
+    background-color: var(--danger);
+  }
+
+  .level.on.warn .dot {
+    background-color: var(--warning);
+  }
+
+  .level.on.info .dot {
+    background-color: var(--success);
+  }
+
+  .level.on.debug .dot {
+    background-color: var(--text-muted);
+  }
+
+  /* Right cluster: live status + actions, pushed to the end */
+  .toolbar-right {
+    display: flex;
+    align-items: center;
+    gap: 0.35rem;
+    margin-left: auto;
+  }
+
+  .status {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+    padding: 0 0.5rem;
+    color: var(--text-dim);
+    white-space: nowrap;
+  }
+
+  .status .dot {
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+    background-color: var(--text-dim);
+  }
+
+  .status.live {
+    color: var(--success);
+  }
+
+  .status.live .dot {
+    background-color: var(--success);
+    box-shadow: 0 0 6px var(--success);
   }
 
   .logs-container {
@@ -822,9 +752,7 @@
     color: var(--text);
   }
 
-  .loading,
-  .error,
-  .empty {
+  .state-msg {
     padding: 2rem;
     text-align: center;
   }
@@ -833,7 +761,7 @@
     color: var(--text-dim);
   }
 
-  .error {
+  .state-error {
     color: var(--danger);
   }
 
@@ -846,36 +774,30 @@
       padding: 0.75rem;
     }
 
-    .filters {
-      flex-direction: column;
-      align-items: stretch;
-      gap: 0.75rem;
+    .search-box {
+      flex-basis: 100%;
+      min-height: 40px;
     }
 
-    .filter-group {
-      flex-direction: column;
-      align-items: stretch;
+    .control,
+    .levels,
+    .status {
+      min-height: 40px;
+      height: auto;
     }
 
-    .filter-group select,
-    .filter-group input[type='text'] {
-      width: 100%;
-      min-height: 44px;
+    select.control {
+      flex: 1 1 auto;
     }
 
-    .filter-group button {
-      min-height: 44px;
-    }
-
-    .filter-actions {
+    .toolbar-right {
       margin-left: 0;
       width: 100%;
       flex-wrap: wrap;
     }
 
-    .filter-actions button {
+    .toolbar-right .control {
       flex: 1;
-      min-height: 44px;
     }
 
     .logs-container {

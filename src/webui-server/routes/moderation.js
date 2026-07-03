@@ -5,6 +5,7 @@ import { deleteFromR2, extractR2KeyFromUrl } from '../../utils/r2-storage.js';
 import {
   getUserR2Media,
   getUserR2MediaCount,
+  getR2UserStats,
   deleteProcessedUrl,
   deleteUserR2Media,
   getProcessedUrl,
@@ -12,6 +13,20 @@ import {
 
 const logger = createLogger('webui');
 const router = express.Router();
+
+// Per-user R2 storage stats (file count + total bytes), largest first
+router.get('/api/moderation/r2-users', async (req, res) => {
+  try {
+    const users = await getR2UserStats();
+    res.json({ users });
+  } catch (error) {
+    logger.error('Failed to fetch R2 user stats:', error);
+    res.status(500).json({
+      error: 'failed to fetch r2 user stats',
+      message: error.message,
+    });
+  }
+});
 
 // Get R2 media files for a user
 router.get('/api/moderation/users/:userId/r2-media', async (req, res) => {

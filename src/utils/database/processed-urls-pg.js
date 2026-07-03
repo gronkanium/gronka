@@ -302,6 +302,43 @@ export async function getUserR2MediaCount(userId, fileType = null) {
 }
 
 /**
+ * Get per-user R2 storage stats (file count + total bytes), largest first
+ * @returns {Promise<Array>} Rows of { user_id, username, file_count, total_size }
+ */
+export async function getR2UserStats() {
+  await ensurePostgresInitialized();
+
+  const sql = getPostgresConnection();
+  if (!sql) {
+    console.error('PostgreSQL not initialized.');
+    return [];
+  }
+
+  const publicDomain = r2Config.publicDomain;
+  const r2UrlPrefix = `https://${publicDomain}/`;
+
+  const rows = await sql`
+    SELECT
+      p.user_id,
+      COALESCE(u.username, p.user_id) AS username,
+      COUNT(*) AS file_count,
+      COALESCE(SUM(p.file_size), 0) AS total_size
+    FROM processed_urls p
+    LEFT JOIN users u ON u.user_id = p.user_id
+    WHERE p.user_id IS NOT NULL AND p.file_url LIKE ${`${r2UrlPrefix}%`}
+    GROUP BY p.user_id, u.username
+    ORDER BY total_size DESC
+  `;
+
+  return rows.map(row => ({
+    user_id: row.user_id,
+    username: row.username,
+    file_count: parseInt(row.file_count, 10),
+    total_size: parseInt(row.total_size, 10),
+  }));
+}
+
+/**
  * Delete a processed URL record by url_hash
  * @param {string} urlHash - URL hash (primary key)
  * @returns {Promise<boolean>} True if record was deleted, false if not found

@@ -9,6 +9,7 @@ import {
   getTableDefinitions,
   getIndexDefinitions,
   addFileSizeColumnIfNeeded,
+  ensureTemporaryUploadsCascadeDelete,
 } from './schema-pg.js';
 
 /**
@@ -95,6 +96,9 @@ export async function initPostgresDatabase() {
 
       // Add file_size column if needed (for migration compatibility)
       await addFileSizeColumnIfNeeded(connection);
+
+      // Ensure old databases pick up ON DELETE CASCADE on temporary_uploads (for migration)
+      await ensureTemporaryUploadsCascadeDelete(connection);
 
       // Reset SERIAL sequences to match existing data (fixes duplicate key errors after migration)
       await resetSerialSequences(connection);

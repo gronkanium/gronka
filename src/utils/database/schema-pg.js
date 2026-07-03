@@ -121,7 +121,7 @@ export function getTableDefinitions() {
           deleted_at BIGINT,
           deletion_failed INTEGER DEFAULT 0,
           deletion_error TEXT,
-          FOREIGN KEY (url_hash) REFERENCES processed_urls(url_hash),
+          FOREIGN KEY (url_hash) REFERENCES processed_urls(url_hash) ON DELETE CASCADE,
           UNIQUE(url_hash, r2_key)
         );
       `,
@@ -268,5 +268,33 @@ export async function addFileSizeColumnIfNeeded(sql) {
   const exists = await columnExists(sql, 'processed_urls', 'file_size');
   if (!exists) {
     await sql`ALTER TABLE processed_urls ADD COLUMN file_size BIGINT`;
+  }
+}
+
+/**
+ * Ensure temporary_uploads.url_hash foreign key cascades on delete (for migration).
+ * Without this, deleting a processed_urls row that still has a temporary_uploads
+ * reference fails with a foreign key violation - the R2 file gets deleted but the
+ * DB row is left behind.
+ * @param {postgres.Sql} sql - PostgreSQL connection
+ * @returns {Promise<void>}
+ */
+export async function ensureTemporaryUploadsCascadeDelete(sql) {
+  const result = await sql`
+    SELECT confdeltype
+    FROM pg_constraint
+    WHERE conname = 'temporary_uploads_url_hash_fkey'
+  `;
+  // confdeltype 'c' means ON DELETE CASCADE already applied
+  if (result.length > 0 && result[0].confdeltype !== 'c') {
+    await sql`
+      ALTER TABLE temporary_uploads
+      DROP CONSTRAINT temporary_uploads_url_hash_fkey
+    `;
+    await sql`
+      ALTER TABLE temporary_uploads
+      ADD CONSTRAINT temporary_uploads_url_hash_fkey
+      FOREIGN KEY (url_hash) REFERENCES processed_urls(url_hash) ON DELETE CASCADE
+    `;
   }
 }

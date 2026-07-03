@@ -11,9 +11,6 @@ and this project adheres (attempts) to [Semantic Versioning](https://semver.org/
 
 - Live Discord smoke test (real upload, cannot be faked in CI):
   normal download, multi-image tweet (picker path), video→gif convert, Tenor optimize, deleted tweet.
-- Revisit the `undici`/discord.js transitive vuln once discord.js bumps its `undici` pin upstream (see 0.15.5 note).
-- Redeploy `main` — the running container image predates commit `49c2956` (dead-subsystem
-  removal, gifsicle bundled into the app image).
 
 ## [0.15.6] - 2026-07-02
 

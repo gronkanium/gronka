@@ -496,7 +496,7 @@ async function wipePostgresDatabase() {
 
     if (dryRun) {
       console.log('  [DRY RUN] would connect and drop all tables');
-      return { wiped: true, reason: 'dry run', tablesDropped: 8, dryRun: true };
+      return { wiped: true, reason: 'dry run', tablesDropped: 7, dryRun: true };
     }
 
     // Connect to PostgreSQL
@@ -512,7 +512,6 @@ async function wipePostgresDatabase() {
     const tables = [
       'temporary_uploads',
       'alerts',
-      'system_metrics',
       'operation_logs',
       'user_metrics',
       'processed_urls',

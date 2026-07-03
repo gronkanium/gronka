@@ -53,9 +53,8 @@ TODO.md
 # Documentation
 docs/
 
-# Build assets (generated files)
-src/public/assets/
-src/public/index.html
+# Build assets (generated files) — entire dir is vite's build output now
+src/public/
 
 # Jekyll build artifacts
 .bundle/

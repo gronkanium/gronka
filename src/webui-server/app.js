@@ -9,6 +9,7 @@ import operationsRoutes, { setSseClients } from './routes/operations.js';
 import usersRoutes from './routes/users.js';
 import logsRoutes from './routes/logs.js';
 import moderationRoutes from './routes/moderation.js';
+import bansRoutes from './routes/bans.js';
 import alertsRoutes from './routes/alerts.js';
 import settingsRoutes from './routes/settings.js';
 import botStatusRoutes from './routes/bot-status.js';
@@ -63,6 +64,7 @@ export function createApp(sseClients) {
   app.use(usersRoutes);
   app.use(logsRoutes);
   app.use(moderationRoutes);
+  app.use(bansRoutes);
   app.use(alertsRoutes);
   app.use(settingsRoutes);
   app.use(botStatusRoutes);

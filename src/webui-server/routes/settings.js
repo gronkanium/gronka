@@ -26,6 +26,11 @@ const KNOWN_SETTINGS = {
     description: 'ntfy server hostname (use your own if self-hosting ntfy)',
     pattern: /^[A-Za-z0-9.-]{1,253}$/,
   },
+  moderation_enabled: {
+    type: 'boolean',
+    default: 'false',
+    description: 'Enforce user bans (blocks every command for banned users when on)',
+  },
 };
 
 // Get all bot settings (known settings filled with defaults)

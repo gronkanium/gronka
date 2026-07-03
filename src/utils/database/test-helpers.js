@@ -92,7 +92,8 @@ export async function truncateAllTables() {
         operation_logs,
         user_metrics,
         alerts,
-        temporary_uploads
+        temporary_uploads,
+        banned_users
       CASCADE
     `;
   } catch (error) {
@@ -120,6 +121,7 @@ export async function clearAllData() {
     await sql`DELETE FROM user_metrics`;
     await sql`DELETE FROM alerts`;
     await sql`DELETE FROM temporary_uploads`;
+    await sql`DELETE FROM banned_users`;
   } catch (error) {
     console.warn('Warning: Failed to clear data:', error.message);
   }

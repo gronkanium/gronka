@@ -126,6 +126,17 @@ export function getTableDefinitions() {
         );
       `,
     },
+    {
+      name: 'banned_users',
+      sql: `
+        CREATE TABLE IF NOT EXISTS banned_users (
+          user_id TEXT PRIMARY KEY,
+          reason TEXT NOT NULL,
+          banned_at BIGINT NOT NULL,
+          appeal_allowed BOOLEAN NOT NULL DEFAULT true
+        );
+      `,
+    },
   ];
 }
 

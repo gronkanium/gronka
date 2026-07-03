@@ -18,6 +18,7 @@ import { r2Config } from './utils/config.js';
 import { startCleanupJob, stopCleanupJob } from './utils/r2-cleanup.js';
 import { initDatabase } from './utils/database.js';
 import { get24HourStats } from './utils/database/stats.js';
+import { replyIfBanned } from './utils/ban-check.js';
 
 // Initialize logger
 const logger = createLogger('bot');
@@ -306,6 +307,10 @@ client.on(Events.InteractionCreate, async interaction => {
     trackUser(interaction.user.id, username).catch(error => {
       logger.debug(`Failed to track user ${interaction.user.id}: ${error.message}`);
     });
+
+    if (await replyIfBanned(interaction)) {
+      return;
+    }
 
     if (interaction.isModalSubmit()) {
       await handleModalSubmit(interaction, modalAttachmentCache);

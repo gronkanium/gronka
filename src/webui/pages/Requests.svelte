@@ -1,7 +1,7 @@
 <script>
   import { onMount } from 'svelte';
-  import { ChevronDown, ChevronRight, Search } from 'lucide-svelte';
-  import { navigate } from '../utils/router.js';
+  import { ChevronDown, ChevronRight } from 'lucide-svelte';
+  import { operations as wsOperations } from '../stores/websocket-store.js';
   import ResponsiveFilterPanel from '../components/ResponsiveFilterPanel.svelte';
   import ResponsiveSearchBar from '../components/ResponsiveSearchBar.svelte';
 
@@ -9,15 +9,16 @@
   let error = null;
   let loading = true;
   let expandedRequests = new Set();
-  
+
   // Search
   let searchOperationId = '';
-  
+
   // Filters
   let selectedStatuses = new Set(['pending', 'running', 'success', 'error']);
   let selectedTypes = new Set(['convert', 'download', 'optimize', 'info']);
   let searchUserId = '';
   let searchUsername = '';
+  let urlPattern = '';
   let failedOnly = false;
   let earlyFailureOnly = false;
   let dateFrom = '';
@@ -27,22 +28,99 @@
   let minFileSize = '';
   let maxFileSize = '';
   let filtersOpen = true;
-  
+
+  // Sorting
+  let sort = 'newest';
+
   // Pagination
   let limit = 50;
   let offset = 0;
   let total = 0;
+
+  // Trace cache for expanded rows
+  let traces = new Map();
+  let traceLoading = new Set();
+
+  // Debounced fetching for free-text/numeric inputs (avoids one query per keystroke)
+  let debounceTimer = null;
+  function debouncedFetch() {
+    clearTimeout(debounceTimer);
+    debounceTimer = setTimeout(() => {
+      offset = 0;
+      fetchRequests();
+    }, 300);
+  }
+
+  function applyFilters() {
+    offset = 0;
+    fetchRequests();
+  }
+
+  const ALL_STATUSES = ['pending', 'running', 'success', 'error'];
+  const ALL_TYPES = ['convert', 'download', 'optimize', 'info'];
+
+  // Filter state lives in the hash query string so reloads and back/forward
+  // keep the search. replaceState avoids triggering the hash router.
+  function readStateFromUrl() {
+    const hash = window.location.hash.slice(1) || '/';
+    const queryString = hash.split('?')[1];
+    if (!queryString) return;
+    const q = new URLSearchParams(queryString);
+
+    searchOperationId = q.get('operationId') || '';
+    if (q.get('status')) selectedStatuses = new Set(q.get('status').split(','));
+    if (q.get('type')) selectedTypes = new Set(q.get('type').split(','));
+    searchUserId = q.get('userId') || '';
+    searchUsername = q.get('username') || '';
+    urlPattern = q.get('url') || '';
+    failedOnly = q.get('failedOnly') === 'true';
+    earlyFailureOnly = q.get('earlyFailureOnly') === 'true';
+    dateFrom = q.get('dateFrom') || '';
+    dateTo = q.get('dateTo') || '';
+    minDuration = q.get('minDuration') || '';
+    maxDuration = q.get('maxDuration') || '';
+    minFileSize = q.get('minFileSize') || '';
+    maxFileSize = q.get('maxFileSize') || '';
+    sort = q.get('sort') || 'newest';
+    offset = parseInt(q.get('offset'), 10) || 0;
+  }
+
+  function writeStateToUrl() {
+    const q = new URLSearchParams();
+    if (searchOperationId) q.set('operationId', searchOperationId);
+    if (selectedStatuses.size > 0 && selectedStatuses.size < ALL_STATUSES.length) {
+      q.set('status', Array.from(selectedStatuses).join(','));
+    }
+    if (selectedTypes.size > 0 && selectedTypes.size < ALL_TYPES.length) {
+      q.set('type', Array.from(selectedTypes).join(','));
+    }
+    if (searchUserId) q.set('userId', searchUserId);
+    if (searchUsername) q.set('username', searchUsername);
+    if (urlPattern) q.set('url', urlPattern);
+    if (failedOnly) q.set('failedOnly', 'true');
+    if (earlyFailureOnly) q.set('earlyFailureOnly', 'true');
+    if (dateFrom) q.set('dateFrom', dateFrom);
+    if (dateTo) q.set('dateTo', dateTo);
+    if (minDuration) q.set('minDuration', minDuration);
+    if (maxDuration) q.set('maxDuration', maxDuration);
+    if (minFileSize) q.set('minFileSize', minFileSize);
+    if (maxFileSize) q.set('maxFileSize', maxFileSize);
+    if (sort !== 'newest') q.set('sort', sort);
+    if (offset > 0) q.set('offset', String(offset));
+    const qs = q.toString();
+    history.replaceState(null, '', qs ? `#/requests?${qs}` : '#/requests');
+  }
 
   function formatTimestamp(timestamp) {
     if (!timestamp) return 'N/A';
     const date = new Date(timestamp);
     const now = new Date();
     const diff = now - date;
-    
+
     if (diff < 0) {
       return 'just now';
     }
-    
+
     const seconds = Math.floor(diff / 1000);
     const minutes = Math.floor(seconds / 60);
     const hours = Math.floor(minutes / 60);
@@ -61,8 +139,30 @@
       expandedRequests.delete(requestId);
     } else {
       expandedRequests.add(requestId);
+      loadTrace(requestId);
     }
     expandedRequests = new Set(expandedRequests);
+  }
+
+  async function loadTrace(requestId) {
+    if (traces.has(requestId) || traceLoading.has(requestId)) return;
+    traceLoading.add(requestId);
+    traceLoading = new Set(traceLoading);
+    try {
+      const response = await fetch(`/api/operations/${requestId}/trace`);
+      if (response.ok) {
+        const data = await response.json();
+        traces.set(requestId, data.trace || null);
+      } else {
+        traces.set(requestId, null);
+      }
+    } catch (err) {
+      console.error('Failed to load trace:', err);
+      traces.set(requestId, null);
+    }
+    traces = new Map(traces);
+    traceLoading.delete(requestId);
+    traceLoading = new Set(traceLoading);
   }
 
   function getErrorTypeLabel(errorType) {
@@ -90,73 +190,84 @@
     return url.substring(0, maxLength - 3) + '...';
   }
 
-  async function fetchRequests() {
-    loading = true;
+  async function fetchRequests(background = false) {
+    if (!background) {
+      loading = true;
+    }
     error = null;
-    
+    writeStateToUrl();
+
     try {
       const params = new URLSearchParams({
         limit: limit.toString(),
         offset: offset.toString(),
       });
-      
+
       if (searchOperationId) {
         params.append('operationId', searchOperationId);
       }
-      
-      if (selectedStatuses.size > 0 && selectedStatuses.size < 4) {
+
+      if (selectedStatuses.size > 0 && selectedStatuses.size < ALL_STATUSES.length) {
         Array.from(selectedStatuses).forEach(s => params.append('status', s));
       }
-      
-      if (selectedTypes.size > 0 && selectedTypes.size < 4) {
+
+      if (selectedTypes.size > 0 && selectedTypes.size < ALL_TYPES.length) {
         Array.from(selectedTypes).forEach(t => params.append('type', t));
       }
-      
+
       if (searchUserId) {
         params.append('userId', searchUserId);
       }
-      
+
       if (searchUsername) {
         params.append('username', searchUsername);
       }
-      
+
+      if (urlPattern) {
+        params.append('urlPattern', urlPattern);
+      }
+
       if (failedOnly) {
         params.append('failedOnly', 'true');
       }
-      
+
       if (earlyFailureOnly) {
         params.append('earlyFailureOnly', 'true');
       }
-      
+
       if (dateFrom) {
         params.append('dateFrom', new Date(dateFrom).getTime().toString());
       }
-      
+
       if (dateTo) {
         params.append('dateTo', new Date(dateTo).getTime().toString());
       }
-      
+
       if (minDuration) {
         params.append('minDuration', minDuration);
       }
-      
+
       if (maxDuration) {
         params.append('maxDuration', maxDuration);
       }
-      
+
       if (minFileSize) {
         params.append('minFileSize', minFileSize);
       }
-      
+
       if (maxFileSize) {
         params.append('maxFileSize', maxFileSize);
       }
-      
+
+      if (sort !== 'newest') {
+        params.append('sort', sort);
+      }
+
       const response = await fetch(`/api/requests?${params.toString()}`);
       if (!response.ok) {
         throw new Error(`Failed to fetch requests: ${response.statusText}`);
       }
-      
+
       const data = await response.json();
       requests = data.requests || [];
       total = data.total || 0;
@@ -189,8 +300,7 @@
       selectedStatuses.add(status);
     }
     selectedStatuses = new Set(selectedStatuses);
-    offset = 0;
-    fetchRequests();
+    applyFilters();
   }
 
   function toggleType(type) {
@@ -200,16 +310,16 @@
       selectedTypes.add(type);
     }
     selectedTypes = new Set(selectedTypes);
-    offset = 0;
-    fetchRequests();
+    applyFilters();
   }
 
   function clearFilters() {
     searchOperationId = '';
-    selectedStatuses = new Set(['pending', 'running', 'success', 'error']);
-    selectedTypes = new Set(['convert', 'download', 'optimize', 'info']);
+    selectedStatuses = new Set(ALL_STATUSES);
+    selectedTypes = new Set(ALL_TYPES);
     searchUserId = '';
     searchUsername = '';
+    urlPattern = '';
     failedOnly = false;
     earlyFailureOnly = false;
     dateFrom = '';
@@ -218,30 +328,55 @@
     maxDuration = '';
     minFileSize = '';
     maxFileSize = '';
-    offset = 0;
-    fetchRequests();
+    sort = 'newest';
+    applyFilters();
   }
 
   onMount(() => {
+    readStateFromUrl();
     fetchRequests();
+
+    // Live refresh: when the websocket pushes new operations while viewing the
+    // first page, silently refetch (throttled) so the list stays current.
+    let skippedInitial = false;
+    let liveRefreshTimer = null;
+    const unsubscribe = wsOperations.subscribe(() => {
+      if (!skippedInitial) {
+        skippedInitial = true;
+        return;
+      }
+      if (offset !== 0 || liveRefreshTimer) return;
+      liveRefreshTimer = setTimeout(() => {
+        liveRefreshTimer = null;
+        fetchRequests(true);
+      }, 2000);
+    });
+
+    return () => {
+      unsubscribe();
+      clearTimeout(liveRefreshTimer);
+      clearTimeout(debounceTimer);
+    };
   });
 </script>
 
 <section class="requests">
   <div class="header-row">
     <h2>all user requests</h2>
-    <button class="advanced-search-btn" on:click={() => navigate('operations-debug')}>
-      <Search size={16} />
-      <span>advanced search</span>
-    </button>
   </div>
 
   <div class="search-section">
     <ResponsiveSearchBar
       placeholder="search by operation ID..."
       bind:value={searchOperationId}
-      onSearch={() => { offset = 0; fetchRequests(); }}
+      onSearch={applyFilters}
     />
+    <select class="sort-select" bind:value={sort} on:change={applyFilters}>
+      <option value="newest">newest first</option>
+      <option value="oldest">oldest first</option>
+      <option value="slowest">slowest first</option>
+      <option value="fastest">fastest first</option>
+    </select>
   </div>
 
   <ResponsiveFilterPanel
@@ -251,13 +386,13 @@
     <div class="filters-header-actions">
       <button class="clear-btn" on:click={clearFilters}>clear all</button>
     </div>
-      
+
     <div class="filters-grid">
       <div class="filter-group">
         <!-- svelte-ignore a11y-label-has-associated-control -->
         <label>status</label>
         <div class="checkbox-group">
-          {#each ['pending', 'running', 'success', 'error'] as status}
+          {#each ALL_STATUSES as status}
             <label class="checkbox-label">
               <input
                 type="checkbox"
@@ -274,7 +409,7 @@
         <!-- svelte-ignore a11y-label-has-associated-control -->
         <label>type</label>
         <div class="checkbox-group">
-          {#each ['convert', 'download', 'optimize', 'info'] as type}
+          {#each ALL_TYPES as type}
             <label class="checkbox-label">
               <input
                 type="checkbox"
@@ -289,12 +424,23 @@
 
       <div class="filter-group">
         <!-- svelte-ignore a11y-label-has-associated-control -->
+        <label>url contains</label>
+        <input
+          type="text"
+          placeholder="filter by URL..."
+          bind:value={urlPattern}
+          on:input={debouncedFetch}
+        />
+      </div>
+
+      <div class="filter-group">
+        <!-- svelte-ignore a11y-label-has-associated-control -->
         <label>user id</label>
         <input
           type="text"
           placeholder="filter by user ID..."
           bind:value={searchUserId}
-          on:input={() => { offset = 0; fetchRequests(); }}
+          on:input={debouncedFetch}
         />
       </div>
 
@@ -305,7 +451,7 @@
           type="text"
           placeholder="filter by username..."
           bind:value={searchUsername}
-          on:input={() => { offset = 0; fetchRequests(); }}
+          on:input={debouncedFetch}
         />
       </div>
 
@@ -314,7 +460,7 @@
           <input
             type="checkbox"
             bind:checked={failedOnly}
-            on:change={() => { offset = 0; fetchRequests(); }}
+            on:change={applyFilters}
           />
           <span>failed operations only</span>
         </label>
@@ -325,7 +471,7 @@
           <input
             type="checkbox"
             bind:checked={earlyFailureOnly}
-            on:change={() => { offset = 0; fetchRequests(); }}
+            on:change={applyFilters}
           />
           <span>early failures only</span>
         </label>
@@ -337,7 +483,7 @@
         <input
           type="date"
           bind:value={dateFrom}
-          on:change={() => { offset = 0; fetchRequests(); }}
+          on:change={applyFilters}
         />
       </div>
 
@@ -347,7 +493,7 @@
         <input
           type="date"
           bind:value={dateTo}
-          on:change={() => { offset = 0; fetchRequests(); }}
+          on:change={applyFilters}
         />
       </div>
 
@@ -358,7 +504,7 @@
           type="number"
           placeholder="min duration..."
           bind:value={minDuration}
-          on:input={() => { offset = 0; fetchRequests(); }}
+          on:input={debouncedFetch}
         />
       </div>
 
@@ -369,7 +515,7 @@
           type="number"
           placeholder="max duration..."
           bind:value={maxDuration}
-          on:input={() => { offset = 0; fetchRequests(); }}
+          on:input={debouncedFetch}
         />
       </div>
 
@@ -380,7 +526,7 @@
           type="number"
           placeholder="min file size..."
           bind:value={minFileSize}
-          on:input={() => { offset = 0; fetchRequests(); }}
+          on:input={debouncedFetch}
         />
       </div>
 
@@ -391,7 +537,7 @@
           type="number"
           placeholder="max file size..."
           bind:value={maxFileSize}
-          on:input={() => { offset = 0; fetchRequests(); }}
+          on:input={debouncedFetch}
         />
       </div>
     </div>
@@ -554,6 +700,28 @@
                         </div>
                       </div>
                     {/if}
+
+                    <div class="details-section">
+                      <h4>full trace</h4>
+                      {#if traceLoading.has(request.id)}
+                        <p class="trace-empty">loading trace...</p>
+                      {:else if traces.get(request.id)?.logs?.length}
+                        <div class="trace-timeline">
+                          {#each traces.get(request.id).logs as log}
+                            <div class="trace-entry" class:error={log.status === 'error'}>
+                              <span class="trace-time">{new Date(log.timestamp).toLocaleTimeString()}</span>
+                              <span class="trace-step">{log.step}</span>
+                              <span class="trace-status status-{log.status}">{log.status}</span>
+                              {#if log.message}
+                                <span class="trace-message">{log.message}</span>
+                              {/if}
+                            </div>
+                          {/each}
+                        </div>
+                      {:else}
+                        <p class="trace-empty">no trace data available</p>
+                      {/if}
+                    </div>
                   </div>
                 </td>
               </tr>
@@ -608,28 +776,22 @@
     color: var(--text-bright);
   }
 
-  .advanced-search-btn {
-    display: flex;
-    align-items: center;
-    gap: 0.5rem;
-    padding: 0.5rem 1rem;
-    background-color: var(--surface-3);
-    color: var(--text-bright);
-    border: 1px solid var(--border-2);
-    border-radius: var(--radius);
-    cursor: pointer;
-    font-size: 0.85rem;
-    transition: background-color 0.2s;
-  }
-
-  .advanced-search-btn:hover {
-    background-color: var(--border-2);
-  }
-
   .search-section {
     display: flex;
     gap: 0.5rem;
     margin-bottom: 1rem;
+    align-items: center;
+  }
+
+  .sort-select {
+    padding: 0.5rem;
+    background-color: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    color: var(--text-bright);
+    font-size: 0.85rem;
+    cursor: pointer;
+    flex-shrink: 0;
   }
 
   .filters-header-actions {
@@ -1032,6 +1194,58 @@
     font-family: monospace;
   }
 
+  .trace-timeline {
+    display: flex;
+    flex-direction: column;
+    gap: 0.25rem;
+    max-height: 320px;
+    overflow-y: auto;
+  }
+
+  .trace-entry {
+    display: flex;
+    align-items: baseline;
+    gap: 0.75rem;
+    padding: 0.4rem 0.6rem;
+    background-color: var(--bg);
+    border-radius: var(--radius);
+    font-size: 0.8rem;
+  }
+
+  .trace-entry.error {
+    border-left: 2px solid var(--danger);
+  }
+
+  .trace-time {
+    color: var(--text-dim);
+    font-family: monospace;
+    flex-shrink: 0;
+  }
+
+  .trace-step {
+    color: var(--text-bright);
+    font-family: monospace;
+    flex-shrink: 0;
+  }
+
+  .trace-status {
+    text-transform: uppercase;
+    font-size: 0.7rem;
+    font-weight: 600;
+    flex-shrink: 0;
+  }
+
+  .trace-message {
+    color: var(--text-muted);
+    word-break: break-word;
+  }
+
+  .trace-empty {
+    color: var(--text-dim);
+    font-size: 0.85rem;
+    margin: 0;
+  }
+
   .pagination {
     display: flex;
     justify-content: space-between;
@@ -1074,28 +1288,31 @@
     section {
       padding: 0.75rem;
     }
-    
+
     .header-row {
       flex-direction: column;
       align-items: flex-start;
       gap: 0.5rem;
     }
-    
+
     .header-row h2 {
       font-size: 1rem;
     }
-    
-    .advanced-search-btn {
-      width: 100%;
-      justify-content: center;
+
+    .search-section {
+      flex-direction: column;
+      align-items: stretch;
+    }
+
+    .sort-select {
       min-height: 44px;
     }
-    
+
     .table-container {
       overflow-x: auto;
       -webkit-overflow-scrolling: touch;
     }
-    
+
     table {
       font-size: 0.8rem;
       min-width: 800px;
@@ -1106,33 +1323,33 @@
       padding: 0.5rem 0.25rem;
       font-size: 0.75rem;
     }
-    
+
     .status-cell {
       width: 50px;
     }
-    
+
     .expand-cell {
       width: 35px;
     }
-    
+
     .expand-btn {
       min-width: 44px;
       min-height: 44px;
     }
-    
+
     .operation-details {
       padding: 1rem;
       gap: 1rem;
     }
-    
+
     .details-section {
       padding: 0.75rem;
     }
-    
+
     .details-section h4 {
       font-size: 0.85rem;
     }
-    
+
     .info-grid {
       grid-template-columns: 1fr;
       gap: 0.5rem;
@@ -1143,17 +1360,17 @@
       align-items: flex-start;
       gap: 0.5rem;
     }
-    
+
     .pagination {
       flex-direction: column;
       gap: 0.75rem;
       align-items: stretch;
     }
-    
+
     .pagination-controls {
       width: 100%;
     }
-    
+
     .pagination-controls button {
       flex: 1;
       min-height: 44px;

@@ -202,112 +202,11 @@ export async function getOperationTrace(operationId) {
 }
 
 /**
- * Get failed operations by user with context
- * @param {string} userId - User ID
- * @param {number} [limit] - Maximum number of results
- * @returns {Promise<Array>} Array of failed operation traces
- */
-export async function getFailedOperationsByUser(userId, limit = 50) {
-  await ensurePostgresInitialized();
-
-  const sql = getPostgresConnection();
-  if (!sql) {
-    console.error('PostgreSQL not initialized. Call initPostgresDatabase() first.');
-    return [];
-  }
-
-  // Get all operation IDs that have error status
-  const errorOperationIds = await sql`
-    SELECT DISTINCT operation_id
-    FROM operation_logs
-    WHERE status = 'error'
-    ORDER BY timestamp DESC
-    LIMIT ${limit}
-  `;
-
-  // Get traces for each operation and filter by user
-  const traces = [];
-  for (const row of errorOperationIds) {
-    const trace = await getOperationTrace(row.operation_id);
-    if (trace && trace.context.userId === userId) {
-      traces.push(trace);
-    }
-  }
-
-  return traces;
-}
-
-/**
- * Search operations by URL pattern
- * @param {string} urlPattern - URL pattern to search for (SQL LIKE pattern)
- * @param {number} [limit] - Maximum number of results
- * @returns {Promise<Array>} Array of operation traces matching the URL pattern
- */
-export async function searchOperationsByUrl(urlPattern, limit = 50) {
-  await ensurePostgresInitialized();
-
-  const sql = getPostgresConnection();
-  if (!sql) {
-    console.error('PostgreSQL not initialized. Call initPostgresDatabase() first.');
-    return [];
-  }
-
-  // Get all operation logs that have metadata containing the URL pattern
-  const matchingOperationIds = await sql`
-    SELECT DISTINCT operation_id
-    FROM operation_logs
-    WHERE metadata LIKE ${`%${urlPattern}%`}
-    ORDER BY timestamp DESC
-    LIMIT ${limit}
-  `;
-
-  // Get traces and filter by actual URL match in context
-  const traces = [];
-  for (const row of matchingOperationIds) {
-    const trace = await getOperationTrace(row.operation_id);
-    if (trace) {
-      const url = trace.context.originalUrl;
-      if (url && url.includes(urlPattern)) {
-        traces.push(trace);
-      }
-    }
-  }
-
-  return traces;
-}
-
-/**
- * Get recent operations reconstructed from database logs
- * @param {number} [limit=100] - Maximum number of operations to return
+ * Reconstruct full operation objects (webui format) from a list of operation IDs
+ * @param {Array<string>} operationIds - Operation IDs to reconstruct
  * @returns {Promise<Array>} Array of operation objects in webui format
  */
-export async function getRecentOperations(limit = 100) {
-  await ensurePostgresInitialized();
-
-  const sql = getPostgresConnection();
-  if (!sql) {
-    console.error('PostgreSQL not initialized. Call initPostgresDatabase() first.');
-    return [];
-  }
-
-  // Check cache first (only for default limit of 100)
-  if (limit === 100) {
-    const cached = getCachedRecentOperations();
-    if (cached) {
-      return cached;
-    }
-  }
-
-  // Get distinct operation IDs ordered by most recent timestamp
-  const operationIdsResult = await sql`
-    SELECT DISTINCT operation_id, MAX(timestamp) as latest_timestamp
-    FROM operation_logs
-    GROUP BY operation_id
-    ORDER BY latest_timestamp DESC
-    LIMIT ${limit}
-  `;
-  const operationIds = operationIdsResult.map(row => row.operation_id);
-
+async function reconstructOperationsByIds(operationIds) {
   // Reconstruct each operation from its logs
   const reconstructedOperations = [];
   for (const operationId of operationIds) {
@@ -490,12 +389,203 @@ export async function getRecentOperations(limit = 100) {
     }
   });
 
+  return convertedOperations;
+}
+
+/**
+ * Get recent operations reconstructed from database logs
+ * @param {number} [limit=100] - Maximum number of operations to return
+ * @returns {Promise<Array>} Array of operation objects in webui format
+ */
+export async function getRecentOperations(limit = 100) {
+  await ensurePostgresInitialized();
+
+  const sql = getPostgresConnection();
+  if (!sql) {
+    console.error('PostgreSQL not initialized. Call initPostgresDatabase() first.');
+    return [];
+  }
+
+  // Check cache first (only for default limit of 100)
+  if (limit === 100) {
+    const cached = getCachedRecentOperations();
+    if (cached) {
+      return cached;
+    }
+  }
+
+  // Get distinct operation IDs ordered by most recent timestamp
+  const operationIdsResult = await sql`
+    SELECT DISTINCT operation_id, MAX(timestamp) as latest_timestamp
+    FROM operation_logs
+    GROUP BY operation_id
+    ORDER BY latest_timestamp DESC
+    LIMIT ${limit}
+  `;
+  const operationIds = operationIdsResult.map(row => row.operation_id);
+
+  const convertedOperations = await reconstructOperationsByIds(operationIds);
+
   // Cache result if using default limit
   if (limit === 100) {
     setCachedRecentOperations(convertedOperations);
   }
 
   return convertedOperations;
+}
+
+/**
+ * Search operations with SQL-level filtering across the full history (not just
+ * the most recent N operations), so filters reliably find older matches.
+ * Filters map onto the 'created' log's metadata (userId, username, operationType,
+ * earlyFailure, timestamp) and the latest 'status_update' log (status, duration).
+ * @param {Object} filters - Filter criteria
+ * @param {string} [filters.operationId]
+ * @param {string} [filters.userId]
+ * @param {string} [filters.username] - Substring match, case-insensitive
+ * @param {string} [filters.urlPattern] - Substring match on originalUrl, case-insensitive
+ * @param {Array<string>} [filters.types] - Operation types to include
+ * @param {Array<string>} [filters.statuses] - Statuses to include
+ * @param {boolean} [filters.failedOnly]
+ * @param {boolean} [filters.earlyFailureOnly]
+ * @param {number} [filters.dateFrom] - Unix ms timestamp
+ * @param {number} [filters.dateTo] - Unix ms timestamp
+ * @param {number} [filters.minDuration] - Milliseconds
+ * @param {number} [filters.maxDuration] - Milliseconds
+ * @param {number} [filters.minFileSize] - Bytes
+ * @param {number} [filters.maxFileSize] - Bytes
+ * @param {Object} [pagination]
+ * @param {number} [pagination.limit=50]
+ * @param {number} [pagination.offset=0]
+ * @param {string} [pagination.sort='newest'] - newest | oldest | slowest | fastest
+ * @returns {Promise<{operations: Array, total: number}>}
+ */
+export async function searchOperations(filters = {}, { limit = 50, offset = 0, sort } = {}) {
+  await ensurePostgresInitialized();
+
+  const sql = getPostgresConnection();
+  if (!sql) {
+    console.error('PostgreSQL not initialized. Call initPostgresDatabase() first.');
+    return { operations: [], total: 0 };
+  }
+
+  const conditions = [];
+  const params = [];
+  const p = value => {
+    params.push(value);
+    return `$${params.length}`;
+  };
+
+  if (filters.operationId) {
+    conditions.push(`c.operation_id = ${p(filters.operationId)}`);
+  }
+  if (filters.userId) {
+    conditions.push(`(c.metadata::jsonb ->> 'userId') = ${p(filters.userId)}`);
+  }
+  if (filters.username) {
+    conditions.push(`(c.metadata::jsonb ->> 'username') ILIKE ${p(`%${filters.username}%`)}`);
+  }
+  if (filters.urlPattern) {
+    conditions.push(`(c.metadata::jsonb ->> 'originalUrl') ILIKE ${p(`%${filters.urlPattern}%`)}`);
+  }
+  if (filters.types && filters.types.length > 0) {
+    conditions.push(`(c.metadata::jsonb ->> 'operationType') = ANY(${p(filters.types)}::text[])`);
+  }
+  if (filters.statuses && filters.statuses.length > 0) {
+    conditions.push(`COALESCE(ls.status, 'pending') = ANY(${p(filters.statuses)}::text[])`);
+  }
+  if (filters.failedOnly) {
+    conditions.push(`COALESCE(ls.status, 'pending') = 'error'`);
+  }
+  if (filters.earlyFailureOnly) {
+    conditions.push(`(c.metadata::jsonb ->> 'earlyFailure') = 'true'`);
+  }
+  if (filters.dateFrom) {
+    conditions.push(`c.created_at >= ${p(filters.dateFrom)}`);
+  }
+  if (filters.dateTo) {
+    conditions.push(`c.created_at <= ${p(filters.dateTo)}`);
+  }
+  if (filters.minDuration) {
+    conditions.push(
+      `ls.status_at IS NOT NULL AND (ls.status_at - c.created_at) >= ${p(filters.minDuration)}`
+    );
+  }
+  if (filters.maxDuration) {
+    conditions.push(
+      `ls.status_at IS NOT NULL AND (ls.status_at - c.created_at) <= ${p(filters.maxDuration)}`
+    );
+  }
+  if (filters.minFileSize) {
+    conditions.push(`EXISTS (
+      SELECT 1 FROM operation_logs su
+      WHERE su.operation_id = c.operation_id AND su.step = 'status_update'
+        AND (su.metadata::jsonb ->> 'fileSize') IS NOT NULL
+        AND (su.metadata::jsonb ->> 'fileSize')::bigint >= ${p(filters.minFileSize)}
+    )`);
+  }
+  if (filters.maxFileSize) {
+    conditions.push(`EXISTS (
+      SELECT 1 FROM operation_logs su
+      WHERE su.operation_id = c.operation_id AND su.step = 'status_update'
+        AND (su.metadata::jsonb ->> 'fileSize') IS NOT NULL
+        AND (su.metadata::jsonb ->> 'fileSize')::bigint <= ${p(filters.maxFileSize)}
+    )`);
+  }
+
+  const whereClause = conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : '';
+
+  const cte = `
+    WITH created AS (
+      SELECT operation_id, timestamp AS created_at, metadata
+      FROM operation_logs
+      WHERE step = 'created'
+    ),
+    latest_status AS (
+      SELECT DISTINCT ON (operation_id) operation_id, status, timestamp AS status_at
+      FROM operation_logs
+      WHERE step = 'status_update'
+      ORDER BY operation_id, timestamp DESC
+    )
+  `;
+
+  const countQuery = `
+    ${cte}
+    SELECT COUNT(*) AS total
+    FROM created c
+    LEFT JOIN latest_status ls ON ls.operation_id = c.operation_id
+    ${whereClause}
+  `;
+  const countResult = await sql.unsafe(countQuery, params);
+  const total = parseInt(countResult[0]?.total ?? 0, 10);
+
+  // Whitelisted ORDER BY variants; duration sorts push never-finished operations last
+  const orderByClauses = {
+    newest: 'c.created_at DESC',
+    oldest: 'c.created_at ASC',
+    slowest: '(ls.status_at - c.created_at) DESC NULLS LAST',
+    fastest: '(ls.status_at - c.created_at) ASC NULLS LAST',
+  };
+  const orderBy = orderByClauses[sort] || orderByClauses.newest;
+
+  const idsQuery = `
+    ${cte}
+    SELECT c.operation_id
+    FROM created c
+    LEFT JOIN latest_status ls ON ls.operation_id = c.operation_id
+    ${whereClause}
+    ORDER BY ${orderBy}
+    LIMIT ${p(limit)} OFFSET ${p(offset)}
+  `;
+  const idsResult = await sql.unsafe(idsQuery, params);
+  const operationIds = idsResult.map(row => row.operation_id);
+
+  const reconstructed = await reconstructOperationsByIds(operationIds);
+  // Preserve SQL ORDER BY (reconstruction doesn't guarantee input order)
+  const orderIndex = new Map(operationIds.map((id, i) => [id, i]));
+  reconstructed.sort((a, b) => orderIndex.get(a.id) - orderIndex.get(b.id));
+
+  return { operations: reconstructed, total };
 }
 
 /**

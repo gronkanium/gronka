@@ -8,9 +8,4 @@ import './webui-server/index.js';
 
 // Re-export broadcast functions for external use
 // These are the same functions that were exported from the monolithic version
-export {
-  broadcastLog,
-  broadcastSystemMetrics,
-  broadcastAlert,
-  broadcastUserMetrics,
-} from './webui-server/index.js';
+export { broadcastLog, broadcastAlert, broadcastUserMetrics } from './webui-server/index.js';

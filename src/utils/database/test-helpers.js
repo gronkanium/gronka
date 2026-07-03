@@ -91,7 +91,6 @@ export async function truncateAllTables() {
         processed_urls,
         operation_logs,
         user_metrics,
-        system_metrics,
         alerts,
         temporary_uploads
       CASCADE
@@ -119,7 +118,6 @@ export async function clearAllData() {
     await sql`DELETE FROM processed_urls`;
     await sql`DELETE FROM users`;
     await sql`DELETE FROM user_metrics`;
-    await sql`DELETE FROM system_metrics`;
     await sql`DELETE FROM alerts`;
     await sql`DELETE FROM temporary_uploads`;
   } catch (error) {

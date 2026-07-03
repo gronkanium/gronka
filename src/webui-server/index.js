@@ -4,14 +4,12 @@ import { webuiConfig } from '../utils/config.js';
 import { ConfigurationError } from '../utils/errors.js';
 import { getPostgresConfig } from '../utils/database/connection.js';
 import { initDatabase, getRecentOperations } from '../utils/database.js';
-import { startMetricsCollection, stopMetricsCollection } from '../utils/system-metrics.js';
 import {
   setBroadcastCallback,
   setUserMetricsBroadcastCallback,
 } from '../utils/operations-tracker.js';
 import { setLogBroadcastCallback } from '../utils/logger.js';
 import { setBroadcastCallback as setAlertBroadcastCallback } from '../utils/ntfy-notifier.js';
-import { setBroadcastCallback as setSystemMetricsBroadcastCallback } from '../utils/system-metrics.js';
 import { createApp } from './app.js';
 import {
   createWebSocketServer,
@@ -23,7 +21,6 @@ import { setupWebSocketHandlers, pingClients } from './websocket/handlers.js';
 import {
   broadcastOperation,
   broadcastLog,
-  broadcastSystemMetrics,
   broadcastAlert,
   broadcastUserMetrics,
 } from './websocket/broadcast.js';
@@ -60,9 +57,6 @@ const broadcastOperationWrapper = operation => {
 };
 const broadcastLogWrapper = logEntry => {
   broadcastLog(clients, logEntry);
-};
-const broadcastSystemMetricsWrapper = metrics => {
-  broadcastSystemMetrics(clients, metrics);
 };
 const broadcastAlertWrapper = alert => {
   broadcastAlert(clients, alert);
@@ -142,9 +136,6 @@ const broadcastUserMetricsWrapper = (userId, metrics) => {
   // Set the log broadcast callback
   setLogBroadcastCallback(broadcastLogWrapper);
 
-  // Set the system metrics broadcast callback
-  setSystemMetricsBroadcastCallback(broadcastSystemMetricsWrapper);
-
   // Set the alert broadcast callback
   setAlertBroadcastCallback(broadcastAlertWrapper);
 
@@ -157,10 +148,6 @@ const broadcastUserMetricsWrapper = (userId, metrics) => {
     logger.info(`dashboard: http://${WEBUI_HOST}:${WEBUI_PORT}`);
     logger.info(`websocket: ws://${WEBUI_HOST}:${WEBUI_PORT}/api/ws`);
 
-    // Start system metrics collection (every 60 seconds)
-    startMetricsCollection(60000);
-    logger.info('started system metrics collection');
-
     // Start ping/pong heartbeat (every 30 seconds)
     startPingInterval(() => pingClients(clients));
   });
@@ -169,8 +156,6 @@ const broadcastUserMetricsWrapper = (userId, metrics) => {
 // Handle graceful shutdown
 function gracefulShutdown() {
   logger.info('Shutdown signal received, shutting down gracefully...');
-  // Stop metrics collection
-  stopMetricsCollection();
   // Stop ping interval
   stopPingInterval();
   // Close WebSocket server
@@ -193,6 +178,5 @@ process.on('SIGINT', gracefulShutdown);
 
 // Export broadcast functions for external use
 export { broadcastLogWrapper as broadcastLog };
-export { broadcastSystemMetricsWrapper as broadcastSystemMetrics };
 export { broadcastAlertWrapper as broadcastAlert };
 export { broadcastUserMetricsWrapper as broadcastUserMetrics };

@@ -121,6 +121,23 @@ export async function getAlerts(options = {}) {
 }
 
 /**
+ * Get distinct alert components
+ * @returns {Promise<Array<string>>} Sorted list of component names
+ */
+export async function getAlertComponents() {
+  await ensurePostgresInitialized();
+
+  const sql = getPostgresConnection();
+  if (!sql) {
+    console.error('PostgreSQL not initialized. Call initPostgresDatabase() first.');
+    return [];
+  }
+
+  const rows = await sql`SELECT DISTINCT component FROM alerts ORDER BY component`;
+  return rows.map(row => row.component);
+}
+
+/**
  * Get count of alerts matching filters
  * @param {Object} options - Query options (same as getAlerts)
  * @returns {Promise<number>} Total count

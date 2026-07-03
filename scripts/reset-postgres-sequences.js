@@ -37,7 +37,6 @@ async function resetSerialSequences(pgSql) {
   const tablesWithSerial = [
     { table: 'logs', sequence: 'logs_id_seq', column: 'id' },
     { table: 'operation_logs', sequence: 'operation_logs_id_seq', column: 'id' },
-    { table: 'system_metrics', sequence: 'system_metrics_id_seq', column: 'id' },
     { table: 'alerts', sequence: 'alerts_id_seq', column: 'id' },
     { table: 'temporary_uploads', sequence: 'temporary_uploads_id_seq', column: 'id' },
   ];

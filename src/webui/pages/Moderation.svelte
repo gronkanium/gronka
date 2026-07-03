@@ -1,47 +1,67 @@
 <script>
   import { onMount } from 'svelte';
+  import { formatTimestamp, formatRelativeTime, formatBytes } from '../utils/format.js';
+  import Pagination from '../components/Pagination.svelte';
 
-  let users = [];
-  let usersTotal = 0;
+  let r2Users = [];
   let usersLoading = false;
-  let usersLimit = 50;
-  let usersOffset = 0;
+  let usersError = null;
+  let userSearch = '';
+
   let selectedUserId = null;
   let selectedUser = null;
+
   let media = [];
   let total = 0;
   let loading = false;
   let error = null;
   let deleting = false;
 
-  let searchQuery = '';
   let fileTypeFilter = '';
   let limit = 25;
   let offset = 0;
   let selectedFiles = new Set();
 
-  async function fetchUsers() {
+  // Armed destructive actions: null | 'bulk' | url_hash of a single file
+  let armed = null;
+  // Delete-all-for-user requires typing the username
+  let deleteAllOpen = false;
+  let deleteAllInput = '';
+
+  // Transient status line ({ kind: 'success' | 'error', text })
+  let status = null;
+  let statusTimeout = null;
+
+  function showStatus(kind, text) {
+    status = { kind, text };
+    clearTimeout(statusTimeout);
+    statusTimeout = setTimeout(() => {
+      status = null;
+    }, 6000);
+  }
+
+  async function fetchR2Users() {
     usersLoading = true;
+    usersError = null;
     try {
-      const params = new URLSearchParams({
-        limit: usersLimit.toString(),
-        offset: usersOffset.toString(),
-      });
-
-      if (searchQuery) params.append('search', searchQuery);
-
-      const response = await fetch(`/api/users?${params}`);
-      if (!response.ok) throw new Error('failed to fetch users');
-
+      const response = await fetch('/api/moderation/r2-users');
+      if (!response.ok) throw new Error('failed to fetch r2 users');
       const data = await response.json();
-      users = data.users || [];
-      usersTotal = data.total || 0;
+      r2Users = data.users || [];
     } catch (err) {
-      console.error('Failed to fetch users:', err);
+      usersError = err.message;
     } finally {
       usersLoading = false;
     }
   }
+
+  $: filteredUsers = userSearch
+    ? r2Users.filter(
+        u =>
+          u.username.toLowerCase().includes(userSearch.toLowerCase()) ||
+          u.user_id.includes(userSearch)
+      )
+    : r2Users;
 
   async function fetchR2Media() {
     if (!selectedUserId) {
@@ -73,62 +93,41 @@
     }
   }
 
+  function resetSelectionState() {
+    selectedFiles = new Set();
+    armed = null;
+    deleteAllOpen = false;
+    deleteAllInput = '';
+  }
+
   function handleUserSelect(userId) {
-    // Toggle: if clicking the same user, deselect them
     if (selectedUserId === userId) {
       selectedUserId = null;
       selectedUser = null;
       media = [];
       total = 0;
-      selectedFiles.clear();
+      resetSelectionState();
     } else {
       selectedUserId = userId;
-      selectedUser = users.find(u => u.user_id === userId) || null;
+      selectedUser = r2Users.find(u => u.user_id === userId) || null;
       offset = 0;
-      selectedFiles.clear();
+      resetSelectionState();
       fetchR2Media();
-    }
-  }
-
-  function handleSearch() {
-    usersOffset = 0;
-    fetchUsers();
-  }
-
-  function handleUsersPrevPage() {
-    if (usersOffset > 0) {
-      usersOffset = Math.max(0, usersOffset - usersLimit);
-      fetchUsers();
-    }
-  }
-
-  function handleUsersNextPage() {
-    if (usersOffset + usersLimit < usersTotal) {
-      usersOffset += usersLimit;
-      fetchUsers();
     }
   }
 
   function handleFileTypeFilter() {
     offset = 0;
-    selectedFiles.clear();
+    resetSelectionState();
     fetchR2Media();
   }
 
-  function handlePrevPage() {
-    if (offset > 0) {
-      offset = Math.max(0, offset - limit);
-      selectedFiles.clear();
-      fetchR2Media();
-    }
-  }
-
-  function handleNextPage() {
-    if (offset + limit < total) {
-      offset += limit;
-      selectedFiles.clear();
-      fetchR2Media();
-    }
+  function handlePage(event) {
+    offset = event.detail.offset;
+    limit = event.detail.limit;
+    selectedFiles = new Set();
+    armed = null;
+    fetchR2Media();
   }
 
   function toggleFileSelection(urlHash) {
@@ -138,21 +137,30 @@
       selectedFiles.add(urlHash);
     }
     selectedFiles = new Set(selectedFiles);
+    armed = null;
   }
 
   function toggleSelectAll() {
     if (selectedFiles.size === media.length) {
-      selectedFiles.clear();
+      selectedFiles = new Set();
     } else {
       selectedFiles = new Set(media.map(m => m.url_hash));
     }
-    selectedFiles = new Set(selectedFiles);
+    armed = null;
+  }
+
+  // Refresh both the media list and the per-user stats after any deletion
+  async function refreshAfterDelete() {
+    await Promise.all([fetchR2Media(), fetchR2Users()]);
+    selectedUser = r2Users.find(u => u.user_id === selectedUserId) || selectedUser;
   }
 
   async function deleteFile(urlHash) {
-    if (!confirm('Are you sure you want to delete this file? This action cannot be undone.')) {
+    if (armed !== urlHash) {
+      armed = urlHash;
       return;
     }
+    armed = null;
 
     deleting = true;
     try {
@@ -165,87 +173,80 @@
         throw new Error(data.message || 'failed to delete file');
       }
 
-      // Refresh the media list
-      await fetchR2Media();
+      showStatus('success', 'file deleted');
+      selectedFiles.delete(urlHash);
+      selectedFiles = new Set(selectedFiles);
+      await refreshAfterDelete();
     } catch (err) {
-      alert(`Failed to delete file: ${err.message}`);
+      showStatus('error', `failed to delete file: ${err.message}`);
     } finally {
       deleting = false;
     }
   }
 
   async function bulkDelete() {
-    if (selectedFiles.size === 0) {
-      alert('Please select at least one file to delete.');
+    if (selectedFiles.size === 0) return;
+    if (armed !== 'bulk') {
+      armed = 'bulk';
       return;
     }
-
-    if (!confirm(`Are you sure you want to delete ${selectedFiles.size} file(s)? This action cannot be undone.`)) {
-      return;
-    }
+    armed = null;
 
     deleting = true;
     try {
-      const urlHashesArray = Array.from(selectedFiles);
-      console.log('Bulk delete: sending request', { urlHashes: urlHashesArray, count: urlHashesArray.length });
-
       const response = await fetch('/api/moderation/files/bulk', {
         method: 'DELETE',
         headers: {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          urlHashes: urlHashesArray,
+          urlHashes: Array.from(selectedFiles),
         }),
       });
-
-      console.log('Bulk delete: response status', response.status, response.statusText);
 
       if (!response.ok) {
         let errorMessage = 'failed to delete files';
         try {
           const data = await response.json();
           errorMessage = data.message || data.error || errorMessage;
-          console.error('Bulk delete: error response', data);
-        } catch (parseError) {
-          const text = await response.text();
-          console.error('Bulk delete: failed to parse error response', text);
+        } catch {
           errorMessage = `HTTP ${response.status}: ${response.statusText}`;
         }
         throw new Error(errorMessage);
       }
 
       const data = await response.json();
-      console.log('Bulk delete: success response', data);
       const { results } = data;
 
       if (results && results.failed && results.failed.length > 0) {
-        alert(`Deleted ${results.success.length} file(s), but ${results.failed.length} failed.`);
+        showStatus(
+          'error',
+          `deleted ${results.success.length} file(s), but ${results.failed.length} failed`
+        );
       } else if (results && results.success) {
-        alert(`Successfully deleted ${results.success.length} file(s).`);
+        showStatus('success', `deleted ${results.success.length} file(s)`);
       }
 
-      // Refresh the media list
-      selectedFiles.clear();
-      await fetchR2Media();
+      selectedFiles = new Set();
+      await refreshAfterDelete();
     } catch (err) {
-      console.error('Bulk delete: error', err);
-      alert(`Failed to delete files: ${err.message}`);
+      showStatus('error', `failed to delete files: ${err.message}`);
     } finally {
       deleting = false;
     }
   }
 
   async function deleteAllForUser() {
-    if (!selectedUserId) {
-      return;
-    }
-
-    if (!confirm(`Are you sure you want to delete ALL R2 files for user "${selectedUser?.username || selectedUserId}"? This action cannot be undone.`)) {
+    if (!selectedUserId) return;
+    const expected = selectedUser?.username || selectedUserId;
+    if (deleteAllInput !== expected) {
+      showStatus('error', 'username does not match — nothing deleted');
       return;
     }
 
     deleting = true;
+    deleteAllOpen = false;
+    deleteAllInput = '';
     try {
       const response = await fetch(`/api/moderation/users/${selectedUserId}/r2-media`, {
         method: 'DELETE',
@@ -257,94 +258,67 @@
       }
 
       const data = await response.json();
-      alert(`Successfully deleted ${data.deleted} file(s) for user.`);
+      showStatus('success', `deleted ${data.deleted} file(s) for user`);
 
-      // Refresh the media list
-      selectedFiles.clear();
-      await fetchR2Media();
+      selectedFiles = new Set();
+      await refreshAfterDelete();
     } catch (err) {
-      alert(`Failed to delete user files: ${err.message}`);
+      showStatus('error', `failed to delete user files: ${err.message}`);
     } finally {
       deleting = false;
     }
   }
 
-  function formatBytes(bytes) {
-    if (!bytes) return '0 B';
-    const k = 1024;
-    const sizes = ['B', 'KB', 'MB', 'GB'];
-    const i = Math.floor(Math.log(bytes) / Math.log(k));
-    return `${parseFloat((bytes / Math.pow(k, i)).toFixed(2))} ${sizes[i]}`;
-  }
-
-  function formatTimestamp(timestamp) {
-    if (!timestamp) return 'N/A';
-    return new Date(timestamp).toLocaleString();
-  }
-
-  function truncateUrl(url) {
-    if (!url) return 'N/A';
-    if (url.length <= 60) return url;
-    return url.substring(0, 30) + '...' + url.substring(url.length - 27);
-  }
-
   onMount(() => {
-    fetchUsers();
+    fetchR2Users();
+    return () => clearTimeout(statusTimeout);
   });
 </script>
 
 <div class="moderation-container">
   <div class="header-section">
-    <h2>r2 moderation</h2>
     <p class="subtitle">manage and delete r2 uploads by user</p>
   </div>
+
+  {#if status}
+    <div class="status-line {status.kind}">{status.text}</div>
+  {/if}
 
   <div class="user-selector-section">
     <div class="selector-header">
       <h3>select user</h3>
       <div class="search-box">
-        <input
-          type="text"
-          bind:value={searchQuery}
-          on:keydown={e => e.key === 'Enter' && handleSearch()}
-          placeholder="search users..."
-        />
-        <button on:click={handleSearch}>search</button>
+        <input type="text" bind:value={userSearch} placeholder="filter users..." />
       </div>
     </div>
 
     {#if usersLoading}
       <div class="loading">loading users...</div>
-    {:else if users.length > 0}
+    {:else if usersError}
+      <div class="error">error: {usersError}</div>
+      <button class="retry-btn" on:click={fetchR2Users}>retry</button>
+    {:else if filteredUsers.length > 0}
       <div class="users-list">
-        {#each users as user}
+        {#each filteredUsers as user (user.user_id)}
           <button
             class="user-item"
             class:selected={selectedUserId === user.user_id}
             on:click={() => handleUserSelect(user.user_id)}
+            title={user.user_id}
           >
             <span class="username">{user.username}</span>
-            <span class="user-id">({user.user_id})</span>
+            <span class="user-stats">
+              {user.file_count} file{user.file_count === 1 ? '' : 's'} · {formatBytes(
+                user.total_size
+              )}
+            </span>
           </button>
         {/each}
       </div>
-      {#if usersTotal > usersLimit}
-        <div class="users-pagination">
-          <div class="pagination-info">
-            showing {usersOffset + 1}-{Math.min(usersOffset + usersLimit, usersTotal)} of {usersTotal}
-          </div>
-          <div class="pagination-controls">
-            <button on:click={handleUsersPrevPage} disabled={usersOffset === 0}>
-              previous
-            </button>
-            <button on:click={handleUsersNextPage} disabled={usersOffset + usersLimit >= usersTotal}>
-              next
-            </button>
-          </div>
-        </div>
-      {/if}
+    {:else if r2Users.length > 0}
+      <div class="empty">no users match "{userSearch}"</div>
     {:else}
-      <div class="empty">no users found</div>
+      <div class="empty">no users with r2 uploads</div>
     {/if}
   </div>
 
@@ -368,13 +342,46 @@
           </select>
           <button
             class="delete-all-btn"
-            on:click={deleteAllForUser}
+            on:click={() => {
+              deleteAllOpen = !deleteAllOpen;
+              deleteAllInput = '';
+            }}
             disabled={deleting || total === 0}
           >
             delete all for user
           </button>
         </div>
       </div>
+
+      {#if deleteAllOpen}
+        <div class="delete-all-confirm">
+          <span>
+            this deletes all {total} r2 file(s) for this user and cannot be undone — type
+            <strong>{selectedUser?.username || selectedUserId}</strong> to confirm:
+          </span>
+          <input
+            type="text"
+            bind:value={deleteAllInput}
+            placeholder={selectedUser?.username || selectedUserId}
+          />
+          <button
+            class="delete-btn"
+            disabled={deleting || deleteAllInput !== (selectedUser?.username || selectedUserId)}
+            on:click={deleteAllForUser}
+          >
+            confirm delete all
+          </button>
+          <button
+            class="btn-small"
+            on:click={() => {
+              deleteAllOpen = false;
+              deleteAllInput = '';
+            }}
+          >
+            cancel
+          </button>
+        </div>
+      {/if}
 
       {#if loading}
         <div class="loading">loading r2 files...</div>
@@ -391,92 +398,80 @@
               checked={selectedFiles.size === media.length && media.length > 0}
               on:change={toggleSelectAll}
             />
-            <span>select all ({selectedFiles.size} selected)</span>
+            <span>select page ({selectedFiles.size} selected)</span>
           </label>
           {#if selectedFiles.size > 0}
             <button
               class="bulk-delete-btn"
+              class:armed={armed === 'bulk'}
               on:click={bulkDelete}
               disabled={deleting}
             >
-              delete selected ({selectedFiles.size})
+              {armed === 'bulk'
+                ? `click again to delete ${selectedFiles.size} file(s)`
+                : `delete selected (${selectedFiles.size})`}
             </button>
           {/if}
         </div>
 
-        <div class="table-container">
-          <table>
-            <thead>
-              <tr>
-                <th class="checkbox-col"></th>
-                <th>file url</th>
-                <th>file type</th>
-                <th>date</th>
-                <th>size</th>
-                <th class="actions-col">actions</th>
-              </tr>
-            </thead>
-            <tbody>
-              {#each media as item}
-                <tr>
-                  <td class="checkbox-cell">
-                    <input
-                      type="checkbox"
-                      checked={selectedFiles.has(item.url_hash)}
-                      on:change={() => toggleFileSelection(item.url_hash)}
-                    />
-                  </td>
-                  <td class="url-cell">
-                    <a href={item.file_url} target="_blank" rel="noopener noreferrer" title={item.file_url}>
-                      {truncateUrl(item.file_url)}
-                    </a>
-                  </td>
-                  <td class="type-cell">{item.file_type || 'N/A'}</td>
-                  <td class="date-cell">{formatTimestamp(item.processed_at)}</td>
-                  <td class="size-cell">{item.file_size ? formatBytes(item.file_size) : 'N/A'}</td>
-                  <td class="actions-cell">
-                    <button
-                      class="delete-btn"
-                      on:click={() => deleteFile(item.url_hash)}
-                      disabled={deleting}
-                    >
-                      delete
-                    </button>
-                  </td>
-                </tr>
-              {/each}
-            </tbody>
-          </table>
+        <div class="media-grid">
+          {#each media as item (item.url_hash)}
+            <div class="media-card" class:checked={selectedFiles.has(item.url_hash)}>
+              <div class="media-preview">
+                {#if item.file_type === 'video'}
+                  <!-- svelte-ignore a11y-media-has-caption -->
+                  <video src={item.file_url} preload="metadata" controls muted playsinline
+                  ></video>
+                {:else}
+                  <a href={item.file_url} target="_blank" rel="noopener noreferrer">
+                    <img src={item.file_url} alt={item.file_type || 'media'} loading="lazy" />
+                  </a>
+                {/if}
+                <label class="card-checkbox">
+                  <input
+                    type="checkbox"
+                    checked={selectedFiles.has(item.url_hash)}
+                    on:change={() => toggleFileSelection(item.url_hash)}
+                  />
+                </label>
+              </div>
+              <div class="media-info">
+                <span class="media-type">{item.file_type || 'unknown'}</span>
+                <span class="media-size">{item.file_size ? formatBytes(item.file_size) : '—'}</span>
+                <span class="media-date" title={formatTimestamp(item.processed_at)}>
+                  {formatRelativeTime(item.processed_at)}
+                </span>
+              </div>
+              <div class="media-actions">
+                <a
+                  class="open-link"
+                  href={item.file_url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                >
+                  open
+                </a>
+                <button
+                  class="delete-btn"
+                  class:armed={armed === item.url_hash}
+                  on:click={() => deleteFile(item.url_hash)}
+                  disabled={deleting}
+                >
+                  {armed === item.url_hash ? 'confirm?' : 'delete'}
+                </button>
+              </div>
+            </div>
+          {/each}
         </div>
 
-        <div class="pagination">
-          <div class="pagination-info">
-            showing {offset + 1}-{Math.min(offset + limit, total)} of {total}
-          </div>
-          <div class="pagination-controls">
-            <select
-              bind:value={limit}
-              on:change={() => {
-                offset = 0;
-                selectedFiles.clear();
-                fetchR2Media();
-              }}
-              disabled={deleting}
-              class="page-size-select"
-            >
-              <option value="10">10 per page</option>
-              <option value="25">25 per page</option>
-              <option value="50">50 per page</option>
-              <option value="100">100 per page</option>
-            </select>
-            <button on:click={handlePrevPage} disabled={offset === 0 || deleting}>
-              previous
-            </button>
-            <button on:click={handleNextPage} disabled={offset + limit >= total || deleting}>
-              next
-            </button>
-          </div>
-        </div>
+        <Pagination
+          {offset}
+          {limit}
+          {total}
+          disabled={deleting}
+          pageSizes={[10, 25, 50, 100]}
+          on:page={handlePage}
+        />
       {/if}
     </div>
   {:else}
@@ -490,24 +485,36 @@
   .moderation-container {
     display: flex;
     flex-direction: column;
-    gap: 2rem;
+    gap: 1.5rem;
   }
 
   .header-section {
-    margin-bottom: 1rem;
-  }
-
-  .header-section h2 {
-    margin: 0 0 0.5rem 0;
-    font-size: 1.5rem;
-    font-weight: 600;
-    color: var(--text-bright);
+    margin: 0;
   }
 
   .subtitle {
     margin: 0;
     color: var(--text-muted);
     font-size: 0.9rem;
+  }
+
+  .status-line {
+    padding: 0.6rem 1rem;
+    border-radius: var(--radius);
+    font-size: 0.9rem;
+    border: 1px solid var(--border);
+  }
+
+  .status-line.success {
+    background-color: rgba(81, 207, 102, 0.1);
+    border-color: var(--success);
+    color: var(--success);
+  }
+
+  .status-line.error {
+    background-color: rgba(255, 107, 107, 0.1);
+    border-color: var(--danger);
+    color: var(--danger);
   }
 
   .user-selector-section {
@@ -531,11 +538,6 @@
     color: var(--text-bright);
   }
 
-  .search-box {
-    display: flex;
-    gap: 0.5rem;
-  }
-
   .search-box input {
     padding: 0.5rem 0.75rem;
     background-color: var(--surface-2);
@@ -546,27 +548,19 @@
     min-width: 250px;
   }
 
-  .search-box button {
-    padding: 0.5rem 1rem;
-    background-color: var(--surface-3);
-    color: var(--text-bright);
-    border: 1px solid var(--border-2);
-    cursor: pointer;
-    font-size: 0.9rem;
-    border-radius: var(--radius);
-  }
-
-  .search-box button:hover {
-    background-color: var(--border-2);
-  }
-
   .users-list {
     display: flex;
     flex-wrap: wrap;
     gap: 0.5rem;
+    max-height: 260px;
+    overflow-y: auto;
   }
 
   .user-item {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 0.15rem;
     padding: 0.5rem 1rem;
     background-color: var(--surface-2);
     border: 1px solid var(--surface-3);
@@ -592,48 +586,9 @@
     font-weight: 500;
   }
 
-  .user-item .user-id {
-    font-size: 0.85rem;
+  .user-item .user-stats {
+    font-size: 0.75rem;
     opacity: 0.7;
-    margin-left: 0.5rem;
-  }
-
-  .users-pagination {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    margin-top: 1rem;
-    padding: 0.75rem 0;
-    border-top: 1px solid var(--border);
-  }
-
-  .users-pagination .pagination-info {
-    font-size: 0.85rem;
-    color: var(--text-muted);
-  }
-
-  .users-pagination .pagination-controls {
-    display: flex;
-    gap: 0.5rem;
-  }
-
-  .users-pagination .pagination-controls button {
-    padding: 0.4rem 0.8rem;
-    font-size: 0.85rem;
-    background-color: var(--surface-3);
-    color: var(--text-bright);
-    border: 1px solid var(--border-2);
-    cursor: pointer;
-    border-radius: var(--radius);
-  }
-
-  .users-pagination .pagination-controls button:hover:not(:disabled) {
-    background-color: var(--border-2);
-  }
-
-  .users-pagination .pagination-controls button:disabled {
-    opacity: 0.5;
-    cursor: not-allowed;
   }
 
   .media-section {
@@ -690,13 +645,46 @@
     border-radius: var(--radius);
   }
 
-  .delete-all-btn:hover:not(:disabled) {
-    background-color: var(--danger);
-  }
-
   .delete-all-btn:disabled {
     opacity: 0.5;
     cursor: not-allowed;
+  }
+
+  .delete-all-confirm {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.75rem;
+    padding: 0.75rem 1rem;
+    margin-bottom: 1rem;
+    background-color: rgba(255, 107, 107, 0.08);
+    border: 1px solid var(--danger);
+    border-radius: var(--radius);
+    font-size: 0.9rem;
+    color: var(--text);
+  }
+
+  .delete-all-confirm input {
+    padding: 0.4rem 0.6rem;
+    background-color: var(--surface-2);
+    border: 1px solid var(--surface-3);
+    color: var(--text-bright);
+    font-size: 0.85rem;
+    border-radius: var(--radius);
+  }
+
+  .btn-small {
+    padding: 0.4rem 0.8rem;
+    font-size: 0.85rem;
+    background-color: var(--surface-3);
+    color: var(--text-bright);
+    border: 1px solid var(--border-2);
+    cursor: pointer;
+    border-radius: var(--radius);
+  }
+
+  .btn-small:hover {
+    background-color: var(--border-2);
   }
 
   .bulk-actions {
@@ -718,7 +706,7 @@
     font-size: 0.9rem;
   }
 
-  .select-all-label input[type="checkbox"] {
+  .select-all-label input[type='checkbox'] {
     cursor: pointer;
   }
 
@@ -732,115 +720,114 @@
     border-radius: var(--radius);
   }
 
-  .bulk-delete-btn:hover:not(:disabled) {
-    background-color: var(--danger);
-  }
-
   .bulk-delete-btn:disabled {
     opacity: 0.5;
     cursor: not-allowed;
   }
 
-  .table-container {
-    overflow-x: auto;
+  .bulk-delete-btn.armed {
+    background-color: var(--bg-deep);
+    color: var(--danger);
+  }
+
+  .media-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+    gap: 0.75rem;
     margin-bottom: 1rem;
   }
 
-  table {
+  .media-card {
+    display: flex;
+    flex-direction: column;
+    background-color: var(--surface-2);
+    border: 1px solid var(--surface-3);
+    border-radius: var(--radius);
+    overflow: hidden;
+  }
+
+  .media-card.checked {
+    border-color: var(--success);
+  }
+
+  .media-preview {
+    position: relative;
+    aspect-ratio: 1 / 1;
+    background-color: var(--bg-deep);
+  }
+
+  .media-preview img,
+  .media-preview video {
     width: 100%;
-    border-collapse: collapse;
-    font-size: 0.9rem;
+    height: 100%;
+    object-fit: contain;
+    display: block;
   }
 
-  thead {
-    background-color: var(--surface-2);
-  }
-
-  th {
-    padding: 0.75rem 1rem;
-    text-align: left;
-    font-weight: 500;
-    color: var(--text-muted);
-    border-bottom: 1px solid var(--border);
-    font-size: 0.85rem;
-    text-transform: uppercase;
-    letter-spacing: 0.5px;
-  }
-
-  .checkbox-col {
-    width: 40px;
-    text-align: center;
-  }
-
-  .actions-col {
-    width: 100px;
-    text-align: center;
-  }
-
-  tbody tr {
-    border-bottom: 1px solid var(--surface-2);
-  }
-
-  tbody tr:hover {
-    background-color: var(--surface-2);
-  }
-
-  td {
-    padding: 0.75rem 1rem;
-    color: var(--text);
-  }
-
-  .checkbox-cell {
-    text-align: center;
-  }
-
-  .checkbox-cell input[type="checkbox"] {
+  .card-checkbox {
+    position: absolute;
+    top: 0.4rem;
+    left: 0.4rem;
+    background-color: rgba(0, 0, 0, 0.6);
+    border-radius: var(--radius);
+    padding: 0.25rem;
+    display: flex;
     cursor: pointer;
   }
 
-  .url-cell {
-    max-width: 400px;
+  .card-checkbox input[type='checkbox'] {
+    cursor: pointer;
+    margin: 0;
   }
 
-  .url-cell a {
+  .media-info {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 0.4rem;
+    padding: 0.4rem 0.6rem;
+    font-size: 0.75rem;
+    color: var(--text-muted);
+  }
+
+  .media-type {
+    text-transform: capitalize;
+  }
+
+  .media-size {
+    font-family: monospace;
+  }
+
+  .media-date {
+    color: var(--text-dim);
+  }
+
+  .media-actions {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 0.4rem 0.6rem;
+    border-top: 1px solid var(--surface-3);
+  }
+
+  .open-link {
+    font-size: 0.8rem;
     color: var(--success);
     text-decoration: none;
   }
 
-  .url-cell a:hover {
+  .open-link:hover {
     text-decoration: underline;
   }
 
-  .type-cell {
-    text-transform: capitalize;
-  }
-
-  .date-cell {
-    font-size: 0.85rem;
-    color: var(--text-muted);
-  }
-
-  .size-cell {
-    font-family: monospace;
-    text-align: right;
-  }
-
-  .actions-cell {
-    text-align: center;
-  }
-
   .delete-btn {
-    padding: 0.4rem 0.8rem;
+    padding: 0.3rem 0.7rem;
     background-color: var(--danger);
     color: var(--text-bright);
     border: 1px solid var(--danger);
     cursor: pointer;
-    font-size: 0.85rem;
+    font-size: 0.8rem;
     border-radius: var(--radius);
-  }
-
-  .delete-btn:hover:not(:disabled) {
-    background-color: var(--danger);
   }
 
   .delete-btn:disabled {
@@ -848,56 +835,10 @@
     cursor: not-allowed;
   }
 
-  .pagination {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    padding: 0.75rem 0;
-  }
-
-  .pagination-info {
-    font-size: 0.85rem;
-    color: var(--text-muted);
-  }
-
-  .pagination-controls {
-    display: flex;
-    gap: 0.5rem;
-  }
-
-  .pagination-controls button {
-    padding: 0.4rem 0.8rem;
-    font-size: 0.85rem;
-    background-color: var(--surface-3);
-    color: var(--text-bright);
-    border: 1px solid var(--border-2);
-    cursor: pointer;
-    border-radius: var(--radius);
-  }
-
-  .pagination-controls button:hover:not(:disabled) {
-    background-color: var(--border-2);
-  }
-
-  .pagination-controls button:disabled {
-    opacity: 0.5;
-    cursor: not-allowed;
-  }
-
-  .page-size-select {
-    padding: 0.4rem 0.6rem;
-    font-size: 0.85rem;
-    background-color: var(--surface-2);
-    border: 1px solid var(--surface-3);
-    color: var(--text-bright);
-    border-radius: var(--radius);
-    cursor: pointer;
-    margin-right: 0.5rem;
-  }
-
-  .page-size-select:disabled {
-    opacity: 0.5;
-    cursor: not-allowed;
+  .delete-btn.armed {
+    background-color: var(--bg-deep);
+    color: var(--danger);
+    font-weight: 600;
   }
 
   .loading,
@@ -940,18 +881,21 @@
   }
 
   @media (max-width: 768px) {
-    .table-container {
-      overflow-x: auto;
-      -webkit-overflow-scrolling: touch;
-    }
-    
-    table {
-      min-width: 600px;
-    }
-    
     button {
       min-height: 44px;
     }
+
+    .selector-header {
+      flex-direction: column;
+      align-items: stretch;
+      gap: 0.75rem;
+    }
+
+    .search-box input {
+      width: 100%;
+      min-width: 0;
+    }
+
     .media-header {
       flex-direction: column;
       align-items: flex-start;
@@ -977,14 +921,8 @@
       width: 100%;
     }
 
-    table {
-      font-size: 0.8rem;
-    }
-
-    th,
-    td {
-      padding: 0.5rem 0.5rem;
+    .media-grid {
+      grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
     }
   }
 </style>
-

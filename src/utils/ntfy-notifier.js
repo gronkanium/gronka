@@ -1,6 +1,6 @@
 import { createLogger } from './logger.js';
 import { botConfig } from './config.js';
-import { insertAlert } from './database.js';
+import { insertAlert, getSetting } from './database.js';
 import { getOperation } from './operations-tracker.js';
 
 const logger = createLogger('ntfy');
@@ -77,10 +77,13 @@ export async function sendNtfyNotification(title, message, options = {}) {
     logger.error('Failed to log alert to database:', error);
   }
 
-  // Send to ntfy.sh if enabled
-  if (!botConfig.ntfyEnabled || !botConfig.ntfyTopic) {
+  // Send to ntfy if enabled (topic/server configurable live via webui, falling
+  // back to the env-configured defaults for installs that haven't set them)
+  const topic = await getSetting('ntfy_topic', botConfig.ntfyTopic);
+  if (!topic) {
     return;
   }
+  const server = await getSetting('ntfy_server', 'ntfy.sh');
 
   try {
     // Build message with format: username: command success (duration)
@@ -97,7 +100,7 @@ export async function sendNtfyNotification(title, message, options = {}) {
     // Log the notification message for debugging
     logger.debug('Sending ntfy notification:', notificationMessage);
 
-    const url = `https://ntfy.sh/${botConfig.ntfyTopic}`;
+    const url = `https://${server}/${topic}`;
     const response = await fetch(url, {
       method: 'POST',
       headers: {

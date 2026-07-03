@@ -32,9 +32,6 @@ function parseHash() {
   if (page === 'users' && segments[1]) {
     params.userId = segments[1];
     page = 'user-profile';
-  } else if (page === 'operations' && segments[1]) {
-    params.operationId = segments[1];
-    page = 'operation-detail';
   }
 
   // Parse query parameters
@@ -73,9 +70,6 @@ export function navigate(page, params = {}) {
   if (params.userId) {
     hash = `#/users/${params.userId}`;
     delete params.userId;
-  } else if (params.operationId) {
-    hash = `#/operations/${params.operationId}`;
-    delete params.operationId;
   }
 
   // Add query parameters

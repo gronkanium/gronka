@@ -22,7 +22,6 @@ export const connectionHealth = writable({
 // Data stores for different message types
 export const operations = writable([]);
 export const logs = writable([]);
-export const systemMetrics = writable(null);
 export const alerts = writable([]);
 export const userMetrics = writable(new Map()); // Map<userId, metrics>
 
@@ -215,11 +214,6 @@ function handleMessage(message) {
       });
       break;
 
-    case 'system_metrics':
-      // System metrics update
-      systemMetrics.set(message.data);
-      break;
-
     case 'alert':
       // New alert notification
       alerts.update(alertList => {
@@ -381,20 +375,6 @@ export function reconnect() {
   }
   disconnect();
   if (connectionRefs > 0 && isOnline) {
-    connect();
-  }
-}
-
-/**
- * Check connection status and reconnect if needed
- */
-export function ensureConnected() {
-  if (connectionRefs > 0 && isOnline && (!ws || ws.readyState !== WebSocket.OPEN)) {
-    if (ws && ws.readyState === WebSocket.CONNECTING) {
-      // Already connecting, wait
-      return;
-    }
-    reconnectAttempts = 0;
     connect();
   }
 }

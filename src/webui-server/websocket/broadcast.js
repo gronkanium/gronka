@@ -32,20 +32,6 @@ export function broadcastLog(clients, logEntry) {
   });
 }
 
-// Broadcast function to send system metrics updates
-export function broadcastSystemMetrics(clients, metrics) {
-  const message = JSON.stringify({ type: 'system_metrics', data: metrics });
-  clients.forEach(client => {
-    if (client.readyState === 1) {
-      try {
-        client.send(message);
-      } catch (error) {
-        logger.error('Error sending system metrics websocket message:', error);
-      }
-    }
-  });
-}
-
 // Broadcast function to send alert notifications
 export function broadcastAlert(clients, alert) {
   const message = JSON.stringify({ type: 'alert', data: alert });

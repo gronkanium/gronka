@@ -9,7 +9,6 @@ import operationsRoutes, { setWebSocketClients } from './routes/operations.js';
 import usersRoutes from './routes/users.js';
 import logsRoutes from './routes/logs.js';
 import moderationRoutes from './routes/moderation.js';
-import metricsRoutes from './routes/metrics.js';
 import alertsRoutes from './routes/alerts.js';
 import settingsRoutes from './routes/settings.js';
 
@@ -57,7 +56,6 @@ export function createApp(websocketClients) {
   app.use(usersRoutes);
   app.use(logsRoutes);
   app.use(moderationRoutes);
-  app.use(metricsRoutes);
   app.use(alertsRoutes);
   app.use(settingsRoutes);
 

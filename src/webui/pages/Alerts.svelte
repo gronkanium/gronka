@@ -1,6 +1,6 @@
 <script>
   import { onMount } from 'svelte';
-  import { alerts as wsAlerts, connected as wsConnected } from '../stores/websocket-store.js';
+  import { alerts as wsAlerts, connected as wsConnected } from '../stores/sse-store.js';
   import { navigate } from '../utils/router.js';
   import {
     formatTimestamp,
@@ -172,7 +172,7 @@
     fetchAlerts();
     fetchComponents();
 
-    // Subscribe to WebSocket alerts (connection managed by App.svelte)
+    // Subscribe to SSE alerts (connection managed by App.svelte)
     const unsubscribe = wsAlerts.subscribe(newAlerts => {
       // The store prepends new alerts; walk from the front until we hit one we know
       for (const incoming of newAlerts) {

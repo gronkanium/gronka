@@ -4,7 +4,7 @@ import { getPostgresConfig } from '../../utils/database/connection.js';
 import { getOperationTrace, searchOperations } from '../../utils/database.js';
 import { operations, storeOperation } from '../operations/storage.js';
 import { reconstructOperationFromTrace } from '../operations/reconstruction.js';
-import { broadcastOperation, broadcastUserMetrics } from '../websocket/broadcast.js';
+import { broadcastOperation, broadcastUserMetrics } from '../sse/broadcast.js';
 
 const logger = createLogger('webui');
 const router = express.Router();
@@ -12,7 +12,7 @@ const router = express.Router();
 // Need clients Set - will be passed via dependency injection
 let clients = null;
 
-export function setWebSocketClients(clientsSet) {
+export function setSseClients(clientsSet) {
   clients = clientsSet;
 }
 
@@ -48,7 +48,7 @@ router.post('/api/operations', express.json(), (req, res) => {
       return res.status(400).json({ error: 'test database detected - operations rejected' });
     }
 
-    // Broadcast the operation update to all connected websocket clients
+    // Broadcast the operation update to all connected SSE clients
     if (clients) {
       storeOperation(operation);
       broadcastOperation(clients, operation);
@@ -67,7 +67,7 @@ router.post('/api/user-metrics', express.json(), (req, res) => {
     if (!userId || !metrics) {
       return res.status(400).json({ error: 'invalid user metrics data' });
     }
-    // Broadcast the user metrics update to all connected websocket clients
+    // Broadcast the user metrics update to all connected SSE clients
     if (clients) {
       broadcastUserMetrics(clients, userId, metrics);
     }

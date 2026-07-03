@@ -1,6 +1,6 @@
 <script>
   import { onMount } from 'svelte';
-  import { logs as wsLogs, connected as wsConnected } from '../stores/websocket-store.js';
+  import { logs as wsLogs, connected as wsConnected } from '../stores/sse-store.js';
   import { formatTimestamp, formatRelativeTime, timeRangeToStartTime } from '../utils/format.js';
   import Pagination from '../components/Pagination.svelte';
 
@@ -188,7 +188,7 @@
     fetchLogs();
     fetchComponents();
 
-    // Subscribe to WebSocket logs (connection managed by App.svelte)
+    // Subscribe to SSE logs (connection managed by App.svelte)
     const unsubscribe = wsLogs.subscribe(newLogs => {
       // The store prepends new logs; walk from the front until we hit one we know
       for (const incoming of newLogs) {

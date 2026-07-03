@@ -1,10 +1,7 @@
 <script>
   import { onMount } from 'svelte';
   import { navigate } from '../utils/router.js';
-  import {
-    userMetrics as wsUserMetrics,
-    connected as wsConnected,
-  } from '../stores/websocket-store.js';
+  import { userMetrics as wsUserMetrics, connected as wsConnected } from '../stores/sse-store.js';
   import ResponsiveGrid from '../components/ResponsiveGrid.svelte';
 
   let users = [];
@@ -91,7 +88,7 @@
     return ((user.successful_commands / user.total_commands) * 100).toFixed(1);
   }
 
-  // Handle user metrics update from WebSocket
+  // Handle user metrics update from SSE
   function handleUserMetricsUpdate(userId, metrics) {
     // Find user in current list
     const userIndex = users.findIndex(u => u.user_id === userId);
@@ -161,7 +158,7 @@
     // Initial fetch
     fetchUsers();
 
-    // Subscribe to WebSocket user metrics (connection managed by App.svelte)
+    // Subscribe to SSE user metrics (connection managed by App.svelte)
     const unsubscribe = wsUserMetrics.subscribe(metricsMap => {
       // Process each updated user
       if (metricsMap && metricsMap.size > 0) {

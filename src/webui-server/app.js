@@ -5,13 +5,14 @@ import { createLogger } from '../utils/logger.js';
 import { securityHeaders } from './middleware/security.js';
 import { staticMiddleware, publicPath } from './middleware/static.js';
 import proxyRoutes from './routes/proxy.js';
-import operationsRoutes, { setWebSocketClients } from './routes/operations.js';
+import operationsRoutes, { setSseClients } from './routes/operations.js';
 import usersRoutes from './routes/users.js';
 import logsRoutes from './routes/logs.js';
 import moderationRoutes from './routes/moderation.js';
 import alertsRoutes from './routes/alerts.js';
 import settingsRoutes from './routes/settings.js';
 import botStatusRoutes from './routes/bot-status.js';
+import { handleSseConnection } from './sse/handlers.js';
 
 const logger = createLogger('webui');
 
@@ -25,7 +26,7 @@ const fileServerLimiter = rateLimit({
 });
 
 // Rate limiter for API routes - all handlers hit the database, so every request has a cost.
-// Generous limit: the dashboard gets live data over WebSocket after the initial load.
+// Generous limit: the dashboard gets live data over SSE after the initial load.
 const apiLimiter = rateLimit({
   windowMs: 60 * 1000, // 1 minute
   max: 300, // Limit each IP to 300 API requests per minute
@@ -34,7 +35,7 @@ const apiLimiter = rateLimit({
   legacyHeaders: false, // Disable the `X-RateLimit-*` headers
 });
 
-export function createApp(websocketClients) {
+export function createApp(sseClients) {
   const app = express();
 
   // Security headers middleware
@@ -51,6 +52,11 @@ export function createApp(websocketClients) {
   // Rate limit all API routes
   app.use('/api', apiLimiter);
 
+  // SSE stream - live updates for the dashboard
+  app.get('/api/events', (req, res) => {
+    handleSseConnection(req, res, sseClients);
+  });
+
   // Register routes
   app.use(proxyRoutes);
   app.use(operationsRoutes);
@@ -61,9 +67,9 @@ export function createApp(websocketClients) {
   app.use(settingsRoutes);
   app.use(botStatusRoutes);
 
-  // Set WebSocket clients in operations routes for broadcasting
-  if (websocketClients) {
-    setWebSocketClients(websocketClients);
+  // Set SSE clients in operations routes for broadcasting
+  if (sseClients) {
+    setSseClients(sseClients);
   }
 
   // SPA fallback - serve index.html for all non-API, non-asset routes

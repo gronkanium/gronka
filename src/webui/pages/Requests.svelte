@@ -1,7 +1,7 @@
 <script>
   import { onMount } from 'svelte';
   import { ChevronDown, ChevronRight } from 'lucide-svelte';
-  import { operations as wsOperations } from '../stores/websocket-store.js';
+  import { operations as wsOperations } from '../stores/sse-store.js';
   import ResponsiveFilterPanel from '../components/ResponsiveFilterPanel.svelte';
   import ResponsiveSearchBar from '../components/ResponsiveSearchBar.svelte';
 
@@ -353,7 +353,7 @@
     readStateFromUrl();
     fetchRequests();
 
-    // Live refresh: when the websocket pushes new operations while viewing the
+    // Live refresh: when the SSE stream pushes new operations while viewing the
     // first page, silently refetch (throttled) so the list stays current.
     let skippedInitial = false;
     let liveRefreshTimer = null;

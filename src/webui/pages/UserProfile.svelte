@@ -5,7 +5,7 @@
     userMetrics as wsUserMetrics,
     operations as wsOperations,
     connected as wsConnected,
-  } from '../stores/websocket-store.js';
+  } from '../stores/sse-store.js';
 
   let user = null;
   let metrics = null;
@@ -242,7 +242,7 @@
   onMount(() => {
     fetchUserProfile();
 
-    // Subscribe to WebSocket user metrics (connection managed by App.svelte)
+    // Subscribe to SSE user metrics (connection managed by App.svelte)
     const unsubscribeMetrics = wsUserMetrics.subscribe(metricsMap => {
       if (userId && metricsMap.has(userId)) {
         const updatedMetrics = metricsMap.get(userId);
@@ -252,13 +252,13 @@
       }
     });
 
-    // Subscribe to WebSocket operations (filtered by current userId)
+    // Subscribe to SSE operations (filtered by current userId)
     const unsubscribeOperations = wsOperations.subscribe(wsOps => {
       if (userId) {
         // Filter operations for this user
         const userOps = wsOps.filter(op => op.userId === userId);
         if (userOps.length > 0) {
-          // Refresh current page when new operations arrive via WebSocket
+          // Refresh current page when new operations arrive via SSE
           // This ensures pagination stays in sync with real-time updates
           fetchUserOperations();
         }

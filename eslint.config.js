@@ -61,7 +61,7 @@ export default [
         document: 'readonly',
         window: 'readonly',
         navigator: 'readonly',
-        WebSocket: 'readonly',
+        EventSource: 'readonly',
         MutationObserver: 'readonly',
         setInterval: 'readonly',
         clearInterval: 'readonly',

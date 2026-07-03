@@ -4,7 +4,7 @@ gronka now includes a built-in logging platform for viewing, searching, and moni
 
 ## features
 
-- **real-time log streaming** - logs appear instantly via websocket
+- **real-time log streaming** - logs appear instantly via server-sent events (SSE)
 - **advanced filtering** - filter by component, log level, time range
 - **full-text search** - search through log messages
 - **metrics dashboard** - view error rates, warnings, and trends
@@ -57,7 +57,7 @@ navigate through logs using the pagination controls at the bottom:
 
 ### real-time updates
 
-when auto-scroll is enabled and you're on the first page, new logs appear instantly via websocket connection. the connection status is shown in the top-right corner:
+when auto-scroll is enabled and you're on the first page, new logs appear instantly via the SSE connection. the connection status is shown in the top-right corner:
 
 - **● live** (green) - connected and receiving updates
 - **○ disconnected** (gray) - reconnecting
@@ -253,10 +253,10 @@ SKIP_DB_INIT=false
    ```
 
 3. verify webui connection:
-   - check websocket status in logs viewer (top-right)
+   - check SSE status in logs viewer (top-right)
    - check browser console for errors
 
-### websocket disconnected
+### SSE disconnected
 
 1. check webui server is running:
 
@@ -267,10 +267,8 @@ SKIP_DB_INIT=false
 2. check network connectivity:
 
    ```bash
-   # test websocket endpoint
-   curl -i -N -H "Connection: Upgrade" \
-     -H "Upgrade: websocket" \
-     http://localhost:3001/api/ws
+   # test SSE endpoint
+   curl -i -N http://localhost:3001/api/events
    ```
 
 3. check logs for errors:

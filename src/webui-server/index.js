@@ -11,27 +11,21 @@ import {
 import { setLogBroadcastCallback } from '../utils/logger.js';
 import { setBroadcastCallback as setAlertBroadcastCallback } from '../utils/ntfy-notifier.js';
 import { createApp } from './app.js';
-import {
-  createWebSocketServer,
-  startPingInterval,
-  stopPingInterval,
-  clients,
-} from './websocket/server.js';
-import { setupWebSocketHandlers, pingClients } from './websocket/handlers.js';
+import { startHeartbeatInterval, stopHeartbeatInterval, clients } from './sse/server.js';
+import { heartbeatClients } from './sse/handlers.js';
 import {
   broadcastOperation,
   broadcastLog,
   broadcastAlert,
   broadcastUserMetrics,
-} from './websocket/broadcast.js';
+} from './sse/broadcast.js';
 import { operations, MAX_OPERATIONS } from './operations/storage.js';
 import { enrichOperationUsername } from './operations/enrichment.js';
 
 const logger = createLogger('webui');
 
-// Store server and wss references for graceful shutdown
+// Store server reference for graceful shutdown
 let server = null;
-let wss = null;
 
 // Configuration from centralized config
 const { webuiPort: WEBUI_PORT, webuiHost: WEBUI_HOST } = webuiConfig;
@@ -123,13 +117,6 @@ const broadcastUserMetricsWrapper = (userId, metrics) => {
   // Create HTTP server from Express app
   server = http.createServer(app);
 
-  // Create WebSocket server
-  const wsServer = createWebSocketServer(server);
-  wss = wsServer.wss;
-
-  // Set up WebSocket handlers
-  setupWebSocketHandlers(wss, clients);
-
   // Set the broadcast callback in operations tracker (with instance port)
   setBroadcastCallback(broadcastOperationWrapper, WEBUI_PORT);
 
@@ -146,24 +133,18 @@ const broadcastUserMetricsWrapper = (userId, metrics) => {
   server.listen(WEBUI_PORT, WEBUI_HOST, () => {
     logger.info(`webui server running on http://${WEBUI_HOST}:${WEBUI_PORT}`);
     logger.info(`dashboard: http://${WEBUI_HOST}:${WEBUI_PORT}`);
-    logger.info(`websocket: ws://${WEBUI_HOST}:${WEBUI_PORT}/api/ws`);
+    logger.info(`sse stream: http://${WEBUI_HOST}:${WEBUI_PORT}/api/events`);
 
-    // Start ping/pong heartbeat (every 30 seconds)
-    startPingInterval(() => pingClients(clients));
+    // Start SSE heartbeat (every 30 seconds)
+    startHeartbeatInterval(() => heartbeatClients(clients));
   });
 })();
 
 // Handle graceful shutdown
 function gracefulShutdown() {
   logger.info('Shutdown signal received, shutting down gracefully...');
-  // Stop ping interval
-  stopPingInterval();
-  // Close WebSocket server
-  if (wss) {
-    wss.close(() => {
-      logger.info('WebSocket server closed');
-    });
-  }
+  // Stop SSE heartbeat
+  stopHeartbeatInterval();
   // Close HTTP server
   if (server) {
     server.close(() => {

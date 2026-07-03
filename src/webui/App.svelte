@@ -2,11 +2,11 @@
   import { onMount, onDestroy } from 'svelte';
   import { currentRoute, initRouter, navigate } from './utils/router.js';
   import {
-    useWebSocket,
+    useSse,
     reconnect,
     connected as wsConnected,
     connectionHealth,
-  } from './stores/websocket-store.js';
+  } from './stores/sse-store.js';
   import {
     BarChart3,
     Users as UsersIcon,
@@ -60,22 +60,22 @@
   };
 
   let sidebarOpen = true;
-  let wsCleanup = null;
+  let sseCleanup = null;
 
   onMount(() => {
     sidebarOpen = loadSidebarState();
     initRouter();
-    // Initialize websocket connection at app level to persist across page navigations
-    // (the store self-heals: onclose reconnect with backoff + stale-connection check)
-    wsCleanup = useWebSocket();
+    // Initialize SSE connection at app level to persist across page navigations
+    // (the store self-heals: onerror reconnect with backoff + stale-connection check)
+    sseCleanup = useSse();
 
     window.addEventListener('keydown', handleKeydown);
   });
 
   onDestroy(() => {
-    // Cleanup websocket when app is destroyed
-    if (wsCleanup) {
-      wsCleanup();
+    // Cleanup SSE connection when app is destroyed
+    if (sseCleanup) {
+      sseCleanup();
     }
     window.removeEventListener('keydown', handleKeydown);
   });

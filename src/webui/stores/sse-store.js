@@ -1,6 +1,6 @@
 /**
- * Shared WebSocket store for all webui components
- * Manages a single WebSocket connection and provides reactive stores for different message types
+ * Shared SSE (Server-Sent Events) store for all webui components
+ * Manages a single EventSource connection and provides reactive stores for different message types
  */
 
 import { writable } from 'svelte/store';
@@ -25,13 +25,12 @@ export const logs = writable([]);
 export const alerts = writable([]);
 export const userMetrics = writable(new Map()); // Map<userId, metrics>
 
-// Internal WebSocket instance
-let ws = null;
+// Internal EventSource instance
+let es = null;
 let reconnectTimeout = null;
 let reconnectAttempts = 0;
 const INITIAL_RECONNECT_DELAY = 1000; // 1 second
 const MAX_RECONNECT_DELAY = 30000; // 30 seconds
-// PING_INTERVAL removed - not currently used (server sends ping)
 const STALE_CONNECTION_TIMEOUT = 60000; // 60 seconds - reconnect if no messages
 
 // Connection reference counter (for multiple components using the store)
@@ -67,20 +66,22 @@ function startHealthMonitoring() {
     clearInterval(healthCheckInterval);
   }
   healthCheckInterval = setInterval(() => {
-    if (ws && ws.readyState === WebSocket.OPEN) {
+    if (es && es.readyState === EventSource.OPEN) {
       updateHealthMetrics();
     }
   }, 1000);
 
-  // Check for stale connections (no messages received)
+  // Check for stale connections (no messages received). EventSource retries
+  // transient drops on its own, but gives no signal for a connection that's
+  // silently gone dead without the browser noticing, so we force one here.
   if (staleConnectionCheckInterval) {
     clearInterval(staleConnectionCheckInterval);
   }
   staleConnectionCheckInterval = setInterval(() => {
-    if (ws && ws.readyState === WebSocket.OPEN && lastMessageTime) {
+    if (es && es.readyState === EventSource.OPEN && lastMessageTime) {
       const timeSinceLastMessage = Date.now() - lastMessageTime;
       if (timeSinceLastMessage > STALE_CONNECTION_TIMEOUT) {
-        console.warn('WebSocket connection appears stale, reconnecting...');
+        console.warn('SSE connection appears stale, reconnecting...');
         reconnectAttempts = 0;
         disconnect();
         if (connectionRefs > 0 && isOnline) {
@@ -106,26 +107,23 @@ function stopHealthMonitoring() {
 }
 
 /**
- * Connect to WebSocket server
+ * Connect to the SSE endpoint
  */
 function connect() {
-  if (ws && ws.readyState === WebSocket.OPEN) {
+  if (es && es.readyState === EventSource.OPEN) {
     return; // Already connected
   }
 
   // Don't connect if offline
   if (!isOnline) {
-    console.log('Device is offline, skipping WebSocket connection');
+    console.log('Device is offline, skipping SSE connection');
     return;
   }
 
-  const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-  const wsUrl = `${protocol}//${window.location.host}/api/ws`;
-
   try {
-    ws = new WebSocket(wsUrl);
+    es = new EventSource('/api/events');
 
-    ws.onopen = () => {
+    es.onopen = () => {
       connected.set(true);
       error.set(null);
       reconnectAttempts = 0;
@@ -134,11 +132,12 @@ function connect() {
       messageCount = 0;
       updateHealthMetrics();
       startHealthMonitoring();
-      console.log('WebSocket connected');
+      console.log('SSE connected');
     };
 
-    ws.onmessage = event => {
-      // Update last message time (any message, including pong, counts)
+    es.onmessage = event => {
+      // Update last message time (any message, including heartbeat comments
+      // which don't reach onmessage, but any real event does)
       lastMessageTime = Date.now();
       messageCount++;
       updateHealthMetrics();
@@ -147,29 +146,29 @@ function connect() {
         const message = JSON.parse(event.data);
         handleMessage(message);
       } catch (err) {
-        console.error('Error parsing websocket message:', err);
+        console.error('Error parsing SSE message:', err);
       }
     };
 
-    ws.onerror = err => {
-      console.error('WebSocket error:', err);
-      error.set('connection error');
+    es.onerror = () => {
       connected.set(false);
-    };
 
-    ws.onclose = event => {
-      connected.set(false);
-      stopHealthMonitoring();
-      connectionStartTime = null;
-      console.log(`WebSocket closed (code: ${event.code}, reason: ${event.reason || 'none'})`);
+      // EventSource enters CLOSED only when it gives up retrying (or after
+      // we call close() ourselves) — anything else is a transient drop the
+      // browser is already retrying, so only handle the terminal case here.
+      if (es && es.readyState === EventSource.CLOSED) {
+        console.error('SSE connection closed');
+        error.set('connection error');
+        stopHealthMonitoring();
+        connectionStartTime = null;
 
-      // Always attempt to reconnect if we have active references and are online
-      if (connectionRefs > 0 && isOnline) {
-        scheduleReconnect();
+        if (connectionRefs > 0 && isOnline) {
+          scheduleReconnect();
+        }
       }
     };
   } catch (err) {
-    console.error('Error creating WebSocket:', err);
+    console.error('Error creating SSE connection:', err);
     error.set('failed to connect');
     connected.set(false);
 
@@ -179,11 +178,8 @@ function connect() {
   }
 }
 
-// Note: sanitizeLogInput function removed - using inline sanitization patterns
-// that CodeQL recognizes directly for better security analysis
-
 /**
- * Handle incoming WebSocket messages
+ * Handle incoming SSE messages
  */
 function handleMessage(message) {
   switch (message.type) {
@@ -286,7 +282,7 @@ function scheduleReconnect() {
 }
 
 /**
- * Disconnect from WebSocket server
+ * Disconnect from the SSE endpoint
  */
 function disconnect() {
   if (reconnectTimeout) {
@@ -296,9 +292,9 @@ function disconnect() {
 
   stopHealthMonitoring();
 
-  if (ws) {
-    ws.close();
-    ws = null;
+  if (es) {
+    es.close();
+    es = null;
   }
 
   connected.set(false);
@@ -317,7 +313,7 @@ function handleOnline() {
   connectionHealth.update(health => ({ ...health, isOnline: true }));
 
   // If we have active references but no connection, try to connect
-  if (connectionRefs > 0 && (!ws || ws.readyState !== WebSocket.OPEN)) {
+  if (connectionRefs > 0 && (!es || es.readyState !== EventSource.OPEN)) {
     reconnectAttempts = 0;
     connect();
   }
@@ -331,10 +327,10 @@ function handleOffline() {
 }
 
 /**
- * Initialize WebSocket connection (call when component mounts)
+ * Initialize SSE connection (call when component mounts)
  * Returns a cleanup function to call when component unmounts
  */
-export function useWebSocket() {
+export function useSse() {
   connectionRefs++;
 
   if (connectionRefs === 1) {

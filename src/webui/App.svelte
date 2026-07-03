@@ -1,12 +1,10 @@
 <script>
   import { onMount, onDestroy } from 'svelte';
   import { currentRoute, initRouter, navigate } from './utils/router.js';
-  import { useWebSocket, ensureConnected, connected as wsConnected } from './stores/websocket-store.js';
-  import { BarChart3, Users as UsersIcon, Settings, FileText, Bell, ChevronLeft, ChevronRight, Shield, List, SlidersHorizontal } from 'lucide-svelte';
+  import { useWebSocket } from './stores/websocket-store.js';
+  import { BarChart3, Users as UsersIcon, FileText, Bell, ChevronLeft, ChevronRight, Shield, List, SlidersHorizontal } from 'lucide-svelte';
   import Stats from './pages/Stats.svelte';
   import Health from './pages/Health.svelte';
-  import Operations from './pages/Operations.svelte';
-  import OperationsDebug from './pages/OperationsDebug.svelte';
   import Requests from './pages/Requests.svelte';
   import Logs from './pages/Logs.svelte';
   import Users from './pages/Users.svelte';
@@ -18,24 +16,16 @@
 
   let sidebarOpen = true;
   let wsCleanup = null;
-  let connectionCheckInterval = null;
 
   onMount(() => {
     initRouter();
     // Initialize websocket connection at app level to persist across page navigations
+    // (the store self-heals: onclose reconnect with backoff + stale-connection check)
     wsCleanup = useWebSocket();
-    
-    // Periodically check connection and reconnect if needed
-    connectionCheckInterval = setInterval(() => {
-      ensureConnected();
-    }, 5000); // Check every 5 seconds
   });
 
   onDestroy(() => {
     // Cleanup websocket when app is destroyed
-    if (connectionCheckInterval) {
-      clearInterval(connectionCheckInterval);
-    }
     if (wsCleanup) {
       wsCleanup();
     }
@@ -75,12 +65,6 @@
         <button on:click={() => navigateTo('users')}>
           <span class="icon"><UsersIcon size={20} /></span>
           {#if sidebarOpen}<span class="label">users</span>{/if}
-        </button>
-      </li>
-      <li class:active={activePage === 'operations'}>
-        <button on:click={() => navigateTo('operations')}>
-          <span class="icon"><Settings size={20} /></span>
-          {#if sidebarOpen}<span class="label">operations</span>{/if}
         </button>
       </li>
       <li class:active={activePage === 'requests'}>
@@ -148,17 +132,6 @@
       </div>
       <div class="page-content">
         <UserProfile />
-      </div>
-    {:else if activePage === 'operations'}
-      <div class="page-header">
-        <h2>operations</h2>
-      </div>
-      <div class="page-content">
-        <Operations />
-      </div>
-    {:else if activePage === 'operations-debug'}
-      <div class="page-content">
-        <OperationsDebug />
       </div>
     {:else if activePage === 'requests'}
       <div class="page-header">

@@ -378,17 +378,3 @@ export function reconnect() {
     connect();
   }
 }
-
-/**
- * Check connection status and reconnect if needed
- */
-export function ensureConnected() {
-  if (connectionRefs > 0 && isOnline && (!ws || ws.readyState !== WebSocket.OPEN)) {
-    if (ws && ws.readyState === WebSocket.CONNECTING) {
-      // Already connecting, wait
-      return;
-    }
-    reconnectAttempts = 0;
-    connect();
-  }
-}

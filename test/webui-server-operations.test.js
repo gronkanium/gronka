@@ -1,11 +1,10 @@
-import { test, describe, before, after, beforeEach } from 'node:test';
+import { test, describe, before, after } from 'node:test';
 import assert from 'node:assert';
 import express from 'express';
-import { initDatabase, getOperationTrace } from '../src/utils/database.js';
+import { initDatabase, getOperationTrace, searchOperations } from '../src/utils/database.js';
 import {
   createOperation,
   updateOperationStatus,
-  getRecentOperations as getRecentOperationsFromTracker,
   flushAllOperationLogs,
 } from '../src/utils/operations-tracker.js';
 
@@ -27,9 +26,6 @@ before(async () => {
   // Create test Express app with operations endpoints
   testApp = express();
   testApp.use(express.json());
-
-  // Import the operations endpoints logic
-  const { getRecentOperations, searchOperationsByUrl } = await import('../src/utils/database.js');
 
   // Helper to reconstruct operation from trace
   function reconstructOperationFromTrace(trace) {
@@ -67,134 +63,6 @@ before(async () => {
       },
     };
   }
-
-  // Operations search endpoint
-  testApp.get('/api/operations/search', async (req, res) => {
-    try {
-      const {
-        operationId,
-        status,
-        type,
-        userId,
-        username,
-        urlPattern,
-        dateFrom,
-        dateTo,
-        minDuration,
-        maxDuration,
-        minFileSize,
-        maxFileSize,
-        failedOnly,
-        limit = 100,
-        offset = 0,
-      } = req.query;
-
-      // Start with in-memory operations from tracker
-      const { getRecentOperations: getRecentOpsFromTracker } =
-        await import('../src/utils/operations-tracker.js');
-      let allOperations = getRecentOpsFromTracker();
-
-      // Get operations from database
-      try {
-        const dbLimit = parseInt(limit, 10) + parseInt(offset, 10) + 100;
-        const dbOps = await getRecentOperations(dbLimit);
-        const existingIds = new Set(allOperations.map(op => op.id));
-        const newOps = dbOps.filter(op => !existingIds.has(op.id));
-        allOperations = [...allOperations, ...newOps];
-      } catch (_error) {
-        // Continue with in-memory operations only
-      }
-
-      // Apply filters
-      let filtered = allOperations;
-
-      if (operationId) {
-        filtered = filtered.filter(op => op.id === operationId);
-      }
-
-      if (status) {
-        const statusArray = Array.isArray(status) ? status : [status];
-        filtered = filtered.filter(op => statusArray.includes(op.status));
-      }
-
-      if (type) {
-        const typeArray = Array.isArray(type) ? type : [type];
-        filtered = filtered.filter(op => typeArray.includes(op.type));
-      }
-
-      if (userId) {
-        filtered = filtered.filter(op => op.userId === userId);
-      }
-
-      if (username) {
-        const usernameLower = username.toLowerCase();
-        filtered = filtered.filter(
-          op => op.username && op.username.toLowerCase().includes(usernameLower)
-        );
-      }
-
-      if (urlPattern) {
-        try {
-          const urlTraces = await searchOperationsByUrl(urlPattern, 1000);
-          const urlOperationIds = new Set(urlTraces.map(trace => trace.operationId));
-          filtered = filtered.filter(op => urlOperationIds.has(op.id));
-        } catch (_error) {
-          // Continue without URL filter if search fails
-        }
-      }
-
-      if (failedOnly === 'true') {
-        filtered = filtered.filter(op => op.status === 'error');
-      }
-
-      if (dateFrom) {
-        const fromTimestamp = parseInt(dateFrom, 10);
-        filtered = filtered.filter(op => op.timestamp >= fromTimestamp);
-      }
-      if (dateTo) {
-        const toTimestamp = parseInt(dateTo, 10);
-        filtered = filtered.filter(op => op.timestamp <= toTimestamp);
-      }
-
-      if (minDuration) {
-        const minDur = parseInt(minDuration, 10);
-        filtered = filtered.filter(
-          op => op.performanceMetrics?.duration && op.performanceMetrics.duration >= minDur
-        );
-      }
-      if (maxDuration) {
-        const maxDur = parseInt(maxDuration, 10);
-        filtered = filtered.filter(
-          op => op.performanceMetrics?.duration && op.performanceMetrics.duration <= maxDur
-        );
-      }
-
-      if (minFileSize) {
-        const minSize = parseInt(minFileSize, 10);
-        filtered = filtered.filter(op => op.fileSize && op.fileSize >= minSize);
-      }
-      if (maxFileSize) {
-        const maxSize = parseInt(maxFileSize, 10);
-        filtered = filtered.filter(op => op.fileSize && op.fileSize <= maxSize);
-      }
-
-      filtered.sort((a, b) => b.timestamp - a.timestamp);
-
-      const limitNum = parseInt(limit, 10);
-      const offsetNum = parseInt(offset, 10);
-      const paginated = filtered.slice(offsetNum, offsetNum + limitNum);
-
-      res.json({
-        operations: paginated,
-        total: filtered.length,
-      });
-    } catch (error) {
-      res.status(500).json({
-        error: 'failed to search operations',
-        message: error.message,
-      });
-    }
-  });
 
   // Operation details endpoint
   testApp.get('/api/operations/:operationId', async (req, res) => {
@@ -248,54 +116,6 @@ before(async () => {
     }
   });
 
-  // Error analysis endpoint
-  testApp.get('/api/operations/errors/analysis', async (req, res) => {
-    try {
-      const { getRecentOperations: getRecentOpsFromTracker } =
-        await import('../src/utils/operations-tracker.js');
-      let allOperations = getRecentOpsFromTracker();
-      try {
-        const dbOps = getRecentOperations(1000);
-        const existingIds = new Set(allOperations.map(op => op.id));
-        const newOps = dbOps.filter(op => !existingIds.has(op.id));
-        allOperations = [...allOperations, ...newOps];
-      } catch (_error) {
-        // Continue with in-memory operations only
-      }
-
-      const errorOps = allOperations.filter(op => op.status === 'error' && op.error);
-
-      const errorGroups = new Map();
-
-      errorOps.forEach(op => {
-        const errorMsg = op.error || 'unknown error';
-        const normalized = errorMsg
-          .replace(/\d+/g, 'N')
-          .replace(/[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}/gi, 'UUID')
-          .substring(0, 200);
-
-        if (!errorGroups.has(normalized)) {
-          errorGroups.set(normalized, {
-            pattern: errorMsg.substring(0, 150),
-            count: 0,
-          });
-        }
-        errorGroups.get(normalized).count++;
-      });
-
-      const groups = Array.from(errorGroups.values())
-        .sort((a, b) => b.count - a.count)
-        .slice(0, 20);
-
-      res.json({ groups });
-    } catch (error) {
-      res.status(500).json({
-        error: 'failed to analyze errors',
-        message: error.message,
-      });
-    }
-  });
-
   // Start test server
   await new Promise(resolve => {
     testServer = testApp.listen(0, () => {
@@ -316,258 +136,7 @@ after(async () => {
   // Connection will be cleaned up when Node.js exits
 });
 
-describe('operations search API', () => {
-  beforeEach(async () => {
-    // Clear operations and create test data before each test
-    // Note: operations array is scoped to the test server setup
-    // We'll create operations via the tracker and database
-  });
-
-  describe('GET /api/operations/search', () => {
-    test('returns all operations when no filters specified', async () => {
-      // Create test operations
-      const op1 = createOperation('convert', 'user1', 'User1');
-      const op2 = createOperation('download', 'user2', 'User2');
-      updateOperationStatus(op1, 'success', { fileSize: 1024 });
-      updateOperationStatus(op2, 'running');
-
-      // Flush operation logs to ensure they're written to database
-      await flushAllOperationLogs();
-
-      const response = await fetch(`http://localhost:${serverPort}/api/operations/search`);
-      const data = await response.json();
-
-      assert.strictEqual(response.status, 200);
-      assert.ok(Array.isArray(data.operations));
-      assert.ok(typeof data.total === 'number');
-    });
-
-    test('filters by operation ID', async () => {
-      const opId = createOperation('convert', 'user1', 'User1');
-
-      const response = await fetch(
-        `http://localhost:${serverPort}/api/operations/search?operationId=${opId}`
-      );
-      const data = await response.json();
-
-      assert.strictEqual(response.status, 200);
-      assert.strictEqual(data.operations.length, 1);
-      assert.strictEqual(data.operations[0].id, opId);
-    });
-
-    test('filters by status', async () => {
-      const op1 = createOperation('convert', 'user1', 'User1');
-      const op2 = createOperation('download', 'user2', 'User2');
-      updateOperationStatus(op1, 'success');
-      updateOperationStatus(op2, 'error');
-
-      // Flush operation logs to ensure they're written to database
-      await flushAllOperationLogs();
-
-      const response = await fetch(
-        `http://localhost:${serverPort}/api/operations/search?status=success`
-      );
-      const data = await response.json();
-
-      assert.strictEqual(response.status, 200);
-      data.operations.forEach(op => {
-        assert.strictEqual(op.status, 'success');
-      });
-    });
-
-    test('filters by multiple statuses', async () => {
-      const op1 = createOperation('convert', 'user1', 'User1');
-      const op2 = createOperation('download', 'user2', 'User2');
-      updateOperationStatus(op1, 'success');
-      updateOperationStatus(op2, 'error');
-
-      // Flush operation logs to ensure they're written to database
-      await flushAllOperationLogs();
-
-      const response = await fetch(
-        `http://localhost:${serverPort}/api/operations/search?status=success&status=error`
-      );
-      const data = await response.json();
-
-      assert.strictEqual(response.status, 200);
-      assert.ok(data.operations.length >= 2);
-    });
-
-    test('filters by type', async () => {
-      createOperation('convert', 'user1', 'User1');
-      createOperation('download', 'user2', 'User2');
-
-      // Flush operation logs to ensure they're written to database
-      await flushAllOperationLogs();
-
-      const response = await fetch(
-        `http://localhost:${serverPort}/api/operations/search?type=convert`
-      );
-      const data = await response.json();
-
-      assert.strictEqual(response.status, 200);
-      data.operations.forEach(op => {
-        assert.strictEqual(op.type, 'convert');
-      });
-    });
-
-    test('filters by user ID', async () => {
-      const userId = 'user123';
-      createOperation('convert', userId, 'User1');
-      createOperation('download', 'user456', 'User2');
-
-      // Flush operation logs to ensure they're written to database
-      await flushAllOperationLogs();
-
-      const response = await fetch(
-        `http://localhost:${serverPort}/api/operations/search?userId=${userId}`
-      );
-      const data = await response.json();
-
-      assert.strictEqual(response.status, 200);
-      data.operations.forEach(op => {
-        assert.strictEqual(op.userId, userId);
-      });
-    });
-
-    test('filters by username', async () => {
-      createOperation('convert', 'user1', 'TestUser');
-      createOperation('download', 'user2', 'OtherUser');
-
-      // Flush operation logs to ensure they're written to database
-      await flushAllOperationLogs();
-
-      const response = await fetch(
-        `http://localhost:${serverPort}/api/operations/search?username=TestUser`
-      );
-      const data = await response.json();
-
-      assert.strictEqual(response.status, 200);
-      data.operations.forEach(op => {
-        assert.ok(op.username && op.username.toLowerCase().includes('testuser'));
-      });
-    });
-
-    test('filters by failedOnly flag', async () => {
-      const op1 = createOperation('convert', 'user1', 'User1');
-      const op2 = createOperation('download', 'user2', 'User2');
-      updateOperationStatus(op1, 'success');
-      updateOperationStatus(op2, 'error');
-
-      // Flush operation logs to ensure they're written to database
-      await flushAllOperationLogs();
-
-      const response = await fetch(
-        `http://localhost:${serverPort}/api/operations/search?failedOnly=true`
-      );
-      const data = await response.json();
-
-      assert.strictEqual(response.status, 200);
-      data.operations.forEach(op => {
-        assert.strictEqual(op.status, 'error');
-      });
-    });
-
-    test('filters by date range', async () => {
-      const now = Date.now();
-      createOperation('convert', 'user1', 'User1');
-      // Flush operation logs to ensure they're written to database
-      await flushAllOperationLogs();
-      createOperation('download', 'user2', 'User2');
-
-      const dateFrom = now - 1000;
-      const dateTo = now + 1000;
-
-      const response = await fetch(
-        `http://localhost:${serverPort}/api/operations/search?dateFrom=${dateFrom}&dateTo=${dateTo}`
-      );
-      const data = await response.json();
-
-      assert.strictEqual(response.status, 200);
-      data.operations.forEach(op => {
-        assert.ok(op.timestamp >= dateFrom);
-        assert.ok(op.timestamp <= dateTo);
-      });
-    });
-
-    test('filters by duration range', async () => {
-      const op1 = createOperation('convert', 'user1', 'User1');
-      await new Promise(resolve => setTimeout(resolve, 50));
-      updateOperationStatus(op1, 'success');
-
-      // Flush operation logs to ensure they're written to database
-      await flushAllOperationLogs();
-
-      const op = getRecentOperationsFromTracker(1)[0];
-      const duration = op.performanceMetrics.duration;
-
-      const minDuration = duration - 100;
-      const maxDuration = duration + 100;
-
-      const response = await fetch(
-        `http://localhost:${serverPort}/api/operations/search?minDuration=${minDuration}&maxDuration=${maxDuration}`
-      );
-      const data = await response.json();
-
-      assert.strictEqual(response.status, 200);
-      // May or may not find operations depending on timing
-      assert.ok(Array.isArray(data.operations));
-    });
-
-    test('filters by file size range', async () => {
-      const op1 = createOperation('convert', 'user1', 'User1');
-      updateOperationStatus(op1, 'success', { fileSize: 1024000 });
-
-      // Flush operation logs to ensure they're written to database
-      await flushAllOperationLogs();
-
-      const response = await fetch(
-        `http://localhost:${serverPort}/api/operations/search?minFileSize=1024&maxFileSize=2048000`
-      );
-      const data = await response.json();
-
-      assert.strictEqual(response.status, 200);
-      data.operations.forEach(op => {
-        if (op.fileSize) {
-          assert.ok(op.fileSize >= 1024);
-          assert.ok(op.fileSize <= 2048000);
-        }
-      });
-    });
-
-    test('applies pagination', async () => {
-      // Create multiple operations
-      for (let i = 0; i < 5; i++) {
-        createOperation('convert', `user${i}`, `User${i}`);
-      }
-
-      // Flush operation logs to ensure they're written to database
-      await flushAllOperationLogs();
-
-      const response1 = await fetch(
-        `http://localhost:${serverPort}/api/operations/search?limit=2&offset=0`
-      );
-      const data1 = await response1.json();
-
-      const response2 = await fetch(
-        `http://localhost:${serverPort}/api/operations/search?limit=2&offset=2`
-      );
-      const data2 = await response2.json();
-
-      assert.strictEqual(response1.status, 200);
-      assert.strictEqual(response2.status, 200);
-      assert.ok(data1.operations.length <= 2);
-      assert.ok(data2.operations.length <= 2);
-    });
-
-    test('returns error on invalid request', async () => {
-      // This test verifies error handling - we'll trigger an error by causing a database issue
-      // Actually, the endpoint should handle errors gracefully
-      const response = await fetch(`http://localhost:${serverPort}/api/operations/search`);
-      assert.strictEqual(response.status, 200);
-    });
-  });
-
+describe('operations API', () => {
   describe('GET /api/operations/:operationId', () => {
     test('returns operation details', async () => {
       const opId = createOperation('convert', 'user1', 'User1');
@@ -637,76 +206,102 @@ describe('operations search API', () => {
     });
   });
 
-  describe('GET /api/operations/errors/analysis', () => {
-    test('returns error analysis', async () => {
-      const _op1 = createOperation('convert', 'user1', 'User1');
-      const _op2 = createOperation('download', 'user2', 'User2');
-      updateOperationStatus(_op1, 'error', { error: 'Test error 1' });
-      updateOperationStatus(_op2, 'error', { error: 'Test error 2' });
-
-      // Flush operation logs to ensure they're written to database
+  // Exercises the SQL search that backs GET /api/requests
+  describe('searchOperations (SQL search behind /api/requests)', () => {
+    test('finds an operation by exact operationId', async () => {
+      const opId = createOperation('convert', 'user1', 'User1');
+      updateOperationStatus(opId, 'success');
       await flushAllOperationLogs();
 
-      const response = await fetch(`http://localhost:${serverPort}/api/operations/errors/analysis`);
-      const data = await response.json();
+      const { operations, total } = await searchOperations({ operationId: opId });
 
-      assert.strictEqual(response.status, 200);
-      assert.ok(Array.isArray(data.groups));
+      assert.strictEqual(total, 1);
+      assert.strictEqual(operations.length, 1);
+      assert.strictEqual(operations[0].id, opId);
     });
 
-    test('groups errors by pattern', async () => {
-      const _op1 = createOperation('convert', 'user1', 'User1');
-      const _op2 = createOperation('download', 'user2', 'User2');
-      updateOperationStatus(_op1, 'error', { error: 'Network error' });
-      updateOperationStatus(_op2, 'error', { error: 'Network error' });
-
-      // Flush operation logs to ensure they're written to database
+    test('filters by urlPattern (case-insensitive substring on originalUrl)', async () => {
+      const marker = `urlsearch-${Date.now()}`;
+      const url = `https://example.com/${marker}/video.mp4`;
+      const opMatch = createOperation('download', 'user1', 'User1', { originalUrl: url });
+      const _opOther = createOperation('download', 'user2', 'User2', {
+        originalUrl: 'https://example.com/other.mp4',
+      });
+      updateOperationStatus(opMatch, 'success');
       await flushAllOperationLogs();
 
-      const response = await fetch(`http://localhost:${serverPort}/api/operations/errors/analysis`);
-      const data = await response.json();
+      const { operations, total } = await searchOperations({
+        urlPattern: marker.toUpperCase(),
+      });
 
-      assert.strictEqual(response.status, 200);
-      // Should group similar errors
-      assert.ok(Array.isArray(data.groups));
+      assert.strictEqual(total, 1);
+      assert.strictEqual(operations[0].id, opMatch);
     });
 
-    test('limits to top 20 error patterns', async () => {
-      // Create many different error operations
-      for (let i = 0; i < 25; i++) {
-        const op = createOperation('convert', `user${i}`, `User${i}`);
-        updateOperationStatus(op, 'error', { error: `Error ${i}` });
-      }
-
-      // Flush operation logs to ensure they're written to database
+    test('sorts oldest-first when requested', async () => {
+      const userId = `sortuser-${Date.now()}`;
+      const first = createOperation('convert', userId, 'SortUser');
+      await new Promise(resolve => setTimeout(resolve, 5));
+      const second = createOperation('convert', userId, 'SortUser');
       await flushAllOperationLogs();
 
-      const response = await fetch(`http://localhost:${serverPort}/api/operations/errors/analysis`);
-      const data = await response.json();
+      const newest = await searchOperations({ userId }, { sort: 'newest' });
+      const oldest = await searchOperations({ userId }, { sort: 'oldest' });
 
-      assert.strictEqual(response.status, 200);
-      assert.ok(data.groups.length <= 20);
+      assert.strictEqual(newest.operations[0].id, second);
+      assert.strictEqual(oldest.operations[0].id, first);
     });
 
-    test('sorts errors by count descending', async () => {
-      // Create operations with different error frequencies
+    test('sorts by duration with unfinished operations last', async () => {
+      const userId = `durationuser-${Date.now()}`;
+      const fast = createOperation('convert', userId, 'DurationUser');
+      updateOperationStatus(fast, 'success');
+      await new Promise(resolve => setTimeout(resolve, 25));
+      const slow = createOperation('convert', userId, 'DurationUser');
+      await new Promise(resolve => setTimeout(resolve, 50));
+      updateOperationStatus(slow, 'success');
+      const unfinished = createOperation('convert', userId, 'DurationUser');
+      await flushAllOperationLogs();
+
+      const { operations } = await searchOperations({ userId }, { sort: 'slowest' });
+
+      assert.strictEqual(operations.length, 3);
+      assert.strictEqual(operations[0].id, slow);
+      assert.strictEqual(operations[1].id, fast);
+      assert.strictEqual(operations[2].id, unfinished);
+    });
+
+    test('falls back to newest-first for unknown sort values', async () => {
+      const userId = `fallbackuser-${Date.now()}`;
+      const first = createOperation('convert', userId, 'FallbackUser');
+      await new Promise(resolve => setTimeout(resolve, 5));
+      const second = createOperation('convert', userId, 'FallbackUser');
+      await flushAllOperationLogs();
+
+      const { operations } = await searchOperations(
+        { userId },
+        { sort: 'DROP TABLE operation_logs' }
+      );
+
+      assert.strictEqual(operations[0].id, second);
+      assert.strictEqual(operations[1].id, first);
+    });
+
+    test('applies pagination with accurate total', async () => {
+      const userId = `pageuser-${Date.now()}`;
       for (let i = 0; i < 5; i++) {
-        const op = createOperation('convert', `user${i}`, `User${i}`);
-        updateOperationStatus(op, 'error', { error: 'Common error' });
+        createOperation('convert', userId, 'PageUser');
       }
-      const _op2 = createOperation('download', 'user5', 'User5');
-      updateOperationStatus(_op2, 'error', { error: 'Rare error' });
-
-      // Flush operation logs to ensure they're written to database
       await flushAllOperationLogs();
 
-      const response = await fetch(`http://localhost:${serverPort}/api/operations/errors/analysis`);
-      const data = await response.json();
+      const page1 = await searchOperations({ userId }, { limit: 2, offset: 0 });
+      const page2 = await searchOperations({ userId }, { limit: 2, offset: 2 });
 
-      assert.strictEqual(response.status, 200);
-      if (data.groups.length > 1) {
-        assert.ok(data.groups[0].count >= data.groups[1].count);
-      }
+      assert.strictEqual(page1.total, 5);
+      assert.strictEqual(page1.operations.length, 2);
+      assert.strictEqual(page2.operations.length, 2);
+      const ids1 = new Set(page1.operations.map(op => op.id));
+      page2.operations.forEach(op => assert.ok(!ids1.has(op.id)));
     });
   });
 });

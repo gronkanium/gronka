@@ -1,7 +1,6 @@
 import express from 'express';
 import { createLogger } from '../../utils/logger.js';
 import { getAllSettings, setSetting } from '../../utils/database.js';
-import { botConfig } from '../../utils/config.js';
 
 const logger = createLogger('webui');
 const router = express.Router();
@@ -15,7 +14,9 @@ const KNOWN_SETTINGS = {
   },
   ntfy_topic: {
     type: 'string',
-    default: botConfig.ntfyTopic || '',
+    // Read directly from env rather than botConfig: botConfig bundles in DISCORD_TOKEN
+    // validation, which webui-only dev/test runs shouldn't need just for this default.
+    default: process.env.NTFY_TOPIC || '',
     description: 'ntfy.sh topic to push command/alert notifications to (blank disables ntfy)',
     pattern: /^[A-Za-z0-9_-]{0,64}$/,
   },

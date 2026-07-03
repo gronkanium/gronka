@@ -4,10 +4,16 @@ import { getStorageStats } from '../../utils/storage.js';
 
 const logger = createLogger('webui');
 
-// Stats cache TTL - use bot config value (default 5 minutes) but cap at 30 seconds for webui refresh interval
-const STATS_CACHE_TTL = Math.min(botConfig.statsCacheTtl || 300000, 30 * 1000);
-// Health cache to reduce load on calculation
-const HEALTH_CACHE_TTL = STATS_CACHE_TTL; // Match stats cache TTL
+// Stats/health cache TTL - use bot config value (default 5 minutes) but cap at 30 seconds
+// for webui refresh interval. Deferred to first use: botConfig requires DISCORD_TOKEN,
+// and a top-level read here would force that requirement onto webui-only dev/test runs.
+let cacheTtl = null;
+function getCacheTtl() {
+  if (cacheTtl === null) {
+    cacheTtl = Math.min(botConfig.statsCacheTtl || 300000, 30 * 1000);
+  }
+  return cacheTtl;
+}
 
 let statsCache = null;
 let statsCacheTimestamp = 0;
@@ -18,7 +24,7 @@ export async function getStats() {
   try {
     // Check cache first
     const now = Date.now();
-    if (statsCache && now - statsCacheTimestamp < STATS_CACHE_TTL) {
+    if (statsCache && now - statsCacheTimestamp < getCacheTtl()) {
       logger.debug('Returning cached stats');
       return statsCache;
     }
@@ -82,7 +88,7 @@ export async function getHealth() {
   try {
     // Check cache first
     const now = Date.now();
-    if (healthCache && now - healthCacheTimestamp < HEALTH_CACHE_TTL) {
+    if (healthCache && now - healthCacheTimestamp < getCacheTtl()) {
       logger.debug('Returning cached health');
       return healthCache;
     }

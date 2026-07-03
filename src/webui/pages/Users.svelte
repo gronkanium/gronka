@@ -253,7 +253,7 @@
     {#if loading && users.length === 0}
       <div class="loading">loading users...</div>
     {:else if error}
-      <div class="error">error: {error}</div>
+      <div class="state-error">error: {error}</div>
       <button on:click={fetchUsers}>retry</button>
     {:else if users.length === 0}
       <div class="empty">no users found</div>
@@ -615,7 +615,7 @@
   }
 
   .loading,
-  .error,
+  .state-error,
   .empty {
     padding: 2rem;
     text-align: center;
@@ -625,7 +625,7 @@
     color: var(--text-dim);
   }
 
-  .error {
+  .state-error {
     color: var(--danger);
   }
 

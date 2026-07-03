@@ -30,7 +30,7 @@
   {#if loading && !stats}
     <div class="loading">loading...</div>
   {:else if error}
-    <div class="error">error: {error}</div>
+    <div class="state-error">error: {error}</div>
     <button on:click={loadStats}>retry</button>
   {:else if stats}
     <dl>
@@ -114,7 +114,7 @@
     padding: 1rem 0;
   }
 
-  .error {
+  .state-error {
     color: var(--danger);
     padding: 1rem 0;
     margin-bottom: 1rem;

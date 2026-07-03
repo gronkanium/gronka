@@ -265,7 +265,7 @@
 {#if loading}
   <div class="loading">loading user profile...</div>
 {:else if error}
-  <div class="error">error: {error}</div>
+  <div class="state-error">error: {error}</div>
   <button on:click={fetchUserProfile}>retry</button>
 {:else if !user && !metrics}
   <div class="empty">user not found</div>
@@ -1119,7 +1119,7 @@
   }
 
   .loading,
-  .error {
+  .state-error {
     padding: 2rem;
     text-align: center;
   }
@@ -1128,7 +1128,7 @@
     color: var(--text-dim);
   }
 
-  .error {
+  .state-error {
     color: var(--danger);
   }
 

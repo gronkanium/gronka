@@ -546,7 +546,7 @@
   {#if loading}
     <div class="loading">loading operations...</div>
   {:else if error}
-    <div class="error">error: {error}</div>
+    <div class="state-error">error: {error}</div>
   {:else if requests.length === 0}
     <div class="empty">no operations found</div>
   {:else}
@@ -1021,7 +1021,7 @@
     padding: 1rem 0;
   }
 
-  .error {
+  .state-error {
     color: var(--danger);
     padding: 1rem 0;
   }

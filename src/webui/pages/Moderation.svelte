@@ -295,7 +295,7 @@
     {#if usersLoading}
       <div class="loading">loading users...</div>
     {:else if usersError}
-      <div class="error">error: {usersError}</div>
+      <div class="state-error">error: {usersError}</div>
       <button class="retry-btn" on:click={fetchR2Users}>retry</button>
     {:else if filteredUsers.length > 0}
       <div class="users-list">
@@ -386,7 +386,7 @@
       {#if loading}
         <div class="loading">loading r2 files...</div>
       {:else if error}
-        <div class="error">error: {error}</div>
+        <div class="state-error">error: {error}</div>
         <button class="retry-btn" on:click={fetchR2Media}>retry</button>
       {:else if media.length === 0}
         <div class="empty">no r2 files found for this user</div>
@@ -842,7 +842,7 @@
   }
 
   .loading,
-  .error,
+  .state-error,
   .empty,
   .empty-state {
     padding: 2rem;
@@ -853,7 +853,7 @@
     color: var(--text-dim);
   }
 
-  .error {
+  .state-error {
     color: var(--danger);
   }
 

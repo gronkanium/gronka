@@ -256,7 +256,7 @@
   {#if loading && alerts.length === 0}
     <div class="loading">loading alerts...</div>
   {:else if error}
-    <div class="error">error: {error}</div>
+    <div class="state-error">error: {error}</div>
     <button on:click={fetchAlerts}>retry</button>
   {:else if alerts.length === 0}
     <div class="empty">no alerts found</div>
@@ -608,7 +608,7 @@
   }
 
   .loading,
-  .error,
+  .state-error,
   .empty {
     padding: 2rem;
     text-align: center;
@@ -618,7 +618,7 @@
     color: var(--text-dim);
   }
 
-  .error {
+  .state-error {
     color: var(--danger);
   }
 

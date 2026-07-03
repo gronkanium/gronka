@@ -116,6 +116,7 @@
       window.innerWidth <= 768
     ) {
       sidebarOpen = false;
+      persistSidebarState();
     }
   }
 

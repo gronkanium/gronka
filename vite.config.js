@@ -8,9 +8,10 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 export default defineConfig({
   plugins: [svelte()],
   root: path.resolve(__dirname, 'src/webui'),
+  publicDir: path.resolve(__dirname, 'src/webui/public'),
   build: {
     outDir: path.resolve(__dirname, 'src/public'),
-    emptyOutDir: false,
+    emptyOutDir: true,
     sourcemap: false,
   },
   server: {

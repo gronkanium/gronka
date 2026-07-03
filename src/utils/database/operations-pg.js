@@ -246,10 +246,11 @@ async function reconstructOperationsByIds(operationIds) {
     const latestStatusLog =
       statusUpdateLogs.length > 0 ? statusUpdateLogs[statusUpdateLogs.length - 1] : createdLog;
 
-    // Extract fileSize, error, stackTrace
+    // Extract fileSize, error, stackTrace, sourceUrl
     let fileSize = null;
     let error = null;
     let stackTrace = null;
+    let sourceUrl = null;
 
     // Check error logs first
     const errorLogs = parsedLogs.filter(log => log.step === 'error');
@@ -286,6 +287,9 @@ async function reconstructOperationsByIds(operationIds) {
     parsedLogs.forEach(log => {
       if (log.file_path && !filePaths.includes(log.file_path)) {
         filePaths.push(log.file_path);
+      }
+      if (log.metadata?.sourceUrl && sourceUrl === null) {
+        sourceUrl = log.metadata.sourceUrl;
       }
     });
 
@@ -361,6 +365,7 @@ async function reconstructOperationsByIds(operationIds) {
       userId: context.userId || null,
       username: username || null,
       originalUrl: context.originalUrl || null,
+      sourceUrl,
       fileSize,
       timestamp: createdLog.timestamp,
       startTime: createdLog.timestamp,

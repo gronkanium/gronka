@@ -27,7 +27,8 @@
   let maxDuration = '';
   let minFileSize = '';
   let maxFileSize = '';
-  let filtersOpen = true;
+  let filtersOpen = false;
+  let showAttachmentLinks = true;
 
   // Sorting
   let sort = 'newest';
@@ -81,6 +82,7 @@
     maxDuration = q.get('maxDuration') || '';
     minFileSize = q.get('minFileSize') || '';
     maxFileSize = q.get('maxFileSize') || '';
+    showAttachmentLinks = q.get('attachmentLinks') !== 'false';
     sort = q.get('sort') || 'newest';
     offset = parseInt(q.get('offset'), 10) || 0;
   }
@@ -105,6 +107,7 @@
     if (maxDuration) q.set('maxDuration', maxDuration);
     if (minFileSize) q.set('minFileSize', minFileSize);
     if (maxFileSize) q.set('maxFileSize', maxFileSize);
+    if (!showAttachmentLinks) q.set('attachmentLinks', 'false');
     if (sort !== 'newest') q.set('sort', sort);
     if (offset > 0) q.set('offset', String(offset));
     const qs = q.toString();
@@ -328,8 +331,22 @@
     maxDuration = '';
     minFileSize = '';
     maxFileSize = '';
+    showAttachmentLinks = true;
     sort = 'newest';
     applyFilters();
+  }
+
+  // Resolves what to show as "input" for a request: a pasted URL takes
+  // priority; otherwise fall back to the uploaded attachment's (ephemeral)
+  // Discord CDN link when the toggle allows it.
+  function getDisplayInput(request) {
+    if (request.originalUrl) {
+      return { url: request.originalUrl, isAttachment: false };
+    }
+    if (request.sourceUrl && showAttachmentLinks) {
+      return { url: request.sourceUrl, isAttachment: true };
+    }
+    return null;
   }
 
   onMount(() => {
@@ -383,10 +400,6 @@
     title="filters"
     defaultOpen={filtersOpen}
   >
-    <div class="filters-header-actions">
-      <button class="clear-btn" on:click={clearFilters}>clear all</button>
-    </div>
-
     <div class="filters-grid">
       <div class="filter-group">
         <!-- svelte-ignore a11y-label-has-associated-control -->
@@ -478,6 +491,17 @@
       </div>
 
       <div class="filter-group">
+        <label>
+          <input
+            type="checkbox"
+            bind:checked={showAttachmentLinks}
+            on:change={writeStateToUrl}
+          />
+          <span>show attachment upload links</span>
+        </label>
+      </div>
+
+      <div class="filter-group">
         <!-- svelte-ignore a11y-label-has-associated-control -->
         <label>date from</label>
         <input
@@ -541,6 +565,10 @@
         />
       </div>
     </div>
+
+    <div class="filters-footer-actions">
+      <button class="clear-btn" on:click={clearFilters}>clear all</button>
+    </div>
   </ResponsiveFilterPanel>
 
   {#if loading}
@@ -566,6 +594,7 @@
         </thead>
         <tbody>
           {#each requests as request (request.id)}
+            {@const input = getDisplayInput(request)}
             <tr class="request-row" class:expanded={expandedRequests.has(request.id)} class:early-failure={request.earlyFailure}>
               <td class="expand-cell">
                 <button class="expand-btn" on:click={() => toggleExpanded(request.id)}>
@@ -594,10 +623,15 @@
               </td>
               <td class="type-cell">{request.type || 'N/A'}</td>
               <td class="url-cell">
-                {#if request.originalUrl}
-                  <a href={request.originalUrl} target="_blank" rel="noopener noreferrer" class="url-link" title={request.originalUrl}>
-                    {truncateUrl(request.originalUrl)}
+                {#if input}
+                  <a href={input.url} target="_blank" rel="noopener noreferrer" class="url-link" title={input.url}>
+                    {truncateUrl(input.url)}
                   </a>
+                  {#if input.isAttachment}
+                    <span class="input-badge" title="Uploaded file — Discord CDN link, may have expired">file</span>
+                  {/if}
+                {:else if request.sourceUrl}
+                  <span class="input-badge muted" title="Uploaded file (attachment links hidden — enable in filters)">uploaded file</span>
                 {:else}
                   N/A
                 {/if}
@@ -634,6 +668,15 @@
                             <span class="value">
                               <a href={request.originalUrl} target="_blank" rel="noopener noreferrer" class="url-link-full monospace" title={request.originalUrl}>
                                 {request.originalUrl}
+                              </a>
+                            </span>
+                          </div>
+                        {:else if request.sourceUrl}
+                          <div class="info-item url-info-item">
+                            <span class="label">uploaded file:</span>
+                            <span class="value">
+                              <a href={request.sourceUrl} target="_blank" rel="noopener noreferrer" class="url-link-full monospace" title="Discord CDN link — may have expired">
+                                {request.sourceUrl}
                               </a>
                             </span>
                           </div>
@@ -794,10 +837,10 @@
     flex-shrink: 0;
   }
 
-  .filters-header-actions {
+  .filters-footer-actions {
     display: flex;
     justify-content: flex-end;
-    margin-bottom: 1rem;
+    margin-top: 0.75rem;
   }
 
   .clear-btn {
@@ -817,13 +860,13 @@
   .filters-grid {
     display: grid;
     grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-    gap: 1rem;
+    gap: 0.65rem 1rem;
   }
 
   .filter-group {
     display: flex;
     flex-direction: column;
-    gap: 0.5rem;
+    gap: 0.35rem;
   }
 
   .filter-group label {
@@ -977,6 +1020,26 @@
   .url-link:hover {
     text-decoration: underline;
     color: var(--success);
+  }
+
+  .input-badge {
+    display: inline-block;
+    margin-left: 0.4rem;
+    padding: 0.05rem 0.4rem;
+    border-radius: var(--radius);
+    background-color: var(--surface-3);
+    color: var(--text-muted);
+    font-size: 0.7rem;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    vertical-align: middle;
+  }
+
+  .input-badge.muted {
+    background-color: transparent;
+    border: 1px dashed var(--border-2);
+    text-transform: none;
+    letter-spacing: normal;
   }
 
   .url-link-full {

@@ -55,7 +55,7 @@
 
 <style>
   .filter-panel {
-    padding: 1rem;
+    padding: 0.75rem;
     background-color: var(--bg);
     border: 1px solid var(--border);
     border-radius: var(--radius);
@@ -113,7 +113,7 @@
   .filter-content {
     display: flex;
     flex-direction: column;
-    gap: 1rem;
+    gap: 0.5rem;
   }
   
   @media (max-width: 767px) {

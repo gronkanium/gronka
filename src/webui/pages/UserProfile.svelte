@@ -1,7 +1,11 @@
 <script>
   import { onMount } from 'svelte';
   import { currentRoute, navigate } from '../utils/router.js';
-  import { userMetrics as wsUserMetrics, operations as wsOperations, connected as wsConnected } from '../stores/websocket-store.js';
+  import {
+    userMetrics as wsUserMetrics,
+    operations as wsOperations,
+    connected as wsConnected,
+  } from '../stores/websocket-store.js';
 
   let user = null;
   let metrics = null;
@@ -63,10 +67,15 @@
     operationsLoading = true;
     operationsError = null;
     try {
-      const response = await fetch(`/api/users/${userId}/operations?limit=${operationsLimit}&offset=${operationsOffset}`);
+      const response = await fetch(
+        `/api/users/${userId}/operations?limit=${operationsLimit}&offset=${operationsOffset}`
+      );
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({}));
-        throw new Error(errorData.message || `failed to fetch user operations: ${response.status} ${response.statusText}`);
+        throw new Error(
+          errorData.message ||
+            `failed to fetch user operations: ${response.status} ${response.statusText}`
+        );
       }
       const data = await response.json();
       operations = data.operations || [];
@@ -87,10 +96,15 @@
     mediaLoading = true;
     mediaError = null;
     try {
-      const response = await fetch(`/api/users/${userId}/media?limit=${mediaLimit}&offset=${mediaOffset}`);
+      const response = await fetch(
+        `/api/users/${userId}/media?limit=${mediaLimit}&offset=${mediaOffset}`
+      );
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({}));
-        throw new Error(errorData.message || `failed to fetch user media: ${response.status} ${response.statusText}`);
+        throw new Error(
+          errorData.message ||
+            `failed to fetch user media: ${response.status} ${response.statusText}`
+        );
       }
       const data = await response.json();
       media = data.media || [];
@@ -159,12 +173,12 @@
     // Convert timestamp to milliseconds if it's in seconds (timestamp < year 2000 in ms)
     const timestampMs = timestamp < 946684800000 ? timestamp * 1000 : timestamp;
     const diff = now - timestampMs;
-    
+
     // Handle negative differences (future timestamps or clock skew)
     if (diff < 0) {
       return 'just now';
     }
-    
+
     const seconds = Math.floor(diff / 1000);
     const minutes = Math.floor(seconds / 60);
     const hours = Math.floor(minutes / 60);
@@ -205,7 +219,10 @@
         operationId,
         hasTrace: !!data.trace,
         traceLogsCount: data.trace?.logs?.length || 0,
-        executionStepsCount: data.trace?.logs?.filter(log => log.step !== 'created' && log.step !== 'status_update' && log.step !== 'error').length || 0,
+        executionStepsCount:
+          data.trace?.logs?.filter(
+            log => log.step !== 'created' && log.step !== 'status_update' && log.step !== 'error'
+          ).length || 0,
         trace: data.trace,
       });
       operationTrace = data.trace;
@@ -224,7 +241,7 @@
 
   onMount(() => {
     fetchUserProfile();
-    
+
     // Subscribe to WebSocket user metrics (connection managed by App.svelte)
     const unsubscribeMetrics = wsUserMetrics.subscribe(metricsMap => {
       if (userId && metricsMap.has(userId)) {
@@ -234,7 +251,7 @@
         }
       }
     });
-    
+
     // Subscribe to WebSocket operations (filtered by current userId)
     const unsubscribeOperations = wsOperations.subscribe(wsOps => {
       if (userId) {
@@ -247,7 +264,7 @@
         }
       }
     });
-    
+
     return () => {
       unsubscribeMetrics();
       unsubscribeOperations();
@@ -352,17 +369,26 @@
             </thead>
             <tbody>
               {#each operations as operation}
-                <tr class:error={operation.status === 'error'} class:selected={selectedOperationId === operation.id}>
+                <tr
+                  class:error={operation.status === 'error'}
+                  class:selected={selectedOperationId === operation.id}
+                >
                   <td class="op-type">{operation.type}</td>
                   <td class="op-status">
-                    <span class="operation-status status-{operation.status}">{operation.status}</span>
+                    <span class="operation-status status-{operation.status}"
+                      >{operation.status}</span
+                    >
                   </td>
                   <td class="op-time">{formatRelativeTime(operation.timestamp)}</td>
-                  <td class="op-size">{operation.fileSize ? formatBytes(operation.fileSize) : '—'}</td>
-                  <td class="op-error" class:has-error={operation.error}>{operation.error || '—'}</td>
+                  <td class="op-size"
+                    >{operation.fileSize ? formatBytes(operation.fileSize) : '—'}</td
+                  >
+                  <td class="op-error" class:has-error={operation.error}
+                    >{operation.error || '—'}</td
+                  >
                   <td class="op-actions">
-                    <button 
-                      class="trace-btn" 
+                    <button
+                      class="trace-btn"
                       on:click={() => fetchOperationTrace(operation.id)}
                       title="view detailed trace"
                     >
@@ -377,13 +403,19 @@
         {#if operationsTotal > operationsLimit}
           <div class="operations-pagination">
             <div class="pagination-info">
-              showing {operationsOffset + 1}-{Math.min(operationsOffset + operationsLimit, operationsTotal)} of {operationsTotal}
+              showing {operationsOffset + 1}-{Math.min(
+                operationsOffset + operationsLimit,
+                operationsTotal
+              )} of {operationsTotal}
             </div>
             <div class="pagination-controls">
               <button on:click={handleOperationsPrevPage} disabled={operationsOffset === 0}>
                 previous
               </button>
-              <button on:click={handleOperationsNextPage} disabled={operationsOffset + operationsLimit >= operationsTotal}>
+              <button
+                on:click={handleOperationsNextPage}
+                disabled={operationsOffset + operationsLimit >= operationsTotal}
+              >
                 next
               </button>
             </div>
@@ -432,7 +464,11 @@
                   <div class="context-item">
                     <span class="context-label">original url:</span>
                     <span class="context-value">
-                      <a href={operationTrace.context.originalUrl} target="_blank" rel="noopener noreferrer">
+                      <a
+                        href={operationTrace.context.originalUrl}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                      >
                         {truncateUrl(operationTrace.context.originalUrl)}
                       </a>
                     </span>
@@ -442,21 +478,27 @@
                   <div class="context-item">
                     <span class="context-label">attachment:</span>
                     <span class="context-value">
-                      {operationTrace.context.attachment.name || 'N/A'} 
-                      {operationTrace.context.attachment.size ? `(${formatBytes(operationTrace.context.attachment.size)})` : ''}
+                      {operationTrace.context.attachment.name || 'N/A'}
+                      {operationTrace.context.attachment.size
+                        ? `(${formatBytes(operationTrace.context.attachment.size)})`
+                        : ''}
                     </span>
                   </div>
                   {#if operationTrace.context.attachment.contentType}
                     <div class="context-item">
                       <span class="context-label">content type:</span>
-                      <span class="context-value">{operationTrace.context.attachment.contentType}</span>
+                      <span class="context-value"
+                        >{operationTrace.context.attachment.contentType}</span
+                      >
                     </div>
                   {/if}
                 {/if}
                 {#if operationTrace.context.commandOptions}
                   <div class="context-item">
                     <span class="context-label">command options:</span>
-                    <span class="context-value">{formatMetadata(operationTrace.context.commandOptions)}</span>
+                    <span class="context-value"
+                      >{formatMetadata(operationTrace.context.commandOptions)}</span
+                    >
                   </div>
                 {/if}
                 <div class="context-item">
@@ -468,36 +510,39 @@
 
             <div class="trace-steps">
               {#if operationTrace.logs}
-                {@const executionSteps = operationTrace.logs.filter(log => log.step !== 'created' && log.step !== 'status_update' && log.step !== 'error')}
+                {@const executionSteps = operationTrace.logs.filter(
+                  log =>
+                    log.step !== 'created' && log.step !== 'status_update' && log.step !== 'error'
+                )}
                 <h4>execution steps ({executionSteps.length})</h4>
                 {#if executionSteps.length > 0}
                   <div class="steps-list">
                     {#each executionSteps as log}
-                    <div class="trace-step" class:error={log.status === 'error'}>
-                      <div class="step-header">
-                        <span class="step-name">{log.step}</span>
-                        <span class="step-status status-{log.status}">{log.status}</span>
-                        <span class="step-time">{formatRelativeTime(log.timestamp)}</span>
+                      <div class="trace-step" class:error={log.status === 'error'}>
+                        <div class="step-header">
+                          <span class="step-name">{log.step}</span>
+                          <span class="step-status status-{log.status}">{log.status}</span>
+                          <span class="step-time">{formatRelativeTime(log.timestamp)}</span>
+                        </div>
+                        {#if log.message}
+                          <div class="step-message">{log.message}</div>
+                        {/if}
+                        {#if log.metadata}
+                          <details class="step-metadata">
+                            <summary>metadata</summary>
+                            <pre class="metadata-content">{formatMetadata(log.metadata)}</pre>
+                          </details>
+                        {/if}
+                        {#if log.stack_trace}
+                          <details class="step-stack">
+                            <summary>stack trace</summary>
+                            <pre class="stack-content">{log.stack_trace}</pre>
+                          </details>
+                        {/if}
+                        {#if log.file_path}
+                          <div class="step-file">file: {log.file_path}</div>
+                        {/if}
                       </div>
-                      {#if log.message}
-                        <div class="step-message">{log.message}</div>
-                      {/if}
-                      {#if log.metadata}
-                        <details class="step-metadata">
-                          <summary>metadata</summary>
-                          <pre class="metadata-content">{formatMetadata(log.metadata)}</pre>
-                        </details>
-                      {/if}
-                      {#if log.stack_trace}
-                        <details class="step-stack">
-                          <summary>stack trace</summary>
-                          <pre class="stack-content">{log.stack_trace}</pre>
-                        </details>
-                      {/if}
-                      {#if log.file_path}
-                        <div class="step-file">file: {log.file_path}</div>
-                      {/if}
-                    </div>
                     {/each}
                   </div>
                 {:else}
@@ -559,7 +604,12 @@
               {#each media as item}
                 <tr>
                   <td class="url-cell">
-                    <a href={item.file_url} target="_blank" rel="noopener noreferrer" title={item.file_url}>
+                    <a
+                      href={item.file_url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      title={item.file_url}
+                    >
                       {truncateUrl(item.file_url)}
                     </a>
                   </td>
@@ -580,7 +630,10 @@
               <button on:click={handleMediaPrevPage} disabled={mediaOffset === 0}>
                 previous
               </button>
-              <button on:click={handleMediaNextPage} disabled={mediaOffset + mediaLimit >= mediaTotal}>
+              <button
+                on:click={handleMediaNextPage}
+                disabled={mediaOffset + mediaLimit >= mediaTotal}
+              >
                 next
               </button>
             </div>
@@ -607,7 +660,10 @@
               {#each activity as log}
                 <tr>
                   <td class="activity-time">{formatRelativeTime(log.timestamp)}</td>
-                  <td><span class="activity-level level-{log.level.toLowerCase()}">{log.level}</span></td>
+                  <td
+                    ><span class="activity-level level-{log.level.toLowerCase()}">{log.level}</span
+                    ></td
+                  >
                   <td class="activity-message">{log.message}</td>
                 </tr>
               {/each}
@@ -1171,11 +1227,11 @@
       overflow-x: auto;
       -webkit-overflow-scrolling: touch;
     }
-    
+
     table {
       min-width: 600px;
     }
-    
+
     button {
       min-height: 44px;
     }
@@ -1526,4 +1582,3 @@
     background-color: var(--surface-2);
   }
 </style>
-

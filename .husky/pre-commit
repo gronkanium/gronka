@@ -70,7 +70,7 @@ fi
 JS_FILES=$(echo "$STAGED_FILES" | grep -E '\.(js|jsx|ts|tsx|cjs|mjs)$' || true)
 
 # Filter staged files for Prettier (common supported formats)
-PRETTIER_FILES=$(echo "$STAGED_FILES" | grep -E '\.(js|jsx|ts|tsx|cjs|mjs|json|css|scss|html|md|yml|yaml)$' || true)
+PRETTIER_FILES=$(echo "$STAGED_FILES" | grep -E '\.(js|jsx|ts|tsx|cjs|mjs|json|css|scss|html|md|yml|yaml|svelte)$' || true)
 
 # Run check:sync only if package files are staged
 if [ "$PACKAGE_FILES_STAGED" = true ]; then

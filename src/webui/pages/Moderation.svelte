@@ -350,8 +350,7 @@
               <div class="media-preview">
                 {#if item.file_type === 'video'}
                   <!-- svelte-ignore a11y-media-has-caption -->
-                  <video src={item.file_url} preload="metadata" controls muted playsinline
-                  ></video>
+                  <video src={item.file_url} preload="metadata" controls muted playsinline></video>
                 {:else}
                   <a href={item.file_url} target="_blank" rel="noopener noreferrer">
                     <img src={item.file_url} alt={item.file_type || 'media'} loading="lazy" />
@@ -373,12 +372,7 @@
                 </span>
               </div>
               <div class="media-actions">
-                <a
-                  class="open-link"
-                  href={item.file_url}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                >
+                <a class="open-link" href={item.file_url} target="_blank" rel="noopener noreferrer">
                   open
                 </a>
                 <button

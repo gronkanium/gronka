@@ -396,10 +396,7 @@
     </select>
   </div>
 
-  <ResponsiveFilterPanel
-    title="filters"
-    defaultOpen={filtersOpen}
-  >
+  <ResponsiveFilterPanel title="filters" defaultOpen={filtersOpen}>
     <div class="filters-grid">
       <div class="filter-group">
         <!-- svelte-ignore a11y-label-has-associated-control -->
@@ -470,33 +467,21 @@
 
       <div class="filter-group">
         <label>
-          <input
-            type="checkbox"
-            bind:checked={failedOnly}
-            on:change={applyFilters}
-          />
+          <input type="checkbox" bind:checked={failedOnly} on:change={applyFilters} />
           <span>failed operations only</span>
         </label>
       </div>
 
       <div class="filter-group">
         <label>
-          <input
-            type="checkbox"
-            bind:checked={earlyFailureOnly}
-            on:change={applyFilters}
-          />
+          <input type="checkbox" bind:checked={earlyFailureOnly} on:change={applyFilters} />
           <span>early failures only</span>
         </label>
       </div>
 
       <div class="filter-group">
         <label>
-          <input
-            type="checkbox"
-            bind:checked={showAttachmentLinks}
-            on:change={writeStateToUrl}
-          />
+          <input type="checkbox" bind:checked={showAttachmentLinks} on:change={writeStateToUrl} />
           <span>show attachment upload links</span>
         </label>
       </div>
@@ -504,21 +489,13 @@
       <div class="filter-group">
         <!-- svelte-ignore a11y-label-has-associated-control -->
         <label>date from</label>
-        <input
-          type="date"
-          bind:value={dateFrom}
-          on:change={applyFilters}
-        />
+        <input type="date" bind:value={dateFrom} on:change={applyFilters} />
       </div>
 
       <div class="filter-group">
         <!-- svelte-ignore a11y-label-has-associated-control -->
         <label>date to</label>
-        <input
-          type="date"
-          bind:value={dateTo}
-          on:change={applyFilters}
-        />
+        <input type="date" bind:value={dateTo} on:change={applyFilters} />
       </div>
 
       <div class="filter-group">
@@ -595,7 +572,11 @@
         <tbody>
           {#each requests as request (request.id)}
             {@const input = getDisplayInput(request)}
-            <tr class="request-row" class:expanded={expandedRequests.has(request.id)} class:early-failure={request.earlyFailure}>
+            <tr
+              class="request-row"
+              class:expanded={expandedRequests.has(request.id)}
+              class:early-failure={request.earlyFailure}
+            >
               <td class="expand-cell">
                 <button class="expand-btn" on:click={() => toggleExpanded(request.id)}>
                   {#if expandedRequests.has(request.id)}
@@ -612,9 +593,26 @@
                   <span class="status-icon success">✓</span>
                 {:else if request.status === 'error'}
                   <span class="status-icon error">
-                    <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="var(--danger)" stroke="var(--text-bright)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
-                      <path d="M12 2C6.477 2 2 6.477 2 12s4.477 10 10 10 10-4.477 10-10S17.523 2 12 2z"/>
-                      <path d="M15 9l-6 6M9 9l6 6" stroke="var(--text-bright)" stroke-width="2" stroke-linecap="round"/>
+                    <svg
+                      xmlns="http://www.w3.org/2000/svg"
+                      width="20"
+                      height="20"
+                      viewBox="0 0 24 24"
+                      fill="var(--danger)"
+                      stroke="var(--text-bright)"
+                      stroke-width="1.5"
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                    >
+                      <path
+                        d="M12 2C6.477 2 2 6.477 2 12s4.477 10 10 10 10-4.477 10-10S17.523 2 12 2z"
+                      />
+                      <path
+                        d="M15 9l-6 6M9 9l6 6"
+                        stroke="var(--text-bright)"
+                        stroke-width="2"
+                        stroke-linecap="round"
+                      />
                     </svg>
                   </span>
                 {:else}
@@ -624,14 +622,27 @@
               <td class="type-cell">{request.type || 'N/A'}</td>
               <td class="url-cell">
                 {#if input}
-                  <a href={input.url} target="_blank" rel="noopener noreferrer" class="url-link" title={input.url}>
+                  <a
+                    href={input.url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    class="url-link"
+                    title={input.url}
+                  >
                     {truncateUrl(input.url)}
                   </a>
                   {#if input.isAttachment}
-                    <span class="input-badge" title="Uploaded file — Discord CDN link, may have expired">file</span>
+                    <span
+                      class="input-badge"
+                      title="Uploaded file — Discord CDN link, may have expired">file</span
+                    >
                   {/if}
                 {:else if request.sourceUrl}
-                  <span class="input-badge muted" title="Uploaded file (attachment links hidden — enable in filters)">uploaded file</span>
+                  <span
+                    class="input-badge muted"
+                    title="Uploaded file (attachment links hidden — enable in filters)"
+                    >uploaded file</span
+                  >
                 {:else}
                   N/A
                 {/if}
@@ -666,7 +677,13 @@
                           <div class="info-item url-info-item">
                             <span class="label">url:</span>
                             <span class="value">
-                              <a href={request.originalUrl} target="_blank" rel="noopener noreferrer" class="url-link-full monospace" title={request.originalUrl}>
+                              <a
+                                href={request.originalUrl}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                class="url-link-full monospace"
+                                title={request.originalUrl}
+                              >
                                 {request.originalUrl}
                               </a>
                             </span>
@@ -675,7 +692,13 @@
                           <div class="info-item url-info-item">
                             <span class="label">uploaded file:</span>
                             <span class="value">
-                              <a href={request.sourceUrl} target="_blank" rel="noopener noreferrer" class="url-link-full monospace" title="Discord CDN link — may have expired">
+                              <a
+                                href={request.sourceUrl}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                class="url-link-full monospace"
+                                title="Discord CDN link — may have expired"
+                              >
                                 {request.sourceUrl}
                               </a>
                             </span>
@@ -684,7 +707,9 @@
                         {#if request.performanceMetrics?.duration}
                           <div class="info-item">
                             <span class="label">duration:</span>
-                            <span class="value">{formatDuration(request.performanceMetrics.duration)}</span>
+                            <span class="value"
+                              >{formatDuration(request.performanceMetrics.duration)}</span
+                            >
                           </div>
                         {/if}
                         {#if request.earlyFailure}
@@ -752,7 +777,9 @@
                         <div class="trace-timeline">
                           {#each traces.get(request.id).logs as log}
                             <div class="trace-entry" class:error={log.status === 'error'}>
-                              <span class="trace-time">{new Date(log.timestamp).toLocaleTimeString()}</span>
+                              <span class="trace-time"
+                                >{new Date(log.timestamp).toLocaleTimeString()}</span
+                              >
                               <span class="trace-step">{log.step}</span>
                               <span class="trace-status status-{log.status}">{log.status}</span>
                               {#if log.message}
@@ -772,21 +799,17 @@
           {/each}
         </tbody>
       </table>
-    {#if total > limit}
-      <div class="pagination">
-        <div class="pagination-info">
-          showing {offset + 1}-{Math.min(offset + limit, total)} of {total}
+      {#if total > limit}
+        <div class="pagination">
+          <div class="pagination-info">
+            showing {offset + 1}-{Math.min(offset + limit, total)} of {total}
+          </div>
+          <div class="pagination-controls">
+            <button on:click={handlePrevPage} disabled={offset === 0}> previous </button>
+            <button on:click={handleNextPage} disabled={offset + limit >= total}> next </button>
+          </div>
         </div>
-        <div class="pagination-controls">
-          <button on:click={handlePrevPage} disabled={offset === 0}>
-            previous
-          </button>
-          <button on:click={handleNextPage} disabled={offset + limit >= total}>
-            next
-          </button>
-        </div>
-      </div>
-    {/if}
+      {/if}
     </div>
   {/if}
 </section>
@@ -877,9 +900,9 @@
     gap: 0.5rem;
   }
 
-  .filter-group input[type="text"],
-  .filter-group input[type="number"],
-  .filter-group input[type="date"] {
+  .filter-group input[type='text'],
+  .filter-group input[type='number'],
+  .filter-group input[type='date'] {
     padding: 0.5rem;
     background-color: var(--surface);
     border: 1px solid var(--border);

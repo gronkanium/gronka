@@ -1,6 +1,6 @@
 <script>
   import { ChevronDown, ChevronRight } from 'lucide-svelte';
-  
+
   export let columns = [];
   export let data = [];
   export let mobileCardLayout = false;
@@ -10,18 +10,18 @@
   export let onExpand = null;
   export let renderExpanded = null;
   export let keyField = 'id';
-  
+
   let sortColumn = null;
   let sortDirection = 'asc';
   let isMobile = false;
-  
+
   function checkMobile() {
     isMobile = window.innerWidth < 768;
   }
-  
+
   function handleSort(column) {
     if (!sortable || !column.sortable) return;
-    
+
     if (sortColumn === column.key) {
       sortDirection = sortDirection === 'asc' ? 'desc' : 'asc';
     } else {
@@ -29,31 +29,32 @@
       sortDirection = 'asc';
     }
   }
-  
+
   function toggleExpand(row) {
     if (!expandable || !onExpand) return;
     onExpand(row);
   }
-  
-  $: sortedData = sortable && sortColumn
-    ? [...data].sort((a, b) => {
-        const aVal = a[sortColumn];
-        const bVal = b[sortColumn];
-        const multiplier = sortDirection === 'asc' ? 1 : -1;
-        
-        if (aVal === null || aVal === undefined) return 1 * multiplier;
-        if (bVal === null || bVal === undefined) return -1 * multiplier;
-        
-        if (typeof aVal === 'number' && typeof bVal === 'number') {
-          return (aVal - bVal) * multiplier;
-        }
-        
-        return String(aVal).localeCompare(String(bVal)) * multiplier;
-      })
-    : data;
-  
-  $: isRowExpanded = (row) => expandedRows.has(row[keyField]);
-  
+
+  $: sortedData =
+    sortable && sortColumn
+      ? [...data].sort((a, b) => {
+          const aVal = a[sortColumn];
+          const bVal = b[sortColumn];
+          const multiplier = sortDirection === 'asc' ? 1 : -1;
+
+          if (aVal === null || aVal === undefined) return 1 * multiplier;
+          if (bVal === null || bVal === undefined) return -1 * multiplier;
+
+          if (typeof aVal === 'number' && typeof bVal === 'number') {
+            return (aVal - bVal) * multiplier;
+          }
+
+          return String(aVal).localeCompare(String(bVal)) * multiplier;
+        })
+      : data;
+
+  $: isRowExpanded = row => expandedRows.has(row[keyField]);
+
   onMount(() => {
     checkMobile();
     window.addEventListener('resize', checkMobile);
@@ -164,7 +165,7 @@
     overflow-x: auto;
     -webkit-overflow-scrolling: touch;
   }
-  
+
   table {
     width: 100%;
     border-collapse: collapse;
@@ -172,27 +173,27 @@
     min-width: 600px;
     table-layout: auto;
   }
-  
+
   @media (max-width: 767px) {
     table {
       font-size: 0.8rem;
       min-width: 500px;
     }
   }
-  
+
   @media (min-width: 1024px) {
     table {
       max-width: 100%;
     }
   }
-  
+
   thead {
     background-color: var(--surface-2);
     position: sticky;
     top: 0;
     z-index: 10;
   }
-  
+
   th {
     padding: 0.75rem 0.5rem;
     text-align: left;
@@ -206,41 +207,41 @@
     min-width: 80px;
     max-width: 300px;
   }
-  
+
   @media (max-width: 767px) {
     th {
       padding: 0.5rem 0.25rem;
       font-size: 0.75rem;
     }
   }
-  
+
   th.sortable {
     cursor: pointer;
     user-select: none;
   }
-  
+
   th.sortable:hover {
     background-color: var(--border);
     color: var(--text-bright);
   }
-  
+
   .sort-indicator {
     margin-left: 0.25rem;
     color: var(--success);
   }
-  
+
   tbody tr {
     border-bottom: 1px solid var(--surface-2);
   }
-  
+
   tbody tr:hover {
     background-color: var(--surface-2);
   }
-  
+
   tbody tr.expanded {
     background-color: var(--surface-2);
   }
-  
+
   td {
     padding: 0.75rem 0.5rem;
     color: var(--text);
@@ -248,30 +249,30 @@
     overflow-wrap: break-word;
     max-width: 300px;
   }
-  
+
   @media (max-width: 767px) {
     td {
       padding: 0.5rem 0.25rem;
       max-width: 200px;
     }
   }
-  
+
   @media (min-width: 1024px) {
     td {
       max-width: 400px;
     }
   }
-  
+
   .expand-col {
     width: 40px;
     text-align: center;
   }
-  
+
   .expand-cell {
     text-align: center;
     width: 40px;
   }
-  
+
   .expand-btn {
     background: none;
     border: none;
@@ -286,32 +287,32 @@
     min-height: 44px;
     justify-content: center;
   }
-  
+
   .expand-btn:hover {
     color: var(--text-bright);
   }
-  
+
   .expanded-row {
     background-color: var(--bg);
   }
-  
+
   .expanded-content {
     padding: 1.5rem !important;
   }
-  
+
   @media (max-width: 767px) {
     .expanded-content {
       padding: 1rem !important;
     }
   }
-  
+
   /* Mobile Card Layout */
   .table-cards {
     display: flex;
     flex-direction: column;
     gap: 1rem;
   }
-  
+
   .table-card {
     background-color: var(--surface);
     border: 1px solid var(--border);
@@ -321,13 +322,13 @@
     flex-direction: column;
     gap: 0.75rem;
   }
-  
+
   .card-field {
     display: flex;
     flex-direction: column;
     gap: 0.25rem;
   }
-  
+
   .card-label {
     font-size: 0.75rem;
     color: var(--text-muted);
@@ -335,29 +336,28 @@
     letter-spacing: 0.5px;
     font-weight: 500;
   }
-  
+
   .card-value {
     font-size: 0.9rem;
     color: var(--text);
     word-break: break-word;
   }
-  
+
   .card-expand {
     margin-top: 0.5rem;
     padding-top: 0.75rem;
     border-top: 1px solid var(--border);
   }
-  
+
   .card-expand .expand-btn {
     width: 100%;
     justify-content: flex-start;
     padding: 0.5rem;
   }
-  
+
   .card-expanded-content {
     margin-top: 0.75rem;
     padding-top: 0.75rem;
     border-top: 1px solid var(--surface-2);
   }
 </style>
-

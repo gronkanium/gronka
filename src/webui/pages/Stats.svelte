@@ -36,19 +36,34 @@
     <dl>
       <div class="stat-item">
         <dt>gifs</dt>
-        <dd>{stats.total_gifs?.toLocaleString() || '0'} ({stats.gifs_disk_usage_formatted || '0.00 MB'})</dd>
+        <dd>
+          {stats.total_gifs?.toLocaleString() || '0'} ({stats.gifs_disk_usage_formatted ||
+            '0.00 MB'})
+        </dd>
       </div>
       <div class="stat-item">
         <dt>videos</dt>
-        <dd>{stats.total_videos?.toLocaleString() || '0'} ({stats.videos_disk_usage_formatted || '0.00 MB'})</dd>
+        <dd>
+          {stats.total_videos?.toLocaleString() || '0'} ({stats.videos_disk_usage_formatted ||
+            '0.00 MB'})
+        </dd>
       </div>
       <div class="stat-item">
         <dt>images</dt>
-        <dd>{stats.total_images?.toLocaleString() || '0'} ({stats.images_disk_usage_formatted || '0.00 MB'})</dd>
+        <dd>
+          {stats.total_images?.toLocaleString() || '0'} ({stats.images_disk_usage_formatted ||
+            '0.00 MB'})
+        </dd>
       </div>
       <div class="stat-item">
         <dt>total</dt>
-        <dd>{((stats.total_gifs || 0) + (stats.total_videos || 0) + (stats.total_images || 0)).toLocaleString()} ({stats.disk_usage_formatted || '0.00 MB'})</dd>
+        <dd>
+          {(
+            (stats.total_gifs || 0) +
+            (stats.total_videos || 0) +
+            (stats.total_images || 0)
+          ).toLocaleString()} ({stats.disk_usage_formatted || '0.00 MB'})
+        </dd>
       </div>
     </dl>
   {/if}
@@ -62,7 +77,7 @@
     max-width: 100%;
     width: 100%;
   }
-  
+
   @media (min-width: 1024px) {
     section {
       max-width: 1400px;
@@ -137,34 +152,33 @@
   button:active {
     background-color: var(--border);
   }
-  
+
   @media (max-width: 768px) {
     section {
       padding: 0.75rem;
     }
-    
+
     h2 {
       font-size: 1rem;
     }
-    
+
     .stat-item {
       flex-direction: column;
       align-items: flex-start;
       gap: 0.25rem;
     }
-    
+
     dt {
       font-size: 0.85rem;
     }
-    
+
     dd {
       font-size: 0.9rem;
     }
-    
+
     button {
       width: 100%;
       min-height: 44px;
     }
   }
 </style>
-

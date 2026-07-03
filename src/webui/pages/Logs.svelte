@@ -211,7 +211,18 @@
 <section class="logs">
   <div class="toolbar">
     <div class="search-box">
-      <svg class="icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+      <svg
+        class="icon"
+        width="14"
+        height="14"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        stroke-width="2"
+        stroke-linecap="round"
+        stroke-linejoin="round"
+        aria-hidden="true"
+      >
         <circle cx="11" cy="11" r="7" />
         <line x1="21" y1="21" x2="16.65" y2="16.65" />
       </svg>
@@ -223,7 +234,14 @@
         placeholder="search logs…"
       />
       {#if searchQuery}
-        <button class="clear-search" title="clear search" on:click={() => { searchQuery = ''; refetch(); }}>×</button>
+        <button
+          class="clear-search"
+          title="clear search"
+          on:click={() => {
+            searchQuery = '';
+            refetch();
+          }}>×</button
+        >
       {/if}
     </div>
 
@@ -240,7 +258,12 @@
       {/each}
     </div>
 
-    <select class="control" aria-label="component" bind:value={selectedComponent} on:change={handleComponentChange}>
+    <select
+      class="control"
+      aria-label="component"
+      bind:value={selectedComponent}
+      on:change={handleComponentChange}
+    >
       <option value="">all components</option>
       {#each components as component}
         <option value={component}>{component}</option>
@@ -257,12 +280,24 @@
     </select>
 
     <div class="toolbar-right">
-      <span class="status" class:live={$wsConnected} title={$wsConnected ? 'streaming live' : 'reconnecting…'}>
+      <span
+        class="status"
+        class:live={$wsConnected}
+        title={$wsConnected ? 'streaming live' : 'reconnecting…'}
+      >
         <span class="dot"></span>{$wsConnected ? 'live' : 'offline'}
       </span>
       <button class="control ghost" on:click={handleClearFilters}>clear</button>
-      <button class="control ghost" on:click={() => exportPage('json')} title="export current page as JSON">json</button>
-      <button class="control ghost" on:click={() => exportPage('csv')} title="export current page as CSV">csv</button>
+      <button
+        class="control ghost"
+        on:click={() => exportPage('json')}
+        title="export current page as JSON">json</button
+      >
+      <button
+        class="control ghost"
+        on:click={() => exportPage('csv')}
+        title="export current page as CSV">csv</button
+      >
     </div>
   </div>
 

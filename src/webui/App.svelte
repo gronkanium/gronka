@@ -7,7 +7,17 @@
     connected as wsConnected,
     connectionHealth,
   } from './stores/websocket-store.js';
-  import { BarChart3, Users as UsersIcon, FileText, Bell, ChevronLeft, ChevronRight, Shield, List, SlidersHorizontal } from 'lucide-svelte';
+  import {
+    BarChart3,
+    Users as UsersIcon,
+    FileText,
+    Bell,
+    ChevronLeft,
+    ChevronRight,
+    Shield,
+    List,
+    SlidersHorizontal,
+  } from 'lucide-svelte';
   import Stats from './pages/Stats.svelte';
   import Health from './pages/Health.svelte';
   import Requests from './pages/Requests.svelte';
@@ -188,8 +198,8 @@
   </nav>
 
   <!-- Mobile sidebar toggle button -->
-  <button 
-    class="mobile-sidebar-toggle" 
+  <button
+    class="mobile-sidebar-toggle"
     class:hidden={sidebarOpen}
     on:click={toggleSidebar}
     aria-label="Toggle sidebar"
@@ -264,7 +274,8 @@
   :global(body) {
     margin: 0;
     padding: 0;
-    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+    font-family:
+      -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
     background-color: var(--bg);
     color: var(--text);
     line-height: 1.6;
@@ -390,7 +401,9 @@
     align-items: center;
     gap: 1rem;
     cursor: pointer;
-    transition: background-color 0.2s, color 0.2s;
+    transition:
+      background-color 0.2s,
+      color 0.2s;
     text-align: left;
     font-size: 0.95rem;
   }
@@ -435,7 +448,9 @@
     cursor: pointer;
     font-size: 0.85rem;
     border-radius: var(--radius);
-    transition: background-color 0.2s, color 0.2s;
+    transition:
+      background-color 0.2s,
+      color 0.2s;
   }
 
   .sidebar:not(.open) .conn-status {
@@ -596,7 +611,7 @@
       gap: 1rem;
       max-width: 100%;
     }
-    
+
     /* Add overlay when sidebar is open on mobile */
     .sidebar.open::after {
       content: '';
@@ -608,7 +623,7 @@
       background-color: rgba(0, 0, 0, 0.5);
       z-index: -1;
     }
-    
+
     /* Mobile sidebar toggle button */
     .mobile-sidebar-toggle {
       position: fixed;
@@ -625,20 +640,22 @@
       justify-content: center;
       cursor: pointer;
       z-index: 1001;
-      transition: opacity 0.2s, transform 0.2s;
+      transition:
+        opacity 0.2s,
+        transform 0.2s;
       box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
     }
-    
+
     .mobile-sidebar-toggle:hover {
       background-color: var(--bg);
       transform: scale(1.05);
     }
-    
+
     .mobile-sidebar-toggle.hidden {
       display: none;
     }
   }
-  
+
   /* Hide mobile toggle on desktop */
   @media (min-width: 769px) {
     .mobile-sidebar-toggle {
@@ -646,4 +663,3 @@
     }
   }
 </style>
-

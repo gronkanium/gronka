@@ -1,14 +1,14 @@
 <script>
   import { onMount } from 'svelte';
   import { ChevronDown, ChevronUp } from 'lucide-svelte';
-  
+
   export let title = 'filters';
   export let defaultOpen = true;
   export let collapsible = true;
-  
+
   let isOpen = defaultOpen;
   let isMobile = false;
-  
+
   function checkMobile() {
     isMobile = window.innerWidth < 768;
     // Auto-collapse on mobile if defaultOpen is false
@@ -16,13 +16,13 @@
       isOpen = false;
     }
   }
-  
+
   function toggle() {
     if (collapsible) {
       isOpen = !isOpen;
     }
   }
-  
+
   onMount(() => {
     checkMobile();
     window.addEventListener('resize', checkMobile);
@@ -45,7 +45,7 @@
       <h3>{title}</h3>
     </div>
   {/if}
-  
+
   {#if isOpen}
     <div class="filter-content">
       <slot />
@@ -61,14 +61,14 @@
     border-radius: var(--radius);
     margin-bottom: 1rem;
   }
-  
+
   @media (max-width: 767px) {
     .filter-panel {
       padding: 0.75rem;
       margin-bottom: 0.75rem;
     }
   }
-  
+
   .filter-header {
     display: flex;
     justify-content: space-between;
@@ -82,44 +82,43 @@
     margin-bottom: 1rem;
     text-align: left;
   }
-  
+
   .filter-panel.collapsed .filter-header {
     margin-bottom: 0;
   }
-  
+
   @media (max-width: 767px) {
     .filter-header {
       margin-bottom: 0.75rem;
     }
-    
+
     .filter-panel.collapsed .filter-header {
       margin-bottom: 0;
     }
   }
-  
+
   .filter-header h3 {
     margin: 0;
     font-size: 1rem;
     color: var(--text-bright);
     font-weight: 500;
   }
-  
+
   @media (max-width: 767px) {
     .filter-header h3 {
       font-size: 0.9rem;
     }
   }
-  
+
   .filter-content {
     display: flex;
     flex-direction: column;
     gap: 0.5rem;
   }
-  
+
   @media (max-width: 767px) {
     .filter-content {
       gap: 0.75rem;
     }
   }
 </style>
-

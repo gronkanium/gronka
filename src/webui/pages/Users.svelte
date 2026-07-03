@@ -1,7 +1,10 @@
 <script>
   import { onMount } from 'svelte';
   import { navigate } from '../utils/router.js';
-  import { userMetrics as wsUserMetrics, connected as wsConnected } from '../stores/websocket-store.js';
+  import {
+    userMetrics as wsUserMetrics,
+    connected as wsConnected,
+  } from '../stores/websocket-store.js';
   import ResponsiveGrid from '../components/ResponsiveGrid.svelte';
 
   let users = [];
@@ -92,12 +95,12 @@
   function handleUserMetricsUpdate(userId, metrics) {
     // Find user in current list
     const userIndex = users.findIndex(u => u.user_id === userId);
-    
+
     if (userIndex !== -1) {
       // Update existing user
       users[userIndex] = { ...users[userIndex], ...metrics };
       users = [...users]; // Trigger reactivity
-      
+
       // Re-sort if needed
       if (sortBy) {
         users.sort((a, b) => {
@@ -110,9 +113,13 @@
       // New user detected
       // Increment total count
       total += 1;
-      
+
       // If we're on the first page and the user matches search/filters, add them to the list
-      if (offset === 0 && (!searchQuery || (metrics.username && metrics.username.toLowerCase().includes(searchQuery.toLowerCase())))) {
+      if (
+        offset === 0 &&
+        (!searchQuery ||
+          (metrics.username && metrics.username.toLowerCase().includes(searchQuery.toLowerCase())))
+      ) {
         // Create user object from metrics
         const newUser = {
           user_id: userId,
@@ -128,7 +135,7 @@
           last_command_at: metrics.last_command_at || null,
           updated_at: metrics.updated_at || Date.now(),
         };
-        
+
         // Add to list and re-sort
         users = [...users, newUser];
         if (sortBy) {
@@ -138,7 +145,7 @@
             return sortDesc ? bVal - aVal : aVal - bVal;
           });
         }
-        
+
         // Keep only limit users if we exceed it
         if (users.length > limit) {
           users = users.slice(0, limit);
@@ -153,7 +160,7 @@
   onMount(() => {
     // Initial fetch
     fetchUsers();
-    
+
     // Subscribe to WebSocket user metrics (connection managed by App.svelte)
     const unsubscribe = wsUserMetrics.subscribe(metricsMap => {
       // Process each updated user
@@ -163,13 +170,15 @@
         });
       }
     });
-    
+
     return () => {
       unsubscribe();
     };
   });
 
-  $: leaderboardMostActive = [...users].sort((a, b) => b.total_commands - a.total_commands).slice(0, 5);
+  $: leaderboardMostActive = [...users]
+    .sort((a, b) => b.total_commands - a.total_commands)
+    .slice(0, 5);
   $: leaderboardHighestSuccess = [...users]
     .filter(u => u.total_commands >= 5)
     .sort((a, b) => calculateSuccessRate(b) - calculateSuccessRate(a))
@@ -187,11 +196,15 @@
       <div class="stat-label">total users</div>
     </div>
     <div class="stat-card">
-      <div class="stat-value">{users.reduce((sum, u) => sum + u.total_commands, 0).toLocaleString()}</div>
+      <div class="stat-value">
+        {users.reduce((sum, u) => sum + u.total_commands, 0).toLocaleString()}
+      </div>
       <div class="stat-label">total commands</div>
     </div>
     <div class="stat-card">
-      <div class="stat-value">{formatBytes(users.reduce((sum, u) => sum + (u.total_file_size || 0), 0))}</div>
+      <div class="stat-value">
+        {formatBytes(users.reduce((sum, u) => sum + (u.total_file_size || 0), 0))}
+      </div>
       <div class="stat-label">total data processed</div>
     </div>
   </ResponsiveGrid>
@@ -316,12 +329,8 @@
           showing {offset + 1}-{Math.min(offset + limit, total)} of {total}
         </div>
         <div class="pagination-controls">
-          <button on:click={handlePrevPage} disabled={offset === 0}>
-            previous
-          </button>
-          <button on:click={handleNextPage} disabled={offset + limit >= total}>
-            next
-          </button>
+          <button on:click={handlePrevPage} disabled={offset === 0}> previous </button>
+          <button on:click={handleNextPage} disabled={offset + limit >= total}> next </button>
         </div>
       </div>
     {/if}
@@ -334,7 +343,6 @@
     flex-direction: column;
     gap: 2rem;
   }
-
 
   .stat-card {
     padding: 1.5rem;
@@ -355,7 +363,6 @@
     font-size: 0.9rem;
     color: var(--text-muted);
   }
-
 
   .leaderboard-card {
     padding: 1.5rem;
@@ -637,36 +644,36 @@
     .users-container {
       gap: 1rem;
     }
-    
+
     .stat-card {
       padding: 1rem;
     }
-    
+
     .stat-value {
       font-size: 1.5rem;
     }
-    
+
     .stat-label {
       font-size: 0.85rem;
     }
-    
+
     .leaderboard-card {
       padding: 1rem;
     }
-    
+
     .leaderboard-card h3 {
       font-size: 0.9rem;
     }
-    
+
     .search-box {
       flex-direction: column;
     }
-    
+
     .search-box input {
       min-width: 0;
       width: 100%;
     }
-    
+
     .search-box button {
       width: 100%;
       min-height: 44px;
@@ -676,7 +683,7 @@
       overflow-x: auto;
       -webkit-overflow-scrolling: touch;
     }
-    
+
     table {
       font-size: 0.8rem;
       min-width: 700px;
@@ -699,27 +706,26 @@
     th:last-child {
       text-align: center;
     }
-    
+
     .view-btn {
       min-width: 44px;
       min-height: 44px;
       padding: 0.5rem 1rem;
     }
-    
+
     .pagination {
       flex-direction: column;
       gap: 0.75rem;
       align-items: stretch;
     }
-    
+
     .pagination-controls {
       width: 100%;
     }
-    
+
     .pagination-controls button {
       flex: 1;
       min-height: 44px;
     }
   }
 </style>
-

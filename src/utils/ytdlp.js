@@ -78,7 +78,7 @@ function getContentType(ext) {
  * @param {string} outputDir - Directory to save the file
  * @param {string} quality - Quality format string for yt-dlp
  * @param {number} timeout - Timeout in milliseconds
- * @param {number} maxDuration - Maximum video duration in seconds (default: 180 = 3 minutes)
+ * @param {number} maxDuration - Maximum video duration in seconds (default: 300 = 5 minutes)
  * @param {number|null} startTime - Start time in seconds for segment download
  * @param {number|null} duration - Duration in seconds for segment download
  * @returns {Promise<string>} Path to downloaded file
@@ -88,7 +88,7 @@ function executeYtdlp(
   outputDir,
   quality,
   timeout = 300000,
-  maxDuration = 180,
+  maxDuration = 300,
   startTime = null,
   duration = null
 ) {
@@ -161,7 +161,8 @@ function executeYtdlp(
         ) {
           reject(
             new ValidationError(
-              'video duration exceeds the maximum allowed (3 minutes).' + TRIM_TIP
+              `video duration exceeds the maximum allowed (${Math.floor(maxDuration / 60)} minutes).` +
+                TRIM_TIP
             )
           );
           return;
@@ -256,7 +257,8 @@ function executeYtdlp(
               if (maxDuration !== Infinity && startTime === null && duration === null) {
                 reject(
                   new ValidationError(
-                    'video duration exceeds the maximum allowed (3 minutes).' + TRIM_TIP
+                    `video duration exceeds the maximum allowed (${Math.floor(maxDuration / 60)} minutes).` +
+                      TRIM_TIP
                   )
                 );
               } else {
@@ -294,7 +296,8 @@ function executeYtdlp(
         ) {
           reject(
             new ValidationError(
-              'video duration exceeds the maximum allowed (3 minutes).' + TRIM_TIP
+              `video duration exceeds the maximum allowed (${Math.floor(maxDuration / 60)} minutes).` +
+                TRIM_TIP
             )
           );
         } else if (
@@ -421,7 +424,7 @@ function getVideoDuration(url, timeout = 15000) {
  * @param {boolean} isAdminUser - Whether the user is an admin (allows larger files and higher quality)
  * @param {number} maxSize - Maximum file size in bytes
  * @param {string} quality - Quality preference (default from config)
- * @param {number} maxDuration - Maximum video duration in seconds (default: 180 = 3 minutes, admins bypass this)
+ * @param {number} maxDuration - Maximum video duration in seconds (default: 300 = 5 minutes, admins bypass this)
  * @param {number|null} startTime - Start time in seconds for segment download
  * @param {number|null} duration - Duration in seconds for segment download
  * @returns {Promise<Object>} Object with buffer, contentType, size, and filename
@@ -431,7 +434,7 @@ export async function downloadWithYtdlp(
   isAdminUser = false,
   maxSize = Infinity,
   quality = null,
-  maxDuration = 180,
+  maxDuration = 300,
   startTime = null,
   duration = null
 ) {
@@ -586,7 +589,7 @@ export async function downloadFromYouTube(
   isAdminUser = false,
   maxSize = Infinity,
   quality = null,
-  maxDuration = 180,
+  maxDuration = 300,
   startTime = null,
   duration = null
 ) {

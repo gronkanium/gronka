@@ -267,9 +267,9 @@ async function processDownload(
         if (downloadMethod === 'ytdlp') {
           // if trimming is requested, yt-dlp will download ONLY the requested segment using --download-sections
           // this avoids downloading huge files and then trimming them
-          // otherwise, enforce 3-minute limit to prevent large downloads
+          // otherwise, enforce 5-minute limit to prevent large downloads
           const skipDurationLimit = startTime !== null || duration !== null;
-          const maxDuration = skipDurationLimit || adminUser ? Infinity : 180;
+          const maxDuration = skipDurationLimit || adminUser ? Infinity : 300;
 
           fileData = await downloadFromYouTube(
             url,
@@ -330,7 +330,7 @@ async function processDownload(
             });
 
             const skipDurationLimit = startTime !== null || duration !== null;
-            const maxDuration = skipDurationLimit || adminUser ? Infinity : 180;
+            const maxDuration = skipDurationLimit || adminUser ? Infinity : 300;
 
             fileData = await downloadWithYtdlp(
               url,

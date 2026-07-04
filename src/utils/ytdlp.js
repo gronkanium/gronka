@@ -9,6 +9,15 @@ import { trimVideo } from './video-processor/trim-video.js';
 
 const logger = createLogger('ytdlp');
 
+// Appended to every duration-cap rejection so users know there's a way around it
+// instead of just hitting a dead end.
+const TRIM_TIP = ' use the start_time/end_time options to grab a clip under the limit.';
+
+// The generic yt-dlp failure bucket in executeYtdlp() below - kept as a constant so the
+// retry wrapper can match on it without duplicating the string.
+const GENERIC_FAILURE_MESSAGE =
+  'could not download this content. it may be deleted, private, age-restricted, or unsupported.';
+
 /**
  * Custom error for yt-dlp rate limiting
  */
@@ -150,7 +159,11 @@ function executeYtdlp(
           combinedOutput.includes('Video is longer than') ||
           combinedOutput.includes('Skipping')
         ) {
-          reject(new ValidationError('video duration exceeds the maximum allowed (3 minutes)'));
+          reject(
+            new ValidationError(
+              'video duration exceeds the maximum allowed (3 minutes).' + TRIM_TIP
+            )
+          );
           return;
         }
 
@@ -242,7 +255,9 @@ function executeYtdlp(
               // This happens when --match-filter skips the video (--quiet may suppress the message)
               if (maxDuration !== Infinity && startTime === null && duration === null) {
                 reject(
-                  new ValidationError('video duration exceeds the maximum allowed (3 minutes)')
+                  new ValidationError(
+                    'video duration exceeds the maximum allowed (3 minutes).' + TRIM_TIP
+                  )
                 );
               } else {
                 reject(new NetworkError('yt-dlp did not return output file path'));
@@ -277,7 +292,11 @@ function executeYtdlp(
           errorOutput.includes('does not pass filter') ||
           errorOutput.includes('duration >')
         ) {
-          reject(new ValidationError('video duration exceeds the maximum allowed (3 minutes)'));
+          reject(
+            new ValidationError(
+              'video duration exceeds the maximum allowed (3 minutes).' + TRIM_TIP
+            )
+          );
         } else if (
           // X/Twitter: deleted or removed posts
           errorOutput.includes('BounceDeleted') ||
@@ -296,11 +315,7 @@ function executeYtdlp(
           reject(new NetworkError('this post is private and cannot be downloaded'));
         } else {
           // Never surface raw yt-dlp stderr to users; full output is logged above.
-          reject(
-            new NetworkError(
-              'could not download this content. it may be deleted, private, age-restricted, or unsupported.'
-            )
-          );
+          reject(new NetworkError(GENERIC_FAILURE_MESSAGE));
         }
       }
     });
@@ -315,6 +330,27 @@ function executeYtdlp(
       }
     });
   });
+}
+
+/**
+ * Wraps executeYtdlp() with a single retry when it fails with the generic catch-all message.
+ * That bucket covers anything yt-dlp didn't give us a specific reason for, which in practice
+ * includes transient YouTube-side extraction hiccups that clear up seconds later - retrying
+ * once recovers those silently instead of surfacing a false "unavailable" to the user. Every
+ * other failure (rate limit, private/age-gated, invalid URL, duration cap) is a confirmed
+ * state and retrying it immediately would just waste time, so only this bucket retries.
+ */
+async function executeYtdlpWithRetry(...args) {
+  try {
+    return await executeYtdlp(...args);
+  } catch (error) {
+    if (error.message !== GENERIC_FAILURE_MESSAGE) {
+      throw error;
+    }
+    logger.warn(`yt-dlp generic failure, retrying once after a short delay: ${args[0]}`);
+    await new Promise(resolve => setTimeout(resolve, 2000));
+    return await executeYtdlp(...args);
+  }
 }
 
 /**
@@ -415,7 +451,8 @@ export async function downloadWithYtdlp(
         const minutes = Math.floor(videoDuration / 60);
         const seconds = Math.round(videoDuration % 60);
         throw new ValidationError(
-          `video is ${minutes}m ${seconds}s long, maximum allowed is ${Math.floor(maxDuration / 60)} minutes`
+          `video is ${minutes}m ${seconds}s long, maximum allowed is ${Math.floor(maxDuration / 60)} minutes.` +
+            TRIM_TIP
         );
       }
     } catch (error) {
@@ -448,7 +485,7 @@ export async function downloadWithYtdlp(
     if (useSegmentDownload) {
       // Try segment download first (using --download-sections)
       try {
-        outputPath = await executeYtdlp(
+        outputPath = await executeYtdlpWithRetry(
           url,
           tmpDir.name,
           effectiveQuality,
@@ -466,7 +503,7 @@ export async function downloadWithYtdlp(
           usedFallback = true;
 
           // Download the full video without segment parameters
-          outputPath = await executeYtdlp(
+          outputPath = await executeYtdlpWithRetry(
             url,
             tmpDir.name,
             effectiveQuality,
@@ -490,7 +527,7 @@ export async function downloadWithYtdlp(
       }
     } else {
       // No segment download requested, proceed normally
-      outputPath = await executeYtdlp(
+      outputPath = await executeYtdlpWithRetry(
         url,
         tmpDir.name,
         effectiveQuality,

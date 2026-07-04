@@ -103,7 +103,15 @@ export async function handleSseConnection(req, res, clients) {
   });
 
   req.on('error', error => {
-    logger.error('SSE connection error:', error);
+    // ECONNRESET/EPIPE/ECONNABORTED just mean the client went away mid-stream (tab closed,
+    // network blip, laptop sleep) - expected for a long-lived SSE connection, not a bug.
+    // Anything else is unexpected and worth keeping at error level.
+    const isBenignDisconnect = ['ECONNRESET', 'EPIPE', 'ECONNABORTED'].includes(error.code);
+    if (isBenignDisconnect) {
+      logger.debug(`SSE connection reset: ${error.code}`);
+    } else {
+      logger.error('SSE connection error:', error);
+    }
     clients.delete(res);
   });
 }

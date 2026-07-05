@@ -376,6 +376,9 @@ async function reconstructOperationsByIds(operationIds) {
         duration,
         steps,
       },
+      // Same DB-reconstruction limitation as reconstruction.js: granular step
+      // logs are never persisted, so `steps` is always empty here.
+      stepsAvailable: false,
       latestTimestamp,
     });
   }

@@ -767,6 +767,15 @@
                           {/each}
                         </div>
                       </div>
+                    {:else if request.stepsAvailable === false}
+                      <div class="details-section">
+                        <h4>performance steps</h4>
+                        <p class="trace-empty">
+                          step-level detail unavailable — this operation is no longer live (evicted
+                          from memory or the bot restarted); only the lifecycle summary above was
+                          persisted.
+                        </p>
+                      </div>
                     {/if}
 
                     <div class="details-section">

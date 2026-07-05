@@ -178,6 +178,11 @@ export async function reconstructOperationFromTrace(trace) {
       duration: duration,
       steps: steps,
     },
+    // Granular step logs (cache hits, trim params, per-step timing, etc.) are
+    // never written to Postgres — only 'created'/'status_update'/'error' are.
+    // `steps` above is therefore always empty for a DB reconstruction; this
+    // flag lets the UI say so instead of looking identical to "no steps ran".
+    stepsAvailable: false,
     originalUrl: context.originalUrl || null, // Extract original URL from context
   };
 }

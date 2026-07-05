@@ -146,12 +146,17 @@ router.get('/api/operations/:operationId', async (req, res) => {
 
     // Get operation from in-memory store
     let operation = operations.find(op => op.id === operationId);
+    if (operation) {
+      // Live operations track their own steps in real time, unlike DB
+      // reconstructions where step-level logs were never persisted.
+      operation = { ...operation, stepsAvailable: true };
+    }
 
     // If not in memory, try to reconstruct from database
     if (!operation) {
       const trace = await getOperationTrace(operationId);
       if (trace) {
-        operation = reconstructOperationFromTrace(trace);
+        operation = await reconstructOperationFromTrace(trace);
       }
     }
 

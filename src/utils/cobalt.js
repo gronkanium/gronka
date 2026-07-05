@@ -155,6 +155,26 @@ const X_HOST_ALIASES = new Set([
   'mobile.twitter.com',
 ]);
 
+// Embed-fixer mirror domains (FxEmbed/FxTwitter, BetterTwitFix, and community
+// instances) mapped to the canonical host Cobalt understands. Cobalt doesn't
+// know these hosts, so they must always be rewritten before the API call.
+const EMBED_FIXER_HOSTS = new Map([
+  // FxEmbed official (fxtwitter/fixupx) + legacy domains
+  ['fxtwitter.com', 'twitter.com'],
+  ['fixupx.com', 'twitter.com'],
+  ['twittpr.com', 'twitter.com'],
+  ['pxtwitter.com', 'twitter.com'],
+  // BetterTwitFix (vxtwitter)
+  ['vxtwitter.com', 'twitter.com'],
+  ['fixvx.com', 'twitter.com'],
+  // Community instances
+  ['cunnyx.com', 'twitter.com'],
+  ['girlcockx.com', 'twitter.com'],
+  ['stupidpenisx.com', 'twitter.com'],
+  // FxEmbed for Bluesky
+  ['fxbsky.app', 'bsky.app'],
+]);
+
 /**
  * Normalize social media URLs before sending them to Cobalt.
  * X/Twitter share links commonly include tracking params like ?s=46 which are
@@ -165,7 +185,13 @@ const X_HOST_ALIASES = new Set([
 export function normalizeSocialMediaUrlForCobalt(url) {
   try {
     const urlObj = new URL(url);
-    const hostname = urlObj.hostname.toLowerCase();
+    let hostname = urlObj.hostname.toLowerCase();
+
+    const canonicalHost = EMBED_FIXER_HOSTS.get(hostname.replace(/^www\./, ''));
+    if (canonicalHost) {
+      urlObj.hostname = canonicalHost;
+      hostname = canonicalHost;
+    }
 
     if (X_HOST_ALIASES.has(hostname) && /^\/(?:[^/]+|i)\/status\/\d+\/?$/i.test(urlObj.pathname)) {
       urlObj.hostname = 'twitter.com';
@@ -192,6 +218,9 @@ export function normalizeSocialMediaUrlForCobalt(url) {
 const SOCIAL_MEDIA_DOMAINS = [
   'twitter.com',
   'x.com',
+  // Embed-fixer mirrors (rewritten to canonical hosts before hitting Cobalt)
+  ...EMBED_FIXER_HOSTS.keys(),
+  'bsky.app',
   'tiktok.com',
   'vm.tiktok.com',
   'instagram.com',

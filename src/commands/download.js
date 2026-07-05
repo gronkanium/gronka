@@ -1366,7 +1366,7 @@ async function processDownload(
       commandSource,
       errorFallback:
         'could not download this content. it may be deleted, private, age-restricted, or unsupported.',
-      context: { url },
+      context: { originalUrl: url },
     }
   );
 }

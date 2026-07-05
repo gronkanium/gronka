@@ -155,6 +155,10 @@ const X_HOST_ALIASES = new Set([
   'mobile.twitter.com',
 ]);
 
+// Embed-fixer mirrors of X/Twitter (FxEmbed instances). Cobalt doesn't know
+// these hosts, so they must always be rewritten to twitter.com.
+const X_PROXY_HOSTS = new Set(['cunnyx.com', 'www.cunnyx.com']);
+
 /**
  * Normalize social media URLs before sending them to Cobalt.
  * X/Twitter share links commonly include tracking params like ?s=46 which are
@@ -165,7 +169,12 @@ const X_HOST_ALIASES = new Set([
 export function normalizeSocialMediaUrlForCobalt(url) {
   try {
     const urlObj = new URL(url);
-    const hostname = urlObj.hostname.toLowerCase();
+    let hostname = urlObj.hostname.toLowerCase();
+
+    if (X_PROXY_HOSTS.has(hostname)) {
+      urlObj.hostname = 'twitter.com';
+      hostname = 'twitter.com';
+    }
 
     if (X_HOST_ALIASES.has(hostname) && /^\/(?:[^/]+|i)\/status\/\d+\/?$/i.test(urlObj.pathname)) {
       urlObj.hostname = 'twitter.com';
@@ -192,6 +201,7 @@ export function normalizeSocialMediaUrlForCobalt(url) {
 const SOCIAL_MEDIA_DOMAINS = [
   'twitter.com',
   'x.com',
+  'cunnyx.com',
   'tiktok.com',
   'vm.tiktok.com',
   'instagram.com',

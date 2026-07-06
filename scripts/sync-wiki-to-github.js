@@ -122,14 +122,9 @@ function configureGitUser(tempDir) {
       stdio: 'ignore',
     });
 
-    // Disable GPG signing in the temp clone. It has no local override, so it would
-    // otherwise inherit a global commit.gpgsign=true and hang waiting on a pinentry
-    // prompt that never surfaces in this headless script.
-    execFileSync('git', ['config', 'commit.gpgsign', 'false'], {
-      cwd: tempDir,
-      stdio: 'ignore',
-    });
-
+    // Signing is inherited from global git config. The signing key must have no
+    // passphrase — a passphrase-protected key hangs this headless script on a
+    // pinentry prompt that never surfaces.
     return true;
   } catch (error) {
     console.error('✗ Failed to configure git user:', error.message);

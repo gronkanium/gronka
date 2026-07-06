@@ -122,6 +122,14 @@ function configureGitUser(tempDir) {
       stdio: 'ignore',
     });
 
+    // Disable GPG signing in the temp clone. It has no local override, so it would
+    // otherwise inherit a global commit.gpgsign=true and hang waiting on a pinentry
+    // prompt that never surfaces in this headless script.
+    execFileSync('git', ['config', 'commit.gpgsign', 'false'], {
+      cwd: tempDir,
+      stdio: 'ignore',
+    });
+
     return true;
   } catch (error) {
     console.error('✗ Failed to configure git user:', error.message);
@@ -170,7 +178,10 @@ function commitAndPush(tempDir) {
     // Commit
     try {
       const commitMessage = `Update wiki from local repository\n\nSynced from wiki/ directory at ${new Date().toISOString()}`;
-      execSync(`git commit -m "${commitMessage}"`, {
+      // Passed as an argv array (not a shell string) so the embedded newline can't be
+      // misparsed by cmd.exe, which (unlike POSIX shells) ends quoted strings at a
+      // literal newline and hangs waiting for a continuation.
+      execFileSync('git', ['commit', '-m', commitMessage], {
         cwd: tempDir,
         stdio: 'inherit',
       });

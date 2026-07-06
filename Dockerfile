@@ -1,5 +1,5 @@
 # Stage 1: Builder - Install dependencies and build application
-FROM node:20-slim AS builder
+FROM node:24-slim AS builder
 
 # Install build tools for native npm modules
 RUN apt-get update && apt-get install -y \
@@ -33,7 +33,7 @@ RUN npm run build:webui
 RUN npm prune --production
 
 # Stage 2: Runtime - Minimal production image
-FROM node:20-slim AS runtime
+FROM node:24-slim AS runtime
 
 # Install runtime dependencies: FFmpeg, gifsicle (GIF optimization), ca-certificates, and yt-dlp
 RUN apt-get update && apt-get install -y \

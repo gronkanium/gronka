@@ -1,0 +1,22 @@
+#!/usr/bin/env bash
+set -e
+
+# Allow skipping hooks with environment variable
+if [ "$SKIP_HOOKS" = "1" ]; then
+  exit 0
+fi
+
+MSG_FILE="$1"
+[ -f "$MSG_FILE" ] || exit 0
+
+# Strip AI-attribution lines (session links, co-author trailers, generated-with
+# banners) from the commit message. These must never appear in history.
+TMP_FILE="$MSG_FILE.tmp"
+grep -viE '(claude-session:|claude\.ai/code|co-authored-by:.*(claude|anthropic)|generated with \[?claude|🤖 generated)' "$MSG_FILE" > "$TMP_FILE" || true
+mv "$TMP_FILE" "$MSG_FILE"
+
+# Fail loudly if the message is now empty (was nothing but attribution)
+if ! grep -qE '[^[:space:]]' "$MSG_FILE"; then
+  echo "commit-msg: message empty after stripping AI attribution" >&2
+  exit 1
+fi

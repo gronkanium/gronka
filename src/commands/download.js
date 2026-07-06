@@ -93,6 +93,61 @@ const {
 } = botConfig;
 
 /**
+ * Reply with direct media URL(s) from cobalt instead of downloading/uploading.
+ * Used by url-only mode and as a last-resort fallback for X/Twitter videos that
+ * exceed the download limits (Discord embeds direct video.twimg.com URLs and
+ * plays the full video, so length/size caps don't apply).
+ * Routes through the cobalt queue so lookups respect the same concurrency limit
+ * and dedupe as regular downloads. The dedupeKey keeps them separate from
+ * download requests, whose promises resolve to buffers rather than URL lists.
+ * Throws when the cobalt API call fails; callers decide whether to fall back.
+ * @param {Object} params
+ * @param {Interaction} params.interaction - Discord interaction
+ * @param {string} params.operationId - Operation tracker id
+ * @param {string} params.userId - Discord user id
+ * @param {string} params.username - Discord username
+ * @param {string} params.url - Original social media URL
+ * @param {string} params.stepName - Operation step name to log under
+ * @returns {Promise<boolean>} true when a reply with URLs was sent
+ */
+async function replyWithDirectMediaUrls({
+  interaction,
+  operationId,
+  userId,
+  username,
+  url,
+  stepName,
+}) {
+  const { urls, direct } = await queueCobaltRequest(
+    url,
+    () => getCobaltMediaUrls(COBALT_API_URL, url),
+    { skipCache: true, dedupeKey: `urlonly:${hashUrl(url)}` }
+  );
+  if (!direct || urls.length === 0) {
+    return false;
+  }
+  // Discord message limit is 2000 chars; include as many URLs as fit
+  const lines = [];
+  let totalLength = 0;
+  for (const item of urls) {
+    if (totalLength + item.url.length + 1 > 1990) {
+      break;
+    }
+    lines.push(item.url);
+    totalLength += item.url.length + 1;
+  }
+  logOperationStep(operationId, stepName, 'success', {
+    message: `Returning ${lines.length} direct media URL(s) without downloading`,
+    metadata: { url, mediaUrls: lines },
+  });
+  updateOperationStatus(operationId, 'success', { fileSize: 0 });
+  recordRateLimit(userId);
+  await safeInteractionEditReply(interaction, { content: lines.join('\n') });
+  await notifyCommandSuccess(username, 'download', { operationId, userId });
+  return true;
+}
+
+/**
  * Clean up temporary files and directory
  * @param {Object} tmpDir - tmp directory object with removeCallback
  * @param {string[]} files - Array of file paths to delete
@@ -211,34 +266,15 @@ async function processDownload(
           metadata: { url },
         });
         try {
-          // Route through the cobalt queue so URL-only lookups respect the same
-          // concurrency limit and dedupe as regular downloads. The dedupeKey keeps
-          // them separate from download requests, whose promises resolve to buffers
-          // rather than URL lists.
-          const { urls, direct } = await queueCobaltRequest(
+          const replied = await replyWithDirectMediaUrls({
+            interaction,
+            operationId,
+            userId,
+            username,
             url,
-            () => getCobaltMediaUrls(COBALT_API_URL, url),
-            { skipCache: true, dedupeKey: `urlonly:${hashUrl(url)}` }
-          );
-          if (direct && urls.length > 0) {
-            // Discord message limit is 2000 chars; include as many URLs as fit
-            const lines = [];
-            let totalLength = 0;
-            for (const item of urls) {
-              if (totalLength + item.url.length + 1 > 1990) {
-                break;
-              }
-              lines.push(item.url);
-              totalLength += item.url.length + 1;
-            }
-            logOperationStep(operationId, 'url_only_mode', 'success', {
-              message: `Returning ${lines.length} direct media URL(s) without downloading`,
-              metadata: { url, mediaUrls: lines },
-            });
-            updateOperationStatus(operationId, 'success', { fileSize: 0 });
-            recordRateLimit(userId);
-            await safeInteractionEditReply(interaction, { content: lines.join('\n') });
-            await notifyCommandSuccess(username, 'download', { operationId, userId });
+            stepName: 'url_only_mode',
+          });
+          if (replied) {
             return;
           }
           logOperationStep(operationId, 'url_only_mode', 'success', {
@@ -332,7 +368,51 @@ async function processDownload(
               : isTikTokUrl(url)
                 ? 'TikTok'
                 : null;
+
+            // Last resort for X/Twitter when downloading isn't possible (e.g. the
+            // video is over the size cap and yt-dlp rejects it on the 5-minute
+            // duration cap): hand out the direct video.twimg.com URL from cobalt.
+            // Discord embeds it and plays the full video, so the caps don't apply.
+            // Trim requests still need a real download. Twitter-only: other sites'
+            // direct URLs (e.g. YouTube) don't reliably embed or exist at all.
+            const tryTwitterDirectUrl = async () => {
+              if (!isTwitterXUrl(url) || startTime !== null || duration !== null) {
+                return false;
+              }
+              logOperationStep(operationId, 'direct_url_fallback', 'running', {
+                message: 'Download failed for X/Twitter URL, trying direct media URL',
+                metadata: { url },
+              });
+              try {
+                const replied = await replyWithDirectMediaUrls({
+                  interaction,
+                  operationId,
+                  userId,
+                  username,
+                  url,
+                  stepName: 'direct_url_fallback',
+                });
+                if (replied) {
+                  return true;
+                }
+                logOperationStep(operationId, 'direct_url_fallback', 'success', {
+                  message: 'No direct URL available (tunnel response), surfacing download error',
+                  metadata: { url },
+                });
+              } catch (directUrlError) {
+                logger.warn(`Direct URL fallback failed: ${directUrlError.message}`);
+                logOperationStep(operationId, 'direct_url_fallback', 'success', {
+                  message: 'Direct URL fallback failed, surfacing download error',
+                  metadata: { url, reason: directUrlError.message },
+                });
+              }
+              return false;
+            };
+
             if (!fallbackSite || !YTDLP_ENABLED) {
+              if (await tryTwitterDirectUrl()) {
+                return;
+              }
               throw cobaltError;
             }
 
@@ -349,15 +429,22 @@ async function processDownload(
             const skipDurationLimit = startTime !== null || duration !== null;
             const maxDuration = skipDurationLimit || adminUser ? Infinity : 300;
 
-            fileData = await downloadWithYtdlp(
-              url,
-              adminUser,
-              maxSize,
-              adminUser ? null : YTDLP_QUALITY,
-              maxDuration,
-              startTime,
-              duration
-            );
+            try {
+              fileData = await downloadWithYtdlp(
+                url,
+                adminUser,
+                maxSize,
+                adminUser ? null : YTDLP_QUALITY,
+                maxDuration,
+                startTime,
+                duration
+              );
+            } catch (ytdlpFallbackError) {
+              if (await tryTwitterDirectUrl()) {
+                return;
+              }
+              throw ytdlpFallbackError;
+            }
 
             // yt-dlp already trimmed via --download-sections; mark the method so the
             // ffmpeg trim step below is skipped (otherwise it re-trims the segment).

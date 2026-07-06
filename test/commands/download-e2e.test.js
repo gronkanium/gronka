@@ -53,12 +53,23 @@ if (!mocksSupported) {
     mock.module('../../src/utils/cobalt.js', {
       namedExports: {
         isSocialMediaUrl: url => /^https?:\/\/(www\.|mobile\.)?(x|twitter)\.com\//i.test(url),
-        // Only reached when the url_only_mode DB setting is on; no test enables it,
-        // so throw loudly if a code change starts routing through it unexpectedly.
-        getCobaltMediaUrls: async () => {
-          throw new Error(
-            'getCobaltMediaUrls should not be called (url_only_mode is off in tests)'
-          );
+        // Reached via url_only_mode (no test enables it) or the direct-URL fallback
+        // for X/Twitter downloads that failed (e.g. over the size/duration caps).
+        getCobaltMediaUrls: async (_apiUrl, url) => {
+          if (url.includes('toolong')) {
+            return {
+              urls: [
+                {
+                  url: 'https://video.twimg.com/ext_tw_video/toolong/vid/avc1/full.mp4',
+                  type: 'video',
+                  filename: null,
+                },
+              ],
+              direct: true,
+            };
+          }
+          const { NetworkError } = await import('../../src/utils/errors.js');
+          throw new NetworkError('this post is unavailable or has been deleted');
         },
         downloadFromSocialMedia: async (_apiUrl, url) => {
           if (url.includes('multi')) {
@@ -80,6 +91,10 @@ if (!mocksSupported) {
           if (url.includes('deleted')) {
             const { NetworkError } = await import('../../src/utils/errors.js');
             throw new NetworkError('this post is unavailable or has been deleted');
+          }
+          if (url.includes('toolong')) {
+            const { ValidationError } = await import('../../src/utils/errors.js');
+            throw new ValidationError('file is too large (max 100mb)');
           }
           return {
             buffer: fakeBuffer(3, 4096),
@@ -130,6 +145,13 @@ if (!mocksSupported) {
           if (u.includes('deleted')) {
             const { NetworkError } = await import('../../src/utils/errors.js');
             throw new NetworkError('this post is unavailable or has been deleted');
+          }
+          if (u.includes('toolong')) {
+            const { ValidationError } = await import('../../src/utils/errors.js');
+            throw new ValidationError(
+              'video duration exceeds the maximum allowed (5 minutes).' +
+                ' use the start_time/end_time options to grab a clip under the limit.'
+            );
           }
           return {
             buffer: fakeBuffer(4, 4096),
@@ -241,6 +263,24 @@ if (!mocksSupported) {
         'this post is unavailable or has been deleted'
       );
       assert.strictEqual(calls.editReply[0].files, undefined, 'no files on error');
+    });
+
+    test('too-long X/Twitter video: falls back to the direct media URL, no files', async () => {
+      await cleanStorage();
+      // Cobalt download fails (too large), yt-dlp fallback fails (duration cap), so the
+      // command should hand out the direct video.twimg.com URL from cobalt instead of erroring.
+      const url = `https://x.com/user/status/toolong-${Date.now()}`;
+      const { interaction, calls } = downloadInteraction(url, 'e2e-dl-toolong');
+
+      await handleDownloadCommand(interaction);
+
+      assert.strictEqual(calls.editReply.length, 1, 'exactly one reply');
+      assert.strictEqual(
+        calls.editReply[0].content,
+        'https://video.twimg.com/ext_tw_video/toolong/vid/avc1/full.mp4',
+        'reply is the direct media URL'
+      );
+      assert.strictEqual(calls.editReply[0].files, undefined, 'no attachment');
     });
 
     test('second identical download hits the file cache and replies with a URL (no re-download)', async () => {

@@ -12,7 +12,7 @@ import {
   getR2PublicUrl,
   listObjectsInR2,
 } from './r2-storage.js';
-import { insertTemporaryUpload } from './database.js';
+import { insertTemporaryUpload, getBooleanSetting } from './database.js';
 
 const logger = createLogger('storage');
 
@@ -1160,12 +1160,22 @@ export function getR2CacheStats() {
  * @returns {Promise<void>}
  */
 export async function trackTemporaryUpload(urlHash, r2Key, uploadedAt = null, isAdmin = false) {
-  // Skip tracking for admin users - they have permanent uploads
+  // Admin uploads are permanent unless the admin_uploads_expire setting (webui)
+  // opts them into the same TTL cleanup as everyone else. A settings read failure
+  // falls back to the old permanent behavior - never surprise-delete admin files.
   if (isAdmin) {
-    logger.debug(
-      `Skipping temporary upload tracking for admin user: urlHash=${urlHash.substring(0, 8)}..., r2Key=${r2Key}`
-    );
-    return;
+    let adminUploadsExpire = false;
+    try {
+      adminUploadsExpire = await getBooleanSetting('admin_uploads_expire', false);
+    } catch (error) {
+      logger.warn(`Could not read admin_uploads_expire setting: ${error.message}`);
+    }
+    if (!adminUploadsExpire) {
+      logger.debug(
+        `Skipping temporary upload tracking for admin user: urlHash=${urlHash.substring(0, 8)}..., r2Key=${r2Key}`
+      );
+      return;
+    }
   }
 
   // Check if temporary uploads are enabled

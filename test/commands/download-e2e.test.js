@@ -53,8 +53,9 @@ if (!mocksSupported) {
     mock.module('../../src/utils/cobalt.js', {
       namedExports: {
         isSocialMediaUrl: url => /^https?:\/\/(www\.|mobile\.)?(x|twitter)\.com\//i.test(url),
-        // Reached via url_only_mode (no test enables it) or the direct-URL fallback
-        // for X/Twitter downloads that failed (e.g. over the size/duration caps).
+        // Reached via the twitter_delivery policy (default hybrid probes every
+        // X/Twitter URL), url_only_mode (no test enables it), or the direct-URL
+        // fallback for downloads that failed (e.g. over the size/duration caps).
         getCobaltMediaUrls: async (_apiUrl, url) => {
           if (url.includes('toolong')) {
             return {
@@ -68,9 +69,25 @@ if (!mocksSupported) {
               direct: true,
             };
           }
+          if (url.includes('huge')) {
+            return {
+              urls: [
+                {
+                  url: 'https://video.twimg.com/ext_tw_video/huge/vid/avc1/big.mp4',
+                  type: 'video',
+                  filename: null,
+                },
+              ],
+              direct: true,
+            };
+          }
           const { NetworkError } = await import('../../src/utils/errors.js');
           throw new NetworkError('this post is unavailable or has been deleted');
         },
+        // Size probe used by the hybrid delivery mode: 'huge' URLs report a size
+        // over the Discord attachment limit, everything else is tiny.
+        getRemoteContentLength: async mediaUrl =>
+          mediaUrl.includes('huge') ? 50 * 1024 * 1024 : 4096,
         downloadFromSocialMedia: async (_apiUrl, url) => {
           if (url.includes('multi')) {
             return [
@@ -95,6 +112,13 @@ if (!mocksSupported) {
           if (url.includes('toolong')) {
             const { ValidationError } = await import('../../src/utils/errors.js');
             throw new ValidationError('file is too large (max 100mb)');
+          }
+          if (url.includes('huge')) {
+            // The hybrid delivery mode must serve the direct URL for oversized
+            // videos WITHOUT downloading - reaching this mock is a test failure.
+            throw new Error(
+              'downloadFromSocialMedia must not be called for huge videos in hybrid mode'
+            );
           }
           return {
             buffer: fakeBuffer(3, 4096),
@@ -263,6 +287,25 @@ if (!mocksSupported) {
         'this post is unavailable or has been deleted'
       );
       assert.strictEqual(calls.editReply[0].files, undefined, 'no files on error');
+    });
+
+    test('hybrid delivery: oversized X/Twitter video is served as a direct URL with no download', async () => {
+      await cleanStorage();
+      // getRemoteContentLength reports 50MB (over the Discord limit), so the hybrid
+      // twitter_delivery policy must reply with the direct URL; the download mock
+      // throws if reached, proving no bytes were transferred.
+      const url = `https://x.com/user/status/huge-${Date.now()}`;
+      const { interaction, calls } = downloadInteraction(url, 'e2e-dl-huge');
+
+      await handleDownloadCommand(interaction);
+
+      assert.strictEqual(calls.editReply.length, 1, 'exactly one reply');
+      assert.strictEqual(
+        calls.editReply[0].content,
+        'https://video.twimg.com/ext_tw_video/huge/vid/avc1/big.mp4',
+        'reply is the direct media URL'
+      );
+      assert.strictEqual(calls.editReply[0].files, undefined, 'no attachment');
     });
 
     test('too-long X/Twitter video: falls back to the direct media URL, no files', async () => {

@@ -9,23 +9,33 @@ const { adminUserIds: ADMIN_USER_IDS, rateLimitCooldown: RATE_LIMIT_COOLDOWN } =
 // Rate limiting: userId -> last use timestamp
 const rateLimit = new Map();
 
-// Admins added from the webui settings page (admin_user_ids, a JSON array in
-// bot_settings), merged with the ADMIN_USER_IDS env list. Cached in memory so
-// isAdmin() stays synchronous; bot.js refreshes the cache on an interval, so
-// webui changes take up to a minute to apply in the bot process.
+// Webui-managed values cached in memory so isAdmin()/checkRateLimit() stay
+// synchronous: admin_user_ids (merged with the ADMIN_USER_IDS env list) and
+// rate_limit_cooldown (falls back to the RATE_LIMIT env default when unset).
+// bot.js refreshes the cache on an interval, so webui changes take up to a
+// minute to apply in the bot process.
 let dbAdminIds = new Set();
+let cooldownMs = RATE_LIMIT_COOLDOWN;
 
 /**
- * Reload the webui-managed admin list from the database into the cache.
- * Keeps the previous cache on failure so a DB hiccup can't demote admins.
+ * Reload the webui-managed admin list and rate-limit cooldown from the database
+ * into the cache. Keeps the previous values on failure so a DB hiccup can't
+ * demote admins or change limits.
  */
-export async function refreshAdminCache() {
+export async function refreshRateLimitSettings() {
   try {
     const raw = await getSetting('admin_user_ids', '[]');
     const parsed = JSON.parse(raw);
     dbAdminIds = new Set(Array.isArray(parsed) ? parsed.filter(id => typeof id === 'string') : []);
   } catch (error) {
     logger.warn(`Failed to refresh admin cache: ${error.message}`);
+  }
+  try {
+    const cooldownRaw = await getSetting('rate_limit_cooldown', null);
+    const seconds = parseInt(cooldownRaw, 10);
+    cooldownMs = Number.isFinite(seconds) && seconds > 0 ? seconds * 1000 : RATE_LIMIT_COOLDOWN;
+  } catch (error) {
+    logger.warn(`Failed to refresh rate limit cooldown: ${error.message}`);
   }
 }
 
@@ -48,7 +58,7 @@ export function checkRateLimit(userId) {
   const now = Date.now();
 
   // Check if user would be rate limited
-  const wouldBeRateLimited = lastUse && now - lastUse < RATE_LIMIT_COOLDOWN;
+  const wouldBeRateLimited = lastUse && now - lastUse < cooldownMs;
 
   // Admins bypass rate limiting
   if (isAdmin(userId)) {

@@ -1,7 +1,7 @@
 import { test, describe, before, after } from 'node:test';
 import assert from 'node:assert';
 import { initDatabase, setSetting } from '../src/utils/database.js';
-import { isAdmin, refreshAdminCache } from '../src/utils/rate-limit.js';
+import { isAdmin, refreshRateLimitSettings } from '../src/utils/rate-limit.js';
 
 let app;
 let server;
@@ -21,6 +21,7 @@ after(async () => {
   // The test DB persists between runs - reset the keys these tests write.
   await setSetting('max_video_duration', '300');
   await setSetting('admin_user_ids', '[]');
+  await setSetting('twitter_delivery', 'hybrid');
   if (server) server.close();
   // Don't close database here - it's shared across parallel test files
 });
@@ -47,6 +48,27 @@ describe('settings route', () => {
     assert.strictEqual(settings.max_video_duration.max, 7200);
     assert.strictEqual(settings.admin_user_ids.type, 'list');
     assert.ok(Array.isArray(settings.admin_user_ids.envValues));
+    assert.strictEqual(settings.twitter_delivery.type, 'select');
+    assert.deepStrictEqual(settings.twitter_delivery.options, [
+      'hybrid',
+      'always_url',
+      'always_download',
+    ]);
+    assert.strictEqual(settings.twitter_delivery.value, 'hybrid');
+    assert.strictEqual(settings.admin_uploads_expire.type, 'boolean');
+    assert.strictEqual(settings.maintenance_mode.type, 'boolean');
+    assert.strictEqual(settings.rate_limit_cooldown.type, 'number');
+  });
+
+  test('select setting accepts listed options and rejects everything else', async () => {
+    const { response, data } = await putSetting('twitter_delivery', 'always_url');
+    assert.strictEqual(response.status, 200);
+    assert.strictEqual(data.value, 'always_url');
+
+    for (const bad of ['sometimes', '', 42, true]) {
+      const { response: badResponse } = await putSetting('twitter_delivery', bad);
+      assert.strictEqual(badResponse.status, 400, `expected 400 for ${JSON.stringify(bad)}`);
+    }
   });
 
   test('number setting accepts an in-range integer', async () => {
@@ -81,30 +103,30 @@ describe('settings route', () => {
 });
 
 describe('db-backed admin cache', () => {
-  test('refreshAdminCache picks up webui-managed admins for isAdmin', async () => {
+  test('refreshRateLimitSettings picks up webui-managed admins for isAdmin', async () => {
     const adminId = '111222333444555666';
     assert.strictEqual(isAdmin(adminId), false);
 
     await setSetting('admin_user_ids', JSON.stringify([adminId]));
-    await refreshAdminCache();
+    await refreshRateLimitSettings();
     assert.strictEqual(isAdmin(adminId), true);
 
     await setSetting('admin_user_ids', '[]');
-    await refreshAdminCache();
+    await refreshRateLimitSettings();
     assert.strictEqual(isAdmin(adminId), false);
   });
 
-  test('refreshAdminCache keeps the previous cache on malformed data', async () => {
+  test('refreshRateLimitSettings keeps the previous cache on malformed data', async () => {
     const adminId = '999888777666555444';
     await setSetting('admin_user_ids', JSON.stringify([adminId]));
-    await refreshAdminCache();
+    await refreshRateLimitSettings();
     assert.strictEqual(isAdmin(adminId), true);
 
     await setSetting('admin_user_ids', 'not json');
-    await refreshAdminCache();
+    await refreshRateLimitSettings();
     assert.strictEqual(isAdmin(adminId), true, 'malformed data must not demote admins');
 
     await setSetting('admin_user_ids', '[]');
-    await refreshAdminCache();
+    await refreshRateLimitSettings();
   });
 });

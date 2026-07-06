@@ -18,8 +18,8 @@ import { r2Config } from './utils/config.js';
 import { startCleanupJob, stopCleanupJob } from './utils/r2-cleanup.js';
 import { initDatabase, getSetting, setSetting } from './utils/database.js';
 import { get24HourStats } from './utils/database/stats.js';
-import { replyIfBanned } from './utils/ban-check.js';
-import { refreshAdminCache } from './utils/rate-limit.js';
+import { replyIfBanned, replyIfMaintenance } from './utils/ban-check.js';
+import { refreshRateLimitSettings } from './utils/rate-limit.js';
 
 // Initialize logger
 const logger = createLogger('bot');
@@ -289,11 +289,12 @@ client.once(Events.ClientReady, async readyClient => {
     // This caches R2 stats to limit class A operations (LIST requests) for the /stats Discord command
     await initializeR2UsageCache();
 
-    // Load webui-managed admins now and keep the cache fresh (webui writes to
-    // the DB from a separate process, so polling is the sync mechanism)
-    await refreshAdminCache();
+    // Load webui-managed admins + rate-limit cooldown now and keep the cache
+    // fresh (webui writes to the DB from a separate process, so polling is the
+    // sync mechanism)
+    await refreshRateLimitSettings();
     setInterval(async () => {
-      await refreshAdminCache();
+      await refreshRateLimitSettings();
     }, 60 * 1000);
 
     // Clean up stuck operations every 5 minutes
@@ -346,6 +347,10 @@ client.on(Events.InteractionCreate, async interaction => {
     });
 
     if (await replyIfBanned(interaction)) {
+      return;
+    }
+
+    if (await replyIfMaintenance(interaction)) {
       return;
     }
 

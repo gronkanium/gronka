@@ -4,7 +4,12 @@ import path from 'path';
 import { createLogger } from '../utils/logger.js';
 import { botConfig } from '../utils/config.js';
 import { validateUrl } from '../utils/validation.js';
-import { isSocialMediaUrl, downloadFromSocialMedia, getCobaltMediaUrls } from '../utils/cobalt.js';
+import {
+  isSocialMediaUrl,
+  downloadFromSocialMedia,
+  getCobaltMediaUrls,
+  getRemoteContentLength,
+} from '../utils/cobalt.js';
 import {
   isYouTubeUrl,
   downloadFromYouTube,
@@ -120,6 +125,8 @@ async function getMaxVideoDuration() {
  * @param {string} params.username - Discord username
  * @param {string} params.url - Original social media URL
  * @param {string} params.stepName - Operation step name to log under
+ * @param {Function|null} [params.shouldServe] - Optional async predicate over the
+ *   fetched URL list; return false to decline (caller falls back to downloading)
  * @returns {Promise<boolean>} true when a reply with URLs was sent
  */
 async function replyWithDirectMediaUrls({
@@ -129,6 +136,7 @@ async function replyWithDirectMediaUrls({
   username,
   url,
   stepName,
+  shouldServe = null,
 }) {
   const { urls, direct } = await queueCobaltRequest(
     url,
@@ -136,6 +144,9 @@ async function replyWithDirectMediaUrls({
     { skipCache: true, dedupeKey: `urlonly:${hashUrl(url)}` }
   );
   if (!direct || urls.length === 0) {
+    return false;
+  }
+  if (shouldServe && !(await shouldServe(urls))) {
     return false;
   }
   // Discord message limit is 2000 chars; include as many URLs as fit
@@ -299,6 +310,51 @@ async function processDownload(
             message: 'URL-only mode failed, falling back to normal download',
             metadata: { url, reason: urlModeError.message },
           });
+        }
+      }
+
+      // Twitter delivery policy (webui setting twitter_delivery): serving the direct
+      // video.twimg.com URL instead of rehosting skips the whole download+upload for
+      // large videos, saving bandwidth and R2 storage. 'hybrid' serves the URL only
+      // when the video wouldn't fit as a Discord attachment (small clips keep the
+      // nicer attachment UX and survive tweet deletion); 'always_url' serves it
+      // whenever cobalt offers one. Trim requests always need real bytes. Any
+      // failure here falls through to the normal download path.
+      if (COBALT_ENABLED && isTwitterXUrl(url) && startTime === null && duration === null) {
+        const deliveryMode = await getSetting('twitter_delivery', 'hybrid');
+        if (deliveryMode === 'always_url' || deliveryMode === 'hybrid') {
+          try {
+            const replied = await replyWithDirectMediaUrls({
+              interaction,
+              operationId,
+              userId,
+              username,
+              url,
+              stepName: 'twitter_delivery',
+              shouldServe:
+                deliveryMode === 'always_url'
+                  ? null
+                  : async urls => {
+                      // hybrid: only bypass rehosting for a single video too big to attach
+                      if (urls.length !== 1 || urls[0].type !== 'video') {
+                        return false;
+                      }
+                      const size = await getRemoteContentLength(urls[0].url);
+                      return size !== null && size > DISCORD_SIZE_LIMIT;
+                    },
+            });
+            if (replied) {
+              return;
+            }
+          } catch (deliveryError) {
+            logger.warn(
+              `Twitter delivery policy (${deliveryMode}) failed, downloading instead: ${deliveryError.message}`
+            );
+            logOperationStep(operationId, 'twitter_delivery', 'success', {
+              message: 'Direct URL delivery failed, falling back to normal download',
+              metadata: { url, deliveryMode, reason: deliveryError.message },
+            });
+          }
         }
       }
 

@@ -1,6 +1,7 @@
 import { EmbedBuilder, MessageFlags } from 'discord.js';
 import { getBan, getBooleanSetting } from './database.js';
 import { safeInteractionReply } from './interaction-helpers.js';
+import { isAdmin } from './rate-limit.js';
 import { createLogger } from './logger.js';
 
 const logger = createLogger('ban-check');
@@ -47,6 +48,36 @@ export async function replyIfBanned(interaction) {
 
   await safeInteractionReply(interaction, {
     embeds: [embed],
+    flags: MessageFlags.Ephemeral,
+  });
+
+  return true;
+}
+
+/**
+ * If maintenance mode (webui setting) is on and the user is not an admin, reply with a
+ * maintenance notice and return true so the caller can skip dispatching the interaction.
+ * Runs at the same choke point as replyIfBanned, before any command handler.
+ * @param {import('discord.js').Interaction} interaction
+ * @returns {Promise<boolean>} true if the interaction was blocked (caller should return early)
+ */
+export async function replyIfMaintenance(interaction) {
+  let maintenanceMode;
+  try {
+    maintenanceMode = await getBooleanSetting('maintenance_mode', false);
+  } catch (error) {
+    logger.error(`Failed to check maintenance mode: ${error.message}`);
+    return false; // fail open - a DB hiccup shouldn't lock out every user
+  }
+
+  if (!maintenanceMode || isAdmin(interaction.user.id)) {
+    return false;
+  }
+
+  logger.info(`Blocked user ${interaction.user.id} during maintenance mode`);
+
+  await safeInteractionReply(interaction, {
+    content: 'gronka is temporarily down for maintenance, please try again later',
     flags: MessageFlags.Ephemeral,
   });
 

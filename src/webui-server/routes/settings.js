@@ -18,6 +18,32 @@ const KNOWN_SETTINGS = {
     description:
       'When an X/Twitter download fails (e.g. over the size or duration limit), reply with the direct media URL instead of an error',
   },
+  twitter_delivery: {
+    type: 'select',
+    default: 'hybrid',
+    options: ['hybrid', 'always_url', 'always_download'],
+    description:
+      'How /download serves X/Twitter videos: hybrid replies with the direct URL only when the video is too big for a Discord attachment (saves bandwidth and R2 storage), always_url skips downloading whenever a direct URL exists, always_download keeps the old rehost-everything behavior',
+  },
+  admin_uploads_expire: {
+    type: 'boolean',
+    default: 'false',
+    description:
+      'Apply the temporary-upload TTL cleanup to admin R2 uploads too (off = admin uploads are permanent)',
+  },
+  maintenance_mode: {
+    type: 'boolean',
+    default: 'false',
+    description: 'Disable all commands for non-admins with a maintenance message',
+  },
+  rate_limit_cooldown: {
+    type: 'number',
+    default: process.env.RATE_LIMIT || '10',
+    description:
+      'Seconds a non-admin must wait between commands (bot picks up changes within a minute)',
+    min: 1,
+    max: 3600,
+  },
   ntfy_topic: {
     type: 'string',
     // Read directly from env rather than botConfig: botConfig bundles in DISCORD_TOKEN
@@ -78,6 +104,9 @@ router.get('/api/settings', async (req, res) => {
       if (meta.envValues) {
         settings[key].envValues = meta.envValues();
       }
+      if (meta.options) {
+        settings[key].options = meta.options;
+      }
     }
     res.json({ settings });
   } catch (error) {
@@ -130,6 +159,14 @@ router.put('/api/settings/:key', express.json(), async (req, res) => {
         });
       }
       textValue = String(num);
+    } else if (meta.type === 'select') {
+      if (!meta.options.includes(value)) {
+        return res.status(400).json({
+          error: 'invalid value',
+          message: `"${key}" must be one of: ${meta.options.join(', ')}`,
+        });
+      }
+      textValue = value;
     } else if (meta.type === 'list') {
       if (!Array.isArray(value) || value.some(item => typeof item !== 'string')) {
         return res.status(400).json({

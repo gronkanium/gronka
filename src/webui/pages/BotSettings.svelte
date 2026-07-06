@@ -264,6 +264,18 @@
           >
             <span class="toggle-knob"></span>
           </button>
+        {:else if setting.type === 'select'}
+          <select
+            class="select-setting"
+            value={setting.value}
+            disabled={saving[key]}
+            on:change={e => saveSetting(key, e.target.value)}
+            aria-label={key.replace(/_/g, ' ')}
+          >
+            {#each setting.options || [] as option (option)}
+              <option value={option}>{option.replace(/_/g, ' ')}</option>
+            {/each}
+          </select>
         {:else if setting.type === 'number'}
           <form
             class="text-setting"
@@ -520,6 +532,21 @@
   .remove-btn:disabled {
     opacity: 0.5;
     cursor: not-allowed;
+  }
+
+  .select-setting {
+    background-color: var(--surface-2);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    color: var(--text-bright);
+    padding: 0.4rem 0.6rem;
+    font-size: 0.9rem;
+    flex-shrink: 0;
+  }
+
+  .select-setting:disabled {
+    opacity: 0.6;
+    cursor: wait;
   }
 
   .text-setting {

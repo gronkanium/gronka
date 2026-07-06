@@ -838,6 +838,39 @@ export async function getCobaltMediaUrls(apiUrl, url) {
 }
 
 /**
+ * Get the byte size of a remote media URL without downloading it, via a ranged GET
+ * (more widely supported than HEAD on media CDNs). Returns null when the size can't
+ * be determined - callers should treat that as "unknown" and fall back to downloading.
+ * @param {string} mediaUrl - Direct media URL (e.g. video.twimg.com)
+ * @returns {Promise<number|null>} Size in bytes, or null if unknown
+ */
+export async function getRemoteContentLength(mediaUrl) {
+  try {
+    const response = await axios.get(mediaUrl, {
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+        Range: 'bytes=0-0',
+      },
+      responseType: 'arraybuffer',
+      timeout: 10000,
+      maxRedirects: 5,
+    });
+    // content-range: "bytes 0-0/12345678" - the total after the slash is the full size
+    const contentRange = response.headers['content-range'] || '';
+    const totalMatch = contentRange.match(/\/(\d+)$/);
+    if (totalMatch) {
+      return parseInt(totalMatch[1], 10);
+    }
+    // Server ignored the Range header and sent the whole file
+    const contentLength = parseInt(response.headers['content-length'] || '', 10);
+    return Number.isFinite(contentLength) && response.status === 200 ? contentLength : null;
+  } catch (error) {
+    logger.warn(`Failed to get remote content length: ${error.message}`);
+    return null;
+  }
+}
+
+/**
  * Download video or photos from social media URL using Cobalt
  * @param {string} apiUrl - Cobalt API URL
  * @param {string} url - Social media URL

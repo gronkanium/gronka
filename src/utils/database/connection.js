@@ -192,6 +192,16 @@ export async function initPostgresConnection() {
       // Suppress in test mode and when FORCE_PRODUCTION_MODE is set (e.g., sync scripts)
       const suppressNotices = testMode || process.env.FORCE_PRODUCTION_MODE === 'true';
 
+      // Idempotent schema init (CREATE ... IF NOT EXISTS) emits "already exists,
+      // skipping" notices on every startup — drop those, log anything else as one line
+      // instead of postgres.js's default raw-object dump.
+      const onnotice = suppressNotices
+        ? () => {}
+        : notice => {
+            if (notice.message && notice.message.includes('already exists, skipping')) return;
+            console.log(`[PostgreSQL] ${notice.severity}: ${notice.message}`);
+          };
+
       // Ensure username is set when using connection string
       let connectionOptions;
       if (typeof config === 'string') {
@@ -212,7 +222,7 @@ export async function initPostgresConnection() {
         }
         connectionOptions = {
           connection: config,
-          onnotice: suppressNotices ? () => {} : undefined,
+          onnotice,
         };
       } else {
         // Ensure username is set in config object
@@ -224,7 +234,7 @@ export async function initPostgresConnection() {
         }
         connectionOptions = {
           ...config,
-          onnotice: suppressNotices ? () => {} : undefined,
+          onnotice,
         };
       }
 

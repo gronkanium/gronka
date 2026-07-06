@@ -339,7 +339,7 @@
                 </span>
               </td>
               <td class="component-cell">{log.component}</td>
-              <td class="message-cell" class:clamped={!expanded}>{log.message}</td>
+              <td class="message-cell">{log.message}</td>
             </tr>
             {#if expanded}
               <tr class="detail-row {getLevelClass(log.level)}">
@@ -739,13 +739,6 @@
     font-size: 0.85rem;
     text-align: left;
     max-width: 600px;
-  }
-
-  .message-cell.clamped {
-    display: -webkit-box;
-    -webkit-line-clamp: 2;
-    -webkit-box-orient: vertical;
-    overflow: hidden;
   }
 
   .detail-content {

@@ -1,4 +1,4 @@
-all environment variables and configuration options for gronka.
+all environment variables and configuration options for gronka. environment variables require a restart to change - for the live-editable settings managed from the webui (delivery policy, admin list, maintenance mode, and more), see [[Bot-Settings]].
 
 ## required variables
 

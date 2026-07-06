@@ -5,6 +5,7 @@
 - [[Running-for-Free]]
 - [[Installation]]
 - [[Configuration]]
+- [[Bot-Settings]]
 
 ## user guide
 

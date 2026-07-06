@@ -35,6 +35,7 @@ gifs can also be converted to gifs with different quality settings or optimizati
 - [[Running-for-Free]] - the zero-cost setup path, from hardware to storage
 - [[Installation]] - detailed installation instructions
 - [[Configuration]] - configure environment variables
+- [[Bot-Settings]] - live-editable settings in the webui
 - [[Test-Bot]] - run separate test and production bots
 
 ## user guide

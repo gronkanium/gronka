@@ -50,11 +50,16 @@ services:
       - POSTGRES_PASSWORD=${PROD_POSTGRES_PASSWORD:-gronka}
       - POSTGRES_DB=${PROD_POSTGRES_DB:-gronka}
       - DATABASE_URL=${DATABASE_URL:-}
+      # Netscape cookies.txt for yt-dlp (age-restricted TikTok etc.); ignored if the file is absent
+      - YTDLP_COOKIES_PATH=${YTDLP_COOKIES_PATH:-/app/tiktok-cookies.txt}
     volumes:
       - ./data-test:/app/data-test
       - ./data-prod:/app/data-prod
       - ./temp:/app/temp
       - ./logs:/app/logs
+      # Optional yt-dlp cookies file (export from a logged-in browser in Netscape format).
+      # If it doesn't exist on the host, Docker mounts an empty directory and yt-dlp runs without cookies.
+      - ./tiktok-cookies.txt:/app/tiktok-cookies.txt
     ports:
       - '${SERVER_PORT:-3000}:${SERVER_PORT:-3000}'
       - '${WEBUI_PORT:-3001}:${WEBUI_PORT:-3001}'

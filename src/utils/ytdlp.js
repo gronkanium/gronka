@@ -19,6 +19,30 @@ const GENERIC_FAILURE_MESSAGE =
   'could not download this content. it may be deleted, private, age-restricted, or unsupported.';
 
 /**
+ * Optional --cookies args for yt-dlp. Age-restricted content (notably TikTok, which Cobalt
+ * has no cookie support for) needs a logged-in browser session, supplied as a Netscape
+ * cookies.txt file via YTDLP_COOKIES_PATH. The file is domain-scoped, so passing it on
+ * every invocation is safe - yt-dlp only sends cookies matching the target site.
+ * Resolved at call time (not module load) so a file mounted/rotated later is picked up.
+ * @returns {string[]} ['--cookies', path] when a usable file is configured, else []
+ */
+function getCookieArgs() {
+  const cookiesPath = process.env.YTDLP_COOKIES_PATH;
+  if (!cookiesPath) {
+    return [];
+  }
+  try {
+    // A missing host file makes Docker mount a directory in its place - isFile() guards that.
+    if (fsSync.statSync(cookiesPath).isFile()) {
+      return ['--cookies', cookiesPath];
+    }
+  } catch {
+    // File not present; proceed without cookies.
+  }
+  return [];
+}
+
+/**
  * Custom error for yt-dlp rate limiting
  */
 export class YtdlpRateLimitError extends NetworkError {
@@ -100,6 +124,7 @@ function executeYtdlp(
       '--no-warnings',
       '--quiet',
       '--no-progress',
+      ...getCookieArgs(),
       '-f',
       quality,
       '--merge-output-format',
@@ -364,7 +389,7 @@ async function executeYtdlpWithRetry(...args) {
  */
 function getVideoDuration(url, timeout = 15000) {
   return new Promise((resolve, reject) => {
-    const args = ['--no-playlist', '--no-warnings', '--print', 'duration', url];
+    const args = ['--no-playlist', '--no-warnings', ...getCookieArgs(), '--print', 'duration', url];
 
     const ytdlp = spawn('yt-dlp', args, {
       timeout: timeout,

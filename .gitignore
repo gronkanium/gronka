@@ -13,6 +13,9 @@ node_modules/
 # Cobalt authentication cookies (contains sensitive tokens)
 cookies.json
 
+# yt-dlp cookies file (contains sensitive session tokens)
+tiktok-cookies.txt
+
 # AWS/R2 credentials
 .aws/
 

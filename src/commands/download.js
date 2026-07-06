@@ -70,6 +70,17 @@ function isTwitterXUrl(url) {
   }
 }
 
+// TikTok URLs get the same Cobalt→yt-dlp fallback as X/Twitter: Cobalt has no TikTok cookie
+// support, so age-restricted posts only work via yt-dlp with a cookies file (YTDLP_COOKIES_PATH).
+function isTikTokUrl(url) {
+  try {
+    const hostname = new URL(url).hostname.toLowerCase().replace(/^www\./, '');
+    return hostname === 'tiktok.com' || hostname.endsWith('.tiktok.com');
+  } catch {
+    return false;
+  }
+}
+
 const {
   gifStoragePath: GIF_STORAGE_PATH,
   cdnBaseUrl: CDN_BASE_URL,
@@ -316,16 +327,22 @@ async function processDownload(
               },
             });
           } catch (cobaltError) {
-            if (!isTwitterXUrl(url) || !YTDLP_ENABLED) {
+            const fallbackSite = isTwitterXUrl(url)
+              ? 'X/Twitter'
+              : isTikTokUrl(url)
+                ? 'TikTok'
+                : null;
+            if (!fallbackSite || !YTDLP_ENABLED) {
               throw cobaltError;
             }
 
             logger.warn(
-              'Cobalt failed for X/Twitter URL, falling back to yt-dlp: ' + cobaltError.message
+              `Cobalt failed for ${fallbackSite} URL, falling back to yt-dlp: ` +
+                cobaltError.message
             );
 
             logOperationStep(operationId, 'download_fallback', 'running', {
-              message: 'Cobalt failed for X/Twitter URL, retrying with yt-dlp',
+              message: `Cobalt failed for ${fallbackSite} URL, retrying with yt-dlp`,
               metadata: { url, reason: cobaltError.message },
             });
 
@@ -347,7 +364,7 @@ async function processDownload(
             downloadMethod = 'ytdlp';
 
             logOperationStep(operationId, 'download_fallback', 'success', {
-              message: 'yt-dlp fallback succeeded for X/Twitter URL',
+              message: `yt-dlp fallback succeeded for ${fallbackSite} URL`,
               metadata: { url },
             });
             logOperationStep(operationId, 'download_complete', 'success', {

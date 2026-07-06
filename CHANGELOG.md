@@ -12,6 +12,57 @@ and this project adheres (attempts) to [Semantic Versioning](https://semver.org/
 - Live Discord smoke test (real upload, cannot be faked in CI):
   normal download, multi-image tweet (picker path), video→gif convert, Tenor optimize, deleted tweet.
 
+### Added
+
+- yt-dlp cookies support + TikTok yt-dlp fallback for age-restricted posts (`9852649`)
+- Download support for cunnyx.com, and the embed-fixer whitelist expanded to all known
+  FxEmbed/vxtwitter mirror domains (`14505c0`, `c931140`)
+- YouTube duration cap raised to 5 minutes; duration errors are now dynamic and point at the
+  trim options (`06aa016`)
+- User ban/moderation system (`dbfa17c`)
+- webui: bot presence control on the Bot Settings page, including display of the bot's
+  current presence (`d0c7163`, `b2ef3b1`)
+- webui: alert components + per-user R2 stats endpoints (`c33c593`)
+- webui: attachment upload links shown on Requests, with tightened Requests filters (`4d876db`)
+- webui: SQL-backed request search, monitoring insights, and ntfy settings (`aecb3d7`)
+
+### Changed
+
+- webui real-time updates migrated from WebSocket to SSE (`242de99`); follow-ups: SSE
+  heartbeats no longer trip the stale-connection check (`b18e15c`), benign SSE disconnects
+  no longer logged as errors (`c71a953`)
+- webui: Operations/OperationsDebug merged into a single Requests page (`75a2390`); alerts,
+  logs, and moderation pages overhauled (`92e285d`); logs filter bar rebuilt into a unified
+  toolbar (`b715fbc`)
+- webui: app-shell UX upgrade — live connection status, persisted sidebar state, a11y
+  improvements (`6c41466`)
+- webui: delete confirmations removed on the moderation page (`f9fdf41`)
+- Docker base image bumped to `node:24-slim`; `commit-msg` hook now strips AI attribution
+  trailers (`e8a01ac`)
+- `prettier-plugin-svelte` added and `.svelte` files reformatted (`ef6c5d4`); all of
+  `src/public` gitignored (`faae553`); dotenv's promotional tip banner silenced (`74abc04`)
+- Operational deploy-status notes dropped from this changelog (`074667c`)
+
+### Removed
+
+- webui monitoring page and its orphaned metrics endpoints (`b7d3181`), other dead webui
+  endpoints and an orphaned route (`033d3a5`), and the unread system-metrics subsystem
+  (`445e9ca`, `d8cac59`)
+
+### Fixed
+
+- Raw Postgres NOTICE objects no longer dumped to the console on startup (`b772422`)
+- webui shows full log message text instead of a 2-line clamp (`3aa7474`)
+- webui: reconstructed operations now flag missing step detail; reconstruction was running
+  unawaited (`0458b7f`)
+- `/download` operations now persist their source URL (`8aafe01`)
+- yt-dlp: generic failures retried once; duration errors point at the trim options (`a5d14ea`)
+- webui build: vite `outDir` emptied on build, broken favicon path fixed (`1dd2bb8`)
+- webui-server no longer requires `DISCORD_TOKEN` to boot (`2060000`)
+- `temporary_uploads` rows now cascade when their `processed_urls` row is deleted (`254ffd8`)
+- webui: generic `.error` style no longer inflates error badges (`289bf02`); sidebar state
+  persists when collapsed via Escape key (`587f3dd`)
+
 ## [0.15.6] - 2026-07-02
 
 ### Added

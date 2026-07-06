@@ -16,9 +16,10 @@ import { cleanupStuckOperations } from './utils/operations-tracker.js';
 import { initializeR2UsageCache, formatFileSize } from './utils/storage.js';
 import { r2Config } from './utils/config.js';
 import { startCleanupJob, stopCleanupJob } from './utils/r2-cleanup.js';
-import { initDatabase } from './utils/database.js';
+import { initDatabase, getSetting, setSetting } from './utils/database.js';
 import { get24HourStats } from './utils/database/stats.js';
 import { replyIfBanned } from './utils/ban-check.js';
+import { refreshAdminCache } from './utils/rate-limit.js';
 
 // Initialize logger
 const logger = createLogger('bot');
@@ -173,6 +174,18 @@ function startStatsServer() {
 
       await client.user.setPresence(presenceOptions);
 
+      // Persist so the presence survives restarts (restored in ClientReady).
+      // setPresence without activities implicitly clears them, so mirror that:
+      // a status-only update stores an empty activity.
+      try {
+        if (status) {
+          await setSetting('bot_presence_status', status);
+        }
+        await setSetting('bot_presence_activity', activity || '');
+      } catch (persistError) {
+        logger.warn(`Failed to persist bot presence: ${persistError.message}`);
+      }
+
       const statusMsg = activity
         ? `Status updated to "${status || 'current'}" with activity: "${activity}"`
         : `Status updated to "${status}"`;
@@ -250,7 +263,24 @@ client.once(Events.ClientReady, async readyClient => {
     botStartTime = Date.now();
     await initializeUserTracking();
 
-    readyClient.user.setPresence({ status: 'dnd' });
+    // Restore the last presence set via the webui/stats API; default matches the
+    // previous hardcoded 'dnd'. A DB hiccup here must not abort startup.
+    try {
+      const validStatuses = ['online', 'idle', 'dnd', 'invisible'];
+      let savedStatus = await getSetting('bot_presence_status', 'dnd');
+      if (!validStatuses.includes(savedStatus)) {
+        savedStatus = 'dnd';
+      }
+      const savedActivity = await getSetting('bot_presence_activity', '');
+      const presenceOptions = { status: savedStatus };
+      if (savedActivity) {
+        presenceOptions.activities = [{ name: savedActivity, type: 4 }]; // ActivityType.Custom
+      }
+      readyClient.user.setPresence(presenceOptions);
+    } catch (presenceError) {
+      logger.warn(`Failed to restore saved presence: ${presenceError.message}`);
+      readyClient.user.setPresence({ status: 'dnd' });
+    }
     logger.info(`bot logged in as ${readyClient.user.tag}`);
     logger.info(`gif storage: ${GIF_STORAGE_PATH}`);
     logger.info(`cdn url: ${CDN_BASE_URL}`);
@@ -258,6 +288,13 @@ client.once(Events.ClientReady, async readyClient => {
     // Initialize R2 usage cache on startup (if R2 is configured)
     // This caches R2 stats to limit class A operations (LIST requests) for the /stats Discord command
     await initializeR2UsageCache();
+
+    // Load webui-managed admins now and keep the cache fresh (webui writes to
+    // the DB from a separate process, so polling is the sync mechanism)
+    await refreshAdminCache();
+    setInterval(async () => {
+      await refreshAdminCache();
+    }, 60 * 1000);
 
     // Clean up stuck operations every 5 minutes
     setInterval(

@@ -40,7 +40,7 @@ import {
 } from '../utils/r2-storage.js';
 import { queueCobaltRequest, hashUrl } from '../utils/cobalt-queue.js';
 import { notifyCommandSuccess, notifyCommandFailure } from '../utils/ntfy-notifier.js';
-import { getProcessedUrl, getBooleanSetting } from '../utils/database.js';
+import { getProcessedUrl, getBooleanSetting, getSetting } from '../utils/database.js';
 import { recordProcessedUrl, trackR2UploadIfApplicable } from './shared/url-cache.js';
 import { runMediaCommand } from './shared/run-media-command.js';
 import { replyIfRateLimited } from './shared/command-guards.js';
@@ -91,6 +91,18 @@ const {
   ytdlpQuality: YTDLP_QUALITY,
   discordSizeLimit: DISCORD_SIZE_LIMIT,
 } = botConfig;
+
+/**
+ * Non-admin duration cap in seconds for yt-dlp downloads, live-editable from the
+ * webui settings page (max_video_duration). Falls back to 300 (5 minutes) when
+ * unset or unparsable.
+ * @returns {Promise<number>} Cap in seconds
+ */
+async function getMaxVideoDuration() {
+  const raw = await getSetting('max_video_duration', '300');
+  const parsed = parseInt(raw, 10);
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : 300;
+}
 
 /**
  * Reply with direct media URL(s) from cobalt instead of downloading/uploading.
@@ -316,7 +328,8 @@ async function processDownload(
           // this avoids downloading huge files and then trimming them
           // otherwise, enforce 5-minute limit to prevent large downloads
           const skipDurationLimit = startTime !== null || duration !== null;
-          const maxDuration = skipDurationLimit || adminUser ? Infinity : 300;
+          const maxDuration =
+            skipDurationLimit || adminUser ? Infinity : await getMaxVideoDuration();
 
           fileData = await downloadFromYouTube(
             url,
@@ -379,6 +392,9 @@ async function processDownload(
               if (!isTwitterXUrl(url) || startTime !== null || duration !== null) {
                 return false;
               }
+              if (!(await getBooleanSetting('twitter_direct_url_fallback', true))) {
+                return false;
+              }
               logOperationStep(operationId, 'direct_url_fallback', 'running', {
                 message: 'Download failed for X/Twitter URL, trying direct media URL',
                 metadata: { url },
@@ -427,7 +443,8 @@ async function processDownload(
             });
 
             const skipDurationLimit = startTime !== null || duration !== null;
-            const maxDuration = skipDurationLimit || adminUser ? Infinity : 300;
+            const maxDuration =
+              skipDurationLimit || adminUser ? Infinity : await getMaxVideoDuration();
 
             try {
               fileData = await downloadWithYtdlp(

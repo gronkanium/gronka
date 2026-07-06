@@ -1,5 +1,6 @@
 import { createLogger } from './logger.js';
 import { botConfig } from './config.js';
+import { getSetting } from './database.js';
 
 const logger = createLogger('rate-limit');
 
@@ -8,13 +9,33 @@ const { adminUserIds: ADMIN_USER_IDS, rateLimitCooldown: RATE_LIMIT_COOLDOWN } =
 // Rate limiting: userId -> last use timestamp
 const rateLimit = new Map();
 
+// Admins added from the webui settings page (admin_user_ids, a JSON array in
+// bot_settings), merged with the ADMIN_USER_IDS env list. Cached in memory so
+// isAdmin() stays synchronous; bot.js refreshes the cache on an interval, so
+// webui changes take up to a minute to apply in the bot process.
+let dbAdminIds = new Set();
+
+/**
+ * Reload the webui-managed admin list from the database into the cache.
+ * Keeps the previous cache on failure so a DB hiccup can't demote admins.
+ */
+export async function refreshAdminCache() {
+  try {
+    const raw = await getSetting('admin_user_ids', '[]');
+    const parsed = JSON.parse(raw);
+    dbAdminIds = new Set(Array.isArray(parsed) ? parsed.filter(id => typeof id === 'string') : []);
+  } catch (error) {
+    logger.warn(`Failed to refresh admin cache: ${error.message}`);
+  }
+}
+
 /**
  * Check if user is an admin
  * @param {string} userId - Discord user ID
  * @returns {boolean} True if user is admin
  */
 export function isAdmin(userId) {
-  return ADMIN_USER_IDS.includes(userId);
+  return ADMIN_USER_IDS.includes(userId) || dbAdminIds.has(userId);
 }
 
 /**

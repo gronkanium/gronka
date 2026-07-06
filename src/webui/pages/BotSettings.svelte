@@ -117,6 +117,36 @@
     saveSetting(key, inputValue);
   }
 
+  function listValues(setting) {
+    try {
+      const parsed = JSON.parse(setting.value);
+      return Array.isArray(parsed) ? parsed : [];
+    } catch {
+      return [];
+    }
+  }
+
+  async function addListItem(key, form) {
+    const item = form.elements.value.value.trim();
+    if (!item) {
+      return;
+    }
+    const items = listValues(settings[key]);
+    if (items.includes(item) || (settings[key].envValues || []).includes(item)) {
+      form.reset();
+      return;
+    }
+    await saveSetting(key, [...items, item]);
+    form.reset();
+  }
+
+  async function removeListItem(key, item) {
+    await saveSetting(
+      key,
+      listValues(settings[key]).filter(i => i !== item)
+    );
+  }
+
   onMount(() => {
     loadSettings();
     loadPresence();
@@ -178,12 +208,53 @@
       <p class="status error">{error}</p>
     {/if}
     {#each Object.entries(settings) as [key, setting] (key)}
-      <div class="setting-row">
+      <div class="setting-row" class:list-setting={setting.type === 'list'}>
         <div class="setting-info">
           <span class="setting-name">{key.replace(/_/g, ' ')}</span>
           <span class="setting-description">{setting.description}</span>
         </div>
-        {#if setting.type === 'boolean'}
+        {#if setting.type === 'list'}
+          <div class="list-editor">
+            {#if (setting.envValues || []).length === 0 && listValues(setting).length === 0}
+              <p class="list-empty">no entries</p>
+            {:else}
+              <table class="list-table">
+                <tbody>
+                  {#each setting.envValues || [] as item (item)}
+                    <tr>
+                      <td class="list-value">{item}</td>
+                      <td class="list-action"><span class="list-source">from env</span></td>
+                    </tr>
+                  {/each}
+                  {#each listValues(setting) as item (item)}
+                    <tr>
+                      <td class="list-value">{item}</td>
+                      <td class="list-action">
+                        <button
+                          class="remove-btn"
+                          disabled={saving[key]}
+                          on:click={() => removeListItem(key, item)}
+                        >
+                          remove
+                        </button>
+                      </td>
+                    </tr>
+                  {/each}
+                </tbody>
+              </table>
+            {/if}
+            <form class="text-setting" on:submit|preventDefault={e => addListItem(key, e.target)}>
+              <input
+                type="text"
+                name="value"
+                placeholder="discord user id"
+                disabled={saving[key]}
+                aria-label={`Add to ${key.replace(/_/g, ' ')}`}
+              />
+              <button type="submit" class="save-btn" disabled={saving[key]}>add</button>
+            </form>
+          </div>
+        {:else if setting.type === 'boolean'}
           <button
             class="toggle"
             class:on={setting.value === 'true'}
@@ -193,6 +264,24 @@
           >
             <span class="toggle-knob"></span>
           </button>
+        {:else if setting.type === 'number'}
+          <form
+            class="text-setting"
+            on:submit|preventDefault={e =>
+              handleTextSubmit(key, Number(e.target.elements.value.value))}
+          >
+            <input
+              type="number"
+              name="value"
+              value={setting.value}
+              min={setting.min}
+              max={setting.max}
+              step="1"
+              disabled={saving[key]}
+              aria-label={key.replace(/_/g, ' ')}
+            />
+            <button type="submit" class="save-btn" disabled={saving[key]}>save</button>
+          </form>
         {:else if setting.type === 'string'}
           <form
             class="text-setting"
@@ -368,6 +457,69 @@
   .toggle.on .toggle-knob {
     transform: translateX(22px);
     background-color: var(--bg-deep);
+  }
+
+  .setting-row.list-setting {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .list-editor {
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+  }
+
+  .list-empty {
+    color: var(--text-muted);
+    font-size: 0.85rem;
+    margin: 0;
+  }
+
+  .list-table {
+    width: 100%;
+    border-collapse: collapse;
+  }
+
+  .list-table td {
+    border-top: 1px solid var(--border);
+    padding: 0.4rem 0.25rem;
+    font-size: 0.9rem;
+  }
+
+  .list-value {
+    color: var(--text-bright);
+    font-family: monospace;
+  }
+
+  .list-action {
+    text-align: right;
+    width: 1%;
+    white-space: nowrap;
+  }
+
+  .list-source {
+    color: var(--text-muted);
+    font-size: 0.8rem;
+  }
+
+  .remove-btn {
+    padding: 0.2rem 0.6rem;
+    font-size: 0.8rem;
+    background-color: var(--surface-3);
+    color: var(--text-bright);
+    border: 1px solid var(--border-2);
+    border-radius: var(--radius);
+    cursor: pointer;
+  }
+
+  .remove-btn:hover:not(:disabled) {
+    background-color: var(--border-2);
+  }
+
+  .remove-btn:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
   }
 
   .text-setting {

@@ -12,6 +12,12 @@ const KNOWN_SETTINGS = {
     default: 'false',
     description: 'Reply with the direct media URL from cobalt instead of downloading/uploading',
   },
+  twitter_direct_url_fallback: {
+    type: 'boolean',
+    default: 'true',
+    description:
+      'When an X/Twitter download fails (e.g. over the size or duration limit), reply with the direct media URL instead of an error',
+  },
   ntfy_topic: {
     type: 'string',
     // Read directly from env rather than botConfig: botConfig bundles in DISCORD_TOKEN
@@ -31,6 +37,27 @@ const KNOWN_SETTINGS = {
     default: 'false',
     description: 'Enforce user bans (blocks every command for banned users when on)',
   },
+  max_video_duration: {
+    type: 'number',
+    default: '300',
+    description: 'Maximum video length in seconds for non-admin downloads (admins are unlimited)',
+    min: 30,
+    max: 7200,
+  },
+  admin_user_ids: {
+    type: 'list',
+    default: '[]',
+    description:
+      'Admin Discord user IDs (bypass rate limits and size/duration caps). Merged with the ADMIN_USER_IDS env list; bot picks up changes within a minute',
+    itemPattern: /^\d{17,20}$/,
+    // Env-provided admins are shown read-only next to the editable DB list.
+    // Read from env directly (botConfig would require DISCORD_TOKEN in webui-only runs).
+    envValues: () =>
+      (process.env.ADMIN_USER_IDS || '')
+        .split(',')
+        .map(id => id.trim())
+        .filter(id => id.length > 0),
+  },
 };
 
 // Get all bot settings (known settings filled with defaults)
@@ -44,6 +71,13 @@ router.get('/api/settings', async (req, res) => {
         type: meta.type,
         description: meta.description,
       };
+      if (meta.min !== undefined) {
+        settings[key].min = meta.min;
+        settings[key].max = meta.max;
+      }
+      if (meta.envValues) {
+        settings[key].envValues = meta.envValues();
+      }
     }
     res.json({ settings });
   } catch (error) {
@@ -83,6 +117,34 @@ router.put('/api/settings/:key', express.json(), async (req, res) => {
         });
       }
       textValue = String(value === true || value === 'true');
+    } else if (meta.type === 'number') {
+      const num = Number(value);
+      if (
+        !Number.isInteger(num) ||
+        (meta.min !== undefined && num < meta.min) ||
+        (meta.max !== undefined && num > meta.max)
+      ) {
+        return res.status(400).json({
+          error: 'invalid value',
+          message: `"${key}" expects an integer between ${meta.min} and ${meta.max}`,
+        });
+      }
+      textValue = String(num);
+    } else if (meta.type === 'list') {
+      if (!Array.isArray(value) || value.some(item => typeof item !== 'string')) {
+        return res.status(400).json({
+          error: 'invalid value',
+          message: `"${key}" expects an array of strings`,
+        });
+      }
+      const items = [...new Set(value.map(item => item.trim()))];
+      if (meta.itemPattern && items.some(item => !meta.itemPattern.test(item))) {
+        return res.status(400).json({
+          error: 'invalid value',
+          message: `"${key}" contains an entry with an invalid format`,
+        });
+      }
+      textValue = JSON.stringify(items);
     } else {
       textValue = String(value).trim();
       if (meta.pattern && !meta.pattern.test(textValue)) {

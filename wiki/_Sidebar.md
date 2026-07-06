@@ -2,6 +2,7 @@
 
 - [[Home]]
 - [[Quick-Start]]
+- [[Running-for-Free]]
 - [[Installation]]
 - [[Configuration]]
 

@@ -139,7 +139,10 @@ and this project adheres (attempts) to [Semantic Versioning](https://semver.org/
   are already fully present in this commit, there is no meaningful distinct `0.15.4` build to bump
   to separately.
 
-## [0.15.4] - 2026-06-26
+## [0.15.3] - 2026-06-26
+
+> Previously mislabeled 0.15.4 — `package.json` was bumped to 0.15.3 for this release
+> and 0.15.4 never shipped.
 
 ### Added
 

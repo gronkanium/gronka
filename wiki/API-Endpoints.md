@@ -95,7 +95,7 @@ the webui dashboard (port 3001) has its own api used by the dashboard interface:
 
 **settings:**
 
-- `GET /api/settings` - list bot settings (e.g., `url_only_mode`) with values, types, and descriptions
+- `GET /api/settings` - list bot settings (e.g., `url_only_mode`, `moderation_enabled`) with values, types, and descriptions
 - `PUT /api/settings/:key` - update a setting (json body: `{"value": "true"}`); settings are stored in the shared `bot_settings` database table so they take effect in the bot process without a restart
 
 **operations and monitoring:**
@@ -109,6 +109,11 @@ the webui dashboard (port 3001) has its own api used by the dashboard interface:
 
 - `GET /api/users`, `GET /api/users/:userId` (plus `/activity`, `/media`, `/operations`) - user tracking
 - `DELETE /api/moderation/files/:urlHash`, `/api/moderation/files/bulk`, `/api/moderation/users/:userId/r2-media` - file/user moderation
+- `GET /api/bans` - list banned users
+- `POST /api/bans` - ban a user (json body: `{"userId": "...", "reason": "...", "appealAllowed": true}`; re-banning updates the reason/appeal)
+- `DELETE /api/bans/:userId` - unban a user
+
+bans block every command, context-menu, and modal interaction for the banned user. enforcement is gated behind the `moderation_enabled` setting, so it can be toggled off without losing ban records. bans are managed from the webui bans tab.
 
 these are for dashboard use only and are not intended for external consumption. the webui binds to `127.0.0.1` by default.
 

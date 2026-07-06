@@ -123,6 +123,19 @@ check if the platform is supported by cobalt:
 
 for unsupported platforms, use `/convert` with a direct media url.
 
+### age-restricted tiktok posts fail
+
+cobalt has no tiktok cookie support, so age-restricted tiktok posts always fail through it. the bot falls back to yt-dlp for tiktok urls, but yt-dlp needs a logged-in session to see age-restricted content:
+
+1. export cookies from a logged-in tiktok browser session in netscape `cookies.txt` format
+2. point `YTDLP_COOKIES_PATH` at the file (in docker, save it as `./tiktok-cookies.txt` in the project root — it's mounted automatically)
+
+see `YTDLP_COOKIES_PATH` in [[Configuration]] for details.
+
+### youtube video too long
+
+`/download` caps youtube videos at 5 minutes for non-admin users. to grab part of a longer video, pass `start_time`/`end_time` — trimmed downloads bypass the cap. admin users (via `ADMIN_USER_IDS`) are exempt.
+
 ### download timeout
 
 large files may timeout. the bot uses deferred downloads for this:

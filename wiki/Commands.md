@@ -52,6 +52,9 @@ download media from a social media url or direct url.
 
 - works with social media platforms (twitter, tiktok, instagram, etc.) if cobalt is enabled
 - also works with direct media urls
+- embed-fixer mirror urls are rewritten to the canonical site before downloading: fxtwitter.com, fixupx.com, twittpr.com, pxtwitter.com, vxtwitter.com, fixvx.com, cunnyx.com, girlcockx.com, and stupidpenisx.com all map to twitter.com; fxbsky.app maps to bsky.app
+- youtube downloads are handled by yt-dlp and capped at 5 minutes for non-admin users; use `start_time`/`end_time` to grab a clip from a longer video (trimmed downloads bypass the duration cap)
+- age-restricted tiktok posts fall back from cobalt to yt-dlp, which needs a cookies file — see `YTDLP_COOKIES_PATH` in [[Configuration]]
 - downloads and stores the media without conversion
 - **for videos**: time parameters (`start_time`, `end_time`) trim the video before saving
   - if only `start_time` is provided, video is trimmed from that time to the end
@@ -202,6 +205,7 @@ default file size limits:
 - images: 50mb maximum (configurable via `MAX_IMAGE_SIZE`)
 - gif optimization: 50mb maximum
 - gif duration: 30 seconds maximum (configurable via `MAX_GIF_DURATION`)
+- youtube downloads: 5 minutes maximum (trimmed downloads via `start_time`/`end_time` bypass this)
 
 admin users can bypass these limits.
 
@@ -213,4 +217,5 @@ common error messages and what they mean:
 - "file too large" - the file exceeds size limits
 - "unsupported format" - the file type isn't supported
 - "download failed" - the download couldn't complete (check url or cobalt status)
+- "video duration exceeds the maximum allowed (5 minutes)" - the video is over the youtube duration cap; use `start_time`/`end_time` to download a clip under the limit
 - "conversion failed" - ffmpeg couldn't process the file

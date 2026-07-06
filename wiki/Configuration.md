@@ -715,6 +715,42 @@ enable or disable cobalt integration.
 COBALT_ENABLED=true
 ```
 
+## yt-dlp integration
+
+yt-dlp handles youtube downloads and is the fallback for x/twitter and tiktok urls when cobalt fails.
+
+### `YTDLP_ENABLED`
+
+enable or disable yt-dlp integration.
+
+**default:** `true`
+
+**example:**
+
+```env
+YTDLP_ENABLED=true
+```
+
+### `YTDLP_COOKIES_PATH`
+
+optional path to a netscape-format `cookies.txt` file passed to yt-dlp.
+
+**optional**
+
+**notes:**
+
+- needed for age-restricted tiktok posts: cobalt has no tiktok cookie support, so those posts only work via the yt-dlp fallback with a logged-in session
+- export the file from a logged-in browser session in netscape cookies.txt format
+- if the file doesn't exist, yt-dlp runs without cookies (no error)
+- yt-dlp writes refreshed cookies back to the file, so keep it writable
+- in docker, this defaults to `/app/tiktok-cookies.txt`, mounted from `./tiktok-cookies.txt` in the project root (gitignored)
+
+**example:**
+
+```env
+YTDLP_COOKIES_PATH=./tiktok-cookies.txt
+```
+
 ## admin configuration
 
 ### `ADMIN_USER_IDS`

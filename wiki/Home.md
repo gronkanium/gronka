@@ -67,7 +67,7 @@ gronka consists of three components:
 
 1. **discord bot** - the part that lives in your server, downloads media, and does the converting
 2. **r2 storage** - stores and serves videos, images, and gifs via cloudflare r2 (optional, falls back to local storage)
-3. **webui** (optional) - a dashboard for statistics, logs, operation tracking, moderation, and bot settings (like url-only mode)
+3. **webui** (optional) - a dashboard for statistics, logs, operation tracking, moderation (including user bans), and bot settings (like url-only mode)
 
 ## license
 

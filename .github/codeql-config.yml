@@ -1,9 +1,13 @@
 name: 'CodeQL Configuration'
 
+# Test code is not a security boundary: env reads and fixture data in tests taint
+# shared sinks (e.g. the logger) and produce alerts against production files.
+# The workflow-level paths-ignore only gates triggering, not analysis scope.
+paths-ignore:
+  - test
+
 # Exclude specific queries that generate false positives
 # These are legitimate security patterns that are properly sanitized/validated
-# Note: CodeQL config doesn't support per-file exclusions, so we exclude globally
-# The code has been refactored to make sanitization/validation more explicit
 queries:
   - exclude:
       id: js/log-injection

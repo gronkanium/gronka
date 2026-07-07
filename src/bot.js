@@ -1,5 +1,5 @@
 import { Client, GatewayIntentBits, Events } from 'discord.js';
-import { createHash, timingSafeEqual } from 'crypto';
+import { scryptSync, randomBytes, timingSafeEqual } from 'crypto';
 import express from 'express';
 import rateLimit from 'express-rate-limit';
 import { createLogger } from './utils/logger.js';
@@ -71,13 +71,18 @@ let cleanupJobIntervalId = null;
 // HTTP server for stats endpoint (minimal, only for Jekyll stats site)
 let httpServer = null;
 
+// Per-process random salt for safeCompare; both sides use the same salt so equal
+// inputs still produce equal digests within this process.
+const SAFE_COMPARE_SALT = randomBytes(16);
+
 /**
  * Constant-time string comparison to prevent timing attacks on credentials.
- * Hashing both sides first equalizes lengths so timingSafeEqual can be used.
+ * Deriving both sides through scrypt equalizes lengths so timingSafeEqual can be
+ * used, and keeps the derivation cost high enough for password inputs (CWE-916).
  */
 function safeCompare(a, b) {
-  const hashA = createHash('sha256').update(String(a)).digest();
-  const hashB = createHash('sha256').update(String(b)).digest();
+  const hashA = scryptSync(String(a), SAFE_COMPARE_SALT, 32);
+  const hashB = scryptSync(String(b), SAFE_COMPARE_SALT, 32);
   return timingSafeEqual(hashA, hashB);
 }
 

@@ -44,6 +44,54 @@ const connectionOptions = {
   onnotice: () => {},
 };
 
+async function ensureRoleExists() {
+  // Probe with the configured role first; the common case is that docker-compose
+  // already provisioned it and this is a single cheap SELECT.
+  const probe = postgres({ ...connectionOptions, database: 'postgres' });
+  let probeError;
+  try {
+    await probe`SELECT 1`;
+    return;
+  } catch (error) {
+    // 28000 = role does not exist (trust auth), 28P01 = password auth failed —
+    // scram/md5 servers report a missing role as a password failure on purpose,
+    // so both need the pg_roles check below to tell "missing" from "wrong password".
+    if (error.code !== '28000' && error.code !== '28P01') {
+      throw error;
+    }
+    probeError = error;
+  } finally {
+    await probe.end();
+  }
+
+  // Fresh machine without the compose-provisioned role: create it via the admin
+  // role (default "postgres", which works on trust-auth local installs).
+  const adminUser = process.env.TEST_POSTGRES_ADMIN_USER || 'postgres';
+  const adminPassword = process.env.TEST_POSTGRES_ADMIN_PASSWORD || '';
+  const admin = postgres({
+    ...connectionOptions,
+    username: adminUser,
+    password: adminPassword,
+    database: 'postgres',
+  });
+  try {
+    const exists = await admin`SELECT 1 FROM pg_roles WHERE rolname = ${username}`;
+    if (exists.length > 0) {
+      // Role is there — the probe failure was a genuine auth problem, not a
+      // missing role. Surface the original error.
+      throw probeError;
+    }
+    console.log(`[test-db-reset] Role "${username}" missing, creating it as "${adminUser}"`);
+    const quotedRole = `"${username.replace(/"/g, '""')}"`;
+    const quotedPassword = `'${password.replace(/'/g, "''")}'`;
+    // SUPERUSER to match the role docker-compose provisions (POSTGRES_USER of the
+    // container); the reset/create-database steps below rely on those privileges.
+    await admin.unsafe(`CREATE ROLE ${quotedRole} LOGIN SUPERUSER PASSWORD ${quotedPassword}`);
+  } finally {
+    await admin.end();
+  }
+}
+
 async function ensureDatabaseExists() {
   // Connect to the maintenance database to create the test database if missing
   const admin = postgres({ ...connectionOptions, database: 'postgres' });
@@ -82,6 +130,7 @@ async function precreateTables() {
 }
 
 try {
+  await ensureRoleExists();
   await ensureDatabaseExists();
   await resetSchema();
   await precreateTables();
@@ -89,6 +138,9 @@ try {
   console.error(`[test-db-reset] Failed to reset test database "${database}": ${error.message}`);
   console.error(
     '[test-db-reset] Is PostgreSQL running? (docker compose up -d postgres, or check TEST_POSTGRES_* env vars)'
+  );
+  console.error(
+    `[test-db-reset] If the "${username}" role is missing and auto-creation failed, set TEST_POSTGRES_ADMIN_USER/TEST_POSTGRES_ADMIN_PASSWORD to a role that can CREATE ROLE`
   );
   process.exit(1);
 }

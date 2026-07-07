@@ -1,4 +1,4 @@
-import { Client, GatewayIntentBits, Events } from 'discord.js';
+import { Client, GatewayIntentBits, Partials, Events } from 'discord.js';
 import { scryptSync, randomBytes, timingSafeEqual } from 'crypto';
 import express from 'express';
 import rateLimit from 'express-rate-limit';
@@ -12,6 +12,7 @@ import { handleOptimizeCommand, handleOptimizeContextMenuCommand } from './comma
 import { handleConvertCommand, handleConvertContextMenu } from './commands/convert.js';
 import { handleInfoCommand } from './commands/info.js';
 import { handleModalSubmit } from './handlers/modals.js';
+import { handlePrefixMessage } from './handlers/prefix-commands.js';
 import { cleanupStuckOperations } from './utils/operations-tracker.js';
 import { initializeR2UsageCache, formatFileSize } from './utils/storage.js';
 import { r2Config } from './utils/config.js';
@@ -60,6 +61,7 @@ const client = new Client({
     GatewayIntentBits.DirectMessages, // Required for DM support
     GatewayIntentBits.MessageContent, // Required to access attachments
   ],
+  partials: [Partials.Channel], // Required to receive MessageCreate in DMs (prefix commands)
 });
 
 // Track bot start time for uptime
@@ -387,6 +389,16 @@ client.on(Events.InteractionCreate, async interaction => {
     }
   } catch (error) {
     logger.error('Unhandled error in interaction handler:', error);
+  }
+});
+
+// Prefix commands ("^download <url>", "@gronka help", ...). The handler does its own
+// bot/webhook filtering, ban/maintenance checks, and per-guild prefix resolution.
+client.on(Events.MessageCreate, async message => {
+  try {
+    await handlePrefixMessage(message, { botStartTime });
+  } catch (error) {
+    logger.error('Unhandled error in message handler:', error);
   }
 });
 

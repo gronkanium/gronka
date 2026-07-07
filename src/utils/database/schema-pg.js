@@ -127,6 +127,16 @@ export function getTableDefinitions() {
       `,
     },
     {
+      name: 'guild_prefixes',
+      sql: `
+        CREATE TABLE IF NOT EXISTS guild_prefixes (
+          guild_id TEXT PRIMARY KEY,
+          prefix TEXT NOT NULL,
+          updated_at BIGINT NOT NULL
+        );
+      `,
+    },
+    {
       name: 'banned_users',
       sql: `
         CREATE TABLE IF NOT EXISTS banned_users (
@@ -249,6 +259,10 @@ export function getIndexDefinitions() {
     {
       name: 'idx_temporary_uploads_deletion_failed',
       sql: 'CREATE INDEX IF NOT EXISTS idx_temporary_uploads_deletion_failed ON temporary_uploads(deletion_failed);',
+    },
+    {
+      name: 'idx_guild_prefixes_updated_at',
+      sql: 'CREATE INDEX IF NOT EXISTS idx_guild_prefixes_updated_at ON guild_prefixes(updated_at);',
     },
   ];
 }

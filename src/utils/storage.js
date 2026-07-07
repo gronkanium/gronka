@@ -282,7 +282,7 @@ export function detectFileType(extension, contentType = '') {
 
 /**
  * Check if a GIF with the given hash already exists
- * @param {string} hash - MD5 hash of the video
+ * @param {string} hash - BLAKE3 hash of the video
  * @param {string} storagePath - Base storage path (kept for backward compatibility)
  * @returns {Promise<boolean>} True if GIF exists
  */
@@ -308,7 +308,7 @@ export async function gifExists(hash, storagePath) {
 
 /**
  * Get the full file path for a GIF by hash
- * @param {string} hash - MD5 hash of the video
+ * @param {string} hash - BLAKE3 hash of the video
  * @param {string} storagePath - Base storage path
  * @returns {string} Full path to GIF file
  */
@@ -329,7 +329,7 @@ export function getGifPath(hash, storagePath) {
 /**
  * Save a GIF buffer to R2 or disk
  * @param {Buffer} buffer - GIF file buffer
- * @param {string} hash - MD5 hash of the video
+ * @param {string} hash - BLAKE3 hash of the video
  * @param {string} storagePath - Base storage path (for local fallback)
  * @param {Object} [metadata={}] - Optional metadata to attach to the object
  * @returns {Promise<{url: string, method: string, buffer: Buffer}>} Object with URL, upload method, and buffer

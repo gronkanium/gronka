@@ -196,7 +196,7 @@ export function getR2KeyFromHash(hash, fileType, extension) {
 /**
  * Upload GIF to R2
  * @param {Buffer} buffer - GIF buffer
- * @param {string} hash - MD5 hash of the GIF
+ * @param {string} hash - BLAKE3 hash of the GIF
  * @param {Object} config - R2 configuration
  * @param {Object} [metadata={}] - Optional metadata to attach to the object
  * @returns {Promise<string>} Public URL of uploaded GIF
@@ -264,7 +264,7 @@ export async function uploadImageToR2(buffer, hash, extension, config, metadata 
 
 /**
  * Check if GIF exists in R2
- * @param {string} hash - MD5 hash of the GIF
+ * @param {string} hash - BLAKE3 hash of the GIF
  * @param {Object} config - R2 configuration
  * @returns {Promise<boolean>} True if GIF exists
  */
@@ -276,7 +276,7 @@ export async function gifExistsInR2(hash, config) {
 
 /**
  * Download GIF from R2
- * @param {string} hash - MD5 hash of the GIF
+ * @param {string} hash - BLAKE3 hash of the GIF
  * @param {Object} config - R2 configuration
  * @returns {Promise<Buffer>} GIF file buffer
  */

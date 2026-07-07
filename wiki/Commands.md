@@ -13,8 +13,8 @@ convert a video or image to gif.
 - `quality` (string, optional) - gif quality preset: `low`, `medium`, or `high` (default: `medium`)
 - `optimize` (boolean, optional) - optimize the gif after conversion to reduce file size
 - `lossy` (number, optional) - lossy compression level (0-100, default: 35)
-- `start_time` (number, optional) - start time in seconds for trimming video before conversion (only applies to video inputs, ignored for images)
-- `end_time` (number, optional) - end time in seconds for trimming video before conversion (only applies to video inputs, ignored for images)
+- `start_time` (string, optional) - start time for trimming video before conversion, as seconds (`90`, `12.5`) or a timestamp (`3:10`, `1:02:30`) (only applies to video inputs, ignored for images)
+- `end_time` (string, optional) - end time for trimming video before conversion, as seconds (`90`, `12.5`) or a timestamp (`3:10`, `1:02:30`) (only applies to video inputs, ignored for images)
 
 **usage:**
 
@@ -35,6 +35,7 @@ convert a video or image to gif.
 /convert url:https://example.com/video.mp4
 /convert file:<attach image> optimize:true
 /convert url:https://example.com/video.mp4 start_time:30 end_time:60
+/convert url:https://example.com/video.mp4 start_time:1:30 end_time:3:10
 /convert file:<attach video> start_time:10
 ```
 
@@ -45,8 +46,8 @@ download media from a social media url or direct url.
 **parameters:**
 
 - `url` (string, required) - url to download media from
-- `start_time` (number, optional) - start time in seconds for video trimming (only applies to videos, ignored for images/gifs)
-- `end_time` (number, optional) - end time in seconds for video trimming (only applies to videos, ignored for images/gifs)
+- `start_time` (string, optional) - start time for video trimming, as seconds (`90`, `12.5`) or a timestamp (`3:10`, `1:02:30`) (only applies to videos, ignored for images/gifs)
+- `end_time` (string, optional) - end time for video trimming, as seconds (`90`, `12.5`) or a timestamp (`3:10`, `1:02:30`) (only applies to videos, ignored for images/gifs)
 
 **usage:**
 
@@ -71,6 +72,7 @@ download media from a social media url or direct url.
 /download url:https://twitter.com/user/status/123
 /download url:https://example.com/video.mp4
 /download url:https://example.com/video.mp4 start_time:30 end_time:60
+/download url:https://example.com/video.mp4 start_time:1:30 end_time:3:10
 /download url:https://example.com/video.mp4 start_time:10
 ```
 

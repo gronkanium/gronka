@@ -4,6 +4,7 @@ import { botConfig } from '../../utils/config.js';
 import { checkRateLimit } from '../../utils/rate-limit.js';
 import { createFailedOperation } from '../../utils/operations-tracker.js';
 import { safeInteractionReply } from '../../utils/interaction-helpers.js';
+import { parseTimestamp } from '../../utils/validation.js';
 
 const logger = createLogger('command-guards');
 
@@ -41,4 +42,65 @@ export async function replyIfRateLimited(interaction, { type, action, commandSou
   });
 
   return true;
+}
+
+/**
+ * Read and parse the start_time/end_time string options from a slash command interaction.
+ * Values may be plain seconds ("90", "12.5") or timestamps ("3:10", "1:02:30"). On an invalid
+ * value or an invalid range (end_time <= start_time), it records a failed operation, replies
+ * ephemerally, and returns null so the caller can return early.
+ *
+ * @param {import('discord.js').ChatInputCommandInteraction} interaction
+ * @param {Object} params
+ * @param {'download'|'convert'} params.type - Operation type (for tracking)
+ * @returns {Promise<{startTime: number|null, endTime: number|null}|null>} Parsed times in
+ *   seconds (null for options the user didn't provide), or null when a reply was already sent
+ */
+export async function resolveTimeOptions(interaction, { type }) {
+  const userId = interaction.user.id;
+  const username = interaction.user.tag || interaction.user.username || 'unknown';
+
+  const failWith = async (errorMessage, reason, commandOptions) => {
+    createFailedOperation(type, userId, username, errorMessage, reason, {
+      commandSource: 'slash',
+      commandOptions,
+    });
+    await safeInteractionReply(interaction, {
+      content: errorMessage,
+      flags: MessageFlags.Ephemeral,
+    });
+    return null;
+  };
+
+  const times = { startTime: null, endTime: null };
+
+  for (const [optionName, key] of [
+    ['start_time', 'startTime'],
+    ['end_time', 'endTime'],
+  ]) {
+    const input = interaction.options.getString(optionName);
+    if (input === null) continue;
+
+    const parsed = parseTimestamp(input);
+    if (!parsed.valid) {
+      logger.warn(`Invalid ${optionName} "${input}" for user ${userId}: ${parsed.error}`);
+      return failWith(`${optionName}: ${parsed.error}`, 'invalid_time_format', {
+        [optionName]: input,
+      });
+    }
+    times[key] = parsed.seconds;
+  }
+
+  const { startTime, endTime } = times;
+  if (startTime !== null && endTime !== null && endTime <= startTime) {
+    logger.warn(
+      `Invalid time range for user ${userId}: end_time (${endTime}) must be greater than start_time (${startTime})`
+    );
+    return failWith('end_time must be greater than start_time.', 'invalid_time_range', {
+      startTime,
+      endTime,
+    });
+  }
+
+  return times;
 }

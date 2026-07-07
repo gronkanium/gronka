@@ -5,6 +5,7 @@ import {
   sanitizeFilename,
   validateFileExtension,
   validateFilename,
+  parseTimestamp,
 } from '../../src/utils/validation.js';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -227,6 +228,67 @@ describe('validation utilities', () => {
       const result = validateFilename('image.png', testStoragePath);
       assert.strictEqual(result.valid, true);
       assert(result.filePath.startsWith(path.resolve(testStoragePath)));
+    });
+  });
+
+  describe('parseTimestamp', () => {
+    test('parses plain seconds', () => {
+      assert.deepStrictEqual(parseTimestamp('90'), { valid: true, seconds: 90 });
+      assert.deepStrictEqual(parseTimestamp('0'), { valid: true, seconds: 0 });
+      assert.deepStrictEqual(parseTimestamp('12.5'), { valid: true, seconds: 12.5 });
+    });
+
+    test('parses MM:SS timestamps', () => {
+      assert.deepStrictEqual(parseTimestamp('3:10'), { valid: true, seconds: 190 });
+      assert.deepStrictEqual(parseTimestamp('0:05'), { valid: true, seconds: 5 });
+      assert.deepStrictEqual(parseTimestamp('10:00'), { valid: true, seconds: 600 });
+      assert.deepStrictEqual(parseTimestamp('1:30.5'), { valid: true, seconds: 90.5 });
+    });
+
+    test('parses HH:MM:SS timestamps', () => {
+      assert.deepStrictEqual(parseTimestamp('1:02:30'), { valid: true, seconds: 3750 });
+      assert.deepStrictEqual(parseTimestamp('0:00:01'), { valid: true, seconds: 1 });
+      assert.deepStrictEqual(parseTimestamp('2:00:00'), { valid: true, seconds: 7200 });
+    });
+
+    test('allows minutes over 59 when no hours segment is present', () => {
+      assert.deepStrictEqual(parseTimestamp('90:00'), { valid: true, seconds: 5400 });
+    });
+
+    test('trims surrounding whitespace', () => {
+      assert.deepStrictEqual(parseTimestamp(' 3:10 '), { valid: true, seconds: 190 });
+    });
+
+    test('rejects seconds/minutes segments of 60 or more', () => {
+      assert.strictEqual(parseTimestamp('1:60').valid, false);
+      assert.strictEqual(parseTimestamp('1:99').valid, false);
+      assert.strictEqual(parseTimestamp('1:60:00').valid, false);
+    });
+
+    test('rejects malformed input', () => {
+      assert.strictEqual(parseTimestamp('abc').valid, false);
+      assert.strictEqual(parseTimestamp('1:2:3:4').valid, false);
+      assert.strictEqual(parseTimestamp('-5').valid, false);
+      assert.strictEqual(parseTimestamp('1:-5').valid, false);
+      assert.strictEqual(parseTimestamp('3:').valid, false);
+      assert.strictEqual(parseTimestamp(':10').valid, false);
+      assert.strictEqual(parseTimestamp('1.5:30').valid, false);
+      assert.strictEqual(parseTimestamp('3:100').valid, false);
+      assert.strictEqual(parseTimestamp('1h30m').valid, false);
+    });
+
+    test('rejects empty and non-string input', () => {
+      assert.strictEqual(parseTimestamp('').valid, false);
+      assert.strictEqual(parseTimestamp('   ').valid, false);
+      assert.strictEqual(parseTimestamp(null).valid, false);
+      assert.strictEqual(parseTimestamp(undefined).valid, false);
+      assert.strictEqual(parseTimestamp(90).valid, false);
+    });
+
+    test('includes the bad value in the error message', () => {
+      const result = parseTimestamp('abc');
+      assert.strictEqual(result.valid, false);
+      assert(result.error.includes('abc'));
     });
   });
 });

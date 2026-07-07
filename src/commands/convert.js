@@ -54,7 +54,7 @@ import { hashUrlWithParams } from '../utils/cobalt-queue.js';
 import { getProcessedUrl } from '../utils/database.js';
 import { recordProcessedUrl, trackR2UploadIfApplicable } from './shared/url-cache.js';
 import { runMediaCommand } from './shared/run-media-command.js';
-import { replyIfRateLimited } from './shared/command-guards.js';
+import { replyIfRateLimited, resolveTimeOptions } from './shared/command-guards.js';
 import { initializeDatabaseWithErrorHandling } from '../utils/database-init.js';
 import { hashPartsHex } from '../utils/hashing.js';
 
@@ -1346,27 +1346,13 @@ export async function handleConvertCommand(interaction) {
   const quality = interaction.options.getString('quality');
   const optimize = interaction.options.getBoolean('optimize') ?? false;
   const lossy = interaction.options.getNumber('lossy');
-  const startTime = interaction.options.getNumber('start_time');
-  const endTime = interaction.options.getNumber('end_time');
 
-  // Validate time parameters if provided
-  if (startTime !== null && endTime !== null) {
-    if (endTime <= startTime) {
-      logger.warn(
-        `Invalid time range for user ${userId}: end_time (${endTime}) must be greater than start_time (${startTime})`
-      );
-      const errorMessage = 'end_time must be greater than start_time.';
-      createFailedOperation('convert', userId, username, errorMessage, 'invalid_time_range', {
-        commandSource: 'slash',
-        commandOptions: { startTime, endTime },
-      });
-      await safeInteractionReply(interaction, {
-        content: errorMessage,
-        flags: MessageFlags.Ephemeral,
-      });
-      return;
-    }
+  // Parse and validate start_time/end_time (accepts seconds or MM:SS / HH:MM:SS timestamps)
+  const times = await resolveTimeOptions(interaction, { type: 'convert' });
+  if (times === null) {
+    return;
   }
+  const { startTime, endTime } = times;
 
   if (!attachment && !url) {
     logger.warn(`No attachment or URL provided for user ${userId}`);

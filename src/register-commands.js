@@ -113,17 +113,17 @@ const commands = [
       },
       {
         name: 'start_time',
-        description: 'start time in seconds for trimming (videos only)',
-        type: 10, // NUMBER type
+        description:
+          'start time for trimming, in seconds or as a timestamp (e.g. 90 or 1:30) (videos only)',
+        type: 3, // STRING type (accepts seconds or MM:SS / HH:MM:SS timestamps)
         required: false,
-        min_value: 0,
       },
       {
         name: 'end_time',
-        description: 'end time in seconds for trimming (videos only)',
-        type: 10, // NUMBER type
+        description:
+          'end time for trimming, in seconds or as a timestamp (e.g. 90 or 1:30) (videos only)',
+        type: 3, // STRING type (accepts seconds or MM:SS / HH:MM:SS timestamps)
         required: false,
-        min_value: 0,
       },
     ],
     default_member_permissions: null, // Available to everyone
@@ -185,17 +185,16 @@ const commands = [
       },
       {
         name: 'start_time',
-        description: 'start time in seconds for video trimming (optional, not used for downloads)',
-        type: 10, // NUMBER type
+        description:
+          'start time for video trimming, in seconds or as a timestamp (e.g. 90 or 1:30)',
+        type: 3, // STRING type (accepts seconds or MM:SS / HH:MM:SS timestamps)
         required: false,
-        min_value: 0,
       },
       {
         name: 'end_time',
-        description: 'end time in seconds for video trimming (optional, not used for downloads)',
-        type: 10, // NUMBER type
+        description: 'end time for video trimming, in seconds or as a timestamp (e.g. 90 or 1:30)',
+        type: 3, // STRING type (accepts seconds or MM:SS / HH:MM:SS timestamps)
         required: false,
-        min_value: 0,
       },
     ],
     default_member_permissions: null, // Available to everyone

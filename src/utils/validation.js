@@ -71,6 +71,66 @@ export function validateUrl(url) {
 }
 
 /**
+ * Parse a timestamp string into seconds
+ * Accepts plain seconds ("90", "12.5"), MM:SS ("3:10"), and HH:MM:SS ("1:02:30").
+ * Fractional seconds are allowed in the last segment ("1:02.5").
+ * @param {string} input - Timestamp string to parse
+ * @returns {Object} { valid: true, seconds } or { valid: false, error }
+ */
+export function parseTimestamp(input) {
+  if (input === null || input === undefined || typeof input !== 'string') {
+    return { valid: false, error: 'timestamp must be a string' };
+  }
+
+  const trimmed = input.trim();
+  if (!trimmed) {
+    return { valid: false, error: 'timestamp is empty' };
+  }
+
+  const invalidFormat = {
+    valid: false,
+    error: `invalid timestamp "${trimmed}". use seconds (e.g. 90) or a timestamp (e.g. 1:30 or 1:02:30)`,
+  };
+
+  const parts = trimmed.split(':');
+  if (parts.length > 3) {
+    return invalidFormat;
+  }
+
+  // Plain seconds: "90" or "12.5"
+  if (parts.length === 1) {
+    if (!/^\d+(\.\d+)?$/.test(trimmed)) {
+      return invalidFormat;
+    }
+    return { valid: true, seconds: parseFloat(trimmed) };
+  }
+
+  // MM:SS or HH:MM:SS — every segment before the last must be whole digits,
+  // the last segment may have a fractional part
+  const last = parts[parts.length - 1];
+  if (!/^\d{1,2}(\.\d+)?$/.test(last) || parseFloat(last) >= 60) {
+    return invalidFormat;
+  }
+
+  for (let i = 0; i < parts.length - 1; i++) {
+    if (!/^\d+$/.test(parts[i])) {
+      return invalidFormat;
+    }
+    // Minutes must be under 60 when hours are present
+    if (parts.length === 3 && i === 1 && parseInt(parts[i], 10) >= 60) {
+      return invalidFormat;
+    }
+  }
+
+  let seconds = 0;
+  for (const part of parts) {
+    seconds = seconds * 60 + parseFloat(part);
+  }
+
+  return { valid: true, seconds };
+}
+
+/**
  * Sanitize filename to prevent path traversal and other issues
  * @param {string} filename - Filename to sanitize
  * @returns {string} Sanitized filename

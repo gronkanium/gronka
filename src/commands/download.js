@@ -48,7 +48,7 @@ import { notifyCommandSuccess, notifyCommandFailure } from '../utils/ntfy-notifi
 import { getProcessedUrl, getBooleanSetting, getSetting } from '../utils/database.js';
 import { recordProcessedUrl, trackR2UploadIfApplicable } from './shared/url-cache.js';
 import { runMediaCommand } from './shared/run-media-command.js';
-import { replyIfRateLimited } from './shared/command-guards.js';
+import { replyIfRateLimited, resolveTimeOptions } from './shared/command-guards.js';
 import { r2Config } from '../utils/config.js';
 import { trimVideo, trimGif } from '../utils/video-processor.js';
 import {
@@ -1707,27 +1707,13 @@ export async function handleDownloadCommand(interaction) {
 
   // Get URL from command options
   const url = interaction.options.getString('url');
-  const startTime = interaction.options.getNumber('start_time');
-  const endTime = interaction.options.getNumber('end_time');
 
-  // Validate time parameters if provided
-  if (startTime !== null && endTime !== null) {
-    if (endTime <= startTime) {
-      logger.warn(
-        `Invalid time range for user ${userId}: end_time (${endTime}) must be greater than start_time (${startTime})`
-      );
-      const errorMessage = 'end_time must be greater than start_time.';
-      createFailedOperation('download', userId, username, errorMessage, 'invalid_time_range', {
-        commandSource: 'slash',
-        commandOptions: { startTime, endTime },
-      });
-      await safeInteractionReply(interaction, {
-        content: errorMessage,
-        flags: MessageFlags.Ephemeral,
-      });
-      return;
-    }
+  // Parse and validate start_time/end_time (accepts seconds or MM:SS / HH:MM:SS timestamps)
+  const times = await resolveTimeOptions(interaction, { type: 'download' });
+  if (times === null) {
+    return;
   }
+  const { startTime, endTime } = times;
 
   // Convert start_time/end_time to startTime/duration format for video trimming
   // Only apply time parameters for videos (they will be ignored for images/gifs)

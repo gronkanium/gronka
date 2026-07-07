@@ -14,14 +14,14 @@ r2 provides several advantages over local storage:
 
 ### step 1: create r2 bucket
 
-1. go to cloudflare dashboard → r2
+1. go to cloudflare dashboard â†’ r2
 2. click "create bucket"
 3. choose a bucket name (e.g., `gronka-media`)
 4. select a location (optional, defaults to auto)
 
 ### step 2: create r2 api token
 
-1. go to r2 → manage r2 api tokens
+1. go to r2 â†’ manage r2 api tokens
 2. click "create api token"
 3. set permissions:
    - object read and write
@@ -30,10 +30,10 @@ r2 provides several advantages over local storage:
 
 ### step 3: configure public access
 
-1. go to r2 → your bucket → settings
+1. go to r2 â†’ your bucket â†’ settings
 2. enable public access
 3. create a custom domain or use the r2.dev subdomain
-4. note your public domain (e.g., `cdn.gronka.p1x.dev`)
+4. note your public domain (e.g., `cdn.gronka.dev`)
 
 ### step 4: configure gronka
 
@@ -44,7 +44,7 @@ R2_ACCOUNT_ID=your_cloudflare_account_id
 R2_ACCESS_KEY_ID=your_access_key_id
 R2_SECRET_ACCESS_KEY=your_secret_access_key
 R2_BUCKET_NAME=gronka-media
-R2_PUBLIC_DOMAIN=https://cdn.gronka.p1x.dev
+R2_PUBLIC_DOMAIN=cdn.gronka.dev
 ```
 
 you can find your account id in the cloudflare dashboard url or in the r2 overview page.

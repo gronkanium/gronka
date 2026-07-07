@@ -68,7 +68,7 @@ const {
 
 /**
  * Check if a CDN URL points to a local file and return the file buffer if it exists
- * @param {string} url - CDN URL to check (e.g., https://cdn.gronka.p1x.dev/gifs/abc123.gif)
+ * @param {string} url - CDN URL to check (e.g., https://cdn.gronka.dev/gifs/abc123.gif)
  * @param {string} storagePath - Base storage path
  * @returns {Promise<{exists: boolean, buffer?: Buffer, filePath?: string, contentType?: string, filename?: string}>}
  */
@@ -76,8 +76,8 @@ async function checkAndReadLocalFileFromCdnUrl(url, storagePath) {
   try {
     const urlObj = new URL(url);
 
-    // Check if it's a p1x.dev subdomain URL
-    if (!urlObj.hostname.endsWith('.p1x.dev')) {
+    // Check if it's a gronka.dev subdomain URL
+    if (!urlObj.hostname.endsWith('.gronka.dev')) {
       return { exists: false };
     }
 
@@ -1188,7 +1188,7 @@ export async function handleConvertContextMenu(interaction) {
     await safeInteractionDeferReply(interaction);
 
     try {
-      // Check if it's a cdn.gronka.p1x.dev URL and try to use local file
+      // Check if it's a cdn.gronka.dev URL and try to use local file
       const localFileCheck = await checkAndReadLocalFileFromCdnUrl(url, GIF_STORAGE_PATH);
       let useLocalFile = false;
 
@@ -1410,7 +1410,7 @@ export async function handleConvertCommand(interaction) {
     await safeInteractionDeferReply(interaction);
 
     try {
-      // Check if it's a cdn.gronka.p1x.dev URL and try to use local file
+      // Check if it's a cdn.gronka.dev URL and try to use local file
       const localFileCheck = await checkAndReadLocalFileFromCdnUrl(url, GIF_STORAGE_PATH);
       let useLocalFile = false;
 

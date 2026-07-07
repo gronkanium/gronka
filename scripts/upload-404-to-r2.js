@@ -41,14 +41,14 @@ async function upload404Cat() {
     // Upload to R2 at root level (404.jpg)
     const publicUrl = await uploadToR2(catImageBuffer, '404.jpg', 'image/jpeg', r2Config);
 
-    console.log('✓ Successfully uploaded 404 cat image to R2');
+    console.log('âœ“ Successfully uploaded 404 cat image to R2');
     console.log(`  URL: ${publicUrl}`);
     console.log('');
     console.log('Next steps:');
     console.log('1. Verify the image is accessible at the URL above');
     console.log('2. Ensure your R2 bucket is set to public access');
-    console.log('3. Configure custom domain cdn.gronka.p1x.dev in Cloudflare R2 dashboard');
-    console.log('4. Test by accessing: https://cdn.gronka.p1x.dev/404.jpg');
+    console.log('3. Configure custom domain cdn.gronka.dev in Cloudflare R2 dashboard');
+    console.log('4. Test by accessing: https://cdn.gronka.dev/404.jpg');
   } catch (error) {
     console.error('Error uploading 404 cat image to R2:', error.message);
     if (error.name === 'NotFound' || error.message.includes('404')) {

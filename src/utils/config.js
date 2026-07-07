@@ -135,7 +135,7 @@ function getBotConfig() {
     clientId: requireStringEnv('CLIENT_ID', 'Discord application/client ID'),
     adminUserIds: parseIdList('ADMIN_USER_IDS'),
     gifStoragePath: getStringEnv('GIF_STORAGE_PATH', './data-test/gifs'),
-    cdnBaseUrl: getStringEnv('CDN_BASE_URL', 'https://cdn.gronka.p1x.dev/gifs'),
+    cdnBaseUrl: getStringEnv('CDN_BASE_URL', 'https://cdn.gronka.dev/gifs'),
     maxGifDuration: parseIntEnv('MAX_GIF_DURATION', 30, 1, 300),
     gifQuality: getGifQualityEnv('GIF_QUALITY', 'medium'),
     maxVideoSize: parseIntEnv('MAX_VIDEO_SIZE', 100 * 1024 * 1024, 1), // 100MB default, configurable via MAX_VIDEO_SIZE env var
@@ -188,7 +188,7 @@ export const r2Config = {
   accessKeyId: getStringEnv('R2_ACCESS_KEY_ID', ''),
   secretAccessKey: getStringEnv('R2_SECRET_ACCESS_KEY', ''),
   bucketName: getStringEnv('R2_BUCKET_NAME', ''),
-  publicDomain: getStringEnv('R2_PUBLIC_DOMAIN', 'cdn.gronka.p1x.dev'),
+  publicDomain: getStringEnv('R2_PUBLIC_DOMAIN', 'cdn.gronka.dev'),
   tempUploadsEnabled: getStringEnv('R2_TEMP_UPLOADS_ENABLED', 'false').toLowerCase() === 'true',
   tempUploadTtlHours: parseIntEnv('R2_TEMP_UPLOAD_TTL_HOURS', 72, 1, 8760), // Max 1 year
   cleanupEnabled: getStringEnv('R2_CLEANUP_ENABLED', 'false').toLowerCase() === 'true',
@@ -197,7 +197,7 @@ export const r2Config = {
 };
 
 // Server configuration for the minimal HTTP server in bot.js
-// (serves /api/stats/24h — used by the Docker healthcheck — and /api/bot/status).
+// (serves /api/stats/24h â€” used by the Docker healthcheck â€” and /api/bot/status).
 export const serverConfig = {
   serverPort: parseIntEnv('SERVER_PORT', 3000, 1, 65535),
   serverHost: getStringEnv('SERVER_HOST', '0.0.0.0'),

@@ -17,7 +17,7 @@ const logger = createLogger('r2-storage');
  * @param {string} config.accessKeyId - R2 access key ID
  * @param {string} config.secretAccessKey - R2 secret access key
  * @param {string} config.bucketName - R2 bucket name
- * @param {string} config.publicDomain - R2 public domain (e.g., cdn.gronka.p1x.dev)
+ * @param {string} config.publicDomain - R2 public domain (e.g., cdn.gronka.dev)
  * @returns {S3Client} Initialized R2 client
  */
 function initializeR2Client(config) {
@@ -427,7 +427,7 @@ export async function deleteFromR2(key, config) {
 
 /**
  * Extract R2 object key from public URL
- * @param {string} url - Public R2 URL (e.g., https://cdn.gronka.p1x.dev/gifs/abc123.gif)
+ * @param {string} url - Public R2 URL (e.g., https://cdn.gronka.dev/gifs/abc123.gif)
  * @param {Object} config - R2 configuration
  * @returns {string|null} R2 object key (e.g., gifs/abc123.gif) or null if URL is not an R2 URL
  */

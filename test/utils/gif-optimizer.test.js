@@ -36,43 +36,50 @@ describe('gif optimizer utilities', () => {
   });
 
   describe('extractHashFromCdnUrl', () => {
-    test('extracts hash from subdomain URL', () => {
-      const url = 'https://cdn.gronka.p1x.dev/gifs/def789abc123.gif';
+    test('extracts hash from cdn.gronka.dev URL', () => {
+      const url = 'https://cdn.gronka.dev/gifs/def789abc123.gif';
       const hash = extractHashFromCdnUrl(url);
       assert.strictEqual(hash, 'def789abc123');
     });
 
-    test('extracts hash from other p1x.dev subdomain', () => {
-      const url = 'https://subdomain.p1x.dev/gifs/abc123def456.gif';
+    test('extracts hash from other gronka.dev subdomain', () => {
+      const url = 'https://subdomain.gronka.dev/gifs/abc123def456.gif';
+      const hash = extractHashFromCdnUrl(url);
+      assert.strictEqual(hash, 'abc123def456');
+    });
+
+    test('extracts hash from cdn.gronka.dev video URL', () => {
+      const url = 'https://cdn.gronka.dev/videos/abc123def456.mp4';
       const hash = extractHashFromCdnUrl(url);
       assert.strictEqual(hash, 'abc123def456');
     });
 
     test('handles URLs with query parameters', () => {
-      const url = 'https://cdn.gronka.p1x.dev/gifs/abc123.gif?version=1&cache=true';
+      const url = 'https://cdn.gronka.dev/gifs/abc123.gif?version=1&cache=true';
       const hash = extractHashFromCdnUrl(url);
       assert.strictEqual(hash, 'abc123');
     });
 
     test('handles URLs with fragments', () => {
-      const url = 'https://cdn.gronka.p1x.dev/gifs/abc123.gif#section';
+      const url = 'https://cdn.gronka.dev/gifs/abc123.gif#section';
       const hash = extractHashFromCdnUrl(url);
       assert.strictEqual(hash, 'abc123');
     });
 
-    test('returns null for non-p1x.dev domains', () => {
+    test('returns null for non-cdn domains', () => {
       assert.strictEqual(extractHashFromCdnUrl('https://example.com/gifs/abc123.gif'), null);
       assert.strictEqual(extractHashFromCdnUrl('https://cdn.example.com/gifs/abc123.gif'), null);
+      // bare apex is not a cdn subdomain
+      assert.strictEqual(extractHashFromCdnUrl('https://gronka.dev/gifs/abc123.gif'), null);
+      // the old p1x.dev domain is no longer trusted
+      assert.strictEqual(extractHashFromCdnUrl('https://cdn.gronka.p1x.dev/gifs/abc123.gif'), null);
     });
 
     test('returns null for invalid path pattern', () => {
-      assert.strictEqual(
-        extractHashFromCdnUrl('https://cdn.gronka.p1x.dev/images/abc123.gif'),
-        null
-      );
-      assert.strictEqual(extractHashFromCdnUrl('https://cdn.gronka.p1x.dev/gifs/'), null);
-      assert.strictEqual(extractHashFromCdnUrl('https://cdn.gronka.p1x.dev/gifs/abc123'), null);
-      assert.strictEqual(extractHashFromCdnUrl('https://cdn.gronka.p1x.dev/gifs/abc123.png'), null);
+      assert.strictEqual(extractHashFromCdnUrl('https://cdn.gronka.dev/images/abc123.gif'), null);
+      assert.strictEqual(extractHashFromCdnUrl('https://cdn.gronka.dev/gifs/'), null);
+      assert.strictEqual(extractHashFromCdnUrl('https://cdn.gronka.dev/gifs/abc123'), null);
+      assert.strictEqual(extractHashFromCdnUrl('https://cdn.gronka.dev/gifs/abc123.png'), null);
     });
 
     test('returns null for invalid URL format', () => {
@@ -81,7 +88,7 @@ describe('gif optimizer utilities', () => {
     });
 
     test('handles case-insensitive hash', () => {
-      const url = 'https://cdn.gronka.p1x.dev/gifs/ABC123DEF456.gif';
+      const url = 'https://cdn.gronka.dev/gifs/ABC123DEF456.gif';
       const hash = extractHashFromCdnUrl(url);
       assert.strictEqual(hash, 'ABC123DEF456');
     });

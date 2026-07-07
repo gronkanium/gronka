@@ -551,7 +551,7 @@ export async function handleOptimizeContextMenuCommand(interaction, modalAttachm
     }
 
     try {
-      // Check if it's a cdn.gronka.p1x.dev URL and try to use local file
+      // Check if it's a cdn.gronka.dev URL and try to use local file
       const hash = extractHashFromCdnUrl(url);
       let useLocalFile = false;
       let localFilePath = null;
@@ -834,7 +834,7 @@ export async function handleOptimizeCommand(interaction) {
     }
 
     try {
-      // Check if it's a cdn.gronka.p1x.dev URL and try to use local file
+      // Check if it's a cdn.gronka.dev URL and try to use local file
       const hash = extractHashFromCdnUrl(url);
       let useLocalFile = false;
       let localFilePath = null;

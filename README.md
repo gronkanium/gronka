@@ -49,7 +49,7 @@ gronka consists of three components:
 
 ### running it locally
 
-docker is the supported way to run gronka — the image bundles ffmpeg, gifsicle, and yt-dlp (see [using docker](#using-docker) below). you can run the bot directly for development, but you'll need node.js 20+, ffmpeg, and yt-dlp installed yourself, and `/optimize` requires gifsicle (linux/macOS only; not supported on windows outside docker). then:
+docker is the supported way to run gronka â€” the image bundles ffmpeg, gifsicle, and yt-dlp (see [using docker](#using-docker) below). you can run the bot directly for development, but you'll need node.js 20+, ffmpeg, and yt-dlp installed yourself, and `/optimize` requires gifsicle (linux/macOS only; not supported on windows outside docker). then:
 
 ```bash
 git clone https://github.com/thedorekaczynski/gronka.git
@@ -139,7 +139,7 @@ to enable r2, add these to your `.env`:
 - `R2_ACCESS_KEY_ID` - r2 access key id
 - `R2_SECRET_ACCESS_KEY` - r2 secret access key
 - `R2_BUCKET_NAME` - name of your r2 bucket
-- `R2_PUBLIC_DOMAIN` - public domain for your r2 bucket (e.g., cdn.gronka.p1x.dev)
+- `R2_PUBLIC_DOMAIN` - public domain for your r2 bucket (e.g., cdn.gronka.dev)
 
 r2 is optional but recommended for production deployments. files are automatically uploaded to r2 when configured, and the bot will check r2 first before downloading or converting to avoid duplicates.
 
@@ -190,9 +190,9 @@ when a file exceeds these limits, you'll receive a clear error message indicatin
 - `/optimize` - optimize an existing gif to reduce file size (supports custom lossy level 0-100)
 - `/stats` - see storage statistics and how many files gronka has stored
 - `/info` - view bot information, system status, and configuration
-- right-click a message → apps → "convert to gif" - quick convert from any message
-- right-click a message → apps → "download" - download media from message urls
-- right-click a message → apps → "optimize" - optimize a gif from any message
+- right-click a message â†’ apps â†’ "convert to gif" - quick convert from any message
+- right-click a message â†’ apps â†’ "download" - download media from message urls
+- right-click a message â†’ apps â†’ "optimize" - optimize a gif from any message
 
 ### storage
 

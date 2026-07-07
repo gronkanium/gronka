@@ -21,16 +21,16 @@ export function isGifFile(filename, contentType) {
 }
 
 /**
- * Extract hash from cdn URL (supports cdn.gronka.p1x.dev and other p1x.dev subdomains)
- * @param {string} url - URL to parse (e.g., https://cdn.gronka.p1x.dev/gifs/abc123.gif)
+ * Extract hash from cdn URL (supports gronka.dev subdomains, e.g. cdn.gronka.dev)
+ * @param {string} url - URL to parse (e.g., https://cdn.gronka.dev/gifs/abc123.gif)
  * @returns {string|null} Extracted hash or null if not a valid cdn URL
  */
 export function extractHashFromCdnUrl(url) {
   try {
     const urlObj = new URL(url);
 
-    // Check if it's a p1x.dev subdomain URL
-    if (!urlObj.hostname.endsWith('.p1x.dev')) {
+    // Check if it's a gronka.dev subdomain URL
+    if (!urlObj.hostname.endsWith('.gronka.dev')) {
       return null;
     }
 

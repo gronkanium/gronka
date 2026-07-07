@@ -67,7 +67,7 @@ PROD_GIF_STORAGE_PATH=./data-prod
 
 base url for serving files.
 
-**default:** `https://cdn.gronka.p1x.dev/gifs`
+**default:** `https://cdn.gronka.dev/gifs`
 
 **notes:**
 
@@ -106,7 +106,7 @@ r2 api access key id.
 
 **where to get it:**
 
-1. go to cloudflare dashboard → r2
+1. go to cloudflare dashboard â†’ r2
 2. click "manage r2 api tokens"
 3. create a new token
 4. copy the access key id
@@ -971,7 +971,7 @@ all other variables in `docker-compose.yml` use standard names and do not suppor
 
 ```env
 # these use standard names (no PROD_ prefix support)
-CDN_BASE_URL=${CDN_BASE_URL:-https://cdn.gronka.p1x.dev/gifs}
+CDN_BASE_URL=${CDN_BASE_URL:-https://cdn.gronka.dev/gifs}
 MAX_GIF_DURATION=${MAX_GIF_DURATION:-30}
 GIF_QUALITY=${GIF_QUALITY:-medium}
 ADMIN_USER_IDS=${ADMIN_USER_IDS:-}

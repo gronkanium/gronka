@@ -2,31 +2,31 @@ all available commands and context menu options in gronka.
 
 ## prefix commands
 
-every slash command is also available as a message (prefix) command. the default prefix is `^` (configurable per server), and mentioning the bot always works as a prefix regardless of the configured one.
+every slash command is also available as a message (prefix) command. the default prefix is `^g` (configurable per server), and mentioning the bot always works as a prefix regardless of the configured one.
 
 ```
-^download https://twitter.com/user/status/123
-^convert https://example.com/video.mp4 quality=high start=0:05 end=0:10
-^optimize lossy=50        (with a gif attached, or replying to one)
-^info
-^stats
-^help
+^g download https://twitter.com/user/status/123
+^g convert https://example.com/video.mp4 quality=high start=0:05 end=0:10
+^g optimize lossy=50        (with a gif attached, or replying to one)
+^g info
+^g stats
+^g help
 @gronka download https://twitter.com/user/status/123
 ```
 
 **usage:**
 
 - options go after the command as `key=value` pairs: `quality`, `optimize`, `lossy`, `start`/`start_time`, `end`/`end_time`
-- `^convert` and `^optimize` accept a url, an attachment on your message, or an attachment on the message you're replying to
-- a bare mention of the bot (or `^help`) shows a short help embed with the current prefix and command list
+- `^g convert` and `^g optimize` accept a url, an attachment on your message, or an attachment on the message you're replying to
+- a bare mention of the bot (or `^g help`) shows a short help embed with the current prefix and command list
 - unknown prefix commands are ignored silently so gronka doesn't clash with other bots sharing the same prefix; unknown commands after an explicit mention get a short pointer to help
 - in dms the default prefix always applies
 
 **changing the prefix (per server):**
 
-- `^prefix` — show the current prefix (anyone)
-- `^prefix !` — set a new prefix (requires the manage server permission); 1-3 printable characters, no spaces, and not `@`, `#`, `<`, `>`, backticks, or backslashes
-- `^prefix reset` — go back to the default
+- `^g prefix` — show the current prefix (anyone)
+- `^g prefix !` — set a new prefix (requires the manage server permission); 1-3 printable characters, no spaces, and not `@`, `#`, `<`, `>`, backticks, or backslashes
+- `^g prefix reset` — go back to the default
 - if the prefix is ever forgotten or clashes with another bot, mentioning the bot always works: `@gronka prefix !`
 
 ## slash commands

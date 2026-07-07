@@ -15,6 +15,7 @@ function makeFakeMessage() {
     channelId: 'chan-1',
     guild: { id: 'guild-1' },
     guildId: 'guild-1',
+    client: { user: { id: 'bot-1' }, guilds: { cache: { size: 3 } } },
     reply: async payload => {
       const sentMessage = {
         payload,
@@ -38,6 +39,7 @@ describe('createMessageAdapter', () => {
 
     assert.strictEqual(adapter.user.id, 'user-1');
     assert.strictEqual(adapter.guildId, 'guild-1');
+    assert.strictEqual(adapter.client, message.client);
     assert.strictEqual(adapter.commandName, 'download');
     assert.strictEqual(adapter.isPrefixCommand, true);
     assert.strictEqual(adapter.replied, false);

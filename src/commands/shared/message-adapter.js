@@ -4,7 +4,7 @@
  * command handlers unchanged.
  *
  * The handlers only touch interactions through:
- *   - `.user` / `.member` / `.channel` / `.guild` / `.replied` / `.deferred`
+ *   - `.user` / `.member` / `.channel` / `.guild` / `.client` / `.replied` / `.deferred`
  *   - `.options.getString/getAttachment/getBoolean/getNumber`
  *   - the four safeInteraction* helpers (reply / deferReply / editReply / followUp)
  * so that is the whole surface implemented here. Anything else (modals, ephemeral flags)
@@ -67,6 +67,7 @@ export function createMessageAdapter(message, namedOptions = {}, extras = {}) {
     channelId: message.channelId,
     guild: message.guild,
     guildId: message.guildId,
+    client: message.client,
     message,
     replied: false,
     deferred: false,

@@ -149,19 +149,19 @@ export function buildHelpEmbed(prefix) {
       {
         name: 'commands',
         value: [
-          `\`${prefix}download <url>\` — download a video from social media`,
-          `\`${prefix}convert [url]\` — convert a video/image to gif (attach a file, link one, or reply to a message with one)`,
-          `\`${prefix}optimize [url]\` — shrink a gif (attachment, url, or reply)`,
-          `\`${prefix}info\` / \`${prefix}stats\` — system info and bot stats`,
-          `\`${prefix}help\` — this message`,
+          `\`${prefix} download <url>\` — download a video from social media`,
+          `\`${prefix} convert [url]\` — convert a video/image to gif (attach a file, link one, or reply to a message with one)`,
+          `\`${prefix} optimize [url]\` — shrink a gif (attachment, url, or reply)`,
+          `\`${prefix} info\` / \`${prefix} stats\` — system info and bot stats`,
+          `\`${prefix} help\` — this message`,
         ].join('\n'),
         inline: false,
       },
       {
         name: 'options',
         value:
-          `\`key=value\` after a command, e.g. \`${prefix}convert quality=high lossy=35 start=0:05 end=0:10\`\n` +
-          `server managers can change the prefix with \`prefix <new>\` or \`prefix reset\``,
+          `\`key=value\` after a command, e.g. \`${prefix} convert quality=high lossy=35 start=0:05 end=0:10\`\n` +
+          `server managers can change the prefix with \`${prefix} prefix <new>\` or \`${prefix} prefix reset\``,
         inline: false,
       }
     );
@@ -214,7 +214,7 @@ async function handlePrefixSetting(message, tokens, currentPrefix, deps) {
   await deps.setGuildPrefix(message.guildId, requested);
   logger.info(`Prefix set to "${requested}" in guild ${message.guildId} by ${message.author.id}`);
   await message.reply(
-    `prefix set to \`${requested}\` for this server. use \`${requested}help\` or mention me if you forget it.`
+    `prefix set to \`${requested}\` for this server. use \`${requested} help\` or mention me if you forget it.`
   );
 }
 
@@ -283,7 +283,7 @@ export async function handlePrefixMessage(message, context = {}) {
   if (!isHelp && !knownCommands.includes(commandName)) {
     if (match.viaMention) {
       await message
-        .reply(`unknown command. try \`${prefix}help\` or mention me with no command.`)
+        .reply(`unknown command. try \`${prefix} help\` or mention me with no command.`)
         .catch(error => logger.debug(`Failed to send unknown-command reply: ${error.message}`));
     }
     return;

@@ -163,9 +163,9 @@ describe('handlePrefixMessage', () => {
     assert.strictEqual(calls.download.length, 0);
   });
 
-  test('dispatches ^download with the url option populated', async () => {
+  test('dispatches ^g download with the url option populated', async () => {
     const { deps, calls } = makeDeps();
-    const message = makeMessage({ content: '^download https://x.com/a start=0:05' });
+    const message = makeMessage({ content: '^g download https://x.com/a start=0:05' });
 
     await handlePrefixMessage(message, { deps });
 
@@ -180,14 +180,14 @@ describe('handlePrefixMessage', () => {
     const { deps, calls } = makeDeps({ getGuildPrefix: async () => '!' });
 
     await handlePrefixMessage(makeMessage({ content: '!info' }), { deps });
-    await handlePrefixMessage(makeMessage({ content: '^info' }), { deps });
+    await handlePrefixMessage(makeMessage({ content: '^g info' }), { deps });
 
     assert.strictEqual(calls.info.length, 1);
   });
 
   test('passes botStartTime through to the stats handler', async () => {
     const { deps, calls } = makeDeps();
-    await handlePrefixMessage(makeMessage({ content: '^stats' }), { deps, botStartTime: 12345 });
+    await handlePrefixMessage(makeMessage({ content: '^g stats' }), { deps, botStartTime: 12345 });
     assert.strictEqual(calls.stats.length, 1);
     assert.strictEqual(calls.stats[0].botStartTime, 12345);
   });
@@ -195,7 +195,7 @@ describe('handlePrefixMessage', () => {
   test('attaches message attachments as the file option for convert', async () => {
     const { deps, calls } = makeDeps();
     const attachment = { name: 'clip.mp4' };
-    const message = makeMessage({ content: '^convert quality=high', attachments: [attachment] });
+    const message = makeMessage({ content: '^g convert quality=high', attachments: [attachment] });
 
     await handlePrefixMessage(message, { deps });
 
@@ -217,7 +217,7 @@ describe('handlePrefixMessage', () => {
   test('unknown command is silent for prefix but replies for mention', async () => {
     const { deps } = makeDeps();
 
-    const silent = makeMessage({ content: '^bogus' });
+    const silent = makeMessage({ content: '^g bogus' });
     await handlePrefixMessage(silent, { deps });
     assert.strictEqual(silent._replies.length, 0);
 
@@ -229,7 +229,7 @@ describe('handlePrefixMessage', () => {
 
   test('banned users are blocked before dispatch', async () => {
     const { deps, calls } = makeDeps({ replyIfBanned: async () => true });
-    await handlePrefixMessage(makeMessage({ content: '^download https://x.com/a' }), { deps });
+    await handlePrefixMessage(makeMessage({ content: '^g download https://x.com/a' }), { deps });
     assert.strictEqual(calls.download.length, 0);
   });
 
@@ -240,14 +240,14 @@ describe('handlePrefixMessage', () => {
     await handlePrefixMessage(help, { deps });
     assert.strictEqual(help._replies.length, 0);
 
-    const prefixMsg = makeMessage({ content: '^prefix !', manageGuild: true });
+    const prefixMsg = makeMessage({ content: '^g prefix !', manageGuild: true });
     await handlePrefixMessage(prefixMsg, { deps });
     assert.strictEqual(calls.setPrefix.length, 0);
 
     const { deps: maintDeps, calls: maintCalls } = makeDeps({
       replyIfMaintenance: async () => true,
     });
-    await handlePrefixMessage(makeMessage({ content: '^info' }), { deps: maintDeps });
+    await handlePrefixMessage(makeMessage({ content: '^g info' }), { deps: maintDeps });
     assert.strictEqual(maintCalls.info.length, 0);
   });
 
@@ -263,7 +263,7 @@ describe('handlePrefixMessage', () => {
 
   test('prefix set stores a valid prefix for managers', async () => {
     const { deps, calls } = makeDeps();
-    const message = makeMessage({ content: '^prefix !', manageGuild: true });
+    const message = makeMessage({ content: '^g prefix !', manageGuild: true });
 
     await handlePrefixMessage(message, { deps });
 
@@ -273,7 +273,7 @@ describe('handlePrefixMessage', () => {
 
   test('prefix reset clears the guild override', async () => {
     const { deps, calls } = makeDeps();
-    const message = makeMessage({ content: '^prefix reset', manageGuild: true });
+    const message = makeMessage({ content: '^g prefix reset', manageGuild: true });
 
     await handlePrefixMessage(message, { deps });
 
@@ -282,7 +282,7 @@ describe('handlePrefixMessage', () => {
 
   test('prefix set rejects invalid prefixes', async () => {
     const { deps, calls } = makeDeps();
-    const message = makeMessage({ content: '^prefix @@@@', manageGuild: true });
+    const message = makeMessage({ content: '^g prefix @@@@', manageGuild: true });
 
     await handlePrefixMessage(message, { deps });
 
@@ -302,7 +302,7 @@ describe('handlePrefixMessage', () => {
 
   test('prefix cannot be changed in DMs', async () => {
     const { deps, calls } = makeDeps();
-    const message = makeMessage({ content: '^prefix !', guildId: null });
+    const message = makeMessage({ content: '^g prefix !', guildId: null });
 
     await handlePrefixMessage(message, { deps });
 
@@ -312,11 +312,11 @@ describe('handlePrefixMessage', () => {
 
   test('bare prefix query still works in DMs', async () => {
     const { deps } = makeDeps();
-    const message = makeMessage({ content: '^prefix', guildId: null });
+    const message = makeMessage({ content: '^g prefix', guildId: null });
 
     await handlePrefixMessage(message, { deps });
 
-    assert.match(message._replies[0], /`\^`/);
+    assert.match(message._replies[0], /`\^g`/);
   });
 });
 
@@ -324,6 +324,6 @@ describe('buildHelpEmbed', () => {
   test('shows the effective prefix in usage lines', () => {
     const embed = buildHelpEmbed('!').toJSON();
     assert.match(embed.description, /`!`/);
-    assert.match(embed.fields[0].value, /!download <url>/);
+    assert.match(embed.fields[0].value, /! download <url>/);
   });
 });

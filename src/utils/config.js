@@ -152,7 +152,7 @@ function getBotConfig() {
     ntfyTopic: getStringEnv('NTFY_TOPIC', ''),
     ntfyEnabled: getStringEnv('NTFY_TOPIC', '') !== '',
     discordSizeLimit: parseIntEnv('DISCORD_SIZE_LIMIT', 8 * 1024 * 1024, 1), // 8MB default, Discord's attachment limit
-    commandPrefix: getStringEnv('COMMAND_PREFIX', '^'), // default prefix for message (prefix) commands; guilds can override via "@bot prefix"
+    commandPrefix: getStringEnv('COMMAND_PREFIX', '^g'), // default prefix for message (prefix) commands; guilds can override via "@bot prefix"
   };
 
   // Validate CDN_BASE_URL format

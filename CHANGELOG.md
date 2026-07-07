@@ -5,6 +5,21 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres (attempts) to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.19.0](https://github.com/thedorekaczynski/gronka/compare/v0.18.0...v0.19.0) (2026-07-07)
+
+
+### Features
+
+* add prefix commands with per-guild prefix, mention support, and help embed ([8efe96b](https://github.com/thedorekaczynski/gronka/commit/8efe96b177b757585d8ade18cb5705eabe739267))
+* add prefix commands with per-guild prefix, mention support, and help embed ([518eb94](https://github.com/thedorekaczynski/gronka/commit/518eb94cf450f158f1f1988375698ad15acff7da))
+* serve media from cdn.gronka.dev and stop trusting p1x.dev hostnames ([2c84b6c](https://github.com/thedorekaczynski/gronka/commit/2c84b6c4be00c83b1076179bdd3f97649a56d8ae))
+
+
+### Bug Fixes
+
+* expose client on the message adapter and default the prefix to ^g ([6928715](https://github.com/thedorekaczynski/gronka/commit/6928715cd33b9468c49e6d1064da6bfd6e3c4847))
+* resolve codeql alerts for password hashing and test-code taint ([158b9b3](https://github.com/thedorekaczynski/gronka/commit/158b9b3efb9a2cb67103b3a6ace0c89f56111364))
+
 ## [0.18.0](https://github.com/thedorekaczynski/gronka/compare/v0.17.0...v0.18.0) (2026-07-07)
 
 

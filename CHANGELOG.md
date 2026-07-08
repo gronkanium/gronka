@@ -5,6 +5,19 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres (attempts) to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.20.0](https://github.com/thedorekaczynski/gronka/compare/v0.19.0...v0.20.0) (2026-07-08)
+
+
+### Features
+
+* size-tiered R2 retention with soft storage guard ([#30](https://github.com/thedorekaczynski/gronka/issues/30)) ([0fc4fb5](https://github.com/thedorekaczynski/gronka/commit/0fc4fb573c9b40f34536ecc5db5eea578e80fdaf))
+* **webui:** tabbed settings page with structured R2 tier editor ([4b77908](https://github.com/thedorekaczynski/gronka/commit/4b7790882bfedc0ef4d806140fd6a25d07147971))
+
+
+### Bug Fixes
+
+* **webui:** align settings page mobile layout with the shell breakpoint ([f7efe25](https://github.com/thedorekaczynski/gronka/commit/f7efe25cc9ca0e2e64c85b88adbab56eafc8e7e9))
+
 ## [0.19.0](https://github.com/thedorekaczynski/gronka/compare/v0.18.0...v0.19.0) (2026-07-07)
 
 

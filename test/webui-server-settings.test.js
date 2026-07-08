@@ -22,6 +22,7 @@ after(async () => {
   await setSetting('max_video_duration', '300');
   await setSetting('admin_user_ids', '[]');
   await setSetting('twitter_delivery', 'hybrid');
+  await setSetting('upload_ttl_tiers', '100:72,250:24,500:8,1024:2');
   if (server) server.close();
   // Don't close database here - it's shared across parallel test files
 });
@@ -58,6 +59,19 @@ describe('settings route', () => {
     assert.strictEqual(settings.admin_uploads_expire.type, 'boolean');
     assert.strictEqual(settings.maintenance_mode.type, 'boolean');
     assert.strictEqual(settings.rate_limit_cooldown.type, 'number');
+    assert.strictEqual(settings.upload_ttl_tiers.type, 'tiers');
+  });
+
+  test('tiers setting normalizes (sorts ascending) and rejects malformed input', async () => {
+    // Unsorted input is accepted and stored ascending by size ceiling.
+    const { response, data } = await putSetting('upload_ttl_tiers', '500:8,100:72,250:24');
+    assert.strictEqual(response.status, 200);
+    assert.strictEqual(data.value, '100:72,250:24,500:8');
+
+    for (const bad of ['', 'garbage', '100:0', '0:5', '100', ['100:72'], 42, 'abc:def']) {
+      const { response: badResponse } = await putSetting('upload_ttl_tiers', bad);
+      assert.strictEqual(badResponse.status, 400, `expected 400 for ${JSON.stringify(bad)}`);
+    }
   });
 
   test('select setting accepts listed options and rejects everything else', async () => {

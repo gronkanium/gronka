@@ -1,6 +1,9 @@
 import express from 'express';
 import { createLogger } from '../../utils/logger.js';
 import { getAllSettings, setSetting } from '../../utils/database.js';
+import { parseTiers } from '../../utils/upload-tiers.js';
+
+const MB = 1024 * 1024;
 
 const logger = createLogger('webui');
 const router = express.Router();
@@ -71,11 +74,10 @@ const KNOWN_SETTINGS = {
     max: 7200,
   },
   upload_ttl_tiers: {
-    type: 'string',
+    type: 'tiers',
     default: '100:72,250:24,500:8,1024:2',
     description:
-      'Size-based R2 retention as comma-separated MB:hours pairs (ascending by size). A file expires after the first tier whose MB ceiling it fits under, so bigger files are deleted sooner. Bot picks up changes within a minute',
-    pattern: /^(\d{1,6}:\d{1,5})(,\d{1,6}:\d{1,5})*$/,
+      'Size-based R2 retention: a file is kept for the hours of the first tier whose MB ceiling it fits under, so bigger files are deleted sooner. Bot picks up changes within a minute',
   },
   r2_soft_limit_gb: {
     type: 'number',
@@ -174,6 +176,18 @@ router.put('/api/settings/:key', express.json(), async (req, res) => {
         });
       }
       textValue = String(num);
+    } else if (meta.type === 'tiers') {
+      // Accept the same MB:hours comma-string the bot consumes, then normalize it through the
+      // bot's own parser so validation can never drift from what actually gets applied.
+      const tiers = parseTiers(typeof value === 'string' ? value : '');
+      if (!tiers || tiers.length === 0) {
+        return res.status(400).json({
+          error: 'invalid value',
+          message: `"${key}" expects comma-separated MB:hours pairs (e.g. 100:72,500:8)`,
+        });
+      }
+      // Re-serialize from the parsed (ascending-sorted) tiers so stored order is canonical.
+      textValue = tiers.map(t => `${Math.round(t.maxBytes / MB)}:${t.hours}`).join(',');
     } else if (meta.type === 'select') {
       if (!meta.options.includes(value)) {
         return res.status(400).json({

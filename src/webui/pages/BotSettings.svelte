@@ -1,10 +1,97 @@
 <script>
   import { onMount } from 'svelte';
+  import {
+    Share2,
+    HardDrive,
+    ShieldCheck,
+    Bell,
+    Activity,
+    SlidersHorizontal,
+    Plus,
+    Trash2,
+    Check,
+  } from 'lucide-svelte';
 
   let settings = {};
   let loading = true;
   let error = null;
   let saving = {};
+  let justSaved = {};
+
+  // Structured drafts for the tier editor, keyed by setting name. Kept separate from `settings`
+  // so the user can add/edit/remove rows freely and only commit on Save.
+  let tierDrafts = {};
+
+  // Which settings live under which tab. Order here is the tab order. Any known setting not
+  // listed falls into an auto "other" tab (below) so a new server-side key never disappears.
+  const TAB_GROUPS = [
+    {
+      id: 'delivery',
+      label: 'delivery',
+      icon: Share2,
+      keys: [
+        'url_only_mode',
+        'twitter_delivery',
+        'twitter_direct_url_fallback',
+        'max_video_duration',
+      ],
+    },
+    {
+      id: 'storage',
+      label: 'storage',
+      icon: HardDrive,
+      keys: ['upload_ttl_tiers', 'r2_soft_limit_gb', 'admin_uploads_expire'],
+    },
+    {
+      id: 'access',
+      label: 'access',
+      icon: ShieldCheck,
+      keys: ['maintenance_mode', 'moderation_enabled', 'rate_limit_cooldown', 'admin_user_ids'],
+    },
+    {
+      id: 'notifications',
+      label: 'notifications',
+      icon: Bell,
+      keys: ['ntfy_topic', 'ntfy_server'],
+    },
+    // Presence has no bot_settings keys — it drives its own /api/bot/status endpoint.
+    { id: 'presence', label: 'presence', icon: Activity, keys: [], presence: true },
+  ];
+
+  const TAB_STORAGE_KEY = 'gronka:settings-tab';
+  let activeTab = 'delivery';
+
+  function loadActiveTab() {
+    try {
+      const stored = localStorage.getItem(TAB_STORAGE_KEY);
+      if (stored && TAB_GROUPS.some(g => g.id === stored)) {
+        activeTab = stored;
+      }
+    } catch {
+      // storage unavailable — default tab stays
+    }
+  }
+
+  function selectTab(id) {
+    activeTab = id;
+    try {
+      localStorage.setItem(TAB_STORAGE_KEY, id);
+    } catch {
+      // ignore
+    }
+  }
+
+  // Everything known to the grouped tabs; leftovers get an auto "other" tab.
+  $: groupedKeys = new Set(TAB_GROUPS.flatMap(g => g.keys));
+  $: otherKeys = Object.keys(settings).filter(k => !groupedKeys.has(k));
+  $: tabs = [
+    ...TAB_GROUPS,
+    ...(otherKeys.length
+      ? [{ id: 'other', label: 'other', icon: SlidersHorizontal, keys: otherKeys }]
+      : []),
+  ];
+  $: activeGroup = tabs.find(t => t.id === activeTab) || tabs[0];
+  $: activeKeys = (activeGroup?.keys || []).filter(k => settings[k]);
 
   const STATUS_OPTIONS = ['online', 'idle', 'dnd', 'invisible'];
   let presenceStatus = 'online';
@@ -72,12 +159,100 @@
       }
       const data = await response.json();
       settings = data.settings || {};
+      syncTierDrafts();
     } catch (err) {
       console.error('Failed to fetch settings:', err);
       error = 'failed to load settings';
     } finally {
       loading = false;
     }
+  }
+
+  // ---- tier editor helpers ----------------------------------------------------------------
+
+  // Parse the stored "MB:hours,MB:hours" string into editable rows.
+  function parseTierRows(value) {
+    return String(value || '')
+      .split(',')
+      .map(p => p.trim())
+      .filter(Boolean)
+      .map(p => {
+        const [mb, hours] = p.split(':');
+        return { mb: Number(mb), hours: Number(hours) };
+      })
+      .filter(r => Number.isFinite(r.mb) && Number.isFinite(r.hours));
+  }
+
+  // Rows -> canonical "MB:hours" string (ascending by MB, dropping incomplete rows).
+  function serializeTiers(rows) {
+    return rows
+      .map(r => ({ mb: Math.floor(Number(r.mb)), hours: Math.floor(Number(r.hours)) }))
+      .filter(r => r.mb > 0 && r.hours > 0)
+      .sort((a, b) => a.mb - b.mb)
+      .map(r => `${r.mb}:${r.hours}`)
+      .join(',');
+  }
+
+  function syncTierDrafts() {
+    const drafts = {};
+    for (const [key, setting] of Object.entries(settings)) {
+      if (setting.type === 'tiers') {
+        drafts[key] = parseTierRows(setting.value);
+      }
+    }
+    tierDrafts = drafts;
+  }
+
+  function updateTierRow(key, idx, field, val) {
+    const rows = tierDrafts[key].map((r, i) => (i === idx ? { ...r, [field]: val } : r));
+    tierDrafts = { ...tierDrafts, [key]: rows };
+  }
+
+  function addTierRow(key) {
+    tierDrafts = { ...tierDrafts, [key]: [...(tierDrafts[key] || []), { mb: '', hours: '' }] };
+  }
+
+  function removeTierRow(key, idx) {
+    tierDrafts = { ...tierDrafts, [key]: tierDrafts[key].filter((_, i) => i !== idx) };
+  }
+
+  function tierDirty(key) {
+    return serializeTiers(tierDrafts[key] || []) !== settings[key].value;
+  }
+
+  // Human-readable summary of the draft, matching how the bot applies the curve.
+  function tierPreview(rows) {
+    const sorted = rows
+      .map(r => ({ mb: Math.floor(Number(r.mb)), hours: Math.floor(Number(r.hours)) }))
+      .filter(r => r.mb > 0 && r.hours > 0)
+      .sort((a, b) => a.mb - b.mb);
+    if (sorted.length === 0) {
+      return '';
+    }
+    const parts = sorted.map(r => `≤${r.mb} MB → ${r.hours}h`);
+    const last = sorted[sorted.length - 1];
+    parts.push(`larger → ${last.hours}h`);
+    return parts.join('  ·  ');
+  }
+
+  async function saveTiers(key) {
+    const str = serializeTiers(tierDrafts[key] || []);
+    if (!str) {
+      error = 'add at least one tier with a size and a duration';
+      return;
+    }
+    await saveSetting(key, str);
+    // Re-sync from the normalized value the server stored (canonical order).
+    tierDrafts = { ...tierDrafts, [key]: parseTierRows(settings[key].value) };
+  }
+
+  // ---- generic setting save ---------------------------------------------------------------
+
+  function flashSaved(key) {
+    justSaved = { ...justSaved, [key]: true };
+    setTimeout(() => {
+      justSaved = { ...justSaved, [key]: false };
+    }, 1600);
   }
 
   async function toggleSetting(key) {
@@ -105,6 +280,7 @@
         ...settings,
         [key]: { ...current, value: data.value },
       };
+      flashSaved(key);
     } catch (err) {
       console.error(`Failed to update setting ${key}:`, err);
       error = err.message || `failed to update ${key.replace(/_/g, ' ')}`;
@@ -147,73 +323,177 @@
     );
   }
 
+  function labelFor(key) {
+    return key.replace(/_/g, ' ');
+  }
+
   onMount(() => {
+    loadActiveTab();
     loadSettings();
     loadPresence();
   });
 </script>
 
 <div class="settings-page">
-  <div class="presence-card">
-    <div class="setting-info">
-      <span class="setting-name">bot presence</span>
-      <span class="setting-description"
-        >change the bot's Discord status and activity text on the fly</span
+  <nav class="tab-bar" aria-label="settings sections">
+    {#each tabs as tab (tab.id)}
+      {@const Icon = tab.icon}
+      <button
+        class="tab"
+        class:active={activeTab === tab.id}
+        on:click={() => selectTab(tab.id)}
+        aria-current={activeTab === tab.id ? 'true' : undefined}
       >
-      {#if currentPresenceLoading}
-        <span class="current-presence">checking current status...</span>
-      {:else if currentPresence}
-        <span class="current-presence">
-          currently: <span
-            class="presence-dot"
-            class:online={currentPresence.status === 'online'}
-            class:idle={currentPresence.status === 'idle'}
-            class:dnd={currentPresence.status === 'dnd'}
-            class:invisible={currentPresence.status === 'invisible'}
-          ></span>
-          {currentPresence.status}{currentPresence.activity ? ` — ${currentPresence.activity}` : ''}
-        </span>
-      {:else}
-        <span class="current-presence">unable to load current status</span>
-      {/if}
-    </div>
-    <form class="presence-form" on:submit|preventDefault={updatePresence}>
-      <select bind:value={presenceStatus} disabled={presenceSaving} aria-label="Bot status">
-        {#each STATUS_OPTIONS as option (option)}
-          <option value={option}>{option}</option>
-        {/each}
-      </select>
-      <input
-        type="text"
-        placeholder="activity text (optional)"
-        bind:value={presenceActivity}
-        disabled={presenceSaving}
-        aria-label="Bot activity text"
-      />
-      <button type="submit" class="save-btn" disabled={presenceSaving}>
-        {presenceSaving ? 'updating...' : 'update'}
+        <Icon size={16} />
+        <span>{tab.label}</span>
       </button>
-    </form>
-    {#if presenceError}
-      <p class="status error">{presenceError}</p>
-    {:else if presenceMessage}
-      <p class="status success">{presenceMessage}</p>
-    {/if}
-  </div>
+    {/each}
+  </nav>
+
+  {#if error}
+    <p class="status error">{error}</p>
+  {/if}
 
   {#if loading}
     <p class="status">loading settings...</p>
+  {:else if activeGroup?.presence}
+    <!-- Presence tab: drives /api/bot/status, not bot_settings -->
+    <div class="card">
+      <div class="setting-info">
+        <span class="setting-name">bot presence</span>
+        <span class="setting-description"
+          >change the bot's Discord status and activity text on the fly</span
+        >
+        {#if currentPresenceLoading}
+          <span class="current-presence">checking current status...</span>
+        {:else if currentPresence}
+          <span class="current-presence">
+            currently: <span
+              class="presence-dot"
+              class:online={currentPresence.status === 'online'}
+              class:idle={currentPresence.status === 'idle'}
+              class:dnd={currentPresence.status === 'dnd'}
+              class:invisible={currentPresence.status === 'invisible'}
+            ></span>
+            {currentPresence.status}{currentPresence.activity
+              ? ` — ${currentPresence.activity}`
+              : ''}
+          </span>
+        {:else}
+          <span class="current-presence">unable to load current status</span>
+        {/if}
+      </div>
+      <form class="presence-form" on:submit|preventDefault={updatePresence}>
+        <select bind:value={presenceStatus} disabled={presenceSaving} aria-label="Bot status">
+          {#each STATUS_OPTIONS as option (option)}
+            <option value={option}>{option}</option>
+          {/each}
+        </select>
+        <input
+          type="text"
+          placeholder="activity text (optional)"
+          bind:value={presenceActivity}
+          disabled={presenceSaving}
+          aria-label="Bot activity text"
+        />
+        <button type="submit" class="btn primary" disabled={presenceSaving}>
+          {presenceSaving ? 'updating...' : 'update'}
+        </button>
+      </form>
+      {#if presenceError}
+        <p class="status error">{presenceError}</p>
+      {:else if presenceMessage}
+        <p class="status success">{presenceMessage}</p>
+      {/if}
+    </div>
+  {:else if activeKeys.length === 0}
+    <p class="status">no settings in this section</p>
   {:else}
-    {#if error}
-      <p class="status error">{error}</p>
-    {/if}
-    {#each Object.entries(settings) as [key, setting] (key)}
-      <div class="setting-row" class:list-setting={setting.type === 'list'}>
+    {#each activeKeys as key (key)}
+      {@const setting = settings[key]}
+      {@const stacked = setting.type === 'list' || setting.type === 'tiers'}
+      <div class="card setting-row" class:stacked>
         <div class="setting-info">
-          <span class="setting-name">{key.replace(/_/g, ' ')}</span>
+          <span class="setting-name">
+            {labelFor(key)}
+            {#if justSaved[key]}<span class="saved-flag"><Check size={13} /> saved</span>{/if}
+          </span>
           <span class="setting-description">{setting.description}</span>
         </div>
-        {#if setting.type === 'list'}
+
+        {#if setting.type === 'tiers'}
+          <div class="tier-editor">
+            <table class="tier-table">
+              <thead>
+                <tr>
+                  <th>up to (MB)</th>
+                  <th>keep for (hours)</th>
+                  <th aria-label="actions"></th>
+                </tr>
+              </thead>
+              <tbody>
+                {#each tierDrafts[key] || [] as row, idx}
+                  <tr>
+                    <td>
+                      <input
+                        type="number"
+                        min="1"
+                        max="999999"
+                        step="1"
+                        value={row.mb}
+                        disabled={saving[key]}
+                        on:input={e => updateTierRow(key, idx, 'mb', e.target.value)}
+                        aria-label="size ceiling in megabytes"
+                      />
+                    </td>
+                    <td>
+                      <input
+                        type="number"
+                        min="1"
+                        max="99999"
+                        step="1"
+                        value={row.hours}
+                        disabled={saving[key]}
+                        on:input={e => updateTierRow(key, idx, 'hours', e.target.value)}
+                        aria-label="retention in hours"
+                      />
+                    </td>
+                    <td class="tier-remove">
+                      <button
+                        class="icon-btn"
+                        title="remove tier"
+                        aria-label="remove tier"
+                        disabled={saving[key]}
+                        on:click={() => removeTierRow(key, idx)}
+                      >
+                        <Trash2 size={15} />
+                      </button>
+                    </td>
+                  </tr>
+                {/each}
+              </tbody>
+            </table>
+
+            {#if tierPreview(tierDrafts[key] || [])}
+              <p class="tier-preview">{tierPreview(tierDrafts[key] || [])}</p>
+            {:else}
+              <p class="tier-preview muted">no tiers — files use the built-in default curve</p>
+            {/if}
+
+            <div class="tier-actions">
+              <button class="btn ghost" disabled={saving[key]} on:click={() => addTierRow(key)}>
+                <Plus size={15} /> add tier
+              </button>
+              <button
+                class="btn primary"
+                disabled={saving[key] || !tierDirty(key)}
+                on:click={() => saveTiers(key)}
+              >
+                {saving[key] ? 'saving...' : 'save tiers'}
+              </button>
+            </div>
+          </div>
+        {:else if setting.type === 'list'}
           <div class="list-editor">
             {#if (setting.envValues || []).length === 0 && listValues(setting).length === 0}
               <p class="list-empty">no entries</p>
@@ -223,7 +503,7 @@
                   {#each setting.envValues || [] as item (item)}
                     <tr>
                       <td class="list-value">{item}</td>
-                      <td class="list-action"><span class="list-source">from env</span></td>
+                      <td class="list-action"><span class="badge">from env</span></td>
                     </tr>
                   {/each}
                   {#each listValues(setting) as item (item)}
@@ -231,11 +511,13 @@
                       <td class="list-value">{item}</td>
                       <td class="list-action">
                         <button
-                          class="remove-btn"
+                          class="icon-btn"
+                          title="remove"
+                          aria-label="remove {item}"
                           disabled={saving[key]}
                           on:click={() => removeListItem(key, item)}
                         >
-                          remove
+                          <Trash2 size={15} />
                         </button>
                       </td>
                     </tr>
@@ -243,15 +525,17 @@
                 </tbody>
               </table>
             {/if}
-            <form class="text-setting" on:submit|preventDefault={e => addListItem(key, e.target)}>
+            <form class="inline-form" on:submit|preventDefault={e => addListItem(key, e.target)}>
               <input
                 type="text"
                 name="value"
                 placeholder="discord user id"
                 disabled={saving[key]}
-                aria-label={`Add to ${key.replace(/_/g, ' ')}`}
+                aria-label={`Add to ${labelFor(key)}`}
               />
-              <button type="submit" class="save-btn" disabled={saving[key]}>add</button>
+              <button type="submit" class="btn ghost" disabled={saving[key]}>
+                <Plus size={15} /> add
+              </button>
             </form>
           </div>
         {:else if setting.type === 'boolean'}
@@ -260,7 +544,8 @@
             class:on={setting.value === 'true'}
             disabled={saving[key]}
             on:click={() => toggleSetting(key)}
-            aria-label={`Toggle ${key.replace(/_/g, ' ')}`}
+            aria-label={`Toggle ${labelFor(key)}`}
+            aria-pressed={setting.value === 'true'}
           >
             <span class="toggle-knob"></span>
           </button>
@@ -270,7 +555,7 @@
             value={setting.value}
             disabled={saving[key]}
             on:change={e => saveSetting(key, e.target.value)}
-            aria-label={key.replace(/_/g, ' ')}
+            aria-label={labelFor(key)}
           >
             {#each setting.options || [] as option (option)}
               <option value={option}>{option.replace(/_/g, ' ')}</option>
@@ -278,7 +563,7 @@
           </select>
         {:else if setting.type === 'number'}
           <form
-            class="text-setting"
+            class="inline-form"
             on:submit|preventDefault={e =>
               handleTextSubmit(key, Number(e.target.elements.value.value))}
           >
@@ -290,13 +575,13 @@
               max={setting.max}
               step="1"
               disabled={saving[key]}
-              aria-label={key.replace(/_/g, ' ')}
+              aria-label={labelFor(key)}
             />
-            <button type="submit" class="save-btn" disabled={saving[key]}>save</button>
+            <button type="submit" class="btn ghost" disabled={saving[key]}>save</button>
           </form>
         {:else if setting.type === 'string'}
           <form
-            class="text-setting"
+            class="inline-form"
             on:submit|preventDefault={e => handleTextSubmit(key, e.target.elements.value.value)}
           >
             <input
@@ -304,9 +589,9 @@
               name="value"
               value={setting.value}
               disabled={saving[key]}
-              aria-label={key.replace(/_/g, ' ')}
+              aria-label={labelFor(key)}
             />
-            <button type="submit" class="save-btn" disabled={saving[key]}>save</button>
+            <button type="submit" class="btn ghost" disabled={saving[key]}>save</button>
           </form>
         {/if}
       </div>
@@ -319,11 +604,12 @@
     display: flex;
     flex-direction: column;
     gap: 1rem;
-    max-width: 700px;
+    max-width: 760px;
   }
 
   .status {
     color: var(--text-muted);
+    margin: 0;
   }
 
   .status.error {
@@ -334,22 +620,97 @@
     color: var(--success);
   }
 
-  .presence-card {
+  /* ---- tab bar ---- */
+  .tab-bar {
     display: flex;
-    flex-direction: column;
-    gap: 0.75rem;
+    flex-wrap: wrap;
+    gap: 0.25rem;
+    border-bottom: 1px solid var(--border);
+    margin-bottom: 0.25rem;
+  }
+
+  .tab {
+    display: flex;
+    align-items: center;
+    gap: 0.45rem;
+    background: none;
+    border: none;
+    border-bottom: 2px solid transparent;
+    color: var(--text-muted);
+    padding: 0.55rem 0.85rem;
+    margin-bottom: -1px;
+    font-size: 0.9rem;
+    cursor: pointer;
+    transition:
+      color 0.15s,
+      border-color 0.15s;
+  }
+
+  .tab:hover {
+    color: var(--text-bright);
+  }
+
+  .tab.active {
+    color: var(--text-bright);
+    border-bottom-color: var(--success);
+  }
+
+  /* ---- cards ---- */
+  .card {
     background-color: var(--bg-deep);
     border: 1px solid var(--border);
     border-radius: var(--radius-lg);
     padding: 1rem 1.25rem;
   }
 
+  .setting-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1rem;
+  }
+
+  .setting-row.stacked {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .setting-info {
+    display: flex;
+    flex-direction: column;
+    gap: 0.25rem;
+    min-width: 0;
+  }
+
+  .setting-name {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    color: var(--text-bright);
+    font-size: 1rem;
+  }
+
+  .setting-description {
+    color: var(--text-muted);
+    font-size: 0.85rem;
+  }
+
+  .saved-flag {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.2rem;
+    color: var(--success);
+    font-size: 0.75rem;
+  }
+
+  /* ---- presence ---- */
   .current-presence {
     display: flex;
     align-items: center;
     gap: 0.4rem;
     color: var(--text-muted);
     font-size: 0.85rem;
+    margin-top: 0.25rem;
   }
 
   .presence-dot {
@@ -380,6 +741,7 @@
     display: flex;
     gap: 0.5rem;
     flex-wrap: wrap;
+    margin-top: 0.75rem;
   }
 
   .presence-form select,
@@ -403,33 +765,7 @@
     cursor: wait;
   }
 
-  .setting-row {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: 1rem;
-    background-color: var(--bg-deep);
-    border: 1px solid var(--border);
-    border-radius: var(--radius-lg);
-    padding: 1rem 1.25rem;
-  }
-
-  .setting-info {
-    display: flex;
-    flex-direction: column;
-    gap: 0.25rem;
-  }
-
-  .setting-name {
-    color: var(--text-bright);
-    font-size: 1rem;
-  }
-
-  .setting-description {
-    color: var(--text-muted);
-    font-size: 0.85rem;
-  }
-
+  /* ---- toggle ---- */
   .toggle {
     position: relative;
     width: 48px;
@@ -471,15 +807,107 @@
     background-color: var(--bg-deep);
   }
 
-  .setting-row.list-setting {
-    flex-direction: column;
-    align-items: stretch;
+  /* ---- select ---- */
+  .select-setting {
+    background-color: var(--surface-2);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    color: var(--text-bright);
+    padding: 0.4rem 0.6rem;
+    font-size: 0.9rem;
+    flex-shrink: 0;
   }
 
+  .select-setting:disabled {
+    opacity: 0.6;
+    cursor: wait;
+  }
+
+  /* ---- inline (number/string/add) forms ---- */
+  .inline-form {
+    display: flex;
+    gap: 0.5rem;
+    flex-shrink: 0;
+  }
+
+  .inline-form input {
+    background-color: var(--surface-2);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    color: var(--text-bright);
+    padding: 0.4rem 0.6rem;
+    font-size: 0.9rem;
+    width: 200px;
+  }
+
+  .inline-form input:disabled {
+    opacity: 0.6;
+    cursor: wait;
+  }
+
+  /* ---- buttons ---- */
+  .btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+    padding: 0.4rem 0.8rem;
+    font-size: 0.85rem;
+    background-color: var(--surface-3);
+    color: var(--text-bright);
+    border: 1px solid var(--border-2);
+    border-radius: var(--radius);
+    cursor: pointer;
+    white-space: nowrap;
+  }
+
+  .btn:hover:not(:disabled) {
+    background-color: var(--border-2);
+  }
+
+  .btn:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+  }
+
+  .btn.ghost {
+    background-color: var(--surface-2);
+  }
+
+  .btn.primary {
+    background-color: var(--surface-3);
+  }
+
+  .icon-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0.3rem;
+    background-color: var(--surface-2);
+    color: var(--text-muted);
+    border: 1px solid var(--border-2);
+    border-radius: var(--radius);
+    cursor: pointer;
+    transition:
+      color 0.15s,
+      background-color 0.15s;
+  }
+
+  .icon-btn:hover:not(:disabled) {
+    color: var(--danger);
+    background-color: var(--surface-3);
+  }
+
+  .icon-btn:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+  }
+
+  /* ---- list editor ---- */
   .list-editor {
     display: flex;
     flex-direction: column;
     gap: 0.75rem;
+    margin-top: 0.75rem;
   }
 
   .list-empty {
@@ -510,82 +938,104 @@
     white-space: nowrap;
   }
 
-  .list-source {
+  .badge {
+    display: inline-block;
+    padding: 0.1rem 0.45rem;
+    font-size: 0.72rem;
     color: var(--text-muted);
-    font-size: 0.8rem;
-  }
-
-  .remove-btn {
-    padding: 0.2rem 0.6rem;
-    font-size: 0.8rem;
-    background-color: var(--surface-3);
-    color: var(--text-bright);
-    border: 1px solid var(--border-2);
-    border-radius: var(--radius);
-    cursor: pointer;
-  }
-
-  .remove-btn:hover:not(:disabled) {
-    background-color: var(--border-2);
-  }
-
-  .remove-btn:disabled {
-    opacity: 0.5;
-    cursor: not-allowed;
-  }
-
-  .select-setting {
     background-color: var(--surface-2);
     border: 1px solid var(--border);
     border-radius: var(--radius);
-    color: var(--text-bright);
-    padding: 0.4rem 0.6rem;
-    font-size: 0.9rem;
-    flex-shrink: 0;
   }
 
-  .select-setting:disabled {
-    opacity: 0.6;
-    cursor: wait;
-  }
-
-  .text-setting {
+  /* ---- tier editor ---- */
+  .tier-editor {
     display: flex;
-    gap: 0.5rem;
-    flex-shrink: 0;
+    flex-direction: column;
+    gap: 0.75rem;
+    margin-top: 0.75rem;
   }
 
-  .text-setting input {
+  .tier-table {
+    width: 100%;
+    border-collapse: collapse;
+  }
+
+  .tier-table th {
+    text-align: left;
+    font-weight: 400;
+    font-size: 0.78rem;
+    color: var(--text-dim);
+    padding: 0 0.25rem 0.35rem;
+  }
+
+  .tier-table th:last-child {
+    width: 1%;
+  }
+
+  .tier-table td {
+    padding: 0.25rem 0.25rem;
+  }
+
+  .tier-table input {
+    width: 100%;
     background-color: var(--surface-2);
     border: 1px solid var(--border);
     border-radius: var(--radius);
     color: var(--text-bright);
     padding: 0.4rem 0.6rem;
     font-size: 0.9rem;
-    width: 200px;
   }
 
-  .text-setting input:disabled {
+  .tier-table input:disabled {
     opacity: 0.6;
     cursor: wait;
   }
 
-  .save-btn {
-    padding: 0.4rem 0.8rem;
-    font-size: 0.85rem;
-    background-color: var(--surface-3);
-    color: var(--text-bright);
-    border: 1px solid var(--border-2);
+  .tier-remove {
+    text-align: right;
+    white-space: nowrap;
+  }
+
+  .tier-preview {
+    margin: 0;
+    font-size: 0.82rem;
+    font-family: monospace;
+    color: var(--text-muted);
+    background-color: var(--surface);
+    border: 1px solid var(--border);
     border-radius: var(--radius);
-    cursor: pointer;
+    padding: 0.5rem 0.65rem;
+    overflow-x: auto;
+    white-space: nowrap;
   }
 
-  .save-btn:hover:not(:disabled) {
-    background-color: var(--border-2);
+  .tier-preview.muted {
+    font-family: inherit;
   }
 
-  .save-btn:disabled {
-    opacity: 0.5;
-    cursor: not-allowed;
+  .tier-actions {
+    display: flex;
+    justify-content: space-between;
+    gap: 0.5rem;
+  }
+
+  @media (max-width: 640px) {
+    .setting-row {
+      flex-direction: column;
+      align-items: stretch;
+    }
+
+    .inline-form input {
+      width: 100%;
+    }
+
+    .tab span {
+      display: none;
+    }
+
+    .tab {
+      padding: 0.55rem 0.7rem;
+    }
   }
 </style>

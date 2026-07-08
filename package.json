@@ -44,6 +44,7 @@
     "migrate:storage": "node scripts/migrate-storage.js",
     "upload:404": "node scripts/upload-404-to-r2.js",
     "user:stats": "node scripts/user-stats.js",
+    "delete:user-data": "node scripts/delete-user-data.js",
     "fix:stuck-ops": "node scripts/fix-stuck-operations.js",
     "fix:creds": "bash scripts/fix-docker-credentials.sh",
     "fetch:security": "node scripts/fetch-code-scanning-issues.js",

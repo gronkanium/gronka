@@ -7,8 +7,53 @@ import {
 } from '@aws-sdk/client-s3';
 import { Upload } from '@aws-sdk/lib-storage';
 import { createLogger } from './logger.js';
+// Import from leaf DB modules (not the ./database.js barrel) to avoid an import cycle:
+// storage.js imports this file, so this file must not pull in the barrel that re-exports it.
+import { getLiveBytes } from './database/temporary-uploads-pg.js';
+import { getSetting } from './database/settings-pg.js';
+import { ValidationError } from './errors.js';
 
 const logger = createLogger('r2-storage');
+
+// Soft cap on total live temporary-upload bytes in R2. Steerable via the `r2_soft_limit_gb`
+// setting; 0 disables the guard. Keeps daily-peak storage (what R2 bills on) under budget.
+const DEFAULT_R2_SOFT_LIMIT_GB = 9;
+
+/**
+ * Throw a curated error if uploading `incomingBytes` more would push live R2 storage past the
+ * soft limit. Big files auto-expire fast (see upload-tiers.js), so this self-heals in minutes.
+ * A read failure fails open (never block uploads because a settings/DB read hiccuped).
+ * @param {number} incomingBytes
+ */
+async function assertR2Capacity(incomingBytes) {
+  let limitGb = DEFAULT_R2_SOFT_LIMIT_GB;
+  try {
+    limitGb = parseFloat(await getSetting('r2_soft_limit_gb', String(DEFAULT_R2_SOFT_LIMIT_GB)));
+  } catch (error) {
+    logger.warn(`Could not read r2_soft_limit_gb, using default: ${error.message}`);
+  }
+  if (!(limitGb > 0)) {
+    return; // Guard disabled.
+  }
+
+  let liveBytes;
+  try {
+    liveBytes = await getLiveBytes(Date.now());
+  } catch (error) {
+    logger.warn(`Could not read live R2 bytes, allowing upload: ${error.message}`);
+    return;
+  }
+
+  const limitBytes = limitGb * 1024 * 1024 * 1024;
+  if (liveBytes + incomingBytes > limitBytes) {
+    logger.warn(
+      `R2 soft limit reached: live=${(liveBytes / 1024 ** 3).toFixed(2)}GB + incoming=${(incomingBytes / 1024 ** 2).toFixed(2)}MB > ${limitGb}GB`
+    );
+    throw new ValidationError(
+      "the bot's temporary storage is full right now - try again in a bit, or grab a shorter clip."
+    );
+  }
+}
 
 /**
  * Initialize R2 client with credentials
@@ -72,6 +117,9 @@ export async function uploadToR2(buffer, key, contentType, config, metadata = {}
     logger.error(`Failed to upload to R2 (${key}):`, error.message);
     throw error;
   }
+
+  // Reject before writing if this upload would push live storage past the soft budget.
+  await assertR2Capacity(buffer.length);
 
   try {
     logger.info(
@@ -448,13 +496,28 @@ export function extractR2KeyFromUrl(url, config) {
 }
 
 /**
+ * Human-readable retention, e.g. "3 days", "1 day", "8 hours", "1 hour".
+ * @param {number} hours
+ * @returns {string}
+ */
+function formatTtlMessage(hours) {
+  const ttlHours = hours || 72;
+  if (ttlHours >= 24 && ttlHours % 24 === 0) {
+    const days = ttlHours / 24;
+    return days === 1 ? '1 day' : `${days} days`;
+  }
+  return ttlHours === 1 ? '1 hour' : `${ttlHours} hours`;
+}
+
+/**
  * Format R2 URL with disclaimer if temporary uploads are enabled
  * @param {string} url - URL to format (may be R2 URL or other URL)
  * @param {Object} config - R2 configuration
  * @param {boolean} [isAdmin=false] - Whether the user is an admin (admins get permanent uploads with no disclaimer)
+ * @param {number|null} [ttlHoursOverride=null] - Actual retention for this file (tiered by size); falls back to the flat config TTL when omitted
  * @returns {string} URL with disclaimer appended if applicable, or original URL
  */
-export function formatR2UrlWithDisclaimer(url, config, isAdmin = false) {
+export function formatR2UrlWithDisclaimer(url, config, isAdmin = false, ttlHoursOverride = null) {
   // Return original URL if not a string or empty
   if (!url || typeof url !== 'string') {
     return url;
@@ -477,18 +540,8 @@ export function formatR2UrlWithDisclaimer(url, config, isAdmin = false) {
     return url;
   }
 
-  // Format TTL message (e.g., "72 hours" or "3 days")
-  const ttlHours = config.tempUploadTtlHours || 72;
-  let ttlMessage;
-  if (ttlHours >= 24 && ttlHours % 24 === 0) {
-    const days = ttlHours / 24;
-    ttlMessage = days === 1 ? '1 day' : `${days} days`;
-  } else {
-    ttlMessage = ttlHours === 1 ? '1 hour' : `${ttlHours} hours`;
-  }
-
   // Format URL with disclaimer
-  const disclaimer = `\n-# this link will expire in ${ttlMessage}, please save and reupload to discord to keep forever`;
+  const disclaimer = `\n-# this link will expire in ${formatTtlMessage(ttlHoursOverride ?? config.tempUploadTtlHours)}, please save and reupload to discord to keep forever`;
   return url + disclaimer;
 }
 
@@ -529,17 +582,7 @@ export function formatMultipleR2UrlsWithDisclaimer(urls, config, isAdmin = false
     return urls.join('\n');
   }
 
-  // Format TTL message (e.g., "72 hours" or "3 days")
-  const ttlHours = config.tempUploadTtlHours || 72;
-  let ttlMessage;
-  if (ttlHours >= 24 && ttlHours % 24 === 0) {
-    const days = ttlHours / 24;
-    ttlMessage = days === 1 ? '1 day' : `${days} days`;
-  } else {
-    ttlMessage = ttlHours === 1 ? '1 hour' : `${ttlHours} hours`;
-  }
-
   // Format all URLs with a single disclaimer at the end
-  const disclaimer = `-# this link will expire in ${ttlMessage}, please save and reupload to discord to keep forever`;
+  const disclaimer = `-# this link will expire in ${formatTtlMessage(config.tempUploadTtlHours)}, please save and reupload to discord to keep forever`;
   return urls.join('\n') + '\n' + disclaimer;
 }

@@ -138,7 +138,12 @@ function getBotConfig() {
     cdnBaseUrl: getStringEnv('CDN_BASE_URL', 'https://cdn.gronka.dev/gifs'),
     maxGifDuration: parseIntEnv('MAX_GIF_DURATION', 30, 1, 300),
     gifQuality: getGifQualityEnv('GIF_QUALITY', 'medium'),
-    maxVideoSize: parseIntEnv('MAX_VIDEO_SIZE', 100 * 1024 * 1024, 1), // 100MB default, configurable via MAX_VIDEO_SIZE env var
+    // 1GB hard ceiling for non-admins: bigger files are rejected outright. Files under it are
+    // delivered as expiring R2 URLs whose TTL shrinks with size (see upload-tiers.js), rather
+    // than bounced at 100MB. Configurable via MAX_VIDEO_SIZE env var.
+    // ponytail: 1GB is also ~1GB held in a Node Buffer during download; if concurrent big
+    // downloads OOM the container, lower this or stream to disk instead of buffering.
+    maxVideoSize: parseIntEnv('MAX_VIDEO_SIZE', 1024 * 1024 * 1024, 1),
     maxImageSize: parseIntEnv('MAX_IMAGE_SIZE', 50 * 1024 * 1024, 1), // 50MB default, configurable via MAX_IMAGE_SIZE env var
     rateLimitCooldown: parseIntEnv('RATE_LIMIT', 10, 1) * 1000, // Default 10 seconds, configurable via RATE_LIMIT env var (in seconds)
     cobaltApiUrl: getStringEnv('COBALT_API_URL', 'http://cobalt:9000'),

@@ -70,6 +70,21 @@ const KNOWN_SETTINGS = {
     min: 30,
     max: 7200,
   },
+  upload_ttl_tiers: {
+    type: 'string',
+    default: '100:72,250:24,500:8,1024:2',
+    description:
+      'Size-based R2 retention as comma-separated MB:hours pairs (ascending by size). A file expires after the first tier whose MB ceiling it fits under, so bigger files are deleted sooner. Bot picks up changes within a minute',
+    pattern: /^(\d{1,6}:\d{1,5})(,\d{1,6}:\d{1,5})*$/,
+  },
+  r2_soft_limit_gb: {
+    type: 'number',
+    default: '9',
+    description:
+      'Soft cap (GB) on total live temporary R2 storage. New uploads that would exceed it are rejected with a "storage full" message until files expire. 0 disables the guard',
+    min: 0,
+    max: 1000,
+  },
   admin_user_ids: {
     type: 'list',
     default: '[]',

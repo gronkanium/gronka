@@ -34,6 +34,7 @@ import {
   saveVideo,
   saveImage,
   detectFileType,
+  resolveTtlHoursForSize,
 } from '../utils/storage.js';
 import { cleanupTempFiles as storageCleanupTempFiles } from '../utils/storage.js';
 import {
@@ -1425,6 +1426,10 @@ async function processDownload(
         // Update operation to success with file size
         updateOperationStatus(operationId, 'success', { fileSize: finalSize });
 
+        // Retention shown to the user must match what trackTemporaryUpload actually stored,
+        // which is tiered by size - so compute it from the same size here for the R2 replies.
+        const deliveredTtlHours = await resolveTtlHoursForSize(finalSize);
+
         // Send as Discord attachment if < 8MB, otherwise send URL
         if (finalUploadMethod === 'discord') {
           const safeHash = hash.replace(/[^a-f0-9]/gi, '');
@@ -1510,7 +1515,7 @@ async function processDownload(
                 });
                 await trackR2UploadIfApplicable(urlHash, r2Url, adminUser);
                 await safeInteractionEditReply(interaction, {
-                  content: formatR2UrlWithDisclaimer(r2Url, r2Config, adminUser),
+                  content: formatR2UrlWithDisclaimer(r2Url, r2Config, adminUser, deliveredTtlHours),
                 });
               } else {
                 // If R2 upload also fails, use the original fileUrl
@@ -1528,7 +1533,7 @@ async function processDownload(
           }
         } else {
           await safeInteractionEditReply(interaction, {
-            content: formatR2UrlWithDisclaimer(fileUrl, r2Config, adminUser),
+            content: formatR2UrlWithDisclaimer(fileUrl, r2Config, adminUser, deliveredTtlHours),
           });
         }
 

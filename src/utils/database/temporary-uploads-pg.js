@@ -106,6 +106,38 @@ export async function getExpiredTemporaryUploads(now) {
 }
 
 /**
+ * Total bytes of live (not expired, not deleted) temporary R2 uploads. Used as a soft cap so
+ * concurrent uploads don't blow past the R2 storage budget - R2 bills on daily-peak storage, so
+ * bounding the live set bounds the bill. Sizes come from processed_urls (joined on url_hash);
+ * admin permanent uploads aren't tracked here so they don't count toward the total.
+ * @param {number} now - Current Unix timestamp in milliseconds
+ * @returns {Promise<number>} Sum of live upload sizes in bytes
+ */
+export async function getLiveBytes(now) {
+  await ensurePostgresInitialized();
+
+  const sql = getPostgresConnection();
+  if (!sql) {
+    getLogger().error('PostgreSQL not initialized.');
+    return 0;
+  }
+
+  try {
+    const result = await sql`
+      SELECT COALESCE(SUM(p.file_size), 0) AS live_bytes
+      FROM temporary_uploads t
+      JOIN processed_urls p ON p.url_hash = t.url_hash
+      WHERE t.deleted_at IS NULL AND t.expires_at > ${now}
+    `;
+    // SUM of BIGINT comes back as a string; coerce to a number.
+    return Number(result[0]?.live_bytes ?? 0);
+  } catch (error) {
+    getLogger().error(`Failed to compute live upload bytes: ${error.message}`);
+    return 0;
+  }
+}
+
+/**
  * Get all temporary upload records for a given R2 key
  * @param {string} r2Key - R2 object key
  * @returns {Promise<Array>} Array of temporary upload records for the R2 key

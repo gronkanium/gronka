@@ -12,7 +12,13 @@ import {
   getR2PublicUrl,
   listObjectsInR2,
 } from './r2-storage.js';
-import { insertTemporaryUpload, getBooleanSetting } from './database.js';
+import {
+  insertTemporaryUpload,
+  getBooleanSetting,
+  getProcessedUrl,
+  getSetting,
+} from './database.js';
+import { ttlHoursForSize, DEFAULT_TTL_TIERS } from './upload-tiers.js';
 
 const logger = createLogger('storage');
 
@@ -1151,6 +1157,35 @@ export function getR2CacheStats() {
 }
 
 /**
+ * Resolve the tiered retention (in hours) for a file of the given size, reading the steerable
+ * `upload_ttl_tiers` setting and falling back to the default curve. Bigger files expire sooner.
+ * @param {number} bytes
+ * @returns {Promise<number>} whole hours
+ */
+export async function resolveTtlHoursForSize(bytes) {
+  const tiersStr = await getSetting('upload_ttl_tiers', DEFAULT_TTL_TIERS);
+  return ttlHoursForSize(bytes, tiersStr);
+}
+
+/**
+ * Resolve retention hours for an already-recorded upload by looking up its stored file size.
+ * Falls back to the flat config TTL when the size can't be read (keeps old behavior safe).
+ * @param {string} urlHash
+ * @returns {Promise<number>} whole hours
+ */
+async function resolveTtlHours(urlHash) {
+  try {
+    const record = await getProcessedUrl(urlHash);
+    if (record && typeof record.file_size === 'number' && record.file_size > 0) {
+      return await resolveTtlHoursForSize(record.file_size);
+    }
+  } catch (error) {
+    logger.warn(`Could not resolve tiered TTL for ${urlHash.substring(0, 8)}...: ${error.message}`);
+  }
+  return r2Config.tempUploadTtlHours;
+}
+
+/**
  * Track a temporary R2 upload for automatic cleanup
  * This should be called after processed_urls record is created (since FK constraint requires it)
  * @param {string} urlHash - URL hash from processed_urls table (required for FK)
@@ -1193,12 +1228,12 @@ export async function trackTemporaryUpload(urlHash, r2Key, uploadedAt = null, is
 
   try {
     const now = uploadedAt || Date.now();
-    const ttlMs = r2Config.tempUploadTtlHours * 60 * 60 * 1000;
-    const expiresAt = now + ttlMs;
+    const ttlHours = await resolveTtlHours(urlHash);
+    const expiresAt = now + ttlHours * 60 * 60 * 1000;
 
     await insertTemporaryUpload(urlHash, r2Key, now, expiresAt);
     logger.debug(
-      `Tracked temporary R2 upload: urlHash=${urlHash.substring(0, 8)}..., r2Key=${r2Key}, expiresAt=${new Date(expiresAt).toISOString()}`
+      `Tracked temporary R2 upload: urlHash=${urlHash.substring(0, 8)}..., r2_key=${r2Key}, ttlHours=${ttlHours}, expiresAt=${new Date(expiresAt).toISOString()}`
     );
   } catch (error) {
     // Log error but don't throw - tracking failure shouldn't break upload flow

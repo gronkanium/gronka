@@ -61,18 +61,18 @@ const commands = [
   },
   {
     name: 'convert',
-    description: 'convert a video (max 100mb) or image (max 50mb) to gif',
+    description: 'convert a video or image to a gif',
     type: 1, // CHAT_INPUT type (slash command)
     options: [
       {
         name: 'file',
-        description: 'the video (max 100mb) or image (max 50mb) file to convert',
+        description: 'the video or image file to convert to a gif',
         type: 11, // ATTACHMENT type
         required: false,
       },
       {
         name: 'url',
-        description: 'url to a video (max 100mb) or image (max 50mb) file to convert',
+        description: 'url to a video or image to download and convert to a gif',
         type: 3, // STRING type
         required: false,
       },
@@ -133,18 +133,18 @@ const commands = [
   },
   {
     name: 'optimize',
-    description: 'optimize a gif file (max 50mb) to reduce its size',
+    description: 'optimize a gif to reduce its file size',
     type: 1, // CHAT_INPUT type (slash command)
     options: [
       {
         name: 'file',
-        description: 'the gif file to optimize (max 50mb)',
+        description: 'the gif file to optimize',
         type: 11, // ATTACHMENT type
         required: false,
       },
       {
         name: 'url',
-        description: 'url to a gif file to optimize (max 50mb)',
+        description: 'url to a gif to optimize',
         type: 3, // STRING type
         required: false,
       },
@@ -174,12 +174,12 @@ const commands = [
   },
   {
     name: 'download',
-    description: 'download a video from social media using cobalt (no conversion)',
+    description: 'download a video or image from a social media url (no conversion)',
     type: 1, // CHAT_INPUT type (slash command)
     options: [
       {
         name: 'url',
-        description: 'url to a social media video to download',
+        description: 'url to a social media post or media file to download',
         type: 3, // STRING type
         required: true,
       },

@@ -979,6 +979,7 @@
 
   .tier-table input {
     width: 100%;
+    min-width: 0;
     background-color: var(--surface-2);
     border: 1px solid var(--border);
     border-radius: var(--radius);
@@ -1020,22 +1021,67 @@
     gap: 0.5rem;
   }
 
-  @media (max-width: 640px) {
+  /* Match the shell's mobile breakpoint (sidebar collapses at 768px) so the page
+     switches to its stacked layout at the same width the chrome does. */
+  @media (max-width: 767px) {
+    .settings-page {
+      max-width: 100%;
+    }
+
+    /* Controls drop below their label/description instead of squeezing to the right. */
     .setting-row {
       flex-direction: column;
       align-items: stretch;
     }
 
-    .inline-form input {
+    .card {
+      padding: 0.85rem 0.95rem;
+    }
+
+    /* Tabs keep their labels and wrap to as many rows as needed — clearer than
+       cryptic icon-only tabs on a phone. */
+    .tab {
+      padding: 0.5rem 0.7rem;
+      font-size: 0.85rem;
+      gap: 0.35rem;
+    }
+
+    .inline-form {
       width: 100%;
     }
 
-    .tab span {
-      display: none;
+    .inline-form input {
+      flex: 1;
+      width: auto;
+      min-width: 0;
     }
 
-    .tab {
-      padding: 0.55rem 0.7rem;
+    .select-setting {
+      width: 100%;
+    }
+
+    .presence-form input {
+      min-width: 140px;
+    }
+
+    /* Comfortable touch targets (repo baseline is 44px). */
+    .icon-btn {
+      min-width: 40px;
+      min-height: 40px;
+      padding: 0.5rem;
+    }
+
+    .btn {
+      padding: 0.55rem 0.9rem;
+    }
+
+    /* Give the two numeric fields room next to the remove button. */
+    .tier-table td {
+      padding: 0.25rem 0.15rem;
+    }
+
+    .tier-table input {
+      padding: 0.45rem 0.4rem;
     }
   }
 </style>

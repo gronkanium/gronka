@@ -5,6 +5,13 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres (attempts) to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.21.0](https://github.com/thedorekaczynski/gronka/compare/v0.20.0...v0.21.0) (2026-07-08)
+
+
+### Features
+
+* size-first download limits + live-editable max size ([#35](https://github.com/thedorekaczynski/gronka/issues/35)) ([d4b6fb4](https://github.com/thedorekaczynski/gronka/commit/d4b6fb426f579eb399f9695192638e7ee82c5237))
+
 ## [0.20.0](https://github.com/thedorekaczynski/gronka/compare/v0.19.0...v0.20.0) (2026-07-08)
 
 

@@ -33,6 +33,7 @@
         'url_only_mode',
         'twitter_delivery',
         'twitter_direct_url_fallback',
+        'max_video_size_mb',
         'max_video_duration',
       ],
     },

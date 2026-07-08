@@ -8,6 +8,11 @@ services:
         GIT_COMMIT: ${GIT_COMMIT:-}
     container_name: gronka
     restart: unless-stopped
+    # Blast-radius cap: a burst of big downloads (each buffers the whole file in RAM, bounded to
+    # 2 concurrent by ytdlp-queue.js) restarts the bot instead of pressuring Postgres/Cobalt in
+    # the shared Docker VM. Must clear one large download + ffmpeg working set + node baseline —
+    # too low and legit big downloads restart-loop. Tune APP_MEM_LIMIT to the host's allotment.
+    mem_limit: ${APP_MEM_LIMIT:-3g}
     depends_on:
       postgres:
         condition: service_healthy

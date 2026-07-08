@@ -6,12 +6,20 @@ import tmp from 'tmp';
 import { createLogger } from './logger.js';
 import { NetworkError, ValidationError } from './errors.js';
 import { trimVideo } from './video-processor/trim-video.js';
+import { runInYtdlpSlot } from './ytdlp-queue.js';
 
 const logger = createLogger('ytdlp');
 
-// Appended to every duration-cap rejection so users know there's a way around it
+// Appended to every duration/size-cap rejection so users know there's a way around it
 // instead of just hitting a dead end.
 const TRIM_TIP = ' use the start_time/end_time options to grab a clip under the limit.';
+
+// Curated user-facing message for a video yt-dlp aborted (or we rejected) for exceeding the
+// size cap. Raw byte counts stay in the logs; users just get the MB ceiling.
+function tooLargeMessage(maxSize) {
+  const mb = Math.floor(maxSize / (1024 * 1024));
+  return `this video is too large to download (over ${mb}MB).` + TRIM_TIP;
+}
 
 // The generic yt-dlp failure bucket in executeYtdlp() below - kept as a constant so the
 // retry wrapper can match on it without duplicating the string.
@@ -105,6 +113,8 @@ function getContentType(ext) {
  * @param {number} maxDuration - Maximum video duration in seconds (default: 300 = 5 minutes)
  * @param {number|null} startTime - Start time in seconds for segment download
  * @param {number|null} duration - Duration in seconds for segment download
+ * @param {number} maxSize - Maximum file size in bytes; finite values add yt-dlp --max-filesize
+ *   so oversized full downloads abort early instead of being caught after buffering (default: Infinity)
  * @returns {Promise<string>} Path to downloaded file
  */
 function executeYtdlp(
@@ -114,7 +124,8 @@ function executeYtdlp(
   timeout = 300000,
   maxDuration = 300,
   startTime = null,
-  duration = null
+  duration = null,
+  maxSize = Infinity
 ) {
   return new Promise((resolve, reject) => {
     const outputTemplate = path.join(outputDir, '%(title)s.%(ext)s');
@@ -136,6 +147,16 @@ function executeYtdlp(
     // - no time-based segment download requested (startTime or duration specified)
     if (maxDuration !== Infinity && startTime === null && duration === null) {
       args.push('--match-filter', `duration <= ${maxDuration}`);
+    }
+
+    // Abort oversized downloads before/while pulling instead of catching them after the whole
+    // file is buffered in RAM. Only for full downloads: with --download-sections, yt-dlp
+    // compares --max-filesize against the *entire* video's reported size, which would wrongly
+    // abort a small requested clip. The post-read length check remains the definitive backstop
+    // for sources whose size yt-dlp can't determine up front (e.g. some HLS streams).
+    if (maxSize !== Infinity && startTime === null && duration === null) {
+      const maxMb = Math.max(1, Math.floor(maxSize / (1024 * 1024)));
+      args.push('--max-filesize', `${maxMb}M`);
     }
 
     // use yt-dlp's --download-sections to download ONLY the requested segment
@@ -176,9 +197,18 @@ function executeYtdlp(
       clearTimeout(timeoutId);
 
       if (code === 0) {
+        const combinedOutput = stdout + stderr;
+
+        // --max-filesize aborts print to stderr even under --quiet ("File is larger than
+        // max-filesize ... Aborting"), so this loud path catches the size cap. The quiet
+        // --match-filter duration skip is handled by the no-output fallback further down.
+        if (/larger than max-filesize/i.test(combinedOutput)) {
+          reject(new ValidationError(tooLargeMessage(maxSize)));
+          return;
+        }
+
         // Check if video was filtered out due to duration limit
         // yt-dlp exits with code 0 when --match-filter skips a video
-        const combinedOutput = stdout + stderr;
         if (
           combinedOutput.includes('does not pass filter') ||
           combinedOutput.includes('Video is longer than') ||
@@ -315,6 +345,8 @@ function executeYtdlp(
           reject(new ValidationError('invalid YouTube URL'));
         } else if (errorOutput.includes('No video formats found')) {
           reject(new NetworkError('no downloadable video formats found'));
+        } else if (/larger than max-filesize/i.test(errorOutput)) {
+          reject(new ValidationError(tooLargeMessage(maxSize)));
         } else if (
           errorOutput.includes('does not pass filter') ||
           errorOutput.includes('duration >')
@@ -502,17 +534,67 @@ export async function downloadWithYtdlp(
       ? 'bestvideo[ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4]/best'
       : 'bestvideo[height<=1080][ext=mp4]+bestaudio[ext=m4a]/best[height<=1080][ext=mp4]/best[height<=1080]');
 
-  // Create temporary directory for download
-  const tmpDir = tmp.dirSync({ unsafeCleanup: true });
-  const useSegmentDownload = startTime !== null || duration !== null;
+  // Admins are never size-gated; for everyone else the cap drives yt-dlp's --max-filesize.
+  const gateSize = isAdminUser ? Infinity : maxSize;
 
-  try {
-    let outputPath;
-    let usedFallback = false;
+  // Hold one of the limited yt-dlp slots for the memory-heavy download+read only. The cheap
+  // metadata duration pre-check above runs unslotted so it never waits behind a big download.
+  return await runInYtdlpSlot(async () => {
+    // Create temporary directory for download
+    const tmpDir = tmp.dirSync({ unsafeCleanup: true });
+    const useSegmentDownload = startTime !== null || duration !== null;
 
-    if (useSegmentDownload) {
-      // Try segment download first (using --download-sections)
-      try {
+    try {
+      let outputPath;
+      let usedFallback = false;
+
+      if (useSegmentDownload) {
+        // Try segment download first (using --download-sections)
+        try {
+          outputPath = await executeYtdlpWithRetry(
+            url,
+            tmpDir.name,
+            effectiveQuality,
+            300000,
+            maxDuration,
+            startTime,
+            duration,
+            gateSize
+          );
+        } catch (segmentError) {
+          // Check if this is a segment download failure (too small file)
+          if (segmentError.message && segmentError.message.includes('output file too small')) {
+            logger.warn(
+              `Segment download failed, falling back to full download + FFmpeg trim: ${segmentError.message}`
+            );
+            usedFallback = true;
+
+            // Download the full video without segment parameters
+            outputPath = await executeYtdlpWithRetry(
+              url,
+              tmpDir.name,
+              effectiveQuality,
+              300000,
+              maxDuration,
+              null,
+              null,
+              gateSize
+            );
+
+            // Trim the video using FFmpeg
+            const trimmedPath = path.join(tmpDir.name, 'trimmed_output.mp4');
+            await trimVideo(outputPath, trimmedPath, { startTime, duration });
+
+            // Use the trimmed file
+            outputPath = trimmedPath;
+            logger.info(`Fallback trim completed: ${outputPath}`);
+          } else {
+            // Re-throw other errors
+            throw segmentError;
+          }
+        }
+      } else {
+        // No segment download requested, proceed normally
         outputPath = await executeYtdlpWithRetry(
           url,
           tmpDir.name,
@@ -520,89 +602,49 @@ export async function downloadWithYtdlp(
           300000,
           maxDuration,
           startTime,
-          duration
+          duration,
+          gateSize
         );
-      } catch (segmentError) {
-        // Check if this is a segment download failure (too small file)
-        if (segmentError.message && segmentError.message.includes('output file too small')) {
-          logger.warn(
-            `Segment download failed, falling back to full download + FFmpeg trim: ${segmentError.message}`
-          );
-          usedFallback = true;
-
-          // Download the full video without segment parameters
-          outputPath = await executeYtdlpWithRetry(
-            url,
-            tmpDir.name,
-            effectiveQuality,
-            300000,
-            maxDuration,
-            null,
-            null
-          );
-
-          // Trim the video using FFmpeg
-          const trimmedPath = path.join(tmpDir.name, 'trimmed_output.mp4');
-          await trimVideo(outputPath, trimmedPath, { startTime, duration });
-
-          // Use the trimmed file
-          outputPath = trimmedPath;
-          logger.info(`Fallback trim completed: ${outputPath}`);
-        } else {
-          // Re-throw other errors
-          throw segmentError;
-        }
       }
-    } else {
-      // No segment download requested, proceed normally
-      outputPath = await executeYtdlpWithRetry(
-        url,
-        tmpDir.name,
-        effectiveQuality,
-        300000,
-        maxDuration,
-        startTime,
-        duration
+
+      // Read the downloaded file
+      const buffer = await fs.readFile(outputPath);
+
+      // Check file size
+      if (!isAdminUser && buffer.length > maxSize) {
+        throw new ValidationError(
+          `file is too large (${(buffer.length / (1024 * 1024)).toFixed(2)}MB, max ${(maxSize / (1024 * 1024)).toFixed(2)}MB)`
+        );
+      }
+
+      // Get file info - filename is only used for extension extraction, not for user-facing purposes
+      // The actual filename used will be hash-based in the download command
+      const filename = path.basename(outputPath);
+      const ext = path.extname(outputPath);
+      const contentType = getContentType(ext);
+
+      logger.info(
+        `Successfully downloaded media via yt-dlp${usedFallback ? ' (via fallback)' : ''}, size: ${buffer.length} bytes, content-type: ${contentType}, extension: ${ext}`
       );
+
+      return {
+        buffer,
+        contentType,
+        size: buffer.length,
+        filename, // Only used for extension extraction in download command, not user-facing
+      };
+    } catch (error) {
+      logger.error(`yt-dlp download failed: ${error.message}`);
+      throw error;
+    } finally {
+      // Clean up temp directory
+      try {
+        tmpDir.removeCallback();
+      } catch (cleanupError) {
+        logger.warn(`Failed to clean up temp directory: ${cleanupError.message}`);
+      }
     }
-
-    // Read the downloaded file
-    const buffer = await fs.readFile(outputPath);
-
-    // Check file size
-    if (!isAdminUser && buffer.length > maxSize) {
-      throw new ValidationError(
-        `file is too large (${(buffer.length / (1024 * 1024)).toFixed(2)}MB, max ${(maxSize / (1024 * 1024)).toFixed(2)}MB)`
-      );
-    }
-
-    // Get file info - filename is only used for extension extraction, not for user-facing purposes
-    // The actual filename used will be hash-based in the download command
-    const filename = path.basename(outputPath);
-    const ext = path.extname(outputPath);
-    const contentType = getContentType(ext);
-
-    logger.info(
-      `Successfully downloaded media via yt-dlp${usedFallback ? ' (via fallback)' : ''}, size: ${buffer.length} bytes, content-type: ${contentType}, extension: ${ext}`
-    );
-
-    return {
-      buffer,
-      contentType,
-      size: buffer.length,
-      filename, // Only used for extension extraction in download command, not user-facing
-    };
-  } catch (error) {
-    logger.error(`yt-dlp download failed: ${error.message}`);
-    throw error;
-  } finally {
-    // Clean up temp directory
-    try {
-      tmpDir.removeCallback();
-    } catch (cleanupError) {
-      logger.warn(`Failed to clean up temp directory: ${cleanupError.message}`);
-    }
-  }
+  });
 }
 
 /**

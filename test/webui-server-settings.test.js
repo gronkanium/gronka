@@ -20,6 +20,7 @@ before(async () => {
 after(async () => {
   // The test DB persists between runs - reset the keys these tests write.
   await setSetting('max_video_duration', '300');
+  await setSetting('max_video_size_mb', '1024');
   await setSetting('admin_user_ids', '[]');
   await setSetting('twitter_delivery', 'hybrid');
   await setSetting('upload_ttl_tiers', '100:72,250:24,500:8,1024:2');
@@ -46,7 +47,10 @@ describe('settings route', () => {
     assert.strictEqual(settings.twitter_direct_url_fallback.type, 'boolean');
     assert.strictEqual(settings.max_video_duration.type, 'number');
     assert.strictEqual(settings.max_video_duration.min, 30);
-    assert.strictEqual(settings.max_video_duration.max, 7200);
+    assert.strictEqual(settings.max_video_duration.max, 21600);
+    assert.strictEqual(settings.max_video_size_mb.type, 'number');
+    assert.strictEqual(settings.max_video_size_mb.min, 50);
+    assert.strictEqual(settings.max_video_size_mb.max, 2048);
     assert.strictEqual(settings.admin_user_ids.type, 'list');
     assert.ok(Array.isArray(settings.admin_user_ids.envValues));
     assert.strictEqual(settings.twitter_delivery.type, 'select');

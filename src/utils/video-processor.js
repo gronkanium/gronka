@@ -7,6 +7,12 @@ export { convertToGif } from './video-processor/convert-to-gif.js';
 // Image to GIF conversion
 export { convertImageToGif } from './video-processor/convert-image-to-gif.js';
 
+// Animated WebP to GIF conversion (ImageMagick; ffmpeg can't demux animated webp)
+export { convertAnimatedWebpToGif } from './video-processor/convert-animated-webp-to-gif.js';
+
+// Animated-WebP header sniff (routing)
+export { isAnimatedWebp } from './video-processor/utils.js';
+
 // Video trimming
 export { trimVideo } from './video-processor/trim-video.js';
 

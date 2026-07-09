@@ -25,7 +25,13 @@ import {
   validateVideoAttachment,
   validateImageAttachment,
 } from '../utils/attachment-helpers.js';
-import { convertToGif, getVideoMetadata, convertImageToGif } from '../utils/video-processor.js';
+import {
+  convertToGif,
+  getVideoMetadata,
+  convertImageToGif,
+  convertAnimatedWebpToGif,
+  isAnimatedWebp,
+} from '../utils/video-processor.js';
 import {
   gifExists,
   getGifPath,
@@ -593,7 +599,7 @@ export async function processConversion(
 
       // Validate file extension
       const allowedVideoExtensions = ['.mp4', '.mov', '.webm', '.avi', '.mkv'];
-      const allowedImageExtensions = ['.png', '.jpg', '.jpeg', '.webp', '.gif'];
+      const allowedImageExtensions = ['.png', '.jpg', '.jpeg', '.webp', '.awebp', '.gif'];
       const allowedExtensions =
         attachmentType === 'video' ? allowedVideoExtensions : allowedImageExtensions;
 
@@ -745,6 +751,16 @@ export async function processConversion(
                 metadata: { originalWidth, targetWidth: options.width },
               });
             }
+          } else if (isAnimatedWebp(fileBuffer)) {
+            // Animated WebP (e.g. TikTok stickers): ffmpeg can't demux it, so
+            // convert via ImageMagick, preserving native size unless a width is
+            // explicitly requested (ffprobe can't read it, so don't probe).
+            await convertAnimatedWebpToGif(tempFilePath, gifPath, {
+              width: options.width,
+            });
+            logOperationStep(operationId, 'conversion_complete', 'success', {
+              message: 'Animated WebP to GIF conversion completed',
+            });
           } else {
             // Not a GIF, convert normally using the source's original width
             const { width: originalWidth } = await probeMediaInfo(tempFilePath, 720);

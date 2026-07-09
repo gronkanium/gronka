@@ -35,10 +35,12 @@ RUN npm prune --production
 # Stage 2: Runtime - Minimal production image
 FROM node:24-slim AS runtime
 
-# Install runtime dependencies: FFmpeg, gifsicle (GIF optimization), ca-certificates, and yt-dlp
+# Install runtime dependencies: FFmpeg, gifsicle (GIF optimization), ImageMagick
+# (animated-WebP -> GIF; ffmpeg can't demux animated webp), ca-certificates, and yt-dlp
 RUN apt-get update && apt-get install -y \
     ffmpeg \
     gifsicle \
+    imagemagick \
     ca-certificates \
     python3 \
     python3-pip \

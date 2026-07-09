@@ -37,6 +37,23 @@ export function validateNumericParameter(value, name, min = 0, max = Infinity, a
 }
 
 /**
+ * Detect an animated WebP from its header bytes.
+ * WebP is a RIFF container; only the extended "VP8X" form can be animated, and
+ * the animation flag is bit 0x02 of the VP8X flags byte at offset 20. Static
+ * WebP (VP8/VP8L) and animated WebP share the same `image/webp` MIME type, so
+ * this byte sniff is the only reliable way to tell them apart for routing.
+ * @param {Buffer} buffer - File contents (only the first 21 bytes are read)
+ * @returns {boolean} True if the buffer is an animated WebP
+ */
+export function isAnimatedWebp(buffer) {
+  if (!Buffer.isBuffer(buffer) || buffer.length < 21) return false;
+  if (buffer.toString('ascii', 0, 4) !== 'RIFF') return false;
+  if (buffer.toString('ascii', 8, 12) !== 'WEBP') return false;
+  if (buffer.toString('ascii', 12, 16) !== 'VP8X') return false;
+  return (buffer[20] & 0x02) !== 0;
+}
+
+/**
  * Check if FFmpeg is installed and available
  * @returns {Promise<boolean>} True if FFmpeg is available
  */

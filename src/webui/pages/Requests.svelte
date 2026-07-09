@@ -1192,17 +1192,21 @@
   .info-item {
     display: flex;
     gap: 0.5rem;
+    min-width: 0;
   }
 
   .info-item .label {
     color: var(--text-muted);
     font-size: 0.85rem;
+    flex-shrink: 0;
   }
 
   .info-item .value {
     color: var(--text-bright);
     font-size: 0.85rem;
     font-weight: 500;
+    min-width: 0;
+    overflow-wrap: anywhere;
   }
 
   .monospace {

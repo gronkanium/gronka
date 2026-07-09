@@ -76,6 +76,34 @@ describe('cobalt utilities', () => {
     assert.strictEqual(normalized, 'https://bsky.app/profile/user.bsky.social/post/3kabc123');
   });
 
+  test('isSocialMediaUrl recognizes pinterest URLs', () => {
+    assert.strictEqual(isSocialMediaUrl('https://www.pinterest.com/pin/10203885745577880/'), true);
+    assert.strictEqual(isSocialMediaUrl('https://pinterest.com/pin/10203885745577880/'), true);
+    assert.strictEqual(isSocialMediaUrl('https://pin.it/abc123'), true);
+  });
+
+  test('isSocialMediaUrl recognizes twitch clip URLs', () => {
+    assert.strictEqual(isSocialMediaUrl('https://clips.twitch.tv/SomeClipSlug'), true);
+    assert.strictEqual(
+      isSocialMediaUrl('https://www.twitch.tv/somechannel/clip/SomeClipSlug'),
+      true
+    );
+  });
+
+  test('isSocialMediaUrl recognizes additional cobalt platforms', () => {
+    assert.strictEqual(isSocialMediaUrl('https://soundcloud.com/artist/track'), true);
+    assert.strictEqual(isSocialMediaUrl('https://on.soundcloud.com/abc123'), true);
+    assert.strictEqual(isSocialMediaUrl('https://someblog.tumblr.com/post/123/slug'), true);
+    assert.strictEqual(isSocialMediaUrl('https://streamable.com/abc12'), true);
+    assert.strictEqual(isSocialMediaUrl('https://www.dailymotion.com/video/x123abc'), true);
+    assert.strictEqual(isSocialMediaUrl('https://dai.ly/x123abc'), true);
+    assert.strictEqual(isSocialMediaUrl('https://t.snapchat.com/abc123'), true);
+  });
+
+  test('isSocialMediaUrl rejects removed/unsupported threads URLs', () => {
+    assert.strictEqual(isSocialMediaUrl('https://www.threads.net/@user/post/abc'), false);
+  });
+
   test('normalizeSocialMediaUrlForCobalt leaves unrelated URLs unchanged', () => {
     const input = 'https://reddit.com/r/test/comments/abc123/example';
     const normalized = normalizeSocialMediaUrlForCobalt(input);

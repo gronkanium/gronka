@@ -119,7 +119,13 @@ check if the platform is supported by cobalt:
 - youtube
 - reddit
 - facebook
-- threads
+- pinterest
+- twitch clips
+- soundcloud
+- tumblr
+- streamable
+- dailymotion
+- snapchat
 
 for unsupported platforms, use `/convert` with a direct media url.
 

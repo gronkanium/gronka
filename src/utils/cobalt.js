@@ -235,8 +235,19 @@ const SOCIAL_MEDIA_DOMAINS = [
   'facebook.com',
   'www.facebook.com',
   'fb.watch',
-  'threads.net',
-  'www.threads.net',
+  'pinterest.com',
+  'www.pinterest.com',
+  'pin.it', // pinterest short links
+  // twitch: cobalt only handles clips (clips.twitch.tv + twitch.tv/<channel>/clip/<slug>),
+  // matched host-only here — non-clip twitch URLs route through and get a curated error.
+  'twitch.tv',
+  'clips.twitch.tv',
+  'soundcloud.com', // also covers m./on. subdomains + short links
+  'tumblr.com', // covers <blog>.tumblr.com and www.tumblr.com
+  'streamable.com',
+  'dailymotion.com',
+  'dai.ly', // dailymotion short links
+  'snapchat.com', // covers t.snapchat.com spotlight links
 ];
 
 /**

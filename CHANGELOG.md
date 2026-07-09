@@ -5,6 +5,22 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres (attempts) to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.22.0](https://github.com/thedorekaczynski/gronka/compare/v0.21.0...v0.22.0) (2026-07-09)
+
+
+### Features
+
+* add data-deletion request template and script ([6368f96](https://github.com/thedorekaczynski/gronka/commit/6368f96d8fdc411ca0401339597c078c276bf538))
+* **convert:** route animated WebP to GIF via ImageMagick ([010a928](https://github.com/thedorekaczynski/gronka/commit/010a92899cde1a71c2aa1c59389d4ca9761b10f2))
+* **download:** add pinterest, twitch clips, and more cobalt services ([3997faa](https://github.com/thedorekaczynski/gronka/commit/3997faa96b3f803794ff0fc26ae4a08f5c7618e7))
+
+
+### Bug Fixes
+
+* **convert:** time out ffprobe and ffmpeg so malformed inputs fail fast ([b9a4225](https://github.com/thedorekaczynski/gronka/commit/b9a4225fa1846eecf389edc5a4536cf7d6352cbd))
+* correct slash command descriptions ([3979425](https://github.com/thedorekaczynski/gronka/commit/397942578dd81d47c794cee5f1103361d397d561))
+* **webui:** wrap long request values instead of overflowing the row ([f0676b4](https://github.com/thedorekaczynski/gronka/commit/f0676b4b1d603ce897cc8261c159e91d1a591951))
+
 ## [0.21.0](https://github.com/thedorekaczynski/gronka/compare/v0.20.0...v0.21.0) (2026-07-08)
 
 

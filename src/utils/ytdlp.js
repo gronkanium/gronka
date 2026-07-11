@@ -99,6 +99,47 @@ export function isRedGifsUrl(url) {
   }
 }
 
+// Sites that download through yt-dlp instead of Cobalt. Either Cobalt has no extractor
+// for them (imgur, kick, coub, rumble, newgrounds, bilibili, the adult tube sites,
+// redgifs) or we deliberately prefer yt-dlp (youtube). Each entry maps a display name to
+// the hostnames it owns; matching is exact-or-subdomain on the www-stripped hostname.
+// Order does not matter (hosts are disjoint). All were confirmed against the running
+// yt-dlp build's extractor list.
+const YTDLP_SITES = [
+  { name: 'YouTube', hosts: ['youtube.com', 'youtu.be'] },
+  { name: 'RedGifs', hosts: ['redgifs.com'] },
+  { name: 'Imgur', hosts: ['imgur.com'] },
+  { name: 'Kick', hosts: ['kick.com'] },
+  { name: 'Coub', hosts: ['coub.com'] },
+  { name: 'Rumble', hosts: ['rumble.com'] },
+  { name: 'Newgrounds', hosts: ['newgrounds.com'] },
+  { name: 'Bilibili', hosts: ['bilibili.com', 'b23.tv'] },
+  { name: 'Pornhub', hosts: ['pornhub.com'] },
+  { name: 'XVideos', hosts: ['xvideos.com'] },
+  { name: 'xHamster', hosts: ['xhamster.com'] },
+  { name: 'RedTube', hosts: ['redtube.com'] },
+];
+
+/**
+ * Resolve the yt-dlp-handled site for a URL, if any.
+ * @param {string} url - URL to classify
+ * @returns {string|null} The site's display name (e.g. 'YouTube'), or null if no yt-dlp
+ *   site owns this host.
+ */
+export function getYtdlpSite(url) {
+  try {
+    const hostname = new URL(url).hostname.toLowerCase().replace(/^www\./, '');
+    for (const site of YTDLP_SITES) {
+      if (site.hosts.some(h => hostname === h || hostname.endsWith(`.${h}`))) {
+        return site.name;
+      }
+    }
+    return null;
+  } catch {
+    return null;
+  }
+}
+
 /**
  * Get content type from file extension
  * @param {string} ext - File extension (with or without dot)

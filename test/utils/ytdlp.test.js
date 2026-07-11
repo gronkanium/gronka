@@ -1,6 +1,11 @@
 import { test, describe } from 'node:test';
 import assert from 'node:assert';
-import { isYouTubeUrl, isRedGifsUrl, YtdlpRateLimitError } from '../../src/utils/ytdlp.js';
+import {
+  isYouTubeUrl,
+  isRedGifsUrl,
+  getYtdlpSite,
+  YtdlpRateLimitError,
+} from '../../src/utils/ytdlp.js';
 import { NetworkError } from '../../src/utils/errors.js';
 
 describe('ytdlp utilities', () => {
@@ -92,6 +97,44 @@ describe('ytdlp utilities', () => {
       assert.strictEqual(isRedGifsUrl(''), false);
       assert.strictEqual(isRedGifsUrl(null), false);
       assert.strictEqual(isRedGifsUrl(undefined), false);
+    });
+  });
+
+  describe('getYtdlpSite', () => {
+    test('resolves each supported yt-dlp site to its display name', () => {
+      assert.strictEqual(getYtdlpSite('https://youtube.com/watch?v=abc'), 'YouTube');
+      assert.strictEqual(getYtdlpSite('https://youtu.be/abc'), 'YouTube');
+      assert.strictEqual(getYtdlpSite('https://www.redgifs.com/watch/x'), 'RedGifs');
+      assert.strictEqual(getYtdlpSite('https://imgur.com/gallery/x'), 'Imgur');
+      assert.strictEqual(getYtdlpSite('https://i.imgur.com/x.mp4'), 'Imgur');
+      assert.strictEqual(getYtdlpSite('https://kick.com/user/clips/x'), 'Kick');
+      assert.strictEqual(getYtdlpSite('https://coub.com/view/x'), 'Coub');
+      assert.strictEqual(getYtdlpSite('https://rumble.com/v123-title.html'), 'Rumble');
+      assert.strictEqual(getYtdlpSite('https://www.newgrounds.com/portal/view/1'), 'Newgrounds');
+      assert.strictEqual(getYtdlpSite('https://www.bilibili.com/video/BV1'), 'Bilibili');
+      assert.strictEqual(getYtdlpSite('https://b23.tv/abc'), 'Bilibili');
+      assert.strictEqual(
+        getYtdlpSite('https://www.pornhub.com/view_video.php?viewkey=x'),
+        'Pornhub'
+      );
+      assert.strictEqual(getYtdlpSite('https://www.xvideos.com/video1/x'), 'XVideos');
+      assert.strictEqual(getYtdlpSite('https://xhamster.com/videos/x'), 'xHamster');
+      assert.strictEqual(getYtdlpSite('https://www.redtube.com/123'), 'RedTube');
+    });
+
+    test('returns null for cobalt/social and unknown hosts', () => {
+      assert.strictEqual(getYtdlpSite('https://twitter.com/user/status/1'), null);
+      assert.strictEqual(getYtdlpSite('https://tiktok.com/@u/video/1'), null);
+      assert.strictEqual(getYtdlpSite('https://hentaigifz.com/some-slug/'), null);
+      assert.strictEqual(getYtdlpSite('https://example.com/x'), null);
+    });
+
+    test('returns null for lookalike domains and invalid input', () => {
+      assert.strictEqual(getYtdlpSite('https://notyoutube.com/watch?v=abc'), null);
+      assert.strictEqual(getYtdlpSite('https://pornhub.com.evil.com/x'), null);
+      assert.strictEqual(getYtdlpSite('not-a-url'), null);
+      assert.strictEqual(getYtdlpSite(''), null);
+      assert.strictEqual(getYtdlpSite(null), null);
     });
   });
 

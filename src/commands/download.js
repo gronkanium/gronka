@@ -16,6 +16,7 @@ import {
   downloadWithYtdlp,
   YtdlpRateLimitError,
 } from '../utils/ytdlp.js';
+import { isHentaiGifzUrl, downloadFromHentaiGifz } from '../utils/hentaigifz.js';
 import { isAdmin, recordRateLimit } from '../utils/rate-limit.js';
 import { generateHash } from '../utils/file-downloader.js';
 import {
@@ -287,13 +288,16 @@ async function processDownload(
 
       const maxSize = adminUser ? Infinity : await getMaxVideoSize();
       const isYouTube = isYouTubeUrl(url);
+      const isHentaiGifz = isHentaiGifzUrl(url);
 
       // URL-only mode (toggleable from the webui): reply with the direct media URL
       // from cobalt instead of downloading/uploading. Trim requests still need a real
-      // download, and the yt-dlp (YouTube) path has no direct URL to hand out.
+      // download, and the yt-dlp (YouTube) and hentaigifz paths have no cobalt direct
+      // URL to hand out.
       if (
         COBALT_ENABLED &&
         !(isYouTube && YTDLP_ENABLED) &&
+        !isHentaiGifz &&
         startTime === null &&
         duration === null &&
         (await getBooleanSetting('url_only_mode', false))
@@ -381,6 +385,13 @@ async function processDownload(
           message: 'Starting download from YouTube via yt-dlp',
           metadata: { url, maxSize: adminUser ? 'unlimited' : maxSize },
         });
+      } else if (isHentaiGifz) {
+        downloadMethod = 'hentaigifz';
+        logger.info(`Downloading from hentaigifz page scrape: ${url}`);
+        logOperationStep(operationId, 'download_start', 'running', {
+          message: 'Starting download from hentaigifz',
+          metadata: { url, maxSize: adminUser ? 'unlimited' : maxSize },
+        });
       } else {
         downloadMethod = 'cobalt';
         logger.info(`Downloading file from Cobalt: ${url}`);
@@ -423,6 +434,12 @@ async function processDownload(
               startTime,
               duration,
             },
+          });
+        } else if (downloadMethod === 'hentaigifz') {
+          fileData = await downloadFromHentaiGifz(url, adminUser);
+          logOperationStep(operationId, 'download_complete', 'success', {
+            message: 'file downloaded successfully via hentaigifz',
+            metadata: { url, fileCount: 1 },
           });
         } else {
           try {
@@ -1663,6 +1680,9 @@ export async function handleDownloadContextMenuCommand(interaction) {
   if (isYouTube) {
     // YouTube requires yt-dlp (already checked above that it's enabled)
     logger.info(`YouTube URL detected, will use yt-dlp for download`);
+  } else if (isHentaiGifzUrl(url)) {
+    // hentaigifz has its own page-scrape extractor, no Cobalt/social-media check needed
+    logger.info(`hentaigifz URL detected, will use page-scrape extractor for download`);
   } else if (!COBALT_ENABLED) {
     // Non-YouTube URLs require Cobalt
     const errorMessage = 'cobalt is not enabled.';
@@ -1810,6 +1830,9 @@ export async function handleDownloadCommand(interaction) {
   if (isYouTube) {
     // YouTube requires yt-dlp (already checked above that it's enabled)
     logger.info(`YouTube URL detected, will use yt-dlp for download`);
+  } else if (isHentaiGifzUrl(url)) {
+    // hentaigifz has its own page-scrape extractor, no Cobalt/social-media check needed
+    logger.info(`hentaigifz URL detected, will use page-scrape extractor for download`);
   } else if (!COBALT_ENABLED) {
     // Non-YouTube URLs require Cobalt
     const errorMessage = 'cobalt is not enabled. please enable it to use the download command.';

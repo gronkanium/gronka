@@ -12,6 +12,7 @@ import {
 } from '../utils/cobalt.js';
 import {
   isYouTubeUrl,
+  isRedGifsUrl,
   downloadFromYouTube,
   downloadWithYtdlp,
   YtdlpRateLimitError,
@@ -288,15 +289,18 @@ async function processDownload(
 
       const maxSize = adminUser ? Infinity : await getMaxVideoSize();
       const isYouTube = isYouTubeUrl(url);
+      const isRedGifs = isRedGifsUrl(url);
       const isHentaiGifz = isHentaiGifzUrl(url);
+      // YouTube and RedGifs both download through yt-dlp (neither is a Cobalt service).
+      const useYtdlp = (isYouTube || isRedGifs) && YTDLP_ENABLED;
 
       // URL-only mode (toggleable from the webui): reply with the direct media URL
       // from cobalt instead of downloading/uploading. Trim requests still need a real
-      // download, and the yt-dlp (YouTube) and hentaigifz paths have no cobalt direct
-      // URL to hand out.
+      // download, and the yt-dlp paths (YouTube/RedGifs) and hentaigifz have no cobalt
+      // direct URL to hand out.
       if (
         COBALT_ENABLED &&
-        !(isYouTube && YTDLP_ENABLED) &&
+        !useYtdlp &&
         !isHentaiGifz &&
         startTime === null &&
         duration === null &&
@@ -378,11 +382,12 @@ async function processDownload(
 
       // Determine download method based on URL type
       let downloadMethod;
-      if (isYouTube && YTDLP_ENABLED) {
+      if (useYtdlp) {
         downloadMethod = 'ytdlp';
-        logger.info(`Downloading from YouTube via yt-dlp: ${url}`);
+        const ytdlpSite = isYouTube ? 'YouTube' : 'RedGifs';
+        logger.info(`Downloading from ${ytdlpSite} via yt-dlp: ${url}`);
         logOperationStep(operationId, 'download_start', 'running', {
-          message: 'Starting download from YouTube via yt-dlp',
+          message: `Starting download from ${ytdlpSite} via yt-dlp`,
           metadata: { url, maxSize: adminUser ? 'unlimited' : maxSize },
         });
       } else if (isHentaiGifz) {
@@ -1660,11 +1665,13 @@ export async function handleDownloadContextMenuCommand(interaction) {
 
   // Check if URL is from YouTube
   const isYouTube = isYouTubeUrl(url);
+  const isRedGifs = isRedGifsUrl(url);
 
-  // Check if URL is from YouTube but yt-dlp is disabled
-  if (isYouTube && !YTDLP_ENABLED) {
-    logger.warn(`User ${userId} attempted to download from YouTube (yt-dlp disabled)`);
-    const errorMessage = 'youtube downloads are disabled.';
+  // Check if URL needs yt-dlp (YouTube/RedGifs) but yt-dlp is disabled
+  if ((isYouTube || isRedGifs) && !YTDLP_ENABLED) {
+    const site = isYouTube ? 'youtube' : 'redgifs';
+    logger.warn(`User ${userId} attempted to download from ${site} (yt-dlp disabled)`);
+    const errorMessage = `${site} downloads are disabled.`;
     createFailedOperation('download', userId, username, errorMessage, 'ytdlp_disabled', {
       originalUrl: url,
       commandSource: 'context-menu',
@@ -1677,9 +1684,9 @@ export async function handleDownloadContextMenuCommand(interaction) {
   }
 
   // Check if downloader is available for the URL type
-  if (isYouTube) {
-    // YouTube requires yt-dlp (already checked above that it's enabled)
-    logger.info(`YouTube URL detected, will use yt-dlp for download`);
+  if (isYouTube || isRedGifs) {
+    // YouTube/RedGifs require yt-dlp (already checked above that it's enabled)
+    logger.info(`${isYouTube ? 'YouTube' : 'RedGifs'} URL detected, will use yt-dlp for download`);
   } else if (isHentaiGifzUrl(url)) {
     // hentaigifz has its own page-scrape extractor, no Cobalt/social-media check needed
     logger.info(`hentaigifz URL detected, will use page-scrape extractor for download`);
@@ -1810,11 +1817,13 @@ export async function handleDownloadCommand(interaction) {
 
   // Check if URL is from YouTube
   const isYouTube = isYouTubeUrl(url);
+  const isRedGifs = isRedGifsUrl(url);
 
-  // Check if URL is from YouTube but yt-dlp is disabled
-  if (isYouTube && !YTDLP_ENABLED) {
-    logger.warn(`User ${userId} attempted to download from YouTube (yt-dlp disabled)`);
-    const errorMessage = 'youtube downloads are disabled.';
+  // Check if URL needs yt-dlp (YouTube/RedGifs) but yt-dlp is disabled
+  if ((isYouTube || isRedGifs) && !YTDLP_ENABLED) {
+    const site = isYouTube ? 'youtube' : 'redgifs';
+    logger.warn(`User ${userId} attempted to download from ${site} (yt-dlp disabled)`);
+    const errorMessage = `${site} downloads are disabled.`;
     createFailedOperation('download', userId, username, errorMessage, 'ytdlp_disabled', {
       originalUrl: url,
       commandSource: 'slash',
@@ -1827,9 +1836,9 @@ export async function handleDownloadCommand(interaction) {
   }
 
   // Check if downloader is available for the URL type
-  if (isYouTube) {
-    // YouTube requires yt-dlp (already checked above that it's enabled)
-    logger.info(`YouTube URL detected, will use yt-dlp for download`);
+  if (isYouTube || isRedGifs) {
+    // YouTube/RedGifs require yt-dlp (already checked above that it's enabled)
+    logger.info(`${isYouTube ? 'YouTube' : 'RedGifs'} URL detected, will use yt-dlp for download`);
   } else if (isHentaiGifzUrl(url)) {
     // hentaigifz has its own page-scrape extractor, no Cobalt/social-media check needed
     logger.info(`hentaigifz URL detected, will use page-scrape extractor for download`);

@@ -23,7 +23,7 @@ the same three actions are also available by right-clicking a message → apps: 
 ### supported sources
 
 - **cobalt** handles most social platforms: twitter/x, tiktok, instagram, youtube, reddit, facebook, pinterest, twitch clips, soundcloud, tumblr, streamable, dailymotion, snapchat
-- **yt-dlp** handles youtube, and is the fallback for x/twitter and tiktok
+- **yt-dlp** handles youtube and redgifs, and is the fallback for x/twitter and tiktok
 - **hentaigifz** — a dedicated page-scrape extractor for hentaigifz.com posts (grabs the post's animated gif)
 - direct urls to video/image files work with `/convert`
 

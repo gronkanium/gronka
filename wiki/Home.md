@@ -23,6 +23,7 @@ download media from social platforms using the `/download` command:
 - streamable
 - dailymotion
 - snapchat
+- redgifs (via yt-dlp)
 - hentaigifz (via a dedicated page-scrape extractor, not cobalt)
 
 you can also download media from direct urls using `/convert` with a url parameter. the bot handles videos and images from most common sources.

@@ -82,6 +82,24 @@ export function isYouTubeUrl(url) {
 }
 
 /**
+ * Check if a URL is a RedGifs URL.
+ * RedGifs is not a Cobalt service, but yt-dlp has a dedicated extractor for it
+ * (watch/ifr pages resolve to media.redgifs.com mp4s), so these route through the
+ * yt-dlp path like YouTube.
+ * @param {string} url - URL to check
+ * @returns {boolean} True if the URL is a RedGifs URL
+ */
+export function isRedGifsUrl(url) {
+  try {
+    const urlObj = new URL(url);
+    const hostname = urlObj.hostname.toLowerCase().replace(/^www\./, '');
+    return hostname === 'redgifs.com' || hostname.endsWith('.redgifs.com');
+  } catch {
+    return false;
+  }
+}
+
+/**
  * Get content type from file extension
  * @param {string} ext - File extension (with or without dot)
  * @returns {string} MIME type

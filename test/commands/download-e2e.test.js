@@ -133,6 +133,7 @@ if (!mocksSupported) {
     mock.module('../../src/utils/ytdlp.js', {
       namedExports: {
         isYouTubeUrl: () => false,
+        isRedGifsUrl: () => false,
         downloadFromYouTube: async (
           _url,
           _admin,

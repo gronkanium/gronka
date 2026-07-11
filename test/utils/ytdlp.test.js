@@ -1,6 +1,6 @@
 import { test, describe } from 'node:test';
 import assert from 'node:assert';
-import { isYouTubeUrl, YtdlpRateLimitError } from '../../src/utils/ytdlp.js';
+import { isYouTubeUrl, isRedGifsUrl, YtdlpRateLimitError } from '../../src/utils/ytdlp.js';
 import { NetworkError } from '../../src/utils/errors.js';
 
 describe('ytdlp utilities', () => {
@@ -61,6 +61,37 @@ describe('ytdlp utilities', () => {
     test('returns false for null/undefined', () => {
       assert.strictEqual(isYouTubeUrl(null), false);
       assert.strictEqual(isYouTubeUrl(undefined), false);
+    });
+  });
+
+  describe('isRedGifsUrl', () => {
+    test('returns true for redgifs watch/ifr URLs', () => {
+      assert.strictEqual(isRedGifsUrl('https://www.redgifs.com/watch/somegif'), true);
+      assert.strictEqual(isRedGifsUrl('https://redgifs.com/watch/somegif'), true);
+      assert.strictEqual(isRedGifsUrl('https://redgifs.com/ifr/somegif'), true);
+      assert.strictEqual(isRedGifsUrl('http://redgifs.com/watch/somegif'), true);
+    });
+
+    test('returns true for redgifs subdomains', () => {
+      assert.strictEqual(isRedGifsUrl('https://v3.redgifs.com/watch/somegif'), true);
+      assert.strictEqual(isRedGifsUrl('https://media.redgifs.com/SomeGif.mp4'), true);
+    });
+
+    test('returns false for non-redgifs URLs', () => {
+      assert.strictEqual(isRedGifsUrl('https://youtube.com/watch?v=abc'), false);
+      assert.strictEqual(isRedGifsUrl('https://gfycat.com/somegif'), false);
+    });
+
+    test('returns false for lookalike domains', () => {
+      assert.strictEqual(isRedGifsUrl('https://notredgifs.com/watch/abc'), false);
+      assert.strictEqual(isRedGifsUrl('https://redgifs.com.fake.com/watch/abc'), false);
+    });
+
+    test('returns false for invalid/empty input', () => {
+      assert.strictEqual(isRedGifsUrl('not-a-url'), false);
+      assert.strictEqual(isRedGifsUrl(''), false);
+      assert.strictEqual(isRedGifsUrl(null), false);
+      assert.strictEqual(isRedGifsUrl(undefined), false);
     });
   });
 

@@ -28,6 +28,8 @@ the same three actions are also available by right-clicking a message → apps: 
 - **booru boards** — danbooru and e621/e926 posts via their JSON APIs (grabs the post's original file)
 - direct urls to video/image files work with `/convert`
 
+each source can be turned on/off individually from the webui **Settings → sources** tab; a turned-off source refuses `/download` with a short message.
+
 video inputs: mp4, mov, webm, avi, mkv. image inputs: png, jpg, jpeg, webp, gif.
 
 ## how it works

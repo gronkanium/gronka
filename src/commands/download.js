@@ -18,6 +18,8 @@ import {
 } from '../utils/ytdlp.js';
 import { isHentaiGifzUrl, downloadFromHentaiGifz } from '../utils/hentaigifz.js';
 import { isBooruUrl, downloadFromBooru } from '../utils/booru.js';
+import { getDisabledServiceLabel } from '../utils/download-services.js';
+import { ValidationError } from '../utils/errors.js';
 import { isAdmin, recordRateLimit } from '../utils/rate-limit.js';
 import { generateHash } from '../utils/file-downloader.js';
 import {
@@ -220,6 +222,17 @@ async function processDownload(
     interaction,
     async ctx => {
       const { operationId, userId, username, adminUser, buildMetadata } = ctx;
+
+      // Refuse sources that have been turned off in the webui (checked before the URL
+      // cache so a disabled source can't serve a previously-downloaded file either).
+      const disabledServiceLabel = await getDisabledServiceLabel(url);
+      if (disabledServiceLabel) {
+        logOperationStep(operationId, 'service_disabled', 'success', {
+          message: 'Download source is turned off',
+          metadata: { url, service: disabledServiceLabel },
+        });
+        throw new ValidationError(`downloads from ${disabledServiceLabel} are turned off.`);
+      }
 
       logOperationStep(operationId, 'url_validation', 'running', {
         message: 'Validating URL',

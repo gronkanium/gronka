@@ -5,6 +5,7 @@ import path from 'path';
 import os from 'os';
 import { mock } from 'node:test';
 import { createFakeInteraction } from '../helpers/fake-interaction.js';
+import { setSetting } from '../../src/utils/database.js';
 
 // Full-pipeline E2E for the download command. The network boundary (Cobalt / yt-dlp / file
 // downloader) is mocked at the module level so these run without any real HTTP, but everything
@@ -133,6 +134,12 @@ if (!mocksSupported) {
     mock.module('../../src/utils/ytdlp.js', {
       namedExports: {
         getYtdlpSite: () => null,
+        // download-services.js builds its registry from this table at import time.
+        YTDLP_SITES: [
+          { name: 'YouTube', hosts: ['youtube.com', 'youtu.be'] },
+          { name: 'RedGifs', hosts: ['redgifs.com'] },
+          { name: 'Pornhub', hosts: ['pornhub.com'] },
+        ],
         downloadFromYouTube: async (
           _url,
           _admin,
@@ -287,6 +294,27 @@ if (!mocksSupported) {
         'this post is unavailable or has been deleted'
       );
       assert.strictEqual(calls.editReply[0].files, undefined, 'no files on error');
+    });
+
+    test('turned-off source: /download is refused with a curated message, no files', async () => {
+      await cleanStorage();
+      // Turn off the Twitter/X source, then attempt an x.com download.
+      await setSetting('disabled_services', JSON.stringify(['twitter']));
+      try {
+        const url = `https://x.com/user/status/disabled-${Date.now()}`;
+        const { interaction, calls } = downloadInteraction(url, 'e2e-dl-disabled');
+
+        await handleDownloadCommand(interaction);
+
+        assert.strictEqual(calls.editReply.length, 1, 'exactly one reply');
+        assert.strictEqual(
+          calls.editReply[0].content,
+          'downloads from Twitter / X are turned off.'
+        );
+        assert.strictEqual(calls.editReply[0].files, undefined, 'no files when the source is off');
+      } finally {
+        await setSetting('disabled_services', '[]');
+      }
     });
 
     test('hybrid delivery: oversized X/Twitter video is served as a direct URL with no download', async () => {

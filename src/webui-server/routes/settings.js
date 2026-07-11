@@ -2,6 +2,7 @@ import express from 'express';
 import { createLogger } from '../../utils/logger.js';
 import { getAllSettings, setSetting } from '../../utils/database.js';
 import { parseTiers } from '../../utils/upload-tiers.js';
+import { DOWNLOAD_SERVICES, DOWNLOAD_SERVICE_IDS } from '../../utils/download-services.js';
 
 const MB = 1024 * 1024;
 
@@ -100,6 +101,12 @@ const KNOWN_SETTINGS = {
     min: 0,
     max: 1000,
   },
+  disabled_services: {
+    type: 'services',
+    default: '[]',
+    description:
+      'Download sources that are turned off. A /download from a turned-off source is refused with a message instead of downloading. Everything not listed here is on; the bot picks up changes within a minute',
+  },
   admin_user_ids: {
     type: 'list',
     default: '[]',
@@ -136,6 +143,14 @@ router.get('/api/settings', async (req, res) => {
       }
       if (meta.options) {
         settings[key].options = meta.options;
+      }
+      if (meta.type === 'services') {
+        // Ship the full catalog so the UI can render grouped toggles without a 2nd request.
+        settings[key].catalog = DOWNLOAD_SERVICES.map(({ id, label, category }) => ({
+          id,
+          label,
+          category,
+        }));
       }
     }
     res.json({ settings });
@@ -224,6 +239,17 @@ router.put('/api/settings/:key', express.json(), async (req, res) => {
         });
       }
       textValue = JSON.stringify(items);
+    } else if (meta.type === 'services') {
+      // Array of disabled service ids. Silently drop unknown ids (a service removed from
+      // the registry shouldn't wedge the whole save) and store a canonical sorted set.
+      if (!Array.isArray(value) || value.some(item => typeof item !== 'string')) {
+        return res.status(400).json({
+          error: 'invalid value',
+          message: `"${key}" expects an array of service ids`,
+        });
+      }
+      const ids = [...new Set(value)].filter(id => DOWNLOAD_SERVICE_IDS.has(id)).sort();
+      textValue = JSON.stringify(ids);
     } else {
       textValue = String(value).trim();
       if (meta.pattern && !meta.pattern.test(textValue)) {

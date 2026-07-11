@@ -10,6 +10,7 @@
     Plus,
     Trash2,
     Check,
+    Globe,
   } from 'lucide-svelte';
 
   let settings = {};
@@ -42,6 +43,12 @@
       label: 'storage',
       icon: HardDrive,
       keys: ['upload_ttl_tiers', 'r2_soft_limit_gb', 'admin_uploads_expire'],
+    },
+    {
+      id: 'sources',
+      label: 'sources',
+      icon: Globe,
+      keys: ['disabled_services'],
     },
     {
       id: 'access',
@@ -262,6 +269,38 @@
     await saveSetting(key, newValue);
   }
 
+  // ---- services (download-source) toggles ----
+  // Section order + display labels for the grouped service list.
+  const SERVICE_CATEGORIES = [
+    { id: 'social', label: 'social' },
+    { id: 'video', label: 'video' },
+    { id: 'adult', label: 'adult' },
+    { id: 'booru', label: 'booru' },
+  ];
+
+  function disabledServiceSet(setting) {
+    try {
+      return new Set(JSON.parse(setting.value || '[]'));
+    } catch {
+      return new Set();
+    }
+  }
+
+  function servicesInCategory(setting, categoryId) {
+    return (setting.catalog || []).filter(svc => svc.category === categoryId);
+  }
+
+  async function toggleService(key, id) {
+    const disabled = disabledServiceSet(settings[key]);
+    if (disabled.has(id)) {
+      disabled.delete(id);
+    } else {
+      disabled.add(id);
+    }
+    // The `services` setting stores the DISABLED ids; a service is "on" when absent.
+    await saveSetting(key, [...disabled]);
+  }
+
   async function saveSetting(key, value) {
     const current = settings[key];
     saving = { ...saving, [key]: true };
@@ -412,7 +451,8 @@
   {:else}
     {#each activeKeys as key (key)}
       {@const setting = settings[key]}
-      {@const stacked = setting.type === 'list' || setting.type === 'tiers'}
+      {@const stacked =
+        setting.type === 'list' || setting.type === 'tiers' || setting.type === 'services'}
       <div class="card setting-row" class:stacked>
         <div class="setting-info">
           <span class="setting-name">
@@ -538,6 +578,33 @@
                 <Plus size={15} /> add
               </button>
             </form>
+          </div>
+        {:else if setting.type === 'services'}
+          {@const off = disabledServiceSet(setting)}
+          <div class="services-editor">
+            {#each SERVICE_CATEGORIES as category (category.id)}
+              {@const rows = servicesInCategory(setting, category.id)}
+              {#if rows.length > 0}
+                <div class="service-group">
+                  <h4 class="service-group-title">{category.label}</h4>
+                  {#each rows as svc (svc.id)}
+                    <div class="service-row">
+                      <span class="service-label">{svc.label}</span>
+                      <button
+                        class="toggle"
+                        class:on={!off.has(svc.id)}
+                        disabled={saving[key]}
+                        on:click={() => toggleService(key, svc.id)}
+                        aria-label={`Toggle ${svc.label}`}
+                        aria-pressed={!off.has(svc.id)}
+                      >
+                        <span class="toggle-knob"></span>
+                      </button>
+                    </div>
+                  {/each}
+                </div>
+              {/if}
+            {/each}
           </div>
         {:else if setting.type === 'boolean'}
           <button
@@ -901,6 +968,36 @@
   .icon-btn:disabled {
     opacity: 0.5;
     cursor: not-allowed;
+  }
+
+  /* ---- services editor ---- */
+  .services-editor {
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+    margin-top: 0.75rem;
+  }
+
+  .service-group-title {
+    margin: 0 0 0.35rem;
+    font-size: 0.72rem;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: var(--text-muted);
+  }
+
+  .service-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1rem;
+    padding: 0.4rem 0;
+    border-top: 1px solid var(--border);
+  }
+
+  .service-label {
+    font-size: 0.9rem;
+    color: var(--text-bright);
   }
 
   /* ---- list editor ---- */

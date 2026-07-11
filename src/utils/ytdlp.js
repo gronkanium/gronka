@@ -105,7 +105,7 @@ export function isRedGifsUrl(url) {
 // the hostnames it owns; matching is exact-or-subdomain on the www-stripped hostname.
 // Order does not matter (hosts are disjoint). All were confirmed against the running
 // yt-dlp build's extractor list.
-const YTDLP_SITES = [
+export const YTDLP_SITES = [
   { name: 'YouTube', hosts: ['youtube.com', 'youtu.be'] },
   { name: 'RedGifs', hosts: ['redgifs.com'] },
   { name: 'Imgur', hosts: ['imgur.com'] },

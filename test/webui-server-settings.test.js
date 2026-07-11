@@ -24,6 +24,7 @@ after(async () => {
   await setSetting('admin_user_ids', '[]');
   await setSetting('twitter_delivery', 'hybrid');
   await setSetting('upload_ttl_tiers', '100:72,250:24,500:8,1024:2');
+  await setSetting('disabled_services', '[]');
   if (server) server.close();
   // Don't close database here - it's shared across parallel test files
 });
@@ -64,6 +65,27 @@ describe('settings route', () => {
     assert.strictEqual(settings.maintenance_mode.type, 'boolean');
     assert.strictEqual(settings.rate_limit_cooldown.type, 'number');
     assert.strictEqual(settings.upload_ttl_tiers.type, 'tiers');
+    assert.strictEqual(settings.disabled_services.type, 'services');
+    assert.ok(Array.isArray(settings.disabled_services.catalog));
+    // catalog carries {id,label,category} for each source
+    const sample = settings.disabled_services.catalog.find(s => s.id === 'pornhub');
+    assert.ok(sample && sample.label === 'Pornhub' && sample.category === 'adult');
+  });
+
+  test('services setting stores known ids sorted and drops unknown ones', async () => {
+    const { response, data } = await putSetting('disabled_services', [
+      'pornhub',
+      'twitter',
+      'not-a-real-service',
+    ]);
+    assert.strictEqual(response.status, 200);
+    // unknown id dropped, remaining ids sorted
+    assert.strictEqual(data.value, JSON.stringify(['pornhub', 'twitter']));
+
+    const rejected = await putSetting('disabled_services', 'nope');
+    assert.strictEqual(rejected.response.status, 400);
+
+    await putSetting('disabled_services', []);
   });
 
   test('tiers setting normalizes (sorts ascending) and rejects malformed input', async () => {

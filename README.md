@@ -25,6 +25,7 @@ the same three actions are also available by right-clicking a message → apps: 
 - **cobalt** handles most social platforms: twitter/x, tiktok, instagram, youtube, reddit, facebook, pinterest, twitch clips, soundcloud, tumblr, streamable, dailymotion, snapchat
 - **yt-dlp** handles youtube, redgifs, imgur, kick, coub, rumble, newgrounds, bilibili, and the adult tube sites (pornhub, xvideos, xhamster, redtube); it is also the fallback for x/twitter and tiktok
 - **hentaigifz** — a dedicated page-scrape extractor for hentaigifz.com posts (grabs the post's animated gif)
+- **booru boards** — danbooru and e621/e926 posts via their JSON APIs (grabs the post's original file)
 - direct urls to video/image files work with `/convert`
 
 video inputs: mp4, mov, webm, avi, mkv. image inputs: png, jpg, jpeg, webp, gif.

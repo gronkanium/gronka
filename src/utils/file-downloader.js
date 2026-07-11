@@ -107,9 +107,12 @@ export async function downloadImage(url, isAdminUser = false) {
  * @param {string} url - File URL
  * @param {boolean} isAdminUser - Whether the user is an admin (allows larger files)
  * @param {Client} [client] - Optional Discord client for refreshing expired URLs
+ * @param {{userAgent?: string}} [options] - Optional overrides. `userAgent` replaces the
+ *   default browser User-Agent for hosts that block it (e.g. danbooru's CDN 403s the
+ *   Chrome UA but accepts a descriptive one).
  * @returns {Promise<{buffer: Buffer, contentType: string, size: number, filename: string}>} File data and metadata
  */
-export async function downloadFileFromUrl(url, isAdminUser = false, client = null) {
+export async function downloadFileFromUrl(url, isAdminUser = false, client = null, options = {}) {
   // Validate URL to prevent SSRF
   const urlValidation = validateUrl(url);
   if (!urlValidation.valid) {
@@ -151,7 +154,9 @@ export async function downloadFileFromUrl(url, isAdminUser = false, client = nul
       maxContentLength: isAdminUser ? Infinity : Math.max(MAX_VIDEO_SIZE, MAX_IMAGE_SIZE),
       maxRedirects: 5,
       validateStatus: status => status >= 200 && status < 400,
-      headers: getRequestHeaders(),
+      headers: options.userAgent
+        ? { ...getRequestHeaders(), 'User-Agent': options.userAgent }
+        : getRequestHeaders(),
     });
 
     const buffer = Buffer.from(response.data);

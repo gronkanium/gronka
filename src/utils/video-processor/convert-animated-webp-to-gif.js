@@ -3,6 +3,7 @@ import fs from 'fs/promises';
 import path from 'path';
 import { createLogger } from '../logger.js';
 import { validateNumericParameter } from './utils.js';
+import { runInMediaSlot } from '../media-processing-queue.js';
 
 const logger = createLogger('convert-animated-webp-to-gif');
 
@@ -23,6 +24,10 @@ const logger = createLogger('convert-animated-webp-to-gif');
  * @returns {Promise<void>}
  */
 export async function convertAnimatedWebpToGif(inputPath, outputPath, options = {}) {
+  return runInMediaSlot(() => convertAnimatedWebpToGifImpl(inputPath, outputPath, options));
+}
+
+async function convertAnimatedWebpToGifImpl(inputPath, outputPath, options = {}) {
   // Validate width only when the caller asked to resize; otherwise preserve native size.
   const width =
     options.width === undefined || options.width === null

@@ -3,11 +3,13 @@ import fs from 'fs/promises';
 import path from 'path';
 import { createLogger } from '../logger.js';
 import { validateNumericParameter, checkFFmpegInstalled } from './utils.js';
+import { runInMediaSlot } from '../media-processing-queue.js';
 
 const logger = createLogger('convert-to-gif');
 
 /**
- * Convert video file to GIF using FFmpeg with two-pass palette generation
+ * Convert video file to GIF using FFmpeg with two-pass palette generation.
+ * Runs inside a bounded media-processing slot so concurrent encodes can't starve the box.
  * @param {string} inputPath - Path to input video file
  * @param {string} outputPath - Path to output GIF file
  * @param {Object} options - Conversion options
@@ -19,6 +21,10 @@ const logger = createLogger('convert-to-gif');
  * @returns {Promise<void>}
  */
 export async function convertToGif(inputPath, outputPath, options = {}) {
+  return runInMediaSlot(() => convertToGifImpl(inputPath, outputPath, options));
+}
+
+async function convertToGifImpl(inputPath, outputPath, options = {}) {
   // Validate and sanitize numeric parameters
   const width = validateNumericParameter(options.width ?? 480, 'width', 1, 4096);
   const fps = validateNumericParameter(options.fps ?? 30, 'fps', 0.1, 120);

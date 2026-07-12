@@ -213,24 +213,37 @@ async function probeMediaInfo(filePath, fallbackWidth) {
   return { width, fps };
 }
 
+// Default ceilings for a video-to-GIF conversion when the user doesn't specify.
+// GIF is a wildly inefficient container: a source-resolution / full-framerate encode of an
+// ordinary phone clip balloons to 100-240MB, which is slow to encode, can't go to Discord, and
+// (when several run at once) starved the box until the stuck-operation reaper failed the job.
+// These caps keep default output sane and fast to encode; an explicit width/fps still overrides.
+const DEFAULT_MAX_GIF_WIDTH = 640;
+const DEFAULT_MAX_GIF_FPS = 20;
+
 /**
  * Resolve the effective settings for a video-to-GIF conversion.
- * Policy: preserve the source's width and fps unless the user overrides them,
- * cap fps at 30 (GIF frame delays are centiseconds and can't represent more),
- * and default quality to the GIF_QUALITY config.
+ * Policy: follow the source's width and fps unless the user overrides them, but clamp the
+ * defaults to sane ceilings (DEFAULT_MAX_GIF_WIDTH / DEFAULT_MAX_GIF_FPS) so an unspecified
+ * convert never produces an enormous GIF; default quality to the GIF_QUALITY config.
  * @param {Object} options - User-provided options (width, fps, quality, startTime, duration)
  * @param {{width: number, fps: number}} probed - Probed source dimensions
  * @returns {Object} Options object for convertToGif
  */
 function resolveVideoConversionOptions(options, probed) {
-  const cappedFps = Math.min(probed.fps, 30);
-  if (probed.fps > 30) {
-    logger.info(`Capping FPS from ${probed.fps.toFixed(1)}fps to 30fps (GIF format limitation)`);
+  const defaultWidth = Math.min(probed.width, DEFAULT_MAX_GIF_WIDTH);
+  if (options.width == null && probed.width > DEFAULT_MAX_GIF_WIDTH) {
+    logger.info(`Clamping default width from ${probed.width}px to ${defaultWidth}px`);
+  }
+
+  const defaultFps = Math.min(probed.fps, DEFAULT_MAX_GIF_FPS);
+  if (options.fps == null && probed.fps > DEFAULT_MAX_GIF_FPS) {
+    logger.info(`Clamping default FPS from ${probed.fps.toFixed(1)}fps to ${defaultFps}fps`);
   }
 
   return {
-    width: options.width ?? probed.width,
-    fps: options.fps ?? cappedFps,
+    width: options.width ?? defaultWidth,
+    fps: options.fps ?? defaultFps,
     quality: options.quality ?? botConfig.gifQuality,
     startTime: options.startTime ?? null,
     duration: options.duration ?? null,

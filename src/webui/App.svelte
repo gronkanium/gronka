@@ -17,6 +17,7 @@
     Shield,
     List,
     SlidersHorizontal,
+    Globe,
   } from 'lucide-svelte';
   import Stats from './pages/Stats.svelte';
   import Health from './pages/Health.svelte';
@@ -26,6 +27,7 @@
   import UserProfile from './pages/UserProfile.svelte';
   import Alerts from './pages/Alerts.svelte';
   import Moderation from './pages/Moderation.svelte';
+  import Sources from './pages/Sources.svelte';
   import BotSettings from './pages/BotSettings.svelte';
   import './styles/responsive.css';
 
@@ -51,6 +53,7 @@
     { page: 'logs', label: 'logs', icon: FileText },
     { page: 'alerts', label: 'alerts', icon: Bell },
     { page: 'moderation', label: 'moderation', icon: Shield },
+    { page: 'sources', label: 'sources', icon: Globe },
     { page: 'settings', label: 'settings', icon: SlidersHorizontal },
   ];
 
@@ -257,6 +260,13 @@
       </div>
       <div class="page-content">
         <Moderation />
+      </div>
+    {:else if activePage === 'sources'}
+      <div class="page-header">
+        <h2>sources</h2>
+      </div>
+      <div class="page-content">
+        <Sources />
       </div>
     {:else if activePage === 'settings'}
       <div class="page-header">

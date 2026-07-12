@@ -28,7 +28,7 @@ download media from social platforms using the `/download` command:
 - hentaigifz (via a dedicated page-scrape extractor, not cobalt)
 - danbooru, e621, e926 (via their JSON APIs, not cobalt)
 
-each of these sources can be individually turned on or off from the webui **Settings → sources** tab. a turned-off source refuses `/download` with a short message instead of downloading.
+each of these sources can be individually turned on or off from the webui **sources** page (in the sidebar). a turned-off source refuses `/download` with a short message instead of downloading.
 
 you can also download media from direct urls using `/convert` with a url parameter. the bot handles videos and images from most common sources.
 

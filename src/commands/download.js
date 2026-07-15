@@ -92,8 +92,8 @@ function isTikTokUrl(url) {
 }
 
 // Human-readable label for a Cobalt-primary host, used when a Cobalt download fails and we
-// retry via yt-dlp. Cobalt's per-service extractors are flaky/auth-gated (Instagram, Pinterest,
-// Reddit, etc.); yt-dlp handles many of the same hosts (and, with a cookies file, private/gated
+// retry via yt-dlp. Cobalt's per-service extractors are flaky/auth-gated (Instagram, Reddit,
+// etc.); yt-dlp handles many of the same hosts (and, with a cookies file, private/gated
 // Instagram). Returning a non-null label makes any Cobalt failure eligible for the yt-dlp retry,
 // not just X/Twitter and TikTok.
 function cobaltFallbackLabel(url) {

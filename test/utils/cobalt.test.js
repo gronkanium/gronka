@@ -76,10 +76,13 @@ describe('cobalt utilities', () => {
     assert.strictEqual(normalized, 'https://bsky.app/profile/user.bsky.social/post/3kabc123');
   });
 
-  test('isSocialMediaUrl recognizes pinterest URLs', () => {
-    assert.strictEqual(isSocialMediaUrl('https://www.pinterest.com/pin/10203885745577880/'), true);
-    assert.strictEqual(isSocialMediaUrl('https://pinterest.com/pin/10203885745577880/'), true);
-    assert.strictEqual(isSocialMediaUrl('https://pin.it/abc123'), true);
+  test('isSocialMediaUrl rejects pinterest URLs (intentionally unsupported)', () => {
+    // Pinterest downloading is dead end-to-end (Cobalt returns empty; yt-dlp's extractor has
+    // been broken since ~2025-06). Removed from the supported list so users get an honest
+    // "unsupported platform" message instead of a misleading "deleted/private" error.
+    assert.strictEqual(isSocialMediaUrl('https://www.pinterest.com/pin/10203885745577880/'), false);
+    assert.strictEqual(isSocialMediaUrl('https://pinterest.com/pin/10203885745577880/'), false);
+    assert.strictEqual(isSocialMediaUrl('https://pin.it/abc123'), false);
   });
 
   test('isSocialMediaUrl recognizes twitch clip URLs', () => {

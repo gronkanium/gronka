@@ -16,7 +16,6 @@ download media from social platforms using the `/download` command:
 - youtube
 - reddit
 - facebook
-- pinterest
 - twitch clips
 - soundcloud
 - tumblr

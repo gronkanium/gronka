@@ -119,7 +119,6 @@ check if the platform is supported by cobalt:
 - youtube
 - reddit
 - facebook
-- pinterest
 - twitch clips
 - soundcloud
 - tumblr

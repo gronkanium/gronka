@@ -42,7 +42,6 @@ const cobaltServices = [
   { id: 'instagram', label: 'Instagram', category: 'social', hosts: ['instagram.com'] },
   { id: 'reddit', label: 'Reddit', category: 'social', hosts: ['reddit.com', 'redd.it'] },
   { id: 'facebook', label: 'Facebook', category: 'social', hosts: ['facebook.com', 'fb.watch'] },
-  { id: 'pinterest', label: 'Pinterest', category: 'social', hosts: ['pinterest.com', 'pin.it'] },
   { id: 'twitch', label: 'Twitch (clips)', category: 'social', hosts: ['twitch.tv'] },
   { id: 'soundcloud', label: 'SoundCloud', category: 'social', hosts: ['soundcloud.com'] },
   { id: 'tumblr', label: 'Tumblr', category: 'social', hosts: ['tumblr.com'] },

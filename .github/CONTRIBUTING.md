@@ -101,7 +101,7 @@ npm run docker:register    # Register Discord commands in container
 The Docker Compose setup includes several services:
 
 - **app** - Main service running both the Discord bot and local server. The local server provides health checks and stats API. Files are stored in R2 when configured (recommended) and served via the R2 public domain. The file serving routes (/gifs/_, /videos/_, /images/\*) have been removed from the server.
-- **cobalt** - Self-hosted API for downloading media from social platforms (Twitter/X, TikTok, Instagram, YouTube, Reddit, Facebook, Pinterest, Twitch clips, SoundCloud, Tumblr, Streamable, Dailymotion, Snapchat). Runs by default on port 9000
+- **cobalt** - Self-hosted API for downloading media from social platforms (Twitter/X, TikTok, Instagram, YouTube, Reddit, Facebook, Twitch clips, SoundCloud, Tumblr, Streamable, Dailymotion, Snapchat). Runs by default on port 9000
 - **giflossy** - Service used for GIF optimization via docker exec. Used internally by the bot for the `/optimize` command
 - **watchtower** - Automatically updates the cobalt image. Runs cleanup and updates every 15 minutes
 - **webui** - Optional dashboard for viewing statistics (requires profile, runs on port 3001)

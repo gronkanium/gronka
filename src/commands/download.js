@@ -91,6 +91,19 @@ function isTikTokUrl(url) {
   }
 }
 
+// Human-readable label for a Cobalt-primary host, used when a Cobalt download fails and we
+// retry via yt-dlp. Cobalt's per-service extractors are flaky/auth-gated (Instagram, Pinterest,
+// Reddit, etc.); yt-dlp handles many of the same hosts (and, with a cookies file, private/gated
+// Instagram). Returning a non-null label makes any Cobalt failure eligible for the yt-dlp retry,
+// not just X/Twitter and TikTok.
+function cobaltFallbackLabel(url) {
+  try {
+    return new URL(url).hostname.toLowerCase().replace(/^www\./, '');
+  } catch {
+    return 'this platform';
+  }
+}
+
 const {
   gifStoragePath: GIF_STORAGE_PATH,
   cdnBaseUrl: CDN_BASE_URL,
@@ -499,7 +512,7 @@ async function processDownload(
               ? 'X/Twitter'
               : isTikTokUrl(url)
                 ? 'TikTok'
-                : null;
+                : cobaltFallbackLabel(url);
 
             // Last resort for X/Twitter when downloading isn't possible (e.g. the
             // video is over the size cap and yt-dlp rejects it on the 5-minute

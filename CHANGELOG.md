@@ -5,6 +5,25 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres (attempts) to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.23.0](https://github.com/thedorekaczynski/gronka/compare/v0.22.0...v0.23.0) (2026-07-18)
+
+
+### Features
+
+* **download:** add danbooru and e621 booru support ([#42](https://github.com/thedorekaczynski/gronka/issues/42)) ([4d79b00](https://github.com/thedorekaczynski/gronka/commit/4d79b00a39d1bc2fc14a0d794d7fb6048b8c0dfe))
+* **download:** add hentaigifz.com support ([#38](https://github.com/thedorekaczynski/gronka/issues/38)) ([e298359](https://github.com/thedorekaczynski/gronka/commit/e29835956f336fb0556e5560047f523a54868436))
+* **download:** add imgur, kick, coub, rumble, and more yt-dlp sites ([1278ba2](https://github.com/thedorekaczynski/gronka/commit/1278ba276c24f81aa659467a83424c53cb4ec51c))
+* **download:** retry any failed Cobalt download via yt-dlp ([462c0ce](https://github.com/thedorekaczynski/gronka/commit/462c0cea4d4b4b2bb48c3f18e0708fbcb6b372db))
+* **download:** support redgifs via yt-dlp ([#39](https://github.com/thedorekaczynski/gronka/issues/39)) ([edc9817](https://github.com/thedorekaczynski/gronka/commit/edc9817e6fb3531444cfd4e694a33abb351fc2d8))
+* **webui:** add a Sources tab to turn download services on/off ([#43](https://github.com/thedorekaczynski/gronka/issues/43)) ([7ac26c5](https://github.com/thedorekaczynski/gronka/commit/7ac26c5b9817cef04e282f7d0861040fe07643a3))
+* **webui:** move source toggles to a dedicated Sources page ([#44](https://github.com/thedorekaczynski/gronka/issues/44)) ([08996d3](https://github.com/thedorekaczynski/gronka/commit/08996d3ea0ed512869621e72ae39c1aa1a2efaf4))
+
+
+### Bug Fixes
+
+* **convert:** cap concurrent encodes and clamp default GIF size ([9e6c8fa](https://github.com/thedorekaczynski/gronka/commit/9e6c8fa43ffa064fcef4f41520adf82f1dec65da))
+* **download:** drop Pinterest as a supported source ([2ee7753](https://github.com/thedorekaczynski/gronka/commit/2ee7753ac8c90c8f2e9bb578dd44eb1065faee31))
+
 ## [0.22.0](https://github.com/thedorekaczynski/gronka/compare/v0.21.0...v0.22.0) (2026-07-09)
 
 

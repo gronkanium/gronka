@@ -5,6 +5,13 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres (attempts) to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.24.0](https://github.com/thedorekaczynski/gronka/compare/v0.23.0...v0.24.0) (2026-07-21)
+
+
+### Features
+
+* **webui:** add install, activation, and throughput stats to the dashboard ([cb93970](https://github.com/thedorekaczynski/gronka/commit/cb93970028552c4dd25965da9314809f3063641a))
+
 ## [0.23.0](https://github.com/thedorekaczynski/gronka/compare/v0.22.0...v0.23.0) (2026-07-18)
 
 

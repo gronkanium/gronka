@@ -6,7 +6,7 @@ import { getAlerts } from '../../utils/database.js';
 const logger = createLogger('webui');
 
 // Write a single SSE event to a client response
-export function sendEvent(client, type, data) {
+function sendEvent(client, type, data) {
   try {
     client.write(`data: ${JSON.stringify({ type, data })}\n\n`);
   } catch (error) {
@@ -15,7 +15,7 @@ export function sendEvent(client, type, data) {
 }
 
 // Clean up dead connections (closed or destroyed responses)
-export function cleanupDeadConnections(clients) {
+function cleanupDeadConnections(clients) {
   const deadClients = [];
   clients.forEach(client => {
     if (client.writableEnded || client.destroyed) {

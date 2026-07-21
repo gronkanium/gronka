@@ -1,8 +1,6 @@
 import { blake3 } from '@noble/hashes/blake3.js';
 import { bytesToHex } from '@noble/hashes/utils.js';
 
-export const HASH_ALGORITHM = 'blake3';
-
 /**
  * Hash arbitrary bytes to lowercase hex.
  * @param {Uint8Array} bytes

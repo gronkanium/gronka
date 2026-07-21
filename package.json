@@ -90,7 +90,6 @@
     "express-rate-limit": "^8.2.1",
     "fluent-ffmpeg": "^2.1.2",
     "lucide-svelte": "^1.0.1",
-    "marked": "^18.0.6",
     "postgres": "^3.4.5",
     "tmp": "^0.2.5"
   },
@@ -101,7 +100,6 @@
     "cross-env": "^10.1.0",
     "eslint": "^10.7.0",
     "eslint-config-prettier": "^10.1.8",
-    "http-proxy-middleware": "^4.1.1",
     "husky": "^9.1.7",
     "nodemon": "^3.1.11",
     "prettier": "^3.9.5",

@@ -63,10 +63,3 @@ export async function runInMediaSlot(fn) {
     release();
   }
 }
-
-/**
- * @returns {{active:number, queued:number, max:number}} Current slot usage.
- */
-export function getMediaQueueStats() {
-  return { active, queued: waiters.length, max: MAX_CONCURRENT_MEDIA };
-}

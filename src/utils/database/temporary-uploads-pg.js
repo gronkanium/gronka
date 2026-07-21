@@ -78,34 +78,6 @@ export async function insertTemporaryUpload(urlHash, r2Key, uploadedAt, expiresA
 }
 
 /**
- * Get all expired temporary uploads that haven't been deleted
- * @param {number} now - Current Unix timestamp in milliseconds
- * @returns {Promise<Array>} Array of expired temporary upload records
- */
-export async function getExpiredTemporaryUploads(now) {
-  await ensurePostgresInitialized();
-
-  const sql = getPostgresConnection();
-  if (!sql) {
-    getLogger().error('PostgreSQL not initialized.');
-    return [];
-  }
-
-  try {
-    const results = await sql`
-      SELECT * FROM temporary_uploads
-      WHERE expires_at < ${now} AND deleted_at IS NULL
-      ORDER BY expires_at ASC
-    `;
-    // Convert timestamp BIGINT fields from strings to numbers
-    return convertTimestampsInArray(results, TEMPORARY_UPLOADS_TIMESTAMP_FIELDS);
-  } catch (error) {
-    getLogger().error(`Failed to get expired temporary uploads: ${error.message}`);
-    return [];
-  }
-}
-
-/**
  * Total bytes of live (not expired, not deleted) temporary R2 uploads. Used as a soft cap so
  * concurrent uploads don't blow past the R2 storage budget - R2 bills on daily-peak storage, so
  * bounding the live set bounds the bill. Sizes come from processed_urls (joined on url_hash);
@@ -214,56 +186,6 @@ export async function markTemporaryUploadDeletionFailed(id, error, retryCount) {
     return result.count > 0;
   } catch (error) {
     getLogger().error(`Failed to mark temporary upload deletion as failed: ${error.message}`);
-    return false;
-  }
-}
-
-/**
- * Get all records with failed deletions for manual review
- * @returns {Promise<Array>} Array of temporary upload records with failed deletions
- */
-export async function getFailedDeletions() {
-  await ensurePostgresInitialized();
-
-  const sql = getPostgresConnection();
-  if (!sql) {
-    getLogger().error('PostgreSQL not initialized.');
-    return [];
-  }
-
-  try {
-    const results = await sql`
-      SELECT * FROM temporary_uploads
-      WHERE deletion_failed > 0 AND deleted_at IS NULL
-      ORDER BY deletion_failed DESC, expires_at ASC
-    `;
-    // Convert timestamp BIGINT fields from strings to numbers
-    return convertTimestampsInArray(results, TEMPORARY_UPLOADS_TIMESTAMP_FIELDS);
-  } catch (error) {
-    getLogger().error(`Failed to get failed deletions: ${error.message}`);
-    return [];
-  }
-}
-
-/**
- * Hard delete a temporary upload record (after R2 deletion confirmed)
- * @param {number} id - Temporary upload record ID
- * @returns {Promise<boolean>} True if record was deleted
- */
-export async function deleteTemporaryUpload(id) {
-  await ensurePostgresInitialized();
-
-  const sql = getPostgresConnection();
-  if (!sql) {
-    getLogger().error('PostgreSQL not initialized.');
-    return false;
-  }
-
-  try {
-    const result = await sql`DELETE FROM temporary_uploads WHERE id = ${id}`;
-    return result.count > 0;
-  } catch (error) {
-    getLogger().error(`Failed to delete temporary upload record: ${error.message}`);
     return false;
   }
 }

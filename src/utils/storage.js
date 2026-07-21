@@ -141,7 +141,7 @@ function setR2UsageCache(usageBytes) {
  * Increment R2 usage cache by file size (no API call)
  * @param {number} fileSizeBytes - File size in bytes to add
  */
-export function incrementR2UsageCache(fileSizeBytes) {
+function incrementR2UsageCache(fileSizeBytes) {
   if (!r2UsageCache) {
     logger.debug('R2 usage cache not initialized, skipping increment');
     return;
@@ -1087,31 +1087,6 @@ async function calculateStorageStats(storagePath) {
       imagesDiskUsageFormatted: '0.00 MB',
     };
   }
-}
-
-/**
- * Get cache statistics for statsCache
- * @returns {Object} Cache statistics
- */
-export function getCacheStats() {
-  const ttl = botConfig.statsCacheTtl;
-  const entries = Array.from(statsCache.entries());
-  const now = Date.now();
-
-  const entryAges = entries.map(([_, entry]) => now - entry.timestamp);
-  const oldestAge = entryAges.length > 0 ? Math.max(...entryAges) : 0;
-  const newestAge = entryAges.length > 0 ? Math.min(...entryAges) : 0;
-
-  return {
-    size: statsCache.size,
-    ttl: ttl === 0 ? null : ttl,
-    ttlFormatted: ttl === 0 ? 'disabled' : `${Math.round(ttl / 1000)}s`,
-    enabled: ttl !== 0,
-    oldestEntryAge: oldestAge,
-    oldestEntryAgeFormatted: oldestAge > 0 ? `${Math.round(oldestAge / 1000)}s` : 'N/A',
-    newestEntryAge: newestAge,
-    newestEntryAgeFormatted: newestAge > 0 ? `${Math.round(newestAge / 1000)}s` : 'N/A',
-  };
 }
 
 /**

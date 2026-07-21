@@ -261,7 +261,7 @@ function resolveVideoConversionOptions(options, probed) {
  * @param {string} [originalUrl] - Original URL if this conversion came from a URL (not Discord attachment)
  * @param {string} [commandSource] - Command source ('slash' or 'context-menu')
  */
-export async function processConversion(
+async function processConversion(
   interaction,
   attachment,
   attachmentType,

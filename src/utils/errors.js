@@ -30,37 +30,10 @@ export class ValidationError extends AppError {
 }
 
 /**
- * File error - thrown when file operations fail
- */
-export class FileError extends AppError {
-  constructor(message, code = 'FILE_ERROR', statusCode = 500) {
-    super(message, code, statusCode);
-  }
-}
-
-/**
  * Network error - thrown when network operations fail
  */
 export class NetworkError extends AppError {
   constructor(message, code = 'NETWORK_ERROR', statusCode = 500) {
-    super(message, code, statusCode);
-  }
-}
-
-/**
- * Rate limit error - thrown when rate limit is exceeded
- */
-export class RateLimitError extends AppError {
-  constructor(message = 'rate limit exceeded', code = 'RATE_LIMIT_ERROR', statusCode = 429) {
-    super(message, code, statusCode);
-  }
-}
-
-/**
- * Conversion error - thrown when video/image conversion fails
- */
-export class ConversionError extends AppError {
-  constructor(message, code = 'CONVERSION_ERROR', statusCode = 500) {
     super(message, code, statusCode);
   }
 }

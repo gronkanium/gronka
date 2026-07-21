@@ -36,14 +36,6 @@ function setCachedRecentOperations(operations) {
 }
 
 /**
- * Invalidate recent operations cache
- */
-export function invalidateRecentOperationsCache() {
-  recentOperationsCache.data = null;
-  recentOperationsCache.timestamp = 0;
-}
-
-/**
  * Insert an operation log entry
  * @param {string} operationId - Operation ID
  * @param {string} step - Step name (e.g., 'download_start', 'processing', 'complete')
@@ -75,7 +67,7 @@ export async function insertOperationLog(operationId, step, status, data = {}) {
  * @param {string} operationId - Operation ID
  * @returns {Promise<Array>} Array of operation log entries
  */
-export async function getOperationLogs(operationId) {
+async function getOperationLogs(operationId) {
   await ensurePostgresInitialized();
 
   const sql = getPostgresConnection();
@@ -594,62 +586,6 @@ export async function searchOperations(filters = {}, { limit = 50, offset = 0, s
   reconstructed.sort((a, b) => orderIndex.get(a.id) - orderIndex.get(b.id));
 
   return { operations: reconstructed, total };
-}
-
-/**
- * Update metadata for a specific operation log entry
- * @param {string} operationId - Operation ID
- * @param {string} step - Step name (e.g., 'created')
- * @param {Object} newMetadata - New metadata object to merge with existing metadata
- * @returns {Promise<boolean>} True if update was successful, false otherwise
- */
-export async function updateOperationLogMetadata(operationId, step, newMetadata) {
-  await ensurePostgresInitialized();
-
-  const sql = getPostgresConnection();
-  if (!sql) {
-    console.error('PostgreSQL not initialized. Call initPostgresDatabase() first.');
-    return false;
-  }
-
-  // Get the existing log entry
-  const existingLogs = await sql`
-    SELECT * FROM operation_logs
-    WHERE operation_id = ${operationId} AND step = ${step}
-    ORDER BY timestamp ASC
-    LIMIT 1
-  `;
-
-  if (existingLogs.length === 0) {
-    console.error(`Operation log not found: ${operationId}, step: ${step}`);
-    return false;
-  }
-
-  const existingLog = existingLogs[0];
-
-  // Parse existing metadata
-  let existingMetadata = {};
-  if (existingLog.metadata) {
-    try {
-      existingMetadata = JSON.parse(existingLog.metadata);
-    } catch (error) {
-      console.error('Failed to parse existing metadata:', error);
-      existingMetadata = {};
-    }
-  }
-
-  // Merge with new metadata
-  const mergedMetadata = { ...existingMetadata, ...newMetadata };
-  const metadataStr = JSON.stringify(mergedMetadata);
-
-  // Update the log entry
-  await sql`
-    UPDATE operation_logs
-    SET metadata = ${metadataStr}
-    WHERE operation_id = ${operationId} AND step = ${step} AND timestamp = ${existingLog.timestamp}
-  `;
-
-  return true;
 }
 
 /**

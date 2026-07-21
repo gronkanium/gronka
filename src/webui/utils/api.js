@@ -41,32 +41,6 @@ export function formatUptime(seconds) {
   }
 }
 
-export function formatServerStartTime(uptimeSeconds) {
-  if (!uptimeSeconds && uptimeSeconds !== 0) return 'N/A';
-
-  try {
-    const now = new Date();
-    const startTime = new Date(now.getTime() - uptimeSeconds * 1000);
-
-    const options = {
-      month: 'short',
-      day: 'numeric',
-      hour: '2-digit',
-      minute: '2-digit',
-    };
-
-    // If same year, don't show year
-    if (startTime.getFullYear() === now.getFullYear()) {
-      return startTime.toLocaleDateString('en-US', options);
-    }
-
-    // Otherwise include year
-    return startTime.toLocaleDateString('en-US', { ...options, year: 'numeric' });
-  } catch {
-    return 'N/A';
-  }
-}
-
 export async function fetchCryptoPrices() {
   try {
     const response = await fetch('/api/crypto-prices');

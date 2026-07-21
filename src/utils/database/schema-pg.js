@@ -274,7 +274,7 @@ export function getIndexDefinitions() {
  * @param {string} columnName - Column name
  * @returns {Promise<boolean>} True if column exists
  */
-export async function columnExists(sql, tableName, columnName) {
+async function columnExists(sql, tableName, columnName) {
   const result = await sql`
     SELECT column_name
     FROM information_schema.columns

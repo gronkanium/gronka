@@ -34,7 +34,7 @@ function formatDuration(ms) {
  * @param {Object} [options.metadata] - Additional metadata (duration will be automatically added if operationId is provided)
  * @returns {Promise<void>}
  */
-export async function sendNtfyNotification(title, message, options = {}) {
+async function sendNtfyNotification(title, message, options = {}) {
   const {
     severity = 'info',
     component = 'bot',
@@ -164,17 +164,6 @@ export async function notifyCommandFailure(username, command, options = {}) {
       ...options.metadata,
     },
   });
-}
-
-/**
- * Send generic notification with full options
- * @param {string} title - Notification title
- * @param {string} message - Notification message
- * @param {Object} options - Full options
- * @returns {Promise<void>}
- */
-export async function notify(title, message, options = {}) {
-  await sendNtfyNotification(title, message, options);
 }
 
 /**

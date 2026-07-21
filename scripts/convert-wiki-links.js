@@ -61,8 +61,8 @@ function convertAllWikiFiles() {
   return converted;
 }
 
-// Export functions for use in other scripts
-export { convertWikiLinks, convertWikiFile, convertAllWikiFiles };
+// Export for use in other scripts
+export { convertAllWikiFiles };
 
 // Run conversion if this is the main module
 const isMainModule =

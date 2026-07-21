@@ -219,7 +219,7 @@ export const webuiConfig = {
 };
 
 // Logger configuration
-export const loggerConfig = {
+const loggerConfig = {
   logDir: getStringEnv('LOG_DIR', './logs'),
   logLevel: getStringEnv('LOG_LEVEL', 'INFO').toUpperCase(),
   logRotation: getStringEnv('LOG_ROTATION', 'daily'),
@@ -251,14 +251,3 @@ if (!validCleanupLogLevels.includes(r2Config.cleanupLogLevel)) {
     'INVALID_CLEANUP_LOG_LEVEL'
   );
 }
-
-// Export all config as a single object for convenience
-export const config = {
-  get bot() {
-    return getBotConfig();
-  },
-  server: serverConfig,
-  webui: webuiConfig,
-  logger: loggerConfig,
-  r2: r2Config,
-};

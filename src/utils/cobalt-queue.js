@@ -208,16 +208,3 @@ export function queueCobaltRequest(url, downloadFn, options = {}) {
 
   return downloadPromise;
 }
-
-/**
- * Get current queue stats
- * @returns {Object} Queue statistics
- */
-export function getQueueStats() {
-  return {
-    activeRequests,
-    queuedRequests: requestQueue.length,
-    inProgressUrls: inProgressDownloads.size,
-    maxConcurrent: MAX_CONCURRENT_REQUESTS,
-  };
-}

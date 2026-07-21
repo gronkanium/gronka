@@ -17,7 +17,7 @@ const logger = createLogger('r2-cleanup');
  * @param {string} logLevel - Logging level: 'minimal', 'detailed', or 'debug'
  * @returns {Promise<{deleted: number, failed: number, skipped: number, errors: Array}>} Cleanup statistics
  */
-export async function deleteExpiredR2Files(config, logLevel = 'detailed') {
+async function deleteExpiredR2Files(config, logLevel = 'detailed') {
   const now = Date.now();
   const stats = {
     deleted: 0,

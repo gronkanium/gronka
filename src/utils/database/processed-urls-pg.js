@@ -46,7 +46,7 @@ function setCachedProcessedUrl(urlHash, processedUrl) {
  * Invalidate processed URL cache
  * @param {string} urlHash - URL hash to invalidate (or null to clear all)
  */
-export function invalidateProcessedUrlCache(urlHash = null) {
+function invalidateProcessedUrlCache(urlHash = null) {
   if (urlHash) {
     processedUrlCache.delete(urlHash);
   } else {

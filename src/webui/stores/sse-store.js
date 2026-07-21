@@ -7,7 +7,7 @@ import { writable } from 'svelte/store';
 
 // Connection state
 export const connected = writable(false);
-export const error = writable(null);
+const error = writable(null);
 
 // Connection health monitoring
 export const connectionHealth = writable({

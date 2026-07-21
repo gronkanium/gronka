@@ -2,7 +2,7 @@
  * Simple hash-based router for Svelte
  */
 
-import { writable, derived } from 'svelte/store';
+import { writable } from 'svelte/store';
 
 // Current route store
 export const currentRoute = writable({
@@ -82,9 +82,4 @@ export function navigate(page, params = {}) {
   }
 
   window.location.hash = hash;
-}
-
-// Derived store for checking active page
-export function isActivePage(page) {
-  return derived(currentRoute, $route => $route.page === page);
 }

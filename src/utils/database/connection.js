@@ -3,7 +3,6 @@ import fs from 'fs';
 
 let sql = null;
 let initPromise = null;
-let currentDatabaseName = null;
 
 /**
  * Check if we're running in test mode
@@ -173,7 +172,6 @@ export async function initPostgresConnection() {
 
       // Extract database name for logging and verification
       const dbName = typeof config === 'string' ? extractDbFromUrl(config) : config.database;
-      currentDatabaseName = dbName;
 
       // Safety check: prevent tests from accidentally writing to production database
       if (testMode && dbName === 'gronka') {
@@ -248,7 +246,6 @@ export async function initPostgresConnection() {
       return sql;
     } catch (error) {
       sql = null;
-      currentDatabaseName = null;
       throw new Error(`Failed to initialize PostgreSQL connection: ${error.message}`, {
         cause: error,
       });
@@ -270,42 +267,6 @@ function extractDbFromUrl(url) {
     return parsed.pathname.slice(1) || 'unknown';
   } catch {
     return 'unknown';
-  }
-}
-
-/**
- * Get the current database name (for verification in tests)
- * @returns {string|null} Current database name or null if not connected
- */
-export function getCurrentDatabaseName() {
-  return currentDatabaseName;
-}
-
-/**
- * Assert that we're connected to a test database (not production)
- * Call this at the start of test files that use the database to fail fast if misconfigured
- * @throws {Error} If connected to production database or not in test mode
- */
-export function assertTestDatabase() {
-  if (!isTestMode()) {
-    throw new Error(
-      'SAFETY: assertTestDatabase() called but not in test mode. ' +
-        'Run tests with TEST_POSTGRES_DB set or via "npm run test:safe".'
-    );
-  }
-
-  if (currentDatabaseName === 'gronka') {
-    throw new Error(
-      'SAFETY: Tests are connected to production database "gronka". ' +
-        'Set TEST_POSTGRES_DB=gronka_test to use the test database.'
-    );
-  }
-
-  if (currentDatabaseName && !currentDatabaseName.includes('test')) {
-    console.warn(
-      `[PostgreSQL] Warning: Database "${currentDatabaseName}" doesn't contain "test" in its name. ` +
-        'Consider using a name like "gronka_test" for clarity.'
-    );
   }
 }
 
@@ -347,14 +308,6 @@ export function setPostgresInitPromise(promise) {
 }
 
 /**
- * Check if PostgreSQL connection is initialized
- * @returns {boolean} True if connection is initialized
- */
-export function isPostgresInitialized() {
-  return sql !== null;
-}
-
-/**
  * Close PostgreSQL connection pool
  * @returns {Promise<void>}
  */
@@ -363,22 +316,5 @@ export async function closePostgresConnection() {
     await sql.end({ timeout: 5 });
     sql = null;
     initPromise = null;
-    currentDatabaseName = null;
-  }
-}
-
-/**
- * Health check for PostgreSQL connection
- * @returns {Promise<boolean>} True if connection is healthy
- */
-export async function checkPostgresHealth() {
-  try {
-    if (!sql) {
-      return false;
-    }
-    await sql`SELECT 1`;
-    return true;
-  } catch (_error) {
-    return false;
   }
 }

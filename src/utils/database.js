@@ -6,7 +6,6 @@
 export {
   initPostgresDatabase as initDatabase,
   closePostgresDatabase as closeDatabase,
-  ensurePostgresInitialized as ensureDbInitialized,
 } from './database/init.js';
 
 // Export operations directly from PostgreSQL implementations

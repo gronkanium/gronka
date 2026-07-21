@@ -100,6 +100,10 @@ MIGRATION.md
 .npmrc
 
 scripts/fix-docker-credentials.sh
+
+# Personal scraping hack (Discord portal install count) - not for other checkouts/prod
+scripts/fetch-portal-stats.js
+
 AGENTS.md
 .agent/
 CLAUDE.md

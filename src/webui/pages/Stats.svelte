@@ -1,6 +1,7 @@
 <script>
   import { onMount } from 'svelte';
   import { fetchStats } from '../utils/api.js';
+  import RequestsChart from '../components/RequestsChart.svelte';
 
   let stats = null;
   let loading = true;
@@ -65,7 +66,47 @@
           ).toLocaleString()} ({stats.disk_usage_formatted || '0.00 MB'})
         </dd>
       </div>
+      {#if stats.discord_portal_install_users != null}
+        <div class="stat-item">
+          <dt>discord installs</dt>
+          <dd>
+            {stats.discord_portal_install_users.toLocaleString()}
+            {#if stats.discord_portal_install_users_fetched_at}
+              <span class="stat-note">
+                (as of {new Date(
+                  stats.discord_portal_install_users_fetched_at
+                ).toLocaleDateString()})
+              </span>
+            {/if}
+          </dd>
+        </div>
+      {/if}
+      {#if stats.ever_active_users != null}
+        <div class="stat-item">
+          <dt>bot users</dt>
+          <dd>
+            {stats.ever_active_users.toLocaleString()}
+            {#if stats.discord_portal_install_users}
+              <span class="stat-note">
+                ({Math.round((stats.ever_active_users / stats.discord_portal_install_users) * 100)}%
+                of installs)
+              </span>
+            {/if}
+          </dd>
+        </div>
+      {/if}
+      {#if stats.active_users_7d != null}
+        <div class="stat-item">
+          <dt>active (7d / 30d)</dt>
+          <dd>
+            {stats.active_users_7d.toLocaleString()} / {stats.active_users_30d.toLocaleString()}
+          </dd>
+        </div>
+      {/if}
     </dl>
+    {#if stats.daily_requests?.length}
+      <RequestsChart data={stats.daily_requests} />
+    {/if}
   {/if}
 </section>
 
@@ -122,6 +163,12 @@
     font-size: 1rem;
     color: var(--text-bright);
     font-weight: 500;
+  }
+
+  .stat-note {
+    font-size: 0.8rem;
+    font-weight: 400;
+    color: var(--text-muted);
   }
 
   .loading {

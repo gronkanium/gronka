@@ -33,6 +33,11 @@
   --info-bg: #2d3a50;
   --info-bg-hover: #3d4a60;
 
+  /* charts - single-series mark color, same hue family as --info but recalibrated
+     to a mid lightness band so it reads as a fill against --surface instead of text */
+  --chart-series-1: #4a90d9;
+  --chart-series-1-hover: #589ad9;
+
   /* shape */
   --radius: 3px;
   --radius-lg: 4px;

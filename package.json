@@ -48,6 +48,8 @@
     "fix:stuck-ops": "node scripts/fix-stuck-operations.js",
     "fix:creds": "bash scripts/fix-docker-credentials.sh",
     "fetch:security": "node scripts/fetch-code-scanning-issues.js",
+    "fetch:portal-stats": "node scripts/fetch-portal-stats.js",
+    "fetch:portal-stats:login": "node scripts/fetch-portal-stats.js --login",
     "reset:clean-slate": "node scripts/reset-clean-slate.js",
     "fix:deps": "npm install",
     "validate": "npm run check:sync && npm run lint && npm run format:check",
@@ -102,12 +104,14 @@
     "eslint-config-prettier": "^10.1.8",
     "husky": "^9.1.7",
     "nodemon": "^3.1.11",
+    "playwright": "^1.61.1",
     "prettier": "^3.9.5",
     "prettier-plugin-svelte": "^4.1.1",
     "svelte": "^5.56.5",
     "vite": "^8.1.4"
   },
   "overrides": {
-    "undici": "^6.27.0"
+    "undici": "^6.27.0",
+    "shell-quote": "^1.10.0"
   }
 }

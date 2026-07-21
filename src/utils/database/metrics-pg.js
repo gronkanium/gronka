@@ -247,3 +247,44 @@ export async function getUserMetricsCount(options = {}) {
     throw error;
   }
 }
+
+/**
+ * Get counts of users active within recent windows, plus the all-time total.
+ * "Active" means last_command_at falls within the window - every row in
+ * user_metrics has run at least one command, so the unfiltered count doubles
+ * as the all-time "ever used the bot" total.
+ * @returns {Promise<{total: number, active7d: number, active30d: number}>}
+ */
+export async function getActiveUserCounts() {
+  await ensurePostgresInitialized();
+
+  const sql = getPostgresConnection();
+  if (!sql) {
+    console.error('PostgreSQL not initialized. Call initPostgresDatabase() first.');
+    return { total: 0, active7d: 0, active30d: 0 };
+  }
+
+  const now = Date.now();
+  const sevenDaysAgo = now - 7 * 24 * 60 * 60 * 1000;
+  const thirtyDaysAgo = now - 30 * 24 * 60 * 60 * 1000;
+
+  try {
+    const result = await sql`
+      SELECT
+        COUNT(*) AS total,
+        COUNT(*) FILTER (WHERE last_command_at >= ${sevenDaysAgo}) AS active_7d,
+        COUNT(*) FILTER (WHERE last_command_at >= ${thirtyDaysAgo}) AS active_30d
+      FROM user_metrics
+    `;
+
+    const row = result[0] || {};
+    return {
+      total: parseInt(row.total || 0, 10),
+      active7d: parseInt(row.active_7d || 0, 10),
+      active30d: parseInt(row.active_30d || 0, 10),
+    };
+  } catch (error) {
+    console.error('Error in getActiveUserCounts:', error);
+    throw error;
+  }
+}

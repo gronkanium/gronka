@@ -66,3 +66,51 @@ export async function get24HourStats() {
     throw error;
   }
 }
+
+const DAY_MS = 24 * 60 * 60 * 1000;
+
+/**
+ * Get a daily request-count time series from processed_urls, zero-filled for
+ * days with no activity.
+ * @param {number} [days] - How many trailing days to include (default 14)
+ * @returns {Promise<Array<{date: string, count: number}>>} Oldest first
+ */
+export async function getDailyRequestCounts(days = 14) {
+  await ensurePostgresInitialized();
+  const sql = getPostgresConnection();
+
+  if (!sql) {
+    const errorMsg = 'PostgreSQL initialization failed - cannot fetch daily request counts';
+    console.error(errorMsg);
+    throw new Error(errorMsg);
+  }
+
+  const now = Date.now();
+  const todayBucket = Math.floor(now / DAY_MS);
+  const startBucket = todayBucket - (days - 1);
+  const since = startBucket * DAY_MS;
+
+  // processed_at is a plain epoch-ms BIGINT, so bucket by whole UTC days with
+  // integer division rather than to_timestamp/to_char (avoids server-timezone
+  // ambiguity for a column that isn't a real timestamp type).
+  const rows = await sql`
+    SELECT FLOOR(processed_at / ${DAY_MS}) AS day_bucket, COUNT(*) AS count
+    FROM processed_urls
+    WHERE processed_at >= ${since}
+    GROUP BY day_bucket
+  `;
+
+  const countsByBucket = new Map(
+    rows.map(row => [parseInt(row.day_bucket, 10), parseInt(row.count, 10)])
+  );
+
+  const series = [];
+  for (let bucket = startBucket; bucket <= todayBucket; bucket++) {
+    series.push({
+      date: new Date(bucket * DAY_MS).toISOString().slice(0, 10),
+      count: countsByBucket.get(bucket) || 0,
+    });
+  }
+
+  return series;
+}

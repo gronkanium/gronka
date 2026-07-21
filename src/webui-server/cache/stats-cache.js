@@ -1,6 +1,8 @@
 import { createLogger } from '../../utils/logger.js';
 import { botConfig } from '../../utils/config.js';
 import { getStorageStats } from '../../utils/storage.js';
+import { getSetting, getActiveUserCounts } from '../../utils/database.js';
+import { getDailyRequestCounts } from '../../utils/database/stats.js';
 
 const logger = createLogger('webui');
 
@@ -41,6 +43,17 @@ export async function getStats() {
     // Calculate stats directly using storage utility
     const stats = await getStorageStats(storagePath);
 
+    // Discord Developer Portal doesn't expose this via API - scripts/fetch-portal-stats.js
+    // scrapes it manually (run on demand) and saves it as a bot_settings row.
+    const portalInstallUsers = await getSetting('discord_portal_install_users', null);
+    const portalInstallUsersFetchedAt = await getSetting(
+      'discord_portal_install_users_fetched_at',
+      null
+    );
+
+    const activeUsers = await getActiveUserCounts();
+    const dailyRequests = await getDailyRequestCounts(14);
+
     // Format response to match expected API format
     const response = {
       total_gifs: stats.totalGifs,
@@ -51,6 +64,14 @@ export async function getStats() {
       videos_disk_usage_formatted: stats.videosDiskUsageFormatted,
       images_disk_usage_formatted: stats.imagesDiskUsageFormatted,
       storage_path: storagePath,
+      discord_portal_install_users: portalInstallUsers ? parseInt(portalInstallUsers, 10) : null,
+      discord_portal_install_users_fetched_at: portalInstallUsersFetchedAt
+        ? parseInt(portalInstallUsersFetchedAt, 10)
+        : null,
+      ever_active_users: activeUsers.total,
+      active_users_7d: activeUsers.active7d,
+      active_users_30d: activeUsers.active30d,
+      daily_requests: dailyRequests,
     };
 
     // Cache the response

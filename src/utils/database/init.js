@@ -75,6 +75,12 @@ export async function initPostgresDatabase() {
         }
       }
 
+      // Add columns from additive migrations before creating indexes - an index on a
+      // column only introduced via migration (not the original CREATE TABLE) would
+      // fail with "column does not exist" on a pre-existing database otherwise.
+      await addFileSizeColumnIfNeeded(connection);
+      await addR2ExpiredAtColumnIfNeeded(connection);
+
       // Create indexes with error handling for race conditions
       const indexes = getIndexDefinitions();
       for (const index of indexes) {
@@ -95,14 +101,8 @@ export async function initPostgresDatabase() {
         }
       }
 
-      // Add file_size column if needed (for migration compatibility)
-      await addFileSizeColumnIfNeeded(connection);
-
       // Ensure old databases pick up ON DELETE CASCADE on temporary_uploads (for migration)
       await ensureTemporaryUploadsCascadeDelete(connection);
-
-      // Add r2_expired_at column if needed (for migration compatibility)
-      await addR2ExpiredAtColumnIfNeeded(connection);
 
       // Reset SERIAL sequences to match existing data (fixes duplicate key errors after migration)
       await resetSerialSequences(connection);

@@ -79,7 +79,7 @@ export async function getProcessedUrl(urlHash) {
 
   // Convert timestamp and numeric BIGINT fields from strings to numbers
   let convertedUrl = processedUrl
-    ? convertTimestampsToNumbers(processedUrl, ['processed_at'])
+    ? convertTimestampsToNumbers(processedUrl, ['processed_at', 'r2_expired_at'])
     : null;
   if (convertedUrl) {
     convertedUrl = convertBigIntToNumbers(convertedUrl, ['file_size']);
@@ -184,7 +184,7 @@ export async function getUserMedia(userId, options = {}) {
 
   const { limit = null, offset = null } = options;
 
-  let query = `SELECT file_url, file_type, file_extension, processed_at, file_size FROM processed_urls WHERE user_id = $1 ORDER BY processed_at DESC`;
+  let query = `SELECT file_url, file_type, file_extension, processed_at, file_size FROM processed_urls WHERE user_id = $1 AND r2_expired_at IS NULL ORDER BY processed_at DESC`;
   const params = [userId];
 
   if (limit !== null) {
@@ -218,7 +218,8 @@ export async function getUserMediaCount(userId) {
     return 0;
   }
 
-  const result = await sql`SELECT COUNT(*) as count FROM processed_urls WHERE user_id = ${userId}`;
+  const result =
+    await sql`SELECT COUNT(*) as count FROM processed_urls WHERE user_id = ${userId} AND r2_expired_at IS NULL`;
   return parseInt(result[0]?.count || 0, 10);
 }
 
@@ -244,7 +245,7 @@ export async function getUserR2Media(userId, options = {}) {
   const publicDomain = r2Config.publicDomain;
   const r2UrlPrefix = `https://${publicDomain}/`;
 
-  let query = `SELECT url_hash, file_url, file_type, file_extension, processed_at, file_size FROM processed_urls WHERE user_id = $1 AND file_url LIKE $2`;
+  let query = `SELECT url_hash, file_url, file_type, file_extension, processed_at, file_size FROM processed_urls WHERE user_id = $1 AND file_url LIKE $2 AND r2_expired_at IS NULL`;
   const params = [userId, `${r2UrlPrefix}%`];
 
   if (fileType) {
@@ -289,7 +290,7 @@ export async function getUserR2MediaCount(userId, fileType = null) {
   const publicDomain = r2Config.publicDomain;
   const r2UrlPrefix = `https://${publicDomain}/`;
 
-  let query = `SELECT COUNT(*) as count FROM processed_urls WHERE user_id = $1 AND file_url LIKE $2`;
+  let query = `SELECT COUNT(*) as count FROM processed_urls WHERE user_id = $1 AND file_url LIKE $2 AND r2_expired_at IS NULL`;
   const params = [userId, `${r2UrlPrefix}%`];
 
   if (fileType) {
@@ -325,7 +326,7 @@ export async function getR2UserStats() {
       COALESCE(SUM(p.file_size), 0) AS total_size
     FROM processed_urls p
     LEFT JOIN users u ON u.user_id = p.user_id
-    WHERE p.user_id IS NOT NULL AND p.file_url LIKE ${`${r2UrlPrefix}%`}
+    WHERE p.user_id IS NOT NULL AND p.file_url LIKE ${`${r2UrlPrefix}%`} AND p.r2_expired_at IS NULL
     GROUP BY p.user_id, u.username
     ORDER BY total_size DESC
   `;
@@ -336,6 +337,36 @@ export async function getR2UserStats() {
     file_count: parseInt(row.file_count, 10),
     total_size: parseInt(row.total_size, 10),
   }));
+}
+
+/**
+ * Mark processed_urls rows as R2-expired once their backing R2 upload has been
+ * confirmed removed. Keeps the historical row (used for request-count stats)
+ * while stopping callers - the moderation "on R2" view, the download/convert/
+ * optimize URL cache - from treating file_url as still resolvable.
+ * @param {string[]} urlHashes - URL hashes whose R2 upload just expired
+ * @returns {Promise<void>}
+ */
+export async function markProcessedUrlsR2Expired(urlHashes) {
+  await ensurePostgresInitialized();
+
+  const sql = getPostgresConnection();
+  if (!sql || !urlHashes || urlHashes.length === 0) {
+    return;
+  }
+
+  try {
+    await sql`
+      UPDATE processed_urls
+      SET r2_expired_at = ${Date.now()}
+      WHERE url_hash = ANY(${urlHashes})
+    `;
+    for (const urlHash of urlHashes) {
+      invalidateProcessedUrlCache(urlHash);
+    }
+  } catch (error) {
+    console.error('Failed to mark processed URLs as R2-expired:', error);
+  }
 }
 
 /**

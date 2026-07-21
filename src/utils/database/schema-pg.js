@@ -44,7 +44,8 @@ export function getTableDefinitions() {
           file_url TEXT NOT NULL,
           processed_at BIGINT NOT NULL,
           user_id TEXT,
-          file_size BIGINT
+          file_size BIGINT,
+          r2_expired_at BIGINT
         );
       `,
     },
@@ -264,6 +265,10 @@ export function getIndexDefinitions() {
       name: 'idx_guild_prefixes_updated_at',
       sql: 'CREATE INDEX IF NOT EXISTS idx_guild_prefixes_updated_at ON guild_prefixes(updated_at);',
     },
+    {
+      name: 'idx_processed_urls_r2_expired_at',
+      sql: 'CREATE INDEX IF NOT EXISTS idx_processed_urls_r2_expired_at ON processed_urls(r2_expired_at);',
+    },
   ];
 }
 
@@ -293,6 +298,21 @@ export async function addFileSizeColumnIfNeeded(sql) {
   const exists = await columnExists(sql, 'processed_urls', 'file_size');
   if (!exists) {
     await sql`ALTER TABLE processed_urls ADD COLUMN file_size BIGINT`;
+  }
+}
+
+/**
+ * Add r2_expired_at column to processed_urls if it doesn't exist (for migration).
+ * Set by the R2 cleanup job once a row's backing R2 upload has actually expired
+ * and been removed, so callers can stop treating file_url as resolvable without
+ * losing the historical processed_urls row (used for request-count stats).
+ * @param {postgres.Sql} sql - PostgreSQL connection
+ * @returns {Promise<void>}
+ */
+export async function addR2ExpiredAtColumnIfNeeded(sql) {
+  const exists = await columnExists(sql, 'processed_urls', 'r2_expired_at');
+  if (!exists) {
+    await sql`ALTER TABLE processed_urls ADD COLUMN r2_expired_at BIGINT`;
   }
 }
 

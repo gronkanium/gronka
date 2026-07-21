@@ -350,10 +350,11 @@ async function processConversion(
         if (processedUrl) {
           // Convert command expects GIF output - only use cache if cached result is a GIF
           // Skip cache if cached type is not 'gif' (e.g., if it was previously downloaded as video)
+          // or if its R2 upload has expired (a stale file_url would be a dead link)
           const isCachedGif =
             processedUrl.file_type === 'gif' || processedUrl.file_extension === '.gif';
 
-          if (isCachedGif) {
+          if (isCachedGif && !processedUrl.r2_expired_at) {
             logger.info(
               `URL already processed as GIF (hash: ${urlHash.substring(0, 8)}...), returning existing file URL: ${processedUrl.file_url}`
             );
@@ -376,6 +377,18 @@ async function processConversion(
             });
             await notifyCommandSuccess(username, 'convert', { operationId, userId });
             return;
+          } else if (processedUrl.r2_expired_at) {
+            logger.info(
+              `URL cache exists but its R2 upload expired (hash: ${urlHash.substring(0, 8)}...), converting fresh instead of returning a dead link`
+            );
+            logOperationStep(operationId, 'url_validation', 'success', {
+              message: 'URL validation complete',
+              metadata: { originalUrl },
+            });
+            logOperationStep(operationId, 'url_cache_mismatch', 'running', {
+              message: 'Cached URL expired from R2, converting to GIF instead',
+              metadata: { originalUrl },
+            });
           } else {
             logger.info(
               `URL cache exists but file type is ${processedUrl.file_type} (not GIF), skipping cache to convert to GIF`

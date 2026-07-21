@@ -1,7 +1,12 @@
 import { test, describe, before, after } from 'node:test';
 import assert from 'node:assert';
 import { hashUrl, queueCobaltRequest } from '../../src/utils/cobalt-queue.js';
-import { initDatabase, insertProcessedUrl, getProcessedUrl } from '../../src/utils/database.js';
+import {
+  initDatabase,
+  insertProcessedUrl,
+  getProcessedUrl,
+  markProcessedUrlsR2Expired,
+} from '../../src/utils/database.js';
 
 before(async () => {
   // Ensure database is initialized before tests run
@@ -109,6 +114,49 @@ describe('cobalt-queue utilities', () => {
       );
       assert.ok(error.message.includes(fileUrl), 'Error message should include cached file URL');
       assert.strictEqual(downloadCalled, false, 'Download function should not be called');
+    });
+
+    test('proceeds with download instead of returning a dead link when R2 upload expired', async () => {
+      await initDatabase();
+
+      const url = 'https://x.com/user/status/expired-' + Date.now();
+      const urlHash = hashUrl(url);
+      const fileUrl = 'https://cdn.example.com/videos/expired.mp4';
+
+      await insertProcessedUrl(
+        urlHash,
+        'test-file-hash-expired',
+        'video',
+        '.mp4',
+        fileUrl,
+        Date.now(),
+        'test-user'
+      );
+      await markProcessedUrlsR2Expired([urlHash]);
+
+      const stored = await getProcessedUrl(urlHash);
+      if (!stored) {
+        console.warn(
+          'Skipping test: database appears to be read-only, cannot insert processed URL'
+        );
+        return;
+      }
+      assert.ok(stored.r2_expired_at, 'expected r2_expired_at to be set');
+
+      let downloadCalled = false;
+      const downloadFn = async () => {
+        downloadCalled = true;
+        return { buffer: Buffer.from('test'), filename: 'test.mp4', contentType: 'video/mp4' };
+      };
+
+      const result = await queueCobaltRequest(url, downloadFn);
+
+      assert.strictEqual(
+        downloadCalled,
+        true,
+        'should skip the expired cache entry and download fresh'
+      );
+      assert.ok(result, 'should return the fresh download result');
     });
 
     test('proceeds with download when URL not processed', async () => {

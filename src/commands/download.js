@@ -260,7 +260,8 @@ async function processDownload(
         const processedUrl = await getProcessedUrl(urlHash);
         if (processedUrl) {
           // Only use cached URL if it's a video (download command expects video, not GIF/image)
-          if (processedUrl.file_type === 'video') {
+          // and its R2 upload hasn't expired (a stale file_url would be a dead link)
+          if (processedUrl.file_type === 'video' && !processedUrl.r2_expired_at) {
             logger.info(
               `URL already processed as video (hash: ${urlHash.substring(0, 8)}...), returning existing file URL: ${processedUrl.file_url}`
             );
@@ -284,6 +285,14 @@ async function processDownload(
             });
             await notifyCommandSuccess(username, 'download', { operationId, userId });
             return;
+          } else if (processedUrl.r2_expired_at) {
+            logger.info(
+              `URL cache exists but its R2 upload expired (hash: ${urlHash.substring(0, 8)}...), downloading fresh instead of returning a dead link`
+            );
+            logOperationStep(operationId, 'url_cache_mismatch', 'running', {
+              message: 'Cached URL expired from R2, downloading video instead',
+              metadata: { url },
+            });
           } else {
             logger.info(
               `URL cache exists but file type is ${processedUrl.file_type} (not video), skipping cache to download video`
@@ -625,19 +634,24 @@ async function processDownload(
           if (urlMatch && urlMatch[1]) {
             const fileUrl = urlMatch[1];
 
-            // Safety check: verify the cached entry is actually a video (defense in depth)
-            // This should not happen with expectedFileType filtering, but check anyway
+            // Safety check: verify the cached entry is actually a video and not R2-expired
+            // (defense in depth) - this should not happen with expectedFileType filtering
+            // and the cache check in cobalt-queue.js, but check anyway
             const processedUrl = await getProcessedUrl(urlHash);
-            if (processedUrl && processedUrl.file_type !== 'video') {
-              logger.warn(
-                `Cached entry file type mismatch (expected: video, got: ${processedUrl.file_type}), proceeding with download`
-              );
+            if (
+              processedUrl &&
+              (processedUrl.file_type !== 'video' || processedUrl.r2_expired_at)
+            ) {
+              const reason = processedUrl.r2_expired_at
+                ? 'R2 upload expired'
+                : `file type mismatch (expected: video, got: ${processedUrl.file_type})`;
+              logger.warn(`Cached entry unusable (${reason}), proceeding with download`);
               logOperationStep(operationId, 'url_cache_mismatch', 'running', {
-                message: 'Cached entry file type mismatch, downloading video instead',
-                metadata: { url, cachedType: processedUrl.file_type },
+                message: 'Cached entry unusable, downloading video instead',
+                metadata: { url, reason },
               });
               // Re-throw to proceed with download
-              throw new Error('Cached entry file type mismatch, proceeding with download', {
+              throw new Error('Cached entry unusable, proceeding with download', {
                 cause: error,
               });
             }

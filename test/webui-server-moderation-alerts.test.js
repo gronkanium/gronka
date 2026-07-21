@@ -7,6 +7,9 @@ import {
   insertProcessedUrl,
   insertOrUpdateUser,
   getR2UserStats,
+  getUserR2Media,
+  getUserR2MediaCount,
+  markProcessedUrlsR2Expired,
 } from '../src/utils/database.js';
 import { r2Config } from '../src/utils/config.js';
 
@@ -155,5 +158,46 @@ describe('r2 user stats', () => {
         'expected descending total_size order'
       );
     }
+  });
+
+  test('rows marked R2-expired are excluded from stats and user media lists', async () => {
+    const uniqueId = Date.now() + 2;
+    const userId = `r2expired-user-${uniqueId}`;
+    const username = `r2expired-name-${uniqueId}`;
+    const r2Prefix = `https://${r2Config.publicDomain}/`;
+    const urlHash = `r2expired-hash-${uniqueId}`;
+
+    await insertOrUpdateUser(userId, username, uniqueId);
+    await insertProcessedUrl(
+      urlHash,
+      'filehash-expired',
+      'gif',
+      'gif',
+      `${r2Prefix}test/expired-${uniqueId}.gif`,
+      uniqueId,
+      userId,
+      4000
+    );
+
+    // Sanity check: shows up before it's marked expired
+    const before = await getUserR2Media(userId);
+    assert.ok(
+      before.some(m => m.url_hash === urlHash),
+      'expected the row to appear before being marked expired'
+    );
+    assert.strictEqual(await getUserR2MediaCount(userId), before.length);
+
+    await markProcessedUrlsR2Expired([urlHash]);
+
+    const after = await getUserR2Media(userId);
+    assert.ok(
+      !after.some(m => m.url_hash === urlHash),
+      'expired row should no longer appear in the user R2 media list'
+    );
+    assert.strictEqual(await getUserR2MediaCount(userId), after.length);
+
+    const stats = await getR2UserStats();
+    const row = stats.find(s => s.user_id === userId);
+    assert.ok(!row, 'user with only an expired R2 row should not appear in aggregate stats');
   });
 });

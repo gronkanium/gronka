@@ -6,10 +6,28 @@ import {
   markTemporaryUploadDeleted,
   markTemporaryUploadDeletionFailed,
   deleteTemporaryUploadsByR2Key,
+  markProcessedUrlsR2Expired,
 } from './database.js';
 import { insertAlert } from './database.js';
 
 const logger = createLogger('r2-cleanup');
+
+/**
+ * Mark a batch of temporary_uploads records as deleted, remove them, and flag their
+ * processed_urls rows as R2-expired so the moderation view and the download/convert/
+ * optimize URL cache stop treating file_url as still resolvable.
+ * @param {Array} expiredUploads - temporary_uploads rows for one r2Key
+ * @param {string} r2Key - The R2 object key these uploads reference
+ * @param {number} now - Current timestamp
+ * @returns {Promise<void>}
+ */
+async function finalizeDeletedUploads(expiredUploads, r2Key, now) {
+  for (const upload of expiredUploads) {
+    await markTemporaryUploadDeleted(upload.id, now);
+  }
+  await deleteTemporaryUploadsByR2Key(r2Key);
+  await markProcessedUrlsR2Expired(expiredUploads.map(u => u.url_hash));
+}
 
 /**
  * Delete expired R2 files with reference counting and error handling
@@ -74,11 +92,7 @@ async function deleteExpiredR2Files(config, logLevel = 'detailed') {
           if (logLevel === 'detailed' || logLevel === 'debug') {
             logger.info(`R2 file already deleted: ${r2Key}, marking records as deleted`);
           }
-          for (const upload of expiredUploads) {
-            await markTemporaryUploadDeleted(upload.id, now);
-          }
-          // Delete the records
-          await deleteTemporaryUploadsByR2Key(r2Key);
+          await finalizeDeletedUploads(expiredUploads, r2Key, now);
           stats.deleted++;
           continue;
         }
@@ -95,19 +109,13 @@ async function deleteExpiredR2Files(config, logLevel = 'detailed') {
             if (logLevel === 'detailed' || logLevel === 'debug') {
               logger.info(`R2 file not found (already deleted): ${r2Key}`);
             }
-            for (const upload of expiredUploads) {
-              await markTemporaryUploadDeleted(upload.id, now);
-            }
-            await deleteTemporaryUploadsByR2Key(r2Key);
+            await finalizeDeletedUploads(expiredUploads, r2Key, now);
             stats.deleted++;
             continue;
           }
 
           // R2 deletion succeeded, mark all uploads as deleted and delete records
-          for (const upload of expiredUploads) {
-            await markTemporaryUploadDeleted(upload.id, now);
-          }
-          await deleteTemporaryUploadsByR2Key(r2Key);
+          await finalizeDeletedUploads(expiredUploads, r2Key, now);
 
           stats.deleted++;
           if (logLevel === 'detailed' || logLevel === 'debug') {

@@ -170,10 +170,16 @@ export function queueCobaltRequest(url, downloadFn, options = {}) {
     if (!skipCache) {
       const processedUrl = await getProcessedUrl(urlHash);
       if (processedUrl) {
-        // If expectedFileType is provided, only use cache if file type matches
+        // If expectedFileType is provided, only use cache if file type matches, and never
+        // reuse a cached URL whose R2 upload has expired - that's a dead link now
         if (expectedFileType && processedUrl.file_type !== expectedFileType) {
           logger.info(
             `URL cache exists but file type mismatch (expected: ${expectedFileType}, cached: ${processedUrl.file_type}), skipping cache`
+          );
+          // Skip cache and proceed with download
+        } else if (processedUrl.r2_expired_at) {
+          logger.info(
+            `URL cache exists but its R2 upload expired (hash: ${urlHash.substring(0, 8)}...), skipping cache`
           );
           // Skip cache and proceed with download
         } else {

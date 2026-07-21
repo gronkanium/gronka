@@ -5,6 +5,15 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres (attempts) to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.24.1](https://github.com/thedorekaczynski/gronka/compare/v0.24.0...v0.24.1) (2026-07-21)
+
+
+### Bug Fixes
+
+* **db:** run additive column migrations before index creation ([f9d041a](https://github.com/thedorekaczynski/gronka/commit/f9d041a75c7eb07fd2f53f3e651856cc1dcd0dbf))
+* **scripts:** set FORCE_PRODUCTION_MODE via cross-env, not in-script ([ba9625a](https://github.com/thedorekaczynski/gronka/commit/ba9625a227b19ecf2bda24e0d4a5eed33c4df8b4))
+* **storage:** stop showing/serving R2 uploads after they've expired ([1fc9b13](https://github.com/thedorekaczynski/gronka/commit/1fc9b13f311f764cddb71e8bc494b4bcb816242a))
+
 ## [0.24.0](https://github.com/thedorekaczynski/gronka/compare/v0.23.0...v0.24.0) (2026-07-21)
 
 

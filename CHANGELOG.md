@@ -5,6 +5,19 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres (attempts) to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.25.0](https://github.com/thedorekaczynski/gronka/compare/v0.24.1...v0.25.0) (2026-07-25)
+
+
+### Features
+
+* **download:** support yande.re and konachan booru posts ([78d6d6d](https://github.com/thedorekaczynski/gronka/commit/78d6d6d99b8b87145aa860318fc2e329081a49cf))
+
+
+### Bug Fixes
+
+* **download:** stop rejecting media whose duration yt-dlp can't read ([249a8f0](https://github.com/thedorekaczynski/gronka/commit/249a8f07e17c123c28259c7e59e7e21194abbcd7))
+* **security:** close SSRF holes in the user-supplied URL fetch path ([03c2b01](https://github.com/thedorekaczynski/gronka/commit/03c2b01d4e90c2d352c7b2e678fac4385bb2c0ea))
+
 ## [0.24.1](https://github.com/thedorekaczynski/gronka/compare/v0.24.0...v0.24.1) (2026-07-21)
 
 

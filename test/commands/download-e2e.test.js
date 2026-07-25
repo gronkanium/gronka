@@ -90,6 +90,15 @@ if (!mocksSupported) {
         getRemoteContentLength: async mediaUrl =>
           mediaUrl.includes('huge') ? 50 * 1024 * 1024 : 4096,
         downloadFromSocialMedia: async (_apiUrl, url) => {
+          // A carousel bigger than Discord's 10-attachment ceiling, to exercise batching.
+          if (url.includes('carousel')) {
+            return Array.from({ length: 12 }, (_, i) => ({
+              buffer: fakeBuffer(i + 1, 2048 + i),
+              contentType: 'image/png',
+              size: 2048 + i,
+              filename: `photo_${i + 1}.png`,
+            }));
+          }
           if (url.includes('multi')) {
             return [
               {
@@ -278,6 +287,36 @@ if (!mocksSupported) {
       assert.ok(
         names.every(n => n.endsWith('.png')),
         'both attachments are .png'
+      );
+    });
+
+    // Regression: Discord rejects a message carrying more than 10 attachments (50035), so a
+    // 12-file carousel sent as one message failed entirely — the user got nothing, and the
+    // operation was still recorded as a success.
+    test('carousel over the attachment cap: splits across a reply plus follow-ups', async () => {
+      await cleanStorage();
+      const url = `https://x.com/user/status/carousel-${Date.now()}`;
+      const { interaction, calls } = downloadInteraction(url, 'e2e-dl-carousel');
+
+      await handleDownloadCommand(interaction);
+
+      assert.strictEqual(calls.editReply.length, 1, 'still exactly one reply edit');
+      assert.strictEqual(calls.followUp.length, 1, 'the overflow goes out as a follow-up');
+
+      const batches = [calls.editReply[0].files, ...calls.followUp.map(call => call.files)];
+      assert.deepStrictEqual(
+        batches.map(batch => batch.length),
+        [10, 2],
+        'no message may carry more than 10 attachments'
+      );
+
+      // Every file must still arrive, in order — the delivery split must not drop or reorder.
+      const delivered = batches.flatMap(batch => batch.map(file => file.name));
+      assert.strictEqual(delivered.length, 12, 'all 12 files delivered');
+      assert.strictEqual(new Set(delivered).size, 12, 'no duplicated attachment');
+      assert.ok(
+        delivered.every(name => name.endsWith('.png')),
+        'every delivered attachment is a .png'
       );
     });
 

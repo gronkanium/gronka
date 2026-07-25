@@ -2,6 +2,7 @@ import axios from 'axios';
 import { createLogger } from './logger.js';
 import { NetworkError, ValidationError } from './errors.js';
 import { downloadFileFromUrl } from './file-downloader.js';
+import { ssrfGuardedRequest } from './ssrf-guard.js';
 
 const logger = createLogger('booru');
 
@@ -84,6 +85,7 @@ export async function downloadFromBooru(url, isAdminUser = false) {
   let data;
   try {
     const response = await axios.get(apiUrl, {
+      ...ssrfGuardedRequest(),
       responseType: 'json',
       timeout: API_TIMEOUT_MS,
       maxRedirects: 5,

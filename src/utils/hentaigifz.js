@@ -3,6 +3,7 @@ import { createLogger } from './logger.js';
 import { NetworkError, ValidationError } from './errors.js';
 import { getRequestHeaders } from './discord-cdn.js';
 import { downloadFileFromUrl } from './file-downloader.js';
+import { ssrfGuardedRequest } from './ssrf-guard.js';
 
 const logger = createLogger('hentaigifz');
 
@@ -107,6 +108,7 @@ export async function downloadFromHentaiGifz(url, isAdminUser = false) {
   let html;
   try {
     const response = await axios.get(url, {
+      ...ssrfGuardedRequest(),
       responseType: 'text',
       timeout: PAGE_FETCH_TIMEOUT_MS,
       maxRedirects: 5,

@@ -8,8 +8,14 @@ import { isSocialMediaUrl, downloadFromSocialMedia } from './cobalt.js';
 import { isDiscordCdnUrl, getRefreshedAttachmentURL, getRequestHeaders } from './discord-cdn.js';
 import { sanitizeFilename } from './validation.js';
 import { hashBytesHex } from './hashing.js';
+import { isSsrfBlockedError, ssrfGuardedRequest } from './ssrf-guard.js';
 
 const logger = createLogger('file-downloader');
+
+// Curated message for a URL the SSRF guard refused (a host that resolves into the private
+// network, or a redirect that lands there). Names no internals — just why we stopped.
+const BLOCKED_DESTINATION_MESSAGE =
+  'that url points to a private or internal address, which is not allowed.';
 
 const {
   maxVideoSize: MAX_VIDEO_SIZE,
@@ -33,6 +39,7 @@ export async function downloadVideo(url, isAdminUser = false) {
 
   try {
     const response = await axios.get(url, {
+      ...ssrfGuardedRequest(),
       responseType: 'arraybuffer',
       timeout: 60000, // 60 second timeout
       maxContentLength: isAdminUser ? Infinity : MAX_VIDEO_SIZE,
@@ -50,6 +57,9 @@ export async function downloadVideo(url, isAdminUser = false) {
 
     return buffer;
   } catch (error) {
+    if (isSsrfBlockedError(error)) {
+      throw new ValidationError(BLOCKED_DESTINATION_MESSAGE);
+    }
     if (error.response?.status === 413 && !isAdminUser) {
       throw new ValidationError(
         `video file is too large (max ${MAX_VIDEO_SIZE / (1024 * 1024)}mb)`
@@ -75,6 +85,7 @@ export async function downloadImage(url, isAdminUser = false) {
 
   try {
     const response = await axios.get(url, {
+      ...ssrfGuardedRequest(),
       responseType: 'arraybuffer',
       timeout: 60000, // 60 second timeout
       maxContentLength: isAdminUser ? Infinity : MAX_IMAGE_SIZE,
@@ -92,6 +103,9 @@ export async function downloadImage(url, isAdminUser = false) {
 
     return buffer;
   } catch (error) {
+    if (isSsrfBlockedError(error)) {
+      throw new ValidationError(BLOCKED_DESTINATION_MESSAGE);
+    }
     if (error.response?.status === 413 && !isAdminUser) {
       throw new ValidationError(
         `image file is too large (max ${MAX_IMAGE_SIZE / (1024 * 1024)}mb)`
@@ -149,6 +163,7 @@ export async function downloadFileFromUrl(url, isAdminUser = false, client = nul
 
   try {
     const response = await axios.get(actualUrl, {
+      ...ssrfGuardedRequest(),
       responseType: 'arraybuffer',
       timeout: 60000, // 60 second timeout
       maxContentLength: isAdminUser ? Infinity : Math.max(MAX_VIDEO_SIZE, MAX_IMAGE_SIZE),
@@ -222,6 +237,9 @@ export async function downloadFileFromUrl(url, isAdminUser = false, client = nul
       filename,
     };
   } catch (error) {
+    if (isSsrfBlockedError(error)) {
+      throw new ValidationError(BLOCKED_DESTINATION_MESSAGE);
+    }
     if (error.response?.status === 413 && !isAdminUser) {
       throw new ValidationError(
         `file is too large (max ${MAX_VIDEO_SIZE / (1024 * 1024)}mb for videos, ${MAX_IMAGE_SIZE / (1024 * 1024)}mb for images)`
@@ -247,6 +265,7 @@ export async function downloadFileFromUrl(url, isAdminUser = false, client = nul
           // Retry with refreshed URL
           logger.info(`Retrying download with refreshed URL`);
           const retryResponse = await axios.get(refreshedUrl, {
+            ...ssrfGuardedRequest(),
             responseType: 'arraybuffer',
             timeout: 60000,
             maxContentLength: isAdminUser ? Infinity : Math.max(MAX_VIDEO_SIZE, MAX_IMAGE_SIZE),
@@ -355,6 +374,7 @@ export async function parseTenorUrl(url) {
       // Remove Discord referer for Tenor URLs
       delete headers.Referer;
       const response = await axios.get(url, {
+        ...ssrfGuardedRequest(),
         timeout: 30000,
         maxRedirects: 5,
         headers,

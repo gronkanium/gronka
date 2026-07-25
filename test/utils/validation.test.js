@@ -81,9 +81,6 @@ describe('validation utilities', () => {
       assert.deepStrictEqual(validateUrl('https://[2001:4860:4860::8888]'), { valid: true });
       assert.deepStrictEqual(validateUrl('https://[2607:f8b0:4005:805::200e]'), { valid: true });
 
-      // Note: IPv6 addresses in brackets are currently accepted even for private ranges
-      // because the hostname includes brackets, so startsWith checks don't match
-      // This tests the current behavior - public IPv6 addresses work correctly
       const publicIpv6 = validateUrl('https://[2001:4860:4860::8888]/path');
       assert.strictEqual(publicIpv6.valid, true);
 
@@ -91,6 +88,79 @@ describe('validation utilities', () => {
       const invalidIpv6 = validateUrl('https://2001:4860:4860::8888');
       assert.strictEqual(invalidIpv6.valid, false);
       assert.strictEqual(invalidIpv6.error, 'invalid URL format');
+    });
+
+    test('rejects IPv6 loopback in every spelling', () => {
+      // A parsed hostname keeps its brackets, so these must be unwrapped before matching
+      for (const url of [
+        'http://[::1]:3001/api/settings',
+        'http://[0:0:0:0:0:0:0:1]/',
+        'http://[0000:0000:0000:0000:0000:0000:0000:0001]/',
+        'http://[::ffff:127.0.0.1]/',
+        'http://[::ffff:7f00:1]/',
+        'http://[::127.0.0.1]/',
+        'http://[::]/',
+      ]) {
+        const result = validateUrl(url);
+        assert.strictEqual(result.valid, false, `${url} should be rejected`);
+        assert.strictEqual(result.error, 'localhost and loopback addresses are not allowed');
+      }
+    });
+
+    test('rejects private IPv6 ranges', () => {
+      // fd00::/8 is the half of fc00::/7 that real deployments actually use
+      for (const url of [
+        'http://[fd00::1]/',
+        'http://[fc00::1]/',
+        'http://[fe80::1]/',
+        'http://[ff02::1]/',
+        'http://[64:ff9b::192.168.1.1]/', // NAT64-embedded private v4
+        'http://[2002:c0a8:101::1]/', // 6to4-embedded 192.168.1.1
+      ]) {
+        const result = validateUrl(url);
+        assert.strictEqual(result.valid, false, `${url} should be rejected`);
+      }
+    });
+
+    test('rejects localhost spellings that dodge an exact match', () => {
+      for (const url of [
+        'http://localhost./', // trailing root dot — same host to every resolver
+        'http://LOCALHOST/',
+        'http://anything.localhost/',
+        'http://ip6-localhost/',
+      ]) {
+        const result = validateUrl(url);
+        assert.strictEqual(result.valid, false, `${url} should be rejected`);
+        assert.strictEqual(result.error, 'localhost and loopback addresses are not allowed');
+      }
+    });
+
+    test('rejects remaining internal IPv4 ranges', () => {
+      assert.strictEqual(validateUrl('http://169.254.169.254/latest/meta-data/').valid, false);
+      assert.strictEqual(validateUrl('http://100.64.0.1/').valid, false); // CGNAT
+      assert.strictEqual(validateUrl('http://192.0.0.1/').valid, false);
+      assert.strictEqual(validateUrl('http://198.18.0.1/').valid, false);
+      assert.strictEqual(validateUrl('http://255.255.255.255/').valid, false);
+      assert.strictEqual(validateUrl('http://239.0.0.1/').valid, false);
+      // Alternate encodings of 127.0.0.1 — the URL parser normalizes these for us
+      assert.strictEqual(validateUrl('http://2130706433/').valid, false);
+      assert.strictEqual(validateUrl('http://0x7f000001/').valid, false);
+    });
+
+    test('rejects a bracketed host that is not a bare IPv6 literal', () => {
+      // A zone id would otherwise reach the address rules unclassified
+      assert.strictEqual(validateUrl('http://[fe80::1%25eth0]/').valid, false);
+      assert.strictEqual(validateUrl('http://[not-an-ip]/').valid, false);
+    });
+
+    test('still allows ordinary public hosts', () => {
+      assert.deepStrictEqual(validateUrl('https://cdn.discordapp.com/attachments/1/2/a.mp4'), {
+        valid: true,
+      });
+      assert.deepStrictEqual(validateUrl('https://media.tenor.com/x/y.gif'), { valid: true });
+      assert.deepStrictEqual(validateUrl('http://172.15.0.1/'), { valid: true }); // just outside /12
+      assert.deepStrictEqual(validateUrl('http://100.128.0.1/'), { valid: true }); // outside CGNAT
+      assert.deepStrictEqual(validateUrl('http://8.8.8.8/'), { valid: true });
     });
 
     test('handles URLs with port numbers', () => {

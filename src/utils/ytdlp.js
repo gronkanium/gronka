@@ -205,7 +205,12 @@ function executeYtdlp(
     // - maxDuration is not Infinity AND
     // - no time-based segment download requested (startTime or duration specified)
     if (maxDuration !== Infinity && startTime === null && duration === null) {
-      args.push('--match-filter', `duration <= ${maxDuration}`);
+      // The `?` on the operator marks the field optional. Without it yt-dlp rejects any item
+      // whose duration is unknown (`NA`) — which is every direct-media link handled by the
+      // generic extractor, e.g. an animated webp from gif.fxtwitter.com. Those were skipped
+      // silently (exit 0, no output) and then misreported as "duration exceeds the maximum".
+      // Unknown-duration items stay bounded by --max-filesize and the post-read size check.
+      args.push('--match-filter', `duration<=?${maxDuration}`);
     }
 
     // Abort oversized downloads before/while pulling instead of catching them after the whole
@@ -267,11 +272,14 @@ function executeYtdlp(
         }
 
         // Check if video was filtered out due to duration limit
-        // yt-dlp exits with code 0 when --match-filter skips a video
+        // yt-dlp exits with code 0 when --match-filter skips a video.
+        // Only the duration filter may be blamed here: yt-dlp prints "Skipping" for plenty of
+        // unrelated reasons (fragments, player responses, already-downloaded files), and
+        // treating any of them as a length overage is how a user gets told a two-second gif
+        // is longer than an hour.
         if (
-          combinedOutput.includes('does not pass filter') ||
-          combinedOutput.includes('Video is longer than') ||
-          combinedOutput.includes('Skipping')
+          /does not pass filter \(duration/.test(combinedOutput) ||
+          combinedOutput.includes('Video is longer than')
         ) {
           reject(
             new ValidationError(
@@ -591,7 +599,8 @@ export async function downloadWithYtdlp(
     quality ||
     (isAdminUser
       ? 'bestvideo[ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4]/best'
-      : 'bestvideo[height<=1080][ext=mp4]+bestaudio[ext=m4a]/best[height<=1080][ext=mp4]/best[height<=1080]');
+      : // `<=?` so formats that report no height (direct-file links) still match; see config.js
+        'bestvideo[height<=?1080][ext=mp4]+bestaudio[ext=m4a]/best[height<=?1080][ext=mp4]/best[height<=?1080]');
 
   // Admins are never size-gated; for everyone else the cap drives yt-dlp's --max-filesize.
   const gateSize = isAdminUser ? Infinity : maxSize;

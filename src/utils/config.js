@@ -151,7 +151,10 @@ function getBotConfig() {
     ytdlpEnabled: getStringEnv('YTDLP_ENABLED', 'true').toLowerCase() === 'true',
     ytdlpQuality: getStringEnv(
       'YTDLP_QUALITY',
-      'bestvideo[height<=1080][ext=mp4]+bestaudio[ext=m4a]/best[height<=1080][ext=mp4]/best[height<=1080]'
+      // `<=?` keeps the 1080p cap for formats that report a height while still accepting ones
+      // that don't (direct-file links via the generic extractor have no height); a plain
+      // `height<=1080` matched nothing there and failed with "Requested format is not available".
+      'bestvideo[height<=?1080][ext=mp4]+bestaudio[ext=m4a]/best[height<=?1080][ext=mp4]/best[height<=?1080]'
     ),
     statsCacheTtl: parseIntEnv('STATS_CACHE_TTL', 300000, 0), // 5 minutes default, 0 to disable
     ntfyTopic: getStringEnv('NTFY_TOPIC', ''),

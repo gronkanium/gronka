@@ -41,7 +41,7 @@ if (!mocksSupported) {
         ...realChildProcess,
         spawn: (cmd, args) => {
           const child = fakeChildProcess();
-          const callNumber = spawnCallLog.push({});
+          const callNumber = spawnCallLog.push({ args });
           // executeYtdlp passes '-o', '<outputDir>/%(title)s.%(ext)s' - recover the real
           // per-call temp directory so a "successful" run can drop a file there.
           const outputTemplate = args[args.indexOf('-o') + 1];
@@ -147,6 +147,67 @@ if (!mocksSupported) {
         2,
         'expected exactly one retry attempt, then give up'
       );
+    });
+  });
+
+  // Regression: a direct-media link (e.g. an animated webp from gif.fxtwitter.com) goes through
+  // yt-dlp's generic extractor, which reports no duration. A plain `duration <= N` match-filter
+  // rejects unknown-duration items outright, so yt-dlp skipped the file, exited 0 with no output,
+  // and the no-output fallback reported "video duration exceeds the maximum allowed (60 minutes)"
+  // for a two-second gif. The `?` on the operator makes the field optional.
+  describe('duration match-filter treats an unknown duration as passing', () => {
+    // First spawn is the duration pre-check (`--print duration`); yt-dlp prints "NA" when the
+    // extractor has no duration. Second spawn is the real download.
+    function unknownDuration(child) {
+      child.stdout.emit('data', Buffer.from('NA\n'));
+      child.emit('close', 0);
+    }
+
+    test('passes the optional-duration form so unknown-duration media still downloads', async () => {
+      spawnCallLog = [];
+      spawnBehaviors = [unknownDuration, success];
+
+      const result = await downloadWithYtdlp(
+        'https://gif.fxtwitter.com/tweet_video/HNOvuGAXoAAAIQO.webp',
+        false,
+        Infinity,
+        null,
+        3600,
+        null,
+        null
+      );
+
+      const downloadArgs = spawnCallLog[1].args;
+      const filterValue = downloadArgs[downloadArgs.indexOf('--match-filter') + 1];
+      assert.strictEqual(
+        filterValue,
+        'duration<=?3600',
+        'the `?` must sit on the operator, or yt-dlp drops every unknown-duration item'
+      );
+      assert.ok(result.buffer.length > 0, 'the download should still produce a file');
+    });
+
+    test('the non-admin format selector accepts formats that report no height', async () => {
+      spawnCallLog = [];
+      spawnBehaviors = [unknownDuration, success];
+
+      await downloadWithYtdlp(
+        'https://gif.fxtwitter.com/tweet_video/HNOvuGAXoAAAIQO.webp',
+        false,
+        Infinity,
+        null,
+        3600,
+        null,
+        null
+      );
+
+      const downloadArgs = spawnCallLog[1].args;
+      const format = downloadArgs[downloadArgs.indexOf('-f') + 1];
+      assert.ok(
+        !/height<=\d/.test(format),
+        `non-admin format selector must use height<=?N, got: ${format}`
+      );
+      assert.ok(format.includes('height<=?1080'), `expected a 1080p cap, got: ${format}`);
     });
   });
 }

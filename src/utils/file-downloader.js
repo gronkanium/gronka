@@ -17,6 +17,24 @@ const logger = createLogger('file-downloader');
 const BLOCKED_DESTINATION_MESSAGE =
   'that url points to a private or internal address, which is not allowed.';
 
+/**
+ * True when a download failed because the file was over the size cap.
+ *
+ * A server can say so with a 413, but axios also aborts on its own once `maxContentLength` is
+ * exceeded — and that abort is client-side, so the error carries no `response`. Checking only
+ * for a 413 therefore missed every locally-aborted oversize download and sent it down the
+ * generic "may be unavailable" path, telling users a file was missing when it was just too big.
+ *
+ * @param {Error} error - Error thrown by axios
+ * @returns {boolean} True when the failure was a size-cap overage
+ */
+function isTooLargeError(error) {
+  return (
+    error?.response?.status === 413 ||
+    /maxContentLength size of \d+ exceeded/i.test(error?.message || '')
+  );
+}
+
 const {
   maxVideoSize: MAX_VIDEO_SIZE,
   maxImageSize: MAX_IMAGE_SIZE,
@@ -60,7 +78,7 @@ export async function downloadVideo(url, isAdminUser = false) {
     if (isSsrfBlockedError(error)) {
       throw new ValidationError(BLOCKED_DESTINATION_MESSAGE);
     }
-    if (error.response?.status === 413 && !isAdminUser) {
+    if (isTooLargeError(error) && !isAdminUser) {
       throw new ValidationError(
         `video file is too large (max ${MAX_VIDEO_SIZE / (1024 * 1024)}mb)`
       );
@@ -106,7 +124,7 @@ export async function downloadImage(url, isAdminUser = false) {
     if (isSsrfBlockedError(error)) {
       throw new ValidationError(BLOCKED_DESTINATION_MESSAGE);
     }
-    if (error.response?.status === 413 && !isAdminUser) {
+    if (isTooLargeError(error) && !isAdminUser) {
       throw new ValidationError(
         `image file is too large (max ${MAX_IMAGE_SIZE / (1024 * 1024)}mb)`
       );
@@ -240,7 +258,7 @@ export async function downloadFileFromUrl(url, isAdminUser = false, client = nul
     if (isSsrfBlockedError(error)) {
       throw new ValidationError(BLOCKED_DESTINATION_MESSAGE);
     }
-    if (error.response?.status === 413 && !isAdminUser) {
+    if (isTooLargeError(error) && !isAdminUser) {
       throw new ValidationError(
         `file is too large (max ${MAX_VIDEO_SIZE / (1024 * 1024)}mb for videos, ${MAX_IMAGE_SIZE / (1024 * 1024)}mb for images)`
       );

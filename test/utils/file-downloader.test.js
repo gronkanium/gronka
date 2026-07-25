@@ -1,9 +1,75 @@
 import { test, describe } from 'node:test';
 import assert from 'node:assert';
-import { generateHash, parseTenorUrl } from '../../src/utils/file-downloader.js';
+import {
+  generateHash,
+  parseTenorUrl,
+  downloadImage,
+  downloadVideo,
+} from '../../src/utils/file-downloader.js';
 import axios from 'axios';
 
 describe('file downloader utilities', () => {
+  // Regression: axios aborts client-side once maxContentLength is exceeded, and that error
+  // carries no `response`. The size branch only checked for a 413, so an oversized file was
+  // reported as "it may be unavailable" — telling users a file was missing when it was too big.
+  describe('oversize downloads report the size cap, not "unavailable"', () => {
+    function throwMaxContentLength() {
+      const error = new Error('maxContentLength size of 52428800 exceeded');
+      error.code = 'ERR_BAD_RESPONSE';
+      throw error;
+    }
+
+    test('downloadImage surfaces the size message on a client-side abort', async () => {
+      const originalGet = axios.get;
+      axios.get = throwMaxContentLength;
+      try {
+        await assert.rejects(
+          () => downloadImage('https://example.com/huge.gif', false),
+          error => {
+            assert.match(error.message, /image file is too large/);
+            return true;
+          }
+        );
+      } finally {
+        axios.get = originalGet;
+      }
+    });
+
+    test('downloadVideo surfaces the size message on a client-side abort', async () => {
+      const originalGet = axios.get;
+      axios.get = throwMaxContentLength;
+      try {
+        await assert.rejects(
+          () => downloadVideo('https://example.com/huge.mp4', false),
+          error => {
+            assert.match(error.message, /video file is too large/);
+            return true;
+          }
+        );
+      } finally {
+        axios.get = originalGet;
+      }
+    });
+
+    test('a genuine fetch failure still reports as unavailable', async () => {
+      const originalGet = axios.get;
+      axios.get = async () => {
+        throw new Error('getaddrinfo ENOTFOUND example.com');
+      };
+      try {
+        await assert.rejects(
+          () => downloadImage('https://example.com/missing.gif', false),
+          error => {
+            assert.match(error.message, /may be unavailable/);
+            return true;
+          }
+        );
+      } finally {
+        axios.get = originalGet;
+      }
+    });
+  });
+
   describe('generateHash', () => {
     test('generates a stable 64-hex content hash', () => {
       const buffer = Buffer.from('test content');

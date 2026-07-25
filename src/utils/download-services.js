@@ -21,6 +21,7 @@ const YTDLP_CATEGORY = {
   Imgur: 'video',
   Kick: 'video',
   Newgrounds: 'video',
+  Xiaohongshu: 'social',
   RedGifs: 'adult',
   Pornhub: 'adult',
   XVideos: 'adult',

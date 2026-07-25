@@ -114,6 +114,10 @@ export const YTDLP_SITES = [
   { name: 'Rumble', hosts: ['rumble.com'] },
   { name: 'Newgrounds', hosts: ['newgrounds.com'] },
   { name: 'Bilibili', hosts: ['bilibili.com', 'b23.tv'] },
+  // Xiaohongshu / RedNote. `xhslink.com` is the app's share-link shortener. Pass these URLs
+  // through untouched: the `xsec_token` query param on an /explore/ link is load-bearing, and
+  // stripping it makes the same post fail to resolve.
+  { name: 'Xiaohongshu', hosts: ['xiaohongshu.com', 'xhslink.com'] },
   { name: 'Pornhub', hosts: ['pornhub.com'] },
   { name: 'XVideos', hosts: ['xvideos.com'] },
   { name: 'xHamster', hosts: ['xhamster.com'] },

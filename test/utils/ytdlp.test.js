@@ -120,6 +120,17 @@ describe('ytdlp utilities', () => {
       assert.strictEqual(getYtdlpSite('https://www.xvideos.com/video1/x'), 'XVideos');
       assert.strictEqual(getYtdlpSite('https://xhamster.com/videos/x'), 'xHamster');
       assert.strictEqual(getYtdlpSite('https://www.redtube.com/123'), 'RedTube');
+      assert.strictEqual(getYtdlpSite('https://www.xiaohongshu.com/explore/abc'), 'Xiaohongshu');
+      assert.strictEqual(getYtdlpSite('http://xhslink.com/o/abc'), 'Xiaohongshu');
+    });
+
+    test('preserves the xsec_token an /explore/ link needs to resolve', () => {
+      // getYtdlpSite classifies by hostname only and must not rewrite the URL — dropping
+      // xsec_token makes the same Xiaohongshu post fail to resolve.
+      const url =
+        'https://www.xiaohongshu.com/explore/6a508e83000000002102380b?xsec_token=ABC%3D&type=video';
+      assert.strictEqual(getYtdlpSite(url), 'Xiaohongshu');
+      assert.ok(url.includes('xsec_token=ABC%3D'));
     });
 
     test('returns null for cobalt/social and unknown hosts', () => {

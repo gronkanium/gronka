@@ -19,7 +19,8 @@ import {
 import { isHentaiGifzUrl, downloadFromHentaiGifz } from '../utils/hentaigifz.js';
 import { isBooruUrl, downloadFromBooru } from '../utils/booru.js';
 import { getDisabledServiceLabel } from '../utils/download-services.js';
-import { ValidationError } from '../utils/errors.js';
+import { AppError, ValidationError } from '../utils/errors.js';
+import { batchAttachmentsForDelivery } from '../utils/attachment-helpers.js';
 import { isAdmin, recordRateLimit } from '../utils/rate-limit.js';
 import { generateHash } from '../utils/file-downloader.js';
 import {
@@ -59,6 +60,7 @@ import { trimVideo, trimGif } from '../utils/video-processor.js';
 import {
   safeInteractionReply,
   safeInteractionEditReply,
+  safeInteractionFollowUp,
   safeInteractionDeferReply,
 } from '../utils/interaction-helpers.js';
 import tmp from 'tmp';
@@ -871,31 +873,55 @@ async function processDownload(
         const r2Urls = r2Files.map(r => r.url);
         const content = formatMultipleR2UrlsWithDisclaimer(r2Urls, r2Config, adminUser);
 
-        // Send single message with both attachments and URLs
+        // A carousel bigger than Discord's per-message attachment cap has to go out as
+        // several messages: the first edits the deferred reply, the rest follow up.
+        const attachmentBatches = batchAttachmentsForDelivery(attachments);
+
         logger.info(
-          `Sending message with ${attachments.length} Discord attachment(s) and ${r2Urls.length} R2 URL(s)`
+          `Sending ${attachments.length} Discord attachment(s) across ` +
+            `${Math.max(1, attachmentBatches.length)} message(s) and ${r2Urls.length} R2 URL(s)`
         );
-        const message = await safeInteractionEditReply(interaction, {
-          files: attachments.length > 0 ? attachments : undefined,
+
+        // safeInteractionEditReply/FollowUp return false when the send failed. Treating that
+        // as "no attachments to record" used to let a total delivery failure be reported as a
+        // successful operation, so a failed send now fails the operation.
+        const sentMessages = [];
+        const firstMessage = await safeInteractionEditReply(interaction, {
+          files: attachmentBatches.length > 0 ? attachmentBatches[0] : undefined,
           content: content || undefined,
         });
+        if (firstMessage === false) {
+          throw new AppError('could not deliver the files to discord. please try again.');
+        }
+        sentMessages.push(firstMessage);
 
-        // Capture Discord attachment URLs for database tracking
-        if (message && message.attachments && message.attachments.size > 0) {
-          const attachmentArray = Array.from(message.attachments.values());
-          for (let i = 0; i < discordFiles.length && i < attachmentArray.length; i++) {
-            const discordAttachment = attachmentArray[i];
-            if (discordAttachment && discordAttachment.url) {
-              await recordProcessedUrl({
-                urlHash,
-                contentHash: discordFiles[i].hash,
-                fileType: discordFiles[i].fileType,
-                fileExtension: discordFiles[i].ext,
-                fileUrl: discordAttachment.url,
-                userId,
-                fileSize: discordFiles[i].size,
-              });
-            }
+        for (const batch of attachmentBatches.slice(1)) {
+          const followUpMessage = await safeInteractionFollowUp(interaction, { files: batch });
+          if (followUpMessage === false) {
+            throw new AppError(
+              'only part of this post could be delivered to discord. please try again.'
+            );
+          }
+          sentMessages.push(followUpMessage);
+        }
+
+        // Capture Discord attachment URLs for database tracking. Batches are sent in order,
+        // so flattening them preserves the discordFiles[i] correspondence.
+        const attachmentArray = sentMessages.flatMap(message =>
+          message && message.attachments ? Array.from(message.attachments.values()) : []
+        );
+        for (let i = 0; i < discordFiles.length && i < attachmentArray.length; i++) {
+          const discordAttachment = attachmentArray[i];
+          if (discordAttachment && discordAttachment.url) {
+            await recordProcessedUrl({
+              urlHash,
+              contentHash: discordFiles[i].hash,
+              fileType: discordFiles[i].fileType,
+              fileExtension: discordFiles[i].ext,
+              fileUrl: discordAttachment.url,
+              userId,
+              fileSize: discordFiles[i].size,
+            });
           }
         }
 

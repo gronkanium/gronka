@@ -3,6 +3,8 @@ import assert from 'node:assert';
 import {
   validateVideoAttachment,
   validateImageAttachment,
+  batchAttachmentsForDelivery,
+  DISCORD_MAX_ATTACHMENTS,
   ALLOWED_VIDEO_TYPES,
   ALLOWED_IMAGE_TYPES,
   MAX_VIDEO_SIZE,
@@ -146,4 +148,32 @@ test('validateImageAttachment - handles zero-size files', () => {
   const result = validateImageAttachment(attachment, false);
 
   assert.strictEqual(result.valid, true);
+});
+
+// Regression: a carousel over Discord's per-message cap was sent as one message, which Discord
+// rejected outright (50035) — the user received nothing and the operation was still recorded
+// as a success.
+test('batchAttachmentsForDelivery - splits past the Discord cap instead of one oversized send', () => {
+  const attachments = Array.from({ length: 23 }, (_, i) => `file-${i}`);
+  const batches = batchAttachmentsForDelivery(attachments);
+
+  assert.strictEqual(DISCORD_MAX_ATTACHMENTS, 10);
+  assert.deepStrictEqual(
+    batches.map(batch => batch.length),
+    [10, 10, 3]
+  );
+  assert.ok(
+    batches.every(batch => batch.length <= DISCORD_MAX_ATTACHMENTS),
+    'no batch may exceed the Discord attachment cap'
+  );
+  // Order and completeness must survive the split, or attachment URLs get recorded against
+  // the wrong source file.
+  assert.deepStrictEqual(batches.flat(), attachments);
+});
+
+test('batchAttachmentsForDelivery - leaves an already-legal set as a single batch', () => {
+  const attachments = Array.from({ length: 10 }, (_, i) => `file-${i}`);
+
+  assert.deepStrictEqual(batchAttachmentsForDelivery(attachments), [attachments]);
+  assert.deepStrictEqual(batchAttachmentsForDelivery([]), []);
 });

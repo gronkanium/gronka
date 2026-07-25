@@ -89,3 +89,25 @@ export function validateImageAttachment(attachment, isAdminUser = false) {
 
   return { valid: true };
 }
+
+// Discord rejects an entire message carrying more than 10 attachments (API error 50035,
+// BASE_TYPE_MAX_LENGTH), so anything larger has to be delivered across several messages.
+export const DISCORD_MAX_ATTACHMENTS = 10;
+
+/**
+ * Split attachments into batches small enough for Discord to accept in one message.
+ *
+ * Sending an oversized carousel as a single message failed the whole request, so the user
+ * silently received nothing at all rather than a partial post.
+ *
+ * @param {Array} attachments - Attachments to deliver, in the order they should appear
+ * @param {number} [size] - Maximum attachments per message
+ * @returns {Array<Array>} Batches in order; empty when there is nothing to send
+ */
+export function batchAttachmentsForDelivery(attachments, size = DISCORD_MAX_ATTACHMENTS) {
+  const batches = [];
+  for (let i = 0; i < attachments.length; i += size) {
+    batches.push(attachments.slice(i, i + size));
+  }
+  return batches;
+}

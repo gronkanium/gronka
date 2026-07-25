@@ -5,6 +5,20 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres (attempts) to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.26.0](https://github.com/thedorekaczynski/gronka/compare/v0.25.0...v0.26.0) (2026-07-25)
+
+
+### Features
+
+* **download:** support Xiaohongshu / RedNote links ([44c5f21](https://github.com/thedorekaczynski/gronka/commit/44c5f21d16091e83407af48107f346bca94f161a))
+
+
+### Bug Fixes
+
+* **download:** deliver carousels larger than Discord's attachment limit ([5d49dd5](https://github.com/thedorekaczynski/gronka/commit/5d49dd5e75a0cd9cbe08d541b14b870bd5603a6b))
+* **download:** describe image-only posts accurately ([9fe227e](https://github.com/thedorekaczynski/gronka/commit/9fe227e2c798551b9da6bdbc21408a9e42068fc5))
+* **download:** report oversized files as too large, not unavailable ([06359b1](https://github.com/thedorekaczynski/gronka/commit/06359b15dc5d2f7abc8346cf7ea45248bac3f000))
+
 ## [0.25.0](https://github.com/thedorekaczynski/gronka/compare/v0.24.1...v0.25.0) (2026-07-25)
 
 

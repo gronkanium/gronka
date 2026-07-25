@@ -25,7 +25,7 @@ download media from social platforms using the `/download` command:
 - redgifs, imgur, kick, coub, rumble, newgrounds, bilibili (via yt-dlp)
 - pornhub, xvideos, xhamster, redtube (via yt-dlp)
 - hentaigifz (via a dedicated page-scrape extractor, not cobalt)
-- danbooru, e621, e926 (via their JSON APIs, not cobalt)
+- danbooru, e621, e926, yande.re, konachan (via their JSON APIs, not cobalt)
 
 each of these sources can be individually turned on or off from the webui **sources** page (in the sidebar). a turned-off source refuses `/download` with a short message instead of downloading.
 

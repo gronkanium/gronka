@@ -14,18 +14,42 @@ const logger = createLogger('booru');
 const BOORU_UA = 'gronka (+https://github.com/thedorekaczynski/gronka)';
 const API_TIMEOUT_MS = 20000;
 
+// Danbooru-style boards expose the post directly at /posts/<id>.json.
+const postJsonApiUrl = (host, postId) => `https://${host}/posts/${postId}.json`;
+
+// Moebooru boards (yande.re, konachan) have no per-post endpoint — the index is queried by
+// id tag and answers with a one-element array, or an empty one when the post is gone.
+const moebooruApiUrl = (host, postId) => `https://${host}/post.json?tags=id:${postId}`;
+const moebooruFileUrl = json => (Array.isArray(json) ? (json[0]?.file_url ?? null) : null);
+
 const BOORU_SITES = [
   {
     name: 'danbooru',
     hosts: ['danbooru.donmai.us'],
+    buildApiUrl: postJsonApiUrl,
     // { ..., file_url: "https://cdn.donmai.us/original/.../<md5>.<ext>" }
     pickFileUrl: json => json.file_url || null,
   },
   {
     name: 'e621',
     hosts: ['e621.net', 'e926.net'],
+    buildApiUrl: postJsonApiUrl,
     // { post: { file: { url: "https://static1.e621.net/data/.../<md5>.<ext>" } } }
     pickFileUrl: json => json.post?.file?.url || null,
+  },
+  {
+    name: 'yande.re',
+    hosts: ['yande.re'],
+    buildApiUrl: moebooruApiUrl,
+    // [ { ..., file_url: "https://files.yande.re/image/<md5>/yande.re%20<id>%20<tags>.<ext>" } ]
+    pickFileUrl: moebooruFileUrl,
+  },
+  {
+    name: 'konachan',
+    hosts: ['konachan.com', 'konachan.net'],
+    buildApiUrl: moebooruApiUrl,
+    // [ { ..., file_url: "https://konachan.com/image/<md5>/Konachan.com%20-%20<id>%20<tags>.<ext>" } ]
+    pickFileUrl: moebooruFileUrl,
   },
 ];
 
@@ -37,7 +61,8 @@ function matchSite(hostname) {
 
 /**
  * Extract a numeric post id from a booru post path.
- * Handles /posts/<id> (danbooru, e621) and legacy /post/show/<id> (e621).
+ * Handles /posts/<id> (danbooru, e621) and /post/show/<id> (yande.re, konachan, and
+ * legacy e621).
  * @param {string} pathname - URL pathname
  * @returns {string|null} The post id, or null if the path is not a post page
  */
@@ -49,7 +74,8 @@ function parsePostId(pathname) {
 /**
  * Check whether a URL is a supported booru post page.
  * @param {string} url - URL to check
- * @returns {boolean} True if the URL is a danbooru/e621/e926 post page
+ * @returns {boolean} True if the URL is a post page on a supported board
+ *   (danbooru, e621/e926, yande.re, konachan)
  */
 export function isBooruUrl(url) {
   try {
@@ -79,7 +105,7 @@ export async function downloadFromBooru(url, isAdminUser = false) {
   }
 
   const host = hostname.toLowerCase().replace(/^www\./, '');
-  const apiUrl = `https://${host}/posts/${postId}.json`;
+  const apiUrl = site.buildApiUrl(host, postId);
   logger.info(`Resolving ${site.name} post ${postId}: ${apiUrl}`);
 
   let data;
@@ -103,7 +129,8 @@ export async function downloadFromBooru(url, isAdminUser = false) {
 
   const fileUrl = site.pickFileUrl(data);
   if (!fileUrl) {
-    // danbooru omits file_url for restricted/banned posts; e621 for deleted ones.
+    // danbooru omits file_url for restricted/banned posts, e621 for deleted ones, and
+    // Moebooru answers with an empty array when the id does not exist.
     logger.warn(`No media URL on ${site.name} post ${postId}`);
     throw new ValidationError('no downloadable media found for this post (it may be restricted)');
   }

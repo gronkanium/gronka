@@ -59,6 +59,13 @@ const customServices = [
   { id: 'hentaigifz', label: 'hentaigifz', category: 'adult', hosts: ['hentaigifz.com'] },
   { id: 'danbooru', label: 'Danbooru', category: 'booru', hosts: ['danbooru.donmai.us'] },
   { id: 'e621', label: 'e621 / e926', category: 'booru', hosts: ['e621.net', 'e926.net'] },
+  { id: 'yandere', label: 'yande.re', category: 'booru', hosts: ['yande.re'] },
+  {
+    id: 'konachan',
+    label: 'Konachan',
+    category: 'booru',
+    hosts: ['konachan.com', 'konachan.net'],
+  },
 ];
 
 /** Every download source, in UI display order (social → video → adult → booru). */

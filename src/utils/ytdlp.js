@@ -410,12 +410,19 @@ function executeYtdlp(
           reject(new NetworkError('video requires age verification'));
         } else if (errorOutput.includes('is not a valid URL')) {
           reject(new ValidationError('invalid YouTube URL'));
+        } else if (errorOutput.includes('There is no video in this post')) {
+          // Image-only posts (common on Instagram /p/ links). The post is perfectly fine —
+          // there is simply no video for yt-dlp to take, so neither the generic "may be
+          // deleted or private" message nor a formats-related one describes what happened.
+          reject(new NetworkError('this post has no video in it.'));
         } else if (errorOutput.includes('No video formats found')) {
           reject(new NetworkError('no downloadable video formats found'));
         } else if (/larger than max-filesize/i.test(errorOutput)) {
           reject(new ValidationError(tooLargeMessage(maxSize)));
         } else if (
-          errorOutput.includes('does not pass filter') ||
+          // Same care as the exit-0 path: only blame length when the duration filter is what
+          // rejected the item, not on any filter message that happens to mention a skip.
+          /does not pass filter \(duration/.test(errorOutput) ||
           errorOutput.includes('duration >')
         ) {
           reject(

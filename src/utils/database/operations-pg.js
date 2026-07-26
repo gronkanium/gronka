@@ -26,23 +26,11 @@ function getCachedRecentOperations() {
   return recentOperationsCache.data;
 }
 
-/**
- * Cache recent operations
- * @param {Array} operations - Operations to cache
- */
 function setCachedRecentOperations(operations) {
   recentOperationsCache.data = operations;
   recentOperationsCache.timestamp = Date.now();
 }
 
-/**
- * Insert an operation log entry
- * @param {string} operationId - Operation ID
- * @param {string} step - Step name (e.g., 'download_start', 'processing', 'complete')
- * @param {string} status - Status ('pending', 'running', 'success', 'error')
- * @param {Object} [data] - Optional data (message, filePath, stackTrace, metadata)
- * @returns {Promise<void>}
- */
 export async function insertOperationLog(operationId, step, status, data = {}) {
   await ensurePostgresInitialized();
 
@@ -62,11 +50,6 @@ export async function insertOperationLog(operationId, step, status, data = {}) {
   `;
 }
 
-/**
- * Get operation logs for a specific operation
- * @param {string} operationId - Operation ID
- * @returns {Promise<Array>} Array of operation log entries
- */
 async function getOperationLogs(operationId) {
   await ensurePostgresInitialized();
 
@@ -193,11 +176,6 @@ export async function getOperationTrace(operationId) {
   };
 }
 
-/**
- * Reconstruct full operation objects (webui format) from a list of operation IDs
- * @param {Array<string>} operationIds - Operation IDs to reconstruct
- * @returns {Promise<Array>} Array of operation objects in webui format
- */
 async function reconstructOperationsByIds(operationIds) {
   // Reconstruct each operation from its logs
   const reconstructedOperations = [];
@@ -392,11 +370,6 @@ async function reconstructOperationsByIds(operationIds) {
   return convertedOperations;
 }
 
-/**
- * Get recent operations reconstructed from database logs
- * @param {number} [limit=100] - Maximum number of operations to return
- * @returns {Promise<Array>} Array of operation objects in webui format
- */
 export async function getRecentOperations(limit = 100) {
   await ensurePostgresInitialized();
 
@@ -588,11 +561,6 @@ export async function searchOperations(filters = {}, { limit = 50, offset = 0, s
   return { operations: reconstructed, total };
 }
 
-/**
- * Get operations that are stuck in running status
- * @param {number} maxAgeMinutes - Maximum age in minutes before an operation is considered stuck
- * @returns {Promise<Array>} Array of operation IDs that are stuck
- */
 export async function getStuckOperations(maxAgeMinutes = 10) {
   await ensurePostgresInitialized();
 
@@ -639,12 +607,6 @@ export async function getStuckOperations(maxAgeMinutes = 10) {
   return verifiedStuck;
 }
 
-/**
- * Mark an operation as failed by inserting a status_update log
- * @param {string} operationId - Operation ID to mark as failed
- * @param {string} errorMessage - Error message to include
- * @returns {Promise<void>}
- */
 export async function markOperationAsFailed(
   operationId,
   errorMessage = 'Operation timed out - marked as failed due to inactivity'

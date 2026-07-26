@@ -272,13 +272,6 @@ export function getIndexDefinitions() {
   ];
 }
 
-/**
- * Check if a column exists in a table
- * @param {postgres.Sql} sql - PostgreSQL connection
- * @param {string} tableName - Table name
- * @param {string} columnName - Column name
- * @returns {Promise<boolean>} True if column exists
- */
 async function columnExists(sql, tableName, columnName) {
   const result = await sql`
     SELECT column_name
@@ -289,11 +282,6 @@ async function columnExists(sql, tableName, columnName) {
   return result.length > 0;
 }
 
-/**
- * Add file_size column to processed_urls if it doesn't exist (for migration)
- * @param {postgres.Sql} sql - PostgreSQL connection
- * @returns {Promise<void>}
- */
 export async function addFileSizeColumnIfNeeded(sql) {
   const exists = await columnExists(sql, 'processed_urls', 'file_size');
   if (!exists) {

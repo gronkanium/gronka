@@ -132,11 +132,6 @@ async function resolveAttachment(message) {
   return null;
 }
 
-/**
- * Build the short help/about embed shown for "^help" and a bare @mention.
- * @param {string} prefix - Effective prefix for this guild/DM
- * @returns {EmbedBuilder}
- */
 export function buildHelpEmbed(prefix) {
   return new EmbedBuilder()
     .setTitle('gronka')

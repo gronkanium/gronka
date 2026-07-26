@@ -1,20 +1,10 @@
 import { blake3 } from '@noble/hashes/blake3.js';
 import { bytesToHex } from '@noble/hashes/utils.js';
 
-/**
- * Hash arbitrary bytes to lowercase hex.
- * @param {Uint8Array} bytes
- * @returns {string}
- */
 export function hashBytesHex(bytes) {
   return bytesToHex(blake3(bytes));
 }
 
-/**
- * Hash a UTF-8 string to lowercase hex.
- * @param {string} value
- * @returns {string}
- */
 export function hashStringHex(value) {
   return hashBytesHex(Buffer.from(String(value), 'utf8'));
 }
@@ -38,11 +28,6 @@ export function hashPartsHex(parts) {
   return bytesToHex(hasher.digest());
 }
 
-/**
- * Generate hash for URL to use as a URL-cache key
- * @param {string} url - URL to hash
- * @returns {string} URL hash
- */
 export function hashUrl(url) {
   return hashStringHex(url);
 }

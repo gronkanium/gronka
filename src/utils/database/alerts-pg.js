@@ -2,11 +2,6 @@ import { getPostgresConnection } from './connection.js';
 import { ensurePostgresInitialized } from './init.js';
 import { convertTimestampsInArray, convertTimestampsToNumbers } from './helpers-pg.js';
 
-/**
- * Insert an alert/notification entry
- * @param {Object} alert - Alert data
- * @returns {Promise<Object>} The inserted alert record
- */
 export async function insertAlert(alert) {
   await ensurePostgresInitialized();
 
@@ -44,18 +39,6 @@ export async function insertAlert(alert) {
   return convertTimestampsToNumbers(alertRecord, ['timestamp']);
 }
 
-/**
- * Get alerts with filtering
- * @param {Object} options - Query options
- * @param {string} [options.severity] - Filter by severity
- * @param {string} [options.component] - Filter by component
- * @param {number} [options.startTime] - Start timestamp
- * @param {number} [options.endTime] - End timestamp
- * @param {string} [options.search] - Search in title/message
- * @param {number} [options.limit] - Limit results
- * @param {number} [options.offset] - Offset for pagination
- * @returns {Promise<Array>} Array of alerts
- */
 export async function getAlerts(options = {}) {
   await ensurePostgresInitialized();
 
@@ -120,10 +103,6 @@ export async function getAlerts(options = {}) {
   return convertTimestampsInArray(alerts, ['timestamp']);
 }
 
-/**
- * Get distinct alert components
- * @returns {Promise<Array<string>>} Sorted list of component names
- */
 export async function getAlertComponents() {
   await ensurePostgresInitialized();
 
@@ -137,11 +116,6 @@ export async function getAlertComponents() {
   return rows.map(row => row.component);
 }
 
-/**
- * Get count of alerts matching filters
- * @param {Object} options - Query options (same as getAlerts)
- * @returns {Promise<number>} Total count
- */
 export async function getAlertsCount(options = {}) {
   await ensurePostgresInitialized();
 

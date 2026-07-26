@@ -46,12 +46,6 @@ const logger = createLogger('optimize');
 
 const { gifStoragePath: GIF_STORAGE_PATH, cdnBaseUrl: CDN_BASE_URL } = botConfig;
 
-/**
- * Safely reply to an interaction with error handling
- * @param {Interaction} interaction - Discord interaction
- * @param {Object} options - Reply options
- * @returns {Promise<boolean>} True if reply was successful, false otherwise
- */
 async function safeReply(interaction, options) {
   if (interaction.replied || interaction.deferred) {
     logger.debug(`Interaction already responded to, skipping reply`);
@@ -72,12 +66,6 @@ async function safeReply(interaction, options) {
   }
 }
 
-/**
- * Safely show a modal with error handling
- * @param {Interaction} interaction - Discord interaction
- * @param {ModalBuilder} modal - Modal to show
- * @returns {Promise<boolean>} True if modal was shown successfully, false otherwise
- */
 async function safeShowModal(interaction, modal) {
   if (interaction.replied || interaction.deferred) {
     logger.debug(`Interaction already responded to, cannot show modal`);
@@ -100,16 +88,6 @@ async function safeShowModal(interaction, modal) {
   }
 }
 
-/**
- * Process GIF optimization
- * @param {Interaction} interaction - Discord interaction
- * @param {Attachment} attachment - Discord attachment (GIF file)
- * @param {boolean} adminUser - Whether the user is an admin
- * @param {Buffer} [preDownloadedBuffer] - Optional pre-downloaded buffer
- * @param {number} [lossyLevel] - Lossy compression level (0-100, default: 35)
- * @param {string} [originalUrl] - Original URL if this optimization came from a URL (not Discord attachment or CDN)
- * @param {string} [commandSource] - Command source ('slash' or 'context-menu')
- */
 export async function processOptimization(
   interaction,
   attachment,
@@ -451,11 +429,6 @@ export async function processOptimization(
   );
 }
 
-/**
- * Handle optimize context menu command
- * @param {Interaction} interaction - Discord interaction
- * @param {Map} modalAttachmentCache - Cache for modal attachment data
- */
 export async function handleOptimizeContextMenuCommand(interaction, modalAttachmentCache) {
   if (!interaction.isMessageContextMenuCommand()) {
     return;
@@ -697,10 +670,6 @@ export async function handleOptimizeContextMenuCommand(interaction, modalAttachm
   }
 }
 
-/**
- * Handle optimize slash command
- * @param {Interaction} interaction - Discord interaction
- */
 export async function handleOptimizeCommand(interaction) {
   const userId = interaction.user.id;
   const username = interaction.user.tag || interaction.user.username || 'unknown';

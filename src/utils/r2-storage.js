@@ -55,16 +55,6 @@ async function assertR2Capacity(incomingBytes) {
   }
 }
 
-/**
- * Initialize R2 client with credentials
- * @param {Object} config - R2 configuration
- * @param {string} config.accountId - R2 account ID
- * @param {string} config.accessKeyId - R2 access key ID
- * @param {string} config.secretAccessKey - R2 secret access key
- * @param {string} config.bucketName - R2 bucket name
- * @param {string} config.publicDomain - R2 public domain (e.g., cdn.gronka.dev)
- * @returns {S3Client} Initialized R2 client
- */
 function initializeR2Client(config) {
   // Always create a new client with the provided config to avoid stale configs
   // The S3Client is lightweight and caching could cause issues if config changes
@@ -88,11 +78,6 @@ function initializeR2Client(config) {
   return client;
 }
 
-/**
- * Get R2 client instance
- * @param {Object} config - R2 configuration
- * @returns {S3Client} R2 client
- */
 function getR2Client(config) {
   return initializeR2Client(config);
 }
@@ -179,12 +164,6 @@ export async function uploadToR2(buffer, key, contentType, config, metadata = {}
   }
 }
 
-/**
- * Check if a file exists in R2
- * @param {string} key - R2 object key (path in bucket)
- * @param {Object} config - R2 configuration
- * @returns {Promise<boolean>} True if file exists
- */
 export async function fileExistsInR2(key, config) {
   const client = getR2Client(config);
   const { bucketName } = config;
@@ -207,24 +186,11 @@ export async function fileExistsInR2(key, config) {
   }
 }
 
-/**
- * Get public URL for a file in R2
- * @param {string} key - R2 object key (path in bucket)
- * @param {Object} config - R2 configuration
- * @returns {string} Public URL
- */
 export function getR2PublicUrl(key, config) {
   const { publicDomain } = config;
   return `https://${publicDomain}/${key}`;
 }
 
-/**
- * Generate R2 key from hash and file type
- * @param {string} hash - File hash (BLAKE3)
- * @param {string} fileType - File type ('gif', 'video', or 'image')
- * @param {string} extension - File extension (e.g., '.gif', '.mp4', '.png')
- * @returns {string} R2 object key (e.g., 'gifs/abc123.gif')
- */
 export function getR2KeyFromHash(hash, fileType, extension) {
   const safeHash = hash.replace(/[^a-f0-9]/gi, '');
   const safeExt = extension.replace(/[^a-zA-Z0-9.]/gi, '');
@@ -310,24 +276,12 @@ export async function uploadImageToR2(buffer, hash, extension, config, metadata 
   return await uploadToR2(buffer, key, contentType, config, metadata);
 }
 
-/**
- * Check if GIF exists in R2
- * @param {string} hash - BLAKE3 hash of the GIF
- * @param {Object} config - R2 configuration
- * @returns {Promise<boolean>} True if GIF exists
- */
 export async function gifExistsInR2(hash, config) {
   const safeHash = hash.replace(/[^a-f0-9]/gi, '');
   const key = `gifs/${safeHash}.gif`;
   return await fileExistsInR2(key, config);
 }
 
-/**
- * Download GIF from R2
- * @param {string} hash - BLAKE3 hash of the GIF
- * @param {Object} config - R2 configuration
- * @returns {Promise<Buffer>} GIF file buffer
- */
 export async function downloadGifFromR2(hash, config) {
   const client = getR2Client(config);
   const { bucketName } = config;
@@ -361,13 +315,6 @@ export async function downloadGifFromR2(hash, config) {
   }
 }
 
-/**
- * Check if video exists in R2
- * @param {string} hash - BLAKE3 hash of the video
- * @param {string} extension - File extension
- * @param {Object} config - R2 configuration
- * @returns {Promise<boolean>} True if video exists
- */
 export async function videoExistsInR2(hash, extension, config) {
   const safeHash = hash.replace(/[^a-f0-9]/gi, '');
   const safeExt = extension.replace(/[^a-zA-Z0-9.]/gi, '');
@@ -376,13 +323,6 @@ export async function videoExistsInR2(hash, extension, config) {
   return await fileExistsInR2(key, config);
 }
 
-/**
- * Check if image exists in R2
- * @param {string} hash - BLAKE3 hash of the image
- * @param {string} extension - File extension
- * @param {Object} config - R2 configuration
- * @returns {Promise<boolean>} True if image exists
- */
 export async function imageExistsInR2(hash, extension, config) {
   const safeHash = hash.replace(/[^a-f0-9]/gi, '');
   const safeExt = extension.replace(/[^a-zA-Z0-9.]/gi, '');
@@ -439,12 +379,6 @@ export async function listObjectsInR2(prefix, config) {
   }
 }
 
-/**
- * Delete a file from R2
- * @param {string} key - R2 object key (path in bucket)
- * @param {Object} config - R2 configuration
- * @returns {Promise<boolean>} True if file was deleted, false if not found
- */
 export async function deleteFromR2(key, config) {
   const client = getR2Client(config);
   const { bucketName } = config;
@@ -495,11 +429,6 @@ export function extractR2KeyFromUrl(url, config) {
   return key || null;
 }
 
-/**
- * Human-readable retention, e.g. "3 days", "1 day", "8 hours", "1 hour".
- * @param {number} hours
- * @returns {string}
- */
 function formatTtlMessage(hours) {
   const ttlHours = hours || 72;
   if (ttlHours >= 24 && ttlHours % 24 === 0) {
@@ -545,13 +474,6 @@ export function formatR2UrlWithDisclaimer(url, config, isAdmin = false, ttlHours
   return url + disclaimer;
 }
 
-/**
- * Format multiple R2 URLs with a single disclaimer at the end
- * @param {string[]} urls - Array of URLs to format
- * @param {Object} config - R2 configuration
- * @param {boolean} [isAdmin=false] - Whether the user is an admin (admins get permanent uploads with no disclaimer)
- * @returns {string} URLs joined with newlines and a single disclaimer if any R2 URLs exist
- */
 export function formatMultipleR2UrlsWithDisclaimer(urls, config, isAdmin = false) {
   // Return empty string if no URLs
   if (!urls || !Array.isArray(urls) || urls.length === 0) {

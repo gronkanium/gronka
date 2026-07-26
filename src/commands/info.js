@@ -14,11 +14,6 @@ const packageJson = JSON.parse(readFileSync(join(__dirname, '../../package.json'
 
 const logger = createLogger('info');
 
-/**
- * Format bytes to human-readable string
- * @param {number} bytes - Bytes to format
- * @returns {string} Formatted string
- */
 function formatBytes(bytes) {
   const mb = bytes / (1024 * 1024);
   if (mb >= 1024) {
@@ -28,11 +23,6 @@ function formatBytes(bytes) {
   return `${mb.toFixed(2)} MB`;
 }
 
-/**
- * Format process uptime
- * @param {number} seconds - Uptime in seconds
- * @returns {string} Formatted uptime string
- */
 function formatProcessUptime(seconds) {
   const days = Math.floor(seconds / 86400);
   const hours = Math.floor((seconds % 86400) / 3600);
@@ -50,10 +40,6 @@ function formatProcessUptime(seconds) {
   }
 }
 
-/**
- * Handle info command
- * @param {Interaction} interaction - Discord interaction
- */
 export async function handleInfoCommand(interaction) {
   try {
     // Get host information

@@ -20,10 +20,6 @@ let dbInitPromise = null;
 // Callback for broadcasting logs to WebSocket clients
 let logBroadcastCallback = null;
 
-/**
- * Set callback for broadcasting logs
- * @param {Function} callback - Function to call with log entry
- */
 export function setLogBroadcastCallback(callback) {
   logBroadcastCallback = callback;
 }

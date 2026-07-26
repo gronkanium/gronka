@@ -5,11 +5,6 @@ import { safeInteractionReply, safeInteractionDeferReply } from '../utils/intera
 
 const logger = createLogger('modals');
 
-/**
- * Handle modal submission for optimization
- * @param {Interaction} interaction - Discord modal submit interaction
- * @param {Map} modalAttachmentCache - Cache for modal attachment data
- */
 export async function handleModalSubmit(interaction, modalAttachmentCache) {
   if (!interaction.isModalSubmit()) {
     return;

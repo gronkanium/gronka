@@ -16,11 +16,6 @@ const logger = createLogger('stats');
 
 const { gifStoragePath: GIF_STORAGE_PATH } = botConfig;
 
-/**
- * Format uptime in a human-readable format
- * @param {number} milliseconds - Uptime in milliseconds
- * @returns {string} Formatted uptime string
- */
 function formatUptime(milliseconds) {
   const seconds = Math.floor(milliseconds / 1000);
   const minutes = Math.floor(seconds / 60);
@@ -38,11 +33,6 @@ function formatUptime(milliseconds) {
   }
 }
 
-/**
- * Handle stats command
- * @param {Interaction} interaction - Discord interaction
- * @param {number} botStartTime - Bot start timestamp
- */
 export async function handleStatsCommand(interaction, botStartTime) {
   try {
     const storageStats = await getStorageStats(GIF_STORAGE_PATH);

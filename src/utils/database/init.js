@@ -13,10 +13,6 @@ import {
   addR2ExpiredAtColumnIfNeeded,
 } from './schema-pg.js';
 
-/**
- * Initialize PostgreSQL database and create tables
- * @returns {Promise<void>}
- */
 export async function initPostgresDatabase() {
   // If initialization is in progress, wait for it
   // This MUST be checked first to prevent race conditions in parallel tests
@@ -163,10 +159,6 @@ async function resetSerialSequences(sql) {
   }
 }
 
-/**
- * Close PostgreSQL database connection
- * @returns {Promise<void>}
- */
 export async function closePostgresDatabase() {
   const { closePostgresConnection } = await import('./connection.js');
   await closePostgresConnection();
@@ -174,10 +166,6 @@ export async function closePostgresDatabase() {
   setPostgresInitPromise(null);
 }
 
-/**
- * Ensure PostgreSQL database is initialized before performing operations
- * @returns {Promise<void>}
- */
 export async function ensurePostgresInitialized() {
   const sql = getPostgresConnection();
   if (sql) {

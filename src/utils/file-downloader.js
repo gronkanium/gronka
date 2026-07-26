@@ -42,12 +42,6 @@ const {
   cobaltEnabled: COBALT_ENABLED,
 } = botConfig;
 
-/**
- * Download video from Discord CDN
- * @param {string} url - Video URL
- * @param {boolean} isAdminUser - Whether the user is an admin (allows larger files)
- * @returns {Promise<Buffer>} Video file buffer
- */
 export async function downloadVideo(url, isAdminUser = false) {
   // Validate URL to prevent SSRF
   const urlValidation = validateUrl(url);
@@ -88,12 +82,6 @@ export async function downloadVideo(url, isAdminUser = false) {
   }
 }
 
-/**
- * Download image from Discord CDN
- * @param {string} url - Image URL
- * @param {boolean} isAdminUser - Whether the user is an admin (allows larger files)
- * @returns {Promise<Buffer>} Image file buffer
- */
 export async function downloadImage(url, isAdminUser = false) {
   // Validate URL to prevent SSRF
   const urlValidation = validateUrl(url);
@@ -368,11 +356,6 @@ export async function downloadFileFromUrl(url, isAdminUser = false, client = nul
   }
 }
 
-/**
- * Parse Tenor GIF URL and extract the actual GIF file URL
- * @param {string} url - Tenor page URL (e.g., https://tenor.com/view/gm-gif-1914360746739225000)
- * @returns {Promise<string>} Direct URL to the GIF file
- */
 export async function parseTenorUrl(url) {
   try {
     // Check if URL is a Tenor view URL
@@ -484,11 +467,6 @@ export async function parseTenorUrl(url) {
   }
 }
 
-/**
- * Generate BLAKE3 hash of buffer
- * @param {Buffer} buffer - Data buffer
- * @returns {string} BLAKE3 hash in hex format
- */
 export function generateHash(buffer) {
   return hashBytesHex(buffer);
 }

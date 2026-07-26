@@ -2,15 +2,6 @@ import { getPostgresConnection } from './connection.js';
 import { ensurePostgresInitialized } from './init.js';
 import { convertTimestampsInArray } from './helpers-pg.js';
 
-/**
- * Insert a log entry into the database
- * @param {number} timestamp - Unix timestamp in milliseconds
- * @param {string} component - Service name (bot, server, webui)
- * @param {string} level - Log level (DEBUG, INFO, WARN, ERROR)
- * @param {string} message - Log message
- * @param {Object} [metadata] - Optional metadata object (will be JSON stringified)
- * @returns {Promise<void>}
- */
 export async function insertLog(timestamp, component, level, message, metadata = null) {
   await ensurePostgresInitialized();
 
@@ -155,11 +146,6 @@ export async function getLogs(options = {}) {
   return convertTimestampsInArray(logs, ['timestamp']);
 }
 
-/**
- * Get total count of logs matching filters
- * @param {Object} options - Query options (same as getLogs)
- * @returns {Promise<number>} Total count of matching logs
- */
 export async function getLogsCount(options = {}) {
   await ensurePostgresInitialized();
 
@@ -239,10 +225,6 @@ export async function getLogsCount(options = {}) {
   return parseInt(result[0]?.count || 0, 10);
 }
 
-/**
- * Get all unique components from logs
- * @returns {Promise<string[]>} Array of component names
- */
 export async function getLogComponents() {
   await ensurePostgresInitialized();
 

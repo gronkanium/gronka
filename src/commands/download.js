@@ -198,11 +198,6 @@ async function replyWithDirectMediaUrls({
   return true;
 }
 
-/**
- * Clean up temporary files and directory
- * @param {Object} tmpDir - tmp directory object with removeCallback
- * @param {string[]} files - Array of file paths to delete
- */
 async function cleanupTempFiles(tmpDir, files = []) {
   await storageCleanupTempFiles(files);
   try {
@@ -249,7 +244,6 @@ async function processDownload(
         metadata: { url },
       });
 
-      // Check if URL has already been processed
       // Skip URL cache if time parameters are provided (trimmed videos are different from untrimmed)
       // Also skip cache if cached result is not a video (e.g., if it was converted to GIF)
       const urlHash = hashUrl(url);
@@ -414,7 +408,6 @@ async function processDownload(
         }
       }
 
-      // Determine download method based on URL type
       let downloadMethod;
       if (useYtdlp) {
         downloadMethod = 'ytdlp';
@@ -446,13 +439,11 @@ async function processDownload(
         });
       }
 
-      // Download based on method
       let fileData;
       try {
         if (downloadMethod === 'ytdlp') {
           // if trimming is requested, yt-dlp will download ONLY the requested segment using --download-sections
           // this avoids downloading huge files and then trimming them
-          // otherwise, enforce 5-minute limit to prevent large downloads
           const skipDurationLimit = startTime !== null || duration !== null;
           const maxDuration =
             skipDurationLimit || adminUser ? Infinity : await getMaxVideoDuration();
@@ -611,16 +602,13 @@ async function processDownload(
           }
         }
       } catch (error) {
-        // Handle yt-dlp rate limit error
         if (error instanceof YtdlpRateLimitError) {
           throw error;
         }
         throw error;
       }
 
-      // Check if we got multiple media files (array) or single file
       if (Array.isArray(fileData)) {
-        // Handle multiple media files from picker (photos and videos)
         logger.info(`Processing ${fileData.length} media files from picker`);
         const mediaResults = [];
         let totalSize = 0;
@@ -634,7 +622,6 @@ async function processDownload(
         // Determine which files should go to Discord vs R2 (greedy packing)
         const shouldUploadToDiscord = [];
         if (totalSize < DISCORD_SIZE_LIMIT) {
-          // All files fit in Discord
           logger.info(
             `Total size: ${(totalSize / (1024 * 1024)).toFixed(2)}MB, sending all files as Discord attachments`
           );
@@ -671,7 +658,6 @@ async function processDownload(
           let exists = false;
           let method;
 
-          // Check if file already exists based on type
           if (fileType === 'video') {
             exists = await videoExists(hash, ext, GIF_STORAGE_PATH);
             if (exists) {
@@ -706,7 +692,6 @@ async function processDownload(
               `Media ${i + 1} already exists (hash: ${hash}, type: ${fileType}, method: ${method})`
             );
           } else {
-            // Save the file based on type
             logger.info(
               `Saving media ${i + 1} (hash: ${hash}, extension: ${ext}, type: ${fileType})`
             );
@@ -763,7 +748,6 @@ async function processDownload(
         // Third pass: re-upload to R2 if file was saved locally but should be on R2
         for (let i = 0; i < mediaResults.length; i++) {
           if (!shouldUploadToDiscord[i] && mediaResults[i].method === 'discord') {
-            // File was saved locally but should be on R2, re-upload
             const result = mediaResults[i];
             logger.info(
               `Re-uploading media ${i + 1} to R2 (hash: ${result.hash}, type: ${result.fileType})`
@@ -798,7 +782,6 @@ async function processDownload(
           }
         }
 
-        // Update operation to success
         updateOperationStatus(operationId, 'success', {
           fileSize: totalSize,
           mediaCount: mediaResults.length,
@@ -806,18 +789,15 @@ async function processDownload(
 
         recordRateLimit(userId);
 
-        // Separate files by intended upload method
         const discordFiles = mediaResults.filter((r, i) => shouldUploadToDiscord[i]);
         const r2Files = mediaResults.filter((r, i) => !shouldUploadToDiscord[i]);
 
-        // Prepare Discord attachments
         const attachments = discordFiles.map(result => {
           const safeHash = result.hash.replace(/[^a-f0-9]/gi, '');
           const filename = `${safeHash}${result.ext}`;
           return new AttachmentBuilder(result.buffer, { name: filename });
         });
 
-        // Prepare R2 URLs with single disclaimer
         const r2Urls = r2Files.map(r => r.url);
         const content = formatMultipleR2UrlsWithDisclaimer(r2Urls, r2Config, adminUser);
 
@@ -873,7 +853,6 @@ async function processDownload(
           }
         }
 
-        // Record R2 uploads in database
         for (const result of r2Files) {
           await recordProcessedUrl({
             urlHash,
@@ -887,22 +866,16 @@ async function processDownload(
           await trackR2UploadIfApplicable(urlHash, result.url, adminUser);
         }
 
-        // Send success notification
         await notifyCommandSuccess(username, 'download', { operationId, userId });
         return;
       }
 
-      // Single file handling (existing code)
-      // Generate hash
       let hash = generateHash(fileData.buffer);
 
-      // Extract extension from filename
       const ext = path.extname(fileData.filename).toLowerCase() || '.mp4';
 
-      // Detect file type
       const fileType = detectFileType(ext, fileData.contentType);
 
-      // Determine CDN path prefix based on file type
       let cdnPath = '/gifs';
       if (fileType === 'video') {
         cdnPath = '/videos';
@@ -910,7 +883,6 @@ async function processDownload(
         cdnPath = '/images';
       }
 
-      // Check if video or GIF trimming is requested
       // note: for YouTube downloads with time parameters, yt-dlp already trimmed the video
       // using --download-sections, so we don't need to trim again with ffmpeg
       const alreadyTrimmedByYtdlp =
@@ -920,7 +892,6 @@ async function processDownload(
         (startTime !== null || duration !== null) &&
         !alreadyTrimmedByYtdlp;
 
-      // Check if file already exists and get appropriate path
       // for yt-dlp downloads with time params, the buffer is already the trimmed segment,
       // so we should check if this trimmed version exists (based on hash of the trimmed buffer)
       // for downloads that need ffmpeg trimming, skip this check (we'll check for trimmed file later)
@@ -949,15 +920,12 @@ async function processDownload(
         // filePath might be a local path or R2 URL
         let fileUrl;
         if (filePath.startsWith('http://') || filePath.startsWith('https://')) {
-          // Already an R2 URL
           fileUrl = filePath;
         } else {
-          // Local path, construct URL
           const filename = path.basename(filePath);
           fileUrl = `${CDN_BASE_URL.replace('/gifs', cdnPath)}/${filename}`;
         }
         logger.info(`${fileType} already exists (hash: ${hash}) for user ${userId}`);
-        // Get file size for existing file
         let existingSize = fileData.buffer.length;
         if (!filePath.startsWith('http://') && !filePath.startsWith('https://')) {
           // Try to stat local file, but it might only exist in R2
@@ -987,20 +955,16 @@ async function processDownload(
           content: formatR2UrlWithDisclaimer(fileUrl, r2Config, adminUser),
         });
 
-        // Send success notification
         await notifyCommandSuccess(username, 'download', { operationId, userId });
         return;
       } else {
-        // Save file based on type
         let finalBuffer = fileData.buffer;
         let finalUploadMethod = 'r2';
-        // Determine the extension to use for saving
         // If video was trimmed, use .mp4 extension (trimVideo outputs MP4 format)
         let saveExt = ext;
         // Track if we're treating a video with .gif extension as a GIF
         let treatAsGif = false;
         if (fileType === 'gif') {
-          // Check if GIF trimming is requested
           if (startTime !== null || duration !== null) {
             logger.info(
               `Trimming GIF (hash: ${hash}, extension: ${ext}, startTime: ${startTime}, duration: ${duration})`
@@ -1010,22 +974,18 @@ async function processDownload(
               metadata: { startTime, duration },
             });
 
-            // Create temporary files for input and output
             const tmpDir = tmp.dirSync({ unsafeCleanup: true });
             const inputGifPath = path.join(tmpDir.name, `input${ext}`);
             const outputGifPath = path.join(tmpDir.name, 'output.gif');
 
             try {
-              // Write original GIF to temp file
               await fs.writeFile(inputGifPath, fileData.buffer);
 
-              // Trim the GIF
               await trimGif(inputGifPath, outputGifPath, {
                 startTime,
                 duration,
               });
 
-              // Read trimmed GIF
               const trimmedBuffer = await fs.readFile(outputGifPath);
 
               // Generate new hash for trimmed GIF (since content changed)
@@ -1035,7 +995,6 @@ async function processDownload(
               // estimate, which must be the trimmed size, not the original untrimmed size.
               finalBuffer = trimmedBuffer;
 
-              // Check if trimmed GIF already exists
               const trimmedExists = await gifExists(hash, GIF_STORAGE_PATH);
               if (trimmedExists) {
                 filePath = getGifPath(hash, GIF_STORAGE_PATH);
@@ -1056,7 +1015,6 @@ async function processDownload(
                 },
               });
 
-              // Clean up temp files
               await cleanupTempFiles(tmpDir, [inputGifPath, outputGifPath]);
             } catch (trimError) {
               logOperationStep(operationId, 'gif_trim', 'error', {
@@ -1064,32 +1022,25 @@ async function processDownload(
                 metadata: { error: trimError.message },
               });
               logger.error(`GIF trimming failed: ${trimError.message}`);
-              // Fall back to saving original GIF without trimming
               logger.info(`Falling back to saving original GIF without trimming`);
               finalBuffer = fileData.buffer;
-              // Clean up temp files on error
               await cleanupTempFiles(tmpDir, [inputGifPath, outputGifPath]);
             }
           } else {
             finalBuffer = fileData.buffer;
           }
 
-          // If trimmed GIF already exists, return early (similar to original file exists check)
           if (exists && filePath) {
             // filePath might be a local path or R2 URL
             let fileUrl;
             if (filePath.startsWith('http://') || filePath.startsWith('https://')) {
-              // Already an R2 URL
               fileUrl = filePath;
             } else {
-              // Local path, construct URL
               const filename = path.basename(filePath);
               fileUrl = `${CDN_BASE_URL.replace('/gifs', cdnPath)}/${filename}`;
             }
-            // Use 'gif' as fileType for database (we're in the GIF block)
             const dbFileType = 'gif';
             logger.info(`${dbFileType} already exists (hash: ${hash}) for user ${userId}`);
-            // Get file size for existing file
             let existingSize = finalBuffer.length;
             if (!filePath.startsWith('http://') && !filePath.startsWith('https://')) {
               // Try to stat local file, but it might only exist in R2
@@ -1105,7 +1056,6 @@ async function processDownload(
             }
 
             // Record processed URL in database (file exists but URL might not be recorded yet)
-            // Use .gif extension (we're in the GIF block)
             const dbExt = '.gif';
             await recordProcessedUrl({
               urlHash,
@@ -1123,12 +1073,10 @@ async function processDownload(
               content: formatR2UrlWithDisclaimer(fileUrl, r2Config, adminUser),
             });
 
-            // Send success notification
             await notifyCommandSuccess(username, 'download', { operationId, userId });
             return;
           }
 
-          // Save as GIF (we're in the GIF block)
           logger.info(`Saving GIF (hash: ${hash})`);
           const saveResult = await saveGif(finalBuffer, hash, GIF_STORAGE_PATH, buildMetadata());
           filePath = saveResult.url;
@@ -1146,13 +1094,11 @@ async function processDownload(
               metadata: { startTime, duration },
             });
 
-            // Create temporary files for input and output
             const tmpDir = tmp.dirSync({ unsafeCleanup: true });
             const inputGifPath = path.join(tmpDir.name, `input${ext}`);
             const outputGifPath = path.join(tmpDir.name, 'output.gif');
 
             try {
-              // Write original file to temp file
               await fs.writeFile(inputGifPath, fileData.buffer);
 
               // Trim as GIF (even though content is video, output should be GIF)
@@ -1161,21 +1107,17 @@ async function processDownload(
                 duration,
               });
 
-              // Read trimmed GIF
               const trimmedBuffer = await fs.readFile(outputGifPath);
 
-              // Generate new hash for trimmed GIF
               hash = generateHash(trimmedBuffer);
               // Always reflect the trimmed content, even if a file with this hash already exists
               // on disk - see the analogous fix in the GIF-trim branch above for why.
               finalBuffer = trimmedBuffer;
 
               // We're treating this as a GIF now (even though it was detected as video)
-              // Update cdnPath and use .gif extension for saving
               cdnPath = '/gifs';
               treatAsGif = true;
 
-              // Check if trimmed GIF already exists
               const trimmedExists = await gifExists(hash, GIF_STORAGE_PATH);
               if (trimmedExists) {
                 filePath = getGifPath(hash, GIF_STORAGE_PATH);
@@ -1196,7 +1138,6 @@ async function processDownload(
                 },
               });
 
-              // Clean up temp files
               await cleanupTempFiles(tmpDir, [inputGifPath, outputGifPath]);
             } catch (trimError) {
               logOperationStep(operationId, 'gif_trim', 'error', {
@@ -1204,29 +1145,22 @@ async function processDownload(
                 metadata: { error: trimError.message },
               });
               logger.error(`GIF trimming failed: ${trimError.message}`);
-              // Fall back to saving original file without trimming
               logger.info(`Falling back to saving original file without trimming`);
               finalBuffer = fileData.buffer;
-              // Clean up temp files on error
               await cleanupTempFiles(tmpDir, [inputGifPath, outputGifPath]);
             }
 
-            // If we trimmed as GIF (even though detected as video), handle it as GIF
             if (treatAsGif) {
-              // Check if trimmed GIF already exists and return early
               if (exists && filePath) {
                 // filePath might be a local path or R2 URL
                 let fileUrl;
                 if (filePath.startsWith('http://') || filePath.startsWith('https://')) {
-                  // Already an R2 URL
                   fileUrl = filePath;
                 } else {
-                  // Local path, construct URL
                   const filename = path.basename(filePath);
                   fileUrl = `${CDN_BASE_URL.replace('/gifs', cdnPath)}/${filename}`;
                 }
                 logger.info(`GIF already exists (hash: ${hash}) for user ${userId}`);
-                // Get file size for existing file
                 let existingSize = finalBuffer.length;
                 if (!filePath.startsWith('http://') && !filePath.startsWith('https://')) {
                   // Try to stat local file, but it might only exist in R2
@@ -1241,7 +1175,6 @@ async function processDownload(
                   }
                 }
 
-                // Record processed URL in database
                 await recordProcessedUrl({
                   urlHash,
                   contentHash: hash,
@@ -1258,12 +1191,10 @@ async function processDownload(
                   content: formatR2UrlWithDisclaimer(fileUrl, r2Config, adminUser),
                 });
 
-                // Send success notification
                 await notifyCommandSuccess(username, 'download', { operationId, userId });
                 return;
               }
 
-              // Save the trimmed GIF
               logger.info(`Saving GIF (hash: ${hash}) - trimmed from video with .gif extension`);
               const saveResult = await saveGif(
                 finalBuffer,
@@ -1276,7 +1207,6 @@ async function processDownload(
               finalUploadMethod = saveResult.method;
               // Note: We continue below to handle optimization and upload, but skip video-specific logic
             }
-            // Close the if (ext === '.gif' && ...) block
           } else if (!alreadyTrimmedByYtdlp && (startTime !== null || duration !== null)) {
             // Regular video trimming (not .gif extension)
             logger.info(
@@ -1287,23 +1217,19 @@ async function processDownload(
               metadata: { startTime, duration },
             });
 
-            // Create temporary files for input and output
             // Always use .mp4 extension for video output (trimVideo outputs MP4 format)
             const tmpDir = tmp.dirSync({ unsafeCleanup: true });
             const inputVideoPath = path.join(tmpDir.name, `input${ext}`);
             const outputVideoPath = path.join(tmpDir.name, 'output.mp4');
 
             try {
-              // Write original video to temp file
               await fs.writeFile(inputVideoPath, fileData.buffer);
 
-              // Trim the video
               await trimVideo(inputVideoPath, outputVideoPath, {
                 startTime,
                 duration,
               });
 
-              // Read trimmed video
               const trimmedBuffer = await fs.readFile(outputVideoPath);
 
               // Generate new hash for trimmed video (since content changed)
@@ -1316,7 +1242,6 @@ async function processDownload(
               // on disk - see the analogous fix in the GIF-trim branch above for why.
               finalBuffer = trimmedBuffer;
 
-              // Check if trimmed video already exists
               // This checks if we've previously created a video with this exact content (hash).
               // If the user requested different trim parameters, the hash will be different,
               // so we won't return the wrong cached version.
@@ -1342,7 +1267,6 @@ async function processDownload(
                 },
               });
 
-              // Clean up temp files
               await cleanupTempFiles(tmpDir, [inputVideoPath, outputVideoPath]);
             } catch (trimError) {
               logOperationStep(operationId, 'video_trim', 'error', {
@@ -1350,35 +1274,28 @@ async function processDownload(
                 metadata: { error: trimError.message },
               });
               logger.error(`Video trimming failed: ${trimError.message}`);
-              // Fall back to saving original video without trimming
               logger.info(`Falling back to saving original video without trimming`);
               finalBuffer = fileData.buffer;
-              // Clean up temp files on error
               await cleanupTempFiles(tmpDir, [inputVideoPath, outputVideoPath]);
             }
           } else {
             finalBuffer = fileData.buffer;
           }
 
-          // Update saveExt for trimmed videos (but not if we're treating as GIF)
           if (fileType === 'video' && (startTime !== null || duration !== null) && !treatAsGif) {
             saveExt = '.mp4';
           }
 
-          // If trimmed file already exists, return early (similar to original file exists check)
           if (exists && filePath) {
             // filePath might be a local path or R2 URL
             let fileUrl;
             if (filePath.startsWith('http://') || filePath.startsWith('https://')) {
-              // Already an R2 URL
               fileUrl = filePath;
             } else {
-              // Local path, construct URL
               const filename = path.basename(filePath);
               fileUrl = `${CDN_BASE_URL.replace('/gifs', cdnPath)}/${filename}`;
             }
             logger.info(`${fileType} already exists (hash: ${hash}) for user ${userId}`);
-            // Get file size for existing file
             let existingSize = finalBuffer.length;
             if (!filePath.startsWith('http://') && !filePath.startsWith('https://')) {
               // Try to stat local file, but it might only exist in R2
@@ -1394,7 +1311,6 @@ async function processDownload(
             }
 
             // Record processed URL in database (file exists but URL might not be recorded yet)
-            // Use saveExt for trimmed videos, ext for others
             await recordProcessedUrl({
               urlHash,
               contentHash: hash,
@@ -1411,7 +1327,6 @@ async function processDownload(
               content: formatR2UrlWithDisclaimer(fileUrl, r2Config, adminUser),
             });
 
-            // Send success notification
             await notifyCommandSuccess(username, 'download', { operationId, userId });
             return;
           }
@@ -1430,7 +1345,6 @@ async function processDownload(
             finalBuffer = saveResult.buffer;
             finalUploadMethod = saveResult.method;
           }
-          // If treatAsGif is true, we already saved it as GIF above, so skip video saving
         } else if (fileType === 'image') {
           logger.info(`Saving image (hash: ${hash}, extension: ${ext})`);
           const saveResult = await saveImage(
@@ -1449,15 +1363,12 @@ async function processDownload(
         let fileUrl;
         let finalSize;
         if (filePath.startsWith('http://') || filePath.startsWith('https://')) {
-          // Already an R2 URL
           fileUrl = filePath;
           // Get size from buffer since we can't stat R2 files
           finalSize = finalBuffer.length;
         } else {
-          // Local path, construct URL
           const filename = path.basename(filePath);
           fileUrl = `${CDN_BASE_URL.replace('/gifs', cdnPath)}/${filename}`;
-          // Get final file size
           const finalStats = await fs.stat(filePath);
           finalSize = finalStats.size;
         }
@@ -1468,7 +1379,6 @@ async function processDownload(
           `Successfully saved ${fileType} (hash: ${hash}, size: ${finalSizeMB}MB) for user ${userId}`
         );
 
-        // Record processed URL in database
         // Use saveExt for trimmed videos, ext for others
         const dbExt = fileType === 'video' ? saveExt : ext;
         await recordProcessedUrl({
@@ -1481,12 +1391,10 @@ async function processDownload(
           fileSize: finalSize,
         });
 
-        // Track temporary upload if file was uploaded to R2
         if (finalUploadMethod === 'r2') {
           await trackR2UploadIfApplicable(urlHash, fileUrl, adminUser);
         }
 
-        // Update operation to success with file size
         updateOperationStatus(operationId, 'success', { fileSize: finalSize });
 
         // Retention shown to the user must match what trackTemporaryUpload actually stored,
@@ -1502,7 +1410,6 @@ async function processDownload(
               files: [new AttachmentBuilder(finalBuffer, { name: filename })],
             });
 
-            // Capture Discord attachment URL and log
             let discordUrl = null;
             if (message && message.attachments && message.attachments.size > 0) {
               const discordAttachment = message.attachments.first();
@@ -1530,7 +1437,6 @@ async function processDownload(
               }
             }
 
-            // Log Discord upload with URL if captured
             if (discordUrl) {
               logger.info(`Uploaded to Discord: ${discordUrl}`);
               // Update database with Discord URL since file was uploaded to Discord, not saved to R2/CDN
@@ -1545,7 +1451,6 @@ async function processDownload(
               });
             }
           } catch (discordError) {
-            // Discord upload failed, fallback to R2
             logger.warn(
               `Discord attachment upload failed, falling back to R2: ${discordError.message}`
             );
@@ -1566,7 +1471,6 @@ async function processDownload(
               }
 
               if (r2Url) {
-                // Update database with R2 URL
                 await recordProcessedUrl({
                   urlHash,
                   contentHash: hash,
@@ -1600,10 +1504,8 @@ async function processDownload(
           });
         }
 
-        // Send success notification
         await notifyCommandSuccess(username, 'download', { operationId, userId });
 
-        // Record rate limit after successful download
         recordRateLimit(userId);
       }
     },
@@ -1616,10 +1518,6 @@ async function processDownload(
   );
 }
 
-/**
- * Handle download context menu command
- * @param {Interaction} interaction - Discord interaction
- */
 export async function handleDownloadContextMenuCommand(interaction) {
   if (!interaction.isMessageContextMenuCommand()) {
     return;
@@ -1647,13 +1545,10 @@ export async function handleDownloadContextMenuCommand(interaction) {
     return;
   }
 
-  // Get the message that was right-clicked
   const targetMessage = interaction.targetMessage;
 
-  // Extract URLs from message content
   let url = null;
   if (targetMessage.content) {
-    // Extract URLs from message content
     const urlPattern = /https?:\/\/[^\s<>"{}|\\^`[\]]+/gi;
     const urls = targetMessage.content.match(urlPattern);
     if (urls && urls.length > 0) {
@@ -1662,7 +1557,6 @@ export async function handleDownloadContextMenuCommand(interaction) {
     }
   }
 
-  // Check if URL was found
   if (!url) {
     logger.warn(`No URL found in message for user ${userId}`);
     const errorMessage = 'no URL found in this message.';
@@ -1680,7 +1574,6 @@ export async function handleDownloadContextMenuCommand(interaction) {
     return;
   }
 
-  // Validate URL format
   const urlValidation = validateUrl(url);
   if (!urlValidation.valid) {
     logger.warn(`Invalid URL for user ${userId}: ${urlValidation.error}`);
@@ -1694,7 +1587,6 @@ export async function handleDownloadContextMenuCommand(interaction) {
   // Classify the URL: yt-dlp site (youtube/redgifs/imgur/...) or not
   const ytdlpSite = getYtdlpSite(url);
 
-  // Check if URL needs yt-dlp but yt-dlp is disabled
   if (ytdlpSite && !YTDLP_ENABLED) {
     logger.warn(`User ${userId} attempted to download from ${ytdlpSite} (yt-dlp disabled)`);
     const errorMessage = `${ytdlpSite.toLowerCase()} downloads are disabled.`;
@@ -1709,7 +1601,6 @@ export async function handleDownloadContextMenuCommand(interaction) {
     return;
   }
 
-  // Check if downloader is available for the URL type
   if (ytdlpSite) {
     // yt-dlp sites require yt-dlp (already checked above that it's enabled)
     logger.info(`${ytdlpSite} URL detected, will use yt-dlp for download`);
@@ -1720,7 +1611,6 @@ export async function handleDownloadContextMenuCommand(interaction) {
     // booru sites have their own JSON-API extractor, no Cobalt/social-media check needed
     logger.info(`booru URL detected, will use booru API extractor for download`);
   } else if (!COBALT_ENABLED) {
-    // Non-YouTube URLs require Cobalt
     const errorMessage = 'cobalt is not enabled.';
     createFailedOperation('download', userId, username, errorMessage, 'cobalt_disabled', {
       originalUrl: url,
@@ -1733,7 +1623,6 @@ export async function handleDownloadContextMenuCommand(interaction) {
     await notifyCommandFailure(username, 'download', { userId, error: errorMessage });
     return;
   } else if (!isSocialMediaUrl(url)) {
-    // Non-YouTube URLs must be from supported social media platforms
     const errorMessage = 'url is not from a supported social media platform.';
     createFailedOperation('download', userId, username, errorMessage, 'invalid_social_media_url', {
       originalUrl: url,
@@ -1756,10 +1645,6 @@ export async function handleDownloadContextMenuCommand(interaction) {
   await processDownload(interaction, url, 'context-menu');
 }
 
-/**
- * Handle download command
- * @param {Interaction} interaction - Discord interaction
- */
 export async function handleDownloadCommand(interaction) {
   const userId = interaction.user.id;
   const username = interaction.user.tag || interaction.user.username || 'unknown';
@@ -1779,7 +1664,6 @@ export async function handleDownloadCommand(interaction) {
     return;
   }
 
-  // Get URL from command options
   const url = interaction.options.getString('url');
 
   // Parse and validate start_time/end_time (accepts seconds or MM:SS / HH:MM:SS timestamps)
@@ -1795,7 +1679,6 @@ export async function handleDownloadCommand(interaction) {
   let trimDuration = null;
 
   if (startTime !== null && endTime !== null) {
-    // Both provided: use range
     trimStartTime = startTime;
     trimDuration = endTime - startTime;
   } else if (startTime !== null) {
@@ -1828,7 +1711,6 @@ export async function handleDownloadCommand(interaction) {
     return;
   }
 
-  // Validate URL format
   const urlValidation = validateUrl(url);
   if (!urlValidation.valid) {
     logger.warn(`Invalid URL for user ${userId}: ${urlValidation.error}`);
@@ -1847,7 +1729,6 @@ export async function handleDownloadCommand(interaction) {
   // Classify the URL: yt-dlp site (youtube/redgifs/imgur/...) or not
   const ytdlpSite = getYtdlpSite(url);
 
-  // Check if URL needs yt-dlp but yt-dlp is disabled
   if (ytdlpSite && !YTDLP_ENABLED) {
     logger.warn(`User ${userId} attempted to download from ${ytdlpSite} (yt-dlp disabled)`);
     const errorMessage = `${ytdlpSite.toLowerCase()} downloads are disabled.`;
@@ -1862,7 +1743,6 @@ export async function handleDownloadCommand(interaction) {
     return;
   }
 
-  // Check if downloader is available for the URL type
   if (ytdlpSite) {
     // yt-dlp sites require yt-dlp (already checked above that it's enabled)
     logger.info(`${ytdlpSite} URL detected, will use yt-dlp for download`);
@@ -1873,7 +1753,6 @@ export async function handleDownloadCommand(interaction) {
     // booru sites have their own JSON-API extractor, no Cobalt/social-media check needed
     logger.info(`booru URL detected, will use booru API extractor for download`);
   } else if (!COBALT_ENABLED) {
-    // Non-YouTube URLs require Cobalt
     const errorMessage = 'cobalt is not enabled. please enable it to use the download command.';
     createFailedOperation('download', userId, username, errorMessage, 'cobalt_disabled', {
       originalUrl: url,
@@ -1886,7 +1765,6 @@ export async function handleDownloadCommand(interaction) {
     await notifyCommandFailure(username, 'download', { userId, error: errorMessage });
     return;
   } else if (!isSocialMediaUrl(url)) {
-    // Non-YouTube URLs must be from supported social media platforms
     const errorMessage = 'url is not from a supported social media platform.';
     createFailedOperation('download', userId, username, errorMessage, 'invalid_social_media_url', {
       originalUrl: url,

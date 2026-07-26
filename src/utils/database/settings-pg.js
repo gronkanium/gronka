@@ -46,12 +46,6 @@ export async function getSetting(key, defaultValue = null) {
   return value ?? defaultValue;
 }
 
-/**
- * Get a boolean bot setting
- * @param {string} key - Setting key
- * @param {boolean} defaultValue - Value to return if the setting is not set
- * @returns {Promise<boolean>} Setting value as boolean
- */
 export async function getBooleanSetting(key, defaultValue = false) {
   const value = await getSetting(key, null);
   if (value === null) {
@@ -87,10 +81,6 @@ export async function setSetting(key, value) {
   invalidateSettingsCache(key);
 }
 
-/**
- * Get all bot settings
- * @returns {Promise<Object>} Map of key -> value
- */
 export async function getAllSettings() {
   await ensurePostgresInitialized();
 

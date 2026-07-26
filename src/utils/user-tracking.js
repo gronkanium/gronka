@@ -7,10 +7,6 @@ import {
 // Track if database has been initialized
 let dbInitialized = false;
 
-/**
- * Initialize user tracking (load existing users from database)
- * @returns {Promise<void>}
- */
 export async function initializeUserTracking() {
   if (!dbInitialized) {
     await initDatabase();
@@ -18,12 +14,6 @@ export async function initializeUserTracking() {
   }
 }
 
-/**
- * Track a user (add to database or update last_used timestamp)
- * @param {string} userId - Discord user ID
- * @param {string} username - Discord username/tag
- * @returns {Promise<void>}
- */
 export async function trackUser(userId, username = null) {
   if (!userId || typeof userId !== 'string') {
     return;
@@ -42,10 +32,6 @@ export async function trackUser(userId, username = null) {
   await insertOrUpdateUser(userId, usernameToStore, timestamp);
 }
 
-/**
- * Get count of unique users who have used the bot
- * @returns {Promise<number>} Number of unique users
- */
 export async function getUniqueUserCount() {
   // Initialize database if not already done
   if (!dbInitialized) {
@@ -56,12 +42,6 @@ export async function getUniqueUserCount() {
   return await dbGetUniqueUserCount();
 }
 
-/**
- * Track a recent conversion for a user (in-memory only, for backwards compatibility)
- * @param {string} userId - Discord user ID
- * @param {string} url - GIF URL
- * @returns {void}
- */
 let recentConversions = new Map();
 
 export function trackRecentConversion(userId, url) {
@@ -90,11 +70,6 @@ export function trackRecentConversion(userId, url) {
   }
 }
 
-/**
- * Get recent conversions for a user
- * @param {string} userId - Discord user ID
- * @returns {string[]} Array of recent conversion URLs (up to 10)
- */
 export function getRecentConversions(userId) {
   if (!userId || typeof userId !== 'string') {
     return [];

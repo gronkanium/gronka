@@ -7,12 +7,6 @@ import { ValidationError } from './errors.js';
 import { mediaSlots } from './concurrency.js';
 const logger = createLogger('gif-optimizer');
 
-/**
- * Check if a file is a GIF based on extension and content type
- * @param {string} filename - File name
- * @param {string} contentType - Content type (MIME type)
- * @returns {boolean} True if file is a GIF
- */
 export function isGifFile(filename, contentType) {
   const ext = path.extname(filename).toLowerCase();
   const isGifExt = ext === '.gif';
@@ -59,12 +53,6 @@ export function extractHashFromCdnUrl(url) {
   }
 }
 
-/**
- * Check if a GIF exists locally in storage (bypasses R2 check)
- * @param {string} hash - Hash of the GIF file
- * @param {string} storagePath - Base storage path
- * @returns {Promise<boolean>} True if GIF exists locally on disk
- */
 export async function checkLocalGif(hash, storagePath) {
   // Check local filesystem directly, ignoring R2
   // This is used by optimization to determine if we can use a local file
@@ -183,12 +171,6 @@ async function optimizeGifImpl(inputPath, outputPath, options = {}) {
   }
 }
 
-/**
- * Calculate size reduction percentage
- * @param {number} originalSize - Original file size in bytes
- * @param {number} optimizedSize - Optimized file size in bytes
- * @returns {number} Size reduction percentage (negative if file grew)
- */
 export function calculateSizeReduction(originalSize, optimizedSize) {
   if (originalSize === 0) {
     return 0;
@@ -198,11 +180,6 @@ export function calculateSizeReduction(originalSize, optimizedSize) {
   return Math.round(reduction);
 }
 
-/**
- * Format file size in MB
- * @param {number} bytes - File size in bytes
- * @returns {string} Formatted size (e.g., "6.7mb")
- */
 export function formatSizeMb(bytes) {
   const mb = bytes / (1024 * 1024);
   return `${mb.toFixed(1)}mb`;

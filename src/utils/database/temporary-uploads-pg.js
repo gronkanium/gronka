@@ -15,14 +15,6 @@ function getLogger() {
   return logger;
 }
 
-/**
- * Insert or update a temporary upload record
- * @param {string} urlHash - Foreign key to processed_urls.url_hash
- * @param {string} r2Key - R2 object key (e.g., gifs/abc123.gif)
- * @param {number} uploadedAt - Unix timestamp in milliseconds when file was uploaded
- * @param {number} expiresAt - Unix timestamp in milliseconds when file expires
- * @returns {Promise<Object>} The inserted/updated record
- */
 export async function insertTemporaryUpload(urlHash, r2Key, uploadedAt, expiresAt) {
   await ensurePostgresInitialized();
 
@@ -109,11 +101,6 @@ export async function getLiveBytes(now) {
   }
 }
 
-/**
- * Get all temporary upload records for a given R2 key
- * @param {string} r2Key - R2 object key
- * @returns {Promise<Array>} Array of temporary upload records for the R2 key
- */
 export async function getTemporaryUploadsByR2Key(r2Key) {
   await ensurePostgresInitialized();
 
@@ -133,12 +120,6 @@ export async function getTemporaryUploadsByR2Key(r2Key) {
   }
 }
 
-/**
- * Mark a temporary upload as deleted
- * @param {number} id - Temporary upload record ID
- * @param {number} deletedAt - Unix timestamp in milliseconds when deleted
- * @returns {Promise<boolean>} True if record was updated
- */
 export async function markTemporaryUploadDeleted(id, deletedAt) {
   await ensurePostgresInitialized();
 
@@ -161,13 +142,6 @@ export async function markTemporaryUploadDeleted(id, deletedAt) {
   }
 }
 
-/**
- * Mark a deletion attempt as failed
- * @param {number} id - Temporary upload record ID
- * @param {string} error - Error message from deletion attempt
- * @param {number} retryCount - Current retry count (deletion_failed)
- * @returns {Promise<boolean>} True if record was updated
- */
 export async function markTemporaryUploadDeletionFailed(id, error, retryCount) {
   await ensurePostgresInitialized();
 
@@ -190,11 +164,6 @@ export async function markTemporaryUploadDeletionFailed(id, error, retryCount) {
   }
 }
 
-/**
- * Delete all temporary upload records for an R2 key
- * @param {string} r2Key - R2 object key
- * @returns {Promise<number>} Number of records deleted
- */
 export async function deleteTemporaryUploadsByR2Key(r2Key) {
   await ensurePostgresInitialized();
 
@@ -213,11 +182,6 @@ export async function deleteTemporaryUploadsByR2Key(r2Key) {
   }
 }
 
-/**
- * Get R2 keys that have all uploads expired and ready for deletion
- * @param {number} now - Current Unix timestamp in milliseconds
- * @returns {Promise<Array<string>>} Array of R2 keys where all uploads are expired
- */
 export async function getExpiredR2Keys(now) {
   await ensurePostgresInitialized();
 

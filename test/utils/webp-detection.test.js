@@ -2,11 +2,6 @@ import { test, describe } from 'bun:test';
 import assert from 'node:assert';
 import { isAnimatedWebp } from '../../src/utils/video-processor.js';
 
-/**
- * Build a minimal WebP header buffer for testing the animation sniff.
- * @param {string} formType - The chunk fourCC after "WEBP" (e.g. "VP8X", "VP8 ", "VP8L")
- * @param {number} flags - The VP8X flags byte at offset 20 (animation bit is 0x02)
- */
 function webpHeader(formType, flags = 0x00) {
   const buf = Buffer.alloc(32);
   buf.write('RIFF', 0, 'ascii');

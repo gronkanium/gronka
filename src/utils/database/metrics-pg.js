@@ -22,13 +22,6 @@ const USER_METRICS_NUMERIC_FIELDS = [
 // Define timestamp fields in user_metrics table
 const USER_METRICS_TIMESTAMP_FIELDS = ['last_command_at', 'updated_at'];
 
-/**
- * Insert or update user metrics
- * @param {string} userId - Discord user ID
- * @param {string} username - Discord username
- * @param {Object} metrics - Metrics to update
- * @returns {Promise<void>}
- */
 export async function insertOrUpdateUserMetrics(userId, username, metrics) {
   await ensurePostgresInitialized();
 
@@ -124,16 +117,6 @@ export async function getUserMetrics(userId) {
   return converted;
 }
 
-/**
- * Get all users with metrics
- * @param {Object} options - Query options
- * @param {string} [options.search] - Search in username
- * @param {string} [options.sortBy] - Sort field (default: 'total_commands')
- * @param {boolean} [options.sortDesc] - Sort descending (default: true)
- * @param {number} [options.limit] - Limit results
- * @param {number} [options.offset] - Offset for pagination
- * @returns {Promise<Array>} Array of user metrics
- */
 export async function getAllUsersMetrics(options = {}) {
   await ensurePostgresInitialized();
 
@@ -210,12 +193,6 @@ export async function getAllUsersMetrics(options = {}) {
   }
 }
 
-/**
- * Get count of users with metrics
- * @param {Object} options - Query options
- * @param {string} [options.search] - Search in username
- * @returns {Promise<number>} Total count
- */
 export async function getUserMetricsCount(options = {}) {
   await ensurePostgresInitialized();
 

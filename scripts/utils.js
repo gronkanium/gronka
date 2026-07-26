@@ -49,12 +49,6 @@ export function checkDockerDaemon() {
   }
 }
 
-/**
- * Execute a command and return the output
- * @param {string} command - Command to execute
- * @param {object} options - Options for execSync
- * @returns {string} Command output
- */
 export function exec(command, options = {}) {
   try {
     const { throwOnError: _throwOnError, ...execOptions } = options;
@@ -71,12 +65,6 @@ export function exec(command, options = {}) {
   }
 }
 
-/**
- * Execute a command with error handling
- * @param {string} command - Command to execute
- * @param {string} errorMessage - Error message if command fails
- * @param {object} options - Options for execSync
- */
 export function execOrError(command, errorMessage, options = {}) {
   try {
     execSync(command, {
@@ -88,11 +76,6 @@ export function execOrError(command, errorMessage, options = {}) {
   }
 }
 
-/**
- * Get git commit hash
- * @param {boolean} short - Return short hash (7 chars)
- * @returns {string} Commit hash or empty string
- */
 export function getGitCommit(short = false) {
   try {
     const command = short ? 'git rev-parse --short HEAD' : 'git rev-parse HEAD';
@@ -102,19 +85,10 @@ export function getGitCommit(short = false) {
   }
 }
 
-/**
- * Get current timestamp in seconds
- * @returns {number} Unix timestamp
- */
 export function getTimestamp() {
   return Math.floor(Date.now() / 1000);
 }
 
-/**
- * Check if a container is running
- * @param {string} containerName - Name of the container
- * @returns {boolean} True if running
- */
 export function isContainerRunning(containerName) {
   try {
     const output = exec(`docker ps --filter "name=${containerName}" --format "{{.Names}}"`);
@@ -127,10 +101,6 @@ export function isContainerRunning(containerName) {
   }
 }
 
-/**
- * Get container status counts
- * @returns {object} Object with running, exited, restarting counts
- */
 export function getContainerStatus() {
   try {
     const output = exec('docker compose ps', { throwOnError: false });
@@ -160,10 +130,6 @@ export function getContainerStatus() {
   }
 }
 
-/**
- * Get list of container names from docker compose
- * @returns {string[]} Array of container names
- */
 export function getContainerNames() {
   try {
     const output = exec('docker compose ps --format "{{.Name}}"', { throwOnError: false });
@@ -176,12 +142,6 @@ export function getContainerNames() {
   }
 }
 
-/**
- * Get container environment variable value
- * @param {string} containerName - Name of the container
- * @param {string} envVar - Environment variable name
- * @returns {string} Value or empty string
- */
 export function getContainerEnvVar(containerName, envVar) {
   try {
     // Try exec first
@@ -210,11 +170,6 @@ export function getContainerEnvVar(containerName, envVar) {
   }
 }
 
-/**
- * Check if container has health check
- * @param {string} containerName - Name of the container
- * @returns {boolean} True if has health check
- */
 export function hasHealthCheck(containerName) {
   try {
     const output = exec(`docker inspect ${containerName} --format '{{.State.Health}}'`, {
@@ -226,11 +181,6 @@ export function hasHealthCheck(containerName) {
   }
 }
 
-/**
- * Get container health status
- * @param {string} containerName - Name of the container
- * @returns {string} Health status or empty string
- */
 export function getContainerHealth(containerName) {
   try {
     return exec(`docker inspect ${containerName} --format '{{.State.Health.Status}}'`, {
@@ -241,11 +191,6 @@ export function getContainerHealth(containerName) {
   }
 }
 
-/**
- * Sleep for specified milliseconds
- * @param {number} ms - Milliseconds to sleep
- * @returns {Promise} Promise that resolves after sleep
- */
 export function sleep(ms) {
   return new Promise(resolve => setTimeout(resolve, ms));
 }

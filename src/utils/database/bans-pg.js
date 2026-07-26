@@ -45,13 +45,6 @@ export async function getBan(userId) {
   return ban;
 }
 
-/**
- * Ban a user (upsert - re-banning updates the reason/appeal)
- * @param {string} userId - Discord user ID to ban
- * @param {string} reason - Ban reason shown to the user
- * @param {boolean} [appealAllowed=true] - Whether to show the appeal line in the ban message
- * @returns {Promise<void>}
- */
 export async function banUser(userId, reason, appealAllowed = true) {
   await ensurePostgresInitialized();
 
@@ -75,11 +68,6 @@ export async function banUser(userId, reason, appealAllowed = true) {
   invalidateBanCache(userId);
 }
 
-/**
- * Unban a user
- * @param {string} userId - Discord user ID to unban
- * @returns {Promise<boolean>} True if a ban record was deleted
- */
 export async function unbanUser(userId) {
   await ensurePostgresInitialized();
 
@@ -96,10 +84,6 @@ export async function unbanUser(userId) {
   return result.length > 0;
 }
 
-/**
- * List all banned users, most recently banned first
- * @returns {Promise<Array<Object>>} Ban records
- */
 export async function listBans() {
   await ensurePostgresInitialized();
 

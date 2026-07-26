@@ -81,7 +81,6 @@ async function checkAndReadLocalFileFromCdnUrl(url, storagePath) {
   try {
     const urlObj = new URL(url);
 
-    // Check if it's a gronka.dev subdomain URL
     if (!urlObj.hostname.endsWith('.gronka.dev')) {
       return { exists: false };
     }
@@ -118,7 +117,6 @@ async function checkAndReadLocalFileFromCdnUrl(url, storagePath) {
         // Read file directly to avoid TOCTOU race condition
         // readFile will throw if file doesn't exist or is inaccessible
         const buffer = await fs.readFile(filePath);
-        // Determine content type from extension
         const contentTypeMap = {
           '.mp4': 'video/mp4',
           '.webm': 'video/webm',
@@ -148,7 +146,6 @@ async function checkAndReadLocalFileFromCdnUrl(url, storagePath) {
         // Read file directly to avoid TOCTOU race condition
         // readFile will throw if file doesn't exist or is inaccessible
         const buffer = await fs.readFile(filePath);
-        // Determine content type from extension
         const contentTypeMap = {
           '.png': 'image/png',
           '.jpg': 'image/jpeg',
@@ -249,17 +246,6 @@ function resolveVideoConversionOptions(options, probed) {
   };
 }
 
-/**
- * Process conversion from attachment to GIF
- * @param {Interaction} interaction - Discord interaction
- * @param {Attachment} attachment - Discord attachment to convert
- * @param {string} attachmentType - Type of attachment ('video' or 'image')
- * @param {boolean} adminUser - Whether the user is an admin
- * @param {Buffer} [preDownloadedBuffer] - Optional pre-downloaded buffer (to avoid double download)
- * @param {Object} [options] - Optional conversion options (startTime, duration, width, fps, quality)
- * @param {string} [originalUrl] - Original URL if this conversion came from a URL (not Discord attachment)
- * @param {string} [commandSource] - Command source ('slash' or 'context-menu')
- */
 async function processConversion(
   interaction,
   attachment,
@@ -276,7 +262,6 @@ async function processConversion(
     async ctx => {
       const { operationId, userId, username, tempFiles, buildMetadata } = ctx;
 
-      // Initialize database if needed (for URL tracking)
       if (originalUrl) {
         const dbInitSuccess = await initializeDatabaseWithErrorHandling({
           operationId,
@@ -295,7 +280,6 @@ async function processConversion(
         });
       }
 
-      // Download file (video or image) if not already downloaded
       // Admins bypass size limits in download
       if (!preDownloadedBuffer) {
         logOperationStep(operationId, 'download_start', 'running', {
@@ -324,10 +308,8 @@ async function processConversion(
         });
       }
 
-      // Generate hash
       const hash = generateHash(fileBuffer);
 
-      // Update operation to running
       updateOperationStatus(operationId, 'running');
 
       logOperationStep(operationId, 'validation_start', 'running', {
@@ -341,7 +323,6 @@ async function processConversion(
         },
       });
 
-      // Check if URL has already been processed (only for URL-based conversions)
       if (originalUrl) {
         // Use composite hash that includes conversion parameters for cache key
         const urlHash = hashUrlWithParams(originalUrl, options);
@@ -416,7 +397,6 @@ async function processConversion(
         });
       }
 
-      // Check if GIF already exists
       const exists = await gifExists(hash, GIF_STORAGE_PATH);
       if (exists && !options.optimize) {
         logger.info(`GIF already exists (hash: ${hash}) for user ${userId}`);
@@ -425,12 +405,10 @@ async function processConversion(
           metadata: { hash: hash.substring(0, 8) + '...' },
         });
 
-        // Read the GIF file from R2 or local disk
         let gifBuffer = null;
         let fileSize = 0;
         let existsInR2 = false;
 
-        // Check if file exists in R2
         if (
           r2Config.accountId &&
           r2Config.accessKeyId &&
@@ -449,7 +427,6 @@ async function processConversion(
           }
         }
 
-        // If not in R2 or download failed, try local disk
         if (!gifBuffer) {
           const gifPath = getGifPath(hash, GIF_STORAGE_PATH);
           try {
@@ -457,7 +434,6 @@ async function processConversion(
             fileSize = gifBuffer.length;
           } catch (error) {
             logger.error(`Failed to read GIF from local disk: ${error.message}`);
-            // Fallback: return R2 URL if it exists in R2, otherwise construct CDN URL
             const gifUrl = existsInR2
               ? getR2PublicUrl(`gifs/${hash.replace(/[^a-f0-9]/gi, '')}.gif`, r2Config)
               : `${CDN_BASE_URL}/${hash}.gif`;
@@ -487,7 +463,6 @@ async function processConversion(
               files: [new AttachmentBuilder(gifBuffer, { name: filename })],
             });
 
-            // Capture Discord attachment URL and save to database
             // Try to get attachments from the returned message first
             let discordUrl = null;
             if (message && message.attachments && message.attachments.size > 0) {
@@ -524,7 +499,6 @@ async function processConversion(
               }
             }
 
-            // Save Discord attachment URL to database if we got one
             if (discordUrl) {
               // For cached files, use the hash as urlHash since there's no originalUrl
               const urlHash = hash;
@@ -552,7 +526,6 @@ async function processConversion(
             await notifyCommandSuccess(username, 'convert', { operationId, userId });
             return;
           } catch (discordError) {
-            // Discord upload failed, fallback to R2 URL
             logger.warn(
               `Discord attachment upload failed for cached GIF, falling back to R2 URL: ${discordError.message}`
             );
@@ -561,7 +534,6 @@ async function processConversion(
               metadata: { error: discordError.message },
             });
 
-            // Upload to R2 as fallback
             try {
               const r2Url = await uploadGifToR2(gifBuffer, hash, r2Config, buildMetadata());
               if (r2Url) {
@@ -622,7 +594,6 @@ async function processConversion(
         `Starting ${attachmentType} to GIF conversion (hash: ${hash})${options.optimize ? ' with optimization' : ''}${exists ? ' (original GIF exists, will optimize)' : ''}`
       );
 
-      // Validate file extension
       const allowedVideoExtensions = ['.mp4', '.mov', '.webm', '.avi', '.mkv'];
       const allowedImageExtensions = ['.png', '.jpg', '.jpeg', '.webp', '.awebp', '.gif'];
       const allowedExtensions =
@@ -630,14 +601,12 @@ async function processConversion(
 
       let ext = path.extname(attachment.name).toLowerCase();
       if (!ext || !validateFileExtension(attachment.name, allowedExtensions)) {
-        // If extension is invalid or missing, use default based on type
         ext = attachmentType === 'video' ? '.mp4' : '.png';
         logger.warn(
           `Invalid or missing file extension for ${attachment.name}, using default: ${ext}`
         );
       }
 
-      // Save file to temp directory
       const tempDir = path.join(process.cwd(), 'temp');
       await fs.mkdir(tempDir, { recursive: true });
 
@@ -695,10 +664,8 @@ async function processConversion(
         }
       }
 
-      // Convert to GIF
       const gifPath = getGifPath(hash, GIF_STORAGE_PATH);
 
-      // Only convert if the GIF doesn't already exist
       if (needsConversion) {
         logOperationStep(operationId, 'conversion_start', 'running', {
           message: `Starting ${attachmentType} to GIF conversion`,
@@ -714,7 +681,6 @@ async function processConversion(
           const probed = await probeMediaInfo(tempFilePath, 480);
           const conversionOptions = resolveVideoConversionOptions(options, probed);
 
-          // Validate duration against video length if startTime and duration are provided
           if (conversionOptions.startTime !== null && conversionOptions.duration !== null) {
             try {
               const metadata = await getVideoMetadata(tempFilePath);
@@ -747,14 +713,12 @@ async function processConversion(
             },
           });
         } else {
-          // Check if input is already a GIF
           const isGif = attachment.contentType === 'image/gif' || ext === '.gif';
 
           if (isGif) {
             // Use original dimensions unless explicitly requested to resize
             const { width: originalWidth } = await probeMediaInfo(tempFilePath, 720);
 
-            // If no explicit width requested, copy directly (preserve original)
             if (!options.width) {
               logger.info(
                 `Input GIF, copying directly (preserving original dimensions: ${originalWidth}px)`
@@ -765,7 +729,6 @@ async function processConversion(
                 metadata: { originalWidth },
               });
             } else {
-              // Custom width requested, resize with convertImageToGif
               logger.info(`Input GIF, resizing to requested width: ${options.width}px`);
               await convertImageToGif(tempFilePath, gifPath, {
                 width: options.width,
@@ -800,15 +763,12 @@ async function processConversion(
           }
         }
       } else {
-        // GIF already exists, read it directly
         logger.info(`Using existing GIF (hash: ${hash}) for user ${userId}`);
       }
 
-      // Read the generated GIF to verify it was created (or read existing one)
       let gifBuffer = await fs.readFile(gifPath);
       const originalSize = gifBuffer.length;
 
-      // Check if optimization is requested
       let finalHash = hash;
       let optimizedSize = originalSize;
       let finalGifUrl = null;
@@ -849,7 +809,6 @@ async function processConversion(
         ]);
         const optimizedGifPath = getGifPath(optimizedHashValue, GIF_STORAGE_PATH);
 
-        // Check if optimized GIF already exists
         const optimizedExists = await gifExists(optimizedHashValue, GIF_STORAGE_PATH);
         if (optimizedExists) {
           logger.info(
@@ -858,7 +817,6 @@ async function processConversion(
           const optimizedBuffer = await fs.readFile(optimizedGifPath);
           optimizedSize = optimizedBuffer.length;
           finalHash = optimizedHashValue;
-          // Upload optimized version to R2 if not already there
           const saveResult = await saveGif(
             optimizedBuffer,
             optimizedHashValue,
@@ -877,7 +835,6 @@ async function processConversion(
             },
           });
         } else {
-          // Optimize the GIF with specified lossy level
           const optimizeOptions =
             options.lossy !== undefined && options.lossy !== null ? { lossy: options.lossy } : {};
           logger.info(
@@ -885,11 +842,9 @@ async function processConversion(
           );
           await optimizeGif(gifPath, optimizedGifPath, optimizeOptions);
 
-          // Read optimized file and get its size
           const optimizedBuffer = await fs.readFile(optimizedGifPath);
           optimizedSize = optimizedBuffer.length;
           finalHash = optimizedHashValue;
-          // Upload optimized version to R2
           const saveResult = await saveGif(
             optimizedBuffer,
             optimizedHashValue,
@@ -910,24 +865,19 @@ async function processConversion(
         }
       }
 
-      // Generate final URL - use R2 URL if available, otherwise construct from CDN_BASE_URL
       let gifUrl;
       if (
         finalGifUrl &&
         (finalGifUrl.startsWith('http://') || finalGifUrl.startsWith('https://'))
       ) {
-        // Already an R2 URL
         gifUrl = finalGifUrl;
       } else if (finalGifUrl) {
-        // Local path, construct URL
         const filename = path.basename(finalGifUrl);
         gifUrl = `${CDN_BASE_URL}/${filename}`;
       } else {
-        // Fallback to constructing URL from CDN_BASE_URL
         gifUrl = `${CDN_BASE_URL}/${finalHash}.gif`;
       }
 
-      // Track recent conversion
       trackRecentConversion(userId, gifUrl);
 
       // Record processed URL in database only for R2 uploads
@@ -951,7 +901,6 @@ async function processConversion(
         `Successfully created GIF (hash: ${finalHash}, size: ${(optimizedSize / (1024 * 1024)).toFixed(2)}MB) for user ${userId}${options.optimize ? ' [OPTIMIZED]' : ''}`
       );
 
-      // Update operation to success with file size
       updateOperationStatus(operationId, 'success', { fileSize: optimizedSize });
 
       // Send as Discord attachment if < 8MB, otherwise send URL
@@ -968,7 +917,6 @@ async function processConversion(
             throw new Error('Discord editReply failed or interaction expired');
           }
 
-          // Capture Discord attachment URL and save to database
           // Try to get attachments from the returned message first
           let discordUrl = null;
           if (message && message.attachments && message.attachments.size > 0) {
@@ -1003,7 +951,6 @@ async function processConversion(
             }
           }
 
-          // Save Discord attachment URL to database if we got one
           if (discordUrl) {
             // Use composite hash that includes conversion parameters for cache key
             const urlHash = originalUrl ? hashUrlWithParams(originalUrl, options) : finalHash;
@@ -1023,7 +970,6 @@ async function processConversion(
             );
           }
         } catch (discordError) {
-          // Discord upload failed, fallback to R2
           logger.warn(
             `Discord attachment upload failed, falling back to R2: ${discordError.message}`
           );
@@ -1031,7 +977,6 @@ async function processConversion(
             const r2Url = await uploadGifToR2(finalGifBuffer, finalHash, r2Config, buildMetadata());
 
             if (r2Url) {
-              // Update database with R2 URL
               // Use composite hash that includes conversion parameters for cache key
               const urlHash = originalUrl ? hashUrlWithParams(originalUrl, options) : finalHash;
               await recordProcessedUrl({
@@ -1067,10 +1012,8 @@ async function processConversion(
         });
       }
 
-      // Send success notification
       await notifyCommandSuccess(username, 'convert', { operationId, userId });
 
-      // Record rate limit after successful conversion
       recordRateLimit(userId);
     },
     {
@@ -1095,10 +1038,6 @@ async function processConversion(
   );
 }
 
-/**
- * Handle convert context menu command
- * @param {Interaction} interaction - Discord interaction
- */
 export async function handleConvertContextMenu(interaction) {
   if (!interaction.isMessageContextMenuCommand()) {
     return;
@@ -1126,10 +1065,8 @@ export async function handleConvertContextMenu(interaction) {
     return;
   }
 
-  // Get the message that was right-clicked
   const targetMessage = interaction.targetMessage;
 
-  // Find video or image attachment
   const videoAttachment = targetMessage.attachments.find(
     att => att.contentType && ALLOWED_VIDEO_TYPES.includes(att.contentType)
   );
@@ -1138,10 +1075,8 @@ export async function handleConvertContextMenu(interaction) {
     att => att.contentType && ALLOWED_IMAGE_TYPES.includes(att.contentType)
   );
 
-  // Check for URLs in message content if no attachments found
   let url = null;
   if (!videoAttachment && !imageAttachment && targetMessage.content) {
-    // Extract URLs from message content
     const urlPattern = /https?:\/\/[^\s<>"{}|\\^`[\]]+/gi;
     const urls = targetMessage.content.match(urlPattern);
     if (urls && urls.length > 0) {
@@ -1150,7 +1085,6 @@ export async function handleConvertContextMenu(interaction) {
     }
   }
 
-  // Determine attachment type and validate
   let attachment = null;
   // No initializer: every branch below either reassigns this before it's read or returns early.
   let attachmentType;
@@ -1208,7 +1142,6 @@ export async function handleConvertContextMenu(interaction) {
       return;
     }
   } else if (url) {
-    // Validate URL format and protocol (strict validation)
     const urlValidation = validateUrl(url);
     if (!urlValidation.valid) {
       logger.warn(`Invalid URL for user ${userId}: ${urlValidation.error}`);
@@ -1229,7 +1162,6 @@ export async function handleConvertContextMenu(interaction) {
     await safeInteractionDeferReply(interaction);
 
     try {
-      // Check if it's a cdn.gronka.dev URL and try to use local file
       const localFileCheck = await checkAndReadLocalFileFromCdnUrl(url, GIF_STORAGE_PATH);
       let useLocalFile = false;
 
@@ -1247,7 +1179,6 @@ export async function handleConvertContextMenu(interaction) {
       }
 
       if (!useLocalFile) {
-        // Check if URL is a Tenor GIF link and parse it
         let actualUrl = url;
         const isTenorUrl = /^https?:\/\/(www\.)?tenor\.com\/view\/.+-gif-\d+/i.test(url);
         if (isTenorUrl) {
@@ -1278,11 +1209,9 @@ export async function handleConvertContextMenu(interaction) {
           size: fileData.size,
           contentType: fileData.contentType,
         };
-        // Store original URL for database tracking
         originalUrlForConversion = actualUrl;
       }
 
-      // Determine attachment type based on content type
       if (attachment.contentType && ALLOWED_VIDEO_TYPES.includes(attachment.contentType)) {
         attachmentType = 'video';
         logger.info(
@@ -1358,10 +1287,6 @@ export async function handleConvertContextMenu(interaction) {
   );
 }
 
-/**
- * Handle convert slash command
- * @param {Interaction} interaction - Discord interaction
- */
 export async function handleConvertCommand(interaction) {
   const userId = interaction.user.id;
   const username = interaction.user.tag || interaction.user.username || 'unknown';
@@ -1381,7 +1306,6 @@ export async function handleConvertCommand(interaction) {
     return;
   }
 
-  // Get attachment or URL from command options
   const attachment = interaction.options.getAttachment('file');
   const url = interaction.options.getString('url');
   const quality = interaction.options.getString('quality');

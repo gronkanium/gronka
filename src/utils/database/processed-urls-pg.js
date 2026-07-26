@@ -42,10 +42,6 @@ function setCachedProcessedUrl(urlHash, processedUrl) {
   });
 }
 
-/**
- * Invalidate processed URL cache
- * @param {string} urlHash - URL hash to invalidate (or null to clear all)
- */
 function invalidateProcessedUrlCache(urlHash = null) {
   if (urlHash) {
     processedUrlCache.delete(urlHash);
@@ -91,18 +87,6 @@ export async function getProcessedUrl(urlHash) {
   return convertedUrl;
 }
 
-/**
- * Insert or update a processed URL record
- * @param {string} urlHash - BLAKE3 hash of the URL
- * @param {string} fileHash - File content hash (BLAKE3)
- * @param {string} fileType - File type ('gif', 'video', or 'image')
- * @param {string} fileExtension - File extension (e.g., '.mp4', '.gif')
- * @param {string} fileUrl - Final CDN URL or path
- * @param {number} processedAt - Unix timestamp in milliseconds
- * @param {string} [userId] - Discord user ID who requested it
- * @param {number} [fileSize] - File size in bytes
- * @returns {Promise<void>}
- */
 export async function insertProcessedUrl(
   urlHash,
   fileHash,
@@ -165,14 +149,6 @@ export async function insertProcessedUrl(
   }
 }
 
-/**
- * Get processed URLs (media files) for a specific user
- * @param {string} userId - Discord user ID
- * @param {Object} options - Query options
- * @param {number} [options.limit] - Maximum number of results
- * @param {number} [options.offset] - Number of results to skip
- * @returns {Promise<Array>} Array of processed URL records
- */
 export async function getUserMedia(userId, options = {}) {
   await ensurePostgresInitialized();
 
@@ -204,11 +180,6 @@ export async function getUserMedia(userId, options = {}) {
   return converted;
 }
 
-/**
- * Get total count of processed URLs (media files) for a specific user
- * @param {string} userId - Discord user ID
- * @returns {Promise<number>} Total count of media files for the user
- */
 export async function getUserMediaCount(userId) {
   await ensurePostgresInitialized();
 
@@ -223,15 +194,6 @@ export async function getUserMediaCount(userId) {
   return parseInt(result[0]?.count || 0, 10);
 }
 
-/**
- * Get R2 media files for a specific user
- * @param {string} userId - Discord user ID
- * @param {Object} options - Query options
- * @param {number} [options.limit] - Maximum number of results
- * @param {number} [options.offset] - Number of results to skip
- * @param {string} [options.fileType] - Filter by file type ('gif', 'video', 'image')
- * @returns {Promise<Array>} Array of R2 media file records
- */
 export async function getUserR2Media(userId, options = {}) {
   await ensurePostgresInitialized();
 
@@ -272,12 +234,6 @@ export async function getUserR2Media(userId, options = {}) {
   return converted;
 }
 
-/**
- * Get total count of R2 media files for a specific user
- * @param {string} userId - Discord user ID
- * @param {string} [fileType] - Filter by file type ('gif', 'video', 'image')
- * @returns {Promise<number>} Total count of R2 media files for the user
- */
 export async function getUserR2MediaCount(userId, fileType = null) {
   await ensurePostgresInitialized();
 
@@ -369,11 +325,6 @@ export async function markProcessedUrlsR2Expired(urlHashes) {
   }
 }
 
-/**
- * Delete a processed URL record by url_hash
- * @param {string} urlHash - URL hash (primary key)
- * @returns {Promise<boolean>} True if record was deleted, false if not found
- */
 export async function deleteProcessedUrl(urlHash) {
   await ensurePostgresInitialized();
 
@@ -392,11 +343,6 @@ export async function deleteProcessedUrl(urlHash) {
   }
 }
 
-/**
- * Delete all R2 media records for a user from database
- * @param {string} userId - Discord user ID
- * @returns {Promise<number>} Number of records deleted
- */
 export async function deleteUserR2Media(userId) {
   await ensurePostgresInitialized();
 

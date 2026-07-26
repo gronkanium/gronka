@@ -2,12 +2,6 @@ import { createLogger } from './logger.js';
 
 const logger = createLogger('interaction-helpers');
 
-/**
- * Safely reply to a Discord interaction, handling expired/already-acknowledged interactions
- * @param {Interaction} interaction - Discord interaction
- * @param {Object} options - Reply options (content, embeds, etc.)
- * @returns {Promise<boolean>} True if reply was successful, false otherwise
- */
 export async function safeInteractionReply(interaction, options) {
   if (interaction.replied || interaction.deferred) {
     logger.debug(`Interaction already responded to, cannot reply`);
@@ -103,12 +97,6 @@ export async function safeInteractionFollowUp(interaction, options) {
   }
 }
 
-/**
- * Safely defer a Discord interaction reply, handling expired/already-acknowledged interactions
- * @param {Interaction} interaction - Discord interaction
- * @param {Object} [options] - Defer options (ephemeral, etc.)
- * @returns {Promise<boolean>} True if defer was successful, false otherwise
- */
 export async function safeInteractionDeferReply(interaction, options = {}) {
   if (interaction.replied || interaction.deferred) {
     logger.debug(`Interaction already responded to, cannot defer reply`);

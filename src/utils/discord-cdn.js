@@ -2,11 +2,6 @@ import { createLogger } from './logger.js';
 
 const logger = createLogger('discord-cdn');
 
-/**
- * Check if URL is a Discord CDN URL
- * @param {string} url - URL to check
- * @returns {boolean} True if URL is from Discord CDN
- */
 export function isDiscordCdnUrl(url) {
   try {
     const urlObj = new URL(url);
@@ -25,11 +20,6 @@ export function isDiscordCdnUrl(url) {
   }
 }
 
-/**
- * Check if attachment URL has expired
- * @param {string} url - URL to check
- * @returns {boolean} True if URL is expired or invalid
- */
 export function isAttachmentExpired(url) {
   try {
     const urlObj = new URL(url);
@@ -49,12 +39,6 @@ export function isAttachmentExpired(url) {
   }
 }
 
-/**
- * Refresh the attachment URL if expired using Discord's REST API
- * @param {Client} client - Discord client instance
- * @param {string} attachmentURL - Original attachment URL
- * @returns {Promise<string>} Refreshed URL or original URL if not needed
- */
 export async function getRefreshedAttachmentURL(client, attachmentURL) {
   try {
     const url = new URL(attachmentURL);
@@ -94,10 +78,6 @@ export async function getRefreshedAttachmentURL(client, attachmentURL) {
   return attachmentURL;
 }
 
-/**
- * Get common headers for HTTP requests (needed for Discord CDN and other services)
- * @returns {Object} Headers object
- */
 export function getRequestHeaders() {
   return {
     'User-Agent':

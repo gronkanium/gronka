@@ -188,13 +188,6 @@ async function deleteExpiredR2Files(config, logLevel = 'detailed') {
   }
 }
 
-/**
- * Start the R2 cleanup job with interval
- * @param {Object} config - R2 configuration
- * @param {number} intervalMs - Cleanup interval in milliseconds
- * @param {string} logLevel - Logging level: 'minimal', 'detailed', or 'debug'
- * @returns {NodeJS.Timeout} Interval ID for stopping the job
- */
 export function startCleanupJob(config, intervalMs, logLevel = 'detailed') {
   logger.info(`Starting R2 cleanup job (interval: ${intervalMs}ms, log level: ${logLevel})`);
 
@@ -216,10 +209,6 @@ export function startCleanupJob(config, intervalMs, logLevel = 'detailed') {
   return intervalId;
 }
 
-/**
- * Stop the R2 cleanup job
- * @param {NodeJS.Timeout} intervalId - Interval ID from startCleanupJob
- */
 export function stopCleanupJob(intervalId) {
   if (intervalId) {
     clearInterval(intervalId);

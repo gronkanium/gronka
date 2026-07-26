@@ -4,14 +4,6 @@ import { ConfigurationError } from './errors.js';
 // Load environment variables
 dotenv.config();
 
-/**
- * Validate and parse integer environment variable
- * @param {string} name - Environment variable name
- * @param {number} defaultValue - Default value if not set
- * @param {number} min - Minimum allowed value
- * @param {number} max - Maximum allowed value
- * @returns {number} Parsed integer value
- */
 function parseIntEnv(name, defaultValue, min = -Infinity, max = Infinity) {
   const value = process.env[name];
   if (!value) {
@@ -58,22 +50,11 @@ function requireStringEnv(name, description) {
   return value.trim();
 }
 
-/**
- * Get optional string environment variable with default
- * @param {string} name - Environment variable name
- * @param {string} defaultValue - Default value if not set
- * @returns {string} Environment variable value or default
- */
 function getStringEnv(name, defaultValue) {
   const value = process.env[name];
   return value ? value.trim() : defaultValue;
 }
 
-/**
- * Parse comma-separated list of IDs from environment variable
- * @param {string} name - Environment variable name
- * @returns {string[]} Array of trimmed IDs
- */
 function parseIdList(name) {
   const value = process.env[name];
   if (!value || value.trim() === '') {
@@ -85,11 +66,6 @@ function parseIdList(name) {
     .filter(id => id.length > 0);
 }
 
-/**
- * Validate URL format
- * @param {string} url - URL to validate
- * @returns {boolean} True if URL is valid
- */
 function validateUrlFormat(url) {
   try {
     new URL(url);
@@ -99,12 +75,6 @@ function validateUrlFormat(url) {
   }
 }
 
-/**
- * Get and validate GIF quality from environment variable
- * @param {string} name - Environment variable name
- * @param {string} defaultValue - Default value if not set
- * @returns {string} Valid quality value: 'low', 'medium', or 'high'
- */
 function getGifQualityEnv(name, defaultValue) {
   const value = process.env[name];
   if (!value) {

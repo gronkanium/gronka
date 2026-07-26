@@ -41,10 +41,6 @@ function writeOperationLog(operationId, step, status, data) {
   write.finally(() => pendingWrites.delete(write));
 }
 
-/**
- * Wait for all in-flight operation log writes to complete (for shutdown/tests)
- * @returns {Promise<void>}
- */
 export async function flushAllOperationLogs() {
   while (pendingWrites.size > 0) {
     await Promise.allSettled([...pendingWrites]);
@@ -69,30 +65,16 @@ function getWebuiUrl() {
   return process.env.WEBUI_URL || process.env.WEBUI_SERVER_URL || `http://localhost:${port}`;
 }
 
-/**
- * Set the broadcast callback for websocket updates
- * @param {Function} callback - Function to call when operations change
- * @param {number} [port] - WebUI port to register this callback for (defaults to current instance port)
- */
 export function setBroadcastCallback(callback, port = null) {
   const targetPort = port || getInstancePort();
   broadcastCallbacks.set(targetPort, callback);
 }
 
-/**
- * Set the broadcast callback for user metrics updates
- * @param {Function} callback - Function to call when user metrics change
- * @param {number} [port] - WebUI port to register this callback for (defaults to current instance port)
- */
 export function setUserMetricsBroadcastCallback(callback, port = null) {
   const targetPort = port || getInstancePort();
   userMetricsBroadcastCallbacks.set(targetPort, callback);
 }
 
-/**
- * Broadcast operation update to all connected clients
- * @param {Object} operation - Operation object to broadcast
- */
 async function broadcastUpdate(operation) {
   const isTestMode = process.env.NODE_ENV === 'test';
 
@@ -186,20 +168,6 @@ function rememberOperation(operation) {
   }
 }
 
-/**
- * Create a failed operation for early validation failures
- * @param {string} type - Operation type ('convert', 'download', 'optimize', 'info')
- * @param {string} userId - Discord user ID
- * @param {string} username - Discord username
- * @param {string} errorMessage - Error message to display
- * @param {string} errorType - Error type (e.g., 'rate_limit', 'invalid_url', 'missing_attachment', etc.)
- * @param {Object} [context] - Additional context
- * @param {string} [context.originalUrl] - Original URL if this came from a URL
- * @param {Object} [context.attachment] - Attachment details (name, size, contentType, url)
- * @param {Object} [context.commandOptions] - Command options (optimize, lossy, etc.)
- * @param {string} [context.commandSource] - Command source ('slash' or 'context-menu')
- * @returns {string} Operation ID
- */
 export function createFailedOperation(
   type,
   userId,
@@ -260,18 +228,6 @@ export function createFailedOperation(
   return operation.id;
 }
 
-/**
- * Create a new operation
- * @param {string} type - Operation type ('convert', 'download', 'optimize', 'info')
- * @param {string} userId - Discord user ID
- * @param {string} username - Discord username
- * @param {Object} [context] - Initial operation context
- * @param {string} [context.originalUrl] - Original URL if this came from a URL
- * @param {Object} [context.attachment] - Attachment details (name, size, contentType, url)
- * @param {Object} [context.commandOptions] - Command options (optimize, lossy, etc.)
- * @param {string} [context.commandSource] - Command source ('slash' or 'context-menu')
- * @returns {string} Operation ID
- */
 export function createOperation(type, userId, username, context = {}) {
   // Use cryptographically secure random bytes for operation ID
   const randomBytes = crypto.randomBytes(6).toString('hex');
@@ -307,12 +263,6 @@ export function createOperation(type, userId, username, context = {}) {
   return operation.id;
 }
 
-/**
- * Update operation status
- * @param {string} operationId - Operation ID
- * @param {string} status - New status ('pending', 'running', 'success', 'error')
- * @param {Object} [data] - Additional data (fileSize, error, stackTrace)
- */
 export function updateOperationStatus(operationId, status, data = {}) {
   const operation = operations.find(op => op.id === operationId);
   if (!operation) {
@@ -361,11 +311,6 @@ export function updateOperationStatus(operationId, status, data = {}) {
   broadcastUpdate(operation);
 }
 
-/**
- * Get recent operations
- * @param {number} [limit] - Maximum number of operations to return (default: all)
- * @returns {Array} Array of operation objects
- */
 export function getRecentOperations(limit = null) {
   if (limit === null) {
     return [...operations];
@@ -383,13 +328,6 @@ export function getOperation(operationId) {
   return operation || null;
 }
 
-/**
- * Log an operation step (in-memory + live broadcast only; not persisted)
- * @param {string} operationId - Operation ID
- * @param {string} step - Step name (e.g., 'download_start', 'processing', 'upload')
- * @param {string} status - Status ('running', 'success', 'error')
- * @param {Object} [data] - Additional data
- */
 export function logOperationStep(operationId, step, status, data = {}) {
   const operation = operations.find(op => op.id === operationId);
   if (!operation) {
@@ -451,10 +389,6 @@ export function logOperationError(operationId, error, data = {}) {
   broadcastUpdate(operation);
 }
 
-/**
- * Update user metrics based on operation completion
- * @param {Object} operation - Operation object
- */
 async function updateUserMetricsForOperation(operation) {
   if (!operation.userId || !operation.username) {
     return;

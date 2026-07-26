@@ -21,10 +21,6 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 const projectRoot = join(__dirname, '..');
 
-/**
- * Check if Docker Desktop is running (Windows/WSL2 specific)
- * @returns {boolean} True if Docker Desktop appears to be running
- */
 function checkDockerDesktop() {
   try {
     // Check if docker context is set to desktop
@@ -40,11 +36,6 @@ function checkDockerDesktop() {
   }
 }
 
-/**
- * Check if error is a credential helper error
- * @param {string} errorOutput - Error output from command
- * @returns {boolean} True if credential error detected
- */
 function isCredentialError(errorOutput) {
   const credentialErrorIndicators = [
     'error getting credentials',
@@ -104,11 +95,6 @@ function buildImages(usePull = true) {
   });
 }
 
-/**
- * Check if Docker images exist locally
- * @param {string[]} images - Array of image names to check
- * @returns {boolean} True if all images exist
- */
 function imagesExistLocally(images) {
   for (const image of images) {
     try {

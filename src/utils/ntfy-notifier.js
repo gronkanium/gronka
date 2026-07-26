@@ -6,11 +6,6 @@ import { getOperation } from './operations-tracker.js';
 const logger = createLogger('ntfy');
 let broadcastCallback = null;
 
-/**
- * Format duration in milliseconds to a human-readable string
- * @param {number} ms - Duration in milliseconds
- * @returns {string} Formatted duration (e.g., "1.2s", "5.3m")
- */
 function formatDuration(ms) {
   if (!ms || ms === 0) return '';
   if (ms < 1000) return `${ms}ms`;
@@ -22,18 +17,6 @@ function formatDuration(ms) {
   return `${hours.toFixed(1)}h`;
 }
 
-/**
- * Send notification to ntfy.sh
- * @param {string} title - Notification title
- * @param {string} message - Notification message
- * @param {Object} [options] - Additional options
- * @param {string} [options.severity] - Alert severity (info, warning, error)
- * @param {string} [options.component] - Component name
- * @param {string} [options.operationId] - Related operation ID
- * @param {string} [options.userId] - Related user ID
- * @param {Object} [options.metadata] - Additional metadata (duration will be automatically added if operationId is provided)
- * @returns {Promise<void>}
- */
 async function sendNtfyNotification(title, message, options = {}) {
   const {
     severity = 'info',
@@ -119,14 +102,6 @@ async function sendNtfyNotification(title, message, options = {}) {
   }
 }
 
-/**
- * Send command success notification
- * @param {string} username - Username
- * @param {string} command - Command name (convert, optimize, download)
- * @param {Object} [options] - Additional options (operationId, userId, metadata)
- * @param {string} [options.operationId] - Operation ID (duration will be automatically calculated and added to metadata)
- * @returns {Promise<void>}
- */
 export async function notifyCommandSuccess(username, command, options = {}) {
   await sendNtfyNotification('command success', `${username}: ${command} success`, {
     severity: 'info',
@@ -140,14 +115,6 @@ export async function notifyCommandSuccess(username, command, options = {}) {
   });
 }
 
-/**
- * Send command failure notification
- * @param {string} username - Username
- * @param {string} command - Command name (convert, optimize, download)
- * @param {Object} [options] - Additional options (operationId, userId, metadata, error)
- * @param {string} [options.operationId] - Operation ID (duration will be automatically calculated and added to metadata)
- * @returns {Promise<void>}
- */
 export async function notifyCommandFailure(username, command, options = {}) {
   const message = options.error
     ? `${username}: ${command} failed - ${options.error}`
@@ -166,10 +133,6 @@ export async function notifyCommandFailure(username, command, options = {}) {
   });
 }
 
-/**
- * Set broadcast callback for alert notifications
- * @param {Function} callback - Callback function to broadcast alerts
- */
 export function setBroadcastCallback(callback) {
   broadcastCallback = callback;
 }

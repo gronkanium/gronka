@@ -61,11 +61,6 @@ export class YtdlpRateLimitError extends NetworkError {
   }
 }
 
-/**
- * Check if a URL is from YouTube
- * @param {string} url - URL to check
- * @returns {boolean} True if URL is from YouTube
- */
 export function isYouTubeUrl(url) {
   try {
     const urlObj = new URL(url);
@@ -144,11 +139,6 @@ export function getYtdlpSite(url) {
   }
 }
 
-/**
- * Get content type from file extension
- * @param {string} ext - File extension (with or without dot)
- * @returns {string} MIME type
- */
 function getContentType(ext) {
   const extLower = ext.toLowerCase().replace(/^\./, '');
   const mimeTypes = {
@@ -491,12 +481,6 @@ async function executeYtdlpWithRetry(...args) {
   }
 }
 
-/**
- * Get video duration from YouTube using yt-dlp metadata fetch (fast, no download)
- * @param {string} url - YouTube URL to check
- * @param {number} timeout - Timeout in milliseconds (default: 15000 = 15 seconds)
- * @returns {Promise<number>} Video duration in seconds
- */
 function getVideoDuration(url, timeout = 15000) {
   return new Promise((resolve, reject) => {
     const args = ['--no-playlist', '--no-warnings', ...getCookieArgs(), '--print', 'duration', url];
@@ -742,10 +726,6 @@ export async function downloadFromYouTube(
   return downloadWithYtdlp(url, isAdminUser, maxSize, quality, maxDuration, startTime, duration);
 }
 
-/**
- * Check if yt-dlp is available on the system
- * @returns {Promise<boolean>} True if yt-dlp is available
- */
 export async function isYtdlpAvailable() {
   return new Promise(resolve => {
     const ytdlp = spawn('yt-dlp', ['--version'], {

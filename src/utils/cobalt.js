@@ -35,12 +35,6 @@ const COBALT_ERROR_MESSAGES = {
   'error.api.auth.jwt.invalid': 'invalid authentication token',
 };
 
-/**
- * Get user-friendly error message for a Cobalt API error code
- * @param {string} errorCode - The error code from Cobalt API
- * @param {Object} context - Additional context (e.g., service name)
- * @returns {string} User-friendly error message
- */
 function getCobaltErrorMessage(errorCode, context = {}) {
   if (!errorCode) {
     return null;
@@ -141,11 +135,6 @@ function analyzeError(data, errorObj) {
   return result;
 }
 
-/**
- * Sleep for specified milliseconds
- * @param {number} ms - Milliseconds to sleep
- * @returns {Promise<void>}
- */
 function sleep(ms) {
   return new Promise(resolve => setTimeout(resolve, ms));
 }
@@ -258,11 +247,6 @@ const SOCIAL_MEDIA_DOMAINS = [
   'snapchat.com', // covers t.snapchat.com spotlight links
 ];
 
-/**
- * Check if a URL is from a social media platform
- * @param {string} url - URL to check
- * @returns {boolean} True if URL is from a social media platform
- */
 export function isSocialMediaUrl(url) {
   try {
     const urlObj = new URL(url);
@@ -277,14 +261,6 @@ export function isSocialMediaUrl(url) {
   }
 }
 
-/**
- * Call Cobalt API to get video information with retry logic
- * @param {string} apiUrl - Cobalt API URL
- * @param {string} url - Social media URL to process
- * @param {number} retryCount - Current retry attempt (0-based)
- * @param {number} maxRetries - Maximum number of retries
- * @returns {Promise<Object>} Cobalt API response
- */
 async function callCobaltApi(apiUrl, url, retryCount = 0, maxRetries = 3) {
   const attemptNum = retryCount + 1;
   const normalizedUrl = normalizeSocialMediaUrlForCobalt(url);
@@ -401,14 +377,6 @@ async function callCobaltApi(apiUrl, url, retryCount = 0, maxRetries = 3) {
   }
 }
 
-/**
- * Download a single photo from a URL
- * @param {string} photoUrl - Photo URL to download
- * @param {number} index - Index of the photo (for filename)
- * @param {boolean} isAdminUser - Whether the user is an admin (allows larger files)
- * @param {number} maxSize - Maximum file size in bytes
- * @returns {Promise<Object>} Object with buffer, contentType, size, and filename
- */
 async function downloadPhoto(photoUrl, index, isAdminUser = false, maxSize = Infinity) {
   try {
     const response = await axios.get(photoUrl, {
@@ -482,14 +450,6 @@ async function downloadPhoto(photoUrl, index, isAdminUser = false, maxSize = Inf
   }
 }
 
-/**
- * Download a single video from a URL (used in picker responses)
- * @param {string} videoUrl - Video URL to download
- * @param {number} index - Index of the video (for filename)
- * @param {boolean} isAdminUser - Whether the user is an admin (allows larger files)
- * @param {number} maxSize - Maximum file size in bytes
- * @returns {Promise<Object>} Object with buffer, contentType, size, and filename
- */
 async function downloadVideo(videoUrl, index, isAdminUser = false, maxSize = Infinity) {
   try {
     const response = await axios.get(videoUrl, {
@@ -563,13 +523,6 @@ async function downloadVideo(videoUrl, index, isAdminUser = false, maxSize = Inf
   }
 }
 
-/**
- * Download multiple media files (photos and videos) from picker array
- * @param {Array} pickerArray - Array of picker items from Cobalt response
- * @param {boolean} isAdminUser - Whether the user is an admin (allows larger files)
- * @param {number} maxSize - Maximum file size in bytes
- * @returns {Promise<Array>} Array of objects with buffer, contentType, size, and filename
- */
 async function downloadMediaFromPicker(pickerArray, isAdminUser = false, maxSize = Infinity) {
   // Filter for photo and video items
   const mediaItems = pickerArray.filter(

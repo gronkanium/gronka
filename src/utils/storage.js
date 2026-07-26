@@ -25,11 +25,6 @@ const logger = createLogger('storage');
 // Discord upload threshold: files smaller than this will be sent as Discord attachments
 const DISCORD_UPLOAD_THRESHOLD = 8 * 1024 * 1024; // 8MB in bytes
 
-/**
- * Check if a file should be sent as a Discord attachment based on size
- * @param {Buffer} buffer - File buffer to check
- * @returns {boolean} True if file should be sent as Discord attachment (< 8MB)
- */
 export function shouldUploadToDiscord(buffer) {
   return buffer.length < DISCORD_UPLOAD_THRESHOLD;
 }
@@ -61,13 +56,11 @@ function getCachedStats(storagePath) {
 
   const ttl = botConfig.statsCacheTtl;
   if (ttl === 0) {
-    // Caching disabled
     return null;
   }
 
   const age = Date.now() - cacheEntry.timestamp;
   if (age >= ttl) {
-    // Cache expired
     statsCache.delete(storagePath);
     return null;
   }
@@ -76,15 +69,9 @@ function getCachedStats(storagePath) {
   return cacheEntry.stats;
 }
 
-/**
- * Store stats in cache
- * @param {string} storagePath - Storage path used as cache key
- * @param {Object} stats - Stats object to cache
- */
 function setCachedStats(storagePath, stats) {
   const ttl = botConfig.statsCacheTtl;
   if (ttl === 0) {
-    // Caching disabled
     return;
   }
 
@@ -95,10 +82,6 @@ function setCachedStats(storagePath, stats) {
   logger.debug(`Cached stats for ${storagePath}`);
 }
 
-/**
- * Invalidate stats cache for a storage path
- * @param {string} storagePath - Storage path to invalidate
- */
 export function invalidateStatsCache(storagePath) {
   if (statsCache.delete(storagePath)) {
     logger.debug(`Invalidated stats cache for ${storagePath}`);
@@ -116,7 +99,6 @@ function getR2UsageCache() {
 
   const age = Date.now() - r2UsageCache.timestamp;
   if (age >= R2_CACHE_TTL) {
-    // Cache expired
     r2UsageCache = null;
     return null;
   }
@@ -125,10 +107,6 @@ function getR2UsageCache() {
   return r2UsageCache.usageBytes;
 }
 
-/**
- * Store R2 usage in cache
- * @param {number} usageBytes - R2 usage in bytes
- */
 function setR2UsageCache(usageBytes) {
   r2UsageCache = {
     usageBytes,
@@ -137,10 +115,6 @@ function setR2UsageCache(usageBytes) {
   logger.debug(`Cached R2 usage: ${formatFileSize(usageBytes)}`);
 }
 
-/**
- * Increment R2 usage cache by file size (no API call)
- * @param {number} fileSizeBytes - File size in bytes to add
- */
 function incrementR2UsageCache(fileSizeBytes) {
   if (!r2UsageCache) {
     logger.debug('R2 usage cache not initialized, skipping increment');
@@ -166,7 +140,6 @@ function incrementR2UsageCache(fileSizeBytes) {
  * @returns {Promise<void>}
  */
 export async function initializeR2UsageCache() {
-  // Check if R2 is configured
   if (
     !r2Config.accountId ||
     !r2Config.accessKeyId ||
@@ -177,14 +150,12 @@ export async function initializeR2UsageCache() {
     return;
   }
 
-  // Check if cache exists and is valid
   const cachedUsage = getR2UsageCache();
   if (cachedUsage !== null) {
     logger.info(`R2 usage cache already initialized: ${formatFileSize(cachedUsage)}`);
     return;
   }
 
-  // Fetch from R2
   logger.info('Initializing R2 usage cache (this may take a moment)...');
   try {
     const allObjects = await listObjectsInR2('', r2Config);
@@ -199,18 +170,11 @@ export async function initializeR2UsageCache() {
     logger.info(`R2 usage cache initialized: ${formatFileSize(totalUsage)}`);
   } catch (error) {
     logger.error(`Failed to initialize R2 usage cache:`, error.message);
-    // Set cache to 0 as fallback
     setR2UsageCache(0);
   }
 }
 
-/**
- * Get the storage path for GIFs
- * @param {string} storagePath - Base storage path from env or default
- * @returns {string} Full path to GIF storage directory
- */
 function getStoragePath(storagePath) {
-  // Validate input
   if (!storagePath || typeof storagePath !== 'string') {
     logger.error('Invalid storagePath provided to getStoragePath:', {
       storagePath,
@@ -286,14 +250,7 @@ export function detectFileType(extension, contentType = '') {
   return 'video';
 }
 
-/**
- * Check if a GIF with the given hash already exists
- * @param {string} hash - BLAKE3 hash of the video
- * @param {string} storagePath - Base storage path (kept for backward compatibility)
- * @returns {Promise<boolean>} True if GIF exists
- */
 export async function gifExists(hash, storagePath) {
-  // Check R2 first if configured
   if (
     r2Config.accountId &&
     r2Config.accessKeyId &&
@@ -302,7 +259,6 @@ export async function gifExists(hash, storagePath) {
   ) {
     return await gifExistsInR2(hash, r2Config);
   }
-  // Fallback to local disk check
   try {
     const gifPath = getGifPath(hash, storagePath);
     await fs.access(gifPath);
@@ -312,12 +268,6 @@ export async function gifExists(hash, storagePath) {
   }
 }
 
-/**
- * Get the full file path for a GIF by hash
- * @param {string} hash - BLAKE3 hash of the video
- * @param {string} storagePath - Base storage path
- * @returns {string} Full path to GIF file
- */
 export function getGifPath(hash, storagePath) {
   const basePath = getStoragePath(storagePath);
   // Ensure hash is safe (alphanumeric only)
@@ -325,10 +275,8 @@ export function getGifPath(hash, storagePath) {
   // Check if basePath already ends with 'gifs' to avoid double gifs/gifs
   const normalizedBasePath = basePath.replace(/\\/g, '/');
   if (normalizedBasePath.endsWith('/gifs') || normalizedBasePath.endsWith('\\gifs')) {
-    // Storage path already includes 'gifs', don't add it again
     return path.join(basePath, `${safeHash}.gif`);
   }
-  // Storage path doesn't include 'gifs', add it
   return path.join(basePath, 'gifs', `${safeHash}.gif`);
 }
 
@@ -355,7 +303,6 @@ export async function saveGif(buffer, hash, storagePath, metadata = {}) {
       // Check if file already exists in R2 specifically (not local disk)
       const existsInR2 = await gifExistsInR2(hash, r2Config);
       if (existsInR2) {
-        // File already exists in R2, return the public URL
         const safeHash = hash.replace(/[^a-f0-9]/gi, '');
         const key = `gifs/${safeHash}.gif`;
         const publicUrl = getR2PublicUrl(key, r2Config);
@@ -363,7 +310,6 @@ export async function saveGif(buffer, hash, storagePath, metadata = {}) {
         return { url: publicUrl, method, buffer };
       }
 
-      // Upload to R2 for large files
       logger.info(
         `Uploading GIF to R2 (hash: ${hash.substring(0, 8)}..., size: ${(buffer.length / (1024 * 1024)).toFixed(2)}MB)`
       );
@@ -371,7 +317,6 @@ export async function saveGif(buffer, hash, storagePath, metadata = {}) {
       logger.info(
         `Saved GIF to R2: ${publicUrl} (size: ${(buffer.length / (1024 * 1024)).toFixed(2)}MB)`
       );
-      // Increment R2 usage cache
       incrementR2UsageCache(buffer.length);
       // Invalidate stats cache since we added a new file
       invalidateStatsCache(storagePath);
@@ -387,7 +332,6 @@ export async function saveGif(buffer, hash, storagePath, metadata = {}) {
   const _basePath = getStoragePath(storagePath);
   const gifPath = getGifPath(hash, storagePath);
 
-  // Ensure directory exists
   await fs.mkdir(path.dirname(gifPath), { recursive: true });
 
   // Write file (fs.writeFile overwrites if file exists, so no TOCTOU issue)
@@ -400,11 +344,6 @@ export async function saveGif(buffer, hash, storagePath, metadata = {}) {
   return { url: gifPath, method, buffer };
 }
 
-/**
- * Clean up temporary video files
- * @param {string[]} tempFiles - Array of temporary file paths to delete
- * @returns {Promise<void>}
- */
 export async function cleanupTempFiles(tempFiles) {
   logger.debug(`Cleaning up ${tempFiles.length} temporary files`);
   const deletePromises = tempFiles.map(async filePath => {
@@ -422,34 +361,24 @@ export async function cleanupTempFiles(tempFiles) {
   await Promise.all(deletePromises);
 }
 
-/**
- * Format file size in bytes to human-readable string (MB first, then GB)
- * @param {number} bytes - File size in bytes
- * @returns {string} Formatted size string (e.g., "1536 MB" or "1.5 GB")
- */
 export function formatFileSize(bytes) {
-  // Validate input
   if (bytes === null || bytes === undefined) {
     logger.warn('formatFileSize called with null/undefined, returning 0.00 MB');
     return '0.00 MB';
   }
 
-  // Convert to number if it's a string
   const numBytes = typeof bytes === 'string' ? parseFloat(bytes) : Number(bytes);
 
-  // Check for invalid numbers
   if (isNaN(numBytes) || !isFinite(numBytes)) {
     logger.warn('formatFileSize called with invalid number:', { bytes, numBytes });
     return '0.00 MB';
   }
 
-  // Handle negative numbers
   if (numBytes < 0) {
     logger.warn('formatFileSize called with negative number:', { bytes, numBytes });
     return '0.00 MB';
   }
 
-  // Handle zero
   if (numBytes === 0) {
     return '0.00 MB';
   }
@@ -467,39 +396,22 @@ export function formatFileSize(bytes) {
   }
 }
 
-/**
- * Get the full file path for a video by hash and extension
- * @param {string} hash - BLAKE3 hash of the video
- * @param {string} extension - File extension (e.g., '.mp4', '.webm')
- * @param {string} storagePath - Base storage path
- * @returns {string} Full path to video file
- */
 export function getVideoPath(hash, extension, storagePath) {
   const basePath = getStoragePath(storagePath);
   // Ensure hash is safe (alphanumeric only)
   const safeHash = hash.replace(/[^a-f0-9]/gi, '');
   // Ensure extension is safe (alphanumeric and dots only)
   const safeExt = extension.replace(/[^a-zA-Z0-9.]/gi, '');
-  // Remove leading dot if present and add it back
   const ext = safeExt.startsWith('.') ? safeExt : `.${safeExt}`;
   // Check if basePath ends with 'gifs' - if so, go up one level to avoid gifs/videos nesting
   const normalizedBasePath = basePath.replace(/\\/g, '/');
   if (normalizedBasePath.endsWith('/gifs') || normalizedBasePath.endsWith('\\gifs')) {
-    // Storage path ends with 'gifs', go up one directory level
     return path.join(path.dirname(basePath), 'videos', `${safeHash}${ext}`);
   }
   return path.join(basePath, 'videos', `${safeHash}${ext}`);
 }
 
-/**
- * Check if a video with the given hash and extension already exists
- * @param {string} hash - BLAKE3 hash of the video
- * @param {string} extension - File extension
- * @param {string} storagePath - Base storage path (kept for backward compatibility)
- * @returns {Promise<boolean>} True if video exists
- */
 export async function videoExists(hash, extension, storagePath) {
-  // Check R2 first if configured
   if (
     r2Config.accountId &&
     r2Config.accessKeyId &&
@@ -508,7 +420,6 @@ export async function videoExists(hash, extension, storagePath) {
   ) {
     return await videoExistsInR2(hash, extension, r2Config);
   }
-  // Fallback to local disk check
   try {
     const videoPath = getVideoPath(hash, extension, storagePath);
     await fs.access(videoPath);
@@ -542,7 +453,6 @@ export async function saveVideo(buffer, hash, extension, storagePath, metadata =
       // Check if file already exists in R2 specifically (not local disk)
       const existsInR2 = await videoExistsInR2(hash, extension, r2Config);
       if (existsInR2) {
-        // File already exists in R2, return the public URL
         const safeHash = hash.replace(/[^a-f0-9]/gi, '');
         const safeExt = extension.replace(/[^a-zA-Z0-9.]/gi, '');
         const ext = safeExt.startsWith('.') ? safeExt : `.${safeExt}`;
@@ -552,7 +462,6 @@ export async function saveVideo(buffer, hash, extension, storagePath, metadata =
         return { url: publicUrl, method, buffer };
       }
 
-      // Upload to R2 for large files
       logger.info(
         `Uploading video to R2 (hash: ${hash.substring(0, 8)}..., size: ${(buffer.length / (1024 * 1024)).toFixed(2)}MB)`
       );
@@ -560,7 +469,6 @@ export async function saveVideo(buffer, hash, extension, storagePath, metadata =
       logger.info(
         `Saved video to R2: ${publicUrl} (size: ${(buffer.length / (1024 * 1024)).toFixed(2)}MB)`
       );
-      // Increment R2 usage cache
       incrementR2UsageCache(buffer.length);
       // Invalidate stats cache since we added a new file
       invalidateStatsCache(storagePath);
@@ -576,7 +484,6 @@ export async function saveVideo(buffer, hash, extension, storagePath, metadata =
   const _basePath = getStoragePath(storagePath);
   const videoPath = getVideoPath(hash, extension, storagePath);
 
-  // Ensure directory exists
   await fs.mkdir(path.dirname(videoPath), { recursive: true });
 
   // Write file (fs.writeFile overwrites if file exists, so no TOCTOU issue)
@@ -589,39 +496,22 @@ export async function saveVideo(buffer, hash, extension, storagePath, metadata =
   return { url: videoPath, method, buffer };
 }
 
-/**
- * Get the full file path for an image by hash and extension
- * @param {string} hash - BLAKE3 hash of the image
- * @param {string} extension - File extension (e.g., '.png', '.jpg')
- * @param {string} storagePath - Base storage path
- * @returns {string} Full path to image file
- */
 export function getImagePath(hash, extension, storagePath) {
   const basePath = getStoragePath(storagePath);
   // Ensure hash is safe (alphanumeric only)
   const safeHash = hash.replace(/[^a-f0-9]/gi, '');
   // Ensure extension is safe (alphanumeric and dots only)
   const safeExt = extension.replace(/[^a-zA-Z0-9.]/gi, '');
-  // Remove leading dot if present and add it back
   const ext = safeExt.startsWith('.') ? safeExt : `.${safeExt}`;
   // Check if basePath ends with 'gifs' - if so, go up one level to avoid gifs/images nesting
   const normalizedBasePath = basePath.replace(/\\/g, '/');
   if (normalizedBasePath.endsWith('/gifs') || normalizedBasePath.endsWith('\\gifs')) {
-    // Storage path ends with 'gifs', go up one directory level
     return path.join(path.dirname(basePath), 'images', `${safeHash}${ext}`);
   }
   return path.join(basePath, 'images', `${safeHash}${ext}`);
 }
 
-/**
- * Check if an image with the given hash and extension already exists
- * @param {string} hash - BLAKE3 hash of the image
- * @param {string} extension - File extension
- * @param {string} storagePath - Base storage path (kept for backward compatibility)
- * @returns {Promise<boolean>} True if image exists
- */
 export async function imageExists(hash, extension, storagePath) {
-  // Check R2 first if configured
   if (
     r2Config.accountId &&
     r2Config.accessKeyId &&
@@ -630,7 +520,6 @@ export async function imageExists(hash, extension, storagePath) {
   ) {
     return await imageExistsInR2(hash, extension, r2Config);
   }
-  // Fallback to local disk check
   try {
     const imagePath = getImagePath(hash, extension, storagePath);
     await fs.access(imagePath);
@@ -664,7 +553,6 @@ export async function saveImage(buffer, hash, extension, storagePath, metadata =
       // Check if file already exists in R2 specifically (not local disk)
       const existsInR2 = await imageExistsInR2(hash, extension, r2Config);
       if (existsInR2) {
-        // File already exists in R2, return the public URL
         const safeHash = hash.replace(/[^a-f0-9]/gi, '');
         const safeExt = extension.replace(/[^a-zA-Z0-9.]/gi, '');
         const ext = safeExt.startsWith('.') ? safeExt : `.${safeExt}`;
@@ -674,7 +562,6 @@ export async function saveImage(buffer, hash, extension, storagePath, metadata =
         return { url: publicUrl, method, buffer };
       }
 
-      // Upload to R2 for large files
       logger.info(
         `Uploading image to R2 (hash: ${hash.substring(0, 8)}..., size: ${(buffer.length / (1024 * 1024)).toFixed(2)}MB)`
       );
@@ -682,7 +569,6 @@ export async function saveImage(buffer, hash, extension, storagePath, metadata =
       logger.info(
         `Saved image to R2: ${publicUrl} (size: ${(buffer.length / (1024 * 1024)).toFixed(2)}MB)`
       );
-      // Increment R2 usage cache
       incrementR2UsageCache(buffer.length);
       // Invalidate stats cache since we added a new file
       invalidateStatsCache(storagePath);
@@ -698,7 +584,6 @@ export async function saveImage(buffer, hash, extension, storagePath, metadata =
   const _basePath = getStoragePath(storagePath);
   const imagePath = getImagePath(hash, extension, storagePath);
 
-  // Ensure directory exists
   await fs.mkdir(path.dirname(imagePath), { recursive: true });
 
   // Write file (fs.writeFile overwrites if file exists, so no TOCTOU issue)
@@ -718,7 +603,6 @@ export async function saveImage(buffer, hash, extension, storagePath, metadata =
  */
 export async function getStorageStats(storagePath) {
   try {
-    // Validate storagePath parameter
     if (!storagePath || typeof storagePath !== 'string' || storagePath.trim() === '') {
       logger.error('getStorageStats called with invalid storagePath:', {
         storagePath,
@@ -729,7 +613,6 @@ export async function getStorageStats(storagePath) {
 
     logger.debug(`Getting storage stats for: ${storagePath}`);
 
-    // Check cache first
     try {
       const cachedStats = getCachedStats(storagePath);
       if (cachedStats) {
@@ -762,7 +645,6 @@ export async function getStorageStats(storagePath) {
       const result = await calculationPromise;
       return result;
     } catch (error) {
-      // If calculation failed, log and return safe defaults
       logger.error('Stats calculation failed or timed out:', {
         error: error.message,
         storagePath,
@@ -782,7 +664,6 @@ export async function getStorageStats(storagePath) {
         imagesDiskUsageFormatted: '0.00 MB',
       };
     } finally {
-      // Clean up the promise from the map once done
       statsCalculationPromises.delete(storagePath);
     }
   } catch (error) {
@@ -795,7 +676,6 @@ export async function getStorageStats(storagePath) {
       storagePathType: typeof storagePath,
     });
 
-    // Return safe defaults
     return {
       totalGifs: 0,
       totalVideos: 0,
@@ -820,7 +700,6 @@ export async function getStorageStats(storagePath) {
  */
 async function calculateStorageStats(storagePath) {
   try {
-    // Check if R2 is configured
     const useR2 =
       r2Config.accountId && r2Config.accessKeyId && r2Config.secretAccessKey && r2Config.bucketName;
 
@@ -841,7 +720,6 @@ async function calculateStorageStats(storagePath) {
         const allObjects = await listObjectsInR2('', r2Config);
         logger.debug(`Listed ${allObjects.length} total objects from R2`);
 
-        // Filter and process GIFs
         const gifFilesOnly = allObjects.filter(
           obj => obj.key.startsWith('gifs/') && obj.key.endsWith('.gif')
         );
@@ -852,7 +730,6 @@ async function calculateStorageStats(storagePath) {
           totalSize += obj.size;
         }
 
-        // Filter and process videos
         const videoExtensions = ['.mp4', '.webm', '.mov', '.avi', '.mkv'];
         const videoFilesOnly = allObjects.filter(obj => {
           if (!obj.key.startsWith('videos/')) return false;
@@ -866,7 +743,6 @@ async function calculateStorageStats(storagePath) {
           totalSize += obj.size;
         }
 
-        // Filter and process images
         const imageExtensions = ['.png', '.jpg', '.jpeg', '.webp'];
         const imageFilesOnly = allObjects.filter(obj => {
           if (!obj.key.startsWith('images/')) return false;
@@ -883,10 +759,8 @@ async function calculateStorageStats(storagePath) {
         logger.warn(`Failed to list objects from R2:`, error.message);
       }
     } else {
-      // Fallback to local filesystem
       logger.debug('R2 not configured, using local filesystem for storage stats');
 
-      // Validate and resolve storage path with error handling
       let basePath;
       try {
         basePath = getStoragePath(storagePath);
@@ -900,7 +774,6 @@ async function calculateStorageStats(storagePath) {
         throw error; // Re-throw to be caught by outer try-catch
       }
 
-      // Scan gifs subdirectory
       try {
         const gifsPath = path.join(basePath, 'gifs');
         const gifFiles = await fs.readdir(gifsPath);
@@ -924,7 +797,6 @@ async function calculateStorageStats(storagePath) {
         }
       }
 
-      // Scan videos subdirectory
       try {
         const videosPath = path.join(basePath, 'videos');
         const videoFiles = await fs.readdir(videosPath);
@@ -952,7 +824,6 @@ async function calculateStorageStats(storagePath) {
         }
       }
 
-      // Scan images subdirectory
       try {
         const imagesPath = path.join(basePath, 'images');
         const imageFiles = await fs.readdir(imagesPath);
@@ -960,7 +831,6 @@ async function calculateStorageStats(storagePath) {
         const imageExtensions = ['.png', '.jpg', '.jpeg', '.webp'];
         const imageFilesOnly = [];
 
-        // Filter and verify each entry is actually a file
         for (const file of imageFiles) {
           try {
             const filePath = path.join(imagesPath, file);
@@ -991,7 +861,6 @@ async function calculateStorageStats(storagePath) {
         totalImages = imageFilesOnly.length;
         logger.debug(`Total image files found: ${totalImages}`);
 
-        // Calculate total size for image files
         for (const file of imageFilesOnly) {
           try {
             const filePath = path.join(imagesPath, file);
@@ -1012,7 +881,6 @@ async function calculateStorageStats(storagePath) {
       }
     }
 
-    // Build stats object with safe formatting
     let stats;
     try {
       stats = {
@@ -1036,7 +904,6 @@ async function calculateStorageStats(storagePath) {
         videosSize,
         imagesSize,
       });
-      // Use safe defaults if formatting fails
       stats = {
         totalGifs,
         totalVideos,
@@ -1056,7 +923,6 @@ async function calculateStorageStats(storagePath) {
       `Storage stats: ${stats.totalGifs} GIFs, ${stats.totalVideos} videos, ${stats.totalImages} images, ${stats.diskUsageFormatted}`
     );
 
-    // Cache the results (with error handling)
     try {
       setCachedStats(storagePath, stats);
     } catch (error) {
@@ -1072,7 +938,6 @@ async function calculateStorageStats(storagePath) {
       storagePathType: typeof storagePath,
     });
 
-    // Return safe defaults
     return {
       totalGifs: 0,
       totalVideos: 0,
@@ -1089,10 +954,6 @@ async function calculateStorageStats(storagePath) {
   }
 }
 
-/**
- * Get R2 cache statistics
- * @returns {Object} R2 cache statistics with usage info
- */
 export function getR2CacheStats() {
   const R2_FREE_LIMIT_GB = 10;
   const R2_FREE_LIMIT_BYTES = R2_FREE_LIMIT_GB * 1024 * 1024 * 1024;
@@ -1188,7 +1049,6 @@ export async function trackTemporaryUpload(urlHash, r2Key, uploadedAt = null, is
     }
   }
 
-  // Check if temporary uploads are enabled
   if (!r2Config.tempUploadsEnabled) {
     return; // Tracking disabled, skip
   }

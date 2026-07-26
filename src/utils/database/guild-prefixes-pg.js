@@ -47,12 +47,6 @@ export async function getGuildPrefix(guildId) {
   return value;
 }
 
-/**
- * Set a guild's custom command prefix (upsert)
- * @param {string} guildId - Discord guild ID
- * @param {string} prefix - New prefix (validation is the caller's responsibility)
- * @returns {Promise<void>}
- */
 export async function setGuildPrefix(guildId, prefix) {
   await ensurePostgresInitialized();
 
@@ -73,11 +67,6 @@ export async function setGuildPrefix(guildId, prefix) {
   invalidateGuildPrefixCache(guildId);
 }
 
-/**
- * Remove a guild's custom prefix so it falls back to the default
- * @param {string} guildId - Discord guild ID
- * @returns {Promise<void>}
- */
 export async function clearGuildPrefix(guildId) {
   await ensurePostgresInitialized();
 

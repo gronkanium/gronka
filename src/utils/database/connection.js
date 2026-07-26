@@ -4,10 +4,6 @@ import fs from 'fs';
 let sql = null;
 let initPromise = null;
 
-/**
- * Check if we're running in test mode
- * @returns {boolean} True if running in test mode
- */
 export function isTestMode() {
   // If FORCE_PRODUCTION_MODE is set, always return false (never test mode)
   // This allows scripts to explicitly force production database connection
@@ -39,10 +35,6 @@ export function isTestMode() {
   return false;
 }
 
-/**
- * Check if we're running inside a Docker container
- * @returns {boolean} True if running in Docker
- */
 function isRunningInDocker() {
   try {
     // Check for .dockerenv file (most reliable indicator)
@@ -62,10 +54,6 @@ function isRunningInDocker() {
   }
 }
 
-/**
- * Get default PostgreSQL host based on environment
- * @returns {string} Default host ('postgres' in Docker, 'localhost' otherwise)
- */
 function getDefaultPostgresHost() {
   // When FORCE_PRODUCTION_MODE is set, respect POSTGRES_HOST if explicitly provided
   // This allows production scripts to connect to the correct host even when running locally
@@ -89,10 +77,6 @@ function getDefaultPostgresHost() {
   return autoDetectedHost;
 }
 
-/**
- * Get PostgreSQL connection configuration from environment variables
- * @returns {Object} PostgreSQL connection configuration
- */
 export function getPostgresConfig() {
   const useTestConfig = isTestMode();
 
@@ -155,10 +139,6 @@ export function getPostgresConfig() {
   return config;
 }
 
-/**
- * Initialize PostgreSQL connection pool
- * @returns {Promise<postgres.Sql>} PostgreSQL connection pool
- */
 export async function initPostgresConnection() {
   if (sql) {
     return sql;
@@ -261,11 +241,6 @@ export async function initPostgresConnection() {
   return newInitPromise;
 }
 
-/**
- * Extract database name from a PostgreSQL connection URL
- * @param {string} url - PostgreSQL connection URL
- * @returns {string} Database name
- */
 function extractDbFromUrl(url) {
   try {
     const parsed = new URL(url);
@@ -312,10 +287,6 @@ export function setPostgresInitPromise(promise) {
   initPromise = promise;
 }
 
-/**
- * Close PostgreSQL connection pool
- * @returns {Promise<void>}
- */
 export async function closePostgresConnection() {
   if (sql) {
     await sql.end({ timeout: 5 });

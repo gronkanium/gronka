@@ -36,10 +36,6 @@ function setCachedUser(userId, user) {
   });
 }
 
-/**
- * Invalidate user cache
- * @param {string} userId - User ID to invalidate (or null to clear all)
- */
 export function invalidateUserCache(userId = null) {
   if (userId) {
     userCache.delete(userId);
@@ -48,13 +44,6 @@ export function invalidateUserCache(userId = null) {
   }
 }
 
-/**
- * Insert or update a user in the database
- * @param {string} userId - Discord user ID
- * @param {string} username - Discord username/tag
- * @param {number} timestamp - Unix timestamp in milliseconds
- * @returns {Promise<void>}
- */
 export async function insertOrUpdateUser(userId, username, timestamp) {
   await ensurePostgresInitialized();
 
@@ -123,10 +112,6 @@ export async function getUser(userId) {
   return convertedUser;
 }
 
-/**
- * Get unique user count
- * @returns {Promise<number>} Number of unique users
- */
 export async function getUniqueUserCount() {
   await ensurePostgresInitialized();
 

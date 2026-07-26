@@ -53,10 +53,6 @@ export function isAnimatedWebp(buffer) {
   return (buffer[20] & 0x02) !== 0;
 }
 
-/**
- * Check if FFmpeg is installed and available
- * @returns {Promise<boolean>} True if FFmpeg is available
- */
 export async function checkFFmpegInstalled() {
   try {
     await execAsync('ffmpeg -version');

@@ -26,12 +26,6 @@ export const ALLOWED_IMAGE_TYPES = [
   'image/gif',
 ];
 
-/**
- * Validate video attachment
- * @param {Attachment} attachment - Discord attachment
- * @param {boolean} isAdminUser - Whether the user is an admin
- * @returns {Object} Validation result with error message if invalid
- */
 export function validateVideoAttachment(attachment, isAdminUser = false) {
   // Check if it's a video
   if (!attachment.contentType || !ALLOWED_VIDEO_TYPES.includes(attachment.contentType)) {
@@ -58,12 +52,6 @@ export function validateVideoAttachment(attachment, isAdminUser = false) {
   return { valid: true };
 }
 
-/**
- * Validate image attachment
- * @param {Attachment} attachment - Discord attachment
- * @param {boolean} isAdminUser - Whether the user is an admin
- * @returns {Object} Validation result with error message if invalid
- */
 export function validateImageAttachment(attachment, isAdminUser = false) {
   // Check if it's an image
   if (!attachment.contentType || !ALLOWED_IMAGE_TYPES.includes(attachment.contentType)) {

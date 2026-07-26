@@ -269,11 +269,6 @@ export function parseTimestamp(input) {
   return { valid: true, seconds };
 }
 
-/**
- * Sanitize filename to prevent path traversal and other issues
- * @param {string} filename - Filename to sanitize
- * @returns {string} Sanitized filename
- */
 export function sanitizeFilename(filename) {
   if (!filename || typeof filename !== 'string') {
     return 'file';
@@ -300,12 +295,6 @@ export function sanitizeFilename(filename) {
   return sanitized;
 }
 
-/**
- * Validate file extension against allowed list
- * @param {string} filename - Filename to check
- * @param {string[]} allowedExtensions - Array of allowed extensions (with or without dot)
- * @returns {boolean} True if extension is allowed
- */
 export function validateFileExtension(filename, allowedExtensions) {
   if (!filename) return false;
 
@@ -318,12 +307,6 @@ export function validateFileExtension(filename, allowedExtensions) {
   });
 }
 
-/**
- * Validate filename to prevent path traversal attacks
- * @param {string} filename - Filename to validate
- * @param {string} storagePath - Base storage path
- * @returns {Object} Validation result with sanitized filename or error
- */
 export function validateFilename(filename, storagePath) {
   if (!filename || typeof filename !== 'string') {
     return {

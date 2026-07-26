@@ -4,10 +4,6 @@
 
 import { getPostgresConnection } from './connection.js';
 
-/**
- * Flag to track if schema has been verified (prevents parallel checks)
- * @type {boolean}
- */
 let logsSchemaVerified = false;
 
 /**
@@ -133,10 +129,6 @@ export async function clearAllData() {
 // to prevent race conditions and primary key collisions
 // ============================================================================
 
-/**
- * Counter for generating unique test namespaces within a process
- * @type {number}
- */
 let testFileCounter = 0;
 
 /**
@@ -146,10 +138,6 @@ let testFileCounter = 0;
  */
 let timestampCounter = 0;
 
-/**
- * Global counter for component uniqueness within the same millisecond
- * @type {number}
- */
 let componentCounter = 0;
 
 /**

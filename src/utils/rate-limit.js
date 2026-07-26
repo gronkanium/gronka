@@ -39,20 +39,10 @@ export async function refreshRateLimitSettings() {
   }
 }
 
-/**
- * Check if user is an admin
- * @param {string} userId - Discord user ID
- * @returns {boolean} True if user is admin
- */
 export function isAdmin(userId) {
   return ADMIN_USER_IDS.includes(userId) || dbAdminIds.has(userId);
 }
 
-/**
- * Check if user is rate limited
- * @param {string} userId - Discord user ID
- * @returns {boolean} True if user should wait
- */
 export function checkRateLimit(userId) {
   const lastUse = rateLimit.get(userId);
   const now = Date.now();
@@ -79,10 +69,6 @@ export function checkRateLimit(userId) {
   return false;
 }
 
-/**
- * Record that a user has successfully completed an operation (for rate limiting)
- * @param {string} userId - Discord user ID
- */
 export function recordRateLimit(userId) {
   // Admins bypass rate limiting, so don't record for them
   if (isAdmin(userId)) {

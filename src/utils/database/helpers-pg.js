@@ -2,12 +2,6 @@
  * Helper functions for PostgreSQL database operations
  */
 
-/**
- * Convert timestamp fields from strings to numbers in a single object
- * @param {Object} obj - Object to convert
- * @param {string[]} timestampFields - Array of field names that contain timestamps
- * @returns {Object} Object with timestamp fields converted to numbers
- */
 export function convertTimestampsToNumbers(obj, timestampFields = ['timestamp']) {
   if (!obj || typeof obj !== 'object') {
     return obj;
@@ -29,12 +23,6 @@ export function convertTimestampsToNumbers(obj, timestampFields = ['timestamp'])
   return converted;
 }
 
-/**
- * Convert timestamp fields from strings to numbers in an array of objects
- * @param {Array} array - Array of objects to convert
- * @param {string[]} timestampFields - Array of field names that contain timestamps
- * @returns {Array} Array with timestamp fields converted to numbers
- */
 export function convertTimestampsInArray(array, timestampFields = ['timestamp']) {
   if (!Array.isArray(array)) {
     return array;
@@ -71,12 +59,6 @@ export function convertBigIntToNumbers(obj, numericFields = []) {
   return converted;
 }
 
-/**
- * Convert numeric BIGINT fields from strings to numbers in an array of objects
- * @param {Array} array - Array of objects to convert
- * @param {string[]} numericFields - Array of field names that contain numeric BIGINT values
- * @returns {Array} Array with numeric fields converted to numbers
- */
 export function convertBigIntInArray(array, numericFields = []) {
   if (!Array.isArray(array)) {
     return array;

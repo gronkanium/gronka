@@ -207,12 +207,6 @@ function stopPostgresContainer() {
   }
 }
 
-/**
- * Wait for PostgreSQL container to be healthy
- * @param {number} maxAttempts - Maximum number of attempts (default: 30)
- * @param {number} delayMs - Delay between attempts in milliseconds (default: 1000)
- * @returns {boolean} - True if container is healthy, false otherwise
- */
 function waitForPostgresHealthy(maxAttempts = 30, delayMs = 1000) {
   console.log('  waiting for postgresql to be healthy...');
 

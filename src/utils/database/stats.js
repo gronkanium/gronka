@@ -1,10 +1,6 @@
 import { ensurePostgresInitialized } from './init.js';
 import { getPostgresConnection } from './connection.js';
 
-/**
- * Get 24-hour statistics from processed_urls table
- * @returns {Promise<Object>} Stats object with unique_users, total_files, total_data_bytes
- */
 export async function get24HourStats() {
   try {
     const now = Date.now();

@@ -14,13 +14,6 @@ export function curatedErrorMessage(error, fallback) {
   return error instanceof AppError && error.message ? error.message : fallback;
 }
 
-/**
- * Edit the interaction reply with a curated, user-facing error message.
- * @param {import('discord.js').Interaction} interaction
- * @param {unknown} error - The caught error
- * @param {string} fallback - Generic message shown for non-AppError errors
- * @returns {Promise<*>}
- */
 export function replyWithCuratedError(interaction, error, fallback) {
   return safeInteractionEditReply(interaction, {
     content: curatedErrorMessage(error, fallback),

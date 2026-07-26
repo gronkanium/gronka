@@ -284,7 +284,6 @@ export function updateOperationStatus(operationId, status, data = {}) {
     operation.stackTrace = data.stackTrace;
   }
 
-  // Calculate duration if operation is complete
   if ((status === 'success' || status === 'error') && operation.startTime) {
     operation.performanceMetrics.duration = Math.max(1, Date.now() - operation.startTime);
   }
@@ -300,7 +299,6 @@ export function updateOperationStatus(operationId, status, data = {}) {
 
   logger.debug(`Operation status updated to ${status} [op: ${operationId}]`);
 
-  // Update user metrics on operation completion
   if (status === 'success' || status === 'error') {
     // Fire and forget - don't await to avoid blocking operation updates
     updateUserMetricsForOperation(operation).catch(error => {
@@ -352,7 +350,6 @@ export function logOperationStep(operationId, step, status, data = {}) {
 
   logger.debug(`Operation step ${step} ${status} [op: ${operationId}]`);
 
-  // Broadcast update if significant change
   if (status === 'error' || data.broadcast) {
     broadcastUpdate(operation);
   }
@@ -401,7 +398,6 @@ async function updateUserMetricsForOperation(operation) {
     lastCommandAt: Date.now(),
   };
 
-  // Update command-specific counters
   if (operation.type === 'convert') {
     metrics.totalConvert = 1;
   } else if (operation.type === 'download') {
@@ -412,7 +408,6 @@ async function updateUserMetricsForOperation(operation) {
     metrics.totalInfo = 1;
   }
 
-  // Add file size if available
   if (operation.fileSize && operation.status === 'success') {
     metrics.totalFileSize = operation.fileSize;
   }
@@ -420,13 +415,11 @@ async function updateUserMetricsForOperation(operation) {
   try {
     await insertOrUpdateUserMetrics(operation.userId, operation.username, metrics);
 
-    // Get updated metrics for broadcasting
     const updatedMetrics = await getUserMetrics(operation.userId);
     if (!updatedMetrics) {
       return; // User metrics not found, skip broadcast
     }
 
-    // Broadcast user metrics update
     const currentPort = getInstancePort();
     const userMetricsCallback = userMetricsBroadcastCallbacks.get(currentPort);
     if (userMetricsCallback) {

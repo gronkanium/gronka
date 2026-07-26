@@ -30,10 +30,8 @@ import { get24HourStats } from './utils/database/stats.js';
 import { replyIfBanned, replyIfMaintenance } from './utils/ban-check.js';
 import { refreshRateLimitSettings } from './utils/rate-limit.js';
 
-// Initialize logger
 const logger = createLogger('bot');
 
-// Configuration from centralized config
 const {
   discordToken: DISCORD_TOKEN,
   clientId: CLIENT_ID,
@@ -61,7 +59,6 @@ setInterval(() => {
   }
 }, 60 * 1000); // Run cleanup every minute
 
-// Create Discord client
 const client = new Client({
   intents: [
     GatewayIntentBits.Guilds,
@@ -72,7 +69,6 @@ const client = new Client({
   partials: [Partials.Channel], // Required to receive MessageCreate in DMs (prefix commands)
 });
 
-// Track bot start time for uptime
 let botStartTime = null;
 
 // Track R2 cleanup job interval ID for graceful shutdown
@@ -146,10 +142,8 @@ function startStatsServer() {
     })
   );
 
-  // Parse JSON bodies for status endpoint
   app.use(express.json());
 
-  // Security headers
   app.use((req, res, next) => {
     res.set('X-Content-Type-Options', 'nosniff');
     res.set('X-Frame-Options', 'DENY');
@@ -200,7 +194,6 @@ function startStatsServer() {
     }
   });
 
-  // Current bot presence endpoint (protected with basic auth)
   app.get('/api/bot/status', basicAuth, (req, res) => {
     if (!client.isReady()) {
       return res.status(503).json({ error: 'bot is not ready' });
@@ -247,7 +240,6 @@ function startStatsServer() {
     }
   });
 
-  // Start server
   httpServer = app.listen(SERVER_PORT, SERVER_HOST, () => {
     logger.info(`stats server running on http://${SERVER_HOST}:${SERVER_PORT}`);
     logger.info(`stats endpoint: http://${SERVER_HOST}:${SERVER_PORT}/api/stats/24h`);
@@ -258,7 +250,6 @@ function startStatsServer() {
   });
 }
 
-// Event handlers
 client.once(Events.ClientReady, async readyClient => {
   try {
     botStartTime = Date.now();
@@ -353,7 +344,6 @@ client.on(Events.InteractionCreate, async interaction => {
     if (interaction.isModalSubmit()) {
       await handleModalSubmit(interaction, modalAttachmentCache);
     } else if (interaction.isMessageContextMenuCommand()) {
-      // Route to appropriate handler based on command name
       if (interaction.commandName === 'download') {
         await handleDownloadContextMenuCommand(interaction);
       } else if (interaction.commandName === 'optimize') {
@@ -395,9 +385,7 @@ client.on(Events.Error, error => {
   logger.error('Discord error:', error);
 });
 
-// Validate configuration
 try {
-  // Config validation happens during import, but check here for clarity
   if (!DISCORD_TOKEN || !CLIENT_ID) {
     throw new ConfigurationError('Required configuration missing');
   }
@@ -418,7 +406,6 @@ async function startBot() {
     await initDatabase();
     logger.info('Database initialized');
 
-    // Start stats HTTP server (minimal, only for /api/stats/24h endpoint)
     if (SERVER_PORT) {
       startStatsServer();
     }
@@ -448,7 +435,6 @@ async function startBot() {
 
 startBot();
 
-// Graceful shutdown handlers
 function gracefulShutdown(signal) {
   logger.info(`${signal} received, shutting down gracefully...`);
   if (cleanupJobIntervalId) {

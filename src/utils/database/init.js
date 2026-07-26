@@ -14,7 +14,6 @@ import {
 } from './schema-pg.js';
 
 export async function initPostgresDatabase() {
-  // If initialization is in progress, wait for it
   // This MUST be checked first to prevent race conditions in parallel tests
   const initPromise = getPostgresInitPromise();
   if (initPromise) {
@@ -22,16 +21,13 @@ export async function initPostgresDatabase() {
     return;
   }
 
-  // If already initialized, return immediately
   const sql = getPostgresConnection();
   if (sql) {
     return; // Already initialized
   }
 
-  // Start initialization
   const newInitPromise = (async () => {
     try {
-      // Initialize connection
       const connection = await initPostgresConnection();
       setPostgresConnection(connection);
 
@@ -87,7 +83,6 @@ export async function initPostgresDatabase() {
           // 23505: unique constraint violation (race condition in pg_class catalog)
           // 42P07: relation already exists (race condition despite IF NOT EXISTS)
           if (error.code === '23505' || error.code === '42P07') {
-            // Index already exists or is being created, this is safe to ignore
             console.warn(
               `[Database Init] Index "${index.name}" already exists (${error.code}), skipping...`
             );
@@ -172,13 +167,11 @@ export async function ensurePostgresInitialized() {
     return; // Already initialized
   }
 
-  // If initialization is in progress, wait for it
   const initPromise = getPostgresInitPromise();
   if (initPromise) {
     await initPromise;
     return;
   }
 
-  // Start initialization if not already started
   await initPostgresDatabase();
 }

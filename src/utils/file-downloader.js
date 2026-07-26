@@ -139,7 +139,6 @@ export async function downloadFileFromUrl(url, isAdminUser = false, client = nul
     throw new ValidationError(urlValidation.error);
   }
 
-  // Try to refresh Discord CDN URLs if client is available
   let actualUrl = url;
   if (client && isDiscordCdnUrl(url)) {
     try {
@@ -152,7 +151,6 @@ export async function downloadFileFromUrl(url, isAdminUser = false, client = nul
     }
   }
 
-  // Check if URL is from social media and Cobalt is enabled
   // Skip Cobalt for Discord CDN URLs as they are handled directly
   if (COBALT_ENABLED && !isDiscordCdnUrl(actualUrl) && isSocialMediaUrl(actualUrl)) {
     try {
@@ -183,7 +181,6 @@ export async function downloadFileFromUrl(url, isAdminUser = false, client = nul
     const buffer = Buffer.from(response.data);
 
     // Validate buffer size (axios maxContentLength may not work if server doesn't send Content-Length header)
-    // Determine appropriate limit based on content type
     const contentType = response.headers['content-type'] || '';
     const isVideo =
       contentType.startsWith('video/') ||
@@ -215,7 +212,6 @@ export async function downloadFileFromUrl(url, isAdminUser = false, client = nul
 
     const contentDisposition = response.headers['content-disposition'] || '';
 
-    // Extract filename from Content-Disposition header or URL
     let filename = 'file';
     if (contentDisposition) {
       const filenameMatch = contentDisposition.match(/filename[^;=\n]*=((['"]).*?\2|[^;\n]*)/);
@@ -224,7 +220,6 @@ export async function downloadFileFromUrl(url, isAdminUser = false, client = nul
       }
     }
     if (filename === 'file') {
-      // Try to extract from URL
       try {
         const urlPath = new URL(url).pathname;
         const urlFilename = path.basename(urlPath);
@@ -268,7 +263,6 @@ export async function downloadFileFromUrl(url, isAdminUser = false, client = nul
         logger.info(`Got 500 error, attempting to refresh Discord URL`);
         const refreshedUrl = await getRefreshedAttachmentURL(client, url);
         if (refreshedUrl !== url) {
-          // Retry with refreshed URL
           logger.info(`Retrying download with refreshed URL`);
           const retryResponse = await axios.get(refreshedUrl, {
             ...ssrfGuardedRequest(),
@@ -358,7 +352,6 @@ export async function downloadFileFromUrl(url, isAdminUser = false, client = nul
 
 export async function parseTenorUrl(url) {
   try {
-    // Check if URL is a Tenor view URL
     const tenorViewPattern = /^https?:\/\/(www\.)?tenor\.com\/view\/.+-gif-(\d+)/i;
     const match = url.match(tenorViewPattern);
 
@@ -383,7 +376,6 @@ export async function parseTenorUrl(url) {
 
       const html = response.data;
 
-      // Try to find the store-cache script tag with JSON data
       // Match script tag with id="store-cache" (attributes can be in any order)
       const storeCacheMatch = html.match(
         /<script[^>]*id=["']store-cache["'][^>]*>(.*?)<\/script>/is
@@ -411,7 +403,6 @@ export async function parseTenorUrl(url) {
         }
       }
 
-      // Try to find og:image meta tag
       const ogImageMatch = html.match(
         /<meta\s+property=["']og:image["']\s+content=["']([^"']+)["']/i
       );
@@ -421,7 +412,6 @@ export async function parseTenorUrl(url) {
         return gifUrl;
       }
 
-      // Try to find other meta tags that might contain the GIF URL
       const metaImageMatch = html.match(/<meta\s+name=["']image["']\s+content=["']([^"']+)["']/i);
       if (metaImageMatch && metaImageMatch[1]) {
         const gifUrl = metaImageMatch[1];
@@ -429,7 +419,6 @@ export async function parseTenorUrl(url) {
         return gifUrl;
       }
 
-      // Try to find in JSON-LD structured data
       const jsonLdMatch = html.match(
         /<script[^>]*type=["']application\/ld\+json["'][^>]*>(.*?)<\/script>/is
       );
@@ -454,7 +443,6 @@ export async function parseTenorUrl(url) {
       );
     }
 
-    // Fall back to direct URL pattern
     const directUrl = `https://c.tenor.com/${gifId}/tenor.gif`;
     logger.info(`Using fallback direct URL pattern: ${directUrl}`);
     return directUrl;

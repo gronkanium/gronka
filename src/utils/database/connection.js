@@ -11,12 +11,10 @@ export function isTestMode() {
     return false;
   }
 
-  // Check if TEST_POSTGRES_DB is explicitly set
   if (process.env.TEST_POSTGRES_DB) {
     return true;
   }
 
-  // Check if TEST_DATABASE_URL is set
   if (process.env.TEST_DATABASE_URL) {
     return true;
   }
@@ -67,7 +65,6 @@ function getDefaultPostgresHost() {
   // Otherwise, use auto-detection to support both Docker and local/WSL environments
   const autoDetectedHost = isRunningInDocker() ? 'postgres' : 'localhost';
 
-  // Log if POSTGRES_HOST is set but being overridden by auto-detection
   if (process.env.POSTGRES_HOST && process.env.POSTGRES_HOST !== autoDetectedHost) {
     console.log(
       `[PostgreSQL] Auto-detected environment: using ${autoDetectedHost} (POSTGRES_HOST=${process.env.POSTGRES_HOST} ignored)`
@@ -80,8 +77,6 @@ function getDefaultPostgresHost() {
 export function getPostgresConfig() {
   const useTestConfig = isTestMode();
 
-  // Support DATABASE_URL for full connection string
-  // Check test version first if in test mode
   if (useTestConfig && process.env.TEST_DATABASE_URL) {
     return process.env.TEST_DATABASE_URL;
   }
@@ -90,7 +85,6 @@ export function getPostgresConfig() {
     return process.env.DATABASE_URL;
   }
 
-  // Get default host (auto-detects Docker vs local)
   // This now handles POSTGRES_HOST internally and prioritizes auto-detection
   const resolvedHost = useTestConfig
     ? process.env.TEST_POSTGRES_HOST || getDefaultPostgresHost()
@@ -100,7 +94,6 @@ export function getPostgresConfig() {
     `[PostgreSQL] Host resolution: POSTGRES_HOST=${process.env.POSTGRES_HOST}, auto-detected=${resolvedHost}`
   );
 
-  // Support individual connection parameters
   // Use TEST_ prefixed variables if in test mode, with fallback to regular variables
   const username = useTestConfig
     ? process.env.TEST_POSTGRES_USER || process.env.POSTGRES_USER || 'gronka'
@@ -144,18 +137,15 @@ export async function initPostgresConnection() {
     return sql;
   }
 
-  // If initialization is in progress, wait for it
   if (initPromise) {
     return initPromise;
   }
 
-  // Start initialization
   const newInitPromise = (async () => {
     try {
       const config = getPostgresConfig();
       const testMode = isTestMode();
 
-      // Extract database name for logging and verification
       const dbName = typeof config === 'string' ? extractDbFromUrl(config) : config.database;
 
       // Safety check: prevent tests from accidentally writing to production database
@@ -166,7 +156,6 @@ export async function initPostgresConnection() {
         );
       }
 
-      // Log connection info (useful for debugging test database issues)
       const mode = testMode ? 'TEST' : 'PROD';
       const host = typeof config === 'string' ? 'from URL' : config.host;
       console.log(`[PostgreSQL] Connecting to database "${dbName}" on ${host} (${mode} mode)`);
@@ -185,10 +174,8 @@ export async function initPostgresConnection() {
             console.log(`[PostgreSQL] ${notice.severity}: ${notice.message}`);
           };
 
-      // Ensure username is set when using connection string
       let connectionOptions;
       if (typeof config === 'string') {
-        // Parse connection string to ensure username is present
         try {
           const url = new URL(config);
           if (!url.username || url.username.trim() === '') {
@@ -208,7 +195,6 @@ export async function initPostgresConnection() {
           onnotice,
         };
       } else {
-        // Ensure username is set in config object
         if (!config.username || config.username.trim() === '') {
           throw new Error(
             'PostgreSQL username is required in connection config. ' +
@@ -223,7 +209,6 @@ export async function initPostgresConnection() {
 
       sql = postgres(connectionOptions);
 
-      // Test the connection
       await sql`SELECT 1`;
 
       console.log(`[PostgreSQL] Connected successfully to "${dbName}"`);

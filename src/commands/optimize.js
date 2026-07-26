@@ -103,11 +103,9 @@ export async function processOptimization(
     async ctx => {
       const { operationId, userId, username, tempFiles, buildMetadata } = ctx;
 
-      // Build optimize options once for reuse throughout the function
       const optimizeOptions =
         lossyLevel !== null && lossyLevel !== undefined ? { lossy: lossyLevel } : {};
 
-      // Check if URL has already been processed (only for external URL-based optimizations)
       if (originalUrl) {
         // Use composite hash that includes lossy parameter for cache key
         const urlHash = hashUrlWithParams(originalUrl, optimizeOptions);
@@ -134,17 +132,14 @@ export async function processOptimization(
             logger.info(
               `URL cache exists but its R2 upload expired (hash: ${urlHash.substring(0, 8)}...), optimizing fresh instead of returning a dead link`
             );
-            // Continue to download and optimize the file
           } else {
             logger.info(
               `URL cache exists but file type is ${processedUrl.file_type} (not GIF), skipping cache for optimization`
             );
-            // Continue to download and optimize the file
           }
         }
       }
 
-      // Download file if not already downloaded
       let fileBuffer = preDownloadedBuffer;
       if (!fileBuffer) {
         logger.info(`Downloading GIF: ${attachment.name}`);
@@ -168,7 +163,6 @@ export async function processOptimization(
 
       const originalSize = fileBuffer.length;
 
-      // Save original to temp directory for optimization
       const tempDir = path.join(process.cwd(), 'temp');
       await fs.mkdir(tempDir, { recursive: true });
 
@@ -183,7 +177,6 @@ export async function processOptimization(
         throw new Error('Invalid temp file path detected');
       }
 
-      // Log validation start
       logOperationStep(operationId, 'validation_start', 'running', {
         message: 'Validating GIF file',
         metadata: {
@@ -198,7 +191,6 @@ export async function processOptimization(
       await writeValidatedFileBuffer(tempInputPath, fileBuffer);
       tempFiles.push(tempInputPath);
 
-      // Log validation complete
       logOperationStep(operationId, 'validation_complete', 'success', {
         message: 'GIF file validation passed',
         metadata: {
@@ -215,7 +207,6 @@ export async function processOptimization(
       ]);
       const optimizedGifPath = getGifPath(optimizedHash, GIF_STORAGE_PATH);
 
-      // Optimize the GIF with specified lossy level
       logger.debug(
         `Optimizing GIF: ${tempInputPath} -> ${optimizedGifPath}${lossyLevel !== null ? ` (lossy: ${lossyLevel})` : ''}`
       );
@@ -232,7 +223,6 @@ export async function processOptimization(
 
       await optimizeGif(tempInputPath, optimizedGifPath, optimizeOptions);
 
-      // Read optimized file and get its size
       const optimizedBuffer = await fs.readFile(optimizedGifPath);
       const optimizedSize = optimizedBuffer.length;
 
@@ -260,21 +250,17 @@ export async function processOptimization(
         optimizedUploadMethod = saveResult.method;
         // If R2 is configured, saveGif returns the R2 URL, otherwise it returns the local path
         if (!optimizedUrl.startsWith('http://') && !optimizedUrl.startsWith('https://')) {
-          // Local path, construct URL
           const filename = path.basename(optimizedGifPath);
           optimizedUrl = `${CDN_BASE_URL}/${filename}`;
         }
       } catch (error) {
         logger.warn(`Failed to upload optimized GIF to R2, using local path:`, error.message);
-        // Fallback to local URL
         const filename = path.basename(optimizedGifPath);
         optimizedUrl = `${CDN_BASE_URL}/${filename}`;
       }
 
-      // Calculate size reduction
       const reduction = calculateSizeReduction(originalSize, optimizedSize);
 
-      // Record processed URL in database for all optimizations
       // For URL-based operations, use composite hash that includes lossy parameter; for attachments, use file hash
       const urlHash = originalUrl ? hashUrlWithParams(originalUrl, optimizeOptions) : optimizedHash;
       await recordProcessedUrl({
@@ -287,7 +273,6 @@ export async function processOptimization(
         fileSize: optimizedSize,
       });
 
-      // Track temporary upload if file was uploaded to R2
       if (optimizedUploadMethod === 'r2') {
         await trackR2UploadIfApplicable(urlHash, optimizedUrl, adminUser);
       }
@@ -296,7 +281,6 @@ export async function processOptimization(
         `GIF optimization completed: ${originalSize} bytes -> ${optimizedSize} bytes (${reduction}% reduction) for user ${userId}`
       );
 
-      // Update operation to success with file size
       updateOperationStatus(operationId, 'success', { fileSize: optimizedSize });
 
       // Send as Discord attachment if < 8MB, otherwise send URL
@@ -308,7 +292,6 @@ export async function processOptimization(
             files: [new AttachmentBuilder(optimizedBuffer, { name: filename })],
           });
 
-          // Capture Discord attachment URL and log
           let discordUrl = null;
           if (message && message.attachments && message.attachments.size > 0) {
             const discordAttachment = message.attachments.first();
@@ -336,7 +319,6 @@ export async function processOptimization(
             }
           }
 
-          // Log Discord upload with URL if captured
           if (discordUrl) {
             logger.info(`Uploaded to Discord: ${discordUrl}`);
             // Update database with Discord URL since file was uploaded to Discord, not saved to R2/CDN
@@ -351,7 +333,6 @@ export async function processOptimization(
             });
           }
         } catch (discordError) {
-          // Discord upload failed, fallback to R2
           logger.warn(
             `Discord attachment upload failed, falling back to R2: ${discordError.message}`
           );
@@ -364,7 +345,6 @@ export async function processOptimization(
             );
 
             if (r2Url) {
-              // Update database with R2 URL
               // Use composite hash that includes lossy parameter for cache key
               const urlHash = originalUrl
                 ? hashUrlWithParams(originalUrl, optimizeOptions)
@@ -401,10 +381,8 @@ export async function processOptimization(
         });
       }
 
-      // Send success notification
       await notifyCommandSuccess(username, 'optimize', { operationId, userId });
 
-      // Record rate limit after successful optimization
       recordRateLimit(userId);
     },
     {
@@ -456,18 +434,14 @@ export async function handleOptimizeContextMenuCommand(interaction, modalAttachm
     return;
   }
 
-  // Get the message that was right-clicked
   const targetMessage = interaction.targetMessage;
 
-  // Find GIF attachment
   const gifAttachment = targetMessage.attachments.find(
     att => att.contentType === 'image/gif' || (att.name && att.name.toLowerCase().endsWith('.gif'))
   );
 
-  // Check for URLs in message content if no attachment found
   let url = null;
   if (!gifAttachment && targetMessage.content) {
-    // Extract URLs from message content
     const urlPattern = /https?:\/\/[^\s<>"{}|\\^`[\]]+/gi;
     const urls = targetMessage.content.match(urlPattern);
     if (urls && urls.length > 0) {
@@ -476,14 +450,12 @@ export async function handleOptimizeContextMenuCommand(interaction, modalAttachm
     }
   }
 
-  // Determine attachment and validate it's a GIF
   // No initializer: every branch below either reassigns this before it's read or returns early.
   let attachment;
   let preDownloadedBuffer = null;
   let originalUrlForConversion = null;
 
   if (gifAttachment) {
-    // Validate it's actually a GIF
     if (!isGifFile(gifAttachment.name, gifAttachment.contentType)) {
       logger.warn(`Attachment is not a GIF for user ${userId}`);
       const errorMessage = 'this command only works on gif files.';
@@ -508,7 +480,6 @@ export async function handleOptimizeContextMenuCommand(interaction, modalAttachm
     }
     attachment = gifAttachment;
   } else if (url) {
-    // Validate URL format
     const urlValidation = validateUrl(url);
     if (!urlValidation.valid) {
       logger.warn(`Invalid URL for user ${userId}: ${urlValidation.error}`);
@@ -529,7 +500,6 @@ export async function handleOptimizeContextMenuCommand(interaction, modalAttachm
     }
 
     try {
-      // Check if it's a cdn.gronka.dev URL and try to use local file
       const hash = extractHashFromCdnUrl(url);
       let useLocalFile = false;
       let localFilePath = null;
@@ -544,7 +514,6 @@ export async function handleOptimizeContextMenuCommand(interaction, modalAttachm
       }
 
       if (!useLocalFile) {
-        // Check if URL is a Tenor GIF link and parse it
         let actualUrl = url;
         const isTenorUrl = /^https?:\/\/(www\.)?tenor\.com\/view\/.+-gif-\d+/i.test(url);
         if (isTenorUrl) {
@@ -566,11 +535,9 @@ export async function handleOptimizeContextMenuCommand(interaction, modalAttachm
           }
         }
 
-        // Download the GIF
         logger.info(`Downloading GIF from URL: ${actualUrl}`);
         const fileData = await downloadFileFromUrl(actualUrl, adminUser, interaction.client);
 
-        // Validate it's a GIF
         if (!isGifFile(fileData.filename, fileData.contentType)) {
           await safeReply(interaction, {
             content: 'this command only works on gif files.',
@@ -592,7 +559,6 @@ export async function handleOptimizeContextMenuCommand(interaction, modalAttachm
           size: fileData.size,
           contentType: fileData.contentType,
         };
-        // Store original URL for database tracking (only for external URLs, not CDN)
         originalUrlForConversion = actualUrl;
       } else {
         // Use local file (CDN URL - don't track as it's already processed)
@@ -604,7 +570,6 @@ export async function handleOptimizeContextMenuCommand(interaction, modalAttachm
           size: preDownloadedBuffer.length,
           contentType: 'image/gif',
         };
-        // Don't set originalUrlForConversion for CDN URLs
       }
     } catch (error) {
       logger.error(`Failed to process URL for user ${userId}:`, error);
@@ -635,7 +600,6 @@ export async function handleOptimizeContextMenuCommand(interaction, modalAttachm
     return;
   }
 
-  // Show modal to get lossy level
   const modal = new ModalBuilder()
     .setCustomId(`optimize_modal_${Date.now()}`)
     .setTitle('optimize gif');
@@ -651,7 +615,6 @@ export async function handleOptimizeContextMenuCommand(interaction, modalAttachm
   const actionRow = new ActionRowBuilder().addComponents(lossyInput);
   modal.addComponents(actionRow);
 
-  // Store attachment info for modal submission
   const modalId = modal.data.custom_id;
   modalAttachmentCache.set(modalId, {
     attachment,
@@ -664,7 +627,6 @@ export async function handleOptimizeContextMenuCommand(interaction, modalAttachm
 
   const modalShown = await safeShowModal(interaction, modal);
   if (!modalShown) {
-    // If modal couldn't be shown, clean up cache entry
     modalAttachmentCache.delete(modalId);
     logger.warn(`Failed to show modal for user ${userId}, cleaned up cache entry`);
   }
@@ -689,12 +651,10 @@ export async function handleOptimizeCommand(interaction) {
     return;
   }
 
-  // Get attachment or URL from command options
   const attachment = interaction.options.getAttachment('file');
   const url = interaction.options.getString('url');
   const lossyLevel = interaction.options.getNumber('lossy');
 
-  // Validate lossy level if provided
   if (lossyLevel !== null && (lossyLevel < 0 || lossyLevel > 100)) {
     const errorMessage = 'lossy level must be between 0 and 100.';
     createFailedOperation('optimize', userId, username, errorMessage, 'invalid_lossy_level', {
@@ -738,7 +698,6 @@ export async function handleOptimizeCommand(interaction) {
   let preDownloadedBuffer = null;
   let originalUrlForConversion = null;
 
-  // Validate attachment is a GIF
   if (attachment) {
     if (!isGifFile(attachment.name, attachment.contentType)) {
       logger.warn(`Attachment is not a GIF for user ${userId}`);

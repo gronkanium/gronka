@@ -40,7 +40,6 @@ function getCobaltErrorMessage(errorCode, context = {}) {
     return null;
   }
 
-  // Handle error.api.link.unsupported with service context
   if (errorCode === 'error.api.link.unsupported' && context?.service) {
     return `the service "${context.service}" is not supported by cobalt`;
   }
@@ -73,14 +72,12 @@ function analyzeError(data, errorObj) {
     result.errorCode = errorCode;
     result.context = errorContext;
 
-    // Get user-friendly message
     const friendlyMessage = getCobaltErrorMessage(errorCode, errorContext);
     if (friendlyMessage) {
       result.userMessage = friendlyMessage;
     }
   }
 
-  // Check for explicit rate limit indicators
   if (errorCode && errorCode.includes('rate')) {
     result.isRateLimit = true;
     return result;
@@ -92,7 +89,6 @@ function analyzeError(data, errorObj) {
     return result;
   }
 
-  // Handle specific error codes
   switch (errorCode) {
     case 'error.api.content.post.unavailable':
     case 'error.api.content.video.unavailable':
@@ -305,10 +301,8 @@ async function callCobaltApi(apiUrl, url, retryCount = 0, maxRetries = 3) {
       const data = error.response.data;
       logger.error(`Cobalt API error response: status=${status}, data=${JSON.stringify(data)}`);
 
-      // Analyze error to determine if it's rate limiting or not found
       const errorAnalysis = analyzeError(data, error);
 
-      // Log error details
       if (errorAnalysis.errorCode) {
         logger.error(`Cobalt error code: ${errorAnalysis.errorCode}`);
         if (errorAnalysis.context) {
@@ -324,7 +318,6 @@ async function callCobaltApi(apiUrl, url, retryCount = 0, maxRetries = 3) {
         throw new NetworkError(notFoundMessage);
       }
 
-      // If rate limited and we have retries left, retry with backoff
       if (errorAnalysis.isRateLimit && retryCount < maxRetries - 1) {
         // Calculate exponential backoff delay: 1s, 2s, 4s
         const delayMs = Math.pow(2, retryCount) * 1000;
@@ -335,7 +328,6 @@ async function callCobaltApi(apiUrl, url, retryCount = 0, maxRetries = 3) {
         return callCobaltApi(apiUrl, url, retryCount + 1, maxRetries);
       }
 
-      // Determine the message to show to the user
       let message = null;
 
       // First priority: Use our user-friendly message if available
@@ -350,14 +342,11 @@ async function callCobaltApi(apiUrl, url, retryCount = 0, maxRetries = 3) {
       } else if (typeof data?.error === 'string') {
         message = data.error;
       } else if (data?.error && typeof data.error === 'object') {
-        // If error is an object, try to extract message or stringify it
         message = data.error.message || data.error.text || JSON.stringify(data.error);
       } else if (data) {
-        // If data exists but doesn't have standard error fields, stringify it
         message = typeof data === 'string' ? data : JSON.stringify(data);
       }
 
-      // Fallback to status code if no message found
       if (!message) {
         message = `Cobalt API error: ${status}`;
       }
@@ -404,7 +393,6 @@ async function downloadPhoto(photoUrl, index, isAdminUser = false, maxSize = Inf
 
     let contentType = response.headers['content-type'] || 'image/jpeg';
 
-    // Extract filename from Content-Disposition if available
     let filename = `photo_${index + 1}.jpg`;
     const contentDisposition = response.headers['content-disposition'] || '';
     if (contentDisposition) {
@@ -413,7 +401,6 @@ async function downloadPhoto(photoUrl, index, isAdminUser = false, maxSize = Inf
         filename = filenameMatch[1].replace(/['"]/g, '');
       }
     } else {
-      // Try to infer extension from content type
       const extMap = {
         'image/jpeg': '.jpg',
         'image/jpg': '.jpg',
@@ -477,7 +464,6 @@ async function downloadVideo(videoUrl, index, isAdminUser = false, maxSize = Inf
 
     let contentType = response.headers['content-type'] || 'video/mp4';
 
-    // Extract filename from Content-Disposition if available
     let filename = `video_${index + 1}.mp4`;
     const contentDisposition = response.headers['content-disposition'] || '';
     if (contentDisposition) {
@@ -486,7 +472,6 @@ async function downloadVideo(videoUrl, index, isAdminUser = false, maxSize = Inf
         filename = filenameMatch[1].replace(/['"]/g, '');
       }
     } else {
-      // Try to infer extension from content type
       const extMap = {
         'video/mp4': '.mp4',
         'video/quicktime': '.mov',
@@ -524,7 +509,6 @@ async function downloadVideo(videoUrl, index, isAdminUser = false, maxSize = Inf
 }
 
 async function downloadMediaFromPicker(pickerArray, isAdminUser = false, maxSize = Infinity) {
-  // Filter for photo and video items
   const mediaItems = pickerArray.filter(
     item => (item.type === 'photo' || item.type === 'video') && item.url
   );
@@ -568,10 +552,8 @@ function replaceTunnelHostname(url, apiUrl) {
     const urlObj = new URL(url);
     const apiUrlObj = new URL(apiUrl);
 
-    // Replace hostname if it's different from the API URL hostname
     if (urlObj.hostname !== apiUrlObj.hostname) {
       urlObj.hostname = apiUrlObj.hostname;
-      // Also replace port if API URL has a specific port
       if (apiUrlObj.port) {
         urlObj.port = apiUrlObj.port;
       }
@@ -611,12 +593,10 @@ async function downloadFromCobalt(
     return await downloadMediaFromPicker(cobaltResponse.picker, isAdminUser, maxSize);
   }
 
-  // Check for direct video URL
   let videoUrl = null;
   let filename = 'video.mp4';
 
   if (cobaltResponse.status === 'success') {
-    // Check for direct video URL
     if (cobaltResponse.url) {
       videoUrl = cobaltResponse.url;
     } else if (cobaltResponse.video) {
@@ -625,7 +605,6 @@ async function downloadFromCobalt(
       videoUrl = cobaltResponse.audio;
     }
 
-    // Get filename from response if available
     if (cobaltResponse.filename) {
       filename = cobaltResponse.filename;
     } else if (cobaltResponse.text) {
@@ -648,19 +627,16 @@ async function downloadFromCobalt(
       throw new NetworkError('cobalt tunnel response missing url');
     }
 
-    // Get filename from response if available
     if (cobaltResponse.filename) {
       filename = cobaltResponse.filename;
     }
   } else if (cobaltResponse.status === 'error') {
     throw new NetworkError(cobaltResponse.text || 'cobalt api returned an error');
   } else {
-    // Try to find video URL in response object
     const possibleKeys = ['url', 'video', 'videoUrl', 'downloadUrl', 'directUrl'];
     for (const key of possibleKeys) {
       if (cobaltResponse[key]) {
         videoUrl = cobaltResponse[key];
-        // If we have an API URL and the video URL looks like a tunnel URL, fix the hostname
         if (apiUrl && videoUrl.includes('/tunnel')) {
           videoUrl = replaceTunnelHostname(videoUrl, apiUrl);
         }
@@ -673,7 +649,6 @@ async function downloadFromCobalt(
     throw new NetworkError('cobalt api did not return a video url');
   }
 
-  // Download the video
   try {
     const response = await axios.get(videoUrl, {
       responseType: 'arraybuffer',
@@ -698,7 +673,6 @@ async function downloadFromCobalt(
 
     let contentType = response.headers['content-type'] || 'video/mp4';
 
-    // Extract filename from Content-Disposition if available
     const contentDisposition = response.headers['content-disposition'] || '';
     if (contentDisposition) {
       const filenameMatch = contentDisposition.match(/filename[^;=\n]*=((['"]).*?\2|[^;\n]*)/);
@@ -707,7 +681,6 @@ async function downloadFromCobalt(
       }
     }
 
-    // If content type is generic or missing, try to infer from filename
     if (
       !contentType ||
       contentType === 'application/octet-stream' ||

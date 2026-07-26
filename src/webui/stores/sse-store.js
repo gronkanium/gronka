@@ -5,11 +5,9 @@
 
 import { writable } from 'svelte/store';
 
-// Connection state
 export const connected = writable(false);
 const error = writable(null);
 
-// Connection health monitoring
 export const connectionHealth = writable({
   uptime: 0,
   reconnectCount: 0,
@@ -19,13 +17,11 @@ export const connectionHealth = writable({
   isOnline: navigator.onLine !== false,
 });
 
-// Data stores for different message types
 export const operations = writable([]);
 export const logs = writable([]);
 export const alerts = writable([]);
 export const userMetrics = writable(new Map()); // Map<userId, metrics>
 
-// Internal EventSource instance
 let es = null;
 let reconnectTimeout = null;
 let reconnectAttempts = 0;
@@ -61,7 +57,6 @@ function updateHealthMetrics() {
  * Start health monitoring intervals
  */
 function startHealthMonitoring() {
-  // Update health metrics every second
   if (healthCheckInterval) {
     clearInterval(healthCheckInterval);
   }
@@ -114,7 +109,6 @@ function connect() {
     return; // Already connected
   }
 
-  // Don't connect if offline
   if (!isOnline) {
     console.log('Device is offline, skipping SSE connection');
     return;
@@ -197,41 +191,34 @@ function connect() {
 function handleMessage(message) {
   switch (message.type) {
     case 'operations':
-      // Initial operations list
       operations.set(message.data || []);
       break;
 
     case 'operation':
-      // Single operation update
       operations.update(ops => {
         const index = ops.findIndex(op => op.id === message.data.id);
         if (index !== -1) {
-          // Update existing operation
           ops[index] = message.data;
           return [...ops];
         } else {
-          // Add new operation at the beginning
           return [message.data, ...ops].slice(0, 100); // Keep last 100
         }
       });
       break;
 
     case 'log':
-      // New log entry
       logs.update(logList => {
         return [message.data, ...logList].slice(0, 1000); // Keep last 1000 logs
       });
       break;
 
     case 'alert':
-      // New alert notification
       alerts.update(alertList => {
         return [message.data, ...alertList].slice(0, 500); // Keep last 500 alerts
       });
       break;
 
     case 'user_metrics':
-      // User metrics update
       userMetrics.update(metricsMap => {
         const newMap = new Map(metricsMap);
         newMap.set(message.data.userId, message.data.metrics);
@@ -263,7 +250,6 @@ function scheduleReconnect() {
     reconnectTimeout = null;
   }
 
-  // Don't reconnect if offline
   if (!isOnline) {
     console.log('Device is offline, pausing reconnection attempts');
     return;
@@ -284,7 +270,6 @@ function scheduleReconnect() {
     reconnectAttempts++;
     updateHealthMetrics();
 
-    // Only reconnect if we still have active references and are online
     if (connectionRefs > 0 && isOnline) {
       connect();
     } else if (connectionRefs > 0 && !isOnline) {
@@ -325,7 +310,6 @@ function handleOnline() {
   isOnline = true;
   connectionHealth.update(health => ({ ...health, isOnline: true }));
 
-  // If we have active references but no connection, try to connect
   if (connectionRefs > 0 && (!es || es.readyState !== EventSource.OPEN)) {
     reconnectAttempts = 0;
     connect();
@@ -348,18 +332,14 @@ export function useSse() {
 
   if (connectionRefs === 1) {
     // First component using the store, establish connection
-    // Set up online/offline listeners
     window.addEventListener('online', handleOnline);
     window.addEventListener('offline', handleOffline);
 
-    // Initialize connection health
     updateHealthMetrics();
 
-    // Establish connection
     connect();
   }
 
-  // Return cleanup function
   return () => {
     connectionRefs--;
 

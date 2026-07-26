@@ -27,10 +27,8 @@ const logger = createLogger('webui');
 // Store server reference for graceful shutdown
 let server = null;
 
-// Configuration from centralized config
 const { webuiPort: WEBUI_PORT, webuiHost: WEBUI_HOST } = webuiConfig;
 
-// Validate configuration
 try {
   // Config validation happens during import
   if (!WEBUI_PORT) {
@@ -45,7 +43,6 @@ try {
   process.exit(1);
 }
 
-// Set up broadcast callbacks with clients
 const broadcastOperationWrapper = operation => {
   broadcastOperation(clients, operation);
 };
@@ -59,12 +56,9 @@ const broadcastUserMetricsWrapper = (userId, metrics) => {
   broadcastUserMetrics(clients, userId, metrics);
 };
 
-// Initialize database and start server
 (async () => {
   try {
-    // Log and validate database configuration before initialization
     const dbConfig = getPostgresConfig();
-    // Extract database name or connection string
     const dbInfo = typeof dbConfig === 'string' ? dbConfig : dbConfig.database;
     logger.info(`using database: ${dbInfo}`);
 
@@ -83,11 +77,9 @@ const broadcastUserMetricsWrapper = (userId, metrics) => {
     // Clear in-memory operations before loading from database to prevent stale test operations
     operations.length = 0;
 
-    // Load recent operations from database
     try {
       const recentOps = await getRecentOperations(MAX_OPERATIONS);
       if (recentOps && Array.isArray(recentOps) && recentOps.length > 0) {
-        // Enrich operations with usernames if missing
         let enrichedCount = 0;
         for (const op of recentOps) {
           if (await enrichOperationUsername(op)) {
@@ -111,25 +103,18 @@ const broadcastUserMetricsWrapper = (userId, metrics) => {
     process.exit(1);
   }
 
-  // Create Express app
   const app = createApp(clients);
 
-  // Create HTTP server from Express app
   server = http.createServer(app);
 
-  // Set the broadcast callback in operations tracker (with instance port)
   setBroadcastCallback(broadcastOperationWrapper, WEBUI_PORT);
 
-  // Set the log broadcast callback
   setLogBroadcastCallback(broadcastLogWrapper);
 
-  // Set the alert broadcast callback
   setAlertBroadcastCallback(broadcastAlertWrapper);
 
-  // Set the user metrics broadcast callback (with instance port)
   setUserMetricsBroadcastCallback(broadcastUserMetricsWrapper, WEBUI_PORT);
 
-  // Start server
   server.listen(WEBUI_PORT, WEBUI_HOST, () => {
     logger.info(`webui server running on http://${WEBUI_HOST}:${WEBUI_PORT}`);
     logger.info(`dashboard: http://${WEBUI_HOST}:${WEBUI_PORT}`);
@@ -140,12 +125,9 @@ const broadcastUserMetricsWrapper = (userId, metrics) => {
   });
 })();
 
-// Handle graceful shutdown
 function gracefulShutdown() {
   logger.info('Shutdown signal received, shutting down gracefully...');
-  // Stop SSE heartbeat
   stopHeartbeatInterval();
-  // Close HTTP server
   if (server) {
     server.close(() => {
       logger.info('HTTP server closed');
@@ -157,7 +139,6 @@ function gracefulShutdown() {
 process.on('SIGTERM', gracefulShutdown);
 process.on('SIGINT', gracefulShutdown);
 
-// Export broadcast functions for external use
 export { broadcastLogWrapper as broadcastLog };
 export { broadcastAlertWrapper as broadcastAlert };
 export { broadcastUserMetricsWrapper as broadcastUserMetrics };

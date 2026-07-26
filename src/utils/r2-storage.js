@@ -126,7 +126,6 @@ export async function uploadToR2(buffer, key, contentType, config, metadata = {}
 
     const result = await upload.done();
 
-    // Log the result to verify upload completed
     if (result && result.ETag) {
       logger.info(`Upload completed: ETag=${result.ETag}, Location=${result.Location || 'N/A'}`);
     }
@@ -150,7 +149,6 @@ export async function uploadToR2(buffer, key, contentType, config, metadata = {}
       );
     }
 
-    // Generate public URL
     const publicUrl = `https://${publicDomain}/${key}`;
     logger.info(`Uploaded to R2: ${publicUrl}`);
     return publicUrl;
@@ -236,7 +234,6 @@ export async function uploadVideoToR2(buffer, hash, extension, config, metadata 
   const ext = safeExt.startsWith('.') ? safeExt : `.${safeExt}`;
   const key = `videos/${safeHash}${ext}`;
 
-  // Determine content type from extension
   const contentTypes = {
     '.mp4': 'video/mp4',
     '.webm': 'video/webm',
@@ -264,7 +261,6 @@ export async function uploadImageToR2(buffer, hash, extension, config, metadata 
   const ext = safeExt.startsWith('.') ? safeExt : `.${safeExt}`;
   const key = `images/${safeHash}${ext}`;
 
-  // Determine content type from extension
   const contentTypes = {
     '.png': 'image/png',
     '.jpg': 'image/jpeg',
@@ -300,7 +296,6 @@ export async function downloadGifFromR2(hash, config) {
 
     const response = await client.send(command);
 
-    // Convert stream to buffer
     const chunks = [];
     for await (const chunk of response.Body) {
       chunks.push(chunk);

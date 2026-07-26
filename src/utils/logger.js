@@ -14,7 +14,6 @@ const LOG_LEVEL_NAMES = {
   3: 'ERROR',
 };
 
-// Track database initialization promise
 let dbInitPromise = null;
 
 // Callback for broadcasting logs to WebSocket clients
@@ -36,7 +35,6 @@ class Logger {
     const levelName = logLevel.toUpperCase();
     this.logLevel = LOG_LEVELS[levelName] !== undefined ? LOG_LEVELS[levelName] : LOG_LEVELS.INFO;
 
-    // Initialize database if not already done
     // Skip if we're in a test environment where database might not be available
     if (!dbInitPromise && !process.env.SKIP_DB_INIT) {
       dbInitPromise = initDatabase().catch(error => {
@@ -112,14 +110,11 @@ class Logger {
     const levelName = LOG_LEVEL_NAMES[level];
     const formattedMessage = this.formatMessage(level, message, ...args);
 
-    // Always output to console
     // Explicitly sanitize formattedMessage to prevent log injection
     // Use dedicated sanitization function so CodeQL can track the sanitization flow
     const sanitizedForConsole = this.sanitizeForConsoleOutput(formattedMessage);
     console.log(sanitizedForConsole);
 
-    // Store in database
-    // Combine message and args into the message field
     // Sanitize to prevent log injection
     const sanitizedMessage = this.sanitizeLogInput(message);
     const fullMessage =
@@ -132,18 +127,15 @@ class Logger {
             .join(' ')}`
         : sanitizedMessage;
 
-    // Write to database (wait for initialization if needed)
     try {
       if (dbInitPromise) {
         const initResult = await dbInitPromise;
-        // If initialization failed, initResult will be null
         if (initResult === null) {
           return; // Skip database logging if init failed
         }
       }
       await insertLog(timestamp, this.component, levelName, fullMessage);
 
-      // Broadcast log to WebSocket clients if callback is set
       if (logBroadcastCallback) {
         try {
           logBroadcastCallback({

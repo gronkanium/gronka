@@ -56,13 +56,12 @@ import {
   logOperationStep,
 } from '../utils/operations-tracker.js';
 import { notifyCommandSuccess, notifyCommandFailure } from '../utils/ntfy-notifier.js';
-import { hashUrlWithParams } from '../utils/cobalt-queue.js';
+import { hashUrlWithParams, hashPartsHex } from '../utils/hashing.js';
 import { getProcessedUrl } from '../utils/database.js';
 import { recordProcessedUrl, trackR2UploadIfApplicable } from './shared/url-cache.js';
 import { runMediaCommand } from './shared/run-media-command.js';
 import { replyIfRateLimited, resolveTimeOptions } from './shared/command-guards.js';
 import { initializeDatabaseWithErrorHandling } from '../utils/database-init.js';
-import { hashPartsHex } from '../utils/hashing.js';
 
 const logger = createLogger('convert');
 

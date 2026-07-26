@@ -30,13 +30,12 @@ import {
   logOperationStep,
 } from '../utils/operations-tracker.js';
 import { notifyCommandSuccess, notifyCommandFailure } from '../utils/ntfy-notifier.js';
-import { hashUrlWithParams } from '../utils/cobalt-queue.js';
+import { hashUrlWithParams, hashPartsHex } from '../utils/hashing.js';
 import { getProcessedUrl } from '../utils/database.js';
 import { recordProcessedUrl, trackR2UploadIfApplicable } from './shared/url-cache.js';
 import { runMediaCommand } from './shared/run-media-command.js';
 import { replyIfRateLimited } from './shared/command-guards.js';
 import { r2Config } from '../utils/config.js';
-import { hashPartsHex } from '../utils/hashing.js';
 import {
   safeInteractionReply,
   safeInteractionEditReply,

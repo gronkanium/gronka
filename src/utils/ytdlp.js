@@ -6,7 +6,7 @@ import tmp from 'tmp';
 import { createLogger } from './logger.js';
 import { NetworkError, ValidationError } from './errors.js';
 import { trimVideo } from './video-processor/trim-video.js';
-import { runInYtdlpSlot } from './ytdlp-queue.js';
+import { ytdlpSlots } from './concurrency.js';
 
 const logger = createLogger('ytdlp');
 
@@ -618,7 +618,7 @@ export async function downloadWithYtdlp(
 
   // Hold one of the limited yt-dlp slots for the memory-heavy download+read only. The cheap
   // metadata duration pre-check above runs unslotted so it never waits behind a big download.
-  return await runInYtdlpSlot(async () => {
+  return await ytdlpSlots.run(async () => {
     // Create temporary directory for download
     const tmpDir = tmp.dirSync({ unsafeCleanup: true });
     const useSegmentDownload = startTime !== null || duration !== null;

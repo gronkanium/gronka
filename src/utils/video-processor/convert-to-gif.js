@@ -3,7 +3,7 @@ import fs from 'fs/promises';
 import path from 'path';
 import { createLogger } from '../logger.js';
 import { validateNumericParameter, checkFFmpegInstalled } from './utils.js';
-import { runInMediaSlot } from '../media-processing-queue.js';
+import { mediaSlots } from '../concurrency.js';
 
 const logger = createLogger('convert-to-gif');
 
@@ -21,7 +21,7 @@ const logger = createLogger('convert-to-gif');
  * @returns {Promise<void>}
  */
 export async function convertToGif(inputPath, outputPath, options = {}) {
-  return runInMediaSlot(() => convertToGifImpl(inputPath, outputPath, options));
+  return mediaSlots.run(() => convertToGifImpl(inputPath, outputPath, options));
 }
 
 async function convertToGifImpl(inputPath, outputPath, options = {}) {

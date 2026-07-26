@@ -1,7 +1,6 @@
 import { test, describe, beforeAll, afterAll } from 'bun:test';
 import assert from 'node:assert';
 import { saveGif, saveVideo, saveImage } from '../../src/utils/storage.js';
-import { queueCobaltRequest } from '../../src/utils/cobalt-queue.js';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { mkdirSync } from 'node:fs';
@@ -89,67 +88,6 @@ describe('race conditions', () => {
       // All should succeed
       const successful = results.filter(r => r.status === 'fulfilled');
       assert.ok(successful.length > 0, 'At least one save should succeed');
-    });
-  });
-
-  describe('concurrent URL requests', () => {
-    test('concurrent requests for same URL should be deduplicated', async () => {
-      const url = 'https://example.com/test-' + Date.now();
-
-      let callCount = 0;
-      const downloadFn = async () => {
-        callCount++;
-        await new Promise(resolve => setTimeout(resolve, 50));
-        return {
-          buffer: Buffer.from('test'),
-          filename: 'test.mp4',
-          contentType: 'video/mp4',
-        };
-      };
-
-      // Make 5 concurrent requests for the same URL
-      const promises = Array.from({ length: 5 }, () => queueCobaltRequest(url, downloadFn));
-
-      // All should resolve
-      const results = await Promise.allSettled(promises);
-
-      // All should succeed
-      const successful = results.filter(r => r.status === 'fulfilled');
-      assert.strictEqual(successful.length, 5, 'All requests should succeed');
-
-      // Download function should be called at most once (due to deduplication)
-      // In practice, due to the race condition fix, it might be called 1-2 times
-      assert.ok(callCount <= 2, `Download should be called at most 2 times, got ${callCount}`);
-    });
-
-    test('concurrent requests for different URLs should not interfere', async () => {
-      const baseUrl = 'https://example.com/test-';
-      let callCount = 0;
-
-      const downloadFn = async () => {
-        callCount++;
-        await new Promise(resolve => setTimeout(resolve, 50));
-        return {
-          buffer: Buffer.from('test'),
-          filename: 'test.mp4',
-          contentType: 'video/mp4',
-        };
-      };
-
-      // Make 5 concurrent requests for different URLs
-      const promises = Array.from({ length: 5 }, (_, i) =>
-        queueCobaltRequest(`${baseUrl}${i}-${Date.now()}`, downloadFn)
-      );
-
-      // All should resolve
-      const results = await Promise.allSettled(promises);
-
-      // All should succeed
-      const successful = results.filter(r => r.status === 'fulfilled');
-      assert.strictEqual(successful.length, 5, 'All requests should succeed');
-
-      // Each URL should trigger its own download
-      assert.strictEqual(callCount, 5, 'Each unique URL should trigger a download');
     });
   });
 });

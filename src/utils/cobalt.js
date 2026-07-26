@@ -1,6 +1,7 @@
 import axios from 'axios';
 import { createLogger } from './logger.js';
 import { NetworkError, ValidationError } from './errors.js';
+import { cobaltSlots } from './concurrency.js';
 
 const logger = createLogger('cobalt');
 
@@ -806,6 +807,10 @@ async function downloadFromCobalt(
  *   direct is false when cobalt only offers a tunnel (caller should fall back to downloading)
  */
 export async function getCobaltMediaUrls(apiUrl, url) {
+  return cobaltSlots.run(() => getCobaltMediaUrlsImpl(apiUrl, url));
+}
+
+async function getCobaltMediaUrlsImpl(apiUrl, url) {
   const cobaltResponse = await callCobaltApi(apiUrl, url);
   logger.info(`Cobalt API response (url-only mode): ${JSON.stringify(cobaltResponse)}`);
 
@@ -897,6 +902,10 @@ export async function downloadFromSocialMedia(
   isAdminUser = false,
   maxSize = Infinity
 ) {
+  return cobaltSlots.run(() => downloadFromSocialMediaImpl(apiUrl, url, isAdminUser, maxSize));
+}
+
+async function downloadFromSocialMediaImpl(apiUrl, url, isAdminUser, maxSize) {
   logger.info(`Attempting to download from social media URL via Cobalt: ${url}`);
 
   try {

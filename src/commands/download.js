@@ -49,7 +49,7 @@ import {
   formatR2UrlWithDisclaimer,
   formatMultipleR2UrlsWithDisclaimer,
 } from '../utils/r2-storage.js';
-import { queueCobaltRequest, hashUrl } from '../utils/cobalt-queue.js';
+import { hashUrl } from '../utils/hashing.js';
 import { notifyCommandSuccess, notifyCommandFailure } from '../utils/ntfy-notifier.js';
 import { getProcessedUrl, getBooleanSetting, getSetting } from '../utils/database.js';
 import { recordProcessedUrl, trackR2UploadIfApplicable } from './shared/url-cache.js';
@@ -147,9 +147,8 @@ async function getMaxVideoSize() {
  * Used by url-only mode and as a last-resort fallback for X/Twitter videos that
  * exceed the download limits (Discord embeds direct video.twimg.com URLs and
  * plays the full video, so length/size caps don't apply).
- * Routes through the cobalt queue so lookups respect the same concurrency limit
- * and dedupe as regular downloads. The dedupeKey keeps them separate from
- * download requests, whose promises resolve to buffers rather than URL lists.
+ * The concurrency limit lives inside cobalt.js, so lookups share the same cap as
+ * regular downloads without the call site knowing about it.
  * Throws when the cobalt API call fails; callers decide whether to fall back.
  * @param {Object} params
  * @param {Interaction} params.interaction - Discord interaction
@@ -171,11 +170,7 @@ async function replyWithDirectMediaUrls({
   stepName,
   shouldServe = null,
 }) {
-  const { urls, direct } = await queueCobaltRequest(
-    url,
-    () => getCobaltMediaUrls(COBALT_API_URL, url),
-    { skipCache: true, dedupeKey: `urlonly:${hashUrl(url)}` }
-  );
+  const { urls, direct } = await getCobaltMediaUrls(COBALT_API_URL, url);
   if (!direct || urls.length === 0) {
     return false;
   }
@@ -499,18 +494,9 @@ async function processDownload(
           });
         } else {
           try {
-            // Wrap Cobalt download in queue to handle concurrency and deduplication
-            // If time parameters are provided, skip URL cache check (we need to download to trim)
-            fileData = await queueCobaltRequest(
-              url,
-              async () => {
-                return await downloadFromSocialMedia(COBALT_API_URL, url, adminUser, maxSize);
-              },
-              {
-                skipCache: startTime !== null || duration !== null,
-                expectedFileType: 'video',
-              }
-            );
+            // Concurrency is capped inside cobalt.js. The URL cache was already consulted
+            // above (and deliberately skipped when trimming), so there is no second check here.
+            fileData = await downloadFromSocialMedia(COBALT_API_URL, url, adminUser, maxSize);
             logOperationStep(operationId, 'download_complete', 'success', {
               message: 'File downloaded successfully',
               metadata: {
@@ -628,44 +614,6 @@ async function processDownload(
         // Handle yt-dlp rate limit error
         if (error instanceof YtdlpRateLimitError) {
           throw error;
-        }
-        // Handle cached URL error (only when no time parameters - should not happen if skipCache is true)
-        if (error.message && error.message.startsWith('URL_ALREADY_PROCESSED:')) {
-          // Extract URL properly (URL may contain colons, so use regex to extract everything after the prefix)
-          const urlMatch = error.message.match(/^URL_ALREADY_PROCESSED:(.+)$/);
-          if (urlMatch && urlMatch[1]) {
-            const fileUrl = urlMatch[1];
-
-            // Safety check: verify the cached entry is actually a video and not R2-expired
-            // (defense in depth) - this should not happen with expectedFileType filtering
-            // and the cache check in cobalt-queue.js, but check anyway
-            const processedUrl = await getProcessedUrl(urlHash);
-            if (
-              processedUrl &&
-              (processedUrl.file_type !== 'video' || processedUrl.r2_expired_at)
-            ) {
-              const reason = processedUrl.r2_expired_at
-                ? 'R2 upload expired'
-                : `file type mismatch (expected: video, got: ${processedUrl.file_type})`;
-              logger.warn(`Cached entry unusable (${reason}), proceeding with download`);
-              logOperationStep(operationId, 'url_cache_mismatch', 'running', {
-                message: 'Cached entry unusable, downloading video instead',
-                metadata: { url, reason },
-              });
-              // Re-throw to proceed with download
-              throw new Error('Cached entry unusable, proceeding with download', {
-                cause: error,
-              });
-            }
-
-            updateOperationStatus(operationId, 'success', { fileSize: 0 });
-            recordRateLimit(userId);
-            await safeInteractionEditReply(interaction, {
-              content: formatR2UrlWithDisclaimer(fileUrl, r2Config, adminUser),
-            });
-            await notifyCommandSuccess(username, 'download', { operationId, userId });
-            return;
-          }
         }
         throw error;
       }

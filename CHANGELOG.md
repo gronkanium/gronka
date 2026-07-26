@@ -5,6 +5,22 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres (attempts) to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.27.0](https://github.com/thedorekaczynski/gronka/compare/v0.26.0...v0.27.0) (2026-07-26)
+
+
+### ⚠ BREAKING CHANGES
+
+* development and deployment now require Bun 1.3+ instead of Node 24. Contributors must run "bun install" and commit bun.lock.
+
+### Features
+
+* port gronka from node to bun ([#57](https://github.com/thedorekaczynski/gronka/issues/57)) ([7df18e8](https://github.com/thedorekaczynski/gronka/commit/7df18e82d0ceeaef6e87d13849517a8cd1502849))
+
+
+### Bug Fixes
+
+* **presence:** restore the saved custom status on restart ([e804e2d](https://github.com/thedorekaczynski/gronka/commit/e804e2d802aac2c7a0248ad33839467174d27bee))
+
 ## [0.26.0](https://github.com/thedorekaczynski/gronka/compare/v0.25.0...v0.26.0) (2026-07-25)
 
 

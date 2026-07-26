@@ -2,6 +2,7 @@ import { test, describe } from 'bun:test';
 import assert from 'node:assert';
 import {
   createSlotLimiter,
+  mapWithLimit,
   cobaltSlots,
   ytdlpSlots,
   mediaSlots,
@@ -88,6 +89,59 @@ describe('createSlotLimiter', () => {
 
     gate.resolve();
     await held;
+  });
+});
+
+describe('mapWithLimit', () => {
+  test('preserves input order regardless of completion order', async () => {
+    // Carousel delivery order is user-visible, so a faster later item must not overtake.
+    const items = [40, 5, 30, 1, 20];
+    const result = await mapWithLimit(items, 3, async ms => {
+      await new Promise(r => setTimeout(r, ms));
+      return ms;
+    });
+
+    assert.deepStrictEqual(result, items, 'results must line up with inputs, not finish order');
+  });
+
+  test('never exceeds the limit', async () => {
+    let running = 0;
+    let peak = 0;
+
+    await mapWithLimit(
+      Array.from({ length: 12 }, (_, i) => i),
+      4,
+      async () => {
+        running++;
+        peak = Math.max(peak, running);
+        await new Promise(r => setTimeout(r, 5));
+        running--;
+      }
+    );
+
+    assert.strictEqual(peak, 4, 'a 12-item carousel must not open 12 downloads at once');
+  });
+
+  test('passes the index to the mapper', async () => {
+    const seen = await mapWithLimit(['a', 'b', 'c'], 2, async (item, index) => `${index}:${item}`);
+    assert.deepStrictEqual(seen, ['0:a', '1:b', '2:c']);
+  });
+
+  test('rejects when an item fails, like Promise.all', async () => {
+    await assert.rejects(
+      mapWithLimit([1, 2, 3], 2, async n => {
+        if (n === 2) {
+          throw new Error('item 2 failed');
+        }
+        return n;
+      }),
+      /item 2 failed/
+    );
+  });
+
+  test('handles an empty list and a limit above the item count', async () => {
+    assert.deepStrictEqual(await mapWithLimit([], 4, async n => n), []);
+    assert.deepStrictEqual(await mapWithLimit([1, 2], 99, async n => n * 2), [2, 4]);
   });
 });
 

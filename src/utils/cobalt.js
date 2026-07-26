@@ -1,9 +1,14 @@
 import axios from 'axios';
 import { createLogger } from './logger.js';
 import { NetworkError, ValidationError } from './errors.js';
-import { cobaltSlots } from './concurrency.js';
+import { cobaltSlots, mapWithLimit } from './concurrency.js';
 
 const logger = createLogger('cobalt');
+
+// How many items of a single picker/carousel response download at once. Bounds the memory a
+// single multi-file post can hold; picker items are usually photos, so this stays generous
+// enough not to slow normal carousels down.
+const MAX_CONCURRENT_PICKER_ITEMS = 4;
 
 /**
  * Map of Cobalt API error codes to user-friendly messages
@@ -579,16 +584,19 @@ async function downloadMediaFromPicker(pickerArray, isAdminUser = false, maxSize
     `Found ${mediaItems.length} media items in picker response (${mediaItems.filter(i => i.type === 'photo').length} photos, ${mediaItems.filter(i => i.type === 'video').length} videos)`
   );
 
-  // Download all media items
-  const downloadPromises = mediaItems.map((item, index) => {
-    if (item.type === 'photo') {
-      return downloadPhoto(item.url, index, isAdminUser, maxSize);
-    } else {
-      return downloadVideo(item.url, index, isAdminUser, maxSize);
-    }
-  });
-
-  const results = await Promise.all(downloadPromises);
+  // Download the items with bounded concurrency. This runs inside a cobalt slot, and a picker
+  // response can carry a dozen-plus items; a plain Promise.all over all of them buffered every
+  // file at once, so one carousel could hold far more memory than the "one slot, one file"
+  // model the caps are sized around. Bounded here rather than via cobaltSlots, which would
+  // deadlock waiting on the slot this call already holds. Order is preserved, which matters
+  // because carousel order is user-visible; mapWithLimit's ordering is pinned in
+  // concurrency.test.js. Note the download e2e mocks this whole module out, so it covers
+  // delivery order downstream of here, not this fan-out.
+  const results = await mapWithLimit(mediaItems, MAX_CONCURRENT_PICKER_ITEMS, (item, index) =>
+    item.type === 'photo'
+      ? downloadPhoto(item.url, index, isAdminUser, maxSize)
+      : downloadVideo(item.url, index, isAdminUser, maxSize)
+  );
   logger.info(`Successfully downloaded ${results.length} media items from picker`);
 
   return results;

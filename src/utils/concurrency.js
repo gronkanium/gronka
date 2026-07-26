@@ -66,6 +66,35 @@ export function createSlotLimiter(name, max) {
   };
 }
 
+/**
+ * Map over `items` with at most `limit` calls to `fn` in flight at once, preserving input
+ * order in the returned array. Rejects on the first error, like Promise.all.
+ *
+ * Use this for fan-out that happens *inside* a slot held from one of the limiters below - a
+ * nested limiter.run() would deadlock waiting for a slot its own caller is holding.
+ * @template T, R
+ * @param {T[]} items
+ * @param {number} limit - Maximum concurrent calls; values below 1 are treated as 1
+ * @param {(item: T, index: number) => Promise<R>} fn
+ * @returns {Promise<R[]>} Results in the same order as `items`
+ */
+export async function mapWithLimit(items, limit, fn) {
+  const results = new Array(items.length);
+  const workers = Math.max(1, Math.min(limit, items.length));
+  let next = 0;
+
+  // Each worker pulls the next unclaimed index until the list is exhausted. Claiming the
+  // index synchronously (next++ before any await) is what keeps two workers off one item.
+  const run = async () => {
+    for (let i = next++; i < items.length; i = next++) {
+      results[i] = await fn(items[i], i);
+    }
+  };
+
+  await Promise.all(Array.from({ length: workers }, run));
+  return results;
+}
+
 // Bounds concurrent Cobalt downloads. Cobalt buffers responses in RAM and shares the Docker VM
 // with Postgres, and hammering it also invites rate limiting. Applied inside cobalt.js so every
 // caller is covered — the previous per-call-site queue missed file-downloader.js entirely, which

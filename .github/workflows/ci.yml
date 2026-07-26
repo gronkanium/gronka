@@ -54,6 +54,33 @@ jobs:
           fail-on-severity: moderate
           config-file: ./.github/dependency-review-config.yml
 
+  # The real lockfile-aware dependency gate. GitHub's dependency graph does NOT parse
+  # bun.lock: after the npm->bun port the SBOM fell from 345 packages to 37, and those 37
+  # are just package.json's direct deps plus Actions refs, carrying raw semver ranges
+  # ("^14.27.0") instead of resolved versions. So dependency-review above has had no
+  # transitive data to check since 7df18e8 - it returned success on the very PR that
+  # swapped the lockfile format, which is only possible against an empty diff.
+  #
+  # Both jobs are kept on purpose: dependency-review still covers the Actions ecosystem and
+  # starts working again for free if GitHub adds bun.lock support. This job reads bun.lock
+  # directly and sees all ~310 resolved packages. Unlike dependency-review it also runs on
+  # push (not just PRs) and is not skipped for dependabot, which is exactly when a
+  # dependency audit is most useful.
+  #
+  # `bun audit` was verified to exit 1 on a real advisory (minimist 1.2.0), not merely print
+  # one - a gate that always exits 0 would repeat the failure it exists to fix.
+  dependency-audit:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      # pinned to a tag's commit — tags are movable, SHAs are not
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
+        with:
+          bun-version: ${{ env.BUN_VERSION }}
+      - run: bun install --frozen-lockfile
+      # severity threshold matches dependency-review's fail-on-severity
+      - run: bun audit --audit-level=moderate
+
   validate-code:
     runs-on: ubuntu-latest
     if: github.actor != 'dependabot[bot]'

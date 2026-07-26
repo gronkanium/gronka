@@ -1,4 +1,4 @@
-import { Client, GatewayIntentBits, Partials, Events } from 'discord.js';
+import { Client, GatewayIntentBits, Partials, Events, ActivityType } from 'discord.js';
 import { scryptSync, randomBytes, timingSafeEqual } from 'crypto';
 import express from 'express';
 import rateLimit from 'express-rate-limit';
@@ -17,7 +17,15 @@ import { cleanupStuckOperations } from './utils/operations-tracker.js';
 import { initializeR2UsageCache, formatFileSize } from './utils/storage.js';
 import { r2Config } from './utils/config.js';
 import { startCleanupJob, stopCleanupJob } from './utils/r2-cleanup.js';
-import { initDatabase, getSetting, setSetting } from './utils/database.js';
+import { initDatabase } from './utils/database.js';
+import {
+  VALID_PRESENCE_STATUSES,
+  DEFAULT_PRESENCE_STATUS,
+  buildPresenceOptions,
+  activityDisplayText,
+  loadSavedPresence,
+  saveSavedPresence,
+} from './utils/presence.js';
 import { get24HourStats } from './utils/database/stats.js';
 import { replyIfBanned, replyIfMaintenance } from './utils/ban-check.js';
 import { refreshRateLimitSettings } from './utils/rate-limit.js';
@@ -159,36 +167,18 @@ function startStatsServer() {
         return res.status(503).json({ error: 'bot is not ready' });
       }
 
-      const validStatuses = ['online', 'idle', 'dnd', 'invisible'];
-      if (status && !validStatuses.includes(status)) {
+      if (status && !VALID_PRESENCE_STATUSES.includes(status)) {
         return res.status(400).json({
-          error: `invalid status "${status}". Must be one of: ${validStatuses.join(', ')}`,
+          error: `invalid status "${status}". Must be one of: ${VALID_PRESENCE_STATUSES.join(', ')}`,
         });
       }
 
-      const presenceOptions = {};
-      if (status) {
-        presenceOptions.status = status;
-      }
-      if (activity) {
-        presenceOptions.activities = [
-          {
-            name: activity,
-            type: 4, // ActivityType.Custom
-          },
-        ];
-      }
+      await client.user.setPresence(buildPresenceOptions(status, activity));
 
-      await client.user.setPresence(presenceOptions);
-
-      // Persist so the presence survives restarts (restored in ClientReady).
-      // setPresence without activities implicitly clears them, so mirror that:
-      // a status-only update stores an empty activity.
+      // Persist so the presence survives restarts (replayed into the identify payload
+      // by startBot(), which is the only way it reliably sticks).
       try {
-        if (status) {
-          await setSetting('bot_presence_status', status);
-        }
-        await setSetting('bot_presence_activity', activity || '');
+        await saveSavedPresence(status, activity);
       } catch (persistError) {
         logger.warn(`Failed to persist bot presence: ${persistError.message}`);
       }
@@ -216,12 +206,16 @@ function startStatsServer() {
       return res.status(503).json({ error: 'bot is not ready' });
     }
 
+    // This is the client's own presence, which Discord never echoes back to bots (that would
+    // need the GuildPresences intent), so it reflects what this process last sent. Since the
+    // saved presence now rides along in the identify payload, that matches what Discord shows.
     const presence = client.user.presence;
-    const activity = presence.activities.find(a => a.type === 4) || null;
+    const activity = presence.activities.find(a => a.type === ActivityType.Custom) || null;
 
     res.json({
       status: presence.status,
-      activity: activity ? activity.name : null,
+      // Custom statuses keep their text in `state`; `name` is the fixed "Custom Status".
+      activity: activityDisplayText(activity),
       botTag: client.user.tag,
     });
   });
@@ -270,23 +264,18 @@ client.once(Events.ClientReady, async readyClient => {
     botStartTime = Date.now();
     await initializeUserTracking();
 
-    // Restore the last presence set via the webui/stats API; default matches the
-    // previous hardcoded 'dnd'. A DB hiccup here must not abort startup.
+    // The identify payload already carried this presence (see startBot) — that is what makes it
+    // stick across a restart, with no race against the presence discord.js sends on identify.
+    // Re-assert it here anyway: identify does not patch the client's local presence, which is
+    // what GET /api/bot/status reads back, and this also covers a pre-login load that failed.
+    // Both paths send the same values, so whichever Discord applies last is the right one.
     try {
-      const validStatuses = ['online', 'idle', 'dnd', 'invisible'];
-      let savedStatus = await getSetting('bot_presence_status', 'dnd');
-      if (!validStatuses.includes(savedStatus)) {
-        savedStatus = 'dnd';
-      }
-      const savedActivity = await getSetting('bot_presence_activity', '');
-      const presenceOptions = { status: savedStatus };
-      if (savedActivity) {
-        presenceOptions.activities = [{ name: savedActivity, type: 4 }]; // ActivityType.Custom
-      }
-      readyClient.user.setPresence(presenceOptions);
+      const { status, activity } = await loadSavedPresence();
+      readyClient.user.setPresence(buildPresenceOptions(status, activity));
+      logger.info(`restored presence: ${status}${activity ? ` (${activity})` : ' (no activity)'}`);
     } catch (presenceError) {
       logger.warn(`Failed to restore saved presence: ${presenceError.message}`);
-      readyClient.user.setPresence({ status: 'dnd' });
+      readyClient.user.setPresence({ status: DEFAULT_PRESENCE_STATUS });
     }
     logger.info(`bot logged in as ${readyClient.user.tag}`);
     logger.info(`gif storage: ${GIF_STORAGE_PATH}`);
@@ -432,6 +421,19 @@ async function startBot() {
     // Start stats HTTP server (minimal, only for /api/stats/24h endpoint)
     if (SERVER_PORT) {
       startStatsServer();
+    }
+
+    // Restore the last presence set via the webui/stats API by putting it in the identify
+    // payload. discord.js always sends a presence on identify (defaulting to online with no
+    // activities), so setting it after ClientReady loses a race against that default and the
+    // bot comes up online with no custom status. Doing it here also means a gateway
+    // re-identify (reconnect after a failed resume) replays the presence for free.
+    // A DB hiccup here must not abort startup — ClientReady retries.
+    try {
+      const { status, activity } = await loadSavedPresence();
+      client.options.presence = buildPresenceOptions(status, activity);
+    } catch (presenceError) {
+      logger.warn(`Failed to load saved presence before login: ${presenceError.message}`);
     }
 
     logger.info('Starting Discord bot...');

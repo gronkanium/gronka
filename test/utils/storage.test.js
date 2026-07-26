@@ -4,7 +4,7 @@ process.env.R2_ACCESS_KEY_ID = '';
 process.env.R2_SECRET_ACCESS_KEY = '';
 process.env.R2_BUCKET_NAME = '';
 
-import { test } from 'node:test';
+import { test, beforeAll, afterAll } from 'bun:test';
 import assert from 'node:assert';
 import {
   detectFileType,
@@ -32,7 +32,7 @@ let testStoragePath;
 let tmpDirCleanup;
 
 // Setup test storage directory
-test.before(() => {
+beforeAll(() => {
   // Use tmp package to create secure temporary directory
   const tmpDir = tmp.dirSync({ prefix: 'gronka-test-storage-', unsafeCleanup: true });
   testStoragePath = tmpDir.name;
@@ -43,7 +43,7 @@ test.before(() => {
   mkdirSync(path.join(testStoragePath, 'images'), { recursive: true });
 });
 
-test.after(() => {
+afterAll(() => {
   // Clean up temporary directory
   if (tmpDirCleanup) {
     tmpDirCleanup();

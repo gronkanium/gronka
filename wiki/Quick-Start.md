@@ -15,7 +15,7 @@ cp .env.example .env
 docker compose up -d
 
 # 4. Register Discord commands (one-time setup)
-docker compose run --rm app npm run register-commands
+docker compose run --rm app bun run register-commands
 ```
 
 ## using docker with webui
@@ -31,17 +31,17 @@ docker compose --profile webui up -d
 
 ```bash
 # 1. Install dependencies
-npm install
+bun install
 
 # 2. Configure environment
 cp .env.example .env
 # Edit .env with your credentials
 
 # 3. Register commands
-npm run register-commands
+bun run register-commands
 
 # 4. Start bot and server
-npm run local
+bun run local
 ```
 
 ## test and production bots
@@ -52,10 +52,10 @@ for local development, you can run separate test and production bots simultaneou
 # configure both bots in .env with TEST_* and PROD_* prefixes
 # then start them separately:
 
-npm run bot:test        # start test bot
-npm run bot:prod        # start prod bot
-npm run bot:register:test  # register test bot commands
-npm run bot:register:prod  # register prod bot commands
+bun run bot:test        # start test bot
+bun run bot:prod        # start prod bot
+bun run bot:register:test  # register test bot commands
+bun run bot:register:prod  # register prod bot commands
 ```
 
 see the [[Test-Bot|test bot documentation]] for complete setup instructions.

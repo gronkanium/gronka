@@ -13,6 +13,9 @@ export default [
       'coverage/**',
       '.vscode/**',
       '.idea/**',
+      // Local-only AI tooling (gitignored). Nothing here is tracked, so a lint error in it
+      // can never be fixed by a commit - it would just block the gate forever.
+      '.claude/**',
       'src/public/assets/**',
       '**/*.svelte',
       'vendor/**',

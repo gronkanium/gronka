@@ -1,4 +1,4 @@
-import { test, describe, before, after } from 'node:test';
+import { test, describe, beforeAll, afterAll } from 'bun:test';
 import assert from 'node:assert';
 import express from 'express';
 import { initDatabase, getOperationTrace, searchOperations } from '../src/utils/database.js';
@@ -16,7 +16,7 @@ let serverPort;
 // Since webui-server.js exports the app, we need to test the endpoints directly
 // We'll create a test server that mimics the operations endpoints
 
-before(async () => {
+beforeAll(async () => {
   await initDatabase();
   // Do NOT truncate tables here: test files run as parallel processes against the
   // same database, so truncating wipes other files' data mid-run and causes flaky
@@ -125,7 +125,7 @@ before(async () => {
   });
 });
 
-after(async () => {
+afterAll(async () => {
   // Flush any pending operation logs before ending
   await flushAllOperationLogs();
 

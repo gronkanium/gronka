@@ -1,10 +1,10 @@
-#!/usr/bin/env node
+#!/usr/bin/env bun
 
 import { execSync } from 'child_process';
 import { existsSync } from 'fs';
 
 const packageJsonPath = './package.json';
-const packageLockPath = './package-lock.json';
+const lockPath = './bun.lock';
 
 // Check if files exist
 if (!existsSync(packageJsonPath)) {
@@ -12,28 +12,25 @@ if (!existsSync(packageJsonPath)) {
   process.exit(1);
 }
 
-if (!existsSync(packageLockPath)) {
-  console.error('Error: package-lock.json not found. Run "npm install" to create it.');
+if (!existsSync(lockPath)) {
+  console.error('Error: bun.lock not found. Run "bun install" to create it.');
   process.exit(1);
 }
 
+// `bun install --frozen-lockfile --dry-run` resolves the full tree against the lockfile and
+// fails if package.json asks for anything the lockfile does not already pin, without touching
+// node_modules. That is the bun equivalent of the old `npm ci --dry-run` check.
 try {
-  // Try to run npm ci in dry-run mode to check if lock file is in sync
-  // If it fails, the lock file is out of sync
-  try {
-    execSync('npm ci --dry-run', {
-      stdio: 'pipe',
-      cwd: process.cwd(),
-    });
-    console.log('✓ package-lock.json is in sync with package.json');
-    process.exit(0);
-  } catch {
-    console.error('✗ package-lock.json is out of sync with package.json');
-    console.error('\nTo fix this, run: npm run fix:deps');
-    console.error('Or manually run: npm install\n');
-    process.exit(1);
-  }
+  execSync('bun install --frozen-lockfile --dry-run', {
+    stdio: 'pipe',
+    cwd: process.cwd(),
+  });
+  console.log('✓ bun.lock is in sync with package.json');
+  process.exit(0);
 } catch (error) {
-  console.error('Error checking lock file sync:', error.message);
+  console.error('✗ bun.lock is out of sync with package.json');
+  if (error.stderr) console.error(error.stderr.toString().trim());
+  console.error('\nTo fix this, run: bun run fix:deps');
+  console.error('Or manually run: bun install\n');
   process.exit(1);
 }

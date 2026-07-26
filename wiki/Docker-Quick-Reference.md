@@ -28,10 +28,10 @@ docker compose logs -f webui
 
 ```bash
 # if container is running
-docker compose exec app npm run register-commands
+docker compose exec app bun run register-commands
 
 # if container is not running (one-off command)
-docker compose run --rm app npm run register-commands
+docker compose run --rm app bun run register-commands
 ```
 
 ### check container status

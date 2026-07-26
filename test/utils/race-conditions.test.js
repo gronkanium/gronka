@@ -1,4 +1,4 @@
-import { test, describe, before, after } from 'node:test';
+import { test, describe, beforeAll, afterAll } from 'bun:test';
 import assert from 'node:assert';
 import { saveGif, saveVideo, saveImage } from '../../src/utils/storage.js';
 import { queueCobaltRequest } from '../../src/utils/cobalt-queue.js';
@@ -18,7 +18,7 @@ process.env.R2_SECRET_ACCESS_KEY = '';
 process.env.R2_BUCKET_NAME = '';
 
 // Setup test storage directory
-before(() => {
+beforeAll(() => {
   const tmpDir = tmp.dirSync({ prefix: 'gronka-test-race-', unsafeCleanup: true });
   testStoragePath = tmpDir.name;
   tmpDirCleanup = tmpDir.removeCallback;
@@ -28,7 +28,7 @@ before(() => {
   mkdirSync(path.join(testStoragePath, 'images'), { recursive: true });
 });
 
-after(() => {
+afterAll(() => {
   if (tmpDirCleanup) {
     tmpDirCleanup();
   }

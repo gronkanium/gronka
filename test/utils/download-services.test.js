@@ -1,4 +1,4 @@
-import { describe, test, before, after } from 'node:test';
+import { describe, test, beforeAll, afterAll } from 'bun:test';
 import assert from 'node:assert';
 import {
   DOWNLOAD_SERVICES,
@@ -44,10 +44,10 @@ describe('download-services registry', () => {
 });
 
 describe('getDisabledServiceLabel gating', () => {
-  before(async () => {
+  beforeAll(async () => {
     await initDatabase();
   });
-  after(async () => {
+  afterAll(async () => {
     await setSetting('disabled_services', '[]');
   });
 

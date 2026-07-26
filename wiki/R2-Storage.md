@@ -81,7 +81,7 @@ to migrate existing local files to r2:
 1. ensure r2 is configured in your `.env`
 2. restart the bot
 3. existing files will be uploaded to r2 as they are accessed
-4. you can also use the migration script: `npm run migrate:storage`
+4. you can also use the migration script: `bun run migrate:storage`
 
 ## troubleshooting
 

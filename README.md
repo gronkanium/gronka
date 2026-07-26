@@ -1,6 +1,6 @@
 # gronka
 
-![Node.js](https://img.shields.io/badge/Node.js-24-339933?logo=node.js&logoColor=white)
+![Bun](https://img.shields.io/badge/Bun-1.3-fbf0df?logo=bun&logoColor=black)
 ![Discord.js](https://img.shields.io/badge/Discord.js-14-5865F2?logo=discord&logoColor=white)
 ![Docker](https://img.shields.io/badge/Docker-Ready-2496ED?logo=docker&logoColor=white)
 [![Add to Discord](https://img.shields.io/badge/Add_to_Discord-5865F2?logo=discord&logoColor=white)](https://discord.com/oauth2/authorize?client_id=1522194017692156046)
@@ -54,12 +54,12 @@ git clone https://github.com/thedorekaczynski/gronka.git
 cd gronka
 cp .env.example .env      # then edit it (see configuration below)
 docker compose up -d
-docker compose run --rm app npm run register-commands   # once, to register slash commands
+docker compose run --rm app bun run register-commands   # once, to register slash commands
 ```
 
 the stats dashboard is then available at `http://localhost:3001`.
 
-> running the bot outside docker is possible for development but needs node 24+, ffmpeg, and yt-dlp installed yourself; `/optimize` also needs gifsicle (linux/macOS, or docker on windows). see the [wiki](https://github.com/thedorekaczynski/gronka/wiki) for the local development workflow.
+> running the bot outside docker is possible for development but needs bun 1.3+, ffmpeg, and yt-dlp installed yourself; `/optimize` also needs gifsicle (linux/macOS, or docker on windows). see the [wiki](https://github.com/thedorekaczynski/gronka/wiki) for the local development workflow.
 
 ## configuration
 
@@ -82,11 +82,11 @@ optional background cleanup (`R2_TEMP_UPLOADS_ENABLED`, `R2_CLEANUP_ENABLED`) de
 ## development
 
 ```bash
-npm run lint          # eslint, no warnings allowed
-npm run format        # prettier
-npm run validate      # lock-sync + lint + format check
-npm run test:safe     # full test suite (needs postgres up)
-npm run test:e2e      # mocked-network download pipeline
+bun run lint          # eslint, no warnings allowed
+bun run format        # prettier
+bun run validate      # lock-sync + lint + format check
+bun run test:safe     # full test suite (needs postgres up)
+bun run test:e2e      # mocked-network download pipeline
 ```
 
 plain esm javascript (no typescript). full docs, including the deploy cycle and architecture, live in the [wiki](https://github.com/thedorekaczynski/gronka/wiki).

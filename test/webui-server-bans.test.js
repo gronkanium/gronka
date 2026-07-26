@@ -1,4 +1,4 @@
-import { test, describe, before, after } from 'node:test';
+import { test, describe, beforeAll, afterAll } from 'bun:test';
 import assert from 'node:assert';
 import { initDatabase, banUser, unbanUser, getBan, listBans } from '../src/utils/database.js';
 
@@ -6,7 +6,7 @@ let app;
 let server;
 let baseUrl;
 
-before(async () => {
+beforeAll(async () => {
   await initDatabase();
   const { createApp } = await import('../src/webui-server/app.js');
   app = createApp();
@@ -16,7 +16,7 @@ before(async () => {
   baseUrl = `http://localhost:${server.address().port}`;
 });
 
-after(() => {
+afterAll(() => {
   if (server) server.close();
   // Don't close database here - it's shared across parallel test files
 });

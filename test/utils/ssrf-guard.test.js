@@ -1,4 +1,4 @@
-import { test, describe } from 'node:test';
+import { test, describe } from 'bun:test';
 import assert from 'node:assert';
 import http from 'node:http';
 import axios from 'axios';
@@ -15,7 +15,7 @@ const listen = server =>
 
 describe('ssrf guard', () => {
   describe('guardedLookup', () => {
-    test('refuses a hostname that resolves to loopback', (_t, done) => {
+    test('refuses a hostname that resolves to loopback', done => {
       guardedLookup('localhost', {}, error => {
         assert.ok(error, 'expected a refusal');
         assert.strictEqual(error.code, SSRF_BLOCKED_CODE);
@@ -24,7 +24,7 @@ describe('ssrf guard', () => {
     });
 
     // dns.lookup short-circuits IP literals, so these two need no network
-    test('passes a public address through in callback form', (_t, done) => {
+    test('passes a public address through in callback form', done => {
       guardedLookup('8.8.8.8', {}, (error, address, family) => {
         assert.ifError(error);
         assert.strictEqual(address, '8.8.8.8');
@@ -33,7 +33,7 @@ describe('ssrf guard', () => {
       });
     });
 
-    test('passes a public address through in all form', (_t, done) => {
+    test('passes a public address through in all form', done => {
       guardedLookup('8.8.8.8', { all: true }, (error, addresses) => {
         assert.ifError(error);
         assert.deepStrictEqual(addresses, [{ address: '8.8.8.8', family: 4 }]);
@@ -41,7 +41,7 @@ describe('ssrf guard', () => {
       });
     });
 
-    test('refuses a private address literal the agent hands it', (_t, done) => {
+    test('refuses a private address literal the agent hands it', done => {
       guardedLookup('192.168.1.1', {}, error => {
         assert.ok(error, 'expected a refusal');
         assert.strictEqual(error.code, SSRF_BLOCKED_CODE);

@@ -9,7 +9,7 @@ discord bot that converts video attachments to gif format via right-click contex
 ### core technologies
 
 - runtime: node.js v20+ (lts)
-- package manager: npm or pnpm
+- package manager: bun
 - primary language: javascript (es6+) or typescript
 
 ### dependencies
@@ -493,10 +493,10 @@ both bots can run simultaneously as separate node processes:
 
 ```bash
 # terminal 1
-npm run bot:test
+bun run bot:test
 
 # terminal 2
-npm run bot:prod
+bun run bot:prod
 ```
 
 each bot:
@@ -510,8 +510,8 @@ each bot:
 each bot registers commands separately using its own application id:
 
 ```bash
-npm run bot:register:test  # registers commands for test bot
-npm run bot:register:prod  # registers commands for prod bot
+bun run bot:register:test  # registers commands for test bot
+bun run bot:register:prod  # registers commands for prod bot
 ```
 
 commands are registered globally per bot, so they appear in all servers where that bot is present.
@@ -521,7 +521,7 @@ commands are registered globally per bot, so they appear in all servers where th
 recommended workflow:
 
 1. configure both bots with prefixed variables in `.env`
-2. start test bot in development mode: `npm run bot:test:dev`
+2. start test bot in development mode: `bun run bot:test:dev`
 3. test changes using test bot
 4. verify production bot continues running normally
 5. deploy verified changes to production

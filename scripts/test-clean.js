@@ -1,4 +1,4 @@
-#!/usr/bin/env node
+#!/usr/bin/env bun
 
 /**
  * Test runner that filters out verbose FFmpeg logs
@@ -132,10 +132,11 @@ const env = {
 };
 
 // Spawn the test process
-const testProcess = spawn('node', ['--test', ...testFiles], {
+const testProcess = spawn('bun', ['test', ...testFiles], {
   cwd: projectRoot,
   env,
   stdio: ['inherit', 'pipe', 'pipe'],
+  shell: process.platform === 'win32',
 });
 
 // Process stdout and stderr

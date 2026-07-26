@@ -71,7 +71,7 @@ trap 'cleanup' TERM INT
 
 # Start the Discord bot in the background (includes stats HTTP server)
 log_info "Starting Discord bot..."
-node src/bot.js &
+bun src/bot.js &
 BOT_PID=$!
 
 # Give bot a moment to start
@@ -88,7 +88,7 @@ log_info "Bot started (PID: $BOT_PID)"
 
 # Start the WebUI server in the background
 log_info "Starting WebUI server..."
-node src/webui-server.js > /tmp/webui.log 2>&1 &
+bun src/webui-server.js > /tmp/webui.log 2>&1 &
 WEBUI_PID=$!
 
 # Give webui a moment to start

@@ -1,10 +1,10 @@
-import { test, describe, before } from 'node:test';
+import { test, describe, beforeAll } from 'bun:test';
 import assert from 'node:assert';
 import { EventEmitter } from 'events';
 import { initDatabase, getLogs } from '../src/utils/database.js';
 import { handleSseConnection } from '../src/webui-server/sse/handlers.js';
 
-before(async () => {
+beforeAll(async () => {
   await initDatabase();
 });
 

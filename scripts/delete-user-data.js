@@ -1,4 +1,4 @@
-#!/usr/bin/env node
+#!/usr/bin/env bun
 
 /**
  * Delete all stored data for a single Discord user (data-deletion request handler).

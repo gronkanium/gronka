@@ -1,4 +1,4 @@
-import { describe, test, before } from 'node:test';
+import { describe, test, beforeAll } from 'bun:test';
 import assert from 'node:assert';
 import { ClientPresence, ActivityType } from 'discord.js';
 import {
@@ -83,7 +83,7 @@ describe('presence round trip through discord.js', () => {
 });
 
 describe('saved presence', () => {
-  before(async () => {
+  beforeAll(async () => {
     await initDatabase();
   });
 

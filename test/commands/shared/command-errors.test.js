@@ -1,4 +1,4 @@
-import { test, describe } from 'node:test';
+import { test, describe } from 'bun:test';
 import assert from 'node:assert';
 import { curatedErrorMessage } from '../../../src/commands/shared/command-errors.js';
 import { AppError, ValidationError, NetworkError } from '../../../src/utils/errors.js';

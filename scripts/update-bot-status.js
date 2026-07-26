@@ -1,4 +1,4 @@
-#!/usr/bin/env node
+#!/usr/bin/env bun
 process.removeAllListeners('warning');
 
 import { spawnSync } from 'child_process';
@@ -120,7 +120,7 @@ if (STATS_USERNAME && STATS_PASSWORD) {
   headers['Authorization'] = `Basic ${credentials}`;
 }
 
-// Docker mode: use docker exec to run node fetch inside the container
+// Docker mode: use docker exec to run a bun fetch inside the container
 if (useDocker) {
   const containerName = 'gronka';
   const dockerUrl = `http://${DOCKER_HOST}:${SERVER_PORT}/api/bot/status`;
@@ -132,8 +132,8 @@ if (useDocker) {
     scriptHeaders['Authorization'] = `Basic ${creds}`;
   }
 
-  // Inline Node.js script - using template that will have values injected
-  const nodeScript = `
+  // Inline script - using template that will have values injected
+  const inlineScript = `
 const h=${JSON.stringify(scriptHeaders)};
 const b=${JSON.stringify(body)};
 fetch("${dockerUrl}",{method:"POST",headers:h,body:JSON.stringify(b)})
@@ -146,7 +146,7 @@ console.log(JSON.stringify(data))})
 
   console.log(`Updating bot status via Docker (${containerName}) -> ${dockerUrl}`);
 
-  const result = spawnSync('docker', ['exec', containerName, 'node', '-e', nodeScript], {
+  const result = spawnSync('docker', ['exec', containerName, 'bun', '-e', inlineScript], {
     encoding: 'utf-8',
   });
 

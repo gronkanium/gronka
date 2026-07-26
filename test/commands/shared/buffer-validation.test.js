@@ -1,4 +1,4 @@
-import { test, describe, before, after } from 'node:test';
+import { test, describe, beforeAll, afterAll } from 'bun:test';
 import assert from 'node:assert';
 import fs from 'fs/promises';
 import path from 'path';
@@ -19,10 +19,10 @@ const webm = () => Buffer.concat([Buffer.from([0x1a, 0x45, 0xdf, 0xa3]), Buffer.
 
 // mkdtemp creates a private, unpredictable directory, avoiding insecure use of the shared tmp dir
 let tmpDir;
-before(async () => {
+beforeAll(async () => {
   tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), 'bv-test-'));
 });
-after(async () => {
+afterAll(async () => {
   await fs.rm(tmpDir, { recursive: true, force: true });
 });
 

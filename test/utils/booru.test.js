@@ -1,4 +1,4 @@
-import { describe, test } from 'node:test';
+import { describe, test } from 'bun:test';
 import assert from 'node:assert';
 import axios from 'axios';
 import { downloadFromBooru, isBooruUrl } from '../../src/utils/booru.js';

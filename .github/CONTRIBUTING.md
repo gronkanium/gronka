@@ -11,37 +11,37 @@ When running in Docker, the main `app` service runs the bot (which includes the 
 
 ### Adding/Removing Dependencies
 
-When adding or removing dependencies, always run `npm install` to update `package-lock.json`:
+When adding or removing dependencies, always run `bun install` to update `bun.lock`:
 
 ```bash
-npm install <package-name>
+bun add <package-name>
 # or
-npm install --save-dev <package-name>
+bun add --dev <package-name>
 ```
 
-**Important:** The `package-lock.json` file must be committed to git. It ensures consistent dependency versions across all environments, including Docker builds.
+**Important:** The `bun.lock` file must be committed to git. It ensures consistent dependency versions across all environments, including Docker builds.
 
 ### Checking Lock File Sync
 
-Before committing changes, verify that `package-lock.json` is in sync with `package.json`:
+Before committing changes, verify that `bun.lock` is in sync with `package.json`:
 
 ```bash
-npm run check:sync
+bun run check:sync
 ```
 
 If the lock file is out of sync, fix it by running:
 
 ```bash
-npm run fix:deps
+bun run fix:deps
 ```
 
-This will update `package-lock.json` to match `package.json`.
+This will update `bun.lock` to match `package.json`.
 
 ### Git Hooks
 
 This project uses [husky](https://typicode.github.io/husky/) to automatically check lock file sync and run linting before each commit. The pre-commit hook will:
 
-- Verify `package-lock.json` is in sync with `package.json`
+- Verify `bun.lock` is in sync with `package.json`
 - Run ESLint to check code quality
 - Check code formatting with Prettier
 
@@ -54,9 +54,9 @@ If any check fails, the commit will be blocked. Fix the issues and try again.
 This project uses ESLint for code linting. Available commands:
 
 ```bash
-npm run lint          # Check for linting errors (fails on warnings)
-npm run lint:warn     # Check for linting errors (allows warnings)
-npm run lint:fix      # Automatically fix linting errors
+bun run lint          # Check for linting errors (fails on warnings)
+bun run lint:warn     # Check for linting errors (allows warnings)
+bun run lint:fix      # Automatically fix linting errors
 ```
 
 ### Formatting
@@ -64,8 +64,8 @@ npm run lint:fix      # Automatically fix linting errors
 This project uses Prettier for code formatting. Available commands:
 
 ```bash
-npm run format        # Format all files
-npm run format:check  # Check if files are formatted correctly
+bun run format        # Format all files
+bun run format:check  # Check if files are formatted correctly
 ```
 
 ### Validation
@@ -73,7 +73,7 @@ npm run format:check  # Check if files are formatted correctly
 Run all checks at once:
 
 ```bash
-npm run validate
+bun run validate
 ```
 
 This will check:
@@ -89,11 +89,11 @@ This will check:
 The project uses Docker Compose with multiple services. The main app service runs both the Discord bot and local server:
 
 ```bash
-npm run docker:up          # Start all services (app only by default)
-npm run docker:down        # Stop all containers
-npm run docker:reload      # Reload containers (rebuild and restart)
-npm run docker:restart     # Restart all containers
-npm run docker:register    # Register Discord commands in container
+bun run docker:up          # Start all services (app only by default)
+bun run docker:down        # Stop all containers
+bun run docker:reload      # Reload containers (rebuild and restart)
+bun run docker:restart     # Restart all containers
+bun run docker:register    # Register Discord commands in container
 ```
 
 ### Docker Services
@@ -125,11 +125,11 @@ docker compose --profile webui up -d
 ### Common Docker Commands
 
 ```bash
-npm run docker:logs        # View logs for all services
-npm run docker:down        # Stop all containers
-npm run docker:reload      # Reload containers (rebuild and restart)
-npm run docker:restart     # Restart all containers
-npm run docker:register    # Register Discord commands in container
+bun run docker:logs        # View logs for all services
+bun run docker:down        # Stop all containers
+bun run docker:reload      # Reload containers (rebuild and restart)
+bun run docker:restart     # Restart all containers
+bun run docker:register    # Register Discord commands in container
 
 # Manual docker compose commands
 docker compose ps           # Check container status
@@ -140,29 +140,29 @@ docker compose logs -f webui # View logs for webui service only
 
 ### Troubleshooting Docker Build Issues
 
-#### Error: package-lock.json out of sync
+#### Error: bun.lock out of sync
 
 If you see an error like:
 
 ```
-npm error `npm ci` can only install packages when your package.json and package-lock.json are in sync
+error: lockfile had changes, but lockfile is frozen
 ```
 
 **Solution:**
 
 1. On your local machine, run:
    ```bash
-   npm run fix:deps
+   bun run fix:deps
    ```
-2. Commit the updated `package-lock.json`:
+2. Commit the updated `bun.lock`:
    ```bash
-   git add package-lock.json
-   git commit -m "Update package-lock.json"
+   git add bun.lock
+   git commit -m "Update bun.lock"
    ```
 3. Push and rebuild:
    ```bash
    git push
-   npm run docker:reload
+   bun run docker:reload
    ```
 
 #### Missing Environment Variables
@@ -176,51 +176,51 @@ WARN[0000] The "DISCORD_TOKEN" variable is not set. Defaulting to a blank string
 **Solution:**
 Create a `.env` file or set environment variables in your `docker-compose.yml` or shell environment.
 
-#### Build Fails During npm ci
+#### Build Fails During bun install
 
-If the Docker build fails during the `npm ci` step:
+If the Docker build fails during the `bun install --frozen-lockfile` step:
 
-1. Ensure `package-lock.json` is committed and up to date
-2. Check that you're using the correct Node version (Node 20 as specified in Dockerfile)
+1. Ensure `bun.lock` is committed and up to date
+2. Check that you are using the correct Bun version (the `oven/bun` tag specified in the Dockerfile)
 3. Try cleaning Docker cache:
    ```bash
    docker compose down
    docker system prune -a
-   npm run docker:up
+   bun run docker:up
    ```
 
 ## Available Scripts
 
-See `package.json` for a full list of available npm scripts. Common ones include:
+See `package.json` for a full list of available scripts. Common ones include:
 
 ### Main Entry Points
 
-- `npm start` - Start the Discord bot (`src/bot.js`)
-- `npm run webui` - Start the webui server (`src/webui-server.js`)
-- `npm run local` - Run both bot and local server concurrently (useful for local development without R2)
-- `npm run dev` - Start bot with watch mode (auto-restart on changes)
+- `bun start` - Start the Discord bot (`src/bot.js`)
+- `bun run webui` - Start the webui server (`src/webui-server.js`)
+- `bun run local` - Run both bot and local server concurrently (useful for local development without R2)
+- `bun run dev` - Start bot with watch mode (auto-restart on changes)
 
 ### Development
 
-- `npm run register-commands` - Register Discord slash commands
-- `npm run build:webui` - Build the webui frontend
-- `npm run webui:dev` - Run webui in development mode with hot reload
-- `npm run webui:dev:server` - Run webui server only (port 3002)
-- `npm run test` - Run tests
-- `npm run test:watch` - Run tests in watch mode
-- `npm run migrate:storage` - Migrate storage to R2
-- `npm run upload:404` - Upload 404 image to R2
-- `npm run user:stats` - Generate user statistics report from database
-- `npm run bot:test` - Start test bot (uses TEST\_\* prefixed environment variables)
-- `npm run bot:prod` - Start prod bot (uses PROD\_\* prefixed environment variables)
-- `npm run bot:test:dev` - Start test bot with hot reload (watch mode)
-- `npm run bot:prod:dev` - Start prod bot with hot reload (watch mode)
-- `npm run bot:register:test` - Register Discord commands for test bot
-- `npm run bot:register:prod` - Register Discord commands for prod bot
+- `bun run register-commands` - Register Discord slash commands
+- `bun run build:webui` - Build the webui frontend
+- `bun run webui:dev` - Run webui in development mode with hot reload
+- `bun run webui:dev:server` - Run webui server only (port 3002)
+- `bun run test` - Run tests
+- `bun run test:watch` - Run tests in watch mode
+- `bun run migrate:storage` - Migrate storage to R2
+- `bun run upload:404` - Upload 404 image to R2
+- `bun run user:stats` - Generate user statistics report from database
+- `bun run bot:test` - Start test bot (uses TEST\_\* prefixed environment variables)
+- `bun run bot:prod` - Start prod bot (uses PROD\_\* prefixed environment variables)
+- `bun run bot:test:dev` - Start test bot with hot reload (watch mode)
+- `bun run bot:prod:dev` - Start prod bot with hot reload (watch mode)
+- `bun run bot:register:test` - Register Discord commands for test bot
+- `bun run bot:register:prod` - Register Discord commands for prod bot
 
 ### Documentation
 
-- `npm run wiki:sync` - Sync local wiki files to GitHub Wiki (converts Obsidian-style links and pushes to GitHub)
+- `bun run wiki:sync` - Sync local wiki files to GitHub Wiki (converts Obsidian-style links and pushes to GitHub)
 
 ### Wiki Documentation
 
@@ -232,7 +232,7 @@ The project maintains wiki documentation in two places:
 When you update wiki files in the `wiki/` directory, sync them to GitHub Wiki using:
 
 ```bash
-npm run wiki:sync
+bun run wiki:sync
 ```
 
 This script will:
@@ -246,19 +246,19 @@ This script will:
 
 ### Docker
 
-- `npm run docker:up` - Start Docker containers
-- `npm run docker:down` - Stop all containers
-- `npm run docker:reload` - Reload containers (rebuild and restart)
-- `npm run docker:restart` - Restart all containers
-- `npm run docker:logs` - View logs for all services
-- `npm run docker:register` - Register Discord commands in container
+- `bun run docker:up` - Start Docker containers
+- `bun run docker:down` - Stop all containers
+- `bun run docker:reload` - Reload containers (rebuild and restart)
+- `bun run docker:restart` - Restart all containers
+- `bun run docker:logs` - View logs for all services
+- `bun run docker:register` - Register Discord commands in container
 
 ### Code Quality
 
-- `npm run check:sync` - Check if package-lock.json is in sync
-- `npm run lint` - Run ESLint (fails on warnings)
-- `npm run lint:warn` - Run ESLint (allows warnings)
-- `npm run lint:fix` - Automatically fix linting errors
-- `npm run format` - Format code with Prettier
-- `npm run format:check` - Check if files are formatted correctly
-- `npm run validate` - Run all validation checks (sync, lint, format)
+- `bun run check:sync` - Check if bun.lock is in sync
+- `bun run lint` - Run ESLint (fails on warnings)
+- `bun run lint:warn` - Run ESLint (allows warnings)
+- `bun run lint:fix` - Automatically fix linting errors
+- `bun run format` - Format code with Prettier
+- `bun run format:check` - Check if files are formatted correctly
+- `bun run validate` - Run all validation checks (sync, lint, format)

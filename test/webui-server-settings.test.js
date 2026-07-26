@@ -1,4 +1,4 @@
-import { test, describe, before, after } from 'node:test';
+import { test, describe, beforeAll, afterAll } from 'bun:test';
 import assert from 'node:assert';
 import { initDatabase, setSetting } from '../src/utils/database.js';
 import { isAdmin, refreshRateLimitSettings } from '../src/utils/rate-limit.js';
@@ -7,7 +7,7 @@ let app;
 let server;
 let baseUrl;
 
-before(async () => {
+beforeAll(async () => {
   await initDatabase();
   const { createApp } = await import('../src/webui-server/app.js');
   app = createApp();
@@ -17,7 +17,7 @@ before(async () => {
   baseUrl = `http://localhost:${server.address().port}`;
 });
 
-after(async () => {
+afterAll(async () => {
   // The test DB persists between runs - reset the keys these tests write.
   await setSetting('max_video_duration', '300');
   await setSetting('max_video_size_mb', '1024');

@@ -1,4 +1,4 @@
-import { test, describe, beforeEach, afterEach } from 'node:test';
+import { test, describe, beforeEach, afterEach } from 'bun:test';
 import assert from 'node:assert';
 import { execSync } from 'child_process';
 import { platform } from 'os';

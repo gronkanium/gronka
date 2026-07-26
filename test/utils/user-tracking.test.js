@@ -1,4 +1,4 @@
-import { test, describe, before, after } from 'node:test';
+import { test, describe, beforeAll, afterAll } from 'bun:test';
 import assert from 'node:assert';
 import {
   trackUser,
@@ -10,14 +10,14 @@ import {
 import { initDatabase, getUser } from '../../src/utils/database.js';
 import { invalidateUserCache } from '../../src/utils/database/users-pg.js';
 
-before(async () => {
+beforeAll(async () => {
   // Clear user cache to avoid stale data from previous test runs
   invalidateUserCache();
   await initDatabase();
   await initializeUserTracking();
 });
 
-after(async () => {
+afterAll(async () => {
   // Don't close database here - it's shared across parallel test files
   // Connection will be cleaned up when Node.js exits
 });

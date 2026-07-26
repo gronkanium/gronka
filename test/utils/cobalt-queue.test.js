@@ -1,4 +1,4 @@
-import { test, describe, before, after } from 'node:test';
+import { test, describe, beforeAll, afterAll } from 'bun:test';
 import assert from 'node:assert';
 import { hashUrl, queueCobaltRequest } from '../../src/utils/cobalt-queue.js';
 import {
@@ -8,12 +8,12 @@ import {
   markProcessedUrlsR2Expired,
 } from '../../src/utils/database.js';
 
-before(async () => {
+beforeAll(async () => {
   // Ensure database is initialized before tests run
   await initDatabase();
 });
 
-after(async () => {
+afterAll(async () => {
   // Don't close database here - it's shared across parallel test files
   // Connection will be cleaned up when Node.js exits
 });

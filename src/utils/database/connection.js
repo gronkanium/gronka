@@ -25,7 +25,12 @@ export function isTestMode() {
     return true;
   }
 
-  // Detect if running via node --test
+  // Detect a test runner. `bun test` sets NODE_ENV=test itself, so that covers the Bun
+  // runner (including spawned child processes, which the argv sniff below never caught).
+  // The argv check stays for `node --test`, still used by one-off script invocations.
+  if (process.env.NODE_ENV === 'test') {
+    return true;
+  }
   const isNodeTest = process.argv.some(arg => arg === '--test' || arg.includes('node:test'));
   if (isNodeTest) {
     return true;

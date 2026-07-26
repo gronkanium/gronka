@@ -1,9 +1,9 @@
-import { test, describe, before, after } from 'node:test';
+import { test, describe, beforeAll, afterAll } from 'bun:test';
 import assert from 'node:assert';
 import fs from 'fs/promises';
 import path from 'path';
 import os from 'os';
-import { mock } from 'node:test';
+import { mock } from 'bun:test';
 import { createFakeInteraction } from '../helpers/fake-interaction.js';
 import { setSetting } from '../../src/utils/database.js';
 
@@ -15,12 +15,14 @@ import { setSetting } from '../../src/utils/database.js';
 //
 // We drive handleDownloadCommand (the public slash-command entry point) so the test also
 // exercises deferral, URL validation, and the social-media-platform check. download.js is
-// imported dynamically AFTER the mocks are registered, since node:test's mock.module only
-// affects imports that resolve after the mock is registered.
-
-// This file requires --experimental-test-module-mocks (provided by the test:e2e npm script).
-// When run under the plain test:safe suite (no mock flag), skip the whole suite gracefully.
-const mocksSupported = typeof mock.module === 'function';
+// imported dynamically AFTER the mocks are registered, since mock.module only affects imports
+// that resolve after the mock is registered.
+//
+// `bun test` runs every file in ONE process and mock.module() is process-global, so this file
+// must not register its cobalt/ytdlp/file-downloader mocks during the plain test:safe run -
+// they would leak into every other file importing those modules. GRONKA_E2E is set only by
+// the test:e2e script.
+const mocksSupported = process.env.GRONKA_E2E === 'true';
 
 // Each run gets its own throwaway storage directory so filesystem-level cache logic is
 // exercised identically for every test. Must be set BEFORE importing download.js because
@@ -44,197 +46,189 @@ if (!mocksSupported) {
   // No --experimental-test-module-mocks: register a single skipped placeholder so the file is
   // visible in the suite but does not fail the main test:safe run.
   describe('handleDownloadCommand (full-pipeline E2E)', () => {
-    test('skipped: requires --experimental-test-module-mocks (run via npm run test:e2e)', () => {
+    test('skipped: module mocks are e2e-only (run via bun run test:e2e)', () => {
       assert.ok(true);
     });
   });
 } else {
-  before(async () => {
+  beforeAll(async () => {
     // Register mocks for the network boundary BEFORE importing download.js.
-    mock.module('../../src/utils/cobalt.js', {
-      namedExports: {
-        isSocialMediaUrl: url => /^https?:\/\/(www\.|mobile\.)?(x|twitter)\.com\//i.test(url),
-        // Reached via the twitter_delivery policy (default hybrid probes every
-        // X/Twitter URL), url_only_mode (no test enables it), or the direct-URL
-        // fallback for downloads that failed (e.g. over the size/duration caps).
-        getCobaltMediaUrls: async (_apiUrl, url) => {
-          if (url.includes('toolong')) {
-            return {
-              urls: [
-                {
-                  url: 'https://video.twimg.com/ext_tw_video/toolong/vid/avc1/full.mp4',
-                  type: 'video',
-                  filename: null,
-                },
-              ],
-              direct: true,
-            };
-          }
-          if (url.includes('huge')) {
-            return {
-              urls: [
-                {
-                  url: 'https://video.twimg.com/ext_tw_video/huge/vid/avc1/big.mp4',
-                  type: 'video',
-                  filename: null,
-                },
-              ],
-              direct: true,
-            };
-          }
+    mock.module('../../src/utils/cobalt.js', () => ({
+      isSocialMediaUrl: url => /^https?:\/\/(www\.|mobile\.)?(x|twitter)\.com\//i.test(url),
+      // Reached via the twitter_delivery policy (default hybrid probes every
+      // X/Twitter URL), url_only_mode (no test enables it), or the direct-URL
+      // fallback for downloads that failed (e.g. over the size/duration caps).
+      getCobaltMediaUrls: async (_apiUrl, url) => {
+        if (url.includes('toolong')) {
+          return {
+            urls: [
+              {
+                url: 'https://video.twimg.com/ext_tw_video/toolong/vid/avc1/full.mp4',
+                type: 'video',
+                filename: null,
+              },
+            ],
+            direct: true,
+          };
+        }
+        if (url.includes('huge')) {
+          return {
+            urls: [
+              {
+                url: 'https://video.twimg.com/ext_tw_video/huge/vid/avc1/big.mp4',
+                type: 'video',
+                filename: null,
+              },
+            ],
+            direct: true,
+          };
+        }
+        const { NetworkError } = await import('../../src/utils/errors.js');
+        throw new NetworkError('this post is unavailable or has been deleted');
+      },
+      // Size probe used by the hybrid delivery mode: 'huge' URLs report a size
+      // over the Discord attachment limit, everything else is tiny.
+      getRemoteContentLength: async mediaUrl =>
+        mediaUrl.includes('huge') ? 50 * 1024 * 1024 : 4096,
+      downloadFromSocialMedia: async (_apiUrl, url) => {
+        // A carousel bigger than Discord's 10-attachment ceiling, to exercise batching.
+        if (url.includes('carousel')) {
+          return Array.from({ length: 12 }, (_, i) => ({
+            buffer: fakeBuffer(i + 1, 2048 + i),
+            contentType: 'image/png',
+            size: 2048 + i,
+            filename: `photo_${i + 1}.png`,
+          }));
+        }
+        if (url.includes('multi')) {
+          return [
+            {
+              buffer: fakeBuffer(1, 2048),
+              contentType: 'image/png',
+              size: 2048,
+              filename: 'photo_1.png',
+            },
+            {
+              buffer: fakeBuffer(2, 3072),
+              contentType: 'image/png',
+              size: 3072,
+              filename: 'photo_2.png',
+            },
+          ];
+        }
+        if (url.includes('deleted')) {
           const { NetworkError } = await import('../../src/utils/errors.js');
           throw new NetworkError('this post is unavailable or has been deleted');
-        },
-        // Size probe used by the hybrid delivery mode: 'huge' URLs report a size
-        // over the Discord attachment limit, everything else is tiny.
-        getRemoteContentLength: async mediaUrl =>
-          mediaUrl.includes('huge') ? 50 * 1024 * 1024 : 4096,
-        downloadFromSocialMedia: async (_apiUrl, url) => {
-          // A carousel bigger than Discord's 10-attachment ceiling, to exercise batching.
-          if (url.includes('carousel')) {
-            return Array.from({ length: 12 }, (_, i) => ({
-              buffer: fakeBuffer(i + 1, 2048 + i),
-              contentType: 'image/png',
-              size: 2048 + i,
-              filename: `photo_${i + 1}.png`,
-            }));
-          }
-          if (url.includes('multi')) {
-            return [
-              {
-                buffer: fakeBuffer(1, 2048),
-                contentType: 'image/png',
-                size: 2048,
-                filename: 'photo_1.png',
-              },
-              {
-                buffer: fakeBuffer(2, 3072),
-                contentType: 'image/png',
-                size: 3072,
-                filename: 'photo_2.png',
-              },
-            ];
-          }
-          if (url.includes('deleted')) {
-            const { NetworkError } = await import('../../src/utils/errors.js');
-            throw new NetworkError('this post is unavailable or has been deleted');
-          }
-          if (url.includes('toolong')) {
-            const { ValidationError } = await import('../../src/utils/errors.js');
-            throw new ValidationError('file is too large (max 100mb)');
-          }
-          if (url.includes('huge')) {
-            // The hybrid delivery mode must serve the direct URL for oversized
-            // videos WITHOUT downloading - reaching this mock is a test failure.
-            throw new Error(
-              'downloadFromSocialMedia must not be called for huge videos in hybrid mode'
-            );
-          }
-          return {
-            buffer: fakeBuffer(3, 4096),
-            contentType: 'video/mp4',
-            size: 4096,
-            filename: 'clip.mp4',
-          };
-        },
-      },
-    });
-
-    mock.module('../../src/utils/ytdlp.js', {
-      namedExports: {
-        getYtdlpSite: () => null,
-        // download-services.js builds its registry from this table at import time.
-        YTDLP_SITES: [
-          { name: 'YouTube', hosts: ['youtube.com', 'youtu.be'] },
-          { name: 'RedGifs', hosts: ['redgifs.com'] },
-          { name: 'Pornhub', hosts: ['pornhub.com'] },
-        ],
-        downloadFromYouTube: async (
-          _url,
-          _admin,
-          _maxSize,
-          _quality,
-          _maxDuration,
-          _startTime,
-          _duration
-        ) => {
-          // yt-dlp is only used as a fallback when Cobalt fails for X/Twitter URLs.
-          // If the URL was deleted, the failure should propagate (not magically succeed).
-          const u = _url || '';
-          if (u.includes('deleted')) {
-            const { NetworkError } = await import('../../src/utils/errors.js');
-            throw new NetworkError('this post is unavailable or has been deleted');
-          }
-          return {
-            buffer: fakeBuffer(4, 4096),
-            contentType: 'video/mp4',
-            size: 4096,
-            filename: 'clip.mp4',
-          };
-        },
-        downloadWithYtdlp: async (
-          _url,
-          _admin,
-          _maxSize,
-          _quality,
-          _maxDuration,
-          _startTime,
-          _duration
-        ) => {
-          const u = _url || '';
-          if (u.includes('deleted')) {
-            const { NetworkError } = await import('../../src/utils/errors.js');
-            throw new NetworkError('this post is unavailable or has been deleted');
-          }
-          if (u.includes('toolong')) {
-            const { ValidationError } = await import('../../src/utils/errors.js');
-            throw new ValidationError(
-              'video duration exceeds the maximum allowed (5 minutes).' +
-                ' use the start_time/end_time options to grab a clip under the limit.'
-            );
-          }
-          return {
-            buffer: fakeBuffer(4, 4096),
-            contentType: 'video/mp4',
-            size: 4096,
-            filename: 'clip.mp4',
-          };
-        },
-        YtdlpRateLimitError: class YtdlpRateLimitError extends Error {},
-      },
-    });
-
-    mock.module('../../src/utils/file-downloader.js', {
-      namedExports: {
-        generateHash: buf => {
-          // BLAKE3 via noble would be real; use a stable synthetic hash for test.
-          let h = 0;
-          for (let i = 0; i < Math.min(buf.length, 64); i++) {
-            h = (h * 31 + buf[i]) >>> 0;
-          }
-          return h.toString(16).padStart(64, '0');
-        },
-        downloadVideo: async () => fakeBuffer(5, 4096),
-        downloadImage: async () => fakeBuffer(6, 4096),
-        downloadFileFromUrl: async () => ({
-          buffer: fakeBuffer(7, 4096),
+        }
+        if (url.includes('toolong')) {
+          const { ValidationError } = await import('../../src/utils/errors.js');
+          throw new ValidationError('file is too large (max 100mb)');
+        }
+        if (url.includes('huge')) {
+          // The hybrid delivery mode must serve the direct URL for oversized
+          // videos WITHOUT downloading - reaching this mock is a test failure.
+          throw new Error(
+            'downloadFromSocialMedia must not be called for huge videos in hybrid mode'
+          );
+        }
+        return {
+          buffer: fakeBuffer(3, 4096),
           contentType: 'video/mp4',
           size: 4096,
           filename: 'clip.mp4',
-        }),
-        parseTenorUrl: async u => u,
+        };
       },
-    });
+    }));
+
+    mock.module('../../src/utils/ytdlp.js', () => ({
+      getYtdlpSite: () => null,
+      // download-services.js builds its registry from this table at import time.
+      YTDLP_SITES: [
+        { name: 'YouTube', hosts: ['youtube.com', 'youtu.be'] },
+        { name: 'RedGifs', hosts: ['redgifs.com'] },
+        { name: 'Pornhub', hosts: ['pornhub.com'] },
+      ],
+      downloadFromYouTube: async (
+        _url,
+        _admin,
+        _maxSize,
+        _quality,
+        _maxDuration,
+        _startTime,
+        _duration
+      ) => {
+        // yt-dlp is only used as a fallback when Cobalt fails for X/Twitter URLs.
+        // If the URL was deleted, the failure should propagate (not magically succeed).
+        const u = _url || '';
+        if (u.includes('deleted')) {
+          const { NetworkError } = await import('../../src/utils/errors.js');
+          throw new NetworkError('this post is unavailable or has been deleted');
+        }
+        return {
+          buffer: fakeBuffer(4, 4096),
+          contentType: 'video/mp4',
+          size: 4096,
+          filename: 'clip.mp4',
+        };
+      },
+      downloadWithYtdlp: async (
+        _url,
+        _admin,
+        _maxSize,
+        _quality,
+        _maxDuration,
+        _startTime,
+        _duration
+      ) => {
+        const u = _url || '';
+        if (u.includes('deleted')) {
+          const { NetworkError } = await import('../../src/utils/errors.js');
+          throw new NetworkError('this post is unavailable or has been deleted');
+        }
+        if (u.includes('toolong')) {
+          const { ValidationError } = await import('../../src/utils/errors.js');
+          throw new ValidationError(
+            'video duration exceeds the maximum allowed (5 minutes).' +
+              ' use the start_time/end_time options to grab a clip under the limit.'
+          );
+        }
+        return {
+          buffer: fakeBuffer(4, 4096),
+          contentType: 'video/mp4',
+          size: 4096,
+          filename: 'clip.mp4',
+        };
+      },
+      YtdlpRateLimitError: class YtdlpRateLimitError extends Error {},
+    }));
+
+    mock.module('../../src/utils/file-downloader.js', () => ({
+      generateHash: buf => {
+        // BLAKE3 via noble would be real; use a stable synthetic hash for test.
+        let h = 0;
+        for (let i = 0; i < Math.min(buf.length, 64); i++) {
+          h = (h * 31 + buf[i]) >>> 0;
+        }
+        return h.toString(16).padStart(64, '0');
+      },
+      downloadVideo: async () => fakeBuffer(5, 4096),
+      downloadImage: async () => fakeBuffer(6, 4096),
+      downloadFileFromUrl: async () => ({
+        buffer: fakeBuffer(7, 4096),
+        contentType: 'video/mp4',
+        size: 4096,
+        filename: 'clip.mp4',
+      }),
+      parseTenorUrl: async u => u,
+    }));
 
     // Dynamically import AFTER mocks are in place so the mocked modules are used.
     ({ handleDownloadCommand } = await import('../../src/commands/download.js'));
   });
 
-  after(async () => {
-    if (mocksSupported) {
-      mock.restoreAll();
-      await fs.rm(GIF_STORAGE_PATH, { recursive: true, force: true });
-    }
+  afterAll(async () => {
+    mock.restore();
+    await fs.rm(GIF_STORAGE_PATH, { recursive: true, force: true });
   });
 
   async function cleanStorage() {

@@ -1,4 +1,4 @@
-import { test, describe, before } from 'node:test';
+import { test, describe, beforeAll } from 'bun:test';
 import assert from 'node:assert';
 import fs from 'fs/promises';
 import path from 'path';
@@ -171,7 +171,7 @@ function escapeShellArg(arg) {
 describe('docker security tests', () => {
   let composeConfig = null;
 
-  before(async () => {
+  beforeAll(async () => {
     try {
       composeConfig = await parseDockerCompose();
     } catch (error) {

@@ -1,4 +1,4 @@
-#!/usr/bin/env node
+#!/usr/bin/env bun
 
 import { execSync } from 'child_process';
 import { existsSync } from 'fs';
@@ -42,7 +42,7 @@ function installRollupNative() {
 
   try {
     console.log(`Installing rollup native module: ${packageName}`);
-    execSync(`npm install ${packageName} --no-save --legacy-peer-deps`, {
+    execSync(`bun add --no-save ${packageName}`, {
       stdio: 'inherit',
     });
     return true;

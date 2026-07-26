@@ -1,4 +1,4 @@
-#!/usr/bin/env node
+#!/usr/bin/env bun
 
 import { checkDockerDaemon, info, error, execOrError, isContainerRunning } from './utils.js';
 
@@ -15,14 +15,14 @@ if (!isContainerRunning(containerName)) {
 // Install devDependencies inside the container (needed for building webui)
 info('Installing devDependencies in container...');
 execOrError(
-  'docker compose exec -T app npm install --include=dev',
+  'docker compose exec -T app bun install',
   'Failed to install devDependencies in container'
 );
 
 // Build webui inside the container
 info('Building webui inside container...');
 execOrError(
-  'docker compose exec -T app npm run build:webui',
+  'docker compose exec -T app bun run build:webui',
   'Failed to build webui inside container'
 );
 

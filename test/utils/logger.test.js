@@ -1,4 +1,4 @@
-import { test, describe, before, after } from 'node:test';
+import { test, describe, beforeAll, afterAll } from 'bun:test';
 import assert from 'node:assert';
 import { createLogger, formatTimestampSeconds } from '../../src/utils/logger.js';
 import { initDatabase, getLogs } from '../../src/utils/database.js';
@@ -7,13 +7,13 @@ import {
   ensureLogsTableSchema,
 } from '../../src/utils/database/test-helpers.js';
 
-before(async () => {
+beforeAll(async () => {
   await initDatabase();
   // Ensure logs table has correct schema (SERIAL PRIMARY KEY on id)
   await ensureLogsTableSchema();
 });
 
-after(async () => {
+afterAll(async () => {
   // Don't close database here - it's shared across parallel test files
   // Connection will be cleaned up when Node.js exits
 });

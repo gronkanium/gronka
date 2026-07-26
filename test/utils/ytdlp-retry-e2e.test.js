@@ -1,15 +1,19 @@
-import { test, describe, before, after } from 'node:test';
+import { test, describe, beforeAll, afterAll } from 'bun:test';
 import assert from 'node:assert';
 import { EventEmitter } from 'events';
 import fsSync from 'fs';
 import path from 'path';
-import { mock } from 'node:test';
+import { mock } from 'bun:test';
 import * as realChildProcess from 'child_process';
 
 // Exercises the retry-on-generic-failure behavior in ytdlp.js's executeYtdlpWithRetry.
 // spawn() is mocked at the module level so this runs without a real yt-dlp binary or network
-// access, which requires --experimental-test-module-mocks (provided by the test:e2e npm script).
-const mocksSupported = typeof mock.module === 'function';
+// access.
+//
+// `bun test` runs every file in ONE process and mock.module() is process-global, so this file
+// must not register its child_process mock during the plain test:safe run - it would leak into
+// every other file that spawns. GRONKA_E2E is set only by the test:e2e script.
+const mocksSupported = process.env.GRONKA_E2E === 'true';
 
 function fakeChildProcess() {
   const child = new EventEmitter();
@@ -21,7 +25,7 @@ function fakeChildProcess() {
 
 if (!mocksSupported) {
   describe('yt-dlp generic-failure retry', () => {
-    test('skipped: requires --experimental-test-module-mocks (run via npm run test:e2e)', () => {
+    test('skipped: module mocks are e2e-only (run via bun run test:e2e)', () => {
       assert.ok(true);
     });
   });
@@ -33,35 +37,35 @@ if (!mocksSupported) {
   let spawnBehaviors;
   let spawnCallLog;
 
-  before(async () => {
-    mock.module('child_process', {
-      namedExports: {
-        // Other modules in the dependency chain (e.g. video-processor/utils.js) also import
-        // from 'child_process' - pass everything else through untouched and only override spawn.
-        ...realChildProcess,
-        spawn: (cmd, args) => {
-          const child = fakeChildProcess();
-          const callNumber = spawnCallLog.push({ args });
-          // executeYtdlp passes '-o', '<outputDir>/%(title)s.%(ext)s' - recover the real
-          // per-call temp directory so a "successful" run can drop a file there.
-          const outputTemplate = args[args.indexOf('-o') + 1];
-          const outputDir = path.dirname(outputTemplate);
-          setTimeout(() => {
-            const behavior = spawnBehaviors[callNumber - 1];
-            behavior(child, outputDir);
-          });
-          return child;
-        },
+  beforeAll(async () => {
+    const childProcessMock = () => ({
+      // Other modules in the dependency chain (e.g. video-processor/utils.js) also import
+      // from 'child_process' - pass everything else through untouched and only override spawn.
+      ...realChildProcess,
+      spawn: (cmd, args) => {
+        const child = fakeChildProcess();
+        const callNumber = spawnCallLog.push({ args });
+        // executeYtdlp passes '-o', '<outputDir>/%(title)s.%(ext)s' - recover the real
+        // per-call temp directory so a "successful" run can drop a file there.
+        const outputTemplate = args[args.indexOf('-o') + 1];
+        const outputDir = path.dirname(outputTemplate);
+        setTimeout(() => {
+          const behavior = spawnBehaviors[callNumber - 1];
+          behavior(child, outputDir);
+        });
+        return child;
       },
     });
+    // Bun resolves bare 'child_process' and 'node:child_process' to distinct module records,
+    // so both specifiers need the mock for it to catch every importer.
+    mock.module('child_process', childProcessMock);
+    mock.module('node:child_process', childProcessMock);
 
     ({ downloadWithYtdlp } = await import('../../src/utils/ytdlp.js'));
   });
 
-  after(() => {
-    if (mocksSupported) {
-      mock.restoreAll();
-    }
+  afterAll(() => {
+    mock.restore();
   });
 
   function genericFailure(child) {

@@ -1,4 +1,4 @@
-import { test, describe, before } from 'node:test';
+import { test, describe, beforeAll } from 'bun:test';
 import assert from 'node:assert';
 import {
   initDatabase,
@@ -8,7 +8,7 @@ import {
 } from '../../src/utils/database.js';
 import { invalidateGuildPrefixCache } from '../../src/utils/database/guild-prefixes-pg.js';
 
-before(async () => {
+beforeAll(async () => {
   await initDatabase();
 });
 

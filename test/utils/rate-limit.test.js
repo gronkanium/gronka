@@ -1,4 +1,4 @@
-import { test, describe } from 'node:test';
+import { test, describe } from 'bun:test';
 import assert from 'node:assert';
 import { isAdmin, checkRateLimit, recordRateLimit } from '../../src/utils/rate-limit.js';
 import { botConfig } from '../../src/utils/config.js';

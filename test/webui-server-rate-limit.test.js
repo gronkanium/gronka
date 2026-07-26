@@ -1,4 +1,4 @@
-import { test, describe, before, after } from 'node:test';
+import { test, describe, beforeAll, afterAll } from 'bun:test';
 import assert from 'node:assert';
 import express from 'express';
 import rateLimit from 'express-rate-limit';
@@ -49,7 +49,7 @@ describe('webui-server rate limiting', () => {
     let app;
     let limiter;
 
-    before(() => {
+    beforeAll(() => {
       app = express();
       limiter = rateLimit({
         windowMs: 15 * 60 * 1000,
@@ -78,7 +78,7 @@ describe('webui-server rate limiting', () => {
     let server;
     let limiter;
 
-    before(() => {
+    beforeAll(() => {
       app = express();
       // Use a very short window and low max for testing
       limiter = rateLimit({
@@ -100,7 +100,7 @@ describe('webui-server rate limiting', () => {
       });
     });
 
-    after(() => {
+    afterAll(() => {
       if (server) {
         server.close();
       }
@@ -141,7 +141,7 @@ describe('webui-server rate limiting', () => {
     let app;
     let server;
 
-    before(async () => {
+    beforeAll(async () => {
       const { createApp } = await import('../src/webui-server/app.js');
       app = createApp();
       return new Promise(resolve => {
@@ -151,7 +151,7 @@ describe('webui-server rate limiting', () => {
       });
     });
 
-    after(() => {
+    afterAll(() => {
       if (server) {
         server.close();
       }

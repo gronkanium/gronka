@@ -36,10 +36,10 @@ look for "bot logged in as" message in logs. if missing:
 
 ```bash
 # docker
-docker compose run --rm app npm run register-commands
+docker compose run --rm app bun run register-commands
 
 # local
-npm run register-commands
+bun run register-commands
 ```
 
 ### wait for propagation

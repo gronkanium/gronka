@@ -1,4 +1,4 @@
-import { test } from 'node:test';
+import { test, beforeAll, afterAll } from 'bun:test';
 import assert from 'node:assert';
 import { convertToGif, trimVideo, trimGif } from '../../src/utils/video-processor.js';
 import path from 'node:path';
@@ -11,14 +11,14 @@ let testTempPath;
 let tmpDirCleanup;
 
 // Setup test temp directory
-test.before(() => {
+beforeAll(() => {
   // Use tmp package to create secure temporary directory
   const tmpDir = tmp.dirSync({ prefix: 'gronka-test-video-processor-', unsafeCleanup: true });
   testTempPath = tmpDir.name;
   tmpDirCleanup = tmpDir.removeCallback;
 });
 
-test.after(() => {
+afterAll(() => {
   // Clean up temporary directory
   if (tmpDirCleanup) {
     tmpDirCleanup();

@@ -1,7 +1,7 @@
 # Stage 1: Builder - Install dependencies and build application
-FROM node:24-slim AS builder
+FROM oven/bun:1.3-debian AS builder
 
-# Install build tools for native npm modules
+# Install build tools for native modules
 RUN apt-get update && apt-get install -y \
     python3 \
     make \
@@ -12,13 +12,15 @@ RUN apt-get update && apt-get install -y \
 WORKDIR /app
 
 # Copy package files for dependency installation
-COPY package*.json ./
+COPY package.json bun.lock ./
 
-# Install all dependencies (including devDependencies for building webui)
-RUN npm ci
+# Install all dependencies (including devDependencies for building webui).
+# --frozen-lockfile makes a lockfile that drifted from package.json fail the build here
+# rather than silently resolving something different from what CI tested.
+RUN bun install --frozen-lockfile
 
 # Copy vite config (needed for webui build)
-COPY vite.config.js ./
+COPY vite.config.js svelte.config.js ./
 
 # Copy application source code
 COPY src/ ./src/
@@ -27,13 +29,16 @@ COPY src/ ./src/
 COPY scripts/ ./scripts/
 
 # Build webui frontend
-RUN npm run build:webui
+RUN bun run build:webui
 
-# Remove devDependencies to keep only production dependencies
-RUN npm prune --production
+# Reinstall with production dependencies only, dropping the build toolchain from the tree
+# that gets copied into the runtime stage. --ignore-scripts because the "prepare" script runs
+# husky, a devDependency that is absent from a production tree (and pointless in a container
+# with no .git) - without it this step dies with exit 127.
+RUN rm -rf node_modules && bun install --frozen-lockfile --production --ignore-scripts
 
 # Stage 2: Runtime - Minimal production image
-FROM node:24-slim AS runtime
+FROM oven/bun:1.3-debian AS runtime
 
 # Install runtime dependencies: FFmpeg, gifsicle (GIF optimization), ImageMagick
 # (animated-WebP -> GIF; ffmpeg can't demux animated webp), ca-certificates, and yt-dlp
@@ -66,7 +71,7 @@ COPY --from=builder /app/node_modules ./node_modules
 # Copy application code and built webui from builder
 COPY --from=builder /app/src ./src
 COPY --from=builder /app/scripts ./scripts
-COPY --from=builder /app/package*.json ./
+COPY --from=builder /app/package.json /app/bun.lock ./
 
 # Create necessary directories
 RUN mkdir -p data-prod/gifs data-test/gifs temp
@@ -80,8 +85,7 @@ EXPOSE 3000
 
 # Health check
 HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
-    CMD node -e "require('http').get('http://localhost:3000/health', (r) => {process.exit(r.statusCode === 200 ? 0 : 1)})"
+    CMD bun -e "const r = await fetch('http://localhost:3000/health'); process.exit(r.status === 200 ? 0 : 1)"
 
 # Use entrypoint script to run both processes
 ENTRYPOINT ["docker-entrypoint.sh"]
-

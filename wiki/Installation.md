@@ -1,7 +1,7 @@
 ## prerequisites
 
 - [ ] Ubuntu 20.04+ or Debian 11+ server
-- [ ] Node.js 20+ installed
+- [ ] Bun 1.3+ installed
 - [ ] FFmpeg installed (`sudo apt install ffmpeg`)
 - [ ] Domain name configured in Cloudflare
 - [ ] Discord bot created and token obtained
@@ -13,7 +13,7 @@
 mkdir gronka && cd gronka
 
 # 2. Install dependencies
-npm install discord.js axios fluent-ffmpeg express dotenv
+bun install
 
 # 3. Create directories
 mkdir -p data-prod/gifs data-test/gifs
@@ -24,13 +24,13 @@ cp .env.example .env
 nano .env  # Fill in tokens
 
 # 5. Register Discord commands
-node src/register-commands.js
+bun src/register-commands.js
 
 # 6. Start services (as of v0.13.0, only bot is needed - includes stats server)
-node src/bot.js  # Discord bot (includes stats HTTP server)
+bun src/bot.js  # Discord bot (includes stats HTTP server)
 
 # optional: start webui dashboard
-node src/webui-server.js &
+bun src/webui-server.js &
 
 # 7. Setup systemd services (production)
 sudo nano /etc/systemd/system/gif-bot.service
@@ -134,14 +134,14 @@ PROD_GIF_STORAGE_PATH=./data-prod
 
 ```bash
 # start test bot
-npm run bot:test
+bun run bot:test
 
 # start prod bot
-npm run bot:prod
+bun run bot:prod
 
 # register commands for each bot
-npm run bot:register:test
-npm run bot:register:prod
+bun run bot:register:test
+bun run bot:register:prod
 ```
 
 each bot uses a separate database file (`gronka-test.db` and `gronka-prod.db`) and storage directory (`data-test/` and `data-prod/`).

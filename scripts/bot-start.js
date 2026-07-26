@@ -1,4 +1,4 @@
-#!/usr/bin/env node
+#!/usr/bin/env bun
 
 import { spawn } from 'child_process';
 import dotenv from 'dotenv';
@@ -115,7 +115,8 @@ const processes = [];
 
 // Function to start a process
 function startProcess(name, scriptPath, options = {}) {
-  const proc = spawn('node', [scriptPath], {
+  const proc = spawn('bun', [scriptPath], {
+    shell: process.platform === 'win32',
     env: { ...env, ...options.env },
     stdio: 'inherit',
     cwd: join(__dirname, '..'),

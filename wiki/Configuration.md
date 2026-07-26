@@ -527,7 +527,7 @@ port for the webui dashboard server.
 
 - webui provides a dashboard for viewing stats and logs
 - typically only accessible from localhost for security
-- can be started with `npm run bot:test:webui` or `npm run bot:prod:webui`
+- can be started with `bun run bot:test:webui` or `bun run bot:prod:webui`
 
 **example:**
 
@@ -811,7 +811,7 @@ PROD_ADMIN_USER_IDS=987654321098765432
 
 ### how it works
 
-when you start a bot with `npm run bot:test` or `npm run bot:prod`, the bot-start script:
+when you start a bot with `bun run bot:test` or `bun run bot:prod`, the bot-start script:
 
 1. reads prefixed environment variables (e.g., `TEST_DISCORD_TOKEN`)
 2. maps them to standard variable names (e.g., `DISCORD_TOKEN`)
@@ -899,25 +899,25 @@ the bots connect to the same PostgreSQL server but use different database names 
 
 ```bash
 # start test bot
-npm run bot:test
+bun run bot:test
 
 # start prod bot
-npm run bot:prod
+bun run bot:prod
 
 # register commands
-npm run bot:register:test
-npm run bot:register:prod
+bun run bot:register:test
+bun run bot:register:prod
 ```
 
 for more details, see the [[Test-Bot|test bot documentation]].
 
 ## local vs docker deployment variable handling
 
-there is an important difference in how environment variables are handled between local deployments (using `npm run bot:prod:webui`) and docker deployments (using `npm run docker:up`).
+there is an important difference in how environment variables are handled between local deployments (using `bun run bot:prod:webui`) and docker deployments (using `bun run docker:up`).
 
-### local deployment (`npm run bot:prod:webui`)
+### local deployment (`bun run bot:prod:webui`)
 
-when you run `npm run bot:prod:webui`, it uses the `bot-start.js` script which:
+when you run `bun run bot:prod:webui`, it uses the `bot-start.js` script which:
 
 1. loads environment variables from your `.env` file
 2. automatically maps **all** `PROD_*` prefixed variables to standard names
@@ -927,17 +927,17 @@ when you run `npm run bot:prod:webui`, it uses the `bot-start.js` script which:
 **all variables support the `PROD_*` prefix** when using local deployment commands:
 
 ```bash
-npm run bot:prod          # uses PROD_* variables
-npm run bot:prod:webui    # uses PROD_* variables
-npm run bot:test          # uses TEST_* variables
-npm run bot:test:webui    # uses TEST_* variables
+bun run bot:prod          # uses PROD_* variables
+bun run bot:prod:webui    # uses PROD_* variables
+bun run bot:test          # uses TEST_* variables
+bun run bot:test:webui    # uses TEST_* variables
 ```
 
-**example:** if you set `PROD_MAX_GIF_DURATION=60` in your `.env`, the bot will use 60 seconds when started with `npm run bot:prod:webui`.
+**example:** if you set `PROD_MAX_GIF_DURATION=60` in your `.env`, the bot will use 60 seconds when started with `bun run bot:prod:webui`.
 
-### docker deployment (`npm run docker:up`)
+### docker deployment (`bun run docker:up`)
 
-when you run `npm run docker:up`, it uses `docker-compose.yml` which:
+when you run `bun run docker:up`, it uses `docker-compose.yml` which:
 
 1. sets environment variables directly in the container
 2. **only supports `PROD_*` prefix for 4 variables:**
@@ -950,7 +950,7 @@ when you run `npm run docker:up`, it uses `docker-compose.yml` which:
 
 **why the difference?**
 
-the docker container uses `docker-entrypoint.sh` which directly executes `node src/bot.js` and `node src/webui-server.js`. it does not use the `bot-start.js` script that performs prefix mapping. instead, variables are set directly in `docker-compose.yml` using docker's variable substitution syntax.
+the docker container uses `docker-entrypoint.sh` which directly executes `bun src/bot.js` and `bun src/webui-server.js`. it does not use the `bot-start.js` script that performs prefix mapping. instead, variables are set directly in `docker-compose.yml` using docker's variable substitution syntax.
 
 note: as of version 0.13.0, `src/server.js` has been removed. the bot process now includes a minimal stats http server.
 
@@ -995,7 +995,7 @@ if you need different values for docker deployment, you must set the standard va
 
 ### example: same config, different methods
 
-**local deployment with `npm run bot:prod:webui`:**
+**local deployment with `bun run bot:prod:webui`:**
 ```env
 PROD_DISCORD_TOKEN=prod_token
 PROD_CLIENT_ID=prod_client_id
@@ -1004,7 +1004,7 @@ PROD_GIF_QUALITY=high
 PROD_R2_BUCKET_NAME=prod-bucket
 ```
 
-**docker deployment with `npm run docker:up`:**
+**docker deployment with `bun run docker:up`:**
 ```env
 PROD_DISCORD_TOKEN=prod_token           # supports PROD_ prefix
 PROD_CLIENT_ID=prod_client_id          # supports PROD_ prefix

@@ -1,4 +1,4 @@
-import { test, describe, before, after, beforeEach } from 'node:test';
+import { test, describe, beforeAll, afterAll, beforeEach } from 'bun:test';
 import assert from 'node:assert';
 import {
   createOperation,
@@ -14,11 +14,11 @@ import {
 } from '../../src/utils/operations-tracker.js';
 import { initDatabase, insertOperationLog, insertOrUpdateUser } from '../../src/utils/database.js';
 
-before(async () => {
+beforeAll(async () => {
   await initDatabase();
 });
 
-after(async () => {
+afterAll(async () => {
   // Flush any pending operation logs before ending
   await flushAllOperationLogs();
 

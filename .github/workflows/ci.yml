@@ -40,6 +40,8 @@ env:
   PGHOST: localhost
   PGPORT: '5432'
   PGDATABASE: gronka_test
+  # Keep in step with the oven/bun tag in the Dockerfile.
+  BUN_VERSION: '1.3'
 
 jobs:
   dependency-review:
@@ -57,16 +59,20 @@ jobs:
     if: github.actor != 'dependabot[bot]'
     steps:
       - uses: actions/checkout@v7
-      - uses: actions/setup-node@v7
+      # pinned to a tag's commit — tags are movable, SHAs are not
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
         with:
-          node-version: '24'
-          cache: 'npm'
-      - run: npm ci
-      - run: npm run check:sync
-      - run: npm run lint
-      - run: npm run format:check || echo "::warning::Formatting check failed"
+          bun-version: ${{ env.BUN_VERSION }}
+      - run: bun install --frozen-lockfile
+      - run: bun run check:sync
+      - run: bun run lint
+      - run: bun run format:check || echo "::warning::Formatting check failed"
 
-  test-utils:
+  # Single job for the whole unit suite. Under `node --test` this was split across four
+  # directory-sharded jobs because forking a process per file made a full run slow; `bun test`
+  # runs all 51 files in one process in ~15s, so the shards only bought four Postgres services
+  # and four chances to typo a path filter into a silently-empty run.
+  test:
     runs-on: ubuntu-latest
     if: github.actor != 'dependabot[bot]'
     services:
@@ -85,98 +91,13 @@ jobs:
           - 5432:5432
     steps:
       - uses: actions/checkout@v7
-      - uses: actions/setup-node@v7
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
         with:
-          node-version: '24'
-          cache: 'npm'
-      - run: npm ci
-      - run: sudo apt-get update && sudo apt-get install -y ffmpeg postgresql-client
+          bun-version: ${{ env.BUN_VERSION }}
+      - run: bun install --frozen-lockfile
+      - run: sudo apt-get update && sudo apt-get install -y ffmpeg gifsicle imagemagick postgresql-client
       - run: psql -c 'DROP SCHEMA IF EXISTS public CASCADE; CREATE SCHEMA public;'
-      - run: npx cross-env WEBUI_PORT=3101 R2_ACCOUNT_ID= R2_ACCESS_KEY_ID= R2_SECRET_ACCESS_KEY= R2_BUCKET_NAME= node --test "test/utils/**/*.test.js"
-
-  test-commands:
-    runs-on: ubuntu-latest
-    if: github.actor != 'dependabot[bot]'
-    services:
-      postgres:
-        image: postgres:16-alpine
-        env:
-          POSTGRES_DB: gronka_test
-          POSTGRES_USER: gronka
-          POSTGRES_PASSWORD: gronka
-        options: >-
-          --health-cmd pg_isready
-          --health-interval 10s
-          --health-timeout 5s
-          --health-retries 5
-        ports:
-          - 5432:5432
-    steps:
-      - uses: actions/checkout@v7
-      - uses: actions/setup-node@v7
-        with:
-          node-version: '24'
-          cache: 'npm'
-      - run: npm ci
-      - run: sudo apt-get update && sudo apt-get install -y ffmpeg postgresql-client
-      - run: psql -c 'DROP SCHEMA IF EXISTS public CASCADE; CREATE SCHEMA public;'
-      - run: npx cross-env WEBUI_PORT=3101 R2_ACCOUNT_ID= R2_ACCESS_KEY_ID= R2_SECRET_ACCESS_KEY= R2_BUCKET_NAME= node --test "test/commands/**/*.test.js"
-
-  test-scripts:
-    runs-on: ubuntu-latest
-    if: github.actor != 'dependabot[bot]'
-    services:
-      postgres:
-        image: postgres:16-alpine
-        env:
-          POSTGRES_DB: gronka_test
-          POSTGRES_USER: gronka
-          POSTGRES_PASSWORD: gronka
-        options: >-
-          --health-cmd pg_isready
-          --health-interval 10s
-          --health-timeout 5s
-          --health-retries 5
-        ports:
-          - 5432:5432
-    steps:
-      - uses: actions/checkout@v7
-      - uses: actions/setup-node@v7
-        with:
-          node-version: '24'
-          cache: 'npm'
-      - run: npm ci
-      - run: sudo apt-get update && sudo apt-get install -y ffmpeg postgresql-client
-      - run: psql -c 'DROP SCHEMA IF EXISTS public CASCADE; CREATE SCHEMA public;'
-      - run: npx cross-env WEBUI_PORT=3101 R2_ACCOUNT_ID= R2_ACCESS_KEY_ID= R2_SECRET_ACCESS_KEY= R2_BUCKET_NAME= node --test "test/scripts/**/*.test.js"
-
-  test-integration:
-    runs-on: ubuntu-latest
-    if: github.actor != 'dependabot[bot]'
-    services:
-      postgres:
-        image: postgres:16-alpine
-        env:
-          POSTGRES_DB: gronka_test
-          POSTGRES_USER: gronka
-          POSTGRES_PASSWORD: gronka
-        options: >-
-          --health-cmd pg_isready
-          --health-interval 10s
-          --health-timeout 5s
-          --health-retries 5
-        ports:
-          - 5432:5432
-    steps:
-      - uses: actions/checkout@v7
-      - uses: actions/setup-node@v7
-        with:
-          node-version: '24'
-          cache: 'npm'
-      - run: npm ci
-      - run: sudo apt-get update && sudo apt-get install -y ffmpeg postgresql-client
-      - run: psql -c 'DROP SCHEMA IF EXISTS public CASCADE; CREATE SCHEMA public;'
-      - run: npx cross-env WEBUI_PORT=3101 R2_ACCOUNT_ID= R2_ACCESS_KEY_ID= R2_SECRET_ACCESS_KEY= R2_BUCKET_NAME= node --test test/webui-server-*.test.js test/docker-security.test.js
+      - run: bun run test:safe
 
   test-e2e:
     runs-on: ubuntu-latest
@@ -197,26 +118,24 @@ jobs:
           - 5432:5432
     steps:
       - uses: actions/checkout@v7
-      # Node 24 (matching local dev) guarantees --experimental-test-module-mocks
-      # support; on older runtimes the suite silently skips and the job proves nothing.
-      - uses: actions/setup-node@v7
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
         with:
-          node-version: '24'
-          cache: 'npm'
-      - run: npm ci
+          bun-version: ${{ env.BUN_VERSION }}
+      - run: bun install --frozen-lockfile
       - run: sudo apt-get update && sudo apt-get install -y ffmpeg postgresql-client
       - run: psql -c 'DROP SCHEMA IF EXISTS public CASCADE; CREATE SCHEMA public;'
-      - run: npm run test:e2e
+      # GRONKA_E2E (set by the script) is what un-skips the module-mock suites, and
+      # run-e2e-tests.js fails on zero discovered files, so this job cannot pass vacuously.
+      - run: bun run test:e2e
 
   dependabot-checks:
     runs-on: ubuntu-latest
     if: github.actor == 'dependabot[bot]'
     steps:
       - uses: actions/checkout@v7
-      - uses: actions/setup-node@v7
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
         with:
-          node-version: '24'
-          cache: 'npm'
-      - run: npm ci
+          bun-version: ${{ env.BUN_VERSION }}
+      - run: bun install --frozen-lockfile
       - run: sudo apt-get update && sudo apt-get install -y ffmpeg
-      - run: npm run validate
+      - run: bun run validate

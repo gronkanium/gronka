@@ -1,4 +1,4 @@
-#!/usr/bin/env node
+#!/usr/bin/env bun
 
 import { checkDockerDaemon, info, error, execOrError, isContainerRunning } from './utils.js';
 
@@ -14,7 +14,7 @@ if (!isContainerRunning(containerName)) {
 
 // Always build webui locally to ensure we have the latest version
 info('Building webui locally...');
-execOrError('npm run build:webui', 'Failed to build webui locally');
+execOrError('bun run build:webui', 'Failed to build webui locally');
 
 // Copy built files to container
 info('Copying built files to container...');

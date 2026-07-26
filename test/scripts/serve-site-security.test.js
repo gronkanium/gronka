@@ -1,4 +1,4 @@
-import { test, describe, before, after } from 'node:test';
+import { test, describe, beforeAll, afterAll } from 'bun:test';
 import assert from 'node:assert';
 import fs from 'fs';
 import path from 'path';
@@ -16,7 +16,7 @@ describe('serve-site security', () => {
   let tempSiteDir;
   let tmpDirCleanup;
 
-  before(() => {
+  beforeAll(() => {
     // Create temporary site directory for testing
     const tmpDir = tmp.dirSync({ prefix: 'gronka-test-site-', unsafeCleanup: true });
     tempSiteDir = tmpDir.name;
@@ -32,7 +32,7 @@ describe('serve-site security', () => {
     );
   });
 
-  after(() => {
+  afterAll(() => {
     // Clean up temp directory
     if (tmpDirCleanup) {
       tmpDirCleanup();

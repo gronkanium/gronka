@@ -1,11 +1,11 @@
-import { test, describe, before } from 'node:test';
+import { test, describe, beforeAll } from 'bun:test';
 import assert from 'node:assert';
 import { initDatabase, banUser, unbanUser, setSetting } from '../src/utils/database.js';
 import { invalidateSettingsCache } from '../src/utils/database/settings-pg.js';
 import { invalidateBanCache } from '../src/utils/database/bans-pg.js';
 import { replyIfBanned } from '../src/utils/ban-check.js';
 
-before(async () => {
+beforeAll(async () => {
   await initDatabase();
 });
 

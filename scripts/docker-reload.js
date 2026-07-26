@@ -1,4 +1,4 @@
-#!/usr/bin/env node
+#!/usr/bin/env bun
 
 import { spawn } from 'child_process';
 import { existsSync, mkdirSync } from 'fs';

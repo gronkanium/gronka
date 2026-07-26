@@ -153,7 +153,7 @@ and any other configuration variable.
 ### start test bot
 
 ```bash
-npm run bot:test
+bun run bot:test
 ```
 
 starts the test bot using `TEST_*` prefixed environment variables.
@@ -161,7 +161,7 @@ starts the test bot using `TEST_*` prefixed environment variables.
 ### start prod bot
 
 ```bash
-npm run bot:prod
+bun run bot:prod
 ```
 
 starts the production bot using `PROD_*` prefixed environment variables.
@@ -172,10 +172,10 @@ run bots with hot reload for development:
 
 ```bash
 # test bot with watch mode
-npm run bot:test:dev
+bun run bot:test:dev
 
 # prod bot with watch mode
-npm run bot:prod:dev
+bun run bot:prod:dev
 ```
 
 ### with webui
@@ -184,10 +184,10 @@ start bot with webui server:
 
 ```bash
 # test bot with webui
-npm run bot:test:webui
+bun run bot:test:webui
 
 # prod bot with webui
-npm run bot:prod:webui
+bun run bot:prod:webui
 ```
 
 ## registering commands
@@ -196,10 +196,10 @@ each bot needs its commands registered separately:
 
 ```bash
 # register test bot commands
-npm run bot:register:test
+bun run bot:register:test
 
 # register prod bot commands
-npm run bot:register:prod
+bun run bot:register:prod
 ```
 
 commands are registered globally for each bot's application id, so they will appear in all servers where the bot is present.
@@ -210,10 +210,10 @@ you can run both bots at the same time for parallel testing:
 
 ```bash
 # terminal 1: start test bot
-npm run bot:test
+bun run bot:test
 
 # terminal 2: start prod bot
-npm run bot:prod
+bun run bot:prod
 ```
 
 both bots will run independently with their own:
@@ -252,7 +252,7 @@ this ensures test data never mixes with production data.
 recommended workflow for development:
 
 1. **configure both bots** in `.env` with prefixed variables
-2. **start test bot** in development mode: `npm run bot:test:dev`
+2. **start test bot** in development mode: `bun run bot:test:dev`
 3. **test changes** using the test bot
 4. **verify production bot** continues running normally (if started)
 5. **deploy to production** once changes are verified
@@ -355,10 +355,10 @@ ensure commands are registered for the correct bot:
 
 ```bash
 # register test bot commands
-npm run bot:register:test
+bun run bot:register:test
 
 # register prod bot commands
-npm run bot:register:prod
+bun run bot:register:prod
 ```
 
 ### database conflicts

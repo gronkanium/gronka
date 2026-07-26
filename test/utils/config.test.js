@@ -1,10 +1,10 @@
-import { test, describe, before } from 'node:test';
+import { test, describe, beforeAll } from 'bun:test';
 import assert from 'node:assert';
 import { ConfigurationError } from '../../src/utils/errors.js';
 import { botConfig } from '../../src/utils/config.js';
 
 describe('GIF_QUALITY configuration', () => {
-  before(() => {
+  beforeAll(() => {
     // Set required environment variables for botConfig to load
     if (!process.env.DISCORD_TOKEN) {
       process.env.DISCORD_TOKEN = 'test-token';

@@ -1,4 +1,4 @@
-import { test, describe, before, after } from 'node:test';
+import { test, describe, beforeAll, afterAll } from 'bun:test';
 import assert from 'node:assert';
 import {
   validateUrl,
@@ -15,7 +15,7 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const testStoragePath = path.join(__dirname, '../../temp/test-storage');
 
 // Setup test storage directory
-before(() => {
+beforeAll(() => {
   try {
     mkdirSync(testStoragePath, { recursive: true });
   } catch {
@@ -23,7 +23,7 @@ before(() => {
   }
 });
 
-after(() => {
+afterAll(() => {
   try {
     rmSync(testStoragePath, { recursive: true, force: true });
   } catch {

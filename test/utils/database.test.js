@@ -1,4 +1,4 @@
-import { test, describe, before, after } from 'node:test';
+import { test, describe, beforeAll, afterAll } from 'bun:test';
 import assert from 'node:assert';
 import {
   initDatabase,
@@ -17,7 +17,7 @@ import {
   ensureLogsTableSchema,
 } from '../../src/utils/database/test-helpers.js';
 
-before(async () => {
+beforeAll(async () => {
   // Clear user cache to avoid stale data from previous test runs
   invalidateUserCache();
   await initDatabase();
@@ -27,7 +27,7 @@ before(async () => {
   // Instead, we use unique component names and timestamps for test isolation
 });
 
-after(async () => {
+afterAll(async () => {
   // Don't close database here - it's shared across parallel test files
   // Connection will be cleaned up when Node.js exits
 });
@@ -456,7 +456,10 @@ describe('database utilities', () => {
     });
 
     test('handles missing database gracefully', async () => {
-      closeDatabase();
+      // Must be awaited: closeDatabase() only nulls the pool handle AFTER sql.end()
+      // settles, so a fire-and-forget call leaves initDatabase() free to hand back the
+      // still-closing pool and every later test dies on CONNECTION_ENDED.
+      await closeDatabase();
       const result = await getProcessedUrl('test-hash');
       assert.strictEqual(result, null);
       await initDatabase();
@@ -589,7 +592,7 @@ describe('database utilities', () => {
     });
 
     test('handles missing database gracefully', async () => {
-      closeDatabase();
+      await closeDatabase();
       // Should not throw even if database is closed
       await assert.doesNotReject(
         insertProcessedUrl(

@@ -91,7 +91,7 @@ cp .env.example .env
 docker compose up -d
 
 # 4. register slash commands (one-time)
-docker compose run --rm app npm run register-commands
+docker compose run --rm app bun run register-commands
 ```
 
 invite the bot to your server with the invite url from step 2, and `/download`, `/convert`, and `/optimize` are live. see [[Quick-Start]] and [[Docker-Deployment]] for more detail on running and updating the stack.

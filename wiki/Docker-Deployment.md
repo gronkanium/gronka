@@ -47,7 +47,7 @@ this will:
 3. **register discord commands:**
 
 ```bash
-docker compose run --rm app npm run register-commands
+docker compose run --rm app bun run register-commands
 ```
 
 4. **view logs:**
@@ -135,10 +135,10 @@ to register the discord slash commands, run:
 
 ```bash
 # if container is running
-docker compose exec app npm run register-commands
+docker compose exec app bun run register-commands
 
 # if container is not running (one-off command)
-docker compose run --rm app npm run register-commands
+docker compose run --rm app bun run register-commands
 ```
 
 you should register commands:

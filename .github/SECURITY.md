@@ -97,7 +97,8 @@ the bot uses these services:
 
 - **discord** - bot platform and API provider
 - **cloudflare r2** - file storage
-- **node.js** - runtime environment
+- **bun** - runtime environment
+- **cobalt** - self-hosted media downloader, runs in a container alongside the bot
 
 we rely on these services to maintain their security. we can't guarantee their security beyond what they provide.
 
@@ -118,7 +119,7 @@ we may temporarily suspend service to address security issues if needed.
 for security-related questions or concerns:
 
 - **email**: gronkasupport@proton.me
-- **github**: [https://github.com/gronkanium/gronka](https://github.com/gronkanium/gronka)
+- **github**: [https://github.com/thedorekaczynski/gronka](https://github.com/thedorekaczynski/gronka)
 
 use email for security vulnerability reports. don't disclose vulnerabilities publicly until they're resolved.
 

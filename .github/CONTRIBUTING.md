@@ -3,9 +3,9 @@
 This project consists of multiple components that can run independently or together:
 
 - **Discord Bot** (`src/bot.js`) - Handles Discord interactions and converts files to GIFs. The bot includes a minimal HTTP server that serves `/api/stats/24h` for Jekyll site integration.
-- **WebUI** (`src/webui-server.js`) - Optional dashboard for viewing statistics
+- **WebUI** (`src/webui-server.js`) - Dashboard for viewing statistics
 
-When running in Docker, the main `app` service runs the bot (which includes the minimal stats HTTP server). Files are stored in R2 when configured (recommended), or saved to local disk if R2 is not configured. Files are served from R2 or Discord attachments. The webui is an optional service that can be enabled via Docker Compose profiles.
+When running in Docker, the `app` container runs both processes: `scripts/docker-entrypoint.sh` starts the bot and the webui server side by side and restarts the container if either exits. Files are stored in R2 when configured (recommended), or saved to local disk if R2 is not configured. Files are served from R2 or Discord attachments.
 
 ## Dependency Management
 
@@ -89,38 +89,23 @@ This will check:
 The project uses Docker Compose with multiple services. The main app service runs both the Discord bot and local server:
 
 ```bash
-bun run docker:up          # Start all services (app only by default)
+bun run docker:up          # Start all services
 bun run docker:down        # Stop all containers
 bun run docker:reload      # Reload containers (rebuild and restart)
 bun run docker:restart     # Restart all containers
-bun run docker:register    # Register Discord commands in container
+bun run docker:register    # Force a re-register (the container already does this on start)
 ```
 
 ### Docker Services
 
-The Docker Compose setup includes several services:
+The Docker Compose setup includes these services:
 
-- **app** - Main service running both the Discord bot and local server. The local server provides health checks and stats API. Files are stored in R2 when configured (recommended) and served via the R2 public domain. The file serving routes (/gifs/_, /videos/_, /images/\*) have been removed from the server.
+- **app** - Runs the Discord bot and the webui server in one container. Provides health checks and the stats API. Files are stored in R2 when configured (recommended) and served via the R2 public domain.
+- **postgres** - Database backing user metrics, operations, processed URLs, and settings. The app waits for it to report healthy before starting.
 - **cobalt** - Self-hosted API for downloading media from social platforms (Twitter/X, TikTok, Instagram, YouTube, Reddit, Facebook, Twitch clips, SoundCloud, Tumblr, Streamable, Dailymotion, Snapchat). Runs by default on port 9000
-- **giflossy** - Service used for GIF optimization via docker exec. Used internally by the bot for the `/optimize` command
 - **watchtower** - Automatically updates the cobalt image. Runs cleanup and updates every 15 minutes
-- **webui** - Optional dashboard for viewing statistics (requires profile, runs on port 3001)
 
-All services except `webui` start automatically when running `docker compose up`. The `webui` service requires a profile to be enabled.
-
-### Docker Compose Profiles
-
-Only the `webui` service uses Docker Compose profiles. All other services (app, cobalt, giflossy, watchtower) start automatically when running `docker compose up`.
-
-To start the optional webui service:
-
-```bash
-# Start webui
-docker compose --profile webui up -d webui
-
-# Start all services including webui
-docker compose --profile webui up -d
-```
+All of them start with `docker compose up`. There are no Compose profiles. GIF optimization uses the `gifsicle` binary installed directly in the app image, not a separate service.
 
 ### Common Docker Commands
 
@@ -129,13 +114,12 @@ bun run docker:logs        # View logs for all services
 bun run docker:down        # Stop all containers
 bun run docker:reload      # Reload containers (rebuild and restart)
 bun run docker:restart     # Restart all containers
-bun run docker:register    # Register Discord commands in container
+bun run docker:register    # Force a re-register (the container already does this on start)
 
 # Manual docker compose commands
 docker compose ps           # Check container status
 docker compose exec app sh  # Open shell in app container
-docker compose logs -f app  # View logs for app service only
-docker compose logs -f webui # View logs for webui service only
+docker compose logs -f app  # View logs for app service only (bot + webui)
 ```
 
 ### Troubleshooting Docker Build Issues
@@ -202,7 +186,7 @@ See `package.json` for a full list of available scripts. Common ones include:
 
 ### Development
 
-- `bun run register-commands` - Register Discord slash commands
+- `bun run register-commands` - Register Discord slash commands. The container does this on every start (`scripts/docker-entrypoint.sh`), so you only need it when running outside Docker or forcing a re-register.
 - `bun run build:webui` - Build the webui frontend
 - `bun run webui:dev` - Run webui in development mode with hot reload
 - `bun run webui:dev:server` - Run webui server only (port 3002)
@@ -251,7 +235,7 @@ This script will:
 - `bun run docker:reload` - Reload containers (rebuild and restart)
 - `bun run docker:restart` - Restart all containers
 - `bun run docker:logs` - View logs for all services
-- `bun run docker:register` - Register Discord commands in container
+- `bun run docker:register` - Force a re-register inside the container (done automatically on start)
 
 ### Code Quality
 

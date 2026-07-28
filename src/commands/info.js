@@ -6,7 +6,7 @@ import { dirname, join } from 'path';
 import { createLogger } from '../utils/logger.js';
 import { safeInteractionReply } from '../utils/interaction-helpers.js';
 import { getR2CacheStats, getStorageStats } from '../utils/storage.js';
-import { getUniqueUserCount } from '../utils/user-tracking.js';
+import { getUserMetricsCount } from '../utils/database.js';
 import { r2Config, botConfig } from '../utils/config.js';
 
 const __filename = fileURLToPath(import.meta.url);
@@ -59,7 +59,10 @@ function formatR2Line(r2CacheStats) {
 export async function handleInfoCommand(interaction, botStartTime) {
   try {
     const storageStats = await getStorageStats(GIF_STORAGE_PATH);
-    const userCount = await getUniqueUserCount();
+    // user_metrics, not the users table: `trackUser` writes users on every interaction
+    // before the ban/maintenance gates, so it counts people the bot never served. The webui
+    // reads this same count — one user number across both surfaces.
+    const userCount = await getUserMetricsCount();
     const guildCount = interaction.client.guilds.cache.size;
 
     // botStartTime is null on the prefix path when the bot has not recorded one yet; the

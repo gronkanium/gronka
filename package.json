@@ -48,6 +48,7 @@
     "fix:stuck-ops": "bun scripts/fix-stuck-operations.js",
     "fix:creds": "bash scripts/fix-docker-credentials.sh",
     "fetch:security": "bun scripts/fetch-code-scanning-issues.js",
+    "fetch:commands": "bun scripts/fetch-registered-commands.js",
     "fetch:portal-stats": "FORCE_PRODUCTION_MODE=true bun scripts/fetch-portal-stats.js",
     "fetch:portal-stats:login": "FORCE_PRODUCTION_MODE=true bun scripts/fetch-portal-stats.js --login",
     "reset:clean-slate": "bun scripts/reset-clean-slate.js",

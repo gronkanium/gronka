@@ -182,11 +182,17 @@ describe('handlePrefixMessage', () => {
     assert.strictEqual(calls.info.length, 1);
   });
 
-  test('routes the stats alias to the info handler with botStartTime', async () => {
+  test('passes botStartTime through to the info handler', async () => {
     const { deps, calls } = makeDeps();
-    await handlePrefixMessage(makeMessage({ content: '^g stats' }), { deps, botStartTime: 12345 });
+    await handlePrefixMessage(makeMessage({ content: '^g info' }), { deps, botStartTime: 12345 });
     assert.strictEqual(calls.info.length, 1);
     assert.strictEqual(calls.info[0].botStartTime, 12345);
+  });
+
+  test('stats is no longer a command and dispatches nothing', async () => {
+    const { deps, calls } = makeDeps();
+    await handlePrefixMessage(makeMessage({ content: '^g stats' }), { deps, botStartTime: 12345 });
+    assert.strictEqual(calls.info.length, 0);
   });
 
   test('attaches message attachments as the file option for convert', async () => {

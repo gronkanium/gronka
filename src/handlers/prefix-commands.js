@@ -272,7 +272,7 @@ export async function handlePrefixMessage(message, context = {}) {
   // Bare @mention: introduce the bot
   const isHelp = commandName === 'help' || (match.viaMention && commandName === '');
 
-  const knownCommands = ['download', 'convert', 'optimize', 'info', 'stats', 'prefix'];
+  const knownCommands = ['download', 'convert', 'optimize', 'info', 'prefix'];
   if (!isHelp && !knownCommands.includes(commandName)) {
     if (match.viaMention) {
       await message
@@ -325,9 +325,7 @@ export async function handlePrefixMessage(message, context = {}) {
       await deps.handleConvertCommand(adapter);
     } else if (commandName === 'optimize') {
       await deps.handleOptimizeCommand(adapter);
-    } else if (commandName === 'info' || commandName === 'stats') {
-      // `stats` was its own command until it merged into `info`; kept as an undocumented
-      // alias so muscle memory and older guides keep working.
+    } else if (commandName === 'info') {
       await deps.handleInfoCommand(adapter, context.botStartTime ?? null);
     }
   } catch (error) {

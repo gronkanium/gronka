@@ -130,36 +130,18 @@ optimize an existing gif to reduce file size.
 /optimize url:https://example.com/gif.gif lossy:50
 ```
 
-### `/stats`
-
-view storage statistics.
-
-**parameters:** none
-
-**usage:**
-
-- shows total files stored (gifs, videos, images)
-- displays storage usage
-- shows bot uptime
-- requires authentication if `STATS_USERNAME` and `STATS_PASSWORD` are configured
-
-**examples:**
-
-```
-/stats
-```
-
 ### `/info`
 
-view bot information and configuration.
+view usage, storage, and system information in one embed.
 
 **parameters:** none
 
 **usage:**
 
-- displays bot version and status
-- shows configured storage type (r2 or local)
-- shows enabled features
+- **usage** — uptime, guild count, unique user count
+- **storage** — files stored (gifs, videos, images), disk usage, and r2 usage against its
+  limit with the cache age
+- **system** — platform, cpu count, memory, bun and gronka versions
 
 **examples:**
 

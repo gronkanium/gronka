@@ -54,7 +54,6 @@ function makeDeps(overrides = {}) {
     convert: [],
     optimize: [],
     info: [],
-    stats: [],
     setPrefix: [],
     clearPrefix: [],
   };
@@ -69,9 +68,7 @@ function makeDeps(overrides = {}) {
     handleDownloadCommand: async adapter => calls.download.push(adapter),
     handleConvertCommand: async adapter => calls.convert.push(adapter),
     handleOptimizeCommand: async adapter => calls.optimize.push(adapter),
-    handleInfoCommand: async adapter => calls.info.push(adapter),
-    handleStatsCommand: async (adapter, botStartTime) =>
-      calls.stats.push({ adapter, botStartTime }),
+    handleInfoCommand: async (adapter, botStartTime) => calls.info.push({ adapter, botStartTime }),
     ...overrides,
   };
   return { deps, calls };
@@ -185,11 +182,11 @@ describe('handlePrefixMessage', () => {
     assert.strictEqual(calls.info.length, 1);
   });
 
-  test('passes botStartTime through to the stats handler', async () => {
+  test('routes the stats alias to the info handler with botStartTime', async () => {
     const { deps, calls } = makeDeps();
     await handlePrefixMessage(makeMessage({ content: '^g stats' }), { deps, botStartTime: 12345 });
-    assert.strictEqual(calls.stats.length, 1);
-    assert.strictEqual(calls.stats[0].botStartTime, 12345);
+    assert.strictEqual(calls.info.length, 1);
+    assert.strictEqual(calls.info[0].botStartTime, 12345);
   });
 
   test('attaches message attachments as the file option for convert', async () => {

@@ -164,15 +164,6 @@ const commands = [
     contexts: [0, 1, 2], // GUILD (0), BOT_DM (1), PRIVATE_CHANNEL (2) - enables command usage in all contexts
   },
   {
-    name: 'stats',
-    description: 'view bot statistics and gif storage information',
-    type: 1, // CHAT_INPUT type (slash command)
-    default_member_permissions: null, // Available to everyone
-    dm_permission: true, // Enable in DMs
-    integration_types: [1], // USER_INSTALL - allows users to install the bot directly
-    contexts: [0, 1, 2], // GUILD (0), BOT_DM (1), PRIVATE_CHANNEL (2) - enables command usage in all contexts
-  },
-  {
     name: 'download',
     description: 'download a video or image from a social media url (no conversion)',
     type: 1, // CHAT_INPUT type (slash command)
@@ -236,7 +227,6 @@ const rest = new REST({ version: '10' }).setToken(DISCORD_TOKEN);
     console.log('\nslash commands:');
     console.log('  • /convert');
     console.log('  • /optimize');
-    console.log('  • /stats');
     console.log('  • /download');
     console.log('  • /info');
 

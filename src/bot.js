@@ -6,7 +6,6 @@ import { createLogger } from './utils/logger.js';
 import { botConfig, serverConfig } from './utils/config.js';
 import { ConfigurationError } from './utils/errors.js';
 import { trackUser, initializeUserTracking } from './utils/user-tracking.js';
-import { handleStatsCommand } from './commands/stats.js';
 import { handleDownloadCommand, handleDownloadContextMenuCommand } from './commands/download.js';
 import { handleOptimizeCommand, handleOptimizeContextMenuCommand } from './commands/optimize.js';
 import { handleConvertCommand, handleConvertContextMenu } from './commands/convert.js';
@@ -354,16 +353,14 @@ client.on(Events.InteractionCreate, async interaction => {
     } else if (interaction.isChatInputCommand()) {
       const commandName = interaction.commandName;
 
-      if (commandName === 'stats') {
-        await handleStatsCommand(interaction, botStartTime);
-      } else if (commandName === 'download') {
+      if (commandName === 'download') {
         await handleDownloadCommand(interaction);
       } else if (commandName === 'optimize') {
         await handleOptimizeCommand(interaction);
       } else if (commandName === 'convert') {
         await handleConvertCommand(interaction);
       } else if (commandName === 'info') {
-        await handleInfoCommand(interaction);
+        await handleInfoCommand(interaction, botStartTime);
       }
     }
   } catch (error) {

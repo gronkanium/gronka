@@ -10,11 +10,10 @@ import { handleDownloadCommand } from '../commands/download.js';
 import { handleConvertCommand } from '../commands/convert.js';
 import { handleOptimizeCommand } from '../commands/optimize.js';
 import { handleInfoCommand } from '../commands/info.js';
-import { handleStatsCommand } from '../commands/stats.js';
 
 const logger = createLogger('prefix-commands');
 
-const EMBED_COLOR = 0x5865f2; // same blurple as /info and /stats
+const EMBED_COLOR = 0x5865f2; // same blurple as /info
 
 // Aliases for key=value option tokens -> slash option names, so "^convert start=0:05"
 // lands in the same option the slash handler reads via resolveTimeOptions
@@ -147,7 +146,7 @@ export function buildHelpEmbed(prefix) {
           `\`${prefix} download <url>\` — download a video from social media`,
           `\`${prefix} convert [url]\` — convert a video/image to gif (attach a file, link one, or reply to a message with one)`,
           `\`${prefix} optimize [url]\` — shrink a gif (attachment, url, or reply)`,
-          `\`${prefix} info\` / \`${prefix} stats\` — system info and bot stats`,
+          `\`${prefix} info\` — bot stats and system info`,
           `\`${prefix} help\` — this message`,
         ].join('\n'),
         inline: false,
@@ -225,7 +224,6 @@ const defaultDeps = {
   handleConvertCommand,
   handleOptimizeCommand,
   handleInfoCommand,
-  handleStatsCommand,
 };
 
 /**
@@ -238,7 +236,7 @@ const defaultDeps = {
  *
  * @param {import('discord.js').Message} message
  * @param {Object} [context]
- * @param {number|null} [context.botStartTime] - For the stats command's uptime field
+ * @param {number|null} [context.botStartTime] - For the info command's uptime field
  * @param {Object} [context.deps] - Dependency overrides for tests
  * @returns {Promise<void>}
  */
@@ -327,10 +325,10 @@ export async function handlePrefixMessage(message, context = {}) {
       await deps.handleConvertCommand(adapter);
     } else if (commandName === 'optimize') {
       await deps.handleOptimizeCommand(adapter);
-    } else if (commandName === 'info') {
-      await deps.handleInfoCommand(adapter);
-    } else if (commandName === 'stats') {
-      await deps.handleStatsCommand(adapter, context.botStartTime ?? null);
+    } else if (commandName === 'info' || commandName === 'stats') {
+      // `stats` was its own command until it merged into `info`; kept as an undocumented
+      // alias so muscle memory and older guides keep working.
+      await deps.handleInfoCommand(adapter, context.botStartTime ?? null);
     }
   } catch (error) {
     logger.error(`Unhandled error in prefix command "${commandName}":`, error);

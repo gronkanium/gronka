@@ -16,6 +16,8 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
+      cobalt:
+        condition: service_started
     environment:
       - DISCORD_TOKEN=${PROD_DISCORD_TOKEN}
       - CLIENT_ID=${PROD_CLIENT_ID}

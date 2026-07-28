@@ -69,6 +69,12 @@ cleanup() {
 # Trap signals for graceful shutdown
 trap 'cleanup' TERM INT
 
+# Register slash commands before the bot comes up, so a deploy that changes a command
+# description can never leave Discord advertising the old one. Non-fatal: Discord being
+# unreachable must not stop the bot from starting with the commands already registered.
+log_info "Registering application commands..."
+bun src/register-commands.js || log_warn "Command registration failed; continuing with previously registered commands"
+
 # Start the Discord bot in the background (includes stats HTTP server)
 log_info "Starting Discord bot..."
 bun src/bot.js &

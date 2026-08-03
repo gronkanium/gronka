@@ -283,11 +283,16 @@ client.once(Events.ClientReady, async readyClient => {
       await refreshRateLimitSettings();
     }, 60 * 1000);
 
-    // Clean up stuck operations every 5 minutes
+    // Clean up stuck operations every 5 minutes. The threshold must stay above Discord's
+    // 15-minute interaction token lifetime: at 10 minutes the reaper was flipping still-running
+    // downloads to error and DMing the user a failure, only for the operation to finish and flip
+    // back to success — by which point the token had expired and the reply died with
+    // "Invalid Webhook Token" (50027). Past 16 minutes nothing can be delivered anyway, so
+    // anything still running then is genuinely stuck.
     setInterval(
       async () => {
         try {
-          await cleanupStuckOperations(10, readyClient); // 10 minute timeout, pass client for DM notifications
+          await cleanupStuckOperations(16, readyClient); // pass client for DM notifications
         } catch (error) {
           logger.error('Error in stuck operations cleanup:', error);
         }

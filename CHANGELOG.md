@@ -5,6 +5,30 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres (attempts) to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.28.0](https://github.com/thedorekaczynski/gronka/compare/v0.27.0...v0.28.0) (2026-08-03)
+
+
+### ⚠ BREAKING CHANGES
+
+* the /stats slash command is removed; use /info.
+
+### Features
+
+* merge /stats into /info and drop the /stats command ([ebbeb34](https://github.com/thedorekaczynski/gronka/commit/ebbeb3482a1c8bb8b3c026587f84b04c7801a710))
+* **webui:** rebuild the alerts page around failure causes ([0c05c89](https://github.com/thedorekaczynski/gronka/commit/0c05c89d7907528ad8dfc0684234e6ebc8b14f83))
+
+
+### Bug Fixes
+
+* **compose:** make app depend on cobalt ([484ddc7](https://github.com/thedorekaczynski/gronka/commit/484ddc798a969dbc729eda8ff99c4d163aa5ad91))
+* **convert:** record the failure reason on convert alerts ([e49a9e3](https://github.com/thedorekaczynski/gronka/commit/e49a9e3e161be6147fe8bdf7ca51f88f982f592c))
+* **convert:** repair reserved colorspace tags ffmpeg 7 rejects ([a219202](https://github.com/thedorekaczynski/gronka/commit/a2192021f167e4fb377838ec677e27e55b88726a))
+* **docker:** register application commands on container startup ([e91cd03](https://github.com/thedorekaczynski/gronka/commit/e91cd03f9cfd5ef5bf5632dff492c8ced227bc11))
+* **download:** bound the per-carousel download fan-out ([acb902a](https://github.com/thedorekaczynski/gronka/commit/acb902a790f33d95ba83ff5b4e1f442a7e25dd18))
+* raise the stuck-operation threshold past Discord's token lifetime ([de7b8c6](https://github.com/thedorekaczynski/gronka/commit/de7b8c6098afe7517a6530bf896b42b8f9d6a069))
+* report one user count in /info and the webui ([25acb66](https://github.com/thedorekaczynski/gronka/commit/25acb66dc0f724964d9293413cf689cae79349d9))
+* **ytdlp:** stop the 1080p cap rejecting every portrait video ([734f10b](https://github.com/thedorekaczynski/gronka/commit/734f10bffdfa182b9848f23bcff2f3dd20a7f997))
+
 ## [0.27.0](https://github.com/thedorekaczynski/gronka/compare/v0.26.0...v0.27.0) (2026-07-26)
 
 

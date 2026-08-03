@@ -4,6 +4,18 @@ import { ConfigurationError } from './errors.js';
 // Load environment variables
 dotenv.config();
 
+// Non-admin download format. The 1080p cap has to be expressed twice — once on height, once
+// on width — because `height<=?1080` alone rejects every format of a portrait video (a 720x1280
+// reel is 1280 tall), which is most of what the bot is asked for. yt-dlp has no OR inside a
+// filter, so the `/` chain supplies it: landscape matches on height, portrait on width.
+// `<=?` keeps formats that report no dimensions at all (direct-file links via the generic
+// extractor). The bare trailing `best` means a resolution filter can never be the sole reason a
+// download fails; --max-filesize still bounds what it picks.
+export const DEFAULT_YTDLP_FORMAT =
+  'bestvideo[height<=?1080][ext=mp4]+bestaudio[ext=m4a]/' +
+  'bestvideo[width<=?1080][ext=mp4]+bestaudio[ext=m4a]/' +
+  'best[height<=?1080][ext=mp4]/best[width<=?1080][ext=mp4]/best';
+
 function parseIntEnv(name, defaultValue, min = -Infinity, max = Infinity) {
   const value = process.env[name];
   if (!value) {
@@ -119,13 +131,7 @@ function getBotConfig() {
     cobaltApiUrl: getStringEnv('COBALT_API_URL', 'http://cobalt:9000'),
     cobaltEnabled: getStringEnv('COBALT_ENABLED', 'true').toLowerCase() === 'true',
     ytdlpEnabled: getStringEnv('YTDLP_ENABLED', 'true').toLowerCase() === 'true',
-    ytdlpQuality: getStringEnv(
-      'YTDLP_QUALITY',
-      // `<=?` keeps the 1080p cap for formats that report a height while still accepting ones
-      // that don't (direct-file links via the generic extractor have no height); a plain
-      // `height<=1080` matched nothing there and failed with "Requested format is not available".
-      'bestvideo[height<=?1080][ext=mp4]+bestaudio[ext=m4a]/best[height<=?1080][ext=mp4]/best[height<=?1080]'
-    ),
+    ytdlpQuality: getStringEnv('YTDLP_QUALITY', DEFAULT_YTDLP_FORMAT),
     statsCacheTtl: parseIntEnv('STATS_CACHE_TTL', 300000, 0), // 5 minutes default, 0 to disable
     ntfyTopic: getStringEnv('NTFY_TOPIC', ''),
     ntfyEnabled: getStringEnv('NTFY_TOPIC', '') !== '',

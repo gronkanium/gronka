@@ -7,6 +7,7 @@ import { createLogger } from './logger.js';
 import { NetworkError, ValidationError } from './errors.js';
 import { trimVideo } from './video-processor/trim-video.js';
 import { ytdlpSlots } from './concurrency.js';
+import { DEFAULT_YTDLP_FORMAT } from './config.js';
 
 const logger = createLogger('ytdlp');
 
@@ -583,8 +584,7 @@ export async function downloadWithYtdlp(
     quality ||
     (isAdminUser
       ? 'bestvideo[ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4]/best'
-      : // `<=?` so formats that report no height (direct-file links) still match; see config.js
-        'bestvideo[height<=?1080][ext=mp4]+bestaudio[ext=m4a]/best[height<=?1080][ext=mp4]/best[height<=?1080]');
+      : DEFAULT_YTDLP_FORMAT);
 
   // Admins are never size-gated; for everyone else the cap drives yt-dlp's --max-filesize.
   const gateSize = isAdminUser ? Infinity : maxSize;

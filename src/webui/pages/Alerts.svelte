@@ -10,39 +10,72 @@
   } from '../utils/format.js';
   import Pagination from '../components/Pagination.svelte';
 
+  // Matches UNKNOWN_REASON in alerts-pg.js — failures logged with no error string
+  // are a real bucket, not an absence, so they get a filterable identity.
+  const UNKNOWN_REASON = '__no_reason__';
+
+  let mode = 'failures';
+
+  let summary = null;
+  let summaryLoading = true;
+  let summaryError = null;
+
   let alerts = [];
   let total = 0;
   let loading = true;
   let error = null;
 
-  let selectedSeverity = '';
-  let selectedComponent = '';
+  let selectedCommand = '';
   let searchQuery = '';
-  let timeRange = '';
-  let groupRepeats = true;
+  let timeRange = '24h';
   let limit = 100;
   let offset = 0;
 
-  let components = [];
-  const severities = ['info', 'warning', 'error'];
+  let commands = [];
 
-  let expandedKeys = new Set();
+  let expandedReason = null;
+  let reasonAlerts = [];
+  let reasonLoading = false;
+  let expandedIds = new Set();
+
+  $: filtersActive = Boolean(selectedCommand || searchQuery || timeRange !== '24h');
+  $: failureRate = summary && summary.total ? (summary.errors / summary.total) * 100 : 0;
+  $: worstCommand = summary?.byCommand?.find(entry => entry.errors > 0) ?? null;
+
+  function filterParams(extra = {}) {
+    const params = new URLSearchParams();
+    if (selectedCommand) params.append('command', selectedCommand);
+    if (searchQuery) params.append('search', searchQuery);
+
+    const startTime = timeRangeToStartTime(timeRange);
+    if (startTime) params.append('startTime', startTime.toString());
+
+    for (const [key, value] of Object.entries(extra)) {
+      if (value !== null && value !== undefined) params.append(key, value.toString());
+    }
+    return params;
+  }
+
+  async function fetchSummary() {
+    summaryLoading = true;
+    summaryError = null;
+    try {
+      const response = await fetch(`/api/alerts/summary?${filterParams()}`);
+      if (!response.ok) throw new Error('failed to fetch alert summary');
+      summary = await response.json();
+    } catch (err) {
+      summaryError = err.message;
+    } finally {
+      summaryLoading = false;
+    }
+  }
 
   async function fetchAlerts() {
     loading = true;
     error = null;
     try {
-      const params = new URLSearchParams({
-        limit: limit.toString(),
-        offset: offset.toString(),
-      });
-
-      if (selectedSeverity) params.append('severity', selectedSeverity);
-      if (selectedComponent) params.append('component', selectedComponent);
-      if (searchQuery) params.append('search', searchQuery);
-
-      const startTime = timeRangeToStartTime(timeRange);
-      if (startTime) params.append('startTime', startTime.toString());
+      const params = filterParams({ limit, offset });
+      if (mode === 'failures') params.append('severity', 'error');
 
       const response = await fetch(`/api/alerts?${params}`);
       if (!response.ok) throw new Error('failed to fetch alerts');
@@ -57,27 +90,55 @@
     }
   }
 
-  async function fetchComponents() {
+  async function fetchReasonAlerts(reason) {
+    reasonLoading = true;
     try {
-      const response = await fetch('/api/alerts/components');
-      if (!response.ok) throw new Error('failed to fetch alert components');
+      const params = filterParams({ severity: 'error', limit: 50 });
+      params.append('reason', reason ?? UNKNOWN_REASON);
+
+      const response = await fetch(`/api/alerts?${params}`);
+      if (!response.ok) throw new Error('failed to fetch occurrences');
+
       const data = await response.json();
-      components = data.components || [];
+      reasonAlerts = data.alerts || [];
+    } catch {
+      reasonAlerts = [];
+    } finally {
+      reasonLoading = false;
+    }
+  }
+
+  async function fetchCommands() {
+    try {
+      const response = await fetch('/api/alerts/commands');
+      if (!response.ok) throw new Error('failed to fetch alert commands');
+      const data = await response.json();
+      commands = data.commands || [];
     } catch (err) {
-      console.error('Error fetching alert components:', err);
+      console.error('Error fetching alert commands:', err);
     }
   }
 
   function refetch() {
     offset = 0;
-    fetchAlerts();
+    expandedReason = null;
+    reasonAlerts = [];
+    fetchSummary();
+    if (mode === 'stream') fetchAlerts();
+  }
+
+  function setMode(next) {
+    if (mode === next) return;
+    mode = next;
+    offset = 0;
+    expandedReason = null;
+    if (mode === 'stream') fetchAlerts();
   }
 
   function handleClearFilters() {
-    selectedSeverity = '';
-    selectedComponent = '';
+    selectedCommand = '';
     searchQuery = '';
-    timeRange = '';
+    timeRange = '24h';
     refetch();
   }
 
@@ -86,8 +147,22 @@
     fetchAlerts();
   }
 
-  function getSeverityClass(severity) {
-    return severity ? severity.toLowerCase() : 'unknown';
+  function toggleReason(reason) {
+    const key = reason ?? UNKNOWN_REASON;
+    if (expandedReason === key) {
+      expandedReason = null;
+      reasonAlerts = [];
+      return;
+    }
+    expandedReason = key;
+    reasonAlerts = [];
+    fetchReasonAlerts(reason);
+  }
+
+  function toggleAlert(id) {
+    if (expandedIds.has(id)) expandedIds.delete(id);
+    else expandedIds.add(id);
+    expandedIds = new Set(expandedIds);
   }
 
   function parseMetadata(alert) {
@@ -101,76 +176,36 @@
     }
   }
 
-  function alertKey(alert) {
-    return alert.id ?? `${alert.timestamp}-${alert.component}-${alert.title}`;
-  }
-
-  function toggleExpanded(key) {
-    if (expandedKeys.has(key)) {
-      expandedKeys.delete(key);
-    } else {
-      expandedKeys.add(key);
-    }
-    expandedKeys = new Set(expandedKeys);
-  }
-
   function goToUser(userId, event) {
     event.stopPropagation();
     navigate('users', { userId });
   }
 
-  // Group alerts in the current page that share severity + component + title.
-  // Each group keeps the newest alert as its representative plus a count.
-  function groupAlerts(list) {
-    const groups = [];
-    const byKey = new Map();
-    for (const alert of list) {
-      const key = `${alert.severity}|${alert.component}|${alert.title}`;
-      const existing = byKey.get(key);
-      if (existing) {
-        existing.count += 1;
-        existing.oldest = alert.timestamp;
-      } else {
-        const group = { alert, count: 1, oldest: alert.timestamp };
-        byKey.set(key, group);
-        groups.push(group);
-      }
-    }
-    return groups;
+  // The stored message is "<username>: <command> failed - <reason>"; the reason is
+  // already its own column in the grouped view, so drop the tail here.
+  function shortMessage(alert) {
+    const message = alert.message || '';
+    const cut = message.indexOf(' - ');
+    return cut === -1 ? message : message.slice(0, cut);
   }
 
-  $: displayGroups = groupRepeats
-    ? groupAlerts(alerts)
-    : alerts.map(alert => ({ alert, count: 1, oldest: alert.timestamp }));
-
-  // Check if alert matches current filters (for live WS inserts)
   function matchesFilters(alert) {
-    if (selectedSeverity && alert.severity !== selectedSeverity) return false;
-    if (selectedComponent && alert.component !== selectedComponent) return false;
+    if (mode === 'failures' && alert.severity !== 'error') return false;
+    const metadata = parseMetadata(alert);
+    if (selectedCommand && metadata?.command !== selectedCommand) return false;
     const startTime = timeRangeToStartTime(timeRange);
     if (startTime && alert.timestamp < startTime) return false;
     if (searchQuery) {
       const query = searchQuery.toLowerCase();
-      const matchesSearch =
-        (alert.title && alert.title.toLowerCase().includes(query)) ||
-        (alert.message && alert.message.toLowerCase().includes(query)) ||
-        (alert.component && alert.component.toLowerCase().includes(query));
-      if (!matchesSearch) return false;
+      const haystack = `${alert.title ?? ''} ${alert.message ?? ''} ${alert.metadata ?? ''}`;
+      if (!haystack.toLowerCase().includes(query)) return false;
     }
     return true;
   }
 
-  function handleNewAlert(newAlert) {
-    if (!matchesFilters(newAlert)) return;
-    if (offset === 0) {
-      alerts = [newAlert, ...alerts].slice(0, limit);
-    }
-    total += 1;
-  }
-
   onMount(() => {
-    fetchAlerts();
-    fetchComponents();
+    fetchSummary();
+    fetchCommands();
 
     // Subscribe to SSE alerts (connection managed by App.svelte)
     const unsubscribe = wsAlerts.subscribe(newAlerts => {
@@ -182,7 +217,13 @@
             (alert.timestamp === incoming.timestamp && alert.title === incoming.title)
         );
         if (exists) break;
-        handleNewAlert(incoming);
+        if (!matchesFilters(incoming)) continue;
+        if (mode === 'stream' && offset === 0) {
+          alerts = [incoming, ...alerts].slice(0, limit);
+          total += 1;
+        }
+        // A new failure invalidates every aggregate on screen
+        if (incoming.severity === 'error') fetchSummary();
       }
     });
 
@@ -193,7 +234,16 @@
 </script>
 
 <div class="alerts-container">
-  <div class="live-bar">
+  <div class="toolbar">
+    <div class="mode-switch" role="group" aria-label="view mode">
+      <button class:active={mode === 'failures'} on:click={() => setMode('failures')}>
+        failures
+      </button>
+      <button class:active={mode === 'stream'} on:click={() => setMode('stream')}>
+        all activity
+      </button>
+    </div>
+
     <div class="ws-status" class:connected={$wsConnected}>
       {$wsConnected ? '● live' : '○ disconnected'}
     </div>
@@ -201,21 +251,11 @@
 
   <div class="filters">
     <div class="filter-group">
-      <label for="severity-filter">severity:</label>
-      <select id="severity-filter" bind:value={selectedSeverity} on:change={refetch}>
+      <label for="command-filter">command:</label>
+      <select id="command-filter" bind:value={selectedCommand} on:change={refetch}>
         <option value="">all</option>
-        {#each severities as severity}
-          <option value={severity}>{severity}</option>
-        {/each}
-      </select>
-    </div>
-
-    <div class="filter-group">
-      <label for="component-filter">component:</label>
-      <select id="component-filter" bind:value={selectedComponent} on:change={refetch}>
-        <option value="">all</option>
-        {#each components as component}
-          <option value={component}>{component}</option>
+        {#each commands as command}
+          <option value={command}>{command}</option>
         {/each}
       </select>
     </div>
@@ -223,12 +263,12 @@
     <div class="filter-group">
       <label for="time-range-filter">time range:</label>
       <select id="time-range-filter" bind:value={timeRange} on:change={refetch}>
-        <option value="">all time</option>
         <option value="1h">last hour</option>
         <option value="6h">last 6 hours</option>
         <option value="24h">last 24 hours</option>
         <option value="7d">last 7 days</option>
         <option value="30d">last 30 days</option>
+        <option value="">all time</option>
       </select>
     </div>
 
@@ -239,21 +279,127 @@
         type="text"
         bind:value={searchQuery}
         on:keydown={e => e.key === 'Enter' && refetch()}
-        placeholder="search title or message..."
+        placeholder="message, reason, or username..."
       />
       <button class="btn-small" on:click={refetch}>search</button>
     </div>
 
-    <div class="filter-actions">
-      <label class="group-toggle">
-        <input type="checkbox" bind:checked={groupRepeats} />
-        group repeats
-      </label>
-      <button class="btn-small" on:click={handleClearFilters}>clear filters</button>
-    </div>
+    {#if filtersActive}
+      <div class="filter-actions">
+        <button class="btn-small" on:click={handleClearFilters}>clear filters</button>
+      </div>
+    {/if}
   </div>
 
-  {#if loading && alerts.length === 0}
+  {#if summaryError}
+    <div class="state-error">error: {summaryError}</div>
+  {:else if summary}
+    <div class="stat-row">
+      <div class="stat" class:bad={summary.errors > 0}>
+        <span class="stat-value">{summary.errors}</span>
+        <span class="stat-label">failures</span>
+      </div>
+      <div class="stat">
+        <span class="stat-value">{failureRate.toFixed(1)}%</span>
+        <span class="stat-label">of {summary.total} operations</span>
+      </div>
+      <div class="stat">
+        <span class="stat-value">{worstCommand ? worstCommand.command : '—'}</span>
+        <span class="stat-label">
+          {worstCommand ? `worst command — ${worstCommand.errors} failed` : 'no failing command'}
+        </span>
+      </div>
+      <div class="stat">
+        <span class="stat-value">{summary.byReason.length}</span>
+        <span class="stat-label">distinct causes</span>
+      </div>
+    </div>
+  {/if}
+
+  {#if mode === 'failures'}
+    {#if summaryLoading && !summary}
+      <div class="loading">loading failures...</div>
+    {:else if summary && summary.byReason.length === 0}
+      <div class="empty">no failures in this window</div>
+    {:else if summary}
+      <div class="reason-list">
+        {#each summary.byReason as bucket (bucket.reason ?? UNKNOWN_REASON)}
+          {@const key = bucket.reason ?? UNKNOWN_REASON}
+          {@const expanded = expandedReason === key}
+          {@const share = summary.errors ? (bucket.count / summary.errors) * 100 : 0}
+          <div class="reason-item" class:expanded>
+            <button class="reason-row" on:click={() => toggleReason(bucket.reason)}>
+              <span class="expand-icon">{expanded ? '▾' : '▸'}</span>
+              <span class="count-badge">{bucket.count}×</span>
+              <span class="reason-text" class:unknown={!bucket.reason}>
+                {bucket.reason ?? 'no reason recorded'}
+              </span>
+              {#each bucket.commands as command}
+                <span class="command-chip">{command}</span>
+              {/each}
+              <span class="share" title="{share.toFixed(1)}% of failures in this window">
+                {share.toFixed(0)}%
+              </span>
+              <span class="timestamp" title={formatTimestamp(bucket.lastSeen)}>
+                {formatRelativeTime(bucket.lastSeen)}
+              </span>
+            </button>
+
+            {#if expanded}
+              <div class="reason-detail">
+                {#if reasonLoading}
+                  <div class="loading-inline">loading occurrences...</div>
+                {:else if reasonAlerts.length === 0}
+                  <div class="loading-inline">no occurrences found</div>
+                {:else}
+                  <table class="occurrences">
+                    <thead>
+                      <tr>
+                        <th>when</th>
+                        <th>user</th>
+                        <th>what</th>
+                        <th>duration</th>
+                        <th>operation</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {#each reasonAlerts as alert (alert.id)}
+                        {@const metadata = parseMetadata(alert)}
+                        <tr>
+                          <td title={formatTimestamp(alert.timestamp)}>
+                            {formatRelativeTime(alert.timestamp)}
+                          </td>
+                          <td>
+                            {#if alert.user_id}
+                              <button class="link-btn" on:click={e => goToUser(alert.user_id, e)}>
+                                {metadata?.username ?? alert.user_id}
+                              </button>
+                            {:else}
+                              <span class="dim">—</span>
+                            {/if}
+                          </td>
+                          <td>{shortMessage(alert)}</td>
+                          <td>
+                            {metadata?.duration !== undefined
+                              ? formatDuration(metadata.duration)
+                              : '—'}
+                          </td>
+                          <td><code>{alert.operation_id ?? '—'}</code></td>
+                        </tr>
+                      {/each}
+                    </tbody>
+                  </table>
+                  {#if reasonAlerts.length >= 50}
+                    <div class="loading-inline">showing the 50 most recent</div>
+                  {/if}
+                {/if}
+              </div>
+            {/if}
+          </div>
+        {/each}
+      </div>
+    {/if}
+  {:else if loading && alerts.length === 0}
     <div class="loading">loading alerts...</div>
   {:else if error}
     <div class="state-error">error: {error}</div>
@@ -262,24 +408,17 @@
     <div class="empty">no alerts found</div>
   {:else}
     <div class="alerts-list">
-      {#each displayGroups as group (alertKey(group.alert))}
-        {@const alert = group.alert}
-        {@const key = alertKey(alert)}
-        {@const expanded = expandedKeys.has(key)}
+      {#each alerts as alert (alert.id)}
+        {@const expanded = expandedIds.has(alert.id)}
         {@const metadata = parseMetadata(alert)}
-        <div class="alert-item severity-{getSeverityClass(alert.severity)}" class:expanded>
-          <button class="alert-row" on:click={() => toggleExpanded(key)}>
+        <div class="alert-item severity-{alert.severity}" class:expanded>
+          <button class="alert-row" on:click={() => toggleAlert(alert.id)}>
             <span class="expand-icon">{expanded ? '▾' : '▸'}</span>
-            <span class="severity-badge severity-{getSeverityClass(alert.severity)}"
-              >{alert.severity}</span
-            >
-            <span class="component-badge">{alert.component}</span>
-            <span class="alert-title">{alert.title}</span>
-            {#if group.count > 1}
-              <span class="repeat-badge" title="repeated {group.count}× in current page"
-                >×{group.count}</span
-              >
+            <span class="severity-badge severity-{alert.severity}">{alert.severity}</span>
+            {#if metadata?.command}
+              <span class="command-chip">{metadata.command}</span>
             {/if}
+            <span class="alert-title">{alert.message}</span>
             <span class="timestamp" title={formatTimestamp(alert.timestamp)}>
               {formatRelativeTime(alert.timestamp)}
             </span>
@@ -287,32 +426,23 @@
 
           {#if expanded}
             <div class="alert-detail">
-              <div class="alert-message">{alert.message}</div>
-              {#if group.count > 1}
+              {#if alert.user_id}
                 <div class="alert-meta">
-                  repeated {group.count}× in this page — oldest
-                  <span title={formatTimestamp(group.oldest)}
-                    >{formatRelativeTime(group.oldest)}</span
-                  >
+                  user:
+                  <button class="link-btn" on:click={e => goToUser(alert.user_id, e)}>
+                    {metadata?.username ?? alert.user_id}
+                  </button>
+                </div>
+              {/if}
+              {#if metadata?.duration !== undefined}
+                <div class="alert-meta">
+                  duration: <code>{formatDuration(metadata.duration)}</code>
                 </div>
               {/if}
               {#if alert.operation_id}
                 <div class="alert-meta">operation id: <code>{alert.operation_id}</code></div>
               {/if}
-              {#if alert.user_id}
-                <div class="alert-meta">
-                  user id:
-                  <button class="link-btn" on:click={e => goToUser(alert.user_id, e)}>
-                    {alert.user_id}
-                  </button>
-                </div>
-              {/if}
               {#if metadata}
-                {#if metadata.duration !== undefined}
-                  <div class="alert-meta">
-                    duration: <code>{formatDuration(metadata.duration)}</code>
-                  </div>
-                {/if}
                 <details class="alert-metadata">
                   <summary>metadata</summary>
                   <pre>{JSON.stringify(metadata, null, 2)}</pre>
@@ -338,9 +468,36 @@
     margin-right: auto;
   }
 
-  .live-bar {
+  .toolbar {
     display: flex;
-    justify-content: flex-end;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1rem;
+  }
+
+  .mode-switch {
+    display: flex;
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    overflow: hidden;
+  }
+
+  .mode-switch button {
+    padding: 0.4rem 0.9rem;
+    font-size: 0.85rem;
+    background-color: var(--surface);
+    color: var(--text-muted);
+    border: none;
+    cursor: pointer;
+  }
+
+  .mode-switch button:hover {
+    color: var(--text-bright);
+  }
+
+  .mode-switch button.active {
+    background-color: var(--surface-3);
+    color: var(--text-bright);
   }
 
   .ws-status {
@@ -410,29 +567,52 @@
     margin-left: auto;
     display: flex;
     align-items: center;
-    gap: 1rem;
   }
 
-  .group-toggle {
+  .stat-row {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+    gap: 0.75rem;
+  }
+
+  .stat {
     display: flex;
-    align-items: center;
-    gap: 0.4rem;
-    font-size: 0.85rem;
-    color: var(--text-muted);
-    cursor: pointer;
-    white-space: nowrap;
+    flex-direction: column;
+    gap: 0.25rem;
+    padding: 0.85rem 1rem;
+    background-color: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-lg);
   }
 
+  .stat-value {
+    font-size: 1.5rem;
+    font-weight: 600;
+    color: var(--text-bright);
+    line-height: 1.1;
+  }
+
+  .stat.bad .stat-value {
+    color: var(--danger);
+  }
+
+  .stat-label {
+    font-size: 0.8rem;
+    color: var(--text-dim);
+  }
+
+  .reason-list,
   .alerts-list {
     display: flex;
     flex-direction: column;
     gap: 0.35rem;
   }
 
+  .reason-item,
   .alert-item {
     background-color: var(--surface);
     border: 1px solid var(--border);
-    border-left: 3px solid var(--text-dim);
+    border-left: 3px solid var(--danger);
     border-radius: var(--radius);
     overflow: hidden;
   }
@@ -445,16 +625,13 @@
     border-left-color: var(--warning);
   }
 
-  .alert-item.severity-error {
-    border-left-color: var(--danger);
-  }
-
+  .reason-row,
   .alert-row {
     display: flex;
     align-items: center;
     gap: 0.75rem;
     width: 100%;
-    padding: 0.5rem 0.75rem;
+    padding: 0.55rem 0.75rem;
     background: none;
     border: none;
     cursor: pointer;
@@ -463,6 +640,7 @@
     font-size: 0.9rem;
   }
 
+  .reason-row:hover,
   .alert-row:hover {
     background-color: var(--surface-2);
   }
@@ -471,6 +649,36 @@
     color: var(--text-dim);
     font-size: 0.75rem;
     width: 0.9rem;
+    flex-shrink: 0;
+  }
+
+  .count-badge {
+    min-width: 3.25rem;
+    text-align: right;
+    font-variant-numeric: tabular-nums;
+    font-weight: 600;
+    color: var(--text-bright);
+    flex-shrink: 0;
+  }
+
+  .reason-text {
+    color: var(--text-bright);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    flex: 1;
+    min-width: 0;
+  }
+
+  .reason-text.unknown {
+    color: var(--text-dim);
+    font-style: italic;
+  }
+
+  .share {
+    font-size: 0.8rem;
+    color: var(--text-muted);
+    font-variant-numeric: tabular-nums;
     flex-shrink: 0;
   }
 
@@ -501,7 +709,7 @@
     color: var(--danger);
   }
 
-  .component-badge {
+  .command-chip {
     padding: 0.15rem 0.5rem;
     background-color: var(--surface-2);
     border-radius: var(--radius);
@@ -520,36 +728,52 @@
     min-width: 0;
   }
 
-  .repeat-badge {
-    padding: 0.1rem 0.45rem;
-    background-color: var(--surface-3);
-    border: 1px solid var(--border-2);
-    border-radius: var(--radius-lg);
-    font-size: 0.7rem;
-    font-weight: 600;
-    color: var(--text-bright);
-    flex-shrink: 0;
-  }
-
   .timestamp {
-    margin-left: auto;
     color: var(--text-dim);
     font-size: 0.8rem;
     white-space: nowrap;
     flex-shrink: 0;
   }
 
+  .reason-detail,
   .alert-detail {
     padding: 0.75rem 1rem 1rem 2.25rem;
     border-top: 1px solid var(--surface-2);
   }
 
-  .alert-message {
+  .occurrences {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.85rem;
+  }
+
+  .occurrences th {
+    text-align: left;
+    padding: 0.3rem 0.6rem 0.4rem 0;
+    font-weight: 500;
+    color: var(--text-dim);
+    border-bottom: 1px solid var(--surface-2);
+  }
+
+  .occurrences td {
+    padding: 0.35rem 0.6rem 0.35rem 0;
     color: var(--text);
-    font-size: 0.9rem;
-    line-height: 1.6;
-    margin-bottom: 0.5rem;
-    word-break: break-word;
+    vertical-align: top;
+  }
+
+  .occurrences code {
+    font-family: monospace;
+    font-size: 0.8rem;
+    color: var(--text-dim);
+  }
+
+  .dim {
+    color: var(--text-dim);
+  }
+
+  .loading-inline {
+    font-size: 0.85rem;
+    color: var(--text-dim);
   }
 
   .alert-meta {
@@ -631,6 +855,7 @@
       min-height: 44px;
     }
 
+    .reason-row,
     .alert-row {
       min-height: 44px;
       flex-wrap: wrap;
@@ -653,17 +878,23 @@
 
     .filter-actions {
       margin-left: 0;
-      justify-content: space-between;
     }
 
+    .reason-text,
     .alert-title {
       flex-basis: 100%;
       white-space: normal;
       order: 5;
     }
 
-    .timestamp {
-      margin-left: 0;
+    .reason-detail,
+    .alert-detail {
+      padding-left: 0.75rem;
+    }
+
+    .occurrences {
+      display: block;
+      overflow-x: auto;
     }
   }
 </style>

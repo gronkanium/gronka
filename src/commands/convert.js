@@ -1113,7 +1113,7 @@ export async function handleConvertContextMenu(interaction) {
         content: validation.error,
         flags: MessageFlags.Ephemeral,
       });
-      await notifyCommandFailure(username, 'convert');
+      await notifyCommandFailure(username, 'convert', { error: validation.error });
       return;
     }
   } else if (imageAttachment) {
@@ -1138,7 +1138,7 @@ export async function handleConvertContextMenu(interaction) {
         content: validation.error,
         flags: MessageFlags.Ephemeral,
       });
-      await notifyCommandFailure(username, 'convert');
+      await notifyCommandFailure(username, 'convert', { error: validation.error });
       return;
     }
   } else if (url) {
@@ -1154,7 +1154,7 @@ export async function handleConvertContextMenu(interaction) {
         content: errorMessage,
         flags: MessageFlags.Ephemeral,
       });
-      await notifyCommandFailure(username, 'convert');
+      await notifyCommandFailure(username, 'convert', { error: errorMessage });
       return;
     }
 
@@ -1191,7 +1191,7 @@ export async function handleConvertContextMenu(interaction) {
             await safeInteractionEditReply(interaction, {
               content: curatedErrorMessage(error, 'failed to parse Tenor URL.'),
             });
-            await notifyCommandFailure(username, 'convert');
+            await notifyCommandFailure(username, 'convert', { error: error.message });
             return;
           }
         }
@@ -1223,7 +1223,7 @@ export async function handleConvertContextMenu(interaction) {
           await safeInteractionEditReply(interaction, {
             content: validation.error,
           });
-          await notifyCommandFailure(username, 'convert');
+          await notifyCommandFailure(username, 'convert', { error: validation.error });
           return;
         }
       } else if (attachment.contentType && ALLOWED_IMAGE_TYPES.includes(attachment.contentType)) {
@@ -1237,7 +1237,7 @@ export async function handleConvertContextMenu(interaction) {
           await safeInteractionEditReply(interaction, {
             content: validation.error,
           });
-          await notifyCommandFailure(username, 'convert');
+          await notifyCommandFailure(username, 'convert', { error: validation.error });
           return;
         }
       } else {
@@ -1246,7 +1246,9 @@ export async function handleConvertContextMenu(interaction) {
           content:
             'unsupported file format. please provide a video (mp4, mov, webm, avi, mkv) or image (png, jpg, jpeg, webp, gif).',
         });
-        await notifyCommandFailure(username, 'convert');
+        await notifyCommandFailure(username, 'convert', {
+          error: `unsupported content type: ${attachment.contentType || 'unknown'}`,
+        });
         return;
       }
     } catch (error) {
@@ -1266,7 +1268,7 @@ export async function handleConvertContextMenu(interaction) {
       content: errorMessage,
       flags: MessageFlags.Ephemeral,
     });
-    await notifyCommandFailure(username, 'convert');
+    await notifyCommandFailure(username, 'convert', { error: errorMessage });
     return;
   }
 
@@ -1367,7 +1369,7 @@ export async function handleConvertCommand(interaction) {
         content: errorMessage,
         flags: MessageFlags.Ephemeral,
       });
-      await notifyCommandFailure(username, 'convert');
+      await notifyCommandFailure(username, 'convert', { error: errorMessage });
       return;
     }
 
@@ -1431,7 +1433,7 @@ export async function handleConvertCommand(interaction) {
       await safeInteractionEditReply(interaction, {
         content: curatedErrorMessage(error, 'failed to download file from URL.'),
       });
-      await notifyCommandFailure(username, 'convert');
+      await notifyCommandFailure(username, 'convert', { error: error.message });
       return;
     }
   }
@@ -1455,7 +1457,7 @@ export async function handleConvertCommand(interaction) {
           flags: MessageFlags.Ephemeral,
         });
       }
-      await notifyCommandFailure(username, 'convert');
+      await notifyCommandFailure(username, 'convert', { error: validation.error });
       return;
     }
   } else if (
@@ -1479,7 +1481,7 @@ export async function handleConvertCommand(interaction) {
           flags: MessageFlags.Ephemeral,
         });
       }
-      await notifyCommandFailure(username, 'convert');
+      await notifyCommandFailure(username, 'convert', { error: validation.error });
       return;
     }
   } else {
@@ -1496,7 +1498,9 @@ export async function handleConvertCommand(interaction) {
         flags: MessageFlags.Ephemeral,
       });
     }
-    await notifyCommandFailure(username, 'convert');
+    await notifyCommandFailure(username, 'convert', {
+      error: `unsupported content type: ${finalAttachment.contentType || 'unknown'}`,
+    });
     return;
   }
 

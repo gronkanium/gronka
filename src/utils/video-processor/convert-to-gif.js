@@ -2,7 +2,12 @@ import ffmpeg from 'fluent-ffmpeg';
 import fs from 'fs/promises';
 import path from 'path';
 import { createLogger } from '../logger.js';
-import { validateNumericParameter, checkFFmpegInstalled } from './utils.js';
+import {
+  validateNumericParameter,
+  checkFFmpegInstalled,
+  colorspaceRepairInputOptions,
+} from './utils.js';
+import { getVideoMetadata } from './metadata.js';
 import { mediaSlots } from '../concurrency.js';
 
 const logger = createLogger('convert-to-gif');
@@ -92,6 +97,18 @@ async function convertToGifImpl(inputPath, outputPath, options = {}) {
   const dither = qualityPresets[quality] || qualityPresets.medium;
   const paletteGen = palettePresets[quality] || palettePresets.medium;
 
+  // Both passes need this: pass 2 reads the same input through the same buffer source.
+  let colorspaceRepair = [];
+  try {
+    colorspaceRepair = colorspaceRepairInputOptions(await getVideoMetadata(inputPath));
+    if (colorspaceRepair.length > 0) {
+      logger.info(`Repairing reserved colorspace tag on ${inputPath}`);
+    }
+  } catch (error) {
+    // A probe failure is not fatal — the conversion is what matters, and it reports its own error.
+    logger.warn(`Could not probe colorspace, continuing unrepaired: ${error.message}`);
+  }
+
   return new Promise((resolve, reject) => {
     // Create temporary palette file in temp directory (same directory as input)
     const tempDir = path.dirname(inputPath);
@@ -142,6 +159,7 @@ async function convertToGifImpl(inputPath, outputPath, options = {}) {
     activeCommand = ffmpeg(inputPath)
       .inputOptions(
         [
+          ...colorspaceRepair,
           startTime !== null ? `-ss ${startTime}` : null,
           duration !== null ? `-t ${duration}` : null,
         ].filter(Boolean)
@@ -161,6 +179,7 @@ async function convertToGifImpl(inputPath, outputPath, options = {}) {
         activeCommand = ffmpeg(inputPath)
           .inputOptions(
             [
+              ...colorspaceRepair,
               startTime !== null ? `-ss ${startTime}` : null,
               duration !== null ? `-t ${duration}` : null,
             ].filter(Boolean)

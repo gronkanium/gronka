@@ -28,6 +28,27 @@ export function formatTimestampSeconds(date = new Date()) {
   return date.toISOString().replace(/\.\d{3}Z$/, 'Z');
 }
 
+// JSON.stringify(new Error('boom')) is '{}' — message and stack are non-enumerable. AppError
+// subclasses set their own enumerable fields so they survived, which hid this: every plain
+// Error logged as a bare `{}` with the cause erased.
+function stringifyArg(arg) {
+  if (arg instanceof Error) {
+    // AppError carries stack/message as own enumerable props; drop them so the fields the
+    // stack already shows aren't printed a second time.
+    const keys = Object.keys(arg).filter(k => k !== 'stack' && k !== 'message');
+    const extra = keys.length > 0 ? ` ${JSON.stringify(arg, keys)}` : '';
+    return `${arg.stack || `${arg.name}: ${arg.message}`}${extra}`;
+  }
+  if (typeof arg === 'object') {
+    try {
+      return JSON.stringify(arg);
+    } catch {
+      return String(arg); // circular refs etc. — never let logging throw
+    }
+  }
+  return String(arg);
+}
+
 class Logger {
   constructor(component, logLevel = 'INFO') {
     this.component = component;
@@ -90,13 +111,7 @@ class Logger {
     const sanitizedMessage = this.sanitizeLogInput(message);
     const formattedArgs =
       args.length > 0
-        ? ' ' +
-          args
-            .map(arg => {
-              const str = typeof arg === 'object' ? JSON.stringify(arg) : String(arg);
-              return this.sanitizeLogInput(str);
-            })
-            .join(' ')
+        ? ' ' + args.map(arg => this.sanitizeLogInput(stringifyArg(arg))).join(' ')
         : '';
     return `[${timestamp}] [${levelStr}] ${sanitizedMessage}${formattedArgs}`;
   }
@@ -119,12 +134,7 @@ class Logger {
     const sanitizedMessage = this.sanitizeLogInput(message);
     const fullMessage =
       args.length > 0
-        ? `${sanitizedMessage} ${args
-            .map(arg => {
-              const str = typeof arg === 'object' ? JSON.stringify(arg) : String(arg);
-              return this.sanitizeLogInput(str);
-            })
-            .join(' ')}`
+        ? `${sanitizedMessage} ${args.map(arg => this.sanitizeLogInput(stringifyArg(arg))).join(' ')}`
         : sanitizedMessage;
 
     try {

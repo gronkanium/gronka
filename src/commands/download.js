@@ -651,7 +651,7 @@ async function processDownload(
           const media = fileData[i];
           const hash = generateHash(media.buffer);
           const ext = path.extname(media.filename).toLowerCase() || '.jpg';
-          const fileType = detectFileType(ext, media.contentType);
+          const fileType = detectFileType(ext, media.contentType, media.buffer);
 
           let filePath;
           let fileUrl;
@@ -874,7 +874,7 @@ async function processDownload(
 
       const ext = path.extname(fileData.filename).toLowerCase() || '.mp4';
 
-      const fileType = detectFileType(ext, fileData.contentType);
+      const fileType = detectFileType(ext, fileData.contentType, fileData.buffer);
 
       let cdnPath = '/gifs';
       if (fileType === 'video') {

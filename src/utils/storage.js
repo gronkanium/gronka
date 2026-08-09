@@ -209,10 +209,25 @@ function getStoragePath(storagePath) {
  * Detect file type from extension and content type
  * @param {string} extension - File extension (e.g., '.mp4', '.png', '.gif')
  * @param {string} [contentType] - Optional content type (e.g., 'video/mp4', 'image/png')
+ * @param {Buffer} [buffer] - File contents; when passed, its magic bytes override both signals
  * @returns {'gif'|'video'|'image'} File type
  */
-export function detectFileType(extension, contentType = '') {
+export function detectFileType(extension, contentType = '', buffer = null) {
   const ext = extension.toLowerCase();
+
+  // Magic bytes beat both other signals: they describe the file we actually have, whereas the
+  // extension and the content-type are both claims by the source. Some sources serve real GIFs
+  // under a video/* content-type, and trusting that put genuine gifs behind the videos/ prefix.
+  if (buffer && buffer.length >= 6) {
+    const magic = buffer.subarray(0, 6).toString('latin1');
+    if (magic === 'GIF87a' || magic === 'GIF89a') {
+      return 'gif';
+    }
+    // ISO-BMFF ('ftyp' at offset 4) covers mp4/mov/m4v — an mp4 named .gif lands here.
+    if (buffer.length >= 12 && buffer.subarray(4, 8).toString('latin1') === 'ftyp') {
+      return 'video';
+    }
+  }
 
   // Check content-type first if provided (more reliable than extension)
   // This handles cases where files have incorrect extensions (e.g., .gif filename but video/mp4 content-type)

@@ -85,6 +85,31 @@ test('detectFileType - prioritizes content-type over extension', () => {
   assert.strictEqual(detectFileType('.mp4', 'video/mp4'), 'video');
 });
 
+test('detectFileType - magic bytes outrank a lying content-type', () => {
+  const gif89a = Buffer.concat([Buffer.from('GIF89a', 'latin1'), Buffer.alloc(16)]);
+  const gif87a = Buffer.concat([Buffer.from('GIF87a', 'latin1'), Buffer.alloc(16)]);
+  // The regression: sources that serve real gifs as video/* sent them to the videos/ prefix.
+  assert.strictEqual(detectFileType('.gif', 'video/mp4', gif89a), 'gif');
+  assert.strictEqual(detectFileType('.mp4', 'video/mp4', gif87a), 'gif');
+
+  // The case the content-type check was originally added for still has to work.
+  const mp4 = Buffer.concat([
+    Buffer.from([0, 0, 0, 0x20]),
+    Buffer.from('ftypisom', 'latin1'),
+    Buffer.alloc(16),
+  ]);
+  assert.strictEqual(detectFileType('.gif', 'image/gif', mp4), 'video');
+});
+
+test('detectFileType - falls back cleanly when the buffer proves nothing', () => {
+  // Too short to hold a signature, and a signature that matches nothing known: both must
+  // defer to the content-type/extension path rather than guessing.
+  assert.strictEqual(detectFileType('.gif', 'image/gif', Buffer.from('GIF')), 'gif');
+  assert.strictEqual(detectFileType('.png', 'image/png', Buffer.alloc(32)), 'image');
+  assert.strictEqual(detectFileType('.gif', 'video/mp4', Buffer.alloc(32)), 'video');
+  assert.strictEqual(detectFileType('.gif', '', null), 'gif');
+});
+
 test('detectFileType - defaults to video for unknown types', () => {
   assert.strictEqual(detectFileType('.unknown'), 'video');
   assert.strictEqual(detectFileType('.txt'), 'video');

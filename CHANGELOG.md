@@ -5,6 +5,21 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres (attempts) to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.29.0](https://github.com/thedorekaczynski/gronka/compare/v0.28.0...v0.29.0) (2026-08-09)
+
+
+### Features
+
+* **config:** make the support server and CDN host configurable ([259fc14](https://github.com/thedorekaczynski/gronka/commit/259fc1408fb2693ce0fd12523ec79d272b6e316e))
+* **download:** add a Pinterest extractor for pins and pin.it links ([a5c2ecd](https://github.com/thedorekaczynski/gronka/commit/a5c2ecdc5dca8bad6bfa9bddb0a595682fdb9db3))
+
+
+### Bug Fixes
+
+* **download:** route gifs by magic bytes, not a lying content-type ([bb455e0](https://github.com/thedorekaczynski/gronka/commit/bb455e01fa2940bc77029896cb31375bef79ba62))
+* **scripts:** stop maintainer scripts assuming the upstream instance ([501d790](https://github.com/thedorekaczynski/gronka/commit/501d790c07b9c57183c6abebf70e2a6a94c796ca))
+* update the Discord invite link to the current server ([b241cf8](https://github.com/thedorekaczynski/gronka/commit/b241cf81bc3f5de9c72804c07fb854872d1efb73))
+
 ## [0.28.0](https://github.com/thedorekaczynski/gronka/compare/v0.27.0...v0.28.0) (2026-08-03)
 
 

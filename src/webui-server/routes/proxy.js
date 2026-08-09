@@ -1,7 +1,6 @@
 import express from 'express';
 import { createLogger } from '../../utils/logger.js';
 import { getStats, getHealth } from '../cache/stats-cache.js';
-import { getCryptoPrices } from '../cache/crypto-cache.js';
 
 const logger = createLogger('webui');
 const router = express.Router();
@@ -29,20 +28,6 @@ router.get('/api/health', async (req, res) => {
     logger.error('Failed to fetch health from main server:', error);
     res.status(500).json({
       error: 'failed to fetch health',
-      message: error.message,
-    });
-  }
-});
-
-// Crypto prices endpoint with caching
-router.get('/api/crypto-prices', async (req, res) => {
-  try {
-    const prices = await getCryptoPrices();
-    res.json(prices);
-  } catch (error) {
-    logger.error('Failed to fetch crypto prices:', error);
-    res.status(500).json({
-      error: 'failed to fetch crypto prices',
       message: error.message,
     });
   }

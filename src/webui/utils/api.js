@@ -40,28 +40,3 @@ export function formatUptime(seconds) {
     return `${days}d ${hours}h`;
   }
 }
-
-export async function fetchCryptoPrices() {
-  try {
-    const response = await fetch('/api/crypto-prices');
-    if (!response.ok) {
-      throw new Error(`HTTP error! status: ${response.status}`);
-    }
-    return await response.json();
-  } catch (error) {
-    console.error('Failed to fetch crypto prices:', error);
-    throw error;
-  }
-}
-
-export function formatPrice(price) {
-  if (price === null || price === undefined) return 'N/A';
-  // Format with commas as thousand separators and 2 decimal places
-  const formatted = price.toFixed(2);
-  const parts = formatted.split('.');
-  const integerPart = parts[0];
-  const decimalPart = parts[1];
-  // Add commas every 3 digits from the right
-  const integerWithCommas = integerPart.replace(/\B(?=(\d{3})+(?!\d))/g, ',');
-  return `$${integerWithCommas}.${decimalPart}`;
-}

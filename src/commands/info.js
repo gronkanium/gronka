@@ -109,7 +109,7 @@ export async function handleInfoCommand(interaction, botStartTime) {
         {
           name: '​',
           value:
-            '[join our server for questions or feature requests](https://discord.gg/MHM2m4keTX)',
+            '[join our server for questions or feature requests](https://discord.gg/5Z4hEeHshH)',
           inline: false,
         }
       );

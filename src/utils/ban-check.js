@@ -7,7 +7,7 @@ import { createLogger } from './logger.js';
 const logger = createLogger('ban-check');
 
 const BAN_EMBED_COLOR = 0xed4245; // Discord red - distinct from the 0x5865f2 blurple used by /info and /stats
-const APPEAL_INVITE_URL = 'https://discord.gg/MHM2m4keTX';
+const APPEAL_INVITE_URL = 'https://discord.gg/5Z4hEeHshH';
 
 /**
  * If the moderation system is enabled and the interacting user is banned, reply with the ban

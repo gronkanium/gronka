@@ -19,7 +19,7 @@ the logging platform is integrated into the webui dashboard:
 1. start the webui service:
 
    ```bash
-   docker compose --profile webui up
+   docker compose up
    ```
 
 2. access the webui at [http://localhost:3001](http://localhost:3001)

@@ -96,9 +96,7 @@ CDN_BASE_URL=https://cdn.site.com/gifs
 SERVER_PORT=3000
 
 # Processing
-MAX_GIF_WIDTH=720
 MAX_GIF_DURATION=30
-DEFAULT_FPS=15
 
 # Cloudflare (optional, for reference)
 TUNNEL_ID=abc123def-456g-789h-012i-345jkl678mno

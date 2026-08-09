@@ -11,21 +11,22 @@ cd gronka
 cp .env.example .env
 # Edit .env and add your DISCORD_TOKEN and CLIENT_ID
 
-# 3. Start the bot
+# 3. Create the bind-mounted cookie files (docker mounts a DIRECTORY over a missing file,
+#    which makes yt-dlp and cobalt silently run unauthenticated)
+touch tiktok-cookies.txt
+cp cookies.example.json cookies.json
+
+# 4. Start the bot
 docker compose up -d
 
-# 4. Register Discord commands (one-time setup)
+# 5. Register Discord commands (one-time setup)
 docker compose run --rm app bun run register-commands
 ```
 
-## using docker with webui
+## webui dashboard
 
-```bash
-# Start bot with webui dashboard
-docker compose --profile webui up -d
-
-# Access dashboard at http://localhost:3001
-```
+the dashboard ships inside the bot container — there is nothing extra to start. once the stack
+is up it answers on http://localhost:3001 (port from `WEBUI_PORT`).
 
 ## local development
 

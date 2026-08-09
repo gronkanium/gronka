@@ -33,7 +33,7 @@ r2 provides several advantages over local storage:
 1. go to r2 â†’ your bucket â†’ settings
 2. enable public access
 3. create a custom domain or use the r2.dev subdomain
-4. note your public domain (e.g., `cdn.gronka.dev`)
+4. note your public domain (e.g., `cdn.example.com`)
 
 ### step 4: configure gronka
 
@@ -44,7 +44,7 @@ R2_ACCOUNT_ID=your_cloudflare_account_id
 R2_ACCESS_KEY_ID=your_access_key_id
 R2_SECRET_ACCESS_KEY=your_secret_access_key
 R2_BUCKET_NAME=gronka-media
-R2_PUBLIC_DOMAIN=cdn.gronka.dev
+R2_PUBLIC_DOMAIN=cdn.example.com
 ```
 
 you can find your account id in the cloudflare dashboard url or in the r2 overview page.

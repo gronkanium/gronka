@@ -192,7 +192,7 @@ usage:
 
 - slash command: `/optimize file:<attachment> lossy:<0-100>`
 - context menu: right-click message → "optimize" → modal appears for lossy level
-- url support: can optimize gifs from urls, with special handling for cdn.gronka.dev links (uses local file if available)
+- url support: can optimize gifs from urls, with special handling for links on this instance's own cdn (uses local file if available)
 
 deduplication:
 

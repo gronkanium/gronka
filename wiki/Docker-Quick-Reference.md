@@ -16,7 +16,7 @@ for services with profiles (webui), use docker compose directly:
 
 ```bash
 # start webui
-docker compose --profile webui up -d
+docker compose up -d   # the webui is served by the bot container
 
 # view specific service logs
 docker compose logs -f webui

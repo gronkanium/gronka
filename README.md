@@ -53,6 +53,7 @@ docker is the supported way to run gronka — the image bundles ffmpeg, gifsicle
 git clone https://github.com/thedorekaczynski/gronka.git
 cd gronka
 cp .env.example .env      # then edit it (see configuration below)
+touch tiktok-cookies.txt  # bind-mounted as a file; docker mounts a directory if it's missing
 docker compose up -d
 docker compose run --rm app bun run register-commands   # once, to register slash commands
 ```
@@ -68,6 +69,11 @@ everything lives in `.env`. the only required values are your discord credential
 - `DISCORD_TOKEN` — bot token from the [discord developer portal](https://discord.com/developers/applications)
 - `CLIENT_ID` — the application id from the same place
 
+two optional values are worth setting before you invite anyone:
+
+- `SUPPORT_INVITE_URL` — your own discord server. `/info` links it and the ban-appeal embed sends appeals there; leave it empty and neither surface mentions a server at all
+- `ADMIN_USER_IDS` — comma-separated discord user ids that bypass rate limits and size caps
+
 `.env.example` uses `PROD_`/`TEST_` prefixes so one file can hold two bot instances; the docker setup and the `bot:prod`/`bot:test` scripts map the chosen prefix onto the plain names above. everything else is optional and documented inline in `.env.example`.
 
 ### cloudflare r2 (optional)
@@ -75,7 +81,7 @@ everything lives in `.env`. the only required values are your discord credential
 set these to store and serve larger files from r2 instead of local disk:
 
 - `R2_ACCOUNT_ID`, `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY`, `R2_BUCKET_NAME`
-- `R2_PUBLIC_DOMAIN` — public domain for the bucket (e.g. `cdn.gronka.dev`)
+- `R2_PUBLIC_DOMAIN` — public domain for the bucket (e.g. `cdn.example.com`)
 
 optional background cleanup (`R2_TEMP_UPLOADS_ENABLED`, `R2_CLEANUP_ENABLED`) deletes expired uploads on a schedule. see the [r2 storage docs](https://github.com/thedorekaczynski/gronka/wiki/R2-Storage).
 

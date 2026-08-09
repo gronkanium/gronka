@@ -70,13 +70,11 @@ any configuration variable can be prefixed for bot-specific settings:
 # test bot configuration
 TEST_ADMIN_USER_IDS=123456789012345678
 TEST_CDN_BASE_URL=http://localhost:3000/gifs
-TEST_MAX_GIF_WIDTH=480
 TEST_R2_BUCKET_NAME=gronka-test-media
 
 # prod bot configuration
 PROD_ADMIN_USER_IDS=987654321098765432
 PROD_CDN_BASE_URL=https://cdn.example.com/gifs
-PROD_MAX_GIF_WIDTH=720
 PROD_R2_BUCKET_NAME=gronka-prod-media
 ```
 
@@ -99,9 +97,7 @@ all standard environment variables support the `TEST_` and `PROD_` prefixes:
 - `TEST_GIF_QUALITY` / `PROD_GIF_QUALITY`
 
 **processing options:**
-- `TEST_MAX_GIF_WIDTH` / `PROD_MAX_GIF_WIDTH`
 - `TEST_MAX_GIF_DURATION` / `PROD_MAX_GIF_DURATION`
-- `TEST_DEFAULT_FPS` / `PROD_DEFAULT_FPS`
 - `TEST_RATE_LIMIT` / `PROD_RATE_LIMIT`
 
 **server configuration:**
@@ -286,9 +282,7 @@ PROD_CDN_BASE_URL=https://cdn.example.com/gifs
 PROD_ADMIN_USER_IDS=987654321098765432
 
 # shared configuration (applies to both if not prefixed)
-MAX_GIF_WIDTH=720
 MAX_GIF_DURATION=30
-DEFAULT_FPS=15
 
 # test bot file size limits
 TEST_MAX_VIDEO_SIZE=52428800

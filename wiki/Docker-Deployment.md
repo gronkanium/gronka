@@ -16,9 +16,7 @@ CLIENT_ID=your_discord_client_id
 CDN_BASE_URL=http://localhost:3000/gifs
 SERVER_PORT=3000
 GIF_STORAGE_PATH=./data-prod
-MAX_GIF_WIDTH=720
 MAX_GIF_DURATION=30
-DEFAULT_FPS=15
 
 # optional: admin user ids (comma-separated)
 ADMIN_USER_IDS=123456789012345678,987654321098765432
@@ -69,7 +67,7 @@ the web ui provides a localhost-only dashboard for viewing stats.
 ### start the web ui
 
 ```bash
-docker compose --profile webui up -d
+docker compose up -d   # the webui is served by the bot container
 ```
 
 ### access the dashboard
@@ -95,9 +93,7 @@ docker compose logs -f webui
 | `CDN_BASE_URL`     | base url for serving gifs                              | `http://localhost:3000/gifs` |
 | `SERVER_PORT`      | express server port                                    | `3000`                       |
 | `GIF_STORAGE_PATH` | path to gif storage                                    | `./data-prod` or `./data-test` |
-| `MAX_GIF_WIDTH`    | maximum gif width                                      | `720`                        |
 | `MAX_GIF_DURATION` | maximum video duration (seconds)                       | `30`                         |
-| `DEFAULT_FPS`      | default frames per second                              | `15`                         |
 | `ADMIN_USER_IDS`   | comma-separated discord user ids with admin privileges | _optional_                   |
 | `STATS_USERNAME`   | username for basic auth on `/stats` endpoint           | _optional_ (recommended)     |
 | `STATS_PASSWORD`   | password for basic auth on `/stats` endpoint           | _optional_ (recommended)     |
@@ -126,7 +122,7 @@ the following directories are mounted as volumes for persistence:
 ### ports
 
 - `3000:3000` - express cdn server
-- `3001:3001` - web ui dashboard (requires `--profile webui`)
+- `3001:3001` - web ui dashboard (served by the bot container)
 - `9000:9000` - cobalt api (internal use)
 
 ## registering discord commands

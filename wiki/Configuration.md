@@ -67,7 +67,7 @@ PROD_GIF_STORAGE_PATH=./data-prod
 
 base url for serving files.
 
-**default:** `https://cdn.gronka.dev/gifs`
+**default:** `https://{R2_PUBLIC_DOMAIN}/gifs`, or empty if `R2_PUBLIC_DOMAIN` is unset too
 
 **notes:**
 
@@ -144,12 +144,16 @@ R2_BUCKET_NAME=gronka-media
 
 ### `R2_PUBLIC_DOMAIN`
 
-public domain for your r2 bucket.
+public domain for your r2 bucket, as a bare hostname — urls are built as
+`https://{R2_PUBLIC_DOMAIN}/{key}`, so including a scheme here produces broken links.
+
+**default:** empty. with no domain set, r2 uploads are disabled and files fall back to
+discord/local delivery.
 
 **example:**
 
 ```env
-R2_PUBLIC_DOMAIN=https://cdn.example.com
+R2_PUBLIC_DOMAIN=cdn.example.com
 ```
 
 ### `R2_TEMP_UPLOADS_ENABLED`
@@ -250,20 +254,6 @@ R2_CLEANUP_LOG_LEVEL=detailed
 
 ## processing options
 
-### `MAX_GIF_WIDTH`
-
-maximum width for converted gifs in pixels.
-
-**default:** `720`
-
-**range:** 1-4096
-
-**example:**
-
-```env
-MAX_GIF_WIDTH=1080
-```
-
 ### `MAX_GIF_DURATION`
 
 maximum video duration in seconds for conversion.
@@ -276,20 +266,6 @@ maximum video duration in seconds for conversion.
 
 ```env
 MAX_GIF_DURATION=60
-```
-
-### `DEFAULT_FPS`
-
-default frames per second for gif conversion.
-
-**default:** `30`
-
-**range:** 1-120
-
-**example:**
-
-```env
-DEFAULT_FPS=15
 ```
 
 ### `RATE_LIMIT`
@@ -321,7 +297,7 @@ PROD_RATE_LIMIT=10
 
 maximum video file size in bytes for downloads and conversions.
 
-**default:** `104857600` (100MB)
+**default:** `1073741824` (1GB)
 
 **range:** 1+
 
@@ -787,6 +763,29 @@ when set, enables notifications for completed downloads and errors.
 NTFY_TOPIC=gronka-notifications
 ```
 
+## support server
+
+### `SUPPORT_INVITE_URL`
+
+invite link to the discord server that supports **your** instance.
+
+**optional** — empty by default
+
+two surfaces use it:
+
+- `/info` adds a "join our server for questions or feature requests" link
+- the ban embed appends `you can appeal at: <invite>` when the ban was created with appeals allowed
+
+when it is empty, `/info` omits the link entirely and the ban embed says appeals go to the bot
+operator without naming a server. leave it empty rather than pointing at someone else's server —
+they cannot action bans on your instance.
+
+**example:**
+
+```env
+SUPPORT_INVITE_URL=https://discord.gg/your-invite
+```
+
 ## test and production bot configuration
 
 gronka supports running separate test and production bots simultaneously using prefixed environment variables. any environment variable can be prefixed with `TEST_` or `PROD_` to create bot-specific configuration.
@@ -836,9 +835,7 @@ all environment variables support the `TEST_` and `PROD_` prefixes, including:
 - `TEST_GIF_QUALITY` / `PROD_GIF_QUALITY`
 
 **processing options:**
-- `TEST_MAX_GIF_WIDTH` / `PROD_MAX_GIF_WIDTH`
 - `TEST_MAX_GIF_DURATION` / `PROD_MAX_GIF_DURATION`
-- `TEST_DEFAULT_FPS` / `PROD_DEFAULT_FPS`
 - `TEST_RATE_LIMIT` / `PROD_RATE_LIMIT`
 
 **server configuration:**
@@ -971,7 +968,7 @@ all other variables in `docker-compose.yml` use standard names and do not suppor
 
 ```env
 # these use standard names (no PROD_ prefix support)
-CDN_BASE_URL=${CDN_BASE_URL:-https://cdn.gronka.dev/gifs}
+CDN_BASE_URL=${CDN_BASE_URL:-}
 MAX_GIF_DURATION=${MAX_GIF_DURATION:-30}
 GIF_QUALITY=${GIF_QUALITY:-medium}
 ADMIN_USER_IDS=${ADMIN_USER_IDS:-}
@@ -1045,9 +1042,7 @@ R2_CLEANUP_INTERVAL_MS=3600000
 R2_CLEANUP_LOG_LEVEL=detailed
 
 # processing
-MAX_GIF_WIDTH=720
 MAX_GIF_DURATION=30
-DEFAULT_FPS=30
 RATE_LIMIT=10
 
 # file size limits
@@ -1087,6 +1082,9 @@ ADMIN_USER_IDS=123456789012345678
 
 # notifications
 NTFY_TOPIC=gronka-notifications
+
+# support server (optional; empty = no server is named to users)
+SUPPORT_INVITE_URL=
 ```
 
 ## example test/prod bot configuration
@@ -1125,15 +1123,11 @@ PROD_MAX_IMAGE_SIZE=52428800
 PROD_GIF_QUALITY=medium
 
 # test bot processing
-TEST_MAX_GIF_WIDTH=480
 TEST_MAX_GIF_DURATION=15
-TEST_DEFAULT_FPS=15
 TEST_RATE_LIMIT=5
 
 # prod bot processing
-PROD_MAX_GIF_WIDTH=720
 PROD_MAX_GIF_DURATION=30
-PROD_DEFAULT_FPS=30
 PROD_RATE_LIMIT=10
 
 # test bot server

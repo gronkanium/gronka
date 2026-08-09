@@ -3,11 +3,11 @@ import { getBan, getBooleanSetting } from './database.js';
 import { safeInteractionReply } from './interaction-helpers.js';
 import { isAdmin } from './rate-limit.js';
 import { createLogger } from './logger.js';
+import { supportConfig } from './config.js';
 
 const logger = createLogger('ban-check');
 
 const BAN_EMBED_COLOR = 0xed4245; // Discord red - distinct from the 0x5865f2 blurple used by /info and /stats
-const APPEAL_INVITE_URL = 'https://discord.gg/5Z4hEeHshH';
 
 /**
  * If the moderation system is enabled and the interacting user is banned, reply with the ban
@@ -37,9 +37,14 @@ export async function replyIfBanned(interaction) {
 
   logger.info(`Blocked banned user ${userId} from interacting`);
 
-  const description = ban.appeal_allowed
-    ? `${ban.reason}\n\nyou can appeal at: ${APPEAL_INVITE_URL}`
-    : ban.reason;
+  // Without a configured support server there is nowhere to point an appeal, so the embed says
+  // appeals are open without naming a venue rather than linking someone else's server.
+  let description = ban.reason;
+  if (ban.appeal_allowed) {
+    description += supportConfig.inviteUrl
+      ? `\n\nyou can appeal at: ${supportConfig.inviteUrl}`
+      : '\n\nyou can appeal this ban with the bot operator';
+  }
 
   const embed = new EmbedBuilder()
     .setTitle('you have been banned from gronka')

@@ -404,7 +404,7 @@ export async function deleteFromR2(key, config) {
 
 /**
  * Extract R2 object key from public URL
- * @param {string} url - Public R2 URL (e.g., https://cdn.gronka.dev/gifs/abc123.gif)
+ * @param {string} url - Public R2 URL (e.g., https://<R2_PUBLIC_DOMAIN>/gifs/abc123.gif)
  * @param {Object} config - R2 configuration
  * @returns {string|null} R2 object key (e.g., gifs/abc123.gif) or null if URL is not an R2 URL
  */

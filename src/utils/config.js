@@ -117,7 +117,12 @@ function getBotConfig() {
     clientId: requireStringEnv('CLIENT_ID', 'Discord application/client ID'),
     adminUserIds: parseIdList('ADMIN_USER_IDS'),
     gifStoragePath: getStringEnv('GIF_STORAGE_PATH', './data-test/gifs'),
-    cdnBaseUrl: getStringEnv('CDN_BASE_URL', 'https://cdn.gronka.dev/gifs'),
+    // Falls back to the configured R2 domain rather than a baked-in one; empty when neither is
+    // set, which is fine because every consumer only builds CDN URLs after an R2 upload.
+    cdnBaseUrl: getStringEnv(
+      'CDN_BASE_URL',
+      r2Config.publicDomain ? `https://${r2Config.publicDomain}/gifs` : ''
+    ),
     maxGifDuration: parseIntEnv('MAX_GIF_DURATION', 30, 1, 300),
     gifQuality: getGifQualityEnv('GIF_QUALITY', 'medium'),
     // 1GB hard ceiling for non-admins: bigger files are rejected outright. Files under it are
@@ -140,7 +145,7 @@ function getBotConfig() {
   };
 
   // Validate CDN_BASE_URL format
-  if (!validateUrlFormat(_botConfig.cdnBaseUrl)) {
+  if (_botConfig.cdnBaseUrl && !validateUrlFormat(_botConfig.cdnBaseUrl)) {
     throw new ConfigurationError(
       `CDN_BASE_URL must be a valid URL, got: ${_botConfig.cdnBaseUrl}`,
       'INVALID_URL'
@@ -167,19 +172,62 @@ export const botConfig = new Proxy(
   }
 );
 
+// Community/support server surfaced by /info and the ban-appeal embed. Empty by default: a
+// self-hosted instance must not send its users to the upstream gronka server, which cannot
+// answer for a bot it doesn't run. Surfaces that use it drop the link when it's unset.
+// A getter, not a snapshot, so the value tracks the env the same way isOwnCdnUrl does.
+export const supportConfig = {
+  get inviteUrl() {
+    return getStringEnv('SUPPORT_INVITE_URL', '');
+  },
+};
+
+if (supportConfig.inviteUrl && !validateUrlFormat(supportConfig.inviteUrl)) {
+  throw new ConfigurationError(
+    `SUPPORT_INVITE_URL must be a valid URL, got: ${supportConfig.inviteUrl}`,
+    'INVALID_URL'
+  );
+}
+
 // R2 configuration
 export const r2Config = {
   accountId: getStringEnv('R2_ACCOUNT_ID', ''),
   accessKeyId: getStringEnv('R2_ACCESS_KEY_ID', ''),
   secretAccessKey: getStringEnv('R2_SECRET_ACCESS_KEY', ''),
   bucketName: getStringEnv('R2_BUCKET_NAME', ''),
-  publicDomain: getStringEnv('R2_PUBLIC_DOMAIN', 'cdn.gronka.dev'),
+  // No default: an unset domain must disable public URLs, not silently mint links on the
+  // upstream instance's CDN that this deployment doesn't own. r2-storage guards on empty.
+  publicDomain: getStringEnv('R2_PUBLIC_DOMAIN', ''),
   tempUploadsEnabled: getStringEnv('R2_TEMP_UPLOADS_ENABLED', 'false').toLowerCase() === 'true',
   tempUploadTtlHours: parseIntEnv('R2_TEMP_UPLOAD_TTL_HOURS', 72, 1, 8760), // Max 1 year
   cleanupEnabled: getStringEnv('R2_CLEANUP_ENABLED', 'false').toLowerCase() === 'true',
   cleanupIntervalMs: parseIntEnv('R2_CLEANUP_INTERVAL_MS', 3600000, 60000, 86400000), // 1 hour default, min 1 minute, max 1 day
   cleanupLogLevel: getStringEnv('R2_CLEANUP_LOG_LEVEL', 'detailed').toLowerCase(),
 };
+
+// Does this URL point at the CDN this instance owns? Gates serving a request from local disk
+// instead of re-downloading, so it must never match a domain we don't control. Reads the env
+// at call time rather than closing over r2Config so tests can vary the domain.
+export function isOwnCdnUrl(url) {
+  let hostname;
+  try {
+    hostname = new URL(url).hostname.toLowerCase();
+  } catch {
+    return false;
+  }
+
+  const domain = getStringEnv('R2_PUBLIC_DOMAIN', '').toLowerCase();
+  if (domain && hostname === domain) {
+    return true;
+  }
+
+  const baseUrl = getStringEnv('CDN_BASE_URL', '');
+  if (baseUrl && validateUrlFormat(baseUrl)) {
+    return hostname === new URL(baseUrl).hostname.toLowerCase();
+  }
+
+  return false;
+}
 
 // Server configuration for the minimal HTTP server in bot.js
 // (serves /api/stats/24h â€” used by the Docker healthcheck â€” and /api/bot/status).

@@ -7,7 +7,7 @@ import {
 import fs from 'fs/promises';
 import path from 'path';
 import { createLogger } from '../utils/logger.js';
-import { botConfig } from '../utils/config.js';
+import { botConfig, isOwnCdnUrl } from '../utils/config.js';
 import { validateUrl, validateFileExtension } from '../utils/validation.js';
 import { writeValidatedFileBuffer } from './shared/buffer-validation.js';
 import { curatedErrorMessage } from './shared/command-errors.js';
@@ -73,17 +73,17 @@ const {
 
 /**
  * Check if a CDN URL points to a local file and return the file buffer if it exists
- * @param {string} url - CDN URL to check (e.g., https://cdn.gronka.dev/gifs/abc123.gif)
+ * @param {string} url - URL to check against this instance's own CDN
  * @param {string} storagePath - Base storage path
  * @returns {Promise<{exists: boolean, buffer?: Buffer, filePath?: string, contentType?: string, filename?: string}>}
  */
 async function checkAndReadLocalFileFromCdnUrl(url, storagePath) {
   try {
-    const urlObj = new URL(url);
-
-    if (!urlObj.hostname.endsWith('.gronka.dev')) {
+    if (!isOwnCdnUrl(url)) {
       return { exists: false };
     }
+
+    const urlObj = new URL(url);
 
     // Parse path patterns: /gifs/{hash}.gif, /videos/{hash}.{ext}, /images/{hash}.{ext}
     const gifPathMatch = urlObj.pathname.match(/^\/gifs\/([a-f0-9]+)\.gif$/i);
@@ -1377,7 +1377,7 @@ export async function handleConvertCommand(interaction) {
     await safeInteractionDeferReply(interaction);
 
     try {
-      // Check if it's a cdn.gronka.dev URL and try to use local file
+      // Check if it's one of our own CDN URLs and try to use the local file
       const localFileCheck = await checkAndReadLocalFileFromCdnUrl(url, GIF_STORAGE_PATH);
       let useLocalFile = false;
 

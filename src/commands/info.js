@@ -7,7 +7,7 @@ import { createLogger } from '../utils/logger.js';
 import { safeInteractionReply } from '../utils/interaction-helpers.js';
 import { getR2CacheStats, getStorageStats } from '../utils/storage.js';
 import { getUserMetricsCount } from '../utils/database.js';
-import { r2Config, botConfig } from '../utils/config.js';
+import { r2Config, botConfig, supportConfig } from '../utils/config.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -105,14 +105,16 @@ export async function handleInfoCommand(interaction, botStartTime) {
             `memory: \`${formatBytes(usedMem)} / ${formatBytes(totalMem)} (${memUsagePercent}%)\`\n` +
             `bun: \`v${bunVersion}\` · gronka: \`v${packageJson.version}\``,
           inline: false,
-        },
-        {
-          name: '​',
-          value:
-            '[join our server for questions or feature requests](https://discord.gg/5Z4hEeHshH)',
-          inline: false,
         }
       );
+
+    if (supportConfig.inviteUrl) {
+      embed.addFields({
+        name: '​',
+        value: `[join our server for questions or feature requests](${supportConfig.inviteUrl})`,
+        inline: false,
+      });
+    }
 
     await safeInteractionReply(interaction, { embeds: [embed] });
   } catch (error) {

@@ -43,8 +43,9 @@ export async function getStats() {
     // Calculate stats directly using storage utility
     const stats = await getStorageStats(storagePath);
 
-    // Discord Developer Portal doesn't expose this via API - scripts/fetch-portal-stats.js
-    // scrapes it manually (run on demand) and saves it as a bot_settings row.
+    // Optional: Discord exposes no API for the portal install count, so it can only arrive from
+    // outside — anything that writes the bot_settings row below. Null when nothing ever has, and
+    // the dashboard hides the tile rather than showing a zero.
     const portalInstallUsers = await getSetting('discord_portal_install_users', null);
     const portalInstallUsersFetchedAt = await getSetting(
       'discord_portal_install_users_fetched_at',

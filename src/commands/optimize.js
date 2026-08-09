@@ -767,7 +767,7 @@ export async function handleOptimizeCommand(interaction) {
     }
 
     try {
-      // Check if it's a cdn.gronka.dev URL and try to use local file
+      // Check if it's one of our own CDN URLs and try to use the local file
       const hash = extractHashFromCdnUrl(url);
       let useLocalFile = false;
       let localFilePath = null;

@@ -69,6 +69,7 @@ const prefixMappings = [
   'R2_CLEANUP_INTERVAL_MS',
   'R2_CLEANUP_LOG_LEVEL',
   'NTFY_TOPIC',
+  'SUPPORT_INVITE_URL',
   'LOG_LEVEL',
   'LOG_DIR',
   'LOG_ROTATION',

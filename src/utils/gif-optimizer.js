@@ -5,6 +5,7 @@ import { createLogger } from './logger.js';
 import { getGifPath } from './storage.js';
 import { ValidationError } from './errors.js';
 import { mediaSlots } from './concurrency.js';
+import { isOwnCdnUrl } from './config.js';
 const logger = createLogger('gif-optimizer');
 
 export function isGifFile(filename, contentType) {
@@ -15,19 +16,14 @@ export function isGifFile(filename, contentType) {
   return isGifExt || isGifContentType;
 }
 
-/**
- * Extract hash from cdn URL (supports gronka.dev subdomains, e.g. cdn.gronka.dev)
- * @param {string} url - URL to parse (e.g., https://cdn.gronka.dev/gifs/abc123.gif)
- * @returns {string|null} Extracted hash or null if not a valid cdn URL
- */
+// Returns the content hash if the URL is one of this instance's own CDN URLs, else null.
 export function extractHashFromCdnUrl(url) {
   try {
-    const urlObj = new URL(url);
-
-    // Check if it's a gronka.dev subdomain URL
-    if (!urlObj.hostname.endsWith('.gronka.dev')) {
+    if (!isOwnCdnUrl(url)) {
       return null;
     }
+
+    const urlObj = new URL(url);
 
     // Parse path patterns: /gifs/{hash}.gif, /videos/{hash}.{ext}, /images/{hash}.{ext}
     const gifPathMatch = urlObj.pathname.match(/^\/gifs\/([a-f0-9]+)\.gif$/i);

@@ -69,7 +69,43 @@ describe('replyIfBanned', () => {
     const embedJson = embed.toJSON();
     assert.strictEqual(embedJson.title, 'you have been banned from gronka');
     assert.ok(embedJson.description.includes('being a menace'));
-    assert.ok(embedJson.description.includes('you can appeal at:'));
+    assert.ok(embedJson.description.includes('you can appeal'));
+
+    await unbanUser(userId);
+  });
+
+  test('links the configured support server in the appeal line', async () => {
+    const userId = `banchk-invite-${Date.now()}`;
+    await setSetting('moderation_enabled', 'true');
+    invalidateSettingsCache('moderation_enabled');
+    await banUser(userId, 'being a menace', true);
+    invalidateBanCache(userId);
+
+    process.env.SUPPORT_INVITE_URL = 'https://discord.gg/example';
+    try {
+      const interaction = makeInteraction(userId);
+      await replyIfBanned(interaction);
+      const embedJson = interaction._replies[0].embeds[0].toJSON();
+      assert.ok(embedJson.description.includes('you can appeal at: https://discord.gg/example'));
+    } finally {
+      delete process.env.SUPPORT_INVITE_URL;
+    }
+
+    await unbanUser(userId);
+  });
+
+  test('appeal line names no server when SUPPORT_INVITE_URL is unset', async () => {
+    const userId = `banchk-noinvite-${Date.now()}`;
+    await setSetting('moderation_enabled', 'true');
+    invalidateSettingsCache('moderation_enabled');
+    await banUser(userId, 'being a menace', true);
+    invalidateBanCache(userId);
+
+    const interaction = makeInteraction(userId);
+    await replyIfBanned(interaction);
+    const embedJson = interaction._replies[0].embeds[0].toJSON();
+    assert.ok(embedJson.description.includes('you can appeal this ban with the bot operator'));
+    assert.ok(!embedJson.description.includes('discord.gg'));
 
     await unbanUser(userId);
   });

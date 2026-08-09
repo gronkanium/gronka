@@ -13,7 +13,15 @@ const __dirname = path.dirname(__filename);
 const projectRoot = path.resolve(__dirname, '..');
 const wikiDir = path.join(projectRoot, 'wiki');
 
-const GITHUB_WIKI_URL = 'https://github.com/thedorekaczynski/gronka.wiki.git';
+// Derived from origin so a fork publishes to its own wiki, not upstream's.
+const GITHUB_WIKI_URL = (() => {
+  try {
+    const origin = execSync('git remote get-url origin', { encoding: 'utf8' }).trim();
+    return origin.replace(/\.git$/, '') + '.wiki.git';
+  } catch {
+    return 'https://github.com/thedorekaczynski/gronka.wiki.git';
+  }
+})();
 
 /**
  * Check if git is available

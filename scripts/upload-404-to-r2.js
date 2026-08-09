@@ -26,7 +26,9 @@ async function upload404Cat() {
     }
 
     // Read the 404 cat image
-    const catImagePath = path.join(__dirname, '..', 'src', 'public', '404.jpg');
+    // The tracked asset, not src/public/ — that's vite's build output and is gitignored, so a
+    // fresh clone has no copy of it until the webui is built.
+    const catImagePath = path.join(__dirname, '..', 'src', 'webui', 'public', '404.jpg');
     let catImageBuffer;
     try {
       catImageBuffer = await fs.readFile(catImagePath);
@@ -47,8 +49,10 @@ async function upload404Cat() {
     console.log('Next steps:');
     console.log('1. Verify the image is accessible at the URL above');
     console.log('2. Ensure your R2 bucket is set to public access');
-    console.log('3. Configure custom domain cdn.gronka.dev in Cloudflare R2 dashboard');
-    console.log('4. Test by accessing: https://cdn.gronka.dev/404.jpg');
+    console.log(
+      `3. Configure custom domain ${r2Config.publicDomain || '<R2_PUBLIC_DOMAIN>'} in the Cloudflare R2 dashboard`
+    );
+    console.log(`4. Test by accessing: https://${r2Config.publicDomain || '<domain>'}/404.jpg`);
   } catch (error) {
     console.error('Error uploading 404 cat image to R2:', error.message);
     if (error.name === 'NotFound' || error.message.includes('404')) {

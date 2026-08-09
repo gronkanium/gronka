@@ -4,7 +4,7 @@ import { getSetting } from './database.js';
 // Registry of every source /download can pull from, so the webui can list them and each
 // can be individually turned off. This is a *parallel* classifier used only for the
 // catalog + the enable/disable gate — the real routing still uses isSocialMediaUrl,
-// getYtdlpSite, isHentaiGifzUrl, and isBooruUrl unchanged. Host matching mirrors those:
+// getYtdlpSite, isHentaiGifzUrl, isBooruUrl, and isPinterestUrl unchanged. Host matching mirrors those:
 // exact-or-subdomain on the www-stripped hostname.
 //
 // `category` groups services in the settings UI. `id` is the stable key stored in the
@@ -57,6 +57,9 @@ const cobaltServices = [
 ];
 
 const customServices = [
+  // Pinterest is a custom extractor rather than a cobalt service; its hosts list covers the
+  // main domain and the pin.it shortener, not every regional ccTLD isPinterestUrl accepts.
+  { id: 'pinterest', label: 'Pinterest', category: 'social', hosts: ['pinterest.com', 'pin.it'] },
   { id: 'hentaigifz', label: 'hentaigifz', category: 'adult', hosts: ['hentaigifz.com'] },
   { id: 'danbooru', label: 'Danbooru', category: 'booru', hosts: ['danbooru.donmai.us'] },
   { id: 'e621', label: 'e621 / e926', category: 'booru', hosts: ['e621.net', 'e926.net'] },

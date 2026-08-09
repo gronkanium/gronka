@@ -18,6 +18,7 @@ import {
 } from '../utils/ytdlp.js';
 import { isHentaiGifzUrl, downloadFromHentaiGifz } from '../utils/hentaigifz.js';
 import { isBooruUrl, downloadFromBooru } from '../utils/booru.js';
+import { isPinterestUrl, downloadFromPinterest } from '../utils/pinterest.js';
 import { getDisabledServiceLabel } from '../utils/download-services.js';
 import { AppError, ValidationError } from '../utils/errors.js';
 import { batchAttachmentsForDelivery } from '../utils/attachment-helpers.js';
@@ -317,19 +318,21 @@ async function processDownload(
       const ytdlpSite = getYtdlpSite(url);
       const isHentaiGifz = isHentaiGifzUrl(url);
       const isBooru = isBooruUrl(url);
+      const isPinterest = isPinterestUrl(url);
       // yt-dlp sites (youtube, redgifs, imgur, the tube sites, etc.) download through
       // yt-dlp, not Cobalt.
       const useYtdlp = ytdlpSite !== null && YTDLP_ENABLED;
 
       // URL-only mode (toggleable from the webui): reply with the direct media URL
       // from cobalt instead of downloading/uploading. Trim requests still need a real
-      // download, and the yt-dlp sites, hentaigifz, and booru sites have no cobalt direct
-      // URL to hand out.
+      // download, and the yt-dlp sites, hentaigifz, booru, and Pinterest have no cobalt
+      // direct URL to hand out.
       if (
         COBALT_ENABLED &&
         !useYtdlp &&
         !isHentaiGifz &&
         !isBooru &&
+        !isPinterest &&
         startTime === null &&
         duration === null &&
         (await getBooleanSetting('url_only_mode', false))
@@ -430,6 +433,13 @@ async function processDownload(
           message: 'Starting download from booru',
           metadata: { url, maxSize: adminUser ? 'unlimited' : maxSize },
         });
+      } else if (isPinterest) {
+        downloadMethod = 'pinterest';
+        logger.info(`Downloading from Pinterest page scrape: ${url}`);
+        logOperationStep(operationId, 'download_start', 'running', {
+          message: 'Starting download from Pinterest',
+          metadata: { url, maxSize: adminUser ? 'unlimited' : maxSize },
+        });
       } else {
         downloadMethod = 'cobalt';
         logger.info(`Downloading file from Cobalt: ${url}`);
@@ -481,6 +491,12 @@ async function processDownload(
           fileData = await downloadFromBooru(url, adminUser);
           logOperationStep(operationId, 'download_complete', 'success', {
             message: 'file downloaded successfully via booru',
+            metadata: { url, fileCount: 1 },
+          });
+        } else if (downloadMethod === 'pinterest') {
+          fileData = await downloadFromPinterest(url, adminUser);
+          logOperationStep(operationId, 'download_complete', 'success', {
+            message: 'file downloaded successfully via Pinterest',
             metadata: { url, fileCount: 1 },
           });
         } else {
@@ -1610,6 +1626,9 @@ export async function handleDownloadContextMenuCommand(interaction) {
   } else if (isBooruUrl(url)) {
     // booru sites have their own JSON-API extractor, no Cobalt/social-media check needed
     logger.info(`booru URL detected, will use booru API extractor for download`);
+  } else if (isPinterestUrl(url)) {
+    // Pinterest has its own JSON-LD extractor, no Cobalt/social-media check needed
+    logger.info(`Pinterest URL detected, will use JSON-LD extractor for download`);
   } else if (!COBALT_ENABLED) {
     const errorMessage = 'cobalt is not enabled.';
     createFailedOperation('download', userId, username, errorMessage, 'cobalt_disabled', {
@@ -1752,6 +1771,9 @@ export async function handleDownloadCommand(interaction) {
   } else if (isBooruUrl(url)) {
     // booru sites have their own JSON-API extractor, no Cobalt/social-media check needed
     logger.info(`booru URL detected, will use booru API extractor for download`);
+  } else if (isPinterestUrl(url)) {
+    // Pinterest has its own JSON-LD extractor, no Cobalt/social-media check needed
+    logger.info(`Pinterest URL detected, will use JSON-LD extractor for download`);
   } else if (!COBALT_ENABLED) {
     const errorMessage = 'cobalt is not enabled. please enable it to use the download command.';
     createFailedOperation('download', userId, username, errorMessage, 'cobalt_disabled', {

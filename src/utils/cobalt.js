@@ -227,10 +227,8 @@ const SOCIAL_MEDIA_DOMAINS = [
   'www.facebook.com',
   'fb.watch',
   // pinterest intentionally NOT listed: Cobalt 11 returns error.api.fetch.empty and yt-dlp's
-  // extractor has been globally broken since ~2025-06 (Pinterest serves a fake 404 to its
-  // resource API even for public pins, with or without cookies — yt-dlp #13554). Downloads
-  // never succeed, so we reject Pinterest URLs upfront with the honest "unsupported platform"
-  // message instead of a misleading "deleted/private" error + a wasted yt-dlp fallback attempt.
+  // extractor has been globally broken since ~2025-06 (yt-dlp #13554). Pinterest is handled by
+  // the custom JSON-LD extractor in pinterest.js instead — routed before this list is consulted.
   // twitch: cobalt only handles clips (clips.twitch.tv + twitch.tv/<channel>/clip/<slug>),
   // matched host-only here — non-clip twitch URLs route through and get a curated error.
   'twitch.tv',

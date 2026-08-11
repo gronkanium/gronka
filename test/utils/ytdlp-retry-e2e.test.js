@@ -154,6 +154,56 @@ if (!mocksSupported) {
     });
   });
 
+  // yt-dlp reports an Instagram photo post as a formats problem, which read to users as a bot
+  // failure on a post that simply has no video. Every production occurrence was an /p/ link.
+  describe('Instagram photo posts blame the post, not the formats', () => {
+    function noVideoFormats(child) {
+      child.stderr.emit(
+        'data',
+        Buffer.from('ERROR: [Instagram] abc123: No video formats found!; please report this issue')
+      );
+      child.emit('close', 1);
+    }
+
+    test('an instagram /p/ permalink reports that the post has no video', async () => {
+      spawnCallLog = [];
+      spawnBehaviors = [noVideoFormats];
+
+      await assert.rejects(
+        () =>
+          downloadWithYtdlp(
+            'https://www.instagram.com/p/DbpZVohPsMX/',
+            false,
+            Infinity,
+            null,
+            Infinity,
+            null,
+            null
+          ),
+        error => error.message === 'this post has no video in it.'
+      );
+    });
+
+    test('other hosts keep the formats message', async () => {
+      spawnCallLog = [];
+      spawnBehaviors = [noVideoFormats];
+
+      await assert.rejects(
+        () =>
+          downloadWithYtdlp(
+            'https://youtu.be/no-formats',
+            false,
+            Infinity,
+            null,
+            Infinity,
+            null,
+            null
+          ),
+        error => error.message === 'no downloadable video formats found'
+      );
+    });
+  });
+
   // Regression: a direct-media link (e.g. an animated webp from gif.fxtwitter.com) goes through
   // yt-dlp's generic extractor, which reports no duration. A plain `duration <= N` match-filter
   // rejects unknown-duration items outright, so yt-dlp skipped the file, exited 0 with no output,

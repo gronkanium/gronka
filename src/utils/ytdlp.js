@@ -95,6 +95,20 @@ export function isRedGifsUrl(url) {
   }
 }
 
+// /p/ permalinks carry photos as often as video; /reel/ and /tv/ are always video.
+function isInstagramPostUrl(url) {
+  try {
+    const urlObj = new URL(url);
+    const hostname = urlObj.hostname.toLowerCase().replace(/^www\./, '');
+    return (
+      (hostname === 'instagram.com' || hostname.endsWith('.instagram.com')) &&
+      /^\/p\//.test(urlObj.pathname)
+    );
+  } catch {
+    return false;
+  }
+}
+
 // Sites that download through yt-dlp instead of Cobalt. Either Cobalt has no extractor
 // for them (imgur, kick, coub, rumble, newgrounds, bilibili, the adult tube sites,
 // redgifs) or we deliberately prefer yt-dlp (youtube). Each entry maps a display name to
@@ -402,7 +416,16 @@ function executeYtdlp(
           // deleted or private" message nor a formats-related one describes what happened.
           reject(new NetworkError('this post has no video in it.'));
         } else if (errorOutput.includes('No video formats found')) {
-          reject(new NetworkError('no downloadable video formats found'));
+          // Instagram reports photo posts this way instead of the "There is no video in this
+          // post" wording handled above, so a plain photo permalink reads to the user as a
+          // bot failure. Every one of these seen in production was an instagram /p/ link.
+          reject(
+            new NetworkError(
+              isInstagramPostUrl(url)
+                ? 'this post has no video in it.'
+                : 'no downloadable video formats found'
+            )
+          );
         } else if (/larger than max-filesize/i.test(errorOutput)) {
           reject(new ValidationError(tooLargeMessage(maxSize)));
         } else if (

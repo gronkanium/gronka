@@ -60,6 +60,8 @@ services:
       - DATABASE_URL=${DATABASE_URL:-}
       # Netscape cookies.txt for yt-dlp (age-restricted TikTok etc.); ignored if the file is absent
       - YTDLP_COOKIES_PATH=${YTDLP_COOKIES_PATH:-/app/tiktok-cookies.txt}
+      # Same cookies.json cobalt reads; its `instagram` entry enables the Instagram extractor
+      - INSTAGRAM_COOKIES_PATH=${INSTAGRAM_COOKIES_PATH:-/app/cookies.json}
     volumes:
       - ./data-test:/app/data-test
       - ./data-prod:/app/data-prod
@@ -68,6 +70,8 @@ services:
       # Optional yt-dlp cookies file (export from a logged-in browser in Netscape format).
       # If it doesn't exist on the host, Docker mounts an empty directory and yt-dlp runs without cookies.
       - ./tiktok-cookies.txt:/app/tiktok-cookies.txt
+      # Read-only: the app only reads the instagram session out of it, cobalt owns the file.
+      - ./cookies.json:/app/cookies.json:ro
     ports:
       - '${SERVER_PORT:-3000}:${SERVER_PORT:-3000}'
       - '${WEBUI_PORT:-3001}:${WEBUI_PORT:-3001}'

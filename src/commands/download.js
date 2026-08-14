@@ -19,6 +19,11 @@ import {
 import { isHentaiGifzUrl, downloadFromHentaiGifz } from '../utils/hentaigifz.js';
 import { isBooruUrl, downloadFromBooru } from '../utils/booru.js';
 import { isPinterestUrl, downloadFromPinterest } from '../utils/pinterest.js';
+import {
+  isInstagramPostUrl,
+  hasInstagramSession,
+  downloadFromInstagram,
+} from '../utils/instagram.js';
 import { getDisabledServiceLabel } from '../utils/download-services.js';
 import { AppError, ValidationError } from '../utils/errors.js';
 import { batchAttachmentsForDelivery } from '../utils/attachment-helpers.js';
@@ -319,6 +324,10 @@ async function processDownload(
       const isHentaiGifz = isHentaiGifzUrl(url);
       const isBooru = isBooruUrl(url);
       const isPinterest = isPinterestUrl(url);
+      // Instagram posts go through our own media-info extractor first, but only when a
+      // session cookie is configured — without one it cannot work at all, and cobalt (the
+      // previous behaviour) stays the only route.
+      const useInstagram = isInstagramPostUrl(url) && hasInstagramSession();
       // yt-dlp sites (youtube, redgifs, imgur, the tube sites, etc.) download through
       // yt-dlp, not Cobalt.
       const useYtdlp = ytdlpSite !== null && YTDLP_ENABLED;
@@ -440,6 +449,13 @@ async function processDownload(
           message: 'Starting download from Pinterest',
           metadata: { url, maxSize: adminUser ? 'unlimited' : maxSize },
         });
+      } else if (useInstagram) {
+        downloadMethod = 'instagram';
+        logger.info(`Downloading from Instagram media-info API: ${url}`);
+        logOperationStep(operationId, 'download_start', 'running', {
+          message: 'Starting download from Instagram',
+          metadata: { url, maxSize: adminUser ? 'unlimited' : maxSize },
+        });
       } else {
         downloadMethod = 'cobalt';
         logger.info(`Downloading file from Cobalt: ${url}`);
@@ -499,7 +515,28 @@ async function processDownload(
             message: 'file downloaded successfully via Pinterest',
             metadata: { url, fileCount: 1 },
           });
-        } else {
+        } else if (downloadMethod === 'instagram') {
+          // Cobalt stays the safety net: an expired session or a shape change must not take
+          // out reels, which cobalt still handles. Falling through can only add coverage.
+          try {
+            fileData = await downloadFromInstagram(url, adminUser);
+            logOperationStep(operationId, 'download_complete', 'success', {
+              message: 'file downloaded successfully via Instagram',
+              metadata: { url, fileCount: 1 },
+            });
+          } catch (instagramError) {
+            logger.warn(
+              `Instagram extractor failed, falling back to cobalt: ${instagramError.message}`
+            );
+            logOperationStep(operationId, 'download_fallback', 'running', {
+              message: 'Instagram extractor failed, retrying with cobalt',
+              metadata: { url, reason: instagramError.message },
+            });
+            downloadMethod = 'cobalt';
+          }
+        }
+
+        if (downloadMethod === 'cobalt') {
           try {
             // Concurrency is capped inside cobalt.js. The URL cache was already consulted
             // above (and deliberately skipped when trimming), so there is no second check here.

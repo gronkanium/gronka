@@ -727,6 +727,30 @@ optional path to a netscape-format `cookies.txt` file passed to yt-dlp.
 YTDLP_COOKIES_PATH=./tiktok-cookies.txt
 ```
 
+### `INSTAGRAM_COOKIES_PATH`
+
+optional path to a `cookies.json` holding an instagram session — the same file and format
+cobalt uses (`{"instagram": ["mid=...; sessionid=..."]}`).
+
+**optional**
+
+**notes:**
+
+- with a session set, instagram posts download through instagram's own media-info api instead
+  of cobalt. this is the only route that works for photo and carousel posts: cobalt answers
+  `error.api.fetch.empty` for them, and yt-dlp's extractor only ever returns video
+- without it, instagram falls back to cobalt exactly as before — reels keep working, photo
+  posts keep failing
+- the entry must contain a `sessionid`; the api has no anonymous form
+- an expired session logs an error naming the cookie file, and downloads fall back to cobalt
+- in docker, this defaults to `/app/cookies.json`, mounted read-only from `./cookies.json`
+
+**example:**
+
+```env
+INSTAGRAM_COOKIES_PATH=./cookies.json
+```
+
 ## admin configuration
 
 ### `ADMIN_USER_IDS`

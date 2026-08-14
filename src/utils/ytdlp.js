@@ -110,7 +110,7 @@ function isInstagramPostUrl(url) {
 }
 
 // Sites that download through yt-dlp instead of Cobalt. Either Cobalt has no extractor
-// for them (imgur, kick, coub, rumble, newgrounds, bilibili, the adult tube sites,
+// for them (imgur, kick, coub, rumble, newgrounds, niconico, bilibili, the adult tube sites,
 // redgifs) or we deliberately prefer yt-dlp (youtube). Each entry maps a display name to
 // the hostnames it owns; matching is exact-or-subdomain on the www-stripped hostname.
 // Order does not matter (hosts are disjoint). All were confirmed against the running
@@ -123,6 +123,8 @@ export const YTDLP_SITES = [
   { name: 'Coub', hosts: ['coub.com'] },
   { name: 'Rumble', hosts: ['rumble.com'] },
   { name: 'Newgrounds', hosts: ['newgrounds.com'] },
+  // `nico.ms` is niconico's own shortener; yt-dlp resolves it to the /watch/ URL itself.
+  { name: 'Niconico', hosts: ['nicovideo.jp', 'nico.ms'] },
   { name: 'Bilibili', hosts: ['bilibili.com', 'b23.tv'] },
   // Xiaohongshu / RedNote. `xhslink.com` is the app's share-link shortener. Pass these URLs
   // through untouched: the `xsec_token` query param on an /explore/ link is load-bearing, and

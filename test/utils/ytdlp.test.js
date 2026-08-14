@@ -111,6 +111,9 @@ describe('ytdlp utilities', () => {
       assert.strictEqual(getYtdlpSite('https://coub.com/view/x'), 'Coub');
       assert.strictEqual(getYtdlpSite('https://rumble.com/v123-title.html'), 'Rumble');
       assert.strictEqual(getYtdlpSite('https://www.newgrounds.com/portal/view/1'), 'Newgrounds');
+      assert.strictEqual(getYtdlpSite('https://www.nicovideo.jp/watch/sm9'), 'Niconico');
+      assert.strictEqual(getYtdlpSite('https://sp.nicovideo.jp/watch/sm9'), 'Niconico');
+      assert.strictEqual(getYtdlpSite('https://nico.ms/sm9'), 'Niconico');
       assert.strictEqual(getYtdlpSite('https://www.bilibili.com/video/BV1'), 'Bilibili');
       assert.strictEqual(getYtdlpSite('https://b23.tv/abc'), 'Bilibili');
       assert.strictEqual(

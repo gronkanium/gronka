@@ -22,7 +22,7 @@ download media from social platforms using the `/download` command:
 - streamable
 - dailymotion
 - snapchat
-- redgifs, imgur, kick, coub, rumble, newgrounds, bilibili (via yt-dlp)
+- redgifs, imgur, kick, coub, rumble, newgrounds, niconico, bilibili (via yt-dlp)
 - pornhub, xvideos, xhamster, redtube (via yt-dlp)
 - pinterest, including pin.it share links (via a dedicated extractor, not cobalt)
 - hentaigifz (via a dedicated page-scrape extractor, not cobalt)

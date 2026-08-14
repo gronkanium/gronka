@@ -23,7 +23,7 @@ the same three actions are also available by right-clicking a message → apps: 
 ### supported sources
 
 - **cobalt** handles most social platforms: twitter/x, tiktok, instagram, youtube, reddit, facebook, twitch clips, soundcloud, tumblr, streamable, dailymotion, snapchat
-- **yt-dlp** handles youtube, redgifs, imgur, kick, coub, rumble, newgrounds, bilibili, and the adult tube sites (pornhub, xvideos, xhamster, redtube); it is also the fallback for x/twitter and tiktok
+- **yt-dlp** handles youtube, redgifs, imgur, kick, coub, rumble, newgrounds, niconico, bilibili, and the adult tube sites (pornhub, xvideos, xhamster, redtube); it is also the fallback for x/twitter and tiktok
 - **pinterest** — a dedicated extractor for pins and `pin.it` share links (neither cobalt nor yt-dlp can read pinterest); grabs the pin's video, or its full-size image
 - **hentaigifz** — a dedicated page-scrape extractor for hentaigifz.com posts (grabs the post's animated gif)
 - **booru boards** — danbooru, e621/e926, yande.re, and konachan posts via their JSON APIs

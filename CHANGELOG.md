@@ -5,6 +5,19 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres (attempts) to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.30.0](https://github.com/thedorekaczynski/gronka/compare/v0.29.0...v0.30.0) (2026-08-14)
+
+
+### Features
+
+* **download:** add niconico support via yt-dlp ([bb9d7f6](https://github.com/thedorekaczynski/gronka/commit/bb9d7f6a8a896275afbb914cc56b5dacd1fd9955))
+
+
+### Bug Fixes
+
+* **download:** download instagram photo and carousel posts ([f49d553](https://github.com/thedorekaczynski/gronka/commit/f49d5532b9833db8f984911d7b8676a1819dc88f))
+* **download:** report instagram photo posts as having no video ([8014be4](https://github.com/thedorekaczynski/gronka/commit/8014be4505a55c854ab4ad6ac888637f13876233))
+
 ## [0.29.0](https://github.com/thedorekaczynski/gronka/compare/v0.28.0...v0.29.0) (2026-08-09)
 
 

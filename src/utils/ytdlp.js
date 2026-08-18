@@ -77,6 +77,17 @@ export function isYouTubeUrl(url) {
   }
 }
 
+// YouTube's default client set (android_vr) now serves GVS URLs that 403 on every request,
+// and the clients yt-dlp would fall back to (tv, tv_simply, web_safari) are either SABR-only
+// or demand a GVS PO Token. web_embedded still hands out the full progressive format ladder
+// without a token. It needs the `n` challenge solved, which requires a JS runtime plus the
+// yt-dlp-ejs solver: bun is the one runtime in this image (upstream has deprecated bun
+// support — yt-dlp#16766 — so this needs deno or node when that lands).
+function getYouTubeArgs(url) {
+  if (!isYouTubeUrl(url)) return [];
+  return ['--js-runtimes', 'bun', '--extractor-args', 'youtube:player_client=web_embedded'];
+}
+
 /**
  * Check if a URL is a RedGifs URL.
  * RedGifs is not a Cobalt service, but yt-dlp has a dedicated extractor for it
@@ -206,6 +217,7 @@ function executeYtdlp(
       '--quiet',
       '--no-progress',
       ...getCookieArgs(),
+      ...getYouTubeArgs(url),
       '-f',
       quality,
       '--merge-output-format',

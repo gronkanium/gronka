@@ -19,6 +19,7 @@ import {
 import { isHentaiGifzUrl, downloadFromHentaiGifz } from '../utils/hentaigifz.js';
 import { isBooruUrl, downloadFromBooru } from '../utils/booru.js';
 import { isPinterestUrl, downloadFromPinterest } from '../utils/pinterest.js';
+import { isKlipyUrl, downloadFromKlipy } from '../utils/klipy.js';
 import {
   isInstagramPostUrl,
   hasInstagramSession,
@@ -324,6 +325,7 @@ async function processDownload(
       const isHentaiGifz = isHentaiGifzUrl(url);
       const isBooru = isBooruUrl(url);
       const isPinterest = isPinterestUrl(url);
+      const isKlipy = isKlipyUrl(url);
       // Instagram posts go through our own media-info extractor first, but only when a
       // session cookie is configured — without one it cannot work at all, and cobalt (the
       // previous behaviour) stays the only route.
@@ -342,6 +344,7 @@ async function processDownload(
         !isHentaiGifz &&
         !isBooru &&
         !isPinterest &&
+        !isKlipy &&
         startTime === null &&
         duration === null &&
         (await getBooleanSetting('url_only_mode', false))
@@ -449,6 +452,13 @@ async function processDownload(
           message: 'Starting download from Pinterest',
           metadata: { url, maxSize: adminUser ? 'unlimited' : maxSize },
         });
+      } else if (isKlipy) {
+        downloadMethod = 'klipy';
+        logger.info(`Downloading from Klipy page scrape: ${url}`);
+        logOperationStep(operationId, 'download_start', 'running', {
+          message: 'Starting download from Klipy',
+          metadata: { url, maxSize: adminUser ? 'unlimited' : maxSize },
+        });
       } else if (useInstagram) {
         downloadMethod = 'instagram';
         logger.info(`Downloading from Instagram media-info API: ${url}`);
@@ -513,6 +523,12 @@ async function processDownload(
           fileData = await downloadFromPinterest(url, adminUser);
           logOperationStep(operationId, 'download_complete', 'success', {
             message: 'file downloaded successfully via Pinterest',
+            metadata: { url, fileCount: 1 },
+          });
+        } else if (downloadMethod === 'klipy') {
+          fileData = await downloadFromKlipy(url, adminUser);
+          logOperationStep(operationId, 'download_complete', 'success', {
+            message: 'file downloaded successfully via Klipy',
             metadata: { url, fileCount: 1 },
           });
         } else if (downloadMethod === 'instagram') {
@@ -1666,6 +1682,8 @@ export async function handleDownloadContextMenuCommand(interaction) {
   } else if (isPinterestUrl(url)) {
     // Pinterest has its own JSON-LD extractor, no Cobalt/social-media check needed
     logger.info(`Pinterest URL detected, will use JSON-LD extractor for download`);
+  } else if (isKlipyUrl(url)) {
+    logger.info(`Klipy URL detected, will use page metadata extractor for download`);
   } else if (!COBALT_ENABLED) {
     const errorMessage = 'cobalt is not enabled.';
     createFailedOperation('download', userId, username, errorMessage, 'cobalt_disabled', {
@@ -1811,6 +1829,8 @@ export async function handleDownloadCommand(interaction) {
   } else if (isPinterestUrl(url)) {
     // Pinterest has its own JSON-LD extractor, no Cobalt/social-media check needed
     logger.info(`Pinterest URL detected, will use JSON-LD extractor for download`);
+  } else if (isKlipyUrl(url)) {
+    logger.info(`Klipy URL detected, will use page metadata extractor for download`);
   } else if (!COBALT_ENABLED) {
     const errorMessage = 'cobalt is not enabled. please enable it to use the download command.';
     createFailedOperation('download', userId, username, errorMessage, 'cobalt_disabled', {

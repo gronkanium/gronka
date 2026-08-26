@@ -66,32 +66,11 @@
           ).toLocaleString()} ({stats.disk_usage_formatted || '0.00 MB'})
         </dd>
       </div>
-      {#if stats.discord_portal_install_users != null}
-        <div class="stat-item">
-          <dt>discord installs</dt>
-          <dd>
-            {stats.discord_portal_install_users.toLocaleString()}
-            {#if stats.discord_portal_install_users_fetched_at}
-              <span class="stat-note">
-                (as of {new Date(
-                  stats.discord_portal_install_users_fetched_at
-                ).toLocaleDateString()})
-              </span>
-            {/if}
-          </dd>
-        </div>
-      {/if}
       {#if stats.ever_active_users != null}
         <div class="stat-item">
           <dt>bot users</dt>
           <dd>
             {stats.ever_active_users.toLocaleString()}
-            {#if stats.discord_portal_install_users}
-              <span class="stat-note">
-                ({Math.round((stats.ever_active_users / stats.discord_portal_install_users) * 100)}%
-                of installs)
-              </span>
-            {/if}
           </dd>
         </div>
       {/if}

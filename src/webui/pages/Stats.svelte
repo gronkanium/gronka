@@ -144,12 +144,6 @@
     font-weight: 500;
   }
 
-  .stat-note {
-    font-size: 0.8rem;
-    font-weight: 400;
-    color: var(--text-muted);
-  }
-
   .loading {
     color: var(--text-dim);
     padding: 1rem 0;

@@ -30,7 +30,11 @@ const mocksSupported = process.env.GRONKA_E2E === 'true';
 const GIF_STORAGE_PATH = mocksSupported
   ? path.join(os.tmpdir(), `gronka-e2e-${process.pid}-${Date.now()}`)
   : null;
-if (mocksSupported) process.env.GIF_STORAGE_PATH = GIF_STORAGE_PATH;
+if (mocksSupported) {
+  process.env.GIF_STORAGE_PATH = GIF_STORAGE_PATH;
+  // The cache-reply assertion exercises the configured CDN path; CI has no .env file.
+  process.env.CDN_BASE_URL = 'https://cdn.test/gifs';
+}
 
 function fakeBuffer(seed, size = 1024) {
   const buf = Buffer.alloc(size);

@@ -22,6 +22,8 @@ const YTDLP_CATEGORY = {
   Kick: 'video',
   Newgrounds: 'video',
   Niconico: 'video',
+  Medal: 'video',
+  Tenor: 'social',
   Xiaohongshu: 'social',
   RedGifs: 'adult',
   Pornhub: 'adult',

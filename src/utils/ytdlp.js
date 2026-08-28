@@ -141,6 +141,9 @@ export const YTDLP_SITES = [
   // through untouched: the `xsec_token` query param on an /explore/ link is load-bearing, and
   // stripping it makes the same post fail to resolve.
   { name: 'Xiaohongshu', hosts: ['xiaohongshu.com', 'xhslink.com'] },
+  { name: 'Medal', hosts: ['medal.tv'] },
+  // Tenor serves an mp4, not the gif — /convert is the route to a gif from here.
+  { name: 'Tenor', hosts: ['tenor.com'] },
   { name: 'Pornhub', hosts: ['pornhub.com'] },
   { name: 'XVideos', hosts: ['xvideos.com'] },
   { name: 'xHamster', hosts: ['xhamster.com'] },

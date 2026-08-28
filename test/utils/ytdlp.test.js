@@ -125,6 +125,9 @@ describe('ytdlp utilities', () => {
       assert.strictEqual(getYtdlpSite('https://www.redtube.com/123'), 'RedTube');
       assert.strictEqual(getYtdlpSite('https://www.xiaohongshu.com/explore/abc'), 'Xiaohongshu');
       assert.strictEqual(getYtdlpSite('http://xhslink.com/o/abc'), 'Xiaohongshu');
+      assert.strictEqual(getYtdlpSite('https://medal.tv/games/x/clips/abc'), 'Medal');
+      assert.strictEqual(getYtdlpSite('https://tenor.com/abc.gif'), 'Tenor');
+      assert.strictEqual(getYtdlpSite('https://www.tenor.com/view/x-gif-1'), 'Tenor');
     });
 
     test('preserves the xsec_token an /explore/ link needs to resolve', () => {

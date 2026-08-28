@@ -58,6 +58,7 @@ if (!mocksSupported) {
   beforeAll(async () => {
     // Register mocks for the network boundary BEFORE importing download.js.
     mock.module('../../src/utils/cobalt.js', () => ({
+      canonicalizeMirrorUrl: url => url,
       isSocialMediaUrl: url => /^https?:\/\/(www\.|mobile\.)?(x|twitter)\.com\//i.test(url),
       // Reached via the twitter_delivery policy (default hybrid probes every
       // X/Twitter URL), url_only_mode (no test enables it), or the direct-URL
@@ -224,6 +225,13 @@ if (!mocksSupported) {
         filename: 'clip.mp4',
       }),
       parseTenorUrl: async u => u,
+      isDirectMediaUrl: () => false,
+      downloadDirectMedia: async () => ({
+        buffer: fakeBuffer(8, 4096),
+        contentType: 'video/mp4',
+        size: 4096,
+        filename: 'direct.mp4',
+      }),
     }));
 
     // Dynamically import AFTER mocks are in place so the mocked modules are used.

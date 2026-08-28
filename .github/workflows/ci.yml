@@ -43,12 +43,7 @@ env:
   # Keep in step with the oven/bun tag in the Dockerfile.
   BUN_VERSION: '1.3'
 
-# validate-code/test/test-e2e used to carry `if: github.actor != 'dependabot[bot]'`, on the
-# assumption that a dependabot PR can't run them for want of repo secrets. Nothing in this
-# workflow reads a secret — DISCORD_TOKEN/CLIENT_ID above are literal dummies and Postgres is a
-# service container — so the skip bought nothing and cost the coverage that matters most: a
-# dependabot group can bump discord.js or the AWS SDK, and those bumps were reaching main having
-# run only `bun run validate`. Verifying them meant re-running the gate by hand on a branch.
+# Dependabot is not skipped here: nothing in this workflow reads a repo secret.
 jobs:
   dependency-review:
     runs-on: ubuntu-latest

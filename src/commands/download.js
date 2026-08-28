@@ -5,6 +5,7 @@ import { createLogger } from '../utils/logger.js';
 import { botConfig } from '../utils/config.js';
 import { validateUrl } from '../utils/validation.js';
 import {
+  canonicalizeMirrorUrl,
   isSocialMediaUrl,
   downloadFromSocialMedia,
   getCobaltMediaUrls,
@@ -29,7 +30,7 @@ import { getDisabledServiceLabel } from '../utils/download-services.js';
 import { AppError, ValidationError } from '../utils/errors.js';
 import { batchAttachmentsForDelivery } from '../utils/attachment-helpers.js';
 import { isAdmin, recordRateLimit } from '../utils/rate-limit.js';
-import { generateHash } from '../utils/file-downloader.js';
+import { generateHash, isDirectMediaUrl, downloadDirectMedia } from '../utils/file-downloader.js';
 import {
   createFailedOperation,
   updateOperationStatus,
@@ -326,6 +327,7 @@ async function processDownload(
       const isBooru = isBooruUrl(url);
       const isPinterest = isPinterestUrl(url);
       const isKlipy = isKlipyUrl(url);
+      const isDirectMedia = isDirectMediaUrl(url);
       // Instagram posts go through our own media-info extractor first, but only when a
       // session cookie is configured — without one it cannot work at all, and cobalt (the
       // previous behaviour) stays the only route.
@@ -345,6 +347,7 @@ async function processDownload(
         !isBooru &&
         !isPinterest &&
         !isKlipy &&
+        !isDirectMedia &&
         startTime === null &&
         duration === null &&
         (await getBooleanSetting('url_only_mode', false))
@@ -459,6 +462,13 @@ async function processDownload(
           message: 'Starting download from Klipy',
           metadata: { url, maxSize: adminUser ? 'unlimited' : maxSize },
         });
+      } else if (isDirectMedia) {
+        downloadMethod = 'direct';
+        logger.info(`Downloading direct media file: ${url}`);
+        logOperationStep(operationId, 'download_start', 'running', {
+          message: 'Starting direct media download',
+          metadata: { url, maxSize: adminUser ? 'unlimited' : maxSize },
+        });
       } else if (useInstagram) {
         downloadMethod = 'instagram';
         logger.info(`Downloading from Instagram media-info API: ${url}`);
@@ -529,6 +539,12 @@ async function processDownload(
           fileData = await downloadFromKlipy(url, adminUser);
           logOperationStep(operationId, 'download_complete', 'success', {
             message: 'file downloaded successfully via Klipy',
+            metadata: { url, fileCount: 1 },
+          });
+        } else if (downloadMethod === 'direct') {
+          fileData = await downloadDirectMedia(url, adminUser, interaction.client);
+          logOperationStep(operationId, 'download_complete', 'success', {
+            message: 'file downloaded successfully via direct fetch',
             metadata: { url, fileCount: 1 },
           });
         } else if (downloadMethod === 'instagram') {
@@ -1653,6 +1669,8 @@ export async function handleDownloadContextMenuCommand(interaction) {
     return;
   }
 
+  url = canonicalizeMirrorUrl(url);
+
   // Classify the URL: yt-dlp site (youtube/redgifs/imgur/...) or not
   const ytdlpSite = getYtdlpSite(url);
 
@@ -1684,6 +1702,9 @@ export async function handleDownloadContextMenuCommand(interaction) {
     logger.info(`Pinterest URL detected, will use JSON-LD extractor for download`);
   } else if (isKlipyUrl(url)) {
     logger.info(`Klipy URL detected, will use page metadata extractor for download`);
+  } else if (isDirectMediaUrl(url)) {
+    // Above the cobalt gate: a direct link needs no cobalt.
+    logger.info(`Direct media URL detected, will fetch the file directly`);
   } else if (!COBALT_ENABLED) {
     const errorMessage = 'cobalt is not enabled.';
     createFailedOperation('download', userId, username, errorMessage, 'cobalt_disabled', {
@@ -1738,7 +1759,7 @@ export async function handleDownloadCommand(interaction) {
     return;
   }
 
-  const url = interaction.options.getString('url');
+  const url = canonicalizeMirrorUrl(interaction.options.getString('url'));
 
   // Parse and validate start_time/end_time (accepts seconds or MM:SS / HH:MM:SS timestamps)
   const times = await resolveTimeOptions(interaction, { type: 'download' });
@@ -1831,6 +1852,9 @@ export async function handleDownloadCommand(interaction) {
     logger.info(`Pinterest URL detected, will use JSON-LD extractor for download`);
   } else if (isKlipyUrl(url)) {
     logger.info(`Klipy URL detected, will use page metadata extractor for download`);
+  } else if (isDirectMediaUrl(url)) {
+    // Above the cobalt gate: a direct link needs no cobalt.
+    logger.info(`Direct media URL detected, will fetch the file directly`);
   } else if (!COBALT_ENABLED) {
     const errorMessage = 'cobalt is not enabled. please enable it to use the download command.';
     createFailedOperation('download', userId, username, errorMessage, 'cobalt_disabled', {

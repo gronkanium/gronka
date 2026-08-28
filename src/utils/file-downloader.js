@@ -17,6 +17,68 @@ const logger = createLogger('file-downloader');
 const BLOCKED_DESTINATION_MESSAGE =
   'that url points to a private or internal address, which is not allowed.';
 
+// Extension only picks the route; isMediaResponse re-checks what actually came back.
+const DIRECT_MEDIA_EXTENSIONS = new Set([
+  'mp4',
+  'webm',
+  'mov',
+  'm4v',
+  'avi',
+  'mkv',
+  'gif',
+  'jpg',
+  'jpeg',
+  'png',
+  'webp',
+  'bmp',
+]);
+
+export function isDirectMediaUrl(url) {
+  try {
+    const ext = path.extname(new URL(url).pathname).slice(1).toLowerCase();
+    return DIRECT_MEDIA_EXTENSIONS.has(ext);
+  } catch {
+    return false;
+  }
+}
+
+export function isMediaResponse(contentType, buffer) {
+  const type = (contentType || '').toLowerCase();
+  if (type.startsWith('video/') || type.startsWith('image/')) {
+    return true;
+  }
+  // An explicit non-media type is a real answer; only sniff when it's absent or generic.
+  if (type && !type.startsWith('application/octet-stream') && !type.startsWith('binary/')) {
+    return false;
+  }
+  if (!buffer || buffer.length < 12) {
+    return false;
+  }
+  const head = buffer.subarray(0, 12);
+  const latin = head.toString('latin1');
+  return (
+    latin.startsWith('GIF87a') ||
+    latin.startsWith('GIF89a') ||
+    head.subarray(4, 8).toString('latin1') === 'ftyp' ||
+    latin.startsWith('\x89PNG\r\n\x1a\n') ||
+    (head[0] === 0xff && head[1] === 0xd8 && head[2] === 0xff) ||
+    (latin.startsWith('RIFF') && head.subarray(8, 12).toString('latin1') === 'WEBP') ||
+    latin.startsWith('\x1aE\xdf\xa3')
+  );
+}
+
+// Reuses /convert's guarded fetch rather than adding a second one.
+export async function downloadDirectMedia(url, isAdminUser = false, client = null) {
+  const fileData = await downloadFileFromUrl(url, isAdminUser, client);
+  if (!isMediaResponse(fileData.contentType, fileData.buffer)) {
+    logger.warn(
+      `Direct media URL returned non-media content: ${url} (content-type: ${fileData.contentType || 'none'})`
+    );
+    throw new ValidationError('that link does not point to a video or image file.');
+  }
+  return fileData;
+}
+
 /**
  * True when a download failed because the file was over the size cap.
  *

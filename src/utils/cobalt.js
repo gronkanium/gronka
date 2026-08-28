@@ -164,7 +164,31 @@ const EMBED_FIXER_HOSTS = new Map([
   ['stupidpenisx.com', 'twitter.com'],
   // FxEmbed for Bluesky
   ['fxbsky.app', 'bsky.app'],
+  // ddinstagram.com omitted: no longer resolves.
+  ['kkinstagram.com', 'instagram.com'],
+  ['eeinstagram.com', 'instagram.com'],
+  ['rxddit.com', 'reddit.com'],
+  ['vxreddit.com', 'reddit.com'],
+  ['tnktok.com', 'tiktok.com'],
+  ['tfxktok.com', 'tiktok.com'],
 ]);
+
+// Canonicalize before routing: the Instagram extractor matches canonical hosts only.
+export function canonicalizeMirrorUrl(url) {
+  try {
+    const urlObj = new URL(url);
+    const canonicalHost = EMBED_FIXER_HOSTS.get(
+      urlObj.hostname.toLowerCase().replace(/^www\./, '')
+    );
+    if (!canonicalHost) {
+      return url;
+    }
+    urlObj.hostname = canonicalHost;
+    return urlObj.toString();
+  } catch {
+    return url;
+  }
+}
 
 /**
  * Normalize social media URLs before sending them to Cobalt.

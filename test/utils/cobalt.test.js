@@ -1,6 +1,11 @@
 import { describe, test } from 'bun:test';
 import assert from 'node:assert';
-import { isSocialMediaUrl, normalizeSocialMediaUrlForCobalt } from '../../src/utils/cobalt.js';
+import {
+  canonicalizeMirrorUrl,
+  isSocialMediaUrl,
+  normalizeSocialMediaUrlForCobalt,
+} from '../../src/utils/cobalt.js';
+import { isInstagramPostUrl } from '../../src/utils/instagram.js';
 
 describe('cobalt utilities', () => {
   test('isSocialMediaUrl recognizes x.com URLs', () => {
@@ -112,5 +117,64 @@ describe('cobalt utilities', () => {
     const normalized = normalizeSocialMediaUrlForCobalt(input);
 
     assert.strictEqual(normalized, input);
+  });
+
+  describe('canonicalizeMirrorUrl', () => {
+    test('rewrites each verified mirror to its canonical host, path intact', () => {
+      const cases = [
+        ['https://kkinstagram.com/reel/DcjrASIDZfX', 'https://instagram.com/reel/DcjrASIDZfX'],
+        ['https://eeinstagram.com/p/DbYuey/', 'https://instagram.com/p/DbYuey/'],
+        [
+          'https://rxddit.com/r/videos/comments/1vk/x/',
+          'https://reddit.com/r/videos/comments/1vk/x/',
+        ],
+        [
+          'https://vxreddit.com/r/pics/comments/abc/y/',
+          'https://reddit.com/r/pics/comments/abc/y/',
+        ],
+        [
+          'https://tnktok.com/@u/video/7678109247363730706',
+          'https://tiktok.com/@u/video/7678109247363730706',
+        ],
+        ['https://tfxktok.com/@u/video/123', 'https://tiktok.com/@u/video/123'],
+      ];
+      for (const [input, expected] of cases) {
+        assert.strictEqual(canonicalizeMirrorUrl(input), expected);
+      }
+    });
+
+    test('strips a www. prefix on the mirror host', () => {
+      assert.strictEqual(
+        canonicalizeMirrorUrl('https://www.eeinstagram.com/p/AbC/'),
+        'https://instagram.com/p/AbC/'
+      );
+    });
+
+    test('lands Instagram mirrors on the Instagram extractor, not cobalt', () => {
+      assert.strictEqual(isInstagramPostUrl('https://kkinstagram.com/reel/DcjrASIDZfX'), false);
+      assert.strictEqual(
+        isInstagramPostUrl(canonicalizeMirrorUrl('https://kkinstagram.com/reel/DcjrASIDZfX')),
+        true
+      );
+    });
+
+    test('leaves canonical and unrelated URLs untouched', () => {
+      const untouched = [
+        'https://instagram.com/reel/DcjrASIDZfX',
+        'https://example.com/a.mp4',
+        'not-a-url',
+        '',
+      ];
+      for (const input of untouched) {
+        assert.strictEqual(canonicalizeMirrorUrl(input), input);
+      }
+    });
+
+    test('preserves the query string', () => {
+      assert.strictEqual(
+        canonicalizeMirrorUrl('https://kkinstagram.com/p/AbC/?img_index=2'),
+        'https://instagram.com/p/AbC/?img_index=2'
+      );
+    });
   });
 });

@@ -5,6 +5,8 @@ import {
   parseTenorUrl,
   downloadImage,
   downloadVideo,
+  isDirectMediaUrl,
+  isMediaResponse,
 } from '../../src/utils/file-downloader.js';
 import axios from 'axios';
 
@@ -272,6 +274,65 @@ describe('file downloader utilities', () => {
       } finally {
         axios.get = originalGet;
       }
+    });
+  });
+
+  describe('isDirectMediaUrl', () => {
+    test('accepts the direct media links users actually paste', () => {
+      assert.strictEqual(isDirectMediaUrl('https://cdn.gronka.dev/videos/abc.mp4'), true);
+      assert.strictEqual(isDirectMediaUrl('https://video.twimg.com/ext_tw/1/vid.mp4'), true);
+      assert.strictEqual(isDirectMediaUrl('https://example.com/a.gif'), true);
+      assert.strictEqual(isDirectMediaUrl('https://example.com/PHOTO.JPEG'), true);
+    });
+
+    test('ignores the query string when reading the extension', () => {
+      assert.strictEqual(
+        isDirectMediaUrl('https://cdn.discordapp.com/attachments/1/2/f.mp4?ex=a&is=b&hm=c'),
+        true
+      );
+      assert.strictEqual(isDirectMediaUrl('https://pbs.twimg.com/media/Gcth.jpg?name=orig'), true);
+    });
+
+    test('rejects pages and extensionless URLs', () => {
+      assert.strictEqual(isDirectMediaUrl('https://example.com/page.html'), false);
+      assert.strictEqual(isDirectMediaUrl('https://open.spotify.com/track/123'), false);
+      assert.strictEqual(isDirectMediaUrl('https://www.google.com/search?q=cats'), false);
+      assert.strictEqual(isDirectMediaUrl('https://example.com/video'), false);
+      assert.strictEqual(isDirectMediaUrl('not-a-url'), false);
+      assert.strictEqual(isDirectMediaUrl(''), false);
+    });
+  });
+
+  describe('isMediaResponse', () => {
+    const gif = Buffer.from('GIF89a' + 'x'.repeat(20));
+    const mp4 = Buffer.concat([Buffer.alloc(4), Buffer.from('ftyp'), Buffer.alloc(8)]);
+    const png = Buffer.concat([
+      Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]),
+      Buffer.alloc(8),
+    ]);
+    const html = Buffer.from('<!doctype html><html><head>bad</head></html>');
+
+    test('accepts a media content-type', () => {
+      assert.strictEqual(isMediaResponse('video/mp4', mp4), true);
+      assert.strictEqual(isMediaResponse('image/gif', gif), true);
+    });
+
+    test('rejects a non-media content-type even when the bytes look like media', () => {
+      assert.strictEqual(isMediaResponse('text/html', gif), false);
+      assert.strictEqual(isMediaResponse('application/json', mp4), false);
+    });
+
+    test('falls back to magic bytes for generic or absent content-types', () => {
+      assert.strictEqual(isMediaResponse('application/octet-stream', gif), true);
+      assert.strictEqual(isMediaResponse('application/octet-stream', mp4), true);
+      assert.strictEqual(isMediaResponse('application/octet-stream', png), true);
+      assert.strictEqual(isMediaResponse('', gif), true);
+      assert.strictEqual(isMediaResponse('application/octet-stream', html), false);
+    });
+
+    test('rejects a body too short to carry a signature', () => {
+      assert.strictEqual(isMediaResponse('', Buffer.alloc(4)), false);
+      assert.strictEqual(isMediaResponse('', null), false);
     });
   });
 });

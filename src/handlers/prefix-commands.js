@@ -329,6 +329,14 @@ export async function handlePrefixMessage(message, context = {}) {
       await deps.handleInfoCommand(adapter, context.botStartTime ?? null);
     }
   } catch (error) {
-    logger.error(`Unhandled error in prefix command "${commandName}":`, error);
+    // 50013/50001 mean the bot was invoked in a channel it can't reply in — the guild's
+    // permission setup, not a defect. Logging those at error buried real failures in noise.
+    if (error?.code === 50013 || error?.code === 50001) {
+      logger.debug(
+        `Cannot reply to prefix command "${isHelp ? 'help' : commandName}" in ${message.guildId || 'DM'}: ${error.message}`
+      );
+      return;
+    }
+    logger.error(`Unhandled error in prefix command "${isHelp ? 'help' : commandName}":`, error);
   }
 }

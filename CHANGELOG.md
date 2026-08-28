@@ -5,6 +5,22 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres (attempts) to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.31.0](https://github.com/thedorekaczynski/gronka/compare/v0.30.0...v0.31.0) (2026-08-28)
+
+
+### Features
+
+* **download:** add Klipy GIF and sticker support ([0b2d4e3](https://github.com/thedorekaczynski/gronka/commit/0b2d4e35222fe5718c70f257125f7ff7e441d0c9))
+* **download:** add Medal and Tenor as yt-dlp sources ([f1c4a0e](https://github.com/thedorekaczynski/gronka/commit/f1c4a0ebfbf269bf6ed30add5a134b81be9b6320))
+* **webui:** remove Discord portal install stats ([f6515da](https://github.com/thedorekaczynski/gronka/commit/f6515daa6697f583821177e6c7d6d1f226cf509f))
+
+
+### Bug Fixes
+
+* **download:** restore youtube downloads via web_embedded client ([159c576](https://github.com/thedorekaczynski/gronka/commit/159c57685b8967c33e4473ee98daa4e64a4f95da))
+* **prefix:** stop logging unreplyable channels as unhandled errors ([7f95c25](https://github.com/thedorekaczynski/gronka/commit/7f95c25d2b701782d10106f00d5a8f499d9113ac))
+* **webui:** remove unused stats note styles ([157150c](https://github.com/thedorekaczynski/gronka/commit/157150c35e6fa31091a0951c89142e9ea710257c))
+
 ## [0.30.0](https://github.com/thedorekaczynski/gronka/compare/v0.29.0...v0.30.0) (2026-08-14)
 
 

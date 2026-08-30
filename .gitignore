@@ -16,15 +16,6 @@ cookies.json
 # yt-dlp cookies file (contains sensitive session tokens)
 tiktok-cookies.txt
 
-# AWS/R2 credentials
-.aws/
-
-# Cloudflared tunnel credentials and config
-.cloudflared/
-
-# Config files that may contain secrets
-config/
-
 # Temporary files
 *.tmp
 temp/
@@ -58,12 +49,6 @@ docs/
 # Build assets (generated files) — entire dir is vite's build output now
 src/public/
 
-# Jekyll build artifacts
-.bundle/
-_site/
-.jekyll-cache/
-vendor/
-
 # Build tools cache
 .vite/
 .eslintcache
@@ -71,21 +56,8 @@ vendor/
 # Source maps (generated files)
 *.map
 
-# npm/yarn debug logs
-.npm-debug.log*
-.yarn-debug.log*
-.yarn-integrity
-
 # Test coverage
 coverage/
-
-# Code scanning results (script now writes to logs/, entry kept in case an old
-# checkout or stale instructions regenerate it in the root)
-code-scanning-issues.json
-
-scripts/setup-glab-auth.sh
-scripts/ci-status.sh
-scripts/check-ci.sh
 
 AGENTS.md
 .agent/

@@ -4,7 +4,6 @@ bun.lock
 # Prettier's, and hand-fixing it every release just fights the tool.
 CHANGELOG.md
 *.log
-data/
 data-prod/
 data-test/
 temp/
@@ -15,10 +14,6 @@ build/
 coverage/
 .vscode/
 .idea/
-.cloudflared/
-_layouts/
-_posts/
-_includes/
 .github/ISSUE_TEMPLATE/
 wiki/
 

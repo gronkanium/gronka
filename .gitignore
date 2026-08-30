@@ -25,7 +25,6 @@ tiktok-cookies.txt
 # Config files that may contain secrets
 config/
 
-
 # Temporary files
 *.tmp
 temp/
@@ -88,23 +87,6 @@ scripts/setup-glab-auth.sh
 scripts/ci-status.sh
 scripts/check-ci.sh
 
-# Rewrite-related files (TypeScript rewrite, not part of main codebase)
-apps/
-packages/
-tsconfig.json
-pnpm-workspace.yaml
-docker-compose.rewrite.yml
-REWRITE_STATUS.md
-README.REWRITE.md
-MIGRATION.md
-.npmrc
-
-scripts/fix-docker-credentials.sh
-
-# Personal scraping hack (Discord portal install count) - not for other checkouts/prod
-scripts/fetch-portal-stats.js
-
 AGENTS.md
 .agent/
 CLAUDE.md
-plan.md

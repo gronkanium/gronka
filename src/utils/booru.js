@@ -35,7 +35,15 @@ const BOORU_SITES = [
     hosts: ['e621.net', 'e926.net'],
     buildApiUrl: postJsonApiUrl,
     // { post: { file: { url: "https://static1.e621.net/data/.../<md5>.<ext>" } } }
-    pickFileUrl: json => json.post?.file?.url || null,
+    // url is null for anonymous clients on some posts, but the CDN path is derivable
+    // from md5 + ext and serves fine.
+    pickFileUrl: json => {
+      const file = json.post?.file;
+      if (file?.url) return file.url;
+      if (!file?.md5 || !file?.ext) return null;
+      const { md5, ext } = file;
+      return `https://static1.e621.net/data/${md5.slice(0, 2)}/${md5.slice(2, 4)}/${md5}.${ext}`;
+    },
   },
   {
     name: 'yande.re',

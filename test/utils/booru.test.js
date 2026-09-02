@@ -120,5 +120,32 @@ describe('booru utilities', () => {
         }
       );
     });
+
+    test('derives the e621 CDN path when the API nulls file.url', async () => {
+      const md5 = 'e96d0bb6c6f8cd4e8097bd5c689994e2';
+
+      await withStubbedAxios(
+        url =>
+          url.endsWith('.json')
+            ? { data: { post: { file: { url: null, md5, ext: 'mp4' } } } }
+            : mediaResponse,
+        async requested => {
+          await downloadFromBooru('https://e621.net/posts/6596150');
+          assert.strictEqual(requested[1].url, `https://static1.e621.net/data/e9/6d/${md5}.mp4`);
+        }
+      );
+    });
+
+    test('still reports missing media when e621 gives no md5', async () => {
+      await withStubbedAxios(
+        () => ({ data: { post: { file: { url: null } } } }),
+        async () => {
+          await assert.rejects(downloadFromBooru('https://e621.net/posts/1'), error => {
+            assert.match(error.message, /no downloadable media/);
+            return true;
+          });
+        }
+      );
+    });
   });
 });

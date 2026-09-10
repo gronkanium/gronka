@@ -1,4 +1,5 @@
 import { YTDLP_SITES } from './ytdlp.js';
+import { GALLERY_DL_SITES } from './gallery-dl.js';
 import { getSetting } from './database.js';
 
 // Registry of every source /download can pull from, so the webui can list them and each
@@ -39,6 +40,15 @@ const ytdlpServices = YTDLP_SITES.map(site => ({
   hosts: site.hosts,
 }));
 
+const galleryDlServices = [
+  ...GALLERY_DL_SITES.map(site => ({
+    id: `gallery-dl-${site.name.toLowerCase().replace(/[^a-z0-9]+/g, '-')}`,
+    label: `${site.name} (gallery-dl)`,
+    category: 'gallery',
+    hosts: site.hosts,
+  })),
+];
+
 const cobaltServices = [
   { id: 'twitter', label: 'Twitter / X', category: 'social', hosts: ['twitter.com', 'x.com'] },
   { id: 'bluesky', label: 'Bluesky', category: 'social', hosts: ['bsky.app'] },
@@ -77,7 +87,12 @@ const customServices = [
 ];
 
 /** Every download source, in UI display order (social → video → adult → booru). */
-export const DOWNLOAD_SERVICES = [...cobaltServices, ...ytdlpServices, ...customServices];
+export const DOWNLOAD_SERVICES = [
+  ...cobaltServices,
+  ...ytdlpServices,
+  ...galleryDlServices,
+  ...customServices,
+];
 
 /** Set of valid service ids, for validating the disabled_services setting. */
 export const DOWNLOAD_SERVICE_IDS = new Set(DOWNLOAD_SERVICES.map(s => s.id));

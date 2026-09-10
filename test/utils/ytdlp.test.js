@@ -7,8 +7,26 @@ import {
   YtdlpRateLimitError,
 } from '../../src/utils/ytdlp.js';
 import { NetworkError } from '../../src/utils/errors.js';
+import { getGalleryDlSite } from '../../src/utils/gallery-dl.js';
 
 describe('ytdlp utilities', () => {
+  describe('gallery-dl site detection', () => {
+    test('resolves supported gallery hosts', () => {
+      assert.strictEqual(getGalleryDlSite('https://www.pixiv.net/artworks/123'), 'Pixiv');
+      assert.strictEqual(
+        getGalleryDlSite('https://www.deviantart.com/user/art/work-1'),
+        'DeviantArt'
+      );
+      assert.strictEqual(getGalleryDlSite('https://wallhaven.cc/w/abc123'), 'Wallhaven');
+    });
+
+    test('rejects unknown and lookalike hosts', () => {
+      assert.strictEqual(getGalleryDlSite('https://example.com/gallery'), null);
+      assert.strictEqual(getGalleryDlSite('https://pixiv.net.example.com/art/1'), null);
+      assert.strictEqual(getGalleryDlSite('not-a-url'), null);
+    });
+  });
+
   describe('isYouTubeUrl', () => {
     test('returns true for standard youtube.com URLs', () => {
       assert.strictEqual(isYouTubeUrl('https://youtube.com/watch?v=abc123'), true);

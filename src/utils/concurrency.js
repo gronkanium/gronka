@@ -106,6 +106,8 @@ export const cobaltSlots = createSlotLimiter('cobalt', 2);
 // otherwise stack unbounded buffers and OOM the app.
 export const ytdlpSlots = createSlotLimiter('yt-dlp', 2);
 
+export const galleryDlSlots = createSlotLimiter('gallery-dl', 2);
+
 // Bounds concurrent CPU-heavy media encodes (ffmpeg GIF passes, ImageMagick, gifsicle). Each
 // encode pins a core and holds its output — up to hundreds of MB for a full-res/full-fps GIF — in
 // memory. Uncapped, a burst of conversions starved the box and left operations making zero

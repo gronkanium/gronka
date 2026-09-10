@@ -17,6 +17,7 @@ import {
   downloadWithYtdlp,
   YtdlpRateLimitError,
 } from '../utils/ytdlp.js';
+import { getGalleryDlSite, downloadWithGalleryDl } from '../utils/gallery-dl.js';
 import { isHentaiGifzUrl, downloadFromHentaiGifz } from '../utils/hentaigifz.js';
 import { isBooruUrl, downloadFromBooru } from '../utils/booru.js';
 import { isPinterestUrl, downloadFromPinterest } from '../utils/pinterest.js';
@@ -122,6 +123,7 @@ const {
   cobaltEnabled: COBALT_ENABLED,
   ytdlpEnabled: YTDLP_ENABLED,
   ytdlpQuality: YTDLP_QUALITY,
+  galleryDlEnabled: GALLERY_DL_ENABLED,
   discordSizeLimit: DISCORD_SIZE_LIMIT,
 } = botConfig;
 
@@ -323,6 +325,7 @@ async function processDownload(
 
       const maxSize = adminUser ? Infinity : await getMaxVideoSize();
       const ytdlpSite = getYtdlpSite(url);
+      const galleryDlSite = getGalleryDlSite(url);
       const isHentaiGifz = isHentaiGifzUrl(url);
       const isBooru = isBooruUrl(url);
       const isPinterest = isPinterestUrl(url);
@@ -343,6 +346,7 @@ async function processDownload(
       if (
         COBALT_ENABLED &&
         !useYtdlp &&
+        !galleryDlSite &&
         !isHentaiGifz &&
         !isBooru &&
         !isPinterest &&
@@ -434,6 +438,13 @@ async function processDownload(
           message: `Starting download from ${ytdlpSite} via yt-dlp`,
           metadata: { url, maxSize: adminUser ? 'unlimited' : maxSize },
         });
+      } else if (galleryDlSite && GALLERY_DL_ENABLED) {
+        downloadMethod = 'gallery-dl';
+        logger.info(`Downloading from ${galleryDlSite} via gallery-dl: ${url}`);
+        logOperationStep(operationId, 'download_start', 'running', {
+          message: `Starting download from ${galleryDlSite} via gallery-dl`,
+          metadata: { url, maxSize: adminUser ? 'unlimited' : maxSize },
+        });
       } else if (isHentaiGifz) {
         downloadMethod = 'hentaigifz';
         logger.info(`Downloading from hentaigifz page scrape: ${url}`);
@@ -516,6 +527,12 @@ async function processDownload(
               startTime,
               duration,
             },
+          });
+        } else if (downloadMethod === 'gallery-dl') {
+          fileData = await downloadWithGalleryDl(url, adminUser, maxSize);
+          logOperationStep(operationId, 'download_complete', 'success', {
+            message: 'file downloaded successfully via gallery-dl',
+            metadata: { url, fileCount: Array.isArray(fileData) ? fileData.length : 1 },
           });
         } else if (downloadMethod === 'hentaigifz') {
           fileData = await downloadFromHentaiGifz(url, adminUser);
@@ -1673,6 +1690,7 @@ export async function handleDownloadContextMenuCommand(interaction) {
 
   // Classify the URL: yt-dlp site (youtube/redgifs/imgur/...) or not
   const ytdlpSite = getYtdlpSite(url);
+  const galleryDlSite = getGalleryDlSite(url);
 
   if (ytdlpSite && !YTDLP_ENABLED) {
     logger.warn(`User ${userId} attempted to download from ${ytdlpSite} (yt-dlp disabled)`);
@@ -1688,9 +1706,24 @@ export async function handleDownloadContextMenuCommand(interaction) {
     return;
   }
 
+  if (galleryDlSite && !GALLERY_DL_ENABLED) {
+    const errorMessage = `${galleryDlSite.toLowerCase()} downloads are disabled.`;
+    createFailedOperation('download', userId, username, errorMessage, 'gallery_dl_disabled', {
+      originalUrl: url,
+      commandSource: 'context-menu',
+    });
+    await safeInteractionReply(interaction, {
+      content: errorMessage,
+      flags: MessageFlags.Ephemeral,
+    });
+    return;
+  }
+
   if (ytdlpSite) {
     // yt-dlp sites require yt-dlp (already checked above that it's enabled)
     logger.info(`${ytdlpSite} URL detected, will use yt-dlp for download`);
+  } else if (galleryDlSite) {
+    logger.info(`${galleryDlSite} URL detected, will use gallery-dl for download`);
   } else if (isHentaiGifzUrl(url)) {
     // hentaigifz has its own page-scrape extractor, no Cobalt/social-media check needed
     logger.info(`hentaigifz URL detected, will use page-scrape extractor for download`);
@@ -1823,6 +1856,7 @@ export async function handleDownloadCommand(interaction) {
 
   // Classify the URL: yt-dlp site (youtube/redgifs/imgur/...) or not
   const ytdlpSite = getYtdlpSite(url);
+  const galleryDlSite = getGalleryDlSite(url);
 
   if (ytdlpSite && !YTDLP_ENABLED) {
     logger.warn(`User ${userId} attempted to download from ${ytdlpSite} (yt-dlp disabled)`);
@@ -1838,9 +1872,25 @@ export async function handleDownloadCommand(interaction) {
     return;
   }
 
+  if (galleryDlSite && !GALLERY_DL_ENABLED) {
+    logger.warn(`User ${userId} attempted to download from ${galleryDlSite} (gallery-dl disabled)`);
+    const errorMessage = `${galleryDlSite.toLowerCase()} downloads are disabled.`;
+    createFailedOperation('download', userId, username, errorMessage, 'gallery_dl_disabled', {
+      originalUrl: url,
+      commandSource: 'slash',
+    });
+    await safeInteractionReply(interaction, {
+      content: errorMessage,
+      flags: MessageFlags.Ephemeral,
+    });
+    return;
+  }
+
   if (ytdlpSite) {
     // yt-dlp sites require yt-dlp (already checked above that it's enabled)
     logger.info(`${ytdlpSite} URL detected, will use yt-dlp for download`);
+  } else if (galleryDlSite) {
+    logger.info(`${galleryDlSite} URL detected, will use gallery-dl for download`);
   } else if (isHentaiGifzUrl(url)) {
     // hentaigifz has its own page-scrape extractor, no Cobalt/social-media check needed
     logger.info(`hentaigifz URL detected, will use page-scrape extractor for download`);

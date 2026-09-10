@@ -34,6 +34,10 @@ describe('download-services registry', () => {
     assert.strictEqual(getServiceForUrl('https://hentaigifz.com/slug/')?.id, 'hentaigifz');
     assert.strictEqual(getServiceForUrl('https://danbooru.donmai.us/posts/1')?.id, 'danbooru');
     assert.strictEqual(getServiceForUrl('https://e926.net/posts/1')?.id, 'e621');
+    assert.strictEqual(
+      getServiceForUrl('https://www.pixiv.net/artworks/1')?.id,
+      'gallery-dl-pixiv'
+    );
   });
 
   test('getServiceForUrl returns null for unknown and lookalike hosts', () => {

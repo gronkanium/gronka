@@ -41,7 +41,7 @@ RUN rm -rf node_modules && bun install --frozen-lockfile --production --ignore-s
 FROM oven/bun:1.3-debian AS runtime
 
 # Install runtime dependencies: FFmpeg, gifsicle (GIF optimization), ImageMagick
-# (animated-WebP -> GIF; ffmpeg can't demux animated webp), ca-certificates, and yt-dlp.
+# (animated-WebP -> GIF; ffmpeg can't demux animated webp), ca-certificates, yt-dlp, and gallery-dl.
 # yt-dlp-ejs ships the solver script for YouTube's `n` challenge; without it every YouTube
 # format is skipped and only storyboards remain.
 RUN apt-get update && apt-get install -y \
@@ -51,7 +51,7 @@ RUN apt-get update && apt-get install -y \
     ca-certificates \
     python3 \
     python3-pip \
-    && pip3 install --break-system-packages yt-dlp yt-dlp-ejs \
+    && pip3 install --break-system-packages yt-dlp yt-dlp-ejs gallery-dl \
     && rm -rf /var/lib/apt/lists/*
 
 # Set working directory

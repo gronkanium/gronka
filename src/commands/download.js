@@ -62,6 +62,7 @@ import {
   uploadGifToR2,
   uploadVideoToR2,
   uploadImageToR2,
+  uploadToR2,
   formatR2UrlWithDisclaimer,
   formatMultipleR2UrlsWithDisclaimer,
 } from '../utils/r2-storage.js';
@@ -718,7 +719,30 @@ export async function processDownload(
         throw error;
       }
 
-      if (Array.isArray(fileData)) {
+      if (fileData?.archive) {
+        const archiveHash = generateHash(fileData.buffer);
+        if (fileData.size < DISCORD_SIZE_LIMIT) {
+          await safeInteractionEditReply(interaction, {
+            files: [new AttachmentBuilder(fileData.buffer, { name: fileData.filename })],
+          });
+        } else if (
+          r2Config.accountId &&
+          r2Config.accessKeyId &&
+          r2Config.secretAccessKey &&
+          r2Config.bucketName
+        ) {
+          const key = `archives/${archiveHash}.zip`;
+          const url = await uploadToR2(fileData.buffer, key, fileData.contentType, r2Config);
+          await safeInteractionEditReply(interaction, {
+            content: formatR2UrlWithDisclaimer(url, r2Config, adminUser),
+          });
+        } else {
+          throw new ValidationError('this ZIP is too large to attach to Discord');
+        }
+        updateOperationStatus(operationId, 'success', { fileSize: fileData.size });
+        recordRateLimit(userId);
+        await notifyCommandSuccess(username, 'download', { operationId, userId });
+      } else if (Array.isArray(fileData)) {
         logger.info(`Processing ${fileData.length} media files from picker`);
         const mediaResults = [];
         let totalSize = 0;

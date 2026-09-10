@@ -5,6 +5,7 @@ import { spawn } from 'child_process';
 import { createLogger } from './logger.js';
 import { NetworkError, ValidationError } from './errors.js';
 import { galleryDlSlots } from './concurrency.js';
+import { createZip } from './archive.js';
 
 const logger = createLogger('gallery-dl');
 
@@ -34,6 +35,7 @@ const MEDIA_EXTENSIONS = new Set([
 ]);
 
 const MAX_GALLERY_FILES = 25;
+const MAX_MANGA_IMAGES = 10;
 const MANGA_PAGE_CONCURRENCY = 4;
 
 export function getGalleryDlSite(url) {
@@ -206,9 +208,6 @@ async function downloadMangaPages(urls, isAdminUser, maxSize) {
   if (urls.length === 0) {
     throw new NetworkError('no pages found in this chapter');
   }
-  if (urls.length > MAX_GALLERY_FILES) {
-    throw new ValidationError(`this chapter has more than ${MAX_GALLERY_FILES} pages`);
-  }
   const results = new Array(urls.length);
   let nextIndex = 0;
   async function worker() {
@@ -224,6 +223,16 @@ async function downloadMangaPages(urls, isAdminUser, maxSize) {
   await Promise.all(
     Array.from({ length: Math.min(MANGA_PAGE_CONCURRENCY, urls.length) }, () => worker())
   );
+  if (results.length > MAX_MANGA_IMAGES) {
+    const buffer = createZip(results);
+    return {
+      archive: true,
+      buffer,
+      contentType: 'application/zip',
+      size: buffer.length,
+      filename: 'manga-pages.zip',
+    };
+  }
   return results;
 }
 

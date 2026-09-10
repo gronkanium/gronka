@@ -35,9 +35,9 @@ the same three actions are also available by right-clicking a message → apps: 
 
 MangaDex and nhentai are the currently allowlisted manga/gallery sources. A MangaDex title or chapter URL, or an nhentai gallery URL, opens an ephemeral
 chapter, language, and source picker, followed by a Discord input box for the page range. The bot
-limits each selection to 25 pages before downloading, then fetches those pages through the guarded
-downloader with four concurrent workers. Chapter URLs can also be passed directly to `/download`
-and use the same page-range picker.
+downloads up to 10 selected pages as individual attachments. Larger selections are bundled into a
+ZIP before delivery. Pages are fetched through the guarded downloader with four concurrent workers.
+Chapter URLs can also be passed directly to `/download` and use the same page-range picker.
 Other manga domains require a working gallery-dl extractor and a source-specific smoke test before
 they are allowlisted. `mangapark.cc` is currently excluded because gallery-dl 1.32.11 reports it as
 an unsupported URL.

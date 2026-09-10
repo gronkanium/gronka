@@ -87,7 +87,7 @@ export async function beginMangaSelection(interaction, url) {
       new EmbedBuilder()
         .setTitle(manga.title)
         .setDescription(
-          `Choose a chapter to download. The next step lets you choose the page range.${suffix}`
+          `Choose a chapter to download. Up to 10 pages are sent as images; larger selections are sent as a ZIP. The next step lets you choose the page range.${suffix}`
         ),
     ],
     components: [new ActionRowBuilder().addComponents(menu)],
@@ -121,8 +121,8 @@ export async function handleMangaInteraction(interaction, processDownload) {
       .setTitle('Choose manga pages');
     const pageRange = new TextInputBuilder()
       .setCustomId('page_range')
-      .setLabel(`Page range (${chapter.urls.length} pages available)`)
-      .setPlaceholder('1-25, or 1 for a single page')
+      .setLabel(`Page range (${chapter.urls.length} available; 11+ becomes ZIP)`)
+      .setPlaceholder('1-10 sends images; 1-11 or more sends a ZIP')
       .setStyle(TextInputStyle.Short)
       .setRequired(true)
       .setMaxLength(20);
@@ -152,13 +152,6 @@ export async function handleMangaInteraction(interaction, processDownload) {
     ) {
       await interaction.reply({
         content: `enter a valid page range from 1 to ${chapter.urls.length}.`,
-        flags: MessageFlags.Ephemeral,
-      });
-      return true;
-    }
-    if (end - start + 1 > 25) {
-      await interaction.reply({
-        content: 'choose at most 25 pages at a time.',
         flags: MessageFlags.Ephemeral,
       });
       return true;

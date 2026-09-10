@@ -5,6 +5,28 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres (attempts) to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.32.0](https://github.com/thedorekaczynski/gronka/compare/v0.31.0...v0.32.0) (2026-09-10)
+
+
+### Features
+
+* **download:** accept direct media links and more embed-fixer mirrors ([f62f019](https://github.com/thedorekaczynski/gronka/commit/f62f01925cf74ff50c3ee1c54beecd5828c0411f))
+* **download:** add gallery-dl gallery support ([ba6279f](https://github.com/thedorekaczynski/gronka/commit/ba6279fa4bfa5cbf3dc2f3de5ff4871281172828))
+* **download:** add interactive manga downloads ([507c970](https://github.com/thedorekaczynski/gronka/commit/507c970897dc804b5ba6ab41cf2dce4c4f7cf873))
+* **download:** add nhentai gallery flow ([92c4de3](https://github.com/thedorekaczynski/gronka/commit/92c4de36fd10475688a93fbb46a0fb08e82db99b))
+* **download:** bundle large manga selections ([34e49da](https://github.com/thedorekaczynski/gronka/commit/34e49dac0d234f419bdb4f8d67f121920cd48a71))
+
+
+### Bug Fixes
+
+* **booru:** derive e621 media URL from md5 when the API omits it ([5a37141](https://github.com/thedorekaczynski/gronka/commit/5a37141bd755f689a794ce9e6b44fd67993e18d4))
+* **download:** bypass cache for manga selections ([8ddc5e2](https://github.com/thedorekaczynski/gronka/commit/8ddc5e289faa90beb1dc0232c4d3b2a3d1e7d514))
+* **download:** expire R2 manga archives ([671a9a1](https://github.com/thedorekaczynski/gronka/commit/671a9a197f55a871758ec399a99a5506d063b896))
+* **download:** handle Instagram share links correctly ([d975935](https://github.com/thedorekaczynski/gronka/commit/d97593545064ea8bfa161a4e6b9d6c2201c9a1bc))
+* **download:** preserve nhentai source URLs ([0c43482](https://github.com/thedorekaczynski/gronka/commit/0c43482f9c84a3fe9180441dc7b939ef7b1759a6))
+* **download:** stop archive fallthrough ([b94835b](https://github.com/thedorekaczynski/gronka/commit/b94835b03e62818011ad2e990a9ec75446a85543))
+* **security:** resolve CodeQL findings ([367714b](https://github.com/thedorekaczynski/gronka/commit/367714b7aa17f6a76d5dcee13ba3c00866c46ac0))
+
 ## [0.31.0](https://github.com/thedorekaczynski/gronka/compare/v0.30.0...v0.31.0) (2026-08-28)
 
 

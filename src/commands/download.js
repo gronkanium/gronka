@@ -17,7 +17,13 @@ import {
   downloadWithYtdlp,
   YtdlpRateLimitError,
 } from '../utils/ytdlp.js';
-import { getGalleryDlSite, downloadWithGalleryDl } from '../utils/gallery-dl.js';
+import {
+  getGalleryDlSite,
+  downloadWithGalleryDl,
+  isMangaDexTitleUrl,
+  isMangaDexChapterUrl,
+} from '../utils/gallery-dl.js';
+import { beginMangaSelection } from './manga.js';
 import { isHentaiGifzUrl, downloadFromHentaiGifz } from '../utils/hentaigifz.js';
 import { isBooruUrl, downloadFromBooru } from '../utils/booru.js';
 import { isPinterestUrl, downloadFromPinterest } from '../utils/pinterest.js';
@@ -225,12 +231,13 @@ async function cleanupTempFiles(tmpDir, files = []) {
  * @param {number|null} [startTime] - Start time in seconds for video trimming (optional)
  * @param {number|null} [duration] - Duration in seconds for video trimming (optional)
  */
-async function processDownload(
+export async function processDownload(
   interaction,
   url,
   commandSource = null,
   startTime = null,
-  duration = null
+  duration = null,
+  galleryOptions = {}
 ) {
   await runMediaCommand(
     'download',
@@ -529,7 +536,7 @@ async function processDownload(
             },
           });
         } else if (downloadMethod === 'gallery-dl') {
-          fileData = await downloadWithGalleryDl(url, adminUser, maxSize);
+          fileData = await downloadWithGalleryDl(url, adminUser, maxSize, galleryOptions);
           logOperationStep(operationId, 'download_complete', 'success', {
             message: 'file downloaded successfully via gallery-dl',
             metadata: { url, fileCount: Array.isArray(fileData) ? fileData.length : 1 },
@@ -1836,6 +1843,24 @@ export async function handleDownloadCommand(interaction) {
       flags: MessageFlags.Ephemeral,
     });
     await notifyCommandFailure(username, 'download', { userId, error: errorMessage });
+    return;
+  }
+
+  if ((isMangaDexTitleUrl(url) || isMangaDexChapterUrl(url)) && GALLERY_DL_ENABLED) {
+    try {
+      await beginMangaSelection(interaction, url);
+    } catch (error) {
+      logger.warn(`Manga selection failed: ${error.message}`);
+      const reply = interaction.deferred
+        ? safeInteractionEditReply(interaction, {
+            content: 'could not inspect that manga. please try again later.',
+          })
+        : safeInteractionReply(interaction, {
+            content: 'could not inspect that manga. please try again later.',
+            flags: MessageFlags.Ephemeral,
+          });
+      await reply;
+    }
     return;
   }
 

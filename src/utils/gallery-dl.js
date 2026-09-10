@@ -33,6 +33,7 @@ const MEDIA_EXTENSIONS = new Set([
 ]);
 
 const MAX_GALLERY_FILES = 25;
+const MANGA_PAGE_CONCURRENCY = 4;
 
 export function getGalleryDlSite(url) {
   try {
@@ -106,8 +107,123 @@ async function findMediaFiles(directory) {
   return files;
 }
 
-export async function downloadWithGalleryDl(url, isAdminUser = false, maxSize = Infinity) {
+export function isMangaDexTitleUrl(url) {
+  try {
+    const parsed = new URL(url);
+    return (
+      parsed.hostname.toLowerCase().replace(/^www\./, '') === 'mangadex.org' &&
+      /^\/title\/[0-9a-f-]+(?:\/[^/?#]+)?\/?$/i.test(parsed.pathname)
+    );
+  } catch {
+    return false;
+  }
+}
+
+export function isMangaDexChapterUrl(url) {
+  try {
+    const parsed = new URL(url);
+    return (
+      parsed.hostname.toLowerCase().replace(/^www\./, '') === 'mangadex.org' &&
+      /^\/chapter\/[0-9a-f-]+\/?$/i.test(parsed.pathname)
+    );
+  } catch {
+    return false;
+  }
+}
+
+function runGalleryDlJson(url, timeout = 300000) {
+  return new Promise((resolve, reject) => {
+    const child = spawn(
+      'gallery-dl',
+      ['--config-ignore', '--no-input', '--quiet', '--resolve-json', '--dump-json', url],
+      { stdio: ['ignore', 'pipe', 'pipe'] }
+    );
+    let stdout = '';
+    let stderr = '';
+    const timeoutId = setTimeout(() => {
+      child.kill('SIGTERM');
+      reject(new NetworkError('gallery discovery timed out'));
+    }, timeout);
+    child.stdout.on('data', chunk => {
+      stdout += chunk;
+    });
+    child.stderr.on('data', chunk => {
+      stderr += chunk;
+    });
+    child.on('error', error => {
+      clearTimeout(timeoutId);
+      reject(new NetworkError(`gallery discovery failed: ${error.message}`));
+    });
+    child.on('close', code => {
+      clearTimeout(timeoutId);
+      if (code !== 0) {
+        logger.warn(`gallery-dl discovery exited with code ${code}: ${stderr.slice(0, 300)}`);
+        reject(new NetworkError('could not inspect this manga'));
+        return;
+      }
+      try {
+        resolve(JSON.parse(stdout));
+      } catch {
+        reject(new NetworkError('gallery-dl returned invalid manga data'));
+      }
+    });
+  });
+}
+
+export async function discoverMangaDexTitle(url) {
+  const messages = await runGalleryDlJson(url);
+  const chapters = [];
+  let current = null;
+  for (const message of messages) {
+    if (message[0] === 2) {
+      current = { metadata: message[1], urls: [] };
+      chapters.push(current);
+    } else if (message[0] === 3 && current) {
+      current.urls.push(message[1]);
+    }
+  }
+  return {
+    title: chapters[0]?.metadata?.manga || 'MangaDex title',
+    chapters: chapters.filter(chapter => chapter.urls.length > 0),
+  };
+}
+
+async function downloadMangaPages(urls, isAdminUser, maxSize) {
+  const { downloadFileFromUrl } = await import('./file-downloader.js');
+  if (urls.length === 0) {
+    throw new NetworkError('no pages found in this chapter');
+  }
+  if (urls.length > MAX_GALLERY_FILES) {
+    throw new ValidationError(`this chapter has more than ${MAX_GALLERY_FILES} pages`);
+  }
+  const results = new Array(urls.length);
+  let nextIndex = 0;
+  async function worker() {
+    while (nextIndex < urls.length) {
+      const index = nextIndex++;
+      const fileData = await downloadFileFromUrl(urls[index], isAdminUser);
+      if (!isAdminUser && fileData.size > maxSize) {
+        throw new ValidationError('a manga page is too large to download');
+      }
+      results[index] = fileData;
+    }
+  }
+  await Promise.all(
+    Array.from({ length: Math.min(MANGA_PAGE_CONCURRENCY, urls.length) }, () => worker())
+  );
+  return results;
+}
+
+export async function downloadWithGalleryDl(
+  url,
+  isAdminUser = false,
+  maxSize = Infinity,
+  options = {}
+) {
   return galleryDlSlots.run(async () => {
+    if (options.mediaUrls) {
+      return downloadMangaPages(options.mediaUrls, isAdminUser, maxSize);
+    }
     const tempDir = tmp.dirSync({ unsafeCleanup: true });
     try {
       await runGalleryDl(url, tempDir.name);

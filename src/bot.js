@@ -6,11 +6,16 @@ import { createLogger } from './utils/logger.js';
 import { botConfig, serverConfig } from './utils/config.js';
 import { ConfigurationError } from './utils/errors.js';
 import { trackUser, initializeUserTracking } from './utils/user-tracking.js';
-import { handleDownloadCommand, handleDownloadContextMenuCommand } from './commands/download.js';
+import {
+  handleDownloadCommand,
+  handleDownloadContextMenuCommand,
+  processDownload,
+} from './commands/download.js';
 import { handleOptimizeCommand, handleOptimizeContextMenuCommand } from './commands/optimize.js';
 import { handleConvertCommand, handleConvertContextMenu } from './commands/convert.js';
 import { handleInfoCommand } from './commands/info.js';
 import { handleModalSubmit } from './handlers/modals.js';
+import { handleMangaInteraction } from './commands/manga.js';
 import { handlePrefixMessage } from './handlers/prefix-commands.js';
 import { cleanupStuckOperations } from './utils/operations-tracker.js';
 import { initializeR2UsageCache, formatFileSize } from './utils/storage.js';
@@ -345,8 +350,13 @@ client.on(Events.InteractionCreate, async interaction => {
       return;
     }
 
-    if (interaction.isModalSubmit()) {
-      await handleModalSubmit(interaction, modalAttachmentCache);
+    if (interaction.isMessageComponent() || interaction.isModalSubmit()) {
+      if (await handleMangaInteraction(interaction, processDownload)) {
+        return;
+      }
+      if (interaction.isModalSubmit()) {
+        await handleModalSubmit(interaction, modalAttachmentCache);
+      }
     } else if (interaction.isMessageContextMenuCommand()) {
       if (interaction.commandName === 'download') {
         await handleDownloadContextMenuCommand(interaction);

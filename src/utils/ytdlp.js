@@ -106,6 +106,14 @@ export function isRedGifsUrl(url) {
   }
 }
 
+function siteLabel(url) {
+  try {
+    return new URL(url).hostname.toLowerCase().replace(/^www\./, '');
+  } catch {
+    return 'this site';
+  }
+}
+
 // /p/ permalinks carry photos as often as video; /reel/ and /tv/ are always video.
 function isInstagramPostUrl(url) {
   try {
@@ -113,7 +121,7 @@ function isInstagramPostUrl(url) {
     const hostname = urlObj.hostname.toLowerCase().replace(/^www\./, '');
     return (
       (hostname === 'instagram.com' || hostname.endsWith('.instagram.com')) &&
-      /^\/p\//.test(urlObj.pathname)
+      /^(?:\/[^/]+)?\/p\//.test(urlObj.pathname)
     );
   } catch {
     return false;
@@ -417,7 +425,12 @@ function executeYtdlp(
         logger.error(`yt-dlp failed with code ${code}: ${errorOutput}`);
 
         if (errorOutput.includes('HTTP Error 429') || errorOutput.includes('Too Many Requests')) {
-          reject(new YtdlpRateLimitError('YouTube rate limit exceeded', 5 * 60 * 1000));
+          reject(
+            new YtdlpRateLimitError(
+              `${siteLabel(url)} is rate limiting downloads right now, try again in a few minutes.`,
+              5 * 60 * 1000
+            )
+          );
         } else if (
           errorOutput.includes('Video unavailable') ||
           errorOutput.includes('Private video')

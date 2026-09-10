@@ -22,7 +22,8 @@ const APP_ID = '936619743392459'; // the public web-client id instagram.com send
 const API_TIMEOUT_MS = 20000;
 const MEDIA_HOSTS = ['cdninstagram.com', 'fbcdn.net'];
 
-const POST_PATH = /^\/(?:p|reel|reels|tv)\/([A-Za-z0-9_-]+)/;
+// The share sheet emits /<username>/p/<code> as often as the bare /p/<code>.
+const POST_PATH = /^(?:\/[^/]+)?\/(?:p|reel|reels|tv)\/([A-Za-z0-9_-]+)/;
 
 // Shortcodes are the media id written in this base64 alphabet, so the id is recoverable
 // locally — no extra lookup request just to turn a permalink into an api id.

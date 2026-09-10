@@ -18,6 +18,14 @@ describe('instagram utilities', () => {
     assert.strictEqual(isInstagramPostUrl('https://instagram.com/reel/DbfuznPzy5r/'), true);
     assert.strictEqual(isInstagramPostUrl('https://www.instagram.com/reels/DbfuznPzy5r/'), true);
     assert.strictEqual(isInstagramPostUrl('https://www.instagram.com/tv/CPESdZpl7MD/'), true);
+    assert.strictEqual(
+      isInstagramPostUrl('https://www.instagram.com/flores.mendoza/p/DR5Uvptjq5T/'),
+      true
+    );
+    assert.strictEqual(
+      isInstagramPostUrl('https://www.instagram.com/someuser/reel/DbfuznPzy5r/'),
+      true
+    );
     // the share sheet's igsh / img_index querystrings must not defeat the match
     assert.strictEqual(
       isInstagramPostUrl('https://www.instagram.com/p/DbOHz1IEw4g/?img_index=1&igsh=MWJ1'),

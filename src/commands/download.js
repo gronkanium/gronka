@@ -758,6 +758,7 @@ export async function processDownload(
         updateOperationStatus(operationId, 'success', { fileSize: fileData.size });
         recordRateLimit(userId);
         await notifyCommandSuccess(username, 'download', { operationId, userId });
+        return;
       } else if (Array.isArray(fileData)) {
         logger.info(`Processing ${fileData.length} media files from picker`);
         const mediaResults = [];

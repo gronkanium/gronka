@@ -66,6 +66,7 @@ export async function beginMangaSelection(interaction, url) {
   sessions.set(sessionToken, {
     createdAt: Date.now(),
     userId: interaction.user.id,
+    sourceUrl: url,
     title: manga.title,
     chapters: manga.chapters,
   });
@@ -158,14 +159,12 @@ export async function handleMangaInteraction(interaction, processDownload) {
     }
     sessions.delete(sessionToken);
     await safeInteractionDeferReply(interaction, { flags: MessageFlags.Ephemeral });
-    await processDownload(
-      interaction,
-      `https://mangadex.org/chapter/${chapter.metadata.chapter_id}`,
-      'slash',
-      null,
-      null,
-      { mediaUrls: chapter.urls.slice(start - 1, end) }
-    );
+    const downloadUrl = chapter.metadata.chapter_id
+      ? `https://mangadex.org/chapter/${chapter.metadata.chapter_id}`
+      : session.sourceUrl;
+    await processDownload(interaction, downloadUrl, 'slash', null, null, {
+      mediaUrls: chapter.urls.slice(start - 1, end),
+    });
     return true;
   }
   return false;

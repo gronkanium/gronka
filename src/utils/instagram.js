@@ -72,9 +72,6 @@ function readSessionCookie() {
     return null;
   }
   try {
-    if (!fsSync.statSync(cookiesPath).isFile()) {
-      return null;
-    }
     const entry = JSON.parse(fsSync.readFileSync(cookiesPath, 'utf8'))?.instagram?.[0];
     return typeof entry === 'string' && entry.includes('sessionid=') ? entry : null;
   } catch (error) {

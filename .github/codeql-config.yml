@@ -16,3 +16,7 @@ queries:
   - exclude:
       id: js/http-to-file-access
       reason: 'False positive - network data is validated via validateVideoBuffer()/validateGifBuffer() before writing to filesystem in convert.js and optimize.js'
+
+  - exclude:
+      id: js/file-access-to-http
+      reason: 'False positive - Instagram session cookies are intentionally read from the owner-provided cookies.json and sent only to Instagram API requests'

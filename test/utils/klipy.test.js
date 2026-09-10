@@ -41,4 +41,13 @@ describe('klipy utilities', () => {
       null
     );
   });
+
+  test('does not double-unescape encoded HTML entities', () => {
+    const html =
+      '<meta property="og:video:url" content="https://media.klipy.com/gifs/cat.mp4?label=&amp;quot;cat&amp;quot;">';
+    assert.strictEqual(
+      extractMediaUrl(html),
+      'https://media.klipy.com/gifs/cat.mp4?label=&quot;cat&quot;'
+    );
+  });
 });

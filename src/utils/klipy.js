@@ -23,10 +23,10 @@ export function isKlipyUrl(url) {
 
 function decodeHtml(value) {
   return value
-    .replaceAll('&amp;', '&')
     .replaceAll('&quot;', '"')
     .replaceAll('&#x27;', "'")
-    .replaceAll('&#39;', "'");
+    .replaceAll('&#39;', "'")
+    .replaceAll('&amp;', '&');
 }
 
 function isKlipyMediaUrl(url) {

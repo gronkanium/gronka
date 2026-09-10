@@ -31,7 +31,7 @@ function token() {
 
 function chapterLabel(chapter) {
   const metadata = chapter.metadata;
-  const number = metadata.chapter ?? '?';
+  const number = metadata.chapter ?? (metadata.gallery_id ? 'Gallery' : '?');
   const minor = metadata.chapter_minor || '';
   const language = (metadata.lang || 'unknown').toUpperCase();
   const group = metadata.group?.join(', ') || metadata.user?.join(', ') || 'uncredited';

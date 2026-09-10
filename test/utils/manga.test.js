@@ -1,6 +1,10 @@
 import assert from 'node:assert/strict';
 import { describe, test } from 'bun:test';
-import { isMangaDexChapterUrl, isMangaDexTitleUrl } from '../../src/utils/gallery-dl.js';
+import {
+  isMangaDexChapterUrl,
+  isMangaDexTitleUrl,
+  isNhentaiGalleryUrl,
+} from '../../src/utils/gallery-dl.js';
 
 describe('manga URL detection', () => {
   test('recognizes MangaDex title URLs', () => {
@@ -31,5 +35,11 @@ describe('manga URL detection', () => {
       true
     );
     assert.equal(isMangaDexChapterUrl('https://mangadex.org/title/not-a-uuid'), false);
+  });
+
+  test('recognizes nhentai gallery URLs', () => {
+    assert.equal(isNhentaiGalleryUrl('https://nhentai.net/g/1/'), true);
+    assert.equal(isNhentaiGalleryUrl('https://nhentai.net/g/1/extra'), false);
+    assert.equal(isNhentaiGalleryUrl('https://nhentai.net.evil.example/g/1/'), false);
   });
 });

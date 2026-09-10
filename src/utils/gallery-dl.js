@@ -15,6 +15,7 @@ export const GALLERY_DL_SITES = [
   { name: 'Flickr', hosts: ['flickr.com'] },
   { name: 'Wallhaven', hosts: ['wallhaven.cc'] },
   { name: 'MangaDex', hosts: ['mangadex.org'] },
+  { name: 'nhentai', hosts: ['nhentai.net'] },
   { name: 'Rule34', hosts: ['rule34.xxx'] },
 ];
 
@@ -125,6 +126,18 @@ export function isMangaDexChapterUrl(url) {
     return (
       parsed.hostname.toLowerCase().replace(/^www\./, '') === 'mangadex.org' &&
       /^\/chapter\/[0-9a-f-]+\/?$/i.test(parsed.pathname)
+    );
+  } catch {
+    return false;
+  }
+}
+
+export function isNhentaiGalleryUrl(url) {
+  try {
+    const parsed = new URL(url);
+    return (
+      parsed.hostname.toLowerCase().replace(/^www\./, '') === 'nhentai.net' &&
+      /^\/g\/\d+\/?$/i.test(parsed.pathname)
     );
   } catch {
     return false;

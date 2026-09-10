@@ -24,7 +24,7 @@ the same three actions are also available by right-clicking a message → apps: 
 
 - **cobalt** handles most social platforms: twitter/x, tiktok, instagram, youtube, reddit, facebook, twitch clips, soundcloud, tumblr, streamable, dailymotion, snapchat
 - **yt-dlp** handles youtube, redgifs, imgur, kick, coub, rumble, newgrounds, niconico, bilibili, and the adult tube sites (pornhub, xvideos, xhamster, redtube); it is also the fallback for x/twitter and tiktok
-- **gallery-dl** handles image galleries from Pixiv, DeviantArt, ArtStation, Flickr, Wallhaven, MangaDex, and Rule34. MangaDex title links open an ephemeral chapter/source picker before downloading selected pages.
+- **gallery-dl** handles image galleries from Pixiv, DeviantArt, ArtStation, Flickr, Wallhaven, MangaDex, nhentai, and Rule34. MangaDex and nhentai links open an ephemeral picker before downloading selected pages.
 - **pinterest** — a dedicated extractor for pins and `pin.it` share links (neither cobalt nor yt-dlp can read pinterest); grabs the pin's video, or its full-size image
 - **Klipy** — a dedicated page-metadata extractor for Klipy GIF and sticker pages; downloads the page's video or image directly
 - **booru boards** — danbooru, e621/e926, yande.re, and konachan posts via their JSON APIs
@@ -33,7 +33,7 @@ the same three actions are also available by right-clicking a message → apps: 
 
 ### manga downloads
 
-MangaDex is the currently allowlisted manga source. A MangaDex title or chapter URL opens an ephemeral
+MangaDex and nhentai are the currently allowlisted manga/gallery sources. A MangaDex title or chapter URL, or an nhentai gallery URL, opens an ephemeral
 chapter, language, and source picker, followed by a Discord input box for the page range. The bot
 limits each selection to 25 pages before downloading, then fetches those pages through the guarded
 downloader with four concurrent workers. Chapter URLs can also be passed directly to `/download`

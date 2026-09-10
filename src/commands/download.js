@@ -22,6 +22,7 @@ import {
   downloadWithGalleryDl,
   isMangaDexTitleUrl,
   isMangaDexChapterUrl,
+  isNhentaiGalleryUrl,
 } from '../utils/gallery-dl.js';
 import { beginMangaSelection } from './manga.js';
 import { isHentaiGifzUrl, downloadFromHentaiGifz } from '../utils/hentaigifz.js';
@@ -1846,7 +1847,10 @@ export async function handleDownloadCommand(interaction) {
     return;
   }
 
-  if ((isMangaDexTitleUrl(url) || isMangaDexChapterUrl(url)) && GALLERY_DL_ENABLED) {
+  if (
+    (isMangaDexTitleUrl(url) || isMangaDexChapterUrl(url) || isNhentaiGalleryUrl(url)) &&
+    GALLERY_DL_ENABLED
+  ) {
     try {
       await beginMangaSelection(interaction, url);
     } catch (error) {

@@ -62,7 +62,7 @@ import {
   uploadGifToR2,
   uploadVideoToR2,
   uploadImageToR2,
-  uploadToR2,
+  uploadArchiveToR2,
   formatR2UrlWithDisclaimer,
   formatMultipleR2UrlsWithDisclaimer,
 } from '../utils/r2-storage.js';
@@ -731,10 +731,26 @@ export async function processDownload(
           r2Config.secretAccessKey &&
           r2Config.bucketName
         ) {
-          const key = `archives/${archiveHash}.zip`;
-          const url = await uploadToR2(fileData.buffer, key, fileData.contentType, r2Config);
+          const url = await uploadArchiveToR2(
+            fileData.buffer,
+            archiveHash,
+            r2Config,
+            buildMetadata()
+          );
+          const archiveUrlHash = hashUrl(`${url}#archive:${archiveHash}`);
+          await recordProcessedUrl({
+            urlHash: archiveUrlHash,
+            contentHash: archiveHash,
+            fileType: 'archive',
+            fileExtension: '.zip',
+            fileUrl: url,
+            userId,
+            fileSize: fileData.size,
+          });
+          await trackR2UploadIfApplicable(archiveUrlHash, url, adminUser);
+          const deliveredTtlHours = await resolveTtlHoursForSize(fileData.size);
           await safeInteractionEditReply(interaction, {
-            content: formatR2UrlWithDisclaimer(url, r2Config, adminUser),
+            content: formatR2UrlWithDisclaimer(url, r2Config, adminUser, deliveredTtlHours),
           });
         } else {
           throw new ValidationError('this ZIP is too large to attach to Discord');

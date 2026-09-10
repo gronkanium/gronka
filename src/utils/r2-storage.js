@@ -200,9 +200,16 @@ export function getR2KeyFromHash(hash, fileType, extension) {
     return `videos/${safeHash}${ext}`;
   } else if (fileType === 'image') {
     return `images/${safeHash}${ext}`;
+  } else if (fileType === 'archive') {
+    return `archives/${safeHash}.zip`;
   } else {
     throw new Error(`Unknown file type: ${fileType}`);
   }
+}
+
+export async function uploadArchiveToR2(buffer, hash, config, metadata = {}) {
+  const key = getR2KeyFromHash(hash, 'archive', '.zip');
+  return await uploadToR2(buffer, key, 'application/zip', config, metadata);
 }
 
 /**

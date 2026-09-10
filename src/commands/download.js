@@ -266,7 +266,7 @@ export async function processDownload(
       // Skip URL cache if time parameters are provided (trimmed videos are different from untrimmed)
       // Also skip cache if cached result is not a video (e.g., if it was converted to GIF)
       const urlHash = hashUrl(url);
-      if (startTime === null && duration === null) {
+      if (!galleryOptions.mediaUrls && startTime === null && duration === null) {
         const processedUrl = await getProcessedUrl(urlHash);
         if (processedUrl) {
           // Only use cached URL if it's a video (download command expects video, not GIF/image)

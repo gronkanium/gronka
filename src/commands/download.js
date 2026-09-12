@@ -81,6 +81,7 @@ import {
   safeInteractionDeferReply,
 } from '../utils/interaction-helpers.js';
 import tmp from 'tmp';
+import { fitsDiscordAttachment, getDiscordAttachmentLimit } from './shared/attachment-limit.js';
 
 const logger = createLogger('download');
 
@@ -108,11 +109,6 @@ function isTikTokUrl(url) {
   } catch {
     return false;
   }
-}
-
-function getDiscordAttachmentLimit(interaction) {
-  const limit = Number(interaction.attachmentSizeLimit);
-  return Number.isFinite(limit) && limit > 0 ? limit : DISCORD_SIZE_LIMIT;
 }
 
 // Human-readable label for a Cobalt-primary host, used when a Cobalt download fails and we
@@ -338,7 +334,7 @@ export async function processDownload(
       });
 
       const maxSize = adminUser ? Infinity : await getMaxVideoSize();
-      const discordAttachmentLimit = getDiscordAttachmentLimit(interaction);
+      const discordAttachmentLimit = getDiscordAttachmentLimit(interaction, DISCORD_SIZE_LIMIT);
       const ytdlpSite = getYtdlpSite(url);
       const galleryDlSite = getGalleryDlSite(url);
       const isHentaiGifz = isHentaiGifzUrl(url);
@@ -427,7 +423,7 @@ export async function processDownload(
                         return false;
                       }
                       const size = await getRemoteContentLength(urls[0].url);
-                      return size !== null && size > DISCORD_SIZE_LIMIT;
+                      return size !== null && !fitsDiscordAttachment(size, discordAttachmentLimit);
                     },
             });
             if (replied) {
@@ -727,7 +723,7 @@ export async function processDownload(
 
       if (fileData?.archive) {
         const archiveHash = generateHash(fileData.buffer);
-        if (fileData.size < discordAttachmentLimit) {
+        if (fitsDiscordAttachment(fileData.size, discordAttachmentLimit)) {
           await safeInteractionEditReply(interaction, {
             files: [new AttachmentBuilder(fileData.buffer, { name: fileData.filename })],
           });
@@ -777,7 +773,9 @@ export async function processDownload(
         }
 
         // Discord applies the limit to each attachment, not the whole request.
-        const shouldUploadToDiscord = fileData.map(media => media.size < discordAttachmentLimit);
+        const shouldUploadToDiscord = fileData.map(media =>
+          fitsDiscordAttachment(media.size, discordAttachmentLimit)
+        );
         const discordSize = fileData
           .filter((_, index) => shouldUploadToDiscord[index])
           .reduce((size, media) => size + media.size, 0);
@@ -1540,8 +1538,8 @@ export async function processDownload(
         // which is tiered by size - so compute it from the same size here for the R2 replies.
         const deliveredTtlHours = await resolveTtlHoursForSize(finalSize);
 
-        // Send as Discord attachment if < 8MB, otherwise send URL
-        if (finalUploadMethod === 'discord') {
+        // Send as a Discord attachment when it fits the current interaction limit.
+        if (fitsDiscordAttachment(finalSize, discordAttachmentLimit)) {
           const safeHash = hash.replace(/[^a-f0-9]/gi, '');
           const filename = `${safeHash}${dbExt}`;
           try {

@@ -776,32 +776,14 @@ export async function processDownload(
           totalSize += media.size;
         }
 
-        // Determine which files should go to Discord vs R2 (greedy packing)
-        const shouldUploadToDiscord = [];
-        if (totalSize < discordAttachmentLimit) {
-          logger.info(
-            `Total size: ${(totalSize / (1024 * 1024)).toFixed(2)}MB, sending all files as Discord attachments`
-          );
-          for (let i = 0; i < fileData.length; i++) {
-            shouldUploadToDiscord[i] = true;
-          }
-        } else {
-          // Greedily pack files up to Discord's per-interaction limit, rest go to R2
-          let accumulatedSize = 0;
-          let discordCount = 0;
-          for (let i = 0; i < fileData.length; i++) {
-            if (accumulatedSize + fileData[i].size < discordAttachmentLimit) {
-              shouldUploadToDiscord[i] = true;
-              accumulatedSize += fileData[i].size;
-              discordCount++;
-            } else {
-              shouldUploadToDiscord[i] = false;
-            }
-          }
-          logger.info(
-            `Total size: ${(totalSize / (1024 * 1024)).toFixed(2)}MB, packing ${discordCount} file(s) for Discord (${(accumulatedSize / (1024 * 1024)).toFixed(2)}MB), ${fileData.length - discordCount} file(s) for R2`
-          );
-        }
+        // Discord applies the limit to each attachment, not the whole request.
+        const shouldUploadToDiscord = fileData.map(media => media.size < discordAttachmentLimit);
+        const discordSize = fileData
+          .filter((_, index) => shouldUploadToDiscord[index])
+          .reduce((size, media) => size + media.size, 0);
+        logger.info(
+          `Total size: ${(totalSize / (1024 * 1024)).toFixed(2)}MB, sending ${shouldUploadToDiscord.filter(Boolean).length} file(s) to Discord (${(discordSize / (1024 * 1024)).toFixed(2)}MB) and ${fileData.length - shouldUploadToDiscord.filter(Boolean).length} file(s) to R2`
+        );
 
         // Second pass: save all files
         for (let i = 0; i < fileData.length; i++) {

@@ -110,6 +110,11 @@ function isTikTokUrl(url) {
   }
 }
 
+function getDiscordAttachmentLimit(interaction) {
+  const limit = Number(interaction.attachmentSizeLimit);
+  return Number.isFinite(limit) && limit > 0 ? limit : DISCORD_SIZE_LIMIT;
+}
+
 // Human-readable label for a Cobalt-primary host, used when a Cobalt download fails and we
 // retry via yt-dlp. Cobalt's per-service extractors are flaky/auth-gated (Instagram, Reddit,
 // etc.); yt-dlp handles many of the same hosts (and, with a cookies file, private/gated
@@ -333,6 +338,7 @@ export async function processDownload(
       });
 
       const maxSize = adminUser ? Infinity : await getMaxVideoSize();
+      const discordAttachmentLimit = getDiscordAttachmentLimit(interaction);
       const ytdlpSite = getYtdlpSite(url);
       const galleryDlSite = getGalleryDlSite(url);
       const isHentaiGifz = isHentaiGifzUrl(url);
@@ -721,7 +727,7 @@ export async function processDownload(
 
       if (fileData?.archive) {
         const archiveHash = generateHash(fileData.buffer);
-        if (fileData.size < DISCORD_SIZE_LIMIT) {
+        if (fileData.size < discordAttachmentLimit) {
           await safeInteractionEditReply(interaction, {
             files: [new AttachmentBuilder(fileData.buffer, { name: fileData.filename })],
           });
@@ -772,7 +778,7 @@ export async function processDownload(
 
         // Determine which files should go to Discord vs R2 (greedy packing)
         const shouldUploadToDiscord = [];
-        if (totalSize < DISCORD_SIZE_LIMIT) {
+        if (totalSize < discordAttachmentLimit) {
           logger.info(
             `Total size: ${(totalSize / (1024 * 1024)).toFixed(2)}MB, sending all files as Discord attachments`
           );
@@ -780,11 +786,11 @@ export async function processDownload(
             shouldUploadToDiscord[i] = true;
           }
         } else {
-          // Greedily pack files up to 8MB for Discord, rest go to R2
+          // Greedily pack files up to Discord's per-interaction limit, rest go to R2
           let accumulatedSize = 0;
           let discordCount = 0;
           for (let i = 0; i < fileData.length; i++) {
-            if (accumulatedSize + fileData[i].size < DISCORD_SIZE_LIMIT) {
+            if (accumulatedSize + fileData[i].size < discordAttachmentLimit) {
               shouldUploadToDiscord[i] = true;
               accumulatedSize += fileData[i].size;
               discordCount++;

@@ -3,11 +3,19 @@ import assert from 'node:assert';
 import {
   canonicalizeMirrorUrl,
   isSocialMediaUrl,
+  normalizeFilenameForContentType,
   normalizeSocialMediaUrlForCobalt,
 } from '../../src/utils/cobalt.js';
 import { isInstagramPostUrl } from '../../src/utils/instagram.js';
 
 describe('cobalt utilities', () => {
+  test('normalizes a filename when Cobalt labels MP4 bytes as GIF', () => {
+    assert.strictEqual(
+      normalizeFilenameForContentType('twitter_2098435345444696492.gif', 'video/mp4'),
+      'twitter_2098435345444696492.mp4'
+    );
+  });
+
   test('isSocialMediaUrl recognizes x.com URLs', () => {
     assert.strictEqual(isSocialMediaUrl('https://x.com/user/status/1234567890'), true);
   });

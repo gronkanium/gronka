@@ -10,6 +10,29 @@ const logger = createLogger('cobalt');
 // enough not to slow normal carousels down.
 const MAX_CONCURRENT_PICKER_ITEMS = 4;
 
+const CONTENT_TYPE_EXTENSIONS = {
+  'video/mp4': '.mp4',
+  'video/quicktime': '.mov',
+  'video/webm': '.webm',
+  'video/x-msvideo': '.avi',
+  'video/x-matroska': '.mkv',
+  'image/gif': '.gif',
+  'image/jpeg': '.jpg',
+  'image/png': '.png',
+  'image/webp': '.webp',
+};
+
+export function normalizeFilenameForContentType(filename, contentType) {
+  const extension = CONTENT_TYPE_EXTENSIONS[contentType.toLowerCase().split(';', 1)[0].trim()];
+  if (!extension) {
+    return filename;
+  }
+
+  return /\.[^.]+$/.test(filename)
+    ? filename.replace(/\.[^.]+$/, extension)
+    : `${filename}${extension}`;
+}
+
 /**
  * Map of Cobalt API error codes to user-friendly messages
  */
@@ -726,6 +749,8 @@ async function downloadFromCobalt(
         contentType = 'video/mp4';
       }
     }
+
+    filename = normalizeFilenameForContentType(filename, contentType);
 
     logger.info(
       `Downloaded file: ${filename}, size: ${buffer.length} bytes, content-type: ${contentType}`

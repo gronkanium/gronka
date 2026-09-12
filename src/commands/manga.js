@@ -10,6 +10,7 @@ import {
 import { randomBytes } from 'crypto';
 import { discoverMangaDexTitle } from '../utils/gallery-dl.js';
 import {
+  safeInteractionReply,
   safeInteractionDeferReply,
   safeInteractionEditReply,
 } from '../utils/interaction-helpers.js';
@@ -100,7 +101,7 @@ export async function handleMangaInteraction(interaction, processDownload) {
   const [, action, sessionToken] = interaction.customId.split(':');
   const session = sessions.get(sessionToken);
   if (!session || session.userId !== interaction.user.id) {
-    await interaction.reply({
+    await safeInteractionReply(interaction, {
       content: 'this manga picker has expired. run `/download` again.',
       flags: MessageFlags.Ephemeral,
     });
@@ -110,7 +111,7 @@ export async function handleMangaInteraction(interaction, processDownload) {
     const index = Number(interaction.values[0]);
     const chapter = session.chapters[index];
     if (!chapter) {
-      await interaction.reply({
+      await safeInteractionReply(interaction, {
         content: 'that chapter selection is invalid.',
         flags: MessageFlags.Ephemeral,
       });
@@ -122,8 +123,9 @@ export async function handleMangaInteraction(interaction, processDownload) {
       .setTitle('Choose manga pages');
     const pageRange = new TextInputBuilder()
       .setCustomId('page_range')
-      .setLabel(`Page range (${chapter.urls.length} available; 11+ becomes ZIP)`)
-      .setPlaceholder('1-10 sends images; 1-11 or more sends a ZIP')
+      .setLabel('Pages (1-10 are images; 11+ becomes a ZIP)')
+      .setPlaceholder(`1-${Math.min(10, chapter.urls.length)}, or one page number`)
+      .setValue(`1-${Math.min(10, chapter.urls.length)}`)
       .setStyle(TextInputStyle.Short)
       .setRequired(true)
       .setMaxLength(20);
@@ -134,7 +136,7 @@ export async function handleMangaInteraction(interaction, processDownload) {
   if (action === 'pages' && interaction.isModalSubmit()) {
     const chapter = session.chapter;
     if (!chapter) {
-      await interaction.reply({
+      await safeInteractionReply(interaction, {
         content: 'that manga selection is invalid. run `/download` again.',
         flags: MessageFlags.Ephemeral,
       });
@@ -151,7 +153,7 @@ export async function handleMangaInteraction(interaction, processDownload) {
       end < start ||
       end > chapter.urls.length
     ) {
-      await interaction.reply({
+      await safeInteractionReply(interaction, {
         content: `enter a valid page range from 1 to ${chapter.urls.length}.`,
         flags: MessageFlags.Ephemeral,
       });
@@ -167,5 +169,9 @@ export async function handleMangaInteraction(interaction, processDownload) {
     });
     return true;
   }
-  return false;
+  await safeInteractionReply(interaction, {
+    content: 'that manga control is no longer valid. run `/download` again.',
+    flags: MessageFlags.Ephemeral,
+  });
+  return true;
 }

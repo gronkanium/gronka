@@ -25,12 +25,36 @@ function u32(value) {
   return buffer;
 }
 
+function pathSafeName(filename) {
+  return (
+    String(filename || 'file')
+      .replace(/[^a-zA-Z0-9._-]/g, '_')
+      .replace(/^\.+/, '')
+      .slice(0, 240) || 'file'
+  );
+}
+
+function zipEntryName(filename, index, names) {
+  const original = pathSafeName(filename);
+  const extension = original.includes('.') ? original.slice(original.lastIndexOf('.')) : '';
+  const stem = extension ? original.slice(0, -extension.length) : original;
+  let name = original;
+  let suffix = 1;
+  while (names.has(name)) {
+    const marker = `-${suffix++}`;
+    name = `${stem.slice(0, 240 - marker.length - extension.length)}${marker}${extension}`;
+  }
+  names.add(name);
+  return name || `file-${index + 1}`;
+}
+
 export function createZip(files) {
   const local = [];
   const central = [];
+  const names = new Set();
   let offset = 0;
-  for (const file of files) {
-    const name = Buffer.from(file.filename.replace(/[^a-zA-Z0-9._-]/g, '_'));
+  for (const [index, file] of files.entries()) {
+    const name = Buffer.from(zipEntryName(file.filename, index, names));
     const checksum = crc32(file.buffer);
     const header = Buffer.concat([
       u32(0x04034b50),

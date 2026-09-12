@@ -198,7 +198,7 @@ export async function discoverMangaDexTitle(url) {
     }
   }
   return {
-    title: chapters[0]?.metadata?.manga || 'MangaDex title',
+    title: chapters[0]?.metadata?.manga || chapters[0]?.metadata?.title || 'MangaDex title',
     chapters: chapters.filter(chapter => chapter.urls.length > 0),
   };
 }

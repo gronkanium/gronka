@@ -69,6 +69,7 @@ import {
 import { hashUrl } from '../utils/hashing.js';
 import { notifyCommandSuccess, notifyCommandFailure } from '../utils/ntfy-notifier.js';
 import { getProcessedUrl, getBooleanSetting, getSetting } from '../utils/database.js';
+import { isRedditPostUrl, hasRedditSession, downloadFromReddit } from '../utils/reddit.js';
 import { recordProcessedUrl, trackR2UploadIfApplicable } from './shared/url-cache.js';
 import { runMediaCommand } from './shared/run-media-command.js';
 import { replyIfRateLimited, resolveTimeOptions } from './shared/command-guards.js';
@@ -346,6 +347,9 @@ export async function processDownload(
       // session cookie is configured — without one it cannot work at all, and cobalt (the
       // previous behaviour) stays the only route.
       const useInstagram = isInstagramPostUrl(url) && hasInstagramSession();
+      // Same shape as Instagram: Reddit deprecated the unauthenticated .json endpoints in
+      // May 2026, so yt-dlp cannot read a post at all and our HTML reader needs a session.
+      const useReddit = isRedditPostUrl(url) && hasRedditSession();
       // yt-dlp sites (youtube, redgifs, imgur, the tube sites, etc.) download through
       // yt-dlp, not Cobalt.
       const useYtdlp = ytdlpSite !== null && YTDLP_ENABLED;
@@ -491,6 +495,13 @@ export async function processDownload(
           message: 'Starting direct media download',
           metadata: { url, maxSize: adminUser ? 'unlimited' : maxSize },
         });
+      } else if (useReddit) {
+        downloadMethod = 'reddit';
+        logger.info(`Downloading from Reddit post page: ${url}`);
+        logOperationStep(operationId, 'download_start', 'running', {
+          message: 'Starting download from Reddit',
+          metadata: { url, maxSize: adminUser ? 'unlimited' : maxSize },
+        });
       } else if (useInstagram) {
         downloadMethod = 'instagram';
         logger.info(`Downloading from Instagram media-info API: ${url}`);
@@ -575,6 +586,22 @@ export async function processDownload(
             message: 'file downloaded successfully via direct fetch',
             metadata: { url, fileCount: 1 },
           });
+        } else if (downloadMethod === 'reddit') {
+          // Images only; a v.redd.it video post finds none and falls through to cobalt/yt-dlp.
+          try {
+            fileData = await downloadFromReddit(url, adminUser);
+            logOperationStep(operationId, 'download_complete', 'success', {
+              message: 'file downloaded successfully via Reddit',
+              metadata: { url, fileCount: 1 },
+            });
+          } catch (redditError) {
+            logger.warn(`Reddit extractor failed, falling back to cobalt: ${redditError.message}`);
+            logOperationStep(operationId, 'download_fallback', 'running', {
+              message: 'Reddit extractor failed, retrying with cobalt',
+              metadata: { url, reason: redditError.message },
+            });
+            downloadMethod = 'cobalt';
+          }
         } else if (downloadMethod === 'instagram') {
           // Cobalt stays the safety net: an expired session or a shape change must not take
           // out reels, which cobalt still handles. Falling through can only add coverage.

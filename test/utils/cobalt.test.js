@@ -5,6 +5,7 @@ import {
   isSocialMediaUrl,
   normalizeFilenameForContentType,
   normalizeSocialMediaUrlForCobalt,
+  resolveContentType,
 } from '../../src/utils/cobalt.js';
 import { isInstagramPostUrl } from '../../src/utils/instagram.js';
 
@@ -14,6 +15,26 @@ describe('cobalt utilities', () => {
       normalizeFilenameForContentType('twitter_2098435345444696492.gif', 'video/mp4'),
       'twitter_2098435345444696492.mp4'
     );
+  });
+
+  test('a GIF tunnel with no content-type header is not called an mp4', () => {
+    // cobalt's tunnel sends Content-Disposition but no Content-Type; the old 'video/mp4'
+    // default made /convert reject real x.com GIFs as "not a valid video format"
+    const gif = Buffer.concat([Buffer.from('GIF89a'), Buffer.alloc(16)]);
+    assert.strictEqual(
+      resolveContentType(undefined, 'twitter_2098630767832416523.gif', gif),
+      'image/gif'
+    );
+  });
+
+  test('magic bytes beat a misleading .gif filename', () => {
+    const mp4 = Buffer.concat([Buffer.alloc(4), Buffer.from('ftyp'), Buffer.alloc(16)]);
+    assert.strictEqual(resolveContentType(undefined, 'twitter_123.gif', mp4), 'video/mp4');
+  });
+
+  test('a content-type the server actually sent is left alone', () => {
+    const gif = Buffer.concat([Buffer.from('GIF89a'), Buffer.alloc(16)]);
+    assert.strictEqual(resolveContentType('video/webm', 'clip.webm', gif), 'video/webm');
   });
 
   test('isSocialMediaUrl recognizes x.com URLs', () => {

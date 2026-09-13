@@ -2,6 +2,7 @@ import axios from 'axios';
 import { createLogger } from './logger.js';
 import { NetworkError, ValidationError } from './errors.js';
 import { cobaltSlots, mapWithLimit } from './concurrency.js';
+import { detectFileType } from './storage.js';
 
 const logger = createLogger('cobalt');
 
@@ -21,6 +22,24 @@ const CONTENT_TYPE_EXTENSIONS = {
   'image/png': '.png',
   'image/webp': '.webp',
 };
+
+// Cobalt's tunnel sends no content-type header at all, so defaulting to video/mp4 relabelled
+// every real GIF (x.com animated GIFs arrive as GIF89a) and /convert then rejected them as
+// "not a valid video format". Magic bytes are the only honest signal when the header is absent.
+export function resolveContentType(headerType, filename, buffer) {
+  if (headerType) {
+    return headerType;
+  }
+  const ext = (filename.toLowerCase().match(/\.[^.]+$/) || [''])[0];
+  const kind = detectFileType(ext, '', buffer);
+  if (kind === 'gif') {
+    return 'image/gif';
+  }
+  if (kind === 'image') {
+    return { '.png': 'image/png', '.webp': 'image/webp' }[ext] || 'image/jpeg';
+  }
+  return { '.mov': 'video/quicktime', '.webm': 'video/webm' }[ext] || 'video/mp4';
+}
 
 export function normalizeFilenameForContentType(filename, contentType) {
   const extension = CONTENT_TYPE_EXTENSIONS[contentType.toLowerCase().split(';', 1)[0].trim()];
@@ -507,8 +526,6 @@ async function downloadVideo(videoUrl, index, isAdminUser = false, maxSize = Inf
       );
     }
 
-    let contentType = response.headers['content-type'] || 'video/mp4';
-
     let filename = `video_${index + 1}.mp4`;
     const contentDisposition = response.headers['content-disposition'] || '';
     if (contentDisposition) {
@@ -516,16 +533,11 @@ async function downloadVideo(videoUrl, index, isAdminUser = false, maxSize = Inf
       if (filenameMatch && filenameMatch[1]) {
         filename = filenameMatch[1].replace(/['"]/g, '');
       }
-    } else {
-      const extMap = {
-        'video/mp4': '.mp4',
-        'video/quicktime': '.mov',
-        'video/webm': '.webm',
-        'video/x-msvideo': '.avi',
-        'video/x-matroska': '.mkv',
-      };
-      const ext = extMap[contentType] || '.mp4';
-      filename = `video_${index + 1}${ext}`;
+    }
+
+    const contentType = resolveContentType(response.headers['content-type'], filename, buffer);
+    if (!contentDisposition) {
+      filename = `video_${index + 1}${CONTENT_TYPE_EXTENSIONS[contentType] || '.mp4'}`;
     }
 
     logger.info(
@@ -716,8 +728,6 @@ async function downloadFromCobalt(
       throw new ValidationError(`file is too large (max ${maxSize / (1024 * 1024)}mb)`);
     }
 
-    let contentType = response.headers['content-type'] || 'video/mp4';
-
     const contentDisposition = response.headers['content-disposition'] || '';
     if (contentDisposition) {
       const filenameMatch = contentDisposition.match(/filename[^;=\n]*=((['"]).*?\2|[^;\n]*)/);
@@ -726,29 +736,9 @@ async function downloadFromCobalt(
       }
     }
 
-    if (
-      !contentType ||
-      contentType === 'application/octet-stream' ||
-      contentType === 'binary/octet-stream'
-    ) {
-      const ext = filename.toLowerCase().split('.').pop();
-      const extToMime = {
-        mp4: 'video/mp4',
-        mov: 'video/quicktime',
-        webm: 'video/webm',
-        avi: 'video/x-msvideo',
-        mkv: 'video/x-matroska',
-        mp3: 'audio/mpeg',
-        m4a: 'audio/mp4',
-      };
-      if (extToMime[ext]) {
-        contentType = extToMime[ext];
-        logger.info(`Inferred content type from filename extension: ${contentType}`);
-      } else {
-        logger.warn(`Could not infer content type from extension ${ext}, using default video/mp4`);
-        contentType = 'video/mp4';
-      }
-    }
+    const declared = response.headers['content-type'];
+    const generic = declared === 'application/octet-stream' || declared === 'binary/octet-stream';
+    const contentType = resolveContentType(generic ? '' : declared, filename, buffer);
 
     filename = normalizeFilenameForContentType(filename, contentType);
 

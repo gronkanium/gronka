@@ -5,6 +5,7 @@ import {
   updateOperationStatus,
   logOperationStep,
   logOperationError,
+  getOperation,
 } from '../../utils/operations-tracker.js';
 import { initializeDatabaseWithErrorHandling } from '../../utils/database-init.js';
 import { replyWithCuratedError } from './command-errors.js';
@@ -95,6 +96,12 @@ export async function runMediaCommand(type, interaction, callback, options = {})
     updateOperationStatus(operationId, 'running');
 
     await callback(ctx);
+
+    // A callback that replied and returned without marking the operation leaves it 'running'
+    // until cleanupStuckOperations kills it ~19min later and DMs the user a bogus timeout.
+    if (getOperation(operationId)?.status === 'running') {
+      updateOperationStatus(operationId, 'error', { error: 'command ended without a result' });
+    }
   } catch (error) {
     logger.error(`${type} failed for user ${userId}:`, error);
 

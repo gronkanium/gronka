@@ -7,6 +7,7 @@ import { runMediaCommand } from '../../src/commands/shared/run-media-command.js'
 import { ValidationError, NetworkError } from '../../src/utils/errors.js';
 import { safeInteractionEditReply } from '../../src/utils/interaction-helpers.js';
 import { createFakeInteraction } from '../helpers/fake-interaction.js';
+import { getOperation, updateOperationStatus } from '../../src/utils/operations-tracker.js';
 
 // In-process E2E for the shared command lifecycle: drives runMediaCommand with a fake Discord
 // interaction and asserts exactly what the user would see. Covers the Discord reply paths that
@@ -152,6 +153,41 @@ describe('runMediaCommand (Discord lifecycle E2E)', () => {
     } finally {
       await fs.rm(tmpDir, { recursive: true, force: true });
     }
+  });
+
+  test('a callback that returns without marking the operation does not leave it running', async () => {
+    const { interaction } = createFakeInteraction();
+    let capturedId;
+
+    await runMediaCommand(
+      'convert',
+      interaction,
+      async ctx => {
+        capturedId = ctx.operationId;
+        // mirrors convert.js's "video is too long" path: replies, returns, marks nothing
+        await safeInteractionEditReply(interaction, { content: 'video is too long (45s).' });
+      },
+      { skipDbInit: true }
+    );
+
+    assert.strictEqual(getOperation(capturedId).status, 'error');
+  });
+
+  test('a callback that marks success keeps that status', async () => {
+    const { interaction } = createFakeInteraction();
+    let capturedId;
+
+    await runMediaCommand(
+      'convert',
+      interaction,
+      async ctx => {
+        capturedId = ctx.operationId;
+        updateOperationStatus(ctx.operationId, 'success', { fileSize: 1 });
+      },
+      { skipDbInit: true }
+    );
+
+    assert.strictEqual(getOperation(capturedId).status, 'success');
   });
 
   test('ctx exposes the expected helpers to the callback', async () => {

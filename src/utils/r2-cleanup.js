@@ -25,8 +25,13 @@ async function finalizeDeletedUploads(expiredUploads, r2Key, now) {
   for (const upload of expiredUploads) {
     await markTemporaryUploadDeleted(upload.id, now);
   }
+  // Mark by key, and before the delete. Marking only `expiredUploads` skipped any row the
+  // deleted_at filter dropped, and deleting the tracking rows first left nothing to re-derive
+  // the url_hashes from if this step never ran — either way processed_urls kept serving a
+  // cdn.gronka.dev link to an object that was already gone.
+  const tracked = await getTemporaryUploadsByR2Key(r2Key);
+  await markProcessedUrlsR2Expired([...new Set(tracked.map(u => u.url_hash))]);
   await deleteTemporaryUploadsByR2Key(r2Key);
-  await markProcessedUrlsR2Expired(expiredUploads.map(u => u.url_hash));
 }
 
 /**

@@ -19,7 +19,12 @@ const logger = createLogger('instagram');
 // When no session is configured the caller falls back to cobalt, so self-hosters without
 // cookies behave exactly as before.
 const APP_ID = '936619743392459'; // the public web-client id instagram.com sends on its own calls
+const ASBD_ID = '129477'; // the web client's constant; it does not vary per session
 const API_TIMEOUT_MS = 20000;
+
+// Instagram hands back a rolling x-ig-set-www-claim and expects it echoed on the next call.
+// Starting at '0' is what a fresh browser tab sends; never advancing it marks us as a bot.
+let wwwClaim = '0';
 const MEDIA_HOSTS = ['cdninstagram.com', 'fbcdn.net'];
 
 // The share sheet emits /<username>/p/<code> as often as the bare /p/<code>.
@@ -162,6 +167,16 @@ export async function downloadFromInstagram(url, isAdminUser = false) {
         'X-IG-App-ID': APP_ID,
         Accept: '*/*',
         'Accept-Language': 'en-US,en;q=0.9',
+        // The web client sends all of these; a bare request is an obvious bot and is what
+        // gets a session flagged for "suspicious automated activity".
+        'X-IG-WWW-Claim': wwwClaim,
+        'X-ASBD-ID': ASBD_ID,
+        'X-Requested-With': 'XMLHttpRequest',
+        Referer: `https://www.instagram.com${parsed.pathname}`,
+        Origin: 'https://www.instagram.com',
+        'Sec-Fetch-Site': 'same-origin',
+        'Sec-Fetch-Mode': 'cors',
+        'Sec-Fetch-Dest': 'empty',
         Cookie: cookie,
       },
     });
@@ -189,6 +204,8 @@ export async function downloadFromInstagram(url, isAdminUser = false) {
     logger.warn(`Instagram media-info request failed: ${error.message}`);
     throw new NetworkError('failed to reach instagram');
   }
+
+  wwwClaim = response.headers?.['x-ig-set-www-claim'] || wwwClaim;
 
   const media = response.data?.items?.[0];
   if (!media) {

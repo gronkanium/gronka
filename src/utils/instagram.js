@@ -156,7 +156,7 @@ export async function downloadFromInstagram(url, isAdminUser = false) {
       ...ssrfGuardedRequest(),
       responseType: 'json',
       timeout: API_TIMEOUT_MS,
-      maxRedirects: 3,
+      maxRedirects: 0,
       headers: {
         'User-Agent': USER_AGENT,
         'X-IG-App-ID': APP_ID,
@@ -173,7 +173,9 @@ export async function downloadFromInstagram(url, isAdminUser = false) {
     // A dead session answers 401/403 on every post, so it reads as "everything is broken"
     // rather than "one post is missing". Say so in the log; the user still gets the curated
     // error from whatever the caller falls back to.
-    if (status === 401 || status === 403) {
+    // An expired sessionid usually 302s to /accounts/login/ instead of answering 401 — hence
+    // maxRedirects: 0, so that lands here rather than as a generic redirect-loop error.
+    if (status === 401 || status === 403 || (status >= 300 && status < 400)) {
       logger.error(
         'Instagram rejected the session cookie (HTTP ' +
           status +

@@ -1,0 +1,29 @@
+#!/usr/bin/env bash
+# Turn git's "fetch first" rejection into an actionable message.
+#
+# Merging a release-please PR puts a commit on the remote that you do not have locally. Committing
+# on top of that stale base is the single thing that has broken this repo's history, so say exactly
+# what to run instead of letting the push fail with a hint about fast-forwards.
+set -e
+
+[ "$SKIP_HOOKS" = "1" ] && exit 0
+
+BRANCH=$(git rev-parse --abbrev-ref HEAD)
+[ "$BRANCH" = "HEAD" ] && exit 0
+
+git fetch --quiet origin "$BRANCH" 2>/dev/null || exit 0
+
+BEHIND=$(git rev-list --count "HEAD..origin/$BRANCH" 2>/dev/null || echo 0)
+[ "$BEHIND" = "0" ] && exit 0
+
+echo ""
+echo "  pre-push: origin/$BRANCH has $BEHIND commit(s) you do not have:"
+git log --oneline "HEAD..origin/$BRANCH" | sed 's/^/      /'
+echo ""
+echo "  This is usually a release-please merge. Rebase your work on top of it:"
+echo ""
+echo "      git pull --rebase origin $BRANCH"
+echo ""
+echo "  Then re-run the tests and push again. Do NOT force-push."
+echo ""
+exit 1

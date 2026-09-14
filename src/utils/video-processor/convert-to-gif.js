@@ -105,7 +105,7 @@ async function convertToGifImpl(inputPath, outputPath, options = {}) {
       logger.info(`Repairing reserved colorspace tag on ${inputPath}`);
     }
   } catch (error) {
-    // A probe failure is not fatal — the conversion is what matters, and it reports its own error.
+    // A probe failure is not fatal, the conversion is what matters, and it reports its own error.
     logger.warn(`Could not probe colorspace, continuing unrepaired: ${error.message}`);
   }
 

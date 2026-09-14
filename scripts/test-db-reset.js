@@ -53,7 +53,7 @@ async function ensureRoleExists() {
     await probe`SELECT 1`;
     return;
   } catch (error) {
-    // 28000 = role does not exist (trust auth), 28P01 = password auth failed —
+    // 28000 = role does not exist (trust auth), 28P01 = password auth failed ,
     // scram/md5 servers report a missing role as a password failure on purpose,
     // so both need the pg_roles check below to tell "missing" from "wrong password".
     if (error.code !== '28000' && error.code !== '28P01') {
@@ -77,7 +77,7 @@ async function ensureRoleExists() {
   try {
     const exists = await admin`SELECT 1 FROM pg_roles WHERE rolname = ${username}`;
     if (exists.length > 0) {
-      // Role is there — the probe failure was a genuine auth problem, not a
+      // Role is there, the probe failure was a genuine auth problem, not a
       // missing role. Surface the original error.
       throw probeError;
     }

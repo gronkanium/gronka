@@ -3,7 +3,7 @@
  * Tracks convert, download, and optimize operations with status updates.
  *
  * Persistence model: only lifecycle events (created, status_update, error) are
- * written to the operation_logs table — enough for the webui to reconstruct an
+ * written to the operation_logs table, enough for the webui to reconstruct an
  * operation's history. Intermediate steps live in memory only and are streamed
  * to the webui via broadcast.
  */

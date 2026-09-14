@@ -149,7 +149,7 @@ describe('ytdlp utilities', () => {
     });
 
     test('preserves the xsec_token an /explore/ link needs to resolve', () => {
-      // getYtdlpSite classifies by hostname only and must not rewrite the URL — dropping
+      // getYtdlpSite classifies by hostname only and must not rewrite the URL, dropping
       // xsec_token makes the same Xiaohongshu post fail to resolve.
       const url =
         'https://www.xiaohongshu.com/explore/6a508e83000000002102380b?xsec_token=ABC%3D&type=video';

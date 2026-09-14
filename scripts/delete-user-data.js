@@ -56,7 +56,7 @@ const skipConfirm = args.includes('--yes') || args.includes('-y');
 const keepFiles = args.includes('--keep-files');
 const includeBans = args.includes('--include-bans');
 
-// Local storage base path — same default the app/container uses. get*Path() append the
+// Local storage base path, same default the app/container uses. get*Path() append the
 // gifs/ videos/ images/ subdirectory themselves.
 const storagePath = process.env.GIF_STORAGE_PATH || './data-prod/gifs';
 
@@ -119,7 +119,7 @@ async function main() {
 
   console.log(`\nuser id: ${userId}`);
   console.log(
-    dryRun ? 'mode:    DRY RUN (no changes — pass --execute to delete)' : 'mode:    EXECUTE'
+    dryRun ? 'mode:    DRY RUN (no changes, pass --execute to delete)' : 'mode:    EXECUTE'
   );
   if (!isR2Configured()) {
     console.log('r2:      not configured (only local files + database rows are considered)');
@@ -159,7 +159,7 @@ async function main() {
     console.log(`  media records:     ${media.length}`);
     console.log(`  alerts:            ${alertCount}`);
     console.log(
-      `  banned_users row:  ${banRow ? `yes${includeBans ? ' (will remove)' : ' (kept — pass --include-bans to remove)'}` : 'none'}`
+      `  banned_users row:  ${banRow ? `yes${includeBans ? ' (will remove)' : ' (kept, pass --include-bans to remove)'}` : 'none'}`
     );
 
     // --- Work out which physical files are safe to delete ----------------------

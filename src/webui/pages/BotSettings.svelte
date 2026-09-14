@@ -55,7 +55,7 @@
       icon: Bell,
       keys: ['ntfy_topic', 'ntfy_server'],
     },
-    // Presence has no bot_settings keys — it drives its own /api/bot/status endpoint.
+    // Presence has no bot_settings keys, it drives its own /api/bot/status endpoint.
     { id: 'presence', label: 'presence', icon: Activity, keys: [], presence: true },
   ];
 
@@ -69,7 +69,7 @@
         activeTab = stored;
       }
     } catch {
-      // storage unavailable — default tab stays
+      // storage unavailable, default tab stays
     }
   }
 
@@ -379,7 +379,7 @@
               class:invisible={currentPresence.status === 'invisible'}
             ></span>
             {currentPresence.status}{currentPresence.activity
-              ? ` — ${currentPresence.activity}`
+              ? `, ${currentPresence.activity}`
               : ''}
           </span>
         {:else}
@@ -480,7 +480,7 @@
             {#if tierPreview(tierDrafts[key] || [])}
               <p class="tier-preview">{tierPreview(tierDrafts[key] || [])}</p>
             {:else}
-              <p class="tier-preview muted">no tiers — files use the built-in default curve</p>
+              <p class="tier-preview muted">no tiers, files use the built-in default curve</p>
             {/if}
 
             <div class="tier-actions">
@@ -1041,7 +1041,7 @@
       padding: 0.85rem 0.95rem;
     }
 
-    /* Tabs keep their labels and wrap to as many rows as needed — clearer than
+    /* Tabs keep their labels and wrap to as many rows as needed, clearer than
        cryptic icon-only tabs on a phone. */
     .tab {
       padding: 0.5rem 0.7rem;

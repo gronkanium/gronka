@@ -10,7 +10,7 @@
   } from '../utils/format.js';
   import Pagination from '../components/Pagination.svelte';
 
-  // Matches UNKNOWN_REASON in alerts-pg.js — failures logged with no error string
+  // Matches UNKNOWN_REASON in alerts-pg.js, failures logged with no error string
   // are a real bucket, not an absence, so they get a filterable identity.
   const UNKNOWN_REASON = '__no_reason__';
 
@@ -304,9 +304,9 @@
         <span class="stat-label">of {summary.total} operations</span>
       </div>
       <div class="stat">
-        <span class="stat-value">{worstCommand ? worstCommand.command : '—'}</span>
+        <span class="stat-value">{worstCommand ? worstCommand.command : ', '}</span>
         <span class="stat-label">
-          {worstCommand ? `worst command — ${worstCommand.errors} failed` : 'no failing command'}
+          {worstCommand ? `worst command, ${worstCommand.errors} failed` : 'no failing command'}
         </span>
       </div>
       <div class="stat">
@@ -375,16 +375,16 @@
                                 {alert.user_id}
                               </button>
                             {:else}
-                              <span class="dim">—</span>
+                              <span class="dim">, </span>
                             {/if}
                           </td>
                           <td>{shortMessage(alert)}</td>
                           <td>
                             {metadata?.duration !== undefined
                               ? formatDuration(metadata.duration)
-                              : '—'}
+                              : ', '}
                           </td>
-                          <td><code>{alert.operation_id ?? '—'}</code></td>
+                          <td><code>{alert.operation_id ?? ', '}</code></td>
                         </tr>
                       {/each}
                     </tbody>

@@ -382,7 +382,7 @@
   }
 
   /* One cohesive toolbar: every control shares height, surface, radius.
-     Color appears only as small accent dots — never as filled boxes. */
+     Color appears only as small accent dots, never as filled boxes. */
   .toolbar {
     display: flex;
     flex-wrap: wrap;
@@ -441,7 +441,7 @@
     color: var(--text-bright);
   }
 
-  /* Search — the primary control, grows to fill the row */
+  /* Search, the primary control, grows to fill the row */
   .search-box {
     flex: 1 1 240px;
     min-width: 180px;
@@ -491,7 +491,7 @@
     color: var(--text-bright);
   }
 
-  /* Level toggles — a connected segmented control, no loud color blocks */
+  /* Level toggles, a connected segmented control, no loud color blocks */
   .levels {
     display: inline-flex;
     border: 1px solid var(--surface-3);

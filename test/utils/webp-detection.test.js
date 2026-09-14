@@ -15,7 +15,7 @@ function webpHeader(formType, flags = 0x00) {
 
 describe('isAnimatedWebp', () => {
   test('returns true for a VP8X header with the animation flag set', () => {
-    // 0x12 = alpha (0x10) | animation (0x02) — the byte observed on the real asset
+    // 0x12 = alpha (0x10) | animation (0x02), the byte observed on the real asset
     assert.strictEqual(isAnimatedWebp(webpHeader('VP8X', 0x12)), true);
   });
 

@@ -28,7 +28,7 @@ export function formatTimestampSeconds(date = new Date()) {
   return date.toISOString().replace(/\.\d{3}Z$/, 'Z');
 }
 
-// JSON.stringify(new Error('boom')) is '{}' — message and stack are non-enumerable. AppError
+// JSON.stringify(new Error('boom')) is '{}', message and stack are non-enumerable. AppError
 // subclasses set their own enumerable fields so they survived, which hid this: every plain
 // Error logged as a bare `{}` with the cause erased.
 function stringifyArg(arg) {
@@ -43,7 +43,7 @@ function stringifyArg(arg) {
     try {
       return JSON.stringify(arg);
     } catch {
-      return String(arg); // circular refs etc. — never let logging throw
+      return String(arg); // circular refs etc., never let logging throw
     }
   }
   return String(arg);
@@ -95,7 +95,7 @@ class Logger {
    * @returns {string} - Sanitized message safe for console output
    */
   sanitizeForConsoleOutput(message) {
-    // Sanitize unconditionally — non-string values are stringified first so every path
+    // Sanitize unconditionally, non-string values are stringified first so every path
     // through this function strips newlines and control characters.
     let sanitized = String(message).replace(/\n|\r/g, '');
     // Remove all control characters (0x00-0x1F and 0x7F-0x9F)

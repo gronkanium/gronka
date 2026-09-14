@@ -165,7 +165,7 @@ export async function initPostgresConnection() {
       const suppressNotices = testMode || process.env.FORCE_PRODUCTION_MODE === 'true';
 
       // Idempotent schema init (CREATE ... IF NOT EXISTS) emits "already exists,
-      // skipping" notices on every startup — drop those, log anything else as one line
+      // skipping" notices on every startup, drop those, log anything else as one line
       // instead of postgres.js's default raw-object dump.
       const onnotice = suppressNotices
         ? () => {}

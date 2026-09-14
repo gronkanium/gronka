@@ -61,7 +61,7 @@ export async function handleInfoCommand(interaction, botStartTime) {
     const storageStats = await getStorageStats(GIF_STORAGE_PATH);
     // user_metrics, not the users table: `trackUser` writes users on every interaction
     // before the ban/maintenance gates, so it counts people the bot never served. The webui
-    // reads this same count — one user number across both surfaces.
+    // reads this same count, one user number across both surfaces.
     const userCount = await getUserMetricsCount();
     const guildCount = interaction.client.guilds.cache.size;
 
@@ -73,7 +73,7 @@ export async function handleInfoCommand(interaction, botStartTime) {
     const usedMem = totalMem - os.freemem();
     const memUsagePercent = ((usedMem / totalMem) * 100).toFixed(1);
 
-    // process.version reports the Node API level Bun emulates, not a real Node install —
+    // process.version reports the Node API level Bun emulates, not a real Node install ,
     // the container runs Bun only, so report that instead or the number is a lie.
     const bunVersion = process.versions.bun;
 

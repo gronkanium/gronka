@@ -13,7 +13,7 @@ import axios from 'axios';
 describe('file downloader utilities', () => {
   // Regression: axios aborts client-side once maxContentLength is exceeded, and that error
   // carries no `response`. The size branch only checked for a 413, so an oversized file was
-  // reported as "it may be unavailable" — telling users a file was missing when it was too big.
+  // reported as "it may be unavailable", telling users a file was missing when it was too big.
   describe('oversize downloads report the size cap, not "unavailable"', () => {
     function throwMaxContentLength() {
       const error = new Error('maxContentLength size of 52428800 exceeded');

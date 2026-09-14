@@ -87,7 +87,7 @@
     try {
       localStorage.setItem(SIDEBAR_STORAGE_KEY, String(sidebarOpen));
     } catch {
-      // Storage unavailable — state simply won't persist across reloads.
+      // Storage unavailable, state simply won't persist across reloads.
     }
   }
 
@@ -147,9 +147,9 @@
   $: connStatus = $wsConnected ? 'live' : isOnline ? 'connecting' : 'offline';
   $: connLabel = $wsConnected ? 'live' : isOnline ? 'connecting…' : 'offline';
   $: connTitle = $wsConnected
-    ? `real-time connection active — ${$connectionHealth?.messageCount ?? 0} messages received`
+    ? `real-time connection active, ${$connectionHealth?.messageCount ?? 0} messages received`
     : isOnline
-      ? 'reconnecting to the live feed — click to retry now'
+      ? 'reconnecting to the live feed, click to retry now'
       : 'device is offline';
 </script>
 

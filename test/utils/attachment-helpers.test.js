@@ -151,7 +151,7 @@ test('validateImageAttachment - handles zero-size files', () => {
 });
 
 // Regression: a carousel over Discord's per-message cap was sent as one message, which Discord
-// rejected outright (50035) — the user received nothing and the operation was still recorded
+// rejected outright (50035), the user received nothing and the operation was still recorded
 // as a success.
 test('batchAttachmentsForDelivery - splits past the Discord cap instead of one oversized send', () => {
   const attachments = Array.from({ length: 23 }, (_, i) => `file-${i}`);

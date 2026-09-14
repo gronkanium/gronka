@@ -97,7 +97,7 @@ export async function mapWithLimit(items, limit, fn) {
 
 // Bounds concurrent Cobalt downloads. Cobalt buffers responses in RAM and shares the Docker VM
 // with Postgres, and hammering it also invites rate limiting. Applied inside cobalt.js so every
-// caller is covered — the previous per-call-site queue missed file-downloader.js entirely, which
+// caller is covered, the previous per-call-site queue missed file-downloader.js entirely, which
 // left the /convert and /optimize paths uncapped.
 export const cobaltSlots = createSlotLimiter('cobalt', 2);
 
@@ -109,7 +109,7 @@ export const ytdlpSlots = createSlotLimiter('yt-dlp', 2);
 export const galleryDlSlots = createSlotLimiter('gallery-dl', 2);
 
 // Bounds concurrent CPU-heavy media encodes (ffmpeg GIF passes, ImageMagick, gifsicle). Each
-// encode pins a core and holds its output — up to hundreds of MB for a full-res/full-fps GIF — in
+// encode pins a core and holds its output, up to hundreds of MB for a full-res/full-fps GIF, in
 // memory. Uncapped, a burst of conversions starved the box and left operations making zero
 // progress until the 10-minute stuck-operation reaper failed them.
 export const mediaSlots = createSlotLimiter('media', 2);

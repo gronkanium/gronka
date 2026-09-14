@@ -8,7 +8,7 @@ import { ssrfGuardedRequest } from './ssrf-guard.js';
 const logger = createLogger('instagram');
 
 // Cobalt 11 answers error.api.fetch.empty for every /p/ permalink, and yt-dlp's Instagram
-// extractor only ever returns video, so an image post fails there as "no video in it" — the
+// extractor only ever returns video, so an image post fails there as "no video in it", the
 // bot's single most common real error. Instagram's own web client does not read either of
 // those surfaces: it calls /api/v1/media/<media_id>/info/ with the public web app id and the
 // viewer's session cookie, and that route still returns the full media payload (images,
@@ -31,7 +31,7 @@ const MEDIA_HOSTS = ['cdninstagram.com', 'fbcdn.net'];
 const POST_PATH = /^(?:\/[^/]+)?\/(?:p|reel|reels|tv)\/([A-Za-z0-9_-]+)/;
 
 // Shortcodes are the media id written in this base64 alphabet, so the id is recoverable
-// locally — no extra lookup request just to turn a permalink into an api id.
+// locally, no extra lookup request just to turn a permalink into an api id.
 const SHORTCODE_ALPHABET = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_';
 
 const USER_AGENT =
@@ -183,18 +183,18 @@ export async function downloadFromInstagram(url, isAdminUser = false) {
   } catch (error) {
     const status = error.response?.status;
     if (status === 400 || status === 404) {
-      throw new NetworkError('this post is unavailable — it may be deleted or private');
+      throw new NetworkError('this post is unavailable, it may be deleted or private');
     }
     // A dead session answers 401/403 on every post, so it reads as "everything is broken"
     // rather than "one post is missing". Say so in the log; the user still gets the curated
     // error from whatever the caller falls back to.
-    // An expired sessionid usually 302s to /accounts/login/ instead of answering 401 — hence
+    // An expired sessionid usually 302s to /accounts/login/ instead of answering 401, hence
     // maxRedirects: 0, so that lands here rather than as a generic redirect-loop error.
     if (status === 401 || status === 403 || (status >= 300 && status < 400)) {
       logger.error(
         'Instagram rejected the session cookie (HTTP ' +
           status +
-          ') — the sessionid in the cookie file needs refreshing'
+          '), the sessionid in the cookie file needs refreshing'
       );
       throw new NetworkError('instagram rejected our session');
     }
@@ -209,7 +209,7 @@ export async function downloadFromInstagram(url, isAdminUser = false) {
 
   const media = response.data?.items?.[0];
   if (!media) {
-    throw new NetworkError('this post is unavailable — it may be deleted or private');
+    throw new NetworkError('this post is unavailable, it may be deleted or private');
   }
 
   const mediaUrl = selectMediaUrl(media, imgIndex);

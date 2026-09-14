@@ -13,8 +13,8 @@ export const SSRF_BLOCKED_CODE = 'ESSRFBLOCKED';
  *
  * validateUrl only sees the URL string, so a hostname that resolves into the private
  * network (attacker-controlled DNS, `foo.localtest.me`, a Docker service name) sails past
- * it. This runs on the addresses the connection will actually use, and — because the
- * option is reused for every hop — on redirect targets too.
+ * it. This runs on the addresses the connection will actually use, and, because the
+ * option is reused for every hop, on redirect targets too.
  * @param {string} hostname - Hostname being resolved
  * @param {Object} options - dns.lookup options supplied by the HTTP agent
  * @param {Function} callback - Node lookup callback
@@ -65,7 +65,7 @@ export function guardedBeforeRedirect(options) {
 
 /**
  * Whether a request failure came from this guard. The refusal is raised inside the DNS
- * lookup or the redirect hook, so axios and follow-redirects wrap it — walk the cause
+ * lookup or the redirect hook, so axios and follow-redirects wrap it, walk the cause
  * chain rather than checking the outermost code.
  * @param {Error} error - Error thrown by a guarded request
  * @returns {boolean} True when the destination was refused by the guard
@@ -82,7 +82,7 @@ export function isSsrfBlockedError(error) {
 /**
  * Axios config fragment to spread into any request whose URL came from user input.
  *
- * Usage: `axios.get(url, { ...ssrfGuardedRequest(), responseType: 'arraybuffer' })` —
+ * Usage: `axios.get(url, { ...ssrfGuardedRequest(), responseType: 'arraybuffer' })` ,
  * always alongside a validateUrl check on the URL itself.
  *
  * Deliberately NOT used in cobalt.js: those requests target the Cobalt API and its tunnel

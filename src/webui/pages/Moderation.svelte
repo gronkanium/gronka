@@ -624,7 +624,7 @@
                 <div class="media-info">
                   <span class="media-type">{item.file_type || 'unknown'}</span>
                   <span class="media-size"
-                    >{item.file_size ? formatBytes(item.file_size) : '—'}</span
+                    >{item.file_size ? formatBytes(item.file_size) : ', '}</span
                   >
                   <span class="media-date" title={formatTimestamp(item.processed_at)}>
                     {formatRelativeTime(item.processed_at)}

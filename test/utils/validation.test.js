@@ -124,7 +124,7 @@ describe('validation utilities', () => {
 
     test('rejects localhost spellings that dodge an exact match', () => {
       for (const url of [
-        'http://localhost./', // trailing root dot — same host to every resolver
+        'http://localhost./', // trailing root dot, same host to every resolver
         'http://LOCALHOST/',
         'http://anything.localhost/',
         'http://ip6-localhost/',
@@ -142,7 +142,7 @@ describe('validation utilities', () => {
       assert.strictEqual(validateUrl('http://198.18.0.1/').valid, false);
       assert.strictEqual(validateUrl('http://255.255.255.255/').valid, false);
       assert.strictEqual(validateUrl('http://239.0.0.1/').valid, false);
-      // Alternate encodings of 127.0.0.1 — the URL parser normalizes these for us
+      // Alternate encodings of 127.0.0.1, the URL parser normalizes these for us
       assert.strictEqual(validateUrl('http://2130706433/').valid, false);
       assert.strictEqual(validateUrl('http://0x7f000001/').valid, false);
     });

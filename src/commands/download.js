@@ -162,7 +162,7 @@ async function getMaxVideoDuration() {
 
 /**
  * Non-admin max download size in bytes, live-editable from the webui settings page
- * (max_video_size_mb, stored in MB). This is the primary download gate — oversized videos
+ * (max_video_size_mb, stored in MB). This is the primary download gate, oversized videos
  * are rejected before download via yt-dlp --max-filesize. Falls back to the MAX_VIDEO_SIZE
  * env/config default when unset or unparsable.
  * @returns {Promise<number>} Cap in bytes
@@ -378,7 +378,7 @@ export async function processDownload(
       const isKlipy = isKlipyUrl(url);
       const isDirectMedia = isDirectMediaUrl(url);
       // Instagram posts go through our own media-info extractor first, but only when a
-      // session cookie is configured — without one it cannot work at all, and cobalt (the
+      // session cookie is configured, without one it cannot work at all, and cobalt (the
       // previous behaviour) stays the only route.
       const useInstagram = isInstagramPostUrl(url) && hasInstagramSession();
       const useReddit = redditImages !== null && redditImages.length > 0;

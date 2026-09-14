@@ -13,7 +13,7 @@ import { isSsrfBlockedError, ssrfGuardedRequest } from './ssrf-guard.js';
 const logger = createLogger('file-downloader');
 
 // Curated message for a URL the SSRF guard refused (a host that resolves into the private
-// network, or a redirect that lands there). Names no internals — just why we stopped.
+// network, or a redirect that lands there). Names no internals, just why we stopped.
 const BLOCKED_DESTINATION_MESSAGE =
   'that url points to a private or internal address, which is not allowed.';
 
@@ -83,7 +83,7 @@ export async function downloadDirectMedia(url, isAdminUser = false, client = nul
  * True when a download failed because the file was over the size cap.
  *
  * A server can say so with a 413, but axios also aborts on its own once `maxContentLength` is
- * exceeded — and that abort is client-side, so the error carries no `response`. Checking only
+ * exceeded, and that abort is client-side, so the error carries no `response`. Checking only
  * for a 413 therefore missed every locally-aborted oversize download and sent it down the
  * generic "may be unavailable" path, telling users a file was missing when it was just too big.
  *

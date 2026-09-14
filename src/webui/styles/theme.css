@@ -1,6 +1,6 @@
 /*
  * Design tokens for the webui.
- * All colors, radii, and shared visual values live here — pages and
+ * All colors, radii, and shared visual values live here, pages and
  * components reference these variables instead of hardcoding values.
  */
 :root {

@@ -78,7 +78,7 @@ function embeddedIpv4(groups) {
 
   const leadingZeros = groups.slice(0, 5).every(g => g === 0);
   if (leadingZeros && groups[5] === 0xffff) return toDotted(groups[6], groups[7]);
-  // ::a.b.c.d — but not :: or ::1, which are handled as loopback
+  // ::a.b.c.d, but not :: or ::1, which are handled as loopback
   if (leadingZeros && groups[5] === 0 && (groups[6] !== 0 || groups[7] > 1)) {
     return toDotted(groups[6], groups[7]);
   }
@@ -96,7 +96,7 @@ function blockedIpv4Reason(address) {
   const [a, b] = address.split('.').map(Number);
 
   if (a === 127) return LOOPBACK_ERROR; // 127.0.0.0/8 loopback
-  if (a === 0) return LOOPBACK_ERROR; // 0.0.0.0/8 — "this host"
+  if (a === 0) return LOOPBACK_ERROR; // 0.0.0.0/8, "this host"
   if (a === 10) return PRIVATE_ADDRESS_ERROR; // 10.0.0.0/8
   if (a === 172 && b >= 16 && b <= 31) return PRIVATE_ADDRESS_ERROR; // 172.16.0.0/12
   if (a === 192 && b === 168) return PRIVATE_ADDRESS_ERROR; // 192.168.0.0/16
@@ -142,7 +142,7 @@ export function blockedAddressReason(address) {
   const family = net.isIP(address);
   if (family === 4) return blockedIpv4Reason(address);
   if (family === 6) return blockedIpv6Reason(address);
-  return null; // not an IP literal — a hostname, resolved by the DNS guard instead
+  return null; // not an IP literal, a hostname, resolved by the DNS guard instead
 }
 
 /**
@@ -244,7 +244,7 @@ export function parseTimestamp(input) {
     return { valid: true, seconds: parseFloat(trimmed) };
   }
 
-  // MM:SS or HH:MM:SS — every segment before the last must be whole digits,
+  // MM:SS or HH:MM:SS, every segment before the last must be whole digits,
   // the last segment may have a fractional part
   const last = parts[parts.length - 1];
   if (!/^\d{1,2}(\.\d+)?$/.test(last) || parseFloat(last) >= 60) {

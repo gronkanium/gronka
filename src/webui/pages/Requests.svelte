@@ -634,13 +634,13 @@
                   {#if input.isAttachment}
                     <span
                       class="input-badge"
-                      title="Uploaded file — Discord CDN link, may have expired">file</span
+                      title="Uploaded file, Discord CDN link, may have expired">file</span
                     >
                   {/if}
                 {:else if request.sourceUrl}
                   <span
                     class="input-badge muted"
-                    title="Uploaded file (attachment links hidden — enable in filters)"
+                    title="Uploaded file (attachment links hidden, enable in filters)"
                     >uploaded file</span
                   >
                 {:else}
@@ -697,7 +697,7 @@
                                 target="_blank"
                                 rel="noopener noreferrer"
                                 class="url-link-full monospace"
-                                title="Discord CDN link — may have expired"
+                                title="Discord CDN link, may have expired"
                               >
                                 {request.sourceUrl}
                               </a>
@@ -771,7 +771,7 @@
                       <div class="details-section">
                         <h4>performance steps</h4>
                         <p class="trace-empty">
-                          step-level detail unavailable — this operation is no longer live (evicted
+                          step-level detail unavailable, this operation is no longer live (evicted
                           from memory or the bot restarted); only the lifecycle summary above was
                           persisted.
                         </p>

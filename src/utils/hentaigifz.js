@@ -48,7 +48,7 @@ export function extractMediaUrl(html) {
     return null;
   }
 
-  // 1. JSON-LD ImageObject contentUrl — the canonical full-quality GIF.
+  // 1. JSON-LD ImageObject contentUrl, the canonical full-quality GIF.
   const jsonLd = html.match(/"@type"\s*:\s*"ImageObject"[^}]*?"contentUrl"\s*:\s*"([^"]+)"/i);
   if (jsonLd?.[1] && isMediaHostUrl(jsonLd[1])) {
     return decodeMediaUrl(jsonLd[1]);

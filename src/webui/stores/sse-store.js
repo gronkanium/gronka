@@ -115,7 +115,7 @@ function connect() {
   }
 
   // Close out any existing connection (e.g. one still CONNECTING) before opening a new
-  // one — otherwise a reconnect triggered while a prior attempt is in flight (flaky network
+  // one, otherwise a reconnect triggered while a prior attempt is in flight (flaky network
   // toggling online/offline, a stale-check firing mid-retry) leaks an open EventSource.
   if (es) {
     es.close();
@@ -138,7 +138,7 @@ function connect() {
     };
 
     // The server also sends a heartbeat as a named event (not a bare comment) purely so this
-    // handler can mark the stream as alive — heartbeats don't otherwise carry data.
+    // handler can mark the stream as alive, heartbeats don't otherwise carry data.
     es.addEventListener('heartbeat', () => {
       lastMessageTime = Date.now();
       updateHealthMetrics();
@@ -161,7 +161,7 @@ function connect() {
       connected.set(false);
 
       // EventSource enters CLOSED only when it gives up retrying (or after
-      // we call close() ourselves) — anything else is a transient drop the
+      // we call close() ourselves), anything else is a transient drop the
       // browser is already retrying, so only handle the terminal case here.
       if (es && es.readyState === EventSource.CLOSED) {
         console.error('SSE connection closed');
@@ -228,7 +228,7 @@ function handleMessage(message) {
 
     default: {
       // Sanitize user-provided message type to prevent log injection. The sanitization must be
-      // unconditional — a non-string type would otherwise reach the log unsanitized.
+      // unconditional, a non-string type would otherwise reach the log unsanitized.
       const sanitizedType = String(message.type)
         .replace(/\n|\r/g, '')
         .replace(

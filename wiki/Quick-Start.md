@@ -12,8 +12,8 @@ docker compose up -d --build
 bun run docker:register       # register the slash commands, once
 ```
 
-`bun run setup` is the whole configuration step. It asks only for what it cannot work out —
-bot token, application id, your Discord user id, a Postgres password — and optionally walks you
+`bun run setup` is the whole configuration step. It asks only for what it cannot work out , 
+bot token, application id, your Discord user id, a Postgres password, and optionally walks you
 through a test bot and R2. It writes `.env` from `.env.example` and **keeps the comments**, so the
 generated file still documents every remaining knob.
 
@@ -21,7 +21,7 @@ It also creates the three files docker bind-mounts **as files**. This matters mo
 if one is missing, Docker creates a *directory* in its place, and yt-dlp/cobalt then run
 unauthenticated. The failure reads as "cookies don't work", not "the mount is wrong".
 
-Check an install at any time — it changes nothing:
+Check an install at any time, it changes nothing:
 
 ```bash
 bun run setup:check          # toolchain, mounted files, cookies, config, ports
@@ -33,7 +33,7 @@ Healthy is `bot logged in as <name>` plus `All processes running` in
 
 ### doing it by hand
 
-`setup` is a convenience, not a requirement — nothing depends on it having run:
+`setup` is a convenience, not a requirement, nothing depends on it having run:
 
 ```bash
 cp .env.example .env          # then edit PROD_DISCORD_TOKEN, PROD_CLIENT_ID, PROD_POSTGRES_PASSWORD
@@ -47,7 +47,7 @@ Optional logins for gated content are in [Cookies](Cookies).
 
 ## webui dashboard
 
-the dashboard ships inside the bot container — there is nothing extra to start. once the stack
+the dashboard ships inside the bot container, there is nothing extra to start. once the stack
 is up it answers on http://localhost:3001 (port from `WEBUI_PORT`).
 
 ## local development

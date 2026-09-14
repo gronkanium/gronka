@@ -384,7 +384,7 @@
     white-space: nowrap;
   }
 
-  /* faux toggle switch (decorative — the tile button owns the interaction) */
+  /* faux toggle switch (decorative, the tile button owns the interaction) */
   .switch {
     position: relative;
     width: 30px;

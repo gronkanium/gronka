@@ -12,11 +12,11 @@ a discord bot that downloads media from social platforms and direct urls, conver
 
 ## commands
 
-- `/download` — download a video/image from a social url (no conversion)
-- `/convert` — attach a file or paste a url and convert it to a gif (quality preset `low`/`medium`/`high`, optional `optimize`, optional `lossy` 0-100, and `start_time`/`end_time` trimming for videos)
-- `/optimize` — shrink an existing gif with lossy compression (`lossy` 0-100, default 35)
-- `/stats` — storage and usage statistics
-- `/info` — system info, cache stats, and configuration
+- `/download`, download a video/image from a social url (no conversion)
+- `/convert`, attach a file or paste a url and convert it to a gif (quality preset `low`/`medium`/`high`, optional `optimize`, optional `lossy` 0-100, and `start_time`/`end_time` trimming for videos)
+- `/optimize`, shrink an existing gif with lossy compression (`lossy` 0-100, default 35)
+- `/stats`, storage and usage statistics
+- `/info`, system info, cache stats, and configuration
 
 the same three actions are also available by right-clicking a message → apps: **convert to gif**, **download**, and **optimize**.
 
@@ -25,9 +25,9 @@ the same three actions are also available by right-clicking a message → apps: 
 - **cobalt** handles most social platforms: twitter/x, tiktok, instagram, youtube, reddit, facebook, twitch clips, soundcloud, tumblr, streamable, dailymotion, snapchat
 - **yt-dlp** handles youtube, redgifs, imgur, kick, coub, rumble, newgrounds, niconico, bilibili, and the adult tube sites (pornhub, xvideos, xhamster, redtube); it is also the fallback for x/twitter and tiktok
 - **gallery-dl** handles image galleries from Pixiv, DeviantArt, ArtStation, Flickr, Wallhaven, MangaDex, nhentai, and Rule34. MangaDex and nhentai links open an ephemeral picker before downloading selected pages.
-- **pinterest** — a dedicated extractor for pins and `pin.it` share links (neither cobalt nor yt-dlp can read pinterest); grabs the pin's video, or its full-size image
-- **Klipy** — a dedicated page-metadata extractor for Klipy GIF and sticker pages; downloads the page's video or image directly
-- **booru boards** — danbooru, e621/e926, yande.re, and konachan posts via their JSON APIs
+- **pinterest**, a dedicated extractor for pins and `pin.it` share links (neither cobalt nor yt-dlp can read pinterest); grabs the pin's video, or its full-size image
+- **Klipy**, a dedicated page-metadata extractor for Klipy GIF and sticker pages; downloads the page's video or image directly
+- **booru boards**, danbooru, e621/e926, yande.re, and konachan posts via their JSON APIs
   (grabs the post's original file)
 - direct urls to video/image files work with `/convert`
 
@@ -48,9 +48,9 @@ video inputs: mp4, mov, webm, avi, mkv. image inputs: png, jpg, jpeg, webp, gif.
 
 ## how it works
 
-- **discord bot** — lives in your server, downloads media, and runs the conversions (ffmpeg for video→gif, gifsicle for gif optimization)
-- **storage** — files under discord's 8mb attachment limit are sent inline; larger files are uploaded to cloudflare r2 (optional) and delivered as a temporary url, falling back to local disk if r2 isn't configured or an upload fails
-- **webui** — a small stats dashboard, served automatically alongside the bot
+- **discord bot**, lives in your server, downloads media, and runs the conversions (ffmpeg for video→gif, gifsicle for gif optimization)
+- **storage**, files under discord's 8mb attachment limit are sent inline; larger files are uploaded to cloudflare r2 (optional) and delivered as a temporary url, falling back to local disk if r2 isn't configured or an upload fails
+- **webui**, a small stats dashboard, served automatically alongside the bot
 
 downloaded media is stored so a repeat of the same url skips re-downloading and re-converting.
 
@@ -60,7 +60,7 @@ non-admin downloads are rejected above a hard ceiling (`MAX_VIDEO_SIZE`, default
 
 ## getting started
 
-docker is the supported way to run gronka — the image bundles ffmpeg, gifsicle, and yt-dlp.
+docker is the supported way to run gronka, the image bundles ffmpeg, gifsicle, and yt-dlp.
 
 ```bash
 git clone https://github.com/thedorekaczynski/gronka.git
@@ -76,7 +76,7 @@ the stats dashboard is then available at `http://localhost:3001`.
 `bun run setup` asks only for what it can't work out itself and writes `.env` from
 `.env.example`, keeping the comments. `bun run setup:check` re-validates an install later and
 changes nothing. prefer doing it by hand? `cp .env.example .env`, `cp cookies.example.json
-cookies.json`, `touch tiktok-cookies.txt` — the wizard is a convenience, nothing depends on it.
+cookies.json`, `touch tiktok-cookies.txt`, the wizard is a convenience, nothing depends on it.
 
 > those files are bind-mounted **as files**. if one is missing docker creates a _directory_ in
 > its place and yt-dlp/cobalt silently run unauthenticated, which reads as "cookies don't work".
@@ -87,16 +87,16 @@ cookies.json`, `touch tiktok-cookies.txt` — the wizard is a convenience, nothi
 
 everything lives in `.env`. the only required values are your discord credentials:
 
-- `DISCORD_TOKEN` — bot token from the [discord developer portal](https://discord.com/developers/applications)
-- `CLIENT_ID` — the application id from the same place
+- `DISCORD_TOKEN`, bot token from the [discord developer portal](https://discord.com/developers/applications)
+- `CLIENT_ID`, the application id from the same place
 
 two optional values are worth setting before you invite anyone:
 
-- `SUPPORT_INVITE_URL` — your own discord server. `/info` links it and the ban-appeal embed sends appeals there; leave it empty and neither surface mentions a server at all
-- `ADMIN_USER_IDS` — comma-separated discord user ids that bypass rate limits and size caps
+- `SUPPORT_INVITE_URL`, your own discord server. `/info` links it and the ban-appeal embed sends appeals there; leave it empty and neither surface mentions a server at all
+- `ADMIN_USER_IDS`, comma-separated discord user ids that bypass rate limits and size caps
 
 optional logins for gated content (instagram photo posts, reddit galleries) go in
-`cookies.json` — see [Cookies](https://github.com/thedorekaczynski/gronka/wiki/Cookies).
+`cookies.json`, see [Cookies](https://github.com/thedorekaczynski/gronka/wiki/Cookies).
 
 `.env.example` uses `PROD_`/`TEST_` prefixes so one file can hold two bot instances; the docker setup and the `bot:prod`/`bot:test` scripts map the chosen prefix onto the plain names above. everything else is optional and documented inline in `.env.example`.
 
@@ -105,7 +105,7 @@ optional logins for gated content (instagram photo posts, reddit galleries) go i
 set these to store and serve larger files from r2 instead of local disk:
 
 - `R2_ACCOUNT_ID`, `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY`, `R2_BUCKET_NAME`
-- `R2_PUBLIC_DOMAIN` — public domain for the bucket (e.g. `cdn.example.com`)
+- `R2_PUBLIC_DOMAIN`, public domain for the bucket (e.g. `cdn.example.com`)
 
 optional background cleanup (`R2_TEMP_UPLOADS_ENABLED`, `R2_CLEANUP_ENABLED`) deletes expired uploads on a schedule. see the [r2 storage docs](https://github.com/thedorekaczynski/gronka/wiki/R2-Storage).
 

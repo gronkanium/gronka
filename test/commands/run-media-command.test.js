@@ -29,7 +29,7 @@ describe('runMediaCommand (Discord lifecycle E2E)', () => {
       { skipDbInit: true }
     );
 
-    assert.strictEqual(calls.editReply.length, 1, 'exactly one reply — no double reply');
+    assert.strictEqual(calls.editReply.length, 1, 'exactly one reply, no double reply');
     assert.strictEqual(calls.editReply[0].content, 'https://cdn.example.com/gifs/abc.gif');
   });
 

@@ -97,7 +97,7 @@ async function convertAnimatedWebpToGifImpl(inputPath, outputPath, options = {})
 
     logger.debug(`Animated WebP to GIF conversion completed: ${outputPath}`);
   } catch (error) {
-    // Log detailed error (not shown to user — curated upstream per the error policy)
+    // Log detailed error (not shown to user, curated upstream per the error policy)
     logger.error(
       `Animated WebP to GIF conversion failed: ${error.message}${
         error.stderr ? ` - ${error.stderr}` : ''

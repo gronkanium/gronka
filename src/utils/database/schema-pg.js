@@ -305,7 +305,7 @@ export async function addR2ExpiredAtColumnIfNeeded(sql) {
 /**
  * Drop the username columns if an older database still has them.
  *
- * gronka stores Discord ids only — a name is never needed for anything the bot does, and every
+ * gronka stores Discord ids only, a name is never needed for anything the bot does, and every
  * surface that showed one now shows the id. Dropping rather than leaving them empty means the
  * names are actually gone, not merely unreferenced. Names already embedded in operation_logs /
  * alerts / logs messages are left to age out with the retention job.

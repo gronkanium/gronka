@@ -101,7 +101,7 @@ function slideId(url) {
 }
 
 // Only &amp; was decoded at first, so a url ending at a &quot; boundary kept the entity and
-// resolved to youtube.com/watch?v=ID&quot — a corrupted link that could never download.
+// resolved to youtube.com/watch?v=ID&quot, a corrupted link that could never download.
 const ENTITIES = { amp: '&', quot: '"', apos: "'", lt: '<', gt: '>', '#39': "'", '#x27': "'" };
 
 function decodeEntities(html) {
@@ -120,7 +120,7 @@ const NON_POST_PATH = /snoovatar|\/award|\/cms\/|defaults|headshot/i;
  * Reddit serves two markup shapes for the same post and flips between them without warning: a
  * hydrated page with each slide in <img class="media-lightbox-img"> plus a srcset, and a
  * server-rendered one carrying only a 140px thumbnail per slide. Both name the slide's id, and
- * `i.redd.it/<id>.<ext>` is the unsigned original — anonymous, full resolution, and the only
+ * `i.redd.it/<id>.<ext>` is the unsigned original, anonymous, full resolution, and the only
  * thing available at all on the thumbnail-only pages. A signed `preview` variant is kept as the
  * fallback because the original 404s for crossposts; every width has its own `s=` signature, so
  * the widest has to be taken as-is rather than rewritten.
@@ -186,11 +186,11 @@ async function fetchPostPage(url) {
   } catch (error) {
     const status = error.response?.status;
     if (status === 404) {
-      throw new NetworkError('this post is unavailable — it may be deleted or private');
+      throw new NetworkError('this post is unavailable, it may be deleted or private');
     }
     if (status === 403 || status === 429) {
       logger.error(
-        `Reddit refused the session cookie (HTTP ${status}) — the reddit_session in the cookie file needs refreshing`
+        `Reddit refused the session cookie (HTTP ${status}), the reddit_session in the cookie file needs refreshing`
       );
       throw new NetworkError('reddit rejected our session');
     }
@@ -239,7 +239,7 @@ export function extractVideoUrl(doc) {
 
 /**
  * The post's Atom feed. Unlike every other Reddit surface this still answers anonymously, and it
- * names the post's video id, its first image and any offsite link — so the session cookie is an
+ * names the post's video id, its first image and any offsite link, so the session cookie is an
  * enhancement (it reads whole galleries out of the HTML) rather than a requirement.
  * Returns null rather than throwing: the caller falls back to the HTML.
  */
@@ -263,9 +263,9 @@ async function fetchPostFeed(url) {
 
 /**
  * Where the post's media actually lives, in the order the caller should prefer:
- *   `external` — a v.redd.it HLS manifest or an offsite host, handed back for the caller's own
+ *   `external`, a v.redd.it HLS manifest or an offsite host, handed back for the caller's own
  *                source selection to route (yt-dlp handles both).
- *   `images`   — per-slide download candidates for Reddit-hosted images.
+ *   `images`, per-slide download candidates for Reddit-hosted images.
  *
  * Tries the anonymous feed first and only reads the cookie-gated HTML when it has to, which is
  * both fewer requests and the difference between working and not when the session expires.

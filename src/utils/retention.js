@@ -6,9 +6,9 @@ import { ensurePostgresInitialized } from './database/init.js';
 
 const logger = createLogger('retention');
 
-// Nothing is kept indefinitely. These tables are append-only histories that accumulate forever
-// otherwise — before this job existed the logs table alone held 127k rows going back to install,
-// and the local media cache 26 GB with nothing older than the first day ever removed.
+// Nothing is kept indefinitely. These tables are append-only histories that would otherwise
+// accumulate forever. Before this job existed the logs table alone held 127k rows going back to
+// install day, and the local media cache 26 GB with nothing ever removed.
 //
 // The per-user rows in `users` / `user_metrics` are deliberately NOT pruned: they are one row per
 // id with counters, not a history, and they are what answers "how many people use the bot".
@@ -67,7 +67,7 @@ export async function pruneTimeSeriesRows(days) {
 }
 
 /**
- * Delete cache rows older than `days`, but never one whose R2 upload is still live — that would
+ * Delete cache rows older than `days`, but never one whose R2 upload is still live, that would
  * orphan the object in R2 with no tracking row left to expire it, which costs money forever.
  * @returns {Promise<number>} rows deleted
  */

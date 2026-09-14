@@ -157,7 +157,7 @@ export async function getAllUsersMetrics(options = {}) {
     const params = [];
 
     if (search) {
-      // Ids only — there is no name to search on any more.
+      // Ids only, there is no name to search on any more.
       query += ` WHERE user_id LIKE $${params.length + 1}`;
       params.push(`%${search}%`);
     }

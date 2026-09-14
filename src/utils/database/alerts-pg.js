@@ -44,7 +44,7 @@ export async function insertAlert(alert) {
 const COMMAND_EXPR = "metadata::jsonb->>'command'";
 const REASON_EXPR = "NULLIF(metadata::jsonb->>'error', '')";
 
-// Sentinel for failures logged without an error string — a real bucket, not an absence.
+// Sentinel for failures logged without an error string, a real bucket, not an absence.
 export const UNKNOWN_REASON = '__no_reason__';
 
 function buildAlertWhere(options = {}) {

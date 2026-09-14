@@ -9,7 +9,7 @@ const logger = createLogger('pinterest');
 
 // Pinterest has no working upstream extractor: Cobalt 11 answers error.api.fetch.empty and
 // yt-dlp's extractor has been broken since ~2025-06 (Pinterest serves a fake 404 to its own
-// resource API even for public pins — yt-dlp #13554). The pin *page* is still fully public
+// resource API even for public pins, yt-dlp #13554). The pin *page* is still fully public
 // though, and renders schema.org JSON-LD carrying a direct progressive MP4 for video pins
 // and the originals-size image for image pins. That is what this extractor reads: the
 // blocked resource API is never touched, and neither is the HLS/DASH ladder next to it.
@@ -20,7 +20,7 @@ const logger = createLogger('pinterest');
 const MEDIA_HOST = 'pinimg.com';
 const PAGE_FETCH_TIMEOUT_MS = 20000;
 
-// Pin pages live on pinterest.com and its regional variants — both the it./br./de. style
+// Pin pages live on pinterest.com and its regional variants, both the it./br./de. style
 // subdomains and the ccTLD style (pinterest.co.uk, pinterest.ca). pin.it is the share
 // shortener, whose links redirect to a canonical /pin/<id>/ page.
 const PINTEREST_HOST = /(^|\.)pinterest\.[a-z]{2,}(\.[a-z]{2,})?$/;

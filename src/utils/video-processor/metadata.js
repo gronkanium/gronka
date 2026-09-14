@@ -14,7 +14,7 @@ const FFPROBE_TIMEOUT_MS = 30000;
  * Get video metadata via ffprobe.
  *
  * Spawns ffprobe directly (rather than fluent-ffmpeg's `ffprobe`) so the timeout
- * can actually SIGKILL the child on a hang — fluent-ffmpeg doesn't expose the
+ * can actually SIGKILL the child on a hang, fluent-ffmpeg doesn't expose the
  * process handle, so a stuck probe there would leak. Output shape matches the
  * `-show_format -show_streams` JSON consumers already read (`.format`, `.streams`).
  * @param {string} inputPath - Path to input video file

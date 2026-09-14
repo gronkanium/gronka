@@ -75,7 +75,7 @@ const KNOWN_SETTINGS = {
       Math.floor((Number(process.env.MAX_VIDEO_SIZE) || 1024 * 1024 * 1024) / (1024 * 1024))
     ),
     description:
-      'Maximum download size in MB for non-admins — the primary limit. Oversized videos are rejected before download (yt-dlp aborts the pull). Applies immediately; admins are unlimited',
+      'Maximum download size in MB for non-admins, the primary limit. Oversized videos are rejected before download (yt-dlp aborts the pull). Applies immediately; admins are unlimited',
     min: 50,
     max: 2048,
   },
@@ -83,7 +83,7 @@ const KNOWN_SETTINGS = {
     type: 'number',
     default: '3600',
     description:
-      'Backstop for non-admin video length in seconds. Size is the primary limit — oversized videos are rejected before download — so this only catches pathologically long ones (admins are unlimited)',
+      'Backstop for non-admin video length in seconds. Size is the primary limit, oversized videos are rejected before download, so this only catches pathologically long ones (admins are unlimited)',
     min: 30,
     max: 21600,
   },

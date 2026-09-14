@@ -17,7 +17,7 @@ const API_TIMEOUT_MS = 20000;
 // Danbooru-style boards expose the post directly at /posts/<id>.json.
 const postJsonApiUrl = (host, postId) => `https://${host}/posts/${postId}.json`;
 
-// Moebooru boards (yande.re, konachan) have no per-post endpoint — the index is queried by
+// Moebooru boards (yande.re, konachan) have no per-post endpoint, the index is queried by
 // id tag and answers with a one-element array, or an empty one when the post is gone.
 const moebooruApiUrl = (host, postId) => `https://${host}/post.json?tags=id:${postId}`;
 const moebooruFileUrl = json => (Array.isArray(json) ? (json[0]?.file_url ?? null) : null);

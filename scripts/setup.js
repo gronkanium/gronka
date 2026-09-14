@@ -132,7 +132,7 @@ async function confirm(question, fallback = true) {
 // ---------------------------------------------------------------------------
 // env file handling
 //
-// Rewrites values in place so the comments in .env.example — which document every knob —
+// Rewrites values in place so the comments in .env.example, which document every knob ,
 // survive into the generated .env instead of being replaced by a bare key=value dump.
 // ---------------------------------------------------------------------------
 
@@ -196,7 +196,7 @@ function portFree(port) {
 /**
  * Files that are bind-mounted **as files** by docker-compose. If one is missing on the host,
  * Docker silently creates a *directory* in its place and the tool that reads it runs without
- * auth — a failure that looks like "cookies don't work" rather than "the mount is wrong".
+ * auth, a failure that looks like "cookies don't work" rather than "the mount is wrong".
  */
 const MOUNTED_FILES = [
   {
@@ -212,7 +212,7 @@ const MOUNTED_FILES = [
     path: 'cobalt-cookies.json',
     mode: 0o600,
     seed: () => '{}\n',
-    what: "cobalt's own writable copy — it rewrites this file and drops keys it doesn't know",
+    what: "cobalt's own writable copy, it rewrites this file and drops keys it doesn't know",
   },
   {
     path: 'tiktok-cookies.txt',
@@ -244,9 +244,9 @@ async function runChecks() {
   const bun = version('bun --version');
   if (bun) {
     const major = Number.parseInt(bun, 10);
-    major >= 1 ? ok(`bun ${bun}`) : warn(`bun ${bun} — 1.3+ expected`);
+    major >= 1 ? ok(`bun ${bun}`) : warn(`bun ${bun}, 1.3+ expected`);
   } else {
-    bad('bun not found — https://bun.sh');
+    bad('bun not found, https://bun.sh');
     problems.push('install bun');
   }
 
@@ -256,38 +256,38 @@ async function runChecks() {
       execSync('docker compose version', { stdio: 'ignore' });
       ok('docker compose (v2 plugin)');
     } catch {
-      bad('`docker compose` not available — v2 plugin required, not docker-compose v1');
+      bad('`docker compose` not available, v2 plugin required, not docker-compose v1');
       problems.push('install the docker compose v2 plugin');
     }
     try {
       execSync('docker info', { stdio: 'ignore' });
       ok('docker daemon reachable');
     } catch {
-      bad('docker daemon not reachable — is it running, and are you in the docker group?');
+      bad('docker daemon not reachable, is it running, and are you in the docker group?');
       problems.push('start docker / add your user to the docker group');
     }
   } else {
-    warn('docker not found — fine for a bare-metal run, required for the compose stack');
+    warn('docker not found, fine for a bare-metal run, required for the compose stack');
   }
 
   if (has('ffmpeg')) {
     ok('ffmpeg (host)');
   } else {
-    note('ffmpeg not on the host — the container ships its own, only local runs need it');
+    note('ffmpeg not on the host. The container ships its own; only local runs need it');
   }
 
   heading('Files docker mounts as files');
   for (const file of MOUNTED_FILES) {
     const full = join(ROOT, file.path);
     if (!existsSync(full)) {
-      bad(`${file.path} missing — docker would mount a DIRECTORY here`);
+      bad(`${file.path} missing, docker would mount a DIRECTORY here`);
       note(file.what);
       fixables.push(file);
       problems.push(`create ${file.path}`);
       continue;
     }
     if (statSync(full).isDirectory()) {
-      bad(`${file.path} is a DIRECTORY — docker created it because the file was missing`);
+      bad(`${file.path} is a DIRECTORY, docker created it because the file was missing`);
       note(`remove it, then re-run setup: rm -rf ${file.path}`);
       problems.push(`${file.path} is a directory`);
       continue;
@@ -295,7 +295,7 @@ async function runChecks() {
     const mode = statSync(full).mode & 0o777;
     mode <= file.mode
       ? ok(`${file.path} (${mode.toString(8)})`)
-      : warn(`${file.path} is mode ${mode.toString(8)} — holds live sessions, prefer 600`);
+      : warn(`${file.path} is mode ${mode.toString(8)}, holds live sessions, prefer 600`);
   }
 
   heading('Service cookies');
@@ -315,16 +315,16 @@ async function runChecks() {
     const missing = meta.required.filter(name => !names.includes(name));
     if (names.length === 0) {
       meta.required.length
-        ? warn(`${service}: not configured — ${meta.why}`)
-        : note(`${service}: not configured — ${meta.why}`);
+        ? warn(`${service}: not configured, ${meta.why}`)
+        : note(`${service}: not configured, ${meta.why}`);
     } else if (missing.length) {
-      bad(`${service}: missing ${missing.join(', ')} — ${meta.why}`);
+      bad(`${service}: missing ${missing.join(', ')}, ${meta.why}`);
       problems.push(`add ${missing.join(', ')} to the ${service} entry in cookies.json`);
     } else {
       ok(`${service}: ${names.length} cookie(s)`);
     }
   }
-  note('values are never printed; copy the format from cookies.example.json');
+  note('format is in cookies.example.json');
 
   heading('Writable directories');
   for (const dir of MOUNTED_DIRS) {
@@ -350,25 +350,25 @@ async function runChecks() {
         : ok(key);
     }
     if (isPlaceholder(env.ADMIN_USER_IDS)) {
-      warn('ADMIN_USER_IDS empty — nobody can bypass limits or see admin surfaces');
+      warn('ADMIN_USER_IDS empty, nobody can bypass limits or see admin surfaces');
     } else {
       ok('ADMIN_USER_IDS');
     }
     const r2Keys = ['R2_ACCOUNT_ID', 'R2_ACCESS_KEY_ID', 'R2_SECRET_ACCESS_KEY', 'R2_BUCKET_NAME'];
     const r2Set = r2Keys.filter(k => !isPlaceholder(env[k]));
     if (r2Set.length === 0) {
-      note('R2 not configured — files attach to Discord instead, which is a fine default');
+      note('R2 not configured. Files attach to Discord instead, which is a fine default');
     } else if (r2Set.length === r2Keys.length) {
       isPlaceholder(env.R2_PUBLIC_DOMAIN)
-        ? warn('R2 configured but R2_PUBLIC_DOMAIN empty — uploads will have no public URL')
+        ? warn('R2 configured but R2_PUBLIC_DOMAIN empty, uploads will have no public URL')
         : ok('R2 fully configured');
     } else {
-      bad(`R2 half-configured — missing ${r2Keys.filter(k => isPlaceholder(env[k])).join(', ')}`);
+      bad(`R2 half-configured, missing ${r2Keys.filter(k => isPlaceholder(env[k])).join(', ')}`);
       problems.push('finish or clear the R2 settings');
     }
     for (const [key, value] of Object.entries(env)) {
       if (/^[A-Z]:\\|\\\\/.test(value)) {
-        bad(`${key} looks like a Windows path (${value}) — use a POSIX path`);
+        bad(`${key} looks like a Windows path (${value}), use a POSIX path`);
         problems.push(`fix the path in ${key}`);
       }
     }
@@ -384,7 +384,7 @@ async function runChecks() {
     if (await portFree(port)) {
       ok(`${port} free (${key})`);
     } else {
-      warn(`${port} in use (${key}) — fine if that's gronka already running`);
+      warn(`${port} in use (${key}), fine if that's gronka already running`);
     }
   }
 
@@ -417,7 +417,7 @@ async function wizard() {
   const examplePath = join(ROOT, '.env.example');
 
   if (!existsSync(examplePath)) {
-    bad('.env.example is missing — cannot generate a documented .env from this clone');
+    bad('.env.example is missing, cannot generate a documented .env from this clone');
     return 1;
   }
 
@@ -425,7 +425,7 @@ async function wizard() {
     heading('Existing configuration');
     warn('.env already exists');
     if (!(await confirm('Edit it in place? (values you skip are left alone)', true))) {
-      note('nothing changed — `bun run setup --check` will tell you what is missing');
+      note('nothing changed. `bun run setup --check` lists what is missing');
       return 0;
     }
   }
@@ -453,11 +453,11 @@ async function wizard() {
     SNOWFLAKE.test(v) ? null : 'a Discord id is 17-20 digits'
   );
   const admins = await ask(
-    `your Discord user id ${c.dim('(admin: bypasses limits — right-click yourself → Copy User ID)')}`,
+    `your Discord user id ${c.dim('(admin: bypasses limits, right-click yourself → Copy User ID)')}`,
     keep('ADMIN_USER_IDS')
   );
   if (admins && !admins.split(',').every(id => SNOWFLAKE.test(id.trim()))) {
-    warn('that does not look like a comma-separated list of Discord ids — saving it anyway');
+    warn('that does not look like a comma-separated list of Discord ids, saving it anyway');
   }
   text = setEnvValue(text, 'PROD_DISCORD_TOKEN', token);
   text = setEnvValue(text, 'PROD_CLIENT_ID', clientId);
@@ -482,12 +482,12 @@ async function wizard() {
       await askRequired('test application id', v => (SNOWFLAKE.test(v) ? null : '17-20 digits'))
     );
   } else {
-    note('skipped — `bun run bot:test` will not work until you fill the TEST_* values');
+    note('skipped. `bun run bot:test` needs the TEST_* values filled in');
   }
 
   heading('Support server');
   note('shown in /info and the ban-appeal embed; leave empty and neither mentions a server');
-  note('do not point your users at someone else’s Discord — they cannot answer for your bot');
+  note('do not point your users at someone else\u2019s Discord; they cannot answer for your bot');
   text = setEnvValue(
     text,
     'SUPPORT_INVITE_URL',
@@ -516,7 +516,7 @@ async function wizard() {
     }
     warn('an R2 bucket on a public domain is readable by anyone who has the URL');
   } else {
-    note('skipped — everything still works, just without a CDN');
+    note('skipped, everything still works, just without a CDN');
   }
 
   writeFileSync(envPath, text);

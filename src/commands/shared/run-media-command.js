@@ -19,7 +19,7 @@ const logger = createLogger('run-media-command');
  *
  * It owns ONLY the parts that are identical and reply-agnostic across the three commands:
  *   - create the operation (+ context) and expose `buildMetadata` / `logStep`
- *   - initialize the database (bail if it fails — the initializer already replied/marked error)
+ *   - initialize the database (bail if it fails, the initializer already replied/marked error)
  *   - flip the operation to `running`
  *   - on a thrown error: log it, mark the operation `error`, send a curated user reply, and
  *     fire `notifyCommandFailure`

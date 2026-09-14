@@ -116,7 +116,7 @@ describe('reddit utilities', () => {
   });
 
   test('a url ending at a &quot; boundary is not left corrupted', () => {
-    // the raw page has ...v=ID&quot; — decoding only &amp; swallowed the entity into the url
+    // the raw page has ...v=ID&quot;, decoding only &amp; swallowed the entity into the url
     const page = '<div>&quot;https://www.youtube.com/watch?v=r1PqynAw0y4&quot;</div>';
     assert.strictEqual(extractOffsiteUrl(page), 'https://www.youtube.com/watch?v=r1PqynAw0y4');
   });

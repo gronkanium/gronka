@@ -4,8 +4,8 @@ import { ConfigurationError } from './errors.js';
 // Load environment variables
 dotenv.config();
 
-// Non-admin download format. The 1080p cap has to be expressed twice — once on height, once
-// on width — because `height<=?1080` alone rejects every format of a portrait video (a 720x1280
+// Non-admin download format. The 1080p cap has to be expressed twice, once on height, once
+// on width, because `height<=?1080` alone rejects every format of a portrait video (a 720x1280
 // reel is 1280 tall), which is most of what the bot is asked for. yt-dlp has no OR inside a
 // filter, so the `/` chain supplies it: landscape matches on height, portrait on width.
 // `<=?` keeps formats that report no dimensions at all (direct-file links via the generic

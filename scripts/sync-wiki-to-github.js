@@ -131,7 +131,7 @@ function configureGitUser(tempDir) {
     });
 
     // Signing is inherited from global git config. The signing key must have no
-    // passphrase — a passphrase-protected key hangs this headless script on a
+    // passphrase, a passphrase-protected key hangs this headless script on a
     // pinentry prompt that never surfaces.
     return true;
   } catch (error) {

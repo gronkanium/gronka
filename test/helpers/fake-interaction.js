@@ -3,7 +3,7 @@
  * command lifecycle (runMediaCommand + interaction-helpers) without a live Discord connection.
  *
  * Records every reply/editReply/deferReply/followUp call so tests can assert exactly what the user
- * would have seen — this is the path the unit tests don't cover.
+ * would have seen, this is the path the unit tests don't cover.
  *
  * @param {Object} [opts]
  * @param {string} [opts.userId]

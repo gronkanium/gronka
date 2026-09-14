@@ -137,17 +137,17 @@ export function buildHelpEmbed(prefix) {
     .setColor(EMBED_COLOR)
     .setDescription(
       `media bot: download from social media, convert videos/images to gif, optimize gifs.\n` +
-        `prefix here is \`${prefix}\` — mentioning me works too. slash commands (\`/download\` etc.) also work.`
+        `prefix here is \`${prefix}\`, mentioning me works too. slash commands (\`/download\` etc.) also work.`
     )
     .addFields(
       {
         name: 'commands',
         value: [
-          `\`${prefix} download <url>\` — download a video from social media`,
-          `\`${prefix} convert [url]\` — convert a video/image to gif (attach a file, link one, or reply to a message with one)`,
-          `\`${prefix} optimize [url]\` — shrink a gif (attachment, url, or reply)`,
-          `\`${prefix} info\` — bot stats and system info`,
-          `\`${prefix} help\` — this message`,
+          `\`${prefix} download <url>\`, download a video from social media`,
+          `\`${prefix} convert [url]\`, convert a video/image to gif (attach a file, link one, or reply to a message with one)`,
+          `\`${prefix} optimize [url]\`, shrink a gif (attachment, url, or reply)`,
+          `\`${prefix} info\`, bot stats and system info`,
+          `\`${prefix} help\`, this message`,
         ].join('\n'),
         inline: false,
       },
@@ -181,7 +181,7 @@ function buildMentionEmbed(prefix) {
  */
 async function handlePrefixSetting(message, tokens, currentPrefix, deps) {
   if (tokens.length === 0) {
-    await message.reply(`my prefix here is \`${currentPrefix}\` — you can always mention me too.`);
+    await message.reply(`my prefix here is \`${currentPrefix}\`, you can always mention me too.`);
     return;
   }
 

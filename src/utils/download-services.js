@@ -4,7 +4,7 @@ import { getSetting } from './database.js';
 
 // Registry of every source /download can pull from, so the webui can list them and each
 // can be individually turned off. This is a *parallel* classifier used only for the
-// catalog + the enable/disable gate — the real routing still uses isSocialMediaUrl,
+// catalog + the enable/disable gate, the real routing still uses isSocialMediaUrl,
 // getYtdlpSite, isHentaiGifzUrl, isBooruUrl, and isPinterestUrl unchanged. Host matching mirrors those:
 // exact-or-subdomain on the www-stripped hostname.
 //

@@ -10,7 +10,7 @@ import { setSetting } from '../../src/utils/database.js';
 // Full-pipeline E2E for the download command. The network boundary (Cobalt / yt-dlp / file
 // downloader) is mocked at the module level so these run without any real HTTP, but everything
 // else is real: the runMediaCommand lifecycle, URL validation, storage (local disk), database
-// (test postgres), hash-based dedup, and — critically — the Discord reply path that the unit
+// (test postgres), hash-based dedup, and, critically, the Discord reply path that the unit
 // tests cannot reach.
 //
 // We drive handleDownloadCommand (the public slash-command entry point) so the test also
@@ -263,7 +263,7 @@ if (!mocksSupported) {
     test('single-file video: downloads, saves, and replies with a Discord attachment', async () => {
       await cleanStorage();
       // Unique URL to avoid colliding with a URL-cache entry persisted in gronka_test from a
-      // prior run (tests share a long-lived DB — see TODO.md "postgres test DB persists").
+      // prior run (tests share a long-lived DB, see TODO.md "postgres test DB persists").
       const url = `https://x.com/user/status/single-${Date.now()}`;
       const { interaction, calls } = downloadInteraction(url, 'e2e-dl-single');
 
@@ -297,7 +297,7 @@ if (!mocksSupported) {
     });
 
     // Regression: Discord rejects a message carrying more than 10 attachments (50035), so a
-    // 12-file carousel sent as one message failed entirely — the user got nothing, and the
+    // 12-file carousel sent as one message failed entirely, the user got nothing, and the
     // operation was still recorded as a success.
     test('carousel over the attachment cap: splits across a reply plus follow-ups', async () => {
       await cleanStorage();
@@ -316,7 +316,7 @@ if (!mocksSupported) {
         'no message may carry more than 10 attachments'
       );
 
-      // Every file must still arrive, in order — the delivery split must not drop or reorder.
+      // Every file must still arrive, in order, the delivery split must not drop or reorder.
       const delivered = batches.flatMap(batch => batch.map(file => file.name));
       assert.strictEqual(delivered.length, 12, 'all 12 files delivered');
       assert.strictEqual(new Set(delivered).size, 12, 'no duplicated attachment');

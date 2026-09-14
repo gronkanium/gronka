@@ -381,10 +381,10 @@
                   </td>
                   <td class="op-time">{formatRelativeTime(operation.timestamp)}</td>
                   <td class="op-size"
-                    >{operation.fileSize ? formatBytes(operation.fileSize) : '—'}</td
+                    >{operation.fileSize ? formatBytes(operation.fileSize) : ', '}</td
                   >
                   <td class="op-error" class:has-error={operation.error}
-                    >{operation.error || '—'}</td
+                    >{operation.error || ', '}</td
                   >
                   <td class="op-actions">
                     <button

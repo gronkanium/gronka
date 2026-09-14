@@ -82,7 +82,7 @@ export function isYouTubeUrl(url) {
 // or demand a GVS PO Token. web_embedded still hands out the full progressive format ladder
 // without a token. It needs the `n` challenge solved, which requires a JS runtime plus the
 // yt-dlp-ejs solver: bun is the one runtime in this image (upstream has deprecated bun
-// support — yt-dlp#16766 — so this needs deno or node when that lands).
+// support, yt-dlp#16766, so this needs deno or node when that lands).
 function getYouTubeArgs(url) {
   if (!isYouTubeUrl(url)) return [];
   return ['--js-runtimes', 'bun', '--extractor-args', 'youtube:player_client=web_embedded'];
@@ -240,7 +240,7 @@ function executeYtdlp(
 
     if (maxDuration !== Infinity && startTime === null && duration === null) {
       // The `?` on the operator marks the field optional. Without it yt-dlp rejects any item
-      // whose duration is unknown (`NA`) — which is every direct-media link handled by the
+      // whose duration is unknown (`NA`), which is every direct-media link handled by the
       // generic extractor, e.g. an animated webp from gif.fxtwitter.com. Those were skipped
       // silently (exit 0, no output) and then misreported as "duration exceeds the maximum".
       // Unknown-duration items stay bounded by --max-filesize and the post-read size check.
@@ -444,7 +444,7 @@ function executeYtdlp(
         } else if (errorOutput.includes('is not a valid URL')) {
           reject(new ValidationError('invalid YouTube URL'));
         } else if (errorOutput.includes('There is no video in this post')) {
-          // Image-only posts (common on Instagram /p/ links). The post is perfectly fine —
+          // Image-only posts (common on Instagram /p/ links). The post is perfectly fine ,
           // there is simply no video for yt-dlp to take, so neither the generic "may be
           // deleted or private" message nor a formats-related one describes what happened.
           reject(new NetworkError('this post has no video in it.'));

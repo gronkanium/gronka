@@ -262,7 +262,7 @@ client.once(Events.ClientReady, async readyClient => {
     botStartTime = Date.now();
     await initializeUserTracking();
 
-    // The identify payload already carried this presence (see startBot) — that is what makes it
+    // The identify payload already carried this presence (see startBot), that is what makes it
     // stick across a restart, with no race against the presence discord.js sends on identify.
     // Re-assert it here anyway: identify does not patch the client's local presence, which is
     // what GET /api/bot/status reads back, and this also covers a pre-login load that failed.
@@ -294,7 +294,7 @@ client.once(Events.ClientReady, async readyClient => {
     // Clean up stuck operations every 5 minutes. The threshold must stay above Discord's
     // 15-minute interaction token lifetime: at 10 minutes the reaper was flipping still-running
     // downloads to error and DMing the user a failure, only for the operation to finish and flip
-    // back to success — by which point the token had expired and the reply died with
+    // back to success, by which point the token had expired and the reply died with
     // "Invalid Webhook Token" (50027). Past 16 minutes nothing can be delivered anyway, so
     // anything still running then is genuinely stuck.
     setInterval(
@@ -446,7 +446,7 @@ async function startBot() {
     // activities), so setting it after ClientReady loses a race against that default and the
     // bot comes up online with no custom status. Doing it here also means a gateway
     // re-identify (reconnect after a failed resume) replays the presence for free.
-    // A DB hiccup here must not abort startup — ClientReady retries.
+    // A DB hiccup here must not abort startup, ClientReady retries.
     try {
       const { status, activity } = await loadSavedPresence();
       client.options.presence = buildPresenceOptions(status, activity);

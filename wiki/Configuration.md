@@ -9,7 +9,7 @@ R2, and Windows-shaped paths left over from another machine.
 
 ## data retention
 
-gronka deletes its own history. Nothing is kept indefinitely, and the job runs automatically —
+gronka deletes its own history. Nothing is kept indefinitely, and the job runs automatically , 
 there is no manual step.
 
 | Variable | Default | What it prunes |
@@ -24,7 +24,7 @@ there is no manual step.
 history, and they are what `/info` and the webui report as the user count. Pruning them would lose
 the only figure gronka publishes about its users. Ban records are kept too, for obvious reasons.
 
-A cache row whose R2 upload is still live is never pruned — deleting it would orphan the object in
+A cache row whose R2 upload is still live is never pruned, deleting it would orphan the object in
 R2 with no tracking row left to expire it.
 
 gronka stores **Discord user ids only**. Usernames are never written to the database, the logs, R2
@@ -178,7 +178,7 @@ R2_BUCKET_NAME=gronka-media
 
 ### `R2_PUBLIC_DOMAIN`
 
-public domain for your r2 bucket, as a bare hostname — urls are built as
+public domain for your r2 bucket, as a bare hostname, urls are built as
 `https://{R2_PUBLIC_DOMAIN}/{key}`, so including a scheme here produces broken links.
 
 **default:** empty. with no domain set, r2 uploads are disabled and files fall back to
@@ -763,7 +763,7 @@ YTDLP_COOKIES_PATH=./tiktok-cookies.txt
 
 ### `INSTAGRAM_COOKIES_PATH`
 
-optional path to a `cookies.json` holding an instagram session — the same file and format
+optional path to a `cookies.json` holding an instagram session, the same file and format
 cobalt uses (`{"instagram": ["mid=...; sessionid=..."]}`).
 
 **optional**
@@ -773,7 +773,7 @@ cobalt uses (`{"instagram": ["mid=...; sessionid=..."]}`).
 - with a session set, instagram posts download through instagram's own media-info api instead
   of cobalt. this is the only route that works for photo and carousel posts: cobalt answers
   `error.api.fetch.empty` for them, and yt-dlp's extractor only ever returns video
-- without it, instagram falls back to cobalt exactly as before — reels keep working, photo
+- without it, instagram falls back to cobalt exactly as before, reels keep working, photo
   posts keep failing
 - the entry must contain a `sessionid`; the api has no anonymous form
 - an expired session logs an error naming the cookie file, and downloads fall back to cobalt
@@ -827,7 +827,7 @@ NTFY_TOPIC=gronka-notifications
 
 invite link to the discord server that supports **your** instance.
 
-**optional** — empty by default
+**optional**, empty by default
 
 two surfaces use it:
 
@@ -835,7 +835,7 @@ two surfaces use it:
 - the ban embed appends `you can appeal at: <invite>` when the ban was created with appeals allowed
 
 when it is empty, `/info` omits the link entirely and the ban embed says appeals go to the bot
-operator without naming a server. leave it empty rather than pointing at someone else's server —
+operator without naming a server. leave it empty rather than pointing at someone else's server , 
 they cannot action bans on your instance.
 
 **example:**

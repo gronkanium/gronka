@@ -14,7 +14,7 @@ const CLIENT_ID = process.env[`${envPrefix}CLIENT_ID`];
 if (!DISCORD_TOKEN || !CLIENT_ID) {
   console.error(
     `missing ${envPrefix}DISCORD_TOKEN or ${envPrefix}CLIENT_ID in environment` +
-      (usePrefix ? '' : ' — pass PROD or TEST to read the prefixed vars')
+      (usePrefix ? '' : ', pass PROD or TEST to read the prefixed vars')
   );
   process.exit(1);
 }

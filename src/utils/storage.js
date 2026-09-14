@@ -223,7 +223,7 @@ export function detectFileType(extension, contentType = '', buffer = null) {
     if (magic === 'GIF87a' || magic === 'GIF89a') {
       return 'gif';
     }
-    // ISO-BMFF ('ftyp' at offset 4) covers mp4/mov/m4v — an mp4 named .gif lands here.
+    // ISO-BMFF ('ftyp' at offset 4) covers mp4/mov/m4v, an mp4 named .gif lands here.
     if (buffer.length >= 12 && buffer.subarray(4, 8).toString('latin1') === 'ftyp') {
       return 'video';
     }

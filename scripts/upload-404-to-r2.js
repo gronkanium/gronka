@@ -26,7 +26,7 @@ async function upload404Cat() {
     }
 
     // Read the 404 cat image
-    // The tracked asset, not src/public/ — that's vite's build output and is gitignored, so a
+    // The tracked asset, not src/public/, that's vite's build output and is gitignored, so a
     // fresh clone has no copy of it until the webui is built.
     const catImagePath = path.join(__dirname, '..', 'src', 'webui', 'public', '404.jpg');
     let catImageBuffer;

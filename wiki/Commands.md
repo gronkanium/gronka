@@ -24,9 +24,9 @@ every slash command is also available as a message (prefix) command. the default
 
 **changing the prefix (per server):**
 
-- `^g prefix` — show the current prefix (anyone)
-- `^g prefix !` — set a new prefix (requires the manage server permission); 1-3 printable characters, no spaces, and not `@`, `#`, `<`, `>`, backticks, or backslashes
-- `^g prefix reset` — go back to the default
+- `^g prefix`, show the current prefix (anyone)
+- `^g prefix !`, set a new prefix (requires the manage server permission); 1-3 printable characters, no spaces, and not `@`, `#`, `<`, `>`, backticks, or backslashes
+- `^g prefix reset`, go back to the default
 - if the prefix is ever forgotten or clashes with another bot, mentioning the bot always works: `@gronka prefix !`
 
 ## slash commands
@@ -84,7 +84,7 @@ download media from a social media url or direct url.
 - also works with direct media urls
 - embed-fixer mirror urls are rewritten to the canonical site before downloading: fxtwitter.com, fixupx.com, twittpr.com, pxtwitter.com, vxtwitter.com, fixvx.com, cunnyx.com, girlcockx.com, and stupidpenisx.com all map to twitter.com; fxbsky.app maps to bsky.app
 - youtube downloads are handled by yt-dlp and capped at 5 minutes for non-admin users; use `start_time`/`end_time` to grab a clip from a longer video (trimmed downloads bypass the duration cap)
-- age-restricted tiktok posts fall back from cobalt to yt-dlp, which needs a cookies file — see `YTDLP_COOKIES_PATH` in [[Configuration]]
+- age-restricted tiktok posts fall back from cobalt to yt-dlp, which needs a cookies file, see `YTDLP_COOKIES_PATH` in [[Configuration]]
 - downloads and stores the media without conversion
 - **for videos**: time parameters (`start_time`, `end_time`) trim the video before saving
   - if only `start_time` is provided, video is trimmed from that time to the end
@@ -138,10 +138,10 @@ view usage, storage, and system information in one embed.
 
 **usage:**
 
-- **usage** — uptime, guild count, unique user count
-- **storage** — files stored (gifs, videos, images), disk usage, and r2 usage against its
+- **usage**, uptime, guild count, unique user count
+- **storage**, files stored (gifs, videos, images), disk usage, and r2 usage against its
   limit with the cache age
-- **system** — platform, cpu count, memory, bun and gronka versions
+- **system**, platform, cpu count, memory, bun and gronka versions
 
 **examples:**
 

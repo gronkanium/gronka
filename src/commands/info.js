@@ -78,7 +78,7 @@ export async function handleInfoCommand(interaction, botStartTime) {
     const bunVersion = process.versions.bun;
 
     const embed = new EmbedBuilder()
-      .setTitle('gronka — info')
+      .setTitle('info')
       .setColor(0x5865f2)
       .addFields(
         {

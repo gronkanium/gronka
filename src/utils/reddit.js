@@ -2,7 +2,6 @@ import axios from 'axios';
 import fsSync from 'node:fs';
 import { createLogger } from './logger.js';
 import { NetworkError, ValidationError } from './errors.js';
-import { downloadFileFromUrl } from './file-downloader.js';
 import { ssrfGuardedRequest } from './ssrf-guard.js';
 
 const logger = createLogger('reddit');
@@ -16,6 +15,11 @@ const logger = createLogger('reddit');
 // mux; those still fall through to cobalt/yt-dlp.
 const PAGE_TIMEOUT_MS = 20000;
 const MEDIA_HOSTS = ['i.redd.it', 'preview.redd.it'];
+
+// Reddit is mostly a link aggregator, so a post's media often is not Reddit's at all. These are
+// the offsite hosts worth handing back to the caller, which re-runs its own source selection on
+// the target rather than duplicating the routing table here.
+const OFFSITE_HOSTS = ['redgifs.com', 'imgur.com', 'gfycat.com', 'streamable.com'];
 
 // /comments/<id>/... is the canonical form; /s/<id> is what the share sheet emits and 301s to it.
 const POST_PATH = /^\/r\/[^/]+\/(?:comments|s)\/[A-Za-z0-9_]+/;
@@ -126,12 +130,7 @@ export function extractImageUrls(html) {
   return entries.map(([, entry]) => entry.url);
 }
 
-/**
- * Download an image from a Reddit post. Gallery posts resolve to their slides in page order;
- * `index` is 1-based to match the ?img_index= convention the share sheet uses elsewhere.
- * Throws on any failure; the caller treats that as "fall back to cobalt".
- */
-export async function downloadFromReddit(url, isAdminUser = false, index = null) {
+async function fetchPostPage(url) {
   const cookie = readSessionCookie();
   if (!cookie) {
     throw new ValidationError('no reddit session configured');
@@ -170,18 +169,37 @@ export async function downloadFromReddit(url, isAdminUser = false, index = null)
   if (/Welcome to Reddit/i.test(html.slice(0, 4000))) {
     throw new NetworkError('reddit served a login wall instead of the post');
   }
+  return html;
+}
 
-  const images = extractImageUrls(html);
-  if (images.length === 0) {
-    throw new ValidationError('no downloadable image found on this post');
+/** The post's offsite media link, if it points at a host the download pipeline already handles. */
+export function extractOffsiteUrl(html) {
+  const decoded = html.replace(/&amp;/g, '&');
+  for (const match of decoded.matchAll(/https?:\/\/[^\s"'<>\\)]+/g)) {
+    let host;
+    try {
+      host = new URL(match[0]).hostname.toLowerCase().replace(/^www\./, '');
+    } catch {
+      continue;
+    }
+    if (OFFSITE_HOSTS.some(h => host === h || host.endsWith(`.${h}`))) {
+      return match[0];
+    }
   }
+  return null;
+}
 
-  const pick = Number.isInteger(index) && index >= 1 && index <= images.length ? index - 1 : 0;
-  logger.info(`Resolved Reddit post to ${images.length} image(s), taking #${pick + 1}`);
-
-  const result = await downloadFileFromUrl(images[pick], isAdminUser);
-  logger.info(
-    `Downloaded Reddit media: ${result.filename} (${result.size} bytes, ${result.contentType})`
-  );
-  return result;
+/**
+ * One fetch, both answers: where the post's media actually lives.
+ * `external` is set when the post points offsite (redgifs, imgur, …) — the caller re-runs its
+ * own source selection on it. `images` holds Reddit-hosted images when it does not.
+ */
+export async function resolveRedditPost(url) {
+  const html = await fetchPostPage(url);
+  const images = extractImageUrls(html);
+  // Reddit-hosted media wins: a post can mention an offsite host in a comment or sidebar.
+  if (images.length > 0) {
+    return { external: null, images };
+  }
+  return { external: extractOffsiteUrl(html), images: [] };
 }

@@ -1,6 +1,6 @@
 import { describe, test } from 'bun:test';
 import assert from 'node:assert';
-import { isRedditPostUrl, extractImageUrls } from '../../src/utils/reddit.js';
+import { isRedditPostUrl, extractImageUrls, extractOffsiteUrl } from '../../src/utils/reddit.js';
 
 // Trimmed from a real post page: src is the 640w variant, srcset carries the wider ones, and
 // every width has its own `s=` signature, so the widest has to be taken as-is.
@@ -93,6 +93,21 @@ describe('reddit utilities', () => {
       slide('title-v0-mine');
     const urls = extractImageUrls(page);
     assert.ok(urls[0].includes('mine'), `og:image slide first, got ${urls[0]}`);
+  });
+
+  test('finds the offsite host a link-aggregator post points at', () => {
+    const page =
+      '<a href="https://www.reddit.com/r/x/comments/y/">permalink</a>' +
+      '<div>https://redgifs.com/watch/digitalmysteriousanglerfish</div>';
+    assert.strictEqual(
+      extractOffsiteUrl(page),
+      'https://redgifs.com/watch/digitalmysteriousanglerfish'
+    );
+  });
+
+  test('ignores offsite hosts the download pipeline cannot handle', () => {
+    assert.strictEqual(extractOffsiteUrl('<a href="https://example.com/thing">x</a>'), null);
+    assert.strictEqual(extractOffsiteUrl('<a href="https://reddit.com/r/a/">x</a>'), null);
   });
 
   test('a post with no images extracts nothing rather than guessing', () => {

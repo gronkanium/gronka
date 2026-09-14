@@ -60,7 +60,7 @@ services:
       - DATABASE_URL=${DATABASE_URL:-}
       # Netscape cookies.txt for yt-dlp (age-restricted TikTok etc.); ignored if the file is absent
       - YTDLP_COOKIES_PATH=${YTDLP_COOKIES_PATH:-/app/tiktok-cookies.txt}
-      # Same cookies.json cobalt reads; its `instagram` entry enables the Instagram extractor
+      # The app's own cookie file (cobalt has a separate copy): `instagram` and `reddit` entries
       - INSTAGRAM_COOKIES_PATH=${INSTAGRAM_COOKIES_PATH:-/app/cookies.json}
     volumes:
       - ./data-test:/app/data-test
@@ -70,7 +70,7 @@ services:
       # Optional yt-dlp cookies file (export from a logged-in browser in Netscape format).
       # If it doesn't exist on the host, Docker mounts an empty directory and yt-dlp runs without cookies.
       - ./tiktok-cookies.txt:/app/tiktok-cookies.txt
-      # Read-only: the app only reads the instagram session out of it, cobalt owns the file.
+      # Read-only, and no longer shared with cobalt, so nothing rewrites it under the app.
       - ./cookies.json:/app/cookies.json:ro
     ports:
       - '${SERVER_PORT:-3000}:${SERVER_PORT:-3000}'
@@ -132,9 +132,9 @@ services:
     networks:
       - gronka-network
     volumes:
-      # Mount cookies.json from project root to enable authentication for restricted content
-      # Create cookies.json from cookies.example.json and add your service authentication cookies
-      - ./cookies.json:/cookies.json
+      # Cobalt's OWN copy: it mounts this read-write and rewrites the file, dropping any service
+      # it does not recognise. Sharing one file with the app cost us the reddit entry once.
+      - ./cobalt-cookies.json:/cookies.json
 
   # watchtower updates the cobalt image automatically
   watchtower:

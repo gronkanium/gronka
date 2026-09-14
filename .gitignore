@@ -62,3 +62,6 @@ coverage/
 AGENTS.md
 .agent/
 CLAUDE.md
+
+# Cobalt writes its own copy back; same secrets as cookies.json
+cobalt-cookies.json

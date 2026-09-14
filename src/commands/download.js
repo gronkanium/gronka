@@ -38,7 +38,12 @@ import { getDisabledServiceLabel } from '../utils/download-services.js';
 import { AppError, ValidationError } from '../utils/errors.js';
 import { batchAttachmentsForDelivery } from '../utils/attachment-helpers.js';
 import { isAdmin, recordRateLimit } from '../utils/rate-limit.js';
-import { generateHash, isDirectMediaUrl, downloadDirectMedia } from '../utils/file-downloader.js';
+import {
+  generateHash,
+  isDirectMediaUrl,
+  downloadDirectMedia,
+  downloadFileFromUrl,
+} from '../utils/file-downloader.js';
 import {
   createFailedOperation,
   updateOperationStatus,
@@ -69,7 +74,7 @@ import {
 import { hashUrl } from '../utils/hashing.js';
 import { notifyCommandSuccess, notifyCommandFailure } from '../utils/ntfy-notifier.js';
 import { getProcessedUrl, getBooleanSetting, getSetting } from '../utils/database.js';
-import { isRedditPostUrl, hasRedditSession, downloadFromReddit } from '../utils/reddit.js';
+import { isRedditPostUrl, hasRedditSession, resolveRedditPost } from '../utils/reddit.js';
 import { recordProcessedUrl, trackR2UploadIfApplicable } from './shared/url-cache.js';
 import { runMediaCommand } from './shared/run-media-command.js';
 import { replyIfRateLimited, resolveTimeOptions } from './shared/command-guards.js';
@@ -336,6 +341,25 @@ export async function processDownload(
 
       const maxSize = adminUser ? Infinity : await getMaxVideoSize();
       const discordAttachmentLimit = getDiscordAttachmentLimit(interaction, DISCORD_SIZE_LIMIT);
+      // Reddit deprecated the unauthenticated .json endpoints in May 2026, so yt-dlp cannot read
+      // a post at all. Resolve it before the source flags below are computed: most posts are
+      // link-aggregator entries whose media lives on redgifs/imgur, and swapping url for that
+      // target lets the normal selection route it to the extractor that already handles it.
+      let redditImages = null;
+      if (isRedditPostUrl(url) && hasRedditSession()) {
+        try {
+          const resolved = await resolveRedditPost(url);
+          if (resolved.external) {
+            logger.info(`Reddit post points offsite, following to: ${resolved.external}`);
+            url = resolved.external;
+          } else {
+            redditImages = resolved.images;
+          }
+        } catch (redditError) {
+          logger.warn(`Reddit resolution failed, falling back to cobalt: ${redditError.message}`);
+        }
+      }
+
       const ytdlpSite = getYtdlpSite(url);
       const galleryDlSite = getGalleryDlSite(url);
       const isHentaiGifz = isHentaiGifzUrl(url);
@@ -347,9 +371,7 @@ export async function processDownload(
       // session cookie is configured — without one it cannot work at all, and cobalt (the
       // previous behaviour) stays the only route.
       const useInstagram = isInstagramPostUrl(url) && hasInstagramSession();
-      // Same shape as Instagram: Reddit deprecated the unauthenticated .json endpoints in
-      // May 2026, so yt-dlp cannot read a post at all and our HTML reader needs a session.
-      const useReddit = isRedditPostUrl(url) && hasRedditSession();
+      const useReddit = redditImages !== null && redditImages.length > 0;
       // yt-dlp sites (youtube, redgifs, imgur, the tube sites, etc.) download through
       // yt-dlp, not Cobalt.
       const useYtdlp = ytdlpSite !== null && YTDLP_ENABLED;
@@ -587,17 +609,18 @@ export async function processDownload(
             metadata: { url, fileCount: 1 },
           });
         } else if (downloadMethod === 'reddit') {
-          // Images only; a v.redd.it video post finds none and falls through to cobalt/yt-dlp.
           try {
-            fileData = await downloadFromReddit(url, adminUser);
+            fileData = await downloadFileFromUrl(redditImages[0], adminUser);
             logOperationStep(operationId, 'download_complete', 'success', {
               message: 'file downloaded successfully via Reddit',
               metadata: { url, fileCount: 1 },
             });
           } catch (redditError) {
-            logger.warn(`Reddit extractor failed, falling back to cobalt: ${redditError.message}`);
+            logger.warn(
+              `Reddit image fetch failed, falling back to cobalt: ${redditError.message}`
+            );
             logOperationStep(operationId, 'download_fallback', 'running', {
-              message: 'Reddit extractor failed, retrying with cobalt',
+              message: 'Reddit image fetch failed, retrying with cobalt',
               metadata: { url, reason: redditError.message },
             });
             downloadMethod = 'cobalt';

@@ -1,6 +1,10 @@
 import { describe, test } from 'bun:test';
 import assert from 'node:assert';
-import { isRedditPostUrl, extractImageUrls, extractOffsiteUrl } from '../../src/utils/reddit.js';
+import {
+  isRedditPostUrl,
+  extractImageCandidates,
+  extractOffsiteUrl,
+} from '../../src/utils/reddit.js';
 
 // Trimmed from a real post page: src is the 640w variant, srcset carries the wider ones, and
 // every width has its own `s=` signature, so the widest has to be taken as-is.
@@ -34,28 +38,32 @@ describe('reddit utilities', () => {
     assert.strictEqual(isRedditPostUrl('not a url'), false);
   });
 
-  test('takes the widest signed variant from srcset, not the smaller src', () => {
-    const urls = extractImageUrls(slide('honest-rate-v0-tuno0m9l29ph1'));
-    assert.strictEqual(urls.length, 1);
-    assert.ok(urls[0].includes('width=1080'), 'widest variant');
-    assert.ok(urls[0].includes('s=ccc'), "that width's own signature");
-    assert.ok(!urls[0].includes('&amp;'), 'entities decoded so the signature survives');
+  test('prefers the unsigned original, keeping the widest signed preview as fallback', () => {
+    const slides = extractImageCandidates(slide('honest-rate-v0-tuno0m9l29ph1'));
+    assert.strictEqual(slides.length, 1);
+    const [original, fallback] = slides[0];
+    assert.strictEqual(original, 'https://i.redd.it/tuno0m9l29ph1.jpg');
+    assert.ok(fallback.includes('width=1080'), 'widest signed variant as fallback');
+    assert.ok(fallback.includes('s=ccc'), "that width's own signature");
+    assert.ok(!fallback.includes('&amp;'), 'entities decoded so the signature survives');
   });
 
   test('a gallery yields one entry per slide, in page order', () => {
-    const urls = extractImageUrls(slide('a-v0-one') + slide('b-v0-two') + slide('c-v0-three'));
-    assert.strictEqual(urls.length, 3);
-    assert.ok(urls[0].includes('a-v0-one'));
-    assert.ok(urls[2].includes('c-v0-three'));
+    const slides = extractImageCandidates(
+      slide('a-v0-one') + slide('b-v0-two') + slide('c-v0-three')
+    );
+    assert.strictEqual(slides.length, 3);
+    assert.ok(slides[0][0].includes('one'));
+    assert.ok(slides[2][0].includes('three'));
   });
 
   test('the same slide at many widths collapses to one image', () => {
-    assert.strictEqual(extractImageUrls(slide('dup-v0-x') + slide('dup-v0-x')).length, 1);
+    assert.strictEqual(extractImageCandidates(slide('dup-v0-x') + slide('dup-v0-x')).length, 1);
   });
 
   test('ignores avatars and other non-post imagery', () => {
-    assert.deepStrictEqual(extractImageUrls(avatar), []);
-    assert.strictEqual(extractImageUrls(avatar + slide('real-v0-post')).length, 1);
+    assert.deepStrictEqual(extractImageCandidates(avatar), []);
+    assert.strictEqual(extractImageCandidates(avatar + slide('real-v0-post')).length, 1);
   });
 
   // Reddit flips to this shape without warning; it carries the same slides at a larger width.
@@ -65,25 +73,27 @@ describe('reddit utilities', () => {
     "more":"https://preview.redd.it/wuv07m9l29ph1.jpg?width=1200&amp;s=q3"}</script>`;
 
   test('reads the server-rendered variant, not just the hydrated one', () => {
-    const urls = extractImageUrls(noJsVariant);
-    assert.strictEqual(urls.length, 2);
-    assert.ok(urls[0].includes('width=1200'), 'widest wins over the 108w thumbnail');
-    assert.ok(urls[0].includes('s=q1'));
+    const slides = extractImageCandidates(noJsVariant);
+    assert.strictEqual(slides.length, 2);
+    assert.strictEqual(slides[0][0], 'https://i.redd.it/tuno0m9l29ph1.jpg');
+    assert.ok(slides[0][1].includes('width=1200'), 'widest signed preview wins over the 108w');
+    assert.ok(slides[0][1].includes('s=q1'));
   });
 
   test('both shapes name the same slide, so they do not double up', () => {
     // hydrated ids carry a title prefix the server-rendered ones omit
-    const urls = extractImageUrls(slide('honest-rate-v0-tuno0m9l29ph1') + noJsVariant);
+    const urls = extractImageCandidates(slide('honest-rate-v0-tuno0m9l29ph1') + noJsVariant);
     assert.ok(
       urls.length <= 2,
       `same two slides across both shapes, got ${urls.length}: ${urls.join(' ')}`
     );
   });
 
-  test('skips unsigned listing thumbnails, which answer 403', () => {
+  test('a thumbnail-only page still yields the unsigned original', () => {
     const thumb =
       '<meta property="og:image" content="https://preview.redd.it/abc123.jpg?width=140&amp;crop=1:1,smart">';
-    assert.deepStrictEqual(extractImageUrls(thumb), []);
+    // the 140px thumb itself is unsigned and 403s, but it names the slide
+    assert.deepStrictEqual(extractImageCandidates(thumb), [['https://i.redd.it/abc123.jpg']]);
   });
 
   test("the post's own image sorts first, ahead of neighbouring posts", () => {
@@ -91,8 +101,8 @@ describe('reddit utilities', () => {
       '<meta property="og:image" content="https://preview.redd.it/mine.jpg?width=140&amp;crop=1:1">' +
       slide('other-v0-neighbour') +
       slide('title-v0-mine');
-    const urls = extractImageUrls(page);
-    assert.ok(urls[0].includes('mine'), `og:image slide first, got ${urls[0]}`);
+    const slides = extractImageCandidates(page);
+    assert.ok(slides[0][0].includes('mine'), `og:image slide first, got ${slides[0][0]}`);
   });
 
   test('finds the offsite host a link-aggregator post points at', () => {
@@ -111,6 +121,6 @@ describe('reddit utilities', () => {
   });
 
   test('a post with no images extracts nothing rather than guessing', () => {
-    assert.deepStrictEqual(extractImageUrls('<html><body>no media here</body></html>'), []);
+    assert.deepStrictEqual(extractImageCandidates('<html><body>no media here</body></html>'), []);
   });
 });

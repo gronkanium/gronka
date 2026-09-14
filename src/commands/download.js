@@ -610,7 +610,20 @@ export async function processDownload(
           });
         } else if (downloadMethod === 'reddit') {
           try {
-            fileData = await downloadFileFromUrl(redditImages[0], adminUser);
+            // Candidates for one slide, best first: the unsigned original, then a signed
+            // preview, because the original 404s for crossposts.
+            let lastError;
+            for (const candidate of redditImages[0]) {
+              try {
+                fileData = await downloadFileFromUrl(candidate, adminUser);
+                break;
+              } catch (candidateError) {
+                lastError = candidateError;
+              }
+            }
+            if (!fileData) {
+              throw lastError;
+            }
             logOperationStep(operationId, 'download_complete', 'success', {
               message: 'file downloaded successfully via Reddit',
               metadata: { url, fileCount: 1 },

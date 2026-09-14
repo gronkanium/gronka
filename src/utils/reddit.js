@@ -9,7 +9,7 @@ const logger = createLogger('reddit');
 // Reddit deprecated the unauthenticated .json endpoints in May 2026: appending .json now answers
 // 403, and old.reddit.com serves the "Welcome to Reddit" interstitial, so yt-dlp's Reddit
 // extractor cannot work from this box at all. The one surface that still answers is the normal
-// www HTML with a logged-in session cookie; see extractImageUrls for the two shapes it comes in.
+// www HTML with a session cookie; see extractImageCandidates for the two shapes it comes in.
 //
 // Images only. v.redd.it serves video and audio as separate DASH streams that need an ffmpeg
 // mux; those still fall through to cobalt/yt-dlp.
@@ -83,27 +83,27 @@ function slideId(url) {
 const NON_POST_PATH = /snoovatar|\/award|\/cms\/|defaults|headshot/i;
 
 /**
- * Post image URLs, widest variant per slide, in page order.
+ * Per-slide download candidates, best first, slides in page order.
  *
- * Reddit serves two markup shapes for the same post and flips between them without warning:
- * the hydrated page puts each slide in <img class="media-lightbox-img"> with a srcset, while
- * the server-rendered variant carries the same images loose in meta tags and JSON blobs under
- * a shorter id. Scanning for the media hosts outright reads both; every width carries its own
- * `s=` signature, so the widest has to be taken as-is rather than rewritten.
+ * Reddit serves two markup shapes for the same post and flips between them without warning: a
+ * hydrated page with each slide in <img class="media-lightbox-img"> plus a srcset, and a
+ * server-rendered one carrying only a 140px thumbnail per slide. Both name the slide's id, and
+ * `i.redd.it/<id>.<ext>` is the unsigned original — anonymous, full resolution, and the only
+ * thing available at all on the thumbnail-only pages. A signed `preview` variant is kept as the
+ * fallback because the original 404s for crossposts; every width has its own `s=` signature, so
+ * the widest has to be taken as-is rather than rewritten.
  */
-export function extractImageUrls(html) {
+export function extractImageCandidates(html) {
   const decoded = html.replace(/&amp;/g, '&');
-  const widest = new Map();
-  // og:image names the post's own first image, which is what distinguishes post media from
-  // the thumbnails of neighbouring posts the server-rendered page also carries.
+  const slides = new Map();
+  // og:image names the post's own first image, which is what distinguishes post media from the
+  // thumbnails of neighbouring posts the server-rendered page also carries.
   const ogId = slideId(decoded.match(/property="og:image"\s+content="([^"]+)"/)?.[1]);
 
   for (const match of decoded.matchAll(/https:\/\/(?:preview|i)\.redd\.it\/[^"'\\\s<>)]+/g)) {
     const url = match[0];
-    if (!/\.(?:jpe?g|png|gif|webp)(?:\?|$)/i.test(url) || NON_POST_PATH.test(url)) {
-      continue;
-    }
-    if (!isMediaHostUrl(url)) {
+    const ext = url.match(/\.(jpe?g|png|gif|webp)(?:\?|$)/i)?.[1];
+    if (!ext || NON_POST_PATH.test(url) || !isMediaHostUrl(url)) {
       continue;
     }
     let parsed;
@@ -112,22 +112,23 @@ export function extractImageUrls(html) {
     } catch {
       continue;
     }
-    // Only signed variants are fetchable; the unsigned 140x140 ones are listing thumbnails
-    // and answer 403.
-    if (!parsed.searchParams.has('s')) {
+    const id = slideId(url);
+    if (!id) {
       continue;
     }
-    const id = slideId(url);
+    const slide = slides.get(id) || { original: `https://i.redd.it/${id}.${ext}`, width: 0 };
+    // Unsigned variants are listing thumbnails and 403, so only a signed one can be a fallback.
     const width = Number.parseInt(parsed.searchParams.get('width') || '0', 10);
-    const current = widest.get(id);
-    if (!current || current.width < width) {
-      widest.set(id, { width, url });
+    if (parsed.searchParams.has('s') && width > slide.width) {
+      slide.width = width;
+      slide.preview = url;
     }
+    slides.set(id, slide);
   }
 
-  const entries = [...widest.entries()];
+  const entries = [...slides.entries()];
   entries.sort(([a], [b]) => (a === ogId ? -1 : 0) - (b === ogId ? -1 : 0));
-  return entries.map(([, entry]) => entry.url);
+  return entries.map(([, slide]) => [slide.original, slide.preview].filter(Boolean));
 }
 
 async function fetchPostPage(url) {
@@ -196,7 +197,7 @@ export function extractOffsiteUrl(html) {
  */
 export async function resolveRedditPost(url) {
   const html = await fetchPostPage(url);
-  const images = extractImageUrls(html);
+  const images = extractImageCandidates(html);
   // Reddit-hosted media wins: a post can mention an offsite host in a comment or sidebar.
   if (images.length > 0) {
     return { external: null, images };

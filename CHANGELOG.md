@@ -5,6 +5,37 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres (attempts) to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.33.0](https://github.com/thedorekaczynski/gronka/compare/v0.32.0...v0.33.0) (2026-09-14)
+
+
+### Features
+
+* **download:** add a Reddit image extractor ([8ffcb74](https://github.com/thedorekaczynski/gronka/commit/8ffcb740cf4ad4a4634c4f9d12f79808fffa1a4e))
+* **download:** follow Reddit posts to their offsite media host ([cdc7fbc](https://github.com/thedorekaczynski/gronka/commit/cdc7fbc0ab151aed34873ba8ab685c3d139da78c))
+* **download:** send every slide of a Reddit gallery ([49456c4](https://github.com/thedorekaczynski/gronka/commit/49456c474e75276c21ab0a1fd8b9a9626eb090e3))
+* **reddit:** fetch the unsigned i.redd.it original per slide ([796d03e](https://github.com/thedorekaczynski/gronka/commit/796d03ef42b31f3d9a4efdf655339b011cf00506))
+* **reddit:** resolve posts via the anonymous feed and support v.redd.it video ([ea0905b](https://github.com/thedorekaczynski/gronka/commit/ea0905b3cb00146fd131613b68b37e5b63e5644a))
+* **setup:** accept any cookie paste format, not just Netscape ([4902eea](https://github.com/thedorekaczynski/gronka/commit/4902eeab06ba223628834b4f8e2d9c0c3bb394cf))
+* **setup:** add a first-run setup wizard and install doctor ([731a121](https://github.com/thedorekaczynski/gronka/commit/731a1219736751dac7a2968835410136f852a890))
+
+
+### Bug Fixes
+
+* **cobalt:** sniff media type when the tunnel sends no content-type ([1810025](https://github.com/thedorekaczynski/gronka/commit/1810025abb1a8f9ffa9dc693e3dade981e63ba6e))
+* **commands:** mark operations failed when a command returns without a result ([57af8c0](https://github.com/thedorekaczynski/gronka/commit/57af8c0b21cec41d81179b283d2a8365b2da9f43))
+* **download:** align Cobalt filenames with media type ([d9dc1f9](https://github.com/thedorekaczynski/gronka/commit/d9dc1f9f55c14d2100fc217960b62f29a7c5667a))
+* **download:** apply attachment limits per file ([8acc9a5](https://github.com/thedorekaczynski/gronka/commit/8acc9a50a025c93c3e0e9c030059900c4489d761))
+* **download:** honor Discord attachment limits ([f50d7a8](https://github.com/thedorekaczynski/gronka/commit/f50d7a8672dd52c7ab49fd276d296070e4c1790d))
+* **download:** honor interaction attachment limits ([3053242](https://github.com/thedorekaczynski/gronka/commit/305324271b1272ee33c93ac16089596c209705db))
+* **download:** improve manga picker archive UX ([f57b6cb](https://github.com/thedorekaczynski/gronka/commit/f57b6cb54430007e0feb941f37de20f18171d8e0))
+* **download:** re-check the disabled-source gate after a Reddit hand-off ([0be36cb](https://github.com/thedorekaczynski/gronka/commit/0be36cb90974420fe06f3ba0a5f6994aaa092f07))
+* **instagram:** detect an expired session from the login redirect ([8448022](https://github.com/thedorekaczynski/gronka/commit/844802214ff48f34f38786f15d1a0c2bbaf2fdb4))
+* **instagram:** send the web client's full header set ([0094ae1](https://github.com/thedorekaczynski/gronka/commit/0094ae1100d2d0637755c59334cef0857deb5239))
+* **r2:** mark processed_urls expired by key before dropping the tracking rows ([8b8a747](https://github.com/thedorekaczynski/gronka/commit/8b8a747aa9c2a1bf311e65417c75d7dea4a049fb))
+* **reddit:** read the server-rendered page variant too ([08b5175](https://github.com/thedorekaczynski/gronka/commit/08b5175eb49e44366ee3f770e2bd6a9829aab5b8))
+* **reddit:** require a signed variant and anchor ordering to og:image ([2e9b794](https://github.com/thedorekaczynski/gronka/commit/2e9b794c8fd3de56d887287c0579cf8da39e87a4))
+* **reddit:** stop handing on corrupted and pathless offsite urls ([421f82d](https://github.com/thedorekaczynski/gronka/commit/421f82da0f1b300fec44d396e0525313a9968324))
+
 ## [0.32.0](https://github.com/thedorekaczynski/gronka/compare/v0.31.0...v0.32.0) (2026-09-10)
 
 

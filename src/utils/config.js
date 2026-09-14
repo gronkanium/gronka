@@ -123,6 +123,16 @@ function getBotConfig() {
       'CDN_BASE_URL',
       r2Config.publicDomain ? `https://${r2Config.publicDomain}/gifs` : ''
     ),
+    // Nothing is kept indefinitely. On by default: a self-hoster should not have to opt in to
+    // not hoarding other people's data. Minimum 1 day so a typo cannot wipe live history.
+    retentionEnabled: getStringEnv('RETENTION_ENABLED', 'true').toLowerCase() === 'true',
+    retentionDays: parseIntEnv('RETENTION_DAYS', 30, 1, 3650),
+    retentionMediaDays: parseIntEnv('RETENTION_MEDIA_DAYS', 30, 1, 3650),
+    // Shorter on purpose. A cache row's whole value is serving the file it points at, and R2
+    // uploads expire in 2-72h (see upload-tiers.js) - so a 30-day row spends most of its life
+    // pointing at media that is already gone, which is how dead cdn links got served.
+    retentionUrlCacheDays: parseIntEnv('RETENTION_URL_CACHE_DAYS', 7, 1, 3650),
+    retentionIntervalMs: parseIntEnv('RETENTION_INTERVAL_MS', 21600000, 60000, 604800000),
     maxGifDuration: parseIntEnv('MAX_GIF_DURATION', 30, 1, 300),
     gifQuality: getGifQualityEnv('GIF_QUALITY', 'medium'),
     // 1GB hard ceiling for non-admins: bigger files are rejected outright. Files under it are

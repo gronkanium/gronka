@@ -6,6 +6,8 @@ import { createLogger } from './utils/logger.js';
 import { botConfig, serverConfig } from './utils/config.js';
 import { ConfigurationError } from './utils/errors.js';
 import { trackUser, initializeUserTracking } from './utils/user-tracking.js';
+import path from 'node:path';
+import { startRetentionJob, stopRetentionJob } from './utils/retention.js';
 import {
   handleDownloadCommand,
   handleDownloadContextMenuCommand,
@@ -77,6 +79,7 @@ let botStartTime = null;
 
 // Track R2 cleanup job interval ID for graceful shutdown
 let cleanupJobIntervalId = null;
+let retentionJobIntervalId = null;
 
 // HTTP server for stats endpoint (minimal, only for Jekyll stats site)
 let httpServer = null;
@@ -305,6 +308,23 @@ client.once(Events.ClientReady, async readyClient => {
       5 * 60 * 1000
     ); // Run cleanup every 5 minutes
 
+    if (botConfig.retentionEnabled) {
+      try {
+        retentionJobIntervalId = startRetentionJob({
+          days: botConfig.retentionDays,
+          mediaDays: botConfig.retentionMediaDays,
+          urlCacheDays: botConfig.retentionUrlCacheDays,
+          // gifStoragePath points at data-*/gifs; retention walks its siblings too.
+          storagePath: path.dirname(botConfig.gifStoragePath),
+          intervalMs: botConfig.retentionIntervalMs,
+        });
+      } catch (error) {
+        logger.error(`Failed to start retention job: ${error.message}`, error);
+      }
+    } else {
+      logger.warn('Retention is disabled: logs, alerts and cached media will grow without limit');
+    }
+
     // Start R2 cleanup job if enabled
     if (r2Config.cleanupEnabled && r2Config.tempUploadsEnabled) {
       try {
@@ -450,6 +470,9 @@ function gracefulShutdown(signal) {
   logger.info(`${signal} received, shutting down gracefully...`);
   if (cleanupJobIntervalId) {
     stopCleanupJob(cleanupJobIntervalId);
+  }
+  if (retentionJobIntervalId) {
+    stopRetentionJob(retentionJobIntervalId);
   }
   if (httpServer) {
     httpServer.close(() => {

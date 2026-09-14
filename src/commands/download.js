@@ -75,6 +75,7 @@ import { hashUrl } from '../utils/hashing.js';
 import { notifyCommandSuccess, notifyCommandFailure } from '../utils/ntfy-notifier.js';
 import { getProcessedUrl, getBooleanSetting, getSetting } from '../utils/database.js';
 import { isRedditPostUrl, hasRedditSession, resolveRedditPost } from '../utils/reddit.js';
+import { mapWithLimit } from '../utils/concurrency.js';
 import { recordProcessedUrl, trackR2UploadIfApplicable } from './shared/url-cache.js';
 import { runMediaCommand } from './shared/run-media-command.js';
 import { replyIfRateLimited, resolveTimeOptions } from './shared/command-guards.js';
@@ -90,6 +91,10 @@ import tmp from 'tmp';
 import { fitsDiscordAttachment, getDiscordAttachmentLimit } from './shared/attachment-limit.js';
 
 const logger = createLogger('download');
+
+// Reddit allows 20 images per gallery. Each slide is buffered whole in memory, so cap the fan-out
+// rather than letting one link pull 20 full-resolution originals at once.
+const MAX_REDDIT_GALLERY_SLIDES = 10;
 
 function isTwitterXUrl(url) {
   try {
@@ -616,20 +621,32 @@ export async function processDownload(
           });
         } else if (downloadMethod === 'reddit') {
           try {
-            // Candidates for one slide, best first: the unsigned original, then a signed
+            // Each slide carries candidates, best first: the unsigned original, then a signed
             // preview, because the original 404s for crossposts.
             let lastError;
-            for (const candidate of redditImages[0]) {
-              try {
-                fileData = await downloadFileFromUrl(candidate, adminUser);
-                break;
-              } catch (candidateError) {
-                lastError = candidateError;
+            const downloadSlide = async candidates => {
+              for (const candidate of candidates) {
+                try {
+                  return await downloadFileFromUrl(candidate, adminUser);
+                } catch (candidateError) {
+                  lastError = candidateError;
+                }
               }
-            }
-            if (!fileData) {
+              return null;
+            };
+
+            const slides = redditImages.slice(0, MAX_REDDIT_GALLERY_SLIDES);
+            const downloaded = (await mapWithLimit(slides, 4, downloadSlide)).filter(Boolean);
+            if (downloaded.length === 0) {
               throw lastError;
             }
+            if (downloaded.length < slides.length) {
+              logger.warn(
+                `Reddit gallery: ${slides.length - downloaded.length} of ${slides.length} slide(s) failed, sending the rest`
+              );
+            }
+            // The array path below fans a gallery out into one attachment per slide.
+            fileData = downloaded.length === 1 ? downloaded[0] : downloaded;
             logOperationStep(operationId, 'download_complete', 'success', {
               message: 'file downloaded successfully via Reddit',
               metadata: { url, fileCount: 1 },

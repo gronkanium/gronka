@@ -100,6 +100,17 @@ function slideId(url) {
   }
 }
 
+// Only &amp; was decoded at first, so a url ending at a &quot; boundary kept the entity and
+// resolved to youtube.com/watch?v=ID&quot — a corrupted link that could never download.
+const ENTITIES = { amp: '&', quot: '"', apos: "'", lt: '<', gt: '>', '#39': "'", '#x27': "'" };
+
+function decodeEntities(html) {
+  return String(html || '').replace(
+    /&(amp|quot|apos|lt|gt|#39|#x27);?/gi,
+    (whole, name) => ENTITIES[name.toLowerCase()] ?? whole
+  );
+}
+
 // Avatars, awards and static chrome live on the same hosts as post media.
 const NON_POST_PATH = /snoovatar|\/award|\/cms\/|defaults|headshot/i;
 
@@ -115,7 +126,7 @@ const NON_POST_PATH = /snoovatar|\/award|\/cms\/|defaults|headshot/i;
  * the widest has to be taken as-is rather than rewritten.
  */
 export function extractImageCandidates(html) {
-  const decoded = html.replace(/&amp;/g, '&');
+  const decoded = decodeEntities(html);
   const slides = new Map();
   // og:image names the post's own first image, which is what distinguishes post media from the
   // thumbnails of neighbouring posts the server-rendered page also carries.
@@ -194,19 +205,28 @@ async function fetchPostPage(url) {
   return html;
 }
 
-/** The post's offsite media link, if it points at a host the download pipeline already handles. */
+/**
+ * The post's offsite media link, if it points at a host the download pipeline already handles.
+ * Requires a path that could identify media: a bare `https://imgur.com/` is page chrome, not a
+ * post, and handing it on just moves the failure.
+ */
 export function extractOffsiteUrl(html) {
-  const decoded = html.replace(/&amp;/g, '&');
+  const decoded = decodeEntities(html);
   for (const match of decoded.matchAll(/https?:\/\/[^\s"'<>\\)]+/g)) {
-    let host;
+    let parsed;
     try {
-      host = new URL(match[0]).hostname.toLowerCase().replace(/^www\./, '');
+      parsed = new URL(match[0]);
     } catch {
       continue;
     }
-    if (OFFSITE_HOSTS.some(h => host === h || host.endsWith(`.${h}`))) {
-      return match[0];
+    const host = parsed.hostname.toLowerCase().replace(/^www\./, '');
+    if (!OFFSITE_HOSTS.some(h => host === h || host.endsWith(`.${h}`))) {
+      continue;
     }
+    if (parsed.pathname.replace(/\/+$/, '') === '' && !parsed.search) {
+      continue;
+    }
+    return parsed.toString();
   }
   return null;
 }

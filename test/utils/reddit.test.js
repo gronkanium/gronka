@@ -115,6 +115,22 @@ describe('reddit utilities', () => {
     );
   });
 
+  test('a url ending at a &quot; boundary is not left corrupted', () => {
+    // the raw page has ...v=ID&quot; — decoding only &amp; swallowed the entity into the url
+    const page = '<div>&quot;https://www.youtube.com/watch?v=r1PqynAw0y4&quot;</div>';
+    assert.strictEqual(extractOffsiteUrl(page), 'https://www.youtube.com/watch?v=r1PqynAw0y4');
+  });
+
+  test('a bare offsite root is page chrome, not a post', () => {
+    assert.strictEqual(extractOffsiteUrl('<a href="http://imgur.com/">imgur</a>'), null);
+    assert.strictEqual(extractOffsiteUrl('<a href="https://imgur.com">imgur</a>'), null);
+    // but a real post on the same host is kept
+    assert.strictEqual(
+      extractOffsiteUrl('<a href="https://i.imgur.com/tFCfRwG.jpeg">x</a>'),
+      'https://i.imgur.com/tFCfRwG.jpeg'
+    );
+  });
+
   test('ignores offsite hosts the download pipeline cannot handle', () => {
     assert.strictEqual(extractOffsiteUrl('<a href="https://example.com/thing">x</a>'), null);
     assert.strictEqual(extractOffsiteUrl('<a href="https://reddit.com/r/a/">x</a>'), null);

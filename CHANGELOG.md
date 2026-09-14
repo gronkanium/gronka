@@ -5,6 +5,19 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres (attempts) to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.35.0](https://github.com/thedorekaczynski/gronka/compare/v0.34.0...v0.35.0) (2026-09-14)
+
+
+### ⚠ BREAKING CHANGES
+
+* **privacy:** users.username and user_metrics.username are dropped, and the /api/requests username filter is now userId.
+
+### Features
+
+* **privacy:** add a retention job so nothing is kept indefinitely ([994253b](https://github.com/thedorekaczynski/gronka/commit/994253be94358bd42b2cc45fba97c02533bf2bf3))
+* **privacy:** drop every retention window to 7 days ([fc788d6](https://github.com/thedorekaczynski/gronka/commit/fc788d6d8c4d5d95e1257707a406fcb5d81f5402))
+* **privacy:** store Discord ids only, never usernames ([442b626](https://github.com/thedorekaczynski/gronka/commit/442b626e7fc38f64cf3dccf64ec71f3f24daf332))
+
 ## [0.34.0](https://github.com/thedorekaczynski/gronka/compare/v0.33.0...v0.34.0) (2026-09-14)
 
 

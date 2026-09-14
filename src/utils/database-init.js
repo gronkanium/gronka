@@ -20,7 +20,6 @@ const logger = createLogger('database-init');
 export async function initializeDatabaseWithErrorHandling({
   operationId,
   userId,
-  username,
   commandName,
   interaction,
   context = {},
@@ -49,7 +48,7 @@ export async function initializeDatabaseWithErrorHandling({
       content: 'an error occurred while initializing the database. please try again later.',
     });
 
-    await notifyCommandFailure(username, commandName, {
+    await notifyCommandFailure(commandName, {
       operationId,
       userId,
       error: `Database initialization failed: ${dbInitError.message}`,

@@ -72,7 +72,7 @@
     if (q.get('status')) selectedStatuses = new Set(q.get('status').split(','));
     if (q.get('type')) selectedTypes = new Set(q.get('type').split(','));
     searchUserId = q.get('userId') || '';
-    searchUsername = q.get('username') || '';
+    searchUsername = q.get('userId') || '';
     urlPattern = q.get('url') || '';
     failedOnly = q.get('failedOnly') === 'true';
     earlyFailureOnly = q.get('earlyFailureOnly') === 'true';
@@ -97,7 +97,7 @@
       q.set('type', Array.from(selectedTypes).join(','));
     }
     if (searchUserId) q.set('userId', searchUserId);
-    if (searchUsername) q.set('username', searchUsername);
+    if (searchUsername) q.set('userId', searchUsername);
     if (urlPattern) q.set('url', urlPattern);
     if (failedOnly) q.set('failedOnly', 'true');
     if (earlyFailureOnly) q.set('earlyFailureOnly', 'true');
@@ -223,7 +223,7 @@
       }
 
       if (searchUsername) {
-        params.append('username', searchUsername);
+        params.append('userId', searchUsername);
       }
 
       if (urlPattern) {
@@ -456,10 +456,10 @@
 
       <div class="filter-group">
         <!-- svelte-ignore a11y-label-has-associated-control -->
-        <label>username</label>
+        <label>user id</label>
         <input
           type="text"
-          placeholder="filter by username..."
+          placeholder="filter by user id..."
           bind:value={searchUsername}
           on:input={debouncedFetch}
         />
@@ -647,7 +647,7 @@
                   N/A
                 {/if}
               </td>
-              <td class="username-cell">{request.username || 'N/A'}</td>
+              <td class="username-cell">{request.userId || 'N/A'}</td>
               <td class="userid-cell">{request.userId || 'N/A'}</td>
               <td class="error-type-cell">
                 {#if request.errorType}

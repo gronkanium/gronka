@@ -337,8 +337,7 @@ client.on(Events.InteractionCreate, async interaction => {
       `Received interaction: ${interaction.type} from user ${interaction.user.id} (${interaction.user.tag})`
     );
     // Track user interaction (non-blocking to avoid interaction timeout)
-    const username = interaction.user.tag || interaction.user.username || 'unknown';
-    trackUser(interaction.user.id, username).catch(error => {
+    trackUser(interaction.user.id).catch(error => {
       logger.debug(`Failed to track user ${interaction.user.id}: ${error.message}`);
     });
 

@@ -293,7 +293,7 @@
       <div class="profile-header">
         <button class="back-btn" on:click={goBack}>← back to users</button>
         <div class="header-info">
-          <h2>{metrics?.username || user?.username || 'unknown user'}</h2>
+          <h2>{user?.user_id || metrics?.user_id || 'unknown user'}</h2>
           <div class="user-id">user id: {userId}</div>
         </div>
       </div>

@@ -195,7 +195,6 @@ async function replyWithDirectMediaUrls({
   interaction,
   operationId,
   userId,
-  username,
   url,
   stepName,
   shouldServe = null,
@@ -224,7 +223,7 @@ async function replyWithDirectMediaUrls({
   updateOperationStatus(operationId, 'success', { fileSize: 0 });
   recordRateLimit(userId);
   await safeInteractionEditReply(interaction, { content: lines.join('\n') });
-  await notifyCommandSuccess(username, 'download', { operationId, userId });
+  await notifyCommandSuccess('download', { operationId, userId });
   return true;
 }
 
@@ -305,7 +304,7 @@ export async function processDownload(
             await safeInteractionEditReply(interaction, {
               content: formatR2UrlWithDisclaimer(fileUrl, r2Config, adminUser),
             });
-            await notifyCommandSuccess(username, 'download', { operationId, userId });
+            await notifyCommandSuccess('download', { operationId, userId });
             return;
           } else if (processedUrl.r2_expired_at) {
             logger.info(
@@ -845,7 +844,7 @@ export async function processDownload(
         }
         updateOperationStatus(operationId, 'success', { fileSize: fileData.size });
         recordRateLimit(userId);
-        await notifyCommandSuccess(username, 'download', { operationId, userId });
+        await notifyCommandSuccess('download', { operationId, userId });
         return;
       } else if (Array.isArray(fileData)) {
         logger.info(`Processing ${fileData.length} media files from picker`);
@@ -1089,7 +1088,7 @@ export async function processDownload(
           await trackR2UploadIfApplicable(urlHash, result.url, adminUser);
         }
 
-        await notifyCommandSuccess(username, 'download', { operationId, userId });
+        await notifyCommandSuccess('download', { operationId, userId });
         return;
       }
 
@@ -1178,7 +1177,7 @@ export async function processDownload(
           content: formatR2UrlWithDisclaimer(fileUrl, r2Config, adminUser),
         });
 
-        await notifyCommandSuccess(username, 'download', { operationId, userId });
+        await notifyCommandSuccess('download', { operationId, userId });
         return;
       } else {
         let finalBuffer = fileData.buffer;
@@ -1296,7 +1295,7 @@ export async function processDownload(
               content: formatR2UrlWithDisclaimer(fileUrl, r2Config, adminUser),
             });
 
-            await notifyCommandSuccess(username, 'download', { operationId, userId });
+            await notifyCommandSuccess('download', { operationId, userId });
             return;
           }
 
@@ -1414,7 +1413,7 @@ export async function processDownload(
                   content: formatR2UrlWithDisclaimer(fileUrl, r2Config, adminUser),
                 });
 
-                await notifyCommandSuccess(username, 'download', { operationId, userId });
+                await notifyCommandSuccess('download', { operationId, userId });
                 return;
               }
 
@@ -1550,7 +1549,7 @@ export async function processDownload(
               content: formatR2UrlWithDisclaimer(fileUrl, r2Config, adminUser),
             });
 
-            await notifyCommandSuccess(username, 'download', { operationId, userId });
+            await notifyCommandSuccess('download', { operationId, userId });
             return;
           }
 
@@ -1727,7 +1726,7 @@ export async function processDownload(
           });
         }
 
-        await notifyCommandSuccess(username, 'download', { operationId, userId });
+        await notifyCommandSuccess('download', { operationId, userId });
 
         recordRateLimit(userId);
       }
@@ -1751,7 +1750,6 @@ export async function handleDownloadContextMenuCommand(interaction) {
   }
 
   const userId = interaction.user.id;
-  const username = interaction.user.tag || interaction.user.username || 'unknown';
   const adminUser = isAdmin(userId);
 
   logger.info(
@@ -1783,14 +1781,14 @@ export async function handleDownloadContextMenuCommand(interaction) {
   if (!url) {
     logger.warn(`No URL found in message for user ${userId}`);
     const errorMessage = 'no URL found in this message.';
-    createFailedOperation('download', userId, username, errorMessage, 'missing_url', {
+    createFailedOperation('download', userId, errorMessage, 'missing_url', {
       commandSource: 'context-menu',
     });
     await safeInteractionReply(interaction, {
       content: errorMessage,
       flags: MessageFlags.Ephemeral,
     });
-    await notifyCommandFailure(username, 'download', {
+    await notifyCommandFailure('download', {
       userId,
       error: errorMessage,
     });
@@ -1816,7 +1814,7 @@ export async function handleDownloadContextMenuCommand(interaction) {
   if (ytdlpSite && !YTDLP_ENABLED) {
     logger.warn(`User ${userId} attempted to download from ${ytdlpSite} (yt-dlp disabled)`);
     const errorMessage = `${ytdlpSite.toLowerCase()} downloads are disabled.`;
-    createFailedOperation('download', userId, username, errorMessage, 'ytdlp_disabled', {
+    createFailedOperation('download', userId, errorMessage, 'ytdlp_disabled', {
       originalUrl: url,
       commandSource: 'context-menu',
     });
@@ -1829,7 +1827,7 @@ export async function handleDownloadContextMenuCommand(interaction) {
 
   if (galleryDlSite && !GALLERY_DL_ENABLED) {
     const errorMessage = `${galleryDlSite.toLowerCase()} downloads are disabled.`;
-    createFailedOperation('download', userId, username, errorMessage, 'gallery_dl_disabled', {
+    createFailedOperation('download', userId, errorMessage, 'gallery_dl_disabled', {
       originalUrl: url,
       commandSource: 'context-menu',
     });
@@ -1861,7 +1859,7 @@ export async function handleDownloadContextMenuCommand(interaction) {
     logger.info(`Direct media URL detected, will fetch the file directly`);
   } else if (!COBALT_ENABLED) {
     const errorMessage = 'cobalt is not enabled.';
-    createFailedOperation('download', userId, username, errorMessage, 'cobalt_disabled', {
+    createFailedOperation('download', userId, errorMessage, 'cobalt_disabled', {
       originalUrl: url,
       commandSource: 'context-menu',
     });
@@ -1869,11 +1867,11 @@ export async function handleDownloadContextMenuCommand(interaction) {
       content: errorMessage,
       flags: MessageFlags.Ephemeral,
     });
-    await notifyCommandFailure(username, 'download', { userId, error: errorMessage });
+    await notifyCommandFailure('download', { userId, error: errorMessage });
     return;
   } else if (!isSocialMediaUrl(url)) {
     const errorMessage = 'url is not from a supported social media platform.';
-    createFailedOperation('download', userId, username, errorMessage, 'invalid_social_media_url', {
+    createFailedOperation('download', userId, errorMessage, 'invalid_social_media_url', {
       originalUrl: url,
       commandSource: 'context-menu',
     });
@@ -1881,7 +1879,7 @@ export async function handleDownloadContextMenuCommand(interaction) {
       content: errorMessage,
       flags: MessageFlags.Ephemeral,
     });
-    await notifyCommandFailure(username, 'download', {
+    await notifyCommandFailure('download', {
       userId,
       error: errorMessage,
     });
@@ -1896,7 +1894,6 @@ export async function handleDownloadContextMenuCommand(interaction) {
 
 export async function handleDownloadCommand(interaction) {
   const userId = interaction.user.id;
-  const username = interaction.user.tag || interaction.user.username || 'unknown';
   const adminUser = isAdmin(userId);
 
   logger.info(
@@ -1949,14 +1946,14 @@ export async function handleDownloadCommand(interaction) {
   if (!url) {
     logger.warn(`No URL provided for user ${userId}`);
     const errorMessage = 'please provide a URL to download from.';
-    createFailedOperation('download', userId, username, errorMessage, 'missing_url', {
+    createFailedOperation('download', userId, errorMessage, 'missing_url', {
       commandSource: 'slash',
     });
     await safeInteractionReply(interaction, {
       content: errorMessage,
       flags: MessageFlags.Ephemeral,
     });
-    await notifyCommandFailure(username, 'download', { userId, error: errorMessage });
+    await notifyCommandFailure('download', { userId, error: errorMessage });
     return;
   }
 
@@ -1985,7 +1982,7 @@ export async function handleDownloadCommand(interaction) {
   if (!urlValidation.valid) {
     logger.warn(`Invalid URL for user ${userId}: ${urlValidation.error}`);
     const errorMessage = `invalid URL: ${urlValidation.error}`;
-    createFailedOperation('download', userId, username, errorMessage, 'invalid_url', {
+    createFailedOperation('download', userId, errorMessage, 'invalid_url', {
       originalUrl: url,
       commandSource: 'slash',
     });
@@ -2003,7 +2000,7 @@ export async function handleDownloadCommand(interaction) {
   if (ytdlpSite && !YTDLP_ENABLED) {
     logger.warn(`User ${userId} attempted to download from ${ytdlpSite} (yt-dlp disabled)`);
     const errorMessage = `${ytdlpSite.toLowerCase()} downloads are disabled.`;
-    createFailedOperation('download', userId, username, errorMessage, 'ytdlp_disabled', {
+    createFailedOperation('download', userId, errorMessage, 'ytdlp_disabled', {
       originalUrl: url,
       commandSource: 'slash',
     });
@@ -2017,7 +2014,7 @@ export async function handleDownloadCommand(interaction) {
   if (galleryDlSite && !GALLERY_DL_ENABLED) {
     logger.warn(`User ${userId} attempted to download from ${galleryDlSite} (gallery-dl disabled)`);
     const errorMessage = `${galleryDlSite.toLowerCase()} downloads are disabled.`;
-    createFailedOperation('download', userId, username, errorMessage, 'gallery_dl_disabled', {
+    createFailedOperation('download', userId, errorMessage, 'gallery_dl_disabled', {
       originalUrl: url,
       commandSource: 'slash',
     });
@@ -2049,7 +2046,7 @@ export async function handleDownloadCommand(interaction) {
     logger.info(`Direct media URL detected, will fetch the file directly`);
   } else if (!COBALT_ENABLED) {
     const errorMessage = 'cobalt is not enabled. please enable it to use the download command.';
-    createFailedOperation('download', userId, username, errorMessage, 'cobalt_disabled', {
+    createFailedOperation('download', userId, errorMessage, 'cobalt_disabled', {
       originalUrl: url,
       commandSource: 'slash',
     });
@@ -2057,11 +2054,11 @@ export async function handleDownloadCommand(interaction) {
       content: errorMessage,
       flags: MessageFlags.Ephemeral,
     });
-    await notifyCommandFailure(username, 'download', { userId, error: errorMessage });
+    await notifyCommandFailure('download', { userId, error: errorMessage });
     return;
   } else if (!isSocialMediaUrl(url)) {
     const errorMessage = 'url is not from a supported social media platform.';
-    createFailedOperation('download', userId, username, errorMessage, 'invalid_social_media_url', {
+    createFailedOperation('download', userId, errorMessage, 'invalid_social_media_url', {
       originalUrl: url,
       commandSource: 'slash',
     });
@@ -2069,7 +2066,7 @@ export async function handleDownloadCommand(interaction) {
       content: errorMessage,
       flags: MessageFlags.Ephemeral,
     });
-    await notifyCommandFailure(username, 'download', {
+    await notifyCommandFailure('download', {
       userId,
       error: errorMessage,
     });

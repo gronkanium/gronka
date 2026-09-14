@@ -181,7 +181,7 @@
     navigate('users', { userId });
   }
 
-  // The stored message is "<username>: <command> failed - <reason>"; the reason is
+  // The stored message is "<command> failed - <reason>"; the reason is
   // already its own column in the grouped view, so drop the tail here.
   function shortMessage(alert) {
     const message = alert.message || '';
@@ -279,7 +279,7 @@
         type="text"
         bind:value={searchQuery}
         on:keydown={e => e.key === 'Enter' && refetch()}
-        placeholder="message, reason, or username..."
+        placeholder="message, reason, or user id..."
       />
       <button class="btn-small" on:click={refetch}>search</button>
     </div>
@@ -372,7 +372,7 @@
                           <td>
                             {#if alert.user_id}
                               <button class="link-btn" on:click={e => goToUser(alert.user_id, e)}>
-                                {metadata?.username ?? alert.user_id}
+                                {alert.user_id}
                               </button>
                             {:else}
                               <span class="dim">—</span>
@@ -430,7 +430,7 @@
                 <div class="alert-meta">
                   user:
                   <button class="link-btn" on:click={e => goToUser(alert.user_id, e)}>
-                    {metadata?.username ?? alert.user_id}
+                    {alert.user_id}
                   </button>
                 </div>
               {/if}

@@ -44,7 +44,7 @@ export function invalidateUserCache(userId = null) {
   }
 }
 
-export async function insertOrUpdateUser(userId, username, timestamp) {
+export async function insertOrUpdateUser(userId, timestamp) {
   await ensurePostgresInitialized();
 
   const sql = getPostgresConnection();
@@ -61,10 +61,9 @@ export async function insertOrUpdateUser(userId, username, timestamp) {
   const existing = await sql`SELECT first_used FROM users WHERE user_id = ${userId}`;
 
   if (existing.length > 0) {
-    // Update last_used and username (in case username changed)
     await sql`
       UPDATE users
-      SET last_used = ${timestamp}, username = ${username}
+      SET last_used = ${timestamp}
       WHERE user_id = ${userId}
     `;
     // Invalidate cache for this user
@@ -72,8 +71,8 @@ export async function insertOrUpdateUser(userId, username, timestamp) {
   } else {
     // Insert new user
     await sql`
-      INSERT INTO users (user_id, username, first_used, last_used)
-      VALUES (${userId}, ${username}, ${timestamp}, ${timestamp})
+      INSERT INTO users (user_id, first_used, last_used)
+      VALUES (${userId}, ${timestamp}, ${timestamp})
     `;
     // Invalidate cache for this user
     invalidateUserCache(userId);

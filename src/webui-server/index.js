@@ -20,7 +20,6 @@ import {
   broadcastUserMetrics,
 } from './sse/broadcast.js';
 import { operations, MAX_OPERATIONS } from './operations/storage.js';
-import { enrichOperationUsername } from './operations/enrichment.js';
 
 const logger = createLogger('webui');
 
@@ -80,17 +79,9 @@ const broadcastUserMetricsWrapper = (userId, metrics) => {
     try {
       const recentOps = await getRecentOperations(MAX_OPERATIONS);
       if (recentOps && Array.isArray(recentOps) && recentOps.length > 0) {
-        let enrichedCount = 0;
-        for (const op of recentOps) {
-          if (await enrichOperationUsername(op)) {
-            enrichedCount++;
-          }
-        }
         // Add operations to in-memory store (most recent first)
         operations.push(...recentOps);
-        logger.info(
-          `loaded ${recentOps.length} operations from database${enrichedCount > 0 ? `, enriched ${enrichedCount} usernames` : ''}`
-        );
+        logger.info(`loaded ${recentOps.length} operations from database`);
       } else {
         logger.info('no operations found in database or invalid response format');
       }

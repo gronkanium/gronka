@@ -137,19 +137,6 @@ export async function getOperationTrace(operationId) {
     }
   }
 
-  // Try to enrich username from users table
-  let username = context.username;
-  if ((!username || username === 'unknown') && context.userId) {
-    try {
-      const user = await getUser(context.userId);
-      if (user && user.username) {
-        username = user.username;
-      }
-    } catch (_error) {
-      // Silently fail
-    }
-  }
-
   // Determine input type from context
   let inputType = null;
   if (context.originalUrl) {
@@ -166,7 +153,6 @@ export async function getOperationTrace(operationId) {
       commandOptions: context.commandOptions || null,
       operationType: context.operationType || null,
       userId: context.userId || null,
-      username: username || null,
       commandSource: context.commandSource || null,
       inputType: context.inputType || inputType || null,
     },

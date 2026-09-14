@@ -14,7 +14,10 @@ export async function initializeUserTracking() {
   }
 }
 
-export async function trackUser(userId, username = null) {
+// Deliberately takes no username: gronka stores Discord ids only, so a name never reaches
+// the database. Callers still pass one; it is ignored on purpose rather than removed from
+// every call site.
+export async function trackUser(userId) {
   if (!userId || typeof userId !== 'string') {
     return;
   }
@@ -25,11 +28,7 @@ export async function trackUser(userId, username = null) {
     dbInitialized = true;
   }
 
-  // If username not provided, use a default
-  const usernameToStore = username || 'unknown';
-
-  const timestamp = Date.now();
-  await insertOrUpdateUser(userId, usernameToStore, timestamp);
+  await insertOrUpdateUser(userId, Date.now());
 }
 
 export async function getUniqueUserCount() {

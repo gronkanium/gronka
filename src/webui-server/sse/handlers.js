@@ -1,6 +1,5 @@
 import { createLogger } from '../../utils/logger.js';
 import { operations } from '../operations/storage.js';
-import { enrichOperationUsername } from '../operations/enrichment.js';
 import { getAlerts } from '../../utils/database.js';
 
 const logger = createLogger('webui');
@@ -70,16 +69,7 @@ export async function handleSseConnection(req, res, clients) {
 
   // Send initial data to the newly connected client
   try {
-    // Enrich any operations that might have missing usernames before sending
-    const enrichedOps = await Promise.all(
-      operations.map(async op => {
-        const enriched = { ...op };
-        await enrichOperationUsername(enriched);
-        return enriched;
-      })
-    );
-    // Send initial operations list
-    sendEvent(res, 'operations', enrichedOps);
+    sendEvent(res, 'operations', operations);
 
     // Send recent alerts (last 10)
     try {

@@ -355,7 +355,7 @@ async function processConversion(
             await safeInteractionEditReply(interaction, {
               content: processedUrl.file_url,
             });
-            await notifyCommandSuccess(username, 'convert', { operationId, userId });
+            await notifyCommandSuccess('convert', { operationId, userId });
             return;
           } else if (processedUrl.r2_expired_at) {
             logger.info(
@@ -523,7 +523,7 @@ async function processConversion(
             });
             updateOperationStatus(operationId, 'success', { fileSize });
             recordRateLimit(userId);
-            await notifyCommandSuccess(username, 'convert', { operationId, userId });
+            await notifyCommandSuccess('convert', { operationId, userId });
             return;
           } catch (discordError) {
             logger.warn(
@@ -542,7 +542,7 @@ async function processConversion(
                 await safeInteractionEditReply(interaction, {
                   content: formatR2UrlWithDisclaimer(r2Url, r2Config),
                 });
-                await notifyCommandSuccess(username, 'convert', { operationId, userId });
+                await notifyCommandSuccess('convert', { operationId, userId });
                 return;
               }
             } catch (r2Error) {
@@ -556,7 +556,7 @@ async function processConversion(
             await safeInteractionEditReply(interaction, {
               content: formatR2UrlWithDisclaimer(gifUrl, r2Config),
             });
-            await notifyCommandSuccess(username, 'convert', { operationId, userId });
+            await notifyCommandSuccess('convert', { operationId, userId });
             return;
           }
         } else {
@@ -572,7 +572,7 @@ async function processConversion(
           await safeInteractionEditReply(interaction, {
             content: formatR2UrlWithDisclaimer(gifUrl, r2Config, adminUser),
           });
-          await notifyCommandSuccess(username, 'convert', { operationId, userId });
+          await notifyCommandSuccess('convert', { operationId, userId });
           return;
         }
       }
@@ -639,7 +639,7 @@ async function processConversion(
             await safeInteractionEditReply(interaction, {
               content: `video is too long (${Math.ceil(duration)}s). maximum duration: ${MAX_GIF_DURATION}s`,
             });
-            await notifyCommandFailure(username, 'convert', {
+            await notifyCommandFailure('convert', {
               operationId,
               userId,
               error: `video is too long (${Math.ceil(duration)}s)`,
@@ -691,7 +691,7 @@ async function processConversion(
                 await safeInteractionEditReply(interaction, {
                   content: `requested timeframe (${conversionOptions.startTime}s to ${requestedEnd.toFixed(1)}s) exceeds video length (${videoDuration.toFixed(1)}s).`,
                 });
-                await notifyCommandFailure(username, 'convert', {
+                await notifyCommandFailure('convert', {
                   operationId,
                   userId,
                   error: `requested timeframe exceeds video length`,
@@ -1012,7 +1012,7 @@ async function processConversion(
         });
       }
 
-      await notifyCommandSuccess(username, 'convert', { operationId, userId });
+      await notifyCommandSuccess('convert', { operationId, userId });
 
       recordRateLimit(userId);
     },
@@ -1048,7 +1048,6 @@ export async function handleConvertContextMenu(interaction) {
   }
 
   const userId = interaction.user.id;
-  const username = interaction.user.tag || interaction.user.username || 'unknown';
   const adminUser = isAdmin(userId);
 
   logger.info(
@@ -1100,7 +1099,7 @@ export async function handleConvertContextMenu(interaction) {
     const validation = validateVideoAttachment(videoAttachment, adminUser);
     if (!validation.valid) {
       logger.warn(`Video validation failed for user ${userId}: ${validation.error}`);
-      createFailedOperation('convert', userId, username, validation.error, 'invalid_attachment', {
+      createFailedOperation('convert', userId, validation.error, 'invalid_attachment', {
         attachment: {
           name: videoAttachment.name,
           size: videoAttachment.size,
@@ -1113,7 +1112,7 @@ export async function handleConvertContextMenu(interaction) {
         content: validation.error,
         flags: MessageFlags.Ephemeral,
       });
-      await notifyCommandFailure(username, 'convert', { error: validation.error });
+      await notifyCommandFailure('convert', { error: validation.error });
       return;
     }
   } else if (imageAttachment) {
@@ -1125,7 +1124,7 @@ export async function handleConvertContextMenu(interaction) {
     const validation = validateImageAttachment(imageAttachment, adminUser);
     if (!validation.valid) {
       logger.warn(`Image validation failed for user ${userId}: ${validation.error}`);
-      createFailedOperation('convert', userId, username, validation.error, 'invalid_attachment', {
+      createFailedOperation('convert', userId, validation.error, 'invalid_attachment', {
         attachment: {
           name: imageAttachment.name,
           size: imageAttachment.size,
@@ -1138,7 +1137,7 @@ export async function handleConvertContextMenu(interaction) {
         content: validation.error,
         flags: MessageFlags.Ephemeral,
       });
-      await notifyCommandFailure(username, 'convert', { error: validation.error });
+      await notifyCommandFailure('convert', { error: validation.error });
       return;
     }
   } else if (url) {
@@ -1146,7 +1145,7 @@ export async function handleConvertContextMenu(interaction) {
     if (!urlValidation.valid) {
       logger.warn(`Invalid URL for user ${userId}: ${urlValidation.error}`);
       const errorMessage = `invalid URL: ${urlValidation.error}`;
-      createFailedOperation('convert', userId, username, errorMessage, 'invalid_url', {
+      createFailedOperation('convert', userId, errorMessage, 'invalid_url', {
         originalUrl: url,
         commandSource: 'context-menu',
       });
@@ -1154,7 +1153,7 @@ export async function handleConvertContextMenu(interaction) {
         content: errorMessage,
         flags: MessageFlags.Ephemeral,
       });
-      await notifyCommandFailure(username, 'convert', { error: errorMessage });
+      await notifyCommandFailure('convert', { error: errorMessage });
       return;
     }
 
@@ -1191,7 +1190,7 @@ export async function handleConvertContextMenu(interaction) {
             await safeInteractionEditReply(interaction, {
               content: curatedErrorMessage(error, 'failed to parse Tenor URL.'),
             });
-            await notifyCommandFailure(username, 'convert', { error: error.message });
+            await notifyCommandFailure('convert', { error: error.message });
             return;
           }
         }
@@ -1223,7 +1222,7 @@ export async function handleConvertContextMenu(interaction) {
           await safeInteractionEditReply(interaction, {
             content: validation.error,
           });
-          await notifyCommandFailure(username, 'convert', { error: validation.error });
+          await notifyCommandFailure('convert', { error: validation.error });
           return;
         }
       } else if (attachment.contentType && ALLOWED_IMAGE_TYPES.includes(attachment.contentType)) {
@@ -1237,7 +1236,7 @@ export async function handleConvertContextMenu(interaction) {
           await safeInteractionEditReply(interaction, {
             content: validation.error,
           });
-          await notifyCommandFailure(username, 'convert', { error: validation.error });
+          await notifyCommandFailure('convert', { error: validation.error });
           return;
         }
       } else {
@@ -1246,7 +1245,7 @@ export async function handleConvertContextMenu(interaction) {
           content:
             'unsupported file format. please provide a video (mp4, mov, webm, avi, mkv) or image (png, jpg, jpeg, webp, gif).',
         });
-        await notifyCommandFailure(username, 'convert', {
+        await notifyCommandFailure('convert', {
           error: `unsupported content type: ${attachment.contentType || 'unknown'}`,
         });
         return;
@@ -1261,14 +1260,14 @@ export async function handleConvertContextMenu(interaction) {
   } else {
     logger.warn(`No video or image attachment or URL found for user ${userId}`);
     const errorMessage = 'no video or image attachment or URL found in this message.';
-    createFailedOperation('convert', userId, username, errorMessage, 'missing_input', {
+    createFailedOperation('convert', userId, errorMessage, 'missing_input', {
       commandSource: 'context-menu',
     });
     await safeInteractionReply(interaction, {
       content: errorMessage,
       flags: MessageFlags.Ephemeral,
     });
-    await notifyCommandFailure(username, 'convert', { error: errorMessage });
+    await notifyCommandFailure('convert', { error: errorMessage });
     return;
   }
 
@@ -1291,7 +1290,6 @@ export async function handleConvertContextMenu(interaction) {
 
 export async function handleConvertCommand(interaction) {
   const userId = interaction.user.id;
-  const username = interaction.user.tag || interaction.user.username || 'unknown';
   const adminUser = isAdmin(userId);
 
   logger.info(
@@ -1325,7 +1323,7 @@ export async function handleConvertCommand(interaction) {
     logger.warn(`No attachment or URL provided for user ${userId}`);
     const errorMessage =
       'please provide either a video/image attachment or a URL to a video/image file.';
-    createFailedOperation('convert', userId, username, errorMessage, 'missing_input', {
+    createFailedOperation('convert', userId, errorMessage, 'missing_input', {
       commandSource: 'slash',
     });
     await safeInteractionReply(interaction, {
@@ -1338,7 +1336,7 @@ export async function handleConvertCommand(interaction) {
   if (attachment && url) {
     logger.warn(`Both attachment and URL provided for user ${userId}`);
     const errorMessage = 'please provide either a file attachment or a URL, not both.';
-    createFailedOperation('convert', userId, username, errorMessage, 'multiple_inputs', {
+    createFailedOperation('convert', userId, errorMessage, 'multiple_inputs', {
       commandSource: 'slash',
     });
     await safeInteractionReply(interaction, {
@@ -1361,7 +1359,7 @@ export async function handleConvertCommand(interaction) {
     if (!urlValidation.valid) {
       logger.warn(`Invalid URL for user ${userId}: ${urlValidation.error}`);
       const errorMessage = `invalid URL: ${urlValidation.error}`;
-      createFailedOperation('convert', userId, username, errorMessage, 'invalid_url', {
+      createFailedOperation('convert', userId, errorMessage, 'invalid_url', {
         originalUrl: url,
         commandSource: 'slash',
       });
@@ -1369,7 +1367,7 @@ export async function handleConvertCommand(interaction) {
         content: errorMessage,
         flags: MessageFlags.Ephemeral,
       });
-      await notifyCommandFailure(username, 'convert', { error: errorMessage });
+      await notifyCommandFailure('convert', { error: errorMessage });
       return;
     }
 
@@ -1433,7 +1431,7 @@ export async function handleConvertCommand(interaction) {
       await safeInteractionEditReply(interaction, {
         content: curatedErrorMessage(error, 'failed to download file from URL.'),
       });
-      await notifyCommandFailure(username, 'convert', { error: error.message });
+      await notifyCommandFailure('convert', { error: error.message });
       return;
     }
   }
@@ -1457,7 +1455,7 @@ export async function handleConvertCommand(interaction) {
           flags: MessageFlags.Ephemeral,
         });
       }
-      await notifyCommandFailure(username, 'convert', { error: validation.error });
+      await notifyCommandFailure('convert', { error: validation.error });
       return;
     }
   } else if (
@@ -1481,7 +1479,7 @@ export async function handleConvertCommand(interaction) {
           flags: MessageFlags.Ephemeral,
         });
       }
-      await notifyCommandFailure(username, 'convert', { error: validation.error });
+      await notifyCommandFailure('convert', { error: validation.error });
       return;
     }
   } else {
@@ -1498,7 +1496,7 @@ export async function handleConvertCommand(interaction) {
         flags: MessageFlags.Ephemeral,
       });
     }
-    await notifyCommandFailure(username, 'convert', {
+    await notifyCommandFailure('convert', {
       error: `unsupported content type: ${finalAttachment.contentType || 'unknown'}`,
     });
     return;

@@ -29,13 +29,12 @@ export async function replyIfRateLimited(interaction, { type, action, commandSou
     return false;
   }
 
-  const username = interaction.user.tag || interaction.user.username || 'unknown';
   logger.warn(`User ${userId} (${interaction.user.tag}) is rate limited`);
 
   const rateLimitSeconds = botConfig.rateLimitCooldown / 1000;
   const message = `please wait ${rateLimitSeconds} seconds before ${action}.`;
 
-  createFailedOperation(type, userId, username, message, 'rate_limit', { commandSource });
+  createFailedOperation(type, userId, message, 'rate_limit', { commandSource });
   await safeInteractionReply(interaction, {
     content: message,
     flags: MessageFlags.Ephemeral,
@@ -58,10 +57,9 @@ export async function replyIfRateLimited(interaction, { type, action, commandSou
  */
 export async function resolveTimeOptions(interaction, { type }) {
   const userId = interaction.user.id;
-  const username = interaction.user.tag || interaction.user.username || 'unknown';
 
   const failWith = async (errorMessage, reason, commandOptions) => {
-    createFailedOperation(type, userId, username, errorMessage, reason, {
+    createFailedOperation(type, userId, errorMessage, reason, {
       commandSource: 'slash',
       commandOptions,
     });

@@ -14,7 +14,6 @@ export function getTableDefinitions() {
       sql: `
         CREATE TABLE IF NOT EXISTS users (
           user_id TEXT PRIMARY KEY,
-          username TEXT NOT NULL,
           first_used BIGINT NOT NULL,
           last_used BIGINT NOT NULL
         );
@@ -70,7 +69,6 @@ export function getTableDefinitions() {
       sql: `
         CREATE TABLE IF NOT EXISTS user_metrics (
           user_id TEXT PRIMARY KEY,
-          username TEXT NOT NULL,
           total_commands BIGINT DEFAULT 0,
           successful_commands BIGINT DEFAULT 0,
           failed_commands BIGINT DEFAULT 0,
@@ -301,6 +299,24 @@ export async function addR2ExpiredAtColumnIfNeeded(sql) {
   const exists = await columnExists(sql, 'processed_urls', 'r2_expired_at');
   if (!exists) {
     await sql`ALTER TABLE processed_urls ADD COLUMN r2_expired_at BIGINT`;
+  }
+}
+
+/**
+ * Drop the username columns if an older database still has them.
+ *
+ * gronka stores Discord ids only — a name is never needed for anything the bot does, and every
+ * surface that showed one now shows the id. Dropping rather than leaving them empty means the
+ * names are actually gone, not merely unreferenced. Names already embedded in operation_logs /
+ * alerts / logs messages are left to age out with the retention job.
+ * @param {postgres.Sql} sql - PostgreSQL connection
+ * @returns {Promise<void>}
+ */
+export async function dropUsernameColumnsIfPresent(sql) {
+  for (const table of ['users', 'user_metrics']) {
+    if (await columnExists(sql, table, 'username')) {
+      await sql.unsafe(`ALTER TABLE ${table} DROP COLUMN username`);
+    }
   }
 }
 

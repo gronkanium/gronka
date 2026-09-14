@@ -34,7 +34,7 @@ const logger = createLogger('run-media-command');
  * @param {'download'|'convert'|'optimize'} type
  * @param {import('discord.js').Interaction} interaction
  * @param {(ctx: {
- *   operationId: string, userId: string, username: string, adminUser: boolean,
+ *   operationId: string, userId: string, adminUser: boolean,
  *   operationContext: Object, tempFiles: string[], buildMetadata: () => Object,
  *   logStep: (step: string, status: string, data?: Object) => void,
  * }) => Promise<void>} callback
@@ -47,7 +47,6 @@ const logger = createLogger('run-media-command');
  */
 export async function runMediaCommand(type, interaction, callback, options = {}) {
   const userId = interaction.user.id;
-  const username = interaction.user.tag || interaction.user.username || 'unknown';
   const adminUser = isAdmin(userId);
 
   const operationContext = { ...(options.context || {}) };
@@ -55,13 +54,13 @@ export async function runMediaCommand(type, interaction, callback, options = {})
     operationContext.commandSource = options.commandSource;
   }
 
-  const operationId = createOperation(type, userId, username, operationContext);
+  const operationId = createOperation(type, userId, operationContext);
 
+  // This becomes R2 object metadata, so it leaves the box: ids only, never a name.
   const buildMetadata = () => ({
     'user-id': userId,
     'upload-timestamp': new Date().toISOString(),
     'operation-type': type,
-    username,
   });
 
   const tempFiles = [];
@@ -69,7 +68,6 @@ export async function runMediaCommand(type, interaction, callback, options = {})
   const ctx = {
     operationId,
     userId,
-    username,
     adminUser,
     operationContext,
     tempFiles,
@@ -83,7 +81,6 @@ export async function runMediaCommand(type, interaction, callback, options = {})
       const dbInitSuccess = await initializeDatabaseWithErrorHandling({
         operationId,
         userId,
-        username,
         commandName: options.commandName || type,
         interaction,
         context: options.context,
@@ -128,7 +125,7 @@ export async function runMediaCommand(type, interaction, callback, options = {})
       options.errorFallback || `an error occurred while processing your ${type} request.`
     );
 
-    await notifyCommandFailure(username, type, { operationId, userId, error: errorMessage });
+    await notifyCommandFailure(type, { operationId, userId, error: errorMessage });
   } finally {
     if (tempFiles.length > 0) {
       await cleanupTempFiles(tempFiles);

@@ -14,7 +14,7 @@
 
   let banModalOpen = false;
   let banSubmitting = false;
-  let banForm = { userId: '', username: '', reason: '', appealAllowed: true };
+  let banForm = { userId: '', reason: '', appealAllowed: true };
   let banUserSearch = '';
   let banUserResults = [];
   let banUserSearchTimeout = null;
@@ -65,7 +65,7 @@
   }
 
   function openBanModal() {
-    banForm = { userId: '', username: '', reason: '', appealAllowed: true };
+    banForm = { userId: '', reason: '', appealAllowed: true };
     banUserSearch = '';
     banUserResults = [];
     banModalOpen = true;
@@ -97,7 +97,6 @@
 
   function pickBanUser(user) {
     banForm.userId = user.user_id;
-    banForm.username = user.username || '';
     banUserSearch = '';
     banUserResults = [];
   }
@@ -125,7 +124,7 @@
         throw new Error(data.message || 'failed to ban user');
       }
 
-      showStatus('success', `banned ${banForm.username || banForm.userId}`);
+      showStatus('success', `banned ${banForm.userId}`);
       banModalOpen = false;
       await fetchBans();
     } catch (err) {
@@ -203,13 +202,7 @@
     }
   }
 
-  $: filteredUsers = userSearch
-    ? r2Users.filter(
-        u =>
-          u.username.toLowerCase().includes(userSearch.toLowerCase()) ||
-          u.user_id.includes(userSearch)
-      )
-    : r2Users;
+  $: filteredUsers = userSearch ? r2Users.filter(u => u.user_id.includes(userSearch)) : r2Users;
 
   async function fetchR2Media() {
     if (!selectedUserId) {
@@ -473,11 +466,8 @@
             <span>user</span>
             {#if banForm.userId}
               <div class="picked-user">
-                <span>{banForm.username || banForm.userId} ({banForm.userId})</span>
-                <button
-                  type="button"
-                  on:click={() => (banForm = { ...banForm, userId: '', username: '' })}
-                >
+                <span>{banForm.userId}</span>
+                <button type="button" on:click={() => (banForm = { ...banForm, userId: '' })}>
                   change
                 </button>
               </div>
@@ -486,13 +476,13 @@
                 type="text"
                 bind:value={banUserSearch}
                 on:input={handleBanUserSearchInput}
-                placeholder="search by username or user id..."
+                placeholder="search by user id..."
               />
               {#if banUserResults.length > 0}
                 <div class="search-results">
                   {#each banUserResults as user (user.user_id)}
                     <button type="button" class="search-result" on:click={() => pickBanUser(user)}>
-                      {user.username} <span class="dim">({user.user_id})</span>
+                      <span class="dim">{user.user_id}</span>
                     </button>
                   {/each}
                 </div>
@@ -542,7 +532,7 @@
               on:click={() => handleUserSelect(user.user_id)}
               title={user.user_id}
             >
-              <span class="username">{user.username}</span>
+              <span class="username">{user.user_id}</span>
               <span class="user-stats">
                 {user.file_count} file{user.file_count === 1 ? '' : 's'} · {formatBytes(
                   user.total_size
@@ -563,7 +553,7 @@
         <div class="media-header">
           <div class="header-info">
             <h3>
-              r2 files for {selectedUser?.username || selectedUserId}
+              r2 files for {selectedUserId}
               {#if total > 0}
                 <span class="count">({total})</span>
               {/if}

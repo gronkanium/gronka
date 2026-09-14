@@ -97,7 +97,7 @@ describe('alert summary', () => {
         component,
         title: severity === 'error' ? 'command failed' : 'command success',
         message: `tester: ${command} ${severity === 'error' ? 'failed' : 'success'}`,
-        metadata: { command, username: 'tester', error },
+        metadata: { command, error },
       });
     }
   });
@@ -155,10 +155,9 @@ describe('r2 user stats', () => {
   test('getR2UserStats aggregates count and size per user', async () => {
     const uniqueId = Date.now();
     const userId = `r2stats-user-${uniqueId}`;
-    const username = `r2stats-name-${uniqueId}`;
     const r2Prefix = `https://${r2Config.publicDomain}/`;
 
-    await insertOrUpdateUser(userId, username, uniqueId);
+    await insertOrUpdateUser(userId, uniqueId);
     await insertProcessedUrl(
       `r2stats-hash-a-${uniqueId}`,
       'filehash-a',
@@ -194,7 +193,6 @@ describe('r2 user stats', () => {
     const stats = await getR2UserStats();
     const row = stats.find(s => s.user_id === userId);
     assert.ok(row, 'expected a stats row for the seeded user');
-    assert.strictEqual(row.username, username);
     assert.strictEqual(row.file_count, 2);
     assert.strictEqual(row.total_size, 3500);
   });
@@ -204,7 +202,7 @@ describe('r2 user stats', () => {
     const userId = `r2route-user-${uniqueId}`;
     const r2Prefix = `https://${r2Config.publicDomain}/`;
 
-    await insertOrUpdateUser(userId, `r2route-name-${uniqueId}`, uniqueId);
+    await insertOrUpdateUser(userId, uniqueId);
     await insertProcessedUrl(
       `r2route-hash-${uniqueId}`,
       'filehash-r',
@@ -239,11 +237,10 @@ describe('r2 user stats', () => {
   test('rows marked R2-expired are excluded from stats and user media lists', async () => {
     const uniqueId = Date.now() + 2;
     const userId = `r2expired-user-${uniqueId}`;
-    const username = `r2expired-name-${uniqueId}`;
     const r2Prefix = `https://${r2Config.publicDomain}/`;
     const urlHash = `r2expired-hash-${uniqueId}`;
 
-    await insertOrUpdateUser(userId, username, uniqueId);
+    await insertOrUpdateUser(userId, uniqueId);
     await insertProcessedUrl(
       urlHash,
       'filehash-expired',

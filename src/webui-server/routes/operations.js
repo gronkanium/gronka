@@ -84,7 +84,6 @@ router.get('/api/requests', async (req, res) => {
     const {
       operationId,
       userId,
-      username,
       urlPattern,
       status,
       type,
@@ -104,7 +103,6 @@ router.get('/api/requests', async (req, res) => {
     const filters = {
       operationId: operationId || undefined,
       userId: userId || undefined,
-      username: username || undefined,
       urlPattern: urlPattern || undefined,
       types: type ? (Array.isArray(type) ? type : [type]) : undefined,
       statuses: status ? (Array.isArray(status) ? status : [status]) : undefined,

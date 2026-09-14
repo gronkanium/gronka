@@ -1,5 +1,4 @@
 import { createLogger } from '../../utils/logger.js';
-import { getUser } from '../../utils/database.js';
 
 const logger = createLogger('webui');
 
@@ -131,43 +130,12 @@ export async function reconstructOperationFromTrace(trace) {
     }
   }
 
-  // Determine username with fallback logic
-  let username = context.username;
-  // Always try to enrich username from users table if we have a userId
-  // This handles cases where metadata was null or username wasn't stored
-  if (context.userId) {
-    // If username is missing or unknown, try to get it from users table
-    if (!username || username === 'unknown') {
-      try {
-        const user = await getUser(context.userId);
-        if (user && user.username) {
-          username = user.username;
-        } else {
-          logger.debug(
-            `User not found for userId ${context.userId} in operation ${trace.operationId}`
-          );
-        }
-      } catch (error) {
-        logger.debug(
-          `Failed to lookup user ${context.userId} for operation ${trace.operationId}: ${error.message}`
-        );
-      }
-    }
-  } else {
-    logger.debug(`No userId found for operation ${trace.operationId} (metadata may be null)`);
-  }
-  // If still no username after all attempts, use null (will display as 'unknown' in UI)
-  if (!username || username === 'unknown') {
-    username = null;
-  }
-
   // Reconstruct operation object
   return {
     id: trace.operationId,
     type: operationType,
     status: latestStatusLog.status || 'pending',
     userId: context.userId || null,
-    username: username,
     fileSize: fileSize,
     timestamp: latestTimestamp,
     startTime: createdLog.timestamp,

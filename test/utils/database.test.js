@@ -50,13 +50,12 @@ describe('database utilities', () => {
     test('inserts new user', async () => {
       const uniqueId = Date.now();
       const userId = `test-user-1-${uniqueId}`;
-      const username = 'TestUser';
       const timestamp = Date.now();
 
       // Clear cache to ensure we get fresh data
       invalidateUserCache(userId);
 
-      await insertOrUpdateUser(userId, username, timestamp);
+      await insertOrUpdateUser(userId, timestamp);
 
       // Clear cache again after insert to force fresh query
       invalidateUserCache(userId);
@@ -64,7 +63,6 @@ describe('database utilities', () => {
       const user = await getUser(userId);
       assert.ok(user, 'User should exist');
       assert.strictEqual(user.user_id, userId);
-      assert.strictEqual(user.username, username);
       // Use approximate matching for timestamps (within 1 second tolerance to account for test execution time)
       // Note: For new users, first_used and last_used should match the provided timestamp
       assert.ok(
@@ -80,16 +78,14 @@ describe('database utilities', () => {
     test('updates existing user', async () => {
       const uniqueId = Date.now();
       const userId = `test-user-2-${uniqueId}`;
-      const username1 = 'TestUser1';
-      const username2 = 'TestUser2';
       const timestamp1 = Date.now();
       const timestamp2 = timestamp1 + 1000;
 
       // Clear cache to ensure we get fresh data
       invalidateUserCache(userId);
 
-      await insertOrUpdateUser(userId, username1, timestamp1);
-      await insertOrUpdateUser(userId, username2, timestamp2);
+      await insertOrUpdateUser(userId, timestamp1);
+      await insertOrUpdateUser(userId, timestamp2);
 
       // Clear cache again after updates to force fresh query
       invalidateUserCache(userId);
@@ -97,7 +93,6 @@ describe('database utilities', () => {
       const user = await getUser(userId);
       assert.ok(user, 'User should exist');
       assert.strictEqual(user.user_id, userId);
-      assert.strictEqual(user.username, username2);
       // Use approximate matching for timestamps (within 1 second tolerance to account for test execution time)
       assert.ok(
         Math.abs(user.first_used - timestamp1) < 1000,
@@ -111,8 +106,8 @@ describe('database utilities', () => {
 
     test('handles invalid userId gracefully', async () => {
       await assert.doesNotReject(async () => {
-        await insertOrUpdateUser(null, 'TestUser', Date.now());
-        await insertOrUpdateUser('', 'TestUser', Date.now());
+        await insertOrUpdateUser(null, Date.now());
+        await insertOrUpdateUser('', Date.now());
         await insertOrUpdateUser(123, 'TestUser', Date.now());
       });
     });
@@ -122,15 +117,13 @@ describe('database utilities', () => {
     test('returns user for existing user_id', async () => {
       const uniqueId = Date.now();
       const userId = `test-user-3-${uniqueId}`;
-      const username = 'TestUser3';
       const timestamp = Date.now();
 
-      await insertOrUpdateUser(userId, username, timestamp);
+      await insertOrUpdateUser(userId, timestamp);
       const user = await getUser(userId);
 
       assert.ok(user, 'User should exist');
       assert.strictEqual(user.user_id, userId);
-      assert.strictEqual(user.username, username);
     });
 
     test('returns null for non-existent user', async () => {
@@ -144,9 +137,9 @@ describe('database utilities', () => {
       const countBefore = await getUniqueUserCount();
       const uniqueId = Date.now();
 
-      await insertOrUpdateUser(`test-count-1-${uniqueId}`, 'User1', Date.now());
-      await insertOrUpdateUser(`test-count-2-${uniqueId}`, 'User2', Date.now());
-      await insertOrUpdateUser(`test-count-3-${uniqueId}`, 'User3', Date.now());
+      await insertOrUpdateUser(`test-count-1-${uniqueId}`, Date.now());
+      await insertOrUpdateUser(`test-count-2-${uniqueId}`, Date.now());
+      await insertOrUpdateUser(`test-count-3-${uniqueId}`, Date.now());
 
       // Other test files insert users concurrently, so assert a lower bound
       // rather than an exact delta

@@ -112,15 +112,10 @@
       total += 1;
 
       // If we're on the first page and the user matches search/filters, add them to the list
-      if (
-        offset === 0 &&
-        (!searchQuery ||
-          (metrics.username && metrics.username.toLowerCase().includes(searchQuery.toLowerCase())))
-      ) {
+      if (offset === 0 && (!searchQuery || false)) {
         // Create user object from metrics
         const newUser = {
           user_id: userId,
-          username: metrics.username || 'Unknown',
           total_commands: metrics.total_commands || 0,
           successful_commands: metrics.successful_commands || 0,
           failed_commands: metrics.failed_commands || 0,
@@ -213,7 +208,7 @@
         {#each leaderboardMostActive as user, index}
           <li>
             <span class="rank">{index + 1}</span>
-            <span class="username">{user.username}</span>
+            <span class="username">{user.user_id}</span>
             <span class="value">{user.total_commands} commands</span>
           </li>
         {/each}
@@ -226,7 +221,7 @@
         {#each leaderboardHighestSuccess as user, index}
           <li>
             <span class="rank">{index + 1}</span>
-            <span class="username">{user.username}</span>
+            <span class="username">{user.user_id}</span>
             <span class="value">{calculateSuccessRate(user)}%</span>
           </li>
         {/each}
@@ -239,7 +234,7 @@
         {#each leaderboardLargestFiles as user, index}
           <li>
             <span class="rank">{index + 1}</span>
-            <span class="username">{user.username}</span>
+            <span class="username">{user.user_id}</span>
             <span class="value">{formatBytes(user.total_file_size)}</span>
           </li>
         {/each}
@@ -273,8 +268,8 @@
           <thead>
             <tr>
               <th>
-                <button on:click={() => handleSort('username')}>
-                  username {sortBy === 'username' ? (sortDesc ? '↓' : '↑') : ''}
+                <button on:click={() => handleSort('user_id')}>
+                  user id {sortBy === 'user_id' ? (sortDesc ? '↓' : '↑') : ''}
                 </button>
               </th>
               <th>
@@ -304,7 +299,7 @@
           <tbody>
             {#each users as user}
               <tr>
-                <td class="username-cell">{user.username}</td>
+                <td class="username-cell">{user.user_id}</td>
                 <td class="number-cell">{user.total_commands}</td>
                 <td class="number-cell success">{user.successful_commands}</td>
                 <td class="number-cell error">{user.failed_commands}</td>

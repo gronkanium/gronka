@@ -24,18 +24,16 @@ afterAll(async () => {
 
 describe('user tracking utilities', () => {
   describe('trackUser', () => {
-    test('tracks new user with username', async () => {
+    test('tracks a new user by id', async () => {
       const uniqueId = Date.now();
       const userId = `test-track-1-${uniqueId}`;
-      const username = 'TestUser1';
       const beforeTimestamp = Date.now();
 
-      await trackUser(userId, username);
+      await trackUser(userId);
 
       const user = await getUser(userId);
       assert.ok(user, 'User should be tracked');
       assert.strictEqual(user.user_id, userId);
-      assert.strictEqual(user.username, username);
       assert.ok(user.first_used > 0);
       assert.ok(user.last_used > 0);
       // trackUser generates its own timestamp, so check it's within reasonable range
@@ -55,22 +53,26 @@ describe('user tracking utilities', () => {
       );
     });
 
-    test('tracks user without username (uses default)', async () => {
+    test('stores no name, even when one is passed', async () => {
       const userId = 'test-track-2';
 
-      await trackUser(userId);
+      // Old callers pass a username positionally; it must never reach storage.
+      await trackUser(userId, 'ShouldNotBeStored');
 
       const user = await getUser(userId);
       assert.ok(user, 'User should be tracked');
       assert.strictEqual(user.user_id, userId);
-      assert.strictEqual(user.username, 'unknown');
+      assert.ok(!('username' in user), 'the users row has no username column');
+      assert.ok(
+        !JSON.stringify(user).includes('ShouldNotBeStored'),
+        'no name is persisted anywhere on the row'
+      );
     });
 
     test('updates existing user last_used', async () => {
       const userId = 'test-track-3';
-      const username = 'TestUser3';
 
-      await trackUser(userId, username);
+      await trackUser(userId);
       const user1 = await getUser(userId);
       const firstUsed = user1.first_used;
       const lastUsed1 = user1.last_used;
@@ -78,25 +80,11 @@ describe('user tracking utilities', () => {
       // Wait a bit to ensure timestamp difference
       await new Promise(resolve => setTimeout(resolve, 10));
 
-      await trackUser(userId, username);
+      await trackUser(userId);
       const user2 = await getUser(userId);
 
       assert.strictEqual(user2.first_used, firstUsed, 'first_used should not change');
       assert.ok(user2.last_used > lastUsed1, 'last_used should be updated');
-    });
-
-    test('updates username if changed', async () => {
-      const userId = 'test-track-4';
-      const username1 = 'TestUser4a';
-      const username2 = 'TestUser4b';
-
-      await trackUser(userId, username1);
-      const user1 = await getUser(userId);
-      assert.strictEqual(user1.username, username1);
-
-      await trackUser(userId, username2);
-      const user2 = await getUser(userId);
-      assert.strictEqual(user2.username, username2);
     });
 
     test('handles invalid userId gracefully', async () => {
@@ -131,14 +119,14 @@ describe('user tracking utilities', () => {
       const uniqueId = Date.now();
       const userId = `test-count-existing-${uniqueId}`;
 
-      await trackUser(userId, 'User');
+      await trackUser(userId);
       const user1 = await getUser(userId);
       assert.ok(user1, 'User should exist after first track');
 
       // Global counts race with parallel test files, so verify idempotency
       // through the user row itself: same identity, first_used unchanged
       invalidateUserCache();
-      await trackUser(userId, 'User');
+      await trackUser(userId);
       const user2 = await getUser(userId);
       assert.ok(user2, 'User should still exist after second track');
       assert.strictEqual(user2.user_id, userId);

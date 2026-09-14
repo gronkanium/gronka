@@ -35,7 +35,7 @@ describe('operations tracker', () => {
 
   describe('createOperation', () => {
     test('creates operation with basic parameters', () => {
-      const operationId = createOperation('convert', 'user123', 'TestUser');
+      const operationId = createOperation('convert', 'user123');
       assert.ok(operationId, 'Should return operation ID');
       assert.strictEqual(typeof operationId, 'string');
 
@@ -44,7 +44,7 @@ describe('operations tracker', () => {
       assert.strictEqual(operation.type, 'convert');
       assert.strictEqual(operation.status, 'pending');
       assert.strictEqual(operation.userId, 'user123');
-      assert.strictEqual(operation.username, 'TestUser');
+      assert.ok(!('username' in operation), 'an operation carries no username');
       assert.ok(operation.timestamp > 0);
       assert.ok(operation.startTime > 0);
       assert.strictEqual(operation.error, null);
@@ -59,7 +59,7 @@ describe('operations tracker', () => {
       const context = {
         originalUrl: 'https://example.com/video.mp4',
       };
-      const operationId = createOperation('download', 'user456', 'User2', context);
+      const operationId = createOperation('download', 'user456', context);
 
       const operation = getOperation(operationId);
       assert.ok(operation);
@@ -75,7 +75,7 @@ describe('operations tracker', () => {
           url: 'https://cdn.discordapp.com/attachments/123/456/video.mp4',
         },
       };
-      const operationId = createOperation('convert', 'user789', 'User3', context);
+      const operationId = createOperation('convert', 'user789', context);
 
       const operation = getOperation(operationId);
       assert.ok(operation);
@@ -91,15 +91,15 @@ describe('operations tracker', () => {
         },
         commandSource: 'slash',
       };
-      const operationId = createOperation('convert', 'user999', 'User4', context);
+      const operationId = createOperation('convert', 'user999', context);
 
       const operation = getOperation(operationId);
       assert.ok(operation);
     });
 
     test('creates unique operation IDs', () => {
-      const id1 = createOperation('convert', 'user1', 'User1');
-      const id2 = createOperation('convert', 'user2', 'User2');
+      const id1 = createOperation('convert', 'user1');
+      const id2 = createOperation('convert', 'user2');
 
       assert.notStrictEqual(id1, id2, 'Operation IDs should be unique');
     });
@@ -129,7 +129,7 @@ describe('operations tracker', () => {
 
   describe('updateOperationStatus', () => {
     test('updates operation status from pending to running', () => {
-      const operationId = createOperation('convert', 'user1', 'User1');
+      const operationId = createOperation('convert', 'user1');
       updateOperationStatus(operationId, 'running');
 
       const operation = getOperation(operationId);
@@ -138,7 +138,7 @@ describe('operations tracker', () => {
     });
 
     test('updates operation status to success', () => {
-      const operationId = createOperation('convert', 'user1', 'User1');
+      const operationId = createOperation('convert', 'user1');
       updateOperationStatus(operationId, 'running');
       updateOperationStatus(operationId, 'success', { fileSize: 1024000 });
 
@@ -149,7 +149,7 @@ describe('operations tracker', () => {
     });
 
     test('updates operation status to error with error message', async () => {
-      const operationId = createOperation('convert', 'user1', 'User1');
+      const operationId = createOperation('convert', 'user1');
       const errorMessage = 'Conversion failed';
 
       // Wait a bit to ensure duration > 0
@@ -164,7 +164,7 @@ describe('operations tracker', () => {
     });
 
     test('updates operation status with stack trace', () => {
-      const operationId = createOperation('convert', 'user1', 'User1');
+      const operationId = createOperation('convert', 'user1');
       const stackTrace = 'Error: test\n    at test.js:1:1';
       updateOperationStatus(operationId, 'error', { stackTrace });
 
@@ -173,7 +173,7 @@ describe('operations tracker', () => {
     });
 
     test('calculates duration on completion', async () => {
-      const operationId = createOperation('convert', 'user1', 'User1');
+      const operationId = createOperation('convert', 'user1');
       const startTime = getOperation(operationId).startTime;
 
       // Wait a bit to ensure duration > 0
@@ -202,7 +202,7 @@ describe('operations tracker', () => {
     });
 
     test('updates file size', () => {
-      const operationId = createOperation('convert', 'user1', 'User1');
+      const operationId = createOperation('convert', 'user1');
       updateOperationStatus(operationId, 'success', { fileSize: 2048000 });
 
       const operation = getOperation(operationId);
@@ -212,7 +212,7 @@ describe('operations tracker', () => {
 
   describe('logOperationStep', () => {
     test('logs operation step with status', () => {
-      const operationId = createOperation('convert', 'user1', 'User1');
+      const operationId = createOperation('convert', 'user1');
       logOperationStep(operationId, 'download_start', 'running');
 
       const operation = getOperation(operationId);
@@ -224,7 +224,7 @@ describe('operations tracker', () => {
     });
 
     test('logs operation step with metadata', () => {
-      const operationId = createOperation('convert', 'user1', 'User1');
+      const operationId = createOperation('convert', 'user1');
       const metadata = { url: 'https://example.com/video.mp4', size: 1024 };
       logOperationStep(operationId, 'download_complete', 'success', { metadata });
 
@@ -235,7 +235,7 @@ describe('operations tracker', () => {
     });
 
     test('tracks file paths in operation', () => {
-      const operationId = createOperation('convert', 'user1', 'User1');
+      const operationId = createOperation('convert', 'user1');
       const filePath = '/tmp/test.gif';
       logOperationStep(operationId, 'processing', 'running', { filePath });
 
@@ -244,7 +244,7 @@ describe('operations tracker', () => {
     });
 
     test('does not duplicate file paths', () => {
-      const operationId = createOperation('convert', 'user1', 'User1');
+      const operationId = createOperation('convert', 'user1');
       const filePath = '/tmp/test.gif';
       logOperationStep(operationId, 'step1', 'running', { filePath });
       logOperationStep(operationId, 'step2', 'running', { filePath });
@@ -255,7 +255,7 @@ describe('operations tracker', () => {
     });
 
     test('calculates step duration from start time', async () => {
-      const operationId = createOperation('convert', 'user1', 'User1');
+      const operationId = createOperation('convert', 'user1');
       const operationBefore = getOperation(operationId);
       assert.ok(operationBefore, 'Operation should exist');
       assert.ok(operationBefore.startTime, 'Operation should have startTime');
@@ -288,7 +288,7 @@ describe('operations tracker', () => {
     });
 
     test('broadcasts update on error status', () => {
-      const operationId = createOperation('convert', 'user1', 'User1');
+      const operationId = createOperation('convert', 'user1');
       let broadcastCalled = false;
       setBroadcastCallback(op => {
         broadcastCalled = true;
@@ -303,7 +303,7 @@ describe('operations tracker', () => {
 
   describe('logOperationError', () => {
     test('logs error with Error object', () => {
-      const operationId = createOperation('convert', 'user1', 'User1');
+      const operationId = createOperation('convert', 'user1');
       const error = new Error('Test error');
       logOperationError(operationId, error);
 
@@ -313,7 +313,7 @@ describe('operations tracker', () => {
     });
 
     test('logs error with string message', () => {
-      const operationId = createOperation('convert', 'user1', 'User1');
+      const operationId = createOperation('convert', 'user1');
       logOperationError(operationId, 'String error message');
 
       const operation = getOperation(operationId);
@@ -322,7 +322,7 @@ describe('operations tracker', () => {
     });
 
     test('logs error with additional data', () => {
-      const operationId = createOperation('convert', 'user1', 'User1');
+      const operationId = createOperation('convert', 'user1');
       const error = new Error('Test error');
       const data = { filePath: '/tmp/test.gif', metadata: { key: 'value' } };
       logOperationError(operationId, error, data);
@@ -338,7 +338,7 @@ describe('operations tracker', () => {
     });
 
     test('broadcasts update when error is logged', () => {
-      const operationId = createOperation('convert', 'user1', 'User1');
+      const operationId = createOperation('convert', 'user1');
       let broadcastCalled = false;
       setBroadcastCallback(op => {
         broadcastCalled = true;
@@ -354,7 +354,7 @@ describe('operations tracker', () => {
 
   describe('getOperation', () => {
     test('returns operation by ID', () => {
-      const operationId = createOperation('convert', 'user1', 'User1');
+      const operationId = createOperation('convert', 'user1');
       const operation = getOperation(operationId);
 
       assert.ok(operation);
@@ -369,9 +369,9 @@ describe('operations tracker', () => {
 
   describe('getRecentOperations', () => {
     test('returns all operations when no limit specified', () => {
-      createOperation('convert', 'user1', 'User1');
-      createOperation('download', 'user2', 'User2');
-      createOperation('optimize', 'user3', 'User3');
+      createOperation('convert', 'user1');
+      createOperation('download', 'user2');
+      createOperation('optimize', 'user3');
 
       const operations = getRecentOperations();
       assert.ok(operations.length >= 3);
@@ -387,9 +387,9 @@ describe('operations tracker', () => {
     });
 
     test('returns operations in reverse chronological order', async () => {
-      const id1 = createOperation('convert', 'user1', 'User1');
+      const id1 = createOperation('convert', 'user1');
       await new Promise(resolve => setTimeout(resolve, 10));
-      const id2 = createOperation('download', 'user2', 'User2');
+      const id2 = createOperation('download', 'user2');
 
       const operations = getRecentOperations(2);
       assert.strictEqual(operations[0].id, id2);
@@ -407,7 +407,7 @@ describe('operations tracker', () => {
         receivedOperation = op;
       });
 
-      const operationId = createOperation('convert', 'user1', 'User1');
+      const operationId = createOperation('convert', 'user1');
       assert.ok(callbackCalled);
       assert.ok(receivedOperation);
       assert.strictEqual(receivedOperation.id, operationId);
@@ -430,7 +430,7 @@ describe('operations tracker', () => {
           callback2Called = true;
         }, 3102);
 
-        createOperation('convert', 'user1', 'User1');
+        createOperation('convert', 'user1');
         // Should call callback for current instance port (3101), not 3102
         assert.ok(callback1Called, 'Callback for port 3101 should be called');
         assert.ok(!callback2Called, 'Callback for port 3102 should not be called');
@@ -452,7 +452,7 @@ describe('operations tracker', () => {
       });
 
       // Create and complete an operation to trigger metrics update
-      const operationId = createOperation('convert', 'user1', 'User1');
+      const operationId = createOperation('convert', 'user1');
       updateOperationStatus(operationId, 'success');
 
       // Wait a bit for async metrics update
@@ -477,7 +477,7 @@ describe('operations tracker', () => {
 
     test('marks stuck operations as failed', async () => {
       // Create an operation and mark it as running
-      const operationId = createOperation('convert', 'user1', 'User1');
+      const operationId = createOperation('convert', 'user1');
 
       // Manually insert a status_update log
       insertOperationLog(operationId, 'status_update', 'running', {
@@ -511,7 +511,7 @@ describe('operations tracker', () => {
       };
 
       // Create a user in database
-      insertOrUpdateUser('user1', 'User1', Date.now());
+      insertOrUpdateUser('user1', Date.now());
 
       const cleaned = await cleanupStuckOperations(10, mockClient);
       assert.ok(cleaned >= 0);
@@ -533,7 +533,7 @@ describe('operations tracker', () => {
 
   describe('operation lifecycle', () => {
     test('complete operation lifecycle from creation to success', () => {
-      const operationId = createOperation('convert', 'user1', 'User1', {
+      const operationId = createOperation('convert', 'user1', {
         originalUrl: 'https://example.com/video.mp4',
       });
 
@@ -562,7 +562,7 @@ describe('operations tracker', () => {
     });
 
     test('operation lifecycle with error', () => {
-      const operationId = createOperation('convert', 'user1', 'User1');
+      const operationId = createOperation('convert', 'user1');
 
       updateOperationStatus(operationId, 'running');
       logOperationStep(operationId, 'download_start', 'running');

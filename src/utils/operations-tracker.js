@@ -127,11 +127,10 @@ async function broadcastUpdate(operation) {
 /**
  * Build the metadata object stored with an operation's 'created' log entry
  */
-function buildCreationMetadata(type, userId, username, context) {
+function buildCreationMetadata(type, userId, context) {
   const metadata = {
     operationType: type,
     userId,
-    username,
   };
 
   if (context.originalUrl) {
@@ -168,14 +167,7 @@ function rememberOperation(operation) {
   }
 }
 
-export function createFailedOperation(
-  type,
-  userId,
-  username,
-  errorMessage,
-  errorType,
-  context = {}
-) {
+export function createFailedOperation(type, userId, errorMessage, errorType, context = {}) {
   // Use cryptographically secure random bytes for operation ID
   const randomBytes = crypto.randomBytes(6).toString('hex');
   const operation = {
@@ -183,7 +175,6 @@ export function createFailedOperation(
     type,
     status: 'error',
     userId,
-    username,
     fileSize: null,
     timestamp: Date.now(),
     startTime: Date.now(),
@@ -201,7 +192,7 @@ export function createFailedOperation(
 
   rememberOperation(operation);
 
-  const metadata = buildCreationMetadata(type, userId, username, context);
+  const metadata = buildCreationMetadata(type, userId, context);
   metadata.errorType = errorType;
   metadata.earlyFailure = true;
 
@@ -228,7 +219,7 @@ export function createFailedOperation(
   return operation.id;
 }
 
-export function createOperation(type, userId, username, context = {}) {
+export function createOperation(type, userId, context = {}) {
   // Use cryptographically secure random bytes for operation ID
   const randomBytes = crypto.randomBytes(6).toString('hex');
   const operation = {
@@ -236,7 +227,6 @@ export function createOperation(type, userId, username, context = {}) {
     type,
     status: 'pending',
     userId,
-    username,
     fileSize: null,
     timestamp: Date.now(),
     startTime: Date.now(),
@@ -253,8 +243,8 @@ export function createOperation(type, userId, username, context = {}) {
   rememberOperation(operation);
 
   writeOperationLog(operation.id, 'created', 'pending', {
-    message: `Operation ${type} created for user ${username}`,
-    metadata: buildCreationMetadata(type, userId, username, context),
+    message: `Operation ${type} created`,
+    metadata: buildCreationMetadata(type, userId, context),
   });
 
   logger.debug(`Operation ${type} created [op: ${operation.id}]`);
@@ -387,7 +377,9 @@ export function logOperationError(operationId, error, data = {}) {
 }
 
 async function updateUserMetricsForOperation(operation) {
-  if (!operation.userId || !operation.username) {
+  // Gated on userId alone. This used to require a username too, so dropping names would have
+  // silently stopped every metrics write - and with it the /info user count.
+  if (!operation.userId) {
     return;
   }
 
@@ -413,7 +405,7 @@ async function updateUserMetricsForOperation(operation) {
   }
 
   try {
-    await insertOrUpdateUserMetrics(operation.userId, operation.username, metrics);
+    await insertOrUpdateUserMetrics(operation.userId, metrics);
 
     const updatedMetrics = await getUserMetrics(operation.userId);
     if (!updatedMetrics) {
@@ -537,7 +529,6 @@ export async function cleanupStuckOperations(maxAgeMinutes = 10, client = null) 
             type: operationType,
             status: 'error',
             userId,
-            username: trace?.context?.username || null,
             fileSize: null,
             timestamp: Date.now(),
             startTime: createdLog?.timestamp || Date.now(),

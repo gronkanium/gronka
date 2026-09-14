@@ -101,7 +101,7 @@ export async function processOptimization(
     'optimize',
     interaction,
     async ctx => {
-      const { operationId, userId, username, tempFiles, buildMetadata } = ctx;
+      const { operationId, userId, tempFiles, buildMetadata } = ctx;
 
       const optimizeOptions =
         lossyLevel !== null && lossyLevel !== undefined ? { lossy: lossyLevel } : {};
@@ -126,7 +126,7 @@ export async function processOptimization(
             await safeInteractionEditReply(interaction, {
               content: processedUrl.file_url,
             });
-            await notifyCommandSuccess(username, 'optimize', { operationId, userId });
+            await notifyCommandSuccess('optimize', { operationId, userId });
             return;
           } else if (processedUrl.r2_expired_at) {
             logger.info(
@@ -381,7 +381,7 @@ export async function processOptimization(
         });
       }
 
-      await notifyCommandSuccess(username, 'optimize', { operationId, userId });
+      await notifyCommandSuccess('optimize', { operationId, userId });
 
       recordRateLimit(userId);
     },
@@ -417,7 +417,6 @@ export async function handleOptimizeContextMenuCommand(interaction, modalAttachm
   }
 
   const userId = interaction.user.id;
-  const username = interaction.user.tag || interaction.user.username || 'unknown';
   const adminUser = isAdmin(userId);
 
   logger.info(
@@ -459,7 +458,7 @@ export async function handleOptimizeContextMenuCommand(interaction, modalAttachm
     if (!isGifFile(gifAttachment.name, gifAttachment.contentType)) {
       logger.warn(`Attachment is not a GIF for user ${userId}`);
       const errorMessage = 'this command only works on gif files.';
-      createFailedOperation('optimize', userId, username, errorMessage, 'invalid_attachment_type', {
+      createFailedOperation('optimize', userId, errorMessage, 'invalid_attachment_type', {
         attachment: {
           name: gifAttachment.name,
           size: gifAttachment.size,
@@ -472,7 +471,7 @@ export async function handleOptimizeContextMenuCommand(interaction, modalAttachm
         content: errorMessage,
         flags: MessageFlags.Ephemeral,
       });
-      await notifyCommandFailure(username, 'optimize', {
+      await notifyCommandFailure('optimize', {
         userId,
         error: errorMessage,
       });
@@ -484,7 +483,7 @@ export async function handleOptimizeContextMenuCommand(interaction, modalAttachm
     if (!urlValidation.valid) {
       logger.warn(`Invalid URL for user ${userId}: ${urlValidation.error}`);
       const errorMessage = `invalid URL: ${urlValidation.error}`;
-      createFailedOperation('optimize', userId, username, errorMessage, 'invalid_url', {
+      createFailedOperation('optimize', userId, errorMessage, 'invalid_url', {
         originalUrl: url,
         commandSource: 'context-menu',
       });
@@ -492,7 +491,7 @@ export async function handleOptimizeContextMenuCommand(interaction, modalAttachm
         content: errorMessage,
         flags: MessageFlags.Ephemeral,
       });
-      await notifyCommandFailure(username, 'optimize', {
+      await notifyCommandFailure('optimize', {
         userId,
         error: errorMessage,
       });
@@ -527,7 +526,7 @@ export async function handleOptimizeContextMenuCommand(interaction, modalAttachm
               content: curatedErrorMessage(error, 'failed to parse Tenor URL.'),
               flags: MessageFlags.Ephemeral,
             });
-            await notifyCommandFailure(username, 'optimize', {
+            await notifyCommandFailure('optimize', {
               userId,
               error: error.message || 'failed to parse Tenor URL',
             });
@@ -543,7 +542,7 @@ export async function handleOptimizeContextMenuCommand(interaction, modalAttachm
             content: 'this command only works on gif files.',
             flags: MessageFlags.Ephemeral,
           });
-          await notifyCommandFailure(username, 'optimize', {
+          await notifyCommandFailure('optimize', {
             userId,
             error: 'downloaded file is not a GIF',
           });
@@ -577,7 +576,7 @@ export async function handleOptimizeContextMenuCommand(interaction, modalAttachm
         content: curatedErrorMessage(error, 'failed to process gif from URL.'),
         flags: MessageFlags.Ephemeral,
       });
-      await notifyCommandFailure(username, 'optimize', {
+      await notifyCommandFailure('optimize', {
         userId,
         error: error.message || 'failed to process gif from URL',
       });
@@ -586,14 +585,14 @@ export async function handleOptimizeContextMenuCommand(interaction, modalAttachm
   } else {
     logger.warn(`No GIF attachment or URL found for user ${userId}`);
     const errorMessage = 'no gif attachment or URL found in this message.';
-    createFailedOperation('optimize', userId, username, errorMessage, 'missing_input', {
+    createFailedOperation('optimize', userId, errorMessage, 'missing_input', {
       commandSource: 'context-menu',
     });
     await safeReply(interaction, {
       content: errorMessage,
       flags: MessageFlags.Ephemeral,
     });
-    await notifyCommandFailure(username, 'optimize', {
+    await notifyCommandFailure('optimize', {
       userId,
       error: errorMessage,
     });
@@ -634,7 +633,6 @@ export async function handleOptimizeContextMenuCommand(interaction, modalAttachm
 
 export async function handleOptimizeCommand(interaction) {
   const userId = interaction.user.id;
-  const username = interaction.user.tag || interaction.user.username || 'unknown';
   const adminUser = isAdmin(userId);
 
   logger.info(
@@ -657,7 +655,7 @@ export async function handleOptimizeCommand(interaction) {
 
   if (lossyLevel !== null && (lossyLevel < 0 || lossyLevel > 100)) {
     const errorMessage = 'lossy level must be between 0 and 100.';
-    createFailedOperation('optimize', userId, username, errorMessage, 'invalid_lossy_level', {
+    createFailedOperation('optimize', userId, errorMessage, 'invalid_lossy_level', {
       commandSource: 'slash',
       commandOptions: { lossy: lossyLevel },
     });
@@ -671,7 +669,7 @@ export async function handleOptimizeCommand(interaction) {
   if (!attachment && !url) {
     logger.warn(`No attachment or URL provided for user ${userId}`);
     const errorMessage = 'please provide either a gif attachment or a URL to a gif file.';
-    createFailedOperation('optimize', userId, username, errorMessage, 'missing_input', {
+    createFailedOperation('optimize', userId, errorMessage, 'missing_input', {
       commandSource: 'slash',
     });
     await safeReply(interaction, {
@@ -684,7 +682,7 @@ export async function handleOptimizeCommand(interaction) {
   if (attachment && url) {
     logger.warn(`Both attachment and URL provided for user ${userId}`);
     const errorMessage = 'please provide either a file attachment or a URL, not both.';
-    createFailedOperation('optimize', userId, username, errorMessage, 'multiple_inputs', {
+    createFailedOperation('optimize', userId, errorMessage, 'multiple_inputs', {
       commandSource: 'slash',
     });
     await safeReply(interaction, {
@@ -702,7 +700,7 @@ export async function handleOptimizeCommand(interaction) {
     if (!isGifFile(attachment.name, attachment.contentType)) {
       logger.warn(`Attachment is not a GIF for user ${userId}`);
       const errorMessage = 'this command only works on gif files.';
-      createFailedOperation('optimize', userId, username, errorMessage, 'invalid_attachment_type', {
+      createFailedOperation('optimize', userId, errorMessage, 'invalid_attachment_type', {
         attachment: {
           name: attachment.name,
           size: attachment.size,
@@ -715,7 +713,7 @@ export async function handleOptimizeCommand(interaction) {
         content: errorMessage,
         flags: MessageFlags.Ephemeral,
       });
-      await notifyCommandFailure(username, 'optimize', {
+      await notifyCommandFailure('optimize', {
         userId,
         error: errorMessage,
       });
@@ -730,7 +728,7 @@ export async function handleOptimizeCommand(interaction) {
     if (!urlValidation.valid) {
       logger.warn(`Invalid URL for user ${userId}: ${urlValidation.error}`);
       const errorMessage = `invalid URL: ${urlValidation.error}`;
-      createFailedOperation('optimize', userId, username, errorMessage, 'invalid_url', {
+      createFailedOperation('optimize', userId, errorMessage, 'invalid_url', {
         originalUrl: url,
         commandSource: 'slash',
       });
@@ -738,7 +736,7 @@ export async function handleOptimizeCommand(interaction) {
         content: errorMessage,
         flags: MessageFlags.Ephemeral,
       });
-      await notifyCommandFailure(username, 'optimize', {
+      await notifyCommandFailure('optimize', {
         userId,
         error: errorMessage,
       });
@@ -795,7 +793,7 @@ export async function handleOptimizeCommand(interaction) {
             await safeInteractionEditReply(interaction, {
               content: curatedErrorMessage(error, 'failed to parse Tenor URL.'),
             });
-            await notifyCommandFailure(username, 'optimize', {
+            await notifyCommandFailure('optimize', {
               userId,
               error: error.message || 'failed to parse Tenor URL',
             });
@@ -812,7 +810,7 @@ export async function handleOptimizeCommand(interaction) {
           await safeInteractionEditReply(interaction, {
             content: 'this command only works on gif files.',
           });
-          await notifyCommandFailure(username, 'optimize', {
+          await notifyCommandFailure('optimize', {
             userId,
             error: 'downloaded file is not a GIF',
           });
@@ -847,7 +845,7 @@ export async function handleOptimizeCommand(interaction) {
       await safeInteractionEditReply(interaction, {
         content: curatedErrorMessage(error, 'failed to download file from URL.'),
       });
-      await notifyCommandFailure(username, 'optimize', {
+      await notifyCommandFailure('optimize', {
         userId,
         error: error.message || 'failed to download file from URL',
       });

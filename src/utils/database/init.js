@@ -11,6 +11,7 @@ import {
   addFileSizeColumnIfNeeded,
   ensureTemporaryUploadsCascadeDelete,
   addR2ExpiredAtColumnIfNeeded,
+  dropUsernameColumnsIfPresent,
 } from './schema-pg.js';
 
 export async function initPostgresDatabase() {
@@ -72,6 +73,7 @@ export async function initPostgresDatabase() {
       // fail with "column does not exist" on a pre-existing database otherwise.
       await addFileSizeColumnIfNeeded(connection);
       await addR2ExpiredAtColumnIfNeeded(connection);
+      await dropUsernameColumnsIfPresent(connection);
 
       // Create indexes with error handling for race conditions
       const indexes = getIndexDefinitions();

@@ -139,7 +139,7 @@ afterAll(async () => {
 describe('operations API', () => {
   describe('GET /api/operations/:operationId', () => {
     test('returns operation details', async () => {
-      const opId = createOperation('convert', 'user1', 'User1');
+      const opId = createOperation('convert', 'user1');
       updateOperationStatus(opId, 'success', { fileSize: 1024 });
 
       // Flush operation logs to ensure they're written to database
@@ -164,7 +164,7 @@ describe('operations API', () => {
     });
 
     test('returns operation with trace', async () => {
-      const opId = createOperation('convert', 'user1', 'User1');
+      const opId = createOperation('convert', 'user1');
       updateOperationStatus(opId, 'success');
 
       // Flush operation logs to ensure they're written to database
@@ -181,7 +181,7 @@ describe('operations API', () => {
 
   describe('GET /api/operations/:operationId/trace', () => {
     test('returns operation trace', async () => {
-      const opId = createOperation('convert', 'user1', 'User1');
+      const opId = createOperation('convert', 'user1');
       updateOperationStatus(opId, 'success');
 
       // Flush operation logs to ensure they're written to database
@@ -209,7 +209,7 @@ describe('operations API', () => {
   // Exercises the SQL search that backs GET /api/requests
   describe('searchOperations (SQL search behind /api/requests)', () => {
     test('finds an operation by exact operationId', async () => {
-      const opId = createOperation('convert', 'user1', 'User1');
+      const opId = createOperation('convert', 'user1');
       updateOperationStatus(opId, 'success');
       await flushAllOperationLogs();
 
@@ -223,8 +223,8 @@ describe('operations API', () => {
     test('filters by urlPattern (case-insensitive substring on originalUrl)', async () => {
       const marker = `urlsearch-${Date.now()}`;
       const url = `https://example.com/${marker}/video.mp4`;
-      const opMatch = createOperation('download', 'user1', 'User1', { originalUrl: url });
-      const _opOther = createOperation('download', 'user2', 'User2', {
+      const opMatch = createOperation('download', 'user1', { originalUrl: url });
+      const _opOther = createOperation('download', 'user2', {
         originalUrl: 'https://example.com/other.mp4',
       });
       updateOperationStatus(opMatch, 'success');
@@ -240,9 +240,9 @@ describe('operations API', () => {
 
     test('sorts oldest-first when requested', async () => {
       const userId = `sortuser-${Date.now()}`;
-      const first = createOperation('convert', userId, 'SortUser');
+      const first = createOperation('convert', userId);
       await new Promise(resolve => setTimeout(resolve, 5));
-      const second = createOperation('convert', userId, 'SortUser');
+      const second = createOperation('convert', userId);
       await flushAllOperationLogs();
 
       const newest = await searchOperations({ userId }, { sort: 'newest' });
@@ -254,13 +254,13 @@ describe('operations API', () => {
 
     test('sorts by duration with unfinished operations last', async () => {
       const userId = `durationuser-${Date.now()}`;
-      const fast = createOperation('convert', userId, 'DurationUser');
+      const fast = createOperation('convert', userId);
       updateOperationStatus(fast, 'success');
       await new Promise(resolve => setTimeout(resolve, 25));
-      const slow = createOperation('convert', userId, 'DurationUser');
+      const slow = createOperation('convert', userId);
       await new Promise(resolve => setTimeout(resolve, 50));
       updateOperationStatus(slow, 'success');
-      const unfinished = createOperation('convert', userId, 'DurationUser');
+      const unfinished = createOperation('convert', userId);
       await flushAllOperationLogs();
 
       const { operations } = await searchOperations({ userId }, { sort: 'slowest' });
@@ -273,9 +273,9 @@ describe('operations API', () => {
 
     test('falls back to newest-first for unknown sort values', async () => {
       const userId = `fallbackuser-${Date.now()}`;
-      const first = createOperation('convert', userId, 'FallbackUser');
+      const first = createOperation('convert', userId);
       await new Promise(resolve => setTimeout(resolve, 5));
-      const second = createOperation('convert', userId, 'FallbackUser');
+      const second = createOperation('convert', userId);
       await flushAllOperationLogs();
 
       const { operations } = await searchOperations(
@@ -290,7 +290,7 @@ describe('operations API', () => {
     test('applies pagination with accurate total', async () => {
       const userId = `pageuser-${Date.now()}`;
       for (let i = 0; i < 5; i++) {
-        createOperation('convert', userId, 'PageUser');
+        createOperation('convert', userId);
       }
       await flushAllOperationLogs();
 

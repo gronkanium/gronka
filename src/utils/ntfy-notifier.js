@@ -69,7 +69,6 @@ async function sendNtfyNotification(title, message, options = {}) {
   const server = await getSetting('ntfy_server', 'ntfy.sh');
 
   try {
-    // Build message with format: username: command success (duration)
     let notificationMessage = message;
 
     // Append duration in parentheses if available
@@ -102,23 +101,21 @@ async function sendNtfyNotification(title, message, options = {}) {
   }
 }
 
-export async function notifyCommandSuccess(username, command, options = {}) {
-  await sendNtfyNotification('command success', `${username}: ${command} success`, {
+// No username: these also land in the alerts table, so a name would persist there too.
+export async function notifyCommandSuccess(command, options = {}) {
+  await sendNtfyNotification('command success', `${command} success`, {
     severity: 'info',
     component: 'bot',
     ...options,
     metadata: {
       command,
-      username,
       ...options.metadata,
     },
   });
 }
 
-export async function notifyCommandFailure(username, command, options = {}) {
-  const message = options.error
-    ? `${username}: ${command} failed - ${options.error}`
-    : `${username}: ${command} failed`;
+export async function notifyCommandFailure(command, options = {}) {
+  const message = options.error ? `${command} failed - ${options.error}` : `${command} failed`;
 
   await sendNtfyNotification('command failed', message, {
     severity: 'error',
@@ -126,7 +123,6 @@ export async function notifyCommandFailure(username, command, options = {}) {
     ...options,
     metadata: {
       command,
-      username,
       error: options.error,
       ...options.metadata,
     },

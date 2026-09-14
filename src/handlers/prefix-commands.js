@@ -292,8 +292,7 @@ export async function handlePrefixMessage(message, context = {}) {
     return;
   }
 
-  const username = message.author.tag || message.author.username || 'unknown';
-  deps.trackUser(message.author.id, username).catch(error => {
+  deps.trackUser(message.author.id).catch(error => {
     logger.debug(`Failed to track user ${message.author.id}: ${error.message}`);
   });
 
@@ -328,7 +327,7 @@ export async function handlePrefixMessage(message, context = {}) {
     }
 
     logger.info(
-      `User ${message.author.id} (${username}) invoked prefix command "${commandName}" in ${message.guildId || 'DM'}`
+      `User ${message.author.id} invoked prefix command "${commandName}" in ${message.guildId || 'DM'}`
     );
 
     if (commandName === 'download') {

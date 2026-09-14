@@ -22,7 +22,7 @@ const USER_METRICS_NUMERIC_FIELDS = [
 // Define timestamp fields in user_metrics table
 const USER_METRICS_TIMESTAMP_FIELDS = ['last_command_at', 'updated_at'];
 
-export async function insertOrUpdateUserMetrics(userId, username, metrics) {
+export async function insertOrUpdateUserMetrics(userId, metrics) {
   await ensurePostgresInitialized();
 
   const sql = getPostgresConnection();
@@ -78,16 +78,16 @@ export async function insertOrUpdateUserMetrics(userId, username, metrics) {
       params.push(metrics.lastCommandAt);
     }
 
-    updates.push(`username = $${params.length + 1}`, `updated_at = $${params.length + 2}`);
-    params.push(username, timestamp, userId);
+    updates.push(`updated_at = $${params.length + 1}`);
+    params.push(timestamp, userId);
 
     const query = `UPDATE user_metrics SET ${updates.join(', ')} WHERE user_id = $${params.length}`;
     await sql.unsafe(query, params);
   } else {
     // Insert new user metrics
     await sql`
-      INSERT INTO user_metrics (user_id, username, total_commands, successful_commands, failed_commands, total_convert, total_download, total_optimize, total_info, total_file_size, last_command_at, updated_at)
-      VALUES (${userId}, ${username}, ${metrics.totalCommands || 0}, ${metrics.successfulCommands || 0}, ${metrics.failedCommands || 0}, ${metrics.totalConvert || 0}, ${metrics.totalDownload || 0}, ${metrics.totalOptimize || 0}, ${metrics.totalInfo || 0}, ${metrics.totalFileSize || 0}, ${metrics.lastCommandAt || timestamp}, ${timestamp})
+      INSERT INTO user_metrics (user_id, total_commands, successful_commands, failed_commands, total_convert, total_download, total_optimize, total_info, total_file_size, last_command_at, updated_at)
+      VALUES (${userId}, ${metrics.totalCommands || 0}, ${metrics.successfulCommands || 0}, ${metrics.failedCommands || 0}, ${metrics.totalConvert || 0}, ${metrics.totalDownload || 0}, ${metrics.totalOptimize || 0}, ${metrics.totalInfo || 0}, ${metrics.totalFileSize || 0}, ${metrics.lastCommandAt || timestamp}, ${timestamp})
     `;
   }
 }
@@ -137,7 +137,6 @@ export async function getAllUsersMetrics(options = {}) {
   // Whitelist allowed sort columns
   const allowedSortColumns = [
     'user_id',
-    'username',
     'total_commands',
     'successful_commands',
     'failed_commands',
@@ -158,7 +157,8 @@ export async function getAllUsersMetrics(options = {}) {
     const params = [];
 
     if (search) {
-      query += ` WHERE username ILIKE $${params.length + 1}`;
+      // Ids only — there is no name to search on any more.
+      query += ` WHERE user_id LIKE $${params.length + 1}`;
       params.push(`%${search}%`);
     }
 
@@ -208,7 +208,7 @@ export async function getUserMetricsCount(options = {}) {
     let result;
     if (search) {
       result =
-        await sql`SELECT COUNT(*) as count FROM user_metrics WHERE username ILIKE ${`%${search}%`}`;
+        await sql`SELECT COUNT(*) as count FROM user_metrics WHERE user_id LIKE ${`%${search}%`}`;
     } else {
       result = await sql`SELECT COUNT(*) as count FROM user_metrics`;
     }

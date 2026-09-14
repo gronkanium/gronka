@@ -7,6 +7,31 @@ R2, and Windows-shaped paths left over from another machine.
 
 ---
 
+## data retention
+
+gronka deletes its own history. Nothing is kept indefinitely, and the job runs automatically —
+there is no manual step.
+
+| Variable | Default | What it prunes |
+|---|---|---|
+| `RETENTION_ENABLED` | `true` | master switch; `false` means unbounded growth |
+| `RETENTION_DAYS` | `7` | `logs`, `operation_logs`, `alerts` |
+| `RETENTION_MEDIA_DAYS` | `7` | cached gif/video/image files on disk |
+| `RETENTION_URL_CACHE_DAYS` | `7` | `processed_urls` (the URL → file cache) |
+| `RETENTION_INTERVAL_MS` | `21600000` | how often the job runs (6 hours) |
+
+**Not pruned:** `users` and `user_metrics`. Those are one row per Discord id with counters, not a
+history, and they are what `/info` and the webui report as the user count. Pruning them would lose
+the only figure gronka publishes about its users. Ban records are kept too, for obvious reasons.
+
+A cache row whose R2 upload is still live is never pruned — deleting it would orphan the object in
+R2 with no tracking row left to expire it.
+
+gronka stores **Discord user ids only**. Usernames are never written to the database, the logs, R2
+object metadata, or ntfy notifications, and the `username` columns are dropped from existing
+databases on startup. Names in records written before that change age out with the retention
+window rather than being rewritten.
+
 all environment variables and configuration options for gronka. environment variables require a restart to change - for the live-editable settings managed from the webui (delivery policy, admin list, maintenance mode, and more), see [[Bot-Settings]].
 
 ## required variables

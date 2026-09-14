@@ -267,7 +267,6 @@
         <option value="6h">last 6 hours</option>
         <option value="24h">last 24 hours</option>
         <option value="7d">last 7 days</option>
-        <option value="30d">last 30 days</option>
         <option value="">all time</option>
       </select>
     </div>

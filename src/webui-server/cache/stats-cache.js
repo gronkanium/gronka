@@ -44,7 +44,10 @@ export async function getStats() {
     const stats = await getStorageStats(storagePath);
 
     const activeUsers = await getActiveUserCounts();
-    const dailyRequests = await getDailyRequestCounts(14);
+    // Never chart a window wider than retention keeps, or the tail is guaranteed to be empty.
+    // daily_requests reads processed_urls, which the retention job prunes.
+    const chartDays = Math.min(14, botConfig.retentionUrlCacheDays || 14);
+    const dailyRequests = await getDailyRequestCounts(chartDays);
 
     // Format response to match expected API format
     const response = {
@@ -60,6 +63,7 @@ export async function getStats() {
       active_users_7d: activeUsers.active7d,
       active_users_30d: activeUsers.active30d,
       daily_requests: dailyRequests,
+      retention_days: botConfig.retentionUrlCacheDays,
     };
 
     // Cache the response

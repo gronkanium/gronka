@@ -9,6 +9,7 @@ import {
   writeServiceCookie,
   readCookieFile,
   describeCookieFile,
+  parseAnyCookieInput,
 } from '../../src/utils/cookie-file.js';
 
 // The shape a browser extension actually exports, including the tab-separated columns and the
@@ -110,6 +111,38 @@ describe('cookie-file', () => {
     assert.strictEqual(instagram.status, 'incomplete');
     assert.deepStrictEqual(instagram.missing, ['ds_user_id']);
     assert.ok(!JSON.stringify(instagram).includes('secret-value'), 'values never leave the file');
+  });
+
+  test('parseAnyCookieInput sniffs a Netscape export', () => {
+    const r = parseAnyCookieInput(EXPORT, ['instagram.com']);
+    assert.strictEqual(r.format, 'netscape');
+    assert.deepStrictEqual(r.names, ['csrftoken', 'sessionid', 'ds_user_id']);
+  });
+
+  test('parseAnyCookieInput accepts a pasted Cookie: header', () => {
+    const r = parseAnyCookieInput('Cookie: sessionid=abc; ds_user_id=42', ['instagram.com']);
+    assert.strictEqual(r.format, 'header');
+    assert.strictEqual(r.cookie, 'sessionid=abc; ds_user_id=42');
+  });
+
+  test('parseAnyCookieInput accepts a bare header with no prefix', () => {
+    const r = parseAnyCookieInput('sessionid=abc; csrftoken=z', ['instagram.com']);
+    assert.deepStrictEqual(r.names, ['sessionid', 'csrftoken']);
+  });
+
+  test('parseAnyCookieInput accepts our own json shape', () => {
+    const r = parseAnyCookieInput('{"instagram":["sessionid=abc; x=1"]}', ['instagram.com']);
+    assert.strictEqual(r.format, 'json');
+    assert.deepStrictEqual(r.names, ['sessionid', 'x']);
+  });
+
+  test('parseAnyCookieInput accepts a flat name/value json map', () => {
+    const r = parseAnyCookieInput('{"sessionid":"abc","ds_user_id":"42"}', ['instagram.com']);
+    assert.deepStrictEqual(r.names, ['sessionid', 'ds_user_id']);
+  });
+
+  test('parseAnyCookieInput treats empty input as empty, not an error', () => {
+    assert.strictEqual(parseAnyCookieInput('   ', ['instagram.com']).format, 'empty');
   });
 
   test('a service with nothing installed reads as empty', () => {

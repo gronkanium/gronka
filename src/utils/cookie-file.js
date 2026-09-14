@@ -77,6 +77,49 @@ export function parseNetscapeCookies(text, domains) {
   };
 }
 
+/**
+ * Accept whatever the user pasted. A browser extension gives a Netscape cookies.txt; DevTools
+ * gives the raw `Cookie:` header; our own file holds JSON. Nobody should have to know which
+ * they have, so sniff it.
+ * @returns {{ cookie: string, names: string[], skipped: number, format: string }}
+ */
+export function parseAnyCookieInput(text, domains) {
+  const raw = String(text || '').trim();
+  if (!raw) {
+    return { cookie: '', names: [], skipped: 0, format: 'empty' };
+  }
+
+  if (raw.startsWith('{')) {
+    try {
+      const parsed = JSON.parse(raw);
+      // Either our own { service: ["a=1; b=2"] } shape or a flat { name: value } map.
+      const entry = Object.values(parsed).find(v => Array.isArray(v) && typeof v[0] === 'string');
+      const cookie = entry
+        ? entry[0]
+        : Object.entries(parsed)
+            .filter(([, v]) => typeof v === 'string')
+            .map(([k, v]) => `${k}=${v}`)
+            .join('; ');
+      return { cookie, names: cookieNames(cookie), skipped: 0, format: 'json' };
+    } catch {
+      // fall through and try the line formats
+    }
+  }
+
+  // A Netscape export is tab-separated; a pasted header is not.
+  if (raw.includes('\t')) {
+    return { ...parseNetscapeCookies(raw, domains), format: 'netscape' };
+  }
+
+  const cookie = raw
+    .replace(/^\s*Cookie:\s*/i, '')
+    .split(/;\s*/)
+    .map(part => part.trim())
+    .filter(part => /^[^=;\s]+=/.test(part))
+    .join('; ');
+  return { cookie, names: cookieNames(cookie), skipped: 0, format: 'header' };
+}
+
 /** Cookie names present in an already-built `name=value; …` string. */
 export function cookieNames(cookie) {
   return String(cookie || '')

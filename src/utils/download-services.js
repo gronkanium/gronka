@@ -86,10 +86,14 @@ const customServices = [
   },
 ];
 
+// v.redd.it routes through yt-dlp but is not a separate source to a user: a yt-dlp entry whose
+// name a cobalt entry already owns contributes its hosts for routing, without a second toggle.
+const cobaltServiceIds = new Set(cobaltServices.map(service => service.id));
+
 /** Every download source, in UI display order (social → video → adult → booru). */
 export const DOWNLOAD_SERVICES = [
   ...cobaltServices,
-  ...ytdlpServices,
+  ...ytdlpServices.filter(service => !cobaltServiceIds.has(service.id)),
   ...galleryDlServices,
   ...customServices,
 ];

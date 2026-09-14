@@ -137,6 +137,9 @@ function isInstagramPostUrl(url) {
 export const YTDLP_SITES = [
   { name: 'YouTube', hosts: ['youtube.com', 'youtu.be'] },
   { name: 'RedGifs', hosts: ['redgifs.com'] },
+  // Reddit-hosted video. The post page is unreadable (see reddit.js), but the CMAF streams the
+  // HLS manifest points at are public, and yt-dlp muxes the separate video and audio itself.
+  { name: 'Reddit', hosts: ['v.redd.it'] },
   { name: 'Imgur', hosts: ['imgur.com'] },
   { name: 'Kick', hosts: ['kick.com'] },
   { name: 'Coub', hosts: ['coub.com'] },

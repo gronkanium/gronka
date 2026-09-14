@@ -19,7 +19,28 @@ const MEDIA_HOSTS = ['i.redd.it', 'preview.redd.it'];
 // Reddit is mostly a link aggregator, so a post's media often is not Reddit's at all. These are
 // the offsite hosts worth handing back to the caller, which re-runs its own source selection on
 // the target rather than duplicating the routing table here.
-const OFFSITE_HOSTS = ['redgifs.com', 'imgur.com', 'gfycat.com', 'streamable.com'];
+// Keep in step with what the pipeline can actually route: every host here must be matched by
+// YTDLP_SITES, GALLERY_DL_SITES, a custom extractor, or cobalt, or the hand-off dead-ends.
+const OFFSITE_HOSTS = [
+  'redgifs.com',
+  'imgur.com',
+  'gfycat.com',
+  'streamable.com',
+  'youtube.com',
+  'youtu.be',
+  'twitter.com',
+  'x.com',
+  'tiktok.com',
+  'pornhub.com',
+  'xvideos.com',
+  'xhamster.com',
+  'redtube.com',
+  'kick.com',
+  'twitch.tv',
+  'medal.tv',
+  'tenor.com',
+  'soundcloud.com',
+];
 
 // /comments/<id>/... is the canonical form; /s/<id> is what the share sheet emits and 301s to it.
 const POST_PATH = /^\/r\/[^/]+\/(?:comments|s)\/[A-Za-z0-9_]+/;
@@ -190,17 +211,85 @@ export function extractOffsiteUrl(html) {
   return null;
 }
 
+/** The v.redd.it HLS manifest for a post, which yt-dlp downloads and muxes on its own. */
+export function extractVideoUrl(doc) {
+  const id = doc.replace(/&amp;/g, '&').match(/https?:\/\/v\.redd\.it\/([A-Za-z0-9]+)/)?.[1];
+  return id ? `https://v.redd.it/${id}/HLSPlaylist.m3u8` : null;
+}
+
 /**
- * One fetch, both answers: where the post's media actually lives.
- * `external` is set when the post points offsite (redgifs, imgur, …) — the caller re-runs its
- * own source selection on it. `images` holds Reddit-hosted images when it does not.
+ * The post's Atom feed. Unlike every other Reddit surface this still answers anonymously, and it
+ * names the post's video id, its first image and any offsite link — so the session cookie is an
+ * enhancement (it reads whole galleries out of the HTML) rather than a requirement.
+ * Returns null rather than throwing: the caller falls back to the HTML.
+ */
+async function fetchPostFeed(url) {
+  const feedUrl = `${url.split('?')[0].replace(/\/$/, '')}/.rss`;
+  try {
+    const response = await axios.get(feedUrl, {
+      ...ssrfGuardedRequest(),
+      responseType: 'text',
+      timeout: PAGE_TIMEOUT_MS,
+      maxRedirects: 3,
+      headers: { 'User-Agent': USER_AGENT, Accept: 'application/atom+xml,application/xml' },
+    });
+    return String(response.data || '');
+  } catch (error) {
+    // 429 here is Reddit throttling the feed, which recovers on its own; nothing to escalate.
+    logger.warn(`Reddit feed request failed (${error.response?.status || error.message})`);
+    return null;
+  }
+}
+
+/**
+ * Where the post's media actually lives, in the order the caller should prefer:
+ *   `external` — a v.redd.it HLS manifest or an offsite host, handed back for the caller's own
+ *                source selection to route (yt-dlp handles both).
+ *   `images`   — per-slide download candidates for Reddit-hosted images.
+ *
+ * Tries the anonymous feed first and only reads the cookie-gated HTML when it has to, which is
+ * both fewer requests and the difference between working and not when the session expires.
  */
 export async function resolveRedditPost(url) {
-  const html = await fetchPostPage(url);
+  const feed = await fetchPostFeed(url);
+
+  if (feed) {
+    const video = extractVideoUrl(feed);
+    if (video) {
+      return { external: video, images: [] };
+    }
+    const offsite = extractOffsiteUrl(feed);
+    if (offsite) {
+      return { external: offsite, images: [] };
+    }
+  }
+
+  // The feed carries only the first image, so a gallery still needs the HTML. Without a session
+  // the feed's single slide is all we get, which still beats failing outright.
+  if (!hasRedditSession()) {
+    const images = feed ? extractImageCandidates(feed) : [];
+    return { external: null, images };
+  }
+
+  let html;
+  try {
+    html = await fetchPostPage(url);
+  } catch (error) {
+    const images = feed ? extractImageCandidates(feed) : [];
+    if (images.length > 0) {
+      logger.warn(`Reddit page failed (${error.message}); using the feed's first image`);
+      return { external: null, images };
+    }
+    throw error;
+  }
+
+  const video = extractVideoUrl(html);
+  if (video) {
+    return { external: video, images: [] };
+  }
   const images = extractImageCandidates(html);
-  // Reddit-hosted media wins: a post can mention an offsite host in a comment or sidebar.
   if (images.length > 0) {
     return { external: null, images };
   }
-  return { external: extractOffsiteUrl(html), images: [] };
+  return { external: extractOffsiteUrl(html), images: extractImageCandidates(feed || '') };
 }

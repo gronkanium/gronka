@@ -9,9 +9,8 @@ const logger = createLogger('reddit');
 
 // Reddit deprecated the unauthenticated .json endpoints in May 2026: appending .json now answers
 // 403, and old.reddit.com serves the "Welcome to Reddit" interstitial, so yt-dlp's Reddit
-// extractor cannot work from this box at all. The one surface that still answers in full is the
-// normal www HTML with a logged-in session cookie, which embeds every image in src/srcset on
-// <img class="media-lightbox-img"> — that is what this reads.
+// extractor cannot work from this box at all. The one surface that still answers is the normal
+// www HTML with a logged-in session cookie; see extractImageUrls for the two shapes it comes in.
 //
 // Images only. v.redd.it serves video and audio as separate DASH streams that need an ffmpeg
 // mux; those still fall through to cobalt/yt-dlp.
@@ -62,47 +61,50 @@ function isMediaHostUrl(url) {
   }
 }
 
-/**
- * Every candidate in a srcset, widest first. Reddit lists the same image at several widths and
- * each one carries its own `s=` signature, so a width cannot be swapped in by hand.
- */
-function parseSrcset(srcset) {
-  return srcset
-    .split(',')
-    .map(part => part.trim().split(/\s+/))
-    .filter(([, w]) => /^\d+w$/.test(w || ''))
-    .map(([url, w]) => ({ url, width: Number.parseInt(w, 10) }))
-    .sort((a, b) => b.width - a.width);
-}
+// Avatars, awards and static chrome live on the same hosts as post media.
+const NON_POST_PATH = /snoovatar|\/award|\/cms\/|defaults|headshot/i;
 
 /**
- * Post image URLs in page order, each the widest signed variant Reddit offered for it.
- * Keyed by image id so a gallery yields one entry per slide rather than one per width.
+ * Post image URLs, widest variant per slide, in page order.
+ *
+ * Reddit serves two markup shapes for the same post and flips between them without warning:
+ * the hydrated page puts each slide in <img class="media-lightbox-img"> with a srcset, while
+ * the server-rendered variant carries the same images loose in meta tags and JSON blobs under
+ * a shorter id. Scanning for the media hosts outright reads both; every width carries its own
+ * `s=` signature, so the widest has to be taken as-is rather than rewritten.
  */
 export function extractImageUrls(html) {
   const decoded = html.replace(/&amp;/g, '&');
-  const bySlide = new Map();
+  const widest = new Map();
 
-  for (const tag of decoded.matchAll(/<img\b[^>]*>/g)) {
-    const markup = tag[0];
-    if (!/media-lightbox-img|post-image/.test(markup)) {
+  for (const match of decoded.matchAll(/https:\/\/(?:preview|i)\.redd\.it\/[^"'\\\s<>)]+/g)) {
+    const url = match[0];
+    if (!/\.(?:jpe?g|png|gif|webp)(?:\?|$)/i.test(url) || NON_POST_PATH.test(url)) {
       continue;
     }
-    const srcset = markup.match(/\bsrcset="([^"]+)"/)?.[1];
-    const src = markup.match(/\bsrc="([^"]+)"/)?.[1];
-    const best = srcset ? parseSrcset(srcset).find(c => isMediaHostUrl(c.url))?.url : null;
-    const chosen = best || (src && isMediaHostUrl(src) ? src : null);
-    if (!chosen) {
+    if (!isMediaHostUrl(url)) {
       continue;
     }
-    // preview and i.redd.it share the filename, so avatars/awards never collide with post media
-    const id = new URL(chosen).pathname.split('/').pop().split('?')[0];
-    if (!bySlide.has(id)) {
-      bySlide.set(id, chosen);
+    let parsed;
+    try {
+      parsed = new URL(url);
+    } catch {
+      continue;
+    }
+    // The two shapes name the same slide differently, so key on the trailing id both share.
+    const file = parsed.pathname.split('/').pop();
+    const id = file
+      .replace(/\.[^.]+$/, '')
+      .split('-')
+      .pop();
+    const width = Number.parseInt(parsed.searchParams.get('width') || '0', 10);
+    const current = widest.get(id);
+    if (!current || current.width < width) {
+      widest.set(id, { width, url });
     }
   }
 
-  return [...bySlide.values()];
+  return [...widest.values()].map(entry => entry.url);
 }
 
 /**

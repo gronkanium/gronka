@@ -58,6 +58,28 @@ describe('reddit utilities', () => {
     assert.strictEqual(extractImageUrls(avatar + slide('real-v0-post')).length, 1);
   });
 
+  // Reddit flips to this shape without warning; it carries the same slides at a larger width.
+  const noJsVariant = `
+    <meta property="og:image" content="https://preview.redd.it/tuno0m9l29ph1.jpg?width=1200&amp;s=q1">
+    <script type="application/json">{"url":"https://preview.redd.it/tuno0m9l29ph1.jpg?width=108&amp;s=q2",
+    "more":"https://preview.redd.it/wuv07m9l29ph1.jpg?width=1200&amp;s=q3"}</script>`;
+
+  test('reads the server-rendered variant, not just the hydrated one', () => {
+    const urls = extractImageUrls(noJsVariant);
+    assert.strictEqual(urls.length, 2);
+    assert.ok(urls[0].includes('width=1200'), 'widest wins over the 108w thumbnail');
+    assert.ok(urls[0].includes('s=q1'));
+  });
+
+  test('both shapes name the same slide, so they do not double up', () => {
+    // hydrated ids carry a title prefix the server-rendered ones omit
+    const urls = extractImageUrls(slide('honest-rate-v0-tuno0m9l29ph1') + noJsVariant);
+    assert.ok(
+      urls.length <= 2,
+      `same two slides across both shapes, got ${urls.length}: ${urls.join(' ')}`
+    );
+  });
+
   test('a post with no images extracts nothing rather than guessing', () => {
     assert.deepStrictEqual(extractImageUrls('<html><body>no media here</body></html>'), []);
   });

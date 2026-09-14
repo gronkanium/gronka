@@ -207,14 +207,29 @@ describe('handlePrefixMessage', () => {
     assert.strictEqual(calls.convert[0].options.getString('quality'), 'high');
   });
 
-  test('bare mention replies with the help embed', async () => {
+  test('bare mention replies with a compact prompt', async () => {
     const { deps } = makeDeps();
     const message = makeMessage({ content: `<@${BOT_ID}>` });
 
     await handlePrefixMessage(message, { deps });
 
     assert.strictEqual(message._replies.length, 1);
-    assert.strictEqual(message._replies[0].embeds.length, 1);
+    const embed = message._replies[0].embeds[0].toJSON();
+    assert.strictEqual(embed.fields?.length ?? 0, 0);
+    assert.match(embed.description, /@gronka download <url>/);
+    assert.match(embed.description, /\^g help/);
+  });
+
+  test('explicit help replies with the detailed help embed', async () => {
+    const { deps } = makeDeps();
+    const message = makeMessage({ content: '^g help' });
+
+    await handlePrefixMessage(message, { deps });
+
+    const embed = message._replies[0].embeds[0].toJSON();
+    assert.strictEqual(embed.fields.length, 2);
+    assert.match(embed.fields[0].value, /download/);
+    assert.match(embed.fields[1].value, /key=value/);
   });
 
   test('unknown command is silent for prefix but replies for mention', async () => {

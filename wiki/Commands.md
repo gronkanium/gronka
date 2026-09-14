@@ -18,7 +18,7 @@ every slash command is also available as a message (prefix) command. the default
 
 - options go after the command as `key=value` pairs: `quality`, `optimize`, `lossy`, `start`/`start_time`, `end`/`end_time`
 - `^g convert` and `^g optimize` accept a url, an attachment on your message, or an attachment on the message you're replying to
-- a bare mention of the bot (or `^g help`) shows a short help embed with the current prefix and command list
+- a bare mention of the bot shows a compact prompt; `^g help` shows the full help embed with the current prefix, commands, and options
 - unknown prefix commands are ignored silently so gronka doesn't clash with other bots sharing the same prefix; unknown commands after an explicit mention get a short pointer to help
 - in dms the default prefix always applies
 

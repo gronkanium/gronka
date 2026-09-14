@@ -161,6 +161,15 @@ export function buildHelpEmbed(prefix) {
     );
 }
 
+function buildMentionEmbed(prefix) {
+  return new EmbedBuilder()
+    .setTitle('gronka')
+    .setColor(EMBED_COLOR)
+    .setDescription(
+      `send me a link with \`@gronka download <url>\`, or use \`${prefix} help\` for the full menu.`
+    );
+}
+
 /**
  * Handle the "prefix" command: show, set, or reset this guild's prefix.
  * Setting/resetting requires the Manage Server permission (or bot admin).
@@ -270,7 +279,8 @@ export async function handlePrefixMessage(message, context = {}) {
   const commandName = (tokens.shift() || '').toLowerCase();
 
   // Bare @mention: introduce the bot
-  const isHelp = commandName === 'help' || (match.viaMention && commandName === '');
+  const isBareMention = match.viaMention && commandName === '';
+  const isHelp = commandName === 'help' || isBareMention;
 
   const knownCommands = ['download', 'convert', 'optimize', 'info', 'prefix'];
   if (!isHelp && !knownCommands.includes(commandName)) {
@@ -306,7 +316,9 @@ export async function handlePrefixMessage(message, context = {}) {
     }
 
     if (isHelp) {
-      await message.reply({ embeds: [buildHelpEmbed(prefix)] });
+      await message.reply({
+        embeds: [isBareMention ? buildMentionEmbed(prefix) : buildHelpEmbed(prefix)],
+      });
       return;
     }
 

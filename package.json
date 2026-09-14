@@ -6,6 +6,9 @@
   "type": "module",
   "scripts": {
     "start": "bun src/bot.js",
+    "setup": "bun scripts/setup.js",
+    "setup:check": "bun scripts/setup.js --check",
+    "setup:repair": "bun scripts/setup.js --repair",
     "webui": "bun src/webui-server.js",
     "webui:dev": "concurrently \"WEBUI_PORT=3002 bun src/webui-server.js\" \"vite\"",
     "webui:dev:server": "WEBUI_PORT=3002 bun src/webui-server.js",

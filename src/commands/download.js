@@ -351,6 +351,12 @@ export async function processDownload(
           const resolved = await resolveRedditPost(url);
           if (resolved.external) {
             logger.info(`Reddit post points offsite, following to: ${resolved.external}`);
+            // The disabled-source gate above ran on the reddit URL, so re-check the target:
+            // following a hand-off must not smuggle past a source the owner turned off.
+            const targetDisabled = await getDisabledServiceLabel(resolved.external);
+            if (targetDisabled) {
+              throw new ValidationError(`downloads from ${targetDisabled} are turned off.`);
+            }
             url = resolved.external;
           } else {
             redditImages = resolved.images;

@@ -1,3 +1,12 @@
+`bun run setup` writes a `.env` for you and keeps the explanatory comments from
+`.env.example`, so the generated file documents itself. This page is the reference for every
+value in it. Service logins live in [Cookies](Cookies).
+
+`bun run setup:check` validates an existing `.env`: missing required values, half-configured
+R2, and Windows-shaped paths left over from another machine.
+
+---
+
 all environment variables and configuration options for gronka. environment variables require a restart to change - for the live-editable settings managed from the webui (delivery policy, admin list, maintenance mode, and more), see [[Bot-Settings]].
 
 ## required variables

@@ -3,25 +3,47 @@ get gronka up and running in minutes.
 ## using docker (recommended)
 
 ```bash
-# 1. Clone the repository
 git clone https://github.com/thedorekaczynski/gronka.git
 cd gronka
+bun install
 
-# 2. Create .env file
-cp .env.example .env
-# Edit .env and add your DISCORD_TOKEN and CLIENT_ID
-
-# 3. Create the bind-mounted cookie files (docker mounts a DIRECTORY over a missing file,
-#    which makes yt-dlp and cobalt silently run unauthenticated)
-touch tiktok-cookies.txt
-cp cookies.example.json cookies.json
-
-# 4. Start the bot
-docker compose up -d
-
-# 5. Register Discord commands (one-time setup)
-docker compose run --rm app bun run register-commands
+bun run setup                 # asks for your token, writes .env, creates the mounted files
+docker compose up -d --build
+bun run docker:register       # register the slash commands, once
 ```
+
+`bun run setup` is the whole configuration step. It asks only for what it cannot work out —
+bot token, application id, your Discord user id, a Postgres password — and optionally walks you
+through a test bot and R2. It writes `.env` from `.env.example` and **keeps the comments**, so the
+generated file still documents every remaining knob.
+
+It also creates the three files docker bind-mounts **as files**. This matters more than it looks:
+if one is missing, Docker creates a *directory* in its place, and yt-dlp/cobalt then run
+unauthenticated. The failure reads as "cookies don't work", not "the mount is wrong".
+
+Check an install at any time — it changes nothing:
+
+```bash
+bun run setup:check          # toolchain, mounted files, cookies, config, ports
+bun run setup:repair         # create only the missing files; no questions
+```
+
+Healthy is `bot logged in as <name>` plus `All processes running` in
+`docker compose logs app --tail 30`.
+
+### doing it by hand
+
+`setup` is a convenience, not a requirement — nothing depends on it having run:
+
+```bash
+cp .env.example .env          # then edit PROD_DISCORD_TOKEN, PROD_CLIENT_ID, PROD_POSTGRES_PASSWORD
+cp cookies.example.json cookies.json
+cp cookies.example.json cobalt-cookies.json
+touch tiktok-cookies.txt
+chmod 600 cookies.json cobalt-cookies.json tiktok-cookies.txt
+```
+
+Optional logins for gated content are in [Cookies](Cookies).
 
 ## webui dashboard
 

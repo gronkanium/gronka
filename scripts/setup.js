@@ -224,6 +224,14 @@ const MOUNTED_FILES = [
 
 const MOUNTED_DIRS = ['data-prod', 'data-test', 'temp', 'logs'];
 
+// What each service in cookies.json needs to be useful. Required names are the ones whose
+// absence breaks a feature outright; the rest only widen coverage.
+const COOKIE_SERVICES = {
+  instagram: { required: ['sessionid'], why: 'photo and carousel posts fail without it' },
+  reddit: { required: [], why: 'optional: adds every gallery slide, not just the first' },
+  twitter: { required: [], why: 'optional: used by cobalt for gated posts' },
+};
+
 const REQUIRED_ENV = ['PROD_DISCORD_TOKEN', 'PROD_CLIENT_ID', 'PROD_POSTGRES_PASSWORD'];
 const PLACEHOLDERS = [/^your_/i, /^change_me$/i, /^$/];
 const isPlaceholder = v => v === undefined || PLACEHOLDERS.some(p => p.test(v));
@@ -289,6 +297,34 @@ async function runChecks() {
       ? ok(`${file.path} (${mode.toString(8)})`)
       : warn(`${file.path} is mode ${mode.toString(8)} — holds live sessions, prefer 600`);
   }
+
+  heading('Service cookies');
+  const cookiePath = join(ROOT, 'cookies.json');
+  let cookies;
+  try {
+    cookies = JSON.parse(readFileSync(cookiePath, 'utf8'));
+  } catch {
+    cookies = {};
+  }
+  for (const [service, meta] of Object.entries(COOKIE_SERVICES)) {
+    const value = Array.isArray(cookies[service]) ? cookies[service][0] : '';
+    const names = String(value || '')
+      .split(';')
+      .map(part => part.trim().split('=')[0])
+      .filter(Boolean);
+    const missing = meta.required.filter(name => !names.includes(name));
+    if (names.length === 0) {
+      meta.required.length
+        ? warn(`${service}: not configured — ${meta.why}`)
+        : note(`${service}: not configured — ${meta.why}`);
+    } else if (missing.length) {
+      bad(`${service}: missing ${missing.join(', ')} — ${meta.why}`);
+      problems.push(`add ${missing.join(', ')} to the ${service} entry in cookies.json`);
+    } else {
+      ok(`${service}: ${names.length} cookie(s)`);
+    }
+  }
+  note('values are never printed; copy the format from cookies.example.json');
 
   heading('Writable directories');
   for (const dir of MOUNTED_DIRS) {

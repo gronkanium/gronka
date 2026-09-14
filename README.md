@@ -65,13 +65,21 @@ docker is the supported way to run gronka — the image bundles ffmpeg, gifsicle
 ```bash
 git clone https://github.com/thedorekaczynski/gronka.git
 cd gronka
-cp .env.example .env      # then edit it (see configuration below)
-touch tiktok-cookies.txt  # bind-mounted as a file; docker mounts a directory if it's missing
-docker compose up -d
-docker compose run --rm app bun run register-commands   # once, to register slash commands
+bun install
+bun run setup             # asks for your token, writes .env, creates the mounted files
+docker compose up -d --build
+bun run docker:register   # once, to register slash commands
 ```
 
 the stats dashboard is then available at `http://localhost:3001`.
+
+`bun run setup` asks only for what it can't work out itself and writes `.env` from
+`.env.example`, keeping the comments. `bun run setup:check` re-validates an install later and
+changes nothing. prefer doing it by hand? `cp .env.example .env`, `cp cookies.example.json
+cookies.json`, `touch tiktok-cookies.txt` — the wizard is a convenience, nothing depends on it.
+
+> those files are bind-mounted **as files**. if one is missing docker creates a _directory_ in
+> its place and yt-dlp/cobalt silently run unauthenticated, which reads as "cookies don't work".
 
 > running the bot outside docker is possible for development but needs bun 1.3+, ffmpeg, and yt-dlp installed yourself; `/optimize` also needs gifsicle (linux/macOS, or docker on windows). see the [wiki](https://github.com/thedorekaczynski/gronka/wiki) for the local development workflow.
 
@@ -86,6 +94,9 @@ two optional values are worth setting before you invite anyone:
 
 - `SUPPORT_INVITE_URL` — your own discord server. `/info` links it and the ban-appeal embed sends appeals there; leave it empty and neither surface mentions a server at all
 - `ADMIN_USER_IDS` — comma-separated discord user ids that bypass rate limits and size caps
+
+optional logins for gated content (instagram photo posts, reddit galleries) go in
+`cookies.json` — see [Cookies](https://github.com/thedorekaczynski/gronka/wiki/Cookies).
 
 `.env.example` uses `PROD_`/`TEST_` prefixes so one file can hold two bot instances; the docker setup and the `bot:prod`/`bot:test` scripts map the chosen prefix onto the plain names above. everything else is optional and documented inline in `.env.example`.
 

@@ -1,7 +1,8 @@
 {
-  "twitter": ["auth_token=your_auth_token_here; ct0=your_csrf_token_here"],
+  "_comment": "Copy to cookies.json and replace the <placeholders>. Each value is the Cookie: header your browser sends, as name=value pairs joined by '; ' - read them from DevTools > Application > Cookies. Delete any service you do not use. These are live sessions: keep the file mode 600. See wiki/Cookies.md, or run `bun run setup:check` to see what is missing.",
   "instagram": [
     "mid=<mid>; ig_did=<ig_did>; csrftoken=<csrftoken>; ds_user_id=<ds_user_id>; sessionid=<sessionid>"
   ],
-  "reddit": ["client_id=<client_id>; client_secret=<client_secret>; refresh_token=<refresh_token>"]
+  "reddit": ["reddit_session=<reddit_session>"],
+  "twitter": ["auth_token=<auth_token>; ct0=<ct0>"]
 }

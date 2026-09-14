@@ -5,6 +5,7 @@
 - [[Running-for-Free]]
 - [[Installation]]
 - [[Configuration]]
+- [[Cookies]]
 - [[Bot-Settings]]
 
 ## user guide

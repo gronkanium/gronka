@@ -1,3 +1,12 @@
+Most installs should follow [Quick-Start](Quick-Start), which is `bun run setup` plus
+`docker compose up -d --build`. This page is the long form: the manual steps, a bare-metal
+(non-docker) run, and the prerequisites behind them.
+
+Verify any install at any point with `bun run setup:check` — it changes nothing and reports
+the toolchain, the bind-mounted files, cookies, required config and port conflicts.
+
+---
+
 ## prerequisites
 
 - [ ] Ubuntu 20.04+ or Debian 11+ server

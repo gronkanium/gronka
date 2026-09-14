@@ -80,6 +80,21 @@ describe('reddit utilities', () => {
     );
   });
 
+  test('skips unsigned listing thumbnails, which answer 403', () => {
+    const thumb =
+      '<meta property="og:image" content="https://preview.redd.it/abc123.jpg?width=140&amp;crop=1:1,smart">';
+    assert.deepStrictEqual(extractImageUrls(thumb), []);
+  });
+
+  test("the post's own image sorts first, ahead of neighbouring posts", () => {
+    const page =
+      '<meta property="og:image" content="https://preview.redd.it/mine.jpg?width=140&amp;crop=1:1">' +
+      slide('other-v0-neighbour') +
+      slide('title-v0-mine');
+    const urls = extractImageUrls(page);
+    assert.ok(urls[0].includes('mine'), `og:image slide first, got ${urls[0]}`);
+  });
+
   test('a post with no images extracts nothing rather than guessing', () => {
     assert.deepStrictEqual(extractImageUrls('<html><body>no media here</body></html>'), []);
   });

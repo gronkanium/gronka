@@ -61,6 +61,20 @@ function isMediaHostUrl(url) {
   }
 }
 
+/** The trailing id both markup shapes share, after the title prefix the hydrated one adds. */
+function slideId(url) {
+  try {
+    return new URL(url).pathname
+      .split('/')
+      .pop()
+      .replace(/\.[^.]+$/, '')
+      .split('-')
+      .pop();
+  } catch {
+    return null;
+  }
+}
+
 // Avatars, awards and static chrome live on the same hosts as post media.
 const NON_POST_PATH = /snoovatar|\/award|\/cms\/|defaults|headshot/i;
 
@@ -76,6 +90,9 @@ const NON_POST_PATH = /snoovatar|\/award|\/cms\/|defaults|headshot/i;
 export function extractImageUrls(html) {
   const decoded = html.replace(/&amp;/g, '&');
   const widest = new Map();
+  // og:image names the post's own first image, which is what distinguishes post media from
+  // the thumbnails of neighbouring posts the server-rendered page also carries.
+  const ogId = slideId(decoded.match(/property="og:image"\s+content="([^"]+)"/)?.[1]);
 
   for (const match of decoded.matchAll(/https:\/\/(?:preview|i)\.redd\.it\/[^"'\\\s<>)]+/g)) {
     const url = match[0];
@@ -91,12 +108,12 @@ export function extractImageUrls(html) {
     } catch {
       continue;
     }
-    // The two shapes name the same slide differently, so key on the trailing id both share.
-    const file = parsed.pathname.split('/').pop();
-    const id = file
-      .replace(/\.[^.]+$/, '')
-      .split('-')
-      .pop();
+    // Only signed variants are fetchable; the unsigned 140x140 ones are listing thumbnails
+    // and answer 403.
+    if (!parsed.searchParams.has('s')) {
+      continue;
+    }
+    const id = slideId(url);
     const width = Number.parseInt(parsed.searchParams.get('width') || '0', 10);
     const current = widest.get(id);
     if (!current || current.width < width) {
@@ -104,7 +121,9 @@ export function extractImageUrls(html) {
     }
   }
 
-  return [...widest.values()].map(entry => entry.url);
+  const entries = [...widest.entries()];
+  entries.sort(([a], [b]) => (a === ogId ? -1 : 0) - (b === ogId ? -1 : 0));
+  return entries.map(([, entry]) => entry.url);
 }
 
 /**

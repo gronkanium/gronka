@@ -5,6 +5,18 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres (attempts) to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.34.0](https://github.com/thedorekaczynski/gronka/compare/v0.33.0...v0.34.0) (2026-09-14)
+
+
+### Features
+
+* **prefix:** answer a bare mention with a compact prompt ([d565538](https://github.com/thedorekaczynski/gronka/commit/d565538158212cfc9737c35ff6b4b8ad7d2ea0b1))
+
+
+### Bug Fixes
+
+* **info:** drop the redundant bot name from the embed title ([9d9147b](https://github.com/thedorekaczynski/gronka/commit/9d9147b50972e392d29107664138f2ee0b961f72))
+
 ## [0.33.0](https://github.com/thedorekaczynski/gronka/compare/v0.32.0...v0.33.0) (2026-09-14)
 
 

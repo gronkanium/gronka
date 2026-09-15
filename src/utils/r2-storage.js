@@ -11,9 +11,20 @@ import { createLogger } from './logger.js';
 // storage.js imports this file, so this file must not pull in the barrel that re-exports it.
 import { getLiveBytes } from './database/temporary-uploads-pg.js';
 import { getSetting } from './database/settings-pg.js';
-import { ValidationError } from './errors.js';
+import { NetworkError, ValidationError } from './errors.js';
 
 const logger = createLogger('r2-storage');
+
+// A degraded Cloudflare route holds an upload open at a trickle instead of failing: 60MB took
+// 16m57s on 2026-09-15, long past the 15-minute interaction token, which held a download slot
+// and let the stuck-operation reaper fail everything queued behind it. Socket timeouts never
+// fire on a trickle, so bound the upload on effective throughput instead.
+const MIN_UPLOAD_BYTES_PER_SEC = 500 * 1024;
+const MIN_UPLOAD_BUDGET_MS = 60_000;
+
+export function uploadBudgetMs(bytes) {
+  return Math.max(MIN_UPLOAD_BUDGET_MS, Math.ceil((bytes / MIN_UPLOAD_BYTES_PER_SEC) * 1000));
+}
 
 // Soft cap on total live temporary-upload bytes in R2. Steerable via the `r2_soft_limit_gb`
 // setting; 0 disables the guard. Keeps daily-peak storage (what R2 bills on) under budget.
@@ -124,7 +135,16 @@ export async function uploadToR2(buffer, key, contentType, config, metadata = {}
       },
     });
 
-    const result = await upload.done();
+    let budgetTimer;
+    const result = await Promise.race([
+      upload.done(),
+      new Promise((_, reject) => {
+        budgetTimer = setTimeout(() => {
+          upload.abort().catch(() => {});
+          reject(new NetworkError('could not upload this file right now, try again shortly.'));
+        }, uploadBudgetMs(buffer.length));
+      }),
+    ]).finally(() => clearTimeout(budgetTimer));
 
     if (result && result.ETag) {
       logger.info(`Upload completed: ETag=${result.ETag}, Location=${result.Location || 'N/A'}`);

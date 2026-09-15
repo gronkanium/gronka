@@ -297,6 +297,20 @@ client.once(Events.ClientReady, async readyClient => {
     // back to success, by which point the token had expired and the reply died with
     // "Invalid Webhook Token" (50027). Past 16 minutes nothing can be delivered anyway, so
     // anything still running then is genuinely stuck.
+    // A restart orphans whatever was mid-flight: the row stays 'running' with no process left
+    // to finish it, so the user waited out the full 16 minutes for a failure that was already
+    // certain. This process owns nothing yet, so anything still 'running' now is orphaned by
+    // definition. Reconciling at boot also covers a crash or an OOM kill, which a SIGTERM
+    // handler would miss.
+    try {
+      const orphaned = await cleanupStuckOperations(0, readyClient);
+      if (orphaned > 0) {
+        logger.info(`Failed ${orphaned} operation(s) orphaned by the previous shutdown`);
+      }
+    } catch (error) {
+      logger.error('Error reconciling orphaned operations at startup:', error);
+    }
+
     setInterval(
       async () => {
         try {

@@ -13,6 +13,7 @@ import {
   flushAllOperationLogs,
 } from '../../src/utils/operations-tracker.js';
 import { initDatabase, insertOperationLog, insertOrUpdateUser } from '../../src/utils/database.js';
+import { getOperationTrace } from '../../src/utils/database/operations-pg.js';
 
 beforeAll(async () => {
   await initDatabase();
@@ -495,6 +496,31 @@ describe('operations tracker', () => {
       const cleaned = await cleanupStuckOperations(1); // 1 minute threshold
       // May be 0 if no operations are actually stuck
       assert.ok(cleaned >= 0);
+    });
+
+    test('a zero threshold fails an operation that only just started', async () => {
+      const orphanId = `orphan-${Date.now()}-${Math.random().toString(16).slice(2)}`;
+      insertOperationLog(orphanId, 'created', 'pending', {
+        message: 'Operation created',
+        metadata: { operationType: 'download', userId: 'user-orphan' },
+      });
+      insertOperationLog(orphanId, 'status_update', 'running', {
+        message: 'Status changed from pending to running',
+        metadata: { operationType: 'download', userId: 'user-orphan' },
+      });
+      await flushAllOperationLogs();
+
+      // 16 minutes is the running reaper: a operation this fresh must survive it.
+      await cleanupStuckOperations(16);
+      let trace = await getOperationTrace(orphanId);
+      let latest = trace.logs.filter(l => l.step === 'status_update').pop();
+      assert.strictEqual(latest.status, 'running');
+
+      // 0 is what boot reconciliation passes: the process owns nothing, so this is orphaned.
+      await cleanupStuckOperations(0);
+      trace = await getOperationTrace(orphanId);
+      latest = trace.logs.filter(l => l.step === 'status_update').pop();
+      assert.strictEqual(latest.status, 'error');
     });
 
     test('sends DM notification when client provided', async () => {

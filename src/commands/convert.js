@@ -32,14 +32,8 @@ import {
   convertAnimatedWebpToGif,
   isAnimatedWebp,
 } from '../utils/video-processor.js';
-import {
-  gifExists,
-  getGifPath,
-  getVideoPath,
-  getImagePath,
-  saveGif,
-  shouldUploadToDiscord,
-} from '../utils/storage.js';
+import { gifExists, getGifPath, getVideoPath, getImagePath, saveGif } from '../utils/storage.js';
+import { fitsDiscordAttachment, getDiscordAttachmentLimit } from './shared/attachment-limit.js';
 import {
   uploadGifToR2,
   downloadGifFromR2,
@@ -69,6 +63,7 @@ const {
   gifStoragePath: GIF_STORAGE_PATH,
   cdnBaseUrl: CDN_BASE_URL,
   maxGifDuration: MAX_GIF_DURATION,
+  discordSizeLimit: DISCORD_SIZE_LIMIT,
 } = botConfig;
 
 /**
@@ -261,6 +256,7 @@ async function processConversion(
     interaction,
     async ctx => {
       const { operationId, userId, username, tempFiles, buildMetadata } = ctx;
+      const discordAttachmentLimit = getDiscordAttachmentLimit(interaction, DISCORD_SIZE_LIMIT);
 
       if (originalUrl) {
         const dbInitSuccess = await initializeDatabaseWithErrorHandling({
@@ -446,8 +442,7 @@ async function processConversion(
           }
         }
 
-        // Check if file should be uploaded to Discord (< 8MB)
-        if (shouldUploadToDiscord(gifBuffer)) {
+        if (fitsDiscordAttachment(gifBuffer.length, discordAttachmentLimit)) {
           logger.info(
             `Cached GIF is small enough for Discord (${(fileSize / (1024 * 1024)).toFixed(2)}MB), uploading to Discord`
           );
@@ -783,7 +778,13 @@ async function processConversion(
       const willOptimize = shouldOptimize;
       if (!willOptimize) {
         try {
-          const saveResult = await saveGif(gifBuffer, hash, GIF_STORAGE_PATH, buildMetadata());
+          const saveResult = await saveGif(
+            gifBuffer,
+            hash,
+            GIF_STORAGE_PATH,
+            buildMetadata(),
+            discordAttachmentLimit
+          );
           finalGifUrl = saveResult.url;
           finalGifBuffer = saveResult.buffer;
           finalUploadMethod = saveResult.method;
@@ -821,7 +822,8 @@ async function processConversion(
             optimizedBuffer,
             optimizedHashValue,
             GIF_STORAGE_PATH,
-            buildMetadata()
+            buildMetadata(),
+            discordAttachmentLimit
           );
           finalGifUrl = saveResult.url;
           finalGifBuffer = saveResult.buffer;
@@ -849,7 +851,8 @@ async function processConversion(
             optimizedBuffer,
             optimizedHashValue,
             GIF_STORAGE_PATH,
-            buildMetadata()
+            buildMetadata(),
+            discordAttachmentLimit
           );
           finalGifUrl = saveResult.url;
           finalGifBuffer = saveResult.buffer;

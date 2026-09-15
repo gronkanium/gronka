@@ -34,6 +34,7 @@ import { hashUrlWithParams, hashPartsHex } from '../utils/hashing.js';
 import { getProcessedUrl } from '../utils/database.js';
 import { recordProcessedUrl, trackR2UploadIfApplicable } from './shared/url-cache.js';
 import { runMediaCommand } from './shared/run-media-command.js';
+import { getDiscordAttachmentLimit } from './shared/attachment-limit.js';
 import { replyIfRateLimited } from './shared/command-guards.js';
 import { r2Config } from '../utils/config.js';
 import {
@@ -44,7 +45,11 @@ import {
 
 const logger = createLogger('optimize');
 
-const { gifStoragePath: GIF_STORAGE_PATH, cdnBaseUrl: CDN_BASE_URL } = botConfig;
+const {
+  gifStoragePath: GIF_STORAGE_PATH,
+  cdnBaseUrl: CDN_BASE_URL,
+  discordSizeLimit: DISCORD_SIZE_LIMIT,
+} = botConfig;
 
 async function safeReply(interaction, options) {
   if (interaction.replied || interaction.deferred) {
@@ -102,6 +107,7 @@ export async function processOptimization(
     interaction,
     async ctx => {
       const { operationId, userId, tempFiles, buildMetadata } = ctx;
+      const discordAttachmentLimit = getDiscordAttachmentLimit(interaction, DISCORD_SIZE_LIMIT);
 
       const optimizeOptions =
         lossyLevel !== null && lossyLevel !== undefined ? { lossy: lossyLevel } : {};
@@ -244,7 +250,8 @@ export async function processOptimization(
           optimizedBuffer,
           optimizedHash,
           GIF_STORAGE_PATH,
-          buildMetadata()
+          buildMetadata(),
+          discordAttachmentLimit
         );
         optimizedUrl = saveResult.url;
         optimizedUploadMethod = saveResult.method;

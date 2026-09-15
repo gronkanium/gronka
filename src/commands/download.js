@@ -925,7 +925,8 @@ export async function processDownload(
                 hash,
                 ext,
                 GIF_STORAGE_PATH,
-                buildMetadata()
+                buildMetadata(),
+                discordAttachmentLimit
               );
             } else if (fileType === 'image') {
               saveResult = await saveImage(
@@ -933,10 +934,17 @@ export async function processDownload(
                 hash,
                 ext,
                 GIF_STORAGE_PATH,
-                buildMetadata()
+                buildMetadata(),
+                discordAttachmentLimit
               );
             } else if (fileType === 'gif') {
-              saveResult = await saveGif(media.buffer, hash, GIF_STORAGE_PATH, buildMetadata());
+              saveResult = await saveGif(
+                media.buffer,
+                hash,
+                GIF_STORAGE_PATH,
+                buildMetadata(),
+                discordAttachmentLimit
+              );
             }
 
             filePath = saveResult.url;
@@ -1300,7 +1308,13 @@ export async function processDownload(
           }
 
           logger.info(`Saving GIF (hash: ${hash})`);
-          const saveResult = await saveGif(finalBuffer, hash, GIF_STORAGE_PATH, buildMetadata());
+          const saveResult = await saveGif(
+            finalBuffer,
+            hash,
+            GIF_STORAGE_PATH,
+            buildMetadata(),
+            discordAttachmentLimit
+          );
           filePath = saveResult.url;
           finalBuffer = saveResult.buffer;
           finalUploadMethod = saveResult.method;
@@ -1422,7 +1436,8 @@ export async function processDownload(
                 finalBuffer,
                 hash,
                 GIF_STORAGE_PATH,
-                buildMetadata()
+                buildMetadata(),
+                discordAttachmentLimit
               );
               filePath = saveResult.url;
               finalBuffer = saveResult.buffer;
@@ -1561,7 +1576,8 @@ export async function processDownload(
               hash,
               saveExt,
               GIF_STORAGE_PATH,
-              buildMetadata()
+              buildMetadata(),
+              discordAttachmentLimit
             );
             filePath = saveResult.url;
             finalBuffer = saveResult.buffer;
@@ -1574,7 +1590,8 @@ export async function processDownload(
             hash,
             ext,
             GIF_STORAGE_PATH,
-            buildMetadata()
+            buildMetadata(),
+            discordAttachmentLimit
           );
           filePath = saveResult.url;
           finalBuffer = saveResult.buffer;

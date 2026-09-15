@@ -22,11 +22,10 @@ import { ttlHoursForSize, DEFAULT_TTL_TIERS } from './upload-tiers.js';
 
 const logger = createLogger('storage');
 
-// Discord upload threshold: files smaller than this will be sent as Discord attachments
-const DISCORD_UPLOAD_THRESHOLD = 8 * 1024 * 1024; // 8MB in bytes
-
-export function shouldUploadToDiscord(buffer) {
-  return buffer.length < DISCORD_UPLOAD_THRESHOLD;
+// The caller owns the limit: it comes from interaction.attachmentSizeLimit via
+// shared/attachment-limit.js, so this file must not keep a second copy of it.
+function pickUploadMethod(buffer, discordLimit) {
+  return buffer.length <= discordLimit ? 'discord' : 'r2';
 }
 
 // Stats cache: Map<storagePath, {stats, timestamp}>
@@ -303,10 +302,16 @@ export function getGifPath(hash, storagePath) {
  * @param {Object} [metadata={}] - Optional metadata to attach to the object
  * @returns {Promise<{url: string, method: string, buffer: Buffer}>} Object with URL, upload method, and buffer
  */
-export async function saveGif(buffer, hash, storagePath, metadata = {}) {
-  const method = shouldUploadToDiscord(buffer) ? 'discord' : 'r2';
+export async function saveGif(
+  buffer,
+  hash,
+  storagePath,
+  metadata = {},
+  discordLimit = botConfig.discordSizeLimit
+) {
+  const method = pickUploadMethod(buffer, discordLimit);
 
-  // Only upload to R2 if file is >= 8MB (Discord limit)
+  // Only upload to R2 if it is too big to ride along as a Discord attachment
   if (
     method === 'r2' &&
     r2Config.accountId &&
@@ -343,7 +348,7 @@ export async function saveGif(buffer, hash, storagePath, metadata = {}) {
     }
   }
 
-  // Save to local disk (for Discord uploads < 8MB, or as fallback)
+  // Save to local disk (for Discord attachment delivery, or as fallback)
   const _basePath = getStoragePath(storagePath);
   const gifPath = getGifPath(hash, storagePath);
 
@@ -453,10 +458,17 @@ export async function videoExists(hash, extension, storagePath) {
  * @param {Object} [metadata={}] - Optional metadata to attach to the object
  * @returns {Promise<{url: string, method: string, buffer: Buffer}>} Object with URL, upload method, and buffer
  */
-export async function saveVideo(buffer, hash, extension, storagePath, metadata = {}) {
-  const method = shouldUploadToDiscord(buffer) ? 'discord' : 'r2';
+export async function saveVideo(
+  buffer,
+  hash,
+  extension,
+  storagePath,
+  metadata = {},
+  discordLimit = botConfig.discordSizeLimit
+) {
+  const method = pickUploadMethod(buffer, discordLimit);
 
-  // Only upload to R2 if file is >= 8MB (Discord limit)
+  // Only upload to R2 if it is too big to ride along as a Discord attachment
   if (
     method === 'r2' &&
     r2Config.accountId &&
@@ -495,7 +507,7 @@ export async function saveVideo(buffer, hash, extension, storagePath, metadata =
     }
   }
 
-  // Save to local disk (for Discord uploads < 8MB, or as fallback)
+  // Save to local disk (for Discord attachment delivery, or as fallback)
   const _basePath = getStoragePath(storagePath);
   const videoPath = getVideoPath(hash, extension, storagePath);
 
@@ -553,10 +565,17 @@ export async function imageExists(hash, extension, storagePath) {
  * @param {Object} [metadata={}] - Optional metadata to attach to the object
  * @returns {Promise<{url: string, method: string, buffer: Buffer}>} Object with URL, upload method, and buffer
  */
-export async function saveImage(buffer, hash, extension, storagePath, metadata = {}) {
-  const method = shouldUploadToDiscord(buffer) ? 'discord' : 'r2';
+export async function saveImage(
+  buffer,
+  hash,
+  extension,
+  storagePath,
+  metadata = {},
+  discordLimit = botConfig.discordSizeLimit
+) {
+  const method = pickUploadMethod(buffer, discordLimit);
 
-  // Only upload to R2 if file is >= 8MB (Discord limit)
+  // Only upload to R2 if it is too big to ride along as a Discord attachment
   if (
     method === 'r2' &&
     r2Config.accountId &&
@@ -595,7 +614,7 @@ export async function saveImage(buffer, hash, extension, storagePath, metadata =
     }
   }
 
-  // Save to local disk (for Discord uploads < 8MB, or as fallback)
+  // Save to local disk (for Discord attachment delivery, or as fallback)
   const _basePath = getStoragePath(storagePath);
   const imagePath = getImagePath(hash, extension, storagePath);
 

@@ -365,6 +365,11 @@ export async function processDownload(
             redditImages = resolved.images;
           }
         } catch (redditError) {
+          // Falling back to cobalt is the net for a resolution failure, but it must not become a
+          // way around the disabled-source gate two lines up.
+          if (redditError instanceof ValidationError) {
+            throw redditError;
+          }
           logger.warn(`Reddit resolution failed, falling back to cobalt: ${redditError.message}`);
         }
       }

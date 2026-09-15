@@ -519,7 +519,9 @@ async function wizard() {
     note('skipped, everything still works, just without a CDN');
   }
 
-  writeFileSync(envPath, text);
+  // mode on create closes the window where .env briefly exists at 0644 holding the Discord
+  // token and R2 keys; chmod still covers the case where the file already existed.
+  writeFileSync(envPath, text, { mode: 0o600 });
   chmodSync(envPath, 0o600);
   ok('wrote .env (600), keeping the documentation comments from .env.example');
 

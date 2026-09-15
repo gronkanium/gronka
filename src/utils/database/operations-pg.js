@@ -1,6 +1,5 @@
 import { getPostgresConnection } from './connection.js';
 import { ensurePostgresInitialized } from './init.js';
-import { getUser } from './users-pg.js';
 import { convertTimestampsInArray, convertTimestampsToNumbers } from './helpers-pg.js';
 
 // Query result cache for getRecentOperations
@@ -301,25 +300,11 @@ async function reconstructOperationsByIds(operationIds) {
       }
     }
 
-    // Determine username
-    let username = context.username;
-    if (context.userId) {
-      try {
-        const user = await getUser(context.userId);
-        if (user && user.username) {
-          username = user.username;
-        }
-      } catch (_error) {
-        // Silently fail
-      }
-    }
-
     reconstructedOperations.push({
       id: operationId,
       type: operationType,
       status: latestStatusLog.status,
       userId: context.userId || null,
-      username: username || null,
       originalUrl: context.originalUrl || null,
       sourceUrl,
       fileSize,
@@ -396,12 +381,11 @@ export async function getRecentOperations(limit = 100) {
 /**
  * Search operations with SQL-level filtering across the full history (not just
  * the most recent N operations), so filters reliably find older matches.
- * Filters map onto the 'created' log's metadata (userId, username, operationType,
+ * Filters map onto the 'created' log's metadata (userId, operationType,
  * earlyFailure, timestamp) and the latest 'status_update' log (status, duration).
  * @param {Object} filters - Filter criteria
  * @param {string} [filters.operationId]
  * @param {string} [filters.userId]
- * @param {string} [filters.username] - Substring match, case-insensitive
  * @param {string} [filters.urlPattern] - Substring match on originalUrl, case-insensitive
  * @param {Array<string>} [filters.types] - Operation types to include
  * @param {Array<string>} [filters.statuses] - Statuses to include
@@ -440,9 +424,6 @@ export async function searchOperations(filters = {}, { limit = 50, offset = 0, s
   }
   if (filters.userId) {
     conditions.push(`(c.metadata::jsonb ->> 'userId') = ${p(filters.userId)}`);
-  }
-  if (filters.username) {
-    conditions.push(`(c.metadata::jsonb ->> 'username') ILIKE ${p(`%${filters.username}%`)}`);
   }
   if (filters.urlPattern) {
     conditions.push(`(c.metadata::jsonb ->> 'originalUrl') ILIKE ${p(`%${filters.urlPattern}%`)}`);

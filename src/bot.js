@@ -367,9 +367,7 @@ client.once(Events.ClientReady, async readyClient => {
 
 client.on(Events.InteractionCreate, async interaction => {
   try {
-    logger.debug(
-      `Received interaction: ${interaction.type} from user ${interaction.user.id} (${interaction.user.tag})`
-    );
+    logger.debug(`Received interaction: ${interaction.type} from user ${interaction.user.id}`);
     // Track user interaction (non-blocking to avoid interaction timeout)
     trackUser(interaction.user.id).catch(error => {
       logger.debug(`Failed to track user ${interaction.user.id}: ${error.message}`);

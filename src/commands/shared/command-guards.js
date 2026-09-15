@@ -29,7 +29,7 @@ export async function replyIfRateLimited(interaction, { type, action, commandSou
     return false;
   }
 
-  logger.warn(`User ${userId} (${interaction.user.tag}) is rate limited`);
+  logger.warn(`User ${userId} is rate limited`);
 
   const rateLimitSeconds = botConfig.rateLimitCooldown / 1000;
   const message = `please wait ${rateLimitSeconds} seconds before ${action}.`;

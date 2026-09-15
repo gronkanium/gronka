@@ -255,14 +255,13 @@ async function processConversion(
     'convert',
     interaction,
     async ctx => {
-      const { operationId, userId, username, tempFiles, buildMetadata } = ctx;
+      const { operationId, userId, tempFiles, buildMetadata } = ctx;
       const discordAttachmentLimit = getDiscordAttachmentLimit(interaction, DISCORD_SIZE_LIMIT);
 
       if (originalUrl) {
         const dbInitSuccess = await initializeDatabaseWithErrorHandling({
           operationId,
           userId,
-          username,
           commandName: 'convert',
           interaction,
           context: { originalUrl },
@@ -1053,9 +1052,7 @@ export async function handleConvertContextMenu(interaction) {
   const userId = interaction.user.id;
   const adminUser = isAdmin(userId);
 
-  logger.info(
-    `User ${userId} (${interaction.user.tag}) initiated conversion${adminUser ? ' [ADMIN]' : ''}`
-  );
+  logger.info(`User ${userId} initiated conversion${adminUser ? ' [ADMIN]' : ''}`);
 
   if (
     await replyIfRateLimited(interaction, {
@@ -1296,7 +1293,7 @@ export async function handleConvertCommand(interaction) {
   const adminUser = isAdmin(userId);
 
   logger.info(
-    `User ${userId} (${interaction.user.tag}) initiated conversion via slash command${adminUser ? ' [ADMIN]' : ''}`
+    `User ${userId} initiated conversion via slash command${adminUser ? ' [ADMIN]' : ''}`
   );
 
   if (

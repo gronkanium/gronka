@@ -11,7 +11,6 @@ const logger = createLogger('database-init');
  * @param {Object} params - Parameters object
  * @param {string} params.operationId - Operation ID for tracking
  * @param {string} params.userId - User ID
- * @param {string} params.username - Username
  * @param {string} params.commandName - Command name ('download', 'convert', etc.)
  * @param {Interaction} params.interaction - Discord interaction
  * @param {Object} [params.context] - Additional context for error logging (e.g., { url, originalUrl })

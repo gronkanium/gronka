@@ -208,7 +208,7 @@
         {#each leaderboardMostActive as user, index}
           <li>
             <span class="rank">{index + 1}</span>
-            <span class="username">{user.user_id}</span>
+            <span class="user-id">{user.user_id}</span>
             <span class="value">{user.total_commands} commands</span>
           </li>
         {/each}
@@ -221,7 +221,7 @@
         {#each leaderboardHighestSuccess as user, index}
           <li>
             <span class="rank">{index + 1}</span>
-            <span class="username">{user.user_id}</span>
+            <span class="user-id">{user.user_id}</span>
             <span class="value">{calculateSuccessRate(user)}%</span>
           </li>
         {/each}
@@ -234,7 +234,7 @@
         {#each leaderboardLargestFiles as user, index}
           <li>
             <span class="rank">{index + 1}</span>
-            <span class="username">{user.user_id}</span>
+            <span class="user-id">{user.user_id}</span>
             <span class="value">{formatBytes(user.total_file_size)}</span>
           </li>
         {/each}
@@ -299,7 +299,7 @@
           <tbody>
             {#each users as user}
               <tr>
-                <td class="username-cell">{user.user_id}</td>
+                <td class="user-id-cell">{user.user_id}</td>
                 <td class="number-cell">{user.total_commands}</td>
                 <td class="number-cell success">{user.successful_commands}</td>
                 <td class="number-cell error">{user.failed_commands}</td>
@@ -398,7 +398,7 @@
     min-width: 1.5rem;
   }
 
-  .username {
+  .user-id {
     flex: 1;
     color: var(--text);
   }
@@ -536,7 +536,7 @@
     overflow-wrap: break-word;
   }
 
-  .username-cell {
+  .user-id-cell {
     font-weight: 500;
     text-align: left;
     max-width: 200px;

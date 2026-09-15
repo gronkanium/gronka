@@ -17,7 +17,6 @@
   let selectedStatuses = new Set(['pending', 'running', 'success', 'error']);
   let selectedTypes = new Set(['convert', 'download', 'optimize', 'info']);
   let searchUserId = '';
-  let searchUsername = '';
   let urlPattern = '';
   let failedOnly = false;
   let earlyFailureOnly = false;
@@ -72,7 +71,6 @@
     if (q.get('status')) selectedStatuses = new Set(q.get('status').split(','));
     if (q.get('type')) selectedTypes = new Set(q.get('type').split(','));
     searchUserId = q.get('userId') || '';
-    searchUsername = q.get('userId') || '';
     urlPattern = q.get('url') || '';
     failedOnly = q.get('failedOnly') === 'true';
     earlyFailureOnly = q.get('earlyFailureOnly') === 'true';
@@ -97,7 +95,6 @@
       q.set('type', Array.from(selectedTypes).join(','));
     }
     if (searchUserId) q.set('userId', searchUserId);
-    if (searchUsername) q.set('userId', searchUsername);
     if (urlPattern) q.set('url', urlPattern);
     if (failedOnly) q.set('failedOnly', 'true');
     if (earlyFailureOnly) q.set('earlyFailureOnly', 'true');
@@ -222,10 +219,6 @@
         params.append('userId', searchUserId);
       }
 
-      if (searchUsername) {
-        params.append('userId', searchUsername);
-      }
-
       if (urlPattern) {
         params.append('urlPattern', urlPattern);
       }
@@ -321,7 +314,6 @@
     selectedStatuses = new Set(ALL_STATUSES);
     selectedTypes = new Set(ALL_TYPES);
     searchUserId = '';
-    searchUsername = '';
     urlPattern = '';
     failedOnly = false;
     earlyFailureOnly = false;
@@ -455,17 +447,6 @@
       </div>
 
       <div class="filter-group">
-        <!-- svelte-ignore a11y-label-has-associated-control -->
-        <label>user id</label>
-        <input
-          type="text"
-          placeholder="filter by user id..."
-          bind:value={searchUsername}
-          on:input={debouncedFetch}
-        />
-      </div>
-
-      <div class="filter-group">
         <label>
           <input type="checkbox" bind:checked={failedOnly} on:change={applyFilters} />
           <span>failed operations only</span>
@@ -563,7 +544,6 @@
             <th>Status</th>
             <th>Type</th>
             <th>URL</th>
-            <th>Username</th>
             <th>User ID</th>
             <th>Error Type</th>
             <th>Timestamp</th>
@@ -647,7 +627,6 @@
                   N/A
                 {/if}
               </td>
-              <td class="username-cell">{request.userId || 'N/A'}</td>
               <td class="userid-cell">{request.userId || 'N/A'}</td>
               <td class="error-type-cell">
                 {#if request.errorType}
@@ -1089,10 +1068,6 @@
 
   .url-info-item {
     grid-column: 1 / -1;
-  }
-
-  .username-cell {
-    color: var(--text);
   }
 
   .userid-cell {

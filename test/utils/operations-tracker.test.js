@@ -489,7 +489,7 @@ describe('operations tracker', () => {
       const stuckId = `stuck-${Date.now()}`;
       insertOperationLog(stuckId, 'created', 'pending', {
         message: 'Operation created',
-        metadata: { operationType: 'convert', userId: 'user1', username: 'User1' },
+        metadata: { operationType: 'convert', userId: 'user1' },
       });
 
       // Test the function with existing operations

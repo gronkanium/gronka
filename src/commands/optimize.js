@@ -427,7 +427,7 @@ export async function handleOptimizeContextMenuCommand(interaction, modalAttachm
   const adminUser = isAdmin(userId);
 
   logger.info(
-    `User ${userId} (${interaction.user.tag}) initiated optimization via context menu${adminUser ? ' [ADMIN]' : ''}`
+    `User ${userId} initiated optimization via context menu${adminUser ? ' [ADMIN]' : ''}`
   );
 
   if (
@@ -643,7 +643,7 @@ export async function handleOptimizeCommand(interaction) {
   const adminUser = isAdmin(userId);
 
   logger.info(
-    `User ${userId} (${interaction.user.tag}) initiated optimization via slash command${adminUser ? ' [ADMIN]' : ''}`
+    `User ${userId} initiated optimization via slash command${adminUser ? ' [ADMIN]' : ''}`
   );
 
   if (

@@ -131,8 +131,7 @@ async function main() {
     await sql`SELECT 1`;
 
     // --- Gather footprint ------------------------------------------------------
-    const [userRow] =
-      await sql`SELECT username, first_used, last_used FROM users WHERE user_id = ${userId}`;
+    const [userRow] = await sql`SELECT first_used, last_used FROM users WHERE user_id = ${userId}`;
     const [metricsRow] =
       await sql`SELECT total_commands FROM user_metrics WHERE user_id = ${userId}`;
     const media = await sql`
@@ -154,7 +153,7 @@ async function main() {
 
     console.log(`\n${line}`);
     console.log('found:');
-    console.log(`  users row:         ${userRow ? `yes (${userRow.username})` : 'none'}`);
+    console.log(`  users row:         ${userRow ? 'yes' : 'none'}`);
     console.log(`  user_metrics row:  ${metricsRow ? 'yes' : 'none'}`);
     console.log(`  media records:     ${media.length}`);
     console.log(`  alerts:            ${alertCount}`);

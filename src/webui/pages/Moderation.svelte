@@ -532,7 +532,7 @@
               on:click={() => handleUserSelect(user.user_id)}
               title={user.user_id}
             >
-              <span class="username">{user.user_id}</span>
+              <span class="user-id">{user.user_id}</span>
               <span class="user-stats">
                 {user.file_count} file{user.file_count === 1 ? '' : 's'} · {formatBytes(
                   user.total_size
@@ -770,7 +770,7 @@
     color: #000;
   }
 
-  .user-item .username {
+  .user-item .user-id {
     font-weight: 500;
   }
 

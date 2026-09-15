@@ -50,7 +50,6 @@ beforeAll(async () => {
       type: context.operationType || 'operation',
       status: latestStatusLog.status || 'pending',
       userId: context.userId || null,
-      username: context.username || null,
       fileSize: null,
       timestamp: latestTimestamp,
       startTime: createdLog.timestamp,

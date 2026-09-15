@@ -29,12 +29,13 @@ async function main() {
   console.log(`Found ${stuckOperationIds.length} stuck operation(s):`);
   for (const operationId of stuckOperationIds) {
     const trace = await getOperationTrace(operationId);
-    const username = trace?.context?.username || 'unknown';
     const operationType = trace?.context?.operationType || 'unknown';
     const timestamp = trace?.logs?.[0]?.timestamp || 'unknown';
     const date = timestamp !== 'unknown' ? new Date(timestamp).toISOString() : 'unknown';
 
-    console.log(`  - ${operationId} (${operationType}, user: ${username}, started: ${date})`);
+    console.log(
+      `  - ${operationId} (${operationType}, user: ${trace?.context?.userId || 'unknown'}, started: ${date})`
+    );
   }
 
   console.log('\nMarking stuck operations as failed...');

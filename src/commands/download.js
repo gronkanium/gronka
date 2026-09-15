@@ -184,7 +184,6 @@ async function getMaxVideoSize() {
  * @param {Interaction} params.interaction - Discord interaction
  * @param {string} params.operationId - Operation tracker id
  * @param {string} params.userId - Discord user id
- * @param {string} params.username - Discord username
  * @param {string} params.url - Original social media URL
  * @param {string} params.stepName - Operation step name to log under
  * @param {Function|null} [params.shouldServe] - Optional async predicate over the
@@ -256,7 +255,7 @@ export async function processDownload(
     'download',
     interaction,
     async ctx => {
-      const { operationId, userId, username, adminUser, buildMetadata } = ctx;
+      const { operationId, userId, adminUser, buildMetadata } = ctx;
 
       // Refuse sources that have been turned off in the webui (checked before the URL
       // cache so a disabled source can't serve a previously-downloaded file either).
@@ -412,7 +411,6 @@ export async function processDownload(
             interaction,
             operationId,
             userId,
-            username,
             url,
             stepName: 'url_only_mode',
           });
@@ -447,7 +445,6 @@ export async function processDownload(
               interaction,
               operationId,
               userId,
-              username,
               url,
               stepName: 'twitter_delivery',
               shouldServe:
@@ -722,7 +719,6 @@ export async function processDownload(
                   interaction,
                   operationId,
                   userId,
-                  username,
                   url,
                   stepName: 'direct_url_fallback',
                 });
@@ -1769,9 +1765,7 @@ export async function handleDownloadContextMenuCommand(interaction) {
   const userId = interaction.user.id;
   const adminUser = isAdmin(userId);
 
-  logger.info(
-    `User ${userId} (${interaction.user.tag}) initiated download via context menu${adminUser ? ' [ADMIN]' : ''}`
-  );
+  logger.info(`User ${userId} initiated download via context menu${adminUser ? ' [ADMIN]' : ''}`);
 
   if (
     await replyIfRateLimited(interaction, {
@@ -1913,9 +1907,7 @@ export async function handleDownloadCommand(interaction) {
   const userId = interaction.user.id;
   const adminUser = isAdmin(userId);
 
-  logger.info(
-    `User ${userId} (${interaction.user.tag}) initiated download${adminUser ? ' [ADMIN]' : ''}`
-  );
+  logger.info(`User ${userId} initiated download${adminUser ? ' [ADMIN]' : ''}`);
 
   if (
     await replyIfRateLimited(interaction, {

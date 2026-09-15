@@ -1,24 +1,32 @@
 import { describe, test } from 'bun:test';
 import assert from 'node:assert';
-import {
-  isRedditPostUrl,
-  extractImageCandidates,
-  extractOffsiteUrl,
-} from '../../src/utils/reddit.js';
+import { isRedditPostUrl, commentIdFromUrl, selectRedditMedia } from '../../src/utils/reddit.js';
 
-// Trimmed from a real post page: src is the 640w variant, srcset carries the wider ones, and
-// every width has its own `s=` signature, so the widest has to be taken as-is.
-const slide = id => `
-  <figure class="h-full w-full m-0 z-10 flex items-center"><img
-    class="media-lightbox-img h-full w-full object-contain mb-0 relative"
-    src="https://preview.redd.it/${id}.jpg?width=640&amp;crop=smart&amp;auto=webp&amp;s=aaa"
-    width="1200" height="900"
-    srcset="https://preview.redd.it/${id}.jpg?width=320&amp;crop=smart&amp;auto=webp&amp;s=bbb 320w,
-            https://preview.redd.it/${id}.jpg?width=640&amp;crop=smart&amp;auto=webp&amp;s=aaa 640w,
-            https://preview.redd.it/${id}.jpg?width=1080&amp;crop=smart&amp;auto=webp&amp;s=ccc 1080w"></figure>`;
+// Shapes taken from real .json?raw_json=1 responses.
+const image = (id, mime = 'image/jpg') => ({
+  status: 'valid',
+  e: 'Image',
+  m: mime,
+  s: { u: `https://preview.redd.it/${id}.jpg?width=2429&format=pjpg&s=826b3b` },
+});
 
-const avatar = `<img class="shreddit-subreddit-icon"
-  src="https://preview.redd.it/snoovatar/avatars/6524c569-headshot.png?width=64&amp;s=zzz">`;
+const animated = id => ({
+  status: 'valid',
+  e: 'AnimatedImage',
+  m: 'image/gif',
+  s: {
+    gif: `https://i.redd.it/${id}.gif`,
+    mp4: `https://preview.redd.it/${id}.gif?format=mp4&s=f49d2f`,
+  },
+});
+
+const listing = (post, comments = []) => [
+  { data: { children: [{ kind: 't3', data: post }] } },
+  { data: { children: comments.map(data => ({ kind: 't1', data })) } },
+];
+
+const POST_URL = 'https://www.reddit.com/r/pics/comments/1wgx7l1/dog_photo_shoot/';
+const COMMENT_URL = `${POST_URL}pa1l75m/`;
 
 describe('reddit utilities', () => {
   test('isRedditPostUrl accepts canonical and share permalinks', () => {
@@ -38,105 +46,172 @@ describe('reddit utilities', () => {
     assert.strictEqual(isRedditPostUrl('not a url'), false);
   });
 
-  test('prefers the unsigned original, keeping the widest signed preview as fallback', () => {
-    const slides = extractImageCandidates(slide('honest-rate-v0-tuno0m9l29ph1'));
-    assert.strictEqual(slides.length, 1);
-    const [original, fallback] = slides[0];
-    assert.strictEqual(original, 'https://i.redd.it/tuno0m9l29ph1.jpg');
-    assert.ok(fallback.includes('width=1080'), 'widest signed variant as fallback');
-    assert.ok(fallback.includes('s=ccc'), "that width's own signature");
-    assert.ok(!fallback.includes('&amp;'), 'entities decoded so the signature survives');
-  });
-
-  test('a gallery yields one entry per slide, in page order', () => {
-    const slides = extractImageCandidates(
-      slide('a-v0-one') + slide('b-v0-two') + slide('c-v0-three')
+  test('commentIdFromUrl tells a comment permalink from a post link', () => {
+    assert.strictEqual(commentIdFromUrl(COMMENT_URL), 'pa1l75m');
+    // the shape reddit's own share button emits
+    assert.strictEqual(
+      commentIdFromUrl('https://www.reddit.com/r/pics/comments/1wgx7l1/comment/pa1l75m/'),
+      'pa1l75m'
     );
-    assert.strictEqual(slides.length, 3);
-    assert.ok(slides[0][0].includes('one'));
-    assert.ok(slides[2][0].includes('three'));
+    assert.strictEqual(commentIdFromUrl(POST_URL), null);
+    assert.strictEqual(commentIdFromUrl('https://www.reddit.com/r/pics/comments/1wgx7l1/'), null);
   });
 
-  test('the same slide at many widths collapses to one image', () => {
-    assert.strictEqual(extractImageCandidates(slide('dup-v0-x') + slide('dup-v0-x')).length, 1);
+  test('a gallery yields one entry per slide, in the order the post declares', () => {
+    const { images } = selectRedditMedia(
+      listing({
+        is_gallery: true,
+        gallery_data: { items: [{ media_id: 'aaa' }, { media_id: 'bbb' }] },
+        media_metadata: { bbb: image('bbb'), aaa: image('aaa') },
+      }),
+      POST_URL
+    );
+    assert.strictEqual(images.length, 2);
+    // media_metadata is unordered, gallery_data is not
+    assert.strictEqual(images[0][0], 'https://i.redd.it/aaa.jpg');
+    assert.strictEqual(images[1][0], 'https://i.redd.it/bbb.jpg');
+    assert.ok(images[0][1].includes('preview.redd.it'), 'signed preview kept as fallback');
   });
 
-  test('ignores avatars and other non-post imagery', () => {
-    assert.deepStrictEqual(extractImageCandidates(avatar), []);
-    assert.strictEqual(extractImageCandidates(avatar + slide('real-v0-post')).length, 1);
+  test('a post link never picks up media from the comment tree', () => {
+    const { images, external } = selectRedditMedia(
+      listing({ url: 'https://i.redd.it/post.jpeg' }, [
+        { id: 'c1', media_metadata: { drawing: image('drawing') } },
+        { id: 'c2', media_metadata: { another: image('another') } },
+      ]),
+      POST_URL
+    );
+    assert.strictEqual(external, null);
+    assert.deepStrictEqual(images, [['https://i.redd.it/post.jpeg']]);
   });
 
-  // Reddit flips to this shape without warning; it carries the same slides at a larger width.
-  const noJsVariant = `
-    <meta property="og:image" content="https://preview.redd.it/tuno0m9l29ph1.jpg?width=1200&amp;s=q1">
-    <script type="application/json">{"url":"https://preview.redd.it/tuno0m9l29ph1.jpg?width=108&amp;s=q2",
-    "more":"https://preview.redd.it/wuv07m9l29ph1.jpg?width=1200&amp;s=q3"}</script>`;
-
-  test('reads the server-rendered variant, not just the hydrated one', () => {
-    const slides = extractImageCandidates(noJsVariant);
-    assert.strictEqual(slides.length, 2);
-    assert.strictEqual(slides[0][0], 'https://i.redd.it/tuno0m9l29ph1.jpg');
-    assert.ok(slides[0][1].includes('width=1200'), 'widest signed preview wins over the 108w');
-    assert.ok(slides[0][1].includes('s=q1'));
+  test('a comment link resolves to that comment and nothing else', () => {
+    const { images } = selectRedditMedia(
+      listing({ url: 'https://i.redd.it/post.jpeg' }, [
+        { id: 'pa1l75m', media_metadata: { drawing: image('drawing', 'image/png') } },
+      ]),
+      COMMENT_URL
+    );
+    assert.deepStrictEqual(images, [
+      [
+        'https://i.redd.it/drawing.png',
+        'https://preview.redd.it/drawing.jpg?width=2429&format=pjpg&s=826b3b',
+      ],
+    ]);
   });
 
-  test('both shapes name the same slide, so they do not double up', () => {
-    // hydrated ids carry a title prefix the server-rendered ones omit
-    const urls = extractImageCandidates(slide('honest-rate-v0-tuno0m9l29ph1') + noJsVariant);
+  test('a comment with no media falls back to the post', () => {
+    const { images } = selectRedditMedia(
+      listing({ url: 'https://i.redd.it/post.jpeg' }, [{ id: 'pa1l75m', body: 'nice dog' }]),
+      COMMENT_URL
+    );
+    assert.deepStrictEqual(images, [['https://i.redd.it/post.jpeg']]);
+  });
+
+  test('a native comment gif prefers the unsigned gif over the preview mp4', () => {
+    const { images } = selectRedditMedia(
+      listing({ url: 'https://i.redd.it/post.jpeg' }, [
+        { id: 'pa1l75m', media_metadata: { '85xj2izy2jph1': animated('85xj2izy2jph1') } },
+      ]),
+      COMMENT_URL
+    );
+    assert.strictEqual(images[0][0], 'https://i.redd.it/85xj2izy2jph1.gif');
+    assert.ok(images[0][1].includes('format=mp4'));
+  });
+
+  test('a giphy comment gif rebuilds from the key reddit marks invalid', () => {
+    // reddit hands back no url at all for these, only the key
+    const { images } = selectRedditMedia(
+      listing({ url: 'https://i.redd.it/post.jpeg' }, [
+        { id: 'pa1l75m', media_metadata: { 'giphy|WO5Q7FsxJN2pjYc424': { status: 'invalid' } } },
+      ]),
+      COMMENT_URL
+    );
+    assert.deepStrictEqual(images, [['https://i.giphy.com/media/WO5Q7FsxJN2pjYc424/giphy.gif']]);
+  });
+
+  test('emotes and expired slides are skipped rather than guessed at', () => {
+    const { images } = selectRedditMedia(
+      listing({
+        is_gallery: true,
+        gallery_data: { items: [{ media_id: 'gone' }, { media_id: 'ok' }] },
+        media_metadata: { gone: { status: 'failed' }, ok: image('ok') },
+      }),
+      POST_URL
+    );
+    assert.deepStrictEqual(images, [
+      [
+        'https://i.redd.it/ok.jpg',
+        'https://preview.redd.it/ok.jpg?width=2429&format=pjpg&s=826b3b',
+      ],
+    ]);
+  });
+
+  test('a video post hands back the manifest for yt-dlp to mux', () => {
+    const { external, images } = selectRedditMedia(
+      listing({
+        is_video: true,
+        media: {
+          reddit_video: {
+            hls_url: 'https://v.redd.it/438iwqxidiph1/HLSPlaylist.m3u8?a=1792&v=1&f=sd',
+            fallback_url: 'https://v.redd.it/438iwqxidiph1/CMAF_720.mp4?source=fallback',
+          },
+        },
+      }),
+      POST_URL
+    );
     assert.ok(
-      urls.length <= 2,
-      `same two slides across both shapes, got ${urls.length}: ${urls.join(' ')}`
+      external.includes('HLSPlaylist.m3u8'),
+      'hls carries the audio track, fallback does not'
+    );
+    assert.deepStrictEqual(images, []);
+  });
+
+  test('a link-aggregator post hands the offsite target back for routing', () => {
+    const { external } = selectRedditMedia(
+      listing({ url: 'https://redgifs.com/watch/digitalmysteriousanglerfish' }),
+      POST_URL
+    );
+    assert.strictEqual(external, 'https://redgifs.com/watch/digitalmysteriousanglerfish');
+  });
+
+  test('offsite hosts the pipeline cannot route are left to cobalt', () => {
+    const { external, images } = selectRedditMedia(
+      listing({ url: 'https://example.com/thing' }),
+      POST_URL
+    );
+    assert.strictEqual(external, null);
+    assert.deepStrictEqual(images, []);
+  });
+
+  test('a crosspost reads the media off the post it quotes', () => {
+    const { images } = selectRedditMedia(
+      listing({
+        url: 'https://www.reddit.com/r/pics/comments/1wgx7l1/dog_photo_shoot/',
+        crosspost_parent_list: [{ url: 'https://i.redd.it/original.png' }],
+      }),
+      POST_URL
+    );
+    assert.deepStrictEqual(images, [['https://i.redd.it/original.png']]);
+  });
+
+  test('a removed post says so instead of falling through to a silent failure', () => {
+    assert.throws(
+      () =>
+        selectRedditMedia(
+          listing({ removed_by_category: 'deleted', author: '[deleted]', is_gallery: true }),
+          POST_URL
+        ),
+      /removed/
     );
   });
 
-  test('a thumbnail-only page still yields the unsigned original', () => {
-    const thumb =
-      '<meta property="og:image" content="https://preview.redd.it/abc123.jpg?width=140&amp;crop=1:1,smart">';
-    // the 140px thumb itself is unsigned and 403s, but it names the slide
-    assert.deepStrictEqual(extractImageCandidates(thumb), [['https://i.redd.it/abc123.jpg']]);
-  });
-
-  test("the post's own image sorts first, ahead of neighbouring posts", () => {
-    const page =
-      '<meta property="og:image" content="https://preview.redd.it/mine.jpg?width=140&amp;crop=1:1">' +
-      slide('other-v0-neighbour') +
-      slide('title-v0-mine');
-    const slides = extractImageCandidates(page);
-    assert.ok(slides[0][0].includes('mine'), `og:image slide first, got ${slides[0][0]}`);
-  });
-
-  test('finds the offsite host a link-aggregator post points at', () => {
-    const page =
-      '<a href="https://www.reddit.com/r/x/comments/y/">permalink</a>' +
-      '<div>https://redgifs.com/watch/digitalmysteriousanglerfish</div>';
-    assert.strictEqual(
-      extractOffsiteUrl(page),
-      'https://redgifs.com/watch/digitalmysteriousanglerfish'
+  test('a text post extracts nothing rather than guessing', () => {
+    const { external, images } = selectRedditMedia(
+      listing({ selftext: 'just words', url: POST_URL }),
+      POST_URL
     );
-  });
-
-  test('a url ending at a &quot; boundary is not left corrupted', () => {
-    // the raw page has ...v=ID&quot;, decoding only &amp; swallowed the entity into the url
-    const page = '<div>&quot;https://www.youtube.com/watch?v=r1PqynAw0y4&quot;</div>';
-    assert.strictEqual(extractOffsiteUrl(page), 'https://www.youtube.com/watch?v=r1PqynAw0y4');
-  });
-
-  test('a bare offsite root is page chrome, not a post', () => {
-    assert.strictEqual(extractOffsiteUrl('<a href="http://imgur.com/">imgur</a>'), null);
-    assert.strictEqual(extractOffsiteUrl('<a href="https://imgur.com">imgur</a>'), null);
-    // but a real post on the same host is kept
-    assert.strictEqual(
-      extractOffsiteUrl('<a href="https://i.imgur.com/tFCfRwG.jpeg">x</a>'),
-      'https://i.imgur.com/tFCfRwG.jpeg'
-    );
-  });
-
-  test('ignores offsite hosts the download pipeline cannot handle', () => {
-    assert.strictEqual(extractOffsiteUrl('<a href="https://example.com/thing">x</a>'), null);
-    assert.strictEqual(extractOffsiteUrl('<a href="https://reddit.com/r/a/">x</a>'), null);
-  });
-
-  test('a post with no images extracts nothing rather than guessing', () => {
-    assert.deepStrictEqual(extractImageCandidates('<html><body>no media here</body></html>'), []);
+    assert.strictEqual(external, null);
+    assert.deepStrictEqual(images, []);
   });
 });

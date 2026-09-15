@@ -1,20 +1,16 @@
 import axios from 'axios';
 import fsSync from 'node:fs';
 import { createLogger } from './logger.js';
-import { NetworkError, ValidationError } from './errors.js';
+import { NetworkError } from './errors.js';
 import { ssrfGuardedRequest } from './ssrf-guard.js';
 
 const logger = createLogger('reddit');
 
-// Reddit deprecated the unauthenticated .json endpoints in May 2026: appending .json now answers
-// 403, and old.reddit.com serves the "Welcome to Reddit" interstitial, so yt-dlp's Reddit
-// extractor cannot work from this box at all. The one surface that still answers is the normal
-// www HTML with a session cookie; see extractImageCandidates for the two shapes it comes in.
-//
-// Images only. v.redd.it serves video and audio as separate DASH streams that need an ffmpeg
-// mux; those still fall through to cobalt/yt-dlp.
-const PAGE_TIMEOUT_MS = 20000;
-const MEDIA_HOSTS = ['i.redd.it', 'preview.redd.it'];
+// Reddit's .json API is 403 only anonymously; with the session cookie it answers 200, so the
+// earlier HTML scraping was never necessary. It also cost us a real bug: the page carries the
+// whole comment tree, and a regex over it downloaded commenters' images as if they were the
+// post's. The API labels post media, gallery order and per-comment media separately.
+const API_TIMEOUT_MS = 20000;
 
 // Reddit is mostly a link aggregator, so a post's media often is not Reddit's at all. These are
 // the offsite hosts worth handing back to the caller, which re-runs its own source selection on
@@ -78,238 +74,198 @@ export function hasRedditSession() {
   return readSessionCookie() !== null;
 }
 
-function isMediaHostUrl(url) {
+/**
+ * The comment id when the link points at one comment rather than at the post.
+ * Both shapes Reddit emits put it sixth: /r/<sub>/comments/<post>/<slug>/<comment> and
+ * /r/<sub>/comments/<post>/comment/<comment>. A bare post link is shorter, so there is nothing
+ * to confuse it with.
+ */
+export function commentIdFromUrl(url) {
   try {
-    return MEDIA_HOSTS.includes(new URL(url).hostname.toLowerCase());
-  } catch {
-    return false;
-  }
-}
-
-/** The trailing id both markup shapes share, after the title prefix the hydrated one adds. */
-function slideId(url) {
-  try {
-    return new URL(url).pathname
-      .split('/')
-      .pop()
-      .replace(/\.[^.]+$/, '')
-      .split('-')
-      .pop();
+    const segments = new URL(url).pathname.split('/').filter(Boolean);
+    return segments[2] === 'comments' && segments.length >= 6 ? segments[5] : null;
   } catch {
     return null;
   }
 }
 
-// Only &amp; was decoded at first, so a url ending at a &quot; boundary kept the entity and
-// resolved to youtube.com/watch?v=ID&quot, a corrupted link that could never download.
-const ENTITIES = { amp: '&', quot: '"', apos: "'", lt: '<', gt: '>', '#39': "'", '#x27': "'" };
-
-function decodeEntities(html) {
-  return String(html || '').replace(
-    /&(amp|quot|apos|lt|gt|#39|#x27);?/gi,
-    (whole, name) => ENTITIES[name.toLowerCase()] ?? whole
-  );
-}
-
-// Avatars, awards and static chrome live on the same hosts as post media.
-const NON_POST_PATH = /snoovatar|\/award|\/cms\/|defaults|headshot/i;
-
-/**
- * Per-slide download candidates, best first, slides in page order.
- *
- * Reddit serves two markup shapes for the same post and flips between them without warning: a
- * hydrated page with each slide in <img class="media-lightbox-img"> plus a srcset, and a
- * server-rendered one carrying only a 140px thumbnail per slide. Both name the slide's id, and
- * `i.redd.it/<id>.<ext>` is the unsigned original, anonymous, full resolution, and the only
- * thing available at all on the thumbnail-only pages. A signed `preview` variant is kept as the
- * fallback because the original 404s for crossposts; every width has its own `s=` signature, so
- * the widest has to be taken as-is rather than rewritten.
- */
-export function extractImageCandidates(html) {
-  const decoded = decodeEntities(html);
-  const slides = new Map();
-  // og:image names the post's own first image, which is what distinguishes post media from the
-  // thumbnails of neighbouring posts the server-rendered page also carries.
-  const ogId = slideId(decoded.match(/property="og:image"\s+content="([^"]+)"/)?.[1]);
-
-  for (const match of decoded.matchAll(/https:\/\/(?:preview|i)\.redd\.it\/[^"'\\\s<>)]+/g)) {
-    const url = match[0];
-    const ext = url.match(/\.(jpe?g|png|gif|webp)(?:\?|$)/i)?.[1];
-    if (!ext || NON_POST_PATH.test(url) || !isMediaHostUrl(url)) {
-      continue;
-    }
-    let parsed;
-    try {
-      parsed = new URL(url);
-    } catch {
-      continue;
-    }
-    const id = slideId(url);
-    if (!id) {
-      continue;
-    }
-    const slide = slides.get(id) || { original: `https://i.redd.it/${id}.${ext}`, width: 0 };
-    // Unsigned variants are listing thumbnails and 403, so only a signed one can be a fallback.
-    const width = Number.parseInt(parsed.searchParams.get('width') || '0', 10);
-    if (parsed.searchParams.has('s') && width > slide.width) {
-      slide.width = width;
-      slide.preview = url;
-    }
-    slides.set(id, slide);
+// Appending .json to a /s/ share link lands on the subreddit, not the post, so it has to be
+// followed first. HEAD is enough: the 301 names the canonical permalink, comment id included.
+async function canonicalUrl(url) {
+  if (!/^\/r\/[^/]+\/s\//.test(new URL(url).pathname)) {
+    return url;
   }
-
-  const entries = [...slides.entries()];
-  entries.sort(([a], [b]) => (a === ogId ? -1 : 0) - (b === ogId ? -1 : 0));
-  return entries.map(([, slide]) => [slide.original, slide.preview].filter(Boolean));
+  try {
+    const response = await axios.head(url, {
+      ...ssrfGuardedRequest(),
+      timeout: API_TIMEOUT_MS,
+      maxRedirects: 0,
+      validateStatus: status => status >= 200 && status < 400,
+      headers: { 'User-Agent': USER_AGENT },
+    });
+    return response.headers.location || url;
+  } catch (error) {
+    logger.warn(`Could not resolve Reddit share link: ${error.message}`);
+    return url;
+  }
 }
 
-async function fetchPostPage(url) {
+async function fetchListing(url) {
   const cookie = readSessionCookie();
   if (!cookie) {
-    throw new ValidationError('no reddit session configured');
+    // Curated rather than internal: download.js only propagates a ValidationError out of the
+    // resolver, and that is reserved for the disabled-source gate.
+    throw new NetworkError('reddit downloads are unavailable right now');
   }
 
-  let response;
+  // raw_json=1 stops Reddit html-escaping the urls it hands back, signatures included.
+  const jsonUrl = `${url.split('?')[0].replace(/\/$/, '')}/.json?limit=100&raw_json=1`;
   try {
-    response = await axios.get(url, {
+    const response = await axios.get(jsonUrl, {
       ...ssrfGuardedRequest(),
-      responseType: 'text',
-      timeout: PAGE_TIMEOUT_MS,
+      responseType: 'json',
+      timeout: API_TIMEOUT_MS,
       maxRedirects: 3,
-      headers: {
-        'User-Agent': USER_AGENT,
-        Accept: 'text/html,application/xhtml+xml',
-        'Accept-Language': 'en-US,en;q=0.9',
-        Cookie: cookie,
-      },
+      headers: { 'User-Agent': USER_AGENT, Accept: 'application/json', Cookie: cookie },
     });
+    return response.data;
   } catch (error) {
     const status = error.response?.status;
     if (status === 404) {
       throw new NetworkError('this post is unavailable, it may be deleted or private');
     }
-    if (status === 403 || status === 429) {
+    if (status === 429) {
+      throw new NetworkError('reddit is rate limiting downloads right now, try again shortly.');
+    }
+    if (status === 401 || status === 403) {
       logger.error(
         `Reddit refused the session cookie (HTTP ${status}), the reddit_session in the cookie file needs refreshing`
       );
       throw new NetworkError('reddit rejected our session');
     }
-    logger.warn(`Reddit page request failed: ${error.message}`);
+    logger.warn(`Reddit API request failed: ${error.message}`);
     throw new NetworkError('failed to reach reddit');
   }
-
-  const html = String(response.data || '');
-  if (/Welcome to Reddit/i.test(html.slice(0, 4000))) {
-    throw new NetworkError('reddit served a login wall instead of the post');
-  }
-  return html;
 }
+
+const IMAGE_EXTENSIONS = {
+  'image/jpg': 'jpg',
+  'image/jpeg': 'jpeg',
+  'image/png': 'png',
+  'image/gif': 'gif',
+  'image/webp': 'webp',
+};
 
 /**
- * The post's offsite media link, if it points at a host the download pipeline already handles.
- * Requires a path that could identify media: a bare `https://imgur.com/` is page chrome, not a
- * post, and handing it on just moves the failure.
- */
-export function extractOffsiteUrl(html) {
-  const decoded = decodeEntities(html);
-  for (const match of decoded.matchAll(/https?:\/\/[^\s"'<>\\)]+/g)) {
-    let parsed;
-    try {
-      parsed = new URL(match[0]);
-    } catch {
-      continue;
-    }
-    const host = parsed.hostname.toLowerCase().replace(/^www\./, '');
-    if (!OFFSITE_HOSTS.some(h => host === h || host.endsWith(`.${h}`))) {
-      continue;
-    }
-    if (parsed.pathname.replace(/\/+$/, '') === '' && !parsed.search) {
-      continue;
-    }
-    return parsed.toString();
-  }
-  return null;
-}
-
-/** The v.redd.it HLS manifest for a post, which yt-dlp downloads and muxes on its own. */
-export function extractVideoUrl(doc) {
-  const id = doc.replace(/&amp;/g, '&').match(/https?:\/\/v\.redd\.it\/([A-Za-z0-9]+)/)?.[1];
-  return id ? `https://v.redd.it/${id}/HLSPlaylist.m3u8` : null;
-}
-
-/**
- * The post's Atom feed. Unlike every other Reddit surface this still answers anonymously, and it
- * names the post's video id, its first image and any offsite link, so the session cookie is an
- * enhancement (it reads whole galleries out of the HTML) rather than a requirement.
- * Returns null rather than throwing: the caller falls back to the HTML.
- */
-async function fetchPostFeed(url) {
-  const feedUrl = `${url.split('?')[0].replace(/\/$/, '')}/.rss`;
-  try {
-    const response = await axios.get(feedUrl, {
-      ...ssrfGuardedRequest(),
-      responseType: 'text',
-      timeout: PAGE_TIMEOUT_MS,
-      maxRedirects: 3,
-      headers: { 'User-Agent': USER_AGENT, Accept: 'application/atom+xml,application/xml' },
-    });
-    return String(response.data || '');
-  } catch (error) {
-    // 429 here is Reddit throttling the feed, which recovers on its own; nothing to escalate.
-    logger.warn(`Reddit feed request failed (${error.response?.status || error.message})`);
-    return null;
-  }
-}
-
-/**
- * Where the post's media actually lives, in the order the caller should prefer:
- *   `external`, a v.redd.it HLS manifest or an offsite host, handed back for the caller's own
- *                source selection to route (yt-dlp handles both).
- *   `images`, per-slide download candidates for Reddit-hosted images.
+ * Download candidates for one media_metadata entry, best first.
  *
- * Tries the anonymous feed first and only reads the cookie-gated HTML when it has to, which is
- * both fewer requests and the difference between working and not when the session expires.
+ * The entry's key is the i.redd.it basename, so the unsigned original rebuilds from the mime
+ * type; the signed preview stays as the fallback because the original 404s for crossposts.
+ * Giphy comment gifs are the exception: Reddit marks them `invalid` and hands back no url at
+ * all, but the key carries giphy's own id, which is all the cdn path needs.
  */
-export async function resolveRedditPost(url) {
-  const feed = await fetchPostFeed(url);
-
-  if (feed) {
-    const video = extractVideoUrl(feed);
-    if (video) {
-      return { external: video, images: [] };
-    }
-    const offsite = extractOffsiteUrl(feed);
-    if (offsite) {
-      return { external: offsite, images: [] };
-    }
+function candidatesFor(id, entry) {
+  const giphy = /^giphy\|(\w+)$/.exec(id);
+  if (giphy) {
+    return [`https://i.giphy.com/media/${giphy[1]}/giphy.gif`];
   }
-
-  // The feed carries only the first image, so a gallery still needs the HTML. Without a session
-  // the feed's single slide is all we get, which still beats failing outright.
-  if (!hasRedditSession()) {
-    const images = feed ? extractImageCandidates(feed) : [];
-    return { external: null, images };
+  if (entry?.status !== 'valid') {
+    return [];
   }
+  if (entry.e === 'AnimatedImage') {
+    return [entry.s?.gif, entry.s?.mp4].filter(Boolean);
+  }
+  if (entry.e !== 'Image') {
+    return [];
+  }
+  const extension = IMAGE_EXTENSIONS[entry.m];
+  return [extension && `https://i.redd.it/${id}.${extension}`, entry.s?.u].filter(Boolean);
+}
 
-  let html;
+function isOffsiteUrl(url) {
   try {
-    html = await fetchPostPage(url);
-  } catch (error) {
-    const images = feed ? extractImageCandidates(feed) : [];
+    const host = new URL(url).hostname.toLowerCase().replace(/^www\./, '');
+    return OFFSITE_HOSTS.some(offsite => host === offsite || host.endsWith(`.${offsite}`));
+  } catch {
+    return false;
+  }
+}
+
+function isRedditImageUrl(url) {
+  try {
+    const parsed = new URL(url);
+    return (
+      parsed.hostname.toLowerCase() === 'i.redd.it' &&
+      /\.(jpe?g|png|gif|webp)$/i.test(parsed.pathname)
+    );
+  } catch {
+    return false;
+  }
+}
+
+function mediaOf(post, depth = 0) {
+  const video = post?.media?.reddit_video;
+  if (video?.hls_url || video?.fallback_url) {
+    return { external: video.hls_url || video.fallback_url, images: [] };
+  }
+
+  if (post?.gallery_data?.items?.length) {
+    const images = post.gallery_data.items
+      .map(item => candidatesFor(item.media_id, post.media_metadata?.[item.media_id]))
+      .filter(candidates => candidates.length > 0);
     if (images.length > 0) {
-      logger.warn(`Reddit page failed (${error.message}); using the feed's first image`);
       return { external: null, images };
     }
-    throw error;
   }
 
-  const video = extractVideoUrl(html);
-  if (video) {
-    return { external: video, images: [] };
+  const target = post?.url_overridden_by_dest || post?.url;
+  if (isRedditImageUrl(target)) {
+    return { external: null, images: [[target]] };
   }
-  const images = extractImageCandidates(html);
-  if (images.length > 0) {
-    return { external: null, images };
+  if (isOffsiteUrl(target)) {
+    return { external: target, images: [] };
   }
-  return { external: extractOffsiteUrl(html), images: extractImageCandidates(feed || '') };
+
+  // A crosspost carries no media of its own, the post it quotes does.
+  const parent = post?.crosspost_parent_list?.[0];
+  return parent && depth === 0 ? mediaOf(parent, 1) : { external: null, images: [] };
+}
+
+/**
+ * Where the linked media lives, in the order the caller should prefer:
+ *   `external`, a v.redd.it manifest or an offsite host, handed back for the caller's own source
+ *               selection to route (yt-dlp handles both).
+ *   `images`, per-item download candidates for Reddit-hosted images.
+ *
+ * A link to one comment resolves to that comment's media and nothing else. A link to the post
+ * resolves to the post's own media and never touches the comment tree.
+ */
+export function selectRedditMedia(listing, url) {
+  const post = listing?.[0]?.data?.children?.[0]?.data;
+  if (!post) {
+    throw new NetworkError('this post is unavailable, it may be deleted or private');
+  }
+
+  const commentId = commentIdFromUrl(url);
+  if (commentId) {
+    const comment = listing?.[1]?.data?.children?.find(child => child.kind === 't1')?.data;
+    const images = Object.entries(comment?.media_metadata || {})
+      .map(([id, entry]) => candidatesFor(id, entry))
+      .filter(candidates => candidates.length > 0);
+    if (images.length > 0) {
+      return { external: null, images };
+    }
+    logger.info(`Reddit comment ${commentId} carries no media, falling back to the post`);
+  }
+
+  const media = mediaOf(post);
+  if (!media.external && media.images.length === 0 && post.removed_by_category) {
+    throw new NetworkError('this post was removed and its media is gone');
+  }
+  return media;
+}
+
+export async function resolveRedditPost(url) {
+  const canonical = await canonicalUrl(url);
+  return selectRedditMedia(await fetchListing(canonical), canonical);
 }

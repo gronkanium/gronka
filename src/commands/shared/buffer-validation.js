@@ -6,8 +6,7 @@ import { ValidationError } from '../../utils/errors.js';
 // Previously duplicated as validateVideoBuffer (convert.js), validateGifBuffer (optimize.js),
 // and two copies of writeValidatedFileBuffer.
 
-const { maxVideoSize: MAX_VIDEO_SIZE } = botConfig;
-const MAX_GIF_SIZE = 50 * 1024 * 1024; // 50MB limit (matches legacy optimize.js)
+const { maxVideoSize: MAX_VIDEO_SIZE, maxImageSize: MAX_GIF_SIZE } = botConfig;
 
 // ftyp box type signature (used by MP4 and MOV)
 const FTYP_BOX_TYPE = Buffer.from([0x66, 0x74, 0x79, 0x70]); // "ftyp" in ASCII

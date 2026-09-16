@@ -5,6 +5,23 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres (attempts) to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.35.1](https://github.com/thedorekaczynski/gronka/compare/v0.35.0...v0.35.1) (2026-09-16)
+
+
+### Bug Fixes
+
+* **commands:** take a pasted link out of the surrounding text ([0395e4a](https://github.com/thedorekaczynski/gronka/commit/0395e4a8f0de98f189313a313e57b5ce724ee8ca))
+* **download:** stop the reddit cobalt fallback swallowing the disabled-source gate ([51acc27](https://github.com/thedorekaczynski/gronka/commit/51acc27ddfdcda67032636e36d67a2c82346e7c5))
+* **operations:** fail restart-orphaned operations at boot, not 16 minutes later ([4298679](https://github.com/thedorekaczynski/gronka/commit/4298679186519a98e2b6e58ea9940ba08b585469))
+* **reddit:** read post media from the json api instead of scraping the page ([90323cc](https://github.com/thedorekaczynski/gronka/commit/90323cc77fffe7c6363ce0746419047b29eabc2c))
+* **reddit:** stop falling back to cobalt and yt-dlp when reddit says the post is gone ([9e7e401](https://github.com/thedorekaczynski/gronka/commit/9e7e4012151ea9eec3713974177a41dc2f1886a4))
+* **setup:** create .env at 0600 instead of chmod-ing it afterwards ([7eaab32](https://github.com/thedorekaczynski/gronka/commit/7eaab32af1d8e9d9479c6f5071d09d076332feb8))
+* **storage:** bound R2 uploads so a stalled route cannot hang an operation ([788e678](https://github.com/thedorekaczynski/gronka/commit/788e6781a2665d023907067942bc8ca438802a4b))
+* **storage:** route /convert and /optimize on the real Discord attachment limit ([f4c8c58](https://github.com/thedorekaczynski/gronka/commit/f4c8c58d876ea94a74cfa2d82d97732f491b813f))
+* **webui:** stop charting windows wider than retention keeps ([4f3375f](https://github.com/thedorekaczynski/gronka/commit/4f3375f4b4a4d10edf0bad205a93fb4d44be8d1f))
+* **ytdlp:** give named yt-dlp failures a reason instead of the catch-all ([a8415ad](https://github.com/thedorekaczynski/gronka/commit/a8415add5da35196d9f53532c32c42ca55868492))
+* **ytdlp:** name the actual site in the invalid-url error instead of YouTube ([e1ada12](https://github.com/thedorekaczynski/gronka/commit/e1ada12f83d4b769eeff887c1956d0dc3dce9f25))
+
 ## [0.35.0](https://github.com/thedorekaczynski/gronka/compare/v0.34.0...v0.35.0) (2026-09-14)
 
 

@@ -3,7 +3,7 @@ import fs from 'fs/promises';
 import path from 'path';
 import { createLogger } from '../utils/logger.js';
 import { botConfig } from '../utils/config.js';
-import { validateUrl } from '../utils/validation.js';
+import { validateUrl, firstUrlIn } from '../utils/validation.js';
 import {
   canonicalizeMirrorUrl,
   isSocialMediaUrl,
@@ -1785,14 +1785,9 @@ export async function handleDownloadContextMenuCommand(interaction) {
 
   const targetMessage = interaction.targetMessage;
 
-  let url = null;
-  if (targetMessage.content) {
-    const urlPattern = /https?:\/\/[^\s<>"{}|\\^`[\]]+/gi;
-    const urls = targetMessage.content.match(urlPattern);
-    if (urls && urls.length > 0) {
-      url = urls[0]; // Use the first URL found
-      logger.info(`Found URL in message content: ${url}`);
-    }
+  let url = firstUrlIn(targetMessage.content);
+  if (url) {
+    logger.info(`Found URL in message content: ${url}`);
   }
 
   if (!url) {
@@ -1925,7 +1920,8 @@ export async function handleDownloadCommand(interaction) {
     return;
   }
 
-  const url = canonicalizeMirrorUrl(interaction.options.getString('url'));
+  const rawUrl = interaction.options.getString('url');
+  const url = canonicalizeMirrorUrl(firstUrlIn(rawUrl) ?? rawUrl);
 
   // Parse and validate start_time/end_time (accepts seconds or MM:SS / HH:MM:SS timestamps)
   const times = await resolveTimeOptions(interaction, { type: 'download' });

@@ -6,6 +6,7 @@ import {
   validateFileExtension,
   validateFilename,
   parseTimestamp,
+  firstUrlIn,
 } from '../../src/utils/validation.js';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -179,6 +180,25 @@ describe('validation utilities', () => {
       const result2 = validateUrl('http://192.168.1.1:8080');
       assert.strictEqual(result2.valid, false);
       assert.strictEqual(result2.error, 'private and internal IP addresses are not allowed');
+    });
+  });
+
+  describe('firstUrlIn', () => {
+    test('salvages a link out of surrounding text', () => {
+      assert.strictEqual(
+        firstUrlIn('/download url:https://www.tiktok.com/t/ZTUfKaFpw/'),
+        'https://www.tiktok.com/t/ZTUfKaFpw/'
+      );
+      assert.strictEqual(
+        firstUrlIn('look at https://example.com/a then https://example.com/b'),
+        'https://example.com/a'
+      );
+    });
+
+    test('leaves a bare url alone and returns null when there is none', () => {
+      assert.strictEqual(firstUrlIn('https://example.com/a'), 'https://example.com/a');
+      assert.strictEqual(firstUrlIn('and'), null);
+      assert.strictEqual(firstUrlIn(null), null);
     });
   });
 

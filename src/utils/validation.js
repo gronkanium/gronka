@@ -1,6 +1,12 @@
 import path from 'path';
 import net from 'net';
 
+// Both the url option and the context menu are handed raw human text, so pull the first real
+// link out of it rather than rejecting a message that contains one.
+export function firstUrlIn(text) {
+  return text?.match(/https?:\/\/[^\s<>"{}|\\^`[\]]+/i)?.[0] ?? null;
+}
+
 export const LOOPBACK_ERROR = 'localhost and loopback addresses are not allowed';
 export const PRIVATE_ADDRESS_ERROR = 'private and internal IP addresses are not allowed';
 

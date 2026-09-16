@@ -8,7 +8,7 @@ import fs from 'fs/promises';
 import path from 'path';
 import { createLogger } from '../utils/logger.js';
 import { botConfig, isOwnCdnUrl } from '../utils/config.js';
-import { validateUrl, validateFileExtension } from '../utils/validation.js';
+import { validateUrl, validateFileExtension, firstUrlIn } from '../utils/validation.js';
 import { writeValidatedFileBuffer } from './shared/buffer-validation.js';
 import { curatedErrorMessage } from './shared/command-errors.js';
 import {
@@ -1074,14 +1074,9 @@ export async function handleConvertContextMenu(interaction) {
     att => att.contentType && ALLOWED_IMAGE_TYPES.includes(att.contentType)
   );
 
-  let url = null;
-  if (!videoAttachment && !imageAttachment && targetMessage.content) {
-    const urlPattern = /https?:\/\/[^\s<>"{}|\\^`[\]]+/gi;
-    const urls = targetMessage.content.match(urlPattern);
-    if (urls && urls.length > 0) {
-      url = urls[0]; // Use the first URL found
-      logger.info(`Found URL in message content: ${url}`);
-    }
+  const url = !videoAttachment && !imageAttachment ? firstUrlIn(targetMessage.content) : null;
+  if (url) {
+    logger.info(`Found URL in message content: ${url}`);
   }
 
   let attachment = null;
@@ -1307,7 +1302,8 @@ export async function handleConvertCommand(interaction) {
   }
 
   const attachment = interaction.options.getAttachment('file');
-  const url = interaction.options.getString('url');
+  const rawUrl = interaction.options.getString('url');
+  const url = firstUrlIn(rawUrl) ?? rawUrl;
   const quality = interaction.options.getString('quality');
   const optimize = interaction.options.getBoolean('optimize') ?? false;
   const lossy = interaction.options.getNumber('lossy');

@@ -10,7 +10,7 @@ import fs from 'fs/promises';
 import path from 'path';
 import { createLogger } from '../utils/logger.js';
 import { botConfig } from '../utils/config.js';
-import { validateUrl } from '../utils/validation.js';
+import { validateUrl, firstUrlIn } from '../utils/validation.js';
 import { writeValidatedFileBuffer } from './shared/buffer-validation.js';
 import { curatedErrorMessage } from './shared/command-errors.js';
 import { downloadImage, downloadFileFromUrl, parseTenorUrl } from '../utils/file-downloader.js';
@@ -446,14 +446,9 @@ export async function handleOptimizeContextMenuCommand(interaction, modalAttachm
     att => att.contentType === 'image/gif' || (att.name && att.name.toLowerCase().endsWith('.gif'))
   );
 
-  let url = null;
-  if (!gifAttachment && targetMessage.content) {
-    const urlPattern = /https?:\/\/[^\s<>"{}|\\^`[\]]+/gi;
-    const urls = targetMessage.content.match(urlPattern);
-    if (urls && urls.length > 0) {
-      url = urls[0]; // Use the first URL found
-      logger.info(`Found URL in message content: ${url}`);
-    }
+  const url = !gifAttachment ? firstUrlIn(targetMessage.content) : null;
+  if (url) {
+    logger.info(`Found URL in message content: ${url}`);
   }
 
   // No initializer: every branch below either reassigns this before it's read or returns early.
@@ -657,7 +652,8 @@ export async function handleOptimizeCommand(interaction) {
   }
 
   const attachment = interaction.options.getAttachment('file');
-  const url = interaction.options.getString('url');
+  const rawUrl = interaction.options.getString('url');
+  const url = firstUrlIn(rawUrl) ?? rawUrl;
   const lossyLevel = interaction.options.getNumber('lossy');
 
   if (lossyLevel !== null && (lossyLevel < 0 || lossyLevel > 100)) {

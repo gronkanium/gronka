@@ -441,6 +441,26 @@ function executeYtdlp(
           reject(new NetworkError('video is unavailable or private'));
         } else if (errorOutput.includes('Sign in to confirm your age')) {
           reject(new NetworkError('video requires age verification'));
+        } else if (/members-only|Join this channel to get access/i.test(errorOutput)) {
+          reject(new NetworkError('this video is members-only'));
+        } else if (
+          errorOutput.includes("Sign in to confirm you're not a bot") ||
+          errorOutput.includes('Please sign in')
+        ) {
+          reject(
+            new NetworkError(
+              `${siteLabel(url)} is asking this server to sign in, this is usually temporary.`,
+              'YTDLP_RETRYABLE'
+            )
+          );
+        } else if (/Your IP address is blocked/i.test(errorOutput)) {
+          reject(
+            new NetworkError(`${siteLabel(url)} is blocking downloads from this server right now.`)
+          );
+        } else if (errorOutput.includes('Cannot parse data')) {
+          reject(new NetworkError(`${siteLabel(url)} changed its page and cannot be read yet.`));
+        } else if (errorOutput.includes('Unsupported URL')) {
+          reject(new ValidationError('this link is not a downloadable video page.'));
         } else if (errorOutput.includes('is not a valid URL')) {
           reject(new ValidationError(`invalid ${siteLabel(url)} URL`));
         } else if (errorOutput.includes('There is no video in this post')) {
@@ -514,13 +534,14 @@ function executeYtdlp(
  * includes transient YouTube-side extraction hiccups that clear up seconds later - retrying
  * once recovers those silently instead of surfacing a false "unavailable" to the user. Every
  * other failure (rate limit, private/age-gated, invalid URL, duration cap) is a confirmed
- * state and retrying it immediately would just waste time, so only this bucket retries.
+ * state and retrying it immediately would just waste time, so only this bucket and the
+ * failures tagged YTDLP_RETRYABLE retry.
  */
 async function executeYtdlpWithRetry(...args) {
   try {
     return await executeYtdlp(...args);
   } catch (error) {
-    if (error.message !== GENERIC_FAILURE_MESSAGE) {
+    if (error.message !== GENERIC_FAILURE_MESSAGE && error.code !== 'YTDLP_RETRYABLE') {
       throw error;
     }
     logger.warn(`yt-dlp generic failure, retrying once after a short delay: ${args[0]}`);

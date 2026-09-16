@@ -204,6 +204,67 @@ if (!mocksSupported) {
     });
   });
 
+  describe('failures yt-dlp names get a reason instead of the catch-all', () => {
+    function failsWith(text) {
+      return child => {
+        child.stderr.emit('data', Buffer.from(text));
+        child.emit('close', 1);
+      };
+    }
+
+    const cases = [
+      [
+        'ERROR: [youtube] abc: Join this channel to get access to members-only content',
+        'https://youtu.be/members',
+        'this video is members-only',
+      ],
+      [
+        'ERROR: [TikTok] 123: Your IP address is blocked from accessing this post',
+        'https://www.tiktok.com/@a/video/123',
+        'tiktok.com is blocking downloads from this server right now.',
+      ],
+      [
+        'ERROR: [facebook] 123: Cannot parse data; please report this issue',
+        'https://www.facebook.com/watch/?v=123',
+        'facebook.com changed its page and cannot be read yet.',
+      ],
+      [
+        'ERROR: Unsupported URL: https://www.tiktok.com/discover/thing',
+        'https://www.tiktok.com/discover/thing',
+        'this link is not a downloadable video page.',
+      ],
+    ];
+
+    for (const [stderr, url, expected] of cases) {
+      test(expected, async () => {
+        spawnCallLog = [];
+        spawnBehaviors = [failsWith(stderr)];
+
+        await assert.rejects(
+          () => downloadWithYtdlp(url, false, Infinity, null, Infinity, null, null),
+          error => error.message === expected
+        );
+      });
+    }
+
+    test('a sign-in demand is retried once before it reaches the user', async () => {
+      spawnCallLog = [];
+      spawnBehaviors = [failsWith('ERROR: [youtube] abc: Please sign in. Use --cookies'), success];
+
+      const result = await downloadWithYtdlp(
+        'https://youtu.be/signin',
+        false,
+        Infinity,
+        null,
+        Infinity,
+        null,
+        null
+      );
+      assert.ok(result);
+      assert.strictEqual(spawnCallLog.length, 2);
+    });
+  });
+
   // Regression: a direct-media link (e.g. an animated webp from gif.fxtwitter.com) goes through
   // yt-dlp's generic extractor, which reports no duration. A plain `duration <= N` match-filter
   // rejects unknown-duration items outright, so yt-dlp skipped the file, exited 0 with no output,

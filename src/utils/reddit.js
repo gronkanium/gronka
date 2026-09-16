@@ -132,7 +132,10 @@ async function fetchListing(url) {
   } catch (error) {
     const status = error.response?.status;
     if (status === 404) {
-      throw new NetworkError('this post is unavailable, it may be deleted or private');
+      throw new NetworkError(
+        'this post is unavailable, it may be deleted or private',
+        'CONTENT_GONE'
+      );
     }
     if (status === 429) {
       throw new NetworkError('reddit is rate limiting downloads right now, try again shortly.');
@@ -260,7 +263,7 @@ export function selectRedditMedia(listing, url) {
 
   const media = mediaOf(post);
   if (!media.external && media.images.length === 0 && post.removed_by_category) {
-    throw new NetworkError('this post was removed and its media is gone');
+    throw new NetworkError('this post was removed and its media is gone', 'CONTENT_GONE');
   }
   return media;
 }

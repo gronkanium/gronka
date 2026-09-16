@@ -206,6 +206,15 @@ describe('reddit utilities', () => {
     );
   });
 
+  test('a removed post is marked gone so download.js does not fall back', () => {
+    try {
+      selectRedditMedia(listing({ removed_by_category: 'deleted', is_gallery: true }), POST_URL);
+      assert.fail('expected a throw');
+    } catch (error) {
+      assert.strictEqual(error.code, 'CONTENT_GONE');
+    }
+  });
+
   test('a text post extracts nothing rather than guessing', () => {
     const { external, images } = selectRedditMedia(
       listing({ selftext: 'just words', url: POST_URL }),

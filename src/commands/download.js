@@ -366,8 +366,9 @@ export async function processDownload(
           }
         } catch (redditError) {
           // Falling back to cobalt is the net for a resolution failure, but it must not become a
-          // way around the disabled-source gate two lines up.
-          if (redditError instanceof ValidationError) {
+          // way around the disabled-source gate two lines up, and a post reddit itself says is
+          // gone has nothing for cobalt or yt-dlp to find either.
+          if (redditError instanceof ValidationError || redditError.code === 'CONTENT_GONE') {
             throw redditError;
           }
           logger.warn(`Reddit resolution failed, falling back to cobalt: ${redditError.message}`);

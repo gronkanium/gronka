@@ -442,7 +442,7 @@ function executeYtdlp(
         } else if (errorOutput.includes('Sign in to confirm your age')) {
           reject(new NetworkError('video requires age verification'));
         } else if (errorOutput.includes('is not a valid URL')) {
-          reject(new ValidationError('invalid YouTube URL'));
+          reject(new ValidationError(`invalid ${siteLabel(url)} URL`));
         } else if (errorOutput.includes('There is no video in this post')) {
           // Image-only posts (common on Instagram /p/ links). The post is perfectly fine ,
           // there is simply no video for yt-dlp to take, so neither the generic "may be

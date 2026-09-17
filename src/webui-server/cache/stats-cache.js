@@ -2,7 +2,7 @@ import { createLogger } from '../../utils/logger.js';
 import { botConfig } from '../../utils/config.js';
 import { getStorageStats } from '../../utils/storage.js';
 import { getActiveUserCounts } from '../../utils/database.js';
-import { getDailyRequestCounts } from '../../utils/database/stats.js';
+import { getHourlyRequestCounts } from '../../utils/database/stats.js';
 
 const logger = createLogger('webui');
 
@@ -44,10 +44,7 @@ export async function getStats() {
     const stats = await getStorageStats(storagePath);
 
     const activeUsers = await getActiveUserCounts();
-    // Never chart a window wider than retention keeps, or the tail is guaranteed to be empty.
-    // daily_requests reads processed_urls, which the retention job prunes.
-    const chartDays = Math.min(14, botConfig.retentionUrlCacheDays || 14);
-    const dailyRequests = await getDailyRequestCounts(chartDays);
+    const hourlyRequests = await getHourlyRequestCounts(24);
 
     // Format response to match expected API format
     const response = {
@@ -62,7 +59,7 @@ export async function getStats() {
       ever_active_users: activeUsers.total,
       active_users_7d: activeUsers.active7d,
       active_users_30d: activeUsers.active30d,
-      daily_requests: dailyRequests,
+      hourly_requests: hourlyRequests,
       retention_days: botConfig.retentionUrlCacheDays,
     };
 

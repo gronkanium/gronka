@@ -1,5 +1,5 @@
 <script>
-  export let data = []; // Array<{date: string, count: number}>, oldest first
+  export let data = []; // Array<{hour: string, count: number}>, oldest first
 
   const VIEW_W = 560;
   const VIEW_H = 160;
@@ -24,9 +24,8 @@
     return niceResidual * magnitude;
   }
 
-  function formatShortDate(isoDate) {
-    const d = new Date(`${isoDate}T00:00:00Z`);
-    return d.toLocaleDateString(undefined, { month: 'short', day: 'numeric', timeZone: 'UTC' });
+  function formatShortHour(iso) {
+    return new Date(iso).toLocaleTimeString(undefined, { hour: 'numeric' });
   }
 
   $: plotWidth = VIEW_W - PAD_LEFT - PAD_RIGHT;
@@ -44,7 +43,7 @@
 </script>
 
 <div class="requests-chart">
-  <h3>requests / day <span class="chart-subtitle">(last {data.length} days)</span></h3>
+  <h3>requests / hour <span class="chart-subtitle">(last {data.length} hours)</span></h3>
   <div class="chart-area">
     <svg viewBox="0 0 {VIEW_W} {VIEW_H}" preserveAspectRatio="none" role="presentation">
       <!-- gridlines -->
@@ -57,7 +56,7 @@
         class="gridline"
       />
 
-      {#each bars as bar, i (bar.date)}
+      {#each bars as bar, i (bar.hour)}
         <rect
           x={bar.x}
           y={bar.y}
@@ -86,7 +85,7 @@
           class="hit-area"
           role="button"
           tabindex="0"
-          aria-label="{formatShortDate(bar.date)}: {bar.count.toLocaleString()} requests"
+          aria-label="{formatShortHour(bar.hour)}: {bar.count.toLocaleString()} requests"
           on:mouseenter={() => (hoveredIndex = i)}
           on:mouseleave={() => (hoveredIndex = null)}
           on:focus={() => (hoveredIndex = i)}
@@ -102,13 +101,13 @@
 
     {#if bars.length}
       <span class="axis-label axis-label-first" style="left: {(bars[0].slotX / VIEW_W) * 100}%">
-        {formatShortDate(bars[0].date)}
+        {formatShortHour(bars[0].hour)}
       </span>
       <span
         class="axis-label axis-label-last"
         style="left: {((bars[bars.length - 1].slotX + barSlot) / VIEW_W) * 100}%"
       >
-        {formatShortDate(bars[bars.length - 1].date)}
+        {formatShortHour(bars[bars.length - 1].hour)}
       </span>
     {/if}
 
@@ -119,7 +118,7 @@
         style="left: {((bar.slotX + barSlot / 2) / VIEW_W) * 100}%; top: {(bar.y / VIEW_H) * 100}%"
       >
         <span class="tooltip-value">{bar.count.toLocaleString()}</span>
-        <span class="tooltip-date">{formatShortDate(bar.date)}</span>
+        <span class="tooltip-hour">{formatShortHour(bar.hour)}</span>
       </div>
     {/if}
   </div>
@@ -129,14 +128,14 @@
     <table>
       <thead>
         <tr>
-          <th>date</th>
+          <th>hour</th>
           <th>requests</th>
         </tr>
       </thead>
       <tbody>
-        {#each data as row (row.date)}
+        {#each data as row (row.hour)}
           <tr>
-            <td>{formatShortDate(row.date)}</td>
+            <td>{formatShortHour(row.hour)}</td>
             <td>{row.count.toLocaleString()}</td>
           </tr>
         {/each}
@@ -250,7 +249,7 @@
     color: var(--text-bright);
   }
 
-  .tooltip-date {
+  .tooltip-hour {
     font-size: 0.7rem;
     color: var(--text-muted);
   }

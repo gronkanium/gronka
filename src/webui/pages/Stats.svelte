@@ -83,8 +83,8 @@
         </div>
       {/if}
     </dl>
-    {#if stats.daily_requests?.length}
-      <RequestsChart data={stats.daily_requests} />
+    {#if stats.hourly_requests?.length}
+      <RequestsChart data={stats.hourly_requests} />
     {/if}
   {/if}
 </section>

@@ -400,12 +400,17 @@
 
   .user-id {
     flex: 1;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
     color: var(--text);
   }
 
   .value {
     color: var(--text-muted);
     font-size: 0.9rem;
+    white-space: nowrap;
   }
 
   .users-table-section {

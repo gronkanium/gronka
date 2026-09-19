@@ -5,6 +5,27 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres (attempts) to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.0.0](https://github.com/thedorekaczynski/gronka/compare/v0.35.1...v1.0.0) (2026-09-19)
+
+
+### Features
+
+* **webui:** chart requests per hour over the last 24 hours ([da8ce32](https://github.com/thedorekaczynski/gronka/commit/da8ce32d0f3fbfca9c95ac63dde92c922aa31346))
+
+
+### Bug Fixes
+
+* **download:** fall back to the default youtube client for embed-disabled videos ([55ff1f8](https://github.com/thedorekaczynski/gronka/commit/55ff1f834464d9ca6d6db53712ec38c1056aaa3c))
+* **download:** send the booru user agent for direct cdn.donmai.us links ([6e78a74](https://github.com/thedorekaczynski/gronka/commit/6e78a748ea9c0ab9ddaf16789c4a6fa7eb7ea5c9))
+* **download:** try instagram's logged-out routes via cobalt before the session ([79d7143](https://github.com/thedorekaczynski/gronka/commit/79d7143f3db7b7f2d08f8a989949ba028c484574))
+* **setup:** set file modes before writing secrets to .env and cookie files ([350ed8b](https://github.com/thedorekaczynski/gronka/commit/350ed8b283062e59145f7b2b28b07147623c31b0))
+* **webui:** keep user leaderboard rows on one line ([df00b9e](https://github.com/thedorekaczynski/gronka/commit/df00b9e6a338bef86848890e2e347206139ab343))
+
+
+### Miscellaneous Chores
+
+* release 1.0.0 ([0a8019b](https://github.com/thedorekaczynski/gronka/commit/0a8019b2b94e275becf51e4e7e727b8694a64551))
+
 ## [0.35.1](https://github.com/thedorekaczynski/gronka/compare/v0.35.0...v0.35.1) (2026-09-16)
 
 

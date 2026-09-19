@@ -26,7 +26,7 @@ import {
 } from '../utils/gallery-dl.js';
 import { beginMangaSelection } from './manga.js';
 import { isHentaiGifzUrl, downloadFromHentaiGifz } from '../utils/hentaigifz.js';
-import { isBooruUrl, downloadFromBooru } from '../utils/booru.js';
+import { isBooruUrl, downloadFromBooru, booruCdnUserAgent } from '../utils/booru.js';
 import { isPinterestUrl, downloadFromPinterest } from '../utils/pinterest.js';
 import { isKlipyUrl, downloadFromKlipy } from '../utils/klipy.js';
 import {
@@ -607,7 +607,9 @@ export async function processDownload(
             metadata: { url, fileCount: 1 },
           });
         } else if (downloadMethod === 'direct') {
-          fileData = await downloadDirectMedia(url, adminUser, interaction.client);
+          fileData = await downloadDirectMedia(url, adminUser, interaction.client, {
+            userAgent: booruCdnUserAgent(url),
+          });
           logOperationStep(operationId, 'download_complete', 'success', {
             message: 'file downloaded successfully via direct fetch',
             metadata: { url, fileCount: 1 },

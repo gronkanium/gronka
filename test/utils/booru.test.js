@@ -1,9 +1,16 @@
 import { describe, test } from 'bun:test';
 import assert from 'node:assert';
 import axios from 'axios';
-import { downloadFromBooru, isBooruUrl } from '../../src/utils/booru.js';
+import { booruCdnUserAgent, downloadFromBooru, isBooruUrl } from '../../src/utils/booru.js';
 
 describe('booru utilities', () => {
+  test('booruCdnUserAgent covers donmai CDN links only', () => {
+    assert.match(booruCdnUserAgent('https://cdn.donmai.us/original/b9/bc/x.mp4'), /^gronka/);
+    assert.strictEqual(booruCdnUserAgent('https://cdn.example.com/x.mp4'), undefined);
+    assert.strictEqual(booruCdnUserAgent('https://notdonmai.us/x.mp4'), undefined);
+    assert.strictEqual(booruCdnUserAgent('not a url'), undefined);
+  });
+
   test('isBooruUrl recognizes danbooru post URLs', () => {
     assert.strictEqual(isBooruUrl('https://danbooru.donmai.us/posts/5000000'), true);
     assert.strictEqual(isBooruUrl('https://danbooru.donmai.us/posts/5000000?q=cat'), true);

@@ -68,8 +68,8 @@ export function isMediaResponse(contentType, buffer) {
 }
 
 // Reuses /convert's guarded fetch rather than adding a second one.
-export async function downloadDirectMedia(url, isAdminUser = false, client = null) {
-  const fileData = await downloadFileFromUrl(url, isAdminUser, client);
+export async function downloadDirectMedia(url, isAdminUser = false, client = null, options = {}) {
+  const fileData = await downloadFileFromUrl(url, isAdminUser, client, options);
   if (!isMediaResponse(fileData.contentType, fileData.buffer)) {
     logger.warn(
       `Direct media URL returned non-media content: ${url} (content-type: ${fileData.contentType || 'none'})`

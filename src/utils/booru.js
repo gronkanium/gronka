@@ -85,6 +85,15 @@ function parsePostId(pathname) {
  * @returns {boolean} True if the URL is a post page on a supported board
  *   (danbooru, e621/e926, yande.re, konachan)
  */
+// A bare cdn.donmai.us link skips the post API but its CDN still 403s the Chrome UA.
+export function booruCdnUserAgent(url) {
+  try {
+    return new URL(url).hostname.toLowerCase().endsWith('.donmai.us') ? BOORU_UA : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
 export function isBooruUrl(url) {
   try {
     const { hostname, pathname } = new URL(url);

@@ -16,7 +16,16 @@
 
 import { createInterface } from 'readline';
 import { execSync } from 'child_process';
-import { existsSync, readFileSync, writeFileSync, mkdirSync, statSync, chmodSync } from 'fs';
+import {
+  existsSync,
+  readFileSync,
+  mkdirSync,
+  statSync,
+  openSync,
+  fchmodSync,
+  writeSync,
+  closeSync,
+} from 'fs';
 import { createServer } from 'net';
 import { fileURLToPath } from 'url';
 import { dirname, join } from 'path';
@@ -56,6 +65,17 @@ let rl;
 const pendingLines = [];
 const waitingAsks = [];
 let stdinClosed = false;
+
+// Mode is fixed on the fd before any secret is written, so an existing 0644 file never holds it.
+function writePrivate(file, text, mode) {
+  const fd = openSync(file, 'w', mode);
+  try {
+    fchmodSync(fd, mode);
+    writeSync(fd, text);
+  } finally {
+    closeSync(fd);
+  }
+}
 
 function lineReader() {
   if (rl) {
@@ -399,8 +419,7 @@ function applyFixes(fixables) {
       continue;
     }
     const full = join(ROOT, fix.path);
-    writeFileSync(full, fix.seed());
-    chmodSync(full, fix.mode);
+    writePrivate(full, fix.seed(), fix.mode);
     ok(`created ${fix.path} (${fix.mode.toString(8)})`);
   }
 }
@@ -519,10 +538,7 @@ async function wizard() {
     note('skipped, everything still works, just without a CDN');
   }
 
-  // mode on create closes the window where .env briefly exists at 0644 holding the Discord
-  // token and R2 keys; chmod still covers the case where the file already existed.
-  writeFileSync(envPath, text, { mode: 0o600 });
-  chmodSync(envPath, 0o600);
+  writePrivate(envPath, text, 0o600);
   ok('wrote .env (600), keeping the documentation comments from .env.example');
 
   heading('Creating what docker needs');

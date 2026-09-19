@@ -83,9 +83,10 @@ export function isYouTubeUrl(url) {
 // without a token. It needs the `n` challenge solved, which requires a JS runtime plus the
 // yt-dlp-ejs solver: bun is the one runtime in this image (upstream has deprecated bun
 // support, yt-dlp#16766, so this needs deno or node when that lands).
+// web_embedded reports embedding-disabled videos as "Video unavailable", so default follows it.
 function getYouTubeArgs(url) {
   if (!isYouTubeUrl(url)) return [];
-  return ['--js-runtimes', 'bun', '--extractor-args', 'youtube:player_client=web_embedded'];
+  return ['--js-runtimes', 'bun', '--extractor-args', 'youtube:player_client=web_embedded,default'];
 }
 
 /**

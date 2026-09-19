@@ -35,7 +35,7 @@ exports the current site's cookies as a Netscape `cookies.txt`. Each line is tab
 last two columns are the name and value:
 
 ```
-.instagram.com   TRUE   /   TRUE   1804893724   sessionid   56293383463%3Aag5…
+.instagram.com   TRUE   /   TRUE   1804893724   sessionid   12345678901%3AabCd…
                                                  ^^^^^^^^^   ^^^^^^^^^^^^^^^^^
 ```
 

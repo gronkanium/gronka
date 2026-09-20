@@ -31,6 +31,7 @@ const OFFSITE_HOSTS = [
   'xvideos.com',
   'xhamster.com',
   'redtube.com',
+  'rule34video.com',
   'kick.com',
   'twitch.tv',
   'medal.tv',

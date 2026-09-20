@@ -160,6 +160,7 @@ export const YTDLP_SITES = [
   { name: 'XVideos', hosts: ['xvideos.com'] },
   { name: 'xHamster', hosts: ['xhamster.com'] },
   { name: 'RedTube', hosts: ['redtube.com'] },
+  { name: 'Rule34Video', hosts: ['rule34video.com'] },
 ];
 
 /**

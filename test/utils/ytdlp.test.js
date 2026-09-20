@@ -141,6 +141,7 @@ describe('ytdlp utilities', () => {
       assert.strictEqual(getYtdlpSite('https://www.xvideos.com/video1/x'), 'XVideos');
       assert.strictEqual(getYtdlpSite('https://xhamster.com/videos/x'), 'xHamster');
       assert.strictEqual(getYtdlpSite('https://www.redtube.com/123'), 'RedTube');
+      assert.strictEqual(getYtdlpSite('https://rule34video.com/video/1/x/'), 'Rule34Video');
       assert.strictEqual(getYtdlpSite('https://www.xiaohongshu.com/explore/abc'), 'Xiaohongshu');
       assert.strictEqual(getYtdlpSite('http://xhslink.com/o/abc'), 'Xiaohongshu');
       assert.strictEqual(getYtdlpSite('https://medal.tv/games/x/clips/abc'), 'Medal');

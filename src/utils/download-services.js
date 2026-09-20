@@ -31,6 +31,7 @@ const YTDLP_CATEGORY = {
   XVideos: 'adult',
   xHamster: 'adult',
   RedTube: 'adult',
+  Rule34Video: 'adult',
 };
 
 const ytdlpServices = YTDLP_SITES.map(site => ({

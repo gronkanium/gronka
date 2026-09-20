@@ -5,6 +5,14 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres (attempts) to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.1.0](https://github.com/thedorekaczynski/gronka/compare/v1.0.0...v1.1.0) (2026-09-20)
+
+
+### Features
+
+* **download:** add rule34video via yt-dlp ([7310317](https://github.com/thedorekaczynski/gronka/commit/73103171a32cc14ad5fb79f8f25e4a4d2c57fdbd))
+* **download:** support Instagram stories and highlights, including /s/ share links ([0920114](https://github.com/thedorekaczynski/gronka/commit/0920114f9127e00dfe247e6eb8375fc7ec319de4))
+
 ## [1.0.0](https://github.com/thedorekaczynski/gronka/compare/v0.35.1...v1.0.0) (2026-09-19)
 
 

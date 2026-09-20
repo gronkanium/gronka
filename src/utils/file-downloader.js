@@ -5,6 +5,7 @@ import { botConfig } from './config.js';
 import { validateUrl } from './validation.js';
 import { ValidationError, NetworkError } from './errors.js';
 import { isSocialMediaUrl, downloadFromSocialMedia } from './cobalt.js';
+import { isInstagramStoryUrl, hasInstagramSession, downloadFromInstagram } from './instagram.js';
 import { isDiscordCdnUrl, getRefreshedAttachmentURL, getRequestHeaders } from './discord-cdn.js';
 import { sanitizeFilename } from './validation.js';
 import { hashBytesHex } from './hashing.js';
@@ -211,6 +212,11 @@ export async function downloadFileFromUrl(url, isAdminUser = false, client = nul
     } catch (error) {
       logger.warn(`Failed to refresh Discord URL, using original: ${error.message}`);
     }
+  }
+
+  if (isInstagramStoryUrl(actualUrl) && hasInstagramSession()) {
+    const story = await downloadFromInstagram(actualUrl, isAdminUser);
+    return Array.isArray(story) ? story[0] : story;
   }
 
   // Skip Cobalt for Discord CDN URLs as they are handled directly

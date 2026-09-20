@@ -31,6 +31,7 @@ import { isPinterestUrl, downloadFromPinterest } from '../utils/pinterest.js';
 import { isKlipyUrl, downloadFromKlipy } from '../utils/klipy.js';
 import {
   isInstagramPostUrl,
+  isInstagramStoryUrl,
   hasInstagramSession,
   downloadFromInstagram,
 } from '../utils/instagram.js';
@@ -384,6 +385,7 @@ export async function processDownload(
       const isDirectMedia = isDirectMediaUrl(url);
       // Cobalt tries Instagram's logged-out routes first; the session extractor is only the backstop.
       const useInstagram = isInstagramPostUrl(url) && hasInstagramSession();
+      const isIgStory = isInstagramStoryUrl(url) && hasInstagramSession();
       const useReddit = redditImages !== null && redditImages.length > 0;
       // yt-dlp sites (youtube, redgifs, imgur, the tube sites, etc.) download through
       // yt-dlp, not Cobalt.
@@ -401,6 +403,7 @@ export async function processDownload(
         !isBooru &&
         !isPinterest &&
         !isKlipy &&
+        !isIgStory &&
         !isDirectMedia &&
         startTime === null &&
         duration === null &&
@@ -521,6 +524,13 @@ export async function processDownload(
           message: 'Starting download from Klipy',
           metadata: { url, maxSize: adminUser ? 'unlimited' : maxSize },
         });
+      } else if (isIgStory) {
+        downloadMethod = 'instagram-story';
+        logger.info(`Downloading Instagram story via web API: ${url}`);
+        logOperationStep(operationId, 'download_start', 'running', {
+          message: 'Starting download from Instagram story',
+          metadata: { url, maxSize: adminUser ? 'unlimited' : maxSize },
+        });
       } else if (isDirectMedia) {
         downloadMethod = 'direct';
         logger.info(`Downloading direct media file: ${url}`);
@@ -605,6 +615,12 @@ export async function processDownload(
           logOperationStep(operationId, 'download_complete', 'success', {
             message: 'file downloaded successfully via Klipy',
             metadata: { url, fileCount: 1 },
+          });
+        } else if (downloadMethod === 'instagram-story') {
+          fileData = await downloadFromInstagram(url, adminUser);
+          logOperationStep(operationId, 'download_complete', 'success', {
+            message: 'file downloaded successfully via Instagram story',
+            metadata: { url, fileCount: Array.isArray(fileData) ? fileData.length : 1 },
           });
         } else if (downloadMethod === 'direct') {
           fileData = await downloadDirectMedia(url, adminUser, interaction.client, {

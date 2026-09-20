@@ -3,6 +3,7 @@ import fsSync from 'node:fs';
 import { createLogger } from './logger.js';
 import { NetworkError, ValidationError } from './errors.js';
 import { downloadFileFromUrl } from './file-downloader.js';
+import { mapWithLimit } from './concurrency.js';
 import { ssrfGuardedRequest } from './ssrf-guard.js';
 
 const logger = createLogger('instagram');
@@ -37,6 +38,44 @@ const SHORTCODE_ALPHABET = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz
 const USER_AGENT =
   'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) ' +
   'Chrome/126.0.0.0 Safari/537.36';
+
+// /stories/<user>/<mediaId>, /stories/highlights/<id>, and the share sheet's /s/<base64 highlight:<id>>.
+const STORY_PATH = /^\/stories\/(?:highlights\/(\d+)|[^/]+\/(\d+))/;
+const SHARE_PATH = /^\/s\/([A-Za-z0-9_-]+)/;
+const MAX_HIGHLIGHT_ITEMS = 10;
+
+function isInstagramHost(hostname) {
+  const host = hostname.toLowerCase().replace(/^www\./, '');
+  return host === 'instagram.com' || host.endsWith('.instagram.com');
+}
+
+/** {highlightId, mediaId} for a story or highlight link (either may be null), else null. */
+export function parseStoryUrl(url) {
+  try {
+    const { hostname, pathname, searchParams } = new URL(url);
+    if (!isInstagramHost(hostname)) {
+      return null;
+    }
+    const story = pathname.match(STORY_PATH);
+    if (story) {
+      return { highlightId: story[1] ?? null, mediaId: story[2] ?? null };
+    }
+    const share = pathname.match(SHARE_PATH);
+    const decoded = share && Buffer.from(share[1], 'base64url').toString('utf8');
+    const highlightId = decoded?.match(/^highlight:(\d+)$/)?.[1];
+    if (!highlightId) {
+      return null;
+    }
+    const mediaId = searchParams.get('story_media_id');
+    return { highlightId, mediaId: /^\d+$/.test(mediaId ?? '') ? mediaId : null };
+  } catch {
+    return null;
+  }
+}
+
+export function isInstagramStoryUrl(url) {
+  return parseStoryUrl(url) !== null;
+}
 
 /** True for an Instagram post permalink (/p/, /reel/, /reels/, /tv/) on any instagram host. */
 export function isInstagramPostUrl(url) {
@@ -130,34 +169,10 @@ export function selectMediaUrl(media, imgIndex = null) {
   return isMediaHostUrl(image) ? image : null;
 }
 
-/**
- * Download the media behind an Instagram post URL via the web client's media-info API.
- * Returns the same { buffer, contentType, size, filename } shape as the other download paths.
- * Throws on any failure; the caller treats that as "fall back to cobalt".
- * @param {string} url - Instagram /p/, /reel/, /reels/ or /tv/ permalink
- * @param {boolean} isAdminUser - Admin users bypass size limits
- */
-export async function downloadFromInstagram(url, isAdminUser = false) {
-  const cookie = readSessionCookie();
-  if (!cookie) {
-    throw new ValidationError('no instagram session configured');
-  }
-
-  const parsed = new URL(url);
-  const shortcode = parsed.pathname.match(POST_PATH)?.[1];
-  const mediaId = shortcodeToMediaId(shortcode);
-  if (!mediaId) {
-    throw new ValidationError('could not read the post id from this instagram link');
-  }
-
-  const imgIndexParam = Number.parseInt(parsed.searchParams.get('img_index') ?? '', 10);
-  const imgIndex = Number.isNaN(imgIndexParam) ? null : imgIndexParam;
-
-  logger.info(`Resolving Instagram post ${shortcode} (media ${mediaId})`);
-
+async function instagramGet(apiPath, refererPath, cookie, unavailable = 'post') {
   let response;
   try {
-    response = await axios.get(`https://www.instagram.com/api/v1/media/${mediaId}/info/`, {
+    response = await axios.get(`https://www.instagram.com${apiPath}`, {
       ...ssrfGuardedRequest(),
       responseType: 'json',
       timeout: API_TIMEOUT_MS,
@@ -172,7 +187,7 @@ export async function downloadFromInstagram(url, isAdminUser = false) {
         'X-IG-WWW-Claim': wwwClaim,
         'X-ASBD-ID': ASBD_ID,
         'X-Requested-With': 'XMLHttpRequest',
-        Referer: `https://www.instagram.com${parsed.pathname}`,
+        Referer: `https://www.instagram.com${refererPath}`,
         Origin: 'https://www.instagram.com',
         'Sec-Fetch-Site': 'same-origin',
         'Sec-Fetch-Mode': 'cors',
@@ -183,7 +198,7 @@ export async function downloadFromInstagram(url, isAdminUser = false) {
   } catch (error) {
     const status = error.response?.status;
     if (status === 400 || status === 404) {
-      throw new NetworkError('this post is unavailable, it may be deleted or private');
+      throw new NetworkError(unavailableMessage(unavailable));
     }
     // A dead session answers 401/403 on every post, so it reads as "everything is broken"
     // rather than "one post is missing". Say so in the log; the user still gets the curated
@@ -201,13 +216,105 @@ export async function downloadFromInstagram(url, isAdminUser = false) {
     if (status === 429) {
       throw new NetworkError('instagram is rate limiting downloads right now');
     }
-    logger.warn(`Instagram media-info request failed: ${error.message}`);
+    logger.warn(`Instagram request failed: ${error.message}`);
     throw new NetworkError('failed to reach instagram');
   }
 
   wwwClaim = response.headers?.['x-ig-set-www-claim'] || wwwClaim;
+  return response.data;
+}
 
-  const media = response.data?.items?.[0];
+function unavailableMessage(kind) {
+  return kind === 'story'
+    ? 'this story is unavailable, it may have expired (stories last 24 hours) or be private'
+    : 'this post is unavailable, it may be deleted or private';
+}
+
+async function fetchStoryItems({ highlightId, mediaId }, refererPath, cookie) {
+  if (mediaId) {
+    try {
+      const item = (
+        await instagramGet(`/api/v1/media/${mediaId}/info/`, refererPath, cookie, 'story')
+      )?.items?.[0];
+      if (item) {
+        return [item];
+      }
+    } catch (error) {
+      if (!highlightId) {
+        throw error;
+      }
+    }
+  }
+  if (!highlightId) {
+    throw new NetworkError(unavailableMessage('story'));
+  }
+  const data = await instagramGet(
+    `/api/v1/feed/reels_media/?reel_ids=highlight%3A${highlightId}`,
+    refererPath,
+    cookie,
+    'story'
+  );
+  const items = data?.reels_media?.[0]?.items ?? [];
+  const wanted = mediaId ? items.filter(item => String(item.pk) === mediaId) : items;
+  if (wanted.length === 0) {
+    throw new NetworkError(unavailableMessage('story'));
+  }
+  return wanted.slice(0, MAX_HIGHLIGHT_ITEMS);
+}
+
+/**
+ * Download the media behind an Instagram post URL via the web client's media-info API.
+ * Returns the same { buffer, contentType, size, filename } shape as the other download paths.
+ * Throws on any failure; the caller treats that as "fall back to cobalt".
+ * @param {string} url - Instagram /p/, /reel/, /reels/ or /tv/ permalink
+ * @param {boolean} isAdminUser - Admin users bypass size limits
+ */
+export async function downloadFromInstagram(url, isAdminUser = false) {
+  const cookie = readSessionCookie();
+  if (!cookie) {
+    throw new ValidationError('no instagram session configured');
+  }
+
+  const parsed = new URL(url);
+
+  const story = parseStoryUrl(url);
+  if (story) {
+    logger.info(
+      `Resolving Instagram story (highlight ${story.highlightId}, media ${story.mediaId})`
+    );
+    const items = await fetchStoryItems(story, parsed.pathname, cookie);
+    const downloaded = (
+      await mapWithLimit(items, 3, async item => {
+        const mediaUrl = selectMediaUrl(item);
+        if (!mediaUrl) {
+          return null;
+        }
+        return downloadFileFromUrl(mediaUrl, isAdminUser).catch(error => {
+          logger.warn(`Instagram story item failed: ${error.message}`);
+          return null;
+        });
+      })
+    ).filter(Boolean);
+    if (downloaded.length === 0) {
+      throw new ValidationError('no downloadable media found on this story');
+    }
+    return downloaded.length === 1 ? downloaded[0] : downloaded;
+  }
+
+  const shortcode = parsed.pathname.match(POST_PATH)?.[1];
+  const mediaId = shortcodeToMediaId(shortcode);
+  if (!mediaId) {
+    throw new ValidationError('could not read the post id from this instagram link');
+  }
+
+  const imgIndexParam = Number.parseInt(parsed.searchParams.get('img_index') ?? '', 10);
+  const imgIndex = Number.isNaN(imgIndexParam) ? null : imgIndexParam;
+
+  logger.info(`Resolving Instagram post ${shortcode} (media ${mediaId})`);
+
+  const data = await instagramGet(`/api/v1/media/${mediaId}/info/`, parsed.pathname, cookie);
+
+  const media = data?.items?.[0];
   if (!media) {
     throw new NetworkError('this post is unavailable, it may be deleted or private');
   }

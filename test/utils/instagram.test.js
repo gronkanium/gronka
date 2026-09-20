@@ -1,7 +1,14 @@
-import { describe, test } from 'bun:test';
+import { describe, test, spyOn, afterEach } from 'bun:test';
 import assert from 'node:assert';
+import axios from 'axios';
+import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
 import {
   isInstagramPostUrl,
+  isInstagramStoryUrl,
+  parseStoryUrl,
+  downloadFromInstagram,
   shortcodeToMediaId,
   selectMediaUrl,
 } from '../../src/utils/instagram.js';
@@ -89,5 +96,162 @@ describe('instagram utilities', () => {
     );
     assert.strictEqual(selectMediaUrl({}), null);
     assert.strictEqual(selectMediaUrl(null), null);
+  });
+});
+
+const highlightShare = id =>
+  `https://www.instagram.com/s/${Buffer.from(`highlight:${id}`).toString('base64url')}`;
+
+describe('instagram story urls', () => {
+  test('parseStoryUrl reads a story, a highlight, and the share-sheet highlight link', () => {
+    assert.deepStrictEqual(parseStoryUrl('https://www.instagram.com/someuser/'), null);
+    assert.deepStrictEqual(
+      parseStoryUrl(
+        'https://www.instagram.com/stories/some.user/3884905143972195700/?utm_source=ig'
+      ),
+      { highlightId: null, mediaId: '3884905143972195700' }
+    );
+    assert.deepStrictEqual(parseStoryUrl('https://www.instagram.com/stories/highlights/1796/'), {
+      highlightId: '1796',
+      mediaId: null,
+    });
+    assert.deepStrictEqual(
+      parseStoryUrl(
+        `${highlightShare('17966681567900583')}?story_media_id=3884905143972195700&stkn=x`
+      ),
+      { highlightId: '17966681567900583', mediaId: '3884905143972195700' }
+    );
+    assert.deepStrictEqual(parseStoryUrl(highlightShare('17966681567900583')), {
+      highlightId: '17966681567900583',
+      mediaId: null,
+    });
+  });
+
+  test('parseStoryUrl rejects other /s/ links, profiles, posts and lookalike hosts', () => {
+    assert.strictEqual(
+      isInstagramStoryUrl('https://www.instagram.com/s/bm90IGEgaGlnaGxpZ2h0'),
+      false
+    );
+    assert.strictEqual(isInstagramStoryUrl('https://www.instagram.com/stories/someuser/'), false);
+    assert.strictEqual(isInstagramStoryUrl('https://www.instagram.com/p/DbzojBsOC6p/'), false);
+    assert.strictEqual(isInstagramStoryUrl('https://instagram.com.evil.com/stories/u/123/'), false);
+    assert.strictEqual(isInstagramStoryUrl('not a url'), false);
+  });
+});
+
+describe('downloadFromInstagram stories', () => {
+  const cookieFile = path.join(os.tmpdir(), `ig-cookies-${process.pid}.json`);
+  const previousPath = process.env.INSTAGRAM_COOKIES_PATH;
+  let spy;
+
+  const stubApi = (routes, bytes = Buffer.from('media')) => {
+    const calls = [];
+    fs.writeFileSync(cookieFile, JSON.stringify({ instagram: ['sessionid=abc; ds_user_id=1'] }));
+    process.env.INSTAGRAM_COOKIES_PATH = cookieFile;
+    spy = spyOn(axios, 'get').mockImplementation(async requestUrl => {
+      calls.push(requestUrl);
+      const route = Object.keys(routes).find(key => requestUrl.includes(key));
+      if (route) {
+        const result = routes[route];
+        if (result instanceof Error) throw result;
+        return { data: result, headers: {} };
+      }
+      return {
+        data: bytes,
+        headers: { 'content-type': requestUrl.endsWith('.mp4') ? 'video/mp4' : 'image/jpeg' },
+      };
+    });
+    return calls;
+  };
+
+  afterEach(() => {
+    spy?.mockRestore();
+    fs.rmSync(cookieFile, { force: true });
+    if (previousPath === undefined) delete process.env.INSTAGRAM_COOKIES_PATH;
+    else process.env.INSTAGRAM_COOKIES_PATH = previousPath;
+  });
+
+  const item = (pk, url) => ({ pk, ...video(url) });
+  const httpError = status => Object.assign(new Error(`HTTP ${status}`), { response: { status } });
+
+  test('a story link downloads the story video via the media-info route', async () => {
+    const calls = stubApi({
+      '/api/v1/media/3884905143972195700/info/': {
+        items: [item('3884905143972195700', 'https://scontent.cdninstagram.com/story.mp4')],
+      },
+    });
+    const result = await downloadFromInstagram(
+      'https://www.instagram.com/stories/someuser/3884905143972195700/'
+    );
+    assert.strictEqual(result.contentType, 'video/mp4');
+    assert.ok(calls[0].includes('/media/3884905143972195700/info/'));
+  });
+
+  test('a share link with story_media_id fetches that one item', async () => {
+    const calls = stubApi({
+      '/api/v1/media/3884905143972195700/info/': {
+        items: [item('3884905143972195700', 'https://scontent.cdninstagram.com/one.mp4')],
+      },
+    });
+    const result = await downloadFromInstagram(
+      `${highlightShare('17966681567900583')}?story_media_id=3884905143972195700`
+    );
+    assert.ok(!Array.isArray(result));
+    assert.strictEqual(calls.filter(c => c.includes('reels_media')).length, 0);
+  });
+
+  test('a highlight link without a story id downloads every item as a gallery', async () => {
+    stubApi({
+      reels_media: {
+        reels_media: [
+          {
+            items: [
+              item('1', 'https://scontent.cdninstagram.com/a.mp4'),
+              { pk: '2', ...image('https://scontent.cdninstagram.com/b.jpg') },
+            ],
+          },
+        ],
+      },
+    });
+    const result = await downloadFromInstagram(
+      'https://www.instagram.com/stories/highlights/1796/'
+    );
+    assert.strictEqual(result.length, 2);
+    assert.strictEqual(result[1].contentType, 'image/jpeg');
+  });
+
+  test('media-info failure falls back to the highlight feed and picks the item by pk', async () => {
+    const calls = stubApi({
+      '/api/v1/media/22/info/': httpError(404),
+      reels_media: {
+        reels_media: [
+          {
+            items: [
+              item('11', 'https://scontent.cdninstagram.com/x.mp4'),
+              item('22', 'https://scontent.cdninstagram.com/y.mp4'),
+            ],
+          },
+        ],
+      },
+    });
+    const result = await downloadFromInstagram(`${highlightShare('5')}?story_media_id=22`);
+    assert.ok(!Array.isArray(result));
+    assert.ok(calls.some(c => c.includes('reels_media')));
+  });
+
+  test('an expired story surfaces a story-specific message', async () => {
+    stubApi({ '/api/v1/media/9/info/': httpError(404) });
+    await assert.rejects(
+      downloadFromInstagram('https://www.instagram.com/stories/someuser/9/'),
+      /this story is unavailable, it may have expired/
+    );
+  });
+
+  test('a highlight the feed no longer returns is reported unavailable', async () => {
+    stubApi({ reels_media: { reels_media: [] } });
+    await assert.rejects(
+      downloadFromInstagram('https://www.instagram.com/stories/highlights/1796/'),
+      /this story is unavailable/
+    );
   });
 });

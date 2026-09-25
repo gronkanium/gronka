@@ -106,7 +106,7 @@ services:
     volumes:
       - postgres-data:/var/lib/postgresql/data
     ports:
-      - '${POSTGRES_PORT:-5432}:5432'
+      - '127.0.0.1:${POSTGRES_PORT:-5432}:5432'
     networks:
       - gronka-network
     healthcheck:
@@ -124,9 +124,8 @@ services:
     restart: unless-stopped
     container_name: cobalt
     ports:
-      # Exposed for internal Docker network access
-      # If you want to restrict to localhost only, use: - 127.0.0.1:9000:9000/tcp
-      - 9000:9000/tcp
+      # Host-only: it holds the cookie sessions and has no API key; the app uses cobalt:9000
+      - 127.0.0.1:9000:9000/tcp
     environment:
       API_URL: ${COBALT_API_URL:-http://cobalt:9000}
       # Path to cookies.json file for authenticating with services (Twitter, Instagram, Reddit, etc.)

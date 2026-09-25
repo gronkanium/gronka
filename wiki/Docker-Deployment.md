@@ -95,8 +95,8 @@ docker compose logs -f webui
 | `GIF_STORAGE_PATH` | path to gif storage                                    | `./data-prod` or `./data-test` |
 | `MAX_GIF_DURATION` | maximum video duration (seconds)                       | `30`                         |
 | `ADMIN_USER_IDS`   | comma-separated discord user ids with admin privileges | _optional_                   |
-| `STATS_USERNAME`   | username for basic auth on `/stats` endpoint           | _optional_ (recommended)     |
-| `STATS_PASSWORD`   | password for basic auth on `/stats` endpoint           | _optional_ (recommended)     |
+| `STATS_USERNAME`   | basic auth username for the dashboard and stats server | required for remote access     |
+| `STATS_PASSWORD`   | basic auth password for the dashboard and stats server | required for remote access     |
 | `COBALT_API_URL`   | cobalt api url for social media downloads              | `http://cobalt:9000`         |
 | `COBALT_ENABLED`   | enable cobalt integration                              | `true`                       |
 
@@ -122,8 +122,9 @@ the following directories are mounted as volumes for persistence:
 ### ports
 
 - `3000:3000` - express cdn server
-- `3001:3001` - web ui dashboard (served by the bot container)
-- `9000:9000` - cobalt api (internal use)
+- `3001:3001` - web ui dashboard (served by the bot container, behind basic auth)
+- `127.0.0.1:9000:9000` - cobalt api, host only (it holds your cookie sessions and has no api key)
+- `127.0.0.1:5432:5432` - postgres, host only
 
 ## registering discord commands
 

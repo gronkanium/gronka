@@ -75,8 +75,9 @@ COPY --from=builder /app/src ./src
 COPY --from=builder /app/scripts ./scripts
 COPY --from=builder /app/package.json /app/bun.lock ./
 
-# Create necessary directories
-RUN mkdir -p data-prod/gifs data-test/gifs temp
+# Writable dirs for the unprivileged user; everything else stays root-owned and read-only to it
+RUN mkdir -p data-prod/gifs data-test/gifs temp logs \
+    && chown -R bun:bun data-prod data-test temp logs
 
 # Copy entrypoint script
 COPY scripts/docker-entrypoint.sh /usr/local/bin/
@@ -88,6 +89,8 @@ EXPOSE 3000
 # Health check
 HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
     CMD bun -e "const r = await fetch('http://localhost:3000/health'); process.exit(r.status === 200 ? 0 : 1)"
+
+USER bun
 
 # Use entrypoint script to run both processes
 ENTRYPOINT ["docker-entrypoint.sh"]

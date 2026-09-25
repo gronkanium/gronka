@@ -31,6 +31,8 @@ import {
   convertImageToGif,
   convertAnimatedWebpToGif,
   isAnimatedWebp,
+  convertToFormat,
+  OUTPUT_FORMATS,
 } from '../utils/video-processor.js';
 import { gifExists, getGifPath, getVideoPath, getImagePath, saveGif } from '../utils/storage.js';
 import { fitsDiscordAttachment, getDiscordAttachmentLimit } from './shared/attachment-limit.js';
@@ -54,6 +56,8 @@ import { hashUrlWithParams, hashPartsHex } from '../utils/hashing.js';
 import { getProcessedUrl } from '../utils/database.js';
 import { recordProcessedUrl, trackR2UploadIfApplicable } from './shared/url-cache.js';
 import { runMediaCommand } from './shared/run-media-command.js';
+import { sendConvertedFile } from './shared/send-converted.js';
+import { ValidationError } from '../utils/errors.js';
 import { replyIfRateLimited, resolveTimeOptions } from './shared/command-guards.js';
 import { initializeDatabaseWithErrorHandling } from '../utils/database-init.js';
 
@@ -239,6 +243,80 @@ function resolveVideoConversionOptions(options, probed) {
     startTime: options.startTime ?? null,
     duration: options.duration ?? null,
   };
+}
+
+async function processFormatConversion(
+  interaction,
+  attachment,
+  adminUser,
+  preDownloadedBuffer,
+  format,
+  trim,
+  originalUrl
+) {
+  const spec = OUTPUT_FORMATS[format];
+  const isGif = attachment.contentType === 'image/gif';
+  const isVideo = ALLOWED_VIDEO_TYPES.includes(attachment.contentType);
+  await runMediaCommand(
+    'convert',
+    interaction,
+    async ctx => {
+      const { operationId, userId } = ctx;
+      if (!isVideo && spec.kind === 'audio') {
+        throw new ValidationError('only videos have audio to turn into audio files.');
+      }
+      if (!isVideo && !isGif && spec.kind === 'video') {
+        throw new ValidationError('still images can only be converted to png, jpg, webp or gif.');
+      }
+      const buffer =
+        preDownloadedBuffer ||
+        (isVideo
+          ? await downloadVideo(attachment.url, adminUser)
+          : await downloadImage(attachment.url, adminUser));
+      logOperationStep(operationId, 'format_convert', 'running', {
+        message: `Converting to ${format}`,
+        metadata: { format, inputSize: buffer.length },
+      });
+      const output = await convertToFormat(
+        buffer,
+        path.extname(attachment.name || '').toLowerCase(),
+        format,
+        isVideo ? trim : {}
+      );
+      const baseName =
+        path.parse(attachment.name || 'file').name.replace(/[^\w.-]+/g, '_') || 'file';
+      await sendConvertedFile(
+        interaction,
+        {
+          ...ctx,
+          discordAttachmentLimit: getDiscordAttachmentLimit(interaction, DISCORD_SIZE_LIMIT),
+        },
+        { buffer: output, format, baseName }
+      );
+      logOperationStep(operationId, 'format_convert', 'success', {
+        message: `Converted to ${format}`,
+        metadata: { format, outputSize: output.length },
+      });
+      updateOperationStatus(operationId, 'success', { fileSize: output.length });
+      recordRateLimit(userId);
+      await notifyCommandSuccess('convert', { operationId, userId });
+    },
+    {
+      commandSource: 'slash',
+      skipDbInit: true,
+      errorFallback: 'an error occurred while converting the file.',
+      context: {
+        commandOptions: { format, ...trim },
+        ...(originalUrl ? { originalUrl } : {}),
+        attachment: {
+          name: attachment.name || null,
+          size: attachment.size || null,
+          contentType: attachment.contentType || null,
+          url: attachment.url || null,
+        },
+      },
+    }
+  );
 }
 
 async function processConversion(
@@ -1305,6 +1383,7 @@ export async function handleConvertCommand(interaction) {
   const rawUrl = interaction.options.getString('url');
   const url = firstUrlIn(rawUrl) ?? rawUrl;
   const quality = interaction.options.getString('quality');
+  const format = interaction.options.getString('format') || 'gif';
   const optimize = interaction.options.getBoolean('optimize') ?? false;
   const lossy = interaction.options.getNumber('lossy');
 
@@ -1525,6 +1604,19 @@ export async function handleConvertCommand(interaction) {
   } else if ((startTime !== null || endTime !== null) && attachmentType === 'image') {
     // Time parameters don't apply to images
     logger.info(`Time parameters provided for image conversion, ignoring them`);
+  }
+
+  if (format !== 'gif') {
+    await processFormatConversion(
+      interaction,
+      finalAttachment,
+      adminUser,
+      preDownloadedBuffer,
+      format,
+      { startTime: conversionStartTime, duration: conversionDuration },
+      url ? originalUrlForConversion : null
+    );
+    return;
   }
 
   await processConversion(

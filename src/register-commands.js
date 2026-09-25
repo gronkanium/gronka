@@ -1,5 +1,6 @@
 import { REST, Routes } from 'discord.js';
 import dotenv from 'dotenv';
+import { OUTPUT_FORMATS } from './utils/output-formats.js';
 
 // Load environment variables
 dotenv.config();
@@ -61,24 +62,34 @@ const commands = [
   },
   {
     name: 'convert',
-    description: 'convert a video or image to a gif',
+    description: 'convert a video or image to a gif, mp4, mp3 or other format',
     type: 1, // CHAT_INPUT type (slash command)
     options: [
       {
         name: 'file',
-        description: 'the video or image file to convert to a gif',
+        description: 'the video or image file to convert',
         type: 11, // ATTACHMENT type
         required: false,
       },
       {
         name: 'url',
-        description: 'url to a video or image to download and convert to a gif',
+        description: 'url to a video or image to download and convert',
         type: 3, // STRING type
         required: false,
       },
       {
+        name: 'format',
+        description: 'what to convert it to. default: gif',
+        type: 3, // STRING type
+        required: false,
+        choices: [
+          { name: 'GIF', value: 'gif' },
+          ...Object.entries(OUTPUT_FORMATS).map(([value, { label }]) => ({ name: label, value })),
+        ],
+      },
+      {
         name: 'quality',
-        description: 'gif quality preset (low, medium, high). default: medium',
+        description: 'gif quality preset (low, medium, high). default: medium. gif only',
         type: 3, // STRING type
         required: false,
         choices: [
@@ -185,6 +196,12 @@ const commands = [
         name: 'end',
         description: 'end time for video trimming, in seconds or as a timestamp (e.g. 90 or 1:30)',
         type: 3, // STRING type (accepts seconds or MM:SS / HH:MM:SS timestamps)
+        required: false,
+      },
+      {
+        name: 'mp3',
+        description: 'send just the audio as an mp3',
+        type: 5, // BOOLEAN type
         required: false,
       },
     ],

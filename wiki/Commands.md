@@ -16,7 +16,7 @@ every slash command is also available as a message (prefix) command. the default
 
 **usage:**
 
-- options go after the command as `key=value` pairs: `quality`, `optimize`, `lossy`, `start`/`start_time`, `end`/`end_time`
+- options go after the command as `key=value` pairs: `quality`, `optimize`, `lossy`, `start`, `end`
 - `^g convert` and `^g optimize` accept a url, an attachment on your message, or an attachment on the message you're replying to
 - a bare mention of the bot shows a compact prompt; `^g help` shows the full help embed with the current prefix, commands, and options
 - unknown prefix commands are ignored silently so gronka doesn't clash with other bots sharing the same prefix; unknown commands after an explicit mention get a short pointer to help
@@ -39,22 +39,23 @@ convert a video or image to gif.
 
 - `file` (attachment, optional) - the video or image file to convert
 - `url` (string, optional) - url to a video or image file to convert
+- `format` (choice, optional) - what to convert to: GIF (default), MP4 or WebM video, MP3, M4A, OGG, WAV or FLAC audio, or a PNG, JPG or WebP image. the input type is detected, never chosen. audio needs a video with sound, still images can only become images, and a gif can also become MP4 or WebM. `quality`, `optimize` and `lossy` only apply to gif output
 - `quality` (string, optional) - gif quality preset: `low`, `medium`, or `high` (default: `medium`)
 - `optimize` (boolean, optional) - optimize the gif after conversion to reduce file size
 - `lossy` (number, optional) - lossy compression level (0-100, default: 35)
-- `start_time` (string, optional) - start time for trimming video before conversion, as seconds (`90`, `12.5`) or a timestamp (`3:10`, `1:02:30`) (only applies to video inputs, ignored for images)
-- `end_time` (string, optional) - end time for trimming video before conversion, as seconds (`90`, `12.5`) or a timestamp (`3:10`, `1:02:30`) (only applies to video inputs, ignored for images)
+- `start` (string, optional) - start time for trimming video before conversion, as seconds (`90`, `12.5`) or a timestamp (`3:10`, `1:02:30`) (only applies to video inputs, ignored for images)
+- `end` (string, optional) - end time for trimming video before conversion, as seconds (`90`, `12.5`) or a timestamp (`3:10`, `1:02:30`) (only applies to video inputs, ignored for images)
 
 **usage:**
 
 - provide either a file attachment or a url (or both)
 - if both are provided, the file attachment takes precedence
 - the `optimize` flag applies lossy compression after conversion
-- **for videos**: time parameters (`start_time`, `end_time`) trim the video first, then convert to gif
-  - if only `start_time` is provided, conversion starts at that time and continues to end of video
-  - if only `end_time` is provided, conversion starts at beginning and ends at that time
+- **for videos**: time parameters (`start`, `end`) trim the video first, then convert to gif
+  - if only `start` is provided, conversion starts at that time and continues to end of video
+  - if only `end` is provided, conversion starts at beginning and ends at that time
   - if both are provided, conversion uses the specified range
-  - `end_time` must be greater than `start_time` if both are provided
+  - `end` must be greater than `start` if both are provided
 - **for images**: time parameters are ignored (images don't have a time dimension)
 
 **examples:**
@@ -63,9 +64,9 @@ convert a video or image to gif.
 /convert file:<attach video>
 /convert url:https://example.com/video.mp4
 /convert file:<attach image> optimize:true
-/convert url:https://example.com/video.mp4 start_time:30 end_time:60
-/convert url:https://example.com/video.mp4 start_time:1:30 end_time:3:10
-/convert file:<attach video> start_time:10
+/convert url:https://example.com/video.mp4 start:30 end:60
+/convert url:https://example.com/video.mp4 start:1:30 end:3:10
+/convert file:<attach video> start:10
 ```
 
 ### `/download`
@@ -75,34 +76,35 @@ download media from a social media url or direct url.
 **parameters:**
 
 - `url` (string, required) - url to download media from
-- `start_time` (string, optional) - start time for video trimming, as seconds (`90`, `12.5`) or a timestamp (`3:10`, `1:02:30`) (only applies to videos, ignored for images/gifs)
-- `end_time` (string, optional) - end time for video trimming, as seconds (`90`, `12.5`) or a timestamp (`3:10`, `1:02:30`) (only applies to videos, ignored for images/gifs)
+- `start` (string, optional) - start time for video trimming, as seconds (`90`, `12.5`) or a timestamp (`3:10`, `1:02:30`) (only applies to videos, ignored for images/gifs)
+- `end` (string, optional) - end time for video trimming, as seconds (`90`, `12.5`) or a timestamp (`3:10`, `1:02:30`) (only applies to videos, ignored for images/gifs)
+- `mp3` (boolean, optional) - send just the audio as an mp3 instead of the video. works with any source that has sound, and respects `start`/`end`
 
 **usage:**
 
 - works with social media platforms (twitter, tiktok, instagram, etc.) if cobalt is enabled
 - also works with direct media urls
 - embed-fixer mirror urls are rewritten to the canonical site before downloading: fxtwitter.com, fixupx.com, twittpr.com, pxtwitter.com, vxtwitter.com, fixvx.com, cunnyx.com, girlcockx.com, and stupidpenisx.com all map to twitter.com; fxbsky.app maps to bsky.app
-- youtube downloads are handled by yt-dlp and capped at 5 minutes for non-admin users; use `start_time`/`end_time` to grab a clip from a longer video (trimmed downloads bypass the duration cap)
+- youtube downloads are handled by yt-dlp and capped at 5 minutes for non-admin users; use `start`/`end` to grab a clip from a longer video (trimmed downloads bypass the duration cap)
 - age-restricted tiktok posts fall back from cobalt to yt-dlp, which needs a cookies file, see `YTDLP_COOKIES_PATH` in [[Configuration]]
 - downloads and stores the media without conversion
-- **for videos**: time parameters (`start_time`, `end_time`) trim the video before saving
-  - if only `start_time` is provided, video is trimmed from that time to the end
-  - if only `end_time` is provided, video is trimmed from beginning to that time
+- **for videos**: time parameters (`start`, `end`) trim the video before saving
+  - if only `start` is provided, video is trimmed from that time to the end
+  - if only `end` is provided, video is trimmed from beginning to that time
   - if both are provided, video is trimmed to the specified range
-  - `end_time` must be greater than `start_time` if both are provided
+  - `end` must be greater than `start` if both are provided
 - **for images/gifs**: time parameters are ignored (images/gifs don't have a time dimension)
 - use `/convert` afterwards if you want to convert to gif
-- **url-only mode**: when enabled from the webui settings page, `/download` replies with the direct media url from cobalt (e.g. video.twimg.com) instead of downloading and re-uploading the file. trim requests (`start_time`/`end_time`) and youtube urls (handled by yt-dlp) still use the normal download pipeline, as does any url where cobalt only offers a tunnel response
+- **url-only mode**: when enabled from the webui settings page, `/download` replies with the direct media url from cobalt (e.g. video.twimg.com) instead of downloading and re-uploading the file. trim requests (`start`/`end`) and youtube urls (handled by yt-dlp) still use the normal download pipeline, as does any url where cobalt only offers a tunnel response
 
 **examples:**
 
 ```
 /download url:https://twitter.com/user/status/123
 /download url:https://example.com/video.mp4
-/download url:https://example.com/video.mp4 start_time:30 end_time:60
-/download url:https://example.com/video.mp4 start_time:1:30 end_time:3:10
-/download url:https://example.com/video.mp4 start_time:10
+/download url:https://example.com/video.mp4 start:30 end:60
+/download url:https://example.com/video.mp4 start:1:30 end:3:10
+/download url:https://example.com/video.mp4 start:10
 ```
 
 ### `/optimize`
@@ -218,7 +220,7 @@ default file size limits:
 - images: 50mb maximum (configurable via `MAX_IMAGE_SIZE`)
 - gif optimization: 50mb maximum
 - gif duration: 30 seconds maximum (configurable via `MAX_GIF_DURATION`)
-- youtube downloads: 5 minutes maximum (trimmed downloads via `start_time`/`end_time` bypass this)
+- youtube downloads: 5 minutes maximum (trimmed downloads via `start`/`end` bypass this)
 
 admin users can bypass these limits.
 
@@ -230,5 +232,5 @@ common error messages and what they mean:
 - "file too large" - the file exceeds size limits
 - "unsupported format" - the file type isn't supported
 - "download failed" - the download couldn't complete (check url or cobalt status)
-- "video duration exceeds the maximum allowed (5 minutes)" - the video is over the youtube duration cap; use `start_time`/`end_time` to download a clip under the limit
+- "video duration exceeds the maximum allowed (5 minutes)" - the video is over the youtube duration cap; use `start`/`end` to download a clip under the limit
 - "conversion failed" - ffmpeg couldn't process the file

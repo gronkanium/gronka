@@ -222,6 +222,8 @@ export function getR2KeyFromHash(hash, fileType, extension) {
     return `images/${safeHash}${ext}`;
   } else if (fileType === 'archive') {
     return `archives/${safeHash}.zip`;
+  } else if (fileType === 'audio') {
+    return `audio/${safeHash}${ext}`;
   } else {
     throw new Error(`Unknown file type: ${fileType}`);
   }

@@ -254,6 +254,7 @@ if (!mocksSupported) {
     const { interaction, calls } = createFakeInteraction({ deferred: false, userId });
     interaction.options = {
       getString: name => (name === 'url' ? url : null),
+      getBoolean: () => null,
       getNumber: () => null,
     };
     return { interaction, calls };

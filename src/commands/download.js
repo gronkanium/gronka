@@ -81,7 +81,8 @@ import { recordProcessedUrl, trackR2UploadIfApplicable } from './shared/url-cach
 import { runMediaCommand } from './shared/run-media-command.js';
 import { replyIfRateLimited, resolveTimeOptions } from './shared/command-guards.js';
 import { r2Config } from '../utils/config.js';
-import { trimVideo, trimGif } from '../utils/video-processor.js';
+import { trimVideo, trimGif, convertToFormat } from '../utils/video-processor.js';
+import { sendConvertedFile } from './shared/send-converted.js';
 import {
   safeInteractionReply,
   safeInteractionEditReply,
@@ -277,7 +278,12 @@ export async function processDownload(
       // Skip URL cache if time parameters are provided (trimmed videos are different from untrimmed)
       // Also skip cache if cached result is not a video (e.g., if it was converted to GIF)
       const urlHash = hashUrl(url);
-      if (!galleryOptions.mediaUrls && startTime === null && duration === null) {
+      if (
+        !galleryOptions.mediaUrls &&
+        !galleryOptions.audioOnly &&
+        startTime === null &&
+        duration === null
+      ) {
         const processedUrl = await getProcessedUrl(urlHash);
         if (processedUrl) {
           // Only use cached URL if it's a video (download command expects video, not GIF/image)
@@ -809,6 +815,48 @@ export async function processDownload(
           throw error;
         }
         throw error;
+      }
+
+      if (galleryOptions.audioOnly) {
+        const source = Array.isArray(fileData)
+          ? fileData.find(
+              media =>
+                detectFileType(
+                  path.extname(media.filename).toLowerCase(),
+                  media.contentType,
+                  media.buffer
+                ) === 'video'
+            )
+          : fileData;
+        if (!source?.buffer || fileData?.archive) {
+          throw new ValidationError('there is no audio in that post to turn into an mp3.');
+        }
+        logOperationStep(operationId, 'audio_extract', 'running', {
+          message: 'Extracting audio as mp3',
+          metadata: { url },
+        });
+        // yt-dlp (and its fallback) already cut the requested section.
+        const trim = downloadMethod === 'ytdlp' ? {} : { startTime, duration };
+        const mp3 = await convertToFormat(
+          source.buffer,
+          path.extname(source.filename).toLowerCase() || '.mp4',
+          'mp3',
+          trim
+        );
+        const baseName = path.parse(source.filename).name.replace(/[^\w.-]+/g, '_') || 'audio';
+        await sendConvertedFile(
+          interaction,
+          { ...ctx, discordAttachmentLimit },
+          { buffer: mp3, format: 'mp3', baseName }
+        );
+        logOperationStep(operationId, 'audio_extract', 'success', {
+          message: 'mp3 delivered',
+          metadata: { url, fileSize: mp3.length },
+        });
+        updateOperationStatus(operationId, 'success', { fileSize: mp3.length });
+        recordRateLimit(userId);
+        await notifyCommandSuccess('download', { operationId, userId });
+        return;
       }
 
       if (fileData?.archive) {
@@ -1925,6 +1973,7 @@ export async function handleDownloadCommand(interaction) {
 
   const rawUrl = interaction.options.getString('url');
   const url = canonicalizeMirrorUrl(firstUrlIn(rawUrl) ?? rawUrl);
+  const audioOnly = interaction.options.getBoolean('mp3') === true;
 
   // Parse and validate start/end (accepts seconds or MM:SS / HH:MM:SS timestamps)
   const times = await resolveTimeOptions(interaction, { type: 'download' });
@@ -2090,5 +2139,5 @@ export async function handleDownloadCommand(interaction) {
   // Defer reply since downloading may take time
   await safeInteractionDeferReply(interaction);
 
-  await processDownload(interaction, url, 'slash', trimStartTime, trimDuration);
+  await processDownload(interaction, url, 'slash', trimStartTime, trimDuration, { audioOnly });
 }

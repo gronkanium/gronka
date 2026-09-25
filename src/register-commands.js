@@ -112,14 +112,14 @@ const commands = [
         max_value: 100,
       },
       {
-        name: 'start_time',
+        name: 'start',
         description:
           'start time for trimming, in seconds or as a timestamp (e.g. 90 or 1:30) (videos only)',
         type: 3, // STRING type (accepts seconds or MM:SS / HH:MM:SS timestamps)
         required: false,
       },
       {
-        name: 'end_time',
+        name: 'end',
         description:
           'end time for trimming, in seconds or as a timestamp (e.g. 90 or 1:30) (videos only)',
         type: 3, // STRING type (accepts seconds or MM:SS / HH:MM:SS timestamps)
@@ -175,14 +175,14 @@ const commands = [
         required: true,
       },
       {
-        name: 'start_time',
+        name: 'start',
         description:
           'start time for video trimming, in seconds or as a timestamp (e.g. 90 or 1:30)',
         type: 3, // STRING type (accepts seconds or MM:SS / HH:MM:SS timestamps)
         required: false,
       },
       {
-        name: 'end_time',
+        name: 'end',
         description: 'end time for video trimming, in seconds or as a timestamp (e.g. 90 or 1:30)',
         type: 3, // STRING type (accepts seconds or MM:SS / HH:MM:SS timestamps)
         required: false,

@@ -105,8 +105,8 @@ describe('parseArgTokens', () => {
     ]);
     assert.deepStrictEqual(options, {
       url: 'https://x.com/a',
-      start_time: '0:05',
-      end_time: '0:10',
+      start: '0:05',
+      end: '0:10',
       quality: 'high',
       lossy: '35',
       optimize: 'true',
@@ -122,7 +122,7 @@ describe('parseArgTokens', () => {
     const options = parseArgTokens(['https://youtube.com/watch?v=abc123', 'start=0:05']);
     assert.deepStrictEqual(options, {
       url: 'https://youtube.com/watch?v=abc123',
-      start_time: '0:05',
+      start: '0:05',
     });
   });
 
@@ -169,7 +169,7 @@ describe('handlePrefixMessage', () => {
     assert.strictEqual(calls.download.length, 1);
     const adapter = calls.download[0];
     assert.strictEqual(adapter.options.getString('url'), 'https://x.com/a');
-    assert.strictEqual(adapter.options.getString('start_time'), '0:05');
+    assert.strictEqual(adapter.options.getString('start'), '0:05');
     assert.strictEqual(adapter.isPrefixCommand, true);
   });
 

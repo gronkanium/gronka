@@ -13,7 +13,7 @@ const logger = createLogger('ytdlp');
 
 // Appended to every duration/size-cap rejection so users know there's a way around it
 // instead of just hitting a dead end.
-const TRIM_TIP = ' use the start_time/end_time options to grab a clip under the limit.';
+const TRIM_TIP = ' use the start and end options to grab a clip under the limit.';
 
 // Curated user-facing message for a video yt-dlp aborted (or we rejected) for exceeding the
 // size cap. Raw byte counts stay in the logs; users just get the MB ceiling.

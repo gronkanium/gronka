@@ -1926,14 +1926,14 @@ export async function handleDownloadCommand(interaction) {
   const rawUrl = interaction.options.getString('url');
   const url = canonicalizeMirrorUrl(firstUrlIn(rawUrl) ?? rawUrl);
 
-  // Parse and validate start_time/end_time (accepts seconds or MM:SS / HH:MM:SS timestamps)
+  // Parse and validate start/end (accepts seconds or MM:SS / HH:MM:SS timestamps)
   const times = await resolveTimeOptions(interaction, { type: 'download' });
   if (times === null) {
     return;
   }
   const { startTime, endTime } = times;
 
-  // Convert start_time/end_time to startTime/duration format for video trimming
+  // Convert start/end to startTime/duration format for video trimming
   // Only apply time parameters for videos (they will be ignored for images/gifs)
   let trimStartTime = null;
   let trimDuration = null;

@@ -21,7 +21,7 @@ how `/download` serves x/twitter videos.
 **notes:**
 
 - direct urls live only as long as the tweet does - a rehosted copy survives tweet deletion, a direct url does not. that's the trade-off `hybrid`/`always_url` make for the bandwidth savings.
-- requests with `start_time`/`end_time` always download (trimming needs the real file).
+- requests with `start`/`end` always download (trimming needs the real file).
 - this only applies to x/twitter: other services either don't expose usable direct urls (tiktok, youtube, reddit, bluesky are proxied) or expire them within hours (instagram).
 
 ### `twitter_direct_url_fallback`

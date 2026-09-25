@@ -18,10 +18,10 @@ const EMBED_COLOR = 0x5865f2; // same blurple as /info
 // Aliases for key=value option tokens -> slash option names, so "^convert start=0:05"
 // lands in the same option the slash handler reads via resolveTimeOptions
 const OPTION_ALIASES = {
-  start: 'start_time',
-  start_time: 'start_time',
-  end: 'end_time',
-  end_time: 'end_time',
+  start: 'start',
+  start_time: 'start',
+  end: 'end',
+  end_time: 'end',
   quality: 'quality',
   optimize: 'optimize',
   lossy: 'lossy',

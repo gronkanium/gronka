@@ -1308,7 +1308,7 @@ export async function handleConvertCommand(interaction) {
   const optimize = interaction.options.getBoolean('optimize') ?? false;
   const lossy = interaction.options.getNumber('lossy');
 
-  // Parse and validate start_time/end_time (accepts seconds or MM:SS / HH:MM:SS timestamps)
+  // Parse and validate start/end (accepts seconds or MM:SS / HH:MM:SS timestamps)
   const times = await resolveTimeOptions(interaction, { type: 'convert' });
   if (times === null) {
     return;
@@ -1503,7 +1503,7 @@ export async function handleConvertCommand(interaction) {
     await safeInteractionDeferReply(interaction);
   }
 
-  // Convert start_time/end_time to startTime/duration format
+  // Convert start/end to startTime/duration format
   // Only apply time parameters for videos, not images
   let conversionStartTime = null;
   let conversionDuration = null;

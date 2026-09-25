@@ -122,7 +122,7 @@ url-only mode makes `/download` reply with the direct media url from cobalt (e.g
 
 url-only mode automatically falls back to the normal download pipeline when:
 
-- the request includes trim parameters (`start_time`/`end_time`), which require a real download
+- the request includes trim parameters (`start`/`end`), which require a real download
 - the url is a youtube link handled by yt-dlp (no direct url to hand out)
 - cobalt only offers a tunnel response (tunnel urls are only reachable inside the docker network)
 

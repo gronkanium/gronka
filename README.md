@@ -13,7 +13,7 @@ a discord bot that downloads media from social platforms and direct urls, conver
 ## commands
 
 - `/download`, download a video/image from a social url (no conversion)
-- `/convert`, attach a file or paste a url and convert it to a gif (quality preset `low`/`medium`/`high`, optional `optimize`, optional `lossy` 0-100, and `start_time`/`end_time` trimming for videos)
+- `/convert`, attach a file or paste a url and convert it to a gif (quality preset `low`/`medium`/`high`, optional `optimize`, optional `lossy` 0-100, and `start`/`end` trimming for videos)
 - `/optimize`, shrink an existing gif with lossy compression (`lossy` 0-100, default 35)
 - `/stats`, storage and usage statistics
 - `/info`, system info, cache stats, and configuration

@@ -194,7 +194,7 @@ if (!mocksSupported) {
           const { ValidationError } = await import('../../src/utils/errors.js');
           throw new ValidationError(
             'video duration exceeds the maximum allowed (5 minutes).' +
-              ' use the start_time/end_time options to grab a clip under the limit.'
+              ' use the start and end options to grab a clip under the limit.'
           );
         }
         return {

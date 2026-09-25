@@ -44,9 +44,9 @@ export async function replyIfRateLimited(interaction, { type, action, commandSou
 }
 
 /**
- * Read and parse the start_time/end_time string options from a slash command interaction.
+ * Read and parse the start/end string options from a slash command interaction.
  * Values may be plain seconds ("90", "12.5") or timestamps ("3:10", "1:02:30"). On an invalid
- * value or an invalid range (end_time <= start_time), it records a failed operation, replies
+ * value or an invalid range (end <= start), it records a failed operation, replies
  * ephemerally, and returns null so the caller can return early.
  *
  * @param {import('discord.js').ChatInputCommandInteraction} interaction
@@ -73,8 +73,8 @@ export async function resolveTimeOptions(interaction, { type }) {
   const times = { startTime: null, endTime: null };
 
   for (const [optionName, key] of [
-    ['start_time', 'startTime'],
-    ['end_time', 'endTime'],
+    ['start', 'startTime'],
+    ['end', 'endTime'],
   ]) {
     const input = interaction.options.getString(optionName);
     if (input === null) continue;
@@ -92,9 +92,9 @@ export async function resolveTimeOptions(interaction, { type }) {
   const { startTime, endTime } = times;
   if (startTime !== null && endTime !== null && endTime <= startTime) {
     logger.warn(
-      `Invalid time range for user ${userId}: end_time (${endTime}) must be greater than start_time (${startTime})`
+      `Invalid time range for user ${userId}: end (${endTime}) must be after start (${startTime})`
     );
-    return failWith('end_time must be greater than start_time.', 'invalid_time_range', {
+    return failWith('the end time has to be after the start time.', 'invalid_time_range', {
       startTime,
       endTime,
     });

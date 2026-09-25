@@ -139,7 +139,7 @@ see `YTDLP_COOKIES_PATH` in [[Configuration]] for details.
 
 ### youtube video too long
 
-`/download` caps youtube videos at 5 minutes for non-admin users. to grab part of a longer video, pass `start_time`/`end_time`, trimmed downloads bypass the cap. admin users (via `ADMIN_USER_IDS`) are exempt.
+`/download` caps youtube videos at 5 minutes for non-admin users. to grab part of a longer video, pass `start`/`end`, trimmed downloads bypass the cap. admin users (via `ADMIN_USER_IDS`) are exempt.
 
 ### download timeout
 

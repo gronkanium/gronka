@@ -115,7 +115,7 @@ describe('download command parameter conversion', () => {
         if (endTime <= startTime) {
           return {
             valid: false,
-            error: 'end_time must be greater than start_time.',
+            error: 'the end time has to be after the start time.',
           };
         }
       }
@@ -125,13 +125,13 @@ describe('download command parameter conversion', () => {
     test('validates that end_time is greater than start_time', () => {
       const result = validateTimeParameters(2.5, 1.5);
       assert.strictEqual(result.valid, false);
-      assert.strictEqual(result.error, 'end_time must be greater than start_time.');
+      assert.strictEqual(result.error, 'the end time has to be after the start time.');
     });
 
     test('validates that end_time cannot equal start_time', () => {
       const result = validateTimeParameters(2.5, 2.5);
       assert.strictEqual(result.valid, false);
-      assert.strictEqual(result.error, 'end_time must be greater than start_time.');
+      assert.strictEqual(result.error, 'the end time has to be after the start time.');
     });
 
     test('allows valid time range', () => {

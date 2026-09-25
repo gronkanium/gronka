@@ -76,6 +76,7 @@ const customServices = [
   { id: 'pinterest', label: 'Pinterest', category: 'social', hosts: ['pinterest.com', 'pin.it'] },
   { id: 'klipy', label: 'Klipy', category: 'social', hosts: ['klipy.com'] },
   { id: 'giphy', label: 'Giphy', category: 'social', hosts: ['giphy.com'] },
+  { id: 'mega', label: 'Mega', category: 'video', hosts: ['mega.nz', 'mega.io'] },
   { id: 'hentaigifz', label: 'hentaigifz', category: 'adult', hosts: ['hentaigifz.com'] },
   { id: 'danbooru', label: 'Danbooru', category: 'booru', hosts: ['danbooru.donmai.us'] },
   { id: 'e621', label: 'e621 / e926', category: 'booru', hosts: ['e621.net', 'e926.net'] },

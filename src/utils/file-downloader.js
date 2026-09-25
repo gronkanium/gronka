@@ -10,6 +10,7 @@ import { isDiscordCdnUrl, getRefreshedAttachmentURL, getRequestHeaders } from '.
 import { sanitizeFilename } from './validation.js';
 import { hashBytesHex } from './hashing.js';
 import { isSsrfBlockedError, ssrfGuardedRequest } from './ssrf-guard.js';
+import { isMegaUrl, downloadFromMega } from './mega.js';
 
 const logger = createLogger('file-downloader');
 
@@ -35,6 +36,7 @@ const DIRECT_MEDIA_EXTENSIONS = new Set([
 ]);
 
 export function isDirectMediaUrl(url) {
+  if (isMegaUrl(url)) return true;
   try {
     const ext = path.extname(new URL(url).pathname).slice(1).toLowerCase();
     return DIRECT_MEDIA_EXTENSIONS.has(ext);
@@ -212,6 +214,10 @@ export async function downloadFileFromUrl(url, isAdminUser = false, client = nul
     } catch (error) {
       logger.warn(`Failed to refresh Discord URL, using original: ${error.message}`);
     }
+  }
+
+  if (isMegaUrl(actualUrl)) {
+    return downloadFromMega(actualUrl, isAdminUser, Math.max(MAX_VIDEO_SIZE, MAX_IMAGE_SIZE));
   }
 
   if (isInstagramStoryUrl(actualUrl) && hasInstagramSession()) {

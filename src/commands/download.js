@@ -29,6 +29,8 @@ import { isHentaiGifzUrl, downloadFromHentaiGifz } from '../utils/hentaigifz.js'
 import { isBooruUrl, downloadFromBooru, booruCdnUserAgent } from '../utils/booru.js';
 import { isPinterestUrl, downloadFromPinterest } from '../utils/pinterest.js';
 import { isKlipyUrl, downloadFromKlipy } from '../utils/klipy.js';
+import { keylessMegaFileId } from '../utils/mega.js';
+import { promptForMegaKey } from './mega-key.js';
 import {
   isInstagramPostUrl,
   isInstagramStoryUrl,
@@ -1870,6 +1872,12 @@ export async function handleDownloadContextMenuCommand(interaction) {
 
   url = canonicalizeMirrorUrl(url);
 
+  const megaFileId = keylessMegaFileId(url);
+  if (megaFileId) {
+    await promptForMegaKey(interaction, megaFileId, 'context-menu', null, null);
+    return;
+  }
+
   // Classify the URL: yt-dlp site (youtube/redgifs/imgur/...) or not
   const ytdlpSite = getYtdlpSite(url);
   const galleryDlSite = getGalleryDlSite(url);
@@ -2038,6 +2046,19 @@ export async function handleDownloadCommand(interaction) {
           });
       await reply;
     }
+    return;
+  }
+
+  const megaFileId = keylessMegaFileId(url);
+  if (megaFileId) {
+    await promptForMegaKey(
+      interaction,
+      megaFileId,
+      'slash',
+      trimStartTime,
+      trimDuration,
+      audioOnly
+    );
     return;
   }
 

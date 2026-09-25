@@ -18,6 +18,7 @@ import { handleConvertCommand, handleConvertContextMenu } from './commands/conve
 import { handleInfoCommand } from './commands/info.js';
 import { handleModalSubmit } from './handlers/modals.js';
 import { handleMangaInteraction } from './commands/manga.js';
+import { handleMegaKeyInteraction } from './commands/mega-key.js';
 import { handlePrefixMessage } from './handlers/prefix-commands.js';
 import { cleanupStuckOperations } from './utils/operations-tracker.js';
 import { initializeR2UsageCache, formatFileSize } from './utils/storage.js';
@@ -331,6 +332,9 @@ client.on(Events.InteractionCreate, async interaction => {
 
     if (interaction.isMessageComponent() || interaction.isModalSubmit()) {
       if (await handleMangaInteraction(interaction, processDownload)) {
+        return;
+      }
+      if (await handleMegaKeyInteraction(interaction, processDownload)) {
         return;
       }
       if (interaction.isModalSubmit()) {

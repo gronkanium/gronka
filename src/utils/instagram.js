@@ -35,9 +35,11 @@ const POST_PATH = /^(?:\/[^/]+)?\/(?:p|reel|reels|tv)\/([A-Za-z0-9_-]+)/;
 // locally, no extra lookup request just to turn a permalink into an api id.
 const SHORTCODE_ALPHABET = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_';
 
+// Must match the browser that holds the session (ig-session), or one sessionid shows two devices.
 const USER_AGENT =
-  'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) ' +
-  'Chrome/126.0.0.0 Safari/537.36';
+  'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) ' +
+  'Chrome/153.0.0.0 Safari/537.36';
+const SEC_CH_UA = '"Chromium";v="153", "Not_A Brand";v="8"';
 
 // /stories/<user>/<mediaId>, /stories/highlights/<id>, and the share sheet's /s/<base64 highlight:<id>>.
 const STORY_PATH = /^\/stories\/(?:highlights\/(\d+)|[^/]+\/(\d+))/;
@@ -179,6 +181,9 @@ async function instagramGet(apiPath, refererPath, cookie, unavailable = 'post') 
       maxRedirects: 0,
       headers: {
         'User-Agent': USER_AGENT,
+        'Sec-CH-UA': SEC_CH_UA,
+        'Sec-CH-UA-Mobile': '?0',
+        'Sec-CH-UA-Platform': '"Linux"',
         'X-IG-App-ID': APP_ID,
         Accept: '*/*',
         'Accept-Language': 'en-US,en;q=0.9',

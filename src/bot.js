@@ -1,8 +1,8 @@
 import { Client, GatewayIntentBits, Partials, Events, ActivityType } from 'discord.js';
-import { scryptSync, randomBytes, timingSafeEqual } from 'crypto';
 import express from 'express';
 import rateLimit from 'express-rate-limit';
 import { createLogger } from './utils/logger.js';
+import { basicAuth } from './utils/basic-auth.js';
 import { botConfig, serverConfig } from './utils/config.js';
 import { ConfigurationError } from './utils/errors.js';
 import { trackUser, initializeUserTracking } from './utils/user-tracking.js';
@@ -45,12 +45,7 @@ const {
   cdnBaseUrl: CDN_BASE_URL,
 } = botConfig;
 
-const {
-  serverPort: SERVER_PORT,
-  serverHost: SERVER_HOST,
-  statsUsername: STATS_USERNAME,
-  statsPassword: STATS_PASSWORD,
-} = serverConfig;
+const { serverPort: SERVER_PORT, serverHost: SERVER_HOST } = serverConfig;
 
 // Store attachment info for modal submissions: customId -> { attachment, attachmentType, adminUser, preDownloadedBuffer }
 const modalAttachmentCache = new Map();
@@ -84,59 +79,12 @@ let retentionJobIntervalId = null;
 // HTTP server for stats endpoint (minimal, only for Jekyll stats site)
 let httpServer = null;
 
-// Per-process random salt for safeCompare; both sides use the same salt so equal
-// inputs still produce equal digests within this process.
-const SAFE_COMPARE_SALT = randomBytes(16);
-
-/**
- * Constant-time string comparison to prevent timing attacks on credentials.
- * Deriving both sides through scrypt equalizes lengths so timingSafeEqual can be
- * used, and keeps the derivation cost high enough for password inputs (CWE-916).
- */
-function safeCompare(a, b) {
-  const hashA = scryptSync(String(a), SAFE_COMPARE_SALT, 32);
-  const hashB = scryptSync(String(b), SAFE_COMPARE_SALT, 32);
-  return timingSafeEqual(hashA, hashB);
-}
-
-/**
- * Basic authentication middleware for stats endpoint
- */
-function basicAuth(req, res, next) {
-  if (!STATS_USERNAME || !STATS_PASSWORD) {
-    // No auth configured, allow access
-    return next();
-  }
-
-  const authHeader = req.headers.authorization;
-
-  if (!authHeader || !authHeader.startsWith('Basic ')) {
-    res.set('WWW-Authenticate', 'Basic realm="Stats API"');
-    return res.status(401).json({ error: 'authentication required' });
-  }
-
-  const credentials = Buffer.from(authHeader.substring(6), 'base64').toString('utf-8');
-  const separatorIndex = credentials.indexOf(':');
-  const username = separatorIndex === -1 ? credentials : credentials.slice(0, separatorIndex);
-  const password = separatorIndex === -1 ? '' : credentials.slice(separatorIndex + 1);
-
-  if (safeCompare(username, STATS_USERNAME) && safeCompare(password, STATS_PASSWORD)) {
-    return next();
-  }
-
-  res.set('WWW-Authenticate', 'Basic realm="Stats API"');
-  return res.status(401).json({ error: 'invalid credentials' });
-}
-
 /**
  * Start minimal HTTP server for stats endpoint
  * Only serves /api/stats/24h for Jekyll stats site integration
  */
 function startStatsServer() {
   const app = express();
-
-  // Trust proxy for proper IP detection
-  app.set('trust proxy', 1);
 
   // Rate limit all stats server routes - they perform authorization and database work
   app.use(

@@ -26,7 +26,7 @@ get 24-hour activity statistics for jekyll site footer.
 
 **authentication:**
 
-if `STATS_USERNAME` and `STATS_PASSWORD` are configured, basic auth is required. this endpoint is publicly accessible (not restricted to internal network).
+basic auth with `STATS_USERNAME` and `STATS_PASSWORD`. requests from loopback (the processes inside the container) skip it; any other client is refused with 403 until both are set.
 
 **purpose:**
 
@@ -86,7 +86,7 @@ curl -v -u admin:password http://localhost:3000/api/stats/24h
 
 ## webui endpoints
 
-the webui dashboard (port 3001) has its own api used by the dashboard interface:
+the webui dashboard (port 3001) has its own api used by the dashboard interface. the whole dashboard, pages and api, sits behind the same `STATS_USERNAME` / `STATS_PASSWORD` basic auth as the stats server; your browser prompts for it once.
 
 **health and stats:**
 
@@ -134,7 +134,7 @@ files smaller than 8mb are uploaded as discord attachments and served directly f
 when exposing the stats endpoint publicly:
 
 - use a reverse proxy (nginx, caddy, etc.)
-- enable authentication with `STATS_USERNAME` and `STATS_PASSWORD`
+- set `STATS_USERNAME` and `STATS_PASSWORD` (without them, only loopback is served)
 - use https (via reverse proxy)
 - consider additional rate limiting at the reverse proxy level
 

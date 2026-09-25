@@ -24,12 +24,6 @@ router.post('/api/bot/status', express.json(), async (req, res) => {
   }
 
   const headers = { 'Content-Type': 'application/json' };
-  if (serverConfig.statsUsername && serverConfig.statsPassword) {
-    const credentials = Buffer.from(
-      `${serverConfig.statsUsername}:${serverConfig.statsPassword}`
-    ).toString('base64');
-    headers['Authorization'] = `Basic ${credentials}`;
-  }
 
   const url = `http://127.0.0.1:${serverConfig.serverPort}/api/bot/status`;
 
@@ -56,18 +50,10 @@ router.post('/api/bot/status', express.json(), async (req, res) => {
 });
 
 router.get('/api/bot/status', async (req, res) => {
-  const headers = {};
-  if (serverConfig.statsUsername && serverConfig.statsPassword) {
-    const credentials = Buffer.from(
-      `${serverConfig.statsUsername}:${serverConfig.statsPassword}`
-    ).toString('base64');
-    headers['Authorization'] = `Basic ${credentials}`;
-  }
-
   const url = `http://127.0.0.1:${serverConfig.serverPort}/api/bot/status`;
 
   try {
-    const response = await fetch(url, { headers });
+    const response = await fetch(url);
     const data = await response.json().catch(() => ({}));
 
     if (!response.ok) {

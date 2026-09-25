@@ -49,61 +49,51 @@ if echo "$STAGED_FILES" | grep -qE "^(package\.json|bun\.lock)$"; then
   PACKAGE_FILES_STAGED=true
 fi
 
-# Filter staged files for ESLint (JavaScript/TypeScript only, excluding .svelte)
-JS_FILES=$(echo "$STAGED_FILES" | grep -E '\.(js|jsx|ts|tsx|cjs|mjs)$' || true)
-
-# Filter staged files for Prettier (common supported formats)
-PRETTIER_FILES=$(echo "$STAGED_FILES" | grep -E '\.(js|jsx|ts|tsx|cjs|mjs|json|css|scss|html|md|yml|yaml|svelte)$' || true)
-
 # Run check:sync only if package files are staged
 if [ "$PACKAGE_FILES_STAGED" = true ]; then
   bun run check:sync
 fi
 
-# Run ESLint only if there are JavaScript/TypeScript files staged
-if [ -n "$JS_FILES" ]; then
-  # Convert newline-separated list to space-separated and run eslint
-  JS_FILE_ARGS=$(echo "$JS_FILES" | tr '\n' ' ')
-  echo "Running ESLint with auto-fix on staged files..."
-  if [ -x "./node_modules/.bin/eslint" ]; then
-    # Try to auto-fix issues first
-    ./node_modules/.bin/eslint --fix $JS_FILE_ARGS || true
-    # Then check for remaining issues (fail only on unfixable errors)
-    ./node_modules/.bin/eslint --max-warnings=0 $JS_FILE_ARGS
+# Partially staged files are only checked: fixing and re-adding them would stage their unstaged hunks too.
+FULLY_STAGED=""
+PARTIAL=""
+for file in $STAGED_FILES; do
+  if git diff --quiet -- "$file" 2>/dev/null; then
+    FULLY_STAGED="$FULLY_STAGED $file"
   else
-    # Try to auto-fix issues first
-    bunx eslint --fix $JS_FILE_ARGS || true
-    # Then check for remaining issues (fail only on unfixable errors)
-    bunx eslint --max-warnings=0 $JS_FILE_ARGS
+    PARTIAL="$PARTIAL $file"
   fi
-  # Stage any files that were auto-fixed (check for unstaged changes)
-  echo "$JS_FILES" | while read -r file; do
-    if [ -n "$file" ] && ! git diff --quiet "$file" 2>/dev/null; then
-      # File has unstaged changes (was modified by eslint --fix), stage it
-      git add "$file" 2>/dev/null || true
-    fi
-  done
-else
-  echo "No JavaScript/TypeScript files staged, skipping lint"
-fi
+done
+pick() { echo "$1" | tr ' ' '\n' | grep -E "$2" | tr '\n' ' ' || true; }
+JS_RE='\.(js|jsx|ts|tsx|cjs|mjs)$'
+PRETTIER_RE='\.(js|jsx|ts|tsx|cjs|mjs|json|css|scss|html|md|yml|yaml|svelte)$'
+JS_FIX=$(pick "$FULLY_STAGED" "$JS_RE")
+JS_CHECK=$(pick "$PARTIAL" "$JS_RE")
+PRETTIER_FIX=$(pick "$FULLY_STAGED" "$PRETTIER_RE")
+PRETTIER_CHECK=$(pick "$PARTIAL" "$PRETTIER_RE")
 
-# Run Prettier auto-fix only if there are prettier-supported files staged
-if [ -n "$PRETTIER_FILES" ]; then
-  # Convert newline-separated list to space-separated and run prettier
-  PRETTIER_FILE_ARGS=$(echo "$PRETTIER_FILES" | tr '\n' ' ')
-  echo "Running Prettier to auto-format staged files..."
-  if [ -x "./node_modules/.bin/prettier" ]; then
-    ./node_modules/.bin/prettier --write $PRETTIER_FILE_ARGS
-  else
-    bunx prettier --write $PRETTIER_FILE_ARGS
-  fi
-  # Stage the formatted files
-  echo "$PRETTIER_FILES" | while read -r file; do
-    if [ -n "$file" ]; then
-      git add "$file" 2>/dev/null || true
-    fi
-  done
-  echo "Prettier formatting complete. Formatted files have been staged."
-else
-  echo "No prettier-supported files staged, skipping format check"
+ESLINT=./node_modules/.bin/eslint
+[ -x "$ESLINT" ] || ESLINT="bunx eslint"
+PRETTIER=./node_modules/.bin/prettier
+[ -x "$PRETTIER" ] || PRETTIER="bunx prettier"
+
+if [ -n "$(echo $JS_FIX)" ]; then
+  echo "Running ESLint with auto-fix on staged files..."
+  $ESLINT --fix $JS_FIX || true
+  $ESLINT --max-warnings=0 $JS_FIX
 fi
+if [ -n "$(echo $JS_CHECK)" ]; then
+  echo "Running ESLint (check only) on partially staged files..."
+  $ESLINT --max-warnings=0 $JS_CHECK
+fi
+if [ -n "$(echo $PRETTIER_FIX)" ]; then
+  echo "Running Prettier to auto-format staged files..."
+  $PRETTIER --write $PRETTIER_FIX
+fi
+if [ -n "$(echo $PRETTIER_CHECK)" ]; then
+  echo "Running Prettier (check only) on partially staged files..."
+  $PRETTIER --check $PRETTIER_CHECK
+fi
+for file in $JS_FIX $PRETTIER_FIX; do
+  git add "$file" 2>/dev/null || true
+done

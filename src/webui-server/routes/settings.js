@@ -2,6 +2,7 @@ import express from 'express';
 import { createLogger } from '../../utils/logger.js';
 import { getAllSettings, setSetting } from '../../utils/database.js';
 import { parseTiers } from '../../utils/upload-tiers.js';
+import { WEBUI_LOGIN_MODES } from '../../utils/basic-auth.js';
 import { DOWNLOAD_SERVICES, DOWNLOAD_SERVICE_IDS } from '../../utils/download-services.js';
 
 const MB = 1024 * 1024;
@@ -34,6 +35,13 @@ const KNOWN_SETTINGS = {
     default: 'false',
     description:
       'Apply the temporary-upload TTL cleanup to admin R2 uploads too (off = admin uploads are permanent)',
+  },
+  webui_login: {
+    type: 'select',
+    default: 'everyone',
+    options: WEBUI_LOGIN_MODES,
+    description:
+      'Who has to log in to this dashboard. everyone: always ask. new devices only: log in once per browser, remembered for about a year (changing the password forgets them all). skip on lan: no login from the local network, including other containers on this box',
   },
   maintenance_mode: {
     type: 'boolean',

@@ -47,7 +47,13 @@
       id: 'access',
       label: 'access',
       icon: ShieldCheck,
-      keys: ['maintenance_mode', 'moderation_enabled', 'rate_limit_cooldown', 'admin_user_ids'],
+      keys: [
+        'webui_login',
+        'maintenance_mode',
+        'moderation_enabled',
+        'rate_limit_cooldown',
+        'admin_user_ids',
+      ],
     },
     {
       id: 'notifications',

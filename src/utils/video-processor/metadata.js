@@ -1,5 +1,6 @@
 import { spawn } from 'child_process';
 import { createLogger } from '../logger.js';
+import { FFMPEG_INPUT_GUARD } from './utils.js';
 
 const logger = createLogger('video-metadata');
 
@@ -23,6 +24,7 @@ const FFPROBE_TIMEOUT_MS = 30000;
 export async function getVideoMetadata(inputPath) {
   return new Promise((resolve, reject) => {
     const args = [
+      ...FFMPEG_INPUT_GUARD,
       '-v',
       'error',
       '-print_format',

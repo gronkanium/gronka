@@ -2,7 +2,7 @@ import ffmpeg from 'fluent-ffmpeg';
 import fs from 'fs/promises';
 import path from 'path';
 import { createLogger } from '../logger.js';
-import { validateNumericParameter, checkFFmpegInstalled } from './utils.js';
+import { validateNumericParameter, checkFFmpegInstalled, FFMPEG_INPUT_GUARD } from './utils.js';
 
 const logger = createLogger('trim-gif');
 
@@ -61,7 +61,7 @@ export async function trimGif(inputPath, outputPath, options = {}) {
   await fs.mkdir(outputDir, { recursive: true });
 
   return new Promise((resolve, reject) => {
-    const ffmpegCommand = ffmpeg(inputPath);
+    const ffmpegCommand = ffmpeg(inputPath).inputOptions(FFMPEG_INPUT_GUARD);
 
     // For GIF trimming, we need to:
     // 1. Seek to start time (as input option for faster seeking)

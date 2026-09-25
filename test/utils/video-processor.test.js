@@ -1,6 +1,11 @@
 import { test, beforeAll, afterAll } from 'bun:test';
 import assert from 'node:assert';
-import { convertToGif, trimVideo, trimGif } from '../../src/utils/video-processor.js';
+import {
+  convertToGif,
+  trimVideo,
+  trimGif,
+  getVideoMetadata,
+} from '../../src/utils/video-processor.js';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { writeFileSync } from 'node:fs';
@@ -659,4 +664,12 @@ test('trimGif - validates minimum duration boundary', async () => {
   await assert.rejects(async () => await trimGif(inputPath, outputPath, { duration: 0.05 }), {
     message: /duration must be at least 0.1/,
   });
+});
+
+test('getVideoMetadata - refuses a playlist disguised as a video', async () => {
+  const target = path.join(testTempPath, 'target.mp4');
+  writeFileSync(target, 'x');
+  const playlist = path.join(testTempPath, 'playlist.mp4');
+  writeFileSync(playlist, `ffconcat version 1.0\nfile ${target}\n`);
+  await assert.rejects(getVideoMetadata(playlist), /not on whitelist/);
 });

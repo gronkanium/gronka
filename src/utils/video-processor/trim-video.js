@@ -2,7 +2,7 @@ import ffmpeg from 'fluent-ffmpeg';
 import fs from 'fs/promises';
 import path from 'path';
 import { createLogger } from '../logger.js';
-import { validateNumericParameter, checkFFmpegInstalled } from './utils.js';
+import { validateNumericParameter, checkFFmpegInstalled, FFMPEG_INPUT_GUARD } from './utils.js';
 
 const logger = createLogger('trim-video');
 
@@ -61,7 +61,7 @@ export async function trimVideo(inputPath, outputPath, options = {}) {
   await fs.mkdir(outputDir, { recursive: true });
 
   return new Promise((resolve, reject) => {
-    const ffmpegCommand = ffmpeg(inputPath);
+    const ffmpegCommand = ffmpeg(inputPath).inputOptions(FFMPEG_INPUT_GUARD);
 
     // For accurate trimming, we need to re-encode instead of using -c copy
     // Stream copy (-c copy) can only cut at keyframes, which can cause:

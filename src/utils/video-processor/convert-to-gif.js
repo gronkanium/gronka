@@ -6,6 +6,7 @@ import {
   validateNumericParameter,
   checkFFmpegInstalled,
   colorspaceRepairInputOptions,
+  FFMPEG_INPUT_GUARD,
 } from './utils.js';
 import { getVideoMetadata } from './metadata.js';
 import { mediaSlots } from '../concurrency.js';
@@ -159,6 +160,7 @@ async function convertToGifImpl(inputPath, outputPath, options = {}) {
     activeCommand = ffmpeg(inputPath)
       .inputOptions(
         [
+          ...FFMPEG_INPUT_GUARD,
           ...colorspaceRepair,
           startTime !== null ? `-ss ${startTime}` : null,
           duration !== null ? `-t ${duration}` : null,
@@ -179,6 +181,7 @@ async function convertToGifImpl(inputPath, outputPath, options = {}) {
         activeCommand = ffmpeg(inputPath)
           .inputOptions(
             [
+              ...FFMPEG_INPUT_GUARD,
               ...colorspaceRepair,
               startTime !== null ? `-ss ${startTime}` : null,
               duration !== null ? `-t ${duration}` : null,

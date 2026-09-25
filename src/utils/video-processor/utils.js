@@ -3,6 +3,14 @@ import { exec } from 'child_process';
 
 const execAsync = promisify(exec);
 
+// Untrusted input: without this, ffmpeg sniffs a text file as a concat/hls playlist and opens what it names.
+export const FFMPEG_INPUT_GUARD = [
+  '-protocol_whitelist',
+  'file',
+  '-format_whitelist',
+  'mov,matroska,avi,flv,mpegts,gif,apng,image2,png_pipe,jpeg_pipe,webp_pipe,bmp_pipe,gif_pipe',
+];
+
 /**
  * Validate numeric parameter to prevent command injection
  * @param {*} value - Value to validate

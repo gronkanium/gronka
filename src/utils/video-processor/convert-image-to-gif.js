@@ -2,7 +2,7 @@ import ffmpeg from 'fluent-ffmpeg';
 import fs from 'fs/promises';
 import path from 'path';
 import { createLogger } from '../logger.js';
-import { validateNumericParameter, checkFFmpegInstalled } from './utils.js';
+import { validateNumericParameter, checkFFmpegInstalled, FFMPEG_INPUT_GUARD } from './utils.js';
 import { mediaSlots } from '../concurrency.js';
 
 const logger = createLogger('convert-image-to-gif');
@@ -83,6 +83,7 @@ async function convertImageToGifImpl(inputPath, outputPath, options = {}) {
     // Two-pass conversion for better quality
     // Pass 1: Generate palette
     ffmpeg(inputPath)
+      .inputOptions(FFMPEG_INPUT_GUARD)
       .videoFilters([`scale=${width}:-1:flags=lanczos`, paletteGen])
       .outputOptions([
         '-y', // Overwrite output file
@@ -100,6 +101,7 @@ async function convertImageToGifImpl(inputPath, outputPath, options = {}) {
         // Pass 2: Apply palette and create GIF
         // Use complex filter because we have two inputs (image + palette)
         ffmpeg(inputPath)
+          .inputOptions(FFMPEG_INPUT_GUARD)
           .input(palettePath)
           .complexFilter([
             `[0:v]scale=${width}:-1:flags=lanczos[v]`,

@@ -5,6 +5,25 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres (attempts) to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.2.0](https://github.com/thedorekaczynski/gronka/compare/v1.1.0...v1.2.0) (2026-09-25)
+
+
+### Features
+
+* add output formats to /convert and an mp3 option to /download ([0f667d8](https://github.com/thedorekaczynski/gronka/commit/0f667d87a2f117dbc54ec13795772250ca34f787))
+* **download:** download mega.nz files and ask for the key when a link has none ([73c8659](https://github.com/thedorekaczynski/gronka/commit/73c8659e58b249896795be056a1c3623dc05c4ab))
+* **download:** support giphy pages and more embed-fixer mirror domains ([da66fa7](https://github.com/thedorekaczynski/gronka/commit/da66fa7a748f5c5bfd9ff9c64b9f828fa5743513))
+* rename the start_time and end_time options to start and end ([342176c](https://github.com/thedorekaczynski/gronka/commit/342176c3039ee3fc1e5f9f5d833f1efaeb7a8977))
+* **webui:** add a login mode setting (everyone, new devices only, skip on lan) ([96193d1](https://github.com/thedorekaczynski/gronka/commit/96193d1aa05903528fe4c65450ddf25b48a67004))
+
+
+### Bug Fixes
+
+* **convert:** restrict ffmpeg inputs to media demuxers and local files ([2fba2ce](https://github.com/thedorekaczynski/gronka/commit/2fba2ce8590e89af988148a2986b3c33edcf99ab))
+* **docker:** bind postgres and cobalt to localhost and run the app as non-root ([d43aa29](https://github.com/thedorekaczynski/gronka/commit/d43aa294ba011c438ff3fda6bc9358e3956b58d4))
+* **instagram:** send the same browser identity as the session's owning browser ([63577bb](https://github.com/thedorekaczynski/gronka/commit/63577bb55879dad9864cb89ed6655fdb66a6206c))
+* **webui:** require basic auth on the dashboard and api ([5e65864](https://github.com/thedorekaczynski/gronka/commit/5e65864f3aa3db2f41026f7c137c740382ec6c98))
+
 ## [1.1.0](https://github.com/thedorekaczynski/gronka/compare/v1.0.0...v1.1.0) (2026-09-20)
 
 

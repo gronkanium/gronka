@@ -166,6 +166,15 @@ describe('cobalt utilities', () => {
           'https://tiktok.com/@u/video/7678109247363730706',
         ],
         ['https://tfxktok.com/@u/video/123', 'https://tiktok.com/@u/video/123'],
+        [
+          'https://www.vxinstagram.com/reel/DdrMVSqvK_G/',
+          'https://instagram.com/reel/DdrMVSqvK_G/',
+        ],
+        ['https://zzinstagram.com/reels/DdhWMc7P1tz/', 'https://instagram.com/reels/DdhWMc7P1tz/'],
+        [
+          'https://chudx.com/u/status/2102217204704186400',
+          'https://twitter.com/u/status/2102217204704186400',
+        ],
       ];
       for (const [input, expected] of cases) {
         assert.strictEqual(canonicalizeMirrorUrl(input), expected);
@@ -196,6 +205,22 @@ describe('cobalt utilities', () => {
       ];
       for (const input of untouched) {
         assert.strictEqual(canonicalizeMirrorUrl(input), input);
+      }
+    });
+
+    test('maps giphy pages to their gif and leaves other giphy links alone', () => {
+      const cases = [
+        [
+          'https://giphy.com/gifs/cat-working-JIX9t2j0ZTN9S',
+          'https://i.giphy.com/JIX9t2j0ZTN9S.gif',
+        ],
+        ['https://www.giphy.com/gifs/JIX9t2j0ZTN9S', 'https://i.giphy.com/JIX9t2j0ZTN9S.gif'],
+        ['https://giphy.com/stickers/wave-hi-abc123XYZ/', 'https://i.giphy.com/abc123XYZ.gif'],
+        ['https://giphy.com/explore/cat', 'https://giphy.com/explore/cat'],
+        ['https://giphy.com.evil.example/gifs/x-abc', 'https://giphy.com.evil.example/gifs/x-abc'],
+      ];
+      for (const [input, expected] of cases) {
+        assert.strictEqual(canonicalizeMirrorUrl(input), expected);
       }
     });
 

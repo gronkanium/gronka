@@ -204,21 +204,36 @@ const EMBED_FIXER_HOSTS = new Map([
   ['cunnyx.com', 'twitter.com'],
   ['girlcockx.com', 'twitter.com'],
   ['stupidpenisx.com', 'twitter.com'],
+  ['chudx.com', 'twitter.com'],
   // FxEmbed for Bluesky
   ['fxbsky.app', 'bsky.app'],
+  ['bskx.app', 'bsky.app'],
   // ddinstagram.com omitted: no longer resolves.
   ['kkinstagram.com', 'instagram.com'],
   ['eeinstagram.com', 'instagram.com'],
+  ['vxinstagram.com', 'instagram.com'],
+  ['zzinstagram.com', 'instagram.com'],
+  ['uuinstagram.com', 'instagram.com'],
   ['rxddit.com', 'reddit.com'],
   ['vxreddit.com', 'reddit.com'],
   ['tnktok.com', 'tiktok.com'],
   ['tfxktok.com', 'tiktok.com'],
+  ['vxtiktok.com', 'tiktok.com'],
 ]);
+
+const GIPHY_PAGE_PATH = /^\/(?:gifs|stickers|embed)\/(?:[^/]*-)?([A-Za-z0-9]+)\/?$/;
 
 // Canonicalize before routing: the Instagram extractor matches canonical hosts only.
 export function canonicalizeMirrorUrl(url) {
   try {
     const urlObj = new URL(url);
+    // A giphy page's id maps straight to its gif, so it routes as a direct media link.
+    const giphyId = /^(www\.)?giphy\.com$/i.test(urlObj.hostname)
+      ? urlObj.pathname.match(GIPHY_PAGE_PATH)?.[1]
+      : null;
+    if (giphyId) {
+      return `https://i.giphy.com/${giphyId}.gif`;
+    }
     const canonicalHost = EMBED_FIXER_HOSTS.get(
       urlObj.hostname.toLowerCase().replace(/^www\./, '')
     );

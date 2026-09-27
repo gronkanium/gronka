@@ -244,8 +244,6 @@ export function isOwnCdnUrl(url) {
 export const serverConfig = {
   serverPort: parseIntEnv('SERVER_PORT', 3000, 1, 65535),
   serverHost: getStringEnv('SERVER_HOST', '0.0.0.0'),
-  statsUsername: getStringEnv('STATS_USERNAME', null),
-  statsPassword: getStringEnv('STATS_PASSWORD', null),
 };
 
 // WebUI configuration

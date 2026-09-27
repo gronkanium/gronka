@@ -2,7 +2,6 @@ import { Client, GatewayIntentBits, Partials, Events, ActivityType } from 'disco
 import express from 'express';
 import rateLimit from 'express-rate-limit';
 import { createLogger } from './utils/logger.js';
-import { basicAuth } from './utils/basic-auth.js';
 import { botConfig, serverConfig } from './utils/config.js';
 import { ConfigurationError } from './utils/errors.js';
 import { trackUser, initializeUserTracking } from './utils/user-tracking.js';
@@ -87,7 +86,7 @@ let httpServer = null;
 function startStatsServer() {
   const app = express();
 
-  // Rate limit all stats server routes - they perform authorization and database work
+  // Rate limit all stats server routes because they perform database work
   app.use(
     rateLimit({
       windowMs: 15 * 60 * 1000, // 15 minutes
@@ -107,9 +106,8 @@ function startStatsServer() {
     next();
   });
 
-  // Bot status update endpoint (protected with basic auth)
   // Used by npm run bot:status script to update presence without creating a new Discord connection
-  app.post('/api/bot/status', basicAuth, async (req, res) => {
+  app.post('/api/bot/status', async (req, res) => {
     try {
       const { status, activity } = req.body;
 
@@ -150,7 +148,7 @@ function startStatsServer() {
     }
   });
 
-  app.get('/api/bot/status', basicAuth, (req, res) => {
+  app.get('/api/bot/status', (req, res) => {
     if (!client.isReady()) {
       return res.status(503).json({ error: 'bot is not ready' });
     }
@@ -169,8 +167,8 @@ function startStatsServer() {
     });
   });
 
-  // 24-hour stats endpoint for Jekyll site (protected with basic auth)
-  app.get('/api/stats/24h', basicAuth, async (req, res) => {
+  // 24-hour stats endpoint for Jekyll site
+  app.get('/api/stats/24h', async (req, res) => {
     try {
       logger.debug('24-hour stats API requested');
 

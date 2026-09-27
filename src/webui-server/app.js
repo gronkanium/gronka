@@ -3,7 +3,6 @@ import path from 'path';
 import rateLimit from 'express-rate-limit';
 import { createLogger } from '../utils/logger.js';
 import { securityHeaders } from './middleware/security.js';
-import { basicAuth } from '../utils/basic-auth.js';
 import { staticMiddleware, publicPath } from './middleware/static.js';
 import proxyRoutes from './routes/proxy.js';
 import operationsRoutes, { setSseClients } from './routes/operations.js';
@@ -42,7 +41,6 @@ export function createApp(sseClients) {
 
   // Security headers middleware
   app.use(securityHeaders);
-  app.use(basicAuth);
 
   // Serve static files
   app.use(staticMiddleware);

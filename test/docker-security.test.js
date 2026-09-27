@@ -410,10 +410,7 @@ describe('docker security tests', () => {
       );
 
       if (hasExternalPort) {
-        console.warn(
-          'NOTE: webui service exposes port 3001 to all interfaces. ' +
-            'Ensure proper authentication is configured (STATS_USERNAME/STATS_PASSWORD).'
-        );
+        console.warn('NOTE: webui service exposes port 3001 to all interfaces.');
       }
     });
   });
@@ -489,11 +486,7 @@ describe('docker security tests', () => {
       const composeContent = await fs.readFile(composePath, 'utf-8');
 
       // Check for hardcoded secrets
-      const sensitivePatterns = [
-        /DISCORD_TOKEN=\w+/,
-        /R2_SECRET_ACCESS_KEY=\w+/,
-        /STATS_PASSWORD=\w+/,
-      ];
+      const sensitivePatterns = [/DISCORD_TOKEN=\w+/, /R2_SECRET_ACCESS_KEY=\w+/];
 
       const hardcodedSecrets = [];
       for (const pattern of sensitivePatterns) {
@@ -513,12 +506,7 @@ describe('docker security tests', () => {
     test('environment variables should use variable substitution', async () => {
       const composeContent = await fs.readFile(composePath, 'utf-8');
 
-      const sensitiveVars = [
-        'DISCORD_TOKEN',
-        'R2_SECRET_ACCESS_KEY',
-        'R2_ACCESS_KEY_ID',
-        'STATS_PASSWORD',
-      ];
+      const sensitiveVars = ['DISCORD_TOKEN', 'R2_SECRET_ACCESS_KEY', 'R2_ACCESS_KEY_ID'];
 
       const lines = composeContent.split('\n');
       const problematicLines = [];

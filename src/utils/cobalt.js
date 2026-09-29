@@ -445,6 +445,14 @@ async function callCobaltApi(apiUrl, url, retryCount = 0, maxRetries = 3) {
   }
 }
 
+// cobalt's tunnel answers 200 with no body when its own fetch fails (seen on Bluesky HLS).
+function nonEmpty(buffer) {
+  if (buffer.length === 0) {
+    throw new NetworkError('cobalt returned an empty file');
+  }
+  return buffer;
+}
+
 async function downloadPhoto(photoUrl, index, isAdminUser = false, maxSize = Infinity) {
   try {
     const response = await axios.get(photoUrl, {
@@ -461,7 +469,7 @@ async function downloadPhoto(photoUrl, index, isAdminUser = false, maxSize = Inf
       },
     });
 
-    const buffer = Buffer.from(response.data);
+    const buffer = nonEmpty(Buffer.from(response.data));
 
     // Validate buffer size (axios maxContentLength may not work if server doesn't send Content-Length header)
     if (!isAdminUser && buffer.length > maxSize) {
@@ -532,7 +540,7 @@ async function downloadVideo(videoUrl, index, isAdminUser = false, maxSize = Inf
       },
     });
 
-    const buffer = Buffer.from(response.data);
+    const buffer = nonEmpty(Buffer.from(response.data));
 
     // Validate buffer size (axios maxContentLength may not work if server doesn't send Content-Length header)
     if (!isAdminUser && buffer.length > maxSize) {
@@ -736,7 +744,7 @@ async function downloadFromCobalt(
       },
     });
 
-    const buffer = Buffer.from(response.data);
+    const buffer = nonEmpty(Buffer.from(response.data));
 
     // Validate buffer size (axios maxContentLength may not work if server doesn't send Content-Length header)
     if (!isAdminUser && buffer.length > maxSize) {

@@ -89,18 +89,34 @@ function loadTurnstile() {
 
 export const warmTurnstile = () => loadTurnstile().catch(() => {});
 
-// Tokens are single use, so every request renders a fresh invisible widget.
-// The widget renders invisibly; the dialog only opens if cloudflare asks the visitor to click.
+// Tokens are single use, so every request renders a fresh invisible widget. It lives in an always-rendered
+// spot (never inside a hidden element: Turnstile, Safari especially, fails there) and takes no room unless
+// cloudflare wants a click; only then does the prompt around it show.
 let tsDialog;
 function turnstileDialog() {
   if (tsDialog) return tsDialog;
-  tsDialog = document.createElement('dialog');
-  tsDialog.className = 'ts-ask ink';
+  tsDialog = document.createElement('div');
+  tsDialog.className = 'ts-ask';
   tsDialog.setAttribute('aria-labelledby', 'ts-title');
-  tsDialog.innerHTML = `<h2 id="ts-title">quick check.</h2>
-    <p class="note">cloudflare wants to check you're a person. tick the box to close this.</p>
+  tsDialog.innerHTML = `<div class="ts-say" hidden><h2 id="ts-title" tabindex="-1">quick check.</h2>
+    <p class="note">cloudflare wants to check you're a person. tick the box to close this.</p></div>
     <div class="ts-box"></div>`;
-  tsDialog.addEventListener('cancel', event => event.preventDefault());
+  tsDialog.open = false;
+  tsDialog.showModal = () => {
+    tsDialog.open = true;
+    tsDialog.classList.add('asking', 'ink');
+    tsDialog.setAttribute('role', 'dialog');
+    tsDialog.setAttribute('aria-modal', 'true');
+    tsDialog.querySelector('.ts-say').hidden = false;
+    tsDialog.querySelector('h2').focus();
+  };
+  tsDialog.close = () => {
+    tsDialog.open = false;
+    tsDialog.classList.remove('asking', 'ink');
+    tsDialog.removeAttribute('role');
+    tsDialog.removeAttribute('aria-modal');
+    tsDialog.querySelector('.ts-say').hidden = true;
+  };
   document.body.append(tsDialog);
   return tsDialog;
 }

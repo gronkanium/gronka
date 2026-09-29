@@ -221,8 +221,9 @@ function signedOut() {
         ${passkeys ? `<p class="or">or</p><button type="button" class="btn line" id="pk">${icon('passkey')}log in with a passkey</button>` : ''}
         <div id="login-msg"></div></form>
     </div>`);
-  view.addEventListener('focusin', warmTurnstile, { once: true });
-  view.addEventListener('pointerdown', warmTurnstile, { once: true });
+  const warm = () => (warmTurnstile('account'), warmTurnstile('login'));
+  view.addEventListener('focusin', warm, { once: true });
+  view.addEventListener('pointerdown', warm, { once: true });
   on('#create', event =>
     busy(event.currentTarget, async () => {
       try {

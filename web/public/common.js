@@ -87,89 +87,90 @@ function loadTurnstile() {
   return loader;
 }
 
-export const warmTurnstile = () => loadTurnstile().catch(() => {});
-
-// Tokens are single use, so every request renders a fresh invisible widget. It lives in an always-rendered
-// spot (never inside a hidden element: Turnstile, Safari especially, fails there) and takes no room unless
-// cloudflare wants a click; only then does the prompt around it show.
-let tsDialog;
-function turnstileDialog() {
-  if (tsDialog) return tsDialog;
-  tsDialog = document.createElement('div');
-  tsDialog.className = 'ts-ask';
-  tsDialog.setAttribute('aria-labelledby', 'ts-title');
-  tsDialog.innerHTML = `<div class="ts-say" hidden><h2 id="ts-title" tabindex="-1">quick check.</h2>
-    <p class="note">cloudflare wants to check you're a person. tick the box to close this.</p></div>
-    <div class="ts-box"></div>`;
-  tsDialog.open = false;
-  tsDialog.showModal = () => {
-    tsDialog.open = true;
-    tsDialog.classList.add('asking', 'ink');
-    tsDialog.setAttribute('role', 'dialog');
-    tsDialog.setAttribute('aria-modal', 'true');
-    tsDialog.querySelector('.ts-say').hidden = false;
-    tsDialog.querySelector('h2').focus();
+// Like cobalt: one widget per action, rendered early, invisible unless cloudflare wants a click; it then
+// shows in #ts-slot under the status message. Nothing may be painted over it (Turnstile rejects a covered
+// widget), and <html> must not carry a data-state attribute: it makes Turnstile fail every check with 600010. It solves in the background, so
+// a token is usually ready by submit; it only shows if cloudflare wants a click. Tokens are single use, so
+// taking one resets the widget to solve the next.
+const widgets = new Map();
+let tsSlot;
+function prepare(action) {
+  if (widgets.has(action)) return widgets.get(action);
+  const w = { token: null, waiters: [], id: null };
+  widgets.set(action, w);
+  const settle = (fn, value) => {
+    for (const waiter of w.waiters.splice(0)) waiter[fn](value);
   };
-  tsDialog.close = () => {
-    tsDialog.open = false;
-    tsDialog.classList.remove('asking', 'ink');
-    tsDialog.removeAttribute('role');
-    tsDialog.removeAttribute('aria-modal');
-    tsDialog.querySelector('.ts-say').hidden = true;
-  };
-  document.body.append(tsDialog);
-  return tsDialog;
+  loadTurnstile().then(
+    () => {
+      // an in-page slot under the status message; nothing else is drawn over it
+      tsSlot ??=
+        document.getElementById('ts-slot') ||
+        document.body.appendChild(document.createElement('div'));
+      const box = document.createElement('div');
+      tsSlot.append(box);
+      w.id = window.turnstile.render(box, {
+        sitekey: SITEKEY,
+        action,
+        appearance: 'interaction-only',
+        'retry-interval': 800,
+        'refresh-expired': 'auto',
+        callback: token => {
+          w.token = token;
+          const waiter = w.waiters.shift();
+          if (waiter) {
+            w.token = null;
+            window.turnstile.reset(w.id);
+            waiter.resolve(token);
+          }
+        },
+        'expired-callback': () => (w.token = null),
+        'error-callback': code => {
+          settle(
+            'reject',
+            new ApiError(
+              'VERIFICATION_FAILED',
+              `cloudflare couldn't check this browser (error ${code}). reload and try again.`,
+              0
+            )
+          );
+          return true; // let turnstile retry on its own for the next attempt
+        },
+      });
+    },
+    error => {
+      widgets.delete(action);
+      settle('reject', error);
+    }
+  );
+  return w;
 }
 
-export async function turnstileToken(action) {
-  await loadTurnstile();
-  const dialog = turnstileDialog();
-  const box = document.createElement('div');
-  dialog.querySelector('.ts-box').replaceChildren(box);
+export const warmTurnstile = (action = 'download') => void prepare(action);
+
+export function turnstileToken(action) {
+  const w = prepare(action);
+  if (w.token) {
+    const token = w.token;
+    w.token = null;
+    window.turnstile.reset(w.id);
+    return Promise.resolve(token);
+  }
   return new Promise((resolve, reject) => {
-    let id;
-    const done = (fn, value) => {
-      clearTimeout(timer);
-      try {
-        window.turnstile.remove(id);
-      } catch {
-        // already gone
-      }
-      if (dialog.open) dialog.close();
-      fn(value);
-    };
-    const timer = setTimeout(
-      () =>
-        done(
-          reject,
-          new ApiError(
-            'VERIFY_SLOW',
-            "cloudflare's check is taking too long. try another network or turn off strict extensions.",
-            0
-          )
-        ),
-      30000
-    );
-    id = window.turnstile.render(box, {
-      sitekey: SITEKEY,
-      action,
-      appearance: 'interaction-only',
-      'refresh-expired': 'never',
-      'before-interactive-callback': () => {
-        clearTimeout(timer);
-        dialog.showModal();
-      },
-      callback: token => done(resolve, token),
-      'error-callback': code =>
-        done(
-          reject,
-          new ApiError(
-            'VERIFICATION_FAILED',
-            `cloudflare couldn't check this browser (error ${code}). reload and try again.`,
-            0
-          )
-        ),
-    });
+    const waiter = { resolve, reject };
+    w.waiters.push(waiter);
+    setTimeout(() => {
+      const i = w.waiters.indexOf(waiter);
+      if (i < 0) return;
+      w.waiters.splice(i, 1);
+      reject(
+        new ApiError(
+          'VERIFY_SLOW',
+          "cloudflare's check is taking too long. try another network or turn off strict extensions.",
+          0
+        )
+      );
+    }, 60000);
   });
 }
 

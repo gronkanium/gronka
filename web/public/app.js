@@ -349,7 +349,9 @@ async function start({ split } = {}) {
   job?.abort();
   const controller = (job = new AbortController());
   setState('verifying', 'verify');
-  draw(`<h2>one sec.</h2><p class="meta">cloudflare is checking you're a person.</p>`);
+  draw(
+    `<h2><span class="spin" aria-hidden="true"></span>one sec.</h2><p class="meta">cloudflare is checking you're a person.</p>`
+  );
   if (request.mode === 'auto' && !prefetchLibav.done) prefetchLibav();
   try {
     request.turnstile = await turnstileToken('download');

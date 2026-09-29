@@ -190,10 +190,7 @@ export async function initPostgresConnection() {
           }
           // If URL parsing fails for other reasons, let postgres.js handle it
         }
-        connectionOptions = {
-          connection: config,
-          onnotice,
-        };
+        connectionOptions = { onnotice };
       } else {
         if (!config.username || config.username.trim() === '') {
           throw new Error(
@@ -207,7 +204,10 @@ export async function initPostgresConnection() {
         };
       }
 
-      sql = postgres(connectionOptions);
+      sql =
+        typeof config === 'string'
+          ? postgres(config, connectionOptions)
+          : postgres(connectionOptions);
 
       await sql`SELECT 1`;
 

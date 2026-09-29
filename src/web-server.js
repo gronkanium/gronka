@@ -71,7 +71,7 @@ export function directStreamInfo(url) {
 
 // Lane 2: the Worker fetches from the source itself, so it only works for links not tied to
 // our IP or cookies. The probe asks the Worker, from Cloudflare's side, whether that holds.
-async function workerLane(url, downloadMethod) {
+async function workerLane(url, downloadMethod, { split = true } = {}) {
   if (!STREAM_BASE || !STREAM_KEY || !['ytdlp', 'cobalt', 'direct'].includes(downloadMethod)) {
     return null;
   }
@@ -90,6 +90,9 @@ async function workerLane(url, downloadMethod) {
     return null;
   }
   const merge = info.parts.length > 1;
+  if (merge && !split) {
+    return null;
+  }
   const base = sanitizeFilename(info.title).replace(/\.[^.]+$/, '') || 'video';
   const parts = info.parts.map(part => {
     const filename = merge ? `${base}.${part.kind}.${part.ext}` : `${base}.${part.ext}`;
@@ -180,7 +183,7 @@ export async function copyCookies(
   }
 }
 
-export async function runDownload({ url, audio, startTime, duration }) {
+export async function runDownload({ url, audio, startTime, duration, split = true }) {
   const disabled = await getDisabledServiceLabel(url);
   if (disabled) {
     throw new ValidationError(`downloads from ${disabled} are turned off.`);
@@ -189,7 +192,7 @@ export async function runDownload({ url, audio, startTime, duration }) {
     startTime,
     duration,
     urlOnly: !audio,
-    streamFirst: audio ? null : workerLane,
+    streamFirst: audio ? null : (link, method) => workerLane(link, method, { split }),
   });
   if (acquired.kind === 'urls') {
     return {
@@ -246,12 +249,16 @@ export function parseDownloadRequest(body) {
   }
   const start = parseSeconds(body.start, 'start');
   const end = parseSeconds(body.end, 'end');
+  if (body.split !== undefined && typeof body.split !== 'boolean') {
+    throw new AppError('split must be true or false.', 'BAD_REQUEST', 400);
+  }
   if (end !== null && end <= (start ?? 0)) {
     throw new AppError('end must be after start.', 'BAD_REQUEST', 400);
   }
   return {
     url,
     audio: mode === 'audio',
+    split: body.split !== false,
     startTime: start,
     duration: end === null ? null : end - (start ?? 0),
   };
@@ -327,8 +334,20 @@ function json(data, status, headers) {
   });
 }
 
-const apiError = (error, headers) =>
-  json({ error: { code: error.code, message: error.message } }, error.statusCode, headers);
+function apiError(error, headers) {
+  const { code, message, retryAfter } = error;
+  if (!retryAfter) {
+    return json({ error: { code, message } }, error.statusCode, headers);
+  }
+  return json({ error: { code, message, retryAfter } }, error.statusCode, {
+    ...headers,
+    'Retry-After': String(retryAfter),
+  });
+}
+
+function retryLater(message, code, status, seconds) {
+  return Object.assign(new AppError(message, code, status), { retryAfter: Math.max(1, seconds) });
+}
 
 // __Host-: Secure, no Domain, Path=/, so no other subdomain can set or shadow it.
 const SESSION_COOKIE = '__Host-gw_session';
@@ -388,20 +407,22 @@ export function createHandler({
     return crypto.createHmac('sha256', dayKey).update(ip).digest('base64url');
   };
 
+  // Seconds until the window resets when over the limit, else 0.
   const overLimit = (key, limit) => {
     const now = Date.now();
     const entry = windows.get(key);
     if (!entry || entry.resetAt <= now) {
       windows.set(key, { count: 1, resetAt: now + IP_WINDOW_MS });
-      return false;
+      return 0;
     }
     entry.count += 1;
-    return entry.count > limit;
+    return entry.count > limit ? Math.ceil((entry.resetAt - now) / 1000) : 0;
   };
 
   const limit = (key, max) => {
-    if (overLimit(key, max)) {
-      throw new AppError('too many requests, try again in a few minutes.', 'RATE_LIMITED', 429);
+    const wait = overLimit(key, max);
+    if (wait) {
+      throw retryLater('too many requests, try again in a few minutes.', 'RATE_LIMITED', 429, wait);
     }
   };
 
@@ -481,16 +502,22 @@ export function createHandler({
       caller = `ip:${ipKey(req, server)}`;
     }
     if (activeCallers.has(caller)) {
-      throw new AppError('one download at a time.', 'RATE_LIMITED', 429);
+      throw retryLater('one download at a time.', 'RATE_LIMITED', 429, 5);
     }
-    if (overLimit(caller, ipLimit)) {
-      throw new AppError('too many downloads, try again in a few minutes.', 'RATE_LIMITED', 429);
+    const wait = overLimit(caller, ipLimit);
+    if (wait) {
+      throw retryLater(
+        'too many downloads, try again in a few minutes.',
+        'RATE_LIMITED',
+        429,
+        wait
+      );
     }
     if (!auth && !(await verify(body.turnstile, 'download'))) {
       throw new AppError('verification failed, reload the page.', 'VERIFICATION_FAILED', 403);
     }
     if (activeJobs >= maxJobs) {
-      throw new AppError('busy right now, try again in a moment.', 'BUSY', 503);
+      throw retryLater('busy right now, try again in a moment.', 'BUSY', 503, 10);
     }
 
     activeJobs += 1;

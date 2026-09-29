@@ -26,7 +26,17 @@ describe('parseDownloadRequest', () => {
   test('pulls the link out of pasted text and converts trims to start + duration', () => {
     expect(
       parseDownloadRequest({ url: 'look https://x.com/a/status/1 lol', start: '1:00', end: '90' })
-    ).toEqual({ url: 'https://x.com/a/status/1', audio: false, startTime: 60, duration: 30 });
+    ).toEqual({
+      url: 'https://x.com/a/status/1',
+      audio: false,
+      split: true,
+      startTime: 60,
+      duration: 30,
+    });
+    expect(parseDownloadRequest({ url: 'https://x.com/a/status/1', split: false }).split).toBe(
+      false
+    );
+    expect(() => parseDownloadRequest({ url: 'https://x.com/a/status/1', split: 'no' })).toThrow();
   });
 
   test('refuses private hosts, bad modes and backwards trims', () => {
@@ -95,7 +105,11 @@ describe('handler', () => {
     const limited = createHandler({ verify: ok, download: async () => result, ipLimit: 2 });
     expect((await limited(post(body))).status).toBe(200);
     expect((await limited(post(body))).status).toBe(200);
-    expect((await limited(post(body))).status).toBe(429);
+    const over = await limited(post(body));
+    expect(over.status).toBe(429);
+    const wait = Number(over.headers.get('retry-after'));
+    expect(wait).toBeGreaterThan(590);
+    expect((await readJson(over)).error.retryAfter).toBe(wait);
     expect((await limited(post(body, { 'cf-connecting-ip': '198.51.100.1' }))).status).toBe(200);
 
     let release;
@@ -103,7 +117,9 @@ describe('handler', () => {
     const capped = createHandler({ verify: ok, download: slow, maxJobs: 1 });
     const first = await capped(post(body));
     expect((await capped(post(body))).status).toBe(429);
-    expect((await capped(post(body, { 'cf-connecting-ip': '198.51.100.2' }))).status).toBe(503);
+    const busy = await capped(post(body, { 'cf-connecting-ip': '198.51.100.2' }));
+    expect(busy.status).toBe(503);
+    expect(busy.headers.get('retry-after')).toBe('10');
     release();
     await first.text();
   });

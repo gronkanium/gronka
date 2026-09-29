@@ -1,0 +1,12 @@
+These files are @imput/libav.js-remux-cli 6.8.7, unmodified, from npm
+(integrity sha512-EXyRSaIGDSLs98dFxPsRPWOr0G/cNWPKe94u0Ch4/ZwopDVfi7Z0utekluhowUns09LJ5RN9BuCZwc6slMcaLg==).
+
+It is a WebAssembly build of FFmpeg's libraries (libavformat, libavcodec, libavutil and friends),
+licensed under the GNU Lesser General Public License 2.1, see COPYING.LGPL-2.1.txt.
+
+Source:
+  https://github.com/imputnet/libav.js (this build)
+  https://github.com/Yahweasel/libav.js (upstream)
+  https://ffmpeg.org/download.html (FFmpeg)
+
+gronka uses it only in your browser, to join a video and its audio into one file.

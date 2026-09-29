@@ -19,7 +19,7 @@ export default [
       'src/public/assets/**',
       '**/*.svelte',
       'vendor/**',
-      'web/public/docs/redoc.standalone.js',
+      'web/public/_libav/**',
       '_site/**',
       '.env',
       '.env.*',
@@ -84,7 +84,27 @@ export default [
   {
     files: ['web/public/**/*.js'],
     languageOptions: {
-      globals: { document: 'readonly', window: 'readonly', navigator: 'readonly' },
+      globals: Object.fromEntries(
+        [
+          'document',
+          'window',
+          'navigator',
+          'location',
+          'history',
+          'sessionStorage',
+          'localStorage',
+          'matchMedia',
+          'requestAnimationFrame',
+          'AbortController',
+          'Blob',
+          'Image',
+          'PublicKeyCredential',
+          'confirm',
+          'prompt',
+          'btoa',
+          'atob',
+        ].map(name => [name, 'readonly'])
+      ),
     },
   },
   {

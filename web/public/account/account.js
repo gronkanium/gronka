@@ -1,0 +1,504 @@
+import { $, api, turnstileToken, warmTurnstile, icon, save, ApiError } from '/common.js';
+
+const view = $('#view');
+const tsBox = $('#ts');
+const esc = text => String(text ?? '').replace(/[&<>"']/g, c => `&#${c.charCodeAt(0)};`);
+const show = html => {
+  view.innerHTML = html;
+  view.querySelector('h1, h2')?.setAttribute('tabindex', '-1');
+};
+const err = (where, error) => {
+  where.innerHTML = `<p class="err ink" role="alert">${esc(error.message)}</p>`;
+};
+const on = (sel, fn) => $(sel)?.addEventListener('click', fn);
+const busy = async (button, fn) => {
+  button.disabled = true;
+  try {
+    await fn();
+  } finally {
+    if (button.isConnected) button.disabled = false;
+  }
+};
+
+const b64url = buf =>
+  btoa(String.fromCharCode(...new Uint8Array(buf)))
+    .replace(/\+/g, '-')
+    .replace(/\//g, '_')
+    .replace(/=+$/, '');
+const unb64url = text =>
+  Uint8Array.from(atob(text.replace(/-/g, '+').replace(/_/g, '/')), c => c.charCodeAt(0));
+const passkeys = !!window.PublicKeyCredential;
+// The session cookie is HttpOnly on api.gronka.dev, so this only saves a pointless 401 on a first visit.
+const HINT = 'gw-signed-in';
+const hint = on => {
+  try {
+    if (on) localStorage.setItem(HINT, '1');
+    else localStorage.removeItem(HINT);
+  } catch {
+    // storage blocked, the account request decides instead
+  }
+};
+const hinted = () => {
+  try {
+    return localStorage.getItem(HINT) !== null;
+  } catch {
+    return true;
+  }
+};
+
+function creationOptions(json) {
+  if (PublicKeyCredential.parseCreationOptionsFromJSON)
+    return PublicKeyCredential.parseCreationOptionsFromJSON(json);
+  return {
+    ...json,
+    challenge: unb64url(json.challenge),
+    user: { ...json.user, id: unb64url(json.user.id) },
+    excludeCredentials: (json.excludeCredentials ?? []).map(c => ({ ...c, id: unb64url(c.id) })),
+  };
+}
+
+function requestOptions(json) {
+  if (PublicKeyCredential.parseRequestOptionsFromJSON)
+    return PublicKeyCredential.parseRequestOptionsFromJSON(json);
+  return {
+    ...json,
+    challenge: unb64url(json.challenge),
+    allowCredentials: (json.allowCredentials ?? []).map(c => ({ ...c, id: unb64url(c.id) })),
+  };
+}
+
+function credentialJson(cred) {
+  if (cred.toJSON) return cred.toJSON();
+  const r = cred.response;
+  const response = { clientDataJSON: b64url(r.clientDataJSON) };
+  if (r.attestationObject) {
+    response.attestationObject = b64url(r.attestationObject);
+    response.transports = r.getTransports?.() ?? [];
+  } else {
+    Object.assign(response, {
+      authenticatorData: b64url(r.authenticatorData),
+      signature: b64url(r.signature),
+    });
+    if (r.userHandle) response.userHandle = b64url(r.userHandle);
+  }
+  return {
+    id: cred.id,
+    rawId: b64url(cred.rawId),
+    type: cred.type,
+    response,
+    clientExtensionResults: cred.getClientExtensionResults(),
+    authenticatorAttachment: cred.authenticatorAttachment,
+  };
+}
+
+let totpOn = false;
+const ask = wrong => {
+  const value = window.prompt(
+    wrong
+      ? 'that code was wrong. try again:'
+      : '2fa is on. enter the code from your authenticator app, or a recovery code:'
+  );
+  return value === null ? null : value.trim();
+};
+
+// Sensitive actions need a current 2fa code when 2fa is on; the server says so if we guessed wrong.
+async function withCode(call) {
+  let code = totpOn ? ask(false) : '';
+  for (let tries = 0; ; tries++) {
+    if (code === null) throw new ApiError('CANCELLED', 'cancelled.', 0);
+    try {
+      return await call(code ? { code } : {});
+    } catch (error) {
+      if (tries < 3 && ['TOTP_REQUIRED', 'TOTP_INVALID'].includes(error.code)) {
+        code = ask(error.code === 'TOTP_INVALID');
+        continue;
+      }
+      throw error;
+    }
+  }
+}
+
+async function addPasskey() {
+  const options = await withCode(body =>
+    api('/v1/passkeys/register/options', { method: 'POST', body })
+  );
+  const cred = await navigator.credentials.create({ publicKey: creationOptions(options) });
+  const label = /iphone|ipad|mac/i.test(navigator.userAgent)
+    ? 'apple device'
+    : /android/i.test(navigator.userAgent)
+      ? 'android'
+      : 'this device';
+  await api('/v1/passkeys/register', {
+    method: 'POST',
+    body: { response: credentialJson(cred), label },
+  });
+}
+
+function kit(number) {
+  const date = new Date().toISOString().slice(0, 10);
+  return new Blob(
+    [
+      `gronka account number\n\n${number}\n\nmade ${date} on https://web.gronka.dev/account/\n\n` +
+        'this number is the only way into your gronka account. it holds your api keys.\n' +
+        'we cannot recover it. no email, no reset. lose it and the account is gone.\n' +
+        'keep this file somewhere safe, like a password manager.\n',
+    ],
+    { type: 'text/plain' }
+  );
+}
+
+function saveNumber(number, next, { rotated = false } = {}) {
+  show(`<img class="peng" src="/p/think.svg" alt="" width="400" height="400" />
+    <h1>${rotated ? 'your new number.' : 'your account number.'}</h1>
+    <p>this is the only way back in. <strong>there is no email and no reset.</strong> if you lose it, the account is gone for good${rotated ? ', and the old number already stopped working' : ''}.</p>
+    <p class="number ink" id="num">${esc(number)}</p>
+    <div class="acts"><button type="button" class="btn" id="dl">${icon('download')}download it</button>
+    <button type="button" class="btn line small" id="copy">${icon('copy')}copy</button></div>
+    <div class="check"><label class="label" for="last4">type the last 4 characters to show you saved it</label>
+    <span class="ink field"><input id="last4" maxlength="4" autocomplete="off" autocapitalize="characters" spellcheck="false" /></span></div>
+    <div class="acts"><button type="button" class="btn" id="next" disabled>i saved it, continue</button></div>`);
+  $('h1').focus();
+  const tail = number
+    .replace(/[^0-9A-Z]/gi, '')
+    .slice(-4)
+    .toUpperCase();
+  on('#dl', () => save(kit(number), 'gronka-account.txt'));
+  on('#copy', async () => {
+    await navigator.clipboard.writeText(number);
+    $('#copy').lastChild.textContent = 'copied';
+  });
+  $('#last4').addEventListener('input', event => {
+    $('#next').disabled = event.target.value.toUpperCase().replace(/O/g, '0') !== tail;
+  });
+  on('#next', next);
+}
+
+function offerPasskey() {
+  if (!passkeys) return dashboard();
+  show(`<img class="peng" src="/p/done.svg" alt="" width="400" height="400" />
+    <h1>add a passkey?</h1>
+    <p>a passkey is a second way in, kept by your phone, laptop or password manager. lose the number but keep the passkey and you can still log in and make a new number.</p>
+    <div class="acts"><button type="button" class="btn" id="add">${icon('passkey')}add a passkey</button>
+    <button type="button" class="linkish" id="skip">not now</button></div><div id="msg"></div>`);
+  $('h1').focus();
+  on('#add', event =>
+    busy(event.currentTarget, async () => {
+      try {
+        await addPasskey();
+        dashboard();
+      } catch (error) {
+        err(
+          $('#msg'),
+          error.name === 'NotAllowedError'
+            ? { message: 'that was cancelled. you can add one later.' }
+            : error
+        );
+      }
+    })
+  );
+  on('#skip', dashboard);
+}
+
+function signedOut() {
+  show(`<h1>account</h1>
+    <p class="lede">only for api keys. the page itself never needs one. no email, no username: you get a number, and the number is the account.</p>
+    <div class="cards">
+      <div class="card ink"><h2>new here</h2><p>one click, nothing to fill in. we show you the number once.</p>
+        <button type="button" class="btn" id="create">make an account</button><div id="create-msg"></div></div>
+      <form class="card ink" id="login" novalidate><h2>have a number</h2>
+        <label class="label" for="number">account number</label>
+        <span class="ink field"><input id="number" autocomplete="username" spellcheck="false" autocapitalize="characters" placeholder="GW-..." /></span>
+        <div id="totp-wrap" hidden><label class="label" for="totp">code from your authenticator app, or a recovery code</label>
+        <span class="ink field"><input id="totp" autocomplete="one-time-code" inputmode="text" spellcheck="false" /></span></div>
+        <button type="submit" class="btn" id="login-go">log in</button>
+        ${passkeys ? `<p class="or">or</p><button type="button" class="btn line" id="pk">${icon('passkey')}log in with a passkey</button>` : ''}
+        <div id="login-msg"></div></form>
+    </div>`);
+  view.addEventListener('focusin', warmTurnstile, { once: true });
+  view.addEventListener('pointerdown', warmTurnstile, { once: true });
+  on('#create', event =>
+    busy(event.currentTarget, async () => {
+      try {
+        const turnstile = await turnstileToken('account', tsBox);
+        const { number } = await api('/v1/account', { method: 'POST', body: { turnstile } });
+        saveNumber(number, offerPasskey);
+      } catch (error) {
+        err($('#create-msg'), error);
+      }
+    })
+  );
+  $('#login').addEventListener('submit', event => {
+    event.preventDefault();
+    busy($('#login-go'), async () => {
+      try {
+        const turnstile = await turnstileToken('login', tsBox);
+        const body = { number: $('#number').value, turnstile };
+        if ($('#totp').value.trim()) body.totp = $('#totp').value.trim();
+        await api('/v1/session', { method: 'POST', body });
+        dashboard();
+      } catch (error) {
+        if (error.code === 'TOTP_REQUIRED') {
+          $('#totp-wrap').hidden = false;
+          $('#totp').focus();
+        }
+        err($('#login-msg'), error);
+      }
+    });
+  });
+  on('#pk', event =>
+    busy(event.currentTarget, async () => {
+      try {
+        const turnstile = await turnstileToken('login', tsBox);
+        const { challengeId, options } = await api('/v1/passkeys/login/options', {
+          method: 'POST',
+          body: { turnstile },
+        });
+        const cred = await navigator.credentials.get({ publicKey: requestOptions(options) });
+        await api('/v1/passkeys/login', {
+          method: 'POST',
+          body: { challengeId, response: credentialJson(cred) },
+        });
+        dashboard();
+      } catch (error) {
+        err(
+          $('#login-msg'),
+          error.name === 'NotAllowedError'
+            ? { message: 'that was cancelled or no passkey was found.' }
+            : error
+        );
+      }
+    })
+  );
+}
+
+const when = (label, day) => (day ? `${label} ${day}` : '');
+
+async function dashboard(notice = '') {
+  let me;
+  try {
+    me = await api('/v1/account');
+    hint(true);
+  } catch (error) {
+    if (error.code === 'UNAUTHORIZED') {
+      hint(false);
+      return signedOut();
+    }
+    return (
+      show(`<h1>account</h1><img class="peng" src="/p/asleep.svg" alt="" width="400" height="400" /><p>${esc(error.message)}</p>
+      <div class="acts"><button type="button" class="btn" id="retry">try again</button></div>`),
+      on('#retry', () => dashboard())
+    );
+  }
+  show(`<h1>account</h1><p class="meta mono">GW-${esc(me.id)} · made ${esc(me.createdOn)}</p><div id="notice">${notice}</div>
+    <section aria-labelledby="h-keys"><h2 id="h-keys">api keys</h2>
+      <p>send one as <span class="mono">Authorization: Bearer gk_...</span> to skip the cloudflare check. same limits as everyone. <a href="/docs/">how</a>.</p>
+      <ul class="list">${
+        me.keys
+          .map(
+            k => `<li><span><span class="what">${esc(k.id)}</span> ${esc(k.label ?? '')}<br><span class="when">${when('made', k.createdOn)} ${when('· last used', k.lastUsedOn) || '· never used'}</span></span>
+        <button type="button" class="btn line small" data-revoke="${esc(k.id)}">${icon('x')}revoke</button></li>`
+          )
+          .join('') || '<li class="note">no keys yet.</li>'
+      }</ul>
+      <form class="row" id="newkey" novalidate><label class="field-wrap"><span class="label">label, optional</span><span class="ink field"><input id="label" maxlength="40" autocomplete="off" /></span></label>
+        <button class="btn" type="submit" ${me.keys.length >= 10 ? 'disabled' : ''}>${icon('key')}new key</button></form><div id="key-out"></div></section>
+    <section aria-labelledby="h-2fa"><h2 id="h-2fa">2fa <span class="pill ${me.totp ? '' : 'off'}">${me.totp ? 'on' : 'off'}</span></h2><div id="totp-box"></div></section>
+    <section aria-labelledby="h-pk"><h2 id="h-pk">passkeys</h2>
+      ${passkeys ? '' : '<p class="note">this browser has no passkey support.</p>'}
+      <ul class="list">${
+        me.passkeys
+          .map(
+            p => `<li><span>${icon('passkey')} ${esc(p.label ?? 'passkey')}<br><span class="when">${when('added', p.createdOn)}</span></span>
+        <button type="button" class="btn line small" data-unpk="${esc(p.id)}">${icon('x')}remove</button></li>`
+          )
+          .join('') || '<li class="note">none yet. a passkey is a second way in.</li>'
+      }</ul>
+      ${passkeys ? `<button type="button" class="btn line small" id="addpk">${icon('passkey')}add a passkey</button>` : ''}<div id="pk-msg"></div></section>
+    <section aria-labelledby="h-num"><h2 id="h-num">account number</h2>
+      <p>make a new number if the old one leaked. the old one stops working at once and every other login is signed out. keys, passkeys and 2fa stay.</p>
+      <button type="button" class="btn line small" id="rotate">new number</button><div id="rot-msg"></div></section>
+    <section aria-labelledby="h-out"><h2 id="h-out">leave</h2>
+      <div class="acts"><button type="button" class="btn line small" id="logout">log out</button></div>
+      <p>deleting removes the account, every key and every passkey right away. there is no undo.</p>
+      <div class="row"><label><span class="label">type delete to confirm</span><span class="ink field"><input id="confirm" autocomplete="off" /></span></label>
+      <button type="button" class="btn" id="delete" disabled>delete account</button></div><div id="del-msg"></div></section>`);
+  $('h1').focus();
+
+  $('#newkey').addEventListener('submit', event => {
+    event.preventDefault();
+    busy(event.target.querySelector('button'), async () => {
+      try {
+        const { id, key } = await api('/v1/keys', {
+          method: 'POST',
+          body: { label: $('#label').value },
+        });
+        await dashboard(`<p class="note">new key <span class="mono">${esc(id)}</span>. copy it now, it is shown once:</p>
+          <p class="number key ink">${esc(key)}</p><div class="acts"><button type="button" class="btn small" id="copykey" data-key="${esc(key)}">${icon('copy')}copy key</button></div>`);
+        on('#copykey', async () => {
+          await navigator.clipboard.writeText($('#copykey').dataset.key);
+          $('#copykey').lastChild.textContent = 'copied';
+        });
+      } catch (error) {
+        err($('#key-out'), error);
+      }
+    });
+  });
+  view.querySelectorAll('[data-revoke]').forEach(button =>
+    button.addEventListener('click', () =>
+      busy(button, async () => {
+        await api(`/v1/keys/${button.dataset.revoke}`, { method: 'DELETE' });
+        dashboard(
+          `<p class="note">revoked ${esc(button.dataset.revoke)}. it stopped working just now.</p>`
+        );
+      })
+    )
+  );
+  view.querySelectorAll('[data-unpk]').forEach(button =>
+    button.addEventListener('click', () =>
+      busy(button, async () => {
+        try {
+          await withCode(body =>
+            api(`/v1/passkeys/${encodeURIComponent(button.dataset.unpk)}`, {
+              method: 'DELETE',
+              body,
+            })
+          );
+          dashboard('<p class="note">passkey removed.</p>');
+        } catch (error) {
+          err($('#pk-msg'), error);
+        }
+      })
+    )
+  );
+  on('#addpk', event =>
+    busy(event.currentTarget, async () => {
+      try {
+        await addPasskey();
+        dashboard('<p class="note">passkey added.</p>');
+      } catch (error) {
+        err(
+          $('#pk-msg'),
+          error.name === 'NotAllowedError' ? { message: 'that was cancelled.' } : error
+        );
+      }
+    })
+  );
+  on('#rotate', event =>
+    busy(event.currentTarget, async () => {
+      if (!confirm('make a new account number? the current one stops working right away.')) return;
+      try {
+        const { number } = await withCode(body =>
+          api('/v1/account/rotate', { method: 'POST', body })
+        );
+        saveNumber(
+          number,
+          () => dashboard('<p class="note">new number saved. the old one is dead.</p>'),
+          { rotated: true }
+        );
+      } catch (error) {
+        err($('#rot-msg'), error);
+      }
+    })
+  );
+  on('#logout', async () => {
+    await api('/v1/session', { method: 'DELETE' }).catch(() => {});
+    hint(false);
+    signedOut();
+  });
+  $('#confirm').addEventListener('input', event => {
+    $('#delete').disabled = event.target.value.trim().toLowerCase() !== 'delete';
+  });
+  on('#delete', event =>
+    busy(event.currentTarget, async () => {
+      try {
+        await withCode(body => api('/v1/account', { method: 'DELETE', body }));
+      } catch (error) {
+        return err($('#del-msg'), error);
+      }
+      hint(false);
+      show(
+        '<h1>gone.</h1><img class="peng" src="/p/asleep.svg" alt="" width="400" height="400" /><p>the account and everything in it were deleted.</p><p><a href="/">back to downloading</a></p>'
+      );
+    })
+  );
+  totpOn = me.totp;
+  totpBox(me);
+}
+
+function codesBlock(codes) {
+  return `<p>recovery codes. each works once, in place of a code, if you lose your authenticator. <strong>shown once.</strong></p>
+    <ul class="codes ink">${codes.map(c => `<li>${esc(c)}</li>`).join('')}</ul>
+    <div class="acts"><button type="button" class="btn small" id="dlcodes">${icon('download')}download codes</button></div>`;
+}
+
+function wireCodes(codes) {
+  on('#dlcodes', () =>
+    save(
+      new Blob([`gronka recovery codes\n\n${codes.join('\n')}\n\neach works once.\n`], {
+        type: 'text/plain',
+      }),
+      'gronka-recovery-codes.txt'
+    )
+  );
+}
+
+function totpBox(me) {
+  const box = $('#totp-box');
+  const codeForm = (
+    id,
+    label,
+    button
+  ) => `<form class="row" id="${id}" novalidate><label><span class="label">${label}</span>
+    <span class="ink field"><input name="code" autocomplete="one-time-code" spellcheck="false" /></span></label><button class="btn small" type="submit">${button}</button></form><div id="${id}-msg"></div>`;
+  const submit = (id, fn) =>
+    $(`#${id}`).addEventListener('submit', event => {
+      event.preventDefault();
+      busy(event.target.querySelector('button'), async () => {
+        try {
+          await fn(event.target.code.value.trim());
+        } catch (error) {
+          err($(`#${id}-msg`), error);
+        }
+      });
+    });
+
+  if (!me.totp) {
+    box.innerHTML = `<p>an authenticator app code on top of your number or passkey.</p><button type="button" class="btn line small" id="setup">turn on 2fa</button><div id="setup-msg"></div>`;
+    on('#setup', event =>
+      busy(event.currentTarget, async () => {
+        try {
+          const { uri, secret } = await api('/v1/totp/setup', { method: 'POST', body: {} });
+          box.innerHTML = `<p>add this to your authenticator app. on a phone, <a href="${esc(uri)}">open it in the app</a>, or type the key:</p>
+            <p class="number key ink mono">${esc(secret.match(/.{1,4}/g).join(' '))}</p>${codeForm('enable', 'the 6-digit code it shows', 'turn on')}`;
+          submit('enable', async code => {
+            const { recoveryCodes } = await api('/v1/totp/enable', {
+              method: 'POST',
+              body: { code },
+            });
+            box.innerHTML = `<p class="note">2fa is on.</p>${codesBlock(recoveryCodes)}<button type="button" class="linkish" id="done2fa">done</button>`;
+            wireCodes(recoveryCodes);
+            on('#done2fa', () => dashboard());
+          });
+        } catch (error) {
+          err($('#setup-msg'), error);
+        }
+      })
+    );
+    return;
+  }
+  box.innerHTML = `<p>${me.recoveryCodesLeft} recovery code${me.recoveryCodesLeft === 1 ? '' : 's'} left.</p>
+    ${codeForm('regen', 'current code, for new recovery codes', 'new codes')}${codeForm('off', 'current code, to turn 2fa off', 'turn off')}`;
+  submit('regen', async code => {
+    const { recoveryCodes } = await api('/v1/totp/recovery', { method: 'POST', body: { code } });
+    box.innerHTML = `${codesBlock(recoveryCodes)}<button type="button" class="linkish" id="done2fa">done</button>`;
+    wireCodes(recoveryCodes);
+    on('#done2fa', () => dashboard());
+  });
+  submit('off', async code => {
+    await api('/v1/totp', { method: 'DELETE', body: { code } });
+    dashboard('<p class="note">2fa is off.</p>');
+  });
+}
+
+if (hinted()) dashboard();
+else signedOut();

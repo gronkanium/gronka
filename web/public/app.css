@@ -1,0 +1,385 @@
+main {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+}
+h1 {
+  max-width: 9ch;
+}
+.lede {
+  color: var(--pencil);
+  max-width: 34ch;
+  margin-bottom: 0;
+}
+
+.stage {
+  --pt: clamp(116px, 27vw, 200px);
+  position: relative;
+  padding-top: var(--pt);
+}
+.peng {
+  position: absolute;
+  right: 3%;
+  bottom: calc(100% - var(--pt) - 16px);
+  width: clamp(128px, 29vw, 222px);
+  height: auto;
+  pointer-events: none;
+  z-index: 1;
+}
+[data-state='working'] .peng {
+  animation: bob 0.5s steps(2) infinite;
+}
+@keyframes bob {
+  50% {
+    transform: translateY(-3px) rotate(-1deg);
+  }
+}
+
+.big {
+  display: flex;
+  align-items: center;
+}
+.big::before {
+  border-width: 5px;
+  border-radius: 12px;
+}
+.big:focus-within::before {
+  border-width: 7px;
+}
+.big input {
+  font-size: 18px;
+  padding: 20px 18px;
+  min-width: 0;
+}
+.paste {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-right: 10px;
+  border: 0;
+  border-radius: 10px;
+  background: var(--soft);
+  color: var(--ink);
+  font:
+    600 15px 'Archivo',
+    sans-serif;
+  padding: 10px 12px;
+  min-height: 44px;
+  cursor: pointer;
+}
+.host {
+  min-height: 1.5em;
+  margin: 8px 2px 0;
+  font-size: 15px;
+  color: var(--pencil);
+}
+
+.opts {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 8px 12px;
+  margin-top: 8px;
+}
+.mode {
+  display: flex;
+  border: 0;
+  padding: 0;
+  margin: 0;
+  isolation: isolate;
+}
+.mode label {
+  position: relative;
+  padding: 10px 18px;
+  cursor: pointer;
+  font-weight: 600;
+  min-height: 44px;
+}
+.mode input {
+  position: absolute;
+  opacity: 0;
+}
+.mode label:has(input:checked) {
+  color: var(--paper);
+}
+.mode label:has(input:checked)::after {
+  content: '';
+  position: absolute;
+  inset: 2px;
+  background: var(--ink);
+  border-radius: 999px;
+  filter: url(#wobble);
+  z-index: -1;
+}
+.mode label:has(input:focus-visible) {
+  outline: 3px solid var(--ink);
+  outline-offset: 2px;
+  border-radius: 999px;
+}
+details {
+  flex: 0 1 auto;
+}
+details[open] {
+  flex-basis: 100%;
+}
+summary {
+  cursor: pointer;
+  font-weight: 600;
+  list-style: none;
+  padding: 10px 4px;
+  min-height: 44px;
+  text-align: right;
+}
+summary::-webkit-details-marker {
+  display: none;
+}
+summary::after {
+  content: ' +';
+}
+details[open] summary::after {
+  content: ' \2212';
+}
+.trim {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+.trim > label {
+  flex: 1 1 140px;
+  font-weight: 600;
+  font-size: 15px;
+}
+.trim .field {
+  margin-top: 6px;
+}
+.trim .note {
+  flex-basis: 100%;
+  margin: 0;
+}
+
+.go {
+  width: 100%;
+  margin-top: 18px;
+  font-size: 22px;
+  padding: 20px;
+}
+.terms {
+  color: var(--pencil);
+  font-size: 14px;
+  margin: 14px 0 0;
+}
+
+.asleep {
+  display: flex;
+  gap: 14px;
+  align-items: center;
+  padding: 12px 16px;
+  margin: 18px 0 0;
+}
+.asleep img {
+  width: 72px;
+  height: 72px;
+  flex: none;
+}
+
+/* while a job runs the form collapses to the link, the panel takes over */
+:root:not([data-state='idle']) .opts,
+:root:not([data-state='idle']) .go,
+:root:not([data-state='idle']) .terms {
+  display: none;
+}
+:root:not([data-state='idle']) .paste,
+:root:not([data-state='idle']) .lede {
+  display: none;
+}
+:root:not([data-state='idle']) h1 {
+  font-size: clamp(1.9rem, 6vw, 3.4rem);
+}
+:root:not([data-state='idle']) .stage {
+  --pt: clamp(96px, 22vw, 150px);
+}
+:root:not([data-state='idle']) .peng {
+  width: clamp(108px, 23vw, 168px);
+}
+.panel:empty {
+  display: none;
+}
+.panel {
+  margin-top: 18px;
+}
+.panel h2 {
+  margin: 0 0 6px;
+  font-size: clamp(1.3rem, 4.4vw, 1.8rem);
+}
+.panel .say {
+  margin: 0 0 14px;
+}
+.meta {
+  font:
+    15px/1.5 'Gronka Mono',
+    monospace;
+  color: var(--pencil);
+  margin: 0 0 12px;
+  word-break: break-word;
+}
+.bar {
+  height: 30px;
+  margin: 4px 0 10px;
+}
+.bar::before {
+  border-radius: 8px;
+}
+.bar i {
+  position: absolute;
+  top: 6px;
+  bottom: 6px;
+  left: 6px;
+  width: 0;
+  max-width: calc(100% - 12px);
+  background: repeating-linear-gradient(-45deg, var(--ink) 0 4px, transparent 4px 10px);
+  filter: url(#wobble);
+  transition: width 0.4s;
+}
+.bar.wait i {
+  background: var(--ink);
+}
+.acts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px 12px;
+  align-items: center;
+  margin-top: 14px;
+}
+.acts .btn:first-child {
+  flex: 1 1 220px;
+}
+.clock {
+  font:
+    800 clamp(2.6rem, 12vw, 4.4rem)/1 'Archivo Expanded',
+    sans-serif;
+  letter-spacing: -0.03em;
+  margin: 4px 0 8px;
+  font-variant-numeric: tabular-nums;
+}
+
+.grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(104px, 1fr));
+  gap: 14px;
+  margin: 8px 0 4px;
+}
+.tile {
+  cursor: pointer;
+  display: block;
+  position: relative;
+}
+.tile input {
+  position: absolute;
+  opacity: 0;
+}
+.tile .ink {
+  display: block;
+  padding: 6px;
+}
+.thumb {
+  display: block;
+  width: 100%;
+  aspect-ratio: 1;
+  object-fit: cover;
+  border-radius: 4px;
+  background: var(--soft);
+}
+.thumb.none {
+  display: grid;
+  place-items: center;
+}
+.thumb.none .i {
+  width: 36%;
+  height: 36%;
+}
+.cap {
+  display: flex;
+  justify-content: space-between;
+  gap: 6px;
+  font:
+    13px 'Gronka Mono',
+    monospace;
+  margin-top: 6px;
+  color: var(--pencil);
+}
+.tile input:checked ~ .ink::before {
+  border-width: 6px;
+}
+.tile .tick {
+  position: absolute;
+  top: -8px;
+  right: -8px;
+  width: 30px;
+  height: 30px;
+  display: none;
+  place-items: center;
+  background: var(--ink);
+  color: var(--paper);
+  border-radius: 50%;
+  z-index: 1;
+}
+.tile .tick .i {
+  width: 18px;
+  height: 18px;
+  stroke-width: 3;
+}
+.tile input:checked ~ .tick {
+  display: grid;
+}
+.tile input:not(:checked) ~ .ink .thumb {
+  opacity: 0.4;
+}
+.tile input:focus-visible ~ .ink {
+  outline: 3px solid var(--ink);
+  outline-offset: 3px;
+}
+
+.ts {
+  margin-top: 14px;
+  display: flex;
+  justify-content: center;
+}
+.nojs {
+  text-align: center;
+  padding: 12px;
+}
+
+@media (min-width: 900px) {
+  h1 {
+    font-size: clamp(4.4rem, 6.6vw, 6.4rem);
+    max-width: 10ch;
+  }
+  .lede {
+    font-size: 20px;
+  }
+  .stage {
+    --pt: 212px;
+  }
+  .peng {
+    width: 250px;
+    right: 2%;
+  }
+  .big input {
+    font-size: 24px;
+    padding: 28px 26px;
+  }
+  .go {
+    font-size: 28px;
+    padding: 26px;
+  }
+  .grid {
+    grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+  }
+}
+@media (max-width: 380px) {
+  .paste span {
+    display: none;
+  }
+}

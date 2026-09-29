@@ -44,7 +44,7 @@ export function otpauthUri(secret, accountId) {
     digits: String(DIGITS),
     period: String(STEP_SECONDS),
   });
-  return `otpauth://totp/gronka:GW-${accountId}?${params}`;
+  return `otpauth://totp/gronka:${accountId}?${params}`;
 }
 
 // Ciphertext layout: version byte, 12-byte nonce, AES-256-GCM ciphertext, 16-byte tag.

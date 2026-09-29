@@ -729,7 +729,7 @@ export function createHandler({
       const options = await webauthn.generateRegistrationOptions({
         rpName: 'gronka',
         rpID: RP_ID,
-        userName: `GW-${accountId}`,
+        userName: `GW ${accountId}`,
         userID: new TextEncoder().encode(accountId),
         attestationType: 'none',
         excludeCredentials: await accounts.listPasskeys(accountId),

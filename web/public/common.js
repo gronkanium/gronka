@@ -31,7 +31,7 @@ export async function api(path, { method = 'GET', body, signal } = {}) {
     });
   } catch (error) {
     if (error.name === 'AbortError') throw error;
-    throw new ApiError('OFFLINE', "can't reach gronka right now.", 0);
+    throw new ApiError('OFFLINE', "can't reach gronka.", 0);
   }
   let data;
   try {
@@ -39,9 +39,7 @@ export async function api(path, { method = 'GET', body, signal } = {}) {
   } catch {
     throw new ApiError(
       'OFFLINE',
-      res.ok
-        ? 'the connection dropped before gronka answered.'
-        : "the server that fetches files isn't answering right now.",
+      res.ok ? 'the connection dropped before gronka replied.' : "the file server isn't answering.",
       res.status
     );
   }
@@ -50,7 +48,7 @@ export async function api(path, { method = 'GET', body, signal } = {}) {
     const retry = Number(error?.retryAfter ?? res.headers.get('retry-after')) || null;
     throw new ApiError(
       error?.code ?? 'INTERNAL',
-      error?.message ?? 'something broke.',
+      error?.message ?? 'something broke here.',
       res.status,
       retry
     );
@@ -79,7 +77,7 @@ function loadTurnstile() {
       reject(
         new ApiError(
           'VERIFY_BLOCKED',
-          "cloudflare's check didn't load. an ad blocker or a strict network can do that.",
+          "cloudflare's check didn't load. an ad blocker or strict network settings may be why.",
           0
         )
       );
@@ -92,8 +90,26 @@ function loadTurnstile() {
 export const warmTurnstile = () => loadTurnstile().catch(() => {});
 
 // Tokens are single use, so every request renders a fresh invisible widget.
-export async function turnstileToken(action, box) {
+// The widget renders invisibly; the dialog only opens if cloudflare asks the visitor to click.
+let tsDialog;
+function turnstileDialog() {
+  if (tsDialog) return tsDialog;
+  tsDialog = document.createElement('dialog');
+  tsDialog.className = 'ts-ask ink';
+  tsDialog.setAttribute('aria-labelledby', 'ts-title');
+  tsDialog.innerHTML = `<h2 id="ts-title">quick check.</h2>
+    <p class="note">cloudflare wants to check you're a person. tick the box to close this.</p>
+    <div class="ts-box"></div>`;
+  tsDialog.addEventListener('cancel', event => event.preventDefault());
+  document.body.append(tsDialog);
+  return tsDialog;
+}
+
+export async function turnstileToken(action) {
   await loadTurnstile();
+  const dialog = turnstileDialog();
+  const box = document.createElement('div');
+  dialog.querySelector('.ts-box').replaceChildren(box);
   return new Promise((resolve, reject) => {
     let id;
     const done = (fn, value) => {
@@ -103,7 +119,7 @@ export async function turnstileToken(action, box) {
       } catch {
         // already gone
       }
-      box.hidden = true;
+      if (dialog.open) dialog.close();
       fn(value);
     };
     const timer = setTimeout(
@@ -118,12 +134,15 @@ export async function turnstileToken(action, box) {
         ),
       30000
     );
-    box.hidden = false;
     id = window.turnstile.render(box, {
       sitekey: SITEKEY,
       action,
       appearance: 'interaction-only',
       'refresh-expired': 'never',
+      'before-interactive-callback': () => {
+        clearTimeout(timer);
+        dialog.showModal();
+      },
       callback: token => done(resolve, token),
       'error-callback': () =>
         done(

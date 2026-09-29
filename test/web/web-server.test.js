@@ -134,7 +134,7 @@ describe('handler', () => {
 
 test('redaction strips links, addresses, keys and account numbers', () => {
   const line = redactForWeb(
-    'fetched https://cdn.example/v.mp4?sig=1 for 203.0.113.9 and 2001:db8::1 key gk_abc_def GW-7K3P9-ABCD'
+    'fetched https://cdn.example/v.mp4?sig=1 for 203.0.113.9 and 2001:db8::1 key gk_abc_def GW 7K3P9 ABCDE'
   );
   expect(line).toBe('fetched <url> for <ip> and <ip> key <key> <account>');
 });

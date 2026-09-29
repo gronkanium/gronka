@@ -52,7 +52,7 @@ async function verifySecret(secret, hash) {
 }
 
 export function formatAccountNumber(id, secret) {
-  return `GW-${id}-${secret.match(/.{1,5}/g).join('-')}`;
+  return `GW ${id} ${secret.match(/.{1,5}/g).join(' ')}`;
 }
 
 export function parseAccountNumber(input) {

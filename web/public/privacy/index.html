@@ -49,22 +49,22 @@
     <main class="prose">
       <h1>privacy</h1>
       <p class="lede">
-        short version: gronka keeps no record of what you download or who you are. this page covers
-        web.gronka.dev and api.gronka.dev. the discord bot has
+        short version: gronka keeps no download history and asks for no personal details. this page
+        covers web.gronka.dev and api.gronka.dev. the discord bot has
         <a href="https://gronka.dev/privacy">its own policy</a>.
       </p>
 
       <h2>no logs, no history</h2>
       <ul>
-        <li>no request logs. nothing writes down which links were asked for, by whom, or when.</li>
         <li>
-          no download history and no cache of past downloads. every request starts from scratch.
+          no request logs. gronka doesn't record which links were requested, who asked, or when.
         </li>
-        <li>no analytics, no ads, no trackers, no cookies on the download page.</li>
+        <li>no download history or cache. each request starts fresh.</li>
+        <li>no analytics, ads, or trackers. the download page sets no cookies.</li>
         <li>
-          when something breaks, the server prints an error line so it can be fixed. links, ip
-          addresses, keys and account numbers are stripped out of it first, and it sits in a small
-          buffer that overwrites itself.
+          when something breaks, the server prints an error line for debugging. it strips links, ip
+          addresses, keys and account numbers first. the line goes into a small buffer that
+          overwrites itself.
         </li>
         <li>
           the server keeps a few counters in memory (how many downloads worked, per site). they
@@ -75,13 +75,12 @@
       <h2>your ip address</h2>
       <p>
         to stop one person from hogging the server, gronka counts requests per address for 10
-        minutes. it never stores the address itself: it keeps a keyed hash of it, only in memory,
-        and the key is thrown away and replaced every day, so yesterday's hashes can't be matched to
-        anything.
+        minutes. gronka keeps only a keyed hash in memory, not the address itself. the key changes
+        daily, so yesterday's hashes can't be matched.
       </p>
 
       <h2>the files</h2>
-      <p>a download reaches you in one of three ways, and the page tells you which:</p>
+      <p>downloads reach you one of three ways. the page says which:</p>
       <ul>
         <li>
           <strong>straight from the site.</strong> gronka hands your browser the site's own link.
@@ -119,9 +118,9 @@
         </li>
       </ul>
       <p>
-        no email, no name, no ip address, no browser details, no download history. while you're
-        logged in, a session cookie keeps you in (stored hashed on our side, gone after a day idle
-        or a week at most). deleting your account removes all of it right away.
+        an account holds no email, name, ip address, browser details, or download history. while
+        you're logged in, a session cookie keeps you in (stored hashed on our side, gone after a day
+        idle or a week at most). deleting your account removes all of it right away.
       </p>
 
       <h2>cloudflare</h2>
@@ -135,8 +134,8 @@
 
       <h2>changes</h2>
       <p>
-        this is a public preview and may change. if what gronka keeps ever changes, this page
-        changes first.
+        this public preview may change. if gronka changes what it keeps, this page will change
+        first.
       </p>
       <p class="note">updated 2026-09-29.</p>
     </main>

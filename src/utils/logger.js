@@ -22,7 +22,7 @@ const isWebMode = () => process.env.GRONKA_WEB === 'true';
 const REDACTIONS = [
   [/https?:\/\/\S+/gi, '<url>'],
   [/\bgk_\w+/g, '<key>'],
-  [/\bGW-[0-9A-Z-]+/g, '<account>'],
+  [/\bGW[\s-]?[0-9A-Z]{5}(?:[\s-]?[0-9A-Z]{1,5}){1,6}/g, '<account>'],
   [/\b\d{1,3}(?:\.\d{1,3}){3}\b/g, '<ip>'],
   [/\b(?:[0-9a-f]{0,4}:){3,7}[0-9a-f]{0,4}\b/gi, '<ip>'],
   [/\b(?=[\w-]*\d)[\w-]{6,}\b/g, '<id>'],

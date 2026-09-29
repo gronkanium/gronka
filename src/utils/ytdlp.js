@@ -36,7 +36,7 @@ const GENERIC_FAILURE_MESSAGE =
  * Resolved at call time (not module load) so a file mounted/rotated later is picked up.
  * @returns {string[]} ['--cookies', path] when a usable file is configured, else []
  */
-function getCookieArgs() {
+export function getCookieArgs() {
   const cookiesPath = process.env.YTDLP_COOKIES_PATH;
   if (!cookiesPath) {
     return [];
@@ -521,7 +521,8 @@ function executeYtdlp(
           // before the 'protected' check below, which is about protected X accounts
           reject(
             new ValidationError(
-              "the site only streams this one encrypted (drm), so it can't be downloaded."
+              "the site only streams this one encrypted (drm), so it can't be downloaded.",
+              'DRM_PROTECTED'
             )
           );
         } else if (

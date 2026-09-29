@@ -2,6 +2,12 @@ import path from 'path';
 import { createLogger } from '../utils/logger.js';
 import { botConfig } from '../utils/config.js';
 import {
+  isSoundCloudUrl,
+  soundcloudViaYoutube,
+  soundcloudTrack,
+  tagAudio,
+} from '../utils/soundcloud.js';
+import {
   downloadFromSocialMedia,
   getCobaltMediaUrls,
   getRemoteContentLength,
@@ -534,6 +540,14 @@ export async function acquireMedia(
           duration
         );
       } catch (ytdlpFallbackError) {
+        if (ytdlpFallbackError.code === 'DRM_PROTECTED' && isSoundCloudUrl(url)) {
+          return {
+            kind: 'file',
+            fileData: await soundcloudViaYoutube(url, { adminUser, maxSize }),
+            downloadMethod: 'ytdlp',
+            url,
+          };
+        }
         const urls = await tryTwitterDirectUrl();
         if (urls) {
           return { kind: 'urls', urls, stepName: 'direct_url_fallback', url };
@@ -560,6 +574,16 @@ export async function acquireMedia(
     }
   }
 
+  // A trimmed request is cut later, and a tag is only worth writing on the whole track.
+  const wholeTrack = startTime === null && duration === null;
+  if (isSoundCloudUrl(url) && wholeTrack && fileData?.buffer && !fileData.audioReady) {
+    try {
+      fileData = await tagAudio(fileData, await soundcloudTrack(url));
+    } catch (error) {
+      logger.warn(`SoundCloud tags skipped: ${error.message}`);
+    }
+  }
+
   return { kind: 'file', fileData, downloadMethod, url };
 }
 
@@ -580,6 +604,10 @@ export async function extractAudio(
     : fileData;
   if (!source?.buffer || fileData?.archive) {
     throw new ValidationError('there is no audio in that post to turn into an mp3.');
+  }
+  // Already a tagged mp3: re-encoding would drop the cover and tags for nothing.
+  if (source.audioReady && startTime === null && duration === null) {
+    return { buffer: source.buffer, baseName: path.parse(source.filename).name };
   }
   // yt-dlp (and its fallback) already cut the requested section.
   const trim = downloadMethod === 'ytdlp' ? {} : { startTime, duration };

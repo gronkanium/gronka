@@ -807,10 +807,10 @@ async function getCobaltMediaUrlsImpl(apiUrl, url) {
   ) {
     const items = cobaltResponse.picker
       .filter(item => (item.type === 'photo' || item.type === 'video') && item.url)
-      .filter(item => !item.url.includes('/tunnel'))
       .map(item => ({ url: item.url, type: item.type, filename: null }));
 
-    if (items.length === 0) {
+    // One tunnelled slide means the gallery can't be served as links without dropping it.
+    if (items.length === 0 || items.some(item => item.url.includes('/tunnel'))) {
       return { urls: [], direct: false };
     }
     return { urls: items, direct: true };

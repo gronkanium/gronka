@@ -136,6 +136,10 @@ describe('validation utilities', () => {
       }
     });
 
+    test('allows public addresses beside the 192.0.0.0/24 block (tumblr)', () => {
+      assert.strictEqual(validateUrl('http://192.0.77.40/').valid, true);
+    });
+
     test('rejects remaining internal IPv4 ranges', () => {
       assert.strictEqual(validateUrl('http://169.254.169.254/latest/meta-data/').valid, false);
       assert.strictEqual(validateUrl('http://100.64.0.1/').valid, false); // CGNAT

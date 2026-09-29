@@ -29,7 +29,6 @@ import {
 import { detectFileType } from '../utils/storage.js';
 import { getBooleanSetting, getSetting } from '../utils/database.js';
 import { isRedditPostUrl, hasRedditSession, resolveRedditPost } from '../utils/reddit.js';
-import { mapWithLimit } from '../utils/concurrency.js';
 import { convertToFormat } from '../utils/video-processor.js';
 import { fitsDiscordAttachment } from '../commands/shared/attachment-limit.js';
 
@@ -443,7 +442,7 @@ export async function acquireMedia(
       };
 
       const slides = redditImages.slice(0, MAX_REDDIT_GALLERY_SLIDES);
-      const downloaded = (await mapWithLimit(slides, 4, downloadSlide)).filter(Boolean);
+      const downloaded = (await Promise.all(slides.map(downloadSlide))).filter(Boolean);
       if (downloaded.length === 0) {
         throw lastError;
       }

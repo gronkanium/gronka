@@ -9,7 +9,6 @@ import {
   FFMPEG_INPUT_GUARD,
 } from './utils.js';
 import { getVideoMetadata } from './metadata.js';
-import { mediaSlots } from '../concurrency.js';
 
 const logger = createLogger('convert-to-gif');
 
@@ -27,7 +26,7 @@ const logger = createLogger('convert-to-gif');
  * @returns {Promise<void>}
  */
 export async function convertToGif(inputPath, outputPath, options = {}) {
-  return mediaSlots.run(() => convertToGifImpl(inputPath, outputPath, options));
+  return convertToGifImpl(inputPath, outputPath, options);
 }
 
 async function convertToGifImpl(inputPath, outputPath, options = {}) {

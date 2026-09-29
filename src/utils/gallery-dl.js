@@ -4,7 +4,6 @@ import tmp from 'tmp';
 import { spawn } from 'child_process';
 import { createLogger } from './logger.js';
 import { NetworkError, ValidationError } from './errors.js';
-import { galleryDlSlots } from './concurrency.js';
 import { createZip } from './archive.js';
 
 const logger = createLogger('gallery-dl');
@@ -36,7 +35,6 @@ const MEDIA_EXTENSIONS = new Set([
 
 const MAX_GALLERY_FILES = 25;
 const MAX_MANGA_IMAGES = 10;
-const MANGA_PAGE_CONCURRENCY = 4;
 
 export function getGalleryDlSite(url) {
   try {
@@ -208,20 +206,14 @@ async function downloadMangaPages(urls, isAdminUser, maxSize) {
   if (urls.length === 0) {
     throw new NetworkError('no pages found in this chapter');
   }
-  const results = new Array(urls.length);
-  let nextIndex = 0;
-  async function worker() {
-    while (nextIndex < urls.length) {
-      const index = nextIndex++;
-      const fileData = await downloadFileFromUrl(urls[index], isAdminUser);
+  const results = await Promise.all(
+    urls.map(async pageUrl => {
+      const fileData = await downloadFileFromUrl(pageUrl, isAdminUser);
       if (!isAdminUser && fileData.size > maxSize) {
         throw new ValidationError('a manga page is too large to download');
       }
-      results[index] = fileData;
-    }
-  }
-  await Promise.all(
-    Array.from({ length: Math.min(MANGA_PAGE_CONCURRENCY, urls.length) }, () => worker())
+      return fileData;
+    })
   );
   if (results.length > MAX_MANGA_IMAGES) {
     const buffer = createZip(results);
@@ -242,39 +234,37 @@ export async function downloadWithGalleryDl(
   maxSize = Infinity,
   options = {}
 ) {
-  return galleryDlSlots.run(async () => {
-    if (options.mediaUrls) {
-      return downloadMangaPages(options.mediaUrls, isAdminUser, maxSize);
+  if (options.mediaUrls) {
+    return downloadMangaPages(options.mediaUrls, isAdminUser, maxSize);
+  }
+  const tempDir = tmp.dirSync({ unsafeCleanup: true });
+  try {
+    await runGalleryDl(url, tempDir.name);
+    const files = await findMediaFiles(tempDir.name);
+    if (files.length === 0) {
+      throw new NetworkError('no downloadable media found in this gallery');
     }
-    const tempDir = tmp.dirSync({ unsafeCleanup: true });
-    try {
-      await runGalleryDl(url, tempDir.name);
-      const files = await findMediaFiles(tempDir.name);
-      if (files.length === 0) {
-        throw new NetworkError('no downloadable media found in this gallery');
-      }
-      if (files.length > MAX_GALLERY_FILES) {
-        throw new ValidationError('this gallery contains too many files to download at once');
-      }
+    if (files.length > MAX_GALLERY_FILES) {
+      throw new ValidationError('this gallery contains too many files to download at once');
+    }
 
-      const results = [];
-      for (const filePath of files) {
-        const buffer = await fs.readFile(filePath);
-        if (!isAdminUser && buffer.length > maxSize) {
-          throw new ValidationError('a gallery file is too large to download');
-        }
-        results.push({
-          buffer,
-          contentType: contentTypeForExtension(path.extname(filePath)),
-          size: buffer.length,
-          filename: path.basename(filePath),
-        });
+    const results = [];
+    for (const filePath of files) {
+      const buffer = await fs.readFile(filePath);
+      if (!isAdminUser && buffer.length > maxSize) {
+        throw new ValidationError('a gallery file is too large to download');
       }
-      return results.length === 1 ? results[0] : results;
-    } finally {
-      tempDir.removeCallback();
+      results.push({
+        buffer,
+        contentType: contentTypeForExtension(path.extname(filePath)),
+        size: buffer.length,
+        filename: path.basename(filePath),
+      });
     }
-  });
+    return results.length === 1 ? results[0] : results;
+  } finally {
+    tempDir.removeCallback();
+  }
 }
 
 function contentTypeForExtension(extension) {

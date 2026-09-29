@@ -108,7 +108,7 @@ describe('handler', () => {
     });
   });
 
-  test('per-ip limit, one job per ip, and the global cap', async () => {
+  test('per-ip limit', async () => {
     const limited = createHandler({ verify: ok, download: async () => result, ipLimit: 2 });
     expect((await limited(post(body))).status).toBe(200);
     expect((await limited(post(body))).status).toBe(200);
@@ -118,17 +118,6 @@ describe('handler', () => {
     expect(wait).toBeGreaterThan(590);
     expect((await readJson(over)).error.retryAfter).toBe(wait);
     expect((await limited(post(body, { 'cf-connecting-ip': '198.51.100.1' }))).status).toBe(200);
-
-    let release;
-    const slow = () => new Promise(resolve => (release = () => resolve(result)));
-    const capped = createHandler({ verify: ok, download: slow, maxJobs: 1 });
-    const first = await capped(post(body));
-    expect((await capped(post(body))).status).toBe(429);
-    const busy = await capped(post(body, { 'cf-connecting-ip': '198.51.100.2' }));
-    expect(busy.status).toBe(503);
-    expect(busy.headers.get('retry-after')).toBe('10');
-    release();
-    await first.text();
   });
 });
 

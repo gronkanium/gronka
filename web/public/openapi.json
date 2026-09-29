@@ -152,7 +152,7 @@
             "$ref": "#/components/responses/Error"
           }
         },
-        "description": "limits: 10 downloads per 10 minutes and one at a time, per ip, or per account for api keys (all keys of an account share them). keyed requests are also limited to 30 key checks per 10 minutes per ip."
+        "description": "limits: 50 downloads per 10 minutes per ip, or per account for api keys (all keys of an account share them). keyed requests are also limited to 30 key checks per 10 minutes per ip."
       }
     },
     "/v1/account": {
@@ -955,7 +955,6 @@
                 "examples": [
                   "BAD_REQUEST",
                   "BAD_URL",
-                  "BUSY",
                   "CONTENT_GONE",
                   "DOWNLOAD_FAILED",
                   "INTERNAL",
@@ -976,7 +975,7 @@
               },
               "retryAfter": {
                 "type": "integer",
-                "description": "on 429 RATE_LIMITED and 503 BUSY: seconds to wait before retrying, also sent as a Retry-After header"
+                "description": "on 429 RATE_LIMITED: seconds to wait before retrying, also sent as a Retry-After header"
               }
             }
           }

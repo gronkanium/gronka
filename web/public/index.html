@@ -6,6 +6,8 @@
     <title>gronka</title>
     <meta name="description" content="paste a link, get the file. coming soon." />
     <link rel="icon" href="data:," />
+    <link rel="preload" href="/fonts/DejaVuSans.woff2" as="font" type="font/woff2" crossorigin />
+    <link rel="stylesheet" href="/fonts/fonts.css" />
     <style>
       :root {
         color-scheme: light dark;
@@ -28,8 +30,7 @@
         background: var(--bg);
         color: var(--fg);
         font:
-          16px/1.5 ui-sans-serif,
-          system-ui,
+          16px/1.5 'DejaVu Sans',
           sans-serif;
         padding: 0 16px;
       }

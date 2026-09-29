@@ -7,6 +7,8 @@
     <meta name="theme-color" content="#f6f5f1" />
     <title>api / gronka</title>
     <link rel="icon" href="data:," />
+    <link rel="preload" href="/fonts/DejaVuSans.woff2" as="font" type="font/woff2" crossorigin />
+    <link rel="stylesheet" href="/fonts/fonts.css" />
     <style>
       :root {
         color-scheme: light dark;
@@ -38,8 +40,7 @@
         background: var(--bg);
         color: var(--fg);
         font:
-          15px/1.6 ui-sans-serif,
-          system-ui,
+          15px/1.6 'DejaVu Sans',
           sans-serif;
         -webkit-font-smoothing: antialiased;
       }
@@ -72,9 +73,7 @@
       }
       .spec-link {
         font:
-          0.83rem/1.4 ui-monospace,
-          SFMono-Regular,
-          Consolas,
+          0.83rem/1.4 'DejaVu Sans Mono',
           monospace;
       }
       .layout {
@@ -160,7 +159,7 @@
       pre,
       .method,
       .route-path {
-        font-family: ui-monospace, SFMono-Regular, Consolas, 'Liberation Mono', monospace;
+        font-family: 'DejaVu Sans Mono', monospace;
       }
       :not(pre) > code {
         font-size: 0.9em;

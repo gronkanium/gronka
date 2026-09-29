@@ -77,32 +77,6 @@
             "offers": { "@type": "Offer", "price": "0", "priceCurrency": "USD" }
           },
           {
-            "@type": "FAQPage",
-            "mainEntity": [
-              {
-                "@type": "Question",
-                "name": "do i get the small preview or the real image?",
-                "acceptedAnswer": {
-                  "@type": "Answer",
-                  "text": "the original size pinterest stores."
-                }
-              },
-              {
-                "@type": "Question",
-                "name": "what if a pin has a video and an image?",
-                "acceptedAnswer": { "@type": "Answer", "text": "you get the video." }
-              },
-              {
-                "@type": "Question",
-                "name": "do i need an account?",
-                "acceptedAnswer": {
-                  "@type": "Answer",
-                  "text": "no. paste the link and download. accounts only exist to hold api keys."
-                }
-              }
-            ]
-          },
-          {
             "@type": "BreadcrumbList",
             "itemListElement": [
               {
@@ -138,8 +112,10 @@
     </header>
 
     <main>
-      <h1>pinterest downloader.</h1>
-      <p class="lede">video pins and full-size images. pin.it links work.</p>
+      <h1>paste a pinterest link, get the file.</h1>
+      <p class="lede">
+        tiktok, instagram, x, youtube, reddit and a lot more. the discord bot, in your browser.
+      </p>
 
       <p id="asleep" class="asleep ink" hidden>
         <img src="/p/asleep.svg" alt="" width="400" height="400" />
@@ -231,43 +207,47 @@
       </form>
 
       <section id="panel" class="panel" aria-live="polite" aria-atomic="false"></section>
-    </main>
 
-    <section class="more">
-      <h2>what works</h2>
-      <ul>
-        <li>
-          pin links on <code>pinterest.com</code> and country sites like
-          <code>pinterest.co.uk</code>, and <code>pin.it</code> share links.
-        </li>
-        <li>video pins as video, image pins at the original size.</li>
-      </ul>
-      <h2>how the file gets to you</h2>
-      <p>
-        gronka opens the pin page, reads the media address out of it, and fetches that file itself.
-        the copy is kept for an hour. <a href="/privacy/">more on that</a>.
-      </p>
-      <h2>questions</h2>
-      <h3>do i get the small preview or the real image?</h3>
-      <p>the original size pinterest stores.</p>
-      <h3>what if a pin has a video and an image?</h3>
-      <p>you get the video.</p>
-      <h3>do i need an account?</h3>
-      <p>no. paste the link and download. accounts only exist to hold api keys.</p>
-      <nav class="sites" aria-label="downloaders by site">
-        <h2>by site</h2>
+      <details class="sites">
+        <summary>supported sites</summary>
         <ul>
-          <li><a href="/tiktok/">tiktok</a></li>
-          <li><a href="/instagram/">instagram</a></li>
-          <li><a href="/x/">x</a></li>
-          <li><a href="/youtube/">youtube</a></li>
-          <li><a href="/reddit/">reddit</a></li>
-          <li><a href="/pinterest/" aria-current="page">pinterest</a></li>
-          <li><a href="/facebook/">facebook</a></li>
+          <li class="page"><a href="/tiktok/">tiktok</a></li>
+          <li class="page"><a href="/instagram/">instagram</a></li>
+          <li class="page"><a href="/x/">x</a></li>
+          <li class="page"><a href="/youtube/">youtube</a></li>
+          <li class="page"><a href="/reddit/">reddit</a></li>
+          <li class="page"><a href="/pinterest/" aria-current="page">pinterest</a></li>
+          <li class="page"><a href="/facebook/">facebook</a></li>
+          <li>bluesky</li>
+          <li>snapchat</li>
+          <li>tumblr</li>
+          <li>twitch clips</li>
+          <li>soundcloud</li>
+          <li>streamable</li>
+          <li>dailymotion</li>
+          <li>imgur</li>
+          <li>giphy</li>
+          <li>tenor</li>
+          <li>klipy</li>
+          <li>kick</li>
+          <li>medal</li>
+          <li>rumble</li>
+          <li>coub</li>
+          <li>newgrounds</li>
+          <li>niconico</li>
+          <li>bilibili</li>
+          <li>xiaohongshu</li>
+          <li>mega</li>
+          <li>pixiv</li>
+          <li>deviantart</li>
+          <li>artstation</li>
+          <li>flickr</li>
+          <li>wallhaven</li>
+          <li>mangadex</li>
         </ul>
-      </nav>
-      <p><a href="/">every other site</a> works from the main page too.</p>
-    </section>
+        <p class="note">public posts only. gronka isn't affiliated with any of these.</p>
+      </details>
+    </main>
 
     <footer class="foot">
       <a href="/docs/">api docs</a><a href="/account/">account</a><a href="/terms/">terms</a

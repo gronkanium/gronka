@@ -74,35 +74,6 @@
             "offers": { "@type": "Offer", "price": "0", "priceCurrency": "USD" }
           },
           {
-            "@type": "FAQPage",
-            "mainEntity": [
-              {
-                "@type": "Question",
-                "name": "why did it say the post is gone?",
-                "acceptedAnswer": {
-                  "@type": "Answer",
-                  "text": "the post was removed. gronka stops there instead of guessing."
-                }
-              },
-              {
-                "@type": "Question",
-                "name": "do i get the comments too?",
-                "acceptedAnswer": {
-                  "@type": "Answer",
-                  "text": "no. a post link gets the post's own media. to get a comment's gif, link to that comment."
-                }
-              },
-              {
-                "@type": "Question",
-                "name": "can it get private posts?",
-                "acceptedAnswer": {
-                  "@type": "Answer",
-                  "text": "no. a private post or account has nothing public to fetch, so gronka cannot get it."
-                }
-              }
-            ]
-          },
-          {
             "@type": "BreadcrumbList",
             "itemListElement": [
               {
@@ -138,8 +109,10 @@
     </header>
 
     <main>
-      <h1>reddit downloader.</h1>
-      <p class="lede">videos with their sound, galleries in order, and gifs from comments.</p>
+      <h1>paste a reddit link, get the file.</h1>
+      <p class="lede">
+        tiktok, instagram, x, youtube, reddit and a lot more. the discord bot, in your browser.
+      </p>
 
       <p id="asleep" class="asleep ink" hidden>
         <img src="/p/asleep.svg" alt="" width="400" height="400" />
@@ -231,52 +204,47 @@
       </form>
 
       <section id="panel" class="panel" aria-live="polite" aria-atomic="false"></section>
-    </main>
 
-    <section class="more">
-      <h2>what works</h2>
-      <ul>
-        <li>
-          post links, including the <code>/s/</code> links the share button makes. reddit's own
-          video comes with its sound.
-        </li>
-        <li>
-          galleries arrive in the post's order, in a picker, so you can take some or all. a gallery
-          gives you its first 10 images.
-        </li>
-        <li>a link to one comment gets that comment's image or gif, not the whole thread.</li>
-        <li>
-          posts that only link somewhere else, like redgifs or imgur, are followed to the file.
-        </li>
-      </ul>
-      <h2>how the file gets to you</h2>
-      <p>
-        gronka reads the post through reddit itself, keeping the post separate from its comments.
-        images are fetched by gronka and kept for an hour. <a href="/privacy/">more on that</a>.
-      </p>
-      <h2>questions</h2>
-      <h3>why did it say the post is gone?</h3>
-      <p>the post was removed. gronka stops there instead of guessing.</p>
-      <h3>do i get the comments too?</h3>
-      <p>
-        no. a post link gets the post's own media. to get a comment's gif, link to that comment.
-      </p>
-      <h3>can it get private posts?</h3>
-      <p>no. a private post or account has nothing public to fetch, so gronka cannot get it.</p>
-      <nav class="sites" aria-label="downloaders by site">
-        <h2>by site</h2>
+      <details class="sites">
+        <summary>supported sites</summary>
         <ul>
-          <li><a href="/tiktok/">tiktok</a></li>
-          <li><a href="/instagram/">instagram</a></li>
-          <li><a href="/x/">x</a></li>
-          <li><a href="/youtube/">youtube</a></li>
-          <li><a href="/reddit/" aria-current="page">reddit</a></li>
-          <li><a href="/pinterest/">pinterest</a></li>
-          <li><a href="/facebook/">facebook</a></li>
+          <li class="page"><a href="/tiktok/">tiktok</a></li>
+          <li class="page"><a href="/instagram/">instagram</a></li>
+          <li class="page"><a href="/x/">x</a></li>
+          <li class="page"><a href="/youtube/">youtube</a></li>
+          <li class="page"><a href="/reddit/" aria-current="page">reddit</a></li>
+          <li class="page"><a href="/pinterest/">pinterest</a></li>
+          <li class="page"><a href="/facebook/">facebook</a></li>
+          <li>bluesky</li>
+          <li>snapchat</li>
+          <li>tumblr</li>
+          <li>twitch clips</li>
+          <li>soundcloud</li>
+          <li>streamable</li>
+          <li>dailymotion</li>
+          <li>imgur</li>
+          <li>giphy</li>
+          <li>tenor</li>
+          <li>klipy</li>
+          <li>kick</li>
+          <li>medal</li>
+          <li>rumble</li>
+          <li>coub</li>
+          <li>newgrounds</li>
+          <li>niconico</li>
+          <li>bilibili</li>
+          <li>xiaohongshu</li>
+          <li>mega</li>
+          <li>pixiv</li>
+          <li>deviantart</li>
+          <li>artstation</li>
+          <li>flickr</li>
+          <li>wallhaven</li>
+          <li>mangadex</li>
         </ul>
-      </nav>
-      <p><a href="/">every other site</a> works from the main page too.</p>
-    </section>
+        <p class="note">public posts only. gronka isn't affiliated with any of these.</p>
+      </details>
+    </main>
 
     <footer class="foot">
       <a href="/docs/">api docs</a><a href="/account/">account</a><a href="/terms/">terms</a

@@ -391,53 +391,45 @@ details[open] summary::after {
   }
 }
 
-.more {
-  width: 100%;
-  max-width: 760px;
-  margin: 0 auto;
-  padding: 8px 0 24px;
+.sites {
+  margin-top: 18px;
 }
-.more h2 {
-  margin: 32px 0 10px;
-}
-.more h3 {
-  font-size: 17px;
-  margin: 18px 0 4px;
-}
-.more p,
-.more li {
-  max-width: 62ch;
-}
-.more li + li {
-  margin-top: 6px;
+.sites summary {
+  display: inline-block;
+  text-align: left;
+  font-size: 15px;
 }
 .sites ul {
   list-style: none;
   padding: 0;
-  margin: 0;
+  margin: 4px 0 0;
   display: flex;
   flex-wrap: wrap;
-  gap: 8px 10px;
+  gap: 6px;
 }
-.sites a {
-  display: inline-block;
-  padding: 7px 14px;
-  border: 2px solid var(--ink);
-  border-radius: 999px;
-  text-decoration: none;
+.sites li {
+  font-size: 14px;
   font-weight: 600;
+  padding: 5px 11px;
+  border-radius: 999px;
+  background: var(--soft);
 }
-.sites a:hover,
-.sites a[aria-current] {
+.sites .page {
+  padding: 0;
   background: var(--ink);
+}
+.sites .page a {
+  display: block;
+  padding: 5px 11px;
   color: var(--paper);
+  text-decoration: none;
 }
-.sites + h2 ~ p:last-child,
-.sites ~ p:last-child {
-  margin-top: 18px;
+.sites .page a:hover,
+.sites .page a[aria-current] {
+  text-decoration: underline;
+  text-underline-offset: 3px;
 }
-@media (min-width: 900px) {
-  .more {
-    max-width: 920px;
-  }
+.sites .note {
+  font-size: 13px;
+  margin: 10px 0 0;
 }

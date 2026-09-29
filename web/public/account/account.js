@@ -155,8 +155,8 @@ function kit(number) {
   return new Blob(
     [
       `gronka account number\n\n${number}\n\nmade ${date} on https://web.gronka.dev/account/\n\n` +
-        'this number is the only way into your gronka account. it holds your api keys.\n' +
-        'there is no recovery or reset. lose it and the account is gone.\n' +
+        'this number gets you into your gronka account. it holds your api keys.\n' +
+        'there is no reset. lose it without a passkey and the account is gone.\n' +
         'keep this file somewhere safe, like a password manager.\n',
     ],
     { type: 'text/plain' }
@@ -164,9 +164,9 @@ function kit(number) {
 }
 
 function saveNumber(number, next, { rotated = false } = {}) {
-  show(`<img class="peng" src="/p/think.svg" alt="" width="400" height="400" />
+  show(`<img class="peng" src="/p/idle.svg" alt="" width="400" height="400" />
     <h1>${rotated ? 'your new number.' : 'your account number.'}</h1>
-    <p>this is your way back in. <strong>no email. no reset.</strong> lose it and the account is gone${rotated ? ', and the old number already stopped working' : ''}.</p>
+    <p>this number gets you back in. <strong>no email. no reset.</strong> lose it without a passkey and the account is gone${rotated ? ', and the old number already stopped working' : ''}.</p>
     <p class="number ink" id="num">${esc(number)}</p>
     <div class="acts"><button type="button" class="btn" id="dl">${icon('download')}download it</button>
     <button type="button" class="btn line small" id="copy">${icon('copy')}copy</button></div>
@@ -182,7 +182,7 @@ function saveNumber(number, next, { rotated = false } = {}) {
 
 function offerPasskey() {
   if (!passkeys) return dashboard();
-  show(`<img class="peng" src="/p/done.svg" alt="" width="400" height="400" />
+  show(`<img class="peng" src="/p/think.svg" alt="" width="400" height="400" />
     <h1>add a passkey?</h1>
     <p>a passkey is another way in, kept by your phone, laptop or password manager. if you lose the number but keep the passkey, you can log in and make a new one.</p>
     <div class="acts"><button type="button" class="btn" id="add">${icon('passkey')}add a passkey</button>
@@ -210,7 +210,7 @@ function signedOut() {
   show(`<h1>account</h1>
     <p class="lede">for api keys. the page doesn't need one. no email or username, just an account number.</p>
     <div class="cards">
-      <div class="card ink"><h2>new here</h2><p>one click. we show you the number once.</p>
+      <div class="card ink"><h2>new here</h2><p>make an account. save the number. it shows once.</p>
         <button type="button" class="btn" id="create">make an account</button><div id="create-msg"></div></div>
       <form class="card ink" id="login" novalidate><h2>have a number</h2>
         <label class="label" for="number">account number</label>
@@ -291,7 +291,7 @@ async function dashboard(notice = '') {
       return signedOut();
     }
     return (
-      show(`<h1>account</h1><img class="peng" src="/p/asleep.svg" alt="" width="400" height="400" /><p>${esc(error.message)}</p>
+      show(`<h1>account</h1><img class="peng" src="/p/failed.svg" alt="" width="400" height="400" /><p>${esc(error.message)}</p>
       <div class="acts"><button type="button" class="btn" id="retry">try again</button></div>`),
       on('#retry', () => dashboard())
     );
@@ -424,7 +424,7 @@ async function dashboard(notice = '') {
       }
       hint(false);
       show(
-        '<h1>gone.</h1><img class="peng" src="/p/asleep.svg" alt="" width="400" height="400" /><p>the account and everything in it are gone.</p><p><a href="/">back to downloading</a></p>'
+        '<h1>gone.</h1><img class="peng" src="/p/done.svg" alt="" width="400" height="400" /><p>the account and everything in it are gone.</p><p><a href="/">back to downloading</a></p>'
       );
     })
   );
@@ -494,7 +494,7 @@ function totpBox(me) {
     return;
   }
   box.innerHTML = `<p>${me.recoveryCodesLeft} recovery code${me.recoveryCodesLeft === 1 ? '' : 's'} left.</p>
-    ${codeForm('regen', 'current code, for new recovery codes', 'new codes')}${codeForm('off', 'current code, to turn 2fa off', 'turn off')}`;
+    ${codeForm('regen', 'authenticator or recovery code, for new recovery codes', 'new codes')}${codeForm('off', 'authenticator or recovery code, to turn 2fa off', 'turn off')}`;
   submit('regen', async code => {
     const { recoveryCodes } = await api('/v1/totp/recovery', { method: 'POST', body: { code } });
     box.innerHTML = `${codesBlock(recoveryCodes)}<button type="button" class="linkish" id="done2fa">done</button>`;

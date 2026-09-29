@@ -77,43 +77,6 @@
             "offers": { "@type": "Offer", "price": "0", "priceCurrency": "USD" }
           },
           {
-            "@type": "FAQPage",
-            "mainEntity": [
-              {
-                "@type": "Question",
-                "name": "does twitter.com still work?",
-                "acceptedAnswer": {
-                  "@type": "Answer",
-                  "text": "yes. twitter.com and x.com links are the same thing to gronka."
-                }
-              },
-              {
-                "@type": "Question",
-                "name": "why is my gif a video?",
-                "acceptedAnswer": {
-                  "@type": "Answer",
-                  "text": "x turns every gif into a short mp4. that's the file x has, so that's the file you get."
-                }
-              },
-              {
-                "@type": "Question",
-                "name": "can it get private posts?",
-                "acceptedAnswer": {
-                  "@type": "Answer",
-                  "text": "no. a private post or account has nothing public to fetch, so gronka cannot get it."
-                }
-              },
-              {
-                "@type": "Question",
-                "name": "is there a limit?",
-                "acceptedAnswer": {
-                  "@type": "Answer",
-                  "text": "about 10 downloads per 10 minutes, one at a time. the same for everyone, and nothing is paid."
-                }
-              }
-            ]
-          },
-          {
             "@type": "BreadcrumbList",
             "itemListElement": [
               {
@@ -149,8 +112,10 @@
     </header>
 
     <main>
-      <h1>x downloader.</h1>
-      <p class="lede">videos, gifs and images from x. twitter.com links work too.</p>
+      <h1>paste an x link, get the file.</h1>
+      <p class="lede">
+        tiktok, instagram, x, youtube, reddit and a lot more. the discord bot, in your browser.
+      </p>
 
       <p id="asleep" class="asleep ink" hidden>
         <img src="/p/asleep.svg" alt="" width="400" height="400" />
@@ -242,53 +207,47 @@
       </form>
 
       <section id="panel" class="panel" aria-live="polite" aria-atomic="false"></section>
-    </main>
 
-    <section class="more">
-      <h2>what works</h2>
-      <ul>
-        <li>
-          post links on <code>x.com</code> and <code>twitter.com</code>, plus embed mirrors like
-          <code>fxtwitter.com</code> and <code>vxtwitter.com</code>.
-        </li>
-        <li>
-          videos, gifs (x stores them as short videos) and images. a post with several goes to the
-          picker.
-        </li>
-        <li>pick <strong>audio</strong> for the sound only.</li>
-      </ul>
-      <h2>how the file gets to you</h2>
-      <p>
-        for a big video gronka often skips copying and hands you x's own video link. when it can't,
-        it fetches the file itself and keeps the copy for an hour.
-        <a href="/privacy/">more on that</a>.
-      </p>
-      <h2>questions</h2>
-      <h3>does twitter.com still work?</h3>
-      <p>yes. twitter.com and x.com links are the same thing to gronka.</p>
-      <h3>why is my gif a video?</h3>
-      <p>x turns every gif into a short mp4. that's the file x has, so that's the file you get.</p>
-      <h3>can it get private posts?</h3>
-      <p>no. a private post or account has nothing public to fetch, so gronka cannot get it.</p>
-      <h3>is there a limit?</h3>
-      <p>
-        about 10 downloads per 10 minutes, one at a time. the same for everyone, and nothing is
-        paid.
-      </p>
-      <nav class="sites" aria-label="downloaders by site">
-        <h2>by site</h2>
+      <details class="sites">
+        <summary>supported sites</summary>
         <ul>
-          <li><a href="/tiktok/">tiktok</a></li>
-          <li><a href="/instagram/">instagram</a></li>
-          <li><a href="/x/" aria-current="page">x</a></li>
-          <li><a href="/youtube/">youtube</a></li>
-          <li><a href="/reddit/">reddit</a></li>
-          <li><a href="/pinterest/">pinterest</a></li>
-          <li><a href="/facebook/">facebook</a></li>
+          <li class="page"><a href="/tiktok/">tiktok</a></li>
+          <li class="page"><a href="/instagram/">instagram</a></li>
+          <li class="page"><a href="/x/" aria-current="page">x</a></li>
+          <li class="page"><a href="/youtube/">youtube</a></li>
+          <li class="page"><a href="/reddit/">reddit</a></li>
+          <li class="page"><a href="/pinterest/">pinterest</a></li>
+          <li class="page"><a href="/facebook/">facebook</a></li>
+          <li>bluesky</li>
+          <li>snapchat</li>
+          <li>tumblr</li>
+          <li>twitch clips</li>
+          <li>soundcloud</li>
+          <li>streamable</li>
+          <li>dailymotion</li>
+          <li>imgur</li>
+          <li>giphy</li>
+          <li>tenor</li>
+          <li>klipy</li>
+          <li>kick</li>
+          <li>medal</li>
+          <li>rumble</li>
+          <li>coub</li>
+          <li>newgrounds</li>
+          <li>niconico</li>
+          <li>bilibili</li>
+          <li>xiaohongshu</li>
+          <li>mega</li>
+          <li>pixiv</li>
+          <li>deviantart</li>
+          <li>artstation</li>
+          <li>flickr</li>
+          <li>wallhaven</li>
+          <li>mangadex</li>
         </ul>
-      </nav>
-      <p><a href="/">every other site</a> works from the main page too.</p>
-    </section>
+        <p class="note">public posts only. gronka isn't affiliated with any of these.</p>
+      </details>
+    </main>
 
     <footer class="foot">
       <a href="/docs/">api docs</a><a href="/account/">account</a><a href="/terms/">terms</a

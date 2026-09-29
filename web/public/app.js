@@ -89,6 +89,7 @@ let flip;
 const restPose = () => MODE_FRAMES[form.mode.value]?.at(-1) ?? 'idle';
 function playMode(next) {
   clearInterval(flip);
+  stopFlip();
   const from = MODE_FRAMES[modeShown] ?? [];
   const to = MODE_FRAMES[next] ?? [];
   modeShown = next;
@@ -101,7 +102,91 @@ function playMode(next) {
     if (!frames.length) clearInterval(flip);
   }, 80);
 }
+// flipbooks, drawn by gronka-promos/projects/mascot/web.py: frames, ms per frame, loops
+const range = (name, n) => Array.from({ length: n }, (_, i) => `${name}-${i + 1}`);
+const FLIPS = {
+  fetching: [range('fetch', 4), [260, 220, 220, 320], true],
+  still: [['still-1', 'still-2', 'still-3', 'still-2'], [1400, 900, 160, 900], true],
+  gotit: [['got-1', 'got-2', 'got-3', 'done'], [140, 140, 360], false],
+  party: [range('party', 40), Array(40).fill(1000 / 30), true],
+  nope: [['nope-1', 'nope-2', 'failed'], [160, 420], false],
+  asleep: [['asleep', 'asleep-2', 'asleep-3', 'asleep-2'], [900, 700, 900, 700], true],
+  fidget: [['fidget-1', 'fidget-2', 'fidget-1', 'idle'], [500, 160, 400], false],
+  gum: [
+    [...range('gum', 5), 'gum-pop', 'gum-after', 'idle'],
+    [420, 380, 340, 300, 260, 220, 900],
+    false,
+  ],
+  coffee: [
+    ['coffee-1', 'coffee-2', 'coffee-1', 'coffee-2', 'coffee-3', 'coffee-4', 'coffee-2', 'idle'],
+    [420, 420, 420, 420, 900, 700, 420],
+    false,
+  ],
+  paper: [
+    ['paper-1', 'paper-2', 'paper-1', 'paper-3', 'paper-4', 'paper-2', 'idle'],
+    [900, 900, 900, 160, 200, 900],
+    false,
+  ],
+  yoyo: [
+    [...Array(3).fill(['yoyo-1', 'yoyo-2', 'yoyo-3', 'yoyo-2']).flat(), 'idle'],
+    Array(12).fill(140),
+    false,
+  ],
+  phones: [[...Array(4).fill(range('phones', 4)).flat(), 'idle'], Array(16).fill(240), false],
+  juggle: [[...Array(4).fill(range('juggle', 6)).flat(), 'idle'], Array(24).fill(120), false],
+};
+const ACTIVITIES = ['fidget', 'fidget', 'gum', 'coffee', 'paper', 'yoyo', 'phones', 'juggle'];
+let flipTimer;
+const stopFlip = () => clearTimeout(flipTimer);
+const preload = names => names.forEach(name => (new Image().src = `/p/${name}.svg`));
+// play a flipbook; a loop runs `times` rounds (forever by default), then `then` (a pose name or a function)
+function play(name, { times = Infinity, then } = {}) {
+  stopFlip();
+  const [frames, ms, loop] = FLIPS[name];
+  const finish = () => (typeof then === 'function' ? then() : then && pose(then));
+  if (reduceMotion) {
+    pose(typeof then === 'string' ? then : loop ? frames[0] : frames.at(-1));
+    if (typeof then === 'function') then();
+    return;
+  }
+  preload(frames);
+  let i = 0;
+  let round = 0;
+  const step = () => {
+    pose(frames[i]);
+    const wait = ms[i] ?? 0;
+    i += 1;
+    if (i === frames.length) {
+      round += 1;
+      if (!loop || round >= times) {
+        if (then) flipTimer = setTimeout(finish, wait);
+        return;
+      }
+      i = 0;
+    }
+    flipTimer = setTimeout(step, wait);
+  };
+  step();
+}
+// now and then, while nobody is using the page, he does something
+function scheduleActivity() {
+  if (reduceMotion) return;
+  setTimeout(
+    () => {
+      scheduleActivity();
+      const idleNow =
+        root.dataset.state === 'idle' &&
+        form.mode.value === 'auto' &&
+        asleep.hidden &&
+        !document.hidden &&
+        document.activeElement !== input;
+      if (idleNow) play(ACTIVITIES[Math.floor(Math.random() * ACTIVITIES.length)]);
+    },
+    35000 + Math.random() * 35000
+  );
+}
 function setState(state, penguin) {
+  stopFlip();
   root.dataset.state = state;
   pose(penguin);
 }
@@ -143,7 +228,9 @@ const STAGES = [
 ];
 
 function working(site) {
-  setState('working', 'working');
+  setState('working', 'fetch-1');
+  play('fetching');
+  let longWait = false;
   draw(`<h2>on it.</h2><p class="meta" id="stage"></p><div class="bar ink"><i id="fill"></i></div>
     <div class="acts"><button type="button" class="linkish" id="cancel">cancel</button></div>`);
   $('#cancel').onclick = idle;
@@ -154,6 +241,10 @@ function working(site) {
       .pop()[1]
       .replace('{site}', site);
     $('#stage').textContent = `${text}. ${Math.floor(t)} s`;
+    if (t >= 45 && !longWait) {
+      longWait = true;
+      play('still');
+    }
     $('#fill').style.width = `${92 * (1 - Math.exp(-t / 14))}%`;
   };
   tick();
@@ -162,16 +253,15 @@ function working(site) {
 
 const COPY = {
   BAD_URL: ['that link looks off.', 'think'],
-  BAD_REQUEST: ['something in that request was off.', 'think'],
+  BAD_REQUEST: ["that didn't work. try a different link.", 'think'],
   VALIDATION_ERROR: ["can't do that one.", 'failed'],
   CONTENT_GONE: ["it's gone.", 'failed'],
   DOWNLOAD_FAILED: ["couldn't get it.", 'failed'],
-  NETWORK_ERROR: ["the site didn't answer.", 'failed'],
+  NETWORK_ERROR: ["the site didn't answer.", 'shrug'],
   VERIFICATION_FAILED: ["cloudflare couldn't check this browser.", 'think'],
   VERIFY_BLOCKED: ["the check didn't load.", 'think'],
   VERIFY_SLOW: ['the check is stuck.', 'think'],
   RATE_LIMITED: ['slow down a little.', 'slow'],
-  BUSY: ["gronka's hands are full.", 'slow'],
   OFFLINE: ['gronka is asleep.', 'asleep'],
   MERGE_FAILED: ["couldn't join the video and audio.", 'failed'],
   INTERNAL: ['something broke on our side.', 'failed'],
@@ -180,9 +270,10 @@ const COPY = {
 function showError(error) {
   stopTimer();
   job = null;
-  if (error.code === 'RATE_LIMITED' || error.code === 'BUSY') return countdown(error);
+  if (error.code === 'RATE_LIMITED') return countdown(error);
   const [title, penguin] = COPY[error.code] ?? COPY.INTERNAL;
   setState('error', penguin);
+  if (penguin === 'failed') play('nope');
   const again = [
     'OFFLINE',
     'NETWORK_ERROR',
@@ -207,7 +298,7 @@ function showError(error) {
 
 function countdown(error) {
   const [title] = COPY[error.code];
-  let left = Math.min(Math.max(error.retryAfter ?? (error.code === 'BUSY' ? 10 : 60), 1), 3600);
+  let left = Math.min(Math.max(error.retryAfter ?? 60, 1), 3600);
   const total = left;
   setState('wait', 'slow');
   draw(`<h2>${title}</h2><p class="say">${esc(error.message)}</p><p class="clock" id="clock" aria-hidden="true"></p>
@@ -222,8 +313,7 @@ function countdown(error) {
       $('#clocktext').textContent = `you can try again in ${left} seconds.`;
     if (left-- <= 0) {
       stopTimer();
-      if (error.code === 'BUSY') start();
-      else idle();
+      idle();
     }
   };
   tick();
@@ -279,8 +369,8 @@ async function start({ split } = {}) {
 }
 
 const LANE_NOTE = {
-  direct: site => `straight from ${site}, gronka never touched the file.`,
-  worker: () => 'passed through to you. gronka keeps no copy.',
+  direct: site => `straight from ${site}. gronka never touched it.`,
+  worker: () => 'passed through. gronka kept nothing.',
   r2: () => 'this link works for an hour. then the file goes.',
 };
 
@@ -338,7 +428,8 @@ async function deliver(result, request) {
   if (result.files.length > 1) return picker(result, site);
   const file = result.files[0];
   const name = nameOf(file);
-  setState('done', 'done');
+  setState('done', 'got-1');
+  play('gotit', { then: () => play('party', { times: 2, then: 'done' }) });
   draw(`<h2>got it.</h2><p class="meta">${esc(name)}${file.size ? ` · ${mb(file.size)}` : ''}</p>
     <p class="say note">${LANE_NOTE[result.lane](site)}</p><p class="meta" id="saving"></p>
     <div class="acts"><button type="button" class="btn" id="save">${icon('download')}save file</button>
@@ -425,7 +516,7 @@ function picker(result, site) {
       if (!(await saveOne(result.files[i], result.lane, i))) failed.push(i);
       await new Promise(r => setTimeout(r, 700));
     }
-    pose(failed.length === picked.length ? 'think' : 'done');
+    pose(failed.length ? 'think' : 'done');
     $('#saving').innerHTML = failed.length
       ? `${failed.length === picked.length ? 'this site' : `${failed.length} of these`} won't let the page save directly. open and save:
         <span class="acts">${failed.map(i => openLink(result.files[i].url, `open ${i + 1}`)).join('')}</span>`
@@ -443,7 +534,8 @@ function picker(result, site) {
 }
 
 async function merge(result, request) {
-  setState('working', 'working');
+  setState('working', 'fetch-1');
+  play('fetching');
   draw(`<h2>two parts, joining them here.</h2><p class="meta" id="stage">getting the video and the audio</p>
     <div class="bar ink"><i id="fill"></i></div><p class="note">this happens in your browser, nothing goes back to gronka.</p>`);
   const sizes = result.files.map(file => file.size ?? 0);
@@ -484,7 +576,8 @@ async function merge(result, request) {
 }
 
 function deliverBlob(blob, filename, request) {
-  setState('done', 'done');
+  setState('done', 'got-1');
+  play('gotit', { then: () => play('party', { times: 2, then: 'done' }) });
   draw(`<h2>got it.</h2><p class="meta">${esc(filename)} · ${mb(blob.size)}</p>
     <p class="say note">joined in your browser from ${esc(siteOf(request.url))}'s own files.</p>
     <div class="acts"><button type="button" class="btn" id="save">${icon('download')}save file</button>
@@ -503,8 +596,11 @@ function deliverBlob(blob, filename, request) {
 async function checkHealth() {
   const up = await online();
   asleep.hidden = up;
-  if (!up && root.dataset.state === 'idle') pose('asleep');
-  if (up && root.dataset.state === 'idle') pose(restPose());
+  if (!up && root.dataset.state === 'idle') play('asleep');
+  if (up && root.dataset.state === 'idle') {
+    stopFlip();
+    pose(restPose());
+  }
   return up;
 }
 
@@ -528,7 +624,11 @@ const intent = () => {
   warmTurnstile();
   for (const name of [
     'verify',
-    'working',
+    ...FLIPS.fetching[0],
+    ...FLIPS.gotit[0],
+    'nope-1',
+    'nope-2',
+    'shrug',
     'done',
     'failed',
     'think',
@@ -555,6 +655,9 @@ if (navigator.clipboard?.readText) {
       const url = firstUrl(await navigator.clipboard.readText());
       if (!url) {
         hostLine.textContent = "there's no link on your clipboard";
+        stopFlip();
+        pose('clipboard');
+        setTimeout(() => root.dataset.state === 'idle' && pose(restPose()), 2500);
         return;
       }
       input.value = url;
@@ -601,3 +704,11 @@ if (prefill && firstUrl(prefill)) {
 } else {
   checkHealth();
 }
+scheduleActivity();
+// an activity stops the moment someone goes for the link box
+input.addEventListener('focus', () => {
+  if (root.dataset.state === 'idle' && asleep.hidden) {
+    stopFlip();
+    pose(restPose());
+  }
+});

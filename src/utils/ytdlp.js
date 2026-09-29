@@ -91,7 +91,7 @@ function getYouTubeArgs(url) {
 }
 
 // These answer yt-dlp's own TLS fingerprint with 403; curl-cffi (in the image) lets it pass as Chrome.
-const IMPERSONATE_HOSTS = ['rumble.com', 'pornhub.com'];
+const IMPERSONATE_HOSTS = ['rumble.com'];
 function getImpersonateArgs(url) {
   let host;
   try {
@@ -170,7 +170,6 @@ export const YTDLP_SITES = [
   { name: 'Medal', hosts: ['medal.tv'] },
   // Tenor yields mp4; /convert is the gif route.
   { name: 'Tenor', hosts: ['tenor.com'] },
-  { name: 'Pornhub', hosts: ['pornhub.com'] },
   { name: 'XVideos', hosts: ['xvideos.com'] },
   { name: 'xHamster', hosts: ['xhamster.com'] },
   { name: 'RedTube', hosts: ['redtube.com'] },

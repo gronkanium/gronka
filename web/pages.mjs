@@ -98,7 +98,6 @@ for (const [slug, name, what] of MORE) {
 
 const OTHER_SITES = [
   'redgifs',
-  'pornhub',
   'xvideos',
   'xhamster',
   'redtube',

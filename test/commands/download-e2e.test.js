@@ -151,7 +151,7 @@ if (!mocksSupported) {
       YTDLP_SITES: [
         { name: 'YouTube', hosts: ['youtube.com', 'youtu.be'] },
         { name: 'RedGifs', hosts: ['redgifs.com'] },
-        { name: 'Pornhub', hosts: ['pornhub.com'] },
+        { name: 'XVideos', hosts: ['xvideos.com'] },
       ],
       downloadFromYouTube: async (
         _url,

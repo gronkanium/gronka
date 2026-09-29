@@ -137,10 +137,7 @@ describe('ytdlp utilities', () => {
       assert.strictEqual(getYtdlpSite('https://nico.ms/sm9'), 'Niconico');
       assert.strictEqual(getYtdlpSite('https://www.bilibili.com/video/BV1'), 'Bilibili');
       assert.strictEqual(getYtdlpSite('https://b23.tv/abc'), 'Bilibili');
-      assert.strictEqual(
-        getYtdlpSite('https://www.pornhub.com/view_video.php?viewkey=x'),
-        'Pornhub'
-      );
+      assert.strictEqual(getYtdlpSite('https://www.xvideos.com/video1/x'), 'XVideos');
       assert.strictEqual(getYtdlpSite('https://www.xvideos.com/video1/x'), 'XVideos');
       assert.strictEqual(getYtdlpSite('https://xhamster.com/videos/x'), 'xHamster');
       assert.strictEqual(getYtdlpSite('https://www.redtube.com/123'), 'RedTube');
@@ -170,7 +167,7 @@ describe('ytdlp utilities', () => {
 
     test('returns null for lookalike domains and invalid input', () => {
       assert.strictEqual(getYtdlpSite('https://notyoutube.com/watch?v=abc'), null);
-      assert.strictEqual(getYtdlpSite('https://pornhub.com.evil.com/x'), null);
+      assert.strictEqual(getYtdlpSite('https://xvideos.com.evil.com/x'), null);
       assert.strictEqual(getYtdlpSite('not-a-url'), null);
       assert.strictEqual(getYtdlpSite(''), null);
       assert.strictEqual(getYtdlpSite(null), null);

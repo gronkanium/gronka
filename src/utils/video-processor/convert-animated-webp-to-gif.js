@@ -3,7 +3,6 @@ import fs from 'fs/promises';
 import path from 'path';
 import { createLogger } from '../logger.js';
 import { validateNumericParameter } from './utils.js';
-import { mediaSlots } from '../concurrency.js';
 
 const logger = createLogger('convert-animated-webp-to-gif');
 
@@ -24,7 +23,7 @@ const logger = createLogger('convert-animated-webp-to-gif');
  * @returns {Promise<void>}
  */
 export async function convertAnimatedWebpToGif(inputPath, outputPath, options = {}) {
-  return mediaSlots.run(() => convertAnimatedWebpToGifImpl(inputPath, outputPath, options));
+  return convertAnimatedWebpToGifImpl(inputPath, outputPath, options);
 }
 
 async function convertAnimatedWebpToGifImpl(inputPath, outputPath, options = {}) {

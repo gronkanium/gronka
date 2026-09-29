@@ -55,7 +55,7 @@
     "fix:deps": "bun install",
     "validate": "bun run check:sync && bun run lint && bun run format:check",
     "pretest": "bun scripts/test-db-reset.js",
-    "test": "NODE_ENV=test GIF_STORAGE_PATH=./data-test/gifs DISCORD_TOKEN=test-token CLIENT_ID=test-client-id R2_ACCOUNT_ID= R2_ACCESS_KEY_ID= R2_SECRET_ACCESS_KEY= R2_BUCKET_NAME= COBALT_ENABLED=false WEBUI_PORT=3101 TEST_POSTGRES_DB=gronka_test bun test test/ --timeout 30000",
+    "test": "NODE_ENV=test GIF_STORAGE_PATH=./data-test/gifs DISCORD_TOKEN=test-token CLIENT_ID=test-client-id R2_ACCOUNT_ID= R2_ACCESS_KEY_ID= R2_SECRET_ACCESS_KEY= R2_BUCKET_NAME= COBALT_ENABLED=false WEBUI_PORT=3101 TEST_POSTGRES_DB=gronka_test bun test test/ web/worker/ --timeout 30000",
     "test:safe": "bun run test",
     "test:e2e": "NODE_ENV=test GRONKA_E2E=true DISCORD_TOKEN=test-token CLIENT_ID=test-client-id R2_ACCOUNT_ID= R2_ACCESS_KEY_ID= R2_SECRET_ACCESS_KEY= R2_BUCKET_NAME= COBALT_ENABLED=true WEBUI_PORT=3101 TEST_POSTGRES_DB=gronka_test bun scripts/run-e2e-tests.js",
     "test:clean": "bun scripts/test-clean.js",
@@ -65,9 +65,9 @@
     "lint": "eslint . --max-warnings=0",
     "lint:warn": "eslint .",
     "lint:fix": "eslint . --fix",
-    "format": "prettier --write .",
-    "format:write": "prettier --write .",
-    "format:check": "prettier --check .",
+    "format": "prettier --write . --ignore-path .gitignore --ignore-path .prettierignore --ignore-path web/.gitignore",
+    "format:write": "prettier --write . --ignore-path .gitignore --ignore-path .prettierignore --ignore-path web/.gitignore",
+    "format:check": "prettier --check . --ignore-path .gitignore --ignore-path .prettierignore --ignore-path web/.gitignore",
     "wiki:sync": "bun scripts/sync-wiki-to-github.js",
     "prepare": "husky"
   },
@@ -84,6 +84,7 @@
     "@aws-sdk/client-s3": "^3.1136.0",
     "@aws-sdk/lib-storage": "^3.1136.0",
     "@noble/hashes": "^2.4.0",
+    "@simplewebauthn/server": "^14.0.3",
     "axios": "^1.20.0",
     "discord.js": "^14.27.0",
     "dotenv": "^18.0.1",
@@ -108,7 +109,8 @@
     "vite": "^8.3.0"
   },
   "overrides": {
-    "undici": "^6.27.0",
+    "undici": "^6.28.1",
+    "ip-address": "^10.7.2",
     "shell-quote": "^1.10.0",
     "brace-expansion": "^5.0.9",
     "qs": "^6.16.0"

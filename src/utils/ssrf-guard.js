@@ -8,6 +8,10 @@ const logger = createLogger('ssrf-guard');
 // from an ordinary network failure.
 export const SSRF_BLOCKED_CODE = 'ESSRFBLOCKED';
 
+// Curated message for a refused destination. Names no internals, just why we stopped.
+export const BLOCKED_DESTINATION_MESSAGE =
+  'that url points to a private or internal address, which is not allowed.';
+
 /**
  * dns.lookup replacement that refuses to hand back an address the bot must not connect to.
  *
@@ -95,4 +99,13 @@ export function ssrfGuardedRequest() {
     lookup: guardedLookup,
     beforeRedirect: guardedBeforeRedirect,
   };
+}
+
+// yt-dlp and cobalt fetch whatever they are handed, so a name that resolves into our own
+// network is refused before any downloader sees it. A lookup failure is left to the downloader.
+export function isPrivateHost(url) {
+  const hostname = new URL(url).hostname.replace(/^\[|\]$/g, '');
+  return new Promise(resolve =>
+    guardedLookup(hostname, { all: true }, error => resolve(error?.code === SSRF_BLOCKED_CODE))
+  );
 }

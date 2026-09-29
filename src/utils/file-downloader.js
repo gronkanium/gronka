@@ -9,15 +9,14 @@ import { isInstagramStoryUrl, hasInstagramSession, downloadFromInstagram } from 
 import { isDiscordCdnUrl, getRefreshedAttachmentURL, getRequestHeaders } from './discord-cdn.js';
 import { sanitizeFilename } from './validation.js';
 import { hashBytesHex } from './hashing.js';
-import { isSsrfBlockedError, ssrfGuardedRequest } from './ssrf-guard.js';
+import {
+  BLOCKED_DESTINATION_MESSAGE,
+  isSsrfBlockedError,
+  ssrfGuardedRequest,
+} from './ssrf-guard.js';
 import { isMegaUrl, downloadFromMega } from './mega.js';
 
 const logger = createLogger('file-downloader');
-
-// Curated message for a URL the SSRF guard refused (a host that resolves into the private
-// network, or a redirect that lands there). Names no internals, just why we stopped.
-const BLOCKED_DESTINATION_MESSAGE =
-  'that url points to a private or internal address, which is not allowed.';
 
 // Extension only picks the route; isMediaResponse re-checks what actually came back.
 const DIRECT_MEDIA_EXTENSIONS = new Set([

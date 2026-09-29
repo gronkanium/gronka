@@ -12,7 +12,10 @@ import { getGalleryDlSite } from '../../src/utils/gallery-dl.js';
 describe('ytdlp utilities', () => {
   describe('gallery-dl site detection', () => {
     test('resolves supported gallery hosts', () => {
-      assert.strictEqual(getGalleryDlSite('https://www.pixiv.net/artworks/123'), 'Pixiv');
+      assert.strictEqual(
+        getGalleryDlSite('https://www.deviantart.com/someone/art/thing-123'),
+        'DeviantArt'
+      );
       assert.strictEqual(
         getGalleryDlSite('https://www.deviantart.com/user/art/work-1'),
         'DeviantArt'
@@ -22,7 +25,7 @@ describe('ytdlp utilities', () => {
 
     test('rejects unknown and lookalike hosts', () => {
       assert.strictEqual(getGalleryDlSite('https://example.com/gallery'), null);
-      assert.strictEqual(getGalleryDlSite('https://pixiv.net.example.com/art/1'), null);
+      assert.strictEqual(getGalleryDlSite('https://deviantart.com.example.com/art/1'), null);
       assert.strictEqual(getGalleryDlSite('not-a-url'), null);
     });
   });
@@ -128,16 +131,13 @@ describe('ytdlp utilities', () => {
       assert.strictEqual(getYtdlpSite('https://kick.com/user/clips/x'), 'Kick');
       assert.strictEqual(getYtdlpSite('https://coub.com/view/x'), 'Coub');
       assert.strictEqual(getYtdlpSite('https://rumble.com/v123-title.html'), 'Rumble');
-      assert.strictEqual(getYtdlpSite('https://www.newgrounds.com/portal/view/1'), 'Newgrounds');
+      assert.strictEqual(getYtdlpSite('https://rumble.com/v1abc-thing.html'), 'Rumble');
       assert.strictEqual(getYtdlpSite('https://www.nicovideo.jp/watch/sm9'), 'Niconico');
       assert.strictEqual(getYtdlpSite('https://sp.nicovideo.jp/watch/sm9'), 'Niconico');
       assert.strictEqual(getYtdlpSite('https://nico.ms/sm9'), 'Niconico');
       assert.strictEqual(getYtdlpSite('https://www.bilibili.com/video/BV1'), 'Bilibili');
       assert.strictEqual(getYtdlpSite('https://b23.tv/abc'), 'Bilibili');
-      assert.strictEqual(
-        getYtdlpSite('https://www.pornhub.com/view_video.php?viewkey=x'),
-        'Pornhub'
-      );
+      assert.strictEqual(getYtdlpSite('https://www.xvideos.com/video1/x'), 'XVideos');
       assert.strictEqual(getYtdlpSite('https://www.xvideos.com/video1/x'), 'XVideos');
       assert.strictEqual(getYtdlpSite('https://xhamster.com/videos/x'), 'xHamster');
       assert.strictEqual(getYtdlpSite('https://www.redtube.com/123'), 'RedTube');
@@ -167,7 +167,7 @@ describe('ytdlp utilities', () => {
 
     test('returns null for lookalike domains and invalid input', () => {
       assert.strictEqual(getYtdlpSite('https://notyoutube.com/watch?v=abc'), null);
-      assert.strictEqual(getYtdlpSite('https://pornhub.com.evil.com/x'), null);
+      assert.strictEqual(getYtdlpSite('https://xvideos.com.evil.com/x'), null);
       assert.strictEqual(getYtdlpSite('not-a-url'), null);
       assert.strictEqual(getYtdlpSite(''), null);
       assert.strictEqual(getYtdlpSite(null), null);

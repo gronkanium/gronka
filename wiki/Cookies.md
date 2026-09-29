@@ -48,10 +48,11 @@ deliberately no importer for this, see *Why it is manual*.
 
 ### yt-dlp is the exception
 
-`tiktok-cookies.txt` wants the Netscape format **exactly as exported**, no reshaping. Export from
-TikTok, save it as `tiktok-cookies.txt` in the project root, done. It is only needed for
-age-restricted TikTok posts; leave the file empty otherwise (it still has to exist, or docker
-mounts a directory over it).
+`ytdlp-cookies.txt` is yt-dlp's one cookie jar for every site, in the Netscape format **exactly as
+exported**, no reshaping. yt-dlp only sends each site its own cookies, so one file can hold several
+(age-restricted TikTok, a SoundCloud login, a YouTube login for age checks). Save it as
+`ytdlp-cookies.txt` in the project root. Leave it empty if you need none; it still has to exist, or
+docker mounts a directory over it. It was called `ytdlp-cookies.txt` before v2: rename yours.
 
 ## What each service needs
 

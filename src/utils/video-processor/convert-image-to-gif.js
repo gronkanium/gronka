@@ -3,7 +3,6 @@ import fs from 'fs/promises';
 import path from 'path';
 import { createLogger } from '../logger.js';
 import { validateNumericParameter, checkFFmpegInstalled, FFMPEG_INPUT_GUARD } from './utils.js';
-import { mediaSlots } from '../concurrency.js';
 
 const logger = createLogger('convert-image-to-gif');
 
@@ -18,7 +17,7 @@ const logger = createLogger('convert-image-to-gif');
  * @returns {Promise<void>}
  */
 export async function convertImageToGif(inputPath, outputPath, options = {}) {
-  return mediaSlots.run(() => convertImageToGifImpl(inputPath, outputPath, options));
+  return convertImageToGifImpl(inputPath, outputPath, options);
 }
 
 async function convertImageToGifImpl(inputPath, outputPath, options = {}) {

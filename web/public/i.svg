@@ -1,0 +1,15 @@
+<svg xmlns="http://www.w3.org/2000/svg">
+<symbol id="auto" viewBox="0 0 24 24"><path d="M3.3 6.1l17.3-.4.2 12.3-17.4.3z"/><path d="M10.1 9.2l4.9 2.9-4.8 2.8z"/></symbol>
+<symbol id="mute" viewBox="0 0 24 24"><path d="M3.4 9.3l3.4.1 4.7-4.1.3 13.6-4.9-3.9-3.4.1z"/><path d="M15.2 9.3l5.2 5.3M20.3 9.2l-5.1 5.2"/></symbol>
+<symbol id="paste" viewBox="0 0 24 24"><path d="M8.6 4.4H6.3c-1 0-1.6.7-1.6 1.7l.2 13.6c0 1 .6 1.6 1.6 1.6h11c1 .1 1.7-.6 1.6-1.6L19 6c0-1-.6-1.6-1.6-1.6h-2.2"/><path d="M9.1 2.9h5.6l.3 3.2H8.8z"/><path d="M8.4 11.2l7.1-.2M8.6 15.1l5.2.1"/></symbol>
+<symbol id="download" viewBox="0 0 24 24"><path d="M12.1 3.2l-.2 12.1M6.9 10.4l5 5.1 5.3-5.3"/><path d="M3.6 15.8l.1 3.6c0 .9.6 1.4 1.5 1.4l13.7-.1c.9 0 1.5-.5 1.5-1.4l-.1-3.5"/></symbol>
+<symbol id="audio" viewBox="0 0 24 24"><path d="M9.2 17.9L9 5.4l10.3-2.2.2 12.1"/><ellipse cx="6.5" cy="18" rx="2.8" ry="2.3" transform="rotate(-12 6.5 18)"/><ellipse cx="16.8" cy="15.6" rx="2.8" ry="2.3" transform="rotate(-12 16.8 15.6)"/></symbol>
+<symbol id="more" viewBox="0 0 24 24"><path d="M12.1 4.6l-.2 14.9M4.5 12.2l15-.3"/></symbol>
+<symbol id="copy" viewBox="0 0 24 24"><path d="M9 8.6l10.6-.2.3 11.6-10.9.3z"/><path d="M15.1 5.4l-.1-1.6-10.9.2.2 11.4 1.6.1"/></symbol>
+<symbol id="share" viewBox="0 0 24 24"><path d="M12 14.6L12.2 3M7.8 7.1l4.3-4.2 4.2 4.3"/><path d="M8.2 10.4H5.9l.3 10.4 12-.1-.2-10.3h-2.1"/></symbol>
+<symbol id="key" viewBox="0 0 24 24"><circle cx="7.6" cy="15.9" r="4.2"/><path d="M10.7 12.9l9.4-9.2M16.6 7.1l2.6 2.7M14.1 9.6l2.2 2.1"/></symbol>
+<symbol id="passkey" viewBox="0 0 24 24"><path d="M5.6 9.4C6.4 5.8 9 3.8 12.2 3.9c3.8.1 6.6 3.1 6.3 7.2"/><path d="M8.6 20.2c-1-2.6-1.4-5.2-1.1-7.9.3-2.2 2.3-3.9 4.6-3.8 2.5.1 4.2 2.1 4 4.8-.1 1.4 0 2.5.4 3.6"/><path d="M12.1 12.4c-.2 3.2.5 5.9 2.2 8.3M4.6 14.1c.2 1.4.6 2.9 1.2 4.2M18.4 14.9c.1 1.1.4 2.1.8 3"/></symbol>
+<symbol id="check" viewBox="0 0 24 24"><path d="M4.4 12.9l4.8 4.6L19.8 6.3"/></symbol>
+<symbol id="x" viewBox="0 0 24 24"><path d="M5.6 5.4l12.9 13.1M18.3 5.7L5.8 18.4"/></symbol>
+<symbol id="back" viewBox="0 0 24 24"><path d="M19.6 12.2l-14.7-.1M10.7 6.3L4.9 12.1l5.9 5.8"/></symbol>
+</svg>

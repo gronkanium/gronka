@@ -68,19 +68,19 @@ describe('settings route', () => {
     assert.strictEqual(settings.disabled_services.type, 'services');
     assert.ok(Array.isArray(settings.disabled_services.catalog));
     // catalog carries {id,label,category} for each source
-    const sample = settings.disabled_services.catalog.find(s => s.id === 'pornhub');
-    assert.ok(sample && sample.label === 'Pornhub' && sample.category === 'adult');
+    const sample = settings.disabled_services.catalog.find(s => s.id === 'xvideos');
+    assert.ok(sample && sample.label === 'XVideos' && sample.category === 'adult');
   });
 
   test('services setting stores known ids sorted and drops unknown ones', async () => {
     const { response, data } = await putSetting('disabled_services', [
-      'pornhub',
+      'xvideos',
       'twitter',
       'not-a-real-service',
     ]);
     assert.strictEqual(response.status, 200);
     // unknown id dropped, remaining ids sorted
-    assert.strictEqual(data.value, JSON.stringify(['pornhub', 'twitter']));
+    assert.strictEqual(data.value, JSON.stringify(['twitter', 'xvideos']));
 
     const rejected = await putSetting('disabled_services', 'nope');
     assert.strictEqual(rejected.response.status, 400);

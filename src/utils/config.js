@@ -109,12 +109,16 @@ let _botConfig = null;
 function getBotConfig() {
   if (_botConfig) return _botConfig;
 
+  // gronka-web shares the download settings below but never talks to Discord.
+  const web = process.env.GRONKA_WEB === 'true';
   _botConfig = {
-    discordToken: requireStringEnv(
-      'DISCORD_TOKEN',
-      'Discord bot token from https://discord.com/developers/applications'
-    ),
-    clientId: requireStringEnv('CLIENT_ID', 'Discord application/client ID'),
+    discordToken: web
+      ? ''
+      : requireStringEnv(
+          'DISCORD_TOKEN',
+          'Discord bot token from https://discord.com/developers/applications'
+        ),
+    clientId: web ? '' : requireStringEnv('CLIENT_ID', 'Discord application/client ID'),
     adminUserIds: parseIdList('ADMIN_USER_IDS'),
     gifStoragePath: getStringEnv('GIF_STORAGE_PATH', './data-test/gifs'),
     // Falls back to the configured R2 domain rather than a baked-in one; empty when neither is

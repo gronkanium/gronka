@@ -334,6 +334,10 @@ export function isSocialMediaUrl(url) {
   }
 }
 
+// cobalt 11 prefixes some Streamable links with a stray scheme: `https:https://cdn-cf-west...`.
+export const repairUrl = url =>
+  typeof url === 'string' ? url.replace(/^https?:(?=https?:\/\/)/i, '') : url;
+
 async function callCobaltApi(apiUrl, url, retryCount = 0, maxRetries = 3) {
   const attemptNum = retryCount + 1;
   const normalizedUrl = normalizeSocialMediaUrlForCobalt(url);
@@ -371,7 +375,10 @@ async function callCobaltApi(apiUrl, url, retryCount = 0, maxRetries = 3) {
       throw new NetworkError(`cobalt api returned status ${response.status}`);
     }
 
-    return response.data;
+    const data = response.data;
+    if (data?.url) data.url = repairUrl(data.url);
+    for (const item of data?.picker ?? []) item.url = repairUrl(item.url);
+    return data;
   } catch (error) {
     if (error.response) {
       const status = error.response.status;

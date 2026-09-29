@@ -258,6 +258,9 @@ export async function trimItem(item, { startTime, duration }) {
       filename: `${base}${gif ? '.gif' : '.mp4'}`,
       contentType: gif ? 'image/gif' : 'video/mp4',
     };
+  } catch (error) {
+    logger.warn(`Trim failed, serving untrimmed: ${error.message}`);
+    return item;
   } finally {
     await fs.rm(dir, { recursive: true, force: true });
   }

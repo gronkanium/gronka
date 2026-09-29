@@ -133,7 +133,7 @@ for unsupported platforms, use `/convert` with a direct media url.
 cobalt has no tiktok cookie support, so age-restricted tiktok posts always fail through it. the bot falls back to yt-dlp for tiktok urls, but yt-dlp needs a logged-in session to see age-restricted content:
 
 1. export cookies from a logged-in tiktok browser session in netscape `cookies.txt` format
-2. point `YTDLP_COOKIES_PATH` at the file (in docker, save it as `./tiktok-cookies.txt` in the project root, it's mounted automatically)
+2. point `YTDLP_COOKIES_PATH` at the file (in docker, save it as `./ytdlp-cookies.txt` in the project root, it's mounted automatically)
 
 see `YTDLP_COOKIES_PATH` in [[Configuration]] for details.
 

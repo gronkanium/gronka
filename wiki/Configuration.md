@@ -753,12 +753,12 @@ optional path to a netscape-format `cookies.txt` file passed to yt-dlp.
 - export the file from a logged-in browser session in netscape cookies.txt format
 - if the file doesn't exist, yt-dlp runs without cookies (no error)
 - yt-dlp writes refreshed cookies back to the file, so keep it writable
-- in docker, this defaults to `/app/tiktok-cookies.txt`, mounted from `./tiktok-cookies.txt` in the project root (gitignored)
+- in docker, this defaults to `/app/ytdlp-cookies.txt`, mounted from `./ytdlp-cookies.txt` in the project root (gitignored)
 
 **example:**
 
 ```env
-YTDLP_COOKIES_PATH=./tiktok-cookies.txt
+YTDLP_COOKIES_PATH=./ytdlp-cookies.txt
 ```
 
 ### `INSTAGRAM_COOKIES_PATH`

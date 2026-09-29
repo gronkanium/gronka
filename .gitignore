@@ -14,7 +14,7 @@ node_modules/
 cookies.json
 
 # yt-dlp cookies file (contains sensitive session tokens)
-tiktok-cookies.txt
+ytdlp-cookies.txt
 
 # Temporary files
 *.tmp

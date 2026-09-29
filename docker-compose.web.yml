@@ -53,11 +53,11 @@ services:
       # yt-dlp rewrites its cookie jar, so the server copies the read-only files here
       WEB_COOKIES_SRC: /secrets
       WEB_COOKIES_DIR: /tmp/cookies
-      YTDLP_COOKIES_PATH: /tmp/cookies/tiktok-cookies.txt
+      YTDLP_COOKIES_PATH: /tmp/cookies/ytdlp-cookies.txt
       INSTAGRAM_COOKIES_PATH: /tmp/cookies/cookies.json
     volumes:
       - ./cookies.json:/secrets/cookies.json:ro
-      - ./tiktok-cookies.txt:/secrets/tiktok-cookies.txt:ro
+      - ./ytdlp-cookies.txt:/secrets/ytdlp-cookies.txt:ro
     networks: [web, web-db]
     depends_on: [cobalt-web]
 

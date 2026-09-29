@@ -5,6 +5,7 @@ import {
   parseDownloadRequest,
   contentDisposition,
   signStreamToken,
+  directStreamInfo,
 } from '../../src/web-server.js';
 import { redactForWeb } from '../../src/utils/logger.js';
 
@@ -113,6 +114,22 @@ test('redaction strips links, addresses, keys and account numbers', () => {
     'fetched https://cdn.example/v.mp4?sig=1 for 203.0.113.9 and 2001:db8::1 key gk_abc_def GW-7K3P9-ABCD'
   );
   expect(line).toBe('fetched <url> for <ip> and <ip> key <key> <account>');
+});
+
+test('redaction blanks id-like tokens such as video ids', () => {
+  expect(redactForWeb('ERROR: [Imgur] kq9tJGv: not available, retry 2 of 3')).toBe(
+    'ERROR: [Imgur] <id>: not available, retry 2 of 3'
+  );
+});
+
+test('a plain media link becomes one worker part named after the file', () => {
+  expect(directStreamInfo('https://i.ibb.co/ab/cat%20pic.JPG?x=1')).toEqual({
+    title: 'cat pic.JPG',
+    ext: 'jpg',
+    parts: [
+      { url: 'https://i.ibb.co/ab/cat%20pic.JPG?x=1', headers: {}, ext: 'jpg', kind: 'file' },
+    ],
+  });
 });
 
 test('content disposition keeps unicode names but sanitizes the ascii fallback', () => {

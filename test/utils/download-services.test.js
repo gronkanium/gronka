@@ -35,8 +35,8 @@ describe('download-services registry', () => {
     assert.strictEqual(getServiceForUrl('https://danbooru.donmai.us/posts/1')?.id, 'danbooru');
     assert.strictEqual(getServiceForUrl('https://e926.net/posts/1')?.id, 'e621');
     assert.strictEqual(
-      getServiceForUrl('https://www.pixiv.net/artworks/1')?.id,
-      'gallery-dl-pixiv'
+      getServiceForUrl('https://www.deviantart.com/someone/art/thing-1')?.id,
+      'gallery-dl-deviantart'
     );
   });
 

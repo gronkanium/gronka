@@ -90,6 +90,20 @@ function getYouTubeArgs(url) {
   return ['--js-runtimes', 'bun', '--extractor-args', 'youtube:player_client=web_embedded,default'];
 }
 
+// These answer yt-dlp's own TLS fingerprint with 403; curl-cffi (in the image) lets it pass as Chrome.
+const IMPERSONATE_HOSTS = ['rumble.com', 'pornhub.com'];
+function getImpersonateArgs(url) {
+  let host;
+  try {
+    host = new URL(url).hostname.replace(/^www\./, '');
+  } catch {
+    return [];
+  }
+  return IMPERSONATE_HOSTS.some(h => host === h || host.endsWith(`.${h}`))
+    ? ['--impersonate', 'chrome']
+    : [];
+}
+
 /**
  * Check if a URL is a RedGifs URL.
  * RedGifs is not a Cobalt service, but yt-dlp has a dedicated extractor for it
@@ -131,7 +145,7 @@ function isInstagramPostUrl(url) {
 }
 
 // Sites that download through yt-dlp instead of Cobalt. Either Cobalt has no extractor
-// for them (imgur, kick, coub, rumble, newgrounds, niconico, bilibili, the adult tube sites,
+// for them (imgur, kick, coub, rumble, niconico, bilibili, the adult tube sites,
 // redgifs) or we deliberately prefer yt-dlp (youtube). Each entry maps a display name to
 // the hostnames it owns; matching is exact-or-subdomain on the www-stripped hostname.
 // Order does not matter (hosts are disjoint). All were confirmed against the running
@@ -146,7 +160,6 @@ export const YTDLP_SITES = [
   { name: 'Kick', hosts: ['kick.com'] },
   { name: 'Coub', hosts: ['coub.com'] },
   { name: 'Rumble', hosts: ['rumble.com'] },
-  { name: 'Newgrounds', hosts: ['newgrounds.com'] },
   // `nico.ms` is niconico's own shortener; yt-dlp resolves it to the /watch/ URL itself.
   { name: 'Niconico', hosts: ['nicovideo.jp', 'nico.ms'] },
   { name: 'Bilibili', hosts: ['bilibili.com', 'b23.tv'] },
@@ -235,6 +248,7 @@ function executeYtdlp(
       '--no-progress',
       ...getCookieArgs(),
       ...getYouTubeArgs(url),
+      ...getImpersonateArgs(url),
       '-f',
       quality,
       '--merge-output-format',
@@ -562,7 +576,15 @@ async function executeYtdlpWithRetry(...args) {
 
 function getVideoDuration(url, timeout = 15000) {
   return new Promise((resolve, reject) => {
-    const args = ['--no-playlist', '--no-warnings', ...getCookieArgs(), '--print', 'duration', url];
+    const args = [
+      '--no-playlist',
+      '--no-warnings',
+      ...getCookieArgs(),
+      ...getImpersonateArgs(url),
+      '--print',
+      'duration',
+      url,
+    ];
 
     const ytdlp = spawn('yt-dlp', args, {
       timeout: timeout,
@@ -627,6 +649,7 @@ export async function getStreamInfo(url, timeout = 30000) {
     '--ies',
     'default,-generic',
     ...getYouTubeArgs(url),
+    ...getImpersonateArgs(url),
     '-S',
     'res:1080,ext:mp4:m4a',
     '-f',

@@ -9,14 +9,12 @@ import { createZip } from './archive.js';
 const logger = createLogger('gallery-dl');
 
 export const GALLERY_DL_SITES = [
-  { name: 'Pixiv', hosts: ['pixiv.net'] },
   { name: 'DeviantArt', hosts: ['deviantart.com'] },
   { name: 'ArtStation', hosts: ['artstation.com'] },
   { name: 'Flickr', hosts: ['flickr.com'] },
   { name: 'Wallhaven', hosts: ['wallhaven.cc'] },
   { name: 'MangaDex', hosts: ['mangadex.org'] },
   { name: 'nhentai', hosts: ['nhentai.net'] },
-  { name: 'Rule34', hosts: ['rule34.xxx'] },
 ];
 
 const MEDIA_EXTENSIONS = new Set([

@@ -21,7 +21,6 @@ const YTDLP_CATEGORY = {
   Coub: 'video',
   Imgur: 'video',
   Kick: 'video',
-  Newgrounds: 'video',
   Niconico: 'video',
   Medal: 'video',
   Tenor: 'social',

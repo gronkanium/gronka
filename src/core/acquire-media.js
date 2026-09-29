@@ -171,7 +171,9 @@ export async function acquireMedia(
   const useInstagram = isInstagramPostUrl(url) && hasInstagramSession();
   const isIgStory = isInstagramStoryUrl(url) && hasInstagramSession();
   const useReddit = redditImages !== null && redditImages.length > 0;
-  const useYtdlp = ytdlpSite !== null && YTDLP_ENABLED;
+  // yt-dlp only does video, so a still image on a yt-dlp host (i.imgur.com/x.jpg) goes direct.
+  const isStillImage = isDirectMedia && /\.(jpe?g|png|webp|bmp)$/i.test(new URL(url).pathname);
+  const useYtdlp = ytdlpSite !== null && YTDLP_ENABLED && !isStillImage;
 
   // Trim requests need real bytes, and yt-dlp sites, hentaigifz, booru and Pinterest have no
   // cobalt URL to hand out.

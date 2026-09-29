@@ -23,8 +23,8 @@ the same three actions are also available by right-clicking a message → apps: 
 ### supported sources
 
 - **cobalt** handles most social platforms: twitter/x, tiktok, instagram, youtube, reddit, facebook, twitch clips, soundcloud, tumblr, streamable, dailymotion, snapchat
-- **yt-dlp** handles youtube, redgifs, imgur, kick, coub, rumble, newgrounds, niconico, bilibili, and the adult tube sites (pornhub, xvideos, xhamster, redtube); it is also the fallback for x/twitter and tiktok
-- **gallery-dl** handles image galleries from Pixiv, DeviantArt, ArtStation, Flickr, Wallhaven, MangaDex, nhentai, and Rule34. MangaDex and nhentai links open an ephemeral picker before downloading selected pages.
+- **yt-dlp** handles youtube, redgifs, imgur, kick, coub, rumble, niconico, bilibili, and the adult tube sites (pornhub, xvideos, xhamster, redtube); it is also the fallback for x/twitter and tiktok
+- **gallery-dl** handles image galleries from DeviantArt, ArtStation, Flickr, Wallhaven, MangaDex, and nhentai. MangaDex and nhentai links open an ephemeral picker before downloading selected pages.
 - **pinterest**, a dedicated extractor for pins and `pin.it` share links (neither cobalt nor yt-dlp can read pinterest); grabs the pin's video, or its full-size image
 - **Klipy**, a dedicated page-metadata extractor for Klipy GIF and sticker pages; downloads the page's video or image directly
 - **booru boards**, danbooru, e621/e926, yande.re, and konachan posts via their JSON APIs

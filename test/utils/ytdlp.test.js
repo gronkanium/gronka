@@ -12,7 +12,10 @@ import { getGalleryDlSite } from '../../src/utils/gallery-dl.js';
 describe('ytdlp utilities', () => {
   describe('gallery-dl site detection', () => {
     test('resolves supported gallery hosts', () => {
-      assert.strictEqual(getGalleryDlSite('https://www.pixiv.net/artworks/123'), 'Pixiv');
+      assert.strictEqual(
+        getGalleryDlSite('https://www.deviantart.com/someone/art/thing-123'),
+        'DeviantArt'
+      );
       assert.strictEqual(
         getGalleryDlSite('https://www.deviantart.com/user/art/work-1'),
         'DeviantArt'
@@ -22,7 +25,7 @@ describe('ytdlp utilities', () => {
 
     test('rejects unknown and lookalike hosts', () => {
       assert.strictEqual(getGalleryDlSite('https://example.com/gallery'), null);
-      assert.strictEqual(getGalleryDlSite('https://pixiv.net.example.com/art/1'), null);
+      assert.strictEqual(getGalleryDlSite('https://deviantart.com.example.com/art/1'), null);
       assert.strictEqual(getGalleryDlSite('not-a-url'), null);
     });
   });
@@ -128,7 +131,7 @@ describe('ytdlp utilities', () => {
       assert.strictEqual(getYtdlpSite('https://kick.com/user/clips/x'), 'Kick');
       assert.strictEqual(getYtdlpSite('https://coub.com/view/x'), 'Coub');
       assert.strictEqual(getYtdlpSite('https://rumble.com/v123-title.html'), 'Rumble');
-      assert.strictEqual(getYtdlpSite('https://www.newgrounds.com/portal/view/1'), 'Newgrounds');
+      assert.strictEqual(getYtdlpSite('https://rumble.com/v1abc-thing.html'), 'Rumble');
       assert.strictEqual(getYtdlpSite('https://www.nicovideo.jp/watch/sm9'), 'Niconico');
       assert.strictEqual(getYtdlpSite('https://sp.nicovideo.jp/watch/sm9'), 'Niconico');
       assert.strictEqual(getYtdlpSite('https://nico.ms/sm9'), 'Niconico');

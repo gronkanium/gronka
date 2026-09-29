@@ -206,6 +206,53 @@ describe('routes', () => {
     await accounts.deleteAccount(id);
   });
 
+  test('rotating needs the second factor and ends every other session', async () => {
+    const signup = await call('POST', '/v1/account', {
+      body: { turnstile: 'ok' },
+      ip: '192.0.2.79',
+    });
+    const { id, number } = await signup.json();
+    const cookie = cookieOf(signup);
+    await call('POST', '/v1/totp/setup', { cookie });
+    const secret = await secretOf(id);
+    const step = currentStep();
+    await call('POST', '/v1/totp/enable', { cookie, body: { code: hotp(secret, step - 1) } });
+    const other = await call('POST', '/v1/session', {
+      body: { number, turnstile: 'ok', totp: hotp(secret, step) },
+      ip: '192.0.2.79',
+    });
+    const otherCookie = cookieOf(other);
+
+    expect(await codeOf(await call('POST', '/v1/account/rotate', { cookie, body: {} }))).toBe(
+      'TOTP_REQUIRED'
+    );
+    expect(await codeOf(await call('DELETE', '/v1/account', { cookie, body: {} }))).toBe(
+      'TOTP_REQUIRED'
+    );
+    expect(
+      await codeOf(await call('POST', '/v1/passkeys/register/options', { cookie, body: {} }))
+    ).toBe('TOTP_REQUIRED');
+    const rotated = await call('POST', '/v1/account/rotate', {
+      cookie,
+      body: { code: hotp(secret, step + 1) },
+    });
+    expect(rotated.status).toBe(200);
+    expect((await call('GET', '/v1/account', { cookie })).status).toBe(200);
+    expect((await call('GET', '/v1/account', { cookie: otherCookie })).status).toBe(401);
+    await accounts.deleteAccount(id);
+  });
+
+  test('parallel wrong codes cannot slip past the throttle', async () => {
+    const { id } = await accounts.createAccount();
+    await accounts.startTotp(id);
+    await accounts.enableTotp(id, hotp(await secretOf(id), currentStep()));
+    const results = await Promise.all(
+      Array.from({ length: 12 }, () => accounts.checkSecondFactor(id, 'nope00'))
+    );
+    expect(results.filter(result => result === 'invalid').length).toBeLessThanOrEqual(5);
+    await accounts.deleteAccount(id);
+  });
+
   test('passkey register, login without a number, single-use challenge, remove', async () => {
     const signup = await call('POST', '/v1/account', {
       body: { turnstile: 'ok' },

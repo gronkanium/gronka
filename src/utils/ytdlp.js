@@ -617,6 +617,9 @@ export async function getStreamInfo(url, timeout = 30000) {
     '-J',
     '--no-playlist',
     '--no-warnings',
+    // The generic extractor would follow any link, redirects into our own network included.
+    '--ies',
+    'default,-generic',
     ...getYouTubeArgs(url),
     '-S',
     'res:1080,ext:mp4:m4a',

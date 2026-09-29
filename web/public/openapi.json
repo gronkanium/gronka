@@ -1,0 +1,352 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "gronka api",
+    "version": "1.0.0-preview",
+    "description": "Paste a link, get the file. The same downloaders as the gronka Discord bot, over HTTP.\n\n**Preview:** the API is not live yet and may still change.\n\n### Auth\nThe web page sends a Cloudflare Turnstile token. Scripts send an API key: `Authorization: Bearer gk_...`. Keys are made on the account page; an account is just an account number (no email).\n\n### Long downloads\n`POST /v1/download` answers `200` as soon as the job starts and sends spaces while it works, then the JSON result. Leading whitespace is valid JSON, so any JSON parser reads it. Download failures arrive in that body as `{\"error\": ...}`; problems found before the job starts use normal status codes.\n\n### Limits\nThe same for everyone: 10 downloads per 10 minutes and one at a time, per IP or per key. Files up to 1 GB.\n\n### Privacy\nNo request logs, no download history. Files we host are deleted after an hour."
+  },
+  "servers": [{ "url": "https://api.gronka.dev" }],
+  "tags": [
+    { "name": "download" },
+    {
+      "name": "account",
+      "description": "Used by the account page (cookie session). Scripts only need a key."
+    }
+  ],
+  "paths": {
+    "/v1/health": {
+      "get": {
+        "summary": "Liveness",
+        "responses": {
+          "200": {
+            "description": "Up",
+            "content": { "application/json": { "example": { "ok": true } } }
+          }
+        }
+      }
+    },
+    "/v1/download": {
+      "post": {
+        "tags": ["download"],
+        "summary": "Get the media behind a link",
+        "security": [{ "apiKey": [] }, {}],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/DownloadRequest" },
+              "examples": {
+                "plain": { "value": { "url": "https://x.com/user/status/123" } },
+                "trimmedAudio": {
+                  "value": {
+                    "url": "https://youtu.be/abc",
+                    "mode": "audio",
+                    "start": "1:00",
+                    "end": "1:30"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "The result, or a download error, after leading whitespace.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "oneOf": [
+                    { "$ref": "#/components/schemas/DownloadResult" },
+                    { "$ref": "#/components/schemas/Error" }
+                  ]
+                },
+                "examples": {
+                  "direct": {
+                    "value": {
+                      "lane": "direct",
+                      "files": [
+                        { "url": "https://video.twimg.com/...", "filename": null, "type": "video" }
+                      ]
+                    }
+                  },
+                  "merge": {
+                    "value": {
+                      "lane": "worker",
+                      "merge": true,
+                      "filename": "clip.mp4",
+                      "files": [
+                        {
+                          "url": "https://dl.gronka.dev/f/...",
+                          "filename": "clip.video.mp4",
+                          "kind": "video",
+                          "size": 30123456
+                        },
+                        {
+                          "url": "https://dl.gronka.dev/f/...",
+                          "filename": "clip.audio.m4a",
+                          "kind": "audio",
+                          "size": 1234567
+                        }
+                      ]
+                    }
+                  },
+                  "failed": {
+                    "value": {
+                      "error": {
+                        "code": "VALIDATION_ERROR",
+                        "message": "video duration exceeds the maximum allowed (60 minutes)."
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": { "$ref": "#/components/responses/Error" },
+          "401": { "$ref": "#/components/responses/Error" },
+          "403": { "$ref": "#/components/responses/Error" },
+          "413": { "$ref": "#/components/responses/Error" },
+          "429": { "$ref": "#/components/responses/Error" },
+          "503": { "$ref": "#/components/responses/Error" }
+        }
+      }
+    },
+    "/v1/account": {
+      "post": {
+        "tags": ["account"],
+        "summary": "Create an account",
+        "description": "Returns the account number once. We cannot recover it.",
+        "requestBody": {
+          "content": {
+            "application/json": { "schema": { "$ref": "#/components/schemas/Turnstile" } }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Created; also sets the session cookie",
+            "content": {
+              "application/json": {
+                "example": { "id": "7K3P9", "number": "GW-7K3P9-ABCDE-FGHJK-MNPQR-STVWX-YZ012-3" }
+              }
+            }
+          },
+          "403": { "$ref": "#/components/responses/Error" },
+          "429": { "$ref": "#/components/responses/Error" }
+        }
+      },
+      "get": {
+        "tags": ["account"],
+        "summary": "Account and its keys",
+        "security": [{ "session": [] }],
+        "responses": {
+          "200": {
+            "description": "Summary",
+            "content": {
+              "application/json": {
+                "example": {
+                  "id": "7K3P9",
+                  "createdOn": "2026-09-28",
+                  "keys": [
+                    {
+                      "id": "gk_ab12cd34",
+                      "label": "cli",
+                      "createdOn": "2026-09-28",
+                      "lastUsedOn": null
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "401": { "$ref": "#/components/responses/Error" }
+        }
+      },
+      "delete": {
+        "tags": ["account"],
+        "summary": "Delete the account and every key, immediately",
+        "security": [{ "session": [] }],
+        "responses": {
+          "200": { "description": "Gone" },
+          "401": { "$ref": "#/components/responses/Error" }
+        }
+      }
+    },
+    "/v1/account/rotate": {
+      "post": {
+        "tags": ["account"],
+        "summary": "Replace the account number; the old one stops working at once",
+        "security": [{ "session": [] }],
+        "responses": {
+          "200": {
+            "description": "The new number",
+            "content": { "application/json": { "example": { "number": "GW-7K3P9-..." } } }
+          }
+        }
+      }
+    },
+    "/v1/session": {
+      "post": {
+        "tags": ["account"],
+        "summary": "Log in with the account number",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "allOf": [
+                  { "$ref": "#/components/schemas/Turnstile" },
+                  {
+                    "type": "object",
+                    "required": ["number"],
+                    "properties": { "number": { "type": "string" } }
+                  }
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": { "description": "Sets the session cookie" },
+          "401": { "$ref": "#/components/responses/Error" },
+          "429": { "$ref": "#/components/responses/Error" }
+        }
+      },
+      "delete": {
+        "tags": ["account"],
+        "summary": "Log out",
+        "responses": { "200": { "description": "Cookie cleared" } }
+      }
+    },
+    "/v1/keys": {
+      "post": {
+        "tags": ["account"],
+        "summary": "Create an API key (shown once, up to 10)",
+        "security": [{ "session": [] }],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": { "label": { "type": "string", "maxLength": 40 } }
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "The key",
+            "content": {
+              "application/json": { "example": { "id": "gk_ab12cd34", "key": "gk_ab12cd34_..." } }
+            }
+          },
+          "400": { "$ref": "#/components/responses/Error" }
+        }
+      }
+    },
+    "/v1/keys/{id}": {
+      "delete": {
+        "tags": ["account"],
+        "summary": "Revoke a key",
+        "security": [{ "session": [] }],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": { "type": "string", "pattern": "^gk_[0-9a-z]{8}$" }
+          }
+        ],
+        "responses": {
+          "200": { "description": "Revoked" },
+          "404": { "$ref": "#/components/responses/Error" }
+        }
+      }
+    }
+  },
+  "components": {
+    "securitySchemes": {
+      "apiKey": { "type": "http", "scheme": "bearer", "description": "gk_<id>_<secret>" },
+      "session": { "type": "apiKey", "in": "cookie", "name": "gw_session" }
+    },
+    "responses": {
+      "Error": {
+        "description": "Rejected",
+        "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Error" } } }
+      }
+    },
+    "schemas": {
+      "Turnstile": {
+        "type": "object",
+        "properties": {
+          "turnstile": {
+            "type": "string",
+            "description": "Cloudflare Turnstile token (web page only)"
+          }
+        }
+      },
+      "DownloadRequest": {
+        "type": "object",
+        "required": ["url"],
+        "properties": {
+          "url": { "type": "string", "description": "A link, or text containing one" },
+          "mode": { "type": "string", "enum": ["auto", "audio"], "default": "auto" },
+          "start": { "type": "string", "description": "Trim start: seconds, m:ss or h:mm:ss" },
+          "end": { "type": "string", "description": "Trim end" },
+          "turnstile": { "type": "string", "description": "Web page only; scripts use a key" }
+        }
+      },
+      "DownloadResult": {
+        "type": "object",
+        "required": ["lane", "files"],
+        "properties": {
+          "lane": {
+            "type": "string",
+            "enum": ["direct", "worker", "r2"],
+            "description": "direct: the source's own link. worker: streamed from the source through dl.gronka.dev, links valid 1 hour. r2: a copy on cdn.gronka.dev, deleted after 1 hour."
+          },
+          "merge": {
+            "type": "boolean",
+            "description": "true when files are a separate video and audio stream to be muxed"
+          },
+          "filename": { "type": "string", "description": "Suggested name for the merged file" },
+          "files": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "required": ["url"],
+              "properties": {
+                "url": { "type": "string" },
+                "filename": { "type": ["string", "null"] },
+                "type": { "type": "string", "description": "video, image, gif, audio, ..." },
+                "kind": { "type": "string", "enum": ["video", "audio"] },
+                "size": { "type": ["integer", "null"] }
+              }
+            }
+          }
+        }
+      },
+      "Error": {
+        "type": "object",
+        "required": ["error"],
+        "properties": {
+          "error": {
+            "type": "object",
+            "properties": {
+              "code": {
+                "type": "string",
+                "examples": [
+                  "BAD_URL",
+                  "RATE_LIMITED",
+                  "VERIFICATION_FAILED",
+                  "BUSY",
+                  "UNAUTHORIZED",
+                  "DOWNLOAD_FAILED"
+                ]
+              },
+              "message": { "type": "string", "description": "Safe to show to a person" }
+            }
+          }
+        }
+      }
+    }
+  }
+}

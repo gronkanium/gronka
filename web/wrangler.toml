@@ -1,0 +1,10 @@
+name = "gronka-web"
+compatibility_date = "2026-09-01"
+workers_dev = false
+routes = [{ pattern = "web.gronka.dev", custom_domain = true }]
+
+[assets]
+directory = "public"
+
+[observability]
+enabled = false

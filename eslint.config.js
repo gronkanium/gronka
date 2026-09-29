@@ -19,6 +19,7 @@ export default [
       'src/public/assets/**',
       '**/*.svelte',
       'vendor/**',
+      'web/public/docs/redoc.standalone.js',
       '_site/**',
       '.env',
       '.env.*',

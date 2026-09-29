@@ -1,0 +1,9 @@
+name = "gronka-dl"
+main = "index.js"
+compatibility_date = "2026-09-01"
+workers_dev = false
+routes = [{ pattern = "dl.gronka.dev", custom_domain = true }]
+
+# No request logs: observability stays off.
+[observability]
+enabled = false

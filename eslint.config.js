@@ -81,6 +81,17 @@ export default [
     },
   },
   {
+    files: ['web/worker/**/*.js'],
+    languageOptions: {
+      globals: {
+        crypto: 'readonly',
+        atob: 'readonly',
+        Headers: 'readonly',
+        TextDecoder: 'readonly',
+      },
+    },
+  },
+  {
     files: ['functions/**/*.js'],
     languageOptions: {
       globals: {

@@ -52,8 +52,7 @@ const VARIANT =
   /\b(remix|sped ?up|slowed|nightcore|cover|live|8d|reverb|instrumental|karaoke|bass ?boosted|edit)\b/i;
 const MAX_DRIFT_S = 2;
 
-// Only the artist's own upload counts: their channel or YouTube's "<artist> - Topic" art track,
-// the same length, the title in its title, and not a variant the SoundCloud track isn't.
+// Only the artist's own upload (channel or "- Topic") counts; no match beats a wrong song.
 export function pickMatch(track, entries) {
   const artist = norm(track.artist);
   const title = norm(String(track.title).replace(/\s*[([].*?[)\]]/g, ''));
@@ -167,8 +166,6 @@ export async function tagAudio(file, track) {
   }
 }
 
-// SoundCloud only streams this track encrypted: get the artist's own YouTube upload of the same
-// recording instead, tagged with SoundCloud's details, or say plainly that there isn't one.
 export async function soundcloudViaYoutube(
   url,
   { adminUser = false, maxSize = Infinity, track = null } = {}

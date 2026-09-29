@@ -43,8 +43,7 @@ FROM oven/bun:1.3-debian AS runtime
 # Install runtime dependencies: FFmpeg, gifsicle (GIF optimization), ImageMagick
 # (animated-WebP -> GIF; ffmpeg can't demux animated webp), ca-certificates, yt-dlp, and gallery-dl.
 # yt-dlp-ejs ships the solver script for YouTube's `n` challenge; without it every YouTube
-# format is skipped and only storyboards remain. curl-cffi lets yt-dlp impersonate a browser's TLS, which
-# sites like Rumble require (plain requests get 403).
+# format is skipped and only storyboards remain. curl-cffi: Rumble 403s yt-dlp's own TLS fingerprint.
 RUN apt-get update && apt-get install -y \
     ffmpeg \
     gifsicle \

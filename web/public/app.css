@@ -390,3 +390,54 @@ details[open] summary::after {
     display: none;
   }
 }
+
+.more {
+  width: 100%;
+  max-width: 760px;
+  margin: 0 auto;
+  padding: 8px 0 24px;
+}
+.more h2 {
+  margin: 32px 0 10px;
+}
+.more h3 {
+  font-size: 17px;
+  margin: 18px 0 4px;
+}
+.more p,
+.more li {
+  max-width: 62ch;
+}
+.more li + li {
+  margin-top: 6px;
+}
+.sites ul {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 10px;
+}
+.sites a {
+  display: inline-block;
+  padding: 7px 14px;
+  border: 2px solid var(--ink);
+  border-radius: 999px;
+  text-decoration: none;
+  font-weight: 600;
+}
+.sites a:hover,
+.sites a[aria-current] {
+  background: var(--ink);
+  color: var(--paper);
+}
+.sites + h2 ~ p:last-child,
+.sites ~ p:last-child {
+  margin-top: 18px;
+}
+@media (min-width: 900px) {
+  .more {
+    max-width: 920px;
+  }
+}

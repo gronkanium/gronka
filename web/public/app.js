@@ -594,7 +594,7 @@ const prefill =
   params.get('u') || (location.hash.length > 1 ? decodeURIComponent(location.hash.slice(1)) : '');
 if (prefill && firstUrl(prefill)) {
   input.value = firstUrl(prefill);
-  history.replaceState(null, '', '/');
+  history.replaceState(null, '', location.pathname);
   showHost();
   intent();
   start();

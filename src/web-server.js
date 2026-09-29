@@ -1,4 +1,5 @@
 import crypto from 'node:crypto';
+import fs from 'node:fs/promises';
 import * as simplewebauthn from '@simplewebauthn/server';
 import path from 'node:path';
 import { createLogger } from './utils/logger.js';
@@ -57,10 +58,21 @@ function streamToken(part, filename) {
   });
 }
 
+// A plain media link needs no resolving; the Worker also reaches hosts that block our IP (i.ibb.co).
+export function directStreamInfo(url) {
+  const name = decodeURIComponent(new URL(url).pathname.split('/').pop() || 'file');
+  const ext = path.extname(name).slice(1).toLowerCase() || 'bin';
+  return {
+    title: name,
+    ext,
+    parts: [{ url, headers: {}, ext, kind: 'file' }],
+  };
+}
+
 // Lane 2: the Worker fetches from the source itself, so it only works for links not tied to
 // our IP or cookies. The probe asks the Worker, from Cloudflare's side, whether that holds.
 async function workerLane(url, downloadMethod) {
-  if (!STREAM_BASE || !STREAM_KEY || !['ytdlp', 'cobalt'].includes(downloadMethod)) {
+  if (!STREAM_BASE || !STREAM_KEY || !['ytdlp', 'cobalt', 'direct'].includes(downloadMethod)) {
     return null;
   }
   // googlevideo links carry ip= for the address that resolved them (measured 2026-09-28).
@@ -69,7 +81,7 @@ async function workerLane(url, downloadMethod) {
   }
   let info;
   try {
-    info = await getStreamInfo(url);
+    info = downloadMethod === 'direct' ? directStreamInfo(url) : await getStreamInfo(url);
   } catch (error) {
     logger.debug(`No stream info, using R2: ${error.message}`);
     return null;
@@ -126,6 +138,9 @@ export async function sweepR2(now = Date.now()) {
 }
 
 async function publishToR2(buffer, filename, contentType) {
+  if (!buffer?.length) {
+    throw new AppError('could not download this content.', 'DOWNLOAD_FAILED', 502);
+  }
   if (liveBytes + buffer.length > R2_LIMIT_BYTES) {
     throw new ValidationError('storage is full right now, try again in a few minutes.');
   }
@@ -149,6 +164,20 @@ async function publishToR2(buffer, filename, contentType) {
   );
   liveBytes += buffer.length;
   return { url, filename: name, size: buffer.length, type: detectFileType(ext, type, buffer) };
+}
+
+// yt-dlp rewrites its cookie jar on exit, so it works on private copies of the read-only shared files.
+export async function copyCookies(
+  from = env('WEB_COOKIES_SRC', ''),
+  to = env('WEB_COOKIES_DIR', '')
+) {
+  if (!from || !to) return;
+  await fs.mkdir(to, { recursive: true, mode: 0o700 });
+  for (const name of await fs.readdir(from)) {
+    const temp = path.join(to, `.${name}.tmp`);
+    await fs.copyFile(path.join(from, name), temp);
+    await fs.rename(temp, path.join(to, name));
+  }
 }
 
 export async function runDownload({ url, audio, startTime, duration }) {
@@ -703,6 +732,11 @@ if (import.meta.main) {
   if (!TURNSTILE_SECRET) {
     throw new Error('TURNSTILE_SECRET is required');
   }
+  await copyCookies();
+  setInterval(
+    () => copyCookies().catch(error => logger.warn(`Cookie copy failed: ${error.message}`)),
+    10 * 60 * 1000
+  );
   await initDatabase();
   await accounts.ensureWebSchema();
   const handler = createHandler();

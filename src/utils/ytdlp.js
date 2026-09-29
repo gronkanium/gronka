@@ -621,7 +621,7 @@ export async function getStreamInfo(url, timeout = 30000) {
     '-S',
     'res:1080,ext:mp4:m4a',
     '-f',
-    'b[protocol^=http][vcodec!=none][acodec!=none]/bv*[protocol^=http]+ba[protocol^=http]',
+    'b[protocol^=http][vcodec!=none][acodec!=none]/bv*[protocol^=http]+ba[protocol^=http]/b*[protocol^=http]',
     url,
   ];
   const { stdout } = await execFileAsync('yt-dlp', args, {

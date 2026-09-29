@@ -65,9 +65,9 @@
     "lint": "eslint . --max-warnings=0",
     "lint:warn": "eslint .",
     "lint:fix": "eslint . --fix",
-    "format": "prettier --write .",
-    "format:write": "prettier --write .",
-    "format:check": "prettier --check .",
+    "format": "prettier --write . --ignore-path .gitignore --ignore-path .prettierignore --ignore-path web/.gitignore",
+    "format:write": "prettier --write . --ignore-path .gitignore --ignore-path .prettierignore --ignore-path web/.gitignore",
+    "format:check": "prettier --check . --ignore-path .gitignore --ignore-path .prettierignore --ignore-path web/.gitignore",
     "wiki:sync": "bun scripts/sync-wiki-to-github.js",
     "prepare": "husky"
   },
@@ -109,7 +109,8 @@
     "vite": "^8.3.0"
   },
   "overrides": {
-    "undici": "^6.27.0",
+    "undici": "^6.28.1",
+    "ip-address": "^10.7.2",
     "shell-quote": "^1.10.0",
     "brace-expansion": "^5.0.9",
     "qs": "^6.16.0"

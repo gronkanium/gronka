@@ -147,6 +147,7 @@ if (!mocksSupported) {
 
     mock.module('../../src/utils/ytdlp.js', () => ({
       getYtdlpSite: () => null,
+      getCookieArgs: () => [],
       // download-services.js builds its registry from this table at import time.
       YTDLP_SITES: [
         { name: 'YouTube', hosts: ['youtube.com', 'youtu.be'] },

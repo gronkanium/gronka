@@ -57,7 +57,7 @@ const PLATFORMS = [
   },
 ];
 
-// The rest of src/utils/download-services.js, minus the adult and booru sources.
+// The rest of src/utils/download-services.js.
 const OTHER_SITES = [
   'bluesky',
   'snapchat',
@@ -85,6 +85,19 @@ const OTHER_SITES = [
   'flickr',
   'wallhaven',
   'mangadex',
+  'redgifs',
+  'pornhub',
+  'xvideos',
+  'xhamster',
+  'redtube',
+  'rule34video',
+  'rule34',
+  'nhentai',
+  'hentaigifz',
+  'danbooru',
+  'e621',
+  'yande.re',
+  'konachan',
 ];
 
 const HOME = {

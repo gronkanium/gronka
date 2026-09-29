@@ -20,6 +20,7 @@ import {
 } from '../utils/instagram.js';
 import { getDisabledServiceLabel } from '../utils/download-services.js';
 import { ValidationError } from '../utils/errors.js';
+import { BLOCKED_DESTINATION_MESSAGE, isPrivateHost } from '../utils/ssrf-guard.js';
 import {
   isDirectMediaUrl,
   downloadDirectMedia,
@@ -138,6 +139,9 @@ export async function acquireMedia(
     streamFirst = null,
   } = {}
 ) {
+  if (await isPrivateHost(url)) {
+    throw new ValidationError(BLOCKED_DESTINATION_MESSAGE);
+  }
   const maxSize = adminUser ? Infinity : await getMaxVideoSize();
   // Reddit deprecated the unauthenticated .json endpoints in May 2026, so yt-dlp cannot read
   // a post at all. Resolve it before the source flags below are computed: most posts are
@@ -154,6 +158,9 @@ export async function acquireMedia(
         const targetDisabled = await getDisabledServiceLabel(resolved.external);
         if (targetDisabled) {
           throw new ValidationError(`downloads from ${targetDisabled} are turned off.`);
+        }
+        if (await isPrivateHost(resolved.external)) {
+          throw new ValidationError(BLOCKED_DESTINATION_MESSAGE);
         }
         url = resolved.external;
       } else {

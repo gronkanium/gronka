@@ -6,6 +6,7 @@ import {
   SSRF_BLOCKED_CODE,
   guardedBeforeRedirect,
   guardedLookup,
+  isPrivateHost,
   isSsrfBlockedError,
   ssrfGuardedRequest,
 } from '../../src/utils/ssrf-guard.js';
@@ -14,6 +15,13 @@ const listen = server =>
   new Promise(resolve => server.listen(0, '127.0.0.1', () => resolve(server.address().port)));
 
 describe('ssrf guard', () => {
+  test('isPrivateHost refuses names that resolve inward and passes public or unknown ones', async () => {
+    assert.strictEqual(await isPrivateHost('http://localhost:3001/x.mp4'), true);
+    assert.strictEqual(await isPrivateHost('http://[::1]/x'), true);
+    assert.strictEqual(await isPrivateHost('https://8.8.8.8/x'), false);
+    assert.strictEqual(await isPrivateHost('https://nothing.invalid/x'), false);
+  });
+
   describe('guardedLookup', () => {
     test('refuses a hostname that resolves to loopback', done => {
       guardedLookup('localhost', {}, error => {

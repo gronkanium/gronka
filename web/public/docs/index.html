@@ -1,0 +1,373 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="description" content="api docs for gronka." />
+    <meta name="theme-color" content="#f6f5f1" />
+    <title>api / gronka</title>
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
+    <link
+      rel="preload"
+      href="/fonts/Archivo-Regular.woff2"
+      as="font"
+      type="font/woff2"
+      crossorigin
+    />
+    <link
+      rel="preload"
+      href="/fonts/Archivo-SemiBold.woff2"
+      as="font"
+      type="font/woff2"
+      crossorigin
+    />
+    <link
+      rel="preload"
+      href="/fonts/Archivo-ExpandedExtraBold.woff2"
+      as="font"
+      type="font/woff2"
+      crossorigin
+    />
+    <link
+      rel="preload"
+      href="/fonts/GronkaMono-Regular.woff2"
+      as="font"
+      type="font/woff2"
+      crossorigin
+    />
+    <link rel="stylesheet" href="/docs/docs.css" />
+    <script src="/docs/docs.js" defer></script>
+  </head>
+  <body>
+    <header class="topbar">
+      <a class="wordmark" href="/"
+        ><img src="/favicon.svg" alt="" width="24" height="24" />gronka</a
+      >
+      <a class="spec-link" href="/openapi.json">openapi.json</a>
+    </header>
+    <div class="layout">
+      <aside class="sidebar" aria-label="page navigation">
+        <nav class="desktop-toc" aria-label="sections">
+          <p class="toc-label">on this page</p>
+          <div class="toc-links">
+            <a href="#auth">auth</a>
+            <a href="#download">download</a>
+            <a href="#responses">responses</a>
+            <a href="#padded-json">padded json</a>
+            <a href="#errors">errors</a>
+            <a href="#accounts">accounts</a>
+            <a href="#limits">limits</a>
+            <a href="#privacy">privacy</a>
+            <a href="#reference">reference</a>
+          </div>
+        </nav>
+        <details class="mobile-toc">
+          <summary>on this page</summary>
+          <nav class="toc-links" aria-label="sections">
+            <a href="#auth">auth</a>
+            <a href="#download">download</a>
+            <a href="#responses">responses</a>
+            <a href="#padded-json">padded json</a>
+            <a href="#errors">errors</a>
+            <a href="#accounts">accounts</a>
+            <a href="#limits">limits</a>
+            <a href="#privacy">privacy</a>
+            <a href="#reference">reference</a>
+          </nav>
+        </details>
+      </aside>
+      <main>
+        <section aria-labelledby="intro-title">
+          <h1 id="intro-title">paste a link, get the file.</h1>
+          <p class="preview" id="preview">
+            public preview: the api runs at <code>api.gronka.dev</code>, but it may still change
+            before the release.
+          </p>
+        </section>
+
+        <section id="auth" aria-labelledby="auth-title">
+          <h2 id="auth-title">auth</h2>
+          <p>
+            send your api key as <code>Authorization: Bearer &lt;key&gt;</code>. make keys on the
+            account page.
+          </p>
+        </section>
+
+        <section id="download" aria-labelledby="download-title">
+          <h2 id="download-title">download</h2>
+          <p>send a link as json to <code>POST /v1/download</code>.</p>
+          <div class="codebox">
+            <button class="copy" type="button" aria-label="copy curl command" hidden>copy</button>
+            <pre tabindex="0"><code>curl https://api.gronka.dev/v1/download \
+  -H 'Authorization: Bearer &lt;key&gt;' \
+  -H 'Content-Type: application/json' \
+  -d '{"url":"https://x.com/user/status/123"}'</code></pre>
+          </div>
+          <p>
+            options: <code>mode</code> is <code>auto</code> (default), <code>audio</code> (an mp3)
+            or <code>mute</code> (the video without its sound); <code>start</code> and
+            <code>end</code> trim, in seconds or <code>m:ss</code>; <code>split: false</code> asks
+            for one finished file instead of separate video and audio parts.
+          </p>
+        </section>
+
+        <section id="responses" aria-labelledby="responses-title">
+          <h2 id="responses-title">responses</h2>
+          <div class="shape">
+            <h3>direct</h3>
+            <p>the link points to the file on its source site.</p>
+            <div class="codebox">
+              <button class="copy" type="button" aria-label="copy direct response" hidden>
+                copy
+              </button>
+              <pre tabindex="0"><code>{
+  "lane": "direct",
+  "files": [
+    {
+      "url": "https://video.twimg.com/...",
+      "filename": null,
+      "type": "video"
+    }
+  ]
+}</code></pre>
+            </div>
+          </div>
+          <div class="shape">
+            <h3>worker</h3>
+            <p>
+              signed links on <code>dl.gronka.dev</code>, good for an hour. usually one file, with
+              <code>kind</code> <code>video</code>, <code>audio</code> or <code>file</code> (an
+              image or other plain file). with <code>merge: true</code>, the files are separate
+              video and audio streams for you to join, or send <code>split: false</code> to get one
+              file.
+            </p>
+            <div class="codebox">
+              <button class="copy" type="button" aria-label="copy worker response" hidden>
+                copy
+              </button>
+              <pre tabindex="0"><code>{
+  "lane": "worker",
+  "merge": true,
+  "filename": "clip.mp4",
+  "files": [
+    {
+      "url": "https://dl.gronka.dev/f/...",
+      "filename": "clip.video.mp4",
+      "kind": "video",
+      "size": 30123456
+    },
+    {
+      "url": "https://dl.gronka.dev/f/...",
+      "filename": "clip.audio.m4a",
+      "kind": "audio",
+      "size": 1234567
+    }
+  ]
+}</code></pre>
+            </div>
+          </div>
+          <div class="shape">
+            <h3>r2</h3>
+            <p>a copy on <code>cdn.gronka.dev</code>, deleted after an hour.</p>
+          </div>
+          <div class="shape">
+            <h3>error</h3>
+            <p>a download error has an <code>error.code</code> and <code>error.message</code>.</p>
+            <div class="codebox">
+              <button class="copy" type="button" aria-label="copy error response" hidden>
+                copy
+              </button>
+              <pre tabindex="0"><code>{
+  "error": {
+    "code": "VALIDATION_ERROR",
+    "message": "video duration exceeds the maximum allowed (60 minutes)."
+  }
+}</code></pre>
+            </div>
+          </div>
+        </section>
+
+        <section id="padded-json" aria-labelledby="padded-title">
+          <h2 id="padded-title">padded json</h2>
+          <p>
+            while a download runs, the response starts with spaces, then json. parse the full
+            response as usual. errors after it starts use the json body; errors before it starts use
+            an http status.
+          </p>
+        </section>
+
+        <section id="errors" aria-labelledby="errors-title">
+          <h2 id="errors-title">errors</h2>
+          <p class="muted">common error codes. <code>message</code> is safe to show to users.</p>
+          <ul class="error-list">
+            <li><code>BAD_REQUEST</code><span>the request body or options are invalid.</span></li>
+            <li><code>BAD_URL</code><span>the url is missing or invalid.</span></li>
+            <li><code>DOWNLOAD_FAILED</code><span>the download did not finish.</span></li>
+            <li><code>FORBIDDEN</code><span>the request origin is not allowed.</span></li>
+            <li><code>INTERNAL</code><span>something broke on the server.</span></li>
+            <li><code>KEY_LIMIT</code><span>the account already has 10 keys.</span></li>
+            <li>
+              <code>NETWORK_ERROR</code><span>the source refused or could not be reached.</span>
+            </li>
+            <li><code>NOT_FOUND</code><span>the account, key or passkey was not found.</span></li>
+            <li><code>PASSKEY_INVALID</code><span>the passkey could not be checked.</span></li>
+            <li><code>PASSKEY_LIMIT</code><span>the account already has 10 passkeys.</span></li>
+            <li>
+              <code>RATE_LIMITED</code
+              ><span
+                >too many downloads or one is already running. retry after
+                <code>retryAfter</code> seconds.</span
+              >
+            </li>
+            <li>
+              <code>UNAUTHORIZED</code><span>the account or api key is missing or invalid.</span>
+            </li>
+            <li><code>TOTP_INVALID</code><span>the 2fa or recovery code is wrong.</span></li>
+            <li>
+              <code>TOTP_LOCKED</code><span>too many wrong codes; wait, or use a passkey.</span>
+            </li>
+            <li><code>TOTP_OFF</code><span>2fa is not on for this account.</span></li>
+            <li><code>TOTP_ON</code><span>2fa is already on.</span></li>
+            <li><code>TOTP_REQUIRED</code><span>this account needs a 2fa code.</span></li>
+            <li><code>VALIDATION_ERROR</code><span>the media or request hit a limit.</span></li>
+            <li><code>VERIFICATION_FAILED</code><span>the turnstile check failed.</span></li>
+          </ul>
+        </section>
+
+        <section id="accounts" aria-labelledby="accounts-title">
+          <h2 id="accounts-title">accounts</h2>
+          <p>
+            an account is a number that holds api keys. add a passkey or 2fa to help protect it:
+          </p>
+          <ul>
+            <li>
+              <strong>passkey</strong>: log in with your phone or laptop, no number needed. we only
+              keep its public key.
+            </li>
+            <li>
+              <strong>2fa</strong>: an authenticator app code on top of the number. turning it on
+              gives 10 recovery codes, each works once, in the same <code>totp</code> field as a
+              code.
+            </li>
+          </ul>
+          <p>
+            wrong codes lock 2fa for 15 minutes after every 5, and for good after 100 in a row. a
+            passkey login clears the lock.
+          </p>
+          <p>
+            with 2fa on, four actions also need a current code (or a recovery code) as
+            <code>code</code> in the json body: <code>POST /v1/account/rotate</code>,
+            <code>DELETE /v1/account</code>, <code>POST /v1/passkeys/register/options</code> and
+            <code>DELETE /v1/passkeys/{id}</code>. a new number also signs out every other session.
+          </p>
+        </section>
+
+        <section id="limits" aria-labelledby="limits-title">
+          <h2 id="limits-title">limits</h2>
+          <p>
+            50 downloads per 10 minutes per ip, or per account with api keys (all keys share the
+            account limit). api key checks are capped at 30 per 10 minutes per ip. files fetched by
+            gronka (lane r2) have a 400 mb cap; images have a 50 mb cap. a
+            <code>429</code> or <code>503</code> includes <code>error.retryAfter</code> in seconds
+            and the same value in a <code>Retry-After</code> header.
+          </p>
+        </section>
+
+        <section id="privacy" aria-labelledby="privacy-title">
+          <h2 id="privacy-title">privacy</h2>
+          <p>no request logs. files are gone after an hour.</p>
+        </section>
+
+        <section id="reference" aria-labelledby="reference-title">
+          <h2 id="reference-title">reference</h2>
+          <ul class="endpoint-list">
+            <li>
+              <span class="method">GET</span><code class="route-path">/v1/health</code
+              ><span class="endpoint-note">check service status</span>
+            </li>
+            <li>
+              <span class="method">POST</span><code class="route-path">/v1/download</code
+              ><span class="endpoint-note">get files from a link</span>
+            </li>
+            <li>
+              <span class="method">POST</span><code class="route-path">/v1/account</code
+              ><span class="endpoint-note">create an account</span>
+            </li>
+            <li>
+              <span class="method">GET</span><code class="route-path">/v1/account</code
+              ><span class="endpoint-note">get account, keys and passkeys</span>
+            </li>
+            <li>
+              <span class="method">DELETE</span><code class="route-path">/v1/account</code
+              ><span class="endpoint-note">delete the account</span>
+            </li>
+            <li>
+              <span class="method">POST</span><code class="route-path">/v1/account/rotate</code
+              ><span class="endpoint-note">replace account number</span>
+            </li>
+            <li>
+              <span class="method">POST</span><code class="route-path">/v1/session</code
+              ><span class="endpoint-note">start a session</span>
+            </li>
+            <li>
+              <span class="method">DELETE</span><code class="route-path">/v1/session</code
+              ><span class="endpoint-note">end a session</span>
+            </li>
+            <li>
+              <span class="method">POST</span><code class="route-path">/v1/keys</code
+              ><span class="endpoint-note">create an api key</span>
+            </li>
+            <li>
+              <span class="method">DELETE</span><code class="route-path">/v1/keys/{id}</code
+              ><span class="endpoint-note">revoke an api key</span>
+            </li>
+            <li>
+              <span class="method">POST</span><code class="route-path">/v1/totp/setup</code
+              ><span class="endpoint-note">start turning on 2fa</span>
+            </li>
+            <li>
+              <span class="method">POST</span><code class="route-path">/v1/totp/enable</code
+              ><span class="endpoint-note">turn on 2fa, get recovery codes</span>
+            </li>
+            <li>
+              <span class="method">DELETE</span><code class="route-path">/v1/totp</code
+              ><span class="endpoint-note">turn off 2fa</span>
+            </li>
+            <li>
+              <span class="method">POST</span><code class="route-path">/v1/totp/recovery</code
+              ><span class="endpoint-note">replace recovery codes</span>
+            </li>
+            <li>
+              <span class="method">POST</span
+              ><code class="route-path">/v1/passkeys/register/options</code
+              ><span class="endpoint-note">start adding a passkey</span>
+            </li>
+            <li>
+              <span class="method">POST</span><code class="route-path">/v1/passkeys/register</code
+              ><span class="endpoint-note">finish adding a passkey</span>
+            </li>
+            <li>
+              <span class="method">POST</span
+              ><code class="route-path">/v1/passkeys/login/options</code
+              ><span class="endpoint-note">start a passkey login</span>
+            </li>
+            <li>
+              <span class="method">POST</span><code class="route-path">/v1/passkeys/login</code
+              ><span class="endpoint-note">log in with a passkey</span>
+            </li>
+            <li>
+              <span class="method">DELETE</span><code class="route-path">/v1/passkeys/{id}</code
+              ><span class="endpoint-note">remove a passkey</span>
+            </li>
+          </ul>
+        </section>
+
+        <footer class="page-foot">
+          full schema: <a href="/openapi.json">openapi.json</a>
+          <span id="copy-status" role="status" aria-live="polite"></span>
+        </footer>
+      </main>
+    </div>
+  </body>
+</html>

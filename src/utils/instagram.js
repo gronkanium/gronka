@@ -3,7 +3,6 @@ import fsSync from 'node:fs';
 import { createLogger } from './logger.js';
 import { NetworkError, ValidationError } from './errors.js';
 import { downloadFileFromUrl } from './file-downloader.js';
-import { mapWithLimit } from './concurrency.js';
 import { ssrfGuardedRequest } from './ssrf-guard.js';
 
 const logger = createLogger('instagram');
@@ -289,16 +288,18 @@ export async function downloadFromInstagram(url, isAdminUser = false) {
     );
     const items = await fetchStoryItems(story, parsed.pathname, cookie);
     const downloaded = (
-      await mapWithLimit(items, 3, async item => {
-        const mediaUrl = selectMediaUrl(item);
-        if (!mediaUrl) {
-          return null;
-        }
-        return downloadFileFromUrl(mediaUrl, isAdminUser).catch(error => {
-          logger.warn(`Instagram story item failed: ${error.message}`);
-          return null;
-        });
-      })
+      await Promise.all(
+        items.map(async item => {
+          const mediaUrl = selectMediaUrl(item);
+          if (!mediaUrl) {
+            return null;
+          }
+          return downloadFileFromUrl(mediaUrl, isAdminUser).catch(error => {
+            logger.warn(`Instagram story item failed: ${error.message}`);
+            return null;
+          });
+        })
+      )
     ).filter(Boolean);
     if (downloaded.length === 0) {
       throw new ValidationError('no downloadable media found on this story');

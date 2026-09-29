@@ -232,3 +232,11 @@ describe('cobalt utilities', () => {
     });
   });
 });
+
+test('repairUrl drops the stray scheme cobalt puts on streamable links', async () => {
+  const { repairUrl } = await import('../../src/utils/cobalt.js');
+  const clean = 'https://cdn-cf-west.streamable.com/video/x.mp4?Expires=1';
+  assert.strictEqual(repairUrl(`https:${clean}`), clean);
+  assert.strictEqual(repairUrl(clean), clean);
+  assert.strictEqual(repairUrl(undefined), undefined);
+});

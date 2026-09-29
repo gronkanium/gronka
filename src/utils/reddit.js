@@ -27,7 +27,6 @@ const OFFSITE_HOSTS = [
   'twitter.com',
   'x.com',
   'tiktok.com',
-  'pornhub.com',
   'xvideos.com',
   'xhamster.com',
   'redtube.com',

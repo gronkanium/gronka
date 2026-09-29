@@ -16,6 +16,22 @@ const LOG_LEVEL_NAMES = {
 
 let dbInitPromise = null;
 
+const isWebMode = () => process.env.GRONKA_WEB === 'true';
+
+// gronka-web keeps no history: nothing that says who fetched what may reach stdout.
+const REDACTIONS = [
+  [/https?:\/\/\S+/gi, '<url>'],
+  [/\bgk_\w+/g, '<key>'],
+  [/\bGW[\s-]?[0-9A-Z]{5}(?:[\s-]?[0-9A-Z]{1,5}){1,6}/g, '<account>'],
+  [/\b\d{1,3}(?:\.\d{1,3}){3}\b/g, '<ip>'],
+  [/\b(?:[0-9a-f]{0,4}:){3,7}[0-9a-f]{0,4}\b/gi, '<ip>'],
+  [/\b(?=[\w-]*\d)[\w-]{6,}\b/g, '<id>'],
+];
+
+export function redactForWeb(text) {
+  return REDACTIONS.reduce((out, [pattern, label]) => out.replace(pattern, label), text);
+}
+
 // Callback for broadcasting logs to WebSocket clients
 let logBroadcastCallback = null;
 
@@ -57,7 +73,7 @@ class Logger {
     this.logLevel = LOG_LEVELS[levelName] !== undefined ? LOG_LEVELS[levelName] : LOG_LEVELS.INFO;
 
     // Skip if we're in a test environment where database might not be available
-    if (!dbInitPromise && !process.env.SKIP_DB_INIT) {
+    if (!dbInitPromise && !process.env.SKIP_DB_INIT && !isWebMode()) {
       dbInitPromise = initDatabase().catch(error => {
         // Silently fail in test environments to avoid cluttering test output
         if (!process.env.NODE_ENV || process.env.NODE_ENV !== 'test') {
@@ -118,6 +134,12 @@ class Logger {
 
   async log(level, message, ...args) {
     if (level < this.logLevel) {
+      return;
+    }
+
+    if (isWebMode()) {
+      const redacted = [message, ...args].map(arg => redactForWeb(stringifyArg(arg)));
+      console.log(this.sanitizeForConsoleOutput(this.formatMessage(level, ...redacted)));
       return;
     }
 
@@ -183,6 +205,6 @@ class Logger {
 }
 
 export function createLogger(component) {
-  const logLevel = process.env.LOG_LEVEL || 'INFO';
+  const logLevel = process.env.LOG_LEVEL || (isWebMode() ? 'ERROR' : 'INFO');
   return new Logger(component, logLevel);
 }

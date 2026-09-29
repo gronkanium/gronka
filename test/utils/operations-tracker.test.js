@@ -481,13 +481,13 @@ describe('operations tracker', () => {
       const operationId = createOperation('convert', 'user1');
 
       // Manually insert a status_update log
-      insertOperationLog(operationId, 'status_update', 'running', {
+      await insertOperationLog(operationId, 'status_update', 'running', {
         message: 'Operation started',
       });
 
       // For testing, we'll create a stuck operation by inserting logs
       const stuckId = `stuck-${Date.now()}`;
-      insertOperationLog(stuckId, 'created', 'pending', {
+      await insertOperationLog(stuckId, 'created', 'pending', {
         message: 'Operation created',
         metadata: { operationType: 'convert', userId: 'user1' },
       });
@@ -500,11 +500,11 @@ describe('operations tracker', () => {
 
     test('a zero threshold fails an operation that only just started', async () => {
       const orphanId = `orphan-${Date.now()}-${Math.random().toString(16).slice(2)}`;
-      insertOperationLog(orphanId, 'created', 'pending', {
+      await insertOperationLog(orphanId, 'created', 'pending', {
         message: 'Operation created',
         metadata: { operationType: 'download', userId: 'user-orphan' },
       });
-      insertOperationLog(orphanId, 'status_update', 'running', {
+      await insertOperationLog(orphanId, 'status_update', 'running', {
         message: 'Status changed from pending to running',
         metadata: { operationType: 'download', userId: 'user-orphan' },
       });

@@ -4,7 +4,6 @@ import path from 'path';
 import { createLogger } from './logger.js';
 import { getGifPath } from './storage.js';
 import { ValidationError } from './errors.js';
-import { mediaSlots } from './concurrency.js';
 import { isOwnCdnUrl } from './config.js';
 const logger = createLogger('gif-optimizer');
 
@@ -74,7 +73,7 @@ export async function checkLocalGif(hash, storagePath) {
  * @returns {Promise<void>}
  */
 export async function optimizeGif(inputPath, outputPath, options = {}) {
-  return mediaSlots.run(() => optimizeGifImpl(inputPath, outputPath, options));
+  return optimizeGifImpl(inputPath, outputPath, options);
 }
 
 async function optimizeGifImpl(inputPath, outputPath, options = {}) {

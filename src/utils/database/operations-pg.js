@@ -499,7 +499,8 @@ export async function searchOperations(filters = {}, { limit = 50, offset = 0, s
   const countResult = await sql.unsafe(countQuery, params);
   const total = parseInt(countResult[0]?.total ?? 0, 10);
 
-  // Whitelisted ORDER BY variants; duration sorts push never-finished operations last
+  // Whitelisted ORDER BY variants; duration sorts push never-finished operations last. The id
+  // tiebreak keeps pages from repeating rows that share a timestamp.
   const orderByClauses = {
     newest: 'c.created_at DESC',
     oldest: 'c.created_at ASC',
@@ -514,7 +515,7 @@ export async function searchOperations(filters = {}, { limit = 50, offset = 0, s
     FROM created c
     LEFT JOIN latest_status ls ON ls.operation_id = c.operation_id
     ${whereClause}
-    ORDER BY ${orderBy}
+    ORDER BY ${orderBy}, c.operation_id
     LIMIT ${p(limit)} OFFSET ${p(offset)}
   `;
   const idsResult = await sql.unsafe(idsQuery, params);

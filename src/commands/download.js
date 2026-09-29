@@ -4,49 +4,26 @@ import path from 'path';
 import { createLogger } from '../utils/logger.js';
 import { botConfig } from '../utils/config.js';
 import { validateUrl, firstUrlIn } from '../utils/validation.js';
-import {
-  canonicalizeMirrorUrl,
-  isSocialMediaUrl,
-  downloadFromSocialMedia,
-  getCobaltMediaUrls,
-  getRemoteContentLength,
-} from '../utils/cobalt.js';
-import {
-  getYtdlpSite,
-  downloadFromYouTube,
-  downloadWithYtdlp,
-  YtdlpRateLimitError,
-} from '../utils/ytdlp.js';
+import { canonicalizeMirrorUrl, isSocialMediaUrl } from '../utils/cobalt.js';
+import { getYtdlpSite } from '../utils/ytdlp.js';
 import {
   getGalleryDlSite,
-  downloadWithGalleryDl,
   isMangaDexTitleUrl,
   isMangaDexChapterUrl,
   isNhentaiGalleryUrl,
 } from '../utils/gallery-dl.js';
 import { beginMangaSelection } from './manga.js';
-import { isHentaiGifzUrl, downloadFromHentaiGifz } from '../utils/hentaigifz.js';
-import { isBooruUrl, downloadFromBooru, booruCdnUserAgent } from '../utils/booru.js';
-import { isPinterestUrl, downloadFromPinterest } from '../utils/pinterest.js';
-import { isKlipyUrl, downloadFromKlipy } from '../utils/klipy.js';
+import { isHentaiGifzUrl } from '../utils/hentaigifz.js';
+import { isBooruUrl } from '../utils/booru.js';
+import { isPinterestUrl } from '../utils/pinterest.js';
+import { isKlipyUrl } from '../utils/klipy.js';
 import { keylessMegaFileId } from '../utils/mega.js';
 import { promptForMegaKey } from './mega-key.js';
-import {
-  isInstagramPostUrl,
-  isInstagramStoryUrl,
-  hasInstagramSession,
-  downloadFromInstagram,
-} from '../utils/instagram.js';
 import { getDisabledServiceLabel } from '../utils/download-services.js';
 import { AppError, ValidationError } from '../utils/errors.js';
 import { batchAttachmentsForDelivery } from '../utils/attachment-helpers.js';
 import { isAdmin, recordRateLimit } from '../utils/rate-limit.js';
-import {
-  generateHash,
-  isDirectMediaUrl,
-  downloadDirectMedia,
-  downloadFileFromUrl,
-} from '../utils/file-downloader.js';
+import { generateHash, isDirectMediaUrl } from '../utils/file-downloader.js';
 import {
   createFailedOperation,
   updateOperationStatus,
@@ -76,14 +53,13 @@ import {
 } from '../utils/r2-storage.js';
 import { hashUrl } from '../utils/hashing.js';
 import { notifyCommandSuccess, notifyCommandFailure } from '../utils/ntfy-notifier.js';
-import { getProcessedUrl, getBooleanSetting, getSetting } from '../utils/database.js';
-import { isRedditPostUrl, hasRedditSession, resolveRedditPost } from '../utils/reddit.js';
-import { mapWithLimit } from '../utils/concurrency.js';
+import { getProcessedUrl } from '../utils/database.js';
 import { recordProcessedUrl, trackR2UploadIfApplicable } from './shared/url-cache.js';
 import { runMediaCommand } from './shared/run-media-command.js';
+import { acquireMedia, extractAudio } from '../core/acquire-media.js';
 import { replyIfRateLimited, resolveTimeOptions } from './shared/command-guards.js';
 import { r2Config } from '../utils/config.js';
-import { trimVideo, trimGif, convertToFormat } from '../utils/video-processor.js';
+import { trimVideo, trimGif } from '../utils/video-processor.js';
 import { sendConvertedFile } from './shared/send-converted.js';
 import {
   safeInteractionReply,
@@ -96,119 +72,16 @@ import { fitsDiscordAttachment, getDiscordAttachmentLimit } from './shared/attac
 
 const logger = createLogger('download');
 
-// Reddit allows 20 images per gallery. Each slide is buffered whole in memory, so cap the fan-out
-// rather than letting one link pull 20 full-resolution originals at once.
-const MAX_REDDIT_GALLERY_SLIDES = 10;
-
-function isTwitterXUrl(url) {
-  try {
-    const hostname = new URL(url).hostname.toLowerCase().replace(/^www\./, '');
-    return (
-      hostname === 'x.com' ||
-      hostname === 'twitter.com' ||
-      hostname === 'mobile.twitter.com' ||
-      hostname.endsWith('.x.com') ||
-      hostname.endsWith('.twitter.com')
-    );
-  } catch {
-    return false;
-  }
-}
-
-// TikTok URLs get the same Cobalt→yt-dlp fallback as X/Twitter: Cobalt has no TikTok cookie
-// support, so age-restricted posts only work via yt-dlp with a cookies file (YTDLP_COOKIES_PATH).
-function isTikTokUrl(url) {
-  try {
-    const hostname = new URL(url).hostname.toLowerCase().replace(/^www\./, '');
-    return hostname === 'tiktok.com' || hostname.endsWith('.tiktok.com');
-  } catch {
-    return false;
-  }
-}
-
-// Human-readable label for a Cobalt-primary host, used when a Cobalt download fails and we
-// retry via yt-dlp. Cobalt's per-service extractors are flaky/auth-gated (Instagram, Reddit,
-// etc.); yt-dlp handles many of the same hosts (and, with a cookies file, private/gated
-// Instagram). Returning a non-null label makes any Cobalt failure eligible for the yt-dlp retry,
-// not just X/Twitter and TikTok.
-function cobaltFallbackLabel(url) {
-  try {
-    return new URL(url).hostname.toLowerCase().replace(/^www\./, '');
-  } catch {
-    return 'this platform';
-  }
-}
-
 const {
   gifStoragePath: GIF_STORAGE_PATH,
   cdnBaseUrl: CDN_BASE_URL,
-  maxVideoSize: MAX_VIDEO_SIZE,
-  cobaltApiUrl: COBALT_API_URL,
   cobaltEnabled: COBALT_ENABLED,
   ytdlpEnabled: YTDLP_ENABLED,
-  ytdlpQuality: YTDLP_QUALITY,
   galleryDlEnabled: GALLERY_DL_ENABLED,
   discordSizeLimit: DISCORD_SIZE_LIMIT,
 } = botConfig;
 
-/**
- * Non-admin duration backstop in seconds for yt-dlp downloads, live-editable from the
- * webui settings page (max_video_duration). Size is the primary gate now (yt-dlp aborts
- * oversized downloads via --max-filesize); this just caps pathological lengths. Falls back
- * to 3600 (60 minutes) when unset or unparsable.
- * @returns {Promise<number>} Cap in seconds
- */
-async function getMaxVideoDuration() {
-  const raw = await getSetting('max_video_duration', '3600');
-  const parsed = parseInt(raw, 10);
-  return Number.isFinite(parsed) && parsed > 0 ? parsed : 3600;
-}
-
-/**
- * Non-admin max download size in bytes, live-editable from the webui settings page
- * (max_video_size_mb, stored in MB). This is the primary download gate, oversized videos
- * are rejected before download via yt-dlp --max-filesize. Falls back to the MAX_VIDEO_SIZE
- * env/config default when unset or unparsable.
- * @returns {Promise<number>} Cap in bytes
- */
-async function getMaxVideoSize() {
-  const mb = parseInt(await getSetting('max_video_size_mb', ''), 10);
-  return Number.isFinite(mb) && mb > 0 ? mb * 1024 * 1024 : MAX_VIDEO_SIZE;
-}
-
-/**
- * Reply with direct media URL(s) from cobalt instead of downloading/uploading.
- * Used by url-only mode and as a last-resort fallback for X/Twitter videos that
- * exceed the download limits (Discord embeds direct video.twimg.com URLs and
- * plays the full video, so length/size caps don't apply).
- * The concurrency limit lives inside cobalt.js, so lookups share the same cap as
- * regular downloads without the call site knowing about it.
- * Throws when the cobalt API call fails; callers decide whether to fall back.
- * @param {Object} params
- * @param {Interaction} params.interaction - Discord interaction
- * @param {string} params.operationId - Operation tracker id
- * @param {string} params.userId - Discord user id
- * @param {string} params.url - Original social media URL
- * @param {string} params.stepName - Operation step name to log under
- * @param {Function|null} [params.shouldServe] - Optional async predicate over the
- *   fetched URL list; return false to decline (caller falls back to downloading)
- * @returns {Promise<boolean>} true when a reply with URLs was sent
- */
-async function replyWithDirectMediaUrls({
-  interaction,
-  operationId,
-  userId,
-  url,
-  stepName,
-  shouldServe = null,
-}) {
-  const { urls, direct } = await getCobaltMediaUrls(COBALT_API_URL, url);
-  if (!direct || urls.length === 0) {
-    return false;
-  }
-  if (shouldServe && !(await shouldServe(urls))) {
-    return false;
-  }
+async function replyWithDirectMediaUrls({ interaction, operationId, userId, url, urls, stepName }) {
   // Discord message limit is 2000 chars; include as many URLs as fit
   const lines = [];
   let totalLength = 0;
@@ -227,7 +100,6 @@ async function replyWithDirectMediaUrls({
   recordRateLimit(userId);
   await safeInteractionEditReply(interaction, { content: lines.join('\n') });
   await notifyCommandSuccess('download', { operationId, userId });
-  return true;
 }
 
 async function cleanupTempFiles(tmpDir, files = []) {
@@ -351,501 +223,39 @@ export async function processDownload(
         metadata: { url },
       });
 
-      const maxSize = adminUser ? Infinity : await getMaxVideoSize();
       const discordAttachmentLimit = getDiscordAttachmentLimit(interaction, DISCORD_SIZE_LIMIT);
-      // Reddit deprecated the unauthenticated .json endpoints in May 2026, so yt-dlp cannot read
-      // a post at all. Resolve it before the source flags below are computed: most posts are
-      // link-aggregator entries whose media lives on redgifs/imgur, and swapping url for that
-      // target lets the normal selection route it to the extractor that already handles it.
-      let redditImages = null;
-      if (isRedditPostUrl(url) && hasRedditSession()) {
-        try {
-          const resolved = await resolveRedditPost(url);
-          if (resolved.external) {
-            logger.info(`Reddit post points offsite, following to: ${resolved.external}`);
-            // The disabled-source gate above ran on the reddit URL, so re-check the target:
-            // following a hand-off must not smuggle past a source the owner turned off.
-            const targetDisabled = await getDisabledServiceLabel(resolved.external);
-            if (targetDisabled) {
-              throw new ValidationError(`downloads from ${targetDisabled} are turned off.`);
-            }
-            url = resolved.external;
-          } else {
-            redditImages = resolved.images;
-          }
-        } catch (redditError) {
-          // Falling back to cobalt is the net for a resolution failure, but it must not become a
-          // way around the disabled-source gate two lines up, and a post reddit itself says is
-          // gone has nothing for cobalt or yt-dlp to find either.
-          if (redditError instanceof ValidationError || redditError.code === 'CONTENT_GONE') {
-            throw redditError;
-          }
-          logger.warn(`Reddit resolution failed, falling back to cobalt: ${redditError.message}`);
-        }
+      const acquired = await acquireMedia(url, {
+        adminUser,
+        startTime,
+        duration,
+        galleryOptions,
+        attachmentLimit: discordAttachmentLimit,
+        client: interaction.client,
+        logStep: ctx.logStep,
+      });
+      if (acquired.kind === 'urls') {
+        await replyWithDirectMediaUrls({
+          interaction,
+          operationId,
+          userId,
+          url: acquired.url,
+          urls: acquired.urls,
+          stepName: acquired.stepName,
+        });
+        return;
       }
-
-      const ytdlpSite = getYtdlpSite(url);
-      const galleryDlSite = getGalleryDlSite(url);
-      const isHentaiGifz = isHentaiGifzUrl(url);
-      const isBooru = isBooruUrl(url);
-      const isPinterest = isPinterestUrl(url);
-      const isKlipy = isKlipyUrl(url);
-      const isDirectMedia = isDirectMediaUrl(url);
-      // Cobalt tries Instagram's logged-out routes first; the session extractor is only the backstop.
-      const useInstagram = isInstagramPostUrl(url) && hasInstagramSession();
-      const isIgStory = isInstagramStoryUrl(url) && hasInstagramSession();
-      const useReddit = redditImages !== null && redditImages.length > 0;
-      // yt-dlp sites (youtube, redgifs, imgur, the tube sites, etc.) download through
-      // yt-dlp, not Cobalt.
-      const useYtdlp = ytdlpSite !== null && YTDLP_ENABLED;
-
-      // URL-only mode (toggleable from the webui): reply with the direct media URL
-      // from cobalt instead of downloading/uploading. Trim requests still need a real
-      // download, and the yt-dlp sites, hentaigifz, booru, and Pinterest have no cobalt
-      // direct URL to hand out.
-      if (
-        COBALT_ENABLED &&
-        !useYtdlp &&
-        !galleryDlSite &&
-        !isHentaiGifz &&
-        !isBooru &&
-        !isPinterest &&
-        !isKlipy &&
-        !isIgStory &&
-        !isDirectMedia &&
-        startTime === null &&
-        duration === null &&
-        (await getBooleanSetting('url_only_mode', false))
-      ) {
-        logOperationStep(operationId, 'url_only_mode', 'running', {
-          message: 'URL-only mode enabled, fetching direct media URL from cobalt',
-          metadata: { url },
-        });
-        try {
-          const replied = await replyWithDirectMediaUrls({
-            interaction,
-            operationId,
-            userId,
-            url,
-            stepName: 'url_only_mode',
-          });
-          if (replied) {
-            return;
-          }
-          logOperationStep(operationId, 'url_only_mode', 'success', {
-            message: 'No direct URL available (tunnel response), falling back to normal download',
-            metadata: { url },
-          });
-        } catch (urlModeError) {
-          logger.warn(`URL-only mode failed, falling back to download: ${urlModeError.message}`);
-          logOperationStep(operationId, 'url_only_mode', 'success', {
-            message: 'URL-only mode failed, falling back to normal download',
-            metadata: { url, reason: urlModeError.message },
-          });
-        }
-      }
-
-      // Twitter delivery policy (webui setting twitter_delivery): serving the direct
-      // video.twimg.com URL instead of rehosting skips the whole download+upload for
-      // large videos, saving bandwidth and R2 storage. 'hybrid' serves the URL only
-      // when the video wouldn't fit as a Discord attachment (small clips keep the
-      // nicer attachment UX and survive tweet deletion); 'always_url' serves it
-      // whenever cobalt offers one. Trim requests always need real bytes. Any
-      // failure here falls through to the normal download path.
-      if (COBALT_ENABLED && isTwitterXUrl(url) && startTime === null && duration === null) {
-        const deliveryMode = await getSetting('twitter_delivery', 'hybrid');
-        if (deliveryMode === 'always_url' || deliveryMode === 'hybrid') {
-          try {
-            const replied = await replyWithDirectMediaUrls({
-              interaction,
-              operationId,
-              userId,
-              url,
-              stepName: 'twitter_delivery',
-              shouldServe:
-                deliveryMode === 'always_url'
-                  ? null
-                  : async urls => {
-                      // hybrid: only bypass rehosting for a single video too big to attach
-                      if (urls.length !== 1 || urls[0].type !== 'video') {
-                        return false;
-                      }
-                      const size = await getRemoteContentLength(urls[0].url);
-                      return size !== null && !fitsDiscordAttachment(size, discordAttachmentLimit);
-                    },
-            });
-            if (replied) {
-              return;
-            }
-          } catch (deliveryError) {
-            logger.warn(
-              `Twitter delivery policy (${deliveryMode}) failed, downloading instead: ${deliveryError.message}`
-            );
-            logOperationStep(operationId, 'twitter_delivery', 'success', {
-              message: 'Direct URL delivery failed, falling back to normal download',
-              metadata: { url, deliveryMode, reason: deliveryError.message },
-            });
-          }
-        }
-      }
-
-      let downloadMethod;
-      if (useYtdlp) {
-        downloadMethod = 'ytdlp';
-        logger.info(`Downloading from ${ytdlpSite} via yt-dlp: ${url}`);
-        logOperationStep(operationId, 'download_start', 'running', {
-          message: `Starting download from ${ytdlpSite} via yt-dlp`,
-          metadata: { url, maxSize: adminUser ? 'unlimited' : maxSize },
-        });
-      } else if (galleryDlSite && GALLERY_DL_ENABLED) {
-        downloadMethod = 'gallery-dl';
-        logger.info(`Downloading from ${galleryDlSite} via gallery-dl: ${url}`);
-        logOperationStep(operationId, 'download_start', 'running', {
-          message: `Starting download from ${galleryDlSite} via gallery-dl`,
-          metadata: { url, maxSize: adminUser ? 'unlimited' : maxSize },
-        });
-      } else if (isHentaiGifz) {
-        downloadMethod = 'hentaigifz';
-        logger.info(`Downloading from hentaigifz page scrape: ${url}`);
-        logOperationStep(operationId, 'download_start', 'running', {
-          message: 'Starting download from hentaigifz',
-          metadata: { url, maxSize: adminUser ? 'unlimited' : maxSize },
-        });
-      } else if (isBooru) {
-        downloadMethod = 'booru';
-        logger.info(`Downloading from booru API: ${url}`);
-        logOperationStep(operationId, 'download_start', 'running', {
-          message: 'Starting download from booru',
-          metadata: { url, maxSize: adminUser ? 'unlimited' : maxSize },
-        });
-      } else if (isPinterest) {
-        downloadMethod = 'pinterest';
-        logger.info(`Downloading from Pinterest page scrape: ${url}`);
-        logOperationStep(operationId, 'download_start', 'running', {
-          message: 'Starting download from Pinterest',
-          metadata: { url, maxSize: adminUser ? 'unlimited' : maxSize },
-        });
-      } else if (isKlipy) {
-        downloadMethod = 'klipy';
-        logger.info(`Downloading from Klipy page scrape: ${url}`);
-        logOperationStep(operationId, 'download_start', 'running', {
-          message: 'Starting download from Klipy',
-          metadata: { url, maxSize: adminUser ? 'unlimited' : maxSize },
-        });
-      } else if (isIgStory) {
-        downloadMethod = 'instagram-story';
-        logger.info(`Downloading Instagram story via web API: ${url}`);
-        logOperationStep(operationId, 'download_start', 'running', {
-          message: 'Starting download from Instagram story',
-          metadata: { url, maxSize: adminUser ? 'unlimited' : maxSize },
-        });
-      } else if (isDirectMedia) {
-        downloadMethod = 'direct';
-        logger.info(`Downloading direct media file: ${url}`);
-        logOperationStep(operationId, 'download_start', 'running', {
-          message: 'Starting direct media download',
-          metadata: { url, maxSize: adminUser ? 'unlimited' : maxSize },
-        });
-      } else if (useReddit) {
-        downloadMethod = 'reddit';
-        logger.info(`Downloading from Reddit post page: ${url}`);
-        logOperationStep(operationId, 'download_start', 'running', {
-          message: 'Starting download from Reddit',
-          metadata: { url, maxSize: adminUser ? 'unlimited' : maxSize },
-        });
-      } else {
-        downloadMethod = 'cobalt';
-        logger.info(`Downloading file from Cobalt: ${url}`);
-        logOperationStep(operationId, 'download_start', 'running', {
-          message: 'Starting download from Cobalt',
-          metadata: { url, maxSize: adminUser ? 'unlimited' : maxSize },
-        });
-      }
-
-      let fileData;
-      try {
-        if (downloadMethod === 'ytdlp') {
-          // if trimming is requested, yt-dlp will download ONLY the requested segment using --download-sections
-          // this avoids downloading huge files and then trimming them
-          const skipDurationLimit = startTime !== null || duration !== null;
-          const maxDuration =
-            skipDurationLimit || adminUser ? Infinity : await getMaxVideoDuration();
-
-          fileData = await downloadFromYouTube(
-            url,
-            adminUser,
-            maxSize,
-            adminUser ? null : YTDLP_QUALITY,
-            maxDuration,
-            startTime,
-            duration
-          );
-
-          const trimmedByYtdlp = startTime !== null || duration !== null;
-          logOperationStep(operationId, 'download_complete', 'success', {
-            message: trimmedByYtdlp
-              ? 'file segment downloaded successfully via yt-dlp (already trimmed)'
-              : 'file downloaded successfully via yt-dlp',
-            metadata: {
-              url,
-              fileCount: 1,
-              trimmedByYtdlp,
-              startTime,
-              duration,
-            },
-          });
-        } else if (downloadMethod === 'gallery-dl') {
-          fileData = await downloadWithGalleryDl(url, adminUser, maxSize, galleryOptions);
-          logOperationStep(operationId, 'download_complete', 'success', {
-            message: 'file downloaded successfully via gallery-dl',
-            metadata: { url, fileCount: Array.isArray(fileData) ? fileData.length : 1 },
-          });
-        } else if (downloadMethod === 'hentaigifz') {
-          fileData = await downloadFromHentaiGifz(url, adminUser);
-          logOperationStep(operationId, 'download_complete', 'success', {
-            message: 'file downloaded successfully via hentaigifz',
-            metadata: { url, fileCount: 1 },
-          });
-        } else if (downloadMethod === 'booru') {
-          fileData = await downloadFromBooru(url, adminUser);
-          logOperationStep(operationId, 'download_complete', 'success', {
-            message: 'file downloaded successfully via booru',
-            metadata: { url, fileCount: 1 },
-          });
-        } else if (downloadMethod === 'pinterest') {
-          fileData = await downloadFromPinterest(url, adminUser);
-          logOperationStep(operationId, 'download_complete', 'success', {
-            message: 'file downloaded successfully via Pinterest',
-            metadata: { url, fileCount: 1 },
-          });
-        } else if (downloadMethod === 'klipy') {
-          fileData = await downloadFromKlipy(url, adminUser);
-          logOperationStep(operationId, 'download_complete', 'success', {
-            message: 'file downloaded successfully via Klipy',
-            metadata: { url, fileCount: 1 },
-          });
-        } else if (downloadMethod === 'instagram-story') {
-          fileData = await downloadFromInstagram(url, adminUser);
-          logOperationStep(operationId, 'download_complete', 'success', {
-            message: 'file downloaded successfully via Instagram story',
-            metadata: { url, fileCount: Array.isArray(fileData) ? fileData.length : 1 },
-          });
-        } else if (downloadMethod === 'direct') {
-          fileData = await downloadDirectMedia(url, adminUser, interaction.client, {
-            userAgent: booruCdnUserAgent(url),
-          });
-          logOperationStep(operationId, 'download_complete', 'success', {
-            message: 'file downloaded successfully via direct fetch',
-            metadata: { url, fileCount: 1 },
-          });
-        } else if (downloadMethod === 'reddit') {
-          try {
-            // Each slide carries candidates, best first: the unsigned original, then a signed
-            // preview, because the original 404s for crossposts.
-            let lastError;
-            const downloadSlide = async candidates => {
-              for (const candidate of candidates) {
-                try {
-                  return await downloadFileFromUrl(candidate, adminUser);
-                } catch (candidateError) {
-                  lastError = candidateError;
-                }
-              }
-              return null;
-            };
-
-            const slides = redditImages.slice(0, MAX_REDDIT_GALLERY_SLIDES);
-            const downloaded = (await mapWithLimit(slides, 4, downloadSlide)).filter(Boolean);
-            if (downloaded.length === 0) {
-              throw lastError;
-            }
-            if (downloaded.length < slides.length) {
-              logger.warn(
-                `Reddit gallery: ${slides.length - downloaded.length} of ${slides.length} slide(s) failed, sending the rest`
-              );
-            }
-            // The array path below fans a gallery out into one attachment per slide.
-            fileData = downloaded.length === 1 ? downloaded[0] : downloaded;
-            logOperationStep(operationId, 'download_complete', 'success', {
-              message: 'file downloaded successfully via Reddit',
-              metadata: { url, fileCount: 1 },
-            });
-          } catch (redditError) {
-            logger.warn(
-              `Reddit image fetch failed, falling back to cobalt: ${redditError.message}`
-            );
-            logOperationStep(operationId, 'download_fallback', 'running', {
-              message: 'Reddit image fetch failed, retrying with cobalt',
-              metadata: { url, reason: redditError.message },
-            });
-            downloadMethod = 'cobalt';
-          }
-        }
-
-        if (downloadMethod === 'cobalt') {
-          try {
-            // Concurrency is capped inside cobalt.js. The URL cache was already consulted
-            // above (and deliberately skipped when trimming), so there is no second check here.
-            fileData = await downloadFromSocialMedia(COBALT_API_URL, url, adminUser, maxSize).catch(
-              async cobaltError => {
-                if (!useInstagram) throw cobaltError;
-                logger.warn(
-                  `Cobalt failed for Instagram, trying the session: ${cobaltError.message}`
-                );
-                try {
-                  return await downloadFromInstagram(url, adminUser);
-                } catch (instagramError) {
-                  logger.warn(`Instagram session extractor failed: ${instagramError.message}`);
-                  throw cobaltError;
-                }
-              }
-            );
-            logOperationStep(operationId, 'download_complete', 'success', {
-              message: 'File downloaded successfully',
-              metadata: {
-                url,
-                fileCount: Array.isArray(fileData) ? fileData.length : 1,
-              },
-            });
-          } catch (cobaltError) {
-            const fallbackSite = isTwitterXUrl(url)
-              ? 'X/Twitter'
-              : isTikTokUrl(url)
-                ? 'TikTok'
-                : cobaltFallbackLabel(url);
-
-            // Last resort for X/Twitter when downloading isn't possible (e.g. the
-            // video is over the size cap and yt-dlp rejects it on the 5-minute
-            // duration cap): hand out the direct video.twimg.com URL from cobalt.
-            // Discord embeds it and plays the full video, so the caps don't apply.
-            // Trim requests still need a real download. Twitter-only: other sites'
-            // direct URLs (e.g. YouTube) don't reliably embed or exist at all.
-            const tryTwitterDirectUrl = async () => {
-              if (!isTwitterXUrl(url) || startTime !== null || duration !== null) {
-                return false;
-              }
-              if (!(await getBooleanSetting('twitter_direct_url_fallback', true))) {
-                return false;
-              }
-              logOperationStep(operationId, 'direct_url_fallback', 'running', {
-                message: 'Download failed for X/Twitter URL, trying direct media URL',
-                metadata: { url },
-              });
-              try {
-                const replied = await replyWithDirectMediaUrls({
-                  interaction,
-                  operationId,
-                  userId,
-                  url,
-                  stepName: 'direct_url_fallback',
-                });
-                if (replied) {
-                  return true;
-                }
-                logOperationStep(operationId, 'direct_url_fallback', 'success', {
-                  message: 'No direct URL available (tunnel response), surfacing download error',
-                  metadata: { url },
-                });
-              } catch (directUrlError) {
-                logger.warn(`Direct URL fallback failed: ${directUrlError.message}`);
-                logOperationStep(operationId, 'direct_url_fallback', 'success', {
-                  message: 'Direct URL fallback failed, surfacing download error',
-                  metadata: { url, reason: directUrlError.message },
-                });
-              }
-              return false;
-            };
-
-            if (!fallbackSite || !YTDLP_ENABLED) {
-              if (await tryTwitterDirectUrl()) {
-                return;
-              }
-              throw cobaltError;
-            }
-
-            logger.warn(
-              `Cobalt failed for ${fallbackSite} URL, falling back to yt-dlp: ` +
-                cobaltError.message
-            );
-
-            logOperationStep(operationId, 'download_fallback', 'running', {
-              message: `Cobalt failed for ${fallbackSite} URL, retrying with yt-dlp`,
-              metadata: { url, reason: cobaltError.message },
-            });
-
-            const skipDurationLimit = startTime !== null || duration !== null;
-            const maxDuration =
-              skipDurationLimit || adminUser ? Infinity : await getMaxVideoDuration();
-
-            try {
-              fileData = await downloadWithYtdlp(
-                url,
-                adminUser,
-                maxSize,
-                adminUser ? null : YTDLP_QUALITY,
-                maxDuration,
-                startTime,
-                duration
-              );
-            } catch (ytdlpFallbackError) {
-              if (await tryTwitterDirectUrl()) {
-                return;
-              }
-              throw ytdlpFallbackError;
-            }
-
-            // yt-dlp already trimmed via --download-sections; mark the method so the
-            // ffmpeg trim step below is skipped (otherwise it re-trims the segment).
-            downloadMethod = 'ytdlp';
-
-            logOperationStep(operationId, 'download_fallback', 'success', {
-              message: `yt-dlp fallback succeeded for ${fallbackSite} URL`,
-              metadata: { url },
-            });
-            logOperationStep(operationId, 'download_complete', 'success', {
-              message: 'file downloaded successfully via yt-dlp fallback',
-              metadata: {
-                url,
-                fileCount: 1,
-                fallbackFrom: 'cobalt',
-              },
-            });
-          }
-        }
-      } catch (error) {
-        if (error instanceof YtdlpRateLimitError) {
-          throw error;
-        }
-        throw error;
-      }
+      url = acquired.url;
+      const { fileData, downloadMethod } = acquired;
 
       if (galleryOptions.audioOnly) {
-        const source = Array.isArray(fileData)
-          ? fileData.find(
-              media =>
-                detectFileType(
-                  path.extname(media.filename).toLowerCase(),
-                  media.contentType,
-                  media.buffer
-                ) === 'video'
-            )
-          : fileData;
-        if (!source?.buffer || fileData?.archive) {
-          throw new ValidationError('there is no audio in that post to turn into an mp3.');
-        }
         logOperationStep(operationId, 'audio_extract', 'running', {
           message: 'Extracting audio as mp3',
           metadata: { url },
         });
-        // yt-dlp (and its fallback) already cut the requested section.
-        const trim = downloadMethod === 'ytdlp' ? {} : { startTime, duration };
-        const mp3 = await convertToFormat(
-          source.buffer,
-          path.extname(source.filename).toLowerCase() || '.mp4',
-          'mp3',
-          trim
-        );
-        const baseName = path.parse(source.filename).name.replace(/[^\w.-]+/g, '_') || 'audio';
+        const { buffer: mp3, baseName } = await extractAudio(fileData, downloadMethod, {
+          startTime,
+          duration,
+        });
         await sendConvertedFile(
           interaction,
           { ...ctx, discordAttachmentLimit },

@@ -1,7 +1,6 @@
 import axios from 'axios';
 import { createLogger } from './logger.js';
 import { NetworkError, ValidationError } from './errors.js';
-import { cobaltSlots, mapWithLimit } from './concurrency.js';
 import { detectFileType } from './storage.js';
 
 const logger = createLogger('cobalt');
@@ -9,7 +8,6 @@ const logger = createLogger('cobalt');
 // How many items of a single picker/carousel response download at once. Bounds the memory a
 // single multi-file post can hold; picker items are usually photos, so this stays generous
 // enough not to slow normal carousels down.
-const MAX_CONCURRENT_PICKER_ITEMS = 4;
 
 const CONTENT_TYPE_EXTENSIONS = {
   'video/mp4': '.mp4',
@@ -336,6 +334,10 @@ export function isSocialMediaUrl(url) {
   }
 }
 
+// cobalt 11 prefixes some Streamable links with a stray scheme: `https:https://cdn-cf-west...`.
+export const repairUrl = url =>
+  typeof url === 'string' ? url.replace(/^https?:(?=https?:\/\/)/i, '') : url;
+
 async function callCobaltApi(apiUrl, url, retryCount = 0, maxRetries = 3) {
   const attemptNum = retryCount + 1;
   const normalizedUrl = normalizeSocialMediaUrlForCobalt(url);
@@ -373,7 +375,10 @@ async function callCobaltApi(apiUrl, url, retryCount = 0, maxRetries = 3) {
       throw new NetworkError(`cobalt api returned status ${response.status}`);
     }
 
-    return response.data;
+    const data = response.data;
+    if (data?.url) data.url = repairUrl(data.url);
+    for (const item of data?.picker ?? []) item.url = repairUrl(item.url);
+    return data;
   } catch (error) {
     if (error.response) {
       const status = error.response.status;
@@ -445,6 +450,14 @@ async function callCobaltApi(apiUrl, url, retryCount = 0, maxRetries = 3) {
   }
 }
 
+// cobalt's tunnel answers 200 with no body when its own fetch fails (seen on Bluesky HLS).
+function nonEmpty(buffer) {
+  if (buffer.length === 0) {
+    throw new NetworkError('cobalt returned an empty file');
+  }
+  return buffer;
+}
+
 async function downloadPhoto(photoUrl, index, isAdminUser = false, maxSize = Infinity) {
   try {
     const response = await axios.get(photoUrl, {
@@ -461,7 +474,7 @@ async function downloadPhoto(photoUrl, index, isAdminUser = false, maxSize = Inf
       },
     });
 
-    const buffer = Buffer.from(response.data);
+    const buffer = nonEmpty(Buffer.from(response.data));
 
     // Validate buffer size (axios maxContentLength may not work if server doesn't send Content-Length header)
     if (!isAdminUser && buffer.length > maxSize) {
@@ -532,7 +545,7 @@ async function downloadVideo(videoUrl, index, isAdminUser = false, maxSize = Inf
       },
     });
 
-    const buffer = Buffer.from(response.data);
+    const buffer = nonEmpty(Buffer.from(response.data));
 
     // Validate buffer size (axios maxContentLength may not work if server doesn't send Content-Length header)
     if (!isAdminUser && buffer.length > maxSize) {
@@ -593,18 +606,12 @@ async function downloadMediaFromPicker(pickerArray, isAdminUser = false, maxSize
     `Found ${mediaItems.length} media items in picker response (${mediaItems.filter(i => i.type === 'photo').length} photos, ${mediaItems.filter(i => i.type === 'video').length} videos)`
   );
 
-  // Download the items with bounded concurrency. This runs inside a cobalt slot, and a picker
-  // response can carry a dozen-plus items; a plain Promise.all over all of them buffered every
-  // file at once, so one carousel could hold far more memory than the "one slot, one file"
-  // model the caps are sized around. Bounded here rather than via cobaltSlots, which would
-  // deadlock waiting on the slot this call already holds. Order is preserved, which matters
-  // because carousel order is user-visible; mapWithLimit's ordering is pinned in
-  // concurrency.test.js. Note the download e2e mocks this whole module out, so it covers
-  // delivery order downstream of here, not this fan-out.
-  const results = await mapWithLimit(mediaItems, MAX_CONCURRENT_PICKER_ITEMS, (item, index) =>
-    item.type === 'photo'
-      ? downloadPhoto(item.url, index, isAdminUser, maxSize)
-      : downloadVideo(item.url, index, isAdminUser, maxSize)
+  const results = await Promise.all(
+    mediaItems.map((item, index) =>
+      item.type === 'photo'
+        ? downloadPhoto(item.url, index, isAdminUser, maxSize)
+        : downloadVideo(item.url, index, isAdminUser, maxSize)
+    )
   );
   logger.info(`Successfully downloaded ${results.length} media items from picker`);
 
@@ -736,7 +743,7 @@ async function downloadFromCobalt(
       },
     });
 
-    const buffer = Buffer.from(response.data);
+    const buffer = nonEmpty(Buffer.from(response.data));
 
     // Validate buffer size (axios maxContentLength may not work if server doesn't send Content-Length header)
     if (!isAdminUser && buffer.length > maxSize) {
@@ -793,7 +800,7 @@ async function downloadFromCobalt(
  *   direct is false when cobalt only offers a tunnel (caller should fall back to downloading)
  */
 export async function getCobaltMediaUrls(apiUrl, url) {
-  return cobaltSlots.run(() => getCobaltMediaUrlsImpl(apiUrl, url));
+  return getCobaltMediaUrlsImpl(apiUrl, url);
 }
 
 async function getCobaltMediaUrlsImpl(apiUrl, url) {
@@ -807,10 +814,10 @@ async function getCobaltMediaUrlsImpl(apiUrl, url) {
   ) {
     const items = cobaltResponse.picker
       .filter(item => (item.type === 'photo' || item.type === 'video') && item.url)
-      .filter(item => !item.url.includes('/tunnel'))
       .map(item => ({ url: item.url, type: item.type, filename: null }));
 
-    if (items.length === 0) {
+    // One tunnelled slide means the gallery can't be served as links without dropping it.
+    if (items.length === 0 || items.some(item => item.url.includes('/tunnel'))) {
       return { urls: [], direct: false };
     }
     return { urls: items, direct: true };
@@ -888,7 +895,7 @@ export async function downloadFromSocialMedia(
   isAdminUser = false,
   maxSize = Infinity
 ) {
-  return cobaltSlots.run(() => downloadFromSocialMediaImpl(apiUrl, url, isAdminUser, maxSize));
+  return downloadFromSocialMediaImpl(apiUrl, url, isAdminUser, maxSize);
 }
 
 async function downloadFromSocialMediaImpl(apiUrl, url, isAdminUser, maxSize) {

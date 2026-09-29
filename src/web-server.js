@@ -29,6 +29,7 @@ export const FILE_TTL_MS = 60 * 60 * 1000;
 const R2_PREFIX = 'web/';
 const MAX_BODY_BYTES = 16 * 1024;
 const HEARTBEAT_MS = 15_000;
+const MAX_WINDOWS = 10_000;
 const RP_ID = env('WEB_RP_ID', 'gronka.dev');
 const CHALLENGE_MS = 5 * 60 * 1000;
 const MAX_CHALLENGES = 10_000;
@@ -385,6 +386,7 @@ export function createHandler({
   ipLimit = IP_LIMIT,
   signupLimit = 3,
   loginLimit = 10,
+  authLimit = 30,
   webauthn = simplewebauthn,
 } = {}) {
   // Per-IP state is keyed by an HMAC under a key that rotates daily and lives only here.
@@ -412,6 +414,9 @@ export function createHandler({
     const now = Date.now();
     const entry = windows.get(key);
     if (!entry || entry.resetAt <= now) {
+      if (windows.size >= MAX_WINDOWS) {
+        for (const [old, value] of windows) if (value.resetAt <= now) windows.delete(old);
+      }
       windows.set(key, { count: 1, resetAt: now + IP_WINDOW_MS });
       return 0;
     }
@@ -493,11 +498,13 @@ export function createHandler({
     let caller;
     const auth = req.headers.get('authorization');
     if (auth) {
+      // A well-formed key costs an argon2 verify, so the attempts are limited before paying for it.
+      limit(`auth:${ipKey(req, server)}`, authLimit);
       const key = await accounts.verifyApiKey(auth.replace(/^Bearer\s+/i, ''));
       if (!key) {
         throw new AppError('that api key is not valid.', 'UNAUTHORIZED', 401);
       }
-      caller = `key:${key.keyId}`;
+      caller = `acct:${key.accountId}`;
     } else {
       caller = `ip:${ipKey(req, server)}`;
     }
@@ -584,12 +591,16 @@ export function createHandler({
       if (method === 'GET') {
         return json(await accounts.getAccountSummary(accountId), 200, headers);
       }
+      await requireSecondFactor(accountId, (await readJson(req)).code);
       await accounts.deleteAccount(accountId);
       return withCookie({ ok: true }, 200, '', 0);
     }
     if (method === 'POST' && pathname === '/v1/account/rotate') {
       const accountId = await requireSession(req);
-      return json({ number: await accounts.rotateAccountNumber(accountId) }, 200, headers);
+      await requireSecondFactor(accountId, (await readJson(req)).code);
+      const number = await accounts.rotateAccountNumber(accountId);
+      await accounts.deleteOtherSessions(accountId, readCookie(req, SESSION_COOKIE));
+      return json({ number }, 200, headers);
     }
     if (method === 'POST' && pathname === '/v1/keys') {
       const accountId = await requireSession(req);
@@ -646,6 +657,7 @@ export function createHandler({
     }
     if (method === 'POST' && pathname === '/v1/passkeys/register/options') {
       const accountId = await requireSession(req);
+      await requireSecondFactor(accountId, (await readJson(req)).code);
       const options = await webauthn.generateRegistrationOptions({
         rpName: 'gronka',
         rpID: RP_ID,
@@ -727,6 +739,7 @@ export function createHandler({
     const passkeyMatch = pathname.match(/^\/v1\/passkeys\/([\w-]{1,1400})$/);
     if (method === 'DELETE' && passkeyMatch) {
       const accountId = await requireSession(req);
+      await requireSecondFactor(accountId, (await readJson(req)).code);
       if (!(await accounts.removePasskey(accountId, passkeyMatch[1]))) {
         throw new AppError('no such passkey.', 'NOT_FOUND', 404);
       }

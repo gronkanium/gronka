@@ -187,6 +187,13 @@ export async function getSessionAccount(token) {
   return row?.account_id ?? null;
 }
 
+export async function deleteOtherSessions(accountId, keepToken) {
+  const sql = getPostgresConnection();
+  await sql`
+    DELETE FROM web_sessions
+    WHERE account_id = ${accountId} AND token_hash <> ${sha256(String(keepToken))}`;
+}
+
 export async function deleteSession(token) {
   if (typeof token !== 'string') return;
   const sql = getPostgresConnection();
@@ -266,6 +273,8 @@ export async function verifyApiKey(input) {
     return cached;
   }
   const parsed = parseApiKey(input);
+  // The format and checksum are public, so refusing a malformed key early leaks nothing.
+  if (!parsed) return null;
   const sql = getPostgresConnection();
   const [row] = parsed
     ? await sql`SELECT account_id, secret_hash FROM web_api_keys WHERE id = ${parsed.id}`
@@ -337,12 +346,21 @@ async function useRecoveryCode(sql, accountId, input) {
 export async function checkSecondFactor(accountId, code) {
   const sql = getPostgresConnection();
   const [row] = await sql`
-    SELECT totp_secret, totp_last_step, totp_failures, totp_locked_until > now() AS throttled
+    SELECT totp_secret, totp_failures, totp_locked_until > now() AS throttled
     FROM web_accounts WHERE id = ${accountId}`;
   if (!row?.totp_secret) return 'ok';
   if (row.totp_failures >= MAX_FAILURES || row.throttled) return 'locked';
   if (typeof code !== 'string' || !code.trim()) return 'required';
-  const lastStep = row.totp_last_step === null ? null : Number(row.totp_last_step);
+  // Each attempt is claimed atomically first, so parallel guesses can't all slip under the throttle.
+  const [attempt] = await sql`
+    UPDATE web_accounts SET totp_failures = totp_failures + 1,
+      totp_locked_until = CASE WHEN (totp_failures + 1) % ${THROTTLE_EVERY} = 0
+        THEN now() + ${THROTTLE_MS / 1000} * interval '1 second' ELSE totp_locked_until END
+    WHERE id = ${accountId} AND totp_failures < ${MAX_FAILURES}
+      AND (totp_locked_until IS NULL OR totp_locked_until <= now())
+    RETURNING totp_failures, totp_last_step`;
+  if (!attempt) return 'locked';
+  const lastStep = attempt.totp_last_step === null ? null : Number(attempt.totp_last_step);
   const step = matchTotp(decryptSecret(row.totp_secret, accountId), code.trim(), lastStep);
   if (step !== null) {
     // The conditional update is what makes a code single-use when two logins race.
@@ -355,11 +373,6 @@ export async function checkSecondFactor(accountId, code) {
     await sql`UPDATE web_accounts SET totp_failures = 0, totp_locked_until = NULL WHERE id = ${accountId}`;
     return 'ok';
   }
-  await sql`
-    UPDATE web_accounts SET totp_failures = totp_failures + 1,
-      totp_locked_until = CASE WHEN (totp_failures + 1) % ${THROTTLE_EVERY} = 0
-        THEN now() + ${THROTTLE_MS / 1000} * interval '1 second' ELSE totp_locked_until END
-    WHERE id = ${accountId}`;
   return 'invalid';
 }
 

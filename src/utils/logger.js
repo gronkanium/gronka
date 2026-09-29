@@ -138,8 +138,8 @@ class Logger {
     }
 
     if (isWebMode()) {
-      const line = this.formatMessage(level, message, ...args);
-      console.log(this.sanitizeForConsoleOutput(redactForWeb(line)));
+      const redacted = [message, ...args].map(arg => redactForWeb(stringifyArg(arg)));
+      console.log(this.sanitizeForConsoleOutput(this.formatMessage(level, ...redacted)));
       return;
     }
 

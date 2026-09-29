@@ -62,7 +62,7 @@ services:
       - POSTGRES_DB=${PROD_POSTGRES_DB:-gronka}
       - DATABASE_URL=${DATABASE_URL:-}
       # Netscape cookies.txt for yt-dlp (age-restricted TikTok etc.); ignored if the file is absent
-      - YTDLP_COOKIES_PATH=${YTDLP_COOKIES_PATH:-/app/tiktok-cookies.txt}
+      - YTDLP_COOKIES_PATH=${YTDLP_COOKIES_PATH:-/app/ytdlp-cookies.txt}
       # The app's own cookie file (cobalt has a separate copy): `instagram` and `reddit` entries
       - INSTAGRAM_COOKIES_PATH=${INSTAGRAM_COOKIES_PATH:-/app/cookies.json}
     volumes:
@@ -72,7 +72,7 @@ services:
       - ./logs:/app/logs
       # Optional yt-dlp cookies file (export from a logged-in browser in Netscape format).
       # If it doesn't exist on the host, Docker mounts an empty directory and yt-dlp runs without cookies.
-      - ./tiktok-cookies.txt:/app/tiktok-cookies.txt
+      - ./ytdlp-cookies.txt:/app/ytdlp-cookies.txt
       # Read-only, and no longer shared with cobalt, so nothing rewrites it under the app.
       - ./cookies.json:/app/cookies.json:ro
     ports:

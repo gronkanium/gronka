@@ -76,7 +76,7 @@ the stats dashboard is then available at `http://localhost:3001`.
 `bun run setup` asks only for what it can't work out itself and writes `.env` from
 `.env.example`, keeping the comments. `bun run setup:check` re-validates an install later and
 changes nothing. prefer doing it by hand? `cp .env.example .env`, `cp cookies.example.json
-cookies.json`, `touch tiktok-cookies.txt`, the wizard is a convenience, nothing depends on it.
+cookies.json`, `touch ytdlp-cookies.txt`, the wizard is a convenience, nothing depends on it.
 
 > those files are bind-mounted **as files**. if one is missing docker creates a _directory_ in
 > its place and yt-dlp/cobalt silently run unauthenticated, which reads as "cookies don't work".

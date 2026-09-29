@@ -39,8 +39,8 @@ Healthy is `bot logged in as <name>` plus `All processes running` in
 cp .env.example .env          # then edit PROD_DISCORD_TOKEN, PROD_CLIENT_ID, PROD_POSTGRES_PASSWORD
 cp cookies.example.json cookies.json
 cp cookies.example.json cobalt-cookies.json
-touch tiktok-cookies.txt
-chmod 600 cookies.json cobalt-cookies.json tiktok-cookies.txt
+touch ytdlp-cookies.txt
+chmod 600 cookies.json cobalt-cookies.json ytdlp-cookies.txt
 ```
 
 Optional logins for gated content are in [Cookies](Cookies).

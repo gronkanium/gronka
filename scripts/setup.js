@@ -235,7 +235,7 @@ const MOUNTED_FILES = [
     what: "cobalt's own writable copy, it rewrites this file and drops keys it doesn't know",
   },
   {
-    path: 'tiktok-cookies.txt',
+    path: 'ytdlp-cookies.txt',
     mode: 0o600,
     seed: () => '# Netscape HTTP Cookie File\n',
     what: 'yt-dlp cookie jar (age-restricted TikTok)',

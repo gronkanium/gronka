@@ -64,11 +64,8 @@ function isTikTokUrl(url) {
   }
 }
 
-// Human-readable label for a Cobalt-primary host, used when a Cobalt download fails and we
-// retry via yt-dlp. Cobalt's per-service extractors are flaky/auth-gated (Instagram, Reddit,
-// etc.); yt-dlp handles many of the same hosts (and, with a cookies file, private/gated
-// Instagram). Returning a non-null label makes any Cobalt failure eligible for the yt-dlp retry,
-// not just X/Twitter and TikTok.
+// A non-null label makes a Cobalt failure on this host eligible for the yt-dlp retry: Cobalt's
+// extractors are flaky or auth-gated, and yt-dlp covers many of the same hosts.
 function cobaltFallbackLabel(url) {
   try {
     return new URL(url).hostname.toLowerCase().replace(/^www\./, '');
@@ -86,26 +83,13 @@ const {
   galleryDlEnabled: GALLERY_DL_ENABLED,
 } = botConfig;
 
-/**
- * Non-admin duration backstop in seconds for yt-dlp downloads, live-editable from the
- * webui settings page (max_video_duration). Size is the primary gate now (yt-dlp aborts
- * oversized downloads via --max-filesize); this just caps pathological lengths. Falls back
- * to 3600 (60 minutes) when unset or unparsable.
- * @returns {Promise<number>} Cap in seconds
- */
+// Size is the real gate (--max-filesize); this only caps pathological lengths.
 async function getMaxVideoDuration() {
   const raw = await getSetting('max_video_duration', '3600');
   const parsed = parseInt(raw, 10);
   return Number.isFinite(parsed) && parsed > 0 ? parsed : 3600;
 }
 
-/**
- * Non-admin max download size in bytes, live-editable from the webui settings page
- * (max_video_size_mb, stored in MB). This is the primary download gate, oversized videos
- * are rejected before download via yt-dlp --max-filesize. Falls back to the MAX_VIDEO_SIZE
- * env/config default when unset or unparsable.
- * @returns {Promise<number>} Cap in bytes
- */
 async function getMaxVideoSize() {
   const mb = parseInt(await getSetting('max_video_size_mb', ''), 10);
   return Number.isFinite(mb) && mb > 0 ? mb * 1024 * 1024 : MAX_VIDEO_SIZE;
@@ -187,14 +171,10 @@ export async function acquireMedia(
   const useInstagram = isInstagramPostUrl(url) && hasInstagramSession();
   const isIgStory = isInstagramStoryUrl(url) && hasInstagramSession();
   const useReddit = redditImages !== null && redditImages.length > 0;
-  // yt-dlp sites (youtube, redgifs, imgur, the tube sites, etc.) download through
-  // yt-dlp, not Cobalt.
   const useYtdlp = ytdlpSite !== null && YTDLP_ENABLED;
 
-  // URL-only mode (toggleable from the webui): reply with the direct media URL
-  // from cobalt instead of downloading/uploading. Trim requests still need a real
-  // download, and the yt-dlp sites, hentaigifz, booru, and Pinterest have no cobalt
-  // direct URL to hand out.
+  // Trim requests need real bytes, and yt-dlp sites, hentaigifz, booru and Pinterest have no
+  // cobalt URL to hand out.
   if (
     COBALT_ENABLED &&
     !useYtdlp &&
@@ -231,13 +211,8 @@ export async function acquireMedia(
     }
   }
 
-  // Twitter delivery policy (webui setting twitter_delivery): serving the direct
-  // video.twimg.com URL instead of rehosting skips the whole download+upload for
-  // large videos, saving bandwidth and R2 storage. 'hybrid' serves the URL only
-  // when the video wouldn't fit as a Discord attachment (small clips keep the
-  // nicer attachment UX and survive tweet deletion); 'always_url' serves it
-  // whenever cobalt offers one. Trim requests always need real bytes. Any
-  // failure here falls through to the normal download path.
+  // Serving video.twimg.com directly skips download + upload for big videos; 'hybrid' still attaches
+  // small clips, which survive the tweet being deleted.
   if (COBALT_ENABLED && isTwitterXUrl(url) && startTime === null && duration === null) {
     const deliveryMode = await getSetting('twitter_delivery', 'hybrid');
     if (deliveryMode === 'always_url' || deliveryMode === 'hybrid') {
@@ -247,7 +222,6 @@ export async function acquireMedia(
           deliveryMode === 'always_url'
             ? null
             : async candidates => {
-                // hybrid: only bypass rehosting for a single video too big to attach
                 if (candidates.length !== 1 || candidates[0].type !== 'video') {
                   return false;
                 }
@@ -353,8 +327,7 @@ export async function acquireMedia(
 
   let fileData;
   if (downloadMethod === 'ytdlp') {
-    // if trimming is requested, yt-dlp will download ONLY the requested segment using --download-sections
-    // this avoids downloading huge files and then trimming them
+    // --download-sections fetches only the trimmed segment, never the whole file.
     const skipDurationLimit = startTime !== null || duration !== null;
     const maxDuration = skipDurationLimit || adminUser ? Infinity : await getMaxVideoDuration();
 
@@ -451,7 +424,6 @@ export async function acquireMedia(
           `Reddit gallery: ${slides.length - downloaded.length} of ${slides.length} slide(s) failed, sending the rest`
         );
       }
-      // The array path below fans a gallery out into one attachment per slide.
       fileData = downloaded.length === 1 ? downloaded[0] : downloaded;
       logStep('download_complete', 'success', {
         message: 'file downloaded successfully via Reddit',
@@ -497,12 +469,8 @@ export async function acquireMedia(
           ? 'TikTok'
           : cobaltFallbackLabel(url);
 
-      // Last resort for X/Twitter when downloading isn't possible (e.g. the
-      // video is over the size cap and yt-dlp rejects it on the 5-minute
-      // duration cap): hand out the direct video.twimg.com URL from cobalt.
-      // Discord embeds it and plays the full video, so the caps don't apply.
-      // Trim requests still need a real download. Twitter-only: other sites'
-      // direct URLs (e.g. YouTube) don't reliably embed or exist at all.
+      // Last resort for X only: Discord embeds and plays a video.twimg.com URL in full, so the size
+      // and duration caps don't apply. Other sites' direct URLs don't reliably embed.
       const tryTwitterDirectUrl = async () => {
         if (!isTwitterXUrl(url) || startTime !== null || duration !== null) {
           return null;

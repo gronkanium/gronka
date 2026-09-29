@@ -77,7 +77,6 @@ export function siteOf(url) {
 const pose = name => {
   peng.src = `/p/${name}.svg`;
 };
-// audio: he covers his eyes. no sound: he covers his ears. played as a short flipbook.
 const MODE_FRAMES = {
   auto: [],
   audio: ['eyes-1', 'eyes-2', 'eyes'],
@@ -104,7 +103,6 @@ function playMode(next) {
 // flipbooks, drawn by gronka-promos/projects/mascot/web.py: frames, ms per frame, loops
 const range = (name, n) => Array.from({ length: n }, (_, i) => `${name}-${i + 1}`);
 const FLIPS = {
-  // the filing cabinet: pulls a folder, checks it, puts it back, opens the next drawer
   fetching: [range('filing', 45), Array(45).fill(133), true],
   wave: [range('wave', 12), Array(12).fill(133), false],
   still: [['still-1', 'still-2', 'still-3', 'still-2'], [1400, 900, 160, 900], true],
@@ -169,7 +167,6 @@ function play(name, { times = Infinity, then } = {}) {
   };
   step();
 }
-// now and then, while nobody is using the page, he does something
 function scheduleActivity() {
   if (reduceMotion) return;
   setTimeout(
@@ -680,14 +677,12 @@ if (prefill && firstUrl(prefill)) {
   intent();
   start();
 } else {
-  // a wave hello when the page opens, unless he's asleep or someone is already at the link box
   checkHealth().then(up => {
     if (up && root.dataset.phase === 'idle' && document.activeElement !== input)
       play('wave', { then: restPose() });
   });
 }
 scheduleActivity();
-// an activity stops the moment someone goes for the link box
 input.addEventListener('focus', () => {
   if (root.dataset.phase === 'idle' && asleep.hidden) {
     stopFlip();

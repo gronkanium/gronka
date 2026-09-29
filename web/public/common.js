@@ -87,11 +87,8 @@ function loadTurnstile() {
   return loader;
 }
 
-// Like cobalt: one widget per action, rendered early, invisible unless cloudflare wants a click; it then
-// shows in #ts-slot under the status message. Nothing may be painted over it (Turnstile rejects a covered
-// widget), and <html> must not carry a data-state attribute: it makes Turnstile fail every check with 600010. It solves in the background, so
-// a token is usually ready by submit; it only shows if cloudflare wants a click. Tokens are single use, so
-// taking one resets the widget to solve the next.
+// One widget per action, rendered early so a token is usually ready by submit. Turnstile fails every check
+// with 600010 if anything is painted over the widget or <html> carries a data-state attribute.
 const widgets = new Map();
 let tsSlot;
 function prepare(action) {
@@ -103,7 +100,6 @@ function prepare(action) {
   };
   loadTurnstile().then(
     () => {
-      // an in-page slot under the status message; nothing else is drawn over it
       tsSlot ??=
         document.getElementById('ts-slot') ||
         document.body.appendChild(document.createElement('div'));

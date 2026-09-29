@@ -8,7 +8,7 @@ h1 {
 }
 .lede {
   color: var(--pencil);
-  max-width: 34ch;
+  max-width: min(34ch, 58%);
   margin-bottom: 0;
 }
 
@@ -36,7 +36,7 @@ h1 {
     scale: 1 1.025;
   }
 }
-.stage:focus-within .peng {
+.stage:has(#url:focus) .peng {
   rotate: -5deg;
 }
 [data-state='working'] .peng {
@@ -357,11 +357,6 @@ details[open] summary::after {
   outline-offset: 3px;
 }
 
-.ts {
-  margin-top: 14px;
-  display: flex;
-  justify-content: center;
-}
 .nojs {
   text-align: center;
   padding: 12px;

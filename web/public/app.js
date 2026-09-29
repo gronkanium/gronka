@@ -18,7 +18,6 @@ const panel = $('#panel');
 const peng = $('#peng');
 const hostLine = $('#host');
 const asleep = $('#asleep');
-const tsBox = $('#ts');
 const reduceMotion = matchMedia('(prefers-reduced-motion: reduce)').matches;
 
 const SITES = [
@@ -79,6 +78,29 @@ export function siteOf(url) {
 const pose = name => {
   peng.src = `/p/${name}.svg`;
 };
+// audio: he covers his eyes. no sound: he covers his ears. played as a short flipbook.
+const MODE_FRAMES = {
+  auto: [],
+  audio: ['eyes-1', 'eyes-2', 'eyes'],
+  mute: ['ears-1', 'ears-2', 'ears'],
+};
+let modeShown = 'auto';
+let flip;
+const restPose = () => MODE_FRAMES[form.mode.value]?.at(-1) ?? 'idle';
+function playMode(next) {
+  clearInterval(flip);
+  const from = MODE_FRAMES[modeShown] ?? [];
+  const to = MODE_FRAMES[next] ?? [];
+  modeShown = next;
+  if (root.dataset.state !== 'idle') return;
+  const back = from.length ? [...from.slice(0, -1).reverse(), 'idle'] : [];
+  const frames = reduceMotion ? [to.at(-1) ?? 'idle'] : [...back, ...to];
+  if (!frames.length) return;
+  flip = setInterval(() => {
+    pose(frames.shift());
+    if (!frames.length) clearInterval(flip);
+  }, 80);
+}
 function setState(state, penguin) {
   root.dataset.state = state;
   pose(penguin);
@@ -99,7 +121,7 @@ function idle() {
   stopTimer();
   job?.abort();
   job = null;
-  setState('idle', 'idle');
+  setState('idle', restPose());
   draw('');
 }
 
@@ -140,12 +162,12 @@ function working(site) {
 
 const COPY = {
   BAD_URL: ['that link looks off.', 'think'],
-  BAD_REQUEST: ['something about that was off.', 'think'],
+  BAD_REQUEST: ['something in that request was off.', 'think'],
   VALIDATION_ERROR: ["can't do that one.", 'failed'],
   CONTENT_GONE: ["it's gone.", 'failed'],
   DOWNLOAD_FAILED: ["couldn't get it.", 'failed'],
   NETWORK_ERROR: ["the site didn't answer.", 'failed'],
-  VERIFICATION_FAILED: ["cloudflare wasn't sure about this browser.", 'think'],
+  VERIFICATION_FAILED: ["cloudflare couldn't check this browser.", 'think'],
   VERIFY_BLOCKED: ["the check didn't load.", 'think'],
   VERIFY_SLOW: ['the check is stuck.', 'think'],
   RATE_LIMITED: ['slow down a little.', 'slow'],
@@ -169,8 +191,7 @@ function showError(error) {
     'INTERNAL',
     'DOWNLOAD_FAILED',
   ].includes(error.code);
-  const message =
-    error instanceof ApiError ? error.message : 'something broke on our side, try again.';
+  const message = error instanceof ApiError ? error.message : 'something broke here. try again.';
   draw(`<h2>${esc(title)}</h2><p class="say">${esc(message)}</p>
     <div class="acts">${again ? `<button type="button" class="btn" id="again">try again</button>` : ''}
     <button type="button" class="btn line" id="other">another link</button></div>`);
@@ -238,12 +259,10 @@ async function start({ split } = {}) {
   job?.abort();
   const controller = (job = new AbortController());
   setState('verifying', 'verify');
-  draw(
-    `<h2>one sec.</h2><p class="meta">cloudflare is checking this is a person, not a script.</p>`
-  );
+  draw(`<h2>one sec.</h2><p class="meta">cloudflare is checking you're a person.</p>`);
   if (request.mode === 'auto' && !prefetchLibav.done) prefetchLibav();
   try {
-    request.turnstile = await turnstileToken('download', tsBox);
+    request.turnstile = await turnstileToken('download');
     if (controller.signal.aborted) return;
     working(siteOf(request.url));
     const result = await api('/v1/download', {
@@ -261,8 +280,8 @@ async function start({ split } = {}) {
 
 const LANE_NOTE = {
   direct: site => `straight from ${site}, gronka never touched the file.`,
-  worker: () => "streamed through gronka's edge, nothing stored.",
-  r2: () => 'this link works for an hour, then the file is deleted.',
+  worker: () => 'passed through to you. gronka keeps no copy.',
+  r2: () => 'this link works for an hour. then the file goes.',
 };
 
 function nameOf(file, i = 0) {
@@ -325,7 +344,7 @@ async function deliver(result, request) {
     <div class="acts"><button type="button" class="btn" id="save">${icon('download')}save file</button>
     <button type="button" class="btn line small" id="copy">${icon('copy')}copy link</button>
     ${navigator.share ? `<button type="button" class="btn line small" id="share">${icon('share')}share</button>` : ''}
-    <button type="button" class="linkish" id="other">another one</button></div>`);
+    <button type="button" class="linkish" id="other">another link</button></div>`);
   const saving = $('#saving');
   const run = () =>
     saveOne(file, result.lane, 0, (got, total) => {
@@ -335,8 +354,7 @@ async function deliver(result, request) {
         saving.textContent = 'saved. check your downloads.';
         return;
       }
-      saving.textContent =
-        "this site won't let the page save it directly. open it and save it from there.";
+      saving.textContent = 'this site blocks direct saving. open the file and save it there.';
       $('#save').replaceWith(
         Object.assign(document.createElement('span'), {
           innerHTML: openLink(file.url, `${icon('share')}open file`),
@@ -486,7 +504,7 @@ async function checkHealth() {
   const up = await online();
   asleep.hidden = up;
   if (!up && root.dataset.state === 'idle') pose('asleep');
-  if (up && root.dataset.state === 'idle') pose('idle');
+  if (up && root.dataset.state === 'idle') pose(restPose());
   return up;
 }
 
@@ -495,9 +513,29 @@ form.addEventListener('submit', event => {
   start();
 });
 input.addEventListener('input', showHost);
+$('.mode').addEventListener(
+  'pointerover',
+  () =>
+    [...MODE_FRAMES.audio, ...MODE_FRAMES.mute].forEach(
+      name => (new Image().src = `/p/${name}.svg`)
+    ),
+  { once: true }
+);
+form.addEventListener('change', event => {
+  if (event.target.name === 'mode') playMode(event.target.value);
+});
 const intent = () => {
   warmTurnstile();
-  for (const name of ['verify', 'working', 'done', 'failed', 'think', 'slow'])
+  for (const name of [
+    'verify',
+    'working',
+    'done',
+    'failed',
+    'think',
+    'slow',
+    ...MODE_FRAMES.audio,
+    ...MODE_FRAMES.mute,
+  ])
     new Image().src = `/p/${name}.svg`;
 };
 input.addEventListener('focus', intent, { once: true });

@@ -80,9 +80,7 @@ export function isYouTubeUrl(url) {
   }
 }
 
-// Anonymous, the default clients serve the full format ladder with no ad wait (measured 2026-09-29).
-// Signed in (only for age or bot checks) web_embedded goes first as before; it needs the `n`
-// challenge solved, so bun plus yt-dlp-ejs, and default follows for embed-disabled videos.
+// Signed-in requests get ads and a ~5 s wait, so web_embedded (needs bun + yt-dlp-ejs) is sign-in only.
 function getYouTubeArgs(url, signedIn = false) {
   if (!isYouTubeUrl(url)) return [];
   const clients = signedIn ? 'web_embedded,default' : 'default';

@@ -20,7 +20,7 @@ const MAX_PASSKEYS = 10;
 const THROTTLE_EVERY = 5;
 const THROTTLE_MS = 15 * 60 * 1000;
 const MAX_FAILURES = 100;
-// OWASP's m=46 MiB, t=1 set: 32 ms on traptop. The secrets are 130+ bits random, so this is defence in depth.
+// OWASP's m=46 MiB, t=1 set: ~32 ms per verify. The secrets are 130+ bits random, so this is defence in depth.
 const ARGON = { algorithm: 'argon2id', memoryCost: 47104, timeCost: 1 };
 
 function randomBase32(length) {

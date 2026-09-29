@@ -57,9 +57,7 @@ const PLATFORMS = [
   },
 ];
 
-// Every other non-adult source in src/utils/download-services.js gets a plain page; `what` is only what the
-// code gets from it. Adult and booru sources stay unlinked text: explicit pages can get the whole domain
-// classed as adult by search engines.
+// No pages for adult sources: search engines can class the whole domain as adult.
 const MORE = [
   ['bluesky', 'bluesky', 'videos'],
   ['snapchat', 'snapchat', 'videos'],

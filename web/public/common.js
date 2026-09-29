@@ -87,8 +87,7 @@ function loadTurnstile() {
   return loader;
 }
 
-// One widget per action, rendered early so a token is usually ready by submit. Turnstile fails every check
-// with 600010 if anything is painted over the widget or <html> carries a data-state attribute.
+// Turnstile fails with 600010 if anything covers the widget or <html> has a data-state attribute.
 const widgets = new Map();
 let tsSlot;
 function prepare(action) {

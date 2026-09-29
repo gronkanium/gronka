@@ -181,8 +181,7 @@ export async function acquireMedia(
   const isStillImage = isDirectMedia && /\.(jpe?g|png|webp|bmp)$/i.test(new URL(url).pathname);
   const useYtdlp = ytdlpSite !== null && YTDLP_ENABLED && !isStillImage;
 
-  // Trim requests need real bytes, and yt-dlp sites, hentaigifz, booru and Pinterest have no
-  // cobalt URL to hand out.
+  // Trims need real bytes, and yt-dlp/gallery/booru/Pinterest sources have no cobalt URL.
   if (
     COBALT_ENABLED &&
     !useYtdlp &&
@@ -219,8 +218,7 @@ export async function acquireMedia(
     }
   }
 
-  // Serving video.twimg.com directly skips download + upload for big videos; 'hybrid' still attaches
-  // small clips, which survive the tweet being deleted.
+  // 'hybrid' still attaches small clips, which outlive the tweet; big ones get the twimg URL.
   if (COBALT_ENABLED && isTwitterXUrl(url) && startTime === null && duration === null) {
     const deliveryMode = await getSetting('twitter_delivery', 'hybrid');
     if (deliveryMode === 'always_url' || deliveryMode === 'hybrid') {
@@ -325,14 +323,13 @@ export async function acquireMedia(
     });
   }
 
-  // Started early and read later: it picks the DRM route and tags the result, and takes ~3 s alone.
+  // Started early: it takes ~3 s and decides both the DRM route and the tags.
   const soundcloud =
     isSoundCloudUrl(url) && startTime === null && duration === null
       ? soundcloudTrack(url).catch(() => null)
       : null;
 
-  // Lets a caller hand out source links it can serve without us holding the bytes. Run beside the
-  // SoundCloud read; a DRM-only track has no such links, so its result is dropped.
+  // Runs beside the SoundCloud read; a DRM-only track has no source links to hand out.
   if (streamFirst && startTime === null && duration === null) {
     const lane = streamFirst(url, downloadMethod).catch(() => null);
     const streams = (await soundcloud)?.drm ? null : await lane;
@@ -485,8 +482,7 @@ export async function acquireMedia(
           ? 'TikTok'
           : cobaltFallbackLabel(url);
 
-      // Last resort for X only: Discord embeds and plays a video.twimg.com URL in full, so the size
-      // and duration caps don't apply. Other sites' direct URLs don't reliably embed.
+      // X only: Discord plays a twimg URL in full, so the caps don't apply; others don't embed.
       const tryTwitterDirectUrl = async () => {
         if (!isTwitterXUrl(url) || startTime !== null || duration !== null) {
           return null;

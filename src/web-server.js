@@ -17,6 +17,8 @@ import { getStreamInfo, isYouTubeUrl } from './utils/ytdlp.js';
 import { AppError, ValidationError } from './utils/errors.js';
 import * as accounts from './web/accounts.js';
 import { FFMPEG_INPUT_GUARD } from './utils/video-processor/utils.js';
+import { trimVideo } from './utils/video-processor/trim-video.js';
+import { trimGif } from './utils/video-processor/trim-gif.js';
 
 const execFileAsync = promisify(execFile);
 
@@ -237,7 +239,38 @@ export async function stripAudio(item) {
   }
 }
 
-export async function runDownload({ url, audio, mute = false, startTime, duration, split = true }) {
+// Same rule as the bot: yt-dlp already cut its download, everything else is cut here.
+export async function trimItem(item, { startTime, duration }) {
+  const ext = path.extname(item.filename ?? '').toLowerCase();
+  const kind = detectFileType(ext, item.contentType, item.buffer);
+  const gif = kind === 'gif' || ext === '.gif';
+  if (!gif && kind !== 'video') return item;
+  const dir = await fs.mkdtemp(path.join(os.tmpdir(), 'trim-'));
+  try {
+    const input = path.join(dir, `in${ext || '.mp4'}`);
+    const output = path.join(dir, gif ? 'out.gif' : 'out.mp4');
+    await fs.writeFile(input, item.buffer, { mode: 0o600, flag: 'wx' });
+    await (gif ? trimGif : trimVideo)(input, output, { startTime, duration });
+    const base = path.parse(item.filename ?? 'video').name || 'video';
+    return {
+      ...item,
+      buffer: await fs.readFile(output),
+      filename: `${base}${gif ? '.gif' : '.mp4'}`,
+      contentType: gif ? 'image/gif' : 'video/mp4',
+    };
+  } finally {
+    await fs.rm(dir, { recursive: true, force: true });
+  }
+}
+
+export async function runDownload({
+  url,
+  audio,
+  mute = false,
+  startTime = null,
+  duration = null,
+  split = true,
+}) {
   const disabled = await getDisabledServiceLabel(url);
   if (disabled) {
     throw new ValidationError(`downloads from ${disabled} are turned off.`);
@@ -274,10 +307,13 @@ export async function runDownload({ url, audio, mute = false, startTime, duratio
       files: [await publishToR2(buffer, `${baseName}.mp3`, 'audio/mpeg')],
     };
   }
+  const trim = (startTime !== null || duration !== null) && downloadMethod !== 'ytdlp';
   const items = Array.isArray(fileData) ? fileData : [fileData];
   const files = [];
   for (const item of items) {
-    const out = mute ? await stripAudio(item) : item;
+    const cut =
+      trim && !Array.isArray(fileData) ? await trimItem(item, { startTime, duration }) : item;
+    const out = mute ? await stripAudio(cut) : cut;
     files.push(await publishToR2(out.buffer, out.filename, out.contentType));
   }
   return { lane: 'r2', ...note, files };

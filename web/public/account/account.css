@@ -133,3 +133,16 @@ section + section {
   background: var(--soft);
   color: var(--ink);
 }
+.code-ask {
+  max-width: min(92vw, 420px);
+  padding: 22px 20px 16px;
+  border: 0;
+  color: inherit;
+  background: var(--paper);
+}
+.code-ask::backdrop {
+  background: rgb(0 0 0 / 0.45);
+}
+.code-ask input {
+  letter-spacing: 0.15em;
+}

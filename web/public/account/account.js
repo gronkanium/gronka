@@ -92,25 +92,43 @@ function credentialJson(cred) {
 }
 
 let totpOn = false;
-const ask = wrong => {
-  const value = window.prompt(
-    wrong
-      ? 'that code was wrong. try again:'
-      : '2fa is on. enter the code from your authenticator app, or a recovery code:'
-  );
-  return value === null ? null : value.trim();
-};
+const codeDialog = document.createElement('dialog');
+codeDialog.className = 'code-ask ink';
+codeDialog.innerHTML = `<form method="dialog">
+  <label class="label" for="ask-code"></label>
+  <span class="ink field"><input id="ask-code" autocomplete="one-time-code" inputmode="text" spellcheck="false" maxlength="11" /></span>
+  <div class="acts"><button class="btn" value="ok">continue</button>
+  <button class="btn line small" value="cancel" formnovalidate>cancel</button></div></form>`;
+document.body.append(codeDialog);
+
+const ask = wrong =>
+  new Promise(resolve => {
+    codeDialog.querySelector('label').textContent = wrong
+      ? 'that code was wrong. try again.'
+      : '2fa is on. enter the code from your authenticator app, or a recovery code.';
+    const input = codeDialog.querySelector('input');
+    input.value = '';
+    codeDialog.returnValue = '';
+    codeDialog.addEventListener(
+      'close',
+      () =>
+        resolve(codeDialog.returnValue === 'ok' && input.value.trim() ? input.value.trim() : null),
+      { once: true }
+    );
+    codeDialog.showModal();
+    input.focus();
+  });
 
 // Sensitive actions need a current 2fa code when 2fa is on; the server says so if we guessed wrong.
 async function withCode(call) {
-  let code = totpOn ? ask(false) : '';
+  let code = totpOn ? await ask(false) : '';
   for (let tries = 0; ; tries++) {
     if (code === null) throw new ApiError('CANCELLED', 'cancelled.', 0);
     try {
       return await call(code ? { code } : {});
     } catch (error) {
       if (tries < 3 && ['TOTP_REQUIRED', 'TOTP_INVALID'].includes(error.code)) {
-        code = ask(error.code === 'TOTP_INVALID');
+        code = await ask(error.code === 'TOTP_INVALID');
         continue;
       }
       throw error;

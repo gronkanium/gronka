@@ -300,7 +300,7 @@ const apiError = (error, headers) =>
 const SESSION_COOKIE = 'gw_session';
 
 function sessionCookie(token, maxAgeSeconds) {
-  return `${SESSION_COOKIE}=${token}; Path=/api; HttpOnly; Secure; SameSite=Strict; Max-Age=${maxAgeSeconds}`;
+  return `${SESSION_COOKIE}=${token}; Path=/v1; HttpOnly; Secure; SameSite=Strict; Max-Age=${maxAgeSeconds}`;
 }
 
 function readCookie(req, name) {
@@ -450,13 +450,13 @@ export function createHandler({
     const withCookie = (data, status, token, maxAge) =>
       json(data, status, { ...headers, 'Set-Cookie': sessionCookie(token, maxAge) });
 
-    if (method === 'GET' && (pathname === '/api/health' || pathname === '/health')) {
+    if (method === 'GET' && (pathname === '/v1/health' || pathname === '/health')) {
       return json({ ok: true }, 200, headers);
     }
-    if (method === 'POST' && pathname === '/api/download') {
+    if (method === 'POST' && pathname === '/v1/download') {
       return handleDownload(req, server, headers);
     }
-    if (method === 'POST' && pathname === '/api/account') {
+    if (method === 'POST' && pathname === '/v1/account') {
       const body = await readJson(req);
       limit(`signup:${ipKey(req, server)}`, signupLimit);
       if (!(await verify(body.turnstile, 'account'))) {
@@ -466,7 +466,7 @@ export function createHandler({
       const token = await accounts.createSession(id);
       return withCookie({ id, number }, 201, token, accounts.SESSION_MS / 1000);
     }
-    if (method === 'POST' && pathname === '/api/session') {
+    if (method === 'POST' && pathname === '/v1/session') {
       const body = await readJson(req);
       limit(`login:${ipKey(req, server)}`, loginLimit);
       if (!(await verify(body.turnstile, 'login'))) {
@@ -479,11 +479,11 @@ export function createHandler({
       const token = await accounts.createSession(accountId);
       return withCookie({ id: accountId }, 200, token, accounts.SESSION_MS / 1000);
     }
-    if (method === 'DELETE' && pathname === '/api/session') {
+    if (method === 'DELETE' && pathname === '/v1/session') {
       await accounts.deleteSession(readCookie(req, SESSION_COOKIE));
       return withCookie({ ok: true }, 200, '', 0);
     }
-    if (pathname === '/api/account' && (method === 'GET' || method === 'DELETE')) {
+    if (pathname === '/v1/account' && (method === 'GET' || method === 'DELETE')) {
       const accountId = await requireSession(req);
       if (method === 'GET') {
         return json(await accounts.getAccountSummary(accountId), 200, headers);
@@ -491,11 +491,11 @@ export function createHandler({
       await accounts.deleteAccount(accountId);
       return withCookie({ ok: true }, 200, '', 0);
     }
-    if (method === 'POST' && pathname === '/api/account/rotate') {
+    if (method === 'POST' && pathname === '/v1/account/rotate') {
       const accountId = await requireSession(req);
       return json({ number: await accounts.rotateAccountNumber(accountId) }, 200, headers);
     }
-    if (method === 'POST' && pathname === '/api/keys') {
+    if (method === 'POST' && pathname === '/v1/keys') {
       const accountId = await requireSession(req);
       const body = await readJson(req);
       const created = await accounts.createApiKey(accountId, body.label);
@@ -504,7 +504,7 @@ export function createHandler({
       }
       return json(created, 201, headers);
     }
-    const keyMatch = pathname.match(/^\/api\/keys\/(gk_[0-9a-z]{8})$/);
+    const keyMatch = pathname.match(/^\/v1\/keys\/(gk_[0-9a-z]{8})$/);
     if (method === 'DELETE' && keyMatch) {
       const accountId = await requireSession(req);
       if (!(await accounts.revokeApiKey(accountId, keyMatch[1]))) {

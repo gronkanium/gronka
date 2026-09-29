@@ -12,7 +12,7 @@ const ok = async () => true;
 const result = { lane: 'direct', files: [{ url: 'https://video.example/a.mp4' }] };
 
 function post(body, headers = {}) {
-  return new Request('http://web/api/download', {
+  return new Request('http://web/v1/download', {
     method: 'POST',
     headers: { 'content-type': 'application/json', 'cf-connecting-ip': '203.0.113.9', ...headers },
     body: typeof body === 'string' ? body : JSON.stringify(body),
@@ -40,16 +40,16 @@ describe('parseDownloadRequest', () => {
 describe('handler', () => {
   test('health, preflight from the page, and unknown routes', async () => {
     const handle = createHandler({ verify: ok });
-    expect((await handle(new Request('http://web/api/health'))).status).toBe(200);
+    expect((await handle(new Request('http://web/v1/health'))).status).toBe(200);
     const pre = await handle(
-      new Request('http://web/api/download', {
+      new Request('http://web/v1/download', {
         method: 'OPTIONS',
         headers: { origin: 'https://web.gronka.dev' },
       })
     );
     expect(pre.headers.get('access-control-allow-origin')).toBe('https://web.gronka.dev');
     const foreign = await handle(
-      new Request('http://web/api/health', { headers: { origin: 'https://evil.example' } })
+      new Request('http://web/v1/health', { headers: { origin: 'https://evil.example' } })
     );
     expect(foreign.headers.get('access-control-allow-origin')).toBeNull();
     expect((await handle(new Request('http://web/nope'))).status).toBe(404);

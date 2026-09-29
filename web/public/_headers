@@ -2,7 +2,7 @@
   Content-Security-Policy: default-src 'none'; script-src 'self' https://challenges.cloudflare.com 'wasm-unsafe-eval'; frame-src https://challenges.cloudflare.com; connect-src 'self' https:; img-src 'self' data: blob: https:; media-src 'self' blob: https:; worker-src 'self' blob:; style-src 'self'; font-src 'self'; manifest-src 'self'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'; upgrade-insecure-requests
   Strict-Transport-Security: max-age=31536000; includeSubDomains
   X-Content-Type-Options: nosniff
-  Referrer-Policy: no-referrer
+  Referrer-Policy: strict-origin
   Permissions-Policy: camera=(), microphone=(), geolocation=(), interest-cohort=(), clipboard-read=(self), clipboard-write=(self), publickey-credentials-get=(self), publickey-credentials-create=(self)
   Cross-Origin-Opener-Policy: same-origin
   Cache-Control: no-transform

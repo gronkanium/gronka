@@ -54,7 +54,10 @@ describe('api keys and sessions', () => {
   test('keys verify, are capped at 10, and a revoked key stops working even when cached', async () => {
     const { id } = await accounts.createAccount();
     const first = await accounts.createApiKey(id, '  my script  ');
-    expect(first.key).toMatch(/^gk_[0-9a-z]{8}_[\w-]{43}$/);
+    expect(first.key).toMatch(/^gk_[0-9a-z]{8}_[\w-]{43}[0-9a-f]{8}$/);
+    const flipped =
+      first.key.slice(0, 20) + (first.key[20] === 'a' ? 'b' : 'a') + first.key.slice(21);
+    expect(accounts.parseApiKey(flipped)).toBeNull();
     expect((await accounts.verifyApiKey(first.key)).accountId).toBe(id);
     expect(await accounts.verifyApiKey(first.key.slice(0, -1) + 'x')).toBeNull();
     const summary = await accounts.getAccountSummary(id);
@@ -71,6 +74,18 @@ describe('api keys and sessions', () => {
     const { id } = await accounts.createAccount();
     const token = await accounts.createSession(id);
     expect(await accounts.getSessionAccount(token)).toBe(id);
+    const { getPostgresConnection } = await import('../../src/utils/database/connection.js');
+    const sql = getPostgresConnection();
+    await sql`UPDATE web_sessions SET expires_at = now() - interval '1 second' WHERE account_id = ${id}`;
+    expect(await accounts.getSessionAccount(token)).toBeNull();
+    const fresh = await accounts.createSession(id);
+    await sql`UPDATE web_sessions SET absolute_at = now() + interval '1 hour' WHERE account_id = ${id}`;
+    expect(await accounts.getSessionAccount(fresh)).toBe(id);
+    const [{ capped }] = await sql`
+      SELECT bool_and(expires_at <= absolute_at) AS capped FROM web_sessions WHERE account_id = ${id}`;
+    expect(capped).toBe(true);
+    await accounts.deleteSession(fresh);
+    expect(await accounts.getSessionAccount(fresh)).toBeNull();
     await accounts.deleteSession(token);
     expect(await accounts.getSessionAccount(token)).toBeNull();
     const second = await accounts.createSession(id);
@@ -104,7 +119,9 @@ describe('account routes', () => {
     expect((await call('POST', '/v1/account', { body: { turnstile: 'bad' } })).status).toBe(403);
     const signup = await call('POST', '/v1/account', { body: { turnstile: 'ok' } });
     expect(signup.status).toBe(201);
-    expect(signup.headers.get('set-cookie')).toContain('HttpOnly; Secure; SameSite=Strict');
+    expect(signup.headers.get('set-cookie')).toMatch(
+      /^__Host-gw_session=[\w-]+; Path=\/; HttpOnly; Secure; SameSite=Strict/
+    );
     const { number } = await signup.json();
     const cookie = cookieOf(signup);
 
@@ -124,7 +141,7 @@ describe('account routes', () => {
     expect(JSON.parse(await keyed.text()).lane).toBe('direct');
     const badKey = await call('POST', '/v1/download', {
       origin: null,
-      auth: 'Bearer gk_00000000_' + 'a'.repeat(43),
+      auth: 'Bearer gk_00000000_' + 'a'.repeat(51),
       body: { url: 'https://x.com/a/status/1' },
     });
     expect(badKey.status).toBe(401);

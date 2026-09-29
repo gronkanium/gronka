@@ -1,4 +1,5 @@
 import crypto from 'node:crypto';
+import { crc32 } from 'node:zlib';
 import { getPostgresConnection } from '../utils/database/connection.js';
 import { ensurePostgresInitialized } from '../utils/database/init.js';
 
@@ -9,8 +10,10 @@ const ACCOUNT_SECRET_LEN = 26; // 130 bits
 const KEY_ID_LEN = 8;
 const MAX_KEYS = 10;
 export const SESSION_MS = 7 * 24 * 60 * 60 * 1000;
+const SESSION_IDLE_MS = 24 * 60 * 60 * 1000;
 const KEY_CACHE_MS = 5 * 60 * 1000;
-const ARGON = { algorithm: 'argon2id', memoryCost: 65536, timeCost: 3 };
+// OWASP's m=46 MiB, t=1 set: 32 ms on traptop. The secrets are 130+ bits random, so this is defence in depth.
+const ARGON = { algorithm: 'argon2id', memoryCost: 47104, timeCost: 1 };
 
 function randomBase32(length) {
   const bytes = crypto.randomBytes(length);
@@ -51,10 +54,14 @@ export function parseAccountNumber(input) {
   return match ? { id: match[1], secret: match[2] } : null;
 }
 
+// GitHub-style: a CRC32 tail lets secret scanners tell a real key from random text.
+const keyChecksum = body => crc32(body).toString(16).padStart(8, '0');
+
 export function parseApiKey(input) {
   const match =
-    typeof input === 'string' && input.match(/^gk_([0-9a-hjkmnp-tv-z]{8})_([\w-]{43})$/);
-  return match ? { id: match[1], secret: match[2] } : null;
+    typeof input === 'string' &&
+    input.match(/^(gk_([0-9a-hjkmnp-tv-z]{8})_([\w-]{43}))([0-9a-f]{8})$/);
+  return match && keyChecksum(match[1]) === match[4] ? { id: match[2], secret: match[3] } : null;
 }
 
 export async function ensureWebSchema() {
@@ -70,7 +77,8 @@ export async function ensureWebSchema() {
     CREATE TABLE IF NOT EXISTS web_sessions (
       token_hash TEXT PRIMARY KEY,
       account_id TEXT NOT NULL REFERENCES web_accounts(id) ON DELETE CASCADE,
-      expires_at TIMESTAMPTZ NOT NULL
+      expires_at TIMESTAMPTZ NOT NULL,
+      absolute_at TIMESTAMPTZ NOT NULL
     )`;
   await sql`
     CREATE TABLE IF NOT EXISTS web_api_keys (
@@ -130,16 +138,21 @@ export async function createSession(accountId) {
   const token = crypto.randomBytes(32).toString('base64url');
   await sql`DELETE FROM web_sessions WHERE expires_at < now()`;
   await sql`
-    INSERT INTO web_sessions (token_hash, account_id, expires_at)
-    VALUES (${sha256(token)}, ${accountId}, ${new Date(Date.now() + SESSION_MS)})`;
+    INSERT INTO web_sessions (token_hash, account_id, expires_at, absolute_at)
+    VALUES (${sha256(token)}, ${accountId}, ${new Date(Date.now() + SESSION_IDLE_MS)},
+      ${new Date(Date.now() + SESSION_MS)})`;
   return token;
 }
 
 export async function getSessionAccount(token) {
   if (typeof token !== 'string' || token.length > 100) return null;
   const sql = getPostgresConnection();
+  // Idle for a day or older than a week, whichever comes first; each use pushes the idle limit.
   const [row] = await sql`
-    SELECT account_id FROM web_sessions WHERE token_hash = ${sha256(token)} AND expires_at > now()`;
+    UPDATE web_sessions
+    SET expires_at = least(now() + ${SESSION_IDLE_MS / 1000} * interval '1 second', absolute_at)
+    WHERE token_hash = ${sha256(token)} AND expires_at > now()
+    RETURNING account_id`;
   return row?.account_id ?? null;
 }
 
@@ -184,7 +197,8 @@ export async function createApiKey(accountId, label = null) {
       VALUES (${id}, ${accountId}, ${secretHash}, ${cleanLabel})
       ON CONFLICT (id) DO NOTHING RETURNING id`;
     if (rows.length) {
-      return { id: `gk_${id}`, key: `gk_${id}_${secret}` };
+      const body = `gk_${id}_${secret}`;
+      return { id: `gk_${id}`, key: body + keyChecksum(body) };
     }
   }
 }
@@ -200,7 +214,7 @@ export async function revokeApiKey(accountId, publicId) {
   return rows.length > 0;
 }
 
-// argon2 runs once per key per 5 minutes, so a script making many calls doesn't pay 64 MiB each.
+// argon2 runs once per key per 5 minutes, so a script making many calls doesn't pay for it each time.
 export async function verifyApiKey(input) {
   const cacheKey = sha256(String(input));
   const cached = keyCache.get(cacheKey);

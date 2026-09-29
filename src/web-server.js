@@ -297,10 +297,11 @@ function json(data, status, headers) {
 const apiError = (error, headers) =>
   json({ error: { code: error.code, message: error.message } }, error.statusCode, headers);
 
-const SESSION_COOKIE = 'gw_session';
+// __Host-: Secure, no Domain, Path=/, so no other subdomain can set or shadow it.
+const SESSION_COOKIE = '__Host-gw_session';
 
 function sessionCookie(token, maxAgeSeconds) {
-  return `${SESSION_COOKIE}=${token}; Path=/v1; HttpOnly; Secure; SameSite=Strict; Max-Age=${maxAgeSeconds}`;
+  return `${SESSION_COOKIE}=${token}; Path=/; HttpOnly; Secure; SameSite=Strict; Max-Age=${maxAgeSeconds}`;
 }
 
 function readCookie(req, name) {

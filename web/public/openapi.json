@@ -265,7 +265,7 @@
   "components": {
     "securitySchemes": {
       "apiKey": { "type": "http", "scheme": "bearer", "description": "gk_<id>_<secret>" },
-      "session": { "type": "apiKey", "in": "cookie", "name": "gw_session" }
+      "session": { "type": "apiKey", "in": "cookie", "name": "__Host-gw_session" }
     },
     "responses": {
       "Error": {

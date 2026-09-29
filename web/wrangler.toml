@@ -3,6 +3,10 @@ compatibility_date = "2026-09-01"
 workers_dev = false
 routes = [{ pattern = "web.gronka.dev", custom_domain = true }]
 
+# the per-site pages and sitemap are not in git; every deploy builds them
+[build]
+command = "bun pages.mjs && npx prettier --write --log-level warn public/index.html 'public/*/index.html'"
+
 [assets]
 directory = "public"
 

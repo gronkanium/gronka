@@ -2,6 +2,7 @@ import crypto from 'node:crypto';
 import { crc32 } from 'node:zlib';
 import { getPostgresConnection } from '../utils/database/connection.js';
 import { ensurePostgresInitialized } from '../utils/database/init.js';
+import { base32Encode, decryptSecret, encryptSecret, matchTotp, otpauthUri } from './totp.js';
 
 // Crockford base32: no I, L, O, U, so a typed number can't be misread.
 const ALPHABET = '0123456789ABCDEFGHJKMNPQRSTVWXYZ';
@@ -12,6 +13,13 @@ const MAX_KEYS = 10;
 export const SESSION_MS = 7 * 24 * 60 * 60 * 1000;
 const SESSION_IDLE_MS = 24 * 60 * 60 * 1000;
 const KEY_CACHE_MS = 5 * 60 * 1000;
+const RECOVERY_CODES = 10;
+const RECOVERY_LEN = 10;
+const MAX_PASSKEYS = 10;
+// Every 5th wrong code locks for 15 minutes; 100 in a row (NIST's ceiling) locks until a passkey login.
+const THROTTLE_EVERY = 5;
+const THROTTLE_MS = 15 * 60 * 1000;
+const MAX_FAILURES = 100;
 // OWASP's m=46 MiB, t=1 set: 32 ms on traptop. The secrets are 130+ bits random, so this is defence in depth.
 const ARGON = { algorithm: 'argon2id', memoryCost: 47104, timeCost: 1 };
 
@@ -89,6 +97,29 @@ export async function ensureWebSchema() {
       created_on DATE NOT NULL DEFAULT CURRENT_DATE,
       last_used_on DATE
     )`;
+  await sql`
+    ALTER TABLE web_accounts
+      ADD COLUMN IF NOT EXISTS totp_secret TEXT,
+      ADD COLUMN IF NOT EXISTS totp_pending TEXT,
+      ADD COLUMN IF NOT EXISTS totp_last_step BIGINT,
+      ADD COLUMN IF NOT EXISTS totp_failures INTEGER NOT NULL DEFAULT 0,
+      ADD COLUMN IF NOT EXISTS totp_locked_until TIMESTAMPTZ`;
+  await sql`
+    CREATE TABLE IF NOT EXISTS web_recovery_codes (
+      id SERIAL PRIMARY KEY,
+      account_id TEXT NOT NULL REFERENCES web_accounts(id) ON DELETE CASCADE,
+      code_hash TEXT NOT NULL
+    )`;
+  await sql`
+    CREATE TABLE IF NOT EXISTS web_passkeys (
+      id TEXT PRIMARY KEY,
+      account_id TEXT NOT NULL REFERENCES web_accounts(id) ON DELETE CASCADE,
+      public_key BYTEA NOT NULL,
+      counter BIGINT NOT NULL DEFAULT 0,
+      transports TEXT[],
+      label TEXT,
+      created_on DATE NOT NULL DEFAULT CURRENT_DATE
+    )`;
 }
 
 export async function createAccount() {
@@ -164,20 +195,33 @@ export async function deleteSession(token) {
 
 export async function getAccountSummary(accountId) {
   const sql = getPostgresConnection();
-  const [account] = await sql`SELECT id, created_on FROM web_accounts WHERE id = ${accountId}`;
+  const [account] =
+    await sql`SELECT id, created_on, totp_secret FROM web_accounts WHERE id = ${accountId}`;
   if (!account) return null;
   const keys = await sql`
     SELECT id, label, created_on, last_used_on FROM web_api_keys
     WHERE account_id = ${accountId} ORDER BY created_on, id`;
+  const passkeys = await sql`
+    SELECT id, label, created_on FROM web_passkeys
+    WHERE account_id = ${accountId} ORDER BY created_on, id`;
+  const [{ left }] =
+    await sql`SELECT count(*)::int AS left FROM web_recovery_codes WHERE account_id = ${accountId}`;
   const day = date => date?.toISOString().slice(0, 10) ?? null;
   return {
     id: account.id,
     createdOn: day(account.created_on),
+    totp: account.totp_secret !== null,
+    recoveryCodesLeft: left,
     keys: keys.map(key => ({
       id: `gk_${key.id}`,
       label: key.label,
       createdOn: day(key.created_on),
       lastUsedOn: day(key.last_used_on),
+    })),
+    passkeys: passkeys.map(key => ({
+      id: key.id,
+      label: key.label,
+      createdOn: day(key.created_on),
     })),
   };
 }
@@ -235,4 +279,154 @@ export async function verifyApiKey(input) {
   const entry = { keyId: parsed.id, accountId: row.account_id, expires: Date.now() + KEY_CACHE_MS };
   keyCache.set(cacheKey, entry);
   return entry;
+}
+
+export async function startTotp(accountId) {
+  const sql = getPostgresConnection();
+  const secret = crypto.randomBytes(20);
+  const rows = await sql`
+    UPDATE web_accounts SET totp_pending = ${encryptSecret(secret, accountId)}
+    WHERE id = ${accountId} AND totp_secret IS NULL RETURNING id`;
+  return rows.length ? { uri: otpauthUri(secret, accountId), secret: base32Encode(secret) } : null;
+}
+
+async function createRecoveryCodes(sql, accountId) {
+  const codes = Array.from({ length: RECOVERY_CODES }, () => randomBase32(RECOVERY_LEN));
+  const hashes = await Promise.all(codes.map(hashSecret));
+  await sql`DELETE FROM web_recovery_codes WHERE account_id = ${accountId}`;
+  await sql`
+    INSERT INTO web_recovery_codes ${sql(
+      hashes.map(codeHash => ({ account_id: accountId, code_hash: codeHash }))
+    )}`;
+  return codes.map(code => `${code.slice(0, 5)}-${code.slice(5)}`);
+}
+
+export async function enableTotp(accountId, code) {
+  const sql = getPostgresConnection();
+  const [row] =
+    await sql`SELECT totp_pending FROM web_accounts WHERE id = ${accountId} AND totp_secret IS NULL`;
+  if (!row?.totp_pending) return null;
+  const step = matchTotp(decryptSecret(row.totp_pending, accountId), code);
+  if (step === null) return null;
+  await sql`
+    UPDATE web_accounts SET totp_secret = totp_pending, totp_pending = NULL,
+      totp_last_step = ${step}, totp_failures = 0, totp_locked_until = NULL
+    WHERE id = ${accountId}`;
+  return createRecoveryCodes(sql, accountId);
+}
+
+const normalizeRecovery = input =>
+  String(input).toUpperCase().replace(/[\s-]/g, '').replace(/O/g, '0').replace(/[IL]/g, '1');
+
+async function useRecoveryCode(sql, accountId, input) {
+  const code = normalizeRecovery(input);
+  if (!/^[0-9A-HJKMNP-TV-Z]{10}$/.test(code)) return false;
+  const rows =
+    await sql`SELECT id, code_hash FROM web_recovery_codes WHERE account_id = ${accountId}`;
+  for (const row of rows) {
+    if (await verifySecret(code, row.code_hash)) {
+      const used = await sql`DELETE FROM web_recovery_codes WHERE id = ${row.id} RETURNING id`;
+      return used.length > 0;
+    }
+  }
+  return false;
+}
+
+// 'ok' when the account has no TOTP or the code (a TOTP code or a recovery code) is right;
+// otherwise 'required', 'invalid' or 'locked'.
+export async function checkSecondFactor(accountId, code) {
+  const sql = getPostgresConnection();
+  const [row] = await sql`
+    SELECT totp_secret, totp_last_step, totp_failures, totp_locked_until > now() AS throttled
+    FROM web_accounts WHERE id = ${accountId}`;
+  if (!row?.totp_secret) return 'ok';
+  if (row.totp_failures >= MAX_FAILURES || row.throttled) return 'locked';
+  if (typeof code !== 'string' || !code.trim()) return 'required';
+  const lastStep = row.totp_last_step === null ? null : Number(row.totp_last_step);
+  const step = matchTotp(decryptSecret(row.totp_secret, accountId), code.trim(), lastStep);
+  if (step !== null) {
+    // The conditional update is what makes a code single-use when two logins race.
+    const claimed = await sql`
+      UPDATE web_accounts SET totp_last_step = ${step}, totp_failures = 0, totp_locked_until = NULL
+      WHERE id = ${accountId} AND (totp_last_step IS NULL OR totp_last_step < ${step})
+      RETURNING id`;
+    if (claimed.length) return 'ok';
+  } else if (await useRecoveryCode(sql, accountId, code)) {
+    await sql`UPDATE web_accounts SET totp_failures = 0, totp_locked_until = NULL WHERE id = ${accountId}`;
+    return 'ok';
+  }
+  await sql`
+    UPDATE web_accounts SET totp_failures = totp_failures + 1,
+      totp_locked_until = CASE WHEN (totp_failures + 1) % ${THROTTLE_EVERY} = 0
+        THEN now() + ${THROTTLE_MS / 1000} * interval '1 second' ELSE totp_locked_until END
+    WHERE id = ${accountId}`;
+  return 'invalid';
+}
+
+export async function disableTotp(accountId) {
+  const sql = getPostgresConnection();
+  await sql`
+    UPDATE web_accounts SET totp_secret = NULL, totp_pending = NULL, totp_last_step = NULL,
+      totp_failures = 0, totp_locked_until = NULL
+    WHERE id = ${accountId}`;
+  await sql`DELETE FROM web_recovery_codes WHERE account_id = ${accountId}`;
+}
+
+export async function regenerateRecoveryCodes(accountId) {
+  return createRecoveryCodes(getPostgresConnection(), accountId);
+}
+
+export async function listPasskeys(accountId) {
+  const sql = getPostgresConnection();
+  const rows = await sql`SELECT id, transports FROM web_passkeys WHERE account_id = ${accountId}`;
+  return rows.map(row => ({ id: row.id, transports: row.transports ?? undefined }));
+}
+
+export async function addPasskey(accountId, { id, publicKey, counter, transports }, label = null) {
+  const sql = getPostgresConnection();
+  const [{ count }] =
+    await sql`SELECT count(*)::int AS count FROM web_passkeys WHERE account_id = ${accountId}`;
+  if (count >= MAX_PASSKEYS) return null;
+  const cleanLabel = typeof label === 'string' ? label.trim().slice(0, 40) || null : null;
+  const [row] = await sql`
+    INSERT INTO web_passkeys (id, account_id, public_key, counter, transports, label)
+    VALUES (${id}, ${accountId}, ${Buffer.from(publicKey)}, ${counter}, ${transports ?? null},
+      ${cleanLabel})
+    ON CONFLICT (id) DO NOTHING RETURNING id, label, created_on`;
+  return row
+    ? { id: row.id, label: row.label, createdOn: row.created_on.toISOString().slice(0, 10) }
+    : null;
+}
+
+export async function getPasskey(id) {
+  if (typeof id !== 'string' || id.length > 1400) return null;
+  const sql = getPostgresConnection();
+  const [row] = await sql`SELECT * FROM web_passkeys WHERE id = ${id}`;
+  return row
+    ? {
+        accountId: row.account_id,
+        credential: {
+          id: row.id,
+          publicKey: new Uint8Array(row.public_key),
+          counter: Number(row.counter),
+          transports: row.transports ?? undefined,
+        },
+      }
+    : null;
+}
+
+// A passkey login proves the device, so it also clears a TOTP lockout.
+export async function usePasskey(id, counter) {
+  const sql = getPostgresConnection();
+  const [row] = await sql`
+    UPDATE web_passkeys SET counter = ${counter} WHERE id = ${id} RETURNING account_id`;
+  await sql`
+    UPDATE web_accounts SET totp_failures = 0, totp_locked_until = NULL WHERE id = ${row.account_id}`;
+}
+
+export async function removePasskey(accountId, id) {
+  const sql = getPostgresConnection();
+  const rows =
+    await sql`DELETE FROM web_passkeys WHERE id = ${id} AND account_id = ${accountId} RETURNING id`;
+  return rows.length > 0;
 }

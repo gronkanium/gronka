@@ -5,9 +5,15 @@
     "version": "1.0.0-preview",
     "description": "paste a link, get the file. preview: not live yet and may change."
   },
-  "servers": [{ "url": "https://api.gronka.dev" }],
+  "servers": [
+    {
+      "url": "https://api.gronka.dev"
+    }
+  ],
   "tags": [
-    { "name": "download" },
+    {
+      "name": "download"
+    },
     {
       "name": "account",
       "description": "the account page uses a cookie session. scripts can use an api key."
@@ -20,7 +26,13 @@
         "responses": {
           "200": {
             "description": "service is up",
-            "content": { "application/json": { "example": { "ok": true } } }
+            "content": {
+              "application/json": {
+                "example": {
+                  "ok": true
+                }
+              }
+            }
           }
         }
       }
@@ -29,14 +41,25 @@
       "post": {
         "tags": ["download"],
         "summary": "download from a link",
-        "security": [{ "apiKey": [] }, {}],
+        "security": [
+          {
+            "apiKey": []
+          },
+          {}
+        ],
         "requestBody": {
           "required": true,
           "content": {
             "application/json": {
-              "schema": { "$ref": "#/components/schemas/DownloadRequest" },
+              "schema": {
+                "$ref": "#/components/schemas/DownloadRequest"
+              },
               "examples": {
-                "plain": { "value": { "url": "https://x.com/user/status/123" } },
+                "plain": {
+                  "value": {
+                    "url": "https://x.com/user/status/123"
+                  }
+                },
                 "trimmedAudio": {
                   "value": {
                     "url": "https://youtu.be/abc",
@@ -56,8 +79,12 @@
               "application/json": {
                 "schema": {
                   "oneOf": [
-                    { "$ref": "#/components/schemas/DownloadResult" },
-                    { "$ref": "#/components/schemas/Error" }
+                    {
+                      "$ref": "#/components/schemas/DownloadResult"
+                    },
+                    {
+                      "$ref": "#/components/schemas/Error"
+                    }
                   ]
                 },
                 "examples": {
@@ -65,7 +92,11 @@
                     "value": {
                       "lane": "direct",
                       "files": [
-                        { "url": "https://video.twimg.com/...", "filename": null, "type": "video" }
+                        {
+                          "url": "https://video.twimg.com/...",
+                          "filename": null,
+                          "type": "video"
+                        }
                       ]
                     }
                   },
@@ -102,12 +133,24 @@
               }
             }
           },
-          "400": { "$ref": "#/components/responses/Error" },
-          "401": { "$ref": "#/components/responses/Error" },
-          "403": { "$ref": "#/components/responses/Error" },
-          "413": { "$ref": "#/components/responses/Error" },
-          "429": { "$ref": "#/components/responses/Error" },
-          "503": { "$ref": "#/components/responses/Error" }
+          "400": {
+            "$ref": "#/components/responses/Error"
+          },
+          "401": {
+            "$ref": "#/components/responses/Error"
+          },
+          "403": {
+            "$ref": "#/components/responses/Error"
+          },
+          "413": {
+            "$ref": "#/components/responses/Error"
+          },
+          "429": {
+            "$ref": "#/components/responses/Error"
+          },
+          "503": {
+            "$ref": "#/components/responses/Error"
+          }
         }
       }
     },
@@ -118,7 +161,11 @@
         "description": "returns the account number once. we cannot recover it.",
         "requestBody": {
           "content": {
-            "application/json": { "schema": { "$ref": "#/components/schemas/Turnstile" } }
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Turnstile"
+              }
+            }
           }
         },
         "responses": {
@@ -126,26 +173,39 @@
             "description": "account created and session cookie set",
             "content": {
               "application/json": {
-                "example": { "id": "7K3P9", "number": "GW-7K3P9-ABCDE-FGHJK-MNPQR-STVWX-YZ012-3" }
+                "example": {
+                  "id": "7K3P9",
+                  "number": "GW-7K3P9-ABCDE-FGHJK-MNPQR-STVWX-YZ012-3"
+                }
               }
             }
           },
-          "403": { "$ref": "#/components/responses/Error" },
-          "429": { "$ref": "#/components/responses/Error" }
+          "403": {
+            "$ref": "#/components/responses/Error"
+          },
+          "429": {
+            "$ref": "#/components/responses/Error"
+          }
         }
       },
       "get": {
         "tags": ["account"],
-        "summary": "get account and keys",
-        "security": [{ "session": [] }],
+        "summary": "get account, keys and passkeys",
+        "security": [
+          {
+            "session": []
+          }
+        ],
         "responses": {
           "200": {
-            "description": "account and keys",
+            "description": "account, keys, 2fa and passkeys",
             "content": {
               "application/json": {
                 "example": {
                   "id": "7K3P9",
                   "createdOn": "2026-09-28",
+                  "totp": true,
+                  "recoveryCodesLeft": 9,
                   "keys": [
                     {
                       "id": "gk_ab12cd34",
@@ -153,21 +213,38 @@
                       "createdOn": "2026-09-28",
                       "lastUsedOn": null
                     }
+                  ],
+                  "passkeys": [
+                    {
+                      "id": "b2T9...",
+                      "label": "phone",
+                      "createdOn": "2026-09-28"
+                    }
                   ]
                 }
               }
             }
           },
-          "401": { "$ref": "#/components/responses/Error" }
+          "401": {
+            "$ref": "#/components/responses/Error"
+          }
         }
       },
       "delete": {
         "tags": ["account"],
         "summary": "delete the account and its keys immediately",
-        "security": [{ "session": [] }],
+        "security": [
+          {
+            "session": []
+          }
+        ],
         "responses": {
-          "200": { "description": "account deleted" },
-          "401": { "$ref": "#/components/responses/Error" }
+          "200": {
+            "description": "account deleted"
+          },
+          "401": {
+            "$ref": "#/components/responses/Error"
+          }
         }
       }
     },
@@ -175,11 +252,21 @@
       "post": {
         "tags": ["account"],
         "summary": "replace the account number; the old one stops working at once",
-        "security": [{ "session": [] }],
+        "security": [
+          {
+            "session": []
+          }
+        ],
         "responses": {
           "200": {
             "description": "new account number",
-            "content": { "application/json": { "example": { "number": "GW-7K3P9-..." } } }
+            "content": {
+              "application/json": {
+                "example": {
+                  "number": "GW-7K3P9-..."
+                }
+              }
+            }
           }
         }
       }
@@ -193,11 +280,21 @@
             "application/json": {
               "schema": {
                 "allOf": [
-                  { "$ref": "#/components/schemas/Turnstile" },
+                  {
+                    "$ref": "#/components/schemas/Turnstile"
+                  },
                   {
                     "type": "object",
                     "required": ["number"],
-                    "properties": { "number": { "type": "string" } }
+                    "properties": {
+                      "number": {
+                        "type": "string"
+                      },
+                      "totp": {
+                        "type": "string",
+                        "description": "needed when 2fa is on: a 6-digit code, or one recovery code"
+                      }
+                    }
                   }
                 ]
               }
@@ -205,28 +302,47 @@
           }
         },
         "responses": {
-          "200": { "description": "session cookie set" },
-          "401": { "$ref": "#/components/responses/Error" },
-          "429": { "$ref": "#/components/responses/Error" }
+          "200": {
+            "description": "session cookie set"
+          },
+          "401": {
+            "$ref": "#/components/responses/Error"
+          },
+          "429": {
+            "$ref": "#/components/responses/Error"
+          }
         }
       },
       "delete": {
         "tags": ["account"],
         "summary": "end a session",
-        "responses": { "200": { "description": "session cookie cleared" } }
+        "responses": {
+          "200": {
+            "description": "session cookie cleared"
+          }
+        }
       }
     },
     "/v1/keys": {
       "post": {
         "tags": ["account"],
         "summary": "create an api key",
-        "security": [{ "session": [] }],
+        "security": [
+          {
+            "session": []
+          }
+        ],
         "requestBody": {
           "content": {
             "application/json": {
               "schema": {
                 "type": "object",
-                "properties": { "label": { "type": "string", "maxLength": 40 } }
+                "properties": {
+                  "label": {
+                    "type": "string",
+                    "maxLength": 40
+                  }
+                }
               }
             }
           }
@@ -235,10 +351,17 @@
           "201": {
             "description": "key shown once. up to 10 keys per account.",
             "content": {
-              "application/json": { "example": { "id": "gk_ab12cd34", "key": "gk_ab12cd34_..." } }
+              "application/json": {
+                "example": {
+                  "id": "gk_ab12cd34",
+                  "key": "gk_ab12cd34_..."
+                }
+              }
             }
           },
-          "400": { "$ref": "#/components/responses/Error" }
+          "400": {
+            "$ref": "#/components/responses/Error"
+          }
         }
       }
     },
@@ -246,18 +369,385 @@
       "delete": {
         "tags": ["account"],
         "summary": "revoke an api key",
-        "security": [{ "session": [] }],
+        "security": [
+          {
+            "session": []
+          }
+        ],
         "parameters": [
           {
             "name": "id",
             "in": "path",
             "required": true,
-            "schema": { "type": "string", "pattern": "^gk_[0-9a-z]{8}$" }
+            "schema": {
+              "type": "string",
+              "pattern": "^gk_[0-9a-z]{8}$"
+            }
           }
         ],
         "responses": {
-          "200": { "description": "key revoked" },
-          "404": { "$ref": "#/components/responses/Error" }
+          "200": {
+            "description": "key revoked"
+          },
+          "404": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    },
+    "/v1/totp/setup": {
+      "post": {
+        "tags": ["account"],
+        "summary": "start turning on 2fa",
+        "description": "returns a new secret. it only takes effect after /v1/totp/enable.",
+        "security": [
+          {
+            "session": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "secret and otpauth uri",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "uri": {
+                      "type": "string"
+                    },
+                    "secret": {
+                      "type": "string",
+                      "description": "base32, for typing into an app"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "409": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    },
+    "/v1/totp/enable": {
+      "post": {
+        "tags": ["account"],
+        "summary": "turn on 2fa",
+        "security": [
+          {
+            "session": []
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "code": {
+                    "type": "string",
+                    "description": "a 6-digit code from the authenticator app, or a recovery code"
+                  }
+                },
+                "required": ["code"]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "recovery codes, shown once",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "recoveryCodes": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    },
+    "/v1/totp": {
+      "delete": {
+        "tags": ["account"],
+        "summary": "turn off 2fa",
+        "security": [
+          {
+            "session": []
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "code": {
+                    "type": "string",
+                    "description": "a 6-digit code from the authenticator app, or a recovery code"
+                  }
+                },
+                "required": ["code"]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "2fa off, recovery codes deleted"
+          },
+          "401": {
+            "$ref": "#/components/responses/Error"
+          },
+          "429": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    },
+    "/v1/totp/recovery": {
+      "post": {
+        "tags": ["account"],
+        "summary": "replace the recovery codes",
+        "security": [
+          {
+            "session": []
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "code": {
+                    "type": "string",
+                    "description": "a 6-digit code from the authenticator app, or a recovery code"
+                  }
+                },
+                "required": ["code"]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "recovery codes, shown once",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "recoveryCodes": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Error"
+          },
+          "409": {
+            "$ref": "#/components/responses/Error"
+          },
+          "429": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    },
+    "/v1/passkeys/register/options": {
+      "post": {
+        "tags": ["account"],
+        "summary": "start adding a passkey",
+        "security": [
+          {
+            "session": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "creation options",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "description": "a WebAuthn options object for navigator.credentials"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/passkeys/register": {
+      "post": {
+        "tags": ["account"],
+        "summary": "finish adding a passkey",
+        "security": [
+          {
+            "session": []
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "response": {
+                    "type": "object",
+                    "description": "the credential from navigator.credentials.create, as JSON"
+                  },
+                  "label": {
+                    "type": "string",
+                    "maxLength": 40
+                  }
+                },
+                "required": ["response"]
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "passkey added"
+          },
+          "400": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    },
+    "/v1/passkeys/login/options": {
+      "post": {
+        "tags": ["account"],
+        "summary": "start a passkey login",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "allOf": [
+                  {
+                    "$ref": "#/components/schemas/Turnstile"
+                  },
+                  {
+                    "type": "object",
+                    "properties": {}
+                  }
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "request options and a challenge id, valid for 5 minutes",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "challengeId": {
+                      "type": "string"
+                    },
+                    "options": {
+                      "type": "object",
+                      "description": "a WebAuthn options object for navigator.credentials"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "403": {
+            "$ref": "#/components/responses/Error"
+          },
+          "429": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    },
+    "/v1/passkeys/login": {
+      "post": {
+        "tags": ["account"],
+        "summary": "log in with a passkey",
+        "description": "no account number needed. a passkey login also clears a 2fa lockout.",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "challengeId": {
+                    "type": "string"
+                  },
+                  "response": {
+                    "type": "object",
+                    "description": "the credential from navigator.credentials.get, as JSON"
+                  }
+                },
+                "required": ["challengeId", "response"]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "session cookie set"
+          },
+          "401": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    },
+    "/v1/passkeys/{id}": {
+      "delete": {
+        "tags": ["account"],
+        "summary": "remove a passkey",
+        "security": [
+          {
+            "session": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "passkey removed"
+          },
+          "404": {
+            "$ref": "#/components/responses/Error"
+          }
         }
       }
     }
@@ -269,12 +759,22 @@
         "scheme": "bearer",
         "description": "api key format: gk_<id>_<secret>"
       },
-      "session": { "type": "apiKey", "in": "cookie", "name": "__Host-gw_session" }
+      "session": {
+        "type": "apiKey",
+        "in": "cookie",
+        "name": "__Host-gw_session"
+      }
     },
     "responses": {
       "Error": {
         "description": "error response",
-        "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Error" } } }
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/Error"
+            }
+          }
+        }
       }
     },
     "schemas": {
@@ -291,11 +791,27 @@
         "type": "object",
         "required": ["url"],
         "properties": {
-          "url": { "type": "string", "description": "link or text containing a link" },
-          "mode": { "type": "string", "enum": ["auto", "audio"], "default": "auto" },
-          "start": { "type": "string", "description": "trim start in seconds, m:ss, or h:mm:ss" },
-          "end": { "type": "string", "description": "trim end in seconds, m:ss, or h:mm:ss" },
-          "turnstile": { "type": "string", "description": "web page only. scripts use an api key" }
+          "url": {
+            "type": "string",
+            "description": "link or text containing a link"
+          },
+          "mode": {
+            "type": "string",
+            "enum": ["auto", "audio"],
+            "default": "auto"
+          },
+          "start": {
+            "type": "string",
+            "description": "trim start in seconds, m:ss, or h:mm:ss"
+          },
+          "end": {
+            "type": "string",
+            "description": "trim end in seconds, m:ss, or h:mm:ss"
+          },
+          "turnstile": {
+            "type": "string",
+            "description": "web page only. scripts use an api key"
+          }
         }
       },
       "DownloadResult": {
@@ -311,21 +827,33 @@
             "type": "boolean",
             "description": "true when separate video and audio files need merging"
           },
-          "filename": { "type": "string", "description": "suggested name for the merged file" },
+          "filename": {
+            "type": "string",
+            "description": "suggested name for the merged file"
+          },
           "files": {
             "type": "array",
             "items": {
               "type": "object",
               "required": ["url"],
               "properties": {
-                "url": { "type": "string" },
-                "filename": { "type": ["string", "null"] },
+                "url": {
+                  "type": "string"
+                },
+                "filename": {
+                  "type": ["string", "null"]
+                },
                 "type": {
                   "type": "string",
                   "description": "media type, such as video, image, gif, or audio"
                 },
-                "kind": { "type": "string", "enum": ["video", "audio"] },
-                "size": { "type": ["integer", "null"] }
+                "kind": {
+                  "type": "string",
+                  "enum": ["video", "audio"]
+                },
+                "size": {
+                  "type": ["integer", "null"]
+                }
               }
             }
           }
@@ -346,10 +874,17 @@
                   "VERIFICATION_FAILED",
                   "BUSY",
                   "UNAUTHORIZED",
-                  "DOWNLOAD_FAILED"
+                  "DOWNLOAD_FAILED",
+                  "TOTP_REQUIRED",
+                  "TOTP_INVALID",
+                  "TOTP_LOCKED",
+                  "PASSKEY_INVALID"
                 ]
               },
-              "message": { "type": "string", "description": "safe to show to a person" }
+              "message": {
+                "type": "string",
+                "description": "safe to show to a person"
+              }
             }
           }
         }

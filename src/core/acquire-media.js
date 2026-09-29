@@ -134,6 +134,8 @@ export async function acquireMedia(
     attachmentLimit = Infinity,
     client = null,
     logStep = () => {},
+    urlOnly = null,
+    streamFirst = null,
   } = {}
 ) {
   const maxSize = adminUser ? Infinity : await getMaxVideoSize();
@@ -199,7 +201,7 @@ export async function acquireMedia(
     !isDirectMedia &&
     startTime === null &&
     duration === null &&
-    (await getBooleanSetting('url_only_mode', false))
+    (urlOnly ?? (await getBooleanSetting('url_only_mode', false)))
   ) {
     logStep('url_only_mode', 'running', {
       message: 'URL-only mode enabled, fetching direct media URL from cobalt',
@@ -333,6 +335,14 @@ export async function acquireMedia(
       message: 'Starting download from Cobalt',
       metadata: { url, maxSize: adminUser ? 'unlimited' : maxSize },
     });
+  }
+
+  // Lets a caller hand out source links it can serve without us holding the bytes.
+  if (streamFirst && startTime === null && duration === null) {
+    const streams = await streamFirst(url, downloadMethod);
+    if (streams) {
+      return { kind: 'stream', streams, url };
+    }
   }
 
   let fileData;

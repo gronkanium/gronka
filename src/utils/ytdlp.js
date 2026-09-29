@@ -1,4 +1,5 @@
-import { spawn } from 'child_process';
+import { spawn, execFile } from 'child_process';
+import { promisify } from 'util';
 import fs from 'fs/promises';
 import fsSync from 'fs';
 import path from 'path';
@@ -10,6 +11,7 @@ import { ytdlpSlots } from './concurrency.js';
 import { DEFAULT_YTDLP_FORMAT } from './config.js';
 
 const logger = createLogger('ytdlp');
+const execFileAsync = promisify(execFile);
 
 // Appended to every duration/size-cap rejection so users know there's a way around it
 // instead of just hitting a dead end.
@@ -606,6 +608,41 @@ function getVideoDuration(url, timeout = 15000) {
       reject(new NetworkError(`duration check failed: ${err.message}`));
     });
   });
+}
+
+// Resolved without cookies so no link we hand out is tied to our sessions, and http(s) only
+// because a proxy can pass a file through but cannot stitch HLS/DASH fragments.
+export async function getStreamInfo(url, timeout = 30000) {
+  const args = [
+    '-J',
+    '--no-playlist',
+    '--no-warnings',
+    ...getYouTubeArgs(url),
+    '-S',
+    'res:1080,ext:mp4:m4a',
+    '-f',
+    'b[protocol^=http][vcodec!=none][acodec!=none]/bv*[protocol^=http]+ba[protocol^=http]',
+    url,
+  ];
+  const { stdout } = await execFileAsync('yt-dlp', args, {
+    timeout,
+    maxBuffer: 64 * 1024 * 1024,
+  });
+  const info = JSON.parse(stdout);
+  const formats = info.requested_formats ?? [info];
+  if (!formats.every(f => f.url && /^https?$/.test(f.protocol))) {
+    return null;
+  }
+  return {
+    title: info.title || 'video',
+    ext: info.ext || 'mp4',
+    parts: formats.map(f => ({
+      url: f.url,
+      headers: f.http_headers ?? {},
+      ext: f.ext,
+      kind: f.vcodec && f.vcodec !== 'none' ? 'video' : 'audio',
+    })),
+  };
 }
 
 /**

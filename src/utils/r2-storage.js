@@ -102,7 +102,14 @@ function getR2Client(config) {
  * @param {Object} [metadata={}] - Optional metadata to attach to the object
  * @returns {Promise<string>} Public URL of uploaded file
  */
-export async function uploadToR2(buffer, key, contentType, config, metadata = {}) {
+export async function uploadToR2(
+  buffer,
+  key,
+  contentType,
+  config,
+  metadata = {},
+  extraParams = {}
+) {
   const client = getR2Client(config);
   const { bucketName, publicDomain } = config;
 
@@ -132,6 +139,7 @@ export async function uploadToR2(buffer, key, contentType, config, metadata = {}
         ContentType: contentType,
         Metadata: metadata,
         CacheControl: 'public, max-age=604800, immutable',
+        ...extraParams,
       },
     });
 
@@ -388,6 +396,7 @@ export async function listObjectsInR2(prefix, config) {
           objects.push({
             key: object.Key,
             size: object.Size || 0,
+            lastModified: object.LastModified,
           });
         }
       }

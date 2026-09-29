@@ -82,6 +82,12 @@ export default [
     },
   },
   {
+    files: ['web/public/**/*.js'],
+    languageOptions: {
+      globals: { document: 'readonly', window: 'readonly', navigator: 'readonly' },
+    },
+  },
+  {
     files: ['web/worker/**/*.js'],
     languageOptions: {
       globals: {

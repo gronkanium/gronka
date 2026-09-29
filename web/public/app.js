@@ -213,13 +213,8 @@ function idle() {
 }
 
 function showHost() {
-  const text = input.value.trim();
-  const url = firstUrl(text);
-  hostLine.textContent = url
-    ? `${siteOf(url)} link`
-    : text
-      ? "that doesn't look like a link yet"
-      : '';
+  const url = firstUrl(input.value.trim());
+  hostLine.textContent = url ? `${siteOf(url)} link` : '';
 }
 
 const STAGES = [

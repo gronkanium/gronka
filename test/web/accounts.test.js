@@ -101,47 +101,47 @@ describe('account routes', () => {
   const cookieOf = res => res.headers.get('set-cookie').split(';')[0];
 
   test('signup to key to keyed download, with CSRF and logout', async () => {
-    expect((await call('POST', '/api/account', { body: { turnstile: 'bad' } })).status).toBe(403);
-    const signup = await call('POST', '/api/account', { body: { turnstile: 'ok' } });
+    expect((await call('POST', '/v1/account', { body: { turnstile: 'bad' } })).status).toBe(403);
+    const signup = await call('POST', '/v1/account', { body: { turnstile: 'ok' } });
     expect(signup.status).toBe(201);
     expect(signup.headers.get('set-cookie')).toContain('HttpOnly; Secure; SameSite=Strict');
     const { number } = await signup.json();
     const cookie = cookieOf(signup);
 
-    expect((await call('POST', '/api/keys', { cookie, origin: null })).status).toBe(403);
+    expect((await call('POST', '/v1/keys', { cookie, origin: null })).status).toBe(403);
     expect(
-      (await call('POST', '/api/keys', { cookie, origin: 'https://evil.example' })).status
+      (await call('POST', '/v1/keys', { cookie, origin: 'https://evil.example' })).status
     ).toBe(403);
     const created = await (
-      await call('POST', '/api/keys', { cookie, body: { label: 'cli' } })
+      await call('POST', '/v1/keys', { cookie, body: { label: 'cli' } })
     ).json();
 
-    const keyed = await call('POST', '/api/download', {
+    const keyed = await call('POST', '/v1/download', {
       origin: null,
       auth: `Bearer ${created.key}`,
       body: { url: 'https://x.com/a/status/1' },
     });
     expect(JSON.parse(await keyed.text()).lane).toBe('direct');
-    const badKey = await call('POST', '/api/download', {
+    const badKey = await call('POST', '/v1/download', {
       origin: null,
       auth: 'Bearer gk_00000000_' + 'a'.repeat(43),
       body: { url: 'https://x.com/a/status/1' },
     });
     expect(badKey.status).toBe(401);
 
-    const login = await call('POST', '/api/session', { body: { number, turnstile: 'ok' } });
+    const login = await call('POST', '/v1/session', { body: { number, turnstile: 'ok' } });
     expect(login.status).toBe(200);
     expect(
-      (await call('POST', '/api/session', { body: { number: number + 'X', turnstile: 'ok' } }))
+      (await call('POST', '/v1/session', { body: { number: number + 'X', turnstile: 'ok' } }))
         .status
     ).toBe(401);
 
-    const summary = await (await call('GET', '/api/account', { cookie })).json();
+    const summary = await (await call('GET', '/v1/account', { cookie })).json();
     expect(summary.keys.map(key => key.id)).toEqual([created.id]);
 
-    await call('DELETE', '/api/session', { cookie });
-    expect((await call('GET', '/api/account', { cookie })).status).toBe(401);
-    await call('DELETE', '/api/account', { cookie: cookieOf(login) });
+    await call('DELETE', '/v1/session', { cookie });
+    expect((await call('GET', '/v1/account', { cookie })).status).toBe(401);
+    await call('DELETE', '/v1/account', { cookie: cookieOf(login) });
     expect(await accounts.verifyAccountNumber(number)).toBeNull();
   });
 });

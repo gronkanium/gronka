@@ -94,12 +94,6 @@ h1 {
   background: var(--ink);
   filter: url(#wobble);
 }
-.host {
-  min-height: 1.5em;
-  margin: 8px 2px 0;
-  font-size: 15px;
-  color: var(--pencil);
-}
 
 .opts {
   display: flex;
@@ -107,7 +101,7 @@ h1 {
   align-items: flex-start;
   justify-content: space-between;
   gap: 8px 12px;
-  margin-top: 8px;
+  margin-top: 16px;
 }
 .mode {
   display: flex;

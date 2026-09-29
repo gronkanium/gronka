@@ -504,6 +504,13 @@ function executeYtdlp(
           /account .*(suspended|deactivated)/i.test(errorOutput)
         ) {
           reject(new NetworkError('this post is unavailable or has been deleted'));
+        } else if (/DRM protected/i.test(errorOutput)) {
+          // before the 'protected' check below, which is about protected X accounts
+          reject(
+            new ValidationError(
+              "the site only streams this one encrypted (drm), so it can't be downloaded."
+            )
+          );
         } else if (
           // X/Twitter: private, protected, or auth-gated posts
           errorOutput.includes('NSFW tweet requires authentication') ||

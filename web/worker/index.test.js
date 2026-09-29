@@ -76,3 +76,12 @@ test('a refused source is a 502, other paths 404', async () => {
   expect((await get(`/f/${sign(payload())}`)).status).toBe(502);
   expect((await get('/anything')).status).toBe(404);
 });
+
+test('the root sends visitors to the page and other paths explain themselves', async () => {
+  const root = await get('/');
+  expect(root.status).toBe(302);
+  expect(root.headers.get('location')).toBe('https://web.gronka.dev/');
+  const other = await get('/nope');
+  expect(other.status).toBe(404);
+  expect(await other.text()).toContain('web.gronka.dev');
+});

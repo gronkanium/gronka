@@ -41,7 +41,7 @@ export async function convertToFormat(
     outputPath,
   ];
 
-  await fs.writeFile(inputPath, buffer);
+  await fs.writeFile(inputPath, buffer, { flag: 'wx', mode: 0o600 });
   try {
     await execFileAsync('ffmpeg', args, { timeout: 10 * 60 * 1000, maxBuffer: 4 * 1024 * 1024 });
     return await fs.readFile(outputPath);

@@ -77,7 +77,7 @@ h1 {
   isolation: isolate;
   border: 0;
   background: none;
-  color: var(--ink);
+  color: var(--paper);
   font:
     600 15px 'Archivo',
     sans-serif;
@@ -91,7 +91,7 @@ h1 {
   inset: 0;
   z-index: -1;
   border-radius: 10px;
-  background: var(--soft);
+  background: var(--ink);
   filter: url(#wobble);
 }
 .host {

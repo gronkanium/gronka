@@ -1,7 +1,10 @@
 import crypto from 'node:crypto';
 import fs from 'node:fs/promises';
 import * as simplewebauthn from '@simplewebauthn/server';
+import os from 'node:os';
 import path from 'node:path';
+import { execFile } from 'node:child_process';
+import { promisify } from 'node:util';
 import { createLogger } from './utils/logger.js';
 import { initDatabase } from './utils/database.js';
 import { r2Config } from './utils/config.js';
@@ -13,6 +16,9 @@ import { uploadToR2, listObjectsInR2, deleteFromR2 } from './utils/r2-storage.js
 import { getStreamInfo, isYouTubeUrl } from './utils/ytdlp.js';
 import { AppError, ValidationError } from './utils/errors.js';
 import * as accounts from './web/accounts.js';
+import { FFMPEG_INPUT_GUARD } from './utils/video-processor/utils.js';
+
+const execFileAsync = promisify(execFile);
 
 const logger = createLogger('web');
 
@@ -85,7 +91,7 @@ export function directStreamInfo(url) {
 
 // Lane 2: the Worker fetches from the source itself, so it only works for links not tied to
 // our IP or cookies. The probe asks the Worker, from Cloudflare's side, whether that holds.
-async function workerLane(url, downloadMethod, { split = true } = {}) {
+export async function workerLane(url, downloadMethod, { split = true, mute = false } = {}) {
   if (!STREAM_BASE || !STREAM_KEY || !['ytdlp', 'cobalt', 'direct'].includes(downloadMethod)) {
     return null;
   }
@@ -102,6 +108,12 @@ async function workerLane(url, downloadMethod, { split = true } = {}) {
   }
   if (!info) {
     return null;
+  }
+  // Muting is free when the video comes as its own part: hand out only that one.
+  if (mute) {
+    const video = info.parts.filter(part => part.kind === 'video');
+    if (info.parts.length < 2 || video.length !== 1) return null;
+    info = { ...info, ext: video[0].ext, parts: video };
   }
   const merge = info.parts.length > 1;
   if (merge && !split) {
@@ -197,7 +209,37 @@ export async function copyCookies(
   }
 }
 
-export async function runDownload({ url, audio, startTime, duration, split = true }) {
+const isVideo = item =>
+  /^video\//.test(item.contentType ?? '') || /\.(mp4|m4v|webm|mov|mkv)$/i.test(item.filename ?? '');
+
+// The same video with its audio track dropped, no re-encode.
+export async function stripAudio(item) {
+  if (!isVideo(item)) return item;
+  const dir = await fs.mkdtemp(path.join(os.tmpdir(), 'mute-'));
+  try {
+    const ext = path.extname(item.filename ?? '').toLowerCase() || '.mp4';
+    const input = path.join(dir, `in${ext}`);
+    const output = path.join(dir, `out${ext}`);
+    await fs.writeFile(input, item.buffer);
+    await execFileAsync('ffmpeg', [
+      '-v',
+      'error',
+      ...FFMPEG_INPUT_GUARD,
+      '-i',
+      input,
+      '-map',
+      '0:v',
+      '-c',
+      'copy',
+      output,
+    ]);
+    return { ...item, buffer: await fs.readFile(output) };
+  } finally {
+    await fs.rm(dir, { recursive: true, force: true });
+  }
+}
+
+export async function runDownload({ url, audio, mute = false, startTime, duration, split = true }) {
   const disabled = await getDisabledServiceLabel(url);
   if (disabled) {
     throw new ValidationError(`downloads from ${disabled} are turned off.`);
@@ -205,8 +247,8 @@ export async function runDownload({ url, audio, startTime, duration, split = tru
   const acquired = await acquireMedia(url, {
     startTime,
     duration,
-    urlOnly: !audio,
-    streamFirst: audio ? null : (link, method) => workerLane(link, method, { split }),
+    urlOnly: !audio && !mute,
+    streamFirst: audio ? null : (link, method) => workerLane(link, method, { split, mute }),
   });
   if (acquired.kind === 'urls') {
     return {
@@ -232,7 +274,8 @@ export async function runDownload({ url, audio, startTime, duration, split = tru
   const items = Array.isArray(fileData) ? fileData : [fileData];
   const files = [];
   for (const item of items) {
-    files.push(await publishToR2(item.buffer, item.filename, item.contentType));
+    const out = mute ? await stripAudio(item) : item;
+    files.push(await publishToR2(out.buffer, out.filename, out.contentType));
   }
   return { lane: 'r2', files };
 }
@@ -258,8 +301,8 @@ export function parseDownloadRequest(body) {
     throw new AppError(check.error, 'BAD_URL', 400);
   }
   const mode = body.mode ?? 'auto';
-  if (mode !== 'auto' && mode !== 'audio') {
-    throw new AppError('mode must be auto or audio.', 'BAD_REQUEST', 400);
+  if (!['auto', 'audio', 'mute'].includes(mode)) {
+    throw new AppError('mode must be auto, audio or mute.', 'BAD_REQUEST', 400);
   }
   const start = parseSeconds(body.start, 'start');
   const end = parseSeconds(body.end, 'end');
@@ -272,6 +315,7 @@ export function parseDownloadRequest(body) {
   return {
     url,
     audio: mode === 'audio',
+    mute: mode === 'mute',
     split: body.split !== false,
     startTime: start,
     duration: end === null ? null : end - (start ?? 0),

@@ -874,8 +874,9 @@
           },
           "mode": {
             "type": "string",
-            "enum": ["auto", "audio"],
-            "default": "auto"
+            "enum": ["auto", "audio", "mute"],
+            "default": "auto",
+            "description": "auto: the file as posted. audio: an mp3. mute: the video without its sound."
           },
           "start": {
             "type": "string",

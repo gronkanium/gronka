@@ -112,8 +112,24 @@
         <div class="opts">
           <fieldset class="mode">
             <legend class="vh">what to get</legend>
-            <label><input type="radio" name="mode" value="auto" checked /> auto</label>
-            <label><input type="radio" name="mode" value="audio" /> audio only</label>
+            <label
+              ><input type="radio" name="mode" value="auto" checked /><svg
+                class="i"
+                aria-hidden="true"
+              >
+                <use href="/i.svg#auto" /></svg
+              >auto</label
+            >
+            <label
+              ><input type="radio" name="mode" value="audio" /><svg class="i" aria-hidden="true">
+                <use href="/i.svg#audio" /></svg
+              >audio</label
+            >
+            <label
+              ><input type="radio" name="mode" value="mute" /><svg class="i" aria-hidden="true">
+                <use href="/i.svg#mute" /></svg
+              >no sound</label
+            >
           </fieldset>
           <details id="more">
             <summary>trim</summary>

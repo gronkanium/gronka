@@ -6,6 +6,7 @@ import {
   contentDisposition,
   signStreamToken,
   directStreamInfo,
+  stripAudio,
 } from '../../src/web-server.js';
 import { redactForWeb } from '../../src/utils/logger.js';
 
@@ -29,6 +30,7 @@ describe('parseDownloadRequest', () => {
     ).toEqual({
       url: 'https://x.com/a/status/1',
       audio: false,
+      mute: false,
       split: true,
       startTime: 60,
       duration: 30,
@@ -167,4 +169,51 @@ test('stream tokens are body.sig with an hmac the worker can verify', () => {
     e: 1,
   });
   expect(sig).toBe(crypto.createHmac('sha256', 'k').update(bodyPart).digest('base64url'));
+});
+
+test('mute mode drops the audio track and keeps the video untouched', async () => {
+  const { execFileSync } = await import('node:child_process');
+  const fs = await import('node:fs');
+  const dir = fs.mkdtempSync('/tmp/mute-test-');
+  const clip = `${dir}/clip.mp4`;
+  execFileSync('ffmpeg', [
+    '-v',
+    'error',
+    '-f',
+    'lavfi',
+    '-i',
+    'testsrc=size=64x64:duration=1',
+    '-f',
+    'lavfi',
+    '-i',
+    'sine=duration=1',
+    '-shortest',
+    '-c:v',
+    'libx264',
+    '-c:a',
+    'aac',
+    clip,
+  ]);
+  const out = await stripAudio({
+    buffer: fs.readFileSync(clip),
+    filename: 'clip.mp4',
+    contentType: 'video/mp4',
+  });
+  fs.writeFileSync(`${dir}/out.mp4`, out.buffer);
+  const streams = execFileSync('ffprobe', [
+    '-v',
+    'error',
+    '-show_entries',
+    'stream=codec_type',
+    '-of',
+    'csv=p=0',
+    `${dir}/out.mp4`,
+  ])
+    .toString()
+    .trim();
+  expect(streams).toBe('video');
+  const image = { buffer: Buffer.from('x'), filename: 'a.jpg', contentType: 'image/jpeg' };
+  expect(await stripAudio(image)).toBe(image);
+  fs.rmSync(dir, { recursive: true });
+  expect(parseDownloadRequest({ url: 'https://x.com/a/status/1', mode: 'mute' }).mute).toBe(true);
 });

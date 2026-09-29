@@ -169,7 +169,9 @@ function showError(error) {
     'INTERNAL',
     'DOWNLOAD_FAILED',
   ].includes(error.code);
-  draw(`<h2>${esc(title)}</h2><p class="say">${esc(error.message)}</p>
+  const message =
+    error instanceof ApiError ? error.message : 'something broke on our side, try again.';
+  draw(`<h2>${esc(title)}</h2><p class="say">${esc(message)}</p>
     <div class="acts">${again ? `<button type="button" class="btn" id="again">try again</button>` : ''}
     <button type="button" class="btn line" id="other">another link</button></div>`);
   $('#again')?.addEventListener('click', () => start());

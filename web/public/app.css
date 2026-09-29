@@ -207,7 +207,6 @@ details[open] summary::after {
   flex: none;
 }
 
-/* while a job runs the form collapses to the link, the panel takes over */
 :root:not([data-phase='idle']) .opts,
 :root:not([data-phase='idle']) .go,
 :root:not([data-phase='idle']) .terms {

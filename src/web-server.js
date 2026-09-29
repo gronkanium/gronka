@@ -211,7 +211,6 @@ export async function copyCookies(
 const isVideo = item =>
   /^video\//.test(item.contentType ?? '') || /\.(mp4|m4v|webm|mov|mkv)$/i.test(item.filename ?? '');
 
-// The same video with its audio track dropped, no re-encode.
 export async function stripAudio(item) {
   if (!isVideo(item)) return item;
   const dir = await fs.mkdtemp(path.join(os.tmpdir(), 'mute-'));
@@ -462,7 +461,6 @@ export function createHandler({
     return crypto.createHmac('sha256', dayKey).update(ip).digest('base64url');
   };
 
-  // Seconds until the window resets when over the limit, else 0.
   const overLimit = (key, limit) => {
     const now = Date.now();
     const entry = windows.get(key);

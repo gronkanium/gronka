@@ -123,7 +123,6 @@ const esc = text =>
   text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 const ld = data => `<script type="application/ld+json">${JSON.stringify(data)}</script>`;
 
-// Collapsed under the download button, like cobalt's "supported services".
 const sitesList = current => `<details class="sites">
           <summary>supported sites</summary>
           <ul>${PLATFORMS.map(p =>

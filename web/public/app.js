@@ -231,7 +231,7 @@ function working(site) {
   setState('working', 'fetch-1');
   play('fetching');
   let longWait = false;
-  draw(`<h2>on it.</h2><p class="meta" id="stage"></p><div class="bar ink"><i id="fill"></i></div>
+  draw(`<h2><span class="spin" aria-hidden="true"></span>on it.</h2><p class="meta" id="stage"></p>
     <div class="acts"><button type="button" class="linkish" id="cancel">cancel</button></div>`);
   $('#cancel').onclick = idle;
   const began = Date.now();
@@ -245,7 +245,6 @@ function working(site) {
       longWait = true;
       play('still');
     }
-    $('#fill').style.width = `${92 * (1 - Math.exp(-t / 14))}%`;
   };
   tick();
   timer = setInterval(tick, 500);

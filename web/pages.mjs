@@ -76,12 +76,10 @@ const MORE = [
   ['medal', 'medal', 'clips'],
   ['rumble', 'rumble', 'videos'],
   ['coub', 'coub', 'videos'],
-  ['newgrounds', 'newgrounds', 'videos'],
   ['niconico', 'niconico', 'videos'],
   ['bilibili', 'bilibili', 'videos'],
   ['xiaohongshu', 'xiaohongshu', 'videos'],
   ['mega', 'mega', 'files'],
-  ['pixiv', 'pixiv', 'images'],
   ['deviantart', 'deviantart', 'images'],
   ['artstation', 'artstation', 'images'],
   ['flickr', 'flickr', 'images'],
@@ -105,7 +103,6 @@ const OTHER_SITES = [
   'xhamster',
   'redtube',
   'rule34video',
-  'rule34',
   'nhentai',
   'hentaigifz',
   'danbooru',
@@ -182,6 +179,15 @@ const app = {
   offers: { '@type': 'Offer', price: '0', priceCurrency: 'USD' },
 };
 
+// Clear the last build's output (listed in .gitignore) so a dropped source's page doesn't linger.
+const IGNORE = new URL('.gitignore', import.meta.url);
+if (fs.existsSync(IGNORE)) {
+  for (const line of fs.readFileSync(IGNORE, 'utf8').split('\n')) {
+    if (line.startsWith('public/'))
+      fs.rmSync(new URL(line, import.meta.url), { recursive: true, force: true });
+  }
+}
+
 let home = fs.readFileSync(new URL('index.html', ROOT), 'utf8');
 home = withHead(home, {
   title: HOME.title,
@@ -238,7 +244,7 @@ fs.writeFileSync(
 );
 // Everything written here except index.html is build output, rebuilt by `wrangler deploy` (wrangler.toml).
 fs.writeFileSync(
-  new URL('.gitignore', import.meta.url),
+  IGNORE,
   [
     '# written by pages.mjs',
     'public/sitemap.xml',

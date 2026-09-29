@@ -16,7 +16,6 @@ const form = $('#form');
 const input = $('#url');
 const panel = $('#panel');
 const peng = $('#peng');
-const hostLine = $('#host');
 const asleep = $('#asleep');
 const reduceMotion = matchMedia('(prefers-reduced-motion: reduce)').matches;
 
@@ -212,11 +211,6 @@ function idle() {
   draw('');
 }
 
-function showHost() {
-  const url = firstUrl(input.value.trim());
-  hostLine.textContent = url ? `${siteOf(url)} link` : '';
-}
-
 const STAGES = [
   [0, 'looking at the link'],
   [3, 'getting it from {site}'],
@@ -285,7 +279,6 @@ function showError(error) {
   $('#again')?.addEventListener('click', () => start());
   $('#other').onclick = () => {
     input.value = '';
-    showHost();
     idle();
     input.focus();
   };
@@ -341,7 +334,6 @@ async function start({ split } = {}) {
     return showError(new ApiError('BAD_URL', 'paste a whole link, starting with https.', 400));
   }
   input.value = request.url;
-  showHost();
   job?.abort();
   const controller = (job = new AbortController());
   setState('verifying', 'verify');
@@ -460,7 +452,6 @@ async function deliver(result, request) {
   );
   $('#other').onclick = () => {
     input.value = '';
-    showHost();
     idle();
     input.focus();
   };
@@ -525,7 +516,6 @@ function picker(result, site) {
   $('#all').onclick = () => saveMany(boxes.map(box => Number(box.value)));
   $('#other').onclick = () => {
     input.value = '';
-    showHost();
     idle();
     input.focus();
   };
@@ -583,7 +573,6 @@ function deliverBlob(blob, filename, request) {
   $('#save').onclick = () => save(blob, filename);
   $('#other').onclick = () => {
     input.value = '';
-    showHost();
     idle();
     input.focus();
   };
@@ -606,7 +595,6 @@ form.addEventListener('submit', event => {
   event.preventDefault();
   start();
 });
-input.addEventListener('input', showHost);
 $('.mode').addEventListener(
   'pointerover',
   () =>
@@ -642,7 +630,6 @@ input.addEventListener('paste', event => {
   if (!url) return;
   event.preventDefault();
   input.value = url;
-  showHost();
 });
 
 if (navigator.clipboard?.readText) {
@@ -652,14 +639,12 @@ if (navigator.clipboard?.readText) {
     try {
       const url = firstUrl(await navigator.clipboard.readText());
       if (!url) {
-        hostLine.textContent = "there's no link on your clipboard";
         stopFlip();
         pose('clipboard');
         setTimeout(() => root.dataset.phase === 'idle' && pose(restPose()), 2500);
         return;
       }
       input.value = url;
-      showHost();
       start();
     } catch {
       input.focus();
@@ -677,7 +662,6 @@ document.addEventListener('keydown', event => {
     input.focus();
   } else if (event.key === 'Escape' && document.activeElement === input) {
     input.value = '';
-    showHost();
   }
 });
 
@@ -696,7 +680,6 @@ const prefill =
 if (prefill && firstUrl(prefill)) {
   input.value = firstUrl(prefill);
   history.replaceState(null, '', location.pathname);
-  showHost();
   intent();
   start();
 } else {

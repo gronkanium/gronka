@@ -105,7 +105,9 @@ function playMode(next) {
 // flipbooks, drawn by gronka-promos/projects/mascot/web.py: frames, ms per frame, loops
 const range = (name, n) => Array.from({ length: n }, (_, i) => `${name}-${i + 1}`);
 const FLIPS = {
-  fetching: [range('fetch', 4), [260, 220, 220, 320], true],
+  // the filing cabinet: pulls a folder, checks it, puts it back, opens the next drawer
+  fetching: [range('filing', 45), Array(45).fill(133), true],
+  wave: [range('wave', 12), Array(12).fill(133), false],
   still: [['still-1', 'still-2', 'still-3', 'still-2'], [1400, 900, 160, 900], true],
   gotit: [['got-1', 'got-2', 'got-3', 'done'], [140, 140, 360], false],
   party: [range('party', 40), Array(40).fill(1000 / 30), true],
@@ -228,7 +230,7 @@ const STAGES = [
 ];
 
 function working(site) {
-  setState('working', 'fetch-1');
+  setState('working', 'filing-1');
   play('fetching');
   let longWait = false;
   draw(`<h2><span class="spin" aria-hidden="true"></span>on it.</h2><p class="meta" id="stage"></p>
@@ -535,7 +537,7 @@ function picker(result, site) {
 }
 
 async function merge(result, request) {
-  setState('working', 'fetch-1');
+  setState('working', 'filing-1');
   play('fetching');
   draw(`<h2>two parts, joining them here.</h2><p class="meta" id="stage">getting the video and the audio</p>
     <div class="bar ink"><i id="fill"></i></div><p class="note">this happens in your browser, nothing goes back to gronka.</p>`);
@@ -703,7 +705,11 @@ if (prefill && firstUrl(prefill)) {
   intent();
   start();
 } else {
-  checkHealth();
+  // a wave hello when the page opens, unless he's asleep or someone is already at the link box
+  checkHealth().then(up => {
+    if (up && root.dataset.phase === 'idle' && document.activeElement !== input)
+      play('wave', { then: restPose() });
+  });
 }
 scheduleActivity();
 // an activity stops the moment someone goes for the link box

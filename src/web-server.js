@@ -27,8 +27,7 @@ const WEB_ORIGIN = env('WEB_ORIGIN', 'https://web.gronka.dev');
 const TURNSTILE_SECRET = env('TURNSTILE_SECRET', '');
 const STREAM_BASE = env('WEB_STREAM_BASE', '');
 const STREAM_KEY = env('WEB_STREAM_KEY', '');
-const MAX_JOBS = Number(env('WEB_MAX_JOBS', 3));
-const IP_LIMIT = Number(env('WEB_IP_LIMIT', 10));
+const IP_LIMIT = Number(env('WEB_IP_LIMIT', 50));
 const IP_WINDOW_MS = 10 * 60 * 1000;
 const R2_LIMIT_BYTES = Number(env('WEB_R2_LIMIT_GB', 5)) * 1024 ** 3;
 export const FILE_TTL_MS = 60 * 60 * 1000;
@@ -439,7 +438,6 @@ async function readJson(req) {
 export function createHandler({
   verify = verifyTurnstile,
   download = runDownload,
-  maxJobs = MAX_JOBS,
   ipLimit = IP_LIMIT,
   signupLimit = 3,
   loginLimit = 10,
@@ -450,8 +448,6 @@ export function createHandler({
   let dayKey = null;
   let day = null;
   const windows = new Map();
-  const activeCallers = new Set();
-  let activeJobs = 0;
   const stats = { started: new Date().toISOString(), lanes: {}, errors: {} };
 
   const ipKey = (req, server) => {
@@ -570,9 +566,6 @@ export function createHandler({
     } else {
       caller = `ip:${ipKey(req, server)}`;
     }
-    if (activeCallers.has(caller)) {
-      throw retryLater('one download at a time.', 'RATE_LIMITED', 429, 5);
-    }
     const wait = overLimit(caller, ipLimit);
     if (wait) {
       throw retryLater(
@@ -585,12 +578,6 @@ export function createHandler({
     if (!auth && !(await verify(body.turnstile, 'download'))) {
       throw new AppError('verification failed, reload the page.', 'VERIFICATION_FAILED', 403);
     }
-    if (activeJobs >= maxJobs) {
-      throw retryLater('busy right now, try again in a moment.', 'BUSY', 503, 10);
-    }
-
-    activeJobs += 1;
-    activeCallers.add(caller);
     const work = download(job)
       .then(result => {
         stats.lanes[result.lane] = (stats.lanes[result.lane] ?? 0) + 1;
@@ -600,10 +587,6 @@ export function createHandler({
         const apiErr = toApiError(error, job.url);
         stats.errors[apiErr.code] = (stats.errors[apiErr.code] ?? 0) + 1;
         return { error: apiErr };
-      })
-      .finally(() => {
-        activeJobs -= 1;
-        activeCallers.delete(caller);
       });
     return heartbeatJson(work, headers);
   }
@@ -839,7 +822,7 @@ export function createHandler({
     }
   }
 
-  fetchHandler.stats = () => ({ ...stats, activeJobs, r2LiveBytes: liveBytes });
+  fetchHandler.stats = () => ({ ...stats, r2LiveBytes: liveBytes });
   return fetchHandler;
 }
 

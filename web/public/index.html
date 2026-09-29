@@ -1,0 +1,62 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>gronka</title>
+    <meta name="description" content="paste a link, get the file. coming soon." />
+    <link rel="icon" href="data:," />
+    <style>
+      :root {
+        color-scheme: light dark;
+        --bg: #f6f5f1;
+        --fg: #111;
+        --dim: #6b6b6b;
+      }
+      @media (prefers-color-scheme: dark) {
+        :root {
+          --bg: #0e0e0e;
+          --fg: #f2f2f2;
+          --dim: #8a8a8a;
+        }
+      }
+      body {
+        margin: 0;
+        min-height: 100dvh;
+        display: grid;
+        place-items: center;
+        background: var(--bg);
+        color: var(--fg);
+        font:
+          16px/1.5 ui-sans-serif,
+          system-ui,
+          sans-serif;
+        padding: 0 16px;
+      }
+      main {
+        max-width: 32rem;
+      }
+      h1 {
+        font-size: clamp(2.5rem, 9vw, 4rem);
+        letter-spacing: -0.04em;
+        margin: 0 0 0.25rem;
+      }
+      p {
+        color: var(--dim);
+        margin: 0.25rem 0;
+      }
+      a {
+        color: inherit;
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <h1>gronka</h1>
+      <p>paste a link, get the file. the web version is coming soon.</p>
+      <p>
+        <a href="/docs/">api docs (preview)</a> · <a href="https://gronka.dev">the discord bot</a>
+      </p>
+    </main>
+  </body>
+</html>

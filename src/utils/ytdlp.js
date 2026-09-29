@@ -645,6 +645,14 @@ export async function getStreamInfo(url, timeout = 30000) {
   };
 }
 
+// Past the segment fallback, "output file too small" is a user-facing failure, not a control signal.
+function emptyDownloadError(error) {
+  if (error?.message?.includes('output file too small')) {
+    throw new NetworkError('could not download this content, the link may not point to any media.');
+  }
+  throw error;
+}
+
 /**
  * Download video from YouTube using yt-dlp
  * @param {string} url - YouTube URL to download
@@ -744,7 +752,7 @@ export async function downloadWithYtdlp(
               null,
               null,
               gateSize
-            );
+            ).catch(emptyDownloadError);
 
             const trimmedPath = path.join(tmpDir.name, 'trimmed_output.mp4');
             await trimVideo(outputPath, trimmedPath, { startTime, duration });
@@ -765,7 +773,7 @@ export async function downloadWithYtdlp(
           startTime,
           duration,
           gateSize
-        );
+        ).catch(emptyDownloadError);
       }
 
       const buffer = await fs.readFile(outputPath);

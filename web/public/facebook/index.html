@@ -74,35 +74,6 @@
             "offers": { "@type": "Offer", "price": "0", "priceCurrency": "USD" }
           },
           {
-            "@type": "FAQPage",
-            "mainEntity": [
-              {
-                "@type": "Question",
-                "name": "can it get private posts?",
-                "acceptedAnswer": {
-                  "@type": "Answer",
-                  "text": "no. a private post or account has nothing public to fetch, so gronka cannot get it."
-                }
-              },
-              {
-                "@type": "Question",
-                "name": "do i need an account?",
-                "acceptedAnswer": {
-                  "@type": "Answer",
-                  "text": "no. paste the link and download. accounts only exist to hold api keys."
-                }
-              },
-              {
-                "@type": "Question",
-                "name": "is there a limit?",
-                "acceptedAnswer": {
-                  "@type": "Answer",
-                  "text": "about 10 downloads per 10 minutes, one at a time. the same for everyone, and nothing is paid."
-                }
-              }
-            ]
-          },
-          {
             "@type": "BreadcrumbList",
             "itemListElement": [
               {
@@ -138,8 +109,10 @@
     </header>
 
     <main>
-      <h1>facebook downloader.</h1>
-      <p class="lede">facebook videos. fb.watch links work too.</p>
+      <h1>paste a facebook link, get the file.</h1>
+      <p class="lede">
+        tiktok, instagram, x, youtube, reddit and a lot more. the discord bot, in your browser.
+      </p>
 
       <p id="asleep" class="asleep ink" hidden>
         <img src="/p/asleep.svg" alt="" width="400" height="400" />
@@ -231,43 +204,47 @@
       </form>
 
       <section id="panel" class="panel" aria-live="polite" aria-atomic="false"></section>
-    </main>
 
-    <section class="more">
-      <h2>what works</h2>
-      <ul>
-        <li>video links on <code>facebook.com</code> and <code>fb.watch</code> short links.</li>
-        <li>pick <strong>audio</strong> for the sound only, or trim a part out.</li>
-      </ul>
-      <h2>how the file gets to you</h2>
-      <p>
-        gronka asks for the video one way and, if that fails, tries a second way.
-        <a href="/privacy/">more on that</a>.
-      </p>
-      <h2>questions</h2>
-      <h3>can it get private posts?</h3>
-      <p>no. a private post or account has nothing public to fetch, so gronka cannot get it.</p>
-      <h3>do i need an account?</h3>
-      <p>no. paste the link and download. accounts only exist to hold api keys.</p>
-      <h3>is there a limit?</h3>
-      <p>
-        about 10 downloads per 10 minutes, one at a time. the same for everyone, and nothing is
-        paid.
-      </p>
-      <nav class="sites" aria-label="downloaders by site">
-        <h2>by site</h2>
+      <details class="sites">
+        <summary>supported sites</summary>
         <ul>
-          <li><a href="/tiktok/">tiktok</a></li>
-          <li><a href="/instagram/">instagram</a></li>
-          <li><a href="/x/">x</a></li>
-          <li><a href="/youtube/">youtube</a></li>
-          <li><a href="/reddit/">reddit</a></li>
-          <li><a href="/pinterest/">pinterest</a></li>
-          <li><a href="/facebook/" aria-current="page">facebook</a></li>
+          <li class="page"><a href="/tiktok/">tiktok</a></li>
+          <li class="page"><a href="/instagram/">instagram</a></li>
+          <li class="page"><a href="/x/">x</a></li>
+          <li class="page"><a href="/youtube/">youtube</a></li>
+          <li class="page"><a href="/reddit/">reddit</a></li>
+          <li class="page"><a href="/pinterest/">pinterest</a></li>
+          <li class="page"><a href="/facebook/" aria-current="page">facebook</a></li>
+          <li>bluesky</li>
+          <li>snapchat</li>
+          <li>tumblr</li>
+          <li>twitch clips</li>
+          <li>soundcloud</li>
+          <li>streamable</li>
+          <li>dailymotion</li>
+          <li>imgur</li>
+          <li>giphy</li>
+          <li>tenor</li>
+          <li>klipy</li>
+          <li>kick</li>
+          <li>medal</li>
+          <li>rumble</li>
+          <li>coub</li>
+          <li>newgrounds</li>
+          <li>niconico</li>
+          <li>bilibili</li>
+          <li>xiaohongshu</li>
+          <li>mega</li>
+          <li>pixiv</li>
+          <li>deviantart</li>
+          <li>artstation</li>
+          <li>flickr</li>
+          <li>wallhaven</li>
+          <li>mangadex</li>
         </ul>
-      </nav>
-      <p><a href="/">every other site</a> works from the main page too.</p>
-    </section>
+        <p class="note">public posts only. gronka isn't affiliated with any of these.</p>
+      </details>
+    </main>
 
     <footer class="foot">
       <a href="/docs/">api docs</a><a href="/account/">account</a><a href="/terms/">terms</a

@@ -4,7 +4,7 @@ this security policy outlines how we handle security for gronka and how to repor
 
 ## reporting vulnerabilities
 
-if you find a security vulnerability, report it to: **gronkasupport@proton.me**
+if you find a security vulnerability, report it to: **admin@gronka.dev**
 
 include this stuff in your report:
 
@@ -118,7 +118,7 @@ we may temporarily suspend service to address security issues if needed.
 
 for security-related questions or concerns:
 
-- **email**: gronkasupport@proton.me
+- **email**: admin@gronka.dev
 - **github**: [https://github.com/thedorekaczynski/gronka](https://github.com/thedorekaczynski/gronka)
 
 use email for security vulnerability reports. don't disclose vulnerabilities publicly until they're resolved.

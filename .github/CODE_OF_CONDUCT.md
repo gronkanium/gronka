@@ -65,7 +65,7 @@ enforcement decisions are made at our sole discretion and are final. there is no
 
 if you witness or experience behavior that violates this code of conduct, you can report it by:
 
-- contacting service maintainers via email: gronkasupport@proton.me
+- contacting service maintainers via email: admin@gronka.dev
 
 all reports will be reviewed, though we are not obligated to take action or provide updates on enforcement decisions.
 
@@ -73,7 +73,7 @@ all reports will be reviewed, though we are not obligated to take action or prov
 
 for questions about this code of conduct or the service:
 
-- **email**: gronkasupport@proton.me
+- **email**: admin@gronka.dev
 
 ## changes to this code of conduct
 

@@ -117,8 +117,8 @@ export async function tagAudio(file, track) {
   const output = `${base}-out.mp3`;
   const cover = await fetchCover(track.cover);
   try {
-    await fs.writeFile(input, file.buffer);
-    if (cover) await fs.writeFile(coverPath, cover);
+    await fs.writeFile(input, file.buffer, { flag: 'wx', mode: 0o600 });
+    if (cover) await fs.writeFile(coverPath, cover, { flag: 'wx', mode: 0o600 });
     const meta = [
       ['title', track.title],
       ['artist', track.artist],

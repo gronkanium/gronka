@@ -151,7 +151,8 @@
           "503": {
             "$ref": "#/components/responses/Error"
           }
-        }
+        },
+        "description": "limits: 10 downloads per 10 minutes and one at a time, per ip, or per account for api keys (all keys of an account share them). keyed requests are also limited to 30 key checks per 10 minutes per ip."
       }
     },
     "/v1/account": {
@@ -245,7 +246,24 @@
           "401": {
             "$ref": "#/components/responses/Error"
           }
-        }
+        },
+        "requestBody": {
+          "required": false,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "code": {
+                    "type": "string",
+                    "description": "current 2fa code or a recovery code. required when the account has 2fa on"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "description": "delete the account and its keys immediately when 2fa is on, send a current code or a recovery code as `code`, or the answer is TOTP_REQUIRED, TOTP_INVALID or TOTP_LOCKED."
       }
     },
     "/v1/account/rotate": {
@@ -268,7 +286,24 @@
               }
             }
           }
-        }
+        },
+        "requestBody": {
+          "required": false,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "code": {
+                    "type": "string",
+                    "description": "current 2fa code or a recovery code. required when the account has 2fa on"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "description": "replace the account number; the old one stops working at once when 2fa is on, send a current code or a recovery code as `code`, or the answer is TOTP_REQUIRED, TOTP_INVALID or TOTP_LOCKED. ends every other session of the account; the current one stays."
       }
     },
     "/v1/session": {
@@ -596,7 +631,24 @@
               }
             }
           }
-        }
+        },
+        "requestBody": {
+          "required": false,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "code": {
+                    "type": "string",
+                    "description": "current 2fa code or a recovery code. required when the account has 2fa on"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "description": "start adding a passkey when 2fa is on, send a current code or a recovery code as `code`, or the answer is TOTP_REQUIRED, TOTP_INVALID or TOTP_LOCKED."
       }
     },
     "/v1/passkeys/register": {
@@ -748,7 +800,24 @@
           "404": {
             "$ref": "#/components/responses/Error"
           }
-        }
+        },
+        "requestBody": {
+          "required": false,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "code": {
+                    "type": "string",
+                    "description": "current 2fa code or a recovery code. required when the account has 2fa on"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "description": "remove a passkey when 2fa is on, send a current code or a recovery code as `code`, or the answer is TOTP_REQUIRED, TOTP_INVALID or TOTP_LOCKED."
       }
     }
   },
@@ -772,6 +841,14 @@
           "application/json": {
             "schema": {
               "$ref": "#/components/schemas/Error"
+            }
+          }
+        },
+        "headers": {
+          "Retry-After": {
+            "description": "seconds to wait, on 429 and 503",
+            "schema": {
+              "type": "integer"
             }
           }
         }
@@ -807,6 +884,11 @@
           "end": {
             "type": "string",
             "description": "trim end in seconds, m:ss, or h:mm:ss"
+          },
+          "split": {
+            "type": "boolean",
+            "default": true,
+            "description": "false: never answer with separate video and audio parts (merge), get one finished file instead"
           },
           "turnstile": {
             "type": "string",
@@ -849,7 +931,8 @@
                 },
                 "kind": {
                   "type": "string",
-                  "enum": ["video", "audio"]
+                  "enum": ["video", "audio", "file"],
+                  "description": "worker lane only. file is a plain image or other file"
                 },
                 "size": {
                   "type": ["integer", "null"]
@@ -869,21 +952,30 @@
               "code": {
                 "type": "string",
                 "examples": [
+                  "BAD_REQUEST",
                   "BAD_URL",
-                  "RATE_LIMITED",
-                  "VERIFICATION_FAILED",
                   "BUSY",
-                  "UNAUTHORIZED",
+                  "CONTENT_GONE",
                   "DOWNLOAD_FAILED",
-                  "TOTP_REQUIRED",
+                  "INTERNAL",
+                  "NETWORK_ERROR",
+                  "PASSKEY_INVALID",
+                  "RATE_LIMITED",
                   "TOTP_INVALID",
                   "TOTP_LOCKED",
-                  "PASSKEY_INVALID"
+                  "TOTP_REQUIRED",
+                  "UNAUTHORIZED",
+                  "VALIDATION_ERROR",
+                  "VERIFICATION_FAILED"
                 ]
               },
               "message": {
                 "type": "string",
                 "description": "safe to show to a person"
+              },
+              "retryAfter": {
+                "type": "integer",
+                "description": "on 429 RATE_LIMITED and 503 BUSY: seconds to wait before retrying, also sent as a Retry-After header"
               }
             }
           }

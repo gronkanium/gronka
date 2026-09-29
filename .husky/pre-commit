@@ -79,12 +79,12 @@ PRETTIER=./node_modules/.bin/prettier
 
 if [ -n "$(echo $JS_FIX)" ]; then
   echo "Running ESLint with auto-fix on staged files..."
-  $ESLINT --fix $JS_FIX || true
-  $ESLINT --max-warnings=0 $JS_FIX
+  $ESLINT --fix --no-warn-ignored $JS_FIX || true
+  $ESLINT --no-warn-ignored --max-warnings=0 $JS_FIX
 fi
 if [ -n "$(echo $JS_CHECK)" ]; then
   echo "Running ESLint (check only) on partially staged files..."
-  $ESLINT --max-warnings=0 $JS_CHECK
+  $ESLINT --no-warn-ignored --max-warnings=0 $JS_CHECK
 fi
 if [ -n "$(echo $PRETTIER_FIX)" ]; then
   echo "Running Prettier to auto-format staged files..."

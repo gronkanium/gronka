@@ -1,0 +1,135 @@
+main {
+  max-width: 760px;
+}
+h1 {
+  font-size: clamp(2.3rem, 9vw, 4.2rem);
+}
+.cards {
+  display: grid;
+  gap: 22px;
+  margin-top: 26px;
+}
+@media (min-width: 760px) {
+  .cards {
+    grid-template-columns: 1fr 1fr;
+  }
+}
+.card {
+  padding: 22px 20px 24px;
+}
+.card h2 {
+  margin-top: 0;
+}
+.card .btn {
+  width: 100%;
+  margin-top: 8px;
+}
+.or {
+  text-align: center;
+  color: var(--pencil);
+  margin: 14px 0 4px;
+}
+.number {
+  font:
+    400 clamp(18px, 5.2vw, 30px)/1.35 'Gronka Mono',
+    monospace;
+  word-break: break-all;
+  padding: 18px 16px;
+  margin: 14px 0;
+  letter-spacing: 0.02em;
+}
+.number.key {
+  font-size: clamp(14px, 3.6vw, 18px);
+}
+.acts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px 12px;
+  align-items: center;
+  margin: 12px 0;
+}
+.check {
+  margin-top: 18px;
+}
+.check input {
+  text-transform: uppercase;
+  letter-spacing: 0.3em;
+  max-width: 12ch;
+}
+.peng {
+  width: 112px;
+  height: auto;
+  float: right;
+  margin: -8px 0 8px 12px;
+}
+section {
+  padding-top: 6px;
+}
+section + section {
+  border-top: 2px solid var(--soft);
+  margin-top: 30px;
+}
+.list {
+  list-style: none;
+  padding: 0;
+  margin: 10px 0;
+}
+.list li {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px 14px;
+  padding: 12px 0;
+  border-bottom: 1px solid var(--soft);
+}
+.list .what {
+  font-family: 'Gronka Mono', monospace;
+}
+.list .when {
+  color: var(--pencil);
+  font-size: 14px;
+}
+.row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  align-items: flex-end;
+}
+.row .field {
+  flex: 1 1 220px;
+}
+.codes {
+  columns: 2;
+  font:
+    17px/1.9 'Gronka Mono',
+    monospace;
+  padding: 16px 18px;
+  margin: 12px 0;
+  list-style: none;
+}
+.err {
+  color: var(--ink);
+  font-weight: 600;
+  padding: 10px 14px;
+  margin: 10px 0;
+}
+.err::before {
+  border-style: dashed;
+}
+.pill {
+  display: inline-block;
+  font:
+    600 13px 'Archivo',
+    sans-serif;
+  padding: 2px 10px;
+  border-radius: 999px;
+  background: var(--ink);
+  color: var(--paper);
+  vertical-align: 3px;
+  margin-left: 8px;
+}
+.pill.off {
+  background: var(--soft);
+  color: var(--ink);
+}

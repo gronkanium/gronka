@@ -1,0 +1,70 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>account / gronka</title>
+    <meta
+      name="description"
+      content="a gronka account holds api keys. no email, no username, just a number."
+    />
+    <meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)" />
+    <meta name="theme-color" content="#000000" media="(prefers-color-scheme: dark)" />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
+    <link
+      rel="preload"
+      href="/fonts/Archivo-Regular.woff2"
+      as="font"
+      type="font/woff2"
+      crossorigin
+    />
+    <link
+      rel="preload"
+      href="/fonts/Archivo-SemiBold.woff2"
+      as="font"
+      type="font/woff2"
+      crossorigin
+    />
+    <link
+      rel="preload"
+      href="/fonts/Archivo-ExpandedExtraBold.woff2"
+      as="font"
+      type="font/woff2"
+      crossorigin
+    />
+    <link
+      rel="preload"
+      href="/fonts/GronkaMono-Regular.woff2"
+      as="font"
+      type="font/woff2"
+      crossorigin
+    />
+    <link rel="stylesheet" href="/s.css" />
+    <link rel="stylesheet" href="/account/account.css" />
+    <link rel="modulepreload" href="/common.js" />
+    <script type="module" src="/account/account.js"></script>
+  </head>
+  <body>
+    <svg width="0" height="0" class="vh" aria-hidden="true">
+      <filter id="wobble" x="-5%" y="-20%" width="110%" height="140%">
+        <feTurbulence type="fractalNoise" baseFrequency="0.045" numOctaves="2" seed="5" />
+        <feDisplacementMap in="SourceGraphic" scale="5" xChannelSelector="R" yChannelSelector="G" />
+      </filter>
+    </svg>
+    <a class="top" href="/"
+      ><img src="/favicon.svg" alt="" width="28" height="28" /><span>gronka</span></a
+    >
+    <main id="view" aria-live="polite">
+      <h1>account</h1>
+      <p class="note">loading...</p>
+    </main>
+    <div id="ts" class="ts" hidden></div>
+    <footer class="foot">
+      <a href="/">download</a><a href="/docs/">api docs</a
+      ><a href="/account/" aria-current="page">account</a><a href="/terms/">terms</a
+      ><a href="/privacy/">privacy</a>
+    </footer>
+    <noscript><p class="note">the account page needs javascript.</p></noscript>
+  </body>
+</html>

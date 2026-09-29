@@ -1,0 +1,148 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>privacy / gronka</title>
+    <meta
+      name="description"
+      content="what gronka's web page keeps: nothing about what you download."
+    />
+    <meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)" />
+    <meta name="theme-color" content="#000000" media="(prefers-color-scheme: dark)" />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <link rel="canonical" href="https://web.gronka.dev/privacy/" />
+    <link
+      rel="preload"
+      href="/fonts/Archivo-Regular.woff2"
+      as="font"
+      type="font/woff2"
+      crossorigin
+    />
+    <link
+      rel="preload"
+      href="/fonts/Archivo-SemiBold.woff2"
+      as="font"
+      type="font/woff2"
+      crossorigin
+    />
+    <link
+      rel="preload"
+      href="/fonts/Archivo-ExpandedExtraBold.woff2"
+      as="font"
+      type="font/woff2"
+      crossorigin
+    />
+    <link
+      rel="preload"
+      href="/fonts/GronkaMono-Regular.woff2"
+      as="font"
+      type="font/woff2"
+      crossorigin
+    />
+    <link rel="stylesheet" href="/s.css" />
+  </head>
+  <body>
+    <a class="top" href="/"
+      ><img src="/favicon.svg" alt="" width="28" height="28" /><span>gronka</span></a
+    >
+    <main class="prose">
+      <h1>privacy</h1>
+      <p class="lede">
+        short version: gronka keeps no record of what you download or who you are. this page covers
+        web.gronka.dev and api.gronka.dev. the discord bot has
+        <a href="https://gronka.dev/privacy">its own policy</a>.
+      </p>
+
+      <h2>no logs, no history</h2>
+      <ul>
+        <li>no request logs. nothing writes down which links were asked for, by whom, or when.</li>
+        <li>
+          no download history and no cache of past downloads. every request starts from scratch.
+        </li>
+        <li>no analytics, no ads, no trackers, no cookies on the download page.</li>
+        <li>
+          when something breaks, the server prints an error line so it can be fixed. links, ip
+          addresses, keys and account numbers are stripped out of it first, and it sits in a small
+          buffer that overwrites itself.
+        </li>
+        <li>
+          the server keeps a few counters in memory (how many downloads worked, per site). they
+          reset on every restart and hold nothing about you.
+        </li>
+      </ul>
+
+      <h2>your ip address</h2>
+      <p>
+        to stop one person from hogging the server, gronka counts requests per address for 10
+        minutes. it never stores the address itself: it keeps a keyed hash of it, only in memory,
+        and the key is thrown away and replaced every day, so yesterday's hashes can't be matched to
+        anything.
+      </p>
+
+      <h2>the files</h2>
+      <p>a download reaches you in one of three ways, and the page tells you which:</p>
+      <ul>
+        <li>
+          <strong>straight from the site.</strong> gronka hands your browser the site's own link.
+          gronka never sees the file, but the site sees your ip address, the same as if you had
+          opened it there.
+        </li>
+        <li>
+          <strong>streamed through gronka's edge</strong> (dl.gronka.dev, a cloudflare worker). the
+          file passes through and is not stored. the site sees cloudflare, not you. these links stop
+          working after an hour.
+        </li>
+        <li>
+          <strong>a copy on cdn.gronka.dev.</strong> gronka fetches the file, stores it under a
+          random name and deletes it after an hour. the name is random on purpose, so two people
+          downloading the same thing get unrelated links.
+        </li>
+      </ul>
+      <p>
+        audio-only and trimmed downloads always take the third way, because gronka has to process
+        them.
+      </p>
+
+      <h2>accounts</h2>
+      <p>you only need one for api keys. an account holds:</p>
+      <ul>
+        <li>
+          a hash of your account number and of each api key and recovery code (salted argon2id with
+          a server secret that is not in the database), never the number or keys themselves;
+        </li>
+        <li>your 2fa secret, if you turned 2fa on, encrypted;</li>
+        <li>the public half of each passkey (the private half never leaves your device);</li>
+        <li>
+          dates: the day things were made and the day each key was last used, so you can spot a
+          leaked key.
+        </li>
+      </ul>
+      <p>
+        no email, no name, no ip address, no browser details, no download history. while you're
+        logged in, a session cookie keeps you in (stored hashed on our side, gone after a day idle
+        or a week at most). deleting your account removes all of it right away.
+      </p>
+
+      <h2>cloudflare</h2>
+      <p>
+        gronka runs behind cloudflare, so cloudflare sees traffic at its edge like it does for any
+        site it serves. the "are you a person" check on the page is cloudflare turnstile; it loads
+        from cloudflare only once you start using the page.
+        <a href="https://www.cloudflare.com/privacypolicy/">cloudflare's privacy policy</a> covers
+        what they do.
+      </p>
+
+      <h2>changes</h2>
+      <p>
+        this is a public preview and may change. if what gronka keeps ever changes, this page
+        changes first.
+      </p>
+      <p class="note">updated 2026-09-29.</p>
+    </main>
+    <footer class="foot">
+      <a href="/">download</a><a href="/docs/">api docs</a><a href="/account/">account</a
+      ><a href="/terms/">terms</a><a href="/privacy/" aria-current="page">privacy</a>
+    </footer>
+  </body>
+</html>

@@ -8,9 +8,60 @@
     <title>api / gronka</title>
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
-    <link rel="preload" href="/fonts/DejaVuSans.woff2" as="font" type="font/woff2" crossorigin />
-    <link rel="stylesheet" href="/fonts/fonts.css" />
+    <link
+      rel="preload"
+      href="/fonts/Archivo-Regular.woff2"
+      as="font"
+      type="font/woff2"
+      crossorigin
+    />
+    <link
+      rel="preload"
+      href="/fonts/Archivo-SemiBold.woff2"
+      as="font"
+      type="font/woff2"
+      crossorigin
+    />
+    <link
+      rel="preload"
+      href="/fonts/Archivo-ExpandedExtraBold.woff2"
+      as="font"
+      type="font/woff2"
+      crossorigin
+    />
+    <link
+      rel="preload"
+      href="/fonts/GronkaMono-Regular.woff2"
+      as="font"
+      type="font/woff2"
+      crossorigin
+    />
     <style>
+      /* Archivo (OFL) and Gronka Mono, a renamed IBM Plex Mono subset (OFL): /fonts/OFL-*.txt */
+      @font-face {
+        font-family: 'Archivo';
+        src: url('/fonts/Archivo-Regular.woff2') format('woff2');
+        font-weight: 400;
+        font-display: block;
+      }
+      @font-face {
+        font-family: 'Archivo';
+        src: url('/fonts/Archivo-SemiBold.woff2') format('woff2');
+        font-weight: 600 700;
+        font-display: block;
+      }
+      @font-face {
+        font-family: 'Archivo Expanded';
+        src: url('/fonts/Archivo-ExpandedExtraBold.woff2') format('woff2');
+        font-weight: 800;
+        font-display: block;
+      }
+      @font-face {
+        font-family: 'Gronka Mono';
+        src: url('/fonts/GronkaMono-Regular.woff2') format('woff2');
+        font-weight: 400;
+        font-display: block;
+      }
       html {
         scrollbar-width: none;
       }
@@ -47,7 +98,7 @@
         background: var(--bg);
         color: var(--fg);
         font:
-          15px/1.6 'DejaVu Sans',
+          15px/1.6 'Archivo',
           sans-serif;
         -webkit-font-smoothing: antialiased;
       }
@@ -73,6 +124,8 @@
         border-bottom: 1px solid var(--line);
       }
       .wordmark {
+        font-family: 'Archivo Expanded', 'Archivo', sans-serif;
+        font-weight: 800;
         font-size: 1.05rem;
         font-weight: 650;
         letter-spacing: -0.04em;
@@ -80,7 +133,7 @@
       }
       .spec-link {
         font:
-          0.83rem/1.4 'DejaVu Sans Mono',
+          0.83rem/1.4 'Gronka Mono',
           monospace;
       }
       .layout {
@@ -137,12 +190,13 @@
         margin-top: 0;
       }
       h1 {
-        max-width: 14ch;
+        font-family: 'Archivo Expanded', 'Archivo', sans-serif;
+        font-weight: 800;
+        max-width: 18ch;
         margin-bottom: 2.4rem;
         font-size: clamp(2.1rem, 5vw, 3rem);
         line-height: 1.08;
-        letter-spacing: -0.055em;
-        font-weight: 600;
+        letter-spacing: -0.02em;
       }
       h2 {
         margin-bottom: 0.75rem;
@@ -166,7 +220,7 @@
       pre,
       .method,
       .route-path {
-        font-family: 'DejaVu Sans Mono', monospace;
+        font-family: 'Gronka Mono', monospace;
       }
       :not(pre) > code {
         font-size: 0.9em;

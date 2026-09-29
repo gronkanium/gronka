@@ -7,9 +7,46 @@
     <meta name="description" content="paste a link, get the file. coming soon." />
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
-    <link rel="preload" href="/fonts/DejaVuSans.woff2" as="font" type="font/woff2" crossorigin />
-    <link rel="stylesheet" href="/fonts/fonts.css" />
+    <link
+      rel="preload"
+      href="/fonts/Archivo-Regular.woff2"
+      as="font"
+      type="font/woff2"
+      crossorigin
+    />
+    <link
+      rel="preload"
+      href="/fonts/Archivo-ExpandedExtraBold.woff2"
+      as="font"
+      type="font/woff2"
+      crossorigin
+    />
     <style>
+      /* Archivo (OFL) and Gronka Mono, a renamed IBM Plex Mono subset (OFL): /fonts/OFL-*.txt */
+      @font-face {
+        font-family: 'Archivo';
+        src: url('/fonts/Archivo-Regular.woff2') format('woff2');
+        font-weight: 400;
+        font-display: block;
+      }
+      @font-face {
+        font-family: 'Archivo';
+        src: url('/fonts/Archivo-SemiBold.woff2') format('woff2');
+        font-weight: 600 700;
+        font-display: block;
+      }
+      @font-face {
+        font-family: 'Archivo Expanded';
+        src: url('/fonts/Archivo-ExpandedExtraBold.woff2') format('woff2');
+        font-weight: 800;
+        font-display: block;
+      }
+      @font-face {
+        font-family: 'Gronka Mono';
+        src: url('/fonts/GronkaMono-Regular.woff2') format('woff2');
+        font-weight: 400;
+        font-display: block;
+      }
       html {
         scrollbar-width: none;
       }
@@ -37,7 +74,7 @@
         background: var(--bg);
         color: var(--fg);
         font:
-          16px/1.5 'DejaVu Sans',
+          16px/1.5 'Archivo',
           sans-serif;
         padding: 0 16px;
       }
@@ -45,8 +82,10 @@
         max-width: 32rem;
       }
       h1 {
+        font-family: 'Archivo Expanded', 'Archivo', sans-serif;
+        font-weight: 800;
         font-size: clamp(2.5rem, 9vw, 4rem);
-        letter-spacing: -0.04em;
+        letter-spacing: -0.02em;
         margin: 0 0 0.25rem;
       }
       p {

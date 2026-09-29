@@ -416,6 +416,11 @@ export function createHandler({
     if (!entry || entry.resetAt <= now) {
       if (windows.size >= MAX_WINDOWS) {
         for (const [old, value] of windows) if (value.resetAt <= now) windows.delete(old);
+        // Still full of live entries: drop the oldest, a Map keeps insertion order.
+        for (const old of windows.keys()) {
+          if (windows.size < MAX_WINDOWS) break;
+          windows.delete(old);
+        }
       }
       windows.set(key, { count: 1, resetAt: now + IP_WINDOW_MS });
       return 0;
@@ -732,7 +737,14 @@ export function createHandler({
       if (!verification?.verified) {
         throw new AppError('that passkey did not work, try again.', 'PASSKEY_INVALID', 401);
       }
-      await accounts.usePasskey(passkey.credential.id, verification.authenticationInfo.newCounter);
+      if (
+        !(await accounts.usePasskey(
+          passkey.credential.id,
+          verification.authenticationInfo.newCounter
+        ))
+      ) {
+        throw new AppError('that passkey did not work, try again.', 'PASSKEY_INVALID', 401);
+      }
       const token = await accounts.createSession(passkey.accountId);
       return withCookie({ id: passkey.accountId }, 200, token, accounts.SESSION_MS / 1000);
     }

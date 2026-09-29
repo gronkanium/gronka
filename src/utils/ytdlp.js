@@ -36,7 +36,9 @@ const GENERIC_FAILURE_MESSAGE =
  * Resolved at call time (not module load) so a file mounted/rotated later is picked up.
  * @returns {string[]} ['--cookies', path] when a usable file is configured, else []
  */
-export function getCookieArgs() {
+export function getCookieArgs(url = null, signedIn = false) {
+  // Signed-in YouTube gets ads, and yt-dlp waits ~5 s for each to be skippable: only sign in when asked.
+  if (url && isYouTubeUrl(url) && !signedIn) return [];
   const cookiesPath = process.env.YTDLP_COOKIES_PATH;
   if (!cookiesPath) {
     return [];
@@ -78,16 +80,13 @@ export function isYouTubeUrl(url) {
   }
 }
 
-// YouTube's default client set (android_vr) now serves GVS URLs that 403 on every request,
-// and the clients yt-dlp would fall back to (tv, tv_simply, web_safari) are either SABR-only
-// or demand a GVS PO Token. web_embedded still hands out the full progressive format ladder
-// without a token. It needs the `n` challenge solved, which requires a JS runtime plus the
-// yt-dlp-ejs solver: bun is the one runtime in this image (upstream has deprecated bun
-// support, yt-dlp#16766, so this needs deno or node when that lands).
-// web_embedded reports embedding-disabled videos as "Video unavailable", so default follows it.
-function getYouTubeArgs(url) {
+// Anonymous, the default clients serve the full format ladder with no ad wait (measured 2026-09-29).
+// Signed in (only for age or bot checks) web_embedded goes first as before; it needs the `n`
+// challenge solved, so bun plus yt-dlp-ejs, and default follows for embed-disabled videos.
+function getYouTubeArgs(url, signedIn = false) {
   if (!isYouTubeUrl(url)) return [];
-  return ['--js-runtimes', 'bun', '--extractor-args', 'youtube:player_client=web_embedded,default'];
+  const clients = signedIn ? 'web_embedded,default' : 'default';
+  return ['--js-runtimes', 'bun', '--extractor-args', `youtube:player_client=${clients}`];
 }
 
 // These answer yt-dlp's own TLS fingerprint with 403; curl-cffi (in the image) lets it pass as Chrome.
@@ -235,7 +234,8 @@ function executeYtdlp(
   maxDuration = 300,
   startTime = null,
   duration = null,
-  maxSize = Infinity
+  maxSize = Infinity,
+  signedIn = false
 ) {
   return new Promise((resolve, reject) => {
     const outputTemplate = path.join(outputDir, '%(title)s.%(ext)s');
@@ -245,8 +245,8 @@ function executeYtdlp(
       '--no-warnings',
       '--quiet',
       '--no-progress',
-      ...getCookieArgs(),
-      ...getYouTubeArgs(url),
+      ...getCookieArgs(url, signedIn),
+      ...getYouTubeArgs(url, signedIn),
       ...getImpersonateArgs(url),
       '-f',
       quality,
@@ -565,6 +565,12 @@ async function executeYtdlpWithRetry(...args) {
   try {
     return await executeYtdlp(...args);
   } catch (error) {
+    const signInAsked =
+      error.message === 'video requires age verification' || error.code === 'YTDLP_RETRYABLE';
+    if (isYouTubeUrl(args[0]) && signInAsked) {
+      logger.info(`YouTube asked to sign in, retrying signed in: ${args[0]}`);
+      return await executeYtdlp(...Array.from({ length: 8 }, (_, i) => args[i]), true);
+    }
     if (error.message !== GENERIC_FAILURE_MESSAGE && error.code !== 'YTDLP_RETRYABLE') {
       throw error;
     }
@@ -579,7 +585,7 @@ function getVideoDuration(url, timeout = 15000) {
     const args = [
       '--no-playlist',
       '--no-warnings',
-      ...getCookieArgs(),
+      ...getCookieArgs(url),
       ...getImpersonateArgs(url),
       '--print',
       'duration',

@@ -325,9 +325,17 @@ export async function acquireMedia(
     });
   }
 
-  // Lets a caller hand out source links it can serve without us holding the bytes.
+  // Started early and read later: it picks the DRM route and tags the result, and takes ~3 s alone.
+  const soundcloud =
+    isSoundCloudUrl(url) && startTime === null && duration === null
+      ? soundcloudTrack(url).catch(() => null)
+      : null;
+
+  // Lets a caller hand out source links it can serve without us holding the bytes. Run beside the
+  // SoundCloud read; a DRM-only track has no such links, so its result is dropped.
   if (streamFirst && startTime === null && duration === null) {
-    const streams = await streamFirst(url, downloadMethod);
+    const lane = streamFirst(url, downloadMethod).catch(() => null);
+    const streams = (await soundcloud)?.drm ? null : await lane;
     if (streams) {
       return { kind: 'stream', streams, url };
     }
@@ -517,6 +525,16 @@ export async function acquireMedia(
         throw cobaltError;
       }
 
+      const track = await soundcloud;
+      if (track?.drm) {
+        return {
+          kind: 'file',
+          fileData: await soundcloudViaYoutube(url, { adminUser, maxSize, track }),
+          downloadMethod: 'ytdlp',
+          url,
+        };
+      }
+
       logger.warn(
         `Cobalt failed for ${fallbackSite} URL, falling back to yt-dlp: ` + cobaltError.message
       );
@@ -574,11 +592,10 @@ export async function acquireMedia(
     }
   }
 
-  // A trimmed request is cut later, and a tag is only worth writing on the whole track.
-  const wholeTrack = startTime === null && duration === null;
-  if (isSoundCloudUrl(url) && wholeTrack && fileData?.buffer && !fileData.audioReady) {
+  const track = soundcloud && (await soundcloud);
+  if (track && fileData?.buffer && !fileData.audioReady) {
     try {
-      fileData = await tagAudio(fileData, await soundcloudTrack(url));
+      fileData = await tagAudio(fileData, track);
     } catch (error) {
       logger.warn(`SoundCloud tags skipped: ${error.message}`);
     }

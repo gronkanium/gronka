@@ -39,6 +39,8 @@ export async function soundcloudTrack(url) {
     genre: info.genre || null,
     year: info.upload_date ? info.upload_date.slice(0, 4) : null,
     cover: art?.url ?? info.thumbnail ?? null,
+    // DRM-only tracks list no formats at all, logged in or not.
+    drm: (info.formats ?? []).length === 0,
   };
 }
 
@@ -167,8 +169,11 @@ export async function tagAudio(file, track) {
 
 // SoundCloud only streams this track encrypted: get the artist's own YouTube upload of the same
 // recording instead, tagged with SoundCloud's details, or say plainly that there isn't one.
-export async function soundcloudViaYoutube(url, { adminUser = false, maxSize = Infinity } = {}) {
-  const track = await soundcloudTrack(url);
+export async function soundcloudViaYoutube(
+  url,
+  { adminUser = false, maxSize = Infinity, track = null } = {}
+) {
+  track ??= await soundcloudTrack(url);
   const match = pickMatch(track, await youtubeCandidates(track));
   if (!match) {
     throw new ValidationError(

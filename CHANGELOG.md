@@ -5,6 +5,77 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres (attempts) to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.0.0](https://github.com/thedorekaczynski/gronka/compare/v1.2.0...v2.0.0) (2026-09-29)
+
+
+### ⚠ BREAKING CHANGES
+
+* the mounted cookie file is now ./ytdlp-cookies.txt. Rename tiktok-cookies.txt before upgrading, or docker mounts an empty directory in its place and yt-dlp runs without cookies.
+* remove Basic Auth from dashboard and stats APIs
+
+### Features
+
+* remove Basic Auth from dashboard and stats APIs ([b3d3bba](https://github.com/thedorekaczynski/gronka/commit/b3d3bba1cb4d87617c5ffbf3a42b37254e92e3e1))
+* remove download concurrency limits, raise the web rate limit to 50 per 10 minutes ([41a9b7f](https://github.com/thedorekaczynski/gronka/commit/41a9b7f51bcaccee00c96117e106b099248847b2))
+* rename the yt-dlp cookie jar to ytdlp-cookies.txt ([b9c8be3](https://github.com/thedorekaczynski/gronka/commit/b9c8be3fa8fbb3d8b5334e08d77c24b5f42e6846))
+* **soundcloud:** DRM-only tracks come from the artist's own YouTube upload, every SoundCloud mp3 gets its cover and tags ([775e455](https://github.com/thedorekaczynski/gronka/commit/775e455fcdf23708cf81a5664d573d4658330440))
+* **web:** a landing page for every non-adult supported source (33), sitemap to 37 urls ([443ccac](https://github.com/thedorekaczynski/gronka/commit/443ccac296dc34e7a2175d61da9a415cb42297f9))
+* **web:** add a hardened compose project for gronka-web, cobalt-web and cloudflared ([2575274](https://github.com/thedorekaczynski/gronka/commit/257527470968fe62e5d239c0f78fbd481330bb68))
+* **web:** add a no-sound mode and drawn icons for every mode ([791d430](https://github.com/thedorekaczynski/gronka/commit/791d4304761e511a136185a03ba762a77a5a1e2c))
+* **web:** add gronka-web server with direct, worker and r2 delivery lanes ([383f705](https://github.com/thedorekaczynski/gronka/commit/383f705f63e3ece9abc2ae336a1945f251f42599))
+* **web:** add number-only accounts, sessions and api keys ([96732f8](https://github.com/thedorekaczynski/gronka/commit/96732f8761382678f7cd3d97b578b43a486b3eca))
+* **web:** add per-platform pages, sitemap and robots for search ([e42ec29](https://github.com/thedorekaczynski/gronka/commit/e42ec29c11c9732cb92e5ac3bacdcc9d2434df23))
+* **web:** add split=false and retryAfter on rate-limit and busy answers ([af97fa8](https://github.com/thedorekaczynski/gronka/commit/af97fa8e500ee8bccaeaf6915405586a4c31013f))
+* **web:** add the download page, account page, terms and privacy ([47a9855](https://github.com/thedorekaczynski/gronka/commit/47a98553c809f1fca92d7bf53382d2a537785018))
+* **web:** add the gronka-dl Worker that streams signed source links ([44f6d47](https://github.com/thedorekaczynski/gronka/commit/44f6d477eada6e3151bca50ab410a9d1e7b48130))
+* **web:** add totp, recovery codes and passkey login ([e3ef26b](https://github.com/thedorekaczynski/gronka/commit/e3ef26be5b518d79e989fc5b95ef48842efb8862))
+* **web:** ask for the 2fa code in a page dialog instead of a browser prompt ([3852f47](https://github.com/thedorekaczynski/gronka/commit/3852f47edd7462547e26faa09fd10eb424a3d123))
+* **web:** checksum api keys, __Host- session cookie with idle timeout, lighter argon2id ([2f6b085](https://github.com/thedorekaczynski/gronka/commit/2f6b085a3a45a1207934572942d155cd6eea430a))
+* **web:** cloudflare check in a popup, account numbers without dashes, no retype step, tighter page copy ([eedaf86](https://github.com/thedorekaczynski/gronka/commit/eedaf86853d70cb8e232971d011a77e36eb9d63f))
+* **web:** drawn penguin flipbooks, idle activities and a supported sites list ([bf08a17](https://github.com/thedorekaczynski/gronka/commit/bf08a17454f909428b7d13774c79e4c79631bfc3))
+* **web:** drop the time-based progress bar while the server works, show the spinner like cobalt ([2075a97](https://github.com/thedorekaczynski/gronka/commit/2075a97500d2f7b15cc2b3e53f22db681f7555f0))
+* **web:** filing cabinet while working, a wave on page load, penguin frames sharp on retina Safari ([b3c1e70](https://github.com/thedorekaczynski/gronka/commit/b3c1e70e182f747448bada2ec813d0bb2dc6d32f))
+* **web:** inked spinner while cloudflare checks the browser ([51965db](https://github.com/thedorekaczynski/gronka/commit/51965db7002a0ca96eee6862b3f98b6828d3d229))
+* **web:** list every supported source under supported sites ([7bd9733](https://github.com/thedorekaczynski/gronka/commit/7bd97339f75c575b6342e06e2ea07da5ee2a8641))
+* **web:** penguin covers his eyes for audio and his ears for no sound, and stops twitching on mode clicks ([d1d64be](https://github.com/thedorekaczynski/gronka/commit/d1d64bebdf8e100744485348135a11ee7ea9e5a1))
+* **web:** penguin peeks over the paste box in real ink, api index at / and /v1, dl root sends visitors to the page ([df029bf](https://github.com/thedorekaczynski/gronka/commit/df029bf77d31db3e73b91ed9820a2589b1a7e773))
+* **web:** penguin rests with his eyes open ([5082613](https://github.com/thedorekaczynski/gronka/commit/508261330ce8bf1fc7861fc30dd21dd4ef7559af))
+* **web:** stream plain media links through the worker, copy cookies to tmpfs, log errors only ([5c37dd2](https://github.com/thedorekaczynski/gronka/commit/5c37dd26a90318ba764887a92ad24b0a813ddadd))
+* **web:** version the api under /v1 ([6fd473f](https://github.com/thedorekaczynski/gronka/commit/6fd473f610e55dc5c487588082964f6dec6b0ad1))
+
+
+### Bug Fixes
+
+* **cobalt:** download instead of dropping tunnelled slides from a picker ([c5e8866](https://github.com/thedorekaczynski/gronka/commit/c5e88660e969b1c86f1071087b236cbd9319ae35))
+* **cobalt:** strip the doubled scheme cobalt puts on Streamable links ([947912a](https://github.com/thedorekaczynski/gronka/commit/947912a74837e543a58b5f48eeab16a0cb86b867))
+* **cobalt:** treat an empty tunnel download as a failure so yt-dlp takes over ([bde8d21](https://github.com/thedorekaczynski/gronka/commit/bde8d21a52869b8bc71a64daf26e1c53275ec7ea))
+* **convert:** write the temp input as 0600 and never over an existing file ([01eb1f6](https://github.com/thedorekaczynski/gronka/commit/01eb1f692958a16cb9f3346518d39a5abfb7ff24))
+* **download:** refuse links whose host resolves into a private network before any downloader runs ([a92ef94](https://github.com/thedorekaczynski/gronka/commit/a92ef94429f43faf395fa88d25736181912c00c3))
+* **soundcloud:** write tagging temp files as 0600 and never over an existing file ([22c94f3](https://github.com/thedorekaczynski/gronka/commit/22c94f3ec6d6f750e3781621afa3be3eed19cf54))
+* **sources:** curl-cffi + --impersonate chrome for Rumble and Pornhub, i.imgur.com stills go direct, drop Pixiv, rule34.xxx and Newgrounds ([0e95cbd](https://github.com/thedorekaczynski/gronka/commit/0e95cbd487daa2eddd6340a0741a9c3765345973))
+* **sources:** drop Pornhub: it serves explicit videos only after in-browser age verification ([3a75e10](https://github.com/thedorekaczynski/gronka/commit/3a75e104c4a11d152eee0fbb554358f79b4185f9))
+* **web:** drop the "that doesn't look like a link yet" hint ([bddaaf4](https://github.com/thedorekaczynski/gronka/commit/bddaaf4262698a70d409c11c56f52fac40c8d208))
+* **web:** enforce key and passkey quotas atomically, cap the rate-limit map and web file size ([1d59823](https://github.com/thedorekaczynski/gronka/commit/1d5982324467fb48242de3f9d4f994f8eabd77e8))
+* **web:** gronka logo links home on the home and per-site pages ([14f8c68](https://github.com/thedorekaczynski/gronka/commit/14f8c680f7b7f2ab7405b864fa647aeeb5caf693))
+* **web:** keep the turnstile widget above the ink border so its click check passes ([f764b1f](https://github.com/thedorekaczynski/gronka/commit/f764b1f50be09cdd2a78823094a872be34d93d62))
+* **web:** label a stream part with an unknown video codec as video, not audio ([7503690](https://github.com/thedorekaczynski/gronka/commit/75036902d41bd3583d4168cee9f7c4c3262c6133))
+* **web:** limit key auth attempts, count limits per account, and require the second factor for rotate, delete and passkey changes ([4e4a0a5](https://github.com/thedorekaczynski/gronka/commit/4e4a0a5cc9b3d49f3cfb1089c78bdaf74bd76d09))
+* **web:** paste button in solid ink like the selected mode ([bb96143](https://github.com/thedorekaczynski/gronka/commit/bb961436c2e6e83f951e4616e51ac74b0890c022))
+* **web:** redact log messages without mangling the timestamp ([5d965aa](https://github.com/thedorekaczynski/gronka/commit/5d965aab9f14a1e869da54e290596ae011c4efd1))
+* **web:** remove the line under the link box entirely ([a1b8ed7](https://github.com/thedorekaczynski/gronka/commit/a1b8ed76e8471047463c8ec9aac4146b07fd73a5))
+* **web:** render turnstile in an always-rendered spot, never inside a closed dialog ([10d4f03](https://github.com/thedorekaczynski/gronka/commit/10d4f03b44e50fcdb6ba1d2a317770126a797b29))
+* **web:** send no-transform so the edge injects no analytics beacon into the page ([b432207](https://github.com/thedorekaczynski/gronka/commit/b4322070714ff692005bfe50d795d64735da8ca6))
+* **web:** send the page origin to turnstile, show its error code when the check fails ([770f646](https://github.com/thedorekaczynski/gronka/commit/770f64677ee63d26193faf93f2bb0666df52a723))
+* **web:** turnstile works again: drop data-state on &lt;html&gt;, pre-solve inline like cobalt, ink the paste button ([7871c3b](https://github.com/thedorekaczynski/gronka/commit/7871c3b1b14a729a6d46eba0bce6cc1cc5a13141))
+* **web:** warm libav with a plain fetch; cloudflare 503s a prefetch it hasn't cached ([98ff590](https://github.com/thedorekaczynski/gronka/commit/98ff590c0b93a324913ec6e58a530e821fbddcb8))
+* **ytdlp:** say a DRM-protected track can't be downloaded instead of calling it private ([4e7197b](https://github.com/thedorekaczynski/gronka/commit/4e7197bd5bffa82f1e54c824ce81d987791718ea))
+* **ytdlp:** show a curated message when a download comes back empty ([c459ede](https://github.com/thedorekaczynski/gronka/commit/c459edec9423b790ff0b645c11215557ef78399e))
+
+
+### Performance Improvements
+
+* **downloads:** YouTube anonymous first, SoundCloud DRM route without dead ends ([d98423a](https://github.com/thedorekaczynski/gronka/commit/d98423ada352f94a04c9b834c4db3f69072aa138))
+
 ## [1.2.0](https://github.com/thedorekaczynski/gronka/compare/v1.1.0...v1.2.0) (2026-09-25)
 
 

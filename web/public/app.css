@@ -39,7 +39,7 @@ h1 {
 .stage:has(#url:focus) .peng {
   rotate: -5deg;
 }
-[data-state='working'] .peng {
+[data-phase='working'] .peng {
   animation: bob 0.5s steps(2) infinite;
 }
 @keyframes bob {
@@ -73,9 +73,10 @@ h1 {
   align-items: center;
   gap: 6px;
   margin-right: 10px;
+  position: relative;
+  isolation: isolate;
   border: 0;
-  border-radius: 10px;
-  background: var(--soft);
+  background: none;
   color: var(--ink);
   font:
     600 15px 'Archivo',
@@ -83,6 +84,15 @@ h1 {
   padding: 10px 12px;
   min-height: 44px;
   cursor: pointer;
+}
+.paste::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  border-radius: 10px;
+  background: var(--soft);
+  filter: url(#wobble);
 }
 .host {
   min-height: 1.5em;
@@ -204,19 +214,19 @@ details[open] summary::after {
 }
 
 /* while a job runs the form collapses to the link, the panel takes over */
-:root:not([data-state='idle']) .opts,
-:root:not([data-state='idle']) .go,
-:root:not([data-state='idle']) .terms {
+:root:not([data-phase='idle']) .opts,
+:root:not([data-phase='idle']) .go,
+:root:not([data-phase='idle']) .terms {
   display: none;
 }
-:root:not([data-state='idle']) .paste,
-:root:not([data-state='idle']) .lede {
+:root:not([data-phase='idle']) .paste,
+:root:not([data-phase='idle']) .lede {
   display: none;
 }
-:root:not([data-state='idle']) h1 {
+:root:not([data-phase='idle']) h1 {
   font-size: clamp(1.9rem, 6vw, 3.4rem);
 }
-:root:not([data-state='idle']) .stage {
+:root:not([data-phase='idle']) .stage {
   --pw: clamp(120px, 28vw, 172px);
 }
 .panel:empty {

@@ -93,7 +93,7 @@ function playMode(next) {
   const from = MODE_FRAMES[modeShown] ?? [];
   const to = MODE_FRAMES[next] ?? [];
   modeShown = next;
-  if (root.dataset.state !== 'idle') return;
+  if (root.dataset.phase !== 'idle') return;
   const back = from.length ? [...from.slice(0, -1).reverse(), 'idle'] : [];
   const frames = reduceMotion ? [to.at(-1) ?? 'idle'] : [...back, ...to];
   if (!frames.length) return;
@@ -175,7 +175,7 @@ function scheduleActivity() {
     () => {
       scheduleActivity();
       const idleNow =
-        root.dataset.state === 'idle' &&
+        root.dataset.phase === 'idle' &&
         form.mode.value === 'auto' &&
         asleep.hidden &&
         !document.hidden &&
@@ -187,7 +187,7 @@ function scheduleActivity() {
 }
 function setState(state, penguin) {
   stopFlip();
-  root.dataset.state = state;
+  root.dataset.phase = state;
   pose(penguin);
 }
 const draw = html => {
@@ -596,8 +596,8 @@ function deliverBlob(blob, filename, request) {
 async function checkHealth() {
   const up = await online();
   asleep.hidden = up;
-  if (!up && root.dataset.state === 'idle') play('asleep');
-  if (up && root.dataset.state === 'idle') {
+  if (!up && root.dataset.phase === 'idle') play('asleep');
+  if (up && root.dataset.phase === 'idle') {
     stopFlip();
     pose(restPose());
   }
@@ -657,7 +657,7 @@ if (navigator.clipboard?.readText) {
         hostLine.textContent = "there's no link on your clipboard";
         stopFlip();
         pose('clipboard');
-        setTimeout(() => root.dataset.state === 'idle' && pose(restPose()), 2500);
+        setTimeout(() => root.dataset.phase === 'idle' && pose(restPose()), 2500);
         return;
       }
       input.value = url;
@@ -674,7 +674,7 @@ document.addEventListener('keydown', event => {
   if (event.key === '/' && !typing) {
     event.preventDefault();
     input.focus();
-  } else if (event.key === 'Escape' && root.dataset.state !== 'idle') {
+  } else if (event.key === 'Escape' && root.dataset.phase !== 'idle') {
     idle();
     input.focus();
   } else if (event.key === 'Escape' && document.activeElement === input) {
@@ -687,7 +687,7 @@ if (!reduceMotion) {
   const turb = document.querySelector('#wobble feTurbulence');
   let seed = 0;
   setInterval(() => {
-    if (/working|verifying/.test(root.dataset.state))
+    if (/working|verifying/.test(root.dataset.phase))
       turb.setAttribute('seed', 3 + (seed = (seed + 1) % 3));
   }, 140);
 }
@@ -707,7 +707,7 @@ if (prefill && firstUrl(prefill)) {
 scheduleActivity();
 // an activity stops the moment someone goes for the link box
 input.addEventListener('focus', () => {
-  if (root.dataset.state === 'idle' && asleep.hidden) {
+  if (root.dataset.phase === 'idle' && asleep.hidden) {
     stopFlip();
     pose(restPose());
   }

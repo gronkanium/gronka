@@ -348,20 +348,32 @@ h2:focus {
 }
 
 .ts-ask {
-  max-width: min(92vw, 400px);
+  position: fixed;
+  left: 50%;
+  bottom: 16px;
+  z-index: 50;
+  transform: translateX(-50%);
+  pointer-events: none;
+}
+.ts-ask.asking {
+  top: 50%;
+  bottom: auto;
+  transform: translate(-50%, -50%);
+  width: min(92vw, 400px);
   padding: 22px 20px 18px;
-  border: 0;
   color: inherit;
   background: var(--paper);
   text-align: center;
-}
-.ts-ask::backdrop {
-  background: rgb(0 0 0 / 0.45);
+  pointer-events: auto;
+  box-shadow: 0 0 0 100vmax rgb(0 0 0 / 0.45);
 }
 .ts-ask h2 {
   margin: 0 0 6px;
 }
-.ts-box {
+.ts-ask h2:focus {
+  outline: none;
+}
+.ts-ask.asking .ts-box {
   display: flex;
   justify-content: center;
   min-height: 65px;

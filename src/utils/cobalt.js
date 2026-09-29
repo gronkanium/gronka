@@ -722,6 +722,7 @@ async function downloadFromCobalt(
         break;
       }
     }
+    filename = cobaltResponse.filename || filename;
   }
 
   if (!videoUrl) {

@@ -66,5 +66,6 @@ CLAUDE.md
 
 # Cobalt writes its own copy back; same secrets as cookies.json
 cobalt-cookies.json
+cobalt-web-cookies.json
 .env.web
 .wrangler/

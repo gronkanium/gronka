@@ -107,6 +107,8 @@ services:
       - '127.0.0.1:${POSTGRES_PORT:-5432}:5432'
     networks:
       - gronka-network
+      # gronka-web's database lane (docker-compose.web.yml); create with: docker network create --internal gronka-web-db
+      - web-db
     healthcheck:
       test:
         ['CMD-SHELL', 'pg_isready -U ${PROD_POSTGRES_USER:-gronka} -d ${PROD_POSTGRES_DB:-gronka}']
@@ -168,3 +170,6 @@ volumes:
 networks:
   gronka-network:
     driver: bridge
+  web-db:
+    name: gronka-web-db
+    external: true

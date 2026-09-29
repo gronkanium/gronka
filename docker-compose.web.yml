@@ -1,0 +1,96 @@
+# gronka-web: the public web page's API. Its own compose project, so bot deploys never touch it.
+# Run from the gronka directory with both env files:
+#   docker compose -f docker-compose.web.yml --env-file .env --env-file .env.web up -d
+name: gronka-web
+
+x-hardening: &hardening
+  restart: unless-stopped
+  read_only: true
+  cap_drop: [ALL]
+  security_opt: [no-new-privileges:true]
+  logging:
+    driver: local
+    options:
+      max-size: 5m
+      max-file: '1'
+      compress: 'false'
+
+services:
+  gronka-web:
+    <<: *hardening
+    image: ${WEB_IMAGE:-gronka-web:preview}
+    pull_policy: never
+    container_name: gronka-web
+    entrypoint: ['bun', 'src/web-server.js']
+    user: '1000:1000'
+    mem_limit: 4g
+    pids_limit: 256
+    tmpfs:
+      - /tmp:size=3g,mode=1777
+    environment:
+      GRONKA_WEB: 'true'
+      NODE_ENV: production
+      WEB_PORT: '3000'
+      HOME: /tmp
+      XDG_CACHE_HOME: /tmp/cache
+      POSTGRES_USER: gronka_web
+      POSTGRES_DB: gronka_web
+      POSTGRES_PASSWORD: ${WEB_DB_PASSWORD:?}
+      WEB_PEPPER: ${WEB_PEPPER:?}
+      WEB_ENC_KEY: ${WEB_ENC_KEY:?}
+      WEB_STREAM_BASE: ${WEB_STREAM_BASE:?}
+      WEB_STREAM_KEY: ${WEB_STREAM_KEY:?}
+      TURNSTILE_SECRET: ${TURNSTILE_SECRET:?}
+      COBALT_API_URL: http://cobalt-web:9000
+      COBALT_ENABLED: 'true'
+      MAX_VIDEO_SIZE: ${MAX_VIDEO_SIZE:-}
+      R2_ACCOUNT_ID: ${R2_ACCOUNT_ID:?}
+      R2_ACCESS_KEY_ID: ${R2_ACCESS_KEY_ID:?}
+      R2_SECRET_ACCESS_KEY: ${R2_SECRET_ACCESS_KEY:?}
+      R2_BUCKET_NAME: ${R2_BUCKET_NAME:?}
+      R2_PUBLIC_DOMAIN: ${R2_PUBLIC_DOMAIN:?}
+      # yt-dlp rewrites its cookie jar, so the server copies the read-only files here
+      WEB_COOKIES_SRC: /secrets
+      WEB_COOKIES_DIR: /tmp/cookies
+      YTDLP_COOKIES_PATH: /tmp/cookies/tiktok-cookies.txt
+      INSTAGRAM_COOKIES_PATH: /tmp/cookies/cookies.json
+    volumes:
+      - ./cookies.json:/secrets/cookies.json:ro
+      - ./tiktok-cookies.txt:/secrets/tiktok-cookies.txt:ro
+    networks: [web, web-db]
+    depends_on: [cobalt-web]
+
+  cobalt-web:
+    <<: *hardening
+    image: ghcr.io/imputnet/cobalt:11
+    container_name: cobalt-web
+    init: true
+    mem_limit: 1g
+    pids_limit: 256
+    environment:
+      API_URL: http://cobalt-web:9000
+      COOKIE_PATH: /cookies.json
+    volumes:
+      # cobalt rewrites its cookie file, so it never shares the bot cobalt's copy
+      - ./cobalt-web-cookies.json:/cookies.json
+    networks: [web]
+
+  cloudflared:
+    <<: *hardening
+    image: cloudflare/cloudflared:2026.8.3
+    container_name: gronka-web-cloudflared
+    command: ['tunnel', '--no-autoupdate', 'run', '--url', 'http://gronka-web:3000']
+    user: '65532:65532'
+    mem_limit: 256m
+    pids_limit: 64
+    environment:
+      TUNNEL_TOKEN: ${CLOUDFLARE_TUNNEL_TOKEN:?}
+    networks: [web]
+    depends_on: [gronka-web]
+
+networks:
+  web:
+  # Created outside compose and joined by gronka-postgres (alias postgres): no egress, web and DB only.
+  web-db:
+    name: gronka-web-db
+    external: true

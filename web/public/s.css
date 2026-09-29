@@ -346,3 +346,24 @@ h2:focus {
     transform: none;
   }
 }
+
+.ts-ask {
+  max-width: min(92vw, 400px);
+  padding: 22px 20px 18px;
+  border: 0;
+  color: inherit;
+  background: var(--paper);
+  text-align: center;
+}
+.ts-ask::backdrop {
+  background: rgb(0 0 0 / 0.45);
+}
+.ts-ask h2 {
+  margin: 0 0 6px;
+}
+.ts-box {
+  display: flex;
+  justify-content: center;
+  min-height: 65px;
+  margin-top: 12px;
+}

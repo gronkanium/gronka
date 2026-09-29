@@ -1,7 +1,6 @@
 import { $, esc, api, turnstileToken, warmTurnstile, icon, save, ApiError } from '/common.js';
 
 const view = $('#view');
-const tsBox = $('#ts');
 const show = html => {
   view.innerHTML = html;
   view.querySelector('h1, h2')?.setAttribute('tabindex', '-1');
@@ -103,8 +102,8 @@ document.body.append(codeDialog);
 const ask = wrong =>
   new Promise(resolve => {
     codeDialog.querySelector('label').textContent = wrong
-      ? 'that code was wrong. try again.'
-      : '2fa is on. enter the code from your authenticator app, or a recovery code.';
+      ? 'wrong code. try again.'
+      : '2fa is on. enter an authenticator code or a recovery code.';
     const input = codeDialog.querySelector('input');
     input.value = '';
     codeDialog.returnValue = '';
@@ -157,7 +156,7 @@ function kit(number) {
     [
       `gronka account number\n\n${number}\n\nmade ${date} on https://web.gronka.dev/account/\n\n` +
         'this number is the only way into your gronka account. it holds your api keys.\n' +
-        'we cannot recover it. no email, no reset. lose it and the account is gone.\n' +
+        'there is no recovery or reset. lose it and the account is gone.\n' +
         'keep this file somewhere safe, like a password manager.\n',
     ],
     { type: 'text/plain' }
@@ -167,25 +166,16 @@ function kit(number) {
 function saveNumber(number, next, { rotated = false } = {}) {
   show(`<img class="peng" src="/p/think.svg" alt="" width="400" height="400" />
     <h1>${rotated ? 'your new number.' : 'your account number.'}</h1>
-    <p>this is the only way back in. <strong>there is no email and no reset.</strong> if you lose it, the account is gone for good${rotated ? ', and the old number already stopped working' : ''}.</p>
+    <p>this is your way back in. <strong>no email. no reset.</strong> lose it and the account is gone${rotated ? ', and the old number already stopped working' : ''}.</p>
     <p class="number ink" id="num">${esc(number)}</p>
     <div class="acts"><button type="button" class="btn" id="dl">${icon('download')}download it</button>
     <button type="button" class="btn line small" id="copy">${icon('copy')}copy</button></div>
-    <div class="check"><label class="label" for="last4">type the last 4 characters to show you saved it</label>
-    <span class="ink field"><input id="last4" maxlength="4" autocomplete="off" autocapitalize="characters" spellcheck="false" /></span></div>
-    <div class="acts"><button type="button" class="btn" id="next" disabled>i saved it, continue</button></div>`);
+    <div class="acts"><button type="button" class="btn line" id="next">continue</button></div>`);
   $('h1').focus();
-  const tail = number
-    .replace(/[^0-9A-Z]/gi, '')
-    .slice(-4)
-    .toUpperCase();
   on('#dl', () => save(kit(number), 'gronka-account.txt'));
   on('#copy', async () => {
     await navigator.clipboard.writeText(number);
     $('#copy').lastChild.textContent = 'copied';
-  });
-  $('#last4').addEventListener('input', event => {
-    $('#next').disabled = event.target.value.toUpperCase().replace(/O/g, '0') !== tail;
   });
   on('#next', next);
 }
@@ -194,7 +184,7 @@ function offerPasskey() {
   if (!passkeys) return dashboard();
   show(`<img class="peng" src="/p/done.svg" alt="" width="400" height="400" />
     <h1>add a passkey?</h1>
-    <p>a passkey is a second way in, kept by your phone, laptop or password manager. lose the number but keep the passkey and you can still log in and make a new number.</p>
+    <p>a passkey is another way in, kept by your phone, laptop or password manager. if you lose the number but keep the passkey, you can log in and make a new one.</p>
     <div class="acts"><button type="button" class="btn" id="add">${icon('passkey')}add a passkey</button>
     <button type="button" class="linkish" id="skip">not now</button></div><div id="msg"></div>`);
   $('h1').focus();
@@ -207,7 +197,7 @@ function offerPasskey() {
         err(
           $('#msg'),
           error.name === 'NotAllowedError'
-            ? { message: 'that was cancelled. you can add one later.' }
+            ? { message: 'cancelled. you can add one later.' }
             : error
         );
       }
@@ -218,13 +208,13 @@ function offerPasskey() {
 
 function signedOut() {
   show(`<h1>account</h1>
-    <p class="lede">only for api keys. the page itself never needs one. no email, no username: you get a number, and the number is the account.</p>
+    <p class="lede">for api keys. the page doesn't need one. no email or username, just an account number.</p>
     <div class="cards">
-      <div class="card ink"><h2>new here</h2><p>one click, nothing to fill in. we show you the number once.</p>
+      <div class="card ink"><h2>new here</h2><p>one click. we show you the number once.</p>
         <button type="button" class="btn" id="create">make an account</button><div id="create-msg"></div></div>
       <form class="card ink" id="login" novalidate><h2>have a number</h2>
         <label class="label" for="number">account number</label>
-        <span class="ink field"><input id="number" autocomplete="username" spellcheck="false" autocapitalize="characters" placeholder="GW-..." /></span>
+        <span class="ink field"><input id="number" autocomplete="username" spellcheck="false" autocapitalize="characters" placeholder="GW ..." /></span>
         <div id="totp-wrap" hidden><label class="label" for="totp">code from your authenticator app, or a recovery code</label>
         <span class="ink field"><input id="totp" autocomplete="one-time-code" inputmode="text" spellcheck="false" /></span></div>
         <button type="submit" class="btn" id="login-go">log in</button>
@@ -236,7 +226,7 @@ function signedOut() {
   on('#create', event =>
     busy(event.currentTarget, async () => {
       try {
-        const turnstile = await turnstileToken('account', tsBox);
+        const turnstile = await turnstileToken('account');
         const { number } = await api('/v1/account', { method: 'POST', body: { turnstile } });
         saveNumber(number, offerPasskey);
       } catch (error) {
@@ -248,7 +238,7 @@ function signedOut() {
     event.preventDefault();
     busy($('#login-go'), async () => {
       try {
-        const turnstile = await turnstileToken('login', tsBox);
+        const turnstile = await turnstileToken('login');
         const body = { number: $('#number').value, turnstile };
         if ($('#totp').value.trim()) body.totp = $('#totp').value.trim();
         await api('/v1/session', { method: 'POST', body });
@@ -265,7 +255,7 @@ function signedOut() {
   on('#pk', event =>
     busy(event.currentTarget, async () => {
       try {
-        const turnstile = await turnstileToken('login', tsBox);
+        const turnstile = await turnstileToken('login');
         const { challengeId, options } = await api('/v1/passkeys/login/options', {
           method: 'POST',
           body: { turnstile },
@@ -306,7 +296,7 @@ async function dashboard(notice = '') {
       on('#retry', () => dashboard())
     );
   }
-  show(`<h1>account</h1><p class="meta mono">GW-${esc(me.id)} · made ${esc(me.createdOn)}</p><div id="notice">${notice}</div>
+  show(`<h1>account</h1><p class="meta mono">GW ${esc(me.id)} · made ${esc(me.createdOn)}</p><div id="notice">${notice}</div>
     <section aria-labelledby="h-keys"><h2 id="h-keys">api keys</h2>
       <p>send one as <span class="mono">Authorization: Bearer gk_...</span> to skip the cloudflare check. same limits as everyone. <a href="/docs/">how</a>.</p>
       <ul class="list">${
@@ -321,22 +311,22 @@ async function dashboard(notice = '') {
         <button class="btn" type="submit" ${me.keys.length >= 10 ? 'disabled' : ''}>${icon('key')}new key</button></form><div id="key-out"></div></section>
     <section aria-labelledby="h-2fa"><h2 id="h-2fa">2fa <span class="pill ${me.totp ? '' : 'off'}">${me.totp ? 'on' : 'off'}</span></h2><div id="totp-box"></div></section>
     <section aria-labelledby="h-pk"><h2 id="h-pk">passkeys</h2>
-      ${passkeys ? '' : '<p class="note">this browser has no passkey support.</p>'}
+      ${passkeys ? '' : '<p class="note">this browser does not support passkeys.</p>'}
       <ul class="list">${
         me.passkeys
           .map(
             p => `<li><span>${icon('passkey')} ${esc(p.label ?? 'passkey')}<br><span class="when">${when('added', p.createdOn)}</span></span>
         <button type="button" class="btn line small" data-unpk="${esc(p.id)}">${icon('x')}remove</button></li>`
           )
-          .join('') || '<li class="note">none yet. a passkey is a second way in.</li>'
+          .join('') || '<li class="note">none yet. a passkey gives you another way in.</li>'
       }</ul>
       ${passkeys ? `<button type="button" class="btn line small" id="addpk">${icon('passkey')}add a passkey</button>` : ''}<div id="pk-msg"></div></section>
     <section aria-labelledby="h-num"><h2 id="h-num">account number</h2>
-      <p>make a new number if the old one leaked. the old one stops working at once and every other login is signed out. keys, passkeys and 2fa stay.</p>
+      <p>if the old number leaked, make a new one. the old number stops working at once, and other sessions are signed out. keys, passkeys and 2fa stay.</p>
       <button type="button" class="btn line small" id="rotate">new number</button><div id="rot-msg"></div></section>
     <section aria-labelledby="h-out"><h2 id="h-out">leave</h2>
       <div class="acts"><button type="button" class="btn line small" id="logout">log out</button></div>
-      <p>deleting removes the account, every key and every passkey right away. there is no undo.</p>
+      <p>delete the account and all its keys and passkeys right away. there is no undo.</p>
       <div class="row"><label><span class="label">type delete to confirm</span><span class="ink field"><input id="confirm" autocomplete="off" /></span></label>
       <button type="button" class="btn" id="delete" disabled>delete account</button></div><div id="del-msg"></div></section>`);
   $('h1').focus();
@@ -434,7 +424,7 @@ async function dashboard(notice = '') {
       }
       hint(false);
       show(
-        '<h1>gone.</h1><img class="peng" src="/p/asleep.svg" alt="" width="400" height="400" /><p>the account and everything in it were deleted.</p><p><a href="/">back to downloading</a></p>'
+        '<h1>gone.</h1><img class="peng" src="/p/asleep.svg" alt="" width="400" height="400" /><p>the account and everything in it are gone.</p><p><a href="/">back to downloading</a></p>'
       );
     })
   );
@@ -480,12 +470,12 @@ function totpBox(me) {
     });
 
   if (!me.totp) {
-    box.innerHTML = `<p>an authenticator app code on top of your number or passkey.</p><button type="button" class="btn line small" id="setup">turn on 2fa</button><div id="setup-msg"></div>`;
+    box.innerHTML = `<p>use an authenticator code with your number or passkey.</p><button type="button" class="btn line small" id="setup">turn on 2fa</button><div id="setup-msg"></div>`;
     on('#setup', event =>
       busy(event.currentTarget, async () => {
         try {
           const { uri, secret } = await api('/v1/totp/setup', { method: 'POST', body: {} });
-          box.innerHTML = `<p>add this to your authenticator app. on a phone, <a href="${esc(uri)}">open it in the app</a>, or type the key:</p>
+          box.innerHTML = `<p>add this to your authenticator app. on your phone, <a href="${esc(uri)}">open it in the app</a>, or type the key:</p>
             <p class="number key ink mono">${esc(secret.match(/.{1,4}/g).join(' '))}</p>${codeForm('enable', 'the 6-digit code it shows', 'turn on')}`;
           submit('enable', async code => {
             const { recoveryCodes } = await api('/v1/totp/enable', {

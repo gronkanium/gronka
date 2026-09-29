@@ -81,7 +81,7 @@
         <section aria-labelledby="intro-title">
           <h1 id="intro-title">paste a link, get the file.</h1>
           <p class="preview" id="preview">
-            public preview: the api is live at <code>api.gronka.dev</code>, but it may still change
+            public preview: the api runs at <code>api.gronka.dev</code>, but it may still change
             before the release.
           </p>
         </section>
@@ -116,7 +116,7 @@
           <h2 id="responses-title">responses</h2>
           <div class="shape">
             <h3>direct</h3>
-            <p>the source link points to the file.</p>
+            <p>the link points to the file on its source site.</p>
             <div class="codebox">
               <button class="copy" type="button" aria-label="copy direct response" hidden>
                 copy
@@ -192,16 +192,14 @@
           <h2 id="padded-title">padded json</h2>
           <p>
             while a download runs, the response starts with spaces, then json. parse the full
-            response as usual. errors after a download starts use the json body; errors before it
-            starts use an http status.
+            response as usual. errors after it starts use the json body; errors before it starts use
+            an http status.
           </p>
         </section>
 
         <section id="errors" aria-labelledby="errors-title">
           <h2 id="errors-title">errors</h2>
-          <p class="muted">
-            the common codes. <code>message</code> is always safe to show a person.
-          </p>
+          <p class="muted">common error codes. <code>message</code> is safe to show to users.</p>
           <ul class="error-list">
             <li><code>BAD_REQUEST</code><span>the request body or options are invalid.</span></li>
             <li><code>BAD_URL</code><span>the url is missing or invalid.</span></li>
@@ -246,8 +244,7 @@
         <section id="accounts" aria-labelledby="accounts-title">
           <h2 id="accounts-title">accounts</h2>
           <p>
-            an account is a number and nothing else. it holds api keys. two ways to make it harder
-            to lose or steal:
+            an account is a number that holds api keys. add a passkey or 2fa to help protect it:
           </p>
           <ul>
             <li>
@@ -275,12 +272,11 @@
         <section id="limits" aria-labelledby="limits-title">
           <h2 id="limits-title">limits</h2>
           <p>
-            10 downloads per 10 minutes, one at a time, per ip, or per account when you use api keys
-            (all keys of an account share them). requests with a key are also capped at 30 key
-            checks per 10 minutes per ip. files we fetch ourselves (lane r2) up to 400 mb; images up
-            to 50 mb. a
-            <code>429</code> or <code>503</code> carries <code>error.retryAfter</code> (seconds) and
-            the same number in a <code>Retry-After</code> header.
+            10 downloads per 10 minutes, one at a time, per ip, or per account with api keys (all
+            keys share the account limit). api key checks are capped at 30 per 10 minutes per ip.
+            files fetched by gronka (lane r2) have a 400 mb cap; images have a 50 mb cap. a
+            <code>429</code> or <code>503</code> includes <code>error.retryAfter</code> in seconds
+            and the same value in a <code>Retry-After</code> header.
           </p>
         </section>
 

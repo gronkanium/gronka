@@ -73,7 +73,7 @@ describe('second factor on an account', () => {
     const { id } = await accounts.createAccount();
     expect(await accounts.checkSecondFactor(id, '')).toBe('ok');
     const started = await accounts.startTotp(id);
-    expect(started.uri).toStartWith(`otpauth://totp/gronka:GW-${id}?secret=${started.secret}`);
+    expect(started.uri).toStartWith(`otpauth://totp/gronka:${id}?secret=${started.secret}`);
     const secret = await secretOf(id);
     const step = currentStep();
     expect(await accounts.enableTotp(id, '000000')).toBeNull();
@@ -265,7 +265,7 @@ describe('routes', () => {
       await codeOf(await call('POST', '/v1/passkeys/register', { cookie, body: { response: {} } }))
     ).toBe('PASSKEY_INVALID');
     const options = await (await call('POST', '/v1/passkeys/register/options', { cookie })).json();
-    expect(options).toMatchObject({ rpID: 'gronka.dev', userName: `GW-${id}` });
+    expect(options).toMatchObject({ rpID: 'gronka.dev', userName: `GW ${id}` });
     expect(options.authenticatorSelection.residentKey).toBe('required');
     const added = await call('POST', '/v1/passkeys/register', {
       cookie,

@@ -176,7 +176,7 @@
               "application/json": {
                 "example": {
                   "id": "7K3P9",
-                  "number": "GW-7K3P9-ABCDE-FGHJK-MNPQR-STVWX-YZ012-3"
+                  "number": "GW 7K3P9 ABCDE FGHJK MNPQR STVWX YZ012 3"
                 }
               }
             }
@@ -281,7 +281,7 @@
             "content": {
               "application/json": {
                 "example": {
-                  "number": "GW-7K3P9-..."
+                  "number": "GW 7K3P9 ..."
                 }
               }
             }

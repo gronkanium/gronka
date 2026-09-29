@@ -12,7 +12,10 @@ describe('account numbers', () => {
     const id = '7K3P9';
     const secret = 'ABCDEFGHJKMNPQRSTVWXYZ0123';
     const number = accounts.formatAccountNumber(id, secret);
-    expect(number).toBe('GW-7K3P9-ABCDE-FGHJK-MNPQR-STVWX-YZ012-3');
+    expect(number).toBe('GW 7K3P9 ABCDE FGHJK MNPQR STVWX YZ012 3');
+    expect(accounts.parseAccountNumber('GW-7K3P9-ABCDE-FGHJK-MNPQR-STVWX-YZ012-3')).toEqual(
+      accounts.parseAccountNumber(number)
+    );
     expect(accounts.parseAccountNumber(number)).toEqual({ id, secret });
     expect(accounts.parseAccountNumber(` gw 7k3p9 abcde fghjk mnpqr stvwx yzo12 3`)).toEqual({
       id,

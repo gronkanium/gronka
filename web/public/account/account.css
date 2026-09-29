@@ -33,7 +33,7 @@ h1 {
   font:
     400 clamp(18px, 5.2vw, 30px)/1.35 'Gronka Mono',
     monospace;
-  word-break: break-all;
+  word-spacing: 0.1em;
   padding: 18px 16px;
   margin: 14px 0;
   letter-spacing: 0.02em;
@@ -47,14 +47,6 @@ h1 {
   gap: 10px 12px;
   align-items: center;
   margin: 12px 0;
-}
-.check {
-  margin-top: 18px;
-}
-.check input {
-  text-transform: uppercase;
-  letter-spacing: 0.3em;
-  max-width: 12ch;
 }
 .peng {
   width: 112px;

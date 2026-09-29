@@ -415,7 +415,7 @@ async function deliver(result, request) {
   setState('done', 'got-1');
   play('gotit', { then: () => play('party', { times: 2, then: 'done' }) });
   draw(`<h2>got it.</h2><p class="meta">${esc(name)}${file.size ? ` · ${mb(file.size)}` : ''}</p>
-    <p class="say note">${LANE_NOTE[result.lane](site)}</p><p class="meta" id="saving"></p>
+    <p class="say note">${esc(result.note ?? LANE_NOTE[result.lane](site))}</p><p class="meta" id="saving"></p>
     <div class="acts"><button type="button" class="btn" id="save">${icon('download')}save file</button>
     <button type="button" class="btn line small" id="copy">${icon('copy')}copy link</button>
     ${navigator.share ? `<button type="button" class="btn line small" id="share">${icon('share')}share</button>` : ''}
@@ -619,11 +619,15 @@ const intent = () => {
     new Image().src = `/p/${name}.svg`;
 };
 input.addEventListener('focus', intent, { once: true });
+// A new link after a result or an error brings the download button back.
+const freshLink = () => /^(done|error|picker)$/.test(root.dataset.phase) && idle();
+input.addEventListener('input', freshLink);
 input.addEventListener('paste', event => {
   const url = firstUrl(event.clipboardData.getData('text'));
   if (!url) return;
   event.preventDefault();
   input.value = url;
+  freshLink();
 });
 
 if (navigator.clipboard?.readText) {

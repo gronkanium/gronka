@@ -262,12 +262,17 @@ export async function runDownload({ url, audio, mute = false, startTime, duratio
     return { lane: 'worker', ...acquired.streams };
   }
   const { fileData, downloadMethod } = acquired;
+  const note = fileData?.note ? { note: fileData.note } : {};
   if (audio) {
     const { buffer, baseName } = await extractAudio(fileData, downloadMethod, {
       startTime,
       duration,
     });
-    return { lane: 'r2', files: [await publishToR2(buffer, `${baseName}.mp3`, 'audio/mpeg')] };
+    return {
+      lane: 'r2',
+      ...note,
+      files: [await publishToR2(buffer, `${baseName}.mp3`, 'audio/mpeg')],
+    };
   }
   const items = Array.isArray(fileData) ? fileData : [fileData];
   const files = [];
@@ -275,7 +280,7 @@ export async function runDownload({ url, audio, mute = false, startTime, duratio
     const out = mute ? await stripAudio(item) : item;
     files.push(await publishToR2(out.buffer, out.filename, out.contentType));
   }
-  return { lane: 'r2', files };
+  return { lane: 'r2', ...note, files };
 }
 
 function parseSeconds(value, field) {

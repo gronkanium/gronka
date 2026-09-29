@@ -818,9 +818,9 @@ async function getCobaltMediaUrlsImpl(apiUrl, url) {
 
     // One tunnelled slide means the gallery can't be served as links without dropping it.
     if (items.length === 0 || items.some(item => item.url.includes('/tunnel'))) {
-      return { urls: [], direct: false };
+      return { urls: [], direct: false, response: cobaltResponse };
     }
-    return { urls: items, direct: true };
+    return { urls: items, direct: true, response: cobaltResponse };
   }
 
   if (cobaltResponse.status === 'redirect' && cobaltResponse.url) {
@@ -833,19 +833,20 @@ async function getCobaltMediaUrlsImpl(apiUrl, url) {
         },
       ],
       direct: true,
+      response: cobaltResponse,
     };
   }
 
   if (cobaltResponse.status === 'tunnel') {
     // Tunnel URLs point at the local cobalt container and are useless to Discord users
-    return { urls: [], direct: false };
+    return { urls: [], direct: false, response: cobaltResponse };
   }
 
   if (cobaltResponse.status === 'error') {
     throw new NetworkError(cobaltResponse.text || 'cobalt api returned an error');
   }
 
-  return { urls: [], direct: false };
+  return { urls: [], direct: false, response: cobaltResponse };
 }
 
 /**
@@ -893,16 +894,17 @@ export async function downloadFromSocialMedia(
   apiUrl,
   url,
   isAdminUser = false,
-  maxSize = Infinity
+  maxSize = Infinity,
+  prefetched = null
 ) {
-  return downloadFromSocialMediaImpl(apiUrl, url, isAdminUser, maxSize);
+  return downloadFromSocialMediaImpl(apiUrl, url, isAdminUser, maxSize, prefetched);
 }
 
-async function downloadFromSocialMediaImpl(apiUrl, url, isAdminUser, maxSize) {
+async function downloadFromSocialMediaImpl(apiUrl, url, isAdminUser, maxSize, prefetched) {
   logger.info(`Attempting to download from social media URL via Cobalt: ${url}`);
 
   try {
-    const cobaltResponse = await callCobaltApi(apiUrl, url);
+    const cobaltResponse = prefetched ?? (await callCobaltApi(apiUrl, url));
     logger.info(`Cobalt API response: ${JSON.stringify(cobaltResponse)}`);
     logger.info('Cobalt API call successful, downloading media');
     const result = await downloadFromCobalt(cobaltResponse, isAdminUser, maxSize, apiUrl);

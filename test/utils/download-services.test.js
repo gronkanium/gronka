@@ -29,7 +29,7 @@ describe('download-services registry', () => {
     assert.strictEqual(getServiceForUrl('https://www.tiktok.com/@u/video/1')?.id, 'tiktok');
     assert.strictEqual(getServiceForUrl('https://v.redd.it/abc')?.id, 'reddit');
     assert.strictEqual(getServiceForUrl('https://youtu.be/abc')?.id, 'youtube');
-    assert.strictEqual(getServiceForUrl('https://www.pornhub.com/view?x')?.id, 'pornhub');
+    assert.strictEqual(getServiceForUrl('https://www.xvideos.com/video1/x')?.id, 'xvideos');
     assert.strictEqual(getServiceForUrl('https://redgifs.com/watch/x')?.id, 'redgifs');
     assert.strictEqual(getServiceForUrl('https://hentaigifz.com/slug/')?.id, 'hentaigifz');
     assert.strictEqual(getServiceForUrl('https://danbooru.donmai.us/posts/1')?.id, 'danbooru');
@@ -42,7 +42,7 @@ describe('download-services registry', () => {
 
   test('getServiceForUrl returns null for unknown and lookalike hosts', () => {
     assert.strictEqual(getServiceForUrl('https://example.com/x'), null);
-    assert.strictEqual(getServiceForUrl('https://pornhub.com.evil.com/x'), null);
+    assert.strictEqual(getServiceForUrl('https://xvideos.com.evil.com/x'), null);
     assert.strictEqual(getServiceForUrl('not a url'), null);
   });
 });
@@ -56,10 +56,10 @@ describe('getDisabledServiceLabel gating', () => {
   });
 
   test('returns the label only for a disabled service', async () => {
-    await setSetting('disabled_services', JSON.stringify(['pornhub']));
+    await setSetting('disabled_services', JSON.stringify(['xvideos']));
     assert.strictEqual(
-      await getDisabledServiceLabel('https://www.pornhub.com/view_video.php?viewkey=x'),
-      'Pornhub'
+      await getDisabledServiceLabel('https://www.xvideos.com/video1/x'),
+      'XVideos'
     );
     // a different service is unaffected
     assert.strictEqual(await getDisabledServiceLabel('https://youtube.com/watch?v=x'), null);
@@ -67,9 +67,6 @@ describe('getDisabledServiceLabel gating', () => {
     assert.strictEqual(await getDisabledServiceLabel('https://example.com/x'), null);
 
     await setSetting('disabled_services', '[]');
-    assert.strictEqual(
-      await getDisabledServiceLabel('https://www.pornhub.com/view_video.php?viewkey=x'),
-      null
-    );
+    assert.strictEqual(await getDisabledServiceLabel('https://www.xvideos.com/video1/x'), null);
   });
 });

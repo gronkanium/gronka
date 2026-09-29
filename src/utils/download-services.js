@@ -26,7 +26,6 @@ const YTDLP_CATEGORY = {
   Tenor: 'social',
   Xiaohongshu: 'social',
   RedGifs: 'adult',
-  Pornhub: 'adult',
   XVideos: 'adult',
   xHamster: 'adult',
   RedTube: 'adult',

@@ -42,6 +42,13 @@ export default [
         setTimeout: 'readonly',
         clearTimeout: 'readonly',
         fetch: 'readonly',
+        Bun: 'readonly',
+        Request: 'readonly',
+        Response: 'readonly',
+        ReadableStream: 'readonly',
+        TextEncoder: 'readonly',
+        URLSearchParams: 'readonly',
+        AbortSignal: 'readonly',
       },
     },
     rules: {

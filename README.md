@@ -1,125 +1,53 @@
-# gronka
+<p align="center">
+  <img src=".github/assets/banner.png" alt="gronka" width="100%">
+</p>
 
-![Bun](https://img.shields.io/badge/Bun-1.3-fbf0df?logo=bun&logoColor=fbf0df)
-![Discord.js](https://img.shields.io/badge/Discord.js-14-5865F2?logo=discord&logoColor=white)
-![Docker](https://img.shields.io/badge/Docker-Ready-2496ED?logo=docker&logoColor=white)
-[![Add to Discord](https://img.shields.io/badge/Add_to_Discord-5865F2?logo=discord&logoColor=white)](https://discord.com/oauth2/authorize?client_id=1522194017692156046)
-[![Docs](https://img.shields.io/badge/read-docs-blue)](https://github.com/thedorekaczynski/gronka/wiki)
-[![FFmpeg](https://img.shields.io/badge/FFmpeg-007808?logo=ffmpeg&logoColor=white)](https://ffmpeg.org/)
-[![GitHub](https://img.shields.io/badge/GitHub-181717?logo=github&logoColor=white)](https://github.com/thedorekaczynski/gronka)
+<p align="center">
+  <a href="https://github.com/thedorekaczynski/gronka/actions/workflows/ci.yml"><img src="https://github.com/thedorekaczynski/gronka/actions/workflows/ci.yml/badge.svg?branch=master" alt="CI"></a>
+  <a href="https://github.com/thedorekaczynski/gronka/releases/latest"><img src="https://img.shields.io/github/v/release/thedorekaczynski/gronka?color=000&label=release" alt="release"></a>
+  <a href="LICENSE"><img src="https://img.shields.io/github/license/thedorekaczynski/gronka?color=000" alt="MIT"></a>
+  <a href="https://discord.com/oauth2/authorize?client_id=1522194017692156046"><img src="https://img.shields.io/badge/add_to-discord-000?logo=discord&logoColor=white" alt="add to discord"></a>
+  <a href="https://web.gronka.dev"><img src="https://img.shields.io/badge/web-gronka.dev-000" alt="web.gronka.dev"></a>
+</p>
 
-a discord bot that downloads media from social platforms and direct urls, converts it to gifs, and optimizes gifs.
+paste a link, get the file. gronka downloads media from 40+ sites, turns video into gifs and shrinks
+gifs, as a discord bot and on [web.gronka.dev](https://web.gronka.dev).
 
 ## commands
 
-- `/download`, download a video/image from a social url (no conversion)
-- `/convert`, attach a file or paste a url and convert it to a gif (quality preset `low`/`medium`/`high`, optional `optimize`, optional `lossy` 0-100, and `start`/`end` trimming for videos)
-- `/optimize`, shrink an existing gif with lossy compression (`lossy` 0-100, default 35)
-- `/stats`, storage and usage statistics
-- `/info`, system info, cache stats, and configuration
+- `/download`: a video, image or gallery from a link, or `mp3` for just the audio
+- `/convert`: a file or link to a gif (or another format), with quality, lossy and `start`/`end` trimming
+- `/optimize`: shrink an existing gif
+- `/info`: version, cache and storage
 
-the same three actions are also available by right-clicking a message → apps: **convert to gif**, **download**, and **optimize**.
+right-click a message → apps does the same: **convert to gif**, **download**, **optimize**.
 
-### supported sources
+## sites
 
-- **cobalt** handles most social platforms: twitter/x, tiktok, instagram, youtube, reddit, facebook, twitch clips, soundcloud, tumblr, streamable, dailymotion, snapchat
-- **yt-dlp** handles youtube, redgifs, imgur, kick, coub, rumble, niconico, bilibili, and the adult tube sites (xvideos, xhamster, redtube); it is also the fallback for x/twitter and tiktok
-- **gallery-dl** handles image galleries from DeviantArt, ArtStation, Flickr, Wallhaven, MangaDex, and nhentai. MangaDex and nhentai links open an ephemeral picker before downloading selected pages.
-- **pinterest**, a dedicated extractor for pins and `pin.it` share links (neither cobalt nor yt-dlp can read pinterest); grabs the pin's video, or its full-size image
-- **Klipy**, a dedicated page-metadata extractor for Klipy GIF and sticker pages; downloads the page's video or image directly
-- **booru boards**, danbooru, e621/e926, yande.re, and konachan posts via their JSON APIs
-  (grabs the post's original file)
-- direct urls to video/image files work with `/convert`
+tiktok, instagram, youtube, x, reddit, soundcloud, bluesky, pinterest, twitch, tumblr, imgur, giphy
+and about 30 more, through [cobalt](https://github.com/imputnet/cobalt), yt-dlp, gallery-dl and a few
+extractors of its own. the full list is on [web.gronka.dev](https://web.gronka.dev).
 
-### manga downloads
-
-MangaDex and nhentai are the currently allowlisted manga/gallery sources. A MangaDex title or chapter URL, or an nhentai gallery URL, opens an ephemeral
-chapter, language, and source picker, followed by a Discord input box for the page range. The bot
-downloads up to 10 selected pages as individual attachments. Larger selections are bundled into a
-ZIP before delivery. Pages are fetched through the guarded downloader with four concurrent workers.
-Chapter URLs can also be passed directly to `/download` and use the same page-range picker.
-Other manga domains require a working gallery-dl extractor and a source-specific smoke test before
-they are allowlisted. `mangapark.cc` is currently excluded because gallery-dl 1.32.11 reports it as
-an unsupported URL.
-
-each source can be turned on/off individually from the webui **sources** page (in the sidebar); a turned-off source refuses `/download` with a short message.
-
-video inputs: mp4, mov, webm, avi, mkv. image inputs: png, jpg, jpeg, webp, gif.
-
-## how it works
-
-- **discord bot**, lives in your server, downloads media, and runs the conversions (ffmpeg for video→gif, gifsicle for gif optimization)
-- **storage**, files under discord's 8mb attachment limit are sent inline; larger files are uploaded to cloudflare r2 (optional) and delivered as a temporary url, falling back to local disk if r2 isn't configured or an upload fails
-- **webui**, a small stats dashboard, served automatically alongside the bot
-
-downloaded media is stored so a repeat of the same url skips re-downloading and re-converting.
-
-### size limits
-
-non-admin downloads are rejected above a hard ceiling (`MAX_VIDEO_SIZE`, default 1gb; `MAX_IMAGE_SIZE`, default 50mb). files delivered via r2 get a temporary url whose lifetime shrinks as size grows (roughly 72h for ≤100mb down to 2h at 1gb), keeping storage costs bounded. admins bypass the download ceiling; conversion and optimization limits still apply. users always see a clear message when a limit is hit.
-
-## getting started
-
-docker is the supported way to run gronka, the image bundles ffmpeg, gifsicle, and yt-dlp.
+## run your own
 
 ```bash
-git clone https://github.com/thedorekaczynski/gronka.git
-cd gronka
+git clone https://github.com/thedorekaczynski/gronka.git && cd gronka
 bun install
-bun run setup             # asks for your token, writes .env, creates the mounted files
+bun run setup             # asks for your token, writes .env and the mounted files
 docker compose up -d --build
-bun run docker:register   # once, to register slash commands
+bun run docker:register   # once, registers the slash commands
 ```
 
-the stats dashboard is then available at `http://localhost:3001`.
-
-`bun run setup` asks only for what it can't work out itself and writes `.env` from
-`.env.example`, keeping the comments. `bun run setup:check` re-validates an install later and
-changes nothing. prefer doing it by hand? `cp .env.example .env`, `cp cookies.example.json
-cookies.json`, `touch ytdlp-cookies.txt`, the wizard is a convenience, nothing depends on it.
-
-> those files are bind-mounted **as files**. if one is missing docker creates a _directory_ in
-> its place and yt-dlp/cobalt silently run unauthenticated, which reads as "cookies don't work".
-
-> running the bot outside docker is possible for development but needs bun 1.3+, ffmpeg, and yt-dlp installed yourself; `/optimize` also needs gifsicle (linux/macOS, or docker on windows). see the [wiki](https://github.com/thedorekaczynski/gronka/wiki) for the local development workflow.
-
-## configuration
-
-everything lives in `.env`. the only required values are your discord credentials:
-
-- `DISCORD_TOKEN`, bot token from the [discord developer portal](https://discord.com/developers/applications)
-- `CLIENT_ID`, the application id from the same place
-
-two optional values are worth setting before you invite anyone:
-
-- `SUPPORT_INVITE_URL`, your own discord server. `/info` links it and the ban-appeal embed sends appeals there; leave it empty and neither surface mentions a server at all
-- `ADMIN_USER_IDS`, comma-separated discord user ids that bypass rate limits and size caps
-
-optional logins for gated content (instagram photo posts, reddit galleries) go in
-`cookies.json`, see [Cookies](https://github.com/thedorekaczynski/gronka/wiki/Cookies).
-
-`.env.example` uses `PROD_`/`TEST_` prefixes so one file can hold two bot instances; the docker setup and the `bot:prod`/`bot:test` scripts map the chosen prefix onto the plain names above. everything else is optional and documented inline in `.env.example`.
-
-### cloudflare r2 (optional)
-
-set these to store and serve larger files from r2 instead of local disk:
-
-- `R2_ACCOUNT_ID`, `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY`, `R2_BUCKET_NAME`
-- `R2_PUBLIC_DOMAIN`, public domain for the bucket (e.g. `cdn.example.com`)
-
-optional background cleanup (`R2_TEMP_UPLOADS_ENABLED`, `R2_CLEANUP_ENABLED`) deletes expired uploads on a schedule. see the [r2 storage docs](https://github.com/thedorekaczynski/gronka/wiki/R2-Storage).
+only `DISCORD_TOKEN` and `CLIENT_ID` are required. cookies, cloudflare r2 and everything else are
+optional: see the [wiki](https://github.com/thedorekaczynski/gronka/wiki).
 
 ## development
 
 ```bash
-bun run lint          # eslint, no warnings allowed
-bun run format        # prettier
-bun run validate      # lock-sync + lint + format check
-bun run test:safe     # full test suite (needs postgres up)
-bun run test:e2e      # mocked-network download pipeline
+bun run lint && bun run test:safe && bun run test:e2e
 ```
 
-plain esm javascript (no typescript). full docs, including the deploy cycle and architecture, live in the [wiki](https://github.com/thedorekaczynski/gronka/wiki).
+plain esm javascript on bun 1.3. issues and PRs welcome, see [CONTRIBUTING](.github/CONTRIBUTING.md).
 
 ## license
 

@@ -236,4 +236,14 @@ fs.writeFileSync(
   new URL('robots.txt', ROOT),
   `User-agent: *\nAllow: /\n\nSitemap: ${SITE}/sitemap.xml\n`
 );
+// Everything written here except index.html is build output, rebuilt by `wrangler deploy` (wrangler.toml).
+fs.writeFileSync(
+  new URL('.gitignore', import.meta.url),
+  [
+    '# written by pages.mjs',
+    'public/sitemap.xml',
+    'public/robots.txt',
+    ...PLATFORMS.map(p => `public/${p.slug}/`),
+  ].join('\n') + '\n'
+);
 console.log(`home + ${PLATFORMS.length} pages, sitemap ${urls.length} urls`);

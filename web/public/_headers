@@ -5,6 +5,7 @@
   Referrer-Policy: no-referrer
   Permissions-Policy: camera=(), microphone=(), geolocation=(), interest-cohort=(), clipboard-read=(self), clipboard-write=(self), publickey-credentials-get=(self), publickey-credentials-create=(self)
   Cross-Origin-Opener-Policy: same-origin
+  Cache-Control: no-transform
 
 /_libav/*
   Cache-Control: public, max-age=31536000, immutable

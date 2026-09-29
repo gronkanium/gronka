@@ -10,6 +10,7 @@ import { detectFileType } from './utils/storage.js';
 import { uploadToR2, listObjectsInR2, deleteFromR2 } from './utils/r2-storage.js';
 import { getStreamInfo, isYouTubeUrl } from './utils/ytdlp.js';
 import { AppError, ValidationError } from './utils/errors.js';
+import * as accounts from './web/accounts.js';
 
 const logger = createLogger('web');
 
@@ -223,7 +224,7 @@ export function parseDownloadRequest(body) {
   };
 }
 
-export async function verifyTurnstile(token, secret = TURNSTILE_SECRET) {
+export async function verifyTurnstile(token, action, secret = TURNSTILE_SECRET) {
   if (!secret || typeof token !== 'string' || !token || token.length > 2048) {
     return false;
   }
@@ -235,9 +236,7 @@ export async function verifyTurnstile(token, secret = TURNSTILE_SECRET) {
     });
     const out = await res.json();
     return (
-      out.success === true &&
-      out.hostname === new URL(WEB_ORIGIN).hostname &&
-      out.action === 'download'
+      out.success === true && out.hostname === new URL(WEB_ORIGIN).hostname && out.action === action
     );
   } catch {
     return false;
@@ -298,31 +297,63 @@ function json(data, status, headers) {
 const apiError = (error, headers) =>
   json({ error: { code: error.code, message: error.message } }, error.statusCode, headers);
 
+const SESSION_COOKIE = 'gw_session';
+
+function sessionCookie(token, maxAgeSeconds) {
+  return `${SESSION_COOKIE}=${token}; Path=/api; HttpOnly; Secure; SameSite=Strict; Max-Age=${maxAgeSeconds}`;
+}
+
+function readCookie(req, name) {
+  for (const part of (req.headers.get('cookie') ?? '').split(';')) {
+    const [key, ...value] = part.trim().split('=');
+    if (key === name) return value.join('=');
+  }
+  return null;
+}
+
+async function readJson(req) {
+  const length = Number(req.headers.get('content-length') ?? 0);
+  if (length > MAX_BODY_BYTES) {
+    throw new AppError('request too large.', 'BAD_REQUEST', 413);
+  }
+  const text = await req.text();
+  if (!text) return {};
+  try {
+    return JSON.parse(text);
+  } catch {
+    throw new AppError('send json.', 'BAD_REQUEST', 400);
+  }
+}
+
 export function createHandler({
   verify = verifyTurnstile,
   download = runDownload,
   maxJobs = MAX_JOBS,
   ipLimit = IP_LIMIT,
+  signupLimit = 3,
+  loginLimit = 10,
 } = {}) {
   // Per-IP state is keyed by an HMAC under a key that rotates daily and lives only here.
   let dayKey = null;
   let day = null;
   const windows = new Map();
-  const activeIps = new Set();
+  const activeCallers = new Set();
   let activeJobs = 0;
   const stats = { started: new Date().toISOString(), lanes: {}, errors: {} };
 
-  const ipKey = ip => {
+  const ipKey = (req, server) => {
     const today = new Date().toISOString().slice(0, 10);
     if (today !== day) {
       day = today;
       dayKey = crypto.randomBytes(32);
       windows.clear();
     }
+    // Only cloudflared can reach this server, so its header is the real client address.
+    const ip = req.headers.get('cf-connecting-ip') || server?.requestIP?.(req)?.address || '';
     return crypto.createHmac('sha256', dayKey).update(ip).digest('base64url');
   };
 
-  const overLimit = key => {
+  const overLimit = (key, limit) => {
     const now = Date.now();
     const entry = windows.get(key);
     if (!entry || entry.resetAt <= now) {
@@ -330,7 +361,13 @@ export function createHandler({
       return false;
     }
     entry.count += 1;
-    return entry.count > ipLimit;
+    return entry.count > limit;
+  };
+
+  const limit = (key, max) => {
+    if (overLimit(key, max)) {
+      throw new AppError('too many requests, try again in a few minutes.', 'RATE_LIMITED', 429);
+    }
   };
 
   const corsHeaders = req => {
@@ -338,7 +375,8 @@ export function createHandler({
     if (req.headers.get('origin') === WEB_ORIGIN) {
       Object.assign(headers, {
         'Access-Control-Allow-Origin': WEB_ORIGIN,
-        'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
+        'Access-Control-Allow-Credentials': 'true',
+        'Access-Control-Allow-Methods': 'GET, POST, DELETE, OPTIONS',
         'Access-Control-Allow-Headers': 'content-type, authorization',
         'Access-Control-Max-Age': '600',
         Vary: 'Origin',
@@ -347,29 +385,40 @@ export function createHandler({
     return headers;
   };
 
+  // Cookie-authenticated routes: the Origin check is the CSRF guard, SameSite=Strict the second one.
+  async function requireSession(req) {
+    if (req.method !== 'GET' && req.headers.get('origin') !== WEB_ORIGIN) {
+      throw new AppError('not allowed from here.', 'FORBIDDEN', 403);
+    }
+    const accountId = await accounts.getSessionAccount(readCookie(req, SESSION_COOKIE));
+    if (!accountId) {
+      throw new AppError('log in first.', 'UNAUTHORIZED', 401);
+    }
+    return accountId;
+  }
+
   async function handleDownload(req, server, headers) {
-    const length = Number(req.headers.get('content-length') ?? 0);
-    if (length > MAX_BODY_BYTES) {
-      throw new AppError('request too large.', 'BAD_REQUEST', 413);
-    }
-    let body;
-    try {
-      body = JSON.parse(await req.text());
-    } catch {
-      throw new AppError('send json.', 'BAD_REQUEST', 400);
-    }
+    const body = await readJson(req);
     const job = parseDownloadRequest(body);
 
-    // Only cloudflared can reach this server, so its header is the real client address.
-    const ip = req.headers.get('cf-connecting-ip') || server?.requestIP?.(req)?.address || '';
-    const key = ipKey(ip);
-    if (activeIps.has(key)) {
+    let caller;
+    const auth = req.headers.get('authorization');
+    if (auth) {
+      const key = await accounts.verifyApiKey(auth.replace(/^Bearer\s+/i, ''));
+      if (!key) {
+        throw new AppError('that api key is not valid.', 'UNAUTHORIZED', 401);
+      }
+      caller = `key:${key.keyId}`;
+    } else {
+      caller = `ip:${ipKey(req, server)}`;
+    }
+    if (activeCallers.has(caller)) {
       throw new AppError('one download at a time.', 'RATE_LIMITED', 429);
     }
-    if (overLimit(key)) {
+    if (overLimit(caller, ipLimit)) {
       throw new AppError('too many downloads, try again in a few minutes.', 'RATE_LIMITED', 429);
     }
-    if (!(await verify(body.turnstile))) {
+    if (!auth && !(await verify(body.turnstile, 'download'))) {
       throw new AppError('verification failed, reload the page.', 'VERIFICATION_FAILED', 403);
     }
     if (activeJobs >= maxJobs) {
@@ -377,7 +426,7 @@ export function createHandler({
     }
 
     activeJobs += 1;
-    activeIps.add(key);
+    activeCallers.add(caller);
     const work = download(job)
       .then(result => {
         stats.lanes[result.lane] = (stats.lanes[result.lane] ?? 0) + 1;
@@ -390,25 +439,89 @@ export function createHandler({
       })
       .finally(() => {
         activeJobs -= 1;
-        activeIps.delete(key);
+        activeCallers.delete(caller);
       });
     return heartbeatJson(work, headers);
   }
 
-  async function fetchHandler(req, server) {
+  async function route(req, server, headers) {
     const { pathname } = new URL(req.url);
+    const { method } = req;
+    const withCookie = (data, status, token, maxAge) =>
+      json(data, status, { ...headers, 'Set-Cookie': sessionCookie(token, maxAge) });
+
+    if (method === 'GET' && (pathname === '/api/health' || pathname === '/health')) {
+      return json({ ok: true }, 200, headers);
+    }
+    if (method === 'POST' && pathname === '/api/download') {
+      return handleDownload(req, server, headers);
+    }
+    if (method === 'POST' && pathname === '/api/account') {
+      const body = await readJson(req);
+      limit(`signup:${ipKey(req, server)}`, signupLimit);
+      if (!(await verify(body.turnstile, 'account'))) {
+        throw new AppError('verification failed, reload the page.', 'VERIFICATION_FAILED', 403);
+      }
+      const { id, number } = await accounts.createAccount();
+      const token = await accounts.createSession(id);
+      return withCookie({ id, number }, 201, token, accounts.SESSION_MS / 1000);
+    }
+    if (method === 'POST' && pathname === '/api/session') {
+      const body = await readJson(req);
+      limit(`login:${ipKey(req, server)}`, loginLimit);
+      if (!(await verify(body.turnstile, 'login'))) {
+        throw new AppError('verification failed, reload the page.', 'VERIFICATION_FAILED', 403);
+      }
+      const accountId = await accounts.verifyAccountNumber(body.number);
+      if (!accountId) {
+        throw new AppError('that account number is not right.', 'UNAUTHORIZED', 401);
+      }
+      const token = await accounts.createSession(accountId);
+      return withCookie({ id: accountId }, 200, token, accounts.SESSION_MS / 1000);
+    }
+    if (method === 'DELETE' && pathname === '/api/session') {
+      await accounts.deleteSession(readCookie(req, SESSION_COOKIE));
+      return withCookie({ ok: true }, 200, '', 0);
+    }
+    if (pathname === '/api/account' && (method === 'GET' || method === 'DELETE')) {
+      const accountId = await requireSession(req);
+      if (method === 'GET') {
+        return json(await accounts.getAccountSummary(accountId), 200, headers);
+      }
+      await accounts.deleteAccount(accountId);
+      return withCookie({ ok: true }, 200, '', 0);
+    }
+    if (method === 'POST' && pathname === '/api/account/rotate') {
+      const accountId = await requireSession(req);
+      return json({ number: await accounts.rotateAccountNumber(accountId) }, 200, headers);
+    }
+    if (method === 'POST' && pathname === '/api/keys') {
+      const accountId = await requireSession(req);
+      const body = await readJson(req);
+      const created = await accounts.createApiKey(accountId, body.label);
+      if (!created) {
+        throw new AppError('10 keys is the limit, revoke one first.', 'KEY_LIMIT', 400);
+      }
+      return json(created, 201, headers);
+    }
+    const keyMatch = pathname.match(/^\/api\/keys\/(gk_[0-9a-z]{8})$/);
+    if (method === 'DELETE' && keyMatch) {
+      const accountId = await requireSession(req);
+      if (!(await accounts.revokeApiKey(accountId, keyMatch[1]))) {
+        throw new AppError('no such key.', 'NOT_FOUND', 404);
+      }
+      return json({ ok: true }, 200, headers);
+    }
+    throw new AppError('not found.', 'NOT_FOUND', 404);
+  }
+
+  async function fetchHandler(req, server) {
     const headers = corsHeaders(req);
     try {
       if (req.method === 'OPTIONS') {
         return new Response(null, { status: 204, headers });
       }
-      if (req.method === 'GET' && (pathname === '/api/health' || pathname === '/health')) {
-        return json({ ok: true }, 200, headers);
-      }
-      if (req.method === 'POST' && pathname === '/api/download') {
-        return await handleDownload(req, server, headers);
-      }
-      throw new AppError('not found.', 'NOT_FOUND', 404);
+      return await route(req, server, headers);
     } catch (error) {
       if (error instanceof AppError) {
         return apiError(error, headers);
@@ -427,6 +540,7 @@ if (import.meta.main) {
     throw new Error('TURNSTILE_SECRET is required');
   }
   await initDatabase();
+  await accounts.ensureWebSchema();
   const handler = createHandler();
   Bun.serve({
     port: Number(env('WEB_PORT', 3000)),

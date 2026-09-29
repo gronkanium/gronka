@@ -3,22 +3,22 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>gronka: free video downloader, no ads, no account</title>
+    <title>facebook video downloader | gronka</title>
     <meta
       name="description"
-      content="paste a link from tiktok, instagram, x, youtube, reddit and more, get the file. free, no ads, no account, no request logs."
+      content="save facebook videos. fb.watch links work. free, no ads, no account, no request logs."
     />
     <meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)" />
     <meta name="theme-color" content="#000000" media="(prefers-color-scheme: dark)" />
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
-    <link rel="canonical" href="https://web.gronka.dev/" />
+    <link rel="canonical" href="https://web.gronka.dev/facebook/" />
     <meta property="og:type" content="website" />
-    <meta property="og:url" content="https://web.gronka.dev/" />
-    <meta property="og:title" content="gronka: free video downloader, no ads, no account" />
+    <meta property="og:url" content="https://web.gronka.dev/facebook/" />
+    <meta property="og:title" content="facebook video downloader | gronka" />
     <meta
       property="og:description"
-      content="paste a link from tiktok, instagram, x, youtube, reddit and more, get the file. free, no ads, no account, no request logs."
+      content="save facebook videos. fb.watch links work. free, no ads, no account, no request logs."
     />
     <meta property="og:image" content="https://web.gronka.dev/og.png" />
     <meta property="og:image:width" content="1200" />
@@ -67,7 +67,7 @@
           {
             "@type": "WebApplication",
             "name": "gronka",
-            "url": "https://web.gronka.dev/",
+            "url": "https://web.gronka.dev/facebook/",
             "applicationCategory": "MultimediaApplication",
             "operatingSystem": "any",
             "browserRequirements": "requires javascript",
@@ -78,26 +78,18 @@
             "mainEntity": [
               {
                 "@type": "Question",
+                "name": "can it get private posts?",
+                "acceptedAnswer": {
+                  "@type": "Answer",
+                  "text": "no. a private post or account has nothing public to fetch, so gronka cannot get it."
+                }
+              },
+              {
+                "@type": "Question",
                 "name": "do i need an account?",
                 "acceptedAnswer": {
                   "@type": "Answer",
                   "text": "no. paste the link and download. accounts only exist to hold api keys."
-                }
-              },
-              {
-                "@type": "Question",
-                "name": "which sites work?",
-                "acceptedAnswer": {
-                  "@type": "Answer",
-                  "text": "tiktok, instagram, x, youtube, reddit, bluesky, pinterest, facebook, imgur, tumblr, twitch clips, soundcloud and more."
-                }
-              },
-              {
-                "@type": "Question",
-                "name": "does gronka keep what i download?",
-                "acceptedAnswer": {
-                  "@type": "Answer",
-                  "text": "no request logs and no history. files gronka has to copy itself are deleted after an hour."
                 }
               },
               {
@@ -107,6 +99,23 @@
                   "@type": "Answer",
                   "text": "about 10 downloads per 10 minutes, one at a time. the same for everyone, and nothing is paid."
                 }
+              }
+            ]
+          },
+          {
+            "@type": "BreadcrumbList",
+            "itemListElement": [
+              {
+                "@type": "ListItem",
+                "position": 1,
+                "name": "gronka",
+                "item": "https://web.gronka.dev/"
+              },
+              {
+                "@type": "ListItem",
+                "position": 2,
+                "name": "facebook downloader",
+                "item": "https://web.gronka.dev/facebook/"
               }
             ]
           }
@@ -129,10 +138,8 @@
     </header>
 
     <main>
-      <h1>paste a link, get the file.</h1>
-      <p class="lede">
-        tiktok, instagram, x, youtube, reddit and a lot more. the discord bot, in your browser.
-      </p>
+      <h1>facebook downloader.</h1>
+      <p class="lede">facebook videos. fb.watch links work too.</p>
 
       <p id="asleep" class="asleep ink" hidden>
         <img src="/p/asleep.svg" alt="" width="400" height="400" />
@@ -154,7 +161,7 @@
             autocomplete="off"
             autocapitalize="off"
             spellcheck="false"
-            placeholder="paste a link"
+            placeholder="paste a facebook link"
             enterkeyhint="go"
             aria-describedby="host"
           />
@@ -227,6 +234,26 @@
     </main>
 
     <section class="more">
+      <h2>what works</h2>
+      <ul>
+        <li>video links on <code>facebook.com</code> and <code>fb.watch</code> short links.</li>
+        <li>pick <strong>audio</strong> for the sound only, or trim a part out.</li>
+      </ul>
+      <h2>how the file gets to you</h2>
+      <p>
+        gronka asks for the video one way and, if that fails, tries a second way.
+        <a href="/privacy/">more on that</a>.
+      </p>
+      <h2>questions</h2>
+      <h3>can it get private posts?</h3>
+      <p>no. a private post or account has nothing public to fetch, so gronka cannot get it.</p>
+      <h3>do i need an account?</h3>
+      <p>no. paste the link and download. accounts only exist to hold api keys.</p>
+      <h3>is there a limit?</h3>
+      <p>
+        about 10 downloads per 10 minutes, one at a time. the same for everyone, and nothing is
+        paid.
+      </p>
       <nav class="sites" aria-label="downloaders by site">
         <h2>by site</h2>
         <ul>
@@ -236,26 +263,10 @@
           <li><a href="/youtube/">youtube</a></li>
           <li><a href="/reddit/">reddit</a></li>
           <li><a href="/pinterest/">pinterest</a></li>
-          <li><a href="/facebook/">facebook</a></li>
+          <li><a href="/facebook/" aria-current="page">facebook</a></li>
         </ul>
       </nav>
-      <h2>questions</h2>
-      <h3>do i need an account?</h3>
-      <p>no. paste the link and download. accounts only exist to hold api keys.</p>
-      <h3>which sites work?</h3>
-      <p>
-        tiktok, instagram, x, youtube, reddit, bluesky, pinterest, facebook, imgur, tumblr, twitch
-        clips, soundcloud and more.
-      </p>
-      <h3>does gronka keep what i download?</h3>
-      <p>
-        no request logs and no history. files gronka has to copy itself are deleted after an hour.
-      </p>
-      <h3>is there a limit?</h3>
-      <p>
-        about 10 downloads per 10 minutes, one at a time. the same for everyone, and nothing is
-        paid.
-      </p>
+      <p><a href="/">every other site</a> works from the main page too.</p>
     </section>
 
     <footer class="foot">

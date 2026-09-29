@@ -3,22 +3,22 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>gronka: free video downloader, no ads, no account</title>
+    <title>instagram downloader: reels, posts, stories | gronka</title>
     <meta
       name="description"
-      content="paste a link from tiktok, instagram, x, youtube, reddit and more, get the file. free, no ads, no account, no request logs."
+      content="save instagram reels, photo posts, carousels, stories and highlights. paste the link, get the file. free, no ads, no account."
     />
     <meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)" />
     <meta name="theme-color" content="#000000" media="(prefers-color-scheme: dark)" />
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
-    <link rel="canonical" href="https://web.gronka.dev/" />
+    <link rel="canonical" href="https://web.gronka.dev/instagram/" />
     <meta property="og:type" content="website" />
-    <meta property="og:url" content="https://web.gronka.dev/" />
-    <meta property="og:title" content="gronka: free video downloader, no ads, no account" />
+    <meta property="og:url" content="https://web.gronka.dev/instagram/" />
+    <meta property="og:title" content="instagram downloader: reels, posts, stories | gronka" />
     <meta
       property="og:description"
-      content="paste a link from tiktok, instagram, x, youtube, reddit and more, get the file. free, no ads, no account, no request logs."
+      content="save instagram reels, photo posts, carousels, stories and highlights. paste the link, get the file. free, no ads, no account."
     />
     <meta property="og:image" content="https://web.gronka.dev/og.png" />
     <meta property="og:image:width" content="1200" />
@@ -67,7 +67,7 @@
           {
             "@type": "WebApplication",
             "name": "gronka",
-            "url": "https://web.gronka.dev/",
+            "url": "https://web.gronka.dev/instagram/",
             "applicationCategory": "MultimediaApplication",
             "operatingSystem": "any",
             "browserRequirements": "requires javascript",
@@ -78,35 +78,52 @@
             "mainEntity": [
               {
                 "@type": "Question",
+                "name": "can i save a whole carousel?",
+                "acceptedAnswer": {
+                  "@type": "Answer",
+                  "text": "yes. the picker shows every slide, and \"all\" saves them in one go."
+                }
+              },
+              {
+                "@type": "Question",
+                "name": "can it get private posts?",
+                "acceptedAnswer": {
+                  "@type": "Answer",
+                  "text": "no. a private post or account has nothing public to fetch, so gronka cannot get it."
+                }
+              },
+              {
+                "@type": "Question",
+                "name": "why did a story fail?",
+                "acceptedAnswer": {
+                  "@type": "Answer",
+                  "text": "stories vanish after 24 hours, so an old story link has nothing left to fetch."
+                }
+              },
+              {
+                "@type": "Question",
                 "name": "do i need an account?",
                 "acceptedAnswer": {
                   "@type": "Answer",
                   "text": "no. paste the link and download. accounts only exist to hold api keys."
                 }
+              }
+            ]
+          },
+          {
+            "@type": "BreadcrumbList",
+            "itemListElement": [
+              {
+                "@type": "ListItem",
+                "position": 1,
+                "name": "gronka",
+                "item": "https://web.gronka.dev/"
               },
               {
-                "@type": "Question",
-                "name": "which sites work?",
-                "acceptedAnswer": {
-                  "@type": "Answer",
-                  "text": "tiktok, instagram, x, youtube, reddit, bluesky, pinterest, facebook, imgur, tumblr, twitch clips, soundcloud and more."
-                }
-              },
-              {
-                "@type": "Question",
-                "name": "does gronka keep what i download?",
-                "acceptedAnswer": {
-                  "@type": "Answer",
-                  "text": "no request logs and no history. files gronka has to copy itself are deleted after an hour."
-                }
-              },
-              {
-                "@type": "Question",
-                "name": "is there a limit?",
-                "acceptedAnswer": {
-                  "@type": "Answer",
-                  "text": "about 10 downloads per 10 minutes, one at a time. the same for everyone, and nothing is paid."
-                }
+                "@type": "ListItem",
+                "position": 2,
+                "name": "instagram downloader",
+                "item": "https://web.gronka.dev/instagram/"
               }
             ]
           }
@@ -129,9 +146,9 @@
     </header>
 
     <main>
-      <h1>paste a link, get the file.</h1>
+      <h1>instagram downloader.</h1>
       <p class="lede">
-        tiktok, instagram, x, youtube, reddit and a lot more. the discord bot, in your browser.
+        reels, photo posts, carousels, stories and highlights. paste the link, get the file.
       </p>
 
       <p id="asleep" class="asleep ink" hidden>
@@ -154,7 +171,7 @@
             autocomplete="off"
             autocapitalize="off"
             spellcheck="false"
-            placeholder="paste a link"
+            placeholder="paste an instagram link"
             enterkeyhint="go"
             aria-describedby="host"
           />
@@ -227,11 +244,40 @@
     </main>
 
     <section class="more">
+      <h2>what works</h2>
+      <ul>
+        <li>
+          reels and video posts (<code>/reel/</code>, <code>/p/</code>, <code>/tv/</code> links).
+        </li>
+        <li>
+          photo posts and carousels. a carousel opens a picker so you can take some slides or all of
+          them. a link that ends in <code>?img_index=</code> and a number gets that one slide.
+        </li>
+        <li>
+          stories and highlights, including the <code>/s/</code> links the share button makes. a
+          highlight gives you its first 10 items.
+        </li>
+      </ul>
+      <h2>how the file gets to you</h2>
+      <p>
+        gronka asks instagram the way a logged-out visitor would first. photo posts and stories need
+        more than that, so gronka signs in to instagram itself and copies the file, kept for an
+        hour. <a href="/privacy/">more on that</a>.
+      </p>
+      <h2>questions</h2>
+      <h3>can i save a whole carousel?</h3>
+      <p>yes. the picker shows every slide, and &quot;all&quot; saves them in one go.</p>
+      <h3>can it get private posts?</h3>
+      <p>no. a private post or account has nothing public to fetch, so gronka cannot get it.</p>
+      <h3>why did a story fail?</h3>
+      <p>stories vanish after 24 hours, so an old story link has nothing left to fetch.</p>
+      <h3>do i need an account?</h3>
+      <p>no. paste the link and download. accounts only exist to hold api keys.</p>
       <nav class="sites" aria-label="downloaders by site">
         <h2>by site</h2>
         <ul>
           <li><a href="/tiktok/">tiktok</a></li>
-          <li><a href="/instagram/">instagram</a></li>
+          <li><a href="/instagram/" aria-current="page">instagram</a></li>
           <li><a href="/x/">x</a></li>
           <li><a href="/youtube/">youtube</a></li>
           <li><a href="/reddit/">reddit</a></li>
@@ -239,23 +285,7 @@
           <li><a href="/facebook/">facebook</a></li>
         </ul>
       </nav>
-      <h2>questions</h2>
-      <h3>do i need an account?</h3>
-      <p>no. paste the link and download. accounts only exist to hold api keys.</p>
-      <h3>which sites work?</h3>
-      <p>
-        tiktok, instagram, x, youtube, reddit, bluesky, pinterest, facebook, imgur, tumblr, twitch
-        clips, soundcloud and more.
-      </p>
-      <h3>does gronka keep what i download?</h3>
-      <p>
-        no request logs and no history. files gronka has to copy itself are deleted after an hour.
-      </p>
-      <h3>is there a limit?</h3>
-      <p>
-        about 10 downloads per 10 minutes, one at a time. the same for everyone, and nothing is
-        paid.
-      </p>
+      <p><a href="/">every other site</a> works from the main page too.</p>
     </section>
 
     <footer class="foot">

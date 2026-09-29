@@ -3,22 +3,25 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>gronka: free video downloader, no ads, no account</title>
+    <title>x (twitter) video downloader: save videos and gifs | gronka</title>
     <meta
       name="description"
-      content="paste a link from tiktok, instagram, x, youtube, reddit and more, get the file. free, no ads, no account, no request logs."
+      content="save videos, gifs and images from x (twitter). works with x.com and twitter.com links. free, no ads, no account, no request logs."
     />
     <meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)" />
     <meta name="theme-color" content="#000000" media="(prefers-color-scheme: dark)" />
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
-    <link rel="canonical" href="https://web.gronka.dev/" />
+    <link rel="canonical" href="https://web.gronka.dev/x/" />
     <meta property="og:type" content="website" />
-    <meta property="og:url" content="https://web.gronka.dev/" />
-    <meta property="og:title" content="gronka: free video downloader, no ads, no account" />
+    <meta property="og:url" content="https://web.gronka.dev/x/" />
+    <meta
+      property="og:title"
+      content="x (twitter) video downloader: save videos and gifs | gronka"
+    />
     <meta
       property="og:description"
-      content="paste a link from tiktok, instagram, x, youtube, reddit and more, get the file. free, no ads, no account, no request logs."
+      content="save videos, gifs and images from x (twitter). works with x.com and twitter.com links. free, no ads, no account, no request logs."
     />
     <meta property="og:image" content="https://web.gronka.dev/og.png" />
     <meta property="og:image:width" content="1200" />
@@ -67,7 +70,7 @@
           {
             "@type": "WebApplication",
             "name": "gronka",
-            "url": "https://web.gronka.dev/",
+            "url": "https://web.gronka.dev/x/",
             "applicationCategory": "MultimediaApplication",
             "operatingSystem": "any",
             "browserRequirements": "requires javascript",
@@ -78,26 +81,26 @@
             "mainEntity": [
               {
                 "@type": "Question",
-                "name": "do i need an account?",
+                "name": "does twitter.com still work?",
                 "acceptedAnswer": {
                   "@type": "Answer",
-                  "text": "no. paste the link and download. accounts only exist to hold api keys."
+                  "text": "yes. twitter.com and x.com links are the same thing to gronka."
                 }
               },
               {
                 "@type": "Question",
-                "name": "which sites work?",
+                "name": "why is my gif a video?",
                 "acceptedAnswer": {
                   "@type": "Answer",
-                  "text": "tiktok, instagram, x, youtube, reddit, bluesky, pinterest, facebook, imgur, tumblr, twitch clips, soundcloud and more."
+                  "text": "x turns every gif into a short mp4. that's the file x has, so that's the file you get."
                 }
               },
               {
                 "@type": "Question",
-                "name": "does gronka keep what i download?",
+                "name": "can it get private posts?",
                 "acceptedAnswer": {
                   "@type": "Answer",
-                  "text": "no request logs and no history. files gronka has to copy itself are deleted after an hour."
+                  "text": "no. a private post or account has nothing public to fetch, so gronka cannot get it."
                 }
               },
               {
@@ -107,6 +110,23 @@
                   "@type": "Answer",
                   "text": "about 10 downloads per 10 minutes, one at a time. the same for everyone, and nothing is paid."
                 }
+              }
+            ]
+          },
+          {
+            "@type": "BreadcrumbList",
+            "itemListElement": [
+              {
+                "@type": "ListItem",
+                "position": 1,
+                "name": "gronka",
+                "item": "https://web.gronka.dev/"
+              },
+              {
+                "@type": "ListItem",
+                "position": 2,
+                "name": "x downloader",
+                "item": "https://web.gronka.dev/x/"
               }
             ]
           }
@@ -129,10 +149,8 @@
     </header>
 
     <main>
-      <h1>paste a link, get the file.</h1>
-      <p class="lede">
-        tiktok, instagram, x, youtube, reddit and a lot more. the discord bot, in your browser.
-      </p>
+      <h1>x downloader.</h1>
+      <p class="lede">videos, gifs and images from x. twitter.com links work too.</p>
 
       <p id="asleep" class="asleep ink" hidden>
         <img src="/p/asleep.svg" alt="" width="400" height="400" />
@@ -154,7 +172,7 @@
             autocomplete="off"
             autocapitalize="off"
             spellcheck="false"
-            placeholder="paste a link"
+            placeholder="paste an x or twitter link"
             enterkeyhint="go"
             aria-describedby="host"
           />
@@ -227,35 +245,49 @@
     </main>
 
     <section class="more">
+      <h2>what works</h2>
+      <ul>
+        <li>
+          post links on <code>x.com</code> and <code>twitter.com</code>, plus embed mirrors like
+          <code>fxtwitter.com</code> and <code>vxtwitter.com</code>.
+        </li>
+        <li>
+          videos, gifs (x stores them as short videos) and images. a post with several goes to the
+          picker.
+        </li>
+        <li>pick <strong>audio</strong> for the sound only.</li>
+      </ul>
+      <h2>how the file gets to you</h2>
+      <p>
+        for a big video gronka often skips copying and hands you x's own video link. when it can't,
+        it fetches the file itself and keeps the copy for an hour.
+        <a href="/privacy/">more on that</a>.
+      </p>
+      <h2>questions</h2>
+      <h3>does twitter.com still work?</h3>
+      <p>yes. twitter.com and x.com links are the same thing to gronka.</p>
+      <h3>why is my gif a video?</h3>
+      <p>x turns every gif into a short mp4. that's the file x has, so that's the file you get.</p>
+      <h3>can it get private posts?</h3>
+      <p>no. a private post or account has nothing public to fetch, so gronka cannot get it.</p>
+      <h3>is there a limit?</h3>
+      <p>
+        about 10 downloads per 10 minutes, one at a time. the same for everyone, and nothing is
+        paid.
+      </p>
       <nav class="sites" aria-label="downloaders by site">
         <h2>by site</h2>
         <ul>
           <li><a href="/tiktok/">tiktok</a></li>
           <li><a href="/instagram/">instagram</a></li>
-          <li><a href="/x/">x</a></li>
+          <li><a href="/x/" aria-current="page">x</a></li>
           <li><a href="/youtube/">youtube</a></li>
           <li><a href="/reddit/">reddit</a></li>
           <li><a href="/pinterest/">pinterest</a></li>
           <li><a href="/facebook/">facebook</a></li>
         </ul>
       </nav>
-      <h2>questions</h2>
-      <h3>do i need an account?</h3>
-      <p>no. paste the link and download. accounts only exist to hold api keys.</p>
-      <h3>which sites work?</h3>
-      <p>
-        tiktok, instagram, x, youtube, reddit, bluesky, pinterest, facebook, imgur, tumblr, twitch
-        clips, soundcloud and more.
-      </p>
-      <h3>does gronka keep what i download?</h3>
-      <p>
-        no request logs and no history. files gronka has to copy itself are deleted after an hour.
-      </p>
-      <h3>is there a limit?</h3>
-      <p>
-        about 10 downloads per 10 minutes, one at a time. the same for everyone, and nothing is
-        paid.
-      </p>
+      <p><a href="/">every other site</a> works from the main page too.</p>
     </section>
 
     <footer class="foot">

@@ -3,23 +3,23 @@
   "info": {
     "title": "gronka api",
     "version": "1.0.0-preview",
-    "description": "Paste a link, get the file. The same downloaders as the gronka Discord bot, over HTTP.\n\n**Preview:** the API is not live yet and may still change.\n\n### Auth\nThe web page sends a Cloudflare Turnstile token. Scripts send an API key: `Authorization: Bearer gk_...`. Keys are made on the account page; an account is just an account number (no email).\n\n### Long downloads\n`POST /v1/download` answers `200` as soon as the job starts and sends spaces while it works, then the JSON result. Leading whitespace is valid JSON, so any JSON parser reads it. Download failures arrive in that body as `{\"error\": ...}`; problems found before the job starts use normal status codes.\n\n### Limits\nThe same for everyone: 10 downloads per 10 minutes and one at a time, per IP or per key. Files up to 1 GB.\n\n### Privacy\nNo request logs, no download history. Files we host are deleted after an hour."
+    "description": "paste a link, get the file. preview: not live yet and may change."
   },
   "servers": [{ "url": "https://api.gronka.dev" }],
   "tags": [
     { "name": "download" },
     {
       "name": "account",
-      "description": "Used by the account page (cookie session). Scripts only need a key."
+      "description": "the account page uses a cookie session. scripts can use an api key."
     }
   ],
   "paths": {
     "/v1/health": {
       "get": {
-        "summary": "Liveness",
+        "summary": "check the service",
         "responses": {
           "200": {
-            "description": "Up",
+            "description": "service is up",
             "content": { "application/json": { "example": { "ok": true } } }
           }
         }
@@ -28,7 +28,7 @@
     "/v1/download": {
       "post": {
         "tags": ["download"],
-        "summary": "Get the media behind a link",
+        "summary": "download from a link",
         "security": [{ "apiKey": [] }, {}],
         "requestBody": {
           "required": true,
@@ -51,7 +51,7 @@
         },
         "responses": {
           "200": {
-            "description": "The result, or a download error, after leading whitespace.",
+            "description": "download result or error after leading spaces",
             "content": {
               "application/json": {
                 "schema": {
@@ -114,8 +114,8 @@
     "/v1/account": {
       "post": {
         "tags": ["account"],
-        "summary": "Create an account",
-        "description": "Returns the account number once. We cannot recover it.",
+        "summary": "create an account",
+        "description": "returns the account number once. we cannot recover it.",
         "requestBody": {
           "content": {
             "application/json": { "schema": { "$ref": "#/components/schemas/Turnstile" } }
@@ -123,7 +123,7 @@
         },
         "responses": {
           "201": {
-            "description": "Created; also sets the session cookie",
+            "description": "account created and session cookie set",
             "content": {
               "application/json": {
                 "example": { "id": "7K3P9", "number": "GW-7K3P9-ABCDE-FGHJK-MNPQR-STVWX-YZ012-3" }
@@ -136,11 +136,11 @@
       },
       "get": {
         "tags": ["account"],
-        "summary": "Account and its keys",
+        "summary": "get account and keys",
         "security": [{ "session": [] }],
         "responses": {
           "200": {
-            "description": "Summary",
+            "description": "account and keys",
             "content": {
               "application/json": {
                 "example": {
@@ -163,10 +163,10 @@
       },
       "delete": {
         "tags": ["account"],
-        "summary": "Delete the account and every key, immediately",
+        "summary": "delete the account and its keys immediately",
         "security": [{ "session": [] }],
         "responses": {
-          "200": { "description": "Gone" },
+          "200": { "description": "account deleted" },
           "401": { "$ref": "#/components/responses/Error" }
         }
       }
@@ -174,11 +174,11 @@
     "/v1/account/rotate": {
       "post": {
         "tags": ["account"],
-        "summary": "Replace the account number; the old one stops working at once",
+        "summary": "replace the account number; the old one stops working at once",
         "security": [{ "session": [] }],
         "responses": {
           "200": {
-            "description": "The new number",
+            "description": "new account number",
             "content": { "application/json": { "example": { "number": "GW-7K3P9-..." } } }
           }
         }
@@ -187,7 +187,7 @@
     "/v1/session": {
       "post": {
         "tags": ["account"],
-        "summary": "Log in with the account number",
+        "summary": "start a session",
         "requestBody": {
           "content": {
             "application/json": {
@@ -205,21 +205,21 @@
           }
         },
         "responses": {
-          "200": { "description": "Sets the session cookie" },
+          "200": { "description": "session cookie set" },
           "401": { "$ref": "#/components/responses/Error" },
           "429": { "$ref": "#/components/responses/Error" }
         }
       },
       "delete": {
         "tags": ["account"],
-        "summary": "Log out",
-        "responses": { "200": { "description": "Cookie cleared" } }
+        "summary": "end a session",
+        "responses": { "200": { "description": "session cookie cleared" } }
       }
     },
     "/v1/keys": {
       "post": {
         "tags": ["account"],
-        "summary": "Create an API key (shown once, up to 10)",
+        "summary": "create an api key",
         "security": [{ "session": [] }],
         "requestBody": {
           "content": {
@@ -233,7 +233,7 @@
         },
         "responses": {
           "201": {
-            "description": "The key",
+            "description": "key shown once. up to 10 keys per account.",
             "content": {
               "application/json": { "example": { "id": "gk_ab12cd34", "key": "gk_ab12cd34_..." } }
             }
@@ -245,7 +245,7 @@
     "/v1/keys/{id}": {
       "delete": {
         "tags": ["account"],
-        "summary": "Revoke a key",
+        "summary": "revoke an api key",
         "security": [{ "session": [] }],
         "parameters": [
           {
@@ -256,7 +256,7 @@
           }
         ],
         "responses": {
-          "200": { "description": "Revoked" },
+          "200": { "description": "key revoked" },
           "404": { "$ref": "#/components/responses/Error" }
         }
       }
@@ -264,12 +264,16 @@
   },
   "components": {
     "securitySchemes": {
-      "apiKey": { "type": "http", "scheme": "bearer", "description": "gk_<id>_<secret>" },
+      "apiKey": {
+        "type": "http",
+        "scheme": "bearer",
+        "description": "api key format: gk_<id>_<secret>"
+      },
       "session": { "type": "apiKey", "in": "cookie", "name": "__Host-gw_session" }
     },
     "responses": {
       "Error": {
-        "description": "Rejected",
+        "description": "error response",
         "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Error" } } }
       }
     },
@@ -279,7 +283,7 @@
         "properties": {
           "turnstile": {
             "type": "string",
-            "description": "Cloudflare Turnstile token (web page only)"
+            "description": "turnstile token for the web page"
           }
         }
       },
@@ -287,11 +291,11 @@
         "type": "object",
         "required": ["url"],
         "properties": {
-          "url": { "type": "string", "description": "A link, or text containing one" },
+          "url": { "type": "string", "description": "link or text containing a link" },
           "mode": { "type": "string", "enum": ["auto", "audio"], "default": "auto" },
-          "start": { "type": "string", "description": "Trim start: seconds, m:ss or h:mm:ss" },
-          "end": { "type": "string", "description": "Trim end" },
-          "turnstile": { "type": "string", "description": "Web page only; scripts use a key" }
+          "start": { "type": "string", "description": "trim start in seconds, m:ss, or h:mm:ss" },
+          "end": { "type": "string", "description": "trim end in seconds, m:ss, or h:mm:ss" },
+          "turnstile": { "type": "string", "description": "web page only. scripts use an api key" }
         }
       },
       "DownloadResult": {
@@ -301,13 +305,13 @@
           "lane": {
             "type": "string",
             "enum": ["direct", "worker", "r2"],
-            "description": "direct: the source's own link. worker: streamed from the source through dl.gronka.dev, links valid 1 hour. r2: a copy on cdn.gronka.dev, deleted after 1 hour."
+            "description": "direct uses the source link. worker streams through dl.gronka.dev; links last one hour. r2 copies to cdn.gronka.dev and is deleted after one hour."
           },
           "merge": {
             "type": "boolean",
-            "description": "true when files are a separate video and audio stream to be muxed"
+            "description": "true when separate video and audio files need merging"
           },
-          "filename": { "type": "string", "description": "Suggested name for the merged file" },
+          "filename": { "type": "string", "description": "suggested name for the merged file" },
           "files": {
             "type": "array",
             "items": {
@@ -316,7 +320,10 @@
               "properties": {
                 "url": { "type": "string" },
                 "filename": { "type": ["string", "null"] },
-                "type": { "type": "string", "description": "video, image, gif, audio, ..." },
+                "type": {
+                  "type": "string",
+                  "description": "media type, such as video, image, gif, or audio"
+                },
                 "kind": { "type": "string", "enum": ["video", "audio"] },
                 "size": { "type": ["integer", "null"] }
               }
@@ -342,7 +349,7 @@
                   "DOWNLOAD_FAILED"
                 ]
               },
-              "message": { "type": "string", "description": "Safe to show to a person" }
+              "message": { "type": "string", "description": "safe to show to a person" }
             }
           }
         }

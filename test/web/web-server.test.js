@@ -52,6 +52,11 @@ describe('handler', () => {
   test('health, preflight from the page, and unknown routes', async () => {
     const handle = createHandler({ verify: ok });
     expect((await handle(new Request('http://web/v1/health'))).status).toBe(200);
+    for (const path of ['/', '/v1']) {
+      const index = await handle(new Request(`http://web${path}`));
+      expect(index.status).toBe(200);
+      expect((await readJson(index)).docs).toBe('https://web.gronka.dev/docs/');
+    }
     const pre = await handle(
       new Request('http://web/v1/download', {
         method: 'OPTIONS',

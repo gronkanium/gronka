@@ -52,15 +52,34 @@ const cors = {
   'access-control-expose-headers': 'content-length, content-range, content-disposition',
 };
 
+const WEB_PAGE = 'https://web.gronka.dev/';
+const text = (body, status) =>
+  new Response(body, {
+    status,
+    headers: {
+      ...cors,
+      'content-type': 'text/plain; charset=utf-8',
+      'x-content-type-options': 'nosniff',
+    },
+  });
+
 export default {
   async fetch(req, env) {
     if (req.method === 'OPTIONS') return new Response(null, { status: 204, headers: cors });
-    const match = new URL(req.url).pathname.match(/^\/(f|probe)\/([\w-]+\.[\w-]+)$/);
+    const { pathname } = new URL(req.url);
+    // Nothing lives here but signed file links, so a visitor is sent to the page.
+    if (pathname === '/') return Response.redirect(WEB_PAGE, 302);
+    const match = pathname.match(/^\/(f|probe)\/([\w-]+\.[\w-]+)$/);
     if (!match || !['GET', 'HEAD'].includes(req.method)) {
-      return new Response('not found', { status: 404 });
+      return text(`nothing here. files come from ${WEB_PAGE}`, 404);
     }
     const payload = await verifyToken(match[2], env.STREAM_KEY);
-    if (!payload) return new Response('this link has expired', { status: 403 });
+    if (!payload) {
+      return text(
+        `this link expired (they last an hour). paste the link again at ${WEB_PAGE}`,
+        403
+      );
+    }
 
     const headers = new Headers(payload.h ?? {});
     if (match[1] === 'probe') {

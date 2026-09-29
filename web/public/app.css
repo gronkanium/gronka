@@ -13,18 +13,31 @@ h1 {
 }
 
 .stage {
-  --pt: clamp(116px, 27vw, 200px);
+  --pw: clamp(150px, 38vw, 230px);
+  --pt: calc(var(--pw) * 0.7);
   position: relative;
   padding-top: var(--pt);
 }
+/* he stands behind the box: it hides his feet and belly, so he peeks over it instead of hovering on it */
 .peng {
   position: absolute;
-  right: 3%;
-  bottom: calc(100% - var(--pt) - 16px);
-  width: clamp(128px, 29vw, 222px);
+  right: 4%;
+  bottom: calc(100% - var(--pt) - var(--pw) * 0.19);
+  width: var(--pw);
   height: auto;
   pointer-events: none;
-  z-index: 1;
+  z-index: 0;
+  transform-origin: 50% 80%;
+  transition: rotate 0.35s ease;
+  animation: breathe 4.5s ease-in-out infinite;
+}
+@keyframes breathe {
+  50% {
+    scale: 1 1.025;
+  }
+}
+.stage:focus-within .peng {
+  rotate: -5deg;
 }
 [data-state='working'] .peng {
   animation: bob 0.5s steps(2) infinite;
@@ -38,6 +51,9 @@ h1 {
 .big {
   display: flex;
   align-items: center;
+  z-index: 1;
+  background: var(--paper);
+  border-radius: 12px;
 }
 .big::before {
   border-width: 5px;
@@ -198,10 +214,7 @@ details[open] summary::after {
   font-size: clamp(1.9rem, 6vw, 3.4rem);
 }
 :root:not([data-state='idle']) .stage {
-  --pt: clamp(96px, 22vw, 150px);
-}
-:root:not([data-state='idle']) .peng {
-  width: clamp(108px, 23vw, 168px);
+  --pw: clamp(120px, 28vw, 172px);
 }
 .panel:empty {
   display: none;
@@ -360,11 +373,7 @@ details[open] summary::after {
     font-size: 20px;
   }
   .stage {
-    --pt: 212px;
-  }
-  .peng {
-    width: 250px;
-    right: 2%;
+    --pw: 250px;
   }
   .big input {
     font-size: 24px;

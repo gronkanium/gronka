@@ -30,6 +30,19 @@ const R2_PREFIX = 'web/';
 const MAX_BODY_BYTES = 16 * 1024;
 const HEARTBEAT_MS = 15_000;
 const MAX_WINDOWS = 10_000;
+const DOCS_URL = 'https://web.gronka.dev/docs/';
+const API_INDEX = {
+  name: 'gronka',
+  about:
+    'paste a link, get the file. the same downloader as the gronka discord bot, as a json api.',
+  version: 'v1',
+  status: 'public preview',
+  docs: DOCS_URL,
+  openapi: 'https://web.gronka.dev/openapi.json',
+  health: 'https://api.gronka.dev/v1/health',
+  download: 'POST https://api.gronka.dev/v1/download',
+  page: 'https://web.gronka.dev/',
+};
 const RP_ID = env('WEB_RP_ID', 'gronka.dev');
 const CHALLENGE_MS = 5 * 60 * 1000;
 const MAX_CHALLENGES = 10_000;
@@ -557,6 +570,12 @@ export function createHandler({
     const withCookie = (data, status, token, maxAge) =>
       json(data, status, { ...headers, 'Set-Cookie': sessionCookie(token, maxAge) });
 
+    if (method === 'GET' && ['/', '/v1', '/v1/'].includes(pathname)) {
+      return new Response(JSON.stringify(API_INDEX, null, 2), {
+        status: 200,
+        headers: { ...headers, 'Content-Type': 'application/json' },
+      });
+    }
     if (method === 'GET' && (pathname === '/v1/health' || pathname === '/health')) {
       return json({ ok: true }, 200, headers);
     }
@@ -757,7 +776,7 @@ export function createHandler({
       }
       return json({ ok: true }, 200, headers);
     }
-    throw new AppError('not found.', 'NOT_FOUND', 404);
+    throw new AppError(`no such route. the api is described at ${DOCS_URL}`, 'NOT_FOUND', 404);
   }
 
   async function fetchHandler(req, server) {

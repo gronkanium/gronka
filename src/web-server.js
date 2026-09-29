@@ -1,4 +1,5 @@
 import crypto from 'node:crypto';
+import * as simplewebauthn from '@simplewebauthn/server';
 import path from 'node:path';
 import { createLogger } from './utils/logger.js';
 import { initDatabase } from './utils/database.js';
@@ -27,6 +28,9 @@ export const FILE_TTL_MS = 60 * 60 * 1000;
 const R2_PREFIX = 'web/';
 const MAX_BODY_BYTES = 16 * 1024;
 const HEARTBEAT_MS = 15_000;
+const RP_ID = env('WEB_RP_ID', 'gronka.dev');
+const CHALLENGE_MS = 5 * 60 * 1000;
+const MAX_CHALLENGES = 10_000;
 
 export function contentDisposition(filename) {
   const ascii = filename.replace(/[^\x20-\x7e]|["\\%]/g, '_');
@@ -333,6 +337,7 @@ export function createHandler({
   ipLimit = IP_LIMIT,
   signupLimit = 3,
   loginLimit = 10,
+  webauthn = simplewebauthn,
 } = {}) {
   // Per-IP state is keyed by an HMAC under a key that rotates daily and lives only here.
   let dayKey = null;
@@ -371,6 +376,22 @@ export function createHandler({
     }
   };
 
+  // WebAuthn challenges live only here, single use, 5 minutes.
+  const challenges = new Map();
+  const putChallenge = (key, challenge) => {
+    const now = Date.now();
+    for (const [old, entry] of challenges) {
+      if (entry.expires > now && challenges.size < MAX_CHALLENGES) break;
+      challenges.delete(old);
+    }
+    challenges.set(key, { challenge, expires: now + CHALLENGE_MS });
+  };
+  const takeChallenge = key => {
+    const entry = challenges.get(key);
+    challenges.delete(key);
+    return entry && entry.expires > Date.now() ? entry.challenge : null;
+  };
+
   const corsHeaders = req => {
     const headers = { 'Cache-Control': 'no-store', 'X-Content-Type-Options': 'nosniff' };
     if (req.headers.get('origin') === WEB_ORIGIN) {
@@ -396,6 +417,23 @@ export function createHandler({
       throw new AppError('log in first.', 'UNAUTHORIZED', 401);
     }
     return accountId;
+  }
+
+  async function requireSecondFactor(accountId, code) {
+    const result = await accounts.checkSecondFactor(accountId, code);
+    if (result === 'required') {
+      throw new AppError('enter the code from your authenticator app.', 'TOTP_REQUIRED', 401);
+    }
+    if (result === 'invalid') {
+      throw new AppError('that code is not right.', 'TOTP_INVALID', 401);
+    }
+    if (result === 'locked') {
+      throw new AppError(
+        'too many wrong codes. wait 15 minutes, or log in with a passkey.',
+        'TOTP_LOCKED',
+        429
+      );
+    }
   }
 
   async function handleDownload(req, server, headers) {
@@ -477,6 +515,7 @@ export function createHandler({
       if (!accountId) {
         throw new AppError('that account number is not right.', 'UNAUTHORIZED', 401);
       }
+      await requireSecondFactor(accountId, body.totp);
       const token = await accounts.createSession(accountId);
       return withCookie({ id: accountId }, 200, token, accounts.SESSION_MS / 1000);
     }
@@ -510,6 +549,130 @@ export function createHandler({
       const accountId = await requireSession(req);
       if (!(await accounts.revokeApiKey(accountId, keyMatch[1]))) {
         throw new AppError('no such key.', 'NOT_FOUND', 404);
+      }
+      return json({ ok: true }, 200, headers);
+    }
+    if (method === 'POST' && pathname === '/v1/totp/setup') {
+      const accountId = await requireSession(req);
+      const started = await accounts.startTotp(accountId);
+      if (!started) {
+        throw new AppError('2fa is already on.', 'TOTP_ON', 409);
+      }
+      return json(started, 200, headers);
+    }
+    if (method === 'POST' && pathname === '/v1/totp/enable') {
+      const accountId = await requireSession(req);
+      const body = await readJson(req);
+      const recoveryCodes = await accounts.enableTotp(accountId, body.code);
+      if (!recoveryCodes) {
+        throw new AppError('that code is not right.', 'TOTP_INVALID', 400);
+      }
+      return json({ recoveryCodes }, 200, headers);
+    }
+    if (method === 'DELETE' && pathname === '/v1/totp') {
+      const accountId = await requireSession(req);
+      await requireSecondFactor(accountId, (await readJson(req)).code);
+      await accounts.disableTotp(accountId);
+      return json({ ok: true }, 200, headers);
+    }
+    if (method === 'POST' && pathname === '/v1/totp/recovery') {
+      const accountId = await requireSession(req);
+      const body = await readJson(req);
+      if (!(await accounts.getAccountSummary(accountId)).totp) {
+        throw new AppError('2fa is off.', 'TOTP_OFF', 409);
+      }
+      await requireSecondFactor(accountId, body.code);
+      return json(
+        { recoveryCodes: await accounts.regenerateRecoveryCodes(accountId) },
+        200,
+        headers
+      );
+    }
+    if (method === 'POST' && pathname === '/v1/passkeys/register/options') {
+      const accountId = await requireSession(req);
+      const options = await webauthn.generateRegistrationOptions({
+        rpName: 'gronka',
+        rpID: RP_ID,
+        userName: `GW-${accountId}`,
+        userID: new TextEncoder().encode(accountId),
+        attestationType: 'none',
+        excludeCredentials: await accounts.listPasskeys(accountId),
+        authenticatorSelection: { residentKey: 'required', userVerification: 'required' },
+      });
+      putChallenge(`reg:${accountId}`, options.challenge);
+      return json(options, 200, headers);
+    }
+    if (method === 'POST' && pathname === '/v1/passkeys/register') {
+      const accountId = await requireSession(req);
+      const body = await readJson(req);
+      const challenge = takeChallenge(`reg:${accountId}`);
+      const verification =
+        challenge &&
+        (await webauthn
+          .verifyRegistrationResponse({
+            response: body.response,
+            expectedChallenge: challenge,
+            expectedOrigin: WEB_ORIGIN,
+            expectedRPID: RP_ID,
+            requireUserVerification: true,
+          })
+          .catch(() => null));
+      if (!verification?.verified) {
+        throw new AppError('that passkey could not be added, try again.', 'PASSKEY_INVALID', 400);
+      }
+      const added = await accounts.addPasskey(
+        accountId,
+        verification.registrationInfo.credential,
+        body.label
+      );
+      if (!added) {
+        throw new AppError('10 passkeys is the limit, remove one first.', 'PASSKEY_LIMIT', 400);
+      }
+      return json(added, 201, headers);
+    }
+    if (method === 'POST' && pathname === '/v1/passkeys/login/options') {
+      const body = await readJson(req);
+      limit(`login:${ipKey(req, server)}`, loginLimit);
+      if (!(await verify(body.turnstile, 'login'))) {
+        throw new AppError('verification failed, reload the page.', 'VERIFICATION_FAILED', 403);
+      }
+      const options = await webauthn.generateAuthenticationOptions({
+        rpID: RP_ID,
+        userVerification: 'required',
+      });
+      const challengeId = crypto.randomBytes(16).toString('base64url');
+      putChallenge(`auth:${challengeId}`, options.challenge);
+      return json({ challengeId, options }, 200, headers);
+    }
+    if (method === 'POST' && pathname === '/v1/passkeys/login') {
+      const body = await readJson(req);
+      const challenge =
+        typeof body.challengeId === 'string' && takeChallenge(`auth:${body.challengeId}`);
+      const passkey = challenge && (await accounts.getPasskey(body.response?.id));
+      const verification =
+        passkey &&
+        (await webauthn
+          .verifyAuthenticationResponse({
+            response: body.response,
+            expectedChallenge: challenge,
+            expectedOrigin: WEB_ORIGIN,
+            expectedRPID: RP_ID,
+            credential: passkey.credential,
+            requireUserVerification: true,
+          })
+          .catch(() => null));
+      if (!verification?.verified) {
+        throw new AppError('that passkey did not work, try again.', 'PASSKEY_INVALID', 401);
+      }
+      await accounts.usePasskey(passkey.credential.id, verification.authenticationInfo.newCounter);
+      const token = await accounts.createSession(passkey.accountId);
+      return withCookie({ id: passkey.accountId }, 200, token, accounts.SESSION_MS / 1000);
+    }
+    const passkeyMatch = pathname.match(/^\/v1\/passkeys\/([\w-]{1,1400})$/);
+    if (method === 'DELETE' && passkeyMatch) {
+      const accountId = await requireSession(req);
+      if (!(await accounts.removePasskey(accountId, passkeyMatch[1]))) {
+        throw new AppError('no such passkey.', 'NOT_FOUND', 404);
       }
       return json({ ok: true }, 200, headers);
     }

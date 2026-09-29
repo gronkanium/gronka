@@ -1,8 +1,7 @@
-import { $, api, turnstileToken, warmTurnstile, icon, save, ApiError } from '/common.js';
+import { $, esc, api, turnstileToken, warmTurnstile, icon, save, ApiError } from '/common.js';
 
 const view = $('#view');
 const tsBox = $('#ts');
-const esc = text => String(text ?? '').replace(/[&<>"']/g, c => `&#${c.charCodeAt(0)};`);
 const show = html => {
   view.innerHTML = html;
   view.querySelector('h1, h2')?.setAttribute('tabindex', '-1');

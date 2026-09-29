@@ -1,4 +1,5 @@
 import {
+  esc,
   $,
   api,
   online,
@@ -82,7 +83,6 @@ function setState(state, penguin) {
   root.dataset.state = state;
   pose(penguin);
 }
-const esc = text => String(text ?? '').replace(/[&<>"']/g, c => `&#${c.charCodeAt(0)};`);
 const draw = html => {
   panel.innerHTML = html;
   if (html)

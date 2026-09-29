@@ -22,6 +22,15 @@ describe('account numbers', () => {
     expect(accounts.parseAccountNumber('GW-7K3PU-ABCDEFGHJKMNPQRSTVWXYZ0123')).toBeNull();
   });
 
+  test('parallel key requests cannot pass the 10-key quota', async () => {
+    const { id } = await accounts.createAccount();
+    for (let i = 0; i < 9; i++) await accounts.createApiKey(id);
+    const made = await Promise.all(Array.from({ length: 5 }, () => accounts.createApiKey(id)));
+    expect(made.filter(Boolean)).toHaveLength(1);
+    expect((await accounts.getAccountSummary(id)).keys).toHaveLength(10);
+    await accounts.deleteAccount(id);
+  });
+
   test('create, verify, and rotate: the old number dies at once', async () => {
     const { id, number } = await accounts.createAccount();
     expect(await accounts.verifyAccountNumber(number)).toBe(id);

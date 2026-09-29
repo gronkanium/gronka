@@ -277,7 +277,8 @@
           <p>
             10 downloads per 10 minutes, one at a time, per ip, or per account when you use api keys
             (all keys of an account share them). requests with a key are also capped at 30 key
-            checks per 10 minutes per ip. videos up to 1 gb; images up to 50 mb. a
+            checks per 10 minutes per ip. files we fetch ourselves (lane r2) up to 400 mb; images up
+            to 50 mb. a
             <code>429</code> or <code>503</code> carries <code>error.retryAfter</code> (seconds) and
             the same number in a <code>Retry-After</code> header.
           </p>

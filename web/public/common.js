@@ -3,6 +3,7 @@ const SITEKEY = '0x4AAAAAAFIbeErYVDJKfBhV';
 const TURNSTILE_JS = 'https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit';
 
 export const $ = sel => document.querySelector(sel);
+export const esc = text => String(text ?? '').replace(/[&<>"']/g, c => `&#${c.charCodeAt(0)};`);
 
 export function icon(name) {
   return `<svg class="i" aria-hidden="true"><use href="/i.svg#${name}"/></svg>`;

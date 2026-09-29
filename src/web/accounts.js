@@ -233,25 +233,33 @@ export async function getAccountSummary(accountId) {
   };
 }
 
-export async function createApiKey(accountId, label = null) {
-  const sql = getPostgresConnection();
+const cleanLabel = label => (typeof label === 'string' ? label.trim().slice(0, 40) || null : null);
+
+// The account row lock makes count-then-insert atomic, so parallel requests can't pass a quota.
+async function underQuota(tx, table, accountId, max) {
+  await tx`SELECT 1 FROM web_accounts WHERE id = ${accountId} FOR UPDATE`;
   const [{ count }] =
-    await sql`SELECT count(*)::int AS count FROM web_api_keys WHERE account_id = ${accountId}`;
-  if (count >= MAX_KEYS) return null;
+    await tx`SELECT count(*)::int AS count FROM ${tx(table)} WHERE account_id = ${accountId}`;
+  return count < max;
+}
+
+export async function createApiKey(accountId, label = null) {
   const secret = crypto.randomBytes(32).toString('base64url');
   const secretHash = await hashSecret(secret);
-  const cleanLabel = typeof label === 'string' ? label.trim().slice(0, 40) || null : null;
-  for (;;) {
-    const id = randomBase32(KEY_ID_LEN).toLowerCase();
-    const rows = await sql`
-      INSERT INTO web_api_keys (id, account_id, secret_hash, label)
-      VALUES (${id}, ${accountId}, ${secretHash}, ${cleanLabel})
-      ON CONFLICT (id) DO NOTHING RETURNING id`;
-    if (rows.length) {
-      const body = `gk_${id}_${secret}`;
-      return { id: `gk_${id}`, key: body + keyChecksum(body) };
+  return getPostgresConnection().begin(async tx => {
+    if (!(await underQuota(tx, 'web_api_keys', accountId, MAX_KEYS))) return null;
+    for (;;) {
+      const id = randomBase32(KEY_ID_LEN).toLowerCase();
+      const rows = await tx`
+        INSERT INTO web_api_keys (id, account_id, secret_hash, label)
+        VALUES (${id}, ${accountId}, ${secretHash}, ${cleanLabel(label)})
+        ON CONFLICT (id) DO NOTHING RETURNING id`;
+      if (rows.length) {
+        const body = `gk_${id}_${secret}`;
+        return { id: `gk_${id}`, key: body + keyChecksum(body) };
+      }
     }
-  }
+  });
 }
 
 export async function revokeApiKey(accountId, publicId) {
@@ -396,16 +404,15 @@ export async function listPasskeys(accountId) {
 }
 
 export async function addPasskey(accountId, { id, publicKey, counter, transports }, label = null) {
-  const sql = getPostgresConnection();
-  const [{ count }] =
-    await sql`SELECT count(*)::int AS count FROM web_passkeys WHERE account_id = ${accountId}`;
-  if (count >= MAX_PASSKEYS) return null;
-  const cleanLabel = typeof label === 'string' ? label.trim().slice(0, 40) || null : null;
-  const [row] = await sql`
-    INSERT INTO web_passkeys (id, account_id, public_key, counter, transports, label)
-    VALUES (${id}, ${accountId}, ${Buffer.from(publicKey)}, ${counter}, ${transports ?? null},
-      ${cleanLabel})
-    ON CONFLICT (id) DO NOTHING RETURNING id, label, created_on`;
+  const row = await getPostgresConnection().begin(async tx => {
+    if (!(await underQuota(tx, 'web_passkeys', accountId, MAX_PASSKEYS))) return null;
+    const [inserted] = await tx`
+      INSERT INTO web_passkeys (id, account_id, public_key, counter, transports, label)
+      VALUES (${id}, ${accountId}, ${Buffer.from(publicKey)}, ${counter}, ${transports ?? null},
+        ${cleanLabel(label)})
+      ON CONFLICT (id) DO NOTHING RETURNING id, label, created_on`;
+    return inserted;
+  });
   return row
     ? { id: row.id, label: row.label, createdOn: row.created_on.toISOString().slice(0, 10) }
     : null;
@@ -433,8 +440,10 @@ export async function usePasskey(id, counter) {
   const sql = getPostgresConnection();
   const [row] = await sql`
     UPDATE web_passkeys SET counter = ${counter} WHERE id = ${id} RETURNING account_id`;
+  if (!row) return false;
   await sql`
     UPDATE web_accounts SET totp_failures = 0, totp_locked_until = NULL WHERE id = ${row.account_id}`;
+  return true;
 }
 
 export async function removePasskey(accountId, id) {

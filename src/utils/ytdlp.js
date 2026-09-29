@@ -640,7 +640,10 @@ export async function getStreamInfo(url, timeout = 30000) {
       url: f.url,
       headers: f.http_headers ?? {},
       ext: f.ext,
-      kind: f.vcodec && f.vcodec !== 'none' ? 'video' : 'audio',
+      kind:
+        f.vcodec === 'none' || (!f.vcodec && f.acodec && f.acodec !== 'none' && !f.width)
+          ? 'audio'
+          : 'video',
     })),
   };
 }

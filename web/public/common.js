@@ -144,12 +144,12 @@ export async function turnstileToken(action) {
         dialog.showModal();
       },
       callback: token => done(resolve, token),
-      'error-callback': () =>
+      'error-callback': code =>
         done(
           reject,
           new ApiError(
             'VERIFICATION_FAILED',
-            "cloudflare couldn't check this browser. reload and try again.",
+            `cloudflare couldn't check this browser (error ${code}). reload and try again.`,
             0
           )
         ),

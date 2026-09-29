@@ -373,7 +373,10 @@ h2:focus {
 .ts-ask h2:focus {
   outline: none;
 }
+/* above .ink::before: Turnstile rejects a click on a widget anything is painted over (600010) */
 .ts-ask.asking .ts-box {
+  position: relative;
+  z-index: 1;
   display: flex;
   justify-content: center;
   min-height: 65px;

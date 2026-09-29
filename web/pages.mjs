@@ -57,34 +57,48 @@ const PLATFORMS = [
   },
 ];
 
-// The rest of src/utils/download-services.js.
+// Every other non-adult source in src/utils/download-services.js gets a plain page; `what` is only what the
+// code gets from it. Adult and booru sources stay unlinked text: explicit pages can get the whole domain
+// classed as adult by search engines.
+const MORE = [
+  ['bluesky', 'bluesky', 'videos'],
+  ['snapchat', 'snapchat', 'videos'],
+  ['tumblr', 'tumblr', 'videos'],
+  ['twitch', 'twitch', 'clips'],
+  ['soundcloud', 'soundcloud', 'tracks as audio'],
+  ['streamable', 'streamable', 'videos'],
+  ['dailymotion', 'dailymotion', 'videos'],
+  ['imgur', 'imgur', 'videos'],
+  ['giphy', 'giphy', 'gifs'],
+  ['tenor', 'tenor', 'gifs'],
+  ['klipy', 'klipy', 'gifs'],
+  ['kick', 'kick', 'videos and clips'],
+  ['medal', 'medal', 'clips'],
+  ['rumble', 'rumble', 'videos'],
+  ['coub', 'coub', 'videos'],
+  ['newgrounds', 'newgrounds', 'videos'],
+  ['niconico', 'niconico', 'videos'],
+  ['bilibili', 'bilibili', 'videos'],
+  ['xiaohongshu', 'xiaohongshu', 'videos'],
+  ['mega', 'mega', 'files'],
+  ['pixiv', 'pixiv', 'images'],
+  ['deviantart', 'deviantart', 'images'],
+  ['artstation', 'artstation', 'images'],
+  ['flickr', 'flickr', 'images'],
+  ['wallhaven', 'wallhaven', 'wallpapers'],
+  ['mangadex', 'mangadex', 'chapter pages'],
+];
+for (const [slug, name, what] of MORE) {
+  PLATFORMS.push({
+    slug,
+    name,
+    title: `${name} downloader: save ${what}`,
+    desc: `save ${what} from ${name}. paste the link, get the file. free, no ads, no account, no request logs.`,
+    placeholder: `paste ${/^[aeiox]/.test(name) ? 'an' : 'a'} ${name} link`,
+  });
+}
+
 const OTHER_SITES = [
-  'bluesky',
-  'snapchat',
-  'tumblr',
-  'twitch clips',
-  'soundcloud',
-  'streamable',
-  'dailymotion',
-  'imgur',
-  'giphy',
-  'tenor',
-  'klipy',
-  'kick',
-  'medal',
-  'rumble',
-  'coub',
-  'newgrounds',
-  'niconico',
-  'bilibili',
-  'xiaohongshu',
-  'mega',
-  'pixiv',
-  'deviantart',
-  'artstation',
-  'flickr',
-  'wallhaven',
-  'mangadex',
   'redgifs',
   'pornhub',
   'xvideos',
@@ -154,7 +168,7 @@ function withSites(html, current) {
   html = html.replace(/\s*<section class="more">[\s\S]*?<\/section>/, '');
   html = html.replace(/\s*<details class="sites">[\s\S]*?<\/details>/, '');
   // Below the result panel, so it never sits between the link and the answer.
-  const panel = /(<section id="panel"[^>]*><\/section>)/;
+  const panel = /(<section id="panel"[^>]*><\/section>(?:\s*<div id="ts-slot"><\/div>)?)/;
   if (!panel.test(html)) throw new Error('template lost the panel');
   return html.replace(panel, `$1\n\n      ${sitesList(current)}`);
 }

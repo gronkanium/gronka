@@ -319,12 +319,9 @@ function body(split) {
 
 function prefetchLibav() {
   if (navigator.connection?.saveData) return;
-  for (const file of ['libav-6.8.7.1-remux-cli.wasm.mjs', 'libav-6.8.7.1-remux-cli.wasm.wasm']) {
-    const link = document.createElement('link');
-    link.rel = 'prefetch';
-    link.href = `/_libav/${file}`;
-    document.head.append(link);
-  }
+  // a plain fetch, not <link rel=prefetch>: cloudflare answers a prefetch it hasn't cached with a 503
+  for (const file of ['libav-6.8.7.1-remux-cli.wasm.mjs', 'libav-6.8.7.1-remux-cli.wasm.wasm'])
+    fetch(`/_libav/${file}`, { priority: 'low' }).catch(() => {});
   prefetchLibav.done = true;
 }
 

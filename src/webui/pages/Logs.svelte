@@ -1,63 +1,80 @@
 <script>
   import { untrack } from 'svelte';
-  import {
-    Search,
-    Download,
-    Radio,
-    Undo2,
-    X,
-    Copy,
-    Crosshair,
-    Link2,
-    FileText,
-  } from 'lucide-svelte';
+  import { Download, Radio, Undo2, SearchX } from 'lucide-svelte';
   import { currentRoute, navigate } from '../utils/router.js';
   import { logs as liveLogs } from '../stores/sse-store.js';
   import PageHeader from '../components/PageHeader.svelte';
   import SaveView from '../components/SaveView.svelte';
   import Chart from '../components/Chart.svelte';
   import TimeRange from '../components/TimeRange.svelte';
+  import LogQueryBar from '../components/LogQueryBar.svelte';
+  import LogFacets from '../components/LogFacets.svelte';
+  import LogList from '../components/LogList.svelte';
+  import LogDetail from '../components/LogDetail.svelte';
+  import { FIELDS, SEVERITY, fieldOf, sameValue } from '../components/LogLevel.svelte';
 
-  const FIELDS = ['level', 'component', 'source', 'command', 'worker', 'op', 'user', 'job'];
-  const FACETS = [
-    ['level', 'Level'],
-    ['component', 'Component'],
-    ['source', 'Source'],
-    ['command', 'Command'],
-    ['worker', 'Worker'],
-  ];
   const RANGES = { '15m': 0.25, '1h': 1, '6h': 6, '24h': 24, '7d': 168 };
   const PAGE = 200;
+  // Stacked bottom-up, most severe first, so errors always sit on the baseline.
   const SERIES = [
-    { key: 'info', label: 'info', color: 'var(--chart-muted)' },
-    { key: 'warn', label: 'warn', color: 'var(--chart-3)' },
-    { key: 'err', label: 'error', color: 'var(--chart-4)' },
+    { key: 'ERROR', label: 'error', color: 'var(--chart-4)' },
+    { key: 'WARN', label: 'warn', color: 'var(--chart-3)' },
+    { key: 'INFO', label: 'info', color: 'var(--chart-1)' },
+    { key: 'DEBUG', label: 'debug', color: 'var(--chart-muted)' },
   ];
+  const PREFS_KEY = 'gronka:logs:view';
 
   let rows = $state([]);
   let total = $state(0);
   let facets = $state({});
   let histogram = $state(null);
   let loading = $state(true);
+  let loadingMore = $state(false);
   let error = $state('');
   let selected = $state(null);
   let related = $state([]);
-  let draft = $state('');
   let zoomStack = $state([]);
-  let copied = $state(false);
+  let pending = $state([]); // live lines held back while the list is scrolled away from the top
+  let fresh = $state(new Set());
+  let atTop = $state(true);
+  let prefs = $state(loadPrefs());
+
+  function loadPrefs() {
+    const d = { wrap: false, timestamps: true, density: 'compact', facets: true };
+    try {
+      return { ...d, ...JSON.parse(localStorage.getItem(PREFS_KEY) || '{}') };
+    } catch {
+      return d;
+    }
+  }
+  $effect(() => {
+    const json = JSON.stringify(prefs);
+    try {
+      localStorage.setItem(PREFS_KEY, json);
+    } catch {
+      /* private mode: the view simply resets next time */
+    }
+  });
 
   // The URL is the only filter state: facet clicks, the query bar and the chart all navigate.
+  // `key=a,b` includes, `-key=a,b` excludes (the API has no negation, so that part is client-side).
   const params = $derived($currentRoute.params);
-  const filters = $derived.by(() => {
+  const split = v => (v ? v.split(',').filter(Boolean) : []);
+  const bagOf = prefix => {
     const f = {};
     for (const key of FIELDS) {
-      const v = params[`$${key}`];
-      if (v) f[key] = v.split(',').filter(Boolean);
+      const v = split(params[`$${prefix}${key}`]);
+      if (v.length) f[key] = v;
     }
     return f;
-  });
+  };
+  const filters = $derived(bagOf(''));
+  const negated = $derived(bagOf('-'));
   const search = $derived(params.$search || '');
   const live = $derived(params.$live === '1');
+  const hasQuery = $derived(
+    !!search || Object.keys(filters).length > 0 || Object.keys(negated).length > 0
+  );
   // An op id starts with its creation time in ms; a request never outlives Discord's 15 min token.
   const opWindow = $derived.by(() => {
     const at = Number(filters.op?.length === 1 && filters.op[0].split('-')[0]);
@@ -104,19 +121,47 @@
     navigate('logs', next);
   }
 
+  const without = (key, list, v) => (list || []).filter(x => !sameValue(key, x, v));
+  const has = (key, list, v) => (list || []).some(x => sameValue(key, x, v));
+
+  // Facet click: un-exclude an excluded value, otherwise flip it in the include list.
   function toggle(key, value) {
+    if (has(key, negated[key], value))
+      return go({ [`-${key}`]: without(key, negated[key], value).join(',') });
     const cur = filters[key] || [];
-    const next = cur.includes(value) ? cur.filter(v => v !== value) : [...cur, value];
+    const next = has(key, cur, value) ? without(key, cur, value) : [...cur, value];
     go({ [key]: next.join(',') });
   }
+  function only(key, value) {
+    go({ [key]: value ?? '', [`-${key}`]: '' });
+  }
+  function filterBy(key, value, exclude) {
+    const v = key === 'level' ? value.toUpperCase() : value;
+    const pos = without(key, filters[key], v);
+    const neg = without(key, negated[key], v);
+    (exclude ? neg : pos).push(v);
+    go({ [key]: pos.join(','), [`-${key}`]: neg.join(',') });
+  }
+  function setQuery(next) {
+    const changes = { search: next.search || '' };
+    for (const k of FIELDS) {
+      changes[k] = (next.filters[k] || []).join(',');
+      changes[`-${k}`] = (next.negated[k] || []).join(',');
+    }
+    go(changes);
+  }
+  const clearAll = () => setQuery({ filters: {}, negated: {}, search: '' });
+
+  const get = url =>
+    fetch(url).then(r => (r.ok ? r.json() : Promise.reject(new Error(`HTTP ${r.status}`))));
 
   let seq = 0;
   async function load() {
     const mine = ++seq;
     loading = true;
     error = '';
+    pending = [];
     try {
-      const get = url => fetch(url).then(r => (r.ok ? r.json() : Promise.reject(r.status)));
       const [l, f, h] = await Promise.all([
         get(`/api/logs?${query({ limit: PAGE })}`),
         get(`/api/logs/facets?${query()}`),
@@ -128,18 +173,30 @@
       facets = f.facets || {};
       histogram = h;
       if (selected && !rows.some(r => r.id === selected.id)) selected = null;
-    } catch {
-      if (mine === seq) error = 'could not load logs';
+    } catch (e) {
+      if (mine === seq)
+        error = `Could not load logs${e?.message?.startsWith('HTTP') ? ` (${e.message})` : ''}. ${
+          rows.length ? 'Showing the last results.' : 'Check the connection and try again.'
+        }`;
     } finally {
       if (mine === seq) loading = false;
     }
   }
 
   async function more() {
-    const l = await fetch(`/api/logs?${query({ limit: PAGE, offset: rows.length })}`).then(r =>
-      r.json()
-    );
-    rows = [...rows, ...(l.logs || [])];
+    if (loadingMore || rows.length >= total) return;
+    const mine = seq;
+    loadingMore = true;
+    try {
+      const l = await get(`/api/logs?${query({ limit: PAGE, offset: rows.length })}`);
+      if (mine !== seq) return;
+      const known = new Set(rows.map(r => r.id));
+      rows = [...rows, ...(l.logs || []).filter(r => !known.has(r.id))];
+    } catch {
+      if (mine === seq) error = 'Could not load more lines.';
+    } finally {
+      loadingMore = false;
+    }
   }
 
   $effect(() => {
@@ -147,13 +204,22 @@
     load();
   });
 
+  // Exclusions run here: the API only knows positive filters.
+  const excludedBy = line =>
+    Object.entries(negated).some(([k, vs]) => {
+      const v = fieldOf(line, k);
+      return v != null && vs.some(x => sameValue(k, x, v));
+    });
+  const visible = $derived(Object.keys(negated).length ? rows.filter(r => !excludedBy(r)) : rows);
+  const excluded = $derived(rows.length - visible.length);
+
   function matches(line) {
     if (line.component === 'webui' && line.level === 'INFO') return false;
     if (line.timestamp < startTime) return false;
     for (const [key, values] of Object.entries(filters)) {
-      const v = key === 'level' || key === 'component' ? line[key] : line.metadata?.[key];
-      if (!values.includes(String(v))) return false;
+      if (!has(key, values, fieldOf(line, key))) return false;
     }
+    if (excludedBy(line)) return false;
     return !search || line.message.toLowerCase().includes(search.toLowerCase());
   }
 
@@ -164,17 +230,35 @@
   });
 
   function take(list) {
-    const known = new Set(rows.map(r => r.id));
-    const fresh = [];
+    const known = new Set([...pending, ...rows].map(r => r.id));
+    const got = [];
     for (const line of list) {
       if (known.has(line.id)) break;
-      if (matches(line)) fresh.push(line);
+      if (matches(line)) got.push(line);
     }
-    if (fresh.length) {
-      rows = [...fresh, ...rows].slice(0, 1000);
-      total += fresh.length;
-    }
+    if (!got.length) return;
+    total += got.length;
+    if (atTop) prepend(got);
+    else pending = [...got, ...pending].slice(0, 1000);
   }
+  function prepend(lines) {
+    rows = [...lines, ...rows].slice(0, 1000);
+    const ids = lines.map(l => l.id);
+    fresh = new Set([...fresh, ...ids]);
+    setTimeout(() => {
+      const next = new Set(fresh);
+      for (const id of ids) next.delete(id);
+      fresh = next;
+    }, 1600);
+  }
+  function resume() {
+    if (pending.length) prepend(pending);
+    pending = [];
+  }
+  // Scrolling back to the top (or leaving live mode) releases what was held back.
+  $effect(() => {
+    if ((atTop || !live) && pending.length) untrack(resume);
+  });
 
   $effect(() => {
     const op = selected?.metadata?.op;
@@ -186,26 +270,21 @@
       .catch(() => {});
   });
 
-  function commitDraft() {
-    const text = draft.trim();
-    if (!text) return;
-    const m = text.match(/^(\w+):(.+)$/);
-    if (m && FIELDS.includes(m[1])) {
-      const value = m[1] === 'level' ? m[2].toUpperCase() : m[2];
-      toggle(m[1], value);
-    } else {
-      go({ search: text });
-    }
-    draft = '';
+  const selIndex = $derived(selected ? visible.findIndex(r => r.id === selected.id) : -1);
+  function step(dir) {
+    if (!visible.length) return;
+    const i = selIndex < 0 ? (dir > 0 ? 0 : visible.length - 1) : selIndex + dir;
+    if (visible[i]) selected = visible[i];
   }
+  const select = r => (selected = selected?.id === r.id ? null : r);
 
-  function onQueryKey(e) {
-    if (e.key === 'Enter') commitDraft();
-    if (e.key === 'Backspace' && !draft) {
-      if (search) return go({ search: '' });
-      const last = Object.entries(filters).at(-1);
-      if (last) toggle(last[0], last[1].at(-1));
-    }
+  function onkey(e) {
+    if (e.metaKey || e.ctrlKey || e.altKey) return;
+    if (e.target?.closest?.('input, textarea, select, [contenteditable="true"], [role="dialog"]'))
+      return;
+    if (e.key === 'Escape' && selected) selected = null;
+    else if (e.key === 'j') step(1);
+    else if (e.key === 'k') step(-1);
   }
 
   // Chart brush: remember where we came from so one click steps back out.
@@ -224,34 +303,43 @@
       range: v.range,
       startTime: v.startTime,
       endTime: v.endTime,
-      live: v.endTime ? '' : undefined,
+      ...(v.endTime ? { live: '' } : {}),
     });
   }
-
-  const time = t =>
-    new Date(t).toLocaleTimeString([], { hour12: false }) + '.' + String(t % 1000).padStart(3, '0');
-  const day = t => new Date(t).toLocaleDateString([], { month: 'short', day: 'numeric' });
-  const lvl = l => ({ ERROR: 'ERR', WARN: 'WRN', INFO: 'INF', DEBUG: 'DBG' })[l] || l;
-  const ctx = r =>
-    [r.metadata?.source, r.metadata?.command && `/${r.metadata.command}`, r.metadata?.worker]
-      .filter(Boolean)
-      .join(' · ');
 
   const bars = $derived(
     (histogram?.buckets ?? []).map((b, i) => ({
       at: histogram.start + i * histogram.size,
-      info: b.INFO + b.DEBUG,
-      warn: b.WARN,
-      err: b.ERROR,
+      ...Object.fromEntries(SEVERITY.map(l => [l, b[l] || 0])),
     }))
   );
-  const levelCount = l => facets.level?.find(f => f.value === l)?.count ?? 0;
-  const facetMax = list => Math.max(1, ...list.map(f => f.count));
+  const levelTotals = $derived(
+    Object.fromEntries(
+      SEVERITY.map(l => [l, (histogram?.buckets ?? []).reduce((s, b) => s + (b[l] || 0), 0)])
+    )
+  );
+  const levelOff = l =>
+    (filters.level?.length && !has('level', filters.level, l)) || has('level', negated.level, l);
 
-  const chips = $derived(Object.entries(filters).flatMap(([k, vs]) => vs.map(v => [k, v])));
+  // Autocomplete values: facets cover level..worker; op, user and job come from loaded lines.
+  const suggest = $derived.by(() => {
+    const out = { ...facets };
+    for (const key of ['op', 'user', 'job']) {
+      const counts = new Map();
+      for (const r of rows) {
+        const v = r.metadata?.[key];
+        if (v != null && v !== '') counts.set(String(v), (counts.get(String(v)) || 0) + 1);
+      }
+      out[key] = [...counts]
+        .map(([value, count]) => ({ value, count }))
+        .sort((a, b) => b.count - a.count)
+        .slice(0, 10);
+    }
+    return out;
+  });
 
   function exportRows() {
-    const blob = new Blob([JSON.stringify(rows, null, 2)], { type: 'application/json' });
+    const blob = new Blob([JSON.stringify(visible, null, 2)], { type: 'application/json' });
     const a = Object.assign(document.createElement('a'), {
       href: URL.createObjectURL(blob),
       download: `gronka-logs-${Date.now()}.json`,
@@ -259,23 +347,18 @@
     a.click();
     URL.revokeObjectURL(a.href);
   }
-  function copy(text) {
-    navigator.clipboard?.writeText(text);
-    copied = true;
-    setTimeout(() => (copied = false), 1200);
-  }
 </script>
 
-<PageHeader
-  title="Logs"
-  description="Every line the bot, its workers and the web server write. Search, narrow by facet, or drag the chart to zoom."
->
+<svelte:window onkeydown={onkey} />
+
+<PageHeader title="Logs" description="Every line the bot, its workers and the web server write">
   {#snippet actions()}
     <button
       class="btn"
       class:on={live}
       onclick={() => go({ live: live ? '' : '1', endTime: '' })}
       title="stream new lines as they are written"
+      aria-pressed={live}
     >
       <span class="dot" class:ok={live} class:pulse={live}></span><Radio size={14} />Live tail
     </button>
@@ -283,7 +366,7 @@
     <button
       class="btn"
       onclick={exportRows}
-      disabled={!rows.length}
+      disabled={!visible.length}
       title="download the loaded lines as JSON"
     >
       <Download size={14} />Export
@@ -291,193 +374,131 @@
   {/snippet}
 </PageHeader>
 
-<section class="panel explorer" class:has-detail={!!selected} aria-label="log explorer">
+{#snippet emptyState()}
+  <div class="empty big">
+    <span class="ic"><SearchX size={20} /></span>
+    {#if excluded}
+      <b>Every loaded line is excluded</b>
+      Your exclusions hide all {rows.length.toLocaleString()} loaded lines.
+      <div class="eacts">
+        <button class="btn sm" onclick={() => setQuery({ filters, negated: {}, search })}
+          >Remove exclusions</button
+        >
+        {#if rows.length < total}<button class="btn sm" onclick={more}>Load more</button>{/if}
+      </div>
+    {:else}
+      <b>No lines match this query {range ? `in the last ${range}` : 'in this window'}</b>
+      {hasQuery ? 'Remove a filter or widen the time range.' : 'Nothing was logged in this window.'}
+      <div class="eacts">
+        {#if range !== '7d'}
+          <button class="btn sm" onclick={() => onrange({ range: '7d' })}>Widen to 7d</button>
+        {/if}
+        {#if hasQuery}<button class="btn sm" onclick={clearAll}>Clear filters</button>{/if}
+      </div>
+    {/if}
+  </div>
+{/snippet}
+
+<section class="panel explorer" aria-label="log explorer">
   <div class="bar">
-    <div class="qbar" role="search">
-      <Search size={15} />
-      {#each chips as [key, value] (key + value)}
-        <button class="qchip" onclick={() => toggle(key, value)} title="remove">
-          <span class="k">{key}:</span>{value}<span class="x">×</span>
-        </button>
-      {/each}
-      {#if search}
-        <button class="qchip text" onclick={() => go({ search: '' })} title="remove">
-          "{search}"<span class="x">×</span>
-        </button>
-      {/if}
-      <input
-        bind:value={draft}
-        onkeydown={onQueryKey}
-        placeholder={chips.length || search
-          ? ''
-          : 'Search messages, or field:value (level:error, source:x.com)'}
-        title="fields: level, component, source, command, worker, op, user"
-        aria-label="filter logs"
-        spellcheck="false"
-      />
-    </div>
+    <LogQueryBar {filters} {negated} {search} values={suggest} onchange={setQuery} />
     <TimeRange presets={RANGES} value={win} onchange={onrange} defaultRange="24h" />
   </div>
 
   <div class="hist">
     <div class="hist-head">
       <span class="summary">
-        <b class="tnum">{total.toLocaleString()}</b> lines
-        {#if levelCount('ERROR')}<span class="sep">·</span><span class="error-text tnum"
-            >{levelCount('ERROR').toLocaleString()} errors</span
+        {#if loading && !rows.length}<span class="skeleton sum-skel"></span>{:else}<b class="tnum"
+            >{total.toLocaleString()}</b
+          > lines{/if}
+        {#if excluded}<span class="sep">·</span><span
+            class="excl"
+            title="the API only filters positive matches; exclusions apply to the loaded lines"
+            >{excluded.toLocaleString()} excluded client-side</span
           >{/if}
-        {#if levelCount('WARN')}<span class="sep">·</span><span class="warn-text tnum"
-            >{levelCount('WARN').toLocaleString()} warnings</span
+        {#if live}<span class="sep">·</span><span class="livep"
+            ><span class="dot ok pulse"></span>Live</span
           >{/if}
-        {#if loading}<span class="sep">·</span><span class="dim">loading</span>{/if}
       </span>
-      <span class="legend">
-        {#each [...SERIES].reverse() as s (s.key)}
-          <span><i style="background:{s.color}"></i>{s.label}</span>
+      <span class="legend" role="group" aria-label="levels">
+        {#each SERIES as s (s.key)}
+          <button
+            class:off={levelOff(s.key)}
+            onclick={e => (e.altKey ? only('level', s.key) : toggle('level', s.key))}
+            title="click to filter by {s.label}, alt-click to show only {s.label}"
+          >
+            <i style="background:{s.color}"></i>{s.label}
+            <span class="tnum">{levelTotals[s.key].toLocaleString()}</span>
+          </button>
         {/each}
       </span>
       {#if zoomStack.length}
         <button class="btn sm" onclick={back}><Undo2 size={12} />Back</button>
       {:else if zoomed}
-        <span class="dim small">zoomed</span>
+        <span class="hint">zoomed</span>
       {:else}
-        <span class="dim small">drag to zoom</span>
+        <span class="hint">drag to zoom</span>
       {/if}
     </div>
     <Chart
       series={SERIES}
       data={bars}
       bucket={histogram?.size}
-      height={110}
+      height={92}
       {onbrush}
-      padLeft={44}
+      padLeft={36}
     />
   </div>
 
-  <div class="body">
-    <aside class="facets" aria-label="filters">
-      {#each FACETS as [key, label] (key)}
-        {#if facets[key]?.length}
-          {@const max = facetMax(facets[key])}
-          <div class="fh">{label}</div>
-          {#each facets[key] as f (f.value)}
-            {@const on = filters[key]?.includes(f.value)}
-            <button class="fv" class:on onclick={() => toggle(key, f.value)}>
-              <span class="box lvl-{key === 'level' ? f.value.toLowerCase() : ''}" class:on></span>
-              <span class="fname">{key === 'level' ? f.value.toLowerCase() : f.value}</span>
-              <span class="fbar"><i style="width:{(f.count / max) * 100}%"></i></span>
-              <span class="fcount">{f.count.toLocaleString()}</span>
-            </button>
-          {/each}
-        {/if}
-      {/each}
-      {#if !facets.source?.length}
-        <p class="note">
-          Source, command and worker filters fill in as new lines are written with request context.
-        </p>
-      {/if}
-    </aside>
+  <div class="body" class:has-detail={!!selected}>
+    {#if prefs.facets}
+      <LogFacets
+        {facets}
+        loading={loading && !rows.length}
+        {filters}
+        {negated}
+        ontoggle={toggle}
+        ononly={only}
+        onhide={() => (prefs.facets = false)}
+      />
+    {/if}
 
-    <section class="list" aria-label="log lines">
-      <div class="lh">
-        <span>time</span><span>lvl</span><span>component</span><span>message</span>
-        <span class="ctxh">context</span>
-      </div>
-      <div class="scroll" class:busy={loading && rows.length}>
-        {#if error}
-          <div class="empty">{error} <button class="btn sm" onclick={load}>retry</button></div>
-        {:else if loading && !rows.length}
-          {#each Array(14) as _, i (i)}
-            <div class="row skel" aria-hidden="true">
-              <span class="skeleton"></span><span class="skeleton"></span><span class="skeleton"
-              ></span><span class="skeleton" style="width:{40 + ((i * 37) % 55)}%"></span>
-            </div>
-          {/each}
-        {:else if !rows.length}
-          <div class="empty">
-            <span class="ic"><FileText size={20} /></span>
-            <b>No lines match</b>
-            Widen the time range or remove a filter.
-          </div>
-        {/if}
-        {#each rows as r (r.id)}
-          <button
-            class="row lvl-{r.level.toLowerCase()}"
-            class:sel={selected?.id === r.id}
-            onclick={() => (selected = selected?.id === r.id ? null : r)}
-          >
-            <span class="t">{time(r.timestamp)}</span>
-            <span class="l">{lvl(r.level)}</span>
-            <span class="c ellipsis">{r.component}</span>
-            <span class="m ellipsis">{r.message}</span>
-            <span class="x ellipsis">{ctx(r)}</span>
-          </button>
-        {/each}
-        {#if rows.length < total}
-          <button class="more" onclick={more}
-            >Load {Math.min(PAGE, total - rows.length)} more · {(
-              total - rows.length
-            ).toLocaleString()} remaining</button
-          >
-        {/if}
-      </div>
-    </section>
+    <LogList
+      rows={visible}
+      selectedId={selected?.id}
+      {search}
+      bind:prefs
+      {loading}
+      {error}
+      {total}
+      {excluded}
+      hasMore={rows.length < total}
+      {loadingMore}
+      {fresh}
+      pending={pending.length}
+      {live}
+      bind:atTop
+      facetsHidden={!prefs.facets}
+      onselect={select}
+      onstep={step}
+      onresume={resume}
+      onmore={more}
+      onretry={load}
+      onshowfacets={() => (prefs.facets = true)}
+      empty={emptyState}
+    />
 
     {#if selected}
-      <aside class="detail" aria-label="selected line">
-        <div class="dh">
-          <span class="badge lvl-{selected.level.toLowerCase()}">{lvl(selected.level)}</span>
-          <b>{selected.component}</b>
-          <span class="t">{day(selected.timestamp)} {time(selected.timestamp)}</span>
-          <button class="icon-btn sm right" onclick={() => (selected = null)} aria-label="close"
-            ><X size={15} /></button
-          >
-        </div>
-        <pre class="msg">{selected.message}</pre>
-        {#if selected.metadata && typeof selected.metadata === 'object'}
-          <div class="sh">Fields</div>
-          <div class="fields">
-            {#each Object.entries(selected.metadata) as [k, v] (k)}
-              <span class="fk">{k}</span>
-              {#if FIELDS.includes(k)}
-                <button class="fvv" onclick={() => toggle(k, String(v))} title="filter by this"
-                  >{v}</button
-                >
-              {:else}<span class="fvv">{v}</span>{/if}
-            {/each}
-          </div>
-        {/if}
-        {#if related.length}
-          <div class="sh">Same request · {related.length}</div>
-          <div class="related">
-            {#each related as r (r.id)}
-              <button class="rr" class:cur={r.id === selected.id} onclick={() => (selected = r)}>
-                <span class="t">{time(r.timestamp)}</span>
-                <span class="dot lvl-{r.level.toLowerCase()}"></span>
-                <span class="m">{r.message}</span>
-              </button>
-            {/each}
-          </div>
-        {/if}
-        <div class="actions">
-          {#if selected.metadata?.op}
-            <button class="btn sm" onclick={() => navigate('logs', { op: selected.metadata.op })}
-              ><Link2 size={12} />Only this request</button
-            >
-          {/if}
-          <button
-            class="btn sm"
-            onclick={() =>
-              navigate('logs', {
-                startTime: String(selected.timestamp - 30000),
-                endTime: String(selected.timestamp + 30000),
-              })}><Crosshair size={12} />±30 s around</button
-          >
-          <button class="btn sm ghost" onclick={() => copy(selected.message)}
-            ><Copy size={12} />{copied ? 'Copied' : 'Copy'}</button
-          >
-        </div>
-      </aside>
+      <LogDetail
+        line={selected}
+        {related}
+        onfilter={filterBy}
+        onselect={r => (selected = r)}
+        onstep={step}
+        onclose={() => (selected = null)}
+        canPrev={selIndex > 0}
+        canNext={selIndex < visible.length - 1}
+      />
     {/if}
   </div>
 </section>
@@ -494,14 +515,14 @@
     display: flex;
     gap: 8px;
     align-items: center;
-    padding: 12px 16px;
+    padding: 10px 12px;
     border-bottom: 1px solid var(--line);
     flex-wrap: wrap;
     background: var(--card-2);
   }
 
   .hist {
-    padding: 10px 16px 4px;
+    padding: 6px 16px 0;
     border-bottom: 1px solid var(--line);
   }
   .hist-head {
@@ -512,373 +533,115 @@
     color: var(--text-muted);
     height: 26px;
   }
+  .summary {
+    display: inline-flex;
+    align-items: center;
+    white-space: nowrap;
+  }
   .summary b {
     color: var(--text-bright);
     font-weight: 600;
+    margin-right: 4px;
+  }
+  .sum-skel {
+    width: 72px;
+    height: 10px;
   }
   .sep {
     margin: 0 6px;
     color: var(--text-dim);
   }
-  .legend {
-    margin-left: auto;
-    display: flex;
-    gap: 12px;
-    font-size: var(--fs-xs);
-    color: var(--text-dim);
+  .excl {
+    color: var(--danger-text);
   }
-  .legend span {
+  .livep {
     display: inline-flex;
     align-items: center;
     gap: 5px;
+    color: var(--success-text);
+    font-weight: 500;
+  }
+  .livep .dot {
+    width: 6px;
+    height: 6px;
+  }
+  .legend {
+    margin-left: auto;
+    display: flex;
+    gap: 2px;
+  }
+  .legend button {
+    height: 22px;
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    padding: 0 6px;
+    border: 0;
+    border-radius: var(--radius-sm);
+    background: none;
+    color: var(--text-muted);
+    font-size: var(--fs-xs);
+    cursor: pointer;
+  }
+  .legend button:hover {
+    background: var(--card-3);
+    color: var(--text-bright);
+  }
+  .legend button span {
+    font-family: var(--mono);
+    color: var(--text);
+  }
+  .legend button.off {
+    opacity: 0.45;
   }
   .legend i {
     width: 8px;
     height: 8px;
     border-radius: 2px;
   }
+  .hint {
+    font-size: var(--fs-xs);
+    color: var(--text-muted);
+    white-space: nowrap;
+  }
 
   .body {
+    position: relative;
     flex: 1;
     min-height: 0;
     display: flex;
   }
-  .facets {
-    width: 240px;
-    flex-shrink: 0;
-    overflow-y: auto;
-    padding: 6px 10px 16px;
-    border-right: 1px solid var(--line);
-  }
-  .fh {
-    padding: 14px 8px 4px;
-    font-size: var(--fs-xs);
-    font-weight: 600;
-    color: var(--text-dim);
-    letter-spacing: 0.06em;
-    text-transform: uppercase;
-  }
-  .fv {
-    width: 100%;
-    height: 30px;
-    padding: 0 8px;
-    display: grid;
-    grid-template-columns: 12px minmax(0, 1fr) 36px auto;
-    align-items: center;
+  .eacts {
+    display: flex;
+    justify-content: center;
     gap: 8px;
-    border: 0;
-    border-radius: var(--radius-sm);
-    background: none;
-    color: var(--text);
-    font: inherit;
-    font-size: var(--fs);
-    text-align: left;
-    cursor: pointer;
+    margin-top: 14px;
   }
-  .fv:hover {
-    background: var(--row-hover);
-  }
-  .fv.on {
-    background: var(--accent-bg);
-  }
-  .box {
-    width: 12px;
-    height: 12px;
-    border-radius: 3px;
-    border: 1.5px solid var(--border-2);
-    background: var(--card);
-  }
-  .box.on {
-    background: var(--accent-strong);
-    border-color: var(--accent-strong);
-  }
-  .box.lvl-error {
-    border-color: var(--danger);
-  }
-  .box.lvl-warn {
-    border-color: var(--warning);
-  }
-  .box.lvl-error.on {
-    background: var(--danger);
-  }
-  .box.lvl-warn.on {
-    background: var(--warning);
-  }
-  .fname {
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
-  }
-  .fbar {
-    height: 4px;
-    border-radius: 2px;
-    background: var(--card-3);
-    overflow: hidden;
-  }
-  .fbar i {
-    display: block;
-    height: 100%;
-    background: var(--chart-muted);
-  }
-  .fv.on .fbar i {
-    background: var(--accent-strong);
-  }
-  .fcount {
-    font: var(--fs-xs) var(--mono);
-    color: var(--text-dim);
-    font-variant-numeric: tabular-nums;
-    min-width: 28px;
-    text-align: right;
-  }
-  .note {
-    margin: 14px 8px;
-    font-size: var(--fs-sm);
-    line-height: 1.5;
-    color: var(--text-dim);
-  }
-
-  .list {
-    flex: 1;
-    min-width: 0;
-    display: flex;
-    flex-direction: column;
-  }
-  .lh,
-  .row {
-    display: grid;
-    grid-template-columns: 100px 32px 130px minmax(0, 1fr) 170px;
-    gap: 12px;
-    align-items: center;
-    padding: 0 16px;
-  }
-  .lh {
-    height: 34px;
-    font-size: var(--fs-xs);
-    font-weight: 600;
-    letter-spacing: 0.05em;
-    text-transform: uppercase;
-    color: var(--text-muted);
-    background: var(--card-2);
-    border-bottom: 1px solid var(--line);
-  }
-  .scroll {
-    flex: 1;
-    overflow-y: auto;
-  }
-  .row {
-    width: 100%;
-    height: 30px;
-    border: 0;
-    border-left: 2px solid transparent;
-    background: none;
-    color: var(--text);
-    font: var(--fs-sm) var(--mono);
-    text-align: left;
-    cursor: pointer;
-  }
-  .row:hover {
-    background: var(--row-hover);
-  }
-  .row.sel {
-    background: var(--row-selected);
-    border-left-color: var(--accent-strong);
-  }
-  .row.skel {
-    pointer-events: none;
-  }
-  .row.skel .skeleton {
-    height: 11px;
-    display: block;
-  }
-  .row .t {
-    color: var(--text-muted);
-    font-variant-numeric: tabular-nums;
-  }
-  .row .c {
-    color: var(--text-muted);
-  }
-  .row .x {
-    color: var(--text-dim);
-    font-size: var(--fs-xs);
-  }
-  .row.lvl-error .m {
-    color: var(--danger-text);
-  }
-  .row.lvl-error .l {
-    color: var(--danger);
-    font-weight: 600;
-  }
-  .row.lvl-warn .l {
-    color: var(--warning);
-    font-weight: 600;
-  }
-  .row.lvl-info .l,
-  .row.lvl-debug .l {
-    color: var(--text-dim);
-  }
-  .more {
-    width: 100%;
-    height: 44px;
-    border: 0;
-    border-top: 1px solid var(--line);
-    background: none;
-    color: var(--accent);
-    font: inherit;
-    font-size: var(--fs);
-    font-weight: 500;
-    cursor: pointer;
-  }
-  .more:hover {
-    background: var(--row-hover);
-  }
-
-  .detail {
-    width: 400px;
-    flex-shrink: 0;
-    display: flex;
-    flex-direction: column;
-    border-left: 1px solid var(--line);
-    overflow-y: auto;
-    background: var(--card-2);
-  }
-  .dh {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    padding: 10px 12px 10px 16px;
-    border-bottom: 1px solid var(--line);
-  }
-  .dh b {
-    font-weight: 600;
-    color: var(--text-bright);
-  }
-  .dh .t {
-    font: var(--fs-sm) var(--mono);
-    color: var(--text-muted);
-  }
-  .badge {
-    font: 600 var(--fs-xs) var(--mono);
-    padding: 2px 6px;
-    border-radius: 4px;
-    background: var(--card-3);
-    color: var(--text-muted);
-  }
-  .badge.lvl-error {
-    background: var(--danger-bg);
-    color: var(--danger-text);
-  }
-  .badge.lvl-warn {
-    background: var(--warning-bg);
-    color: var(--warning-text);
-  }
-  .msg {
+  .eacts .btn {
     margin: 0;
-    padding: 14px 16px;
-    font: var(--fs-sm) / 1.6 var(--mono);
-    color: var(--text-bright);
-    white-space: pre-wrap;
-    overflow-wrap: anywhere;
-    border-bottom: 1px solid var(--line);
-    background: var(--card);
-  }
-  .sh {
-    padding: 14px 16px 6px;
-    font-size: var(--fs-xs);
-    font-weight: 600;
-    color: var(--text-dim);
-    letter-spacing: 0.06em;
-    text-transform: uppercase;
-  }
-  .fields {
-    display: grid;
-    grid-template-columns: 90px 1fr;
-    gap: 6px 12px;
-    padding: 0 16px 12px;
-    font: var(--fs-sm) var(--mono);
-  }
-  .fk {
-    color: var(--text-dim);
-  }
-  .fvv {
-    color: var(--text-bright);
-    background: none;
-    border: 0;
-    padding: 0;
-    font: inherit;
-    text-align: left;
-    overflow-wrap: anywhere;
-  }
-  button.fvv {
-    cursor: pointer;
-    color: var(--accent);
-  }
-  button.fvv:hover {
-    text-decoration: underline;
-  }
-  .related {
-    padding: 0 8px 12px;
-  }
-  .rr {
-    width: 100%;
-    display: grid;
-    grid-template-columns: 92px 8px minmax(0, 1fr);
-    gap: 8px;
-    align-items: center;
-    height: 26px;
-    padding: 0 8px;
-    border: 0;
-    border-radius: var(--radius-sm);
-    background: none;
-    color: var(--text);
-    font: var(--fs-sm) var(--mono);
-    text-align: left;
-    cursor: pointer;
-  }
-  .rr:hover,
-  .rr.cur {
-    background: var(--card-3);
-  }
-  .rr .t {
-    color: var(--text-dim);
-  }
-  .rr .m {
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
-  }
-  .rr .dot {
-    width: 7px;
-    height: 7px;
-  }
-  .rr .dot.lvl-error {
-    background: var(--danger);
-  }
-  .rr .dot.lvl-warn {
-    background: var(--warning);
-  }
-  .actions {
-    margin-top: auto;
-    display: flex;
-    flex-wrap: wrap;
-    gap: 6px;
-    padding: 12px 16px;
-    border-top: 1px solid var(--line);
   }
 
-  @media (max-width: 1500px) {
-    .has-detail .lh,
-    .has-detail .row,
-    .lh,
-    .row {
-      grid-template-columns: 100px 32px 130px minmax(0, 1fr);
+  /* Below 1680px the detail panel slides over the list instead of squeezing the message away. */
+  @media (max-width: 1680px) and (min-width: 769px) {
+    .body :global(.detail) {
+      position: absolute;
+      top: 0;
+      right: 0;
+      bottom: 0;
+      z-index: 6;
+      width: min(480px, 100%);
+      box-shadow: var(--shadow-pop);
+      animation: slide-in 0.16s ease-out;
     }
-    .ctxh,
-    .row .x {
-      display: none;
+  }
+  @keyframes slide-in {
+    from {
+      transform: translateX(24px);
+      opacity: 0;
     }
   }
   @media (max-width: 1100px) {
-    .facets {
+    .body :global(.facets) {
       display: none;
     }
   }
@@ -886,39 +649,26 @@
     .explorer {
       height: auto;
       min-height: 70vh;
+      overflow: visible;
     }
     .bar {
       padding: 10px 12px;
     }
-    .qbar {
+    .bar :global(.qwrap) {
       flex-basis: 100%;
     }
-    .legend {
-      display: none;
-    }
-    .lh {
-      grid-template-columns: minmax(0, 1fr);
-      padding: 0 12px;
-    }
-    .lh > :not(:nth-child(4)) {
-      display: none;
-    }
-    .scroll {
-      min-height: 50vh;
-    }
-    .row {
-      grid-template-columns: 72px 30px minmax(0, 1fr);
-      height: auto;
-      min-height: 30px;
-      padding: 6px 12px;
-    }
-    .row .c {
+    .legend,
+    .hint {
       display: none;
     }
     .body {
       flex-direction: column;
     }
-    .detail {
+    .body :global(.list) {
+      flex: none;
+      height: 70vh;
+    }
+    .body :global(.detail) {
       width: 100%;
       border-left: 0;
       border-top: 1px solid var(--line);

@@ -306,6 +306,11 @@ input:not([type]) {
   margin-left: auto;
   color: var(--pencil);
 }
+.foot .tm {
+  flex-basis: 100%;
+  color: var(--pencil);
+  font-size: 0.85em;
+}
 
 .lede {
   color: var(--pencil);

@@ -1,6 +1,6 @@
 <script>
   import { Search } from 'lucide-svelte';
-  import { useHeaderActions } from '../stores/header.js';
+  import PageHeader from '../components/PageHeader.svelte';
 
   // Order + display names for the category sections; unknown categories render after these.
   const CATEGORY_ORDER = [
@@ -97,35 +97,35 @@
     })
   );
   const totalOn = $derived(catalog.length - disabled.size);
-
-  useHeaderActions(actions);
 </script>
 
-{#snippet actions()}
-  <span class="dim small">{saving ? 'saving…' : `${totalOn} of ${catalog.length} on`}</span>
-  <button class="btn" disabled={saving || !disabled.size} onclick={() => persist(new Set())}
-    >Turn all on</button
-  >
-  <button
-    class="btn danger"
-    disabled={saving || disabled.size === catalog.length}
-    onclick={() => persist(new Set(catalog.map(s => s.id)))}>Turn all off</button
-  >
-{/snippet}
+<PageHeader
+  title="Download sources"
+  description="A turned-off source refuses /download with a message instead of downloading. The bot picks changes up within a minute."
+>
+  {#snippet actions()}
+    <span class="pill" class:ok={totalOn === catalog.length} class:warn={totalOn < catalog.length}
+      >{saving ? 'Saving…' : `${totalOn} of ${catalog.length} on`}</span
+    >
+    <button class="btn" disabled={saving || !disabled.size} onclick={() => persist(new Set())}
+      >Turn all on</button
+    >
+    <button
+      class="btn danger"
+      disabled={saving || disabled.size === catalog.length}
+      onclick={() => persist(new Set(catalog.map(s => s.id)))}>Turn all off</button
+    >
+  {/snippet}
+  {#snippet below()}
+    <label class="searchbox">
+      <Search size={15} />
+      <input bind:value={search} placeholder="Find a source" aria-label="find a source" />
+    </label>
+  {/snippet}
+</PageHeader>
 
 <div class="sources stack">
-  <div class="intro">
-    <p class="muted">
-      A turned-off source refuses <span class="mono">/download</span> with a message instead of downloading.
-      The bot picks changes up within a minute.
-    </p>
-    <label class="searchbox">
-      <Search size={14} />
-      <input bind:value={search} placeholder="find a source" aria-label="find a source" />
-    </label>
-  </div>
-
-  {#if error}<div class="panel pb error-text">{error}</div>{/if}
+  {#if error}<div class="flash error">{error}</div>{/if}
   {#if loading && !catalog.length}<div class="panel empty">loading…</div>{/if}
 
   <div class="grid">
@@ -135,7 +135,7 @@
           <div class="ph">
             <span>{c.label}</span>
             <span class="meta">
-              <span class="mono">{c.on}/{c.all.length} on</span>
+              <span class="tnum">{c.on}/{c.all.length} on</span>
               <button
                 class="linkish"
                 disabled={saving}
@@ -168,7 +168,7 @@
                 disabled={saving}
                 onclick={() => toggle(s.id)}
               ></button>
-              <span class="grow">{s.label}</span>
+              <span class="grow strong">{s.label}</span>
               <span class="mono dim small">{s.id}</span>
             </div>
           {/each}
@@ -179,31 +179,20 @@
 </div>
 
 <style>
-  .intro {
-    display: flex;
-    align-items: center;
-    gap: 16px;
-    flex-wrap: wrap;
-  }
-  .intro p {
-    margin: 0;
-    flex: 1;
-    min-width: 260px;
-    font-size: var(--fs);
-  }
   .searchbox {
-    width: 280px;
+    width: 300px;
   }
   .grid {
     display: grid;
     grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
-    gap: 16px;
+    gap: var(--gap);
     align-items: start;
   }
   .src {
-    padding: 8px 16px;
+    padding: 10px 20px;
   }
-  .src.off .grow {
+  .src.off .strong {
     color: var(--text-dim);
+    font-weight: 500;
   }
 </style>

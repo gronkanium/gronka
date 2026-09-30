@@ -1,9 +1,9 @@
 <script>
-  import { Pause, Play, AlertTriangle } from 'lucide-svelte';
+  import { Pause, Play, AlertTriangle, Cpu } from 'lucide-svelte';
   import { currentRoute, navigate } from '../utils/router.js';
-  import { useHeaderActions } from '../stores/header.js';
   import { refreshNav } from '../stores/nav.js';
   import { formatBytes, formatRelativeTime, urlLabel } from '../utils/format.js';
+  import PageHeader from '../components/PageHeader.svelte';
   import DataTable from '../components/DataTable.svelte';
 
   const LIVE_MS = 30_000;
@@ -76,8 +76,15 @@
         ? `${Math.floor(m / 60)}h ${m % 60}m`
         : `${Math.floor(m / 1440)}d ${Math.floor((m % 1440) / 60)}h`;
   };
-  const jobDot = s => ({ done: 'ok', failed: 'err', running: 'run', queued: '' })[s] ?? '';
+  const JOB_STATUS = {
+    done: ['ok', 'Done'],
+    failed: ['bad', 'Failed'],
+    running: ['info', 'Running'],
+    queued: ['idle', 'Queued'],
+  };
   const paused = $derived(!!jobs?.paused);
+  const liveWorkers = $derived(processes.filter(p => p.live && p.role !== 'bot').length);
+  const allWorkers = $derived(processes.filter(p => p.role !== 'bot').length);
   const sessionNote = s =>
     !s.fileFound
       ? `${s.file} not found`
@@ -91,47 +98,42 @@
   const sessionBad = s => s.loggedIn && s.lastRejected && s.lastRejected > s.fileChanged;
 
   const JOB_COLUMNS = [
-    { key: 'id', label: 'job', width: '56px' },
-    { key: 'state', label: 'state', width: '84px' },
+    { key: 'id', label: 'job', width: '64px' },
+    { key: 'state', label: 'state', width: '96px' },
     { key: 'req', label: 'request' },
     { key: 'worker', label: 'worker', width: '150px', sm: false },
-    { key: 'attempts', label: 'attempts', width: '64px', align: 'right', sm: false },
+    { key: 'attempts', label: 'attempts', width: '72px', align: 'right', sm: false },
     { key: 'age', label: 'age', width: '70px', align: 'right' },
   ];
-
-  useHeaderActions(actions);
 </script>
 
-{#snippet actions()}
-  <span class="dim small">refreshes every 5 s</span>
-  {#if jobs && data?.mediaWorkers !== false}
-    <button class="btn" class:primary={paused} disabled={busy} onclick={() => setPaused(!paused)}>
-      {#if paused}<Play size={13} />Resume queue{:else}<Pause size={13} />Pause queue{/if}
-    </button>
-  {/if}
-{/snippet}
+<PageHeader
+  title="Workers & queue"
+  description="Media jobs, the processes running them, and the services they depend on. Refreshes every 5 seconds."
+>
+  {#snippet actions()}
+    {#if paused}<span class="pill warn">Queue paused</span>{:else if jobs}<span class="pill ok"
+        >Queue running</span
+      >{/if}
+    {#if jobs && data?.mediaWorkers !== false}
+      <button class="btn" class:primary={paused} disabled={busy} onclick={() => setPaused(!paused)}>
+        {#if paused}<Play size={14} />Resume queue{:else}<Pause size={14} />Pause queue{/if}
+      </button>
+    {/if}
+  {/snippet}
+</PageHeader>
 
 <div class="workers stack">
   {#if data?.mediaWorkers === false}
-    <div class="panel pb note">
+    <div class="flash">
+      <Cpu size={14} />
       Media jobs run inside the bot (MEDIA_WORKERS=false), so there are no worker processes.
     </div>
   {/if}
 
   {#if paused}
-    <div
-      class="panel pb banner"
-      class:accent-warn={count('running')}
-      class:accent-ok={!count('running')}
-      role="status"
-    >
-      <span
-        class="dot"
-        class:run={count('running')}
-        class:ok={!count('running')}
-        class:pulse={count('running')}
-      ></span>
-      <div class="grow">
+    <div class="flash" class:warn={count('running')} class:ok={!count('running')} role="status">
+      <span class="grow">
         {#if count('running')}
           <b>Queue paused, draining.</b>
           {count('running')} running job{count('running') === 1 ? '' : 's'} will finish; nothing new is
@@ -139,10 +141,8 @@
         {:else}
           <b>Queue paused and drained.</b> No job is running, so a deploy interrupts nothing.
         {/if}
-        {#if count('queued')}
-          <span class="dim">{count('queued')} queued and waiting.</span>
-        {/if}
-      </div>
+        {#if count('queued')}{count('queued')} queued and waiting.{/if}
+      </span>
       <button class="btn primary sm" disabled={busy} onclick={() => setPaused(false)}>Resume</button
       >
     </div>
@@ -160,13 +160,12 @@
     </div>
   {/if}
 
-  <section class="panel kpis" style="--kpi-cols: 6" aria-label="queue">
+  <section class="kpis" style="--kpi-cols: 6" aria-label="queue">
     <div class="kpi">
       <div class="k">Queued</div>
       <div class="v">
-        {jobs ? count('queued') : '—'}<span class="d" class:warn={count('queued')}
-          >{paused ? 'paused' : ''}</span
-        >
+        {jobs ? count('queued') : '—'}
+        {#if paused}<span class="d warn">paused</span>{/if}
       </div>
       <div class="s">waiting for a worker</div>
     </div>
@@ -202,9 +201,8 @@
     <div class="kpi">
       <div class="k">Workers live</div>
       <div class="v">
-        {processes.length
-          ? `${processes.filter(p => p.live && p.role !== 'bot').length} / ${processes.filter(p => p.role !== 'bot').length}`
-          : '—'}
+        {allWorkers ? `${liveWorkers} / ${allWorkers}` : '—'}
+        {#if allWorkers && liveWorkers < allWorkers}<span class="d bad">down</span>{/if}
       </div>
       <div class="s">{data?.version ? `webui v${data.version}` : ''}</div>
     </div>
@@ -213,27 +211,26 @@
   {#if processes.length}
     <div class="cards">
       {#each processes as p (p.id)}
-        <section class="panel" class:accent-danger={!p.live} aria-label={p.name}>
+        <section class="panel proc" class:accent-danger={!p.live} aria-label={p.name}>
           <div class="ph">
             <span class="dot" class:ok={p.live} class:err={!p.live}></span>
             <span>{p.name}</span>
-            <span class="meta mono" class:warn-text={mismatch && p.version !== data?.version}
-              >v{p.version ?? '?'}</span
-            >
+            <span class="meta">
+              <span class="pill sm" class:ok={p.live} class:bad={!p.live}
+                >{!p.live
+                  ? 'Not reporting'
+                  : p.role === 'bot'
+                    ? 'Gateway ready'
+                    : p.running
+                      ? `Running ${p.running}`
+                      : 'Idle'}</span
+              >
+              <span class="mono" class:warn-text={mismatch && p.version !== data?.version}
+                >v{p.version ?? '?'}</span
+              >
+            </span>
           </div>
           <div class="pb facts">
-            <div>
-              <div class="k">state</div>
-              <div class="v">
-                {!p.live
-                  ? 'not reporting'
-                  : p.role === 'bot'
-                    ? 'gateway ready'
-                    : p.running
-                      ? `running ${p.running}`
-                      : 'idle'}
-              </div>
-            </div>
             <div>
               <div class="k">heartbeat</div>
               <div class="v mono">{formatRelativeTime(p.seen_at)}</div>
@@ -250,7 +247,7 @@
               <div class="k">cpu</div>
               <div class="v mono">{p.cpu == null ? '—' : `${p.cpu.toFixed(1)}%`}</div>
             </div>
-            <div>
+            <div class="wide">
               <div class="k">id</div>
               <div class="v mono dim ellipsis" title={p.id}>{p.id}</div>
             </div>
@@ -292,15 +289,13 @@
         {/if}
       {/snippet}
       {#snippet row(j)}
+        {@const [kind, label] = JOB_STATUS[j.status] ?? ['idle', j.status]}
         <span class="mono dim">#{j.id}</span>
-        <span class="row"
-          ><span class="dot {jobDot(j.status)}" class:pulse={j.status === 'running'}
-          ></span>{j.status}</span
-        >
-        <span class="mono small ellipsis"
+        <span><span class="pill sm {kind}">{label}</span></span>
+        <span class="mono ellipsis"
           >{j.kind} {j.url ? urlLabel(j.url) : j.attachment ? 'attachment' : ''}</span
         >
-        <span class="mono small muted ellipsis hide-sm">{j.worker ?? '—'}</span>
+        <span class="mono muted ellipsis hide-sm">{j.worker ?? '—'}</span>
         <span class="num hide-sm" class:warn-text={j.attempts > 1}>{j.attempts}</span>
         <span class="num dim">{formatRelativeTime(j.created_at)}</span>
       {/snippet}
@@ -316,7 +311,7 @@
               class:ok={bot.status && bot.status !== 'offline'}
               class:err={!bot.status || bot.status === 'offline'}
             ></span>
-            <span>Discord</span>
+            <span class="strong">Discord</span>
             <span class="mono dim small right ellipsis">{bot.botTag ?? '—'} · {bot.status}</span>
           </div>
         {/if}
@@ -328,7 +323,7 @@
               class:bad={d.status === 'warn'}
               class:err={d.status === 'error'}
             ></span>
-            <span>{d.label}</span>
+            <span class="strong">{d.label}</span>
             <span class="mono dim small right ellipsis" title={d.detail}
               >{d.detail ?? d.status}</span
             >
@@ -351,7 +346,7 @@
               class:err={sessionBad(s) || !s.fileFound}
             ></span>
             <div class="grow">
-              <div>{s.label}</div>
+              <div class="strong">{s.label}</div>
               <div class="dim small">
                 {#if sessionBad(s)}
                   rejected {formatRelativeTime(s.lastRejected)}, needs a fresh cookie
@@ -382,36 +377,34 @@
   }
   .cards {
     display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+    grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
     gap: var(--gap);
   }
   .facts {
     display: grid;
-    grid-template-columns: repeat(3, minmax(0, 1fr));
+    grid-template-columns: repeat(4, minmax(0, 1fr));
     gap: 14px 12px;
+  }
+  .facts .wide {
+    grid-column: 1 / -1;
   }
   .k {
     font-size: var(--fs-xs);
+    font-weight: 600;
     color: var(--text-dim);
     text-transform: uppercase;
-    letter-spacing: 0.04em;
+    letter-spacing: 0.05em;
   }
   .v {
-    margin-top: 3px;
+    margin-top: 4px;
     font-size: var(--fs);
-    color: var(--text);
-  }
-  .banner {
-    display: flex;
-    align-items: center;
-    gap: 12px;
-    font-size: var(--fs);
-  }
-  .banner b {
     color: var(--text-bright);
-    font-weight: 500;
   }
   .dep {
-    padding: 10px 16px;
+    padding: 11px 20px;
+  }
+  .flash b {
+    color: inherit;
+    font-weight: 600;
   }
 </style>

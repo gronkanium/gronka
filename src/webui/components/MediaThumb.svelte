@@ -61,7 +61,7 @@
     place-items: center;
     overflow: hidden;
     border-radius: var(--radius-sm);
-    background: var(--bg-deep);
+    background: var(--canvas);
     border: 1px solid var(--border);
   }
   .thumb.preview {
@@ -92,7 +92,7 @@
     color: var(--text-dim);
   }
   .ph.faint {
-    color: var(--surface-3);
+    color: var(--card-3);
   }
   .dead {
     background: var(--danger-bg-subtle);

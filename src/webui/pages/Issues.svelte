@@ -1,14 +1,22 @@
 <script>
   import { tick } from 'svelte';
-  import { TerminalSquare, Copy, BellOff, CheckCircle2, RotateCcw } from 'lucide-svelte';
+  import {
+    TerminalSquare,
+    Copy,
+    BellOff,
+    CheckCircle2,
+    RotateCcw,
+    PartyPopper,
+  } from 'lucide-svelte';
   import { currentRoute, navigate } from '../utils/router.js';
-  import { useHeaderActions } from '../stores/header.js';
   import { alerts as liveAlerts } from '../stores/sse-store.js';
   import { issueStates, setIssueState } from '../stores/nav.js';
   import { groupIssues, stateOf, isOpen, KIND_LABEL } from '../issues.js';
   import { formatRelativeTime, shortId, urlLabel } from '../utils/format.js';
+  import PageHeader from '../components/PageHeader.svelte';
   import DataTable from '../components/DataTable.svelte';
   import Sparkline from '../components/Sparkline.svelte';
+  import Avatar from '../components/Avatar.svelte';
 
   const DAY = 24 * 3600e3;
   const TABS = [
@@ -20,9 +28,14 @@
     ['resolved', 'Resolved'],
   ];
   const KIND_COLOR = {
-    defect: 'var(--warning)',
+    defect: 'var(--chart-3)',
     upstream: 'var(--chart-1)',
     user: 'var(--chart-muted)',
+  };
+  const KIND_HELP = {
+    user: 'A reply to something the user sent. Nothing to fix unless it keeps catching valid links.',
+    upstream: 'A site refused or no longer has the content. Worth a look if it spikes.',
+    defect: 'Not a user error or a site refusing, so treat it as ours until proven otherwise.',
   };
 
   let groups = $state([]);
@@ -172,200 +185,206 @@
 
   const columns = [
     { key: 'cause', label: 'cause' },
-    { key: 'kind', label: 'kind', width: '88px', sm: false },
-    { key: 'trend', label: '7 days', width: '76px', sm: false },
-    { key: 'n', label: 'events', width: '60px', align: 'right' },
-    { key: 'last', label: 'last seen', width: '84px', align: 'right', sm: false },
+    { key: 'kind', label: 'kind', width: '96px', sm: false },
+    { key: 'trend', label: '7 days', width: '80px', sm: false },
+    { key: 'n', label: 'events', width: '64px', align: 'right' },
+    { key: 'last', label: 'last seen', width: '88px', align: 'right', sm: false },
   ];
-
-  useHeaderActions(actions);
 </script>
 
-{#snippet actions()}
-  {#if error}<span class="error-text small">{error}</span>{/if}
-  <span class="dim small">failures grouped by cause · kept 7 days</span>
-{/snippet}
-
-<div class="issues stack">
-  <div class="tabs" role="tablist">
-    {#each TABS as [id, label] (id)}
-      <button
-        role="tab"
-        aria-selected={tab === id}
-        class:on={tab === id}
-        onclick={() => navigate('issues', id === 'open' ? {} : { tab: id })}
-      >
-        {label}<span class="n">{lists[id].length}</span>
-      </button>
-    {/each}
-  </div>
-
-  <div class="grid">
-    <DataTable
-      {columns}
-      rows={visible}
-      rowKey="key"
-      loading={!loaded}
-      empty="nothing here"
-      selected={selected?.key}
-      onrow={g => pick(g.key)}
-      label="issues"
+<PageHeader
+  title="Issues"
+  description="Failures from the last 7 days, grouped by cause and sorted by how often they happen."
+>
+  {#snippet actions()}
+    {#if error}<span class="error-text small">{error}</span>{/if}
+    <span class="pill" class:warn={lists.defects.length} class:ok={!lists.defects.length}
+      >{lists.defects.length
+        ? `${lists.defects.length} defect${lists.defects.length === 1 ? '' : 's'} open`
+        : 'No open defects'}</span
     >
-      {#snippet row(g)}
-        <span class="cause">
-          <span class="row">
-            <span class="ellipsis title">{g.title}</span>
-            {#if g.state === 'regressed'}<span class="chip bad">regressed</span>{/if}
-          </span>
-          <span class="meta ellipsis">
-            {[
-              g.commands.map(c => `/${c}`).join(', '),
-              g.members.length > 1 && `${g.members.length} variants`,
-            ]
-              .filter(Boolean)
-              .join(' · ')}
-          </span>
-        </span>
-        <span class="hide-sm"><span class="chip {g.kind}">{KIND_LABEL[g.kind]}</span></span>
-        <span class="hide-sm">
-          <Sparkline
-            values={sparks[g.key] ?? []}
-            width={64}
-            height={20}
-            color={KIND_COLOR[g.kind]}
-            title="events per day, last 7 days"
-          />
-        </span>
-        <span class="num">{g.count.toLocaleString()}</span>
-        <span class="num dim hide-sm">{formatRelativeTime(g.lastSeen)}</span>
-      {/snippet}
-    </DataTable>
+  {/snippet}
+  {#snippet below()}
+    <div class="tabs" role="tablist">
+      {#each TABS as [id, label] (id)}
+        <button
+          role="tab"
+          aria-selected={tab === id}
+          class:on={tab === id}
+          onclick={() => navigate('issues', id === 'open' ? {} : { tab: id })}
+        >
+          {label}<span class="n">{lists[id].length}</span>
+        </button>
+      {/each}
+    </div>
+  {/snippet}
+</PageHeader>
 
-    {#if selected}
-      <section class="panel detail" aria-label="selected issue">
-        <div class="pb top">
-          <div class="row">
-            <span class="chip {selected.kind}">{KIND_LABEL[selected.kind]}</span>
-            {#if selected.state !== 'open'}<span class="chip">{selected.state}</span>{/if}
-            {#if firstSeen}<span class="mono dim small right"
-                >first seen {new Date(firstSeen).toLocaleDateString([], {
-                  month: 'short',
-                  day: 'numeric',
-                })}</span
-              >{/if}
-          </div>
-          <h2>{selected.title}</h2>
-          <p class="muted small">
-            {#if selected.kind === 'user'}
-              A reply to something the user sent. Nothing to fix unless it keeps catching valid
-              links.
-            {:else if selected.kind === 'upstream'}
-              A site refused or no longer has the content. Worth a look if it spikes.
-            {:else}
-              Not a user error or a site refusing, so treat it as ours until proven otherwise.
-            {/if}
-          </p>
-          <p class="dim small basis">Classified {selected.basis}.</p>
+<div class="grid">
+  <DataTable
+    {columns}
+    rows={visible}
+    rowKey="key"
+    loading={!loaded}
+    selected={selected?.key}
+    onrow={g => pick(g.key)}
+    label="issues"
+  >
+    {#snippet emptyState()}
+      <div class="empty">
+        <span class="ic"><PartyPopper size={20} /></span>
+        <b>Nothing here</b>
+        {tab === 'open' ? 'No open failures in the last 7 days.' : 'No issues in this list.'}
+      </div>
+    {/snippet}
+    {#snippet row(g)}
+      <span class="cause">
+        <span class="row">
+          <span class="ellipsis title">{g.title}</span>
+          {#if g.state === 'regressed'}<span class="pill sm bad">regressed</span>{/if}
+        </span>
+        <span class="meta ellipsis">
+          {[
+            g.commands.map(c => `/${c}`).join(', '),
+            g.members.length > 1 && `${g.members.length} variants`,
+          ]
+            .filter(Boolean)
+            .join(' · ')}
+        </span>
+      </span>
+      <span class="hide-sm"><span class="chip {g.kind}">{KIND_LABEL[g.kind]}</span></span>
+      <span class="hide-sm">
+        <Sparkline
+          values={sparks[g.key] ?? []}
+          width={64}
+          height={20}
+          color={KIND_COLOR[g.kind]}
+          title="events per day, last 7 days"
+        />
+      </span>
+      <span class="num strong">{g.count.toLocaleString()}</span>
+      <span class="num dim hide-sm">{formatRelativeTime(g.lastSeen)}</span>
+    {/snippet}
+  </DataTable>
+
+  {#if selected}
+    <section class="panel detail" aria-label="selected issue">
+      <div class="pb top">
+        <div class="row">
+          <span class="chip {selected.kind}">{KIND_LABEL[selected.kind]}</span>
+          {#if selected.state !== 'open'}<span class="pill sm">{selected.state}</span>{/if}
+          {#if firstSeen}<span class="dim small right"
+              >first seen {new Date(firstSeen).toLocaleDateString([], {
+                month: 'short',
+                day: 'numeric',
+              })}</span
+            >{/if}
         </div>
-        <div class="stats">
-          <div>
-            <div class="k">events</div>
-            <div class="v mono">{selected.count.toLocaleString()}</div>
-          </div>
-          <div>
-            <div class="k">last 24h</div>
-            <div class="v mono">{occ.length ? today : '…'}</div>
-          </div>
-          <div>
-            <div class="k">users</div>
-            <div class="v mono">{occ.length ? users : '…'}</div>
-          </div>
-          <div>
-            <div class="k">last seen</div>
-            <div class="v mono">{formatRelativeTime(selected.lastSeen)}</div>
-          </div>
+        <h2>{selected.title}</h2>
+        <p class="muted">{KIND_HELP[selected.kind]}</p>
+        <p class="dim small basis">Classified {selected.basis}.</p>
+      </div>
+      <div class="stats">
+        <div>
+          <div class="k">events</div>
+          <div class="v">{selected.count.toLocaleString()}</div>
         </div>
-        {#if selected.members.length > 1}
-          <div class="section-label pad">Variants</div>
-          <div class="pad variants">
-            {#each selected.members as m (m)}<div class="mono small muted ellipsis" title={m}>
-                {m}
-              </div>{/each}
-          </div>
+        <div>
+          <div class="k">last 24h</div>
+          <div class="v">{occ.length ? today : '…'}</div>
+        </div>
+        <div>
+          <div class="k">users</div>
+          <div class="v">{occ.length ? users : '…'}</div>
+        </div>
+        <div>
+          <div class="k">last seen</div>
+          <div class="v small-v">{formatRelativeTime(selected.lastSeen)}</div>
+        </div>
+      </div>
+      {#if selected.members.length > 1}
+        <div class="section-label pad">Variants</div>
+        <div class="pad variants">
+          {#each selected.members as m (m)}<div class="mono small muted ellipsis" title={m}>
+              {m}
+            </div>{/each}
+        </div>
+      {/if}
+      <div class="section-label pad">Recent requests</div>
+      <div class="occ">
+        {#each occ.slice(0, 8) as a (a.id)}
+          {@const o = occOps[a.operation_id]}
+          <button
+            class="orow"
+            disabled={!a.operation_id}
+            onclick={() => navigate('request', { requestId: a.operation_id })}
+          >
+            <span class="mono dim"
+              >{new Date(a.timestamp).toLocaleString([], {
+                month: 'short',
+                day: 'numeric',
+                hour: '2-digit',
+                minute: '2-digit',
+                hour12: false,
+              })}</span
+            >
+            <span class="mono ellipsis" class:dim={!o}>
+              {o
+                ? urlLabel(o.originalUrl)
+                : !a.operation_id
+                  ? 'not linked to a request'
+                  : opsLoaded
+                    ? 'no longer kept'
+                    : '…'}
+            </span>
+            <span class="user-cell"
+              ><Avatar id={a.user_id} size={18} /><span class="id">{shortId(a.user_id)}</span></span
+            >
+          </button>
+        {:else}
+          <div class="empty">loading…</div>
+        {/each}
+      </div>
+      <div class="foot">
+        {#if selected.state === 'muted' || selected.state === 'resolved' || selected.state === 'regressed'}
+          <button class="btn sm" disabled={saving} onclick={() => setState(selected, null)}
+            ><RotateCcw size={13} />Reopen</button
+          >
         {/if}
-        <div class="section-label pad">Recent requests</div>
-        <div class="occ">
-          {#each occ.slice(0, 8) as a (a.id)}
-            {@const o = occOps[a.operation_id]}
-            <button
-              class="orow"
-              disabled={!a.operation_id}
-              onclick={() => navigate('request', { requestId: a.operation_id })}
-            >
-              <span class="mono dim"
-                >{new Date(a.timestamp).toLocaleString([], {
-                  month: 'short',
-                  day: 'numeric',
-                  hour: '2-digit',
-                  minute: '2-digit',
-                  hour12: false,
-                })}</span
-              >
-              <span class="mono ellipsis" class:dim={!o}>
-                {o
-                  ? urlLabel(o.originalUrl)
-                  : !a.operation_id
-                    ? 'not linked to a request'
-                    : opsLoaded
-                      ? 'no longer kept'
-                      : '…'}
-              </span>
-              <span class="mono muted">{shortId(a.user_id)}</span>
-            </button>
-          {:else}
-            <div class="empty">loading…</div>
-          {/each}
-        </div>
-        <div class="foot">
-          {#if selected.state === 'muted' || selected.state === 'resolved' || selected.state === 'regressed'}
-            <button class="btn sm" disabled={saving} onclick={() => setState(selected, null)}
-              ><RotateCcw size={12} />Reopen</button
-            >
-          {/if}
-          {#if selected.state !== 'muted'}
-            <button
-              class="btn sm"
-              disabled={saving}
-              onclick={() => setState(selected, { state: 'muted', until: Date.now() + DAY })}
-              ><BellOff size={12} />Mute 24h</button
-            >
-            <button
-              class="btn sm"
-              disabled={saving}
-              onclick={() => setState(selected, { state: 'muted', until: Date.now() + 7 * DAY })}
-              >Mute 7d</button
-            >
-          {/if}
-          {#if selected.state !== 'resolved'}
-            <button
-              class="btn sm primary"
-              disabled={saving}
-              onclick={() => setState(selected, { state: 'resolved', at: Date.now() })}
-              ><CheckCircle2 size={12} />Resolve</button
-            >
-          {/if}
+        {#if selected.state !== 'muted'}
           <button
             class="btn sm"
-            onclick={() => navigate('logs', { search: logSearch(selected), range: '7d' })}
-            ><TerminalSquare size={12} />Logs</button
+            disabled={saving}
+            onclick={() => setState(selected, { state: 'muted', until: Date.now() + DAY })}
+            ><BellOff size={13} />Mute 24h</button
           >
-          <button class="btn sm" onclick={() => copy(selected.members[0])}
-            ><Copy size={12} />{copied ? 'Copied' : 'Copy'}</button
+          <button
+            class="btn sm"
+            disabled={saving}
+            onclick={() => setState(selected, { state: 'muted', until: Date.now() + 7 * DAY })}
+            >Mute 7d</button
           >
-        </div>
-      </section>
-    {/if}
-  </div>
+        {/if}
+        {#if selected.state !== 'resolved'}
+          <button
+            class="btn sm primary"
+            disabled={saving}
+            onclick={() => setState(selected, { state: 'resolved', at: Date.now() })}
+            ><CheckCircle2 size={13} />Resolve</button
+          >
+        {/if}
+        <span class="right"></span>
+        <button
+          class="btn sm ghost"
+          onclick={() => navigate('logs', { search: logSearch(selected), range: '7d' })}
+          ><TerminalSquare size={13} />Logs</button
+        >
+        <button class="btn sm ghost" onclick={() => copy(selected.members[0])}
+          ><Copy size={13} />{copied ? 'Copied' : 'Copy'}</button
+        >
+      </div>
+    </section>
+  {/if}
 </div>
 
 <style>
@@ -380,11 +399,12 @@
     flex-direction: column;
     gap: 3px;
     min-width: 0;
-    padding: 7px 0;
+    padding: 8px 0;
   }
   .title {
     font-size: var(--fs);
-    color: var(--text);
+    font-weight: 500;
+    color: var(--text-bright);
   }
   .meta {
     font-size: var(--fs-sm);
@@ -392,22 +412,21 @@
   }
   .detail {
     position: sticky;
-    top: calc(var(--topbar-h) + 20px);
+    top: 24px;
   }
   .top {
     border-bottom: 1px solid var(--line);
   }
   h2 {
-    margin: 10px 0 6px;
-    font-size: 15px;
-    font-weight: 600;
+    margin: 12px 0 6px;
+    font-size: var(--fs-lg);
     line-height: 1.35;
-    color: var(--text-bright);
     overflow-wrap: anywhere;
   }
   .top p {
     margin: 0;
     line-height: 1.5;
+    font-size: var(--fs);
   }
   .basis {
     margin-top: 6px !important;
@@ -416,22 +435,31 @@
     display: grid;
     grid-template-columns: repeat(4, 1fr);
     gap: 10px;
-    padding: 14px 16px;
+    padding: 16px 20px;
     border-bottom: 1px solid var(--line);
   }
   .k {
     font-size: var(--fs-xs);
+    font-weight: 600;
     color: var(--text-dim);
     text-transform: uppercase;
-    letter-spacing: 0.04em;
+    letter-spacing: 0.05em;
   }
   .v {
     margin-top: 4px;
-    font-size: var(--fs-lg);
+    font-size: var(--fs-xl);
+    font-weight: 600;
+    letter-spacing: -0.02em;
     color: var(--text-bright);
+    font-variant-numeric: tabular-nums;
+  }
+  .v.small-v {
+    font-size: var(--fs-md);
+    font-weight: 500;
+    margin-top: 8px;
   }
   .pad {
-    padding: 12px 16px 6px;
+    padding: 14px 20px 6px;
   }
   .variants {
     padding-top: 0;
@@ -445,10 +473,10 @@
   .orow {
     width: 100%;
     display: grid;
-    grid-template-columns: 96px minmax(0, 1fr) 84px;
+    grid-template-columns: 96px minmax(0, 1fr) 100px;
     gap: 10px;
     align-items: center;
-    padding: 8px 16px;
+    padding: 9px 20px;
     border: 0;
     border-top: 1px solid var(--line);
     background: none;
@@ -468,7 +496,7 @@
     display: flex;
     flex-wrap: wrap;
     gap: 6px;
-    padding: 12px 16px;
+    padding: 12px 20px;
   }
   @media (max-width: 1100px) {
     .grid {

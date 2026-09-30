@@ -1,9 +1,19 @@
 <script>
   import { untrack } from 'svelte';
-  import { Search, Download, Radio, Undo2, X, Copy, Crosshair, Link2 } from 'lucide-svelte';
+  import {
+    Search,
+    Download,
+    Radio,
+    Undo2,
+    X,
+    Copy,
+    Crosshair,
+    Link2,
+    FileText,
+  } from 'lucide-svelte';
   import { currentRoute, navigate } from '../utils/router.js';
   import { logs as liveLogs } from '../stores/sse-store.js';
-  import { useHeaderActions } from '../stores/header.js';
+  import PageHeader from '../components/PageHeader.svelte';
   import SaveView from '../components/SaveView.svelte';
   import Chart from '../components/Chart.svelte';
   import TimeRange from '../components/TimeRange.svelte';
@@ -20,8 +30,8 @@
   const PAGE = 200;
   const SERIES = [
     { key: 'info', label: 'info', color: 'var(--chart-muted)' },
-    { key: 'warn', label: 'warn', color: 'var(--warning)' },
-    { key: 'err', label: 'error', color: 'var(--danger)' },
+    { key: 'warn', label: 'warn', color: 'var(--chart-3)' },
+    { key: 'err', label: 'error', color: 'var(--chart-4)' },
   ];
 
   let rows = $state([]);
@@ -254,34 +264,37 @@
     copied = true;
     setTimeout(() => (copied = false), 1200);
   }
-
-  useHeaderActions(actions);
 </script>
 
-{#snippet actions()}
-  <button
-    class="btn"
-    class:on={live}
-    onclick={() => go({ live: live ? '' : '1', endTime: '' })}
-    title="stream new lines as they are written"
-  >
-    <span class="dot" class:ok={live} class:pulse={live}></span><Radio size={13} />Live tail
-  </button>
-  <SaveView page="logs" />
-  <button
-    class="btn"
-    onclick={exportRows}
-    disabled={!rows.length}
-    title="download the loaded lines as JSON"
-  >
-    <Download size={13} />Export
-  </button>
-{/snippet}
+<PageHeader
+  title="Logs"
+  description="Every line the bot, its workers and the web server write. Search, narrow by facet, or drag the chart to zoom."
+>
+  {#snippet actions()}
+    <button
+      class="btn"
+      class:on={live}
+      onclick={() => go({ live: live ? '' : '1', endTime: '' })}
+      title="stream new lines as they are written"
+    >
+      <span class="dot" class:ok={live} class:pulse={live}></span><Radio size={14} />Live tail
+    </button>
+    <SaveView page="logs" />
+    <button
+      class="btn"
+      onclick={exportRows}
+      disabled={!rows.length}
+      title="download the loaded lines as JSON"
+    >
+      <Download size={14} />Export
+    </button>
+  {/snippet}
+</PageHeader>
 
-<div class="logs" class:has-detail={!!selected}>
+<section class="panel explorer" class:has-detail={!!selected} aria-label="log explorer">
   <div class="bar">
     <div class="qbar" role="search">
-      <Search size={14} />
+      <Search size={15} />
       {#each chips as [key, value] (key + value)}
         <button class="qchip" onclick={() => toggle(key, value)} title="remove">
           <span class="k">{key}:</span>{value}<span class="x">×</span>
@@ -295,7 +308,9 @@
       <input
         bind:value={draft}
         onkeydown={onQueryKey}
-        placeholder={chips.length || search ? '' : 'search, or field:value'}
+        placeholder={chips.length || search
+          ? ''
+          : 'Search messages, or field:value (level:error, source:x.com)'}
         title="fields: level, component, source, command, worker, op, user"
         aria-label="filter logs"
         spellcheck="false"
@@ -326,14 +341,14 @@
       {:else if zoomed}
         <span class="dim small">zoomed</span>
       {:else}
-        <span class="dim small">drag the chart to zoom</span>
+        <span class="dim small">drag to zoom</span>
       {/if}
     </div>
     <Chart
       series={SERIES}
       data={bars}
       bucket={histogram?.size}
-      height={104}
+      height={110}
       {onbrush}
       padLeft={44}
     />
@@ -379,7 +394,11 @@
             </div>
           {/each}
         {:else if !rows.length}
-          <div class="empty">no lines match</div>
+          <div class="empty">
+            <span class="ic"><FileText size={20} /></span>
+            <b>No lines match</b>
+            Widen the time range or remove a filter.
+          </div>
         {/if}
         {#each rows as r (r.id)}
           <button
@@ -396,7 +415,7 @@
         {/each}
         {#if rows.length < total}
           <button class="more" onclick={more}
-            >load {Math.min(PAGE, total - rows.length)} more · {(
+            >Load {Math.min(PAGE, total - rows.length)} more · {(
               total - rows.length
             ).toLocaleString()} remaining</button
           >
@@ -454,35 +473,35 @@
                 endTime: String(selected.timestamp + 30000),
               })}><Crosshair size={12} />±30 s around</button
           >
-          <button class="btn sm" onclick={() => copy(selected.message)}
+          <button class="btn sm ghost" onclick={() => copy(selected.message)}
             ><Copy size={12} />{copied ? 'Copied' : 'Copy'}</button
           >
         </div>
       </aside>
     {/if}
   </div>
-</div>
+</section>
 
 <style>
-  .logs {
-    flex: 1;
+  .explorer {
     display: flex;
     flex-direction: column;
-    height: calc(100vh - var(--topbar-h));
-    min-width: 0;
-    font-size: var(--fs);
+    height: calc(100vh - 190px);
+    min-height: 560px;
+    overflow: hidden;
   }
   .bar {
     display: flex;
     gap: 8px;
     align-items: center;
-    padding: 10px 24px;
+    padding: 12px 16px;
     border-bottom: 1px solid var(--line);
     flex-wrap: wrap;
+    background: var(--card-2);
   }
 
   .hist {
-    padding: 8px 24px 4px;
+    padding: 10px 16px 4px;
     border-bottom: 1px solid var(--line);
   }
   .hist-head {
@@ -495,7 +514,7 @@
   }
   .summary b {
     color: var(--text-bright);
-    font-weight: 500;
+    font-weight: 600;
   }
   .sep {
     margin: 0 6px;
@@ -534,17 +553,17 @@
   .fh {
     padding: 14px 8px 4px;
     font-size: var(--fs-xs);
-    font-weight: 500;
+    font-weight: 600;
     color: var(--text-dim);
-    letter-spacing: 0.05em;
+    letter-spacing: 0.06em;
     text-transform: uppercase;
   }
   .fv {
     width: 100%;
-    height: 28px;
+    height: 30px;
     padding: 0 8px;
     display: grid;
-    grid-template-columns: 11px minmax(0, 1fr) 36px auto;
+    grid-template-columns: 12px minmax(0, 1fr) 36px auto;
     align-items: center;
     gap: 8px;
     border: 0;
@@ -557,16 +576,17 @@
     cursor: pointer;
   }
   .fv:hover {
-    background: var(--surface);
+    background: var(--row-hover);
   }
   .fv.on {
-    background: var(--surface-2);
+    background: var(--accent-bg);
   }
   .box {
-    width: 11px;
-    height: 11px;
+    width: 12px;
+    height: 12px;
     border-radius: 3px;
     border: 1.5px solid var(--border-2);
+    background: var(--card);
   }
   .box.on {
     background: var(--accent-strong);
@@ -590,9 +610,9 @@
     text-overflow: ellipsis;
   }
   .fbar {
-    height: 3px;
+    height: 4px;
     border-radius: 2px;
-    background: var(--surface-3);
+    background: var(--card-3);
     overflow: hidden;
   }
   .fbar i {
@@ -632,12 +652,13 @@
     padding: 0 16px;
   }
   .lh {
-    height: 30px;
+    height: 34px;
     font-size: var(--fs-xs);
-    font-weight: 500;
-    letter-spacing: 0.03em;
+    font-weight: 600;
+    letter-spacing: 0.05em;
     text-transform: uppercase;
-    color: var(--text-dim);
+    color: var(--text-muted);
+    background: var(--card-2);
     border-bottom: 1px solid var(--line);
   }
   .scroll {
@@ -646,7 +667,7 @@
   }
   .row {
     width: 100%;
-    height: 28px;
+    height: 30px;
     border: 0;
     border-left: 2px solid transparent;
     background: none;
@@ -685,29 +706,26 @@
   }
   .row.lvl-error .l {
     color: var(--danger);
-    font-weight: 500;
+    font-weight: 600;
   }
   .row.lvl-warn .l {
     color: var(--warning);
-    font-weight: 500;
+    font-weight: 600;
   }
   .row.lvl-info .l,
   .row.lvl-debug .l {
     color: var(--text-dim);
   }
-  .empty {
-    padding: 24px 16px;
-    color: var(--text-dim);
-  }
   .more {
     width: 100%;
-    height: 40px;
+    height: 44px;
     border: 0;
     border-top: 1px solid var(--line);
     background: none;
     color: var(--accent);
     font: inherit;
-    font-size: var(--fs-sm);
+    font-size: var(--fs);
+    font-weight: 500;
     cursor: pointer;
   }
   .more:hover {
@@ -721,7 +739,7 @@
     flex-direction: column;
     border-left: 1px solid var(--line);
     overflow-y: auto;
-    background: var(--surface);
+    background: var(--card-2);
   }
   .dh {
     display: flex;
@@ -731,7 +749,7 @@
     border-bottom: 1px solid var(--line);
   }
   .dh b {
-    font-weight: 500;
+    font-weight: 600;
     color: var(--text-bright);
   }
   .dh .t {
@@ -739,19 +757,19 @@
     color: var(--text-muted);
   }
   .badge {
-    font: var(--fs-xs) var(--mono);
-    padding: 1px 6px;
+    font: 600 var(--fs-xs) var(--mono);
+    padding: 2px 6px;
     border-radius: 4px;
-    background: var(--surface-2);
+    background: var(--card-3);
     color: var(--text-muted);
   }
   .badge.lvl-error {
     background: var(--danger-bg);
-    color: var(--danger);
+    color: var(--danger-text);
   }
   .badge.lvl-warn {
     background: var(--warning-bg);
-    color: var(--warning);
+    color: var(--warning-text);
   }
   .msg {
     margin: 0;
@@ -761,13 +779,14 @@
     white-space: pre-wrap;
     overflow-wrap: anywhere;
     border-bottom: 1px solid var(--line);
+    background: var(--card);
   }
   .sh {
     padding: 14px 16px 6px;
     font-size: var(--fs-xs);
-    font-weight: 500;
+    font-weight: 600;
     color: var(--text-dim);
-    letter-spacing: 0.05em;
+    letter-spacing: 0.06em;
     text-transform: uppercase;
   }
   .fields {
@@ -791,9 +810,9 @@
   }
   button.fvv {
     cursor: pointer;
+    color: var(--accent);
   }
   button.fvv:hover {
-    color: var(--accent);
     text-decoration: underline;
   }
   .related {
@@ -817,7 +836,7 @@
   }
   .rr:hover,
   .rr.cur {
-    background: var(--surface-2);
+    background: var(--card-3);
   }
   .rr .t {
     color: var(--text-dim);
@@ -846,7 +865,9 @@
     border-top: 1px solid var(--line);
   }
 
-  @media (max-width: 1280px) {
+  @media (max-width: 1500px) {
+    .has-detail .lh,
+    .has-detail .row,
     .lh,
     .row {
       grid-template-columns: 100px 32px 130px minmax(0, 1fr);
@@ -856,35 +877,21 @@
       display: none;
     }
   }
-  /* With the detail open the message needs the room more than the context column does. */
-  @media (max-width: 1700px) {
-    .has-detail .lh,
-    .has-detail .row {
-      grid-template-columns: 100px 32px 130px minmax(0, 1fr);
-    }
-    .has-detail .ctxh,
-    .has-detail .row .x {
-      display: none;
-    }
-  }
   @media (max-width: 1100px) {
     .facets {
       display: none;
     }
   }
   @media (max-width: 768px) {
-    .logs {
+    .explorer {
       height: auto;
-      min-height: calc(100vh - var(--topbar-h));
+      min-height: 70vh;
     }
     .bar {
-      padding: 10px 16px;
+      padding: 10px 12px;
     }
     .qbar {
       flex-basis: 100%;
-    }
-    .hist {
-      padding: 8px 16px 4px;
     }
     .legend {
       display: none;
@@ -907,9 +914,6 @@
     }
     .row .c {
       display: none;
-    }
-    .row .t {
-      font-size: var(--fs-xs);
     }
     .body {
       flex-direction: column;

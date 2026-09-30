@@ -32,16 +32,25 @@
     <path d={line.area} fill={color} opacity="0.15" />
     <path d={line.path} fill="none" stroke={color} stroke-width="1.5" stroke-linejoin="round" />
   {:else}
+    <line
+      x1="0"
+      x2={width}
+      y1={height - 0.5}
+      y2={height - 0.5}
+      stroke={color}
+      stroke-opacity="0.25"
+    />
     {#each values as v, i (i)}
-      <rect
-        x={i * (bw + gap)}
-        y={height - Math.max(1.5, (v / max) * height)}
-        width={bw}
-        height={Math.max(1.5, (v / max) * height)}
-        fill={color}
-        opacity={v ? 1 : 0.35}
-        rx="0.5"
-      />
+      {#if v > 0}
+        <rect
+          x={i * (bw + gap)}
+          y={height - Math.max(2, (v / max) * height)}
+          width={bw}
+          height={Math.max(2, (v / max) * height)}
+          fill={color}
+          rx="1"
+        />
+      {/if}
     {/each}
   {/if}
 </svg>

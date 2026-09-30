@@ -1,8 +1,10 @@
 <script>
+  import { SlidersHorizontal, HardDrive } from 'lucide-svelte';
   import { navigate } from '../utils/router.js';
-  import { useHeaderActions } from '../stores/header.js';
   import { formatBytes, formatRelativeTime, shortId } from '../utils/format.js';
+  import PageHeader from '../components/PageHeader.svelte';
   import DataTable from '../components/DataTable.svelte';
+  import Avatar from '../components/Avatar.svelte';
 
   let data = $state(null);
   let local = $state(null);
@@ -60,21 +62,24 @@
 
   const FILE_COLUMNS = [
     { key: 'file', label: 'file' },
-    { key: 'type', label: 'type', width: '56px', sm: false },
-    { key: 'size', label: 'size', width: '80px', align: 'right' },
-    { key: 'user', label: 'user', width: '110px', sm: false },
-    { key: 'exp', label: 'expires in', width: '84px', align: 'right' },
+    { key: 'type', label: 'type', width: '60px', sm: false },
+    { key: 'size', label: 'size', width: '84px', align: 'right' },
+    { key: 'user', label: 'user', width: '120px', sm: false },
+    { key: 'exp', label: 'expires in', width: '90px', align: 'right' },
   ];
-
-  useHeaderActions(actions);
 </script>
 
-{#snippet actions()}
-  <span class="dim small">refreshes every 30 s</span>
-  <button class="btn" onclick={() => navigate('settings', { section: 'storage' })}>
-    Limits and lifetimes
-  </button>
-{/snippet}
+<PageHeader
+  title="Storage"
+  description="What is in R2 right now, when it leaves, and what the local cache holds. Refreshes every 30 seconds."
+>
+  {#snippet actions()}
+    {#if pct != null}<span class="pill {level}">{pct}% of soft limit</span>{/if}
+    <button class="btn" onclick={() => navigate('settings', { section: 'storage' })}>
+      <SlidersHorizontal size={14} />Limits and lifetimes
+    </button>
+  {/snippet}
+</PageHeader>
 
 {#snippet files(title, note, rows)}
   <DataTable
@@ -89,18 +94,20 @@
   >
     {#snippet header()}<span class="dim">{note}</span>{/snippet}
     {#snippet row(f)}
-      <span class="mono small ellipsis" title={f.key}>{name(f.key)}</span>
-      <span class="dim small hide-sm">{f.type ?? '—'}</span>
-      <span class="num">{f.size ? formatBytes(f.size) : '—'}</span>
+      <span class="mono ellipsis" title={f.key}>{name(f.key)}</span>
+      <span class="hide-sm"><span class="chip">{f.type ?? '—'}</span></span>
+      <span class="num strong">{f.size ? formatBytes(f.size) : '—'}</span>
       <span class="hide-sm">
         {#if f.userId}
-          <button
-            class="linkish mono small"
-            onclick={e => {
-              e.preventDefault();
-              e.stopPropagation();
-              navigate('user-profile', { userId: f.userId });
-            }}>{shortId(f.userId)}</button
+          <span class="user-cell"
+            ><Avatar id={f.userId} size={20} /><button
+              class="linkish mono id"
+              onclick={e => {
+                e.preventDefault();
+                e.stopPropagation();
+                navigate('user-profile', { userId: f.userId });
+              }}>{shortId(f.userId)}</button
+            ></span
           >
         {:else}
           <span class="dim">—</span>
@@ -118,54 +125,52 @@
     <div class="flash error">Could not read storage. Retrying.</div>
   {/if}
 
-  <section class="panel" aria-label="R2 usage">
-    <div class="kpis" style="--kpi-cols: 5">
-      <div class="kpi">
-        <div class="k">R2, live</div>
-        <div class="v">
-          {r2 ? formatBytes(r2.bytes) : '—'}
-          {#if pct != null}<span class="d {level}">{pct}%</span>{/if}
-        </div>
-        <div class="s">{limit ? `soft limit ${formatBytes(limit)}` : 'no soft limit set'}</div>
+  <section class="kpis" style="--kpi-cols: 5" aria-label="storage numbers">
+    <div class="kpi">
+      <div class="k">R2, live</div>
+      <div class="v">
+        {r2 ? formatBytes(r2.bytes) : '—'}
+        {#if pct != null}<span class="d {level}">{pct}%</span>{/if}
       </div>
-      <div class="kpi">
-        <div class="k">Files</div>
-        <div class="v">{r2?.files?.toLocaleString() ?? '—'}</div>
-        <div class="s">temporary uploads with a live link</div>
-      </div>
-      <div class="kpi">
-        <div class="k">Freed within 1h</div>
-        <div class="v">{r2 ? formatBytes(r2.expiring.h1) : '—'}</div>
-        <div class="s">{r2 ? `${formatBytes(r2.expiring.h24)} within 24h` : ''}</div>
-      </div>
-      <div class="kpi">
-        <div class="k">Local cache</div>
-        <div class="v">{local?.disk_usage_formatted ?? '—'}</div>
-        <div class="s">
-          {#if local}
-            {local.total_gifs} gifs · {local.total_videos} videos · {local.total_images} images
-          {/if}
-        </div>
-      </div>
-      <div class="kpi">
-        <div class="k">Local disk</div>
-        <div class="v">
-          {data?.disk ? formatBytes(data.disk.free) : '—'}
-          {#if diskPct != null}<span class="d {diskLevel}">{diskPct}% used</span>{/if}
-        </div>
-        <div class="s">{data?.disk ? `free of ${formatBytes(data.disk.total)}` : ''}</div>
-        {#if diskPct != null}
-          <div class="diskbar bar-track">
-            <span
-              style="width:{diskPct}%; background: {diskLevel === 'bad'
-                ? 'var(--danger)'
-                : diskLevel === 'warn'
-                  ? 'var(--warning)'
-                  : 'var(--chart-muted)'}"
-            ></span>
-          </div>
+      <div class="s">{limit ? `soft limit ${formatBytes(limit)}` : 'no soft limit set'}</div>
+    </div>
+    <div class="kpi">
+      <div class="k">Files</div>
+      <div class="v">{r2?.files?.toLocaleString() ?? '—'}</div>
+      <div class="s">temporary uploads with a live link</div>
+    </div>
+    <div class="kpi">
+      <div class="k">Freed within 1h</div>
+      <div class="v">{r2 ? formatBytes(r2.expiring.h1) : '—'}</div>
+      <div class="s">{r2 ? `${formatBytes(r2.expiring.h24)} within 24h` : ''}</div>
+    </div>
+    <div class="kpi">
+      <div class="k">Local cache</div>
+      <div class="v">{local?.disk_usage_formatted ?? '—'}</div>
+      <div class="s">
+        {#if local}
+          {local.total_gifs} gifs · {local.total_videos} videos · {local.total_images} images
         {/if}
       </div>
+    </div>
+    <div class="kpi">
+      <div class="k">Local disk</div>
+      <div class="v">
+        {data?.disk ? formatBytes(data.disk.free) : '—'}
+        {#if diskPct != null}<span class="d {diskLevel}">{diskPct}% used</span>{/if}
+      </div>
+      <div class="s">{data?.disk ? `free of ${formatBytes(data.disk.total)}` : ''}</div>
+    </div>
+  </section>
+
+  <section class="panel" aria-label="R2 usage">
+    <div class="ph">
+      <span>R2 usage by time to expiry</span>
+      <span class="meta">
+        {#if limit && r2}<span class="dim"
+            >{formatBytes(Math.max(0, limit - r2.bytes))} of headroom</span
+          >{/if}
+      </span>
     </div>
     <div class="pb usage">
       <div class="bar-track tall">
@@ -183,28 +188,25 @@
             <b class="mono">{formatBytes(s.bytes)}</b></span
           >
         {/each}
-        {#if limit && r2}
-          <span class="right dim">{formatBytes(Math.max(0, limit - r2.bytes))} of headroom</span>
-        {/if}
       </div>
     </div>
   </section>
 
   {#if r2?.deletionFailures.count}
-    <div class="panel pb failures accent-danger">
-      <span class="dot err"></span>
-      <div class="grow">
+    <div class="flash error">
+      <HardDrive size={14} />
+      <span class="grow">
         <b
           >{r2.deletionFailures.count} expired file{r2.deletionFailures.count === 1 ? '' : 's'}
           could not be deleted from R2.</b
         >
         The cleanup job retries them.
         {#if r2.deletionFailures.lastError}
-          <div class="mono small dim ellipsis" title={r2.deletionFailures.lastError}>
-            {r2.deletionFailures.lastError}
-          </div>
+          <span class="mono small" title={r2.deletionFailures.lastError}
+            >{r2.deletionFailures.lastError}</span
+          >
         {/if}
-      </div>
+      </span>
       <button
         class="btn sm"
         onclick={() => navigate('logs', { search: 'r2', level: 'ERROR,WARN' })}
@@ -227,9 +229,9 @@
           >{local.retention_days ? `pruned after ${local.retention_days} days` : ''}</span
         >
       </div>
-      <div class="kpis" style="--kpi-cols: 3">
+      <div class="pb cache">
         {#each [['gifs', local.total_gifs, local.gifs_disk_usage_formatted], ['videos', local.total_videos, local.videos_disk_usage_formatted], ['images', local.total_images, local.images_disk_usage_formatted]] as [kind, n, size] (kind)}
-          <div class="kpi">
+          <div class="cache-item">
             <div class="k">{kind}</div>
             <div class="v">{size}</div>
             <div class="s">{n?.toLocaleString()} files</div>
@@ -241,18 +243,11 @@
 </div>
 
 <style>
-  .usage {
-    border-top: 1px solid var(--line);
-  }
-  .diskbar {
-    margin-top: 8px;
-    height: 4px;
-  }
   .legend {
-    margin-top: 10px;
+    margin-top: 12px;
     display: flex;
     flex-wrap: wrap;
-    gap: 6px 18px;
+    gap: 6px 20px;
     font-size: var(--fs-sm);
     color: var(--text-muted);
   }
@@ -267,17 +262,44 @@
     border-radius: 2px;
   }
   .legend b {
-    font-weight: 400;
+    font-weight: 500;
     color: var(--text);
   }
-  .failures {
-    display: flex;
-    align-items: center;
-    gap: 12px;
-    font-size: var(--fs);
+  .cache {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: var(--gap);
   }
-  .failures b {
-    color: var(--text-bright);
+  .cache-item {
+    padding: 14px 16px;
+    border: 1px solid var(--line);
+    border-radius: var(--radius);
+    background: var(--card-2);
+  }
+  .cache .k {
+    font-size: var(--fs-sm);
     font-weight: 500;
+    color: var(--text-muted);
+    text-transform: capitalize;
+  }
+  .cache .v {
+    margin-top: 6px;
+    font-size: var(--fs-xl);
+    font-weight: 600;
+    letter-spacing: -0.02em;
+    color: var(--text-bright);
+  }
+  .cache .s {
+    margin-top: 4px;
+    font-size: var(--fs-sm);
+    color: var(--text-dim);
+  }
+  .flash b {
+    color: inherit;
+  }
+  @media (max-width: 640px) {
+    .cache {
+      grid-template-columns: 1fr;
+    }
   }
 </style>

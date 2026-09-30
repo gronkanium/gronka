@@ -1,10 +1,11 @@
 <script>
-  import { Search, SlidersHorizontal } from 'lucide-svelte';
+  import { Search, SlidersHorizontal, Inbox } from 'lucide-svelte';
   import { currentRoute, navigate } from '../utils/router.js';
-  import { useHeaderActions } from '../stores/header.js';
+  import PageHeader from '../components/PageHeader.svelte';
   import SaveView from '../components/SaveView.svelte';
   import DataTable from '../components/DataTable.svelte';
   import TimeRange from '../components/TimeRange.svelte';
+  import Avatar from '../components/Avatar.svelte';
   import {
     formatBytes,
     formatDuration,
@@ -49,6 +50,12 @@
     'time:false': 'oldest',
     'took:true': 'slowest',
     'took:false': 'fastest',
+  };
+  const STATUS = {
+    success: ['ok', 'Delivered'],
+    error: ['bad', 'Failed'],
+    running: ['info', 'Running'],
+    pending: ['idle', 'Queued'],
   };
 
   let rows = $state([]);
@@ -148,11 +155,7 @@
     });
   }
   function onrange(v) {
-    go({
-      range: v.range || '',
-      dateFrom: v.startTime || '',
-      dateTo: v.endTime || '',
-    });
+    go({ range: v.range || '', dateFrom: v.startTime || '', dateTo: v.endTime || '' });
   }
   function onsort(key, desc) {
     const s = SORTS[`${key}:${desc}`];
@@ -171,63 +174,68 @@
   const moreActive = $derived(
     ['minDuration', 'maxDuration', 'minFileSize', 'maxFileSize'].filter(k => get(k)).length
   );
+  const filtered = $derived(chips.length > 0 || moreActive > 0 || view !== 'all');
 
   const columns = [
-    { key: 'st', label: '', width: '12px' },
-    { key: 'time', label: 'time', width: '140px', sortable: true },
-    { key: 'type', label: 'command', width: '76px', sm: false },
+    { key: 'st', label: 'status', width: '100px' },
+    { key: 'time', label: 'time', width: '140px', sortable: true, sm: false },
+    { key: 'type', label: 'command', width: '84px', sm: false },
     { key: 'link', label: 'link' },
-    { key: 'user', label: 'user', width: '96px', sm: false },
-    { key: 'size', label: 'size', width: '72px', align: 'right', sm: false },
+    { key: 'user', label: 'user', width: '120px', sm: false },
+    { key: 'size', label: 'size', width: '76px', align: 'right', sm: false },
     { key: 'took', label: 'took', width: '64px', align: 'right', sortable: true },
   ];
-
-  useHeaderActions(actions);
 </script>
 
-{#snippet actions()}
-  <TimeRange presets={RANGES} value={windowValue} onchange={onrange} allowAll defaultRange="" />
-{/snippet}
+<PageHeader
+  title="Requests"
+  description="Every command the bot has run in the last 7 days. Click a row for its full timeline."
+>
+  {#snippet actions()}
+    <TimeRange presets={RANGES} value={windowValue} onchange={onrange} allowAll defaultRange="" />
+  {/snippet}
+  {#snippet below()}
+    <div class="toolbar">
+      <div class="seg" role="group" aria-label="quick views">
+        {#each VIEWS as [id, label, p] (id)}
+          <button
+            class:on={view === id}
+            onclick={() => go({ status: '', minDuration: '', earlyFailureOnly: '', ...p })}
+            >{label}</button
+          >
+        {/each}
+      </div>
+      <div class="qbar" role="search">
+        <Search size={15} />
+        {#each chips as [k, p, v] (k)}
+          <button class="qchip" onclick={() => go({ [p]: '' })} title="remove">
+            <span class="k">{k}:</span>{v}<span class="x">×</span>
+          </button>
+        {/each}
+        <input
+          bind:value={draft}
+          onkeydown={onkey}
+          placeholder={chips.length
+            ? ''
+            : 'Search by link, user id or request id, or type:download, status:error'}
+          aria-label="filter requests"
+          spellcheck="false"
+        />
+      </div>
+      <button
+        class="btn"
+        class:on={showMore || moreActive}
+        onclick={() => (showMore = !showMore)}
+        aria-expanded={showMore}
+        ><SlidersHorizontal size={14} />Filters{#if moreActive}<span class="n">{moreActive}</span
+          >{/if}</button
+      >
+      <SaveView page="requests" />
+    </div>
+  {/snippet}
+</PageHeader>
 
 <div class="requests stack">
-  <div class="toolbar">
-    <div class="seg" role="group" aria-label="quick views">
-      {#each VIEWS as [id, label, p] (id)}
-        <button
-          class:on={view === id}
-          onclick={() => go({ status: '', minDuration: '', earlyFailureOnly: '', ...p })}
-          >{label}</button
-        >
-      {/each}
-    </div>
-    <div class="qbar" role="search">
-      <Search size={14} />
-      {#each chips as [k, p, v] (k)}
-        <button class="qchip" onclick={() => go({ [p]: '' })} title="remove">
-          <span class="k">{k}:</span>{v}<span class="x">×</span>
-        </button>
-      {/each}
-      <input
-        bind:value={draft}
-        onkeydown={onkey}
-        placeholder={chips.length
-          ? ''
-          : 'paste a link, user id or request id, or type:download, status:error'}
-        aria-label="filter requests"
-        spellcheck="false"
-      />
-    </div>
-    <button
-      class="btn"
-      class:on={showMore || moreActive}
-      onclick={() => (showMore = !showMore)}
-      aria-expanded={showMore}
-      ><SlidersHorizontal size={13} />Filters{#if moreActive}<span class="n">{moreActive}</span
-        >{/if}</button
-    >
-    <SaveView page="requests" />
-  </div>
-
   {#if showMore}
     <div class="panel more">
       <label
@@ -301,7 +309,7 @@
           <option value="pending">pending</option>
         </select>
       </label>
-      <button class="btn" onclick={() => navigate('requests', {})}>Clear all</button>
+      <button class="btn ghost" onclick={() => navigate('requests', {})}>Clear all</button>
     </div>
   {/if}
 
@@ -311,7 +319,6 @@
     {loading}
     {error}
     onretry={load}
-    empty="no requests match"
     sort={sortState}
     {onsort}
     onrow={r => navigate('request', { requestId: r.id })}
@@ -319,24 +326,35 @@
     skeleton={12}
     label="requests"
   >
+    {#snippet header()}
+      <span class="tnum"><b>{total.toLocaleString()}</b> {filtered ? 'matching' : 'requests'}</span>
+    {/snippet}
+    {#snippet emptyState()}
+      <div class="empty">
+        <span class="ic"><Inbox size={20} /></span>
+        <b>No requests match</b>
+        {filtered
+          ? 'Try widening the time range or clearing a filter.'
+          : 'Nothing has been run yet.'}
+        {#if filtered}<br /><button class="btn sm" onclick={() => navigate('requests', {})}
+            >Clear filters</button
+          >{/if}
+      </div>
+    {/snippet}
     {#snippet row(r)}
-      <span
-        class="dot"
-        class:ok={r.status === 'success'}
-        class:err={r.status === 'error'}
-        class:run={r.status === 'running' || r.status === 'pending'}
-        class:pulse={r.status === 'running'}
-        title={r.status}
-      ></span>
-      <span class="mono small muted tnum" title={formatRelativeTime(r.timestamp)}
+      {@const [kind, label] = STATUS[r.status] ?? ['idle', r.status]}
+      <span><span class="pill sm {kind}">{label}</span></span>
+      <span class="mono muted tnum hide-sm" title={formatRelativeTime(r.timestamp)}
         >{time(r.timestamp)}</span
       >
-      <span class="muted hide-sm">{r.type}</span>
+      <span class="soft hide-sm">/{r.type}</span>
       <span class="linkcell">
-        <span class="mono small ellipsis">{urlLabel(r.originalUrl)}</span>
+        <span class="mono ellipsis">{urlLabel(r.originalUrl)}</span>
         {#if r.status === 'error' && r.error}<span class="err ellipsis">{r.error}</span>{/if}
       </span>
-      <span class="mono small muted hide-sm">{shortId(r.userId)}</span>
+      <span class="user-cell hide-sm"
+        ><Avatar id={r.userId} size={20} /><span class="id">{shortId(r.userId)}</span></span
+      >
       <span class="num muted hide-sm">{r.fileSize ? formatBytes(r.fileSize) : '—'}</span>
       <span class="num muted"
         >{r.performanceMetrics?.duration
@@ -355,25 +373,26 @@
     flex-wrap: wrap;
   }
   .btn .n {
-    font-family: var(--mono);
     font-size: 10px;
-    padding: 0 5px;
-    border-radius: 8px;
+    font-weight: 600;
+    padding: 0 6px;
+    border-radius: 999px;
     background: var(--accent-strong);
-    color: #fff;
+    color: var(--on-accent);
   }
   .more {
     display: flex;
     flex-wrap: wrap;
     align-items: flex-end;
     gap: 16px;
-    padding: 14px 16px;
+    padding: 16px 20px;
   }
   .more label {
     display: flex;
     flex-direction: column;
     gap: 6px;
     font-size: var(--fs-sm);
+    font-weight: 500;
     color: var(--text-muted);
   }
   .more .field[type='number'] {
@@ -383,7 +402,7 @@
     display: flex;
     flex-direction: column;
     min-width: 0;
-    padding: 6px 0;
+    padding: 7px 0;
   }
   .err {
     font-size: var(--fs-sm);

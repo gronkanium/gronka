@@ -1,11 +1,21 @@
 <script>
   import { onDestroy } from 'svelte';
-  import { Search, Trash2, ExternalLink, X, Ban, ShieldOff, AlertTriangle } from 'lucide-svelte';
+  import {
+    Search,
+    Trash2,
+    ExternalLink,
+    X,
+    Ban,
+    ShieldOff,
+    AlertTriangle,
+    FolderOpen,
+  } from 'lucide-svelte';
   import { currentRoute, navigate } from '../utils/router.js';
-  import { useHeaderActions } from '../stores/header.js';
   import { formatBytes, formatRelativeTime } from '../utils/format.js';
+  import PageHeader from '../components/PageHeader.svelte';
   import DataTable from '../components/DataTable.svelte';
   import MediaThumb from '../components/MediaThumb.svelte';
+  import Avatar from '../components/Avatar.svelte';
 
   const PAGE = 25;
 
@@ -153,34 +163,34 @@
     if (link === 'dead')
       return {
         kind: 'bad',
-        label: 'link dead',
-        note: 'the object is gone from R2 but this record still points at it',
+        label: 'Link dead',
+        note: 'The object is gone from R2 but this record still points at it.',
       };
     if (m.deleted_at)
       return {
         kind: 'bad',
-        label: 'deleted',
-        note: `removed ${formatRelativeTime(m.deleted_at)}, record not yet marked`,
+        label: 'Deleted',
+        note: `Removed ${formatRelativeTime(m.deleted_at)}, record not yet marked.`,
       };
     if (m.expires_at == null)
       return {
         kind: 'info',
-        label: 'permanent',
-        note: 'no expiry tracked: an admin upload, or made while tracking was off',
+        label: 'Permanent',
+        note: 'No expiry tracked: an admin upload, or made while tracking was off.',
       };
     if (m.expires_at < now)
       return {
         kind: 'warn',
-        label: 'expired',
-        note: `due ${formatRelativeTime(m.expires_at)}, waiting for the cleanup job`,
+        label: 'Expired',
+        note: `Due ${formatRelativeTime(m.expires_at)}, waiting for the cleanup job.`,
       };
     if (m.deletion_failed)
       return {
         kind: 'warn',
-        label: 'delete failed',
-        note: 'the cleanup job could not remove it and will retry',
+        label: 'Delete failed',
+        note: 'The cleanup job could not remove it and will retry.',
       };
-    return { kind: 'ok', label: `expires ${left(m.expires_at - now)}`, note: '' };
+    return { kind: 'ok', label: `Expires ${left(m.expires_at - now)}`, note: '' };
   }
   const left = ms =>
     ms < 3_600_000
@@ -257,40 +267,49 @@
     { key: 'pick', label: '', width: '18px' },
     { key: 'thumb', label: '', width: '40px' },
     { key: 'file', label: 'file', width: 'minmax(120px, 1fr)' },
-    { key: 'size', label: 'size', width: '72px', align: 'right', sm: false },
-    { key: 'made', label: 'created', width: '72px', align: 'right', sm: false },
-    { key: 'life', label: 'lifecycle', width: '124px', sm: false },
-    { key: 'act', label: '', width: '52px' },
+    { key: 'size', label: 'size', width: '76px', align: 'right', sm: false },
+    { key: 'made', label: 'created', width: '76px', align: 'right', sm: false },
+    { key: 'life', label: 'lifecycle', width: '128px', sm: false },
+    { key: 'act', label: '', width: '56px' },
   ];
 
   loadUsers();
   loadBans();
 
-  useHeaderActions(actions);
   onDestroy(() => {
     clearTimeout(statusTimer);
     clearTimeout(searchTimer);
   });
 </script>
 
-{#snippet actions()}
-  <div class="seg" role="tablist">
-    <button
-      role="tab"
-      aria-selected={tab === 'files'}
-      class:on={tab === 'files'}
-      onclick={() => navigate('moderation')}
-      >Stored files<span class="n">{storedFiles.toLocaleString()}</span></button
+<PageHeader
+  title="Moderation"
+  description="Files the bot is holding in R2 for each user, and who is banned from using it."
+>
+  {#snippet actions()}
+    <span class="pill" class:ok={enabled} class:warn={!enabled}
+      >{enabled ? 'Bans enforced' : 'Bans not enforced'}</span
     >
-    <button
-      role="tab"
-      aria-selected={tab === 'bans'}
-      class:on={tab === 'bans'}
-      onclick={() => navigate('moderation', { tab: 'bans' })}
-      >Bans<span class="n">{bans.length}</span></button
-    >
-  </div>
-{/snippet}
+  {/snippet}
+  {#snippet below()}
+    <div class="tabs" role="tablist">
+      <button
+        role="tab"
+        aria-selected={tab === 'files'}
+        class:on={tab === 'files'}
+        onclick={() => navigate('moderation')}
+        >Stored files<span class="n">{storedFiles.toLocaleString()}</span></button
+      >
+      <button
+        role="tab"
+        aria-selected={tab === 'bans'}
+        class:on={tab === 'bans'}
+        onclick={() => navigate('moderation', { tab: 'bans' })}
+        >Bans<span class="n">{bans.length}</span></button
+      >
+    </div>
+  {/snippet}
+</PageHeader>
 
 <div class="mod stack">
   {#if status}<div class="flash {status.kind}" role="status">{status.text}</div>{/if}
@@ -300,11 +319,13 @@
       <section class="panel users-col" aria-label="users with stored files">
         <div class="ph">
           <span>Users</span>
-          <span class="meta mono">{storedFiles.toLocaleString()} · {formatBytes(storedTotal)}</span>
+          <span class="meta tnum"
+            >{storedFiles.toLocaleString()} files · {formatBytes(storedTotal)}</span
+          >
         </div>
         <label class="searchbox in-panel">
-          <Search size={13} />
-          <input bind:value={userFilter} placeholder="filter by id" aria-label="filter users" />
+          <Search size={14} />
+          <input bind:value={userFilter} placeholder="Filter by id" aria-label="filter users" />
         </label>
         <div class="ulist">
           {#if usersLoading}
@@ -325,17 +346,20 @@
                 preview = null;
               }}
             >
-              <span class="row top">
-                <span class="mono ellipsis">{u.user_id}</span>
-                <span class="mono dim small right tnum nowrap"
-                  >{formatBytes(Number(u.total_size))}</span
-                >
-              </span>
-              <span class="row">
-                <span class="ubar"
-                  ><i style="width:{(Number(u.total_size) / userMax) * 100}%"></i></span
-                >
-                <span class="dim xs tnum">{u.file_count}</span>
+              <Avatar id={u.user_id} size={28} />
+              <span class="grow">
+                <span class="row top">
+                  <span class="mono ellipsis uid">{u.user_id}</span>
+                  <span class="dim small right tnum nowrap"
+                    >{formatBytes(Number(u.total_size))}</span
+                  >
+                </span>
+                <span class="row">
+                  <span class="ubar"
+                    ><i style="width:{(Number(u.total_size) / userMax) * 100}%"></i></span
+                  >
+                  <span class="dim xs tnum">{u.file_count}</span>
+                </span>
               </span>
             </button>
           {:else}
@@ -346,7 +370,11 @@
 
       {#if !selectedUser}
         <section class="panel">
-          <div class="empty big">Pick a user to see and remove their stored files.</div>
+          <div class="empty big">
+            <span class="ic"><FolderOpen size={20} /></span>
+            <b>Pick a user</b>
+            Their stored files, with thumbnails and expiry, show up here.
+          </div>
         </section>
       {:else}
         <DataTable
@@ -361,16 +389,18 @@
           label="stored files"
         >
           {#snippet header()}
-            <button
-              class="linkish mono"
-              onclick={() => navigate('user-profile', { userId: selectedUser.user_id })}
-              >{selectedUser.user_id}</button
+            <span class="user-cell"
+              ><Avatar id={selectedUser.user_id} size={20} /><button
+                class="linkish mono"
+                onclick={() => navigate('user-profile', { userId: selectedUser.user_id })}
+                >{selectedUser.user_id}</button
+              ></span
             >
             <select class="field sm" bind:value={fileType} aria-label="file type">
-              <option value="">all types</option>
-              <option value="video">video</option>
-              <option value="gif">gif</option>
-              <option value="image">image</option>
+              <option value="">All types</option>
+              <option value="video">Video</option>
+              <option value="gif">GIF</option>
+              <option value="image">Image</option>
             </select>
             {#if picked.size}
               <button
@@ -413,17 +443,17 @@
               onstate={s => setLink(m.url_hash, s)}
             />
             <span class="filecell">
-              <span class="mono small ellipsis" title={m.file_url}>{name(m)}</span>
+              <span class="mono ellipsis" title={m.file_url}>{name(m)}</span>
               <span class="row xs dim"
-                ><span class="chip xs">{m.file_type}</span>{m.file_extension}</span
+                ><span class="chip">{m.file_type}</span>{m.file_extension}</span
               >
             </span>
             <span class="num muted hide-sm">{formatBytes(m.file_size)}</span>
-            <span class="num dim small hide-sm" title={new Date(m.processed_at).toLocaleString()}
+            <span class="num dim hide-sm" title={new Date(m.processed_at).toLocaleString()}
               >{formatRelativeTime(m.processed_at)}</span
             >
             <span class="hide-sm">
-              <span class="chip {life.kind}" title={life.note}>{life.label}</span>
+              <span class="pill sm {life.kind}" title={life.note}>{life.label}</span>
             </span>
             <span class="row acts">
               <a
@@ -455,7 +485,7 @@
                     class="pickbox"
                     checked={picked.size === media.length}
                     onclick={pickAll}
-                  /> select page</label
+                  /> Select page</label
                 >
                 {#if deadRows.length}
                   <span class="warn-text small"
@@ -486,21 +516,21 @@
               />
             </div>
             <dl class="dl">
-              <dt>type</dt>
+              <dt>Type</dt>
               <dd>{preview.file_type} · {preview.file_extension}</dd>
-              <dt>size</dt>
+              <dt>Size</dt>
               <dd>{formatBytes(preview.file_size)}</dd>
-              <dt>created</dt>
+              <dt>Created</dt>
               <dd>{new Date(preview.processed_at).toLocaleString()}</dd>
-              <dt>lifecycle</dt>
-              <dd><span class="chip {life.kind}">{life.label}</span></dd>
+              <dt>Lifecycle</dt>
+              <dd><span class="pill sm {life.kind}">{life.label}</span></dd>
               {#if life.note}<dt></dt>
                 <dd class="dim small">{life.note}</dd>{/if}
               {#if preview.expires_at}
-                <dt>expires</dt>
+                <dt>Expires</dt>
                 <dd>{new Date(preview.expires_at).toLocaleString()}</dd>
               {/if}
-              <dt>hash</dt>
+              <dt>Hash</dt>
               <dd class="mono small break">{preview.url_hash}</dd>
             </dl>
             <div class="pf">
@@ -533,15 +563,12 @@
           ></button>
           <div class="grow">
             <b>Enforce bans</b>
-            <div class="dim small">
+            <div class="muted small">
               {enabled
                 ? 'Banned users are refused every command.'
                 : 'Off: bans are recorded but not enforced.'}
             </div>
           </div>
-          {#if enabled}<span class="chip ok">enforcing</span>{:else}<span class="chip warn"
-              >not enforced</span
-            >{/if}
         </div>
       </section>
 
@@ -551,26 +578,38 @@
           columns={[
             { key: 'user', label: 'user', width: 'minmax(0, 1fr)' },
             { key: 'reason', label: 'reason', width: 'minmax(0, 1.4fr)', sm: false },
-            { key: 'appeal', label: 'appeal', width: '80px', sm: false },
+            { key: 'appeal', label: 'appeal', width: '90px', sm: false },
             { key: 'since', label: 'since', width: '90px', align: 'right' },
-            { key: 'act', label: '', width: '70px' },
+            { key: 'act', label: '', width: '84px' },
           ]}
           rows={bans}
           rowKey="user_id"
           loading={bansLoading}
-          empty="nobody is banned"
         >
-          {#snippet header()}<span class="mono">{bans.length}</span>{/snippet}
+          {#snippet header()}<span class="tnum">{bans.length}</span>{/snippet}
+          {#snippet emptyState()}
+            <div class="empty">
+              <span class="ic"><ShieldOff size={20} /></span>
+              <b>Nobody is banned</b>
+              Ban a user from the form, or from their profile.
+            </div>
+          {/snippet}
           {#snippet row(b)}
-            <button
-              class="linkish mono ellipsis"
-              onclick={() => navigate('user-profile', { userId: b.user_id })}>{b.user_id}</button
+            <span class="user-cell"
+              ><Avatar id={b.user_id} size={24} /><button
+                class="linkish mono id"
+                onclick={() => navigate('user-profile', { userId: b.user_id })}>{b.user_id}</button
+              ></span
             >
             <span class="ellipsis hide-sm" title={b.reason}>{b.reason}</span>
-            <span class="small muted hide-sm">{b.appeal_allowed ? 'allowed' : 'no'}</span>
+            <span class="hide-sm"
+              ><span class="pill sm" class:ok={b.appeal_allowed} class:idle={!b.appeal_allowed}
+                >{b.appeal_allowed ? 'Allowed' : 'No appeal'}</span
+              ></span
+            >
             <span class="num dim">{formatRelativeTime(b.banned_at)}</span>
             <button class="btn sm" onclick={() => unban(b.user_id)}
-              ><ShieldOff size={11} />Unban</button
+              ><ShieldOff size={12} />Unban</button
             >
           {/snippet}
         </DataTable>
@@ -581,11 +620,11 @@
             <label
               >Find user
               <label class="searchbox">
-                <Search size={13} />
+                <Search size={14} />
                 <input
                   bind:value={banSearch}
                   oninput={onBanSearch}
-                  placeholder="search by id"
+                  placeholder="Search by id"
                   aria-label="search users"
                 />
               </label>
@@ -601,6 +640,7 @@
                       banResults = [];
                     }}
                   >
+                    <Avatar id={u.user_id} size={22} />
                     <span class="mono ellipsis grow">{u.user_id}</span><span class="dim small"
                       >{u.total_commands} requests</span
                     >
@@ -621,15 +661,15 @@
                 rows="3"
                 bind:value={banForm.reason}
                 maxlength="200"
-                placeholder="shown to them when they appeal"></textarea></label
+                placeholder="Shown to them when they appeal"></textarea></label
             >
             <label class="check-row"
-              ><input type="checkbox" bind:checked={banForm.appealAllowed} /> allow appeal</label
+              ><input type="checkbox" bind:checked={banForm.appealAllowed} /> Allow appeal</label
             >
             <button
               class="btn danger"
               disabled={busy || !banForm.userId.trim() || !banForm.reason.trim()}
-              onclick={submitBan}><Ban size={13} />Ban user</button
+              onclick={submitBan}><Ban size={14} />Ban user</button
             >
           </div>
         </section>
@@ -641,29 +681,29 @@
 <style>
   .files {
     display: grid;
-    grid-template-columns: 280px minmax(0, 1fr);
+    grid-template-columns: 300px minmax(0, 1fr);
     gap: var(--gap);
     align-items: start;
   }
   .files.with-preview {
-    grid-template-columns: 240px minmax(0, 1fr) 300px;
+    grid-template-columns: 260px minmax(0, 1fr) 300px;
   }
   .searchbox.in-panel {
-    margin: 10px 12px;
+    margin: 12px 12px 8px;
   }
   .ulist {
-    max-height: calc(100vh - 240px);
+    max-height: calc(100vh - 330px);
     overflow-y: auto;
-    padding: 0 6px 8px;
+    padding: 0 8px 8px;
   }
   .urow {
     width: 100%;
     display: flex;
-    flex-direction: column;
-    gap: 5px;
+    align-items: center;
+    gap: 10px;
     padding: 8px 10px;
     border: 0;
-    border-radius: var(--radius-sm);
+    border-radius: var(--radius);
     background: none;
     color: var(--text);
     font: inherit;
@@ -671,24 +711,29 @@
     text-align: left;
     cursor: pointer;
   }
+  .urow .grow {
+    display: flex;
+    flex-direction: column;
+    gap: 5px;
+  }
   .urow .row {
     width: 100%;
   }
-  .nowrap {
-    white-space: nowrap;
+  .uid {
+    font-size: var(--fs-sm);
+    color: var(--text-bright);
   }
   .urow:hover {
     background: var(--row-hover);
   }
   .urow.sel {
-    background: var(--row-selected);
-    box-shadow: inset 2px 0 0 var(--accent-strong);
+    background: var(--accent-bg);
   }
   .ubar {
     flex: 1;
-    height: 3px;
+    height: 4px;
     border-radius: 2px;
-    background: var(--surface-3);
+    background: var(--card-3);
     overflow: hidden;
   }
   .ubar i {
@@ -700,8 +745,8 @@
     background: var(--accent-strong);
   }
   .pickbox {
-    width: 14px;
-    height: 14px;
+    width: 15px;
+    height: 15px;
     margin: 0;
     accent-color: var(--accent-strong);
     cursor: pointer;
@@ -709,14 +754,9 @@
   .filecell {
     display: flex;
     flex-direction: column;
-    gap: 2px;
+    gap: 3px;
     min-width: 0;
-    padding: 6px 0;
-  }
-  .chip.xs {
-    height: 16px;
-    padding: 0 5px;
-    font-size: 10px;
+    padding: 7px 0;
   }
   .acts {
     justify-content: flex-end;
@@ -724,15 +764,15 @@
   }
   .preview {
     position: sticky;
-    top: calc(var(--topbar-h) + 20px);
+    top: 24px;
   }
   .dl {
     margin: 0;
-    padding: 4px 16px 12px;
+    padding: 4px 20px 14px;
     display: grid;
-    grid-template-columns: 78px 1fr;
+    grid-template-columns: 80px 1fr;
     gap: 8px 10px;
-    font-size: var(--fs-sm);
+    font-size: var(--fs);
   }
   .dl dt {
     color: var(--text-dim);
@@ -748,19 +788,20 @@
     gap: 14px;
   }
   .switch b {
-    font-weight: 500;
+    font-weight: 600;
     color: var(--text-bright);
   }
   .form {
     display: flex;
     flex-direction: column;
-    gap: 12px;
+    gap: 14px;
   }
   .form > label {
     display: flex;
     flex-direction: column;
     gap: 6px;
     font-size: var(--fs-sm);
+    font-weight: 500;
     color: var(--text-muted);
   }
   .form .check-row {

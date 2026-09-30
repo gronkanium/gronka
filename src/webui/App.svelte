@@ -20,13 +20,14 @@
     SlidersHorizontal,
     PanelLeftClose,
     PanelLeftOpen,
-    ChevronRight,
+    Menu,
+    Sun,
+    Moon,
   } from 'lucide-svelte';
   import NavFlyout from './components/NavFlyout.svelte';
   import { navStats, savedViews, issueStates, startNavStats, removeView } from './stores/nav.js';
   import { isOpen } from './issues.js';
   import { menuFor } from './nav-menus.js';
-  import { headerActions, headerCrumbs } from './stores/header.js';
   import Overview from './pages/Overview.svelte';
   import Requests from './pages/Requests.svelte';
   import RequestDetail from './pages/Request.svelte';
@@ -40,7 +41,8 @@
   import Sources from './pages/Sources.svelte';
   import BotSettings from './pages/BotSettings.svelte';
 
-  const SIDEBAR_STORAGE_KEY = 'gronka:sidebar-open';
+  const SIDEBAR_KEY = 'gronka:sidebar-open';
+  const THEME_KEY = 'gronka:theme';
 
   const sections = [
     { items: [{ page: 'dashboard', label: 'Overview', icon: LayoutDashboard }] },
@@ -84,11 +86,10 @@
     sources: Sources,
     settings: BotSettings,
   };
-  // Pages that lay out their own full-height view instead of a padded column.
-  const FULL_BLEED = new Set(['logs']);
   const PARENT = { 'user-profile': 'users', request: 'requests' };
 
   let sidebarOpen = $state(true);
+  let theme = $state('light');
   let fly = $state(null);
   let flyout = $state();
   let openTimer;
@@ -104,18 +105,26 @@
   const PageComponent = $derived(PAGES[activePage]);
   const isOnline = $derived($connectionHealth?.isOnline !== false);
   const connStatus = $derived($wsConnected ? 'live' : isOnline ? 'connecting' : 'offline');
-  const crumbs = $derived($headerCrumbs?.list ?? null);
 
   $effect(() => {
     document.title =
       activePage === 'dashboard' ? 'gronka' : `gronka · ${activeTitle.toLowerCase()}`;
   });
+  $effect(() => {
+    document.documentElement.dataset.theme = theme;
+  });
 
   onMount(() => {
     try {
       // On a phone the sidebar covers the page, so it always starts closed there.
-      sidebarOpen =
-        window.innerWidth > 768 && localStorage.getItem(SIDEBAR_STORAGE_KEY) !== 'false';
+      sidebarOpen = window.innerWidth > 768 && localStorage.getItem(SIDEBAR_KEY) !== 'false';
+      const saved = localStorage.getItem(THEME_KEY);
+      theme =
+        saved === 'dark' || saved === 'light'
+          ? saved
+          : matchMedia('(prefers-color-scheme: dark)').matches
+            ? 'dark'
+            : 'light';
     } catch {
       sidebarOpen = window.innerWidth > 768;
     }
@@ -133,7 +142,15 @@
   function toggleSidebar() {
     sidebarOpen = !sidebarOpen;
     try {
-      localStorage.setItem(SIDEBAR_STORAGE_KEY, String(sidebarOpen));
+      localStorage.setItem(SIDEBAR_KEY, String(sidebarOpen));
+    } catch {
+      // storage unavailable
+    }
+  }
+  function toggleTheme() {
+    theme = theme === 'dark' ? 'light' : 'dark';
+    try {
+      localStorage.setItem(THEME_KEY, theme);
     } catch {
       // storage unavailable
     }
@@ -205,7 +222,10 @@
   <nav class="sidebar" aria-label="primary">
     <div class="brand">
       <img class="mark" src="/favicon.svg" alt="" />
-      {#if sidebarOpen}<span class="name">gronka</span>{/if}
+      {#if sidebarOpen}
+        <span class="name">gronka</span>
+        <span class="env">admin</span>
+      {/if}
       <button
         class="icon-btn collapse"
         onclick={toggleSidebar}
@@ -213,14 +233,17 @@
         aria-label={sidebarOpen ? 'collapse sidebar' : 'expand sidebar'}
         aria-expanded={sidebarOpen}
       >
-        {#if sidebarOpen}<PanelLeftClose size={15} />{:else}<PanelLeftOpen size={15} />{/if}
+        {#if sidebarOpen}<PanelLeftClose size={16} />{:else}<PanelLeftOpen size={16} />{/if}
       </button>
     </div>
 
     <div class="nav">
       {#each sections as section, i (i)}
-        {#if section.name && sidebarOpen}<div class="section">{section.name}</div>{/if}
-        {#if section.name && !sidebarOpen}<div class="section-rule"></div>{/if}
+        {#if section.name}
+          {#if sidebarOpen}<div class="section">{section.name}</div>{:else}<div
+              class="section-rule"
+            ></div>{/if}
+        {/if}
         {#each section.items as item (item.page)}
           {@const Icon = item.icon}
           <button
@@ -240,7 +263,7 @@
             onmouseleave={hideMenu}
             onkeydown={e => onNavKey(e, item)}
           >
-            <Icon size={16} strokeWidth={1.8} />
+            <Icon size={17} strokeWidth={1.9} />
             {#if sidebarOpen}
               <span class="grow">{item.label}</span>
               {#if item.page === 'issues' && issueCount}
@@ -250,9 +273,7 @@
               {:else if badge(item.page) != null}
                 <span class="count">{badge(item.page).toLocaleString()}</span>
               {/if}
-            {:else if item.page === 'issues' && issueCount}
-              <span class="pip"></span>
-            {:else if item.page === 'system' && $navStats?.paused}
+            {:else if (item.page === 'issues' && issueCount) || (item.page === 'system' && $navStats?.paused)}
               <span class="pip"></span>
             {/if}
           </button>
@@ -277,53 +298,45 @@
         onmouseleave={hideMenu}
         onkeydown={e => onNavKey(e, settingsItem)}
       >
-        <SlidersHorizontal size={16} strokeWidth={1.8} />
-        {#if sidebarOpen}<span>Settings</span>{/if}
+        <SlidersHorizontal size={17} strokeWidth={1.9} />
+        {#if sidebarOpen}<span class="grow">Settings</span>{/if}
       </button>
-      <button
-        class="conn conn-{connStatus}"
-        onclick={reconnect}
-        title={$wsConnected
-          ? `live feed connected, ${$connectionHealth?.messageCount ?? 0} messages received`
-          : 'click to reconnect the live feed'}
-      >
-        <span class="dot"></span>
-        {#if sidebarOpen}
-          <span class="grow">{connStatus}</span>
-          {#if $navStats?.version}<span class="ver mono">v{$navStats.version}</span>{/if}
-        {/if}
-      </button>
+      <div class="status" class:col={!sidebarOpen}>
+        <button
+          class="conn conn-{connStatus}"
+          onclick={reconnect}
+          title={$wsConnected
+            ? `live feed connected, ${$connectionHealth?.messageCount ?? 0} messages received`
+            : 'click to reconnect the live feed'}
+        >
+          <span class="dot"></span>
+          {#if sidebarOpen}<span>{connStatus}</span>{/if}
+        </button>
+        {#if sidebarOpen && $navStats?.version}<span class="ver mono">v{$navStats.version}</span
+          >{/if}
+        <button
+          class="icon-btn sm theme"
+          onclick={toggleTheme}
+          title={theme === 'dark' ? 'switch to light' : 'switch to dark'}
+          aria-label="toggle theme"
+        >
+          {#if theme === 'dark'}<Sun size={15} />{:else}<Moon size={15} />{/if}
+        </button>
+      </div>
     </div>
   </nav>
 
   {#if sidebarOpen}<div class="scrim" onclick={toggleSidebar} role="presentation"></div>{/if}
 
   <div class="main" id="main-content">
-    <header class="topbar">
-      <button class="icon-btn mobile-only" onclick={toggleSidebar} aria-label="open menu">
-        <PanelLeftOpen size={18} />
-      </button>
-      {#if crumbs}
-        <nav class="crumbs" aria-label="breadcrumb">
-          {#each crumbs as c, i (i)}
-            {#if i}<ChevronRight size={13} class="sep" />{/if}
-            {#if i < crumbs.length - 1}
-              <button class="crumb" onclick={() => go(c.page, c.params)}>{c.label}</button>
-            {:else}
-              <h1 class="cur ellipsis" class:mono={c.mono}>{c.label}</h1>
-            {/if}
-          {/each}
-        </nav>
-      {:else}
-        <h1>{activeTitle}</h1>
-      {/if}
-      <div class="actions">
-        {#if $headerActions}{@render $headerActions()}{/if}
-      </div>
-    </header>
-
+    <div class="mobile-bar">
+      <button class="icon-btn" onclick={toggleSidebar} aria-label="open menu"
+        ><Menu size={20} /></button
+      >
+      <span class="mtitle">{activeTitle}</span>
+    </div>
     {#if PageComponent}
-      <div class="page" class:full={FULL_BLEED.has(activePage)}>
+      <div class="page">
         <PageComponent />
       </div>
     {/if}
@@ -336,7 +349,7 @@
     title={fly.item.label}
     menu={menuFor(fly.item.page, $navStats, $savedViews, $issueStates)}
     top={fly.top}
-    left={sidebarOpen ? 222 : 50}
+    left={sidebarOpen ? 234 : 58}
     onpick={pick}
     onremove={name => removeView(name)}
     onenter={keepMenu}
@@ -352,23 +365,24 @@
     padding: 0;
     font-family: var(--font);
     font-size: var(--fs);
-    background-color: var(--bg);
+    background-color: var(--canvas);
     color: var(--text);
     line-height: 1.5;
     -webkit-font-smoothing: antialiased;
     text-rendering: optimizeLegibility;
+    font-feature-settings: 'cv11', 'ss01';
   }
   :global(*) {
     box-sizing: border-box;
     scrollbar-width: thin;
-    scrollbar-color: var(--surface-3) transparent;
+    scrollbar-color: var(--border-2) transparent;
   }
   :global(*)::-webkit-scrollbar {
     width: 8px;
     height: 8px;
   }
   :global(*)::-webkit-scrollbar-thumb {
-    background-color: var(--surface-3);
+    background-color: var(--border-2);
     border-radius: 4px;
   }
   :global(code),
@@ -398,7 +412,7 @@
     top: 0;
     display: flex;
     flex-direction: column;
-    background: var(--bg-deep);
+    background: var(--sidebar);
     border-right: 1px solid var(--border);
     font-size: var(--fs);
     transition: width 0.18s ease;
@@ -407,26 +421,37 @@
     width: var(--sidebar-w-collapsed);
   }
   .brand {
-    height: var(--topbar-h);
-    padding: 0 10px 0 16px;
+    height: 64px;
+    padding: 0 12px 0 18px;
     display: flex;
     align-items: center;
-    gap: 10px;
-    border-bottom: 1px solid var(--line);
+    gap: 9px;
   }
   .mark {
-    width: 22px;
-    height: 22px;
-    border-radius: 6px;
+    width: 28px;
+    height: 28px;
+    border-radius: 8px;
+    flex-shrink: 0;
   }
   .name {
-    font-weight: 600;
-    font-size: var(--fs-md);
-    letter-spacing: -0.01em;
+    font-weight: 700;
+    font-size: 15px;
+    letter-spacing: -0.02em;
     color: var(--text-bright);
+  }
+  .env {
+    font-size: 10px;
+    font-weight: 600;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: var(--text-muted);
+    background: var(--card-3);
+    padding: 2px 6px;
+    border-radius: 4px;
   }
   .collapse {
     margin-left: auto;
+    color: var(--text-dim);
   }
   .collapsed .brand {
     padding: 0;
@@ -441,35 +466,37 @@
   .nav {
     flex: 1;
     overflow-y: auto;
-    padding: 8px 8px;
+    padding: 4px 12px;
     display: flex;
     flex-direction: column;
-    gap: 1px;
+    gap: 2px;
   }
   .section {
-    padding: 16px 10px 5px;
+    padding: 18px 10px 6px;
     font-size: var(--fs-xs);
-    font-weight: 500;
+    font-weight: 600;
     color: var(--text-dim);
-    letter-spacing: 0.05em;
+    letter-spacing: 0.06em;
     text-transform: uppercase;
   }
   .section-rule {
     height: 1px;
-    margin: 8px 6px;
+    margin: 10px 8px;
     background: var(--line);
   }
   .link {
-    height: 32px;
+    height: 36px;
     padding: 0 10px;
     display: flex;
     align-items: center;
-    gap: 10px;
+    gap: 11px;
     border: 0;
     border-radius: var(--radius);
     background: none;
-    color: var(--text-muted);
+    color: var(--text-soft);
     font: inherit;
+    font-size: var(--fs-md);
+    font-weight: 500;
     text-align: left;
     cursor: pointer;
     position: relative;
@@ -477,24 +504,21 @@
       background 0.1s,
       color 0.1s;
   }
+  .link :global(svg) {
+    color: var(--text-muted);
+    flex-shrink: 0;
+  }
   .link:hover,
   .link.hover {
-    background: var(--surface);
+    background: var(--card-3);
     color: var(--text-bright);
   }
   .link.active {
-    background: var(--surface-2);
-    color: var(--text-bright);
+    background: var(--accent-bg);
+    color: var(--accent);
   }
-  .link.active::before {
-    content: '';
-    position: absolute;
-    left: -8px;
-    top: 8px;
-    bottom: 8px;
-    width: 2px;
-    border-radius: 0 2px 2px 0;
-    background: var(--accent-strong);
+  .link.active :global(svg) {
+    color: var(--accent);
   }
   .count {
     font-family: var(--mono);
@@ -503,59 +527,71 @@
     font-variant-numeric: tabular-nums;
   }
   .count.alert {
-    color: var(--bg-deep);
-    background: var(--warning);
-    border-radius: 9px;
+    font-family: var(--font);
+    font-weight: 600;
+    color: var(--warning-text);
+    background: var(--warning-bg);
+    border-radius: 999px;
     padding: 1px 7px;
-    font-weight: 500;
   }
   .pip {
     position: absolute;
-    top: 7px;
-    right: 7px;
-    width: 6px;
-    height: 6px;
+    top: 8px;
+    right: 8px;
+    width: 7px;
+    height: 7px;
     border-radius: 50%;
     background: var(--warning);
+    border: 2px solid var(--sidebar);
   }
   .collapsed .link {
     justify-content: center;
     padding: 0;
   }
   .foot {
-    padding: 8px;
+    padding: 8px 12px 12px;
     border-top: 1px solid var(--line);
     display: flex;
     flex-direction: column;
-    gap: 2px;
+    gap: 6px;
+  }
+  .status {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 0 4px 0 10px;
+    min-height: 30px;
+  }
+  .status.col {
+    flex-direction: column;
+    padding: 0;
   }
   .conn {
-    height: 30px;
-    padding: 0 10px;
+    height: 26px;
+    padding: 0 6px 0 0;
     display: flex;
     align-items: center;
     gap: 8px;
     border: 0;
-    border-radius: var(--radius);
+    border-radius: var(--radius-sm);
     background: none;
     color: var(--text-muted);
     font: inherit;
     font-size: var(--fs-sm);
+    font-weight: 500;
     cursor: pointer;
-    text-align: left;
-  }
-  .collapsed .conn {
-    justify-content: center;
+    text-transform: capitalize;
   }
   .conn:hover {
-    background: var(--surface);
+    color: var(--text-bright);
   }
   .conn .dot {
-    width: 7px;
-    height: 7px;
+    width: 8px;
+    height: 8px;
   }
   .conn-live .dot {
     background: var(--success);
+    box-shadow: 0 0 0 3px var(--success-bg);
   }
   .conn-connecting .dot {
     background: var(--warning);
@@ -567,6 +603,12 @@
   .ver {
     font-size: var(--fs-xs);
     color: var(--text-dim);
+  }
+  .theme {
+    margin-left: auto;
+  }
+  .col .theme {
+    margin: 0;
   }
   @keyframes blink {
     50% {
@@ -580,77 +622,14 @@
     display: flex;
     flex-direction: column;
   }
-  .topbar {
-    height: var(--topbar-h);
-    flex-shrink: 0;
-    padding: 0 24px;
-    display: flex;
-    align-items: center;
-    gap: 12px;
-    border-bottom: 1px solid var(--line);
-    position: sticky;
-    top: 0;
-    z-index: 50;
-    background: rgba(14, 15, 18, 0.85);
-    backdrop-filter: blur(8px);
-    -webkit-backdrop-filter: blur(8px);
-  }
-  .topbar h1 {
-    margin: 0;
-    font-size: var(--fs-md);
-    font-weight: 600;
-    letter-spacing: -0.01em;
-    color: var(--text-bright);
-    min-width: 0;
-  }
-  .topbar .crumbs {
-    gap: 4px;
-    min-width: 0;
-  }
-  .topbar .crumbs :global(.sep) {
-    color: var(--text-dim);
-    flex-shrink: 0;
-  }
-  .crumb {
-    background: none;
-    border: 0;
-    padding: 2px 4px;
-    margin: 0 -4px;
-    border-radius: 4px;
-    color: var(--text-muted);
-    font: inherit;
-    font-size: var(--fs-md);
-    cursor: pointer;
-  }
-  .crumb:hover {
-    color: var(--text-bright);
-    background: var(--surface-2);
-  }
-  .topbar h1.mono {
-    font-family: var(--mono);
-    font-weight: 500;
-  }
-  .actions {
-    margin-left: auto;
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    flex-shrink: 0;
-  }
   .page {
     flex: 1;
-    padding: 20px 24px 32px;
+    padding: 28px 32px 48px;
     width: 100%;
-    max-width: 1480px;
+    max-width: 1400px;
     margin: 0 auto;
   }
-  .page.full {
-    padding: 0;
-    max-width: none;
-    display: flex;
-    min-height: 0;
-  }
-  .mobile-only,
+  .mobile-bar,
   .scrim {
     display: none;
   }
@@ -659,7 +638,7 @@
     left: -9999px;
     top: 0;
     z-index: 2000;
-    background: var(--surface-2);
+    background: var(--card);
     color: var(--text-bright);
     padding: 0.75rem 1rem;
     border-radius: var(--radius);
@@ -674,33 +653,40 @@
       position: fixed;
       z-index: 1000;
       left: 0;
+      box-shadow: var(--shadow-pop);
     }
     .collapsed .sidebar {
       width: 0;
       overflow: hidden;
       border: 0;
+      box-shadow: none;
     }
     .scrim {
       display: block;
       position: fixed;
       inset: 0;
-      background: rgba(0, 0, 0, 0.5);
+      background: rgba(16, 24, 40, 0.45);
       z-index: 999;
     }
-    .mobile-only {
+    .mobile-bar {
       display: flex;
-      margin: 0;
+      align-items: center;
+      gap: 8px;
+      height: var(--mobile-bar-h);
+      padding: 0 12px;
+      background: var(--sidebar);
+      border-bottom: 1px solid var(--border);
+      position: sticky;
+      top: 0;
+      z-index: 50;
     }
-    .topbar,
+    .mtitle {
+      font-weight: 600;
+      color: var(--text-bright);
+      font-size: var(--fs-md);
+    }
     .page {
-      padding-left: 16px;
-      padding-right: 16px;
-    }
-    .page.full {
-      padding: 0;
-    }
-    .actions {
-      gap: 6px;
+      padding: 16px 16px 40px;
     }
     :global(kbd) {
       display: none !important;

@@ -176,7 +176,7 @@
     padding: 0 3px;
     border: 1px solid var(--border);
     border-radius: var(--radius);
-    background: var(--surface);
+    background: var(--card);
   }
   .win.abs {
     border-color: var(--accent-border);
@@ -200,7 +200,7 @@
     color: var(--text-bright);
   }
   .lbl:hover {
-    background: var(--surface-3);
+    background: var(--card-3);
     color: var(--text-bright);
   }
   .compact .lbl span {

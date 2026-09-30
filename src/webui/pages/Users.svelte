@@ -1,35 +1,36 @@
 <script>
   import { onDestroy } from 'svelte';
-  import { Search } from 'lucide-svelte';
+  import { Search, Users as UsersIcon } from 'lucide-svelte';
   import { navigate } from '../utils/router.js';
   import { userMetrics } from '../stores/sse-store.js';
-  import { useHeaderActions } from '../stores/header.js';
   import { formatBytes, formatRelativeTime } from '../utils/format.js';
+  import PageHeader from '../components/PageHeader.svelte';
   import DataTable from '../components/DataTable.svelte';
+  import Avatar from '../components/Avatar.svelte';
 
   const PAGE = 50;
   const COLUMNS = [
     { key: 'user_id', label: 'user', width: 'minmax(0, 1.4fr)', sortable: true },
-    { key: 'total_commands', label: 'requests', width: '90px', align: 'right', sortable: true },
+    { key: 'total_commands', label: 'requests', width: '96px', align: 'right', sortable: true },
     {
       key: 'successful_commands',
       label: 'delivered',
-      width: '90px',
+      width: '96px',
       align: 'right',
       sortable: true,
       sm: false,
     },
     { key: 'failed_commands', label: 'failed', width: '80px', align: 'right', sortable: true },
-    { key: 'rate', label: 'success', width: '110px', align: 'right', sm: false },
+    { key: 'rate', label: 'success', width: '130px', sm: false },
     {
       key: 'total_file_size',
       label: 'data',
-      width: '90px',
+      width: '96px',
       align: 'right',
       sortable: true,
       sm: false,
     },
-    { key: 'last_command_at', label: 'last seen', width: '96px', align: 'right', sm: false },
+    { key: 'last_command_at', label: 'last seen', width: '100px', align: 'right', sm: false },
   ];
 
   let users = $state([]);
@@ -77,7 +78,7 @@
     const top = active?.users ?? [];
     boards = {
       active: top.slice(0, 5),
-      data: data?.users ?? [],
+      data: (data?.users ?? []).slice(0, 5),
       success: top
         .filter(u => u.total_commands >= 5)
         .sort((a, b) => rate(b) - rate(a) || b.total_commands - a.total_commands)
@@ -118,33 +119,41 @@
     load();
   }
   const boardMax = list => Math.max(1, ...list.map(u => u.total_commands));
-
-  useHeaderActions(actions);
+  const rateColor = r =>
+    r >= 90 ? 'var(--chart-1)' : r >= 70 ? 'var(--chart-3)' : 'var(--chart-4)';
 </script>
 
-{#snippet actions()}
-  <label class="searchbox users-search">
-    <Search size={14} />
-    <input
-      bind:value={search}
-      onkeydown={e => e.key === 'Enter' && submitSearch()}
-      placeholder="find a user id"
-      aria-label="find a user id"
-    />
-  </label>
-{/snippet}
+<PageHeader
+  title="Users"
+  description="Everyone who has run a command, with how much they ask for and how often it works."
+>
+  {#snippet actions()}
+    <label class="searchbox users-search">
+      <Search size={15} />
+      <input
+        bind:value={search}
+        onkeydown={e => e.key === 'Enter' && submitSearch()}
+        placeholder="Find a user id"
+        aria-label="find a user id"
+      />
+    </label>
+  {/snippet}
+</PageHeader>
 
-{#snippet board(title, list, value, share)}
+{#snippet board(title, note, list, value, share)}
   <section class="panel">
-    <div class="ph"><span>{title}</span></div>
+    <div class="ph">
+      <span>{title}</span><span class="meta"><span class="dim">{note}</span></span>
+    </div>
     {#each list as u, i (u.user_id)}
       <button class="lrow lb" onclick={() => navigate('user-profile', { userId: u.user_id })}>
-        <span class="rank mono">{i + 1}</span>
+        <span class="rank">{i + 1}</span>
+        <Avatar id={u.user_id} size={28} />
         <span class="grow">
-          <span class="mono ellipsis">{u.user_id}</span>
+          <span class="mono id ellipsis">{u.user_id}</span>
           <span class="bar-track"><span style="width:{share(u) * 100}%"></span></span>
         </span>
-        <span class="mono muted small tnum">{value(u)}</span>
+        <span class="mono muted small tnum nowrap">{value(u)}</span>
       </button>
     {:else}
       <div class="empty">—</div>
@@ -153,7 +162,7 @@
 {/snippet}
 
 <div class="users stack">
-  <section class="panel kpis" style="--kpi-cols: 4">
+  <section class="kpis" style="--kpi-cols: 4">
     <div class="kpi">
       <div class="k">Users, ever</div>
       <div class="v">{stats?.ever_active_users?.toLocaleString() ?? '—'}</div>
@@ -161,21 +170,23 @@
     </div>
     <div class="kpi">
       <div class="k">Active, 7 days</div>
-      <div class="v">{stats?.active_users_7d?.toLocaleString() ?? '—'}</div>
-      <div class="s">
-        {stats?.ever_active_users
-          ? `${Math.round((stats.active_users_7d / stats.ever_active_users) * 100)}% of everyone`
-          : 'ran at least one command'}
+      <div class="v">
+        {stats?.active_users_7d?.toLocaleString() ?? '—'}
+        {#if stats?.ever_active_users}<span class="d"
+            >{Math.round((stats.active_users_7d / stats.ever_active_users) * 100)}%</span
+          >{/if}
       </div>
+      <div class="s">ran at least one command</div>
     </div>
     <div class="kpi">
       <div class="k">Active, 30 days</div>
-      <div class="v">{stats?.active_users_30d?.toLocaleString() ?? '—'}</div>
-      <div class="s">
-        {stats?.ever_active_users
-          ? `${Math.round((stats.active_users_30d / stats.ever_active_users) * 100)}% of everyone`
-          : 'ran at least one command'}
+      <div class="v">
+        {stats?.active_users_30d?.toLocaleString() ?? '—'}
+        {#if stats?.ever_active_users}<span class="d"
+            >{Math.round((stats.active_users_30d / stats.ever_active_users) * 100)}%</span
+          >{/if}
       </div>
+      <div class="s">ran at least one command</div>
     </div>
     <div class="kpi">
       <div class="k">Top user</div>
@@ -184,21 +195,24 @@
     </div>
   </section>
 
-  <div class="boards">
+  <div class="three">
     {@render board(
       'Most active',
+      'all time',
       boards.active,
       u => `${u.total_commands.toLocaleString()} requests`,
       u => u.total_commands / boardMax(boards.active)
     )}
     {@render board(
       'Highest success rate',
+      '5+ requests',
       boards.success,
       u => `${rate(u)}% of ${u.total_commands}`,
       u => rate(u) / 100
     )}
     {@render board(
       'Most data',
+      'processed for them',
       boards.data,
       u => formatBytes(u.total_file_size),
       u => u.total_file_size / Math.max(1, boards.data[0]?.total_file_size ?? 1)
@@ -206,13 +220,13 @@
   </div>
 
   <DataTable
+    title="All users"
     columns={COLUMNS}
     rows={users}
     rowKey="user_id"
     {loading}
     {error}
     onretry={load}
-    empty="no users found"
     sort={{ key: sortBy, desc: sortDesc }}
     {onsort}
     onrow={u => navigate('user-profile', { userId: u.user_id })}
@@ -220,22 +234,26 @@
     skeleton={10}
     label="users"
   >
+    {#snippet header()}<span class="tnum"><b>{total.toLocaleString()}</b> users</span>{/snippet}
+    {#snippet emptyState()}
+      <div class="empty">
+        <span class="ic"><UsersIcon size={20} /></span>
+        <b>No users found</b>
+        {search ? 'No id contains that text.' : 'Nobody has run a command yet.'}
+      </div>
+    {/snippet}
     {#snippet row(u)}
-      <span class="mono ellipsis">{u.user_id}</span>
-      <span class="num">{u.total_commands.toLocaleString()}</span>
+      <span class="user-cell"
+        ><Avatar id={u.user_id} size={24} /><span class="id">{u.user_id}</span></span
+      >
+      <span class="num strong">{u.total_commands.toLocaleString()}</span>
       <span class="num muted hide-sm">{u.successful_commands.toLocaleString()}</span>
       <span class="num" class:warn-text={u.failed_commands > 0} class:muted={!u.failed_commands}
         >{u.failed_commands.toLocaleString()}</span
       >
       <span class="ratecell hide-sm">
         <span class="bar-track"
-          ><span
-            style="width:{rate(u)}%; background:{rate(u) >= 90
-              ? 'var(--chart-1)'
-              : rate(u) >= 70
-                ? 'var(--warning)'
-                : 'var(--danger)'}"
-          ></span></span
+          ><span style="width:{rate(u)}%; background:{rateColor(rate(u))}"></span></span
         >
         <span class="num muted">{rate(u)}%</span>
       </span>
@@ -249,53 +267,51 @@
 
 <style>
   .users-search {
-    width: 240px;
+    width: 260px;
   }
-  .boards {
-    display: grid;
-    grid-template-columns: repeat(3, minmax(0, 1fr));
-    gap: var(--gap);
-    align-items: start;
+  .lb {
+    padding: 10px 20px;
   }
   .lb .grow {
     display: flex;
     flex-direction: column;
-    gap: 5px;
+    gap: 6px;
+  }
+  .lb .id {
+    font-size: var(--fs-sm);
+    color: var(--text-bright);
   }
   .lb .bar-track {
-    height: 3px;
+    height: 4px;
   }
   .lb .bar-track > span {
-    background: var(--chart-muted);
+    background: var(--chart-1-soft);
   }
   .lb:hover .bar-track > span {
     background: var(--chart-1);
   }
   .rank {
-    width: 18px;
+    width: 16px;
     color: var(--text-dim);
     font-size: var(--fs-sm);
+    font-weight: 600;
+    font-variant-numeric: tabular-nums;
   }
   .ratecell {
     display: flex;
     align-items: center;
-    gap: 8px;
+    gap: 10px;
   }
   .ratecell .bar-track {
     flex: 1;
-    height: 4px;
+    height: 6px;
   }
   .ratecell .num {
-    width: 38px;
-  }
-  @media (max-width: 1000px) {
-    .boards {
-      grid-template-columns: 1fr;
-    }
+    width: 40px;
   }
   @media (max-width: 700px) {
     .users-search {
-      width: 150px;
+      width: 100%;
     }
   }
 </style>

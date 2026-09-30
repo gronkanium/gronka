@@ -1,14 +1,16 @@
 <script>
   import { Check, X, Loader, Copy, TerminalSquare, Ban, ExternalLink } from 'lucide-svelte';
   import { currentRoute, navigate } from '../utils/router.js';
-  import { useHeaderActions, useCrumbs } from '../stores/header.js';
   import {
     formatBytes,
     formatDuration,
     formatRelativeTime,
     hostOf,
     urlLabel,
+    shortId,
   } from '../utils/format.js';
+  import PageHeader from '../components/PageHeader.svelte';
+  import Avatar from '../components/Avatar.svelte';
 
   let op = $state(null);
   let trace = $state(null);
@@ -33,7 +35,7 @@
       op = data.operation;
       trace = data.trace;
     } catch {
-      error = 'this request is not in the history any more (requests are kept for 7 days)';
+      error = 'This request is not in the history any more. Requests are kept for 7 days.';
       return;
     }
     const start = op.timestamp;
@@ -126,11 +128,27 @@
       ? ''
       : op.status === 'success'
         ? op.sourceUrl && !op.fileSize
-          ? 'delivered as a link'
-          : 'delivered'
+          ? 'Delivered as a link'
+          : 'Delivered'
         : op.status === 'error'
-          ? 'failed'
+          ? 'Failed'
           : op.status
+  );
+  const statusKind = $derived(
+    op?.status === 'success' ? 'ok' : op?.status === 'error' ? 'bad' : 'info'
+  );
+  const description = $derived(
+    op
+      ? [
+          op.originalUrl ? urlLabel(op.originalUrl) : 'attachment',
+          op.fileSize && formatBytes(op.fileSize),
+          op.performanceMetrics?.duration &&
+            `${formatDuration(op.performanceMetrics.duration)} end to end`,
+          formatRelativeTime(op.timestamp),
+        ]
+          .filter(Boolean)
+          .join(' · ')
+      : ''
   );
   const workerLabel = (g, i) => (g === 'bot' ? 'Bot (gateway)' : `Attempt ${i} · ${g}`);
   const stamp = t =>
@@ -154,28 +172,35 @@
     copied = true;
     setTimeout(() => (copied = false), 1200);
   }
-
-  const setCrumbs = useCrumbs();
-  $effect(() =>
-    setCrumbs([
-      { label: 'Requests', page: 'requests' },
-      { label: id, mono: true },
-    ])
-  );
-  useHeaderActions(actions);
 </script>
 
-{#snippet actions()}
-  <button class="btn" onclick={() => navigate('logs', { op: id })}
-    ><TerminalSquare size={13} />View logs</button
-  >
-  <button class="btn" onclick={copyLink}><Copy size={13} />{copied ? 'Copied' : 'Copy link'}</button
-  >
-{/snippet}
+<PageHeader
+  title={op ? `/${op.type}` : 'Request'}
+  crumbs={[{ label: 'Requests', page: 'requests' }]}
+  {description}
+>
+  {#if op}
+    <span class="pill {statusKind}"
+      >{#if op.status === 'success'}<Check size={12} />{:else if op.status === 'error'}<X
+          size={12}
+        />{:else}<Loader size={12} />{/if}{statusTitle}</span
+    >
+    {#if job && job.attempts > 1}<span class="chip warn">retried {job.attempts - 1}×</span>{/if}
+    {#if /timed out/i.test(failure)}<span class="chip bad">timed out</span>{/if}
+  {/if}
+  {#snippet actions()}
+    <button class="btn" onclick={() => navigate('logs', { op: id })}
+      ><TerminalSquare size={14} />View logs</button
+    >
+    <button class="btn" onclick={copyLink}
+      ><Copy size={14} />{copied ? 'Copied' : 'Copy link'}</button
+    >
+  {/snippet}
+</PageHeader>
 
 <div class="request">
   {#if error}
-    <div class="panel empty">{error}</div>
+    <div class="panel empty big"><b>Not found</b>{error}</div>
   {:else if !op}
     <div class="panel">
       <div class="skel-rows">
@@ -187,29 +212,6 @@
   {:else}
     <div class="grid">
       <div class="stack">
-        <div class="head">
-          <div class="icon {op.status}">
-            {#if op.status === 'success'}<Check size={20} />{:else if op.status === 'error'}<X
-                size={20}
-              />{:else}<Loader size={20} />{/if}
-          </div>
-          <div class="grow">
-            <div class="row">
-              <h2>/{op.type} {statusTitle}</h2>
-              {#if job && job.attempts > 1}<span class="chip warn">retried {job.attempts - 1}×</span
-                >{/if}
-              {#if /timed out/i.test(failure)}<span class="chip bad">timed out</span>{/if}
-            </div>
-            <div class="sub mono ellipsis">
-              {op.originalUrl ? urlLabel(op.originalUrl) : 'attachment'}
-              {#if op.fileSize}
-                · {formatBytes(op.fileSize)}{/if}
-              {#if op.performanceMetrics?.duration}
-                · {formatDuration(op.performanceMetrics.duration)} end to end{/if}
-            </div>
-          </div>
-        </div>
-
         <section class="panel">
           <div class="ph">
             <span>Timeline</span>
@@ -279,9 +281,12 @@
           <dl class="dl">
             <dt>User</dt>
             <dd>
-              <button
-                class="linkish mono"
-                onclick={() => navigate('user-profile', { userId: op.userId })}>{op.userId}</button
+              <span class="user-cell"
+                ><Avatar id={op.userId} size={20} /><button
+                  class="linkish mono"
+                  onclick={() => navigate('user-profile', { userId: op.userId })}
+                  >{shortId(op.userId)}</button
+                ></span
               >
               {#if related.user}<span class="dim"> · {related.user.total} in 24h</span>{/if}
             </dd>
@@ -355,14 +360,14 @@
 
         <section class="panel pb actions-panel">
           <button class="btn danger" onclick={() => (banOpen = !banOpen)}
-            ><Ban size={13} />Ban this user</button
+            ><Ban size={14} />Ban this user</button
           >
           {#if banOpen}
             <div class="banform">
               <input
                 class="field"
                 bind:value={banReason}
-                placeholder="reason (shown on appeal)"
+                placeholder="Reason (shown on appeal)"
                 maxlength="200"
               />
               <button class="btn danger" disabled={!banReason.trim()} onclick={ban}
@@ -384,55 +389,19 @@
     gap: var(--gap);
     align-items: start;
   }
-  .head {
-    display: flex;
-    align-items: center;
-    gap: 14px;
-  }
-  .icon {
-    width: 42px;
-    height: 42px;
-    border-radius: var(--radius-lg);
-    display: grid;
-    place-items: center;
-    background: var(--surface-2);
-    color: var(--text-muted);
-    flex-shrink: 0;
-    border: 1px solid var(--border);
-  }
-  .icon.success {
-    background: var(--success-bg);
-    color: var(--success);
-    border-color: var(--success-border);
-  }
-  .icon.error {
-    background: var(--danger-bg);
-    color: var(--danger);
-    border-color: var(--danger-border);
-  }
-  h2 {
-    margin: 0;
-    font-size: 18px;
-    font-weight: 600;
-    color: var(--text-bright);
-  }
-  .sub {
-    margin-top: 4px;
-    font-size: var(--fs-sm);
-    color: var(--text-muted);
-  }
   .timeline {
-    padding: 10px 16px 14px;
+    padding: 12px 20px 16px;
   }
   .tg {
     display: flex;
     align-items: center;
     gap: 8px;
-    margin: 10px 0 4px;
+    margin: 12px 0 6px;
     font-size: var(--fs);
   }
   .tg b {
-    font-weight: 500;
+    font-weight: 600;
+    color: var(--text-bright);
   }
   .tg .mono {
     font-size: var(--fs-sm);
@@ -448,10 +417,13 @@
   }
   .trow {
     display: grid;
-    grid-template-columns: 64px 220px 1fr 64px;
+    grid-template-columns: 64px 240px 1fr 64px;
     align-items: center;
     gap: 12px;
-    height: 28px;
+    height: 30px;
+    padding: 0 6px;
+    margin: 0 -6px;
+    border-radius: 6px;
     font-size: var(--fs);
   }
   .trow:hover {
@@ -469,13 +441,13 @@
     color: var(--danger-text);
   }
   .lbl.warn {
-    color: var(--warning);
+    color: var(--warning-text);
   }
   .track {
     position: relative;
     height: 10px;
     border-radius: 3px;
-    background: var(--surface-2);
+    background: var(--card-3);
   }
   .seg-bar {
     position: absolute;
@@ -497,10 +469,10 @@
     background: var(--chart-1);
   }
   .hint {
-    margin: 0 16px 14px;
+    margin: 0 20px 16px;
     padding: 10px 12px;
     border-radius: var(--radius);
-    background: var(--surface-2);
+    background: var(--card-2);
     font-size: var(--fs-sm);
     color: var(--text-muted);
   }
@@ -512,7 +484,7 @@
     overflow-wrap: anywhere;
   }
   .stack-trace {
-    margin: 0 16px 14px;
+    margin: 0 20px 16px;
     font-size: var(--fs-sm);
     color: var(--text-muted);
   }
@@ -521,21 +493,21 @@
     padding: 10px;
     max-height: 280px;
     overflow: auto;
-    background: var(--bg-deep);
+    background: var(--card-2);
     border-radius: var(--radius);
     font: var(--fs-xs) / 1.5 var(--mono);
     white-space: pre-wrap;
   }
   .dl {
     margin: 0;
-    padding: 8px 16px 12px;
+    padding: 10px 20px 14px;
     display: grid;
     grid-template-columns: 96px 1fr;
-    gap: 10px 12px;
+    gap: 12px;
     font-size: var(--fs);
   }
   .dl dt {
-    color: var(--text-dim);
+    color: var(--text-muted);
   }
   .dl dd {
     margin: 0;

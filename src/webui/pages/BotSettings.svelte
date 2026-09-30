@@ -12,7 +12,7 @@
     Check,
   } from 'lucide-svelte';
   import { currentRoute, navigate } from '../utils/router.js';
-  import { useHeaderActions } from '../stores/header.js';
+  import PageHeader from '../components/PageHeader.svelte';
 
   // Which settings live in which section; unknown server keys fall into "other" so none vanish.
   const SECTIONS = [
@@ -214,13 +214,16 @@
     if (res?.ok) loadPresence();
   }
   loadPresence();
-
-  useHeaderActions(actions);
 </script>
 
-{#snippet actions()}
-  {#if error}<span class="error-text small">{error}</span>{/if}
-{/snippet}
+<PageHeader
+  title="Settings"
+  description="How the bot behaves: delivery, limits, access and notifications. Changes apply within a minute."
+>
+  {#snippet actions()}
+    {#if error}<span class="pill bad">{error}</span>{/if}
+  {/snippet}
+</PageHeader>
 
 <div class="settings">
   <nav class="side" aria-label="settings sections">
@@ -420,10 +423,10 @@
     flex-direction: column;
     gap: 2px;
     position: sticky;
-    top: calc(var(--topbar-h) + 20px);
+    top: 24px;
   }
   .sec {
-    height: 34px;
+    height: 36px;
     padding: 0 10px;
     display: flex;
     align-items: center;
@@ -431,19 +434,20 @@
     border: 0;
     border-radius: var(--radius);
     background: none;
-    color: var(--text-muted);
+    color: var(--text-soft);
     font: inherit;
-    font-size: var(--fs);
+    font-size: var(--fs-md);
+    font-weight: 500;
     text-align: left;
     cursor: pointer;
   }
   .sec:hover {
-    background: var(--surface);
+    background: var(--card-3);
     color: var(--text-bright);
   }
   .sec.on {
-    background: var(--surface-2);
-    color: var(--text-bright);
+    background: var(--accent-bg);
+    color: var(--accent);
   }
   .arrow {
     margin-left: auto;
@@ -453,20 +457,20 @@
     display: grid;
     grid-template-columns: minmax(0, 1fr) minmax(260px, 1.1fr);
     gap: 24px;
-    padding: 18px 20px;
+    padding: 20px 24px;
     border-top: 1px solid var(--line);
   }
   .item:first-of-type {
     border-top: 0;
   }
   .lbl b {
-    font-weight: 500;
-    font-size: var(--fs);
+    font-weight: 600;
+    font-size: var(--fs-md);
     color: var(--text-bright);
   }
   .lbl p {
     margin: 4px 0 0;
-    font-size: var(--fs-sm);
+    font-size: var(--fs);
     line-height: 1.5;
     color: var(--text-muted);
   }
@@ -520,7 +524,7 @@
   }
   .iconbtn:hover {
     color: var(--danger);
-    background: var(--surface-2);
+    background: var(--card-2);
   }
   .saved {
     display: inline-flex;

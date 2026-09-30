@@ -103,7 +103,7 @@
     position: fixed;
     z-index: 1500;
     width: 300px;
-    background: var(--surface-pop);
+    background: var(--pop);
     border: 1px solid var(--border-2);
     border-radius: 10px;
     box-shadow:
@@ -180,7 +180,7 @@
   }
   .item:hover,
   .item:focus-visible {
-    background: var(--surface-3);
+    background: var(--card-3);
     color: var(--text-bright);
   }
   .ic {
@@ -212,7 +212,7 @@
     justify-content: center;
     border: 0;
     border-radius: 4px;
-    background: var(--surface-2);
+    background: var(--card-2);
     color: var(--text-muted);
     cursor: pointer;
   }

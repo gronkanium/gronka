@@ -1,16 +1,18 @@
 <script>
   /**
-   * Stacked-bar time series in SVG: gridlines, y labels, x ticks, a crosshair tooltip listing
-   * every series, and brush-to-zoom on pointer drag (touch included). Escape cancels a brush.
+   * Time series in SVG, stacked bars or stacked areas: gridlines, y labels, x ticks, a crosshair
+   * tooltip listing every series, and brush-to-zoom on pointer drag (touch included). Escape
+   * cancels a brush.
    *
+   *   type    'bar' | 'area'
    *   series  [{ key, label, color }]           stacked bottom-up in this order
    *   data    [{ at, <key>: number, ... }]      one bucket per entry, `at` is the bucket start
    *   bucket  bucket width in ms                (defaults to the gap between the first two)
    *   onbrush (startMs, endMs) => void          enables the brush when given
-   *   onbar   (entry) => void                   click on a bar, when given
-   *   xlabel  (ms) => string, ylabel (n) => string
+   *   onbar   (entry) => void                   click on a bucket, when given
    */
   let {
+    type = 'bar',
     series = [],
     data = [],
     bucket = null,
@@ -26,7 +28,8 @@
     brushHint = 'drag to zoom',
   } = $props();
 
-  const PAD = { top: 10, right: 8, bottom: 22 };
+  const uid = $props.id();
+  const PAD = { top: 12, right: 12, bottom: 24 };
   let width = $state(0);
   let hover = $state(null); // bucket index
   let press = $state(null); // { x, i }
@@ -67,8 +70,9 @@
   });
   const yMax = $derived(yTicks.max);
   const slot = $derived(data.length ? innerW / data.length : 0);
-  const barW = $derived(Math.max(1, slot - Math.min(4, slot * 0.3)));
+  const barW = $derived(Math.max(1, slot - Math.min(6, slot * 0.35)));
   const y = v => PAD.top + innerH - (v / yMax) * innerH;
+  const cx = i => left + i * slot + slot / 2;
 
   const bars = $derived(
     data.map((d, i) => {
@@ -83,6 +87,21 @@
     })
   );
 
+  // Stacked areas share the bar math: each series fills between its lower and upper edge.
+  const areas = $derived.by(() => {
+    if (type !== 'area' || data.length < 2) return [];
+    return series.map((s, si) => {
+      const top = bars.map(b => `${cx(b.i).toFixed(1)} ${b.segs[si].y1.toFixed(1)}`);
+      const bottom = bars.map(b => `${cx(b.i).toFixed(1)} ${b.segs[si].y0.toFixed(1)}`).reverse();
+      return {
+        key: s.key,
+        color: s.color,
+        line: `M${top.join(' L')}`,
+        fill: `M${top.join(' L')} L${bottom.join(' L')} Z`,
+      };
+    });
+  });
+
   // Around 6 x labels, always aligned to a bucket start, never crowding each other.
   const xTicks = $derived.by(() => {
     if (!data.length || !innerW) return [];
@@ -90,7 +109,7 @@
     const every = Math.max(1, Math.ceil(data.length / want));
     const out = [];
     for (let i = 0; i < data.length; i += every)
-      out.push({ x: left + i * slot + slot / 2, label: xlabel(data[i].at, span) });
+      out.push({ x: cx(i), label: xlabel(data[i].at, span) });
     return out;
   });
 
@@ -141,12 +160,13 @@
   const tip = $derived.by(() => {
     if (hover == null || !bars[hover]) return null;
     const b = bars[hover];
-    const flip = b.x + slot / 2 > width * 0.62;
+    const x = cx(hover);
+    const flip = x > width * 0.62;
     return {
       at: b.at,
       total: b.total,
       rows: series.map(s => ({ ...s, v: data[hover][s.key] || 0 })).reverse(),
-      x: flip ? width - b.x + 8 : b.x + barW + 8,
+      x: flip ? width - x + 12 : x + 12,
       flip,
     };
   });
@@ -180,10 +200,18 @@
 >
   {#if width}
     <svg {width} {height} aria-hidden="true">
+      <defs>
+        {#each series as s (s.key)}
+          <linearGradient id="{uid}-{s.key}" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%" stop-color={s.color} stop-opacity="0.32" />
+            <stop offset="100%" stop-color={s.color} stop-opacity="0.03" />
+          </linearGradient>
+        {/each}
+      </defs>
       {#if showY}
         {#each yTicks.ticks as t (t)}
           <line x1={left} x2={width - PAD.right} y1={y(t)} y2={y(t)} class="grid" />
-          <text x={left - 6} y={y(t)} class="ylab">{ylabel(t)}</text>
+          <text x={left - 8} y={y(t)} class="ylab">{ylabel(t)}</text>
         {/each}
       {:else}
         <line x1={left} x2={width - PAD.right} y1={y(0)} y2={y(0)} class="grid" />
@@ -202,30 +230,44 @@
           class="brush-edge"
         />
       {/if}
-      {#each bars as b (b.i)}
-        <g class="bar" class:dimmed={hover != null && hover !== b.i && !brush}>
-          {#each b.segs as s (s.key)}
-            {#if s.v > 0}
-              <rect
-                x={b.x}
-                y={s.y1}
-                width={barW}
-                height={Math.max(1, s.y0 - s.y1)}
-                fill={s.color}
-                rx={barW > 3 ? 1.5 : 0}
-              />
+      {#if type === 'area'}
+        {#each areas as a (a.key)}
+          <path d={a.fill} fill="url(#{uid}-{a.key})" />
+          <path
+            d={a.line}
+            fill="none"
+            stroke={a.color}
+            stroke-width="1.75"
+            stroke-linejoin="round"
+          />
+        {/each}
+        {#if hover != null && bars[hover]}
+          {#each bars[hover].segs as s (s.key)}
+            {#if s.v > 0 || series.length === 1}
+              <circle cx={cx(hover)} cy={s.y1} r="3.5" fill={s.color} class="pt" />
             {/if}
           {/each}
-        </g>
-      {/each}
+        {/if}
+      {:else}
+        {#each bars as b (b.i)}
+          <g class="bar" class:dimmed={hover != null && hover !== b.i && !brush}>
+            {#each b.segs as s (s.key)}
+              {#if s.v > 0}
+                <rect
+                  x={b.x}
+                  y={s.y1}
+                  width={barW}
+                  height={Math.max(1, s.y0 - s.y1)}
+                  fill={s.color}
+                  rx={barW > 3 ? 2 : 0}
+                />
+              {/if}
+            {/each}
+          </g>
+        {/each}
+      {/if}
       {#if hover != null && bars[hover] && !brush}
-        <line
-          x1={bars[hover].x + barW / 2}
-          x2={bars[hover].x + barW / 2}
-          y1={PAD.top}
-          y2={y(0)}
-          class="crosshair"
-        />
+        <line x1={cx(hover)} x2={cx(hover)} y1={PAD.top} y2={y(0)} class="crosshair" />
       {/if}
       <!-- svelte-ignore a11y_no_static_element_interactions -->
       <rect
@@ -294,6 +336,10 @@
   .bar.dimmed {
     opacity: 0.55;
   }
+  .pt {
+    stroke: var(--card);
+    stroke-width: 2;
+  }
   .crosshair {
     stroke: var(--chart-crosshair);
     stroke-width: 1;
@@ -329,20 +375,20 @@
   }
   .tip {
     position: absolute;
-    top: 6px;
+    top: 8px;
     z-index: 5;
-    min-width: 150px;
-    padding: 8px 10px;
-    background: var(--surface-pop);
-    border: 1px solid var(--border-2);
+    min-width: 160px;
+    padding: 10px 12px;
+    background: var(--pop);
+    border: 1px solid var(--border);
     border-radius: var(--radius);
     box-shadow: var(--shadow-pop);
     font-size: var(--fs-sm);
     pointer-events: none;
   }
   .tt {
-    font-family: var(--mono);
-    color: var(--text-muted);
+    font-weight: 600;
+    color: var(--text-bright);
     margin-bottom: 6px;
     white-space: nowrap;
   }
@@ -351,8 +397,8 @@
     grid-template-columns: 8px 1fr auto;
     gap: 8px;
     align-items: center;
-    line-height: 1.7;
-    color: var(--text);
+    line-height: 1.8;
+    color: var(--text-muted);
   }
   .tr i {
     width: 8px;
@@ -367,13 +413,12 @@
     font-variant-numeric: tabular-nums;
   }
   .tr.total {
-    margin-top: 3px;
-    padding-top: 3px;
+    margin-top: 4px;
+    padding-top: 4px;
     border-top: 1px solid var(--line);
-    color: var(--text-muted);
   }
   .hint {
-    margin-top: 5px;
+    margin-top: 6px;
     color: var(--text-dim);
     font-size: var(--fs-xs);
   }

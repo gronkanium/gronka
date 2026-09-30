@@ -1,20 +1,8 @@
-/* Archivo (OFL) and Gronka Mono, a renamed IBM Plex Mono subset (OFL): /fonts/OFL-*.txt */
+/* Inter (variable, OFL) and Gronka Mono, a renamed IBM Plex Mono subset (OFL): /fonts/OFL-*.txt */
 @font-face {
-  font-family: 'Archivo';
-  src: url('/fonts/Archivo-Regular.woff2') format('woff2');
-  font-weight: 400;
-  font-display: swap;
-}
-@font-face {
-  font-family: 'Archivo';
-  src: url('/fonts/Archivo-Medium.woff2') format('woff2');
-  font-weight: 500;
-  font-display: swap;
-}
-@font-face {
-  font-family: 'Archivo';
-  src: url('/fonts/Archivo-SemiBold.woff2') format('woff2');
-  font-weight: 600 700;
+  font-family: 'Inter';
+  src: url('/fonts/Inter-Variable.woff2') format('woff2');
+  font-weight: 100 900;
   font-display: swap;
 }
 @font-face {
@@ -25,101 +13,173 @@
 }
 
 /*
- * Design tokens for the webui. Every colour, radius, shadow and type value lives here;
- * pages and components reference these variables and never hardcode a hex.
+ * Design tokens. Light is the default; [data-theme="dark"] on <html> swaps every colour.
  *
- * Surfaces climb in four steps from the page background: bg -> surface (panels) ->
- * surface-2 (hover, inset controls) -> surface-3 (active). Borders are one step brighter
- * than the surface they sit on, and hairlines inside a panel are dimmer than its border.
+ * Layers: canvas (the page) -> card (white panels) -> card-2 (inset areas, table headers,
+ * hover) -> card-3 (pressed / active). Borders sit one step darker than the layer they edge.
  */
 :root {
-  color-scheme: dark;
+  color-scheme: light;
 
-  /* surfaces */
-  --bg-deep: #0a0b0d;
-  --bg: #0e0f12;
-  --surface: #141518;
-  --surface-2: #1a1b20;
-  --surface-3: #24262c;
-  --surface-pop: #17181d;
+  /* layers */
+  --canvas: #f4f5f7;
+  --card: #ffffff;
+  --card-2: #f8f9fb;
+  --card-3: #eef0f4;
+  --sidebar: #ffffff;
+  --pop: #ffffff;
 
   /* borders */
-  --border: #212328;
-  --border-2: #30333a;
-  --line: #1c1e23; /* hairline inside a panel */
-  --hairline: var(--line);
+  --border: #e5e7eb;
+  --border-2: #d3d7de;
+  --line: #eef0f3;
 
   /* text */
-  --text-bright: #f2f1ed;
-  --text: #dcdbd6;
-  --text-soft: #c2c1bc;
-  --text-muted: #8f9198;
-  --text-dim: #64666d;
+  --text-bright: #0d1117;
+  --text: #1c2230;
+  --text-soft: #3a4252;
+  --text-muted: #667085;
+  --text-dim: #98a2b3;
+  --on-accent: #ffffff;
 
-  /* brand accent: links, focus, active, primary chart series */
-  --accent: #9db0ff;
-  --accent-strong: #5b7cfa;
-  --accent-bg: rgba(91, 124, 250, 0.13);
-  --accent-border: rgba(91, 124, 250, 0.42);
-  --focus: rgba(91, 124, 250, 0.55);
+  /* brand */
+  --accent: #2f55e6;
+  --accent-strong: #2f55e6;
+  --accent-hover: #2446cc;
+  --accent-bg: rgba(47, 85, 230, 0.08);
+  --accent-bg-strong: rgba(47, 85, 230, 0.14);
+  --accent-border: rgba(47, 85, 230, 0.32);
+  --focus: rgba(47, 85, 230, 0.35);
 
   /* status */
-  --success: #3fc48a;
-  --success-bg: rgba(63, 196, 138, 0.13);
-  --success-border: rgba(63, 196, 138, 0.4);
-  --danger: #f06a6a;
-  --danger-text: #f4b4b4;
-  --danger-bg: rgba(240, 106, 106, 0.14);
-  --danger-bg-subtle: rgba(240, 106, 106, 0.07);
-  --danger-border: rgba(240, 106, 106, 0.42);
-  --warning: #f0a552;
-  --warning-bg: rgba(240, 165, 82, 0.14);
-  --warning-border: rgba(240, 165, 82, 0.4);
-  --info: #8fa7f5;
-  --info-bg: rgba(143, 167, 245, 0.13);
-  --info-bg-hover: rgba(143, 167, 245, 0.2);
+  --success: #17a34a;
+  --success-text: #157a3a;
+  --success-bg: #e9f8ef;
+  --success-border: #b9e8c9;
+  --danger: #dc3c3c;
+  --danger-text: #b42323;
+  --danger-bg: #fdecec;
+  --danger-bg-subtle: #fff5f5;
+  --danger-border: #f3bcbc;
+  --warning: #dd8a0f;
+  --warning-text: #a86408;
+  --warning-bg: #fef4e2;
+  --warning-border: #f6d7a4;
+  --info: #2f55e6;
+  --info-bg: rgba(47, 85, 230, 0.08);
+  --info-bg-hover: rgba(47, 85, 230, 0.14);
 
-  /* charts: series colours sit in a mid lightness band so they read as fills, not text */
-  --chart-1: #6b8cf5;
-  --chart-1-hover: #86a0f7;
-  --chart-2: #3fc48a;
-  --chart-3: #f0a552;
-  --chart-4: #f06a6a;
-  --chart-5: #b48cf5;
-  --chart-muted: #3a3f4d;
-  --chart-grid: #1f2126;
-  --chart-crosshair: #4a4d57;
-  --chart-brush: rgba(91, 124, 250, 0.16);
-  --chart-brush-edge: rgba(91, 124, 250, 0.7);
+  /* charts */
+  --chart-1: #2f55e6;
+  --chart-1-soft: rgba(47, 85, 230, 0.16);
+  --chart-2: #17a34a;
+  --chart-3: #dd8a0f;
+  --chart-4: #dc3c3c;
+  --chart-5: #8b5cf6;
+  --chart-muted: #c9cfd9;
+  --chart-grid: #eceef2;
+  --chart-crosshair: #98a2b3;
+  --chart-brush: rgba(47, 85, 230, 0.12);
+  --chart-brush-edge: rgba(47, 85, 230, 0.6);
   --chart-series-1: var(--chart-1);
-  --chart-series-1-hover: var(--chart-1-hover);
 
   /* interaction */
-  --row-hover: rgba(255, 255, 255, 0.028);
-  --row-selected: rgba(91, 124, 250, 0.09);
-  --shadow-pop: 0 12px 40px rgba(0, 0, 0, 0.55), 0 0 0 1px rgba(0, 0, 0, 0.4);
-  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.35);
+  --row-hover: #f8f9fb;
+  --row-selected: rgba(47, 85, 230, 0.07);
+  --shadow-card: 0 1px 2px rgba(16, 24, 40, 0.04), 0 1px 3px rgba(16, 24, 40, 0.05);
+  --shadow-btn: 0 1px 2px rgba(16, 24, 40, 0.05);
+  --shadow-pop: 0 12px 32px rgba(16, 24, 40, 0.14), 0 0 0 1px rgba(16, 24, 40, 0.06);
+  --shadow-seg: 0 1px 2px rgba(16, 24, 40, 0.08), 0 0 0 1px rgba(16, 24, 40, 0.04);
 
   /* type */
-  --font: 'Archivo', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+  --font: 'Inter', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
   --mono: 'Gronka Mono', ui-monospace, 'SF Mono', 'Cascadia Mono', Menlo, Consolas, monospace;
   --fs-xs: 11px;
   --fs-sm: 12px;
   --fs: 13px;
   --fs-md: 14px;
   --fs-lg: 16px;
-  --fs-xl: 22px;
+  --fs-xl: 20px;
+  --fs-2xl: 24px;
+  --fs-3xl: 28px;
 
   /* shape and rhythm */
-  --radius-sm: 5px;
-  --radius: 7px;
-  --radius-lg: 10px;
+  --radius-sm: 6px;
+  --radius: 8px;
+  --radius-lg: 12px;
   --gap: 16px;
-  --topbar-h: 52px;
-  --sidebar-w: 228px;
-  --sidebar-w-collapsed: 56px;
+  --gap-lg: 24px;
+  --sidebar-w: 240px;
+  --sidebar-w-collapsed: 64px;
+  --mobile-bar-h: 52px;
+}
+
+:root[data-theme='dark'] {
+  color-scheme: dark;
+
+  --canvas: #0b0d10;
+  --card: #14171c;
+  --card-2: #1a1e25;
+  --card-3: #242a33;
+  --sidebar: #0e1014;
+  --pop: #1a1e25;
+
+  --border: #242a33;
+  --border-2: #323a45;
+  --line: #1e232b;
+
+  --text-bright: #f5f6f8;
+  --text: #e3e6ea;
+  --text-soft: #c2c8d1;
+  --text-muted: #8b93a1;
+  --text-dim: #5f6875;
+  --on-accent: #ffffff;
+
+  --accent: #8ea3ff;
+  --accent-strong: #4f6ef7;
+  --accent-hover: #6683f9;
+  --accent-bg: rgba(79, 110, 247, 0.14);
+  --accent-bg-strong: rgba(79, 110, 247, 0.22);
+  --accent-border: rgba(79, 110, 247, 0.45);
+  --focus: rgba(79, 110, 247, 0.55);
+
+  --success: #3fc48a;
+  --success-text: #5fd39e;
+  --success-bg: rgba(63, 196, 138, 0.14);
+  --success-border: rgba(63, 196, 138, 0.4);
+  --danger: #f06a6a;
+  --danger-text: #f4a2a2;
+  --danger-bg: rgba(240, 106, 106, 0.15);
+  --danger-bg-subtle: rgba(240, 106, 106, 0.07);
+  --danger-border: rgba(240, 106, 106, 0.42);
+  --warning: #f0a552;
+  --warning-text: #f5bd7f;
+  --warning-bg: rgba(240, 165, 82, 0.15);
+  --warning-border: rgba(240, 165, 82, 0.4);
+  --info: #8ea3ff;
+  --info-bg: rgba(79, 110, 247, 0.14);
+  --info-bg-hover: rgba(79, 110, 247, 0.22);
+
+  --chart-1: #6b8cf5;
+  --chart-1-soft: rgba(107, 140, 245, 0.2);
+  --chart-2: #3fc48a;
+  --chart-3: #f0a552;
+  --chart-4: #f06a6a;
+  --chart-5: #b48cf5;
+  --chart-muted: #3b4351;
+  --chart-grid: #1e232b;
+  --chart-crosshair: #4a5260;
+  --chart-brush: rgba(79, 110, 247, 0.18);
+  --chart-brush-edge: rgba(79, 110, 247, 0.7);
+
+  --row-hover: rgba(255, 255, 255, 0.03);
+  --row-selected: rgba(79, 110, 247, 0.1);
+  --shadow-card: 0 1px 2px rgba(0, 0, 0, 0.3);
+  --shadow-btn: 0 1px 2px rgba(0, 0, 0, 0.3);
+  --shadow-pop: 0 16px 40px rgba(0, 0, 0, 0.55), 0 0 0 1px rgba(255, 255, 255, 0.06);
+  --shadow-seg: 0 1px 2px rgba(0, 0, 0, 0.4), 0 0 0 1px rgba(255, 255, 255, 0.05);
 }
 
 ::selection {
-  background: rgba(91, 124, 250, 0.35);
+  background: var(--accent-bg-strong);
 }

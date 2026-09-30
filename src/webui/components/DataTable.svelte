@@ -32,6 +32,7 @@
     error = '',
     onretry = null,
     empty = 'nothing here',
+    emptyState = null,
     pager = null,
     sort = null,
     onsort = null,
@@ -120,7 +121,7 @@
         </div>
       {/each}
     {:else if !rows.length}
-      <div class="empty">{empty}</div>
+      {#if emptyState}{@render emptyState()}{:else}<div class="empty">{empty}</div>{/if}
     {/if}
     {#each rows as r, i (keyOf(r, i))}
       <!-- svelte-ignore a11y_no_static_element_interactions -->

@@ -1,9 +1,9 @@
 <script>
+  import { ArrowUpRight } from 'lucide-svelte';
   import { currentRoute, navigate } from '../utils/router.js';
   import { connected } from '../stores/sse-store.js';
-  import { useHeaderActions } from '../stores/header.js';
   import { issueStates } from '../stores/nav.js';
-  import { groupIssues, isOpen } from '../issues.js';
+  import { groupIssues, isOpen, KIND_LABEL } from '../issues.js';
   import {
     formatDuration,
     formatRelativeTime,
@@ -11,10 +11,12 @@
     hostOf,
     urlLabel,
   } from '../utils/format.js';
+  import PageHeader from '../components/PageHeader.svelte';
   import Chart from '../components/Chart.svelte';
   import DataTable from '../components/DataTable.svelte';
   import Sparkline from '../components/Sparkline.svelte';
   import TimeRange from '../components/TimeRange.svelte';
+  import Avatar from '../components/Avatar.svelte';
 
   const HOUR = 3600e3;
   // Span of the range, bucket size, and whether a previous period of equal length still exists
@@ -29,6 +31,12 @@
     { key: 'ok', label: 'delivered', color: 'var(--chart-1)' },
     { key: 'fail', label: 'failed', color: 'var(--chart-4)' },
   ];
+  const STATUS = {
+    success: ['ok', 'Delivered'],
+    error: ['bad', 'Failed'],
+    running: ['info', 'Running'],
+    pending: ['idle', 'Queued'],
+  };
 
   let ops = $state([]);
   let stats = $state(null);
@@ -254,30 +262,39 @@
   }
   // Brushing the chart opens the requests list for exactly that window.
   const onbrush = (s, e) => navigate('requests', { dateFrom: String(s), dateTo: String(e) });
-
-  useHeaderActions(actions);
 </script>
 
-{#snippet actions()}
-  <TimeRange presets={PRESETS} value={windowValue} onchange={onrange} defaultRange="24h" />
-  <span class="live" title={$connected ? 'live feed connected' : 'live feed reconnecting'}>
-    <span class="dot" class:ok={$connected} class:pulse={$connected}></span>live
-  </span>
-{/snippet}
+<PageHeader
+  title="Overview"
+  description="How the bot is doing right now: volume, delivery rate, speed and what needs attention."
+>
+  {#snippet actions()}
+    <span class="pill" class:ok={$connected} class:idle={!$connected}
+      >{$connected ? 'Live' : 'Reconnecting'}</span
+    >
+    <TimeRange presets={PRESETS} value={windowValue} onchange={onrange} defaultRange="24h" />
+  {/snippet}
+</PageHeader>
 
 <div class="overview stack">
-  <section class="panel kpis" aria-label="key numbers">
+  <section class="kpis" aria-label="key numbers">
     {#each kpis as k (k.k)}
       <button class="kpi clickable" onclick={() => navigate(k.page, k.params ?? {})}>
         <div class="k">{k.k}</div>
         <div class="v">
-          {#if loaded}{k.v}{:else}<span class="skeleton">00000</span>{/if}
+          {#if loaded}{k.v}{:else}<span class="skeleton">0000</span>{/if}
           {#if loaded && k.d}<span class="d" class:up={k.up} class:down={!k.up}>{k.d}</span>{/if}
         </div>
         <div class="s">{loaded ? k.s : ' '}</div>
         {#if loaded && k.spark}
           <span class="spark"
-            ><Sparkline values={k.spark} width={72} height={20} color={k.sparkColor} /></span
+            ><Sparkline
+              values={k.spark}
+              width={80}
+              height={24}
+              type="line"
+              color={k.sparkColor ?? 'var(--chart-1)'}
+            /></span
           >
         {/if}
       </button>
@@ -292,17 +309,17 @@
           {#each SERIES as s (s.key)}
             <span class="legend"><i style="background:{s.color}"></i>{s.label}</span>
           {/each}
-          <span class="dim">drag to open that window</span>
         </span>
       </div>
       <div class="chart">
         <Chart
+          type="area"
           series={SERIES}
           data={bars}
           bucket={range.bucket}
-          height={220}
+          height={240}
           {onbrush}
-          brushHint="drag to open that window in requests"
+          brushHint="drag to open that window in Requests"
         />
       </div>
     </section>
@@ -310,22 +327,26 @@
     <section class="panel" aria-label="open issues">
       <div class="ph">
         <span>Open issues</span>
-        <button class="linkish meta" onclick={() => navigate('issues')}>View all</button>
+        <button class="linkish meta" onclick={() => navigate('issues')}
+          >View all <ArrowUpRight size={13} /></button
+        >
       </div>
       {#each openIssues as i (i.key)}
         <button class="lrow issue" onclick={() => navigate('issues', { issue: i.key })}>
-          <span class="n num">{i.count}</span>
+          <span class="n">{i.count}</span>
           <span class="grow">
             <span class="t ellipsis">{i.title}</span>
             <span class="m"
-              ><span class="chip {i.kind} xs">{i.kind}</span>{i.commands
+              ><span class="chip {i.kind}">{KIND_LABEL[i.kind]}</span>{i.commands
                 .map(c => `/${c}`)
                 .join(', ')} · {formatRelativeTime(i.lastSeen)}</span
             >
           </span>
         </button>
       {:else}
-        <div class="empty">{loaded ? 'no failures in the last 7 days' : 'loading…'}</div>
+        <div class="empty">
+          {#if loaded}<b>All clear</b>no failures in the last 7 days{:else}loading…{/if}
+        </div>
       {/each}
     </section>
   </div>
@@ -334,12 +355,12 @@
     <DataTable
       title="Recent requests"
       columns={[
-        { key: 'st', label: '', width: '12px' },
-        { key: 'type', label: 'command', width: '76px' },
+        { key: 'st', label: 'status', width: '100px' },
+        { key: 'type', label: 'command', width: '84px', sm: false },
         { key: 'link', label: 'link' },
-        { key: 'user', label: 'user', width: '92px', sm: false },
+        { key: 'user', label: 'user', width: '120px', sm: false },
         { key: 'took', label: 'took', width: '64px', align: 'right', sm: false },
-        { key: 'when', label: 'when', width: '72px', align: 'right' },
+        { key: 'when', label: 'when', width: '76px', align: 'right' },
       ]}
       rows={recent}
       loading={!loaded}
@@ -347,19 +368,18 @@
       onrow={r => navigate('request', { requestId: r.id })}
     >
       {#snippet header()}
-        <button class="linkish" onclick={() => navigate('requests')}>Open requests</button>
+        <button class="linkish" onclick={() => navigate('requests')}
+          >All requests <ArrowUpRight size={13} /></button
+        >
       {/snippet}
       {#snippet row(r)}
-        <span
-          class="dot"
-          class:ok={r.status === 'success'}
-          class:err={r.status === 'error'}
-          class:run={r.status === 'running'}
-          title={r.status}
-        ></span>
-        <span class="muted">{r.type}</span>
-        <span class="mono ellipsis small">{urlLabel(r.originalUrl)}</span>
-        <span class="mono muted small hide-sm">{shortId(r.userId)}</span>
+        {@const [kind, label] = STATUS[r.status] ?? ['idle', r.status]}
+        <span><span class="pill sm {kind}">{label}</span></span>
+        <span class="soft hide-sm">/{r.type}</span>
+        <span class="mono ellipsis">{urlLabel(r.originalUrl)}</span>
+        <span class="user-cell hide-sm"
+          ><Avatar id={r.userId} size={20} /><span class="id">{shortId(r.userId)}</span></span
+        >
         <span class="num muted hide-sm"
           >{r.performanceMetrics?.duration
             ? formatDuration(r.performanceMetrics.duration)
@@ -372,7 +392,7 @@
     <section class="panel" aria-label="sources">
       <div class="ph">
         <span>Sources</span>
-        <span class="meta"><span class="dim">share · delivered</span></span>
+        <span class="meta"><span class="dim">requests · delivered</span></span>
       </div>
       <div class="sources">
         {#each sources as s (s.name)}
@@ -381,17 +401,17 @@
             onclick={() =>
               navigate('requests', { urlPattern: s.name === 'attachment' ? '' : s.name })}
           >
-            <span class="ellipsis">{s.name}</span>
+            <span class="ellipsis name">{s.name}</span>
             <span class="bar-track"
               ><span
                 style="width:{s.share * 100}%; background:{s.rate >= 90
                   ? 'var(--chart-1)'
                   : s.rate >= 70
-                    ? 'var(--warning)'
-                    : 'var(--danger)'}"
+                    ? 'var(--chart-3)'
+                    : 'var(--chart-4)'}"
               ></span></span
             >
-            <span class="num dim">{s.n}</span>
+            <span class="num muted">{s.n}</span>
             <span
               class="num"
               class:ok-text={s.rate >= 90}
@@ -408,37 +428,6 @@
 </div>
 
 <style>
-  .kpi.clickable {
-    border: 0;
-    background: none;
-    text-align: left;
-    cursor: pointer;
-    font: inherit;
-    color: inherit;
-    display: block;
-    width: 100%;
-  }
-  .kpi.clickable:hover {
-    background: var(--row-hover);
-  }
-  .kpi.clickable:first-child {
-    border-radius: var(--radius-lg) 0 0 var(--radius-lg);
-  }
-  .live {
-    height: 30px;
-    padding: 0 10px;
-    display: inline-flex;
-    align-items: center;
-    gap: 7px;
-    border: 1px solid var(--border);
-    border-radius: var(--radius);
-    font-size: var(--fs-sm);
-    color: var(--text-muted);
-  }
-  .live .dot {
-    width: 7px;
-    height: 7px;
-  }
   .legend {
     display: inline-flex;
     align-items: center;
@@ -450,40 +439,44 @@
     border-radius: 2px;
   }
   .chart {
-    padding: 14px 16px 8px 8px;
+    padding: 18px 16px 10px 8px;
   }
   .issue .n {
-    width: 34px;
-    font-size: var(--fs);
+    min-width: 36px;
+    height: 24px;
+    padding: 0 8px;
+    display: inline-grid;
+    place-items: center;
+    border-radius: 6px;
+    background: var(--card-3);
+    font: 600 var(--fs-sm) var(--mono);
     color: var(--text-bright);
+    font-variant-numeric: tabular-nums;
   }
   .issue .t {
     display: block;
     font-size: var(--fs);
+    font-weight: 500;
+    color: var(--text-bright);
   }
   .issue .m {
     display: flex;
     align-items: center;
     gap: 6px;
-    margin-top: 3px;
+    margin-top: 4px;
     font-size: var(--fs-sm);
     color: var(--text-dim);
   }
-  .chip.xs {
-    height: 16px;
-    padding: 0 5px;
-    font-size: 10px;
-  }
   .sources {
-    padding: 6px 8px 10px;
+    padding: 8px 12px 12px;
   }
   .src {
     width: 100%;
     display: grid;
-    grid-template-columns: 120px 1fr 40px 44px;
+    grid-template-columns: 120px 1fr 44px 44px;
     align-items: center;
-    gap: 10px;
-    height: 32px;
+    gap: 12px;
+    height: 36px;
     padding: 0 8px;
     border: 0;
     border-radius: var(--radius-sm);
@@ -494,15 +487,13 @@
     text-align: left;
     cursor: pointer;
   }
+  .src .name {
+    font-weight: 500;
+  }
   .src:hover {
     background: var(--row-hover);
   }
   .src .bar-track {
-    height: 5px;
-  }
-  @media (max-width: 640px) {
-    .live {
-      display: none;
-    }
+    height: 6px;
   }
 </style>

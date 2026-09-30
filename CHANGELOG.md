@@ -5,6 +5,32 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres (attempts) to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.1.0](https://github.com/thedorekaczynski/gronka/compare/v2.0.1...v2.1.0) (2026-09-30)
+
+
+### Features
+
+* pause the media queue so workers drain before a deploy ([01107ff](https://github.com/thedorekaczynski/gronka/commit/01107ffaacbd8773596fefbbe2c0611969155dd8))
+* report bot and worker health and the job queue to the webui ([6e79790](https://github.com/thedorekaczynski/gronka/commit/6e79790257209a4744579d1f1bffac286cdcc3ad))
+* run media jobs in worker processes that survive crashes and deploys ([0d9780a](https://github.com/thedorekaczynski/gronka/commit/0d9780a2c6bd9af4331a6aed7c5646b564edd351))
+* tag log lines with their request and push new lines to the webui ([de59c01](https://github.com/thedorekaczynski/gronka/commit/de59c0125a11e893c92941977f3e4a4bc81bc8c4))
+* **webui:** group issues by cause, classify them from the recorded error, mute and resolve ([90d8422](https://github.com/thedorekaczynski/gronka/commit/90d8422c73e83f63af41c59dccf8f828efa1dc67))
+* **webui:** redesign every page with flyout menus and saved views ([19e4c17](https://github.com/thedorekaczynski/gronka/commit/19e4c179931a3701e45e66338f08fea4df929f5e))
+* **webui:** storage page, dependency and session health, queue pause control ([3616ae9](https://github.com/thedorekaczynski/gronka/commit/3616ae98feafd6c125ddc1b75c601f186cf5efd0))
+
+
+### Bug Fixes
+
+* hash natively and drop redundant download buffer copies ([52e26db](https://github.com/thedorekaczynski/gronka/commit/52e26db453bd3d20802b0f9532634bcc8e5cf6b3))
+* keep the worker health file in its own job dir, not the shared temp dir ([cfa9c9d](https://github.com/thedorekaczynski/gronka/commit/cfa9c9d9b31049bc6bc64fd41177a7ac81d2c1c1))
+* record early /convert and /optimize refusals as requests with tagged log lines ([387d37c](https://github.com/thedorekaczynski/gronka/commit/387d37c42dad05f41f9bcf511f589489258e1d07))
+* say a job was interrupted by a restart instead of timed out ([4a91229](https://github.com/thedorekaczynski/gronka/commit/4a912296a90eef65c2f197a9fa14ef251a56631f))
+* stream media to disk instead of holding whole files in memory ([f889c14](https://github.com/thedorekaczynski/gronka/commit/f889c147cfe7f024809f1f9c2302e1e87a84205d))
+* time out ntfy posts after 5 s so an unreachable server cannot hold a job open ([d05fa0f](https://github.com/thedorekaczynski/gronka/commit/d05fa0fdb5f5e0a68d44e9d48118be7ac6817ec4))
+* **webui:** build issue states without writing user-supplied property names ([e5d6c11](https://github.com/thedorekaczynski/gronka/commit/e5d6c11454caa33c46d52e2acd412098d0ed8dd7))
+* **webui:** show each page's header actions, which the previous page's teardown was clearing ([d5e03d0](https://github.com/thedorekaczynski/gronka/commit/d5e03d0b9ae862c463850b5b2213535432651e34))
+* write the worker health file at startup so a slow start never reads as unhealthy ([a1a63b3](https://github.com/thedorekaczynski/gronka/commit/a1a63b37bd37b96b6669dfcdfdabd53e9d29a8c7))
+
 ## [2.0.1](https://github.com/thedorekaczynski/gronka/compare/v2.0.0...v2.0.1) (2026-09-30)
 
 

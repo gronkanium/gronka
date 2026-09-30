@@ -84,24 +84,28 @@
     go({ [key]: next.join(',') });
   }
 
+  let seq = 0;
   async function load() {
+    const mine = ++seq;
     loading = true;
     error = '';
     try {
+      const get = url => fetch(url).then(r => (r.ok ? r.json() : Promise.reject(r.status)));
       const [l, f, h] = await Promise.all([
-        fetch(`/api/logs?${query({ limit: PAGE })}`).then(r => r.json()),
-        fetch(`/api/logs/facets?${query()}`).then(r => r.json()),
-        fetch(`/api/logs/histogram?${query({ buckets: 60 })}`).then(r => r.json()),
+        get(`/api/logs?${query({ limit: PAGE })}`),
+        get(`/api/logs/facets?${query()}`),
+        get(`/api/logs/histogram?${query({ buckets: 60 })}`),
       ]);
+      if (mine !== seq) return;
       rows = l.logs || [];
       total = l.total || 0;
       facets = f.facets || {};
       histogram = h;
       if (selected && !rows.some(r => r.id === selected.id)) selected = null;
     } catch {
-      error = 'could not load logs';
+      if (mine === seq) error = 'could not load logs';
     } finally {
-      loading = false;
+      if (mine === seq) loading = false;
     }
   }
 
@@ -253,9 +257,8 @@
       <input
         bind:value={draft}
         onkeydown={onQueryKey}
-        placeholder={chips.length || search
-          ? ''
-          : 'search text, or field:value  (level, component, source, command, worker, op, user)'}
+        placeholder={chips.length || search ? '' : 'search, or field:value'}
+        title="fields: level, component, source, command, worker, op, user"
         aria-label="filter logs"
         spellcheck="false"
       />
@@ -349,7 +352,7 @@
             : ''}</span
         >
       </div>
-      <div class="scroll">
+      <div class="scroll" class:busy={loading}>
         {#if error}
           <div class="empty">{error} <button class="link" onclick={load}>retry</button></div>
         {:else if !rows.length && !loading}
@@ -465,8 +468,9 @@
   }
   .query input {
     flex: 1;
-    min-width: 160px;
+    min-width: 120px;
     background: none;
+    text-overflow: ellipsis;
     border: 0;
     outline: 0;
     color: var(--text-bright);
@@ -721,6 +725,10 @@
   .scroll {
     flex: 1;
     overflow-y: auto;
+    transition: opacity 0.15s;
+  }
+  .scroll.busy {
+    opacity: 0.45;
   }
   .row {
     width: 100%;
@@ -940,7 +948,17 @@
       padding: 8px 16px 4px;
     }
     .lh {
+      grid-template-columns: minmax(0, 1fr);
+      padding: 0 12px;
+    }
+    .lh > :not(:last-child) {
       display: none;
+    }
+    .query input {
+      font-size: 16px;
+    }
+    .scroll {
+      min-height: 50vh;
     }
     .row {
       grid-template-columns: 72px 30px minmax(0, 1fr);

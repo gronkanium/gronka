@@ -135,4 +135,17 @@ describe('media job queue', () => {
     assert.ok(recent.length > 0);
     assert.ok(recent.every(j => !('reply' in j) && !JSON.stringify(j).includes('"token"')));
   });
+
+  test('a paused queue hands out nothing until resumed, and says so', async () => {
+    const id = await enqueue();
+    await sql`INSERT INTO bot_settings (key, value, updated_at) VALUES (${queue.PAUSE_KEY}, 'true', 0)
+      ON CONFLICT (key) DO UPDATE SET value = 'true'`;
+    try {
+      assert.strictEqual(await queue.claimJob('w1'), null);
+      assert.strictEqual((await queue.jobsOverview()).paused, true);
+    } finally {
+      await sql`DELETE FROM bot_settings WHERE key = ${queue.PAUSE_KEY}`;
+    }
+    assert.strictEqual((await queue.claimJob('w1')).id, id);
+  });
 });

@@ -8,6 +8,8 @@ export const DONE_CHANNEL = 'media_jobs_done';
 export const HEARTBEAT_MS = 10_000;
 export const STALE_MS = 45_000;
 export const MAX_ATTEMPTS = 3;
+// A bot_settings flag: while 'true' no worker claims a job; running jobs still finish.
+export const PAUSE_KEY = 'queue_paused';
 // A retry needs time left on the reply token to be worth starting.
 const MIN_TOKEN_LEFT_MS = 60_000;
 
@@ -39,6 +41,7 @@ export async function claimJob(worker = WORKER_ID) {
         heartbeat_at = ${now}, timestamp = ${now}
     WHERE id = (
       SELECT id FROM media_jobs WHERE status = 'queued'
+        AND NOT EXISTS (SELECT 1 FROM bot_settings WHERE key = ${PAUSE_KEY} AND value = 'true')
       ORDER BY id FOR UPDATE SKIP LOCKED LIMIT 1
     )
     RETURNING *
@@ -163,7 +166,9 @@ export async function jobsOverview({ since = Date.now() - 24 * 3600e3, limit = 2
     heartbeat_at: row.heartbeat_at == null ? null : Number(row.heartbeat_at),
     id: Number(row.id),
   });
+  const [pause] = await sql`SELECT value FROM bot_settings WHERE key = ${PAUSE_KEY}`;
   return {
+    paused: pause?.value === 'true',
     processes: await presence(),
     counts: Object.fromEntries(counts.map(c => [c.status, { count: c.count, retried: c.retried }])),
     recent: recent.map(num),

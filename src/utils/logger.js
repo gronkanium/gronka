@@ -1,3 +1,4 @@
+import { AsyncLocalStorage } from 'node:async_hooks';
 import { insertLog, initDatabase } from './database.js';
 
 const LOG_LEVELS = {
@@ -32,11 +33,11 @@ export function redactForWeb(text) {
   return REDACTIONS.reduce((out, [pattern, label]) => out.replace(pattern, label), text);
 }
 
-// Callback for broadcasting logs to WebSocket clients
-let logBroadcastCallback = null;
+// Fields stamped on every log line written inside a request or job (op, command, source, worker...).
+const logContext = new AsyncLocalStorage();
 
-export function setLogBroadcastCallback(callback) {
-  logBroadcastCallback = callback;
+export function withLogContext(fields, fn) {
+  return logContext.run({ ...logContext.getStore(), ...fields }, fn);
 }
 
 // Format timestamp to seconds precision (removes milliseconds)
@@ -166,21 +167,13 @@ class Logger {
           return; // Skip database logging if init failed
         }
       }
-      await insertLog(timestamp, this.component, levelName, fullMessage);
-
-      if (logBroadcastCallback) {
-        try {
-          logBroadcastCallback({
-            timestamp,
-            component: this.component,
-            level: levelName,
-            message: fullMessage,
-          });
-        } catch (error) {
-          // Don't fail if broadcast fails
-          console.error(`Failed to broadcast log:`, error);
-        }
-      }
+      await insertLog(
+        timestamp,
+        this.component,
+        levelName,
+        fullMessage,
+        logContext.getStore() || null
+      );
     } catch (error) {
       // Don't fail if database write fails, but log to console
       console.error(`Failed to write log to database:`, error);

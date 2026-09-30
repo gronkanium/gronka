@@ -1,239 +1,154 @@
 import { getPostgresConnection } from './connection.js';
 import { ensurePostgresInitialized } from './init.js';
-import { convertTimestampsInArray } from './helpers-pg.js';
+
+// Context keys the logger stamps into metadata (see withLogContext); the only ones filterable.
+export const LOG_FIELDS = ['op', 'command', 'source', 'user', 'worker', 'job'];
+const FACETS = ['level', 'component', 'source', 'command', 'worker'];
+
+async function connection() {
+  await ensurePostgresInitialized();
+  const sql = getPostgresConnection();
+  if (!sql) console.error('PostgreSQL not initialized. Call initPostgresDatabase() first.');
+  return sql;
+}
+
+// Every process writes logs here, so this is the one place that can announce them to the webui.
+export const LOG_CHANNEL = 'gronka_logs';
 
 export async function insertLog(timestamp, component, level, message, metadata = null) {
-  await ensurePostgresInitialized();
-
-  const sql = getPostgresConnection();
-  if (!sql) {
-    console.error('PostgreSQL not initialized. Call initPostgresDatabase() first.');
-    return;
-  }
-
+  const sql = await connection();
+  if (!sql) return;
   const metadataStr = metadata ? JSON.stringify(metadata) : null;
-
+  // Only the id is sent: NOTIFY payloads cap at 8000 bytes and a stack trace can exceed that.
   await sql`
-    INSERT INTO logs (timestamp, component, level, message, metadata)
-    VALUES (${timestamp}, ${component}, ${level}, ${message}, ${metadataStr})
+    WITH row AS (
+      INSERT INTO logs (timestamp, component, level, message, metadata)
+      VALUES (${timestamp}, ${component}, ${level}, ${message}, ${metadataStr})
+      RETURNING id
+    )
+    SELECT pg_notify(${LOG_CHANNEL}, id::text) FROM row
   `;
 }
 
-/**
- * Query logs with optional filters
- * @param {Object} options - Query options
- * @param {string} [options.component] - Filter by component
- * @param {string|string[]} [options.level] - Filter by level (single or array)
- * @param {number} [options.startTime] - Start timestamp (inclusive)
- * @param {number} [options.endTime] - End timestamp (inclusive)
- * @param {string} [options.search] - Search in message (case-insensitive)
- * @param {number} [options.limit] - Maximum number of results
- * @param {number} [options.offset] - Offset for pagination
- * @param {boolean} [options.orderDesc=true] - Order by timestamp descending
- * @returns {Promise<Array>} Array of log entries
- */
-export async function getLogs(options = {}) {
-  await ensurePostgresInitialized();
+export async function onNewLog(fn) {
+  const sql = await connection();
+  if (!sql) return null;
+  return sql.listen(LOG_CHANNEL, async id => {
+    const [row] = await sql`SELECT * FROM logs WHERE id = ${Number(id)}`.catch(() => []);
+    if (row) fn(toLog(row));
+  });
+}
 
-  const sql = getPostgresConnection();
-  if (!sql) {
-    console.error('PostgreSQL not initialized. Call initPostgresDatabase() first.');
-    return [];
+function toLog(row) {
+  let metadata = null;
+  if (row.metadata) {
+    try {
+      metadata = JSON.parse(row.metadata);
+    } catch {
+      metadata = row.metadata;
+    }
   }
+  return { ...row, timestamp: Number(row.timestamp), metadata };
+}
 
-  const {
-    component = null,
-    level = null,
-    startTime = null,
-    endTime = null,
-    search = null,
-    limit = null,
-    offset = null,
-    orderDesc = true,
-    excludedComponents = null,
-    excludeComponentLevels = null,
-  } = options;
+const asList = v => (v == null || v === '' ? [] : Array.isArray(v) ? v : [v]);
 
-  // Build query parts
+// `skip` leaves one facet's own filter out, so its counts show every value you could pick.
+function buildWhere(options = {}, skip = null) {
   const conditions = [];
   const params = [];
+  const p = value => `$${params.push(value)}`;
+  const inList = (expr, values) => {
+    if (values.length) conditions.push(`${expr} IN (${values.map(p).join(',')})`);
+  };
 
-  if (component) {
-    conditions.push(`component = $${params.length + 1}`);
-    params.push(component);
+  if (skip !== 'component') inList('component', asList(options.component));
+  if (skip !== 'level') inList('level', asList(options.level));
+
+  const excluded = asList(options.excludedComponents);
+  if (excluded.length) conditions.push(`component NOT IN (${excluded.map(p).join(',')})`);
+  for (const { component, level } of options.excludeComponentLevels || []) {
+    conditions.push(`NOT (component = ${p(component)} AND level = ${p(level)})`);
   }
 
-  if (excludedComponents && Array.isArray(excludedComponents) && excludedComponents.length > 0) {
-    const placeholders = excludedComponents.map((_, i) => `$${params.length + i + 1}`).join(',');
-    conditions.push(`component NOT IN (${placeholders})`);
-    params.push(...excludedComponents);
+  if (options.startTime != null) conditions.push(`timestamp >= ${p(options.startTime)}`);
+  if (options.endTime != null) conditions.push(`timestamp <= ${p(options.endTime)}`);
+  if (options.search) conditions.push(`message ILIKE ${p(`%${options.search}%`)}`);
+
+  for (const [key, values] of Object.entries(options.fields || {})) {
+    if (!LOG_FIELDS.includes(key) || key === skip) continue;
+    inList(`(metadata::jsonb ->> ${p(key)})`, asList(values).map(String));
   }
 
-  if (
-    excludeComponentLevels &&
-    Array.isArray(excludeComponentLevels) &&
-    excludeComponentLevels.length > 0
-  ) {
-    for (const { component: comp, level: lvl } of excludeComponentLevels) {
-      conditions.push(`NOT (component = $${params.length + 1} AND level = $${params.length + 2})`);
-      params.push(comp, lvl);
-    }
-  }
+  return { where: conditions.length ? ` WHERE ${conditions.join(' AND ')}` : '', params, p };
+}
 
-  if (level) {
-    if (Array.isArray(level)) {
-      const placeholders = level.map((_, i) => `$${params.length + i + 1}`).join(',');
-      conditions.push(`level IN (${placeholders})`);
-      params.push(...level);
-    } else {
-      conditions.push(`level = $${params.length + 1}`);
-      params.push(level);
-    }
-  }
+/**
+ * @param {Object} options
+ * @param {string|string[]} [options.component]
+ * @param {string|string[]} [options.level]
+ * @param {number} [options.startTime] inclusive, ms
+ * @param {number} [options.endTime] inclusive, ms
+ * @param {string} [options.search] case-insensitive substring of message
+ * @param {Object<string, string|string[]>} [options.fields] metadata filters, keys from LOG_FIELDS
+ */
+export async function getLogs(options = {}) {
+  const sql = await connection();
+  if (!sql) return [];
+  const { where, params, p } = buildWhere(options);
+  let query = `SELECT * FROM logs${where} ORDER BY timestamp ${options.orderDesc === false ? 'ASC' : 'DESC'}, id ${options.orderDesc === false ? 'ASC' : 'DESC'}`;
+  if (options.limit != null) query += ` LIMIT ${p(options.limit)}`;
+  if (options.offset != null) query += ` OFFSET ${p(options.offset)}`;
 
-  if (startTime !== null) {
-    conditions.push(`timestamp >= $${params.length + 1}`);
-    params.push(startTime);
-  }
-
-  if (endTime !== null) {
-    conditions.push(`timestamp <= $${params.length + 1}`);
-    params.push(endTime);
-  }
-
-  if (search) {
-    conditions.push(`message ILIKE $${params.length + 1}`);
-    params.push(`%${search}%`);
-  }
-
-  let query = 'SELECT * FROM logs';
-  if (conditions.length > 0) {
-    query += ` WHERE ${conditions.join(' AND ')}`;
-  }
-
-  query += ` ORDER BY timestamp ${orderDesc ? 'DESC' : 'ASC'}`;
-
-  if (limit !== null) {
-    query += ` LIMIT $${params.length + 1}`;
-    params.push(limit);
-  }
-
-  if (offset !== null) {
-    query += ` OFFSET $${params.length + 1}`;
-    params.push(offset);
-  }
-
-  const rawLogs = await sql.unsafe(query, params);
-
-  // Parse metadata JSON strings into objects and convert timestamps to numbers
-  const logs = rawLogs.map(log => {
-    let metadata = null;
-    if (log.metadata) {
-      try {
-        metadata = JSON.parse(log.metadata);
-      } catch (error) {
-        console.error('Failed to parse metadata for log:', error);
-        metadata = log.metadata;
-      }
-    }
-    return {
-      ...log,
-      metadata,
-    };
-  });
-
-  // Convert timestamp fields from strings to numbers
-  return convertTimestampsInArray(logs, ['timestamp']);
+  return (await sql.unsafe(query, params)).map(toLog);
 }
 
 export async function getLogsCount(options = {}) {
-  await ensurePostgresInitialized();
-
-  const sql = getPostgresConnection();
-  if (!sql) {
-    console.error('PostgreSQL not initialized. Call initPostgresDatabase() first.');
-    return 0;
-  }
-
-  const {
-    component = null,
-    level = null,
-    startTime = null,
-    endTime = null,
-    search = null,
-    excludedComponents = null,
-    excludeComponentLevels = null,
-  } = options;
-
-  const conditions = [];
-  const params = [];
-
-  if (component) {
-    conditions.push(`component = $${params.length + 1}`);
-    params.push(component);
-  }
-
-  if (excludedComponents && Array.isArray(excludedComponents) && excludedComponents.length > 0) {
-    const placeholders = excludedComponents.map((_, i) => `$${params.length + i + 1}`).join(',');
-    conditions.push(`component NOT IN (${placeholders})`);
-    params.push(...excludedComponents);
-  }
-
-  if (
-    excludeComponentLevels &&
-    Array.isArray(excludeComponentLevels) &&
-    excludeComponentLevels.length > 0
-  ) {
-    for (const { component: comp, level: lvl } of excludeComponentLevels) {
-      conditions.push(`NOT (component = $${params.length + 1} AND level = $${params.length + 2})`);
-      params.push(comp, lvl);
-    }
-  }
-
-  if (level) {
-    if (Array.isArray(level)) {
-      const placeholders = level.map((_, i) => `$${params.length + i + 1}`).join(',');
-      conditions.push(`level IN (${placeholders})`);
-      params.push(...level);
-    } else {
-      conditions.push(`level = $${params.length + 1}`);
-      params.push(level);
-    }
-  }
-
-  if (startTime !== null) {
-    conditions.push(`timestamp >= $${params.length + 1}`);
-    params.push(startTime);
-  }
-
-  if (endTime !== null) {
-    conditions.push(`timestamp <= $${params.length + 1}`);
-    params.push(endTime);
-  }
-
-  if (search) {
-    conditions.push(`message ILIKE $${params.length + 1}`);
-    params.push(`%${search}%`);
-  }
-
-  let query = 'SELECT COUNT(*) as count FROM logs';
-  if (conditions.length > 0) {
-    query += ` WHERE ${conditions.join(' AND ')}`;
-  }
-
-  const result = await sql.unsafe(query, params);
+  const sql = await connection();
+  if (!sql) return 0;
+  const { where, params } = buildWhere(options);
+  const result = await sql.unsafe(`SELECT COUNT(*) AS count FROM logs${where}`, params);
   return parseInt(result[0]?.count || 0, 10);
 }
 
-export async function getLogComponents() {
-  await ensurePostgresInitialized();
-
-  const sql = getPostgresConnection();
-  if (!sql) {
-    console.error('PostgreSQL not initialized. Call initPostgresDatabase() first.');
-    return [];
+export async function getLogFacets(options = {}, limit = 12) {
+  const sql = await connection();
+  if (!sql) return {};
+  const facets = {};
+  for (const facet of FACETS) {
+    const { where, params, p } = buildWhere(options, facet);
+    const column = LOG_FIELDS.includes(facet) ? `(metadata::jsonb ->> ${p(facet)})` : facet;
+    const rows = await sql.unsafe(
+      `SELECT ${column} AS value, COUNT(*) AS count FROM logs${where} GROUP BY 1 HAVING ${column} IS NOT NULL ORDER BY 2 DESC LIMIT ${p(limit)}`,
+      params
+    );
+    facets[facet] = rows.map(r => ({ value: r.value, count: Number(r.count) }));
   }
+  return facets;
+}
 
+export async function getLogHistogram(options, buckets = 48) {
+  const sql = await connection();
+  if (!sql) return { start: 0, size: 0, buckets: [] };
+  const start = Number(options.startTime);
+  const end = Number(options.endTime ?? Date.now());
+  const size = Math.max(1000, Math.ceil((end - start) / buckets));
+  const { where, params, p } = buildWhere({ ...options, startTime: start, endTime: end });
+  const rows = await sql.unsafe(
+    `SELECT FLOOR((timestamp - ${p(start)}) / ${p(size)})::int AS b, level, COUNT(*) AS count FROM logs${where} GROUP BY 1, 2`,
+    params
+  );
+  const out = Array.from({ length: buckets }, () => ({ ERROR: 0, WARN: 0, INFO: 0, DEBUG: 0 }));
+  for (const r of rows) {
+    const bucket = out[Math.min(r.b, buckets - 1)];
+    if (bucket && r.level in bucket) bucket[r.level] += Number(r.count);
+  }
+  return { start, size, buckets: out };
+}
+
+export async function getLogComponents() {
+  const sql = await connection();
+  if (!sql) return [];
   const results = await sql`SELECT DISTINCT component FROM logs ORDER BY component`;
   return results.map(r => r.component);
 }

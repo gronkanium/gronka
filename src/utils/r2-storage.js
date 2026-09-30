@@ -237,82 +237,36 @@ export function getR2KeyFromHash(hash, fileType, extension) {
   }
 }
 
-export async function uploadArchiveToR2(buffer, hash, config, metadata = {}) {
-  const key = getR2KeyFromHash(hash, 'archive', '.zip');
-  return await uploadToR2(buffer, key, 'application/zip', config, metadata);
+export const CONTENT_TYPES = {
+  '.gif': 'image/gif',
+  '.mp4': 'video/mp4',
+  '.webm': 'video/webm',
+  '.mov': 'video/quicktime',
+  '.avi': 'video/x-msvideo',
+  '.mkv': 'video/x-matroska',
+  '.png': 'image/png',
+  '.jpg': 'image/jpeg',
+  '.jpeg': 'image/jpeg',
+  '.webp': 'image/webp',
+  '.zip': 'application/zip',
+};
+const FALLBACK_CONTENT_TYPES = { video: 'video/mp4', image: 'image/png' };
+
+export function isR2Configured(config) {
+  return Boolean(
+    config.accountId && config.accessKeyId && config.secretAccessKey && config.bucketName
+  );
 }
 
-/**
- * Upload GIF to R2
- * @param {Buffer} buffer - GIF buffer
- * @param {string} hash - BLAKE3 hash of the GIF
- * @param {Object} config - R2 configuration
- * @param {Object} [metadata={}] - Optional metadata to attach to the object
- * @returns {Promise<string>} Public URL of uploaded GIF
- */
-export async function uploadGifToR2(buffer, hash, config, metadata = {}) {
-  const safeHash = hash.replace(/[^a-f0-9]/gi, '');
-  const key = `gifs/${safeHash}.gif`;
-  return await uploadToR2(buffer, key, 'image/gif', config, metadata);
-}
-
-/**
- * Upload video to R2
- * @param {Buffer} buffer - Video buffer
- * @param {string} hash - BLAKE3 hash of the video
- * @param {string} extension - File extension (e.g., '.mp4', '.webm')
- * @param {Object} config - R2 configuration
- * @param {Object} [metadata={}] - Optional metadata to attach to the object
- * @returns {Promise<string>} Public URL of uploaded video
- */
-export async function uploadVideoToR2(buffer, hash, extension, config, metadata = {}) {
-  const safeHash = hash.replace(/[^a-f0-9]/gi, '');
-  const safeExt = extension.replace(/[^a-zA-Z0-9.]/gi, '');
-  const ext = safeExt.startsWith('.') ? safeExt : `.${safeExt}`;
-  const key = `videos/${safeHash}${ext}`;
-
-  const contentTypes = {
-    '.mp4': 'video/mp4',
-    '.webm': 'video/webm',
-    '.mov': 'video/quicktime',
-    '.avi': 'video/x-msvideo',
-    '.mkv': 'video/x-matroska',
-  };
-  const contentType = contentTypes[ext.toLowerCase()] || 'video/mp4';
-
+export async function uploadMediaToR2(type, buffer, hash, extension, config, metadata = {}) {
+  const key = getR2KeyFromHash(hash, type, extension);
+  const contentType =
+    CONTENT_TYPES[key.slice(key.lastIndexOf('.')).toLowerCase()] ?? FALLBACK_CONTENT_TYPES[type];
   return await uploadToR2(buffer, key, contentType, config, metadata);
 }
 
-/**
- * Upload image to R2
- * @param {Buffer} buffer - Image buffer
- * @param {string} hash - BLAKE3 hash of the image
- * @param {string} extension - File extension (e.g., '.png', '.jpg')
- * @param {Object} config - R2 configuration
- * @param {Object} [metadata={}] - Optional metadata to attach to the object
- * @returns {Promise<string>} Public URL of uploaded image
- */
-export async function uploadImageToR2(buffer, hash, extension, config, metadata = {}) {
-  const safeHash = hash.replace(/[^a-f0-9]/gi, '');
-  const safeExt = extension.replace(/[^a-zA-Z0-9.]/gi, '');
-  const ext = safeExt.startsWith('.') ? safeExt : `.${safeExt}`;
-  const key = `images/${safeHash}${ext}`;
-
-  const contentTypes = {
-    '.png': 'image/png',
-    '.jpg': 'image/jpeg',
-    '.jpeg': 'image/jpeg',
-    '.webp': 'image/webp',
-  };
-  const contentType = contentTypes[ext.toLowerCase()] || 'image/png';
-
-  return await uploadToR2(buffer, key, contentType, config, metadata);
-}
-
-export async function gifExistsInR2(hash, config) {
-  const safeHash = hash.replace(/[^a-f0-9]/gi, '');
-  const key = `gifs/${safeHash}.gif`;
-  return await fileExistsInR2(key, config);
+export async function mediaExistsInR2(type, hash, extension, config) {
+  return await fileExistsInR2(getR2KeyFromHash(hash, type, extension), config);
 }
 
 export async function downloadGifFromR2(hash, config) {
@@ -345,22 +299,6 @@ export async function downloadGifFromR2(hash, config) {
     logger.error(`Failed to download GIF from R2 (${key}):`, error.message);
     throw error;
   }
-}
-
-export async function videoExistsInR2(hash, extension, config) {
-  const safeHash = hash.replace(/[^a-f0-9]/gi, '');
-  const safeExt = extension.replace(/[^a-zA-Z0-9.]/gi, '');
-  const ext = safeExt.startsWith('.') ? safeExt : `.${safeExt}`;
-  const key = `videos/${safeHash}${ext}`;
-  return await fileExistsInR2(key, config);
-}
-
-export async function imageExistsInR2(hash, extension, config) {
-  const safeHash = hash.replace(/[^a-f0-9]/gi, '');
-  const safeExt = extension.replace(/[^a-zA-Z0-9.]/gi, '');
-  const ext = safeExt.startsWith('.') ? safeExt : `.${safeExt}`;
-  const key = `images/${safeHash}${ext}`;
-  return await fileExistsInR2(key, config);
 }
 
 /**

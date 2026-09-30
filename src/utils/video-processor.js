@@ -22,3 +22,4 @@ export { trimGif } from './video-processor/trim-gif.js';
 // Video metadata
 export { getVideoMetadata } from './video-processor/metadata.js';
 export { convertToFormat, OUTPUT_FORMATS } from './video-processor/convert-format.js';
+export { trimItem } from './video-processor/trim-item.js';

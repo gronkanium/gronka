@@ -10,11 +10,12 @@ const json = url => fetch(url).then(r => (r.ok ? r.json() : Promise.reject(new E
 
 export async function refreshNav() {
   const since = Date.now() - DAY;
-  const [req, facets, issues, stats] = await Promise.all([
+  const [req, facets, issues, stats, system] = await Promise.all([
     json(`/api/requests?dateFrom=${since}&limit=5000`).catch(() => null),
     json(`/api/logs/facets?startTime=${since}`).catch(() => null),
     json('/api/alerts/summary?reasonLimit=300').catch(() => null),
     json('/api/stats').catch(() => null),
+    json('/api/system').catch(() => null),
   ]);
   const ops = req?.requests ?? [];
   const byType = {};
@@ -29,6 +30,7 @@ export async function refreshNav() {
     logs: facets?.facets ?? {},
     issues: groupIssues(issues?.byReason ?? []),
     users: stats?.ever_active_users,
+    paused: !!system?.jobs?.paused,
   });
 }
 

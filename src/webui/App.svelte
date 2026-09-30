@@ -13,6 +13,7 @@
     TriangleAlert,
     TerminalSquare,
     Server,
+    HardDrive,
     Users as UsersIcon,
     Shield,
     Globe,
@@ -35,6 +36,7 @@
   import UserProfile from './pages/UserProfile.svelte';
   import Issues from './pages/Issues.svelte';
   import Workers from './pages/Workers.svelte';
+  import Storage from './pages/Storage.svelte';
   import Moderation from './pages/Moderation.svelte';
   import Sources from './pages/Sources.svelte';
   import BotSettings from './pages/BotSettings.svelte';
@@ -62,6 +64,7 @@
       name: 'System',
       items: [
         { page: 'system', label: 'Workers & queue', icon: Server },
+        { page: 'storage', label: 'Storage', icon: HardDrive },
         { page: 'sources', label: 'Sources', icon: Globe },
       ],
     },
@@ -75,6 +78,7 @@
     logs: Logs,
     issues: Issues,
     system: Workers,
+    storage: Storage,
     users: Users,
     'user-profile': UserProfile,
     moderation: Moderation,
@@ -321,6 +325,8 @@
               <span class="grow">{item.label}</span>
               {#if item.page === 'issues' && issueCount}
                 <span class="count alert">{issueCount}</span>
+              {:else if item.page === 'system' && $navStats?.paused}
+                <span class="count alert">paused</span>
               {:else if badge(item.page) != null}
                 <span class="count">{badge(item.page).toLocaleString()}</span>
               {/if}

@@ -2,34 +2,47 @@
   import { onDestroy } from 'svelte';
   import { currentRoute, navigate } from '../utils/router.js';
   import { headerActions } from '../stores/header.js';
+  import { refreshNav } from '../stores/nav.js';
   import { formatBytes, formatRelativeTime, urlLabel } from '../utils/format.js';
 
   const LIVE_MS = 30_000;
 
   let data = $state(null);
-  let health = $state(null);
+  let system = $state(null);
   let bot = $state(null);
   let now = $state(Date.now());
+  let busy = $state(false);
 
   const statusFilter = $derived($currentRoute.params.$status || '');
 
+  const get = url =>
+    fetch(url)
+      .then(r => (r.ok ? r.json() : null))
+      .catch(() => null);
   async function load() {
-    const get = url =>
-      fetch(url)
-        .then(r => (r.ok ? r.json() : null))
-        .catch(() => null);
-    [data, health, bot] = await Promise.all([
-      get('/api/system'),
-      get('/api/health'),
-      get('/api/bot/status'),
-    ]);
+    [data, bot] = await Promise.all([get('/api/system'), get('/api/bot/status')]);
     now = Date.now();
   }
+  const loadDeps = async () => (system = (await get('/api/system/deps')) ?? system);
   $effect(() => {
     load();
+    loadDeps();
     const t = setInterval(load, 5000);
-    return () => clearInterval(t);
+    const d = setInterval(loadDeps, 30_000);
+    return () => (clearInterval(t), clearInterval(d));
   });
+
+  async function setPaused(value) {
+    busy = true;
+    await fetch('/api/settings/queue_paused', {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ value }),
+    }).catch(() => null);
+    await load();
+    refreshNav();
+    busy = false;
+  }
 
   const jobs = $derived(data?.jobs);
   const processes = $derived.by(() => {
@@ -47,6 +60,8 @@
   const retried = $derived(
     Object.values(jobs?.counts ?? {}).reduce((n, c) => n + (c.retried || 0), 0)
   );
+  const until = ms =>
+    ms < 86_400_000 ? `${Math.ceil(ms / 3_600_000)}h` : `${Math.floor(ms / 86_400_000)}d`;
   const uptime = ms => {
     const m = Math.floor(ms / 60000);
     return m < 60
@@ -56,6 +71,18 @@
         : `${Math.floor(m / 1440)}d ${Math.floor((m % 1440) / 60)}h`;
   };
   const jobDot = s => ({ done: 'ok', failed: 'bad', running: 'run', queued: '' })[s] ?? '';
+  const paused = $derived(!!jobs?.paused);
+  const sessionNote = s =>
+    !s.fileFound
+      ? `${s.file} not found`
+      : !s.loggedIn
+        ? 'anonymous'
+        : s.expires
+          ? s.expires < now
+            ? `expired ${formatRelativeTime(s.expires)}`
+            : `expires in ${until(s.expires - now)}`
+          : `${s.cookies} cookies`;
+  const sessionBad = s => s.loggedIn && s.lastRejected && s.lastRejected > s.fileChanged;
 
   headerActions.set(actions);
   onDestroy(() => headerActions.set(null));
@@ -63,12 +90,42 @@
 
 {#snippet actions()}
   <span class="dim small">refreshes every 5 s</span>
+  {#if jobs && data?.mediaWorkers !== false}
+    <button
+      class="btn sm"
+      class:primary={paused}
+      disabled={busy}
+      onclick={() => setPaused(!paused)}
+    >
+      {paused ? 'Resume queue' : 'Pause queue'}
+    </button>
+  {/if}
 {/snippet}
 
 <div class="workers stack">
   {#if data?.mediaWorkers === false}
     <div class="panel pb note">
       Media jobs run inside the bot (MEDIA_WORKERS=false), so there are no worker processes.
+    </div>
+  {/if}
+
+  {#if paused}
+    <div class="panel pb banner" class:drained={!count('running')} role="status">
+      <span class="dot" class:run={count('running')} class:ok={!count('running')}></span>
+      <div class="grow">
+        {#if count('running')}
+          <b>Queue paused, draining.</b>
+          {count('running')} running job{count('running') === 1 ? '' : 's'} will finish; nothing new is
+          started.
+        {:else}
+          <b>Queue paused and drained.</b> No job is running, so a deploy interrupts nothing.
+        {/if}
+        {#if count('queued')}
+          <span class="dim">{count('queued')} queued and waiting.</span>
+        {/if}
+      </div>
+      <button class="btn primary sm" disabled={busy} onclick={() => setPaused(false)}>Resume</button
+      >
     </div>
   {/if}
 
@@ -182,34 +239,67 @@
       {/each}
     </section>
 
-    <section class="panel" aria-label="dependencies">
-      <div class="ph"><span>Health</span></div>
-      {#each Object.entries(health?.components ?? {}) as [name, c] (name)}
-        <div class="dep">
-          <span class="dot" class:ok={c.status === 'ok'} class:err={c.status !== 'ok'}></span>
-          <span>{name === 'database' ? 'Postgres' : name === 'webui' ? 'Web UI' : name}</span>
-          <span class="mono dim small right">{c.status}</span>
+    <div class="stack">
+      <section class="panel" aria-label="dependencies">
+        <div class="ph"><span>Dependencies</span></div>
+        {#if bot}
+          <div class="dep">
+            <span
+              class="dot"
+              class:ok={bot.status && bot.status !== 'offline'}
+              class:err={!bot.status || bot.status === 'offline'}
+            ></span>
+            <span>Discord</span>
+            <span class="mono dim small right ellipsis">{bot.botTag ?? '—'} · {bot.status}</span>
+          </div>
+        {/if}
+        {#each system?.deps ?? [] as d (d.id)}
+          <div class="dep">
+            <span
+              class="dot"
+              class:ok={d.status === 'ok'}
+              class:run={d.status === 'warn'}
+              class:err={d.status === 'error'}
+            ></span>
+            <span>{d.label}</span>
+            <span class="mono dim small right ellipsis" title={d.detail}
+              >{d.detail ?? d.status}</span
+            >
+          </div>
+        {:else}
+          <div class="empty">{system ? 'no checks' : 'checking…'}</div>
+        {/each}
+      </section>
+
+      <section class="panel" aria-label="sessions">
+        <div class="ph">
+          <span>Sessions</span>
+          <span class="meta">from the bot's cookie files</span>
         </div>
-      {/each}
-      {#if bot}
-        <div class="dep">
-          <span
-            class="dot"
-            class:ok={bot.status && bot.status !== 'offline'}
-            class:err={!bot.status || bot.status === 'offline'}
-          ></span>
-          <span>Discord</span>
-          <span class="mono dim small right ellipsis">{bot.botTag ?? '—'} · {bot.status}</span>
-        </div>
-      {/if}
-      {#if health}
-        <div class="dep">
-          <span class="dot ok"></span><span>Web UI uptime</span><span class="mono dim small right"
-            >{uptime(health.uptime * 1000)}</span
-          >
-        </div>
-      {/if}
-    </section>
+        {#each system?.sessions ?? [] as s (s.id)}
+          <div class="dep">
+            <span
+              class="dot"
+              class:ok={s.loggedIn && !sessionBad(s)}
+              class:err={sessionBad(s) || !s.fileFound}
+            ></span>
+            <div class="grow">
+              <div>{s.label}</div>
+              <div class="dim small">
+                {#if sessionBad(s)}
+                  rejected {formatRelativeTime(s.lastRejected)}, needs a fresh cookie
+                {:else if s.fileFound}
+                  file updated {formatRelativeTime(s.fileChanged)}
+                {/if}
+              </div>
+            </div>
+            <span class="mono dim small right">{sessionNote(s)}</span>
+          </div>
+        {:else}
+          <div class="empty">{system ? 'no cookie files' : 'checking…'}</div>
+        {/each}
+      </section>
+    </div>
   </div>
 </div>
 
@@ -257,6 +347,20 @@
     grid-template-columns: minmax(0, 1fr) 380px;
     gap: 16px;
     align-items: start;
+  }
+  .banner {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    font-size: 13px;
+    border-color: var(--warning);
+  }
+  .banner.drained {
+    border-color: var(--success);
+  }
+  .banner b {
+    color: var(--text-bright);
+    font-weight: 500;
   }
   .ph b {
     color: var(--text-bright);

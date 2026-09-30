@@ -57,26 +57,12 @@ export async function insertOrUpdateUser(userId, timestamp) {
     return;
   }
 
-  // Check if user exists
-  const existing = await sql`SELECT first_used FROM users WHERE user_id = ${userId}`;
-
-  if (existing.length > 0) {
-    await sql`
-      UPDATE users
-      SET last_used = ${timestamp}
-      WHERE user_id = ${userId}
-    `;
-    // Invalidate cache for this user
-    invalidateUserCache(userId);
-  } else {
-    // Insert new user
-    await sql`
-      INSERT INTO users (user_id, first_used, last_used)
-      VALUES (${userId}, ${timestamp}, ${timestamp})
-    `;
-    // Invalidate cache for this user
-    invalidateUserCache(userId);
-  }
+  await sql`
+    INSERT INTO users (user_id, first_used, last_used)
+    VALUES (${userId}, ${timestamp}, ${timestamp})
+    ON CONFLICT (user_id) DO UPDATE SET last_used = EXCLUDED.last_used
+  `;
+  invalidateUserCache(userId);
 }
 
 /**

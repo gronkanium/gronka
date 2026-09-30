@@ -1,4 +1,6 @@
-# gronka-web: the public web page's API. Its own compose project, so bot deploys never touch it.
+# gronka-web: the API behind the hosted site at web.gronka.dev. Not part of a self-hosted install:
+# it needs Cloudflare (tunnel, Turnstile, R2). Its own compose project and its own database, so it
+# shares nothing with the bot stack but the image.
 # Run from the gronka directory with both env files:
 #   docker compose -f docker-compose.web.yml --env-file .env --env-file .env.web up -d
 name: gronka-web
@@ -61,7 +63,32 @@ services:
       # a missing host dir is created root-owned and unwritable for uid 1000: mkdir it first
       - ./temp/web-jobs:/jobs
     networks: [web, web-db]
-    depends_on: [cobalt-web]
+    depends_on:
+      cobalt-web:
+        condition: service_started
+      postgres:
+        condition: service_healthy
+
+  postgres:
+    image: postgres:16-alpine
+    container_name: gronka-web-postgres
+    restart: unless-stopped
+    security_opt: [no-new-privileges:true]
+    mem_limit: 512m
+    environment:
+      POSTGRES_USER: gronka_web
+      POSTGRES_DB: gronka_web
+      POSTGRES_PASSWORD: ${WEB_DB_PASSWORD:?}
+      PGDATA: /var/lib/postgresql/data/pgdata
+    volumes:
+      - web-postgres-data:/var/lib/postgresql/data
+    networks: [web-db]
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U gronka_web -d gronka_web']
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
 
   cobalt-web:
     <<: *hardening
@@ -91,9 +118,11 @@ services:
     networks: [web]
     depends_on: [gronka-web]
 
+volumes:
+  web-postgres-data:
+
 networks:
   web:
-  # Created outside compose and joined by gronka-postgres (alias postgres): no egress, web and DB only.
+  # no egress: the web server and its database only
   web-db:
-    name: gronka-web-db
-    external: true
+    internal: true

@@ -1,7 +1,6 @@
 <script>
-  import { onDestroy } from 'svelte';
   import { currentRoute, navigate } from '../utils/router.js';
-  import { headerActions } from '../stores/header.js';
+  import { useHeaderActions } from '../stores/header.js';
   import { refreshNav } from '../stores/nav.js';
   import { formatBytes, formatRelativeTime, urlLabel } from '../utils/format.js';
 
@@ -84,8 +83,7 @@
           : `${s.cookies} cookies`;
   const sessionBad = s => s.loggedIn && s.lastRejected && s.lastRejected > s.fileChanged;
 
-  headerActions.set(actions);
-  onDestroy(() => headerActions.set(null));
+  useHeaderActions(actions);
 </script>
 
 {#snippet actions()}

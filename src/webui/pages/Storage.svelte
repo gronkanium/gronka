@@ -1,7 +1,6 @@
 <script>
-  import { onDestroy } from 'svelte';
   import { navigate } from '../utils/router.js';
-  import { headerActions } from '../stores/header.js';
+  import { useHeaderActions } from '../stores/header.js';
   import { formatBytes, formatRelativeTime, shortId } from '../utils/format.js';
 
   let data = $state(null);
@@ -55,8 +54,7 @@
     data?.disk ? Math.round((1 - data.disk.free / data.disk.total) * 100) : null
   );
 
-  headerActions.set(actions);
-  onDestroy(() => headerActions.set(null));
+  useHeaderActions(actions);
 </script>
 
 {#snippet actions()}
@@ -130,12 +128,11 @@
         </div>
       </div>
       <div class="kpi">
-        <div class="k">Disk</div>
-        <div class="v">
-          {data?.disk ? formatBytes(data.disk.free) : '—'}
-          {#if diskPct != null}<span class="d" class:bad={diskPct >= 90}>{diskPct}% used</span>{/if}
+        <div class="k">Disk free</div>
+        <div class="v">{data?.disk ? formatBytes(data.disk.free) : '—'}</div>
+        <div class="s" class:error-text={diskPct >= 90}>
+          {data?.disk ? `of ${formatBytes(data.disk.total)}, ${diskPct}% used` : ''}
         </div>
-        <div class="s">{data?.disk ? `free of ${formatBytes(data.disk.total)}` : ''}</div>
       </div>
     </div>
     <div class="pb usage">

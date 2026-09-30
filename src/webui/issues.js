@@ -48,11 +48,11 @@ function classify(classes, text) {
       : kinds.includes('upstream')
         ? 'upstream'
         : 'user';
-    return { kind, basis: `recorded as ${classes.join(', ')}` };
+    return { kind, basis: `from the recorded error (${classes.join(', ')})` };
   }
   return {
     kind: GUESSES.find(([, re]) => re.test(text))?.[0] ?? 'defect',
-    basis: 'guessed from the message',
+    basis: 'by a guess from the message',
   };
 }
 

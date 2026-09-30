@@ -1,8 +1,7 @@
 <script>
-  import { onDestroy } from 'svelte';
   import { TerminalSquare, Activity, Copy, Ban, ExternalLink } from 'lucide-svelte';
   import { currentRoute, navigate } from '../utils/router.js';
-  import { headerActions } from '../stores/header.js';
+  import { useHeaderActions } from '../stores/header.js';
   import { formatBytes, formatDuration, formatRelativeTime, urlLabel } from '../utils/format.js';
 
   const OPS = 10;
@@ -107,8 +106,7 @@
     setTimeout(() => (copied = false), 1200);
   }
 
-  headerActions.set(actions);
-  onDestroy(() => headerActions.set(null));
+  useHeaderActions(actions);
 </script>
 
 {#snippet actions()}

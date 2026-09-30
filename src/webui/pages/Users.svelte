@@ -3,7 +3,7 @@
   import { Search } from 'lucide-svelte';
   import { navigate } from '../utils/router.js';
   import { userMetrics } from '../stores/sse-store.js';
-  import { headerActions } from '../stores/header.js';
+  import { useHeaderActions } from '../stores/header.js';
   import { formatBytes, formatRelativeTime } from '../utils/format.js';
 
   const PAGE = 50;
@@ -105,8 +105,7 @@
     load();
   }
 
-  headerActions.set(actions);
-  onDestroy(() => headerActions.set(null));
+  useHeaderActions(actions);
 </script>
 
 {#snippet actions()}

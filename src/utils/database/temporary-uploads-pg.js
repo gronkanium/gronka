@@ -24,45 +24,21 @@ export async function insertTemporaryUpload(urlHash, r2Key, uploadedAt, expiresA
   }
 
   try {
-    // Check if record exists
-    const existing = await sql`
-      SELECT * FROM temporary_uploads
-      WHERE url_hash = ${urlHash} AND r2_key = ${r2Key}
+    const result = await sql`
+      INSERT INTO temporary_uploads (url_hash, r2_key, uploaded_at, expires_at)
+      VALUES (${urlHash}, ${r2Key}, ${uploadedAt}, ${expiresAt})
+      ON CONFLICT (url_hash, r2_key) DO UPDATE SET
+        uploaded_at = EXCLUDED.uploaded_at,
+        expires_at = EXCLUDED.expires_at,
+        deleted_at = NULL,
+        deletion_failed = 0,
+        deletion_error = NULL
+      RETURNING *
     `;
-
-    if (existing.length > 0) {
-      // Update existing record
-      await sql`
-        UPDATE temporary_uploads
-        SET uploaded_at = ${uploadedAt},
-            expires_at = ${expiresAt},
-            deleted_at = NULL,
-            deletion_failed = 0,
-            deletion_error = NULL
-        WHERE url_hash = ${urlHash} AND r2_key = ${r2Key}
-      `;
-      getLogger().debug(
-        `Updated existing temporary upload record: url_hash=${urlHash.substring(0, 8)}..., r2_key=${r2Key}`
-      );
-      const updated = await sql`
-        SELECT * FROM temporary_uploads
-        WHERE url_hash = ${urlHash} AND r2_key = ${r2Key}
-      `;
-      // Convert timestamp BIGINT fields from strings to numbers
-      return convertTimestampsToNumbers(updated[0], TEMPORARY_UPLOADS_TIMESTAMP_FIELDS);
-    } else {
-      // Insert new record
-      const result = await sql`
-        INSERT INTO temporary_uploads (url_hash, r2_key, uploaded_at, expires_at)
-        VALUES (${urlHash}, ${r2Key}, ${uploadedAt}, ${expiresAt})
-        RETURNING *
-      `;
-      getLogger().debug(
-        `Inserted new temporary upload record: id=${result[0].id}, url_hash=${urlHash.substring(0, 8)}..., r2_key=${r2Key}`
-      );
-      // Convert timestamp BIGINT fields from strings to numbers
-      return convertTimestampsToNumbers(result[0], TEMPORARY_UPLOADS_TIMESTAMP_FIELDS);
-    }
+    getLogger().debug(
+      `Saved temporary upload record: id=${result[0].id}, url_hash=${urlHash.substring(0, 8)}..., r2_key=${r2Key}`
+    );
+    return convertTimestampsToNumbers(result[0], TEMPORARY_UPLOADS_TIMESTAMP_FIELDS);
   } catch (error) {
     getLogger().error(`Failed to insert/update temporary upload: ${error.message}`);
     throw error;

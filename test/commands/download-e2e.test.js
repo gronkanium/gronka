@@ -256,7 +256,7 @@ if (!mocksSupported) {
 
     mock.module('../../src/utils/file-downloader.js', () => ({
       generateHash: buf => {
-        // BLAKE3 via noble would be real; use a stable synthetic hash for test.
+        // Use a stable synthetic hash for test.
         let h = 0;
         for (let i = 0; i < Math.min(buf.length, 64); i++) {
           h = (h * 31 + buf[i]) >>> 0;

@@ -35,11 +35,14 @@ git clone https://github.com/gronkanium/gronka.git && cd gronka
 bun install
 bun run setup             # asks for your token, writes .env and the mounted files
 docker compose up -d --build
-bun run docker:register   # once, registers the slash commands
 ```
 
 only `DISCORD_TOKEN` and `CLIENT_ID` are required. cookies, cloudflare r2 and everything else are
-optional: see the [wiki](https://github.com/gronkanium/gronka/wiki).
+optional: see the [wiki](https://github.com/gronkanium/gronka/wiki). `bun run setup --help`
+lists flags for scripted installs.
+
+self-hosting runs the discord bot. web.gronka.dev is a hosted service built on cloudflare and is
+not part of a self-hosted install.
 
 ## development
 

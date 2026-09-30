@@ -1,11 +1,36 @@
 <script>
-  import { TerminalSquare, Activity, Copy, Ban, ExternalLink } from 'lucide-svelte';
+  import {
+    TerminalSquare,
+    Activity,
+    Copy,
+    Ban,
+    ExternalLink,
+    ShieldOff,
+    Check,
+  } from 'lucide-svelte';
   import { currentRoute, navigate } from '../utils/router.js';
-  import { useHeaderActions } from '../stores/header.js';
-  import { formatBytes, formatDuration, formatRelativeTime, urlLabel } from '../utils/format.js';
+  import {
+    formatBytes,
+    formatDate,
+    formatDateTime,
+    formatDuration,
+    formatRelativeTime,
+    urlLabel,
+  } from '../utils/format.js';
+  import PageHeader from '../components/PageHeader.svelte';
+  import DataTable from '../components/DataTable.svelte';
+  import MediaThumb from '../components/MediaThumb.svelte';
+  import Avatar from '../components/Avatar.svelte';
 
   const OPS = 10;
   const MEDIA = 12;
+  const STATUS = {
+    success: ['ok', 'Delivered'],
+    error: ['bad', 'Failed'],
+    running: ['info', 'Running'],
+    pending: ['idle', 'Queued'],
+  };
+  const SPLIT_COLORS = ['var(--chart-1)', 'var(--chart-5)', 'var(--chart-6)'];
 
   let user = $state(null);
   let metrics = $state(null);
@@ -13,9 +38,11 @@
   let ops = $state([]);
   let opsTotal = $state(0);
   let opsOffset = $state(0);
+  let opsLoading = $state(true);
   let media = $state([]);
   let mediaTotal = $state(0);
   let mediaOffset = $state(0);
+  let mediaLoading = $state(true);
   let ban = $state(null);
   let banOpen = $state(false);
   let banReason = $state('');
@@ -46,21 +73,25 @@
   });
   $effect(() => {
     if (!userId) return;
+    opsLoading = true;
     get(`/api/users/${userId}/operations?limit=${OPS}&offset=${opsOffset}`)
       .then(d => {
         ops = d.operations ?? [];
         opsTotal = d.total ?? 0;
       })
-      .catch(() => (ops = []));
+      .catch(() => (ops = []))
+      .finally(() => (opsLoading = false));
   });
   $effect(() => {
     if (!userId) return;
+    mediaLoading = true;
     get(`/api/users/${userId}/media?limit=${MEDIA}&offset=${mediaOffset}`)
       .then(d => {
         media = d.media ?? [];
         mediaTotal = d.total ?? 0;
       })
-      .catch(() => (media = []));
+      .catch(() => (media = []))
+      .finally(() => (mediaLoading = false));
   });
 
   const rate = $derived(
@@ -77,7 +108,21 @@
         ]
       : []
   );
-  const splitMax = $derived(Math.max(1, ...split.map(([, n]) => n)));
+  const splitTotal = $derived(
+    Math.max(
+      1,
+      split.reduce((s, [, n]) => s + n, 0)
+    )
+  );
+  const failedRecent = $derived(ops.filter(o => o.status === 'error').length);
+  const description = $derived(
+    [
+      user?.first_used && `First seen ${formatDate(user.first_used)}`,
+      `last seen ${formatRelativeTime(metrics?.last_command_at ?? user?.last_used)}`,
+    ]
+      .filter(Boolean)
+      .join(' · ')
+  );
 
   async function doBan() {
     busy = true;
@@ -105,89 +150,82 @@
     copied = true;
     setTimeout(() => (copied = false), 1200);
   }
-
-  useHeaderActions(actions);
 </script>
 
-{#snippet actions()}
-  <button class="btn" onclick={() => navigate('requests', { userId })}
-    ><Activity size={13} />Requests</button
+<PageHeader
+  title={userId}
+  mono
+  crumbs={[{ label: 'Users', page: 'users' }]}
+  description={error ? '' : description}
+>
+  {#if ban}<span class="pill bad">Banned</span>{/if}
+  <button class="icon-btn sm" onclick={copyId} title="copy id" aria-label="copy user id"
+    >{#if copied}<Check size={14} />{:else}<Copy size={14} />{/if}</button
   >
-  <button class="btn" onclick={() => navigate('logs', { user: userId, range: '7d' })}
-    ><TerminalSquare size={13} />Logs</button
-  >
-{/snippet}
+  {#snippet actions()}
+    <button class="btn" onclick={() => navigate('requests', { userId })}
+      ><Activity size={14} />Requests</button
+    >
+    <button class="btn" onclick={() => navigate('logs', { user: userId, range: '7d' })}
+      ><TerminalSquare size={14} />Logs</button
+    >
+    {#if ban}
+      <button class="btn" disabled={busy} onclick={unban}><ShieldOff size={14} />Unban</button>
+    {:else}
+      <button class="btn danger" onclick={() => (banOpen = !banOpen)}><Ban size={14} />Ban</button>
+    {/if}
+  {/snippet}
+</PageHeader>
 
 <div class="profile stack">
-  <div class="crumbs">
-    <button class="linkish" onclick={() => navigate('users')}>Users</button>
-    <span class="dim">/</span>
-    <span class="mono">{userId}</span>
-  </div>
-
   {#if error}
-    <div class="panel empty">{error}</div>
-  {:else}
-    <div class="head">
-      <div class="avatar mono">{userId?.slice(-2)}</div>
-      <div class="grow">
-        <div class="row">
-          <h2 class="mono">{userId}</h2>
-          <button class="iconbtn" onclick={copyId} title="copy id" aria-label="copy user id"
-            ><Copy size={14} /></button
-          >
-          {#if copied}<span class="dim small">copied</span>{/if}
-          {#if ban}<span class="chip bad">banned</span>{/if}
-        </div>
-        <div class="sub">
-          {#if user?.first_used}first seen {new Date(user.first_used).toLocaleDateString()} ·
-          {/if}
-          last seen {formatRelativeTime(metrics?.last_command_at ?? user?.last_used)}
-        </div>
-      </div>
-      {#if ban}
-        <button class="btn" disabled={busy} onclick={unban}>Unban</button>
-      {:else}
-        <button class="btn danger" onclick={() => (banOpen = !banOpen)}><Ban size={13} />Ban</button
-        >
-      {/if}
+    <div class="panel empty big">
+      <b>No user with this id</b>Check the id, or find them in Users
     </div>
-
+  {:else}
     {#if ban}
-      <div class="panel pb banned">
-        Banned {formatRelativeTime(ban.banned_at)}: <b>{ban.reason}</b>{ban.appeal_allowed
-          ? ''
-          : ' (no appeal)'}
+      <div class="flash error">
+        <Ban size={14} />
+        <span
+          >Banned {formatRelativeTime(ban.banned_at)}: <b>{ban.reason}</b>{ban.appeal_allowed
+            ? ''
+            : ' (no appeal)'}</span
+        >
       </div>
     {/if}
     {#if banOpen && !ban}
       <div class="panel pb banform">
+        <Avatar id={userId} size={32} />
         <input
           class="field grow"
           bind:value={banReason}
-          placeholder="reason (the user sees it when appealing)"
+          placeholder="Reason (the user sees it when appealing)"
           maxlength="200"
         />
-        <button class="btn danger" disabled={busy || !banReason.trim()} onclick={doBan}
+        <button class="btn danger solid" disabled={busy || !banReason.trim()} onclick={doBan}
           >Confirm ban</button
         >
+        <button class="btn ghost" onclick={() => (banOpen = false)}>Cancel</button>
       </div>
     {/if}
 
-    <section class="panel kpis" style="--kpi-cols: 5">
+    <section class="kpis" style="--kpi-cols: 4">
       <div class="kpi">
         <div class="k">Requests</div>
         <div class="v">{metrics?.total_commands?.toLocaleString() ?? '—'}</div>
         <div class="s">all time</div>
       </div>
-      <div class="kpi">
+      <div class="kpi" class:bad={rate != null && rate < 80}>
         <div class="k">Delivered</div>
-        <div class="v">{rate == null ? '—' : `${rate}%`}</div>
-        <div class="s">{metrics?.successful_commands?.toLocaleString() ?? 0} ok</div>
+        <div class="v">
+          {rate == null ? '—' : rate}{#if rate != null}<span class="unit">%</span>{/if}
+        </div>
+        <div class="s">{metrics?.successful_commands?.toLocaleString() ?? 0} delivered</div>
       </div>
       <div class="kpi">
         <div class="k">Failed</div>
         <div class="v">{metrics?.failed_commands?.toLocaleString() ?? '—'}</div>
+        {#if failedRecent}<span class="d warn">{failedRecent} in the last 7 days</span>{/if}
         <div class="s">user and site errors included</div>
       </div>
       <div class="kpi">
@@ -195,222 +233,148 @@
         <div class="v">{metrics ? formatBytes(metrics.total_file_size) : '—'}</div>
         <div class="s">processed for them</div>
       </div>
-      <div class="kpi">
-        <div class="k">Stored files</div>
-        <div class="v">{mediaTotal.toLocaleString()}</div>
-        <div class="s">in the URL cache</div>
-      </div>
     </section>
 
-    <div class="two">
-      <section
-        class="panel tbl"
-        aria-label="requests"
-        style="--cols: 12px 76px minmax(0, 1fr) 70px 80px"
-      >
-        <div class="ph">
-          <span>Requests</span><span class="meta mono">{opsTotal} kept, 7 days</span>
-        </div>
-        {#each ops as r (r.id)}
-          <button class="tr" onclick={() => navigate('request', { requestId: r.id })}>
+    <section class="panel" aria-label="commands">
+      <div class="pb split">
+        <span class="section-label">Commands</span>
+        <div class="bar-track tall">
+          {#each split as [name, n], i (name)}
             <span
-              class="dot"
-              class:ok={r.status === 'success'}
-              class:bad={r.status === 'error'}
-              class:run={r.status === 'running'}
+              style="width:{(n / splitTotal) * 100}%; background:{SPLIT_COLORS[i]}"
+              title="/{name}: {n}"
             ></span>
-            <span class="muted">{r.type}</span>
-            <span class="mono small ellipsis">{urlLabel(r.originalUrl)}</span>
-            <span class="num small muted"
-              >{r.performanceMetrics?.duration
-                ? formatDuration(r.performanceMetrics.duration)
-                : '—'}</span
-            >
-            <span class="num small dim">{formatRelativeTime(r.timestamp)}</span>
-          </button>
-        {:else}
-          <div class="empty">no requests in the last 7 days</div>
-        {/each}
-        {#if opsTotal > OPS}
-          <div class="pager">
-            <span class="dim"
-              >{opsOffset + 1}–{Math.min(opsOffset + OPS, opsTotal)} of {opsTotal}</span
-            >
-            <span class="row">
-              <button class="btn sm" disabled={opsOffset === 0} onclick={() => (opsOffset -= OPS)}
-                >Previous</button
-              >
-              <button
-                class="btn sm"
-                disabled={opsOffset + OPS >= opsTotal}
-                onclick={() => (opsOffset += OPS)}>Next</button
-              >
-            </span>
-          </div>
-        {/if}
-      </section>
-
-      <section class="panel" aria-label="commands">
-        <div class="ph"><span>Commands</span></div>
-        <div class="pb split">
-          {#each split as [name, n] (name)}
-            <span>/{name}</span>
-            <span class="bar-track"
-              ><span style="width:{(n / splitMax) * 100}%; background: var(--chart-series-1)"
-              ></span></span
-            >
-            <span class="num small muted">{n.toLocaleString()}</span>
           {/each}
         </div>
-      </section>
-    </div>
-
-    <section
-      class="panel tbl"
-      aria-label="stored files"
-      style="--cols: 64px minmax(0, 1fr) 90px 100px 28px"
-    >
-      <div class="ph">
-        <span>Stored files</span><span class="meta mono">{mediaTotal} total</span>
-      </div>
-      {#each media as m, i (m.file_url + i)}
-        <a class="tr" href={m.file_url} target="_blank" rel="noreferrer">
-          <span class="chip">{m.file_type}</span>
-          <span class="mono small ellipsis">{urlLabel(m.file_url)}</span>
-          <span class="num small muted">{formatBytes(m.file_size)}</span>
-          <span class="num small dim">{formatRelativeTime(m.processed_at)}</span>
-          <span class="dim"><ExternalLink size={13} /></span>
-        </a>
-      {:else}
-        <div class="empty">nothing stored</div>
-      {/each}
-      {#if mediaTotal > MEDIA}
-        <div class="pager">
-          <span class="dim"
-            >{mediaOffset + 1}–{Math.min(mediaOffset + MEDIA, mediaTotal)} of {mediaTotal}</span
-          >
-          <span class="row">
-            <button
-              class="btn sm"
-              disabled={mediaOffset === 0}
-              onclick={() => (mediaOffset -= MEDIA)}>Previous</button
+        <div class="legend">
+          {#each split as [name, n], i (name)}
+            <span
+              ><i style="background:{SPLIT_COLORS[i]}"></i><span class="mono">/{name}</span>
+              <b>{n.toLocaleString()}</b><span class="dim"
+                >{Math.round((n / splitTotal) * 100)}%</span
+              ></span
             >
-            <button
-              class="btn sm"
-              disabled={mediaOffset + MEDIA >= mediaTotal}
-              onclick={() => (mediaOffset += MEDIA)}>Next</button
-            >
-          </span>
+          {/each}
         </div>
-      {/if}
+      </div>
     </section>
+
+    <div class="two wide-left">
+      <DataTable
+        title="Recent requests"
+        columns={[
+          { key: 'st', label: 'Status', width: '100px' },
+          { key: 'type', label: 'Command', width: '84px', sm: false },
+          { key: 'link', label: 'Link' },
+          { key: 'took', label: 'Took', width: '70px', align: 'right', sm: false },
+          { key: 'when', label: 'When', width: '80px', align: 'right' },
+        ]}
+        rows={ops}
+        loading={opsLoading}
+        empty="No requests in the last 7 days"
+        onrow={r => navigate('request', { requestId: r.id })}
+        pager={{ offset: opsOffset, limit: OPS, total: opsTotal, onpage: o => (opsOffset = o) }}
+        skeleton={5}
+      >
+        {#snippet header()}<span class="tnum">{opsTotal} kept, 7 days</span>{/snippet}
+        {#snippet row(r)}
+          {@const [kind, label] = STATUS[r.status] ?? ['idle', r.status]}
+          <span><span class="pill sm {kind}">{label}</span></span>
+          <span class="soft hide-sm">/{r.type}</span>
+          <span class="ellipsis">
+            <span class="mono">{urlLabel(r.originalUrl)}</span>
+            {#if r.status === 'error' && r.error}<span class="errline" title={r.error}
+                >· {r.error}</span
+              >{/if}
+          </span>
+          <span class="num muted hide-sm"
+            >{r.performanceMetrics?.duration
+              ? formatDuration(r.performanceMetrics.duration)
+              : '—'}</span
+          >
+          <span class="num dim" title={formatDateTime(r.timestamp)}
+            >{formatRelativeTime(r.timestamp)}</span
+          >
+        {/snippet}
+      </DataTable>
+
+      <DataTable
+        title="Stored files"
+        columns={[
+          { key: 'thumb', label: '', width: '36px' },
+          { key: 'file', label: 'File' },
+          { key: 'size', label: 'Size', width: '80px', align: 'right' },
+          { key: 'open', label: '', width: '20px' },
+        ]}
+        rows={media}
+        rowKey={(m, i) => `${m.file_url}#${i}`}
+        loading={mediaLoading}
+        empty="Nothing stored"
+        href={m => m.file_url}
+        pager={{
+          offset: mediaOffset,
+          limit: MEDIA,
+          total: mediaTotal,
+          onpage: o => (mediaOffset = o),
+        }}
+        skeleton={4}
+      >
+        {#snippet header()}<span class="tnum">{mediaTotal} in the URL cache</span>{/snippet}
+        {#snippet row(m)}
+          <MediaThumb url={m.file_url} type={m.file_type} size={28} />
+          <span class="filecell">
+            <span class="mono ellipsis">{urlLabel(m.file_url).split('/').pop()}</span>
+            <span class="dim xs">{m.file_type} · {formatRelativeTime(m.processed_at)}</span>
+          </span>
+          <span class="num muted">{formatBytes(m.file_size)}</span>
+          <span class="dim"><ExternalLink size={13} /></span>
+        {/snippet}
+      </DataTable>
+    </div>
   {/if}
 </div>
 
 <style>
-  .profile {
-    max-width: 1400px;
-    margin: 0 auto;
-  }
-  .crumbs {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    font-size: 13px;
-  }
-  .linkish {
-    background: none;
-    border: 0;
-    padding: 0;
-    color: var(--accent);
-    font: inherit;
-    cursor: pointer;
-  }
-  .small {
-    font-size: 12px;
-  }
-  .head {
-    display: flex;
-    align-items: center;
-    gap: 14px;
-  }
-  .avatar {
-    width: 44px;
-    height: 44px;
-    border-radius: 50%;
-    display: grid;
-    place-items: center;
-    background: var(--info-bg);
-    color: var(--accent);
-    font-size: 14px;
-    flex-shrink: 0;
-  }
-  h2 {
-    margin: 0;
-    font-size: 18px;
-    font-weight: 500;
-    color: var(--text-bright);
-  }
-  .sub {
-    margin-top: 3px;
-    font-size: 12px;
-    color: var(--text-muted);
-  }
-  .iconbtn {
-    display: flex;
-    padding: 4px;
-    border: 0;
-    border-radius: 6px;
-    background: none;
-    color: var(--text-dim);
-    cursor: pointer;
-  }
-  .iconbtn:hover {
-    color: var(--text-bright);
-    background: var(--surface-2);
-  }
-  .banned {
-    border-color: var(--danger-border);
-    background: var(--danger-bg-subtle);
-    font-size: 13px;
-    color: #f0c9c9;
-  }
   .banform {
     display: flex;
-    gap: 8px;
-  }
-  .two {
-    display: grid;
-    grid-template-columns: minmax(0, 1fr) 360px;
-    gap: 16px;
-    align-items: start;
+    align-items: center;
+    gap: 10px;
   }
   .split {
-    display: grid;
-    grid-template-columns: 80px 1fr 60px;
-    gap: 14px 12px;
-    align-items: center;
-    font-size: 13px;
-  }
-  .pager {
     display: flex;
+    flex-direction: column;
+    gap: 10px;
+  }
+  .legend {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px 20px;
+    font-size: var(--fs-sm);
+    color: var(--text-muted);
+  }
+  .legend > span {
+    display: inline-flex;
     align-items: center;
-    justify-content: space-between;
-    padding: 10px 16px;
-    border-top: 1px solid var(--line);
-    font-size: 12px;
+    gap: 6px;
   }
-  @media (max-width: 1000px) {
-    .two {
-      grid-template-columns: 1fr;
-    }
+  .legend i {
+    width: 8px;
+    height: 8px;
+    border-radius: 2px;
   }
-  @media (max-width: 640px) {
-    .head {
-      flex-wrap: wrap;
-    }
-    h2 {
-      font-size: 14px;
-    }
+  .legend b {
+    font-weight: 600;
+    color: var(--text-bright);
+    font-variant-numeric: tabular-nums;
+  }
+  .errline {
+    font-size: var(--fs-sm);
+    color: var(--danger-text);
+  }
+  .filecell {
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+    line-height: 1.3;
   }
 </style>

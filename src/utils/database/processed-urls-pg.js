@@ -195,15 +195,24 @@ export async function getUserR2Media(userId, options = {}) {
   const publicDomain = r2Config.publicDomain;
   const r2UrlPrefix = `https://${publicDomain}/`;
 
-  let query = `SELECT url_hash, file_url, file_type, file_extension, processed_at, file_size FROM processed_urls WHERE user_id = $1 AND file_url LIKE $2 AND r2_expired_at IS NULL`;
+  // The newest tracking row tells when the object leaves R2 (or already left). A cache row with
+  // no tracking row is a permanent upload, or one made while tracking was off.
+  let query = `SELECT p.url_hash, p.file_url, p.file_type, p.file_extension, p.processed_at, p.file_size,
+      t.expires_at, t.deleted_at, t.deletion_failed
+    FROM processed_urls p
+    LEFT JOIN LATERAL (
+      SELECT expires_at, deleted_at, deletion_failed FROM temporary_uploads
+      WHERE url_hash = p.url_hash ORDER BY expires_at DESC LIMIT 1
+    ) t ON true
+    WHERE p.user_id = $1 AND p.file_url LIKE $2 AND p.r2_expired_at IS NULL`;
   const params = [userId, `${r2UrlPrefix}%`];
 
   if (fileType) {
-    query += ` AND file_type = $${params.length + 1}`;
+    query += ` AND p.file_type = $${params.length + 1}`;
     params.push(fileType);
   }
 
-  query += ' ORDER BY processed_at DESC';
+  query += ' ORDER BY p.processed_at DESC';
 
   if (limit !== null) {
     query += ` LIMIT $${params.length + 1}`;
@@ -217,7 +226,7 @@ export async function getUserR2Media(userId, options = {}) {
 
   const results = await sql.unsafe(query, params);
   // Convert timestamp and numeric BIGINT fields from strings to numbers
-  let converted = convertTimestampsInArray(results, ['processed_at']);
+  let converted = convertTimestampsInArray(results, ['processed_at', 'expires_at', 'deleted_at']);
   converted = convertBigIntInArray(converted, ['file_size']);
   return converted;
 }

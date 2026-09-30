@@ -9,6 +9,7 @@ import { getLiveBytes, getStorageOverview, lastLogMatching } from '../../utils/d
 import { getPostgresConnection } from '../../utils/database/connection.js';
 import { r2SoftLimitGb } from '../../utils/r2-storage.js';
 import { readSessions } from '../sessions.js';
+import pkg from '../../../package.json' with { type: 'json' };
 
 const logger = createLogger('webui');
 const router = express.Router();
@@ -73,7 +74,11 @@ const LABELS = {
 
 router.get('/api/system', async (req, res) => {
   try {
-    res.json({ jobs: await jobsOverview(), mediaWorkers: process.env.MEDIA_WORKERS !== 'false' });
+    res.json({
+      jobs: await jobsOverview(),
+      mediaWorkers: process.env.MEDIA_WORKERS !== 'false',
+      version: pkg.version,
+    });
   } catch (error) {
     logger.error('Failed to read job queue:', error);
     res.status(500).json({ error: 'failed to read job queue' });

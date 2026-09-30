@@ -7,6 +7,7 @@ import {
   signStreamToken,
   directStreamInfo,
   stripAudio,
+  trimItem,
 } from '../../src/web-server.js';
 import { redactForWeb } from '../../src/utils/logger.js';
 
@@ -205,4 +206,43 @@ test('mute mode drops the audio track and keeps the video untouched', async () =
   expect(await stripAudio(image)).toBe(image);
   fs.rmSync(dir, { recursive: true });
   expect(parseDownloadRequest({ url: 'https://x.com/a/status/1', mode: 'mute' }).mute).toBe(true);
+});
+
+test('trimItem cuts a video to the requested section and leaves images alone', async () => {
+  const { execFileSync } = await import('node:child_process');
+  const fs = await import('node:fs');
+  const dir = fs.mkdtempSync('/tmp/trim-test-');
+  const clip = `${dir}/clip.mp4`;
+  execFileSync('ffmpeg', [
+    '-v',
+    'error',
+    '-f',
+    'lavfi',
+    '-i',
+    'testsrc=size=64x64:duration=6',
+    '-c:v',
+    'libx264',
+    clip,
+  ]);
+  const out = await trimItem(
+    { buffer: fs.readFileSync(clip), filename: 'clip.mp4', contentType: 'video/mp4' },
+    { startTime: 1, duration: 2 }
+  );
+  fs.writeFileSync(`${dir}/out.mp4`, out.buffer);
+  const seconds = Number(
+    execFileSync('ffprobe', [
+      '-v',
+      'error',
+      '-show_entries',
+      'format=duration',
+      '-of',
+      'csv=p=0',
+      `${dir}/out.mp4`,
+    ])
+  );
+  expect(seconds).toBeGreaterThan(1.5);
+  expect(seconds).toBeLessThan(2.5);
+  const image = { buffer: Buffer.from('x'), filename: 'a.jpg', contentType: 'image/jpeg' };
+  expect(await trimItem(image, { startTime: 1, duration: 2 })).toBe(image);
+  fs.rmSync(dir, { recursive: true });
 });

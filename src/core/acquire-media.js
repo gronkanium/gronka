@@ -101,8 +101,9 @@ async function getMaxVideoSize() {
   return Number.isFinite(mb) && mb > 0 ? mb * 1024 * 1024 : MAX_VIDEO_SIZE;
 }
 
-async function directMediaUrls(url, shouldServe = null) {
-  const { urls, direct } = await getCobaltMediaUrls(COBALT_API_URL, url);
+async function directMediaUrls(url, shouldServe = null, keep = () => {}) {
+  const { urls, direct, response } = await getCobaltMediaUrls(COBALT_API_URL, url);
+  keep(response);
   if (!direct || urls.length === 0) {
     return null;
   }
@@ -132,6 +133,8 @@ export async function acquireMedia(
     throw new ValidationError(BLOCKED_DESTINATION_MESSAGE);
   }
   const maxSize = adminUser ? Infinity : await getMaxVideoSize();
+  let cobaltResponse = null;
+  const keep = response => (cobaltResponse = response);
   // Reddit deprecated the unauthenticated .json endpoints in May 2026, so yt-dlp cannot read
   // a post at all. Resolve it before the source flags below are computed: most posts are
   // link-aggregator entries whose media lives on redgifs/imgur, and swapping url for that
@@ -201,7 +204,7 @@ export async function acquireMedia(
       metadata: { url },
     });
     try {
-      const urls = await directMediaUrls(url);
+      const urls = await directMediaUrls(url, null, keep);
       if (urls) {
         return { kind: 'urls', urls, stepName: 'url_only_mode', url };
       }
@@ -219,7 +222,13 @@ export async function acquireMedia(
   }
 
   // 'hybrid' still attaches small clips, which outlive the tweet; big ones get the twimg URL.
-  if (COBALT_ENABLED && isTwitterXUrl(url) && startTime === null && duration === null) {
+  if (
+    COBALT_ENABLED &&
+    !cobaltResponse &&
+    isTwitterXUrl(url) &&
+    startTime === null &&
+    duration === null
+  ) {
     const deliveryMode = await getSetting('twitter_delivery', 'hybrid');
     if (deliveryMode === 'always_url' || deliveryMode === 'hybrid') {
       try {
@@ -233,7 +242,8 @@ export async function acquireMedia(
                 }
                 const size = await getRemoteContentLength(candidates[0].url);
                 return size !== null && !fitsDiscordAttachment(size, attachmentLimit);
-              }
+              },
+          keep
         );
         if (urls) {
           return { kind: 'urls', urls, stepName: 'twitter_delivery', url };
@@ -330,7 +340,9 @@ export async function acquireMedia(
       : null;
 
   // Runs beside the SoundCloud read; a DRM-only track has no source links to hand out.
-  if (streamFirst && startTime === null && duration === null) {
+  // cobalt turns X's looping mp4s into real gifs; a raw stream would hand out the mp4.
+  const cobaltGif = /\.gif$/i.test(cobaltResponse?.filename ?? '');
+  if (streamFirst && !cobaltGif && startTime === null && duration === null) {
     const lane = streamFirst(url, downloadMethod).catch(() => null);
     const streams = (await soundcloud)?.drm ? null : await lane;
     if (streams) {
@@ -456,18 +468,22 @@ export async function acquireMedia(
     try {
       // Concurrency is capped inside cobalt.js. The URL cache was already consulted
       // above (and deliberately skipped when trimming), so there is no second check here.
-      fileData = await downloadFromSocialMedia(COBALT_API_URL, url, adminUser, maxSize).catch(
-        async cobaltError => {
-          if (!useInstagram) throw cobaltError;
-          logger.warn(`Cobalt failed for Instagram, trying the session: ${cobaltError.message}`);
-          try {
-            return await downloadFromInstagram(url, adminUser);
-          } catch (instagramError) {
-            logger.warn(`Instagram session extractor failed: ${instagramError.message}`);
-            throw cobaltError;
-          }
+      fileData = await downloadFromSocialMedia(
+        COBALT_API_URL,
+        url,
+        adminUser,
+        maxSize,
+        cobaltResponse
+      ).catch(async cobaltError => {
+        if (!useInstagram) throw cobaltError;
+        logger.warn(`Cobalt failed for Instagram, trying the session: ${cobaltError.message}`);
+        try {
+          return await downloadFromInstagram(url, adminUser);
+        } catch (instagramError) {
+          logger.warn(`Instagram session extractor failed: ${instagramError.message}`);
+          throw cobaltError;
         }
-      );
+      });
       logStep('download_complete', 'success', {
         message: 'File downloaded successfully',
         metadata: {

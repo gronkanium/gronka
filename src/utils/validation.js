@@ -99,7 +99,7 @@ function embeddedIpv4(groups) {
  * @returns {string|null} Error message when the address must not be reached, else null
  */
 function blockedIpv4Reason(address) {
-  const [a, b] = address.split('.').map(Number);
+  const [a, b, c] = address.split('.').map(Number);
 
   if (a === 127) return LOOPBACK_ERROR; // 127.0.0.0/8 loopback
   if (a === 0) return LOOPBACK_ERROR; // 0.0.0.0/8, "this host"
@@ -108,7 +108,7 @@ function blockedIpv4Reason(address) {
   if (a === 192 && b === 168) return PRIVATE_ADDRESS_ERROR; // 192.168.0.0/16
   if (a === 169 && b === 254) return PRIVATE_ADDRESS_ERROR; // link-local + cloud metadata
   if (a === 100 && b >= 64 && b <= 127) return PRIVATE_ADDRESS_ERROR; // 100.64.0.0/10 CGNAT
-  if (a === 192 && b === 0) return PRIVATE_ADDRESS_ERROR; // 192.0.0.0/24 protocol assignments
+  if (a === 192 && b === 0 && c === 0) return PRIVATE_ADDRESS_ERROR; // 192.0.0.0/24 protocol assignments
   if (a === 198 && (b === 18 || b === 19)) return PRIVATE_ADDRESS_ERROR; // 198.18.0.0/15
   if (a >= 224) return PRIVATE_ADDRESS_ERROR; // multicast, reserved, broadcast
   return null;

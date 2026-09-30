@@ -1,18 +1,6 @@
 #!/usr/bin/env bun
 
-/**
- * First-run setup for a fresh clone.
- *
- * Usage:
- *   bun run setup            interactive wizard: asks only what it cannot work out itself
- *   bun run setup --check    diagnose an existing install and change nothing
- *   bun run setup --repair   create the missing files a working install needs, no questions
- *
- * Options:
- *   --check, -c     read-only diagnosis; exits non-zero if anything is broken
- *   --repair        non-interactive: run every fix that needs no input from you
- *   --yes, -y       accept every default (only asks for values with no safe default)
- */
+// First-run setup for a fresh clone; `bun run setup --help` lists every option.
 
 import { createInterface } from 'readline';
 import { execSync } from 'child_process';
@@ -31,28 +19,117 @@ import { fileURLToPath } from 'url';
 import { dirname, join } from 'path';
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
-const argv = process.argv.slice(2);
-const flag = (...names) => names.some(n => argv.includes(n));
-const CHECK = flag('--check', '-c');
-const REPAIR = flag('--repair');
-const ASSUME_YES = flag('--yes', '-y');
 
+const HELP = `gronka setup
+
+  bun run setup            guided setup: asks only what it cannot work out itself
+  bun run setup --check    diagnose an install and change nothing
+  bun run setup --repair   create the missing files, no questions
+
+Options:
+  --check, -c        read-only diagnosis; exits 1 if anything is broken
+  --repair           run every fix that needs no input
+  --json             with --check or --repair: print one JSON object instead of text
+  --yes, -y          never prompt: take defaults and existing .env values, fail on anything missing
+  --help, -h         this text
+
+Answers (each one skips its question; with --yes, --token, --client-id and
+--db-password are required unless .env already has them):
+  --token            bot token
+  --client-id        application id
+  --admin-ids        comma-separated Discord user ids
+  --db-password      postgres password (8+ characters)
+  --test-token       test bot token (with --test-client-id)
+  --test-client-id   test bot application id
+  --invite           support server invite url
+  --r2-account-id, --r2-access-key-id, --r2-secret-access-key, --r2-bucket, --r2-domain
+                     Cloudflare R2; giving any of them turns R2 on
+  --r2-ttl-hours     hours to keep an R2 upload (default 72)
+
+Every answer can also come from the environment as SETUP_ plus the flag in capitals,
+e.g. SETUP_TOKEN, SETUP_DB_PASSWORD. Prefer that for secrets: a flag's value shows up
+in the process list, shell history and \`bun run\`'s echo of the command.
+
+Exit codes: 0 done / ready, 1 problems found or setup failed, 2 bad arguments.`;
+
+const BOOL_FLAGS = {
+  c: 'check',
+  y: 'yes',
+  h: 'help',
+  check: 1,
+  repair: 1,
+  json: 1,
+  yes: 1,
+  help: 1,
+};
+const VALUE_FLAGS = new Set([
+  'token',
+  'client-id',
+  'admin-ids',
+  'db-password',
+  'test-token',
+  'test-client-id',
+  'invite',
+  'r2-account-id',
+  'r2-access-key-id',
+  'r2-secret-access-key',
+  'r2-bucket',
+  'r2-domain',
+  'r2-ttl-hours',
+]);
+
+function parseArgs(args) {
+  const opts = {};
+  for (let i = 0; i < args.length; i++) {
+    const [, name, inline] = args[i].match(/^--?([a-z0-9-]+)(?:=(.*))?$/) || [];
+    if (VALUE_FLAGS.has(name)) {
+      const value = inline ?? args[++i];
+      if (value === undefined) {
+        throw new UsageError(`--${name} needs a value`);
+      }
+      opts[name] = value.trim();
+    } else if (name in BOOL_FLAGS) {
+      opts[typeof BOOL_FLAGS[name] === 'string' ? BOOL_FLAGS[name] : name] = true;
+    } else {
+      throw new UsageError(`unknown option ${args[i]}, see --help`);
+    }
+  }
+  return opts;
+}
+
+class UsageError extends Error {}
+
+let opts = {};
+let CHECK, REPAIR, ASSUME_YES, JSON_OUT;
+
+const color = process.stdout.isTTY && !process.env.NO_COLOR;
+const paint = code => s => (color ? `\x1b[${code}m${s}\x1b[0m` : String(s));
 const c = {
-  dim: s => `\x1b[2m${s}\x1b[0m`,
-  bold: s => `\x1b[1m${s}\x1b[0m`,
-  red: s => `\x1b[31m${s}\x1b[0m`,
-  green: s => `\x1b[32m${s}\x1b[0m`,
-  yellow: s => `\x1b[33m${s}\x1b[0m`,
-  cyan: s => `\x1b[36m${s}\x1b[0m`,
+  dim: paint(2),
+  bold: paint(1),
+  red: paint(31),
+  green: paint(32),
+  yellow: paint(33),
+  cyan: paint(36),
 };
 
+// With --json every line is also recorded, and the JSON object is the only thing printed.
+const results = [];
+let section = '';
 const RULE = '━'.repeat(64);
-const say = (...a) => console.log(...a);
-const heading = t => say(`\n${c.bold(t)}\n${c.dim(RULE)}`);
-const ok = m => say(`  ${c.green('✓')} ${m}`);
-const warn = m => say(`  ${c.yellow('!')} ${m}`);
-const bad = m => say(`  ${c.red('✗')} ${m}`);
-const note = m => say(`    ${c.dim(m)}`);
+const say = (...a) => JSON_OUT || console.log(...a);
+const line = (level, text) => m => {
+  results.push({ section, level, message: m });
+  say(text(m));
+};
+const heading = t => {
+  section = t;
+  say(`\n${c.bold(t)}\n${c.dim(RULE)}`);
+};
+const ok = line('ok', m => `  ${c.green('✓')} ${m}`);
+const warn = line('warn', m => `  ${c.yellow('!')} ${m}`);
+const bad = line('error', m => `  ${c.red('✗')} ${m}`);
+const note = line('info', m => `    ${c.dim(m)}`);
 
 // ---------------------------------------------------------------------------
 // prompts
@@ -106,35 +183,35 @@ function nextLine() {
   return new Promise(resolve => waitingAsks.push(resolve));
 }
 
-async function ask(question, fallback = '') {
-  if (ASSUME_YES && fallback !== '') {
+async function ask(question, { flag, fallback = '', secret = false } = {}) {
+  if (flag in opts) {
+    say(`  ${question}: ${c.dim('given')}`);
+    return opts[flag];
+  }
+  if (ASSUME_YES) {
     return fallback;
   }
-  const shown = fallback ? ` ${c.dim(`[${fallback}]`)}` : '';
+  const shown = fallback ? ` ${c.dim(`[${secret ? 'keep existing' : fallback}]`)}` : '';
   process.stdout.write(`  ${question}${shown}: `);
   const answer = (await nextLine()).trim();
   if (!process.stdin.isTTY) {
-    say(answer);
+    say(secret && answer ? '********' : answer);
   }
   return answer || fallback;
 }
 
-async function askRequired(question, validate) {
+async function askRequired(question, { validate, ...options }) {
   for (;;) {
-    const answer = await ask(question);
-    if (!answer) {
-      if (stdinClosed) {
-        throw new Error(`no value given for "${question}" and stdin has closed`);
-      }
-      bad('required');
-      continue;
+    const answer = await ask(question, options);
+    const problem = answer ? validate?.(answer) : 'required';
+    if (!problem) {
+      return answer;
     }
-    const problem = validate?.(answer);
-    if (problem) {
-      bad(problem);
-      continue;
+    // Nobody is there to answer again: a flag, --yes or a closed pipe gets one try.
+    if (options.flag in opts || ASSUME_YES || stdinClosed) {
+      throw new Error(`${question}: ${problem}, pass --${options.flag}`);
     }
-    return answer;
+    bad(problem);
   }
 }
 
@@ -142,10 +219,9 @@ async function confirm(question, fallback = true) {
   if (ASSUME_YES) {
     return fallback;
   }
-  const answer = await ask(
-    `${question} ${c.dim(fallback ? '(Y/n)' : '(y/N)')}`,
-    fallback ? 'y' : 'n'
-  );
+  const answer = await ask(`${question} ${c.dim(fallback ? '(Y/n)' : '(y/N)')}`, {
+    fallback: fallback ? 'y' : 'n',
+  });
   return /^y/i.test(answer);
 }
 
@@ -222,10 +298,7 @@ const MOUNTED_FILES = [
   {
     path: 'cookies.json',
     mode: 0o600,
-    seed: () =>
-      existsSync(join(ROOT, 'cookies.example.json'))
-        ? readFileSync(join(ROOT, 'cookies.example.json'), 'utf8')
-        : '{}\n',
+    seed: () => '{}\n',
     what: 'cobalt/instagram/reddit service cookies (read-only to the app)',
   },
   {
@@ -333,7 +406,10 @@ async function runChecks() {
       .map(part => part.trim().split('=')[0])
       .filter(Boolean);
     const missing = meta.required.filter(name => !names.includes(name));
-    if (names.length === 0) {
+    if (/<[^>]*>/.test(value)) {
+      bad(`${service}: still the <placeholder> values from cookies.example.json`);
+      problems.push(`fill in or remove the ${service} entry in cookies.json`);
+    } else if (names.length === 0) {
       meta.required.length
         ? warn(`${service}: not configured, ${meta.why}`)
         : note(`${service}: not configured, ${meta.why}`);
@@ -399,6 +475,8 @@ async function runChecks() {
   for (const [key, fallback] of [
     ['PROD_SERVER_PORT', 3000],
     ['PROD_WEBUI_PORT', 3001],
+    ['POSTGRES_PORT', 5432],
+    ['cobalt', 9000],
   ]) {
     const port = Number.parseInt(env[key] || fallback, 10);
     if (await portFree(port)) {
@@ -455,25 +533,35 @@ async function wizard() {
   const current = readEnv(envPath);
   const keep = key => (isPlaceholder(current[key]) ? '' : current[key]);
 
+  if (ASSUME_YES) {
+    const missing = [
+      ['token', 'PROD_DISCORD_TOKEN'],
+      ['client-id', 'PROD_CLIENT_ID'],
+      ['db-password', 'PROD_POSTGRES_PASSWORD'],
+    ].filter(([name, key]) => !(name in opts) && !keep(key));
+    if (missing.length) {
+      throw new Error(`--yes needs ${missing.map(([name]) => `--${name}`).join(', ')}`);
+    }
+  }
+
   heading('Discord');
   note('https://discord.com/developers/applications → your app → Bot');
   note('the token is shown once; Reset Token if you no longer have it');
-  const token = keep('PROD_DISCORD_TOKEN')
-    ? await ask(
-        `bot token ${c.dim('(enter to keep the existing one)')}`,
-        keep('PROD_DISCORD_TOKEN')
-      )
-    : await askRequired('bot token', v =>
-        TOKEN_SHAPE.test(v)
-          ? null
-          : "that doesn't look like a bot token (three dot-separated parts)"
-      );
-  const clientId = await askRequired('application id', v =>
-    SNOWFLAKE.test(v) ? null : 'a Discord id is 17-20 digits'
-  );
+  const token = await askRequired('bot token', {
+    flag: 'token',
+    fallback: keep('PROD_DISCORD_TOKEN'),
+    secret: true,
+    validate: v =>
+      TOKEN_SHAPE.test(v) ? null : "that doesn't look like a bot token (three dot-separated parts)",
+  });
+  const clientId = await askRequired('application id', {
+    flag: 'client-id',
+    fallback: keep('PROD_CLIENT_ID'),
+    validate: v => (SNOWFLAKE.test(v) ? null : 'a Discord id is 17-20 digits'),
+  });
   const admins = await ask(
     `your Discord user id ${c.dim('(admin: bypasses limits, right-click yourself → Copy User ID)')}`,
-    keep('ADMIN_USER_IDS')
+    { flag: 'admin-ids', fallback: keep('ADMIN_USER_IDS') }
   );
   if (admins && !admins.split(',').every(id => SNOWFLAKE.test(id.trim()))) {
     warn('that does not look like a comma-separated list of Discord ids, saving it anyway');
@@ -484,21 +572,35 @@ async function wizard() {
 
   heading('Database');
   note('the compose stack runs its own Postgres; this password is what it is created with');
-  const dbPassword = await askRequired('postgres password', v =>
-    v.length >= 8 ? null : 'use at least 8 characters'
-  );
+  if (keep('PROD_POSTGRES_PASSWORD')) {
+    note('changing it later does not change the password an existing database was created with');
+  }
+  const dbPassword = await askRequired('postgres password', {
+    flag: 'db-password',
+    fallback: keep('PROD_POSTGRES_PASSWORD'),
+    secret: true,
+    validate: v => (v.length >= 8 ? null : 'use at least 8 characters'),
+  });
   for (const key of ['PROD_POSTGRES_PASSWORD', 'TEST_POSTGRES_PASSWORD']) {
     text = setEnvValue(text, key, dbPassword);
   }
 
   heading('A second bot for testing');
   note('optional, and strongly recommended: it keeps experiments off your live bot');
-  if (await confirm('Configure a test bot too?', false)) {
-    text = setEnvValue(text, 'TEST_DISCORD_TOKEN', await askRequired('test bot token'));
+  const testGiven = 'test-token' in opts || 'test-client-id' in opts;
+  if (testGiven || (await confirm('Configure a test bot too?', false))) {
+    text = setEnvValue(
+      text,
+      'TEST_DISCORD_TOKEN',
+      await askRequired('test bot token', { flag: 'test-token', secret: true })
+    );
     text = setEnvValue(
       text,
       'TEST_CLIENT_ID',
-      await askRequired('test application id', v => (SNOWFLAKE.test(v) ? null : '17-20 digits'))
+      await askRequired('test application id', {
+        flag: 'test-client-id',
+        validate: v => (SNOWFLAKE.test(v) ? null : '17-20 digits'),
+      })
     );
   } else {
     note('skipped. `bun run bot:test` needs the TEST_* values filled in');
@@ -510,19 +612,24 @@ async function wizard() {
   text = setEnvValue(
     text,
     'SUPPORT_INVITE_URL',
-    await ask('invite url', keep('SUPPORT_INVITE_URL'))
+    await ask('invite url', { flag: 'invite', fallback: keep('SUPPORT_INVITE_URL') })
   );
 
   heading('Cloudflare R2');
   note('optional. Without it, files attach straight to Discord and nothing is stored off-box.');
   note('With it, files too big for Discord get a cdn URL instead of failing.');
-  if (await confirm('Configure R2 storage?', false)) {
-    text = setEnvValue(text, 'R2_ACCOUNT_ID', await askRequired('account id'));
-    text = setEnvValue(text, 'R2_ACCESS_KEY_ID', await askRequired('access key id'));
-    text = setEnvValue(text, 'R2_SECRET_ACCESS_KEY', await askRequired('secret access key'));
-    text = setEnvValue(text, 'R2_BUCKET_NAME', await askRequired('bucket name'));
+  const r2Given = Object.keys(opts).some(name => name.startsWith('r2-'));
+  if (r2Given || (await confirm('Configure R2 storage?', false))) {
+    for (const [key, question, flag, secret] of [
+      ['R2_ACCOUNT_ID', 'account id', 'r2-account-id'],
+      ['R2_ACCESS_KEY_ID', 'access key id', 'r2-access-key-id'],
+      ['R2_SECRET_ACCESS_KEY', 'secret access key', 'r2-secret-access-key', true],
+      ['R2_BUCKET_NAME', 'bucket name', 'r2-bucket'],
+    ]) {
+      text = setEnvValue(text, key, await askRequired(question, { flag, secret }));
+    }
     note('the public domain is the bucket’s custom domain, without a scheme');
-    const domain = await askRequired('public domain (e.g. cdn.example.com)');
+    const domain = await askRequired('public domain (e.g. cdn.example.com)', { flag: 'r2-domain' });
     text = setEnvValue(text, 'R2_PUBLIC_DOMAIN', domain);
     if (await confirm('Expire uploads automatically?', true)) {
       text = setEnvValue(text, 'R2_TEMP_UPLOADS_ENABLED', 'true');
@@ -530,7 +637,7 @@ async function wizard() {
       text = setEnvValue(
         text,
         'R2_TEMP_UPLOAD_TTL_HOURS',
-        await ask('hours to keep an upload', '72')
+        await ask('hours to keep an upload', { flag: 'r2-ttl-hours', fallback: '72' })
       );
     }
     warn('an R2 bucket on a public domain is readable by anyone who has the URL');
@@ -561,8 +668,7 @@ async function runChecksQuiet() {
 function nextSteps() {
   heading('Next');
   say(`  1. ${c.cyan('docker compose up -d --build')}      build and start the stack`);
-  say(`  2. ${c.cyan('bun run docker:register')}            register the slash commands`);
-  say(`  3. ${c.cyan('docker compose logs app --tail 30')}  expect "bot logged in as ..."`);
+  say(`  2. ${c.cyan('docker compose logs app --tail 30')}  expect "bot logged in as ..."`);
   say('');
   note('invite the bot with Scopes: bot + applications.commands');
   note('re-run `bun run setup --check` any time to re-validate an install');
@@ -570,12 +676,33 @@ function nextSteps() {
 
 // ---------------------------------------------------------------------------
 
+function printJson(ready, problems) {
+  console.log(JSON.stringify({ ready, problems, checks: results }, null, 2));
+}
+
 async function main() {
+  opts = parseArgs(process.argv.slice(2));
+  for (const name of VALUE_FLAGS) {
+    const value = process.env[`SETUP_${name.toUpperCase().replaceAll('-', '_')}`]?.trim();
+    if (value && !(name in opts)) {
+      opts[name] = value;
+    }
+  }
+  ({ check: CHECK, repair: REPAIR, yes: ASSUME_YES, json: JSON_OUT } = opts);
+  if (opts.help) {
+    console.log(HELP);
+    return 0;
+  }
+  if (JSON_OUT && !CHECK && !REPAIR) {
+    throw new UsageError('--json works with --check or --repair');
+  }
+
   say(c.bold('\ngronka setup'));
   say(c.dim(RULE));
 
   if (CHECK) {
     const { problems } = await runChecks();
+    JSON_OUT && printJson(problems.length === 0, problems);
     heading('Result');
     if (problems.length === 0) {
       ok('ready to start');
@@ -591,7 +718,9 @@ async function main() {
     const { fixables, problems } = await runChecks();
     heading('Repair');
     fixables.length ? applyFixes(fixables) : ok('nothing to create');
-    return problems.length > fixables.length ? 1 : 0;
+    const left = problems.length - fixables.length;
+    JSON_OUT && printJson(left === 0, problems.slice(0, left > 0 ? problems.length : 0));
+    return left > 0 ? 1 : 0;
   }
 
   const code = await wizard();
@@ -608,6 +737,6 @@ main()
   })
   .catch(error => {
     rl?.close();
-    bad(error.message);
-    process.exit(1);
+    console.error(`${c.red('✗')} ${error.message}`);
+    process.exit(error instanceof UsageError ? 2 : 1);
   });

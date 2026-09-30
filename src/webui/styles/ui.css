@@ -433,3 +433,12 @@ textarea.field {
     border-top: 1px solid #1f2126;
   }
 }
+
+/* iOS zooms the page when a focused field is under 16px */
+@media (max-width: 768px) {
+  input,
+  select,
+  textarea {
+    font-size: 16px !important;
+  }
+}

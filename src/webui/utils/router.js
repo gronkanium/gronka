@@ -21,7 +21,11 @@ function sanitizePropertyKey(key) {
 
 // Parse hash and update route
 function parseHash() {
-  const hash = window.location.hash.slice(1) || '/';
+  return parseHashOf(window.location.hash);
+}
+
+function parseHashOf(full) {
+  const hash = full.slice(1) || '/';
   const [path, queryString] = hash.split('?');
   const segments = path.split('/').filter(Boolean);
 
@@ -58,10 +62,9 @@ function parseHash() {
 // Initialize router
 export function initRouter() {
   // Listen for hash changes
-  window.addEventListener('hashchange', () => {
-    const route = parseHash();
-    currentRoute.set(route);
-  });
+  const sync = () => currentRoute.set(parseHash());
+  window.addEventListener('hashchange', sync);
+  window.addEventListener('popstate', sync);
 
   // Parse initial route
   const route = parseHash();
@@ -91,5 +94,12 @@ export function navigate(page, params = {}) {
     hash += `?${queryString}`;
   }
 
-  window.location.hash = hash;
+  // Assigning location.hash is a navigation: on a phone it flashes the address bar and the page.
+  const from = parseHash();
+  if (hash === (window.location.hash || '#/')) return;
+  const route = parseHashOf(hash);
+  const samePage = route.page === from.page;
+  window.history[samePage ? 'replaceState' : 'pushState'](null, '', hash);
+  currentRoute.set(route);
+  if (!samePage) window.scrollTo(0, 0);
 }

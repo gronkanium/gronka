@@ -527,6 +527,14 @@
     color: var(--text-muted);
     font: inherit;
     cursor: pointer;
+    white-space: nowrap;
+    text-align: left;
+  }
+  .jump span {
+    flex: 1;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
   }
   .jump:hover {
     border-color: var(--border-2);
@@ -752,8 +760,9 @@
     .page.full {
       padding: 0;
     }
-    .palette-hint {
-      display: none;
+    .palette-hint,
+    :global(kbd) {
+      display: none !important;
     }
   }
 </style>

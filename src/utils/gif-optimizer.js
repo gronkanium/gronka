@@ -2,63 +2,63 @@ import { spawn } from 'child_process';
 import fs from 'fs/promises';
 import path from 'path';
 import { createLogger } from './logger.js';
-import { getGifPath } from './storage.js';
+import { mediaPath } from './storage.js';
 import { ValidationError } from './errors.js';
-import { isOwnCdnUrl } from './config.js';
+import { botConfig, isOwnCdnUrl, r2Config } from './config.js';
+import { downloadGifFromR2, isR2Configured, mediaExistsInR2 } from './r2-storage.js';
+import { hashPartsHex } from './hashing.js';
 const logger = createLogger('gif-optimizer');
 
 export function isGifFile(filename, contentType) {
-  const ext = path.extname(filename).toLowerCase();
+  const ext = path.extname(filename ?? '').toLowerCase();
   const isGifExt = ext === '.gif';
   const isGifContentType = contentType ? contentType.toLowerCase() === 'image/gif' : false;
 
   return isGifExt || isGifContentType;
 }
 
-// Returns the content hash if the URL is one of this instance's own CDN URLs, else null.
-export function extractHashFromCdnUrl(url) {
+const OWN_CDN_PATHS = [
+  ['gif', /^\/gifs\/([a-f0-9]+)(\.gif)$/i],
+  ['video', /^\/videos\/([a-f0-9]+)(\.(?:mp4|webm|mov|avi|mkv))$/i],
+  ['image', /^\/images\/([a-f0-9]+)(\.(?:png|jpg|jpeg|webp))$/i],
+];
+
+// {type, hash, ext} for a file on this instance's own CDN, else null.
+export function parseOwnCdnUrl(url) {
   try {
-    if (!isOwnCdnUrl(url)) {
-      return null;
+    if (!isOwnCdnUrl(url)) return null;
+    const { pathname } = new URL(url);
+    for (const [type, pattern] of OWN_CDN_PATHS) {
+      const match = pathname.match(pattern);
+      if (match) return { type, hash: match[1], ext: match[2].toLowerCase() };
     }
-
-    const urlObj = new URL(url);
-
-    // Parse path patterns: /gifs/{hash}.gif, /videos/{hash}.{ext}, /images/{hash}.{ext}
-    const gifPathMatch = urlObj.pathname.match(/^\/gifs\/([a-f0-9]+)\.gif$/i);
-    if (gifPathMatch && gifPathMatch[1]) {
-      return gifPathMatch[1];
-    }
-
-    const videoPathMatch = urlObj.pathname.match(
-      /^\/videos\/([a-f0-9]+)\.(mp4|webm|mov|avi|mkv)$/i
-    );
-    if (videoPathMatch && videoPathMatch[1]) {
-      return videoPathMatch[1];
-    }
-
-    const imagePathMatch = urlObj.pathname.match(/^\/images\/([a-f0-9]+)\.(png|jpg|jpeg|webp)$/i);
-    if (imagePathMatch && imagePathMatch[1]) {
-      return imagePathMatch[1];
-    }
-
-    return null;
   } catch {
-    return null;
+    // not a URL
   }
+  return null;
 }
 
-export async function checkLocalGif(hash, storagePath) {
-  // Check local filesystem directly, ignoring R2
-  // This is used by optimization to determine if we can use a local file
-  // instead of downloading from R2/CDN
+// A stored gif from local disk, else from R2; null when neither has it.
+export async function loadStoredGif(hash) {
   try {
-    const gifPath = getGifPath(hash, storagePath);
-    await fs.access(gifPath);
-    return true;
+    return await fs.readFile(mediaPath('gif', hash, '.gif', botConfig.gifStoragePath));
   } catch {
-    return false;
+    // not on this disk
   }
+  if (!isR2Configured(r2Config) || !(await mediaExistsInR2('gif', hash, '.gif', r2Config))) {
+    return null;
+  }
+  return downloadGifFromR2(hash, r2Config).catch(() => null);
+}
+
+// Optimizes the gif at inputPath once per (content, lossy) pair and reuses the result after that.
+export async function optimizeCached(buffer, inputPath, lossy = null) {
+  const hash = hashPartsHex([buffer, 'optimized', lossy === null ? null : String(lossy)]);
+  const stored = await loadStoredGif(hash);
+  if (stored) return { hash, buffer: stored };
+  const outputPath = mediaPath('gif', hash, '.gif', botConfig.gifStoragePath);
+  await optimizeGif(inputPath, outputPath, lossy === null ? {} : { lossy });
+  return { hash, buffer: await fs.readFile(outputPath) };
 }
 
 /**

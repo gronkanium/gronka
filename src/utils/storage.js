@@ -3,13 +3,12 @@ import path from 'path';
 import { createLogger } from './logger.js';
 import { r2Config, botConfig } from './config.js';
 import {
-  uploadGifToR2,
-  uploadVideoToR2,
-  uploadImageToR2,
-  gifExistsInR2,
-  videoExistsInR2,
-  imageExistsInR2,
+  uploadMediaToR2,
+  mediaExistsInR2,
+  fileExistsInR2,
+  getR2KeyFromHash,
   getR2PublicUrl,
+  isR2Configured,
   listObjectsInR2,
 } from './r2-storage.js';
 import {
@@ -139,12 +138,7 @@ function incrementR2UsageCache(fileSizeBytes) {
  * @returns {Promise<void>}
  */
 export async function initializeR2UsageCache() {
-  if (
-    !r2Config.accountId ||
-    !r2Config.accessKeyId ||
-    !r2Config.secretAccessKey ||
-    !r2Config.bucketName
-  ) {
+  if (!isR2Configured(r2Config)) {
     logger.debug('R2 not configured, skipping R2 usage cache initialization');
     return;
   }
@@ -264,104 +258,89 @@ export function detectFileType(extension, contentType = '', buffer = null) {
   return 'video';
 }
 
-export async function gifExists(hash, storagePath) {
-  if (
-    r2Config.accountId &&
-    r2Config.accessKeyId &&
-    r2Config.secretAccessKey &&
-    r2Config.bucketName
-  ) {
-    return await gifExistsInR2(hash, r2Config);
+const MEDIA_DIRS = { gif: 'gifs', video: 'videos', image: 'images' };
+
+function safeExtension(type, extension) {
+  if (type === 'gif') return '.gif';
+  const safe = extension.replace(/[^a-zA-Z0-9.]/gi, '');
+  return safe.startsWith('.') ? safe : `.${safe}`;
+}
+
+// GIF_STORAGE_PATH points at data-*/gifs, so every kind lives beside it, not inside it.
+export function mediaPath(type, hash, extension, storagePath) {
+  const basePath = getStoragePath(storagePath);
+  const root = basePath.replace(/\\/g, '/').endsWith('/gifs') ? path.dirname(basePath) : basePath;
+  const safeHash = hash.replace(/[^a-f0-9]/gi, '');
+  return path.join(root, MEDIA_DIRS[type], `${safeHash}${safeExtension(type, extension)}`);
+}
+
+const isRemote = location => /^https?:\/\//i.test(location);
+
+// saveMedia hands back an R2 URL or a local path; both become the URL a user can open.
+export function mediaPublicUrl(location, type) {
+  if (isRemote(location)) return location;
+  return `${botConfig.cdnBaseUrl.replace('/gifs', `/${MEDIA_DIRS[type]}`)}/${path.basename(location)}`;
+}
+
+export async function storedSize(location, fallback) {
+  if (isRemote(location)) return fallback;
+  try {
+    return (await fs.stat(location)).size;
+  } catch {
+    return fallback;
+  }
+}
+
+export async function mediaExists(type, hash, extension, storagePath) {
+  if (isR2Configured(r2Config)) {
+    return await mediaExistsInR2(type, hash, extension, r2Config);
   }
   try {
-    const gifPath = getGifPath(hash, storagePath);
-    await fs.access(gifPath);
+    await fs.access(mediaPath(type, hash, extension, storagePath));
     return true;
   } catch {
     return false;
   }
 }
 
-export function getGifPath(hash, storagePath) {
-  const basePath = getStoragePath(storagePath);
-  // Ensure hash is safe (alphanumeric only)
-  const safeHash = hash.replace(/[^a-f0-9]/gi, '');
-  // Check if basePath already ends with 'gifs' to avoid double gifs/gifs
-  const normalizedBasePath = basePath.replace(/\\/g, '/');
-  if (normalizedBasePath.endsWith('/gifs') || normalizedBasePath.endsWith('\\gifs')) {
-    return path.join(basePath, `${safeHash}.gif`);
-  }
-  return path.join(basePath, 'gifs', `${safeHash}.gif`);
-}
-
-/**
- * Save a GIF buffer to R2 or disk
- * @param {Buffer} buffer - GIF file buffer
- * @param {string} hash - BLAKE3 hash of the video
- * @param {string} storagePath - Base storage path (for local fallback)
- * @param {Object} [metadata={}] - Optional metadata to attach to the object
- * @returns {Promise<{url: string, method: string, buffer: Buffer}>} Object with URL, upload method, and buffer
- */
-export async function saveGif(
+// Returns {url, method, buffer}: url is an R2 URL when uploaded there, else the local path.
+export async function saveMedia(
+  type,
   buffer,
   hash,
+  extension,
   storagePath,
   metadata = {},
   discordLimit = botConfig.discordSizeLimit
 ) {
   const method = pickUploadMethod(buffer, discordLimit);
+  const sizeMb = (buffer.length / (1024 * 1024)).toFixed(2);
 
-  // Only upload to R2 if it is too big to ride along as a Discord attachment
-  if (
-    method === 'r2' &&
-    r2Config.accountId &&
-    r2Config.accessKeyId &&
-    r2Config.secretAccessKey &&
-    r2Config.bucketName
-  ) {
+  if (method === 'r2' && isR2Configured(r2Config)) {
     try {
-      // Check if file already exists in R2 specifically (not local disk)
-      const existsInR2 = await gifExistsInR2(hash, r2Config);
-      if (existsInR2) {
-        const safeHash = hash.replace(/[^a-f0-9]/gi, '');
-        const key = `gifs/${safeHash}.gif`;
+      const key = getR2KeyFromHash(hash, type, extension);
+      if (await fileExistsInR2(key, r2Config)) {
         const publicUrl = getR2PublicUrl(key, r2Config);
-        logger.info(`GIF already exists in R2: ${publicUrl}`);
+        logger.info(`${type} already exists in R2: ${publicUrl}`);
         return { url: publicUrl, method, buffer };
       }
-
-      logger.info(
-        `Uploading GIF to R2 (hash: ${hash.substring(0, 8)}..., size: ${(buffer.length / (1024 * 1024)).toFixed(2)}MB)`
-      );
-      const publicUrl = await uploadGifToR2(buffer, hash, r2Config, metadata);
-      logger.info(
-        `Saved GIF to R2: ${publicUrl} (size: ${(buffer.length / (1024 * 1024)).toFixed(2)}MB)`
-      );
+      logger.info(`Uploading ${type} to R2 (hash: ${hash.substring(0, 8)}..., size: ${sizeMb}MB)`);
+      const publicUrl = await uploadMediaToR2(type, buffer, hash, extension, r2Config, metadata);
+      logger.info(`Saved ${type} to R2: ${publicUrl} (size: ${sizeMb}MB)`);
       incrementR2UsageCache(buffer.length);
-      // Invalidate stats cache since we added a new file
       invalidateStatsCache(storagePath);
       return { url: publicUrl, method, buffer };
     } catch (error) {
-      logger.error(`Failed to upload GIF to R2, falling back to local storage:`, error.message);
-      logger.error(`R2 upload error details:`, error);
-      // Fall through to local storage
+      logger.error(`Failed to upload ${type} to R2, falling back to local storage:`, error);
     }
   }
 
-  // Save to local disk (for Discord attachment delivery, or as fallback)
-  const _basePath = getStoragePath(storagePath);
-  const gifPath = getGifPath(hash, storagePath);
-
-  await fs.mkdir(path.dirname(gifPath), { recursive: true });
-
-  // Write file (fs.writeFile overwrites if file exists, so no TOCTOU issue)
-  await fs.writeFile(gifPath, buffer);
-  logger.debug(`Saved GIF: ${gifPath} (size: ${(buffer.length / (1024 * 1024)).toFixed(2)}MB)`);
-
-  // Invalidate stats cache since we added a new file
+  const filePath = mediaPath(type, hash, extension, storagePath);
+  await fs.mkdir(path.dirname(filePath), { recursive: true });
+  await fs.writeFile(filePath, buffer);
+  logger.debug(`Saved ${type}: ${filePath} (size: ${sizeMb}MB)`);
   invalidateStatsCache(storagePath);
-
-  return { url: gifPath, method, buffer };
+  return { url: filePath, method, buffer };
 }
 
 export async function cleanupTempFiles(tempFiles) {
@@ -414,220 +393,6 @@ export function formatFileSize(bytes) {
     logger.error('Error formatting file size:', { error: error.message, bytes, numBytes });
     return '0.00 MB';
   }
-}
-
-export function getVideoPath(hash, extension, storagePath) {
-  const basePath = getStoragePath(storagePath);
-  // Ensure hash is safe (alphanumeric only)
-  const safeHash = hash.replace(/[^a-f0-9]/gi, '');
-  // Ensure extension is safe (alphanumeric and dots only)
-  const safeExt = extension.replace(/[^a-zA-Z0-9.]/gi, '');
-  const ext = safeExt.startsWith('.') ? safeExt : `.${safeExt}`;
-  // Check if basePath ends with 'gifs' - if so, go up one level to avoid gifs/videos nesting
-  const normalizedBasePath = basePath.replace(/\\/g, '/');
-  if (normalizedBasePath.endsWith('/gifs') || normalizedBasePath.endsWith('\\gifs')) {
-    return path.join(path.dirname(basePath), 'videos', `${safeHash}${ext}`);
-  }
-  return path.join(basePath, 'videos', `${safeHash}${ext}`);
-}
-
-export async function videoExists(hash, extension, storagePath) {
-  if (
-    r2Config.accountId &&
-    r2Config.accessKeyId &&
-    r2Config.secretAccessKey &&
-    r2Config.bucketName
-  ) {
-    return await videoExistsInR2(hash, extension, r2Config);
-  }
-  try {
-    const videoPath = getVideoPath(hash, extension, storagePath);
-    await fs.access(videoPath);
-    return true;
-  } catch {
-    return false;
-  }
-}
-
-/**
- * Save a video buffer to R2 or disk
- * @param {Buffer} buffer - Video file buffer
- * @param {string} hash - BLAKE3 hash of the video
- * @param {string} extension - File extension (e.g., '.mp4', '.webm')
- * @param {string} storagePath - Base storage path (for local fallback)
- * @param {Object} [metadata={}] - Optional metadata to attach to the object
- * @returns {Promise<{url: string, method: string, buffer: Buffer}>} Object with URL, upload method, and buffer
- */
-export async function saveVideo(
-  buffer,
-  hash,
-  extension,
-  storagePath,
-  metadata = {},
-  discordLimit = botConfig.discordSizeLimit
-) {
-  const method = pickUploadMethod(buffer, discordLimit);
-
-  // Only upload to R2 if it is too big to ride along as a Discord attachment
-  if (
-    method === 'r2' &&
-    r2Config.accountId &&
-    r2Config.accessKeyId &&
-    r2Config.secretAccessKey &&
-    r2Config.bucketName
-  ) {
-    try {
-      // Check if file already exists in R2 specifically (not local disk)
-      const existsInR2 = await videoExistsInR2(hash, extension, r2Config);
-      if (existsInR2) {
-        const safeHash = hash.replace(/[^a-f0-9]/gi, '');
-        const safeExt = extension.replace(/[^a-zA-Z0-9.]/gi, '');
-        const ext = safeExt.startsWith('.') ? safeExt : `.${safeExt}`;
-        const key = `videos/${safeHash}${ext}`;
-        const publicUrl = getR2PublicUrl(key, r2Config);
-        logger.info(`Video already exists in R2: ${publicUrl}`);
-        return { url: publicUrl, method, buffer };
-      }
-
-      logger.info(
-        `Uploading video to R2 (hash: ${hash.substring(0, 8)}..., size: ${(buffer.length / (1024 * 1024)).toFixed(2)}MB)`
-      );
-      const publicUrl = await uploadVideoToR2(buffer, hash, extension, r2Config, metadata);
-      logger.info(
-        `Saved video to R2: ${publicUrl} (size: ${(buffer.length / (1024 * 1024)).toFixed(2)}MB)`
-      );
-      incrementR2UsageCache(buffer.length);
-      // Invalidate stats cache since we added a new file
-      invalidateStatsCache(storagePath);
-      return { url: publicUrl, method, buffer };
-    } catch (error) {
-      logger.error(`Failed to upload video to R2, falling back to local storage:`, error.message);
-      logger.error(`R2 upload error details:`, error);
-      // Fall through to local storage
-    }
-  }
-
-  // Save to local disk (for Discord attachment delivery, or as fallback)
-  const _basePath = getStoragePath(storagePath);
-  const videoPath = getVideoPath(hash, extension, storagePath);
-
-  await fs.mkdir(path.dirname(videoPath), { recursive: true });
-
-  // Write file (fs.writeFile overwrites if file exists, so no TOCTOU issue)
-  await fs.writeFile(videoPath, buffer);
-  logger.debug(`Saved video: ${videoPath} (size: ${(buffer.length / (1024 * 1024)).toFixed(2)}MB)`);
-
-  // Invalidate stats cache since we added a new file
-  invalidateStatsCache(storagePath);
-
-  return { url: videoPath, method, buffer };
-}
-
-export function getImagePath(hash, extension, storagePath) {
-  const basePath = getStoragePath(storagePath);
-  // Ensure hash is safe (alphanumeric only)
-  const safeHash = hash.replace(/[^a-f0-9]/gi, '');
-  // Ensure extension is safe (alphanumeric and dots only)
-  const safeExt = extension.replace(/[^a-zA-Z0-9.]/gi, '');
-  const ext = safeExt.startsWith('.') ? safeExt : `.${safeExt}`;
-  // Check if basePath ends with 'gifs' - if so, go up one level to avoid gifs/images nesting
-  const normalizedBasePath = basePath.replace(/\\/g, '/');
-  if (normalizedBasePath.endsWith('/gifs') || normalizedBasePath.endsWith('\\gifs')) {
-    return path.join(path.dirname(basePath), 'images', `${safeHash}${ext}`);
-  }
-  return path.join(basePath, 'images', `${safeHash}${ext}`);
-}
-
-export async function imageExists(hash, extension, storagePath) {
-  if (
-    r2Config.accountId &&
-    r2Config.accessKeyId &&
-    r2Config.secretAccessKey &&
-    r2Config.bucketName
-  ) {
-    return await imageExistsInR2(hash, extension, r2Config);
-  }
-  try {
-    const imagePath = getImagePath(hash, extension, storagePath);
-    await fs.access(imagePath);
-    return true;
-  } catch {
-    return false;
-  }
-}
-
-/**
- * Save an image buffer to R2 or disk
- * @param {Buffer} buffer - Image file buffer
- * @param {string} hash - BLAKE3 hash of the image
- * @param {string} extension - File extension (e.g., '.png', '.jpg')
- * @param {string} storagePath - Base storage path (for local fallback)
- * @param {Object} [metadata={}] - Optional metadata to attach to the object
- * @returns {Promise<{url: string, method: string, buffer: Buffer}>} Object with URL, upload method, and buffer
- */
-export async function saveImage(
-  buffer,
-  hash,
-  extension,
-  storagePath,
-  metadata = {},
-  discordLimit = botConfig.discordSizeLimit
-) {
-  const method = pickUploadMethod(buffer, discordLimit);
-
-  // Only upload to R2 if it is too big to ride along as a Discord attachment
-  if (
-    method === 'r2' &&
-    r2Config.accountId &&
-    r2Config.accessKeyId &&
-    r2Config.secretAccessKey &&
-    r2Config.bucketName
-  ) {
-    try {
-      // Check if file already exists in R2 specifically (not local disk)
-      const existsInR2 = await imageExistsInR2(hash, extension, r2Config);
-      if (existsInR2) {
-        const safeHash = hash.replace(/[^a-f0-9]/gi, '');
-        const safeExt = extension.replace(/[^a-zA-Z0-9.]/gi, '');
-        const ext = safeExt.startsWith('.') ? safeExt : `.${safeExt}`;
-        const key = `images/${safeHash}${ext}`;
-        const publicUrl = getR2PublicUrl(key, r2Config);
-        logger.info(`Image already exists in R2: ${publicUrl}`);
-        return { url: publicUrl, method, buffer };
-      }
-
-      logger.info(
-        `Uploading image to R2 (hash: ${hash.substring(0, 8)}..., size: ${(buffer.length / (1024 * 1024)).toFixed(2)}MB)`
-      );
-      const publicUrl = await uploadImageToR2(buffer, hash, extension, r2Config, metadata);
-      logger.info(
-        `Saved image to R2: ${publicUrl} (size: ${(buffer.length / (1024 * 1024)).toFixed(2)}MB)`
-      );
-      incrementR2UsageCache(buffer.length);
-      // Invalidate stats cache since we added a new file
-      invalidateStatsCache(storagePath);
-      return { url: publicUrl, method, buffer };
-    } catch (error) {
-      logger.error(`Failed to upload image to R2, falling back to local storage:`, error.message);
-      logger.error(`R2 upload error details:`, error);
-      // Fall through to local storage
-    }
-  }
-
-  // Save to local disk (for Discord attachment delivery, or as fallback)
-  const _basePath = getStoragePath(storagePath);
-  const imagePath = getImagePath(hash, extension, storagePath);
-
-  await fs.mkdir(path.dirname(imagePath), { recursive: true });
-
-  // Write file (fs.writeFile overwrites if file exists, so no TOCTOU issue)
-  await fs.writeFile(imagePath, buffer);
-  logger.debug(`Saved image: ${imagePath} (size: ${(buffer.length / (1024 * 1024)).toFixed(2)}MB)`);
-
-  // Invalidate stats cache since we added a new file
-  invalidateStatsCache(storagePath);
-
-  return { url: imagePath, method, buffer };
 }
 
 /**
@@ -734,8 +499,7 @@ export async function getStorageStats(storagePath) {
  */
 async function calculateStorageStats(storagePath) {
   try {
-    const useR2 =
-      r2Config.accountId && r2Config.accessKeyId && r2Config.secretAccessKey && r2Config.bucketName;
+    const useR2 = isR2Configured(r2Config);
 
     let totalGifs = 0;
     let totalVideos = 0;

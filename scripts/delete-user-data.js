@@ -39,8 +39,8 @@ import { createInterface } from 'readline';
 import postgres from 'postgres';
 import { getPostgresConfig } from '../src/utils/database/connection.js';
 import { r2Config } from '../src/utils/config.js';
-import { getR2KeyFromHash, deleteFromR2 } from '../src/utils/r2-storage.js';
-import { getGifPath, getVideoPath, getImagePath } from '../src/utils/storage.js';
+import { getR2KeyFromHash, deleteFromR2, isR2Configured } from '../src/utils/r2-storage.js';
+import { mediaPath } from '../src/utils/storage.js';
 
 const args = process.argv.slice(2);
 
@@ -56,36 +56,11 @@ const skipConfirm = args.includes('--yes') || args.includes('-y');
 const keepFiles = args.includes('--keep-files');
 const includeBans = args.includes('--include-bans');
 
-// Local storage base path, same default the app/container uses. get*Path() append the
-// gifs/ videos/ images/ subdirectory themselves.
+// Local storage base path, same default the app/container uses. mediaPath() appends the
+// gifs/ videos/ images/ subdirectory itself.
 const storagePath = process.env.GIF_STORAGE_PATH || './data-prod/gifs';
 
 const line = '━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━';
-
-function isR2Configured() {
-  return !!(
-    r2Config.accountId &&
-    r2Config.accessKeyId &&
-    r2Config.secretAccessKey &&
-    r2Config.bucketName
-  );
-}
-
-/**
- * Local disk path for a stored file, or null if the type is unknown.
- */
-function localPathFor(fileHash, fileType, fileExtension) {
-  if (fileType === 'gif') {
-    return getGifPath(fileHash, storagePath);
-  }
-  if (fileType === 'video') {
-    return getVideoPath(fileHash, fileExtension, storagePath);
-  }
-  if (fileType === 'image') {
-    return getImagePath(fileHash, fileExtension, storagePath);
-  }
-  return null;
-}
 
 function askConfirmation(question) {
   return new Promise(resolve => {
@@ -121,7 +96,7 @@ async function main() {
   console.log(
     dryRun ? 'mode:    DRY RUN (no changes, pass --execute to delete)' : 'mode:    EXECUTE'
   );
-  if (!isR2Configured()) {
+  if (!isR2Configured(r2Config)) {
     console.log('r2:      not configured (only local files + database rows are considered)');
   }
 
@@ -216,7 +191,7 @@ async function main() {
 
     for (const row of filesToDelete) {
       // R2
-      if (isR2Configured()) {
+      if (isR2Configured(r2Config)) {
         try {
           const key = getR2KeyFromHash(row.file_hash, row.file_type, row.file_extension);
           if (key && (await deleteFromR2(key, r2Config))) {
@@ -229,7 +204,9 @@ async function main() {
       }
       // Local disk
       try {
-        const path = localPathFor(row.file_hash, row.file_type, row.file_extension);
+        const path = ['gif', 'video', 'image'].includes(row.file_type)
+          ? mediaPath(row.file_type, row.file_hash, row.file_extension, storagePath)
+          : null;
         if (path && existsSync(path)) {
           unlinkSync(path);
           localDeleted++;

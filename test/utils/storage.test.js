@@ -8,18 +8,12 @@ import { test, beforeAll, afterAll } from 'bun:test';
 import assert from 'node:assert';
 import {
   detectFileType,
-  getGifPath,
-  getVideoPath,
-  getImagePath,
+  mediaPath,
   formatFileSize,
-  gifExists,
-  saveGif,
+  mediaExists,
+  saveMedia,
   cleanupTempFiles,
   getStorageStats,
-  videoExists,
-  saveVideo,
-  imageExists,
-  saveImage,
   invalidateStatsCache,
 } from '../../src/utils/storage.js';
 import path from 'node:path';
@@ -118,7 +112,7 @@ test('detectFileType - defaults to video for unknown types', () => {
 
 test('getGifPath - generates correct path for GIF', () => {
   const hash = 'abc123def456';
-  const gifPath = getGifPath(hash, testStoragePath);
+  const gifPath = mediaPath('gif', hash, '.gif', testStoragePath);
   assert(gifPath.includes('gifs'));
   assert(gifPath.endsWith('.gif'));
   assert(gifPath.includes(hash));
@@ -126,13 +120,13 @@ test('getGifPath - generates correct path for GIF', () => {
 
 test('getGifPath - sanitizes hash to alphanumeric only', () => {
   const hash = 'abc123!@#$%^&*()';
-  const gifPath = getGifPath(hash, testStoragePath);
+  const gifPath = mediaPath('gif', hash, '.gif', testStoragePath);
   assert.strictEqual(path.basename(gifPath), 'abc123.gif');
 });
 
 test('getVideoPath - generates correct path for video', () => {
   const hash = 'abc123def456';
-  const videoPath = getVideoPath(hash, '.mp4', testStoragePath);
+  const videoPath = mediaPath('video', hash, '.mp4', testStoragePath);
   assert(videoPath.includes('videos'));
   assert(videoPath.endsWith('.mp4'));
   assert(videoPath.includes(hash));
@@ -140,20 +134,20 @@ test('getVideoPath - generates correct path for video', () => {
 
 test('getVideoPath - sanitizes hash and extension', () => {
   const hash = 'abc123!@#$%^&*()';
-  const videoPath = getVideoPath(hash, '.mp4', testStoragePath);
+  const videoPath = mediaPath('video', hash, '.mp4', testStoragePath);
   assert.strictEqual(path.basename(videoPath), 'abc123.mp4');
 });
 
 test('getVideoPath - handles extension with or without dot', () => {
   const hash = 'abc123';
-  const path1 = getVideoPath(hash, '.mp4', testStoragePath);
-  const path2 = getVideoPath(hash, 'mp4', testStoragePath);
+  const path1 = mediaPath('video', hash, '.mp4', testStoragePath);
+  const path2 = mediaPath('video', hash, 'mp4', testStoragePath);
   assert.strictEqual(path1, path2);
 });
 
 test('getImagePath - generates correct path for image', () => {
   const hash = 'abc123def456';
-  const imagePath = getImagePath(hash, '.png', testStoragePath);
+  const imagePath = mediaPath('image', hash, '.png', testStoragePath);
   assert(imagePath.includes('images'));
   assert(imagePath.endsWith('.png'));
   assert(imagePath.includes(hash));
@@ -161,7 +155,7 @@ test('getImagePath - generates correct path for image', () => {
 
 test('getImagePath - sanitizes hash and extension', () => {
   const hash = 'abc123!@#$%^&*()';
-  const imagePath = getImagePath(hash, '.png', testStoragePath);
+  const imagePath = mediaPath('image', hash, '.png', testStoragePath);
   assert.strictEqual(path.basename(imagePath), 'abc123.png');
 });
 
@@ -182,33 +176,33 @@ test('formatFileSize - handles zero bytes', () => {
 });
 
 test('gifExists - returns false for non-existent GIF', async () => {
-  const exists = await gifExists('nonexistent123', testStoragePath);
+  const exists = await mediaExists('gif', 'nonexistent123', '.gif', testStoragePath);
   assert.strictEqual(exists, false);
 });
 
 test('gifExists - returns true for existing GIF', async () => {
   const hash = 'testgif123';
-  const gifPath = getGifPath(hash, testStoragePath);
+  const gifPath = mediaPath('gif', hash, '.gif', testStoragePath);
   // Ensure directory exists
   const gifsDir = path.dirname(gifPath);
   mkdirSync(gifsDir, { recursive: true });
   writeFileSync(gifPath, Buffer.from('fake gif content'));
 
-  const exists = await gifExists(hash, testStoragePath);
+  const exists = await mediaExists('gif', hash, '.gif', testStoragePath);
   assert.strictEqual(exists, true);
 });
 
 test('saveGif - saves GIF file and returns path', async () => {
   const hash = 'testgif456';
   const buffer = Buffer.from('fake gif content');
-  const saveResult = await saveGif(buffer, hash, testStoragePath);
+  const saveResult = await saveMedia('gif', buffer, hash, '.gif', testStoragePath);
   const savedPath = saveResult.url;
 
   // Hash is sanitized (hex characters only), so testgif456 becomes ef456
   assert(savedPath.includes('ef456'));
   assert(savedPath.endsWith('.gif'));
 
-  const exists = await gifExists(hash, testStoragePath);
+  const exists = await mediaExists('gif', hash, '.gif', testStoragePath);
   assert.strictEqual(exists, true);
 });
 
@@ -216,69 +210,69 @@ test('saveGif - creates directory if it does not exist', async () => {
   const customPath = path.join(testStoragePath, 'custom');
   const hash = 'testgif789';
   const buffer = Buffer.from('fake gif content');
-  await saveGif(buffer, hash, customPath);
+  await saveMedia('gif', buffer, hash, '.gif', customPath);
 
-  const exists = await gifExists(hash, customPath);
+  const exists = await mediaExists('gif', hash, '.gif', customPath);
   assert.strictEqual(exists, true);
 });
 
 test('videoExists - returns false for non-existent video', async () => {
-  const exists = await videoExists('nonexistent123', '.mp4', testStoragePath);
+  const exists = await mediaExists('video', 'nonexistent123', '.mp4', testStoragePath);
   assert.strictEqual(exists, false);
 });
 
 test('videoExists - returns true for existing video', async () => {
   const hash = 'testvideo123';
-  const videoPath = getVideoPath(hash, '.mp4', testStoragePath);
+  const videoPath = mediaPath('video', hash, '.mp4', testStoragePath);
   const videosDir = path.dirname(videoPath);
   mkdirSync(videosDir, { recursive: true });
   writeFileSync(videoPath, Buffer.from('fake video content'));
 
-  const exists = await videoExists(hash, '.mp4', testStoragePath);
+  const exists = await mediaExists('video', hash, '.mp4', testStoragePath);
   assert.strictEqual(exists, true);
 });
 
 test('saveVideo - saves video file and returns path', async () => {
   const hash = 'testvideo456';
   const buffer = Buffer.from('fake video content');
-  const saveResult = await saveVideo(buffer, hash, '.webm', testStoragePath);
+  const saveResult = await saveMedia('video', buffer, hash, '.webm', testStoragePath);
   const savedPath = saveResult.url;
 
   // Hash is sanitized (hex characters only), so testvideo456 becomes ede456
   assert(savedPath.includes('ede456'));
   assert(savedPath.endsWith('.webm'));
 
-  const exists = await videoExists(hash, '.webm', testStoragePath);
+  const exists = await mediaExists('video', hash, '.webm', testStoragePath);
   assert.strictEqual(exists, true);
 });
 
 test('imageExists - returns false for non-existent image', async () => {
-  const exists = await imageExists('nonexistent123', '.png', testStoragePath);
+  const exists = await mediaExists('image', 'nonexistent123', '.png', testStoragePath);
   assert.strictEqual(exists, false);
 });
 
 test('imageExists - returns true for existing image', async () => {
   const hash = 'testimage123';
-  const imagePath = getImagePath(hash, '.png', testStoragePath);
+  const imagePath = mediaPath('image', hash, '.png', testStoragePath);
   const imagesDir = path.dirname(imagePath);
   mkdirSync(imagesDir, { recursive: true });
   writeFileSync(imagePath, Buffer.from('fake image content'));
 
-  const exists = await imageExists(hash, '.png', testStoragePath);
+  const exists = await mediaExists('image', hash, '.png', testStoragePath);
   assert.strictEqual(exists, true);
 });
 
 test('saveImage - saves image file and returns path', async () => {
   const hash = 'testimage456';
   const buffer = Buffer.from('fake image content');
-  const saveResult = await saveImage(buffer, hash, '.jpg', testStoragePath);
+  const saveResult = await saveMedia('image', buffer, hash, '.jpg', testStoragePath);
   const savedPath = saveResult.url;
 
   // Hash is sanitized (hex characters only), so testimage456 becomes eae456
   assert(savedPath.includes('eae456'));
   assert(savedPath.endsWith('.jpg'));
 
-  const exists = await imageExists(hash, '.jpg', testStoragePath);
+  const exists = await mediaExists('image', hash, '.jpg', testStoragePath);
   assert.strictEqual(exists, true);
 });
 
@@ -345,10 +339,10 @@ test('getStorageStats - returns zero stats for empty storage', async () => {
 test('getStorageStats - counts files correctly', async () => {
   // Use unique hash to avoid conflicts with other tests
   const uniqueId = Date.now();
-  const gif1Path = getGifPath(`hash1${uniqueId}`, testStoragePath);
-  const gif2Path = getGifPath(`hash2${uniqueId}`, testStoragePath);
-  const video1Path = getVideoPath(`hash3${uniqueId}`, '.mp4', testStoragePath);
-  const image1Path = getImagePath(`hash4${uniqueId}`, '.png', testStoragePath);
+  const gif1Path = mediaPath('gif', `hash1${uniqueId}`, '.gif', testStoragePath);
+  const gif2Path = mediaPath('gif', `hash2${uniqueId}`, '.gif', testStoragePath);
+  const video1Path = mediaPath('video', `hash3${uniqueId}`, '.mp4', testStoragePath);
+  const image1Path = mediaPath('image', `hash4${uniqueId}`, '.png', testStoragePath);
 
   mkdirSync(path.dirname(gif1Path), { recursive: true });
   mkdirSync(path.dirname(video1Path), { recursive: true });
@@ -370,7 +364,7 @@ test('getStorageStats - counts files correctly', async () => {
 
 test('getStorageStats - calculates formatted sizes correctly', async () => {
   const uniqueId = Date.now();
-  const gifPath = getGifPath(`hash1${uniqueId}`, testStoragePath);
+  const gifPath = mediaPath('gif', `hash1${uniqueId}`, '.gif', testStoragePath);
   const gifsDir = path.dirname(gifPath);
   mkdirSync(gifsDir, { recursive: true });
   const fileSize = 1024 * 1024;

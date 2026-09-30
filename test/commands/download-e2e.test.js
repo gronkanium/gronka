@@ -1,6 +1,7 @@
 import { test, describe, beforeAll, afterAll } from 'bun:test';
 import assert from 'node:assert';
 import fs from 'fs/promises';
+import fsSync from 'fs';
 import path from 'path';
 import os from 'os';
 import { mock } from 'bun:test';
@@ -45,6 +46,31 @@ function fakeBuffer(seed, size = 1024) {
 }
 
 let handleDownloadCommand;
+let getProcessedUrl;
+let hashUrl;
+const fixtures = {};
+
+function ffmpeg(args) {
+  const run = Bun.spawnSync(['ffmpeg', '-y', '-v', 'error', ...args]);
+  if (run.exitCode !== 0) throw new Error(run.stderr.toString());
+}
+
+function probeSeconds(buffer, ext) {
+  const file = path.join(os.tmpdir(), `gronka-probe-${process.pid}-${Date.now()}${ext}`);
+  fsSync.writeFileSync(file, buffer);
+  const run = Bun.spawnSync([
+    'ffprobe',
+    '-v',
+    'error',
+    '-show_entries',
+    'format=duration',
+    '-of',
+    'csv=p=0',
+    file,
+  ]);
+  fsSync.rmSync(file, { force: true });
+  return Number(run.stdout.toString().trim());
+}
 
 if (!mocksSupported) {
   // No --experimental-test-module-mocks: register a single skipped placeholder so the file is
@@ -56,6 +82,22 @@ if (!mocksSupported) {
   });
 } else {
   beforeAll(async () => {
+    const dir = await fs.mkdtemp(path.join(os.tmpdir(), 'gronka-e2e-media-'));
+    ffmpeg([
+      ...['-f', 'lavfi', '-i', 'testsrc=size=64x64:rate=10:duration=6'],
+      ...['-c:v', 'libx264', '-pix_fmt', 'yuv420p', `${dir}/clip.mp4`],
+    ]);
+    ffmpeg(['-f', 'lavfi', '-i', 'testsrc=size=32x32:rate=5:duration=6', `${dir}/anim.gif`]);
+    fixtures.mp4 = await fs.readFile(`${dir}/clip.mp4`);
+    fixtures.gif = await fs.readFile(`${dir}/anim.gif`);
+    await fs.rm(dir, { recursive: true, force: true });
+    const media = (buffer, contentType, filename) => ({
+      buffer,
+      contentType,
+      size: buffer.length,
+      filename,
+    });
+
     // Register mocks for the network boundary BEFORE importing download.js.
     mock.module('../../src/utils/cobalt.js', () => ({
       canonicalizeMirrorUrl: url => url,
@@ -121,6 +163,10 @@ if (!mocksSupported) {
             },
           ];
         }
+        if (url.includes('trimvid')) return media(fixtures.mp4, 'video/mp4', 'clip.mp4');
+        if (url.includes('trimgif')) return media(fixtures.gif, 'image/gif', 'anim.gif');
+        if (url.includes('gifnamed')) return media(fixtures.mp4, 'video/mp4', 'loop.gif');
+        if (url.includes('onephoto')) return media(fakeBuffer(9, 2048), 'image/png', 'one.png');
         if (url.includes('deleted')) {
           const { NetworkError } = await import('../../src/utils/errors.js');
           throw new NetworkError('this post is unavailable or has been deleted');
@@ -237,6 +283,8 @@ if (!mocksSupported) {
 
     // Dynamically import AFTER mocks are in place so the mocked modules are used.
     ({ handleDownloadCommand } = await import('../../src/commands/download.js'));
+    ({ getProcessedUrl } = await import('../../src/utils/database.js'));
+    ({ hashUrl } = await import('../../src/utils/hashing.js'));
   });
 
   afterAll(async () => {
@@ -251,10 +299,11 @@ if (!mocksSupported) {
     await fs.rm(path.join(base, 'gifs'), { recursive: true, force: true });
   }
 
-  function downloadInteraction(url, userId = 'e2e-user') {
+  function downloadInteraction(url, userId = 'e2e-user', { start = null, end = null } = {}) {
     const { interaction, calls } = createFakeInteraction({ deferred: false, userId });
+    const strings = { url, start, end };
     interaction.options = {
-      getString: name => (name === 'url' ? url : null),
+      getString: name => strings[name] ?? null,
       getBoolean: () => null,
       getNumber: () => null,
     };
@@ -417,6 +466,106 @@ if (!mocksSupported) {
       const content = second.calls.editReply[0].content;
       assert.ok(content, 'cache hit replies with a URL');
       assert.ok(content.includes('/videos/'), 'URL points to the videos CDN path');
+    });
+
+    test('trimmed video: ffmpeg cuts the requested range and sends an mp4', async () => {
+      await cleanStorage();
+      const url = `https://x.com/user/status/trimvid-${Date.now()}`;
+      const { interaction, calls } = downloadInteraction(url, 'e2e-dl-trimvid', {
+        start: '1',
+        end: '3',
+      });
+
+      await handleDownloadCommand(interaction);
+
+      const [file] = calls.editReply[0].files;
+      assert.ok(file.name.endsWith('.mp4'));
+      const seconds = probeSeconds(file.attachment, '.mp4');
+      assert.ok(seconds > 1.5 && seconds < 2.6, `trimmed to ~2s, got ${seconds}`);
+    });
+
+    test('trimmed gif: cut and sent back as a gif', async () => {
+      await cleanStorage();
+      const url = `https://x.com/user/status/trimgif-${Date.now()}`;
+      const { interaction, calls } = downloadInteraction(url, 'e2e-dl-trimgif', {
+        start: '1',
+        end: '3',
+      });
+
+      await handleDownloadCommand(interaction);
+
+      const [file] = calls.editReply[0].files;
+      assert.ok(file.name.endsWith('.gif'));
+      const seconds = probeSeconds(file.attachment, '.gif');
+      assert.ok(seconds > 1.5 && seconds < 2.6, `trimmed to ~2s, got ${seconds}`);
+    });
+
+    test('mp4 served under a .gif name: trimmed into a real gif', async () => {
+      await cleanStorage();
+      const url = `https://x.com/user/status/gifnamed-${Date.now()}`;
+      const { interaction, calls } = downloadInteraction(url, 'e2e-dl-gifnamed', {
+        start: '1',
+        end: '3',
+      });
+
+      await handleDownloadCommand(interaction);
+
+      const [file] = calls.editReply[0].files;
+      assert.ok(file.name.endsWith('.gif'));
+      assert.strictEqual(file.attachment.subarray(0, 3).toString(), 'GIF');
+    });
+
+    test('trim ffmpeg cannot do: the untrimmed file is still delivered', async () => {
+      await cleanStorage();
+      const url = `https://x.com/user/status/badtrim-${Date.now()}`;
+      const { interaction, calls } = downloadInteraction(url, 'e2e-dl-badtrim', { start: '1' });
+
+      await handleDownloadCommand(interaction);
+
+      const [file] = calls.editReply[0].files;
+      assert.ok(file.name.endsWith('.mp4'));
+      assert.strictEqual(file.attachment.length, 4096, 'original bytes');
+    });
+
+    test('single image: sent as an attachment with its own extension', async () => {
+      await cleanStorage();
+      const url = `https://x.com/user/status/onephoto-${Date.now()}`;
+      const { interaction, calls } = downloadInteraction(url, 'e2e-dl-onephoto');
+
+      await handleDownloadCommand(interaction);
+
+      assert.ok(calls.editReply[0].files[0].name.endsWith('.png'));
+      const row = await getProcessedUrl(hashUrl(url));
+      assert.strictEqual(row.file_type, 'image');
+    });
+
+    test('file over the attachment limit: replies with a CDN link and records it', async () => {
+      await cleanStorage();
+      const url = `https://x.com/user/status/over-${Date.now()}`;
+      const { interaction, calls } = downloadInteraction(url, 'e2e-dl-over');
+      interaction.attachmentSizeLimit = 1000;
+
+      await handleDownloadCommand(interaction);
+
+      assert.strictEqual(calls.editReply.length, 1);
+      assert.strictEqual(calls.editReply[0].files, undefined, 'no attachment');
+      assert.ok(calls.editReply[0].content.includes('https://cdn.test/videos/'));
+      const row = await getProcessedUrl(hashUrl(url));
+      assert.strictEqual(row.file_type, 'video');
+      assert.ok(row.file_url.startsWith('https://cdn.test/videos/'));
+    });
+
+    test('gallery with one oversized item: small one attaches, big one becomes a link', async () => {
+      await cleanStorage();
+      const url = `https://x.com/user/status/multi-split-${Date.now()}`;
+      const { interaction, calls } = downloadInteraction(url, 'e2e-dl-multisplit');
+      interaction.attachmentSizeLimit = 2500;
+
+      await handleDownloadCommand(interaction);
+
+      const reply = calls.editReply[0];
+      assert.strictEqual(reply.files.length, 1, 'only the 2048-byte photo attaches');
+      assert.ok(reply.content.includes('https://cdn.test/images/'), 'the 3072-byte one is a link');
     });
   });
 }

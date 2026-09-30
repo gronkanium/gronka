@@ -7,8 +7,8 @@ import {
   signStreamToken,
   directStreamInfo,
   stripAudio,
-  trimItem,
 } from '../../src/web-server.js';
+import { trimItem } from '../../src/utils/video-processor/trim-item.js';
 import { redactForWeb } from '../../src/utils/logger.js';
 
 const ok = async () => true;

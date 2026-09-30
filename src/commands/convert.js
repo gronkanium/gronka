@@ -1,24 +1,12 @@
-import { MessageFlags, AttachmentBuilder } from 'discord.js';
-import {
-  safeInteractionReply,
-  safeInteractionEditReply,
-  safeInteractionDeferReply,
-} from '../utils/interaction-helpers.js';
 import fs from 'fs/promises';
 import path from 'path';
 import { createLogger } from '../utils/logger.js';
-import { botConfig, isOwnCdnUrl } from '../utils/config.js';
+import { botConfig } from '../utils/config.js';
 import { validateUrl, validateFileExtension, firstUrlIn } from '../utils/validation.js';
 import { writeValidatedFileBuffer } from './shared/buffer-validation.js';
 import { curatedErrorMessage } from './shared/command-errors.js';
-import {
-  downloadVideo,
-  downloadImage,
-  downloadFileFromUrl,
-  parseTenorUrl,
-  generateHash,
-} from '../utils/file-downloader.js';
-import { isAdmin, recordRateLimit } from '../utils/rate-limit.js';
+import { downloadVideo, downloadImage, generateHash } from '../utils/file-downloader.js';
+import { isAdmin } from '../utils/rate-limit.js';
 import {
   ALLOWED_VIDEO_TYPES,
   ALLOWED_IMAGE_TYPES,
@@ -34,141 +22,43 @@ import {
   convertToFormat,
   OUTPUT_FORMATS,
 } from '../utils/video-processor.js';
-import { gifExists, getGifPath, getVideoPath, getImagePath, saveGif } from '../utils/storage.js';
-import { fitsDiscordAttachment, getDiscordAttachmentLimit } from './shared/attachment-limit.js';
-import {
-  uploadGifToR2,
-  downloadGifFromR2,
-  gifExistsInR2,
-  getR2PublicUrl,
-  formatR2UrlWithDisclaimer,
-} from '../utils/r2-storage.js';
-import { r2Config } from '../utils/config.js';
+import { mediaPath } from '../utils/storage.js';
+import { getDiscordAttachmentLimit } from './shared/attachment-limit.js';
 import { trackRecentConversion } from '../utils/user-tracking.js';
-import { optimizeGif } from '../utils/gif-optimizer.js';
-import {
-  createFailedOperation,
-  updateOperationStatus,
-  logOperationStep,
-} from '../utils/operations-tracker.js';
-import { notifyCommandSuccess, notifyCommandFailure } from '../utils/ntfy-notifier.js';
+import { loadStoredGif, optimizeCached } from '../utils/gif-optimizer.js';
+import { logOperationStep } from '../utils/operations-tracker.js';
+import { notifyCommandFailure } from '../utils/ntfy-notifier.js';
 import { hashUrlWithParams, hashPartsHex } from '../utils/hashing.js';
 import { getProcessedUrl } from '../utils/database.js';
-import { recordProcessedUrl, trackR2UploadIfApplicable } from './shared/url-cache.js';
 import { runMediaCommand } from './shared/run-media-command.js';
 import { sendConvertedFile } from './shared/send-converted.js';
 import { ValidationError } from '../utils/errors.js';
-import { replyIfRateLimited, resolveTimeOptions } from './shared/command-guards.js';
+import {
+  replyIfRateLimited,
+  resolveTimeOptions,
+  refuse,
+  replyError,
+} from './shared/command-guards.js';
 import { initializeDatabaseWithErrorHandling } from '../utils/database-init.js';
+import {
+  safeInteractionEditReply,
+  safeInteractionDeferReply,
+} from '../utils/interaction-helpers.js';
+import { storeMedia, deliverStored, finishCommand } from './shared/deliver.js';
+import { fetchUrlInput } from './shared/url-input.js';
 
 const logger = createLogger('convert');
 
 const {
   gifStoragePath: GIF_STORAGE_PATH,
-  cdnBaseUrl: CDN_BASE_URL,
   maxGifDuration: MAX_GIF_DURATION,
   discordSizeLimit: DISCORD_SIZE_LIMIT,
 } = botConfig;
 
-/**
- * Check if a CDN URL points to a local file and return the file buffer if it exists
- * @param {string} url - URL to check against this instance's own CDN
- * @param {string} storagePath - Base storage path
- * @returns {Promise<{exists: boolean, buffer?: Buffer, filePath?: string, contentType?: string, filename?: string}>}
- */
-async function checkAndReadLocalFileFromCdnUrl(url, storagePath) {
-  try {
-    if (!isOwnCdnUrl(url)) {
-      return { exists: false };
-    }
-
-    const urlObj = new URL(url);
-
-    // Parse path patterns: /gifs/{hash}.gif, /videos/{hash}.{ext}, /images/{hash}.{ext}
-    const gifPathMatch = urlObj.pathname.match(/^\/gifs\/([a-f0-9]+)\.gif$/i);
-    if (gifPathMatch && gifPathMatch[1]) {
-      const hash = gifPathMatch[1];
-      const filePath = getGifPath(hash, storagePath);
-      try {
-        // Read file directly to avoid TOCTOU race condition
-        // readFile will throw if file doesn't exist or is inaccessible
-        const buffer = await fs.readFile(filePath);
-        return {
-          exists: true,
-          buffer,
-          filePath,
-          contentType: 'image/gif',
-          filename: `${hash}.gif`,
-        };
-      } catch {
-        return { exists: false };
-      }
-    }
-
-    const videoPathMatch = urlObj.pathname.match(
-      /^\/videos\/([a-f0-9]+)\.(mp4|webm|mov|avi|mkv)$/i
-    );
-    if (videoPathMatch && videoPathMatch[1] && videoPathMatch[2]) {
-      const hash = videoPathMatch[1];
-      const extension = `.${videoPathMatch[2]}`;
-      const filePath = getVideoPath(hash, extension, storagePath);
-      try {
-        // Read file directly to avoid TOCTOU race condition
-        // readFile will throw if file doesn't exist or is inaccessible
-        const buffer = await fs.readFile(filePath);
-        const contentTypeMap = {
-          '.mp4': 'video/mp4',
-          '.webm': 'video/webm',
-          '.mov': 'video/quicktime',
-          '.avi': 'video/x-msvideo',
-          '.mkv': 'video/x-matroska',
-        };
-        const contentType = contentTypeMap[extension.toLowerCase()] || 'video/mp4';
-        return {
-          exists: true,
-          buffer,
-          filePath,
-          contentType,
-          filename: `${hash}${extension}`,
-        };
-      } catch {
-        return { exists: false };
-      }
-    }
-
-    const imagePathMatch = urlObj.pathname.match(/^\/images\/([a-f0-9]+)\.(png|jpg|jpeg|webp)$/i);
-    if (imagePathMatch && imagePathMatch[1] && imagePathMatch[2]) {
-      const hash = imagePathMatch[1];
-      const extension = `.${imagePathMatch[2]}`;
-      const filePath = getImagePath(hash, extension, storagePath);
-      try {
-        // Read file directly to avoid TOCTOU race condition
-        // readFile will throw if file doesn't exist or is inaccessible
-        const buffer = await fs.readFile(filePath);
-        const contentTypeMap = {
-          '.png': 'image/png',
-          '.jpg': 'image/jpeg',
-          '.jpeg': 'image/jpeg',
-          '.webp': 'image/webp',
-        };
-        const contentType = contentTypeMap[extension.toLowerCase()] || 'image/png';
-        return {
-          exists: true,
-          buffer,
-          filePath,
-          contentType,
-          filename: `${hash}${extension}`,
-        };
-      } catch {
-        return { exists: false };
-      }
-    }
-
-    return { exists: false };
-  } catch {
-    return { exists: false };
-  }
-}
+const VIDEO_EXTENSIONS = ['.mp4', '.mov', '.webm', '.avi', '.mkv'];
+const IMAGE_EXTENSIONS = ['.png', '.jpg', '.jpeg', '.webp', '.awebp', '.gif'];
+const UNSUPPORTED_FORMAT =
+  'unsupported file format. please provide a video (mp4, mov, webm, avi, mkv) or image (png, jpg, jpeg, webp, gif).';
 
 /**
  * Probe a media file's width and fps via ffprobe, with safe fallbacks.
@@ -261,7 +151,7 @@ async function processFormatConversion(
     'convert',
     interaction,
     async ctx => {
-      const { operationId, userId } = ctx;
+      const { operationId } = ctx;
       if (!isVideo && spec.kind === 'audio') {
         throw new ValidationError('only videos have audio to turn into audio files.');
       }
@@ -297,9 +187,7 @@ async function processFormatConversion(
         message: `Converted to ${format}`,
         metadata: { format, outputSize: output.length },
       });
-      updateOperationStatus(operationId, 'success', { fileSize: output.length });
-      recordRateLimit(userId);
-      await notifyCommandSuccess('convert', { operationId, userId });
+      await finishCommand('convert', ctx, output.length);
     },
     {
       commandSource: 'slash',
@@ -319,6 +207,76 @@ async function processFormatConversion(
   );
 }
 
+// Writes the source to temp/ and renders it into gifPath with ffmpeg or ImageMagick.
+async function renderGif(
+  ctx,
+  { attachment, attachmentType, adminUser, fileBuffer, options, gifPath }
+) {
+  const { operationId, tempFiles } = ctx;
+  let ext = path.extname(attachment.name ?? '').toLowerCase();
+  const allowed = attachmentType === 'video' ? VIDEO_EXTENSIONS : IMAGE_EXTENSIONS;
+  if (!ext || !validateFileExtension(attachment.name, allowed)) {
+    ext = attachmentType === 'video' ? '.mp4' : '.png';
+  }
+  const tempDir = path.resolve('temp');
+  const inputPath = path.join(tempDir, `${attachmentType}_${Date.now()}${ext}`);
+  if (!inputPath.startsWith(tempDir)) {
+    throw new Error('Invalid temp file path detected');
+  }
+  await fs.mkdir(tempDir, { recursive: true });
+  await writeValidatedFileBuffer(inputPath, fileBuffer, attachmentType);
+  tempFiles.push(inputPath);
+  await fs.mkdir(path.dirname(gifPath), { recursive: true });
+  logOperationStep(operationId, 'conversion_start', 'running', {
+    message: `Starting ${attachmentType} to GIF conversion`,
+    metadata: { inputFile: attachment.name, inputSize: attachment.size },
+  });
+
+  if (attachmentType === 'video') {
+    const seconds = await getVideoMetadata(inputPath).then(
+      metadata => metadata.format.duration,
+      () => null
+    );
+    if (seconds > MAX_GIF_DURATION && !adminUser) {
+      throw new ValidationError(
+        `video is too long (${Math.ceil(seconds)}s). maximum duration: ${MAX_GIF_DURATION}s`
+      );
+    }
+    const conversionOptions = resolveVideoConversionOptions(
+      options,
+      await probeMediaInfo(inputPath, 480)
+    );
+    const { startTime, duration } = conversionOptions;
+    if (seconds && startTime !== null && duration !== null && startTime + duration > seconds) {
+      throw new ValidationError(
+        `requested timeframe (${startTime}s to ${(startTime + duration).toFixed(1)}s) exceeds video length (${seconds.toFixed(1)}s).`
+      );
+    }
+    await convertToGif(inputPath, gifPath, conversionOptions);
+  } else if (attachment.contentType === 'image/gif' || ext === '.gif') {
+    if (options.width) {
+      await convertImageToGif(inputPath, gifPath, {
+        width: options.width,
+        quality: options.quality ?? botConfig.gifQuality,
+      });
+    } else {
+      await fs.copyFile(inputPath, gifPath);
+    }
+  } else if (isAnimatedWebp(fileBuffer)) {
+    // ffmpeg can't demux animated webp (e.g. TikTok stickers), so ImageMagick converts it.
+    await convertAnimatedWebpToGif(inputPath, gifPath, { width: options.width });
+  } else {
+    const { width } = await probeMediaInfo(inputPath, 720);
+    await convertImageToGif(inputPath, gifPath, {
+      width: options.width ?? width,
+      quality: options.quality ?? botConfig.gifQuality,
+    });
+  }
+  logOperationStep(operationId, 'conversion_complete', 'success', {
+    message: `${attachmentType} converted to GIF`,
+  });
+}
+
 async function processConversion(
   interaction,
   attachment,
@@ -333,36 +291,30 @@ async function processConversion(
     'convert',
     interaction,
     async ctx => {
-      const { operationId, userId, tempFiles, buildMetadata } = ctx;
-      const discordAttachmentLimit = getDiscordAttachmentLimit(interaction, DISCORD_SIZE_LIMIT);
+      const { operationId, userId } = ctx;
+      const attachmentLimit = getDiscordAttachmentLimit(interaction, DISCORD_SIZE_LIMIT);
 
       if (originalUrl) {
-        const dbInitSuccess = await initializeDatabaseWithErrorHandling({
+        const dbReady = await initializeDatabaseWithErrorHandling({
           operationId,
           userId,
           commandName: 'convert',
           interaction,
           context: { originalUrl },
         });
-        if (!dbInitSuccess) {
-          return; // Exit early - operation is already marked as error
-        }
-        logOperationStep(operationId, 'url_validation', 'running', {
-          message: 'Validating and processing URL',
-          metadata: { originalUrl },
-        });
+        if (!dbReady) return;
       }
 
-      // Admins bypass size limits in download
-      if (!preDownloadedBuffer) {
-        logOperationStep(operationId, 'download_start', 'running', {
-          message: `Starting download from ${attachment.url}`,
-          metadata: {
-            sourceUrl: attachment.url,
-            attachmentType,
-            expectedSize: attachment.size || null,
-          },
+      const urlHash = originalUrl ? hashUrlWithParams(originalUrl, options) : null;
+      const cachedRow = urlHash ? await getProcessedUrl(urlHash) : null;
+      const cachedGif = cachedRow?.file_type === 'gif' || cachedRow?.file_extension === '.gif';
+      if (cachedGif && !cachedRow.r2_expired_at) {
+        logOperationStep(operationId, 'url_cache_hit', 'success', {
+          message: 'URL already converted, returning cached result',
+          metadata: { originalUrl, cachedUrl: cachedRow.file_url },
         });
+        await safeInteractionEditReply(interaction, { content: cachedRow.file_url });
+        return finishCommand('convert', ctx, 0);
       }
 
       const fileBuffer =
@@ -371,730 +323,57 @@ async function processConversion(
           ? await downloadVideo(attachment.url, adminUser)
           : await downloadImage(attachment.url, adminUser));
 
-      if (!preDownloadedBuffer) {
-        logOperationStep(operationId, 'download_complete', 'success', {
-          message: 'File downloaded successfully',
-          metadata: {
-            downloadedSize: fileBuffer.length,
-            sourceUrl: attachment.url,
-          },
-        });
+      // The gif is stored under its source and the options that shaped it, so a trimmed or
+      // resized convert never reuses the plain one.
+      const shape = [options.quality, options.width, options.startTime, options.duration];
+      const hash = shape.every(value => value == null)
+        ? generateHash(fileBuffer)
+        : hashPartsHex([fileBuffer, 'gif', ...shape.map(v => (v == null ? null : String(v)))]);
+      const gifPath = mediaPath('gif', hash, '.gif', GIF_STORAGE_PATH);
+      const lossy = options.lossy ?? null;
+      const optimize = Boolean(options.optimize) || lossy !== null;
+
+      let gifBuffer = await loadStoredGif(hash);
+      if (gifBuffer && optimize) {
+        await fs.mkdir(path.dirname(gifPath), { recursive: true });
+        await fs.writeFile(gifPath, gifBuffer);
       }
-
-      const hash = generateHash(fileBuffer);
-
-      updateOperationStatus(operationId, 'running');
-
-      logOperationStep(operationId, 'validation_start', 'running', {
-        message: 'Validating file',
-        metadata: {
-          hash: hash.substring(0, 8) + '...',
+      if (!gifBuffer) {
+        await renderGif(ctx, {
+          attachment,
           attachmentType,
-          fileName: attachment.name,
-          fileSize: attachment.size,
-          contentType: attachment.contentType,
-        },
-      });
-
-      if (originalUrl) {
-        // Use composite hash that includes conversion parameters for cache key
-        const urlHash = hashUrlWithParams(originalUrl, options);
-        const processedUrl = await getProcessedUrl(urlHash);
-        if (processedUrl) {
-          // Convert command expects GIF output - only use cache if cached result is a GIF
-          // Skip cache if cached type is not 'gif' (e.g., if it was previously downloaded as video)
-          // or if its R2 upload has expired (a stale file_url would be a dead link)
-          const isCachedGif =
-            processedUrl.file_type === 'gif' || processedUrl.file_extension === '.gif';
-
-          if (isCachedGif && !processedUrl.r2_expired_at) {
-            logger.info(
-              `URL already processed as GIF (hash: ${urlHash.substring(0, 8)}...), returning existing file URL: ${processedUrl.file_url}`
-            );
-            logOperationStep(operationId, 'url_validation', 'success', {
-              message: 'URL validation complete',
-              metadata: { originalUrl },
-            });
-            logOperationStep(operationId, 'url_cache_hit', 'success', {
-              message: 'URL already processed as GIF, returning cached result',
-              metadata: {
-                originalUrl,
-                cachedUrl: processedUrl.file_url,
-                cachedType: processedUrl.file_type,
-              },
-            });
-            updateOperationStatus(operationId, 'success', { fileSize: 0 });
-            recordRateLimit(userId);
-            await safeInteractionEditReply(interaction, {
-              content: processedUrl.file_url,
-            });
-            await notifyCommandSuccess('convert', { operationId, userId });
-            return;
-          } else if (processedUrl.r2_expired_at) {
-            logger.info(
-              `URL cache exists but its R2 upload expired (hash: ${urlHash.substring(0, 8)}...), converting fresh instead of returning a dead link`
-            );
-            logOperationStep(operationId, 'url_validation', 'success', {
-              message: 'URL validation complete',
-              metadata: { originalUrl },
-            });
-            logOperationStep(operationId, 'url_cache_mismatch', 'running', {
-              message: 'Cached URL expired from R2, converting to GIF instead',
-              metadata: { originalUrl },
-            });
-          } else {
-            logger.info(
-              `URL cache exists but file type is ${processedUrl.file_type} (not GIF), skipping cache to convert to GIF`
-            );
-            logOperationStep(operationId, 'url_validation', 'success', {
-              message: 'URL validation complete',
-              metadata: { originalUrl },
-            });
-            logOperationStep(operationId, 'url_cache_mismatch', 'running', {
-              message: 'URL cached with different file type, converting to GIF instead',
-              metadata: { originalUrl, cachedType: processedUrl.file_type },
-            });
-          }
-        }
-        logOperationStep(operationId, 'url_validation', 'success', {
-          message: 'URL validation complete',
-          metadata: { originalUrl },
+          adminUser,
+          fileBuffer,
+          options,
+          gifPath,
         });
-        logOperationStep(operationId, 'url_cache_miss', 'running', {
-          message: 'URL not found in cache, proceeding with conversion',
-          metadata: { originalUrl },
-        });
-        logOperationStep(operationId, 'url_cache_miss', 'success', {
-          message: 'URL cache check complete, proceeding with conversion',
-          metadata: { originalUrl },
-        });
+        gifBuffer = await fs.readFile(gifPath);
       }
-
-      const exists = await gifExists(hash, GIF_STORAGE_PATH);
-      if (exists && !options.optimize) {
-        logger.info(`GIF already exists (hash: ${hash}) for user ${userId}`);
-        logOperationStep(operationId, 'gif_cache_hit', 'success', {
-          message: 'GIF already exists, checking if should upload to Discord',
-          metadata: { hash: hash.substring(0, 8) + '...' },
-        });
-
-        let gifBuffer = null;
-        let fileSize = 0;
-        let existsInR2 = false;
-
-        if (
-          r2Config.accountId &&
-          r2Config.accessKeyId &&
-          r2Config.secretAccessKey &&
-          r2Config.bucketName
-        ) {
-          existsInR2 = await gifExistsInR2(hash, r2Config);
-          if (existsInR2) {
-            try {
-              gifBuffer = await downloadGifFromR2(hash, r2Config);
-              fileSize = gifBuffer.length;
-            } catch (error) {
-              logger.warn(`Failed to download GIF from R2, trying local disk: ${error.message}`);
-              existsInR2 = false;
-            }
-          }
-        }
-
-        if (!gifBuffer) {
-          const gifPath = getGifPath(hash, GIF_STORAGE_PATH);
-          try {
-            gifBuffer = await fs.readFile(gifPath);
-            fileSize = gifBuffer.length;
-          } catch (error) {
-            logger.error(`Failed to read GIF from local disk: ${error.message}`);
-            const gifUrl = existsInR2
-              ? getR2PublicUrl(`gifs/${hash.replace(/[^a-f0-9]/gi, '')}.gif`, r2Config)
-              : `${CDN_BASE_URL}/${hash}.gif`;
-            updateOperationStatus(operationId, 'success', { fileSize: 0 });
-            recordRateLimit(userId);
-            await safeInteractionEditReply(interaction, {
-              content: formatR2UrlWithDisclaimer(gifUrl, r2Config, adminUser),
-            });
-            return;
-          }
-        }
-
-        if (fitsDiscordAttachment(gifBuffer.length, discordAttachmentLimit)) {
-          logger.info(
-            `Cached GIF is small enough for Discord (${(fileSize / (1024 * 1024)).toFixed(2)}MB), uploading to Discord`
-          );
-          logOperationStep(operationId, 'discord_upload', 'running', {
-            message: 'Uploading cached GIF to Discord',
-            metadata: { fileSize },
-          });
-
-          const safeHash = hash.replace(/[^a-f0-9]/gi, '');
-          const filename = `${safeHash}.gif`;
-          try {
-            const message = await safeInteractionEditReply(interaction, {
-              files: [new AttachmentBuilder(gifBuffer, { name: filename })],
-            });
-
-            // Try to get attachments from the returned message first
-            let discordUrl = null;
-            if (message && message.attachments && message.attachments.size > 0) {
-              const discordAttachment = message.attachments.first();
-              if (discordAttachment && discordAttachment.url) {
-                discordUrl = discordAttachment.url;
-                logger.debug(
-                  `Captured Discord attachment URL for cached GIF from editReply: ${discordUrl.substring(0, 60)}...`
-                );
-              }
-            }
-
-            // If attachments weren't in the response, try fetching the message
-            if (!discordUrl && message && message.id && interaction.channel) {
-              try {
-                const fetchedMessage = await interaction.channel.messages.fetch(message.id);
-                if (
-                  fetchedMessage &&
-                  fetchedMessage.attachments &&
-                  fetchedMessage.attachments.size > 0
-                ) {
-                  const discordAttachment = fetchedMessage.attachments.first();
-                  if (discordAttachment && discordAttachment.url) {
-                    discordUrl = discordAttachment.url;
-                    logger.debug(
-                      `Captured Discord attachment URL for cached GIF from fetched message: ${discordUrl.substring(0, 60)}...`
-                    );
-                  }
-                }
-              } catch (fetchError) {
-                logger.warn(
-                  `Failed to fetch message to get attachment URL for cached GIF: ${fetchError.message}`
-                );
-              }
-            }
-
-            if (discordUrl) {
-              // For cached files, use the hash as urlHash since there's no originalUrl
-              const urlHash = hash;
-              await recordProcessedUrl({
-                urlHash,
-                contentHash: hash,
-                fileType: 'gif',
-                fileExtension: '.gif',
-                fileUrl: discordUrl,
-                userId,
-                fileSize,
-              });
-              logger.info(`Uploaded to Discord: ${discordUrl}`);
-            } else {
-              logger.warn(
-                `Failed to capture Discord attachment URL for cached GIF - message: ${message ? 'exists' : 'null'}, attachments: ${message?.attachments?.size || 0}, messageId: ${message?.id || 'none'}`
-              );
-            }
-
-            logOperationStep(operationId, 'discord_upload', 'success', {
-              message: 'Cached GIF uploaded to Discord successfully',
-            });
-            updateOperationStatus(operationId, 'success', { fileSize });
-            recordRateLimit(userId);
-            await notifyCommandSuccess('convert', { operationId, userId });
-            return;
-          } catch (discordError) {
-            logger.warn(
-              `Discord attachment upload failed for cached GIF, falling back to R2 URL: ${discordError.message}`
-            );
-            logOperationStep(operationId, 'discord_upload', 'error', {
-              message: 'Discord upload failed, falling back to R2 URL',
-              metadata: { error: discordError.message },
-            });
-
-            try {
-              const r2Url = await uploadGifToR2(gifBuffer, hash, r2Config, buildMetadata());
-              if (r2Url) {
-                updateOperationStatus(operationId, 'success', { fileSize });
-                recordRateLimit(userId);
-                await safeInteractionEditReply(interaction, {
-                  content: formatR2UrlWithDisclaimer(r2Url, r2Config),
-                });
-                await notifyCommandSuccess('convert', { operationId, userId });
-                return;
-              }
-            } catch (r2Error) {
-              logger.error(`R2 fallback upload also failed: ${r2Error.message}`);
-            }
-
-            // Last resort: construct CDN URL
-            const gifUrl = `${CDN_BASE_URL}/${hash}.gif`;
-            updateOperationStatus(operationId, 'success', { fileSize });
-            recordRateLimit(userId);
-            await safeInteractionEditReply(interaction, {
-              content: formatR2UrlWithDisclaimer(gifUrl, r2Config),
-            });
-            await notifyCommandSuccess('convert', { operationId, userId });
-            return;
-          }
-        } else {
-          // File is >= 8MB, return R2 URL or CDN URL
-          logger.info(
-            `Cached GIF is too large for Discord (${(fileSize / (1024 * 1024)).toFixed(2)}MB), returning URL`
-          );
-          const gifUrl = existsInR2
-            ? getR2PublicUrl(`gifs/${hash.replace(/[^a-f0-9]/gi, '')}.gif`, r2Config)
-            : `${CDN_BASE_URL}/${hash}.gif`;
-          updateOperationStatus(operationId, 'success', { fileSize });
-          recordRateLimit(userId);
-          await safeInteractionEditReply(interaction, {
-            content: formatR2UrlWithDisclaimer(gifUrl, r2Config, adminUser),
-          });
-          await notifyCommandSuccess('convert', { operationId, userId });
-          return;
-        }
-      }
-
-      logOperationStep(operationId, 'validation_complete', 'success', {
-        message: 'File validation passed',
-        metadata: {
-          hash: hash.substring(0, 8) + '...',
-          attachmentType,
-          needsConversion: !exists,
-          willOptimize: options.optimize || false,
-        },
-      });
-
-      // If optimization is requested and original GIF exists, we'll optimize it directly
-      // Otherwise, we need to convert first
-      const needsConversion = !exists;
-      logger.info(
-        `Starting ${attachmentType} to GIF conversion (hash: ${hash})${options.optimize ? ' with optimization' : ''}${exists ? ' (original GIF exists, will optimize)' : ''}`
-      );
-
-      const allowedVideoExtensions = ['.mp4', '.mov', '.webm', '.avi', '.mkv'];
-      const allowedImageExtensions = ['.png', '.jpg', '.jpeg', '.webp', '.awebp', '.gif'];
-      const allowedExtensions =
-        attachmentType === 'video' ? allowedVideoExtensions : allowedImageExtensions;
-
-      let ext = path.extname(attachment.name).toLowerCase();
-      if (!ext || !validateFileExtension(attachment.name, allowedExtensions)) {
-        ext = attachmentType === 'video' ? '.mp4' : '.png';
-        logger.warn(
-          `Invalid or missing file extension for ${attachment.name}, using default: ${ext}`
-        );
-      }
-
-      const tempDir = path.join(process.cwd(), 'temp');
-      await fs.mkdir(tempDir, { recursive: true });
-
-      // Generate safe temp file path - validate to prevent path injection
-      const filePrefix = attachmentType === 'video' ? 'video' : 'image';
-      // Sanitize extension to prevent path traversal
-      const safeExt = ext.replace(/[^a-zA-Z0-9.]/g, '');
-      const tempFileName = `${filePrefix}_${Date.now()}${safeExt}`;
-      const tempFilePath = path.join(tempDir, tempFileName);
-
-      // Validate path stays within temp directory to prevent path traversal
-      const resolvedTempDir = path.resolve(tempDir);
-      const resolvedFilePath = path.resolve(tempFilePath);
-      if (!resolvedFilePath.startsWith(resolvedTempDir)) {
-        throw new Error('Invalid temp file path detected');
-      }
-
-      // Write validated buffer to filesystem
-      // This function ensures validation happens before write so CodeQL can track the data flow
-      await writeValidatedFileBuffer(tempFilePath, fileBuffer, attachmentType);
-      tempFiles.push(tempFilePath);
-
-      // Get video duration to check limits (only for videos, admins bypass this)
-      if (attachmentType === 'video' && !adminUser) {
-        try {
-          const metadata = await getVideoMetadata(tempFilePath);
-          const duration = metadata.format.duration;
-
-          if (duration > MAX_GIF_DURATION) {
-            await safeInteractionEditReply(interaction, {
-              content: `video is too long (${Math.ceil(duration)}s). maximum duration: ${MAX_GIF_DURATION}s`,
-            });
-            await notifyCommandFailure('convert', {
-              operationId,
-              userId,
-              error: `video is too long (${Math.ceil(duration)}s)`,
-            });
-            return;
-          }
-        } catch (error) {
-          logger.warn('Failed to get video metadata:', error.message);
-          // Continue anyway
-        }
-      } else if (attachmentType === 'video' && adminUser) {
-        try {
-          const metadata = await getVideoMetadata(tempFilePath);
-          const duration = metadata.format.duration;
-          if (duration > MAX_GIF_DURATION) {
-            logger.info(
-              `Video duration limit bypassed for admin (${Math.ceil(duration)}s > ${MAX_GIF_DURATION}s)`
-            );
-          }
-        } catch {
-          // Ignore metadata errors for admin bypass logging
-        }
-      }
-
-      const gifPath = getGifPath(hash, GIF_STORAGE_PATH);
-
-      if (needsConversion) {
-        logOperationStep(operationId, 'conversion_start', 'running', {
-          message: `Starting ${attachmentType} to GIF conversion`,
-          metadata: {
-            inputFile: attachment.name,
-            inputSize: attachment.size,
-            inputType: attachment.contentType,
-            hash: hash.substring(0, 8) + '...',
-          },
-        });
-
-        if (attachmentType === 'video') {
-          const probed = await probeMediaInfo(tempFilePath, 480);
-          const conversionOptions = resolveVideoConversionOptions(options, probed);
-
-          if (conversionOptions.startTime !== null && conversionOptions.duration !== null) {
-            try {
-              const metadata = await getVideoMetadata(tempFilePath);
-              const videoDuration = metadata.format.duration;
-              const requestedEnd = conversionOptions.startTime + conversionOptions.duration;
-
-              if (requestedEnd > videoDuration) {
-                await safeInteractionEditReply(interaction, {
-                  content: `requested timeframe (${conversionOptions.startTime}s to ${requestedEnd.toFixed(1)}s) exceeds video length (${videoDuration.toFixed(1)}s).`,
-                });
-                await notifyCommandFailure('convert', {
-                  operationId,
-                  userId,
-                  error: `requested timeframe exceeds video length`,
-                });
-                return;
-              }
-            } catch (error) {
-              logger.warn('Failed to get video metadata for timeframe validation:', error.message);
-              // Continue anyway, FFmpeg will handle it
-            }
-          }
-
-          await convertToGif(tempFilePath, gifPath, conversionOptions);
-          logOperationStep(operationId, 'conversion_complete', 'success', {
-            message: 'Video to GIF conversion completed',
-            metadata: {
-              conversionOptions,
-              outputPath: gifPath,
-            },
-          });
-        } else {
-          const isGif = attachment.contentType === 'image/gif' || ext === '.gif';
-
-          if (isGif) {
-            // Use original dimensions unless explicitly requested to resize
-            const { width: originalWidth } = await probeMediaInfo(tempFilePath, 720);
-
-            if (!options.width) {
-              logger.info(
-                `Input GIF, copying directly (preserving original dimensions: ${originalWidth}px)`
-              );
-              await fs.copyFile(tempFilePath, gifPath);
-              logOperationStep(operationId, 'conversion_complete', 'success', {
-                message: 'GIF copied directly (preserving original dimensions)',
-                metadata: { originalWidth },
-              });
-            } else {
-              logger.info(`Input GIF, resizing to requested width: ${options.width}px`);
-              await convertImageToGif(tempFilePath, gifPath, {
-                width: options.width,
-                quality: options.quality ?? botConfig.gifQuality,
-              });
-              logOperationStep(operationId, 'conversion_complete', 'success', {
-                message: 'GIF resized and converted',
-                metadata: { originalWidth, targetWidth: options.width },
-              });
-            }
-          } else if (isAnimatedWebp(fileBuffer)) {
-            // Animated WebP (e.g. TikTok stickers): ffmpeg can't demux it, so
-            // convert via ImageMagick, preserving native size unless a width is
-            // explicitly requested (ffprobe can't read it, so don't probe).
-            await convertAnimatedWebpToGif(tempFilePath, gifPath, {
-              width: options.width,
-            });
-            logOperationStep(operationId, 'conversion_complete', 'success', {
-              message: 'Animated WebP to GIF conversion completed',
-            });
-          } else {
-            // Not a GIF, convert normally using the source's original width
-            const { width: originalWidth } = await probeMediaInfo(tempFilePath, 720);
-
-            await convertImageToGif(tempFilePath, gifPath, {
-              width: options.width ?? originalWidth,
-              quality: options.quality ?? botConfig.gifQuality,
-            });
-            logOperationStep(operationId, 'conversion_complete', 'success', {
-              message: 'Image to GIF conversion completed',
-            });
-          }
-        }
-      } else {
-        logger.info(`Using existing GIF (hash: ${hash}) for user ${userId}`);
-      }
-
-      let gifBuffer = await fs.readFile(gifPath);
-      const originalSize = gifBuffer.length;
 
       let finalHash = hash;
-      let optimizedSize = originalSize;
-      let finalGifUrl = null;
-      let finalGifBuffer = gifBuffer;
-      let finalUploadMethod = 'r2';
-
-      // Only upload initial GIF to R2 if optimization is NOT going to happen
-      // (if optimization or auto-optimization is enabled, we'll upload the optimized version instead)
-      // If lossy is provided, treat it as an implicit optimization request
-      const shouldOptimize =
-        options.optimize || (options.lossy !== undefined && options.lossy !== null);
-      const willOptimize = shouldOptimize;
-      if (!willOptimize) {
-        try {
-          const saveResult = await saveGif(
-            gifBuffer,
-            hash,
-            GIF_STORAGE_PATH,
-            buildMetadata(),
-            discordAttachmentLimit
-          );
-          finalGifUrl = saveResult.url;
-          finalGifBuffer = saveResult.buffer;
-          finalUploadMethod = saveResult.method;
-        } catch (error) {
-          logger.warn(`Failed to upload initial GIF to R2, continuing:`, error.message);
-        }
-      }
-
-      if (shouldOptimize) {
-        logOperationStep(operationId, 'optimization_start', 'running', {
-          message: 'Starting GIF optimization',
+      if (optimize) {
+        const optimized = await optimizeCached(gifBuffer, gifPath, lossy);
+        logOperationStep(operationId, 'optimization_complete', 'success', {
+          message: 'GIF optimized',
           metadata: {
-            originalSize,
-            lossy: options.lossy !== undefined && options.lossy !== null ? options.lossy : null,
+            originalSize: gifBuffer.length,
+            optimizedSize: optimized.buffer.length,
+            lossy,
           },
         });
-
-        // Generate hash for optimized file (include lossy level in hash for uniqueness)
-        const optimizedHashValue = hashPartsHex([
-          gifBuffer,
-          'optimized',
-          options.lossy !== undefined && options.lossy !== null ? String(options.lossy) : null,
-        ]);
-        const optimizedGifPath = getGifPath(optimizedHashValue, GIF_STORAGE_PATH);
-
-        const optimizedExists = await gifExists(optimizedHashValue, GIF_STORAGE_PATH);
-        if (optimizedExists) {
-          logger.info(
-            `Optimized GIF already exists (hash: ${optimizedHashValue}) for user ${userId}`
-          );
-          const optimizedBuffer = await fs.readFile(optimizedGifPath);
-          optimizedSize = optimizedBuffer.length;
-          finalHash = optimizedHashValue;
-          const saveResult = await saveGif(
-            optimizedBuffer,
-            optimizedHashValue,
-            GIF_STORAGE_PATH,
-            buildMetadata(),
-            discordAttachmentLimit
-          );
-          finalGifUrl = saveResult.url;
-          finalGifBuffer = saveResult.buffer;
-          finalUploadMethod = saveResult.method;
-          logOperationStep(operationId, 'optimization_complete', 'success', {
-            message: 'Optimized GIF found in cache',
-            metadata: {
-              originalSize,
-              optimizedSize,
-              reduction: `${((1 - optimizedSize / originalSize) * 100).toFixed(1)}%`,
-            },
-          });
-        } else {
-          const optimizeOptions =
-            options.lossy !== undefined && options.lossy !== null ? { lossy: options.lossy } : {};
-          logger.info(
-            `Optimizing GIF: ${gifPath} -> ${optimizedGifPath}${options.lossy !== undefined && options.lossy !== null ? ` (lossy: ${options.lossy})` : ''}`
-          );
-          await optimizeGif(gifPath, optimizedGifPath, optimizeOptions);
-
-          const optimizedBuffer = await fs.readFile(optimizedGifPath);
-          optimizedSize = optimizedBuffer.length;
-          finalHash = optimizedHashValue;
-          const saveResult = await saveGif(
-            optimizedBuffer,
-            optimizedHashValue,
-            GIF_STORAGE_PATH,
-            buildMetadata(),
-            discordAttachmentLimit
-          );
-          finalGifUrl = saveResult.url;
-          finalGifBuffer = saveResult.buffer;
-          finalUploadMethod = saveResult.method;
-          logOperationStep(operationId, 'optimization_complete', 'success', {
-            message: 'GIF optimization completed',
-            metadata: {
-              originalSize,
-              optimizedSize,
-              reduction: `${((1 - optimizedSize / originalSize) * 100).toFixed(1)}%`,
-            },
-          });
-        }
+        finalHash = optimized.hash;
+        gifBuffer = optimized.buffer;
       }
 
-      let gifUrl;
-      if (
-        finalGifUrl &&
-        (finalGifUrl.startsWith('http://') || finalGifUrl.startsWith('https://'))
-      ) {
-        gifUrl = finalGifUrl;
-      } else if (finalGifUrl) {
-        const filename = path.basename(finalGifUrl);
-        gifUrl = `${CDN_BASE_URL}/${filename}`;
-      } else {
-        gifUrl = `${CDN_BASE_URL}/${finalHash}.gif`;
-      }
-
-      trackRecentConversion(userId, gifUrl);
-
-      // Record processed URL in database only for R2 uploads
-      // Discord uploads are tracked separately when we capture the attachment URL
-      if (finalUploadMethod === 'r2') {
-        // Use composite hash that includes conversion parameters for cache key
-        const urlHash = originalUrl ? hashUrlWithParams(originalUrl, options) : finalHash;
-        await recordProcessedUrl({
-          urlHash,
-          contentHash: finalHash,
-          fileType: 'gif',
-          fileExtension: '.gif',
-          fileUrl: gifUrl,
-          userId,
-          fileSize: optimizedSize,
-        });
-        await trackR2UploadIfApplicable(urlHash, gifUrl, adminUser);
-      }
-
-      logger.info(
-        `Successfully created GIF (hash: ${finalHash}, size: ${(optimizedSize / (1024 * 1024)).toFixed(2)}MB) for user ${userId}${options.optimize ? ' [OPTIMIZED]' : ''}`
+      const stored = await storeMedia(
+        { buffer: gifBuffer, filename: `${finalHash}.gif`, contentType: 'image/gif' },
+        ctx,
+        attachmentLimit,
+        { hash: finalHash }
       );
-
-      updateOperationStatus(operationId, 'success', { fileSize: optimizedSize });
-
-      // Send as Discord attachment if < 8MB, otherwise send URL
-      if (finalUploadMethod === 'discord') {
-        const safeHash = finalHash.replace(/[^a-f0-9]/gi, '');
-        const filename = `${safeHash}.gif`;
-        try {
-          const message = await safeInteractionEditReply(interaction, {
-            files: [new AttachmentBuilder(finalGifBuffer, { name: filename })],
-          });
-          if (!message) {
-            // safeInteractionEditReply already retried transient socket errors and logged the
-            // failure; throw here to preserve the existing R2-fallback path below.
-            throw new Error('Discord editReply failed or interaction expired');
-          }
-
-          // Try to get attachments from the returned message first
-          let discordUrl = null;
-          if (message && message.attachments && message.attachments.size > 0) {
-            const discordAttachment = message.attachments.first();
-            if (discordAttachment && discordAttachment.url) {
-              discordUrl = discordAttachment.url;
-              logger.debug(
-                `Captured Discord attachment URL from editReply response: ${discordUrl.substring(0, 60)}...`
-              );
-            }
-          }
-
-          // If attachments weren't in the response, try fetching the message
-          if (!discordUrl && message && message.id && interaction.channel) {
-            try {
-              const fetchedMessage = await interaction.channel.messages.fetch(message.id);
-              if (
-                fetchedMessage &&
-                fetchedMessage.attachments &&
-                fetchedMessage.attachments.size > 0
-              ) {
-                const discordAttachment = fetchedMessage.attachments.first();
-                if (discordAttachment && discordAttachment.url) {
-                  discordUrl = discordAttachment.url;
-                  logger.debug(
-                    `Captured Discord attachment URL from fetched message: ${discordUrl.substring(0, 60)}...`
-                  );
-                }
-              }
-            } catch (fetchError) {
-              logger.warn(`Failed to fetch message to get attachment URL: ${fetchError.message}`);
-            }
-          }
-
-          if (discordUrl) {
-            // Use composite hash that includes conversion parameters for cache key
-            const urlHash = originalUrl ? hashUrlWithParams(originalUrl, options) : finalHash;
-            await recordProcessedUrl({
-              urlHash,
-              contentHash: finalHash,
-              fileType: 'gif',
-              fileExtension: '.gif',
-              fileUrl: discordUrl,
-              userId,
-              fileSize: optimizedSize,
-            });
-            logger.info(`Uploaded to Discord: ${discordUrl}`);
-          } else {
-            logger.warn(
-              `Failed to capture Discord attachment URL - message: ${message ? 'exists' : 'null'}, attachments: ${message?.attachments?.size || 0}, messageId: ${message?.id || 'none'}`
-            );
-          }
-        } catch (discordError) {
-          logger.warn(
-            `Discord attachment upload failed, falling back to R2: ${discordError.message}`
-          );
-          try {
-            const r2Url = await uploadGifToR2(finalGifBuffer, finalHash, r2Config, buildMetadata());
-
-            if (r2Url) {
-              // Use composite hash that includes conversion parameters for cache key
-              const urlHash = originalUrl ? hashUrlWithParams(originalUrl, options) : finalHash;
-              await recordProcessedUrl({
-                urlHash,
-                contentHash: finalHash,
-                fileType: 'gif',
-                fileExtension: '.gif',
-                fileUrl: r2Url,
-                userId,
-                fileSize: optimizedSize,
-              });
-              await trackR2UploadIfApplicable(urlHash, r2Url, adminUser);
-              await safeInteractionEditReply(interaction, {
-                content: formatR2UrlWithDisclaimer(r2Url, r2Config, adminUser),
-              });
-            } else {
-              // If R2 upload also fails, use the original gifUrl
-              await safeInteractionEditReply(interaction, {
-                content: formatR2UrlWithDisclaimer(gifUrl, r2Config, adminUser),
-              });
-            }
-          } catch (r2Error) {
-            logger.error(`R2 fallback upload also failed: ${r2Error.message}`);
-            // Last resort: use the original gifUrl
-            await safeInteractionEditReply(interaction, {
-              content: formatR2UrlWithDisclaimer(gifUrl, r2Config, adminUser),
-            });
-          }
-        }
-      } else {
-        await safeInteractionEditReply(interaction, {
-          content: formatR2UrlWithDisclaimer(gifUrl, r2Config, adminUser),
-        });
-      }
-
-      await notifyCommandSuccess('convert', { operationId, userId });
-
-      recordRateLimit(userId);
+      trackRecentConversion(userId, stored.url);
+      await deliverStored(interaction, ctx, stored, { urlHash: urlHash ?? finalHash });
+      await finishCommand('convert', ctx, stored.size);
     },
     {
       commandSource,
@@ -1118,245 +397,109 @@ async function processConversion(
   );
 }
 
-export async function handleConvertContextMenu(interaction) {
-  if (!interaction.isMessageContextMenuCommand()) {
-    return;
-  }
-
-  if (interaction.commandName !== 'convert to gif') {
-    return;
-  }
-
-  const userId = interaction.user.id;
-  const adminUser = isAdmin(userId);
-
-  logger.info(`User ${userId} initiated conversion${adminUser ? ' [ADMIN]' : ''}`);
-
-  if (
-    await replyIfRateLimited(interaction, {
-      type: 'convert',
-      action: 'converting another video or image',
-      commandSource: 'context-menu',
-    })
-  ) {
-    return;
-  }
-
-  const targetMessage = interaction.targetMessage;
-
-  const videoAttachment = targetMessage.attachments.find(
-    att => att.contentType && ALLOWED_VIDEO_TYPES.includes(att.contentType)
-  );
-
-  const imageAttachment = targetMessage.attachments.find(
-    att => att.contentType && ALLOWED_IMAGE_TYPES.includes(att.contentType)
-  );
-
-  const url = !videoAttachment && !imageAttachment ? firstUrlIn(targetMessage.content) : null;
+// Checks the file (or downloads the url) a convert was given and says whether it is a video or
+// an image; replies and returns null when it cannot be converted.
+async function gatherInput(interaction, { attachment, url, adminUser, commandSource }) {
+  let buffer = null;
+  let originalUrl = null;
   if (url) {
-    logger.info(`Found URL in message content: ${url}`);
+    const check = validateUrl(url);
+    if (!check.valid) {
+      await refuse(interaction, 'convert', {
+        message: `invalid URL: ${check.error}`,
+        reason: 'invalid_url',
+        context: { originalUrl: url, commandSource },
+        notify: true,
+      });
+      return null;
+    }
+    await safeInteractionDeferReply(interaction);
+    try {
+      ({ attachment, buffer, originalUrl } = await fetchUrlInput(
+        url,
+        adminUser,
+        interaction.client
+      ));
+    } catch (error) {
+      logger.error(`Failed to download file from URL for user ${interaction.user.id}:`, error);
+      await replyError(
+        interaction,
+        curatedErrorMessage(error, 'failed to download file from URL.')
+      );
+      await notifyCommandFailure('convert', { error: error.message });
+      return null;
+    }
   }
 
-  let attachment = null;
-  // No initializer: every branch below either reassigns this before it's read or returns early.
-  let attachmentType;
-  let preDownloadedBuffer = null;
-  let originalUrlForConversion = null;
-
-  if (videoAttachment) {
-    attachment = videoAttachment;
-    attachmentType = 'video';
-    logger.info(
-      `Processing video: ${videoAttachment.name} (${(videoAttachment.size / (1024 * 1024)).toFixed(2)}MB)`
-    );
-    const validation = validateVideoAttachment(videoAttachment, adminUser);
-    if (!validation.valid) {
-      logger.warn(`Video validation failed for user ${userId}: ${validation.error}`);
-      createFailedOperation('convert', userId, validation.error, 'invalid_attachment', {
-        attachment: {
-          name: videoAttachment.name,
-          size: videoAttachment.size,
-          contentType: videoAttachment.contentType,
-          url: videoAttachment.url,
-        },
-        commandSource: 'context-menu',
-      });
-      await safeInteractionReply(interaction, {
-        content: validation.error,
-        flags: MessageFlags.Ephemeral,
-      });
-      await notifyCommandFailure('convert', { error: validation.error });
-      return;
-    }
-  } else if (imageAttachment) {
-    attachment = imageAttachment;
-    attachmentType = 'image';
-    logger.info(
-      `Processing image: ${imageAttachment.name} (${(imageAttachment.size / (1024 * 1024)).toFixed(2)}MB)`
-    );
-    const validation = validateImageAttachment(imageAttachment, adminUser);
-    if (!validation.valid) {
-      logger.warn(`Image validation failed for user ${userId}: ${validation.error}`);
-      createFailedOperation('convert', userId, validation.error, 'invalid_attachment', {
-        attachment: {
-          name: imageAttachment.name,
-          size: imageAttachment.size,
-          contentType: imageAttachment.contentType,
-          url: imageAttachment.url,
-        },
-        commandSource: 'context-menu',
-      });
-      await safeInteractionReply(interaction, {
-        content: validation.error,
-        flags: MessageFlags.Ephemeral,
-      });
-      await notifyCommandFailure('convert', { error: validation.error });
-      return;
-    }
-  } else if (url) {
-    const urlValidation = validateUrl(url);
-    if (!urlValidation.valid) {
-      logger.warn(`Invalid URL for user ${userId}: ${urlValidation.error}`);
-      const errorMessage = `invalid URL: ${urlValidation.error}`;
-      createFailedOperation('convert', userId, errorMessage, 'invalid_url', {
-        originalUrl: url,
-        commandSource: 'context-menu',
-      });
-      await safeInteractionReply(interaction, {
-        content: errorMessage,
-        flags: MessageFlags.Ephemeral,
-      });
-      await notifyCommandFailure('convert', { error: errorMessage });
-      return;
-    }
-
-    // Defer reply since downloading may take time
-    await safeInteractionDeferReply(interaction);
-
-    try {
-      const localFileCheck = await checkAndReadLocalFileFromCdnUrl(url, GIF_STORAGE_PATH);
-      let useLocalFile = false;
-
-      if (localFileCheck.exists) {
-        useLocalFile = true;
-        logger.info(`Using local file for cdn URL: ${localFileCheck.filePath}`);
-        preDownloadedBuffer = localFileCheck.buffer;
-        attachment = {
-          url: url,
-          name: localFileCheck.filename,
-          size: localFileCheck.buffer.length,
-          contentType: localFileCheck.contentType,
-        };
-        // Don't set originalUrlForConversion for CDN URLs (they're already processed)
-      }
-
-      if (!useLocalFile) {
-        let actualUrl = url;
-        const isTenorUrl = /^https?:\/\/(www\.)?tenor\.com\/view\/.+-gif-\d+/i.test(url);
-        if (isTenorUrl) {
-          logger.info(`Detected Tenor URL, parsing to extract GIF URL: ${url}`);
-          try {
-            actualUrl = await parseTenorUrl(url);
-            logger.info(`Resolved Tenor URL to: ${actualUrl}`);
-          } catch (error) {
-            logger.error(`Failed to parse Tenor URL for user ${userId}:`, error);
-            await safeInteractionEditReply(interaction, {
-              content: curatedErrorMessage(error, 'failed to parse Tenor URL.'),
-            });
-            await notifyCommandFailure('convert', { error: error.message });
-            return;
-          }
-        }
-
-        logger.info(`Downloading file from URL: ${actualUrl}`);
-        const fileData = await downloadFileFromUrl(actualUrl, adminUser, interaction.client);
-
-        // Store the buffer to avoid double download
-        preDownloadedBuffer = fileData.buffer;
-
-        // Create a pseudo-attachment object
-        attachment = {
-          url: actualUrl,
-          name: fileData.filename,
-          size: fileData.size,
-          contentType: fileData.contentType,
-        };
-        originalUrlForConversion = actualUrl;
-      }
-
-      if (attachment.contentType && ALLOWED_VIDEO_TYPES.includes(attachment.contentType)) {
-        attachmentType = 'video';
-        logger.info(
-          `Processing video from URL: ${attachment.name} (${(attachment.size / (1024 * 1024)).toFixed(2)}MB)`
-        );
-        const validation = validateVideoAttachment(attachment, adminUser);
-        if (!validation.valid) {
-          logger.warn(`Video validation failed for user ${userId}: ${validation.error}`);
-          await safeInteractionEditReply(interaction, {
-            content: validation.error,
-          });
-          await notifyCommandFailure('convert', { error: validation.error });
-          return;
-        }
-      } else if (attachment.contentType && ALLOWED_IMAGE_TYPES.includes(attachment.contentType)) {
-        attachmentType = 'image';
-        logger.info(
-          `Processing image from URL: ${attachment.name} (${(attachment.size / (1024 * 1024)).toFixed(2)}MB)`
-        );
-        const validation = validateImageAttachment(attachment, adminUser);
-        if (!validation.valid) {
-          logger.warn(`Image validation failed for user ${userId}: ${validation.error}`);
-          await safeInteractionEditReply(interaction, {
-            content: validation.error,
-          });
-          await notifyCommandFailure('convert', { error: validation.error });
-          return;
-        }
-      } else {
-        logger.warn(`Invalid attachment type for user ${userId}`);
-        await safeInteractionEditReply(interaction, {
-          content:
-            'unsupported file format. please provide a video (mp4, mov, webm, avi, mkv) or image (png, jpg, jpeg, webp, gif).',
-        });
-        await notifyCommandFailure('convert', {
-          error: `unsupported content type: ${attachment.contentType || 'unknown'}`,
-        });
-        return;
-      }
-    } catch (error) {
-      logger.error(`Failed to download file from URL for user ${userId}:`, error);
-      await safeInteractionEditReply(interaction, {
-        content: curatedErrorMessage(error, 'failed to download file from URL.'),
-      });
-      return;
-    }
-  } else {
-    logger.warn(`No video or image attachment or URL found for user ${userId}`);
-    const errorMessage = 'no video or image attachment or URL found in this message.';
-    createFailedOperation('convert', userId, errorMessage, 'missing_input', {
-      commandSource: 'context-menu',
+  const type = ALLOWED_VIDEO_TYPES.includes(attachment.contentType)
+    ? 'video'
+    : ALLOWED_IMAGE_TYPES.includes(attachment.contentType)
+      ? 'image'
+      : null;
+  if (!type) {
+    await replyError(interaction, UNSUPPORTED_FORMAT);
+    await notifyCommandFailure('convert', {
+      error: `unsupported content type: ${attachment.contentType || 'unknown'}`,
     });
-    await safeInteractionReply(interaction, {
-      content: errorMessage,
-      flags: MessageFlags.Ephemeral,
+    return null;
+  }
+  const validation =
+    type === 'video'
+      ? validateVideoAttachment(attachment, adminUser)
+      : validateImageAttachment(attachment, adminUser);
+  if (!validation.valid) {
+    const { name, size, contentType } = attachment;
+    await refuse(interaction, 'convert', {
+      message: validation.error,
+      reason: url ? null : 'invalid_attachment',
+      context: { attachment: { name, size, contentType, url: attachment.url }, commandSource },
+      notify: true,
     });
-    await notifyCommandFailure('convert', { error: errorMessage });
+    return null;
+  }
+  await safeInteractionDeferReply(interaction);
+  return { attachment, buffer, originalUrl, type };
+}
+
+export async function handleConvertContextMenu(interaction) {
+  if (!interaction.isMessageContextMenuCommand() || interaction.commandName !== 'convert to gif') {
+    return;
+  }
+  const adminUser = isAdmin(interaction.user.id);
+  const guard = { type: 'convert', action: 'converting another video or image' };
+  if (await replyIfRateLimited(interaction, { ...guard, commandSource: 'context-menu' })) {
     return;
   }
 
-  // Defer reply if not already deferred (for attachment case)
-  if (!url) {
-    await safeInteractionDeferReply(interaction);
+  const { attachments, content } = interaction.targetMessage;
+  const attachment =
+    attachments.find(att => ALLOWED_VIDEO_TYPES.includes(att.contentType)) ??
+    attachments.find(att => ALLOWED_IMAGE_TYPES.includes(att.contentType));
+  const url = attachment ? null : firstUrlIn(content);
+  if (!attachment && !url) {
+    await refuse(interaction, 'convert', {
+      message: 'no video or image attachment or URL found in this message.',
+      reason: 'missing_input',
+      context: { commandSource: 'context-menu' },
+      notify: true,
+    });
+    return;
   }
-
+  const input = await gatherInput(interaction, {
+    attachment,
+    url,
+    adminUser,
+    commandSource: 'context-menu',
+  });
+  if (!input) return;
   await processConversion(
     interaction,
-    attachment,
-    attachmentType,
+    input.attachment,
+    input.type,
     adminUser,
-    preDownloadedBuffer,
+    input.buffer,
     {},
-    originalUrlForConversion,
+    input.originalUrl,
     'context-menu'
   );
 }
@@ -1364,275 +507,75 @@ export async function handleConvertContextMenu(interaction) {
 export async function handleConvertCommand(interaction) {
   const userId = interaction.user.id;
   const adminUser = isAdmin(userId);
-
   logger.info(
     `User ${userId} initiated conversion via slash command${adminUser ? ' [ADMIN]' : ''}`
   );
-
-  if (
-    await replyIfRateLimited(interaction, {
-      type: 'convert',
-      action: 'converting another video or image',
-      commandSource: 'slash',
-    })
-  ) {
+  const guard = { type: 'convert', action: 'converting another video or image' };
+  if (await replyIfRateLimited(interaction, { ...guard, commandSource: 'slash' })) {
     return;
   }
 
   const attachment = interaction.options.getAttachment('file');
   const rawUrl = interaction.options.getString('url');
   const url = firstUrlIn(rawUrl) ?? rawUrl;
-  const quality = interaction.options.getString('quality');
   const format = interaction.options.getString('format') || 'gif';
-  const optimize = interaction.options.getBoolean('optimize') ?? false;
-  const lossy = interaction.options.getNumber('lossy');
-
-  // Parse and validate start/end (accepts seconds or MM:SS / HH:MM:SS timestamps)
   const times = await resolveTimeOptions(interaction, { type: 'convert' });
   if (times === null) {
     return;
   }
-  const { startTime, endTime } = times;
 
+  const context = { commandSource: 'slash' };
   if (!attachment && !url) {
-    logger.warn(`No attachment or URL provided for user ${userId}`);
-    const errorMessage =
+    const message =
       'please provide either a video/image attachment or a URL to a video/image file.';
-    createFailedOperation('convert', userId, errorMessage, 'missing_input', {
-      commandSource: 'slash',
-    });
-    await safeInteractionReply(interaction, {
-      content: errorMessage,
-      flags: MessageFlags.Ephemeral,
-    });
+    await refuse(interaction, 'convert', { message, reason: 'missing_input', context });
     return;
   }
-
   if (attachment && url) {
-    logger.warn(`Both attachment and URL provided for user ${userId}`);
-    const errorMessage = 'please provide either a file attachment or a URL, not both.';
-    createFailedOperation('convert', userId, errorMessage, 'multiple_inputs', {
-      commandSource: 'slash',
-    });
-    await safeInteractionReply(interaction, {
-      content: errorMessage,
-      flags: MessageFlags.Ephemeral,
-    });
+    const message = 'please provide either a file attachment or a URL, not both.';
+    await refuse(interaction, 'convert', { message, reason: 'multiple_inputs', context });
     return;
   }
 
-  let finalAttachment = attachment;
-  // No initializer: every branch below either reassigns this before it's read or returns early.
-  let attachmentType;
-  let preDownloadedBuffer = null;
-  let originalUrlForConversion = null;
-
-  // If URL is provided, download the file first
-  if (url) {
-    // Validate URL format and protocol (strict validation)
-    const urlValidation = validateUrl(url);
-    if (!urlValidation.valid) {
-      logger.warn(`Invalid URL for user ${userId}: ${urlValidation.error}`);
-      const errorMessage = `invalid URL: ${urlValidation.error}`;
-      createFailedOperation('convert', userId, errorMessage, 'invalid_url', {
-        originalUrl: url,
-        commandSource: 'slash',
-      });
-      await safeInteractionReply(interaction, {
-        content: errorMessage,
-        flags: MessageFlags.Ephemeral,
-      });
-      await notifyCommandFailure('convert', { error: errorMessage });
-      return;
-    }
-
-    // Defer reply since downloading may take time
-    await safeInteractionDeferReply(interaction);
-
-    try {
-      // Check if it's one of our own CDN URLs and try to use the local file
-      const localFileCheck = await checkAndReadLocalFileFromCdnUrl(url, GIF_STORAGE_PATH);
-      let useLocalFile = false;
-
-      if (localFileCheck.exists) {
-        useLocalFile = true;
-        logger.info(`Using local file for cdn URL: ${localFileCheck.filePath}`);
-        preDownloadedBuffer = localFileCheck.buffer;
-        finalAttachment = {
-          url: url,
-          name: localFileCheck.filename,
-          size: localFileCheck.buffer.length,
-          contentType: localFileCheck.contentType,
-        };
-        // Don't set originalUrlForConversion for CDN URLs (they're already processed)
-      }
-
-      if (!useLocalFile) {
-        // Check if URL is a Tenor GIF link and parse it
-        let actualUrl = url;
-        const isTenorUrl = /^https?:\/\/(www\.)?tenor\.com\/view\/.+-gif-\d+/i.test(url);
-        if (isTenorUrl) {
-          logger.info(`Detected Tenor URL, parsing to extract GIF URL: ${url}`);
-          try {
-            actualUrl = await parseTenorUrl(url);
-            logger.info(`Resolved Tenor URL to: ${actualUrl}`);
-          } catch (error) {
-            logger.error(`Failed to parse Tenor URL for user ${userId}:`, error);
-            await safeInteractionEditReply(interaction, {
-              content: curatedErrorMessage(error, 'failed to parse Tenor URL.'),
-            });
-            return;
-          }
-        }
-
-        logger.info(`Downloading file from URL: ${actualUrl}`);
-        const fileData = await downloadFileFromUrl(actualUrl, adminUser, interaction.client);
-
-        // Store the buffer to avoid double download
-        preDownloadedBuffer = fileData.buffer;
-
-        // Create a pseudo-attachment object
-        finalAttachment = {
-          url: actualUrl,
-          name: fileData.filename,
-          size: fileData.size,
-          contentType: fileData.contentType,
-        };
-        // Store original URL for database tracking
-        originalUrlForConversion = actualUrl;
-      }
-    } catch (error) {
-      logger.error(`Failed to download file from URL for user ${userId}:`, error);
-      await safeInteractionEditReply(interaction, {
-        content: curatedErrorMessage(error, 'failed to download file from URL.'),
-      });
-      await notifyCommandFailure('convert', { error: error.message });
-      return;
-    }
-  }
-
-  // Determine attachment type and validate
-  if (finalAttachment.contentType && ALLOWED_VIDEO_TYPES.includes(finalAttachment.contentType)) {
-    attachmentType = 'video';
-    logger.info(
-      `Processing video: ${finalAttachment.name} (${(finalAttachment.size / (1024 * 1024)).toFixed(2)}MB)`
-    );
-    const validation = validateVideoAttachment(finalAttachment, adminUser);
-    if (!validation.valid) {
-      logger.warn(`Video validation failed for user ${userId}: ${validation.error}`);
-      if (url) {
-        await safeInteractionEditReply(interaction, {
-          content: validation.error,
-        });
-      } else {
-        await safeInteractionReply(interaction, {
-          content: validation.error,
-          flags: MessageFlags.Ephemeral,
-        });
-      }
-      await notifyCommandFailure('convert', { error: validation.error });
-      return;
-    }
-  } else if (
-    finalAttachment.contentType &&
-    ALLOWED_IMAGE_TYPES.includes(finalAttachment.contentType)
-  ) {
-    attachmentType = 'image';
-    logger.info(
-      `Processing image: ${finalAttachment.name} (${(finalAttachment.size / (1024 * 1024)).toFixed(2)}MB)`
-    );
-    const validation = validateImageAttachment(finalAttachment, adminUser);
-    if (!validation.valid) {
-      logger.warn(`Image validation failed for user ${userId}: ${validation.error}`);
-      if (url) {
-        await safeInteractionEditReply(interaction, {
-          content: validation.error,
-        });
-      } else {
-        await safeInteractionReply(interaction, {
-          content: validation.error,
-          flags: MessageFlags.Ephemeral,
-        });
-      }
-      await notifyCommandFailure('convert', { error: validation.error });
-      return;
-    }
-  } else {
-    logger.warn(`Invalid attachment type for user ${userId}`);
-    const errorMsg =
-      'unsupported file format. please provide a video (mp4, mov, webm, avi, mkv) or image (png, jpg, jpeg, webp, gif).';
-    if (url) {
-      await safeInteractionEditReply(interaction, {
-        content: errorMsg,
-      });
-    } else {
-      await safeInteractionReply(interaction, {
-        content: errorMsg,
-        flags: MessageFlags.Ephemeral,
-      });
-    }
-    await notifyCommandFailure('convert', {
-      error: `unsupported content type: ${finalAttachment.contentType || 'unknown'}`,
-    });
-    return;
-  }
-
-  // Defer reply if not already deferred (for attachment case)
-  if (!url) {
-    await safeInteractionDeferReply(interaction);
-  }
-
-  // Convert start/end to startTime/duration format
-  // Only apply time parameters for videos, not images
-  let conversionStartTime = null;
-  let conversionDuration = null;
-
-  if (attachmentType === 'video') {
-    if (startTime !== null && endTime !== null) {
-      // Both provided: use range
-      conversionStartTime = startTime;
-      conversionDuration = endTime - startTime;
-    } else if (startTime !== null) {
-      // Only start_time: start at that time, continue to end
-      conversionStartTime = startTime;
-      conversionDuration = null;
-    } else if (endTime !== null) {
-      // Only end_time: start at beginning, end at that time
-      conversionStartTime = null;
-      conversionDuration = endTime;
-    }
-  } else if ((startTime !== null || endTime !== null) && attachmentType === 'image') {
-    // Time parameters don't apply to images
-    logger.info(`Time parameters provided for image conversion, ignoring them`);
-  }
+  const input = await gatherInput(interaction, {
+    attachment,
+    url,
+    adminUser,
+    commandSource: 'slash',
+  });
+  if (!input) return;
+  // Start and end only mean something for a video.
+  const trim =
+    input.type === 'video'
+      ? { startTime: times.startTime, duration: times.duration }
+      : { startTime: null, duration: null };
 
   if (format !== 'gif') {
     await processFormatConversion(
       interaction,
-      finalAttachment,
+      input.attachment,
       adminUser,
-      preDownloadedBuffer,
+      input.buffer,
       format,
-      { startTime: conversionStartTime, duration: conversionDuration },
-      url ? originalUrlForConversion : null
+      trim,
+      input.originalUrl
     );
     return;
   }
-
+  const lossy = interaction.options.getNumber('lossy');
   await processConversion(
     interaction,
-    finalAttachment,
-    attachmentType,
+    input.attachment,
+    input.type,
     adminUser,
-    preDownloadedBuffer,
+    input.buffer,
     {
-      quality: quality || undefined,
-      optimize,
+      quality: interaction.options.getString('quality') || undefined,
+      optimize: interaction.options.getBoolean('optimize') ?? false,
       lossy: lossy !== null ? lossy : undefined,
-      startTime: conversionStartTime,
-      duration: conversionDuration,
+      ...trim,
     },
-    url ? originalUrlForConversion : null,
+    input.originalUrl,
     'slash'
   );
 }

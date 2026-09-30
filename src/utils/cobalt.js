@@ -282,9 +282,7 @@ export function normalizeSocialMediaUrlForCobalt(url) {
   }
 }
 
-/**
- * Social media domains that Cobalt can handle
- */
+// Hosts cobalt handles; each also matches its subdomains (www., m., vm., clips. ...).
 const SOCIAL_MEDIA_DOMAINS = [
   'twitter.com',
   'x.com',
@@ -292,18 +290,12 @@ const SOCIAL_MEDIA_DOMAINS = [
   ...EMBED_FIXER_HOSTS.keys(),
   'bsky.app',
   'tiktok.com',
-  'vm.tiktok.com',
   'instagram.com',
-  'www.instagram.com',
   'youtube.com',
-  'www.youtube.com',
   'youtu.be',
-  'm.youtube.com',
   'reddit.com',
-  'www.reddit.com',
   'v.redd.it',
   'facebook.com',
-  'www.facebook.com',
   'fb.watch',
   // pinterest intentionally NOT listed: Cobalt 11 returns error.api.fetch.empty and yt-dlp's
   // extractor has been globally broken since ~2025-06 (yt-dlp #13554). Pinterest is handled by
@@ -311,7 +303,6 @@ const SOCIAL_MEDIA_DOMAINS = [
   // twitch: cobalt only handles clips (clips.twitch.tv + twitch.tv/<channel>/clip/<slug>),
   // matched host-only here, non-clip twitch URLs route through and get a curated error.
   'twitch.tv',
-  'clips.twitch.tv',
   'soundcloud.com', // also covers m./on. subdomains + short links
   'tumblr.com', // covers <blog>.tumblr.com and www.tumblr.com
   'streamable.com',
@@ -325,10 +316,9 @@ export function isSocialMediaUrl(url) {
     const urlObj = new URL(url);
     const hostname = urlObj.hostname.toLowerCase().replace(/^www\./, '');
 
-    return SOCIAL_MEDIA_DOMAINS.some(domain => {
-      const normalizedDomain = domain.replace(/^www\./, '');
-      return hostname === normalizedDomain || hostname.endsWith(`.${normalizedDomain}`);
-    });
+    return SOCIAL_MEDIA_DOMAINS.some(
+      domain => hostname === domain || hostname.endsWith(`.${domain}`)
+    );
   } catch {
     return false;
   }

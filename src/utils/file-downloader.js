@@ -122,7 +122,7 @@ export async function downloadVideo(url, isAdminUser = false) {
       maxRedirects: 5,
       headers: getRequestHeaders(),
     });
-    const buffer = Buffer.from(response.data);
+    const buffer = response.data;
 
     // Validate buffer size (axios maxContentLength may not work if server doesn't send Content-Length header)
     if (!isAdminUser && buffer.length > MAX_VIDEO_SIZE) {
@@ -162,7 +162,7 @@ export async function downloadImage(url, isAdminUser = false) {
       maxRedirects: 5,
       headers: getRequestHeaders(),
     });
-    const buffer = Buffer.from(response.data);
+    const buffer = response.data;
 
     // Validate buffer size (axios maxContentLength may not work if server doesn't send Content-Length header)
     if (!isAdminUser && buffer.length > MAX_IMAGE_SIZE) {
@@ -251,7 +251,7 @@ export async function downloadFileFromUrl(url, isAdminUser = false, client = nul
         : getRequestHeaders(),
     });
 
-    const buffer = Buffer.from(response.data);
+    const buffer = response.data;
 
     // Validate buffer size (axios maxContentLength may not work if server doesn't send Content-Length header)
     const contentType = response.headers['content-type'] || '';
@@ -346,7 +346,7 @@ export async function downloadFileFromUrl(url, isAdminUser = false, client = nul
             validateStatus: status => status >= 200 && status < 400,
             headers: getRequestHeaders(),
           });
-          const buffer = Buffer.from(retryResponse.data);
+          const buffer = retryResponse.data;
 
           // Validate buffer size (axios maxContentLength may not work if server doesn't send Content-Length header)
           const contentType = retryResponse.headers['content-type'] || '';

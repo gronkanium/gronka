@@ -1,6 +1,7 @@
 // Media worker: claims jobs from Postgres, runs them, and answers users over Discord REST.
 // Any number can run; a job whose worker dies is reclaimed by another (see jobs/queue.js).
 import fs from 'node:fs';
+import path from 'node:path';
 import { Client } from 'discord.js';
 import { createLogger } from './utils/logger.js';
 import { botConfig } from './utils/config.js';
@@ -8,7 +9,7 @@ import { initDatabase, markOperationAsFailed } from './utils/database.js';
 import { refreshRateLimitSettings } from './utils/rate-limit.js';
 import { flushAllOperationLogs, getOperation } from './utils/operations-tracker.js';
 import { safeInteractionEditReply } from './utils/interaction-helpers.js';
-import { sweepJobDirs } from './utils/media-file.js';
+import { JOBS_ROOT, sweepJobDirs } from './utils/media-file.js';
 import { jobContext } from './jobs/context.js';
 import { runMediaJob } from './jobs/run-job.js';
 import { interactionFor } from './jobs/reply-target.js';
@@ -22,7 +23,8 @@ const POLL_MS = 2000;
 const RECLAIM_MS = 15_000;
 const STALL_MS = 2 * 60 * 1000;
 const DRAIN_MS = Number(process.env.WORKER_DRAIN_MS || 90_000);
-const ALIVE_FILE = process.env.WORKER_ALIVE_FILE || '/tmp/worker-alive';
+// Read by the compose healthcheck; lives in this worker's own job dir, not a shared temp dir.
+const ALIVE_FILE = path.join(JOBS_ROOT, 'alive');
 const INTERRUPTED = 'this was interrupted before it could finish. please try again.';
 
 const client = new Client({
@@ -158,6 +160,7 @@ process.on('uncaughtException', error => {
   process.exit(1);
 });
 
+fs.mkdirSync(JOBS_ROOT, { recursive: true, mode: 0o700 });
 await initDatabase();
 await refreshRateLimitSettings();
 await queue.listen(queue.JOB_CHANNEL, () => pump());

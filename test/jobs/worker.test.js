@@ -1,7 +1,5 @@
 import { test, describe, beforeAll, afterAll } from 'bun:test';
 import assert from 'node:assert';
-import os from 'node:os';
-import path from 'node:path';
 import { initDatabase } from '../../src/utils/database.js';
 import { getPostgresConnection } from '../../src/utils/database/connection.js';
 import { STALE_MS, MAX_ATTEMPTS } from '../../src/jobs/queue.js';
@@ -76,7 +74,6 @@ describe('media worker process', () => {
       env: {
         ...process.env,
         DISCORD_API_URL: api.url,
-        WORKER_ALIVE_FILE: path.join(os.tmpdir(), `worker-alive-${process.pid}`),
         WORKER_DRAIN_MS: '2000',
       },
       stdout: 'ignore',

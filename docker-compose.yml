@@ -116,7 +116,11 @@ services:
     networks:
       - gronka-network
     healthcheck:
-      test: ['CMD-SHELL', 'test $(( $(date +%s) - $(stat -c %Y /tmp/worker-alive) )) -lt 60']
+      test:
+        [
+          'CMD-SHELL',
+          'test $(( $(date +%s) - $(stat -c %Y /app/temp/jobs/$(hostname)/alive) )) -lt 60',
+        ]
       interval: 30s
       timeout: 5s
       retries: 3

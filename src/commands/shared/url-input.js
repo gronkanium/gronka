@@ -1,29 +1,26 @@
-import fs from 'fs/promises';
 import { botConfig } from '../../utils/config.js';
 import { AppError } from '../../utils/errors.js';
 import { downloadFileFromUrl, parseTenorUrl } from '../../utils/file-downloader.js';
 import { parseOwnCdnUrl } from '../../utils/gif-optimizer.js';
 import { CONTENT_TYPES } from '../../utils/r2-storage.js';
 import { mediaPath } from '../../utils/storage.js';
+import { fromPath } from '../../utils/media-file.js';
 
 const TENOR_VIEW_URL = /^https?:\/\/(www\.)?tenor\.com\/view\/.+-gif-\d+/i;
 
-// The bytes behind a url option, as {attachment, buffer, originalUrl}. A file on this instance's
+// The file behind a url option, as {attachment, file, originalUrl}. A file on this instance's
 // own CDN is read from disk and gets no originalUrl, since it is already a processed result.
 export async function fetchUrlInput(url, adminUser, client) {
   const own = parseOwnCdnUrl(url);
   if (own) {
-    const buffer = await fs
-      .readFile(mediaPath(own.type, own.hash, own.ext, botConfig.gifStoragePath))
-      .catch(() => null);
-    if (buffer) {
-      const name = `${own.hash}${own.ext}`;
-      const contentType = CONTENT_TYPES[own.ext];
-      return {
-        attachment: { url, name, size: buffer.length, contentType },
-        buffer,
-        originalUrl: null,
-      };
+    const name = `${own.hash}${own.ext}`;
+    const contentType = CONTENT_TYPES[own.ext];
+    const file = await fromPath(mediaPath(own.type, own.hash, own.ext, botConfig.gifStoragePath), {
+      contentType,
+      filename: name,
+    }).catch(() => null);
+    if (file) {
+      return { attachment: { url, name, size: file.size, contentType }, file, originalUrl: null };
     }
   }
   let source = url;
@@ -42,7 +39,7 @@ export async function fetchUrlInput(url, adminUser, client) {
       size: file.size,
       contentType: file.contentType,
     },
-    buffer: file.buffer,
+    file,
     originalUrl: source,
   };
 }

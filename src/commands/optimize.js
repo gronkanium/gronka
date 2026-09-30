@@ -1,10 +1,8 @@
 import { ModalBuilder, TextInputBuilder, TextInputStyle, ActionRowBuilder } from 'discord.js';
-import fs from 'fs/promises';
-import path from 'path';
 import { createLogger } from '../utils/logger.js';
 import { botConfig } from '../utils/config.js';
 import { validateUrl, firstUrlIn } from '../utils/validation.js';
-import { writeValidatedFileBuffer } from './shared/buffer-validation.js';
+import { validateMediaFile } from './shared/media-validation.js';
 import { curatedErrorMessage } from './shared/command-errors.js';
 import { downloadImage } from '../utils/file-downloader.js';
 import { isAdmin } from '../utils/rate-limit.js';
@@ -31,7 +29,7 @@ export async function processOptimization(
   interaction,
   attachment,
   adminUser,
-  preDownloadedBuffer = null,
+  preDownloaded = null,
   lossyLevel = null,
   originalUrl = null,
   commandSource = null
@@ -41,7 +39,7 @@ export async function processOptimization(
     'optimize',
     interaction,
     async ctx => {
-      const { operationId, tempFiles } = ctx;
+      const { operationId } = ctx;
       const urlHash = originalUrl
         ? hashUrlWithParams(originalUrl, lossy === null ? {} : { lossy })
         : null;
@@ -52,30 +50,27 @@ export async function processOptimization(
         return finishCommand('optimize', ctx, 0);
       }
 
-      const fileBuffer = preDownloadedBuffer ?? (await downloadImage(attachment.url, adminUser));
-      const tempDir = path.resolve('temp');
-      const inputPath = path.join(tempDir, `gif_input_${Date.now()}.gif`);
-      await fs.mkdir(tempDir, { recursive: true });
-      await writeValidatedFileBuffer(inputPath, fileBuffer);
-      tempFiles.push(inputPath);
-
+      const gif = validateMediaFile(
+        preDownloaded ?? (await downloadImage(attachment.url, adminUser)),
+        'gif'
+      );
       logOperationStep(operationId, 'optimization_start', 'running', {
         message: 'Starting GIF optimization',
-        metadata: { inputFile: attachment.name || 'unknown', inputSize: fileBuffer.length, lossy },
+        metadata: { inputFile: attachment.name || 'unknown', inputSize: gif.size, lossy },
       });
-      const optimized = await optimizeCached(fileBuffer, inputPath, lossy);
+      const optimized = await optimizeCached(gif, lossy);
       logOperationStep(operationId, 'optimization_complete', 'success', {
         message: 'GIF optimization completed',
         metadata: {
-          originalSize: fileBuffer.length,
-          optimizedSize: optimized.buffer.length,
-          sizeReduction: calculateSizeReduction(fileBuffer.length, optimized.buffer.length),
+          originalSize: gif.size,
+          optimizedSize: optimized.file.size,
+          sizeReduction: calculateSizeReduction(gif.size, optimized.file.size),
           lossy,
         },
       });
 
       const stored = await storeMedia(
-        { buffer: optimized.buffer, filename: `${optimized.hash}.gif`, contentType: 'image/gif' },
+        { ...optimized.file, filename: `${optimized.hash}.gif`, contentType: 'image/gif' },
         ctx,
         getDiscordAttachmentLimit(interaction, DISCORD_SIZE_LIMIT),
         { hash: optimized.hash }
@@ -107,7 +102,7 @@ export async function processOptimization(
 
 // Checks the gif (or downloads the url) an optimize was given; replies and returns null on failure.
 async function gatherGif(interaction, { attachment, url, adminUser, commandSource, defer }) {
-  let buffer = null;
+  let file = null;
   let originalUrl = null;
   if (url) {
     const check = validateUrl(url);
@@ -122,11 +117,7 @@ async function gatherGif(interaction, { attachment, url, adminUser, commandSourc
     }
     if (defer) await safeInteractionDeferReply(interaction);
     try {
-      ({ attachment, buffer, originalUrl } = await fetchUrlInput(
-        url,
-        adminUser,
-        interaction.client
-      ));
+      ({ attachment, file, originalUrl } = await fetchUrlInput(url, adminUser, interaction.client));
     } catch (error) {
       logger.error(`Failed to download file from URL for user ${interaction.user.id}:`, error);
       const message = curatedErrorMessage(error, 'failed to download file from URL.');
@@ -145,7 +136,7 @@ async function gatherGif(interaction, { attachment, url, adminUser, commandSourc
     });
     return null;
   }
-  return { attachment, buffer, originalUrl };
+  return { attachment, file, originalUrl };
 }
 
 // The context menu cannot defer: it has to answer with the lossy-level modal.
@@ -203,7 +194,6 @@ export async function handleOptimizeContextMenuCommand(interaction, modalAttachm
     attachment: input.attachment,
     attachmentType: 'gif',
     adminUser,
-    preDownloadedBuffer: input.buffer,
     originalUrl: input.originalUrl,
     timestamp: Date.now(),
   });
@@ -270,7 +260,7 @@ export async function handleOptimizeCommand(interaction) {
     interaction,
     input.attachment,
     adminUser,
-    input.buffer,
+    input.file,
     lossyLevel,
     input.originalUrl,
     'slash'

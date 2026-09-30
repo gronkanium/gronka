@@ -184,12 +184,7 @@ test('mute mode drops the audio track and keeps the video untouched', async () =
     'aac',
     clip,
   ]);
-  const out = await stripAudio({
-    buffer: fs.readFileSync(clip),
-    filename: 'clip.mp4',
-    contentType: 'video/mp4',
-  });
-  fs.writeFileSync(`${dir}/out.mp4`, out.buffer);
+  const out = await stripAudio({ path: clip, filename: 'clip.mp4', contentType: 'video/mp4' });
   const streams = execFileSync('ffprobe', [
     '-v',
     'error',
@@ -197,12 +192,12 @@ test('mute mode drops the audio track and keeps the video untouched', async () =
     'stream=codec_type',
     '-of',
     'csv=p=0',
-    `${dir}/out.mp4`,
+    out.path,
   ])
     .toString()
     .trim();
   expect(streams).toBe('video');
-  const image = { buffer: Buffer.from('x'), filename: 'a.jpg', contentType: 'image/jpeg' };
+  const image = { path: '/nonexistent.jpg', filename: 'a.jpg', contentType: 'image/jpeg' };
   expect(await stripAudio(image)).toBe(image);
   fs.rmSync(dir, { recursive: true });
   expect(parseDownloadRequest({ url: 'https://x.com/a/status/1', mode: 'mute' }).mute).toBe(true);
@@ -225,10 +220,9 @@ test('trimItem cuts a video to the requested section and leaves images alone', a
     clip,
   ]);
   const out = await trimItem(
-    { buffer: fs.readFileSync(clip), filename: 'clip.mp4', contentType: 'video/mp4' },
+    { path: clip, filename: 'clip.mp4', contentType: 'video/mp4' },
     { startTime: 1, duration: 2 }
   );
-  fs.writeFileSync(`${dir}/out.mp4`, out.buffer);
   const seconds = Number(
     execFileSync('ffprobe', [
       '-v',
@@ -237,12 +231,12 @@ test('trimItem cuts a video to the requested section and leaves images alone', a
       'format=duration',
       '-of',
       'csv=p=0',
-      `${dir}/out.mp4`,
+      out.path,
     ])
   );
   expect(seconds).toBeGreaterThan(1.5);
   expect(seconds).toBeLessThan(2.5);
-  const image = { buffer: Buffer.from('x'), filename: 'a.jpg', contentType: 'image/jpeg' };
+  const image = { path: '/nonexistent.jpg', filename: 'a.jpg', contentType: 'image/jpeg' };
   expect(await trimItem(image, { startTime: 1, duration: 2 })).toBe(image);
   fs.rmSync(dir, { recursive: true });
 });

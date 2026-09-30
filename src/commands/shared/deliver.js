@@ -3,7 +3,6 @@ import { AttachmentBuilder } from 'discord.js';
 import { createLogger } from '../../utils/logger.js';
 import { botConfig, r2Config } from '../../utils/config.js';
 import { AppError } from '../../utils/errors.js';
-import { generateHash } from '../../utils/file-downloader.js';
 import { safeInteractionEditReply } from '../../utils/interaction-helpers.js';
 import { recordRateLimit } from '../../utils/rate-limit.js';
 import { updateOperationStatus } from '../../utils/operations-tracker.js';
@@ -33,26 +32,25 @@ export async function storeMedia(
   media,
   { buildMetadata },
   attachmentLimit,
-  { defaultExt = '.mp4', hash = generateHash(media.buffer) } = {}
+  { defaultExt = '.mp4', hash = media.hash } = {}
 ) {
   const storage = botConfig.gifStoragePath;
   const ext = path.extname(media.filename ?? '').toLowerCase() || defaultExt;
-  const type = detectFileType(ext, media.contentType, media.buffer);
+  const type = detectFileType(ext, media.contentType, media.head);
   const cached = await mediaExists(type, hash, ext, storage);
   const location = cached
     ? mediaPath(type, hash, ext, storage)
-    : (await saveMedia(type, media.buffer, hash, ext, storage, buildMetadata(), attachmentLimit))
-        .url;
+    : (await saveMedia(type, media, hash, ext, storage, buildMetadata(), attachmentLimit)).url;
   return {
     hash,
     ext,
     type,
     cached,
     inR2: cached ? isR2Configured(r2Config) : isRemote(location),
-    buffer: media.buffer,
+    file: media,
     url: mediaPublicUrl(location, type),
-    size: await storedSize(location, media.buffer.length),
-    fits: fitsDiscordAttachment(media.size ?? media.buffer.length, attachmentLimit),
+    size: await storedSize(location, media.size),
+    fits: fitsDiscordAttachment(media.size, attachmentLimit),
   };
 }
 
@@ -61,7 +59,7 @@ export async function toR2(stored, { buildMetadata }) {
   if (stored.inR2 || !isR2Configured(r2Config)) return stored;
   const url = await uploadMediaToR2(
     stored.type,
-    stored.buffer,
+    stored.file,
     stored.hash,
     stored.ext,
     r2Config,
@@ -71,7 +69,7 @@ export async function toR2(stored, { buildMetadata }) {
 }
 
 export const attachmentFor = stored =>
-  new AttachmentBuilder(stored.buffer, {
+  new AttachmentBuilder(stored.file.path, {
     name: `${stored.hash.replace(/[^a-f0-9]/gi, '')}${stored.ext}`,
   });
 

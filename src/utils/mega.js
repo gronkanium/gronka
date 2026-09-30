@@ -5,6 +5,7 @@ import { createLogger } from './logger.js';
 import { NetworkError, ValidationError } from './errors.js';
 import { sanitizeFilename } from './validation.js';
 import { ssrfGuardedRequest } from './ssrf-guard.js';
+import { writeStream } from './media-file.js';
 
 const logger = createLogger('mega');
 const MEGA_API = 'https://g.api.mega.co.nz/cs';
@@ -107,26 +108,25 @@ export async function downloadFromMega(url, isAdminUser, maxSize) {
   }
 
   logger.info(`Downloading mega file ${id} (${info.s} bytes)`);
-  let encrypted;
+  const decipher = crypto.createDecipheriv('aes-128-ctr', aesKey, iv);
+  let file;
   try {
     const response = await axios.get(info.g, {
       ...ssrfGuardedRequest(),
-      responseType: 'arraybuffer',
+      responseType: 'stream',
       timeout: 300000,
-      maxContentLength: isAdminUser ? Infinity : maxSize,
     });
-    encrypted = response.data;
+    file = await writeStream(response.data, {
+      transforms: [decipher],
+      ext: `.${ext}`,
+      maxSize: isAdminUser ? Infinity : maxSize,
+    });
   } catch (error) {
+    if (error.code === 'TOO_LARGE') {
+      throw new ValidationError(`file is too large (max ${maxSize / (1024 * 1024)}mb)`);
+    }
     logger.warn(`Mega file download failed: ${error.message}`);
     throw new NetworkError('failed to download the mega file. it may be unavailable.');
   }
-
-  const decipher = crypto.createDecipheriv('aes-128-ctr', aesKey, iv);
-  const buffer = Buffer.concat([decipher.update(encrypted), decipher.final()]);
-  return {
-    buffer,
-    contentType: MIME_BY_EXT[ext],
-    size: buffer.length,
-    filename: sanitizeFilename(name),
-  };
+  return { ...file, contentType: MIME_BY_EXT[ext], filename: sanitizeFilename(name) };
 }

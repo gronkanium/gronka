@@ -1,6 +1,7 @@
 import axios from 'axios';
 import { createLogger } from './logger.js';
 import { NetworkError, ValidationError } from './errors.js';
+import { fetchToFile, withExtension } from './media-file.js';
 import { detectFileType } from './storage.js';
 
 const logger = createLogger('cobalt');
@@ -24,12 +25,12 @@ const CONTENT_TYPE_EXTENSIONS = {
 // Cobalt's tunnel sends no content-type header at all, so defaulting to video/mp4 relabelled
 // every real GIF (x.com animated GIFs arrive as GIF89a) and /convert then rejected them as
 // "not a valid video format". Magic bytes are the only honest signal when the header is absent.
-export function resolveContentType(headerType, filename, buffer) {
+export function resolveContentType(headerType, filename, head) {
   if (headerType) {
     return headerType;
   }
   const ext = (filename.toLowerCase().match(/\.[^.]+$/) || [''])[0];
-  const kind = detectFileType(ext, '', buffer);
+  const kind = detectFileType(ext, '', head);
   if (kind === 'gif') {
     return 'image/gif';
   }
@@ -440,147 +441,78 @@ async function callCobaltApi(apiUrl, url, retryCount = 0, maxRetries = 3) {
   }
 }
 
-// cobalt's tunnel answers 200 with no body when its own fetch fails (seen on Bluesky HLS).
-function nonEmpty(buffer) {
-  if (buffer.length === 0) {
-    throw new NetworkError('cobalt returned an empty file');
+const BROWSER_UA =
+  'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36';
+const DISPOSITION_NAME = /filename[^;=\n]*=((['"]).*?\2|[^;\n]*)/;
+
+// Streams a cobalt (or source) URL to disk. {what} names the file in user-facing errors.
+async function fetchCobaltFile(url, { accept, timeout, maxSize, what, failMessage }) {
+  try {
+    const file = await fetchToFile(
+      url,
+      {
+        timeout,
+        maxRedirects: 5,
+        validateStatus: status => status >= 200 && status < 400,
+        headers: { 'User-Agent': BROWSER_UA, Accept: accept, Referer: url },
+      },
+      { maxSize }
+    );
+    // cobalt's tunnel answers 200 with no body when its own fetch fails (seen on Bluesky HLS).
+    if (file.size === 0) throw new NetworkError('cobalt returned an empty file');
+    const match = (file.headers['content-disposition'] || '').match(DISPOSITION_NAME);
+    return { ...file, dispositionName: match?.[1]?.replace(/['"]/g, '') || null };
+  } catch (error) {
+    if (error.code === 'TOO_LARGE' || error.response?.status === 413) {
+      throw new ValidationError(`${what} is too large (max ${maxSize / (1024 * 1024)}mb)`);
+    }
+    if (error instanceof NetworkError) throw error;
+    if (error.response?.status === 404) throw new NetworkError(`${what} not found at url`);
+    if (error.code === 'ECONNABORTED') throw new NetworkError(`${what} download timed out`);
+    logger.warn(`Cobalt ${what} download failed: ${error.message}`);
+    throw new NetworkError(failMessage ?? `${what} could not be downloaded`);
   }
-  return buffer;
 }
 
+const PHOTO_EXTENSIONS = {
+  'image/jpeg': '.jpg',
+  'image/jpg': '.jpg',
+  'image/png': '.png',
+  'image/gif': '.gif',
+  'image/webp': '.webp',
+};
+
 async function downloadPhoto(photoUrl, index, isAdminUser = false, maxSize = Infinity) {
-  try {
-    const response = await axios.get(photoUrl, {
-      responseType: 'arraybuffer',
-      timeout: 60000, // 1 minute timeout for photo downloads
-      maxContentLength: isAdminUser ? Infinity : maxSize,
-      maxRedirects: 5,
-      validateStatus: status => status >= 200 && status < 400,
-      headers: {
-        'User-Agent':
-          'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-        Accept: 'image/*,*/*',
-        Referer: photoUrl,
-      },
-    });
-
-    const buffer = nonEmpty(response.data);
-
-    // Validate buffer size (axios maxContentLength may not work if server doesn't send Content-Length header)
-    if (!isAdminUser && buffer.length > maxSize) {
-      throw new ValidationError(
-        `photo ${index + 1} file is too large (max ${maxSize / (1024 * 1024)}mb)`
-      );
-    }
-
-    let contentType = response.headers['content-type'] || 'image/jpeg';
-
-    let filename = `photo_${index + 1}.jpg`;
-    const contentDisposition = response.headers['content-disposition'] || '';
-    if (contentDisposition) {
-      const filenameMatch = contentDisposition.match(/filename[^;=\n]*=((['"]).*?\2|[^;\n]*)/);
-      if (filenameMatch && filenameMatch[1]) {
-        filename = filenameMatch[1].replace(/['"]/g, '');
-      }
-    } else {
-      const extMap = {
-        'image/jpeg': '.jpg',
-        'image/jpg': '.jpg',
-        'image/png': '.png',
-        'image/gif': '.gif',
-        'image/webp': '.webp',
-      };
-      const ext = extMap[contentType] || '.jpg';
-      filename = `photo_${index + 1}${ext}`;
-    }
-
-    logger.info(
-      `Downloaded photo ${index + 1}: ${filename}, size: ${buffer.length} bytes, content-type: ${contentType}`
-    );
-
-    return {
-      buffer,
-      contentType,
-      size: buffer.length,
-      filename,
-    };
-  } catch (error) {
-    if (error.response?.status === 413 && !isAdminUser) {
-      throw new NetworkError(`photo ${index + 1} file is too large`);
-    }
-    if (error.response?.status === 404) {
-      throw new NetworkError(`photo ${index + 1} not found at url`);
-    }
-    if (error.code === 'ECONNABORTED') {
-      throw new NetworkError(`photo ${index + 1} download timed out`);
-    }
-    logger.warn(`Photo ${index + 1} download failed: ${error.message}`);
-    throw new NetworkError(`photo ${index + 1} could not be downloaded`);
-  }
+  const file = await fetchCobaltFile(photoUrl, {
+    accept: 'image/*,*/*',
+    timeout: 60000,
+    maxSize: isAdminUser ? Infinity : maxSize,
+    what: `photo ${index + 1}`,
+  });
+  const contentType = file.headers['content-type'] || 'image/jpeg';
+  const filename =
+    file.dispositionName ?? `photo_${index + 1}${PHOTO_EXTENSIONS[contentType] || '.jpg'}`;
+  logger.info(
+    `Downloaded photo ${index + 1}: ${filename}, size: ${file.size} bytes, content-type: ${contentType}`
+  );
+  return withExtension({ ...file, contentType, filename });
 }
 
 async function downloadVideo(videoUrl, index, isAdminUser = false, maxSize = Infinity) {
-  try {
-    const response = await axios.get(videoUrl, {
-      responseType: 'arraybuffer',
-      timeout: 300000, // 5 minute timeout for video downloads
-      maxContentLength: isAdminUser ? Infinity : maxSize,
-      maxRedirects: 5,
-      validateStatus: status => status >= 200 && status < 400,
-      headers: {
-        'User-Agent':
-          'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-        Accept: 'video/*,*/*',
-        Referer: videoUrl,
-      },
-    });
-
-    const buffer = nonEmpty(response.data);
-
-    // Validate buffer size (axios maxContentLength may not work if server doesn't send Content-Length header)
-    if (!isAdminUser && buffer.length > maxSize) {
-      throw new ValidationError(
-        `video ${index + 1} file is too large (max ${maxSize / (1024 * 1024)}mb)`
-      );
-    }
-
-    let filename = `video_${index + 1}.mp4`;
-    const contentDisposition = response.headers['content-disposition'] || '';
-    if (contentDisposition) {
-      const filenameMatch = contentDisposition.match(/filename[^;=\n]*=((['"]).*?\2|[^;\n]*)/);
-      if (filenameMatch && filenameMatch[1]) {
-        filename = filenameMatch[1].replace(/['"]/g, '');
-      }
-    }
-
-    const contentType = resolveContentType(response.headers['content-type'], filename, buffer);
-    if (!contentDisposition) {
-      filename = `video_${index + 1}${CONTENT_TYPE_EXTENSIONS[contentType] || '.mp4'}`;
-    }
-
-    logger.info(
-      `Downloaded video ${index + 1}: ${filename}, size: ${buffer.length} bytes, content-type: ${contentType}`
-    );
-
-    return {
-      buffer,
-      contentType,
-      size: buffer.length,
-      filename,
-    };
-  } catch (error) {
-    if (error.response?.status === 413 && !isAdminUser) {
-      throw new NetworkError(`video ${index + 1} file is too large`);
-    }
-    if (error.response?.status === 404) {
-      throw new NetworkError(`video ${index + 1} not found at url`);
-    }
-    if (error.code === 'ECONNABORTED') {
-      throw new NetworkError(`video ${index + 1} download timed out`);
-    }
-    logger.warn(`Video ${index + 1} download failed: ${error.message}`);
-    throw new NetworkError(`video ${index + 1} could not be downloaded`);
-  }
+  const file = await fetchCobaltFile(videoUrl, {
+    accept: 'video/*,*/*',
+    timeout: 300000,
+    maxSize: isAdminUser ? Infinity : maxSize,
+    what: `video ${index + 1}`,
+  });
+  const named = file.dispositionName ?? `video_${index + 1}.mp4`;
+  const contentType = resolveContentType(file.headers['content-type'], named, file.head);
+  const filename =
+    file.dispositionName ?? `video_${index + 1}${CONTENT_TYPE_EXTENSIONS[contentType] || '.mp4'}`;
+  logger.info(
+    `Downloaded video ${index + 1}: ${filename}, size: ${file.size} bytes, content-type: ${contentType}`
+  );
+  return withExtension({ ...file, contentType, filename });
 }
 
 async function downloadMediaFromPicker(pickerArray, isAdminUser = false, maxSize = Infinity) {
@@ -642,7 +574,7 @@ function replaceTunnelHostname(url, apiUrl) {
  * @param {boolean} isAdminUser - Whether the user is an admin (allows larger files)
  * @param {number} maxSize - Maximum file size in bytes
  * @param {string} apiUrl - Cobalt API URL (used to fix tunnel hostnames)
- * @returns {Promise<Object|Array>} Object with buffer, contentType, size, and filename (or array of objects for picker)
+ * @returns {Promise<Object|Array>} Media file (path, size, hash, contentType, filename) (or array of objects for picker)
  */
 async function downloadFromCobalt(
   cobaltResponse,
@@ -719,65 +651,22 @@ async function downloadFromCobalt(
     throw new NetworkError('cobalt api did not return a video url');
   }
 
-  try {
-    const response = await axios.get(videoUrl, {
-      responseType: 'arraybuffer',
-      timeout: 300000, // 5 minute timeout for video downloads
-      maxContentLength: isAdminUser ? Infinity : maxSize,
-      maxRedirects: 5,
-      validateStatus: status => status >= 200 && status < 400,
-      headers: {
-        'User-Agent':
-          'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-        Accept: '*/*',
-        Referer: videoUrl,
-      },
-    });
-
-    const buffer = nonEmpty(response.data);
-
-    // Validate buffer size (axios maxContentLength may not work if server doesn't send Content-Length header)
-    if (!isAdminUser && buffer.length > maxSize) {
-      throw new ValidationError(`file is too large (max ${maxSize / (1024 * 1024)}mb)`);
-    }
-
-    const contentDisposition = response.headers['content-disposition'] || '';
-    if (contentDisposition) {
-      const filenameMatch = contentDisposition.match(/filename[^;=\n]*=((['"]).*?\2|[^;\n]*)/);
-      if (filenameMatch && filenameMatch[1]) {
-        filename = filenameMatch[1].replace(/['"]/g, '');
-      }
-    }
-
-    const declared = response.headers['content-type'];
-    const generic = declared === 'application/octet-stream' || declared === 'binary/octet-stream';
-    const contentType = resolveContentType(generic ? '' : declared, filename, buffer);
-
-    filename = normalizeFilenameForContentType(filename, contentType);
-
-    logger.info(
-      `Downloaded file: ${filename}, size: ${buffer.length} bytes, content-type: ${contentType}`
-    );
-
-    return {
-      buffer,
-      contentType,
-      size: buffer.length,
-      filename,
-    };
-  } catch (error) {
-    if (error.response?.status === 413 && !isAdminUser) {
-      throw new NetworkError('video file is too large');
-    }
-    if (error.response?.status === 404) {
-      throw new NetworkError('video file not found at cobalt url');
-    }
-    if (error.code === 'ECONNABORTED') {
-      throw new NetworkError('video download timed out');
-    }
-    logger.warn(`Cobalt video download failed: ${error.message}`);
-    throw new NetworkError('the download failed. the content may be unavailable.');
-  }
+  const file = await fetchCobaltFile(videoUrl, {
+    accept: '*/*',
+    timeout: 300000,
+    maxSize: isAdminUser ? Infinity : maxSize,
+    what: 'file',
+    failMessage: 'the download failed. the content may be unavailable.',
+  });
+  const declared = file.headers['content-type'];
+  const generic = declared === 'application/octet-stream' || declared === 'binary/octet-stream';
+  const named = file.dispositionName ?? filename;
+  const contentType = resolveContentType(generic ? '' : declared, named, file.head);
+  const finalName = normalizeFilenameForContentType(named, contentType);
+  logger.info(
+    `Downloaded file: ${finalName}, size: ${file.size} bytes, content-type: ${contentType}`
+  );
+  return withExtension({ ...file, contentType, filename: finalName });
 }
 
 /**
@@ -879,7 +768,7 @@ export async function getRemoteContentLength(mediaUrl) {
  * @param {string} url - Social media URL
  * @param {boolean} isAdminUser - Whether the user is an admin
  * @param {number} maxSize - Maximum file size in bytes
- * @returns {Promise<Object|Array>} Object with buffer, contentType, size, and filename (or array for multiple photos)
+ * @returns {Promise<Object|Array>} Media file (path, size, hash, contentType, filename) (or array for multiple photos)
  */
 export async function downloadFromSocialMedia(
   apiUrl,

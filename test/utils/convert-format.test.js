@@ -14,7 +14,7 @@ beforeAll(() => {
   const make = (name, inputs) => {
     const out = path.join(dir, name);
     execFileSync('ffmpeg', ['-loglevel', 'error', '-y', ...inputs, '-c:v', 'libx264', out]);
-    return fs.readFileSync(out);
+    return { path: out, filename: name };
   };
   clip = make('clip.mp4', [
     '-f',
@@ -50,22 +50,22 @@ describe('convertToFormat', () => {
 
   for (const format of Object.keys(MAGIC)) {
     test(`turns an mp4 into ${format}`, async () => {
-      const out = await convertToFormat(clip, '.mp4', format);
-      assert.ok(MAGIC[format](out), `${format} output has the wrong signature`);
+      const out = await convertToFormat(clip, format);
+      assert.ok(MAGIC[format](out.head), `${format} output has the wrong signature`);
     }, 60000);
   }
 
   test('trims before converting', async () => {
-    const full = await convertToFormat(clip, '.mp4', 'wav');
-    const half = await convertToFormat(clip, '.mp4', 'wav', { startTime: 1, duration: 0.5 });
-    assert.ok(half.length < full.length / 2);
+    const full = await convertToFormat(clip, 'wav');
+    const half = await convertToFormat(clip, 'wav', { startTime: 1, duration: 0.5 });
+    assert.ok(half.size < full.size / 2);
   });
 
   test('says so when asked for audio from a silent video', async () => {
-    await assert.rejects(convertToFormat(silent, '.mp4', 'mp3'), /no audio to extract/);
+    await assert.rejects(convertToFormat(silent, 'mp3'), /no audio to extract/);
   });
 
   test('rejects formats outside the list', async () => {
-    await assert.rejects(convertToFormat(clip, '.mp4', 'exe'), /not supported/);
+    await assert.rejects(convertToFormat(clip, 'exe'), /not supported/);
   });
 });

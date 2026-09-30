@@ -10,7 +10,7 @@ import {
 import { initializeDatabaseWithErrorHandling } from '../../utils/database-init.js';
 import { replyWithCuratedError } from './command-errors.js';
 import { notifyCommandFailure } from '../../utils/ntfy-notifier.js';
-import { cleanupTempFiles } from '../../utils/storage.js';
+import { withJobDir } from '../../utils/media-file.js';
 
 const logger = createLogger('run-media-command');
 
@@ -23,7 +23,7 @@ const logger = createLogger('run-media-command');
  *   - flip the operation to `running`
  *   - on a thrown error: log it, mark the operation `error`, send a curated user reply, and
  *     fire `notifyCommandFailure`
- *   - in `finally`: clean up any temp files the callback registered
+ *   - run inside a job dir (media-file.js), so every file the callback makes is removed after
  *
  * The callback keeps FULL ownership of the download / transform / save / upload / Discord reply /
  * success bookkeeping (`updateOperationStatus('success', …)`, `recordRateLimit`,
@@ -35,7 +35,7 @@ const logger = createLogger('run-media-command');
  * @param {import('discord.js').Interaction} interaction
  * @param {(ctx: {
  *   operationId: string, userId: string, adminUser: boolean,
- *   operationContext: Object, tempFiles: string[], buildMetadata: () => Object,
+ *   operationContext: Object, buildMetadata: () => Object,
  *   logStep: (step: string, status: string, data?: Object) => void,
  * }) => Promise<void>} callback
  * @param {Object} [options]
@@ -45,7 +45,11 @@ const logger = createLogger('run-media-command');
  * @param {string} [options.errorFallback] - generic user-facing message for unexpected errors
  * @returns {Promise<void>}
  */
-export async function runMediaCommand(type, interaction, callback, options = {}) {
+export function runMediaCommand(type, interaction, callback, options = {}) {
+  return withJobDir(() => runInJob(type, interaction, callback, options));
+}
+
+async function runInJob(type, interaction, callback, options) {
   const userId = interaction.user.id;
   const adminUser = isAdmin(userId);
 
@@ -63,14 +67,11 @@ export async function runMediaCommand(type, interaction, callback, options = {})
     'operation-type': type,
   });
 
-  const tempFiles = [];
-
   const ctx = {
     operationId,
     userId,
     adminUser,
     operationContext,
-    tempFiles,
     buildMetadata,
     logStep: (step, status, data) => logOperationStep(operationId, step, status, data),
   };
@@ -126,9 +127,5 @@ export async function runMediaCommand(type, interaction, callback, options = {})
     );
 
     await notifyCommandFailure(type, { operationId, userId, error: errorMessage });
-  } finally {
-    if (tempFiles.length > 0) {
-      await cleanupTempFiles(tempFiles);
-    }
   }
 }

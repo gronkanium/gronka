@@ -121,7 +121,35 @@ const KNOWN_SETTINGS = {
         .map(id => id.trim())
         .filter(id => id.length > 0),
   },
+  webui_saved_views: {
+    type: 'views',
+    default: '[]',
+    description: 'Filtered views pinned to the webui sidebar menus',
+  },
 };
+
+const VIEW_PAGES = new Set(['logs', 'requests', 'issues']);
+
+// [{ name, page, params }] with short string params only: this is rendered straight into nav links.
+function parseViews(value) {
+  if (!Array.isArray(value) || value.length > 50) return null;
+  const views = [];
+  for (const v of value) {
+    if (!v || typeof v.name !== 'string' || !VIEW_PAGES.has(v.page)) return null;
+    const name = v.name.trim().slice(0, 60);
+    const entries = Object.entries(v.params ?? {});
+    if (!name || entries.length > 20) return null;
+    if (
+      entries.some(
+        ([k, val]) => !/^\w{1,32}$/.test(k) || typeof val !== 'string' || val.length > 500
+      )
+    ) {
+      return null;
+    }
+    views.push({ name, page: v.page, params: Object.fromEntries(entries) });
+  }
+  return views;
+}
 
 // Get all bot settings (known settings filled with defaults)
 router.get('/api/settings', async (req, res) => {
@@ -250,6 +278,15 @@ router.put('/api/settings/:key', express.json(), async (req, res) => {
       }
       const ids = [...new Set(value)].filter(id => DOWNLOAD_SERVICE_IDS.has(id)).sort();
       textValue = JSON.stringify(ids);
+    } else if (meta.type === 'views') {
+      const views = parseViews(value);
+      if (!views) {
+        return res.status(400).json({
+          error: 'invalid value',
+          message: `"${key}" expects a list of { name, page, params } views`,
+        });
+      }
+      textValue = JSON.stringify(views);
     } else {
       textValue = String(value).trim();
       if (meta.pattern && !meta.pattern.test(textValue)) {

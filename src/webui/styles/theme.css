@@ -5,40 +5,47 @@
  */
 :root {
   /* surfaces */
-  --bg-deep: #0d0d0d;
-  --bg: #1a1a1a;
-  --surface: #222;
-  --surface-2: #2a2a2a;
-  --surface-3: #444;
+  --bg-deep: #0b0c0e;
+  --bg: #0e0f11;
+  --surface: #15161a;
+  --surface-2: #1b1d22;
+  --surface-3: #2a2c32;
 
   /* borders */
-  --border: #333;
-  --border-2: #555;
+  --border: #23252a;
+  --border-2: #33363d;
+  --line: #1c1e22;
 
   /* text */
-  --text-bright: #fff;
-  --text: #e0e0e0;
-  --text-muted: #aaa;
-  --text-dim: #888;
+  --text-bright: #f4f3ef;
+  --text: #e8e7e3;
+  --text-muted: #9a9ca3;
+  --text-dim: #6e7077;
 
   /* status */
-  --success: #51cf66;
-  --success-bg: #2d5016;
-  --danger: #ff6b6b;
-  --danger-bg: #5a1a1a;
-  --danger-bg-subtle: #2a1a1a;
-  --danger-border: #5a3333;
-  --warning: #ffd93d;
-  --info: #74c0fc;
-  --info-bg: #2d3a50;
-  --info-bg-hover: #3d4a60;
+  --success: #43c28a;
+  --success-bg: #12281f;
+  --danger: #ef6b6b;
+  --danger-bg: #351819;
+  --danger-bg-subtle: #221415;
+  --danger-border: #5a2a2c;
+  --warning: #f0a35e;
+  --warning-bg: #33261a;
+  --info: #8fa7f5;
+  --info-bg: #1a2240;
+  --info-bg-hover: #222b4f;
+  --accent: #a9bbff;
 
   /* charts - single-series mark color, same hue family as --info but recalibrated
      to a mid lightness band so it reads as a fill against --surface instead of text */
-  --chart-series-1: #4a90d9;
-  --chart-series-1-hover: #589ad9;
+  --chart-series-1: #6f8ff0;
+  --chart-series-1-hover: #86a0f3;
+
+  /* type */
+  --font: 'Geist', 'Inter', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+  --mono: 'Geist Mono', ui-monospace, 'SF Mono', 'Cascadia Mono', Menlo, Consolas, monospace;
 
   /* shape */
-  --radius: 3px;
-  --radius-lg: 4px;
+  --radius: 6px;
+  --radius-lg: 10px;
 }

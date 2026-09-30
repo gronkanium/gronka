@@ -2,11 +2,6 @@
  * Shared display formatters for webui pages
  */
 
-export function formatTimestamp(timestamp) {
-  if (!timestamp) return 'N/A';
-  return new Date(timestamp).toLocaleString();
-}
-
 export function formatRelativeTime(timestamp) {
   if (!timestamp) return 'N/A';
   const seconds = Math.floor((Date.now() - timestamp) / 1000);
@@ -18,7 +13,7 @@ export function formatRelativeTime(timestamp) {
   if (hours < 24) return `${hours}h ago`;
   const days = Math.floor(hours / 24);
   if (days < 7) return `${days}d ago`;
-  return formatTimestamp(timestamp);
+  return new Date(timestamp).toLocaleDateString([], { month: 'short', day: 'numeric' });
 }
 
 export function formatBytes(bytes) {
@@ -53,4 +48,27 @@ export function timeRangeToStartTime(timeRange, now = Date.now()) {
     '30d': 30 * 24 * hour,
   };
   return ranges[timeRange] ? now - ranges[timeRange] : null;
+}
+
+export function shortId(id) {
+  const s = String(id ?? '');
+  return s.length > 10 ? `${s.slice(0, 4)}…${s.slice(-4)}` : s;
+}
+
+export function hostOf(url) {
+  try {
+    return new URL(url).hostname.replace(/^www\./, '');
+  } catch {
+    return null;
+  }
+}
+
+// "x.com/user/status/123" style label for a request's link, without scheme or query.
+export function urlLabel(url) {
+  try {
+    const u = new URL(url);
+    return `${u.hostname.replace(/^www\./, '')}${u.pathname.replace(/\/$/, '')}`;
+  } catch {
+    return url || 'attachment';
+  }
 }

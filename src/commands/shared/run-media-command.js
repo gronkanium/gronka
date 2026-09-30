@@ -1,4 +1,4 @@
-import { createLogger } from '../../utils/logger.js';
+import { createLogger, withLogContext } from '../../utils/logger.js';
 import { isAdmin } from '../../utils/rate-limit.js';
 import {
   createOperation,
@@ -79,6 +79,22 @@ async function runInJob(type, interaction, callback, options) {
     logStep: (step, status, data) => logOperationStep(operationId, step, status, data),
   };
 
+  const url = operationContext.url || operationContext.originalUrl;
+  const logFields = { op: operationId, command: type, user: userId };
+  if (url) logFields.source = sourceOf(url);
+  return withLogContext(logFields, () => runOperation(type, interaction, callback, options, ctx));
+}
+
+function sourceOf(url) {
+  try {
+    return new URL(url).hostname.replace(/^www\./, '');
+  } catch {
+    return undefined;
+  }
+}
+
+async function runOperation(type, interaction, callback, options, ctx) {
+  const { operationId, userId, operationContext } = ctx;
   try {
     // optimize relies on startup DB init and intentionally skips per-command init.
     if (options.skipDbInit !== true) {

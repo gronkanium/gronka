@@ -6,11 +6,11 @@ import { fileURLToPath } from 'url';
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 export default defineConfig({
-  plugins: [svelte()],
-  root: path.resolve(__dirname, 'src/webui'),
-  publicDir: path.resolve(__dirname, 'src/webui/public'),
+  plugins: [svelte({ compilerOptions: { css: 'injected' } })],
+  root: __dirname,
+  publicDir: path.resolve(__dirname, 'public'),
   build: {
-    outDir: path.resolve(__dirname, 'src/public'),
+    outDir: path.resolve(__dirname, '../public'),
     emptyOutDir: true,
     sourcemap: false,
   },

@@ -19,9 +19,6 @@ COPY package.json bun.lock ./
 # rather than silently resolving something different from what CI tested.
 RUN bun install --frozen-lockfile
 
-# Copy vite config (needed for webui build)
-COPY vite.config.js svelte.config.js ./
-
 # Copy application source code
 COPY src/ ./src/
 

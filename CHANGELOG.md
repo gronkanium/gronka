@@ -5,6 +5,20 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres (attempts) to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.3.0](https://github.com/gronkanium/gronka/compare/v2.2.0...v2.3.0) (2026-09-30)
+
+
+### Features
+
+* **setup:** flags and SETUP_ env answers, --yes and --check --json ([c996c27](https://github.com/gronkanium/gronka/commit/c996c27ea7efe2e50ea568749bd530d95d201dd5))
+* **webui:** redesign the dashboard with a logs explorer and trace view ([8e6c5ed](https://github.com/gronkanium/gronka/commit/8e6c5ede6b20f6359ffec97f4b0fe1703d1e250c))
+
+
+### Bug Fixes
+
+* **docker:** give gronka-web its own database so the bot stack starts anywhere ([8524a3b](https://github.com/gronkanium/gronka/commit/8524a3b562e12975a0e13164fc932d1af29aedf9))
+* **docker:** stop entrypoint log lines starting with a literal -e ([a9d51ac](https://github.com/gronkanium/gronka/commit/a9d51ac5e8cac60be33c02b26147d8d47c56dcbd))
+
 ## [2.2.0](https://github.com/thedorekaczynski/gronka/compare/v2.1.0...v2.2.0) (2026-09-30)
 
 

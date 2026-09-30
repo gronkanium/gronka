@@ -27,18 +27,12 @@ import { getDiscordAttachmentLimit } from './shared/attachment-limit.js';
 import { trackRecentConversion } from '../utils/user-tracking.js';
 import { loadStoredGif, optimizeCached } from '../utils/gif-optimizer.js';
 import { logOperationStep } from '../utils/operations-tracker.js';
-import { notifyCommandFailure } from '../utils/ntfy-notifier.js';
 import { hashUrlWithParams, hashPartsHex } from '../utils/hashing.js';
 import { getProcessedUrl } from '../utils/database.js';
 import { runMediaCommand } from './shared/run-media-command.js';
 import { sendConvertedFile } from './shared/send-converted.js';
 import { ValidationError } from '../utils/errors.js';
-import {
-  replyIfRateLimited,
-  resolveTimeOptions,
-  refuse,
-  replyError,
-} from './shared/command-guards.js';
+import { replyIfRateLimited, resolveTimeOptions, refuse } from './shared/command-guards.js';
 import { initializeDatabaseWithErrorHandling } from '../utils/database-init.js';
 import {
   safeInteractionEditReply,
@@ -393,20 +387,29 @@ async function resolveInput(interaction, { attachment, url, adminUser, commandSo
     try {
       ({ attachment, file, originalUrl } = await fetchUrlInput(url, adminUser, interaction.client));
     } catch (error) {
-      logger.error(`Failed to download file from URL for user ${interaction.user.id}:`, error);
-      await replyError(
-        interaction,
-        curatedErrorMessage(error, 'failed to download file from URL.')
-      );
-      await notifyCommandFailure('convert', { error: error.message });
+      await refuse(interaction, 'convert', {
+        message: curatedErrorMessage(error, 'failed to download file from URL.'),
+        cause: error,
+        reason: 'url_download_failed',
+        context: { originalUrl: url, commandSource },
+        notify: true,
+      });
       return null;
     }
   }
   const type = inputType(attachment);
   if (!type) {
-    await replyError(interaction, UNSUPPORTED_FORMAT);
-    await notifyCommandFailure('convert', {
-      error: `unsupported content type: ${attachment.contentType || 'unknown'}`,
+    const { name, size, contentType } = attachment;
+    await refuse(interaction, 'convert', {
+      message: UNSUPPORTED_FORMAT,
+      detail: `unsupported content type: ${contentType || 'unknown'}`,
+      reason: 'unsupported_format',
+      context: {
+        originalUrl,
+        attachment: { name, size, contentType, url: attachment.url },
+        commandSource,
+      },
+      notify: true,
     });
     return null;
   }

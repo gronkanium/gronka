@@ -40,6 +40,15 @@ export function withLogContext(fields, fn) {
   return logContext.run({ ...logContext.getStore(), ...fields }, fn);
 }
 
+// The `source` log field: a link's host without www.
+export function sourceOf(url) {
+  try {
+    return new URL(url).hostname.replace(/^www\./, '');
+  } catch {
+    return undefined;
+  }
+}
+
 // Format timestamp to seconds precision (removes milliseconds)
 export function formatTimestampSeconds(date = new Date()) {
   return date.toISOString().replace(/\.\d{3}Z$/, 'Z');

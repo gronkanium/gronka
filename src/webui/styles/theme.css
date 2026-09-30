@@ -25,53 +25,101 @@
 }
 
 /*
- * Design tokens for the webui.
- * All colors, radii, and shared visual values live here, pages and
- * components reference these variables instead of hardcoding values.
+ * Design tokens for the webui. Every colour, radius, shadow and type value lives here;
+ * pages and components reference these variables and never hardcode a hex.
+ *
+ * Surfaces climb in four steps from the page background: bg -> surface (panels) ->
+ * surface-2 (hover, inset controls) -> surface-3 (active). Borders are one step brighter
+ * than the surface they sit on, and hairlines inside a panel are dimmer than its border.
  */
 :root {
+  color-scheme: dark;
+
   /* surfaces */
-  --bg-deep: #0b0c0e;
-  --bg: #0e0f11;
-  --surface: #15161a;
-  --surface-2: #1b1d22;
-  --surface-3: #2a2c32;
+  --bg-deep: #0a0b0d;
+  --bg: #0e0f12;
+  --surface: #141518;
+  --surface-2: #1a1b20;
+  --surface-3: #24262c;
+  --surface-pop: #17181d;
 
   /* borders */
-  --border: #23252a;
-  --border-2: #33363d;
-  --line: #1c1e22;
+  --border: #212328;
+  --border-2: #30333a;
+  --line: #1c1e23; /* hairline inside a panel */
+  --hairline: var(--line);
 
   /* text */
-  --text-bright: #f4f3ef;
-  --text: #e8e7e3;
-  --text-muted: #9a9ca3;
-  --text-dim: #6e7077;
+  --text-bright: #f2f1ed;
+  --text: #dcdbd6;
+  --text-soft: #c2c1bc;
+  --text-muted: #8f9198;
+  --text-dim: #64666d;
+
+  /* brand accent: links, focus, active, primary chart series */
+  --accent: #9db0ff;
+  --accent-strong: #5b7cfa;
+  --accent-bg: rgba(91, 124, 250, 0.13);
+  --accent-border: rgba(91, 124, 250, 0.42);
+  --focus: rgba(91, 124, 250, 0.55);
 
   /* status */
-  --success: #43c28a;
-  --success-bg: #12281f;
-  --danger: #ef6b6b;
-  --danger-bg: #351819;
-  --danger-bg-subtle: #221415;
-  --danger-border: #5a2a2c;
-  --warning: #f0a35e;
-  --warning-bg: #33261a;
+  --success: #3fc48a;
+  --success-bg: rgba(63, 196, 138, 0.13);
+  --success-border: rgba(63, 196, 138, 0.4);
+  --danger: #f06a6a;
+  --danger-text: #f4b4b4;
+  --danger-bg: rgba(240, 106, 106, 0.14);
+  --danger-bg-subtle: rgba(240, 106, 106, 0.07);
+  --danger-border: rgba(240, 106, 106, 0.42);
+  --warning: #f0a552;
+  --warning-bg: rgba(240, 165, 82, 0.14);
+  --warning-border: rgba(240, 165, 82, 0.4);
   --info: #8fa7f5;
-  --info-bg: #1a2240;
-  --info-bg-hover: #222b4f;
-  --accent: #a9bbff;
+  --info-bg: rgba(143, 167, 245, 0.13);
+  --info-bg-hover: rgba(143, 167, 245, 0.2);
 
-  /* charts - single-series mark color, same hue family as --info but recalibrated
-     to a mid lightness band so it reads as a fill against --surface instead of text */
-  --chart-series-1: #6f8ff0;
-  --chart-series-1-hover: #86a0f3;
+  /* charts: series colours sit in a mid lightness band so they read as fills, not text */
+  --chart-1: #6b8cf5;
+  --chart-1-hover: #86a0f7;
+  --chart-2: #3fc48a;
+  --chart-3: #f0a552;
+  --chart-4: #f06a6a;
+  --chart-5: #b48cf5;
+  --chart-muted: #3a3f4d;
+  --chart-grid: #1f2126;
+  --chart-crosshair: #4a4d57;
+  --chart-brush: rgba(91, 124, 250, 0.16);
+  --chart-brush-edge: rgba(91, 124, 250, 0.7);
+  --chart-series-1: var(--chart-1);
+  --chart-series-1-hover: var(--chart-1-hover);
+
+  /* interaction */
+  --row-hover: rgba(255, 255, 255, 0.028);
+  --row-selected: rgba(91, 124, 250, 0.09);
+  --shadow-pop: 0 12px 40px rgba(0, 0, 0, 0.55), 0 0 0 1px rgba(0, 0, 0, 0.4);
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.35);
 
   /* type */
   --font: 'Archivo', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
   --mono: 'Gronka Mono', ui-monospace, 'SF Mono', 'Cascadia Mono', Menlo, Consolas, monospace;
+  --fs-xs: 11px;
+  --fs-sm: 12px;
+  --fs: 13px;
+  --fs-md: 14px;
+  --fs-lg: 16px;
+  --fs-xl: 22px;
 
-  /* shape */
-  --radius: 6px;
+  /* shape and rhythm */
+  --radius-sm: 5px;
+  --radius: 7px;
   --radius-lg: 10px;
+  --gap: 16px;
+  --topbar-h: 52px;
+  --sidebar-w: 228px;
+  --sidebar-w-collapsed: 56px;
+}
+
+::selection {
+  background: rgba(91, 124, 250, 0.35);
 }

@@ -83,7 +83,7 @@
     flex-wrap: wrap;
     gap: 8px;
     padding: 10px;
-    background: #17181c;
+    background: var(--surface-pop);
     border: 1px solid var(--border-2);
     border-radius: 10px;
     box-shadow: 0 18px 48px rgba(0, 0, 0, 0.5);

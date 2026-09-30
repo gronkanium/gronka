@@ -103,8 +103,8 @@
     position: fixed;
     z-index: 1500;
     width: 300px;
-    background: #17181c;
-    border: 1px solid #2c2e35;
+    background: var(--surface-pop);
+    border: 1px solid var(--border-2);
     border-radius: 10px;
     box-shadow:
       0 24px 60px rgba(0, 0, 0, 0.55),
@@ -172,7 +172,7 @@
     border: 0;
     border-radius: 6px;
     background: none;
-    color: #d4d3cf;
+    color: var(--text);
     font: inherit;
     text-align: left;
     cursor: pointer;

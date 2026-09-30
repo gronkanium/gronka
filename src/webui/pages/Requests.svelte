@@ -1,7 +1,10 @@
 <script>
+  import { Search, SlidersHorizontal } from 'lucide-svelte';
   import { currentRoute, navigate } from '../utils/router.js';
   import { useHeaderActions } from '../stores/header.js';
   import SaveView from '../components/SaveView.svelte';
+  import DataTable from '../components/DataTable.svelte';
+  import TimeRange from '../components/TimeRange.svelte';
   import {
     formatBytes,
     formatDuration,
@@ -40,6 +43,13 @@
     ['early', 'Early failures', { earlyFailureOnly: 'true' }],
   ];
   const PAGE = 50;
+  // Column sorts map onto the API's named orders.
+  const SORTS = {
+    'time:true': 'newest',
+    'time:false': 'oldest',
+    'took:true': 'slowest',
+    'took:false': 'fastest',
+  };
 
   let rows = $state([]);
   let total = $state(0);
@@ -58,6 +68,16 @@
       ([, , p]) => Object.keys(p).length && Object.entries(p).every(([k, v]) => get(k) === v)
     )?.[0] ?? 'all'
   );
+  const sortState = $derived.by(() => {
+    const hit = Object.entries(SORTS).find(([, v]) => v === sort);
+    const [key, desc] = (hit?.[0] ?? 'time:true').split(':');
+    return { key, desc: desc === 'true' };
+  });
+  const windowValue = $derived({
+    range: get('dateFrom') ? '' : range === 'all' ? '' : range,
+    startTime: get('dateFrom') || null,
+    endTime: get('dateTo') || null,
+  });
 
   function go(changes) {
     const next = {};
@@ -127,6 +147,17 @@
       [key]: value === '' || !Number.isFinite(n) || n <= 0 ? '' : String(Math.round(n * scale)),
     });
   }
+  function onrange(v) {
+    go({
+      range: v.range || '',
+      dateFrom: v.startTime || '',
+      dateTo: v.endTime || '',
+    });
+  }
+  function onsort(key, desc) {
+    const s = SORTS[`${key}:${desc}`];
+    if (s) go({ sort: s === 'newest' ? '' : s });
+  }
 
   const time = t =>
     new Date(t).toLocaleString([], {
@@ -137,17 +168,25 @@
       second: '2-digit',
       hour12: false,
     });
+  const moreActive = $derived(
+    ['minDuration', 'maxDuration', 'minFileSize', 'maxFileSize'].filter(k => get(k)).length
+  );
+
+  const columns = [
+    { key: 'st', label: '', width: '12px' },
+    { key: 'time', label: 'time', width: '140px', sortable: true },
+    { key: 'type', label: 'command', width: '76px', sm: false },
+    { key: 'link', label: 'link' },
+    { key: 'user', label: 'user', width: '96px', sm: false },
+    { key: 'size', label: 'size', width: '72px', align: 'right', sm: false },
+    { key: 'took', label: 'took', width: '64px', align: 'right', sortable: true },
+  ];
 
   useHeaderActions(actions);
 </script>
 
 {#snippet actions()}
-  <div class="seg" role="group" aria-label="time range">
-    {#each [...Object.keys(RANGES), 'all'] as r (r)}
-      <button class:on={range === r} onclick={() => go({ range: r === 'all' ? '' : r })}>{r}</button
-      >
-    {/each}
-  </div>
+  <TimeRange presets={RANGES} value={windowValue} onchange={onrange} allowAll defaultRange="" />
 {/snippet}
 
 <div class="requests stack">
@@ -161,7 +200,8 @@
         >
       {/each}
     </div>
-    <div class="query" role="search">
+    <div class="qbar" role="search">
+      <Search size={14} />
       {#each chips as [k, p, v] (k)}
         <button class="qchip" onclick={() => go({ [p]: '' })} title="remove">
           <span class="k">{k}:</span>{v}<span class="x">×</span>
@@ -179,21 +219,12 @@
     </div>
     <button
       class="btn"
-      class:on={showMore}
+      class:on={showMore || moreActive}
       onclick={() => (showMore = !showMore)}
-      aria-expanded={showMore}>More filters</button
+      aria-expanded={showMore}
+      ><SlidersHorizontal size={13} />Filters{#if moreActive}<span class="n">{moreActive}</span
+        >{/if}</button
     >
-    <select
-      class="field"
-      value={sort}
-      onchange={e => go({ sort: e.currentTarget.value === 'newest' ? '' : e.currentTarget.value })}
-      aria-label="sort"
-    >
-      <option value="newest">Newest first</option>
-      <option value="oldest">Oldest first</option>
-      <option value="slowest">Slowest first</option>
-      <option value="fastest">Fastest first</option>
-    </select>
     <SaveView page="requests" />
   </div>
 
@@ -274,132 +305,62 @@
     </div>
   {/if}
 
-  <section
-    class="panel tbl"
-    aria-label="requests"
-    style="--cols: 12px 132px 76px minmax(0, 1fr) 96px 70px 64px"
+  <DataTable
+    {columns}
+    {rows}
+    {loading}
+    {error}
+    onretry={load}
+    empty="no requests match"
+    sort={sortState}
+    {onsort}
+    onrow={r => navigate('request', { requestId: r.id })}
+    pager={{ offset, limit: PAGE, total, onpage: o => go({ offset: String(o) }) }}
+    skeleton={12}
+    label="requests"
   >
-    <div class="tr head">
-      <span></span><span>time</span><span>command</span><span>link</span><span>user</span>
-      <span class="num">size</span><span class="num">took</span>
-    </div>
-    {#if error}
-      <div class="empty error-text">
-        {error} <button class="btn sm" onclick={load}>retry</button>
-      </div>
-    {:else if !rows.length}
-      <div class="empty">{loading ? 'loading…' : 'no requests match'}</div>
-    {/if}
-    {#each rows as r (r.id)}
-      <button class="tr" onclick={() => navigate('request', { requestId: r.id })}>
-        <span
-          class="dot"
-          class:ok={r.status === 'success'}
-          class:bad={r.status === 'error'}
-          class:run={r.status === 'running' || r.status === 'pending'}
-          title={r.status}
-        ></span>
-        <span class="mono small muted" title={formatRelativeTime(r.timestamp)}
-          >{time(r.timestamp)}</span
-        >
-        <span class="muted">{r.type}</span>
-        <span class="linkcell">
-          <span class="mono small ellipsis">{urlLabel(r.originalUrl)}</span>
-          {#if r.status === 'error' && r.error}<span class="err ellipsis">{r.error}</span>{/if}
-        </span>
-        <span class="mono small muted">{shortId(r.userId)}</span>
-        <span class="num small muted">{r.fileSize ? formatBytes(r.fileSize) : '—'}</span>
-        <span class="num small muted"
-          >{r.performanceMetrics?.duration
-            ? formatDuration(r.performanceMetrics.duration)
-            : '—'}</span
-        >
-      </button>
-    {/each}
-    <div class="pager">
-      <span class="dim"
-        >{total
-          ? `${offset + 1}–${Math.min(offset + PAGE, total)} of ${total.toLocaleString()}`
-          : ''}</span
+    {#snippet row(r)}
+      <span
+        class="dot"
+        class:ok={r.status === 'success'}
+        class:err={r.status === 'error'}
+        class:run={r.status === 'running' || r.status === 'pending'}
+        class:pulse={r.status === 'running'}
+        title={r.status}
+      ></span>
+      <span class="mono small muted tnum" title={formatRelativeTime(r.timestamp)}
+        >{time(r.timestamp)}</span
       >
-      <span class="row">
-        <button
-          class="btn sm"
-          disabled={offset === 0}
-          onclick={() => go({ offset: String(Math.max(0, offset - PAGE)) })}>Previous</button
-        >
-        <button
-          class="btn sm"
-          disabled={offset + PAGE >= total}
-          onclick={() => go({ offset: String(offset + PAGE) })}>Next</button
-        >
+      <span class="muted hide-sm">{r.type}</span>
+      <span class="linkcell">
+        <span class="mono small ellipsis">{urlLabel(r.originalUrl)}</span>
+        {#if r.status === 'error' && r.error}<span class="err ellipsis">{r.error}</span>{/if}
       </span>
-    </div>
-  </section>
+      <span class="mono small muted hide-sm">{shortId(r.userId)}</span>
+      <span class="num muted hide-sm">{r.fileSize ? formatBytes(r.fileSize) : '—'}</span>
+      <span class="num muted"
+        >{r.performanceMetrics?.duration
+          ? formatDuration(r.performanceMetrics.duration)
+          : '—'}</span
+      >
+    {/snippet}
+  </DataTable>
 </div>
 
 <style>
-  .requests {
-    max-width: 1400px;
-    margin: 0 auto;
-  }
   .toolbar {
     display: flex;
     align-items: center;
     gap: 8px;
     flex-wrap: wrap;
   }
-  .query {
-    flex: 1;
-    min-width: 260px;
-    min-height: 34px;
-    display: flex;
-    flex-wrap: wrap;
-    align-items: center;
-    gap: 6px;
-    padding: 4px 8px;
-    background: var(--surface);
-    border: 1px solid var(--border);
+  .btn .n {
+    font-family: var(--mono);
+    font-size: 10px;
+    padding: 0 5px;
     border-radius: 8px;
-  }
-  .query:focus-within {
-    border-color: var(--border-2);
-  }
-  .query input {
-    flex: 1;
-    min-width: 160px;
-    background: none;
-    border: 0;
-    outline: 0;
-    color: var(--text-bright);
-    font: 13px var(--mono);
-  }
-  .query input::placeholder {
-    color: var(--text-dim);
-  }
-  .qchip {
-    height: 24px;
-    padding: 0 8px;
-    display: inline-flex;
-    align-items: center;
-    gap: 2px;
-    font: 12px var(--mono);
-    color: var(--text-bright);
-    background: var(--info-bg);
-    border: 1px solid #2b3350;
-    border-radius: 6px;
-    cursor: pointer;
-  }
-  .qchip .k {
-    color: var(--accent);
-  }
-  .qchip .x {
-    margin-left: 6px;
-    color: var(--text-dim);
-  }
-  .btn.on {
-    border-color: var(--border-2);
-    color: var(--text-bright);
+    background: var(--accent-strong);
+    color: #fff;
   }
   .more {
     display: flex;
@@ -412,14 +373,11 @@
     display: flex;
     flex-direction: column;
     gap: 6px;
-    font-size: 12px;
+    font-size: var(--fs-sm);
     color: var(--text-muted);
   }
   .more .field[type='number'] {
     width: 90px;
-  }
-  .small {
-    font-size: 12px;
   }
   .linkcell {
     display: flex;
@@ -428,26 +386,7 @@
     padding: 6px 0;
   }
   .err {
-    font-size: 12px;
-    color: #e9a3a3;
-  }
-  .pager {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    padding: 10px 16px;
-    border-top: 1px solid var(--line);
-    font-size: 12px;
-  }
-  @media (max-width: 760px) {
-    .tbl {
-      --cols: 10px minmax(0, 1fr) 60px !important;
-    }
-    .tbl .tr > :nth-child(2),
-    .tbl .tr > :nth-child(3),
-    .tbl .tr > :nth-child(5),
-    .tbl .tr > :nth-child(6) {
-      display: none;
-    }
+    font-size: var(--fs-sm);
+    color: var(--danger-text);
   }
 </style>

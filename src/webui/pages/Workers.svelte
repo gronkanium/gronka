@@ -1,8 +1,10 @@
 <script>
+  import { Pause, Play, AlertTriangle } from 'lucide-svelte';
   import { currentRoute, navigate } from '../utils/router.js';
   import { useHeaderActions } from '../stores/header.js';
   import { refreshNav } from '../stores/nav.js';
   import { formatBytes, formatRelativeTime, urlLabel } from '../utils/format.js';
+  import DataTable from '../components/DataTable.svelte';
 
   const LIVE_MS = 30_000;
 
@@ -52,6 +54,11 @@
       live: now - p.seen_at < LIVE_MS,
     }));
   });
+  // Every process should run the same build; a mismatch means a deploy is half done.
+  const versions = $derived([...new Set(processes.map(p => p.version).filter(Boolean))]);
+  const mismatch = $derived(
+    versions.length > 1 || (data?.version && versions.length === 1 && versions[0] !== data.version)
+  );
   const recent = $derived(
     (jobs?.recent ?? []).filter(j => !statusFilter || j.status === statusFilter)
   );
@@ -69,7 +76,7 @@
         ? `${Math.floor(m / 60)}h ${m % 60}m`
         : `${Math.floor(m / 1440)}d ${Math.floor((m % 1440) / 60)}h`;
   };
-  const jobDot = s => ({ done: 'ok', failed: 'bad', running: 'run', queued: '' })[s] ?? '';
+  const jobDot = s => ({ done: 'ok', failed: 'err', running: 'run', queued: '' })[s] ?? '';
   const paused = $derived(!!jobs?.paused);
   const sessionNote = s =>
     !s.fileFound
@@ -83,19 +90,23 @@
           : `${s.cookies} cookies`;
   const sessionBad = s => s.loggedIn && s.lastRejected && s.lastRejected > s.fileChanged;
 
+  const JOB_COLUMNS = [
+    { key: 'id', label: 'job', width: '56px' },
+    { key: 'state', label: 'state', width: '84px' },
+    { key: 'req', label: 'request' },
+    { key: 'worker', label: 'worker', width: '150px', sm: false },
+    { key: 'attempts', label: 'attempts', width: '64px', align: 'right', sm: false },
+    { key: 'age', label: 'age', width: '70px', align: 'right' },
+  ];
+
   useHeaderActions(actions);
 </script>
 
 {#snippet actions()}
   <span class="dim small">refreshes every 5 s</span>
   {#if jobs && data?.mediaWorkers !== false}
-    <button
-      class="btn sm"
-      class:primary={paused}
-      disabled={busy}
-      onclick={() => setPaused(!paused)}
-    >
-      {paused ? 'Resume queue' : 'Pause queue'}
+    <button class="btn" class:primary={paused} disabled={busy} onclick={() => setPaused(!paused)}>
+      {#if paused}<Play size={13} />Resume queue{:else}<Pause size={13} />Pause queue{/if}
     </button>
   {/if}
 {/snippet}
@@ -108,8 +119,18 @@
   {/if}
 
   {#if paused}
-    <div class="panel pb banner" class:drained={!count('running')} role="status">
-      <span class="dot" class:run={count('running')} class:ok={!count('running')}></span>
+    <div
+      class="panel pb banner"
+      class:accent-warn={count('running')}
+      class:accent-ok={!count('running')}
+      role="status"
+    >
+      <span
+        class="dot"
+        class:run={count('running')}
+        class:ok={!count('running')}
+        class:pulse={count('running')}
+      ></span>
       <div class="grow">
         {#if count('running')}
           <b>Queue paused, draining.</b>
@@ -127,14 +148,78 @@
     </div>
   {/if}
 
+  {#if mismatch}
+    <div class="flash warn" role="status">
+      <AlertTriangle size={14} />
+      <span
+        >Processes are on different builds ({[...new Set([...versions, data?.version])]
+          .filter(Boolean)
+          .map(v => `v${v}`)
+          .join(', ')}). A deploy is probably half done; restart what is behind.</span
+      >
+    </div>
+  {/if}
+
+  <section class="panel kpis" style="--kpi-cols: 6" aria-label="queue">
+    <div class="kpi">
+      <div class="k">Queued</div>
+      <div class="v">
+        {jobs ? count('queued') : '—'}<span class="d" class:warn={count('queued')}
+          >{paused ? 'paused' : ''}</span
+        >
+      </div>
+      <div class="s">waiting for a worker</div>
+    </div>
+    <div class="kpi">
+      <div class="k">Running</div>
+      <div class="v">{jobs ? count('running') : '—'}</div>
+      <div class="s">right now</div>
+    </div>
+    <div class="kpi">
+      <div class="k">Done</div>
+      <div class="v">{jobs ? count('done').toLocaleString() : '—'}</div>
+      <div class="s">last 24h</div>
+    </div>
+    <div class="kpi">
+      <div class="k">Failed</div>
+      <div class="v">
+        {jobs ? count('failed') : '—'}
+        {#if count('failed')}<span class="d bad">24h</span>{/if}
+      </div>
+      <div class="s">
+        <button
+          class="linkish"
+          onclick={() => navigate('system', statusFilter === 'failed' ? {} : { status: 'failed' })}
+          >{statusFilter === 'failed' ? 'show all jobs' : 'show only failed'}</button
+        >
+      </div>
+    </div>
+    <div class="kpi">
+      <div class="k">Retried</div>
+      <div class="v">{jobs ? retried : '—'}</div>
+      <div class="s">attempts beyond the first</div>
+    </div>
+    <div class="kpi">
+      <div class="k">Workers live</div>
+      <div class="v">
+        {processes.length
+          ? `${processes.filter(p => p.live && p.role !== 'bot').length} / ${processes.filter(p => p.role !== 'bot').length}`
+          : '—'}
+      </div>
+      <div class="s">{data?.version ? `webui v${data.version}` : ''}</div>
+    </div>
+  </section>
+
   {#if processes.length}
     <div class="cards">
       {#each processes as p (p.id)}
-        <section class="panel" aria-label={p.name}>
+        <section class="panel" class:accent-danger={!p.live} aria-label={p.name}>
           <div class="ph">
             <span class="dot" class:ok={p.live} class:err={!p.live}></span>
             <span>{p.name}</span>
-            <span class="meta mono">v{p.version ?? '?'}</span>
+            <span class="meta mono" class:warn-text={mismatch && p.version !== data?.version}
+              >v{p.version ?? '?'}</span
+            >
           </div>
           <div class="pb facts">
             <div>
@@ -157,8 +242,6 @@
               <div class="k">uptime</div>
               <div class="v mono">{uptime(now - p.started_at)}</div>
             </div>
-          </div>
-          <div class="pb facts bottom">
             <div>
               <div class="k">memory</div>
               <div class="v mono">{p.rss ? formatBytes(p.rss) : '—'}</div>
@@ -189,59 +272,45 @@
     </div>
   {/if}
 
-  <div class="two">
-    <section
-      class="panel tbl"
-      aria-label="media jobs"
-      style="--cols: 56px 84px minmax(0, 1fr) 150px 64px 70px"
+  <div class="two wide-left">
+    <DataTable
+      title="Media jobs"
+      columns={JOB_COLUMNS}
+      rows={recent}
+      loading={!jobs}
+      empty={statusFilter ? `no ${statusFilter} jobs` : 'no jobs'}
+      onrow={j => navigate('request', { requestId: j.operation_id })}
+      rowDisabled={j => !j.operation_id}
+      label="media jobs"
     >
-      <div class="ph">
-        <span>media_jobs</span>
-        <span class="meta">
-          <span>queued <b class="mono">{count('queued')}</b></span>
-          <span>running <b class="mono">{count('running')}</b></span>
-          <span>done 24h <b class="mono">{count('done')}</b></span>
-          <button
-            class="linkish"
-            class:strong={statusFilter === 'failed'}
-            onclick={() =>
-              navigate('system', statusFilter === 'failed' ? {} : { status: 'failed' })}
-          >
-            failed <b class="mono">{count('failed')}</b>
-          </button>
-          <span>retried <b class="mono">{retried}</b></span>
-        </span>
-      </div>
-      <div class="tr head">
-        <span>job</span><span>state</span><span>request</span><span>worker</span><span class="num"
-          >attempts</span
-        ><span class="num">age</span>
-      </div>
-      {#each recent as j (j.id)}
-        <button
-          class="tr"
-          disabled={!j.operation_id}
-          onclick={() => navigate('request', { requestId: j.operation_id })}
+      {#snippet header()}
+        {#if statusFilter}
+          <span class="chip warn">{statusFilter} only</span>
+          <button class="linkish" onclick={() => navigate('system', {})}>clear</button>
+        {:else}
+          <span class="dim">most recent first</span>
+        {/if}
+      {/snippet}
+      {#snippet row(j)}
+        <span class="mono dim">#{j.id}</span>
+        <span class="row"
+          ><span class="dot {jobDot(j.status)}" class:pulse={j.status === 'running'}
+          ></span>{j.status}</span
         >
-          <span class="mono dim">#{j.id}</span>
-          <span class="row"><span class="dot {jobDot(j.status)}"></span>{j.status}</span>
-          <span class="mono small ellipsis"
-            >{j.kind} {j.url ? urlLabel(j.url) : j.attachment ? 'attachment' : ''}</span
-          >
-          <span class="mono small muted ellipsis">{j.worker ?? '—'}</span>
-          <span class="num">{j.attempts}</span>
-          <span class="num dim small">{formatRelativeTime(j.created_at)}</span>
-        </button>
-      {:else}
-        <div class="empty">{jobs ? 'no jobs' : 'loading…'}</div>
-      {/each}
-    </section>
+        <span class="mono small ellipsis"
+          >{j.kind} {j.url ? urlLabel(j.url) : j.attachment ? 'attachment' : ''}</span
+        >
+        <span class="mono small muted ellipsis hide-sm">{j.worker ?? '—'}</span>
+        <span class="num hide-sm" class:warn-text={j.attempts > 1}>{j.attempts}</span>
+        <span class="num dim">{formatRelativeTime(j.created_at)}</span>
+      {/snippet}
+    </DataTable>
 
     <div class="stack">
       <section class="panel" aria-label="dependencies">
-        <div class="ph"><span>Dependencies</span></div>
+        <div class="ph"><span>Dependencies</span><span class="meta">checked every 30 s</span></div>
         {#if bot}
-          <div class="dep">
+          <div class="lrow dep">
             <span
               class="dot"
               class:ok={bot.status && bot.status !== 'offline'}
@@ -252,11 +321,11 @@
           </div>
         {/if}
         {#each system?.deps ?? [] as d (d.id)}
-          <div class="dep">
+          <div class="lrow dep">
             <span
               class="dot"
               class:ok={d.status === 'ok'}
-              class:run={d.status === 'warn'}
+              class:bad={d.status === 'warn'}
               class:err={d.status === 'error'}
             ></span>
             <span>{d.label}</span>
@@ -275,7 +344,7 @@
           <span class="meta">from the bot's cookie files</span>
         </div>
         {#each system?.sessions ?? [] as s (s.id)}
-          <div class="dep">
+          <div class="lrow dep">
             <span
               class="dot"
               class:ok={s.loggedIn && !sessionBad(s)}
@@ -302,15 +371,8 @@
 </div>
 
 <style>
-  .workers {
-    max-width: 1400px;
-    margin: 0 auto;
-  }
-  .small {
-    font-size: 12px;
-  }
   .note {
-    font-size: 13px;
+    font-size: var(--fs);
     line-height: 1.6;
     color: var(--text-muted);
     display: flex;
@@ -321,89 +383,35 @@
   .cards {
     display: grid;
     grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
-    gap: 16px;
+    gap: var(--gap);
   }
   .facts {
     display: grid;
     grid-template-columns: repeat(3, minmax(0, 1fr));
-    gap: 12px;
-  }
-  .facts.bottom {
-    border-top: 1px solid #1f2126;
+    gap: 14px 12px;
   }
   .k {
-    font-size: 11px;
+    font-size: var(--fs-xs);
     color: var(--text-dim);
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
   }
   .v {
-    margin-top: 4px;
-    font-size: 13px;
+    margin-top: 3px;
+    font-size: var(--fs);
     color: var(--text);
-  }
-  .two {
-    display: grid;
-    grid-template-columns: minmax(0, 1fr) 380px;
-    gap: 16px;
-    align-items: start;
   }
   .banner {
     display: flex;
     align-items: center;
     gap: 12px;
-    font-size: 13px;
-    border-color: var(--warning);
-  }
-  .banner.drained {
-    border-color: var(--success);
+    font-size: var(--fs);
   }
   .banner b {
     color: var(--text-bright);
     font-weight: 500;
   }
-  .ph b {
-    color: var(--text-bright);
-    font-weight: 500;
-  }
-  .linkish {
-    background: none;
-    border: 0;
-    padding: 0;
-    color: var(--text-muted);
-    font: inherit;
-    cursor: pointer;
-  }
-  .linkish.strong,
-  .linkish:hover {
-    color: var(--accent);
-  }
-  .tr:disabled {
-    cursor: default;
-  }
   .dep {
-    display: flex;
-    align-items: center;
-    gap: 10px;
-    padding: 11px 16px;
-    border-top: 1px solid var(--line);
-    font-size: 13px;
-  }
-  .dep:first-of-type {
-    border-top: 0;
-  }
-  .right {
-    margin-left: auto;
-  }
-  @media (max-width: 1100px) {
-    .two {
-      grid-template-columns: 1fr;
-    }
-  }
-  @media (max-width: 640px) {
-    .tbl {
-      --cols: 48px 70px minmax(0, 1fr) !important;
-    }
-    .tbl .tr > :nth-child(n + 4) {
-      display: none;
-    }
+    padding: 10px 16px;
   }
 </style>

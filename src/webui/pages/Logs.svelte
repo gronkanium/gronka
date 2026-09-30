@@ -1,8 +1,12 @@
 <script>
   import { untrack } from 'svelte';
+  import { Search, Download, Radio, Undo2, X, Copy, Crosshair, Link2 } from 'lucide-svelte';
   import { currentRoute, navigate } from '../utils/router.js';
   import { logs as liveLogs } from '../stores/sse-store.js';
+  import { useHeaderActions } from '../stores/header.js';
   import SaveView from '../components/SaveView.svelte';
+  import Chart from '../components/Chart.svelte';
+  import TimeRange from '../components/TimeRange.svelte';
 
   const FIELDS = ['level', 'component', 'source', 'command', 'worker', 'op', 'user', 'job'];
   const FACETS = [
@@ -14,6 +18,11 @@
   ];
   const RANGES = { '15m': 0.25, '1h': 1, '6h': 6, '24h': 24, '7d': 168 };
   const PAGE = 200;
+  const SERIES = [
+    { key: 'info', label: 'info', color: 'var(--chart-muted)' },
+    { key: 'warn', label: 'warn', color: 'var(--warning)' },
+    { key: 'err', label: 'error', color: 'var(--danger)' },
+  ];
 
   let rows = $state([]);
   let total = $state(0);
@@ -24,10 +33,10 @@
   let selected = $state(null);
   let related = $state([]);
   let draft = $state('');
-  let drag = $state(null);
-  let histEl = $state();
+  let zoomStack = $state([]);
+  let copied = $state(false);
 
-  // The URL is the only filter state: facet clicks, the query bar and the palette all navigate.
+  // The URL is the only filter state: facet clicks, the query bar and the chart all navigate.
   const params = $derived($currentRoute.params);
   const filters = $derived.by(() => {
     const f = {};
@@ -59,6 +68,13 @@
         ? opWindow[1]
         : null
   );
+  const win = $derived({
+    range,
+    startTime: params.$startTime || (opWindow && !range ? String(opWindow[0]) : null),
+    endTime:
+      params.$endTime || (opWindow && !range && !params.$startTime ? String(opWindow[1]) : null),
+  });
+  const zoomed = $derived(!!params.$startTime);
 
   function query(extra = {}) {
     const q = new URLSearchParams();
@@ -94,7 +110,7 @@
       const [l, f, h] = await Promise.all([
         get(`/api/logs?${query({ limit: PAGE })}`),
         get(`/api/logs/facets?${query()}`),
-        get(`/api/logs/histogram?${query({ buckets: 60 })}`),
+        get(`/api/logs/histogram?${query({ buckets: 80 })}`),
       ]);
       if (mine !== seq) return;
       rows = l.logs || [];
@@ -182,50 +198,47 @@
     }
   }
 
+  // Chart brush: remember where we came from so one click steps back out.
+  function onbrush(s, e) {
+    zoomStack = [...zoomStack, win];
+    go({ range: '', startTime: String(s), endTime: String(e), live: '' });
+  }
+  function back() {
+    const prev = zoomStack.at(-1);
+    zoomStack = zoomStack.slice(0, -1);
+    if (prev) go({ range: prev.range, startTime: prev.startTime, endTime: prev.endTime });
+  }
+  function onrange(v) {
+    zoomStack = [];
+    go({
+      range: v.range,
+      startTime: v.startTime,
+      endTime: v.endTime,
+      live: v.endTime ? '' : undefined,
+    });
+  }
+
   const time = t =>
     new Date(t).toLocaleTimeString([], { hour12: false }) + '.' + String(t % 1000).padStart(3, '0');
-  const stamp = t =>
-    new Date(t).toLocaleString([], {
-      month: 'short',
-      day: 'numeric',
-      hour: '2-digit',
-      minute: '2-digit',
-      hour12: false,
-    });
   const day = t => new Date(t).toLocaleDateString([], { month: 'short', day: 'numeric' });
   const lvl = l => ({ ERROR: 'ERR', WARN: 'WRN', INFO: 'INF', DEBUG: 'DBG' })[l] || l;
+  const ctx = r =>
+    [r.metadata?.source, r.metadata?.command && `/${r.metadata.command}`, r.metadata?.worker]
+      .filter(Boolean)
+      .join(' · ');
 
-  const bars = $derived.by(() => {
-    if (!histogram?.buckets) return [];
-    const max = Math.max(1, ...histogram.buckets.map(b => b.ERROR + b.WARN + b.INFO + b.DEBUG));
-    return histogram.buckets.map((b, i) => ({
+  const bars = $derived(
+    (histogram?.buckets ?? []).map((b, i) => ({
       at: histogram.start + i * histogram.size,
-      err: (b.ERROR / max) * 100,
-      warn: (b.WARN / max) * 100,
-      info: ((b.INFO + b.DEBUG) / max) * 100,
-      title: `${stamp(histogram.start + i * histogram.size)} · ${b.ERROR} err · ${b.WARN} warn · ${b.INFO + b.DEBUG} info`,
-    }));
-  });
+      info: b.INFO + b.DEBUG,
+      warn: b.WARN,
+      err: b.ERROR,
+    }))
+  );
+  const levelCount = l => facets.level?.find(f => f.value === l)?.count ?? 0;
+  const facetMax = list => Math.max(1, ...list.map(f => f.count));
 
-  function bucketAt(e) {
-    const r = histEl.getBoundingClientRect();
-    return Math.min(
-      bars.length - 1,
-      Math.max(0, Math.floor(((e.clientX - r.left) / r.width) * bars.length))
-    );
-  }
-  function endDrag() {
-    if (!drag) return;
-    const [a, b] = [Math.min(drag.from, drag.to), Math.max(drag.from, drag.to)];
-    drag = null;
-    if (!histogram) return;
-    go({
-      range: '',
-      startTime: String(histogram.start + a * histogram.size),
-      endTime: String(histogram.start + (b + 1) * histogram.size),
-      live: '',
-    });
-  }
+  const chips = $derived(Object.entries(filters).flatMap(([k, vs]) => vs.map(v => [k, v])));
 
   function exportRows() {
     const blob = new Blob([JSON.stringify(rows, null, 2)], { type: 'application/json' });
@@ -236,21 +249,46 @@
     a.click();
     URL.revokeObjectURL(a.href);
   }
+  function copy(text) {
+    navigator.clipboard?.writeText(text);
+    copied = true;
+    setTimeout(() => (copied = false), 1200);
+  }
 
-  const chips = $derived(Object.entries(filters).flatMap(([k, vs]) => vs.map(v => [k, v])));
-  const zoomed = $derived(!!params.$startTime);
+  useHeaderActions(actions);
 </script>
 
-<div class="logs">
+{#snippet actions()}
+  <button
+    class="btn"
+    class:on={live}
+    onclick={() => go({ live: live ? '' : '1', endTime: '' })}
+    title="stream new lines as they are written"
+  >
+    <span class="dot" class:ok={live} class:pulse={live}></span><Radio size={13} />Live tail
+  </button>
+  <SaveView page="logs" />
+  <button
+    class="btn"
+    onclick={exportRows}
+    disabled={!rows.length}
+    title="download the loaded lines as JSON"
+  >
+    <Download size={13} />Export
+  </button>
+{/snippet}
+
+<div class="logs" class:has-detail={!!selected}>
   <div class="bar">
-    <div class="query" role="search">
+    <div class="qbar" role="search">
+      <Search size={14} />
       {#each chips as [key, value] (key + value)}
-        <button class="chip" onclick={() => toggle(key, value)} title="remove">
+        <button class="qchip" onclick={() => toggle(key, value)} title="remove">
           <span class="k">{key}:</span>{value}<span class="x">×</span>
         </button>
       {/each}
       {#if search}
-        <button class="chip text" onclick={() => go({ search: '' })} title="remove">
+        <button class="qchip text" onclick={() => go({ search: '' })} title="remove">
           "{search}"<span class="x">×</span>
         </button>
       {/if}
@@ -263,74 +301,56 @@
         spellcheck="false"
       />
     </div>
-    <div class="seg" role="group" aria-label="time range">
-      {#each Object.keys(RANGES) as r (r)}
-        <button
-          class:on={range === r && !zoomed}
-          onclick={() => go({ range: r, startTime: '', endTime: '' })}>{r}</button
-        >
-      {/each}
-    </div>
-    <button
-      class="btn"
-      class:live
-      onclick={() => go({ live: live ? '' : '1', endTime: '' })}
-      title="stream new lines as they are written"
-    >
-      <span class="dot"></span>Live tail
-    </button>
-    <SaveView page="logs" />
-    <button class="btn" onclick={exportRows} disabled={!rows.length}>Export</button>
+    <TimeRange presets={RANGES} value={win} onchange={onrange} defaultRange="24h" />
   </div>
 
-  <div class="hist-wrap">
-    <div
-      class="hist"
-      bind:this={histEl}
-      role="slider"
-      aria-label="drag to zoom the time range"
-      aria-valuenow={0}
-      tabindex="-1"
-      onmousedown={e => (drag = { from: bucketAt(e), to: bucketAt(e) })}
-      onmousemove={e => drag && (drag.to = bucketAt(e))}
-      onmouseup={endDrag}
-      onmouseleave={endDrag}
-    >
-      {#each bars as b, i (i)}
-        <div
-          class="col"
-          class:sel={drag && i >= Math.min(drag.from, drag.to) && i <= Math.max(drag.from, drag.to)}
-          title={b.title}
-        >
-          <span class="err" style="height:{b.err}%"></span>
-          <span class="warn" style="height:{b.warn}%"></span>
-          <span class="info" style="height:{b.info}%"></span>
-        </div>
-      {/each}
-    </div>
-    <div class="axis">
-      <span>{histogram ? stamp(histogram.start) : ''}</span>
-      <span class="hint">
-        {#if zoomed}
-          <button class="link" onclick={() => go({ startTime: '', endTime: '', range: '24h' })}
-            >reset zoom</button
-          >
-        {:else}drag to zoom{/if}
+  <div class="hist">
+    <div class="hist-head">
+      <span class="summary">
+        <b class="tnum">{total.toLocaleString()}</b> lines
+        {#if levelCount('ERROR')}<span class="sep">·</span><span class="error-text tnum"
+            >{levelCount('ERROR').toLocaleString()} errors</span
+          >{/if}
+        {#if levelCount('WARN')}<span class="sep">·</span><span class="warn-text tnum"
+            >{levelCount('WARN').toLocaleString()} warnings</span
+          >{/if}
+        {#if loading}<span class="sep">·</span><span class="dim">loading</span>{/if}
       </span>
-      <span>{endTime ? stamp(endTime) : 'now'}</span>
+      <span class="legend">
+        {#each [...SERIES].reverse() as s (s.key)}
+          <span><i style="background:{s.color}"></i>{s.label}</span>
+        {/each}
+      </span>
+      {#if zoomStack.length}
+        <button class="btn sm" onclick={back}><Undo2 size={12} />Back</button>
+      {:else if zoomed}
+        <span class="dim small">zoomed</span>
+      {:else}
+        <span class="dim small">drag the chart to zoom</span>
+      {/if}
     </div>
+    <Chart
+      series={SERIES}
+      data={bars}
+      bucket={histogram?.size}
+      height={104}
+      {onbrush}
+      padLeft={44}
+    />
   </div>
 
   <div class="body">
     <aside class="facets" aria-label="filters">
       {#each FACETS as [key, label] (key)}
         {#if facets[key]?.length}
+          {@const max = facetMax(facets[key])}
           <div class="fh">{label}</div>
           {#each facets[key] as f (f.value)}
             {@const on = filters[key]?.includes(f.value)}
             <button class="fv" class:on onclick={() => toggle(key, f.value)}>
               <span class="box lvl-{key === 'level' ? f.value.toLowerCase() : ''}" class:on></span>
               <span class="fname">{key === 'level' ? f.value.toLowerCase() : f.value}</span>
+              <span class="fbar"><i style="width:{(f.count / max) * 100}%"></i></span>
               <span class="fcount">{f.count.toLocaleString()}</span>
             </button>
           {/each}
@@ -345,17 +365,20 @@
 
     <section class="list" aria-label="log lines">
       <div class="lh">
-        <span>time</span><span>lvl</span><span>component</span>
-        <span
-          >message · {rows.length.toLocaleString()} of {total.toLocaleString()}{loading
-            ? ' · loading'
-            : ''}</span
-        >
+        <span>time</span><span>lvl</span><span>component</span><span>message</span>
+        <span class="ctxh">context</span>
       </div>
-      <div class="scroll" class:busy={loading}>
+      <div class="scroll" class:busy={loading && rows.length}>
         {#if error}
-          <div class="empty">{error} <button class="link" onclick={load}>retry</button></div>
-        {:else if !rows.length && !loading}
+          <div class="empty">{error} <button class="btn sm" onclick={load}>retry</button></div>
+        {:else if loading && !rows.length}
+          {#each Array(14) as _, i (i)}
+            <div class="row skel" aria-hidden="true">
+              <span class="skeleton"></span><span class="skeleton"></span><span class="skeleton"
+              ></span><span class="skeleton" style="width:{40 + ((i * 37) % 55)}%"></span>
+            </div>
+          {/each}
+        {:else if !rows.length}
           <div class="empty">no lines match</div>
         {/if}
         {#each rows as r (r.id)}
@@ -366,13 +389,16 @@
           >
             <span class="t">{time(r.timestamp)}</span>
             <span class="l">{lvl(r.level)}</span>
-            <span class="c">{r.component}</span>
-            <span class="m">{r.message}</span>
+            <span class="c ellipsis">{r.component}</span>
+            <span class="m ellipsis">{r.message}</span>
+            <span class="x ellipsis">{ctx(r)}</span>
           </button>
         {/each}
         {#if rows.length < total}
           <button class="more" onclick={more}
-            >load {Math.min(PAGE, total - rows.length)} more</button
+            >load {Math.min(PAGE, total - rows.length)} more · {(
+              total - rows.length
+            ).toLocaleString()} remaining</button
           >
         {/if}
       </div>
@@ -384,7 +410,9 @@
           <span class="badge lvl-{selected.level.toLowerCase()}">{lvl(selected.level)}</span>
           <b>{selected.component}</b>
           <span class="t">{day(selected.timestamp)} {time(selected.timestamp)}</span>
-          <button class="x" onclick={() => (selected = null)} aria-label="close">×</button>
+          <button class="icon-btn sm right" onclick={() => (selected = null)} aria-label="close"
+            ><X size={15} /></button
+          >
         </div>
         <pre class="msg">{selected.message}</pre>
         {#if selected.metadata && typeof selected.metadata === 'object'}
@@ -414,20 +442,20 @@
         {/if}
         <div class="actions">
           {#if selected.metadata?.op}
-            <button class="btn" onclick={() => navigate('logs', { op: selected.metadata.op })}
-              >Only this request</button
+            <button class="btn sm" onclick={() => navigate('logs', { op: selected.metadata.op })}
+              ><Link2 size={12} />Only this request</button
             >
           {/if}
           <button
-            class="btn"
+            class="btn sm"
             onclick={() =>
               navigate('logs', {
                 startTime: String(selected.timestamp - 30000),
                 endTime: String(selected.timestamp + 30000),
-              })}>Lines around this</button
+              })}><Crosshair size={12} />±30 s around</button
           >
-          <button class="btn" onclick={() => navigator.clipboard?.writeText(selected.message)}
-            >Copy</button
+          <button class="btn sm" onclick={() => copy(selected.message)}
+            ><Copy size={12} />{copied ? 'Copied' : 'Copy'}</button
           >
         </div>
       </aside>
@@ -440,185 +468,55 @@
     flex: 1;
     display: flex;
     flex-direction: column;
-    height: calc(100vh - 56px);
+    height: calc(100vh - var(--topbar-h));
     min-width: 0;
-    font-size: 13px;
+    font-size: var(--fs);
   }
   .bar {
     display: flex;
     gap: 8px;
     align-items: center;
-    padding: 12px 24px;
+    padding: 10px 24px;
     border-bottom: 1px solid var(--line);
-  }
-  .query {
-    flex: 1;
-    min-height: 34px;
-    display: flex;
     flex-wrap: wrap;
-    align-items: center;
-    gap: 6px;
-    padding: 4px 8px;
-    background: var(--surface);
-    border: 1px solid var(--border);
-    border-radius: 8px;
-  }
-  .query:focus-within {
-    border-color: var(--border-2);
-  }
-  .query input {
-    flex: 1;
-    min-width: 120px;
-    background: none;
-    text-overflow: ellipsis;
-    border: 0;
-    outline: 0;
-    color: var(--text-bright);
-    font: 13px var(--mono);
-  }
-  .query input::placeholder {
-    color: var(--text-dim);
-  }
-  .chip {
-    height: 24px;
-    padding: 0 8px;
-    display: inline-flex;
-    align-items: center;
-    gap: 2px;
-    font: 12px var(--mono);
-    color: var(--text-bright);
-    background: var(--info-bg);
-    border: 1px solid #2b3350;
-    border-radius: 6px;
-    cursor: pointer;
-  }
-  .chip.text {
-    background: var(--surface-2);
-    border-color: var(--border-2);
-  }
-  .chip .k {
-    color: var(--accent);
-  }
-  .chip .x {
-    margin-left: 6px;
-    color: var(--text-dim);
-  }
-  .seg {
-    display: flex;
-    gap: 2px;
-    padding: 2px;
-    background: var(--surface);
-    border: 1px solid var(--border);
-    border-radius: 8px;
-  }
-  .seg button {
-    height: 28px;
-    padding: 0 10px;
-    border: 0;
-    border-radius: 6px;
-    background: none;
-    color: var(--text-muted);
-    font: inherit;
-    font-size: 12px;
-    cursor: pointer;
-  }
-  .seg button.on {
-    background: var(--surface-3);
-    color: var(--text-bright);
-  }
-  .btn {
-    height: 32px;
-    padding: 0 12px;
-    display: inline-flex;
-    align-items: center;
-    gap: 7px;
-    border: 1px solid var(--border);
-    border-radius: 8px;
-    background: var(--surface);
-    color: var(--text);
-    font: inherit;
-    font-size: 12px;
-    cursor: pointer;
-    white-space: nowrap;
-  }
-  .btn:hover:not(:disabled) {
-    border-color: var(--border-2);
-  }
-  .btn:disabled {
-    opacity: 0.5;
-  }
-  .btn .dot {
-    width: 7px;
-    height: 7px;
-    border-radius: 50%;
-    background: var(--text-dim);
-  }
-  .btn.live {
-    border-color: #1f5a41;
-    color: var(--text-bright);
-  }
-  .btn.live .dot {
-    background: var(--success);
-    animation: pulse 1.6s ease-in-out infinite;
-  }
-  @keyframes pulse {
-    50% {
-      opacity: 0.35;
-    }
-  }
-  .link {
-    background: none;
-    border: 0;
-    color: var(--accent);
-    font: inherit;
-    cursor: pointer;
-    padding: 0;
   }
 
-  .hist-wrap {
-    padding: 10px 24px 6px;
+  .hist {
+    padding: 8px 24px 4px;
     border-bottom: 1px solid var(--line);
   }
-  .hist {
-    height: 64px;
+  .hist-head {
     display: flex;
-    align-items: flex-end;
-    gap: 2px;
-    cursor: crosshair;
-    user-select: none;
+    align-items: center;
+    gap: 14px;
+    font-size: var(--fs-sm);
+    color: var(--text-muted);
+    height: 26px;
   }
-  .col {
-    flex: 1;
-    height: 100%;
-    display: flex;
-    flex-direction: column-reverse;
-    border-radius: 2px;
+  .summary b {
+    color: var(--text-bright);
+    font-weight: 500;
   }
-  .col.sel {
-    background: rgba(143, 167, 245, 0.14);
-  }
-  .col span {
-    display: block;
-    min-height: 0;
-  }
-  .col .info {
-    background: #33405f;
-  }
-  .col .warn {
-    background: var(--warning);
-  }
-  .col .err {
-    background: var(--danger);
-  }
-  .col span:last-child {
-    border-radius: 2px 2px 0 0;
-  }
-  .axis {
-    display: flex;
-    justify-content: space-between;
-    padding-top: 4px;
-    font: 11px var(--mono);
+  .sep {
+    margin: 0 6px;
     color: var(--text-dim);
+  }
+  .legend {
+    margin-left: auto;
+    display: flex;
+    gap: 12px;
+    font-size: var(--fs-xs);
+    color: var(--text-dim);
+  }
+  .legend span {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+  }
+  .legend i {
+    width: 8px;
+    height: 8px;
+    border-radius: 2px;
   }
 
   .body {
@@ -627,37 +525,40 @@
     display: flex;
   }
   .facets {
-    width: 236px;
+    width: 240px;
     flex-shrink: 0;
     overflow-y: auto;
-    padding: 8px 10px 16px;
+    padding: 6px 10px 16px;
     border-right: 1px solid var(--line);
   }
   .fh {
-    padding: 12px 8px 4px;
-    font-size: 11px;
+    padding: 14px 8px 4px;
+    font-size: var(--fs-xs);
     font-weight: 500;
     color: var(--text-dim);
-    letter-spacing: 0.04em;
+    letter-spacing: 0.05em;
     text-transform: uppercase;
   }
   .fv {
     width: 100%;
     height: 28px;
     padding: 0 8px;
-    display: flex;
+    display: grid;
+    grid-template-columns: 11px minmax(0, 1fr) 36px auto;
     align-items: center;
-    gap: 9px;
+    gap: 8px;
     border: 0;
-    border-radius: 6px;
+    border-radius: var(--radius-sm);
     background: none;
     color: var(--text);
     font: inherit;
-    font-size: 13px;
+    font-size: var(--fs);
     text-align: left;
     cursor: pointer;
   }
-  .fv:hover,
+  .fv:hover {
+    background: var(--surface);
+  }
   .fv.on {
     background: var(--surface-2);
   }
@@ -666,11 +567,10 @@
     height: 11px;
     border-radius: 3px;
     border: 1.5px solid var(--border-2);
-    flex-shrink: 0;
   }
   .box.on {
-    background: var(--accent);
-    border-color: var(--accent);
+    background: var(--accent-strong);
+    border-color: var(--accent-strong);
   }
   .box.lvl-error {
     border-color: var(--danger);
@@ -685,19 +585,34 @@
     background: var(--warning);
   }
   .fname {
-    flex: 1;
-    min-width: 0;
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
   }
+  .fbar {
+    height: 3px;
+    border-radius: 2px;
+    background: var(--surface-3);
+    overflow: hidden;
+  }
+  .fbar i {
+    display: block;
+    height: 100%;
+    background: var(--chart-muted);
+  }
+  .fv.on .fbar i {
+    background: var(--accent-strong);
+  }
   .fcount {
-    font: 11px var(--mono);
+    font: var(--fs-xs) var(--mono);
     color: var(--text-dim);
+    font-variant-numeric: tabular-nums;
+    min-width: 28px;
+    text-align: right;
   }
   .note {
     margin: 14px 8px;
-    font-size: 12px;
+    font-size: var(--fs-sm);
     line-height: 1.5;
     color: var(--text-dim);
   }
@@ -711,66 +626,70 @@
   .lh,
   .row {
     display: grid;
-    grid-template-columns: 110px 38px 140px minmax(0, 1fr);
+    grid-template-columns: 100px 32px 130px minmax(0, 1fr) 170px;
     gap: 12px;
     align-items: center;
     padding: 0 16px;
   }
   .lh {
-    height: 32px;
-    font: 11px var(--mono);
+    height: 30px;
+    font-size: var(--fs-xs);
+    font-weight: 500;
+    letter-spacing: 0.03em;
+    text-transform: uppercase;
     color: var(--text-dim);
     border-bottom: 1px solid var(--line);
   }
   .scroll {
     flex: 1;
     overflow-y: auto;
-    transition: opacity 0.15s;
-  }
-  .scroll.busy {
-    opacity: 0.45;
   }
   .row {
     width: 100%;
-    height: 30px;
+    height: 28px;
     border: 0;
     border-left: 2px solid transparent;
     background: none;
     color: var(--text);
-    font: 12px var(--mono);
+    font: var(--fs-sm) var(--mono);
     text-align: left;
     cursor: pointer;
   }
   .row:hover {
-    background: var(--surface);
+    background: var(--row-hover);
   }
   .row.sel {
-    background: var(--surface-2);
-    border-left-color: var(--accent);
+    background: var(--row-selected);
+    border-left-color: var(--accent-strong);
+  }
+  .row.skel {
+    pointer-events: none;
+  }
+  .row.skel .skeleton {
+    height: 11px;
+    display: block;
   }
   .row .t {
     color: var(--text-muted);
+    font-variant-numeric: tabular-nums;
   }
   .row .c {
     color: var(--text-muted);
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
   }
-  .row .m {
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
+  .row .x {
+    color: var(--text-dim);
+    font-size: var(--fs-xs);
   }
-  .row.lvl-error .l,
   .row.lvl-error .m {
-    color: #f4b4b4;
+    color: var(--danger-text);
   }
   .row.lvl-error .l {
     color: var(--danger);
+    font-weight: 500;
   }
   .row.lvl-warn .l {
     color: var(--warning);
+    font-weight: 500;
   }
   .row.lvl-info .l,
   .row.lvl-debug .l {
@@ -788,38 +707,39 @@
     background: none;
     color: var(--accent);
     font: inherit;
+    font-size: var(--fs-sm);
     cursor: pointer;
+  }
+  .more:hover {
+    background: var(--row-hover);
   }
 
   .detail {
-    width: 380px;
+    width: 400px;
     flex-shrink: 0;
     display: flex;
     flex-direction: column;
     border-left: 1px solid var(--line);
     overflow-y: auto;
+    background: var(--surface);
   }
   .dh {
     display: flex;
     align-items: center;
     gap: 8px;
-    padding: 14px 16px;
+    padding: 10px 12px 10px 16px;
     border-bottom: 1px solid var(--line);
   }
+  .dh b {
+    font-weight: 500;
+    color: var(--text-bright);
+  }
   .dh .t {
-    font: 12px var(--mono);
+    font: var(--fs-sm) var(--mono);
     color: var(--text-muted);
   }
-  .dh .x {
-    margin-left: auto;
-    background: none;
-    border: 0;
-    color: var(--text-dim);
-    font-size: 18px;
-    cursor: pointer;
-  }
   .badge {
-    font: 11px var(--mono);
+    font: var(--fs-xs) var(--mono);
     padding: 1px 6px;
     border-radius: 4px;
     background: var(--surface-2);
@@ -836,7 +756,7 @@
   .msg {
     margin: 0;
     padding: 14px 16px;
-    font: 12px/1.6 var(--mono);
+    font: var(--fs-sm) / 1.6 var(--mono);
     color: var(--text-bright);
     white-space: pre-wrap;
     overflow-wrap: anywhere;
@@ -844,10 +764,10 @@
   }
   .sh {
     padding: 14px 16px 6px;
-    font-size: 11px;
+    font-size: var(--fs-xs);
     font-weight: 500;
     color: var(--text-dim);
-    letter-spacing: 0.04em;
+    letter-spacing: 0.05em;
     text-transform: uppercase;
   }
   .fields {
@@ -855,7 +775,7 @@
     grid-template-columns: 90px 1fr;
     gap: 6px 12px;
     padding: 0 16px 12px;
-    font: 12px var(--mono);
+    font: var(--fs-sm) var(--mono);
   }
   .fk {
     color: var(--text-dim);
@@ -874,6 +794,7 @@
   }
   button.fvv:hover {
     color: var(--accent);
+    text-decoration: underline;
   }
   .related {
     padding: 0 8px 12px;
@@ -887,10 +808,10 @@
     height: 26px;
     padding: 0 8px;
     border: 0;
-    border-radius: 5px;
+    border-radius: var(--radius-sm);
     background: none;
     color: var(--text);
-    font: 12px var(--mono);
+    font: var(--fs-sm) var(--mono);
     text-align: left;
     cursor: pointer;
   }
@@ -909,8 +830,6 @@
   .rr .dot {
     width: 7px;
     height: 7px;
-    border-radius: 50%;
-    background: var(--text-dim);
   }
   .rr .dot.lvl-error {
     background: var(--danger);
@@ -922,11 +841,32 @@
     margin-top: auto;
     display: flex;
     flex-wrap: wrap;
-    gap: 8px;
-    padding: 14px 16px;
+    gap: 6px;
+    padding: 12px 16px;
     border-top: 1px solid var(--line);
   }
 
+  @media (max-width: 1280px) {
+    .lh,
+    .row {
+      grid-template-columns: 100px 32px 130px minmax(0, 1fr);
+    }
+    .ctxh,
+    .row .x {
+      display: none;
+    }
+  }
+  /* With the detail open the message needs the room more than the context column does. */
+  @media (max-width: 1700px) {
+    .has-detail .lh,
+    .has-detail .row {
+      grid-template-columns: 100px 32px 130px minmax(0, 1fr);
+    }
+    .has-detail .ctxh,
+    .has-detail .row .x {
+      display: none;
+    }
+  }
   @media (max-width: 1100px) {
     .facets {
       display: none;
@@ -935,23 +875,25 @@
   @media (max-width: 768px) {
     .logs {
       height: auto;
-      min-height: calc(100vh - 56px);
+      min-height: calc(100vh - var(--topbar-h));
     }
     .bar {
-      flex-wrap: wrap;
       padding: 10px 16px;
     }
-    .query {
+    .qbar {
       flex-basis: 100%;
     }
-    .hist-wrap {
+    .hist {
       padding: 8px 16px 4px;
+    }
+    .legend {
+      display: none;
     }
     .lh {
       grid-template-columns: minmax(0, 1fr);
       padding: 0 12px;
     }
-    .lh > :not(:last-child) {
+    .lh > :not(:nth-child(4)) {
       display: none;
     }
     .scroll {
@@ -967,7 +909,7 @@
       display: none;
     }
     .row .t {
-      font-size: 11px;
+      font-size: var(--fs-xs);
     }
     .body {
       flex-direction: column;

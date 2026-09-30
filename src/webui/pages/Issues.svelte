@@ -7,6 +7,8 @@
   import { issueStates, setIssueState } from '../stores/nav.js';
   import { groupIssues, stateOf, isOpen, KIND_LABEL } from '../issues.js';
   import { formatRelativeTime, shortId, urlLabel } from '../utils/format.js';
+  import DataTable from '../components/DataTable.svelte';
+  import Sparkline from '../components/Sparkline.svelte';
 
   const DAY = 24 * 3600e3;
   const TABS = [
@@ -17,6 +19,11 @@
     ['muted', 'Muted'],
     ['resolved', 'Resolved'],
   ];
+  const KIND_COLOR = {
+    defect: 'var(--warning)',
+    upstream: 'var(--chart-1)',
+    user: 'var(--chart-muted)',
+  };
 
   let groups = $state([]);
   let loaded = $state(false);
@@ -25,6 +32,7 @@
   let opsLoaded = $state(false);
   let saving = $state(false);
   let error = $state('');
+  let copied = $state(false);
 
   const tab = $derived(
     TABS.some(([t]) => t === $currentRoute.params.$tab) ? $currentRoute.params.$tab : 'open'
@@ -132,7 +140,7 @@
 
   const users = $derived(new Set(occ.map(a => a.user_id).filter(Boolean)).size);
   const firstSeen = $derived(occ.length ? Math.min(...occ.map(a => a.timestamp)) : null);
-  const sparkMax = s => Math.max(1, ...(s ?? []));
+  const today = $derived(occ.filter(a => a.timestamp > Date.now() - DAY).length);
   const logSearch = g =>
     g.key
       .split('#')[0]
@@ -156,17 +164,30 @@
     if (!wide)
       tick().then(() => document.querySelector('.detail')?.scrollIntoView({ block: 'start' }));
   }
+  function copy(text) {
+    navigator.clipboard?.writeText(text);
+    copied = true;
+    setTimeout(() => (copied = false), 1200);
+  }
+
+  const columns = [
+    { key: 'cause', label: 'cause' },
+    { key: 'kind', label: 'kind', width: '88px', sm: false },
+    { key: 'trend', label: '7 days', width: '76px', sm: false },
+    { key: 'n', label: 'events', width: '60px', align: 'right' },
+    { key: 'last', label: 'last seen', width: '84px', align: 'right', sm: false },
+  ];
 
   useHeaderActions(actions);
 </script>
 
 {#snippet actions()}
   {#if error}<span class="error-text small">{error}</span>{/if}
-  <span class="dim small">failures grouped by cause, kept 7 days</span>
+  <span class="dim small">failures grouped by cause · kept 7 days</span>
 {/snippet}
 
-<div class="issues">
-  <div class="seg tabs" role="tablist">
+<div class="issues stack">
+  <div class="tabs" role="tablist">
     {#each TABS as [id, label] (id)}
       <button
         role="tab"
@@ -180,50 +201,45 @@
   </div>
 
   <div class="grid">
-    <section
-      class="panel tbl"
-      aria-label="issues"
-      style="--cols: 3px minmax(0, 1fr) 96px 64px 88px"
+    <DataTable
+      {columns}
+      rows={visible}
+      rowKey="key"
+      loading={!loaded}
+      empty="nothing here"
+      selected={selected?.key}
+      onrow={g => pick(g.key)}
+      label="issues"
     >
-      <div class="tr head">
-        <span></span><span>cause</span><span>7 days</span><span class="num">events</span><span
-          class="num">last seen</span
-        >
-      </div>
-      {#each visible as g (g.key)}
-        {@const on = selected?.key === g.key}
-        <button class="tr issue" class:sel={on} onclick={() => pick(g.key)}>
-          <span class="accent" class:on></span>
-          <span class="cause">
-            <span class="row">
-              <span class="ellipsis title">{g.title}</span>
-              <span class="chip {g.kind}">{KIND_LABEL[g.kind]}</span>
-              {#if g.state === 'regressed'}<span class="chip bad">regressed</span>{/if}
-            </span>
-            <span class="meta">
-              {[
-                g.commands.map(c => `/${c}`).join(', '),
-                g.members.length > 1 && `${g.members.length} variants`,
-              ]
-                .filter(Boolean)
-                .join(' · ')}
-            </span>
+      {#snippet row(g)}
+        <span class="cause">
+          <span class="row">
+            <span class="ellipsis title">{g.title}</span>
+            {#if g.state === 'regressed'}<span class="chip bad">regressed</span>{/if}
           </span>
-          <span class="spark" aria-hidden="true">
-            {#each sparks[g.key] ?? [] as v, d (d)}
-              <span
-                class="sb {g.kind}"
-                style="height:{Math.max(2, (v / sparkMax(sparks[g.key])) * 22)}px"
-              ></span>
-            {/each}
+          <span class="meta ellipsis">
+            {[
+              g.commands.map(c => `/${c}`).join(', '),
+              g.members.length > 1 && `${g.members.length} variants`,
+            ]
+              .filter(Boolean)
+              .join(' · ')}
           </span>
-          <span class="num">{g.count}</span>
-          <span class="num dim small">{formatRelativeTime(g.lastSeen)}</span>
-        </button>
-      {:else}
-        <div class="empty">{loaded ? 'nothing here' : 'loading…'}</div>
-      {/each}
-    </section>
+        </span>
+        <span class="hide-sm"><span class="chip {g.kind}">{KIND_LABEL[g.kind]}</span></span>
+        <span class="hide-sm">
+          <Sparkline
+            values={sparks[g.key] ?? []}
+            width={64}
+            height={20}
+            color={KIND_COLOR[g.kind]}
+            title="events per day, last 7 days"
+          />
+        </span>
+        <span class="num">{g.count.toLocaleString()}</span>
+        <span class="num dim hide-sm">{formatRelativeTime(g.lastSeen)}</span>
+      {/snippet}
+    </DataTable>
 
     {#if selected}
       <section class="panel detail" aria-label="selected issue">
@@ -231,7 +247,7 @@
           <div class="row">
             <span class="chip {selected.kind}">{KIND_LABEL[selected.kind]}</span>
             {#if selected.state !== 'open'}<span class="chip">{selected.state}</span>{/if}
-            {#if firstSeen}<span class="mono dim small"
+            {#if firstSeen}<span class="mono dim small right"
                 >first seen {new Date(firstSeen).toLocaleDateString([], {
                   month: 'short',
                   day: 'numeric',
@@ -254,7 +270,11 @@
         <div class="stats">
           <div>
             <div class="k">events</div>
-            <div class="v mono">{selected.count}</div>
+            <div class="v mono">{selected.count.toLocaleString()}</div>
+          </div>
+          <div>
+            <div class="k">last 24h</div>
+            <div class="v mono">{occ.length ? today : '…'}</div>
           </div>
           <div>
             <div class="k">users</div>
@@ -308,19 +328,19 @@
         </div>
         <div class="foot">
           {#if selected.state === 'muted' || selected.state === 'resolved' || selected.state === 'regressed'}
-            <button class="btn" disabled={saving} onclick={() => setState(selected, null)}
-              ><RotateCcw size={13} />Reopen</button
+            <button class="btn sm" disabled={saving} onclick={() => setState(selected, null)}
+              ><RotateCcw size={12} />Reopen</button
             >
           {/if}
           {#if selected.state !== 'muted'}
             <button
-              class="btn"
+              class="btn sm"
               disabled={saving}
               onclick={() => setState(selected, { state: 'muted', until: Date.now() + DAY })}
-              ><BellOff size={13} />Mute 24h</button
+              ><BellOff size={12} />Mute 24h</button
             >
             <button
-              class="btn"
+              class="btn sm"
               disabled={saving}
               onclick={() => setState(selected, { state: 'muted', until: Date.now() + 7 * DAY })}
               >Mute 7d</button
@@ -328,19 +348,19 @@
           {/if}
           {#if selected.state !== 'resolved'}
             <button
-              class="btn"
+              class="btn sm primary"
               disabled={saving}
               onclick={() => setState(selected, { state: 'resolved', at: Date.now() })}
-              ><CheckCircle2 size={13} />Resolve</button
+              ><CheckCircle2 size={12} />Resolve</button
             >
           {/if}
           <button
-            class="btn"
+            class="btn sm"
             onclick={() => navigate('logs', { search: logSearch(selected), range: '7d' })}
-            ><TerminalSquare size={13} />Logs</button
+            ><TerminalSquare size={12} />Logs</button
           >
-          <button class="btn" onclick={() => navigator.clipboard?.writeText(selected.members[0])}
-            ><Copy size={13} />Copy</button
+          <button class="btn sm" onclick={() => copy(selected.members[0])}
+            ><Copy size={12} />{copied ? 'Copied' : 'Copy'}</button
           >
         </div>
       </section>
@@ -349,77 +369,33 @@
 </div>
 
 <style>
-  .issues {
-    max-width: 1400px;
-    margin: 0 auto;
-    display: flex;
-    flex-direction: column;
-    gap: 16px;
-  }
-  .tabs {
-    align-self: flex-start;
-    flex-wrap: wrap;
-  }
-  .small {
-    font-size: 12px;
-  }
   .grid {
     display: grid;
     grid-template-columns: minmax(0, 1fr) 440px;
-    gap: 16px;
+    gap: var(--gap);
     align-items: start;
-  }
-  .tbl .tr.issue {
-    padding-left: 0;
-    min-height: 62px;
-  }
-  .tbl .tr.head {
-    padding-left: 0;
-  }
-  .accent {
-    align-self: stretch;
-    border-radius: 0 2px 2px 0;
-  }
-  .accent.on {
-    background: var(--chart-series-1);
   }
   .cause {
     display: flex;
     flex-direction: column;
-    gap: 4px;
+    gap: 3px;
     min-width: 0;
+    padding: 7px 0;
   }
   .title {
-    font-size: 13px;
+    font-size: var(--fs);
     color: var(--text);
   }
   .meta {
-    font-size: 12px;
+    font-size: var(--fs-sm);
     color: var(--text-dim);
-  }
-  .spark {
-    display: flex;
-    align-items: flex-end;
-    gap: 3px;
-    height: 24px;
-  }
-  .sb {
-    width: 10px;
-    border-radius: 2px;
-    background: var(--warning);
-  }
-  .sb.upstream {
-    background: var(--chart-series-1);
-  }
-  .sb.user {
-    background: #3a3c44;
   }
   .detail {
     position: sticky;
-    top: 76px;
+    top: calc(var(--topbar-h) + 20px);
   }
   .top {
-    border-bottom: 1px solid #1f2126;
+    border-bottom: 1px solid var(--line);
   }
   h2 {
     margin: 10px 0 6px;
@@ -427,6 +403,7 @@
     font-weight: 600;
     line-height: 1.35;
     color: var(--text-bright);
+    overflow-wrap: anywhere;
   }
   .top p {
     margin: 0;
@@ -437,18 +414,20 @@
   }
   .stats {
     display: grid;
-    grid-template-columns: repeat(3, 1fr);
+    grid-template-columns: repeat(4, 1fr);
     gap: 10px;
     padding: 14px 16px;
-    border-bottom: 1px solid #1f2126;
+    border-bottom: 1px solid var(--line);
   }
   .k {
-    font-size: 11px;
+    font-size: var(--fs-xs);
     color: var(--text-dim);
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
   }
   .v {
     margin-top: 4px;
-    font-size: 16px;
+    font-size: var(--fs-lg);
     color: var(--text-bright);
   }
   .pad {
@@ -461,7 +440,7 @@
     gap: 3px;
   }
   .occ {
-    border-bottom: 1px solid #1f2126;
+    border-bottom: 1px solid var(--line);
   }
   .orow {
     width: 100%;
@@ -475,12 +454,12 @@
     background: none;
     color: var(--text);
     font: inherit;
-    font-size: 12px;
+    font-size: var(--fs-sm);
     text-align: left;
     cursor: pointer;
   }
   .orow:hover:not(:disabled) {
-    background: #191a1f;
+    background: var(--row-hover);
   }
   .orow:disabled {
     cursor: default;
@@ -488,7 +467,7 @@
   .foot {
     display: flex;
     flex-wrap: wrap;
-    gap: 8px;
+    gap: 6px;
     padding: 12px 16px;
   }
   @media (max-width: 1100px) {
@@ -500,13 +479,8 @@
     }
   }
   @media (max-width: 640px) {
-    .tbl {
-      min-height: 60vh;
-      --cols: 3px minmax(0, 1fr) 44px !important;
-    }
-    .tbl .tr > :nth-child(3),
-    .tbl .tr > :nth-child(5) {
-      display: none;
+    .tabs {
+      overflow-x: auto;
     }
   }
 </style>

@@ -410,22 +410,17 @@
 
 <style>
   .settings {
-    max-width: 1200px;
-    margin: 0 auto;
     display: grid;
     grid-template-columns: 220px minmax(0, 1fr);
     gap: 16px;
     align-items: start;
-  }
-  .small {
-    font-size: 12px;
   }
   .side {
     display: flex;
     flex-direction: column;
     gap: 2px;
     position: sticky;
-    top: 76px;
+    top: calc(var(--topbar-h) + 20px);
   }
   .sec {
     height: 34px;
@@ -434,11 +429,11 @@
     align-items: center;
     gap: 10px;
     border: 0;
-    border-radius: 7px;
+    border-radius: var(--radius);
     background: none;
-    color: #a9abb1;
+    color: var(--text-muted);
     font: inherit;
-    font-size: 13px;
+    font-size: var(--fs);
     text-align: left;
     cursor: pointer;
   }
@@ -466,12 +461,12 @@
   }
   .lbl b {
     font-weight: 500;
-    font-size: 13px;
+    font-size: var(--fs);
     color: var(--text-bright);
   }
   .lbl p {
     margin: 4px 0 0;
-    font-size: 12px;
+    font-size: var(--fs-sm);
     line-height: 1.5;
     color: var(--text-muted);
   }
@@ -518,7 +513,7 @@
     display: flex;
     padding: 4px;
     border: 0;
-    border-radius: 5px;
+    border-radius: var(--radius-sm);
     background: none;
     color: var(--text-dim);
     cursor: pointer;
@@ -531,7 +526,7 @@
     display: inline-flex;
     align-items: center;
     gap: 4px;
-    font-size: 12px;
+    font-size: var(--fs-sm);
     color: var(--success);
   }
   @media (max-width: 860px) {

@@ -11,15 +11,24 @@
     hostOf,
     urlLabel,
   } from '../utils/format.js';
+  import Chart from '../components/Chart.svelte';
+  import DataTable from '../components/DataTable.svelte';
+  import Sparkline from '../components/Sparkline.svelte';
+  import TimeRange from '../components/TimeRange.svelte';
 
   const HOUR = 3600e3;
-  // span of the range, bucket size, and whether a previous period of equal length still exists
+  // Span of the range, bucket size, and whether a previous period of equal length still exists
   // (retention keeps 7 days, so only ranges up to 24h can be compared).
   const RANGES = {
     '1h': { span: HOUR, bucket: 5 * 60e3, compare: true, label: 'previous hour' },
     '24h': { span: 24 * HOUR, bucket: HOUR, compare: true, label: 'previous 24h' },
     '7d': { span: 7 * 24 * HOUR, bucket: 6 * HOUR, compare: false },
   };
+  const PRESETS = { '1h': 1, '24h': 24, '7d': 168 };
+  const SERIES = [
+    { key: 'ok', label: 'delivered', color: 'var(--chart-1)' },
+    { key: 'fail', label: 'failed', color: 'var(--chart-4)' },
+  ];
 
   let ops = $state([]);
   let stats = $state(null);
@@ -28,20 +37,33 @@
   let loaded = $state(false);
   let now = $state(Date.now());
 
-  const rangeKey = $derived(
-    RANGES[$currentRoute.params.$range] ? $currentRoute.params.$range : '24h'
-  );
-  const range = $derived(RANGES[rangeKey]);
+  const params = $derived($currentRoute.params);
+  const absolute = $derived(!!params.$startTime);
+  const rangeKey = $derived(RANGES[params.$range] ? params.$range : '24h');
+  const range = $derived.by(() => {
+    if (!absolute) return RANGES[rangeKey];
+    const start = Number(params.$startTime);
+    const end = Number(params.$endTime) || Date.now();
+    const span = Math.max(60e3, end - start);
+    const bucket = span <= 2 * HOUR ? 5 * 60e3 : span <= 2 * 24 * HOUR ? HOUR : 6 * HOUR;
+    return { span, bucket, compare: false, start, end };
+  });
+  const windowValue = $derived({
+    range: absolute ? '' : rangeKey,
+    startTime: params.$startTime || null,
+    endTime: params.$endTime || null,
+  });
 
   async function load() {
     const t = Date.now();
-    const from = t - (range.compare ? 2 : 1) * range.span;
+    const end = range.end ?? t;
+    const from = (range.start ?? t - range.span) - (range.compare ? range.span : 0);
     const get = url =>
       fetch(url)
         .then(r => (r.ok ? r.json() : null))
         .catch(() => null);
     const [req, st, sys, sum] = await Promise.all([
-      get(`/api/requests?dateFrom=${from}&limit=10000`),
+      get(`/api/requests?dateFrom=${from}&dateTo=${end}&limit=10000`),
       get('/api/stats'),
       get('/api/system'),
       get('/api/alerts/summary?reasonLimit=300'),
@@ -55,14 +77,16 @@
   }
 
   $effect(() => {
-    rangeKey;
+    range;
     load();
     const timer = setInterval(load, 60_000);
     return () => clearInterval(timer);
   });
 
-  const cur = $derived(ops.filter(o => o.timestamp >= now - range.span));
-  const prev = $derived(range.compare ? ops.filter(o => o.timestamp < now - range.span) : []);
+  const winEnd = $derived(range.end ?? now);
+  const winStart = $derived(range.start ?? now - range.span);
+  const cur = $derived(ops.filter(o => o.timestamp >= winStart && o.timestamp <= winEnd));
+  const prev = $derived(range.compare ? ops.filter(o => o.timestamp < winStart) : []);
 
   const finished = list => list.filter(o => o.status === 'success' || o.status === 'error');
   const successRate = list => {
@@ -77,6 +101,24 @@
   const pct = (sorted, p) =>
     sorted.length ? sorted[Math.min(sorted.length - 1, Math.floor(sorted.length * p))] : null;
   const users = list => new Set(list.map(o => o.userId)).size;
+
+  const bars = $derived.by(() => {
+    const n = Math.max(1, Math.round(range.span / range.bucket));
+    const start =
+      Math.floor(winStart / range.bucket) * range.bucket + (absolute ? 0 : range.bucket);
+    const out = Array.from({ length: n }, (_, i) => ({
+      at: start + i * range.bucket,
+      ok: 0,
+      fail: 0,
+    }));
+    for (const o of cur) {
+      const b = out[Math.floor((o.timestamp - start) / range.bucket)];
+      if (b) o.status === 'error' ? b.fail++ : b.ok++;
+    }
+    return out;
+  });
+  const sparkTotals = $derived(bars.map(b => b.ok + b.fail));
+  const sparkFails = $derived(bars.map(b => b.fail));
 
   const kpis = $derived.by(() => {
     const c = cur;
@@ -100,13 +142,16 @@
       (s, x) => s + (x.retried || 0),
       0
     );
+    const windowLabel = absolute ? 'in this window' : `last ${rangeKey}`;
     return [
       {
         k: 'Requests',
         v: c.length.toLocaleString(),
         d: reqDelta == null ? '' : `${reqDelta >= 0 ? '+' : ''}${reqDelta}%`,
         up: reqDelta == null || reqDelta >= 0,
-        s: cmp ? `vs ${range.label}` : `last ${rangeKey}`,
+        s: cmp ? `vs ${range.label}` : windowLabel,
+        spark: sparkTotals,
+        page: 'requests',
       },
       {
         k: 'Delivered',
@@ -116,7 +161,11 @@
             ? `${rateC - rateP >= 0 ? '+' : ''}${(rateC - rateP).toFixed(1)}`
             : '',
         up: !(cmp && rateC < rateP),
-        s: `${failed} failed`,
+        s: `${failed.toLocaleString()} failed`,
+        spark: sparkFails,
+        sparkColor: 'var(--chart-4)',
+        page: 'requests',
+        params: { status: 'error' },
       },
       {
         k: 'Median time',
@@ -127,6 +176,8 @@
             : '',
         up: !(cmp && medC > medP),
         s: `p95 ${pct(dC, 0.95) == null ? '—' : formatDuration(pct(dC, 0.95))}`,
+        page: 'requests',
+        params: { minDuration: '10000' },
       },
       {
         k: 'Active users',
@@ -134,9 +185,10 @@
         d: cmp ? `${users(c) - users(p) >= 0 ? '+' : ''}${users(c) - users(p)}` : '',
         up: !(cmp && users(c) < users(p)),
         s: stats ? `${stats.active_users_7d.toLocaleString()} this week` : '',
+        page: 'users',
       },
       system?.mediaWorkers === false
-        ? { k: 'Workers', v: 'in bot', d: '', up: true, s: 'MEDIA_WORKERS=false' }
+        ? { k: 'Workers', v: 'in bot', d: '', up: true, s: 'MEDIA_WORKERS=false', page: 'system' }
         : {
             k: 'Workers',
             v: procs.length ? `${live} / ${procs.length}` : '—',
@@ -149,44 +201,20 @@
                   : 'healthy',
             up: live === procs.length,
             s: lastJob ? `last job ${formatRelativeTime(lastJob)}` : 'no jobs yet',
+            page: 'system',
           },
       {
         k: 'Queue',
         v: String(queued),
-        d: queued ? 'waiting' : 'clear',
-        up: queued === 0,
+        d: system?.jobs?.paused ? 'paused' : queued ? 'waiting' : 'clear',
+        up: !system?.jobs?.paused && queued === 0,
         s: `${retried} retried in 24h`,
+        page: 'system',
       },
     ];
   });
 
-  const bars = $derived.by(() => {
-    const n = Math.round(range.span / range.bucket);
-    const start = Math.floor((now - range.span) / range.bucket) * range.bucket + range.bucket;
-    const out = Array.from({ length: n }, (_, i) => ({
-      at: start + i * range.bucket,
-      ok: 0,
-      fail: 0,
-    }));
-    for (const o of cur) {
-      const b = out[Math.floor((o.timestamp - start) / range.bucket)];
-      if (b) o.status === 'error' ? b.fail++ : b.ok++;
-    }
-    const max = Math.max(4, ...out.map(b => b.ok + b.fail));
-    return out.map(b => ({ ...b, okH: (b.ok / max) * 100, failH: (b.fail / max) * 100 }));
-  });
-  const ticks = $derived(
-    [0, 0.25, 0.5, 0.75, 1].map(f => {
-      const b = bars[Math.min(bars.length - 1, Math.round(f * (bars.length - 1)))];
-      if (!b) return '';
-      const d = new Date(b.at);
-      return rangeKey === '7d'
-        ? d.toLocaleDateString([], { weekday: 'short', day: 'numeric' })
-        : d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false });
-    })
-  );
-
-  const recent = $derived([...ops].sort((a, b) => b.timestamp - a.timestamp).slice(0, 6));
+  const recent = $derived([...ops].sort((a, b) => b.timestamp - a.timestamp).slice(0, 8));
 
   const sources = $derived.by(() => {
     const map = new Map();
@@ -197,84 +225,85 @@
       if (o.status === 'success') s.ok++;
       map.set(host, s);
     }
+    const max = Math.max(1, ...[...map.values()].map(s => s.n));
     return [...map.values()]
       .sort((a, b) => b.n - a.n)
-      .slice(0, 7)
-      .map(s => ({ ...s, rate: Math.round((s.ok / s.n) * 100) }));
+      .slice(0, 8)
+      .map(s => ({ ...s, rate: Math.round((s.ok / s.n) * 100), share: s.n / max }));
   });
 
   const openIssues = $derived(
     groupIssues(issues)
       .filter(g => isOpen(g, $issueStates))
-      .slice(0, 4)
+      .slice(0, 5)
   );
 
-  const hourLabel = at =>
-    new Date(at).toLocaleString([], {
-      weekday: 'short',
-      hour: '2-digit',
-      minute: '2-digit',
-      hour12: false,
-    });
+  const bucketLabel = $derived(
+    range.bucket >= HOUR * 6 ? '6 hours' : range.bucket >= HOUR ? 'hour' : '5 minutes'
+  );
+
+  function onrange(v) {
+    navigate(
+      'dashboard',
+      v.startTime
+        ? { startTime: v.startTime, ...(v.endTime ? { endTime: v.endTime } : {}) }
+        : v.range === '24h'
+          ? {}
+          : { range: v.range }
+    );
+  }
+  // Brushing the chart opens the requests list for exactly that window.
+  const onbrush = (s, e) => navigate('requests', { dateFrom: String(s), dateTo: String(e) });
 
   useHeaderActions(actions);
 </script>
 
 {#snippet actions()}
-  <div class="seg" role="group" aria-label="time range">
-    {#each Object.keys(RANGES) as r (r)}
-      <button
-        class:on={rangeKey === r}
-        onclick={() => navigate('dashboard', r === '24h' ? {} : { range: r })}>{r}</button
-      >
-    {/each}
-  </div>
+  <TimeRange presets={PRESETS} value={windowValue} onchange={onrange} defaultRange="24h" />
   <span class="live" title={$connected ? 'live feed connected' : 'live feed reconnecting'}>
-    <span class="dot" class:ok={$connected}></span>live
+    <span class="dot" class:ok={$connected} class:pulse={$connected}></span>live
   </span>
 {/snippet}
 
 <div class="overview stack">
   <section class="panel kpis" aria-label="key numbers">
     {#each kpis as k (k.k)}
-      <div class="kpi">
+      <button class="kpi clickable" onclick={() => navigate(k.page, k.params ?? {})}>
         <div class="k">{k.k}</div>
         <div class="v">
-          {loaded ? k.v : '—'}
+          {#if loaded}{k.v}{:else}<span class="skeleton">00000</span>{/if}
           {#if loaded && k.d}<span class="d" class:up={k.up} class:down={!k.up}>{k.d}</span>{/if}
         </div>
         <div class="s">{loaded ? k.s : ' '}</div>
-      </div>
+        {#if loaded && k.spark}
+          <span class="spark"
+            ><Sparkline values={k.spark} width={72} height={20} color={k.sparkColor} /></span
+          >
+        {/if}
+      </button>
     {/each}
   </section>
 
-  <div class="two">
+  <div class="two wide-left">
     <section class="panel" aria-label="requests over time">
       <div class="ph">
-        <span
-          >Requests per {range.bucket >= HOUR * 6
-            ? '6 hours'
-            : range.bucket >= HOUR
-              ? 'hour'
-              : '5 minutes'}</span
-        >
+        <span>Requests per {bucketLabel}</span>
         <span class="meta">
-          <span class="legend"><i class="okc"></i>delivered</span>
-          <span class="legend"><i class="failc"></i>failed</span>
+          {#each SERIES as s (s.key)}
+            <span class="legend"><i style="background:{s.color}"></i>{s.label}</span>
+          {/each}
+          <span class="dim">drag to open that window</span>
         </span>
       </div>
       <div class="chart">
-        <div class="bars">
-          {#each bars as b (b.at)}
-            <div class="col" title="{hourLabel(b.at)} · {b.ok} delivered, {b.fail} failed">
-              <div class="fail" style="height:{b.failH}%" class:gap={b.fail && b.ok}></div>
-              <div class="ok" style="height:{b.okH}%" class:top={!b.fail}></div>
-            </div>
-          {/each}
-        </div>
-        <div class="axis mono">
-          {#each ticks as t, i (i)}<span>{t}</span>{/each}
-        </div>
+        <Chart
+          series={SERIES}
+          data={bars}
+          bucket={range.bucket}
+          height={220}
+          {onbrush}
+          brushHint="drag to open that window in requests"
+        />
       </div>
     </section>
 
@@ -284,11 +313,15 @@
         <button class="linkish meta" onclick={() => navigate('issues')}>View all</button>
       </div>
       {#each openIssues as i (i.key)}
-        <button class="issue" onclick={() => navigate('issues', { issue: i.key })}>
-          <span class="n mono">{i.count}</span>
+        <button class="lrow issue" onclick={() => navigate('issues', { issue: i.key })}>
+          <span class="n num">{i.count}</span>
           <span class="grow">
             <span class="t ellipsis">{i.title}</span>
-            <span class="m">{i.commands.join(', ')} · {formatRelativeTime(i.lastSeen)}</span>
+            <span class="m"
+              ><span class="chip {i.kind} xs">{i.kind}</span>{i.commands
+                .map(c => `/${c}`)
+                .join(', ')} · {formatRelativeTime(i.lastSeen)}</span
+            >
           </span>
         </button>
       {:else}
@@ -297,42 +330,50 @@
     </section>
   </div>
 
-  <div class="two">
-    <section
-      class="panel tbl"
-      aria-label="recent requests"
-      style="--cols: 12px 76px minmax(0,1fr) 96px 64px 72px"
+  <div class="two wide-left">
+    <DataTable
+      title="Recent requests"
+      columns={[
+        { key: 'st', label: '', width: '12px' },
+        { key: 'type', label: 'command', width: '76px' },
+        { key: 'link', label: 'link' },
+        { key: 'user', label: 'user', width: '92px', sm: false },
+        { key: 'took', label: 'took', width: '64px', align: 'right', sm: false },
+        { key: 'when', label: 'when', width: '72px', align: 'right' },
+      ]}
+      rows={recent}
+      loading={!loaded}
+      empty="no requests yet"
+      onrow={r => navigate('request', { requestId: r.id })}
     >
-      <div class="ph">
-        <span>Recent requests</span>
-        <button class="linkish meta" onclick={() => navigate('requests')}>Open requests</button>
-      </div>
-      {#each recent as r (r.id)}
-        <button class="tr" onclick={() => navigate('request', { requestId: r.id })}>
-          <span
-            class="dot"
-            class:ok={r.status === 'success'}
-            class:bad={r.status === 'error'}
-            class:run={r.status === 'running'}
-            title={r.status}
-          ></span>
-          <span class="muted">{r.type}</span>
-          <span class="mono ellipsis small">{urlLabel(r.originalUrl)}</span>
-          <span class="mono muted small">{shortId(r.userId)}</span>
-          <span class="num muted small"
-            >{r.performanceMetrics?.duration
-              ? formatDuration(r.performanceMetrics.duration)
-              : '—'}</span
-          >
-          <span class="dim small right">{formatRelativeTime(r.timestamp)}</span>
-        </button>
-      {:else}
-        <div class="empty">{loaded ? 'no requests yet' : 'loading…'}</div>
-      {/each}
-    </section>
+      {#snippet header()}
+        <button class="linkish" onclick={() => navigate('requests')}>Open requests</button>
+      {/snippet}
+      {#snippet row(r)}
+        <span
+          class="dot"
+          class:ok={r.status === 'success'}
+          class:err={r.status === 'error'}
+          class:run={r.status === 'running'}
+          title={r.status}
+        ></span>
+        <span class="muted">{r.type}</span>
+        <span class="mono ellipsis small">{urlLabel(r.originalUrl)}</span>
+        <span class="mono muted small hide-sm">{shortId(r.userId)}</span>
+        <span class="num muted hide-sm"
+          >{r.performanceMetrics?.duration
+            ? formatDuration(r.performanceMetrics.duration)
+            : '—'}</span
+        >
+        <span class="num dim">{formatRelativeTime(r.timestamp)}</span>
+      {/snippet}
+    </DataTable>
 
     <section class="panel" aria-label="sources">
-      <div class="ph"><span>Sources, last {rangeKey}</span></div>
+      <div class="ph">
+        <span>Sources</span>
+        <span class="meta"><span class="dim">share · delivered</span></span>
+      </div>
       <div class="sources">
         {#each sources as s (s.name)}
           <button
@@ -343,13 +384,20 @@
             <span class="ellipsis">{s.name}</span>
             <span class="bar-track"
               ><span
-                style="width:{s.rate}%; background:{s.rate >= 90
-                  ? 'var(--chart-series-1)'
-                  : 'var(--warning)'}"
+                style="width:{s.share * 100}%; background:{s.rate >= 90
+                  ? 'var(--chart-1)'
+                  : s.rate >= 70
+                    ? 'var(--warning)'
+                    : 'var(--danger)'}"
               ></span></span
             >
-            <span class="num muted small">{s.rate}%</span>
-            <span class="num dim small">{s.n}</span>
+            <span class="num dim">{s.n}</span>
+            <span
+              class="num"
+              class:ok-text={s.rate >= 90}
+              class:warn-text={s.rate < 90 && s.rate >= 70}
+              class:error-text={s.rate < 70}>{s.rate}%</span
+            >
           </button>
         {:else}
           <div class="empty">{loaded ? 'nothing yet' : 'loading…'}</div>
@@ -360,25 +408,36 @@
 </div>
 
 <style>
-  .overview {
-    max-width: 1400px;
-    margin: 0 auto;
+  .kpi.clickable {
+    border: 0;
+    background: none;
+    text-align: left;
+    cursor: pointer;
+    font: inherit;
+    color: inherit;
+    display: block;
+    width: 100%;
   }
-  .two {
-    display: grid;
-    grid-template-columns: minmax(0, 1fr) 420px;
-    gap: 16px;
+  .kpi.clickable:hover {
+    background: var(--row-hover);
+  }
+  .kpi.clickable:first-child {
+    border-radius: var(--radius-lg) 0 0 var(--radius-lg);
   }
   .live {
-    height: 32px;
+    height: 30px;
     padding: 0 10px;
     display: inline-flex;
     align-items: center;
     gap: 7px;
     border: 1px solid var(--border);
-    border-radius: 8px;
-    font-size: 12px;
+    border-radius: var(--radius);
+    font-size: var(--fs-sm);
     color: var(--text-muted);
+  }
+  .live .dot {
+    width: 7px;
+    height: 7px;
   }
   .legend {
     display: inline-flex;
@@ -390,96 +449,30 @@
     height: 8px;
     border-radius: 2px;
   }
-  .okc {
-    background: var(--chart-series-1);
-  }
-  .failc {
-    background: var(--warning);
-  }
   .chart {
-    height: 216px;
-    padding: 16px 16px 8px;
-    display: flex;
-    flex-direction: column;
-  }
-  .bars {
-    flex: 1;
-    display: flex;
-    align-items: flex-end;
-    gap: 6px;
-    border-bottom: 1px solid #25272d;
-  }
-  .col {
-    flex: 1;
-    height: 100%;
-    display: flex;
-    flex-direction: column;
-    justify-content: flex-end;
-  }
-  .col:hover .ok {
-    background: var(--chart-series-1-hover);
-  }
-  .ok {
-    background: var(--chart-series-1);
-  }
-  .ok.top,
-  .fail {
-    border-radius: 3px 3px 0 0;
-  }
-  .fail {
-    background: var(--warning);
-  }
-  .fail.gap {
-    margin-bottom: 1px;
-  }
-  .axis {
-    display: flex;
-    justify-content: space-between;
-    padding-top: 6px;
-    font-size: 11px;
-    color: var(--text-dim);
-  }
-  .issue {
-    width: 100%;
-    display: flex;
-    align-items: center;
-    gap: 12px;
-    padding: 11px 16px;
-    border: 0;
-    border-top: 1px solid var(--line);
-    background: none;
-    color: #d4d3cf;
-    font: inherit;
-    text-align: left;
-    cursor: pointer;
-  }
-  .issue:first-of-type {
-    border-top: 0;
-  }
-  .issue:hover {
-    background: #191a1f;
+    padding: 14px 16px 8px 8px;
   }
   .issue .n {
     width: 34px;
-    text-align: right;
-    font-size: 13px;
+    font-size: var(--fs);
     color: var(--text-bright);
   }
   .issue .t {
     display: block;
-    font-size: 13px;
+    font-size: var(--fs);
   }
   .issue .m {
-    display: block;
-    margin-top: 2px;
-    font-size: 12px;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    margin-top: 3px;
+    font-size: var(--fs-sm);
     color: var(--text-dim);
   }
-  .small {
-    font-size: 12px;
-  }
-  .right {
-    text-align: right;
+  .chip.xs {
+    height: 16px;
+    padding: 0 5px;
+    font-size: 10px;
   }
   .sources {
     padding: 6px 8px 10px;
@@ -487,36 +480,27 @@
   .src {
     width: 100%;
     display: grid;
-    grid-template-columns: 110px 1fr 48px 40px;
+    grid-template-columns: 120px 1fr 40px 44px;
     align-items: center;
     gap: 10px;
-    height: 34px;
+    height: 32px;
     padding: 0 8px;
     border: 0;
-    border-radius: 6px;
+    border-radius: var(--radius-sm);
     background: none;
     color: var(--text);
     font: inherit;
-    font-size: 13px;
+    font-size: var(--fs);
     text-align: left;
     cursor: pointer;
   }
   .src:hover {
-    background: #191a1f;
+    background: var(--row-hover);
   }
-  @media (max-width: 1100px) {
-    .two {
-      grid-template-columns: 1fr;
-    }
+  .src .bar-track {
+    height: 5px;
   }
   @media (max-width: 640px) {
-    .tbl {
-      --cols: 10px 64px minmax(0, 1fr) 60px !important;
-    }
-    .tbl :global(.tr > :nth-child(4)),
-    .tbl :global(.tr > :nth-child(5)) {
-      display: none;
-    }
     .live {
       display: none;
     }

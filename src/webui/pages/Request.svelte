@@ -1,7 +1,7 @@
 <script>
-  import { Check, X, Loader, Copy, TerminalSquare, Ban } from 'lucide-svelte';
+  import { Check, X, Loader, Copy, TerminalSquare, Ban, ExternalLink } from 'lucide-svelte';
   import { currentRoute, navigate } from '../utils/router.js';
-  import { useHeaderActions } from '../stores/header.js';
+  import { useHeaderActions, useCrumbs } from '../stores/header.js';
   import {
     formatBytes,
     formatDuration,
@@ -110,6 +110,7 @@
         left: ((e.at - start) / span) * 100,
         width: Math.max(0.6, ((next - e.at) / span) * 100),
         took: next - e.at,
+        offset: e.at - start,
       };
       if (groups.at(-1)?.group !== e.group) groups.push({ group: e.group, start: e.at, rows: [] });
       groups.at(-1).rows.push(row);
@@ -135,6 +136,7 @@
   const stamp = t =>
     new Date(t).toLocaleTimeString([], { hour12: false }) + '.' + String(t % 1000).padStart(3, '0');
   const took = ms => (ms < 1000 ? `${ms}ms` : formatDuration(ms));
+  const plus = ms => (ms < 1000 ? `+${ms}ms` : `+${(ms / 1000).toFixed(2)}s`);
 
   async function ban() {
     banStatus = '';
@@ -153,6 +155,13 @@
     setTimeout(() => (copied = false), 1200);
   }
 
+  const setCrumbs = useCrumbs();
+  $effect(() =>
+    setCrumbs([
+      { label: 'Requests', page: 'requests' },
+      { label: id, mono: true },
+    ])
+  );
   useHeaderActions(actions);
 </script>
 
@@ -165,16 +174,16 @@
 {/snippet}
 
 <div class="request">
-  <div class="crumbs">
-    <button class="linkish" onclick={() => navigate('requests')}>Requests</button>
-    <span class="dim">/</span>
-    <span class="mono">{id}</span>
-  </div>
-
   {#if error}
     <div class="panel empty">{error}</div>
   {:else if !op}
-    <div class="panel empty">loading…</div>
+    <div class="panel">
+      <div class="skel-rows">
+        <span class="skeleton" style="width:40%;height:20px"></span>
+        <span class="skeleton" style="width:60%"></span>
+        <span class="skeleton" style="width:30%"></span>
+      </div>
+    </div>
   {:else}
     <div class="grid">
       <div class="stack">
@@ -205,7 +214,8 @@
           <div class="ph">
             <span>Timeline</span>
             <span class="meta"
-              >each step, placed on the request's {timeline ? took(timeline.span) : '—'}</span
+              >each step, placed on the request's <b>{timeline ? took(timeline.span) : '—'}</b
+              ></span
             >
           </div>
           {#if timeline}
@@ -223,7 +233,12 @@
                 </div>
                 {#each g.rows as r, ri (ri)}
                   <div class="trow" title={r.component ? `${r.component}: ${r.label}` : r.label}>
-                    <span class="lbl ellipsis" class:err={r.kind === 'err'}>{r.label}</span>
+                    <span class="off mono dim">{plus(r.offset)}</span>
+                    <span
+                      class="lbl ellipsis"
+                      class:err={r.kind === 'err'}
+                      class:warn={r.kind === 'warn'}>{r.label}</span
+                    >
                     <span class="track"
                       ><span class="seg-bar {r.kind}" style="left:{r.left}%; width:{r.width}%"
                       ></span></span
@@ -245,7 +260,7 @@
         </section>
 
         {#if op.status === 'error'}
-          <section class="panel">
+          <section class="panel accent-danger">
             <div class="ph"><span>Why it failed</span></div>
             <div class="pb why">{failure || 'no error message was recorded'}</div>
             {#if op.stackTrace}
@@ -282,10 +297,16 @@
             </dd>
             <dt>Source</dt>
             <dd>{hostOf(op.originalUrl) ?? 'attachment'}</dd>
+            {#if op.originalUrl}<dt>Link</dt>
+              <dd>
+                <a class="mono break" href={op.originalUrl} target="_blank" rel="noreferrer"
+                  >{urlLabel(op.originalUrl)} <ExternalLink size={11} /></a
+                >
+              </dd>{/if}
             {#if op.sourceUrl}<dt>Output</dt>
               <dd>
                 <a class="mono break" href={op.sourceUrl} target="_blank" rel="noreferrer"
-                  >{urlLabel(op.sourceUrl)}</a
+                  >{urlLabel(op.sourceUrl)} <ExternalLink size={11} /></a
                 >
               </dd>{/if}
             <dt>Size</dt>
@@ -306,27 +327,29 @@
           <div class="ph"><span>Related</span></div>
           {#if op.originalUrl}
             <button
-              class="rel"
+              class="lrow rel"
               onclick={() => navigate('requests', { urlPattern: op.originalUrl.split('?')[0] })}
             >
-              <span>Same link, asked again</span><span class="mono dim"
+              <span class="grow">Same link, asked again</span><span class="mono dim"
                 >{related.sameUrl ?? '…'}</span
               >
             </button>
           {/if}
           <button
-            class="rel"
+            class="lrow rel"
             onclick={() => navigate('requests', { userId: op.userId, range: '24h' })}
           >
-            <span>This user, last 24h</span>
+            <span class="grow">This user, last 24h</span>
             <span class="mono dim"
               >{related.user
                 ? `${related.user.total} requests · ${related.user.failed} failed`
                 : '…'}</span
             >
           </button>
-          <button class="rel" onclick={() => navigate('logs', { op: op.id })}>
-            <span>Log lines for this request</span><span class="mono dim">{logs.length}</span>
+          <button class="lrow rel" onclick={() => navigate('logs', { op: op.id })}>
+            <span class="grow">Log lines for this request</span><span class="mono dim"
+              >{logs.length}</span
+            >
           </button>
         </section>
 
@@ -355,30 +378,10 @@
 </div>
 
 <style>
-  .request {
-    max-width: 1400px;
-    margin: 0 auto;
-  }
-  .crumbs {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    margin-bottom: 14px;
-    font-size: 13px;
-  }
-  .linkish {
-    background: none;
-    border: 0;
-    padding: 0;
-    color: var(--accent);
-    font: inherit;
-    cursor: pointer;
-    text-align: left;
-  }
   .grid {
     display: grid;
     grid-template-columns: minmax(0, 1fr) 380px;
-    gap: 16px;
+    gap: var(--gap);
     align-items: start;
   }
   .head {
@@ -389,20 +392,23 @@
   .icon {
     width: 42px;
     height: 42px;
-    border-radius: 10px;
+    border-radius: var(--radius-lg);
     display: grid;
     place-items: center;
     background: var(--surface-2);
     color: var(--text-muted);
     flex-shrink: 0;
+    border: 1px solid var(--border);
   }
   .icon.success {
     background: var(--success-bg);
     color: var(--success);
+    border-color: var(--success-border);
   }
   .icon.error {
     background: var(--danger-bg);
     color: var(--danger);
+    border-color: var(--danger-border);
   }
   h2 {
     margin: 0;
@@ -412,7 +418,7 @@
   }
   .sub {
     margin-top: 4px;
-    font-size: 12px;
+    font-size: var(--fs-sm);
     color: var(--text-muted);
   }
   .timeline {
@@ -423,13 +429,13 @@
     align-items: center;
     gap: 8px;
     margin: 10px 0 4px;
-    font-size: 13px;
+    font-size: var(--fs);
   }
   .tg b {
     font-weight: 500;
   }
   .tg .mono {
-    font-size: 12px;
+    font-size: var(--fs-sm);
   }
   .sq {
     width: 8px;
@@ -438,35 +444,45 @@
     background: var(--text-dim);
   }
   .sq.w {
-    background: var(--chart-series-1);
+    background: var(--chart-1);
   }
   .trow {
     display: grid;
-    grid-template-columns: 220px 1fr 64px;
+    grid-template-columns: 64px 220px 1fr 64px;
     align-items: center;
     gap: 12px;
-    height: 30px;
-    font-size: 13px;
+    height: 28px;
+    font-size: var(--fs);
+  }
+  .trow:hover {
+    background: var(--row-hover);
+  }
+  .off {
+    font-size: var(--fs-xs);
+    text-align: right;
+    font-variant-numeric: tabular-nums;
   }
   .lbl {
-    padding-left: 16px;
-    color: #d4d3cf;
+    color: var(--text-soft);
   }
   .lbl.err {
-    color: #f4b4b4;
+    color: var(--danger-text);
+  }
+  .lbl.warn {
+    color: var(--warning);
   }
   .track {
     position: relative;
     height: 10px;
     border-radius: 3px;
-    background: #1c1e23;
+    background: var(--surface-2);
   }
   .seg-bar {
     position: absolute;
     top: 0;
     bottom: 0;
     border-radius: 3px;
-    background: #4a5578;
+    background: var(--chart-muted);
   }
   .seg-bar.ok {
     background: var(--success);
@@ -478,24 +494,26 @@
     background: var(--warning);
   }
   .seg-bar.log {
-    background: var(--chart-series-1);
+    background: var(--chart-1);
   }
   .hint {
     margin: 0 16px 14px;
     padding: 10px 12px;
-    border-radius: 8px;
+    border-radius: var(--radius);
     background: var(--surface-2);
-    font-size: 12px;
+    font-size: var(--fs-sm);
     color: var(--text-muted);
   }
   .why {
-    font-size: 13px;
+    font-size: var(--fs);
     line-height: 1.6;
-    color: #f0c9c9;
+    color: var(--danger-text);
+    font-family: var(--mono);
+    overflow-wrap: anywhere;
   }
   .stack-trace {
     margin: 0 16px 14px;
-    font-size: 12px;
+    font-size: var(--fs-sm);
     color: var(--text-muted);
   }
   .stack-trace pre {
@@ -504,8 +522,8 @@
     max-height: 280px;
     overflow: auto;
     background: var(--bg-deep);
-    border-radius: 8px;
-    font: 11px/1.5 var(--mono);
+    border-radius: var(--radius);
+    font: var(--fs-xs) / 1.5 var(--mono);
     white-space: pre-wrap;
   }
   .dl {
@@ -514,7 +532,7 @@
     display: grid;
     grid-template-columns: 96px 1fr;
     gap: 10px 12px;
-    font-size: 13px;
+    font-size: var(--fs);
   }
   .dl dt {
     color: var(--text-dim);
@@ -523,35 +541,19 @@
     margin: 0;
     min-width: 0;
   }
+  .dl a {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+  }
   .break {
     overflow-wrap: anywhere;
   }
-  .dl a {
-    color: var(--accent);
-  }
   .rel {
-    width: 100%;
-    display: flex;
-    justify-content: space-between;
-    gap: 12px;
-    padding: 11px 16px;
-    border: 0;
-    border-top: 1px solid var(--line);
-    background: none;
-    color: var(--text);
-    font: inherit;
-    font-size: 13px;
-    text-align: left;
     cursor: pointer;
   }
-  .rel:first-of-type {
-    border-top: 0;
-  }
-  .rel:hover {
-    background: #191a1f;
-  }
   .rel .mono {
-    font-size: 12px;
+    font-size: var(--fs-sm);
   }
   .actions-panel {
     display: flex;
@@ -567,9 +569,6 @@
   .banform .field {
     flex: 1;
   }
-  .small {
-    font-size: 12px;
-  }
   @media (max-width: 1100px) {
     .grid {
       grid-template-columns: 1fr;
@@ -579,7 +578,8 @@
     .trow {
       grid-template-columns: 1fr 56px;
     }
-    .trow .track {
+    .trow .track,
+    .trow .off {
       display: none;
     }
   }

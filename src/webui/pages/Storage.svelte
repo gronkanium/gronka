@@ -2,6 +2,7 @@
   import { navigate } from '../utils/router.js';
   import { useHeaderActions } from '../stores/header.js';
   import { formatBytes, formatRelativeTime, shortId } from '../utils/format.js';
+  import DataTable from '../components/DataTable.svelte';
 
   let data = $state(null);
   let local = $state(null);
@@ -35,10 +36,10 @@
     const { h1, h6, h24 } = r2.expiring;
     const of = limit || r2.bytes;
     return [
-      { label: 'gone within 1h', bytes: h1, color: 'var(--success)' },
-      { label: 'within 6h', bytes: h6 - h1, color: 'var(--chart-series-1)' },
-      { label: 'within 24h', bytes: h24 - h6, color: 'var(--info)' },
-      { label: 'later', bytes: r2.bytes - h24, color: 'var(--text-dim)' },
+      { label: 'gone within 1h', bytes: h1, color: 'var(--chart-2)' },
+      { label: 'within 6h', bytes: h6 - h1, color: 'var(--chart-1)' },
+      { label: 'within 24h', bytes: h24 - h6, color: 'var(--chart-5)' },
+      { label: 'later', bytes: r2.bytes - h24, color: 'var(--chart-muted)' },
     ].map(s => ({ ...s, width: (s.bytes / of) * 100 }));
   });
   const left = ms =>
@@ -53,49 +54,68 @@
   const diskPct = $derived(
     data?.disk ? Math.round((1 - data.disk.free / data.disk.total) * 100) : null
   );
+  const diskLevel = $derived(
+    diskPct == null ? '' : diskPct >= 90 ? 'bad' : diskPct >= 75 ? 'warn' : 'ok'
+  );
+
+  const FILE_COLUMNS = [
+    { key: 'file', label: 'file' },
+    { key: 'type', label: 'type', width: '56px', sm: false },
+    { key: 'size', label: 'size', width: '80px', align: 'right' },
+    { key: 'user', label: 'user', width: '110px', sm: false },
+    { key: 'exp', label: 'expires in', width: '84px', align: 'right' },
+  ];
 
   useHeaderActions(actions);
 </script>
 
 {#snippet actions()}
   <span class="dim small">refreshes every 30 s</span>
-  <button class="btn sm" onclick={() => navigate('settings', { section: 'storage' })}>
+  <button class="btn" onclick={() => navigate('settings', { section: 'storage' })}>
     Limits and lifetimes
   </button>
 {/snippet}
 
 {#snippet files(title, note, rows)}
-  <section class="panel tbl" aria-label={title} style="--cols: minmax(0, 1fr) 56px 80px 150px 84px">
-    <div class="ph"><span>{title}</span><span class="meta">{note}</span></div>
-    <div class="tr head">
-      <span>file</span><span>type</span><span class="num">size</span><span>user</span><span
-        class="num">expires in</span
-      >
-    </div>
-    {#each rows as f (f.key)}
-      <div class="tr">
-        <a class="mono small ellipsis" href={f.url} target="_blank" rel="noreferrer" title={f.key}
-          >{name(f.key)}</a
-        >
-        <span class="dim small">{f.type ?? '—'}</span>
-        <span class="num">{f.size ? formatBytes(f.size) : '—'}</span>
+  <DataTable
+    {title}
+    columns={FILE_COLUMNS}
+    {rows}
+    rowKey="key"
+    loading={!r2}
+    empty="nothing stored"
+    href={f => f.url}
+    label={title}
+  >
+    {#snippet header()}<span class="dim">{note}</span>{/snippet}
+    {#snippet row(f)}
+      <span class="mono small ellipsis" title={f.key}>{name(f.key)}</span>
+      <span class="dim small hide-sm">{f.type ?? '—'}</span>
+      <span class="num">{f.size ? formatBytes(f.size) : '—'}</span>
+      <span class="hide-sm">
         {#if f.userId}
-          <a class="mono small ellipsis" href="#/users/{f.userId}">{shortId(f.userId)}</a>
+          <button
+            class="linkish mono small"
+            onclick={e => {
+              e.preventDefault();
+              e.stopPropagation();
+              navigate('user-profile', { userId: f.userId });
+            }}>{shortId(f.userId)}</button
+          >
         {:else}
           <span class="dim">—</span>
         {/if}
-        <span class="num" class:soon={f.expiresAt - now < 3_600_000}>{left(f.expiresAt - now)}</span
-        >
-      </div>
-    {:else}
-      <div class="empty">{r2 ? 'nothing stored' : 'loading…'}</div>
-    {/each}
-  </section>
+      </span>
+      <span class="num" class:warn-text={f.expiresAt - now < 3_600_000}
+        >{left(f.expiresAt - now)}</span
+      >
+    {/snippet}
+  </DataTable>
 {/snippet}
 
 <div class="storage stack">
   {#if failed}
-    <div class="panel pb error-text small">Could not read storage. Retrying.</div>
+    <div class="flash error">Could not read storage. Retrying.</div>
   {/if}
 
   <section class="panel" aria-label="R2 usage">
@@ -128,11 +148,23 @@
         </div>
       </div>
       <div class="kpi">
-        <div class="k">Disk free</div>
-        <div class="v">{data?.disk ? formatBytes(data.disk.free) : '—'}</div>
-        <div class="s" class:error-text={diskPct >= 90}>
-          {data?.disk ? `of ${formatBytes(data.disk.total)}, ${diskPct}% used` : ''}
+        <div class="k">Local disk</div>
+        <div class="v">
+          {data?.disk ? formatBytes(data.disk.free) : '—'}
+          {#if diskPct != null}<span class="d {diskLevel}">{diskPct}% used</span>{/if}
         </div>
+        <div class="s">{data?.disk ? `free of ${formatBytes(data.disk.total)}` : ''}</div>
+        {#if diskPct != null}
+          <div class="diskbar bar-track">
+            <span
+              style="width:{diskPct}%; background: {diskLevel === 'bad'
+                ? 'var(--danger)'
+                : diskLevel === 'warn'
+                  ? 'var(--warning)'
+                  : 'var(--chart-muted)'}"
+            ></span>
+          </div>
+        {/if}
       </div>
     </div>
     <div class="pb usage">
@@ -159,7 +191,7 @@
   </section>
 
   {#if r2?.deletionFailures.count}
-    <div class="panel pb failures">
+    <div class="panel pb failures accent-danger">
       <span class="dot err"></span>
       <div class="grow">
         <b
@@ -209,35 +241,19 @@
 </div>
 
 <style>
-  .storage {
-    max-width: 1400px;
-    margin: 0 auto;
-  }
-  .small {
-    font-size: 12px;
-  }
-  .d.ok {
-    color: var(--success);
-  }
-  .d.warn {
-    color: var(--warning);
-  }
-  .d.bad {
-    color: var(--danger);
-  }
   .usage {
-    border-top: 1px solid #1f2126;
+    border-top: 1px solid var(--line);
   }
-  .bar-track.tall {
-    height: 10px;
-    border-radius: 5px;
+  .diskbar {
+    margin-top: 8px;
+    height: 4px;
   }
   .legend {
     margin-top: 10px;
     display: flex;
     flex-wrap: wrap;
     gap: 6px 18px;
-    font-size: 12px;
+    font-size: var(--fs-sm);
     color: var(--text-muted);
   }
   .legend span {
@@ -254,48 +270,14 @@
     font-weight: 400;
     color: var(--text);
   }
-  .right {
-    margin-left: auto;
-  }
   .failures {
     display: flex;
     align-items: center;
     gap: 12px;
-    font-size: 13px;
-    border-color: var(--danger-border);
+    font-size: var(--fs);
   }
   .failures b {
     color: var(--text-bright);
     font-weight: 500;
-  }
-  .two {
-    display: grid;
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-    gap: 16px;
-    align-items: start;
-  }
-  .tr a {
-    color: var(--text);
-    text-decoration: none;
-  }
-  .tr a:hover {
-    color: var(--accent);
-  }
-  .soon {
-    color: var(--warning);
-  }
-  @media (max-width: 1100px) {
-    .two {
-      grid-template-columns: 1fr;
-    }
-  }
-  @media (max-width: 640px) {
-    .tbl {
-      --cols: minmax(0, 1fr) 70px 70px !important;
-    }
-    .tbl .tr > :nth-child(2),
-    .tbl .tr > :nth-child(4) {
-      display: none;
-    }
   }
 </style>

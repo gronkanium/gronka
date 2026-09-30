@@ -158,7 +158,7 @@
           </div>
           {#each c.shown as s (s.id)}
             {@const on = !disabled.has(s.id)}
-            <div class="src" class:off={!on}>
+            <div class="src lrow" class:off={!on}>
               <button
                 class="toggle"
                 class:on
@@ -179,13 +179,6 @@
 </div>
 
 <style>
-  .sources {
-    max-width: 1400px;
-    margin: 0 auto;
-  }
-  .small {
-    font-size: 12px;
-  }
   .intro {
     display: flex;
     align-items: center;
@@ -196,31 +189,10 @@
     margin: 0;
     flex: 1;
     min-width: 260px;
-    font-size: 13px;
+    font-size: var(--fs);
   }
   .searchbox {
-    height: 34px;
     width: 280px;
-    padding: 0 10px;
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    background: var(--surface);
-    border: 1px solid var(--border);
-    border-radius: 8px;
-    color: var(--text-muted);
-  }
-  .searchbox:focus-within {
-    border-color: var(--border-2);
-  }
-  .searchbox input {
-    flex: 1;
-    background: none;
-    border: 0;
-    outline: 0;
-    color: var(--text-bright);
-    font: inherit;
-    font-size: 13px;
   }
   .grid {
     display: grid;
@@ -228,28 +200,8 @@
     gap: 16px;
     align-items: start;
   }
-  .linkish {
-    background: none;
-    border: 0;
-    padding: 0;
-    color: var(--accent);
-    font: inherit;
-    font-size: 12px;
-    cursor: pointer;
-  }
-  .linkish:disabled {
-    opacity: 0.5;
-  }
   .src {
-    display: flex;
-    align-items: center;
-    gap: 12px;
-    padding: 9px 16px;
-    border-top: 1px solid var(--line);
-    font-size: 13px;
-  }
-  .src:first-of-type {
-    border-top: 0;
+    padding: 8px 16px;
   }
   .src.off .grow {
     color: var(--text-dim);

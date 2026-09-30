@@ -1,5 +1,4 @@
 <script>
-  import { onMount } from 'svelte';
   import {
     Share2,
     HardDrive,
@@ -7,27 +6,19 @@
     Bell,
     Activity,
     SlidersHorizontal,
+    Globe,
     Plus,
-    Trash2,
+    X,
     Check,
   } from 'lucide-svelte';
+  import { currentRoute, navigate } from '../utils/router.js';
+  import { useHeaderActions } from '../stores/header.js';
 
-  let settings = {};
-  let loading = true;
-  let error = null;
-  let saving = {};
-  let justSaved = {};
-
-  // Structured drafts for the tier editor, keyed by setting name. Kept separate from `settings`
-  // so the user can add/edit/remove rows freely and only commit on Save.
-  let tierDrafts = {};
-
-  // Which settings live under which tab. Order here is the tab order. Any known setting not
-  // listed falls into an auto "other" tab (below) so a new server-side key never disappears.
-  const TAB_GROUPS = [
+  // Which settings live in which section; unknown server keys fall into "other" so none vanish.
+  const SECTIONS = [
     {
       id: 'delivery',
-      label: 'delivery',
+      label: 'Delivery',
       icon: Share2,
       keys: [
         'url_only_mode',
@@ -39,1052 +30,525 @@
     },
     {
       id: 'storage',
-      label: 'storage',
+      label: 'Limits and storage',
       icon: HardDrive,
       keys: ['upload_ttl_tiers', 'r2_soft_limit_gb', 'admin_uploads_expire'],
     },
     {
       id: 'access',
-      label: 'access',
+      label: 'Access and moderation',
       icon: ShieldCheck,
-      keys: ['maintenance_mode', 'moderation_enabled', 'rate_limit_cooldown', 'admin_user_ids'],
+      keys: [
+        'maintenance_mode',
+        'queue_paused',
+        'moderation_enabled',
+        'rate_limit_cooldown',
+        'admin_user_ids',
+      ],
     },
     {
       id: 'notifications',
-      label: 'notifications',
+      label: 'Notifications',
       icon: Bell,
       keys: ['ntfy_topic', 'ntfy_server'],
     },
-    // Presence has no bot_settings keys, it drives its own /api/bot/status endpoint.
-    { id: 'presence', label: 'presence', icon: Activity, keys: [], presence: true },
+    { id: 'presence', label: 'Bot presence', icon: Activity, keys: [], presence: true },
   ];
+  // Edited on their own pages, not here.
+  const ELSEWHERE = new Set(['services', 'views', 'issuestates']);
+  const LABELS = {
+    url_only_mode: 'Reply with links only',
+    twitter_delivery: 'X / Twitter delivery',
+    twitter_direct_url_fallback: 'X / Twitter link fallback',
+    max_video_size_mb: 'Max download size (MB)',
+    max_video_duration: 'Max video duration',
+    upload_ttl_tiers: 'Upload lifetime tiers',
+    r2_soft_limit_gb: 'R2 soft limit (GB)',
+    admin_uploads_expire: 'Admin uploads expire',
+    maintenance_mode: 'Maintenance mode',
+    queue_paused: 'Pause media queue',
+    moderation_enabled: 'Enforce bans',
+    rate_limit_cooldown: 'Rate limit cooldown (s)',
+    admin_user_ids: 'Admins',
+    ntfy_topic: 'ntfy topic',
+    ntfy_server: 'ntfy server',
+  };
+  const label = key => LABELS[key] ?? key.replace(/_/g, ' ');
 
-  const TAB_STORAGE_KEY = 'gronka:settings-tab';
-  let activeTab = 'delivery';
+  let settings = $state({});
+  let loading = $state(true);
+  let error = $state('');
+  let saving = $state({});
+  let saved = $state({});
+  let drafts = $state({});
+  let tierDrafts = $state({});
 
-  function loadActiveTab() {
+  const sections = $derived.by(() => {
+    const grouped = new Set(SECTIONS.flatMap(s => s.keys));
+    const other = Object.keys(settings).filter(
+      k => !grouped.has(k) && !ELSEWHERE.has(settings[k].type)
+    );
+    return [
+      ...SECTIONS,
+      ...(other.length
+        ? [{ id: 'other', label: 'Other', icon: SlidersHorizontal, keys: other }]
+        : []),
+    ];
+  });
+  const active = $derived(
+    sections.find(s => s.id === $currentRoute.params.$section) ?? sections[0]
+  );
+  const activeKeys = $derived(active.keys.filter(k => settings[k]));
+
+  const parseTiers = v =>
+    String(v || '')
+      .split(',')
+      .map(p => p.trim().split(':').map(Number))
+      .filter(([mb, h]) => Number.isFinite(mb) && Number.isFinite(h))
+      .map(([mb, hours]) => ({ mb, hours }));
+  const cleanTiers = rows =>
+    rows
+      .map(r => ({ mb: Math.floor(Number(r.mb)), hours: Math.floor(Number(r.hours)) }))
+      .filter(r => r.mb > 0 && r.hours > 0)
+      .sort((a, b) => a.mb - b.mb);
+  const serializeTiers = rows =>
+    cleanTiers(rows)
+      .map(r => `${r.mb}:${r.hours}`)
+      .join(',');
+  const tierPreview = rows => {
+    const t = cleanTiers(rows);
+    return t.length
+      ? [...t.map(r => `≤${r.mb} MB → ${r.hours}h`), `larger → ${t.at(-1).hours}h`].join('  ·  ')
+      : '';
+  };
+  const listValues = s => {
     try {
-      const stored = localStorage.getItem(TAB_STORAGE_KEY);
-      if (stored && TAB_GROUPS.some(g => g.id === stored)) {
-        activeTab = stored;
-      }
+      const v = JSON.parse(s.value);
+      return Array.isArray(v) ? v : [];
     } catch {
-      // storage unavailable, default tab stays
+      return [];
     }
-  }
+  };
 
-  function selectTab(id) {
-    activeTab = id;
-    try {
-      localStorage.setItem(TAB_STORAGE_KEY, id);
-    } catch {
-      // ignore
-    }
-  }
-
-  // Everything known to the grouped tabs; leftovers get an auto "other" tab.
-  $: groupedKeys = new Set(TAB_GROUPS.flatMap(g => g.keys));
-  $: otherKeys = Object.keys(settings).filter(k => !groupedKeys.has(k));
-  $: tabs = [
-    ...TAB_GROUPS,
-    ...(otherKeys.length
-      ? [{ id: 'other', label: 'other', icon: SlidersHorizontal, keys: otherKeys }]
-      : []),
-  ];
-  $: activeGroup = tabs.find(t => t.id === activeTab) || tabs[0];
-  $: activeKeys = (activeGroup?.keys || []).filter(k => settings[k]);
-
-  const STATUS_OPTIONS = ['online', 'idle', 'dnd', 'invisible'];
-  let presenceStatus = 'online';
-  let presenceActivity = '';
-  let presenceSaving = false;
-  let presenceError = null;
-  let presenceMessage = null;
-  let currentPresence = null;
-  let currentPresenceLoading = true;
-
-  async function loadPresence() {
-    currentPresenceLoading = true;
-    try {
-      const response = await fetch('/api/bot/status');
-      const data = await response.json().catch(() => ({}));
-      if (!response.ok) {
-        throw new Error(data.error || data.message || `HTTP error! status: ${response.status}`);
-      }
-      currentPresence = data;
-      presenceStatus = data.status || presenceStatus;
-      presenceActivity = data.activity || '';
-    } catch (err) {
-      console.error('Failed to fetch bot presence:', err);
-    } finally {
-      currentPresenceLoading = false;
-    }
-  }
-
-  async function updatePresence() {
-    presenceSaving = true;
-    presenceError = null;
-    presenceMessage = null;
-    try {
-      const response = await fetch('/api/bot/status', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          status: presenceStatus,
-          activity: presenceActivity.trim() || undefined,
-        }),
-      });
-      const data = await response.json().catch(() => ({}));
-      if (!response.ok) {
-        throw new Error(data.error || data.message || `HTTP error! status: ${response.status}`);
-      }
-      presenceMessage = data.activity
-        ? `status set to "${data.status}" with activity "${data.activity}"`
-        : `status set to "${data.status}"`;
-      await loadPresence();
-    } catch (err) {
-      console.error('Failed to update bot presence:', err);
-      presenceError = err.message || 'failed to update bot presence';
-    } finally {
-      presenceSaving = false;
-    }
-  }
-
-  async function loadSettings() {
+  async function load() {
     loading = true;
-    error = null;
     try {
-      const response = await fetch('/api/settings');
-      if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
-      }
-      const data = await response.json();
-      settings = data.settings || {};
-      // disabled_services is managed on the dedicated Sources page, not here.
-      delete settings.disabled_services;
-      syncTierDrafts();
+      const res = await fetch('/api/settings');
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      settings = (await res.json()).settings;
+      drafts = Object.fromEntries(Object.entries(settings).map(([k, s]) => [k, s.value]));
+      tierDrafts = Object.fromEntries(
+        Object.entries(settings)
+          .filter(([, s]) => s.type === 'tiers')
+          .map(([k, s]) => [k, parseTiers(s.value)])
+      );
     } catch (err) {
-      console.error('Failed to fetch settings:', err);
-      error = 'failed to load settings';
+      error = err.message || 'failed to load settings';
     } finally {
       loading = false;
     }
   }
+  load();
 
-  // ---- tier editor helpers ----------------------------------------------------------------
-
-  // Parse the stored "MB:hours,MB:hours" string into editable rows.
-  function parseTierRows(value) {
-    return String(value || '')
-      .split(',')
-      .map(p => p.trim())
-      .filter(Boolean)
-      .map(p => {
-        const [mb, hours] = p.split(':');
-        return { mb: Number(mb), hours: Number(hours) };
-      })
-      .filter(r => Number.isFinite(r.mb) && Number.isFinite(r.hours));
-  }
-
-  // Rows -> canonical "MB:hours" string (ascending by MB, dropping incomplete rows).
-  function serializeTiers(rows) {
-    return rows
-      .map(r => ({ mb: Math.floor(Number(r.mb)), hours: Math.floor(Number(r.hours)) }))
-      .filter(r => r.mb > 0 && r.hours > 0)
-      .sort((a, b) => a.mb - b.mb)
-      .map(r => `${r.mb}:${r.hours}`)
-      .join(',');
-  }
-
-  function syncTierDrafts() {
-    const drafts = {};
-    for (const [key, setting] of Object.entries(settings)) {
-      if (setting.type === 'tiers') {
-        drafts[key] = parseTierRows(setting.value);
-      }
-    }
-    tierDrafts = drafts;
-  }
-
-  function updateTierRow(key, idx, field, val) {
-    const rows = tierDrafts[key].map((r, i) => (i === idx ? { ...r, [field]: val } : r));
-    tierDrafts = { ...tierDrafts, [key]: rows };
-  }
-
-  function addTierRow(key) {
-    tierDrafts = { ...tierDrafts, [key]: [...(tierDrafts[key] || []), { mb: '', hours: '' }] };
-  }
-
-  function removeTierRow(key, idx) {
-    tierDrafts = { ...tierDrafts, [key]: tierDrafts[key].filter((_, i) => i !== idx) };
-  }
-
-  function tierDirty(key) {
-    return serializeTiers(tierDrafts[key] || []) !== settings[key].value;
-  }
-
-  // Human-readable summary of the draft, matching how the bot applies the curve.
-  function tierPreview(rows) {
-    const sorted = rows
-      .map(r => ({ mb: Math.floor(Number(r.mb)), hours: Math.floor(Number(r.hours)) }))
-      .filter(r => r.mb > 0 && r.hours > 0)
-      .sort((a, b) => a.mb - b.mb);
-    if (sorted.length === 0) {
-      return '';
-    }
-    const parts = sorted.map(r => `≤${r.mb} MB → ${r.hours}h`);
-    const last = sorted[sorted.length - 1];
-    parts.push(`larger → ${last.hours}h`);
-    return parts.join('  ·  ');
-  }
-
-  async function saveTiers(key) {
-    const str = serializeTiers(tierDrafts[key] || []);
-    if (!str) {
-      error = 'add at least one tier with a size and a duration';
-      return;
-    }
-    await saveSetting(key, str);
-    // Re-sync from the normalized value the server stored (canonical order).
-    tierDrafts = { ...tierDrafts, [key]: parseTierRows(settings[key].value) };
-  }
-
-  // ---- generic setting save ---------------------------------------------------------------
-
-  function flashSaved(key) {
-    justSaved = { ...justSaved, [key]: true };
-    setTimeout(() => {
-      justSaved = { ...justSaved, [key]: false };
-    }, 1600);
-  }
-
-  async function toggleSetting(key) {
-    const current = settings[key];
-    const newValue = current.value !== 'true';
-    await saveSetting(key, newValue);
-  }
-
-  async function saveSetting(key, value) {
-    const current = settings[key];
-    saving = { ...saving, [key]: true };
-    error = null;
+  async function save(key, value) {
+    saving[key] = true;
+    error = '';
     try {
-      const response = await fetch(`/api/settings/${key}`, {
+      const res = await fetch(`/api/settings/${key}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ value }),
       });
-      if (!response.ok) {
-        const data = await response.json().catch(() => ({}));
-        throw new Error(data.message || `HTTP error! status: ${response.status}`);
-      }
-      const data = await response.json();
-      settings = {
-        ...settings,
-        [key]: { ...current, value: data.value },
-      };
-      flashSaved(key);
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.message || `HTTP ${res.status}`);
+      settings[key].value = data.value;
+      drafts[key] = data.value;
+      if (settings[key].type === 'tiers') tierDrafts[key] = parseTiers(data.value);
+      saved[key] = true;
+      setTimeout(() => (saved[key] = false), 1600);
     } catch (err) {
-      console.error(`Failed to update setting ${key}:`, err);
-      error = err.message || `failed to update ${key.replace(/_/g, ' ')}`;
+      error = `${label(key)}: ${err.message}`;
     } finally {
-      saving = { ...saving, [key]: false };
+      saving[key] = false;
     }
   }
 
-  function handleTextSubmit(key, inputValue) {
-    saveSetting(key, inputValue);
-  }
-
-  function listValues(setting) {
-    try {
-      const parsed = JSON.parse(setting.value);
-      return Array.isArray(parsed) ? parsed : [];
-    } catch {
-      return [];
-    }
-  }
-
-  async function addListItem(key, form) {
-    const item = form.elements.value.value.trim();
-    if (!item) {
-      return;
-    }
+  function addListItem(key, e) {
+    e.preventDefault();
+    const input = e.currentTarget.elements.value;
+    const item = input.value.trim();
     const items = listValues(settings[key]);
-    if (items.includes(item) || (settings[key].envValues || []).includes(item)) {
-      form.reset();
-      return;
-    }
-    await saveSetting(key, [...items, item]);
-    form.reset();
+    if (item && !items.includes(item) && !(settings[key].envValues || []).includes(item))
+      save(key, [...items, item]);
+    input.value = '';
   }
 
-  async function removeListItem(key, item) {
-    await saveSetting(
-      key,
-      listValues(settings[key]).filter(i => i !== item)
-    );
+  // Presence lives on /api/bot/status, not in bot_settings.
+  const STATUS_OPTIONS = ['online', 'idle', 'dnd', 'invisible'];
+  let presence = $state(null);
+  let presenceStatus = $state('online');
+  let presenceActivity = $state('');
+  let presenceMsg = $state('');
+  let presenceSaving = $state(false);
+  async function loadPresence() {
+    presence = await fetch('/api/bot/status')
+      .then(r => r.json())
+      .catch(() => null);
+    if (presence?.status) presenceStatus = presence.status;
+    presenceActivity = presence?.activity ?? '';
   }
-
-  function labelFor(key) {
-    return key.replace(/_/g, ' ');
+  async function savePresence() {
+    presenceSaving = true;
+    presenceMsg = '';
+    const res = await fetch('/api/bot/status', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        status: presenceStatus,
+        activity: presenceActivity.trim() || undefined,
+      }),
+    }).catch(() => null);
+    const data = res ? await res.json().catch(() => ({})) : {};
+    presenceSaving = false;
+    presenceMsg = res?.ok ? 'updated' : data.error || data.message || 'could not update presence';
+    if (res?.ok) loadPresence();
   }
+  loadPresence();
 
-  onMount(() => {
-    loadActiveTab();
-    loadSettings();
-    loadPresence();
-  });
+  useHeaderActions(actions);
 </script>
 
-<div class="settings-page">
-  <nav class="tab-bar" aria-label="settings sections">
-    {#each tabs as tab (tab.id)}
-      {@const Icon = tab.icon}
+{#snippet actions()}
+  {#if error}<span class="error-text small">{error}</span>{/if}
+{/snippet}
+
+<div class="settings">
+  <nav class="side" aria-label="settings sections">
+    {#each sections as s (s.id)}
+      {@const Icon = s.icon}
       <button
-        class="tab"
-        class:active={activeTab === tab.id}
-        on:click={() => selectTab(tab.id)}
-        aria-current={activeTab === tab.id ? 'true' : undefined}
+        class="sec"
+        class:on={active.id === s.id}
+        onclick={() => navigate('settings', { section: s.id })}
       >
-        <Icon size={16} />
-        <span>{tab.label}</span>
+        <Icon size={15} strokeWidth={1.8} /><span>{s.label}</span>
       </button>
     {/each}
+    <button class="sec" onclick={() => navigate('sources')}
+      ><Globe size={15} strokeWidth={1.8} /><span>Download sources</span><span class="arrow">↗</span
+      ></button
+    >
   </nav>
 
-  {#if error}
-    <p class="status error">{error}</p>
-  {/if}
-
-  {#if loading}
-    <p class="status">loading settings...</p>
-  {:else if activeGroup?.presence}
-    <!-- Presence tab: drives /api/bot/status, not bot_settings -->
-    <div class="card">
-      <div class="setting-info">
-        <span class="setting-name">bot presence</span>
-        <span class="setting-description"
-          >change the bot's Discord status and activity text on the fly</span
-        >
-        {#if currentPresenceLoading}
-          <span class="current-presence">checking current status...</span>
-        {:else if currentPresence}
-          <span class="current-presence">
-            currently: <span
-              class="presence-dot"
-              class:online={currentPresence.status === 'online'}
-              class:idle={currentPresence.status === 'idle'}
-              class:dnd={currentPresence.status === 'dnd'}
-              class:invisible={currentPresence.status === 'invisible'}
-            ></span>
-            {currentPresence.status}{currentPresence.activity
-              ? `, ${currentPresence.activity}`
-              : ''}
-          </span>
-        {:else}
-          <span class="current-presence">unable to load current status</span>
-        {/if}
-      </div>
-      <form class="presence-form" on:submit|preventDefault={updatePresence}>
-        <select bind:value={presenceStatus} disabled={presenceSaving} aria-label="Bot status">
-          {#each STATUS_OPTIONS as option (option)}
-            <option value={option}>{option}</option>
-          {/each}
-        </select>
-        <input
-          type="text"
-          placeholder="activity text (optional)"
-          bind:value={presenceActivity}
-          disabled={presenceSaving}
-          aria-label="Bot activity text"
-        />
-        <button type="submit" class="btn primary" disabled={presenceSaving}>
-          {presenceSaving ? 'updating...' : 'update'}
-        </button>
-      </form>
-      {#if presenceError}
-        <p class="status error">{presenceError}</p>
-      {:else if presenceMessage}
-        <p class="status success">{presenceMessage}</p>
-      {/if}
-    </div>
-  {:else if activeKeys.length === 0}
-    <p class="status">no settings in this section</p>
-  {:else}
-    {#each activeKeys as key (key)}
-      {@const setting = settings[key]}
-      {@const stacked = setting.type === 'list' || setting.type === 'tiers'}
-      <div class="card setting-row" class:stacked>
-        <div class="setting-info">
-          <span class="setting-name">
-            {labelFor(key)}
-            {#if justSaved[key]}<span class="saved-flag"><Check size={13} /> saved</span>{/if}
-          </span>
-          <span class="setting-description">{setting.description}</span>
+  <section class="panel content" aria-label={active.label}>
+    <div class="ph"><span>{active.label}</span></div>
+    {#if loading}
+      <div class="empty">loading…</div>
+    {:else if active.presence}
+      <div class="item">
+        <div class="lbl">
+          <b>Current presence</b>
+          <p>
+            {presence
+              ? `${presence.botTag ?? 'bot'} · ${presence.status}${presence.activity ? ` · ${presence.activity}` : ''}`
+              : 'unavailable'}
+          </p>
         </div>
-
-        {#if setting.type === 'tiers'}
-          <div class="tier-editor">
-            <table class="tier-table">
-              <thead>
-                <tr>
-                  <th>up to (MB)</th>
-                  <th>keep for (hours)</th>
-                  <th aria-label="actions"></th>
-                </tr>
-              </thead>
-              <tbody>
-                {#each tierDrafts[key] || [] as row, idx}
-                  <tr>
-                    <td>
-                      <input
-                        type="number"
-                        min="1"
-                        max="999999"
-                        step="1"
-                        value={row.mb}
-                        disabled={saving[key]}
-                        on:input={e => updateTierRow(key, idx, 'mb', e.target.value)}
-                        aria-label="size ceiling in megabytes"
-                      />
-                    </td>
-                    <td>
-                      <input
-                        type="number"
-                        min="1"
-                        max="99999"
-                        step="1"
-                        value={row.hours}
-                        disabled={saving[key]}
-                        on:input={e => updateTierRow(key, idx, 'hours', e.target.value)}
-                        aria-label="retention in hours"
-                      />
-                    </td>
-                    <td class="tier-remove">
-                      <button
-                        class="icon-btn"
-                        title="remove tier"
-                        aria-label="remove tier"
-                        disabled={saving[key]}
-                        on:click={() => removeTierRow(key, idx)}
-                      >
-                        <Trash2 size={15} />
-                      </button>
-                    </td>
-                  </tr>
-                {/each}
-              </tbody>
-            </table>
-
-            {#if tierPreview(tierDrafts[key] || [])}
-              <p class="tier-preview">{tierPreview(tierDrafts[key] || [])}</p>
-            {:else}
-              <p class="tier-preview muted">no tiers, files use the built-in default curve</p>
-            {/if}
-
-            <div class="tier-actions">
-              <button class="btn ghost" disabled={saving[key]} on:click={() => addTierRow(key)}>
-                <Plus size={15} /> add tier
-              </button>
-              <button
-                class="btn primary"
-                disabled={saving[key] || !tierDirty(key)}
-                on:click={() => saveTiers(key)}
-              >
-                {saving[key] ? 'saving...' : 'save tiers'}
-              </button>
-            </div>
-          </div>
-        {:else if setting.type === 'list'}
-          <div class="list-editor">
-            {#if (setting.envValues || []).length === 0 && listValues(setting).length === 0}
-              <p class="list-empty">no entries</p>
-            {:else}
-              <table class="list-table">
-                <tbody>
-                  {#each setting.envValues || [] as item (item)}
-                    <tr>
-                      <td class="list-value">{item}</td>
-                      <td class="list-action"><span class="badge">from env</span></td>
-                    </tr>
-                  {/each}
-                  {#each listValues(setting) as item (item)}
-                    <tr>
-                      <td class="list-value">{item}</td>
-                      <td class="list-action">
-                        <button
-                          class="icon-btn"
-                          title="remove"
-                          aria-label="remove {item}"
-                          disabled={saving[key]}
-                          on:click={() => removeListItem(key, item)}
-                        >
-                          <Trash2 size={15} />
-                        </button>
-                      </td>
-                    </tr>
-                  {/each}
-                </tbody>
-              </table>
-            {/if}
-            <form class="inline-form" on:submit|preventDefault={e => addListItem(key, e.target)}>
-              <input
-                type="text"
-                name="value"
-                placeholder="discord user id"
-                disabled={saving[key]}
-                aria-label={`Add to ${labelFor(key)}`}
-              />
-              <button type="submit" class="btn ghost" disabled={saving[key]}>
-                <Plus size={15} /> add
-              </button>
-            </form>
-          </div>
-        {:else if setting.type === 'boolean'}
-          <button
-            class="toggle"
-            class:on={setting.value === 'true'}
-            disabled={saving[key]}
-            on:click={() => toggleSetting(key)}
-            aria-label={`Toggle ${labelFor(key)}`}
-            aria-pressed={setting.value === 'true'}
-          >
-            <span class="toggle-knob"></span>
-          </button>
-        {:else if setting.type === 'select'}
-          <select
-            class="select-setting"
-            value={setting.value}
-            disabled={saving[key]}
-            on:change={e => saveSetting(key, e.target.value)}
-            aria-label={labelFor(key)}
-          >
-            {#each setting.options || [] as option (option)}
-              <option value={option}>{option.replace(/_/g, ' ')}</option>
-            {/each}
-          </select>
-        {:else if setting.type === 'number'}
-          <form
-            class="inline-form"
-            on:submit|preventDefault={e =>
-              handleTextSubmit(key, Number(e.target.elements.value.value))}
-          >
-            <input
-              type="number"
-              name="value"
-              value={setting.value}
-              min={setting.min}
-              max={setting.max}
-              step="1"
-              disabled={saving[key]}
-              aria-label={labelFor(key)}
-            />
-            <button type="submit" class="btn ghost" disabled={saving[key]}>save</button>
-          </form>
-        {:else if setting.type === 'string'}
-          <form
-            class="inline-form"
-            on:submit|preventDefault={e => handleTextSubmit(key, e.target.elements.value.value)}
-          >
-            <input
-              type="text"
-              name="value"
-              value={setting.value}
-              disabled={saving[key]}
-              aria-label={labelFor(key)}
-            />
-            <button type="submit" class="btn ghost" disabled={saving[key]}>save</button>
-          </form>
-        {/if}
       </div>
-    {/each}
-  {/if}
+      <div class="item">
+        <div class="lbl">
+          <b>Status</b>
+          <p>What Discord shows next to the bot.</p>
+        </div>
+        <div class="seg">
+          {#each STATUS_OPTIONS as o (o)}<button
+              class:on={presenceStatus === o}
+              onclick={() => (presenceStatus = o)}>{o}</button
+            >{/each}
+        </div>
+      </div>
+      <div class="item">
+        <div class="lbl">
+          <b>Custom status</b>
+          <p>Leave empty for none. Survives restarts.</p>
+        </div>
+        <div class="row ctl">
+          <input
+            class="field wide"
+            bind:value={presenceActivity}
+            maxlength="128"
+            placeholder="e.g. web.gronka.dev"
+          />
+          <button class="btn primary" disabled={presenceSaving} onclick={savePresence}>Apply</button
+          >
+          {#if presenceMsg}<span class="dim small">{presenceMsg}</span>{/if}
+        </div>
+      </div>
+    {:else}
+      {#each activeKeys as key (key)}
+        {@const s = settings[key]}
+        <div class="item">
+          <div class="lbl">
+            <b>{label(key)}</b>
+            <p>{s.description}</p>
+          </div>
+          <div class="ctl">
+            {#if s.type === 'boolean'}
+              <button
+                class="toggle"
+                class:on={s.value === 'true'}
+                role="switch"
+                aria-checked={s.value === 'true'}
+                aria-label={label(key)}
+                disabled={saving[key]}
+                onclick={() => save(key, s.value !== 'true')}
+              ></button>
+            {:else if s.type === 'select'}
+              <select
+                class="field"
+                value={s.value}
+                disabled={saving[key]}
+                onchange={e => save(key, e.currentTarget.value)}
+              >
+                {#each s.options as o (o)}<option value={o}>{o.replace(/_/g, ' ')}</option>{/each}
+              </select>
+            {:else if s.type === 'number' || s.type === 'string'}
+              <form
+                class="row"
+                onsubmit={e => {
+                  e.preventDefault();
+                  save(key, drafts[key]);
+                }}
+              >
+                <input
+                  class="field"
+                  class:wide={s.type === 'string'}
+                  type={s.type === 'number' ? 'number' : 'text'}
+                  min={s.min}
+                  max={s.max}
+                  bind:value={drafts[key]}
+                />
+                {#if String(drafts[key]) !== String(s.value)}<button
+                    class="btn primary"
+                    disabled={saving[key]}>Save</button
+                  >{/if}
+              </form>
+              {#if s.min !== undefined}<span class="dim small">{s.min}–{s.max}</span>{/if}
+            {:else if s.type === 'tiers'}
+              <div class="tiers">
+                {#each tierDrafts[key] ?? [] as row, i (i)}
+                  <div class="row">
+                    <span class="dim small">up to</span>
+                    <input class="field num-in" type="number" min="1" bind:value={row.mb} /><span
+                      class="dim small">MB for</span
+                    >
+                    <input class="field num-in" type="number" min="1" bind:value={row.hours} /><span
+                      class="dim small">hours</span
+                    >
+                    <button
+                      class="iconbtn"
+                      aria-label="remove tier"
+                      onclick={() => (tierDrafts[key] = tierDrafts[key].filter((_, j) => j !== i))}
+                      ><X size={13} /></button
+                    >
+                  </div>
+                {/each}
+                <div class="row">
+                  <button
+                    class="btn sm"
+                    onclick={() =>
+                      (tierDrafts[key] = [...(tierDrafts[key] ?? []), { mb: '', hours: '' }])}
+                    ><Plus size={12} />Add tier</button
+                  >
+                  {#if serializeTiers(tierDrafts[key] ?? []) !== s.value}
+                    <button
+                      class="btn primary sm"
+                      disabled={saving[key] || !serializeTiers(tierDrafts[key] ?? [])}
+                      onclick={() => save(key, serializeTiers(tierDrafts[key]))}>Save</button
+                    >
+                  {/if}
+                </div>
+                <div class="dim small mono">{tierPreview(tierDrafts[key] ?? [])}</div>
+              </div>
+            {:else if s.type === 'list'}
+              <div class="list">
+                <div class="chips">
+                  {#each s.envValues ?? [] as v (v)}<span
+                      class="chip mono"
+                      title="set in .env, read-only">{v} · env</span
+                    >{/each}
+                  {#each listValues(s) as v (v)}
+                    <span class="chip mono"
+                      >{v}<button
+                        class="x"
+                        aria-label={`remove ${v}`}
+                        disabled={saving[key]}
+                        onclick={() =>
+                          save(
+                            key,
+                            listValues(s).filter(i => i !== v)
+                          )}><X size={11} /></button
+                      ></span
+                    >
+                  {/each}
+                </div>
+                <form class="row" onsubmit={e => addListItem(key, e)}>
+                  <input class="field mono" name="value" placeholder="add an id" />
+                  <button class="btn sm" disabled={saving[key]}><Plus size={12} />Add</button>
+                </form>
+              </div>
+            {:else}
+              <span class="mono dim small">{s.value}</span>
+            {/if}
+            {#if saved[key]}<span class="saved"><Check size={13} />saved</span>{/if}
+          </div>
+        </div>
+      {/each}
+    {/if}
+  </section>
 </div>
 
 <style>
-  .settings-page {
+  .settings {
+    max-width: 1200px;
+    margin: 0 auto;
+    display: grid;
+    grid-template-columns: 220px minmax(0, 1fr);
+    gap: 16px;
+    align-items: start;
+  }
+  .small {
+    font-size: 12px;
+  }
+  .side {
     display: flex;
     flex-direction: column;
-    gap: 1rem;
-    max-width: 760px;
+    gap: 2px;
+    position: sticky;
+    top: 76px;
   }
-
-  .status {
-    color: var(--text-muted);
-    margin: 0;
-  }
-
-  .status.error {
-    color: var(--danger);
-  }
-
-  .status.success {
-    color: var(--success);
-  }
-
-  /* ---- tab bar ---- */
-  .tab-bar {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 0.25rem;
-    border-bottom: 1px solid var(--border);
-    margin-bottom: 0.25rem;
-  }
-
-  .tab {
+  .sec {
+    height: 34px;
+    padding: 0 10px;
     display: flex;
     align-items: center;
-    gap: 0.45rem;
+    gap: 10px;
+    border: 0;
+    border-radius: 7px;
     background: none;
-    border: none;
-    border-bottom: 2px solid transparent;
-    color: var(--text-muted);
-    padding: 0.55rem 0.85rem;
-    margin-bottom: -1px;
-    font-size: 0.9rem;
-    cursor: pointer;
-    transition:
-      color 0.15s,
-      border-color 0.15s;
-  }
-
-  .tab:hover {
-    color: var(--text-bright);
-  }
-
-  .tab.active {
-    color: var(--text-bright);
-    border-bottom-color: var(--success);
-  }
-
-  /* ---- cards ---- */
-  .card {
-    background-color: var(--bg-deep);
-    border: 1px solid var(--border);
-    border-radius: var(--radius-lg);
-    padding: 1rem 1.25rem;
-  }
-
-  .setting-row {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: 1rem;
-  }
-
-  .setting-row.stacked {
-    flex-direction: column;
-    align-items: stretch;
-  }
-
-  .setting-info {
-    display: flex;
-    flex-direction: column;
-    gap: 0.25rem;
-    min-width: 0;
-  }
-
-  .setting-name {
-    display: flex;
-    align-items: center;
-    gap: 0.5rem;
-    color: var(--text-bright);
-    font-size: 1rem;
-  }
-
-  .setting-description {
-    color: var(--text-muted);
-    font-size: 0.85rem;
-  }
-
-  .saved-flag {
-    display: inline-flex;
-    align-items: center;
-    gap: 0.2rem;
-    color: var(--success);
-    font-size: 0.75rem;
-  }
-
-  /* ---- presence ---- */
-  .current-presence {
-    display: flex;
-    align-items: center;
-    gap: 0.4rem;
-    color: var(--text-muted);
-    font-size: 0.85rem;
-    margin-top: 0.25rem;
-  }
-
-  .presence-dot {
-    width: 8px;
-    height: 8px;
-    border-radius: 50%;
-    background-color: var(--text-muted);
-    flex-shrink: 0;
-  }
-
-  .presence-dot.online {
-    background-color: var(--success);
-  }
-
-  .presence-dot.idle {
-    background-color: #f0b232;
-  }
-
-  .presence-dot.dnd {
-    background-color: var(--danger);
-  }
-
-  .presence-dot.invisible {
-    background-color: var(--text-muted);
-  }
-
-  .presence-form {
-    display: flex;
-    gap: 0.5rem;
-    flex-wrap: wrap;
-    margin-top: 0.75rem;
-  }
-
-  .presence-form select,
-  .presence-form input {
-    background-color: var(--surface-2);
-    border: 1px solid var(--border);
-    border-radius: var(--radius);
-    color: var(--text-bright);
-    padding: 0.4rem 0.6rem;
-    font-size: 0.9rem;
-  }
-
-  .presence-form input {
-    flex: 1;
-    min-width: 200px;
-  }
-
-  .presence-form select:disabled,
-  .presence-form input:disabled {
-    opacity: 0.6;
-    cursor: wait;
-  }
-
-  /* ---- toggle ---- */
-  .toggle {
-    position: relative;
-    width: 48px;
-    height: 26px;
-    flex-shrink: 0;
-    border-radius: 13px;
-    border: 1px solid var(--border);
-    background-color: var(--surface-2);
-    cursor: pointer;
-    padding: 0;
-    transition:
-      background-color 0.2s,
-      border-color 0.2s;
-  }
-
-  .toggle.on {
-    background-color: var(--success);
-    border-color: var(--success);
-  }
-
-  .toggle:disabled {
-    opacity: 0.6;
-    cursor: wait;
-  }
-
-  .toggle-knob {
-    position: absolute;
-    top: 2px;
-    left: 2px;
-    width: 20px;
-    height: 20px;
-    border-radius: 50%;
-    background-color: var(--text);
-    transition: transform 0.2s;
-  }
-
-  .toggle.on .toggle-knob {
-    transform: translateX(22px);
-    background-color: var(--bg-deep);
-  }
-
-  /* ---- select ---- */
-  .select-setting {
-    background-color: var(--surface-2);
-    border: 1px solid var(--border);
-    border-radius: var(--radius);
-    color: var(--text-bright);
-    padding: 0.4rem 0.6rem;
-    font-size: 0.9rem;
-    flex-shrink: 0;
-  }
-
-  .select-setting:disabled {
-    opacity: 0.6;
-    cursor: wait;
-  }
-
-  /* ---- inline (number/string/add) forms ---- */
-  .inline-form {
-    display: flex;
-    gap: 0.5rem;
-    flex-shrink: 0;
-  }
-
-  .inline-form input {
-    background-color: var(--surface-2);
-    border: 1px solid var(--border);
-    border-radius: var(--radius);
-    color: var(--text-bright);
-    padding: 0.4rem 0.6rem;
-    font-size: 0.9rem;
-    width: 200px;
-  }
-
-  .inline-form input:disabled {
-    opacity: 0.6;
-    cursor: wait;
-  }
-
-  /* ---- buttons ---- */
-  .btn {
-    display: inline-flex;
-    align-items: center;
-    gap: 0.35rem;
-    padding: 0.4rem 0.8rem;
-    font-size: 0.85rem;
-    background-color: var(--surface-3);
-    color: var(--text-bright);
-    border: 1px solid var(--border-2);
-    border-radius: var(--radius);
-    cursor: pointer;
-    white-space: nowrap;
-  }
-
-  .btn:hover:not(:disabled) {
-    background-color: var(--border-2);
-  }
-
-  .btn:disabled {
-    opacity: 0.5;
-    cursor: not-allowed;
-  }
-
-  .btn.ghost {
-    background-color: var(--surface-2);
-  }
-
-  .btn.primary {
-    background-color: var(--surface-3);
-  }
-
-  .icon-btn {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    padding: 0.3rem;
-    background-color: var(--surface-2);
-    color: var(--text-muted);
-    border: 1px solid var(--border-2);
-    border-radius: var(--radius);
-    cursor: pointer;
-    transition:
-      color 0.15s,
-      background-color 0.15s;
-  }
-
-  .icon-btn:hover:not(:disabled) {
-    color: var(--danger);
-    background-color: var(--surface-3);
-  }
-
-  .icon-btn:disabled {
-    opacity: 0.5;
-    cursor: not-allowed;
-  }
-
-  /* ---- list editor ---- */
-  .list-editor {
-    display: flex;
-    flex-direction: column;
-    gap: 0.75rem;
-    margin-top: 0.75rem;
-  }
-
-  .list-empty {
-    color: var(--text-muted);
-    font-size: 0.85rem;
-    margin: 0;
-  }
-
-  .list-table {
-    width: 100%;
-    border-collapse: collapse;
-  }
-
-  .list-table td {
-    border-top: 1px solid var(--border);
-    padding: 0.4rem 0.25rem;
-    font-size: 0.9rem;
-  }
-
-  .list-value {
-    color: var(--text-bright);
-    font-family: monospace;
-  }
-
-  .list-action {
-    text-align: right;
-    width: 1%;
-    white-space: nowrap;
-  }
-
-  .badge {
-    display: inline-block;
-    padding: 0.1rem 0.45rem;
-    font-size: 0.72rem;
-    color: var(--text-muted);
-    background-color: var(--surface-2);
-    border: 1px solid var(--border);
-    border-radius: var(--radius);
-  }
-
-  /* ---- tier editor ---- */
-  .tier-editor {
-    display: flex;
-    flex-direction: column;
-    gap: 0.75rem;
-    margin-top: 0.75rem;
-  }
-
-  .tier-table {
-    width: 100%;
-    border-collapse: collapse;
-  }
-
-  .tier-table th {
+    color: #a9abb1;
+    font: inherit;
+    font-size: 13px;
     text-align: left;
-    font-weight: 400;
-    font-size: 0.78rem;
-    color: var(--text-dim);
-    padding: 0 0.25rem 0.35rem;
+    cursor: pointer;
   }
-
-  .tier-table th:last-child {
-    width: 1%;
-  }
-
-  .tier-table td {
-    padding: 0.25rem 0.25rem;
-  }
-
-  .tier-table input {
-    width: 100%;
-    min-width: 0;
-    background-color: var(--surface-2);
-    border: 1px solid var(--border);
-    border-radius: var(--radius);
+  .sec:hover {
+    background: var(--surface);
     color: var(--text-bright);
-    padding: 0.4rem 0.6rem;
-    font-size: 0.9rem;
   }
-
-  .tier-table input:disabled {
-    opacity: 0.6;
-    cursor: wait;
+  .sec.on {
+    background: var(--surface-2);
+    color: var(--text-bright);
   }
-
-  .tier-remove {
-    text-align: right;
-    white-space: nowrap;
+  .arrow {
+    margin-left: auto;
+    color: var(--text-dim);
   }
-
-  .tier-preview {
-    margin: 0;
-    font-size: 0.82rem;
-    font-family: monospace;
+  .item {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(260px, 1.1fr);
+    gap: 24px;
+    padding: 18px 20px;
+    border-top: 1px solid var(--line);
+  }
+  .item:first-of-type {
+    border-top: 0;
+  }
+  .lbl b {
+    font-weight: 500;
+    font-size: 13px;
+    color: var(--text-bright);
+  }
+  .lbl p {
+    margin: 4px 0 0;
+    font-size: 12px;
+    line-height: 1.5;
     color: var(--text-muted);
-    background-color: var(--surface);
-    border: 1px solid var(--border);
-    border-radius: var(--radius);
-    padding: 0.5rem 0.65rem;
-    overflow-x: auto;
-    white-space: nowrap;
   }
-
-  .tier-preview.muted {
-    font-family: inherit;
-  }
-
-  .tier-actions {
+  .ctl {
     display: flex;
-    justify-content: space-between;
-    gap: 0.5rem;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 10px;
+    align-self: center;
   }
-
-  /* Match the shell's mobile breakpoint (sidebar collapses at 768px) so the page
-     switches to its stacked layout at the same width the chrome does. */
-  @media (max-width: 767px) {
-    .settings-page {
-      max-width: 100%;
+  .field.wide {
+    width: 260px;
+  }
+  .field[type='number'] {
+    width: 110px;
+  }
+  .num-in {
+    width: 80px !important;
+  }
+  .tiers,
+  .list {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    width: 100%;
+  }
+  .chips {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+  }
+  .chip .x {
+    display: flex;
+    padding: 0;
+    border: 0;
+    background: none;
+    color: var(--text-dim);
+    cursor: pointer;
+  }
+  .chip .x:hover {
+    color: var(--danger);
+  }
+  .iconbtn {
+    display: flex;
+    padding: 4px;
+    border: 0;
+    border-radius: 5px;
+    background: none;
+    color: var(--text-dim);
+    cursor: pointer;
+  }
+  .iconbtn:hover {
+    color: var(--danger);
+    background: var(--surface-2);
+  }
+  .saved {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    font-size: 12px;
+    color: var(--success);
+  }
+  @media (max-width: 860px) {
+    .settings {
+      grid-template-columns: 1fr;
     }
-
-    /* Controls drop below their label/description instead of squeezing to the right. */
-    .setting-row {
-      flex-direction: column;
-      align-items: stretch;
+    .side {
+      position: static;
+      flex-direction: row;
+      overflow-x: auto;
     }
-
-    .card {
-      padding: 0.85rem 0.95rem;
+    .sec span {
+      white-space: nowrap;
     }
-
-    /* Tabs keep their labels and wrap to as many rows as needed, clearer than
-       cryptic icon-only tabs on a phone. */
-    .tab {
-      padding: 0.5rem 0.7rem;
-      font-size: 0.85rem;
-      gap: 0.35rem;
-    }
-
-    .inline-form {
-      width: 100%;
-    }
-
-    .inline-form input {
-      flex: 1;
-      width: auto;
-      min-width: 0;
-    }
-
-    .select-setting {
-      width: 100%;
-    }
-
-    .presence-form input {
-      min-width: 140px;
-    }
-
-    /* Comfortable touch targets (repo baseline is 44px). */
-    .icon-btn {
-      min-width: 40px;
-      min-height: 40px;
-      padding: 0.5rem;
-    }
-
-    .btn {
-      padding: 0.55rem 0.9rem;
-    }
-
-    /* Give the two numeric fields room next to the remove button. */
-    .tier-table td {
-      padding: 0.25rem 0.15rem;
-    }
-
-    .tier-table input {
-      padding: 0.45rem 0.4rem;
+    .item {
+      grid-template-columns: 1fr;
+      gap: 10px;
     }
   }
 </style>

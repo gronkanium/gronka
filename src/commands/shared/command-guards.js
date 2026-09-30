@@ -1,10 +1,11 @@
 import { MessageFlags } from 'discord.js';
-import { createLogger } from '../../utils/logger.js';
+import { createLogger, withLogContext, sourceOf } from '../../utils/logger.js';
 import { botConfig } from '../../utils/config.js';
 import { checkRateLimit } from '../../utils/rate-limit.js';
 import { createFailedOperation } from '../../utils/operations-tracker.js';
 import { safeInteractionReply, safeInteractionEditReply } from '../../utils/interaction-helpers.js';
 import { notifyCommandFailure } from '../../utils/ntfy-notifier.js';
+import { jobContext } from '../../jobs/context.js';
 import { parseTimestamp } from '../../utils/validation.js';
 
 const logger = createLogger('command-guards');
@@ -112,10 +113,26 @@ export function replyError(interaction, content) {
     : safeInteractionReply(interaction, { content, flags: MessageFlags.Ephemeral });
 }
 
-// Turns a request away before any work: optional failed-operation row, reply, optional ntfy.
-export async function refuse(interaction, type, { message, reason, context, notify = false }) {
+// Turns a request away before any work: optional failed-operation row, a tagged log line, the
+// reply, optional ntfy. `detail`/`cause` are what we record; `message` is what the user sees.
+export async function refuse(
+  interaction,
+  type,
+  { message, detail, cause, reason, context = {}, notify = false }
+) {
   const userId = interaction.user.id;
-  if (reason) createFailedOperation(type, userId, message, reason, context);
+  const error = detail || cause?.message || message;
+  const operationId = reason ? createFailedOperation(type, userId, error, reason, context) : null;
+  if (operationId) jobContext.getStore()?.onOperation?.(operationId);
+  const fields = { command: type, user: userId };
+  if (operationId) fields.op = operationId;
+  const source = sourceOf(context.originalUrl || context.url);
+  if (source) fields.source = source;
+  await withLogContext(fields, () =>
+    cause
+      ? logger.warn(`${type} refused: ${error}`, cause)
+      : logger.info(`${type} refused: ${error}`)
+  );
   await replyError(interaction, message);
-  if (notify) await notifyCommandFailure(type, { userId, error: message });
+  if (notify) await notifyCommandFailure(type, { userId, operationId, error });
 }

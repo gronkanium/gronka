@@ -1,845 +1,966 @@
 <script>
-  import { onMount } from 'svelte';
-  import { logs as wsLogs, connected as wsConnected } from '../stores/sse-store.js';
-  import { formatTimestamp, formatRelativeTime, timeRangeToStartTime } from '../utils/format.js';
-  import Pagination from '../components/Pagination.svelte';
+  import { untrack } from 'svelte';
+  import { currentRoute, navigate } from '../utils/router.js';
+  import { logs as liveLogs } from '../stores/sse-store.js';
+  import SaveView from '../components/SaveView.svelte';
 
-  let logs = [];
-  let total = 0;
-  let loading = true;
-  let error = null;
-
-  // Filters
-  let selectedComponent = '';
-  let selectedLevels = ['ERROR', 'WARN', 'INFO'];
-  let searchQuery = '';
-  let timeRange = '';
-
-  // Pagination
-  let limit = 50;
-  let offset = 0;
-
-  // Components list for dropdown/exclude chips
-  let components = [];
-
-  let expandedIds = new Set();
-
-  const levelDefs = [
-    { level: 'ERROR', label: 'error', cls: 'error' },
-    { level: 'WARN', label: 'warn', cls: 'warn' },
-    { level: 'INFO', label: 'info', cls: 'info' },
-    { level: 'DEBUG', label: 'debug', cls: 'debug' },
+  const FIELDS = ['level', 'component', 'source', 'command', 'worker', 'op', 'user', 'job'];
+  const FACETS = [
+    ['level', 'Level'],
+    ['component', 'Component'],
+    ['source', 'Source'],
+    ['command', 'Command'],
+    ['worker', 'Worker'],
   ];
+  const RANGES = { '15m': 0.25, '1h': 1, '6h': 6, '24h': 24, '7d': 168 };
+  const PAGE = 200;
 
-  function getLevelClass(level) {
-    return level ? level.toLowerCase() : 'unknown';
+  let rows = $state([]);
+  let total = $state(0);
+  let facets = $state({});
+  let histogram = $state(null);
+  let loading = $state(true);
+  let error = $state('');
+  let selected = $state(null);
+  let related = $state([]);
+  let draft = $state('');
+  let drag = $state(null);
+  let histEl = $state();
+
+  // The URL is the only filter state: facet clicks, the query bar and the palette all navigate.
+  const params = $derived($currentRoute.params);
+  const filters = $derived.by(() => {
+    const f = {};
+    for (const key of FIELDS) {
+      const v = params[`$${key}`];
+      if (v) f[key] = v.split(',').filter(Boolean);
+    }
+    return f;
+  });
+  const search = $derived(params.$search || '');
+  const live = $derived(params.$live === '1');
+  // An op id starts with its creation time in ms; a request never outlives Discord's 15 min token.
+  const opWindow = $derived.by(() => {
+    const at = Number(filters.op?.length === 1 && filters.op[0].split('-')[0]);
+    return at > 1e12 ? [at - 60e3, at + 20 * 60e3] : null;
+  });
+  const range = $derived(params.$range || (params.$startTime || opWindow ? '' : '24h'));
+  const startTime = $derived(
+    params.$startTime
+      ? Number(params.$startTime)
+      : range
+        ? Date.now() - RANGES[range] * 3600e3
+        : opWindow[0]
+  );
+  const endTime = $derived(
+    params.$endTime
+      ? Number(params.$endTime)
+      : !params.$startTime && !range && opWindow
+        ? opWindow[1]
+        : null
+  );
+
+  function query(extra = {}) {
+    const q = new URLSearchParams();
+    for (const [k, v] of Object.entries(filters)) q.set(k, v.join(','));
+    if (search) q.set('search', search);
+    q.set('startTime', String(startTime));
+    if (endTime) q.set('endTime', String(endTime));
+    for (const [k, v] of Object.entries(extra)) q.set(k, String(v));
+    return q;
   }
 
-  async function fetchLogs() {
+  function go(changes) {
+    const next = {};
+    for (const [k, v] of Object.entries(params)) if (k.startsWith('$')) next[k.slice(1)] = v;
+    Object.assign(next, changes);
+    for (const k of Object.keys(next)) if (next[k] === '' || next[k] == null) delete next[k];
+    navigate('logs', next);
+  }
+
+  function toggle(key, value) {
+    const cur = filters[key] || [];
+    const next = cur.includes(value) ? cur.filter(v => v !== value) : [...cur, value];
+    go({ [key]: next.join(',') });
+  }
+
+  async function load() {
     loading = true;
-    error = null;
+    error = '';
     try {
-      const params = new URLSearchParams({
-        limit: limit.toString(),
-        offset: offset.toString(),
-      });
-
-      if (selectedComponent) params.append('component', selectedComponent);
-      if (selectedLevels.length > 0) params.append('level', selectedLevels.join(','));
-      if (searchQuery) params.append('search', searchQuery);
-
-      const startTime = timeRangeToStartTime(timeRange);
-      if (startTime) params.append('startTime', startTime.toString());
-
-      const response = await fetch(`/api/logs?${params}`);
-      if (!response.ok) throw new Error('Failed to fetch logs');
-
-      const data = await response.json();
-      logs = data.logs || [];
-      total = data.total || 0;
-    } catch (err) {
-      error = err.message;
+      const [l, f, h] = await Promise.all([
+        fetch(`/api/logs?${query({ limit: PAGE })}`).then(r => r.json()),
+        fetch(`/api/logs/facets?${query()}`).then(r => r.json()),
+        fetch(`/api/logs/histogram?${query({ buckets: 60 })}`).then(r => r.json()),
+      ]);
+      rows = l.logs || [];
+      total = l.total || 0;
+      facets = f.facets || {};
+      histogram = h;
+      if (selected && !rows.some(r => r.id === selected.id)) selected = null;
+    } catch {
+      error = 'could not load logs';
     } finally {
       loading = false;
     }
   }
 
-  async function fetchComponents() {
-    try {
-      const response = await fetch('/api/logs/components');
-      if (!response.ok) throw new Error('Failed to fetch components');
-
-      const data = await response.json();
-      components = data.components || [];
-    } catch (err) {
-      console.error('Error fetching components:', err);
-    }
+  async function more() {
+    const l = await fetch(`/api/logs?${query({ limit: PAGE, offset: rows.length })}`).then(r =>
+      r.json()
+    );
+    rows = [...rows, ...(l.logs || [])];
   }
 
-  function refetch() {
-    offset = 0;
-    fetchLogs();
-  }
-
-  function handleLevelToggle(level) {
-    if (selectedLevels.includes(level)) {
-      selectedLevels = selectedLevels.filter(l => l !== level);
-    } else {
-      selectedLevels = [...selectedLevels, level];
-    }
-    refetch();
-  }
-
-  function handleComponentChange() {
-    refetch();
-  }
-
-  function handleClearFilters() {
-    selectedComponent = '';
-    selectedLevels = ['ERROR', 'WARN', 'INFO'];
-    searchQuery = '';
-    timeRange = '';
-    refetch();
-  }
-
-  function handlePage(event) {
-    offset = event.detail.offset;
-    fetchLogs();
-  }
-
-  function toggleExpanded(id) {
-    if (expandedIds.has(id)) {
-      expandedIds.delete(id);
-    } else {
-      expandedIds.add(id);
-    }
-    expandedIds = new Set(expandedIds);
-  }
-
-  function formatMetadata(metadata) {
-    if (typeof metadata !== 'string') return JSON.stringify(metadata, null, 2);
-    try {
-      return JSON.stringify(JSON.parse(metadata), null, 2);
-    } catch {
-      return metadata;
-    }
-  }
-
-  // Exports the currently visible page of logs
-  function exportPage(format) {
-    if (logs.length === 0) return;
-
-    if (format === 'json') {
-      const dataStr = JSON.stringify(logs, null, 2);
-      downloadBlob(new Blob([dataStr], { type: 'application/json' }), `logs-${Date.now()}.json`);
-    } else if (format === 'csv') {
-      const headers = ['timestamp', 'level', 'component', 'message'];
-      const csvContent = [
-        headers.join(','),
-        ...logs.map(log =>
-          headers
-            .map(h => {
-              const value = h === 'timestamp' ? new Date(log[h]).toISOString() : log[h] || '';
-              return `"${String(value).replace(/"/g, '""')}"`;
-            })
-            .join(',')
-        ),
-      ].join('\n');
-      downloadBlob(new Blob([csvContent], { type: 'text/csv' }), `logs-${Date.now()}.csv`);
-    }
-  }
-
-  function downloadBlob(blob, filename) {
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = filename;
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    URL.revokeObjectURL(url);
-  }
-
-  // Check if a log entry matches current filters (for live WS inserts)
-  function matchesFilters(logEntry) {
-    if (selectedComponent && logEntry.component !== selectedComponent) return false;
-    if (selectedLevels.length > 0 && !selectedLevels.includes(logEntry.level)) return false;
-    const startTime = timeRangeToStartTime(timeRange);
-    if (startTime && logEntry.timestamp < startTime) return false;
-    if (searchQuery) {
-      const query = searchQuery.toLowerCase();
-      const matchesSearch =
-        (logEntry.message && logEntry.message.toLowerCase().includes(query)) ||
-        (logEntry.component && logEntry.component.toLowerCase().includes(query));
-      if (!matchesSearch) return false;
-    }
-    return true;
-  }
-
-  function handleNewLog(newLog) {
-    if (!matchesFilters(newLog)) return;
-    if (offset === 0) {
-      logs = [newLog, ...logs].slice(0, limit);
-    }
-    total += 1;
-  }
-
-  onMount(() => {
-    fetchLogs();
-    fetchComponents();
-
-    // Subscribe to SSE logs (connection managed by App.svelte)
-    const unsubscribe = wsLogs.subscribe(newLogs => {
-      // The store prepends new logs; walk from the front until we hit one we know
-      for (const incoming of newLogs) {
-        const exists = logs.some(
-          log =>
-            (log.id !== undefined && log.id === incoming.id) ||
-            (log.timestamp === incoming.timestamp && log.message === incoming.message)
-        );
-        if (exists) break;
-        handleNewLog(incoming);
-      }
-    });
-
-    return () => {
-      unsubscribe();
-    };
+  $effect(() => {
+    query();
+    load();
   });
+
+  function matches(line) {
+    if (line.component === 'webui' && line.level === 'INFO') return false;
+    if (line.timestamp < startTime) return false;
+    for (const [key, values] of Object.entries(filters)) {
+      const v = key === 'level' || key === 'component' ? line[key] : line.metadata?.[key];
+      if (!values.includes(String(v))) return false;
+    }
+    return !search || line.message.toLowerCase().includes(search.toLowerCase());
+  }
+
+  // New lines arrive over SSE: every process's insertLog NOTIFYs and the webui server relays it.
+  $effect(() => {
+    if (!live || endTime) return;
+    return liveLogs.subscribe(list => untrack(() => take(list)));
+  });
+
+  function take(list) {
+    const known = new Set(rows.map(r => r.id));
+    const fresh = [];
+    for (const line of list) {
+      if (known.has(line.id)) break;
+      if (matches(line)) fresh.push(line);
+    }
+    if (fresh.length) {
+      rows = [...fresh, ...rows].slice(0, 1000);
+      total += fresh.length;
+    }
+  }
+
+  $effect(() => {
+    const op = selected?.metadata?.op;
+    related = [];
+    if (!op) return;
+    fetch(`/api/logs?op=${encodeURIComponent(op)}&orderDesc=false&limit=100`)
+      .then(r => r.json())
+      .then(l => (related = l.logs || []))
+      .catch(() => {});
+  });
+
+  function commitDraft() {
+    const text = draft.trim();
+    if (!text) return;
+    const m = text.match(/^(\w+):(.+)$/);
+    if (m && FIELDS.includes(m[1])) {
+      const value = m[1] === 'level' ? m[2].toUpperCase() : m[2];
+      toggle(m[1], value);
+    } else {
+      go({ search: text });
+    }
+    draft = '';
+  }
+
+  function onQueryKey(e) {
+    if (e.key === 'Enter') commitDraft();
+    if (e.key === 'Backspace' && !draft) {
+      if (search) return go({ search: '' });
+      const last = Object.entries(filters).at(-1);
+      if (last) toggle(last[0], last[1].at(-1));
+    }
+  }
+
+  const time = t =>
+    new Date(t).toLocaleTimeString([], { hour12: false }) + '.' + String(t % 1000).padStart(3, '0');
+  const stamp = t =>
+    new Date(t).toLocaleString([], {
+      month: 'short',
+      day: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit',
+      hour12: false,
+    });
+  const day = t => new Date(t).toLocaleDateString([], { month: 'short', day: 'numeric' });
+  const lvl = l => ({ ERROR: 'ERR', WARN: 'WRN', INFO: 'INF', DEBUG: 'DBG' })[l] || l;
+
+  const bars = $derived.by(() => {
+    if (!histogram?.buckets) return [];
+    const max = Math.max(1, ...histogram.buckets.map(b => b.ERROR + b.WARN + b.INFO + b.DEBUG));
+    return histogram.buckets.map((b, i) => ({
+      at: histogram.start + i * histogram.size,
+      err: (b.ERROR / max) * 100,
+      warn: (b.WARN / max) * 100,
+      info: ((b.INFO + b.DEBUG) / max) * 100,
+      title: `${stamp(histogram.start + i * histogram.size)} · ${b.ERROR} err · ${b.WARN} warn · ${b.INFO + b.DEBUG} info`,
+    }));
+  });
+
+  function bucketAt(e) {
+    const r = histEl.getBoundingClientRect();
+    return Math.min(
+      bars.length - 1,
+      Math.max(0, Math.floor(((e.clientX - r.left) / r.width) * bars.length))
+    );
+  }
+  function endDrag() {
+    if (!drag) return;
+    const [a, b] = [Math.min(drag.from, drag.to), Math.max(drag.from, drag.to)];
+    drag = null;
+    if (!histogram) return;
+    go({
+      range: '',
+      startTime: String(histogram.start + a * histogram.size),
+      endTime: String(histogram.start + (b + 1) * histogram.size),
+      live: '',
+    });
+  }
+
+  function exportRows() {
+    const blob = new Blob([JSON.stringify(rows, null, 2)], { type: 'application/json' });
+    const a = Object.assign(document.createElement('a'), {
+      href: URL.createObjectURL(blob),
+      download: `gronka-logs-${Date.now()}.json`,
+    });
+    a.click();
+    URL.revokeObjectURL(a.href);
+  }
+
+  const chips = $derived(Object.entries(filters).flatMap(([k, vs]) => vs.map(v => [k, v])));
+  const zoomed = $derived(!!params.$startTime);
 </script>
 
-<section class="logs">
-  <div class="toolbar">
-    <div class="search-box">
-      <svg
-        class="icon"
-        width="14"
-        height="14"
-        viewBox="0 0 24 24"
-        fill="none"
-        stroke="currentColor"
-        stroke-width="2"
-        stroke-linecap="round"
-        stroke-linejoin="round"
-        aria-hidden="true"
-      >
-        <circle cx="11" cy="11" r="7" />
-        <line x1="21" y1="21" x2="16.65" y2="16.65" />
-      </svg>
-      <input
-        type="text"
-        aria-label="search logs"
-        bind:value={searchQuery}
-        on:keydown={e => e.key === 'Enter' && refetch()}
-        placeholder="search logs…"
-      />
-      {#if searchQuery}
-        <button
-          class="clear-search"
-          title="clear search"
-          on:click={() => {
-            searchQuery = '';
-            refetch();
-          }}>×</button
-        >
-      {/if}
-    </div>
-
-    <div class="levels" role="group" aria-label="log levels">
-      {#each levelDefs as def}
-        <button
-          class="level {def.cls}"
-          class:on={selectedLevels.includes(def.level)}
-          aria-pressed={selectedLevels.includes(def.level)}
-          on:click={() => handleLevelToggle(def.level)}
-        >
-          <span class="dot"></span>{def.label}
+<div class="logs">
+  <div class="bar">
+    <div class="query" role="search">
+      {#each chips as [key, value] (key + value)}
+        <button class="chip" onclick={() => toggle(key, value)} title="remove">
+          <span class="k">{key}:</span>{value}<span class="x">×</span>
         </button>
       {/each}
+      {#if search}
+        <button class="chip text" onclick={() => go({ search: '' })} title="remove">
+          "{search}"<span class="x">×</span>
+        </button>
+      {/if}
+      <input
+        bind:value={draft}
+        onkeydown={onQueryKey}
+        placeholder={chips.length || search
+          ? ''
+          : 'search text, or field:value  (level, component, source, command, worker, op, user)'}
+        aria-label="filter logs"
+        spellcheck="false"
+      />
     </div>
-
-    <select
-      class="control"
-      aria-label="component"
-      bind:value={selectedComponent}
-      on:change={handleComponentChange}
-    >
-      <option value="">all components</option>
-      {#each components as component}
-        <option value={component}>{component}</option>
+    <div class="seg" role="group" aria-label="time range">
+      {#each Object.keys(RANGES) as r (r)}
+        <button
+          class:on={range === r && !zoomed}
+          onclick={() => go({ range: r, startTime: '', endTime: '' })}>{r}</button
+        >
       {/each}
-    </select>
+    </div>
+    <button
+      class="btn"
+      class:live
+      onclick={() => go({ live: live ? '' : '1', endTime: '' })}
+      title="stream new lines as they are written"
+    >
+      <span class="dot"></span>Live tail
+    </button>
+    <SaveView page="logs" />
+    <button class="btn" onclick={exportRows} disabled={!rows.length}>Export</button>
+  </div>
 
-    <select class="control" aria-label="time range" bind:value={timeRange} on:change={refetch}>
-      <option value="">all time</option>
-      <option value="1h">last hour</option>
-      <option value="6h">last 6 hours</option>
-      <option value="24h">last 24 hours</option>
-      <option value="7d">last 7 days</option>
-    </select>
-
-    <div class="toolbar-right">
-      <span
-        class="status"
-        class:live={$wsConnected}
-        title={$wsConnected ? 'streaming live' : 'reconnecting…'}
-      >
-        <span class="dot"></span>{$wsConnected ? 'live' : 'offline'}
+  <div class="hist-wrap">
+    <div
+      class="hist"
+      bind:this={histEl}
+      role="slider"
+      aria-label="drag to zoom the time range"
+      aria-valuenow={0}
+      tabindex="-1"
+      onmousedown={e => (drag = { from: bucketAt(e), to: bucketAt(e) })}
+      onmousemove={e => drag && (drag.to = bucketAt(e))}
+      onmouseup={endDrag}
+      onmouseleave={endDrag}
+    >
+      {#each bars as b, i (i)}
+        <div
+          class="col"
+          class:sel={drag && i >= Math.min(drag.from, drag.to) && i <= Math.max(drag.from, drag.to)}
+          title={b.title}
+        >
+          <span class="err" style="height:{b.err}%"></span>
+          <span class="warn" style="height:{b.warn}%"></span>
+          <span class="info" style="height:{b.info}%"></span>
+        </div>
+      {/each}
+    </div>
+    <div class="axis">
+      <span>{histogram ? stamp(histogram.start) : ''}</span>
+      <span class="hint">
+        {#if zoomed}
+          <button class="link" onclick={() => go({ startTime: '', endTime: '', range: '24h' })}
+            >reset zoom</button
+          >
+        {:else}drag to zoom{/if}
       </span>
-      <button class="control ghost" on:click={handleClearFilters}>clear</button>
-      <button
-        class="control ghost"
-        on:click={() => exportPage('json')}
-        title="export current page as JSON">json</button
-      >
-      <button
-        class="control ghost"
-        on:click={() => exportPage('csv')}
-        title="export current page as CSV">csv</button
-      >
+      <span>{endTime ? stamp(endTime) : 'now'}</span>
     </div>
   </div>
 
-  {#if loading && logs.length === 0}
-    <div class="state-msg loading">loading logs...</div>
-  {:else if error}
-    <div class="state-msg state-error">error: {error}</div>
-    <button on:click={fetchLogs}>retry</button>
-  {:else if logs.length === 0}
-    <div class="state-msg empty">no logs found</div>
-  {:else}
-    <div class="logs-container">
-      <table>
-        <thead>
-          <tr>
-            <th class="expand-col"></th>
-            <th class="timestamp-col">time</th>
-            <th class="level-col">level</th>
-            <th class="component-col">component</th>
-            <th class="message-col">message</th>
-          </tr>
-        </thead>
-        <tbody>
-          {#each logs as log (log.id ?? `${log.timestamp}-${log.message}`)}
-            {@const id = log.id ?? `${log.timestamp}-${log.message}`}
-            {@const expanded = expandedIds.has(id)}
-            <tr class="log-row {getLevelClass(log.level)}" class:expanded>
-              <td class="expand-cell">
-                <button class="expand-btn" on:click={() => toggleExpanded(id)}>
-                  {expanded ? '▾' : '▸'}
-                </button>
-              </td>
-              <td class="timestamp-cell" title={formatTimestamp(log.timestamp)}>
-                {formatRelativeTime(log.timestamp)}
-              </td>
-              <td class="level-cell">
-                <span class="level-badge {getLevelClass(log.level)}">
-                  {log.level}
-                </span>
-              </td>
-              <td class="component-cell">{log.component}</td>
-              <td class="message-cell">{log.message}</td>
-            </tr>
-            {#if expanded}
-              <tr class="detail-row {getLevelClass(log.level)}">
-                <td></td>
-                <td colspan="4">
-                  <div class="detail-content">
-                    <div class="detail-field">
-                      <span class="detail-label">timestamp</span>
-                      <span class="detail-value">{formatTimestamp(log.timestamp)}</span>
-                    </div>
-                    <div class="detail-field">
-                      <span class="detail-label">message</span>
-                      <pre class="detail-message">{log.message}</pre>
-                    </div>
-                    {#if log.metadata}
-                      <div class="detail-field">
-                        <span class="detail-label">metadata</span>
-                        <pre class="detail-message">{formatMetadata(log.metadata)}</pre>
-                      </div>
-                    {/if}
-                  </div>
-                </td>
-              </tr>
-            {/if}
+  <div class="body">
+    <aside class="facets" aria-label="filters">
+      {#each FACETS as [key, label] (key)}
+        {#if facets[key]?.length}
+          <div class="fh">{label}</div>
+          {#each facets[key] as f (f.value)}
+            {@const on = filters[key]?.includes(f.value)}
+            <button class="fv" class:on onclick={() => toggle(key, f.value)}>
+              <span class="box lvl-{key === 'level' ? f.value.toLowerCase() : ''}" class:on></span>
+              <span class="fname">{key === 'level' ? f.value.toLowerCase() : f.value}</span>
+              <span class="fcount">{f.count.toLocaleString()}</span>
+            </button>
           {/each}
-        </tbody>
-      </table>
-    </div>
+        {/if}
+      {/each}
+      {#if !facets.source?.length}
+        <p class="note">
+          Source, command and worker filters fill in as new lines are written with request context.
+        </p>
+      {/if}
+    </aside>
 
-    <Pagination {offset} {limit} {total} on:page={handlePage} />
-  {/if}
-</section>
+    <section class="list" aria-label="log lines">
+      <div class="lh">
+        <span>time</span><span>lvl</span><span>component</span>
+        <span
+          >message · {rows.length.toLocaleString()} of {total.toLocaleString()}{loading
+            ? ' · loading'
+            : ''}</span
+        >
+      </div>
+      <div class="scroll">
+        {#if error}
+          <div class="empty">{error} <button class="link" onclick={load}>retry</button></div>
+        {:else if !rows.length && !loading}
+          <div class="empty">no lines match</div>
+        {/if}
+        {#each rows as r (r.id)}
+          <button
+            class="row lvl-{r.level.toLowerCase()}"
+            class:sel={selected?.id === r.id}
+            onclick={() => (selected = selected?.id === r.id ? null : r)}
+          >
+            <span class="t">{time(r.timestamp)}</span>
+            <span class="l">{lvl(r.level)}</span>
+            <span class="c">{r.component}</span>
+            <span class="m">{r.message}</span>
+          </button>
+        {/each}
+        {#if rows.length < total}
+          <button class="more" onclick={more}
+            >load {Math.min(PAGE, total - rows.length)} more</button
+          >
+        {/if}
+      </div>
+    </section>
+
+    {#if selected}
+      <aside class="detail" aria-label="selected line">
+        <div class="dh">
+          <span class="badge lvl-{selected.level.toLowerCase()}">{lvl(selected.level)}</span>
+          <b>{selected.component}</b>
+          <span class="t">{day(selected.timestamp)} {time(selected.timestamp)}</span>
+          <button class="x" onclick={() => (selected = null)} aria-label="close">×</button>
+        </div>
+        <pre class="msg">{selected.message}</pre>
+        {#if selected.metadata && typeof selected.metadata === 'object'}
+          <div class="sh">Fields</div>
+          <div class="fields">
+            {#each Object.entries(selected.metadata) as [k, v] (k)}
+              <span class="fk">{k}</span>
+              {#if FIELDS.includes(k)}
+                <button class="fvv" onclick={() => toggle(k, String(v))} title="filter by this"
+                  >{v}</button
+                >
+              {:else}<span class="fvv">{v}</span>{/if}
+            {/each}
+          </div>
+        {/if}
+        {#if related.length}
+          <div class="sh">Same request · {related.length}</div>
+          <div class="related">
+            {#each related as r (r.id)}
+              <button class="rr" class:cur={r.id === selected.id} onclick={() => (selected = r)}>
+                <span class="t">{time(r.timestamp)}</span>
+                <span class="dot lvl-{r.level.toLowerCase()}"></span>
+                <span class="m">{r.message}</span>
+              </button>
+            {/each}
+          </div>
+        {/if}
+        <div class="actions">
+          {#if selected.metadata?.op}
+            <button class="btn" onclick={() => navigate('logs', { op: selected.metadata.op })}
+              >Only this request</button
+            >
+          {/if}
+          <button
+            class="btn"
+            onclick={() =>
+              navigate('logs', {
+                startTime: String(selected.timestamp - 30000),
+                endTime: String(selected.timestamp + 30000),
+              })}>Lines around this</button
+          >
+          <button class="btn" onclick={() => navigator.clipboard?.writeText(selected.message)}
+            >Copy</button
+          >
+        </div>
+      </aside>
+    {/if}
+  </div>
+</div>
 
 <style>
-  section {
-    padding: 1rem;
-    border: 1px solid var(--border);
-    background-color: var(--surface);
-    grid-column: 1 / -1;
+  .logs {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    height: calc(100vh - 56px);
+    min-width: 0;
+    font-size: 13px;
   }
-
-  /* One cohesive toolbar: every control shares height, surface, radius.
-     Color appears only as small accent dots, never as filled boxes. */
-  .toolbar {
+  .bar {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+    padding: 12px 24px;
+    border-bottom: 1px solid var(--line);
+  }
+  .query {
+    flex: 1;
+    min-height: 34px;
     display: flex;
     flex-wrap: wrap;
     align-items: center;
-    gap: 0.5rem;
-    margin-bottom: 1rem;
-    padding: 0.6rem 0.7rem;
-    background-color: var(--bg);
+    gap: 6px;
+    padding: 4px 8px;
+    background: var(--surface);
     border: 1px solid var(--border);
-    border-radius: var(--radius);
-    max-width: 100%;
+    border-radius: 8px;
   }
-
-  /* Shared control baseline */
-  .control,
-  .search-box,
-  .levels,
-  .status {
-    height: 32px;
-    box-sizing: border-box;
-    border-radius: var(--radius);
-    font-size: 0.78rem;
-  }
-
-  .control {
-    display: inline-flex;
-    align-items: center;
-    padding: 0 0.6rem;
-    background-color: var(--surface-2);
-    border: 1px solid var(--surface-3);
-    color: var(--text-bright);
-    cursor: pointer;
-    white-space: nowrap;
-    transition:
-      background-color 0.15s,
-      border-color 0.15s,
-      color 0.15s;
-  }
-
-  .control:hover {
-    background-color: var(--border);
-  }
-
-  select.control {
-    min-width: 130px;
-  }
-
-  .control.ghost {
-    background-color: transparent;
-    border-color: transparent;
-    color: var(--text-muted);
-  }
-
-  .control.ghost:hover {
-    background-color: var(--surface-2);
-    color: var(--text-bright);
-  }
-
-  /* Search, the primary control, grows to fill the row */
-  .search-box {
-    flex: 1 1 240px;
-    min-width: 180px;
-    display: flex;
-    align-items: center;
-    gap: 0.45rem;
-    padding: 0 0.55rem;
-    background-color: var(--surface-2);
-    border: 1px solid var(--surface-3);
-    transition: border-color 0.15s;
-  }
-
-  .search-box:focus-within {
+  .query:focus-within {
     border-color: var(--border-2);
   }
-
-  .search-box .icon {
+  .query input {
+    flex: 1;
+    min-width: 160px;
+    background: none;
+    border: 0;
+    outline: 0;
+    color: var(--text-bright);
+    font: 13px var(--mono);
+  }
+  .query input::placeholder {
     color: var(--text-dim);
-    flex-shrink: 0;
+  }
+  .chip {
+    height: 24px;
+    padding: 0 8px;
+    display: inline-flex;
+    align-items: center;
+    gap: 2px;
+    font: 12px var(--mono);
+    color: var(--text-bright);
+    background: var(--info-bg);
+    border: 1px solid #2b3350;
+    border-radius: 6px;
+    cursor: pointer;
+  }
+  .chip.text {
+    background: var(--surface-2);
+    border-color: var(--border-2);
+  }
+  .chip .k {
+    color: var(--accent);
+  }
+  .chip .x {
+    margin-left: 6px;
+    color: var(--text-dim);
+  }
+  .seg {
+    display: flex;
+    gap: 2px;
+    padding: 2px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+  }
+  .seg button {
+    height: 28px;
+    padding: 0 10px;
+    border: 0;
+    border-radius: 6px;
+    background: none;
+    color: var(--text-muted);
+    font: inherit;
+    font-size: 12px;
+    cursor: pointer;
+  }
+  .seg button.on {
+    background: var(--surface-3);
+    color: var(--text-bright);
+  }
+  .btn {
+    height: 32px;
+    padding: 0 12px;
+    display: inline-flex;
+    align-items: center;
+    gap: 7px;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    background: var(--surface);
+    color: var(--text);
+    font: inherit;
+    font-size: 12px;
+    cursor: pointer;
+    white-space: nowrap;
+  }
+  .btn:hover:not(:disabled) {
+    border-color: var(--border-2);
+  }
+  .btn:disabled {
+    opacity: 0.5;
+  }
+  .btn .dot {
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+    background: var(--text-dim);
+  }
+  .btn.live {
+    border-color: #1f5a41;
+    color: var(--text-bright);
+  }
+  .btn.live .dot {
+    background: var(--success);
+    animation: pulse 1.6s ease-in-out infinite;
+  }
+  @keyframes pulse {
+    50% {
+      opacity: 0.35;
+    }
+  }
+  .link {
+    background: none;
+    border: 0;
+    color: var(--accent);
+    font: inherit;
+    cursor: pointer;
+    padding: 0;
   }
 
-  .search-box input {
+  .hist-wrap {
+    padding: 10px 24px 6px;
+    border-bottom: 1px solid var(--line);
+  }
+  .hist {
+    height: 64px;
+    display: flex;
+    align-items: flex-end;
+    gap: 2px;
+    cursor: crosshair;
+    user-select: none;
+  }
+  .col {
+    flex: 1;
+    height: 100%;
+    display: flex;
+    flex-direction: column-reverse;
+    border-radius: 2px;
+  }
+  .col.sel {
+    background: rgba(143, 167, 245, 0.14);
+  }
+  .col span {
+    display: block;
+    min-height: 0;
+  }
+  .col .info {
+    background: #33405f;
+  }
+  .col .warn {
+    background: var(--warning);
+  }
+  .col .err {
+    background: var(--danger);
+  }
+  .col span:last-child {
+    border-radius: 2px 2px 0 0;
+  }
+  .axis {
+    display: flex;
+    justify-content: space-between;
+    padding-top: 4px;
+    font: 11px var(--mono);
+    color: var(--text-dim);
+  }
+
+  .body {
+    flex: 1;
+    min-height: 0;
+    display: flex;
+  }
+  .facets {
+    width: 236px;
+    flex-shrink: 0;
+    overflow-y: auto;
+    padding: 8px 10px 16px;
+    border-right: 1px solid var(--line);
+  }
+  .fh {
+    padding: 12px 8px 4px;
+    font-size: 11px;
+    font-weight: 500;
+    color: var(--text-dim);
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+  }
+  .fv {
+    width: 100%;
+    height: 28px;
+    padding: 0 8px;
+    display: flex;
+    align-items: center;
+    gap: 9px;
+    border: 0;
+    border-radius: 6px;
+    background: none;
+    color: var(--text);
+    font: inherit;
+    font-size: 13px;
+    text-align: left;
+    cursor: pointer;
+  }
+  .fv:hover,
+  .fv.on {
+    background: var(--surface-2);
+  }
+  .box {
+    width: 11px;
+    height: 11px;
+    border-radius: 3px;
+    border: 1.5px solid var(--border-2);
+    flex-shrink: 0;
+  }
+  .box.on {
+    background: var(--accent);
+    border-color: var(--accent);
+  }
+  .box.lvl-error {
+    border-color: var(--danger);
+  }
+  .box.lvl-warn {
+    border-color: var(--warning);
+  }
+  .box.lvl-error.on {
+    background: var(--danger);
+  }
+  .box.lvl-warn.on {
+    background: var(--warning);
+  }
+  .fname {
     flex: 1;
     min-width: 0;
-    background: none;
-    border: none;
-    outline: none;
-    color: var(--text-bright);
-    font-size: 0.8rem;
-  }
-
-  .search-box input::placeholder {
-    color: var(--text-dim);
-  }
-
-  .clear-search {
-    background: none;
-    border: none;
-    color: var(--text-dim);
-    cursor: pointer;
-    font-size: 1.1rem;
-    line-height: 1;
-    padding: 0 0.1rem;
-  }
-
-  .clear-search:hover {
-    color: var(--text-bright);
-  }
-
-  /* Level toggles, a connected segmented control, no loud color blocks */
-  .levels {
-    display: inline-flex;
-    border: 1px solid var(--surface-3);
-    overflow: hidden;
-  }
-
-  .level {
-    display: inline-flex;
-    align-items: center;
-    gap: 0.35rem;
-    padding: 0 0.6rem;
-    background-color: var(--surface-2);
-    border: none;
-    border-right: 1px solid var(--surface-3);
-    color: var(--text-dim);
-    font-size: 0.75rem;
-    cursor: pointer;
-    opacity: 0.55;
-    transition:
-      opacity 0.15s,
-      background-color 0.15s,
-      color 0.15s;
-  }
-
-  .level:last-child {
-    border-right: none;
-  }
-
-  .level:hover {
-    background-color: var(--border);
-  }
-
-  .level.on {
-    opacity: 1;
-    color: var(--text-bright);
-    background-color: var(--surface-3);
-  }
-
-  .level .dot {
-    width: 7px;
-    height: 7px;
-    border-radius: 50%;
-    background-color: var(--text-dim);
-    flex-shrink: 0;
-  }
-
-  .level.on.error .dot {
-    background-color: var(--danger);
-  }
-
-  .level.on.warn .dot {
-    background-color: var(--warning);
-  }
-
-  .level.on.info .dot {
-    background-color: var(--success);
-  }
-
-  .level.on.debug .dot {
-    background-color: var(--text-muted);
-  }
-
-  /* Right cluster: live status + actions, pushed to the end */
-  .toolbar-right {
-    display: flex;
-    align-items: center;
-    gap: 0.35rem;
-    margin-left: auto;
-  }
-
-  .status {
-    display: inline-flex;
-    align-items: center;
-    gap: 0.4rem;
-    padding: 0 0.5rem;
-    color: var(--text-dim);
     white-space: nowrap;
-  }
-
-  .status .dot {
-    width: 7px;
-    height: 7px;
-    border-radius: 50%;
-    background-color: var(--text-dim);
-  }
-
-  .status.live {
-    color: var(--success);
-  }
-
-  .status.live .dot {
-    background-color: var(--success);
-    box-shadow: 0 0 6px var(--success);
-  }
-
-  .logs-container {
-    overflow-x: auto;
-    margin-bottom: 1rem;
-    max-width: 100%;
-    width: 100%;
-  }
-
-  table {
-    width: 100%;
-    border-collapse: collapse;
-    font-size: 0.85rem;
-    table-layout: auto;
-  }
-
-  thead {
-    background-color: var(--surface-2);
-    position: sticky;
-    top: 0;
-  }
-
-  th {
-    padding: 0.75rem 0.5rem;
-    text-align: left;
-    font-weight: 500;
-    color: var(--text-muted);
-    border-bottom: 1px solid var(--border);
-    font-size: 0.8rem;
-    text-transform: uppercase;
-    letter-spacing: 0.5px;
-    white-space: nowrap;
-  }
-
-  .expand-col {
-    width: 24px;
-  }
-
-  .timestamp-col {
-    width: 110px;
-  }
-
-  .level-col {
-    width: 70px;
-  }
-
-  .component-col {
-    width: 120px;
-  }
-
-  .message-col {
-    width: auto;
-    min-width: 200px;
-  }
-
-  tbody tr {
-    border-bottom: 1px solid var(--surface-2);
-  }
-
-  tbody tr.log-row:hover {
-    background-color: var(--surface-2);
-  }
-
-  .expand-btn {
-    background: none;
-    border: none;
-    padding: 0;
-    color: var(--text-dim);
-    font-size: 0.75rem;
-    cursor: pointer;
-    line-height: 1.2;
-  }
-
-  .expand-btn:hover {
-    color: var(--text-bright);
-  }
-
-  td {
-    padding: 0.5rem;
-    color: var(--text);
-    vertical-align: top;
-    word-wrap: break-word;
-    overflow-wrap: break-word;
-  }
-
-  .log-row.error,
-  .detail-row.error {
-    background-color: rgba(255, 107, 107, 0.05);
-  }
-
-  .log-row.warn,
-  .detail-row.warn {
-    background-color: rgba(255, 217, 61, 0.05);
-  }
-
-  .expand-cell {
-    color: var(--text-dim);
-    font-size: 0.75rem;
-  }
-
-  .timestamp-cell {
-    color: var(--text-dim);
-    font-size: 0.8rem;
-    font-family: monospace;
-    white-space: nowrap;
-  }
-
-  .level-badge {
-    display: inline-block;
-    padding: 0.05rem 0.2rem;
-    border-radius: var(--radius);
-    font-size: 0.65rem;
-    font-weight: 500;
-    text-transform: uppercase;
-    letter-spacing: 0.3px;
-    line-height: 1.2;
-  }
-
-  .level-badge.error {
-    background-color: rgba(255, 107, 107, 0.2);
-    color: var(--danger);
-  }
-
-  .level-badge.warn {
-    background-color: rgba(255, 217, 61, 0.2);
-    color: var(--warning);
-  }
-
-  .level-badge.info {
-    background-color: rgba(81, 207, 102, 0.2);
-    color: var(--success);
-  }
-
-  .level-badge.debug {
-    background-color: rgba(136, 136, 136, 0.2);
-    color: var(--text-dim);
-  }
-
-  .component-cell {
-    color: var(--text-muted);
-    font-size: 0.85rem;
-    max-width: 200px;
     overflow: hidden;
     text-overflow: ellipsis;
-    white-space: nowrap;
+  }
+  .fcount {
+    font: 11px var(--mono);
+    color: var(--text-dim);
+  }
+  .note {
+    margin: 14px 8px;
+    font-size: 12px;
+    line-height: 1.5;
+    color: var(--text-dim);
   }
 
-  .message-cell {
+  .list {
+    flex: 1;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+  }
+  .lh,
+  .row {
+    display: grid;
+    grid-template-columns: 110px 38px 140px minmax(0, 1fr);
+    gap: 12px;
+    align-items: center;
+    padding: 0 16px;
+  }
+  .lh {
+    height: 32px;
+    font: 11px var(--mono);
+    color: var(--text-dim);
+    border-bottom: 1px solid var(--line);
+  }
+  .scroll {
+    flex: 1;
+    overflow-y: auto;
+  }
+  .row {
+    width: 100%;
+    height: 30px;
+    border: 0;
+    border-left: 2px solid transparent;
+    background: none;
     color: var(--text);
-    word-break: break-word;
-    font-family: monospace;
-    font-size: 0.85rem;
+    font: 12px var(--mono);
     text-align: left;
-    max-width: 600px;
+    cursor: pointer;
   }
-
-  .detail-content {
-    display: flex;
-    flex-direction: column;
-    gap: 0.5rem;
-    padding: 0.25rem 0 0.5rem;
+  .row:hover {
+    background: var(--surface);
   }
-
-  .detail-field {
-    display: flex;
-    flex-direction: column;
-    gap: 0.25rem;
+  .row.sel {
+    background: var(--surface-2);
+    border-left-color: var(--accent);
   }
-
-  .detail-label {
-    font-size: 0.7rem;
-    text-transform: uppercase;
-    letter-spacing: 0.5px;
-    color: var(--text-dim);
+  .row .t {
+    color: var(--text-muted);
   }
-
-  .detail-value {
-    font-family: monospace;
-    font-size: 0.8rem;
-    color: var(--text);
+  .row .c {
+    color: var(--text-muted);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
   }
-
-  .detail-message {
-    margin: 0;
-    padding: 0.5rem;
-    background-color: var(--bg-deep);
-    border: 1px solid var(--border);
-    border-radius: var(--radius);
-    overflow-x: auto;
-    white-space: pre-wrap;
-    word-wrap: break-word;
-    font-size: 0.8rem;
-    color: var(--text);
+  .row .m {
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
   }
-
-  .state-msg {
-    padding: 2rem;
-    text-align: center;
+  .row.lvl-error .l,
+  .row.lvl-error .m {
+    color: #f4b4b4;
   }
-
-  .loading {
-    color: var(--text-dim);
-  }
-
-  .state-error {
+  .row.lvl-error .l {
     color: var(--danger);
   }
-
-  .empty {
+  .row.lvl-warn .l {
+    color: var(--warning);
+  }
+  .row.lvl-info .l,
+  .row.lvl-debug .l {
     color: var(--text-dim);
   }
+  .empty {
+    padding: 24px 16px;
+    color: var(--text-dim);
+  }
+  .more {
+    width: 100%;
+    height: 40px;
+    border: 0;
+    border-top: 1px solid var(--line);
+    background: none;
+    color: var(--accent);
+    font: inherit;
+    cursor: pointer;
+  }
 
+  .detail {
+    width: 380px;
+    flex-shrink: 0;
+    display: flex;
+    flex-direction: column;
+    border-left: 1px solid var(--line);
+    overflow-y: auto;
+  }
+  .dh {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 14px 16px;
+    border-bottom: 1px solid var(--line);
+  }
+  .dh .t {
+    font: 12px var(--mono);
+    color: var(--text-muted);
+  }
+  .dh .x {
+    margin-left: auto;
+    background: none;
+    border: 0;
+    color: var(--text-dim);
+    font-size: 18px;
+    cursor: pointer;
+  }
+  .badge {
+    font: 11px var(--mono);
+    padding: 1px 6px;
+    border-radius: 4px;
+    background: var(--surface-2);
+    color: var(--text-muted);
+  }
+  .badge.lvl-error {
+    background: var(--danger-bg);
+    color: var(--danger);
+  }
+  .badge.lvl-warn {
+    background: var(--warning-bg);
+    color: var(--warning);
+  }
+  .msg {
+    margin: 0;
+    padding: 14px 16px;
+    font: 12px/1.6 var(--mono);
+    color: var(--text-bright);
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+    border-bottom: 1px solid var(--line);
+  }
+  .sh {
+    padding: 14px 16px 6px;
+    font-size: 11px;
+    font-weight: 500;
+    color: var(--text-dim);
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+  }
+  .fields {
+    display: grid;
+    grid-template-columns: 90px 1fr;
+    gap: 6px 12px;
+    padding: 0 16px 12px;
+    font: 12px var(--mono);
+  }
+  .fk {
+    color: var(--text-dim);
+  }
+  .fvv {
+    color: var(--text-bright);
+    background: none;
+    border: 0;
+    padding: 0;
+    font: inherit;
+    text-align: left;
+    overflow-wrap: anywhere;
+  }
+  button.fvv {
+    cursor: pointer;
+  }
+  button.fvv:hover {
+    color: var(--accent);
+  }
+  .related {
+    padding: 0 8px 12px;
+  }
+  .rr {
+    width: 100%;
+    display: grid;
+    grid-template-columns: 92px 8px minmax(0, 1fr);
+    gap: 8px;
+    align-items: center;
+    height: 26px;
+    padding: 0 8px;
+    border: 0;
+    border-radius: 5px;
+    background: none;
+    color: var(--text);
+    font: 12px var(--mono);
+    text-align: left;
+    cursor: pointer;
+  }
+  .rr:hover,
+  .rr.cur {
+    background: var(--surface-2);
+  }
+  .rr .t {
+    color: var(--text-dim);
+  }
+  .rr .m {
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .rr .dot {
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+    background: var(--text-dim);
+  }
+  .rr .dot.lvl-error {
+    background: var(--danger);
+  }
+  .rr .dot.lvl-warn {
+    background: var(--warning);
+  }
+  .actions {
+    margin-top: auto;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    padding: 14px 16px;
+    border-top: 1px solid var(--line);
+  }
+
+  @media (max-width: 1100px) {
+    .facets {
+      display: none;
+    }
+  }
   @media (max-width: 768px) {
-    section {
-      padding: 0.75rem;
-    }
-
-    .search-box {
-      flex-basis: 100%;
-      min-height: 40px;
-    }
-
-    .control,
-    .levels,
-    .status {
-      min-height: 40px;
+    .logs {
       height: auto;
+      min-height: calc(100vh - 56px);
     }
-
-    select.control {
-      flex: 1 1 auto;
-    }
-
-    .toolbar-right {
-      margin-left: 0;
-      width: 100%;
+    .bar {
       flex-wrap: wrap;
+      padding: 10px 16px;
     }
-
-    .toolbar-right .control {
-      flex: 1;
+    .query {
+      flex-basis: 100%;
     }
-
-    .logs-container {
-      -webkit-overflow-scrolling: touch;
+    .hist-wrap {
+      padding: 8px 16px 4px;
     }
-
-    table {
-      min-width: 700px;
-      font-size: 0.75rem;
+    .lh {
+      display: none;
     }
-
-    th,
-    td {
-      font-size: 0.75rem;
-      padding: 0.5rem 0.25rem;
+    .row {
+      grid-template-columns: 72px 30px minmax(0, 1fr);
+      height: auto;
+      min-height: 30px;
+      padding: 6px 12px;
+    }
+    .row .c {
+      display: none;
+    }
+    .row .t {
+      font-size: 11px;
+    }
+    .body {
+      flex-direction: column;
+    }
+    .detail {
+      width: 100%;
+      border-left: 0;
+      border-top: 1px solid var(--line);
     }
   }
 </style>

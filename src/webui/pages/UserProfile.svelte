@@ -1,1584 +1,416 @@
 <script>
-  import { onMount } from 'svelte';
+  import { TerminalSquare, Activity, Copy, Ban, ExternalLink } from 'lucide-svelte';
   import { currentRoute, navigate } from '../utils/router.js';
-  import {
-    userMetrics as wsUserMetrics,
-    operations as wsOperations,
-    connected as wsConnected,
-  } from '../stores/sse-store.js';
+  import { useHeaderActions } from '../stores/header.js';
+  import { formatBytes, formatDuration, formatRelativeTime, urlLabel } from '../utils/format.js';
 
-  let user = null;
-  let metrics = null;
-  let operations = [];
-  let operationsTotal = 0;
-  let operationsLimit = 7;
-  let operationsOffset = 0;
-  let operationsLoading = false;
-  let operationsError = null;
-  let activity = [];
-  let media = [];
-  let mediaTotal = 0;
-  let mediaLimit = 25;
-  let mediaOffset = 0;
-  let mediaLoading = false;
-  let mediaError = null;
-  let loading = true;
-  let error = null;
-  let selectedOperationId = null;
-  let operationTrace = null;
-  let traceLoading = false;
+  const OPS = 10;
+  const MEDIA = 12;
 
-  $: userId = $currentRoute.params.userId;
+  let user = $state(null);
+  let metrics = $state(null);
+  let error = $state('');
+  let ops = $state([]);
+  let opsTotal = $state(0);
+  let opsOffset = $state(0);
+  let media = $state([]);
+  let mediaTotal = $state(0);
+  let mediaOffset = $state(0);
+  let ban = $state(null);
+  let banOpen = $state(false);
+  let banReason = $state('');
+  let busy = $state(false);
+  let copied = $state(false);
 
-  async function fetchUserProfile() {
+  const userId = $derived($currentRoute.params.userId);
+  const get = url =>
+    fetch(url).then(r => (r.ok ? r.json() : Promise.reject(new Error(String(r.status)))));
+
+  async function loadProfile(id) {
+    error = '';
+    user = metrics = null;
+    try {
+      const data = await get(`/api/users/${id}`);
+      user = data.user;
+      metrics = data.metrics;
+    } catch {
+      error = 'no user with this id';
+    }
+    const bans = await get('/api/bans').catch(() => null);
+    ban = bans?.bans?.find(b => b.user_id === id) ?? null;
+  }
+  $effect(() => {
+    opsOffset = 0;
+    mediaOffset = 0;
+    if (userId) loadProfile(userId);
+  });
+  $effect(() => {
     if (!userId) return;
-
-    loading = true;
-    error = null;
-    try {
-      // Fetch user profile
-      const profileResponse = await fetch(`/api/users/${userId}`);
-      if (!profileResponse.ok) throw new Error('failed to fetch user profile');
-      const profileData = await profileResponse.json();
-      user = profileData.user;
-      metrics = profileData.metrics;
-
-      // Fetch user operations
-      await fetchUserOperations();
-
-      // Fetch user activity (limited to 10 most recent)
-      const activityResponse = await fetch(`/api/users/${userId}/activity?limit=10`);
-      if (!activityResponse.ok) throw new Error('failed to fetch activity');
-      const activityData = await activityResponse.json();
-      activity = (activityData.activity || []).slice(0, 10);
-
-      // Fetch user media
-      await fetchUserMedia();
-    } catch (err) {
-      error = err.message;
-    } finally {
-      loading = false;
-    }
-  }
-
-  async function fetchUserOperations() {
+    get(`/api/users/${userId}/operations?limit=${OPS}&offset=${opsOffset}`)
+      .then(d => {
+        ops = d.operations ?? [];
+        opsTotal = d.total ?? 0;
+      })
+      .catch(() => (ops = []));
+  });
+  $effect(() => {
     if (!userId) return;
-
-    operationsLoading = true;
-    operationsError = null;
-    try {
-      const response = await fetch(
-        `/api/users/${userId}/operations?limit=${operationsLimit}&offset=${operationsOffset}`
-      );
-      if (!response.ok) {
-        const errorData = await response.json().catch(() => ({}));
-        throw new Error(
-          errorData.message ||
-            `failed to fetch user operations: ${response.status} ${response.statusText}`
-        );
-      }
-      const data = await response.json();
-      operations = data.operations || [];
-      operationsTotal = data.total || 0;
-    } catch (err) {
-      console.error('Failed to fetch user operations:', err);
-      operationsError = err.message || 'failed to fetch user operations';
-      operations = [];
-      operationsTotal = 0;
-    } finally {
-      operationsLoading = false;
-    }
-  }
-
-  async function fetchUserMedia() {
-    if (!userId) return;
-
-    mediaLoading = true;
-    mediaError = null;
-    try {
-      const response = await fetch(
-        `/api/users/${userId}/media?limit=${mediaLimit}&offset=${mediaOffset}`
-      );
-      if (!response.ok) {
-        const errorData = await response.json().catch(() => ({}));
-        throw new Error(
-          errorData.message ||
-            `failed to fetch user media: ${response.status} ${response.statusText}`
-        );
-      }
-      const data = await response.json();
-      media = data.media || [];
-      mediaTotal = data.total || 0;
-    } catch (err) {
-      console.error('Failed to fetch user media:', err);
-      mediaError = err.message || 'failed to fetch user media';
-      media = [];
-      mediaTotal = 0;
-    } finally {
-      mediaLoading = false;
-    }
-  }
-
-  function handleMediaPrevPage() {
-    if (mediaOffset > 0) {
-      mediaOffset = Math.max(0, mediaOffset - mediaLimit);
-      fetchUserMedia();
-    }
-  }
-
-  function handleMediaNextPage() {
-    if (mediaOffset + mediaLimit < mediaTotal) {
-      mediaOffset += mediaLimit;
-      fetchUserMedia();
-    }
-  }
-
-  function handleOperationsPrevPage() {
-    if (operationsOffset > 0) {
-      operationsOffset = Math.max(0, operationsOffset - operationsLimit);
-      fetchUserOperations();
-    }
-  }
-
-  function handleOperationsNextPage() {
-    if (operationsOffset + operationsLimit < operationsTotal) {
-      operationsOffset += operationsLimit;
-      fetchUserOperations();
-    }
-  }
-
-  function truncateUrl(url) {
-    if (!url) return 'N/A';
-    if (url.length <= 40) return url;
-    return url.substring(0, 37) + '...';
-  }
-
-  function formatBytes(bytes) {
-    if (!bytes) return '0 B';
-    const k = 1024;
-    const sizes = ['B', 'KB', 'MB', 'GB'];
-    const i = Math.floor(Math.log(bytes) / Math.log(k));
-    return `${parseFloat((bytes / Math.pow(k, i)).toFixed(2))} ${sizes[i]}`;
-  }
-
-  function formatTimestamp(timestamp) {
-    if (!timestamp) return 'N/A';
-    const date = new Date(timestamp);
-    return date.toLocaleString();
-  }
-
-  function formatRelativeTime(timestamp) {
-    if (!timestamp) return 'N/A';
-    const now = Date.now();
-    // Convert timestamp to milliseconds if it's in seconds (timestamp < year 2000 in ms)
-    const timestampMs = timestamp < 946684800000 ? timestamp * 1000 : timestamp;
-    const diff = now - timestampMs;
-
-    // Handle negative differences (future timestamps or clock skew)
-    if (diff < 0) {
-      return 'just now';
-    }
-
-    const seconds = Math.floor(diff / 1000);
-    const minutes = Math.floor(seconds / 60);
-    const hours = Math.floor(minutes / 60);
-    const days = Math.floor(hours / 24);
-
-    if (seconds < 1) return 'just now';
-    if (seconds < 60) return `${seconds}s ago`;
-    if (minutes < 60) return `${minutes}m ago`;
-    if (hours < 24) return `${hours}h ago`;
-    if (days < 7) return `${days}d ago`;
-    return formatTimestamp(timestampMs);
-  }
-
-  function calculateSuccessRate() {
-    if (!metrics || !metrics.total_commands) return 0;
-    return ((metrics.successful_commands / metrics.total_commands) * 100).toFixed(1);
-  }
-
-  function goBack() {
-    navigate('users');
-  }
-
-  async function fetchOperationTrace(operationId) {
-    if (selectedOperationId === operationId && operationTrace) {
-      // Already loaded, just toggle
-      selectedOperationId = null;
-      operationTrace = null;
-      return;
-    }
-
-    selectedOperationId = operationId;
-    traceLoading = true;
-    try {
-      const response = await fetch(`/api/operations/${operationId}`);
-      if (!response.ok) throw new Error('failed to fetch operation trace');
-      const data = await response.json();
-      console.log('Operation trace API response:', {
-        operationId,
-        hasTrace: !!data.trace,
-        traceLogsCount: data.trace?.logs?.length || 0,
-        executionStepsCount:
-          data.trace?.logs?.filter(
-            log => log.step !== 'created' && log.step !== 'status_update' && log.step !== 'error'
-          ).length || 0,
-        trace: data.trace,
-      });
-      operationTrace = data.trace;
-    } catch (err) {
-      console.error('Failed to fetch operation trace:', err);
-      operationTrace = null;
-    } finally {
-      traceLoading = false;
-    }
-  }
-
-  function formatMetadata(metadata) {
-    if (!metadata) return null;
-    return JSON.stringify(metadata, null, 2);
-  }
-
-  onMount(() => {
-    fetchUserProfile();
-
-    // Subscribe to SSE user metrics (connection managed by App.svelte)
-    const unsubscribeMetrics = wsUserMetrics.subscribe(metricsMap => {
-      if (userId && metricsMap.has(userId)) {
-        const updatedMetrics = metricsMap.get(userId);
-        if (updatedMetrics) {
-          metrics = updatedMetrics;
-        }
-      }
-    });
-
-    // Subscribe to SSE operations (filtered by current userId)
-    const unsubscribeOperations = wsOperations.subscribe(wsOps => {
-      if (userId) {
-        // Filter operations for this user
-        const userOps = wsOps.filter(op => op.userId === userId);
-        if (userOps.length > 0) {
-          // Refresh current page when new operations arrive via SSE
-          // This ensures pagination stays in sync with real-time updates
-          fetchUserOperations();
-        }
-      }
-    });
-
-    return () => {
-      unsubscribeMetrics();
-      unsubscribeOperations();
-    };
+    get(`/api/users/${userId}/media?limit=${MEDIA}&offset=${mediaOffset}`)
+      .then(d => {
+        media = d.media ?? [];
+        mediaTotal = d.total ?? 0;
+      })
+      .catch(() => (media = []));
   });
 
-  $: if (userId) {
-    fetchUserProfile();
-    // Reset pagination when userId changes
-    mediaOffset = 0;
-    operationsOffset = 0;
+  const rate = $derived(
+    metrics?.total_commands
+      ? ((metrics.successful_commands / metrics.total_commands) * 100).toFixed(1)
+      : null
+  );
+  const split = $derived(
+    metrics
+      ? [
+          ['download', metrics.total_download],
+          ['convert', metrics.total_convert],
+          ['optimize', metrics.total_optimize],
+        ]
+      : []
+  );
+  const splitMax = $derived(Math.max(1, ...split.map(([, n]) => n)));
+
+  async function doBan() {
+    busy = true;
+    const res = await fetch('/api/bans', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ userId, reason: banReason.trim() }),
+    }).catch(() => null);
+    busy = false;
+    if (res?.ok) {
+      banOpen = false;
+      banReason = '';
+      loadProfile(userId);
+    }
   }
+  async function unban() {
+    if (!confirm(`Unban ${userId}?`)) return;
+    busy = true;
+    await fetch(`/api/bans/${userId}`, { method: 'DELETE' }).catch(() => null);
+    busy = false;
+    loadProfile(userId);
+  }
+  function copyId() {
+    navigator.clipboard?.writeText(userId);
+    copied = true;
+    setTimeout(() => (copied = false), 1200);
+  }
+
+  useHeaderActions(actions);
 </script>
 
-{#if loading}
-  <div class="loading">loading user profile...</div>
-{:else if error}
-  <div class="state-error">error: {error}</div>
-  <button on:click={fetchUserProfile}>retry</button>
-{:else if !user && !metrics}
-  <div class="empty">user not found</div>
-  <button on:click={goBack}>back to users</button>
-{:else}
-  <div class="profile-container">
-    <div class="profile-header-section">
-      <div class="profile-header">
-        <button class="back-btn" on:click={goBack}>← back to users</button>
-        <div class="header-info">
-          <h2>{user?.user_id || metrics?.user_id || 'unknown user'}</h2>
-          <div class="user-id">user id: {userId}</div>
-        </div>
-      </div>
+{#snippet actions()}
+  <button class="btn" onclick={() => navigate('requests', { userId })}
+    ><Activity size={13} />Requests</button
+  >
+  <button class="btn" onclick={() => navigate('logs', { user: userId, range: '7d' })}
+    ><TerminalSquare size={13} />Logs</button
+  >
+{/snippet}
 
-      <div class="stats-grid">
-        <div class="stat-card">
-          <div class="stat-label">total commands</div>
-          <div class="stat-value">{metrics?.total_commands || 0}</div>
-        </div>
-        <div class="stat-card">
-          <div class="stat-label">successful</div>
-          <div class="stat-value success">{metrics?.successful_commands || 0}</div>
-        </div>
-        <div class="stat-card">
-          <div class="stat-label">failed</div>
-          <div class="stat-value error">{metrics?.failed_commands || 0}</div>
-        </div>
-        <div class="stat-card">
-          <div class="stat-label">success rate</div>
-          <div class="stat-value">{calculateSuccessRate()}%</div>
-        </div>
-        <div class="stat-card">
-          <div class="stat-label">data processed</div>
-          <div class="stat-value">{formatBytes(metrics?.total_file_size || 0)}</div>
-        </div>
-        <div class="stat-card">
-          <div class="stat-label">last active</div>
-          <div class="stat-value">{formatRelativeTime(metrics?.last_command_at)}</div>
-        </div>
-      </div>
-
-      <div class="commands-breakdown">
-        <div class="breakdown-grid">
-          <div class="breakdown-item">
-            <span class="label">convert</span>
-            <span class="value">{metrics?.total_convert || 0}</span>
-          </div>
-          <div class="breakdown-item">
-            <span class="label">download</span>
-            <span class="value">{metrics?.total_download || 0}</span>
-          </div>
-          <div class="breakdown-item">
-            <span class="label">optimize</span>
-            <span class="value">{metrics?.total_optimize || 0}</span>
-          </div>
-          <div class="breakdown-item">
-            <span class="label">info</span>
-            <span class="value">{metrics?.total_info || 0}</span>
-          </div>
-        </div>
-      </div>
-    </div>
-
-    <div class="operations-section">
-      <h3>recent operations</h3>
-      {#if operationsLoading}
-        <div class="loading-inline">loading operations...</div>
-      {:else if operationsError}
-        <div class="error-inline">error: {operationsError}</div>
-        <button class="retry-btn" on:click={fetchUserOperations}>retry</button>
-      {:else if operations.length > 0}
-        <div class="operations-table-container">
-          <table class="operations-table">
-            <thead>
-              <tr>
-                <th class="col-type">type</th>
-                <th class="col-status">status</th>
-                <th class="col-time">time</th>
-                <th class="col-size">file size</th>
-                <th class="col-error">error</th>
-                <th class="col-actions">actions</th>
-              </tr>
-            </thead>
-            <tbody>
-              {#each operations as operation}
-                <tr
-                  class:error={operation.status === 'error'}
-                  class:selected={selectedOperationId === operation.id}
-                >
-                  <td class="op-type">{operation.type}</td>
-                  <td class="op-status">
-                    <span class="operation-status status-{operation.status}"
-                      >{operation.status}</span
-                    >
-                  </td>
-                  <td class="op-time">{formatRelativeTime(operation.timestamp)}</td>
-                  <td class="op-size"
-                    >{operation.fileSize ? formatBytes(operation.fileSize) : ', '}</td
-                  >
-                  <td class="op-error" class:has-error={operation.error}
-                    >{operation.error || ', '}</td
-                  >
-                  <td class="op-actions">
-                    <button
-                      class="trace-btn"
-                      on:click={() => fetchOperationTrace(operation.id)}
-                      title="view detailed trace"
-                    >
-                      {selectedOperationId === operation.id ? 'hide trace' : 'view trace'}
-                    </button>
-                  </td>
-                </tr>
-              {/each}
-            </tbody>
-          </table>
-        </div>
-        {#if operationsTotal > operationsLimit}
-          <div class="operations-pagination">
-            <div class="pagination-info">
-              showing {operationsOffset + 1}-{Math.min(
-                operationsOffset + operationsLimit,
-                operationsTotal
-              )} of {operationsTotal}
-            </div>
-            <div class="pagination-controls">
-              <button on:click={handleOperationsPrevPage} disabled={operationsOffset === 0}>
-                previous
-              </button>
-              <button
-                on:click={handleOperationsNextPage}
-                disabled={operationsOffset + operationsLimit >= operationsTotal}
-              >
-                next
-              </button>
-            </div>
-          </div>
-        {/if}
-      {:else}
-        <div class="empty-state">no operations found</div>
-      {/if}
-    </div>
-
-    {#if selectedOperationId && operationTrace}
-      <div class="trace-section">
-        <h3>operation trace: {selectedOperationId}</h3>
-        {#if traceLoading}
-          <div class="loading">loading trace...</div>
-        {:else if operationTrace}
-          <div class="trace-container">
-            <div class="trace-context">
-              <h4>context</h4>
-              <div class="context-grid">
-                <div class="context-item highlight">
-                  <span class="context-label">command source:</span>
-                  <span class="context-value">
-                    {#if operationTrace.context.commandSource === 'slash'}
-                      <span class="badge badge-slash">slash command</span>
-                    {:else if operationTrace.context.commandSource === 'context-menu'}
-                      <span class="badge badge-context">context menu</span>
-                    {:else}
-                      <span class="badge badge-unknown">unknown</span>
-                    {/if}
-                  </span>
-                </div>
-                <div class="context-item highlight">
-                  <span class="context-label">input type:</span>
-                  <span class="context-value">
-                    {#if operationTrace.context.inputType === 'url'}
-                      <span class="badge badge-url">url</span>
-                    {:else if operationTrace.context.inputType === 'file'}
-                      <span class="badge badge-file">file</span>
-                    {:else}
-                      <span class="badge badge-unknown">unknown</span>
-                    {/if}
-                  </span>
-                </div>
-                {#if operationTrace.context.originalUrl}
-                  <div class="context-item">
-                    <span class="context-label">original url:</span>
-                    <span class="context-value">
-                      <a
-                        href={operationTrace.context.originalUrl}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                      >
-                        {truncateUrl(operationTrace.context.originalUrl)}
-                      </a>
-                    </span>
-                  </div>
-                {/if}
-                {#if operationTrace.context.attachment}
-                  <div class="context-item">
-                    <span class="context-label">attachment:</span>
-                    <span class="context-value">
-                      {operationTrace.context.attachment.name || 'N/A'}
-                      {operationTrace.context.attachment.size
-                        ? `(${formatBytes(operationTrace.context.attachment.size)})`
-                        : ''}
-                    </span>
-                  </div>
-                  {#if operationTrace.context.attachment.contentType}
-                    <div class="context-item">
-                      <span class="context-label">content type:</span>
-                      <span class="context-value"
-                        >{operationTrace.context.attachment.contentType}</span
-                      >
-                    </div>
-                  {/if}
-                {/if}
-                {#if operationTrace.context.commandOptions}
-                  <div class="context-item">
-                    <span class="context-label">command options:</span>
-                    <span class="context-value"
-                      >{formatMetadata(operationTrace.context.commandOptions)}</span
-                    >
-                  </div>
-                {/if}
-                <div class="context-item">
-                  <span class="context-label">operation type:</span>
-                  <span class="context-value">{operationTrace.context.operationType || 'N/A'}</span>
-                </div>
-              </div>
-            </div>
-
-            <div class="trace-steps">
-              {#if operationTrace.logs}
-                {@const executionSteps = operationTrace.logs.filter(
-                  log =>
-                    log.step !== 'created' && log.step !== 'status_update' && log.step !== 'error'
-                )}
-                <h4>execution steps ({executionSteps.length})</h4>
-                {#if executionSteps.length > 0}
-                  <div class="steps-list">
-                    {#each executionSteps as log}
-                      <div class="trace-step" class:error={log.status === 'error'}>
-                        <div class="step-header">
-                          <span class="step-name">{log.step}</span>
-                          <span class="step-status status-{log.status}">{log.status}</span>
-                          <span class="step-time">{formatRelativeTime(log.timestamp)}</span>
-                        </div>
-                        {#if log.message}
-                          <div class="step-message">{log.message}</div>
-                        {/if}
-                        {#if log.metadata}
-                          <details class="step-metadata">
-                            <summary>metadata</summary>
-                            <pre class="metadata-content">{formatMetadata(log.metadata)}</pre>
-                          </details>
-                        {/if}
-                        {#if log.stack_trace}
-                          <details class="step-stack">
-                            <summary>stack trace</summary>
-                            <pre class="stack-content">{log.stack_trace}</pre>
-                          </details>
-                        {/if}
-                        {#if log.file_path}
-                          <div class="step-file">file: {log.file_path}</div>
-                        {/if}
-                      </div>
-                    {/each}
-                  </div>
-                {:else}
-                  <div class="empty-state">no execution steps available for this operation</div>
-                {/if}
-              {:else}
-                <h4>execution steps (0)</h4>
-                <div class="empty-state">no execution steps available for this operation</div>
-              {/if}
-            </div>
-
-            {#if operationTrace.errorSteps.length > 0}
-              <div class="trace-errors">
-                <h4>errors ({operationTrace.errorSteps.length})</h4>
-                {#each operationTrace.errorSteps as errorLog}
-                  <div class="error-item">
-                    <div class="error-step">{errorLog.step}</div>
-                    <div class="error-message">{errorLog.message}</div>
-                    {#if errorLog.metadata}
-                      <details class="error-metadata">
-                        <summary>error details</summary>
-                        <pre class="metadata-content">{formatMetadata(errorLog.metadata)}</pre>
-                      </details>
-                    {/if}
-                    {#if errorLog.stack_trace}
-                      <details class="error-stack">
-                        <summary>stack trace</summary>
-                        <pre class="stack-content">{errorLog.stack_trace}</pre>
-                      </details>
-                    {/if}
-                  </div>
-                {/each}
-              </div>
-            {/if}
-          </div>
-        {/if}
-      </div>
-    {/if}
-
-    <div class="media-section">
-      <h3>user media</h3>
-      {#if mediaLoading}
-        <div class="loading-inline">loading media...</div>
-      {:else if mediaError}
-        <div class="error-inline">error: {mediaError}</div>
-        <button class="retry-btn" on:click={fetchUserMedia}>retry</button>
-      {:else if media.length > 0}
-        <div class="media-table-container">
-          <table class="media-table">
-            <thead>
-              <tr>
-                <th>url</th>
-                <th>file type</th>
-                <th>date</th>
-                <th>size</th>
-              </tr>
-            </thead>
-            <tbody>
-              {#each media as item}
-                <tr>
-                  <td class="url-cell">
-                    <a
-                      href={item.file_url}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      title={item.file_url}
-                    >
-                      {truncateUrl(item.file_url)}
-                    </a>
-                  </td>
-                  <td class="type-cell">{item.file_type || 'N/A'}</td>
-                  <td class="date-cell">{formatTimestamp(item.processed_at)}</td>
-                  <td class="size-cell">{item.file_size ? formatBytes(item.file_size) : 'N/A'}</td>
-                </tr>
-              {/each}
-            </tbody>
-          </table>
-        </div>
-        {#if mediaTotal > mediaLimit}
-          <div class="media-pagination">
-            <div class="pagination-info">
-              showing {mediaOffset + 1}-{Math.min(mediaOffset + mediaLimit, mediaTotal)} of {mediaTotal}
-            </div>
-            <div class="pagination-controls">
-              <button on:click={handleMediaPrevPage} disabled={mediaOffset === 0}>
-                previous
-              </button>
-              <button
-                on:click={handleMediaNextPage}
-                disabled={mediaOffset + mediaLimit >= mediaTotal}
-              >
-                next
-              </button>
-            </div>
-          </div>
-        {/if}
-      {:else}
-        <div class="empty-state">no media found</div>
-      {/if}
-    </div>
-
-    {#if activity.length > 0}
-      <div class="activity-section">
-        <h3>activity timeline</h3>
-        <div class="activity-table-container">
-          <table class="activity-table">
-            <thead>
-              <tr>
-                <th>time</th>
-                <th>level</th>
-                <th>message</th>
-              </tr>
-            </thead>
-            <tbody>
-              {#each activity as log}
-                <tr>
-                  <td class="activity-time">{formatRelativeTime(log.timestamp)}</td>
-                  <td
-                    ><span class="activity-level level-{log.level.toLowerCase()}">{log.level}</span
-                    ></td
-                  >
-                  <td class="activity-message">{log.message}</td>
-                </tr>
-              {/each}
-            </tbody>
-          </table>
-        </div>
-      </div>
-    {/if}
+<div class="profile stack">
+  <div class="crumbs">
+    <button class="linkish" onclick={() => navigate('users')}>Users</button>
+    <span class="dim">/</span>
+    <span class="mono">{userId}</span>
   </div>
-{/if}
+
+  {#if error}
+    <div class="panel empty">{error}</div>
+  {:else}
+    <div class="head">
+      <div class="avatar mono">{userId?.slice(-2)}</div>
+      <div class="grow">
+        <div class="row">
+          <h2 class="mono">{userId}</h2>
+          <button class="iconbtn" onclick={copyId} title="copy id" aria-label="copy user id"
+            ><Copy size={14} /></button
+          >
+          {#if copied}<span class="dim small">copied</span>{/if}
+          {#if ban}<span class="chip bad">banned</span>{/if}
+        </div>
+        <div class="sub">
+          {#if user?.first_used}first seen {new Date(user.first_used).toLocaleDateString()} ·
+          {/if}
+          last seen {formatRelativeTime(metrics?.last_command_at ?? user?.last_used)}
+        </div>
+      </div>
+      {#if ban}
+        <button class="btn" disabled={busy} onclick={unban}>Unban</button>
+      {:else}
+        <button class="btn danger" onclick={() => (banOpen = !banOpen)}><Ban size={13} />Ban</button
+        >
+      {/if}
+    </div>
+
+    {#if ban}
+      <div class="panel pb banned">
+        Banned {formatRelativeTime(ban.banned_at)}: <b>{ban.reason}</b>{ban.appeal_allowed
+          ? ''
+          : ' (no appeal)'}
+      </div>
+    {/if}
+    {#if banOpen && !ban}
+      <div class="panel pb banform">
+        <input
+          class="field grow"
+          bind:value={banReason}
+          placeholder="reason (the user sees it when appealing)"
+          maxlength="200"
+        />
+        <button class="btn danger" disabled={busy || !banReason.trim()} onclick={doBan}
+          >Confirm ban</button
+        >
+      </div>
+    {/if}
+
+    <section class="panel kpis" style="--kpi-cols: 5">
+      <div class="kpi">
+        <div class="k">Requests</div>
+        <div class="v">{metrics?.total_commands?.toLocaleString() ?? '—'}</div>
+        <div class="s">all time</div>
+      </div>
+      <div class="kpi">
+        <div class="k">Delivered</div>
+        <div class="v">{rate == null ? '—' : `${rate}%`}</div>
+        <div class="s">{metrics?.successful_commands?.toLocaleString() ?? 0} ok</div>
+      </div>
+      <div class="kpi">
+        <div class="k">Failed</div>
+        <div class="v">{metrics?.failed_commands?.toLocaleString() ?? '—'}</div>
+        <div class="s">user and site errors included</div>
+      </div>
+      <div class="kpi">
+        <div class="k">Data</div>
+        <div class="v">{metrics ? formatBytes(metrics.total_file_size) : '—'}</div>
+        <div class="s">processed for them</div>
+      </div>
+      <div class="kpi">
+        <div class="k">Stored files</div>
+        <div class="v">{mediaTotal.toLocaleString()}</div>
+        <div class="s">in the URL cache</div>
+      </div>
+    </section>
+
+    <div class="two">
+      <section
+        class="panel tbl"
+        aria-label="requests"
+        style="--cols: 12px 76px minmax(0, 1fr) 70px 80px"
+      >
+        <div class="ph">
+          <span>Requests</span><span class="meta mono">{opsTotal} kept, 7 days</span>
+        </div>
+        {#each ops as r (r.id)}
+          <button class="tr" onclick={() => navigate('request', { requestId: r.id })}>
+            <span
+              class="dot"
+              class:ok={r.status === 'success'}
+              class:bad={r.status === 'error'}
+              class:run={r.status === 'running'}
+            ></span>
+            <span class="muted">{r.type}</span>
+            <span class="mono small ellipsis">{urlLabel(r.originalUrl)}</span>
+            <span class="num small muted"
+              >{r.performanceMetrics?.duration
+                ? formatDuration(r.performanceMetrics.duration)
+                : '—'}</span
+            >
+            <span class="num small dim">{formatRelativeTime(r.timestamp)}</span>
+          </button>
+        {:else}
+          <div class="empty">no requests in the last 7 days</div>
+        {/each}
+        {#if opsTotal > OPS}
+          <div class="pager">
+            <span class="dim"
+              >{opsOffset + 1}–{Math.min(opsOffset + OPS, opsTotal)} of {opsTotal}</span
+            >
+            <span class="row">
+              <button class="btn sm" disabled={opsOffset === 0} onclick={() => (opsOffset -= OPS)}
+                >Previous</button
+              >
+              <button
+                class="btn sm"
+                disabled={opsOffset + OPS >= opsTotal}
+                onclick={() => (opsOffset += OPS)}>Next</button
+              >
+            </span>
+          </div>
+        {/if}
+      </section>
+
+      <section class="panel" aria-label="commands">
+        <div class="ph"><span>Commands</span></div>
+        <div class="pb split">
+          {#each split as [name, n] (name)}
+            <span>/{name}</span>
+            <span class="bar-track"
+              ><span style="width:{(n / splitMax) * 100}%; background: var(--chart-series-1)"
+              ></span></span
+            >
+            <span class="num small muted">{n.toLocaleString()}</span>
+          {/each}
+        </div>
+      </section>
+    </div>
+
+    <section
+      class="panel tbl"
+      aria-label="stored files"
+      style="--cols: 64px minmax(0, 1fr) 90px 100px 28px"
+    >
+      <div class="ph">
+        <span>Stored files</span><span class="meta mono">{mediaTotal} total</span>
+      </div>
+      {#each media as m, i (m.file_url + i)}
+        <a class="tr" href={m.file_url} target="_blank" rel="noreferrer">
+          <span class="chip">{m.file_type}</span>
+          <span class="mono small ellipsis">{urlLabel(m.file_url)}</span>
+          <span class="num small muted">{formatBytes(m.file_size)}</span>
+          <span class="num small dim">{formatRelativeTime(m.processed_at)}</span>
+          <span class="dim"><ExternalLink size={13} /></span>
+        </a>
+      {:else}
+        <div class="empty">nothing stored</div>
+      {/each}
+      {#if mediaTotal > MEDIA}
+        <div class="pager">
+          <span class="dim"
+            >{mediaOffset + 1}–{Math.min(mediaOffset + MEDIA, mediaTotal)} of {mediaTotal}</span
+          >
+          <span class="row">
+            <button
+              class="btn sm"
+              disabled={mediaOffset === 0}
+              onclick={() => (mediaOffset -= MEDIA)}>Previous</button
+            >
+            <button
+              class="btn sm"
+              disabled={mediaOffset + MEDIA >= mediaTotal}
+              onclick={() => (mediaOffset += MEDIA)}>Next</button
+            >
+          </span>
+        </div>
+      {/if}
+    </section>
+  {/if}
+</div>
 
 <style>
-  .profile-container {
+  .profile {
+    max-width: 1400px;
+    margin: 0 auto;
+  }
+  .crumbs {
     display: flex;
-    flex-direction: column;
-    gap: 1rem;
+    align-items: center;
+    gap: 8px;
+    font-size: 13px;
   }
-
-  .profile-header-section {
-    padding: 1rem;
-    background-color: var(--surface);
-    border: 1px solid var(--border);
-    border-radius: var(--radius-lg);
-  }
-
-  .profile-header {
-    display: flex;
-    flex-direction: column;
-    gap: 0.5rem;
-    margin-bottom: 1rem;
-  }
-
-  .header-info {
-    display: flex;
-    flex-direction: column;
-    gap: 0.25rem;
-  }
-
-  .back-btn {
-    align-self: flex-start;
+  .linkish {
     background: none;
-    border: 1px solid var(--surface-3);
-    color: var(--text-muted);
-    padding: 0.5rem 1rem;
+    border: 0;
+    padding: 0;
+    color: var(--accent);
+    font: inherit;
     cursor: pointer;
-    font-size: 0.9rem;
-    border-radius: var(--radius);
   }
-
-  .back-btn:hover {
-    background-color: var(--surface-2);
-    color: var(--text-bright);
+  .small {
+    font-size: 12px;
   }
-
-  .profile-header h2 {
-    margin: 0;
-    font-size: 1.5rem;
-    font-weight: 500;
-    color: var(--text-bright);
+  .head {
+    display: flex;
+    align-items: center;
+    gap: 14px;
   }
-
-  .user-id {
-    font-size: 0.85rem;
-    color: var(--text-dim);
-    font-family: monospace;
-  }
-
-  .stats-grid {
+  .avatar {
+    width: 44px;
+    height: 44px;
+    border-radius: 50%;
     display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(110px, 1fr));
-    gap: 0.5rem;
-    margin-bottom: 1rem;
+    place-items: center;
+    background: var(--info-bg);
+    color: var(--accent);
+    font-size: 14px;
+    flex-shrink: 0;
   }
-
-  .stat-card {
-    display: flex;
-    flex-direction: column;
-    padding: 0.5rem;
-    background-color: var(--bg);
-    border: 1px solid var(--border);
-    border-radius: var(--radius);
-    position: relative;
+  h2 {
+    margin: 0;
+    font-size: 18px;
+    font-weight: 500;
+    color: var(--text-bright);
   }
-
-  .stat-label {
-    font-size: 0.8rem;
+  .sub {
+    margin-top: 3px;
+    font-size: 12px;
     color: var(--text-muted);
-    align-self: flex-start;
-    margin-bottom: auto;
   }
-
-  .stat-value {
-    font-size: 1.5rem;
-    font-weight: 600;
-    color: var(--success);
-    flex-grow: 1;
+  .iconbtn {
     display: flex;
-    align-items: center;
-    justify-content: center;
-    text-align: center;
+    padding: 4px;
+    border: 0;
+    border-radius: 6px;
+    background: none;
+    color: var(--text-dim);
+    cursor: pointer;
   }
-
-  .stat-value.success {
-    color: var(--success);
+  .iconbtn:hover {
+    color: var(--text-bright);
+    background: var(--surface-2);
   }
-
-  .stat-value.error {
-    color: var(--danger);
+  .banned {
+    border-color: var(--danger-border);
+    background: var(--danger-bg-subtle);
+    font-size: 13px;
+    color: #f0c9c9;
   }
-
-  .commands-breakdown {
-    margin-top: 0.5rem;
+  .banform {
+    display: flex;
+    gap: 8px;
   }
-
-  .breakdown-grid {
+  .two {
     display: grid;
-    grid-template-columns: repeat(4, 1fr);
-    gap: 0.5rem;
+    grid-template-columns: minmax(0, 1fr) 360px;
+    gap: 16px;
+    align-items: start;
   }
-
-  .breakdown-item {
+  .split {
+    display: grid;
+    grid-template-columns: 80px 1fr 60px;
+    gap: 14px 12px;
+    align-items: center;
+    font-size: 13px;
+  }
+  .pager {
     display: flex;
+    align-items: center;
     justify-content: space-between;
-    align-items: center;
-    padding: 0.5rem;
-    background-color: var(--bg);
-    border-radius: var(--radius);
-  }
-
-  .breakdown-item .label {
-    color: var(--text-muted);
-    font-size: 0.8rem;
-  }
-
-  .breakdown-item .value {
-    color: var(--text-bright);
-    font-weight: 500;
-    font-size: 0.95rem;
-  }
-
-  .operations-section,
-  .activity-section,
-  .media-section {
-    padding: 1rem;
-    background-color: var(--surface);
-    border: 1px solid var(--border);
-    border-radius: var(--radius-lg);
-  }
-
-  .operations-section h3,
-  .activity-section h3,
-  .media-section h3 {
-    margin: 0 0 0.75rem 0;
-    font-size: 1rem;
-    font-weight: 500;
-    color: var(--text-bright);
-  }
-
-  .operations-table-container {
-    overflow-x: auto;
-  }
-
-  .operations-table {
-    width: 100%;
-    border-collapse: collapse;
-    font-size: 0.85rem;
-    table-layout: fixed;
-  }
-
-  .operations-table thead {
-    background-color: var(--surface-2);
-  }
-
-  .operations-table th {
-    padding: 0.5rem;
-    text-align: left;
-    font-weight: 500;
-    color: var(--text-muted);
-    border-bottom: 1px solid var(--border);
-    font-size: 0.8rem;
-    text-transform: uppercase;
-    letter-spacing: 0.5px;
-    vertical-align: middle;
-  }
-
-  .operations-table th.col-type {
-    width: 10%;
-  }
-
-  .operations-table th.col-status {
-    width: 12%;
-  }
-
-  .operations-table th.col-time {
-    width: 10%;
-  }
-
-  .operations-table th.col-size {
-    width: 12%;
-  }
-
-  .operations-table th.col-error {
-    width: 36%;
-    padding: 0.5rem;
-    padding-left: 0.5rem;
-    padding-right: 0.5rem;
-    text-align: left !important;
-    margin: 0;
-  }
-
-  .operations-table th.col-actions {
-    width: 20%;
-  }
-
-  .operations-table tbody tr {
-    border-bottom: 1px solid var(--surface-2);
-  }
-
-  .operations-table tbody tr:hover {
-    background-color: var(--surface-2);
-  }
-
-  .operations-table tbody tr.error {
-    background-color: rgba(255, 107, 107, 0.05);
-  }
-
-  .operations-table tbody tr.error td {
-    text-align: left;
-  }
-
-  .operations-table td {
-    padding: 0.5rem;
-    color: var(--text);
-    vertical-align: middle;
-    text-align: left;
-    margin: 0;
-    border: none;
-    box-sizing: border-box;
-  }
-
-  .operations-table td > * {
-    vertical-align: middle;
-  }
-
-  .op-type {
-    font-weight: 500;
-    text-transform: capitalize;
-    text-align: left;
-  }
-
-  .op-status {
-    text-align: left;
-  }
-
-  .op-time {
-    color: var(--text-dim);
-    font-size: 0.8rem;
-    text-align: left;
-  }
-
-  .op-size {
-    color: var(--text-muted);
-    font-size: 0.8rem;
-    text-align: left;
-  }
-
-  .operations-table td.op-error {
-    text-align: left !important;
-    padding: 0.5rem;
-    padding-left: 0.5rem;
-    padding-right: 0.5rem;
-    margin: 0;
-    color: var(--text-muted);
-    font-size: 0.8rem;
-    font-family: monospace;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-    line-height: 1.4;
-    text-indent: 0;
-  }
-
-  .operations-table td.op-error.has-error {
-    color: var(--danger);
-  }
-
-  .operation-status {
-    padding: 0.15rem 0.5rem;
-    border-radius: var(--radius);
-    font-size: 0.75rem;
-    font-weight: 500;
-    text-transform: uppercase;
-    display: inline-block;
-    vertical-align: middle;
-    line-height: 1.4;
-  }
-
-  .status-pending {
-    background-color: rgba(136, 136, 136, 0.2);
-    color: var(--text-dim);
-  }
-
-  .status-running {
-    background-color: rgba(81, 207, 102, 0.2);
-    color: var(--success);
-  }
-
-  .status-success {
-    background-color: rgba(81, 207, 102, 0.2);
-    color: var(--success);
-  }
-
-  .status-error {
-    background-color: rgba(255, 107, 107, 0.2);
-    color: var(--danger);
-  }
-
-  .activity-table-container {
-    overflow-x: auto;
-  }
-
-  .activity-table {
-    width: 100%;
-    border-collapse: collapse;
-    font-size: 0.85rem;
-  }
-
-  .activity-table thead {
-    background-color: var(--surface-2);
-  }
-
-  .activity-table th {
-    padding: 0.5rem;
-    text-align: left;
-    font-weight: 500;
-    color: var(--text-muted);
-    border-bottom: 1px solid var(--border);
-    font-size: 0.8rem;
-    text-transform: uppercase;
-    letter-spacing: 0.5px;
-  }
-
-  .activity-table tbody tr {
-    border-bottom: 1px solid var(--surface-2);
-  }
-
-  .activity-table tbody tr:hover {
-    background-color: var(--surface-2);
-  }
-
-  .activity-table td {
-    padding: 0.5rem;
-    color: var(--text);
-  }
-
-  .activity-time {
-    color: var(--text-dim);
-    font-size: 0.8rem;
-    font-family: monospace;
-    white-space: nowrap;
-  }
-
-  .activity-level {
-    padding: 0.15rem 0.4rem;
-    border-radius: var(--radius);
-    font-size: 0.7rem;
-    font-weight: 600;
-    text-transform: uppercase;
-    display: inline-block;
-  }
-
-  .level-error {
-    background-color: rgba(255, 107, 107, 0.2);
-    color: var(--danger);
-  }
-
-  .level-warn {
-    background-color: rgba(255, 217, 61, 0.2);
-    color: var(--warning);
-  }
-
-  .level-info {
-    background-color: rgba(81, 207, 102, 0.2);
-    color: var(--success);
-  }
-
-  .level-debug {
-    background-color: rgba(136, 136, 136, 0.2);
-    color: var(--text-dim);
-  }
-
-  .activity-message {
-    color: var(--text);
-    font-size: 0.8rem;
-    font-family: monospace;
-    max-width: 500px;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-  }
-
-  .media-table-container {
-    overflow-x: auto;
-    margin-bottom: 1rem;
-  }
-
-  .media-table {
-    width: 100%;
-    border-collapse: collapse;
-    font-size: 0.9rem;
-  }
-
-  .media-table thead {
-    background-color: var(--surface-2);
-  }
-
-  .media-table th {
-    padding: 0.5rem;
-    text-align: left;
-    font-weight: 500;
-    color: var(--text-muted);
-    border-bottom: 1px solid var(--border);
-    font-size: 0.8rem;
-    text-transform: uppercase;
-    letter-spacing: 0.5px;
-  }
-
-  .media-table tbody tr {
-    border-bottom: 1px solid var(--surface-2);
-  }
-
-  .media-table tbody tr:hover {
-    background-color: var(--surface-2);
-  }
-
-  .media-table td {
-    padding: 0.5rem;
-    color: var(--text);
-    font-size: 0.85rem;
-  }
-
-  .url-cell {
-    max-width: 300px;
-  }
-
-  .url-cell a {
-    color: var(--success);
-    text-decoration: none;
-    word-break: break-all;
-  }
-
-  .url-cell a:hover {
-    text-decoration: underline;
-    color: var(--success);
-  }
-
-  .type-cell {
-    text-transform: capitalize;
-    color: var(--text-muted);
-  }
-
-  .date-cell {
-    color: var(--text-dim);
-    font-size: 0.8rem;
-  }
-
-  .size-cell {
-    color: var(--text-dim);
-    font-size: 0.8rem;
-  }
-
-  .media-pagination,
-  .operations-pagination {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    padding: 0.5rem 0;
-    margin-top: 0.75rem;
-    border-top: 1px solid var(--border);
-  }
-
-  .pagination-info {
-    font-size: 0.85rem;
-    color: var(--text-muted);
-  }
-
-  .pagination-controls {
-    display: flex;
-    gap: 0.5rem;
-  }
-
-  .pagination-controls button {
-    padding: 0.4rem 0.8rem;
-    font-size: 0.85rem;
-    background-color: var(--surface-3);
-    color: var(--text-bright);
-    border: 1px solid var(--border-2);
-    cursor: pointer;
-    border-radius: var(--radius);
-  }
-
-  .pagination-controls button:hover:not(:disabled) {
-    background-color: var(--border-2);
-  }
-
-  .pagination-controls button:disabled {
-    opacity: 0.5;
-    cursor: not-allowed;
-  }
-
-  .loading,
-  .state-error {
-    padding: 2rem;
-    text-align: center;
-  }
-
-  .loading {
-    color: var(--text-dim);
-  }
-
-  .state-error {
-    color: var(--danger);
-  }
-
-  .loading-inline {
-    color: var(--text-dim);
-    font-size: 0.85rem;
-    padding: 0.5rem 0;
-  }
-
-  .empty-state {
-    color: var(--text-dim);
-    font-size: 0.85rem;
-    padding: 1rem 0;
-    text-align: center;
-  }
-
-  .error-inline {
-    color: var(--danger);
-    font-size: 0.85rem;
-    padding: 0.5rem 0;
-  }
-
-  .retry-btn {
-    margin-top: 0.5rem;
-    padding: 0.4rem 0.8rem;
-    font-size: 0.85rem;
-    background-color: var(--surface-3);
-    color: var(--text-bright);
-    border: 1px solid var(--border-2);
-    cursor: pointer;
-    border-radius: var(--radius);
-  }
-
-  .retry-btn:hover {
-    background-color: var(--border-2);
-  }
-
-  @media (max-width: 768px) {
-    .table-container {
-      overflow-x: auto;
-      -webkit-overflow-scrolling: touch;
-    }
-
-    table {
-      min-width: 600px;
-    }
-
-    button {
-      min-height: 44px;
-    }
-    .stats-grid {
-      grid-template-columns: repeat(2, 1fr);
-    }
-
-    .breakdown-grid {
-      grid-template-columns: repeat(2, 1fr);
-    }
-
-    .operations-table,
-    .activity-table,
-    .media-table {
-      font-size: 0.75rem;
-    }
-
-    .operations-table th,
-    .operations-table td,
-    .activity-table th,
-    .activity-table td,
-    .media-table th,
-    .media-table td {
-      padding: 0.4rem 0.25rem;
-    }
-
-    .url-cell {
-      max-width: 150px;
-    }
-
-    .op-error,
-    .activity-message {
-      max-width: 200px;
-    }
-
-    .media-pagination,
-    .operations-pagination {
-      flex-direction: column;
-      gap: 0.5rem;
-      align-items: flex-start;
+    padding: 10px 16px;
+    border-top: 1px solid var(--line);
+    font-size: 12px;
+  }
+  @media (max-width: 1000px) {
+    .two {
+      grid-template-columns: 1fr;
     }
   }
-  .trace-section {
-    padding: 1rem;
-    background-color: var(--surface);
-    border: 1px solid var(--border);
-    border-radius: var(--radius-lg);
-  }
-
-  .trace-section h3 {
-    margin: 0 0 1rem 0;
-    font-size: 1.2rem;
-    font-weight: 500;
-    color: var(--text-bright);
-  }
-
-  .trace-container {
-    display: flex;
-    flex-direction: column;
-    gap: 1.5rem;
-  }
-
-  .trace-context {
-    padding: 1rem;
-    background-color: var(--bg);
-    border: 1px solid var(--border);
-    border-radius: var(--radius);
-  }
-
-  .trace-context h4 {
-    margin: 0 0 0.75rem 0;
-    font-size: 1rem;
-    font-weight: 500;
-    color: var(--text-bright);
-  }
-
-  .context-grid {
-    display: flex;
-    flex-direction: column;
-    gap: 0.5rem;
-  }
-
-  .context-item {
-    display: flex;
-    gap: 0.5rem;
-    font-size: 0.9rem;
-  }
-
-  .context-label {
-    color: var(--text-dim);
-    min-width: 120px;
-  }
-
-  .context-value {
-    color: var(--text);
-    word-break: break-all;
-  }
-
-  .context-value a {
-    color: var(--success);
-    text-decoration: none;
-  }
-
-  .context-value a:hover {
-    text-decoration: underline;
-  }
-
-  .context-item.highlight {
-    background-color: var(--surface-2);
-    padding: 0.75rem;
-    border-radius: var(--radius);
-    border-left: 3px solid var(--success);
-  }
-
-  .badge {
-    display: inline-block;
-    padding: 0.25rem 0.5rem;
-    border-radius: var(--radius);
-    font-size: 0.85rem;
-    font-weight: 600;
-    text-transform: uppercase;
-    letter-spacing: 0.5px;
-  }
-
-  .badge-slash {
-    background-color: rgba(81, 207, 102, 0.2);
-    color: var(--success);
-  }
-
-  .badge-context {
-    background-color: rgba(116, 192, 252, 0.2);
-    color: var(--info);
-  }
-
-  .badge-url {
-    background-color: rgba(255, 217, 61, 0.2);
-    color: var(--warning);
-  }
-
-  .badge-file {
-    background-color: rgba(255, 107, 107, 0.2);
-    color: var(--danger);
-  }
-
-  .badge-unknown {
-    background-color: rgba(136, 136, 136, 0.2);
-    color: var(--text-dim);
-  }
-
-  .trace-steps {
-    padding: 1rem;
-    background-color: var(--bg);
-    border: 1px solid var(--border);
-    border-radius: var(--radius);
-  }
-
-  .trace-steps h4 {
-    margin: 0 0 0.75rem 0;
-    font-size: 1rem;
-    font-weight: 500;
-    color: var(--text-bright);
-  }
-
-  .steps-list {
-    display: flex;
-    flex-direction: column;
-    gap: 0.75rem;
-  }
-
-  .trace-step {
-    padding: 0.75rem;
-    background-color: var(--bg-deep);
-    border: 1px solid var(--border);
-    border-radius: var(--radius);
-    border-left: 3px solid var(--success);
-  }
-
-  .trace-step.error {
-    border-left-color: var(--danger);
-  }
-
-  .step-header {
-    display: flex;
-    align-items: center;
-    gap: 0.75rem;
-    margin-bottom: 0.5rem;
-  }
-
-  .step-name {
-    font-weight: 500;
-    color: var(--text-bright);
-    font-family: monospace;
-    font-size: 0.9rem;
-  }
-
-  .step-status {
-    padding: 0.2rem 0.5rem;
-    border-radius: var(--radius);
-    font-size: 0.75rem;
-    font-weight: 500;
-  }
-
-  .step-status.status-success {
-    background-color: var(--success-bg);
-    color: var(--success);
-  }
-
-  .step-status.status-error {
-    background-color: var(--danger-bg);
-    color: var(--danger);
-  }
-
-  .step-status.status-running {
-    background-color: var(--info-bg);
-    color: var(--info);
-  }
-
-  .step-time {
-    margin-left: auto;
-    font-size: 0.8rem;
-    color: var(--text-dim);
-  }
-
-  .step-message {
-    margin-top: 0.5rem;
-    color: var(--text);
-    font-size: 0.9rem;
-  }
-
-  .step-file {
-    margin-top: 0.5rem;
-    font-size: 0.85rem;
-    color: var(--text-dim);
-    font-family: monospace;
-  }
-
-  .step-metadata,
-  .step-stack {
-    margin-top: 0.5rem;
-  }
-
-  .step-metadata summary,
-  .step-stack summary {
-    cursor: pointer;
-    color: var(--info);
-    font-size: 0.85rem;
-    user-select: none;
-  }
-
-  .step-metadata summary:hover,
-  .step-stack summary:hover {
-    color: var(--info);
-  }
-
-  .metadata-content,
-  .stack-content {
-    margin-top: 0.5rem;
-    padding: 0.75rem;
-    background-color: #000;
-    border: 1px solid var(--border);
-    border-radius: var(--radius);
-    font-size: 0.8rem;
-    color: var(--text);
-    overflow-x: auto;
-    white-space: pre-wrap;
-    word-break: break-all;
-  }
-
-  .trace-errors {
-    padding: 1rem;
-    background-color: var(--danger-bg-subtle);
-    border: 1px solid var(--danger-border);
-    border-radius: var(--radius);
-  }
-
-  .trace-errors h4 {
-    margin: 0 0 0.75rem 0;
-    font-size: 1rem;
-    font-weight: 500;
-    color: var(--danger);
-  }
-
-  .error-item {
-    padding: 0.75rem;
-    margin-bottom: 0.5rem;
-    background-color: var(--danger-bg-subtle);
-    border: 1px solid var(--danger-border);
-    border-radius: var(--radius);
-  }
-
-  .error-step {
-    font-weight: 500;
-    color: var(--danger);
-    font-family: monospace;
-    font-size: 0.9rem;
-    margin-bottom: 0.25rem;
-  }
-
-  .error-message {
-    color: var(--danger);
-    font-size: 0.9rem;
-    margin-bottom: 0.5rem;
-  }
-
-  .error-metadata,
-  .error-stack {
-    margin-top: 0.5rem;
-  }
-
-  .error-metadata summary,
-  .error-stack summary {
-    cursor: pointer;
-    color: var(--danger);
-    font-size: 0.85rem;
-    user-select: none;
-  }
-
-  .error-metadata summary:hover,
-  .error-stack summary:hover {
-    color: var(--danger);
-  }
-
-  .op-actions {
-    text-align: center;
-    vertical-align: middle;
-  }
-
-  .op-actions .trace-btn {
-    vertical-align: middle;
-  }
-
-  .trace-btn {
-    background-color: var(--info-bg);
-    border: 1px solid var(--surface-3);
-    color: var(--info);
-    padding: 0.3rem 0.6rem;
-    cursor: pointer;
-    font-size: 0.8rem;
-    border-radius: var(--radius);
-  }
-
-  .trace-btn:hover {
-    background-color: var(--info-bg-hover);
-    color: var(--info);
-  }
-
-  tr.selected {
-    background-color: var(--surface-2);
+  @media (max-width: 640px) {
+    .head {
+      flex-wrap: wrap;
+    }
+    h2 {
+      font-size: 14px;
+    }
   }
 </style>

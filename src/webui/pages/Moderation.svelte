@@ -1,1342 +1,670 @@
 <script>
-  import { onMount } from 'svelte';
-  import { formatTimestamp, formatRelativeTime, formatBytes } from '../utils/format.js';
-  import Pagination from '../components/Pagination.svelte';
+  import { onDestroy } from 'svelte';
+  import { Search, Trash2, ExternalLink, Film } from 'lucide-svelte';
+  import { currentRoute, navigate } from '../utils/router.js';
+  import { useHeaderActions } from '../stores/header.js';
+  import { formatBytes, formatRelativeTime } from '../utils/format.js';
 
-  let activeTab = 'files';
+  const PAGE = 24;
 
-  // --- Bans tab state ---
-  let moderationEnabled = false;
-  let moderationEnabledLoading = false;
-  let bans = [];
-  let bansLoading = false;
-  let bansError = null;
-
-  let banModalOpen = false;
-  let banSubmitting = false;
-  let banForm = { userId: '', reason: '', appealAllowed: true };
-  let banUserSearch = '';
-  let banUserResults = [];
-  let banUserSearchTimeout = null;
-
-  async function fetchModerationEnabled() {
-    try {
-      const response = await fetch('/api/settings');
-      if (!response.ok) throw new Error('failed to fetch settings');
-      const data = await response.json();
-      moderationEnabled = data.settings?.moderation_enabled?.value === 'true';
-    } catch (err) {
-      showStatus('error', `failed to load moderation toggle: ${err.message}`);
-    }
+  const tab = $derived($currentRoute.params.$tab === 'bans' ? 'bans' : 'files');
+  let status = $state(null);
+  let statusTimer;
+  function flash(kind, text) {
+    status = { kind, text };
+    clearTimeout(statusTimer);
+    statusTimer = setTimeout(() => (status = null), 5000);
   }
+  const readError = async (res, fallback) =>
+    (await res.json().catch(() => ({}))).message || fallback;
 
-  async function toggleModerationEnabled() {
-    const next = !moderationEnabled;
-    moderationEnabledLoading = true;
-    try {
-      const response = await fetch('/api/settings/moderation_enabled', {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ value: next }),
-      });
-      if (!response.ok) throw new Error('failed to update setting');
-      moderationEnabled = next;
-      showStatus('success', `ban enforcement ${next ? 'enabled' : 'disabled'}`);
-    } catch (err) {
-      showStatus('error', `failed to toggle moderation: ${err.message}`);
-    } finally {
-      moderationEnabledLoading = false;
-    }
+  // Moderation switch + bans
+  let enabled = $state(false);
+  let bans = $state([]);
+  let banForm = $state({ userId: '', reason: '', appealAllowed: true });
+  let banSearch = $state('');
+  let banResults = $state([]);
+  let busy = $state(false);
+
+  async function loadBans() {
+    const [s, b] = await Promise.all([
+      fetch('/api/settings')
+        .then(r => r.json())
+        .catch(() => null),
+      fetch('/api/bans')
+        .then(r => r.json())
+        .catch(() => null),
+    ]);
+    enabled = s?.settings?.moderation_enabled?.value === 'true';
+    bans = b?.bans ?? [];
   }
-
-  async function fetchBans() {
-    bansLoading = true;
-    bansError = null;
-    try {
-      const response = await fetch('/api/bans');
-      if (!response.ok) throw new Error('failed to fetch bans');
-      const data = await response.json();
-      bans = data.bans || [];
-    } catch (err) {
-      bansError = err.message;
-    } finally {
-      bansLoading = false;
-    }
+  async function toggleEnabled() {
+    busy = true;
+    const res = await fetch('/api/settings/moderation_enabled', {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ value: !enabled }),
+    }).catch(() => null);
+    busy = false;
+    if (res?.ok) enabled = !enabled;
+    else flash('error', 'could not change the moderation switch');
   }
-
-  function openBanModal() {
-    banForm = { userId: '', reason: '', appealAllowed: true };
-    banUserSearch = '';
-    banUserResults = [];
-    banModalOpen = true;
-  }
-
-  function closeBanModal() {
-    banModalOpen = false;
-  }
-
-  function handleBanUserSearchInput() {
-    clearTimeout(banUserSearchTimeout);
-    if (!banUserSearch.trim()) {
-      banUserResults = [];
-      return;
-    }
-    banUserSearchTimeout = setTimeout(async () => {
-      try {
-        const response = await fetch(
-          `/api/users?search=${encodeURIComponent(banUserSearch.trim())}&limit=8`
-        );
-        if (!response.ok) return;
-        const data = await response.json();
-        banUserResults = data.users || [];
-      } catch {
-        banUserResults = [];
-      }
+  let searchTimer;
+  function onBanSearch() {
+    clearTimeout(searchTimer);
+    if (!banSearch.trim()) return (banResults = []);
+    searchTimer = setTimeout(async () => {
+      const d = await fetch(`/api/users?search=${encodeURIComponent(banSearch.trim())}&limit=8`)
+        .then(r => r.json())
+        .catch(() => null);
+      banResults = d?.users ?? [];
     }, 250);
   }
-
-  function pickBanUser(user) {
-    banForm.userId = user.user_id;
-    banUserSearch = '';
-    banUserResults = [];
-  }
-
   async function submitBan() {
-    if (!banForm.userId.trim() || !banForm.reason.trim()) {
-      showStatus('error', 'user id and reason are required');
-      return;
-    }
-
-    banSubmitting = true;
-    try {
-      const response = await fetch('/api/bans', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          userId: banForm.userId.trim(),
-          reason: banForm.reason.trim(),
-          appealAllowed: banForm.appealAllowed,
-        }),
-      });
-
-      if (!response.ok) {
-        const data = await response.json();
-        throw new Error(data.message || 'failed to ban user');
-      }
-
-      showStatus('success', `banned ${banForm.userId}`);
-      banModalOpen = false;
-      await fetchBans();
-    } catch (err) {
-      showStatus('error', `failed to ban user: ${err.message}`);
-    } finally {
-      banSubmitting = false;
-    }
+    busy = true;
+    const res = await fetch('/api/bans', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        userId: banForm.userId.trim(),
+        reason: banForm.reason.trim(),
+        appealAllowed: banForm.appealAllowed,
+      }),
+    }).catch(() => null);
+    busy = false;
+    if (res?.ok) {
+      flash('ok', `banned ${banForm.userId.trim()}`);
+      banForm = { userId: '', reason: '', appealAllowed: true };
+      loadBans();
+    } else flash('error', res ? await readError(res, 'could not ban') : 'could not ban');
+  }
+  async function unban(userId) {
+    if (!confirm(`Unban ${userId}?`)) return;
+    const res = await fetch(`/api/bans/${userId}`, { method: 'DELETE' }).catch(() => null);
+    if (res?.ok) {
+      flash('ok', `unbanned ${userId}`);
+      loadBans();
+    } else flash('error', 'could not unban');
   }
 
-  async function unbanUserRow(userId) {
-    try {
-      const response = await fetch(`/api/bans/${userId}`, { method: 'DELETE' });
-      if (!response.ok) {
-        const data = await response.json();
-        throw new Error(data.message || 'failed to unban user');
-      }
-      showStatus('success', 'user unbanned');
-      await fetchBans();
-    } catch (err) {
-      showStatus('error', `failed to unban user: ${err.message}`);
-    }
+  // Stored files by user
+  let r2Users = $state([]);
+  let userFilter = $state('');
+  let selectedUser = $state(null);
+  let media = $state([]);
+  let total = $state(0);
+  let offset = $state(0);
+  let fileType = $state('');
+  let picked = $state(new Set());
+  let deleting = $state(false);
+
+  async function loadUsers() {
+    const d = await fetch('/api/moderation/r2-users')
+      .then(r => r.json())
+      .catch(() => null);
+    r2Users = d?.users ?? [];
+    if (selectedUser) selectedUser = r2Users.find(u => u.user_id === selectedUser.user_id) ?? null;
   }
-
-  function switchTab(tab) {
-    activeTab = tab;
-    if (tab === 'bans' && bans.length === 0 && !bansLoading) {
-      fetchModerationEnabled();
-      fetchBans();
-    }
+  async function loadMedia() {
+    if (!selectedUser) return;
+    const q = new URLSearchParams({ limit: String(PAGE), offset: String(offset) });
+    if (fileType) q.set('fileType', fileType);
+    const d = await fetch(`/api/moderation/users/${selectedUser.user_id}/r2-media?${q}`)
+      .then(r => r.json())
+      .catch(() => null);
+    media = d?.media ?? [];
+    total = d?.total ?? 0;
   }
-
-  let r2Users = [];
-  let usersLoading = false;
-  let usersError = null;
-  let userSearch = '';
-
-  let selectedUserId = null;
-  let selectedUser = null;
-
-  let media = [];
-  let total = 0;
-  let loading = false;
-  let error = null;
-  let deleting = false;
-
-  let fileTypeFilter = '';
-  let limit = 25;
-  let offset = 0;
-  let selectedFiles = new Set();
-
-  // Transient status line ({ kind: 'success' | 'error', text })
-  let status = null;
-  let statusTimeout = null;
-
-  function showStatus(kind, text) {
-    status = { kind, text };
-    clearTimeout(statusTimeout);
-    statusTimeout = setTimeout(() => {
-      status = null;
-    }, 6000);
-  }
-
-  async function fetchR2Users() {
-    usersLoading = true;
-    usersError = null;
-    try {
-      const response = await fetch('/api/moderation/r2-users');
-      if (!response.ok) throw new Error('failed to fetch r2 users');
-      const data = await response.json();
-      r2Users = data.users || [];
-    } catch (err) {
-      usersError = err.message;
-    } finally {
-      usersLoading = false;
-    }
-  }
-
-  $: filteredUsers = userSearch ? r2Users.filter(u => u.user_id.includes(userSearch)) : r2Users;
-
-  async function fetchR2Media() {
-    if (!selectedUserId) {
-      media = [];
-      total = 0;
-      return;
-    }
-
-    loading = true;
-    error = null;
-    try {
-      const params = new URLSearchParams({
-        limit: limit.toString(),
-        offset: offset.toString(),
-      });
-
-      if (fileTypeFilter) params.append('fileType', fileTypeFilter);
-
-      const response = await fetch(`/api/moderation/users/${selectedUserId}/r2-media?${params}`);
-      if (!response.ok) throw new Error('failed to fetch r2 media');
-
-      const data = await response.json();
-      media = data.media || [];
-      total = data.total || 0;
-    } catch (err) {
-      error = err.message;
-    } finally {
-      loading = false;
-    }
-  }
-
-  function resetSelectionState() {
-    selectedFiles = new Set();
-  }
-
-  function handleUserSelect(userId) {
-    if (selectedUserId === userId) {
-      selectedUserId = null;
-      selectedUser = null;
-      media = [];
-      total = 0;
-      resetSelectionState();
-    } else {
-      selectedUserId = userId;
-      selectedUser = r2Users.find(u => u.user_id === userId) || null;
-      offset = 0;
-      resetSelectionState();
-      fetchR2Media();
-    }
-  }
-
-  function handleFileTypeFilter() {
-    offset = 0;
-    resetSelectionState();
-    fetchR2Media();
-  }
-
-  function handlePage(event) {
-    offset = event.detail.offset;
-    limit = event.detail.limit;
-    selectedFiles = new Set();
-    fetchR2Media();
-  }
-
-  function toggleFileSelection(urlHash) {
-    if (selectedFiles.has(urlHash)) {
-      selectedFiles.delete(urlHash);
-    } else {
-      selectedFiles.add(urlHash);
-    }
-    selectedFiles = new Set(selectedFiles);
-  }
-
-  function toggleSelectAll() {
-    if (selectedFiles.size === media.length) {
-      selectedFiles = new Set();
-    } else {
-      selectedFiles = new Set(media.map(m => m.url_hash));
-    }
-  }
-
-  // Refresh both the media list and the per-user stats after any deletion
-  async function refreshAfterDelete() {
-    await Promise.all([fetchR2Media(), fetchR2Users()]);
-    selectedUser = r2Users.find(u => u.user_id === selectedUserId) || selectedUser;
-  }
-
-  async function deleteFile(urlHash) {
-    deleting = true;
-    try {
-      const response = await fetch(`/api/moderation/files/${urlHash}`, {
-        method: 'DELETE',
-      });
-
-      if (!response.ok) {
-        const data = await response.json();
-        throw new Error(data.message || 'failed to delete file');
-      }
-
-      showStatus('success', 'file deleted');
-      selectedFiles.delete(urlHash);
-      selectedFiles = new Set(selectedFiles);
-      await refreshAfterDelete();
-    } catch (err) {
-      showStatus('error', `failed to delete file: ${err.message}`);
-    } finally {
-      deleting = false;
-    }
-  }
-
-  async function bulkDelete() {
-    if (selectedFiles.size === 0) return;
-
-    deleting = true;
-    try {
-      const response = await fetch('/api/moderation/files/bulk', {
-        method: 'DELETE',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          urlHashes: Array.from(selectedFiles),
-        }),
-      });
-
-      if (!response.ok) {
-        let errorMessage = 'failed to delete files';
-        try {
-          const data = await response.json();
-          errorMessage = data.message || data.error || errorMessage;
-        } catch {
-          errorMessage = `HTTP ${response.status}: ${response.statusText}`;
-        }
-        throw new Error(errorMessage);
-      }
-
-      const data = await response.json();
-      const { results } = data;
-
-      if (results && results.failed && results.failed.length > 0) {
-        showStatus(
-          'error',
-          `deleted ${results.success.length} file(s), but ${results.failed.length} failed`
-        );
-      } else if (results && results.success) {
-        showStatus('success', `deleted ${results.success.length} file(s)`);
-      }
-
-      selectedFiles = new Set();
-      await refreshAfterDelete();
-    } catch (err) {
-      showStatus('error', `failed to delete files: ${err.message}`);
-    } finally {
-      deleting = false;
-    }
-  }
-
-  async function deleteAllForUser() {
-    if (!selectedUserId) return;
-
-    deleting = true;
-    try {
-      const response = await fetch(`/api/moderation/users/${selectedUserId}/r2-media`, {
-        method: 'DELETE',
-      });
-
-      if (!response.ok) {
-        const data = await response.json();
-        throw new Error(data.message || 'failed to delete user files');
-      }
-
-      const data = await response.json();
-      showStatus('success', `deleted ${data.deleted} file(s) for user`);
-
-      selectedFiles = new Set();
-      await refreshAfterDelete();
-    } catch (err) {
-      showStatus('error', `failed to delete user files: ${err.message}`);
-    } finally {
-      deleting = false;
-    }
-  }
-
-  onMount(() => {
-    fetchR2Users();
-    return () => clearTimeout(statusTimeout);
+  $effect(() => {
+    selectedUser;
+    offset;
+    fileType;
+    picked = new Set();
+    loadMedia();
   });
+  const shownUsers = $derived(
+    r2Users.filter(u => !userFilter.trim() || u.user_id.includes(userFilter.trim()))
+  );
+  const storedTotal = $derived(r2Users.reduce((s, u) => s + Number(u.total_size || 0), 0));
+
+  async function afterDelete() {
+    picked = new Set();
+    await Promise.all([loadUsers(), loadMedia()]);
+  }
+  async function deleteOne(item) {
+    if (!confirm('Delete this file from storage? Its link stops working.')) return;
+    deleting = true;
+    const res = await fetch(`/api/moderation/files/${item.url_hash}`, { method: 'DELETE' }).catch(
+      () => null
+    );
+    deleting = false;
+    res?.ok
+      ? flash('ok', 'file deleted')
+      : flash('error', res ? await readError(res, 'delete failed') : 'delete failed');
+    afterDelete();
+  }
+  async function deletePicked() {
+    if (!confirm(`Delete ${picked.size} file(s) from storage? Their links stop working.`)) return;
+    deleting = true;
+    const res = await fetch('/api/moderation/files/bulk', {
+      method: 'DELETE',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ urlHashes: [...picked] }),
+    }).catch(() => null);
+    deleting = false;
+    const results = res?.ok ? (await res.json()).results : null;
+    if (!results) flash('error', res ? await readError(res, 'delete failed') : 'delete failed');
+    else if (results.failed?.length)
+      flash('error', `deleted ${results.success.length}, ${results.failed.length} failed`);
+    else flash('ok', `deleted ${results.success.length} file(s)`);
+    afterDelete();
+  }
+  async function deleteAll() {
+    const id = selectedUser.user_id;
+    if (
+      !confirm(
+        `Delete ALL ${selectedUser.file_count} stored file(s) for ${id}? This cannot be undone.`
+      )
+    )
+      return;
+    deleting = true;
+    const res = await fetch(`/api/moderation/users/${id}/r2-media`, { method: 'DELETE' }).catch(
+      () => null
+    );
+    deleting = false;
+    res?.ok
+      ? flash('ok', `deleted ${(await res.json()).deleted} file(s)`)
+      : flash('error', 'delete failed');
+    afterDelete();
+  }
+  function pick(hash) {
+    const next = new Set(picked);
+    next.has(hash) ? next.delete(hash) : next.add(hash);
+    picked = next;
+  }
+  const isVisual = m => m.file_type === 'gif' || m.file_type === 'image';
+
+  loadUsers();
+  loadBans();
+
+  useHeaderActions(actions);
+  onDestroy(() => clearTimeout(statusTimer));
 </script>
 
-<div class="moderation-container">
-  <div class="header-section">
-    <p class="subtitle">manage r2 uploads and user bans</p>
+{#snippet actions()}
+  <div class="seg" role="tablist">
+    <button
+      role="tab"
+      aria-selected={tab === 'files'}
+      class:on={tab === 'files'}
+      onclick={() => navigate('moderation')}
+      >Stored files<span class="n">{r2Users.length}</span></button
+    >
+    <button
+      role="tab"
+      aria-selected={tab === 'bans'}
+      class:on={tab === 'bans'}
+      onclick={() => navigate('moderation', { tab: 'bans' })}
+      >Bans<span class="n">{bans.length}</span></button
+    >
   </div>
+{/snippet}
 
-  <div class="tabs">
-    <button class:active={activeTab === 'files'} on:click={() => switchTab('files')}>
-      files
-    </button>
-    <button class:active={activeTab === 'bans'} on:click={() => switchTab('bans')}> bans </button>
-  </div>
+<div class="mod">
+  {#if status}<div class="flash {status.kind}" role="status">{status.text}</div>{/if}
 
-  {#if status}
-    <div class="status-line {status.kind}">{status.text}</div>
-  {/if}
-
-  {#if activeTab === 'bans'}
-    <div class="bans-section">
-      <div class="bans-toggle-row">
-        <label class="toggle-label">
-          <input
-            type="checkbox"
-            checked={moderationEnabled}
-            disabled={moderationEnabledLoading}
-            on:change={toggleModerationEnabled}
-          />
-          <span>ban enforcement {moderationEnabled ? 'enabled' : 'disabled'}</span>
-        </label>
-        <button class="ban-user-btn" on:click={openBanModal}>ban user</button>
-      </div>
-
-      {#if bansLoading}
-        <div class="loading">loading bans...</div>
-      {:else if bansError}
-        <div class="state-error">error: {bansError}</div>
-        <button class="retry-btn" on:click={fetchBans}>retry</button>
-      {:else if bans.length === 0}
-        <div class="empty">no banned users</div>
-      {:else}
-        <div class="bans-list">
-          {#each bans as ban (ban.user_id)}
-            <div class="ban-row">
-              <div class="ban-info">
-                <span class="ban-user" title={ban.user_id}>{ban.user_id}</span>
-                <span class="ban-reason">{ban.reason}</span>
-                <span class="ban-meta">
-                  banned {formatRelativeTime(ban.banned_at)} · appeal {ban.appeal_allowed
-                    ? 'allowed'
-                    : 'not allowed'}
-                </span>
-              </div>
-              <button class="unban-btn" on:click={() => unbanUserRow(ban.user_id)}>unban</button>
-            </div>
+  {#if tab === 'files'}
+    <div class="files">
+      <section class="panel users-col" aria-label="users with stored files">
+        <div class="ph">
+          <span>Users with stored files</span><span class="meta mono"
+            >{formatBytes(storedTotal)}</span
+          >
+        </div>
+        <label class="filter"
+          ><Search size={13} /><input
+            bind:value={userFilter}
+            placeholder="filter by id"
+            aria-label="filter users"
+          /></label
+        >
+        <div class="ulist">
+          {#each shownUsers as u (u.user_id)}
+            <button
+              class="urow"
+              class:sel={selectedUser?.user_id === u.user_id}
+              onclick={() => {
+                selectedUser = u;
+                offset = 0;
+              }}
+            >
+              <span class="mono ellipsis">{u.user_id}</span>
+              <span class="mono dim small"
+                >{u.file_count} · {formatBytes(Number(u.total_size))}</span
+              >
+            </button>
+          {:else}
+            <div class="empty">no stored files</div>
           {/each}
         </div>
-      {/if}
-    </div>
+      </section>
 
-    {#if banModalOpen}
-      <div
-        class="modal-overlay"
-        role="button"
-        tabindex="0"
-        on:click={closeBanModal}
-        on:keydown={e => e.key === 'Escape' && closeBanModal()}
-      >
-        <!-- svelte-ignore a11y-no-noninteractive-element-interactions -->
-        <div class="modal" role="dialog" aria-modal="true" on:click|stopPropagation>
-          <h3>ban user</h3>
-
-          <label class="field">
-            <span>user</span>
-            {#if banForm.userId}
-              <div class="picked-user">
-                <span>{banForm.userId}</span>
-                <button type="button" on:click={() => (banForm = { ...banForm, userId: '' })}>
-                  change
+      <section class="panel" aria-label="files">
+        {#if !selectedUser}
+          <div class="empty big">Pick a user to see and remove their stored files.</div>
+        {:else}
+          <div class="ph">
+            <button
+              class="linkish mono"
+              onclick={() => navigate('user-profile', { userId: selectedUser.user_id })}
+              >{selectedUser.user_id}</button
+            >
+            <span class="meta">
+              <select class="field sm" bind:value={fileType} aria-label="file type">
+                <option value="">all types</option>
+                <option value="video">video</option>
+                <option value="gif">gif</option>
+                <option value="image">image</option>
+              </select>
+              {#if picked.size}
+                <button class="btn danger sm" disabled={deleting} onclick={deletePicked}
+                  >Delete {picked.size}</button
+                >
+              {/if}
+              <button class="btn danger sm" disabled={deleting} onclick={deleteAll}
+                ><Trash2 size={12} />Delete all</button
+              >
+            </span>
+          </div>
+          <div class="gallery">
+            {#each media as m (m.url_hash)}
+              <div class="tile" class:on={picked.has(m.url_hash)}>
+                <button
+                  class="thumb"
+                  onclick={() => pick(m.url_hash)}
+                  aria-pressed={picked.has(m.url_hash)}
+                  aria-label="select file"
+                >
+                  {#if isVisual(m)}
+                    <img src={m.file_url} alt="" loading="lazy" />
+                  {:else}
+                    <span class="vid"><Film size={22} /><span>{m.file_extension}</span></span>
+                  {/if}
+                  <span class="check">{picked.has(m.url_hash) ? '✓' : ''}</span>
                 </button>
+                <div class="cap">
+                  <span class="chip">{m.file_type}</span>
+                  <span class="mono small muted">{formatBytes(m.file_size)}</span>
+                  <span class="dim small grow">{formatRelativeTime(m.processed_at)}</span>
+                  <a class="icon" href={m.file_url} target="_blank" rel="noreferrer" title="open"
+                    ><ExternalLink size={13} /></a
+                  >
+                  <button
+                    class="icon danger"
+                    disabled={deleting}
+                    onclick={() => deleteOne(m)}
+                    title="delete"
+                    aria-label="delete file"><Trash2 size={13} /></button
+                  >
+                </div>
               </div>
             {:else}
-              <input
-                type="text"
-                bind:value={banUserSearch}
-                on:input={handleBanUserSearchInput}
-                placeholder="search by user id..."
-              />
-              {#if banUserResults.length > 0}
-                <div class="search-results">
-                  {#each banUserResults as user (user.user_id)}
-                    <button type="button" class="search-result" on:click={() => pickBanUser(user)}>
-                      <span class="dim">{user.user_id}</span>
-                    </button>
-                  {/each}
-                </div>
-              {/if}
-            {/if}
-          </label>
-
-          <label class="field">
-            <span>reason</span>
-            <textarea bind:value={banForm.reason} rows="3" placeholder="ban reason..."></textarea>
-          </label>
-
-          <label class="field checkbox-field">
-            <input type="checkbox" bind:checked={banForm.appealAllowed} />
-            <span>allow appeal (shows appeal invite in the ban message)</span>
-          </label>
-
-          <div class="modal-actions">
-            <button class="cancel-btn" on:click={closeBanModal}>cancel</button>
-            <button class="confirm-ban-btn" on:click={submitBan} disabled={banSubmitting}>
-              {banSubmitting ? 'banning...' : 'ban user'}
-            </button>
-          </div>
-        </div>
-      </div>
-    {/if}
-  {:else}
-    <div class="user-selector-section">
-      <div class="selector-header">
-        <h3>select user</h3>
-        <div class="search-box">
-          <input type="text" bind:value={userSearch} placeholder="filter users..." />
-        </div>
-      </div>
-
-      {#if usersLoading}
-        <div class="loading">loading users...</div>
-      {:else if usersError}
-        <div class="state-error">error: {usersError}</div>
-        <button class="retry-btn" on:click={fetchR2Users}>retry</button>
-      {:else if filteredUsers.length > 0}
-        <div class="users-list">
-          {#each filteredUsers as user (user.user_id)}
-            <button
-              class="user-item"
-              class:selected={selectedUserId === user.user_id}
-              on:click={() => handleUserSelect(user.user_id)}
-              title={user.user_id}
-            >
-              <span class="user-id">{user.user_id}</span>
-              <span class="user-stats">
-                {user.file_count} file{user.file_count === 1 ? '' : 's'} · {formatBytes(
-                  user.total_size
-                )}
-              </span>
-            </button>
-          {/each}
-        </div>
-      {:else if r2Users.length > 0}
-        <div class="empty">no users match "{userSearch}"</div>
-      {:else}
-        <div class="empty">no users with r2 uploads</div>
-      {/if}
-    </div>
-
-    {#if selectedUserId}
-      <div class="media-section">
-        <div class="media-header">
-          <div class="header-info">
-            <h3>
-              r2 files for {selectedUserId}
-              {#if total > 0}
-                <span class="count">({total})</span>
-              {/if}
-            </h3>
-          </div>
-          <div class="header-actions">
-            <select bind:value={fileTypeFilter} on:change={handleFileTypeFilter}>
-              <option value="">all types</option>
-              <option value="gif">gif</option>
-              <option value="video">video</option>
-              <option value="image">image</option>
-            </select>
-            <button
-              class="delete-all-btn"
-              on:click={deleteAllForUser}
-              disabled={deleting || total === 0}
-            >
-              delete all for user
-            </button>
-          </div>
-        </div>
-
-        {#if loading}
-          <div class="loading">loading r2 files...</div>
-        {:else if error}
-          <div class="state-error">error: {error}</div>
-          <button class="retry-btn" on:click={fetchR2Media}>retry</button>
-        {:else if media.length === 0}
-          <div class="empty">no r2 files found for this user</div>
-        {:else}
-          <div class="bulk-actions">
-            <label class="select-all-label">
-              <input
-                type="checkbox"
-                checked={selectedFiles.size === media.length && media.length > 0}
-                on:change={toggleSelectAll}
-              />
-              <span>select page ({selectedFiles.size} selected)</span>
-            </label>
-            {#if selectedFiles.size > 0}
-              <button class="bulk-delete-btn" on:click={bulkDelete} disabled={deleting}>
-                delete selected ({selectedFiles.size})
-              </button>
-            {/if}
-          </div>
-
-          <div class="media-grid">
-            {#each media as item (item.url_hash)}
-              <div class="media-card" class:checked={selectedFiles.has(item.url_hash)}>
-                <div class="media-preview">
-                  {#if item.file_type === 'video'}
-                    <!-- svelte-ignore a11y-media-has-caption -->
-                    <video src={item.file_url} preload="metadata" controls muted playsinline
-                    ></video>
-                  {:else}
-                    <a href={item.file_url} target="_blank" rel="noopener noreferrer">
-                      <img src={item.file_url} alt={item.file_type || 'media'} loading="lazy" />
-                    </a>
-                  {/if}
-                  <label class="card-checkbox">
-                    <input
-                      type="checkbox"
-                      checked={selectedFiles.has(item.url_hash)}
-                      on:change={() => toggleFileSelection(item.url_hash)}
-                    />
-                  </label>
-                </div>
-                <div class="media-info">
-                  <span class="media-type">{item.file_type || 'unknown'}</span>
-                  <span class="media-size"
-                    >{item.file_size ? formatBytes(item.file_size) : ', '}</span
-                  >
-                  <span class="media-date" title={formatTimestamp(item.processed_at)}>
-                    {formatRelativeTime(item.processed_at)}
-                  </span>
-                </div>
-                <div class="media-actions">
-                  <a
-                    class="open-link"
-                    href={item.file_url}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                  >
-                    open
-                  </a>
-                  <button
-                    class="delete-btn"
-                    on:click={() => deleteFile(item.url_hash)}
-                    disabled={deleting}
-                  >
-                    delete
-                  </button>
-                </div>
-              </div>
+              <div class="empty">no files</div>
             {/each}
           </div>
-
-          <Pagination
-            {offset}
-            {limit}
-            {total}
-            disabled={deleting}
-            pageSizes={[10, 25, 50, 100]}
-            on:page={handlePage}
-          />
+          {#if total > PAGE}
+            <div class="pager">
+              <span class="dim">{offset + 1}–{Math.min(offset + PAGE, total)} of {total}</span>
+              <span class="row">
+                <button class="btn sm" disabled={offset === 0} onclick={() => (offset -= PAGE)}
+                  >Previous</button
+                >
+                <button
+                  class="btn sm"
+                  disabled={offset + PAGE >= total}
+                  onclick={() => (offset += PAGE)}>Next</button
+                >
+              </span>
+            </div>
+          {/if}
         {/if}
+      </section>
+    </div>
+  {:else}
+    <div class="bans">
+      <section class="panel switch-panel">
+        <div class="pb row">
+          <button
+            class="toggle"
+            class:on={enabled}
+            role="switch"
+            aria-checked={enabled}
+            aria-label="enforce bans"
+            disabled={busy}
+            onclick={toggleEnabled}
+          ></button>
+          <div class="grow">
+            <b>Enforce bans</b>
+            <div class="dim small">
+              {enabled
+                ? 'Banned users are refused every command.'
+                : 'Off: bans are recorded but not enforced.'}
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <div class="two">
+        <section
+          class="panel tbl"
+          aria-label="bans"
+          style="--cols: minmax(0, 1fr) minmax(0, 1.4fr) 90px 100px 80px"
+        >
+          <div class="ph">
+            <span>Banned users</span><span class="meta mono">{bans.length}</span>
+          </div>
+          <div class="tr head">
+            <span>user</span><span>reason</span><span>appeal</span><span>since</span><span></span>
+          </div>
+          {#each bans as b (b.user_id)}
+            <div class="tr">
+              <button
+                class="linkish mono ellipsis"
+                onclick={() => navigate('user-profile', { userId: b.user_id })}>{b.user_id}</button
+              >
+              <span class="ellipsis" title={b.reason}>{b.reason}</span>
+              <span class="small muted">{b.appeal_allowed ? 'allowed' : 'no'}</span>
+              <span class="small dim">{formatRelativeTime(b.banned_at)}</span>
+              <button class="btn sm" onclick={() => unban(b.user_id)}>Unban</button>
+            </div>
+          {:else}
+            <div class="empty">nobody is banned</div>
+          {/each}
+        </section>
+
+        <section class="panel" aria-label="ban a user">
+          <div class="ph"><span>Ban a user</span></div>
+          <div class="pb form">
+            <label
+              >Find user
+              <input
+                class="field"
+                bind:value={banSearch}
+                oninput={onBanSearch}
+                placeholder="search by id"
+              />
+            </label>
+            {#if banResults.length}
+              <div class="results">
+                {#each banResults as u (u.user_id)}
+                  <button
+                    class="urow"
+                    onclick={() => {
+                      banForm.userId = u.user_id;
+                      banSearch = '';
+                      banResults = [];
+                    }}
+                  >
+                    <span class="mono ellipsis">{u.user_id}</span><span class="dim small"
+                      >{u.total_commands} requests</span
+                    >
+                  </button>
+                {/each}
+              </div>
+            {/if}
+            <label
+              >User id <input
+                class="field mono"
+                bind:value={banForm.userId}
+                placeholder="17-20 digit Discord id"
+              /></label
+            >
+            <label
+              >Reason <textarea
+                class="field"
+                rows="3"
+                bind:value={banForm.reason}
+                maxlength="200"
+                placeholder="shown to them when they appeal"></textarea></label
+            >
+            <label class="check-row"
+              ><input type="checkbox" bind:checked={banForm.appealAllowed} /> allow appeal</label
+            >
+            <button
+              class="btn danger"
+              disabled={busy || !banForm.userId.trim() || !banForm.reason.trim()}
+              onclick={submitBan}>Ban user</button
+            >
+          </div>
+        </section>
       </div>
-    {:else}
-      <div class="empty-state">
-        <p>select a user above to view their r2 uploads</p>
-      </div>
-    {/if}
+    </div>
   {/if}
 </div>
 
 <style>
-  .moderation-container {
+  .mod {
+    max-width: 1400px;
+    margin: 0 auto;
     display: flex;
     flex-direction: column;
-    gap: 1.5rem;
+    gap: 16px;
   }
-
-  .header-section {
-    margin: 0;
+  .small {
+    font-size: 12px;
   }
-
-  .subtitle {
-    margin: 0;
-    color: var(--text-muted);
-    font-size: 0.9rem;
+  .flash {
+    padding: 10px 14px;
+    border-radius: 8px;
+    font-size: 13px;
   }
-
-  .status-line {
-    padding: 0.6rem 1rem;
-    border-radius: var(--radius);
-    font-size: 0.9rem;
-    border: 1px solid var(--border);
-  }
-
-  .status-line.success {
-    background-color: rgba(81, 207, 102, 0.1);
-    border-color: var(--success);
+  .flash.ok {
+    background: var(--success-bg);
     color: var(--success);
   }
-
-  .status-line.error {
-    background-color: rgba(255, 107, 107, 0.1);
-    border-color: var(--danger);
-    color: var(--danger);
+  .flash.error {
+    background: var(--danger-bg);
+    color: #f4b4b4;
   }
-
-  .user-selector-section {
-    background-color: var(--surface);
-    border: 1px solid var(--border);
-    border-radius: var(--radius-lg);
-    padding: 1.5rem;
-  }
-
-  .selector-header {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    margin-bottom: 1rem;
-  }
-
-  .selector-header h3 {
-    margin: 0;
-    font-size: 1rem;
-    font-weight: 500;
-    color: var(--text-bright);
-  }
-
-  .search-box input {
-    padding: 0.5rem 0.75rem;
-    background-color: var(--surface-2);
-    border: 1px solid var(--surface-3);
-    color: var(--text-bright);
-    font-size: 0.9rem;
-    border-radius: var(--radius);
-    min-width: 250px;
-  }
-
-  .users-list {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 0.5rem;
-    max-height: 260px;
-    overflow-y: auto;
-  }
-
-  .user-item {
-    display: flex;
-    flex-direction: column;
-    align-items: flex-start;
-    gap: 0.15rem;
-    padding: 0.5rem 1rem;
-    background-color: var(--surface-2);
-    border: 1px solid var(--surface-3);
-    color: var(--text);
-    cursor: pointer;
-    border-radius: var(--radius);
-    font-size: 0.9rem;
-    transition: all 0.2s;
-  }
-
-  .user-item:hover {
-    background-color: var(--border);
-    border-color: var(--border-2);
-  }
-
-  .user-item.selected {
-    background-color: var(--success);
-    border-color: var(--success);
-    color: #000;
-  }
-
-  .user-item .user-id {
-    font-weight: 500;
-  }
-
-  .user-item .user-stats {
-    font-size: 0.75rem;
-    opacity: 0.7;
-  }
-
-  .media-section {
-    background-color: var(--surface);
-    border: 1px solid var(--border);
-    border-radius: var(--radius-lg);
-    padding: 1.5rem;
-  }
-
-  .media-header {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    margin-bottom: 1rem;
-    flex-wrap: wrap;
-    gap: 1rem;
-  }
-
-  .header-info h3 {
-    margin: 0;
-    font-size: 1rem;
-    font-weight: 500;
-    color: var(--text-bright);
-  }
-
-  .count {
-    color: var(--text-muted);
-    font-weight: normal;
-  }
-
-  .header-actions {
-    display: flex;
-    gap: 0.5rem;
-    align-items: center;
-  }
-
-  .header-actions select {
-    padding: 0.5rem 0.75rem;
-    background-color: var(--surface-2);
-    border: 1px solid var(--surface-3);
-    color: var(--text-bright);
-    font-size: 0.9rem;
-    border-radius: var(--radius);
-    cursor: pointer;
-  }
-
-  .delete-all-btn {
-    padding: 0.5rem 1rem;
-    background-color: var(--danger);
-    color: var(--text-bright);
-    border: 1px solid var(--danger);
-    cursor: pointer;
-    font-size: 0.9rem;
-    border-radius: var(--radius);
-  }
-
-  .delete-all-btn:disabled {
-    opacity: 0.5;
-    cursor: not-allowed;
-  }
-
-  .bulk-actions {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    margin-bottom: 1rem;
-    padding: 0.75rem;
-    background-color: var(--surface-2);
-    border-radius: var(--radius);
-  }
-
-  .select-all-label {
-    display: flex;
-    align-items: center;
-    gap: 0.5rem;
-    color: var(--text);
-    cursor: pointer;
-    font-size: 0.9rem;
-  }
-
-  .select-all-label input[type='checkbox'] {
-    cursor: pointer;
-  }
-
-  .bulk-delete-btn {
-    padding: 0.4rem 0.8rem;
-    background-color: var(--danger);
-    color: var(--text-bright);
-    border: 1px solid var(--danger);
-    cursor: pointer;
-    font-size: 0.85rem;
-    border-radius: var(--radius);
-  }
-
-  .bulk-delete-btn:disabled {
-    opacity: 0.5;
-    cursor: not-allowed;
-  }
-
-  .media-grid {
+  .files {
     display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
-    gap: 0.75rem;
-    margin-bottom: 1rem;
+    grid-template-columns: 320px minmax(0, 1fr);
+    gap: 16px;
+    align-items: start;
   }
-
-  .media-card {
+  .filter {
+    margin: 10px 12px;
+    height: 32px;
+    padding: 0 10px;
     display: flex;
-    flex-direction: column;
-    background-color: var(--surface-2);
-    border: 1px solid var(--surface-3);
-    border-radius: var(--radius);
+    align-items: center;
+    gap: 8px;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    color: var(--text-muted);
+  }
+  .filter input {
+    flex: 1;
+    min-width: 0;
+    background: none;
+    border: 0;
+    outline: 0;
+    color: var(--text-bright);
+    font: inherit;
+    font-size: 13px;
+  }
+  .ulist {
+    max-height: calc(100vh - 260px);
+    overflow-y: auto;
+    padding: 0 6px 8px;
+  }
+  .urow {
+    width: 100%;
+    display: flex;
+    justify-content: space-between;
+    gap: 10px;
+    padding: 8px 10px;
+    border: 0;
+    border-radius: 6px;
+    background: none;
+    color: var(--text);
+    font: inherit;
+    font-size: 13px;
+    text-align: left;
+    cursor: pointer;
+  }
+  .urow:hover,
+  .urow.sel {
+    background: var(--surface-2);
+  }
+  .empty.big {
+    padding: 80px 16px;
+  }
+  .field.sm {
+    height: 26px;
+    font-size: 12px;
+  }
+  .linkish {
+    background: none;
+    border: 0;
+    padding: 0;
+    color: var(--accent);
+    font: inherit;
+    font-size: 13px;
+    cursor: pointer;
+    text-align: left;
+  }
+  .gallery {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(190px, 1fr));
+    gap: 12px;
+    padding: 14px;
+  }
+  .tile {
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    overflow: hidden;
+    background: var(--bg);
+  }
+  .tile.on {
+    border-color: var(--danger);
+  }
+  .thumb {
+    position: relative;
+    width: 100%;
+    aspect-ratio: 16 / 10;
+    display: grid;
+    place-items: center;
+    padding: 0;
+    border: 0;
+    background: #0b0c0e;
+    cursor: pointer;
     overflow: hidden;
   }
-
-  .media-card.checked {
-    border-color: var(--success);
-  }
-
-  .media-preview {
-    position: relative;
-    aspect-ratio: 1 / 1;
-    background-color: var(--bg-deep);
-  }
-
-  .media-preview img,
-  .media-preview video {
+  .thumb img {
     width: 100%;
     height: 100%;
-    object-fit: contain;
-    display: block;
+    object-fit: cover;
   }
-
-  .card-checkbox {
+  .vid {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 6px;
+    color: var(--text-dim);
+    font: 11px var(--mono);
+  }
+  .check {
     position: absolute;
-    top: 0.4rem;
-    left: 0.4rem;
-    background-color: rgba(0, 0, 0, 0.6);
-    border-radius: var(--radius);
-    padding: 0.25rem;
-    display: flex;
-    cursor: pointer;
+    top: 8px;
+    left: 8px;
+    width: 18px;
+    height: 18px;
+    border-radius: 5px;
+    border: 1.5px solid rgba(255, 255, 255, 0.5);
+    background: rgba(0, 0, 0, 0.4);
+    color: #fff;
+    font-size: 12px;
+    line-height: 15px;
   }
-
-  .card-checkbox input[type='checkbox'] {
-    cursor: pointer;
-    margin: 0;
+  .tile.on .check {
+    background: var(--danger);
+    border-color: var(--danger);
   }
-
-  .media-info {
+  .cap {
     display: flex;
-    justify-content: space-between;
     align-items: center;
-    gap: 0.4rem;
-    padding: 0.4rem 0.6rem;
-    font-size: 0.75rem;
+    gap: 6px;
+    padding: 8px;
+  }
+  .icon {
+    display: flex;
+    padding: 3px;
+    border: 0;
+    border-radius: 5px;
+    background: none;
     color: var(--text-muted);
-  }
-
-  .media-type {
-    text-transform: capitalize;
-  }
-
-  .media-size {
-    font-family: monospace;
-  }
-
-  .media-date {
-    color: var(--text-dim);
-  }
-
-  .media-actions {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    padding: 0.4rem 0.6rem;
-    border-top: 1px solid var(--surface-3);
-  }
-
-  .open-link {
-    font-size: 0.8rem;
-    color: var(--success);
-    text-decoration: none;
-  }
-
-  .open-link:hover {
-    text-decoration: underline;
-  }
-
-  .delete-btn {
-    padding: 0.3rem 0.7rem;
-    background-color: var(--danger);
-    color: var(--text-bright);
-    border: 1px solid var(--danger);
     cursor: pointer;
-    font-size: 0.8rem;
-    border-radius: var(--radius);
   }
-
-  .delete-btn:disabled {
-    opacity: 0.5;
-    cursor: not-allowed;
+  .icon:hover {
+    background: var(--surface-2);
+    color: var(--text-bright);
   }
-
-  .loading,
-  .state-error,
-  .empty,
-  .empty-state {
-    padding: 2rem;
-    text-align: center;
-  }
-
-  .loading {
-    color: var(--text-dim);
-  }
-
-  .state-error {
+  .icon.danger:hover {
     color: var(--danger);
   }
-
-  .empty,
-  .empty-state {
-    color: var(--text-dim);
-  }
-
-  .empty-state p {
-    margin: 0;
-  }
-
-  .retry-btn {
-    margin-top: 1rem;
-    padding: 0.5rem 1rem;
-    background-color: var(--surface-3);
-    color: var(--text-bright);
-    border: 1px solid var(--border-2);
-    cursor: pointer;
-    border-radius: var(--radius);
-  }
-
-  .retry-btn:hover {
-    background-color: var(--border-2);
-  }
-
-  @media (max-width: 768px) {
-    button {
-      min-height: 44px;
-    }
-
-    .selector-header {
-      flex-direction: column;
-      align-items: stretch;
-      gap: 0.75rem;
-    }
-
-    .search-box input {
-      width: 100%;
-      min-width: 0;
-    }
-
-    .media-header {
-      flex-direction: column;
-      align-items: flex-start;
-    }
-
-    .header-actions {
-      width: 100%;
-      flex-direction: column;
-    }
-
-    .header-actions select,
-    .delete-all-btn {
-      width: 100%;
-    }
-
-    .bulk-actions {
-      flex-direction: column;
-      align-items: flex-start;
-      gap: 0.5rem;
-    }
-
-    .bulk-delete-btn {
-      width: 100%;
-    }
-
-    .media-grid {
-      grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
-    }
-  }
-
-  .tabs {
+  .pager {
     display: flex;
-    gap: 0.5rem;
-    border-bottom: 1px solid var(--border);
-  }
-
-  .tabs button {
-    padding: 0.6rem 1rem;
-    background: none;
-    border: none;
-    border-bottom: 2px solid transparent;
-    color: var(--text-muted);
-    cursor: pointer;
-    font-size: 0.9rem;
-  }
-
-  .tabs button:hover {
-    color: var(--text-bright);
-  }
-
-  .tabs button.active {
-    color: var(--text-bright);
-    border-bottom-color: var(--success);
-  }
-
-  .bans-section {
-    background-color: var(--surface);
-    border: 1px solid var(--border);
-    border-radius: var(--radius-lg);
-    padding: 1.5rem;
-  }
-
-  .bans-toggle-row {
-    display: flex;
+    align-items: center;
     justify-content: space-between;
-    align-items: center;
-    margin-bottom: 1rem;
-    gap: 1rem;
-    flex-wrap: wrap;
+    padding: 10px 16px;
+    border-top: 1px solid var(--line);
+    font-size: 12px;
   }
-
-  .toggle-label {
-    display: flex;
-    align-items: center;
-    gap: 0.5rem;
-    color: var(--text);
-    cursor: pointer;
-    font-size: 0.9rem;
-  }
-
-  .ban-user-btn {
-    padding: 0.5rem 1rem;
-    background-color: var(--danger);
-    color: var(--text-bright);
-    border: 1px solid var(--danger);
-    cursor: pointer;
-    font-size: 0.9rem;
-    border-radius: var(--radius);
-  }
-
-  .bans-list {
+  .bans {
     display: flex;
     flex-direction: column;
-    gap: 0.5rem;
+    gap: 16px;
   }
-
-  .ban-row {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    gap: 1rem;
-    padding: 0.75rem 1rem;
-    background-color: var(--surface-2);
-    border: 1px solid var(--surface-3);
-    border-radius: var(--radius);
+  .switch-panel .row {
+    gap: 14px;
   }
-
-  .ban-info {
-    display: flex;
-    flex-direction: column;
-    gap: 0.2rem;
-    min-width: 0;
-  }
-
-  .ban-user {
-    font-family: monospace;
-    font-size: 0.8rem;
-    color: var(--text-dim);
-  }
-
-  .ban-reason {
-    color: var(--text-bright);
-    font-size: 0.9rem;
-  }
-
-  .ban-meta {
-    color: var(--text-muted);
-    font-size: 0.75rem;
-  }
-
-  .unban-btn {
-    flex-shrink: 0;
-    padding: 0.4rem 0.8rem;
-    background-color: var(--surface-3);
-    color: var(--text-bright);
-    border: 1px solid var(--border-2);
-    cursor: pointer;
-    font-size: 0.85rem;
-    border-radius: var(--radius);
-  }
-
-  .unban-btn:hover {
-    background-color: var(--border-2);
-  }
-
-  .modal-overlay {
-    position: fixed;
-    inset: 0;
-    background-color: rgba(0, 0, 0, 0.6);
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    z-index: 1500;
-    padding: 1rem;
-  }
-
-  .modal {
-    background-color: var(--surface);
-    border: 1px solid var(--border-2);
-    border-radius: var(--radius-lg);
-    padding: 1.5rem;
-    width: 100%;
-    max-width: 420px;
-    display: flex;
-    flex-direction: column;
-    gap: 1rem;
-  }
-
-  .modal h3 {
-    margin: 0;
-    color: var(--text-bright);
-    font-size: 1.1rem;
+  .switch-panel b {
     font-weight: 500;
+    color: var(--text-bright);
   }
-
-  .field {
+  .two {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 360px;
+    gap: 16px;
+    align-items: start;
+  }
+  .form {
     display: flex;
     flex-direction: column;
-    gap: 0.4rem;
-    font-size: 0.85rem;
+    gap: 12px;
+  }
+  .form label {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    font-size: 12px;
     color: var(--text-muted);
-    position: relative;
   }
-
-  .field input[type='text'],
-  .field textarea {
-    padding: 0.5rem 0.75rem;
-    background-color: var(--surface-2);
-    border: 1px solid var(--surface-3);
-    color: var(--text-bright);
-    font-size: 0.9rem;
-    border-radius: var(--radius);
-    font-family: inherit;
-    resize: vertical;
-  }
-
-  .field.checkbox-field {
+  .form .check-row {
     flex-direction: row;
     align-items: center;
+    gap: 8px;
   }
-
-  .picked-user {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    gap: 0.5rem;
-    padding: 0.5rem 0.75rem;
-    background-color: var(--surface-2);
-    border: 1px solid var(--surface-3);
-    border-radius: var(--radius);
-    color: var(--text-bright);
-    font-size: 0.85rem;
+  .results {
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 4px;
   }
-
-  .picked-user button {
-    background: none;
-    border: 1px solid var(--border-2);
-    color: var(--text-muted);
-    cursor: pointer;
-    padding: 0.2rem 0.5rem;
-    border-radius: var(--radius);
-    font-size: 0.75rem;
-  }
-
-  .search-results {
-    position: absolute;
-    top: 100%;
-    left: 0;
-    right: 0;
-    background-color: var(--surface-2);
-    border: 1px solid var(--surface-3);
-    border-radius: var(--radius);
-    max-height: 200px;
-    overflow-y: auto;
-    z-index: 10;
-  }
-
-  .search-result {
-    display: block;
-    width: 100%;
-    text-align: left;
-    padding: 0.5rem 0.75rem;
-    background: none;
-    border: none;
-    color: var(--text-bright);
-    cursor: pointer;
-    font-size: 0.85rem;
-  }
-
-  .search-result:hover {
-    background-color: var(--surface-3);
-  }
-
-  .search-result .dim {
-    color: var(--text-dim);
-    font-size: 0.75rem;
-  }
-
-  .modal-actions {
-    display: flex;
-    justify-content: flex-end;
-    gap: 0.5rem;
-  }
-
-  .cancel-btn {
-    padding: 0.5rem 1rem;
-    background-color: var(--surface-3);
-    color: var(--text-bright);
-    border: 1px solid var(--border-2);
-    cursor: pointer;
-    border-radius: var(--radius);
-  }
-
-  .confirm-ban-btn {
-    padding: 0.5rem 1rem;
-    background-color: var(--danger);
-    color: var(--text-bright);
-    border: 1px solid var(--danger);
-    cursor: pointer;
-    border-radius: var(--radius);
-  }
-
-  .confirm-ban-btn:disabled,
-  .ban-user-btn:disabled {
-    opacity: 0.5;
-    cursor: not-allowed;
-  }
-
-  @media (max-width: 768px) {
-    .bans-toggle-row {
-      flex-direction: column;
-      align-items: stretch;
-    }
-
-    .ban-row {
-      flex-direction: column;
-      align-items: flex-start;
-    }
-
-    .unban-btn {
-      width: 100%;
+  @media (max-width: 1000px) {
+    .files,
+    .two {
+      grid-template-columns: 1fr;
     }
   }
 </style>

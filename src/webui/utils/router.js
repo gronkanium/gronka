@@ -33,6 +33,12 @@ function parseHash() {
     params.userId = segments[1];
     page = 'user-profile';
   }
+  if (page === 'requests' && segments[1]) {
+    params.requestId = segments[1];
+    page = 'request';
+  }
+  // The alerts page became issues.
+  if (page === 'alerts') page = 'issues';
 
   // Parse query parameters
   if (queryString) {
@@ -70,6 +76,10 @@ export function navigate(page, params = {}) {
   if (params.userId) {
     hash = `#/users/${params.userId}`;
     delete params.userId;
+  }
+  if (params.requestId) {
+    hash = `#/requests/${params.requestId}`;
+    delete params.requestId;
   }
 
   // Add query parameters

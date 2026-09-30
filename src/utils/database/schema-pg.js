@@ -166,6 +166,21 @@ export function getTableDefinitions() {
         );
       `,
     },
+    {
+      name: 'media_workers',
+      sql: `
+        CREATE TABLE IF NOT EXISTS media_workers (
+          id TEXT PRIMARY KEY,
+          role TEXT NOT NULL,
+          version TEXT,
+          started_at BIGINT NOT NULL,
+          seen_at BIGINT NOT NULL,
+          rss BIGINT,
+          cpu REAL,
+          running INTEGER NOT NULL DEFAULT 0
+        );
+      `,
+    },
   ];
 }
 

@@ -3,7 +3,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { Client } from 'discord.js';
-import { createLogger } from './utils/logger.js';
+import { createLogger, withLogContext } from './utils/logger.js';
 import { botConfig } from './utils/config.js';
 import { initDatabase, markOperationAsFailed } from './utils/database.js';
 import { refreshRateLimitSettings } from './utils/rate-limit.js';
@@ -38,7 +38,11 @@ const running = new Map();
 let draining = false;
 let lastPump = Date.now();
 
-async function runJob(job) {
+function runJob(job) {
+  return withLogContext({ worker: queue.WORKER_ID, job: job.id }, () => runJobInContext(job));
+}
+
+async function runJobInContext(job) {
   logger.info(`Job ${job.id} (${job.kind}) attempt ${job.attempts} [user: ${job.user_id}]`);
   let operationId = job.operation_id;
   const beat = setInterval(
@@ -136,6 +140,7 @@ function watchdog() {
     process.exit(1);
   }
   fs.writeFile(ALIVE_FILE, String(Date.now()), () => {});
+  queue.reportPresence({ role: 'worker', running: running.size }).catch(() => {});
 }
 
 async function shutdown(signal) {
@@ -149,6 +154,7 @@ async function shutdown(signal) {
   const released = await queue.releaseJobs([...running.keys()]).catch(() => 0);
   if (released) logger.info(`Handed ${released} unfinished job(s) back to the queue`);
   await flushAllOperationLogs();
+  await queue.clearPresence().catch(() => {});
   process.exit(0);
 }
 

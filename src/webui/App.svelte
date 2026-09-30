@@ -1,5 +1,5 @@
 <script>
-  import { onMount, onDestroy } from 'svelte';
+  import { onMount } from 'svelte';
   import { currentRoute, initRouter, navigate } from './utils/router.js';
   import {
     useSse,
@@ -8,325 +8,438 @@
     connectionHealth,
   } from './stores/sse-store.js';
   import {
-    BarChart3,
+    LayoutDashboard,
+    Activity,
+    TriangleAlert,
+    TerminalSquare,
+    Server,
+    HardDrive,
     Users as UsersIcon,
-    FileText,
-    Bell,
-    ChevronLeft,
-    ChevronRight,
     Shield,
-    List,
-    SlidersHorizontal,
     Globe,
+    SlidersHorizontal,
+    Search,
+    PanelLeftClose,
+    PanelLeftOpen,
   } from 'lucide-svelte';
-  import Stats from './pages/Stats.svelte';
-  import Health from './pages/Health.svelte';
+  import CommandPalette from './components/CommandPalette.svelte';
+  import NavFlyout from './components/NavFlyout.svelte';
+  import { navStats, savedViews, issueStates, startNavStats, removeView } from './stores/nav.js';
+  import { isOpen } from './issues.js';
+  import { menuFor } from './nav-menus.js';
+  import { headerActions } from './stores/header.js';
+  import Overview from './pages/Overview.svelte';
   import Requests from './pages/Requests.svelte';
+  import RequestDetail from './pages/Request.svelte';
   import Logs from './pages/Logs.svelte';
   import Users from './pages/Users.svelte';
   import UserProfile from './pages/UserProfile.svelte';
-  import Alerts from './pages/Alerts.svelte';
+  import Issues from './pages/Issues.svelte';
+  import Workers from './pages/Workers.svelte';
+  import Storage from './pages/Storage.svelte';
   import Moderation from './pages/Moderation.svelte';
   import Sources from './pages/Sources.svelte';
   import BotSettings from './pages/BotSettings.svelte';
-  import './styles/responsive.css';
 
   const SIDEBAR_STORAGE_KEY = 'gronka:sidebar-open';
 
-  // Restore the sidebar's collapsed/open state from a previous visit. Defaults to
-  // open, and stays open if storage is unavailable (private mode, etc.).
-  function loadSidebarState() {
-    try {
-      const stored = localStorage.getItem(SIDEBAR_STORAGE_KEY);
-      return stored === null ? true : stored === 'true';
-    } catch {
-      return true;
-    }
-  }
-
-  // Nav items drive both the sidebar and the per-page document title / heading,
-  // so the labels only live in one place.
-  const navItems = [
-    { page: 'dashboard', label: 'dashboard', icon: BarChart3 },
-    { page: 'users', label: 'users', icon: UsersIcon },
-    { page: 'requests', label: 'requests', icon: List },
-    { page: 'logs', label: 'logs', icon: FileText },
-    { page: 'alerts', label: 'alerts', icon: Bell },
-    { page: 'moderation', label: 'moderation', icon: Shield },
-    { page: 'sources', label: 'sources', icon: Globe },
-    { page: 'settings', label: 'settings', icon: SlidersHorizontal },
+  const sections = [
+    { items: [{ page: 'dashboard', label: 'Overview', icon: LayoutDashboard }] },
+    {
+      name: 'Activity',
+      items: [
+        { page: 'requests', label: 'Requests', icon: Activity },
+        { page: 'issues', label: 'Issues', icon: TriangleAlert },
+        { page: 'logs', label: 'Logs', icon: TerminalSquare },
+      ],
+    },
+    {
+      name: 'People',
+      items: [
+        { page: 'users', label: 'Users', icon: UsersIcon },
+        { page: 'moderation', label: 'Moderation', icon: Shield },
+      ],
+    },
+    {
+      name: 'System',
+      items: [
+        { page: 'system', label: 'Workers & queue', icon: Server },
+        { page: 'storage', label: 'Storage', icon: HardDrive },
+        { page: 'sources', label: 'Sources', icon: Globe },
+      ],
+    },
   ];
-
-  // Pages reachable by deep link that aren't top-level nav entries.
-  const pageTitles = {
-    'user-profile': 'user profile',
+  const settingsItem = { page: 'settings', label: 'Settings', icon: SlidersHorizontal };
+  const allItems = [...sections.flatMap(s => s.items), settingsItem];
+  const PAGES = {
+    dashboard: Overview,
+    requests: Requests,
+    request: RequestDetail,
+    logs: Logs,
+    issues: Issues,
+    system: Workers,
+    storage: Storage,
+    users: Users,
+    'user-profile': UserProfile,
+    moderation: Moderation,
+    sources: Sources,
+    settings: BotSettings,
   };
+  // Pages that lay out their own full-height view instead of a padded column.
+  const FULL_BLEED = new Set(['logs']);
 
-  let sidebarOpen = true;
-  let sseCleanup = null;
+  let sidebarOpen = $state(true);
+  let paletteOpen = $state(false);
+  let paletteQuery = $state('');
+  let fly = $state(null);
+  let flyout = $state();
+  let openTimer;
+  let closeTimer;
+
+  const activePage = $derived($currentRoute.page);
+  const activeTitle = $derived(
+    { 'user-profile': 'User', request: 'Request' }[activePage] ??
+      allItems.find(i => i.page === activePage)?.label ??
+      activePage
+  );
+  const PageComponent = $derived(PAGES[activePage]);
+  const isOnline = $derived($connectionHealth?.isOnline !== false);
+  const connStatus = $derived($wsConnected ? 'live' : isOnline ? 'connecting' : 'offline');
+
+  $effect(() => {
+    document.title =
+      activePage === 'dashboard' ? 'gronka' : `gronka · ${activeTitle.toLowerCase()}`;
+  });
 
   onMount(() => {
-    sidebarOpen = loadSidebarState();
-    initRouter();
-    // Initialize SSE connection at app level to persist across page navigations
-    // (the store self-heals: onerror reconnect with backoff + stale-connection check)
-    sseCleanup = useSse();
-
-    window.addEventListener('keydown', handleKeydown);
-  });
-
-  onDestroy(() => {
-    // Cleanup SSE connection when app is destroyed
-    if (sseCleanup) {
-      sseCleanup();
-    }
-    window.removeEventListener('keydown', handleKeydown);
-  });
-
-  function persistSidebarState() {
     try {
-      localStorage.setItem(SIDEBAR_STORAGE_KEY, String(sidebarOpen));
+      // On a phone the sidebar covers the page, so it always starts closed there.
+      sidebarOpen =
+        window.innerWidth > 768 && localStorage.getItem(SIDEBAR_STORAGE_KEY) !== 'false';
     } catch {
-      // Storage unavailable, state simply won't persist across reloads.
+      sidebarOpen = window.innerWidth > 768;
     }
-  }
+    initRouter();
+    const cleanup = useSse();
+    const stopNav = startNavStats();
+    window.addEventListener('keydown', onKeydown);
+    return () => {
+      cleanup?.();
+      stopNav();
+      window.removeEventListener('keydown', onKeydown);
+    };
+  });
 
   function toggleSidebar() {
     sidebarOpen = !sidebarOpen;
-    persistSidebarState();
-  }
-
-  function navigateTo(page) {
-    navigate(page);
-    // On mobile the sidebar overlays the content, so collapse it after a jump.
-    if (typeof window !== 'undefined' && window.innerWidth <= 768) {
-      sidebarOpen = false;
+    try {
+      localStorage.setItem(SIDEBAR_STORAGE_KEY, String(sidebarOpen));
+    } catch {
+      // storage unavailable
     }
   }
 
-  function handleKeydown(event) {
-    // Ignore shortcuts while typing in a field.
-    const target = event.target;
-    const typing =
-      target &&
-      (target.tagName === 'INPUT' ||
-        target.tagName === 'TEXTAREA' ||
-        target.tagName === 'SELECT' ||
-        target.isContentEditable);
+  function go(page, params) {
+    navigate(page, params);
+    if (window.innerWidth <= 768) sidebarOpen = false;
+  }
 
-    if ((event.ctrlKey || event.metaKey) && !event.altKey && event.key.toLowerCase() === 'b') {
-      event.preventDefault();
+  // Sidebar counts, from the same numbers the flyouts show.
+  function badge(page) {
+    if (page === 'requests') return $navStats?.requests.total;
+    if (page === 'users') return $navStats?.users;
+    return undefined;
+  }
+  const issueCount = $derived(
+    ($navStats?.issues ?? []).filter(g => isOpen(g, $issueStates)).length
+  );
+
+  const canFly = () => window.matchMedia('(hover: hover) and (min-width: 769px)').matches;
+
+  function showMenu(item, target, now = false) {
+    if (!canFly() || !menuFor(item.page, $navStats, $savedViews, $issueStates)) return;
+    clearTimeout(closeTimer);
+    clearTimeout(openTimer);
+    const open = () => (fly = { item, top: target.getBoundingClientRect().top });
+    if (now || fly) open();
+    else openTimer = setTimeout(open, 90);
+  }
+  function hideMenu() {
+    clearTimeout(openTimer);
+    closeTimer = setTimeout(() => (fly = null), 180);
+  }
+  function keepMenu() {
+    clearTimeout(closeTimer);
+  }
+  function closeMenu(refocus) {
+    const page = fly?.item.page;
+    fly = null;
+    if (refocus) document.querySelector(`[data-nav="${page}"]`)?.focus();
+  }
+  function onNavKey(e, item) {
+    if (e.key === 'ArrowRight') {
+      e.preventDefault();
+      showMenu(item, e.currentTarget, true);
+      queueMicrotask(() => flyout?.focusFirst());
+    } else if (e.key === 'Escape') {
+      closeMenu(false);
+    }
+  }
+  function pick(entry) {
+    const page = entry.page ?? fly.item.page;
+    fly = null;
+    go(page, { ...entry.params });
+  }
+
+  function openPalette(query = '') {
+    paletteQuery = query;
+    paletteOpen = true;
+  }
+
+  function onKeydown(e) {
+    const mod = e.ctrlKey || e.metaKey;
+    const key = e.key.toLowerCase();
+    if (mod && e.shiftKey && key === 'p') {
+      e.preventDefault();
+      openPalette('>');
+    } else if (mod && !e.shiftKey && (key === 'p' || key === 'k')) {
+      e.preventDefault();
+      openPalette('');
+    } else if (mod && !e.altKey && key === 'b') {
+      e.preventDefault();
       toggleSidebar();
-      return;
-    }
-
-    // Escape collapses the sidebar when it's overlaying content on mobile.
-    if (
-      event.key === 'Escape' &&
-      !typing &&
-      sidebarOpen &&
-      typeof window !== 'undefined' &&
-      window.innerWidth <= 768
-    ) {
-      sidebarOpen = false;
-      persistSidebarState();
     }
   }
 
-  $: activePage = $currentRoute.page;
-  $: activeTitle =
-    pageTitles[activePage] || navItems.find(item => item.page === activePage)?.label || activePage;
+  const commands = [
+    ...allItems.map(i => ({ group: 'Go to', label: i.label, run: () => go(i.page) })),
+    {
+      group: 'Logs',
+      label: 'Show errors, last 24h',
+      run: () => go('logs', { level: 'ERROR', range: '24h' }),
+    },
+    {
+      group: 'Logs',
+      label: 'Show errors and warnings, last hour',
+      run: () => go('logs', { level: 'ERROR,WARN', range: '1h' }),
+    },
+    { group: 'Logs', label: 'Live tail everything', run: () => go('logs', { live: '1' }) },
+    { group: 'App', label: 'Toggle sidebar', keys: 'Ctrl B', run: toggleSidebar },
+    { group: 'App', label: 'Reconnect live feed', run: reconnect },
+    {
+      group: 'App',
+      label: 'Copy link to this view',
+      run: () => navigator.clipboard?.writeText(location.href),
+    },
+  ];
 
-  // Keep the browser tab title in sync with the current page.
-  $: if (typeof document !== 'undefined') {
-    document.title = activePage === 'dashboard' ? 'gronka dashboard' : `gronka · ${activeTitle}`;
+  function search(needle, raw) {
+    if (!raw) return [];
+    const out = [];
+    if (/^\d{15,20}$/.test(raw)) {
+      out.push(
+        {
+          group: 'User',
+          label: `Open user ${raw}`,
+          run: () => go('user-profile', { userId: raw }),
+        },
+        { group: 'User', label: `Logs for user ${raw}`, run: () => go('logs', { user: raw }) }
+      );
+    }
+    if (/^\d{13}-[0-9a-f]{6,}$/i.test(raw)) {
+      out.push({
+        group: 'Request',
+        label: `Every log line for request ${raw}`,
+        run: () => go('logs', { op: raw }),
+      });
+    }
+    try {
+      const host = new URL(raw).hostname.replace(/^www\./, '');
+      out.push(
+        { group: 'Link', label: `Logs for ${host}`, run: () => go('logs', { source: host }) },
+        {
+          group: 'Link',
+          label: 'Logs mentioning this link',
+          run: () => go('logs', { search: raw }),
+        }
+      );
+    } catch {
+      out.push({
+        group: 'Logs',
+        label: `Search logs for "${raw}"`,
+        run: () => go('logs', { search: raw }),
+      });
+    }
+    return out;
   }
-
-  // Connection status for the sidebar footer indicator.
-  $: isOnline = $connectionHealth?.isOnline !== false;
-  $: connStatus = $wsConnected ? 'live' : isOnline ? 'connecting' : 'offline';
-  $: connLabel = $wsConnected ? 'live' : isOnline ? 'connecting…' : 'offline';
-  $: connTitle = $wsConnected
-    ? `real-time connection active, ${$connectionHealth?.messageCount ?? 0} messages received`
-    : isOnline
-      ? 'reconnecting to the live feed, click to retry now'
-      : 'device is offline';
 </script>
 
 <a href="#main-content" class="skip-link">skip to content</a>
-<main class:sidebar-open={sidebarOpen}>
-  <nav class="sidebar" class:open={sidebarOpen} aria-label="primary">
-    <div class="sidebar-header">
-      <h1>gronka</h1>
+<div class="shell" class:collapsed={!sidebarOpen}>
+  <nav class="sidebar" aria-label="primary">
+    <div class="brand">
+      <img class="mark" src="/favicon.svg" alt="" />
+      {#if sidebarOpen}<span class="name">gronka</span>{/if}
       <button
-        class="toggle-btn"
-        on:click={toggleSidebar}
+        class="icon-btn collapse"
+        onclick={toggleSidebar}
         title={sidebarOpen ? 'collapse sidebar (Ctrl+B)' : 'expand sidebar (Ctrl+B)'}
         aria-label={sidebarOpen ? 'collapse sidebar' : 'expand sidebar'}
         aria-expanded={sidebarOpen}
       >
-        {#if sidebarOpen}
-          <ChevronLeft size={16} />
-        {:else}
-          <ChevronRight size={16} />
-        {/if}
+        {#if sidebarOpen}<PanelLeftClose size={16} />{:else}<PanelLeftOpen size={16} />{/if}
       </button>
     </div>
-    <ul class="nav-menu">
-      {#each navItems as item (item.page)}
-        {@const Icon = item.icon}
-        <li class:active={activePage === item.page}>
+
+    <button class="jump" onclick={() => openPalette('')} title="search or jump (Ctrl+P)">
+      <Search size={15} />
+      {#if sidebarOpen}<span>Search or jump to…</span><kbd>Ctrl P</kbd>{/if}
+    </button>
+
+    <div class="nav">
+      {#each sections as section, i (i)}
+        {#if section.name && sidebarOpen}<div class="section">{section.name}</div>{/if}
+        {#each section.items as item (item.page)}
+          {@const Icon = item.icon}
           <button
-            on:click={() => navigateTo(item.page)}
-            title={sidebarOpen ? null : item.label}
+            class="link"
+            data-nav={item.page}
+            class:active={activePage === item.page ||
+              (item.page === 'users' && activePage === 'user-profile') ||
+              (item.page === 'requests' && activePage === 'request')}
+            class:hover={fly?.item.page === item.page}
             aria-current={activePage === item.page ? 'page' : undefined}
+            aria-haspopup={menuFor(item.page, null, []) ? 'menu' : undefined}
+            aria-expanded={menuFor(item.page, null, []) ? fly?.item.page === item.page : undefined}
+            title={sidebarOpen ? null : item.label}
+            onclick={() => {
+              fly = null;
+              go(item.page);
+            }}
+            onmouseenter={e => showMenu(item, e.currentTarget)}
+            onmouseleave={hideMenu}
+            onkeydown={e => onNavKey(e, item)}
           >
-            <span class="icon"><Icon size={20} /></span>
-            {#if sidebarOpen}<span class="label">{item.label}</span>{/if}
+            <Icon size={16} strokeWidth={1.8} />
+            {#if sidebarOpen}
+              <span class="grow">{item.label}</span>
+              {#if item.page === 'issues' && issueCount}
+                <span class="count alert">{issueCount}</span>
+              {:else if item.page === 'system' && $navStats?.paused}
+                <span class="count alert">paused</span>
+              {:else if badge(item.page) != null}
+                <span class="count">{badge(item.page).toLocaleString()}</span>
+              {/if}
+            {/if}
           </button>
-        </li>
+        {/each}
       {/each}
-    </ul>
-    <div class="sidebar-footer">
+    </div>
+
+    <div class="foot">
       <button
-        class="conn-status conn-{connStatus}"
-        on:click={reconnect}
-        title={connTitle}
-        aria-label={`connection status: ${connLabel}. click to reconnect`}
+        class="link"
+        data-nav="settings"
+        class:active={activePage === 'settings'}
+        class:hover={fly?.item.page === 'settings'}
+        aria-haspopup="menu"
+        aria-expanded={fly?.item.page === 'settings'}
+        title={sidebarOpen ? null : 'Settings'}
+        onclick={() => {
+          fly = null;
+          go('settings');
+        }}
+        onmouseenter={e => showMenu(settingsItem, e.currentTarget)}
+        onmouseleave={hideMenu}
+        onkeydown={e => onNavKey(e, settingsItem)}
       >
-        <span class="conn-dot"></span>
-        {#if sidebarOpen}<span class="conn-label">{connLabel}</span>{/if}
+        <SlidersHorizontal size={16} strokeWidth={1.8} />
+        {#if sidebarOpen}<span>Settings</span>{/if}
+      </button>
+      <button
+        class="conn conn-{connStatus}"
+        onclick={reconnect}
+        title={$wsConnected
+          ? `live, ${$connectionHealth?.messageCount ?? 0} messages received`
+          : 'click to reconnect the live feed'}
+      >
+        <span class="dot"></span>
+        {#if sidebarOpen}<span>{connStatus}</span>{/if}
       </button>
     </div>
   </nav>
 
-  <!-- Mobile sidebar toggle button -->
-  <button
-    class="mobile-sidebar-toggle"
-    class:hidden={sidebarOpen}
-    on:click={toggleSidebar}
-    aria-label="Toggle sidebar"
-  >
-    <ChevronRight size={20} />
-  </button>
+  {#if sidebarOpen}<div class="scrim" onclick={toggleSidebar} role="presentation"></div>{/if}
 
-  <div class="main-content" id="main-content">
-    {#if activePage === 'dashboard'}
-      <div class="page-header">
-        <h2>dashboard</h2>
+  <div class="main" id="main-content">
+    <header class="topbar">
+      <button class="icon-btn mobile-only" onclick={toggleSidebar} aria-label="open menu">
+        <PanelLeftOpen size={18} />
+      </button>
+      <h1>{activeTitle}</h1>
+      <div class="actions">
+        {#if $headerActions}{@render $headerActions()}{/if}
       </div>
-      <div class="dashboard-grid">
-        <Stats />
-        <Health />
-      </div>
-    {:else if activePage === 'users'}
-      <div class="page-header">
-        <h2>users</h2>
-      </div>
-      <div class="page-content">
-        <Users />
-      </div>
-    {:else if activePage === 'user-profile'}
-      <div class="page-header">
-        <h2>user profile</h2>
-      </div>
-      <div class="page-content">
-        <UserProfile />
-      </div>
-    {:else if activePage === 'requests'}
-      <div class="page-header">
-        <h2>requests</h2>
-      </div>
-      <div class="page-content">
-        <Requests />
-      </div>
-    {:else if activePage === 'logs'}
-      <div class="page-header">
-        <h2>logs</h2>
-      </div>
-      <div class="page-content">
-        <Logs />
-      </div>
-    {:else if activePage === 'alerts'}
-      <div class="page-header">
-        <h2>alerts</h2>
-      </div>
-      <div class="page-content">
-        <Alerts />
-      </div>
-    {:else if activePage === 'moderation'}
-      <div class="page-header">
-        <h2>moderation</h2>
-      </div>
-      <div class="page-content">
-        <Moderation />
-      </div>
-    {:else if activePage === 'sources'}
-      <div class="page-header">
-        <h2>sources</h2>
-      </div>
-      <div class="page-content">
-        <Sources />
-      </div>
-    {:else if activePage === 'settings'}
-      <div class="page-header">
-        <h2>settings</h2>
-      </div>
-      <div class="page-content">
-        <BotSettings />
+      <button class="palette-hint" onclick={() => openPalette('>')} title="command palette">
+        <kbd>Ctrl Shift P</kbd>
+      </button>
+    </header>
+
+    {#if PageComponent}
+      <div class="page" class:full={FULL_BLEED.has(activePage)}>
+        <PageComponent />
       </div>
     {/if}
   </div>
-</main>
+</div>
+
+{#if fly}
+  <NavFlyout
+    bind:this={flyout}
+    title={fly.item.label}
+    menu={menuFor(fly.item.page, $navStats, $savedViews, $issueStates)}
+    top={fly.top}
+    left={sidebarOpen ? 226 : 54}
+    onpick={pick}
+    onremove={name => removeView(name)}
+    onenter={keepMenu}
+    onleave={hideMenu}
+    onclose={closeMenu}
+  />
+{/if}
+
+<CommandPalette bind:open={paletteOpen} bind:query={paletteQuery} {commands} {search} />
 
 <style>
   :global(html),
   :global(body) {
     margin: 0;
     padding: 0;
-    font-family:
-      -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+    font-family: var(--font);
+    font-size: 14px;
     background-color: var(--bg);
     color: var(--text);
-    line-height: 1.6;
+    line-height: 1.5;
+    -webkit-font-smoothing: antialiased;
   }
-
   :global(*) {
     box-sizing: border-box;
+    scrollbar-width: thin;
+    scrollbar-color: var(--surface-3) transparent;
   }
-
-  /* Slim, themed scrollbars: subtle enough to keep the clean look, but present
-     so long log/table views still signal that there's more to scroll. */
-  :global(*) {
-    scrollbar-width: thin; /* Firefox */
-    scrollbar-color: var(--surface-3) transparent; /* Firefox: thumb, track */
-  }
-
   :global(*)::-webkit-scrollbar {
     width: 8px;
     height: 8px;
   }
-
-  :global(*)::-webkit-scrollbar-track {
-    background: transparent;
-  }
-
   :global(*)::-webkit-scrollbar-thumb {
     background-color: var(--surface-3);
     border-radius: 4px;
   }
-
-  :global(*)::-webkit-scrollbar-thumb:hover {
-    background-color: var(--border-2);
+  :global(code),
+  :global(pre),
+  :global(kbd) {
+    font-family: var(--mono);
   }
-
-  main {
-    min-height: 100vh;
-    display: flex;
-  }
-
-  /* Respect users who ask for less motion: drop transitions and the status
-     pulse rather than animating the shell. */
   @media (prefers-reduced-motion: reduce) {
     :global(*),
     :global(*)::before,
@@ -337,338 +450,309 @@
     }
   }
 
-  .sidebar {
-    background-color: var(--bg-deep);
-    border-right: 1px solid var(--border);
-    transition: width 0.3s ease;
-    width: 60px;
+  .shell {
+    display: flex;
     min-height: 100vh;
+  }
+  .sidebar {
+    width: 232px;
+    flex-shrink: 0;
+    height: 100vh;
     position: sticky;
     top: 0;
     display: flex;
     flex-direction: column;
+    background: var(--bg-deep);
+    border-right: 1px solid var(--border);
+    font-size: 13px;
+    transition: width 0.2s ease;
   }
-
-  .sidebar.open {
-    width: 220px;
+  .collapsed .sidebar {
+    width: 60px;
   }
-
-  .sidebar-header {
-    padding: 1.5rem 1rem;
-    border-bottom: 1px solid var(--border);
+  .brand {
+    height: 56px;
+    padding: 0 12px 0 16px;
     display: flex;
-    justify-content: space-between;
     align-items: center;
+    gap: 10px;
+    border-bottom: 1px solid var(--line);
   }
-
-  .sidebar-header h1 {
-    margin: 0;
-    font-size: 1.25rem;
-    font-weight: 500;
-    color: var(--text-bright);
-    white-space: nowrap;
-    overflow: hidden;
-    opacity: 0;
-    transition: opacity 0.3s ease;
+  .mark {
+    width: 22px;
+    height: 22px;
+    border-radius: 6px;
   }
-
-  .sidebar.open .sidebar-header h1 {
-    opacity: 1;
-  }
-
-  .toggle-btn {
-    background: none;
-    border: none;
-    color: var(--text-muted);
-    font-size: 1rem;
-    cursor: pointer;
-    padding: 0.25rem;
-    transition: color 0.2s;
-  }
-
-  .toggle-btn:hover {
+  .name {
+    font-weight: 600;
+    font-size: 14px;
     color: var(--text-bright);
   }
-
-  .nav-menu {
-    list-style: none;
+  .collapsed .brand {
     padding: 0;
+    justify-content: center;
+    flex-direction: column;
+    gap: 4px;
+  }
+  .collapsed .mark {
+    display: none;
+  }
+  .icon-btn {
+    margin-left: auto;
+    background: none;
+    border: 0;
+    color: var(--text-dim);
+    padding: 4px;
+    border-radius: 6px;
+    display: flex;
+    cursor: pointer;
+  }
+  .collapsed .icon-btn {
     margin: 0;
+  }
+  .icon-btn:hover {
+    color: var(--text-bright);
+    background: var(--surface-2);
+  }
+  .jump {
+    margin: 12px 12px 4px;
+    height: 34px;
+    padding: 0 10px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    color: var(--text-muted);
+    font: inherit;
+    cursor: pointer;
+  }
+  .jump:hover {
+    border-color: var(--border-2);
+  }
+  .collapsed .jump {
+    margin: 12px 10px 4px;
+    justify-content: center;
+  }
+  .jump kbd {
+    margin-left: auto;
+    font-size: 11px;
+    color: var(--text-dim);
+  }
+  .nav {
     flex: 1;
+    overflow-y: auto;
+    padding: 6px 8px;
+    display: flex;
+    flex-direction: column;
+    gap: 1px;
   }
-
-  .nav-menu li {
-    margin: 0;
+  .section {
+    padding: 14px 12px 4px;
+    font-size: 11px;
+    font-weight: 500;
+    color: var(--text-dim);
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
   }
-
-  .nav-menu button {
-    width: 100%;
-    background: none;
-    border: none;
-    color: var(--text-muted);
-    padding: 1rem;
+  .link {
+    height: 32px;
+    padding: 0 10px;
     display: flex;
     align-items: center;
-    gap: 1rem;
-    cursor: pointer;
-    transition:
-      background-color 0.2s,
-      color 0.2s;
+    gap: 10px;
+    border: 0;
+    border-radius: 7px;
+    background: none;
+    color: #a9abb1;
+    font: inherit;
     text-align: left;
-    font-size: 0.95rem;
-  }
-
-  .nav-menu button:hover {
-    background-color: var(--bg);
-    color: var(--text-bright);
-  }
-
-  .nav-menu li.active button {
-    background-color: var(--surface-2);
-    color: var(--text-bright);
-    border-left: 3px solid var(--success);
-  }
-
-  .nav-menu .icon {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    min-width: 1.5rem;
-    color: inherit;
-  }
-
-  .nav-menu .label {
-    white-space: nowrap;
-  }
-
-  .sidebar-footer {
-    border-top: 1px solid var(--border);
-    padding: 0.5rem;
-  }
-
-  .conn-status {
-    width: 100%;
-    background: none;
-    border: none;
-    color: var(--text-muted);
-    padding: 0.5rem;
-    display: flex;
-    align-items: center;
-    gap: 0.6rem;
     cursor: pointer;
-    font-size: 0.85rem;
-    border-radius: var(--radius);
-    transition:
-      background-color 0.2s,
-      color 0.2s;
   }
-
-  .sidebar:not(.open) .conn-status {
-    justify-content: center;
-  }
-
-  .conn-status:hover {
-    background-color: var(--bg);
+  .link:hover {
+    background: var(--surface);
     color: var(--text-bright);
   }
-
-  .conn-dot {
-    width: 8px;
-    height: 8px;
-    min-width: 8px;
+  .link.hover {
+    background: var(--surface);
+    color: var(--text-bright);
+  }
+  .count {
+    font-family: var(--mono);
+    font-size: 11px;
+    color: var(--text-dim);
+  }
+  .count.alert {
+    color: var(--bg-deep);
+    background: var(--warning);
+    border-radius: 9px;
+    padding: 1px 7px;
+    font-weight: 500;
+  }
+  .link.active {
+    background: var(--surface-2);
+    color: var(--text-bright);
+  }
+  .collapsed .link {
+    justify-content: center;
+    padding: 0;
+  }
+  .foot {
+    padding: 8px;
+    border-top: 1px solid var(--line);
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+  }
+  .conn {
+    height: 30px;
+    padding: 0 10px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    border: 0;
+    border-radius: 7px;
+    background: none;
+    color: var(--text-muted);
+    font: inherit;
+    font-size: 12px;
+    cursor: pointer;
+  }
+  .collapsed .conn {
+    justify-content: center;
+  }
+  .conn:hover {
+    background: var(--surface);
+  }
+  .dot {
+    width: 7px;
+    height: 7px;
     border-radius: 50%;
-    background-color: var(--text-dim);
+    background: var(--text-dim);
   }
-
-  .conn-live .conn-dot {
-    background-color: var(--success);
-    box-shadow: 0 0 0 0 var(--success);
-    animation: conn-pulse 2s infinite;
+  .conn-live .dot {
+    background: var(--success);
   }
-
-  .conn-connecting .conn-dot {
-    background-color: var(--warning);
-    animation: conn-blink 1.2s ease-in-out infinite;
+  .conn-connecting .dot {
+    background: var(--warning);
+    animation: blink 1.2s ease-in-out infinite;
   }
-
-  .conn-offline .conn-dot {
-    background-color: var(--danger);
+  .conn-offline .dot {
+    background: var(--danger);
   }
-
-  .conn-label {
-    white-space: nowrap;
-  }
-
-  @keyframes conn-pulse {
-    0% {
-      box-shadow: 0 0 0 0 rgba(81, 207, 102, 0.5);
-    }
-    70% {
-      box-shadow: 0 0 0 5px rgba(81, 207, 102, 0);
-    }
-    100% {
-      box-shadow: 0 0 0 0 rgba(81, 207, 102, 0);
-    }
-  }
-
-  @keyframes conn-blink {
-    0%,
-    100% {
-      opacity: 1;
-    }
+  @keyframes blink {
     50% {
       opacity: 0.3;
     }
   }
 
+  .main {
+    flex: 1;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+  }
+  .topbar {
+    height: 56px;
+    flex-shrink: 0;
+    padding: 0 24px;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    border-bottom: 1px solid var(--line);
+    position: sticky;
+    top: 0;
+    z-index: 50;
+    background: var(--bg);
+  }
+  .topbar h1 {
+    margin: 0;
+    font-size: 15px;
+    font-weight: 600;
+    color: var(--text-bright);
+  }
+  .actions {
+    margin-left: auto;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .palette-hint {
+    background: none;
+    border: 0;
+    cursor: pointer;
+  }
+  .palette-hint kbd {
+    font-size: 11px;
+    color: var(--text-dim);
+    border: 1px solid var(--border-2);
+    border-radius: 5px;
+    padding: 3px 7px;
+  }
+  .page {
+    flex: 1;
+    padding: 20px 24px;
+    width: 100%;
+    max-width: 1440px;
+    margin: 0 auto;
+  }
+  .page.full {
+    padding: 0;
+    max-width: none;
+    display: flex;
+    min-height: 0;
+  }
+  .mobile-only,
+  .scrim {
+    display: none;
+  }
   .skip-link {
     position: absolute;
     left: -9999px;
     top: 0;
     z-index: 2000;
-    background-color: var(--surface-2);
+    background: var(--surface-2);
     color: var(--text-bright);
     padding: 0.75rem 1rem;
-    border: 1px solid var(--border-2);
     border-radius: var(--radius);
-    text-decoration: none;
   }
-
   .skip-link:focus {
     left: 0.5rem;
     top: 0.5rem;
-  }
-
-  .main-content {
-    flex: 1;
-    display: flex;
-    flex-direction: column;
-    min-width: 0;
-  }
-
-  .page-header {
-    padding: 2rem;
-    border-bottom: 1px solid var(--border);
-    max-width: 1400px;
-    margin: 0 auto;
-    width: 100%;
-  }
-
-  .page-header h2 {
-    margin: 0;
-    font-size: 1.5rem;
-    font-weight: 500;
-    color: var(--text-bright);
-  }
-
-  .page-content {
-    flex: 1;
-    padding: 2rem;
-    overflow-y: auto;
-    max-width: 1400px;
-    margin: 0 auto;
-    width: 100%;
-  }
-
-  .dashboard-grid {
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-    gap: 2rem;
-    padding: 2rem;
-    max-width: 1400px;
-    margin: 0 auto;
-    width: 100%;
-  }
-
-  @media (max-width: 1024px) {
-    .dashboard-grid {
-      grid-template-columns: 1fr;
-    }
   }
 
   @media (max-width: 768px) {
     .sidebar {
       position: fixed;
       z-index: 1000;
-      height: 100vh;
       left: 0;
-      top: 0;
     }
-
-    .sidebar:not(.open) {
+    .collapsed .sidebar {
       width: 0;
       overflow: hidden;
-      border-right: none;
+      border: 0;
     }
-
-    .main-content {
-      width: 100%;
-      margin-left: 0;
-    }
-
-    .page-header {
-      padding: 1rem;
-      max-width: 100%;
-    }
-
-    .page-content {
-      padding: 1rem;
-      max-width: 100%;
-    }
-
-    .dashboard-grid {
-      padding: 1rem;
-      gap: 1rem;
-      max-width: 100%;
-    }
-
-    /* Add overlay when sidebar is open on mobile */
-    .sidebar.open::after {
-      content: '';
+    .scrim {
+      display: block;
       position: fixed;
-      top: 0;
-      left: 220px;
-      right: 0;
-      bottom: 0;
-      background-color: rgba(0, 0, 0, 0.5);
-      z-index: -1;
+      inset: 0;
+      background: rgba(0, 0, 0, 0.5);
+      z-index: 999;
     }
-
-    /* Mobile sidebar toggle button */
-    .mobile-sidebar-toggle {
-      position: fixed;
-      top: 1rem;
-      left: 1rem;
-      width: 44px;
-      height: 44px;
-      background-color: var(--bg-deep);
-      border: 1px solid var(--border);
-      border-radius: var(--radius-lg);
-      color: var(--text-bright);
+    .mobile-only {
       display: flex;
-      align-items: center;
-      justify-content: center;
-      cursor: pointer;
-      z-index: 1001;
-      transition:
-        opacity 0.2s,
-        transform 0.2s;
-      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+      margin: 0;
     }
-
-    .mobile-sidebar-toggle:hover {
-      background-color: var(--bg);
-      transform: scale(1.05);
+    .topbar,
+    .page {
+      padding-left: 16px;
+      padding-right: 16px;
     }
-
-    .mobile-sidebar-toggle.hidden {
-      display: none;
+    .page.full {
+      padding: 0;
     }
-  }
-
-  /* Hide mobile toggle on desktop */
-  @media (min-width: 769px) {
-    .mobile-sidebar-toggle {
+    .palette-hint {
       display: none;
     }
   }

@@ -62,6 +62,12 @@ const KNOWN_SETTINGS = {
     description: 'ntfy server hostname (use your own if self-hosting ntfy)',
     pattern: /^[A-Za-z0-9.-]{1,253}$/,
   },
+  queue_paused: {
+    type: 'boolean',
+    default: 'false',
+    description:
+      'Workers stop taking new media jobs; running ones finish (drain before a deploy). Queued requests wait, and are told they were interrupted after about 15 minutes. No effect with MEDIA_WORKERS=false',
+  },
   moderation_enabled: {
     type: 'boolean',
     default: 'false',
@@ -121,7 +127,56 @@ const KNOWN_SETTINGS = {
         .map(id => id.trim())
         .filter(id => id.length > 0),
   },
+  webui_issue_states: {
+    type: 'issuestates',
+    default: '{}',
+    description: 'Muted and resolved issues on the webui Issues page',
+  },
+  webui_saved_views: {
+    type: 'views',
+    default: '[]',
+    description: 'Filtered views pinned to the webui sidebar menus',
+  },
 };
+
+const VIEW_PAGES = new Set(['logs', 'requests', 'issues']);
+
+// [{ name, page, params }] with short string params only: this is rendered straight into nav links.
+function parseViews(value) {
+  if (!Array.isArray(value) || value.length > 50) return null;
+  const views = [];
+  for (const v of value) {
+    if (!v || typeof v.name !== 'string' || !VIEW_PAGES.has(v.page)) return null;
+    const name = v.name.trim().slice(0, 60);
+    const entries = Object.entries(v.params ?? {});
+    if (!name || entries.length > 20) return null;
+    if (
+      entries.some(
+        ([k, val]) => !/^\w{1,32}$/.test(k) || typeof val !== 'string' || val.length > 500
+      )
+    ) {
+      return null;
+    }
+    views.push({ name, page: v.page, params: Object.fromEntries(entries) });
+  }
+  return views;
+}
+
+// { [issueKey]: { state: 'muted', until } | { state: 'resolved', at } }
+function parseIssueStates(value) {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return null;
+  const entries = Object.entries(value);
+  if (entries.length > 500) return null;
+  const states = entries.map(([key, s]) => {
+    if (key.length > 300 || !s || typeof s !== 'object') return null;
+    if (s.state === 'muted' && Number.isFinite(s.until))
+      return [key, { state: 'muted', until: s.until }];
+    if (s.state === 'resolved' && Number.isFinite(s.at))
+      return [key, { state: 'resolved', at: s.at }];
+    return null;
+  });
+  return states.includes(null) ? null : Object.fromEntries(states);
+}
 
 // Get all bot settings (known settings filled with defaults)
 router.get('/api/settings', async (req, res) => {
@@ -250,6 +305,24 @@ router.put('/api/settings/:key', express.json(), async (req, res) => {
       }
       const ids = [...new Set(value)].filter(id => DOWNLOAD_SERVICE_IDS.has(id)).sort();
       textValue = JSON.stringify(ids);
+    } else if (meta.type === 'issuestates') {
+      const states = parseIssueStates(value);
+      if (!states) {
+        return res.status(400).json({
+          error: 'invalid value',
+          message: `"${key}" expects { key: { state: 'muted', until } | { state: 'resolved', at } }`,
+        });
+      }
+      textValue = JSON.stringify(states);
+    } else if (meta.type === 'views') {
+      const views = parseViews(value);
+      if (!views) {
+        return res.status(400).json({
+          error: 'invalid value',
+          message: `"${key}" expects a list of { name, page, params } views`,
+        });
+      }
+      textValue = JSON.stringify(views);
     } else {
       textValue = String(value).trim();
       if (meta.pattern && !meta.pattern.test(textValue)) {

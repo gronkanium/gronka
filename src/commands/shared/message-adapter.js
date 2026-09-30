@@ -43,10 +43,11 @@ function toMessagePayload(options) {
  *   after type coercion, so the prefix parser owns validation of raw tokens.
  * @param {Object} [extras]
  * @param {string} [extras.commandName] - Command name for logging parity
+ * @param {Object} [extras.replyMessage] - An existing placeholder to edit (a worker's side of a job)
  * @returns {Object} ChatInputCommandInteraction-shaped adapter
  */
 export function createMessageAdapter(message, namedOptions = {}, extras = {}) {
-  let replyMessage = null;
+  let replyMessage = extras.replyMessage ?? null;
 
   const send = payload =>
     message.reply({
@@ -70,7 +71,8 @@ export function createMessageAdapter(message, namedOptions = {}, extras = {}) {
     client: message.client,
     message,
     replied: false,
-    deferred: false,
+    deferred: Boolean(replyMessage),
+    replyMessageId: () => replyMessage?.id ?? null,
 
     options: {
       getString(name) {

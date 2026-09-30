@@ -46,6 +46,7 @@ import {
 } from '../utils/interaction-helpers.js';
 import { storeMedia, deliverStored, finishCommand } from './shared/deliver.js';
 import { fetchUrlInput } from './shared/url-input.js';
+import { dispatchMediaJob } from '../jobs/dispatch.js';
 import { fromPath } from '../utils/media-file.js';
 
 const logger = createLogger('convert');
@@ -368,23 +369,27 @@ async function processConversion(
   );
 }
 
-// Checks the file (or downloads the url) a convert was given and says whether it is a video or
-// an image; replies and returns null when it cannot be converted.
-async function gatherInput(interaction, { attachment, url, adminUser, commandSource }) {
+const inputType = attachment =>
+  ALLOWED_VIDEO_TYPES.includes(attachment.contentType)
+    ? 'video'
+    : ALLOWED_IMAGE_TYPES.includes(attachment.contentType)
+      ? 'image'
+      : null;
+
+const attachmentJson = attachment =>
+  attachment && {
+    url: attachment.url,
+    name: attachment.name,
+    size: attachment.size,
+    contentType: attachment.contentType,
+  };
+
+// The file (downloading a url) a convert was given, typed as video or image; replies and
+// returns null when it cannot be converted.
+async function resolveInput(interaction, { attachment, url, adminUser, commandSource }) {
   let file = null;
   let originalUrl = null;
   if (url) {
-    const check = validateUrl(url);
-    if (!check.valid) {
-      await refuse(interaction, 'convert', {
-        message: `invalid URL: ${check.error}`,
-        reason: 'invalid_url',
-        context: { originalUrl: url, commandSource },
-        notify: true,
-      });
-      return null;
-    }
-    await safeInteractionDeferReply(interaction);
     try {
       ({ attachment, file, originalUrl } = await fetchUrlInput(url, adminUser, interaction.client));
     } catch (error) {
@@ -397,12 +402,7 @@ async function gatherInput(interaction, { attachment, url, adminUser, commandSou
       return null;
     }
   }
-
-  const type = ALLOWED_VIDEO_TYPES.includes(attachment.contentType)
-    ? 'video'
-    : ALLOWED_IMAGE_TYPES.includes(attachment.contentType)
-      ? 'image'
-      : null;
+  const type = inputType(attachment);
   if (!type) {
     await replyError(interaction, UNSUPPORTED_FORMAT);
     await notifyCommandFailure('convert', {
@@ -424,8 +424,60 @@ async function gatherInput(interaction, { attachment, url, adminUser, commandSou
     });
     return null;
   }
-  await safeInteractionDeferReply(interaction);
   return { attachment, file, originalUrl, type };
+}
+
+// The bot's half: checks that answer privately before anything is deferred or queued.
+async function acceptInput(interaction, { attachment, url, adminUser, commandSource }) {
+  if (!url)
+    return (await resolveInput(interaction, { attachment, adminUser, commandSource })) !== null;
+  const check = validateUrl(url);
+  if (!check.valid) {
+    await refuse(interaction, 'convert', {
+      message: `invalid URL: ${check.error}`,
+      reason: 'invalid_url',
+      context: { originalUrl: url, commandSource },
+      notify: true,
+    });
+  }
+  return check.valid;
+}
+
+// The job half, run by a worker (or inline): fetch, then convert to gif or another format.
+export async function runConvertJob(
+  interaction,
+  { attachment, url, format = 'gif', times = null, gifOptions = {}, commandSource }
+) {
+  const adminUser = isAdmin(interaction.user.id);
+  const input = await resolveInput(interaction, { attachment, url, adminUser, commandSource });
+  if (!input) return;
+  // Start and end only mean something for a video.
+  const trim = {
+    startTime: input.type === 'video' ? (times?.startTime ?? null) : null,
+    duration: input.type === 'video' ? (times?.duration ?? null) : null,
+  };
+  if (format !== 'gif') {
+    await processFormatConversion(
+      interaction,
+      input.attachment,
+      adminUser,
+      input.file,
+      format,
+      trim,
+      input.originalUrl
+    );
+    return;
+  }
+  await processConversion(
+    interaction,
+    input.attachment,
+    input.type,
+    adminUser,
+    input.file,
+    { ...gifOptions, ...trim },
+    input.originalUrl,
+    commandSource
+  );
 }
 
 export async function handleConvertContextMenu(interaction) {
@@ -452,23 +504,14 @@ export async function handleConvertContextMenu(interaction) {
     });
     return;
   }
-  const input = await gatherInput(interaction, {
-    attachment,
+  const commandSource = 'context-menu';
+  if (!(await acceptInput(interaction, { attachment, url, adminUser, commandSource }))) return;
+  await safeInteractionDeferReply(interaction);
+  await dispatchMediaJob(interaction, 'convert', {
+    attachment: attachmentJson(attachment),
     url,
-    adminUser,
-    commandSource: 'context-menu',
+    commandSource,
   });
-  if (!input) return;
-  await processConversion(
-    interaction,
-    input.attachment,
-    input.type,
-    adminUser,
-    input.file,
-    {},
-    input.originalUrl,
-    'context-menu'
-  );
 }
 
 export async function handleConvertCommand(interaction) {
@@ -504,45 +547,20 @@ export async function handleConvertCommand(interaction) {
     return;
   }
 
-  const input = await gatherInput(interaction, {
-    attachment,
-    url,
-    adminUser,
-    commandSource: 'slash',
-  });
-  if (!input) return;
-  // Start and end only mean something for a video.
-  const trim =
-    input.type === 'video'
-      ? { startTime: times.startTime, duration: times.duration }
-      : { startTime: null, duration: null };
-
-  if (format !== 'gif') {
-    await processFormatConversion(
-      interaction,
-      input.attachment,
-      adminUser,
-      input.file,
-      format,
-      trim,
-      input.originalUrl
-    );
-    return;
-  }
+  const commandSource = 'slash';
+  if (!(await acceptInput(interaction, { attachment, url, adminUser, commandSource }))) return;
+  await safeInteractionDeferReply(interaction);
   const lossy = interaction.options.getNumber('lossy');
-  await processConversion(
-    interaction,
-    input.attachment,
-    input.type,
-    adminUser,
-    input.file,
-    {
+  await dispatchMediaJob(interaction, 'convert', {
+    attachment: attachmentJson(attachment),
+    url,
+    format,
+    times: { startTime: times.startTime, duration: times.duration },
+    gifOptions: {
       quality: interaction.options.getString('quality') || undefined,
       optimize: interaction.options.getBoolean('optimize') ?? false,
       lossy: lossy !== null ? lossy : undefined,
-      ...trim,
     },
-    input.originalUrl,
-    'slash'
-  );
+    commandSource,
+  });
 }

@@ -8,17 +8,15 @@ services:
         GIT_COMMIT: ${GIT_COMMIT:-}
     container_name: gronka
     restart: unless-stopped
-    # Blast-radius cap: a burst of big downloads (each buffers the whole file in RAM, bounded to
-    # 2 concurrent by ytdlp-queue.js) restarts the bot instead of pressuring Postgres/Cobalt in
-    # the shared Docker VM. Must clear one large download + ffmpeg working set + node baseline —
-    # too low and legit big downloads restart-loop. Tune APP_MEM_LIMIT to the host's allotment.
+    # Media streams through disk (never whole files in RAM) and runs in the worker service, so
+    # this only has to hold the gateway, the webui and ffmpeg when MEDIA_WORKERS=false.
     mem_limit: ${APP_MEM_LIMIT:-3g}
     depends_on:
       postgres:
         condition: service_healthy
       cobalt:
         condition: service_started
-    environment:
+    environment: &app-env
       - DISCORD_TOKEN=${PROD_DISCORD_TOKEN}
       - CLIENT_ID=${PROD_CLIENT_ID}
       - CDN_BASE_URL=${CDN_BASE_URL:-}
@@ -65,7 +63,11 @@ services:
       - YTDLP_COOKIES_PATH=${YTDLP_COOKIES_PATH:-/app/ytdlp-cookies.txt}
       # The app's own cookie file (cobalt has a separate copy): `instagram` and `reddit` entries
       - INSTAGRAM_COOKIES_PATH=${INSTAGRAM_COOKIES_PATH:-/app/cookies.json}
-    volumes:
+      # Deferred commands go to the worker service; false runs them inside the bot process.
+      - MEDIA_WORKERS=${MEDIA_WORKERS:-true}
+      # Workers report operation progress to the webui across the network.
+      - WEBUI_URL=http://gronka:${WEBUI_PORT:-3001}
+    volumes: &app-volumes
       - ./data-test:/app/data-test
       - ./data-prod:/app/data-prod
       - ./temp:/app/temp
@@ -91,6 +93,38 @@ services:
       timeout: 5s
       retries: 3
       start_period: 15s
+
+  # Runs media jobs from the media_jobs table and answers users over Discord REST. A job whose
+  # worker dies or is redeployed is picked up by another; scale with --scale worker=N.
+  worker:
+    image: gronka-app
+    pull_policy: never
+    entrypoint: ['bun', 'src/worker.js']
+    restart: unless-stopped
+    mem_limit: ${WORKER_MEM_LIMIT:-3g}
+    # Room to finish what it holds; anything left is handed back to the queue before exit.
+    stop_grace_period: 2m
+    deploy:
+      replicas: ${WORKER_REPLICAS:-2}
+    depends_on:
+      postgres:
+        condition: service_healthy
+      cobalt:
+        condition: service_started
+    environment: *app-env
+    volumes: *app-volumes
+    networks:
+      - gronka-network
+    healthcheck:
+      test:
+        [
+          'CMD-SHELL',
+          'test $(( $(date +%s) - $(stat -c %Y /app/temp/jobs/$(hostname)/alive) )) -lt 60',
+        ]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 20s
 
   postgres:
     image: postgres:16-alpine

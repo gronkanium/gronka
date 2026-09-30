@@ -17,6 +17,7 @@ const TIME_SERIES_TABLES = [
   { table: 'logs', column: 'timestamp' },
   { table: 'operation_logs', column: 'timestamp' },
   { table: 'alerts', column: 'timestamp' },
+  { table: 'media_jobs', column: 'timestamp' },
 ];
 
 // Content-addressed caches. Nothing in processed_urls points at these (every row is a Discord or

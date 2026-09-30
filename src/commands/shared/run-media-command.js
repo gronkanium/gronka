@@ -11,6 +11,7 @@ import { initializeDatabaseWithErrorHandling } from '../../utils/database-init.j
 import { replyWithCuratedError } from './command-errors.js';
 import { notifyCommandFailure } from '../../utils/ntfy-notifier.js';
 import { withJobDir } from '../../utils/media-file.js';
+import { jobContext } from '../../jobs/context.js';
 
 const logger = createLogger('run-media-command');
 
@@ -58,7 +59,9 @@ async function runInJob(type, interaction, callback, options) {
     operationContext.commandSource = options.commandSource;
   }
 
-  const operationId = createOperation(type, userId, operationContext);
+  const job = jobContext.getStore();
+  const operationId = createOperation(type, userId, operationContext, job?.operationId);
+  job?.onOperation?.(operationId);
 
   // This becomes R2 object metadata, so it leaves the box: ids only, never a name.
   const buildMetadata = () => ({

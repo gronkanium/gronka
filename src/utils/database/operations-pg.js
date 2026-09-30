@@ -1,5 +1,6 @@
 import { getPostgresConnection } from './connection.js';
 import { ensurePostgresInitialized } from './init.js';
+import { STALE_MS } from '../../jobs/queue.js';
 import { convertTimestampsInArray, convertTimestampsToNumbers } from './helpers-pg.js';
 
 // Query result cache for getRecentOperations
@@ -543,10 +544,15 @@ export async function getStuckOperations(maxAgeMinutes = 10) {
   const cutoffTime = now - maxAge;
 
   // Find operations where the latest status_update has status='running' and is older than cutoff
+  // A job a live worker is still heartbeating is the queue's to finish or fail, not ours.
   const results = await sql`
     SELECT operation_id, MAX(timestamp) as latest_timestamp
     FROM operation_logs
     WHERE step = 'status_update' AND status = 'running'
+      AND operation_id NOT IN (
+        SELECT operation_id FROM media_jobs
+        WHERE status = 'running' AND operation_id IS NOT NULL AND heartbeat_at > ${now - STALE_MS}
+      )
     GROUP BY operation_id
     HAVING MAX(timestamp) < ${cutoffTime}
   `;

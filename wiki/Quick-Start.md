@@ -9,8 +9,13 @@ bun install
 
 bun run setup                 # asks for your token, writes .env, creates the mounted files
 docker compose up -d --build
-bun run docker:register       # register the slash commands, once
 ```
+
+The container registers the slash commands every time it starts.
+
+This is the Discord bot. web.gronka.dev is a hosted service built on Cloudflare (tunnel,
+Turnstile, R2) and is not part of a self-hosted install; `docker-compose.web.yml` is its
+deployment and nothing in the bot stack depends on it.
 
 `bun run setup` is the whole configuration step. It asks only for what it cannot work out , 
 bot token, application id, your Discord user id, a Postgres password, and optionally walks you
@@ -28,6 +33,21 @@ bun run setup:check          # toolchain, mounted files, cookies, config, ports
 bun run setup:repair         # create only the missing files; no questions
 ```
 
+### without prompts (scripts, CI, agents)
+
+Every question has a flag, and a flag skips its question. `--yes` never prompts: it takes the
+defaults and any values `.env` already has, and fails naming each required flag still missing.
+
+```bash
+SETUP_TOKEN=... SETUP_DB_PASSWORD=... bun run setup --yes --client-id 123456789012345678
+bun run setup --check --json  # one JSON object: ready, problems, every check
+```
+
+Any answer can come from `SETUP_` plus the flag name in capitals. Pass secrets that way, not as
+flags: a flag's value shows in the process list, shell history and `bun run`'s echo of the command.
+
+`bun run setup --help` lists every flag. Exit codes: 0 done, 1 problems or failure, 2 bad arguments.
+
 Healthy is `bot logged in as <name>` plus `All processes running` in
 `docker compose logs app --tail 30`.
 
@@ -37,8 +57,8 @@ Healthy is `bot logged in as <name>` plus `All processes running` in
 
 ```bash
 cp .env.example .env          # then edit PROD_DISCORD_TOKEN, PROD_CLIENT_ID, PROD_POSTGRES_PASSWORD
-cp cookies.example.json cookies.json
-cp cookies.example.json cobalt-cookies.json
+echo '{}' > cookies.json      # cookies.example.json shows the format
+echo '{}' > cobalt-cookies.json
 touch ytdlp-cookies.txt
 chmod 600 cookies.json cobalt-cookies.json ytdlp-cookies.txt
 ```

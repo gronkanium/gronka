@@ -1,7 +1,6 @@
 <script>
-  import { onDestroy } from 'svelte';
   import { Search } from 'lucide-svelte';
-  import { headerActions } from '../stores/header.js';
+  import { useHeaderActions } from '../stores/header.js';
 
   // Order + display names for the category sections; unknown categories render after these.
   const CATEGORY_ORDER = [
@@ -99,8 +98,7 @@
   );
   const totalOn = $derived(catalog.length - disabled.size);
 
-  headerActions.set(actions);
-  onDestroy(() => headerActions.set(null));
+  useHeaderActions(actions);
 </script>
 
 {#snippet actions()}

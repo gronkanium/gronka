@@ -17,11 +17,10 @@ const GB = 1024 ** 3;
 
 // One dependency row: never throws, a failure is the row's status.
 async function check(id, label, probe) {
-  const started = Date.now();
   try {
-    return { id, label, status: 'ok', ms: Date.now() - started, ...(await probe(started)) };
+    return { id, label, status: 'ok', ...(await probe(Date.now())) };
   } catch (error) {
-    return { id, label, status: 'error', detail: error.message, ms: Date.now() - started };
+    return { id, label, status: 'error', detail: error.message };
   }
 }
 

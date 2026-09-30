@@ -1,8 +1,7 @@
 <script>
-  import { onDestroy } from 'svelte';
   import { TerminalSquare, Copy, BellOff, CheckCircle2, RotateCcw } from 'lucide-svelte';
   import { currentRoute, navigate } from '../utils/router.js';
-  import { headerActions } from '../stores/header.js';
+  import { useHeaderActions } from '../stores/header.js';
   import { alerts as liveAlerts } from '../stores/sse-store.js';
   import { issueStates, setIssueState } from '../stores/nav.js';
   import { groupIssues, stateOf, isOpen, KIND_LABEL } from '../issues.js';
@@ -144,8 +143,7 @@
     navigate('issues', { ...(tab === 'open' ? {} : { tab }), issue: key });
   }
 
-  headerActions.set(actions);
-  onDestroy(() => headerActions.set(null));
+  useHeaderActions(actions);
 </script>
 
 {#snippet actions()}
@@ -189,8 +187,12 @@
               {#if g.state === 'regressed'}<span class="chip bad">regressed</span>{/if}
             </span>
             <span class="meta">
-              {g.commands.map(c => `/${c}`).join(', ')}{#if g.members.length > 1}
-                · {g.members.length} variants{/if}
+              {[
+                g.commands.map(c => `/${c}`).join(', '),
+                g.members.length > 1 && `${g.members.length} variants`,
+              ]
+                .filter(Boolean)
+                .join(' · ')}
             </span>
           </span>
           <span class="spark" aria-hidden="true">

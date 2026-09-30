@@ -40,7 +40,7 @@ describe('issue grouping', () => {
       [user.kind, upstream.kind, mixed.kind, guessed.kind],
       ['user', 'upstream', 'defect', 'upstream']
     );
-    assert.strictEqual(guessed.basis, 'guessed from the message');
+    assert.strictEqual(guessed.basis, 'by a guess from the message');
   });
 });
 

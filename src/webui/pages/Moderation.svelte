@@ -2,7 +2,7 @@
   import { onDestroy } from 'svelte';
   import { Search, Trash2, ExternalLink, Film } from 'lucide-svelte';
   import { currentRoute, navigate } from '../utils/router.js';
-  import { headerActions } from '../stores/header.js';
+  import { useHeaderActions } from '../stores/header.js';
   import { formatBytes, formatRelativeTime } from '../utils/format.js';
 
   const PAGE = 24;
@@ -187,11 +187,8 @@
   loadUsers();
   loadBans();
 
-  headerActions.set(actions);
-  onDestroy(() => {
-    headerActions.set(null);
-    clearTimeout(statusTimer);
-  });
+  useHeaderActions(actions);
+  onDestroy(() => clearTimeout(statusTimer));
 </script>
 
 {#snippet actions()}

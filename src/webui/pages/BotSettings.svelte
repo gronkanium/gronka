@@ -1,5 +1,4 @@
 <script>
-  import { onDestroy } from 'svelte';
   import {
     Share2,
     HardDrive,
@@ -13,7 +12,7 @@
     Check,
   } from 'lucide-svelte';
   import { currentRoute, navigate } from '../utils/router.js';
-  import { headerActions } from '../stores/header.js';
+  import { useHeaderActions } from '../stores/header.js';
 
   // Which settings live in which section; unknown server keys fall into "other" so none vanish.
   const SECTIONS = [
@@ -216,8 +215,7 @@
   }
   loadPresence();
 
-  headerActions.set(actions);
-  onDestroy(() => headerActions.set(null));
+  useHeaderActions(actions);
 </script>
 
 {#snippet actions()}

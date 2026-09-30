@@ -1,8 +1,7 @@
 <script>
-  import { onDestroy } from 'svelte';
   import { Check, X, Loader, Copy, TerminalSquare, Ban } from 'lucide-svelte';
   import { currentRoute, navigate } from '../utils/router.js';
-  import { headerActions } from '../stores/header.js';
+  import { useHeaderActions } from '../stores/header.js';
   import {
     formatBytes,
     formatDuration,
@@ -154,8 +153,7 @@
     setTimeout(() => (copied = false), 1200);
   }
 
-  headerActions.set(actions);
-  onDestroy(() => headerActions.set(null));
+  useHeaderActions(actions);
 </script>
 
 {#snippet actions()}

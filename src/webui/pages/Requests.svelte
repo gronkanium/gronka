@@ -1,7 +1,6 @@
 <script>
-  import { onDestroy } from 'svelte';
   import { currentRoute, navigate } from '../utils/router.js';
-  import { headerActions } from '../stores/header.js';
+  import { useHeaderActions } from '../stores/header.js';
   import SaveView from '../components/SaveView.svelte';
   import {
     formatBytes,
@@ -139,8 +138,7 @@
       hour12: false,
     });
 
-  headerActions.set(actions);
-  onDestroy(() => headerActions.set(null));
+  useHeaderActions(actions);
 </script>
 
 {#snippet actions()}

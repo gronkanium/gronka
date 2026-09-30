@@ -15,81 +15,86 @@
 /*
  * Design tokens. Light is the default; [data-theme="dark"] on <html> swaps every colour.
  *
- * Layers: canvas (the page) -> card (white panels) -> card-2 (inset areas, table headers,
- * hover) -> card-3 (pressed / active). Borders sit one step darker than the layer they edge.
+ * Neutrals are pure gray (Vercel Geist), borders are low-alpha so they sit on any surface,
+ * the one accent is Radix Iris, and status colours are fixed and never reused for charts.
+ * Layers: canvas (page and sidebar) -> card -> card-2 (inset, table header) -> card-3 (active).
  */
 :root {
   color-scheme: light;
 
   /* layers */
-  --canvas: #f4f5f7;
+  --canvas: #fafafa;
   --card: #ffffff;
-  --card-2: #f8f9fb;
-  --card-3: #eef0f4;
-  --sidebar: #ffffff;
+  --card-2: #f7f7f7;
+  --card-3: #ebebeb;
+  --sidebar: #fafafa;
   --pop: #ffffff;
 
   /* borders */
-  --border: #e5e7eb;
-  --border-2: #d3d7de;
-  --line: #eef0f3;
+  --border: rgba(0, 0, 0, 0.08);
+  --border-2: rgba(0, 0, 0, 0.16);
+  --line: rgba(0, 0, 0, 0.06);
 
   /* text */
-  --text-bright: #0d1117;
-  --text: #1c2230;
-  --text-soft: #3a4252;
-  --text-muted: #667085;
-  --text-dim: #98a2b3;
+  --text-bright: #171717;
+  --text: #262626;
+  --text-soft: #4d4d4d;
+  --text-muted: #6f6f6f;
+  --text-dim: #8f8f8f;
   --on-accent: #ffffff;
 
-  /* brand */
-  --accent: #2f55e6;
-  --accent-strong: #2f55e6;
-  --accent-hover: #2446cc;
-  --accent-bg: rgba(47, 85, 230, 0.08);
-  --accent-bg-strong: rgba(47, 85, 230, 0.14);
-  --accent-border: rgba(47, 85, 230, 0.32);
-  --focus: rgba(47, 85, 230, 0.35);
+  /* brand: Radix Iris */
+  --accent: #5753c6;
+  --accent-strong: #5b5bd6;
+  --accent-hover: #5151cd;
+  --accent-bg: #f0f1fe;
+  --accent-bg-strong: #e6e7fc;
+  --accent-border: rgba(91, 91, 214, 0.4);
+  --focus: rgba(91, 91, 214, 0.45);
 
   /* status */
-  --success: #17a34a;
-  --success-text: #157a3a;
-  --success-bg: #e9f8ef;
-  --success-border: #b9e8c9;
-  --danger: #dc3c3c;
-  --danger-text: #b42323;
-  --danger-bg: #fdecec;
+  --success: #30a46c;
+  --success-text: #218358;
+  --success-bg: #e6f6eb;
+  --success-border: #b4dfc4;
+  --danger: #e5484d;
+  --danger-text: #ce2c31;
+  --danger-bg: #feebec;
   --danger-bg-subtle: #fff5f5;
-  --danger-border: #f3bcbc;
-  --warning: #dd8a0f;
-  --warning-text: #a86408;
-  --warning-bg: #fef4e2;
-  --warning-border: #f6d7a4;
-  --info: #2f55e6;
-  --info-bg: rgba(47, 85, 230, 0.08);
-  --info-bg-hover: rgba(47, 85, 230, 0.14);
+  --danger-border: #f4b9bc;
+  --warning: #f5b647;
+  --warning-text: #ab6400;
+  --warning-bg: #fff7c2;
+  --warning-border: #f0dc94;
+  --info: #0070f3;
+  --info-bg: #f0f7ff;
+  --info-bg-hover: #e1efff;
 
-  /* charts */
-  --chart-1: #2f55e6;
-  --chart-1-soft: rgba(47, 85, 230, 0.16);
-  --chart-2: #17a34a;
-  --chart-3: #dd8a0f;
-  --chart-4: #dc3c3c;
-  --chart-5: #8b5cf6;
-  --chart-muted: #c9cfd9;
-  --chart-grid: #eceef2;
-  --chart-crosshair: #98a2b3;
-  --chart-brush: rgba(47, 85, 230, 0.12);
-  --chart-brush-edge: rgba(47, 85, 230, 0.6);
+  /* charts: series 1 is the accent, then a categorical palette; status hues are fixed */
+  --chart-1: #5b5bd6;
+  --chart-1-soft: rgba(91, 91, 214, 0.18);
+  --chart-2: #30a46c;
+  --chart-3: #f5b647;
+  --chart-4: #e5484d;
+  --chart-5: #50c3b6;
+  --chart-6: #e8649d;
+  --chart-7: #4290f0;
+  --chart-muted: #c9c9c9;
+  --chart-grid: rgba(0, 0, 0, 0.07);
+  --chart-crosshair: #8f8f8f;
+  --chart-brush: rgba(91, 91, 214, 0.12);
+  --chart-brush-edge: rgba(91, 91, 214, 0.6);
   --chart-series-1: var(--chart-1);
 
   /* interaction */
-  --row-hover: #f8f9fb;
-  --row-selected: rgba(47, 85, 230, 0.07);
-  --shadow-card: 0 1px 2px rgba(16, 24, 40, 0.04), 0 1px 3px rgba(16, 24, 40, 0.05);
-  --shadow-btn: 0 1px 2px rgba(16, 24, 40, 0.05);
-  --shadow-pop: 0 12px 32px rgba(16, 24, 40, 0.14), 0 0 0 1px rgba(16, 24, 40, 0.06);
-  --shadow-seg: 0 1px 2px rgba(16, 24, 40, 0.08), 0 0 0 1px rgba(16, 24, 40, 0.04);
+  --row-hover: #f2f2f2;
+  --row-selected: #f0f1fe;
+  --shadow-card: 0 2px 2px rgba(0, 0, 0, 0.04);
+  --shadow-btn: 0 1px 2px rgba(0, 0, 0, 0.04);
+  --shadow-pop:
+    0 0 0 1px rgba(0, 0, 0, 0.08), 0 1px 1px rgba(0, 0, 0, 0.02),
+    0 4px 8px -4px rgba(0, 0, 0, 0.04), 0 16px 24px -8px rgba(0, 0, 0, 0.06);
+  --shadow-seg: 0 1px 2px rgba(0, 0, 0, 0.08), 0 0 0 1px rgba(0, 0, 0, 0.04);
 
   /* type */
   --font: 'Inter', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
@@ -106,78 +111,80 @@
   /* shape and rhythm */
   --radius-sm: 6px;
   --radius: 8px;
-  --radius-lg: 12px;
+  --radius-lg: 10px;
   --gap: 16px;
   --gap-lg: 24px;
-  --sidebar-w: 240px;
-  --sidebar-w-collapsed: 64px;
+  --sidebar-w: 248px;
+  --sidebar-w-collapsed: 60px;
   --mobile-bar-h: 52px;
 }
 
 :root[data-theme='dark'] {
   color-scheme: dark;
 
-  --canvas: #0b0d10;
-  --card: #14171c;
-  --card-2: #1a1e25;
-  --card-3: #242a33;
-  --sidebar: #0e1014;
-  --pop: #1a1e25;
+  --canvas: #0a0a0a;
+  --card: #111111;
+  --card-2: #171717;
+  --card-3: #262626;
+  --sidebar: #0a0a0a;
+  --pop: #1a1a1a;
 
-  --border: #242a33;
-  --border-2: #323a45;
-  --line: #1e232b;
+  --border: rgba(255, 255, 255, 0.1);
+  --border-2: rgba(255, 255, 255, 0.16);
+  --line: rgba(255, 255, 255, 0.07);
 
-  --text-bright: #f5f6f8;
-  --text: #e3e6ea;
-  --text-soft: #c2c8d1;
-  --text-muted: #8b93a1;
-  --text-dim: #5f6875;
+  --text-bright: #ededed;
+  --text: #d6d6d6;
+  --text-soft: #a1a1a1;
+  --text-muted: #8a8a8a;
+  --text-dim: #6b6b6b;
   --on-accent: #ffffff;
 
-  --accent: #8ea3ff;
-  --accent-strong: #4f6ef7;
-  --accent-hover: #6683f9;
-  --accent-bg: rgba(79, 110, 247, 0.14);
-  --accent-bg-strong: rgba(79, 110, 247, 0.22);
-  --accent-border: rgba(79, 110, 247, 0.45);
-  --focus: rgba(79, 110, 247, 0.55);
+  --accent: #b1a9ff;
+  --accent-strong: #6e6ade;
+  --accent-hover: #7f7be6;
+  --accent-bg: #202248;
+  --accent-bg-strong: #262a5c;
+  --accent-border: rgba(110, 106, 222, 0.5);
+  --focus: rgba(110, 106, 222, 0.6);
 
-  --success: #3fc48a;
-  --success-text: #5fd39e;
-  --success-bg: rgba(63, 196, 138, 0.14);
-  --success-border: rgba(63, 196, 138, 0.4);
-  --danger: #f06a6a;
-  --danger-text: #f4a2a2;
-  --danger-bg: rgba(240, 106, 106, 0.15);
-  --danger-bg-subtle: rgba(240, 106, 106, 0.07);
-  --danger-border: rgba(240, 106, 106, 0.42);
-  --warning: #f0a552;
-  --warning-text: #f5bd7f;
-  --warning-bg: rgba(240, 165, 82, 0.15);
-  --warning-border: rgba(240, 165, 82, 0.4);
-  --info: #8ea3ff;
-  --info-bg: rgba(79, 110, 247, 0.14);
-  --info-bg-hover: rgba(79, 110, 247, 0.22);
+  --success: #33b074;
+  --success-text: #3dd68c;
+  --success-bg: #132d21;
+  --success-border: #1f5a3b;
+  --danger: #e5484d;
+  --danger-text: #ff9592;
+  --danger-bg: #3b1219;
+  --danger-bg-subtle: #2a0e12;
+  --danger-border: #72232d;
+  --warning: #ffb224;
+  --warning-text: #ffca16;
+  --warning-bg: #302008;
+  --warning-border: #5c3f0c;
+  --info: #52a8ff;
+  --info-bg: #0f1c2e;
+  --info-bg-hover: #16253d;
 
-  --chart-1: #6b8cf5;
-  --chart-1-soft: rgba(107, 140, 245, 0.2);
-  --chart-2: #3fc48a;
-  --chart-3: #f0a552;
-  --chart-4: #f06a6a;
-  --chart-5: #b48cf5;
-  --chart-muted: #3b4351;
-  --chart-grid: #1e232b;
-  --chart-crosshair: #4a5260;
-  --chart-brush: rgba(79, 110, 247, 0.18);
-  --chart-brush-edge: rgba(79, 110, 247, 0.7);
+  --chart-1: #6e6ade;
+  --chart-1-soft: rgba(110, 106, 222, 0.24);
+  --chart-2: #33b074;
+  --chart-3: #eeb720;
+  --chart-4: #e5484d;
+  --chart-5: #50c3b6;
+  --chart-6: #e8649d;
+  --chart-7: #4290f0;
+  --chart-muted: #454545;
+  --chart-grid: rgba(255, 255, 255, 0.08);
+  --chart-crosshair: #6b6b6b;
+  --chart-brush: rgba(110, 106, 222, 0.18);
+  --chart-brush-edge: rgba(110, 106, 222, 0.7);
 
-  --row-hover: rgba(255, 255, 255, 0.03);
-  --row-selected: rgba(79, 110, 247, 0.1);
-  --shadow-card: 0 1px 2px rgba(0, 0, 0, 0.3);
-  --shadow-btn: 0 1px 2px rgba(0, 0, 0, 0.3);
-  --shadow-pop: 0 16px 40px rgba(0, 0, 0, 0.55), 0 0 0 1px rgba(255, 255, 255, 0.06);
-  --shadow-seg: 0 1px 2px rgba(0, 0, 0, 0.4), 0 0 0 1px rgba(255, 255, 255, 0.05);
+  --row-hover: #1f1f1f;
+  --row-selected: #202248;
+  --shadow-card: none;
+  --shadow-btn: none;
+  --shadow-pop: 0 0 0 1px rgba(255, 255, 255, 0.1), 0 16px 32px -8px rgba(0, 0, 0, 0.6);
+  --shadow-seg: 0 1px 2px rgba(0, 0, 0, 0.4), 0 0 0 1px rgba(255, 255, 255, 0.06);
 }
 
 ::selection {

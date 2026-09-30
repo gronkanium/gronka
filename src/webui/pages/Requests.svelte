@@ -8,8 +8,11 @@
   import Avatar from '../components/Avatar.svelte';
   import {
     formatBytes,
+    formatDate,
+    formatDateTime,
     formatDuration,
     formatRelativeTime,
+    formatTime,
     shortId,
     urlLabel,
   } from '../utils/format.js';
@@ -162,35 +165,31 @@
     if (s) go({ sort: s === 'newest' ? '' : s });
   }
 
-  const time = t =>
-    new Date(t).toLocaleString([], {
-      month: 'short',
-      day: 'numeric',
-      hour: '2-digit',
-      minute: '2-digit',
-      second: '2-digit',
-      hour12: false,
-    });
   const moreActive = $derived(
     ['minDuration', 'maxDuration', 'minFileSize', 'maxFileSize'].filter(k => get(k)).length
   );
   const filtered = $derived(chips.length > 0 || moreActive > 0 || view !== 'all');
+  const windowLabel = $derived(
+    get('dateFrom') ? 'in this window' : RANGES[range] ? `in the last ${range}` : 'kept for 7 days'
+  );
+  const today = formatDate(Date.now());
+  const dayOf = r => {
+    const d = formatDate(r.timestamp);
+    return d === today ? 'Today' : d;
+  };
 
   const columns = [
-    { key: 'st', label: 'status', width: '100px' },
-    { key: 'time', label: 'time', width: '140px', sortable: true, sm: false },
-    { key: 'type', label: 'command', width: '84px', sm: false },
-    { key: 'link', label: 'link' },
-    { key: 'user', label: 'user', width: '120px', sm: false },
-    { key: 'size', label: 'size', width: '76px', align: 'right', sm: false },
-    { key: 'took', label: 'took', width: '64px', align: 'right', sortable: true },
+    { key: 'st', label: 'Status', width: '100px' },
+    { key: 'time', label: 'Time', width: '92px', sortable: true, sm: false },
+    { key: 'type', label: 'Command', width: '84px', sm: false },
+    { key: 'link', label: 'Link' },
+    { key: 'user', label: 'User', width: '116px', sm: false },
+    { key: 'size', label: 'Size', width: '76px', align: 'right', sm: false },
+    { key: 'took', label: 'Took', width: '64px', align: 'right', sortable: true },
   ];
 </script>
 
-<PageHeader
-  title="Requests"
-  description="Every command the bot has run in the last 7 days. Click a row for its full timeline."
->
+<PageHeader title="Requests" description="Every command the bot has run, {windowLabel}">
   {#snippet actions()}
     <TimeRange presets={RANGES} value={windowValue} onchange={onrange} allowAll defaultRange="" />
   {/snippet}
@@ -215,9 +214,7 @@
         <input
           bind:value={draft}
           onkeydown={onkey}
-          placeholder={chips.length
-            ? ''
-            : 'Search by link, user id or request id, or type:download, status:error'}
+          placeholder={chips.length ? '' : 'Filter by link, user id, request id, type:download…'}
           aria-label="filter requests"
           spellcheck="false"
         />
@@ -231,6 +228,10 @@
           >{/if}</button
       >
       <SaveView page="requests" />
+      <span class="count tnum"
+        >{#if !loading || total}<b>{total.toLocaleString()}</b>
+          {filtered ? 'matching' : 'requests'}{/if}</span
+      >
     </div>
   {/snippet}
 </PageHeader>
@@ -321,21 +322,17 @@
     onretry={load}
     sort={sortState}
     {onsort}
+    groupBy={dayOf}
     onrow={r => navigate('request', { requestId: r.id })}
     pager={{ offset, limit: PAGE, total, onpage: o => go({ offset: String(o) }) }}
     skeleton={12}
     label="requests"
   >
-    {#snippet header()}
-      <span class="tnum"><b>{total.toLocaleString()}</b> {filtered ? 'matching' : 'requests'}</span>
-    {/snippet}
     {#snippet emptyState()}
       <div class="empty">
         <span class="ic"><Inbox size={20} /></span>
         <b>No requests match</b>
-        {filtered
-          ? 'Try widening the time range or clearing a filter.'
-          : 'Nothing has been run yet.'}
+        {filtered ? 'Widen the time range or clear a filter' : 'Nothing has been run yet'}
         {#if filtered}<br /><button class="btn sm" onclick={() => navigate('requests', {})}
             >Clear filters</button
           >{/if}
@@ -344,19 +341,21 @@
     {#snippet row(r)}
       {@const [kind, label] = STATUS[r.status] ?? ['idle', r.status]}
       <span><span class="pill sm {kind}">{label}</span></span>
-      <span class="mono muted tnum hide-sm" title={formatRelativeTime(r.timestamp)}
-        >{time(r.timestamp)}</span
+      <span class="mono muted tnum hide-sm" title={formatDateTime(r.timestamp, { seconds: true })}
+        >{formatTime(r.timestamp)}</span
       >
       <span class="soft hide-sm">/{r.type}</span>
-      <span class="linkcell">
-        <span class="mono ellipsis">{urlLabel(r.originalUrl)}</span>
-        {#if r.status === 'error' && r.error}<span class="err ellipsis">{r.error}</span>{/if}
+      <span class="linkcell ellipsis">
+        <span class="mono">{urlLabel(r.originalUrl)}</span>
+        {#if r.status === 'error' && r.error}<span class="err" title={r.error}>· {r.error}</span
+          >{/if}
       </span>
       <span class="user-cell hide-sm"
-        ><Avatar id={r.userId} size={20} /><span class="id">{shortId(r.userId)}</span></span
+        ><Avatar id={r.userId} size={18} label="" /><span class="id">{shortId(r.userId)}</span
+        ></span
       >
       <span class="num muted hide-sm">{r.fileSize ? formatBytes(r.fileSize) : '—'}</span>
-      <span class="num muted"
+      <span class="num muted" title={formatRelativeTime(r.timestamp)}
         >{r.performanceMetrics?.duration
           ? formatDuration(r.performanceMetrics.duration)
           : '—'}</span
@@ -371,6 +370,16 @@
     align-items: center;
     gap: 8px;
     flex-wrap: wrap;
+  }
+  .count {
+    margin-left: auto;
+    font-size: var(--fs);
+    color: var(--text-muted);
+    white-space: nowrap;
+  }
+  .count b {
+    font-weight: 600;
+    color: var(--text-bright);
   }
   .btn .n {
     font-size: 10px;
@@ -399,10 +408,7 @@
     width: 90px;
   }
   .linkcell {
-    display: flex;
-    flex-direction: column;
-    min-width: 0;
-    padding: 7px 0;
+    display: block;
   }
   .err {
     font-size: var(--fs-sm);

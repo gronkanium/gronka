@@ -10,6 +10,7 @@
     Plus,
     X,
     Check,
+    ArrowUpRight,
   } from 'lucide-svelte';
   import { currentRoute, navigate } from '../utils/router.js';
   import PageHeader from '../components/PageHeader.svelte';
@@ -20,6 +21,7 @@
       id: 'delivery',
       label: 'Delivery',
       icon: Share2,
+      blurb: 'How the bot hands files back to Discord',
       keys: [
         'url_only_mode',
         'twitter_delivery',
@@ -32,12 +34,14 @@
       id: 'storage',
       label: 'Limits and storage',
       icon: HardDrive,
+      blurb: 'How long uploads live in R2 and how much it may hold',
       keys: ['upload_ttl_tiers', 'r2_soft_limit_gb', 'admin_uploads_expire'],
     },
     {
       id: 'access',
       label: 'Access and moderation',
       icon: ShieldCheck,
+      blurb: 'Who may use the bot and when it stops taking work',
       keys: [
         'maintenance_mode',
         'queue_paused',
@@ -50,9 +54,17 @@
       id: 'notifications',
       label: 'Notifications',
       icon: Bell,
+      blurb: 'Where failures and alerts are pushed',
       keys: ['ntfy_topic', 'ntfy_server'],
     },
-    { id: 'presence', label: 'Bot presence', icon: Activity, keys: [], presence: true },
+    {
+      id: 'presence',
+      label: 'Bot presence',
+      icon: Activity,
+      blurb: 'What Discord shows next to the bot',
+      keys: [],
+      presence: true,
+    },
   ];
   // Edited on their own pages, not here.
   const ELSEWHERE = new Set(['services', 'views', 'issuestates']);
@@ -79,9 +91,10 @@
   let loading = $state(true);
   let error = $state('');
   let saving = $state({});
-  let saved = $state({});
   let drafts = $state({});
   let tierDrafts = $state({});
+  let toast = $state('');
+  let toastTimer;
 
   const sections = $derived.by(() => {
     const grouped = new Set(SECTIONS.flatMap(s => s.keys));
@@ -91,7 +104,7 @@
     return [
       ...SECTIONS,
       ...(other.length
-        ? [{ id: 'other', label: 'Other', icon: SlidersHorizontal, keys: other }]
+        ? [{ id: 'other', label: 'Other', icon: SlidersHorizontal, keys: other, blurb: '' }]
         : []),
     ];
   });
@@ -150,6 +163,12 @@
   }
   load();
 
+  function say(text) {
+    toast = text;
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(() => (toast = ''), 2000);
+  }
+
   async function save(key, value) {
     saving[key] = true;
     error = '';
@@ -164,8 +183,7 @@
       settings[key].value = data.value;
       drafts[key] = data.value;
       if (settings[key].type === 'tiers') tierDrafts[key] = parseTiers(data.value);
-      saved[key] = true;
-      setTimeout(() => (saved[key] = false), 1600);
+      say(`${label(key)} saved`);
     } catch (err) {
       error = `${label(key)}: ${err.message}`;
     } finally {
@@ -188,7 +206,6 @@
   let presence = $state(null);
   let presenceStatus = $state('online');
   let presenceActivity = $state('');
-  let presenceMsg = $state('');
   let presenceSaving = $state(false);
   async function loadPresence() {
     presence = await fetch('/api/bot/status')
@@ -199,7 +216,6 @@
   }
   async function savePresence() {
     presenceSaving = true;
-    presenceMsg = '';
     const res = await fetch('/api/bot/status', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -210,16 +226,19 @@
     }).catch(() => null);
     const data = res ? await res.json().catch(() => ({})) : {};
     presenceSaving = false;
-    presenceMsg = res?.ok ? 'updated' : data.error || data.message || 'could not update presence';
-    if (res?.ok) loadPresence();
+    if (res?.ok) {
+      say('Presence updated');
+      loadPresence();
+    } else error = data.error || data.message || 'could not update presence';
   }
   loadPresence();
+  const presenceDirty = $derived(
+    presence &&
+      (presenceStatus !== presence.status || presenceActivity.trim() !== (presence.activity ?? ''))
+  );
 </script>
 
-<PageHeader
-  title="Settings"
-  description="How the bot behaves: delivery, limits, access and notifications. Changes apply within a minute."
->
+<PageHeader title="Settings" description="Changes apply within a minute">
   {#snippet actions()}
     {#if error}<span class="pill bad">{error}</span>{/if}
   {/snippet}
@@ -238,36 +257,51 @@
       </button>
     {/each}
     <button class="sec" onclick={() => navigate('sources')}
-      ><Globe size={15} strokeWidth={1.8} /><span>Download sources</span><span class="arrow">↗</span
+      ><Globe size={15} strokeWidth={1.8} /><span>Sources</span><span class="arrow"
+        ><ArrowUpRight size={13} /></span
       ></button
     >
   </nav>
 
   <section class="panel content" aria-label={active.label}>
-    <div class="ph"><span>{active.label}</span></div>
+    <div class="ph">
+      <span>{active.label}</span>
+      {#if active.blurb}<span class="sub">{active.blurb}</span>{/if}
+    </div>
     {#if loading}
-      <div class="empty">loading…</div>
+      <div class="skel-rows">
+        {#each Array(4) as _, i (i)}<span class="skeleton" style="width:{60 - i * 8}%"
+          ></span>{/each}
+      </div>
     {:else if active.presence}
       <div class="item">
         <div class="lbl">
           <b>Current presence</b>
-          <p>
-            {presence
+          <p>What Discord shows right now</p>
+        </div>
+        <div class="ctl">
+          <span
+            class="pill"
+            class:ok={presence?.status === 'online'}
+            class:idle={presence?.status !== 'online'}
+            >{presence
               ? `${presence.botTag ?? 'bot'} · ${presence.status}${presence.activity ? ` · ${presence.activity}` : ''}`
-              : 'unavailable'}
-          </p>
+              : 'unavailable'}</span
+          >
         </div>
       </div>
       <div class="item">
         <div class="lbl">
           <b>Status</b>
-          <p>What Discord shows next to the bot.</p>
+          <p>The dot next to the bot's name</p>
         </div>
-        <div class="seg">
-          {#each STATUS_OPTIONS as o (o)}<button
-              class:on={presenceStatus === o}
-              onclick={() => (presenceStatus = o)}>{o}</button
-            >{/each}
+        <div class="ctl">
+          <div class="seg">
+            {#each STATUS_OPTIONS as o (o)}<button
+                class:on={presenceStatus === o}
+                onclick={() => (presenceStatus = o)}>{o}</button
+              >{/each}
+          </div>
         </div>
       </div>
       <div class="item">
@@ -275,17 +309,22 @@
           <b>Custom status</b>
           <p>Leave empty for none. Survives restarts.</p>
         </div>
-        <div class="row ctl">
+        <div class="ctl">
           <input
             class="field wide"
             bind:value={presenceActivity}
             maxlength="128"
             placeholder="e.g. web.gronka.dev"
           />
-          <button class="btn primary" disabled={presenceSaving} onclick={savePresence}>Apply</button
-          >
-          {#if presenceMsg}<span class="dim small">{presenceMsg}</span>{/if}
         </div>
+      </div>
+      <div class="pf foot">
+        <span class="dim">{presenceDirty ? 'Unsaved changes' : 'Up to date'}</span>
+        <button
+          class="btn primary right"
+          disabled={presenceSaving || !presenceDirty}
+          onclick={savePresence}>Apply</button
+        >
       </div>
     {:else}
       {#each activeKeys as key (key)}
@@ -306,6 +345,7 @@
                 disabled={saving[key]}
                 onclick={() => save(key, s.value !== 'true')}
               ></button>
+              <span class="small muted">{s.value === 'true' ? 'On' : 'Off'}</span>
             {:else if s.type === 'select'}
               <select
                 class="field"
@@ -331,12 +371,12 @@
                   max={s.max}
                   bind:value={drafts[key]}
                 />
+                {#if s.min !== undefined}<span class="dim small nowrap">{s.min}–{s.max}</span>{/if}
                 {#if String(drafts[key]) !== String(s.value)}<button
-                    class="btn primary"
-                    disabled={saving[key]}>Save</button
+                    class="btn primary sm"
+                    disabled={saving[key]}><Check size={12} />Save</button
                   >{/if}
               </form>
-              {#if s.min !== undefined}<span class="dim small">{s.min}–{s.max}</span>{/if}
             {:else if s.type === 'tiers'}
               <div class="tiers">
                 {#each tierDrafts[key] ?? [] as row, i (i)}
@@ -349,7 +389,7 @@
                       class="dim small">hours</span
                     >
                     <button
-                      class="iconbtn"
+                      class="icon-btn sm"
                       aria-label="remove tier"
                       onclick={() => (tierDrafts[key] = tierDrafts[key].filter((_, j) => j !== i))}
                       ><X size={13} /></button
@@ -367,7 +407,8 @@
                     <button
                       class="btn primary sm"
                       disabled={saving[key] || !serializeTiers(tierDrafts[key] ?? [])}
-                      onclick={() => save(key, serializeTiers(tierDrafts[key]))}>Save</button
+                      onclick={() => save(key, serializeTiers(tierDrafts[key]))}
+                      ><Check size={12} />Save</button
                     >
                   {/if}
                 </div>
@@ -396,14 +437,13 @@
                   {/each}
                 </div>
                 <form class="row" onsubmit={e => addListItem(key, e)}>
-                  <input class="field mono" name="value" placeholder="add an id" />
+                  <input class="field mono" name="value" placeholder="Add an id" />
                   <button class="btn sm" disabled={saving[key]}><Plus size={12} />Add</button>
                 </form>
               </div>
             {:else}
               <span class="mono dim small">{s.value}</span>
             {/if}
-            {#if saved[key]}<span class="saved"><Check size={13} />saved</span>{/if}
           </div>
         </div>
       {/each}
@@ -411,11 +451,13 @@
   </section>
 </div>
 
+{#if toast}<div class="toast" role="status"><Check size={14} />{toast}</div>{/if}
+
 <style>
   .settings {
     display: grid;
-    grid-template-columns: 220px minmax(0, 1fr);
-    gap: 16px;
+    grid-template-columns: 200px minmax(0, 720px);
+    gap: var(--gap-lg);
     align-items: start;
   }
   .side {
@@ -423,10 +465,10 @@
     flex-direction: column;
     gap: 2px;
     position: sticky;
-    top: 24px;
+    top: 80px;
   }
   .sec {
-    height: 36px;
+    height: 34px;
     padding: 0 10px;
     display: flex;
     align-items: center;
@@ -436,41 +478,53 @@
     background: none;
     color: var(--text-soft);
     font: inherit;
-    font-size: var(--fs-md);
+    font-size: var(--fs);
     font-weight: 500;
     text-align: left;
     cursor: pointer;
+  }
+  .sec :global(svg) {
+    color: var(--text-muted);
   }
   .sec:hover {
     background: var(--card-3);
     color: var(--text-bright);
   }
   .sec.on {
-    background: var(--accent-bg);
-    color: var(--accent);
+    background: var(--card-3);
+    color: var(--text-bright);
+    font-weight: 600;
+  }
+  .sec.on :global(svg) {
+    color: var(--text-bright);
   }
   .arrow {
     margin-left: auto;
     color: var(--text-dim);
+    display: flex;
   }
   .item {
     display: grid;
-    grid-template-columns: minmax(0, 1fr) minmax(260px, 1.1fr);
+    grid-template-columns: minmax(0, 1fr) minmax(220px, 300px);
     gap: 24px;
-    padding: 20px 24px;
+    padding: 16px;
     border-top: 1px solid var(--line);
+    align-items: center;
   }
-  .item:first-of-type {
+  .item:hover {
+    background: var(--card-2);
+  }
+  .ph + .item {
     border-top: 0;
   }
   .lbl b {
     font-weight: 600;
-    font-size: var(--fs-md);
+    font-size: var(--fs);
     color: var(--text-bright);
   }
   .lbl p {
-    margin: 4px 0 0;
-    font-size: var(--fs);
+    margin: 3px 0 0;
+    font-size: var(--fs-sm);
     line-height: 1.5;
     color: var(--text-muted);
   }
@@ -479,16 +533,19 @@
     align-items: center;
     flex-wrap: wrap;
     gap: 10px;
-    align-self: center;
+    justify-content: flex-end;
+  }
+  .ctl .row {
+    justify-content: flex-end;
   }
   .field.wide {
-    width: 260px;
+    width: 100%;
   }
   .field[type='number'] {
-    width: 110px;
+    width: 100px;
   }
   .num-in {
-    width: 80px !important;
+    width: 76px !important;
   }
   .tiers,
   .list {
@@ -501,6 +558,7 @@
     display: flex;
     flex-wrap: wrap;
     gap: 6px;
+    justify-content: flex-end;
   }
   .chip .x {
     display: flex;
@@ -511,27 +569,11 @@
     cursor: pointer;
   }
   .chip .x:hover {
-    color: var(--danger);
+    color: var(--danger-text);
   }
-  .iconbtn {
-    display: flex;
-    padding: 4px;
-    border: 0;
-    border-radius: var(--radius-sm);
-    background: none;
-    color: var(--text-dim);
-    cursor: pointer;
-  }
-  .iconbtn:hover {
-    color: var(--danger);
+  .foot {
     background: var(--card-2);
-  }
-  .saved {
-    display: inline-flex;
-    align-items: center;
-    gap: 4px;
-    font-size: var(--fs-sm);
-    color: var(--success);
+    border-radius: 0 0 var(--radius-lg) var(--radius-lg);
   }
   @media (max-width: 860px) {
     .settings {
@@ -548,6 +590,11 @@
     .item {
       grid-template-columns: 1fr;
       gap: 10px;
+    }
+    .ctl,
+    .ctl .row,
+    .chips {
+      justify-content: flex-start;
     }
   }
 </style>

@@ -9,9 +9,10 @@
     ShieldOff,
     AlertTriangle,
     FolderOpen,
+    Check,
   } from 'lucide-svelte';
   import { currentRoute, navigate } from '../utils/router.js';
-  import { formatBytes, formatRelativeTime } from '../utils/format.js';
+  import { formatBytes, formatDateTime, formatRelativeTime } from '../utils/format.js';
   import PageHeader from '../components/PageHeader.svelte';
   import DataTable from '../components/DataTable.svelte';
   import MediaThumb from '../components/MediaThumb.svelte';
@@ -20,12 +21,12 @@
   const PAGE = 25;
 
   const tab = $derived($currentRoute.params.$tab === 'bans' ? 'bans' : 'files');
-  let status = $state(null);
-  let statusTimer;
-  function flash(kind, text) {
-    status = { kind, text };
-    clearTimeout(statusTimer);
-    statusTimer = setTimeout(() => (status = null), 5000);
+  let toast = $state(null);
+  let toastTimer;
+  function say(kind, text) {
+    toast = { kind, text };
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(() => (toast = null), 4000);
   }
   const readError = async (res, fallback) =>
     (await res.json().catch(() => ({}))).message || fallback;
@@ -60,8 +61,10 @@
       body: JSON.stringify({ value: !enabled }),
     }).catch(() => null);
     busy = false;
-    if (res?.ok) enabled = !enabled;
-    else flash('error', 'could not change the moderation switch');
+    if (res?.ok) {
+      enabled = !enabled;
+      say('ok', enabled ? 'Bans are now enforced' : 'Bans are recorded but not enforced');
+    } else say('error', 'Could not change the moderation switch');
   }
   let searchTimer;
   function onBanSearch() {
@@ -74,6 +77,7 @@
       banResults = d?.users ?? [];
     }, 250);
   }
+  const validId = $derived(/^\d{17,20}$/.test(banForm.userId.trim()));
   async function submitBan() {
     busy = true;
     const res = await fetch('/api/bans', {
@@ -87,18 +91,18 @@
     }).catch(() => null);
     busy = false;
     if (res?.ok) {
-      flash('ok', `banned ${banForm.userId.trim()}`);
+      say('ok', `Banned ${banForm.userId.trim()}`);
       banForm = { userId: '', reason: '', appealAllowed: true };
       loadBans();
-    } else flash('error', res ? await readError(res, 'could not ban') : 'could not ban');
+    } else say('error', res ? await readError(res, 'Could not ban') : 'Could not ban');
   }
   async function unban(userId) {
     if (!confirm(`Unban ${userId}?`)) return;
     const res = await fetch(`/api/bans/${userId}`, { method: 'DELETE' }).catch(() => null);
     if (res?.ok) {
-      flash('ok', `unbanned ${userId}`);
+      say('ok', `Unbanned ${userId}`);
       loadBans();
-    } else flash('error', 'could not unban');
+    } else say('error', 'Could not unban');
   }
 
   // ---- stored files by user
@@ -111,6 +115,7 @@
   let total = $state(0);
   let offset = $state(0);
   let fileType = $state('');
+  let onlyDead = $state(false);
   let picked = $state(new Set());
   let deleting = $state(false);
   let preview = $state(null);
@@ -148,6 +153,7 @@
     fileType;
     picked = new Set();
     linkState = {};
+    onlyDead = false;
     loadMedia();
   });
   const shownUsers = $derived(
@@ -164,31 +170,31 @@
       return {
         kind: 'bad',
         label: 'Link dead',
-        note: 'The object is gone from R2 but this record still points at it.',
+        note: 'The object is gone from R2 but this record still points at it',
       };
     if (m.deleted_at)
       return {
         kind: 'bad',
         label: 'Deleted',
-        note: `Removed ${formatRelativeTime(m.deleted_at)}, record not yet marked.`,
+        note: `Removed ${formatRelativeTime(m.deleted_at)}, record not yet marked`,
       };
     if (m.expires_at == null)
       return {
         kind: 'info',
         label: 'Permanent',
-        note: 'No expiry tracked: an admin upload, or made while tracking was off.',
+        note: 'No expiry tracked: an admin upload, or made while tracking was off',
       };
     if (m.expires_at < now)
       return {
         kind: 'warn',
         label: 'Expired',
-        note: `Due ${formatRelativeTime(m.expires_at)}, waiting for the cleanup job.`,
+        note: `Due ${formatRelativeTime(m.expires_at)}, waiting for the cleanup job`,
       };
     if (m.deletion_failed)
       return {
         kind: 'warn',
         label: 'Delete failed',
-        note: 'The cleanup job could not remove it and will retry.',
+        note: 'The cleanup job could not remove it and will retry',
       };
     return { kind: 'ok', label: `Expires ${left(m.expires_at - now)}`, note: '' };
   }
@@ -198,7 +204,9 @@
       : ms < 86_400_000
         ? `in ${Math.floor(ms / 3_600_000)}h`
         : `in ${Math.floor(ms / 86_400_000)}d ${Math.floor((ms % 86_400_000) / 3_600_000)}h`;
-  const deadRows = $derived(media.filter(m => linkState[m.url_hash] === 'dead' || m.deleted_at));
+  const isDead = m => linkState[m.url_hash] === 'dead' || !!m.deleted_at;
+  const deadRows = $derived(media.filter(isDead));
+  const visible = $derived(onlyDead ? deadRows : media);
   const name = m => m.file_url.split('/').pop().split('?')[0];
 
   async function afterDelete() {
@@ -214,8 +222,8 @@
     );
     deleting = false;
     res?.ok
-      ? flash('ok', 'file deleted')
-      : flash('error', res ? await readError(res, 'delete failed') : 'delete failed');
+      ? say('ok', 'File deleted')
+      : say('error', res ? await readError(res, 'Delete failed') : 'Delete failed');
     afterDelete();
   }
   async function deleteMany(hashes, what) {
@@ -228,10 +236,11 @@
     }).catch(() => null);
     deleting = false;
     const results = res?.ok ? (await res.json()).results : null;
-    if (!results) flash('error', res ? await readError(res, 'delete failed') : 'delete failed');
+    if (!results) say('error', res ? await readError(res, 'Delete failed') : 'Delete failed');
     else if (results.failed?.length)
-      flash('error', `deleted ${results.success.length}, ${results.failed.length} failed`);
-    else flash('ok', `deleted ${results.success.length} file(s)`);
+      say('error', `Deleted ${results.success.length}, ${results.failed.length} failed`);
+    else
+      say('ok', `Deleted ${results.success.length} file${results.success.length === 1 ? '' : 's'}`);
     afterDelete();
   }
   async function deleteAll() {
@@ -248,8 +257,8 @@
     );
     deleting = false;
     res?.ok
-      ? flash('ok', `deleted ${(await res.json()).deleted} file(s)`)
-      : flash('error', 'delete failed');
+      ? say('ok', `Deleted ${(await res.json()).deleted} file(s)`)
+      : say('error', 'Delete failed');
     afterDelete();
   }
   function pick(hash, e) {
@@ -259,17 +268,17 @@
     picked = next;
   }
   function pickAll() {
-    picked = picked.size === media.length ? new Set() : new Set(media.map(m => m.url_hash));
+    picked = picked.size === visible.length ? new Set() : new Set(visible.map(m => m.url_hash));
   }
   const setLink = (hash, s) => (linkState = { ...linkState, [hash]: s });
 
   const columns = [
     { key: 'pick', label: '', width: '18px' },
-    { key: 'thumb', label: '', width: '40px' },
-    { key: 'file', label: 'file', width: 'minmax(120px, 1fr)' },
-    { key: 'size', label: 'size', width: '76px', align: 'right', sm: false },
-    { key: 'made', label: 'created', width: '76px', align: 'right', sm: false },
-    { key: 'life', label: 'lifecycle', width: '128px', sm: false },
+    { key: 'thumb', label: '', width: '36px' },
+    { key: 'file', label: 'File', width: 'minmax(120px, 1fr)' },
+    { key: 'size', label: 'Size', width: '76px', align: 'right', sm: false },
+    { key: 'made', label: 'Created', width: '76px', align: 'right', sm: false },
+    { key: 'life', label: 'Lifecycle', width: '128px', sm: false },
     { key: 'act', label: '', width: '56px' },
   ];
 
@@ -277,19 +286,28 @@
   loadBans();
 
   onDestroy(() => {
-    clearTimeout(statusTimer);
+    clearTimeout(toastTimer);
     clearTimeout(searchTimer);
   });
 </script>
 
-<PageHeader
-  title="Moderation"
-  description="Files the bot is holding in R2 for each user, and who is banned from using it."
->
+<PageHeader title="Moderation" description="Stored files by user, and who is banned">
   {#snippet actions()}
     <span class="pill" class:ok={enabled} class:warn={!enabled}
       >{enabled ? 'Bans enforced' : 'Bans not enforced'}</span
     >
+    <button
+      class="toggle"
+      class:on={enabled}
+      role="switch"
+      aria-checked={enabled}
+      aria-label="enforce bans"
+      title={enabled
+        ? 'Banned users are refused every command'
+        : 'Bans are recorded but not enforced'}
+      disabled={busy}
+      onclick={toggleEnabled}
+    ></button>
   {/snippet}
   {#snippet below()}
     <div class="tabs" role="tablist">
@@ -312,8 +330,6 @@
 </PageHeader>
 
 <div class="mod stack">
-  {#if status}<div class="flash {status.kind}" role="status">{status.text}</div>{/if}
-
   {#if tab === 'files'}
     <div class="files" class:with-preview={!!preview}>
       <section class="panel users-col" aria-label="users with stored files">
@@ -346,7 +362,7 @@
                 preview = null;
               }}
             >
-              <Avatar id={u.user_id} size={28} />
+              <Avatar id={u.user_id} size={26} />
               <span class="grow">
                 <span class="row top">
                   <span class="mono ellipsis uid">{u.user_id}</span>
@@ -358,12 +374,12 @@
                   <span class="ubar"
                     ><i style="width:{(Number(u.total_size) / userMax) * 100}%"></i></span
                   >
-                  <span class="dim xs tnum">{u.file_count}</span>
+                  <span class="dim xs tnum nowrap">{u.file_count} files</span>
                 </span>
               </span>
             </button>
           {:else}
-            {#if !usersLoading}<div class="empty">no stored files</div>{/if}
+            {#if !usersLoading}<div class="empty">No stored files</div>{/if}
           {/each}
         </div>
       </section>
@@ -373,19 +389,18 @@
           <div class="empty big">
             <span class="ic"><FolderOpen size={20} /></span>
             <b>Pick a user</b>
-            Their stored files, with thumbnails and expiry, show up here.
+            Their stored files, with thumbnails and expiry, show up here
           </div>
         </section>
       {:else}
         <DataTable
           {columns}
-          rows={media}
+          rows={visible}
           rowKey="url_hash"
           loading={mediaLoading}
-          empty="no files"
           selected={preview?.url_hash}
           onrow={m => (preview = preview?.url_hash === m.url_hash ? null : m)}
-          pager={{ offset, limit: PAGE, total, onpage: o => (offset = o) }}
+          pager={onlyDead ? null : { offset, limit: PAGE, total, onpage: o => (offset = o) }}
           label="stored files"
         >
           {#snippet header()}
@@ -402,28 +417,25 @@
               <option value="gif">GIF</option>
               <option value="image">Image</option>
             </select>
-            {#if picked.size}
-              <button
-                class="btn danger sm"
-                disabled={deleting}
-                onclick={() => deleteMany([...picked], 'selected file(s)')}
-                ><Trash2 size={12} />Delete {picked.size}</button
-              >
-            {:else if deadRows.length}
-              <button
-                class="btn sm"
-                disabled={deleting}
-                title="drop the cache records whose object is already gone"
-                onclick={() =>
-                  deleteMany(
-                    deadRows.map(m => m.url_hash),
-                    'dead record(s)'
-                  )}><AlertTriangle size={12} />Clear {deadRows.length} dead</button
+            {#if deadRows.length}
+              <button class="btn sm" class:on={onlyDead} onclick={() => (onlyDead = !onlyDead)}
+                ><AlertTriangle size={12} />Dead links {deadRows.length}</button
               >
             {/if}
-            <button class="btn danger sm" disabled={deleting} onclick={deleteAll}
-              ><Trash2 size={12} />Delete all</button
+            <button
+              class="btn danger sm"
+              disabled={deleting}
+              title="every file this user has stored"
+              onclick={deleteAll}><Trash2 size={12} />Delete all</button
             >
+          {/snippet}
+          {#snippet emptyState()}
+            <div class="empty">
+              <b>{onlyDead ? 'No dead links' : 'No files'}</b>
+              {onlyDead
+                ? 'Every record on this page still resolves'
+                : 'Nothing of this type is stored'}
+            </div>
           {/snippet}
           {#snippet row(m)}
             {@const life = lifecycle(m)}
@@ -439,17 +451,15 @@
             <MediaThumb
               url={m.file_url}
               type={m.file_type}
-              size={36}
+              size={30}
               onstate={s => setLink(m.url_hash, s)}
             />
             <span class="filecell">
               <span class="mono ellipsis" title={m.file_url}>{name(m)}</span>
-              <span class="row xs dim"
-                ><span class="chip">{m.file_type}</span>{m.file_extension}</span
-              >
+              <span class="xs dim">{m.file_type}</span>
             </span>
             <span class="num muted hide-sm">{formatBytes(m.file_size)}</span>
-            <span class="num dim hide-sm" title={new Date(m.processed_at).toLocaleString()}
+            <span class="num dim hide-sm" title={formatDateTime(m.processed_at)}
               >{formatRelativeTime(m.processed_at)}</span
             >
             <span class="hide-sm">
@@ -477,17 +487,17 @@
             </span>
           {/snippet}
           {#snippet footer()}
-            {#if media.length}
+            {#if visible.length}
               <div class="pf">
                 <label class="row small"
                   ><input
                     type="checkbox"
                     class="pickbox"
-                    checked={picked.size === media.length}
+                    checked={picked.size === visible.length}
                     onclick={pickAll}
                   /> Select page</label
                 >
-                {#if deadRows.length}
+                {#if deadRows.length && !onlyDead}
                   <span class="warn-text small"
                     >{deadRows.length} record{deadRows.length === 1 ? '' : 's'} on this page point at
                     objects that are gone</span
@@ -521,14 +531,14 @@
               <dt>Size</dt>
               <dd>{formatBytes(preview.file_size)}</dd>
               <dt>Created</dt>
-              <dd>{new Date(preview.processed_at).toLocaleString()}</dd>
+              <dd>{formatDateTime(preview.processed_at)}</dd>
               <dt>Lifecycle</dt>
               <dd><span class="pill sm {life.kind}">{life.label}</span></dd>
               {#if life.note}<dt></dt>
                 <dd class="dim small">{life.note}</dd>{/if}
               {#if preview.expires_at}
                 <dt>Expires</dt>
-                <dd>{new Date(preview.expires_at).toLocaleString()}</dd>
+                <dd>{formatDateTime(preview.expires_at)}</dd>
               {/if}
               <dt>Hash</dt>
               <dd class="mono small break">{preview.url_hash}</dd>
@@ -548,135 +558,134 @@
         {/if}
       {/if}
     </div>
+    {#if picked.size}
+      <div class="bulk pop" role="status">
+        <b>{picked.size} selected</b>
+        <button class="btn sm ghost" onclick={() => (picked = new Set())}>Clear</button>
+        <button
+          class="btn danger solid sm"
+          disabled={deleting}
+          onclick={() => deleteMany([...picked], 'selected file(s)')}
+          ><Trash2 size={12} />Delete {picked.size}</button
+        >
+      </div>
+    {/if}
   {:else}
-    <div class="bans stack">
-      <section class="panel" class:accent-ok={enabled} class:accent-warn={!enabled}>
-        <div class="pb row switch">
-          <button
-            class="toggle"
-            class:on={enabled}
-            role="switch"
-            aria-checked={enabled}
-            aria-label="enforce bans"
-            disabled={busy}
-            onclick={toggleEnabled}
-          ></button>
-          <div class="grow">
-            <b>Enforce bans</b>
-            <div class="muted small">
-              {enabled
-                ? 'Banned users are refused every command.'
-                : 'Off: bans are recorded but not enforced.'}
-            </div>
+    <div class="two wide-left">
+      <DataTable
+        title="Banned users"
+        columns={[
+          { key: 'user', label: 'User', width: '220px' },
+          { key: 'reason', label: 'Reason' },
+          { key: 'appeal', label: 'Appeal', width: '90px', sm: false },
+          { key: 'since', label: 'Since', width: '90px', align: 'right' },
+          { key: 'act', label: '', width: '84px' },
+        ]}
+        rows={bans}
+        rowKey="user_id"
+        loading={bansLoading}
+      >
+        {#snippet header()}<span class="tnum">{bans.length}</span>{/snippet}
+        {#snippet emptyState()}
+          <div class="empty">
+            <span class="ic"><ShieldOff size={20} /></span>
+            <b>Nobody is banned</b>
+            Ban a user from the form, or from their profile
           </div>
+        {/snippet}
+        {#snippet row(b)}
+          <span class="user-cell"
+            ><Avatar id={b.user_id} size={22} /><button
+              class="linkish mono id"
+              onclick={() => navigate('user-profile', { userId: b.user_id })}>{b.user_id}</button
+            ></span
+          >
+          <span class="ellipsis" title={b.reason}>{b.reason}</span>
+          <span class="hide-sm"
+            ><span class="pill sm" class:ok={b.appeal_allowed} class:idle={!b.appeal_allowed}
+              >{b.appeal_allowed ? 'Allowed' : 'No appeal'}</span
+            ></span
+          >
+          <span class="num dim" title={formatDateTime(b.banned_at)}
+            >{formatRelativeTime(b.banned_at)}</span
+          >
+          <button class="btn sm" onclick={() => unban(b.user_id)}
+            ><ShieldOff size={12} />Unban</button
+          >
+        {/snippet}
+      </DataTable>
+
+      <section class="panel" aria-label="ban a user">
+        <div class="ph"><span>Ban a user</span></div>
+        <div class="pb form">
+          <label
+            >Find user
+            <label class="searchbox">
+              <Search size={14} />
+              <input
+                bind:value={banSearch}
+                oninput={onBanSearch}
+                placeholder="Search by id"
+                aria-label="search users"
+              />
+            </label>
+          </label>
+          {#if banResults.length}
+            <div class="results">
+              {#each banResults as u (u.user_id)}
+                <button
+                  class="lrow"
+                  onclick={() => {
+                    banForm.userId = u.user_id;
+                    banSearch = '';
+                    banResults = [];
+                  }}
+                >
+                  <Avatar id={u.user_id} size={22} />
+                  <span class="mono ellipsis grow">{u.user_id}</span><span class="dim small"
+                    >{u.total_commands} requests</span
+                  >
+                </button>
+              {/each}
+            </div>
+          {/if}
+          <label
+            >User id <input
+              class="field mono"
+              bind:value={banForm.userId}
+              placeholder="17-20 digit Discord id"
+            /></label
+          >
+          <label
+            >Reason <textarea
+              class="field"
+              rows="3"
+              bind:value={banForm.reason}
+              maxlength="200"
+              placeholder="Shown to them when they appeal"></textarea></label
+          >
+          <label class="check-row"
+            ><input type="checkbox" bind:checked={banForm.appealAllowed} /> Allow appeal</label
+          >
+        </div>
+        <div class="pf">
+          <span class="dim small">{validId ? '' : 'Enter a valid Discord id'}</span>
+          <button
+            class="btn danger solid right"
+            disabled={busy || !validId || !banForm.reason.trim()}
+            onclick={submitBan}><Ban size={14} />Ban user</button
+          >
         </div>
       </section>
-
-      <div class="two wide-left">
-        <DataTable
-          title="Banned users"
-          columns={[
-            { key: 'user', label: 'user', width: 'minmax(0, 1fr)' },
-            { key: 'reason', label: 'reason', width: 'minmax(0, 1.4fr)', sm: false },
-            { key: 'appeal', label: 'appeal', width: '90px', sm: false },
-            { key: 'since', label: 'since', width: '90px', align: 'right' },
-            { key: 'act', label: '', width: '84px' },
-          ]}
-          rows={bans}
-          rowKey="user_id"
-          loading={bansLoading}
-        >
-          {#snippet header()}<span class="tnum">{bans.length}</span>{/snippet}
-          {#snippet emptyState()}
-            <div class="empty">
-              <span class="ic"><ShieldOff size={20} /></span>
-              <b>Nobody is banned</b>
-              Ban a user from the form, or from their profile.
-            </div>
-          {/snippet}
-          {#snippet row(b)}
-            <span class="user-cell"
-              ><Avatar id={b.user_id} size={24} /><button
-                class="linkish mono id"
-                onclick={() => navigate('user-profile', { userId: b.user_id })}>{b.user_id}</button
-              ></span
-            >
-            <span class="ellipsis hide-sm" title={b.reason}>{b.reason}</span>
-            <span class="hide-sm"
-              ><span class="pill sm" class:ok={b.appeal_allowed} class:idle={!b.appeal_allowed}
-                >{b.appeal_allowed ? 'Allowed' : 'No appeal'}</span
-              ></span
-            >
-            <span class="num dim">{formatRelativeTime(b.banned_at)}</span>
-            <button class="btn sm" onclick={() => unban(b.user_id)}
-              ><ShieldOff size={12} />Unban</button
-            >
-          {/snippet}
-        </DataTable>
-
-        <section class="panel" aria-label="ban a user">
-          <div class="ph"><span>Ban a user</span></div>
-          <div class="pb form">
-            <label
-              >Find user
-              <label class="searchbox">
-                <Search size={14} />
-                <input
-                  bind:value={banSearch}
-                  oninput={onBanSearch}
-                  placeholder="Search by id"
-                  aria-label="search users"
-                />
-              </label>
-            </label>
-            {#if banResults.length}
-              <div class="results">
-                {#each banResults as u (u.user_id)}
-                  <button
-                    class="lrow"
-                    onclick={() => {
-                      banForm.userId = u.user_id;
-                      banSearch = '';
-                      banResults = [];
-                    }}
-                  >
-                    <Avatar id={u.user_id} size={22} />
-                    <span class="mono ellipsis grow">{u.user_id}</span><span class="dim small"
-                      >{u.total_commands} requests</span
-                    >
-                  </button>
-                {/each}
-              </div>
-            {/if}
-            <label
-              >User id <input
-                class="field mono"
-                bind:value={banForm.userId}
-                placeholder="17-20 digit Discord id"
-              /></label
-            >
-            <label
-              >Reason <textarea
-                class="field"
-                rows="3"
-                bind:value={banForm.reason}
-                maxlength="200"
-                placeholder="Shown to them when they appeal"></textarea></label
-            >
-            <label class="check-row"
-              ><input type="checkbox" bind:checked={banForm.appealAllowed} /> Allow appeal</label
-            >
-            <button
-              class="btn danger"
-              disabled={busy || !banForm.userId.trim() || !banForm.reason.trim()}
-              onclick={submitBan}><Ban size={14} />Ban user</button
-            >
-          </div>
-        </section>
-      </div>
     </div>
   {/if}
 </div>
+
+{#if toast}
+  <div class="toast" role="status">
+    {#if toast.kind === 'ok'}<Check size={14} />{:else}<AlertTriangle size={14} />{/if}{toast.text}
+  </div>
+{/if}
 
 <style>
   .files {
@@ -690,6 +699,7 @@
   }
   .searchbox.in-panel {
     margin: 12px 12px 8px;
+    height: 30px;
   }
   .ulist {
     max-height: calc(100vh - 330px);
@@ -701,7 +711,7 @@
     display: flex;
     align-items: center;
     gap: 10px;
-    padding: 8px 10px;
+    padding: 8px 8px;
     border: 0;
     border-radius: var(--radius);
     background: none;
@@ -727,7 +737,7 @@
     background: var(--row-hover);
   }
   .urow.sel {
-    background: var(--accent-bg);
+    background: var(--card-3);
   }
   .ubar {
     flex: 1;
@@ -754,9 +764,8 @@
   .filecell {
     display: flex;
     flex-direction: column;
-    gap: 3px;
     min-width: 0;
-    padding: 7px 0;
+    line-height: 1.3;
   }
   .acts {
     justify-content: flex-end;
@@ -764,11 +773,11 @@
   }
   .preview {
     position: sticky;
-    top: 24px;
+    top: 80px;
   }
   .dl {
     margin: 0;
-    padding: 4px 20px 14px;
+    padding: 4px 16px 14px;
     display: grid;
     grid-template-columns: 80px 1fr;
     gap: 8px 10px;
@@ -784,10 +793,19 @@
   .break {
     overflow-wrap: anywhere;
   }
-  .switch {
-    gap: 14px;
+  .bulk {
+    position: fixed;
+    bottom: 24px;
+    left: 50%;
+    transform: translateX(-50%);
+    z-index: 120;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 8px 8px 8px 16px;
+    font-size: var(--fs);
   }
-  .switch b {
+  .bulk b {
     font-weight: 600;
     color: var(--text-bright);
   }

@@ -95,11 +95,11 @@
     color: var(--card-3);
   }
   .dead {
-    background: var(--danger-bg-subtle);
-    border-color: var(--danger-border);
+    background: var(--card-3);
+    border-color: var(--border);
   }
   .dead .ph {
-    color: var(--danger);
+    color: var(--text-dim);
   }
   .badge {
     position: absolute;

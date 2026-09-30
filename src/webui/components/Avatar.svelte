@@ -7,7 +7,7 @@
     for (const ch of String(id)) h = (h * 31 + ch.charCodeAt(0)) % 360;
     return h;
   });
-  const text = $derived(label ?? String(id).slice(-2));
+  const text = $derived(label ?? (size < 20 ? '' : String(id).slice(-2)));
 </script>
 
 <span

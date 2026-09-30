@@ -1,14 +1,15 @@
 <script>
   /**
-   * Table panel: sticky uppercase header, sortable columns, tabular numbers, hover and selected
-   * rows, skeleton / empty / error states and a pager. Cells come from the `row` snippet, one
-   * element per column, in column order.
+   * Table panel: sticky header, sortable columns, tabular numbers, hover and selected rows,
+   * optional day separators, skeleton / empty / error states and a pager. Cells come from the
+   * `row` snippet, one element per column, in column order.
    *
    *   columns  [{ key, label, width, align: 'right', sortable, sm: false }]
    *            sm: false drops the column on phones; give its cell class="hide-sm".
-   *   rows     the data; rowKey names the id field or is a function
+   *   rows     the data; rowKey names the id field or is a function (row, index)
    *   onrow    (r) => void makes rows buttons; href (r) => url makes them links
    *   sort     { key, desc } with onsort(key, desc)
+   *   groupBy  (r) => label; a separator row appears whenever the label changes
    *   pager    { offset, limit, total, onpage(offset) }
    *   header   snippet for the panel header's right side; title for its left
    */
@@ -28,6 +29,7 @@
     selected = null,
     rowClass = null,
     rowDisabled = null,
+    groupBy = null,
     loading = false,
     error = '',
     onretry = null,
@@ -56,6 +58,14 @@
   const keyOf = (r, i) => (typeof rowKey === 'function' ? rowKey(r, i) : r[rowKey]);
   const Tag = $derived(href ? 'a' : onrow ? 'button' : 'div');
   const widths = [72, 48, 88, 40, 64, 56];
+  // Rows with their separator label, so the template stays a flat loop.
+  const items = $derived(
+    rows.map((r, i) => {
+      const group = groupBy ? groupBy(r) : null;
+      const prev = i ? (groupBy ? groupBy(rows[i - 1]) : null) : null;
+      return { r, i, sep: group != null && group !== prev ? group : null };
+    })
+  );
 
   function clickSort(c) {
     if (!c.sortable || !onsort) return;
@@ -123,7 +133,8 @@
     {:else if !rows.length}
       {#if emptyState}{@render emptyState()}{:else}<div class="empty">{empty}</div>{/if}
     {/if}
-    {#each rows as r, i (keyOf(r, i))}
+    {#each items as { r, i, sep } (keyOf(r, i))}
+      {#if sep}<div class="tr sep"><span>{sep}</span></div>{/if}
       <!-- svelte-ignore a11y_no_static_element_interactions -->
       <svelte:element
         this={Tag}
@@ -175,8 +186,6 @@
     padding: 0;
     color: inherit;
     font: inherit;
-    letter-spacing: inherit;
-    text-transform: inherit;
     text-align: left;
     cursor: pointer;
     min-width: 0;
@@ -191,6 +200,9 @@
   }
   .sorter.on {
     color: var(--accent);
+  }
+  .tr.sep {
+    grid-template-columns: 1fr;
   }
   .tr.skel {
     pointer-events: none;

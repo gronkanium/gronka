@@ -12,6 +12,7 @@
   let system = $state(null);
   let bot = $state(null);
   let now = $state(Date.now());
+  let updated = $state(0);
   let busy = $state(false);
 
   const statusFilter = $derived($currentRoute.params.$status || '');
@@ -23,6 +24,7 @@
   async function load() {
     [data, bot] = await Promise.all([get('/api/system'), get('/api/bot/status')]);
     now = Date.now();
+    updated = now;
   }
   const loadDeps = async () => (system = (await get('/api/system/deps')) ?? system);
   $effect(() => {
@@ -30,7 +32,8 @@
     loadDeps();
     const t = setInterval(load, 5000);
     const d = setInterval(loadDeps, 30_000);
-    return () => (clearInterval(t), clearInterval(d));
+    const tick = setInterval(() => (now = Date.now()), 1000);
+    return () => (clearInterval(t), clearInterval(d), clearInterval(tick));
   });
 
   async function setPaused(value) {
@@ -54,6 +57,7 @@
       live: now - p.seen_at < LIVE_MS,
     }));
   });
+  const down = $derived(processes.filter(p => !p.live));
   // Every process should run the same build; a mismatch means a deploy is half done.
   const versions = $derived([...new Set(processes.map(p => p.version).filter(Boolean))]);
   const mismatch = $derived(
@@ -96,22 +100,21 @@
             : `expires in ${until(s.expires - now)}`
           : `${s.cookies} cookies`;
   const sessionBad = s => s.loggedIn && s.lastRejected && s.lastRejected > s.fileChanged;
+  const ago = $derived(updated ? Math.max(0, Math.round((now - updated) / 1000)) : null);
 
   const JOB_COLUMNS = [
-    { key: 'id', label: 'job', width: '64px' },
-    { key: 'state', label: 'state', width: '96px' },
-    { key: 'req', label: 'request' },
-    { key: 'worker', label: 'worker', width: '150px', sm: false },
-    { key: 'attempts', label: 'attempts', width: '72px', align: 'right', sm: false },
-    { key: 'age', label: 'age', width: '70px', align: 'right' },
+    { key: 'id', label: 'Job', width: '64px' },
+    { key: 'state', label: 'State', width: '96px' },
+    { key: 'req', label: 'Request' },
+    { key: 'worker', label: 'Worker', width: '120px', sm: false },
+    { key: 'attempts', label: 'Attempts', width: '76px', align: 'right', sm: false },
+    { key: 'age', label: 'Age', width: '70px', align: 'right' },
   ];
 </script>
 
-<PageHeader
-  title="Workers & queue"
-  description="Media jobs, the processes running them, and the services they depend on. Refreshes every 5 seconds."
->
+<PageHeader title="Workers & queue" description="Media jobs and the processes that run them">
   {#snippet actions()}
+    {#if ago != null}<span class="dim small tnum">Updated {ago}s ago</span>{/if}
     {#if paused}<span class="pill warn">Queue paused</span>{:else if jobs}<span class="pill ok"
         >Queue running</span
       >{/if}
@@ -127,7 +130,7 @@
   {#if data?.mediaWorkers === false}
     <div class="flash">
       <Cpu size={14} />
-      Media jobs run inside the bot (MEDIA_WORKERS=false), so there are no worker processes.
+      Media jobs run inside the bot (MEDIA_WORKERS=false), so there are no worker processes
     </div>
   {/if}
 
@@ -136,8 +139,7 @@
       <span class="grow">
         {#if count('running')}
           <b>Queue paused, draining.</b>
-          {count('running')} running job{count('running') === 1 ? '' : 's'} will finish; nothing new is
-          started.
+          {count('running')} running job{count('running') === 1 ? '' : 's'} will finish; nothing new starts.
         {:else}
           <b>Queue paused and drained.</b> No job is running, so a deploy interrupts nothing.
         {/if}
@@ -148,25 +150,32 @@
     </div>
   {/if}
 
-  {#if mismatch}
+  {#if down.length || mismatch}
     <div class="flash warn" role="status">
       <AlertTriangle size={14} />
-      <span
-        >Processes are on different builds ({[...new Set([...versions, data?.version])]
-          .filter(Boolean)
-          .map(v => `v${v}`)
-          .join(', ')}). A deploy is probably half done; restart what is behind.</span
-      >
+      <span class="grow">
+        {#if down.length}
+          <b>{down.length} process{down.length === 1 ? '' : 'es'} not reporting:</b>
+          {down.map(p => p.name).join(', ')}. Last heartbeat {formatRelativeTime(
+            Math.max(...down.map(p => p.seen_at))
+          )}.
+        {/if}
+        {#if mismatch}
+          <b>Version mismatch:</b>
+          {[...new Set([...versions, data?.version])]
+            .filter(Boolean)
+            .map(v => `v${v}`)
+            .join(', ')}. Restart the older process.
+        {/if}
+      </span>
     </div>
   {/if}
 
-  <section class="kpis" style="--kpi-cols: 6" aria-label="queue">
-    <div class="kpi">
+  <section class="kpis" style="--kpi-cols: 4" aria-label="queue">
+    <div class="kpi" class:warn={paused && count('queued')}>
       <div class="k">Queued</div>
-      <div class="v">
-        {jobs ? count('queued') : '—'}
-        {#if paused}<span class="d warn">paused</span>{/if}
-      </div>
+      <div class="v">{jobs ? count('queued') : '—'}</div>
+      {#if paused}<span class="d warn">paused</span>{/if}
       <div class="s">waiting for a worker</div>
     </div>
     <div class="kpi">
@@ -177,46 +186,51 @@
     <div class="kpi">
       <div class="k">Done</div>
       <div class="v">{jobs ? count('done').toLocaleString() : '—'}</div>
+      {#if retried}<span class="d plain">{retried} needed a retry</span>{/if}
       <div class="s">last 24h</div>
     </div>
-    <div class="kpi">
+    <div class="kpi" class:bad={count('failed') > 0}>
       <div class="k">Failed</div>
-      <div class="v">
-        {jobs ? count('failed') : '—'}
-        {#if count('failed')}<span class="d bad">24h</span>{/if}
-      </div>
+      <div class="v">{jobs ? count('failed') : '—'}</div>
       <div class="s">
         <button
           class="linkish"
           onclick={() => navigate('system', statusFilter === 'failed' ? {} : { status: 'failed' })}
-          >{statusFilter === 'failed' ? 'show all jobs' : 'show only failed'}</button
+          >{statusFilter === 'failed' ? 'Show all jobs' : 'Show only failed'}</button
         >
       </div>
-    </div>
-    <div class="kpi">
-      <div class="k">Retried</div>
-      <div class="v">{jobs ? retried : '—'}</div>
-      <div class="s">attempts beyond the first</div>
-    </div>
-    <div class="kpi">
-      <div class="k">Workers live</div>
-      <div class="v">
-        {allWorkers ? `${liveWorkers} / ${allWorkers}` : '—'}
-        {#if allWorkers && liveWorkers < allWorkers}<span class="d bad">down</span>{/if}
-      </div>
-      <div class="s">{data?.version ? `webui v${data.version}` : ''}</div>
     </div>
   </section>
 
   {#if processes.length}
-    <div class="cards">
-      {#each processes as p (p.id)}
-        <section class="panel proc" class:accent-danger={!p.live} aria-label={p.name}>
-          <div class="ph">
-            <span class="dot" class:ok={p.live} class:err={!p.live}></span>
-            <span>{p.name}</span>
-            <span class="meta">
-              <span class="pill sm" class:ok={p.live} class:bad={!p.live}
+    <section class="panel" aria-label="processes">
+      <div class="ph">
+        <span>Processes</span>
+        <span class="meta"
+          ><span class="tnum"
+            >{allWorkers ? `${liveWorkers} of ${allWorkers} workers live` : ''}</span
+          >{#if data?.version}<span class="dim mono">webui v{data.version}</span>{/if}</span
+        >
+      </div>
+      <div class="procs">
+        <div class="pr head">
+          <span></span><span>Process</span><span>State</span><span>Build</span><span>Heartbeat</span
+          ><span>Uptime</span><span class="num">Memory</span><span class="num">CPU</span>
+        </div>
+        {#each processes as p (p.id)}
+          <div class="pr">
+            <span
+              class="dot"
+              class:ok={p.live}
+              class:err={!p.live}
+              class:pulse={p.live && p.running}
+            ></span>
+            <span class="pname">
+              <span class="strong">{p.name}</span>
+              <span class="mono xs dim ellipsis" title={p.id}>{p.id}</span>
+            </span>
+            <span
+              ><span class="pill sm" class:ok={p.live} class:bad={!p.live}
                 >{!p.live
                   ? 'Not reporting'
                   : p.role === 'bot'
@@ -224,37 +238,38 @@
                     : p.running
                       ? `Running ${p.running}`
                       : 'Idle'}</span
-              >
-              <span class="mono" class:warn-text={mismatch && p.version !== data?.version}
+              ></span
+            >
+            <span
+              ><span class="chip mono" class:warn={mismatch && p.version !== data?.version}
                 >v{p.version ?? '?'}</span
-              >
+              ></span
+            >
+            <span class="mono small muted">{formatRelativeTime(p.seen_at)}</span>
+            <span class="mono small muted">{uptime(now - p.started_at)}</span>
+            <span class="meter num">
+              <span class="bar-track"
+                ><span
+                  style="width:{Math.min(
+                    100,
+                    ((p.rss ?? 0) / 1024 ** 3) * 100
+                  )}%; background: var(--chart-1)"
+                ></span></span
+              >{p.rss ? formatBytes(p.rss) : '—'}
+            </span>
+            <span class="meter num">
+              <span class="bar-track"
+                ><span
+                  style="width:{Math.min(100, p.cpu ?? 0)}%; background: {(p.cpu ?? 0) > 80
+                    ? 'var(--warning)'
+                    : 'var(--chart-1)'}"
+                ></span></span
+              >{p.cpu == null ? '—' : `${p.cpu.toFixed(1)}%`}
             </span>
           </div>
-          <div class="pb facts">
-            <div>
-              <div class="k">heartbeat</div>
-              <div class="v mono">{formatRelativeTime(p.seen_at)}</div>
-            </div>
-            <div>
-              <div class="k">uptime</div>
-              <div class="v mono">{uptime(now - p.started_at)}</div>
-            </div>
-            <div>
-              <div class="k">memory</div>
-              <div class="v mono">{p.rss ? formatBytes(p.rss) : '—'}</div>
-            </div>
-            <div>
-              <div class="k">cpu</div>
-              <div class="v mono">{p.cpu == null ? '—' : `${p.cpu.toFixed(1)}%`}</div>
-            </div>
-            <div class="wide">
-              <div class="k">id</div>
-              <div class="v mono dim ellipsis" title={p.id}>{p.id}</div>
-            </div>
-          </div>
-        </section>
-      {/each}
-    </div>
+        {/each}
+      </div>
+    </section>
   {:else if jobs}
     <div class="panel pb note">
       Live process status appears once this version is running: each bot and worker reports in every
@@ -275,7 +290,7 @@
       columns={JOB_COLUMNS}
       rows={recent}
       loading={!jobs}
-      empty={statusFilter ? `no ${statusFilter} jobs` : 'no jobs'}
+      empty={statusFilter ? `No ${statusFilter} jobs` : 'No jobs yet'}
       onrow={j => navigate('request', { requestId: j.operation_id })}
       rowDisabled={j => !j.operation_id}
       label="media jobs"
@@ -283,7 +298,7 @@
       {#snippet header()}
         {#if statusFilter}
           <span class="chip warn">{statusFilter} only</span>
-          <button class="linkish" onclick={() => navigate('system', {})}>clear</button>
+          <button class="linkish" onclick={() => navigate('system', {})}>Clear</button>
         {:else}
           <span class="dim">most recent first</span>
         {/if}
@@ -329,7 +344,10 @@
             >
           </div>
         {:else}
-          <div class="empty">{system ? 'no checks' : 'checking…'}</div>
+          {#if system}<div class="empty">No checks</div>{:else}<div class="skel-rows">
+              {#each Array(5) as _, i (i)}<span class="skeleton" style="width:{60 + (i % 3) * 10}%"
+                ></span>{/each}
+            </div>{/if}
         {/each}
       </section>
 
@@ -358,7 +376,10 @@
             <span class="mono dim small right">{sessionNote(s)}</span>
           </div>
         {:else}
-          <div class="empty">{system ? 'no cookie files' : 'checking…'}</div>
+          {#if system}<div class="empty">No cookie files</div>{:else}<div class="skel-rows">
+              {#each Array(2) as _, i (i)}<span class="skeleton" style="width:{60 + i * 10}%"
+                ></span>{/each}
+            </div>{/if}
         {/each}
       </section>
     </div>
@@ -375,36 +396,55 @@
     align-items: center;
     gap: 8px;
   }
-  .cards {
+  .procs {
+    overflow-x: auto;
+  }
+  .pr {
     display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
-    gap: var(--gap);
-  }
-  .facts {
-    display: grid;
-    grid-template-columns: repeat(4, minmax(0, 1fr));
-    gap: 14px 12px;
-  }
-  .facts .wide {
-    grid-column: 1 / -1;
-  }
-  .k {
-    font-size: var(--fs-xs);
-    font-weight: 600;
-    color: var(--text-dim);
-    text-transform: uppercase;
-    letter-spacing: 0.05em;
-  }
-  .v {
-    margin-top: 4px;
+    grid-template-columns: 14px minmax(160px, 1.2fr) 130px 76px 90px 80px 130px 110px;
+    align-items: center;
+    gap: 14px;
+    min-height: 48px;
+    padding: 6px 16px;
+    border-top: 1px solid var(--line);
     font-size: var(--fs);
-    color: var(--text-bright);
+  }
+  .pr.head {
+    min-height: 36px;
+    padding: 0 16px;
+    border-top: 0;
+    background: var(--card-2);
+    font-size: var(--fs-sm);
+    font-weight: 500;
+    color: var(--text-muted);
+  }
+  .pr > * {
+    min-width: 0;
+  }
+  .pname {
+    display: flex;
+    flex-direction: column;
+    line-height: 1.3;
+  }
+  .meter {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: var(--fs-sm);
+  }
+  .meter .bar-track {
+    flex: 1;
+    height: 5px;
   }
   .dep {
-    padding: 11px 20px;
+    padding: 11px 16px;
   }
-  .flash b {
-    color: inherit;
-    font-weight: 600;
+  @media (max-width: 900px) {
+    .pr {
+      grid-template-columns: 14px minmax(140px, 1fr) 120px;
+    }
+    .pr > :nth-child(n + 4) {
+      display: none;
+    }
   }
 </style>

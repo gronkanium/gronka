@@ -1,5 +1,5 @@
 <script>
-  import { Search } from 'lucide-svelte';
+  import { Search, Globe } from 'lucide-svelte';
   import PageHeader from '../components/PageHeader.svelte';
 
   // Order + display names for the category sections; unknown categories render after these.
@@ -16,6 +16,8 @@
   let error = $state('');
   let saving = $state(false);
   let search = $state('');
+  let toast = $state('');
+  let toastTimer;
 
   const parseIds = value => {
     try {
@@ -43,8 +45,14 @@
   }
   load();
 
+  function say(text) {
+    toast = text;
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(() => (toast = ''), 2000);
+  }
+
   // Optimistic: the caller already changed `disabled`; a failure reloads what's actually stored.
-  async function persist(next) {
+  async function persist(next, what) {
     if (saving) return;
     disabled = next;
     saving = true;
@@ -58,6 +66,7 @@
       const data = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(data.message || `HTTP ${res.status}`);
       disabled = new Set(parseIds(data.value));
+      say(what ?? 'Saved');
     } catch (err) {
       error = err.message || 'failed to save';
       await load();
@@ -66,15 +75,25 @@
     }
   }
 
-  function toggle(id) {
+  function toggle(s) {
     const next = new Set(disabled);
-    next.has(id) ? next.delete(id) : next.add(id);
-    persist(next);
+    const off = !next.has(s.id);
+    off ? next.add(s.id) : next.delete(s.id);
+    persist(next, `${s.label} turned ${off ? 'off' : 'on'}`);
   }
-  function setMany(ids, off) {
+  function setMany(ids, off, what) {
     const next = new Set(disabled);
     for (const id of ids) off ? next.add(id) : next.delete(id);
-    persist(next);
+    persist(next, what);
+  }
+  function allOff() {
+    if (!confirm(`Turn off all ${catalog.length} sources? Every /download link will be refused.`))
+      return;
+    setMany(
+      catalog.map(s => s.id),
+      true,
+      'All sources turned off'
+    );
   }
 
   const query = $derived(search.trim().toLowerCase());
@@ -99,100 +118,150 @@
   const totalOn = $derived(catalog.length - disabled.size);
 </script>
 
-<PageHeader
-  title="Download sources"
-  description="A turned-off source refuses /download with a message instead of downloading. The bot picks changes up within a minute."
->
+<PageHeader title="Sources" description="Sites the bot will download from">
   {#snippet actions()}
     <span class="pill" class:ok={totalOn === catalog.length} class:warn={totalOn < catalog.length}
       >{saving ? 'Saving…' : `${totalOn} of ${catalog.length} on`}</span
     >
-    <button class="btn" disabled={saving || !disabled.size} onclick={() => persist(new Set())}
-      >Turn all on</button
+    <button
+      class="btn"
+      disabled={saving || !disabled.size}
+      onclick={() =>
+        setMany(
+          catalog.map(s => s.id),
+          false,
+          'All sources turned on'
+        )}>Turn all on</button
     >
     <button
       class="btn danger"
       disabled={saving || disabled.size === catalog.length}
-      onclick={() => persist(new Set(catalog.map(s => s.id)))}>Turn all off</button
+      onclick={allOff}>Turn all off</button
     >
-  {/snippet}
-  {#snippet below()}
-    <label class="searchbox">
-      <Search size={15} />
-      <input bind:value={search} placeholder="Find a source" aria-label="find a source" />
-    </label>
   {/snippet}
 </PageHeader>
 
 <div class="sources stack">
   {#if error}<div class="flash error">{error}</div>{/if}
-  {#if loading && !catalog.length}<div class="panel empty">loading…</div>{/if}
 
-  <div class="grid">
+  <section class="panel" aria-label="download sources">
+    <div class="ph">
+      <span>Download sources</span>
+      <span class="sub"
+        >a turned-off source refuses /download with a message; the bot picks changes up within a
+        minute</span
+      >
+      <span class="meta">
+        <label class="searchbox find">
+          <Search size={14} />
+          <input bind:value={search} placeholder="Find a source" aria-label="find a source" />
+        </label>
+      </span>
+    </div>
+    {#if loading && !catalog.length}
+      <div class="skel-rows">
+        {#each Array(8) as _, i (i)}<span class="skeleton" style="width:{70 - (i % 3) * 12}%"
+          ></span>{/each}
+      </div>
+    {:else if !categories.some(c => c.shown.length)}
+      <div class="empty">
+        <span class="ic"><Globe size={20} /></span>
+        <b>No source matches</b>Try another name
+      </div>
+    {/if}
     {#each categories as c (c.id)}
       {#if c.shown.length}
-        <section class="panel" aria-label={c.label}>
-          <div class="ph">
-            <span>{c.label}</span>
-            <span class="meta">
-              <span class="tnum">{c.on}/{c.all.length} on</span>
-              <button
-                class="linkish"
-                disabled={saving}
-                onclick={() =>
-                  setMany(
-                    c.all.map(s => s.id),
-                    false
-                  )}>all on</button
-              >
-              <button
-                class="linkish"
-                disabled={saving}
-                onclick={() =>
-                  setMany(
-                    c.all.map(s => s.id),
-                    true
-                  )}>all off</button
-              >
-            </span>
+        <div class="group">
+          <span class="section-label">{c.label}</span>
+          <span class="dim small tnum">{c.on}/{c.all.length} on</span>
+          <span class="right row">
+            <button
+              class="linkish small"
+              disabled={saving || c.on === c.all.length}
+              onclick={() =>
+                setMany(
+                  c.all.map(s => s.id),
+                  false,
+                  `${c.label} sources turned on`
+                )}>All on</button
+            >
+            <span class="dim">·</span>
+            <button
+              class="linkish small"
+              disabled={saving || c.on === 0}
+              onclick={() =>
+                setMany(
+                  c.all.map(s => s.id),
+                  true,
+                  `${c.label} sources turned off`
+                )}>All off</button
+            >
+          </span>
+        </div>
+        {#each c.shown as s (s.id)}
+          {@const on = !disabled.has(s.id)}
+          <div class="src lrow" class:off={!on}>
+            <button
+              class="toggle"
+              class:on
+              role="switch"
+              aria-checked={on}
+              aria-label={`${s.label} ${on ? 'on' : 'off'}`}
+              disabled={saving}
+              onclick={() => toggle(s)}
+            ></button>
+            <span class="grow name">{s.label}</span>
+            <span class="mono dim small">{s.id}</span>
+            <span class="pill sm" class:ok={on} class:idle={!on}>{on ? 'On' : 'Off'}</span>
           </div>
-          {#each c.shown as s (s.id)}
-            {@const on = !disabled.has(s.id)}
-            <div class="src lrow" class:off={!on}>
-              <button
-                class="toggle"
-                class:on
-                role="switch"
-                aria-checked={on}
-                aria-label={`${s.label} ${on ? 'on' : 'off'}`}
-                disabled={saving}
-                onclick={() => toggle(s.id)}
-              ></button>
-              <span class="grow strong">{s.label}</span>
-              <span class="mono dim small">{s.id}</span>
-            </div>
-          {/each}
-        </section>
+        {/each}
       {/if}
     {/each}
-  </div>
+  </section>
 </div>
 
+{#if toast}<div class="toast" role="status">{toast}</div>{/if}
+
 <style>
-  .searchbox {
-    width: 300px;
+  .sources {
+    max-width: 880px;
   }
-  .grid {
-    display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
-    gap: var(--gap);
-    align-items: start;
+  .find {
+    width: 220px;
+    height: 28px;
+  }
+  .group {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 14px 16px 6px;
+    border-top: 1px solid var(--line);
+  }
+  .group:first-of-type {
+    border-top: 0;
   }
   .src {
-    padding: 10px 20px;
+    padding: 8px 16px;
+    border-top: 0;
   }
-  .src.off .strong {
-    color: var(--text-dim);
+  .name {
     font-weight: 500;
+    color: var(--text-bright);
+  }
+  .src.off .name {
+    color: var(--text-muted);
+    font-weight: 400;
+  }
+  .linkish.small {
+    font-size: var(--fs-sm);
+  }
+  .ph .sub {
+    display: none;
+  }
+  @media (min-width: 1100px) {
+    .ph .sub {
+      display: inline;
+      font-size: var(--fs-sm);
+    }
   }
 </style>

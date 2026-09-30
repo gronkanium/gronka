@@ -23,6 +23,7 @@
     Menu,
     Sun,
     Moon,
+    Search,
   } from 'lucide-svelte';
   import NavFlyout from './components/NavFlyout.svelte';
   import { navStats, savedViews, issueStates, startNavStats, removeView } from './stores/nav.js';
@@ -87,11 +88,15 @@
     settings: BotSettings,
   };
   const PARENT = { 'user-profile': 'users', request: 'requests' };
+  // Pages where every pixel is data get the full width.
+  const WIDE = new Set(['logs', 'requests']);
 
   let sidebarOpen = $state(true);
   let theme = $state('light');
   let fly = $state(null);
   let flyout = $state();
+  let jump = $state('');
+  let jumpInput = $state();
   let openTimer;
   let closeTimer;
 
@@ -161,6 +166,24 @@
     if (window.innerWidth <= 768) sidebarOpen = false;
   }
 
+  // The jump box understands the ids that appear everywhere in the product.
+  function onJump(e) {
+    if (e.key === 'Escape') {
+      jump = '';
+      e.currentTarget.blur();
+      return;
+    }
+    if (e.key !== 'Enter') return;
+    const raw = jump.trim();
+    if (!raw) return;
+    if (/^\d{15,20}$/.test(raw)) go('user-profile', { userId: raw });
+    else if (/^\d{13}-[0-9a-f]{6,}$/i.test(raw)) go('request', { requestId: raw });
+    else if (/^https?:\/\//i.test(raw)) go('requests', { urlPattern: raw.split('?')[0] });
+    else go('requests', { urlPattern: raw });
+    jump = '';
+    e.currentTarget.blur();
+  }
+
   // Sidebar counts, from the same numbers the flyouts show.
   function badge(page) {
     if (page === 'requests') return $navStats?.requests.total;
@@ -179,7 +202,7 @@
     clearTimeout(openTimer);
     const open = () => (fly = { item, top: target.getBoundingClientRect().top });
     if (now || fly) open();
-    else openTimer = setTimeout(open, 90);
+    else openTimer = setTimeout(open, 120);
   }
   function hideMenu() {
     clearTimeout(openTimer);
@@ -213,6 +236,9 @@
     if (mod && !e.altKey && !e.shiftKey && e.key.toLowerCase() === 'b') {
       e.preventDefault();
       toggleSidebar();
+    } else if (mod && !e.altKey && !e.shiftKey && e.key.toLowerCase() === 'k') {
+      e.preventDefault();
+      jumpInput?.focus();
     }
   }
 </script>
@@ -224,7 +250,7 @@
       <img class="mark" src="/favicon.svg" alt="" />
       {#if sidebarOpen}
         <span class="name">gronka</span>
-        <span class="env">admin</span>
+        {#if $navStats?.version}<span class="ver mono">v{$navStats.version}</span>{/if}
       {/if}
       <button
         class="icon-btn collapse"
@@ -263,7 +289,7 @@
             onmouseleave={hideMenu}
             onkeydown={e => onNavKey(e, item)}
           >
-            <Icon size={17} strokeWidth={1.9} />
+            <Icon size={16} strokeWidth={1.9} />
             {#if sidebarOpen}
               <span class="grow">{item.label}</span>
               {#if item.page === 'issues' && issueCount}
@@ -298,45 +324,56 @@
         onmouseleave={hideMenu}
         onkeydown={e => onNavKey(e, settingsItem)}
       >
-        <SlidersHorizontal size={17} strokeWidth={1.9} />
+        <SlidersHorizontal size={16} strokeWidth={1.9} />
         {#if sidebarOpen}<span class="grow">Settings</span>{/if}
       </button>
-      <div class="status" class:col={!sidebarOpen}>
-        <button
-          class="conn conn-{connStatus}"
-          onclick={reconnect}
-          title={$wsConnected
-            ? `live feed connected, ${$connectionHealth?.messageCount ?? 0} messages received`
-            : 'click to reconnect the live feed'}
-        >
-          <span class="dot"></span>
-          {#if sidebarOpen}<span>{connStatus}</span>{/if}
-        </button>
-        {#if sidebarOpen && $navStats?.version}<span class="ver mono">v{$navStats.version}</span
-          >{/if}
-        <button
-          class="icon-btn sm theme"
-          onclick={toggleTheme}
-          title={theme === 'dark' ? 'switch to light' : 'switch to dark'}
-          aria-label="toggle theme"
-        >
-          {#if theme === 'dark'}<Sun size={15} />{:else}<Moon size={15} />{/if}
-        </button>
-      </div>
     </div>
   </nav>
 
   {#if sidebarOpen}<div class="scrim" onclick={toggleSidebar} role="presentation"></div>{/if}
 
   <div class="main" id="main-content">
-    <div class="mobile-bar">
-      <button class="icon-btn" onclick={toggleSidebar} aria-label="open menu"
+    <header class="topbar">
+      <button class="icon-btn mobile-only" onclick={toggleSidebar} aria-label="open menu"
         ><Menu size={20} /></button
       >
-      <span class="mtitle">{activeTitle}</span>
-    </div>
+      <label class="searchbox jump">
+        <Search size={15} />
+        <input
+          bind:this={jumpInput}
+          bind:value={jump}
+          onkeydown={onJump}
+          placeholder="Jump to a request id, user id or link"
+          aria-label="jump to"
+          spellcheck="false"
+        />
+        <kbd>Ctrl K</kbd>
+      </label>
+      <div class="tools">
+        <button
+          class="pill conn conn-{connStatus}"
+          class:ok={connStatus === 'live'}
+          class:warn={connStatus === 'connecting'}
+          class:bad={connStatus === 'offline'}
+          onclick={reconnect}
+          title={$wsConnected
+            ? `live feed connected, ${$connectionHealth?.messageCount ?? 0} messages received`
+            : 'click to reconnect the live feed'}
+        >
+          {connStatus === 'live' ? 'Live' : connStatus === 'connecting' ? 'Connecting' : 'Offline'}
+        </button>
+        <button
+          class="icon-btn"
+          onclick={toggleTheme}
+          title={theme === 'dark' ? 'switch to light' : 'switch to dark'}
+          aria-label="toggle theme"
+        >
+          {#if theme === 'dark'}<Sun size={16} />{:else}<Moon size={16} />{/if}
+        </button>
+      </div>
+    </header>
     {#if PageComponent}
-      <div class="page">
+      <div class="page" class:wide={WIDE.has(activePage)}>
         <PageComponent />
       </div>
     {/if}
@@ -421,16 +458,16 @@
     width: var(--sidebar-w-collapsed);
   }
   .brand {
-    height: 64px;
-    padding: 0 12px 0 18px;
+    height: 56px;
+    padding: 0 10px 0 18px;
     display: flex;
     align-items: center;
     gap: 9px;
   }
   .mark {
-    width: 28px;
-    height: 28px;
-    border-radius: 8px;
+    width: 26px;
+    height: 26px;
+    border-radius: 7px;
     flex-shrink: 0;
   }
   .name {
@@ -439,26 +476,20 @@
     letter-spacing: -0.02em;
     color: var(--text-bright);
   }
-  .env {
-    font-size: 10px;
-    font-weight: 600;
-    letter-spacing: 0.06em;
-    text-transform: uppercase;
-    color: var(--text-muted);
-    background: var(--card-3);
-    padding: 2px 6px;
-    border-radius: 4px;
+  .ver {
+    font-size: var(--fs-xs);
+    color: var(--text-dim);
+    margin-top: 2px;
   }
   .collapse {
     margin-left: auto;
     color: var(--text-dim);
   }
   .collapsed .brand {
-    padding: 0;
-    justify-content: center;
-  }
-  .collapsed .mark {
-    display: none;
+    flex-direction: column;
+    height: auto;
+    padding: 12px 0 4px;
+    gap: 6px;
   }
   .collapsed .collapse {
     margin: 0;
@@ -475,7 +506,7 @@
     padding: 18px 10px 6px;
     font-size: var(--fs-xs);
     font-weight: 600;
-    color: var(--text-dim);
+    color: var(--text-muted);
     letter-spacing: 0.06em;
     text-transform: uppercase;
   }
@@ -485,17 +516,17 @@
     background: var(--line);
   }
   .link {
-    height: 36px;
-    padding: 0 10px;
+    height: 34px;
+    padding: 0 12px;
     display: flex;
     align-items: center;
-    gap: 11px;
+    gap: 10px;
     border: 0;
     border-radius: var(--radius);
     background: none;
     color: var(--text-soft);
     font: inherit;
-    font-size: var(--fs-md);
+    font-size: var(--fs);
     font-weight: 500;
     text-align: left;
     cursor: pointer;
@@ -514,16 +545,17 @@
     color: var(--text-bright);
   }
   .link.active {
-    background: var(--accent-bg);
-    color: var(--accent);
+    background: var(--card-3);
+    color: var(--text-bright);
+    font-weight: 600;
   }
   .link.active :global(svg) {
-    color: var(--accent);
+    color: var(--text-bright);
   }
   .count {
     font-family: var(--mono);
     font-size: var(--fs-xs);
-    color: var(--text-dim);
+    color: var(--text-muted);
     font-variant-numeric: tabular-nums;
   }
   .count.alert {
@@ -536,8 +568,8 @@
   }
   .pip {
     position: absolute;
-    top: 8px;
-    right: 8px;
+    top: 7px;
+    right: 7px;
     width: 7px;
     height: 7px;
     border-radius: 50%;
@@ -551,69 +583,6 @@
   .foot {
     padding: 8px 12px 12px;
     border-top: 1px solid var(--line);
-    display: flex;
-    flex-direction: column;
-    gap: 6px;
-  }
-  .status {
-    display: flex;
-    align-items: center;
-    gap: 6px;
-    padding: 0 4px 0 10px;
-    min-height: 30px;
-  }
-  .status.col {
-    flex-direction: column;
-    padding: 0;
-  }
-  .conn {
-    height: 26px;
-    padding: 0 6px 0 0;
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    border: 0;
-    border-radius: var(--radius-sm);
-    background: none;
-    color: var(--text-muted);
-    font: inherit;
-    font-size: var(--fs-sm);
-    font-weight: 500;
-    cursor: pointer;
-    text-transform: capitalize;
-  }
-  .conn:hover {
-    color: var(--text-bright);
-  }
-  .conn .dot {
-    width: 8px;
-    height: 8px;
-  }
-  .conn-live .dot {
-    background: var(--success);
-    box-shadow: 0 0 0 3px var(--success-bg);
-  }
-  .conn-connecting .dot {
-    background: var(--warning);
-    animation: blink 1.2s ease-in-out infinite;
-  }
-  .conn-offline .dot {
-    background: var(--danger);
-  }
-  .ver {
-    font-size: var(--fs-xs);
-    color: var(--text-dim);
-  }
-  .theme {
-    margin-left: auto;
-  }
-  .col .theme {
-    margin: 0;
-  }
-  @keyframes blink {
-    50% {
-      opacity: 0.3;
-    }
   }
 
   .main {
@@ -622,14 +591,53 @@
     display: flex;
     flex-direction: column;
   }
+  .topbar {
+    height: 56px;
+    flex-shrink: 0;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 0 32px;
+    border-bottom: 1px solid var(--border);
+    background: var(--canvas);
+    position: sticky;
+    top: 0;
+    z-index: 50;
+  }
+  .jump {
+    width: 380px;
+    max-width: 100%;
+    box-shadow: none;
+    background: var(--card);
+    border-color: var(--border);
+  }
+  .jump:hover {
+    border-color: var(--border-2);
+  }
+  .jump:focus-within {
+    background: var(--card);
+  }
+  .tools {
+    margin-left: auto;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+  .conn {
+    border: 0;
+    cursor: pointer;
+  }
   .page {
     flex: 1;
-    padding: 28px 32px 48px;
+    padding: 24px 32px 48px;
     width: 100%;
-    max-width: 1400px;
+    max-width: 1312px;
     margin: 0 auto;
   }
-  .mobile-bar,
+  .page.wide {
+    max-width: none;
+  }
+  .mobile-only,
   .scrim {
     display: none;
   }
@@ -668,22 +676,23 @@
       background: rgba(16, 24, 40, 0.45);
       z-index: 999;
     }
-    .mobile-bar {
-      display: flex;
-      align-items: center;
-      gap: 8px;
-      height: var(--mobile-bar-h);
-      padding: 0 12px;
-      background: var(--sidebar);
-      border-bottom: 1px solid var(--border);
-      position: sticky;
-      top: 0;
-      z-index: 50;
+    .mobile-only {
+      display: inline-flex;
     }
-    .mtitle {
-      font-weight: 600;
-      color: var(--text-bright);
-      font-size: var(--fs-md);
+    .topbar {
+      padding: 0 12px;
+      height: 52px;
+    }
+    .jump {
+      flex: 1;
+      width: auto;
+      min-width: 0;
+    }
+    .jump input {
+      min-width: 0;
+    }
+    .tools .pill {
+      display: none;
     }
     .page {
       padding: 16px 16px 40px;

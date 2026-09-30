@@ -1,7 +1,6 @@
 <script>
-  import { ArrowUpRight } from 'lucide-svelte';
+  import { ArrowUpRight, ArrowUp, ArrowDown, Check } from 'lucide-svelte';
   import { currentRoute, navigate } from '../utils/router.js';
-  import { connected } from '../stores/sse-store.js';
   import { issueStates } from '../stores/nav.js';
   import { groupIssues, isOpen, KIND_LABEL } from '../issues.js';
   import {
@@ -127,7 +126,28 @@
   });
   const sparkTotals = $derived(bars.map(b => b.ok + b.fail));
   const sparkFails = $derived(bars.map(b => b.fail));
+  const sparkTimes = $derived.by(() => {
+    const step = Math.max(1, Math.floor(bars.length / 24));
+    return bars
+      .filter((_, i) => i % step === 0)
+      .map(b => {
+        const inBucket = cur.filter(
+          o =>
+            o.status === 'success' &&
+            o.performanceMetrics?.duration &&
+            o.timestamp >= b.at &&
+            o.timestamp < b.at + range.bucket * step
+        );
+        return (
+          pct(
+            inBucket.map(o => o.performanceMetrics.duration).sort((a, b) => a - b),
+            0.5
+          ) ?? 0
+        );
+      });
+  });
 
+  // The four numbers that say how the service is doing; workers and queue live in the strip.
   const kpis = $derived.by(() => {
     const c = cur;
     const p = prev;
@@ -137,88 +157,117 @@
     const dC = durations(c);
     const dP = durations(p);
     const failed = c.filter(o => o.status === 'error').length;
+    const failedP = p.filter(o => o.status === 'error').length;
     const reqDelta = cmp ? Math.round(((c.length - p.length) / p.length) * 100) : null;
     const medC = pct(dC, 0.5);
     const medP = pct(dP, 0.5);
-    const workers = system?.jobs?.workers ?? [];
-    const procs = (system?.jobs?.processes ?? []).filter(p => p.role === 'worker');
-    const live = procs.filter(p => Date.now() - p.seen_at < 30_000).length;
-    const running = system?.jobs?.counts?.running?.count ?? 0;
-    const queued = system?.jobs?.counts?.queued?.count ?? 0;
-    const lastJob = Math.max(0, ...workers.map(w => w.last_seen));
-    const retried = Object.values(system?.jobs?.counts ?? {}).reduce(
-      (s, x) => s + (x.retried || 0),
-      0
-    );
     const windowLabel = absolute ? 'in this window' : `last ${rangeKey}`;
+    const vs = cmp ? `vs ${range.label}` : windowLabel;
     return [
       {
         k: 'Requests',
         v: c.length.toLocaleString(),
-        d: reqDelta == null ? '' : `${reqDelta >= 0 ? '+' : ''}${reqDelta}%`,
-        up: reqDelta == null || reqDelta >= 0,
-        s: cmp ? `vs ${range.label}` : windowLabel,
+        delta:
+          reqDelta == null ? null : { text: `${Math.abs(reqDelta)}%`, dir: reqDelta, tone: '' },
+        s: vs,
         spark: sparkTotals,
         page: 'requests',
       },
       {
         k: 'Delivered',
-        v: rateC == null ? '—' : `${rateC.toFixed(1)}%`,
-        d:
+        v: rateC == null ? '—' : `${rateC.toFixed(1)}`,
+        unit: rateC == null ? '' : '%',
+        delta:
           cmp && rateC != null && rateP != null
-            ? `${rateC - rateP >= 0 ? '+' : ''}${(rateC - rateP).toFixed(1)}`
-            : '',
-        up: !(cmp && rateC < rateP),
-        s: `${failed.toLocaleString()} failed`,
+            ? {
+                text: `${Math.abs(rateC - rateP).toFixed(1)} pts`,
+                dir: rateC - rateP,
+                tone: rateC - rateP >= 0 ? 'ok' : 'warn',
+              }
+            : null,
+        s: vs,
+        bad: rateC != null && rateC < 80,
+        page: 'requests',
+        params: { status: 'success' },
+      },
+      {
+        k: 'Failed',
+        v: failed.toLocaleString(),
+        delta: cmp
+          ? {
+              text: `${Math.abs(failed - failedP)}`,
+              dir: failed - failedP,
+              tone: failed - failedP > 0 ? 'bad' : 'ok',
+              invert: true,
+            }
+          : null,
+        s: vs,
         spark: sparkFails,
         sparkColor: 'var(--chart-4)',
+        bad: failed > 0 && rateC != null && rateC < 80,
         page: 'requests',
         params: { status: 'error' },
       },
       {
         k: 'Median time',
         v: medC == null ? '—' : formatDuration(medC),
-        d:
+        delta:
           cmp && medC != null && medP != null
-            ? `${medC - medP <= 0 ? '-' : '+'}${(Math.abs(medC - medP) / 1000).toFixed(1)}s`
-            : '',
-        up: !(cmp && medC > medP),
+            ? {
+                text: `${(Math.abs(medC - medP) / 1000).toFixed(1)}s`,
+                dir: medC - medP,
+                tone: medC - medP <= 0 ? 'ok' : 'warn',
+                invert: true,
+              }
+            : null,
         s: `p95 ${pct(dC, 0.95) == null ? '—' : formatDuration(pct(dC, 0.95))}`,
+        spark: sparkTimes,
+        sparkColor: 'var(--chart-5)',
         page: 'requests',
         params: { minDuration: '10000' },
       },
+    ];
+  });
+
+  const strip = $derived.by(() => {
+    const procs = (system?.jobs?.processes ?? []).filter(p => p.role === 'worker');
+    const live = procs.filter(p => Date.now() - p.seen_at < 30_000).length;
+    const running = system?.jobs?.counts?.running?.count ?? 0;
+    const queued = system?.jobs?.counts?.queued?.count ?? 0;
+    const paused = !!system?.jobs?.paused;
+    const retried = Object.values(system?.jobs?.counts ?? {}).reduce(
+      (s, x) => s + (x.retried || 0),
+      0
+    );
+    return [
       {
-        k: 'Active users',
-        v: users(c).toLocaleString(),
-        d: cmp ? `${users(c) - users(p) >= 0 ? '+' : ''}${users(c) - users(p)}` : '',
-        up: !(cmp && users(c) < users(p)),
-        s: stats ? `${stats.active_users_7d.toLocaleString()} this week` : '',
+        label: 'Active users',
+        value: users(cur).toLocaleString(),
+        note: stats ? `${stats.active_users_7d.toLocaleString()} this week` : '',
         page: 'users',
       },
       system?.mediaWorkers === false
-        ? { k: 'Workers', v: 'in bot', d: '', up: true, s: 'MEDIA_WORKERS=false', page: 'system' }
+        ? { label: 'Workers', value: 'in bot', note: '', page: 'system' }
         : {
-            k: 'Workers',
-            v: procs.length ? `${live} / ${procs.length}` : '—',
-            d: !procs.length
-              ? ''
-              : live < procs.length
+            label: 'Workers',
+            value: procs.length ? `${live} / ${procs.length}` : '—',
+            note:
+              procs.length && live < procs.length
                 ? 'not reporting'
                 : running
                   ? `${running} running`
-                  : 'healthy',
-            up: live === procs.length,
-            s: lastJob ? `last job ${formatRelativeTime(lastJob)}` : 'no jobs yet',
+                  : 'idle',
+            tone: procs.length && live < procs.length ? 'bad' : '',
             page: 'system',
           },
       {
-        k: 'Queue',
-        v: String(queued),
-        d: system?.jobs?.paused ? 'paused' : queued ? 'waiting' : 'clear',
-        up: !system?.jobs?.paused && queued === 0,
-        s: `${retried} retried in 24h`,
+        label: 'Queue',
+        value: String(queued),
+        note: paused ? 'paused' : queued ? 'waiting' : 'clear',
+        tone: paused ? 'warn' : '',
         page: 'system',
       },
+      { label: 'Retried', value: String(retried), note: 'last 24h', page: 'system' },
     ];
   });
 
@@ -264,34 +313,40 @@
   const onbrush = (s, e) => navigate('requests', { dateFrom: String(s), dateTo: String(e) });
 </script>
 
-<PageHeader
-  title="Overview"
-  description="How the bot is doing right now: volume, delivery rate, speed and what needs attention."
->
+<PageHeader title="Overview" description="Volume, delivery and speed for the window you pick">
   {#snippet actions()}
-    <span class="pill" class:ok={$connected} class:idle={!$connected}
-      >{$connected ? 'Live' : 'Reconnecting'}</span
-    >
     <TimeRange presets={PRESETS} value={windowValue} onchange={onrange} defaultRange="24h" />
   {/snippet}
 </PageHeader>
 
 <div class="overview stack">
-  <section class="kpis" aria-label="key numbers">
+  <section class="kpis" style="--kpi-cols: 4" aria-label="key numbers">
     {#each kpis as k (k.k)}
-      <button class="kpi clickable" onclick={() => navigate(k.page, k.params ?? {})}>
+      <button
+        class="kpi clickable"
+        class:bad={k.bad}
+        onclick={() => navigate(k.page, k.params ?? {})}
+      >
         <div class="k">{k.k}</div>
         <div class="v">
-          {#if loaded}{k.v}{:else}<span class="skeleton">0000</span>{/if}
-          {#if loaded && k.d}<span class="d" class:up={k.up} class:down={!k.up}>{k.d}</span>{/if}
+          {#if loaded}{k.v}{#if k.unit}<span class="unit">{k.unit}</span>{/if}{:else}<span
+              class="skeleton">0000</span
+            >{/if}
         </div>
+        {#if loaded && k.delta}
+          <span class="d {k.delta.tone}" class:plain={!k.delta.tone}>
+            {#if k.delta.dir > 0}<ArrowUp size={11} />{:else if k.delta.dir < 0}<ArrowDown
+                size={11}
+              />{/if}{k.delta.dir === 0 ? 'no change' : k.delta.text}
+          </span>
+        {/if}
         <div class="s">{loaded ? k.s : ' '}</div>
         {#if loaded && k.spark}
           <span class="spark"
             ><Sparkline
               values={k.spark}
-              width={80}
-              height={24}
+              width={96}
+              height={28}
               type="line"
               color={k.sparkColor ?? 'var(--chart-1)'}
             /></span
@@ -300,6 +355,17 @@
       </button>
     {/each}
   </section>
+
+  <div class="strip" aria-label="system">
+    {#each strip as s (s.label)}
+      <button class="item" onclick={() => navigate(s.page)}>
+        <span>{s.label}</span>
+        <b>{loaded ? s.value : '—'}</b>
+        {#if s.note}<span class="pill sm {s.tone || 'idle'}" class:nodot={!s.tone}>{s.note}</span
+          >{/if}
+      </button>
+    {/each}
+  </div>
 
   <div class="two wide-left">
     <section class="panel" aria-label="requests over time">
@@ -344,9 +410,17 @@
           </span>
         </button>
       {:else}
-        <div class="empty">
-          {#if loaded}<b>All clear</b>no failures in the last 7 days{:else}loading…{/if}
-        </div>
+        {#if loaded}
+          <div class="empty">
+            <span class="ic"><Check size={20} /></span>
+            <b>All clear</b>No failures in the last 7 days
+          </div>
+        {:else}
+          <div class="skel-rows">
+            {#each Array(4) as _, i (i)}<span class="skeleton" style="width:{70 - i * 8}%"
+              ></span>{/each}
+          </div>
+        {/if}
       {/each}
     </section>
   </div>
@@ -355,16 +429,15 @@
     <DataTable
       title="Recent requests"
       columns={[
-        { key: 'st', label: 'status', width: '100px' },
-        { key: 'type', label: 'command', width: '84px', sm: false },
-        { key: 'link', label: 'link' },
-        { key: 'user', label: 'user', width: '120px', sm: false },
-        { key: 'took', label: 'took', width: '64px', align: 'right', sm: false },
-        { key: 'when', label: 'when', width: '76px', align: 'right' },
+        { key: 'st', label: 'Status', width: '100px' },
+        { key: 'type', label: 'Command', width: '84px', sm: false },
+        { key: 'link', label: 'Link' },
+        { key: 'user', label: 'User', width: '110px', sm: false },
+        { key: 'took', label: 'Took', width: '64px', align: 'right', sm: false },
+        { key: 'when', label: 'When', width: '76px', align: 'right' },
       ]}
       rows={recent}
       loading={!loaded}
-      empty="no requests yet"
       onrow={r => navigate('request', { requestId: r.id })}
     >
       {#snippet header()}
@@ -372,13 +445,17 @@
           >All requests <ArrowUpRight size={13} /></button
         >
       {/snippet}
+      {#snippet emptyState()}
+        <div class="empty"><b>No requests yet</b>They appear here as the bot handles them</div>
+      {/snippet}
       {#snippet row(r)}
         {@const [kind, label] = STATUS[r.status] ?? ['idle', r.status]}
         <span><span class="pill sm {kind}">{label}</span></span>
         <span class="soft hide-sm">/{r.type}</span>
         <span class="mono ellipsis">{urlLabel(r.originalUrl)}</span>
         <span class="user-cell hide-sm"
-          ><Avatar id={r.userId} size={20} /><span class="id">{shortId(r.userId)}</span></span
+          ><Avatar id={r.userId} size={18} label="" /><span class="id">{shortId(r.userId)}</span
+          ></span
         >
         <span class="num muted hide-sm"
           >{r.performanceMetrics?.duration
@@ -402,25 +479,24 @@
               navigate('requests', { urlPattern: s.name === 'attachment' ? '' : s.name })}
           >
             <span class="ellipsis name">{s.name}</span>
-            <span class="bar-track"
-              ><span
-                style="width:{s.share * 100}%; background:{s.rate >= 90
-                  ? 'var(--chart-1)'
-                  : s.rate >= 70
-                    ? 'var(--chart-3)'
-                    : 'var(--chart-4)'}"
-              ></span></span
-            >
+            <span class="bar-track"><span style="width:{s.share * 100}%"></span></span>
             <span class="num muted">{s.n}</span>
             <span
               class="num"
-              class:ok-text={s.rate >= 90}
-              class:warn-text={s.rate < 90 && s.rate >= 70}
-              class:error-text={s.rate < 70}>{s.rate}%</span
+              class:muted={s.rate >= 90}
+              class:warn-text={s.rate < 90 && s.rate >= 75}
+              class:error-text={s.rate < 75}>{s.rate}%</span
             >
           </button>
         {:else}
-          <div class="empty">{loaded ? 'nothing yet' : 'loading…'}</div>
+          {#if loaded}
+            <div class="empty">Nothing yet</div>
+          {:else}
+            <div class="skel-rows">
+              {#each Array(5) as _, i (i)}<span class="skeleton" style="width:{80 - i * 9}%"
+                ></span>{/each}
+            </div>
+          {/if}
         {/each}
       </div>
     </section>
@@ -495,5 +571,9 @@
   }
   .src .bar-track {
     height: 6px;
+  }
+  .src .bar-track > span {
+    background: var(--chart-1);
+    border-radius: 3px;
   }
 </style>

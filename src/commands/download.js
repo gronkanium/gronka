@@ -21,7 +21,7 @@ import { getDisabledServiceLabel } from '../utils/download-services.js';
 import { AppError, ValidationError } from '../utils/errors.js';
 import { batchAttachmentsForDelivery } from '../utils/attachment-helpers.js';
 import { isAdmin } from '../utils/rate-limit.js';
-import { generateHash, isDirectMediaUrl } from '../utils/file-downloader.js';
+import { isDirectMediaUrl } from '../utils/file-downloader.js';
 import { logOperationStep } from '../utils/operations-tracker.js';
 import { resolveTtlHoursForSize } from '../utils/storage.js';
 import {
@@ -76,13 +76,13 @@ async function replyWithDirectMediaUrls(interaction, ctx, { url, urls, stepName 
 async function deliverArchive(interaction, ctx, fileData, attachmentLimit) {
   if (fitsDiscordAttachment(fileData.size, attachmentLimit)) {
     await safeInteractionEditReply(interaction, {
-      files: [new AttachmentBuilder(fileData.buffer, { name: fileData.filename })],
+      files: [new AttachmentBuilder(fileData.path, { name: fileData.filename })],
     });
   } else if (isR2Configured(r2Config)) {
-    const archiveHash = generateHash(fileData.buffer);
+    const archiveHash = fileData.hash;
     const url = await uploadMediaToR2(
       'archive',
-      fileData.buffer,
+      fileData,
       archiveHash,
       '.zip',
       r2Config,
@@ -247,20 +247,20 @@ export async function processDownload(
           message: 'Extracting audio as mp3',
           metadata: { url },
         });
-        const { buffer: mp3, baseName } = await extractAudio(fileData, downloadMethod, {
+        const { file: mp3, baseName } = await extractAudio(fileData, downloadMethod, {
           startTime,
           duration,
         });
         await sendConvertedFile(
           interaction,
           { ...ctx, discordAttachmentLimit: attachmentLimit },
-          { buffer: mp3, format: 'mp3', baseName }
+          { file: mp3, format: 'mp3', baseName }
         );
         logOperationStep(operationId, 'audio_extract', 'success', {
           message: 'mp3 delivered',
-          metadata: { url, fileSize: mp3.length },
+          metadata: { url, fileSize: mp3.size },
         });
-        return finishCommand('download', ctx, mp3.length);
+        return finishCommand('download', ctx, mp3.size);
       }
       if (fileData?.archive) {
         return deliverArchive(interaction, ctx, fileData, attachmentLimit);
@@ -275,7 +275,7 @@ export async function processDownload(
         item = await trimItem(fileData, { startTime, duration });
         logOperationStep(operationId, 'media_trim', item === fileData ? 'error' : 'success', {
           message: item === fileData ? 'Trim failed, sending the untrimmed file' : 'Trimmed',
-          metadata: { startTime, duration, originalSize: fileData.buffer.length },
+          metadata: { startTime, duration, originalSize: fileData.size },
         });
       }
       await deliverSingle(interaction, ctx, item, urlHash, attachmentLimit);

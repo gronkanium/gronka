@@ -1,7 +1,6 @@
 import crypto from 'node:crypto';
 import fs from 'node:fs/promises';
 import * as simplewebauthn from '@simplewebauthn/server';
-import os from 'node:os';
 import path from 'node:path';
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
@@ -18,6 +17,7 @@ import { AppError, ValidationError } from './utils/errors.js';
 import * as accounts from './web/accounts.js';
 import { FFMPEG_INPUT_GUARD } from './utils/video-processor/utils.js';
 import { trimItem } from './utils/video-processor/trim-item.js';
+import { fromPath, tempPath, withJobDir, sweepJobDirs } from './utils/media-file.js';
 
 const execFileAsync = promisify(execFile);
 
@@ -166,11 +166,11 @@ export async function sweepR2(now = Date.now()) {
   return kept;
 }
 
-async function publishToR2(buffer, filename, contentType) {
-  if (!buffer?.length) {
+async function publishToR2(file, filename, contentType) {
+  if (!file?.size) {
     throw new AppError('could not download this content.', 'DOWNLOAD_FAILED', 502);
   }
-  if (liveBytes + buffer.length > R2_LIMIT_BYTES) {
+  if (liveBytes + file.size > R2_LIMIT_BYTES) {
     throw new ValidationError('storage is full right now, try again in a few minutes.');
   }
   const name = sanitizeFilename(filename);
@@ -181,7 +181,7 @@ async function publishToR2(buffer, filename, contentType) {
   const type = contentType || 'application/octet-stream';
   const key = `${R2_PREFIX}${crypto.randomBytes(16).toString('hex')}${ext}`;
   const url = await uploadToR2(
-    buffer,
+    file,
     key,
     type,
     r2Config,
@@ -191,8 +191,8 @@ async function publishToR2(buffer, filename, contentType) {
       CacheControl: 'public, max-age=3600',
     }
   );
-  liveBytes += buffer.length;
-  return { url, filename: name, size: buffer.length, type: detectFileType(ext, type, buffer) };
+  liveBytes += file.size;
+  return { url, filename: name, size: file.size, type: detectFileType(ext, type, file.head) };
 }
 
 // yt-dlp rewrites its cookie jar on exit, so it works on private copies of the read-only shared files.
@@ -214,31 +214,27 @@ const isVideo = item =>
 
 export async function stripAudio(item) {
   if (!isVideo(item)) return item;
-  const dir = await fs.mkdtemp(path.join(os.tmpdir(), 'mute-'));
-  try {
-    const ext = path.extname(item.filename ?? '').toLowerCase() || '.mp4';
-    const input = path.join(dir, `in${ext}`);
-    const output = path.join(dir, `out${ext}`);
-    await fs.writeFile(input, item.buffer);
-    await execFileAsync('ffmpeg', [
-      '-v',
-      'error',
-      ...FFMPEG_INPUT_GUARD,
-      '-i',
-      input,
-      '-map',
-      '0:v',
-      '-c',
-      'copy',
-      output,
-    ]);
-    return { ...item, buffer: await fs.readFile(output) };
-  } finally {
-    await fs.rm(dir, { recursive: true, force: true });
-  }
+  const ext = path.extname(item.filename ?? '').toLowerCase() || '.mp4';
+  const output = await tempPath(ext);
+  await execFileAsync('ffmpeg', [
+    '-v',
+    'error',
+    ...FFMPEG_INPUT_GUARD,
+    '-i',
+    item.path,
+    '-map',
+    '0:v',
+    '-c',
+    'copy',
+    output,
+  ]);
+  return fromPath(output, { filename: item.filename, contentType: item.contentType });
 }
 
-export async function runDownload({
+// Every file a download touches lives in one job dir, gone when the answer is sent.
+export const runDownload = options => withJobDir(() => downloadInJob(options));
+
+async function downloadInJob({
   url,
   audio,
   mute = false,
@@ -272,14 +268,14 @@ export async function runDownload({
   const { fileData, downloadMethod } = acquired;
   const note = fileData?.note ? { note: fileData.note } : {};
   if (audio) {
-    const { buffer, baseName } = await extractAudio(fileData, downloadMethod, {
+    const { file, baseName } = await extractAudio(fileData, downloadMethod, {
       startTime,
       duration,
     });
     return {
       lane: 'r2',
       ...note,
-      files: [await publishToR2(buffer, `${baseName}.mp3`, 'audio/mpeg')],
+      files: [await publishToR2(file, `${baseName}.mp3`, 'audio/mpeg')],
     };
   }
   const trim = (startTime !== null || duration !== null) && downloadMethod !== 'ytdlp';
@@ -289,7 +285,7 @@ export async function runDownload({
     const cut =
       trim && !Array.isArray(fileData) ? await trimItem(item, { startTime, duration }) : item;
     const out = mute ? await stripAudio(cut) : cut;
-    files.push(await publishToR2(out.buffer, out.filename, out.contentType));
+    files.push(await publishToR2(out, out.filename, out.contentType));
   }
   return { lane: 'r2', ...note, files };
 }
@@ -855,7 +851,11 @@ if (import.meta.main) {
     port: Number(env('WEB_STATS_PORT', 3099)),
     fetch: () => Response.json(handler.stats()),
   });
-  const sweep = () => sweepR2().catch(error => logger.warn(`R2 sweep failed: ${error.message}`));
+  const sweep = () =>
+    Promise.all([
+      sweepR2().catch(error => logger.warn(`R2 sweep failed: ${error.message}`)),
+      sweepJobDirs().catch(error => logger.warn(`Job dir sweep failed: ${error.message}`)),
+    ]);
   await sweep();
   setInterval(sweep, 5 * 60 * 1000);
   logger.info('gronka-web listening');

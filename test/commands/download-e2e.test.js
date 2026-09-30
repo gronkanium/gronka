@@ -6,6 +6,7 @@ import path from 'path';
 import os from 'os';
 import { mock } from 'bun:test';
 import { createFakeInteraction } from '../helpers/fake-interaction.js';
+import { mediaFromBytes } from '../helpers/media.js';
 import { setSetting } from '../../src/utils/database.js';
 
 // Full-pipeline E2E for the download command. The network boundary (Cobalt / yt-dlp / file
@@ -91,12 +92,8 @@ if (!mocksSupported) {
     fixtures.mp4 = await fs.readFile(`${dir}/clip.mp4`);
     fixtures.gif = await fs.readFile(`${dir}/anim.gif`);
     await fs.rm(dir, { recursive: true, force: true });
-    const media = (buffer, contentType, filename) => ({
-      buffer,
-      contentType,
-      size: buffer.length,
-      filename,
-    });
+    const media = (buffer, contentType, filename) =>
+      mediaFromBytes(buffer, { contentType, filename, ext: path.extname(filename) });
 
     // Register mocks for the network boundary BEFORE importing download.js.
     mock.module('../../src/utils/cobalt.js', () => ({
@@ -140,28 +137,17 @@ if (!mocksSupported) {
       downloadFromSocialMedia: async (_apiUrl, url) => {
         // A carousel bigger than Discord's 10-attachment ceiling, to exercise batching.
         if (url.includes('carousel')) {
-          return Array.from({ length: 12 }, (_, i) => ({
-            buffer: fakeBuffer(i + 1, 2048 + i),
-            contentType: 'image/png',
-            size: 2048 + i,
-            filename: `photo_${i + 1}.png`,
-          }));
+          return Promise.all(
+            Array.from({ length: 12 }, (_, i) =>
+              media(fakeBuffer(i + 1, 2048 + i), 'image/png', `photo_${i + 1}.png`)
+            )
+          );
         }
         if (url.includes('multi')) {
-          return [
-            {
-              buffer: fakeBuffer(1, 2048),
-              contentType: 'image/png',
-              size: 2048,
-              filename: 'photo_1.png',
-            },
-            {
-              buffer: fakeBuffer(2, 3072),
-              contentType: 'image/png',
-              size: 3072,
-              filename: 'photo_2.png',
-            },
-          ];
+          return Promise.all([
+            media(fakeBuffer(1, 2048), 'image/png', 'photo_1.png'),
+            media(fakeBuffer(2, 3072), 'image/png', 'photo_2.png'),
+          ]);
         }
         if (url.includes('trimvid')) return media(fixtures.mp4, 'video/mp4', 'clip.mp4');
         if (url.includes('trimgif')) return media(fixtures.gif, 'image/gif', 'anim.gif');
@@ -182,12 +168,7 @@ if (!mocksSupported) {
             'downloadFromSocialMedia must not be called for huge videos in hybrid mode'
           );
         }
-        return {
-          buffer: fakeBuffer(3, 4096),
-          contentType: 'video/mp4',
-          size: 4096,
-          filename: 'clip.mp4',
-        };
+        return media(fakeBuffer(3, 4096), 'video/mp4', 'clip.mp4');
       },
     }));
 
@@ -216,12 +197,7 @@ if (!mocksSupported) {
           const { NetworkError } = await import('../../src/utils/errors.js');
           throw new NetworkError('this post is unavailable or has been deleted');
         }
-        return {
-          buffer: fakeBuffer(4, 4096),
-          contentType: 'video/mp4',
-          size: 4096,
-          filename: 'clip.mp4',
-        };
+        return media(fakeBuffer(4, 4096), 'video/mp4', 'clip.mp4');
       },
       downloadWithYtdlp: async (
         _url,
@@ -244,41 +220,18 @@ if (!mocksSupported) {
               ' use the start and end options to grab a clip under the limit.'
           );
         }
-        return {
-          buffer: fakeBuffer(4, 4096),
-          contentType: 'video/mp4',
-          size: 4096,
-          filename: 'clip.mp4',
-        };
+        return media(fakeBuffer(4, 4096), 'video/mp4', 'clip.mp4');
       },
       YtdlpRateLimitError: class YtdlpRateLimitError extends Error {},
     }));
 
     mock.module('../../src/utils/file-downloader.js', () => ({
-      generateHash: buf => {
-        // Use a stable synthetic hash for test.
-        let h = 0;
-        for (let i = 0; i < Math.min(buf.length, 64); i++) {
-          h = (h * 31 + buf[i]) >>> 0;
-        }
-        return h.toString(16).padStart(64, '0');
-      },
-      downloadVideo: async () => fakeBuffer(5, 4096),
-      downloadImage: async () => fakeBuffer(6, 4096),
-      downloadFileFromUrl: async () => ({
-        buffer: fakeBuffer(7, 4096),
-        contentType: 'video/mp4',
-        size: 4096,
-        filename: 'clip.mp4',
-      }),
+      downloadVideo: async () => media(fakeBuffer(5, 4096), 'video/mp4', 'clip.mp4'),
+      downloadImage: async () => media(fakeBuffer(6, 4096), 'image/png', 'still.png'),
+      downloadFileFromUrl: async () => media(fakeBuffer(7, 4096), 'video/mp4', 'clip.mp4'),
       parseTenorUrl: async u => u,
       isDirectMediaUrl: () => false,
-      downloadDirectMedia: async () => ({
-        buffer: fakeBuffer(8, 4096),
-        contentType: 'video/mp4',
-        size: 4096,
-        filename: 'direct.mp4',
-      }),
+      downloadDirectMedia: async () => media(fakeBuffer(8, 4096), 'video/mp4', 'direct.mp4'),
     }));
 
     // Dynamically import AFTER mocks are in place so the mocked modules are used.

@@ -1,13 +1,12 @@
 import { test, describe } from 'bun:test';
 import assert from 'node:assert';
 import fs from 'fs/promises';
-import path from 'path';
-import os from 'os';
 import { runMediaCommand } from '../../src/commands/shared/run-media-command.js';
 import { ValidationError, NetworkError } from '../../src/utils/errors.js';
 import { safeInteractionEditReply } from '../../src/utils/interaction-helpers.js';
 import { createFakeInteraction } from '../helpers/fake-interaction.js';
 import { getOperation, updateOperationStatus } from '../../src/utils/operations-tracker.js';
+import { tempPath } from '../../src/utils/media-file.js';
 
 // In-process E2E for the shared command lifecycle: drives runMediaCommand with a fake Discord
 // interaction and asserts exactly what the user would see. Covers the Discord reply paths that
@@ -107,52 +106,36 @@ describe('runMediaCommand (Discord lifecycle E2E)', () => {
     );
   });
 
-  test('temp files registered on ctx are cleaned up on success', async () => {
+  test('files made in the job dir are removed on success', async () => {
     const { interaction } = createFakeInteraction();
-    // mkdtemp creates a private, unpredictable directory, avoiding insecure use of the shared tmp dir
-    const tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), 'rmc-e2e-ok-'));
-    const tmpFile = path.join(tmpDir, 'file.tmp');
-    await fs.writeFile(tmpFile, 'data');
-
-    try {
-      await runMediaCommand(
-        'convert',
-        interaction,
-        async ctx => {
-          ctx.tempFiles.push(tmpFile);
-          await safeInteractionEditReply(interaction, { content: 'ok' });
-        },
-        { skipDbInit: true }
-      );
-
-      await assert.rejects(() => fs.access(tmpFile), 'temp file should be deleted after success');
-    } finally {
-      await fs.rm(tmpDir, { recursive: true, force: true });
-    }
+    let tmpFile;
+    await runMediaCommand(
+      'convert',
+      interaction,
+      async () => {
+        tmpFile = await tempPath('.tmp');
+        await fs.writeFile(tmpFile, 'data');
+        await safeInteractionEditReply(interaction, { content: 'ok' });
+      },
+      { skipDbInit: true }
+    );
+    await assert.rejects(() => fs.access(tmpFile), 'job file should be deleted after success');
   });
 
-  test('temp files are cleaned up even when the callback throws', async () => {
+  test('files made in the job dir are removed when the callback throws', async () => {
     const { interaction } = createFakeInteraction();
-    // mkdtemp creates a private, unpredictable directory, avoiding insecure use of the shared tmp dir
-    const tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), 'rmc-e2e-err-'));
-    const tmpFile = path.join(tmpDir, 'file.tmp');
-    await fs.writeFile(tmpFile, 'data');
-
-    try {
-      await runMediaCommand(
-        'convert',
-        interaction,
-        async ctx => {
-          ctx.tempFiles.push(tmpFile);
-          throw new ValidationError('boom');
-        },
-        { skipDbInit: true }
-      );
-
-      await assert.rejects(() => fs.access(tmpFile), 'temp file should be deleted on error too');
-    } finally {
-      await fs.rm(tmpDir, { recursive: true, force: true });
-    }
+    let tmpFile;
+    await runMediaCommand(
+      'convert',
+      interaction,
+      async () => {
+        tmpFile = await tempPath('.tmp');
+        await fs.writeFile(tmpFile, 'data');
+        throw new ValidationError('boom');
+      },
+      { skipDbInit: true }
+    );
+    await assert.rejects(() => fs.access(tmpFile), 'job file should be deleted on error too');
   });
 
   test('a callback that returns without marking the operation does not leave it running', async () => {
@@ -202,7 +185,6 @@ describe('runMediaCommand (Discord lifecycle E2E)', () => {
           hasOperationId: typeof ctx.operationId === 'string' && ctx.operationId.length > 0,
           userId: ctx.userId,
           adminUser: ctx.adminUser,
-          isTempArray: Array.isArray(ctx.tempFiles),
           logStepFn: typeof ctx.logStep === 'function',
           buildMetadataFn: typeof ctx.buildMetadata === 'function',
         };
@@ -213,7 +195,6 @@ describe('runMediaCommand (Discord lifecycle E2E)', () => {
     assert.ok(seen.hasOperationId);
     assert.strictEqual(seen.userId, 'e2e-user');
     assert.strictEqual(seen.adminUser, false);
-    assert.ok(seen.isTempArray);
     assert.ok(seen.logStepFn);
     assert.ok(seen.buildMetadataFn);
   });

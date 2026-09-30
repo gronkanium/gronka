@@ -5,6 +5,7 @@ import fsSync from 'fs';
 import path from 'path';
 import os from 'os';
 import { createFakeInteraction } from '../helpers/fake-interaction.js';
+import { mediaFromBytes } from '../helpers/media.js';
 
 // Full-pipeline E2E for /convert and /optimize: only the network download is mocked, ffmpeg,
 // gifsicle, storage, the database and the Discord reply path are real. See download-e2e for why
@@ -42,28 +43,31 @@ function probeSeconds(buffer, ext) {
   return Number(run.stdout.toString().trim());
 }
 
-const media = (buffer, contentType, filename) => ({
-  buffer,
-  contentType,
-  size: buffer.length,
-  filename,
-});
+const media = (buffer, contentType, filename) =>
+  mediaFromBytes(buffer, { contentType, filename, ext: path.extname(filename) });
+
+const HTML = Buffer.from('<html></html>');
+
+function fixtureMeta(url) {
+  if (url.includes('longvid')) return { bytes: fixtures.long, type: 'video/mp4', name: 'long.mp4' };
+  if (url.includes('vid')) return { bytes: fixtures.mp4, type: 'video/mp4', name: 'clip.mp4' };
+  if (url.includes('anim')) return { bytes: fixtures.gif, type: 'image/gif', name: 'anim.gif' };
+  if (url.includes('still')) return { bytes: fixtures.png, type: 'image/png', name: 'still.png' };
+  return { bytes: HTML, type: 'text/html', name: 'page.html' };
+}
 
 function fixtureFor(url) {
-  if (url.includes('longvid')) return media(fixtures.long, 'video/mp4', 'long.mp4');
-  if (url.includes('vid')) return media(fixtures.mp4, 'video/mp4', 'clip.mp4');
-  if (url.includes('anim')) return media(fixtures.gif, 'image/gif', 'anim.gif');
-  if (url.includes('still')) return media(fixtures.png, 'image/png', 'still.png');
-  return media(Buffer.from('<html></html>'), 'text/html', 'page.html');
+  const { bytes, type, name } = fixtureMeta(url);
+  return media(bytes, type, name);
 }
 
 function attachmentOf(kind) {
-  const file = fixtureFor(kind);
+  const { bytes, type, name } = fixtureMeta(kind);
   return {
-    url: `https://cdn.discordapp.com/attachments/1/2/${kind}-${file.filename}`,
-    name: file.filename,
-    size: file.size,
-    contentType: file.contentType,
+    url: `https://cdn.discordapp.com/attachments/1/2/${kind}-${name}`,
+    name,
+    size: bytes.length,
+    contentType: type,
   };
 }
 
@@ -125,8 +129,8 @@ if (!mocksSupported) {
     const real = { ...(await import('../../src/utils/file-downloader.js')) };
     mock.module('../../src/utils/file-downloader.js', () => ({
       ...real,
-      downloadVideo: async url => fixtureFor(url).buffer,
-      downloadImage: async url => fixtureFor(url).buffer,
+      downloadVideo: async url => fixtureFor(url),
+      downloadImage: async url => fixtureFor(url),
       downloadFileFromUrl: async url => fixtureFor(url),
       parseTenorUrl: async url => url,
     }));

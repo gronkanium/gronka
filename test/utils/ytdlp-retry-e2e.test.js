@@ -102,7 +102,7 @@ if (!mocksSupported) {
       );
 
       assert.strictEqual(spawnCallLog.length, 2, 'expected exactly one retry (two spawn calls)');
-      assert.ok(result.buffer.length > 0);
+      assert.ok(result.size > 0);
     });
 
     test('does not retry a confirmed-state failure (rate limit)', async () => {
@@ -299,7 +299,7 @@ if (!mocksSupported) {
         'duration<=?3600',
         'the `?` must sit on the operator, or yt-dlp drops every unknown-duration item'
       );
-      assert.ok(result.buffer.length > 0, 'the download should still produce a file');
+      assert.ok(result.size > 0, 'the download should still produce a file');
     });
 
     test('the non-admin format selector accepts formats that report no height', async () => {

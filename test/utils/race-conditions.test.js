@@ -1,6 +1,7 @@
 import { test, describe, beforeAll, afterAll } from 'bun:test';
 import assert from 'node:assert';
 import { saveMedia } from '../../src/utils/storage.js';
+import { mediaFromBytes } from '../helpers/media.js';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { mkdirSync } from 'node:fs';
@@ -40,8 +41,8 @@ describe('race conditions', () => {
       const buffer = Buffer.from('GIF89a test gif content');
 
       // Create multiple concurrent save operations
-      const promises = Array.from({ length: 5 }, () =>
-        saveMedia('gif', buffer, hash, '.gif', testStoragePath)
+      const promises = Array.from({ length: 5 }, async () =>
+        saveMedia('gif', await mediaFromBytes(buffer), hash, '.gif', testStoragePath)
       );
 
       // All should complete without errors (race condition handled)
@@ -62,8 +63,8 @@ describe('race conditions', () => {
       const extension = '.mp4';
 
       // Create multiple concurrent save operations
-      const promises = Array.from({ length: 5 }, () =>
-        saveMedia('video', buffer, hash, extension, testStoragePath)
+      const promises = Array.from({ length: 5 }, async () =>
+        saveMedia('video', await mediaFromBytes(buffer), hash, extension, testStoragePath)
       );
 
       // All should complete without errors
@@ -80,8 +81,8 @@ describe('race conditions', () => {
       const extension = '.png';
 
       // Create multiple concurrent save operations
-      const promises = Array.from({ length: 5 }, () =>
-        saveMedia('image', buffer, hash, extension, testStoragePath)
+      const promises = Array.from({ length: 5 }, async () =>
+        saveMedia('image', await mediaFromBytes(buffer), hash, extension, testStoragePath)
       );
 
       // All should complete without errors

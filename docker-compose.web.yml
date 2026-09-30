@@ -26,7 +26,7 @@ services:
     mem_limit: 4g
     pids_limit: 256
     tmpfs:
-      - /tmp:size=3g,mode=1777
+      - /tmp:size=256m,mode=1777
     environment:
       GRONKA_WEB: 'true'
       NODE_ENV: production
@@ -43,8 +43,8 @@ services:
       TURNSTILE_SECRET: ${TURNSTILE_SECRET:?}
       COBALT_API_URL: http://cobalt-web:9000
       COBALT_ENABLED: 'true'
-      # 3 jobs, each file on tmpfs and in memory at once, must fit mem_limit
-      MAX_VIDEO_SIZE: '419430400'
+      # downloads stream to disk here, never into memory or tmpfs
+      MEDIA_TEMP_DIR: /jobs
       R2_ACCOUNT_ID: ${R2_ACCOUNT_ID:?}
       R2_ACCESS_KEY_ID: ${R2_ACCESS_KEY_ID:?}
       R2_SECRET_ACCESS_KEY: ${R2_SECRET_ACCESS_KEY:?}
@@ -58,6 +58,8 @@ services:
     volumes:
       - ./cookies.json:/secrets/cookies.json:ro
       - ./ytdlp-cookies.txt:/secrets/ytdlp-cookies.txt:ro
+      # a missing host dir is created root-owned and unwritable for uid 1000: mkdir it first
+      - ./temp/web-jobs:/jobs
     networks: [web, web-db]
     depends_on: [cobalt-web]
 

@@ -3,9 +3,9 @@ import path from 'path';
 import { createLogger } from '../utils/logger.js';
 import { botConfig } from '../utils/config.js';
 import { validateUrl, validateFileExtension, firstUrlIn } from '../utils/validation.js';
-import { writeValidatedFileBuffer } from './shared/buffer-validation.js';
+import { validateMediaFile } from './shared/media-validation.js';
 import { curatedErrorMessage } from './shared/command-errors.js';
-import { downloadVideo, downloadImage, generateHash } from '../utils/file-downloader.js';
+import { downloadVideo, downloadImage } from '../utils/file-downloader.js';
 import { isAdmin } from '../utils/rate-limit.js';
 import {
   ALLOWED_VIDEO_TYPES,
@@ -46,6 +46,7 @@ import {
 } from '../utils/interaction-helpers.js';
 import { storeMedia, deliverStored, finishCommand } from './shared/deliver.js';
 import { fetchUrlInput } from './shared/url-input.js';
+import { fromPath } from '../utils/media-file.js';
 
 const logger = createLogger('convert');
 
@@ -139,7 +140,7 @@ async function processFormatConversion(
   interaction,
   attachment,
   adminUser,
-  preDownloadedBuffer,
+  preDownloaded,
   format,
   trim,
   originalUrl
@@ -158,21 +159,16 @@ async function processFormatConversion(
       if (!isVideo && !isGif && spec.kind === 'video') {
         throw new ValidationError('still images can only be converted to png, jpg, webp or gif.');
       }
-      const buffer =
-        preDownloadedBuffer ||
+      const input =
+        preDownloaded ||
         (isVideo
           ? await downloadVideo(attachment.url, adminUser)
           : await downloadImage(attachment.url, adminUser));
       logOperationStep(operationId, 'format_convert', 'running', {
         message: `Converting to ${format}`,
-        metadata: { format, inputSize: buffer.length },
+        metadata: { format, inputSize: input.size },
       });
-      const output = await convertToFormat(
-        buffer,
-        path.extname(attachment.name || '').toLowerCase(),
-        format,
-        isVideo ? trim : {}
-      );
+      const output = await convertToFormat(input, format, isVideo ? trim : {});
       const baseName =
         path.parse(attachment.name || 'file').name.replace(/[^\w.-]+/g, '_') || 'file';
       await sendConvertedFile(
@@ -181,13 +177,13 @@ async function processFormatConversion(
           ...ctx,
           discordAttachmentLimit: getDiscordAttachmentLimit(interaction, DISCORD_SIZE_LIMIT),
         },
-        { buffer: output, format, baseName }
+        { file: output, format, baseName }
       );
       logOperationStep(operationId, 'format_convert', 'success', {
         message: `Converted to ${format}`,
-        metadata: { format, outputSize: output.length },
+        metadata: { format, outputSize: output.size },
       });
-      await finishCommand('convert', ctx, output.length);
+      await finishCommand('convert', ctx, output.size);
     },
     {
       commandSource: 'slash',
@@ -207,25 +203,15 @@ async function processFormatConversion(
   );
 }
 
-// Writes the source to temp/ and renders it into gifPath with ffmpeg or ImageMagick.
-async function renderGif(
-  ctx,
-  { attachment, attachmentType, adminUser, fileBuffer, options, gifPath }
-) {
-  const { operationId, tempFiles } = ctx;
+// Renders the source file into gifPath with ffmpeg or ImageMagick.
+async function renderGif(ctx, { attachment, attachmentType, adminUser, file, options, gifPath }) {
+  const { operationId } = ctx;
   let ext = path.extname(attachment.name ?? '').toLowerCase();
   const allowed = attachmentType === 'video' ? VIDEO_EXTENSIONS : IMAGE_EXTENSIONS;
   if (!ext || !validateFileExtension(attachment.name, allowed)) {
     ext = attachmentType === 'video' ? '.mp4' : '.png';
   }
-  const tempDir = path.resolve('temp');
-  const inputPath = path.join(tempDir, `${attachmentType}_${Date.now()}${ext}`);
-  if (!inputPath.startsWith(tempDir)) {
-    throw new Error('Invalid temp file path detected');
-  }
-  await fs.mkdir(tempDir, { recursive: true });
-  await writeValidatedFileBuffer(inputPath, fileBuffer, attachmentType);
-  tempFiles.push(inputPath);
+  const inputPath = validateMediaFile(file, attachmentType).path;
   await fs.mkdir(path.dirname(gifPath), { recursive: true });
   logOperationStep(operationId, 'conversion_start', 'running', {
     message: `Starting ${attachmentType} to GIF conversion`,
@@ -262,7 +248,7 @@ async function renderGif(
     } else {
       await fs.copyFile(inputPath, gifPath);
     }
-  } else if (isAnimatedWebp(fileBuffer)) {
+  } else if (isAnimatedWebp(file.head)) {
     // ffmpeg can't demux animated webp (e.g. TikTok stickers), so ImageMagick converts it.
     await convertAnimatedWebpToGif(inputPath, gifPath, { width: options.width });
   } else {
@@ -282,7 +268,7 @@ async function processConversion(
   attachment,
   attachmentType,
   adminUser,
-  preDownloadedBuffer = null,
+  preDownloaded = null,
   options = {},
   originalUrl = null,
   commandSource = null
@@ -317,8 +303,8 @@ async function processConversion(
         return finishCommand('convert', ctx, 0);
       }
 
-      const fileBuffer =
-        preDownloadedBuffer ||
+      const file =
+        preDownloaded ||
         (attachmentType === 'video'
           ? await downloadVideo(attachment.url, adminUser)
           : await downloadImage(attachment.url, adminUser));
@@ -327,46 +313,31 @@ async function processConversion(
       // resized convert never reuses the plain one.
       const shape = [options.quality, options.width, options.startTime, options.duration];
       const hash = shape.every(value => value == null)
-        ? generateHash(fileBuffer)
-        : hashPartsHex([fileBuffer, 'gif', ...shape.map(v => (v == null ? null : String(v)))]);
+        ? file.hash
+        : hashPartsHex([file.hash, 'gif', ...shape.map(v => (v == null ? null : String(v)))]);
       const gifPath = mediaPath('gif', hash, '.gif', GIF_STORAGE_PATH);
       const lossy = options.lossy ?? null;
       const optimize = Boolean(options.optimize) || lossy !== null;
 
-      let gifBuffer = await loadStoredGif(hash);
-      if (gifBuffer && optimize) {
-        await fs.mkdir(path.dirname(gifPath), { recursive: true });
-        await fs.writeFile(gifPath, gifBuffer);
-      }
-      if (!gifBuffer) {
-        await renderGif(ctx, {
-          attachment,
-          attachmentType,
-          adminUser,
-          fileBuffer,
-          options,
-          gifPath,
-        });
-        gifBuffer = await fs.readFile(gifPath);
+      let gif = await loadStoredGif(hash);
+      if (!gif) {
+        await renderGif(ctx, { attachment, attachmentType, adminUser, file, options, gifPath });
+        gif = await fromPath(gifPath, { contentType: 'image/gif', filename: `${hash}.gif` });
       }
 
       let finalHash = hash;
       if (optimize) {
-        const optimized = await optimizeCached(gifBuffer, gifPath, lossy);
+        const optimized = await optimizeCached(gif, lossy);
         logOperationStep(operationId, 'optimization_complete', 'success', {
           message: 'GIF optimized',
-          metadata: {
-            originalSize: gifBuffer.length,
-            optimizedSize: optimized.buffer.length,
-            lossy,
-          },
+          metadata: { originalSize: gif.size, optimizedSize: optimized.file.size, lossy },
         });
         finalHash = optimized.hash;
-        gifBuffer = optimized.buffer;
+        gif = optimized.file;
       }
 
       const stored = await storeMedia(
-        { buffer: gifBuffer, filename: `${finalHash}.gif`, contentType: 'image/gif' },
+        { ...gif, filename: `${finalHash}.gif`, contentType: 'image/gif' },
         ctx,
         attachmentLimit,
         { hash: finalHash }
@@ -400,7 +371,7 @@ async function processConversion(
 // Checks the file (or downloads the url) a convert was given and says whether it is a video or
 // an image; replies and returns null when it cannot be converted.
 async function gatherInput(interaction, { attachment, url, adminUser, commandSource }) {
-  let buffer = null;
+  let file = null;
   let originalUrl = null;
   if (url) {
     const check = validateUrl(url);
@@ -415,11 +386,7 @@ async function gatherInput(interaction, { attachment, url, adminUser, commandSou
     }
     await safeInteractionDeferReply(interaction);
     try {
-      ({ attachment, buffer, originalUrl } = await fetchUrlInput(
-        url,
-        adminUser,
-        interaction.client
-      ));
+      ({ attachment, file, originalUrl } = await fetchUrlInput(url, adminUser, interaction.client));
     } catch (error) {
       logger.error(`Failed to download file from URL for user ${interaction.user.id}:`, error);
       await replyError(
@@ -458,7 +425,7 @@ async function gatherInput(interaction, { attachment, url, adminUser, commandSou
     return null;
   }
   await safeInteractionDeferReply(interaction);
-  return { attachment, buffer, originalUrl, type };
+  return { attachment, file, originalUrl, type };
 }
 
 export async function handleConvertContextMenu(interaction) {
@@ -497,7 +464,7 @@ export async function handleConvertContextMenu(interaction) {
     input.attachment,
     input.type,
     adminUser,
-    input.buffer,
+    input.file,
     {},
     input.originalUrl,
     'context-menu'
@@ -555,7 +522,7 @@ export async function handleConvertCommand(interaction) {
       interaction,
       input.attachment,
       adminUser,
-      input.buffer,
+      input.file,
       format,
       trim,
       input.originalUrl
@@ -568,7 +535,7 @@ export async function handleConvertCommand(interaction) {
     input.attachment,
     input.type,
     adminUser,
-    input.buffer,
+    input.file,
     {
       quality: interaction.options.getString('quality') || undefined,
       optimize: interaction.options.getBoolean('optimize') ?? false,

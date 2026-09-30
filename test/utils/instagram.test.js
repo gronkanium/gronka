@@ -1,5 +1,6 @@
 import { describe, test, spyOn, afterEach } from 'bun:test';
 import assert from 'node:assert';
+import { Readable } from 'node:stream';
 import axios from 'axios';
 import fs from 'node:fs';
 import os from 'node:os';
@@ -157,7 +158,7 @@ describe('downloadFromInstagram stories', () => {
         return { data: result, headers: {} };
       }
       return {
-        data: bytes,
+        data: Readable.from([bytes]),
         headers: { 'content-type': requestUrl.endsWith('.mp4') ? 'video/mp4' : 'image/jpeg' },
       };
     });

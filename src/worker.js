@@ -169,6 +169,7 @@ setInterval(pump, POLL_MS);
 setInterval(reclaim, RECLAIM_MS);
 setInterval(watchdog, 10_000);
 setInterval(() => sweepJobDirs().catch(() => {}), 30 * 60 * 1000);
+watchdog();
 logger.info(`Worker ${queue.WORKER_ID} ready`);
 await reclaim();
 await pump();

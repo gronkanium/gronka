@@ -105,6 +105,25 @@ describe('second factor on an account', () => {
     await accounts.deleteAccount(id);
   });
 
+  test('parallel enables turn 2fa on once and hand out one set of codes', async () => {
+    const { id } = await accounts.createAccount();
+    await accounts.startTotp(id);
+    const code = hotp(await secretOf(id), currentStep());
+    const results = await Promise.all(
+      Array.from({ length: 5 }, () => accounts.enableTotp(id, code))
+    );
+    expect(results.filter(Boolean)).toHaveLength(1);
+    expect((await accounts.getAccountSummary(id)).recoveryCodesLeft).toBe(10);
+    await accounts.deleteAccount(id);
+  });
+
+  test('regenerating with 2fa off hands out nothing', async () => {
+    const { id } = await accounts.createAccount();
+    expect(await accounts.regenerateRecoveryCodes(id)).toBeNull();
+    expect((await accounts.getAccountSummary(id)).recoveryCodesLeft).toBe(0);
+    await accounts.deleteAccount(id);
+  });
+
   test('recovery codes are stored as argon2id hashes', async () => {
     const { id } = await accounts.createAccount();
     await accounts.startTotp(id);

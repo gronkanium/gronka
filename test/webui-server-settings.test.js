@@ -25,6 +25,7 @@ afterAll(async () => {
   await setSetting('twitter_delivery', 'hybrid');
   await setSetting('upload_ttl_tiers', '100:72,250:24,500:8,1024:2');
   await setSetting('disabled_services', '[]');
+  await setSetting('webui_saved_views', '[]');
   if (server) server.close();
   // Don't close database here - it's shared across parallel test files
 });
@@ -168,5 +169,28 @@ describe('db-backed admin cache', () => {
 
     await setSetting('admin_user_ids', '[]');
     await refreshRateLimitSettings();
+  });
+
+  test('saved views store trimmed names and string params only', async () => {
+    const { response, data } = await putSetting('webui_saved_views', [
+      { name: '  cobalt errors  ', page: 'logs', params: { level: 'ERROR', component: 'cobalt' } },
+    ]);
+    assert.strictEqual(response.status, 200);
+    assert.deepStrictEqual(JSON.parse(data.value), [
+      { name: 'cobalt errors', page: 'logs', params: { level: 'ERROR', component: 'cobalt' } },
+    ]);
+  });
+
+  test('saved views reject unknown pages, non-string params and odd keys', async () => {
+    for (const bad of [
+      [{ name: 'x', page: 'settings', params: {} }],
+      [{ name: 'x', page: 'logs', params: { level: ['ERROR'] } }],
+      [{ name: 'x', page: 'logs', params: { 'a b': 'c' } }],
+      [{ name: '   ', page: 'logs', params: {} }],
+      'not a list',
+    ]) {
+      const { response } = await putSetting('webui_saved_views', bad);
+      assert.strictEqual(response.status, 400, JSON.stringify(bad));
+    }
   });
 });

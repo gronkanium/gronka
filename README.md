@@ -3,14 +3,14 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/thedorekaczynski/gronka/actions/workflows/ci.yml"><img src="https://github.com/thedorekaczynski/gronka/actions/workflows/ci.yml/badge.svg?branch=master" alt="CI"></a>
-  <a href="https://github.com/thedorekaczynski/gronka/releases/latest"><img src="https://img.shields.io/github/v/release/thedorekaczynski/gronka?color=000&label=release" alt="release"></a>
-  <a href="LICENSE"><img src="https://img.shields.io/github/license/thedorekaczynski/gronka?color=000" alt="MIT"></a>
+  <a href="https://github.com/gronkanium/gronka/actions/workflows/ci.yml"><img src="https://github.com/gronkanium/gronka/actions/workflows/ci.yml/badge.svg?branch=master" alt="CI"></a>
+  <a href="https://github.com/gronkanium/gronka/releases/latest"><img src="https://img.shields.io/github/v/release/gronkanium/gronka?color=000&label=release" alt="release"></a>
+  <a href="LICENSE"><img src="https://img.shields.io/github/license/gronkanium/gronka?color=000" alt="MIT"></a>
   <a href="https://discord.com/oauth2/authorize?client_id=1522194017692156046"><img src="https://img.shields.io/badge/add_to-discord-000?logo=discord&logoColor=white" alt="add to discord"></a>
   <a href="https://web.gronka.dev"><img src="https://img.shields.io/badge/web-gronka.dev-000" alt="web.gronka.dev"></a>
 </p>
 
-paste a link, get the file. gronka downloads media from 40+ sites, turns video into gifs and shrinks
+paste a link, get the file. gronka™ downloads media from 40+ sites, turns video into gifs and shrinks
 gifs, as a discord bot and on [web.gronka.dev](https://web.gronka.dev).
 
 ## commands
@@ -31,14 +31,14 @@ extractors of its own. the full list is on [web.gronka.dev](https://web.gronka.d
 ## run your own
 
 ```bash
-git clone https://github.com/thedorekaczynski/gronka.git && cd gronka
+git clone https://github.com/gronkanium/gronka.git && cd gronka
 bun install
 bun run setup             # asks for your token, writes .env and the mounted files
 docker compose up -d --build
 ```
 
 only `DISCORD_TOKEN` and `CLIENT_ID` are required. cookies, cloudflare r2 and everything else are
-optional: see the [wiki](https://github.com/thedorekaczynski/gronka/wiki). `bun run setup --help`
+optional: see the [wiki](https://github.com/gronkanium/gronka/wiki). `bun run setup --help`
 lists flags for scripted installs.
 
 self-hosting runs the discord bot. web.gronka.dev is a hosted service built on cloudflare and is
@@ -54,4 +54,6 @@ plain esm javascript on bun 1.3. issues and PRs welcome, see [CONTRIBUTING](.git
 
 ## license
 
-MIT
+The code is [MIT](LICENSE): run it, change it, host it for anyone. The gronka™ name, logo and
+penguin are trademarks of gronkanium, artwork all rights reserved; see
+[TRADEMARKS](.github/TRADEMARKS.md).

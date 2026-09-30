@@ -45,7 +45,6 @@
     "docker:register": "docker compose exec app bun run register-commands",
     "check:sync": "bun scripts/check-lock-sync.js",
     "migrate:storage": "bun scripts/migrate-storage.js",
-    "upload:404": "bun scripts/upload-404-to-r2.js",
     "user:stats": "bun scripts/user-stats.js",
     "delete:user-data": "bun scripts/delete-user-data.js",
     "fix:stuck-ops": "bun scripts/fix-stuck-operations.js",

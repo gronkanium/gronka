@@ -119,7 +119,7 @@ we may temporarily suspend service to address security issues if needed.
 for security-related questions or concerns:
 
 - **email**: admin@gronka.dev
-- **github**: [https://github.com/thedorekaczynski/gronka](https://github.com/thedorekaczynski/gronka)
+- **github**: [https://github.com/gronkanium/gronka](https://github.com/gronkanium/gronka)
 
 use email for security vulnerability reports. don't disclose vulnerabilities publicly until they're resolved.
 

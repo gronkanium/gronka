@@ -19,7 +19,7 @@ const GITHUB_WIKI_URL = (() => {
     const origin = execSync('git remote get-url origin', { encoding: 'utf8' }).trim();
     return origin.replace(/\.git$/, '') + '.wiki.git';
   } catch {
-    return 'https://github.com/thedorekaczynski/gronka.wiki.git';
+    return 'https://github.com/gronkanium/gronka.wiki.git';
   }
 })();
 

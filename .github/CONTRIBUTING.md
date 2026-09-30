@@ -193,7 +193,6 @@ See `package.json` for a full list of available scripts. Common ones include:
 - `bun run test` - Run tests
 - `bun run test:watch` - Run tests in watch mode
 - `bun run migrate:storage` - Migrate storage to R2
-- `bun run upload:404` - Upload 404 image to R2
 - `bun run user:stats` - Generate user statistics report from database
 - `bun run bot:test` - Start test bot (uses TEST\_\* prefixed environment variables)
 - `bun run bot:prod` - Start prod bot (uses PROD\_\* prefixed environment variables)

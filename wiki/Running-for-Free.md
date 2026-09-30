@@ -80,7 +80,7 @@ on the machine you picked:
 
 ```bash
 # 1. clone
-git clone https://github.com/thedorekaczynski/gronka.git
+git clone https://github.com/gronkanium/gronka.git
 cd gronka
 
 # 2. configure

@@ -466,6 +466,15 @@ async function updateUserMetricsForOperation(operation) {
 export async function cleanupStuckOperations(maxAgeMinutes = 10, client = null) {
   try {
     const cutoffTime = Date.now() - maxAgeMinutes * 60 * 1000;
+    // Age 0 is the boot reconciliation: the process that ran these died, nothing timed out.
+    const reason =
+      maxAgeMinutes === 0
+        ? 'Operation interrupted - the bot restarted while it was running'
+        : 'Operation timed out - marked as failed due to inactivity';
+    const dmText = type =>
+      maxAgeMinutes === 0
+        ? `your ${type} was interrupted by a bot restart. please try again.`
+        : `your ${type} operation timed out after ${maxAgeMinutes} minutes and was automatically cancelled. please try again.`;
 
     let dbStuckIds = [];
     try {
@@ -493,7 +502,7 @@ export async function cleanupStuckOperations(maxAgeMinutes = 10, client = null) 
     for (const operationId of stuckIds) {
       try {
         try {
-          await markOperationAsFailed(operationId);
+          await markOperationAsFailed(operationId, reason);
         } catch (dbError) {
           logger.debug(
             `Could not mark operation ${operationId} as failed in database: ${dbError.message}`
@@ -507,7 +516,7 @@ export async function cleanupStuckOperations(maxAgeMinutes = 10, client = null) 
         if (inMemoryOp) {
           inMemoryOp.status = 'error';
           inMemoryOp.timestamp = Date.now();
-          inMemoryOp.error = 'Operation timed out - marked as failed due to inactivity';
+          inMemoryOp.error = reason;
           if (inMemoryOp.startTime) {
             inMemoryOp.performanceMetrics.duration = Math.max(1, Date.now() - inMemoryOp.startTime);
           }
@@ -532,7 +541,7 @@ export async function cleanupStuckOperations(maxAgeMinutes = 10, client = null) 
             fileSize: null,
             timestamp: Date.now(),
             startTime: createdLog?.timestamp || Date.now(),
-            error: 'Operation timed out - marked as failed due to inactivity',
+            error: reason,
             stackTrace: null,
             filePaths: [],
             performanceMetrics: {
@@ -546,9 +555,7 @@ export async function cleanupStuckOperations(maxAgeMinutes = 10, client = null) 
         if (client && userId) {
           try {
             const user = await client.users.fetch(userId);
-            await user.send(
-              `your ${operationType} operation timed out after ${maxAgeMinutes} minutes and was automatically cancelled. please try again.`
-            );
+            await user.send(dmText(operationType));
             logger.debug(
               `Sent timeout notification DM to user ${userId} for operation ${operationId}`
             );

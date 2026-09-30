@@ -13,6 +13,7 @@ import bansRoutes from './routes/bans.js';
 import alertsRoutes from './routes/alerts.js';
 import settingsRoutes from './routes/settings.js';
 import botStatusRoutes from './routes/bot-status.js';
+import systemRoutes from './routes/system.js';
 import { handleSseConnection } from './sse/handlers.js';
 
 const logger = createLogger('webui');
@@ -68,6 +69,7 @@ export function createApp(sseClients) {
   app.use(alertsRoutes);
   app.use(settingsRoutes);
   app.use(botStatusRoutes);
+  app.use(systemRoutes);
 
   // Set SSE clients in operations routes for broadcasting
   if (sseClients) {

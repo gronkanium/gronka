@@ -2,6 +2,7 @@ import { AsyncLocalStorage } from 'node:async_hooks';
 import { createHash, randomBytes } from 'node:crypto';
 import fs from 'node:fs';
 import fsp from 'node:fs/promises';
+import os from 'node:os';
 import path from 'node:path';
 import { Transform } from 'node:stream';
 import { pipeline } from 'node:stream/promises';
@@ -10,8 +11,10 @@ import { createLogger } from './logger.js';
 
 const logger = createLogger('media-file');
 
-// Real disk, never tmpfs: a job dir holds whole downloads.
-export const JOBS_ROOT = path.resolve(process.env.MEDIA_TEMP_DIR || 'temp/jobs');
+// Real disk, never tmpfs: a job dir holds whole downloads. The bot and every worker share the
+// base, so each process works under its own host dir and only age ever deletes another's.
+const JOBS_BASE = path.resolve(process.env.MEDIA_TEMP_DIR || 'temp/jobs');
+export const JOBS_ROOT = path.join(JOBS_BASE, os.hostname());
 const HEAD_BYTES = 64;
 const IDLE_TIMEOUT_MS = 60_000;
 const scope = new AsyncLocalStorage();
@@ -133,22 +136,24 @@ export async function fromPath(file, meta = {}) {
   return { ...meta, path: file, size, hash: hash.digest('hex'), head };
 }
 
-// Removes job dirs a crash left behind.
+// Removes job dirs a crash left behind, in any process's host dir.
 export async function sweepJobDirs(maxAgeMs = 6 * 60 * 60 * 1000) {
-  let entries;
-  try {
-    entries = await fsp.readdir(JOBS_ROOT, { withFileTypes: true });
-  } catch {
-    return 0;
-  }
+  const cutoff = Date.now() - maxAgeMs;
+  const hosts = await fsp.readdir(JOBS_BASE, { withFileTypes: true }).catch(() => []);
   let removed = 0;
-  for (const entry of entries) {
-    if (!entry.isDirectory()) continue;
-    const dir = path.join(JOBS_ROOT, entry.name);
-    const { mtimeMs } = await fsp.stat(dir).catch(() => ({ mtimeMs: Date.now() }));
-    if (Date.now() - mtimeMs < maxAgeMs) continue;
-    await fsp.rm(dir, { recursive: true, force: true });
-    removed++;
+  for (const host of hosts.filter(entry => entry.isDirectory())) {
+    const hostDir = path.join(JOBS_BASE, host.name);
+    const jobs = await fsp.readdir(hostDir, { withFileTypes: true }).catch(() => []);
+    for (const job of jobs.filter(entry => entry.isDirectory())) {
+      const dir = path.join(hostDir, job.name);
+      const { mtimeMs } = await fsp.stat(dir).catch(() => ({ mtimeMs: Date.now() }));
+      if (mtimeMs >= cutoff) continue;
+      await fsp.rm(dir, { recursive: true, force: true });
+      removed++;
+    }
+    if (hostDir !== JOBS_ROOT && (await fsp.readdir(hostDir).catch(() => [1])).length === 0) {
+      await fsp.rmdir(hostDir).catch(() => {});
+    }
   }
   if (removed) logger.info(`Removed ${removed} stale job dir(s)`);
   return removed;

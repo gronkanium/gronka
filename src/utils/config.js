@@ -151,6 +151,8 @@ function getBotConfig() {
     ytdlpEnabled: getStringEnv('YTDLP_ENABLED', 'true').toLowerCase() === 'true',
     ytdlpQuality: getStringEnv('YTDLP_QUALITY', DEFAULT_YTDLP_FORMAT),
     galleryDlEnabled: getStringEnv('GALLERY_DL_ENABLED', 'true').toLowerCase() === 'true',
+    // Media jobs go to worker processes through Postgres; off runs them in the bot process.
+    mediaWorkers: getStringEnv('MEDIA_WORKERS', 'false').toLowerCase() === 'true',
     statsCacheTtl: parseIntEnv('STATS_CACHE_TTL', 300000, 0), // 5 minutes default, 0 to disable
     ntfyTopic: getStringEnv('NTFY_TOPIC', ''),
     ntfyEnabled: getStringEnv('NTFY_TOPIC', '') !== '',

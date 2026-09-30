@@ -219,11 +219,10 @@ export function createFailedOperation(type, userId, errorMessage, errorType, con
   return operation.id;
 }
 
-export function createOperation(type, userId, context = {}) {
-  // Use cryptographically secure random bytes for operation ID
-  const randomBytes = crypto.randomBytes(6).toString('hex');
+// resumeId continues a job a stopped worker left behind under the same operation.
+export function createOperation(type, userId, context = {}, resumeId = null) {
   const operation = {
-    id: `${Date.now()}-${randomBytes}`,
+    id: resumeId ?? `${Date.now()}-${crypto.randomBytes(6).toString('hex')}`,
     type,
     status: 'pending',
     userId,
@@ -242,10 +241,16 @@ export function createOperation(type, userId, context = {}) {
 
   rememberOperation(operation);
 
-  writeOperationLog(operation.id, 'created', 'pending', {
-    message: `Operation ${type} created`,
-    metadata: buildCreationMetadata(type, userId, context),
-  });
+  if (resumeId) {
+    writeOperationLog(operation.id, 'retry', 'running', {
+      message: `Operation ${type} retried after its worker stopped`,
+    });
+  } else {
+    writeOperationLog(operation.id, 'created', 'pending', {
+      message: `Operation ${type} created`,
+      metadata: buildCreationMetadata(type, userId, context),
+    });
+  }
 
   logger.debug(`Operation ${type} created [op: ${operation.id}]`);
 

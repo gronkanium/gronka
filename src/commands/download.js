@@ -36,6 +36,7 @@ import { getProcessedUrl } from '../utils/database.js';
 import { recordProcessedUrl, trackR2UploadIfApplicable } from './shared/url-cache.js';
 import { runMediaCommand } from './shared/run-media-command.js';
 import { acquireMedia, extractAudio } from '../core/acquire-media.js';
+import { dispatchMediaJob } from '../jobs/dispatch.js';
 import { replyIfRateLimited, resolveTimeOptions, refuse } from './shared/command-guards.js';
 import { trimItem } from '../utils/video-processor.js';
 import { sendConvertedFile } from './shared/send-converted.js';
@@ -289,6 +290,24 @@ export async function processDownload(
   );
 }
 
+// processDownload's signature, run by a worker when workers are on.
+export function queueDownload(
+  interaction,
+  url,
+  commandSource,
+  startTime,
+  duration,
+  galleryOptions
+) {
+  return dispatchMediaJob(interaction, 'download', {
+    url,
+    commandSource,
+    startTime,
+    duration,
+    galleryOptions,
+  });
+}
+
 // Replies and returns true when no extractor can take this URL.
 async function refuseUnsupported(interaction, url, commandSource) {
   const context = { originalUrl: url, commandSource };
@@ -375,7 +394,7 @@ export async function handleDownloadContextMenuCommand(interaction) {
     return;
   }
   await safeInteractionDeferReply(interaction);
-  await processDownload(interaction, url, 'context-menu');
+  await queueDownload(interaction, url, 'context-menu', null, null, {});
 }
 
 export async function handleDownloadCommand(interaction) {
@@ -441,5 +460,5 @@ export async function handleDownloadCommand(interaction) {
     return;
   }
   await safeInteractionDeferReply(interaction);
-  await processDownload(interaction, url, 'slash', trimStart, trimDuration, { audioOnly });
+  await queueDownload(interaction, url, 'slash', trimStart, trimDuration, { audioOnly });
 }

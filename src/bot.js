@@ -10,7 +10,7 @@ import { startRetentionJob, stopRetentionJob } from './utils/retention.js';
 import {
   handleDownloadCommand,
   handleDownloadContextMenuCommand,
-  processDownload,
+  queueDownload,
 } from './commands/download.js';
 import { handleOptimizeCommand, handleOptimizeContextMenuCommand } from './commands/optimize.js';
 import { handleConvertCommand, handleConvertContextMenu } from './commands/convert.js';
@@ -34,7 +34,8 @@ import {
 } from './utils/presence.js';
 import { get24HourStats } from './utils/database/stats.js';
 import { replyIfBanned, replyIfMaintenance } from './utils/ban-check.js';
-import { refreshRateLimitSettings } from './utils/rate-limit.js';
+import { refreshRateLimitSettings, recordRateLimit } from './utils/rate-limit.js';
+import { DONE_CHANNEL, listen as listenForJobs } from './jobs/queue.js';
 import { withJobDir, sweepJobDirs } from './utils/media-file.js';
 
 const logger = createLogger('bot');
@@ -259,7 +260,7 @@ client.once(Events.ClientReady, async readyClient => {
       logger.error('Error reconciling orphaned operations at startup:', error);
     }
 
-    await sweepJobDirs(0).catch(error => logger.warn(`Job dir sweep failed: ${error.message}`));
+    await sweepJobDirs().catch(error => logger.warn(`Job dir sweep failed: ${error.message}`));
     setInterval(
       () => sweepJobDirs().catch(error => logger.warn(`Job dir sweep failed: ${error.message}`)),
       30 * 60 * 1000
@@ -340,10 +341,10 @@ async function handleInteraction(interaction) {
     }
 
     if (interaction.isMessageComponent() || interaction.isModalSubmit()) {
-      if (await handleMangaInteraction(interaction, processDownload)) {
+      if (await handleMangaInteraction(interaction, queueDownload)) {
         return;
       }
-      if (await handleMegaKeyInteraction(interaction, processDownload)) {
+      if (await handleMegaKeyInteraction(interaction, queueDownload)) {
         return;
       }
       if (interaction.isModalSubmit()) {
@@ -409,6 +410,14 @@ async function startBot() {
     logger.info('Initializing database...');
     await initDatabase();
     logger.info('Database initialized');
+
+    // Workers finish jobs in other processes; a delivered one starts the user's cooldown here.
+    if (botConfig.mediaWorkers) {
+      await listenForJobs(DONE_CHANNEL, payload => {
+        const { userId, success } = JSON.parse(payload);
+        if (success) recordRateLimit(userId);
+      });
+    }
 
     if (SERVER_PORT) {
       startStatsServer();

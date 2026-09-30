@@ -20,6 +20,7 @@ import {
 } from '../utils/interaction-helpers.js';
 import { storeMedia, deliverStored, finishCommand } from './shared/deliver.js';
 import { fetchUrlInput } from './shared/url-input.js';
+import { dispatchMediaJob } from '../jobs/dispatch.js';
 
 const logger = createLogger('optimize');
 
@@ -100,22 +101,19 @@ export async function processOptimization(
   );
 }
 
-// Checks the gif (or downloads the url) an optimize was given; replies and returns null on failure.
-async function gatherGif(interaction, { attachment, url, adminUser, commandSource, defer }) {
+const attachmentJson = attachment =>
+  attachment && {
+    url: attachment.url,
+    name: attachment.name,
+    size: attachment.size,
+    contentType: attachment.contentType,
+  };
+
+// The gif (downloading a url) an optimize was given; replies and returns null on failure.
+async function resolveGif(interaction, { attachment, url, adminUser, commandSource }) {
   let file = null;
   let originalUrl = null;
   if (url) {
-    const check = validateUrl(url);
-    if (!check.valid) {
-      await refuse(interaction, 'optimize', {
-        message: `invalid URL: ${check.error}`,
-        reason: 'invalid_url',
-        context: { originalUrl: url, commandSource },
-        notify: true,
-      });
-      return null;
-    }
-    if (defer) await safeInteractionDeferReply(interaction);
     try {
       ({ attachment, file, originalUrl } = await fetchUrlInput(url, adminUser, interaction.client));
     } catch (error) {
@@ -139,7 +137,43 @@ async function gatherGif(interaction, { attachment, url, adminUser, commandSourc
   return { attachment, file, originalUrl };
 }
 
-// The context menu cannot defer: it has to answer with the lossy-level modal.
+// The bot's half: checks that answer privately before anything is deferred or queued.
+async function acceptGif(interaction, { attachment, url, adminUser, commandSource }) {
+  if (!url)
+    return (await resolveGif(interaction, { attachment, adminUser, commandSource })) !== null;
+  const check = validateUrl(url);
+  if (!check.valid) {
+    await refuse(interaction, 'optimize', {
+      message: `invalid URL: ${check.error}`,
+      reason: 'invalid_url',
+      context: { originalUrl: url, commandSource },
+      notify: true,
+    });
+  }
+  return check.valid;
+}
+
+// The job half, run by a worker (or inline).
+export async function runOptimizeJob(
+  interaction,
+  { attachment, url, lossy = null, commandSource }
+) {
+  const adminUser = isAdmin(interaction.user.id);
+  const input = await resolveGif(interaction, { attachment, url, adminUser, commandSource });
+  if (!input) return;
+  await processOptimization(
+    interaction,
+    input.attachment,
+    adminUser,
+    input.file,
+    lossy,
+    input.originalUrl,
+    commandSource
+  );
+}
+
+// The context menu cannot defer: it has to answer with the lossy-level modal. The gif itself is
+// fetched by the job once the modal is submitted.
 export async function handleOptimizeContextMenuCommand(interaction, modalAttachmentCache) {
   if (!interaction.isMessageContextMenuCommand() || interaction.commandName !== 'optimize') {
     return;
@@ -165,14 +199,8 @@ export async function handleOptimizeContextMenuCommand(interaction, modalAttachm
     });
     return;
   }
-  const input = await gatherGif(interaction, {
-    attachment,
-    url,
-    adminUser,
-    commandSource: 'context-menu',
-    defer: false,
-  });
-  if (!input) return;
+  const commandSource = 'context-menu';
+  if (!(await acceptGif(interaction, { attachment, url, adminUser, commandSource }))) return;
 
   const modal = new ModalBuilder()
     .setCustomId(`optimize_modal_${Date.now()}`)
@@ -191,10 +219,8 @@ export async function handleOptimizeContextMenuCommand(interaction, modalAttachm
 
   const modalId = modal.data.custom_id;
   modalAttachmentCache.set(modalId, {
-    attachment: input.attachment,
-    attachmentType: 'gif',
-    adminUser,
-    originalUrl: input.originalUrl,
+    attachment: attachmentJson(attachment),
+    url,
     timestamp: Date.now(),
   });
 
@@ -247,22 +273,13 @@ export async function handleOptimizeCommand(interaction) {
     return;
   }
 
-  const input = await gatherGif(interaction, {
-    attachment,
-    url,
-    adminUser,
-    commandSource: 'slash',
-    defer: true,
-  });
-  if (!input) return;
+  const commandSource = 'slash';
+  if (!(await acceptGif(interaction, { attachment, url, adminUser, commandSource }))) return;
   await safeInteractionDeferReply(interaction);
-  await processOptimization(
-    interaction,
-    input.attachment,
-    adminUser,
-    input.file,
-    lossyLevel,
-    input.originalUrl,
-    'slash'
-  );
+  await dispatchMediaJob(interaction, 'optimize', {
+    attachment: attachmentJson(attachment),
+    url,
+    lossy: lossyLevel,
+    commandSource,
+  });
 }

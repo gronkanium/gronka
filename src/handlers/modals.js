@@ -1,6 +1,6 @@
 import { MessageFlags } from 'discord.js';
 import { createLogger } from '../utils/logger.js';
-import { processOptimization } from '../commands/optimize.js';
+import { dispatchMediaJob } from '../jobs/dispatch.js';
 import { safeInteractionReply, safeInteractionDeferReply } from '../utils/interaction-helpers.js';
 
 const logger = createLogger('modals');
@@ -48,7 +48,7 @@ export async function handleModalSubmit(interaction, modalAttachmentCache) {
     // Clean up cache entry
     modalAttachmentCache.delete(customId);
 
-    const { attachment, adminUser, originalUrl } = cachedData;
+    const { attachment, url } = cachedData;
 
     // Parse lossy level
     const lossyValue = interaction.fields.getTextInputValue('lossy_level') || null;
@@ -106,16 +106,12 @@ export async function handleModalSubmit(interaction, modalAttachmentCache) {
       return;
     }
 
-    // Process optimization
-    await processOptimization(
-      interaction,
+    await dispatchMediaJob(interaction, 'optimize', {
       attachment,
-      adminUser,
-      null,
-      lossyLevel,
-      originalUrl || null,
-      'context-menu'
-    );
+      url,
+      lossy: lossyLevel,
+      commandSource: 'context-menu',
+    });
     return;
   }
 }

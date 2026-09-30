@@ -146,6 +146,26 @@ export function getTableDefinitions() {
         );
       `,
     },
+    {
+      name: 'media_jobs',
+      sql: `
+        CREATE TABLE IF NOT EXISTS media_jobs (
+          id BIGSERIAL PRIMARY KEY,
+          kind TEXT NOT NULL,
+          args JSONB NOT NULL,
+          reply JSONB NOT NULL,
+          user_id TEXT NOT NULL,
+          status TEXT NOT NULL DEFAULT 'queued',
+          attempts INTEGER NOT NULL DEFAULT 0,
+          operation_id TEXT,
+          worker TEXT,
+          error TEXT,
+          created_at BIGINT NOT NULL,
+          timestamp BIGINT NOT NULL,
+          heartbeat_at BIGINT
+        );
+      `,
+    },
   ];
 }
 
@@ -266,6 +286,10 @@ export function getIndexDefinitions() {
     {
       name: 'idx_processed_urls_r2_expired_at',
       sql: 'CREATE INDEX IF NOT EXISTS idx_processed_urls_r2_expired_at ON processed_urls(r2_expired_at);',
+    },
+    {
+      name: 'idx_media_jobs_status',
+      sql: 'CREATE INDEX IF NOT EXISTS idx_media_jobs_status ON media_jobs(status, id);',
     },
   ];
 }

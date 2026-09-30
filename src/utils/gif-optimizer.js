@@ -7,6 +7,7 @@ import { ValidationError } from './errors.js';
 import { botConfig, isOwnCdnUrl, r2Config } from './config.js';
 import { downloadGifFromR2, isR2Configured, mediaExistsInR2 } from './r2-storage.js';
 import { hashPartsHex } from './hashing.js';
+import { fromPath } from './media-file.js';
 const logger = createLogger('gif-optimizer');
 
 export function isGifFile(filename, contentType) {
@@ -38,10 +39,11 @@ export function parseOwnCdnUrl(url) {
   return null;
 }
 
-// A stored gif from local disk, else from R2; null when neither has it.
+// A stored gif as a media file from local disk, else from R2; null when neither has it.
 export async function loadStoredGif(hash) {
+  const local = mediaPath('gif', hash, '.gif', botConfig.gifStoragePath);
   try {
-    return await fs.readFile(mediaPath('gif', hash, '.gif', botConfig.gifStoragePath));
+    return await fromPath(local, { contentType: 'image/gif', filename: `${hash}.gif` });
   } catch {
     // not on this disk
   }
@@ -51,14 +53,17 @@ export async function loadStoredGif(hash) {
   return downloadGifFromR2(hash, r2Config).catch(() => null);
 }
 
-// Optimizes the gif at inputPath once per (content, lossy) pair and reuses the result after that.
-export async function optimizeCached(buffer, inputPath, lossy = null) {
-  const hash = hashPartsHex([buffer, 'optimized', lossy === null ? null : String(lossy)]);
+// Optimizes a gif once per (content, lossy) pair; returns {hash: its storage key, file}.
+export async function optimizeCached(gif, lossy = null) {
+  const hash = hashPartsHex([gif.hash, 'optimized', lossy === null ? null : String(lossy)]);
   const stored = await loadStoredGif(hash);
-  if (stored) return { hash, buffer: stored };
+  if (stored) return { hash, file: stored };
   const outputPath = mediaPath('gif', hash, '.gif', botConfig.gifStoragePath);
-  await optimizeGif(inputPath, outputPath, lossy === null ? {} : { lossy });
-  return { hash, buffer: await fs.readFile(outputPath) };
+  await optimizeGif(gif.path, outputPath, lossy === null ? {} : { lossy });
+  return {
+    hash,
+    file: await fromPath(outputPath, { contentType: 'image/gif', filename: `${hash}.gif` }),
+  };
 }
 
 /**

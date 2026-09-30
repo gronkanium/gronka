@@ -12,10 +12,10 @@ import {
   formatFileSize,
   mediaExists,
   saveMedia,
-  cleanupTempFiles,
   getStorageStats,
   invalidateStatsCache,
 } from '../../src/utils/storage.js';
+import { mediaFromBytes } from '../helpers/media.js';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { mkdirSync, rmSync, writeFileSync } from 'node:fs';
@@ -195,7 +195,13 @@ test('gifExists - returns true for existing GIF', async () => {
 test('saveGif - saves GIF file and returns path', async () => {
   const hash = 'testgif456';
   const buffer = Buffer.from('fake gif content');
-  const saveResult = await saveMedia('gif', buffer, hash, '.gif', testStoragePath);
+  const saveResult = await saveMedia(
+    'gif',
+    await mediaFromBytes(buffer),
+    hash,
+    '.gif',
+    testStoragePath
+  );
   const savedPath = saveResult.url;
 
   // Hash is sanitized (hex characters only), so testgif456 becomes ef456
@@ -210,7 +216,7 @@ test('saveGif - creates directory if it does not exist', async () => {
   const customPath = path.join(testStoragePath, 'custom');
   const hash = 'testgif789';
   const buffer = Buffer.from('fake gif content');
-  await saveMedia('gif', buffer, hash, '.gif', customPath);
+  await saveMedia('gif', await mediaFromBytes(buffer), hash, '.gif', customPath);
 
   const exists = await mediaExists('gif', hash, '.gif', customPath);
   assert.strictEqual(exists, true);
@@ -235,7 +241,13 @@ test('videoExists - returns true for existing video', async () => {
 test('saveVideo - saves video file and returns path', async () => {
   const hash = 'testvideo456';
   const buffer = Buffer.from('fake video content');
-  const saveResult = await saveMedia('video', buffer, hash, '.webm', testStoragePath);
+  const saveResult = await saveMedia(
+    'video',
+    await mediaFromBytes(buffer),
+    hash,
+    '.webm',
+    testStoragePath
+  );
   const savedPath = saveResult.url;
 
   // Hash is sanitized (hex characters only), so testvideo456 becomes ede456
@@ -265,7 +277,13 @@ test('imageExists - returns true for existing image', async () => {
 test('saveImage - saves image file and returns path', async () => {
   const hash = 'testimage456';
   const buffer = Buffer.from('fake image content');
-  const saveResult = await saveMedia('image', buffer, hash, '.jpg', testStoragePath);
+  const saveResult = await saveMedia(
+    'image',
+    await mediaFromBytes(buffer),
+    hash,
+    '.jpg',
+    testStoragePath
+  );
   const savedPath = saveResult.url;
 
   // Hash is sanitized (hex characters only), so testimage456 becomes eae456
@@ -274,42 +292,6 @@ test('saveImage - saves image file and returns path', async () => {
 
   const exists = await mediaExists('image', hash, '.jpg', testStoragePath);
   assert.strictEqual(exists, true);
-});
-
-test('cleanupTempFiles - deletes existing files', async () => {
-  mkdirSync(testStoragePath, { recursive: true });
-  const tempFile1 = path.join(testStoragePath, 'temp1.txt');
-  const tempFile2 = path.join(testStoragePath, 'temp2.txt');
-  writeFileSync(tempFile1, 'content1');
-  writeFileSync(tempFile2, 'content2');
-
-  await cleanupTempFiles([tempFile1, tempFile2]);
-
-  const fs = await import('fs/promises');
-  try {
-    await fs.access(tempFile1);
-    assert.fail('tempFile1 should have been deleted');
-  } catch {
-    // Expected - file should not exist
-  }
-
-  try {
-    await fs.access(tempFile2);
-    assert.fail('tempFile2 should have been deleted');
-  } catch {
-    // Expected - file should not exist
-  }
-});
-
-test('cleanupTempFiles - handles non-existent files gracefully', async () => {
-  const tempFile = path.join(testStoragePath, 'nonexistent.txt');
-  await cleanupTempFiles([tempFile]);
-  // Should not throw
-});
-
-test('cleanupTempFiles - handles empty array', async () => {
-  await cleanupTempFiles([]);
-  // Should not throw
 });
 
 test('getStorageStats - returns zero stats for empty storage', async () => {

@@ -48,7 +48,7 @@ export async function handleModalSubmit(interaction, modalAttachmentCache) {
     // Clean up cache entry
     modalAttachmentCache.delete(customId);
 
-    const { attachment, adminUser, preDownloadedBuffer, originalUrl } = cachedData;
+    const { attachment, adminUser, originalUrl } = cachedData;
 
     // Parse lossy level
     const lossyValue = interaction.fields.getTextInputValue('lossy_level') || null;
@@ -111,7 +111,7 @@ export async function handleModalSubmit(interaction, modalAttachmentCache) {
       interaction,
       attachment,
       adminUser,
-      preDownloadedBuffer,
+      null,
       lossyLevel,
       originalUrl || null,
       'context-menu'

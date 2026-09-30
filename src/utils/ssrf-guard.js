@@ -86,7 +86,7 @@ export function isSsrfBlockedError(error) {
 /**
  * Axios config fragment to spread into any request whose URL came from user input.
  *
- * Usage: `axios.get(url, { ...ssrfGuardedRequest(), responseType: 'arraybuffer' })` ,
+ * Usage: `axios.get(url, { ...ssrfGuardedRequest(), responseType: 'stream' })` ,
  * always alongside a validateUrl check on the URL itself.
  *
  * Deliberately NOT used in cobalt.js: those requests target the Cobalt API and its tunnel

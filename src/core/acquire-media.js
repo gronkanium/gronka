@@ -40,8 +40,7 @@ import { fitsDiscordAttachment } from '../commands/shared/attachment-limit.js';
 
 const logger = createLogger('acquire-media');
 
-// Reddit allows 20 images per gallery. Each slide is buffered whole in memory, so cap the fan-out
-// rather than letting one link pull 20 full-resolution originals at once.
+// Reddit allows 20 images per gallery; one link should not pull 20 full-resolution originals.
 const MAX_REDDIT_GALLERY_SLIDES = 10;
 
 // Each slide carries candidates, best first: the unsigned original, then a signed preview,
@@ -506,7 +505,7 @@ export async function acquireMedia(
   }
 
   const track = soundcloud && (await soundcloud);
-  if (track && fileData?.buffer && !fileData.audioReady) {
+  if (track && fileData?.path && !fileData.audioReady) {
     try {
       fileData = await tagAudio(fileData, track);
     } catch (error) {
@@ -528,25 +527,20 @@ export async function extractAudio(
           detectFileType(
             path.extname(media.filename).toLowerCase(),
             media.contentType,
-            media.buffer
+            media.head
           ) === 'video'
       )
     : fileData;
-  if (!source?.buffer || fileData?.archive) {
+  if (!source?.path || fileData?.archive) {
     throw new ValidationError('there is no audio in that post to turn into an mp3.');
   }
   // Already a tagged mp3: re-encoding would drop the cover and tags for nothing.
   if (source.audioReady && startTime === null && duration === null) {
-    return { buffer: source.buffer, baseName: path.parse(source.filename).name };
+    return { file: source, baseName: path.parse(source.filename).name };
   }
   // yt-dlp (and its fallback) already cut the requested section.
   const trim = downloadMethod === 'ytdlp' ? {} : { startTime, duration };
-  const buffer = await convertToFormat(
-    source.buffer,
-    path.extname(source.filename).toLowerCase() || '.mp4',
-    'mp3',
-    trim
-  );
+  const file = await convertToFormat(source, 'mp3', trim);
   const baseName = path.parse(source.filename).name.replace(/[^\w.-]+/g, '_') || 'audio';
-  return { buffer, baseName };
+  return { file, baseName };
 }

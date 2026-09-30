@@ -1,5 +1,6 @@
 import { describe, test } from 'bun:test';
 import assert from 'node:assert';
+import { Readable } from 'node:stream';
 import axios from 'axios';
 import { booruCdnUserAgent, downloadFromBooru, isBooruUrl } from '../../src/utils/booru.js';
 
@@ -66,16 +67,17 @@ describe('booru utilities', () => {
       }
     };
 
-    const mediaResponse = {
-      data: Buffer.from('fake-image-bytes'),
+    const mediaBytes = Buffer.from('fake-image-bytes');
+    const mediaResponse = () => ({
+      data: Readable.from([mediaBytes]),
       headers: { 'content-type': 'image/jpeg' },
-    };
+    });
 
     test('queries the index by id and downloads the array entry file_url', async () => {
       const fileUrl = 'https://files.yande.re/image/abc123/yande.re%201000000%20tagged.jpg';
 
       await withStubbedAxios(
-        url => (url.includes('/post.json') ? { data: [{ file_url: fileUrl }] } : mediaResponse),
+        url => (url.includes('/post.json') ? { data: [{ file_url: fileUrl }] } : mediaResponse()),
         async requested => {
           const result = await downloadFromBooru('https://yande.re/post/show/1000000');
 
@@ -86,7 +88,7 @@ describe('booru utilities', () => {
           );
           assert.strictEqual(requested[1].url, fileUrl);
           assert.strictEqual(result.contentType, 'image/jpeg');
-          assert.strictEqual(result.size, mediaResponse.data.length);
+          assert.strictEqual(result.size, mediaBytes.length);
         }
       );
     });
@@ -95,7 +97,7 @@ describe('booru utilities', () => {
       const fileUrl = 'https://konachan.com/image/def456/Konachan.com%20-%20300000.png';
 
       await withStubbedAxios(
-        url => (url.includes('/post.json') ? { data: [{ file_url: fileUrl }] } : mediaResponse),
+        url => (url.includes('/post.json') ? { data: [{ file_url: fileUrl }] } : mediaResponse()),
         async requested => {
           await downloadFromBooru('https://konachan.net/post/show/300000');
           assert.strictEqual(requested[0].url, 'https://konachan.net/post.json?tags=id:300000');
@@ -120,7 +122,7 @@ describe('booru utilities', () => {
         url =>
           url.includes('.json')
             ? { data: { file_url: 'https://cdn.donmai.us/original/ab/cd/abcd.jpg' } }
-            : mediaResponse,
+            : mediaResponse(),
         async requested => {
           await downloadFromBooru('https://danbooru.donmai.us/posts/5000000');
           assert.strictEqual(requested[0].url, 'https://danbooru.donmai.us/posts/5000000.json');
@@ -135,7 +137,7 @@ describe('booru utilities', () => {
         url =>
           url.endsWith('.json')
             ? { data: { post: { file: { url: null, md5, ext: 'mp4' } } } }
-            : mediaResponse,
+            : mediaResponse(),
         async requested => {
           await downloadFromBooru('https://e621.net/posts/6596150');
           assert.strictEqual(requested[1].url, `https://static1.e621.net/data/e9/6d/${md5}.mp4`);

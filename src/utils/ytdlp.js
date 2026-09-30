@@ -1,13 +1,12 @@
 import { spawn, execFile } from 'child_process';
 import { promisify } from 'util';
-import fs from 'fs/promises';
 import fsSync from 'fs';
 import path from 'path';
-import tmp from 'tmp';
 import { createLogger } from './logger.js';
 import { NetworkError, ValidationError } from './errors.js';
 import { trimVideo } from './video-processor/trim-video.js';
 import { DEFAULT_YTDLP_FORMAT } from './config.js';
+import { fromPath, tempDir } from './media-file.js';
 
 const logger = createLogger('ytdlp');
 const execFileAsync = promisify(execFile);
@@ -701,7 +700,7 @@ function emptyDownloadError(error) {
  * @param {number} maxDuration - Maximum video duration in seconds (default: 300 = 5 minutes, admins bypass this)
  * @param {number|null} startTime - Start time in seconds for segment download
  * @param {number|null} duration - Duration in seconds for segment download
- * @returns {Promise<Object>} Object with buffer, contentType, size, and filename
+ * @returns {Promise<Object>} Media file (path, size, hash, contentType, filename)
  */
 export async function downloadWithYtdlp(
   url,
@@ -752,7 +751,7 @@ export async function downloadWithYtdlp(
   // Admins are never size-gated; for everyone else the cap drives yt-dlp's --max-filesize.
   const gateSize = isAdminUser ? Infinity : maxSize;
 
-  const tmpDir = tmp.dirSync({ unsafeCleanup: true });
+  const workDir = await tempDir();
   const useSegmentDownload = startTime !== null || duration !== null;
 
   try {
@@ -763,7 +762,7 @@ export async function downloadWithYtdlp(
       try {
         outputPath = await executeYtdlpWithRetry(
           url,
-          tmpDir.name,
+          workDir,
           effectiveQuality,
           300000,
           maxDuration,
@@ -781,7 +780,7 @@ export async function downloadWithYtdlp(
 
           outputPath = await executeYtdlpWithRetry(
             url,
-            tmpDir.name,
+            workDir,
             effectiveQuality,
             300000,
             maxDuration,
@@ -790,7 +789,7 @@ export async function downloadWithYtdlp(
             gateSize
           ).catch(emptyDownloadError);
 
-          const trimmedPath = path.join(tmpDir.name, 'trimmed_output.mp4');
+          const trimmedPath = path.join(workDir, 'trimmed_output.mp4');
           await trimVideo(outputPath, trimmedPath, { startTime, duration });
 
           outputPath = trimmedPath;
@@ -802,7 +801,7 @@ export async function downloadWithYtdlp(
     } else {
       outputPath = await executeYtdlpWithRetry(
         url,
-        tmpDir.name,
+        workDir,
         effectiveQuality,
         300000,
         maxDuration,
@@ -812,39 +811,21 @@ export async function downloadWithYtdlp(
       ).catch(emptyDownloadError);
     }
 
-    const buffer = await fs.readFile(outputPath);
-
-    if (!isAdminUser && buffer.length > maxSize) {
+    const filename = path.basename(outputPath);
+    const contentType = getContentType(path.extname(outputPath));
+    const file = await fromPath(outputPath, { contentType, filename });
+    if (!isAdminUser && file.size > maxSize) {
       throw new ValidationError(
-        `file is too large (${(buffer.length / (1024 * 1024)).toFixed(2)}MB, max ${(maxSize / (1024 * 1024)).toFixed(2)}MB)`
+        `file is too large (${(file.size / (1024 * 1024)).toFixed(2)}MB, max ${(maxSize / (1024 * 1024)).toFixed(2)}MB)`
       );
     }
-
-    // Get file info - filename is only used for extension extraction, not for user-facing purposes
-    // The actual filename used will be hash-based in the download command
-    const filename = path.basename(outputPath);
-    const ext = path.extname(outputPath);
-    const contentType = getContentType(ext);
-
     logger.info(
-      `Successfully downloaded media via yt-dlp${usedFallback ? ' (via fallback)' : ''}, size: ${buffer.length} bytes, content-type: ${contentType}, extension: ${ext}`
+      `Successfully downloaded media via yt-dlp${usedFallback ? ' (via fallback)' : ''}, size: ${file.size} bytes, content-type: ${contentType}`
     );
-
-    return {
-      buffer,
-      contentType,
-      size: buffer.length,
-      filename, // Only used for extension extraction in download command, not user-facing
-    };
+    return file;
   } catch (error) {
     logger.error(`yt-dlp download failed: ${error.message}`);
     throw error;
-  } finally {
-    try {
-      tmpDir.removeCallback();
-    } catch (cleanupError) {
-      logger.warn(`Failed to clean up temp directory: ${cleanupError.message}`);
-    }
   }
 }
 

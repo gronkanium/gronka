@@ -72,3 +72,36 @@ export function urlLabel(url) {
     return url || 'attachment';
   }
 }
+
+// One way to print a moment everywhere: "Sep 30, 14:21" (with the year only when it differs).
+export function formatDateTime(t, { seconds = false } = {}) {
+  if (!t) return '—';
+  const d = new Date(t);
+  const sameYear = d.getFullYear() === new Date().getFullYear();
+  return d.toLocaleString([], {
+    ...(sameYear ? {} : { year: 'numeric' }),
+    month: 'short',
+    day: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+    ...(seconds ? { second: '2-digit' } : {}),
+    hour12: false,
+  });
+}
+
+export function formatDate(t) {
+  if (!t) return '—';
+  const d = new Date(t);
+  const sameYear = d.getFullYear() === new Date().getFullYear();
+  return d.toLocaleDateString([], {
+    ...(sameYear ? {} : { year: 'numeric' }),
+    month: 'short',
+    day: 'numeric',
+  });
+}
+
+export function formatTime(t, { millis = false } = {}) {
+  if (!t) return '—';
+  const s = new Date(t).toLocaleTimeString([], { hour12: false });
+  return millis ? `${s}.${String(t % 1000).padStart(3, '0')}` : s;
+}

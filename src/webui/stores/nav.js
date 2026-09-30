@@ -31,6 +31,7 @@ export async function refreshNav() {
     issues: groupIssues(issues?.byReason ?? []),
     users: stats?.ever_active_users,
     paused: !!system?.jobs?.paused,
+    version: system?.version ?? null,
   });
 }
 

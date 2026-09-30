@@ -5,6 +5,22 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres (attempts) to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.2.0](https://github.com/thedorekaczynski/gronka/compare/v2.1.0...v2.2.0) (2026-09-30)
+
+
+### Features
+
+* **webui:** serve Archivo and Gronka Mono so every device shows the same fonts ([2e64e6c](https://github.com/thedorekaczynski/gronka/commit/2e64e6c455126d8b0a4ebdce3232e40a1015b208))
+
+
+### Bug Fixes
+
+* **db:** make user, metrics, cached-link and upload upserts atomic ([fe597c3](https://github.com/thedorekaczynski/gronka/commit/fe597c3b3d8a8f2fa0a3d6f499ab1fbef5fd5132))
+* **db:** un-expire re-processed links and close second-factor races ([d3d069f](https://github.com/thedorekaczynski/gronka/commit/d3d069f08e415f7675e0c8e5d37112cc3b058938))
+* **web:** enable, disable and regenerate second-factor codes in one transaction ([506e8dc](https://github.com/thedorekaczynski/gronka/commit/506e8dc3737a04c70d035e655e42df9c5912e028))
+* **webui:** change filters and tabs without a navigation, no input zoom or key hints on phones ([24d3a6d](https://github.com/thedorekaczynski/gronka/commit/24d3a6dfaf3ca82dbbfa8d92b40a2d2c842e578f))
+* **webui:** stop mobile logs and issues jumping, guard stale log loads ([750ab00](https://github.com/thedorekaczynski/gronka/commit/750ab000d1de44890b8b595f9167caabc68ee174))
+
 ## [2.1.0](https://github.com/thedorekaczynski/gronka/compare/v2.0.1...v2.1.0) (2026-09-30)
 
 

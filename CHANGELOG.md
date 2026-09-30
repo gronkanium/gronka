@@ -5,6 +5,18 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres (attempts) to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.0.1](https://github.com/thedorekaczynski/gronka/compare/v2.0.0...v2.0.1) (2026-09-30)
+
+
+### Bug Fixes
+
+* **cobalt:** keep cobalt's filename on redirect downloads ([0de53b1](https://github.com/thedorekaczynski/gronka/commit/0de53b1b2e142796bb1378fcf288183431e0de8f))
+* **database:** pass DATABASE_URL to postgres.js as the connection string ([92f5d55](https://github.com/thedorekaczynski/gronka/commit/92f5d55934c20e577d4659e044f69653abd11c0d))
+* **download:** serve X gifs as gifs on the web and ask cobalt once per link ([8852566](https://github.com/thedorekaczynski/gronka/commit/8852566f5f49098d92f59f55f26091e3b5255e97))
+* **validation:** block only 192.0.0.0/24, not every 192.0.x.x address ([d976175](https://github.com/thedorekaczynski/gronka/commit/d976175343b2efb97d3392e8b9795cd8df0794cd))
+* **web:** apply start and end to downloads yt-dlp did not trim ([84dca1d](https://github.com/thedorekaczynski/gronka/commit/84dca1d35cb19338c05964f7c2c7ab28eae2c5f8))
+* **web:** serve the untrimmed file when ffmpeg cannot trim it ([07c0613](https://github.com/thedorekaczynski/gronka/commit/07c061326a7204ea0deabec8bdc7475f71d613e4))
+
 ## [2.0.0](https://github.com/thedorekaczynski/gronka/compare/v1.2.0...v2.0.0) (2026-09-29)
 
 

@@ -1,8 +1,8 @@
-import { blake3 } from '@noble/hashes/blake3.js';
-import { bytesToHex } from '@noble/hashes/utils.js';
+import { createHash } from 'crypto';
 
+// Native only: pure-JS hashing of a 500MB video allocated ~1GB of garbage and OOM-killed the bot.
 export function hashBytesHex(bytes) {
-  return bytesToHex(blake3(bytes));
+  return createHash('sha256').update(bytes).digest('hex');
 }
 
 export function hashStringHex(value) {
@@ -16,7 +16,7 @@ export function hashStringHex(value) {
  * @returns {string}
  */
 export function hashPartsHex(parts) {
-  const hasher = blake3.create();
+  const hasher = createHash('sha256');
   for (const part of parts) {
     if (part === null || part === undefined) continue;
     if (typeof part === 'string') {
@@ -25,7 +25,7 @@ export function hashPartsHex(parts) {
       hasher.update(part);
     }
   }
-  return bytesToHex(hasher.digest());
+  return hasher.digest('hex');
 }
 
 export function hashUrl(url) {

@@ -12,6 +12,8 @@ import {
   insertProcessedUrl,
 } from '../../src/utils/database.js';
 import { invalidateUserCache } from '../../src/utils/database/users-pg.js';
+import { insertOrUpdateUserMetrics, getUserMetrics } from '../../src/utils/database/metrics-pg.js';
+import { insertTemporaryUpload } from '../../src/utils/database/temporary-uploads-pg.js';
 import {
   getUniqueTestComponent,
   ensureLogsTableSchema,
@@ -599,6 +601,25 @@ describe('database utilities', () => {
         )
       );
       await initDatabase();
+    });
+  });
+
+  describe('concurrent upserts', () => {
+    const id = `race-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+    const all = fn => Promise.all(Array.from({ length: 20 }, fn));
+
+    test('user metrics count every parallel write for a new user', async () => {
+      await all(() => insertOrUpdateUserMetrics(id, { totalCommands: 1, totalDownload: 1 }));
+      const m = await getUserMetrics(id);
+      assert.strictEqual(m.total_commands, 20);
+      assert.strictEqual(m.total_download, 20);
+    });
+
+    test('users, processed urls and temporary uploads accept parallel first writes', async () => {
+      await all(() => insertOrUpdateUser(id, Date.now()));
+      await all((_, i) => insertProcessedUrl(id, `hash-${i}`, 'gif', '.gif', 'u', Date.now()));
+      await all(() => insertTemporaryUpload(id, 'key', Date.now(), Date.now() + 1000));
+      assert.ok(await getProcessedUrl(id));
     });
   });
 });

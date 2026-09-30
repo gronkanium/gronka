@@ -33,63 +33,22 @@ export async function insertOrUpdateUserMetrics(userId, metrics) {
 
   const timestamp = Date.now();
 
-  // Check if user metrics exist
-  const existing = await sql`SELECT * FROM user_metrics WHERE user_id = ${userId}`;
-
-  if (existing.length > 0) {
-    // Build update query dynamically
-    const updates = [];
-    const params = [];
-
-    if (metrics.totalCommands !== undefined) {
-      updates.push(`total_commands = total_commands + $${params.length + 1}`);
-      params.push(metrics.totalCommands);
-    }
-    if (metrics.successfulCommands !== undefined) {
-      updates.push(`successful_commands = successful_commands + $${params.length + 1}`);
-      params.push(metrics.successfulCommands);
-    }
-    if (metrics.failedCommands !== undefined) {
-      updates.push(`failed_commands = failed_commands + $${params.length + 1}`);
-      params.push(metrics.failedCommands);
-    }
-    if (metrics.totalConvert !== undefined) {
-      updates.push(`total_convert = total_convert + $${params.length + 1}`);
-      params.push(metrics.totalConvert);
-    }
-    if (metrics.totalDownload !== undefined) {
-      updates.push(`total_download = total_download + $${params.length + 1}`);
-      params.push(metrics.totalDownload);
-    }
-    if (metrics.totalOptimize !== undefined) {
-      updates.push(`total_optimize = total_optimize + $${params.length + 1}`);
-      params.push(metrics.totalOptimize);
-    }
-    if (metrics.totalInfo !== undefined) {
-      updates.push(`total_info = total_info + $${params.length + 1}`);
-      params.push(metrics.totalInfo);
-    }
-    if (metrics.totalFileSize !== undefined) {
-      updates.push(`total_file_size = total_file_size + $${params.length + 1}`);
-      params.push(metrics.totalFileSize);
-    }
-    if (metrics.lastCommandAt !== undefined) {
-      updates.push(`last_command_at = $${params.length + 1}`);
-      params.push(metrics.lastCommandAt);
-    }
-
-    updates.push(`updated_at = $${params.length + 1}`);
-    params.push(timestamp, userId);
-
-    const query = `UPDATE user_metrics SET ${updates.join(', ')} WHERE user_id = $${params.length}`;
-    await sql.unsafe(query, params);
-  } else {
-    // Insert new user metrics
-    await sql`
-      INSERT INTO user_metrics (user_id, total_commands, successful_commands, failed_commands, total_convert, total_download, total_optimize, total_info, total_file_size, last_command_at, updated_at)
-      VALUES (${userId}, ${metrics.totalCommands || 0}, ${metrics.successfulCommands || 0}, ${metrics.failedCommands || 0}, ${metrics.totalConvert || 0}, ${metrics.totalDownload || 0}, ${metrics.totalOptimize || 0}, ${metrics.totalInfo || 0}, ${metrics.totalFileSize || 0}, ${metrics.lastCommandAt || timestamp}, ${timestamp})
-    `;
-  }
+  const m = metrics;
+  await sql`
+    INSERT INTO user_metrics (user_id, total_commands, successful_commands, failed_commands, total_convert, total_download, total_optimize, total_info, total_file_size, last_command_at, updated_at)
+    VALUES (${userId}, ${m.totalCommands || 0}, ${m.successfulCommands || 0}, ${m.failedCommands || 0}, ${m.totalConvert || 0}, ${m.totalDownload || 0}, ${m.totalOptimize || 0}, ${m.totalInfo || 0}, ${m.totalFileSize || 0}, ${m.lastCommandAt || timestamp}, ${timestamp})
+    ON CONFLICT (user_id) DO UPDATE SET
+      total_commands = user_metrics.total_commands + EXCLUDED.total_commands,
+      successful_commands = user_metrics.successful_commands + EXCLUDED.successful_commands,
+      failed_commands = user_metrics.failed_commands + EXCLUDED.failed_commands,
+      total_convert = user_metrics.total_convert + EXCLUDED.total_convert,
+      total_download = user_metrics.total_download + EXCLUDED.total_download,
+      total_optimize = user_metrics.total_optimize + EXCLUDED.total_optimize,
+      total_info = user_metrics.total_info + EXCLUDED.total_info,
+      total_file_size = user_metrics.total_file_size + EXCLUDED.total_file_size,
+      last_command_at = COALESCE(${m.lastCommandAt ?? null}::bigint, user_metrics.last_command_at),
+      updated_at = EXCLUDED.updated_at
+  `;
 }
 
 /**

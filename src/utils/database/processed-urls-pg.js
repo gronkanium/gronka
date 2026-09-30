@@ -106,32 +106,19 @@ export async function insertProcessedUrl(
   }
 
   try {
-    // Check if record exists
-    const existing = await getProcessedUrl(urlHash);
-    if (existing) {
-      // Update existing record (in case file URL or other info changed)
-      await sql`
-        UPDATE processed_urls
-        SET file_hash = ${fileHash},
-            file_type = ${fileType},
-            file_extension = ${fileExtension},
-            file_url = ${fileUrl},
-            processed_at = ${processedAt},
-            user_id = ${userId},
-            file_size = ${fileSize}
-        WHERE url_hash = ${urlHash}
-      `;
-      // Invalidate cache
-      invalidateProcessedUrlCache(urlHash);
-    } else {
-      // Insert new record
-      await sql`
-        INSERT INTO processed_urls (url_hash, file_hash, file_type, file_extension, file_url, processed_at, user_id, file_size)
-        VALUES (${urlHash}, ${fileHash}, ${fileType}, ${fileExtension}, ${fileUrl}, ${processedAt}, ${userId}, ${fileSize})
-      `;
-      // Invalidate cache (though entry didn't exist before, clear to be safe)
-      invalidateProcessedUrlCache(urlHash);
-    }
+    await sql`
+      INSERT INTO processed_urls (url_hash, file_hash, file_type, file_extension, file_url, processed_at, user_id, file_size)
+      VALUES (${urlHash}, ${fileHash}, ${fileType}, ${fileExtension}, ${fileUrl}, ${processedAt}, ${userId}, ${fileSize})
+      ON CONFLICT (url_hash) DO UPDATE SET
+        file_hash = EXCLUDED.file_hash,
+        file_type = EXCLUDED.file_type,
+        file_extension = EXCLUDED.file_extension,
+        file_url = EXCLUDED.file_url,
+        processed_at = EXCLUDED.processed_at,
+        user_id = EXCLUDED.user_id,
+        file_size = EXCLUDED.file_size
+    `;
+    invalidateProcessedUrlCache(urlHash);
   } catch (error) {
     // Handle connection errors gracefully (e.g., when database is closed)
     if (

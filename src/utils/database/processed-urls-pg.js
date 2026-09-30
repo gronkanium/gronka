@@ -116,7 +116,8 @@ export async function insertProcessedUrl(
         file_url = EXCLUDED.file_url,
         processed_at = EXCLUDED.processed_at,
         user_id = EXCLUDED.user_id,
-        file_size = EXCLUDED.file_size
+        file_size = EXCLUDED.file_size,
+        r2_expired_at = NULL
     `;
     invalidateProcessedUrlCache(urlHash);
   } catch (error) {

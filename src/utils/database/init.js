@@ -10,6 +10,7 @@ import {
   getIndexDefinitions,
   addFileSizeColumnIfNeeded,
   ensureTemporaryUploadsCascadeDelete,
+  ensureTemporaryUploadsUniqueKey,
   addR2ExpiredAtColumnIfNeeded,
   dropUsernameColumnsIfPresent,
 } from './schema-pg.js';
@@ -96,6 +97,7 @@ export async function initPostgresDatabase() {
 
       // Ensure old databases pick up ON DELETE CASCADE on temporary_uploads (for migration)
       await ensureTemporaryUploadsCascadeDelete(connection);
+      await ensureTemporaryUploadsUniqueKey(connection);
 
       // Reset SERIAL sequences to match existing data (fixes duplicate key errors after migration)
       await resetSerialSequences(connection);

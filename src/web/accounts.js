@@ -326,10 +326,12 @@ export async function enableTotp(accountId, code) {
   const step = matchTotp(decryptSecret(row.totp_pending, accountId), code);
   if (step === null) return null;
   return sql.begin(async tx => {
+    // Only the pending secret the code was checked against may go live.
     const enabled = await tx`
       UPDATE web_accounts SET totp_secret = totp_pending, totp_pending = NULL,
         totp_last_step = ${step}, totp_failures = 0, totp_locked_until = NULL
-      WHERE id = ${accountId} AND totp_secret IS NULL RETURNING id`;
+      WHERE id = ${accountId} AND totp_secret IS NULL AND totp_pending = ${row.totp_pending}
+      RETURNING id`;
     return enabled.length ? createRecoveryCodes(tx, accountId) : null;
   });
 }
@@ -398,9 +400,10 @@ export async function disableTotp(accountId) {
 
 export async function regenerateRecoveryCodes(accountId) {
   return getPostgresConnection().begin(async tx => {
-    // The account row lock makes parallel regenerations take turns instead of both inserting.
-    await tx`SELECT 1 FROM web_accounts WHERE id = ${accountId} FOR UPDATE`;
-    return createRecoveryCodes(tx, accountId);
+    // The row lock makes parallel regenerations take turns; null once 2fa is off.
+    const [row] = await tx`
+      SELECT 1 FROM web_accounts WHERE id = ${accountId} AND totp_secret IS NOT NULL FOR UPDATE`;
+    return row ? createRecoveryCodes(tx, accountId) : null;
   });
 }
 

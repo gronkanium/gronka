@@ -73,7 +73,7 @@ function build() {
   // Run vite build
   try {
     console.log('Building webui...');
-    execSync('vite build', {
+    execSync('vite build --config src/webui/vite.config.js', {
       stdio: 'inherit',
     });
     console.log('Build completed successfully');
@@ -89,7 +89,7 @@ function build() {
         // Retry build after installing
         console.log('Retrying build...');
         try {
-          execSync('vite build', {
+          execSync('vite build --config src/webui/vite.config.js', {
             stdio: 'inherit',
           });
           console.log('Build completed successfully');

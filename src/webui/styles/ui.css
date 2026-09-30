@@ -1012,11 +1012,14 @@ textarea.field {
 }
 .user-cell {
   display: inline-flex;
+  vertical-align: middle;
   align-items: center;
   gap: 8px;
   min-width: 0;
 }
 .user-cell .id {
+  display: inline-block;
+  line-height: 1;
   font-family: var(--mono);
   font-size: var(--fs-sm);
   color: var(--text-soft);
@@ -1295,6 +1298,16 @@ button.lrow:hover:not(:disabled) {
   }
   .kpi .v {
     font-size: var(--fs-2xl);
+  }
+  .kpi {
+    grid-template-areas:
+      'k k'
+      'v v'
+      'd d'
+      's s';
+  }
+  .kpi .spark {
+    display: none;
   }
   .page-head {
     flex-direction: column;

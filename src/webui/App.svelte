@@ -691,7 +691,7 @@
     .jump input {
       min-width: 0;
     }
-    .tools .pill {
+    .tools .conn {
       display: none;
     }
     .page {

@@ -146,11 +146,8 @@
 
   <section class="panel" aria-label="download sources">
     <div class="ph">
-      <span>Download sources</span>
-      <span class="sub"
-        >a turned-off source refuses /download with a message; the bot picks changes up within a
-        minute</span
-      >
+      <span class="nowrap">Download sources</span>
+      <span class="sub">a turned-off source refuses /download with a message</span>
       <span class="meta">
         <label class="searchbox find">
           <Search size={14} />
@@ -255,13 +252,20 @@
   .linkish.small {
     font-size: var(--fs-sm);
   }
+  .nowrap {
+    white-space: nowrap;
+  }
   .ph .sub {
     display: none;
   }
-  @media (min-width: 1100px) {
+  @media (min-width: 1000px) {
     .ph .sub {
       display: inline;
       font-size: var(--fs-sm);
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      min-width: 0;
     }
   }
 </style>

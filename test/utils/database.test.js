@@ -12,8 +12,12 @@ import {
   insertProcessedUrl,
 } from '../../src/utils/database.js';
 import { invalidateUserCache } from '../../src/utils/database/users-pg.js';
+import { markProcessedUrlsR2Expired } from '../../src/utils/database/processed-urls-pg.js';
 import { insertOrUpdateUserMetrics, getUserMetrics } from '../../src/utils/database/metrics-pg.js';
-import { insertTemporaryUpload } from '../../src/utils/database/temporary-uploads-pg.js';
+import {
+  insertTemporaryUpload,
+  getTemporaryUploadsByR2Key,
+} from '../../src/utils/database/temporary-uploads-pg.js';
 import {
   getUniqueTestComponent,
   ensureLogsTableSchema,
@@ -455,7 +459,8 @@ describe('database utilities', () => {
       // settles, so a fire-and-forget call leaves initDatabase() free to hand back the
       // still-closing pool and every later test dies on CONNECTION_ENDED.
       await closeDatabase();
-      const result = await getProcessedUrl('test-hash');
+      // A fixed hash is only absent on a fresh database: the insert test below writes 'test-hash'.
+      const result = await getProcessedUrl('missing-after-close-' + Date.now());
       assert.strictEqual(result, null);
       await initDatabase();
     });
@@ -519,6 +524,18 @@ describe('database utilities', () => {
       assert.strictEqual(result.file_url, fileUrl2, 'Should have updated file URL');
       assert.strictEqual(result.processed_at, processedAt2, 'Should have updated timestamp');
       assert.strictEqual(result.user_id, 'user-2', 'Should have updated user ID');
+    });
+
+    test('a re-processed url is no longer r2-expired', async () => {
+      const urlHash = 'test-reprocess-' + Date.now();
+      await insertProcessedUrl(urlHash, 'old', 'gif', '.gif', 'https://r2/old.gif', Date.now());
+      await markProcessedUrlsR2Expired([urlHash]);
+      assert.ok((await getProcessedUrl(urlHash)).r2_expired_at, 'Should be expired');
+
+      await insertProcessedUrl(urlHash, 'new', 'gif', '.gif', 'https://r2/new.gif', Date.now());
+      const result = await getProcessedUrl(urlHash);
+      assert.strictEqual(result.file_url, 'https://r2/new.gif');
+      assert.strictEqual(result.r2_expired_at, null);
     });
 
     test('handles null userId', async () => {
@@ -619,7 +636,11 @@ describe('database utilities', () => {
       await all(() => insertOrUpdateUser(id, Date.now()));
       await all((_, i) => insertProcessedUrl(id, `hash-${i}`, 'gif', '.gif', 'u', Date.now()));
       await all(() => insertTemporaryUpload(id, 'key', Date.now(), Date.now() + 1000));
+      invalidateUserCache(id);
+      assert.ok(await getUser(id));
       assert.ok(await getProcessedUrl(id));
+      const uploads = await getTemporaryUploadsByR2Key('key');
+      assert.strictEqual(uploads.filter(upload => upload.url_hash === id).length, 1);
     });
   });
 });

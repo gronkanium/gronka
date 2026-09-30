@@ -386,3 +386,24 @@ export async function ensureTemporaryUploadsCascadeDelete(sql) {
     `;
   }
 }
+
+// ON CONFLICT (url_hash, r2_key) is rejected without this key; older databases may lack it.
+export async function ensureTemporaryUploadsUniqueKey(sql) {
+  const keyed = await sql`
+    SELECT 1 FROM pg_index i
+    WHERE i.indrelid = 'temporary_uploads'::regclass AND i.indisunique AND i.indpred IS NULL
+      AND (
+        SELECT array_agg(a.attname::text ORDER BY a.attname)
+        FROM unnest(i.indkey::int2[]) AS k(attnum)
+        JOIN pg_attribute a ON a.attrelid = i.indrelid AND a.attnum = k.attnum
+      ) = ARRAY['r2_key', 'url_hash']`;
+  if (keyed.length > 0) {
+    return;
+  }
+  await sql`
+    DELETE FROM temporary_uploads old USING temporary_uploads newer
+    WHERE newer.url_hash = old.url_hash AND newer.r2_key = old.r2_key AND newer.id > old.id`;
+  await sql`
+    ALTER TABLE temporary_uploads
+    ADD CONSTRAINT temporary_uploads_url_hash_r2_key_key UNIQUE (url_hash, r2_key)`;
+}

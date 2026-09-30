@@ -707,11 +707,11 @@ export function createHandler({
         throw new AppError('2fa is off.', 'TOTP_OFF', 409);
       }
       await requireSecondFactor(accountId, body.code);
-      return json(
-        { recoveryCodes: await accounts.regenerateRecoveryCodes(accountId) },
-        200,
-        headers
-      );
+      const recoveryCodes = await accounts.regenerateRecoveryCodes(accountId);
+      if (!recoveryCodes) {
+        throw new AppError('2fa is off.', 'TOTP_OFF', 409);
+      }
+      return json({ recoveryCodes }, 200, headers);
     }
     if (method === 'POST' && pathname === '/v1/passkeys/register/options') {
       const accountId = await requireSessionAnd2fa(req);

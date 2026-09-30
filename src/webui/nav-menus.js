@@ -190,6 +190,25 @@ export function menuFor(page, stats, views, issueStates = {}) {
           },
         ],
       };
+    case 'storage':
+      return {
+        open: 'Open storage',
+        groups: [
+          {
+            name: 'Views',
+            items: [
+              { label: 'R2 usage and expiry', page, params: {}, icon: 'list' },
+              { label: 'Stored files by user', page: 'moderation', params: {}, icon: 'user' },
+              {
+                label: 'Limits and lifetimes',
+                page: 'settings',
+                params: { section: 'storage' },
+                icon: 'arrow',
+              },
+            ],
+          },
+        ],
+      };
     case 'settings':
       return {
         open: 'Open settings',

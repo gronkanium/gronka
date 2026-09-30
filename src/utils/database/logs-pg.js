@@ -152,3 +152,11 @@ export async function getLogComponents() {
   const results = await sql`SELECT DISTINCT component FROM logs ORDER BY component`;
   return results.map(r => r.component);
 }
+
+// Newest log line whose message matches a (case-insensitive) regex, in ms, or null.
+export async function lastLogMatching(regex) {
+  const sql = await connection();
+  if (!sql) return null;
+  const [row] = await sql`SELECT MAX(timestamp) AS at FROM logs WHERE message ~* ${regex.source}`;
+  return row?.at ? Number(row.at) : null;
+}

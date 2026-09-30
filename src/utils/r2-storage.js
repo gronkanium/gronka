@@ -38,10 +38,14 @@ const DEFAULT_R2_SOFT_LIMIT_GB = 9;
  * A read failure fails open (never block uploads because a settings/DB read hiccuped).
  * @param {number} incomingBytes
  */
+export async function r2SoftLimitGb() {
+  return parseFloat(await getSetting('r2_soft_limit_gb', String(DEFAULT_R2_SOFT_LIMIT_GB)));
+}
+
 async function assertR2Capacity(incomingBytes) {
   let limitGb = DEFAULT_R2_SOFT_LIMIT_GB;
   try {
-    limitGb = parseFloat(await getSetting('r2_soft_limit_gb', String(DEFAULT_R2_SOFT_LIMIT_GB)));
+    limitGb = await r2SoftLimitGb();
   } catch (error) {
     logger.warn(`Could not read r2_soft_limit_gb, using default: ${error.message}`);
   }

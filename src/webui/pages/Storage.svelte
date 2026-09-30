@@ -1,7 +1,10 @@
 <script>
+  import { SlidersHorizontal, HardDrive, Film, Image, Sparkles } from 'lucide-svelte';
   import { navigate } from '../utils/router.js';
-  import { useHeaderActions } from '../stores/header.js';
-  import { formatBytes, formatRelativeTime, shortId } from '../utils/format.js';
+  import { formatBytes, shortId } from '../utils/format.js';
+  import PageHeader from '../components/PageHeader.svelte';
+  import DataTable from '../components/DataTable.svelte';
+  import Avatar from '../components/Avatar.svelte';
 
   let data = $state(null);
   let local = $state(null);
@@ -28,17 +31,20 @@
   const r2 = $derived(data?.r2);
   const limit = $derived(data?.limitBytes ?? 0);
   const pct = $derived(limit && r2 ? Math.round((r2.bytes / limit) * 100) : null);
-  const level = $derived(pct == null ? '' : pct >= 90 ? 'bad' : pct >= 70 ? 'warn' : 'ok');
-  // Expiry buckets are cumulative; the bar wants each slice on its own.
+  const level = $derived(pct == null ? '' : pct >= 95 ? 'bad' : pct >= 80 ? 'warn' : 'ok');
+  const meterColor = $derived(
+    level === 'bad' ? 'var(--danger)' : level === 'warn' ? 'var(--warning)' : 'var(--accent-strong)'
+  );
+  // Expiry buckets are cumulative; the bar wants each slice on its own, darkest = soonest.
   const slices = $derived.by(() => {
     if (!r2?.bytes) return [];
     const { h1, h6, h24 } = r2.expiring;
     const of = limit || r2.bytes;
     return [
-      { label: 'gone within 1h', bytes: h1, color: 'var(--success)' },
-      { label: 'within 6h', bytes: h6 - h1, color: 'var(--chart-series-1)' },
-      { label: 'within 24h', bytes: h24 - h6, color: 'var(--info)' },
-      { label: 'later', bytes: r2.bytes - h24, color: 'var(--text-dim)' },
+      { label: 'gone within 1h', bytes: h1, opacity: 1 },
+      { label: 'within 6h', bytes: h6 - h1, opacity: 0.7 },
+      { label: 'within 24h', bytes: h24 - h6, opacity: 0.45 },
+      { label: 'later', bytes: r2.bytes - h24, opacity: 0.22 },
     ].map(s => ({ ...s, width: (s.bytes / of) * 100 }));
   });
   const left = ms =>
@@ -53,93 +59,126 @@
   const diskPct = $derived(
     data?.disk ? Math.round((1 - data.disk.free / data.disk.total) * 100) : null
   );
+  const diskLevel = $derived(
+    diskPct == null ? '' : diskPct >= 90 ? 'bad' : diskPct >= 75 ? 'warn' : 'ok'
+  );
+  const ICONS = { video: Film, gif: Sparkles, image: Image };
 
-  useHeaderActions(actions);
+  const FILE_COLUMNS = [
+    { key: 'file', label: 'File' },
+    { key: 'size', label: 'Size', width: '84px', align: 'right' },
+    { key: 'user', label: 'User', width: '120px', sm: false },
+    { key: 'exp', label: 'Expires in', width: '90px', align: 'right' },
+  ];
 </script>
 
-{#snippet actions()}
-  <span class="dim small">refreshes every 30 s</span>
-  <button class="btn sm" onclick={() => navigate('settings', { section: 'storage' })}>
-    Limits and lifetimes
-  </button>
-{/snippet}
+<PageHeader title="Storage" description="What is in R2 now, when it leaves, and the local cache">
+  {#snippet actions()}
+    {#if pct != null}<span class="pill {level}">{pct}% of soft limit</span>{/if}
+    <button class="btn" onclick={() => navigate('settings', { section: 'storage' })}>
+      <SlidersHorizontal size={14} />Limits and lifetimes
+    </button>
+  {/snippet}
+</PageHeader>
 
 {#snippet files(title, note, rows)}
-  <section class="panel tbl" aria-label={title} style="--cols: minmax(0, 1fr) 56px 80px 150px 84px">
-    <div class="ph"><span>{title}</span><span class="meta">{note}</span></div>
-    <div class="tr head">
-      <span>file</span><span>type</span><span class="num">size</span><span>user</span><span
-        class="num">expires in</span
-      >
-    </div>
-    {#each rows as f (f.key)}
-      <div class="tr">
-        <a class="mono small ellipsis" href={f.url} target="_blank" rel="noreferrer" title={f.key}
-          >{name(f.key)}</a
-        >
-        <span class="dim small">{f.type ?? '—'}</span>
-        <span class="num">{f.size ? formatBytes(f.size) : '—'}</span>
+  <DataTable
+    {title}
+    columns={FILE_COLUMNS}
+    {rows}
+    rowKey="key"
+    loading={!r2}
+    empty="nothing stored"
+    href={f => f.url}
+    label={title}
+  >
+    {#snippet header()}<span class="dim">{note}</span>{/snippet}
+    {#snippet row(f)}
+      {@const Icon = ICONS[f.type] ?? Film}
+      <span class="filecell">
+        <span class="ficon"><Icon size={13} /></span>
+        <span class="mono ellipsis" title={f.key}>{name(f.key)}</span>
+      </span>
+      <span class="num strong">{f.size ? formatBytes(f.size) : '—'}</span>
+      <span class="hide-sm">
         {#if f.userId}
-          <a class="mono small ellipsis" href="#/users/{f.userId}">{shortId(f.userId)}</a>
+          <span class="user-cell"
+            ><Avatar id={f.userId} size={18} label="" /><button
+              class="linkish mono id"
+              onclick={e => {
+                e.preventDefault();
+                e.stopPropagation();
+                navigate('user-profile', { userId: f.userId });
+              }}>{shortId(f.userId)}</button
+            ></span
+          >
         {:else}
           <span class="dim">—</span>
         {/if}
-        <span class="num" class:soon={f.expiresAt - now < 3_600_000}>{left(f.expiresAt - now)}</span
-        >
-      </div>
-    {:else}
-      <div class="empty">{r2 ? 'nothing stored' : 'loading…'}</div>
-    {/each}
-  </section>
+      </span>
+      <span class="num" class:warn-text={f.expiresAt - now < 3_600_000}
+        >{left(f.expiresAt - now)}</span
+      >
+    {/snippet}
+  </DataTable>
 {/snippet}
 
 <div class="storage stack">
   {#if failed}
-    <div class="panel pb error-text small">Could not read storage. Retrying.</div>
+    <div class="flash error">Could not read storage. Retrying.</div>
   {/if}
 
+  <section class="kpis" style="--kpi-cols: 4" aria-label="storage numbers">
+    <div class="kpi" class:bad={level === 'bad'} class:warn={level === 'warn'}>
+      <div class="k">R2, live</div>
+      <div class="v">{r2 ? formatBytes(r2.bytes) : '—'}</div>
+      {#if pct != null}<span class="d {level}">{pct}% of {formatBytes(limit)}</span>{/if}
+      <div class="s">{limit ? 'soft limit' : 'no soft limit set'}</div>
+    </div>
+    <div class="kpi">
+      <div class="k">Files</div>
+      <div class="v">{r2?.files?.toLocaleString() ?? '—'}</div>
+      <div class="s">temporary uploads with a live link</div>
+    </div>
+    <div class="kpi">
+      <div class="k">Freed within 1h</div>
+      <div class="v">{r2 ? formatBytes(r2.expiring.h1) : '—'}</div>
+      <div class="s">{r2 ? `${formatBytes(r2.expiring.h24)} within 24h` : ''}</div>
+    </div>
+    <div class="kpi" class:bad={diskLevel === 'bad'} class:warn={diskLevel === 'warn'}>
+      <div class="k">Local disk</div>
+      <div class="v">{data?.disk ? formatBytes(data.disk.free) : '—'}</div>
+      {#if diskPct != null}<span class="d {diskLevel}">{diskPct}% used</span>{/if}
+      <div class="s">{data?.disk ? `free of ${formatBytes(data.disk.total)}` : ''}</div>
+    </div>
+  </section>
+
   <section class="panel" aria-label="R2 usage">
-    <div class="kpis" style="--kpi-cols: 5">
-      <div class="kpi">
-        <div class="k">R2, live</div>
-        <div class="v">
-          {r2 ? formatBytes(r2.bytes) : '—'}
-          {#if pct != null}<span class="d {level}">{pct}%</span>{/if}
-        </div>
-        <div class="s">{limit ? `soft limit ${formatBytes(limit)}` : 'no soft limit set'}</div>
-      </div>
-      <div class="kpi">
-        <div class="k">Files</div>
-        <div class="v">{r2?.files?.toLocaleString() ?? '—'}</div>
-        <div class="s">temporary uploads with a live link</div>
-      </div>
-      <div class="kpi">
-        <div class="k">Freed within 1h</div>
-        <div class="v">{r2 ? formatBytes(r2.expiring.h1) : '—'}</div>
-        <div class="s">{r2 ? `${formatBytes(r2.expiring.h24)} within 24h` : ''}</div>
-      </div>
-      <div class="kpi">
-        <div class="k">Local cache</div>
-        <div class="v">{local?.disk_usage_formatted ?? '—'}</div>
-        <div class="s">
-          {#if local}
-            {local.total_gifs} gifs · {local.total_videos} videos · {local.total_images} images
-          {/if}
-        </div>
-      </div>
-      <div class="kpi">
-        <div class="k">Disk free</div>
-        <div class="v">{data?.disk ? formatBytes(data.disk.free) : '—'}</div>
-        <div class="s" class:error-text={diskPct >= 90}>
-          {data?.disk ? `of ${formatBytes(data.disk.total)}, ${diskPct}% used` : ''}
-        </div>
-      </div>
+    <div class="ph">
+      <span>R2 quota</span>
+      <span class="meta">
+        {#if limit && r2}<span class="dim"
+            >{formatBytes(Math.max(0, limit - r2.bytes))} of headroom</span
+          >{/if}
+      </span>
     </div>
     <div class="pb usage">
-      <div class="bar-track tall">
+      <div class="meter">
+        <div
+          class="meter-fill"
+          style="width:{Math.min(100, pct ?? 0)}%; background:{meterColor}"
+        ></div>
+      </div>
+      <div class="legend">
+        <span class="strong">{r2 ? formatBytes(r2.bytes) : '—'}</span>
+        <span class="dim">used of {limit ? formatBytes(limit) : 'no limit'}</span>
+        <span class="right dim">turns amber at 80%, red at 95%</span>
+      </div>
+      <div class="section-label">By time to expiry</div>
+      <div class="bar-track tall expiry">
         {#each slices as s (s.label)}
           <span
-            style="width: {s.width}%; background: {s.color}"
+            style="width: {s.width}%; background: var(--accent-strong); opacity: {s.opacity}"
             title="{s.label}: {formatBytes(s.bytes)}"
           ></span>
         {/each}
@@ -147,38 +186,31 @@
       <div class="legend">
         {#each slices as s (s.label)}
           <span
-            ><i style="background: {s.color}"></i>{s.label}
+            ><i style="background: var(--accent-strong); opacity: {s.opacity}"></i>{s.label}
             <b class="mono">{formatBytes(s.bytes)}</b></span
           >
         {/each}
-        {#if limit && r2}
-          <span class="right dim">{formatBytes(Math.max(0, limit - r2.bytes))} of headroom</span>
-        {/if}
       </div>
     </div>
   </section>
 
   {#if r2?.deletionFailures.count}
-    <div class="panel pb failures">
-      <span class="dot err"></span>
-      <div class="grow">
+    <div class="flash error">
+      <HardDrive size={14} />
+      <span class="grow stack">
         <b
           >{r2.deletionFailures.count} expired file{r2.deletionFailures.count === 1 ? '' : 's'}
-          could not be deleted from R2.</b
+          could not be deleted from R2. The cleanup job retries them.</b
         >
-        The cleanup job retries them.
         {#if r2.deletionFailures.lastError}
-          <div class="mono small dim ellipsis" title={r2.deletionFailures.lastError}>
-            {r2.deletionFailures.lastError}
-          </div>
+          <span class="mono small" title={r2.deletionFailures.lastError}
+            >{r2.deletionFailures.lastError}</span
+          >
         {/if}
-      </div>
-      <button
-        class="btn sm"
-        onclick={() => navigate('logs', { search: 'r2', level: 'ERROR,WARN' })}
+      </span>
+      <button class="btn sm" onclick={() => navigate('logs', { search: 'r2', level: 'ERROR,WARN' })}
+        >Logs</button
       >
-        Logs
-      </button>
     </div>
   {/if}
 
@@ -191,14 +223,17 @@
     <section class="panel" aria-label="local cache">
       <div class="ph">
         <span>Local cache</span>
-        <span class="meta"
-          >{local.retention_days ? `pruned after ${local.retention_days} days` : ''}</span
-        >
+        <span class="meta">
+          <b>{local.disk_usage_formatted}</b>
+          <span class="dim"
+            >{local.retention_days ? `pruned after ${local.retention_days} days` : ''}</span
+          >
+        </span>
       </div>
-      <div class="kpis" style="--kpi-cols: 3">
-        {#each [['gifs', local.total_gifs, local.gifs_disk_usage_formatted], ['videos', local.total_videos, local.videos_disk_usage_formatted], ['images', local.total_images, local.images_disk_usage_formatted]] as [kind, n, size] (kind)}
-          <div class="kpi">
-            <div class="k">{kind}</div>
+      <div class="pb cache">
+        {#each [['Videos', local.total_videos, local.videos_disk_usage_formatted, Film], ['GIFs', local.total_gifs, local.gifs_disk_usage_formatted, Sparkles], ['Images', local.total_images, local.images_disk_usage_formatted, Image]] as [kind, n, size, Icon] (kind)}
+          <div class="cache-item">
+            <div class="k"><Icon size={13} />{kind}</div>
             <div class="v">{size}</div>
             <div class="s">{n?.toLocaleString()} files</div>
           </div>
@@ -209,35 +244,24 @@
 </div>
 
 <style>
-  .storage {
-    max-width: 1400px;
-    margin: 0 auto;
-  }
-  .small {
-    font-size: 12px;
-  }
-  .d.ok {
-    color: var(--success);
-  }
-  .d.warn {
-    color: var(--warning);
-  }
-  .d.bad {
-    color: var(--danger);
-  }
-  .usage {
-    border-top: 1px solid #1f2126;
-  }
-  .bar-track.tall {
+  .meter {
     height: 10px;
-    border-radius: 5px;
+    border-radius: 999px;
+    background: var(--card-3);
+    overflow: hidden;
+  }
+  .meter-fill {
+    height: 100%;
+    border-radius: 999px;
+    transition: width 0.3s;
   }
   .legend {
-    margin-top: 10px;
+    margin: 10px 0 0;
     display: flex;
     flex-wrap: wrap;
+    align-items: center;
     gap: 6px 18px;
-    font-size: 12px;
+    font-size: var(--fs-sm);
     color: var(--text-muted);
   }
   .legend span {
@@ -251,51 +275,65 @@
     border-radius: 2px;
   }
   .legend b {
-    font-weight: 400;
+    font-weight: 500;
     color: var(--text);
   }
-  .right {
-    margin-left: auto;
+  .usage .section-label {
+    margin: 20px 0 8px;
   }
-  .failures {
+  .expiry > span {
+    border-right: 1px solid var(--card);
+  }
+  .filecell {
     display: flex;
     align-items: center;
-    gap: 12px;
-    font-size: 13px;
-    border-color: var(--danger-border);
+    gap: 8px;
+    min-width: 0;
   }
-  .failures b {
-    color: var(--text-bright);
-    font-weight: 500;
-  }
-  .two {
+  .ficon {
+    width: 22px;
+    height: 22px;
     display: grid;
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-    gap: 16px;
-    align-items: start;
+    place-items: center;
+    border-radius: 6px;
+    background: var(--card-3);
+    color: var(--text-muted);
+    flex-shrink: 0;
   }
-  .tr a {
-    color: var(--text);
-    text-decoration: none;
+  .cache {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: var(--gap);
   }
-  .tr a:hover {
-    color: var(--accent);
+  .cache-item {
+    padding: 14px 16px;
+    border: 1px solid var(--line);
+    border-radius: var(--radius);
+    background: var(--card-2);
   }
-  .soon {
-    color: var(--warning);
+  .cache .k {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: var(--fs-sm);
+    font-weight: 500;
+    color: var(--text-muted);
   }
-  @media (max-width: 1100px) {
-    .two {
-      grid-template-columns: 1fr;
-    }
+  .cache .v {
+    margin-top: 6px;
+    font-size: var(--fs-xl);
+    font-weight: 600;
+    letter-spacing: -0.02em;
+    color: var(--text-bright);
+  }
+  .cache .s {
+    margin-top: 4px;
+    font-size: var(--fs-sm);
+    color: var(--text-dim);
   }
   @media (max-width: 640px) {
-    .tbl {
-      --cols: minmax(0, 1fr) 70px 70px !important;
-    }
-    .tbl .tr > :nth-child(2),
-    .tbl .tr > :nth-child(4) {
-      display: none;
+    .cache {
+      grid-template-columns: 1fr;
     }
   }
 </style>

@@ -167,16 +167,15 @@ function parseIssueStates(value) {
   if (!value || typeof value !== 'object' || Array.isArray(value)) return null;
   const entries = Object.entries(value);
   if (entries.length > 500) return null;
-  const out = {};
-  for (const [key, s] of entries) {
+  const states = entries.map(([key, s]) => {
     if (key.length > 300 || !s || typeof s !== 'object') return null;
     if (s.state === 'muted' && Number.isFinite(s.until))
-      out[key] = { state: 'muted', until: s.until };
-    else if (s.state === 'resolved' && Number.isFinite(s.at))
-      out[key] = { state: 'resolved', at: s.at };
-    else return null;
-  }
-  return out;
+      return [key, { state: 'muted', until: s.until }];
+    if (s.state === 'resolved' && Number.isFinite(s.at))
+      return [key, { state: 'resolved', at: s.at }];
+    return null;
+  });
+  return states.includes(null) ? null : Object.fromEntries(states);
 }
 
 // Get all bot settings (known settings filled with defaults)

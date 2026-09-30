@@ -1,11 +1,10 @@
 import { execFile } from 'child_process';
 import { promisify } from 'util';
 import fs from 'fs/promises';
-import os from 'os';
 import path from 'path';
-import { randomBytes } from 'crypto';
 import { createLogger } from './logger.js';
 import { ValidationError } from './errors.js';
+import { fromPath, tempPath } from './media-file.js';
 import { downloadWithYtdlp, getCookieArgs } from './ytdlp.js';
 
 const logger = createLogger('soundcloud');
@@ -110,60 +109,45 @@ const AUDIO_INPUT_GUARD = [
 
 // An mp3 carrying SoundCloud's title, artist and cover, whatever the audio came from.
 export async function tagAudio(file, track) {
-  const base = path.join(os.tmpdir(), `gronka-sc-${randomBytes(8).toString('hex')}`);
   const ext = path.extname(file.filename ?? '').toLowerCase() || '.m4a';
-  const input = `${base}-in${/^\.[a-z0-9]{1,5}$/.test(ext) ? ext : '.bin'}`;
-  const coverPath = `${base}-cover.jpg`;
-  const output = `${base}-out.mp3`;
+  const input = file.path;
+  const coverPath = await tempPath('.jpg');
+  const output = await tempPath('.mp3');
   const cover = await fetchCover(track.cover);
-  try {
-    await fs.writeFile(input, file.buffer, { flag: 'wx', mode: 0o600 });
-    if (cover) await fs.writeFile(coverPath, cover, { flag: 'wx', mode: 0o600 });
-    const meta = [
-      ['title', track.title],
-      ['artist', track.artist],
-      ['genre', track.genre],
-      ['date', track.year],
-    ].flatMap(([key, value]) => (value ? ['-metadata', `${key}=${value}`] : []));
-    await execFileAsync(
-      'ffmpeg',
-      [
-        '-v',
-        'error',
-        ...AUDIO_INPUT_GUARD,
-        '-i',
-        input,
-        ...(cover ? [...AUDIO_INPUT_GUARD, '-i', coverPath] : []),
-        '-map',
-        '0:a:0',
-        ...(cover ? ['-map', '1:0', '-c:v', 'copy', '-disposition:v', 'attached_pic'] : []),
-        ...(ext === '.mp3' ? ['-c:a', 'copy'] : ['-c:a', 'libmp3lame', '-q:a', '2']),
-        '-map_metadata',
-        '-1',
-        ...meta,
-        ...(cover
-          ? ['-metadata:s:v', 'title=Album cover', '-metadata:s:v', 'comment=Cover (front)']
-          : []),
-        '-id3v2_version',
-        '3',
-        output,
-      ],
-      { timeout: 120_000 }
-    );
-    const buffer = await fs.readFile(output);
-    const name = `${track.artist} - ${track.title}`.replace(/[\\/:*?"<>|]+/g, '').slice(0, 150);
-    return {
-      buffer,
-      size: buffer.length,
-      contentType: 'audio/mpeg',
-      filename: `${name}.mp3`,
-      audioReady: true,
-    };
-  } finally {
-    await Promise.all(
-      [input, coverPath, output].map(p => fs.rm(p, { force: true }).catch(() => {}))
-    );
-  }
+  if (cover) await fs.writeFile(coverPath, cover, { flag: 'wx', mode: 0o600 });
+  const meta = [
+    ['title', track.title],
+    ['artist', track.artist],
+    ['genre', track.genre],
+    ['date', track.year],
+  ].flatMap(([key, value]) => (value ? ['-metadata', `${key}=${value}`] : []));
+  await execFileAsync(
+    'ffmpeg',
+    [
+      '-v',
+      'error',
+      ...AUDIO_INPUT_GUARD,
+      '-i',
+      input,
+      ...(cover ? [...AUDIO_INPUT_GUARD, '-i', coverPath] : []),
+      '-map',
+      '0:a:0',
+      ...(cover ? ['-map', '1:0', '-c:v', 'copy', '-disposition:v', 'attached_pic'] : []),
+      ...(ext === '.mp3' ? ['-c:a', 'copy'] : ['-c:a', 'libmp3lame', '-q:a', '2']),
+      '-map_metadata',
+      '-1',
+      ...meta,
+      ...(cover
+        ? ['-metadata:s:v', 'title=Album cover', '-metadata:s:v', 'comment=Cover (front)']
+        : []),
+      '-id3v2_version',
+      '3',
+      output,
+    ],
+    { timeout: 120_000 }
+  );
+  const name = `${track.artist} - ${track.title}`.replace(/[\\/:*?"<>|]+/g, '').slice(0, 150);
+  return fromPath(output, { contentType: 'audio/mpeg', filename: `${name}.mp3`, audioReady: true });
 }
 
 export async function soundcloudViaYoutube(

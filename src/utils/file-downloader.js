@@ -8,7 +8,7 @@ import { isSocialMediaUrl, downloadFromSocialMedia } from './cobalt.js';
 import { isInstagramStoryUrl, hasInstagramSession, downloadFromInstagram } from './instagram.js';
 import { isDiscordCdnUrl, getRefreshedAttachmentURL, getRequestHeaders } from './discord-cdn.js';
 import { sanitizeFilename } from './validation.js';
-import { hashBytesHex } from './hashing.js';
+import { fetchToFile, withExtension } from './media-file.js';
 import {
   BLOCKED_DESTINATION_MESSAGE,
   isSsrfBlockedError,
@@ -44,7 +44,7 @@ export function isDirectMediaUrl(url) {
   }
 }
 
-export function isMediaResponse(contentType, buffer) {
+export function isMediaResponse(contentType, head) {
   const type = (contentType || '').toLowerCase();
   if (type.startsWith('video/') || type.startsWith('image/')) {
     return true;
@@ -53,11 +53,10 @@ export function isMediaResponse(contentType, buffer) {
   if (type && !type.startsWith('application/octet-stream') && !type.startsWith('binary/')) {
     return false;
   }
-  if (!buffer || buffer.length < 12) {
+  if (!head || head.length < 12) {
     return false;
   }
-  const head = buffer.subarray(0, 12);
-  const latin = head.toString('latin1');
+  const latin = head.subarray(0, 12).toString('latin1');
   return (
     latin.startsWith('GIF87a') ||
     latin.startsWith('GIF89a') ||
@@ -72,7 +71,7 @@ export function isMediaResponse(contentType, buffer) {
 // Reuses /convert's guarded fetch rather than adding a second one.
 export async function downloadDirectMedia(url, isAdminUser = false, client = null, options = {}) {
   const fileData = await downloadFileFromUrl(url, isAdminUser, client, options);
-  if (!isMediaResponse(fileData.contentType, fileData.buffer)) {
+  if (!isMediaResponse(fileData.contentType, fileData.head)) {
     logger.warn(
       `Direct media URL returned non-media content: ${url} (content-type: ${fileData.contentType || 'none'})`
     );
@@ -81,22 +80,9 @@ export async function downloadDirectMedia(url, isAdminUser = false, client = nul
   return fileData;
 }
 
-/**
- * True when a download failed because the file was over the size cap.
- *
- * A server can say so with a 413, but axios also aborts on its own once `maxContentLength` is
- * exceeded, and that abort is client-side, so the error carries no `response`. Checking only
- * for a 413 therefore missed every locally-aborted oversize download and sent it down the
- * generic "may be unavailable" path, telling users a file was missing when it was just too big.
- *
- * @param {Error} error - Error thrown by axios
- * @returns {boolean} True when the failure was a size-cap overage
- */
+// A 413, or our own cap tripping mid-stream.
 function isTooLargeError(error) {
-  return (
-    error?.response?.status === 413 ||
-    /maxContentLength size of \d+ exceeded/i.test(error?.message || '')
-  );
+  return error?.response?.status === 413 || error?.code === 'TOO_LARGE';
 }
 
 const {
@@ -105,99 +91,85 @@ const {
   cobaltApiUrl: COBALT_API_URL,
   cobaltEnabled: COBALT_ENABLED,
 } = botConfig;
+const MAX_ANY_SIZE = Math.max(MAX_VIDEO_SIZE, MAX_IMAGE_SIZE);
+const mb = bytes => bytes / (1024 * 1024);
 
-export async function downloadVideo(url, isAdminUser = false) {
-  // Validate URL to prevent SSRF
+function guardedFetch(url, maxSize, userAgent = null) {
+  return fetchToFile(
+    url,
+    {
+      ...ssrfGuardedRequest(),
+      timeout: 60000,
+      maxRedirects: 5,
+      validateStatus: status => status >= 200 && status < 400,
+      headers: userAgent
+        ? { ...getRequestHeaders(), 'User-Agent': userAgent }
+        : getRequestHeaders(),
+    },
+    { maxSize }
+  );
+}
+
+function filenameFor(file, url) {
+  const match = (file.headers['content-disposition'] || '').match(
+    /filename[^;=\n]*=((['"]).*?\2|[^;\n]*)/
+  );
+  if (match?.[1]) return sanitizeFilename(match[1].replace(/['"]/g, ''));
+  try {
+    const name = path.basename(new URL(url).pathname);
+    if (name && name !== '/') return sanitizeFilename(name);
+  } catch {
+    // keep the default
+  }
+  return 'file';
+}
+
+async function downloadCapped(url, isAdminUser, maxSize, kind) {
   const urlValidation = validateUrl(url);
   if (!urlValidation.valid) {
     throw new ValidationError(urlValidation.error);
   }
-
   try {
-    const response = await axios.get(url, {
-      ...ssrfGuardedRequest(),
-      responseType: 'arraybuffer',
-      timeout: 60000, // 60 second timeout
-      maxContentLength: isAdminUser ? Infinity : MAX_VIDEO_SIZE,
-      maxRedirects: 5,
-      headers: getRequestHeaders(),
-    });
-    const buffer = response.data;
-
-    // Validate buffer size (axios maxContentLength may not work if server doesn't send Content-Length header)
-    if (!isAdminUser && buffer.length > MAX_VIDEO_SIZE) {
-      throw new ValidationError(
-        `video file is too large (max ${MAX_VIDEO_SIZE / (1024 * 1024)}mb)`
-      );
-    }
-
-    return buffer;
+    const file = await guardedFetch(url, isAdminUser ? Infinity : maxSize);
+    return await withExtension({ ...file, filename: filenameFor(file, url) });
   } catch (error) {
     if (isSsrfBlockedError(error)) {
       throw new ValidationError(BLOCKED_DESTINATION_MESSAGE);
     }
     if (isTooLargeError(error) && !isAdminUser) {
-      throw new ValidationError(
-        `video file is too large (max ${MAX_VIDEO_SIZE / (1024 * 1024)}mb)`
-      );
+      throw new ValidationError(`${kind} file is too large (max ${mb(maxSize)}mb)`);
     }
-    logger.warn(`Video download failed: ${error.message}`);
-    throw new NetworkError('failed to download the video. it may be unavailable.');
+    logger.warn(`${kind} download failed: ${error.message}`);
+    throw new NetworkError(`failed to download the ${kind}. it may be unavailable.`);
   }
 }
 
-export async function downloadImage(url, isAdminUser = false) {
-  // Validate URL to prevent SSRF
-  const urlValidation = validateUrl(url);
-  if (!urlValidation.valid) {
-    throw new ValidationError(urlValidation.error);
+export function downloadVideo(url, isAdminUser = false) {
+  return downloadCapped(url, isAdminUser, MAX_VIDEO_SIZE, 'video');
+}
+
+export function downloadImage(url, isAdminUser = false) {
+  return downloadCapped(url, isAdminUser, MAX_IMAGE_SIZE, 'image');
+}
+
+async function fetchAnyFile(url, isAdminUser, userAgent) {
+  const file = await guardedFetch(url, isAdminUser ? Infinity : MAX_ANY_SIZE, userAgent);
+  const contentType = file.headers['content-type'] || '';
+  const isImage =
+    !contentType.includes('video') &&
+    (contentType.includes('image') || /\.(jpg|jpeg|png|gif|webp|bmp|svg)$/i.test(url));
+  if (!isAdminUser && isImage && file.size > MAX_IMAGE_SIZE) {
+    throw new ValidationError(`file is too large (max ${mb(MAX_IMAGE_SIZE)}mb for images)`);
   }
-
-  try {
-    const response = await axios.get(url, {
-      ...ssrfGuardedRequest(),
-      responseType: 'arraybuffer',
-      timeout: 60000, // 60 second timeout
-      maxContentLength: isAdminUser ? Infinity : MAX_IMAGE_SIZE,
-      maxRedirects: 5,
-      headers: getRequestHeaders(),
-    });
-    const buffer = response.data;
-
-    // Validate buffer size (axios maxContentLength may not work if server doesn't send Content-Length header)
-    if (!isAdminUser && buffer.length > MAX_IMAGE_SIZE) {
-      throw new ValidationError(
-        `image file is too large (max ${MAX_IMAGE_SIZE / (1024 * 1024)}mb)`
-      );
-    }
-
-    return buffer;
-  } catch (error) {
-    if (isSsrfBlockedError(error)) {
-      throw new ValidationError(BLOCKED_DESTINATION_MESSAGE);
-    }
-    if (isTooLargeError(error) && !isAdminUser) {
-      throw new ValidationError(
-        `image file is too large (max ${MAX_IMAGE_SIZE / (1024 * 1024)}mb)`
-      );
-    }
-    logger.warn(`Image download failed: ${error.message}`);
-    throw new NetworkError('failed to download the image. it may be unavailable.');
-  }
+  return withExtension({ ...file, contentType, filename: filenameFor(file, url) });
 }
 
 /**
- * Download file from URL and detect content type
- * @param {string} url - File URL
- * @param {boolean} isAdminUser - Whether the user is an admin (allows larger files)
- * @param {Client} [client] - Optional Discord client for refreshing expired URLs
- * @param {{userAgent?: string}} [options] - Optional overrides. `userAgent` replaces the
- *   default browser User-Agent for hosts that block it (e.g. danbooru's CDN 403s the
- *   Chrome UA but accepts a descriptive one).
- * @returns {Promise<{buffer: Buffer, contentType: string, size: number, filename: string}>} File data and metadata
+ * Download file from URL to a job temp file and detect content type
+ * @param {{userAgent?: string}} [options] - `userAgent` replaces the default browser UA for hosts
+ *   that block it (danbooru's CDN 403s the Chrome UA but accepts a descriptive one).
  */
 export async function downloadFileFromUrl(url, isAdminUser = false, client = null, options = {}) {
-  // Validate URL to prevent SSRF
   const urlValidation = validateUrl(url);
   if (!urlValidation.valid) {
     throw new ValidationError(urlValidation.error);
@@ -216,7 +188,7 @@ export async function downloadFileFromUrl(url, isAdminUser = false, client = nul
   }
 
   if (isMegaUrl(actualUrl)) {
-    return downloadFromMega(actualUrl, isAdminUser, Math.max(MAX_VIDEO_SIZE, MAX_IMAGE_SIZE));
+    return downloadFromMega(actualUrl, isAdminUser, MAX_ANY_SIZE);
   }
 
   if (isInstagramStoryUrl(actualUrl) && hasInstagramSession()) {
@@ -234,89 +206,19 @@ export async function downloadFileFromUrl(url, isAdminUser = false, client = nul
       logger.warn(
         `Cobalt download failed, falling back to direct download: ${cobaltError.message}`
       );
-      // Fall through to direct download
     }
   }
 
   try {
-    const response = await axios.get(actualUrl, {
-      ...ssrfGuardedRequest(),
-      responseType: 'arraybuffer',
-      timeout: 60000, // 60 second timeout
-      maxContentLength: isAdminUser ? Infinity : Math.max(MAX_VIDEO_SIZE, MAX_IMAGE_SIZE),
-      maxRedirects: 5,
-      validateStatus: status => status >= 200 && status < 400,
-      headers: options.userAgent
-        ? { ...getRequestHeaders(), 'User-Agent': options.userAgent }
-        : getRequestHeaders(),
-    });
-
-    const buffer = response.data;
-
-    // Validate buffer size (axios maxContentLength may not work if server doesn't send Content-Length header)
-    const contentType = response.headers['content-type'] || '';
-    const isVideo =
-      contentType.startsWith('video/') ||
-      contentType.includes('video') ||
-      /\.(mp4|webm|mov|avi|mkv|flv|wmv|m4v)$/i.test(url);
-    const isImage =
-      contentType.startsWith('image/') ||
-      contentType.includes('image') ||
-      /\.(jpg|jpeg|png|gif|webp|bmp|svg)$/i.test(url);
-
-    if (!isAdminUser) {
-      if (isVideo && buffer.length > MAX_VIDEO_SIZE) {
-        throw new ValidationError(
-          `file is too large (max ${MAX_VIDEO_SIZE / (1024 * 1024)}mb for videos)`
-        );
-      }
-      if (isImage && buffer.length > MAX_IMAGE_SIZE) {
-        throw new ValidationError(
-          `file is too large (max ${MAX_IMAGE_SIZE / (1024 * 1024)}mb for images)`
-        );
-      }
-      // For unknown types, use the larger limit (video limit)
-      if (!isVideo && !isImage && buffer.length > Math.max(MAX_VIDEO_SIZE, MAX_IMAGE_SIZE)) {
-        throw new ValidationError(
-          `file is too large (max ${Math.max(MAX_VIDEO_SIZE, MAX_IMAGE_SIZE) / (1024 * 1024)}mb)`
-        );
-      }
-    }
-
-    const contentDisposition = response.headers['content-disposition'] || '';
-
-    let filename = 'file';
-    if (contentDisposition) {
-      const filenameMatch = contentDisposition.match(/filename[^;=\n]*=((['"]).*?\2|[^;\n]*)/);
-      if (filenameMatch && filenameMatch[1]) {
-        filename = sanitizeFilename(filenameMatch[1].replace(/['"]/g, ''));
-      }
-    }
-    if (filename === 'file') {
-      try {
-        const urlPath = new URL(url).pathname;
-        const urlFilename = path.basename(urlPath);
-        if (urlFilename && urlFilename !== '/') {
-          filename = sanitizeFilename(urlFilename);
-        }
-      } catch {
-        // Invalid URL, keep default
-      }
-    }
-
-    return {
-      buffer,
-      contentType,
-      size: buffer.length,
-      filename,
-    };
+    return await fetchAnyFile(actualUrl, isAdminUser, options.userAgent);
   } catch (error) {
+    if (error instanceof ValidationError) throw error;
     if (isSsrfBlockedError(error)) {
       throw new ValidationError(BLOCKED_DESTINATION_MESSAGE);
     }
     if (isTooLargeError(error) && !isAdminUser) {
       throw new ValidationError(
-        `file is too large (max ${MAX_VIDEO_SIZE / (1024 * 1024)}mb for videos, ${MAX_IMAGE_SIZE / (1024 * 1024)}mb for images)`
+        `file is too large (max ${mb(MAX_VIDEO_SIZE)}mb for videos, ${mb(MAX_IMAGE_SIZE)}mb for images)`
       );
     }
     if (error.response?.status === 404) {
@@ -330,85 +232,16 @@ export async function downloadFileFromUrl(url, isAdminUser = false, client = nul
     if (error.response?.status === 401) {
       throw new NetworkError('authentication required to access the file URL');
     }
-    // Handle 500 errors for Discord CDN URLs - try refreshing if we haven't already
     if (error.response?.status === 500 && isDiscordCdnUrl(url) && client && actualUrl === url) {
       try {
         logger.info(`Got 500 error, attempting to refresh Discord URL`);
         const refreshedUrl = await getRefreshedAttachmentURL(client, url);
         if (refreshedUrl !== url) {
           logger.info(`Retrying download with refreshed URL`);
-          const retryResponse = await axios.get(refreshedUrl, {
-            ...ssrfGuardedRequest(),
-            responseType: 'arraybuffer',
-            timeout: 60000,
-            maxContentLength: isAdminUser ? Infinity : Math.max(MAX_VIDEO_SIZE, MAX_IMAGE_SIZE),
-            maxRedirects: 5,
-            validateStatus: status => status >= 200 && status < 400,
-            headers: getRequestHeaders(),
-          });
-          const buffer = retryResponse.data;
-
-          // Validate buffer size (axios maxContentLength may not work if server doesn't send Content-Length header)
-          const contentType = retryResponse.headers['content-type'] || '';
-          const isVideo =
-            contentType.startsWith('video/') ||
-            contentType.includes('video') ||
-            /\.(mp4|webm|mov|avi|mkv|flv|wmv|m4v)$/i.test(refreshedUrl);
-          const isImage =
-            contentType.startsWith('image/') ||
-            contentType.includes('image') ||
-            /\.(jpg|jpeg|png|gif|webp|bmp|svg)$/i.test(refreshedUrl);
-
-          if (!isAdminUser) {
-            if (isVideo && buffer.length > MAX_VIDEO_SIZE) {
-              throw new ValidationError(
-                `file is too large (max ${MAX_VIDEO_SIZE / (1024 * 1024)}mb for videos)`
-              );
-            }
-            if (isImage && buffer.length > MAX_IMAGE_SIZE) {
-              throw new ValidationError(
-                `file is too large (max ${MAX_IMAGE_SIZE / (1024 * 1024)}mb for images)`
-              );
-            }
-            // For unknown types, use the larger limit (video limit)
-            if (!isVideo && !isImage && buffer.length > Math.max(MAX_VIDEO_SIZE, MAX_IMAGE_SIZE)) {
-              throw new ValidationError(
-                `file is too large (max ${Math.max(MAX_VIDEO_SIZE, MAX_IMAGE_SIZE) / (1024 * 1024)}mb)`
-              );
-            }
-          }
-
-          const contentDisposition = retryResponse.headers['content-disposition'] || '';
-
-          let filename = 'file';
-          if (contentDisposition) {
-            const filenameMatch = contentDisposition.match(
-              /filename[^;=\n]*=((['"]).*?\2|[^;\n]*)/
-            );
-            if (filenameMatch && filenameMatch[1]) {
-              filename = sanitizeFilename(filenameMatch[1].replace(/['"]/g, ''));
-            }
-          }
-          if (filename === 'file') {
-            try {
-              const urlPath = new URL(refreshedUrl).pathname;
-              const urlFilename = path.basename(urlPath);
-              if (urlFilename && urlFilename !== '/') {
-                filename = sanitizeFilename(urlFilename);
-              }
-            } catch {
-              // Invalid URL, keep default
-            }
-          }
-
-          return {
-            buffer,
-            contentType,
-            size: buffer.length,
-            filename,
-          };
+          return await fetchAnyFile(refreshedUrl, isAdminUser);
         }
       } catch (refreshError) {
+        if (refreshError instanceof ValidationError) throw refreshError;
         logger.warn(`Failed to refresh and retry Discord URL: ${refreshError.message}`);
       }
       throw new NetworkError(
@@ -526,8 +359,4 @@ export async function parseTenorUrl(url) {
     logger.warn(`Tenor URL parse failed: ${error.message}`);
     throw new NetworkError('failed to parse the tenor url.');
   }
-}
-
-export function generateHash(buffer) {
-  return hashBytesHex(buffer);
 }

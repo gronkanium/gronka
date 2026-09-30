@@ -1,16 +1,12 @@
-const CRC_TABLE = new Uint32Array(256);
-for (let i = 0; i < 256; i++) {
-  let value = i;
-  for (let bit = 0; bit < 8; bit++) {
-    value = value & 1 ? 0xedb88320 ^ (value >>> 1) : value >>> 1;
-  }
-  CRC_TABLE[i] = value >>> 0;
-}
+import fs from 'node:fs';
+import fsp from 'node:fs/promises';
+import { crc32 } from 'node:zlib';
+import { fromPath, tempPath } from './media-file.js';
 
-function crc32(buffer) {
-  let value = 0xffffffff;
-  for (const byte of buffer) value = CRC_TABLE[(value ^ byte) & 0xff] ^ (value >>> 8);
-  return (value ^ 0xffffffff) >>> 0;
+async function fileCrc(file) {
+  let value = 0;
+  for await (const chunk of fs.createReadStream(file)) value = crc32(chunk, value);
+  return value;
 }
 
 function u16(value) {
@@ -48,63 +44,73 @@ function zipEntryName(filename, index, names) {
   return name || `file-${index + 1}`;
 }
 
-export function createZip(files) {
-  const local = [];
+// Stored (uncompressed) zip of media files, written straight to a temp file.
+export async function writeZip(files, filename = 'archive.zip') {
+  const out = await tempPath('.zip');
+  const handle = await fsp.open(out, 'wx', 0o600);
   const central = [];
   const names = new Set();
   let offset = 0;
-  for (const [index, file] of files.entries()) {
-    const name = Buffer.from(zipEntryName(file.filename, index, names));
-    const checksum = crc32(file.buffer);
-    const header = Buffer.concat([
-      u32(0x04034b50),
-      u16(20),
-      u16(0),
-      u16(0),
-      u16(0),
-      u16(0),
-      u32(checksum),
-      u32(file.buffer.length),
-      u32(file.buffer.length),
-      u16(name.length),
-      u16(0),
-      name,
-    ]);
-    local.push(header, file.buffer);
-    central.push(
-      Buffer.concat([
-        u32(0x02014b50),
-        u16(20),
+  try {
+    for (const [index, file] of files.entries()) {
+      const name = Buffer.from(zipEntryName(file.filename, index, names));
+      const checksum = await fileCrc(file.path);
+      const header = Buffer.concat([
+        u32(0x04034b50),
         u16(20),
         u16(0),
         u16(0),
         u16(0),
         u16(0),
         u32(checksum),
-        u32(file.buffer.length),
-        u32(file.buffer.length),
+        u32(file.size),
+        u32(file.size),
         u16(name.length),
         u16(0),
-        u16(0),
-        u16(0),
-        u16(0),
-        u32(0),
-        u32(offset),
         name,
+      ]);
+      await handle.write(header);
+      for await (const chunk of fs.createReadStream(file.path)) await handle.write(chunk);
+      central.push(
+        Buffer.concat([
+          u32(0x02014b50),
+          u16(20),
+          u16(20),
+          u16(0),
+          u16(0),
+          u16(0),
+          u16(0),
+          u32(checksum),
+          u32(file.size),
+          u32(file.size),
+          u16(name.length),
+          u16(0),
+          u16(0),
+          u16(0),
+          u16(0),
+          u32(0),
+          u32(offset),
+          name,
+        ])
+      );
+      offset += header.length + file.size;
+    }
+    const centralBuffer = Buffer.concat(central);
+    await handle.write(centralBuffer);
+    await handle.write(
+      Buffer.concat([
+        u32(0x06054b50),
+        u16(0),
+        u16(0),
+        u16(files.length),
+        u16(files.length),
+        u32(centralBuffer.length),
+        u32(offset),
+        u16(0),
       ])
     );
-    offset += header.length + file.buffer.length;
+  } finally {
+    await handle.close();
   }
-  const centralBuffer = Buffer.concat(central);
-  const end = Buffer.concat([
-    u32(0x06054b50),
-    u16(0),
-    u16(0),
-    u16(files.length),
-    u16(files.length),
-    u32(centralBuffer.length),
-    u32(offset),
-    u16(0),
-  ]);
-  return Buffer.concat([...local, centralBuffer, end]);
+  return fromPath(out, { archive: true, contentType: 'application/zip', filename });
 }

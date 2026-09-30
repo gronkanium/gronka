@@ -5,6 +5,7 @@ import {
   GetObjectCommand,
   DeleteObjectCommand,
 } from '@aws-sdk/client-s3';
+import fs from 'node:fs';
 import { Upload } from '@aws-sdk/lib-storage';
 import { createLogger } from './logger.js';
 // Import from leaf DB modules (not the ./database.js barrel) to avoid an import cycle:
@@ -12,6 +13,7 @@ import { createLogger } from './logger.js';
 import { getLiveBytes } from './database/temporary-uploads-pg.js';
 import { getSetting } from './database/settings-pg.js';
 import { NetworkError, ValidationError } from './errors.js';
+import { writeStream } from './media-file.js';
 
 const logger = createLogger('r2-storage');
 
@@ -93,23 +95,8 @@ function getR2Client(config) {
   return initializeR2Client(config);
 }
 
-/**
- * Upload a file to R2
- * @param {Buffer} buffer - File buffer to upload
- * @param {string} key - R2 object key (path in bucket)
- * @param {string} contentType - Content type (MIME type)
- * @param {Object} config - R2 configuration
- * @param {Object} [metadata={}] - Optional metadata to attach to the object
- * @returns {Promise<string>} Public URL of uploaded file
- */
-export async function uploadToR2(
-  buffer,
-  key,
-  contentType,
-  config,
-  metadata = {},
-  extraParams = {}
-) {
+// Streams a media file ({path, size}) to R2 as a multipart upload; returns its public URL.
+export async function uploadToR2(file, key, contentType, config, metadata = {}, extraParams = {}) {
   const client = getR2Client(config);
   const { bucketName, publicDomain } = config;
 
@@ -122,20 +109,20 @@ export async function uploadToR2(
   }
 
   // Reject before writing if this upload would push live storage past the soft budget.
-  await assertR2Capacity(buffer.length);
+  await assertR2Capacity(file.size);
 
   try {
     logger.info(
-      `Uploading to R2: ${key} (${contentType}, ${(buffer.length / (1024 * 1024)).toFixed(2)}MB) to bucket: ${bucketName}`
+      `Uploading to R2: ${key} (${contentType}, ${(file.size / (1024 * 1024)).toFixed(2)}MB) to bucket: ${bucketName}`
     );
 
-    // Use Upload for multipart uploads (better for large files)
     const upload = new Upload({
       client,
       params: {
         Bucket: bucketName,
         Key: key,
-        Body: buffer,
+        Body: fs.createReadStream(file.path),
+        ContentLength: file.size,
         ContentType: contentType,
         Metadata: metadata,
         CacheControl: 'public, max-age=604800, immutable',
@@ -150,7 +137,7 @@ export async function uploadToR2(
         budgetTimer = setTimeout(() => {
           upload.abort().catch(() => {});
           reject(new NetworkError('could not upload this file right now, try again shortly.'));
-        }, uploadBudgetMs(buffer.length));
+        }, uploadBudgetMs(file.size));
       }),
     ]).finally(() => clearTimeout(budgetTimer));
 
@@ -258,11 +245,11 @@ export function isR2Configured(config) {
   );
 }
 
-export async function uploadMediaToR2(type, buffer, hash, extension, config, metadata = {}) {
+export async function uploadMediaToR2(type, file, hash, extension, config, metadata = {}) {
   const key = getR2KeyFromHash(hash, type, extension);
   const contentType =
     CONTENT_TYPES[key.slice(key.lastIndexOf('.')).toLowerCase()] ?? FALLBACK_CONTENT_TYPES[type];
-  return await uploadToR2(buffer, key, contentType, config, metadata);
+  return await uploadToR2(file, key, contentType, config, metadata);
 }
 
 export async function mediaExistsInR2(type, hash, extension, config) {
@@ -286,15 +273,9 @@ export async function downloadGifFromR2(hash, config) {
     });
 
     const response = await client.send(command);
-
-    const chunks = [];
-    for await (const chunk of response.Body) {
-      chunks.push(chunk);
-    }
-    const buffer = Buffer.concat(chunks);
-
-    logger.info(`Downloaded GIF from R2: ${key} (${(buffer.length / (1024 * 1024)).toFixed(2)}MB)`);
-    return buffer;
+    const file = await writeStream(response.Body, { ext: '.gif' });
+    logger.info(`Downloaded GIF from R2: ${key} (${(file.size / (1024 * 1024)).toFixed(2)}MB)`);
+    return { ...file, contentType: 'image/gif', filename: `${safeHash}.gif` };
   } catch (error) {
     logger.error(`Failed to download GIF from R2 (${key}):`, error.message);
     throw error;

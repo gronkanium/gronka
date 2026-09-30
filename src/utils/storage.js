@@ -23,8 +23,8 @@ const logger = createLogger('storage');
 
 // The caller owns the limit: it comes from interaction.attachmentSizeLimit via
 // shared/attachment-limit.js, so this file must not keep a second copy of it.
-function pickUploadMethod(buffer, discordLimit) {
-  return buffer.length <= discordLimit ? 'discord' : 'r2';
+function pickUploadMethod(size, discordLimit) {
+  return size <= discordLimit ? 'discord' : 'r2';
 }
 
 // Stats cache: Map<storagePath, {stats, timestamp}>
@@ -205,19 +205,19 @@ function getStoragePath(storagePath) {
  * @param {Buffer} [buffer] - File contents; when passed, its magic bytes override both signals
  * @returns {'gif'|'video'|'image'} File type
  */
-export function detectFileType(extension, contentType = '', buffer = null) {
+export function detectFileType(extension, contentType = '', head = null) {
   const ext = extension.toLowerCase();
 
   // Magic bytes beat both other signals: they describe the file we actually have, whereas the
   // extension and the content-type are both claims by the source. Some sources serve real GIFs
   // under a video/* content-type, and trusting that put genuine gifs behind the videos/ prefix.
-  if (buffer && buffer.length >= 6) {
-    const magic = buffer.subarray(0, 6).toString('latin1');
+  if (head && head.length >= 6) {
+    const magic = head.subarray(0, 6).toString('latin1');
     if (magic === 'GIF87a' || magic === 'GIF89a') {
       return 'gif';
     }
     // ISO-BMFF ('ftyp' at offset 4) covers mp4/mov/m4v, an mp4 named .gif lands here.
-    if (buffer.length >= 12 && buffer.subarray(4, 8).toString('latin1') === 'ftyp') {
+    if (head.length >= 12 && head.subarray(4, 8).toString('latin1') === 'ftyp') {
       return 'video';
     }
   }
@@ -303,18 +303,18 @@ export async function mediaExists(type, hash, extension, storagePath) {
   }
 }
 
-// Returns {url, method, buffer}: url is an R2 URL when uploaded there, else the local path.
+// Returns {url, method}: url is an R2 URL when uploaded there, else the local path.
 export async function saveMedia(
   type,
-  buffer,
+  file,
   hash,
   extension,
   storagePath,
   metadata = {},
   discordLimit = botConfig.discordSizeLimit
 ) {
-  const method = pickUploadMethod(buffer, discordLimit);
-  const sizeMb = (buffer.length / (1024 * 1024)).toFixed(2);
+  const method = pickUploadMethod(file.size, discordLimit);
+  const sizeMb = (file.size / (1024 * 1024)).toFixed(2);
 
   if (method === 'r2' && isR2Configured(r2Config)) {
     try {
@@ -322,14 +322,14 @@ export async function saveMedia(
       if (await fileExistsInR2(key, r2Config)) {
         const publicUrl = getR2PublicUrl(key, r2Config);
         logger.info(`${type} already exists in R2: ${publicUrl}`);
-        return { url: publicUrl, method, buffer };
+        return { url: publicUrl, method };
       }
       logger.info(`Uploading ${type} to R2 (hash: ${hash.substring(0, 8)}..., size: ${sizeMb}MB)`);
-      const publicUrl = await uploadMediaToR2(type, buffer, hash, extension, r2Config, metadata);
+      const publicUrl = await uploadMediaToR2(type, file, hash, extension, r2Config, metadata);
       logger.info(`Saved ${type} to R2: ${publicUrl} (size: ${sizeMb}MB)`);
-      incrementR2UsageCache(buffer.length);
+      incrementR2UsageCache(file.size);
       invalidateStatsCache(storagePath);
-      return { url: publicUrl, method, buffer };
+      return { url: publicUrl, method };
     } catch (error) {
       logger.error(`Failed to upload ${type} to R2, falling back to local storage:`, error);
     }
@@ -337,27 +337,10 @@ export async function saveMedia(
 
   const filePath = mediaPath(type, hash, extension, storagePath);
   await fs.mkdir(path.dirname(filePath), { recursive: true });
-  await fs.writeFile(filePath, buffer);
+  await fs.copyFile(file.path, filePath);
   logger.debug(`Saved ${type}: ${filePath} (size: ${sizeMb}MB)`);
   invalidateStatsCache(storagePath);
-  return { url: filePath, method, buffer };
-}
-
-export async function cleanupTempFiles(tempFiles) {
-  logger.debug(`Cleaning up ${tempFiles.length} temporary files`);
-  const deletePromises = tempFiles.map(async filePath => {
-    try {
-      await fs.unlink(filePath);
-      logger.debug(`Deleted temp file: ${filePath}`);
-    } catch (error) {
-      // Ignore errors if file doesn't exist
-      if (error.code !== 'ENOENT') {
-        logger.error(`Failed to delete temp file ${filePath}:`, error.message);
-      }
-    }
-  });
-
-  await Promise.all(deletePromises);
+  return { url: filePath, method };
 }
 
 export function formatFileSize(bytes) {

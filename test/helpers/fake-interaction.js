@@ -1,3 +1,5 @@
+import fs from 'node:fs';
+
 /**
  * Minimal in-process stand-in for a discord.js ChatInputCommandInteraction, enough to drive the
  * command lifecycle (runMediaCommand + interaction-helpers) without a live Discord connection.
@@ -17,6 +19,19 @@ export function createFakeInteraction(opts = {}) {
   const { userId = 'e2e-user', tag = 'e2e#0001', deferred = true, messageAttachments = [] } = opts;
 
   const calls = { reply: [], editReply: [], deferReply: [], followUp: [] };
+
+  // discord.js reads a path attachment at send time; do the same before the job dir is removed.
+  const record = options =>
+    options?.files
+      ? {
+          ...options,
+          files: options.files.map(file =>
+            typeof file.attachment === 'string'
+              ? { name: file.name, attachment: fs.readFileSync(file.attachment) }
+              : file
+          ),
+        }
+      : options;
 
   const toCollection = items => {
     const map = new Map(items.map((it, i) => [String(i), it]));
@@ -40,12 +55,12 @@ export function createFakeInteraction(opts = {}) {
       },
     },
     async reply(options) {
-      calls.reply.push(options);
+      calls.reply.push(record(options));
       this.replied = true;
       return makeMessage();
     },
     async editReply(options) {
-      calls.editReply.push(options);
+      calls.editReply.push(record(options));
       return makeMessage();
     },
     async deferReply(options = {}) {
@@ -54,7 +69,7 @@ export function createFakeInteraction(opts = {}) {
       return true;
     },
     async followUp(options) {
-      calls.followUp.push(options);
+      calls.followUp.push(record(options));
       return makeMessage();
     },
   };

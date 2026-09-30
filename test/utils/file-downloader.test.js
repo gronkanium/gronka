@@ -1,7 +1,6 @@
 import { test, describe } from 'bun:test';
 import assert from 'node:assert';
 import {
-  generateHash,
   parseTenorUrl,
   downloadImage,
   downloadVideo,
@@ -9,17 +8,14 @@ import {
   isMediaResponse,
 } from '../../src/utils/file-downloader.js';
 import axios from 'axios';
+import { Readable } from 'node:stream';
 
 describe('file downloader utilities', () => {
-  // Regression: axios aborts client-side once maxContentLength is exceeded, and that error
-  // carries no `response`. The size branch only checked for a 413, so an oversized file was
-  // reported as "it may be unavailable", telling users a file was missing when it was too big.
   describe('oversize downloads report the size cap, not "unavailable"', () => {
-    function throwMaxContentLength() {
-      const error = new Error('maxContentLength size of 52428800 exceeded');
-      error.code = 'ERR_BAD_RESPONSE';
-      throw error;
-    }
+    const throwMaxContentLength = async () => ({
+      data: Readable.from([]),
+      headers: { 'content-length': String(1e12) },
+    });
 
     test('downloadImage surfaces the size message on a client-side abort', async () => {
       const originalGet = axios.get;
@@ -69,50 +65,6 @@ describe('file downloader utilities', () => {
       } finally {
         axios.get = originalGet;
       }
-    });
-  });
-
-  describe('generateHash', () => {
-    test('generates a stable 64-hex content hash', () => {
-      const buffer = Buffer.from('test content');
-      const hash = generateHash(buffer);
-
-      assert.strictEqual(typeof hash, 'string');
-      assert.strictEqual(hash.length, 64); // 32-byte hash as 64 hex chars
-    });
-
-    test('produces consistent hashes', () => {
-      const buffer = Buffer.from('test content');
-      const hash1 = generateHash(buffer);
-      const hash2 = generateHash(buffer);
-
-      assert.strictEqual(hash1, hash2);
-    });
-
-    test('produces different hashes for different content', () => {
-      const buffer1 = Buffer.from('test content 1');
-      const buffer2 = Buffer.from('test content 2');
-
-      const hash1 = generateHash(buffer1);
-      const hash2 = generateHash(buffer2);
-
-      assert.notStrictEqual(hash1, hash2);
-    });
-
-    test('handles empty buffer', () => {
-      const buffer = Buffer.from('');
-      const hash = generateHash(buffer);
-
-      assert.strictEqual(typeof hash, 'string');
-      assert.strictEqual(hash.length, 64);
-    });
-
-    test('handles binary data', () => {
-      const buffer = Buffer.from([0x00, 0x01, 0x02, 0xff, 0xfe]);
-      const hash = generateHash(buffer);
-
-      assert.strictEqual(typeof hash, 'string');
-      assert.strictEqual(hash.length, 64);
     });
   });
 

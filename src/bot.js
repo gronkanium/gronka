@@ -35,6 +35,7 @@ import {
 import { get24HourStats } from './utils/database/stats.js';
 import { replyIfBanned, replyIfMaintenance } from './utils/ban-check.js';
 import { refreshRateLimitSettings } from './utils/rate-limit.js';
+import { withJobDir, sweepJobDirs } from './utils/media-file.js';
 
 const logger = createLogger('bot');
 
@@ -47,7 +48,7 @@ const {
 
 const { serverPort: SERVER_PORT, serverHost: SERVER_HOST } = serverConfig;
 
-// Store attachment info for modal submissions: customId -> { attachment, attachmentType, adminUser, preDownloadedBuffer }
+// Optimize modal state; the file is re-fetched on submit since the menu's job dir is gone by then.
 const modalAttachmentCache = new Map();
 
 // Clean up modal cache entries older than 5 minutes
@@ -258,6 +259,12 @@ client.once(Events.ClientReady, async readyClient => {
       logger.error('Error reconciling orphaned operations at startup:', error);
     }
 
+    await sweepJobDirs(0).catch(error => logger.warn(`Job dir sweep failed: ${error.message}`));
+    setInterval(
+      () => sweepJobDirs().catch(error => logger.warn(`Job dir sweep failed: ${error.message}`)),
+      30 * 60 * 1000
+    );
+
     setInterval(
       async () => {
         try {
@@ -312,7 +319,11 @@ client.once(Events.ClientReady, async readyClient => {
   }
 });
 
-client.on(Events.InteractionCreate, async interaction => {
+client.on(Events.InteractionCreate, interaction =>
+  withJobDir(() => handleInteraction(interaction))
+);
+
+async function handleInteraction(interaction) {
   try {
     logger.debug(`Received interaction: ${interaction.type} from user ${interaction.user.id}`);
     // Track user interaction (non-blocking to avoid interaction timeout)
@@ -362,13 +373,13 @@ client.on(Events.InteractionCreate, async interaction => {
   } catch (error) {
     logger.error('Unhandled error in interaction handler:', error);
   }
-});
+}
 
 // Prefix commands ("^download <url>", "@gronka help", ...). The handler does its own
 // bot/webhook filtering, ban/maintenance checks, and per-guild prefix resolution.
 client.on(Events.MessageCreate, async message => {
   try {
-    await handlePrefixMessage(message, { botStartTime });
+    await withJobDir(() => handlePrefixMessage(message, { botStartTime }));
   } catch (error) {
     logger.error('Unhandled error in message handler:', error);
   }

@@ -1,0 +1,155 @@
+import { AsyncLocalStorage } from 'node:async_hooks';
+import { createHash, randomBytes } from 'node:crypto';
+import fs from 'node:fs';
+import fsp from 'node:fs/promises';
+import path from 'node:path';
+import { Transform } from 'node:stream';
+import { pipeline } from 'node:stream/promises';
+import axios from 'axios';
+import { createLogger } from './logger.js';
+
+const logger = createLogger('media-file');
+
+// Real disk, never tmpfs: a job dir holds whole downloads.
+export const JOBS_ROOT = path.resolve(process.env.MEDIA_TEMP_DIR || 'temp/jobs');
+const HEAD_BYTES = 64;
+const IDLE_TIMEOUT_MS = 60_000;
+const scope = new AsyncLocalStorage();
+
+export class TooLargeError extends Error {
+  constructor(maxSize) {
+    super(`file exceeds ${maxSize} bytes`);
+    this.code = 'TOO_LARGE';
+    this.maxSize = maxSize;
+  }
+}
+
+async function newJobDir() {
+  await fsp.mkdir(JOBS_ROOT, { recursive: true, mode: 0o700 });
+  return fsp.mkdtemp(path.join(JOBS_ROOT, 'job-'));
+}
+
+// Runs fn with a job dir that every file created inside it lands in; the dir goes when fn settles.
+export async function withJobDir(fn) {
+  if (scope.getStore()) return fn();
+  const dir = await newJobDir();
+  try {
+    return await scope.run({ dir }, fn);
+  } finally {
+    await fsp.rm(dir, { recursive: true, force: true });
+  }
+}
+
+// Outside withJobDir (tests, scripts) a file gets its own dir, left for sweepJobDirs.
+export async function tempPath(ext = '') {
+  const dir = scope.getStore()?.dir ?? (await newJobDir());
+  const safeExt = /^\.[a-z0-9]{1,5}$/i.test(ext) ? ext.toLowerCase() : '';
+  return path.join(dir, `${randomBytes(8).toString('hex')}${safeExt}`);
+}
+
+export async function tempDir() {
+  const dir = await tempPath();
+  await fsp.mkdir(dir, { mode: 0o700 });
+  return dir;
+}
+
+function meter(maxSize, onChunk = () => {}) {
+  const hash = createHash('sha256');
+  const state = { size: 0, head: Buffer.alloc(0) };
+  const stream = new Transform({
+    transform(chunk, _encoding, callback) {
+      onChunk();
+      state.size += chunk.length;
+      if (state.size > maxSize) return callback(new TooLargeError(maxSize));
+      hash.update(chunk);
+      if (state.head.length < HEAD_BYTES) {
+        state.head = Buffer.concat([state.head, chunk.subarray(0, HEAD_BYTES - state.head.length)]);
+      }
+      callback(null, chunk);
+    },
+  });
+  return { stream, state, digest: () => hash.digest('hex') };
+}
+
+// Streams a readable to a new temp file, hashing on the way; nothing is held in memory.
+export async function writeStream(
+  readable,
+  { ext = '', maxSize = Infinity, transforms = [] } = {}
+) {
+  const file = await tempPath(ext);
+  let idle;
+  const touch = () => {
+    clearTimeout(idle);
+    idle = setTimeout(() => readable.destroy(new Error('download stalled')), IDLE_TIMEOUT_MS);
+  };
+  const m = meter(maxSize, touch);
+  touch();
+  try {
+    await pipeline(readable, ...transforms, m.stream, fs.createWriteStream(file, { mode: 0o600 }));
+  } catch (error) {
+    await fsp.rm(file, { force: true });
+    throw error;
+  } finally {
+    clearTimeout(idle);
+  }
+  return { path: file, size: m.state.size, hash: m.digest(), head: m.state.head };
+}
+
+// GETs url straight to disk. axios's maxContentLength does not apply to streams, so the cap is ours.
+export async function fetchToFile(url, options = {}, { maxSize = Infinity, ext = '' } = {}) {
+  const response = await axios.get(url, { ...options, responseType: 'stream' });
+  const declared = Number(response.headers['content-length']);
+  if (Number.isFinite(declared) && declared > maxSize) {
+    response.data.destroy();
+    throw new TooLargeError(maxSize);
+  }
+  const written = await writeStream(response.data, { ext, maxSize });
+  return {
+    ...written,
+    headers: response.headers,
+    contentType: response.headers['content-type'] || '',
+  };
+}
+
+// Gives an item's file its filename's extension; tools like ffmpeg's image2 pick a demuxer by it.
+export async function withExtension(item) {
+  const ext = path.extname(item.filename ?? '').toLowerCase();
+  if (!/^\.[a-z0-9]{1,5}$/.test(ext) || path.extname(item.path) === ext) return item;
+  const renamed = item.path.replace(/(\.[a-z0-9]{1,5})?$/i, ext);
+  await fsp.rename(item.path, renamed);
+  return { ...item, path: renamed };
+}
+
+// Hash and head of a file a tool already wrote.
+export async function fromPath(file, meta = {}) {
+  const hash = createHash('sha256');
+  let size = 0;
+  let head = Buffer.alloc(0);
+  for await (const chunk of fs.createReadStream(file)) {
+    if (size === 0) head = Buffer.from(chunk.subarray(0, HEAD_BYTES));
+    size += chunk.length;
+    hash.update(chunk);
+  }
+  return { ...meta, path: file, size, hash: hash.digest('hex'), head };
+}
+
+// Removes job dirs a crash left behind.
+export async function sweepJobDirs(maxAgeMs = 6 * 60 * 60 * 1000) {
+  let entries;
+  try {
+    entries = await fsp.readdir(JOBS_ROOT, { withFileTypes: true });
+  } catch {
+    return 0;
+  }
+  let removed = 0;
+  for (const entry of entries) {
+    if (!entry.isDirectory()) continue;
+    const dir = path.join(JOBS_ROOT, entry.name);
+    const { mtimeMs } = await fsp.stat(dir).catch(() => ({ mtimeMs: Date.now() }));
+    if (Date.now() - mtimeMs < maxAgeMs) continue;
+    await fsp.rm(dir, { recursive: true, force: true });
+    removed++;
+  }
+  if (removed) logger.info(`Removed ${removed} stale job dir(s)`);
+  return removed;
+}

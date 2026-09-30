@@ -1,135 +1,93 @@
 import express from 'express';
 import { createLogger } from '../../utils/logger.js';
-import { getLogs, getLogsCount, getLogComponents } from '../../utils/database.js';
+import {
+  getLogs,
+  getLogsCount,
+  getLogComponents,
+  getLogFacets,
+  getLogHistogram,
+  LOG_FIELDS,
+} from '../../utils/database.js';
 
 const logger = createLogger('webui');
 const router = express.Router();
 
-// Logs endpoint with filtering and pagination
+const list = value =>
+  [value]
+    .flat()
+    .filter(v => typeof v === 'string')
+    .flatMap(v => v.split(','))
+    .map(v => v.trim())
+    .filter(Boolean);
+
+const int = value => {
+  const n = parseInt(value, 10);
+  return Number.isFinite(n) ? n : null;
+};
+
+// Shared by list, facets and histogram so all three always describe the same set of lines.
+function filtersFrom(query) {
+  const fields = {};
+  for (const key of LOG_FIELDS) {
+    const values = list(query[key]);
+    if (values.length) fields[key] = values;
+  }
+  return {
+    component: list(query.component),
+    level: list(query.level).map(l => l.toUpperCase()),
+    excludedComponents: list(query.excludedComponents),
+    startTime: int(query.startTime),
+    endTime: int(query.endTime),
+    search: typeof query.search === 'string' && query.search ? query.search : null,
+    fields,
+    // webui's own INFO lines are HTTP request noise
+    excludeComponentLevels: [{ component: 'webui', level: 'INFO' }],
+  };
+}
+
 router.get('/api/logs', async (req, res) => {
   try {
-    const {
-      component,
-      level,
-      startTime,
-      endTime,
-      search,
-      limit = 100,
-      offset = 0,
-      orderDesc = 'true',
-      excludedComponents,
-    } = req.query;
-
-    // Parse query parameters
     const options = {
-      orderDesc: orderDesc === 'true',
-      limit: parseInt(limit, 10) || 100,
-      offset: parseInt(offset, 10) || 0,
+      ...filtersFrom(req.query),
+      orderDesc: req.query.orderDesc !== 'false',
+      limit: Math.min(int(req.query.limit) ?? 100, 1000),
+      offset: int(req.query.offset) ?? 0,
     };
-
-    if (component) options.component = component;
-    if (search) options.search = search;
-    if (startTime) options.startTime = parseInt(startTime, 10);
-    if (endTime) options.endTime = parseInt(endTime, 10);
-
-    // Handle multiple levels (comma-separated)
-    if (level) {
-      if (Array.isArray(level)) {
-        // Multiple level parameters: flatten and trim all values
-        options.level = level.flatMap(l =>
-          typeof l === 'string' ? l.split(',').map(sub => sub.trim()) : []
-        );
-      } else if (typeof level === 'string') {
-        if (level.includes(',')) {
-          options.level = level.split(',').map(l => l.trim());
-        } else {
-          options.level = level.trim();
-        }
-      } else {
-        // Unexpected type, ignore or reject (here we ignore)
-      }
-    }
-
-    // Handle excluded components (comma-separated)
-    if (excludedComponents) {
-      if (Array.isArray(excludedComponents)) {
-        // Multiple excluded component parameters: flatten and trim all values
-        options.excludedComponents = excludedComponents.flatMap(c =>
-          typeof c === 'string' ? c.split(',').map(sub => sub.trim()) : []
-        );
-      } else if (typeof excludedComponents === 'string') {
-        if (excludedComponents.includes(',')) {
-          options.excludedComponents = excludedComponents.split(',').map(c => c.trim());
-        } else {
-          options.excludedComponents = [excludedComponents.trim()];
-        }
-      }
-    }
-
-    // Always exclude webui INFO logs from the logs list (to mute HTTP request noise)
-    // But keep ERROR/WARN logs from webui visible
-    options.excludeComponentLevels = [{ component: 'webui', level: 'INFO' }];
-
-    // Get logs and total count
-    let logs, total;
-    try {
-      logs = await getLogs(options);
-      if (logs === undefined || logs === null) {
-        logger.warn('getLogs returned undefined or null, defaulting to empty array');
-        logs = [];
-      }
-      if (!Array.isArray(logs)) {
-        logger.warn(`getLogs returned non-array: ${typeof logs}, defaulting to empty array`);
-        logs = [];
-      }
-    } catch (error) {
-      logger.error('Error calling getLogs:', error);
-      logger.error('Error stack:', error.stack);
-      logs = [];
-    }
-
-    try {
-      total = await getLogsCount(options);
-      if (total === undefined || total === null) {
-        logger.warn('getLogsCount returned undefined or null, defaulting to 0');
-        total = 0;
-      }
-      if (typeof total !== 'number') {
-        logger.warn(`getLogsCount returned non-number: ${typeof total}, defaulting to 0`);
-        total = 0;
-      }
-    } catch (error) {
-      logger.error('Error calling getLogsCount:', error);
-      logger.error('Error stack:', error.stack);
-      total = 0;
-    }
-
-    res.json({
-      logs: Array.isArray(logs) ? logs : [],
-      total: typeof total === 'number' ? total : 0,
-      limit: options.limit,
-      offset: options.offset,
-    });
+    const [logs, total] = await Promise.all([getLogs(options), getLogsCount(options)]);
+    res.json({ logs, total, limit: options.limit, offset: options.offset });
   } catch (error) {
     logger.error('Failed to fetch logs:', error);
-    res.status(500).json({
-      error: 'failed to fetch logs',
-      message: error.message,
-    });
+    res.status(500).json({ error: 'failed to fetch logs' });
   }
 });
 
-// Log components endpoint
+router.get('/api/logs/facets', async (req, res) => {
+  try {
+    res.json({ facets: await getLogFacets(filtersFrom(req.query)) });
+  } catch (error) {
+    logger.error('Failed to fetch log facets:', error);
+    res.status(500).json({ error: 'failed to fetch log facets' });
+  }
+});
+
+router.get('/api/logs/histogram', async (req, res) => {
+  try {
+    const filters = filtersFrom(req.query);
+    filters.startTime ??= Date.now() - 24 * 3600 * 1000;
+    const buckets = Math.min(Math.max(int(req.query.buckets) ?? 48, 1), 200);
+    res.json(await getLogHistogram(filters, buckets));
+  } catch (error) {
+    logger.error('Failed to fetch log histogram:', error);
+    res.status(500).json({ error: 'failed to fetch log histogram' });
+  }
+});
+
 router.get('/api/logs/components', async (req, res) => {
   try {
-    const components = await getLogComponents();
-    res.json({ components });
+    res.json({ components: await getLogComponents() });
   } catch (error) {
     logger.error('Failed to fetch log components:', error);
-    res.status(500).json({
-      error: 'failed to fetch log components',
-      message: error.message,
-    });
+    res.status(500).json({ error: 'failed to fetch log components' });
   }
 });
 

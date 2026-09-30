@@ -8,12 +8,11 @@ import { downloadImage } from '../utils/file-downloader.js';
 import { isAdmin } from '../utils/rate-limit.js';
 import { isGifFile, optimizeCached, calculateSizeReduction } from '../utils/gif-optimizer.js';
 import { logOperationStep } from '../utils/operations-tracker.js';
-import { notifyCommandFailure } from '../utils/ntfy-notifier.js';
 import { hashUrlWithParams } from '../utils/hashing.js';
 import { getProcessedUrl } from '../utils/database.js';
 import { runMediaCommand } from './shared/run-media-command.js';
 import { getDiscordAttachmentLimit } from './shared/attachment-limit.js';
-import { replyIfRateLimited, refuse, replyError } from './shared/command-guards.js';
+import { replyIfRateLimited, refuse } from './shared/command-guards.js';
 import {
   safeInteractionEditReply,
   safeInteractionDeferReply,
@@ -117,10 +116,13 @@ async function resolveGif(interaction, { attachment, url, adminUser, commandSour
     try {
       ({ attachment, file, originalUrl } = await fetchUrlInput(url, adminUser, interaction.client));
     } catch (error) {
-      logger.error(`Failed to download file from URL for user ${interaction.user.id}:`, error);
-      const message = curatedErrorMessage(error, 'failed to download file from URL.');
-      await replyError(interaction, message);
-      await notifyCommandFailure('optimize', { userId: interaction.user.id, error: error.message });
+      await refuse(interaction, 'optimize', {
+        message: curatedErrorMessage(error, 'failed to download file from URL.'),
+        cause: error,
+        reason: 'url_download_failed',
+        context: { originalUrl: url, commandSource },
+        notify: true,
+      });
       return null;
     }
   }

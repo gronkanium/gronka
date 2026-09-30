@@ -1,6 +1,7 @@
 import { mount } from 'svelte';
 import App from './App.svelte';
 import './styles/theme.css';
+import './styles/ui.css';
 
 // Wait for DOM to be ready
 function init() {

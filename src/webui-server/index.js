@@ -3,12 +3,11 @@ import { createLogger } from '../utils/logger.js';
 import { webuiConfig } from '../utils/config.js';
 import { ConfigurationError } from '../utils/errors.js';
 import { getPostgresConfig } from '../utils/database/connection.js';
-import { initDatabase, getRecentOperations } from '../utils/database.js';
+import { initDatabase, getRecentOperations, onNewLog } from '../utils/database.js';
 import {
   setBroadcastCallback,
   setUserMetricsBroadcastCallback,
 } from '../utils/operations-tracker.js';
-import { setLogBroadcastCallback } from '../utils/logger.js';
 import { setBroadcastCallback as setAlertBroadcastCallback } from '../utils/ntfy-notifier.js';
 import { createApp } from './app.js';
 import { startHeartbeatInterval, stopHeartbeatInterval, clients } from './sse/server.js';
@@ -100,7 +99,7 @@ const broadcastUserMetricsWrapper = (userId, metrics) => {
 
   setBroadcastCallback(broadcastOperationWrapper, WEBUI_PORT);
 
-  setLogBroadcastCallback(broadcastLogWrapper);
+  await onNewLog(broadcastLogWrapper);
 
   setAlertBroadcastCallback(broadcastAlertWrapper);
 

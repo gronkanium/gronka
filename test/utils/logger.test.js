@@ -1,7 +1,14 @@
 import { test, describe, beforeAll, afterAll } from 'bun:test';
 import assert from 'node:assert';
-import { createLogger, formatTimestampSeconds } from '../../src/utils/logger.js';
-import { initDatabase, getLogs } from '../../src/utils/database.js';
+import { createLogger, formatTimestampSeconds, withLogContext } from '../../src/utils/logger.js';
+import {
+  initDatabase,
+  getLogs,
+  getLogsCount,
+  getLogFacets,
+  getLogHistogram,
+  onNewLog,
+} from '../../src/utils/database.js';
 import {
   getUniqueTestComponent,
   ensureLogsTableSchema,
@@ -220,6 +227,76 @@ describe('logger utilities', () => {
       assert.ok(log.message.includes('Arg'));
       assert.ok(log.message.includes('with'));
       assert.ok(log.message.includes('newlines'));
+    });
+  });
+
+  describe('log context', () => {
+    test('announces each new line, with its context, to onNewLog listeners', async () => {
+      const component = getUniqueTestComponent('test-log-notify');
+      const seen = [];
+      const listener = await onNewLog(line => line.component === component && seen.push(line));
+      await withLogContext({ op: 'op-notify-1' }, () => createLogger(component).error('pushed'));
+      for (let i = 0; i < 50 && !seen.length; i++) await new Promise(r => setTimeout(r, 20));
+      await listener.unlisten();
+
+      assert.strictEqual(seen.length, 1);
+      assert.strictEqual(seen[0].message, 'pushed');
+      assert.strictEqual(seen[0].level, 'ERROR');
+      assert.strictEqual(typeof seen[0].timestamp, 'number');
+      assert.deepStrictEqual(seen[0].metadata, { op: 'op-notify-1' });
+    });
+
+    test('stamps nested context on every line and leaves lines outside it bare', async () => {
+      const component = getUniqueTestComponent('test-log-context');
+      const logger = createLogger(component);
+      await withLogContext({ op: 'op-ctx-1', source: 'x.com' }, () =>
+        withLogContext({ worker: 'w-1' }, () => logger.warn('inside'))
+      );
+      await logger.info('outside');
+
+      const [outside, inside] = await getLogs({ component, limit: 2 });
+      assert.deepStrictEqual(inside.metadata, { op: 'op-ctx-1', source: 'x.com', worker: 'w-1' });
+      assert.strictEqual(outside.metadata, null);
+    });
+
+    test('field filters, facets and histogram agree on the same lines', async () => {
+      const component = getUniqueTestComponent('test-log-facets');
+      const logger = createLogger(component);
+      const startTime = Date.now();
+      await withLogContext({ op: 'op-facet-a', source: 'tiktok.com' }, async () => {
+        await logger.info('a1');
+        await logger.error('a2');
+      });
+      await withLogContext({ op: 'op-facet-b', source: 'x.com' }, () => logger.warn('b1'));
+
+      const filters = { component, startTime, fields: { source: ['tiktok.com'] } };
+      assert.strictEqual(await getLogsCount(filters), 2);
+      assert.deepStrictEqual(
+        (await getLogs({ ...filters, fields: { op: 'op-facet-b' } })).map(l => l.message),
+        ['b1']
+      );
+
+      const facets = await getLogFacets(filters);
+      assert.deepStrictEqual(
+        facets.source.map(f => [f.value, f.count]).sort(),
+        [
+          ['tiktok.com', 2],
+          ['x.com', 1],
+        ],
+        'a facet ignores its own filter so every value stays pickable'
+      );
+      assert.deepStrictEqual(facets.level.map(f => f.value).sort(), ['ERROR', 'INFO']);
+
+      const histogram = await getLogHistogram({ component, startTime, endTime: Date.now() }, 4);
+      const totals = histogram.buckets.reduce(
+        (sum, b) => ({
+          ERROR: sum.ERROR + b.ERROR,
+          WARN: sum.WARN + b.WARN,
+          INFO: sum.INFO + b.INFO,
+        }),
+        { ERROR: 0, WARN: 0, INFO: 0 }
+      );
+      assert.deepStrictEqual(totals, { ERROR: 1, WARN: 1, INFO: 1 });
     });
   });
 });

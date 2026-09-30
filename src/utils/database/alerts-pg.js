@@ -43,6 +43,10 @@ export async function insertAlert(alert) {
 // fields worth filtering on have to be dug back out of it.
 const COMMAND_EXPR = "metadata::jsonb->>'command'";
 const REASON_EXPR = "NULLIF(metadata::jsonb->>'error', '')";
+// What the bot recorded about the failure: the error class, or an early refusal's reason code.
+const ERROR_CLASS_EXPR = `SELECT COALESCE(NULLIF(ol.metadata::jsonb->>'errorName', ''),
+    NULLIF(ol.metadata::jsonb->>'errorType', ''))
+  FROM operation_logs ol WHERE ol.operation_id = alerts.operation_id AND ol.step = 'error' LIMIT 1`;
 
 // Sentinel for failures logged without an error string, a real bucket, not an absence.
 export const UNKNOWN_REASON = '__no_reason__';
@@ -144,7 +148,8 @@ export async function getAlertSummary(options = {}) {
     `SELECT ${REASON_EXPR} AS reason,
             COUNT(*)::int AS count,
             MAX(timestamp) AS last_seen,
-            ARRAY_REMOVE(ARRAY_AGG(DISTINCT ${COMMAND_EXPR}), NULL) AS commands
+            ARRAY_REMOVE(ARRAY_AGG(DISTINCT ${COMMAND_EXPR}), NULL) AS commands,
+            ARRAY_REMOVE(ARRAY_AGG(DISTINCT (${ERROR_CLASS_EXPR})), NULL) AS classes
      FROM alerts ${clause} AND severity = 'error'
      GROUP BY 1
      ORDER BY 2 DESC
@@ -180,6 +185,7 @@ export async function getAlertSummary(options = {}) {
     reason: row.reason,
     count: row.count,
     commands: row.commands ?? [],
+    classes: row.classes ?? [],
     lastSeen: Number(row.last_seen),
   }));
 

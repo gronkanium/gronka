@@ -227,3 +227,53 @@ export async function getExpiredR2Keys(now) {
     return [];
   }
 }
+
+// What is in R2 right now, what leaves next, and what failed to leave. Sizes come from
+// processed_urls, same as getLiveBytes.
+export async function getStorageOverview(now = Date.now()) {
+  await ensurePostgresInitialized();
+  const sql = getPostgresConnection();
+  if (!sql) return null;
+  const hour = 3600 * 1000;
+  const live = sql`t.deleted_at IS NULL AND t.expires_at > ${now}`;
+  const [[totals], soon, biggest, [failed]] = await Promise.all([
+    sql`
+      SELECT COUNT(*)::int AS files, COALESCE(SUM(p.file_size), 0)::bigint AS bytes,
+        COALESCE(SUM(p.file_size) FILTER (WHERE t.expires_at <= ${now + hour}), 0)::bigint AS h1,
+        COALESCE(SUM(p.file_size) FILTER (WHERE t.expires_at <= ${now + 6 * hour}), 0)::bigint AS h6,
+        COALESCE(SUM(p.file_size) FILTER (WHERE t.expires_at <= ${now + 24 * hour}), 0)::bigint AS h24
+      FROM temporary_uploads t JOIN processed_urls p ON p.url_hash = t.url_hash WHERE ${live}
+    `,
+    sql`
+      SELECT t.r2_key, t.uploaded_at, t.expires_at, p.file_size, p.file_url, p.user_id, p.file_type
+      FROM temporary_uploads t JOIN processed_urls p ON p.url_hash = t.url_hash WHERE ${live}
+      ORDER BY t.expires_at LIMIT 12
+    `,
+    sql`
+      SELECT t.r2_key, t.uploaded_at, t.expires_at, p.file_size, p.file_url, p.user_id, p.file_type
+      FROM temporary_uploads t JOIN processed_urls p ON p.url_hash = t.url_hash WHERE ${live}
+      ORDER BY p.file_size DESC NULLS LAST LIMIT 8
+    `,
+    sql`
+      SELECT COUNT(*)::int AS count, MAX(deletion_error) AS last_error
+      FROM temporary_uploads WHERE deleted_at IS NULL AND deletion_failed > 0
+    `,
+  ]);
+  const file = r => ({
+    key: r.r2_key,
+    uploadedAt: Number(r.uploaded_at),
+    expiresAt: Number(r.expires_at),
+    size: Number(r.file_size ?? 0),
+    url: r.file_url,
+    userId: r.user_id,
+    type: r.file_type,
+  });
+  return {
+    files: totals.files,
+    bytes: Number(totals.bytes),
+    expiring: { h1: Number(totals.h1), h6: Number(totals.h6), h24: Number(totals.h24) },
+    soon: soon.map(file),
+    biggest: biggest.map(file),
+    deletionFailures: { count: failed.count, lastError: failed.last_error },
+  };
+}

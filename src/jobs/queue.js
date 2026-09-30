@@ -1,4 +1,5 @@
 import os from 'node:os';
+import pkg from '../../package.json' with { type: 'json' };
 import { getPostgresConnection } from '../utils/database/connection.js';
 import { ensurePostgresInitialized } from '../utils/database/init.js';
 
@@ -7,6 +8,8 @@ export const DONE_CHANNEL = 'media_jobs_done';
 export const HEARTBEAT_MS = 10_000;
 export const STALE_MS = 45_000;
 export const MAX_ATTEMPTS = 3;
+// A bot_settings flag: while 'true' no worker claims a job; running jobs still finish.
+export const PAUSE_KEY = 'queue_paused';
 // A retry needs time left on the reply token to be worth starting.
 const MIN_TOKEN_LEFT_MS = 60_000;
 
@@ -38,6 +41,7 @@ export async function claimJob(worker = WORKER_ID) {
         heartbeat_at = ${now}, timestamp = ${now}
     WHERE id = (
       SELECT id FROM media_jobs WHERE status = 'queued'
+        AND NOT EXISTS (SELECT 1 FROM bot_settings WHERE key = ${PAUSE_KEY} AND value = 'true')
       ORDER BY id FOR UPDATE SKIP LOCKED LIMIT 1
     )
     RETURNING *
@@ -128,4 +132,104 @@ export async function forgetToken(id) {
 export async function listen(channel, fn) {
   const sql = await db();
   return sql.listen(channel, fn);
+}
+
+// Read-only view for the webui. Never selects `reply`: it holds the interaction token.
+export async function jobsOverview({ since = Date.now() - 24 * 3600e3, limit = 25 } = {}) {
+  const sql = await db();
+  const [counts, recent, workers] = await Promise.all([
+    sql`
+      SELECT status, COUNT(*)::int AS count, COUNT(*) FILTER (WHERE attempts > 1)::int AS retried
+      FROM media_jobs WHERE status IN ('queued', 'running') OR timestamp >= ${since}
+      GROUP BY status
+    `,
+    sql`
+      SELECT id, kind, status, attempts, worker, error, operation_id, user_id,
+             args->>'url' AS url, (args ? 'attachment') AS attachment,
+             created_at, timestamp, heartbeat_at
+      FROM media_jobs ORDER BY id DESC LIMIT ${limit}
+    `,
+    sql`
+      SELECT worker,
+             MAX(GREATEST(timestamp, COALESCE(heartbeat_at, 0))) AS last_seen,
+             COUNT(*) FILTER (WHERE status = 'done')::int AS done,
+             COUNT(*) FILTER (WHERE status = 'failed')::int AS failed,
+             MAX(id) FILTER (WHERE status = 'running') AS running_job
+      FROM media_jobs WHERE worker IS NOT NULL AND timestamp >= ${since}
+      GROUP BY worker ORDER BY worker
+    `,
+  ]);
+  const num = row => ({
+    ...row,
+    created_at: Number(row.created_at),
+    timestamp: Number(row.timestamp),
+    heartbeat_at: row.heartbeat_at == null ? null : Number(row.heartbeat_at),
+    id: Number(row.id),
+  });
+  const [pause] = await sql`SELECT value FROM bot_settings WHERE key = ${PAUSE_KEY}`;
+  return {
+    paused: pause?.value === 'true',
+    processes: await presence(),
+    counts: Object.fromEntries(counts.map(c => [c.status, { count: c.count, retried: c.retried }])),
+    recent: recent.map(num),
+    workers: workers.map(w => ({
+      ...w,
+      last_seen: Number(w.last_seen),
+      running_job: w.running_job == null ? null : Number(w.running_job),
+    })),
+  };
+}
+
+export async function jobsForOperation(operationId) {
+  const sql = await db();
+  const rows = await sql`
+    SELECT id, kind, status, attempts, worker, error, created_at, timestamp, heartbeat_at
+    FROM media_jobs WHERE operation_id = ${operationId} ORDER BY id
+  `;
+  return rows.map(r => ({
+    ...r,
+    id: Number(r.id),
+    created_at: Number(r.created_at),
+    timestamp: Number(r.timestamp),
+    heartbeat_at: r.heartbeat_at == null ? null : Number(r.heartbeat_at),
+  }));
+}
+
+// Presence: every bot and worker process reports in, so the webui can tell live, idle and dead apart.
+export const PRESENCE_MS = 10_000;
+let lastCpu = null;
+
+export async function reportPresence({ role, running = 0 }) {
+  const sql = await db();
+  const now = Date.now();
+  const usage = process.cpuUsage();
+  const cpu = lastCpu
+    ? ((usage.user + usage.system - lastCpu.total) / 1000 / (now - lastCpu.at)) * 100
+    : null;
+  lastCpu = { total: usage.user + usage.system, at: now };
+  const startedAt = Math.round(now - process.uptime() * 1000);
+  await sql`
+    INSERT INTO media_workers (id, role, version, started_at, seen_at, rss, cpu, running)
+    VALUES (${WORKER_ID}, ${role}, ${pkg.version}, ${startedAt}, ${now}, ${process.memoryUsage().rss},
+            ${cpu}, ${running})
+    ON CONFLICT (id) DO UPDATE SET seen_at = EXCLUDED.seen_at, rss = EXCLUDED.rss,
+      cpu = EXCLUDED.cpu, running = EXCLUDED.running, version = EXCLUDED.version
+  `;
+  await sql`DELETE FROM media_workers WHERE seen_at < ${now - 24 * 3600e3}`;
+}
+
+export async function clearPresence() {
+  const sql = await db();
+  await sql`DELETE FROM media_workers WHERE id = ${WORKER_ID}`;
+}
+
+export async function presence() {
+  const sql = await db();
+  const rows = await sql`SELECT * FROM media_workers ORDER BY role, started_at`;
+  return rows.map(r => ({
+    ...r,
+    started_at: Number(r.started_at),
+    seen_at: Number(r.seen_at),
+    rss: r.rss == null ? null : Number(r.rss),
+  }));
 }

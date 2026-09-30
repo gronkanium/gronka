@@ -116,4 +116,36 @@ describe('media job queue', () => {
     assert.strictEqual(await queue.releaseJobs([job.id], 'w1'), 1);
     assert.strictEqual((await row(job.id)).status, 'queued');
   });
+
+  test('a process reports presence, readable with memory and role, and clears it on exit', async () => {
+    await queue.reportPresence({ role: 'worker', running: 2 });
+    await queue.reportPresence({ role: 'worker', running: 1 });
+    const me = (await queue.presence()).find(p => p.id === queue.WORKER_ID);
+    assert.strictEqual(me.role, 'worker');
+    assert.strictEqual(me.running, 1);
+    assert.ok(me.rss > 0);
+    assert.strictEqual(typeof me.cpu, 'number', 'second report knows the cpu delta');
+    await queue.clearPresence();
+    assert.ok(!(await queue.presence()).some(p => p.id === queue.WORKER_ID));
+  });
+
+  test('the webui overview never exposes a reply token', async () => {
+    await enqueue();
+    const { recent } = await queue.jobsOverview();
+    assert.ok(recent.length > 0);
+    assert.ok(recent.every(j => !('reply' in j) && !JSON.stringify(j).includes('"token"')));
+  });
+
+  test('a paused queue hands out nothing until resumed, and says so', async () => {
+    const id = await enqueue();
+    await sql`INSERT INTO bot_settings (key, value, updated_at) VALUES (${queue.PAUSE_KEY}, 'true', 0)
+      ON CONFLICT (key) DO UPDATE SET value = 'true'`;
+    try {
+      assert.strictEqual(await queue.claimJob('w1'), null);
+      assert.strictEqual((await queue.jobsOverview()).paused, true);
+    } finally {
+      await sql`DELETE FROM bot_settings WHERE key = ${queue.PAUSE_KEY}`;
+    }
+    assert.strictEqual((await queue.claimJob('w1')).id, id);
+  });
 });

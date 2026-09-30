@@ -248,12 +248,28 @@ if (!mocksSupported) {
       assert.match(calls.reply[0].content, /not both/);
     });
 
-    test('url that is not media: refused as an unsupported format', async () => {
-      const { interaction, calls } = commandInteraction(`cv-html-${Date.now()}`, {
-        url: `https://example.com/page-${Date.now()}`,
+    test('url that is not media: refused as an unsupported format, logged and recorded', async () => {
+      const since = Date.now();
+      const { interaction, calls } = commandInteraction(`cv-html-${since}`, {
+        url: `https://example.com/page-${since}`,
       });
       await handleConvertCommand(interaction);
       assert.match(firstReply(calls).content, /unsupported file format/);
+
+      const { getLogs } = await import('../../src/utils/database.js');
+      const [line] = await getLogs({
+        search: 'convert refused: unsupported content type',
+        startTime: since,
+        limit: 1,
+      });
+      assert.ok(line, 'the refusal writes a log line');
+      assert.strictEqual(line.metadata.command, 'convert');
+      assert.strictEqual(line.metadata.source, 'example.com');
+      assert.match(
+        line.metadata.op,
+        /^\d{13}-[0-9a-f]+$/,
+        'and it names the failed request it recorded'
+      );
     });
 
     test('context menu on a message with a video: converted to a gif', async () => {

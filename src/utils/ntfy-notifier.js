@@ -4,6 +4,8 @@ import { insertAlert, getSetting } from './database.js';
 import { getOperation } from './operations-tracker.js';
 
 const logger = createLogger('ntfy');
+// Callers await the post, so an unreachable ntfy server must not hold a job open.
+const NTFY_TIMEOUT_MS = 5000;
 let broadcastCallback = null;
 
 function formatDuration(ms) {
@@ -89,6 +91,7 @@ async function sendNtfyNotification(title, message, options = {}) {
         Title: title,
       },
       body: notificationMessage,
+      signal: AbortSignal.timeout(NTFY_TIMEOUT_MS),
     });
 
     if (!response.ok) {

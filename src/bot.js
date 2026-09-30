@@ -35,7 +35,13 @@ import {
 import { get24HourStats } from './utils/database/stats.js';
 import { replyIfBanned, replyIfMaintenance } from './utils/ban-check.js';
 import { refreshRateLimitSettings, recordRateLimit } from './utils/rate-limit.js';
-import { DONE_CHANNEL, listen as listenForJobs } from './jobs/queue.js';
+import {
+  DONE_CHANNEL,
+  listen as listenForJobs,
+  reportPresence,
+  clearPresence,
+  PRESENCE_MS,
+} from './jobs/queue.js';
 import { withJobDir, sweepJobDirs } from './utils/media-file.js';
 
 const logger = createLogger('bot');
@@ -260,6 +266,10 @@ client.once(Events.ClientReady, async readyClient => {
       logger.error('Error reconciling orphaned operations at startup:', error);
     }
 
+    const report = () => reportPresence({ role: 'bot' }).catch(() => {});
+    report();
+    setInterval(report, PRESENCE_MS);
+
     await sweepJobDirs().catch(error => logger.warn(`Job dir sweep failed: ${error.message}`));
     setInterval(
       () => sweepJobDirs().catch(error => logger.warn(`Job dir sweep failed: ${error.message}`)),
@@ -456,6 +466,7 @@ function gracefulShutdown(signal) {
   if (retentionJobIntervalId) {
     stopRetentionJob(retentionJobIntervalId);
   }
+  clearPresence().catch(() => {});
   if (httpServer) {
     httpServer.close(() => {
       logger.info('HTTP server closed');

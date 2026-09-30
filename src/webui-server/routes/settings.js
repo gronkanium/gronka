@@ -121,6 +121,11 @@ const KNOWN_SETTINGS = {
         .map(id => id.trim())
         .filter(id => id.length > 0),
   },
+  webui_issue_states: {
+    type: 'issuestates',
+    default: '{}',
+    description: 'Muted and resolved issues on the webui Issues page',
+  },
   webui_saved_views: {
     type: 'views',
     default: '[]',
@@ -149,6 +154,23 @@ function parseViews(value) {
     views.push({ name, page: v.page, params: Object.fromEntries(entries) });
   }
   return views;
+}
+
+// { [issueKey]: { state: 'muted', until } | { state: 'resolved', at } }
+function parseIssueStates(value) {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return null;
+  const entries = Object.entries(value);
+  if (entries.length > 500) return null;
+  const out = {};
+  for (const [key, s] of entries) {
+    if (key.length > 300 || !s || typeof s !== 'object') return null;
+    if (s.state === 'muted' && Number.isFinite(s.until))
+      out[key] = { state: 'muted', until: s.until };
+    else if (s.state === 'resolved' && Number.isFinite(s.at))
+      out[key] = { state: 'resolved', at: s.at };
+    else return null;
+  }
+  return out;
 }
 
 // Get all bot settings (known settings filled with defaults)
@@ -278,6 +300,15 @@ router.put('/api/settings/:key', express.json(), async (req, res) => {
       }
       const ids = [...new Set(value)].filter(id => DOWNLOAD_SERVICE_IDS.has(id)).sort();
       textValue = JSON.stringify(ids);
+    } else if (meta.type === 'issuestates') {
+      const states = parseIssueStates(value);
+      if (!states) {
+        return res.status(400).json({
+          error: 'invalid value',
+          message: `"${key}" expects { key: { state: 'muted', until } | { state: 'resolved', at } }`,
+        });
+      }
+      textValue = JSON.stringify(states);
     } else if (meta.type === 'views') {
       const views = parseViews(value);
       if (!views) {

@@ -26,6 +26,7 @@ afterAll(async () => {
   await setSetting('upload_ttl_tiers', '100:72,250:24,500:8,1024:2');
   await setSetting('disabled_services', '[]');
   await setSetting('webui_saved_views', '[]');
+  await setSetting('webui_issue_states', '{}');
   if (server) server.close();
   // Don't close database here - it's shared across parallel test files
 });
@@ -191,6 +192,16 @@ describe('db-backed admin cache', () => {
     ]) {
       const { response } = await putSetting('webui_saved_views', bad);
       assert.strictEqual(response.status, 400, JSON.stringify(bad));
+    }
+  });
+
+  test('issue states keep muted and resolved entries and reject anything else', async () => {
+    const good = { a: { state: 'muted', until: 5 }, b: { state: 'resolved', at: 7 } };
+    const { response, data } = await putSetting('webui_issue_states', good);
+    assert.strictEqual(response.status, 200);
+    assert.deepStrictEqual(JSON.parse(data.value), good);
+    for (const bad of [[], { a: { state: 'open' } }, { a: { state: 'muted', until: 'soon' } }]) {
+      assert.strictEqual((await putSetting('webui_issue_states', bad)).response.status, 400);
     }
   });
 });

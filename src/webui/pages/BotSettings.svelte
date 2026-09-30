@@ -50,7 +50,7 @@
     { id: 'presence', label: 'Bot presence', icon: Activity, keys: [], presence: true },
   ];
   // Edited on their own pages, not here.
-  const ELSEWHERE = new Set(['services', 'views']);
+  const ELSEWHERE = new Set(['services', 'views', 'issuestates']);
   const LABELS = {
     url_only_mode: 'Reply with links only',
     twitter_delivery: 'X / Twitter delivery',

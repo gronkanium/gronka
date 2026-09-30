@@ -1,50 +1,41 @@
 <script>
   import { onDestroy } from 'svelte';
-  import { TerminalSquare, Copy } from 'lucide-svelte';
+  import { TerminalSquare, Copy, BellOff, CheckCircle2, RotateCcw } from 'lucide-svelte';
   import { currentRoute, navigate } from '../utils/router.js';
   import { headerActions } from '../stores/header.js';
   import { alerts as liveAlerts } from '../stores/sse-store.js';
+  import { issueStates, setIssueState } from '../stores/nav.js';
+  import { groupIssues, stateOf, isOpen, KIND_LABEL } from '../issues.js';
   import { formatRelativeTime, shortId, urlLabel } from '../utils/format.js';
 
   const DAY = 24 * 3600e3;
-  // Best guess from the curated message: what the user did wrong, what a site did, or ours to fix.
-  const KINDS = [
-    [
-      'user',
-      /not from a supported|no video or image attachment|please provide|invalid url|not a valid|too large|too long|maximum allowed|exceeds the maximum|no video in it|private or internal address|wait \d|rate limit|cooldown|banned|maintenance/i,
-    ],
-    [
-      'upstream',
-      /changed its page|is blocking|deleted, private|unavailable|removed|age-restricted|sign-in|login required|members-only|blocked|not available in your/i,
-    ],
-  ];
-  const kindOf = reason => KINDS.find(([, re]) => re.test(reason))?.[0] ?? 'defect';
-  const KIND_LABEL = { defect: 'defect', upstream: 'upstream', user: 'user error' };
   const TABS = [
     ['open', 'Open'],
     ['defects', 'Defects'],
     ['upstream', 'Upstream'],
     ['user', 'User errors'],
+    ['muted', 'Muted'],
+    ['resolved', 'Resolved'],
   ];
 
-  let reasons = $state([]);
+  let groups = $state([]);
   let loaded = $state(false);
   let occ = $state([]);
   let occOps = $state({});
   let opsLoaded = $state(false);
-  let now = $state(Date.now());
+  let saving = $state(false);
+  let error = $state('');
 
   const tab = $derived(
     TABS.some(([t]) => t === $currentRoute.params.$tab) ? $currentRoute.params.$tab : 'open'
   );
-  const selectedReason = $derived($currentRoute.params.$reason || '');
+  const selectedKey = $derived($currentRoute.params.$issue || '');
 
   async function load() {
-    const r = await fetch('/api/alerts/summary?reasonLimit=100')
+    const r = await fetch('/api/alerts/summary?reasonLimit=300')
       .then(x => x.json())
       .catch(() => null);
-    now = Date.now();
-    reasons = (r?.byReason ?? []).map(i => ({ ...i, kind: kindOf(i.reason) }));
+    groups = groupIssues(r?.byReason ?? []);
     loaded = true;
   }
   $effect(() => {
@@ -64,73 +55,93 @@
     };
   });
 
-  const visible = $derived(
-    reasons.filter(i =>
-      tab === 'open' ? true : tab === 'defects' ? i.kind === 'defect' : i.kind === tab
-    )
-  );
-  const counts = $derived({
-    open: reasons.length,
-    defects: reasons.filter(i => i.kind === 'defect').length,
-    upstream: reasons.filter(i => i.kind === 'upstream').length,
-    user: reasons.filter(i => i.kind === 'user').length,
+  const withState = $derived(groups.map(g => ({ ...g, state: stateOf(g, $issueStates) })));
+  const open = $derived(withState.filter(g => isOpen(g, $issueStates)));
+  const lists = $derived({
+    open,
+    defects: open.filter(g => g.kind === 'defect'),
+    upstream: open.filter(g => g.kind === 'upstream'),
+    user: open.filter(g => g.kind === 'user'),
+    muted: withState.filter(g => g.state === 'muted'),
+    resolved: withState.filter(g => g.state === 'resolved'),
   });
-  const selected = $derived(reasons.find(i => i.reason === selectedReason) ?? visible[0] ?? null);
+  const visible = $derived(lists[tab]);
+  const selected = $derived(withState.find(g => g.key === selectedKey) ?? visible[0] ?? null);
 
-  // Occurrences of the selected issue, and 7-day sparklines for every row from one query each.
+  const alertsFor = (g, extra = '') =>
+    Promise.all(
+      g.members.map(reason =>
+        fetch(`/api/alerts?reason=${encodeURIComponent(reason)}&limit=500${extra}`)
+          .then(r => r.json())
+          .then(d => d.alerts ?? [])
+          .catch(() => [])
+      )
+    ).then(parts => parts.flat().sort((a, b) => b.timestamp - a.timestamp));
+
+  // 7-day sparkline per row, fetched once per group.
   let sparks = $state({});
   $effect(() => {
-    for (const i of visible) {
-      if (sparks[i.reason]) continue;
-      sparks[i.reason] = [];
-      fetch(
-        `/api/alerts?reason=${encodeURIComponent(i.reason)}&limit=500&startTime=${Date.now() - 7 * DAY}`
-      )
-        .then(r => r.json())
-        .then(d => {
-          const days = Array(7).fill(0);
-          for (const a of d.alerts ?? []) {
-            const ago = Math.floor((Date.now() - a.timestamp) / DAY);
-            if (ago >= 0 && ago < 7) days[6 - ago]++;
-          }
-          sparks[i.reason] = days;
-        })
-        .catch(() => {});
+    for (const g of visible) {
+      if (sparks[g.key]) continue;
+      sparks[g.key] = [];
+      alertsFor(g, `&startTime=${Date.now() - 7 * DAY}`).then(list => {
+        const days = Array(7).fill(0);
+        for (const a of list) {
+          const ago = Math.floor((Date.now() - a.timestamp) / DAY);
+          if (ago >= 0 && ago < 7) days[6 - ago]++;
+        }
+        sparks[g.key] = days;
+      });
     }
   });
+
   $effect(() => {
-    const reason = selected?.reason;
+    const g = selected;
     occ = [];
     occOps = {};
     opsLoaded = false;
-    if (!reason) return;
-    fetch(`/api/alerts?reason=${encodeURIComponent(reason)}&limit=500`)
-      .then(r => r.json())
-      .then(async d => {
-        if (selected?.reason !== reason) return;
-        occ = d.alerts ?? [];
-        const recent = occ.slice(0, 8).filter(a => a.operation_id);
-        const ops = await Promise.all(
-          recent.map(a =>
-            fetch(`/api/operations/${encodeURIComponent(a.operation_id)}`)
-              .then(r => (r.ok ? r.json() : null))
-              .catch(() => null)
-          )
-        );
-        const map = {};
-        ops.forEach((o, i) => o?.operation && (map[recent[i].operation_id] = o.operation));
-        occOps = map;
-        opsLoaded = true;
-      })
-      .catch(() => {});
+    if (!g) return;
+    alertsFor(g).then(async list => {
+      if (selected?.key !== g.key) return;
+      occ = list;
+      const recent = list.slice(0, 8).filter(a => a.operation_id);
+      const ops = await Promise.all(
+        recent.map(a =>
+          fetch(`/api/operations/${encodeURIComponent(a.operation_id)}`)
+            .then(r => (r.ok ? r.json() : null))
+            .catch(() => null)
+        )
+      );
+      const map = {};
+      ops.forEach((o, i) => o?.operation && (map[recent[i].operation_id] = o.operation));
+      occOps = map;
+      opsLoaded = true;
+    });
   });
 
   const users = $derived(new Set(occ.map(a => a.user_id).filter(Boolean)).size);
   const firstSeen = $derived(occ.length ? Math.min(...occ.map(a => a.timestamp)) : null);
   const sparkMax = s => Math.max(1, ...(s ?? []));
+  const logSearch = g =>
+    g.key
+      .split('#')[0]
+      .replace(/[\s,.(:]+$/, '')
+      .slice(0, 60);
 
-  function pick(reason) {
-    navigate('issues', { ...(tab === 'open' ? {} : { tab }), reason });
+  async function setState(g, state) {
+    saving = true;
+    error = '';
+    try {
+      await setIssueState(g.key, state);
+    } catch {
+      error = 'could not save';
+    } finally {
+      saving = false;
+    }
+  }
+
+  function pick(key) {
+    navigate('issues', { ...(tab === 'open' ? {} : { tab }), issue: key });
   }
 
   headerActions.set(actions);
@@ -138,6 +149,7 @@
 </script>
 
 {#snippet actions()}
+  {#if error}<span class="error-text small">{error}</span>{/if}
   <span class="dim small">failures grouped by cause, kept 7 days</span>
 {/snippet}
 
@@ -150,7 +162,7 @@
         class:on={tab === id}
         onclick={() => navigate('issues', id === 'open' ? {} : { tab: id })}
       >
-        {label}<span class="n">{counts[id]}</span>
+        {label}<span class="n">{lists[id].length}</span>
       </button>
     {/each}
   </div>
@@ -166,30 +178,34 @@
           class="num">last seen</span
         >
       </div>
-      {#each visible as i (i.reason)}
-        {@const on = selected?.reason === i.reason}
-        <button class="tr issue" class:sel={on} onclick={() => pick(i.reason)}>
+      {#each visible as g (g.key)}
+        {@const on = selected?.key === g.key}
+        <button class="tr issue" class:sel={on} onclick={() => pick(g.key)}>
           <span class="accent" class:on></span>
           <span class="cause">
             <span class="row">
-              <span class="ellipsis title">{i.reason}</span>
-              <span class="chip {i.kind}">{KIND_LABEL[i.kind]}</span>
+              <span class="ellipsis title">{g.title}</span>
+              <span class="chip {g.kind}">{KIND_LABEL[g.kind]}</span>
+              {#if g.state === 'regressed'}<span class="chip bad">regressed</span>{/if}
             </span>
-            <span class="meta">{i.commands.map(c => `/${c}`).join(', ')}</span>
+            <span class="meta">
+              {g.commands.map(c => `/${c}`).join(', ')}{#if g.members.length > 1}
+                · {g.members.length} variants{/if}
+            </span>
           </span>
           <span class="spark" aria-hidden="true">
-            {#each sparks[i.reason] ?? [] as v, d (d)}
+            {#each sparks[g.key] ?? [] as v, d (d)}
               <span
-                class="sb {i.kind}"
-                style="height:{Math.max(2, (v / sparkMax(sparks[i.reason])) * 22)}px"
+                class="sb {g.kind}"
+                style="height:{Math.max(2, (v / sparkMax(sparks[g.key])) * 22)}px"
               ></span>
             {/each}
           </span>
-          <span class="num">{i.count}</span>
-          <span class="num dim small">{formatRelativeTime(i.lastSeen)}</span>
+          <span class="num">{g.count}</span>
+          <span class="num dim small">{formatRelativeTime(g.lastSeen)}</span>
         </button>
       {:else}
-        <div class="empty">{loaded ? 'nothing here, good' : 'loading…'}</div>
+        <div class="empty">{loaded ? 'nothing here' : 'loading…'}</div>
       {/each}
     </section>
 
@@ -198,6 +214,7 @@
         <div class="pb top">
           <div class="row">
             <span class="chip {selected.kind}">{KIND_LABEL[selected.kind]}</span>
+            {#if selected.state !== 'open'}<span class="chip">{selected.state}</span>{/if}
             {#if firstSeen}<span class="mono dim small"
                 >first seen {new Date(firstSeen).toLocaleDateString([], {
                   month: 'short',
@@ -205,18 +222,18 @@
                 })}</span
               >{/if}
           </div>
-          <h2>{selected.reason}</h2>
+          <h2>{selected.title}</h2>
           <p class="muted small">
             {#if selected.kind === 'user'}
-              A curated reply to something the user sent. Nothing to fix unless it keeps catching
-              valid links.
+              A reply to something the user sent. Nothing to fix unless it keeps catching valid
+              links.
             {:else if selected.kind === 'upstream'}
-              The site refused or no longer has the content. Worth a look only if it spikes.
+              A site refused or no longer has the content. Worth a look if it spikes.
             {:else}
-              Not recognised as user error or a site refusing, so treat it as ours until proven
-              otherwise.
+              Not a user error or a site refusing, so treat it as ours until proven otherwise.
             {/if}
           </p>
+          <p class="dim small basis">Classified {selected.basis}.</p>
         </div>
         <div class="stats">
           <div>
@@ -232,10 +249,14 @@
             <div class="v mono">{formatRelativeTime(selected.lastSeen)}</div>
           </div>
         </div>
-        <div class="section-label pad">Commands</div>
-        <div class="pad cmds">
-          {#each selected.commands as c (c)}<span class="chip">/{c}</span>{/each}
-        </div>
+        {#if selected.members.length > 1}
+          <div class="section-label pad">Variants</div>
+          <div class="pad variants">
+            {#each selected.members as m (m)}<div class="mono small muted ellipsis" title={m}>
+                {m}
+              </div>{/each}
+          </div>
+        {/if}
         <div class="section-label pad">Recent requests</div>
         <div class="occ">
           {#each occ.slice(0, 8) as a (a.id)}
@@ -254,15 +275,15 @@
                   hour12: false,
                 })}</span
               >
-              <span class="mono ellipsis" class:dim={!o}
-                >{o
+              <span class="mono ellipsis" class:dim={!o}>
+                {o
                   ? urlLabel(o.originalUrl)
                   : !a.operation_id
-                    ? '—'
+                    ? 'not linked to a request'
                     : opsLoaded
                       ? 'no longer kept'
-                      : '…'}</span
-              >
+                      : '…'}
+              </span>
               <span class="mono muted">{shortId(a.user_id)}</span>
             </button>
           {:else}
@@ -270,14 +291,40 @@
           {/each}
         </div>
         <div class="foot">
+          {#if selected.state === 'muted' || selected.state === 'resolved' || selected.state === 'regressed'}
+            <button class="btn" disabled={saving} onclick={() => setState(selected, null)}
+              ><RotateCcw size={13} />Reopen</button
+            >
+          {/if}
+          {#if selected.state !== 'muted'}
+            <button
+              class="btn"
+              disabled={saving}
+              onclick={() => setState(selected, { state: 'muted', until: Date.now() + DAY })}
+              ><BellOff size={13} />Mute 24h</button
+            >
+            <button
+              class="btn"
+              disabled={saving}
+              onclick={() => setState(selected, { state: 'muted', until: Date.now() + 7 * DAY })}
+              >Mute 7d</button
+            >
+          {/if}
+          {#if selected.state !== 'resolved'}
+            <button
+              class="btn"
+              disabled={saving}
+              onclick={() => setState(selected, { state: 'resolved', at: Date.now() })}
+              ><CheckCircle2 size={13} />Resolve</button
+            >
+          {/if}
           <button
             class="btn"
-            onclick={() => navigate('logs', { search: selected.reason.slice(0, 60), range: '7d' })}
+            onclick={() => navigate('logs', { search: logSearch(selected), range: '7d' })}
+            ><TerminalSquare size={13} />Logs</button
           >
-            <TerminalSquare size={13} />Open in logs
-          </button>
-          <button class="btn" onclick={() => navigator.clipboard?.writeText(selected.reason)}
-            ><Copy size={13} />Copy message</button
+          <button class="btn" onclick={() => navigator.clipboard?.writeText(selected.members[0])}
+            ><Copy size={13} />Copy</button
           >
         </div>
       </section>
@@ -295,6 +342,7 @@
   }
   .tabs {
     align-self: flex-start;
+    flex-wrap: wrap;
   }
   .small {
     font-size: 12px;
@@ -368,6 +416,9 @@
     margin: 0;
     line-height: 1.5;
   }
+  .basis {
+    margin-top: 6px !important;
+  }
   .stats {
     display: grid;
     grid-template-columns: repeat(3, 1fr);
@@ -387,11 +438,11 @@
   .pad {
     padding: 12px 16px 6px;
   }
-  .cmds {
-    display: flex;
-    gap: 6px;
+  .variants {
     padding-top: 0;
-    padding-bottom: 10px;
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
   }
   .occ {
     border-bottom: 1px solid #1f2126;

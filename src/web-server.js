@@ -17,8 +17,7 @@ import { getStreamInfo, isYouTubeUrl } from './utils/ytdlp.js';
 import { AppError, ValidationError } from './utils/errors.js';
 import * as accounts from './web/accounts.js';
 import { FFMPEG_INPUT_GUARD } from './utils/video-processor/utils.js';
-import { trimVideo } from './utils/video-processor/trim-video.js';
-import { trimGif } from './utils/video-processor/trim-gif.js';
+import { trimItem } from './utils/video-processor/trim-item.js';
 
 const execFileAsync = promisify(execFile);
 
@@ -234,33 +233,6 @@ export async function stripAudio(item) {
       output,
     ]);
     return { ...item, buffer: await fs.readFile(output) };
-  } finally {
-    await fs.rm(dir, { recursive: true, force: true });
-  }
-}
-
-// Same rule as the bot: yt-dlp already cut its download, everything else is cut here.
-export async function trimItem(item, { startTime, duration }) {
-  const ext = path.extname(item.filename ?? '').toLowerCase();
-  const kind = detectFileType(ext, item.contentType, item.buffer);
-  const gif = kind === 'gif' || ext === '.gif';
-  if (!gif && kind !== 'video') return item;
-  const dir = await fs.mkdtemp(path.join(os.tmpdir(), 'trim-'));
-  try {
-    const input = path.join(dir, `in${ext || '.mp4'}`);
-    const output = path.join(dir, gif ? 'out.gif' : 'out.mp4');
-    await fs.writeFile(input, item.buffer, { mode: 0o600, flag: 'wx' });
-    await (gif ? trimGif : trimVideo)(input, output, { startTime, duration });
-    const base = path.parse(item.filename ?? 'video').name || 'video';
-    return {
-      ...item,
-      buffer: await fs.readFile(output),
-      filename: `${base}${gif ? '.gif' : '.mp4'}`,
-      contentType: gif ? 'image/gif' : 'video/mp4',
-    };
-  } catch (error) {
-    logger.warn(`Trim failed, serving untrimmed: ${error.message}`);
-    return item;
   } finally {
     await fs.rm(dir, { recursive: true, force: true });
   }
@@ -524,12 +496,20 @@ export function createHandler({
     return entry.count > limit ? Math.ceil((entry.resetAt - now) / 1000) : 0;
   };
 
-  const limit = (key, max) => {
+  const limit = (key, max, message = 'too many requests, try again in a few minutes.') => {
     const wait = overLimit(key, max);
     if (wait) {
-      throw retryLater('too many requests, try again in a few minutes.', 'RATE_LIMITED', 429, wait);
+      throw retryLater(message, 'RATE_LIMITED', 429, wait);
     }
   };
+
+  // Rate limit first, so a flood never reaches Turnstile's siteverify.
+  async function requireHuman(req, server, body, action, max) {
+    limit(`${action}:${ipKey(req, server)}`, max);
+    if (!(await verify(body.turnstile, action))) {
+      throw new AppError('verification failed, reload the page.', 'VERIFICATION_FAILED', 403);
+    }
+  }
 
   // WebAuthn challenges live only here, single use, 5 minutes.
   const challenges = new Map();
@@ -574,6 +554,12 @@ export function createHandler({
     return accountId;
   }
 
+  async function requireSessionAnd2fa(req) {
+    const accountId = await requireSession(req);
+    await requireSecondFactor(accountId, (await readJson(req)).code);
+    return accountId;
+  }
+
   async function requireSecondFactor(accountId, code) {
     const result = await accounts.checkSecondFactor(accountId, code);
     if (result === 'required') {
@@ -608,15 +594,7 @@ export function createHandler({
     } else {
       caller = `ip:${ipKey(req, server)}`;
     }
-    const wait = overLimit(caller, ipLimit);
-    if (wait) {
-      throw retryLater(
-        'too many downloads, try again in a few minutes.',
-        'RATE_LIMITED',
-        429,
-        wait
-      );
-    }
+    limit(caller, ipLimit, 'too many downloads, try again in a few minutes.');
     if (!auth && !(await verify(body.turnstile, 'download'))) {
       throw new AppError('verification failed, reload the page.', 'VERIFICATION_FAILED', 403);
     }
@@ -652,21 +630,14 @@ export function createHandler({
       return handleDownload(req, server, headers);
     }
     if (method === 'POST' && pathname === '/v1/account') {
-      const body = await readJson(req);
-      limit(`signup:${ipKey(req, server)}`, signupLimit);
-      if (!(await verify(body.turnstile, 'account'))) {
-        throw new AppError('verification failed, reload the page.', 'VERIFICATION_FAILED', 403);
-      }
+      await requireHuman(req, server, await readJson(req), 'account', signupLimit);
       const { id, number } = await accounts.createAccount();
       const token = await accounts.createSession(id);
       return withCookie({ id, number }, 201, token, accounts.SESSION_MS / 1000);
     }
     if (method === 'POST' && pathname === '/v1/session') {
       const body = await readJson(req);
-      limit(`login:${ipKey(req, server)}`, loginLimit);
-      if (!(await verify(body.turnstile, 'login'))) {
-        throw new AppError('verification failed, reload the page.', 'VERIFICATION_FAILED', 403);
-      }
+      await requireHuman(req, server, body, 'login', loginLimit);
       const accountId = await accounts.verifyAccountNumber(body.number);
       if (!accountId) {
         throw new AppError('that account number is not right.', 'UNAUTHORIZED', 401);
@@ -689,8 +660,7 @@ export function createHandler({
       return withCookie({ ok: true }, 200, '', 0);
     }
     if (method === 'POST' && pathname === '/v1/account/rotate') {
-      const accountId = await requireSession(req);
-      await requireSecondFactor(accountId, (await readJson(req)).code);
+      const accountId = await requireSessionAnd2fa(req);
       const number = await accounts.rotateAccountNumber(accountId);
       await accounts.deleteOtherSessions(accountId, readCookie(req, SESSION_COOKIE));
       return json({ number }, 200, headers);
@@ -730,8 +700,7 @@ export function createHandler({
       return json({ recoveryCodes }, 200, headers);
     }
     if (method === 'DELETE' && pathname === '/v1/totp') {
-      const accountId = await requireSession(req);
-      await requireSecondFactor(accountId, (await readJson(req)).code);
+      const accountId = await requireSessionAnd2fa(req);
       await accounts.disableTotp(accountId);
       return json({ ok: true }, 200, headers);
     }
@@ -749,8 +718,7 @@ export function createHandler({
       );
     }
     if (method === 'POST' && pathname === '/v1/passkeys/register/options') {
-      const accountId = await requireSession(req);
-      await requireSecondFactor(accountId, (await readJson(req)).code);
+      const accountId = await requireSessionAnd2fa(req);
       const options = await webauthn.generateRegistrationOptions({
         rpName: 'gronka',
         rpID: RP_ID,
@@ -792,11 +760,7 @@ export function createHandler({
       return json(added, 201, headers);
     }
     if (method === 'POST' && pathname === '/v1/passkeys/login/options') {
-      const body = await readJson(req);
-      limit(`login:${ipKey(req, server)}`, loginLimit);
-      if (!(await verify(body.turnstile, 'login'))) {
-        throw new AppError('verification failed, reload the page.', 'VERIFICATION_FAILED', 403);
-      }
+      await requireHuman(req, server, await readJson(req), 'login', loginLimit);
       const options = await webauthn.generateAuthenticationOptions({
         rpID: RP_ID,
         userVerification: 'required',
@@ -838,8 +802,7 @@ export function createHandler({
     }
     const passkeyMatch = pathname.match(/^\/v1\/passkeys\/([\w-]{1,1400})$/);
     if (method === 'DELETE' && passkeyMatch) {
-      const accountId = await requireSession(req);
-      await requireSecondFactor(accountId, (await readJson(req)).code);
+      const accountId = await requireSessionAnd2fa(req);
       if (!(await accounts.removePasskey(accountId, passkeyMatch[1]))) {
         throw new AppError('no such passkey.', 'NOT_FOUND', 404);
       }

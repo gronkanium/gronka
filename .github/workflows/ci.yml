@@ -147,7 +147,7 @@ jobs:
         with:
           bun-version: ${{ env.BUN_VERSION }}
       - run: bun install --frozen-lockfile
-      - run: sudo apt-get update && sudo apt-get install -y ffmpeg postgresql-client
+      - run: sudo apt-get update && sudo apt-get install -y ffmpeg gifsicle postgresql-client
       - run: psql -c 'DROP SCHEMA IF EXISTS public CASCADE; CREATE SCHEMA public;'
       # GRONKA_E2E (set by the script) is what un-skips the module-mock suites, and
       # run-e2e-tests.js fails on zero discovered files, so this job cannot pass vacuously.

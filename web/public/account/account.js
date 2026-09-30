@@ -17,6 +17,17 @@ const busy = async (button, fn) => {
     if (button.isConnected) button.disabled = false;
   }
 };
+// Runs fn with the button disabled and prints any error into msg; `cancelled` replaces a dismissed browser prompt.
+const act = (button, msg, fn, cancelled) =>
+  busy(button, async () => {
+    try {
+      await fn();
+    } catch (error) {
+      err($(msg), cancelled && error.name === 'NotAllowedError' ? { message: cancelled } : error);
+    }
+  });
+const onAct = (sel, msg, fn, cancelled) =>
+  on(sel, event => act(event.currentTarget, msg, fn, cancelled));
 
 const b64url = buf =>
   btoa(String.fromCharCode(...new Uint8Array(buf)))
@@ -188,20 +199,14 @@ function offerPasskey() {
     <div class="acts"><button type="button" class="btn" id="add">${icon('passkey')}add a passkey</button>
     <button type="button" class="linkish" id="skip">not now</button></div><div id="msg"></div>`);
   $('h1').focus();
-  on('#add', event =>
-    busy(event.currentTarget, async () => {
-      try {
-        await addPasskey();
-        dashboard();
-      } catch (error) {
-        err(
-          $('#msg'),
-          error.name === 'NotAllowedError'
-            ? { message: 'cancelled. you can add one later.' }
-            : error
-        );
-      }
-    })
+  onAct(
+    '#add',
+    '#msg',
+    async () => {
+      await addPasskey();
+      dashboard();
+    },
+    'cancelled. you can add one later.'
   );
   on('#skip', dashboard);
 }
@@ -224,17 +229,11 @@ function signedOut() {
   const warm = () => (warmTurnstile('account'), warmTurnstile('login'));
   view.addEventListener('focusin', warm, { once: true });
   view.addEventListener('pointerdown', warm, { once: true });
-  on('#create', event =>
-    busy(event.currentTarget, async () => {
-      try {
-        const turnstile = await turnstileToken('account');
-        const { number } = await api('/v1/account', { method: 'POST', body: { turnstile } });
-        saveNumber(number, offerPasskey);
-      } catch (error) {
-        err($('#create-msg'), error);
-      }
-    })
-  );
+  onAct('#create', '#create-msg', async () => {
+    const turnstile = await turnstileToken('account');
+    const { number } = await api('/v1/account', { method: 'POST', body: { turnstile } });
+    saveNumber(number, offerPasskey);
+  });
   $('#login').addEventListener('submit', event => {
     event.preventDefault();
     busy($('#login-go'), async () => {
@@ -253,29 +252,23 @@ function signedOut() {
       }
     });
   });
-  on('#pk', event =>
-    busy(event.currentTarget, async () => {
-      try {
-        const turnstile = await turnstileToken('login');
-        const { challengeId, options } = await api('/v1/passkeys/login/options', {
-          method: 'POST',
-          body: { turnstile },
-        });
-        const cred = await navigator.credentials.get({ publicKey: requestOptions(options) });
-        await api('/v1/passkeys/login', {
-          method: 'POST',
-          body: { challengeId, response: credentialJson(cred) },
-        });
-        dashboard();
-      } catch (error) {
-        err(
-          $('#login-msg'),
-          error.name === 'NotAllowedError'
-            ? { message: 'that was cancelled or no passkey was found.' }
-            : error
-        );
-      }
-    })
+  onAct(
+    '#pk',
+    '#login-msg',
+    async () => {
+      const turnstile = await turnstileToken('login');
+      const { challengeId, options } = await api('/v1/passkeys/login/options', {
+        method: 'POST',
+        body: { turnstile },
+      });
+      const cred = await navigator.credentials.get({ publicKey: requestOptions(options) });
+      await api('/v1/passkeys/login', {
+        method: 'POST',
+        body: { challengeId, response: credentialJson(cred) },
+      });
+      dashboard();
+    },
+    'that was cancelled or no passkey was found.'
   );
 }
 
@@ -334,21 +327,17 @@ async function dashboard(notice = '') {
 
   $('#newkey').addEventListener('submit', event => {
     event.preventDefault();
-    busy(event.target.querySelector('button'), async () => {
-      try {
-        const { id, key } = await api('/v1/keys', {
-          method: 'POST',
-          body: { label: $('#label').value },
-        });
-        await dashboard(`<p class="note">new key <span class="mono">${esc(id)}</span>. copy it now, it is shown once:</p>
-          <p class="number key ink">${esc(key)}</p><div class="acts"><button type="button" class="btn small" id="copykey" data-key="${esc(key)}">${icon('copy')}copy key</button></div>`);
-        on('#copykey', async () => {
-          await navigator.clipboard.writeText($('#copykey').dataset.key);
-          $('#copykey').lastChild.textContent = 'copied';
-        });
-      } catch (error) {
-        err($('#key-out'), error);
-      }
+    act(event.target.querySelector('button'), '#key-out', async () => {
+      const { id, key } = await api('/v1/keys', {
+        method: 'POST',
+        body: { label: $('#label').value },
+      });
+      await dashboard(`<p class="note">new key <span class="mono">${esc(id)}</span>. copy it now, it is shown once:</p>
+        <p class="number key ink">${esc(key)}</p><div class="acts"><button type="button" class="btn small" id="copykey" data-key="${esc(key)}">${icon('copy')}copy key</button></div>`);
+      on('#copykey', async () => {
+        await navigator.clipboard.writeText($('#copykey').dataset.key);
+        $('#copykey').lastChild.textContent = 'copied';
+      });
     });
   });
   view.querySelectorAll('[data-revoke]').forEach(button =>
@@ -363,51 +352,32 @@ async function dashboard(notice = '') {
   );
   view.querySelectorAll('[data-unpk]').forEach(button =>
     button.addEventListener('click', () =>
-      busy(button, async () => {
-        try {
-          await withCode(body =>
-            api(`/v1/passkeys/${encodeURIComponent(button.dataset.unpk)}`, {
-              method: 'DELETE',
-              body,
-            })
-          );
-          dashboard('<p class="note">passkey removed.</p>');
-        } catch (error) {
-          err($('#pk-msg'), error);
-        }
+      act(button, '#pk-msg', async () => {
+        await withCode(body =>
+          api(`/v1/passkeys/${encodeURIComponent(button.dataset.unpk)}`, { method: 'DELETE', body })
+        );
+        dashboard('<p class="note">passkey removed.</p>');
       })
     )
   );
-  on('#addpk', event =>
-    busy(event.currentTarget, async () => {
-      try {
-        await addPasskey();
-        dashboard('<p class="note">passkey added.</p>');
-      } catch (error) {
-        err(
-          $('#pk-msg'),
-          error.name === 'NotAllowedError' ? { message: 'that was cancelled.' } : error
-        );
-      }
-    })
+  onAct(
+    '#addpk',
+    '#pk-msg',
+    async () => {
+      await addPasskey();
+      dashboard('<p class="note">passkey added.</p>');
+    },
+    'that was cancelled.'
   );
-  on('#rotate', event =>
-    busy(event.currentTarget, async () => {
-      if (!confirm('make a new account number? the current one stops working right away.')) return;
-      try {
-        const { number } = await withCode(body =>
-          api('/v1/account/rotate', { method: 'POST', body })
-        );
-        saveNumber(
-          number,
-          () => dashboard('<p class="note">new number saved. the old one is dead.</p>'),
-          { rotated: true }
-        );
-      } catch (error) {
-        err($('#rot-msg'), error);
-      }
-    })
-  );
+  onAct('#rotate', '#rot-msg', async () => {
+    if (!confirm('make a new account number? the current one stops working right away.')) return;
+    const { number } = await withCode(body => api('/v1/account/rotate', { method: 'POST', body }));
+    saveNumber(
+      number,
+      () => dashboard('<p class="note">new number saved. the old one is dead.</p>'),
+      { rotated: true }
+    );
+  });
   on('#logout', async () => {
     await api('/v1/session', { method: 'DELETE' }).catch(() => {});
     hint(false);
@@ -416,19 +386,13 @@ async function dashboard(notice = '') {
   $('#confirm').addEventListener('input', event => {
     $('#delete').disabled = event.target.value.trim().toLowerCase() !== 'delete';
   });
-  on('#delete', event =>
-    busy(event.currentTarget, async () => {
-      try {
-        await withCode(body => api('/v1/account', { method: 'DELETE', body }));
-      } catch (error) {
-        return err($('#del-msg'), error);
-      }
-      hint(false);
-      show(
-        '<h1>gone.</h1><img class="peng" src="/p/done.svg" alt="" width="400" height="400" /><p>the account and everything in it are gone.</p><p><a href="/">back to downloading</a></p>'
-      );
-    })
-  );
+  onAct('#delete', '#del-msg', async () => {
+    await withCode(body => api('/v1/account', { method: 'DELETE', body }));
+    hint(false);
+    show(
+      '<h1>gone.</h1><img class="peng" src="/p/done.svg" alt="" width="400" height="400" /><p>the account and everything in it are gone.</p><p><a href="/">back to downloading</a></p>'
+    );
+  });
   totpOn = me.totp;
   totpBox(me);
 }
@@ -439,7 +403,8 @@ function codesBlock(codes) {
     <div class="acts"><button type="button" class="btn small" id="dlcodes">${icon('download')}download codes</button></div>`;
 }
 
-function wireCodes(codes) {
+function showCodes(box, codes, before = '') {
+  box.innerHTML = `${before}${codesBlock(codes)}<button type="button" class="linkish" id="done2fa">done</button>`;
   on('#dlcodes', () =>
     save(
       new Blob([`gronka recovery codes\n\n${codes.join('\n')}\n\neach works once.\n`], {
@@ -448,6 +413,7 @@ function wireCodes(codes) {
       'gronka-recovery-codes.txt'
     )
   );
+  on('#done2fa', () => dashboard());
 }
 
 function totpBox(me) {
@@ -461,46 +427,29 @@ function totpBox(me) {
   const submit = (id, fn) =>
     $(`#${id}`).addEventListener('submit', event => {
       event.preventDefault();
-      busy(event.target.querySelector('button'), async () => {
-        try {
-          await fn(event.target.code.value.trim());
-        } catch (error) {
-          err($(`#${id}-msg`), error);
-        }
-      });
+      act(event.target.querySelector('button'), `#${id}-msg`, () =>
+        fn(event.target.code.value.trim())
+      );
     });
 
   if (!me.totp) {
     box.innerHTML = `<p>use an authenticator code with your number or passkey.</p><button type="button" class="btn line small" id="setup">turn on 2fa</button><div id="setup-msg"></div>`;
-    on('#setup', event =>
-      busy(event.currentTarget, async () => {
-        try {
-          const { uri, secret } = await api('/v1/totp/setup', { method: 'POST', body: {} });
-          box.innerHTML = `<p>add this to your authenticator app. on your phone, <a href="${esc(uri)}">open it in the app</a>, or type the key:</p>
-            <p class="number key ink mono">${esc(secret.match(/.{1,4}/g).join(' '))}</p>${codeForm('enable', 'the 6-digit code it shows', 'turn on')}`;
-          submit('enable', async code => {
-            const { recoveryCodes } = await api('/v1/totp/enable', {
-              method: 'POST',
-              body: { code },
-            });
-            box.innerHTML = `<p class="note">2fa is on.</p>${codesBlock(recoveryCodes)}<button type="button" class="linkish" id="done2fa">done</button>`;
-            wireCodes(recoveryCodes);
-            on('#done2fa', () => dashboard());
-          });
-        } catch (error) {
-          err($('#setup-msg'), error);
-        }
-      })
-    );
+    onAct('#setup', '#setup-msg', async () => {
+      const { uri, secret } = await api('/v1/totp/setup', { method: 'POST', body: {} });
+      box.innerHTML = `<p>add this to your authenticator app. on your phone, <a href="${esc(uri)}">open it in the app</a>, or type the key:</p>
+        <p class="number key ink mono">${esc(secret.match(/.{1,4}/g).join(' '))}</p>${codeForm('enable', 'the 6-digit code it shows', 'turn on')}`;
+      submit('enable', async code => {
+        const { recoveryCodes } = await api('/v1/totp/enable', { method: 'POST', body: { code } });
+        showCodes(box, recoveryCodes, '<p class="note">2fa is on.</p>');
+      });
+    });
     return;
   }
   box.innerHTML = `<p>${me.recoveryCodesLeft} recovery code${me.recoveryCodesLeft === 1 ? '' : 's'} left.</p>
     ${codeForm('regen', 'authenticator or recovery code, for new recovery codes', 'new codes')}${codeForm('off', 'authenticator or recovery code, to turn 2fa off', 'turn off')}`;
   submit('regen', async code => {
     const { recoveryCodes } = await api('/v1/totp/recovery', { method: 'POST', body: { code } });
-    box.innerHTML = `${codesBlock(recoveryCodes)}<button type="button" class="linkish" id="done2fa">done</button>`;
-    wireCodes(recoveryCodes);
-    on('#done2fa', () => dashboard());
+    showCodes(box, recoveryCodes);
   });
   submit('off', async code => {
     await api('/v1/totp', { method: 'DELETE', body: { code } });

@@ -3,7 +3,8 @@ import { createLogger } from '../../utils/logger.js';
 import { botConfig } from '../../utils/config.js';
 import { checkRateLimit } from '../../utils/rate-limit.js';
 import { createFailedOperation } from '../../utils/operations-tracker.js';
-import { safeInteractionReply } from '../../utils/interaction-helpers.js';
+import { safeInteractionReply, safeInteractionEditReply } from '../../utils/interaction-helpers.js';
+import { notifyCommandFailure } from '../../utils/ntfy-notifier.js';
 import { parseTimestamp } from '../../utils/validation.js';
 
 const logger = createLogger('command-guards');
@@ -52,8 +53,8 @@ export async function replyIfRateLimited(interaction, { type, action, commandSou
  * @param {import('discord.js').ChatInputCommandInteraction} interaction
  * @param {Object} params
  * @param {'download'|'convert'} params.type - Operation type (for tracking)
- * @returns {Promise<{startTime: number|null, endTime: number|null}|null>} Parsed times in
- *   seconds (null for options the user didn't provide), or null when a reply was already sent
+ * @returns {Promise<{startTime: number|null, endTime: number|null, duration: number|null}|null>}
+ *   Parsed times in seconds (null for options not given), or null when a reply was already sent
  */
 export async function resolveTimeOptions(interaction, { type }) {
   const userId = interaction.user.id;
@@ -100,5 +101,21 @@ export async function resolveTimeOptions(interaction, { type }) {
     });
   }
 
+  times.duration = endTime === null ? null : endTime - (startTime ?? 0);
   return times;
+}
+
+// Ephemeral before the reply is deferred, an edit of the deferred reply after.
+export function replyError(interaction, content) {
+  return interaction.deferred
+    ? safeInteractionEditReply(interaction, { content })
+    : safeInteractionReply(interaction, { content, flags: MessageFlags.Ephemeral });
+}
+
+// Turns a request away before any work: optional failed-operation row, reply, optional ntfy.
+export async function refuse(interaction, type, { message, reason, context, notify = false }) {
+  const userId = interaction.user.id;
+  if (reason) createFailedOperation(type, userId, message, reason, context);
+  await replyError(interaction, message);
+  if (notify) await notifyCommandFailure(type, { userId, error: message });
 }

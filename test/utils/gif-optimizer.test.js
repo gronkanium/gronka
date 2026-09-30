@@ -2,10 +2,12 @@ import { test, describe, beforeAll, afterAll } from 'bun:test';
 import assert from 'node:assert';
 import {
   isGifFile,
-  extractHashFromCdnUrl,
+  parseOwnCdnUrl,
   calculateSizeReduction,
   formatSizeMb,
 } from '../../src/utils/gif-optimizer.js';
+
+const extractHashFromCdnUrl = url => parseOwnCdnUrl(url)?.hash ?? null;
 
 describe('gif optimizer utilities', () => {
   describe('isGifFile', () => {
@@ -35,7 +37,7 @@ describe('gif optimizer utilities', () => {
     });
   });
 
-  describe('extractHashFromCdnUrl', () => {
+  describe('parseOwnCdnUrl', () => {
     // The CDN host is whatever this instance configured, so the tests configure one.
     const previousDomain = process.env.R2_PUBLIC_DOMAIN;
 

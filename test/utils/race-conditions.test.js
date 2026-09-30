@@ -1,6 +1,6 @@
 import { test, describe, beforeAll, afterAll } from 'bun:test';
 import assert from 'node:assert';
-import { saveGif, saveVideo, saveImage } from '../../src/utils/storage.js';
+import { saveMedia } from '../../src/utils/storage.js';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { mkdirSync } from 'node:fs';
@@ -40,7 +40,9 @@ describe('race conditions', () => {
       const buffer = Buffer.from('GIF89a test gif content');
 
       // Create multiple concurrent save operations
-      const promises = Array.from({ length: 5 }, () => saveGif(buffer, hash, testStoragePath));
+      const promises = Array.from({ length: 5 }, () =>
+        saveMedia('gif', buffer, hash, '.gif', testStoragePath)
+      );
 
       // All should complete without errors (race condition handled)
       const results = await Promise.allSettled(promises);
@@ -61,7 +63,7 @@ describe('race conditions', () => {
 
       // Create multiple concurrent save operations
       const promises = Array.from({ length: 5 }, () =>
-        saveVideo(buffer, hash, extension, testStoragePath)
+        saveMedia('video', buffer, hash, extension, testStoragePath)
       );
 
       // All should complete without errors
@@ -79,7 +81,7 @@ describe('race conditions', () => {
 
       // Create multiple concurrent save operations
       const promises = Array.from({ length: 5 }, () =>
-        saveImage(buffer, hash, extension, testStoragePath)
+        saveMedia('image', buffer, hash, extension, testStoragePath)
       );
 
       // All should complete without errors

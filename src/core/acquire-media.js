@@ -44,6 +44,33 @@ const logger = createLogger('acquire-media');
 // rather than letting one link pull 20 full-resolution originals at once.
 const MAX_REDDIT_GALLERY_SLIDES = 10;
 
+// Each slide carries candidates, best first: the unsigned original, then a signed preview,
+// because the original 404s for crossposts.
+async function downloadRedditSlides(images, adminUser) {
+  let lastError;
+  const downloadSlide = async candidates => {
+    for (const candidate of candidates) {
+      try {
+        return await downloadFileFromUrl(candidate, adminUser);
+      } catch (candidateError) {
+        lastError = candidateError;
+      }
+    }
+    return null;
+  };
+  const slides = images.slice(0, MAX_REDDIT_GALLERY_SLIDES);
+  const downloaded = (await Promise.all(slides.map(downloadSlide))).filter(Boolean);
+  if (downloaded.length === 0) {
+    throw lastError;
+  }
+  if (downloaded.length < slides.length) {
+    logger.warn(
+      `Reddit gallery: ${slides.length - downloaded.length} of ${slides.length} slide(s) failed, sending the rest`
+    );
+  }
+  return downloaded.length === 1 ? downloaded[0] : downloaded;
+}
+
 function isTwitterXUrl(url) {
   try {
     const hostname = new URL(url).hostname.toLowerCase().replace(/^www\./, '');
@@ -133,6 +160,7 @@ export async function acquireMedia(
     throw new ValidationError(BLOCKED_DESTINATION_MESSAGE);
   }
   const maxSize = adminUser ? Infinity : await getMaxVideoSize();
+  const trimming = startTime !== null || duration !== null;
   let cobaltResponse = null;
   const keep = response => (cobaltResponse = response);
   // Reddit deprecated the unauthenticated .json endpoints in May 2026, so yt-dlp cannot read
@@ -195,8 +223,7 @@ export async function acquireMedia(
     !isKlipy &&
     !isIgStory &&
     !isDirectMedia &&
-    startTime === null &&
-    duration === null &&
+    !trimming &&
     (urlOnly ?? (await getBooleanSetting('url_only_mode', false)))
   ) {
     logStep('url_only_mode', 'running', {
@@ -222,13 +249,7 @@ export async function acquireMedia(
   }
 
   // 'hybrid' still attaches small clips, which outlive the tweet; big ones get the twimg URL.
-  if (
-    COBALT_ENABLED &&
-    !cobaltResponse &&
-    isTwitterXUrl(url) &&
-    startTime === null &&
-    duration === null
-  ) {
+  if (COBALT_ENABLED && !cobaltResponse && isTwitterXUrl(url) && !trimming) {
     const deliveryMode = await getSetting('twitter_delivery', 'hybrid');
     if (deliveryMode === 'always_url' || deliveryMode === 'hybrid') {
       try {
@@ -260,89 +281,63 @@ export async function acquireMedia(
     }
   }
 
-  let downloadMethod;
-  if (useYtdlp) {
-    downloadMethod = 'ytdlp';
-    logger.info(`Downloading from ${ytdlpSite} via yt-dlp: ${url}`);
-    logStep('download_start', 'running', {
-      message: `Starting download from ${ytdlpSite} via yt-dlp`,
-      metadata: { url, maxSize: adminUser ? 'unlimited' : maxSize },
-    });
-  } else if (galleryDlSite && GALLERY_DL_ENABLED) {
-    downloadMethod = 'gallery-dl';
-    logger.info(`Downloading from ${galleryDlSite} via gallery-dl: ${url}`);
-    logStep('download_start', 'running', {
-      message: `Starting download from ${galleryDlSite} via gallery-dl`,
-      metadata: { url, maxSize: adminUser ? 'unlimited' : maxSize },
-    });
-  } else if (isHentaiGifz) {
-    downloadMethod = 'hentaigifz';
-    logger.info(`Downloading from hentaigifz page scrape: ${url}`);
-    logStep('download_start', 'running', {
-      message: 'Starting download from hentaigifz',
-      metadata: { url, maxSize: adminUser ? 'unlimited' : maxSize },
-    });
-  } else if (isBooru) {
-    downloadMethod = 'booru';
-    logger.info(`Downloading from booru API: ${url}`);
-    logStep('download_start', 'running', {
-      message: 'Starting download from booru',
-      metadata: { url, maxSize: adminUser ? 'unlimited' : maxSize },
-    });
-  } else if (isPinterest) {
-    downloadMethod = 'pinterest';
-    logger.info(`Downloading from Pinterest page scrape: ${url}`);
-    logStep('download_start', 'running', {
-      message: 'Starting download from Pinterest',
-      metadata: { url, maxSize: adminUser ? 'unlimited' : maxSize },
-    });
-  } else if (isKlipy) {
-    downloadMethod = 'klipy';
-    logger.info(`Downloading from Klipy page scrape: ${url}`);
-    logStep('download_start', 'running', {
-      message: 'Starting download from Klipy',
-      metadata: { url, maxSize: adminUser ? 'unlimited' : maxSize },
-    });
-  } else if (isIgStory) {
-    downloadMethod = 'instagram-story';
-    logger.info(`Downloading Instagram story via web API: ${url}`);
-    logStep('download_start', 'running', {
-      message: 'Starting download from Instagram story',
-      metadata: { url, maxSize: adminUser ? 'unlimited' : maxSize },
-    });
-  } else if (isDirectMedia) {
-    downloadMethod = 'direct';
-    logger.info(`Downloading direct media file: ${url}`);
-    logStep('download_start', 'running', {
-      message: 'Starting direct media download',
-      metadata: { url, maxSize: adminUser ? 'unlimited' : maxSize },
-    });
-  } else if (useReddit) {
-    downloadMethod = 'reddit';
-    logger.info(`Downloading from Reddit post page: ${url}`);
-    logStep('download_start', 'running', {
-      message: 'Starting download from Reddit',
-      metadata: { url, maxSize: adminUser ? 'unlimited' : maxSize },
-    });
-  } else {
-    downloadMethod = 'cobalt';
-    logger.info(`Downloading file from Cobalt: ${url}`);
-    logStep('download_start', 'running', {
-      message: 'Starting download from Cobalt',
-      metadata: { url, maxSize: adminUser ? 'unlimited' : maxSize },
-    });
-  }
+  const ytdlpMaxDuration = async () =>
+    trimming || adminUser ? Infinity : await getMaxVideoDuration();
+  const extractors = [
+    [
+      'ytdlp',
+      useYtdlp,
+      `${ytdlpSite} via yt-dlp`,
+      async () =>
+        downloadFromYouTube(
+          url,
+          adminUser,
+          maxSize,
+          adminUser ? null : YTDLP_QUALITY,
+          await ytdlpMaxDuration(),
+          startTime,
+          duration
+        ),
+    ],
+    [
+      'gallery-dl',
+      galleryDlSite && GALLERY_DL_ENABLED,
+      `${galleryDlSite} via gallery-dl`,
+      () => downloadWithGalleryDl(url, adminUser, maxSize, galleryOptions),
+    ],
+    ['hentaigifz', isHentaiGifz, 'hentaigifz', () => downloadFromHentaiGifz(url, adminUser)],
+    ['booru', isBooru, 'booru', () => downloadFromBooru(url, adminUser)],
+    ['pinterest', isPinterest, 'Pinterest', () => downloadFromPinterest(url, adminUser)],
+    ['klipy', isKlipy, 'Klipy', () => downloadFromKlipy(url, adminUser)],
+    ['instagram-story', isIgStory, 'Instagram story', () => downloadFromInstagram(url, adminUser)],
+    [
+      'direct',
+      isDirectMedia,
+      'direct media link',
+      () => downloadDirectMedia(url, adminUser, client, { userAgent: booruCdnUserAgent(url) }),
+    ],
+    ['reddit', useReddit, 'Reddit', () => downloadRedditSlides(redditImages, adminUser)],
+  ];
+  let [downloadMethod, , sourceLabel, extract] = extractors.find(([, applies]) => applies) ?? [
+    'cobalt',
+    true,
+    'Cobalt',
+    null,
+  ];
+  logger.info(`Downloading from ${sourceLabel}: ${url}`);
+  logStep('download_start', 'running', {
+    message: `Starting download from ${sourceLabel}`,
+    metadata: { url, maxSize: adminUser ? 'unlimited' : maxSize },
+  });
 
   // Started early: it takes ~3 s and decides both the DRM route and the tags.
   const soundcloud =
-    isSoundCloudUrl(url) && startTime === null && duration === null
-      ? soundcloudTrack(url).catch(() => null)
-      : null;
+    isSoundCloudUrl(url) && !trimming ? soundcloudTrack(url).catch(() => null) : null;
 
   // Runs beside the SoundCloud read; a DRM-only track has no source links to hand out.
   // cobalt turns X's looping mp4s into real gifs; a raw stream would hand out the mp4.
   const cobaltGif = /\.gif$/i.test(cobaltResponse?.filename ?? '');
-  if (streamFirst && !cobaltGif && startTime === null && duration === null) {
+  if (streamFirst && !cobaltGif && !trimming) {
     const lane = streamFirst(url, downloadMethod).catch(() => null);
     const streams = (await soundcloud)?.drm ? null : await lane;
     if (streams) {
@@ -351,114 +346,23 @@ export async function acquireMedia(
   }
 
   let fileData;
-  if (downloadMethod === 'ytdlp') {
-    // --download-sections fetches only the trimmed segment, never the whole file.
-    const skipDurationLimit = startTime !== null || duration !== null;
-    const maxDuration = skipDurationLimit || adminUser ? Infinity : await getMaxVideoDuration();
-
-    fileData = await downloadFromYouTube(
-      url,
-      adminUser,
-      maxSize,
-      adminUser ? null : YTDLP_QUALITY,
-      maxDuration,
-      startTime,
-      duration
-    );
-
-    const trimmedByYtdlp = startTime !== null || duration !== null;
-    logStep('download_complete', 'success', {
-      message: trimmedByYtdlp
-        ? 'file segment downloaded successfully via yt-dlp (already trimmed)'
-        : 'file downloaded successfully via yt-dlp',
-      metadata: {
-        url,
-        fileCount: 1,
-        trimmedByYtdlp,
-        startTime,
-        duration,
-      },
-    });
-  } else if (downloadMethod === 'gallery-dl') {
-    fileData = await downloadWithGalleryDl(url, adminUser, maxSize, galleryOptions);
-    logStep('download_complete', 'success', {
-      message: 'file downloaded successfully via gallery-dl',
-      metadata: { url, fileCount: Array.isArray(fileData) ? fileData.length : 1 },
-    });
-  } else if (downloadMethod === 'hentaigifz') {
-    fileData = await downloadFromHentaiGifz(url, adminUser);
-    logStep('download_complete', 'success', {
-      message: 'file downloaded successfully via hentaigifz',
-      metadata: { url, fileCount: 1 },
-    });
-  } else if (downloadMethod === 'booru') {
-    fileData = await downloadFromBooru(url, adminUser);
-    logStep('download_complete', 'success', {
-      message: 'file downloaded successfully via booru',
-      metadata: { url, fileCount: 1 },
-    });
-  } else if (downloadMethod === 'pinterest') {
-    fileData = await downloadFromPinterest(url, adminUser);
-    logStep('download_complete', 'success', {
-      message: 'file downloaded successfully via Pinterest',
-      metadata: { url, fileCount: 1 },
-    });
-  } else if (downloadMethod === 'klipy') {
-    fileData = await downloadFromKlipy(url, adminUser);
-    logStep('download_complete', 'success', {
-      message: 'file downloaded successfully via Klipy',
-      metadata: { url, fileCount: 1 },
-    });
-  } else if (downloadMethod === 'instagram-story') {
-    fileData = await downloadFromInstagram(url, adminUser);
-    logStep('download_complete', 'success', {
-      message: 'file downloaded successfully via Instagram story',
-      metadata: { url, fileCount: Array.isArray(fileData) ? fileData.length : 1 },
-    });
-  } else if (downloadMethod === 'direct') {
-    fileData = await downloadDirectMedia(url, adminUser, client, {
-      userAgent: booruCdnUserAgent(url),
-    });
-    logStep('download_complete', 'success', {
-      message: 'file downloaded successfully via direct fetch',
-      metadata: { url, fileCount: 1 },
-    });
-  } else if (downloadMethod === 'reddit') {
+  if (extract) {
     try {
-      // Each slide carries candidates, best first: the unsigned original, then a signed
-      // preview, because the original 404s for crossposts.
-      let lastError;
-      const downloadSlide = async candidates => {
-        for (const candidate of candidates) {
-          try {
-            return await downloadFileFromUrl(candidate, adminUser);
-          } catch (candidateError) {
-            lastError = candidateError;
-          }
-        }
-        return null;
-      };
-
-      const slides = redditImages.slice(0, MAX_REDDIT_GALLERY_SLIDES);
-      const downloaded = (await Promise.all(slides.map(downloadSlide))).filter(Boolean);
-      if (downloaded.length === 0) {
-        throw lastError;
-      }
-      if (downloaded.length < slides.length) {
-        logger.warn(
-          `Reddit gallery: ${slides.length - downloaded.length} of ${slides.length} slide(s) failed, sending the rest`
-        );
-      }
-      fileData = downloaded.length === 1 ? downloaded[0] : downloaded;
+      fileData = await extract();
       logStep('download_complete', 'success', {
-        message: 'file downloaded successfully via Reddit',
-        metadata: { url, fileCount: 1 },
+        message: `file downloaded successfully via ${sourceLabel}`,
+        metadata: {
+          url,
+          fileCount: Array.isArray(fileData) ? fileData.length : 1,
+          trimmedByYtdlp: downloadMethod === 'ytdlp' && trimming,
+        },
       });
-    } catch (redditError) {
-      logger.warn(`Reddit image fetch failed, falling back to cobalt: ${redditError.message}`);
+    } catch (extractError) {
+      if (downloadMethod !== 'reddit') throw extractError;
+      logger.warn(`Reddit image fetch failed, falling back to cobalt: ${extractError.message}`);
       logStep('download_fallback', 'running', {
         message: 'Reddit image fetch failed, retrying with cobalt',
-        metadata: { url, reason: redditError.message },
+        metadata: { url, reason: extractError.message },
       });
       downloadMethod = 'cobalt';
     }
@@ -500,7 +404,7 @@ export async function acquireMedia(
 
       // X only: Discord plays a twimg URL in full, so the caps don't apply; others don't embed.
       const tryTwitterDirectUrl = async () => {
-        if (!isTwitterXUrl(url) || startTime !== null || duration !== null) {
+        if (!isTwitterXUrl(url) || trimming) {
           return null;
         }
         if (!(await getBooleanSetting('twitter_direct_url_fallback', true))) {
@@ -556,16 +460,13 @@ export async function acquireMedia(
         metadata: { url, reason: cobaltError.message },
       });
 
-      const skipDurationLimit = startTime !== null || duration !== null;
-      const maxDuration = skipDurationLimit || adminUser ? Infinity : await getMaxVideoDuration();
-
       try {
         fileData = await downloadWithYtdlp(
           url,
           adminUser,
           maxSize,
           adminUser ? null : YTDLP_QUALITY,
-          maxDuration,
+          await ytdlpMaxDuration(),
           startTime,
           duration
         );

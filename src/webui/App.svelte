@@ -23,7 +23,8 @@
   } from 'lucide-svelte';
   import CommandPalette from './components/CommandPalette.svelte';
   import NavFlyout from './components/NavFlyout.svelte';
-  import { navStats, savedViews, startNavStats, removeView } from './stores/nav.js';
+  import { navStats, savedViews, issueStates, startNavStats, removeView } from './stores/nav.js';
+  import { isOpen } from './issues.js';
   import { menuFor } from './nav-menus.js';
   import { headerActions } from './stores/header.js';
   import Overview from './pages/Overview.svelte';
@@ -145,12 +146,14 @@
     if (page === 'users') return $navStats?.users;
     return undefined;
   }
-  const issueCount = $derived($navStats?.issues.length ?? 0);
+  const issueCount = $derived(
+    ($navStats?.issues ?? []).filter(g => isOpen(g, $issueStates)).length
+  );
 
   const canFly = () => window.matchMedia('(hover: hover) and (min-width: 769px)').matches;
 
   function showMenu(item, target, now = false) {
-    if (!canFly() || !menuFor(item.page, $navStats, $savedViews)) return;
+    if (!canFly() || !menuFor(item.page, $navStats, $savedViews, $issueStates)) return;
     clearTimeout(closeTimer);
     clearTimeout(openTimer);
     const open = () => (fly = { item, top: target.getBoundingClientRect().top });
@@ -388,7 +391,7 @@
   <NavFlyout
     bind:this={flyout}
     title={fly.item.label}
-    menu={menuFor(fly.item.page, $navStats, $savedViews)}
+    menu={menuFor(fly.item.page, $navStats, $savedViews, $issueStates)}
     top={fly.top}
     left={sidebarOpen ? 226 : 54}
     onpick={pick}

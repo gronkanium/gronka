@@ -3,6 +3,8 @@
   import { currentRoute, navigate } from '../utils/router.js';
   import { connected } from '../stores/sse-store.js';
   import { headerActions } from '../stores/header.js';
+  import { issueStates } from '../stores/nav.js';
+  import { groupIssues, isOpen } from '../issues.js';
   import {
     formatDuration,
     formatRelativeTime,
@@ -43,7 +45,7 @@
       get(`/api/requests?dateFrom=${from}&limit=10000`),
       get('/api/stats'),
       get('/api/system'),
-      get('/api/alerts/summary'),
+      get('/api/alerts/summary?reasonLimit=300'),
     ]);
     ops = req?.requests ?? [];
     stats = st;
@@ -202,7 +204,11 @@
       .map(s => ({ ...s, rate: Math.round((s.ok / s.n) * 100) }));
   });
 
-  const openIssues = $derived(issues.filter(i => i.lastSeen > now - 7 * 24 * HOUR).slice(0, 4));
+  const openIssues = $derived(
+    groupIssues(issues)
+      .filter(g => isOpen(g, $issueStates))
+      .slice(0, 4)
+  );
 
   const hourLabel = at =>
     new Date(at).toLocaleString([], {
@@ -279,11 +285,11 @@
         <span>Open issues</span>
         <button class="linkish meta" onclick={() => navigate('issues')}>View all</button>
       </div>
-      {#each openIssues as i (i.reason)}
-        <button class="issue" onclick={() => navigate('issues', { reason: i.reason })}>
+      {#each openIssues as i (i.key)}
+        <button class="issue" onclick={() => navigate('issues', { issue: i.key })}>
           <span class="n mono">{i.count}</span>
           <span class="grow">
-            <span class="t ellipsis">{i.reason}</span>
+            <span class="t ellipsis">{i.title}</span>
             <span class="m">{i.commands.join(', ')} · {formatRelativeTime(i.lastSeen)}</span>
           </span>
         </button>

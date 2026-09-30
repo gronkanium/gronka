@@ -1,3 +1,5 @@
+import { isOpen } from './issues.js';
+
 // What each sidebar entry's flyout offers: { open, groups: [{ name, items: [{ label, count, page, params }] }], footer }.
 const short = (text, n = 42) => (text.length > n ? `${text.slice(0, n - 1)}…` : text);
 const saved = (views, page) =>
@@ -7,10 +9,10 @@ const saved = (views, page) =>
 const top = (facet = [], n = 3) => facet.slice(0, n);
 const count = (facet = [], value) => facet.find(f => f.value === value)?.count;
 
-export function menuFor(page, stats, views) {
+export function menuFor(page, stats, views, issueStates = {}) {
   const req = stats?.requests;
   const logs = stats?.logs ?? {};
-  const issues = stats?.issues ?? [];
+  const issues = (stats?.issues ?? []).filter(g => isOpen(g, issueStates));
 
   switch (page) {
     case 'requests':
@@ -60,8 +62,28 @@ export function menuFor(page, stats, views) {
             name: 'Views',
             items: [
               { label: 'Open', count: issues.length, page, params: {}, icon: 'alert' },
-              { label: 'Defects', page, params: { tab: 'defects' }, icon: 'bug' },
-              { label: 'User errors', page, params: { tab: 'user' }, icon: 'user' },
+              {
+                label: 'Defects',
+                count: issues.filter(i => i.kind === 'defect').length,
+                page,
+                params: { tab: 'defects' },
+                icon: 'bug',
+              },
+              {
+                label: 'Upstream',
+                count: issues.filter(i => i.kind === 'upstream').length,
+                page,
+                params: { tab: 'upstream' },
+                icon: 'arrow',
+              },
+              {
+                label: 'User errors',
+                count: issues.filter(i => i.kind === 'user').length,
+                page,
+                params: { tab: 'user' },
+                icon: 'user',
+              },
+              { label: 'Muted and resolved', page, params: { tab: 'muted' }, icon: 'dot' },
             ],
           },
           ...(issues.length
@@ -69,10 +91,10 @@ export function menuFor(page, stats, views) {
                 {
                   name: 'Top causes',
                   items: issues.slice(0, 3).map(i => ({
-                    label: short(i.reason),
+                    label: short(i.title),
                     count: i.count,
                     page,
-                    params: { reason: i.reason },
+                    params: { issue: i.key },
                     icon: 'dot',
                   })),
                 },

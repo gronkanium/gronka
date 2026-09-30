@@ -325,11 +325,13 @@ export async function enableTotp(accountId, code) {
   if (!row?.totp_pending) return null;
   const step = matchTotp(decryptSecret(row.totp_pending, accountId), code);
   if (step === null) return null;
-  await sql`
-    UPDATE web_accounts SET totp_secret = totp_pending, totp_pending = NULL,
-      totp_last_step = ${step}, totp_failures = 0, totp_locked_until = NULL
-    WHERE id = ${accountId}`;
-  return createRecoveryCodes(sql, accountId);
+  return sql.begin(async tx => {
+    const enabled = await tx`
+      UPDATE web_accounts SET totp_secret = totp_pending, totp_pending = NULL,
+        totp_last_step = ${step}, totp_failures = 0, totp_locked_until = NULL
+      WHERE id = ${accountId} AND totp_secret IS NULL RETURNING id`;
+    return enabled.length ? createRecoveryCodes(tx, accountId) : null;
+  });
 }
 
 const normalizeRecovery = input =>
@@ -385,16 +387,21 @@ export async function checkSecondFactor(accountId, code) {
 }
 
 export async function disableTotp(accountId) {
-  const sql = getPostgresConnection();
-  await sql`
-    UPDATE web_accounts SET totp_secret = NULL, totp_pending = NULL, totp_last_step = NULL,
-      totp_failures = 0, totp_locked_until = NULL
-    WHERE id = ${accountId}`;
-  await sql`DELETE FROM web_recovery_codes WHERE account_id = ${accountId}`;
+  await getPostgresConnection().begin(async tx => {
+    await tx`
+      UPDATE web_accounts SET totp_secret = NULL, totp_pending = NULL, totp_last_step = NULL,
+        totp_failures = 0, totp_locked_until = NULL
+      WHERE id = ${accountId}`;
+    await tx`DELETE FROM web_recovery_codes WHERE account_id = ${accountId}`;
+  });
 }
 
 export async function regenerateRecoveryCodes(accountId) {
-  return createRecoveryCodes(getPostgresConnection(), accountId);
+  return getPostgresConnection().begin(async tx => {
+    // The account row lock makes parallel regenerations take turns instead of both inserting.
+    await tx`SELECT 1 FROM web_accounts WHERE id = ${accountId} FOR UPDATE`;
+    return createRecoveryCodes(tx, accountId);
+  });
 }
 
 export async function listPasskeys(accountId) {

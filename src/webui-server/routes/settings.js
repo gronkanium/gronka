@@ -62,6 +62,12 @@ const KNOWN_SETTINGS = {
     description: 'ntfy server hostname (use your own if self-hosting ntfy)',
     pattern: /^[A-Za-z0-9.-]{1,253}$/,
   },
+  queue_paused: {
+    type: 'boolean',
+    default: 'false',
+    description:
+      'Workers stop taking new media jobs; running ones finish (drain before a deploy). Queued requests wait, and are told they were interrupted after about 15 minutes. No effect with MEDIA_WORKERS=false',
+  },
   moderation_enabled: {
     type: 'boolean',
     default: 'false',

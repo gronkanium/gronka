@@ -39,7 +39,13 @@
       id: 'access',
       label: 'Access and moderation',
       icon: ShieldCheck,
-      keys: ['maintenance_mode', 'moderation_enabled', 'rate_limit_cooldown', 'admin_user_ids'],
+      keys: [
+        'maintenance_mode',
+        'queue_paused',
+        'moderation_enabled',
+        'rate_limit_cooldown',
+        'admin_user_ids',
+      ],
     },
     {
       id: 'notifications',
@@ -61,6 +67,7 @@
     r2_soft_limit_gb: 'R2 soft limit (GB)',
     admin_uploads_expire: 'Admin uploads expire',
     maintenance_mode: 'Maintenance mode',
+    queue_paused: 'Pause media queue',
     moderation_enabled: 'Enforce bans',
     rate_limit_cooldown: 'Rate limit cooldown (s)',
     admin_user_ids: 'Admins',

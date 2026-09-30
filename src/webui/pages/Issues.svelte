@@ -1,4 +1,5 @@
 <script>
+  import { tick } from 'svelte';
   import { TerminalSquare, Copy, BellOff, CheckCircle2, RotateCcw } from 'lucide-svelte';
   import { currentRoute, navigate } from '../utils/router.js';
   import { useHeaderActions } from '../stores/header.js';
@@ -65,7 +66,18 @@
     resolved: withState.filter(g => g.state === 'resolved'),
   });
   const visible = $derived(lists[tab]);
-  const selected = $derived(withState.find(g => g.key === selectedKey) ?? visible[0] ?? null);
+  let wide = $state(true);
+  $effect(() => {
+    const mq = matchMedia('(min-width: 1101px)');
+    const sync = () => (wide = mq.matches);
+    sync();
+    mq.addEventListener('change', sync);
+    return () => mq.removeEventListener('change', sync);
+  });
+  // On a phone the detail sits under the list, so only show it for an explicit pick.
+  const selected = $derived(
+    withState.find(g => g.key === selectedKey) ?? (wide ? (visible[0] ?? null) : null)
+  );
 
   const alertsFor = (g, extra = '') =>
     Promise.all(
@@ -141,6 +153,8 @@
 
   function pick(key) {
     navigate('issues', { ...(tab === 'open' ? {} : { tab }), issue: key });
+    if (!wide)
+      tick().then(() => document.querySelector('.detail')?.scrollIntoView({ block: 'start' }));
   }
 
   useHeaderActions(actions);
@@ -487,6 +501,7 @@
   }
   @media (max-width: 640px) {
     .tbl {
+      min-height: 60vh;
       --cols: 3px minmax(0, 1fr) 44px !important;
     }
     .tbl .tr > :nth-child(3),

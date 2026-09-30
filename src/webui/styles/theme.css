@@ -1,3 +1,29 @@
+/* Archivo (OFL) and Gronka Mono, a renamed IBM Plex Mono subset (OFL): /fonts/OFL-*.txt */
+@font-face {
+  font-family: 'Archivo';
+  src: url('/fonts/Archivo-Regular.woff2') format('woff2');
+  font-weight: 400;
+  font-display: swap;
+}
+@font-face {
+  font-family: 'Archivo';
+  src: url('/fonts/Archivo-Medium.woff2') format('woff2');
+  font-weight: 500;
+  font-display: swap;
+}
+@font-face {
+  font-family: 'Archivo';
+  src: url('/fonts/Archivo-SemiBold.woff2') format('woff2');
+  font-weight: 600 700;
+  font-display: swap;
+}
+@font-face {
+  font-family: 'Gronka Mono';
+  src: url('/fonts/GronkaMono-Regular.woff2') format('woff2');
+  font-weight: 400 700;
+  font-display: swap;
+}
+
 /*
  * Design tokens for the webui.
  * All colors, radii, and shared visual values live here, pages and
@@ -42,8 +68,8 @@
   --chart-series-1-hover: #86a0f3;
 
   /* type */
-  --font: 'Geist', 'Inter', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
-  --mono: 'Geist Mono', ui-monospace, 'SF Mono', 'Cascadia Mono', Menlo, Consolas, monospace;
+  --font: 'Archivo', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+  --mono: 'Gronka Mono', ui-monospace, 'SF Mono', 'Cascadia Mono', Menlo, Consolas, monospace;
 
   /* shape */
   --radius: 6px;

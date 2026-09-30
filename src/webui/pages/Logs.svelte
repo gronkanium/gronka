@@ -954,9 +954,6 @@
     .lh > :not(:last-child) {
       display: none;
     }
-    .query input {
-      font-size: 16px;
-    }
     .scroll {
       min-height: 50vh;
     }

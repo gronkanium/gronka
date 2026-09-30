@@ -235,8 +235,8 @@
   .spacer {
     margin-left: auto;
   }
-  @media (max-width: 640px) {
-    .foot .spacer {
+  @media (max-width: 768px) {
+    .foot {
       display: none;
     }
   }

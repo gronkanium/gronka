@@ -3,7 +3,7 @@ get gronka up and running in minutes.
 ## using docker (recommended)
 
 ```bash
-git clone https://github.com/thedorekaczynski/gronka.git
+git clone https://github.com/gronkanium/gronka.git
 cd gronka
 bun install
 

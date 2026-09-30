@@ -11,7 +11,7 @@ const logger = createLogger('booru');
 // not to impersonate a browser, and danbooru's API *and* CDN 403 the shared Chrome UA
 // from getRequestHeaders() while accepting a descriptive one. So both the API fetch and
 // the media download (via downloadFileFromUrl's userAgent override) use BOORU_UA.
-const BOORU_UA = 'gronka (+https://github.com/thedorekaczynski/gronka)';
+const BOORU_UA = 'gronka (+https://github.com/gronkanium/gronka)';
 const API_TIMEOUT_MS = 20000;
 
 // Danbooru-style boards expose the post directly at /posts/<id>.json.

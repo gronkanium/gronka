@@ -115,7 +115,7 @@ export async function downloadFromMega(url, isAdminUser, maxSize) {
       timeout: 300000,
       maxContentLength: isAdminUser ? Infinity : maxSize,
     });
-    encrypted = Buffer.from(response.data);
+    encrypted = response.data;
   } catch (error) {
     logger.warn(`Mega file download failed: ${error.message}`);
     throw new NetworkError('failed to download the mega file. it may be unavailable.');

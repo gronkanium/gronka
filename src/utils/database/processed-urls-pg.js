@@ -52,7 +52,7 @@ function invalidateProcessedUrlCache(urlHash = null) {
 
 /**
  * Get processed URL record by URL hash
- * @param {string} urlHash - BLAKE3 hash of the URL
+ * @param {string} urlHash - sha256 hash of the URL
  * @returns {Promise<Object|null>} Processed URL record or null if not found
  */
 export async function getProcessedUrl(urlHash) {

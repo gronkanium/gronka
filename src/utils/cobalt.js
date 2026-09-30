@@ -464,7 +464,7 @@ async function downloadPhoto(photoUrl, index, isAdminUser = false, maxSize = Inf
       },
     });
 
-    const buffer = nonEmpty(Buffer.from(response.data));
+    const buffer = nonEmpty(response.data);
 
     // Validate buffer size (axios maxContentLength may not work if server doesn't send Content-Length header)
     if (!isAdminUser && buffer.length > maxSize) {
@@ -535,7 +535,7 @@ async function downloadVideo(videoUrl, index, isAdminUser = false, maxSize = Inf
       },
     });
 
-    const buffer = nonEmpty(Buffer.from(response.data));
+    const buffer = nonEmpty(response.data);
 
     // Validate buffer size (axios maxContentLength may not work if server doesn't send Content-Length header)
     if (!isAdminUser && buffer.length > maxSize) {
@@ -734,7 +734,7 @@ async function downloadFromCobalt(
       },
     });
 
-    const buffer = nonEmpty(Buffer.from(response.data));
+    const buffer = nonEmpty(response.data);
 
     // Validate buffer size (axios maxContentLength may not work if server doesn't send Content-Length header)
     if (!isAdminUser && buffer.length > maxSize) {

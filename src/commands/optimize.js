@@ -12,7 +12,7 @@ import { hashUrlWithParams } from '../utils/hashing.js';
 import { getProcessedUrl } from '../utils/database.js';
 import { runMediaCommand } from './shared/run-media-command.js';
 import { getDiscordAttachmentLimit } from './shared/attachment-limit.js';
-import { replyIfRateLimited, refuse } from './shared/command-guards.js';
+import { replyIfRateLimited, refuse, commandSourceOf } from './shared/command-guards.js';
 import {
   safeInteractionEditReply,
   safeInteractionDeferReply,
@@ -246,7 +246,9 @@ export async function handleOptimizeCommand(interaction) {
     `User ${userId} initiated optimization via slash command${adminUser ? ' [ADMIN]' : ''}`
   );
   const guard = { type: 'optimize', action: 'optimizing another gif' };
-  if (await replyIfRateLimited(interaction, { ...guard, commandSource: 'slash' })) {
+  if (
+    await replyIfRateLimited(interaction, { ...guard, commandSource: commandSourceOf(interaction) })
+  ) {
     return;
   }
 
@@ -254,7 +256,7 @@ export async function handleOptimizeCommand(interaction) {
   const rawUrl = interaction.options.getString('url');
   const url = firstUrlIn(rawUrl) ?? rawUrl;
   const lossyLevel = interaction.options.getNumber('lossy');
-  const context = { commandSource: 'slash' };
+  const context = { commandSource: commandSourceOf(interaction) };
 
   if (lossyLevel !== null && (lossyLevel < 0 || lossyLevel > 100)) {
     await refuse(interaction, 'optimize', {
@@ -275,7 +277,7 @@ export async function handleOptimizeCommand(interaction) {
     return;
   }
 
-  const commandSource = 'slash';
+  const commandSource = commandSourceOf(interaction);
   if (!(await acceptGif(interaction, { attachment, url, adminUser, commandSource }))) return;
   await safeInteractionDeferReply(interaction);
   await dispatchMediaJob(interaction, 'optimize', {

@@ -37,7 +37,12 @@ import { recordProcessedUrl, trackR2UploadIfApplicable } from './shared/url-cach
 import { runMediaCommand } from './shared/run-media-command.js';
 import { acquireMedia, extractAudio } from '../core/acquire-media.js';
 import { dispatchMediaJob } from '../jobs/dispatch.js';
-import { replyIfRateLimited, resolveTimeOptions, refuse } from './shared/command-guards.js';
+import {
+  replyIfRateLimited,
+  resolveTimeOptions,
+  refuse,
+  commandSourceOf,
+} from './shared/command-guards.js';
 import { trimItem } from '../utils/video-processor.js';
 import { sendConvertedFile } from './shared/send-converted.js';
 import {
@@ -399,9 +404,10 @@ export async function handleDownloadContextMenuCommand(interaction) {
 
 export async function handleDownloadCommand(interaction) {
   const userId = interaction.user.id;
+  const commandSource = commandSourceOf(interaction);
   logger.info(`User ${userId} initiated download${isAdmin(userId) ? ' [ADMIN]' : ''}`);
   const guard = { type: 'download', action: 'downloading another video' };
-  if (await replyIfRateLimited(interaction, { ...guard, commandSource: 'slash' })) {
+  if (await replyIfRateLimited(interaction, { ...guard, commandSource })) {
     return;
   }
 
@@ -416,7 +422,7 @@ export async function handleDownloadCommand(interaction) {
   const { startTime: trimStart, duration: trimDuration } = times;
 
   if (!url) {
-    const context = { commandSource: 'slash' };
+    const context = { commandSource };
     const message = 'please provide a URL to download from.';
     await refuse(interaction, 'download', {
       message,
@@ -445,20 +451,27 @@ export async function handleDownloadCommand(interaction) {
 
   const megaFileId = keylessMegaFileId(url);
   if (megaFileId) {
-    await promptForMegaKey(interaction, megaFileId, 'slash', trimStart, trimDuration, audioOnly);
+    await promptForMegaKey(
+      interaction,
+      megaFileId,
+      commandSource,
+      trimStart,
+      trimDuration,
+      audioOnly
+    );
     return;
   }
 
   const urlValidation = validateUrl(url);
   if (!urlValidation.valid) {
-    const context = { originalUrl: url, commandSource: 'slash' };
+    const context = { originalUrl: url, commandSource };
     const message = `invalid URL: ${urlValidation.error}`;
     await refuse(interaction, 'download', { message, reason: 'invalid_url', context });
     return;
   }
-  if (await refuseUnsupported(interaction, url, 'slash')) {
+  if (await refuseUnsupported(interaction, url, commandSource)) {
     return;
   }
   await safeInteractionDeferReply(interaction);
-  await queueDownload(interaction, url, 'slash', trimStart, trimDuration, { audioOnly });
+  await queueDownload(interaction, url, commandSource, trimStart, trimDuration, { audioOnly });
 }

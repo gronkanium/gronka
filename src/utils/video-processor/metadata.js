@@ -1,6 +1,7 @@
 import { spawn } from 'child_process';
 import { createLogger } from '../logger.js';
 import { FFMPEG_INPUT_GUARD } from './utils.js';
+import { jobSignal } from '../media-file.js';
 
 const logger = createLogger('video-metadata');
 
@@ -26,6 +27,7 @@ export async function getVideoMetadata(inputPath) {
     ];
 
     const child = spawn('ffprobe', args, {
+      signal: jobSignal(),
       timeout: FFPROBE_TIMEOUT_MS,
       killSignal: 'SIGKILL',
     });

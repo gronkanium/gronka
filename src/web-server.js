@@ -14,7 +14,7 @@ import { validateUrl, firstUrlIn, parseTimestamp, sanitizeFilename } from './uti
 import { detectFileType } from './utils/storage.js';
 import { uploadToR2, listObjectsInR2, deleteManyFromR2 } from './utils/r2-storage.js';
 import { getStreamInfo, isYouTubeUrl } from './utils/ytdlp.js';
-import { AppError, ValidationError } from './utils/errors.js';
+import { AppError, NetworkError, ValidationError } from './utils/errors.js';
 import * as accounts from './web/accounts.js';
 import { FFMPEG_INPUT_GUARD } from './utils/video-processor/utils.js';
 import { trimItem } from './utils/video-processor/trim-item.js';
@@ -246,8 +246,10 @@ export async function stripAudio(item) {
   return fromPath(output, { filename: item.filename, contentType: item.contentType });
 }
 
-// Every file a download touches lives in one job dir, gone when the answer is sent.
-export const runDownload = options => withJobDir(() => downloadInJob(options));
+// Every file a download touches lives in one job dir, gone when the answer is sent; the signal
+// cancels everything it started.
+export const runDownload = (options, signal) =>
+  withJobDir(() => downloadInJob(options), { signal });
 
 async function downloadInJob({
   url,
@@ -365,17 +367,26 @@ export async function verifyTurnstile(token, action, secret = TURNSTILE_SECRET) 
   }
 }
 
+// A source that failed or refused is the upstream's fault (502), not a server error.
 function toApiError(error, url) {
   if (error instanceof AppError && error.message) {
-    return { code: error.code, message: error.message };
+    const status =
+      error instanceof NetworkError && error.statusCode === 500 ? 502 : error.statusCode;
+    return { status, error: { code: error.code, message: error.message } };
   }
   logger.error(`Download failed (${getServiceForUrl(url)?.id ?? 'other'}):`, error);
-  return { code: 'DOWNLOAD_FAILED', message: 'could not download this content.' };
+  return {
+    status: 502,
+    error: { code: 'DOWNLOAD_FAILED', message: 'could not download this content.' },
+  };
 }
 
-// Cloudflare drops a tunnelled request that sends nothing for ~100 s, and a big download
-// takes longer. Whitespace before a JSON document is valid JSON, so send some while working.
-function heartbeatJson(work, headers) {
+// Cloudflare drops a tunnelled request that sends nothing for ~100 s, so a download that finishes
+// sooner answers with its real status; a longer one keeps the line open with whitespace, which is
+// valid before a JSON document, and reports a late failure in the body.
+const ANSWER_WITHIN_MS = 80_000;
+
+function heartbeatJson(work, headers, onCancel) {
   const encoder = new TextEncoder();
   let timer;
   const body = new ReadableStream({
@@ -401,6 +412,7 @@ function heartbeatJson(work, headers) {
     },
     cancel() {
       clearInterval(timer);
+      onCancel();
     },
   });
   return new Response(body, {
@@ -468,6 +480,7 @@ export function createHandler({
   loginLimit = 10,
   authLimit = 30,
   webauthn = simplewebauthn,
+  answerWithinMs = ANSWER_WITHIN_MS,
 } = {}) {
   // Per-IP state is keyed by an HMAC under a key that rotates daily and lives only here.
   let dayKey = null;
@@ -610,17 +623,34 @@ export function createHandler({
     if (!auth && !(await verify(body.turnstile, 'download'))) {
       throw new AppError('verification failed, reload the page.', 'VERIFICATION_FAILED', 403);
     }
-    const work = download(job)
+    // A closed tab or dropped connection cancels the download, wherever it has got to.
+    const cancel = new AbortController();
+    const signal = req.signal ? AbortSignal.any([req.signal, cancel.signal]) : cancel.signal;
+    const work = download(job, signal)
       .then(result => {
         stats.lanes[result.lane] = (stats.lanes[result.lane] ?? 0) + 1;
-        return result;
+        return { status: 200, body: result };
       })
       .catch(error => {
-        const apiErr = toApiError(error, job.url);
+        if (signal.aborted) {
+          stats.cancelled = (stats.cancelled ?? 0) + 1;
+          return { status: 499, body: { error: { code: 'CANCELLED', message: 'cancelled.' } } };
+        }
+        const { status, error: apiErr } = toApiError(error, job.url);
         stats.errors[apiErr.code] = (stats.errors[apiErr.code] ?? 0) + 1;
-        return { error: apiErr };
+        return { status, body: { error: apiErr } };
       });
-    return heartbeatJson(work, headers);
+    let timer;
+    const early = await Promise.race([
+      work,
+      new Promise(resolve => (timer = setTimeout(resolve, answerWithinMs, null))),
+    ]).finally(() => clearTimeout(timer));
+    if (early) return json(early.body, early.status, headers);
+    return heartbeatJson(
+      work.then(answer => answer.body),
+      headers,
+      () => cancel.abort()
+    );
   }
 
   async function route(req, server, headers) {

@@ -191,9 +191,11 @@
         <section id="padded-json" aria-labelledby="padded-title">
           <h2 id="padded-title">padded json</h2>
           <p>
-            while a download runs, the response starts with spaces, then json. parse the full
-            response as usual. errors after it starts use the json body; errors before it starts use
-            an http status.
+            a download that finishes within about 80 seconds answers with its http status: 200, 400
+            when the link or options are the problem, 502 when the source failed. a longer one
+            starts sending spaces to keep the connection open, then json; parse the full response as
+            usual, and look for <code>error</code> in the body, since the status is already 200.
+            closing the connection cancels the download.
           </p>
         </section>
 

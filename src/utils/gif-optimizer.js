@@ -7,7 +7,7 @@ import { ValidationError } from './errors.js';
 import { botConfig, isOwnCdnUrl, r2Config } from './config.js';
 import { downloadGifFromR2, isR2Configured, mediaExistsInR2 } from './r2-storage.js';
 import { hashPartsHex } from './hashing.js';
-import { fromPath, writeAtomic } from './media-file.js';
+import { fromPath, writeAtomic, jobSignal } from './media-file.js';
 const logger = createLogger('gif-optimizer');
 
 export function isGifFile(filename, contentType) {
@@ -104,9 +104,7 @@ export async function optimizeGif(inputPath, outputPath, options = {}) {
 
   try {
     const stderr = await new Promise((resolve, reject) => {
-      const child = spawn('gifsicle', args, {
-        timeout: 300000, // 5 minute timeout
-      });
+      const child = spawn('gifsicle', args, { signal: jobSignal(), timeout: 300000 });
 
       let stderrData = '';
       child.stderr.on('data', data => {

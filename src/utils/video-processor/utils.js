@@ -1,5 +1,6 @@
 import { promisify } from 'util';
 import { exec, spawn } from 'child_process';
+import { jobSignal } from '../media-file.js';
 
 const execAsync = promisify(exec);
 
@@ -21,7 +22,7 @@ export const FFMPEG_TIMEOUT_MS = 300000;
 export function runFfmpeg(args, { signal = AbortSignal.timeout(FFMPEG_TIMEOUT_MS) } = {}) {
   return new Promise((resolve, reject) => {
     const child = spawn('ffmpeg', args, {
-      signal,
+      signal: jobSignal(signal),
       killSignal: 'SIGKILL',
       stdio: ['ignore', 'ignore', 'pipe'],
     });

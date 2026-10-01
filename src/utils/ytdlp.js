@@ -6,7 +6,7 @@ import { createLogger } from './logger.js';
 import { NetworkError, ValidationError } from './errors.js';
 import { trimVideo } from './video-processor/trim-video.js';
 import { DEFAULT_YTDLP_FORMAT } from './config.js';
-import { fromPath, tempDir } from './media-file.js';
+import { fromPath, tempDir, jobSignal } from './media-file.js';
 import { hostOf, normalizeHost } from './url-host.js';
 
 const logger = createLogger('ytdlp');
@@ -231,7 +231,8 @@ function executeYtdlp(
     logger.debug(`Executing yt-dlp with args: ${args.join(' ')}`);
 
     const ytdlp = spawn('yt-dlp', args, {
-      timeout: timeout,
+      signal: jobSignal(),
+      timeout,
       stdio: ['ignore', 'pipe', 'pipe'],
     });
 
@@ -537,7 +538,8 @@ function getVideoDuration(url, timeout = 15000) {
     ];
 
     const ytdlp = spawn('yt-dlp', args, {
-      timeout: timeout,
+      signal: jobSignal(),
+      timeout,
       stdio: ['ignore', 'pipe', 'pipe'],
     });
 

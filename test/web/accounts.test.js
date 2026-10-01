@@ -168,6 +168,10 @@ describe('account routes', () => {
     const summary = await (await call('GET', '/v1/account', { cookie })).json();
     expect(summary.keys.map(key => key.id)).toEqual([created.id]);
 
+    expect(
+      (await call('DELETE', '/v1/session', { cookie, origin: 'https://evil.example' })).status
+    ).toBe(403);
+    expect((await call('GET', '/v1/account', { cookie })).status).toBe(200);
     await call('DELETE', '/v1/session', { cookie });
     expect((await call('GET', '/v1/account', { cookie })).status).toBe(401);
     await call('DELETE', '/v1/account', { cookie: cookieOf(login) });

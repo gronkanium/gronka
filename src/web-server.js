@@ -539,10 +539,14 @@ export function createHandler({
   };
 
   // Cookie-authenticated routes: the Origin check is the CSRF guard, SameSite=Strict the second one.
-  async function requireSession(req) {
+  function requireSameOrigin(req) {
     if (req.method !== 'GET' && req.headers.get('origin') !== WEB_ORIGIN) {
       throw new AppError('not allowed from here.', 'FORBIDDEN', 403);
     }
+  }
+
+  async function requireSession(req) {
+    requireSameOrigin(req);
     const accountId = await accounts.getSessionAccount(readCookie(req, SESSION_COOKIE));
     if (!accountId) {
       throw new AppError('log in first.', 'UNAUTHORIZED', 401);
@@ -643,6 +647,7 @@ export function createHandler({
       return withCookie({ id: accountId }, 200, token, accounts.SESSION_MS / 1000);
     }
     if (method === 'DELETE' && pathname === '/v1/session') {
+      requireSameOrigin(req);
       await accounts.deleteSession(readCookie(req, SESSION_COOKIE));
       return withCookie({ ok: true }, 200, '', 0);
     }

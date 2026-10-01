@@ -4,7 +4,7 @@ import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
 import { createLogger } from '../../utils/logger.js';
 import { botConfig } from '../../utils/config.js';
-import { jobsOverview, jobsForOperation } from '../../jobs/queue.js';
+import { jobsOverview, jobsForOperation } from '../../utils/database/media-jobs-pg.js';
 import { getLiveBytes, getStorageOverview, lastLogMatching } from '../../utils/database.js';
 import { getPostgresConnection } from '../../utils/database/connection.js';
 import { r2SoftLimitGb } from '../../utils/r2-storage.js';

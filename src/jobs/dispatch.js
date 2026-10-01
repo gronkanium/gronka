@@ -1,6 +1,6 @@
 import { botConfig } from '../utils/config.js';
 import { createLogger } from '../utils/logger.js';
-import { enqueueJob } from './queue.js';
+import { enqueueJob } from '../utils/database/media-jobs-pg.js';
 import { replyTargetOf } from './reply-target.js';
 import { runMediaJob } from './run-job.js';
 

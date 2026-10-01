@@ -147,9 +147,6 @@
           },
           "429": {
             "$ref": "#/components/responses/Error"
-          },
-          "503": {
-            "$ref": "#/components/responses/Error"
           }
         },
         "description": "limits: 50 downloads per 10 minutes per ip, or per account for api keys (all keys of an account share them). keyed requests are also limited to 30 key checks per 10 minutes per ip."
@@ -846,7 +843,7 @@
         },
         "headers": {
           "Retry-After": {
-            "description": "seconds to wait, on 429 and 503",
+            "description": "seconds to wait, on 429 RATE_LIMITED",
             "schema": {
               "type": "integer"
             }

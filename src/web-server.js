@@ -1,3 +1,4 @@
+import axios from 'axios';
 import crypto from 'node:crypto';
 import fs from 'node:fs/promises';
 import * as simplewebauthn from '@simplewebauthn/server';
@@ -126,8 +127,9 @@ export async function workerLane(url, downloadMethod, { split = true, mute = fal
   });
   const probes = await Promise.all(
     parts.map(part =>
-      fetch(part.link.replace('/f/', '/probe/'), { signal: AbortSignal.timeout(10_000) })
-        .then(res => res.json())
+      axios
+        .get(part.link.replace('/f/', '/probe/'), { timeout: 10_000, validateStatus: () => true })
+        .then(res => res.data)
         .catch(() => ({ ok: false }))
     )
   );
@@ -337,12 +339,11 @@ export async function verifyTurnstile(token, action, secret = TURNSTILE_SECRET) 
     return false;
   }
   try {
-    const res = await fetch('https://challenges.cloudflare.com/turnstile/v0/siteverify', {
-      method: 'POST',
-      body: new URLSearchParams({ secret, response: token }),
-      signal: AbortSignal.timeout(10_000),
-    });
-    const out = await res.json();
+    const { data: out } = await axios.post(
+      'https://challenges.cloudflare.com/turnstile/v0/siteverify',
+      new URLSearchParams({ secret, response: token }),
+      { timeout: 10_000, validateStatus: () => true }
+    );
     return (
       out.success === true && out.hostname === new URL(WEB_ORIGIN).hostname && out.action === action
     );

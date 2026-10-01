@@ -1,3 +1,4 @@
+import axios from 'axios';
 import express from 'express';
 import fs from 'node:fs/promises';
 import { execFile } from 'node:child_process';
@@ -37,9 +38,12 @@ const probes = {
     return { detail: `${Date.now() - started} ms` };
   },
   cobalt: async started => {
-    const res = await fetch(botConfig.cobaltApiUrl, { signal: AbortSignal.timeout(3000) });
-    if (!res.ok) throw new Error(`HTTP ${res.status}`);
-    const { cobalt } = await res.json();
+    const res = await axios.get(botConfig.cobaltApiUrl, {
+      timeout: 3000,
+      validateStatus: () => true,
+    });
+    if (res.status < 200 || res.status >= 300) throw new Error(`HTTP ${res.status}`);
+    const { cobalt } = res.data;
     return { detail: `v${cobalt.version} · ${Date.now() - started} ms` };
   },
   ytdlp: async () => {

@@ -95,7 +95,7 @@ async function broadcastUpdate(operation) {
     try {
       callback(operation);
     } catch (error) {
-      console.error('Error broadcasting operation update:', error);
+      logger.error('Error broadcasting operation update:', error);
     }
   } else {
     // Prevent test operations from being sent to webui-server via HTTP POST
@@ -118,7 +118,7 @@ async function broadcastUpdate(operation) {
         error.code !== 'ETIMEDOUT' &&
         error.code !== 'ECONNABORTED'
       ) {
-        console.error('Error sending operation update to webui:', error.message);
+        logger.error('Error sending operation update to webui:', error.message);
       }
     }
   }
@@ -212,7 +212,7 @@ export function createFailedOperation(type, userId, errorMessage, errorType, con
 
   // Update user metrics (fire and forget)
   updateUserMetricsForOperation(operation).catch(error => {
-    console.error('Failed to update user metrics for failed operation:', error);
+    logger.error('Failed to update user metrics for failed operation:', error);
   });
 
   broadcastUpdate(operation);
@@ -261,7 +261,7 @@ export function createOperation(type, userId, context = {}, resumeId = null) {
 export function updateOperationStatus(operationId, status, data = {}) {
   const operation = operations.find(op => op.id === operationId);
   if (!operation) {
-    console.warn(`Operation ${operationId} not found`);
+    logger.warn(`Operation ${operationId} not found`);
     return;
   }
 
@@ -297,7 +297,7 @@ export function updateOperationStatus(operationId, status, data = {}) {
   if (status === 'success' || status === 'error') {
     // Fire and forget - don't await to avoid blocking operation updates
     updateUserMetricsForOperation(operation).catch(error => {
-      console.error('Failed to update user metrics:', error);
+      logger.error('Failed to update user metrics:', error);
     });
   }
 
@@ -324,7 +324,7 @@ export function getOperation(operationId) {
 export function logOperationStep(operationId, step, status, data = {}) {
   const operation = operations.find(op => op.id === operationId);
   if (!operation) {
-    console.warn(`Operation ${operationId} not found`);
+    logger.warn(`Operation ${operationId} not found`);
     return;
   }
 
@@ -359,7 +359,7 @@ export function logOperationStep(operationId, step, status, data = {}) {
 export function logOperationError(operationId, error, data = {}) {
   const operation = operations.find(op => op.id === operationId);
   if (!operation) {
-    console.warn(`Operation ${operationId} not found`);
+    logger.warn(`Operation ${operationId} not found`);
     return;
   }
 
@@ -403,7 +403,7 @@ async function updateUserMetricsForOperation(operation) {
       try {
         userMetricsCallback(operation.userId, updatedMetrics);
       } catch (error) {
-        console.error('Error broadcasting user metrics:', error);
+        logger.error('Error broadcasting user metrics:', error);
       }
     } else if (process.env.NODE_ENV === 'test') {
       // In test mode, skip HTTP POST to avoid hitting the production webui-server
@@ -430,12 +430,12 @@ async function updateUserMetricsForOperation(operation) {
           error.code !== 'ETIMEDOUT' &&
           error.code !== 'ECONNABORTED'
         ) {
-          console.error('Error sending user metrics update to webui:', error.message);
+          logger.error('Error sending user metrics update to webui:', error.message);
         }
       }
     }
   } catch (error) {
-    console.error('Failed to update user metrics:', error);
+    logger.error('Failed to update user metrics:', error);
   }
 }
 

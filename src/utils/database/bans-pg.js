@@ -27,10 +27,6 @@ export async function getBan(userId) {
   await ensurePostgresInitialized();
 
   const sql = getPostgresConnection();
-  if (!sql) {
-    console.error('PostgreSQL not initialized. Call initPostgresDatabase() first.');
-    return null;
-  }
 
   const cached = banCache.get(userId);
   if (cached && Date.now() - cached.timestamp < BAN_CACHE_TTL) {
@@ -49,10 +45,6 @@ export async function banUser(userId, reason, appealAllowed = true) {
   await ensurePostgresInitialized();
 
   const sql = getPostgresConnection();
-  if (!sql) {
-    console.error('PostgreSQL not initialized. Call initPostgresDatabase() first.');
-    return;
-  }
 
   const now = Date.now();
 
@@ -72,10 +64,6 @@ export async function unbanUser(userId) {
   await ensurePostgresInitialized();
 
   const sql = getPostgresConnection();
-  if (!sql) {
-    console.error('PostgreSQL not initialized. Call initPostgresDatabase() first.');
-    return false;
-  }
 
   const result = await sql`DELETE FROM banned_users WHERE user_id = ${userId} RETURNING user_id`;
 
@@ -88,10 +76,6 @@ export async function listBans() {
   await ensurePostgresInitialized();
 
   const sql = getPostgresConnection();
-  if (!sql) {
-    console.error('PostgreSQL not initialized. Call initPostgresDatabase() first.');
-    return [];
-  }
 
   const result = await sql`SELECT * FROM banned_users ORDER BY banned_at DESC`;
 

@@ -29,10 +29,6 @@ export async function getGuildPrefix(guildId) {
   await ensurePostgresInitialized();
 
   const sql = getPostgresConnection();
-  if (!sql) {
-    console.error('PostgreSQL not initialized. Call initPostgresDatabase() first.');
-    return null;
-  }
 
   const cached = prefixCache.get(guildId);
   if (cached && Date.now() - cached.timestamp < PREFIX_CACHE_TTL) {
@@ -51,10 +47,6 @@ export async function setGuildPrefix(guildId, prefix) {
   await ensurePostgresInitialized();
 
   const sql = getPostgresConnection();
-  if (!sql) {
-    console.error('PostgreSQL not initialized. Call initPostgresDatabase() first.');
-    return;
-  }
 
   const now = Date.now();
 
@@ -71,10 +63,6 @@ export async function clearGuildPrefix(guildId) {
   await ensurePostgresInitialized();
 
   const sql = getPostgresConnection();
-  if (!sql) {
-    console.error('PostgreSQL not initialized. Call initPostgresDatabase() first.');
-    return;
-  }
 
   await sql`DELETE FROM guild_prefixes WHERE guild_id = ${guildId}`;
 

@@ -10,12 +10,6 @@ export async function get24HourStats() {
     await ensurePostgresInitialized();
     const sql = getPostgresConnection();
 
-    if (!sql) {
-      const errorMsg = 'PostgreSQL initialization failed - cannot fetch stats';
-      console.error(errorMsg);
-      throw new Error(errorMsg);
-    }
-
     // Count unique users in last 24 hours
     const uniqueUsersQuery =
       'SELECT COUNT(DISTINCT user_id) AS count FROM processed_urls WHERE processed_at >= $1 AND user_id IS NOT NULL';
@@ -36,18 +30,6 @@ export async function get24HourStats() {
     // Handle null from SUM() when no rows match - use nullish coalescing
     const total_data_bytes =
       totalDataResult[0]?.total != null ? parseInt(totalDataResult[0].total, 10) : 0;
-
-    // Debug logging to help diagnose issues
-    if (process.env.DEBUG_STATS) {
-      console.log('get24HourStats debug:', {
-        twentyFourHoursAgo,
-        now,
-        uniqueUsersResult: uniqueUsersResult[0],
-        totalFilesResult: totalFilesResult[0],
-        totalDataResult: totalDataResult[0],
-        parsed: { unique_users, total_files, total_data_bytes },
-      });
-    }
 
     return {
       unique_users,
@@ -74,12 +56,6 @@ const HOUR_MS = 60 * 60 * 1000;
 export async function getHourlyRequestCounts(hours = 24) {
   await ensurePostgresInitialized();
   const sql = getPostgresConnection();
-
-  if (!sql) {
-    const errorMsg = 'PostgreSQL initialization failed - cannot fetch hourly request counts';
-    console.error(errorMsg);
-    throw new Error(errorMsg);
-  }
 
   const now = Date.now();
   const currentBucket = Math.floor(now / HOUR_MS);

@@ -59,10 +59,6 @@ export async function getProcessedUrl(urlHash) {
   await ensurePostgresInitialized();
 
   const sql = getPostgresConnection();
-  if (!sql) {
-    console.error('PostgreSQL not initialized.');
-    return null;
-  }
 
   // Check in-memory cache first
   const cached = getCachedProcessedUrl(urlHash);
@@ -100,10 +96,6 @@ export async function insertProcessedUrl(
   await ensurePostgresInitialized();
 
   const sql = getPostgresConnection();
-  if (!sql) {
-    console.error('PostgreSQL not initialized. Cannot insert processed URL.');
-    return;
-  }
 
   try {
     await sql`
@@ -141,10 +133,6 @@ export async function getUserMedia(userId, options = {}) {
   await ensurePostgresInitialized();
 
   const sql = getPostgresConnection();
-  if (!sql) {
-    console.error('PostgreSQL not initialized.');
-    return [];
-  }
 
   const { limit = null, offset = null } = options;
 
@@ -172,10 +160,6 @@ export async function getUserMediaCount(userId) {
   await ensurePostgresInitialized();
 
   const sql = getPostgresConnection();
-  if (!sql) {
-    console.error('PostgreSQL not initialized.');
-    return 0;
-  }
 
   const result =
     await sql`SELECT COUNT(*) as count FROM processed_urls WHERE user_id = ${userId} AND r2_expired_at IS NULL`;
@@ -186,10 +170,6 @@ export async function getUserR2Media(userId, options = {}) {
   await ensurePostgresInitialized();
 
   const sql = getPostgresConnection();
-  if (!sql) {
-    console.error('PostgreSQL not initialized.');
-    return [];
-  }
 
   const { limit = null, offset = null, fileType = null } = options;
   const publicDomain = r2Config.publicDomain;
@@ -235,10 +215,6 @@ export async function getUserR2MediaCount(userId, fileType = null) {
   await ensurePostgresInitialized();
 
   const sql = getPostgresConnection();
-  if (!sql) {
-    console.error('PostgreSQL not initialized.');
-    return 0;
-  }
 
   const publicDomain = r2Config.publicDomain;
   const r2UrlPrefix = `https://${publicDomain}/`;
@@ -263,10 +239,6 @@ export async function getR2UserStats() {
   await ensurePostgresInitialized();
 
   const sql = getPostgresConnection();
-  if (!sql) {
-    console.error('PostgreSQL not initialized.');
-    return [];
-  }
 
   const publicDomain = r2Config.publicDomain;
   const r2UrlPrefix = `https://${publicDomain}/`;
@@ -323,10 +295,6 @@ export async function deleteProcessedUrl(urlHash) {
   await ensurePostgresInitialized();
 
   const sql = getPostgresConnection();
-  if (!sql) {
-    console.error('PostgreSQL not initialized.');
-    return false;
-  }
 
   try {
     const result = await sql`DELETE FROM processed_urls WHERE url_hash = ${urlHash}`;
@@ -341,10 +309,6 @@ export async function deleteUserR2Media(userId) {
   await ensurePostgresInitialized();
 
   const sql = getPostgresConnection();
-  if (!sql) {
-    console.error('PostgreSQL not initialized.');
-    return 0;
-  }
 
   try {
     const publicDomain = r2Config.publicDomain;

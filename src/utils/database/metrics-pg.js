@@ -17,10 +17,6 @@ export async function recordUserCommand(userId, { failed = false, at = Date.now(
   await ensurePostgresInitialized();
 
   const sql = getPostgresConnection();
-  if (!sql) {
-    console.error('PostgreSQL not initialized. Call initPostgresDatabase() first.');
-    return;
-  }
 
   await sql`
     INSERT INTO user_metrics (user_id, total_commands, failed_commands, first_used, last_command_at)
@@ -41,10 +37,6 @@ export async function getUserMetrics(userId) {
   await ensurePostgresInitialized();
 
   const sql = getPostgresConnection();
-  if (!sql) {
-    console.error('PostgreSQL not initialized. Call initPostgresDatabase() first.');
-    return null;
-  }
 
   const result = await sql`SELECT * FROM user_metrics WHERE user_id = ${userId}`;
   if (result.length === 0) {
@@ -61,10 +53,6 @@ export async function getAllUsersMetrics(options = {}) {
   await ensurePostgresInitialized();
 
   const sql = getPostgresConnection();
-  if (!sql) {
-    console.error('PostgreSQL not initialized. Call initPostgresDatabase() first.');
-    return [];
-  }
 
   const {
     search = null,
@@ -131,10 +119,6 @@ export async function getUserMetricsCount(options = {}) {
   await ensurePostgresInitialized();
 
   const sql = getPostgresConnection();
-  if (!sql) {
-    console.error('PostgreSQL not initialized. Call initPostgresDatabase() first.');
-    return 0;
-  }
 
   const { search = null } = options;
 
@@ -170,10 +154,6 @@ export async function getActiveUserCounts() {
   await ensurePostgresInitialized();
 
   const sql = getPostgresConnection();
-  if (!sql) {
-    console.error('PostgreSQL not initialized. Call initPostgresDatabase() first.');
-    return { total: 0, active7d: 0, active30d: 0 };
-  }
 
   const now = Date.now();
   const sevenDaysAgo = now - 7 * 24 * 60 * 60 * 1000;

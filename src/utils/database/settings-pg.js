@@ -28,10 +28,6 @@ export async function getSetting(key, defaultValue = null) {
   await ensurePostgresInitialized();
 
   const sql = getPostgresConnection();
-  if (!sql) {
-    console.error('PostgreSQL not initialized. Call initPostgresDatabase() first.');
-    return defaultValue;
-  }
 
   const cached = settingsCache.get(key);
   if (cached && Date.now() - cached.timestamp < SETTINGS_CACHE_TTL) {
@@ -64,10 +60,6 @@ export async function setSetting(key, value) {
   await ensurePostgresInitialized();
 
   const sql = getPostgresConnection();
-  if (!sql) {
-    console.error('PostgreSQL not initialized. Call initPostgresDatabase() first.');
-    return;
-  }
 
   const textValue = String(value);
   const now = Date.now();
@@ -85,10 +77,6 @@ export async function getAllSettings() {
   await ensurePostgresInitialized();
 
   const sql = getPostgresConnection();
-  if (!sql) {
-    console.error('PostgreSQL not initialized. Call initPostgresDatabase() first.');
-    return {};
-  }
 
   const result = await sql`SELECT key, value FROM bot_settings`;
   const settings = {};

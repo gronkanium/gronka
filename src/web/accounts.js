@@ -12,7 +12,6 @@ const KEY_ID_LEN = 8;
 const MAX_KEYS = 10;
 export const SESSION_MS = 7 * 24 * 60 * 60 * 1000;
 const SESSION_IDLE_MS = 24 * 60 * 60 * 1000;
-const KEY_CACHE_MS = 5 * 60 * 1000;
 const RECOVERY_CODES = 10;
 const RECOVERY_LEN = 10;
 const MAX_PASSKEYS = 10;
@@ -38,6 +37,12 @@ function pepper() {
 
 const peppered = secret => crypto.createHmac('sha256', pepper()).update(secret).digest('hex');
 const hashSecret = secret => Bun.password.hash(peppered(secret), ARGON);
+// API key secrets and recovery codes are random, so a keyed HMAC is enough and costs no argon2.
+const sameHmac = (secret, stored) => {
+  const mine = Buffer.from(peppered(secret), 'hex');
+  const theirs = Buffer.from(String(stored ?? ''), 'hex');
+  return mine.length === theirs.length && crypto.timingSafeEqual(mine, theirs);
+};
 const sha256 = text => crypto.createHash('sha256').update(text).digest('hex');
 
 let dummyHash;
@@ -128,10 +133,6 @@ export async function ensureWebSchema() {
 
 export async function pruneExpired() {
   await getPostgresConnection()`DELETE FROM web_sessions WHERE expires_at < now()`;
-  const now = Date.now();
-  for (const [cacheKey, entry] of keyCache) {
-    if (entry.expires <= now) keyCache.delete(cacheKey);
-  }
 }
 
 export async function createAccount() {
@@ -166,14 +167,9 @@ export async function rotateAccountNumber(accountId) {
   return formatAccountNumber(accountId, secret);
 }
 
-const keyCache = new Map();
-
 export async function deleteAccount(accountId) {
   const sql = getPostgresConnection();
   await sql`DELETE FROM web_accounts WHERE id = ${accountId}`;
-  for (const [cacheKey, entry] of keyCache) {
-    if (entry.accountId === accountId) keyCache.delete(cacheKey);
-  }
 }
 
 export async function createSession(accountId) {
@@ -256,7 +252,7 @@ async function underQuota(tx, table, accountId, max) {
 
 export async function createApiKey(accountId, label = null) {
   const secret = crypto.randomBytes(32).toString('base64url');
-  const secretHash = await hashSecret(secret);
+  const secretHash = peppered(secret);
   return getPostgresConnection().begin(async tx => {
     if (!(await underQuota(tx, 'web_api_keys', accountId, MAX_KEYS))) return null;
     for (;;) {
@@ -278,35 +274,20 @@ export async function revokeApiKey(accountId, publicId) {
   const sql = getPostgresConnection();
   const rows = await sql`
     DELETE FROM web_api_keys WHERE id = ${id} AND account_id = ${accountId} RETURNING id`;
-  for (const [cacheKey, entry] of keyCache) {
-    if (entry.keyId === id) keyCache.delete(cacheKey);
-  }
   return rows.length > 0;
 }
 
-// argon2 runs once per key per 5 minutes, so a script making many calls doesn't pay for it each time.
 export async function verifyApiKey(input) {
-  const cacheKey = sha256(String(input));
-  const cached = keyCache.get(cacheKey);
-  if (cached && cached.expires > Date.now()) {
-    return cached;
-  }
   const parsed = parseApiKey(input);
   // The format and checksum are public, so refusing a malformed key early leaks nothing.
   if (!parsed) return null;
   const sql = getPostgresConnection();
-  const [row] = parsed
-    ? await sql`SELECT account_id, secret_hash FROM web_api_keys WHERE id = ${parsed.id}`
-    : [];
-  if (!(await verifySecret(parsed?.secret ?? 'invalid', row?.secret_hash))) {
-    return null;
-  }
+  const [row] = await sql`SELECT account_id, secret_hash FROM web_api_keys WHERE id = ${parsed.id}`;
+  if (!row || !sameHmac(parsed.secret, row.secret_hash)) return null;
   await sql`
     UPDATE web_api_keys SET last_used_on = CURRENT_DATE
     WHERE id = ${parsed.id} AND last_used_on IS DISTINCT FROM CURRENT_DATE`;
-  const entry = { keyId: parsed.id, accountId: row.account_id, expires: Date.now() + KEY_CACHE_MS };
-  keyCache.set(cacheKey, entry);
-  return entry;
+  return { keyId: parsed.id, accountId: row.account_id };
 }
 
 export async function startTotp(accountId) {
@@ -320,7 +301,7 @@ export async function startTotp(accountId) {
 
 async function createRecoveryCodes(sql, accountId) {
   const codes = Array.from({ length: RECOVERY_CODES }, () => randomBase32(RECOVERY_LEN));
-  const hashes = await Promise.all(codes.map(hashSecret));
+  const hashes = codes.map(peppered);
   await sql`DELETE FROM web_recovery_codes WHERE account_id = ${accountId}`;
   await sql`
     INSERT INTO web_recovery_codes ${sql(
@@ -353,15 +334,11 @@ const normalizeRecovery = input =>
 async function useRecoveryCode(sql, accountId, input) {
   const code = normalizeRecovery(input);
   if (!/^[0-9A-HJKMNP-TV-Z]{10}$/.test(code)) return false;
-  const rows =
-    await sql`SELECT id, code_hash FROM web_recovery_codes WHERE account_id = ${accountId}`;
-  for (const row of rows) {
-    if (await verifySecret(code, row.code_hash)) {
-      const used = await sql`DELETE FROM web_recovery_codes WHERE id = ${row.id} RETURNING id`;
-      return used.length > 0;
-    }
-  }
-  return false;
+  // Deleting by the hash both checks the code and makes it single-use when two logins race.
+  const used = await sql`
+    DELETE FROM web_recovery_codes
+    WHERE account_id = ${accountId} AND code_hash = ${peppered(code)} RETURNING id`;
+  return used.length > 0;
 }
 
 // 'ok' when the account has no TOTP or the code (a TOTP code or a recovery code) is right;

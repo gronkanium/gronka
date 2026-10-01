@@ -124,14 +124,27 @@ describe('second factor on an account', () => {
     await accounts.deleteAccount(id);
   });
 
-  test('recovery codes are stored as argon2id hashes', async () => {
+  test('recovery codes are stored as keyed hashes, never in plaintext', async () => {
     const { id } = await accounts.createAccount();
     await accounts.startTotp(id);
     const codes = await accounts.enableTotp(id, hotp(await secretOf(id), currentStep()));
     const rows = await getPostgresConnection()`
       SELECT code_hash FROM web_recovery_codes WHERE account_id = ${id}`;
-    expect(rows.every(row => row.code_hash.startsWith('$argon2id$'))).toBe(true);
+    expect(rows.every(row => /^[0-9a-f]{64}$/.test(row.code_hash))).toBe(true);
     expect(rows.some(row => row.code_hash.includes(codes[0].replace('-', '')))).toBe(false);
+    await accounts.deleteAccount(id);
+  });
+
+  test('one recovery code presented twice at once lets exactly one login through', async () => {
+    const { id } = await accounts.createAccount();
+    await accounts.startTotp(id);
+    const codes = await accounts.enableTotp(id, hotp(await secretOf(id), currentStep()));
+    const results = await Promise.all([
+      accounts.checkSecondFactor(id, codes[0]),
+      accounts.checkSecondFactor(id, codes[0]),
+    ]);
+    expect(results.filter(r => r === 'ok')).toHaveLength(1);
+    expect((await accounts.getAccountSummary(id)).recoveryCodesLeft).toBe(9);
     await accounts.deleteAccount(id);
   });
 });

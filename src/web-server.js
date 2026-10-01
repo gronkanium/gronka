@@ -598,7 +598,7 @@ export function createHandler({
     let caller;
     const auth = req.headers.get('authorization');
     if (auth) {
-      // A well-formed key costs an argon2 verify, so the attempts are limited before paying for it.
+      // Guessing keys is limited per address before any lookup.
       limit(`auth:${ipKey(req, server)}`, authLimit);
       const key = await accounts.verifyApiKey(auth.replace(/^Bearer\s+/i, ''));
       if (!key) {

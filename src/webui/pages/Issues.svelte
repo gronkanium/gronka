@@ -1,5 +1,6 @@
 <script>
   import { createCopier } from '../utils/copier.svelte.js';
+  import { getJson, getJsonOrNull } from '../utils/api.js';
   import { tick, untrack } from 'svelte';
   import { SvelteSet } from 'svelte/reactivity';
   import {
@@ -15,7 +16,7 @@
   import { currentRoute, navigate } from '../utils/router.js';
   import { alerts as liveAlerts } from '../stores/sse-store.js';
   import { issueStates, setIssueState } from '../stores/nav.js';
-  import { groupIssues, stateOf, isOpen, KIND_LABEL } from '../issues.js';
+  import { groupIssues, stateOf, isOpen, inTab, buckets, abbr, KIND_LABEL } from '../issues.js';
   import { formatRelativeTime, formatDateTime, shortId, urlLabel } from '../utils/format.js';
   import PageHeader from '../components/PageHeader.svelte';
   import DataTable from '../components/DataTable.svelte';
@@ -35,7 +36,6 @@
     ['muted', 'Muted'],
     ['resolved', 'Resolved'],
   ];
-  const TAB_KIND = { defects: 'defect', upstream: 'upstream', user: 'user' };
   const KIND_HELP = {
     user: 'A reply to something the user sent. Nothing to fix unless it keeps catching valid links.',
     upstream: 'A site refused or no longer has the content. Worth a look if it spikes.',
@@ -111,9 +111,7 @@
   const selectedKey = $derived($currentRoute.params.$issue || '');
 
   async function load() {
-    const r = await fetch('/api/alerts/summary?reasonLimit=300')
-      .then(x => (x.ok ? x.json() : null))
-      .catch(() => null);
+    const r = await getJsonOrNull('/api/alerts/summary?reasonLimit=300');
     now = Date.now();
     if (!r) {
       if (!loaded) loadError = 'Could not load issues';
@@ -156,10 +154,6 @@
     muted: withState.filter(g => g.state === 'muted'),
     resolved: withState.filter(g => g.state === 'resolved'),
   });
-  const inTab = (t, g, state) =>
-    t === 'muted' || t === 'resolved'
-      ? state === t
-      : ['open', 'regressed'].includes(state) && (!TAB_KIND[t] || TAB_KIND[t] === g.kind);
 
   // Per group and period: the alerts' timestamps and distinct users, fetched on demand.
   let cache = $state.raw({});
@@ -172,8 +166,7 @@
   const alertsFor = (g, extra = '') =>
     Promise.all(
       g.members.map(reason =>
-        fetch(`/api/alerts?reason=${encodeURIComponent(reason)}&limit=${LIMIT}${extra}`)
-          .then(r => (r.ok ? r.json() : Promise.reject(new Error(String(r.status)))))
+        getJson(`/api/alerts?reason=${encodeURIComponent(reason)}&limit=${LIMIT}${extra}`)
           .then(d => d.alerts ?? [])
           .catch(() => null)
       )
@@ -215,22 +208,6 @@
     }
   }
 
-  function bucketStart(unit, at) {
-    const d = new Date(at);
-    if (unit === 'day') d.setHours(0, 0, 0, 0);
-    else d.setMinutes(0, 0, 0);
-    return d.getTime();
-  }
-  function buckets(times, unit, n, at) {
-    const size = unit === 'day' ? DAY : HOUR;
-    const first = bucketStart(unit, at) - (n - 1) * size;
-    const out = Array.from({ length: n }, (_, i) => ({ at: first + i * size, n: 0 }));
-    for (const t of times) {
-      const i = Math.floor((t - first) / size);
-      if (i >= 0 && i < n) out[i].n++;
-    }
-    return out;
-  }
   const bucketLabel = (at, unit) =>
     unit === 'day'
       ? new Date(at).toLocaleDateString([], { weekday: 'short', month: 'short', day: 'numeric' })
@@ -370,11 +347,7 @@
       occLoading = false;
       const recent = list.slice(0, 8).filter(a => a.operation_id);
       const ops = await Promise.all(
-        recent.map(a =>
-          fetch(`/api/operations/${encodeURIComponent(a.operation_id)}`)
-            .then(r => (r.ok ? r.json() : null))
-            .catch(() => null)
-        )
+        recent.map(a => getJsonOrNull(`/api/operations/${encodeURIComponent(a.operation_id)}`))
       );
       if (stale) return;
       const map = {};
@@ -415,13 +388,6 @@
     ]
       .filter(Boolean)
       .join(' · ');
-  function abbr(n) {
-    if (n == null) return '–';
-    if (n < 1000) return String(n);
-    if (n < 1e4) return `${(n / 1e3).toFixed(1).replace(/\.0$/, '')}k`;
-    if (n < 1e6) return `${Math.round(n / 1e3)}k`;
-    return `${(n / 1e6).toFixed(1).replace(/\.0$/, '')}M`;
-  }
   const wait = ms => new Promise(r => setTimeout(r, ms));
 
   let toastTimer;

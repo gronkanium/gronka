@@ -264,7 +264,10 @@ client.once(Events.ClientReady, async readyClient => {
       logger.error('Error reconciling orphaned operations at startup:', error);
     }
 
-    const report = () => reportPresence({ role: 'bot' }).catch(() => {});
+    const report = () =>
+      reportPresence({ role: 'bot' }).catch(error =>
+        logger.warn(`Presence report failed: ${error.message}`)
+      );
     report();
     setInterval(report, PRESENCE_MS);
 
@@ -459,7 +462,7 @@ function gracefulShutdown(signal) {
   if (retentionJobIntervalId) {
     stopRetentionJob(retentionJobIntervalId);
   }
-  clearPresence().catch(() => {});
+  clearPresence().catch(error => logger.warn(`Could not clear presence: ${error.message}`));
   if (httpServer) {
     httpServer.close(() => {
       logger.info('HTTP server closed');

@@ -10,6 +10,15 @@
 export function getTableDefinitions() {
   return [
     {
+      name: 'schema_migrations',
+      sql: `
+        CREATE TABLE IF NOT EXISTS schema_migrations (
+          name TEXT PRIMARY KEY,
+          applied_at BIGINT NOT NULL
+        );
+      `,
+    },
+    {
       name: 'logs',
       sql: `
         CREATE TABLE IF NOT EXISTS logs (
@@ -296,7 +305,7 @@ async function columnExists(sql, tableName, columnName) {
   return result.length > 0;
 }
 
-export async function addFileSizeColumnIfNeeded(sql) {
+async function addFileSizeColumnIfNeeded(sql) {
   const exists = await columnExists(sql, 'processed_urls', 'file_size');
   if (!exists) {
     await sql`ALTER TABLE processed_urls ADD COLUMN file_size BIGINT`;
@@ -311,7 +320,7 @@ export async function addFileSizeColumnIfNeeded(sql) {
  * @param {postgres.Sql} sql - PostgreSQL connection
  * @returns {Promise<void>}
  */
-export async function addR2ExpiredAtColumnIfNeeded(sql) {
+async function addR2ExpiredAtColumnIfNeeded(sql) {
   const exists = await columnExists(sql, 'processed_urls', 'r2_expired_at');
   if (!exists) {
     await sql`ALTER TABLE processed_urls ADD COLUMN r2_expired_at BIGINT`;
@@ -328,7 +337,7 @@ export async function addR2ExpiredAtColumnIfNeeded(sql) {
  * @param {postgres.Sql} sql - PostgreSQL connection
  * @returns {Promise<void>}
  */
-export async function dropUsernameColumnsIfPresent(sql) {
+async function dropUsernameColumnsIfPresent(sql) {
   await sql`ALTER TABLE user_metrics DROP COLUMN IF EXISTS username`;
 }
 
@@ -337,27 +346,45 @@ export async function mergeUsersIntoUserMetrics(sql) {
   if (!(await columnExists(sql, 'user_metrics', 'updated_at'))) {
     return;
   }
-  await sql.begin(async tx => {
-    await tx`ALTER TABLE user_metrics ADD COLUMN IF NOT EXISTS first_used BIGINT`;
-    if (await columnExists(tx, 'users', 'first_used')) {
-      await tx`
-        UPDATE user_metrics m SET first_used = u.first_used
-        FROM users u WHERE u.user_id = m.user_id AND m.first_used IS NULL`;
+  await sql`ALTER TABLE user_metrics ADD COLUMN IF NOT EXISTS first_used BIGINT`;
+  if (await columnExists(sql, 'users', 'first_used')) {
+    await sql`
+      UPDATE user_metrics m SET first_used = u.first_used
+      FROM users u WHERE u.user_id = m.user_id AND m.first_used IS NULL`;
+  }
+  await sql`
+    UPDATE user_metrics m SET first_used = COALESCE(
+      (SELECT MIN(processed_at) FROM processed_urls p WHERE p.user_id = m.user_id),
+      m.last_command_at, 0)
+    WHERE m.first_used IS NULL`;
+  await sql`ALTER TABLE user_metrics ALTER COLUMN first_used SET NOT NULL`;
+  await sql`DROP TABLE IF EXISTS users`;
+  await sql`
+    ALTER TABLE user_metrics
+      DROP COLUMN IF EXISTS successful_commands, DROP COLUMN IF EXISTS total_convert,
+      DROP COLUMN IF EXISTS total_download, DROP COLUMN IF EXISTS total_optimize,
+      DROP COLUMN IF EXISTS total_info, DROP COLUMN IF EXISTS total_file_size,
+      DROP COLUMN IF EXISTS updated_at`;
+}
+
+// Append only: a name, once recorded in schema_migrations, never runs again.
+const MIGRATIONS = [
+  ['processed_urls_file_size', addFileSizeColumnIfNeeded],
+  ['processed_urls_r2_expired_at', addR2ExpiredAtColumnIfNeeded],
+  ['drop_username_columns', dropUsernameColumnsIfPresent],
+  ['merge_users_into_user_metrics', mergeUsersIntoUserMetrics],
+  ['temporary_uploads_cascade_delete', ensureTemporaryUploadsCascadeDelete],
+  ['temporary_uploads_unique_key', ensureTemporaryUploadsUniqueKey],
+];
+
+export async function runMigrations(sql) {
+  const applied = new Set((await sql`SELECT name FROM schema_migrations`).map(r => r.name));
+  for (const [name, migrate] of MIGRATIONS) {
+    if (!applied.has(name)) {
+      await migrate(sql);
+      await sql`INSERT INTO schema_migrations (name, applied_at) VALUES (${name}, ${Date.now()})`;
     }
-    await tx`
-      UPDATE user_metrics m SET first_used = COALESCE(
-        (SELECT MIN(processed_at) FROM processed_urls p WHERE p.user_id = m.user_id),
-        m.last_command_at, 0)
-      WHERE m.first_used IS NULL`;
-    await tx`ALTER TABLE user_metrics ALTER COLUMN first_used SET NOT NULL`;
-    await tx`DROP TABLE IF EXISTS users`;
-    await tx`
-      ALTER TABLE user_metrics
-        DROP COLUMN IF EXISTS successful_commands, DROP COLUMN IF EXISTS total_convert,
-        DROP COLUMN IF EXISTS total_download, DROP COLUMN IF EXISTS total_optimize,
-        DROP COLUMN IF EXISTS total_info, DROP COLUMN IF EXISTS total_file_size,
-        DROP COLUMN IF EXISTS updated_at`;
-  });
+  }
 }
 
 /**
@@ -368,7 +395,7 @@ export async function mergeUsersIntoUserMetrics(sql) {
  * @param {postgres.Sql} sql - PostgreSQL connection
  * @returns {Promise<void>}
  */
-export async function ensureTemporaryUploadsCascadeDelete(sql) {
+async function ensureTemporaryUploadsCascadeDelete(sql) {
   const result = await sql`
     SELECT confdeltype
     FROM pg_constraint
@@ -389,7 +416,7 @@ export async function ensureTemporaryUploadsCascadeDelete(sql) {
 }
 
 // ON CONFLICT (url_hash, r2_key) is rejected without this key; older databases may lack it.
-export async function ensureTemporaryUploadsUniqueKey(sql) {
+async function ensureTemporaryUploadsUniqueKey(sql) {
   const keyed = await sql`
     SELECT 1 FROM pg_index i
     WHERE i.indrelid = 'temporary_uploads'::regclass AND i.indisunique AND i.indpred IS NULL

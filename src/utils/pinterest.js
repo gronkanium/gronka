@@ -26,12 +26,7 @@ const MEDIA_HOST = 'pinimg.com';
 const PINTEREST_HOST = /(^|\.)pinterest\.[a-z]{2,}(\.[a-z]{2,})?$/;
 const PIN_PATH = /^\/pin\/\d+/;
 
-/**
- * Check whether a URL is a Pinterest pin we can extract media from: a /pin/<id> page on any
- * pinterest domain, or a pin.it share link (whose path is an opaque slug).
- * @param {string} url - URL to check
- * @returns {boolean} True if the URL is a pin page or a pin.it share link
- */
+// Check whether a URL is a Pinterest pin we can extract media from: a /pin/<id> page on any pinterest domain, or a pin.it share link (whose path is an opaque slug)
 export function isPinterestUrl(url) {
   try {
     const { hostname, pathname } = new URL(url);
@@ -45,14 +40,7 @@ export function isPinterestUrl(url) {
   }
 }
 
-/**
- * Extract the primary media URL from a pin page's HTML.
- * Video pins carry a JSON-LD VideoObject whose contentUrl is a progressive MP4; image pins
- * carry a SocialMediaPosting whose image is the originals-size asset. Video wins when both
- * are present, since a video pin also publishes its still as the posting image.
- * @param {string} html - Raw HTML of the pin page
- * @returns {string|null} Absolute media URL on the Pinterest CDN, or null if none found
- */
+// Extract the primary media URL from a pin page's HTML
 export function extractMediaUrl(html) {
   if (typeof html !== 'string' || html.length === 0) {
     return null;
@@ -79,13 +67,7 @@ export function extractMediaUrl(html) {
   return image;
 }
 
-/**
- * Guard that a resolved media URL lives on the Pinterest CDN, so an unexpected page shape
- * can't point us at an arbitrary host (SSRF is also caught later by downloadFileFromUrl's
- * validateUrl, but this keeps extraction honest).
- * @param {unknown} url - Candidate media URL
- * @returns {boolean}
- */
+// Guard that a resolved media URL lives on the Pinterest CDN, so an unexpected page shape can't point us at an arbitrary host (SSRF is also caught later by downloadFileFromUrl's validateUrl, but this keeps extraction honest)
 function isMediaHostUrl(url) {
   if (typeof url !== 'string') {
     return false;
@@ -98,16 +80,7 @@ function isMediaHostUrl(url) {
   }
 }
 
-/**
- * Download the media for a Pinterest pin URL.
- * Fetches the pin page (following the pin.it redirect when present), reads the media URL out
- * of its JSON-LD, then downloads it via the shared file-downloader (reusing SSRF validation,
- * size limits, and content-type/filename detection). Returns the same { buffer, contentType,
- * size, filename } shape as the other download paths.
- * @param {string} url - Pinterest pin or pin.it URL
- * @param {boolean} isAdminUser - Admin users bypass size limits
- * @returns {Promise<{buffer: Buffer, contentType: string, size: number, filename: string}>}
- */
+// Download the media for a Pinterest pin URL
 export async function downloadFromPinterest(url, isAdminUser = false) {
   logger.debug(`Resolving Pinterest pin: ${url}`);
 

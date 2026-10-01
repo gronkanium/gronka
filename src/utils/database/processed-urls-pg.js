@@ -12,11 +12,6 @@ import {
 const processedUrlCache = new Map(); // Map<urlHash, {data, timestamp}>
 const PROCESSED_URL_CACHE_TTL = 5 * 60 * 1000; // 5 minutes
 
-/**
- * Get cached processed URL if available and not expired
- * @param {string} urlHash - URL hash
- * @returns {Object|null} Cached processed URL or null
- */
 function getCachedProcessedUrl(urlHash) {
   const cached = processedUrlCache.get(urlHash);
   if (!cached) {
@@ -30,11 +25,6 @@ function getCachedProcessedUrl(urlHash) {
   return cached.data;
 }
 
-/**
- * Cache processed URL
- * @param {string} urlHash - URL hash
- * @param {Object|null} processedUrl - Processed URL object to cache
- */
 function setCachedProcessedUrl(urlHash, processedUrl) {
   processedUrlCache.set(urlHash, {
     data: processedUrl,
@@ -50,11 +40,6 @@ function invalidateProcessedUrlCache(urlHash = null) {
   }
 }
 
-/**
- * Get processed URL record by URL hash
- * @param {string} urlHash - sha256 hash of the URL
- * @returns {Promise<Object|null>} Processed URL record or null if not found
- */
 export async function getProcessedUrl(urlHash) {
   await ensurePostgresInitialized();
 
@@ -215,10 +200,7 @@ export async function getUserR2MediaCount(userId, fileType = null) {
   return parseInt(result[0]?.count || 0, 10);
 }
 
-/**
- * Get per-user R2 storage stats (file count + total bytes), largest first
- * @returns {Promise<Array>} Rows of { user_id, file_count, total_size }
- */
+// Get per-user R2 storage stats (file count + total bytes), largest first
 export async function getR2UserStats() {
   await ensurePostgresInitialized();
 
@@ -245,14 +227,7 @@ export async function getR2UserStats() {
   }));
 }
 
-/**
- * Mark processed_urls rows as R2-expired once their backing R2 upload has been
- * confirmed removed. Keeps the historical row (used for request-count stats)
- * while stopping callers - the moderation "on R2" view, the download/convert/
- * optimize URL cache - from treating file_url as still resolvable.
- * @param {string[]} urlHashes - URL hashes whose R2 upload just expired
- * @returns {Promise<void>}
- */
+// Mark processed_urls rows as R2-expired once their backing R2 upload has been confirmed removed
 export async function markProcessedUrlsR2Expired(urlHashes) {
   await ensurePostgresInitialized();
 

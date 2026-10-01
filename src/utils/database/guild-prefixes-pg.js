@@ -8,10 +8,6 @@ import { ensurePostgresInitialized } from './init.js';
 const prefixCache = new Map(); // Map<guildId, {value, timestamp}>
 const PREFIX_CACHE_TTL = 60 * 1000; // 60 seconds
 
-/**
- * Invalidate the guild prefix cache
- * @param {string|null} guildId - Guild to invalidate (or null to clear all)
- */
 export function invalidateGuildPrefixCache(guildId = null) {
   if (guildId) {
     prefixCache.delete(guildId);
@@ -20,11 +16,6 @@ export function invalidateGuildPrefixCache(guildId = null) {
   }
 }
 
-/**
- * Get a guild's custom command prefix
- * @param {string} guildId - Discord guild ID
- * @returns {Promise<string|null>} Custom prefix, or null when the guild uses the default
- */
 export async function getGuildPrefix(guildId) {
   await ensurePostgresInitialized();
 

@@ -6,10 +6,6 @@ import { convertTimestampsToNumbers } from './helpers-pg.js';
 const banCache = new Map(); // Map<userId, {banned: Object|null, timestamp}>
 const BAN_CACHE_TTL = 10 * 1000; // 10 seconds
 
-/**
- * Invalidate the ban check cache
- * @param {string|null} userId - User ID to invalidate (or null to clear all)
- */
 export function invalidateBanCache(userId = null) {
   if (userId) {
     banCache.delete(userId);
@@ -18,11 +14,6 @@ export function invalidateBanCache(userId = null) {
   }
 }
 
-/**
- * Get a user's ban record, if any
- * @param {string} userId - Discord user ID
- * @returns {Promise<Object|null>} Ban record or null if not banned
- */
 export async function getBan(userId) {
   await ensurePostgresInitialized();
 

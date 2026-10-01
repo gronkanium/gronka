@@ -57,12 +57,6 @@ const IMAGE_EXTENSIONS = ['.png', '.jpg', '.jpeg', '.webp', '.awebp', '.gif'];
 const UNSUPPORTED_FORMAT =
   'unsupported file format. please provide a video (mp4, mov, webm, avi, mkv) or image (png, jpg, jpeg, webp, gif).';
 
-/**
- * Probe a media file's width and fps via ffprobe, with safe fallbacks.
- * @param {string} filePath - Path to the media file
- * @param {number} fallbackWidth - Width to assume when probing fails
- * @returns {Promise<{width: number, fps: number}>}
- */
 async function probeMediaInfo(filePath, fallbackWidth) {
   let width = fallbackWidth;
   let fps = 30;
@@ -103,15 +97,7 @@ async function probeMediaInfo(filePath, fallbackWidth) {
 const DEFAULT_MAX_GIF_WIDTH = 640;
 const DEFAULT_MAX_GIF_FPS = 20;
 
-/**
- * Resolve the effective settings for a video-to-GIF conversion.
- * Policy: follow the source's width and fps unless the user overrides them, but clamp the
- * defaults to sane ceilings (DEFAULT_MAX_GIF_WIDTH / DEFAULT_MAX_GIF_FPS) so an unspecified
- * convert never produces an enormous GIF.
- * @param {Object} options - User-provided options (width, fps, startTime, duration)
- * @param {{width: number, fps: number}} probed - Probed source dimensions
- * @returns {Object} Options object for convertToGif
- */
+// Resolve the effective settings for a video-to-GIF conversion
 function resolveVideoConversionOptions(options, probed) {
   const defaultWidth = Math.min(probed.width, DEFAULT_MAX_GIF_WIDTH);
   if (options.width == null && probed.width > DEFAULT_MAX_GIF_WIDTH) {

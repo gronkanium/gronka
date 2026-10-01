@@ -109,12 +109,7 @@ class Logger {
     return input;
   }
 
-  /**
-   * Explicitly sanitize a string for console output to prevent log injection
-   * This function is designed to be recognized by CodeQL as a sanitization step
-   * @param {string} message - The message to sanitize
-   * @returns {string} - Sanitized message safe for console output
-   */
+  // Strips control characters before console output; kept as its own function so CodeQL sees the sanitizer
   sanitizeForConsoleOutput(message) {
     // Sanitize unconditionally, non-string values are stringified first so every path
     // through this function strips newlines and control characters.

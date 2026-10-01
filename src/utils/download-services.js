@@ -103,11 +103,6 @@ export const DOWNLOAD_SERVICES = [
 /** Set of valid service ids, for validating the disabled_services setting. */
 export const DOWNLOAD_SERVICE_IDS = new Set(DOWNLOAD_SERVICES.map(s => s.id));
 
-/**
- * Resolve which download service a URL belongs to.
- * @param {string} url - URL to classify
- * @returns {{id: string, label: string, category: string, hosts: string[]}|null}
- */
 export function getServiceForUrl(url) {
   const hostname = hostOf(url);
   if (!hostname) return null;
@@ -118,12 +113,7 @@ export function getServiceForUrl(url) {
   );
 }
 
-/**
- * If the URL belongs to a service that has been turned off in the webui, return that
- * service's display label; otherwise null. Reads the (cached) disabled_services setting.
- * @param {string} url - URL to check
- * @returns {Promise<string|null>} The disabled service's label, or null
- */
+// If the URL belongs to a service that has been turned off in the webui, return that service's display label; otherwise null
 export async function getDisabledServiceLabel(url) {
   const service = getServiceForUrl(url);
   if (!service) {

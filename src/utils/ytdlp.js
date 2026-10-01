@@ -28,14 +28,7 @@ function tooLargeMessage(maxSize) {
 const GENERIC_FAILURE_MESSAGE =
   'could not download this content. it may be deleted, private, age-restricted, or unsupported.';
 
-/**
- * Optional --cookies args for yt-dlp. Age-restricted content (notably TikTok, which Cobalt
- * has no cookie support for) needs a logged-in browser session, supplied as a Netscape
- * cookies.txt file via YTDLP_COOKIES_PATH. The file is domain-scoped, so passing it on
- * every invocation is safe - yt-dlp only sends cookies matching the target site.
- * Resolved at call time (not module load) so a file mounted/rotated later is picked up.
- * @returns {string[]} ['--cookies', path] when a usable file is configured, else []
- */
+// Optional --cookies args for yt-dlp
 export function getCookieArgs(url = null, signedIn = false) {
   // Signed-in YouTube gets ads, and yt-dlp waits ~5 s for each to be skippable: only sign in when asked.
   if (url && isYouTubeUrl(url) && !signedIn) return [];
@@ -145,12 +138,6 @@ export const YTDLP_SITES = [
   { name: 'Rule34Video', hosts: ['rule34video.com'] },
 ];
 
-/**
- * Resolve the yt-dlp-handled site for a URL, if any.
- * @param {string} url - URL to classify
- * @returns {string|null} The site's display name (e.g. 'YouTube'), or null if no yt-dlp
- *   site owns this host.
- */
 export function getYtdlpSite(url) {
   try {
     const hostname = hostOf(url);
@@ -183,19 +170,6 @@ function getContentType(ext) {
   return mimeTypes[extLower] || 'video/mp4';
 }
 
-/**
- * Execute yt-dlp command and return the output file path
- * @param {string} url - YouTube URL to download
- * @param {string} outputDir - Directory to save the file
- * @param {string} quality - Quality format string for yt-dlp
- * @param {number} timeout - Timeout in milliseconds
- * @param {number} maxDuration - Maximum video duration in seconds (default: 300 = 5 minutes)
- * @param {number|null} startTime - Start time in seconds for segment download
- * @param {number|null} duration - Duration in seconds for segment download
- * @param {number} maxSize - Maximum file size in bytes; finite values add yt-dlp --max-filesize
- *   so oversized full downloads abort early instead of being caught after buffering (default: Infinity)
- * @returns {Promise<string>} Path to downloaded file
- */
 function executeYtdlp(
   url,
   outputDir,
@@ -664,17 +638,6 @@ function emptyDownloadError(error) {
   throw error;
 }
 
-/**
- * Download video from YouTube using yt-dlp
- * @param {string} url - YouTube URL to download
- * @param {boolean} isAdminUser - Whether the user is an admin (allows larger files and higher quality)
- * @param {number} maxSize - Maximum file size in bytes
- * @param {string} quality - Quality preference (default from config)
- * @param {number} maxDuration - Maximum video duration in seconds (default: 300 = 5 minutes, admins bypass this)
- * @param {number|null} startTime - Start time in seconds for segment download
- * @param {number|null} duration - Duration in seconds for segment download
- * @returns {Promise<Object>} Media file (path, size, hash, contentType, filename)
- */
 export async function downloadWithYtdlp(
   url,
   isAdminUser = false,

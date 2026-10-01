@@ -9,12 +9,7 @@ export function hashStringHex(value) {
   return hashBytesHex(Buffer.from(String(value), 'utf8'));
 }
 
-/**
- * Hash multiple parts (strings/bytes) in-order to lowercase hex.
- * This avoids concatenating large buffers.
- * @param {Array<string|Uint8Array|null|undefined>} parts
- * @returns {string}
- */
+// Hash multiple parts (strings/bytes) in-order to lowercase hex
 export function hashPartsHex(parts) {
   const hasher = createHash('sha256');
   for (const part of parts) {
@@ -32,12 +27,7 @@ export function hashUrl(url) {
   return hashStringHex(url);
 }
 
-/**
- * Normalize conversion options to include only explicitly provided parameters
- * Filters out undefined and null values for consistent hashing
- * @param {Object} options - Conversion options object
- * @returns {Object} Normalized options object with only explicitly provided parameters
- */
+// Only explicitly given options take part in the cache key, so unset and default hash the same
 function normalizeConversionOptions(options) {
   if (!options || typeof options !== 'object') {
     return {};
@@ -69,13 +59,7 @@ function normalizeConversionOptions(options) {
   return normalized;
 }
 
-/**
- * Generate composite hash for URL with conversion parameters
- * Creates a cache key that includes both URL and explicitly provided conversion parameters
- * @param {string} url - URL to hash
- * @param {Object} [options] - Conversion options object (quality, optimize, lossy, startTime, duration, width, fps)
- * @returns {string} Composite hash combining URL and parameters
- */
+// Cache key for a URL plus the conversion options that change the output
 export function hashUrlWithParams(url, options = {}) {
   const normalized = normalizeConversionOptions(options);
 

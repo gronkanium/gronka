@@ -165,11 +165,6 @@ async function fetchAnyFile(url, isAdminUser, userAgent) {
   return withExtension({ ...file, contentType, filename: filenameFor(file, url) });
 }
 
-/**
- * Download file from URL to a job temp file and detect content type
- * @param {{userAgent?: string}} [options] - `userAgent` replaces the default browser UA for hosts
- *   that block it (danbooru's CDN 403s the Chrome UA but accepts a descriptive one).
- */
 export async function downloadFileFromUrl(url, isAdminUser = false, client = null, options = {}) {
   const urlValidation = validateUrl(url);
   if (!urlValidation.valid) {

@@ -13,12 +13,7 @@ export const PRIVATE_ADDRESS_ERROR = 'private and internal IP addresses are not 
 // Hostnames that reach the local host no matter what DNS says
 const LOOPBACK_HOSTNAMES = new Set(['localhost', 'ip6-localhost', 'ip6-loopback']);
 
-/**
- * Normalize a URL hostname for comparison: lowercase, IPv6 brackets stripped, and the
- * root-zone trailing dot dropped ("localhost." is the same host as "localhost").
- * @param {string} hostname - Hostname from a parsed URL
- * @returns {{host: string, bracketed: boolean}} Normalized host and whether it was bracketed
- */
+// Normalize a URL hostname for comparison: lowercase, IPv6 brackets stripped, and the root-zone trailing dot dropped ("localhost." is the same host as "localhost")
 function normalizeHostname(hostname) {
   let host = hostname.toLowerCase();
   const bracketed = host.startsWith('[') && host.endsWith(']');
@@ -28,12 +23,7 @@ function normalizeHostname(hostname) {
   return { host: host.replace(/\.+$/, ''), bracketed };
 }
 
-/**
- * Parse an IPv6 literal into its eight 16-bit groups, handling `::` compression and a
- * trailing dotted-quad (`::ffff:127.0.0.1`).
- * @param {string} address - IPv6 literal, no brackets
- * @returns {number[]|null} Eight groups, or null if unparseable
- */
+// Parse an IPv6 literal into its eight 16-bit groups, handling `::` compression and a trailing dotted-quad (`::ffff:127.0.0.1`)
 function ipv6Groups(address) {
   const halves = address.split('::');
   if (halves.length > 2) return null;
@@ -71,13 +61,7 @@ function ipv6Groups(address) {
   return [...left, ...Array(zeros).fill(0), ...right];
 }
 
-/**
- * Extract the IPv4 address embedded in a transition-mechanism IPv6 address, so the v4
- * rules below judge it: IPv4-mapped/compatible (::ffff:a.b.c.d, ::a.b.c.d), NAT64
- * (64:ff9b::/96), and 6to4 (2002::/16) all carry a reachable v4 destination.
- * @param {number[]} groups - Eight 16-bit groups
- * @returns {string|null} Dotted-quad IPv4 address, or null when none is embedded
- */
+// Extract the IPv4 address embedded in a transition-mechanism IPv6 address, so the v4 rules below judge it: IPv4-mapped/compatible (::ffff:a.b.c.d, ::a.b.c.d), NAT64 (64:ff9b::/96), and 6to4 (2002::/16) all carry a reachable v4 destination
 function embeddedIpv4(groups) {
   const toDotted = (high, low) =>
     `${(high >> 8) & 0xff}.${high & 0xff}.${(low >> 8) & 0xff}.${low & 0xff}`;
@@ -93,11 +77,6 @@ function embeddedIpv4(groups) {
   return null;
 }
 
-/**
- * Classify an IPv4 literal.
- * @param {string} address - Dotted-quad IPv4 address
- * @returns {string|null} Error message when the address must not be reached, else null
- */
 function blockedIpv4Reason(address) {
   const [a, b, c] = address.split('.').map(Number);
 
@@ -114,11 +93,6 @@ function blockedIpv4Reason(address) {
   return null;
 }
 
-/**
- * Classify an IPv6 literal.
- * @param {string} address - IPv6 literal, no brackets
- * @returns {string|null} Error message when the address must not be reached, else null
- */
 function blockedIpv6Reason(address) {
   const groups = ipv6Groups(address);
   // net.isIP already said this is IPv6; if we cannot decompose it, refuse rather than guess
@@ -137,13 +111,7 @@ function blockedIpv6Reason(address) {
   return null;
 }
 
-/**
- * Decide whether an IP address is safe for the bot to connect to. Used both by
- * validateUrl (on the literal in the URL) and by the DNS guard in ssrf-guard.js (on
- * every address a hostname actually resolves to).
- * @param {string} address - IPv4 or IPv6 literal, no brackets
- * @returns {string|null} Error message when the address must not be reached, else null
- */
+// Decide whether an IP address is safe for the bot to connect to
 export function blockedAddressReason(address) {
   const family = net.isIP(address);
   if (family === 4) return blockedIpv4Reason(address);
@@ -151,15 +119,7 @@ export function blockedAddressReason(address) {
   return null; // not an IP literal, a hostname, resolved by the DNS guard instead
 }
 
-/**
- * Validate URL to prevent SSRF attacks.
- *
- * This is a string-level check on the URL the user handed us. It cannot see where a
- * hostname resolves or where a redirect leads, so every request built from a
- * user-supplied URL must also carry the DNS/redirect guard from ssrf-guard.js.
- * @param {string} url - URL to validate
- * @returns {Object} Validation result with error message if invalid
- */
+// Validate URL to prevent SSRF attacks
 export function validateUrl(url) {
   let urlObj;
   try {
@@ -215,13 +175,7 @@ export function validateUrl(url) {
   return { valid: true };
 }
 
-/**
- * Parse a timestamp string into seconds
- * Accepts plain seconds ("90", "12.5"), MM:SS ("3:10"), and HH:MM:SS ("1:02:30").
- * Fractional seconds are allowed in the last segment ("1:02.5").
- * @param {string} input - Timestamp string to parse
- * @returns {Object} { valid: true, seconds } or { valid: false, error }
- */
+// Parse a timestamp string into seconds Accepts plain seconds ("90", "12.5"), MM:SS ("3:10"), and HH:MM:SS ("1:02:30")
 export function parseTimestamp(input) {
   if (input === null || input === undefined || typeof input !== 'string') {
     return { valid: false, error: 'timestamp must be a string' };

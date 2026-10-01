@@ -29,12 +29,7 @@ const OPTION_ALIASES = {
   url: 'url',
 };
 
-/**
- * Validate a candidate custom prefix: 1-3 printable ASCII chars, no whitespace, and none
- * of the characters Discord parses specially (mentions, channels, code, backslash).
- * @param {string} prefix
- * @returns {boolean}
- */
+// Validate a candidate custom prefix: 1-3 printable ASCII chars, no whitespace, and none of the characters Discord parses specially (mentions, channels, code, backslash)
 export function isValidPrefix(prefix) {
   return /^[!-~]{1,3}$/.test(prefix) && !/[@#`\\<>]/.test(prefix);
 }
@@ -64,15 +59,7 @@ export function matchPrefix(content, { prefix, botUserId }) {
   return null;
 }
 
-/**
- * Parse command argument tokens into slash-shaped named options. A token only counts as
- * key=value when the key is a known option alias - URLs routinely contain "=" (e.g.
- * youtube.com/watch?v=...) and must stay intact as the bare `url` token. Values that the
- * slash UI would have constrained (format choices, lossy range) are normalized here since
- * prefix input is free-form.
- * @param {string[]} tokens - Whitespace-split tokens after the command name
- * @returns {Object} Named options keyed by slash option name
- */
+// Parse command argument tokens into slash-shaped named options
 export function parseArgTokens(tokens) {
   const options = {};
 
@@ -108,12 +95,7 @@ export function parseArgTokens(tokens) {
   return options;
 }
 
-/**
- * Resolve the attachment a convert/optimize prefix command should operate on: an attachment
- * on the invoking message, or one on the message it replies to.
- * @param {import('discord.js').Message} message
- * @returns {Promise<import('discord.js').Attachment|null>}
- */
+// Resolve the attachment a convert/optimize prefix command should operate on: an attachment on the invoking message, or one on the message it replies to
 async function resolveAttachment(message) {
   const own = message.attachments.first();
   if (own) {
@@ -171,15 +153,7 @@ function buildMentionEmbed(prefix) {
     );
 }
 
-/**
- * Handle the "prefix" command: show, set, or reset this guild's prefix.
- * Setting/resetting requires the Manage Server permission (or bot admin).
- * @param {import('discord.js').Message} message
- * @param {string[]} tokens - Arguments after "prefix"
- * @param {string} currentPrefix - Effective prefix for this guild
- * @param {Object} deps - Injected dependencies (see handlePrefixMessage)
- * @returns {Promise<void>}
- */
+// Handle the "prefix" command: show, set, or reset this guild's prefix
 async function handlePrefixSetting(message, tokens, currentPrefix, deps) {
   if (tokens.length === 0) {
     await message.reply(`my prefix here is \`${currentPrefix}\`, you can always mention me too.`);

@@ -1,4 +1,5 @@
 <script>
+  import { createCopier } from '../utils/copier.svelte.js';
   /**
    * Side panel for one log line: message, fields grouped into request context and the rest, per
    * field "Filter by" / "Exclude" / "Copy value", and every line written for the same request.
@@ -38,7 +39,7 @@
   } = $props();
 
   const CONTEXT = ['component', 'source', 'command', 'worker', 'op', 'user', 'job'];
-  let copied = $state('');
+  const copier = createCopier();
 
   const text = v => (v != null && typeof v === 'object' ? JSON.stringify(v) : String(v));
   const context = $derived(
@@ -58,12 +59,6 @@
     const d = (t - first) / 1000;
     return d < 10 ? `+${d.toFixed(2)}s` : `+${d.toFixed(1)}s`;
   };
-
-  function copy(value, key) {
-    navigator.clipboard?.writeText(value);
-    copied = key;
-    setTimeout(() => copied === key && (copied = ''), 1200);
-  }
 </script>
 
 <aside class="detail" aria-label="selected line">
@@ -99,10 +94,10 @@
       <pre>{line.message}</pre>
       <button
         class="icon-btn sm copy"
-        onclick={() => copy(line.message, 'message')}
+        onclick={() => copier.copy(line.message, 'message')}
         title="copy message"
         aria-label="copy message"
-        >{#if copied === 'message'}<Check size={14} />{:else}<Copy size={14} />{/if}</button
+        >{#if copier.copied === 'message'}<Check size={14} />{:else}<Copy size={14} />{/if}</button
       >
     </div>
 
@@ -135,10 +130,12 @@
                 {/if}
                 <button
                   class="icon-btn sm"
-                  onclick={() => copy(text(v), k)}
+                  onclick={() => copier.copy(text(v), k)}
                   title="Copy value"
                   aria-label="copy {k}"
-                  >{#if copied === k}<Check size={13} />{:else}<Copy size={13} />{/if}</button
+                  >{#if copier.copied === k}<Check size={13} />{:else}<Copy
+                      size={13}
+                    />{/if}</button
                 >
               </span>
             </div>
@@ -180,8 +177,10 @@
           endTime: String(line.timestamp + 30000),
         })}><Crosshair size={12} />±30 s around</button
     >
-    <button class="btn sm" onclick={() => copy(JSON.stringify(line, null, 2), 'json')}
-      >{#if copied === 'json'}<Check size={12} />Copied{:else}<Copy size={12} />Copy{/if}</button
+    <button class="btn sm" onclick={() => copier.copy(JSON.stringify(line, null, 2), 'json')}
+      >{#if copier.copied === 'json'}<Check size={12} />Copied{:else}<Copy
+          size={12}
+        />Copy{/if}</button
     >
     {#if line.metadata?.op}
       <button

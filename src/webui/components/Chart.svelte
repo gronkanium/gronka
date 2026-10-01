@@ -1,11 +1,11 @@
 <script>
   /**
-   * Time series in SVG, stacked bars or stacked areas: gridlines, y labels, x ticks, a crosshair
+   * Time series in SVG, stacked bars or overlapping areas: gridlines, y labels, x ticks, a crosshair
    * tooltip listing every series, and brush-to-zoom on pointer drag (touch included). Escape
    * cancels a brush.
    *
    *   type    'bar' | 'area'
-   *   series  [{ key, label, color }]           stacked bottom-up in this order
+   *   series  [{ key, label, color }]           bars stack bottom-up in this order
    *   data    [{ at, <key>: number, ... }]      one bucket per entry, `at` is the bucket start
    *   bucket  bucket width in ms                (defaults to the gap between the first two)
    *   onbrush (startMs, endMs) => void          enables the brush when given
@@ -54,7 +54,15 @@
   const left = $derived(showY ? padLeft : 6);
   const innerW = $derived(Math.max(0, width - left - PAD.right));
   const innerH = $derived(Math.max(0, height - PAD.top - PAD.bottom));
-  const totals = $derived(data.map(d => series.reduce((s, x) => s + (d[x.key] || 0), 0)));
+  // Areas overlap from 0: stacked, a small series would just trace the total.
+  const stacked = $derived(type !== 'area');
+  const totals = $derived(
+    data.map(d =>
+      stacked
+        ? series.reduce((s, x) => s + (d[x.key] || 0), 0)
+        : Math.max(0, ...series.map(x => d[x.key] || 0))
+    )
+  );
   const rawMax = $derived(Math.max(0, ...totals));
 
   // A rounded ceiling and evenly spaced ticks so the y axis reads as 0 / 50 / 100, not 0 / 47 / 94.
@@ -80,14 +88,20 @@
       const segs = series.map(s => {
         const v = d[s.key] || 0;
         const seg = { key: s.key, color: s.color, y0: y(acc), y1: y(acc + v), v };
-        acc += v;
+        if (stacked) acc += v;
         return seg;
       });
-      return { i, x: left + i * slot + (slot - barW) / 2, segs, total: acc, at: d.at };
+      return {
+        i,
+        x: left + i * slot + (slot - barW) / 2,
+        segs,
+        total: segs.reduce((t, g) => t + g.v, 0),
+        at: d.at,
+      };
     })
   );
 
-  // Stacked areas share the bar math: each series fills between its lower and upper edge.
+  // Areas share the bar math: each series fills between its lower and upper edge.
   const areas = $derived.by(() => {
     if (type !== 'area' || data.length < 2) return [];
     return series.map((s, si) => {

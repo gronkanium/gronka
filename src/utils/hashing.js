@@ -47,9 +47,6 @@ function normalizeConversionOptions(options) {
 
   // Only include explicitly provided parameters (non-undefined, non-null)
   // Parameters that affect output quality/size:
-  if (options.quality !== undefined && options.quality !== null) {
-    normalized.quality = String(options.quality);
-  }
   if (options.optimize !== undefined && options.optimize !== null) {
     normalized.optimize = Boolean(options.optimize);
   }

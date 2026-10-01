@@ -22,7 +22,6 @@ const OPTION_ALIASES = {
   start_time: 'start',
   end: 'end',
   end_time: 'end',
-  quality: 'quality',
   optimize: 'optimize',
   lossy: 'lossy',
   mp3: 'mp3',
@@ -69,7 +68,7 @@ export function matchPrefix(content, { prefix, botUserId }) {
  * Parse command argument tokens into slash-shaped named options. A token only counts as
  * key=value when the key is a known option alias - URLs routinely contain "=" (e.g.
  * youtube.com/watch?v=...) and must stay intact as the bare `url` token. Values that the
- * slash UI would have constrained (quality choices, lossy range) are normalized here since
+ * slash UI would have constrained (format choices, lossy range) are normalized here since
  * prefix input is free-form.
  * @param {string[]} tokens - Whitespace-split tokens after the command name
  * @returns {Object} Named options keyed by slash option name
@@ -90,11 +89,6 @@ export function parseArgTokens(tokens) {
     if (options.url === undefined) {
       options.url = token;
     }
-  }
-
-  // Slash commands restrict quality via choices; drop anything else so the default applies
-  if (options.quality !== undefined && !['low', 'medium', 'high'].includes(options.quality)) {
-    delete options.quality;
   }
 
   if (options.format !== undefined) {
@@ -161,7 +155,7 @@ export function buildHelpEmbed(prefix) {
       {
         name: 'options',
         value:
-          `\`key=value\` after a command, e.g. \`${prefix} convert format=mp4 start=0:05 end=0:10\`, or \`${prefix} convert quality=high lossy=35 optimize=true\`\n` +
+          `\`key=value\` after a command, e.g. \`${prefix} convert format=mp4 start=0:05 end=0:10\`, or \`${prefix} convert lossy=35 optimize=true\`\n` +
           `server managers can change the prefix with \`${prefix} prefix <new>\` or \`${prefix} prefix reset\``,
         inline: false,
       }

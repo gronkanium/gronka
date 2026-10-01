@@ -87,23 +87,6 @@ function validateUrlFormat(url) {
   }
 }
 
-function getGifQualityEnv(name, defaultValue) {
-  const value = process.env[name];
-  if (!value) {
-    return defaultValue;
-  }
-
-  const trimmed = value.trim().toLowerCase();
-  const validQualities = ['low', 'medium', 'high'];
-  if (!validQualities.includes(trimmed)) {
-    throw new ConfigurationError(
-      `${name} must be one of: ${validQualities.join(', ')}, got: ${value}`,
-      'INVALID_GIF_QUALITY'
-    );
-  }
-  return trimmed;
-}
-
 // Bot configuration - lazy loaded to avoid requiring DISCORD_TOKEN for webui
 let _botConfig = null;
 function getBotConfig() {
@@ -137,7 +120,6 @@ function getBotConfig() {
     retentionUrlCacheDays: parseIntEnv('RETENTION_URL_CACHE_DAYS', 7, 1, 3650),
     retentionIntervalMs: parseIntEnv('RETENTION_INTERVAL_MS', 21600000, 60000, 604800000),
     maxGifDuration: parseIntEnv('MAX_GIF_DURATION', 30, 1, 300),
-    gifQuality: getGifQualityEnv('GIF_QUALITY', 'medium'),
     // 1GB hard ceiling for non-admins: bigger files are rejected outright. Files under it are
     // delivered as expiring R2 URLs whose TTL shrinks with size (see upload-tiers.js), rather
     // than bounced at 100MB. Configurable via MAX_VIDEO_SIZE env var.

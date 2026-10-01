@@ -110,8 +110,8 @@ const DEFAULT_MAX_GIF_FPS = 20;
  * Resolve the effective settings for a video-to-GIF conversion.
  * Policy: follow the source's width and fps unless the user overrides them, but clamp the
  * defaults to sane ceilings (DEFAULT_MAX_GIF_WIDTH / DEFAULT_MAX_GIF_FPS) so an unspecified
- * convert never produces an enormous GIF; default quality to the GIF_QUALITY config.
- * @param {Object} options - User-provided options (width, fps, quality, startTime, duration)
+ * convert never produces an enormous GIF.
+ * @param {Object} options - User-provided options (width, fps, startTime, duration)
  * @param {{width: number, fps: number}} probed - Probed source dimensions
  * @returns {Object} Options object for convertToGif
  */
@@ -129,7 +129,6 @@ function resolveVideoConversionOptions(options, probed) {
   return {
     width: options.width ?? defaultWidth,
     fps: options.fps ?? defaultFps,
-    quality: options.quality ?? botConfig.gifQuality,
     startTime: options.startTime ?? null,
     duration: options.duration ?? null,
   };
@@ -243,7 +242,6 @@ async function renderGif(ctx, { attachment, attachmentType, adminUser, file, opt
     if (options.width) {
       await convertImageToGif(inputPath, gifPath, {
         width: options.width,
-        quality: options.quality ?? botConfig.gifQuality,
       });
     } else {
       await fs.copyFile(inputPath, gifPath);
@@ -255,7 +253,6 @@ async function renderGif(ctx, { attachment, attachmentType, adminUser, file, opt
     const { width } = await probeMediaInfo(inputPath, 720);
     await convertImageToGif(inputPath, gifPath, {
       width: options.width ?? width,
-      quality: options.quality ?? botConfig.gifQuality,
     });
   }
   logOperationStep(operationId, 'conversion_complete', 'success', {
@@ -311,7 +308,7 @@ async function processConversion(
 
       // The gif is stored under its source and the options that shaped it, so a trimmed or
       // resized convert never reuses the plain one.
-      const shape = [options.quality, options.width, options.startTime, options.duration];
+      const shape = [options.width, options.startTime, options.duration];
       const hash = shape.every(value => value == null)
         ? file.hash
         : hashPartsHex([file.hash, 'gif', ...shape.map(v => (v == null ? null : String(v)))]);
@@ -565,7 +562,6 @@ export async function handleConvertCommand(interaction) {
     format,
     times: { startTime: times.startTime, duration: times.duration },
     gifOptions: {
-      quality: interaction.options.getString('quality') || undefined,
       optimize: interaction.options.getBoolean('optimize') ?? false,
       lossy: lossy !== null ? lossy : undefined,
     },

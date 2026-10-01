@@ -6,7 +6,7 @@ every slash command is also available as a message (prefix) command. the default
 
 ```
 ^g download https://twitter.com/user/status/123
-^g convert https://example.com/video.mp4 quality=high start=0:05 end=0:10
+^g convert https://example.com/video.mp4 start=0:05 end=0:10
 ^g optimize lossy=50        (with a gif attached, or replying to one)
 ^g info
 ^g stats
@@ -39,8 +39,7 @@ convert a video or image to gif.
 
 - `file` (attachment, optional) - the video or image file to convert
 - `url` (string, optional) - url to a video or image file to convert
-- `format` (choice, optional) - what to convert to: GIF (default), MP4 or WebM video, MP3, M4A, OGG, WAV or FLAC audio, or a PNG, JPG or WebP image. the input type is detected, never chosen. audio needs a video with sound, still images can only become images, and a gif can also become MP4 or WebM. `quality`, `optimize` and `lossy` only apply to gif output
-- `quality` (string, optional) - gif quality preset: `low`, `medium`, or `high` (default: `medium`)
+- `format` (choice, optional) - what to convert to: GIF (default), MP4 or WebM video, MP3, M4A, OGG, WAV or FLAC audio, or a PNG, JPG or WebP image. the input type is detected, never chosen. audio needs a video with sound, still images can only become images, and a gif can also become MP4 or WebM. `optimize` and `lossy` only apply to gif output
 - `optimize` (boolean, optional) - optimize the gif after conversion to reduce file size
 - `lossy` (number, optional) - lossy compression level (0-100, default: 35)
 - `start` (string, optional) - start time for trimming video before conversion, as seconds (`90`, `12.5`) or a timestamp (`3:10`, `1:02:30`) (only applies to video inputs, ignored for images)

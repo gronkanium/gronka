@@ -18,14 +18,19 @@ export async function recordUserCommand(userId, { failed = false, at = Date.now(
 
   const sql = getPostgresConnection();
 
-  await sql`
+  const [row] = await sql`
     INSERT INTO user_metrics (user_id, total_commands, failed_commands, first_used, last_command_at)
     VALUES (${userId}, 1, ${failed ? 1 : 0}, ${at}, ${at})
     ON CONFLICT (user_id) DO UPDATE SET
       total_commands = user_metrics.total_commands + 1,
       failed_commands = user_metrics.failed_commands + EXCLUDED.failed_commands,
       last_command_at = GREATEST(user_metrics.last_command_at, EXCLUDED.last_command_at)
+    RETURNING *
   `;
+  return convertBigIntToNumbers(
+    convertTimestampsToNumbers(row, USER_METRICS_TIMESTAMP_FIELDS),
+    USER_METRICS_NUMERIC_FIELDS
+  );
 }
 
 /**

@@ -520,6 +520,40 @@ export async function searchOperations(filters = {}, { limit = 50, offset = 0, s
   return { operations: reconstructed, total };
 }
 
+// One narrow row per request since a time, for counting; no per-request rebuild.
+export async function getOperationOutcomes(since) {
+  await ensurePostgresInitialized();
+  const sql = getPostgresConnection();
+  const rows = await sql`
+    SELECT c.operation_id AS id, c.timestamp, COALESCE(ls.status, c.status) AS status,
+      COALESCE(ls.timestamp, c.timestamp) AS status_at,
+      c.metadata::jsonb ->> 'operationType' AS type,
+      c.metadata::jsonb ->> 'userId' AS user_id,
+      c.metadata::jsonb ->> 'originalUrl' AS original_url
+    FROM operation_logs c
+    LEFT JOIN LATERAL (
+      SELECT status, timestamp FROM operation_logs s
+      WHERE s.operation_id = c.operation_id AND s.step = 'status_update'
+      ORDER BY s.timestamp DESC, s.id DESC LIMIT 1
+    ) ls ON true
+    WHERE c.step = 'created' AND c.timestamp >= ${since}
+    ORDER BY c.timestamp DESC
+  `;
+  return rows.map(r => {
+    const timestamp = Number(r.timestamp);
+    const done = r.status === 'success' || r.status === 'error';
+    return {
+      id: r.id,
+      type: r.type || 'unknown',
+      status: r.status,
+      timestamp,
+      userId: r.user_id,
+      originalUrl: r.original_url,
+      duration: done ? Number(r.status_at) - timestamp : null,
+    };
+  });
+}
+
 export async function getStuckOperations(maxAgeMinutes = 10) {
   await ensurePostgresInitialized();
 
@@ -529,42 +563,21 @@ export async function getStuckOperations(maxAgeMinutes = 10) {
   const maxAge = maxAgeMinutes * 60 * 1000;
   const cutoffTime = now - maxAge;
 
-  // Find operations where the latest status_update has status='running' and is older than cutoff
-  // A job a live worker is still heartbeating is the queue's to finish or fail, not ours.
-  const results = await sql`
-    SELECT operation_id, MAX(timestamp) as latest_timestamp
-    FROM operation_logs
-    WHERE step = 'status_update' AND status = 'running'
+  // Latest status_update per operation; a job a live worker still heartbeats is the queue's to finish.
+  const rows = await sql`
+    SELECT operation_id FROM (
+      SELECT DISTINCT ON (operation_id) operation_id, status, timestamp
+      FROM operation_logs
+      WHERE step = 'status_update'
+      ORDER BY operation_id, timestamp DESC, id DESC
+    ) latest
+    WHERE status = 'running' AND timestamp < ${cutoffTime}
       AND operation_id NOT IN (
         SELECT operation_id FROM media_jobs
         WHERE status = 'running' AND operation_id IS NOT NULL AND heartbeat_at > ${now - STALE_MS}
       )
-    GROUP BY operation_id
-    HAVING MAX(timestamp) < ${cutoffTime}
   `;
-
-  const stuckOperationIds = results.map(row => row.operation_id);
-
-  // Verify these operations don't have a more recent success/error status
-  const verifiedStuck = [];
-  for (const operationId of stuckOperationIds) {
-    const latestStatusResult = await sql`
-      SELECT status, timestamp
-      FROM operation_logs
-      WHERE operation_id = ${operationId} AND step = 'status_update'
-      ORDER BY timestamp DESC
-      LIMIT 1
-    `;
-
-    if (latestStatusResult.length > 0) {
-      const latestStatus = latestStatusResult[0];
-      if (latestStatus.status === 'running' && latestStatus.timestamp < cutoffTime) {
-        verifiedStuck.push(operationId);
-      }
-    }
-  }
-
-  return verifiedStuck;
+  return rows.map(row => row.operation_id);
 }
 
 export async function markOperationAsFailed(

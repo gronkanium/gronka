@@ -10,7 +10,6 @@ export {
 
 // Export operations directly from PostgreSQL implementations
 export * from './database/logs-pg.js';
-export * from './database/users-pg.js';
 export * from './database/processed-urls-pg.js';
 export * from './database/operations-pg.js';
 export * from './database/metrics-pg.js';

@@ -4,7 +4,6 @@ import rateLimit from 'express-rate-limit';
 import { createLogger } from './utils/logger.js';
 import { botConfig, serverConfig } from './utils/config.js';
 import { ConfigurationError } from './utils/errors.js';
-import { trackUser, initializeUserTracking } from './utils/user-tracking.js';
 import path from 'node:path';
 import { startRetentionJob, stopRetentionJob } from './utils/retention.js';
 import {
@@ -215,7 +214,6 @@ function startStatsServer() {
 client.once(Events.ClientReady, async readyClient => {
   try {
     botStartTime = Date.now();
-    await initializeUserTracking();
 
     // The identify payload already carried this presence (see startBot), that is what makes it
     // stick across a restart, with no race against the presence discord.js sends on identify.
@@ -337,11 +335,6 @@ client.on(Events.InteractionCreate, interaction =>
 async function handleInteraction(interaction) {
   try {
     logger.debug(`Received interaction: ${interaction.type} from user ${interaction.user.id}`);
-    // Track user interaction (non-blocking to avoid interaction timeout)
-    trackUser(interaction.user.id).catch(error => {
-      logger.debug(`Failed to track user ${interaction.user.id}: ${error.message}`);
-    });
-
     if (await replyIfBanned(interaction)) {
       return;
     }

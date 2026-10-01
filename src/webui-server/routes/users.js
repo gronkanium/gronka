@@ -4,7 +4,6 @@ import {
   getAllUsersMetrics,
   getUserMetricsCount,
   getUserMetrics,
-  getUser,
   getUserMedia,
   getUserMediaCount,
   getRecentOperations,
@@ -107,16 +106,10 @@ router.get('/api/users/:userId', async (req, res) => {
     const { userId } = req.params;
 
     const userMetrics = await getUserMetrics(userId);
-    const userInfo = await getUser(userId);
-
-    if (!userMetrics && !userInfo) {
+    if (!userMetrics) {
       return res.status(404).json({ error: 'user not found' });
     }
-
-    res.json({
-      user: userInfo,
-      metrics: userMetrics,
-    });
+    res.json({ metrics: userMetrics });
   } catch (error) {
     logger.error('Failed to fetch user profile:', error);
     res.status(500).json({

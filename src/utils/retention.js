@@ -10,9 +10,8 @@ const logger = createLogger('retention');
 // accumulate forever. Before this job existed the logs table alone held 127k rows going back to
 // install day, and the local media cache 26 GB with nothing ever removed.
 //
-// The per-user rows in `users` / `user_metrics` are deliberately NOT pruned: they are one row per
-// id with counters, not a history, and they are what answers "how many people use the bot".
-// Dropping them would lose the only number gronka actually reports about its users.
+// `user_metrics` is not pruned: one row per id (request and failure counts, first and last use),
+// not a history, and the only number gronka reports about its users.
 const TIME_SERIES_TABLES = [
   { table: 'logs', column: 'timestamp' },
   { table: 'operation_logs', column: 'timestamp' },

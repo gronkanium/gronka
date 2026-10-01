@@ -30,9 +30,7 @@
     running: ['info', 'Running'],
     pending: ['idle', 'Queued'],
   };
-  const SPLIT_COLORS = ['var(--chart-1)', 'var(--chart-5)', 'var(--chart-6)'];
 
-  let user = $state(null);
   let metrics = $state(null);
   let error = $state('');
   let ops = $state([]);
@@ -55,11 +53,9 @@
 
   async function loadProfile(id) {
     error = '';
-    user = metrics = null;
+    metrics = null;
     try {
-      const data = await get(`/api/users/${id}`);
-      user = data.user;
-      metrics = data.metrics;
+      metrics = (await get(`/api/users/${id}`)).metrics;
     } catch {
       error = 'no user with this id';
     }
@@ -96,29 +92,17 @@
 
   const rate = $derived(
     metrics?.total_commands
-      ? ((metrics.successful_commands / metrics.total_commands) * 100).toFixed(1)
+      ? (
+          ((metrics.total_commands - metrics.failed_commands) / metrics.total_commands) *
+          100
+        ).toFixed(1)
       : null
-  );
-  const split = $derived(
-    metrics
-      ? [
-          ['download', metrics.total_download],
-          ['convert', metrics.total_convert],
-          ['optimize', metrics.total_optimize],
-        ]
-      : []
-  );
-  const splitTotal = $derived(
-    Math.max(
-      1,
-      split.reduce((s, [, n]) => s + n, 0)
-    )
   );
   const failedRecent = $derived(ops.filter(o => o.status === 'error').length);
   const description = $derived(
     [
-      user?.first_used && `First seen ${formatDate(user.first_used)}`,
-      `last seen ${formatRelativeTime(metrics?.last_command_at ?? user?.last_used)}`,
+      metrics?.first_used && `First seen ${formatDate(metrics.first_used)}`,
+      metrics && `last seen ${formatRelativeTime(metrics.last_command_at)}`,
     ]
       .filter(Boolean)
       .join(' · ')
@@ -220,7 +204,9 @@
         <div class="v">
           {rate == null ? '—' : rate}{#if rate != null}<span class="unit">%</span>{/if}
         </div>
-        <div class="s">{metrics?.successful_commands?.toLocaleString() ?? 0} delivered</div>
+        <div class="s">
+          {metrics ? (metrics.total_commands - metrics.failed_commands).toLocaleString() : 0} delivered
+        </div>
       </div>
       <div class="kpi">
         <div class="k">Failed</div>
@@ -229,33 +215,9 @@
         <div class="s">user and site errors included</div>
       </div>
       <div class="kpi">
-        <div class="k">Data</div>
-        <div class="v">{metrics ? formatBytes(metrics.total_file_size) : '—'}</div>
-        <div class="s">processed for them</div>
-      </div>
-    </section>
-
-    <section class="panel" aria-label="commands">
-      <div class="pb split">
-        <span class="section-label">Commands</span>
-        <div class="bar-track tall">
-          {#each split as [name, n], i (name)}
-            <span
-              style="width:{(n / splitTotal) * 100}%; background:{SPLIT_COLORS[i]}"
-              title="/{name}: {n}"
-            ></span>
-          {/each}
-        </div>
-        <div class="legend">
-          {#each split as [name, n], i (name)}
-            <span
-              ><i style="background:{SPLIT_COLORS[i]}"></i><span class="mono">/{name}</span>
-              <b>{n.toLocaleString()}</b><span class="dim"
-                >{Math.round((n / splitTotal) * 100)}%</span
-              ></span
-            >
-          {/each}
-        </div>
+        <div class="k">First seen</div>
+        <div class="v">{metrics?.first_used ? formatDate(metrics.first_used) : '—'}</div>
+        <div class="s">last {metrics ? formatRelativeTime(metrics.last_command_at) : '—'}</div>
       </div>
     </section>
 
@@ -339,33 +301,6 @@
     display: flex;
     align-items: center;
     gap: 10px;
-  }
-  .split {
-    display: flex;
-    flex-direction: column;
-    gap: 10px;
-  }
-  .legend {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 6px 20px;
-    font-size: var(--fs-sm);
-    color: var(--text-muted);
-  }
-  .legend > span {
-    display: inline-flex;
-    align-items: center;
-    gap: 6px;
-  }
-  .legend i {
-    width: 8px;
-    height: 8px;
-    border-radius: 2px;
-  }
-  .legend b {
-    font-weight: 600;
-    color: var(--text-bright);
-    font-variant-numeric: tabular-nums;
   }
   .errline {
     font-size: var(--fs-sm);

@@ -20,8 +20,9 @@ there is no manual step.
 | `RETENTION_URL_CACHE_DAYS` | `7` | `processed_urls` (the URL → file cache) |
 | `RETENTION_INTERVAL_MS` | `21600000` | how often the job runs (6 hours) |
 
-**Not pruned:** `users` and `user_metrics`. Those are one row per Discord id with counters, not a
-history, and they are what `/info` and the webui report as the user count. Pruning them would lose
+**Not pruned:** `user_metrics`, one row per Discord id holding its request and failure counts and
+the dates of first and last use. It is not a history, and it is what `/info` and the webui report
+as the user count. Pruning them would lose
 the only figure gronka publishes about its users. Ban records are kept too, for obvious reasons.
 
 A cache row whose R2 upload is still live is never pruned, deleting it would orphan the object in

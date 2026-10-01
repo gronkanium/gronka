@@ -8,21 +8,12 @@ import {
 } from './helpers-pg.js';
 
 // Define numeric fields in user_metrics table that need conversion from BIGINT strings to numbers
-const USER_METRICS_NUMERIC_FIELDS = [
-  'total_commands',
-  'successful_commands',
-  'failed_commands',
-  'total_convert',
-  'total_download',
-  'total_optimize',
-  'total_info',
-  'total_file_size',
-];
+const USER_METRICS_NUMERIC_FIELDS = ['total_commands', 'failed_commands'];
 
 // Define timestamp fields in user_metrics table
-const USER_METRICS_TIMESTAMP_FIELDS = ['last_command_at', 'updated_at'];
+const USER_METRICS_TIMESTAMP_FIELDS = ['first_used', 'last_command_at'];
 
-export async function insertOrUpdateUserMetrics(userId, metrics) {
+export async function recordUserCommand(userId, { failed = false, at = Date.now() } = {}) {
   await ensurePostgresInitialized();
 
   const sql = getPostgresConnection();
@@ -31,23 +22,13 @@ export async function insertOrUpdateUserMetrics(userId, metrics) {
     return;
   }
 
-  const timestamp = Date.now();
-
-  const m = metrics;
   await sql`
-    INSERT INTO user_metrics (user_id, total_commands, successful_commands, failed_commands, total_convert, total_download, total_optimize, total_info, total_file_size, last_command_at, updated_at)
-    VALUES (${userId}, ${m.totalCommands || 0}, ${m.successfulCommands || 0}, ${m.failedCommands || 0}, ${m.totalConvert || 0}, ${m.totalDownload || 0}, ${m.totalOptimize || 0}, ${m.totalInfo || 0}, ${m.totalFileSize || 0}, ${m.lastCommandAt || timestamp}, ${timestamp})
+    INSERT INTO user_metrics (user_id, total_commands, failed_commands, first_used, last_command_at)
+    VALUES (${userId}, 1, ${failed ? 1 : 0}, ${at}, ${at})
     ON CONFLICT (user_id) DO UPDATE SET
-      total_commands = user_metrics.total_commands + EXCLUDED.total_commands,
-      successful_commands = user_metrics.successful_commands + EXCLUDED.successful_commands,
+      total_commands = user_metrics.total_commands + 1,
       failed_commands = user_metrics.failed_commands + EXCLUDED.failed_commands,
-      total_convert = user_metrics.total_convert + EXCLUDED.total_convert,
-      total_download = user_metrics.total_download + EXCLUDED.total_download,
-      total_optimize = user_metrics.total_optimize + EXCLUDED.total_optimize,
-      total_info = user_metrics.total_info + EXCLUDED.total_info,
-      total_file_size = user_metrics.total_file_size + EXCLUDED.total_file_size,
-      last_command_at = COALESCE(${m.lastCommandAt ?? null}::bigint, user_metrics.last_command_at),
-      updated_at = EXCLUDED.updated_at
+      last_command_at = GREATEST(user_metrics.last_command_at, EXCLUDED.last_command_at)
   `;
 }
 
@@ -97,15 +78,9 @@ export async function getAllUsersMetrics(options = {}) {
   const allowedSortColumns = [
     'user_id',
     'total_commands',
-    'successful_commands',
     'failed_commands',
-    'total_convert',
-    'total_download',
-    'total_optimize',
-    'total_info',
-    'total_file_size',
+    'first_used',
     'last_command_at',
-    'updated_at',
   ];
 
   const safeSortBy = allowedSortColumns.includes(sortBy) ? sortBy : 'total_commands';

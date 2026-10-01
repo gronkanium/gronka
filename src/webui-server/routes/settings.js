@@ -97,7 +97,7 @@ const KNOWN_SETTINGS = {
     type: 'tiers',
     default: '100:72,250:24,500:8,1024:2',
     description:
-      'Size-based R2 retention: a file is kept for the hours of the first tier whose MB ceiling it fits under, so bigger files are deleted sooner. Bot picks up changes within a minute',
+      'How long an upload stays in R2. A file is kept for the first tier it fits under, so bigger files are deleted sooner',
   },
   r2_soft_limit_gb: {
     type: 'number',

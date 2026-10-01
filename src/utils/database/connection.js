@@ -190,19 +190,10 @@ function extractDbFromUrl(url) {
   }
 }
 
-/**
- * Get PostgreSQL connection pool
- * @returns {postgres.Sql|null} PostgreSQL connection pool or null if not initialized
- */
 export function getPostgresConnection() {
   return sql;
 }
 
-/**
- * Set PostgreSQL connection pool (internal use)
- * @param {postgres.Sql|null} connection - PostgreSQL connection pool to set
- * @returns {void}
- */
 export function setPostgresConnection(connection) {
   sql = connection;
   if (connection === null) {
@@ -210,19 +201,10 @@ export function setPostgresConnection(connection) {
   }
 }
 
-/**
- * Get the initialization promise (internal use)
- * @returns {Promise|null} Initialization promise or null
- */
 export function getPostgresInitPromise() {
   return initPromise;
 }
 
-/**
- * Set the initialization promise (internal use)
- * @param {Promise|null} promise - Initialization promise to set
- * @returns {void}
- */
 export function setPostgresInitPromise(promise) {
   initPromise = promise;
 }

@@ -18,13 +18,7 @@ const logger = createLogger('hentaigifz');
 const PAGE_HOST = 'hentaigifz.com';
 const MEDIA_HOST = 'hentaigifz.com'; // media lives on cdn.<host> / cdn2.<host>
 
-/**
- * Check whether a URL is a hentaigifz.com post page we can extract media from.
- * Matches the site host only (post pages are hentaigifz.com/<slug>/); the cdn
- * subdomains are not user-facing post URLs.
- * @param {string} url - URL to check
- * @returns {boolean} True if the URL is a hentaigifz.com post page
- */
+// Check whether a URL is a hentaigifz.com post page we can extract media from
 export function isHentaiGifzUrl(url) {
   try {
     const { hostname } = new URL(url);
@@ -35,14 +29,7 @@ export function isHentaiGifzUrl(url) {
   }
 }
 
-/**
- * Extract the primary media URL from a hentaigifz.com post page's HTML.
- * Prefers the JSON-LD ImageObject.contentUrl (the full-quality animated GIF),
- * then the main <img> inside <... class="single-post-media">, then og:image.
- * All three normally point at the same cdn.hentaigifz.com asset.
- * @param {string} html - Raw HTML of the post page
- * @returns {string|null} Absolute media URL, or null if none found
- */
+// Extract the primary media URL from a hentaigifz.com post page's HTML
 export function extractMediaUrl(html) {
   if (typeof html !== 'string' || html.length === 0) {
     return null;
@@ -70,13 +57,7 @@ export function extractMediaUrl(html) {
   return null;
 }
 
-/**
- * Guard that a resolved media URL lives on the hentaigifz CDN, so a compromised or
- * unexpected page can't redirect us at an arbitrary host (SSRF is also caught later
- * by downloadFileFromUrl's validateUrl, but this keeps extraction honest).
- * @param {string} url - Candidate media URL
- * @returns {boolean}
- */
+// Guard that a resolved media URL lives on the hentaigifz CDN, so a compromised or unexpected page can't redirect us at an arbitrary host (SSRF is also caught later by downloadFileFromUrl's validateUrl, but this keeps extraction honest)
 function isMediaHostUrl(url) {
   try {
     const { hostname } = new URL(url);
@@ -92,16 +73,7 @@ function decodeMediaUrl(url) {
   return url.replace(/&amp;/gi, '&');
 }
 
-/**
- * Download the media from a hentaigifz.com post URL.
- * Fetches the post page, extracts the primary GIF/media URL, then downloads it via
- * the shared file-downloader (which enforces SSRF validation, size limits, and
- * content-type/filename detection). Returns the same { buffer, contentType, size,
- * filename } shape as the Cobalt/direct download paths.
- * @param {string} url - hentaigifz.com post URL
- * @param {boolean} isAdminUser - Admin users bypass size limits
- * @returns {Promise<{buffer: Buffer, contentType: string, size: number, filename: string}>}
- */
+// Download the media from a hentaigifz.com post URL
 export async function downloadFromHentaiGifz(url, isAdminUser = false) {
   logger.debug(`Resolving hentaigifz post: ${url}`);
 

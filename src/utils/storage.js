@@ -33,11 +33,6 @@ const statsCalculationPromises = new Map();
 const R2_CACHE_TTL = 24 * 60 * 60 * 1000;
 let r2UsageCache = null;
 
-/**
- * Get cached stats if available and not expired
- * @param {string} storagePath - Storage path used as cache key
- * @returns {Object|null} Cached stats or null if not available/expired
- */
 function getCachedStats(storagePath) {
   const cacheEntry = statsCache.get(storagePath);
   if (!cacheEntry) {
@@ -78,10 +73,6 @@ export function invalidateStatsCache(storagePath) {
   }
 }
 
-/**
- * Get cached R2 usage if available and not expired
- * @returns {number|null} Cached usage in bytes or null if not available/expired
- */
 function getR2UsageCache() {
   if (!r2UsageCache) {
     return null;
@@ -124,11 +115,7 @@ function incrementR2UsageCache(fileSizeBytes) {
   );
 }
 
-/**
- * Initialize R2 usage cache by fetching from R2 if needed
- * This caches R2 stats on startup to limit class A operations (LIST requests) for the /stats Discord command
- * @returns {Promise<void>}
- */
+// Initialize R2 usage cache by fetching from R2 if needed This caches R2 stats on startup to limit class A operations (LIST requests) for the /stats Discord command
 export async function initializeR2UsageCache() {
   if (!isR2Configured(r2Config)) {
     logger.debug('R2 not configured, skipping R2 usage cache initialization');
@@ -171,13 +158,6 @@ function mediaRoot(storagePath) {
   return basePath.replace(/\\/g, '/').endsWith('/gifs') ? path.dirname(basePath) : basePath;
 }
 
-/**
- * Detect file type from extension and content type
- * @param {string} extension - File extension (e.g., '.mp4', '.png', '.gif')
- * @param {string} [contentType] - Optional content type (e.g., 'video/mp4', 'image/png')
- * @param {Buffer} [buffer] - File contents; when passed, its magic bytes override both signals
- * @returns {'gif'|'video'|'image'} File type
- */
 export function detectFileType(extension, contentType = '', head = null) {
   const ext = extension.toLowerCase();
 
@@ -430,23 +410,13 @@ export function getR2CacheStats() {
   };
 }
 
-/**
- * Resolve the tiered retention (in hours) for a file of the given size, reading the steerable
- * `upload_ttl_tiers` setting and falling back to the default curve. Bigger files expire sooner.
- * @param {number} bytes
- * @returns {Promise<number>} whole hours
- */
+// Resolve the tiered retention (in hours) for a file of the given size, reading the steerable `upload_ttl_tiers` setting and falling back to the default curve
 export async function resolveTtlHoursForSize(bytes) {
   const tiersStr = await getSetting('upload_ttl_tiers', DEFAULT_TTL_TIERS);
   return ttlHoursForSize(bytes, tiersStr);
 }
 
-/**
- * Resolve retention hours for an already-recorded upload by looking up its stored file size.
- * Falls back to the flat config TTL when the size can't be read (keeps old behavior safe).
- * @param {string} urlHash
- * @returns {Promise<number>} whole hours
- */
+// Resolve retention hours for an already-recorded upload by looking up its stored file size
 async function resolveTtlHours(urlHash) {
   try {
     const record = await getProcessedUrl(urlHash);
@@ -459,15 +429,7 @@ async function resolveTtlHours(urlHash) {
   return r2Config.tempUploadTtlHours;
 }
 
-/**
- * Track a temporary R2 upload for automatic cleanup
- * This should be called after processed_urls record is created (since FK constraint requires it)
- * @param {string} urlHash - URL hash from processed_urls table (required for FK)
- * @param {string} r2Key - R2 object key (e.g., 'gifs/abc123.gif')
- * @param {number} [uploadedAt] - Unix timestamp in milliseconds (defaults to now)
- * @param {boolean} [isAdmin=false] - Whether the user is an admin (admins have permanent uploads)
- * @returns {Promise<void>}
- */
+// Track a temporary R2 upload for automatic cleanup This should be called after processed_urls record is created (since FK constraint requires it)
 export async function trackTemporaryUpload(urlHash, r2Key, uploadedAt = null, isAdmin = false) {
   // Admin uploads are permanent unless the admin_uploads_expire setting (webui)
   // opts them into the same TTL cleanup as everyone else. A settings read failure

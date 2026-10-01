@@ -56,13 +56,7 @@ export async function initPostgresDatabase() {
   return newInitPromise;
 }
 
-/**
- * Reset SERIAL sequences to match the maximum ID in each table
- * This fixes duplicate key errors after data migration
- * NOTE: Skipped in test mode to prevent race conditions with parallel test execution
- * @param {Object} sql - The postgres.js client instance
- * @returns {Promise<void>}
- */
+// Realigns SERIAL sequences with each table's max id after a restore; skipped in tests, where parallel runs race on it
 async function resetSerialSequences(sql) {
   // Skip sequence reset in test mode - it can cause race conditions
   // with parallel test execution and tests don't need it (they create fresh data)

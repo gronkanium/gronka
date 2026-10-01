@@ -20,10 +20,6 @@ function cutoffMs(days) {
   return Date.now() - days * 24 * 60 * 60 * 1000;
 }
 
-/**
- * Delete cached media files last modified more than `days` ago.
- * @returns {Promise<{files: number, bytes: number}>}
- */
 export async function pruneLocalMedia(storagePath, days) {
   const cutoff = cutoffMs(days);
   let files = 0;

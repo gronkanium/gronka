@@ -6,10 +6,6 @@ import { ensurePostgresInitialized } from './init.js';
 const settingsCache = new Map(); // Map<key, {value, timestamp}>
 const SETTINGS_CACHE_TTL = 10 * 1000; // 10 seconds
 
-/**
- * Invalidate settings cache
- * @param {string|null} key - Setting key to invalidate (or null to clear all)
- */
 export function invalidateSettingsCache(key = null) {
   if (key) {
     settingsCache.delete(key);
@@ -18,12 +14,6 @@ export function invalidateSettingsCache(key = null) {
   }
 }
 
-/**
- * Get a bot setting value
- * @param {string} key - Setting key
- * @param {string|null} defaultValue - Value to return if the setting is not set
- * @returns {Promise<string|null>} Setting value or defaultValue
- */
 export async function getSetting(key, defaultValue = null) {
   await ensurePostgresInitialized();
 
@@ -50,12 +40,6 @@ export async function getBooleanSetting(key, defaultValue = false) {
   return value === 'true';
 }
 
-/**
- * Set a bot setting value (upsert)
- * @param {string} key - Setting key
- * @param {string|boolean|number} value - Setting value (stored as text)
- * @returns {Promise<void>}
- */
 export async function setSetting(key, value) {
   await ensurePostgresInitialized();
 

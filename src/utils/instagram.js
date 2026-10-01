@@ -250,13 +250,7 @@ async function fetchStoryItems({ highlightId, mediaId }, refererPath, cookie) {
   return wanted.slice(0, MAX_HIGHLIGHT_ITEMS);
 }
 
-/**
- * Download the media behind an Instagram post URL via the web client's media-info API.
- * Returns the same { buffer, contentType, size, filename } shape as the other download paths.
- * Throws on any failure; the caller treats that as "fall back to cobalt".
- * @param {string} url - Instagram /p/, /reel/, /reels/ or /tv/ permalink
- * @param {boolean} isAdminUser - Admin users bypass size limits
- */
+// Download the media behind an Instagram post URL via the web client's media-info API
 export async function downloadFromInstagram(url, isAdminUser = false) {
   const cookie = readCookie();
   if (!cookie) {

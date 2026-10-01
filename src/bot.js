@@ -244,17 +244,7 @@ client.once(Events.ClientReady, async readyClient => {
       await refreshRateLimitSettings();
     }, 60 * 1000);
 
-    // Clean up stuck operations every 5 minutes. The threshold must stay above Discord's
-    // 15-minute interaction token lifetime: at 10 minutes the reaper was flipping still-running
-    // downloads to error and DMing the user a failure, only for the operation to finish and flip
-    // back to success, by which point the token had expired and the reply died with
-    // "Invalid Webhook Token" (50027). Past 16 minutes nothing can be delivered anyway, so
-    // anything still running then is genuinely stuck.
-    // A restart orphans whatever was mid-flight: the row stays 'running' with no process left
-    // to finish it, so the user waited out the full 16 minutes for a failure that was already
-    // certain. This process owns nothing yet, so anything still 'running' now is orphaned by
-    // definition. Reconciling at boot also covers a crash or an OOM kill, which a SIGTERM
-    // handler would miss.
+    // Nothing runs yet, so anything still 'running' was orphaned by the last shutdown, crash or OOM kill.
     try {
       const orphaned = await cleanupStuckOperations(0, readyClient);
       if (orphaned > 0) {
@@ -280,7 +270,8 @@ client.once(Events.ClientReady, async readyClient => {
     setInterval(
       async () => {
         try {
-          await cleanupStuckOperations(16, readyClient); // pass client for DM notifications
+          // Past Discord's 15-minute reply token nothing can be delivered, so 16 minutes means stuck.
+          await cleanupStuckOperations(16, readyClient);
         } catch (error) {
           logger.error('Error in stuck operations cleanup:', error);
         }

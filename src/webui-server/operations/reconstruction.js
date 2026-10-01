@@ -2,11 +2,6 @@ import { createLogger } from '../../utils/logger.js';
 
 const logger = createLogger('webui');
 
-/**
- * Reconstruct operation object from database trace
- * @param {Object} trace - Operation trace from database
- * @returns {Promise<Object|null>} Reconstructed operation object or null
- */
 export async function reconstructOperationFromTrace(trace) {
   if (!trace || !trace.logs || trace.logs.length === 0) {
     return null;

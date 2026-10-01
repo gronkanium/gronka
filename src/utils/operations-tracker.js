@@ -300,11 +300,6 @@ export function getRecentOperations(limit = null) {
   return operations.slice(0, limit);
 }
 
-/**
- * Get an operation by ID
- * @param {string} operationId - Operation ID
- * @returns {Object|null} Operation object or null if not found
- */
 export function getOperation(operationId) {
   const operation = operations.find(op => op.id === operationId);
   return operation || null;
@@ -339,12 +334,6 @@ export function logOperationStep(operationId, step, status, data = {}) {
   }
 }
 
-/**
- * Log an error with stack trace
- * @param {string} operationId - Operation ID
- * @param {Error|string} error - Error object or message
- * @param {Object} [data] - Additional data
- */
 export function logOperationError(operationId, error, data = {}) {
   const operation = operations.find(op => op.id === operationId);
   if (!operation) {
@@ -371,8 +360,7 @@ export function logOperationError(operationId, error, data = {}) {
 }
 
 async function updateUserMetricsForOperation(operation) {
-  // Gated on userId alone. This used to require a username too, so dropping names would have
-  // silently stopped every metrics write - and with it the /info user count.
+  // Gated on userId alone: requiring anything more silently stops every metrics write.
   if (!operation.userId) {
     return;
   }
@@ -425,14 +413,7 @@ async function updateUserMetricsForOperation(operation) {
   }
 }
 
-/**
- * Clean up operations that are stuck in running/pending status: mark them as
- * failed in the database and in memory, broadcast the change, and optionally
- * DM the affected user.
- * @param {number} [maxAgeMinutes=10] - Maximum age in minutes before an operation is considered stuck
- * @param {Object} [client] - Optional Discord client for sending DM notifications to users
- * @returns {Promise<number>} Number of operations cleaned up
- */
+// Clean up operations that are stuck in running/pending status: mark them as failed in the database and in memory, broadcast the change, and optionally DM the affected user
 export async function cleanupStuckOperations(maxAgeMinutes = 10, client = null) {
   try {
     const cutoffTime = Date.now() - maxAgeMinutes * 60 * 1000;

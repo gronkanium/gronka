@@ -33,11 +33,6 @@ export async function recordUserCommand(userId, { failed = false, at = Date.now(
   );
 }
 
-/**
- * Get user metrics by user ID
- * @param {string} userId - Discord user ID
- * @returns {Promise<Object|null>} User metrics or null if not found
- */
 export async function getUserMetrics(userId) {
   await ensurePostgresInitialized();
 
@@ -138,13 +133,7 @@ export async function getUserMetricsCount(options = {}) {
   return parseInt(count || 0, 10);
 }
 
-/**
- * Get counts of users active within recent windows, plus the all-time total.
- * "Active" means last_command_at falls within the window - every row in
- * user_metrics has run at least one command, so the unfiltered count doubles
- * as the all-time "ever used the bot" total.
- * @returns {Promise<{total: number, active7d: number, active30d: number}>}
- */
+// Get counts of users active within recent windows, plus the all-time total
 export async function getActiveUserCounts() {
   await ensurePostgresInitialized();
 

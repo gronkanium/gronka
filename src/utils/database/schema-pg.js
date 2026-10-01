@@ -3,10 +3,6 @@
  * Converts SQLite schema to PostgreSQL syntax
  */
 
-/**
- * Get all table creation SQL statements
- * @returns {Array<{name: string, sql: string}>} Array of table definitions
- */
 export function getTableDefinitions() {
   return [
     {
@@ -177,10 +173,6 @@ export function getTableDefinitions() {
   ];
 }
 
-/**
- * Get all index creation SQL statements
- * @returns {Array<{name: string, sql: string}>} Array of index definitions
- */
 export function getIndexDefinitions() {
   return [
     {
@@ -312,14 +304,7 @@ async function addFileSizeColumnIfNeeded(sql) {
   }
 }
 
-/**
- * Add r2_expired_at column to processed_urls if it doesn't exist (for migration).
- * Set by the R2 cleanup job once a row's backing R2 upload has actually expired
- * and been removed, so callers can stop treating file_url as resolvable without
- * losing the historical processed_urls row (used for request-count stats).
- * @param {postgres.Sql} sql - PostgreSQL connection
- * @returns {Promise<void>}
- */
+// Add r2_expired_at column to processed_urls if it doesn't exist (for migration)
 async function addR2ExpiredAtColumnIfNeeded(sql) {
   const exists = await columnExists(sql, 'processed_urls', 'r2_expired_at');
   if (!exists) {
@@ -327,16 +312,7 @@ async function addR2ExpiredAtColumnIfNeeded(sql) {
   }
 }
 
-/**
- * Drop the username columns if an older database still has them.
- *
- * gronka stores Discord ids only, a name is never needed for anything the bot does, and every
- * surface that showed one now shows the id. Dropping rather than leaving them empty means the
- * names are actually gone, not merely unreferenced. Names already embedded in operation_logs /
- * alerts / logs messages are left to age out with the retention job.
- * @param {postgres.Sql} sql - PostgreSQL connection
- * @returns {Promise<void>}
- */
+// Drop the username columns if an older database still has them
 async function dropUsernameColumnsIfPresent(sql) {
   await sql`ALTER TABLE user_metrics DROP COLUMN IF EXISTS username`;
 }
@@ -387,14 +363,7 @@ export async function runMigrations(sql) {
   }
 }
 
-/**
- * Ensure temporary_uploads.url_hash foreign key cascades on delete (for migration).
- * Without this, deleting a processed_urls row that still has a temporary_uploads
- * reference fails with a foreign key violation - the R2 file gets deleted but the
- * DB row is left behind.
- * @param {postgres.Sql} sql - PostgreSQL connection
- * @returns {Promise<void>}
- */
+// Ensure temporary_uploads.url_hash foreign key cascades on delete (for migration)
 async function ensureTemporaryUploadsCascadeDelete(sql) {
   const result = await sql`
     SELECT confdeltype

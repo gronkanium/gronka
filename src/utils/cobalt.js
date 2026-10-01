@@ -90,14 +90,7 @@ function getCobaltErrorMessage(errorCode, context = {}) {
   return COBALT_ERROR_MESSAGES[errorCode] || null;
 }
 
-/**
- * Classify a Cobalt API error response.
- * Rate limiting is only assumed on explicit signals (HTTP 429 or a rate error code);
- * everything else is either "not found" (don't retry) or a plain failure.
- * @param {Object} data - Cobalt API error response data
- * @param {Object} errorObj - Full axios error object
- * @returns {Object} { isRateLimit, isNotFound, userMessage, errorCode, context }
- */
+// Classify a Cobalt API error response
 function analyzeError(data, errorObj) {
   const result = {
     isRateLimit: false,
@@ -246,13 +239,7 @@ export function canonicalizeMirrorUrl(url) {
   }
 }
 
-/**
- * Normalize social media URLs before sending them to Cobalt.
- * X/Twitter share links commonly include tracking params like ?s=46 which are
- * not needed for fetching and can make public-post handling less reliable.
- * @param {string} url - Original URL
- * @returns {string} Normalized URL
- */
+// Normalize social media URLs before sending them to Cobalt
 export function normalizeSocialMediaUrlForCobalt(url) {
   try {
     const urlObj = new URL(url);
@@ -538,14 +525,7 @@ async function downloadMediaFromPicker(pickerArray, isAdminUser = false, maxSize
   return results;
 }
 
-/**
- * Replace hostname in URL with hostname from API URL
- * This is needed when Cobalt returns tunnel URLs with Docker hostnames (e.g., "cobalt")
- * that aren't resolvable from outside the Docker network
- * @param {string} url - URL to fix
- * @param {string} apiUrl - Cobalt API URL to extract hostname from
- * @returns {string} URL with replaced hostname
- */
+// Cobalt's tunnel URLs carry its Docker hostname ("cobalt"), which only resolves inside the Docker network
 function replaceTunnelHostname(url, apiUrl) {
   try {
     const urlObj = new URL(url);
@@ -566,14 +546,6 @@ function replaceTunnelHostname(url, apiUrl) {
   }
 }
 
-/**
- * Download video from Cobalt response
- * @param {Object} cobaltResponse - Response from Cobalt API
- * @param {boolean} isAdminUser - Whether the user is an admin (allows larger files)
- * @param {number} maxSize - Maximum file size in bytes
- * @param {string} apiUrl - Cobalt API URL (used to fix tunnel hostnames)
- * @returns {Promise<Object|Array>} Media file (path, size, hash, contentType, filename) (or array of objects for picker)
- */
 async function downloadFromCobalt(
   cobaltResponse,
   isAdminUser = false,
@@ -712,13 +684,7 @@ export async function getCobaltMediaUrls(apiUrl, url) {
   return { urls: [], direct: false, response: cobaltResponse };
 }
 
-/**
- * Get the byte size of a remote media URL without downloading it, via a ranged GET
- * (more widely supported than HEAD on media CDNs). Returns null when the size can't
- * be determined - callers should treat that as "unknown" and fall back to downloading.
- * @param {string} mediaUrl - Direct media URL (e.g. video.twimg.com)
- * @returns {Promise<number|null>} Size in bytes, or null if unknown
- */
+// Get the byte size of a remote media URL without downloading it, via a ranged GET (more widely supported than HEAD on media CDNs)
 export async function getRemoteContentLength(mediaUrl) {
   try {
     const response = await axios.get(mediaUrl, {

@@ -18,12 +18,6 @@ async function finalizeDeletedUploads(r2Key) {
   await deleteTemporaryUploadsByR2Key(r2Key);
 }
 
-/**
- * Delete expired R2 files with reference counting and error handling
- * @param {Object} config - R2 configuration
- * @param {string} logLevel - Logging level: 'minimal', 'detailed', or 'debug'
- * @returns {Promise<{deleted: number, failed: number, skipped: number, errors: Array}>} Cleanup statistics
- */
 async function deleteExpiredR2Files(config, logLevel = 'detailed') {
   const now = Date.now();
   const stats = {

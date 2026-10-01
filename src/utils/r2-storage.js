@@ -33,12 +33,7 @@ export function uploadBudgetMs(bytes) {
 // setting; 0 disables the guard. Keeps daily-peak storage (what R2 bills on) under budget.
 const DEFAULT_R2_SOFT_LIMIT_GB = 9;
 
-/**
- * Throw a curated error if uploading `incomingBytes` more would push live R2 storage past the
- * soft limit. Big files auto-expire fast (see upload-tiers.js), so this self-heals in minutes.
- * A read failure fails open (never block uploads because a settings/DB read hiccuped).
- * @param {number} incomingBytes
- */
+// Throw a curated error if uploading `incomingBytes` more would push live R2 storage past the soft limit
 export async function r2SoftLimitGb() {
   return parseFloat(await getSetting('r2_soft_limit_gb', String(DEFAULT_R2_SOFT_LIMIT_GB)));
 }
@@ -263,12 +258,6 @@ export async function downloadGifFromR2(hash, config) {
   }
 }
 
-/**
- * List objects in R2 with a given prefix
- * @param {string} prefix - Prefix to filter objects (e.g., 'images/', 'gifs/', 'videos/')
- * @param {Object} config - R2 configuration
- * @returns {Promise<Array<{key: string, size: number}>>} Array of objects with key and size
- */
 export async function listObjectsInR2(prefix, config) {
   const client = getR2Client(config);
   const { bucketName } = config;
@@ -356,12 +345,6 @@ export async function deleteFromR2(key, config) {
   }
 }
 
-/**
- * Extract R2 object key from public URL
- * @param {string} url - Public R2 URL (e.g., https://<R2_PUBLIC_DOMAIN>/gifs/abc123.gif)
- * @param {Object} config - R2 configuration
- * @returns {string|null} R2 object key (e.g., gifs/abc123.gif) or null if URL is not an R2 URL
- */
 export function extractR2KeyFromUrl(url, config) {
   const { publicDomain } = config;
   if (!publicDomain || !url || typeof url !== 'string') {
@@ -387,14 +370,6 @@ function formatTtlMessage(hours) {
   return ttlHours === 1 ? '1 hour' : `${ttlHours} hours`;
 }
 
-/**
- * Format R2 URL with disclaimer if temporary uploads are enabled
- * @param {string} url - URL to format (may be R2 URL or other URL)
- * @param {Object} config - R2 configuration
- * @param {boolean} [isAdmin=false] - Whether the user is an admin (admins get permanent uploads with no disclaimer)
- * @param {number|null} [ttlHoursOverride=null] - Actual retention for this file (tiered by size); falls back to the flat config TTL when omitted
- * @returns {string} URL with disclaimer appended if applicable, or original URL
- */
 export function formatR2UrlWithDisclaimer(url, config, isAdmin = false, ttlHoursOverride = null) {
   // Return original URL if not a string or empty
   if (!url || typeof url !== 'string') {

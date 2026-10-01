@@ -24,12 +24,7 @@ export async function get24HourStats() {
 
 const HOUR_MS = 60 * 60 * 1000;
 
-/**
- * Get an hourly request-count time series from processed_urls, zero-filled for
- * hours with no activity.
- * @param {number} [hours] - How many trailing hours to include (default 24)
- * @returns {Promise<Array<{hour: string, count: number}>>} Oldest first
- */
+// Get an hourly request-count time series from processed_urls, zero-filled for hours with no activity
 export async function getHourlyRequestCounts(hours = 24) {
   await ensurePostgresInitialized();
   const sql = getPostgresConnection();

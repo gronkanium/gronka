@@ -47,13 +47,6 @@ function parseIntEnv(name, defaultValue, min = -Infinity, max = Infinity) {
   return parsed;
 }
 
-/**
- * Validate required string environment variable
- * @param {string} name - Environment variable name
- * @param {string} description - Description for error message
- * @returns {string} Environment variable value
- * @throws {ConfigurationError} If variable is not set
- */
 function requireStringEnv(name, description) {
   const value = process.env[name];
   if (!value || value.trim() === '') {

@@ -10,10 +10,6 @@ const recentOperationsCache = {
   ttl: 30 * 1000, // 30 seconds
 };
 
-/**
- * Get cached recent operations if available and not expired
- * @returns {Array|null} Cached operations or null
- */
 function getCachedRecentOperations() {
   if (!recentOperationsCache.data) {
     return null;
@@ -60,11 +56,6 @@ async function getOperationLogs(operationId) {
   return convertTimestampsInArray(logs, ['timestamp']);
 }
 
-/**
- * Get full operation trace with parsed metadata
- * @param {string} operationId - Operation ID
- * @returns {Promise<Object|null>} Operation trace with parsed metadata or null if not found
- */
 export async function getOperationTrace(operationId) {
   const logs = await getOperationLogs(operationId);
   if (logs.length === 0) {

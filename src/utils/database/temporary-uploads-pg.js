@@ -37,14 +37,7 @@ export async function insertTemporaryUpload(urlHash, r2Key, uploadedAt, expiresA
   return convertTimestampsToNumbers(result[0], TEMPORARY_UPLOADS_TIMESTAMP_FIELDS);
 }
 
-/**
- * Total bytes of live (not expired, not deleted) temporary R2 uploads. Used as a soft cap so
- * concurrent uploads don't blow past the R2 storage budget - R2 bills on daily-peak storage, so
- * bounding the live set bounds the bill. Sizes come from processed_urls (joined on url_hash);
- * admin permanent uploads aren't tracked here so they don't count toward the total.
- * @param {number} now - Current Unix timestamp in milliseconds
- * @returns {Promise<number>} Sum of live upload sizes in bytes
- */
+// Total bytes of live (not expired, not deleted) temporary R2 uploads
 export async function getLiveBytes(now) {
   await ensurePostgresInitialized();
 

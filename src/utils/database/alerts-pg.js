@@ -106,15 +106,7 @@ export async function getAlerts(options = {}) {
   return convertTimestampsInArray(alerts, ['timestamp']);
 }
 
-/**
- * Aggregates over the whole filtered window, not just the current page: severity
- * totals, a per-command split, and the top failure reasons.
- *
- * @param {object} options same filters as getAlerts, plus `reasonLimit`
- * @returns {Promise<{total: number, errors: number, info: number, warnings: number,
- *   byCommand: Array<{command: string|null, total: number, errors: number, info: number}>,
- *   byReason: Array<{reason: string|null, count: number, commands: string[], lastSeen: number}>}>}
- */
+// Aggregates over the whole filtered window, not just the current page: severity totals, a per-command split, and the top failure reasons
 export async function getAlertSummary(options = {}) {
   await ensurePostgresInitialized();
 

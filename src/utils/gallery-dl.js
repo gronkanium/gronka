@@ -6,6 +6,7 @@ import { NetworkError, ValidationError } from './errors.js';
 import { writeZip } from './archive.js';
 import { fromPath, tempDir } from './media-file.js';
 import { mapLimit, ITEM_FANOUT } from './map-limit.js';
+import { hostOf, normalizeHost } from './url-host.js';
 
 const logger = createLogger('gallery-dl');
 
@@ -37,7 +38,7 @@ const MAX_MANGA_IMAGES = 10;
 
 export function getGalleryDlSite(url) {
   try {
-    const hostname = new URL(url).hostname.toLowerCase().replace(/^www\./, '');
+    const hostname = hostOf(url);
     return (
       GALLERY_DL_SITES.find(site =>
         site.hosts.some(host => hostname === host || hostname.endsWith(`.${host}`))
@@ -111,7 +112,7 @@ export function isMangaDexTitleUrl(url) {
   try {
     const parsed = new URL(url);
     return (
-      parsed.hostname.toLowerCase().replace(/^www\./, '') === 'mangadex.org' &&
+      normalizeHost(parsed.hostname) === 'mangadex.org' &&
       /^\/title\/[0-9a-f-]+(?:\/[^/?#]+)?\/?$/i.test(parsed.pathname)
     );
   } catch {
@@ -123,7 +124,7 @@ export function isMangaDexChapterUrl(url) {
   try {
     const parsed = new URL(url);
     return (
-      parsed.hostname.toLowerCase().replace(/^www\./, '') === 'mangadex.org' &&
+      normalizeHost(parsed.hostname) === 'mangadex.org' &&
       /^\/chapter\/[0-9a-f-]+\/?$/i.test(parsed.pathname)
     );
   } catch {
@@ -135,8 +136,7 @@ export function isNhentaiGalleryUrl(url) {
   try {
     const parsed = new URL(url);
     return (
-      parsed.hostname.toLowerCase().replace(/^www\./, '') === 'nhentai.net' &&
-      /^\/g\/\d+\/?$/i.test(parsed.pathname)
+      normalizeHost(parsed.hostname) === 'nhentai.net' && /^\/g\/\d+\/?$/i.test(parsed.pathname)
     );
   } catch {
     return false;
@@ -260,12 +260,4 @@ function contentTypeForExtension(extension) {
   if (ext === '.mov') return 'video/quicktime';
   if (ext === '.mkv') return 'video/x-matroska';
   return 'video/mp4';
-}
-
-export async function isGalleryDlAvailable() {
-  return new Promise(resolve => {
-    const child = spawn('gallery-dl', ['--version'], { stdio: ['ignore', 'ignore', 'ignore'] });
-    child.on('close', code => resolve(code === 0));
-    child.on('error', () => resolve(false));
-  });
 }

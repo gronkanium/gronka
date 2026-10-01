@@ -2,6 +2,7 @@ import axios from 'axios';
 import express from 'express';
 import { createLogger } from '../../utils/logger.js';
 import { serverConfig } from '../../utils/config.js';
+import { VALID_PRESENCE_STATUSES as VALID_STATUSES } from '../../utils/presence.js';
 
 const logger = createLogger('webui');
 const router = express.Router();
@@ -18,7 +19,6 @@ const botRequest = {
     },
   ],
 };
-const VALID_STATUSES = ['online', 'idle', 'dnd', 'invisible'];
 
 // Proxies to the bot process's internal stats server (bot.js), which holds the
 // live Discord client and actually owns setPresence(). webui-server and the bot

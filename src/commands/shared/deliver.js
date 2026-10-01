@@ -15,6 +15,7 @@ import {
   storedSize,
   detectFileType,
   resolveTtlHoursForSize,
+  isRemote,
 } from '../../utils/storage.js';
 import {
   uploadMediaToR2,
@@ -25,7 +26,6 @@ import { fitsDiscordAttachment } from './attachment-limit.js';
 import { recordProcessedUrl, trackR2UploadIfApplicable } from './url-cache.js';
 
 const logger = createLogger('deliver');
-const isRemote = location => /^https?:\/\//i.test(location);
 
 // Saves a file (or reuses the stored copy) and says where it lives and whether it can be attached.
 export async function storeMedia(

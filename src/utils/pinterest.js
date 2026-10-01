@@ -4,6 +4,7 @@ import { NetworkError, ValidationError } from './errors.js';
 import { getRequestHeaders } from './discord-cdn.js';
 import { downloadFileFromUrl } from './file-downloader.js';
 import { ssrfGuardedRequest, PAGE_FETCH_TIMEOUT_MS, MAX_PAGE_BYTES } from './ssrf-guard.js';
+import { normalizeHost } from './url-host.js';
 
 const logger = createLogger('pinterest');
 
@@ -34,7 +35,7 @@ const PIN_PATH = /^\/pin\/\d+/;
 export function isPinterestUrl(url) {
   try {
     const { hostname, pathname } = new URL(url);
-    const host = hostname.toLowerCase().replace(/^www\./, '');
+    const host = normalizeHost(hostname);
     if (host === 'pin.it') {
       return pathname.length > 1;
     }

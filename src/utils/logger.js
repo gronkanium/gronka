@@ -1,5 +1,6 @@
 import { AsyncLocalStorage } from 'node:async_hooks';
 import { insertLog, initDatabase } from './database.js';
+import { hostOf } from './url-host.js';
 
 const LOG_LEVELS = {
   DEBUG: 0,
@@ -41,13 +42,7 @@ export function withLogContext(fields, fn) {
 }
 
 // The `source` log field: a link's host without www.
-export function sourceOf(url) {
-  try {
-    return new URL(url).hostname.replace(/^www\./, '');
-  } catch {
-    return undefined;
-  }
-}
+export const sourceOf = url => hostOf(url) ?? undefined;
 
 // Format timestamp to seconds precision (removes milliseconds)
 export function formatTimestampSeconds(date = new Date()) {

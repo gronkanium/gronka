@@ -245,7 +245,7 @@ export function mediaPath(type, hash, extension, storagePath) {
   return path.join(root, MEDIA_DIRS[type], `${safeHash}${safeExtension(type, extension)}`);
 }
 
-const isRemote = location => /^https?:\/\//i.test(location);
+export const isRemote = location => /^https?:\/\//i.test(location);
 
 // saveMedia hands back an R2 URL or a local path; both become the URL a user can open.
 export function mediaPublicUrl(location, type) {

@@ -7,6 +7,7 @@ import { NetworkError, ValidationError } from './errors.js';
 import { trimVideo } from './video-processor/trim-video.js';
 import { DEFAULT_YTDLP_FORMAT } from './config.js';
 import { fromPath, tempDir } from './media-file.js';
+import { hostOf, normalizeHost } from './url-host.js';
 
 const logger = createLogger('ytdlp');
 const execFileAsync = promisify(execFile);
@@ -67,7 +68,7 @@ export class YtdlpRateLimitError extends NetworkError {
 export function isYouTubeUrl(url) {
   try {
     const urlObj = new URL(url);
-    const hostname = urlObj.hostname.toLowerCase().replace(/^www\./, '');
+    const hostname = normalizeHost(urlObj.hostname);
     return (
       hostname === 'youtube.com' ||
       hostname === 'youtu.be' ||
@@ -89,48 +90,20 @@ function getYouTubeArgs(url, signedIn = false) {
 // These answer yt-dlp's own TLS fingerprint with 403; curl-cffi (in the image) lets it pass as Chrome.
 const IMPERSONATE_HOSTS = ['rumble.com'];
 function getImpersonateArgs(url) {
-  let host;
-  try {
-    host = new URL(url).hostname.replace(/^www\./, '');
-  } catch {
-    return [];
-  }
+  const host = hostOf(url);
+  if (!host) return [];
   return IMPERSONATE_HOSTS.some(h => host === h || host.endsWith(`.${h}`))
     ? ['--impersonate', 'chrome']
     : [];
 }
 
-/**
- * Check if a URL is a RedGifs URL.
- * RedGifs is not a Cobalt service, but yt-dlp has a dedicated extractor for it
- * (watch/ifr pages resolve to media.redgifs.com mp4s), so these route through the
- * yt-dlp path like YouTube.
- * @param {string} url - URL to check
- * @returns {boolean} True if the URL is a RedGifs URL
- */
-export function isRedGifsUrl(url) {
-  try {
-    const urlObj = new URL(url);
-    const hostname = urlObj.hostname.toLowerCase().replace(/^www\./, '');
-    return hostname === 'redgifs.com' || hostname.endsWith('.redgifs.com');
-  } catch {
-    return false;
-  }
-}
-
-function siteLabel(url) {
-  try {
-    return new URL(url).hostname.toLowerCase().replace(/^www\./, '');
-  } catch {
-    return 'this site';
-  }
-}
+const siteLabel = url => hostOf(url) ?? 'this site';
 
 // /p/ permalinks carry photos as often as video; /reel/ and /tv/ are always video.
 function isInstagramPostUrl(url) {
   try {
     const urlObj = new URL(url);
-    const hostname = urlObj.hostname.toLowerCase().replace(/^www\./, '');
+    const hostname = normalizeHost(urlObj.hostname);
     return (
       (hostname === 'instagram.com' || hostname.endsWith('.instagram.com')) &&
       /^(?:\/[^/]+)?\/p\//.test(urlObj.pathname)
@@ -180,7 +153,7 @@ export const YTDLP_SITES = [
  */
 export function getYtdlpSite(url) {
   try {
-    const hostname = new URL(url).hostname.toLowerCase().replace(/^www\./, '');
+    const hostname = hostOf(url);
     for (const site of YTDLP_SITES) {
       if (site.hosts.some(h => hostname === h || hostname.endsWith(`.${h}`))) {
         return site.name;
@@ -827,36 +800,4 @@ export async function downloadWithYtdlp(
     logger.error(`yt-dlp download failed: ${error.message}`);
     throw error;
   }
-}
-
-/**
- * Download media from YouTube using yt-dlp.
- * This wrapper preserves the older function name for current callers.
- */
-export async function downloadFromYouTube(
-  url,
-  isAdminUser = false,
-  maxSize = Infinity,
-  quality = null,
-  maxDuration = 300,
-  startTime = null,
-  duration = null
-) {
-  return downloadWithYtdlp(url, isAdminUser, maxSize, quality, maxDuration, startTime, duration);
-}
-
-export async function isYtdlpAvailable() {
-  return new Promise(resolve => {
-    const ytdlp = spawn('yt-dlp', ['--version'], {
-      stdio: ['ignore', 'pipe', 'ignore'],
-    });
-
-    ytdlp.on('close', code => {
-      resolve(code === 0);
-    });
-
-    ytdlp.on('error', () => {
-      resolve(false);
-    });
-  });
 }

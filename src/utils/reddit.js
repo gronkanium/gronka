@@ -3,6 +3,7 @@ import { readSessionCookie } from './session-cookie.js';
 import { createLogger } from './logger.js';
 import { NetworkError } from './errors.js';
 import { ssrfGuardedRequest } from './ssrf-guard.js';
+import { hostOf, normalizeHost } from './url-host.js';
 
 const logger = createLogger('reddit');
 
@@ -48,7 +49,7 @@ const USER_AGENT =
 export function isRedditPostUrl(url) {
   try {
     const { hostname, pathname } = new URL(url);
-    const host = hostname.toLowerCase().replace(/^www\./, '');
+    const host = normalizeHost(hostname);
     return (host === 'reddit.com' || host.endsWith('.reddit.com')) && POST_PATH.test(pathname);
   } catch {
     return false;
@@ -175,7 +176,7 @@ function candidatesFor(id, entry) {
 
 function isOffsiteUrl(url) {
   try {
-    const host = new URL(url).hostname.toLowerCase().replace(/^www\./, '');
+    const host = hostOf(url);
     return OFFSITE_HOSTS.some(offsite => host === offsite || host.endsWith(`.${offsite}`));
   } catch {
     return false;

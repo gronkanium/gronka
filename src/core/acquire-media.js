@@ -12,7 +12,7 @@ import {
   getCobaltMediaUrls,
   getRemoteContentLength,
 } from '../utils/cobalt.js';
-import { getYtdlpSite, downloadFromYouTube, downloadWithYtdlp } from '../utils/ytdlp.js';
+import { getYtdlpSite, downloadWithYtdlp } from '../utils/ytdlp.js';
 import { getGalleryDlSite, downloadWithGalleryDl } from '../utils/gallery-dl.js';
 import { isHentaiGifzUrl, downloadFromHentaiGifz } from '../utils/hentaigifz.js';
 import { isBooruUrl, downloadFromBooru, booruCdnUserAgent } from '../utils/booru.js';
@@ -37,6 +37,7 @@ import { getBooleanSetting, getSetting } from '../utils/database.js';
 import { isRedditPostUrl, hasRedditSession, resolveRedditPost } from '../utils/reddit.js';
 import { convertToFormat } from '../utils/video-processor.js';
 import { fitsDiscordAttachment } from '../commands/shared/attachment-limit.js';
+import { hostOf } from '../utils/url-host.js';
 
 const logger = createLogger('acquire-media');
 
@@ -72,7 +73,7 @@ async function downloadRedditSlides(images, adminUser) {
 
 function isTwitterXUrl(url) {
   try {
-    const hostname = new URL(url).hostname.toLowerCase().replace(/^www\./, '');
+    const hostname = hostOf(url);
     return (
       hostname === 'x.com' ||
       hostname === 'twitter.com' ||
@@ -89,7 +90,7 @@ function isTwitterXUrl(url) {
 // support, so age-restricted posts only work via yt-dlp with a cookies file (YTDLP_COOKIES_PATH).
 function isTikTokUrl(url) {
   try {
-    const hostname = new URL(url).hostname.toLowerCase().replace(/^www\./, '');
+    const hostname = hostOf(url);
     return hostname === 'tiktok.com' || hostname.endsWith('.tiktok.com');
   } catch {
     return false;
@@ -98,13 +99,7 @@ function isTikTokUrl(url) {
 
 // A non-null label makes a Cobalt failure on this host eligible for the yt-dlp retry: Cobalt's
 // extractors are flaky or auth-gated, and yt-dlp covers many of the same hosts.
-function cobaltFallbackLabel(url) {
-  try {
-    return new URL(url).hostname.toLowerCase().replace(/^www\./, '');
-  } catch {
-    return 'this platform';
-  }
-}
+const cobaltFallbackLabel = url => hostOf(url) ?? 'this platform';
 
 const {
   maxVideoSize: MAX_VIDEO_SIZE,
@@ -288,7 +283,7 @@ export async function acquireMedia(
       useYtdlp,
       `${ytdlpSite} via yt-dlp`,
       async () =>
-        downloadFromYouTube(
+        downloadWithYtdlp(
           url,
           adminUser,
           maxSize,

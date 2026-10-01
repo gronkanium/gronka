@@ -6,6 +6,7 @@ import { dirname, join } from 'path';
 import { createLogger } from '../utils/logger.js';
 import { safeInteractionReply } from '../utils/interaction-helpers.js';
 import { getR2CacheStats, getStorageStats } from '../utils/storage.js';
+import { isR2Configured } from '../utils/r2-storage.js';
 import { getUserMetricsCount } from '../utils/database.js';
 import { r2Config, botConfig, supportConfig } from '../utils/config.js';
 
@@ -44,10 +45,7 @@ function formatUptime(milliseconds) {
 }
 
 function formatR2Line(r2CacheStats) {
-  const configured =
-    r2Config.accountId && r2Config.accessKeyId && r2Config.secretAccessKey && r2Config.bucketName;
-
-  if (!configured) return 'r2: `not configured`';
+  if (!isR2Configured(r2Config)) return 'r2: `not configured`';
   if (!r2CacheStats.initialized) return 'r2: `cache not initialized`';
 
   return (

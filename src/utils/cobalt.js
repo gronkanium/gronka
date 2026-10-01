@@ -4,6 +4,7 @@ import { NetworkError, ValidationError } from './errors.js';
 import { fetchToFile, withExtension } from './media-file.js';
 import { detectFileType } from './storage.js';
 import { mapLimit, ITEM_FANOUT } from './map-limit.js';
+import { normalizeHost } from './url-host.js';
 
 const logger = createLogger('cobalt');
 
@@ -234,9 +235,7 @@ export function canonicalizeMirrorUrl(url) {
     if (giphyId) {
       return `https://i.giphy.com/${giphyId}.gif`;
     }
-    const canonicalHost = EMBED_FIXER_HOSTS.get(
-      urlObj.hostname.toLowerCase().replace(/^www\./, '')
-    );
+    const canonicalHost = EMBED_FIXER_HOSTS.get(normalizeHost(urlObj.hostname));
     if (!canonicalHost) {
       return url;
     }
@@ -259,7 +258,7 @@ export function normalizeSocialMediaUrlForCobalt(url) {
     const urlObj = new URL(url);
     let hostname = urlObj.hostname.toLowerCase();
 
-    const canonicalHost = EMBED_FIXER_HOSTS.get(hostname.replace(/^www\./, ''));
+    const canonicalHost = EMBED_FIXER_HOSTS.get(normalizeHost(hostname));
     if (canonicalHost) {
       urlObj.hostname = canonicalHost;
       hostname = canonicalHost;
@@ -316,7 +315,7 @@ const SOCIAL_MEDIA_DOMAINS = [
 export function isSocialMediaUrl(url) {
   try {
     const urlObj = new URL(url);
-    const hostname = urlObj.hostname.toLowerCase().replace(/^www\./, '');
+    const hostname = normalizeHost(urlObj.hostname);
 
     return SOCIAL_MEDIA_DOMAINS.some(
       domain => hostname === domain || hostname.endsWith(`.${domain}`)
@@ -668,21 +667,7 @@ async function downloadFromCobalt(
   return withExtension({ ...file, contentType, filename: finalName });
 }
 
-/**
- * Get direct media URLs from Cobalt without downloading anything.
- * Only returns URLs that are publicly reachable (redirect/picker responses).
- * Tunnel responses proxy through the local cobalt instance and are not usable
- * outside the Docker network, so they are reported as unavailable.
- * @param {string} apiUrl - Cobalt API URL
- * @param {string} url - Social media URL
- * @returns {Promise<{urls: Array<{url: string, type: string, filename: string|null}>, direct: boolean}>}
- *   direct is false when cobalt only offers a tunnel (caller should fall back to downloading)
- */
 export async function getCobaltMediaUrls(apiUrl, url) {
-  return getCobaltMediaUrlsImpl(apiUrl, url);
-}
-
-async function getCobaltMediaUrlsImpl(apiUrl, url) {
   const cobaltResponse = await callCobaltApi(apiUrl, url);
 
   if (
@@ -762,14 +747,6 @@ export async function getRemoteContentLength(mediaUrl) {
   }
 }
 
-/**
- * Download video or photos from social media URL using Cobalt
- * @param {string} apiUrl - Cobalt API URL
- * @param {string} url - Social media URL
- * @param {boolean} isAdminUser - Whether the user is an admin
- * @param {number} maxSize - Maximum file size in bytes
- * @returns {Promise<Object|Array>} Media file (path, size, hash, contentType, filename) (or array for multiple photos)
- */
 export async function downloadFromSocialMedia(
   apiUrl,
   url,
@@ -777,10 +754,6 @@ export async function downloadFromSocialMedia(
   maxSize = Infinity,
   prefetched = null
 ) {
-  return downloadFromSocialMediaImpl(apiUrl, url, isAdminUser, maxSize, prefetched);
-}
-
-async function downloadFromSocialMediaImpl(apiUrl, url, isAdminUser, maxSize, prefetched) {
   logger.debug(`Attempting to download from social media URL via Cobalt: ${url}`);
 
   try {

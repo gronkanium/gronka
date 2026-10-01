@@ -1,12 +1,10 @@
 import { botConfig } from '../../utils/config.js';
 import { AppError } from '../../utils/errors.js';
-import { downloadFileFromUrl, parseTenorUrl } from '../../utils/file-downloader.js';
+import { downloadFileFromUrl, parseTenorUrl, TENOR_VIEW_URL } from '../../utils/file-downloader.js';
 import { parseOwnCdnUrl } from '../../utils/gif-optimizer.js';
 import { CONTENT_TYPES } from '../../utils/r2-storage.js';
 import { mediaPath } from '../../utils/storage.js';
 import { fromPath } from '../../utils/media-file.js';
-
-const TENOR_VIEW_URL = /^https?:\/\/(www\.)?tenor\.com\/view\/.+-gif-\d+/i;
 
 // The file behind a url option, as {attachment, file, originalUrl}. A file on this instance's
 // own CDN is read from disk and gets no originalUrl, since it is already a processed result.

@@ -182,6 +182,13 @@ describe('db-backed admin cache', () => {
     ]);
   });
 
+  test('saved views keep excluded log filters', async () => {
+    const views = [{ name: 'no cobalt', page: 'logs', params: { '-component': 'cobalt' } }];
+    const { response, data } = await putSetting('webui_saved_views', views);
+    assert.strictEqual(response.status, 200);
+    assert.deepStrictEqual(JSON.parse(data.value), views);
+  });
+
   test('saved views reject unknown pages, non-string params and odd keys', async () => {
     for (const bad of [
       [{ name: 'x', page: 'settings', params: {} }],

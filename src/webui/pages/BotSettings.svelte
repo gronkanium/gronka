@@ -373,7 +373,10 @@
                   >{/if}
               </form>
             {:else if s.type === 'tiers'}
-              <TierChart bind:tiers={tierDrafts[key]} />
+              <TierChart
+                bind:tiers={tierDrafts[key]}
+                maxMb={Number(settings.max_video_size_mb?.value) || 1024}
+              />
               {#if serializeTiers(tierDrafts[key] ?? []) !== s.value}
                 <div class="row">
                   <button class="btn sm" onclick={() => (tierDrafts[key] = parseTiers(s.value))}

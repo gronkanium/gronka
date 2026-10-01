@@ -11,20 +11,15 @@ and this project adheres (attempts) to [Semantic Versioning](https://semver.org/
 ### Features
 
 * **webui:** blobatar avatars for user ids ([e8b545b](https://github.com/gronkanium/gronka/commit/e8b545b40716f5d589e8026132a1de03107a5466))
-* **webui:** blobatar avatars for user ids ([d152398](https://github.com/gronkanium/gronka/commit/d152398ef0b0548c34dbdec06b5096907a5f01e7))
 * **webui:** edit upload lifetime tiers on a draggable chart ([867785e](https://github.com/gronkanium/gronka/commit/867785ec27673a2a00ebd5d234b8b2fff1c90d68))
-* **webui:** edit upload lifetime tiers on a draggable chart ([d7a3cd9](https://github.com/gronkanium/gronka/commit/d7a3cd97e93dc6817aa63bd812576fa332aa76c5))
 * **webui:** end the tier chart at the max download size ([37d2b27](https://github.com/gronkanium/gronka/commit/37d2b27d1402ab9ad9fae9b1b3cac66e2c30e06d))
 * **webui:** rework the users page into a scrolling list with a user preview ([7ff65cc](https://github.com/gronkanium/gronka/commit/7ff65cc6d588d228335ab2823fa1a431e66e14ee))
-* **webui:** rework the users page into a scrolling list with a user preview ([15dab89](https://github.com/gronkanium/gronka/commit/15dab89ccf8873f9b75054b5fbe898ecf25d5481))
 * **webui:** show sources as tiles with 7-day requests and success rate ([aa1a32a](https://github.com/gronkanium/gronka/commit/aa1a32a79973dd5b47f780d438af697fb1b1b490))
-* **webui:** show sources as tiles with 7-day requests and success rate ([78dec7f](https://github.com/gronkanium/gronka/commit/78dec7f2f3d1e76b994ccabd48d2ab5e4cc19812))
 
 
 ### Bug Fixes
 
 * **webui:** scroll the issues list inside its pane instead of the whole page ([b3acece](https://github.com/gronkanium/gronka/commit/b3acece94f93f4b4d7a5ba215bcdf281d6dec386))
-* **webui:** scroll the issues list inside its pane instead of the whole page ([78c1179](https://github.com/gronkanium/gronka/commit/78c117963262a4b28a4e388d32736a87ca0470bd))
 
 ## [2.3.0](https://github.com/gronkanium/gronka/compare/v2.2.0...v2.3.0) (2026-09-30)
 

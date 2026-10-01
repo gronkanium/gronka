@@ -82,6 +82,13 @@ export default [
     },
   },
   {
+    files: ['src/**/*.js'],
+    ignores: ['src/webui/**'],
+    rules: {
+      'no-restricted-globals': ['error', { name: 'fetch', message: 'use axios on the server' }],
+    },
+  },
+  {
     files: ['src/webui/**/*.svelte.js'],
     languageOptions: { globals: { $state: 'readonly', $derived: 'readonly', $effect: 'readonly' } },
   },

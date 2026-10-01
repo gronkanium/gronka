@@ -147,10 +147,24 @@ export async function getOperationTrace(operationId) {
 }
 
 async function reconstructOperationsByIds(operationIds) {
-  // Reconstruct each operation from its logs
+  const sql = getPostgresConnection();
+  const rows =
+    operationIds.length > 0
+      ? await sql`
+          SELECT * FROM operation_logs
+          WHERE operation_id = ANY(${operationIds})
+          ORDER BY timestamp ASC, id ASC
+        `
+      : [];
+  const logsById = new Map();
+  for (const row of convertTimestampsInArray(rows, ['timestamp'])) {
+    if (!logsById.has(row.operation_id)) logsById.set(row.operation_id, []);
+    logsById.get(row.operation_id).push(row);
+  }
+
   const reconstructedOperations = [];
   for (const operationId of operationIds) {
-    const logs = await getOperationLogs(operationId);
+    const logs = logsById.get(operationId) ?? [];
     if (logs.length === 0) {
       continue;
     }

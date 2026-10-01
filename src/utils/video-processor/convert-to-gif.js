@@ -4,6 +4,7 @@ import { createLogger } from '../logger.js';
 import {
   validateNumericParameter,
   checkFFmpegInstalled,
+  FFMPEG_TIMEOUT_MS,
   colorspaceRepairInputOptions,
   FFMPEG_INPUT_GUARD,
   GIF_PALETTEGEN,
@@ -49,7 +50,7 @@ async function convertToGifImpl(inputPath, outputPath, options = {}) {
     true
   );
 
-  logger.info(
+  logger.debug(
     `Starting video to GIF conversion: ${inputPath} -> ${outputPath} (width: ${width}, fps: ${fps})`
   );
 
@@ -77,7 +78,7 @@ async function convertToGifImpl(inputPath, outputPath, options = {}) {
   try {
     colorspaceRepair = colorspaceRepairInputOptions(await getVideoMetadata(inputPath));
     if (colorspaceRepair.length > 0) {
-      logger.info(`Repairing reserved colorspace tag on ${inputPath}`);
+      logger.debug(`Repairing reserved colorspace tag on ${inputPath}`);
     }
   } catch (error) {
     // A probe failure is not fatal, the conversion is what matters, and it reports its own error.
@@ -90,9 +91,8 @@ async function convertToGifImpl(inputPath, outputPath, options = {}) {
   );
   const cleanupPalette = () => fs.unlink(palettePath).catch(() => {});
 
-  // A real encode finishes in a couple of minutes; a longer run is a stalled ffmpeg.
   // One deadline covers both passes so it fails cleanly instead of hanging until the reaper.
-  const encodeTimeoutMs = 300000;
+  const encodeTimeoutMs = FFMPEG_TIMEOUT_MS;
   const signal = AbortSignal.timeout(encodeTimeoutMs);
   const inputOptions = [
     ...FFMPEG_INPUT_GUARD,

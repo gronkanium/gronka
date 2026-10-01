@@ -450,6 +450,15 @@ export async function handleDownloadCommand(interaction) {
   }
 
   const megaFileId = keylessMegaFileId(url);
+  if (megaFileId && interaction.isPrefixCommand) {
+    const message = 'send the full mega link including the key (the part after #).';
+    await refuse(interaction, 'download', {
+      message,
+      reason: 'missing_input',
+      context: { originalUrl: url, commandSource },
+    });
+    return;
+  }
   if (megaFileId) {
     await promptForMegaKey(
       interaction,

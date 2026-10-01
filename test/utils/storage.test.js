@@ -394,3 +394,16 @@ test('getStorageStats - only counts valid file types', async () => {
   assert(stats.totalVideos >= 2);
   assert(stats.totalImages >= 2);
 });
+
+test('getStorageStats - a GIF_STORAGE_PATH ending in /gifs counts every kind beside it', async () => {
+  const root = path.join(testStoragePath, `gifs-root-${Date.now()}`);
+  const gifsPath = path.join(root, 'gifs');
+  mkdirSync(gifsPath, { recursive: true });
+  writeFileSync(mediaPath('gif', 'aa11', '.gif', gifsPath), Buffer.alloc(10));
+  mkdirSync(path.join(root, 'videos'), { recursive: true });
+  writeFileSync(mediaPath('video', 'bb22', '.mp4', gifsPath), Buffer.alloc(20));
+  const stats = await getStorageStats(gifsPath);
+  assert.strictEqual(stats.totalGifs, 1);
+  assert.strictEqual(stats.totalVideos, 1);
+  assert.strictEqual(stats.diskUsageBytes, 30);
+});

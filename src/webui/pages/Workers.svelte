@@ -1,4 +1,5 @@
 <script>
+  import { poll } from '../utils/poll.js';
   import { getJsonOrNull, sendJson } from '../utils/api.js';
   import { Pause, Play, AlertTriangle, Cpu } from 'lucide-svelte';
   import { currentRoute, navigate } from '../utils/router.js';
@@ -30,10 +31,8 @@
   $effect(() => {
     load();
     loadDeps();
-    const t = setInterval(load, 5000);
-    const d = setInterval(loadDeps, 30_000);
-    const tick = setInterval(() => (now = Date.now()), 1000);
-    return () => (clearInterval(t), clearInterval(d), clearInterval(tick));
+    const stops = [poll(load, 5000), poll(loadDeps, 30_000), poll(() => (now = Date.now()), 1000)];
+    return () => stops.forEach(stop => stop());
   });
 
   async function setPaused(value) {

@@ -1,4 +1,5 @@
 <script>
+  import { poll } from '../utils/poll.js';
   import { getJsonOrNull } from '../utils/api.js';
   import { SlidersHorizontal, HardDrive, Film, Image, Sparkles } from 'lucide-svelte';
   import { navigate } from '../utils/router.js';
@@ -24,8 +25,7 @@
   }
   $effect(() => {
     load();
-    const t = setInterval(load, 30_000);
-    return () => clearInterval(t);
+    return poll(load, 30_000);
   });
 
   const r2 = $derived(data?.r2);

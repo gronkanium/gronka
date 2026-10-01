@@ -18,6 +18,3 @@ export * from './database/temporary-uploads-pg.js';
 export * from './database/settings-pg.js';
 export * from './database/bans-pg.js';
 export * from './database/guild-prefixes-pg.js';
-
-// Test helpers (for cleaning database state in tests)
-export * from './database/test-helpers.js';

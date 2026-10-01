@@ -105,19 +105,22 @@
     return q;
   }
 
+  let seq = 0;
   async function load() {
+    const mine = ++seq;
     loading = true;
     error = '';
     try {
       const r = await fetch(`/api/requests?${query()}`);
       if (!r.ok) throw new Error();
       const data = await r.json();
+      if (mine !== seq) return;
       rows = data.requests ?? [];
       total = data.total ?? 0;
     } catch {
-      error = 'could not load requests';
+      if (mine === seq) error = 'could not load requests';
     } finally {
-      loading = false;
+      if (mine === seq) loading = false;
     }
   }
 

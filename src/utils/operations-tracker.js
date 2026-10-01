@@ -12,7 +12,7 @@ import crypto from 'crypto';
 import axios from 'axios';
 import {
   insertOperationLog,
-  insertOrUpdateUserMetrics,
+  recordUserCommand,
   getUserMetrics,
   getStuckOperations,
   markOperationAsFailed,
@@ -388,29 +388,8 @@ async function updateUserMetricsForOperation(operation) {
     return;
   }
 
-  const metrics = {
-    totalCommands: 1,
-    successfulCommands: operation.status === 'success' ? 1 : 0,
-    failedCommands: operation.status === 'error' ? 1 : 0,
-    lastCommandAt: Date.now(),
-  };
-
-  if (operation.type === 'convert') {
-    metrics.totalConvert = 1;
-  } else if (operation.type === 'download') {
-    metrics.totalDownload = 1;
-  } else if (operation.type === 'optimize') {
-    metrics.totalOptimize = 1;
-  } else if (operation.type === 'info') {
-    metrics.totalInfo = 1;
-  }
-
-  if (operation.fileSize && operation.status === 'success') {
-    metrics.totalFileSize = operation.fileSize;
-  }
-
   try {
-    await insertOrUpdateUserMetrics(operation.userId, metrics);
+    await recordUserCommand(operation.userId, { failed: operation.status === 'error' });
 
     const updatedMetrics = await getUserMetrics(operation.userId);
     if (!updatedMetrics) {

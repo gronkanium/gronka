@@ -58,7 +58,6 @@ function makeDeps(overrides = {}) {
     clearPrefix: [],
   };
   const deps = {
-    trackUser: async () => {},
     isAdmin: () => false,
     replyIfBanned: async () => false,
     replyIfMaintenance: async () => false,

@@ -13,6 +13,7 @@ import {
   ensureTemporaryUploadsUniqueKey,
   addR2ExpiredAtColumnIfNeeded,
   dropUsernameColumnsIfPresent,
+  mergeUsersIntoUserMetrics,
 } from './schema-pg.js';
 
 export async function initPostgresDatabase() {
@@ -75,6 +76,7 @@ export async function initPostgresDatabase() {
       await addFileSizeColumnIfNeeded(connection);
       await addR2ExpiredAtColumnIfNeeded(connection);
       await dropUsernameColumnsIfPresent(connection);
+      await mergeUsersIntoUserMetrics(connection);
 
       // Create indexes with error handling for race conditions
       const indexes = getIndexDefinitions();

@@ -4,7 +4,8 @@
  * Delete all stored data for a single Discord user (data-deletion request handler).
  *
  * Removes, for the given user id:
- *   - users row and user_metrics row
+ *   - user_metrics row
+ *   - operation_logs and media_jobs rows for their requests
  *   - processed_urls rows (their downloads/conversions/optimizations); the
  *     temporary_uploads FK cascades automatically
  *   - alerts rows referencing the user
@@ -106,7 +107,6 @@ async function main() {
     await sql`SELECT 1`;
 
     // --- Gather footprint ------------------------------------------------------
-    const [userRow] = await sql`SELECT first_used, last_used FROM users WHERE user_id = ${userId}`;
     const [metricsRow] =
       await sql`SELECT total_commands FROM user_metrics WHERE user_id = ${userId}`;
     const media = await sql`
@@ -118,9 +118,16 @@ async function main() {
       SELECT COUNT(*)::int AS count FROM alerts WHERE user_id = ${userId}
     `;
     const [banRow] = await sql`SELECT reason FROM banned_users WHERE user_id = ${userId}`;
+    const opIds = (
+      await sql`
+        SELECT DISTINCT operation_id FROM operation_logs
+        WHERE (metadata::jsonb ->> 'userId') = ${userId}
+        UNION SELECT operation_id FROM media_jobs WHERE user_id = ${userId} AND operation_id IS NOT NULL
+      `
+    ).map(r => r.operation_id);
 
     const nothingFound =
-      !userRow && !metricsRow && media.length === 0 && alertCount === 0 && !banRow;
+      !metricsRow && media.length === 0 && alertCount === 0 && !banRow && opIds.length === 0;
     if (nothingFound) {
       console.log('\nno data found for this user id. nothing to delete.');
       return;
@@ -128,10 +135,10 @@ async function main() {
 
     console.log(`\n${line}`);
     console.log('found:');
-    console.log(`  users row:         ${userRow ? 'yes' : 'none'}`);
     console.log(`  user_metrics row:  ${metricsRow ? 'yes' : 'none'}`);
     console.log(`  media records:     ${media.length}`);
     console.log(`  alerts:            ${alertCount}`);
+    console.log(`  requests:          ${opIds.length}`);
     console.log(
       `  banned_users row:  ${banRow ? `yes${includeBans ? ' (will remove)' : ' (kept, pass --include-bans to remove)'}` : 'none'}`
     );
@@ -219,26 +226,31 @@ async function main() {
 
     // --- Delete database rows --------------------------------------------------
     // processed_urls first so temporary_uploads cascades cleanly.
-    const processedDeleted = (await sql`DELETE FROM processed_urls WHERE user_id = ${userId}`)
-      .count;
-    const metricsDeleted = (await sql`DELETE FROM user_metrics WHERE user_id = ${userId}`).count;
-    const alertsDeleted = (await sql`DELETE FROM alerts WHERE user_id = ${userId}`).count;
-    const usersDeleted = (await sql`DELETE FROM users WHERE user_id = ${userId}`).count;
-    let bansDeleted = 0;
-    if (includeBans) {
-      bansDeleted = (await sql`DELETE FROM banned_users WHERE user_id = ${userId}`).count;
-    }
+    const deleted = await sql.begin(async tx => {
+      const count = async query => (await query).count;
+      return {
+        processed: await count(tx`DELETE FROM processed_urls WHERE user_id = ${userId}`),
+        metrics: await count(tx`DELETE FROM user_metrics WHERE user_id = ${userId}`),
+        alerts: await count(tx`DELETE FROM alerts WHERE user_id = ${userId}`),
+        opLogs: opIds.length
+          ? await count(tx`DELETE FROM operation_logs WHERE operation_id IN ${tx(opIds)}`)
+          : 0,
+        jobs: await count(tx`DELETE FROM media_jobs WHERE user_id = ${userId}`),
+        bans: includeBans ? await count(tx`DELETE FROM banned_users WHERE user_id = ${userId}`) : 0,
+      };
+    });
 
     // --- Summary ---------------------------------------------------------------
     console.log(`\n${line}`);
     console.log('deletion complete');
     console.log(line);
-    console.log(`  processed_urls rows deleted: ${processedDeleted}`);
-    console.log(`  user_metrics rows deleted:   ${metricsDeleted}`);
-    console.log(`  alerts rows deleted:         ${alertsDeleted}`);
-    console.log(`  users rows deleted:          ${usersDeleted}`);
+    console.log(`  processed_urls rows deleted: ${deleted.processed}`);
+    console.log(`  user_metrics rows deleted:   ${deleted.metrics}`);
+    console.log(`  alerts rows deleted:         ${deleted.alerts}`);
+    console.log(`  operation_logs rows deleted: ${deleted.opLogs}`);
+    console.log(`  media_jobs rows deleted:     ${deleted.jobs}`);
     if (includeBans) {
-      console.log(`  banned_users rows deleted:   ${bansDeleted}`);
+      console.log(`  banned_users rows deleted:   ${deleted.bans}`);
     }
     if (!keepFiles) {
       console.log(`  r2 objects deleted:          ${r2Deleted}`);

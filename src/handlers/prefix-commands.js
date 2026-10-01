@@ -1,7 +1,6 @@
 import { EmbedBuilder, PermissionFlagsBits } from 'discord.js';
 import { createLogger } from '../utils/logger.js';
 import { botConfig } from '../utils/config.js';
-import { trackUser } from '../utils/user-tracking.js';
 import { isAdmin } from '../utils/rate-limit.js';
 import { replyIfBanned, replyIfMaintenance } from '../utils/ban-check.js';
 import { getGuildPrefix, setGuildPrefix, clearGuildPrefix } from '../utils/database.js';
@@ -223,7 +222,6 @@ async function handlePrefixSetting(message, tokens, currentPrefix, deps) {
 }
 
 const defaultDeps = {
-  trackUser,
   isAdmin,
   replyIfBanned,
   replyIfMaintenance,
@@ -292,10 +290,6 @@ export async function handlePrefixMessage(message, context = {}) {
     }
     return;
   }
-
-  deps.trackUser(message.author.id).catch(error => {
-    logger.debug(`Failed to track user ${message.author.id}: ${error.message}`);
-  });
 
   try {
     const namedOptions = parseArgTokens(tokens);

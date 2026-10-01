@@ -510,7 +510,6 @@ async function wipePostgresDatabase() {
       'user_metrics',
       'processed_urls',
       'logs',
-      'users',
     ];
 
     let dropped = 0;

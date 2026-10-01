@@ -12,7 +12,7 @@ import {
   setUserMetricsBroadcastCallback,
   flushAllOperationLogs,
 } from '../../src/utils/operations-tracker.js';
-import { initDatabase, insertOperationLog, insertOrUpdateUser } from '../../src/utils/database.js';
+import { initDatabase, insertOperationLog } from '../../src/utils/database.js';
 import { getOperationTrace } from '../../src/utils/database/operations-pg.js';
 
 beforeAll(async () => {
@@ -535,9 +535,6 @@ describe('operations tracker', () => {
           },
         },
       };
-
-      // Create a user in database
-      insertOrUpdateUser('user1', Date.now());
 
       const cleaned = await cleanupStuckOperations(10, mockClient);
       assert.ok(cleaned >= 0);

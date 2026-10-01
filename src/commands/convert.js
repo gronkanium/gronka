@@ -24,7 +24,6 @@ import {
 } from '../utils/video-processor.js';
 import { mediaPath } from '../utils/storage.js';
 import { getDiscordAttachmentLimit } from './shared/attachment-limit.js';
-import { trackRecentConversion } from '../utils/user-tracking.js';
 import { loadStoredGif, optimizeCached } from '../utils/gif-optimizer.js';
 import { logOperationStep } from '../utils/operations-tracker.js';
 import { hashUrlWithParams, hashPartsHex } from '../utils/hashing.js';
@@ -337,7 +336,6 @@ async function processConversion(
         attachmentLimit,
         { hash: finalHash }
       );
-      trackRecentConversion(userId, stored.url);
       await deliverStored(interaction, ctx, stored, { urlHash: urlHash ?? finalHash });
       await finishCommand('convert', ctx, stored.size);
     },

@@ -59,9 +59,6 @@ function formatR2Line(r2CacheStats) {
 export async function handleInfoCommand(interaction, botStartTime) {
   try {
     const storageStats = await getStorageStats(GIF_STORAGE_PATH);
-    // user_metrics, not the users table: `trackUser` writes users on every interaction
-    // before the ban/maintenance gates, so it counts people the bot never served. The webui
-    // reads this same count, one user number across both surfaces.
     const userCount = await getUserMetricsCount();
     const guildCount = interaction.client.guilds.cache.size;
 

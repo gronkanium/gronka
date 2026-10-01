@@ -4,16 +4,12 @@ import {
   initDatabase,
   closeDatabase,
   insertLog,
-  insertOrUpdateUser,
-  getUser,
-  getUniqueUserCount,
   getLogs,
   getProcessedUrl,
   insertProcessedUrl,
 } from '../../src/utils/database.js';
-import { invalidateUserCache } from '../../src/utils/database/users-pg.js';
 import { markProcessedUrlsR2Expired } from '../../src/utils/database/processed-urls-pg.js';
-import { insertOrUpdateUserMetrics, getUserMetrics } from '../../src/utils/database/metrics-pg.js';
+import { recordUserCommand, getUserMetrics } from '../../src/utils/database/metrics-pg.js';
 import {
   insertTemporaryUpload,
   getTemporaryUploadsByR2Key,
@@ -24,8 +20,6 @@ import {
 } from '../../src/utils/database/test-helpers.js';
 
 beforeAll(async () => {
-  // Clear user cache to avoid stale data from previous test runs
-  invalidateUserCache();
   await initDatabase();
   // Ensure logs table has correct schema (SERIAL PRIMARY KEY on id)
   await ensureLogsTableSchema();
@@ -49,119 +43,6 @@ describe('database utilities', () => {
       await initDatabase();
       await initDatabase();
       assert.ok(true, 'Multiple init calls handled');
-    });
-  });
-
-  describe('insertOrUpdateUser', () => {
-    test('inserts new user', async () => {
-      const uniqueId = Date.now();
-      const userId = `test-user-1-${uniqueId}`;
-      const timestamp = Date.now();
-
-      // Clear cache to ensure we get fresh data
-      invalidateUserCache(userId);
-
-      await insertOrUpdateUser(userId, timestamp);
-
-      // Clear cache again after insert to force fresh query
-      invalidateUserCache(userId);
-
-      const user = await getUser(userId);
-      assert.ok(user, 'User should exist');
-      assert.strictEqual(user.user_id, userId);
-      // Use approximate matching for timestamps (within 1 second tolerance to account for test execution time)
-      // Note: For new users, first_used and last_used should match the provided timestamp
-      assert.ok(
-        Math.abs(user.first_used - timestamp) < 1000,
-        `first_used should be within 1s of ${timestamp}, got ${user.first_used}`
-      );
-      assert.ok(
-        Math.abs(user.last_used - timestamp) < 1000,
-        `last_used should be within 1s of ${timestamp}, got ${user.last_used}`
-      );
-    });
-
-    test('updates existing user', async () => {
-      const uniqueId = Date.now();
-      const userId = `test-user-2-${uniqueId}`;
-      const timestamp1 = Date.now();
-      const timestamp2 = timestamp1 + 1000;
-
-      // Clear cache to ensure we get fresh data
-      invalidateUserCache(userId);
-
-      await insertOrUpdateUser(userId, timestamp1);
-      await insertOrUpdateUser(userId, timestamp2);
-
-      // Clear cache again after updates to force fresh query
-      invalidateUserCache(userId);
-
-      const user = await getUser(userId);
-      assert.ok(user, 'User should exist');
-      assert.strictEqual(user.user_id, userId);
-      // Use approximate matching for timestamps (within 1 second tolerance to account for test execution time)
-      assert.ok(
-        Math.abs(user.first_used - timestamp1) < 1000,
-        `first_used should be within 1s of ${timestamp1}, got ${user.first_used}`
-      );
-      assert.ok(
-        Math.abs(user.last_used - timestamp2) < 1000,
-        `last_used should be within 1s of ${timestamp2}, got ${user.last_used}`
-      );
-    });
-
-    test('handles invalid userId gracefully', async () => {
-      await assert.doesNotReject(async () => {
-        await insertOrUpdateUser(null, Date.now());
-        await insertOrUpdateUser('', Date.now());
-        await insertOrUpdateUser(123, 'TestUser', Date.now());
-      });
-    });
-  });
-
-  describe('getUser', () => {
-    test('returns user for existing user_id', async () => {
-      const uniqueId = Date.now();
-      const userId = `test-user-3-${uniqueId}`;
-      const timestamp = Date.now();
-
-      await insertOrUpdateUser(userId, timestamp);
-      const user = await getUser(userId);
-
-      assert.ok(user, 'User should exist');
-      assert.strictEqual(user.user_id, userId);
-    });
-
-    test('returns null for non-existent user', async () => {
-      const user = await getUser('non-existent-user');
-      assert.strictEqual(user, null);
-    });
-  });
-
-  describe('getUniqueUserCount', () => {
-    test('count grows when new users are inserted', async () => {
-      const countBefore = await getUniqueUserCount();
-      const uniqueId = Date.now();
-
-      await insertOrUpdateUser(`test-count-1-${uniqueId}`, Date.now());
-      await insertOrUpdateUser(`test-count-2-${uniqueId}`, Date.now());
-      await insertOrUpdateUser(`test-count-3-${uniqueId}`, Date.now());
-
-      // Other test files insert users concurrently, so assert a lower bound
-      // rather than an exact delta
-      const countAfter = await getUniqueUserCount();
-      assert.ok(
-        countAfter >= countBefore + 3,
-        `Expected count to grow by at least 3 (before: ${countBefore}, after: ${countAfter})`
-      );
-    });
-
-    test('returns 0 for empty database', async () => {
-      // This test assumes a clean database, which isn't guaranteed
-      // So we just check it returns a number
-      const count = await getUniqueUserCount();
-      assert.strictEqual(typeof count, 'number');
-      assert.ok(count >= 0);
     });
   });
 
@@ -626,18 +507,15 @@ describe('database utilities', () => {
     const all = fn => Promise.all(Array.from({ length: 20 }, fn));
 
     test('user metrics count every parallel write for a new user', async () => {
-      await all(() => insertOrUpdateUserMetrics(id, { totalCommands: 1, totalDownload: 1 }));
+      await all((_, i) => recordUserCommand(id, { failed: i % 4 === 0 }));
       const m = await getUserMetrics(id);
       assert.strictEqual(m.total_commands, 20);
-      assert.strictEqual(m.total_download, 20);
+      assert.strictEqual(m.failed_commands, 5);
     });
 
-    test('users, processed urls and temporary uploads accept parallel first writes', async () => {
-      await all(() => insertOrUpdateUser(id, Date.now()));
+    test('processed urls and temporary uploads accept parallel first writes', async () => {
       await all((_, i) => insertProcessedUrl(id, `hash-${i}`, 'gif', '.gif', 'u', Date.now()));
       await all(() => insertTemporaryUpload(id, 'key', Date.now(), Date.now() + 1000));
-      invalidateUserCache(id);
-      assert.ok(await getUser(id));
       assert.ok(await getProcessedUrl(id));
       const uploads = await getTemporaryUploadsByR2Key('key');
       assert.strictEqual(uploads.filter(upload => upload.url_hash === id).length, 1);

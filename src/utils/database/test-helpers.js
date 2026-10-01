@@ -83,7 +83,6 @@ export async function truncateAllTables() {
     await sql`
       TRUNCATE TABLE 
         logs,
-        users,
         processed_urls,
         operation_logs,
         user_metrics,
@@ -113,7 +112,6 @@ export async function clearAllData() {
     await sql`DELETE FROM logs`;
     await sql`DELETE FROM operation_logs`;
     await sql`DELETE FROM processed_urls`;
-    await sql`DELETE FROM users`;
     await sql`DELETE FROM user_metrics`;
     await sql`DELETE FROM alerts`;
     await sql`DELETE FROM temporary_uploads`;

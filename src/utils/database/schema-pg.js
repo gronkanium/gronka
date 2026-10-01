@@ -10,16 +10,6 @@
 export function getTableDefinitions() {
   return [
     {
-      name: 'users',
-      sql: `
-        CREATE TABLE IF NOT EXISTS users (
-          user_id TEXT PRIMARY KEY,
-          first_used BIGINT NOT NULL,
-          last_used BIGINT NOT NULL
-        );
-      `,
-    },
-    {
       name: 'logs',
       sql: `
         CREATE TABLE IF NOT EXISTS logs (
@@ -70,15 +60,9 @@ export function getTableDefinitions() {
         CREATE TABLE IF NOT EXISTS user_metrics (
           user_id TEXT PRIMARY KEY,
           total_commands BIGINT DEFAULT 0,
-          successful_commands BIGINT DEFAULT 0,
           failed_commands BIGINT DEFAULT 0,
-          total_convert BIGINT DEFAULT 0,
-          total_download BIGINT DEFAULT 0,
-          total_optimize BIGINT DEFAULT 0,
-          total_info BIGINT DEFAULT 0,
-          total_file_size BIGINT DEFAULT 0,
-          last_command_at BIGINT,
-          updated_at BIGINT NOT NULL
+          first_used BIGINT NOT NULL,
+          last_command_at BIGINT
         );
       `,
     },
@@ -190,14 +174,6 @@ export function getTableDefinitions() {
  */
 export function getIndexDefinitions() {
   return [
-    {
-      name: 'idx_users_user_id',
-      sql: 'CREATE INDEX IF NOT EXISTS idx_users_user_id ON users(user_id);',
-    },
-    {
-      name: 'idx_users_last_used',
-      sql: 'CREATE INDEX IF NOT EXISTS idx_users_last_used ON users(last_used);',
-    },
     {
       name: 'idx_logs_timestamp',
       sql: 'CREATE INDEX IF NOT EXISTS idx_logs_timestamp ON logs(timestamp);',
@@ -313,7 +289,8 @@ async function columnExists(sql, tableName, columnName) {
   const result = await sql`
     SELECT column_name
     FROM information_schema.columns
-    WHERE table_name = ${tableName}
+    WHERE table_schema = current_schema()
+      AND table_name = ${tableName}
       AND column_name = ${columnName}
   `;
   return result.length > 0;
@@ -352,11 +329,35 @@ export async function addR2ExpiredAtColumnIfNeeded(sql) {
  * @returns {Promise<void>}
  */
 export async function dropUsernameColumnsIfPresent(sql) {
-  for (const table of ['users', 'user_metrics']) {
-    if (await columnExists(sql, table, 'username')) {
-      await sql.unsafe(`ALTER TABLE ${table} DROP COLUMN username`);
-    }
+  await sql`ALTER TABLE user_metrics DROP COLUMN IF EXISTS username`;
+}
+
+// One row per user: request and failure counts, first and last use. Everything else was dropped.
+export async function mergeUsersIntoUserMetrics(sql) {
+  if (!(await columnExists(sql, 'user_metrics', 'updated_at'))) {
+    return;
   }
+  await sql.begin(async tx => {
+    await tx`ALTER TABLE user_metrics ADD COLUMN IF NOT EXISTS first_used BIGINT`;
+    if (await columnExists(tx, 'users', 'first_used')) {
+      await tx`
+        UPDATE user_metrics m SET first_used = u.first_used
+        FROM users u WHERE u.user_id = m.user_id AND m.first_used IS NULL`;
+    }
+    await tx`
+      UPDATE user_metrics m SET first_used = COALESCE(
+        (SELECT MIN(processed_at) FROM processed_urls p WHERE p.user_id = m.user_id),
+        m.last_command_at, 0)
+      WHERE m.first_used IS NULL`;
+    await tx`ALTER TABLE user_metrics ALTER COLUMN first_used SET NOT NULL`;
+    await tx`DROP TABLE IF EXISTS users`;
+    await tx`
+      ALTER TABLE user_metrics
+        DROP COLUMN IF EXISTS successful_commands, DROP COLUMN IF EXISTS total_convert,
+        DROP COLUMN IF EXISTS total_download, DROP COLUMN IF EXISTS total_optimize,
+        DROP COLUMN IF EXISTS total_info, DROP COLUMN IF EXISTS total_file_size,
+        DROP COLUMN IF EXISTS updated_at`;
+  });
 }
 
 /**

@@ -13,11 +13,8 @@ import { getProcessedUrl } from '../utils/database.js';
 import { runMediaCommand } from './shared/run-media-command.js';
 import { getDiscordAttachmentLimit } from './shared/attachment-limit.js';
 import { replyIfRateLimited, refuse, commandSourceOf } from './shared/command-guards.js';
-import {
-  safeInteractionEditReply,
-  safeInteractionDeferReply,
-} from '../utils/interaction-helpers.js';
-import { storeMedia, deliverStored, finishCommand } from './shared/deliver.js';
+import { safeInteractionDeferReply } from '../utils/interaction-helpers.js';
+import { storeMedia, deliverStored, deliverReply, finishCommand } from './shared/deliver.js';
 import { fetchUrlInput } from './shared/url-input.js';
 import { dispatchMediaJob } from '../jobs/dispatch.js';
 
@@ -46,7 +43,7 @@ export async function processOptimization(
       const cachedRow = urlHash ? await getProcessedUrl(urlHash) : null;
       const cachedGif = cachedRow?.file_type === 'gif' || cachedRow?.file_extension === '.gif';
       if (cachedGif && !cachedRow.r2_expired_at) {
-        await safeInteractionEditReply(interaction, { content: cachedRow.file_url });
+        await deliverReply(interaction, { content: cachedRow.file_url });
         return finishCommand('optimize', ctx, 0);
       }
 

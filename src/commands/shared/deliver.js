@@ -94,11 +94,18 @@ export async function finishCommand(type, ctx, fileSize, extra = {}) {
   );
 }
 
-export async function replyWithLink(interaction, ctx, url, ttlHours) {
-  const content = formatR2UrlWithDisclaimer(url, r2Config, ctx.adminUser, ttlHours);
-  if ((await safeInteractionEditReply(interaction, { content })) === false) {
+// The final reply of a command; a failed edit means the user got nothing, so the request failed.
+export async function deliverReply(interaction, payload) {
+  const message = await safeInteractionEditReply(interaction, payload);
+  if (message === false) {
     throw new AppError('could not deliver the file to discord. please try again.');
   }
+  return message;
+}
+
+export async function replyWithLink(interaction, ctx, url, ttlHours) {
+  const content = formatR2UrlWithDisclaimer(url, r2Config, ctx.adminUser, ttlHours);
+  await deliverReply(interaction, { content });
 }
 
 // Attaches the file when it fits, else links it; a rejected attachment falls back to an R2 link.

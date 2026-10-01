@@ -30,7 +30,14 @@ import {
   formatR2UrlWithDisclaimer,
   formatMultipleR2UrlsWithDisclaimer,
 } from '../utils/r2-storage.js';
-import { storeMedia, toR2, attachmentFor, deliverStored, finishCommand } from './shared/deliver.js';
+import {
+  storeMedia,
+  toR2,
+  attachmentFor,
+  deliverStored,
+  deliverReply,
+  finishCommand,
+} from './shared/deliver.js';
 import { hashUrl } from '../utils/hashing.js';
 import { getProcessedUrl } from '../utils/database.js';
 import { recordProcessedUrl, trackR2UploadIfApplicable } from './shared/url-cache.js';
@@ -75,13 +82,13 @@ async function replyWithDirectMediaUrls(interaction, ctx, { url, urls, stepName 
     message: `Returning ${lines.length} direct media URL(s) without downloading`,
     metadata: { url, mediaUrls: lines },
   });
-  await safeInteractionEditReply(interaction, { content: lines.join('\n') });
+  await deliverReply(interaction, { content: lines.join('\n') });
   await finishCommand('download', ctx, 0);
 }
 
 async function deliverArchive(interaction, ctx, fileData, attachmentLimit) {
   if (fitsDiscordAttachment(fileData.size, attachmentLimit)) {
-    await safeInteractionEditReply(interaction, {
+    await deliverReply(interaction, {
       files: [new AttachmentBuilder(fileData.path, { name: fileData.filename })],
     });
   } else if (isR2Configured(r2Config)) {
@@ -106,7 +113,7 @@ async function deliverArchive(interaction, ctx, fileData, attachmentLimit) {
     });
     await trackR2UploadIfApplicable(archiveUrlHash, url, ctx.adminUser);
     const ttlHours = await resolveTtlHoursForSize(fileData.size);
-    await safeInteractionEditReply(interaction, {
+    await deliverReply(interaction, {
       content: formatR2UrlWithDisclaimer(url, r2Config, ctx.adminUser, ttlHours),
     });
   } else {
@@ -220,7 +227,7 @@ export async function processDownload(
           message: 'URL already processed as video, returning cached result',
           metadata: { url, cachedUrl: cachedRow.file_url },
         });
-        await safeInteractionEditReply(interaction, {
+        await deliverReply(interaction, {
           content: formatR2UrlWithDisclaimer(cachedRow.file_url, r2Config, adminUser),
         });
         return finishCommand('download', ctx, 0);

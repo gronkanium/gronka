@@ -313,6 +313,7 @@ export async function listObjectsInR2(prefix, config) {
 
 // DeleteObjects takes up to 1000 keys per call; returns the keys R2 refused.
 export async function deleteManyFromR2(keys, config) {
+  if (!keys.length) return [];
   const client = getR2Client(config);
   const failed = [];
   for (let i = 0; i < keys.length; i += 1000) {

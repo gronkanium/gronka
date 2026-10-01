@@ -38,11 +38,8 @@ import {
   commandSourceOf,
 } from './shared/command-guards.js';
 import { initializeDatabaseWithErrorHandling } from '../utils/database-init.js';
-import {
-  safeInteractionEditReply,
-  safeInteractionDeferReply,
-} from '../utils/interaction-helpers.js';
-import { storeMedia, deliverStored, finishCommand } from './shared/deliver.js';
+import { safeInteractionDeferReply } from '../utils/interaction-helpers.js';
+import { storeMedia, deliverStored, deliverReply, finishCommand } from './shared/deliver.js';
 import { fetchUrlInput } from './shared/url-input.js';
 import { dispatchMediaJob } from '../jobs/dispatch.js';
 import { fromPath, writeAtomic } from '../utils/media-file.js';
@@ -219,10 +216,7 @@ async function renderGif(ctx, { attachment, attachmentType, adminUser, file, opt
 
   await writeAtomic(gifPath, async out => {
     if (attachmentType === 'video') {
-      const seconds = await getVideoMetadata(inputPath).then(
-        metadata => metadata.format.duration,
-        () => null
-      );
+      const seconds = (await getVideoMetadata(inputPath)).format.duration;
       if (seconds > MAX_GIF_DURATION && !adminUser) {
         throw new ValidationError(
           `video is too long (${Math.ceil(seconds)}s). maximum duration: ${MAX_GIF_DURATION}s`
@@ -298,7 +292,7 @@ async function processConversion(
           message: 'URL already converted, returning cached result',
           metadata: { originalUrl, cachedUrl: cachedRow.file_url },
         });
-        await safeInteractionEditReply(interaction, { content: cachedRow.file_url });
+        await deliverReply(interaction, { content: cachedRow.file_url });
         return finishCommand('convert', ctx, 0);
       }
 

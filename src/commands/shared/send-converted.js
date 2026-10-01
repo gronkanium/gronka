@@ -2,7 +2,7 @@ import { AttachmentBuilder } from 'discord.js';
 import { r2Config } from '../../utils/config.js';
 import { ValidationError } from '../../utils/errors.js';
 import { hashUrl } from '../../utils/hashing.js';
-import { safeInteractionEditReply } from '../../utils/interaction-helpers.js';
+import { deliverReply } from './deliver.js';
 import {
   assertR2Capacity,
   uploadToR2,
@@ -21,7 +21,7 @@ export async function sendConvertedFile(interaction, ctx, { file, format, baseNa
   const filename = `${baseName}.${format}`;
 
   if (fitsDiscordAttachment(file.size, discordAttachmentLimit)) {
-    await safeInteractionEditReply(interaction, {
+    await deliverReply(interaction, {
       files: [new AttachmentBuilder(file.path, { name: filename })],
     });
     return;
@@ -51,7 +51,7 @@ export async function sendConvertedFile(interaction, ctx, { file, format, baseNa
   });
   await trackR2UploadIfApplicable(urlHash, url, adminUser);
   const ttlHours = await resolveTtlHoursForSize(file.size);
-  await safeInteractionEditReply(interaction, {
+  await deliverReply(interaction, {
     content: formatR2UrlWithDisclaimer(url, r2Config, adminUser, ttlHours),
   });
 }

@@ -8,6 +8,7 @@ import {
   tempPath,
   withExtension,
   withJobDir,
+  writeAtomic,
   writeStream,
 } from '../../src/utils/media-file.js';
 
@@ -71,4 +72,23 @@ describe('media-file', () => {
     assert.ok(named.path.endsWith('.mp4'));
     await fs.access(named.path);
   });
+});
+
+describe('writeAtomic', () => {
+  test('a failed write leaves neither the final file nor its part file', () =>
+    withJobDir(async () => {
+      const dir = await tempPath();
+      await fs.mkdir(dir);
+      const final = `${dir}/a.gif`;
+      await assert.rejects(
+        writeAtomic(final, async part => {
+          await fs.writeFile(part, 'half');
+          throw new Error('killed');
+        })
+      );
+      assert.deepEqual(await fs.readdir(dir), []);
+      await writeAtomic(final, part => fs.writeFile(part, 'whole'));
+      assert.deepEqual(await fs.readdir(dir), ['a.gif']);
+      assert.equal(await fs.readFile(final, 'utf8'), 'whole');
+    }));
 });

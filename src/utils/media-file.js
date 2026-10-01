@@ -43,6 +43,18 @@ export async function withJobDir(fn) {
   }
 }
 
+// Writes beside the final path, then renames, so a killed write never leaves a truncated file there.
+export async function writeAtomic(finalPath, write) {
+  const part = finalPath.replace(/(\.\w+)?$/, `.${randomBytes(6).toString('hex')}.part$1`);
+  try {
+    await write(part);
+    await fsp.rename(part, finalPath);
+  } catch (error) {
+    await fsp.rm(part, { force: true });
+    throw error;
+  }
+}
+
 // Outside withJobDir (tests, scripts) a file gets its own dir, left for sweepJobDirs.
 export async function tempPath(ext = '') {
   const dir = scope.getStore()?.dir ?? (await newJobDir());

@@ -45,7 +45,7 @@ import {
 import { storeMedia, deliverStored, finishCommand } from './shared/deliver.js';
 import { fetchUrlInput } from './shared/url-input.js';
 import { dispatchMediaJob } from '../jobs/dispatch.js';
-import { fromPath } from '../utils/media-file.js';
+import { fromPath, writeAtomic } from '../utils/media-file.js';
 
 const logger = createLogger('convert');
 
@@ -118,12 +118,12 @@ const DEFAULT_MAX_GIF_FPS = 20;
 function resolveVideoConversionOptions(options, probed) {
   const defaultWidth = Math.min(probed.width, DEFAULT_MAX_GIF_WIDTH);
   if (options.width == null && probed.width > DEFAULT_MAX_GIF_WIDTH) {
-    logger.info(`Clamping default width from ${probed.width}px to ${defaultWidth}px`);
+    logger.debug(`Clamping default width from ${probed.width}px to ${defaultWidth}px`);
   }
 
   const defaultFps = Math.min(probed.fps, DEFAULT_MAX_GIF_FPS);
   if (options.fps == null && probed.fps > DEFAULT_MAX_GIF_FPS) {
-    logger.info(`Clamping default FPS from ${probed.fps.toFixed(1)}fps to ${defaultFps}fps`);
+    logger.debug(`Clamping default FPS from ${probed.fps.toFixed(1)}fps to ${defaultFps}fps`);
   }
 
   return {
@@ -217,44 +217,46 @@ async function renderGif(ctx, { attachment, attachmentType, adminUser, file, opt
     metadata: { inputFile: attachment.name, inputSize: attachment.size },
   });
 
-  if (attachmentType === 'video') {
-    const seconds = await getVideoMetadata(inputPath).then(
-      metadata => metadata.format.duration,
-      () => null
-    );
-    if (seconds > MAX_GIF_DURATION && !adminUser) {
-      throw new ValidationError(
-        `video is too long (${Math.ceil(seconds)}s). maximum duration: ${MAX_GIF_DURATION}s`
+  await writeAtomic(gifPath, async out => {
+    if (attachmentType === 'video') {
+      const seconds = await getVideoMetadata(inputPath).then(
+        metadata => metadata.format.duration,
+        () => null
       );
-    }
-    const conversionOptions = resolveVideoConversionOptions(
-      options,
-      await probeMediaInfo(inputPath, 480)
-    );
-    const { startTime, duration } = conversionOptions;
-    if (seconds && startTime !== null && duration !== null && startTime + duration > seconds) {
-      throw new ValidationError(
-        `requested timeframe (${startTime}s to ${(startTime + duration).toFixed(1)}s) exceeds video length (${seconds.toFixed(1)}s).`
+      if (seconds > MAX_GIF_DURATION && !adminUser) {
+        throw new ValidationError(
+          `video is too long (${Math.ceil(seconds)}s). maximum duration: ${MAX_GIF_DURATION}s`
+        );
+      }
+      const conversionOptions = resolveVideoConversionOptions(
+        options,
+        await probeMediaInfo(inputPath, 480)
       );
-    }
-    await convertToGif(inputPath, gifPath, conversionOptions);
-  } else if (attachment.contentType === 'image/gif' || ext === '.gif') {
-    if (options.width) {
-      await convertImageToGif(inputPath, gifPath, {
-        width: options.width,
-      });
+      const { startTime, duration } = conversionOptions;
+      if (seconds && startTime !== null && duration !== null && startTime + duration > seconds) {
+        throw new ValidationError(
+          `requested timeframe (${startTime}s to ${(startTime + duration).toFixed(1)}s) exceeds video length (${seconds.toFixed(1)}s).`
+        );
+      }
+      await convertToGif(inputPath, out, conversionOptions);
+    } else if (attachment.contentType === 'image/gif' || ext === '.gif') {
+      if (options.width) {
+        await convertImageToGif(inputPath, out, {
+          width: options.width,
+        });
+      } else {
+        await fs.copyFile(inputPath, out);
+      }
+    } else if (isAnimatedWebp(file.head)) {
+      // ffmpeg can't demux animated webp (e.g. TikTok stickers), so ImageMagick converts it.
+      await convertAnimatedWebpToGif(inputPath, out, { width: options.width });
     } else {
-      await fs.copyFile(inputPath, gifPath);
+      const { width } = await probeMediaInfo(inputPath, 720);
+      await convertImageToGif(inputPath, out, {
+        width: options.width ?? width,
+      });
     }
-  } else if (isAnimatedWebp(file.head)) {
-    // ffmpeg can't demux animated webp (e.g. TikTok stickers), so ImageMagick converts it.
-    await convertAnimatedWebpToGif(inputPath, gifPath, { width: options.width });
-  } else {
-    const { width } = await probeMediaInfo(inputPath, 720);
-    await convertImageToGif(inputPath, gifPath, {
-      width: options.width ?? width,
-    });
-  }
+  });
   logOperationStep(operationId, 'conversion_complete', 'success', {
     message: `${attachmentType} converted to GIF`,
   });
@@ -523,7 +525,7 @@ export async function handleConvertCommand(interaction) {
   const userId = interaction.user.id;
   const adminUser = isAdmin(userId);
   const commandSource = commandSourceOf(interaction);
-  logger.info(
+  logger.debug(
     `User ${userId} initiated conversion via slash command${adminUser ? ' [ADMIN]' : ''}`
   );
   const guard = { type: 'convert', action: 'converting another video or image' };

@@ -7,7 +7,7 @@ import { ValidationError } from './errors.js';
 import { botConfig, isOwnCdnUrl, r2Config } from './config.js';
 import { downloadGifFromR2, isR2Configured, mediaExistsInR2 } from './r2-storage.js';
 import { hashPartsHex } from './hashing.js';
-import { fromPath } from './media-file.js';
+import { fromPath, writeAtomic } from './media-file.js';
 const logger = createLogger('gif-optimizer');
 
 export function isGifFile(filename, contentType) {
@@ -62,7 +62,9 @@ export async function optimizeCached(gif, lossy = null) {
   const stored = await loadStoredGif(hash);
   if (stored) return { hash, file: stored };
   const outputPath = mediaPath('gif', hash, '.gif', botConfig.gifStoragePath);
-  await optimizeGif(gif.path, outputPath, lossy === null ? {} : { lossy });
+  await writeAtomic(outputPath, part =>
+    optimizeGif(gif.path, part, lossy === null ? {} : { lossy })
+  );
   return {
     hash,
     file: await fromPath(outputPath, { contentType: 'image/gif', filename: `${hash}.gif` }),
@@ -98,7 +100,7 @@ async function optimizeGifImpl(inputPath, outputPath, options = {}) {
     throw new ValidationError('optimize level must be between 1 and 3');
   }
 
-  logger.info(
+  logger.debug(
     `Optimizing GIF: ${inputPath} -> ${outputPath} (lossy: ${lossy}, optimize: ${optimizeLevel})`
   );
 
@@ -151,7 +153,7 @@ async function optimizeGifImpl(inputPath, outputPath, options = {}) {
       throw new ValidationError('Optimized GIF file was not created');
     }
 
-    logger.info(`GIF optimization completed: ${outputPath}`);
+    logger.debug(`GIF optimization completed: ${outputPath}`);
   } catch (error) {
     if (error instanceof ValidationError) {
       throw error;

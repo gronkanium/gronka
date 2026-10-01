@@ -15,7 +15,10 @@ export const FFMPEG_INPUT_GUARD = [
 export const GIF_PALETTEGEN = 'palettegen=max_colors=256:reserve_transparent=0:stats_mode=diff';
 export const GIF_PALETTEUSE = 'paletteuse=dither=floyd_steinberg:diff_mode=rectangle';
 
-export function runFfmpeg(args, { signal } = {}) {
+// A real encode finishes in a couple of minutes; a longer run is a stalled ffmpeg.
+export const FFMPEG_TIMEOUT_MS = 300000;
+
+export function runFfmpeg(args, { signal = AbortSignal.timeout(FFMPEG_TIMEOUT_MS) } = {}) {
   return new Promise((resolve, reject) => {
     const child = spawn('ffmpeg', args, {
       signal,
@@ -85,13 +88,13 @@ export function isAnimatedWebp(buffer) {
   return (buffer[20] & 0x02) !== 0;
 }
 
-export async function checkFFmpegInstalled() {
-  try {
-    await execAsync('ffmpeg -version');
-    return true;
-  } catch {
-    return false;
-  }
+let ffmpegCheck;
+export function checkFFmpegInstalled() {
+  ffmpegCheck ??= execAsync('ffmpeg -version').then(
+    () => true,
+    () => false
+  );
+  return ffmpegCheck;
 }
 
 // A stream tagged matrix_coefficients=3 ("reserved", an encoder bug, but common in the wild)

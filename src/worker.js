@@ -154,7 +154,9 @@ async function shutdown(signal) {
     Promise.allSettled([...running.values()]),
     new Promise(resolve => setTimeout(resolve, DRAIN_MS)),
   ]);
-  const released = await queue.releaseJobs([...running.keys()]).catch(() => 0);
+  const released = await queue
+    .releaseJobs([...running.keys()])
+    .catch(warn('Could not hand jobs back to the queue'));
   if (released) logger.info(`Handed ${released} unfinished job(s) back to the queue`);
   await flushAllOperationLogs();
   await queue.clearPresence().catch(warn('Could not clear presence'));

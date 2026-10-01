@@ -18,11 +18,11 @@ import { handleModalSubmit } from './handlers/modals.js';
 import { handleMangaInteraction } from './commands/manga.js';
 import { handleMegaKeyInteraction } from './commands/mega-key.js';
 import { handlePrefixMessage } from './handlers/prefix-commands.js';
-import { cleanupStuckOperations } from './utils/operations-tracker.js';
+import { cleanupStuckOperations, flushAllOperationLogs } from './utils/operations-tracker.js';
 import { initializeR2UsageCache, formatFileSize } from './utils/storage.js';
 import { r2Config } from './utils/config.js';
 import { startCleanupJob, stopCleanupJob } from './utils/r2-cleanup.js';
-import { initDatabase } from './utils/database.js';
+import { initDatabase, closeDatabase } from './utils/database.js';
 import {
   VALID_PRESENCE_STATUSES,
   DEFAULT_PRESENCE_STATUS,
@@ -454,24 +454,22 @@ async function startBot() {
 
 startBot();
 
-function gracefulShutdown(signal) {
+let shuttingDown = false;
+
+async function gracefulShutdown(signal) {
+  if (shuttingDown) return;
+  shuttingDown = true;
   logger.info(`${signal} received, shutting down gracefully...`);
-  if (cleanupJobIntervalId) {
-    stopCleanupJob(cleanupJobIntervalId);
-  }
-  if (retentionJobIntervalId) {
-    stopRetentionJob(retentionJobIntervalId);
-  }
-  clearPresence().catch(error => logger.warn(`Could not clear presence: ${error.message}`));
-  if (httpServer) {
-    httpServer.close(() => {
-      logger.info('HTTP server closed');
-    });
-  }
-  // Give servers time to close before exiting
-  setTimeout(() => {
-    process.exit(0);
-  }, 1000);
+  setTimeout(() => process.exit(1), 8000).unref();
+  const warn = label => error => logger.warn(`${label}: ${error.message}`);
+  if (cleanupJobIntervalId) stopCleanupJob(cleanupJobIntervalId);
+  if (retentionJobIntervalId) stopRetentionJob(retentionJobIntervalId);
+  await clearPresence().catch(warn('Could not clear presence'));
+  if (httpServer) httpServer.close();
+  await flushAllOperationLogs().catch(warn('Could not flush operation logs'));
+  await client.destroy();
+  await closeDatabase().catch(warn('Could not close database'));
+  process.exit(0);
 }
 
 process.on('SIGTERM', () => gracefulShutdown('SIGTERM'));
@@ -480,5 +478,6 @@ process.on('unhandledRejection', error => {
   logger.error('Unhandled promise rejection:', error);
 });
 process.on('uncaughtException', error => {
-  logger.error('Uncaught exception:', error);
+  logger.error('Uncaught exception, exiting:', error);
+  process.exit(1);
 });

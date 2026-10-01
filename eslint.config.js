@@ -50,6 +50,7 @@ export default [
         TextEncoder: 'readonly',
         URLSearchParams: 'readonly',
         AbortSignal: 'readonly',
+        AbortController: 'readonly',
       },
     },
     rules: {

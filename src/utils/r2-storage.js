@@ -14,7 +14,7 @@ import { createLogger } from './logger.js';
 import { getLiveBytes } from './database/temporary-uploads-pg.js';
 import { getSetting } from './database/settings-pg.js';
 import { NetworkError, ValidationError } from './errors.js';
-import { writeStream } from './media-file.js';
+import { jobSignal, writeStream } from './media-file.js';
 
 const logger = createLogger('r2-storage');
 
@@ -124,16 +124,24 @@ export async function uploadToR2(file, key, contentType, config, metadata = {}, 
       },
     });
 
-    let budgetTimer;
+    // The upload stops at its time budget or when the job is cancelled, whichever comes first.
+    const signal = jobSignal(AbortSignal.timeout(uploadBudgetMs(file.size)));
+    let stop;
     const result = await Promise.race([
       upload.done(),
       new Promise((_, reject) => {
-        budgetTimer = setTimeout(() => {
+        stop = () => {
           upload.abort().catch(() => {});
-          reject(new NetworkError('could not upload this file right now, try again shortly.'));
-        }, uploadBudgetMs(file.size));
+          reject(
+            signal.reason?.name === 'TimeoutError'
+              ? new NetworkError('could not upload this file right now, try again shortly.')
+              : signal.reason
+          );
+        };
+        if (signal.aborted) stop();
+        else signal.addEventListener('abort', stop, { once: true });
       }),
-    ]).finally(() => clearTimeout(budgetTimer));
+    ]).finally(() => signal.removeEventListener('abort', stop));
 
     if (result && result.ETag) {
       logger.debug(`Upload completed: ETag=${result.ETag}, Location=${result.Location || 'N/A'}`);

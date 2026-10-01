@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
 import fs from 'node:fs/promises';
 import { Readable } from 'node:stream';
-import { describe, test } from 'bun:test';
+import { describe, expect, test } from 'bun:test';
 import {
   fromPath,
   tempPath,
@@ -91,4 +91,31 @@ describe('writeAtomic', () => {
       assert.deepEqual(await fs.readdir(dir), ['a.gif']);
       assert.equal(await fs.readFile(final, 'utf8'), 'whole');
     }));
+});
+
+describe('job cancellation', () => {
+  test('cancelling a job aborts its http requests and child processes', async () => {
+    const { default: axios } = await import('axios');
+    const { runFfmpeg } = await import('../../src/utils/video-processor/utils.js');
+    const server = Bun.serve({ port: 0, fetch: () => new Promise(() => {}) });
+    const cancel = new AbortController();
+    try {
+      const started = Date.now();
+      const results = withJobDir(
+        () =>
+          Promise.allSettled([
+            axios.get(`http://127.0.0.1:${server.port}/`),
+            runFfmpeg(['-re', '-f', 'lavfi', '-i', 'anullsrc', '-t', '60', '-f', 'null', '-']),
+          ]),
+        { signal: cancel.signal }
+      );
+      setTimeout(() => cancel.abort(), 200);
+      const [http, ffmpeg] = await results;
+      expect(http.status).toBe('rejected');
+      expect(ffmpeg.status).toBe('rejected');
+      expect(Date.now() - started).toBeLessThan(5000);
+    } finally {
+      server.stop(true);
+    }
+  });
 });

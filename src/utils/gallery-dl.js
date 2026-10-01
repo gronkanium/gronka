@@ -4,7 +4,7 @@ import { spawn } from 'child_process';
 import { createLogger } from './logger.js';
 import { NetworkError, ValidationError } from './errors.js';
 import { writeZip } from './archive.js';
-import { fromPath, tempDir } from './media-file.js';
+import { fromPath, tempDir, jobSignal } from './media-file.js';
 import { mapLimit, ITEM_FANOUT } from './map-limit.js';
 import { hostOf, normalizeHost } from './url-host.js';
 
@@ -63,7 +63,7 @@ function runGalleryDl(url, outputDir, timeout = 300000) {
         outputDir,
         url,
       ],
-      { stdio: ['ignore', 'pipe', 'pipe'] }
+      { signal: jobSignal(), stdio: ['ignore', 'pipe', 'pipe'] }
     );
     let stderr = '';
     const timeoutId = setTimeout(() => {
@@ -148,7 +148,7 @@ function runGalleryDlJson(url, timeout = 300000) {
     const child = spawn(
       'gallery-dl',
       ['--config-ignore', '--no-input', '--quiet', '--resolve-json', '--dump-json', url],
-      { stdio: ['ignore', 'pipe', 'pipe'] }
+      { signal: jobSignal(), stdio: ['ignore', 'pipe', 'pipe'] }
     );
     let stdout = '';
     let stderr = '';

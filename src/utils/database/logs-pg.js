@@ -107,17 +107,18 @@ export async function getLogsCount(options = {}) {
 
 export async function getLogFacets(options = {}, limit = 12) {
   const sql = await connection();
-  const facets = {};
-  for (const facet of FACETS) {
-    const { where, params, p } = buildWhere(options, facet);
-    const column = LOG_FIELDS.includes(facet) ? `(metadata::jsonb ->> ${p(facet)})` : facet;
-    const rows = await sql.unsafe(
-      `SELECT ${column} AS value, COUNT(*) AS count FROM logs${where} GROUP BY 1 HAVING ${column} IS NOT NULL ORDER BY 2 DESC LIMIT ${p(limit)}`,
-      params
-    );
-    facets[facet] = rows.map(r => ({ value: r.value, count: Number(r.count) }));
-  }
-  return facets;
+  const entries = await Promise.all(
+    FACETS.map(async facet => {
+      const { where, params, p } = buildWhere(options, facet);
+      const column = LOG_FIELDS.includes(facet) ? `(metadata::jsonb ->> ${p(facet)})` : facet;
+      const rows = await sql.unsafe(
+        `SELECT ${column} AS value, COUNT(*) AS count FROM logs${where} GROUP BY 1 HAVING ${column} IS NOT NULL ORDER BY 2 DESC LIMIT ${p(limit)}`,
+        params
+      );
+      return [facet, rows.map(r => ({ value: r.value, count: Number(r.count) }))];
+    })
+  );
+  return Object.fromEntries(entries);
 }
 
 export async function getLogHistogram(options, buckets = 48) {
@@ -144,9 +145,12 @@ export async function getLogComponents() {
   return results.map(r => r.component);
 }
 
-// Newest log line whose message matches a (case-insensitive) regex, in ms, or null.
+// Newest warn/error log line whose message matches a (case-insensitive) regex, in ms, or null.
 export async function lastLogMatching(regex) {
   const sql = await connection();
-  const [row] = await sql`SELECT MAX(timestamp) AS at FROM logs WHERE message ~* ${regex.source}`;
+  const [row] = await sql`
+    SELECT MAX(timestamp) AS at FROM logs
+    WHERE level IN ('WARN', 'ERROR') AND message ~* ${regex.source}
+  `;
   return row?.at ? Number(row.at) : null;
 }

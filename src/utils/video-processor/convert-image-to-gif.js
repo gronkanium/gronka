@@ -1,8 +1,12 @@
-import ffmpeg from 'fluent-ffmpeg';
 import fs from 'fs/promises';
 import path from 'path';
 import { createLogger } from '../logger.js';
-import { validateNumericParameter, checkFFmpegInstalled, FFMPEG_INPUT_GUARD } from './utils.js';
+import {
+  validateNumericParameter,
+  checkFFmpegInstalled,
+  FFMPEG_INPUT_GUARD,
+  runFfmpeg,
+} from './utils.js';
 
 const logger = createLogger('convert-image-to-gif');
 
@@ -73,69 +77,54 @@ async function convertImageToGifImpl(inputPath, outputPath, options = {}) {
   const dither = qualityPresets[quality] || qualityPresets.medium;
   const paletteGen = palettePresets[quality] || palettePresets.medium;
 
-  return new Promise((resolve, reject) => {
-    // Create temporary palette file in temp directory (same directory as input)
-    const tempDir = path.dirname(inputPath);
-    const paletteFilename = path.basename(outputPath) + '.palette.png';
-    const palettePath = path.join(tempDir, paletteFilename);
+  const tempDir = path.dirname(inputPath);
+  const palettePath = path.join(tempDir, path.basename(outputPath) + '.palette.png');
 
-    // Two-pass conversion for better quality
-    // Pass 1: Generate palette
-    ffmpeg(inputPath)
-      .inputOptions(FFMPEG_INPUT_GUARD)
-      .videoFilters([`scale=${width}:-1:flags=lanczos`, paletteGen])
-      .outputOptions([
-        '-y', // Overwrite output file
-        '-update',
-        '1', // Update existing file (for single image output)
-        '-frames:v',
-        '1', // Write only 1 frame
-      ])
-      .output(palettePath)
-      .on('error', (err, stdout, stderr) => {
-        logger.error('FFmpeg pass 1 (palette) failed for image:', stderr);
-        reject(new Error(`Palette generation failed: ${err.message}`));
-      })
-      .on('end', () => {
-        // Pass 2: Apply palette and create GIF
-        // Use complex filter because we have two inputs (image + palette)
-        ffmpeg(inputPath)
-          .inputOptions(FFMPEG_INPUT_GUARD)
-          .input(palettePath)
-          .complexFilter([
-            `[0:v]scale=${width}:-1:flags=lanczos[v]`,
-            `[v][1:v]paletteuse=dither=${dither}`,
-          ])
-          .outputOptions([
-            '-loop',
-            '0', // Infinite loop (for static GIF, this just means it can loop)
-            '-gifflags',
-            '+transdiff', // Better compression for GIFs
-            '-y', // Overwrite output file
-          ])
-          .output(outputPath)
-          .on('error', async (err, stdout, stderr) => {
-            logger.error('FFmpeg pass 2 (conversion) failed for image:', stderr);
-            // Clean up palette file on error
-            try {
-              await fs.unlink(palettePath);
-            } catch {
-              // Ignore cleanup errors
-            }
-            reject(new Error(`GIF conversion failed: ${err.message}`));
-          })
-          .on('end', async () => {
-            // Clean up palette file
-            try {
-              await fs.unlink(palettePath);
-            } catch (error) {
-              logger.warn('Failed to delete palette file:', error.message);
-            }
-            logger.debug(`Image to GIF conversion completed: ${outputPath}`);
-            resolve();
-          })
-          .run();
-      })
-      .run();
-  });
+  try {
+    await runFfmpeg([
+      ...FFMPEG_INPUT_GUARD,
+      '-i',
+      inputPath,
+      '-vf',
+      `scale=${width}:-1:flags=lanczos,${paletteGen}`,
+      '-y',
+      '-update',
+      '1',
+      '-frames:v',
+      '1',
+      palettePath,
+    ]);
+  } catch (err) {
+    logger.error('FFmpeg pass 1 (palette) failed for image:', err.stderr);
+    throw new Error(`Palette generation failed: ${err.message}`, { cause: err });
+  }
+
+  try {
+    await runFfmpeg([
+      ...FFMPEG_INPUT_GUARD,
+      '-i',
+      inputPath,
+      '-i',
+      palettePath,
+      '-filter_complex',
+      `[0:v]scale=${width}:-1:flags=lanczos[v];[v][1:v]paletteuse=dither=${dither}`,
+      '-loop',
+      '0',
+      '-gifflags',
+      '+transdiff',
+      '-y',
+      outputPath,
+    ]);
+  } catch (err) {
+    logger.error('FFmpeg pass 2 (conversion) failed for image:', err.stderr);
+    await fs.unlink(palettePath).catch(() => {});
+    throw new Error(`GIF conversion failed: ${err.message}`, { cause: err });
+  }
+
+  try {
+    await fs.unlink(palettePath);
+  } catch (error) {
+    logger.warn('Failed to delete palette file:', error.message);
+  }
+  logger.debug(`Image to GIF conversion completed: ${outputPath}`);
 }

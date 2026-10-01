@@ -1,4 +1,3 @@
-import ffmpeg from 'fluent-ffmpeg';
 import fs from 'fs/promises';
 import path from 'path';
 import { createLogger } from '../logger.js';
@@ -7,6 +6,7 @@ import {
   checkFFmpegInstalled,
   colorspaceRepairInputOptions,
   FFMPEG_INPUT_GUARD,
+  runFfmpeg,
 } from './utils.js';
 import { getVideoMetadata } from './metadata.js';
 
@@ -109,108 +109,71 @@ async function convertToGifImpl(inputPath, outputPath, options = {}) {
     logger.warn(`Could not probe colorspace, continuing unrepaired: ${error.message}`);
   }
 
-  return new Promise((resolve, reject) => {
-    // Create temporary palette file in temp directory (same directory as input)
-    const tempDir = path.dirname(inputPath);
-    const paletteFilename = path.basename(outputPath) + '.palette.png';
-    const palettePath = path.join(tempDir, paletteFilename);
+  const palettePath = path.join(
+    path.dirname(inputPath),
+    path.basename(outputPath) + '.palette.png'
+  );
+  const cleanupPalette = () => fs.unlink(palettePath).catch(() => {});
 
-    // A real encode finishes in at most a couple of minutes; a longer run means a
-    // stalled ffmpeg (an input it opens but never drains). Bound the whole two-pass
-    // run so it fails cleanly instead of hanging until the stuck-operation reaper.
-    // Input-agnostic: the deadline applies to every conversion.
-    const encodeTimeoutMs = 300000; // 5 minutes
-    let activeCommand = null;
-    let settled = false;
+  // A real encode finishes in a couple of minutes; a longer run is a stalled ffmpeg.
+  // One deadline covers both passes so it fails cleanly instead of hanging until the reaper.
+  const encodeTimeoutMs = 300000;
+  const signal = AbortSignal.timeout(encodeTimeoutMs);
+  const inputOptions = [
+    ...FFMPEG_INPUT_GUARD,
+    ...colorspaceRepair,
+    ...(startTime !== null ? ['-ss', `${startTime}`] : []),
+    ...(duration !== null ? ['-t', `${duration}`] : []),
+  ];
+  const timedOut = async () => {
+    logger.error(`FFmpeg GIF conversion timed out after ${encodeTimeoutMs / 1000}s, killing`);
+    await cleanupPalette();
+    return new Error(`GIF conversion timed out after ${encodeTimeoutMs / 1000}s`);
+  };
 
-    const cleanupPalette = async () => {
-      try {
-        await fs.unlink(palettePath);
-      } catch {
-        // Ignore cleanup errors (palette may not exist yet)
-      }
-    };
+  try {
+    await runFfmpeg(
+      [
+        ...inputOptions,
+        '-i',
+        inputPath,
+        '-vf',
+        `fps=${fps},scale=${width}:-1:flags=lanczos,${paletteGen}`,
+        '-y',
+        palettePath,
+      ],
+      { signal }
+    );
+  } catch (err) {
+    if (signal.aborted) throw await timedOut();
+    logger.error('FFmpeg pass 1 (palette) failed:', err.stderr);
+    throw new Error(`Palette generation failed: ${err.message}`, { cause: err });
+  }
 
-    const settle = (fn, value) => {
-      if (settled) return;
-      settled = true;
-      clearTimeout(timer);
-      fn(value);
-    };
+  try {
+    await runFfmpeg(
+      [
+        ...inputOptions,
+        '-i',
+        inputPath,
+        '-i',
+        palettePath,
+        '-filter_complex',
+        `[0:v]fps=${fps},scale=${width}:-1:flags=lanczos[v];[v][1:v]paletteuse=dither=${dither}`,
+        '-loop',
+        '0',
+        '-y',
+        outputPath,
+      ],
+      { signal }
+    );
+  } catch (err) {
+    if (signal.aborted) throw await timedOut();
+    logger.error('FFmpeg pass 2 (conversion) failed:', err.stderr);
+    await cleanupPalette();
+    throw new Error(`GIF conversion failed: ${err.message}`, { cause: err });
+  }
 
-    const timer = setTimeout(() => {
-      if (settled) return;
-      settled = true;
-      logger.error(`FFmpeg GIF conversion timed out after ${encodeTimeoutMs / 1000}s, killing`);
-      if (activeCommand) {
-        try {
-          activeCommand.kill('SIGKILL');
-        } catch {
-          // Ignore kill errors
-        }
-      }
-      cleanupPalette().finally(() =>
-        reject(new Error(`GIF conversion timed out after ${encodeTimeoutMs / 1000}s`))
-      );
-    }, encodeTimeoutMs);
-
-    // Two-pass conversion for better quality
-    // Pass 1: Generate palette
-    activeCommand = ffmpeg(inputPath)
-      .inputOptions(
-        [
-          ...FFMPEG_INPUT_GUARD,
-          ...colorspaceRepair,
-          startTime !== null ? `-ss ${startTime}` : null,
-          duration !== null ? `-t ${duration}` : null,
-        ].filter(Boolean)
-      )
-      .videoFilters([`fps=${fps}`, `scale=${width}:-1:flags=lanczos`, paletteGen])
-      .outputOptions(['-y']) // Overwrite output file
-      .output(palettePath)
-      .on('error', (err, stdout, stderr) => {
-        if (settled) return; // already timed out
-        logger.error('FFmpeg pass 1 (palette) failed:', stderr);
-        settle(reject, new Error(`Palette generation failed: ${err.message}`));
-      })
-      .on('end', () => {
-        if (settled) return; // timed out during pass 1
-        // Pass 2: Apply palette and create GIF
-        // Use complex filter because we have two inputs (video + palette)
-        activeCommand = ffmpeg(inputPath)
-          .inputOptions(
-            [
-              ...FFMPEG_INPUT_GUARD,
-              ...colorspaceRepair,
-              startTime !== null ? `-ss ${startTime}` : null,
-              duration !== null ? `-t ${duration}` : null,
-            ].filter(Boolean)
-          )
-          .input(palettePath)
-          .complexFilter([
-            `[0:v]fps=${fps},scale=${width}:-1:flags=lanczos[v]`,
-            `[v][1:v]paletteuse=dither=${dither}`,
-          ])
-          .outputOptions([
-            '-loop',
-            '0', // Infinite loop
-            '-y', // Overwrite output file
-          ])
-          .output(outputPath)
-          .on('error', async (err, stdout, stderr) => {
-            if (settled) return; // already timed out
-            logger.error('FFmpeg pass 2 (conversion) failed:', stderr);
-            await cleanupPalette();
-            settle(reject, new Error(`GIF conversion failed: ${err.message}`));
-          })
-          .on('end', async () => {
-            if (settled) return; // timed out during pass 2
-            await cleanupPalette();
-            logger.debug(`Video to GIF conversion completed: ${outputPath}`);
-            settle(resolve);
-          })
-          .run();
-      })
-      .run();
-  });
+  await cleanupPalette();
+  logger.debug(`Video to GIF conversion completed: ${outputPath}`);
 }

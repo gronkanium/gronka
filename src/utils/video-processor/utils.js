@@ -1,5 +1,5 @@
 import { promisify } from 'util';
-import { exec } from 'child_process';
+import { exec, spawn } from 'child_process';
 
 const execAsync = promisify(exec);
 
@@ -10,6 +10,26 @@ export const FFMPEG_INPUT_GUARD = [
   '-format_whitelist',
   'mov,matroska,avi,flv,mpegts,gif,apng,image2,png_pipe,jpeg_pipe,webp_pipe,bmp_pipe,gif_pipe',
 ];
+
+export function runFfmpeg(args, { signal } = {}) {
+  return new Promise((resolve, reject) => {
+    const child = spawn('ffmpeg', args, {
+      signal,
+      killSignal: 'SIGKILL',
+      stdio: ['ignore', 'ignore', 'pipe'],
+    });
+    let stderr = '';
+    child.stderr.on('data', d => {
+      stderr = (stderr + d).slice(-65536);
+    });
+    child.on('error', reject);
+    child.on('close', code => {
+      if (code === 0) return resolve();
+      const lastLine = stderr.trim().split('\n').pop();
+      reject(Object.assign(new Error(`ffmpeg exited with code ${code}: ${lastLine}`), { stderr }));
+    });
+  });
+}
 
 /**
  * Validate numeric parameter to prevent command injection
@@ -90,5 +110,5 @@ export function colorspaceRepairInputOptions(metadata) {
 
   const bsf = METADATA_BSF_BY_CODEC[video.codec_name];
   // No metadata bsf for this codec: leave it alone rather than guess. It fails as it does today.
-  return bsf ? [`-bsf:v ${bsf}=matrix_coefficients=2`] : [];
+  return bsf ? ['-bsf:v', `${bsf}=matrix_coefficients=2`] : [];
 }

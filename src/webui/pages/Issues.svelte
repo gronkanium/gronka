@@ -1,4 +1,5 @@
 <script>
+  import { poll } from '../utils/poll.js';
   import { createCopier } from '../utils/copier.svelte.js';
   import { getJson, getJsonOrNull } from '../utils/api.js';
   import { tick, untrack } from 'svelte';
@@ -137,7 +138,7 @@
   }
   $effect(() => {
     load();
-    const t = setInterval(load, 60_000);
+    const stopPoll = poll(load, 60_000);
     // A new failure alert refreshes the list (debounced: alerts arrive in bursts).
     let soon;
     const unsub = liveAlerts.subscribe(list => {
@@ -146,7 +147,7 @@
       soon = setTimeout(load, 2000);
     });
     return () => {
-      clearInterval(t);
+      stopPoll();
       clearTimeout(soon);
       clearTimeout(toastTimer);
       unsub();
@@ -164,13 +165,7 @@
     resolved: withState.filter(g => g.state === 'resolved'),
   });
 
-  // Per group and period: the alerts' timestamps and distinct users, fetched on demand.
-  let cache = $state.raw({});
-  const inflight = new Set();
-  const queue = [];
-  let active = 0;
-  const entry = (g, p) => (g ? cache[`${g.key}|${p}`] : undefined);
-  const usersOf = g => entry(g, '7d')?.users;
+  const usersOf = g => g?.users;
 
   const alertsFor = (g, extra = '') =>
     Promise.all(
@@ -181,54 +176,14 @@
       )
     );
 
-  function want(g, p) {
-    const id = `${g.key}|${p}`;
-    const had = cache[id];
-    if (inflight.has(id) || (had && had.lastSeen >= g.lastSeen)) return;
-    inflight.add(id);
-    queue.push(async () => {
-      const span = p === '24h' ? DAY : 7 * DAY;
-      const parts = await alertsFor(g, `&startTime=${Date.now() - span}`);
-      inflight.delete(id);
-      const failed = parts.includes(null);
-      if (failed && had) return;
-      const list = parts.flatMap(x => x ?? []);
-      cache = {
-        ...cache,
-        [id]: {
-          lastSeen: g.lastSeen,
-          times: list.map(a => a.timestamp),
-          users: new Set(list.map(a => a.user_id).filter(Boolean)).size,
-          truncated: parts.some(x => x && x.length >= LIMIT),
-        },
-      };
-    });
-    pump();
-  }
-  function pump() {
-    while (active < 4 && queue.length) {
-      active++;
-      queue
-        .shift()()
-        .finally(() => {
-          active--;
-          pump();
-        });
-    }
-  }
-
   const bucketLabel = (at, unit) =>
     unit === 'day'
       ? new Date(at).toLocaleDateString([], { weekday: 'short', month: 'short', day: 'numeric' })
       : formatDateTime(at);
 
   function trendOf(g) {
-    const week = entry(g, '7d');
-    // Hourly buckets come from the 7-day fetch unless it hit the row limit.
-    const src = period === '24h' && week?.truncated ? entry(g, '24h') : week;
-    if (!src) return null;
     const { unit, n } = PERIODS[period];
-    const b = buckets(src.times, unit, n, now);
+    const b = buckets(g.times, unit, n, now);
     return {
       values: b.map(x => x.n),
       tips: b.map(x => `${bucketLabel(x.at, unit)} · ${x.n} event${x.n === 1 ? '' : 's'}`),
@@ -276,14 +231,6 @@
   const selected = $derived(
     withState.find(g => g.key === selectedKey) ?? (wide ? (visible[0] ?? null) : null)
   );
-
-  $effect(() => {
-    for (const g of visible) {
-      want(g, '7d');
-      if (period === '24h' && entry(g, '7d')?.truncated) want(g, '24h');
-    }
-    if (selected) want(selected, '7d');
-  });
 
   // Columns give way as the list narrows, so the issue title keeps room to breathe.
   const show = $derived({
@@ -370,7 +317,7 @@
     return () => (stale = true);
   });
 
-  const week = $derived(entry(selected, '7d'));
+  const week = $derived(selected);
   const hourly = $derived(week ? buckets(week.times, 'hour', 168, now) : []);
   const last24 = $derived(week ? week.times.filter(t => t > now - DAY).length : null);
   const firstSeen = $derived(occ.length ? occ.at(-1).timestamp : null);
@@ -775,9 +722,6 @@
               padLeft={28}
               series={[{ key: 'n', label: 'events', color: 'var(--chart-1)' }]}
             />
-            {#if week.truncated}
-              <div class="note">Only the latest {LIMIT} events per variant are counted.</div>
-            {/if}
           {:else}
             <div class="skeleton chart-skel"></div>
           {/if}

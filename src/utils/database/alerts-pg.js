@@ -137,6 +137,8 @@ export async function getAlertSummary(options = {}) {
             COUNT(*)::int AS count,
             MAX(timestamp) AS last_seen,
             MIN(timestamp) AS first_seen,
+            ARRAY_AGG(timestamp) AS times,
+            ARRAY_REMOVE(ARRAY_AGG(DISTINCT user_id), NULL) AS user_ids,
             ARRAY_REMOVE(ARRAY_AGG(DISTINCT ${COMMAND_EXPR}), NULL) AS commands,
             ARRAY_REMOVE(ARRAY_AGG(DISTINCT (${ERROR_CLASS_EXPR})), NULL) AS classes
      FROM alerts ${clause} AND severity = 'error'
@@ -178,6 +180,8 @@ export async function getAlertSummary(options = {}) {
     classes: row.classes ?? [],
     lastSeen: Number(row.last_seen),
     firstSeen: Number(row.first_seen),
+    times: row.times.map(Number),
+    userIds: row.user_ids,
   }));
 
   return summary;

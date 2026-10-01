@@ -969,7 +969,7 @@ for more details, see the [[Test-Bot|test bot documentation]].
 
 ## local vs docker deployment variable handling
 
-there is an important difference in how environment variables are handled between local deployments (using `bun run bot:prod:webui`) and docker deployments (using `bun run docker:up`).
+there is an important difference in how environment variables are handled between local deployments (using `bun run bot:prod:webui`) and docker deployments (using `docker compose up -d`).
 
 ### local deployment (`bun run bot:prod:webui`)
 
@@ -991,9 +991,9 @@ bun run bot:test:webui    # uses TEST_* variables
 
 **example:** if you set `PROD_MAX_GIF_DURATION=60` in your `.env`, the bot will use 60 seconds when started with `bun run bot:prod:webui`.
 
-### docker deployment (`bun run docker:up`)
+### docker deployment (`docker compose up -d`)
 
-when you run `bun run docker:up`, it uses `docker-compose.yml` which:
+when you run `docker compose up -d`, it uses `docker-compose.yml` which:
 
 1. sets environment variables directly in the container
 2. **only supports `PROD_*` prefix for 4 variables:**
@@ -1060,7 +1060,7 @@ PROD_GIF_QUALITY=high
 PROD_R2_BUCKET_NAME=prod-bucket
 ```
 
-**docker deployment with `bun run docker:up`:**
+**docker deployment with `docker compose up -d`:**
 ```env
 PROD_DISCORD_TOKEN=prod_token           # supports PROD_ prefix
 PROD_CLIENT_ID=prod_client_id          # supports PROD_ prefix

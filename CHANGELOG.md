@@ -5,6 +5,22 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres (attempts) to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.4.0](https://github.com/gronkanium/gronka/compare/v2.3.0...v2.4.0) (2026-10-01)
+
+
+### Features
+
+* **webui:** blobatar avatars for user ids ([e8b545b](https://github.com/gronkanium/gronka/commit/e8b545b40716f5d589e8026132a1de03107a5466))
+* **webui:** edit upload lifetime tiers on a draggable chart ([867785e](https://github.com/gronkanium/gronka/commit/867785ec27673a2a00ebd5d234b8b2fff1c90d68))
+* **webui:** end the tier chart at the max download size ([37d2b27](https://github.com/gronkanium/gronka/commit/37d2b27d1402ab9ad9fae9b1b3cac66e2c30e06d))
+* **webui:** rework the users page into a scrolling list with a user preview ([7ff65cc](https://github.com/gronkanium/gronka/commit/7ff65cc6d588d228335ab2823fa1a431e66e14ee))
+* **webui:** show sources as tiles with 7-day requests and success rate ([aa1a32a](https://github.com/gronkanium/gronka/commit/aa1a32a79973dd5b47f780d438af697fb1b1b490))
+
+
+### Bug Fixes
+
+* **webui:** scroll the issues list inside its pane instead of the whole page ([b3acece](https://github.com/gronkanium/gronka/commit/b3acece94f93f4b4d7a5ba215bcdf281d6dec386))
+
 ## [2.3.0](https://github.com/gronkanium/gronka/compare/v2.2.0...v2.3.0) (2026-09-30)
 
 

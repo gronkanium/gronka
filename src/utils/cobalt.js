@@ -3,6 +3,7 @@ import { createLogger } from './logger.js';
 import { NetworkError, ValidationError } from './errors.js';
 import { fetchToFile, withExtension } from './media-file.js';
 import { detectFileType } from './storage.js';
+import { mapLimit, ITEM_FANOUT } from './map-limit.js';
 
 const logger = createLogger('cobalt');
 
@@ -528,12 +529,10 @@ async function downloadMediaFromPicker(pickerArray, isAdminUser = false, maxSize
     `Found ${mediaItems.length} media items in picker response (${mediaItems.filter(i => i.type === 'photo').length} photos, ${mediaItems.filter(i => i.type === 'video').length} videos)`
   );
 
-  const results = await Promise.all(
-    mediaItems.map((item, index) =>
-      item.type === 'photo'
-        ? downloadPhoto(item.url, index, isAdminUser, maxSize)
-        : downloadVideo(item.url, index, isAdminUser, maxSize)
-    )
+  const results = await mapLimit(mediaItems, ITEM_FANOUT, (item, index) =>
+    item.type === 'photo'
+      ? downloadPhoto(item.url, index, isAdminUser, maxSize)
+      : downloadVideo(item.url, index, isAdminUser, maxSize)
   );
   logger.debug(`Successfully downloaded ${results.length} media items from picker`);
 
@@ -742,10 +741,12 @@ export async function getRemoteContentLength(mediaUrl) {
         'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
         Range: 'bytes=0-0',
       },
-      responseType: 'arraybuffer',
+      responseType: 'stream',
       timeout: 10000,
       maxRedirects: 5,
     });
+    // Only the headers are needed; a host that ignores Range would otherwise send the whole file.
+    response.data?.destroy?.();
     // content-range: "bytes 0-0/12345678" - the total after the slash is the full size
     const contentRange = response.headers['content-range'] || '';
     const totalMatch = contentRange.match(/\/(\d+)$/);

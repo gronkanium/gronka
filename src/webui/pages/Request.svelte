@@ -1,5 +1,5 @@
 <script>
-  import { getJson, getJsonOrNull } from '../utils/api.js';
+  import { getJson, getJsonOrNull, sendJson } from '../utils/api.js';
   import { tick } from 'svelte';
   import {
     Check,
@@ -8,7 +8,6 @@
     Copy,
     SquareTerminal,
     Ban,
-    ExternalLink,
     ChevronRight,
     ChevronLeft,
     ChevronsDownUp,
@@ -21,16 +20,18 @@
   import { currentRoute, navigate } from '../utils/router.js';
   import {
     formatBytes,
-    formatDuration,
     formatRelativeTime,
     formatDateTime,
-    formatTime,
     hostOf,
     urlLabel,
     shortId,
   } from '../utils/format.js';
   import PageHeader from '../components/PageHeader.svelte';
   import Avatar from '../components/Avatar.svelte';
+  import CopyValue from '../components/CopyValue.svelte';
+  import SpanDrawer from '../components/SpanDrawer.svelte';
+  import { createCopier } from '../utils/copier.svelte.js';
+  import { buildTimeline, buildTree, highlight, fmtDur, plus, plusFine, pctOf } from '../trace.js';
 
   let op = $state(null);
   let trace = $state(null);
@@ -58,18 +59,18 @@
     }
     const start = op.timestamp;
     const [l, j, same, user] = await Promise.all([
-      getJson(
+      getJsonOrNull(
         `/api/logs?op=${encodeURIComponent(requestId)}&orderDesc=false&limit=500&startTime=${start - 60e3}&endTime=${start + 20 * 60e3}`
-      ).catch(() => null),
+      ),
       getJsonOrNull(`/api/system/jobs/${encodeURIComponent(requestId)}`),
       op.originalUrl
-        ? getJson(
+        ? getJsonOrNull(
             `/api/requests?urlPattern=${encodeURIComponent(op.originalUrl.split('?')[0])}&limit=1`
-          ).catch(() => null)
+          )
         : null,
-      getJson(
+      getJsonOrNull(
         `/api/requests?userId=${op.userId}&dateFrom=${Date.now() - 24 * 3600e3}&limit=500`
-      ).catch(() => null),
+      ),
     ]);
     logs = l?.logs ?? [];
     jobs = j?.jobs ?? [];
@@ -88,102 +89,8 @@
     if (id) load(id);
   });
 
-  const STEP_LABELS = {
-    pending: 'received',
-    running: 'started',
-    success: 'delivered',
-    error: 'failed',
-  };
-
-  // One timeline from the operation's status steps plus every log line stamped with this request.
-  const timeline = $derived.by(() => {
-    if (!op) return null;
-    const events = [
-      ...(trace?.logs ?? []).map(s => ({
-        at: s.timestamp,
-        label:
-          s.step === 'created'
-            ? `received /${op.type}`
-            : s.status === 'error'
-              ? `failed: ${s.message}`
-              : (STEP_LABELS[s.status] ?? s.message),
-        kind: s.status === 'error' ? 'err' : s.status === 'success' ? 'ok' : 'step',
-        group: 'bot',
-        component: 'operation',
-        source: 'trace',
-        raw: s,
-      })),
-      ...logs.map(l => ({
-        at: l.timestamp,
-        label: l.message,
-        kind: l.level === 'ERROR' ? 'err' : l.level === 'WARN' ? 'warn' : 'log',
-        component: l.component,
-        group: l.metadata?.worker ?? 'bot',
-        source: 'log',
-        level: l.level,
-        raw: l,
-      })),
-    ].sort((a, b) => a.at - b.at);
-    if (!events.length) return null;
-    const start = events[0].at;
-    const end = Math.max(events.at(-1).at, op.latestTimestamp ?? 0, start + 1);
-    const span = end - start;
-    const groups = [];
-    events.forEach((e, i) => {
-      const next = events[i + 1]?.at ?? end;
-      const row = {
-        ...e,
-        index: i,
-        left: ((e.at - start) / span) * 100,
-        width: Math.max(0.6, ((next - e.at) / span) * 100),
-        took: next - e.at,
-        offset: e.at - start,
-      };
-      if (groups.at(-1)?.group !== e.group) groups.push({ group: e.group, start: e.at, rows: [] });
-      groups.at(-1).rows.push(row);
-    });
-    return { span, start, groups };
-  });
-
-  // The waterfall tree: one parent row per group (bot gateway, each worker attempt), spans under it.
-  const tree = $derived.by(() => {
-    const groups = [];
-    const spans = [];
-    if (!timeline) return { groups, spans };
-    let attempt = 0;
-    timeline.groups.forEach((g, gi) => {
-      const bot = g.group === 'bot';
-      if (!bot) attempt++;
-      const last = g.rows.at(-1);
-      const offset = g.rows[0].offset;
-      const kids = g.rows.map((r, ri) => ({
-        ...r,
-        type: 'span',
-        key: String(r.index),
-        gi,
-        bot,
-        worker: bot ? (r.raw?.metadata?.worker ?? null) : g.group,
-        last: ri === g.rows.length - 1,
-        tone: r.kind === 'err' ? 'err' : r.kind === 'warn' ? 'warn' : bot ? 'bot' : 'worker',
-      }));
-      spans.push(...kids);
-      groups.push({
-        type: 'group',
-        key: `g${gi}`,
-        gi,
-        bot,
-        worker: bot ? null : g.group,
-        label: bot ? 'Bot gateway' : `Attempt ${attempt} · ${g.group}`,
-        at: g.start,
-        offset,
-        took: last.offset + last.took - offset,
-        kids,
-        errors: kids.filter(k => k.tone === 'err').length,
-        tone: bot ? 'bot' : 'worker',
-      });
-    });
-    return { groups, spans };
-  });
+  const timeline = $derived(buildTimeline(op, trace, logs));
+  const tree = $derived(buildTree(timeline));
   const byKey = $derived(new Map([...tree.groups, ...tree.spans].map(r => [r.key, r])));
 
   let collapsed = $state({});
@@ -282,24 +189,6 @@
       else e.currentTarget.blur();
     }
   }
-  function parts(text, needle) {
-    const s = String(text ?? '');
-    if (!needle) return [{ t: s }];
-    const lo = s.toLowerCase();
-    const out = [];
-    let i = 0;
-    for (;;) {
-      const j = lo.indexOf(needle, i);
-      if (j < 0) {
-        if (i < s.length) out.push({ t: s.slice(i) });
-        return out;
-      }
-      if (j > i) out.push({ t: s.slice(i, j) });
-      out.push({ t: s.slice(j, j + needle.length), m: true });
-      i = j + needle.length;
-    }
-  }
-
   // Geometry: bars are placed in percent, the duration label needs the track's pixel width.
   let trackW = $state(0);
   let rulerTrack = $state(null);
@@ -340,21 +229,6 @@
     };
   });
 
-  // Formatting
-  const fmtDur = ms =>
-    ms < 1000
-      ? `${Math.round(ms)}ms`
-      : ms < 10e3
-        ? `${(ms / 1000).toFixed(2)}s`
-        : ms < 60e3
-          ? `${(ms / 1000).toFixed(1)}s`
-          : formatDuration(ms);
-  const plus = ms => `+${fmtDur(ms)}`;
-  const plusFine = ms => (ms < 1000 ? `+${ms.toFixed(1)}ms` : `+${(ms / 1000).toFixed(2)}s`);
-  const pctOf = ms => {
-    const p = timeline ? (ms / timeline.span) * 100 : 0;
-    return p > 0 && p < 0.1 ? '<0.1%' : `${p.toFixed(1)}%`;
-  };
   const ticks = $derived(
     timeline
       ? [0, 1, 2, 3, 4].map(i => {
@@ -369,9 +243,6 @@
         })
       : []
   );
-  const LEVEL = { ERROR: 'ERR', WARN: 'WARN', INFO: 'INFO', DEBUG: 'DBG', TRACE: 'TRC' };
-  const levelOf = r =>
-    r.source === 'trace' ? 'STEP' : (LEVEL[r.level] ?? String(r.level ?? 'LOG').slice(0, 5));
 
   // Header facts
   const job = $derived(jobs.at(-1));
@@ -393,47 +264,15 @@
   const errorSpans = $derived(tree.spans.filter(s => s.tone === 'err'));
   const totalMs = $derived(op?.performanceMetrics?.duration || timeline?.span || 0);
 
-  // Drawer
-  function attrs(r) {
-    if (r?.type !== 'span') return [];
-    const raw = r.raw ?? {};
-    const base =
-      r.source === 'log'
-        ? { id: raw.id, level: raw.level, component: raw.component, ...(raw.metadata ?? {}) }
-        : {
-            source: 'operation trace',
-            ...Object.fromEntries(Object.entries(raw).filter(([k]) => k !== 'message')),
-          };
-    return Object.entries(base)
-      .filter(([, v]) => v != null && v !== '')
-      .map(([k, v]) => [k, typeof v === 'object' ? JSON.stringify(v) : String(v)]);
-  }
-  const selAttrs = $derived(attrs(selected));
-  const selMessage = $derived(
-    selected?.type === 'span' ? String(selected.raw?.message || selected.label || '') : ''
-  );
-  const slowest = $derived(
-    selected?.type === 'group'
-      ? selected.kids.reduce((a, b) => (b.took > a.took ? b : a), selected.kids[0])
-      : null
-  );
   const logsHref = $derived(op ? `#/logs?op=${encodeURIComponent(op.id)}` : '#/logs');
 
-  let copiedKey = $state(null);
-  let copyTimer;
-  function copy(text, key) {
-    navigator.clipboard?.writeText(String(text)).catch(() => {});
-    copiedKey = key;
-    clearTimeout(copyTimer);
-    copyTimer = setTimeout(() => (copiedKey = null), 1500);
-  }
+  const copier = createCopier();
 
   async function ban() {
     banStatus = '';
-    const res = await fetch('/api/bans', {
-      method: 'POST',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ userId: op.userId, reason: banReason.trim() }),
+    const res = await sendJson('/api/bans', 'POST', {
+      userId: op.userId,
+      reason: banReason.trim(),
     }).catch(() => null);
     banStatus = res?.ok ? 'banned' : 'could not ban';
     if (res?.ok) banOpen = false;
@@ -441,26 +280,6 @@
 </script>
 
 <svelte:window onkeydown={onKey} />
-
-{#snippet cv(text, full, key, href = null)}
-  <span class="cv">
-    {#if href}
-      <a class="cv-t" {href} target="_blank" rel="noreferrer" title={full}
-        ><span class="ellipsis">{text}</span><ExternalLink size={11} /></a
-      >
-    {:else}
-      <span class="cv-t ellipsis" title={full}>{text}</span>
-    {/if}
-    <button
-      class="cv-b"
-      class:done={copiedKey === key}
-      title={copiedKey === key ? 'Copied' : 'Copy'}
-      aria-label="Copy {key}"
-      onclick={() => copy(full, key)}
-      >{#if copiedKey === key}<Check size={12} />{:else}<Copy size={12} />{/if}</button
-    >
-  </span>
-{/snippet}
 
 {#snippet summary()}
   <dl class="summary">
@@ -531,8 +350,9 @@
     <button class="btn" onclick={() => navigate('logs', { op: id })}
       ><SquareTerminal size={14} />View logs</button
     >
-    <button class="btn" onclick={() => copy(location.href, 'page-link')}
-      >{#if copiedKey === 'page-link'}<Check size={14} />Copied{:else}<Link size={14} />Copy link{/if}</button
+    <button class="btn" onclick={() => copier.copy(location.href, 'page-link')}
+      >{#if copier.copied === 'page-link'}<Check size={14} />Copied{:else}<Link size={14} />Copy
+        link{/if}</button
     >
   {/snippet}
 </PageHeader>
@@ -701,7 +521,7 @@
                         <span
                           class="msg ellipsis"
                           title={row.component ? `${row.component}: ${row.label}` : row.label}
-                          >{#each parts(row.label, q) as p, pi (pi)}{#if p.m}<mark>{p.t}</mark
+                          >{#each highlight(row.label, q) as p, pi (pi)}{#if p.m}<mark>{p.t}</mark
                               >{:else}{p.t}{/if}{/each}</span
                         >
                       {/if}
@@ -732,114 +552,7 @@
 
       <aside class="side-area">
         {#if selected}
-          <section class="panel drawer" aria-label="Span detail">
-            <div class="ph dph">
-              <span class="sw t-{selected.tone}"></span>
-              {#if selected.type === 'group'}
-                <span class="grow ellipsis" title={selected.label}>{selected.label}</span>
-              {:else}
-                <span class="chip lvl {selected.tone}">{levelOf(selected)}</span>
-                <span class="grow ellipsis mono dcomp" title={selected.component}
-                  >{selected.component ?? 'span'}</span
-                >
-              {/if}
-              <button
-                class="icon-btn sm"
-                title={copiedKey === 'span-link' ? 'Copied' : 'Copy link to this span'}
-                aria-label="Copy link to this span"
-                onclick={() => copy(location.href, 'span-link')}
-                >{#if copiedKey === 'span-link'}<Check size={14} />{:else}<Link
-                    size={14}
-                  />{/if}</button
-              >
-              <button
-                class="icon-btn sm"
-                title="Close (Esc)"
-                aria-label="Close span detail"
-                onclick={() => select(null)}><X size={15} /></button
-              >
-            </div>
-
-            <div class="dsec">
-              <div class="section-label">Overview</div>
-              <dl class="ov">
-                {#if selected.type === 'span'}
-                  <dt>Component</dt>
-                  <dd class="mono ellipsis">{selected.component ?? '—'}</dd>
-                {/if}
-                <dt>Worker</dt>
-                <dd class="mono ellipsis">
-                  {selected.worker ?? (selected.bot ? 'bot (gateway)' : '—')}
-                </dd>
-                <dt>Started at</dt>
-                <dd class="mono" title={formatDateTime(selected.at, { seconds: true })}>
-                  {formatTime(selected.at, { millis: true })}
-                </dd>
-                <dt>Offset</dt>
-                <dd class="mono">{plus(selected.offset)}</dd>
-                <dt>Duration</dt>
-                <dd class="mono">{fmtDur(selected.took)}</dd>
-                <dt>% of trace</dt>
-                <dd class="pct">
-                  <span class="mono">{pctOf(selected.took)}</span>
-                  <span class="pbar"
-                    ><span
-                      class="t-{selected.tone}"
-                      style="width:{Math.min(100, (selected.took / timeline.span) * 100)}%"
-                    ></span></span
-                  >
-                </dd>
-                {#if selected.type === 'group'}
-                  <dt>Spans</dt>
-                  <dd class="mono">{selected.kids.length}</dd>
-                  <dt>Errors</dt>
-                  <dd class="mono" class:error-text={selected.errors}>{selected.errors}</dd>
-                {/if}
-              </dl>
-            </div>
-
-            {#if selected.type === 'span'}
-              <div class="dsec">
-                <div class="dsec-h">
-                  <span class="section-label">Message</span>
-                  <button class="btn ghost sm" onclick={() => copy(selMessage, 'msg')}
-                    >{#if copiedKey === 'msg'}<Check size={13} />Copied{:else}<Copy
-                        size={13}
-                      />Copy{/if}</button
-                  >
-                </div>
-                <pre class="msgblock" class:err={selected.tone === 'err'}>{selMessage}</pre>
-              </div>
-
-              {#if selAttrs.length}
-                <div class="dsec flush">
-                  <div class="section-label pad">Attributes</div>
-                  <dl class="kv">
-                    {#each selAttrs as [k, v] (k)}
-                      <div class="kvr">
-                        <dt class="ellipsis" title={k}>{k}</dt>
-                        <dd>{@render cv(v, v, `attr-${k}`)}</dd>
-                      </div>
-                    {/each}
-                  </dl>
-                </div>
-              {/if}
-            {:else if slowest}
-              <div class="dsec">
-                <div class="section-label">Slowest span</div>
-                <button class="slowest" onclick={() => select(slowest.key)}>
-                  <span class="sw t-{slowest.tone}"></span>
-                  <span class="grow ellipsis" title={slowest.label}>{slowest.label}</span>
-                  <span class="mono dim">{fmtDur(slowest.took)}</span>
-                </button>
-              </div>
-            {/if}
-
-            <div class="pf dfoot">
-              <span class="mono dim">span {selected.key}</span>
-              <a class="right view-logs" href={logsHref}>View in logs<ArrowUpRight size={13} /></a>
-            </div>
-          </section>
+          <SpanDrawer {selected} span={timeline.span} {logsHref} onselect={select} />
         {:else}
           <div class="stack">
             <section class="panel">
@@ -851,27 +564,19 @@
               </div>
               <dl class="dl">
                 <dt>User</dt>
-                <dd class="user-row">
-                  <span class="user-cell"
-                    ><Avatar id={op.userId} size={20} /><button
-                      class="linkish mono"
-                      title={op.userId}
-                      onclick={() => navigate('user-profile', { userId: op.userId })}
-                      >{shortId(op.userId)}</button
-                    ></span
-                  >
-                  {#if related.user}<span class="dim nowrap">· {related.user.total} in 24h</span
-                    >{/if}
-                  <button
-                    class="cv-b"
-                    class:done={copiedKey === 'user'}
-                    title={copiedKey === 'user' ? 'Copied' : 'Copy user id'}
-                    aria-label="Copy user id"
-                    onclick={() => copy(op.userId, 'user')}
-                    >{#if copiedKey === 'user'}<Check size={12} />{:else}<Copy
-                        size={12}
-                      />{/if}</button
-                  >
+                <dd>
+                  <CopyValue full={op.userId} label="user id">
+                    <span class="user-cell"
+                      ><Avatar id={op.userId} size={20} /><button
+                        class="linkish mono"
+                        title={op.userId}
+                        onclick={() => navigate('user-profile', { userId: op.userId })}
+                        >{shortId(op.userId)}</button
+                      ></span
+                    >
+                    {#if related.user}<span class="dim nowrap">· {related.user.total} in 24h</span
+                      >{/if}
+                  </CopyValue>
                 </dd>
                 <dt>Started</dt>
                 <dd>
@@ -888,13 +593,23 @@
                 {#if op.originalUrl}
                   <dt>Link</dt>
                   <dd>
-                    {@render cv(urlLabel(op.originalUrl), op.originalUrl, 'link', op.originalUrl)}
+                    <CopyValue
+                      text={urlLabel(op.originalUrl)}
+                      full={op.originalUrl}
+                      label="link"
+                      href={op.originalUrl}
+                    />
                   </dd>
                 {/if}
                 {#if op.sourceUrl}
                   <dt>Output</dt>
                   <dd>
-                    {@render cv(urlLabel(op.sourceUrl), op.sourceUrl, 'output', op.sourceUrl)}
+                    <CopyValue
+                      text={urlLabel(op.sourceUrl)}
+                      full={op.sourceUrl}
+                      label="output"
+                      href={op.sourceUrl}
+                    />
                   </dd>
                 {/if}
                 <dt>Size</dt>
@@ -916,7 +631,7 @@
                   </dd>
                 {/if}
                 <dt>Request id</dt>
-                <dd>{@render cv(op.id, op.id, 'request id')}</dd>
+                <dd><CopyValue text={op.id} label="request id" /></dd>
               </dl>
             </section>
 
@@ -985,8 +700,8 @@
                 >
               {/if}
               {#if failure}
-                <button class="btn ghost sm" onclick={() => copy(failure, 'failure')}
-                  >{#if copiedKey === 'failure'}<Check size={13} />Copied{:else}<Copy
+                <button class="btn ghost sm" onclick={() => copier.copy(failure, 'failure')}
+                  >{#if copier.copied === 'failure'}<Check size={13} />Copied{:else}<Copy
                       size={13}
                     />Copy{/if}</button
                 >
@@ -1022,7 +737,7 @@
       <dt>Duration</dt>
       <dd>{fmtDur(hovered.took)}</dd>
       <dt>% of total</dt>
-      <dd>{pctOf(hovered.took)}</dd>
+      <dd>{pctOf(hovered.took, timeline.span)}</dd>
       <dt>Start</dt>
       <dd>{plus(hovered.offset)}</dd>
     </dl>
@@ -1479,60 +1194,6 @@
     color: var(--text-bright);
   }
 
-  /* ---------- copyable values ---------- */
-  .cv {
-    display: flex;
-    align-items: center;
-    gap: 4px;
-    min-width: 0;
-    max-width: 100%;
-  }
-  .cv-t {
-    min-width: 0;
-    font-family: var(--mono);
-    font-size: var(--fs-sm);
-  }
-  a.cv-t {
-    display: inline-flex;
-    align-items: center;
-    gap: 4px;
-  }
-  a.cv-t :global(svg) {
-    flex-shrink: 0;
-  }
-  .cv-b {
-    width: 22px;
-    height: 22px;
-    flex-shrink: 0;
-    padding: 0;
-    border: 0;
-    border-radius: 5px;
-    background: none;
-    color: var(--text-dim);
-    display: inline-grid;
-    place-items: center;
-    opacity: 0;
-    transition: opacity 0.1s;
-  }
-  .cv:hover .cv-b,
-  .user-row:hover .cv-b,
-  .cv-b:focus-visible,
-  .cv-b.done {
-    opacity: 1;
-  }
-  .cv-b:hover {
-    background: var(--card-3);
-    color: var(--text-bright);
-  }
-  .cv-b.done {
-    color: var(--success-text);
-  }
-  @media (hover: none) {
-    .cv-b {
-      opacity: 1;
-    }
-  }
-
   /* ---------- details (nothing selected) ---------- */
   .keys {
     gap: 4px;
@@ -1560,12 +1221,6 @@
     margin: 0;
     min-width: 0;
   }
-  .user-row {
-    display: flex;
-    align-items: center;
-    gap: 6px;
-    min-width: 0;
-  }
   .rel {
     cursor: pointer;
   }
@@ -1586,182 +1241,6 @@
   .banform .field {
     flex: 1;
     min-width: 0;
-  }
-
-  /* ---------- span drawer ---------- */
-  .drawer {
-    max-height: calc(100vh - 88px);
-    overflow: auto;
-    display: flex;
-    flex-direction: column;
-  }
-  .dph {
-    gap: 8px;
-    padding-right: 10px;
-    position: sticky;
-    top: 0;
-    background: var(--card);
-    z-index: 1;
-  }
-  .dph .sw {
-    width: 10px;
-    height: 10px;
-  }
-  .dcomp {
-    font-size: var(--fs);
-    font-weight: 500;
-  }
-  .lvl {
-    font-family: var(--mono);
-    letter-spacing: 0.04em;
-  }
-  .lvl.err {
-    color: var(--danger-text);
-    border-color: var(--danger-border);
-    background: var(--danger-bg);
-  }
-  .lvl.warn {
-    color: var(--warning-text);
-    border-color: var(--warning-border);
-    background: var(--warning-bg);
-  }
-  .lvl.worker {
-    color: var(--accent);
-    border-color: var(--accent-border);
-    background: var(--accent-bg);
-  }
-  .dsec {
-    padding: 14px 20px;
-    border-bottom: 1px solid var(--line);
-  }
-  .dsec.flush {
-    padding: 14px 0 8px;
-  }
-  .section-label.pad {
-    padding: 0 20px;
-  }
-  .dsec-h {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    margin: -4px 0 6px;
-  }
-  .dsec > .section-label {
-    margin-bottom: 8px;
-  }
-  .ov {
-    margin: 0;
-    display: grid;
-    grid-template-columns: 96px minmax(0, 1fr);
-    row-gap: 8px;
-    column-gap: 12px;
-    font-size: var(--fs);
-  }
-  .ov dt {
-    color: var(--text-muted);
-  }
-  .ov dd {
-    margin: 0;
-    min-width: 0;
-    color: var(--text-bright);
-  }
-  .ov dd.mono {
-    font-size: var(--fs-sm);
-  }
-  .pct {
-    display: flex;
-    align-items: center;
-    gap: 10px;
-  }
-  .pct .mono {
-    font-size: var(--fs-sm);
-    min-width: 44px;
-  }
-  .pbar {
-    flex: 1;
-    height: 6px;
-    border-radius: 3px;
-    background: var(--card-3);
-    overflow: hidden;
-  }
-  .pbar span {
-    display: block;
-    height: 100%;
-    min-width: 2px;
-    background: var(--c);
-  }
-  .msgblock {
-    margin: 0;
-    padding: 10px 12px;
-    max-height: 220px;
-    overflow: auto;
-    background: var(--card-2);
-    border: 1px solid var(--line);
-    border-radius: var(--radius);
-    font: var(--fs-sm) / 18px var(--mono);
-    color: var(--text);
-    white-space: pre-wrap;
-    overflow-wrap: anywhere;
-  }
-  .msgblock.err {
-    color: var(--danger-text);
-    background: var(--danger-bg-subtle);
-    border-color: var(--danger-border);
-  }
-  .kv {
-    margin: 8px 0 0;
-  }
-  .kvr {
-    display: grid;
-    grid-template-columns: 112px minmax(0, 1fr);
-    gap: 12px;
-    align-items: center;
-    min-height: 28px;
-    padding: 0 12px 0 20px;
-  }
-  .kvr:nth-child(odd) {
-    background: var(--card-2);
-  }
-  .kvr dt {
-    font-size: var(--fs-sm);
-    color: var(--text-muted);
-  }
-  .kvr dd {
-    margin: 0;
-    min-width: 0;
-    color: var(--text);
-  }
-  .slowest {
-    width: 100%;
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    height: 32px;
-    padding: 0 10px;
-    border: 1px solid var(--border);
-    border-radius: var(--radius);
-    background: var(--card);
-    font-size: var(--fs);
-    text-align: left;
-  }
-  .slowest:hover {
-    background: var(--row-hover);
-  }
-  .slowest .mono {
-    font-size: var(--fs-sm);
-  }
-  .dfoot {
-    margin-top: auto;
-    border-top: 0;
-  }
-  .dfoot .mono {
-    font-size: var(--fs-xs);
-  }
-  .view-logs {
-    display: inline-flex;
-    align-items: center;
-    gap: 4px;
-    font-weight: 500;
   }
 
   /* ---------- why it failed ---------- */

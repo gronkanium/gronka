@@ -1,5 +1,6 @@
 <script>
-  import { getJson, getJsonOrNull } from '../utils/api.js';
+  import { createCopier } from '../utils/copier.svelte.js';
+  import { getJson, getJsonOrNull, sendJson } from '../utils/api.js';
   import {
     TerminalSquare,
     Activity,
@@ -46,7 +47,7 @@
   let banOpen = $state(false);
   let banReason = $state('');
   let busy = $state(false);
-  let copied = $state(false);
+  const copier = createCopier();
 
   const userId = $derived($currentRoute.params.userId);
 
@@ -109,11 +110,9 @@
 
   async function doBan() {
     busy = true;
-    const res = await fetch('/api/bans', {
-      method: 'POST',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ userId, reason: banReason.trim() }),
-    }).catch(() => null);
+    const res = await sendJson('/api/bans', 'POST', { userId, reason: banReason.trim() }).catch(
+      () => null
+    );
     busy = false;
     if (res?.ok) {
       banOpen = false;
@@ -128,11 +127,6 @@
     busy = false;
     loadProfile(userId);
   }
-  function copyId() {
-    navigator.clipboard?.writeText(userId);
-    copied = true;
-    setTimeout(() => (copied = false), 1200);
-  }
 </script>
 
 <PageHeader
@@ -142,8 +136,12 @@
   description={error ? '' : description}
 >
   {#if ban}<span class="pill bad">Banned</span>{/if}
-  <button class="icon-btn sm" onclick={copyId} title="copy id" aria-label="copy user id"
-    >{#if copied}<Check size={14} />{:else}<Copy size={14} />{/if}</button
+  <button
+    class="icon-btn sm"
+    onclick={() => copier.copy(userId)}
+    title="copy id"
+    aria-label="copy user id"
+    >{#if copier.copied}<Check size={14} />{:else}<Copy size={14} />{/if}</button
   >
   {#snippet actions()}
     <button class="btn" onclick={() => navigate('requests', { userId })}

@@ -82,6 +82,10 @@ export default [
     },
   },
   {
+    files: ['src/webui/**/*.svelte.js'],
+    languageOptions: { globals: { $state: 'readonly', $derived: 'readonly', $effect: 'readonly' } },
+  },
+  {
     files: ['web/public/**/*.js'],
     languageOptions: {
       globals: Object.fromEntries(

@@ -1,4 +1,5 @@
 <script>
+  import { createCopier } from '../utils/copier.svelte.js';
   import { tick, untrack } from 'svelte';
   import { SvelteSet } from 'svelte/reactivity';
   import {
@@ -79,7 +80,7 @@
   let now = $state(Date.now());
   let error = $state('');
   let saving = $state(false);
-  let copied = $state(false);
+  const copier = createCopier();
   let muteOpen = $state(false);
   let toast = $state(null);
   let sort = $state({ key: 'n', desc: true });
@@ -485,7 +486,7 @@
 
   function pick(key, scroll = true) {
     muteOpen = false;
-    copied = false;
+    copier.clear();
     navigate('issues', { ...(tab === 'open' ? {} : { tab }), issue: key });
     if (scroll && !wide)
       tick().then(() => document.querySelector('.detail')?.scrollIntoView({ block: 'start' }));
@@ -502,11 +503,6 @@
     tick().then(() =>
       document.querySelector('.issues-list .tr.sel')?.scrollIntoView({ block: 'nearest' })
     );
-  }
-  function copy(text) {
-    navigator.clipboard?.writeText(text);
-    copied = true;
-    setTimeout(() => (copied = false), 1200);
   }
 
   // A click anywhere on a row opens it; the title is the row's keyboard-focusable control.
@@ -890,10 +886,10 @@
         >
         <button
           class="icon-btn sm"
-          title={copied ? 'Copied' : 'Copy message'}
+          title={copier.copied ? 'Copied' : 'Copy message'}
           aria-label="copy message"
-          onclick={() => copy(selected.members[0])}
-          >{#if copied}<Check size={15} />{:else}<Copy size={15} />{/if}</button
+          onclick={() => copier.copy(selected.members[0])}
+          >{#if copier.copied}<Check size={15} />{:else}<Copy size={15} />{/if}</button
         >
         <span class="grow"></span>
         {#if selected.state !== 'open'}

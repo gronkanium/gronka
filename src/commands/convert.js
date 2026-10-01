@@ -31,7 +31,12 @@ import { getProcessedUrl } from '../utils/database.js';
 import { runMediaCommand } from './shared/run-media-command.js';
 import { sendConvertedFile } from './shared/send-converted.js';
 import { ValidationError } from '../utils/errors.js';
-import { replyIfRateLimited, resolveTimeOptions, refuse } from './shared/command-guards.js';
+import {
+  replyIfRateLimited,
+  resolveTimeOptions,
+  refuse,
+  commandSourceOf,
+} from './shared/command-guards.js';
 import { initializeDatabaseWithErrorHandling } from '../utils/database-init.js';
 import {
   safeInteractionEditReply,
@@ -137,7 +142,8 @@ async function processFormatConversion(
   preDownloaded,
   format,
   trim,
-  originalUrl
+  originalUrl,
+  commandSource = null
 ) {
   const spec = OUTPUT_FORMATS[format];
   const isGif = attachment.contentType === 'image/gif';
@@ -180,7 +186,7 @@ async function processFormatConversion(
       await finishCommand('convert', ctx, output.size);
     },
     {
-      commandSource: 'slash',
+      commandSource,
       skipDbInit: true,
       errorFallback: 'an error occurred while converting the file.',
       context: {
@@ -465,7 +471,8 @@ export async function runConvertJob(
       input.file,
       format,
       trim,
-      input.originalUrl
+      input.originalUrl,
+      commandSource
     );
     return;
   }
@@ -518,11 +525,12 @@ export async function handleConvertContextMenu(interaction) {
 export async function handleConvertCommand(interaction) {
   const userId = interaction.user.id;
   const adminUser = isAdmin(userId);
+  const commandSource = commandSourceOf(interaction);
   logger.info(
     `User ${userId} initiated conversion via slash command${adminUser ? ' [ADMIN]' : ''}`
   );
   const guard = { type: 'convert', action: 'converting another video or image' };
-  if (await replyIfRateLimited(interaction, { ...guard, commandSource: 'slash' })) {
+  if (await replyIfRateLimited(interaction, { ...guard, commandSource })) {
     return;
   }
 
@@ -535,7 +543,7 @@ export async function handleConvertCommand(interaction) {
     return;
   }
 
-  const context = { commandSource: 'slash' };
+  const context = { commandSource };
   if (!attachment && !url) {
     const message =
       'please provide either a video/image attachment or a URL to a video/image file.';
@@ -548,7 +556,6 @@ export async function handleConvertCommand(interaction) {
     return;
   }
 
-  const commandSource = 'slash';
   if (!(await acceptInput(interaction, { attachment, url, adminUser, commandSource }))) return;
   await safeInteractionDeferReply(interaction);
   const lossy = interaction.options.getNumber('lossy');

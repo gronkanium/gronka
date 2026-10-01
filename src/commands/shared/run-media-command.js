@@ -40,7 +40,7 @@ const logger = createLogger('run-media-command');
  *   logStep: (step: string, status: string, data?: Object) => void,
  * }) => Promise<void>} callback
  * @param {Object} [options]
- * @param {string} [options.commandSource] - 'slash' | 'context-menu'
+ * @param {string} [options.commandSource] - 'slash' | 'prefix' | 'context-menu'
  * @param {string} [options.commandName] - command name for DB init (defaults to `type`)
  * @param {Object} [options.context] - extra operation context (e.g. { url } or { originalUrl })
  * @param {string} [options.errorFallback] - generic user-facing message for unexpected errors

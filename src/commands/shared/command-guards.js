@@ -10,6 +10,9 @@ import { parseTimestamp } from '../../utils/validation.js';
 
 const logger = createLogger('command-guards');
 
+// Slash and prefix commands share their handlers; the message adapter marks the prefix ones.
+export const commandSourceOf = interaction => (interaction.isPrefixCommand ? 'prefix' : 'slash');
+
 /**
  * Shared rate-limit guard for the command entry handlers. If the user is rate limited, it records a
  * failed operation, replies ephemerally, and returns true so the caller can return early.
@@ -22,7 +25,7 @@ const logger = createLogger('command-guards');
  * @param {Object} params
  * @param {'download'|'convert'|'optimize'} params.type - Operation type (for tracking)
  * @param {string} params.action - Verb phrase for the message, e.g. 'downloading another video'
- * @param {'slash'|'context-menu'} params.commandSource
+ * @param {'slash'|'prefix'|'context-menu'} params.commandSource
  * @returns {Promise<boolean>} true if rate limited (caller should return early), false otherwise
  */
 export async function replyIfRateLimited(interaction, { type, action, commandSource }) {
@@ -62,7 +65,7 @@ export async function resolveTimeOptions(interaction, { type }) {
 
   const failWith = async (errorMessage, reason, commandOptions) => {
     createFailedOperation(type, userId, errorMessage, reason, {
-      commandSource: 'slash',
+      commandSource: commandSourceOf(interaction),
       commandOptions,
     });
     await safeInteractionReply(interaction, {

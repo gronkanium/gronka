@@ -3,6 +3,7 @@ import { createLogger } from './logger.js';
 import { NetworkError, ValidationError } from './errors.js';
 import { downloadFileFromUrl } from './file-downloader.js';
 import { ssrfGuardedRequest } from './ssrf-guard.js';
+import { normalizeHost } from './url-host.js';
 
 const logger = createLogger('booru');
 
@@ -63,7 +64,7 @@ const BOORU_SITES = [
 
 /** Match a hostname (www-stripped) to a booru site definition, or null. */
 function matchSite(hostname) {
-  const host = hostname.toLowerCase().replace(/^www\./, '');
+  const host = normalizeHost(hostname);
   return BOORU_SITES.find(site => site.hosts.includes(host)) || null;
 }
 
@@ -121,7 +122,7 @@ export async function downloadFromBooru(url, isAdminUser = false) {
     throw new ValidationError('unsupported or malformed booru URL');
   }
 
-  const host = hostname.toLowerCase().replace(/^www\./, '');
+  const host = normalizeHost(hostname);
   const apiUrl = site.buildApiUrl(host, postId);
   logger.debug(`Resolving ${site.name} post ${postId}: ${apiUrl}`);
 

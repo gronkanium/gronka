@@ -34,22 +34,6 @@ export function formatDuration(ms) {
   return `${(minutes / 60).toFixed(1)}h`;
 }
 
-/**
- * Convert a time-range key ('1h', '6h', '24h', '7d', '30d') to a start timestamp,
- * or null for unknown/empty keys.
- */
-export function timeRangeToStartTime(timeRange, now = Date.now()) {
-  const hour = 60 * 60 * 1000;
-  const ranges = {
-    '1h': hour,
-    '6h': 6 * hour,
-    '24h': 24 * hour,
-    '7d': 7 * 24 * hour,
-    '30d': 30 * 24 * hour,
-  };
-  return ranges[timeRange] ? now - ranges[timeRange] : null;
-}
-
 export function shortId(id) {
   const s = String(id ?? '');
   return s.length > 10 ? `${s.slice(0, 4)}…${s.slice(-4)}` : s;

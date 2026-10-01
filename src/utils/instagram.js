@@ -4,6 +4,7 @@ import { createLogger } from './logger.js';
 import { NetworkError, ValidationError } from './errors.js';
 import { downloadFileFromUrl } from './file-downloader.js';
 import { ssrfGuardedRequest } from './ssrf-guard.js';
+import { normalizeHost } from './url-host.js';
 
 const logger = createLogger('instagram');
 
@@ -46,7 +47,7 @@ const SHARE_PATH = /^\/s\/([A-Za-z0-9_-]+)/;
 const MAX_HIGHLIGHT_ITEMS = 10;
 
 function isInstagramHost(hostname) {
-  const host = hostname.toLowerCase().replace(/^www\./, '');
+  const host = normalizeHost(hostname);
   return host === 'instagram.com' || host.endsWith('.instagram.com');
 }
 
@@ -82,7 +83,7 @@ export function isInstagramStoryUrl(url) {
 export function isInstagramPostUrl(url) {
   try {
     const { hostname, pathname } = new URL(url);
-    const host = hostname.toLowerCase().replace(/^www\./, '');
+    const host = normalizeHost(hostname);
     return (
       (host === 'instagram.com' || host.endsWith('.instagram.com')) && POST_PATH.test(pathname)
     );

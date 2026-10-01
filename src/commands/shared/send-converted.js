@@ -8,6 +8,7 @@ import {
   uploadToR2,
   getR2KeyFromHash,
   formatR2UrlWithDisclaimer,
+  isR2Configured,
 } from '../../utils/r2-storage.js';
 import { resolveTtlHoursForSize } from '../../utils/storage.js';
 import { OUTPUT_FORMATS } from '../../utils/video-processor.js';
@@ -26,12 +27,7 @@ export async function sendConvertedFile(interaction, ctx, { file, format, baseNa
     });
     return;
   }
-  if (
-    !r2Config.accountId ||
-    !r2Config.accessKeyId ||
-    !r2Config.secretAccessKey ||
-    !r2Config.bucketName
-  ) {
+  if (!isR2Configured(r2Config)) {
     throw new ValidationError(`the ${format} is too large to attach to Discord.`);
   }
 

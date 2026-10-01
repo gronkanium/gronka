@@ -48,6 +48,7 @@ import {
   replyIfRateLimited,
   resolveTimeOptions,
   refuse,
+  replyError,
   commandSourceOf,
 } from './shared/command-guards.js';
 import { trimItem } from '../utils/video-processor.js';
@@ -449,9 +450,7 @@ export async function handleDownloadCommand(interaction) {
     } catch (error) {
       logger.warn(`Manga selection failed: ${error.message}`);
       const content = 'could not inspect that manga. please try again later.';
-      await (interaction.deferred
-        ? safeInteractionEditReply(interaction, { content })
-        : safeInteractionReply(interaction, { content, flags: MessageFlags.Ephemeral }));
+      await replyError(interaction, content);
     }
     return;
   }

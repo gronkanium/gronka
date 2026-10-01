@@ -257,10 +257,11 @@ export async function downloadFileFromUrl(url, isAdminUser = false, client = nul
   }
 }
 
+export const TENOR_VIEW_URL = /^https?:\/\/(www\.)?tenor\.com\/view\/.+-gif-(\d+)/i;
+
 export async function parseTenorUrl(url) {
   try {
-    const tenorViewPattern = /^https?:\/\/(www\.)?tenor\.com\/view\/.+-gif-(\d+)/i;
-    const match = url.match(tenorViewPattern);
+    const match = url.match(TENOR_VIEW_URL);
 
     if (!match) {
       throw new ValidationError('invalid Tenor URL format');

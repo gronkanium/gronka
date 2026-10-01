@@ -71,22 +71,7 @@ export async function optimizeCached(gif, lossy = null) {
   };
 }
 
-/**
- * Optimize a GIF file using gifsicle
- * gifsicle ships in the app Docker image; running the bot in Docker is the
- * supported setup (outside it, /optimize fails with a clear error).
- * @param {string} inputPath - Path to input GIF file
- * @param {string} outputPath - Path to output optimized GIF file
- * @param {Object} options - Optimization options
- * @param {number} options.lossy - Lossy compression level (0-100, default: 35). Higher = more compression, lower quality
- * @param {number} options.optimize - Optimization level (1-3, default: 3). Higher = better optimization, slower
- * @returns {Promise<void>}
- */
 export async function optimizeGif(inputPath, outputPath, options = {}) {
-  return optimizeGifImpl(inputPath, outputPath, options);
-}
-
-async function optimizeGifImpl(inputPath, outputPath, options = {}) {
   const lossy = options.lossy ?? 35;
   const optimizeLevel = options.optimize ?? 3;
 
@@ -183,9 +168,4 @@ export function calculateSizeReduction(originalSize, optimizedSize) {
 
   const reduction = ((originalSize - optimizedSize) / originalSize) * 100;
   return Math.round(reduction);
-}
-
-export function formatSizeMb(bytes) {
-  const mb = bytes / (1024 * 1024);
-  return `${mb.toFixed(1)}mb`;
 }

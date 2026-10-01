@@ -1,5 +1,5 @@
 // Media worker: claims jobs from Postgres, runs them, and answers users over Discord REST.
-// Any number can run; a job whose worker dies is reclaimed by another (see jobs/queue.js).
+// Any number can run; a job whose worker dies is reclaimed by another (see utils/database/media-jobs-pg.js).
 import fs from 'node:fs';
 import path from 'node:path';
 import { Client } from 'discord.js';
@@ -13,7 +13,7 @@ import { JOBS_ROOT, sweepJobDirs } from './utils/media-file.js';
 import { jobContext } from './jobs/context.js';
 import { runMediaJob } from './jobs/run-job.js';
 import { interactionFor } from './jobs/reply-target.js';
-import * as queue from './jobs/queue.js';
+import * as queue from './utils/database/media-jobs-pg.js';
 
 const logger = createLogger('worker');
 

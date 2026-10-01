@@ -2,7 +2,8 @@ import { test, describe, beforeAll, beforeEach } from 'bun:test';
 import assert from 'node:assert';
 import { initDatabase } from '../../src/utils/database.js';
 import { getPostgresConnection } from '../../src/utils/database/connection.js';
-import * as queue from '../../src/jobs/queue.js';
+import * as queue from '../../src/utils/database/media-jobs-pg.js';
+import { setSetting } from '../../src/utils/database/settings-pg.js';
 
 let sql;
 const reply = (extra = {}) => ({
@@ -138,13 +139,12 @@ describe('media job queue', () => {
 
   test('a paused queue hands out nothing until resumed, and says so', async () => {
     const id = await enqueue();
-    await sql`INSERT INTO bot_settings (key, value, updated_at) VALUES (${queue.PAUSE_KEY}, 'true', 0)
-      ON CONFLICT (key) DO UPDATE SET value = 'true'`;
+    await setSetting(queue.PAUSE_KEY, 'true');
     try {
       assert.strictEqual(await queue.claimJob('w1'), null);
       assert.strictEqual((await queue.jobsOverview()).paused, true);
     } finally {
-      await sql`DELETE FROM bot_settings WHERE key = ${queue.PAUSE_KEY}`;
+      await setSetting(queue.PAUSE_KEY, 'false');
     }
     assert.strictEqual((await queue.claimJob('w1')).id, id);
   });

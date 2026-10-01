@@ -1,6 +1,6 @@
 import { getPostgresConnection } from './connection.js';
 import { ensurePostgresInitialized } from './init.js';
-import { STALE_MS } from '../../jobs/queue.js';
+import { STALE_MS } from './media-jobs-pg.js';
 import { convertTimestampsInArray, convertTimestampsToNumbers } from './helpers-pg.js';
 
 // Query result cache for getRecentOperations

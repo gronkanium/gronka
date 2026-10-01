@@ -40,7 +40,7 @@ import {
   reportPresence,
   clearPresence,
   PRESENCE_MS,
-} from './jobs/queue.js';
+} from './utils/database/media-jobs-pg.js';
 import { withJobDir, sweepJobDirs } from './utils/media-file.js';
 
 const logger = createLogger('bot');

@@ -1,7 +1,8 @@
 import os from 'node:os';
-import pkg from '../../package.json' with { type: 'json' };
-import { getPostgresConnection } from '../utils/database/connection.js';
-import { ensurePostgresInitialized } from '../utils/database/init.js';
+import pkg from '../../../package.json' with { type: 'json' };
+import { getPostgresConnection } from './connection.js';
+import { ensurePostgresInitialized } from './init.js';
+import { getBooleanSetting } from './settings-pg.js';
 
 export const JOB_CHANNEL = 'media_jobs';
 export const DONE_CHANNEL = 'media_jobs_done';
@@ -166,9 +167,8 @@ export async function jobsOverview({ since = Date.now() - 24 * 3600e3, limit = 2
     heartbeat_at: row.heartbeat_at == null ? null : Number(row.heartbeat_at),
     id: Number(row.id),
   });
-  const [pause] = await sql`SELECT value FROM bot_settings WHERE key = ${PAUSE_KEY}`;
   return {
-    paused: pause?.value === 'true',
+    paused: await getBooleanSetting(PAUSE_KEY),
     processes: await presence(),
     counts: Object.fromEntries(counts.map(c => [c.status, { count: c.count, retried: c.retried }])),
     recent: recent.map(num),

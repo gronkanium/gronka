@@ -1,6 +1,7 @@
 import { getJson, getJsonOrNull } from '../utils/api.js';
 import { writable, get } from 'svelte/store';
 import { groupIssues } from '../issues.js';
+import { poll } from '../utils/poll.js';
 
 export const navStats = writable(null);
 export const savedViews = writable([]);
@@ -38,8 +39,7 @@ export async function refreshNav() {
 export function startNavStats() {
   refreshNav();
   loadViews();
-  const timer = setInterval(refreshNav, 60_000);
-  return () => clearInterval(timer);
+  return poll(refreshNav, 60_000);
 }
 
 async function loadViews() {

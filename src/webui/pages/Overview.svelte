@@ -4,6 +4,7 @@
 </script>
 
 <script>
+  import { poll } from '../utils/poll.js';
   import { getJsonOrNull } from '../utils/api.js';
   import { ArrowUpRight, ArrowUp, ArrowDown, Check } from 'lucide-svelte';
   import { currentRoute, navigate } from '../utils/router.js';
@@ -87,8 +88,7 @@
 
   $effect(() => {
     load();
-    const timer = setInterval(load, 60_000);
-    return () => clearInterval(timer);
+    return poll(load, 60_000);
   });
 
   const winEnd = $derived(range.end ?? now);

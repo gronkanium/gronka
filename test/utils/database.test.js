@@ -14,15 +14,10 @@ import {
   insertTemporaryUpload,
   getTemporaryUploadsByR2Key,
 } from '../../src/utils/database/temporary-uploads-pg.js';
-import {
-  getUniqueTestComponent,
-  ensureLogsTableSchema,
-} from '../../src/utils/database/test-helpers.js';
+import { getUniqueTestComponent } from '../helpers/unique.js';
 
 beforeAll(async () => {
   await initDatabase();
-  // Ensure logs table has correct schema (SERIAL PRIMARY KEY on id)
-  await ensureLogsTableSchema();
   // NOTE: Do NOT truncate tables here - it causes race conditions with parallel tests
   // Instead, we use unique component names and timestamps for test isolation
 });

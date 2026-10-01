@@ -107,8 +107,10 @@ export async function safeInteractionDeferReply(interaction, options = {}) {
     await interaction.deferReply(options);
     return true;
   } catch (error) {
-    // Handle expired interactions (code 10062) or already acknowledged (code 40060)
-    if (error.code === 10062 || error.code === 40060) {
+    if (error.code === 10062) {
+      const age = Date.now() - interaction.createdTimestamp;
+      logger.warn(`Discord expired the interaction before it was acknowledged (${age} ms old)`);
+    } else if (error.code === 40060) {
       logger.debug(
         `Interaction expired or already acknowledged when deferring reply: ${error.message}`
       );

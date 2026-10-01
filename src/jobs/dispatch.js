@@ -8,6 +8,8 @@ const logger = createLogger('jobs');
 
 // Hands a deferred command to a worker; runs it here when workers are off or the queue is down.
 export async function dispatchMediaJob(interaction, kind, args) {
+  // A failed defer means Discord already expired the token; nothing could reach the user.
+  if (!interaction.deferred && !interaction.replied) return;
   if (botConfig.mediaWorkers) {
     try {
       const reply = replyTargetOf(interaction);

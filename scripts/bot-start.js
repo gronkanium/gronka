@@ -95,6 +95,11 @@ for (const key of prefixMappings) {
   }
 }
 
+if (prefix === 'TEST' && (!env.POSTGRES_DB || env.POSTGRES_DB === 'gronka')) {
+  console.error('error: refusing to start the test bot on database "gronka", set TEST_POSTGRES_DB');
+  process.exit(1);
+}
+
 // For local dev, override COBALT_API_URL to use localhost
 if (!env.COBALT_API_URL || env.COBALT_API_URL.includes('cobalt:9000')) {
   env.COBALT_API_URL = 'http://localhost:9000';

@@ -82,16 +82,6 @@ async function broadcastUpdate(operation) {
   const currentPort = getInstancePort();
   const callback = broadcastCallbacks.get(currentPort);
   if (callback) {
-    // Safety check: prevent test operations from calling production port callbacks
-    // Production ports are 3000 (server) and 3001 (webui)
-    // Test ports are 3100 (server) and 3101 (webui)
-    if (isTestMode && (currentPort === 3000 || currentPort === 3001)) {
-      logger.debug(
-        `Skipping broadcast to production port ${currentPort} in test mode (test operations should use test ports 3100/3101)`
-      );
-      return;
-    }
-
     try {
       callback(operation);
     } catch (error) {

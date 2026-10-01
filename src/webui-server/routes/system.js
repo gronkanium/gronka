@@ -113,8 +113,14 @@ router.get('/api/storage', async (req, res) => {
   try {
     const [r2, limitGb, space] = await Promise.all([
       getStorageOverview(),
-      r2SoftLimitGb().catch(() => 0),
-      disk().catch(() => null),
+      r2SoftLimitGb().catch(error => {
+        logger.warn(`R2 soft limit read failed: ${error.message}`);
+        return 0;
+      }),
+      disk().catch(error => {
+        logger.warn(`Disk usage read failed: ${error.message}`);
+        return null;
+      }),
     ]);
     res.json({ r2, limitBytes: limitGb > 0 ? limitGb * GB : 0, disk: space });
   } catch (error) {

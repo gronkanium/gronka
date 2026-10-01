@@ -94,6 +94,10 @@ export function isSsrfBlockedError(error) {
  * Cobalt's own response rather than from the user.
  * @returns {{lookup: Function, beforeRedirect: Function}} Guard options
  */
+// Scraped pages: a slow or huge one is a broken or hostile site, not a page worth waiting for.
+export const PAGE_FETCH_TIMEOUT_MS = 20000;
+export const MAX_PAGE_BYTES = 2 * 1024 * 1024;
+
 export function ssrfGuardedRequest() {
   return {
     lookup: guardedLookup,

@@ -13,6 +13,7 @@ import {
   BLOCKED_DESTINATION_MESSAGE,
   isSsrfBlockedError,
   ssrfGuardedRequest,
+  MAX_PAGE_BYTES,
 } from './ssrf-guard.js';
 import { isMegaUrl, downloadFromMega } from './mega.js';
 
@@ -276,6 +277,7 @@ export async function parseTenorUrl(url) {
       const response = await axios.get(url, {
         ...ssrfGuardedRequest(),
         timeout: 30000,
+        maxContentLength: MAX_PAGE_BYTES,
         maxRedirects: 5,
         headers,
       });

@@ -3,7 +3,7 @@ import { createLogger } from './logger.js';
 import { NetworkError, ValidationError } from './errors.js';
 import { getRequestHeaders } from './discord-cdn.js';
 import { downloadFileFromUrl } from './file-downloader.js';
-import { ssrfGuardedRequest } from './ssrf-guard.js';
+import { ssrfGuardedRequest, PAGE_FETCH_TIMEOUT_MS, MAX_PAGE_BYTES } from './ssrf-guard.js';
 
 const logger = createLogger('hentaigifz');
 
@@ -16,7 +16,6 @@ const logger = createLogger('hentaigifz');
 // page fetch must send one too (getRequestHeaders() already does).
 const PAGE_HOST = 'hentaigifz.com';
 const MEDIA_HOST = 'hentaigifz.com'; // media lives on cdn.<host> / cdn2.<host>
-const PAGE_FETCH_TIMEOUT_MS = 20000;
 
 /**
  * Check whether a URL is a hentaigifz.com post page we can extract media from.
@@ -111,6 +110,7 @@ export async function downloadFromHentaiGifz(url, isAdminUser = false) {
       ...ssrfGuardedRequest(),
       responseType: 'text',
       timeout: PAGE_FETCH_TIMEOUT_MS,
+      maxContentLength: MAX_PAGE_BYTES,
       maxRedirects: 5,
       headers: getRequestHeaders(),
       validateStatus: status => status >= 200 && status < 400,

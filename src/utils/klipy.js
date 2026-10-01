@@ -3,10 +3,9 @@ import { createLogger } from './logger.js';
 import { NetworkError, ValidationError } from './errors.js';
 import { getRequestHeaders } from './discord-cdn.js';
 import { downloadFileFromUrl } from './file-downloader.js';
-import { ssrfGuardedRequest } from './ssrf-guard.js';
+import { ssrfGuardedRequest, PAGE_FETCH_TIMEOUT_MS, MAX_PAGE_BYTES } from './ssrf-guard.js';
 
 const logger = createLogger('klipy');
-const PAGE_FETCH_TIMEOUT_MS = 20000;
 const KLIPY_HOST = /(^|\.)klipy\.com$/i;
 const KLIPY_PAGE_PATH = /^\/(?:gifs?|stickers?|memes?)\//i;
 
@@ -105,6 +104,7 @@ export async function downloadFromKlipy(url, isAdminUser = false) {
       ...ssrfGuardedRequest(),
       responseType: 'text',
       timeout: PAGE_FETCH_TIMEOUT_MS,
+      maxContentLength: MAX_PAGE_BYTES,
       maxRedirects: 5,
       headers: {
         ...getRequestHeaders(),

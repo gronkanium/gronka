@@ -3,7 +3,7 @@ import { createLogger } from './logger.js';
 import { NetworkError, ValidationError } from './errors.js';
 import { getRequestHeaders } from './discord-cdn.js';
 import { downloadFileFromUrl } from './file-downloader.js';
-import { ssrfGuardedRequest } from './ssrf-guard.js';
+import { ssrfGuardedRequest, PAGE_FETCH_TIMEOUT_MS, MAX_PAGE_BYTES } from './ssrf-guard.js';
 
 const logger = createLogger('pinterest');
 
@@ -18,7 +18,6 @@ const logger = createLogger('pinterest');
 // URI-encoded JSON inside window.__PWS_RELAY_REGISTER_COMPLETED_REQUEST__() calls keyed by
 // query hash, which churns with every frontend deploy. JSON-LD is a public SEO contract.
 const MEDIA_HOST = 'pinimg.com';
-const PAGE_FETCH_TIMEOUT_MS = 20000;
 
 // Pin pages live on pinterest.com and its regional variants, both the it./br./de. style
 // subdomains and the ccTLD style (pinterest.co.uk, pinterest.ca). pin.it is the share
@@ -117,6 +116,7 @@ export async function downloadFromPinterest(url, isAdminUser = false) {
       ...ssrfGuardedRequest(),
       responseType: 'text',
       timeout: PAGE_FETCH_TIMEOUT_MS,
+      maxContentLength: MAX_PAGE_BYTES,
       maxRedirects: 5,
       headers: getRequestHeaders(),
       validateStatus: status => status >= 200 && status < 400,

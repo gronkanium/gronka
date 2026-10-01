@@ -746,7 +746,10 @@ export function createHandler({
             expectedRPID: RP_ID,
             requireUserVerification: true,
           })
-          .catch(() => null));
+          .catch(error => {
+            logger.warn(`Passkey registration check failed: ${error.message}`);
+            return null;
+          }));
       if (!verification?.verified) {
         throw new AppError('that passkey could not be added, try again.', 'PASSKEY_INVALID', 400);
       }
@@ -786,7 +789,10 @@ export function createHandler({
             credential: passkey.credential,
             requireUserVerification: true,
           })
-          .catch(() => null));
+          .catch(error => {
+            logger.warn(`Passkey login check failed: ${error.message}`);
+            return null;
+          }));
       if (!verification?.verified) {
         throw new AppError('that passkey did not work, try again.', 'PASSKEY_INVALID', 401);
       }

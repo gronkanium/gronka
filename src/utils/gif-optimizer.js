@@ -50,7 +50,10 @@ export async function loadStoredGif(hash) {
   if (!isR2Configured(r2Config) || !(await mediaExistsInR2('gif', hash, '.gif', r2Config))) {
     return null;
   }
-  return downloadGifFromR2(hash, r2Config).catch(() => null);
+  return downloadGifFromR2(hash, r2Config).catch(error => {
+    logger.warn(`R2 gif download failed for ${hash}: ${error.message}`);
+    return null;
+  });
 }
 
 // Optimizes a gif once per (content, lossy) pair; returns {hash: its storage key, file}.

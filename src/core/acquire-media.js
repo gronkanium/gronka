@@ -331,13 +331,21 @@ export async function acquireMedia(
 
   // Started early: it takes ~3 s and decides both the DRM route and the tags.
   const soundcloud =
-    isSoundCloudUrl(url) && !trimming ? soundcloudTrack(url).catch(() => null) : null;
+    isSoundCloudUrl(url) && !trimming
+      ? soundcloudTrack(url).catch(error => {
+          logger.warn(`SoundCloud track read failed: ${error.message}`);
+          return null;
+        })
+      : null;
 
   // Runs beside the SoundCloud read; a DRM-only track has no source links to hand out.
   // cobalt turns X's looping mp4s into real gifs; a raw stream would hand out the mp4.
   const cobaltGif = /\.gif$/i.test(cobaltResponse?.filename ?? '');
   if (streamFirst && !cobaltGif && !trimming) {
-    const lane = streamFirst(url, downloadMethod).catch(() => null);
+    const lane = streamFirst(url, downloadMethod).catch(error => {
+      logger.debug(`Stream lane unavailable, using the download path: ${error.message}`);
+      return null;
+    });
     const streams = (await soundcloud)?.drm ? null : await lane;
     if (streams) {
       return { kind: 'stream', streams, url };

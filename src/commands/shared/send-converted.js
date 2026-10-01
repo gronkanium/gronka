@@ -3,7 +3,12 @@ import { r2Config } from '../../utils/config.js';
 import { ValidationError } from '../../utils/errors.js';
 import { hashUrl } from '../../utils/hashing.js';
 import { safeInteractionEditReply } from '../../utils/interaction-helpers.js';
-import { uploadToR2, getR2KeyFromHash, formatR2UrlWithDisclaimer } from '../../utils/r2-storage.js';
+import {
+  assertR2Capacity,
+  uploadToR2,
+  getR2KeyFromHash,
+  formatR2UrlWithDisclaimer,
+} from '../../utils/r2-storage.js';
 import { resolveTtlHoursForSize } from '../../utils/storage.js';
 import { OUTPUT_FORMATS } from '../../utils/video-processor.js';
 import { fitsDiscordAttachment } from './attachment-limit.js';
@@ -32,6 +37,7 @@ export async function sendConvertedFile(interaction, ctx, { file, format, baseNa
 
   const { hash } = file;
   const key = getR2KeyFromHash(hash, spec.kind, `.${format}`);
+  await assertR2Capacity(file.size);
   const url = await uploadToR2(file, key, spec.mime, r2Config, buildMetadata());
   const urlHash = hashUrl(`${url}#${format}:${hash}`);
   await recordProcessedUrl({

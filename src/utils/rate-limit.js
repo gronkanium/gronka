@@ -54,7 +54,7 @@ export function checkRateLimit(userId) {
   if (isAdmin(userId)) {
     // Only log if there was an actual rate limit to bypass
     if (wouldBeRateLimited) {
-      logger.info(`Rate limit bypassed for admin user ${userId}`);
+      logger.debug(`Rate limit bypassed for admin user ${userId}`);
     }
     return false;
   }
@@ -75,5 +75,9 @@ export function recordRateLimit(userId) {
     return;
   }
 
-  rateLimit.set(userId, Date.now());
+  const now = Date.now();
+  for (const [id, at] of rateLimit) {
+    if (now - at >= cooldownMs) rateLimit.delete(id);
+  }
+  rateLimit.set(userId, now);
 }

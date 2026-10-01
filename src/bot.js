@@ -386,7 +386,7 @@ async function handleInteraction(interaction) {
 // bot/webhook filtering, ban/maintenance checks, and per-guild prefix resolution.
 client.on(Events.MessageCreate, async message => {
   try {
-    await withJobDir(() => handlePrefixMessage(message, { botStartTime }));
+    await handlePrefixMessage(message, { botStartTime });
   } catch (error) {
     logger.error('Unhandled error in message handler:', error);
   }

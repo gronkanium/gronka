@@ -120,6 +120,18 @@ export async function ensureWebSchema() {
       label TEXT,
       created_on DATE NOT NULL DEFAULT CURRENT_DATE
     )`;
+  await sql`CREATE INDEX IF NOT EXISTS idx_web_sessions_expires ON web_sessions (expires_at)`;
+  for (const table of ['web_sessions', 'web_api_keys', 'web_passkeys', 'web_recovery_codes']) {
+    await sql.unsafe(`CREATE INDEX IF NOT EXISTS idx_${table}_account ON ${table} (account_id)`);
+  }
+}
+
+export async function pruneExpired() {
+  await getPostgresConnection()`DELETE FROM web_sessions WHERE expires_at < now()`;
+  const now = Date.now();
+  for (const [cacheKey, entry] of keyCache) {
+    if (entry.expires <= now) keyCache.delete(cacheKey);
+  }
 }
 
 export async function createAccount() {
@@ -167,7 +179,6 @@ export async function deleteAccount(accountId) {
 export async function createSession(accountId) {
   const sql = getPostgresConnection();
   const token = crypto.randomBytes(32).toString('base64url');
-  await sql`DELETE FROM web_sessions WHERE expires_at < now()`;
   await sql`
     INSERT INTO web_sessions (token_hash, account_id, expires_at, absolute_at)
     VALUES (${sha256(token)}, ${accountId}, ${new Date(Date.now() + SESSION_IDLE_MS)},
@@ -202,17 +213,17 @@ export async function deleteSession(token) {
 
 export async function getAccountSummary(accountId) {
   const sql = getPostgresConnection();
-  const [account] =
-    await sql`SELECT id, created_on, totp_secret FROM web_accounts WHERE id = ${accountId}`;
+  const [[account], keys, passkeys, [{ left }]] = await Promise.all([
+    sql`SELECT id, created_on, totp_secret FROM web_accounts WHERE id = ${accountId}`,
+    sql`
+      SELECT id, label, created_on, last_used_on FROM web_api_keys
+      WHERE account_id = ${accountId} ORDER BY created_on, id`,
+    sql`
+      SELECT id, label, created_on FROM web_passkeys
+      WHERE account_id = ${accountId} ORDER BY created_on, id`,
+    sql`SELECT count(*)::int AS left FROM web_recovery_codes WHERE account_id = ${accountId}`,
+  ]);
   if (!account) return null;
-  const keys = await sql`
-    SELECT id, label, created_on, last_used_on FROM web_api_keys
-    WHERE account_id = ${accountId} ORDER BY created_on, id`;
-  const passkeys = await sql`
-    SELECT id, label, created_on FROM web_passkeys
-    WHERE account_id = ${accountId} ORDER BY created_on, id`;
-  const [{ left }] =
-    await sql`SELECT count(*)::int AS left FROM web_recovery_codes WHERE account_id = ${accountId}`;
   const day = date => date?.toISOString().slice(0, 10) ?? null;
   return {
     id: account.id,

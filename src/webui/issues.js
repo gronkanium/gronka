@@ -99,3 +99,36 @@ export function stateOf(group, states = {}, now = Date.now()) {
 }
 
 export const isOpen = (group, states) => ['open', 'regressed'].includes(stateOf(group, states));
+
+const TAB_KIND = { defects: 'defect', upstream: 'upstream', user: 'user' };
+
+export const inTab = (tab, group, state) =>
+  tab === 'muted' || tab === 'resolved'
+    ? state === tab
+    : ['open', 'regressed'].includes(state) && (!TAB_KIND[tab] || TAB_KIND[tab] === group.kind);
+
+const HOUR = 3600e3;
+const DAY = 24 * HOUR;
+
+// n hourly or daily buckets ending with the one that holds `at`, in local time.
+export function buckets(times, unit, n, at) {
+  const size = unit === 'day' ? DAY : HOUR;
+  const start = new Date(at);
+  if (unit === 'day') start.setHours(0, 0, 0, 0);
+  else start.setMinutes(0, 0, 0);
+  const first = start.getTime() - (n - 1) * size;
+  const out = Array.from({ length: n }, (_, i) => ({ at: first + i * size, n: 0 }));
+  for (const t of times) {
+    const i = Math.floor((t - first) / size);
+    if (i >= 0 && i < n) out[i].n++;
+  }
+  return out;
+}
+
+export function abbr(n) {
+  if (n == null) return '–';
+  if (n < 1000) return String(n);
+  if (n < 1e4) return `${(n / 1e3).toFixed(1).replace(/\.0$/, '')}k`;
+  if (n < 1e6) return `${Math.round(n / 1e3)}k`;
+  return `${(n / 1e6).toFixed(1).replace(/\.0$/, '')}M`;
+}

@@ -1,6 +1,6 @@
 import { test, describe } from 'bun:test';
 import assert from 'node:assert';
-import { groupIssues, stateOf, isOpen } from '../../src/webui/issues.js';
+import { groupIssues, stateOf, isOpen, inTab, buckets, abbr } from '../../src/webui/issues.js';
 
 const reason = (text, extra = {}) => ({
   reason: text,
@@ -57,4 +57,45 @@ describe('issue state', () => {
     assert.strictEqual(stateOf(g, { [g.key]: { state: 'muted', until: 3000 } }, 2000), 'muted');
     assert.strictEqual(stateOf(g, { [g.key]: { state: 'muted', until: 3000 } }, 4000), 'open');
   });
+});
+
+describe('inTab', () => {
+  const defect = { kind: 'defect' };
+  test('open tabs take open and regressed issues of their kind', () => {
+    assert.ok(inTab('open', defect, 'regressed'));
+    assert.ok(inTab('defects', defect, 'open'));
+    assert.ok(!inTab('upstream', defect, 'open'));
+    assert.ok(!inTab('open', defect, 'muted'));
+  });
+  test('muted and resolved tabs take only their own state', () => {
+    assert.ok(inTab('muted', defect, 'muted'));
+    assert.ok(!inTab('resolved', defect, 'regressed'));
+  });
+});
+
+describe('buckets', () => {
+  test('counts each time into its hour, ending with the current one', () => {
+    const at = new Date(2026, 0, 2, 10, 30).getTime();
+    const b = buckets([at, at - 3600e3, at - 3600e3 + 60e3, at - 5 * 3600e3], 'hour', 3, at);
+    assert.deepStrictEqual(
+      b.map(x => x.n),
+      [0, 2, 1]
+    );
+    assert.strictEqual(b.at(-1).at, new Date(2026, 0, 2, 10).getTime());
+  });
+  test('day buckets start at local midnight', () => {
+    const at = new Date(2026, 0, 2, 10).getTime();
+    assert.strictEqual(buckets([], 'day', 1, at)[0].at, new Date(2026, 0, 2).getTime());
+  });
+});
+
+test('abbr shortens big counts', () => {
+  assert.deepStrictEqual([999, 1000, 1500, 12_345, 2_500_000, null].map(abbr), [
+    '999',
+    '1k',
+    '1.5k',
+    '12k',
+    '2.5M',
+    '–',
+  ]);
 });

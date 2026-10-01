@@ -2,47 +2,40 @@ import { ensurePostgresInitialized } from './init.js';
 import { getPostgresConnection } from './connection.js';
 
 export async function get24HourStats() {
-  try {
-    const now = Date.now();
-    const twentyFourHoursAgo = now - 24 * 60 * 60 * 1000;
+  const now = Date.now();
+  const twentyFourHoursAgo = now - 24 * 60 * 60 * 1000;
 
-    // PostgreSQL implementation
-    await ensurePostgresInitialized();
-    const sql = getPostgresConnection();
+  // PostgreSQL implementation
+  await ensurePostgresInitialized();
+  const sql = getPostgresConnection();
 
-    // Count unique users in last 24 hours
-    const uniqueUsersQuery =
-      'SELECT COUNT(DISTINCT user_id) AS count FROM processed_urls WHERE processed_at >= $1 AND user_id IS NOT NULL';
-    const uniqueUsersResult = await sql.unsafe(uniqueUsersQuery, [twentyFourHoursAgo]);
+  // Count unique users in last 24 hours
+  const uniqueUsersQuery =
+    'SELECT COUNT(DISTINCT user_id) AS count FROM processed_urls WHERE processed_at >= $1 AND user_id IS NOT NULL';
+  const uniqueUsersResult = await sql.unsafe(uniqueUsersQuery, [twentyFourHoursAgo]);
 
-    // Count total files in last 24 hours
-    const totalFilesQuery = 'SELECT COUNT(*) AS count FROM processed_urls WHERE processed_at >= $1';
-    const totalFilesResult = await sql.unsafe(totalFilesQuery, [twentyFourHoursAgo]);
+  // Count total files in last 24 hours
+  const totalFilesQuery = 'SELECT COUNT(*) AS count FROM processed_urls WHERE processed_at >= $1';
+  const totalFilesResult = await sql.unsafe(totalFilesQuery, [twentyFourHoursAgo]);
 
-    // Sum file sizes in last 24 hours (SUM returns NULL when no rows match)
-    const totalDataQuery =
-      'SELECT SUM(file_size) AS total FROM processed_urls WHERE processed_at >= $1 AND file_size IS NOT NULL';
-    const totalDataResult = await sql.unsafe(totalDataQuery, [twentyFourHoursAgo]);
+  // Sum file sizes in last 24 hours (SUM returns NULL when no rows match)
+  const totalDataQuery =
+    'SELECT SUM(file_size) AS total FROM processed_urls WHERE processed_at >= $1 AND file_size IS NOT NULL';
+  const totalDataResult = await sql.unsafe(totalDataQuery, [twentyFourHoursAgo]);
 
-    // Parse results - postgres.js returns BIGINT as strings, and SUM can return null
-    const unique_users = parseInt(uniqueUsersResult[0]?.count || 0, 10);
-    const total_files = parseInt(totalFilesResult[0]?.count || 0, 10);
-    // Handle null from SUM() when no rows match - use nullish coalescing
-    const total_data_bytes =
-      totalDataResult[0]?.total != null ? parseInt(totalDataResult[0].total, 10) : 0;
+  // Parse results - postgres.js returns BIGINT as strings, and SUM can return null
+  const unique_users = parseInt(uniqueUsersResult[0]?.count || 0, 10);
+  const total_files = parseInt(totalFilesResult[0]?.count || 0, 10);
+  // Handle null from SUM() when no rows match - use nullish coalescing
+  const total_data_bytes =
+    totalDataResult[0]?.total != null ? parseInt(totalDataResult[0].total, 10) : 0;
 
-    return {
-      unique_users,
-      total_files,
-      total_data_bytes,
-      timestamp: now,
-    };
-  } catch (error) {
-    console.error('Failed to get 24-hour stats:', error);
-    // Re-throw the error instead of silently returning zeros
-    // This ensures scripts fail loudly when database connection fails
-    throw error;
-  }
+  return {
+    unique_users,
+    total_files,
+    total_data_bytes,
+    timestamp: now,
+  };
 }
 
 const HOUR_MS = 60 * 60 * 1000;

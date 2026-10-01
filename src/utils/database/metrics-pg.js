@@ -73,46 +73,41 @@ export async function getAllUsersMetrics(options = {}) {
 
   const safeSortBy = allowedSortColumns.includes(sortBy) ? sortBy : 'total_commands';
 
-  try {
-    // Build query using sql.unsafe() for dynamic ORDER BY (column names are whitelisted)
-    let query = 'SELECT * FROM user_metrics';
-    const params = [];
+  // Build query using sql.unsafe() for dynamic ORDER BY (column names are whitelisted)
+  let query = 'SELECT * FROM user_metrics';
+  const params = [];
 
-    if (search) {
-      // Ids only, there is no name to search on any more.
-      query += ` WHERE user_id LIKE $${params.length + 1}`;
-      params.push(`%${search}%`);
-    }
-
-    // ORDER BY with sanitized column name (already whitelisted)
-    query += ` ORDER BY ${safeSortBy} ${sortDesc ? 'DESC' : 'ASC'}`;
-
-    if (limit !== null && limit !== undefined) {
-      query += ` LIMIT $${params.length + 1}`;
-      params.push(limit);
-    }
-
-    if (offset !== null && offset !== undefined) {
-      query += ` OFFSET $${params.length + 1}`;
-      params.push(offset);
-    }
-
-    const result = await sql.unsafe(query, params);
-
-    // Ensure we return an array
-    if (!Array.isArray(result)) {
-      console.error('getAllUsersMetrics: query did not return an array:', typeof result, result);
-      return [];
-    }
-    // Convert timestamp fields from strings to numbers
-    let converted = convertTimestampsInArray(result, USER_METRICS_TIMESTAMP_FIELDS);
-    // Convert numeric BIGINT fields from strings to numbers
-    converted = convertBigIntInArray(converted, USER_METRICS_NUMERIC_FIELDS);
-    return converted;
-  } catch (error) {
-    console.error('Error in getAllUsersMetrics:', error);
-    throw error;
+  if (search) {
+    // Ids only, there is no name to search on any more.
+    query += ` WHERE user_id LIKE $${params.length + 1}`;
+    params.push(`%${search}%`);
   }
+
+  // ORDER BY with sanitized column name (already whitelisted)
+  query += ` ORDER BY ${safeSortBy} ${sortDesc ? 'DESC' : 'ASC'}`;
+
+  if (limit !== null && limit !== undefined) {
+    query += ` LIMIT $${params.length + 1}`;
+    params.push(limit);
+  }
+
+  if (offset !== null && offset !== undefined) {
+    query += ` OFFSET $${params.length + 1}`;
+    params.push(offset);
+  }
+
+  const result = await sql.unsafe(query, params);
+
+  // Ensure we return an array
+  if (!Array.isArray(result)) {
+    console.error('getAllUsersMetrics: query did not return an array:', typeof result, result);
+    return [];
+  }
+  // Convert timestamp fields from strings to numbers
+  let converted = convertTimestampsInArray(result, USER_METRICS_TIMESTAMP_FIELDS);
+  // Convert numeric BIGINT fields from strings to numbers
+  converted = convertBigIntInArray(converted, USER_METRICS_NUMERIC_FIELDS);
+  return converted;
 }
 
 export async function getUserMetricsCount(options = {}) {
@@ -122,25 +117,20 @@ export async function getUserMetricsCount(options = {}) {
 
   const { search = null } = options;
 
-  try {
-    let result;
-    if (search) {
-      result =
-        await sql`SELECT COUNT(*) as count FROM user_metrics WHERE user_id LIKE ${`%${search}%`}`;
-    } else {
-      result = await sql`SELECT COUNT(*) as count FROM user_metrics`;
-    }
-
-    // Ensure result is an array and extract count
-    if (!Array.isArray(result) || result.length === 0) {
-      return 0;
-    }
-    const count = result[0]?.count;
-    return parseInt(count || 0, 10);
-  } catch (error) {
-    console.error('Error in getUserMetricsCount:', error);
-    throw error;
+  let result;
+  if (search) {
+    result =
+      await sql`SELECT COUNT(*) as count FROM user_metrics WHERE user_id LIKE ${`%${search}%`}`;
+  } else {
+    result = await sql`SELECT COUNT(*) as count FROM user_metrics`;
   }
+
+  // Ensure result is an array and extract count
+  if (!Array.isArray(result) || result.length === 0) {
+    return 0;
+  }
+  const count = result[0]?.count;
+  return parseInt(count || 0, 10);
 }
 
 /**
@@ -159,23 +149,18 @@ export async function getActiveUserCounts() {
   const sevenDaysAgo = now - 7 * 24 * 60 * 60 * 1000;
   const thirtyDaysAgo = now - 30 * 24 * 60 * 60 * 1000;
 
-  try {
-    const result = await sql`
-      SELECT
-        COUNT(*) AS total,
-        COUNT(*) FILTER (WHERE last_command_at >= ${sevenDaysAgo}) AS active_7d,
-        COUNT(*) FILTER (WHERE last_command_at >= ${thirtyDaysAgo}) AS active_30d
-      FROM user_metrics
-    `;
+  const result = await sql`
+    SELECT
+      COUNT(*) AS total,
+      COUNT(*) FILTER (WHERE last_command_at >= ${sevenDaysAgo}) AS active_7d,
+      COUNT(*) FILTER (WHERE last_command_at >= ${thirtyDaysAgo}) AS active_30d
+    FROM user_metrics
+  `;
 
-    const row = result[0] || {};
-    return {
-      total: parseInt(row.total || 0, 10),
-      active7d: parseInt(row.active_7d || 0, 10),
-      active30d: parseInt(row.active_30d || 0, 10),
-    };
-  } catch (error) {
-    console.error('Error in getActiveUserCounts:', error);
-    throw error;
-  }
+  const row = result[0] || {};
+  return {
+    total: parseInt(row.total || 0, 10),
+    active7d: parseInt(row.active_7d || 0, 10),
+    active30d: parseInt(row.active_30d || 0, 10),
+  };
 }

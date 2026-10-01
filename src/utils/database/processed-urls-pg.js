@@ -97,36 +97,20 @@ export async function insertProcessedUrl(
 
   const sql = getPostgresConnection();
 
-  try {
-    await sql`
-      INSERT INTO processed_urls (url_hash, file_hash, file_type, file_extension, file_url, processed_at, user_id, file_size)
-      VALUES (${urlHash}, ${fileHash}, ${fileType}, ${fileExtension}, ${fileUrl}, ${processedAt}, ${userId}, ${fileSize})
-      ON CONFLICT (url_hash) DO UPDATE SET
-        file_hash = EXCLUDED.file_hash,
-        file_type = EXCLUDED.file_type,
-        file_extension = EXCLUDED.file_extension,
-        file_url = EXCLUDED.file_url,
-        processed_at = EXCLUDED.processed_at,
-        user_id = EXCLUDED.user_id,
-        file_size = EXCLUDED.file_size,
-        r2_expired_at = NULL
-    `;
-    invalidateProcessedUrlCache(urlHash);
-  } catch (error) {
-    // Handle connection errors gracefully (e.g., when database is closed)
-    if (
-      error.message &&
-      (error.message.includes('CONNECTION_ENDED') || error.message.includes('connection'))
-    ) {
-      console.error(
-        `Database connection not available. Cannot insert processed URL: ${error.message}`
-      );
-      return; // Return gracefully instead of throwing
-    }
-    // Log other errors but don't throw - allows graceful degradation
-    console.error(`Failed to insert/update processed URL in database: ${error.message}`);
-    throw error;
-  }
+  await sql`
+    INSERT INTO processed_urls (url_hash, file_hash, file_type, file_extension, file_url, processed_at, user_id, file_size)
+    VALUES (${urlHash}, ${fileHash}, ${fileType}, ${fileExtension}, ${fileUrl}, ${processedAt}, ${userId}, ${fileSize})
+    ON CONFLICT (url_hash) DO UPDATE SET
+      file_hash = EXCLUDED.file_hash,
+      file_type = EXCLUDED.file_type,
+      file_extension = EXCLUDED.file_extension,
+      file_url = EXCLUDED.file_url,
+      processed_at = EXCLUDED.processed_at,
+      user_id = EXCLUDED.user_id,
+      file_size = EXCLUDED.file_size,
+      r2_expired_at = NULL
+  `;
+  invalidateProcessedUrlCache(urlHash);
 }
 
 export async function getUserMedia(userId, options = {}) {
@@ -277,17 +261,13 @@ export async function markProcessedUrlsR2Expired(urlHashes) {
     return;
   }
 
-  try {
-    await sql`
-      UPDATE processed_urls
-      SET r2_expired_at = ${Date.now()}
-      WHERE url_hash = ANY(${urlHashes})
-    `;
-    for (const urlHash of urlHashes) {
-      invalidateProcessedUrlCache(urlHash);
-    }
-  } catch (error) {
-    console.error('Failed to mark processed URLs as R2-expired:', error);
+  await sql`
+    UPDATE processed_urls
+    SET r2_expired_at = ${Date.now()}
+    WHERE url_hash = ANY(${urlHashes})
+  `;
+  for (const urlHash of urlHashes) {
+    invalidateProcessedUrlCache(urlHash);
   }
 }
 
@@ -296,13 +276,8 @@ export async function deleteProcessedUrl(urlHash) {
 
   const sql = getPostgresConnection();
 
-  try {
-    const result = await sql`DELETE FROM processed_urls WHERE url_hash = ${urlHash}`;
-    return result.count > 0;
-  } catch (error) {
-    console.error('Failed to delete processed URL:', error);
-    return false;
-  }
+  const result = await sql`DELETE FROM processed_urls WHERE url_hash = ${urlHash}`;
+  return result.count > 0;
 }
 
 export async function deleteUserR2Media(userId) {
@@ -310,16 +285,11 @@ export async function deleteUserR2Media(userId) {
 
   const sql = getPostgresConnection();
 
-  try {
-    const publicDomain = r2Config.publicDomain;
-    const r2UrlPrefix = `https://${publicDomain}/`;
-    const result = await sql`
-      DELETE FROM processed_urls
-      WHERE user_id = ${userId} AND file_url LIKE ${`${r2UrlPrefix}%`}
-    `;
-    return result.count;
-  } catch (error) {
-    console.error('Failed to delete user R2 media:', error);
-    return 0;
-  }
+  const publicDomain = r2Config.publicDomain;
+  const r2UrlPrefix = `https://${publicDomain}/`;
+  const result = await sql`
+    DELETE FROM processed_urls
+    WHERE user_id = ${userId} AND file_url LIKE ${`${r2UrlPrefix}%`}
+  `;
+  return result.count;
 }

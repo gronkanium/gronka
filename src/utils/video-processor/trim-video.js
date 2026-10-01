@@ -1,8 +1,12 @@
-import ffmpeg from 'fluent-ffmpeg';
 import fs from 'fs/promises';
 import path from 'path';
 import { createLogger } from '../logger.js';
-import { validateNumericParameter, checkFFmpegInstalled, FFMPEG_INPUT_GUARD } from './utils.js';
+import {
+  validateNumericParameter,
+  checkFFmpegInstalled,
+  FFMPEG_INPUT_GUARD,
+  runFfmpeg,
+} from './utils.js';
 
 const logger = createLogger('trim-video');
 
@@ -60,58 +64,50 @@ export async function trimVideo(inputPath, outputPath, options = {}) {
   const outputDir = path.dirname(outputPath);
   await fs.mkdir(outputDir, { recursive: true });
 
-  return new Promise((resolve, reject) => {
-    const ffmpegCommand = ffmpeg(inputPath).inputOptions(FFMPEG_INPUT_GUARD);
+  // For accurate trimming, we need to re-encode instead of using -c copy
+  // Stream copy (-c copy) can only cut at keyframes, which can cause:
+  // 1. Inaccurate trim points
+  // 2. Corrupted files when trim points don't align with keyframes
+  // 3. Empty or unplayable files
+  // Re-encoding ensures frame-accurate trimming and valid output files
 
-    // For accurate trimming, we need to re-encode instead of using -c copy
-    // Stream copy (-c copy) can only cut at keyframes, which can cause:
-    // 1. Inaccurate trim points
-    // 2. Corrupted files when trim points don't align with keyframes
-    // 3. Empty or unplayable files
-    // Re-encoding ensures frame-accurate trimming and valid output files
+  // Add start time as input option (before -i) for faster seeking
+  // Then decode and trim accurately
+  const inputOptions = [...FFMPEG_INPUT_GUARD];
+  if (startTime !== null) {
+    inputOptions.push('-ss', `${startTime}`);
+  }
 
-    // Add start time as input option (before -i) for faster seeking
-    // Then decode and trim accurately
-    if (startTime !== null) {
-      ffmpegCommand.inputOptions([`-ss ${startTime}`]);
-    }
+  // Build output options with re-encoding for accurate trimming
+  const outputOptions = [
+    '-c:v',
+    'libx264', // Re-encode video with H.264 (widely compatible)
+    '-preset',
+    'fast', // Faster encoding, good quality balance
+    '-crf',
+    '26', // Optimized for file size while maintaining good quality (18-28 range)
+    '-c:a',
+    'aac', // Re-encode audio to AAC (widely compatible)
+    '-b:a',
+    '128k', // Audio bitrate - optimized for web, good quality
+    '-movflags',
+    '+faststart', // Enable fast start for web playback
+    '-avoid_negative_ts',
+    'make_zero', // Handle timestamp issues
+  ];
 
-    // Build output options with re-encoding for accurate trimming
-    const outputOptions = [
-      '-c:v',
-      'libx264', // Re-encode video with H.264 (widely compatible)
-      '-preset',
-      'fast', // Faster encoding, good quality balance
-      '-crf',
-      '26', // Optimized for file size while maintaining good quality (18-28 range)
-      '-c:a',
-      'aac', // Re-encode audio to AAC (widely compatible)
-      '-b:a',
-      '128k', // Audio bitrate - optimized for web, good quality
-      '-movflags',
-      '+faststart', // Enable fast start for web playback
-      '-avoid_negative_ts',
-      'make_zero', // Handle timestamp issues
-    ];
+  // Add duration as output option
+  if (duration !== null) {
+    outputOptions.push('-t', `${duration}`);
+  }
 
-    // Add duration as output option
-    if (duration !== null) {
-      outputOptions.push('-t', `${duration}`);
-    }
+  outputOptions.push('-y'); // Overwrite output file
 
-    outputOptions.push('-y'); // Overwrite output file
-
-    ffmpegCommand
-      .outputOptions(outputOptions)
-      .output(outputPath)
-      .on('error', (err, stdout, stderr) => {
-        logger.error('FFmpeg video trim failed:', stderr);
-        reject(new Error(`Video trimming failed: ${err.message}`));
-      })
-      .on('end', () => {
-        logger.debug(`Video trim completed: ${outputPath}`);
-        resolve();
-      })
-      .run();
-  });
+  try {
+    await runFfmpeg([...inputOptions, '-i', inputPath, ...outputOptions, outputPath]);
+  } catch (err) {
+    logger.error('FFmpeg video trim failed:', err.stderr);
+    throw new Error(`Video trimming failed: ${err.message}`, { cause: err });
+  }
+  logger.debug(`Video trim completed: ${outputPath}`);
 }

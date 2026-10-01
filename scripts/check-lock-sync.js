@@ -30,7 +30,7 @@ try {
 } catch (error) {
   console.error('✗ bun.lock is out of sync with package.json');
   if (error.stderr) console.error(error.stderr.toString().trim());
-  console.error('\nTo fix this, run: bun run fix:deps');
+  console.error('\nTo fix this, run: bun install');
   console.error('Or manually run: bun install\n');
   process.exit(1);
 }

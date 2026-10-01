@@ -969,8 +969,9 @@
   .grid {
     display: grid;
     grid-template-columns: minmax(0, 1fr) 440px;
+    grid-template-rows: minmax(0, 1fr);
     gap: var(--gap);
-    height: calc(100vh - var(--grid-top, 170px) - 24px);
+    height: calc(100vh - var(--grid-top, 170px) - 48px);
     min-height: 420px;
   }
   .issues-list {
@@ -1403,6 +1404,7 @@
   @media (max-width: 1100px) {
     .grid {
       grid-template-columns: minmax(0, 1fr);
+      grid-template-rows: none;
       height: auto;
       min-height: 0;
     }

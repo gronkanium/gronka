@@ -469,7 +469,7 @@ url of the bot server api endpoint for jekyll stats polling.
 **example:**
 
 ```env
-BOT_API_URL=http://192.168.0.212:3000
+BOT_API_URL=http://your-bot-host:3000
 ```
 
 ### `STATS_USERNAME`

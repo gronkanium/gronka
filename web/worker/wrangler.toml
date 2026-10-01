@@ -1,6 +1,7 @@
 name = "gronka-dl"
 main = "index.js"
 compatibility_date = "2026-09-01"
+upload_source_maps = false
 workers_dev = false
 routes = [{ pattern = "dl.gronka.dev", custom_domain = true }]
 

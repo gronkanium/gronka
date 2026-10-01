@@ -1,5 +1,5 @@
 import axios from 'axios';
-import fsSync from 'node:fs';
+import { readSessionCookie } from './session-cookie.js';
 import { createLogger } from './logger.js';
 import { NetworkError } from './errors.js';
 import { ssrfGuardedRequest } from './ssrf-guard.js';
@@ -55,23 +55,11 @@ export function isRedditPostUrl(url) {
   }
 }
 
-function readSessionCookie() {
-  const cookiesPath = process.env.INSTAGRAM_COOKIES_PATH;
-  if (!cookiesPath) {
-    return null;
-  }
-  try {
-    const entry = JSON.parse(fsSync.readFileSync(cookiesPath, 'utf8'))?.reddit?.[0];
-    return typeof entry === 'string' && entry.includes('reddit_session=') ? entry : null;
-  } catch (error) {
-    logger.warn(`Could not read Reddit cookies from ${cookiesPath}: ${error.message}`);
-    return null;
-  }
-}
+const readCookie = () => readSessionCookie('reddit', 'reddit_session=');
 
 /** Whether the Reddit extractor is usable at all; false means the caller should use cobalt. */
 export function hasRedditSession() {
-  return readSessionCookie() !== null;
+  return readCookie() !== null;
 }
 
 /**
@@ -111,7 +99,7 @@ async function canonicalUrl(url) {
 }
 
 async function fetchListing(url) {
-  const cookie = readSessionCookie();
+  const cookie = readCookie();
   if (!cookie) {
     // Curated rather than internal: download.js only propagates a ValidationError out of the
     // resolver, and that is reserved for the disabled-source gate.

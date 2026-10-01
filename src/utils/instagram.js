@@ -1,5 +1,5 @@
 import axios from 'axios';
-import fsSync from 'node:fs';
+import { readSessionCookie } from './session-cookie.js';
 import { createLogger } from './logger.js';
 import { NetworkError, ValidationError } from './errors.js';
 import { downloadFileFromUrl } from './file-downloader.js';
@@ -106,28 +106,11 @@ export function shortcodeToMediaId(shortcode) {
   return id.toString();
 }
 
-/**
- * The `instagram` service cookie out of the cobalt cookie file, or null when none is usable.
- * Same file cobalt reads, so a refreshed session only has to be pasted in one place. Read per
- * call rather than memoized: refreshing an expired session must not need a container restart.
- */
-function readSessionCookie() {
-  const cookiesPath = process.env.INSTAGRAM_COOKIES_PATH;
-  if (!cookiesPath) {
-    return null;
-  }
-  try {
-    const entry = JSON.parse(fsSync.readFileSync(cookiesPath, 'utf8'))?.instagram?.[0];
-    return typeof entry === 'string' && entry.includes('sessionid=') ? entry : null;
-  } catch (error) {
-    logger.warn(`Could not read Instagram cookies from ${cookiesPath}: ${error.message}`);
-    return null;
-  }
-}
+const readCookie = () => readSessionCookie('instagram', 'sessionid=');
 
 /** Whether the Instagram extractor is usable at all; false means the caller should use cobalt. */
 export function hasInstagramSession() {
-  return readSessionCookie() !== null;
+  return readCookie() !== null;
 }
 
 function isMediaHostUrl(url) {
@@ -274,7 +257,7 @@ async function fetchStoryItems({ highlightId, mediaId }, refererPath, cookie) {
  * @param {boolean} isAdminUser - Admin users bypass size limits
  */
 export async function downloadFromInstagram(url, isAdminUser = false) {
-  const cookie = readSessionCookie();
+  const cookie = readCookie();
   if (!cookie) {
     throw new ValidationError('no instagram session configured');
   }

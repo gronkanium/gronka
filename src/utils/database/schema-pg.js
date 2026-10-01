@@ -180,14 +180,6 @@ export function getIndexDefinitions() {
       sql: 'CREATE INDEX IF NOT EXISTS idx_logs_timestamp ON logs(timestamp);',
     },
     {
-      name: 'idx_logs_component',
-      sql: 'CREATE INDEX IF NOT EXISTS idx_logs_component ON logs(component);',
-    },
-    {
-      name: 'idx_logs_level',
-      sql: 'CREATE INDEX IF NOT EXISTS idx_logs_level ON logs(level);',
-    },
-    {
       name: 'idx_logs_component_timestamp',
       sql: 'CREATE INDEX IF NOT EXISTS idx_logs_component_timestamp ON logs(component, timestamp);',
     },
@@ -204,20 +196,8 @@ export function getIndexDefinitions() {
       sql: 'CREATE INDEX IF NOT EXISTS idx_processed_urls_user_id ON processed_urls(user_id);',
     },
     {
-      name: 'idx_operation_logs_operation_id',
-      sql: 'CREATE INDEX IF NOT EXISTS idx_operation_logs_operation_id ON operation_logs(operation_id);',
-    },
-    {
       name: 'idx_operation_logs_timestamp',
       sql: 'CREATE INDEX IF NOT EXISTS idx_operation_logs_timestamp ON operation_logs(timestamp);',
-    },
-    {
-      name: 'idx_operation_logs_status',
-      sql: 'CREATE INDEX IF NOT EXISTS idx_operation_logs_status ON operation_logs(status);',
-    },
-    {
-      name: 'idx_operation_logs_step',
-      sql: 'CREATE INDEX IF NOT EXISTS idx_operation_logs_step ON operation_logs(step);',
     },
     {
       name: 'idx_operation_logs_operation_id_timestamp',
@@ -260,10 +240,6 @@ export function getIndexDefinitions() {
       sql: 'CREATE INDEX IF NOT EXISTS idx_temporary_uploads_r2_key ON temporary_uploads(r2_key);',
     },
     {
-      name: 'idx_temporary_uploads_url_hash',
-      sql: 'CREATE INDEX IF NOT EXISTS idx_temporary_uploads_url_hash ON temporary_uploads(url_hash);',
-    },
-    {
       name: 'idx_temporary_uploads_deleted_at',
       sql: 'CREATE INDEX IF NOT EXISTS idx_temporary_uploads_deleted_at ON temporary_uploads(deleted_at);',
     },
@@ -282,6 +258,22 @@ export function getIndexDefinitions() {
     {
       name: 'idx_media_jobs_status',
       sql: 'CREATE INDEX IF NOT EXISTS idx_media_jobs_status ON media_jobs(status, id);',
+    },
+    {
+      name: 'idx_operation_logs_status_update',
+      sql: "CREATE INDEX IF NOT EXISTS idx_operation_logs_status_update ON operation_logs(operation_id, timestamp DESC) WHERE step = 'status_update';",
+    },
+    {
+      name: 'idx_operation_logs_created',
+      sql: "CREATE INDEX IF NOT EXISTS idx_operation_logs_created ON operation_logs(timestamp) WHERE step = 'created';",
+    },
+    {
+      name: 'idx_media_jobs_timestamp',
+      sql: 'CREATE INDEX IF NOT EXISTS idx_media_jobs_timestamp ON media_jobs(timestamp);',
+    },
+    {
+      name: 'idx_media_jobs_operation_id',
+      sql: 'CREATE INDEX IF NOT EXISTS idx_media_jobs_operation_id ON media_jobs(operation_id) WHERE operation_id IS NOT NULL;',
     },
   ];
 }
@@ -343,6 +335,20 @@ export async function mergeUsersIntoUserMetrics(sql) {
       DROP COLUMN IF EXISTS updated_at`;
 }
 
+// Each is a prefix of another index or has about four distinct values; they only cost writes.
+async function dropRedundantIndexes(sql) {
+  for (const name of [
+    'idx_logs_component',
+    'idx_logs_level',
+    'idx_operation_logs_operation_id',
+    'idx_operation_logs_status',
+    'idx_operation_logs_step',
+    'idx_temporary_uploads_url_hash',
+  ]) {
+    await sql.unsafe(`DROP INDEX IF EXISTS ${name}`);
+  }
+}
+
 // Append only: a name, once recorded in schema_migrations, never runs again.
 const MIGRATIONS = [
   ['processed_urls_file_size', addFileSizeColumnIfNeeded],
@@ -351,6 +357,7 @@ const MIGRATIONS = [
   ['merge_users_into_user_metrics', mergeUsersIntoUserMetrics],
   ['temporary_uploads_cascade_delete', ensureTemporaryUploadsCascadeDelete],
   ['temporary_uploads_unique_key', ensureTemporaryUploadsUniqueKey],
+  ['drop_redundant_indexes', dropRedundantIndexes],
 ];
 
 export async function runMigrations(sql) {

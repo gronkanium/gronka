@@ -29,7 +29,7 @@ describe what actually happened. include any error messages, screenshots, or log
 ## environment
 
 - gronka version: (run `/info` to check)
-- platform: (discord desktop/web/mobile)
+- where: (discord desktop/web/mobile, or web.gronka.dev)
 - docker or source installation?
 - any relevant configuration changes?
 

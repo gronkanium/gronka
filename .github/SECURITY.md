@@ -4,7 +4,7 @@ this security policy outlines how we handle security for gronka and how to repor
 
 ## reporting vulnerabilities
 
-if you find a security vulnerability, report it to: **admin@gronka.dev**
+if you find a security vulnerability, report it privately through [github's vulnerability reporting](https://github.com/gronkanium/gronka/security/advisories/new) or email **admin@gronka.dev**. please don't open a public issue.
 
 include this stuff in your report:
 
@@ -16,7 +16,7 @@ include this stuff in your report:
 
 ### what we're interested in
 
-security issues that affect:
+security issues in the discord bot, the code in this repository, web.gronka.dev and api.gronka.dev that affect:
 
 - authentication or authorization problems
 - data leaks or exposure
@@ -42,9 +42,10 @@ these aren't considered security vulnerabilities:
 ### data protection
 
 - files are stored on cloudflare r2 or local filesystem with proper access controls
-- files are identified by MD5 hash for deduplication and integrity checking
+- files are identified by SHA-256 hash for deduplication and integrity checking
 - storage access is restricted to necessary operations only
 - user data isn't directly linked to stored files
+- the bot stores discord ids only, never usernames, and prunes logs and history after 7 days
 
 ### authentication
 
@@ -55,7 +56,7 @@ these aren't considered security vulnerabilities:
 ### network security
 
 - public endpoints use HTTPS where applicable
-- internal APIs aren't exposed to the public internet when using r2 storage
+- the default compose file binds the database and media downloader to localhost only
 - command usage is rate-limited to prevent abuse
 
 ### input validation
@@ -99,8 +100,14 @@ the bot uses these services:
 - **cloudflare r2** - file storage
 - **bun** - runtime environment
 - **cobalt** - self-hosted media downloader, runs in a container alongside the bot
+- **yt-dlp**, **ffmpeg** and **gifsicle** - media download and processing inside the container
+- **postgresql** - the bot's database
 
 we rely on these services to maintain their security. we can't guarantee their security beyond what they provide.
+
+## supported versions
+
+only the latest release gets security fixes. self-hosted instances should run the newest tag.
 
 ## security updates
 

@@ -6,6 +6,8 @@ import {
   checkFFmpegInstalled,
   colorspaceRepairInputOptions,
   FFMPEG_INPUT_GUARD,
+  GIF_PALETTEGEN,
+  GIF_PALETTEUSE,
   runFfmpeg,
 } from './utils.js';
 import { getVideoMetadata } from './metadata.js';
@@ -22,7 +24,6 @@ const logger = createLogger('convert-to-gif');
  * @param {number} options.fps - Frames per second (default: 30)
  * @param {number|null} options.startTime - Trim start time in seconds (optional)
  * @param {number|null} options.duration - Trim duration in seconds (optional)
- * @param {string} options.quality - Quality preset: 'low', 'medium', 'high' (optional, uses botConfig.gifQuality default: 'medium')
  * @returns {Promise<void>}
  */
 export async function convertToGif(inputPath, outputPath, options = {}) {
@@ -47,16 +48,9 @@ async function convertToGifImpl(inputPath, outputPath, options = {}) {
     Infinity,
     true
   );
-  const quality = options.quality;
-
-  // Validate quality preset
-  const validQualities = ['low', 'medium', 'high'];
-  if (!validQualities.includes(quality)) {
-    throw new Error(`quality must be one of: ${validQualities.join(', ')}`);
-  }
 
   logger.info(
-    `Starting video to GIF conversion: ${inputPath} -> ${outputPath} (width: ${width}, fps: ${fps}, quality: ${quality})`
+    `Starting video to GIF conversion: ${inputPath} -> ${outputPath} (width: ${width}, fps: ${fps})`
   );
 
   // Check if FFmpeg is installed
@@ -77,25 +71,6 @@ async function convertToGifImpl(inputPath, outputPath, options = {}) {
   // Ensure output directory exists
   const outputDir = path.dirname(outputPath);
   await fs.mkdir(outputDir, { recursive: true });
-
-  // Quality presets for dithering - performance-optimized presets
-  // Low and medium use faster Bayer dithering, high uses slower but best quality Floyd-Steinberg
-  const qualityPresets = {
-    low: 'bayer:bayer_scale=5',
-    medium: 'sierra2_4a',
-    high: 'floyd_steinberg:diff_mode=rectangle',
-  };
-
-  // Quality-specific palette generation for file size optimization
-  // Lower color counts reduce file size with minimal quality impact
-  const palettePresets = {
-    low: 'palettegen=max_colors=128:reserve_transparent=0:stats_mode=diff',
-    medium: 'palettegen=max_colors=192:reserve_transparent=0:stats_mode=diff',
-    high: 'palettegen=max_colors=256:reserve_transparent=0:stats_mode=diff',
-  };
-
-  const dither = qualityPresets[quality] || qualityPresets.medium;
-  const paletteGen = palettePresets[quality] || palettePresets.medium;
 
   // Both passes need this: pass 2 reads the same input through the same buffer source.
   let colorspaceRepair = [];
@@ -138,7 +113,7 @@ async function convertToGifImpl(inputPath, outputPath, options = {}) {
         '-i',
         inputPath,
         '-vf',
-        `fps=${fps},scale=${width}:-1:flags=lanczos,${paletteGen}`,
+        `fps=${fps},scale=${width}:-1:flags=lanczos,${GIF_PALETTEGEN}`,
         '-y',
         palettePath,
       ],
@@ -159,7 +134,7 @@ async function convertToGifImpl(inputPath, outputPath, options = {}) {
         '-i',
         palettePath,
         '-filter_complex',
-        `[0:v]fps=${fps},scale=${width}:-1:flags=lanczos[v];[v][1:v]paletteuse=dither=${dither}`,
+        `[0:v]fps=${fps},scale=${width}:-1:flags=lanczos[v];[v][1:v]${GIF_PALETTEUSE}`,
         '-loop',
         '0',
         '-y',

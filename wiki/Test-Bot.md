@@ -94,7 +94,6 @@ all standard environment variables support the `TEST_` and `PROD_` prefixes:
 **file size limits:**
 - `TEST_MAX_VIDEO_SIZE` / `PROD_MAX_VIDEO_SIZE`
 - `TEST_MAX_IMAGE_SIZE` / `PROD_MAX_IMAGE_SIZE`
-- `TEST_GIF_QUALITY` / `PROD_GIF_QUALITY`
 
 **processing options:**
 - `TEST_MAX_GIF_DURATION` / `PROD_MAX_GIF_DURATION`
@@ -287,12 +286,10 @@ MAX_GIF_DURATION=30
 # test bot file size limits
 TEST_MAX_VIDEO_SIZE=52428800
 TEST_MAX_IMAGE_SIZE=26214400
-TEST_GIF_QUALITY=low
 
 # prod bot file size limits
 PROD_MAX_VIDEO_SIZE=104857600
 PROD_MAX_IMAGE_SIZE=52428800
-PROD_GIF_QUALITY=medium
 
 # test bot server configuration
 TEST_SERVER_HOST=127.0.0.1

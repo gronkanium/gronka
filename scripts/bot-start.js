@@ -55,7 +55,6 @@ const prefixMappings = [
   'MAX_GIF_DURATION',
   'MAX_VIDEO_SIZE',
   'MAX_IMAGE_SIZE',
-  'GIF_QUALITY',
   'COBALT_API_URL',
   'COBALT_ENABLED',
   'R2_ACCOUNT_ID',

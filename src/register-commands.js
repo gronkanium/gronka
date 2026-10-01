@@ -88,26 +88,6 @@ const commands = [
         ],
       },
       {
-        name: 'quality',
-        description: 'gif quality preset (low, medium, high). default: medium. gif only',
-        type: 3, // STRING type
-        required: false,
-        choices: [
-          {
-            name: 'low',
-            value: 'low',
-          },
-          {
-            name: 'medium',
-            value: 'medium',
-          },
-          {
-            name: 'high',
-            value: 'high',
-          },
-        ],
-      },
-      {
         name: 'optimize',
         description: 'optimize the gif after conversion to reduce file size',
         type: 5, // BOOLEAN type

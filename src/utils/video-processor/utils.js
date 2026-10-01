@@ -11,6 +11,10 @@ export const FFMPEG_INPUT_GUARD = [
   'mov,matroska,avi,flv,mpegts,gif,apng,image2,png_pipe,jpeg_pipe,webp_pipe,bmp_pipe,gif_pipe',
 ];
 
+// Measured best size for quality on real clips; error diffusion only redraws each frame's changed rectangle.
+export const GIF_PALETTEGEN = 'palettegen=max_colors=256:reserve_transparent=0:stats_mode=diff';
+export const GIF_PALETTEUSE = 'paletteuse=dither=floyd_steinberg:diff_mode=rectangle';
+
 export function runFfmpeg(args, { signal } = {}) {
   return new Promise((resolve, reject) => {
     const child = spawn('ffmpeg', args, {

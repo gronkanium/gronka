@@ -1,4 +1,5 @@
 <script>
+  import { getJson, getJsonOrNull } from '../utils/api.js';
   import {
     TerminalSquare,
     Activity,
@@ -48,18 +49,16 @@
   let copied = $state(false);
 
   const userId = $derived($currentRoute.params.userId);
-  const get = url =>
-    fetch(url).then(r => (r.ok ? r.json() : Promise.reject(new Error(String(r.status)))));
 
   async function loadProfile(id) {
     error = '';
     metrics = null;
     try {
-      metrics = (await get(`/api/users/${id}`)).metrics;
+      metrics = (await getJson(`/api/users/${id}`)).metrics;
     } catch {
       error = 'no user with this id';
     }
-    const bans = await get('/api/bans').catch(() => null);
+    const bans = await getJsonOrNull('/api/bans');
     ban = bans?.bans?.find(b => b.user_id === id) ?? null;
   }
   $effect(() => {
@@ -70,7 +69,7 @@
   $effect(() => {
     if (!userId) return;
     opsLoading = true;
-    get(`/api/users/${userId}/operations?limit=${OPS}&offset=${opsOffset}`)
+    getJson(`/api/users/${userId}/operations?limit=${OPS}&offset=${opsOffset}`)
       .then(d => {
         ops = d.operations ?? [];
         opsTotal = d.total ?? 0;
@@ -81,7 +80,7 @@
   $effect(() => {
     if (!userId) return;
     mediaLoading = true;
-    get(`/api/users/${userId}/media?limit=${MEDIA}&offset=${mediaOffset}`)
+    getJson(`/api/users/${userId}/media?limit=${MEDIA}&offset=${mediaOffset}`)
       .then(d => {
         media = d.media ?? [];
         mediaTotal = d.total ?? 0;

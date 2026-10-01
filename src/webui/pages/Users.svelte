@@ -1,4 +1,5 @@
 <script>
+  import { getJsonOrNull } from '../utils/api.js';
   import { onDestroy } from 'svelte';
   import { Search, Users as UsersIcon, ArrowUpRight } from 'lucide-svelte';
   import { navigate } from '../utils/router.js';
@@ -47,10 +48,6 @@
     u.total_commands
       ? Math.round(((u.total_commands - u.failed_commands) / u.total_commands) * 100)
       : 0;
-  const get = url =>
-    fetch(url)
-      .then(r => (r.ok ? r.json() : Promise.reject(new Error())))
-      .catch(() => null);
 
   async function load() {
     loading = true;
@@ -62,7 +59,7 @@
       offset: String(offset),
     });
     if (search.trim()) q.set('search', search.trim());
-    const data = await get(`/api/users?${q}`);
+    const data = await getJsonOrNull(`/api/users?${q}`);
     if (!data) error = 'could not load users';
     users = data?.users ?? [];
     total = data?.total ?? 0;
@@ -71,8 +68,8 @@
 
   async function loadStats() {
     const [st, top] = await Promise.all([
-      get('/api/stats'),
-      get('/api/users?sortBy=total_commands&sortDesc=true&limit=1'),
+      getJsonOrNull('/api/stats'),
+      getJsonOrNull('/api/users?sortBy=total_commands&sortDesc=true&limit=1'),
     ]);
     stats = st;
     topUser = top?.users?.[0] ?? null;

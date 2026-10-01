@@ -1,4 +1,5 @@
 <script>
+  import { getJson, getJsonOrNull } from '../utils/api.js';
   import { tick } from 'svelte';
   import {
     Check,
@@ -42,15 +43,13 @@
   let banStatus = $state('');
 
   const id = $derived($currentRoute.params.requestId);
-  const json = url =>
-    fetch(url).then(r => (r.ok ? r.json() : Promise.reject(new Error(String(r.status)))));
 
   async function load(requestId) {
     error = '';
     op = null;
     collapsed = {};
     try {
-      const data = await json(`/api/operations/${encodeURIComponent(requestId)}`);
+      const data = await getJson(`/api/operations/${encodeURIComponent(requestId)}`);
       op = data.operation;
       trace = data.trace;
     } catch {
@@ -59,16 +58,16 @@
     }
     const start = op.timestamp;
     const [l, j, same, user] = await Promise.all([
-      json(
+      getJson(
         `/api/logs?op=${encodeURIComponent(requestId)}&orderDesc=false&limit=500&startTime=${start - 60e3}&endTime=${start + 20 * 60e3}`
       ).catch(() => null),
-      json(`/api/system/jobs/${encodeURIComponent(requestId)}`).catch(() => null),
+      getJsonOrNull(`/api/system/jobs/${encodeURIComponent(requestId)}`),
       op.originalUrl
-        ? json(
+        ? getJson(
             `/api/requests?urlPattern=${encodeURIComponent(op.originalUrl.split('?')[0])}&limit=1`
           ).catch(() => null)
         : null,
-      json(
+      getJson(
         `/api/requests?userId=${op.userId}&dateFrom=${Date.now() - 24 * 3600e3}&limit=500`
       ).catch(() => null),
     ]);

@@ -1,4 +1,5 @@
 <script>
+  import { getJsonOrNull } from '../utils/api.js';
   import { SlidersHorizontal, HardDrive, Film, Image, Sparkles } from 'lucide-svelte';
   import { navigate } from '../utils/router.js';
   import { formatBytes, shortId } from '../utils/format.js';
@@ -12,11 +13,10 @@
   let now = $state(Date.now());
 
   async function load() {
-    const get = url =>
-      fetch(url)
-        .then(r => (r.ok ? r.json() : null))
-        .catch(() => null);
-    const [storage, stats] = await Promise.all([get('/api/storage'), get('/api/stats')]);
+    const [storage, stats] = await Promise.all([
+      getJsonOrNull('/api/storage'),
+      getJsonOrNull('/api/stats'),
+    ]);
     failed = !storage;
     data = storage ?? data;
     local = stats ?? local;

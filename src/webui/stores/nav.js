@@ -1,3 +1,4 @@
+import { getJson, getJsonOrNull } from '../utils/api.js';
 import { writable, get } from 'svelte/store';
 import { groupIssues } from '../issues.js';
 
@@ -6,16 +7,15 @@ export const savedViews = writable([]);
 export const issueStates = writable({});
 
 const DAY = 24 * 3600 * 1000;
-const json = url => fetch(url).then(r => (r.ok ? r.json() : Promise.reject(new Error(url))));
 
 export async function refreshNav() {
   const since = Date.now() - DAY;
   const [req, facets, issues, stats, system] = await Promise.all([
-    json(`/api/requests?dateFrom=${since}&limit=5000`).catch(() => null),
-    json(`/api/logs/facets?startTime=${since}`).catch(() => null),
-    json('/api/alerts/summary?reasonLimit=300').catch(() => null),
-    json('/api/stats').catch(() => null),
-    json('/api/system').catch(() => null),
+    getJsonOrNull(`/api/requests?dateFrom=${since}&limit=5000`),
+    getJsonOrNull(`/api/logs/facets?startTime=${since}`),
+    getJsonOrNull('/api/alerts/summary?reasonLimit=300'),
+    getJsonOrNull('/api/stats'),
+    getJsonOrNull('/api/system'),
   ]);
   const ops = req?.requests ?? [];
   const byType = {};
@@ -44,7 +44,7 @@ export function startNavStats() {
 
 async function loadViews() {
   try {
-    const { settings } = await json('/api/settings');
+    const { settings } = await getJson('/api/settings');
     savedViews.set(JSON.parse(settings.webui_saved_views?.value || '[]'));
     issueStates.set(JSON.parse(settings.webui_issue_states?.value || '{}'));
   } catch {

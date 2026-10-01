@@ -2,15 +2,7 @@ import fs from 'fs/promises';
 import path from 'path';
 import { createLogger } from './logger.js';
 import { r2Config, botConfig } from './config.js';
-import {
-  uploadMediaToR2,
-  mediaExistsInR2,
-  fileExistsInR2,
-  getR2KeyFromHash,
-  getR2PublicUrl,
-  isR2Configured,
-  listObjectsInR2,
-} from './r2-storage.js';
+import { uploadMediaToR2, mediaExistsInR2, isR2Configured, listObjectsInR2 } from './r2-storage.js';
 import {
   insertTemporaryUpload,
   getBooleanSetting,
@@ -318,15 +310,9 @@ export async function saveMedia(
 
   if (method === 'r2' && isR2Configured(r2Config)) {
     try {
-      const key = getR2KeyFromHash(hash, type, extension);
-      if (await fileExistsInR2(key, r2Config)) {
-        const publicUrl = getR2PublicUrl(key, r2Config);
-        logger.info(`${type} already exists in R2: ${publicUrl}`);
-        return { url: publicUrl, method };
-      }
-      logger.info(`Uploading ${type} to R2 (hash: ${hash.substring(0, 8)}..., size: ${sizeMb}MB)`);
+      logger.debug(`Uploading ${type} to R2 (hash: ${hash.substring(0, 8)}..., size: ${sizeMb}MB)`);
       const publicUrl = await uploadMediaToR2(type, file, hash, extension, r2Config, metadata);
-      logger.info(`Saved ${type} to R2: ${publicUrl} (size: ${sizeMb}MB)`);
+      logger.debug(`Saved ${type} to R2: ${publicUrl} (size: ${sizeMb}MB)`);
       incrementR2UsageCache(file.size);
       invalidateStatsCache(storagePath);
       return { url: publicUrl, method };

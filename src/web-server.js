@@ -12,7 +12,7 @@ import { acquireMedia, extractAudio } from './core/acquire-media.js';
 import { getDisabledServiceLabel, getServiceForUrl } from './utils/download-services.js';
 import { validateUrl, firstUrlIn, parseTimestamp, sanitizeFilename } from './utils/validation.js';
 import { detectFileType } from './utils/storage.js';
-import { uploadToR2, listObjectsInR2, deleteFromR2 } from './utils/r2-storage.js';
+import { uploadToR2, listObjectsInR2, deleteManyFromR2 } from './utils/r2-storage.js';
 import { getStreamInfo, isYouTubeUrl } from './utils/ytdlp.js';
 import { AppError, ValidationError } from './utils/errors.js';
 import * as accounts from './web/accounts.js';
@@ -151,30 +151,43 @@ export async function workerLane(url, downloadMethod, { split = true, mute = fal
 // Lane 3 storage. The R2 listing is the only record: no database rows, nothing in memory
 // that says what was fetched, and a restart loses nothing because the next sweep catches up.
 let liveBytes = 0;
+let reservedBytes = 0;
+let sweeping = null;
 
-export async function sweepR2(now = Date.now()) {
-  const objects = await listObjectsInR2(R2_PREFIX, r2Config);
-  let kept = 0;
-  for (const object of objects) {
-    if (now - new Date(object.lastModified).getTime() > FILE_TTL_MS) {
-      await deleteFromR2(object.key, r2Config).catch(error =>
-        logger.warn(`Sweep could not delete an object: ${error.message}`)
-      );
-    } else {
-      kept += object.size;
-    }
-  }
-  liveBytes = kept;
-  return kept;
+export function sweepR2(now = Date.now()) {
+  sweeping ??= (async () => {
+    const objects = await listObjectsInR2(R2_PREFIX, r2Config);
+    const expired = objects.filter(o => now - new Date(o.lastModified).getTime() > FILE_TTL_MS);
+    const failed = expired.length
+      ? await deleteManyFromR2(
+          expired.map(o => o.key),
+          r2Config
+        )
+      : [];
+    if (failed.length) logger.warn(`Sweep could not delete ${failed.length} objects`);
+    const gone = new Set(expired.map(o => o.key).filter(k => !failed.includes(k)));
+    liveBytes = objects.reduce((sum, o) => sum + (gone.has(o.key) ? 0 : o.size), 0);
+    return liveBytes;
+  })().finally(() => (sweeping = null));
+  return sweeping;
 }
 
 async function publishToR2(file, filename, contentType) {
   if (!file?.size) {
     throw new AppError('could not download this content.', 'DOWNLOAD_FAILED', 502);
   }
-  if (liveBytes + file.size > R2_LIMIT_BYTES) {
+  if (liveBytes + reservedBytes + file.size > R2_LIMIT_BYTES) {
     throw new ValidationError('storage is full right now, try again in a few minutes.');
   }
+  reservedBytes += file.size;
+  try {
+    return await uploadReserved(file, filename, contentType);
+  } finally {
+    reservedBytes -= file.size;
+  }
+}
+
+async function uploadReserved(file, filename, contentType) {
   const name = sanitizeFilename(filename);
   const ext = path
     .extname(name)
@@ -867,6 +880,7 @@ if (import.meta.main) {
     Promise.all([
       sweepR2().catch(error => logger.warn(`R2 sweep failed: ${error.message}`)),
       sweepJobDirs().catch(error => logger.warn(`Job dir sweep failed: ${error.message}`)),
+      accounts.pruneExpired().catch(error => logger.warn(`Session prune failed: ${error.message}`)),
     ]);
   await sweep();
   setInterval(sweep, 5 * 60 * 1000);

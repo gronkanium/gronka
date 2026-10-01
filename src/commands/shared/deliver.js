@@ -89,7 +89,9 @@ async function attachmentUrl(interaction, message) {
 export async function finishCommand(type, ctx, fileSize, extra = {}) {
   updateOperationStatus(ctx.operationId, 'success', { fileSize, ...extra });
   recordRateLimit(ctx.userId);
-  await notifyCommandSuccess(type, { operationId: ctx.operationId, userId: ctx.userId });
+  notifyCommandSuccess(type, { operationId: ctx.operationId, userId: ctx.userId }).catch(error =>
+    logger.warn(`Success notification failed: ${error.message}`)
+  );
 }
 
 export async function replyWithLink(interaction, ctx, url, ttlHours) {

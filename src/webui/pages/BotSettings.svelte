@@ -14,6 +14,7 @@
   } from 'lucide-svelte';
   import { currentRoute, navigate } from '../utils/router.js';
   import PageHeader from '../components/PageHeader.svelte';
+  import TierChart from '../components/TierChart.svelte';
 
   // Which settings live in which section; unknown server keys fall into "other" so none vanish.
   const SECTIONS = [
@@ -128,12 +129,6 @@
     cleanTiers(rows)
       .map(r => `${r.mb}:${r.hours}`)
       .join(',');
-  const tierPreview = rows => {
-    const t = cleanTiers(rows);
-    return t.length
-      ? [...t.map(r => `≤${r.mb} MB → ${r.hours}h`), `larger → ${t.at(-1).hours}h`].join('  ·  ')
-      : '';
-  };
   const listValues = s => {
     try {
       const v = JSON.parse(s.value);
@@ -329,7 +324,7 @@
     {:else}
       {#each activeKeys as key (key)}
         {@const s = settings[key]}
-        <div class="item">
+        <div class="item" class:stacked={s.type === 'tiers'}>
           <div class="lbl">
             <b>{label(key)}</b>
             <p>{s.description}</p>
@@ -378,42 +373,23 @@
                   >{/if}
               </form>
             {:else if s.type === 'tiers'}
-              <div class="tiers">
-                {#each tierDrafts[key] ?? [] as row, i (i)}
-                  <div class="row">
-                    <span class="dim small">up to</span>
-                    <input class="field num-in" type="number" min="1" bind:value={row.mb} /><span
-                      class="dim small">MB for</span
-                    >
-                    <input class="field num-in" type="number" min="1" bind:value={row.hours} /><span
-                      class="dim small">hours</span
-                    >
-                    <button
-                      class="icon-btn sm"
-                      aria-label="remove tier"
-                      onclick={() => (tierDrafts[key] = tierDrafts[key].filter((_, j) => j !== i))}
-                      ><X size={13} /></button
-                    >
-                  </div>
-                {/each}
+              <TierChart
+                bind:tiers={tierDrafts[key]}
+                maxMb={Number(settings.max_video_size_mb?.value) || 1024}
+              />
+              {#if serializeTiers(tierDrafts[key] ?? []) !== s.value}
                 <div class="row">
-                  <button
-                    class="btn sm"
-                    onclick={() =>
-                      (tierDrafts[key] = [...(tierDrafts[key] ?? []), { mb: '', hours: '' }])}
-                    ><Plus size={12} />Add tier</button
+                  <button class="btn sm" onclick={() => (tierDrafts[key] = parseTiers(s.value))}
+                    >Discard</button
                   >
-                  {#if serializeTiers(tierDrafts[key] ?? []) !== s.value}
-                    <button
-                      class="btn primary sm"
-                      disabled={saving[key] || !serializeTiers(tierDrafts[key] ?? [])}
-                      onclick={() => save(key, serializeTiers(tierDrafts[key]))}
-                      ><Check size={12} />Save</button
-                    >
-                  {/if}
+                  <button
+                    class="btn primary sm"
+                    disabled={saving[key] || !serializeTiers(tierDrafts[key] ?? [])}
+                    onclick={() => save(key, serializeTiers(tierDrafts[key]))}
+                    ><Check size={12} />Save</button
+                  >
                 </div>
-                <div class="dim small mono">{tierPreview(tierDrafts[key] ?? [])}</div>
-              </div>
+              {/if}
             {:else if s.type === 'list'}
               <div class="list">
                 <div class="chips">
@@ -544,10 +520,13 @@
   .field[type='number'] {
     width: 100px;
   }
-  .num-in {
-    width: 76px !important;
+  .item.stacked {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 12px;
   }
-  .tiers,
+  .item.stacked .ctl {
+    justify-content: flex-end;
+  }
   .list {
     display: flex;
     flex-direction: column;

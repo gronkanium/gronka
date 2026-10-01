@@ -1,6 +1,6 @@
 <script>
   import { onDestroy } from 'svelte';
-  import { Search, Users as UsersIcon } from 'lucide-svelte';
+  import { Search, Users as UsersIcon, ArrowUpRight } from 'lucide-svelte';
   import { navigate } from '../utils/router.js';
   import { userMetrics } from '../stores/sse-store.js';
   import { formatBytes, formatRelativeTime } from '../utils/format.js';
@@ -10,32 +10,30 @@
 
   const PAGE = 50;
   const COLUMNS = [
-    { key: 'user_id', label: 'User', width: '240px', sortable: true },
-    { key: 'total_commands', label: 'Requests', width: '96px', align: 'right', sortable: true },
+    { key: 'user_id', label: 'User', width: 'minmax(0, 1fr)', sortable: true },
+    { key: 'total_commands', label: 'Requests', width: '84px', align: 'right', sortable: true },
+    { key: 'failed_commands', label: 'Failed', width: '72px', align: 'right', sortable: true },
+    { key: 'rate', label: 'Success', width: '150px', sm: false },
     {
-      key: 'successful_commands',
-      label: 'Delivered',
-      width: '96px',
+      key: 'last_command_at',
+      label: 'Last seen',
+      width: '92px',
       align: 'right',
       sortable: true,
       sm: false,
     },
-    { key: 'failed_commands', label: 'Failed', width: '80px', align: 'right', sortable: true },
-    { key: 'rate', label: 'Success', width: 'minmax(160px, 1fr)', sm: false },
-    {
-      key: 'total_file_size',
-      label: 'Data',
-      width: '96px',
-      align: 'right',
-      sortable: true,
-      sm: false,
-    },
-    { key: 'last_command_at', label: 'Last seen', width: '100px', align: 'right', sm: false },
   ];
-  const BOARDS = [
-    ['active', 'Most active', 'all time'],
-    ['success', 'Highest success rate', '5+ requests'],
-    ['data', 'Most data', 'processed for them'],
+  const VIEWS = [
+    ['total_commands', 'Most active'],
+    ['last_command_at', 'Recently seen'],
+    ['failed_commands', 'Most failures'],
+    ['total_file_size', 'Most data'],
+  ];
+  const MIX = [
+    ['total_download', '/download'],
+    ['total_convert', '/convert'],
+    ['total_optimize', '/optimize'],
+    ['total_info', '/info'],
   ];
 
   let users = $state([]);
@@ -47,8 +45,10 @@
   let sortDesc = $state(true);
   let offset = $state(0);
   let stats = $state(null);
-  let boards = $state({ active: [], data: [], success: [] });
-  let board = $state('active');
+  let topUser = $state(null);
+  let picked = $state(null);
+  let innerWidth = $state(1400);
+  const split = $derived(innerWidth > 1100);
 
   const rate = u =>
     u.total_commands ? Math.round((u.successful_commands / u.total_commands) * 100) : 0;
@@ -74,22 +74,13 @@
     loading = false;
   }
 
-  async function loadBoards() {
-    const [s, active, data] = await Promise.all([
+  async function loadStats() {
+    const [st, top] = await Promise.all([
       get('/api/stats'),
-      get('/api/users?sortBy=total_commands&sortDesc=true&limit=200'),
-      get('/api/users?sortBy=total_file_size&sortDesc=true&limit=5'),
+      get('/api/users?sortBy=total_commands&sortDesc=true&limit=1'),
     ]);
-    stats = s;
-    const top = active?.users ?? [];
-    boards = {
-      active: top.slice(0, 8),
-      data: (data?.users ?? []).slice(0, 8),
-      success: top
-        .filter(u => u.total_commands >= 5)
-        .sort((a, b) => rate(b) - rate(a) || b.total_commands - a.total_commands)
-        .slice(0, 8),
-    };
+    stats = st;
+    topUser = top?.users?.[0] ?? null;
   }
 
   $effect(() => {
@@ -98,7 +89,7 @@
     offset;
     load();
   });
-  loadBoards();
+  loadStats();
 
   // Live metric updates: refresh what's on screen, debounced since they arrive per command.
   let soon;
@@ -107,7 +98,7 @@
     clearTimeout(soon);
     soon = setTimeout(() => {
       load();
-      loadBoards();
+      loadStats();
     }, 1500);
   });
   onDestroy(() => {
@@ -124,19 +115,23 @@
     offset = 0;
     load();
   }
-  const boardList = $derived(boards[board]);
-  const boardValue = u =>
-    board === 'active'
-      ? `${u.total_commands.toLocaleString()} requests`
-      : board === 'success'
-        ? `${rate(u)}% of ${u.total_commands}`
-        : formatBytes(u.total_file_size);
-  const boardShare = u =>
-    board === 'active'
-      ? u.total_commands / Math.max(1, boards.active[0]?.total_commands ?? 1)
-      : board === 'success'
-        ? rate(u) / 100
-        : u.total_file_size / Math.max(1, boards.data[0]?.total_file_size ?? 1);
+  const selected = $derived(users.find(u => u.user_id === picked) ?? users[0] ?? null);
+  const openRow = u =>
+    split ? (picked = u.user_id) : navigate('user-profile', { userId: u.user_id });
+  const mixMax = u => Math.max(1, ...MIX.map(([k]) => u[k] ?? 0));
+
+  // Same as Issues: the panes fill the viewport below the header, so measure where they start.
+  let gridEl = $state();
+  let gridTop = $state(0);
+  $effect(() => {
+    if (!gridEl) return;
+    const measure = () =>
+      (gridTop = Math.round(gridEl.getBoundingClientRect().top + window.scrollY));
+    measure();
+    const ro = new ResizeObserver(measure);
+    ro.observe(gridEl.parentElement ?? gridEl);
+    return () => ro.disconnect();
+  });
   const rateTone = r =>
     r >= 90 ? 'var(--chart-1)' : r >= 75 ? 'var(--chart-3)' : 'var(--chart-4)';
 </script>
@@ -168,145 +163,212 @@
     </div>
     <div class="kpi">
       <div class="k">Top user</div>
-      <div class="v">{boards.active[0]?.total_commands.toLocaleString() ?? '—'}</div>
+      <div class="v">{topUser?.total_commands.toLocaleString() ?? '—'}</div>
       <div class="s">requests, all time</div>
     </div>
   </section>
 
-  <div class="two wide-right">
-    <section class="panel" aria-label="leaderboards">
-      <div class="ph">
-        <span>Leaderboard</span>
-        <span class="meta"><span class="dim">{BOARDS.find(b => b[0] === board)?.[2]}</span></span>
-      </div>
-      <div class="seg boards" role="tablist">
-        {#each BOARDS as [id, label] (id)}
-          <button
-            role="tab"
-            aria-selected={board === id}
-            class:on={board === id}
-            onclick={() => (board = id)}>{label}</button
+  <div
+    class="grid"
+    class:split
+    bind:this={gridEl}
+    style:--grid-top={gridTop ? `${gridTop}px` : null}
+  >
+    <div class="list">
+      <DataTable
+        columns={COLUMNS}
+        rows={users}
+        rowKey="user_id"
+        {loading}
+        {error}
+        onretry={load}
+        selected={split ? selected?.user_id : null}
+        sort={{ key: sortBy, desc: sortDesc }}
+        {onsort}
+        onrow={openRow}
+        pager={{ offset, limit: PAGE, total, onpage: o => (offset = o) }}
+        skeleton={10}
+        label="users"
+      >
+        {#snippet toolbar()}
+          <div class="bar">
+            <div class="seg" role="tablist" aria-label="views">
+              {#each VIEWS as [key, label] (key)}
+                <button
+                  role="tab"
+                  aria-selected={sortBy === key && sortDesc}
+                  class:on={sortBy === key && sortDesc}
+                  onclick={() => onsort(key, true)}>{label}</button
+                >
+              {/each}
+            </div>
+            <span class="dim small tnum count"><b>{total.toLocaleString()}</b> users</span>
+            <label class="searchbox users-search">
+              <Search size={14} />
+              <input
+                bind:value={search}
+                onkeydown={e => e.key === 'Enter' && submitSearch()}
+                placeholder="Find a user id"
+                aria-label="find a user id"
+              />
+            </label>
+          </div>
+        {/snippet}
+        {#snippet emptyState()}
+          <div class="empty">
+            <span class="ic"><UsersIcon size={20} /></span>
+            <b>No users found</b>
+            {search ? 'No id contains that text' : 'Nobody has run a command yet'}
+          </div>
+        {/snippet}
+        {#snippet row(u)}
+          <span class="user-cell"
+            ><Avatar id={u.user_id} size={22} /><span class="id">{u.user_id}</span></span
           >
-        {/each}
-      </div>
-      {#each boardList as u, i (u.user_id)}
-        <button class="lrow lb" onclick={() => navigate('user-profile', { userId: u.user_id })}>
-          <span class="rank">{i + 1}</span>
-          <Avatar id={u.user_id} size={26} />
-          <span class="grow">
-            <span class="mono id ellipsis">{u.user_id}</span>
-            <span class="bar-track"><span style="width:{boardShare(u) * 100}%"></span></span>
+          <span class="num strong">{u.total_commands.toLocaleString()}</span>
+          <span class="num" class:warn-text={u.failed_commands > 0} class:muted={!u.failed_commands}
+            >{u.failed_commands.toLocaleString()}</span
+          >
+          <span class="ratecell hide-sm">
+            <span class="bar-track"
+              ><span style="width:{rate(u)}%; background:{rateTone(rate(u))}"></span></span
+            >
+            <span class="num muted">{rate(u)}%</span>
           </span>
-          <span class="mono muted small tnum nowrap">{boardValue(u)}</span>
-        </button>
-      {:else}
-        <div class="skel-rows">
-          {#each Array(6) as _, i (i)}<span class="skeleton" style="width:{80 - i * 6}%"
-            ></span>{/each}
-        </div>
-      {/each}
-    </section>
-
-    <DataTable
-      title="All users"
-      columns={COLUMNS}
-      rows={users}
-      rowKey="user_id"
-      {loading}
-      {error}
-      onretry={load}
-      sort={{ key: sortBy, desc: sortDesc }}
-      {onsort}
-      onrow={u => navigate('user-profile', { userId: u.user_id })}
-      pager={{ offset, limit: PAGE, total, onpage: o => (offset = o) }}
-      skeleton={10}
-      label="users"
-    >
-      {#snippet header()}
-        <span class="tnum"><b>{total.toLocaleString()}</b> users</span>
-        <label class="searchbox users-search">
-          <Search size={14} />
-          <input
-            bind:value={search}
-            onkeydown={e => e.key === 'Enter' && submitSearch()}
-            placeholder="Find a user id"
-            aria-label="find a user id"
-          />
-        </label>
-      {/snippet}
-      {#snippet emptyState()}
-        <div class="empty">
-          <span class="ic"><UsersIcon size={20} /></span>
-          <b>No users found</b>
-          {search ? 'No id contains that text' : 'Nobody has run a command yet'}
-        </div>
-      {/snippet}
-      {#snippet row(u)}
-        <span class="user-cell"
-          ><Avatar id={u.user_id} size={22} /><span class="id">{u.user_id}</span></span
-        >
-        <span class="num strong">{u.total_commands.toLocaleString()}</span>
-        <span class="num muted hide-sm">{u.successful_commands.toLocaleString()}</span>
-        <span class="num" class:warn-text={u.failed_commands > 0} class:muted={!u.failed_commands}
-          >{u.failed_commands.toLocaleString()}</span
-        >
-        <span class="ratecell hide-sm">
-          <span class="bar-track"
-            ><span style="width:{rate(u)}%; background:{rateTone(rate(u))}"></span></span
+          <span class="num dim hide-sm"
+            >{u.last_command_at ? formatRelativeTime(u.last_command_at) : '—'}</span
           >
-          <span class="num muted">{rate(u)}%</span>
-        </span>
-        <span class="num muted hide-sm">{formatBytes(u.total_file_size)}</span>
-        <span class="num dim hide-sm"
-          >{u.last_command_at ? formatRelativeTime(u.last_command_at) : '—'}</span
-        >
-      {/snippet}
-    </DataTable>
+        {/snippet}
+      </DataTable>
+    </div>
+
+    {#if split}
+      <aside class="panel detail" aria-label="selected user">
+        {#if selected}
+          {@const u = selected}
+          <div class="dhead">
+            <Avatar id={u.user_id} size={56} />
+            <div class="who">
+              <span class="mono uid">{u.user_id}</span>
+              <span class="dim small"
+                >last seen {u.last_command_at
+                  ? formatRelativeTime(u.last_command_at)
+                  : 'never'}</span
+              >
+            </div>
+          </div>
+          <div class="dscroll">
+            <div class="big-rate">
+              <span class="v tnum">{rate(u)}%</span>
+              <span class="dim small"
+                >of {u.total_commands.toLocaleString()} requests delivered</span
+              >
+              <span class="bar-track"
+                ><span style="width:{rate(u)}%; background:{rateTone(rate(u))}"></span></span
+              >
+            </div>
+            <div class="facts">
+              <div>
+                <span class="k">Delivered</span><b class="tnum"
+                  >{u.successful_commands.toLocaleString()}</b
+                >
+              </div>
+              <div>
+                <span class="k">Failed</span><b class="tnum" class:warn-text={u.failed_commands > 0}
+                  >{u.failed_commands.toLocaleString()}</b
+                >
+              </div>
+              <div>
+                <span class="k">Data</span><b class="tnum">{formatBytes(u.total_file_size)}</b>
+              </div>
+            </div>
+            <div class="mix">
+              <span class="section-label">Commands</span>
+              {#each MIX as [key, label] (key)}
+                <div class="mrow">
+                  <span class="mono small">{label}</span>
+                  <span class="bar-track"
+                    ><span style="width:{((u[key] ?? 0) / mixMax(u)) * 100}%"></span></span
+                  >
+                  <span class="num small tnum">{(u[key] ?? 0).toLocaleString()}</span>
+                </div>
+              {/each}
+            </div>
+          </div>
+          <div class="dfoot">
+            <button
+              class="btn primary"
+              onclick={() => navigate('user-profile', { userId: u.user_id })}
+              ><ArrowUpRight size={14} />Open profile</button
+            >
+          </div>
+        {:else}
+          <div class="skel-rows">
+            {#each Array(5) as _, i (i)}<span class="skeleton" style="width:{80 - i * 8}%"
+              ></span>{/each}
+          </div>
+        {/if}
+      </aside>
+    {/if}
   </div>
 </div>
 
+<svelte:window bind:innerWidth />
+
 <style>
+  .grid {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    gap: var(--gap);
+  }
+  .grid.split {
+    grid-template-columns: minmax(0, 1fr) 360px;
+    grid-template-rows: minmax(0, 1fr);
+    height: calc(100vh - var(--grid-top, 330px) - 48px);
+    min-height: 480px;
+  }
+  .list {
+    min-width: 0;
+  }
+  .split .list,
+  .split .list :global(.tbl) {
+    height: 100%;
+  }
+  .split .list :global(.tbl) {
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+  }
+  .split .list :global(.tbl > .body) {
+    flex: 1;
+    min-height: 0;
+    overscroll-behavior: contain;
+  }
+  .bar {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    flex-wrap: wrap;
+    padding: 10px 16px;
+    border-bottom: 1px solid var(--line);
+  }
+  .bar .seg {
+    max-width: 100%;
+    overflow-x: auto;
+  }
+  .bar .seg button {
+    font-size: var(--fs-sm);
+    white-space: nowrap;
+  }
+  .count {
+    margin-left: auto;
+  }
+  .count b {
+    color: var(--text);
+  }
   .users-search {
     width: 200px;
     height: 28px;
-  }
-  .boards {
-    margin: 12px 16px 4px;
-    display: flex;
-  }
-  .boards button {
-    flex: 1;
-    justify-content: center;
-    padding: 0 6px;
-    font-size: var(--fs-sm);
-  }
-  .lb {
-    padding: 9px 20px;
-  }
-  .lb .grow {
-    display: flex;
-    flex-direction: column;
-    gap: 5px;
-  }
-  .lb .id {
-    font-size: var(--fs-sm);
-    color: var(--text-bright);
-  }
-  .lb .bar-track {
-    height: 4px;
-  }
-  .lb .bar-track > span {
-    background: var(--chart-1-soft);
-  }
-  .lb:hover .bar-track > span {
-    background: var(--chart-1);
-  }
-  .rank {
-    width: 16px;
-    color: var(--text-dim);
-    font-size: var(--fs-sm);
-    font-weight: 600;
-    font-variant-numeric: tabular-nums;
   }
   .ratecell {
     display: flex;
@@ -319,5 +381,99 @@
   }
   .ratecell .num {
     width: 40px;
+  }
+  .detail {
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    min-height: 0;
+  }
+  .dhead {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    padding: 20px;
+    border-bottom: 1px solid var(--line);
+  }
+  .who {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    min-width: 0;
+  }
+  .uid {
+    font-size: var(--fs-md);
+    font-weight: 600;
+    color: var(--text-bright);
+    overflow-wrap: anywhere;
+  }
+  .dscroll {
+    flex: 1;
+    min-height: 0;
+    overflow: auto;
+  }
+  .big-rate {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    padding: 18px 20px;
+    border-bottom: 1px solid var(--line);
+  }
+  .big-rate .v {
+    font-size: 28px;
+    font-weight: 600;
+    color: var(--text-bright);
+    letter-spacing: -0.02em;
+  }
+  .big-rate .bar-track {
+    height: 6px;
+    margin-top: 4px;
+  }
+  .facts {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    border-bottom: 1px solid var(--line);
+  }
+  .facts > div {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    padding: 14px 20px;
+  }
+  .facts > div + div {
+    border-left: 1px solid var(--line);
+  }
+  .facts .k {
+    font-size: var(--fs-sm);
+    color: var(--text-muted);
+  }
+  .facts b {
+    font-size: var(--fs-md);
+    color: var(--text-bright);
+  }
+  .mix {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    padding: 16px 20px;
+  }
+  .mrow {
+    display: grid;
+    grid-template-columns: 76px minmax(0, 1fr) 48px;
+    align-items: center;
+    gap: 10px;
+    color: var(--text-soft);
+  }
+  .mrow .bar-track {
+    height: 6px;
+  }
+  .mrow .bar-track > span {
+    background: var(--chart-1);
+  }
+  .dfoot {
+    padding: 12px 20px;
+    border-top: 1px solid var(--line);
+    display: flex;
+    justify-content: flex-end;
   }
 </style>

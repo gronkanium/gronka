@@ -59,6 +59,7 @@ import {
   safeInteractionDeferReply,
 } from '../utils/interaction-helpers.js';
 import { fitsDiscordAttachment, getDiscordAttachmentLimit } from './shared/attachment-limit.js';
+import { mapLimit, ITEM_FANOUT } from '../utils/map-limit.js';
 
 const logger = createLogger('download');
 
@@ -126,11 +127,10 @@ async function deliverArchive(interaction, ctx, fileData, attachmentLimit) {
 async function deliverGallery(interaction, ctx, fileData, urlHash, attachmentLimit) {
   const { userId, adminUser } = ctx;
   logger.debug(`Processing ${fileData.length} media files from picker`);
-  const stored = [];
-  for (const media of fileData) {
+  const stored = await mapLimit(fileData, ITEM_FANOUT, async media => {
     const item = await storeMedia(media, ctx, attachmentLimit, { defaultExt: '.jpg' });
-    stored.push(item.fits ? item : await toR2(item, ctx));
-  }
+    return item.fits ? item : toR2(item, ctx);
+  });
   const attached = stored.filter(item => item.fits);
   const linked = stored.filter(item => !item.fits);
   const batches = batchAttachmentsForDelivery(attached.map(attachmentFor));
@@ -170,13 +170,13 @@ async function deliverGallery(interaction, ctx, fileData, urlHash, attachmentLim
       userId,
       fileSize: item.size,
     });
-  for (const [i, item] of attached.entries()) {
-    if (discordUrls[i]) await record(item, discordUrls[i]);
-  }
-  for (const item of linked) {
-    await record(item, item.url);
-    await trackR2UploadIfApplicable(urlHash, item.url, adminUser);
-  }
+  await Promise.all([
+    ...attached.map((item, i) => discordUrls[i] && record(item, discordUrls[i])),
+    ...linked.map(async item => {
+      await record(item, item.url);
+      await trackR2UploadIfApplicable(urlHash, item.url, adminUser);
+    }),
+  ]);
   const totalSize = fileData.reduce((sum, media) => sum + media.size, 0);
   await finishCommand('download', ctx, totalSize, { mediaCount: stored.length });
 }

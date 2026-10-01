@@ -5,32 +5,7 @@ let sql = null;
 let initPromise = null;
 
 export function isTestMode() {
-  // If FORCE_PRODUCTION_MODE is set, always return false (never test mode)
-  // This allows scripts to explicitly force production database connection
-  if (process.env.FORCE_PRODUCTION_MODE === 'true') {
-    return false;
-  }
-
-  if (process.env.TEST_POSTGRES_DB) {
-    return true;
-  }
-
-  if (process.env.TEST_DATABASE_URL) {
-    return true;
-  }
-
-  // Detect a test runner. `bun test` sets NODE_ENV=test itself, so that covers the Bun
-  // runner (including spawned child processes, which the argv sniff below never caught).
-  // The argv check stays for `node --test`, still used by one-off script invocations.
-  if (process.env.NODE_ENV === 'test') {
-    return true;
-  }
-  const isNodeTest = process.argv.some(arg => arg === '--test' || arg.includes('node:test'));
-  if (isNodeTest) {
-    return true;
-  }
-
-  return false;
+  return process.env.NODE_ENV === 'test';
 }
 
 function isRunningInDocker() {
@@ -53,25 +28,10 @@ function isRunningInDocker() {
 }
 
 function getDefaultPostgresHost() {
-  // When FORCE_PRODUCTION_MODE is set, respect POSTGRES_HOST if explicitly provided
-  // This allows production scripts to connect to the correct host even when running locally
-  if (process.env.FORCE_PRODUCTION_MODE === 'true' && process.env.POSTGRES_HOST) {
-    console.log(
-      `[PostgreSQL] Using explicit POSTGRES_HOST=${process.env.POSTGRES_HOST} (FORCE_PRODUCTION_MODE=true)`
-    );
+  if (process.env.POSTGRES_HOST) {
     return process.env.POSTGRES_HOST;
   }
-
-  // Otherwise, use auto-detection to support both Docker and local/WSL environments
-  const autoDetectedHost = isRunningInDocker() ? 'postgres' : 'localhost';
-
-  if (process.env.POSTGRES_HOST && process.env.POSTGRES_HOST !== autoDetectedHost) {
-    console.log(
-      `[PostgreSQL] Auto-detected environment: using ${autoDetectedHost} (POSTGRES_HOST=${process.env.POSTGRES_HOST} ignored)`
-    );
-  }
-
-  return autoDetectedHost;
+  return isRunningInDocker() ? 'postgres' : 'localhost';
 }
 
 export function getPostgresConfig() {
@@ -85,14 +45,9 @@ export function getPostgresConfig() {
     return process.env.DATABASE_URL;
   }
 
-  // This now handles POSTGRES_HOST internally and prioritizes auto-detection
   const resolvedHost = useTestConfig
     ? process.env.TEST_POSTGRES_HOST || getDefaultPostgresHost()
     : getDefaultPostgresHost();
-
-  console.log(
-    `[PostgreSQL] Host resolution: POSTGRES_HOST=${process.env.POSTGRES_HOST}, auto-detected=${resolvedHost}`
-  );
 
   // Use TEST_ prefixed variables if in test mode, with fallback to regular variables
   const username = useTestConfig
@@ -161,8 +116,7 @@ export async function initPostgresConnection() {
       console.log(`[PostgreSQL] Connecting to database "${dbName}" on ${host} (${mode} mode)`);
 
       // Add onnotice handler to suppress verbose NOTICE logs
-      // Suppress in test mode and when FORCE_PRODUCTION_MODE is set (e.g., sync scripts)
-      const suppressNotices = testMode || process.env.FORCE_PRODUCTION_MODE === 'true';
+      const suppressNotices = testMode;
 
       // Idempotent schema init (CREATE ... IF NOT EXISTS) emits "already exists,
       // skipping" notices on every startup, drop those, log anything else as one line
@@ -216,6 +170,7 @@ export async function initPostgresConnection() {
       return sql;
     } catch (error) {
       sql = null;
+      initPromise = null;
       throw new Error(`Failed to initialize PostgreSQL connection: ${error.message}`, {
         cause: error,
       });

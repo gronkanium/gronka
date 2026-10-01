@@ -5,6 +5,7 @@ import { createLogger } from './logger.js';
 import { NetworkError, ValidationError } from './errors.js';
 import { writeZip } from './archive.js';
 import { fromPath, tempDir } from './media-file.js';
+import { mapLimit, ITEM_FANOUT } from './map-limit.js';
 
 const logger = createLogger('gallery-dl');
 
@@ -204,15 +205,13 @@ async function downloadMangaPages(urls, isAdminUser, maxSize) {
   if (urls.length === 0) {
     throw new NetworkError('no pages found in this chapter');
   }
-  const results = await Promise.all(
-    urls.map(async pageUrl => {
-      const fileData = await downloadFileFromUrl(pageUrl, isAdminUser);
-      if (!isAdminUser && fileData.size > maxSize) {
-        throw new ValidationError('a manga page is too large to download');
-      }
-      return fileData;
-    })
-  );
+  const results = await mapLimit(urls, ITEM_FANOUT, async pageUrl => {
+    const fileData = await downloadFileFromUrl(pageUrl, isAdminUser);
+    if (!isAdminUser && fileData.size > maxSize) {
+      throw new ValidationError('a manga page is too large to download');
+    }
+    return fileData;
+  });
   if (results.length > MAX_MANGA_IMAGES) {
     return writeZip(results, 'manga-pages.zip');
   }

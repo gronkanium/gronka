@@ -58,8 +58,10 @@ function formatR2Line(r2CacheStats) {
 
 export async function handleInfoCommand(interaction, botStartTime) {
   try {
-    const storageStats = await getStorageStats(GIF_STORAGE_PATH);
-    const userCount = await getUserMetricsCount();
+    const [storageStats, userCount] = await Promise.all([
+      getStorageStats(GIF_STORAGE_PATH),
+      getUserMetricsCount(),
+    ]);
     const guildCount = interaction.client.guilds.cache.size;
 
     // botStartTime is null on the prefix path when the bot has not recorded one yet; the

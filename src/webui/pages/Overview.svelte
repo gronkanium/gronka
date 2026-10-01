@@ -71,7 +71,7 @@
   async function load() {
     const t = Date.now();
     const [req, st, sys, sum] = await Promise.all([
-      getJsonOrNull(`/api/requests?dateFrom=${t - RANGES['7d'].span}&dateTo=${t}&limit=10000`),
+      getJsonOrNull(`/api/requests/outcomes?dateFrom=${t - RANGES['7d'].span}`),
       getJsonOrNull('/api/stats'),
       getJsonOrNull('/api/system'),
       getJsonOrNull('/api/alerts/summary?reasonLimit=300'),
@@ -103,8 +103,8 @@
   };
   const durations = list =>
     list
-      .filter(o => o.status === 'success' && o.performanceMetrics?.duration)
-      .map(o => o.performanceMetrics.duration)
+      .filter(o => o.status === 'success' && o.duration)
+      .map(o => o.duration)
       .sort((a, b) => a - b);
   const pct = (sorted, p) =>
     sorted.length ? sorted[Math.min(sorted.length - 1, Math.floor(sorted.length * p))] : null;
@@ -135,13 +135,13 @@
         const inBucket = cur.filter(
           o =>
             o.status === 'success' &&
-            o.performanceMetrics?.duration &&
+            o.duration &&
             o.timestamp >= b.at &&
             o.timestamp < b.at + range.bucket * step
         );
         return (
           pct(
-            inBucket.map(o => o.performanceMetrics.duration).sort((a, b) => a - b),
+            inBucket.map(o => o.duration).sort((a, b) => a - b),
             0.5
           ) ?? 0
         );
@@ -457,11 +457,7 @@
         <span class="user-cell hide-sm"
           ><Avatar id={r.userId} size={18} /><span class="id">{shortId(r.userId)}</span></span
         >
-        <span class="num muted hide-sm"
-          >{r.performanceMetrics?.duration
-            ? formatDuration(r.performanceMetrics.duration)
-            : '—'}</span
-        >
+        <span class="num muted hide-sm">{r.duration ? formatDuration(r.duration) : '—'}</span>
         <span class="num dim">{formatRelativeTime(r.timestamp)}</span>
       {/snippet}
     </DataTable>

@@ -27,9 +27,11 @@ export async function insertLog(timestamp, component, level, message, metadata =
   `;
 }
 
-export async function onNewLog(fn) {
+// `wanted` lets a listener with nobody to tell skip the row lookup.
+export async function onNewLog(fn, wanted = () => true) {
   const sql = await connection();
   return sql.listen(LOG_CHANNEL, async id => {
+    if (!wanted()) return;
     const [row] = await sql`SELECT * FROM logs WHERE id = ${Number(id)}`.catch(() => []);
     if (row) fn(toLog(row));
   });
@@ -149,8 +151,9 @@ export async function getLogComponents() {
 export async function lastLogMatching(regex) {
   const sql = await connection();
   const [row] = await sql`
-    SELECT MAX(timestamp) AS at FROM logs
+    SELECT timestamp AS at FROM logs
     WHERE level IN ('WARN', 'ERROR') AND message ~* ${regex.source}
+    ORDER BY timestamp DESC LIMIT 1
   `;
   return row?.at ? Number(row.at) : null;
 }

@@ -450,7 +450,7 @@ export async function cleanupStuckOperations(maxAgeMinutes = 10, client = null) 
     try {
       dbStuckIds = await getStuckOperations(maxAgeMinutes);
     } catch (dbError) {
-      logger.debug(`Could not query stuck operations from database: ${dbError.message}`);
+      logger.warn(`Could not query stuck operations from database: ${dbError.message}`);
     }
 
     // Also check in-memory operations (catches operations that never reached the database)
@@ -474,9 +474,8 @@ export async function cleanupStuckOperations(maxAgeMinutes = 10, client = null) 
         try {
           await markOperationAsFailed(operationId, reason);
         } catch (dbError) {
-          logger.debug(
-            `Could not mark operation ${operationId} as failed in database: ${dbError.message}`
-          );
+          logger.warn(`Could not mark operation ${operationId} as failed: ${dbError.message}`);
+          continue;
         }
 
         const inMemoryOp = operations.find(op => op.id === operationId);
@@ -497,7 +496,7 @@ export async function cleanupStuckOperations(maxAgeMinutes = 10, client = null) 
           try {
             trace = await getOperationTrace(operationId);
           } catch (dbError) {
-            logger.debug(`Could not get trace for operation ${operationId}: ${dbError.message}`);
+            logger.warn(`Could not get trace for operation ${operationId}: ${dbError.message}`);
           }
           userId = trace?.context?.userId || null;
           operationType = trace?.context?.operationType || 'operation';

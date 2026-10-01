@@ -125,25 +125,27 @@ export async function getAlertSummary(options = {}) {
   const { reasonLimit = 25 } = options;
   const { clause, params } = buildAlertWhere(options);
 
-  const severityRows = await sql.unsafe(
-    `SELECT severity, ${COMMAND_EXPR} AS command, COUNT(*)::int AS count
+  const [severityRows, reasonRows] = await Promise.all([
+    sql.unsafe(
+      `SELECT severity, ${COMMAND_EXPR} AS command, COUNT(*)::int AS count
      FROM alerts ${clause}
      GROUP BY 1, 2`,
-    params
-  );
-
-  const reasonRows = await sql.unsafe(
-    `SELECT ${REASON_EXPR} AS reason,
+      params
+    ),
+    sql.unsafe(
+      `SELECT ${REASON_EXPR} AS reason,
             COUNT(*)::int AS count,
             MAX(timestamp) AS last_seen,
+            MIN(timestamp) AS first_seen,
             ARRAY_REMOVE(ARRAY_AGG(DISTINCT ${COMMAND_EXPR}), NULL) AS commands,
             ARRAY_REMOVE(ARRAY_AGG(DISTINCT (${ERROR_CLASS_EXPR})), NULL) AS classes
      FROM alerts ${clause} AND severity = 'error'
      GROUP BY 1
      ORDER BY 2 DESC
      LIMIT $${params.length + 1}`,
-    [...params, reasonLimit]
-  );
+      [...params, reasonLimit]
+    ),
+  ]);
 
   const summary = { ...empty, byCommand: [], byReason: [] };
   const byCommand = new Map();
@@ -175,6 +177,7 @@ export async function getAlertSummary(options = {}) {
     commands: row.commands ?? [],
     classes: row.classes ?? [],
     lastSeen: Number(row.last_seen),
+    firstSeen: Number(row.first_seen),
   }));
 
   return summary;

@@ -66,12 +66,14 @@ export function groupIssues(byReason = []) {
       members: [],
       count: 0,
       lastSeen: 0,
+      firstSeen: Infinity,
       commands: new Set(),
       classes: new Set(),
     };
     g.members.push(r.reason);
     g.count += r.count;
     g.lastSeen = Math.max(g.lastSeen, r.lastSeen);
+    g.firstSeen = Math.min(g.firstSeen, r.firstSeen ?? r.lastSeen);
     r.commands.forEach(c => g.commands.add(c));
     (r.classes ?? []).forEach(c => g.classes.add(c));
     groups.set(key, g);
@@ -97,6 +99,8 @@ export function stateOf(group, states = {}, now = Date.now()) {
   if (s?.state === 'resolved') return group.lastSeen > s.at ? 'regressed' : 'resolved';
   return 'open';
 }
+
+export const isNew = (group, now = Date.now()) => group.firstSeen > now - 24 * 3600e3;
 
 export const isOpen = (group, states) => ['open', 'regressed'].includes(stateOf(group, states));
 

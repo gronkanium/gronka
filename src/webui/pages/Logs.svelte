@@ -262,10 +262,12 @@
     const op = selected?.metadata?.op;
     related = [];
     if (!op) return;
+    let live = true;
     fetch(`/api/logs?op=${encodeURIComponent(op)}&orderDesc=false&limit=100`)
       .then(r => r.json())
-      .then(l => (related = l.logs || []))
+      .then(l => live && (related = l.logs || []))
       .catch(() => {});
+    return () => (live = false);
   });
 
   const selIndex = $derived(selected ? visible.findIndex(r => r.id === selected.id) : -1);

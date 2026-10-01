@@ -54,12 +54,13 @@
   async function loadProfile(id) {
     error = '';
     metrics = null;
-    try {
-      metrics = (await getJson(`/api/users/${id}`)).metrics;
-    } catch {
-      error = 'no user with this id';
-    }
-    const bans = await getJsonOrNull('/api/bans');
+    const [m, bans] = await Promise.all([
+      getJsonOrNull(`/api/users/${id}`),
+      getJsonOrNull('/api/bans'),
+    ]);
+    if (id !== userId) return;
+    metrics = m?.metrics ?? null;
+    if (!m) error = 'no user with this id';
     ban = bans?.bans?.find(b => b.user_id === id) ?? null;
   }
   $effect(() => {
@@ -69,25 +70,31 @@
   });
   $effect(() => {
     if (!userId) return;
+    let live = true;
     opsLoading = true;
     getJson(`/api/users/${userId}/operations?limit=${OPS}&offset=${opsOffset}`)
       .then(d => {
+        if (!live) return;
         ops = d.operations ?? [];
         opsTotal = d.total ?? 0;
       })
-      .catch(() => (ops = []))
-      .finally(() => (opsLoading = false));
+      .catch(() => live && (ops = []))
+      .finally(() => live && (opsLoading = false));
+    return () => (live = false);
   });
   $effect(() => {
     if (!userId) return;
+    let live = true;
     mediaLoading = true;
     getJson(`/api/users/${userId}/media?limit=${MEDIA}&offset=${mediaOffset}`)
       .then(d => {
+        if (!live) return;
         media = d.media ?? [];
         mediaTotal = d.total ?? 0;
       })
-      .catch(() => (media = []))
-      .finally(() => (mediaLoading = false));
+      .catch(() => live && (media = []))
+      .finally(() => live && (mediaLoading = false));
+    return () => (live = false);
   });
 
   const rate = $derived(

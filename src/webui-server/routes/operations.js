@@ -2,6 +2,7 @@ import express from 'express';
 import { createLogger } from '../../utils/logger.js';
 import { getPostgresConfig } from '../../utils/database/connection.js';
 import { getOperationTrace, searchOperations } from '../../utils/database.js';
+import { getServiceForUrl } from '../../utils/download-services.js';
 import { operations, storeOperation } from '../operations/storage.js';
 import { reconstructOperationFromTrace } from '../operations/reconstruction.js';
 import { broadcastOperation, broadcastUserMetrics } from '../sse/broadcast.js';
@@ -134,6 +135,27 @@ router.get('/api/requests', async (req, res) => {
       error: 'failed to fetch requests',
       message: error.message,
     });
+  }
+});
+
+router.get('/api/sources/usage', async (req, res) => {
+  try {
+    const { operations: ops } = await searchOperations(
+      { dateFrom: Date.now() - 7 * 24 * 3600e3 },
+      { limit: 10000 }
+    );
+    const usage = {};
+    for (const o of ops) {
+      const id = o.originalUrl && getServiceForUrl(o.originalUrl)?.id;
+      if (!id || (o.status !== 'success' && o.status !== 'error')) continue;
+      usage[id] ??= { n: 0, ok: 0 };
+      usage[id].n++;
+      if (o.status === 'success') usage[id].ok++;
+    }
+    res.json({ usage, days: 7 });
+  } catch (error) {
+    logger.error('Failed to fetch source usage:', error);
+    res.status(500).json({ error: 'failed to fetch source usage' });
   }
 });
 

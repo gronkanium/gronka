@@ -20,26 +20,21 @@ export async function insertTemporaryUpload(urlHash, r2Key, uploadedAt, expiresA
 
   const sql = getPostgresConnection();
 
-  try {
-    const result = await sql`
-      INSERT INTO temporary_uploads (url_hash, r2_key, uploaded_at, expires_at)
-      VALUES (${urlHash}, ${r2Key}, ${uploadedAt}, ${expiresAt})
-      ON CONFLICT (url_hash, r2_key) DO UPDATE SET
-        uploaded_at = EXCLUDED.uploaded_at,
-        expires_at = EXCLUDED.expires_at,
-        deleted_at = NULL,
-        deletion_failed = 0,
-        deletion_error = NULL
-      RETURNING *
-    `;
-    getLogger().debug(
-      `Saved temporary upload record: id=${result[0].id}, url_hash=${urlHash.substring(0, 8)}..., r2_key=${r2Key}`
-    );
-    return convertTimestampsToNumbers(result[0], TEMPORARY_UPLOADS_TIMESTAMP_FIELDS);
-  } catch (error) {
-    getLogger().error(`Failed to insert/update temporary upload: ${error.message}`);
-    throw error;
-  }
+  const result = await sql`
+    INSERT INTO temporary_uploads (url_hash, r2_key, uploaded_at, expires_at)
+    VALUES (${urlHash}, ${r2Key}, ${uploadedAt}, ${expiresAt})
+    ON CONFLICT (url_hash, r2_key) DO UPDATE SET
+      uploaded_at = EXCLUDED.uploaded_at,
+      expires_at = EXCLUDED.expires_at,
+      deleted_at = NULL,
+      deletion_failed = 0,
+      deletion_error = NULL
+    RETURNING *
+  `;
+  getLogger().debug(
+    `Saved temporary upload record: id=${result[0].id}, url_hash=${urlHash.substring(0, 8)}..., r2_key=${r2Key}`
+  );
+  return convertTimestampsToNumbers(result[0], TEMPORARY_UPLOADS_TIMESTAMP_FIELDS);
 }
 
 /**
@@ -55,19 +50,14 @@ export async function getLiveBytes(now) {
 
   const sql = getPostgresConnection();
 
-  try {
-    const result = await sql`
-      SELECT COALESCE(SUM(p.file_size), 0) AS live_bytes
-      FROM temporary_uploads t
-      JOIN processed_urls p ON p.url_hash = t.url_hash
-      WHERE t.deleted_at IS NULL AND t.expires_at > ${now}
-    `;
-    // SUM of BIGINT comes back as a string; coerce to a number.
-    return Number(result[0]?.live_bytes ?? 0);
-  } catch (error) {
-    getLogger().error(`Failed to compute live upload bytes: ${error.message}`);
-    return 0;
-  }
+  const result = await sql`
+    SELECT COALESCE(SUM(p.file_size), 0) AS live_bytes
+    FROM temporary_uploads t
+    JOIN processed_urls p ON p.url_hash = t.url_hash
+    WHERE t.deleted_at IS NULL AND t.expires_at > ${now}
+  `;
+  // SUM of BIGINT comes back as a string; coerce to a number.
+  return Number(result[0]?.live_bytes ?? 0);
 }
 
 export async function getTemporaryUploadsByR2Key(r2Key) {
@@ -75,14 +65,9 @@ export async function getTemporaryUploadsByR2Key(r2Key) {
 
   const sql = getPostgresConnection();
 
-  try {
-    const results = await sql`SELECT * FROM temporary_uploads WHERE r2_key = ${r2Key}`;
-    // Convert timestamp BIGINT fields from strings to numbers
-    return convertTimestampsInArray(results, TEMPORARY_UPLOADS_TIMESTAMP_FIELDS);
-  } catch (error) {
-    getLogger().error(`Failed to get temporary uploads by R2 key: ${error.message}`);
-    return [];
-  }
+  const results = await sql`SELECT * FROM temporary_uploads WHERE r2_key = ${r2Key}`;
+  // Convert timestamp BIGINT fields from strings to numbers
+  return convertTimestampsInArray(results, TEMPORARY_UPLOADS_TIMESTAMP_FIELDS);
 }
 
 export async function markTemporaryUploadDeleted(id, deletedAt) {
@@ -90,17 +75,12 @@ export async function markTemporaryUploadDeleted(id, deletedAt) {
 
   const sql = getPostgresConnection();
 
-  try {
-    const result = await sql`
-      UPDATE temporary_uploads
-      SET deleted_at = ${deletedAt}
-      WHERE id = ${id} AND deleted_at IS NULL
-    `;
-    return result.count > 0;
-  } catch (error) {
-    getLogger().error(`Failed to mark temporary upload as deleted: ${error.message}`);
-    return false;
-  }
+  const result = await sql`
+    UPDATE temporary_uploads
+    SET deleted_at = ${deletedAt}
+    WHERE id = ${id} AND deleted_at IS NULL
+  `;
+  return result.count > 0;
 }
 
 export async function markTemporaryUploadDeletionFailed(id, error, retryCount) {
@@ -108,17 +88,12 @@ export async function markTemporaryUploadDeletionFailed(id, error, retryCount) {
 
   const sql = getPostgresConnection();
 
-  try {
-    const result = await sql`
-      UPDATE temporary_uploads
-      SET deletion_failed = ${retryCount}, deletion_error = ${error}
-      WHERE id = ${id}
-    `;
-    return result.count > 0;
-  } catch (error) {
-    getLogger().error(`Failed to mark temporary upload deletion as failed: ${error.message}`);
-    return false;
-  }
+  const result = await sql`
+    UPDATE temporary_uploads
+    SET deletion_failed = ${retryCount}, deletion_error = ${error}
+    WHERE id = ${id}
+  `;
+  return result.count > 0;
 }
 
 export async function deleteTemporaryUploadsByR2Key(r2Key) {
@@ -126,13 +101,8 @@ export async function deleteTemporaryUploadsByR2Key(r2Key) {
 
   const sql = getPostgresConnection();
 
-  try {
-    const result = await sql`DELETE FROM temporary_uploads WHERE r2_key = ${r2Key}`;
-    return result.count;
-  } catch (error) {
-    getLogger().error(`Failed to delete temporary uploads by R2 key: ${error.message}`);
-    return 0;
-  }
+  const result = await sql`DELETE FROM temporary_uploads WHERE r2_key = ${r2Key}`;
+  return result.count;
 }
 
 export async function getExpiredR2Keys(now) {
@@ -140,41 +110,36 @@ export async function getExpiredR2Keys(now) {
 
   const sql = getPostgresConnection();
 
-  try {
-    // Get all unique R2 keys that have expired uploads
-    const expiredKeysResult = await sql`
-      SELECT DISTINCT r2_key
+  // Get all unique R2 keys that have expired uploads
+  const expiredKeysResult = await sql`
+    SELECT DISTINCT r2_key
+    FROM temporary_uploads
+    WHERE expires_at < ${now} AND deleted_at IS NULL
+  `;
+  const expiredKeys = expiredKeysResult.map(row => row.r2_key);
+
+  // For each R2 key, check if ALL uploads are expired
+  const keysToDelete = [];
+  for (const r2Key of expiredKeys) {
+    const result = await sql`
+      SELECT
+        COUNT(*) as total_count,
+        SUM(CASE WHEN expires_at < ${now} AND deleted_at IS NULL THEN 1 ELSE 0 END) as expired_count
       FROM temporary_uploads
-      WHERE expires_at < ${now} AND deleted_at IS NULL
+      WHERE r2_key = ${r2Key}
     `;
-    const expiredKeys = expiredKeysResult.map(row => row.r2_key);
 
-    // For each R2 key, check if ALL uploads are expired
-    const keysToDelete = [];
-    for (const r2Key of expiredKeys) {
-      const result = await sql`
-        SELECT
-          COUNT(*) as total_count,
-          SUM(CASE WHEN expires_at < ${now} AND deleted_at IS NULL THEN 1 ELSE 0 END) as expired_count
-        FROM temporary_uploads
-        WHERE r2_key = ${r2Key}
-      `;
-
-      const row = result[0];
-      if (
-        row &&
-        parseInt(row.total_count, 10) > 0 &&
-        parseInt(row.total_count, 10) === parseInt(row.expired_count, 10)
-      ) {
-        keysToDelete.push(r2Key);
-      }
+    const row = result[0];
+    if (
+      row &&
+      parseInt(row.total_count, 10) > 0 &&
+      parseInt(row.total_count, 10) === parseInt(row.expired_count, 10)
+    ) {
+      keysToDelete.push(r2Key);
     }
-
-    return keysToDelete;
-  } catch (error) {
-    getLogger().error(`Failed to get expired R2 keys: ${error.message}`);
-    return [];
   }
+
+  return keysToDelete;
 }
 
 // What is in R2 right now, what leaves next, and what failed to leave. Sizes come from

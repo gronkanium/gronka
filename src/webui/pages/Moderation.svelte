@@ -1,4 +1,5 @@
 <script>
+  import { sendJson } from '../utils/api.js';
   import { onDestroy } from 'svelte';
   import {
     Search,
@@ -55,10 +56,8 @@
   }
   async function toggleEnabled() {
     busy = true;
-    const res = await fetch('/api/settings/moderation_enabled', {
-      method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ value: !enabled }),
+    const res = await sendJson('/api/settings/moderation_enabled', 'PUT', {
+      value: !enabled,
     }).catch(() => null);
     busy = false;
     if (res?.ok) {
@@ -80,14 +79,10 @@
   const validId = $derived(/^\d{17,20}$/.test(banForm.userId.trim()));
   async function submitBan() {
     busy = true;
-    const res = await fetch('/api/bans', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        userId: banForm.userId.trim(),
-        reason: banForm.reason.trim(),
-        appealAllowed: banForm.appealAllowed,
-      }),
+    const res = await sendJson('/api/bans', 'POST', {
+      userId: banForm.userId.trim(),
+      reason: banForm.reason.trim(),
+      appealAllowed: banForm.appealAllowed,
     }).catch(() => null);
     busy = false;
     if (res?.ok) {
@@ -229,11 +224,9 @@
   async function deleteMany(hashes, what) {
     if (!confirm(`Delete ${hashes.length} ${what}? Links stop working.`)) return;
     deleting = true;
-    const res = await fetch('/api/moderation/files/bulk', {
-      method: 'DELETE',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ urlHashes: hashes }),
-    }).catch(() => null);
+    const res = await sendJson('/api/moderation/files/bulk', 'DELETE', { urlHashes: hashes }).catch(
+      () => null
+    );
     deleting = false;
     const results = res?.ok ? (await res.json()).results : null;
     if (!results) say('error', res ? await readError(res, 'Delete failed') : 'Delete failed');

@@ -1,4 +1,5 @@
 <script>
+  import { getJsonOrNull } from '../utils/api.js';
   import { ArrowUpRight, ArrowUp, ArrowDown, Check } from 'lucide-svelte';
   import { currentRoute, navigate } from '../utils/router.js';
   import { issueStates } from '../stores/nav.js';
@@ -65,15 +66,11 @@
     const t = Date.now();
     const end = range.end ?? t;
     const from = (range.start ?? t - range.span) - (range.compare ? range.span : 0);
-    const get = url =>
-      fetch(url)
-        .then(r => (r.ok ? r.json() : null))
-        .catch(() => null);
     const [req, st, sys, sum] = await Promise.all([
-      get(`/api/requests?dateFrom=${from}&dateTo=${end}&limit=10000`),
-      get('/api/stats'),
-      get('/api/system'),
-      get('/api/alerts/summary?reasonLimit=300'),
+      getJsonOrNull(`/api/requests?dateFrom=${from}&dateTo=${end}&limit=10000`),
+      getJsonOrNull('/api/stats'),
+      getJsonOrNull('/api/system'),
+      getJsonOrNull('/api/alerts/summary?reasonLimit=300'),
     ]);
     ops = req?.requests ?? [];
     stats = st;

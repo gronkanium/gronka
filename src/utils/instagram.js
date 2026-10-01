@@ -283,7 +283,7 @@ export async function downloadFromInstagram(url, isAdminUser = false) {
 
   const story = parseStoryUrl(url);
   if (story) {
-    logger.info(
+    logger.debug(
       `Resolving Instagram story (highlight ${story.highlightId}, media ${story.mediaId})`
     );
     const items = await fetchStoryItems(story, parsed.pathname, cookie);
@@ -316,7 +316,7 @@ export async function downloadFromInstagram(url, isAdminUser = false) {
   const imgIndexParam = Number.parseInt(parsed.searchParams.get('img_index') ?? '', 10);
   const imgIndex = Number.isNaN(imgIndexParam) ? null : imgIndexParam;
 
-  logger.info(`Resolving Instagram post ${shortcode} (media ${mediaId})`);
+  logger.debug(`Resolving Instagram post ${shortcode} (media ${mediaId})`);
 
   const data = await instagramGet(`/api/v1/media/${mediaId}/info/`, parsed.pathname, cookie);
 
@@ -331,7 +331,7 @@ export async function downloadFromInstagram(url, isAdminUser = false) {
   }
 
   const result = await downloadFileFromUrl(mediaUrl, isAdminUser);
-  logger.info(
+  logger.debug(
     `Downloaded Instagram media: ${result.filename} (${result.size} bytes, ${result.contentType})`
   );
   return result;

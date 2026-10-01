@@ -41,7 +41,7 @@ export async function trimGif(inputPath, outputPath, options = {}) {
     throw new Error('Either startTime or duration must be provided for GIF trimming');
   }
 
-  logger.info(
+  logger.debug(
     `Starting GIF trim: ${inputPath} -> ${outputPath} (startTime: ${startTime}, duration: ${duration})`
   );
 

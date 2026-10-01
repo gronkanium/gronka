@@ -258,7 +258,7 @@ export function selectRedditMedia(listing, url) {
     if (images.length > 0) {
       return { external: null, images };
     }
-    logger.info(`Reddit comment ${commentId} carries no media, falling back to the post`);
+    logger.debug(`Reddit comment ${commentId} carries no media, falling back to the post`);
   }
 
   const media = mediaOf(post);

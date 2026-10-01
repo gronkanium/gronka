@@ -33,7 +33,7 @@ async function convertAnimatedWebpToGifImpl(inputPath, outputPath, options = {})
       ? null
       : validateNumericParameter(options.width, 'width', 1, 4096);
 
-  logger.info(
+  logger.debug(
     `Starting animated WebP to GIF conversion: ${inputPath} -> ${outputPath}${
       width ? ` (width: ${width})` : ' (native size)'
     }`

@@ -44,7 +44,7 @@ export function validateVideoAttachment(attachment, isAdminUser = false) {
   }
 
   if (isAdminUser && attachment.size > MAX_VIDEO_SIZE) {
-    logger.info(
+    logger.debug(
       `Video size limit bypassed for admin (${(attachment.size / (1024 * 1024)).toFixed(2)}MB > ${MAX_VIDEO_SIZE / (1024 * 1024)}MB)`
     );
   }
@@ -70,7 +70,7 @@ export function validateImageAttachment(attachment, isAdminUser = false) {
   }
 
   if (isAdminUser && attachment.size > MAX_IMAGE_SIZE) {
-    logger.info(
+    logger.debug(
       `Image size limit bypassed for admin (${(attachment.size / (1024 * 1024)).toFixed(2)}MB > ${MAX_IMAGE_SIZE / (1024 * 1024)}MB)`
     );
   }

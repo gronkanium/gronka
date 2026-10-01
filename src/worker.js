@@ -44,7 +44,7 @@ function runJob(job) {
 }
 
 async function runJobInContext(job) {
-  logger.info(`Job ${job.id} (${job.kind}) attempt ${job.attempts} [user: ${job.user_id}]`);
+  logger.debug(`Job ${job.id} (${job.kind}) attempt ${job.attempts} [user: ${job.user_id}]`);
   let operationId = job.operation_id;
   const beat = setInterval(
     () => queue.heartbeat(job.id).catch(error => logger.warn(`Heartbeat failed: ${error.message}`)),

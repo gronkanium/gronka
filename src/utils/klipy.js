@@ -98,7 +98,7 @@ export function extractMediaUrl(html) {
 }
 
 export async function downloadFromKlipy(url, isAdminUser = false) {
-  logger.info(`Resolving Klipy page: ${url}`);
+  logger.debug(`Resolving Klipy page: ${url}`);
   let response;
   try {
     response = await axios.get(url, {
@@ -127,6 +127,6 @@ export async function downloadFromKlipy(url, isAdminUser = false) {
     logger.warn('No media found on Klipy page');
     throw new ValidationError('no downloadable media found on this Klipy page');
   }
-  logger.info(`Extracted Klipy media URL: ${mediaUrl}`);
+  logger.debug(`Extracted Klipy media URL: ${mediaUrl}`);
   return downloadFileFromUrl(mediaUrl, isAdminUser);
 }

@@ -41,7 +41,7 @@ export async function trimVideo(inputPath, outputPath, options = {}) {
     throw new Error('Either startTime or duration must be provided for video trimming');
   }
 
-  logger.info(
+  logger.debug(
     `Starting video trim: ${inputPath} -> ${outputPath} (startTime: ${startTime}, duration: ${duration})`
   );
 

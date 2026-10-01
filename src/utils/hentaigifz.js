@@ -103,7 +103,7 @@ function decodeMediaUrl(url) {
  * @returns {Promise<{buffer: Buffer, contentType: string, size: number, filename: string}>}
  */
 export async function downloadFromHentaiGifz(url, isAdminUser = false) {
-  logger.info(`Resolving hentaigifz post: ${url}`);
+  logger.debug(`Resolving hentaigifz post: ${url}`);
 
   let html;
   try {
@@ -133,9 +133,9 @@ export async function downloadFromHentaiGifz(url, isAdminUser = false) {
     throw new ValidationError('no downloadable media found on this page');
   }
 
-  logger.info(`Extracted hentaigifz media URL: ${mediaUrl}`);
+  logger.debug(`Extracted hentaigifz media URL: ${mediaUrl}`);
   const result = await downloadFileFromUrl(mediaUrl, isAdminUser);
-  logger.info(
+  logger.debug(
     `Downloaded hentaigifz media: ${result.filename} (${result.size} bytes, ${result.contentType})`
   );
   return result;

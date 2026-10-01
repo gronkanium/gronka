@@ -123,7 +123,7 @@ export async function downloadFromBooru(url, isAdminUser = false) {
 
   const host = hostname.toLowerCase().replace(/^www\./, '');
   const apiUrl = site.buildApiUrl(host, postId);
-  logger.info(`Resolving ${site.name} post ${postId}: ${apiUrl}`);
+  logger.debug(`Resolving ${site.name} post ${postId}: ${apiUrl}`);
 
   let data;
   try {
@@ -152,9 +152,9 @@ export async function downloadFromBooru(url, isAdminUser = false) {
     throw new ValidationError('no downloadable media found for this post (it may be restricted)');
   }
 
-  logger.info(`Extracted ${site.name} media URL: ${fileUrl}`);
+  logger.debug(`Extracted ${site.name} media URL: ${fileUrl}`);
   const result = await downloadFileFromUrl(fileUrl, isAdminUser, null, { userAgent: BOORU_UA });
-  logger.info(
+  logger.debug(
     `Downloaded ${site.name} media: ${result.filename} (${result.size} bytes, ${result.contentType})`
   );
   return result;

@@ -322,7 +322,7 @@ export async function handlePrefixMessage(message, context = {}) {
       return;
     }
 
-    logger.info(
+    logger.debug(
       `User ${message.author.id} invoked prefix command "${commandName}" in ${message.guildId || 'DM'}`
     );
 

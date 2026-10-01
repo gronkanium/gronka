@@ -109,7 +109,7 @@ function isMediaHostUrl(url) {
  * @returns {Promise<{buffer: Buffer, contentType: string, size: number, filename: string}>}
  */
 export async function downloadFromPinterest(url, isAdminUser = false) {
-  logger.info(`Resolving Pinterest pin: ${url}`);
+  logger.debug(`Resolving Pinterest pin: ${url}`);
 
   let response;
   try {
@@ -143,9 +143,9 @@ export async function downloadFromPinterest(url, isAdminUser = false) {
     throw new ValidationError('no downloadable media found on this pin');
   }
 
-  logger.info(`Extracted Pinterest media URL: ${mediaUrl}`);
+  logger.debug(`Extracted Pinterest media URL: ${mediaUrl}`);
   const result = await downloadFileFromUrl(mediaUrl, isAdminUser);
-  logger.info(
+  logger.debug(
     `Downloaded Pinterest media: ${result.filename} (${result.size} bytes, ${result.contentType})`
   );
   return result;

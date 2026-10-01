@@ -138,7 +138,9 @@ export async function listen(channel, fn) {
 // Read-only view for the webui. Never selects `reply`: it holds the interaction token.
 export async function jobsOverview({ since = Date.now() - 24 * 3600e3, limit = 25 } = {}) {
   const sql = await db();
-  const [counts, recent, workers] = await Promise.all([
+  const [paused, processes, counts, recent, workers] = await Promise.all([
+    getBooleanSetting(PAUSE_KEY),
+    presence(),
     sql`
       SELECT status, COUNT(*)::int AS count, COUNT(*) FILTER (WHERE attempts > 1)::int AS retried
       FROM media_jobs WHERE status IN ('queued', 'running') OR timestamp >= ${since}
@@ -168,8 +170,8 @@ export async function jobsOverview({ since = Date.now() - 24 * 3600e3, limit = 2
     id: Number(row.id),
   });
   return {
-    paused: await getBooleanSetting(PAUSE_KEY),
-    processes: await presence(),
+    paused,
+    processes,
     counts: Object.fromEntries(counts.map(c => [c.status, { count: c.count, retried: c.retried }])),
     recent: recent.map(num),
     workers: workers.map(w => ({

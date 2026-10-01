@@ -13,7 +13,6 @@ import axios from 'axios';
 import {
   insertOperationLog,
   recordUserCommand,
-  getUserMetrics,
   getStuckOperations,
   markOperationAsFailed,
   getOperationTrace,
@@ -379,12 +378,9 @@ async function updateUserMetricsForOperation(operation) {
   }
 
   try {
-    await recordUserCommand(operation.userId, { failed: operation.status === 'error' });
-
-    const updatedMetrics = await getUserMetrics(operation.userId);
-    if (!updatedMetrics) {
-      return; // User metrics not found, skip broadcast
-    }
+    const updatedMetrics = await recordUserCommand(operation.userId, {
+      failed: operation.status === 'error',
+    });
 
     const currentPort = getInstancePort();
     const userMetricsCallback = userMetricsBroadcastCallbacks.get(currentPort);

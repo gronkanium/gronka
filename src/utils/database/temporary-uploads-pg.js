@@ -70,19 +70,6 @@ export async function getTemporaryUploadsByR2Key(r2Key) {
   return convertTimestampsInArray(results, TEMPORARY_UPLOADS_TIMESTAMP_FIELDS);
 }
 
-export async function markTemporaryUploadDeleted(id, deletedAt) {
-  await ensurePostgresInitialized();
-
-  const sql = getPostgresConnection();
-
-  const result = await sql`
-    UPDATE temporary_uploads
-    SET deleted_at = ${deletedAt}
-    WHERE id = ${id} AND deleted_at IS NULL
-  `;
-  return result.count > 0;
-}
-
 export async function markTemporaryUploadDeletionFailed(id, error, retryCount) {
   await ensurePostgresInitialized();
 
@@ -107,39 +94,14 @@ export async function deleteTemporaryUploadsByR2Key(r2Key) {
 
 export async function getExpiredR2Keys(now) {
   await ensurePostgresInitialized();
-
   const sql = getPostgresConnection();
-
-  // Get all unique R2 keys that have expired uploads
-  const expiredKeysResult = await sql`
-    SELECT DISTINCT r2_key
-    FROM temporary_uploads
-    WHERE expires_at < ${now} AND deleted_at IS NULL
+  // A key is only deletable once every upload sharing it has expired.
+  const rows = await sql`
+    SELECT r2_key FROM temporary_uploads
+    GROUP BY r2_key
+    HAVING COUNT(*) = COUNT(*) FILTER (WHERE expires_at < ${now} AND deleted_at IS NULL)
   `;
-  const expiredKeys = expiredKeysResult.map(row => row.r2_key);
-
-  // For each R2 key, check if ALL uploads are expired
-  const keysToDelete = [];
-  for (const r2Key of expiredKeys) {
-    const result = await sql`
-      SELECT
-        COUNT(*) as total_count,
-        SUM(CASE WHEN expires_at < ${now} AND deleted_at IS NULL THEN 1 ELSE 0 END) as expired_count
-      FROM temporary_uploads
-      WHERE r2_key = ${r2Key}
-    `;
-
-    const row = result[0];
-    if (
-      row &&
-      parseInt(row.total_count, 10) > 0 &&
-      parseInt(row.total_count, 10) === parseInt(row.expired_count, 10)
-    ) {
-      keysToDelete.push(r2Key);
-    }
-  }
-
-  return keysToDelete;
+  return rows.map(row => row.r2_key);
 }
 
 // What is in R2 right now, what leaves next, and what failed to leave. Sizes come from

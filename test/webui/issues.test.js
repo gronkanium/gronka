@@ -1,6 +1,14 @@
 import { test, describe } from 'bun:test';
 import assert from 'node:assert';
-import { groupIssues, stateOf, isOpen, inTab, buckets, abbr } from '../../src/webui/issues.js';
+import {
+  groupIssues,
+  stateOf,
+  isOpen,
+  isNew,
+  inTab,
+  buckets,
+  abbr,
+} from '../../src/webui/issues.js';
 
 const reason = (text, extra = {}) => ({
   reason: text,
@@ -12,6 +20,17 @@ const reason = (text, extra = {}) => ({
 });
 
 describe('issue grouping', () => {
+  test('an issue is new only when every variant first appeared in the last day', () => {
+    const now = 10 * 24 * 3600e3;
+    const [g] = groupIssues([
+      reason('could not deliver 1', { firstSeen: now - 3600e3 }),
+      reason('could not deliver 2', { firstSeen: now - 3 * 24 * 3600e3 }),
+    ]);
+    assert.strictEqual(isNew(g, now), false);
+    const [fresh] = groupIssues([reason('could not deliver 1', { firstSeen: now - 3600e3 })]);
+    assert.strictEqual(isNew(fresh, now), true);
+  });
+
   test('variants that differ only in numbers or charset become one issue', () => {
     const groups = groupIssues([
       reason('video is 64m 48s long, maximum allowed is 60 minutes.', { count: 2 }),

@@ -70,10 +70,11 @@
     clearTimeout(searchTimer);
     if (!banSearch.trim()) return (banResults = []);
     searchTimer = setTimeout(async () => {
-      const d = await fetch(`/api/users?search=${encodeURIComponent(banSearch.trim())}&limit=8`)
+      const q = banSearch.trim();
+      const d = await fetch(`/api/users?search=${encodeURIComponent(q)}&limit=8`)
         .then(r => r.json())
         .catch(() => null);
-      banResults = d?.users ?? [];
+      if (q === banSearch.trim()) banResults = d?.users ?? [];
     }, 250);
   }
   const validId = $derived(/^\d{17,20}$/.test(banForm.userId.trim()));

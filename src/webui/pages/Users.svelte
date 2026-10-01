@@ -49,7 +49,9 @@
       ? Math.round(((u.total_commands - u.failed_commands) / u.total_commands) * 100)
       : 0;
 
+  let seq = 0;
   async function load() {
+    const mine = ++seq;
     loading = true;
     error = '';
     const q = new URLSearchParams({
@@ -60,6 +62,7 @@
     });
     if (search.trim()) q.set('search', search.trim());
     const data = await getJsonOrNull(`/api/users?${q}`);
+    if (mine !== seq) return;
     if (!data) error = 'could not load users';
     users = data?.users ?? [];
     total = data?.total ?? 0;

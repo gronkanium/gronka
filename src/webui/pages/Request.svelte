@@ -16,6 +16,8 @@
     Link,
     ArrowUpRight,
     TriangleAlert,
+    User,
+    List,
   } from 'lucide-svelte';
   import { currentRoute, navigate } from '../utils/router.js';
   import {
@@ -48,17 +50,23 @@
   async function load(requestId) {
     error = '';
     op = null;
+    logs = [];
+    jobs = [];
+    related = { sameUrl: null, user: null };
     collapsed = {};
     try {
       const data = await getJson(`/api/operations/${encodeURIComponent(requestId)}`);
+      if (requestId !== id) return;
       op = data.operation;
       trace = data.trace;
     } catch {
+      if (requestId !== id) return;
       error = 'This request is not in the history any more. Requests are kept for 7 days.';
       return;
     }
     const start = op.timestamp;
-    const [l, j, same, user] = await Promise.all([
+    const userQuery = `/api/requests?userId=${op.userId}&dateFrom=${Date.now() - 24 * 3600e3}&limit=1`;
+    const [l, j, same, user, userFailed] = await Promise.all([
       getJsonOrNull(
         `/api/logs?op=${encodeURIComponent(requestId)}&orderDesc=false&limit=500&startTime=${start - 60e3}&endTime=${start + 20 * 60e3}`
       ),
@@ -68,20 +76,15 @@
             `/api/requests?urlPattern=${encodeURIComponent(op.originalUrl.split('?')[0])}&limit=1`
           )
         : null,
-      getJsonOrNull(
-        `/api/requests?userId=${op.userId}&dateFrom=${Date.now() - 24 * 3600e3}&limit=500`
-      ),
+      getJsonOrNull(userQuery),
+      getJsonOrNull(`${userQuery}&status=error`),
     ]);
+    if (requestId !== id) return;
     logs = l?.logs ?? [];
     jobs = j?.jobs ?? [];
     related = {
       sameUrl: same ? Math.max(0, (same.total ?? 1) - 1) : null,
-      user: user
-        ? {
-            total: user.total,
-            failed: (user.requests ?? []).filter(r => r.status === 'error').length,
-          }
-        : null,
+      user: user && userFailed ? { total: user.total, failed: userFailed.total } : null,
     };
   }
 
@@ -666,6 +669,12 @@
             </section>
 
             <section class="panel pb actions-panel">
+              <button class="btn" onclick={() => navigate('user-profile', { userId: op.userId })}
+                ><User size={14} />View profile</button
+              >
+              <button class="btn" onclick={() => navigate('requests', { userId: op.userId })}
+                ><List size={14} />Their requests</button
+              >
               <button class="btn danger" onclick={() => (banOpen = !banOpen)}
                 ><Ban size={14} />Ban this user</button
               >

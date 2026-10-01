@@ -16,7 +16,16 @@
   import { currentRoute, navigate } from '../utils/router.js';
   import { alerts as liveAlerts } from '../stores/sse-store.js';
   import { issueStates, setIssueState } from '../stores/nav.js';
-  import { groupIssues, stateOf, isOpen, inTab, buckets, abbr, KIND_LABEL } from '../issues.js';
+  import {
+    groupIssues,
+    stateOf,
+    isOpen,
+    isNew,
+    inTab,
+    buckets,
+    abbr,
+    KIND_LABEL,
+  } from '../issues.js';
   import { formatRelativeTime, formatDateTime, shortId, urlLabel } from '../utils/format.js';
   import PageHeader from '../components/PageHeader.svelte';
   import DataTable from '../components/DataTable.svelte';
@@ -230,7 +239,10 @@
   const visible = $derived.by(() => {
     const by = SORTS[sort.key] ?? SORTS.n;
     const dir = sort.desc ? 1 : -1;
-    return [...lists[tab]].sort((a, b) => (by(b) - by(a)) * dir || b.count - a.count);
+    const fresh = g => (sort.key === 'n' && isNew(g, now) ? 1 : 0);
+    return [...lists[tab]].sort(
+      (a, b) => fresh(b) - fresh(a) || (by(b) - by(a)) * dir || b.count - a.count
+    );
   });
   const trends = $derived(Object.fromEntries(visible.map(g => [g.key, trendOf(g)])));
 
@@ -667,6 +679,9 @@
           <span class="l1">
             <button class="ttl ellipsis" data-key={g.key} title={g.title}>{g.title}</button>
             <span class="chip {g.kind}">{KIND_LABEL[g.kind]}</span>
+            {#if g.state === 'open' && isNew(g, now)}
+              <span class="pill sm bad">New</span>
+            {/if}
             {#if BADGE[g.state]}
               <span class="pill sm {BADGE[g.state][0]}">{BADGE[g.state][1]}</span>
             {/if}

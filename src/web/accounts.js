@@ -186,11 +186,19 @@ export async function getSessionAccount(token) {
   if (typeof token !== 'string' || token.length > 100) return null;
   const sql = getPostgresConnection();
   // Idle for a day or older than a week, whichever comes first; each use pushes the idle limit.
+  const hash = sha256(token);
+  const idle = `${SESSION_IDLE_MS / 1000} seconds`;
+  // Extends at most hourly, so a busy session is not a row write on every request.
   const [row] = await sql`
-    UPDATE web_sessions
-    SET expires_at = least(now() + ${SESSION_IDLE_MS / 1000} * interval '1 second', absolute_at)
-    WHERE token_hash = ${sha256(token)} AND expires_at > now()
-    RETURNING account_id`;
+    WITH live AS (
+      SELECT account_id FROM web_sessions WHERE token_hash = ${hash} AND expires_at > now()
+    ), extended AS (
+      UPDATE web_sessions SET expires_at = least(now() + ${idle}::interval, absolute_at)
+      WHERE token_hash = ${hash} AND expires_at > now()
+        AND (expires_at < least(now() + ${idle}::interval, absolute_at) - interval '1 hour'
+          OR expires_at > absolute_at)
+    )
+    SELECT account_id FROM live`;
   return row?.account_id ?? null;
 }
 

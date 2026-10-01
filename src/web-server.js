@@ -491,14 +491,12 @@ export function createHandler({
     const now = Date.now();
     const entry = windows.get(key);
     if (!entry || entry.resetAt <= now) {
-      if (windows.size >= MAX_WINDOWS) {
-        for (const [old, value] of windows) if (value.resetAt <= now) windows.delete(old);
-        // Still full of live entries: drop the oldest, a Map keeps insertion order.
-        for (const old of windows.keys()) {
-          if (windows.size < MAX_WINDOWS) break;
-          windows.delete(old);
-        }
+      // Every window is re-inserted when it starts, so the Map is ordered by expiry: prune from the front.
+      for (const [old, value] of windows) {
+        if (value.resetAt > now && windows.size < MAX_WINDOWS) break;
+        windows.delete(old);
       }
+      windows.delete(key);
       windows.set(key, { count: 1, resetAt: now + IP_WINDOW_MS });
       return 0;
     }

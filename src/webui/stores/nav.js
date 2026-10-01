@@ -11,7 +11,7 @@ const DAY = 24 * 3600 * 1000;
 export async function refreshNav() {
   const since = Date.now() - DAY;
   const [req, facets, issues, stats, system] = await Promise.all([
-    getJsonOrNull(`/api/requests?dateFrom=${since}&limit=5000`),
+    getJsonOrNull(`/api/requests/outcomes?dateFrom=${since}`),
     getJsonOrNull(`/api/logs/facets?startTime=${since}`),
     getJsonOrNull('/api/alerts/summary?reasonLimit=300'),
     getJsonOrNull('/api/stats'),
@@ -24,7 +24,7 @@ export async function refreshNav() {
     requests: {
       total: ops.length,
       failed: ops.filter(op => op.status === 'error').length,
-      slow: ops.filter(op => (op.performanceMetrics?.duration ?? 0) > 10000).length,
+      slow: ops.filter(op => op.duration > 10000).length,
       byType,
     },
     logs: facets?.facets ?? {},

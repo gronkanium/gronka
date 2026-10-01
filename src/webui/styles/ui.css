@@ -987,28 +987,8 @@ textarea.field {
   gap: 2px;
 }
 
-/* Avatar: a hue derived from the id keeps one user recognisable across pages. */
 .avatar {
-  --h: 220;
-  width: 24px;
-  height: 24px;
-  border-radius: 50%;
-  display: inline-grid;
-  place-items: center;
   flex-shrink: 0;
-  font: 600 10px var(--font);
-  letter-spacing: 0.02em;
-  background: hsl(var(--h) 70% 90%);
-  color: hsl(var(--h) 55% 36%);
-}
-:root[data-theme='dark'] .avatar {
-  background: hsl(var(--h) 45% 22%);
-  color: hsl(var(--h) 80% 78%);
-}
-.avatar.lg {
-  width: 48px;
-  height: 48px;
-  font-size: 16px;
 }
 .user-cell {
   display: inline-flex;

@@ -454,8 +454,7 @@
         <span class="soft hide-sm">/{r.type}</span>
         <span class="mono ellipsis">{urlLabel(r.originalUrl)}</span>
         <span class="user-cell hide-sm"
-          ><Avatar id={r.userId} size={18} label="" /><span class="id">{shortId(r.userId)}</span
-          ></span
+          ><Avatar id={r.userId} size={18} /><span class="id">{shortId(r.userId)}</span></span
         >
         <span class="num muted hide-sm"
           >{r.performanceMetrics?.duration

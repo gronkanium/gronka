@@ -103,7 +103,7 @@
       <span class="hide-sm">
         {#if f.userId}
           <span class="user-cell"
-            ><Avatar id={f.userId} size={18} label="" /><button
+            ><Avatar id={f.userId} size={18} /><button
               class="linkish mono id"
               onclick={e => {
                 e.preventDefault();

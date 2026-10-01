@@ -53,6 +53,7 @@
           <div class="toc-links">
             <a href="#auth">auth</a>
             <a href="#download">download</a>
+            <a href="#content">content</a>
             <a href="#responses">responses</a>
             <a href="#padded-json">padded json</a>
             <a href="#errors">errors</a>
@@ -67,6 +68,7 @@
           <nav class="toc-links" aria-label="sections">
             <a href="#auth">auth</a>
             <a href="#download">download</a>
+            <a href="#content">content</a>
             <a href="#responses">responses</a>
             <a href="#padded-json">padded json</a>
             <a href="#errors">errors</a>
@@ -109,6 +111,36 @@
             or <code>mute</code> (the video without its sound); <code>start</code> and
             <code>end</code> trim, in seconds or <code>m:ss</code>; <code>split: false</code> asks
             for one finished file instead of separate video and audio parts.
+          </p>
+        </section>
+
+        <section id="content" aria-labelledby="content-title">
+          <h2 id="content-title">content</h2>
+          <p>
+            the text behind a link, not the file: send a link as json to
+            <code>POST /v1/content</code>. reddit answers with the post and its comment tree; x
+            answers with the post, the post it quotes, and the author's own thread above it.
+          </p>
+          <div class="codebox">
+            <button class="copy" type="button" aria-label="copy content curl command" hidden>
+              copy
+            </button>
+            <pre tabindex="0"><code>curl https://api.gronka.dev/v1/content \
+  -H 'Authorization: Bearer &lt;key&gt;' \
+  -H 'Content-Type: application/json' \
+  -d '{"url":"https://www.reddit.com/r/pics/comments/abc123/title/","depth":3}'</code></pre>
+          </div>
+          <p>
+            options: <code>format</code> is <code>json</code> (default) or <code>text</code> (a
+            plain-text rendering, comments indented); on reddit, <code>depth</code> (0 to 10) and
+            <code>comments</code> (0 to 500) cap the tree; on x, <code>thread: false</code> stops at
+            the linked post. the answer is one <code>Thread</code>: <code>source</code>,
+            <code>url</code>, <code>post</code>, <code>thread</code> (the author's posts in order),
+            <code>comments</code> (a tree) and <code>truncated</code>. every item has
+            <code>author</code>, <code>text</code>, <code>media</code>, <code>links</code>,
+            <code>quoted</code> and <code>stats</code>. errors use the http status:
+            <code>404 CONTENT_GONE</code>, <code>400 UNSUPPORTED_SOURCE</code>,
+            <code>502 CONTENT_FAILED</code>. reddit and x only for now.
           </p>
         </section>
 
@@ -205,6 +237,8 @@
           <ul class="error-list">
             <li><code>BAD_REQUEST</code><span>the request body or options are invalid.</span></li>
             <li><code>BAD_URL</code><span>the url is missing or invalid.</span></li>
+            <li><code>CONTENT_FAILED</code><span>the content could not be read.</span></li>
+            <li><code>CONTENT_GONE</code><span>the post is deleted, private or removed.</span></li>
             <li><code>DOWNLOAD_FAILED</code><span>the download did not finish.</span></li>
             <li><code>FORBIDDEN</code><span>the request origin is not allowed.</span></li>
             <li><code>INTERNAL</code><span>something broke on the server.</span></li>
@@ -221,6 +255,9 @@
             </li>
             <li>
               <code>UNAUTHORIZED</code><span>the account or api key is missing or invalid.</span>
+            </li>
+            <li>
+              <code>UNSUPPORTED_SOURCE</code><span>content is not available for that site.</span>
             </li>
             <li><code>TOTP_INVALID</code><span>the 2fa or recovery code is wrong.</span></li>
             <li>
@@ -269,9 +306,9 @@
         <section id="limits" aria-labelledby="limits-title">
           <h2 id="limits-title">limits</h2>
           <p>
-            50 downloads per 10 minutes per ip, or per account with api keys (all keys share the
-            account limit). api key checks are capped at 30 per 10 minutes per ip. files fetched by
-            gronka (lane r2) have a 400 mb cap; images have a 50 mb cap. a
+            50 downloads or content reads per 10 minutes per ip, or per account with api keys (all
+            keys share the account limit). api key checks are capped at 30 per 10 minutes per ip.
+            files fetched by gronka (lane r2) have a 400 mb cap; images have a 50 mb cap. a
             <code>RATE_LIMITED</code> <code>429</code> includes <code>error.retryAfter</code> in
             seconds and the same value in a <code>Retry-After</code> header.
           </p>
@@ -292,6 +329,10 @@
             <li>
               <span class="method">POST</span><code class="route-path">/v1/download</code
               ><span class="endpoint-note">get files from a link</span>
+            </li>
+            <li>
+              <span class="method">POST</span><code class="route-path">/v1/content</code
+              ><span class="endpoint-note">read the text behind a link</span>
             </li>
             <li>
               <span class="method">POST</span><code class="route-path">/v1/account</code

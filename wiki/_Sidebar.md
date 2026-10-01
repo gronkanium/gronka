@@ -19,6 +19,7 @@
 ## reference
 
 - [[API-Endpoints]]
+- [[Content-API]]
 - [[Technical-Specification]]
 - [[Logging-Platform]]
 

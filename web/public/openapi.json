@@ -15,6 +15,10 @@
       "name": "download"
     },
     {
+      "name": "content",
+      "description": "the text behind a link: posts, threads and comments as json."
+    },
+    {
       "name": "account",
       "description": "the account page uses a cookie session. scripts can use an api key."
     }
@@ -822,6 +826,172 @@
         },
         "description": "remove a passkey when 2fa is on, send a current code or a recovery code as `code`, or the answer is TOTP_REQUIRED, TOTP_INVALID or TOTP_LOCKED."
       }
+    },
+    "/v1/content": {
+      "post": {
+        "tags": ["content"],
+        "summary": "read a post, thread or comments from a link",
+        "description": "reads reddit posts (with the comment tree) and x posts (with the quoted post and the author's thread above it). same quota as /v1/download, shared per caller. preview: the shape may still change.",
+        "security": [
+          {
+            "apiKey": []
+          },
+          {}
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ContentRequest"
+              },
+              "examples": {
+                "reddit": {
+                  "value": {
+                    "url": "https://www.reddit.com/r/pics/comments/abc123/title/",
+                    "depth": 3,
+                    "comments": 50
+                  }
+                },
+                "x": {
+                  "value": {
+                    "url": "https://x.com/user/status/123"
+                  }
+                },
+                "text": {
+                  "value": {
+                    "url": "https://x.com/user/status/123",
+                    "format": "text"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "the content as json, or plain text when format is text",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Thread"
+                },
+                "example": {
+                  "source": "twitter",
+                  "url": "https://x.com/user/status/123",
+                  "post": {
+                    "id": "123",
+                    "url": "https://x.com/user/status/123",
+                    "author": {
+                      "handle": "user",
+                      "name": "User",
+                      "url": "https://x.com/user"
+                    },
+                    "createdAt": "2026-09-30T12:00:00.000Z",
+                    "title": null,
+                    "text": "3/ and that is why the penguin wins.",
+                    "media": [],
+                    "links": [],
+                    "quoted": {
+                      "id": "100",
+                      "url": "https://x.com/other/status/100",
+                      "author": {
+                        "handle": "other",
+                        "name": "Other",
+                        "url": "https://x.com/other"
+                      },
+                      "createdAt": "2026-09-29T08:00:00.000Z",
+                      "title": null,
+                      "text": "penguins cannot fly",
+                      "media": [],
+                      "links": [],
+                      "quoted": null,
+                      "parent": null,
+                      "stats": {
+                        "likes": 12,
+                        "reposts": 1,
+                        "replies": 3,
+                        "score": null,
+                        "views": 900
+                      },
+                      "flags": {
+                        "nsfw": false,
+                        "spoiler": false,
+                        "edited": false
+                      },
+                      "extra": {}
+                    },
+                    "parent": {
+                      "id": "122",
+                      "url": "https://x.com/user/status/122",
+                      "author": {
+                        "handle": "user",
+                        "name": null,
+                        "url": "https://x.com/user"
+                      }
+                    },
+                    "stats": {
+                      "likes": 40,
+                      "reposts": 4,
+                      "replies": 2,
+                      "score": null,
+                      "views": 3100
+                    },
+                    "flags": {
+                      "nsfw": false,
+                      "spoiler": false,
+                      "edited": false
+                    },
+                    "extra": {
+                      "lang": "en"
+                    }
+                  },
+                  "thread": [
+                    {
+                      "id": "121",
+                      "text": "1/ a thread about penguins"
+                    },
+                    {
+                      "id": "122",
+                      "text": "2/ they are birds"
+                    },
+                    {
+                      "id": "123",
+                      "text": "3/ and that is why the penguin wins."
+                    }
+                  ],
+                  "comments": [],
+                  "truncated": false
+                }
+              },
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                },
+                "example": "twitter: https://x.com/user/status/123\n\n@user (User) · 2026-09-30 12:00\n1/ a thread about penguins\n"
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/Error"
+          },
+          "401": {
+            "$ref": "#/components/responses/Error"
+          },
+          "403": {
+            "$ref": "#/components/responses/Error"
+          },
+          "404": {
+            "$ref": "#/components/responses/Error"
+          },
+          "429": {
+            "$ref": "#/components/responses/Error"
+          },
+          "502": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
     }
   },
   "components": {
@@ -958,6 +1128,7 @@
                 "examples": [
                   "BAD_REQUEST",
                   "BAD_URL",
+                  "CONTENT_FAILED",
                   "CONTENT_GONE",
                   "DOWNLOAD_FAILED",
                   "INTERNAL",
@@ -968,6 +1139,7 @@
                   "TOTP_LOCKED",
                   "TOTP_REQUIRED",
                   "UNAUTHORIZED",
+                  "UNSUPPORTED_SOURCE",
                   "VALIDATION_ERROR",
                   "VERIFICATION_FAILED"
                 ]
@@ -981,6 +1153,257 @@
                 "description": "on 429 RATE_LIMITED: seconds to wait before retrying, also sent as a Retry-After header"
               }
             }
+          }
+        }
+      },
+      "ContentRequest": {
+        "type": "object",
+        "required": ["url"],
+        "properties": {
+          "url": {
+            "type": "string",
+            "description": "link or text containing a link. reddit post or comment permalinks, /s/ share links, x.com, twitter.com and fxtwitter/vxtwitter mirrors"
+          },
+          "format": {
+            "type": "string",
+            "enum": ["json", "text"],
+            "default": "json",
+            "description": "text: a plain-text rendering of the same content, one block per post, comments indented"
+          },
+          "thread": {
+            "type": "boolean",
+            "default": true,
+            "description": "x only. follow the author's own replies upward from the linked post to rebuild the thread"
+          },
+          "depth": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 10,
+            "default": 10,
+            "description": "reddit only. how many comment levels to include; 0 leaves out comments"
+          },
+          "comments": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 500,
+            "default": 500,
+            "description": "reddit only. cap on the number of comments across the tree"
+          },
+          "turnstile": {
+            "type": "string",
+            "description": "web page only. scripts use an api key"
+          }
+        }
+      },
+      "Post": {
+        "type": "object",
+        "required": ["id", "url", "author", "text", "media", "links", "stats"],
+        "properties": {
+          "id": {
+            "type": ["string", "null"]
+          },
+          "url": {
+            "type": ["string", "null"]
+          },
+          "author": {
+            "type": "object",
+            "properties": {
+              "handle": {
+                "type": ["string", "null"],
+                "description": "the @name or u/name, without the prefix"
+              },
+              "name": {
+                "type": ["string", "null"]
+              },
+              "url": {
+                "type": ["string", "null"]
+              }
+            }
+          },
+          "createdAt": {
+            "type": ["string", "null"],
+            "format": "date-time"
+          },
+          "title": {
+            "type": ["string", "null"],
+            "description": "reddit post title"
+          },
+          "text": {
+            "type": "string",
+            "description": "the body as plain text; reddit markdown is left as written"
+          },
+          "media": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "required": ["type", "url"],
+              "properties": {
+                "type": {
+                  "type": "string",
+                  "enum": ["image", "video", "gif"]
+                },
+                "url": {
+                  "type": "string"
+                },
+                "alt": {
+                  "type": ["string", "null"]
+                },
+                "width": {
+                  "type": ["integer", "null"]
+                },
+                "height": {
+                  "type": ["integer", "null"]
+                }
+              }
+            }
+          },
+          "links": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "outbound links in the text, a reddit link post's target included"
+          },
+          "quoted": {
+            "description": "the quoted post or crosspost parent",
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/Post"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "parent": {
+            "type": ["object", "null"],
+            "description": "what this item replies to",
+            "properties": {
+              "id": {
+                "type": ["string", "null"]
+              },
+              "url": {
+                "type": ["string", "null"]
+              },
+              "author": {
+                "oneOf": [
+                  {
+                    "type": "object",
+                    "properties": {
+                      "handle": {
+                        "type": ["string", "null"],
+                        "description": "the @name or u/name, without the prefix"
+                      },
+                      "name": {
+                        "type": ["string", "null"]
+                      },
+                      "url": {
+                        "type": ["string", "null"]
+                      }
+                    }
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              }
+            }
+          },
+          "stats": {
+            "type": "object",
+            "description": "each a number or null when the source does not say",
+            "properties": {
+              "likes": {
+                "type": ["integer", "null"]
+              },
+              "reposts": {
+                "type": ["integer", "null"]
+              },
+              "replies": {
+                "type": ["integer", "null"]
+              },
+              "score": {
+                "type": ["integer", "null"],
+                "description": "reddit net votes"
+              },
+              "views": {
+                "type": ["integer", "null"]
+              }
+            }
+          },
+          "flags": {
+            "type": "object",
+            "properties": {
+              "nsfw": {
+                "type": "boolean"
+              },
+              "spoiler": {
+                "type": "boolean"
+              },
+              "edited": {
+                "type": "boolean"
+              }
+            }
+          },
+          "extra": {
+            "type": "object",
+            "description": "source fields that do not fit above: subreddit, flair, poll, article, communityNote, op, distinguished"
+          }
+        }
+      },
+      "Comment": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/Post"
+          },
+          {
+            "type": "object",
+            "properties": {
+              "depth": {
+                "type": "integer"
+              },
+              "replies": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/components/schemas/Comment"
+                }
+              }
+            }
+          }
+        ]
+      },
+      "Thread": {
+        "type": "object",
+        "required": ["source", "url", "post", "thread", "comments", "truncated"],
+        "properties": {
+          "source": {
+            "type": "string",
+            "enum": ["reddit", "twitter"]
+          },
+          "url": {
+            "type": "string",
+            "description": "the canonical link"
+          },
+          "post": {
+            "$ref": "#/components/schemas/Post"
+          },
+          "thread": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Post"
+            },
+            "description": "the author's own thread in order, the post included; empty when the post stands alone"
+          },
+          "comments": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Comment"
+            },
+            "description": "replies by others as a tree (reddit); always empty for x"
+          },
+          "truncated": {
+            "type": "boolean",
+            "description": "true when depth, comments or thread caps dropped something"
           }
         }
       }

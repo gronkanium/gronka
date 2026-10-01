@@ -4,6 +4,7 @@ import { botConfig } from '../utils/config.js';
 import { isAdmin } from '../utils/rate-limit.js';
 import { replyIfBanned, replyIfMaintenance } from '../utils/ban-check.js';
 import { getGuildPrefix, setGuildPrefix, clearGuildPrefix } from '../utils/database.js';
+import { OUTPUT_FORMATS } from '../utils/output-formats.js';
 import { createMessageAdapter } from '../commands/shared/message-adapter.js';
 import { handleDownloadCommand } from '../commands/download.js';
 import { handleConvertCommand } from '../commands/convert.js';
@@ -25,6 +26,7 @@ const OPTION_ALIASES = {
   optimize: 'optimize',
   lossy: 'lossy',
   mp3: 'mp3',
+  format: 'format',
   url: 'url',
 };
 
@@ -95,6 +97,11 @@ export function parseArgTokens(tokens) {
     delete options.quality;
   }
 
+  if (options.format !== undefined) {
+    options.format = options.format.toLowerCase();
+    if (options.format !== 'gif' && !OUTPUT_FORMATS[options.format]) delete options.format;
+  }
+
   // Slash commands enforce 0-100 via min/max; clamp here (non-numeric values are dropped
   // later by the adapter's getNumber)
   if (options.lossy !== undefined) {
@@ -143,8 +150,8 @@ export function buildHelpEmbed(prefix) {
       {
         name: 'commands',
         value: [
-          `\`${prefix} download <url>\`, download a video from social media`,
-          `\`${prefix} convert [url]\`, convert a video/image to gif (attach a file, link one, or reply to a message with one)`,
+          `\`${prefix} download <url>\`, download a video from social media (\`mp3=true\` for audio only)`,
+          `\`${prefix} convert [url]\`, convert a video/image to gif, mp4 or another format (attach a file, link one, or reply to a message with one)`,
           `\`${prefix} optimize [url]\`, shrink a gif (attachment, url, or reply)`,
           `\`${prefix} info\`, bot stats and system info`,
           `\`${prefix} help\`, this message`,
@@ -154,7 +161,7 @@ export function buildHelpEmbed(prefix) {
       {
         name: 'options',
         value:
-          `\`key=value\` after a command, e.g. \`${prefix} convert quality=high lossy=35 start=0:05 end=0:10\`\n` +
+          `\`key=value\` after a command, e.g. \`${prefix} convert format=mp4 start=0:05 end=0:10\`, or \`${prefix} convert quality=high lossy=35 optimize=true\`\n` +
           `server managers can change the prefix with \`${prefix} prefix <new>\` or \`${prefix} prefix reset\``,
         inline: false,
       }

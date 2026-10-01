@@ -130,6 +130,12 @@ describe('parseArgTokens', () => {
     assert.deepStrictEqual(parseArgTokens(['quality=high']), { quality: 'high' });
   });
 
+  test('format maps through and invalid formats are dropped', () => {
+    assert.deepStrictEqual(parseArgTokens(['format=mp4']), { format: 'mp4' });
+    assert.deepStrictEqual(parseArgTokens(['format=GIF']), { format: 'gif' });
+    assert.deepStrictEqual(parseArgTokens(['format=exe']), {});
+  });
+
   test('lossy is clamped to the 0-100 range the slash command enforces', () => {
     assert.deepStrictEqual(parseArgTokens(['lossy=9999']), { lossy: '100' });
     assert.deepStrictEqual(parseArgTokens(['lossy=-5']), { lossy: '0' });

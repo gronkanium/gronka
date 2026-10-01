@@ -1,8 +1,11 @@
 blank_issues_enabled: false
 contact_links:
-  - name: documentation
-    url: https://gronkanium.github.io/gronka/docs/
-    about: check the documentation for installation guides, configuration, and usage
+  - name: security vulnerability
+    url: https://github.com/gronkanium/gronka/security/advisories/new
+    about: report security issues privately, not as a public issue
+  - name: gronka.dev
+    url: https://gronka.dev
+    about: what gronka does, its commands, terms and privacy
   - name: wiki
     url: https://github.com/gronkanium/gronka/wiki
     about: browse the wiki for additional guides and information

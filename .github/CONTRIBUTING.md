@@ -1,247 +1,93 @@
-## Project Structure
+# contributing to gronka
 
-This project consists of multiple components that can run independently or together:
+thanks for helping. issues and pull requests are welcome; this page covers how the code is laid out,
+how to run it, and what a pull request needs before it can merge.
 
-- **Discord Bot** (`src/bot.js`) - Handles Discord interactions and converts files to GIFs. The bot includes a minimal HTTP server that serves `/api/stats/24h` for Jekyll site integration.
-- **WebUI** (`src/webui-server.js`) - Dashboard for viewing statistics
-
-When running in Docker, the `app` container runs both processes: `scripts/docker-entrypoint.sh` starts the bot and the webui server side by side and restarts the container if either exits. Files are stored in R2 when configured (recommended), or saved to local disk if R2 is not configured. Files are served from R2 or Discord attachments.
-
-## Dependency Management
-
-### Adding/Removing Dependencies
-
-When adding or removing dependencies, always run `bun install` to update `bun.lock`:
+## run it
 
 ```bash
-bun add <package-name>
-# or
-bun add --dev <package-name>
+git clone https://github.com/gronkanium/gronka.git && cd gronka
+bun install
+bun run setup            # writes .env; `bun run setup --help` lists flags for scripted installs
+docker compose up -d --build
 ```
 
-**Important:** The `bun.lock` file must be committed to git. It ensures consistent dependency versions across all environments, including Docker builds.
+you need [bun](https://bun.sh) 1.3, docker with compose, and a discord application for the bot token.
+the [wiki](https://github.com/gronkanium/gronka/wiki) covers configuration in detail.
 
-### Checking Lock File Sync
+## how it fits together
 
-Before committing changes, verify that `bun.lock` is in sync with `package.json`:
+| part          | where                               | what it does                                                                                    |
+| ------------- | ----------------------------------- | ----------------------------------------------------------------------------------------------- |
+| bot           | `src/bot.js`                        | discord commands (`/download`, `/convert`, `/optimize`) and replies                             |
+| media workers | `src/worker.js`                     | run every download and conversion from the `media_jobs` table; two by default                   |
+| webui         | `src/webui-server.js`, `src/webui/` | the operator dashboard (svelte, built by `src/webui/vite.config.js`)                            |
+| gronka web    | `src/web-server.js`, `web/`         | the hosted site at web.gronka.dev; it needs cloudflare and is not part of a self-hosted install |
 
-```bash
-bun run check:sync
-```
+`docker compose up` starts `app` (bot and webui), `worker`, `postgres`, `cobalt` (the media downloader)
+and `watchtower` (keeps cobalt updated). gifs are optimized with `gifsicle` inside the image.
 
-If the lock file is out of sync, fix it by running:
+## the development loop
 
-```bash
-bun run fix:deps
-```
+1. branch from `master`.
+2. run your change against a **test bot**, never a live one: put `TEST_DISCORD_TOKEN` and
+   `TEST_CLIENT_ID` in `.env`, then `bun run bot:register:test` once and `bun run bot:test`.
+3. pass the gate. postgres must be running (`docker compose up -d postgres`):
 
-This will update `bun.lock` to match `package.json`.
-
-### Git Hooks
-
-This project uses [husky](https://typicode.github.io/husky/) to automatically check lock file sync and run linting before each commit. The pre-commit hook will:
-
-- Verify `bun.lock` is in sync with `package.json`
-- Run ESLint to check code quality
-- Check code formatting with Prettier
-
-If any check fails, the commit will be blocked. Fix the issues and try again.
-
-## Code Quality
-
-### Linting
-
-This project uses ESLint for code linting. Available commands:
-
-```bash
-bun run lint          # Check for linting errors (fails on warnings)
-bun run lint:warn     # Check for linting errors (allows warnings)
-bun run lint:fix      # Automatically fix linting errors
-```
-
-### Formatting
-
-This project uses Prettier for code formatting. Available commands:
-
-```bash
-bun run format        # Format all files
-bun run format:check  # Check if files are formatted correctly
-```
-
-### Validation
-
-Run all checks at once:
-
-```bash
-bun run validate
-```
-
-This will check:
-
-- Package lock file sync
-- Linting errors
-- Code formatting
-
-## Docker
-
-### Building and Running
-
-The project uses Docker Compose with multiple services. The main app service runs both the Discord bot and local server:
-
-```bash
-bun run docker:up          # Start all services
-bun run docker:down        # Stop all containers
-bun run docker:reload      # Reload containers (rebuild and restart)
-bun run docker:restart     # Restart all containers
-bun run docker:register    # Force a re-register (the container already does this on start)
-```
-
-### Docker Services
-
-The Docker Compose setup includes these services:
-
-- **app** - Runs the Discord bot and the webui server in one container. Provides health checks and the stats API. Files are stored in R2 when configured (recommended) and served via the R2 public domain.
-- **postgres** - Database backing user metrics, operations, processed URLs, and settings. The app waits for it to report healthy before starting.
-- **cobalt** - Self-hosted API for downloading media from social platforms (Twitter/X, TikTok, Instagram, YouTube, Reddit, Facebook, Twitch clips, SoundCloud, Tumblr, Streamable, Dailymotion, Snapchat). Runs by default on port 9000
-- **watchtower** - Automatically updates the cobalt image. Runs cleanup and updates every 15 minutes
-
-All of them start with `docker compose up`. There are no Compose profiles. GIF optimization uses the `gifsicle` binary installed directly in the app image, not a separate service.
-
-### Common Docker Commands
-
-```bash
-bun run docker:logs        # View logs for all services
-bun run docker:down        # Stop all containers
-bun run docker:reload      # Reload containers (rebuild and restart)
-bun run docker:restart     # Restart all containers
-bun run docker:register    # Force a re-register (the container already does this on start)
-
-# Manual docker compose commands
-docker compose ps           # Check container status
-docker compose exec app sh  # Open shell in app container
-docker compose logs -f app  # View logs for app service only (bot + webui)
-```
-
-### Troubleshooting Docker Build Issues
-
-#### Error: bun.lock out of sync
-
-If you see an error like:
-
-```
-error: lockfile had changes, but lockfile is frozen
-```
-
-**Solution:**
-
-1. On your local machine, run:
    ```bash
-   bun run fix:deps
-   ```
-2. Commit the updated `bun.lock`:
-   ```bash
-   git add bun.lock
-   git commit -m "Update bun.lock"
-   ```
-3. Push and rebuild:
-   ```bash
-   git push
-   bun run docker:reload
+   bun run validate     # lock file sync, public-file check, lint, formatting
+   bun run test:safe    # the full suite
+   bun run test:e2e     # the mocked download pipeline
    ```
 
-#### Missing Environment Variables
+4. open a pull request against `master`. ci runs the same gate plus codeql and a dependency review.
 
-If you see warnings about missing environment variables:
+### commits
 
-```
-WARN[0000] The "DISCORD_TOKEN" variable is not set. Defaulting to a blank string.
-```
+use [conventional commits](https://www.conventionalcommits.org/en/v1.0.0/): `feat:`, `fix:`, `docs:`,
+`refactor:`, `test:`, `chore:`, `ci:`. release-please turns `feat:` and `fix:` subjects into the
+changelog word for word, so make the subject say what changed. never edit `CHANGELOG.md` or the
+version in `package.json` by hand; merging the release pull request does both.
 
-**Solution:**
-Create a `.env` file or set environment variables in your `docker-compose.yml` or shell environment.
+a pre-commit hook (husky) checks lock file sync and runs eslint and prettier on staged files.
 
-#### Build Fails During bun install
+### code
 
-If the Docker build fails during the `bun install --frozen-lockfile` step:
+- plain esm javascript on bun, no typescript.
+- users only ever see curated error messages; raw errors go to the log.
+- the bot stores discord ids only, never usernames.
+- comments explain why, not what, and stay short.
 
-1. Ensure `bun.lock` is committed and up to date
-2. Check that you are using the correct Bun version (the `oven/bun` tag specified in the Dockerfile)
-3. Try cleaning Docker cache:
-   ```bash
-   docker compose down
-   docker system prune -a
-   bun run docker:up
-   ```
+### public files stay generic
 
-## Available Scripts
+the repository is a product anyone can run, so nothing tracked describes one particular
+deployment: no host names, private addresses, home paths or machine-specific steps in docs, web
+pages or comments. source maps stay off everywhere. `bun run check:public` enforces both and runs in
+ci.
 
-See `package.json` for a full list of available scripts. Common ones include:
+## dependencies
 
-### Main Entry Points
+add packages with `bun add <name>` (or `bun add --dev <name>`) and commit `bun.lock`. if
+`bun run check:sync` says the lock file drifted, `bun run fix:deps` repairs it. docker builds use
+`--frozen-lockfile` and fail on drift.
 
-- `bun start` - Start the Discord bot (`src/bot.js`)
-- `bun run webui` - Start the webui server (`src/webui-server.js`)
-- `bun run local` - Run both bot and local server concurrently (useful for local development without R2)
-- `bun run dev` - Start bot with watch mode (auto-restart on changes)
+## docs
 
-### Development
+documentation lives in `wiki/` (obsidian-style `[[links]]`). maintainers publish it to the github
+wiki with `bun run wiki:sync`.
 
-- `bun run register-commands` - Register Discord slash commands. The container does this on every start (`scripts/docker-entrypoint.sh`), so you only need it when running outside Docker or forcing a re-register.
-- `bun run build:webui` - Build the webui frontend
-- `bun run webui:dev` - Run webui in development mode with hot reload
-- `bun run webui:dev:server` - Run webui server only (port 3002)
-- `bun run test` - Run tests
-- `bun run test:watch` - Run tests in watch mode
-- `bun run migrate:storage` - Migrate storage to R2
-- `bun run user:stats` - Generate user statistics report from database
-- `bun run bot:test` - Start test bot (uses TEST\_\* prefixed environment variables)
-- `bun run bot:prod` - Start prod bot (uses PROD\_\* prefixed environment variables)
-- `bun run bot:test:dev` - Start test bot with hot reload (watch mode)
-- `bun run bot:prod:dev` - Start prod bot with hot reload (watch mode)
-- `bun run bot:register:test` - Register Discord commands for test bot
-- `bun run bot:register:prod` - Register Discord commands for prod bot
+## useful scripts
 
-### Documentation
+| script                          | does                                                          |
+| ------------------------------- | ------------------------------------------------------------- |
+| `bun run setup` / `setup:check` | write `.env` / check an install, `--json` for tooling         |
+| `bun run dev`                   | the bot with auto-restart                                     |
+| `bun run webui:dev`             | the webui with hot reload                                     |
+| `bun run build:webui`           | build the webui                                               |
+| `bun run lint:fix` / `format`   | fix lint and formatting                                       |
+| `bun run docker:logs`           | follow the container logs                                     |
+| `bun run docker:register`       | re-register slash commands (the container does this on start) |
 
-- `bun run wiki:sync` - Sync local wiki files to GitHub Wiki (converts Obsidian-style links and pushes to GitHub)
+## name and artwork
 
-### Wiki Documentation
-
-The project maintains wiki documentation in two places:
-
-1. **Local Wiki** (`wiki/` directory) - Uses Obsidian-style links (`[[Page-Name]]`) for local editing
-2. **GitHub Wiki** - Public wiki accessible on GitHub, uses standard markdown links
-
-When you update wiki files in the `wiki/` directory, sync them to GitHub Wiki using:
-
-```bash
-bun run wiki:sync
-```
-
-This script will:
-
-- Convert Obsidian-style links (`[[Page-Name]]`) to GitHub Wiki format (`[Page-Name](Page-Name)`)
-- Clone the GitHub Wiki repository
-- Copy all converted files
-- Commit and push changes to GitHub
-
-**Note:** You need Git installed and appropriate permissions to push to the GitHub Wiki repository.
-
-### Docker
-
-- `bun run docker:up` - Start Docker containers
-- `bun run docker:down` - Stop all containers
-- `bun run docker:reload` - Reload containers (rebuild and restart)
-- `bun run docker:restart` - Restart all containers
-- `bun run docker:logs` - View logs for all services
-- `bun run docker:register` - Force a re-register inside the container (done automatically on start)
-
-### Code Quality
-
-- `bun run check:sync` - Check if bun.lock is in sync
-- `bun run lint` - Run ESLint (fails on warnings)
-- `bun run lint:warn` - Run ESLint (allows warnings)
-- `bun run lint:fix` - Automatically fix linting errors
-- `bun run format` - Format code with Prettier
-- `bun run format:check` - Check if files are formatted correctly
-- `bun run validate` - Run all validation checks (sync, lint, format)
+the code is MIT. the gronka name, logo and penguin are not; see [TRADEMARKS](TRADEMARKS.md).

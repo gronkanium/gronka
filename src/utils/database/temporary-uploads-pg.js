@@ -19,9 +19,6 @@ export async function insertTemporaryUpload(urlHash, r2Key, uploadedAt, expiresA
   await ensurePostgresInitialized();
 
   const sql = getPostgresConnection();
-  if (!sql) {
-    throw new Error('PostgreSQL not initialized. Cannot insert temporary upload.');
-  }
 
   try {
     const result = await sql`
@@ -57,10 +54,6 @@ export async function getLiveBytes(now) {
   await ensurePostgresInitialized();
 
   const sql = getPostgresConnection();
-  if (!sql) {
-    getLogger().error('PostgreSQL not initialized.');
-    return 0;
-  }
 
   try {
     const result = await sql`
@@ -81,10 +74,6 @@ export async function getTemporaryUploadsByR2Key(r2Key) {
   await ensurePostgresInitialized();
 
   const sql = getPostgresConnection();
-  if (!sql) {
-    getLogger().error('PostgreSQL not initialized.');
-    return [];
-  }
 
   try {
     const results = await sql`SELECT * FROM temporary_uploads WHERE r2_key = ${r2Key}`;
@@ -100,10 +89,6 @@ export async function markTemporaryUploadDeleted(id, deletedAt) {
   await ensurePostgresInitialized();
 
   const sql = getPostgresConnection();
-  if (!sql) {
-    getLogger().error('PostgreSQL not initialized.');
-    return false;
-  }
 
   try {
     const result = await sql`
@@ -122,10 +107,6 @@ export async function markTemporaryUploadDeletionFailed(id, error, retryCount) {
   await ensurePostgresInitialized();
 
   const sql = getPostgresConnection();
-  if (!sql) {
-    getLogger().error('PostgreSQL not initialized.');
-    return false;
-  }
 
   try {
     const result = await sql`
@@ -144,10 +125,6 @@ export async function deleteTemporaryUploadsByR2Key(r2Key) {
   await ensurePostgresInitialized();
 
   const sql = getPostgresConnection();
-  if (!sql) {
-    getLogger().error('PostgreSQL not initialized.');
-    return 0;
-  }
 
   try {
     const result = await sql`DELETE FROM temporary_uploads WHERE r2_key = ${r2Key}`;
@@ -162,10 +139,6 @@ export async function getExpiredR2Keys(now) {
   await ensurePostgresInitialized();
 
   const sql = getPostgresConnection();
-  if (!sql) {
-    getLogger().error('PostgreSQL not initialized.');
-    return [];
-  }
 
   try {
     // Get all unique R2 keys that have expired uploads
@@ -209,7 +182,6 @@ export async function getExpiredR2Keys(now) {
 export async function getStorageOverview(now = Date.now()) {
   await ensurePostgresInitialized();
   const sql = getPostgresConnection();
-  if (!sql) return null;
   const hour = 3600 * 1000;
   const live = sql`t.deleted_at IS NULL AND t.expires_at > ${now}`;
   const [[totals], soon, biggest, [failed]] = await Promise.all([

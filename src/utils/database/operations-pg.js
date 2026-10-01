@@ -35,10 +35,6 @@ export async function insertOperationLog(operationId, step, status, data = {}) {
   await ensurePostgresInitialized();
 
   const sql = getPostgresConnection();
-  if (!sql) {
-    console.error('PostgreSQL not initialized. Call initPostgresDatabase() first.');
-    return;
-  }
 
   const timestamp = Date.now();
   const { message = null, filePath = null, stackTrace = null, metadata = null } = data;
@@ -54,10 +50,6 @@ async function getOperationLogs(operationId) {
   await ensurePostgresInitialized();
 
   const sql = getPostgresConnection();
-  if (!sql) {
-    console.error('PostgreSQL not initialized. Call initPostgresDatabase() first.');
-    return [];
-  }
 
   const logs = await sql`
     SELECT * FROM operation_logs
@@ -74,14 +66,6 @@ async function getOperationLogs(operationId) {
  * @returns {Promise<Object|null>} Operation trace with parsed metadata or null if not found
  */
 export async function getOperationTrace(operationId) {
-  await ensurePostgresInitialized();
-
-  const sql = getPostgresConnection();
-  if (!sql) {
-    console.error('PostgreSQL not initialized. Call initPostgresDatabase() first.');
-    return null;
-  }
-
   const logs = await getOperationLogs(operationId);
   if (logs.length === 0) {
     return null;
@@ -346,10 +330,6 @@ export async function getRecentOperations(limit = 100) {
   await ensurePostgresInitialized();
 
   const sql = getPostgresConnection();
-  if (!sql) {
-    console.error('PostgreSQL not initialized. Call initPostgresDatabase() first.');
-    return [];
-  }
 
   // Check cache first (only for default limit of 100)
   if (limit === 100) {
@@ -408,10 +388,6 @@ export async function searchOperations(filters = {}, { limit = 50, offset = 0, s
   await ensurePostgresInitialized();
 
   const sql = getPostgresConnection();
-  if (!sql) {
-    console.error('PostgreSQL not initialized. Call initPostgresDatabase() first.');
-    return { operations: [], total: 0 };
-  }
 
   const conditions = [];
   const params = [];
@@ -534,10 +510,6 @@ export async function getStuckOperations(maxAgeMinutes = 10) {
   await ensurePostgresInitialized();
 
   const sql = getPostgresConnection();
-  if (!sql) {
-    console.error('PostgreSQL not initialized. Call initPostgresDatabase() first.');
-    return [];
-  }
 
   const now = Date.now();
   const maxAge = maxAgeMinutes * 60 * 1000;

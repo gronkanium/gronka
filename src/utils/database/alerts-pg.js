@@ -6,10 +6,6 @@ export async function insertAlert(alert) {
   await ensurePostgresInitialized();
 
   const sql = getPostgresConnection();
-  if (!sql) {
-    console.error('PostgreSQL not initialized. Call initPostgresDatabase() first.');
-    return null;
-  }
 
   const timestamp = Date.now();
   const {
@@ -89,10 +85,6 @@ export async function getAlerts(options = {}) {
   await ensurePostgresInitialized();
 
   const sql = getPostgresConnection();
-  if (!sql) {
-    console.error('PostgreSQL not initialized. Call initPostgresDatabase() first.');
-    return [];
-  }
 
   const { limit = null, offset = null } = options;
   const { clause, params } = buildAlertWhere(options);
@@ -129,10 +121,6 @@ export async function getAlertSummary(options = {}) {
   const empty = { total: 0, errors: 0, info: 0, warnings: 0, byCommand: [], byReason: [] };
 
   const sql = getPostgresConnection();
-  if (!sql) {
-    console.error('PostgreSQL not initialized. Call initPostgresDatabase() first.');
-    return empty;
-  }
 
   const { reasonLimit = 25 } = options;
   const { clause, params } = buildAlertWhere(options);
@@ -196,10 +184,6 @@ export async function getAlertComponents() {
   await ensurePostgresInitialized();
 
   const sql = getPostgresConnection();
-  if (!sql) {
-    console.error('PostgreSQL not initialized. Call initPostgresDatabase() first.');
-    return [];
-  }
 
   const rows = await sql`SELECT DISTINCT component FROM alerts ORDER BY component`;
   return rows.map(row => row.component);
@@ -209,10 +193,6 @@ export async function getAlertCommands() {
   await ensurePostgresInitialized();
 
   const sql = getPostgresConnection();
-  if (!sql) {
-    console.error('PostgreSQL not initialized. Call initPostgresDatabase() first.');
-    return [];
-  }
 
   const rows = await sql.unsafe(
     `SELECT DISTINCT ${COMMAND_EXPR} AS command FROM alerts
@@ -225,10 +205,6 @@ export async function getAlertsCount(options = {}) {
   await ensurePostgresInitialized();
 
   const sql = getPostgresConnection();
-  if (!sql) {
-    console.error('PostgreSQL not initialized. Call initPostgresDatabase() first.');
-    return 0;
-  }
 
   const { clause, params } = buildAlertWhere(options);
   const result = await sql.unsafe(`SELECT COUNT(*) as count FROM alerts ${clause}`, params);

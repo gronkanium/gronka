@@ -76,11 +76,11 @@ export function navigate(page, params = {}) {
   let hash = `#/${page}`;
 
   // Add path parameters
-  if (params.userId) {
+  if (page === 'user-profile' && params.userId) {
     hash = `#/users/${params.userId}`;
     delete params.userId;
   }
-  if (params.requestId) {
+  if (page === 'request' && params.requestId) {
     hash = `#/requests/${params.requestId}`;
     delete params.requestId;
   }

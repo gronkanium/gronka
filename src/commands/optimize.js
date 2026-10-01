@@ -242,7 +242,7 @@ export async function handleOptimizeContextMenuCommand(interaction, modalAttachm
 export async function handleOptimizeCommand(interaction) {
   const userId = interaction.user.id;
   const adminUser = isAdmin(userId);
-  logger.info(
+  logger.debug(
     `User ${userId} initiated optimization via slash command${adminUser ? ' [ADMIN]' : ''}`
   );
   const guard = { type: 'optimize', action: 'optimizing another gif' };

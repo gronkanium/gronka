@@ -29,7 +29,7 @@ async function convertImageToGifImpl(inputPath, outputPath, options = {}) {
   // Validate and sanitize numeric parameters
   const width = validateNumericParameter(options.width ?? 720, 'width', 1, 4096);
 
-  logger.info(`Starting image to GIF conversion: ${inputPath} -> ${outputPath} (width: ${width})`);
+  logger.debug(`Starting image to GIF conversion: ${inputPath} -> ${outputPath} (width: ${width})`);
 
   // Check if FFmpeg is installed
   const ffmpegInstalled = await checkFFmpegInstalled();

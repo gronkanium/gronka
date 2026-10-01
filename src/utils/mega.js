@@ -107,7 +107,7 @@ export async function downloadFromMega(url, isAdminUser, maxSize) {
     throw new ValidationError('that mega link does not point to a video or image file.');
   }
 
-  logger.info(`Downloading mega file ${id} (${info.s} bytes)`);
+  logger.debug(`Downloading mega file ${id} (${info.s} bytes)`);
   const decipher = crypto.createDecipheriv('aes-128-ctr', aesKey, iv);
   let file;
   try {

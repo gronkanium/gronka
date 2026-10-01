@@ -171,7 +171,7 @@ export async function acquireMedia(
     try {
       const resolved = await resolveRedditPost(url);
       if (resolved.external) {
-        logger.info(`Reddit post points offsite, following to: ${resolved.external}`);
+        logger.debug(`Reddit post points offsite, following to: ${resolved.external}`);
         // The disabled-source gate above ran on the reddit URL, so re-check the target:
         // following a hand-off must not smuggle past a source the owner turned off.
         const targetDisabled = await getDisabledServiceLabel(resolved.external);
@@ -323,7 +323,7 @@ export async function acquireMedia(
     'Cobalt',
     null,
   ];
-  logger.info(`Downloading from ${sourceLabel}: ${url}`);
+  logger.debug(`Downloading from ${sourceLabel}: ${url}`);
   logStep('download_start', 'running', {
     message: `Starting download from ${sourceLabel}`,
     metadata: { url, maxSize: adminUser ? 'unlimited' : maxSize },

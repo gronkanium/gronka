@@ -334,10 +334,10 @@ async function callCobaltApi(apiUrl, url, retryCount = 0, maxRetries = 3) {
   const normalizedUrl = normalizeSocialMediaUrlForCobalt(url);
 
   if (normalizedUrl !== url) {
-    logger.info(`Normalized social media URL for Cobalt: ${url} -> ${normalizedUrl}`);
+    logger.debug(`Normalized social media URL for Cobalt: ${url} -> ${normalizedUrl}`);
   }
 
-  logger.info(
+  logger.debug(
     `Calling Cobalt API at ${apiUrl} with URL: ${normalizedUrl} (attempt ${attemptNum}/${maxRetries})`
   );
 
@@ -361,7 +361,7 @@ async function callCobaltApi(apiUrl, url, retryCount = 0, maxRetries = 3) {
       }
     );
 
-    logger.info(`Cobalt API response status: ${response.status}`);
+    logger.debug(`Cobalt API response status: ${response.status}`);
     if (response.status !== 200) {
       throw new NetworkError(`cobalt api returned status ${response.status}`);
     }
@@ -492,7 +492,7 @@ async function downloadPhoto(photoUrl, index, isAdminUser = false, maxSize = Inf
   const contentType = file.headers['content-type'] || 'image/jpeg';
   const filename =
     file.dispositionName ?? `photo_${index + 1}${PHOTO_EXTENSIONS[contentType] || '.jpg'}`;
-  logger.info(
+  logger.debug(
     `Downloaded photo ${index + 1}: ${filename}, size: ${file.size} bytes, content-type: ${contentType}`
   );
   return withExtension({ ...file, contentType, filename });
@@ -509,7 +509,7 @@ async function downloadVideo(videoUrl, index, isAdminUser = false, maxSize = Inf
   const contentType = resolveContentType(file.headers['content-type'], named, file.head);
   const filename =
     file.dispositionName ?? `video_${index + 1}${CONTENT_TYPE_EXTENSIONS[contentType] || '.mp4'}`;
-  logger.info(
+  logger.debug(
     `Downloaded video ${index + 1}: ${filename}, size: ${file.size} bytes, content-type: ${contentType}`
   );
   return withExtension({ ...file, contentType, filename });
@@ -524,7 +524,7 @@ async function downloadMediaFromPicker(pickerArray, isAdminUser = false, maxSize
     throw new NetworkError('no media files (photos or videos) found in picker response');
   }
 
-  logger.info(
+  logger.debug(
     `Found ${mediaItems.length} media items in picker response (${mediaItems.filter(i => i.type === 'photo').length} photos, ${mediaItems.filter(i => i.type === 'video').length} videos)`
   );
 
@@ -535,7 +535,7 @@ async function downloadMediaFromPicker(pickerArray, isAdminUser = false, maxSize
         : downloadVideo(item.url, index, isAdminUser, maxSize)
     )
   );
-  logger.info(`Successfully downloaded ${results.length} media items from picker`);
+  logger.debug(`Successfully downloaded ${results.length} media items from picker`);
 
   return results;
 }
@@ -558,7 +558,7 @@ function replaceTunnelHostname(url, apiUrl) {
       if (apiUrlObj.port) {
         urlObj.port = apiUrlObj.port;
       }
-      logger.info(`Replacing tunnel hostname: ${url} -> ${urlObj.toString()}`);
+      logger.debug(`Replacing tunnel hostname: ${url} -> ${urlObj.toString()}`);
       return urlObj.toString();
     }
     return url;
@@ -590,7 +590,7 @@ async function downloadFromCobalt(
     cobaltResponse.picker &&
     Array.isArray(cobaltResponse.picker)
   ) {
-    logger.info('Detected picker response with media files');
+    logger.debug('Detected picker response with media files');
     return await downloadMediaFromPicker(cobaltResponse.picker, isAdminUser, maxSize);
   }
 
@@ -617,7 +617,7 @@ async function downloadFromCobalt(
     }
   } else if (cobaltResponse.status === 'tunnel') {
     // Handle tunnel response - Cobalt returns a tunnel URL that needs to be accessed
-    logger.info('Detected tunnel response from Cobalt');
+    logger.debug('Detected tunnel response from Cobalt');
     if (cobaltResponse.url) {
       videoUrl = cobaltResponse.url;
       // Replace Docker hostname with API URL hostname if needed
@@ -663,7 +663,7 @@ async function downloadFromCobalt(
   const named = file.dispositionName ?? filename;
   const contentType = resolveContentType(generic ? '' : declared, named, file.head);
   const finalName = normalizeFilenameForContentType(named, contentType);
-  logger.info(
+  logger.debug(
     `Downloaded file: ${finalName}, size: ${file.size} bytes, content-type: ${contentType}`
   );
   return withExtension({ ...file, contentType, filename: finalName });
@@ -685,7 +685,6 @@ export async function getCobaltMediaUrls(apiUrl, url) {
 
 async function getCobaltMediaUrlsImpl(apiUrl, url) {
   const cobaltResponse = await callCobaltApi(apiUrl, url);
-  logger.info(`Cobalt API response (url-only mode): ${JSON.stringify(cobaltResponse)}`);
 
   if (
     cobaltResponse.status === 'picker' &&
@@ -781,21 +780,20 @@ export async function downloadFromSocialMedia(
 }
 
 async function downloadFromSocialMediaImpl(apiUrl, url, isAdminUser, maxSize, prefetched) {
-  logger.info(`Attempting to download from social media URL via Cobalt: ${url}`);
+  logger.debug(`Attempting to download from social media URL via Cobalt: ${url}`);
 
   try {
     const cobaltResponse = prefetched ?? (await callCobaltApi(apiUrl, url));
-    logger.info(`Cobalt API response: ${JSON.stringify(cobaltResponse)}`);
-    logger.info('Cobalt API call successful, downloading media');
+    logger.debug('Cobalt API call successful, downloading media');
     const result = await downloadFromCobalt(cobaltResponse, isAdminUser, maxSize, apiUrl);
 
     // Check if result is an array (multiple photos) or single object
     if (Array.isArray(result)) {
-      logger.info(
+      logger.debug(
         `Successfully downloaded ${result.length} photos from Cobalt (total size: ${result.reduce((sum, r) => sum + r.size, 0)} bytes)`
       );
     } else {
-      logger.info(
+      logger.debug(
         `Successfully downloaded media from Cobalt: ${result.filename} (${result.size} bytes, content-type: ${result.contentType})`
       );
     }

@@ -174,7 +174,7 @@ export async function soundcloudViaYoutube(
       'DRM_PROTECTED'
     );
   }
-  logger.info(`DRM SoundCloud track matched to YouTube ${match.id} (${match.channel})`);
+  logger.debug(`DRM SoundCloud track matched to YouTube ${match.id} (${match.channel})`);
   const audio = await downloadWithYtdlp(
     `https://www.youtube.com/watch?v=${match.id}`,
     adminUser,

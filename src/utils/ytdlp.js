@@ -281,7 +281,7 @@ function executeYtdlp(
 
     args.push('-o', outputTemplate, '--restrict-filenames', '--print', 'after_move:filepath', url);
 
-    logger.info(`Executing yt-dlp with args: ${args.join(' ')}`);
+    logger.debug(`Executing yt-dlp with args: ${args.join(' ')}`);
 
     const ytdlp = spawn('yt-dlp', args, {
       timeout: timeout,
@@ -370,7 +370,7 @@ function executeYtdlp(
                 reject(new NetworkError('yt-dlp segment download failed: output file too small'));
                 return;
               }
-              logger.info(`yt-dlp download complete: ${outputPath} (${stats.size} bytes)`);
+              logger.debug(`yt-dlp download complete: ${outputPath} (${stats.size} bytes)`);
               resolve(outputPath);
             } else {
               reject(new NetworkError('yt-dlp output path is not a file'));
@@ -388,7 +388,7 @@ function executeYtdlp(
                 reject(new NetworkError('yt-dlp segment download failed: output file too small'));
                 return;
               }
-              logger.info(
+              logger.debug(
                 `yt-dlp download complete (found file): ${actualPath} (${fallbackStats.size} bytes)`
               );
               resolve(actualPath);
@@ -411,7 +411,7 @@ function executeYtdlp(
                 reject(new NetworkError('yt-dlp segment download failed: output file too small'));
                 return;
               }
-              logger.info(
+              logger.debug(
                 `yt-dlp download complete (fallback): ${actualPath} (${fallbackStats.size} bytes)`
               );
               resolve(actualPath);
@@ -565,7 +565,7 @@ async function executeYtdlpWithRetry(...args) {
     const signInAsked =
       error.message === 'video requires age verification' || error.code === 'YTDLP_RETRYABLE';
     if (isYouTubeUrl(args[0]) && signInAsked) {
-      logger.info(`YouTube asked to sign in, retrying signed in: ${args[0]}`);
+      logger.debug(`YouTube asked to sign in, retrying signed in: ${args[0]}`);
       return await executeYtdlp(...Array.from({ length: 8 }, (_, i) => args[i]), true);
     }
     if (error.message !== GENERIC_FAILURE_MESSAGE && error.code !== 'YTDLP_RETRYABLE') {
@@ -711,7 +711,7 @@ export async function downloadWithYtdlp(
   startTime = null,
   duration = null
 ) {
-  logger.info(
+  logger.debug(
     `Downloading via yt-dlp: ${url} (admin: ${isAdminUser}, maxDuration: ${maxDuration}, startTime: ${startTime}, duration: ${duration})`
   );
 
@@ -721,7 +721,7 @@ export async function downloadWithYtdlp(
   if (needsDurationCheck) {
     try {
       const videoDuration = await getVideoDuration(url);
-      logger.info(`Video duration: ${videoDuration}s (max: ${maxDuration}s)`);
+      logger.debug(`Video duration: ${videoDuration}s (max: ${maxDuration}s)`);
 
       if (videoDuration > maxDuration) {
         const minutes = Math.floor(videoDuration / 60);
@@ -793,7 +793,7 @@ export async function downloadWithYtdlp(
           await trimVideo(outputPath, trimmedPath, { startTime, duration });
 
           outputPath = trimmedPath;
-          logger.info(`Fallback trim completed: ${outputPath}`);
+          logger.debug(`Fallback trim completed: ${outputPath}`);
         } else {
           throw segmentError;
         }
@@ -819,7 +819,7 @@ export async function downloadWithYtdlp(
         `file is too large (${(file.size / (1024 * 1024)).toFixed(2)}MB, max ${(maxSize / (1024 * 1024)).toFixed(2)}MB)`
       );
     }
-    logger.info(
+    logger.debug(
       `Successfully downloaded media via yt-dlp${usedFallback ? ' (via fallback)' : ''}, size: ${file.size} bytes, content-type: ${contentType}`
     );
     return file;

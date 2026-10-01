@@ -118,7 +118,7 @@ async function deliverArchive(interaction, ctx, fileData, attachmentLimit) {
 // Files that fit go out as attachments (split into batches); the rest become R2 links.
 async function deliverGallery(interaction, ctx, fileData, urlHash, attachmentLimit) {
   const { userId, adminUser } = ctx;
-  logger.info(`Processing ${fileData.length} media files from picker`);
+  logger.debug(`Processing ${fileData.length} media files from picker`);
   const stored = [];
   for (const media of fileData) {
     const item = await storeMedia(media, ctx, attachmentLimit, { defaultExt: '.jpg' });
@@ -178,7 +178,7 @@ async function deliverGallery(interaction, ctx, fileData, urlHash, attachmentLim
 async function deliverSingle(interaction, ctx, item, urlHash, attachmentLimit) {
   const stored = await storeMedia(item, ctx, attachmentLimit);
   if (stored.cached) {
-    logger.info(`${stored.type} already exists (hash: ${stored.hash}) for user ${ctx.userId}`);
+    logger.debug(`${stored.type} already exists (hash: ${stored.hash}) for user ${ctx.userId}`);
   }
   await deliverStored(interaction, ctx, stored.cached ? { ...stored, fits: false } : stored, {
     urlHash,
@@ -362,7 +362,7 @@ export async function handleDownloadContextMenuCommand(interaction) {
     return;
   }
   const userId = interaction.user.id;
-  logger.info(`User ${userId} initiated download via context menu`);
+  logger.debug(`User ${userId} initiated download via context menu`);
   const guard = { type: 'download', action: 'downloading another video' };
   if (await replyIfRateLimited(interaction, { ...guard, commandSource: 'context-menu' })) {
     return;
@@ -405,7 +405,7 @@ export async function handleDownloadContextMenuCommand(interaction) {
 export async function handleDownloadCommand(interaction) {
   const userId = interaction.user.id;
   const commandSource = commandSourceOf(interaction);
-  logger.info(`User ${userId} initiated download${isAdmin(userId) ? ' [ADMIN]' : ''}`);
+  logger.debug(`User ${userId} initiated download${isAdmin(userId) ? ' [ADMIN]' : ''}`);
   const guard = { type: 'download', action: 'downloading another video' };
   if (await replyIfRateLimited(interaction, { ...guard, commandSource })) {
     return;

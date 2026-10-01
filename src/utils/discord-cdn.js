@@ -50,7 +50,7 @@ export async function getRefreshedAttachmentURL(client, attachmentURL) {
     ) {
       // Check if expired or missing query parameters
       if (isAttachmentExpired(attachmentURL) || !url.search || url.search.length === 0) {
-        logger.info(`Refreshing expired or invalid Discord CDN URL: ${attachmentURL}`);
+        logger.debug(`Refreshing expired or invalid Discord CDN URL: ${attachmentURL}`);
         // Use Discord's REST API to refresh the URL
         const response = await client.rest.post('/attachments/refresh-urls', {
           body: {
@@ -65,7 +65,7 @@ export async function getRefreshedAttachmentURL(client, attachmentURL) {
         ) {
           const refreshedURL = new URL(response.refreshed_urls[0].refreshed);
           refreshedURL.searchParams.set('animated', 'true');
-          logger.info(`Successfully refreshed URL: ${refreshedURL.toString()}`);
+          logger.debug(`Successfully refreshed URL: ${refreshedURL.toString()}`);
           return refreshedURL.toString();
         }
       }

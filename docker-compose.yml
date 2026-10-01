@@ -57,7 +57,7 @@ services:
       - POSTGRES_HOST=${PROD_POSTGRES_HOST:-postgres}
       - POSTGRES_PORT=${PROD_POSTGRES_PORT:-5432}
       - POSTGRES_USER=${PROD_POSTGRES_USER:-gronka}
-      - POSTGRES_PASSWORD=${PROD_POSTGRES_PASSWORD:-gronka}
+      - POSTGRES_PASSWORD=${PROD_POSTGRES_PASSWORD:?run bun run setup, or set PROD_POSTGRES_PASSWORD in .env}
       - POSTGRES_DB=${PROD_POSTGRES_DB:-gronka}
       - DATABASE_URL=${DATABASE_URL:-}
       # Netscape cookies.txt for yt-dlp (age-restricted TikTok etc.); ignored if the file is absent
@@ -84,7 +84,7 @@ services:
     networks:
       - gronka-network
     healthcheck:
-      # node:20-slim does not ship procps (pgrep), so probe the stats server instead
+      # probes the stats server over http; the bun image ships a node shim
       test:
         [
           'CMD-SHELL',
@@ -133,7 +133,7 @@ services:
     restart: unless-stopped
     environment:
       - POSTGRES_USER=${PROD_POSTGRES_USER:-gronka}
-      - POSTGRES_PASSWORD=${PROD_POSTGRES_PASSWORD:-gronka}
+      - POSTGRES_PASSWORD=${PROD_POSTGRES_PASSWORD:?run bun run setup, or set PROD_POSTGRES_PASSWORD in .env}
       - POSTGRES_DB=${PROD_POSTGRES_DB:-gronka}
       - PGDATA=/var/lib/postgresql/data/pgdata
     volumes:
@@ -175,7 +175,7 @@ services:
 
   # watchtower updates the cobalt image automatically
   watchtower:
-    image: ghcr.io/containrrr/watchtower:latest
+    image: ghcr.io/containrrr/watchtower:1.7.1
     restart: unless-stopped
     command: --cleanup --scope cobalt --interval 900 --include-restarting
     environment:
@@ -184,17 +184,6 @@ services:
       - /var/run/docker.sock:/var/run/docker.sock
     networks:
       - gronka-network
-
-  # if needed, use this image for automatically generating poToken & visitor_data
-  # yt-session-generator:
-  #   image: ghcr.io/imputnet/yt-session-generator:webserver
-  #   init: true
-  #   restart: unless-stopped
-  #   container_name: yt-session-generator
-  #   labels:
-  #     - com.centurylinklabs.watchtower.scope=cobalt
-  #   networks:
-  #     - gronka-network
 
 volumes:
   postgres-data:

@@ -1,13 +1,6 @@
 # Stage 1: Builder - Install dependencies and build application
 FROM oven/bun:1.3-debian AS builder
 
-# Install build tools for native modules
-RUN apt-get update && apt-get install -y \
-    python3 \
-    make \
-    g++ \
-    && rm -rf /var/lib/apt/lists/*
-
 # Set working directory
 WORKDIR /app
 

@@ -507,7 +507,7 @@
   .explorer {
     display: flex;
     flex-direction: column;
-    height: calc(100vh - 190px);
+    height: calc(100vh - 193px);
     min-height: 560px;
     overflow: hidden;
   }

@@ -1,12 +1,12 @@
 <script>
   import { X } from 'lucide-svelte';
 
-  let { tiers = $bindable([]) } = $props();
+  let { tiers = $bindable([]), maxMb = 1024 } = $props();
 
   const H = 250;
   const PAD = { l: 44, r: 16, t: 34, b: 30 };
   const X_MIN = 10;
-  const X_TICKS = [10, 100, 1024, 4096, 16384];
+  const X_TICKS = [10, 100, 1024];
   const Y_TICKS = [1, 6, 24, 72, 168, 336, 720];
 
   let width = $state(320);
@@ -15,7 +15,7 @@
   let focused = $state(-1);
 
   const domain = rows => ({
-    xMax: Math.max(4096, ...rows.map(r => r.mb * 2)),
+    xMax: maxMb,
     yMax: Math.max(168, ...rows.map(r => r.hours * 1.3)),
   });
   let dom = $state(domain(tiers));
@@ -26,7 +26,8 @@
   const plotW = $derived(Math.max(200, width - PAD.l - PAD.r));
   const plotH = H - PAD.t - PAD.b;
   const span = $derived(Math.log10(dom.xMax / X_MIN));
-  const x = mb => PAD.l + (Math.log10(Math.max(X_MIN, mb) / X_MIN) / span) * plotW;
+  const x = mb =>
+    PAD.l + (Math.log10(Math.min(dom.xMax, Math.max(X_MIN, mb)) / X_MIN) / span) * plotW;
   const xInv = px => X_MIN * 10 ** (((px - PAD.l) / plotW) * span);
   const y = h => PAD.t + plotH - Math.sqrt(Math.max(0, h) / dom.yMax) * plotH;
   const yInv = py => ((PAD.t + plotH - py) / plotH) ** 2 * dom.yMax;
@@ -121,7 +122,7 @@
       <line class="grid" x1={PAD.l} x2={PAD.l + plotW} y1={y(t)} y2={y(t)} />
       <text class="tick" x={PAD.l - 8} y={y(t) + 4} text-anchor="end">{fmtH(t)}</text>
     {/each}
-    {#each X_TICKS.filter(t => t <= dom.xMax && tiers.every(r => Math.abs(x(r.mb) - x(t)) > 40)) as t (t)}
+    {#each [...X_TICKS.filter(t => t < dom.xMax), dom.xMax].filter( t => tiers.every(r => Math.abs(x(r.mb) - x(t)) > 40) ) as t (t)}
       <text class="tick" x={x(t)} y={H - 8} text-anchor="middle">{fmtMb(t)}</text>
     {/each}
 
@@ -135,7 +136,7 @@
       ondblclick={split}
     />
 
-    {#if last}
+    {#if last && last.mb < dom.xMax}
       <rect
         class="area larger"
         x={x(last.mb) + 1}

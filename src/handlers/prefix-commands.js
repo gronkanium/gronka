@@ -1,9 +1,7 @@
-import { EmbedBuilder, PermissionFlagsBits } from 'discord.js';
+import { EmbedBuilder } from 'discord.js';
 import { createLogger } from '../utils/logger.js';
 import { botConfig } from '../utils/config.js';
-import { isAdmin } from '../utils/rate-limit.js';
-import { replyIfBanned, replyIfMaintenance } from '../utils/ban-check.js';
-import { getGuildPrefix, setGuildPrefix, clearGuildPrefix } from '../utils/database.js';
+import { replyIfMaintenance } from '../utils/maintenance.js';
 import { OUTPUT_FORMATS } from '../utils/output-formats.js';
 import { createMessageAdapter } from '../commands/shared/message-adapter.js';
 import { handleDownloadCommand } from '../commands/download.js';
@@ -29,16 +27,11 @@ const OPTION_ALIASES = {
   url: 'url',
 };
 
-// Validate a candidate custom prefix: 1-3 printable ASCII chars, no whitespace, and none of the characters Discord parses specially (mentions, channels, code, backslash)
-export function isValidPrefix(prefix) {
-  return /^[!-~]{1,3}$/.test(prefix) && !/[@#`\\<>]/.test(prefix);
-}
-
 /**
  * Match a message's content against the bot mention or the effective prefix.
  * @param {string} content - Raw message content
  * @param {Object} params
- * @param {string} params.prefix - Effective prefix for this guild/DM
+ * @param {string} params.prefix - The default prefix
  * @param {string} params.botUserId - The bot's user ID (for mention matching)
  * @returns {{ rest: string, viaMention: boolean }|null} Remaining text after the prefix,
  *   or null when the message is not addressed to the bot
@@ -114,95 +107,46 @@ async function resolveAttachment(message) {
   return null;
 }
 
-export function buildHelpEmbed(prefix) {
+// No Message Content intent: in a server Discord only delivers messages that mention gronka.
+export function buildHelpEmbed(prefix, me = '@gronka') {
   return new EmbedBuilder()
     .setTitle('gronka')
     .setColor(EMBED_COLOR)
     .setDescription(
       `media bot: download from social media, convert videos/images to gif, optimize gifs.\n` +
-        `prefix here is \`${prefix}\`, mentioning me works too. slash commands (\`/download\` etc.) also work.`
+        `mention me to run a command, or use slash commands (\`/download\` etc.). in dms, \`${prefix}\` works too.`
     )
     .addFields(
       {
         name: 'commands',
         value: [
-          `\`${prefix} download <url>\`, download a video from social media (\`mp3=true\` for audio only)`,
-          `\`${prefix} convert [url]\`, convert a video/image to gif, mp4 or another format (attach a file, link one, or reply to a message with one)`,
-          `\`${prefix} optimize [url]\`, shrink a gif (attachment, url, or reply)`,
-          `\`${prefix} info\`, bot stats and system info`,
-          `\`${prefix} help\`, this message`,
+          `${me} \`download <url>\`, download a video from social media (\`mp3=true\` for audio only)`,
+          `${me} \`convert [url]\`, convert a video/image to gif, mp4 or another format (attach a file or link one)`,
+          `${me} \`optimize [url]\`, shrink a gif (attach it or link one)`,
+          `${me} \`info\`, bot stats and system info`,
+          `${me} \`help\`, this message`,
         ].join('\n'),
         inline: false,
       },
       {
         name: 'options',
-        value:
-          `\`key=value\` after a command, e.g. \`${prefix} convert format=mp4 start=0:05 end=0:10\`, or \`${prefix} convert lossy=35 optimize=true\`\n` +
-          `server managers can change the prefix with \`${prefix} prefix <new>\` or \`${prefix} prefix reset\``,
+        value: `\`key=value\` after a command, e.g. ${me} \`convert format=mp4 start=0:05 end=0:10\``,
         inline: false,
       }
     );
 }
 
-function buildMentionEmbed(prefix) {
+function buildMentionEmbed(me) {
   return new EmbedBuilder()
     .setTitle('gronka')
     .setColor(EMBED_COLOR)
     .setDescription(
-      `send me a link with \`@gronka download <url>\`, or use \`${prefix} help\` for the full menu.`
+      `send me a link with ${me} \`download <url>\`, or ${me} \`help\` for the full menu.`
     );
-}
-
-// Handle the "prefix" command: show, set, or reset this guild's prefix
-async function handlePrefixSetting(message, tokens, currentPrefix, deps) {
-  if (tokens.length === 0) {
-    await message.reply(`my prefix here is \`${currentPrefix}\`, you can always mention me too.`);
-    return;
-  }
-
-  if (!message.guildId) {
-    await message.reply('the prefix can only be changed in a server.');
-    return;
-  }
-
-  const isManager =
-    message.member?.permissions?.has(PermissionFlagsBits.ManageGuild) ||
-    deps.isAdmin(message.author.id);
-  if (!isManager) {
-    await message.reply('you need the manage server permission to change the prefix.');
-    return;
-  }
-
-  const requested = tokens[0];
-
-  if (requested === 'reset' || requested === 'default') {
-    await deps.clearGuildPrefix(message.guildId);
-    logger.info(`Prefix reset to default in guild ${message.guildId} by ${message.author.id}`);
-    await message.reply(`prefix reset to the default \`${botConfig.commandPrefix}\`.`);
-    return;
-  }
-
-  if (!isValidPrefix(requested)) {
-    await message.reply(
-      'prefix must be 1-3 characters with no spaces, and cannot contain `@`, `#`, `<`, `>`, backticks, or backslashes.'
-    );
-    return;
-  }
-
-  await deps.setGuildPrefix(message.guildId, requested);
-  logger.info(`Prefix set to "${requested}" in guild ${message.guildId} by ${message.author.id}`);
-  await message.reply(
-    `prefix set to \`${requested}\` for this server. use \`${requested} help\` or mention me if you forget it.`
-  );
 }
 
 const defaultDeps = {
-  isAdmin,
-  replyIfBanned,
   replyIfMaintenance,
-  getGuildPrefix,
-  setGuildPrefix,
-  clearGuildPrefix,
   handleDownloadCommand,
   handleConvertCommand,
   handleOptimizeCommand,
@@ -210,8 +154,8 @@ const defaultDeps = {
 };
 
 /**
- * MessageCreate entry point for prefix commands. Ignores bots/webhooks, resolves the
- * effective prefix (guild override or default) plus @mention-as-prefix, and dispatches to
+ * MessageCreate entry point for prefix commands. Ignores bots/webhooks, matches the
+ * default prefix (DMs) or an @mention, and dispatches to
  * the existing slash command handlers through the message adapter.
  *
  * Unknown commands after a prefix are ignored silently (another bot may share the prefix);
@@ -235,14 +179,7 @@ export async function handlePrefixMessage(message, context = {}) {
     return;
   }
 
-  let prefix = botConfig.commandPrefix;
-  if (message.guildId) {
-    try {
-      prefix = (await deps.getGuildPrefix(message.guildId)) ?? prefix;
-    } catch (error) {
-      logger.error(`Failed to resolve guild prefix for ${message.guildId}:`, error);
-    }
-  }
+  const prefix = botConfig.commandPrefix;
 
   const match = matchPrefix(message.content, { prefix, botUserId });
   if (!match) {
@@ -256,11 +193,11 @@ export async function handlePrefixMessage(message, context = {}) {
   const isBareMention = match.viaMention && commandName === '';
   const isHelp = commandName === 'help' || isBareMention;
 
-  const knownCommands = ['download', 'convert', 'optimize', 'info', 'prefix'];
+  const knownCommands = ['download', 'convert', 'optimize', 'info'];
   if (!isHelp && !knownCommands.includes(commandName)) {
     if (match.viaMention) {
       await message
-        .reply(`unknown command. try \`${prefix} help\` or mention me with no command.`)
+        .reply(`unknown command. try <@${botUserId}> help.`)
         .catch(error => logger.debug(`Failed to send unknown-command reply: ${error.message}`));
     }
     return;
@@ -277,28 +214,20 @@ export async function handlePrefixMessage(message, context = {}) {
     });
 
     // Same gauntlet the interaction handler runs before dispatching anything
-    if (await deps.replyIfBanned(adapter)) {
-      return;
-    }
     if (await deps.replyIfMaintenance(adapter)) {
       return;
     }
 
     if (isHelp) {
       await message.reply({
-        embeds: [isBareMention ? buildMentionEmbed(prefix) : buildHelpEmbed(prefix)],
+        embeds: [
+          isBareMention
+            ? buildMentionEmbed(`<@${botUserId}>`)
+            : buildHelpEmbed(prefix, `<@${botUserId}>`),
+        ],
       });
       return;
     }
-
-    if (commandName === 'prefix') {
-      await handlePrefixSetting(message, tokens, prefix, deps);
-      return;
-    }
-
-    logger.debug(
-      `User ${message.author.id} invoked prefix command "${commandName}" in ${message.guildId || 'DM'}`
-    );
 
     if (commandName === 'download') {
       await deps.handleDownloadCommand(adapter);

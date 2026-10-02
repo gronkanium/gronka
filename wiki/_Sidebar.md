@@ -16,12 +16,6 @@
 - [[R2-Storage]]
 - [[Cobalt-Integration]]
 
-## reference
-
-- [[API-Endpoints]]
-- [[Technical-Specification]]
-- [[Logging-Platform]]
-
 ## troubleshooting
 
 - [[Troubleshooting]]

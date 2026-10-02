@@ -13,7 +13,7 @@ export async function dispatchMediaJob(interaction, kind, args) {
   if (botConfig.mediaWorkers) {
     try {
       const reply = replyTargetOf(interaction);
-      await enqueueJob({ kind, args, reply, userId: interaction.user.id });
+      await enqueueJob({ kind, args, reply });
       return;
     } catch (error) {
       logger.error(`Could not queue a ${kind} job, running it in the bot: ${error.message}`);

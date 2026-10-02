@@ -1,12 +1,6 @@
-import { test, describe, beforeAll, afterAll } from 'bun:test';
+import { test, describe } from 'bun:test';
 import assert from 'node:assert';
-import {
-  isGifFile,
-  parseOwnCdnUrl,
-  calculateSizeReduction,
-} from '../../src/utils/gif-optimizer.js';
-
-const extractHashFromCdnUrl = url => parseOwnCdnUrl(url)?.hash ?? null;
+import { isGifFile, calculateSizeReduction } from '../../src/utils/gif-optimizer.js';
 
 describe('gif optimizer utilities', () => {
   describe('isGifFile', () => {
@@ -33,88 +27,6 @@ describe('gif optimizer utilities', () => {
     test('returns true if either extension or content type matches', () => {
       assert.strictEqual(isGifFile('file.gif', 'image/png'), true); // Extension wins
       assert.strictEqual(isGifFile('file.png', 'image/gif'), true); // Content type wins
-    });
-  });
-
-  describe('parseOwnCdnUrl', () => {
-    // The CDN host is whatever this instance configured, so the tests configure one.
-    const previousDomain = process.env.R2_PUBLIC_DOMAIN;
-
-    beforeAll(() => {
-      process.env.R2_PUBLIC_DOMAIN = 'cdn.example.test';
-    });
-
-    afterAll(() => {
-      if (previousDomain === undefined) {
-        delete process.env.R2_PUBLIC_DOMAIN;
-      } else {
-        process.env.R2_PUBLIC_DOMAIN = previousDomain;
-      }
-    });
-
-    test('extracts hash from a gif URL on the configured CDN', () => {
-      const url = 'https://cdn.example.test/gifs/def789abc123.gif';
-      const hash = extractHashFromCdnUrl(url);
-      assert.strictEqual(hash, 'def789abc123');
-    });
-
-    test('extracts hash from a video URL on the configured CDN', () => {
-      const url = 'https://cdn.example.test/videos/abc123def456.mp4';
-      const hash = extractHashFromCdnUrl(url);
-      assert.strictEqual(hash, 'abc123def456');
-    });
-
-    test('handles URLs with query parameters', () => {
-      const url = 'https://cdn.example.test/gifs/abc123.gif?version=1&cache=true';
-      const hash = extractHashFromCdnUrl(url);
-      assert.strictEqual(hash, 'abc123');
-    });
-
-    test('handles URLs with fragments', () => {
-      const url = 'https://cdn.example.test/gifs/abc123.gif#section';
-      const hash = extractHashFromCdnUrl(url);
-      assert.strictEqual(hash, 'abc123');
-    });
-
-    test('returns null for hosts other than the configured CDN', () => {
-      assert.strictEqual(extractHashFromCdnUrl('https://example.com/gifs/abc123.gif'), null);
-      // a sibling subdomain is not the CDN
-      assert.strictEqual(extractHashFromCdnUrl('https://other.example.test/gifs/abc.gif'), null);
-      // nor is the bare apex
-      assert.strictEqual(extractHashFromCdnUrl('https://example.test/gifs/abc123.gif'), null);
-      // nor a lookalike that merely ends with it
-      assert.strictEqual(
-        extractHashFromCdnUrl('https://cdn.example.test.evil.com/gifs/a1.gif'),
-        null
-      );
-    });
-
-    test('returns null when no CDN is configured', () => {
-      const configured = process.env.R2_PUBLIC_DOMAIN;
-      delete process.env.R2_PUBLIC_DOMAIN;
-      try {
-        assert.strictEqual(extractHashFromCdnUrl('https://cdn.example.test/gifs/abc123.gif'), null);
-      } finally {
-        process.env.R2_PUBLIC_DOMAIN = configured;
-      }
-    });
-
-    test('returns null for invalid path pattern', () => {
-      assert.strictEqual(extractHashFromCdnUrl('https://cdn.example.test/images/abc123.gif'), null);
-      assert.strictEqual(extractHashFromCdnUrl('https://cdn.example.test/gifs/'), null);
-      assert.strictEqual(extractHashFromCdnUrl('https://cdn.example.test/gifs/abc123'), null);
-      assert.strictEqual(extractHashFromCdnUrl('https://cdn.example.test/gifs/abc123.png'), null);
-    });
-
-    test('returns null for invalid URL format', () => {
-      assert.strictEqual(extractHashFromCdnUrl('not a url'), null);
-      assert.strictEqual(extractHashFromCdnUrl(''), null);
-    });
-
-    test('handles case-insensitive hash', () => {
-      const url = 'https://cdn.example.test/gifs/ABC123DEF456.gif';
-      const hash = extractHashFromCdnUrl(url);
-      assert.strictEqual(hash, 'ABC123DEF456');
     });
   });
 

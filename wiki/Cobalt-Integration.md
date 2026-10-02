@@ -66,8 +66,6 @@ YTDLP_QUALITY=bestvideo[height<=1080][ext=mp4]+bestaudio[ext=m4a]/best[height<=1
 - `YTDLP_ENABLED`: enable/disable youtube downloads (default: true)
 - `YTDLP_QUALITY`: yt-dlp format string for video quality (default: 1080p max)
 
-admin users automatically get higher quality (no height restriction).
-
 for local development without docker, install yt-dlp:
 
 ```bash
@@ -118,7 +116,6 @@ url-only mode makes `/download` reply with the direct media url from cobalt (e.g
 
 - toggle it from the webui settings page, or via the api: `PUT /api/settings/url_only_mode` with `{"value": "true"}`
 - the setting is stored in the `bot_settings` database table shared between the bot and webui processes (changes take effect within ~10 seconds due to caching)
-- requests still go through the cobalt queue, so they respect the same concurrency limits and deduplication as regular downloads
 
 url-only mode automatically falls back to the normal download pipeline when:
 

@@ -64,15 +64,11 @@ R2_BUCKET_NAME=gronka-media
 R2_PUBLIC_DOMAIN=https://pub-xxxxxxxx.r2.dev
 ```
 
-to make sure you never grow past the free 10 gb, enable temporary uploads so old files clean themselves up:
+to make sure you never grow past the free 10 gb, turn on the cleanup so uploads delete themselves after a few hours to days, by size:
 
 ```env
-R2_TEMP_UPLOADS_ENABLED=true
 R2_CLEANUP_ENABLED=true
-R2_TEMP_UPLOAD_TTL_HOURS=72
 ```
-
-deduplication is built in (files are stored by content hash), so repeated downloads of the same media don't consume extra space.
 
 ## step 4: run it
 

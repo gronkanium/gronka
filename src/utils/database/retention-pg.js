@@ -2,8 +2,6 @@ import { getPostgresConnection } from './connection.js';
 import { ensurePostgresInitialized } from './init.js';
 
 const TIME_SERIES_TABLES = [
-  { table: 'logs', column: 'timestamp' },
-  { table: 'operation_logs', column: 'timestamp' },
   { table: 'alerts', column: 'timestamp' },
   { table: 'media_jobs', column: 'timestamp' },
 ];
@@ -31,19 +29,4 @@ export async function pruneTimeSeriesRows(cutoff) {
     }
   }
   return deleted;
-}
-
-// Never a row whose R2 upload is still live: that orphans the object with nothing left to expire it.
-export async function pruneUrlCache(cutoff) {
-  await ensurePostgresInitialized();
-  const sql = getPostgresConnection();
-  const result = await sql`
-    DELETE FROM processed_urls
-    WHERE processed_at < ${cutoff}
-      AND NOT EXISTS (
-        SELECT 1 FROM temporary_uploads t
-        WHERE t.url_hash = processed_urls.url_hash AND t.deleted_at IS NULL
-      )
-  `;
-  return result.count ?? 0;
 }

@@ -342,10 +342,6 @@ async function readConversation(id, author, want, gql) {
   return { comments, continuation, truncated };
 }
 
-/**
- * A Thread for one x post. `thread` walks the reply chain upward while the author matches;
- * asking for `comments` also reads the replies, and the author's own follow-ups below the post.
- */
 export async function fetchTweetThread(
   url,
   { thread: walk = true, comments = 0, gql = request } = {}

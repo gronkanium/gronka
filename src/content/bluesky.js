@@ -169,10 +169,6 @@ function ownChain(node, did) {
   return chain;
 }
 
-/**
- * A Thread for one Bluesky post. `thread` is the author's own chain above and below the post;
- * asking for `comments` also returns replies by other people.
- */
 export async function fetchBlueskyThread(
   url,
   { thread: walk = true, comments = 0, get = request } = {}

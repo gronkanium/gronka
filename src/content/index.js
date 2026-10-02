@@ -11,10 +11,7 @@ import { toPlainText } from './schema.js';
 
 export { toPlainText } from './schema.js';
 
-/**
- * Every source the content api can read, in the order a link is matched. `match` decides on
- * the link alone, `fetch` returns a Thread (src/content/schema.js). Add a source by adding a row.
- */
+// Every source the content api can read, in the order a link is matched
 export const CONTENT_SOURCES = [
   {
     id: 'reddit',
@@ -115,12 +112,6 @@ export function getContentSourceForUrl(url) {
   return CONTENT_SOURCES.find(source => source.match(url)) ?? null;
 }
 
-/**
- * Read the text content behind a link into a Thread. Options that a source does not take are
- * ignored, so a caller can always send the same body.
- * @param {string} url
- * @param {{ depth?: number, comments?: number, thread?: boolean }} options
- */
 export async function fetchContent(url, options = {}) {
   const source = getContentSourceForUrl(url);
   if (!source) {
@@ -144,7 +135,6 @@ export async function fetchContent(url, options = {}) {
   return value;
 }
 
-/** A Thread, or its plain-text rendering when `format` is text. */
 export function formatContent(result, format = 'json') {
   return format === 'text' ? toPlainText(result) : result;
 }

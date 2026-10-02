@@ -1378,7 +1378,16 @@
         "properties": {
           "source": {
             "type": "string",
-            "enum": ["reddit", "twitter"]
+            "enum": [
+              "reddit",
+              "twitter",
+              "bluesky",
+              "instagram",
+              "tiktok",
+              "booru",
+              "pinterest",
+              "video"
+            ]
           },
           "url": {
             "type": "string",

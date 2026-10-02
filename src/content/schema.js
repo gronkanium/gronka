@@ -63,6 +63,13 @@ export function linksIn(text) {
   return [...found];
 }
 
+function clock(seconds) {
+  const s = Math.floor(seconds);
+  const hms = [Math.floor(s / 3600), Math.floor(s / 60) % 60, s % 60];
+  const [h, m, sec] = hms.map(n => String(n).padStart(2, '0'));
+  return hms[0] ? `${h}:${m}:${sec}` : `${m}:${sec}`;
+}
+
 function authorLine(item) {
   const handle = item.author?.handle ? `@${item.author.handle}` : 'unknown';
   const name =
@@ -78,6 +85,12 @@ function postLines(item, indent = '') {
   for (const line of String(item.text ?? '').split('\n')) lines.push(`${indent}${line}`);
   for (const media of item.media ?? []) {
     lines.push(`${indent}[${media.type}] ${media.url}${media.alt ? ` (${media.alt})` : ''}`);
+  }
+  if (item.extra?.transcript?.segments?.length) {
+    lines.push(`${indent}--- transcript (${item.extra.transcript.language}) ---`);
+    for (const seg of item.extra.transcript.segments) {
+      lines.push(`${indent}[${clock(seg.start)}] ${seg.text}`);
+    }
   }
   if (item.quoted) {
     lines.push(`${indent}> quoting ${item.quoted.url ?? ''}`.trimEnd());

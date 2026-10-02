@@ -1,5 +1,12 @@
 import { test, expect, describe } from 'bun:test';
-import { isVideoContentUrl, fetchVideoThread, VIDEO_LIMITS } from '../../src/content/video.js';
+import {
+  isVideoContentUrl,
+  fetchVideoThread,
+  pickTrack,
+  parseJson3,
+  VIDEO_LIMITS,
+} from '../../src/content/video.js';
+import { toPlainText } from '../../src/content/schema.js';
 
 const info = (fields = {}) => ({
   id: 'abc',
@@ -157,5 +164,72 @@ describe('fetchVideoThread', () => {
       e => e
     );
     expect(error.code).toBe('BAD_URL');
+  });
+});
+
+const track = (name, url) => ({
+  [name]: [
+    { ext: 'vtt', url: 'v' },
+    { ext: 'json3', url },
+  ],
+});
+
+describe('transcripts', () => {
+  test('prefers uploaded captions, then the untranslated auto track', () => {
+    const auto = { ...track('en', 'auto-en'), ...track('en-orig', 'orig') };
+    expect(pickTrack({ language: 'en', automatic_captions: auto })).toEqual({
+      language: 'en-orig',
+      url: 'orig',
+      generated: true,
+    });
+    expect(
+      pickTrack({ language: 'en', subtitles: track('en-US', 'up'), automatic_captions: auto })
+    ).toEqual({ language: 'en-US', url: 'up', generated: false });
+    expect(pickTrack({ subtitles: track('live_chat', 'chat') }, 'en')).toBeNull();
+    expect(pickTrack({ language: 'de', subtitles: track('en', 'up') })).toBeNull();
+  });
+
+  test('parses json3 into timed lines and skips empty events', () => {
+    expect(
+      parseJson3({
+        events: [
+          { tStartMs: 0, dDurationMs: 500 },
+          { tStartMs: 1500, dDurationMs: 2000, segs: [{ utf8: 'hello ' }, { utf8: '\nthere' }] },
+          { tStartMs: 4000, segs: [{ utf8: '\n' }] },
+        ],
+      })
+    ).toEqual([{ start: 1.5, end: 3.5, text: 'hello there' }]);
+  });
+
+  test('adds the transcript to youtube posts only when asked', async () => {
+    const data = info({ language: 'en', automatic_captions: track('en-orig', 'cap') });
+    const fetched = [];
+    const fetcher = async u => {
+      fetched.push(u);
+      return { events: [{ tStartMs: 61000, dDurationMs: 1000, segs: [{ utf8: 'penguins' }] }] };
+    };
+    const plain = await fetchVideoThread('https://youtu.be/abc', {
+      runner: runnerOf(data),
+      fetcher,
+    });
+    expect(plain.post.extra.transcript).toBeUndefined();
+    const result = await fetchVideoThread('https://youtu.be/abc', {
+      transcript: true,
+      runner: runnerOf(data),
+      fetcher,
+    });
+    expect(fetched).toEqual(['cap']);
+    expect(result.post.extra.transcript).toEqual({
+      language: 'en-orig',
+      generated: true,
+      segments: [{ start: 61, end: 62, text: 'penguins' }],
+    });
+    expect(toPlainText(result)).toContain('[01:01] penguins');
+    const none = await fetchVideoThread('https://youtu.be/abc', {
+      transcript: true,
+      runner: runnerOf(info()),
+      fetcher,
+    });
+    expect(none.post.extra.transcript).toBeNull();
   });
 });

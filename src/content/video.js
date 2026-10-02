@@ -1,3 +1,4 @@
+import axios from 'axios';
 import { execFile } from 'child_process';
 import { promisify } from 'util';
 import { createLogger } from '../utils/logger.js';
@@ -16,7 +17,12 @@ import { post, comment, thread, isoDate, linksIn, MAX_COMMENTS } from './schema.
 const logger = createLogger('content-video');
 const execFileAsync = promisify(execFile);
 
-export const VIDEO_LIMITS = { comments: MAX_COMMENTS, tags: 30, timeoutMs: 30000 };
+export const VIDEO_LIMITS = {
+  comments: MAX_COMMENTS,
+  tags: 30,
+  timeoutMs: 30000,
+  transcriptBytes: 8 * 1024 * 1024,
+};
 
 // Sites yt-dlp reads that are not in YTDLP_SITES (those download through cobalt).
 const EXTRA_SITES = [
@@ -200,12 +206,73 @@ export function normalizeVideo(info, url, site) {
   });
 }
 
-export async function fetchVideoThread(url, { comments = 0, runner = defaultRunner } = {}) {
+// Uploaded captions beat youtube's speech recognition; "-orig" is the auto track before translation.
+export function pickTrack(info, lang) {
+  const want = String(lang ?? info.language ?? 'en').toLowerCase();
+  const base = want.split('-')[0];
+  const find = (tracks, exact) => {
+    const names = Object.keys(tracks ?? {}).filter(k => k !== 'live_chat');
+    const name =
+      exact.map(e => names.find(k => k.toLowerCase() === e)).find(Boolean) ??
+      names.find(k => k.toLowerCase().split('-')[0] === base);
+    const json3 = name && tracks[name].find(f => f.ext === 'json3' && f.url);
+    return json3 ? { language: name, url: json3.url } : null;
+  };
+  const manual = find(info.subtitles, [want]);
+  if (manual) return { ...manual, generated: false };
+  const auto = find(info.automatic_captions, [`${want}-orig`, want]);
+  return auto ? { ...auto, generated: true } : null;
+}
+
+export function parseJson3(data) {
+  const segments = [];
+  for (const event of data?.events ?? []) {
+    const text = (event.segs ?? [])
+      .map(s => s.utf8 ?? '')
+      .join('')
+      .replace(/\s+/g, ' ')
+      .trim();
+    if (!text) continue;
+    const start = (event.tStartMs ?? 0) / 1000;
+    segments.push({ start, end: start + (event.dDurationMs ?? 0) / 1000, text });
+  }
+  return segments;
+}
+
+async function defaultFetcher(url) {
+  const { data } = await axios.get(url, {
+    timeout: VIDEO_LIMITS.timeoutMs,
+    maxContentLength: VIDEO_LIMITS.transcriptBytes,
+    responseType: 'json',
+  });
+  return data;
+}
+
+async function readTranscript(info, lang, fetcher) {
+  const track = pickTrack(info, lang);
+  if (!track) return null;
+  try {
+    const segments = parseJson3(await fetcher(track.url));
+    return { language: track.language, generated: track.generated, segments };
+  } catch (error) {
+    logger.warn(`could not fetch the transcript: ${error.message}`);
+    throw new NetworkError('failed to read the transcript');
+  }
+}
+
+export async function fetchVideoThread(
+  url,
+  { comments = 0, transcript = false, runner = defaultRunner, fetcher = defaultFetcher } = {}
+) {
   const site = siteOf(url);
   if (!site) throw new NetworkError('that is not a link to a video page', 'BAD_URL', 400);
   const want = site === 'YouTube' ? Math.min(comments, VIDEO_LIMITS.comments) : 0;
   const info = await readInfo(url, site, want, runner);
   const subject = normalizeVideo(info, url, site);
+  if (transcript && site === 'YouTube') {
+    const lang = typeof transcript === 'string' ? transcript : null;
+    subject.extra.transcript = await readTranscript(info, lang, fetcher);
+  }
   const replies = want > 0 ? (info.comments ?? []).filter(c => c.parent === 'root') : [];
   return thread({
     source: 'video',

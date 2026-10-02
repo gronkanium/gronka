@@ -50,6 +50,7 @@ export default [
         TextEncoder: 'readonly',
         URLSearchParams: 'readonly',
         AbortSignal: 'readonly',
+        AbortController: 'readonly',
       },
     },
     rules: {
@@ -80,6 +81,17 @@ export default [
         clearTimeout: 'readonly',
       },
     },
+  },
+  {
+    files: ['src/**/*.js'],
+    ignores: ['src/webui/**'],
+    rules: {
+      'no-restricted-globals': ['error', { name: 'fetch', message: 'use axios on the server' }],
+    },
+  },
+  {
+    files: ['src/webui/**/*.svelte.js'],
+    languageOptions: { globals: { $state: 'readonly', $derived: 'readonly', $effect: 'readonly' } },
   },
   {
     files: ['web/public/**/*.js'],

@@ -4,7 +4,9 @@ import { spawn } from 'child_process';
 import { createLogger } from './logger.js';
 import { NetworkError, ValidationError } from './errors.js';
 import { writeZip } from './archive.js';
-import { fromPath, tempDir } from './media-file.js';
+import { fromPath, tempDir, jobSignal } from './media-file.js';
+import { mapLimit, ITEM_FANOUT } from './map-limit.js';
+import { hostOf, normalizeHost } from './url-host.js';
 
 const logger = createLogger('gallery-dl');
 
@@ -36,7 +38,7 @@ const MAX_MANGA_IMAGES = 10;
 
 export function getGalleryDlSite(url) {
   try {
-    const hostname = new URL(url).hostname.toLowerCase().replace(/^www\./, '');
+    const hostname = hostOf(url);
     return (
       GALLERY_DL_SITES.find(site =>
         site.hosts.some(host => hostname === host || hostname.endsWith(`.${host}`))
@@ -61,7 +63,7 @@ function runGalleryDl(url, outputDir, timeout = 300000) {
         outputDir,
         url,
       ],
-      { stdio: ['ignore', 'pipe', 'pipe'] }
+      { signal: jobSignal(), stdio: ['ignore', 'pipe', 'pipe'] }
     );
     let stderr = '';
     const timeoutId = setTimeout(() => {
@@ -110,7 +112,7 @@ export function isMangaDexTitleUrl(url) {
   try {
     const parsed = new URL(url);
     return (
-      parsed.hostname.toLowerCase().replace(/^www\./, '') === 'mangadex.org' &&
+      normalizeHost(parsed.hostname) === 'mangadex.org' &&
       /^\/title\/[0-9a-f-]+(?:\/[^/?#]+)?\/?$/i.test(parsed.pathname)
     );
   } catch {
@@ -122,7 +124,7 @@ export function isMangaDexChapterUrl(url) {
   try {
     const parsed = new URL(url);
     return (
-      parsed.hostname.toLowerCase().replace(/^www\./, '') === 'mangadex.org' &&
+      normalizeHost(parsed.hostname) === 'mangadex.org' &&
       /^\/chapter\/[0-9a-f-]+\/?$/i.test(parsed.pathname)
     );
   } catch {
@@ -134,8 +136,7 @@ export function isNhentaiGalleryUrl(url) {
   try {
     const parsed = new URL(url);
     return (
-      parsed.hostname.toLowerCase().replace(/^www\./, '') === 'nhentai.net' &&
-      /^\/g\/\d+\/?$/i.test(parsed.pathname)
+      normalizeHost(parsed.hostname) === 'nhentai.net' && /^\/g\/\d+\/?$/i.test(parsed.pathname)
     );
   } catch {
     return false;
@@ -147,7 +148,7 @@ function runGalleryDlJson(url, timeout = 300000) {
     const child = spawn(
       'gallery-dl',
       ['--config-ignore', '--no-input', '--quiet', '--resolve-json', '--dump-json', url],
-      { stdio: ['ignore', 'pipe', 'pipe'] }
+      { signal: jobSignal(), stdio: ['ignore', 'pipe', 'pipe'] }
     );
     let stdout = '';
     let stderr = '';
@@ -199,34 +200,27 @@ export async function discoverMangaDexTitle(url) {
   };
 }
 
-async function downloadMangaPages(urls, isAdminUser, maxSize) {
+async function downloadMangaPages(urls, maxSize) {
   const { downloadFileFromUrl } = await import('./file-downloader.js');
   if (urls.length === 0) {
     throw new NetworkError('no pages found in this chapter');
   }
-  const results = await Promise.all(
-    urls.map(async pageUrl => {
-      const fileData = await downloadFileFromUrl(pageUrl, isAdminUser);
-      if (!isAdminUser && fileData.size > maxSize) {
-        throw new ValidationError('a manga page is too large to download');
-      }
-      return fileData;
-    })
-  );
+  const results = await mapLimit(urls, ITEM_FANOUT, async pageUrl => {
+    const fileData = await downloadFileFromUrl(pageUrl);
+    if (fileData.size > maxSize) {
+      throw new ValidationError('a manga page is too large to download');
+    }
+    return fileData;
+  });
   if (results.length > MAX_MANGA_IMAGES) {
     return writeZip(results, 'manga-pages.zip');
   }
   return results;
 }
 
-export async function downloadWithGalleryDl(
-  url,
-  isAdminUser = false,
-  maxSize = Infinity,
-  options = {}
-) {
+export async function downloadWithGalleryDl(url, maxSize = Infinity, options = {}) {
   if (options.mediaUrls) {
-    return downloadMangaPages(options.mediaUrls, isAdminUser, maxSize);
+    return downloadMangaPages(options.mediaUrls, maxSize);
   }
   const workDir = await tempDir();
   await runGalleryDl(url, workDir);
@@ -243,7 +237,7 @@ export async function downloadWithGalleryDl(
       contentType: contentTypeForExtension(path.extname(filePath)),
       filename: path.basename(filePath),
     });
-    if (!isAdminUser && file.size > maxSize) {
+    if (file.size > maxSize) {
       throw new ValidationError('a gallery file is too large to download');
     }
     results.push(file);
@@ -261,12 +255,4 @@ function contentTypeForExtension(extension) {
   if (ext === '.mov') return 'video/quicktime';
   if (ext === '.mkv') return 'video/x-matroska';
   return 'video/mp4';
-}
-
-export async function isGalleryDlAvailable() {
-  return new Promise(resolve => {
-    const child = spawn('gallery-dl', ['--version'], { stdio: ['ignore', 'ignore', 'ignore'] });
-    child.on('close', code => resolve(code === 0));
-    child.on('error', () => resolve(false));
-  });
 }

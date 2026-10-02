@@ -5,18 +5,12 @@ import { validateUrl, firstUrlIn } from '../utils/validation.js';
 import { validateMediaFile } from './shared/media-validation.js';
 import { curatedErrorMessage } from './shared/command-errors.js';
 import { downloadImage } from '../utils/file-downloader.js';
-import { isAdmin } from '../utils/rate-limit.js';
-import { isGifFile, optimizeCached, calculateSizeReduction } from '../utils/gif-optimizer.js';
+import { isGifFile, optimizeToJob, calculateSizeReduction } from '../utils/gif-optimizer.js';
 import { logOperationStep } from '../utils/operations-tracker.js';
-import { hashUrlWithParams } from '../utils/hashing.js';
-import { getProcessedUrl } from '../utils/database.js';
 import { runMediaCommand } from './shared/run-media-command.js';
 import { getDiscordAttachmentLimit } from './shared/attachment-limit.js';
-import { replyIfRateLimited, refuse } from './shared/command-guards.js';
-import {
-  safeInteractionEditReply,
-  safeInteractionDeferReply,
-} from '../utils/interaction-helpers.js';
+import { refuse, commandSourceOf } from './shared/command-guards.js';
+import { safeInteractionDeferReply } from '../utils/interaction-helpers.js';
 import { storeMedia, deliverStored, finishCommand } from './shared/deliver.js';
 import { fetchUrlInput } from './shared/url-input.js';
 import { dispatchMediaJob } from '../jobs/dispatch.js';
@@ -28,7 +22,6 @@ const { discordSizeLimit: DISCORD_SIZE_LIMIT } = botConfig;
 export async function processOptimization(
   interaction,
   attachment,
-  adminUser,
   preDownloaded = null,
   lossyLevel = null,
   originalUrl = null,
@@ -40,47 +33,31 @@ export async function processOptimization(
     interaction,
     async ctx => {
       const { operationId } = ctx;
-      const urlHash = originalUrl
-        ? hashUrlWithParams(originalUrl, lossy === null ? {} : { lossy })
-        : null;
-      const cachedRow = urlHash ? await getProcessedUrl(urlHash) : null;
-      const cachedGif = cachedRow?.file_type === 'gif' || cachedRow?.file_extension === '.gif';
-      if (cachedGif && !cachedRow.r2_expired_at) {
-        await safeInteractionEditReply(interaction, { content: cachedRow.file_url });
-        return finishCommand('optimize', ctx, 0);
-      }
-
-      const gif = validateMediaFile(
-        preDownloaded ?? (await downloadImage(attachment.url, adminUser)),
-        'gif'
-      );
+      const gif = validateMediaFile(preDownloaded ?? (await downloadImage(attachment.url)), 'gif');
       logOperationStep(operationId, 'optimization_start', 'running', {
         message: 'Starting GIF optimization',
         metadata: { inputFile: attachment.name || 'unknown', inputSize: gif.size, lossy },
       });
-      const optimized = await optimizeCached(gif, lossy);
+      const optimized = await optimizeToJob(gif, lossy);
       logOperationStep(operationId, 'optimization_complete', 'success', {
         message: 'GIF optimization completed',
         metadata: {
           originalSize: gif.size,
-          optimizedSize: optimized.file.size,
-          sizeReduction: calculateSizeReduction(gif.size, optimized.file.size),
+          optimizedSize: optimized.size,
+          sizeReduction: calculateSizeReduction(gif.size, optimized.size),
           lossy,
         },
       });
 
       const stored = await storeMedia(
-        { ...optimized.file, filename: `${optimized.hash}.gif`, contentType: 'image/gif' },
-        ctx,
-        getDiscordAttachmentLimit(interaction, DISCORD_SIZE_LIMIT),
-        { hash: optimized.hash }
+        optimized,
+        getDiscordAttachmentLimit(interaction, DISCORD_SIZE_LIMIT)
       );
-      await deliverStored(interaction, ctx, stored, { urlHash: urlHash ?? optimized.hash });
+      await deliverStored(interaction, stored);
       await finishCommand('optimize', ctx, stored.size);
     },
     {
       commandSource,
-      skipDbInit: true,
       errorFallback: 'an error occurred while optimizing the gif.',
       context: {
         commandOptions: { lossy },
@@ -109,12 +86,12 @@ const attachmentJson = attachment =>
   };
 
 // The gif (downloading a url) an optimize was given; replies and returns null on failure.
-async function resolveGif(interaction, { attachment, url, adminUser, commandSource }) {
+async function resolveGif(interaction, { attachment, url, commandSource }) {
   let file = null;
   let originalUrl = null;
   if (url) {
     try {
-      ({ attachment, file, originalUrl } = await fetchUrlInput(url, adminUser, interaction.client));
+      ({ attachment, file, originalUrl } = await fetchUrlInput(url, interaction.client));
     } catch (error) {
       await refuse(interaction, 'optimize', {
         message: curatedErrorMessage(error, 'failed to download file from URL.'),
@@ -140,9 +117,8 @@ async function resolveGif(interaction, { attachment, url, adminUser, commandSour
 }
 
 // The bot's half: checks that answer privately before anything is deferred or queued.
-async function acceptGif(interaction, { attachment, url, adminUser, commandSource }) {
-  if (!url)
-    return (await resolveGif(interaction, { attachment, adminUser, commandSource })) !== null;
+async function acceptGif(interaction, { attachment, url, commandSource }) {
+  if (!url) return (await resolveGif(interaction, { attachment, commandSource })) !== null;
   const check = validateUrl(url);
   if (!check.valid) {
     await refuse(interaction, 'optimize', {
@@ -160,13 +136,11 @@ export async function runOptimizeJob(
   interaction,
   { attachment, url, lossy = null, commandSource }
 ) {
-  const adminUser = isAdmin(interaction.user.id);
-  const input = await resolveGif(interaction, { attachment, url, adminUser, commandSource });
+  const input = await resolveGif(interaction, { attachment, url, commandSource });
   if (!input) return;
   await processOptimization(
     interaction,
     input.attachment,
-    adminUser,
     input.file,
     lossy,
     input.originalUrl,
@@ -178,12 +152,6 @@ export async function runOptimizeJob(
 // fetched by the job once the modal is submitted.
 export async function handleOptimizeContextMenuCommand(interaction, modalAttachmentCache) {
   if (!interaction.isMessageContextMenuCommand() || interaction.commandName !== 'optimize') {
-    return;
-  }
-  const userId = interaction.user.id;
-  const adminUser = isAdmin(userId);
-  const guard = { type: 'optimize', action: 'optimizing another gif' };
-  if (await replyIfRateLimited(interaction, { ...guard, commandSource: 'context-menu' })) {
     return;
   }
 
@@ -202,7 +170,7 @@ export async function handleOptimizeContextMenuCommand(interaction, modalAttachm
     return;
   }
   const commandSource = 'context-menu';
-  if (!(await acceptGif(interaction, { attachment, url, adminUser, commandSource }))) return;
+  if (!(await acceptGif(interaction, { attachment, url, commandSource }))) return;
 
   const modal = new ModalBuilder()
     .setCustomId(`optimize_modal_${Date.now()}`)
@@ -235,26 +203,16 @@ export async function handleOptimizeContextMenuCommand(interaction, modalAttachm
   );
   if (!modalShown) {
     modalAttachmentCache.delete(modalId);
-    logger.warn(`Failed to show modal for user ${userId}, cleaned up cache entry`);
+    logger.warn('Failed to show the optimize modal, cleaned up cache entry');
   }
 }
 
 export async function handleOptimizeCommand(interaction) {
-  const userId = interaction.user.id;
-  const adminUser = isAdmin(userId);
-  logger.info(
-    `User ${userId} initiated optimization via slash command${adminUser ? ' [ADMIN]' : ''}`
-  );
-  const guard = { type: 'optimize', action: 'optimizing another gif' };
-  if (await replyIfRateLimited(interaction, { ...guard, commandSource: 'slash' })) {
-    return;
-  }
-
   const attachment = interaction.options.getAttachment('file');
   const rawUrl = interaction.options.getString('url');
   const url = firstUrlIn(rawUrl) ?? rawUrl;
   const lossyLevel = interaction.options.getNumber('lossy');
-  const context = { commandSource: 'slash' };
+  const context = { commandSource: commandSourceOf(interaction) };
 
   if (lossyLevel !== null && (lossyLevel < 0 || lossyLevel > 100)) {
     await refuse(interaction, 'optimize', {
@@ -275,8 +233,8 @@ export async function handleOptimizeCommand(interaction) {
     return;
   }
 
-  const commandSource = 'slash';
-  if (!(await acceptGif(interaction, { attachment, url, adminUser, commandSource }))) return;
+  const commandSource = commandSourceOf(interaction);
+  if (!(await acceptGif(interaction, { attachment, url, commandSource }))) return;
   await safeInteractionDeferReply(interaction);
   await dispatchMediaJob(interaction, 'optimize', {
     attachment: attachmentJson(attachment),

@@ -47,13 +47,6 @@ function parseIntEnv(name, defaultValue, min = -Infinity, max = Infinity) {
   return parsed;
 }
 
-/**
- * Validate required string environment variable
- * @param {string} name - Environment variable name
- * @param {string} description - Description for error message
- * @returns {string} Environment variable value
- * @throws {ConfigurationError} If variable is not set
- */
 function requireStringEnv(name, description) {
   const value = process.env[name];
   if (!value || value.trim() === '') {
@@ -67,17 +60,6 @@ function getStringEnv(name, defaultValue) {
   return value ? value.trim() : defaultValue;
 }
 
-function parseIdList(name) {
-  const value = process.env[name];
-  if (!value || value.trim() === '') {
-    return [];
-  }
-  return value
-    .split(',')
-    .map(id => id.trim())
-    .filter(id => id.length > 0);
-}
-
 function validateUrlFormat(url) {
   try {
     new URL(url);
@@ -85,23 +67,6 @@ function validateUrlFormat(url) {
   } catch {
     return false;
   }
-}
-
-function getGifQualityEnv(name, defaultValue) {
-  const value = process.env[name];
-  if (!value) {
-    return defaultValue;
-  }
-
-  const trimmed = value.trim().toLowerCase();
-  const validQualities = ['low', 'medium', 'high'];
-  if (!validQualities.includes(trimmed)) {
-    throw new ConfigurationError(
-      `${name} must be one of: ${validQualities.join(', ')}, got: ${value}`,
-      'INVALID_GIF_QUALITY'
-    );
-  }
-  return trimmed;
 }
 
 // Bot configuration - lazy loaded to avoid requiring DISCORD_TOKEN for webui
@@ -119,31 +84,17 @@ function getBotConfig() {
           'Discord bot token from https://discord.com/developers/applications'
         ),
     clientId: web ? '' : requireStringEnv('CLIENT_ID', 'Discord application/client ID'),
-    adminUserIds: parseIdList('ADMIN_USER_IDS'),
-    gifStoragePath: getStringEnv('GIF_STORAGE_PATH', './data-test/gifs'),
-    // Falls back to the configured R2 domain rather than a baked-in one; empty when neither is
-    // set, which is fine because every consumer only builds CDN URLs after an R2 upload.
-    cdnBaseUrl: getStringEnv(
-      'CDN_BASE_URL',
-      r2Config.publicDomain ? `https://${r2Config.publicDomain}/gifs` : ''
-    ),
     // Nothing is kept indefinitely. On by default: a self-hoster should not have to opt in to
     // not hoarding other people's data. Minimum 1 day so a typo cannot wipe live history.
     retentionEnabled: getStringEnv('RETENTION_ENABLED', 'true').toLowerCase() === 'true',
     retentionDays: parseIntEnv('RETENTION_DAYS', 7, 1, 3650),
-    retentionMediaDays: parseIntEnv('RETENTION_MEDIA_DAYS', 7, 1, 3650),
-    // A cache row's whole value is serving the file it points at, and R2 uploads expire in
-    // 2-72h (see upload-tiers.js), so a row that outlives its media only serves dead links.
-    retentionUrlCacheDays: parseIntEnv('RETENTION_URL_CACHE_DAYS', 7, 1, 3650),
     retentionIntervalMs: parseIntEnv('RETENTION_INTERVAL_MS', 21600000, 60000, 604800000),
     maxGifDuration: parseIntEnv('MAX_GIF_DURATION', 30, 1, 300),
-    gifQuality: getGifQualityEnv('GIF_QUALITY', 'medium'),
-    // 1GB hard ceiling for non-admins: bigger files are rejected outright. Files under it are
+    // 1GB hard ceiling: bigger files are rejected outright. Files under it are
     // delivered as expiring R2 URLs whose TTL shrinks with size (see upload-tiers.js), rather
     // than bounced at 100MB. Configurable via MAX_VIDEO_SIZE env var.
     maxVideoSize: parseIntEnv('MAX_VIDEO_SIZE', 1024 * 1024 * 1024, 1),
     maxImageSize: parseIntEnv('MAX_IMAGE_SIZE', 50 * 1024 * 1024, 1), // 50MB default, configurable via MAX_IMAGE_SIZE env var
-    rateLimitCooldown: parseIntEnv('RATE_LIMIT', 10, 1) * 1000, // Default 10 seconds, configurable via RATE_LIMIT env var (in seconds)
     cobaltApiUrl: getStringEnv('COBALT_API_URL', 'http://cobalt:9000'),
     cobaltEnabled: getStringEnv('COBALT_ENABLED', 'true').toLowerCase() === 'true',
     ytdlpEnabled: getStringEnv('YTDLP_ENABLED', 'true').toLowerCase() === 'true',
@@ -152,19 +103,9 @@ function getBotConfig() {
     // Media jobs go to worker processes through Postgres; off runs them in the bot process.
     mediaWorkers: getStringEnv('MEDIA_WORKERS', 'false').toLowerCase() === 'true',
     statsCacheTtl: parseIntEnv('STATS_CACHE_TTL', 300000, 0), // 5 minutes default, 0 to disable
-    ntfyTopic: getStringEnv('NTFY_TOPIC', ''),
-    ntfyEnabled: getStringEnv('NTFY_TOPIC', '') !== '',
     discordSizeLimit: parseIntEnv('DISCORD_SIZE_LIMIT', 8 * 1024 * 1024, 1), // 8MB default, Discord's attachment limit
     commandPrefix: getStringEnv('COMMAND_PREFIX', '^g'), // default prefix for message (prefix) commands; guilds can override via "@bot prefix"
   };
-
-  // Validate CDN_BASE_URL format
-  if (_botConfig.cdnBaseUrl && !validateUrlFormat(_botConfig.cdnBaseUrl)) {
-    throw new ConfigurationError(
-      `CDN_BASE_URL must be a valid URL, got: ${_botConfig.cdnBaseUrl}`,
-      'INVALID_URL'
-    );
-  }
 
   return _botConfig;
 }
@@ -189,7 +130,7 @@ export const botConfig = new Proxy(
 // Community/support server surfaced by /info and the ban-appeal embed. Empty by default: a
 // self-hosted instance must not send its users to the upstream gronka server, which cannot
 // answer for a bot it doesn't run. Surfaces that use it drop the link when it's unset.
-// A getter, not a snapshot, so the value tracks the env the same way isOwnCdnUrl does.
+// A getter, not a snapshot, so it tracks the env.
 export const supportConfig = {
   get inviteUrl() {
     return getStringEnv('SUPPORT_INVITE_URL', '');
@@ -212,36 +153,9 @@ export const r2Config = {
   // No default: an unset domain must disable public URLs, not silently mint links on the
   // upstream instance's CDN that this deployment doesn't own. r2-storage guards on empty.
   publicDomain: getStringEnv('R2_PUBLIC_DOMAIN', ''),
-  tempUploadsEnabled: getStringEnv('R2_TEMP_UPLOADS_ENABLED', 'false').toLowerCase() === 'true',
-  tempUploadTtlHours: parseIntEnv('R2_TEMP_UPLOAD_TTL_HOURS', 72, 1, 8760), // Max 1 year
   cleanupEnabled: getStringEnv('R2_CLEANUP_ENABLED', 'false').toLowerCase() === 'true',
   cleanupIntervalMs: parseIntEnv('R2_CLEANUP_INTERVAL_MS', 3600000, 60000, 86400000), // 1 hour default, min 1 minute, max 1 day
-  cleanupLogLevel: getStringEnv('R2_CLEANUP_LOG_LEVEL', 'detailed').toLowerCase(),
 };
-
-// Does this URL point at the CDN this instance owns? Gates serving a request from local disk
-// instead of re-downloading, so it must never match a domain we don't control. Reads the env
-// at call time rather than closing over r2Config so tests can vary the domain.
-export function isOwnCdnUrl(url) {
-  let hostname;
-  try {
-    hostname = new URL(url).hostname.toLowerCase();
-  } catch {
-    return false;
-  }
-
-  const domain = getStringEnv('R2_PUBLIC_DOMAIN', '').toLowerCase();
-  if (domain && hostname === domain) {
-    return true;
-  }
-
-  const baseUrl = getStringEnv('CDN_BASE_URL', '');
-  if (baseUrl && validateUrlFormat(baseUrl)) {
-    return hostname === new URL(baseUrl).hostname.toLowerCase();
-  }
-
-  return false;
-}
 
 // Server configuration for the minimal HTTP server in bot.js
 // (serves /api/stats/24h â€” used by the Docker healthcheck â€” and /api/bot/status).
@@ -259,9 +173,7 @@ export const webuiConfig = {
 
 // Logger configuration
 const loggerConfig = {
-  logDir: getStringEnv('LOG_DIR', './logs'),
   logLevel: getStringEnv('LOG_LEVEL', 'INFO').toUpperCase(),
-  logRotation: getStringEnv('LOG_ROTATION', 'daily'),
 };
 
 // Validate log level
@@ -270,23 +182,5 @@ if (!validLogLevels.includes(loggerConfig.logLevel)) {
   throw new ConfigurationError(
     `LOG_LEVEL must be one of: ${validLogLevels.join(', ')}, got: ${loggerConfig.logLevel}`,
     'INVALID_LOG_LEVEL'
-  );
-}
-
-// Validate log rotation
-const validRotations = ['daily', 'none'];
-if (!validRotations.includes(loggerConfig.logRotation)) {
-  throw new ConfigurationError(
-    `LOG_ROTATION must be one of: ${validRotations.join(', ')}, got: ${loggerConfig.logRotation}`,
-    'INVALID_LOG_ROTATION'
-  );
-}
-
-// Validate R2 cleanup log level
-const validCleanupLogLevels = ['minimal', 'detailed', 'debug'];
-if (!validCleanupLogLevels.includes(r2Config.cleanupLogLevel)) {
-  throw new ConfigurationError(
-    `R2_CLEANUP_LOG_LEVEL must be one of: ${validCleanupLogLevels.join(', ')}, got: ${r2Config.cleanupLogLevel}`,
-    'INVALID_CLEANUP_LOG_LEVEL'
   );
 }

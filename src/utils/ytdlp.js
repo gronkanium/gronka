@@ -6,7 +6,8 @@ import { createLogger } from './logger.js';
 import { NetworkError, ValidationError } from './errors.js';
 import { trimVideo } from './video-processor/trim-video.js';
 import { DEFAULT_YTDLP_FORMAT } from './config.js';
-import { fromPath, tempDir } from './media-file.js';
+import { fromPath, tempDir, jobSignal } from './media-file.js';
+import { hostOf, normalizeHost } from './url-host.js';
 
 const logger = createLogger('ytdlp');
 const execFileAsync = promisify(execFile);
@@ -27,14 +28,7 @@ function tooLargeMessage(maxSize) {
 const GENERIC_FAILURE_MESSAGE =
   'could not download this content. it may be deleted, private, age-restricted, or unsupported.';
 
-/**
- * Optional --cookies args for yt-dlp. Age-restricted content (notably TikTok, which Cobalt
- * has no cookie support for) needs a logged-in browser session, supplied as a Netscape
- * cookies.txt file via YTDLP_COOKIES_PATH. The file is domain-scoped, so passing it on
- * every invocation is safe - yt-dlp only sends cookies matching the target site.
- * Resolved at call time (not module load) so a file mounted/rotated later is picked up.
- * @returns {string[]} ['--cookies', path] when a usable file is configured, else []
- */
+// Optional --cookies args for yt-dlp
 export function getCookieArgs(url = null, signedIn = false) {
   // Signed-in YouTube gets ads, and yt-dlp waits ~5 s for each to be skippable: only sign in when asked.
   if (url && isYouTubeUrl(url) && !signedIn) return [];
@@ -67,7 +61,7 @@ export class YtdlpRateLimitError extends NetworkError {
 export function isYouTubeUrl(url) {
   try {
     const urlObj = new URL(url);
-    const hostname = urlObj.hostname.toLowerCase().replace(/^www\./, '');
+    const hostname = normalizeHost(urlObj.hostname);
     return (
       hostname === 'youtube.com' ||
       hostname === 'youtu.be' ||
@@ -80,7 +74,7 @@ export function isYouTubeUrl(url) {
 }
 
 // Signed-in requests get ads and a ~5 s wait, so web_embedded (needs bun + yt-dlp-ejs) is sign-in only.
-function getYouTubeArgs(url, signedIn = false) {
+export function getYouTubeArgs(url, signedIn = false) {
   if (!isYouTubeUrl(url)) return [];
   const clients = signedIn ? 'web_embedded,default' : 'default';
   return ['--js-runtimes', 'bun', '--extractor-args', `youtube:player_client=${clients}`];
@@ -88,49 +82,21 @@ function getYouTubeArgs(url, signedIn = false) {
 
 // These answer yt-dlp's own TLS fingerprint with 403; curl-cffi (in the image) lets it pass as Chrome.
 const IMPERSONATE_HOSTS = ['rumble.com'];
-function getImpersonateArgs(url) {
-  let host;
-  try {
-    host = new URL(url).hostname.replace(/^www\./, '');
-  } catch {
-    return [];
-  }
+export function getImpersonateArgs(url) {
+  const host = hostOf(url);
+  if (!host) return [];
   return IMPERSONATE_HOSTS.some(h => host === h || host.endsWith(`.${h}`))
     ? ['--impersonate', 'chrome']
     : [];
 }
 
-/**
- * Check if a URL is a RedGifs URL.
- * RedGifs is not a Cobalt service, but yt-dlp has a dedicated extractor for it
- * (watch/ifr pages resolve to media.redgifs.com mp4s), so these route through the
- * yt-dlp path like YouTube.
- * @param {string} url - URL to check
- * @returns {boolean} True if the URL is a RedGifs URL
- */
-export function isRedGifsUrl(url) {
-  try {
-    const urlObj = new URL(url);
-    const hostname = urlObj.hostname.toLowerCase().replace(/^www\./, '');
-    return hostname === 'redgifs.com' || hostname.endsWith('.redgifs.com');
-  } catch {
-    return false;
-  }
-}
-
-function siteLabel(url) {
-  try {
-    return new URL(url).hostname.toLowerCase().replace(/^www\./, '');
-  } catch {
-    return 'this site';
-  }
-}
+const siteLabel = url => hostOf(url) ?? 'this site';
 
 // /p/ permalinks carry photos as often as video; /reel/ and /tv/ are always video.
 function isInstagramPostUrl(url) {
   try {
     const urlObj = new URL(url);
-    const hostname = urlObj.hostname.toLowerCase().replace(/^www\./, '');
+    const hostname = normalizeHost(urlObj.hostname);
     return (
       (hostname === 'instagram.com' || hostname.endsWith('.instagram.com')) &&
       /^(?:\/[^/]+)?\/p\//.test(urlObj.pathname)
@@ -172,15 +138,9 @@ export const YTDLP_SITES = [
   { name: 'Rule34Video', hosts: ['rule34video.com'] },
 ];
 
-/**
- * Resolve the yt-dlp-handled site for a URL, if any.
- * @param {string} url - URL to classify
- * @returns {string|null} The site's display name (e.g. 'YouTube'), or null if no yt-dlp
- *   site owns this host.
- */
 export function getYtdlpSite(url) {
   try {
-    const hostname = new URL(url).hostname.toLowerCase().replace(/^www\./, '');
+    const hostname = hostOf(url);
     for (const site of YTDLP_SITES) {
       if (site.hosts.some(h => hostname === h || hostname.endsWith(`.${h}`))) {
         return site.name;
@@ -210,19 +170,6 @@ function getContentType(ext) {
   return mimeTypes[extLower] || 'video/mp4';
 }
 
-/**
- * Execute yt-dlp command and return the output file path
- * @param {string} url - YouTube URL to download
- * @param {string} outputDir - Directory to save the file
- * @param {string} quality - Quality format string for yt-dlp
- * @param {number} timeout - Timeout in milliseconds
- * @param {number} maxDuration - Maximum video duration in seconds (default: 300 = 5 minutes)
- * @param {number|null} startTime - Start time in seconds for segment download
- * @param {number|null} duration - Duration in seconds for segment download
- * @param {number} maxSize - Maximum file size in bytes; finite values add yt-dlp --max-filesize
- *   so oversized full downloads abort early instead of being caught after buffering (default: Infinity)
- * @returns {Promise<string>} Path to downloaded file
- */
 function executeYtdlp(
   url,
   outputDir,
@@ -254,7 +201,7 @@ function executeYtdlp(
     if (maxDuration !== Infinity && startTime === null && duration === null) {
       // The `?` on the operator marks the field optional. Without it yt-dlp rejects any item
       // whose duration is unknown (`NA`), which is every direct-media link handled by the
-      // generic extractor, e.g. an animated webp from gif.fxtwitter.com. Those were skipped
+      // generic extractor, e.g. an animated webp from an embed mirror. Those were skipped
       // silently (exit 0, no output) and then misreported as "duration exceeds the maximum".
       // Unknown-duration items stay bounded by --max-filesize and the post-read size check.
       args.push('--match-filter', `duration<=?${maxDuration}`);
@@ -281,10 +228,11 @@ function executeYtdlp(
 
     args.push('-o', outputTemplate, '--restrict-filenames', '--print', 'after_move:filepath', url);
 
-    logger.info(`Executing yt-dlp with args: ${args.join(' ')}`);
+    logger.debug(`Executing yt-dlp with args: ${args.join(' ')}`);
 
     const ytdlp = spawn('yt-dlp', args, {
-      timeout: timeout,
+      signal: jobSignal(),
+      timeout,
       stdio: ['ignore', 'pipe', 'pipe'],
     });
 
@@ -370,7 +318,7 @@ function executeYtdlp(
                 reject(new NetworkError('yt-dlp segment download failed: output file too small'));
                 return;
               }
-              logger.info(`yt-dlp download complete: ${outputPath} (${stats.size} bytes)`);
+              logger.debug(`yt-dlp download complete: ${outputPath} (${stats.size} bytes)`);
               resolve(outputPath);
             } else {
               reject(new NetworkError('yt-dlp output path is not a file'));
@@ -388,7 +336,7 @@ function executeYtdlp(
                 reject(new NetworkError('yt-dlp segment download failed: output file too small'));
                 return;
               }
-              logger.info(
+              logger.debug(
                 `yt-dlp download complete (found file): ${actualPath} (${fallbackStats.size} bytes)`
               );
               resolve(actualPath);
@@ -411,7 +359,7 @@ function executeYtdlp(
                 reject(new NetworkError('yt-dlp segment download failed: output file too small'));
                 return;
               }
-              logger.info(
+              logger.debug(
                 `yt-dlp download complete (fallback): ${actualPath} (${fallbackStats.size} bytes)`
               );
               resolve(actualPath);
@@ -565,7 +513,7 @@ async function executeYtdlpWithRetry(...args) {
     const signInAsked =
       error.message === 'video requires age verification' || error.code === 'YTDLP_RETRYABLE';
     if (isYouTubeUrl(args[0]) && signInAsked) {
-      logger.info(`YouTube asked to sign in, retrying signed in: ${args[0]}`);
+      logger.debug(`YouTube asked to sign in, retrying signed in: ${args[0]}`);
       return await executeYtdlp(...Array.from({ length: 8 }, (_, i) => args[i]), true);
     }
     if (error.message !== GENERIC_FAILURE_MESSAGE && error.code !== 'YTDLP_RETRYABLE') {
@@ -590,7 +538,8 @@ function getVideoDuration(url, timeout = 15000) {
     ];
 
     const ytdlp = spawn('yt-dlp', args, {
-      timeout: timeout,
+      signal: jobSignal(),
+      timeout,
       stdio: ['ignore', 'pipe', 'pipe'],
     });
 
@@ -691,37 +640,25 @@ function emptyDownloadError(error) {
   throw error;
 }
 
-/**
- * Download video from YouTube using yt-dlp
- * @param {string} url - YouTube URL to download
- * @param {boolean} isAdminUser - Whether the user is an admin (allows larger files and higher quality)
- * @param {number} maxSize - Maximum file size in bytes
- * @param {string} quality - Quality preference (default from config)
- * @param {number} maxDuration - Maximum video duration in seconds (default: 300 = 5 minutes, admins bypass this)
- * @param {number|null} startTime - Start time in seconds for segment download
- * @param {number|null} duration - Duration in seconds for segment download
- * @returns {Promise<Object>} Media file (path, size, hash, contentType, filename)
- */
 export async function downloadWithYtdlp(
   url,
-  isAdminUser = false,
   maxSize = Infinity,
   quality = null,
   maxDuration = 300,
   startTime = null,
   duration = null
 ) {
-  logger.info(
-    `Downloading via yt-dlp: ${url} (admin: ${isAdminUser}, maxDuration: ${maxDuration}, startTime: ${startTime}, duration: ${duration})`
+  logger.debug(
+    `Downloading via yt-dlp: ${url} (maxDuration: ${maxDuration}, startTime: ${startTime}, duration: ${duration})`
   );
 
-  // Fast duration pre-check for non-admin users (skip if using segment download with explicit duration)
+  // Fast duration pre-check (skipped for a segment download with an explicit duration)
   // This prevents waiting for a full download attempt just to find out the video is too long
   const needsDurationCheck = maxDuration !== Infinity && startTime === null && duration === null;
   if (needsDurationCheck) {
     try {
       const videoDuration = await getVideoDuration(url);
-      logger.info(`Video duration: ${videoDuration}s (max: ${maxDuration}s)`);
+      logger.debug(`Video duration: ${videoDuration}s (max: ${maxDuration}s)`);
 
       if (videoDuration > maxDuration) {
         const minutes = Math.floor(videoDuration / 60);
@@ -741,15 +678,7 @@ export async function downloadWithYtdlp(
     }
   }
 
-  // Admin users get best quality, regular users get 1080p max
-  const effectiveQuality =
-    quality ||
-    (isAdminUser
-      ? 'bestvideo[ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4]/best'
-      : DEFAULT_YTDLP_FORMAT);
-
-  // Admins are never size-gated; for everyone else the cap drives yt-dlp's --max-filesize.
-  const gateSize = isAdminUser ? Infinity : maxSize;
+  const effectiveQuality = quality || DEFAULT_YTDLP_FORMAT;
 
   const workDir = await tempDir();
   const useSegmentDownload = startTime !== null || duration !== null;
@@ -768,7 +697,7 @@ export async function downloadWithYtdlp(
           maxDuration,
           startTime,
           duration,
-          gateSize
+          maxSize
         );
       } catch (segmentError) {
         // Check if this is a segment download failure (too small file)
@@ -786,14 +715,14 @@ export async function downloadWithYtdlp(
             maxDuration,
             null,
             null,
-            gateSize
+            maxSize
           ).catch(emptyDownloadError);
 
           const trimmedPath = path.join(workDir, 'trimmed_output.mp4');
           await trimVideo(outputPath, trimmedPath, { startTime, duration });
 
           outputPath = trimmedPath;
-          logger.info(`Fallback trim completed: ${outputPath}`);
+          logger.debug(`Fallback trim completed: ${outputPath}`);
         } else {
           throw segmentError;
         }
@@ -807,19 +736,19 @@ export async function downloadWithYtdlp(
         maxDuration,
         startTime,
         duration,
-        gateSize
+        maxSize
       ).catch(emptyDownloadError);
     }
 
     const filename = path.basename(outputPath);
     const contentType = getContentType(path.extname(outputPath));
     const file = await fromPath(outputPath, { contentType, filename });
-    if (!isAdminUser && file.size > maxSize) {
+    if (file.size > maxSize) {
       throw new ValidationError(
         `file is too large (${(file.size / (1024 * 1024)).toFixed(2)}MB, max ${(maxSize / (1024 * 1024)).toFixed(2)}MB)`
       );
     }
-    logger.info(
+    logger.debug(
       `Successfully downloaded media via yt-dlp${usedFallback ? ' (via fallback)' : ''}, size: ${file.size} bytes, content-type: ${contentType}`
     );
     return file;
@@ -827,36 +756,4 @@ export async function downloadWithYtdlp(
     logger.error(`yt-dlp download failed: ${error.message}`);
     throw error;
   }
-}
-
-/**
- * Download media from YouTube using yt-dlp.
- * This wrapper preserves the older function name for current callers.
- */
-export async function downloadFromYouTube(
-  url,
-  isAdminUser = false,
-  maxSize = Infinity,
-  quality = null,
-  maxDuration = 300,
-  startTime = null,
-  duration = null
-) {
-  return downloadWithYtdlp(url, isAdminUser, maxSize, quality, maxDuration, startTime, duration);
-}
-
-export async function isYtdlpAvailable() {
-  return new Promise(resolve => {
-    const ytdlp = spawn('yt-dlp', ['--version'], {
-      stdio: ['ignore', 'pipe', 'ignore'],
-    });
-
-    ytdlp.on('close', code => {
-      resolve(code === 0);
-    });
-
-    ytdlp.on('error', () => {
-      resolve(false);
-    });
-  });
 }

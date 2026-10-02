@@ -23,11 +23,7 @@
 
 const DEFER_PLACEHOLDER = 'processing...';
 
-/**
- * Strip interaction-only fields from a reply payload so it is valid for channel messages.
- * @param {Object|string} options - Reply options (or bare content string)
- * @returns {Object} Message-safe payload
- */
+// Strip interaction-only fields from a reply payload so it is valid for channel messages
 function toMessagePayload(options) {
   const payload = typeof options === 'string' ? { content: options } : { ...options };
   delete payload.flags; // MessageFlags.Ephemeral is interaction-only
@@ -69,6 +65,8 @@ export function createMessageAdapter(message, namedOptions = {}, extras = {}) {
     guild: message.guild,
     guildId: message.guildId,
     client: message.client,
+    appPermissions: message.guild ? message.channel?.permissionsFor?.(message.client.user) : null,
+    attachmentSizeLimit: extras.attachmentSizeLimit,
     message,
     replied: false,
     deferred: Boolean(replyMessage),

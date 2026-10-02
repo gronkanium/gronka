@@ -76,7 +76,7 @@ export function decryptMegaAttributes(at, aesKey) {
   return JSON.parse(plain.slice(4));
 }
 
-export async function downloadFromMega(url, isAdminUser, maxSize) {
+export async function downloadFromMega(url, maxSize) {
   const { id, key } = parseMegaUrl(url);
   const { aesKey, iv } = megaKeys(key);
 
@@ -99,7 +99,7 @@ export async function downloadFromMega(url, isAdminUser, maxSize) {
   }
 
   const { n: name = 'file' } = decryptMegaAttributes(info.at, aesKey);
-  if (!isAdminUser && info.s > maxSize) {
+  if (info.s > maxSize) {
     throw new ValidationError(`file is too large (max ${maxSize / (1024 * 1024)}mb)`);
   }
   const ext = path.extname(name).slice(1).toLowerCase();
@@ -107,7 +107,7 @@ export async function downloadFromMega(url, isAdminUser, maxSize) {
     throw new ValidationError('that mega link does not point to a video or image file.');
   }
 
-  logger.info(`Downloading mega file ${id} (${info.s} bytes)`);
+  logger.debug(`Downloading mega file ${id} (${info.s} bytes)`);
   const decipher = crypto.createDecipheriv('aes-128-ctr', aesKey, iv);
   let file;
   try {
@@ -119,7 +119,7 @@ export async function downloadFromMega(url, isAdminUser, maxSize) {
     file = await writeStream(response.data, {
       transforms: [decipher],
       ext: `.${ext}`,
-      maxSize: isAdminUser ? Infinity : maxSize,
+      maxSize,
     });
   } catch (error) {
     if (error.code === 'TOO_LARGE') {

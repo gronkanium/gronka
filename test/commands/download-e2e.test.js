@@ -26,18 +26,6 @@ import { setSetting } from '../../src/utils/database.js';
 // the test:e2e script.
 const mocksSupported = process.env.GRONKA_E2E === 'true';
 
-// Each run gets its own throwaway storage directory so filesystem-level cache logic is
-// exercised identically for every test. Must be set BEFORE importing download.js because
-// botConfig reads GIF_STORAGE_PATH at module load time. Only required when mocks are active.
-const GIF_STORAGE_PATH = mocksSupported
-  ? path.join(os.tmpdir(), `gronka-e2e-${process.pid}-${Date.now()}`)
-  : null;
-if (mocksSupported) {
-  process.env.GIF_STORAGE_PATH = GIF_STORAGE_PATH;
-  // The cache-reply assertion exercises the configured CDN path; CI has no .env file.
-  process.env.CDN_BASE_URL = 'https://cdn.test/gifs';
-}
-
 function fakeBuffer(seed, size = 1024) {
   const buf = Buffer.alloc(size);
   for (let i = 0; i < size; i++) {
@@ -47,9 +35,9 @@ function fakeBuffer(seed, size = 1024) {
 }
 
 let handleDownloadCommand;
-let getProcessedUrl;
-let hashUrl;
 const fixtures = {};
+// What reached the (mocked) R2 bucket: nothing about the user, just the file.
+const uploads = [];
 
 function ffmpeg(args) {
   const run = Bun.spawnSync(['ffmpeg', '-y', '-v', 'error', ...args]);
@@ -96,6 +84,15 @@ if (!mocksSupported) {
       mediaFromBytes(buffer, { contentType, filename, ext: path.extname(filename) });
 
     // Register mocks for the network boundary BEFORE importing download.js.
+    const realR2 = await import('../../src/utils/r2-storage.js');
+    mock.module('../../src/utils/r2-storage.js', () => ({
+      ...realR2,
+      isR2Configured: () => true,
+      uploadMediaToR2: async (type, file, ext) => {
+        uploads.push({ type, size: file.size });
+        return `https://cdn.test/${realR2.newMediaKey(type, ext)}`;
+      },
+    }));
     mock.module('../../src/utils/cobalt.js', () => ({
       canonicalizeMirrorUrl: url => url,
       isSocialMediaUrl: url => /^https?:\/\/(www\.|mobile\.)?(x|twitter)\.com\//i.test(url),
@@ -181,33 +178,7 @@ if (!mocksSupported) {
         { name: 'RedGifs', hosts: ['redgifs.com'] },
         { name: 'XVideos', hosts: ['xvideos.com'] },
       ],
-      downloadFromYouTube: async (
-        _url,
-        _admin,
-        _maxSize,
-        _quality,
-        _maxDuration,
-        _startTime,
-        _duration
-      ) => {
-        // yt-dlp is only used as a fallback when Cobalt fails for X/Twitter URLs.
-        // If the URL was deleted, the failure should propagate (not magically succeed).
-        const u = _url || '';
-        if (u.includes('deleted')) {
-          const { NetworkError } = await import('../../src/utils/errors.js');
-          throw new NetworkError('this post is unavailable or has been deleted');
-        }
-        return media(fakeBuffer(4, 4096), 'video/mp4', 'clip.mp4');
-      },
-      downloadWithYtdlp: async (
-        _url,
-        _admin,
-        _maxSize,
-        _quality,
-        _maxDuration,
-        _startTime,
-        _duration
-      ) => {
+      downloadWithYtdlp: async (_url, _maxSize, _quality, _maxDuration, _startTime, _duration) => {
         const u = _url || '';
         if (u.includes('deleted')) {
           const { NetworkError } = await import('../../src/utils/errors.js');
@@ -230,27 +201,18 @@ if (!mocksSupported) {
       downloadImage: async () => media(fakeBuffer(6, 4096), 'image/png', 'still.png'),
       downloadFileFromUrl: async () => media(fakeBuffer(7, 4096), 'video/mp4', 'clip.mp4'),
       parseTenorUrl: async u => u,
+      TENOR_VIEW_URL: /^https?:\/\/(www\.)?tenor\.com\/view\/.+-gif-(\d+)/i,
       isDirectMediaUrl: () => false,
       downloadDirectMedia: async () => media(fakeBuffer(8, 4096), 'video/mp4', 'direct.mp4'),
     }));
 
     // Dynamically import AFTER mocks are in place so the mocked modules are used.
     ({ handleDownloadCommand } = await import('../../src/commands/download.js'));
-    ({ getProcessedUrl } = await import('../../src/utils/database.js'));
-    ({ hashUrl } = await import('../../src/utils/hashing.js'));
   });
 
-  afterAll(async () => {
+  afterAll(() => {
     mock.restore();
-    await fs.rm(GIF_STORAGE_PATH, { recursive: true, force: true });
   });
-
-  async function cleanStorage() {
-    const base = path.resolve(GIF_STORAGE_PATH);
-    await fs.rm(path.join(base, 'videos'), { recursive: true, force: true });
-    await fs.rm(path.join(base, 'images'), { recursive: true, force: true });
-    await fs.rm(path.join(base, 'gifs'), { recursive: true, force: true });
-  }
 
   function downloadInteraction(url, userId = 'e2e-user', { start = null, end = null } = {}) {
     const { interaction, calls } = createFakeInteraction({ deferred: false, userId });
@@ -265,9 +227,6 @@ if (!mocksSupported) {
 
   describe('handleDownloadCommand (full-pipeline E2E)', () => {
     test('single-file video: downloads, saves, and replies with a Discord attachment', async () => {
-      await cleanStorage();
-      // Unique URL to avoid colliding with a URL-cache entry persisted in gronka_test from a
-      // prior run (tests share a long-lived DB, see TODO.md "postgres test DB persists").
       const url = `https://x.com/user/status/single-${Date.now()}`;
       const { interaction, calls } = downloadInteraction(url, 'e2e-dl-single');
 
@@ -283,7 +242,6 @@ if (!mocksSupported) {
     });
 
     test('multi-file picker: downloads array and replies with multiple attachments', async () => {
-      await cleanStorage();
       const url = `https://x.com/user/status/multi-${Date.now()}`;
       const { interaction, calls } = downloadInteraction(url, 'e2e-dl-multi');
 
@@ -304,7 +262,6 @@ if (!mocksSupported) {
     // 12-file carousel sent as one message failed entirely, the user got nothing, and the
     // operation was still recorded as a success.
     test('carousel over the attachment cap: splits across a reply plus follow-ups', async () => {
-      await cleanStorage();
       const url = `https://x.com/user/status/carousel-${Date.now()}`;
       const { interaction, calls } = downloadInteraction(url, 'e2e-dl-carousel');
 
@@ -331,7 +288,6 @@ if (!mocksSupported) {
     });
 
     test('deleted post: curated error message reaches the user, no files', async () => {
-      await cleanStorage();
       const url = `https://x.com/user/status/deleted-${Date.now()}`;
       const { interaction, calls } = downloadInteraction(url, 'e2e-dl-deleted');
 
@@ -346,7 +302,6 @@ if (!mocksSupported) {
     });
 
     test('turned-off source: /download is refused with a curated message, no files', async () => {
-      await cleanStorage();
       // Turn off the Twitter/X source, then attempt an x.com download.
       await setSetting('disabled_services', JSON.stringify(['twitter']));
       try {
@@ -367,7 +322,6 @@ if (!mocksSupported) {
     });
 
     test('hybrid delivery: oversized X/Twitter video is served as a direct URL with no download', async () => {
-      await cleanStorage();
       // getRemoteContentLength reports 50MB (over the Discord limit), so the hybrid
       // twitter_delivery policy must reply with the direct URL; the download mock
       // throws if reached, proving no bytes were transferred.
@@ -386,7 +340,6 @@ if (!mocksSupported) {
     });
 
     test('too-long X/Twitter video: falls back to the direct media URL, no files', async () => {
-      await cleanStorage();
       // Cobalt download fails (too large), yt-dlp fallback fails (duration cap), so the
       // command should hand out the direct video.twimg.com URL from cobalt instead of erroring.
       const url = `https://x.com/user/status/toolong-${Date.now()}`;
@@ -403,26 +356,7 @@ if (!mocksSupported) {
       assert.strictEqual(calls.editReply[0].files, undefined, 'no attachment');
     });
 
-    test('second identical download hits the file cache and replies with a URL (no re-download)', async () => {
-      await cleanStorage();
-      const url = `https://x.com/user/status/cache-${Date.now()}`;
-      const first = downloadInteraction(url, 'e2e-dl-cache-a');
-      await handleDownloadCommand(first.interaction);
-      assert.ok(first.calls.editReply[0].files, 'first download sends attachment');
-
-      // Second download of the same URL by a different user: the file already exists on disk
-      // (matched by content hash), so the command should skip the download and reply with a URL.
-      const second = downloadInteraction(url, 'e2e-dl-cache-b');
-      await handleDownloadCommand(second.interaction);
-
-      assert.strictEqual(second.calls.editReply.length, 1);
-      const content = second.calls.editReply[0].content;
-      assert.ok(content, 'cache hit replies with a URL');
-      assert.ok(content.includes('/videos/'), 'URL points to the videos CDN path');
-    });
-
     test('trimmed video: ffmpeg cuts the requested range and sends an mp4', async () => {
-      await cleanStorage();
       const url = `https://x.com/user/status/trimvid-${Date.now()}`;
       const { interaction, calls } = downloadInteraction(url, 'e2e-dl-trimvid', {
         start: '1',
@@ -438,7 +372,6 @@ if (!mocksSupported) {
     });
 
     test('trimmed gif: cut and sent back as a gif', async () => {
-      await cleanStorage();
       const url = `https://x.com/user/status/trimgif-${Date.now()}`;
       const { interaction, calls } = downloadInteraction(url, 'e2e-dl-trimgif', {
         start: '1',
@@ -454,7 +387,6 @@ if (!mocksSupported) {
     });
 
     test('mp4 served under a .gif name: trimmed into a real gif', async () => {
-      await cleanStorage();
       const url = `https://x.com/user/status/gifnamed-${Date.now()}`;
       const { interaction, calls } = downloadInteraction(url, 'e2e-dl-gifnamed', {
         start: '1',
@@ -469,7 +401,6 @@ if (!mocksSupported) {
     });
 
     test('trim ffmpeg cannot do: the untrimmed file is still delivered', async () => {
-      await cleanStorage();
       const url = `https://x.com/user/status/badtrim-${Date.now()}`;
       const { interaction, calls } = downloadInteraction(url, 'e2e-dl-badtrim', { start: '1' });
 
@@ -481,19 +412,15 @@ if (!mocksSupported) {
     });
 
     test('single image: sent as an attachment with its own extension', async () => {
-      await cleanStorage();
       const url = `https://x.com/user/status/onephoto-${Date.now()}`;
       const { interaction, calls } = downloadInteraction(url, 'e2e-dl-onephoto');
 
       await handleDownloadCommand(interaction);
 
       assert.ok(calls.editReply[0].files[0].name.endsWith('.png'));
-      const row = await getProcessedUrl(hashUrl(url));
-      assert.strictEqual(row.file_type, 'image');
     });
 
-    test('file over the attachment limit: replies with a CDN link and records it', async () => {
-      await cleanStorage();
+    test('file over the attachment limit: uploaded to R2 under a random name and linked', async () => {
       const url = `https://x.com/user/status/over-${Date.now()}`;
       const { interaction, calls } = downloadInteraction(url, 'e2e-dl-over');
       interaction.attachmentSizeLimit = 1000;
@@ -502,14 +429,11 @@ if (!mocksSupported) {
 
       assert.strictEqual(calls.editReply.length, 1);
       assert.strictEqual(calls.editReply[0].files, undefined, 'no attachment');
-      assert.ok(calls.editReply[0].content.includes('https://cdn.test/videos/'));
-      const row = await getProcessedUrl(hashUrl(url));
-      assert.strictEqual(row.file_type, 'video');
-      assert.ok(row.file_url.startsWith('https://cdn.test/videos/'));
+      assert.match(calls.editReply[0].content, /https:\/\/cdn\.test\/videos\/[0-9a-f]{32}\.mp4/);
+      assert.deepStrictEqual(uploads.at(-1), { type: 'video', size: 4096 });
     });
 
     test('gallery with one oversized item: small one attaches, big one becomes a link', async () => {
-      await cleanStorage();
       const url = `https://x.com/user/status/multi-split-${Date.now()}`;
       const { interaction, calls } = downloadInteraction(url, 'e2e-dl-multisplit');
       interaction.attachmentSizeLimit = 2500;
@@ -518,7 +442,7 @@ if (!mocksSupported) {
 
       const reply = calls.editReply[0];
       assert.strictEqual(reply.files.length, 1, 'only the 2048-byte photo attaches');
-      assert.ok(reply.content.includes('https://cdn.test/images/'), 'the 3072-byte one is a link');
+      assert.match(reply.content, /https:\/\/cdn\.test\/images\/[0-9a-f]{32}\.png/);
     });
   });
 }

@@ -1,8 +1,9 @@
 import axios from 'axios';
-import fsSync from 'node:fs';
+import { readSessionCookie } from './session-cookie.js';
 import { createLogger } from './logger.js';
 import { NetworkError } from './errors.js';
 import { ssrfGuardedRequest } from './ssrf-guard.js';
+import { hostOf, normalizeHost } from './url-host.js';
 
 const logger = createLogger('reddit');
 
@@ -39,7 +40,8 @@ const OFFSITE_HOSTS = [
 ];
 
 // /comments/<id>/... is the canonical form; /s/<id> is what the share sheet emits and 301s to it.
-const POST_PATH = /^\/r\/[^/]+\/(?:comments|s)\/[A-Za-z0-9_]+/;
+// Posts made to a user profile live under /user/<name>/ (or /u/) instead of /r/<sub>/.
+const POST_PATH = /^\/(?:r|u|user)\/[^/]+\/(?:comments|s)\/[A-Za-z0-9_]+/;
 
 const USER_AGENT =
   'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) ' +
@@ -48,30 +50,18 @@ const USER_AGENT =
 export function isRedditPostUrl(url) {
   try {
     const { hostname, pathname } = new URL(url);
-    const host = hostname.toLowerCase().replace(/^www\./, '');
+    const host = normalizeHost(hostname);
     return (host === 'reddit.com' || host.endsWith('.reddit.com')) && POST_PATH.test(pathname);
   } catch {
     return false;
   }
 }
 
-function readSessionCookie() {
-  const cookiesPath = process.env.INSTAGRAM_COOKIES_PATH;
-  if (!cookiesPath) {
-    return null;
-  }
-  try {
-    const entry = JSON.parse(fsSync.readFileSync(cookiesPath, 'utf8'))?.reddit?.[0];
-    return typeof entry === 'string' && entry.includes('reddit_session=') ? entry : null;
-  } catch (error) {
-    logger.warn(`Could not read Reddit cookies from ${cookiesPath}: ${error.message}`);
-    return null;
-  }
-}
+const readCookie = () => readSessionCookie('reddit', 'reddit_session=');
 
 /** Whether the Reddit extractor is usable at all; false means the caller should use cobalt. */
 export function hasRedditSession() {
-  return readSessionCookie() !== null;
+  return readCookie() !== null;
 }
 
 /**
@@ -92,7 +82,7 @@ export function commentIdFromUrl(url) {
 // Appending .json to a /s/ share link lands on the subreddit, not the post, so it has to be
 // followed first. HEAD is enough: the 301 names the canonical permalink, comment id included.
 async function canonicalUrl(url) {
-  if (!/^\/r\/[^/]+\/s\//.test(new URL(url).pathname)) {
+  if (!/^\/(?:r|u|user)\/[^/]+\/s\//.test(new URL(url).pathname)) {
     return url;
   }
   try {
@@ -110,8 +100,8 @@ async function canonicalUrl(url) {
   }
 }
 
-async function fetchListing(url) {
-  const cookie = readSessionCookie();
+async function fetchListing(url, limit = 100) {
+  const cookie = readCookie();
   if (!cookie) {
     // Curated rather than internal: download.js only propagates a ValidationError out of the
     // resolver, and that is reserved for the disabled-source gate.
@@ -119,7 +109,7 @@ async function fetchListing(url) {
   }
 
   // raw_json=1 stops Reddit html-escaping the urls it hands back, signatures included.
-  const jsonUrl = `${url.split('?')[0].replace(/\/$/, '')}/.json?limit=100&raw_json=1`;
+  const jsonUrl = `${url.split('?')[0].replace(/\/$/, '')}/.json?limit=${limit}&raw_json=1`;
   try {
     const response = await axios.get(jsonUrl, {
       ...ssrfGuardedRequest(),
@@ -187,7 +177,7 @@ function candidatesFor(id, entry) {
 
 function isOffsiteUrl(url) {
   try {
-    const host = new URL(url).hostname.toLowerCase().replace(/^www\./, '');
+    const host = hostOf(url);
     return OFFSITE_HOSTS.some(offsite => host === offsite || host.endsWith(`.${offsite}`));
   } catch {
     return false;
@@ -258,7 +248,7 @@ export function selectRedditMedia(listing, url) {
     if (images.length > 0) {
       return { external: null, images };
     }
-    logger.info(`Reddit comment ${commentId} carries no media, falling back to the post`);
+    logger.debug(`Reddit comment ${commentId} carries no media, falling back to the post`);
   }
 
   const media = mediaOf(post);
@@ -271,4 +261,13 @@ export function selectRedditMedia(listing, url) {
 export async function resolveRedditPost(url) {
   const canonical = await canonicalUrl(url);
   return selectRedditMedia(await fetchListing(canonical), canonical);
+}
+
+/**
+ * The raw post-and-comments listing behind a link, with the canonical permalink it was read
+ * from. The content api normalizes it; the downloader only wants the media out of it.
+ */
+export async function fetchRedditListing(url, { limit = 100 } = {}) {
+  const canonical = await canonicalUrl(url);
+  return { url: canonical, listing: await fetchListing(canonical, limit) };
 }

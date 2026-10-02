@@ -3,6 +3,7 @@ import crypto from 'node:crypto';
 import {
   createHandler,
   parseDownloadRequest,
+  parseContentRequest,
   contentDisposition,
   signStreamToken,
   directStreamInfo,
@@ -10,6 +11,7 @@ import {
 } from '../../src/web-server.js';
 import { trimItem } from '../../src/utils/video-processor/trim-item.js';
 import { redactForWeb } from '../../src/utils/logger.js';
+import { NetworkError, ValidationError } from '../../src/utils/errors.js';
 
 const ok = async () => true;
 const result = { lane: 'direct', files: [{ url: 'https://video.example/a.mp4' }] };
@@ -85,28 +87,67 @@ describe('handler', () => {
     expect(calls).toBe(0);
   });
 
-  test('a download answers with padded json carrying the result', async () => {
+  test('a download that finishes in time answers with its result and a real status', async () => {
     const handle = createHandler({ verify: ok, download: async () => result });
+    const res = await handle(post(body));
+    expect(res.status).toBe(200);
+    expect(await readJson(res)).toEqual(result);
+    expect(handle.stats().lanes.direct).toBe(1);
+  });
+
+  test('a download past the answer window keeps the line open with padded json', async () => {
+    const handle = createHandler({
+      verify: ok,
+      download: () => new Promise(resolve => setTimeout(resolve, 20, result)),
+      answerWithinMs: 0,
+    });
     const res = await handle(post(body));
     expect(res.status).toBe(200);
     const text = await res.text();
     expect(text.startsWith(' ')).toBe(true);
     expect(JSON.parse(text)).toEqual(result);
-    expect(handle.stats().lanes.direct).toBe(1);
   });
 
-  test('internal errors are curated, AppErrors pass through', async () => {
-    const handle = createHandler({
-      verify: ok,
-      download: async () => {
-        throw new Error('ENOENT /app/temp/secret-path');
-      },
-    });
-    const out = await readJson(await handle(post(body)));
-    expect(out.error).toEqual({
+  test('failures carry their status: 400 for the user, 502 for the source, curated internals', async () => {
+    const failing = error =>
+      createHandler({
+        verify: ok,
+        download: async () => {
+          throw error;
+        },
+      });
+    const internal = await failing(new Error('ENOENT /app/temp/secret-path'))(post(body));
+    expect(internal.status).toBe(502);
+    expect((await readJson(internal)).error).toEqual({
       code: 'DOWNLOAD_FAILED',
       message: 'could not download this content.',
     });
+    const user = await failing(new ValidationError('video is too long.'))(post(body));
+    expect(user.status).toBe(400);
+    expect((await readJson(user)).error.message).toBe('video is too long.');
+    const source = await failing(new NetworkError('this post is unavailable.'))(post(body));
+    expect(source.status).toBe(502);
+  });
+
+  test('a dropped request cancels the download it started', async () => {
+    let seen;
+    const handle = createHandler({
+      verify: ok,
+      download: (_job, signal) =>
+        new Promise((_, reject) => {
+          seen = signal;
+          signal.addEventListener('abort', () => reject(signal.reason));
+        }),
+    });
+    const client = new AbortController();
+    const req = new Request(post(body), { signal: client.signal });
+    const pending = handle(req);
+    await new Promise(resolve => setTimeout(resolve, 10));
+    client.abort();
+    const res = await pending;
+    expect(seen.aborted).toBe(true);
+    expect(res.status).toBe(499);
+    expect(handle.stats().cancelled).toBe(1);
   });
 
   test('per-ip limit', async () => {
@@ -122,11 +163,11 @@ describe('handler', () => {
   });
 });
 
-test('redaction strips links, addresses, keys and account numbers', () => {
+test('redaction strips links, addresses and keys', () => {
   const line = redactForWeb(
-    'fetched https://cdn.example/v.mp4?sig=1 for 203.0.113.9 and 2001:db8::1 key gk_abc_def GW 7K3P9 ABCDE'
+    'fetched https://cdn.example/v.mp4?sig=1 for 203.0.113.9 and 2001:db8::1 key gk_abc_def'
   );
-  expect(line).toBe('fetched <url> for <ip> and <ip> key <key> <account>');
+  expect(line).toBe('fetched <url> for <ip> and <ip> key <key>');
 });
 
 test('redaction blanks id-like tokens such as video ids', () => {
@@ -239,4 +280,146 @@ test('trimItem cuts a video to the requested section and leaves images alone', a
   const image = { path: '/nonexistent.jpg', filename: 'a.jpg', contentType: 'image/jpeg' };
   expect(await trimItem(image, { startTime: 1, duration: 2 })).toBe(image);
   fs.rmSync(dir, { recursive: true });
+});
+
+test('a client that hangs up mid-download cancels it on a real server', async () => {
+  let seen;
+  const handle = createHandler({
+    verify: ok,
+    download: (_job, signal) =>
+      new Promise((_, reject) => {
+        seen = signal;
+        signal.addEventListener('abort', () => reject(signal.reason));
+      }),
+  });
+  const server = Bun.serve({ port: 0, fetch: (req, srv) => handle(req, srv) });
+  try {
+    const client = new AbortController();
+    const res = fetch(`http://127.0.0.1:${server.port}/v1/download`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify(body),
+      signal: client.signal,
+    }).catch(() => null);
+    await new Promise(resolve => setTimeout(resolve, 100));
+    client.abort();
+    await res;
+    await new Promise(resolve => setTimeout(resolve, 100));
+    expect(seen?.aborted).toBe(true);
+  } finally {
+    server.stop(true);
+  }
+});
+
+describe('content', () => {
+  const sample = {
+    source: 'twitter',
+    url: 'https://x.com/a/status/1',
+    post: {
+      id: '1',
+      author: { handle: 'a', name: 'A', url: 'https://x.com/a' },
+      text: 'hi',
+      media: [],
+    },
+    thread: [],
+    comments: [],
+    truncated: false,
+  };
+  const postContent = (body, headers = {}) =>
+    new Request('http://web/v1/content', {
+      method: 'POST',
+      headers: {
+        'content-type': 'application/json',
+        'cf-connecting-ip': '203.0.113.9',
+        ...headers,
+      },
+      body: JSON.stringify(body),
+    });
+
+  test('parseContentRequest validates format, thread and the caps', () => {
+    expect(
+      parseContentRequest({ url: 'see https://x.com/a/status/1', depth: 2, comments: 5 })
+    ).toEqual({
+      url: 'https://x.com/a/status/1',
+      format: 'json',
+      transcript: false,
+      thread: true,
+      depth: 2,
+      comments: 5,
+    });
+    expect(
+      parseContentRequest({ url: 'https://x.com/a/status/1', format: 'text', thread: false })
+    ).toMatchObject({
+      format: 'text',
+      thread: false,
+      depth: undefined,
+    });
+    expect(() => parseContentRequest({ url: 'https://x.com/a/status/1', format: 'xml' })).toThrow();
+    expect(() => parseContentRequest({ url: 'https://x.com/a/status/1', depth: 11 })).toThrow();
+    expect(() => parseContentRequest({ url: 'https://x.com/a/status/1', comments: -1 })).toThrow();
+    expect(() => parseContentRequest({ url: 'https://x.com/a/status/1', comments: 21 })).toThrow();
+    expect(() => parseContentRequest({ url: 'https://x.com/a/status/1', thread: 'yes' })).toThrow();
+    expect(
+      parseContentRequest({ url: 'https://youtu.be/abc', transcript: 'pt-BR' }).transcript
+    ).toBe('pt-BR');
+    expect(() => parseContentRequest({ url: 'https://youtu.be/a', transcript: 'x y' })).toThrow();
+    expect(() => parseContentRequest({ url: 'http://127.0.0.1/' })).toThrow();
+  });
+
+  test('answers json, or plain text on request, and hands the options to the reader', async () => {
+    let seen;
+    const handle = createHandler({
+      verify: ok,
+      content: async (url, options) => ((seen = { url, options }), sample),
+    });
+    const res = await handle(postContent({ ...body, depth: 1 }));
+    expect(res.status).toBe(200);
+    expect(res.headers.get('content-type')).toBe('application/json');
+    expect(await readJson(res)).toEqual(sample);
+    expect(seen.url).toBe('https://x.com/a/status/1');
+    expect(seen.options).toMatchObject({ depth: 1, thread: true });
+    expect(handle.stats().content.twitter).toBe(1);
+
+    const text = await handle(postContent({ ...body, format: 'text' }));
+    expect(text.headers.get('content-type')).toBe('text/plain; charset=utf-8');
+    expect(await text.text()).toBe('twitter: https://x.com/a/status/1\n\n@a (A)\nhi\n');
+  });
+
+  test('source errors use the http status; unknown errors are curated', async () => {
+    const { NetworkError, AppError } = await import('../../src/utils/errors.js');
+    const failing = error =>
+      createHandler({
+        verify: ok,
+        content: async () => {
+          throw error;
+        },
+      });
+    const gone = await failing(new NetworkError('gone', 'CONTENT_GONE'))(postContent(body));
+    expect(gone.status).toBe(404);
+    expect((await readJson(gone)).error).toEqual({ code: 'CONTENT_GONE', message: 'gone' });
+    const unsupported = await failing(new AppError('nope', 'UNSUPPORTED_SOURCE', 400))(
+      postContent(body)
+    );
+    expect(unsupported.status).toBe(400);
+    const down = await failing(new NetworkError('failed to reach x'))(postContent(body));
+    expect(down.status).toBe(502);
+    const raw = await failing(new Error('ENOENT /app/secret'))(postContent(body));
+    expect(raw.status).toBe(502);
+    expect((await readJson(raw)).error).toEqual({
+      code: 'CONTENT_FAILED',
+      message: 'could not read this content.',
+    });
+  });
+
+  test('downloads and content reads share one quota per caller', async () => {
+    const handle = createHandler({
+      verify: ok,
+      download: async () => result,
+      content: async () => sample,
+      ipLimit: 2,
+    });
+    expect((await handle(post(body))).status).toBe(200);
+    expect((await handle(postContent(body))).status).toBe(200);
+    expect((await handle(postContent(body))).status).toBe(429);
+  });
 });

@@ -6,27 +6,15 @@ export async function insertAlert(alert) {
   await ensurePostgresInitialized();
 
   const sql = getPostgresConnection();
-  if (!sql) {
-    console.error('PostgreSQL not initialized. Call initPostgresDatabase() first.');
-    return null;
-  }
 
   const timestamp = Date.now();
-  const {
-    severity,
-    component,
-    title,
-    message,
-    operationId = null,
-    userId = null,
-    metadata = null,
-  } = alert;
+  const { severity, component, title, message, metadata = null } = alert;
 
   const metadataStr = metadata ? JSON.stringify(metadata) : null;
 
   const result = await sql`
-    INSERT INTO alerts (timestamp, severity, component, title, message, operation_id, user_id, metadata)
-    VALUES (${timestamp}, ${severity}, ${component}, ${title}, ${message}, ${operationId}, ${userId}, ${metadataStr})
+    INSERT INTO alerts (timestamp, severity, component, title, message, metadata)
+    VALUES (${timestamp}, ${severity}, ${component}, ${title}, ${message}, ${metadataStr})
     RETURNING *
   `;
 
@@ -43,10 +31,8 @@ export async function insertAlert(alert) {
 // fields worth filtering on have to be dug back out of it.
 const COMMAND_EXPR = "metadata::jsonb->>'command'";
 const REASON_EXPR = "NULLIF(metadata::jsonb->>'error', '')";
-// What the bot recorded about the failure: the error class, or an early refusal's reason code.
-const ERROR_CLASS_EXPR = `SELECT COALESCE(NULLIF(ol.metadata::jsonb->>'errorName', ''),
-    NULLIF(ol.metadata::jsonb->>'errorType', ''))
-  FROM operation_logs ol WHERE ol.operation_id = alerts.operation_id AND ol.step = 'error' LIMIT 1`;
+// The error class, or an early refusal's reason code.
+const ERROR_CLASS_EXPR = "NULLIF(metadata::jsonb->>'errorClass', '')";
 
 // Sentinel for failures logged without an error string, a real bucket, not an absence.
 export const UNKNOWN_REASON = '__no_reason__';
@@ -89,10 +75,6 @@ export async function getAlerts(options = {}) {
   await ensurePostgresInitialized();
 
   const sql = getPostgresConnection();
-  if (!sql) {
-    console.error('PostgreSQL not initialized. Call initPostgresDatabase() first.');
-    return [];
-  }
 
   const { limit = null, offset = null } = options;
   const { clause, params } = buildAlertWhere(options);
@@ -114,48 +96,39 @@ export async function getAlerts(options = {}) {
   return convertTimestampsInArray(alerts, ['timestamp']);
 }
 
-/**
- * Aggregates over the whole filtered window, not just the current page: severity
- * totals, a per-command split, and the top failure reasons.
- *
- * @param {object} options same filters as getAlerts, plus `reasonLimit`
- * @returns {Promise<{total: number, errors: number, info: number, warnings: number,
- *   byCommand: Array<{command: string|null, total: number, errors: number, info: number}>,
- *   byReason: Array<{reason: string|null, count: number, commands: string[], lastSeen: number}>}>}
- */
+// Aggregates over the whole filtered window, not just the current page: severity totals, a per-command split, and the top failure reasons
 export async function getAlertSummary(options = {}) {
   await ensurePostgresInitialized();
 
   const empty = { total: 0, errors: 0, info: 0, warnings: 0, byCommand: [], byReason: [] };
 
   const sql = getPostgresConnection();
-  if (!sql) {
-    console.error('PostgreSQL not initialized. Call initPostgresDatabase() first.');
-    return empty;
-  }
 
   const { reasonLimit = 25 } = options;
   const { clause, params } = buildAlertWhere(options);
 
-  const severityRows = await sql.unsafe(
-    `SELECT severity, ${COMMAND_EXPR} AS command, COUNT(*)::int AS count
+  const [severityRows, reasonRows] = await Promise.all([
+    sql.unsafe(
+      `SELECT severity, ${COMMAND_EXPR} AS command, COUNT(*)::int AS count
      FROM alerts ${clause}
      GROUP BY 1, 2`,
-    params
-  );
-
-  const reasonRows = await sql.unsafe(
-    `SELECT ${REASON_EXPR} AS reason,
+      params
+    ),
+    sql.unsafe(
+      `SELECT ${REASON_EXPR} AS reason,
             COUNT(*)::int AS count,
             MAX(timestamp) AS last_seen,
+            MIN(timestamp) AS first_seen,
+            ARRAY_AGG(timestamp) AS times,
             ARRAY_REMOVE(ARRAY_AGG(DISTINCT ${COMMAND_EXPR}), NULL) AS commands,
-            ARRAY_REMOVE(ARRAY_AGG(DISTINCT (${ERROR_CLASS_EXPR})), NULL) AS classes
+            ARRAY_REMOVE(ARRAY_AGG(DISTINCT ${ERROR_CLASS_EXPR}), NULL) AS classes
      FROM alerts ${clause} AND severity = 'error'
      GROUP BY 1
      ORDER BY 2 DESC
      LIMIT $${params.length + 1}`,
-    [...params, reasonLimit]
-  );
+      [...params, reasonLimit]
+    ),
+  ]);
 
   const summary = { ...empty, byCommand: [], byReason: [] };
   const byCommand = new Map();
@@ -187,6 +160,8 @@ export async function getAlertSummary(options = {}) {
     commands: row.commands ?? [],
     classes: row.classes ?? [],
     lastSeen: Number(row.last_seen),
+    firstSeen: Number(row.first_seen),
+    times: row.times.map(Number),
   }));
 
   return summary;
@@ -196,10 +171,6 @@ export async function getAlertComponents() {
   await ensurePostgresInitialized();
 
   const sql = getPostgresConnection();
-  if (!sql) {
-    console.error('PostgreSQL not initialized. Call initPostgresDatabase() first.');
-    return [];
-  }
 
   const rows = await sql`SELECT DISTINCT component FROM alerts ORDER BY component`;
   return rows.map(row => row.component);
@@ -209,10 +180,6 @@ export async function getAlertCommands() {
   await ensurePostgresInitialized();
 
   const sql = getPostgresConnection();
-  if (!sql) {
-    console.error('PostgreSQL not initialized. Call initPostgresDatabase() first.');
-    return [];
-  }
 
   const rows = await sql.unsafe(
     `SELECT DISTINCT ${COMMAND_EXPR} AS command FROM alerts
@@ -225,10 +192,6 @@ export async function getAlertsCount(options = {}) {
   await ensurePostgresInitialized();
 
   const sql = getPostgresConnection();
-  if (!sql) {
-    console.error('PostgreSQL not initialized. Call initPostgresDatabase() first.');
-    return 0;
-  }
 
   const { clause, params } = buildAlertWhere(options);
   const result = await sql.unsafe(`SELECT COUNT(*) as count FROM alerts ${clause}`, params);

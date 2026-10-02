@@ -1,9 +1,10 @@
 import axios from 'axios';
-import fsSync from 'node:fs';
+import { readSessionCookie } from './session-cookie.js';
 import { createLogger } from './logger.js';
 import { NetworkError, ValidationError } from './errors.js';
 import { downloadFileFromUrl } from './file-downloader.js';
 import { ssrfGuardedRequest } from './ssrf-guard.js';
+import { normalizeHost } from './url-host.js';
 
 const logger = createLogger('instagram');
 
@@ -46,7 +47,7 @@ const SHARE_PATH = /^\/s\/([A-Za-z0-9_-]+)/;
 const MAX_HIGHLIGHT_ITEMS = 10;
 
 function isInstagramHost(hostname) {
-  const host = hostname.toLowerCase().replace(/^www\./, '');
+  const host = normalizeHost(hostname);
   return host === 'instagram.com' || host.endsWith('.instagram.com');
 }
 
@@ -82,7 +83,7 @@ export function isInstagramStoryUrl(url) {
 export function isInstagramPostUrl(url) {
   try {
     const { hostname, pathname } = new URL(url);
-    const host = hostname.toLowerCase().replace(/^www\./, '');
+    const host = normalizeHost(hostname);
     return (
       (host === 'instagram.com' || host.endsWith('.instagram.com')) && POST_PATH.test(pathname)
     );
@@ -106,28 +107,11 @@ export function shortcodeToMediaId(shortcode) {
   return id.toString();
 }
 
-/**
- * The `instagram` service cookie out of the cobalt cookie file, or null when none is usable.
- * Same file cobalt reads, so a refreshed session only has to be pasted in one place. Read per
- * call rather than memoized: refreshing an expired session must not need a container restart.
- */
-function readSessionCookie() {
-  const cookiesPath = process.env.INSTAGRAM_COOKIES_PATH;
-  if (!cookiesPath) {
-    return null;
-  }
-  try {
-    const entry = JSON.parse(fsSync.readFileSync(cookiesPath, 'utf8'))?.instagram?.[0];
-    return typeof entry === 'string' && entry.includes('sessionid=') ? entry : null;
-  } catch (error) {
-    logger.warn(`Could not read Instagram cookies from ${cookiesPath}: ${error.message}`);
-    return null;
-  }
-}
+export const readCookie = () => readSessionCookie('instagram', 'sessionid=');
 
 /** Whether the Instagram extractor is usable at all; false means the caller should use cobalt. */
 export function hasInstagramSession() {
-  return readSessionCookie() !== null;
+  return readCookie() !== null;
 }
 
 function isMediaHostUrl(url) {
@@ -170,7 +154,7 @@ export function selectMediaUrl(media, imgIndex = null) {
   return isMediaHostUrl(image) ? image : null;
 }
 
-async function instagramGet(apiPath, refererPath, cookie, unavailable = 'post') {
+export async function instagramGet(apiPath, refererPath, cookie, unavailable = 'post') {
   let response;
   try {
     response = await axios.get(`https://www.instagram.com${apiPath}`, {
@@ -202,7 +186,7 @@ async function instagramGet(apiPath, refererPath, cookie, unavailable = 'post') 
   } catch (error) {
     const status = error.response?.status;
     if (status === 400 || status === 404) {
-      throw new NetworkError(unavailableMessage(unavailable));
+      throw new NetworkError(unavailableMessage(unavailable), 'CONTENT_GONE');
     }
     // A dead session answers 401/403 on every post, so it reads as "everything is broken"
     // rather than "one post is missing". Say so in the log; the user still gets the curated
@@ -266,15 +250,9 @@ async function fetchStoryItems({ highlightId, mediaId }, refererPath, cookie) {
   return wanted.slice(0, MAX_HIGHLIGHT_ITEMS);
 }
 
-/**
- * Download the media behind an Instagram post URL via the web client's media-info API.
- * Returns the same { buffer, contentType, size, filename } shape as the other download paths.
- * Throws on any failure; the caller treats that as "fall back to cobalt".
- * @param {string} url - Instagram /p/, /reel/, /reels/ or /tv/ permalink
- * @param {boolean} isAdminUser - Admin users bypass size limits
- */
-export async function downloadFromInstagram(url, isAdminUser = false) {
-  const cookie = readSessionCookie();
+// Download the media behind an Instagram post URL via the web client's media-info API
+export async function downloadFromInstagram(url) {
+  const cookie = readCookie();
   if (!cookie) {
     throw new ValidationError('no instagram session configured');
   }
@@ -283,7 +261,7 @@ export async function downloadFromInstagram(url, isAdminUser = false) {
 
   const story = parseStoryUrl(url);
   if (story) {
-    logger.info(
+    logger.debug(
       `Resolving Instagram story (highlight ${story.highlightId}, media ${story.mediaId})`
     );
     const items = await fetchStoryItems(story, parsed.pathname, cookie);
@@ -294,7 +272,7 @@ export async function downloadFromInstagram(url, isAdminUser = false) {
           if (!mediaUrl) {
             return null;
           }
-          return downloadFileFromUrl(mediaUrl, isAdminUser).catch(error => {
+          return downloadFileFromUrl(mediaUrl).catch(error => {
             logger.warn(`Instagram story item failed: ${error.message}`);
             return null;
           });
@@ -316,7 +294,7 @@ export async function downloadFromInstagram(url, isAdminUser = false) {
   const imgIndexParam = Number.parseInt(parsed.searchParams.get('img_index') ?? '', 10);
   const imgIndex = Number.isNaN(imgIndexParam) ? null : imgIndexParam;
 
-  logger.info(`Resolving Instagram post ${shortcode} (media ${mediaId})`);
+  logger.debug(`Resolving Instagram post ${shortcode} (media ${mediaId})`);
 
   const data = await instagramGet(`/api/v1/media/${mediaId}/info/`, parsed.pathname, cookie);
 
@@ -330,8 +308,8 @@ export async function downloadFromInstagram(url, isAdminUser = false) {
     throw new ValidationError('no downloadable media found on this post');
   }
 
-  const result = await downloadFileFromUrl(mediaUrl, isAdminUser);
-  logger.info(
+  const result = await downloadFileFromUrl(mediaUrl);
+  logger.debug(
     `Downloaded Instagram media: ${result.filename} (${result.size} bytes, ${result.contentType})`
   );
   return result;

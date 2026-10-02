@@ -13,6 +13,7 @@ import {
   BLOCKED_DESTINATION_MESSAGE,
   isSsrfBlockedError,
   ssrfGuardedRequest,
+  MAX_PAGE_BYTES,
 } from './ssrf-guard.js';
 import { isMegaUrl, downloadFromMega } from './mega.js';
 
@@ -69,8 +70,8 @@ export function isMediaResponse(contentType, head) {
 }
 
 // Reuses /convert's guarded fetch rather than adding a second one.
-export async function downloadDirectMedia(url, isAdminUser = false, client = null, options = {}) {
-  const fileData = await downloadFileFromUrl(url, isAdminUser, client, options);
+export async function downloadDirectMedia(url, client = null, options = {}) {
+  const fileData = await downloadFileFromUrl(url, client, options);
   if (!isMediaResponse(fileData.contentType, fileData.head)) {
     logger.warn(
       `Direct media URL returned non-media content: ${url} (content-type: ${fileData.contentType || 'none'})`
@@ -124,19 +125,19 @@ function filenameFor(file, url) {
   return 'file';
 }
 
-async function downloadCapped(url, isAdminUser, maxSize, kind) {
+async function downloadCapped(url, maxSize, kind) {
   const urlValidation = validateUrl(url);
   if (!urlValidation.valid) {
     throw new ValidationError(urlValidation.error);
   }
   try {
-    const file = await guardedFetch(url, isAdminUser ? Infinity : maxSize);
+    const file = await guardedFetch(url, maxSize);
     return await withExtension({ ...file, filename: filenameFor(file, url) });
   } catch (error) {
     if (isSsrfBlockedError(error)) {
       throw new ValidationError(BLOCKED_DESTINATION_MESSAGE);
     }
-    if (isTooLargeError(error) && !isAdminUser) {
+    if (isTooLargeError(error)) {
       throw new ValidationError(`${kind} file is too large (max ${mb(maxSize)}mb)`);
     }
     logger.warn(`${kind} download failed: ${error.message}`);
@@ -144,32 +145,27 @@ async function downloadCapped(url, isAdminUser, maxSize, kind) {
   }
 }
 
-export function downloadVideo(url, isAdminUser = false) {
-  return downloadCapped(url, isAdminUser, MAX_VIDEO_SIZE, 'video');
+export function downloadVideo(url) {
+  return downloadCapped(url, MAX_VIDEO_SIZE, 'video');
 }
 
-export function downloadImage(url, isAdminUser = false) {
-  return downloadCapped(url, isAdminUser, MAX_IMAGE_SIZE, 'image');
+export function downloadImage(url) {
+  return downloadCapped(url, MAX_IMAGE_SIZE, 'image');
 }
 
-async function fetchAnyFile(url, isAdminUser, userAgent) {
-  const file = await guardedFetch(url, isAdminUser ? Infinity : MAX_ANY_SIZE, userAgent);
+async function fetchAnyFile(url, userAgent) {
+  const file = await guardedFetch(url, MAX_ANY_SIZE, userAgent);
   const contentType = file.headers['content-type'] || '';
   const isImage =
     !contentType.includes('video') &&
     (contentType.includes('image') || /\.(jpg|jpeg|png|gif|webp|bmp|svg)$/i.test(url));
-  if (!isAdminUser && isImage && file.size > MAX_IMAGE_SIZE) {
+  if (isImage && file.size > MAX_IMAGE_SIZE) {
     throw new ValidationError(`file is too large (max ${mb(MAX_IMAGE_SIZE)}mb for images)`);
   }
   return withExtension({ ...file, contentType, filename: filenameFor(file, url) });
 }
 
-/**
- * Download file from URL to a job temp file and detect content type
- * @param {{userAgent?: string}} [options] - `userAgent` replaces the default browser UA for hosts
- *   that block it (danbooru's CDN 403s the Chrome UA but accepts a descriptive one).
- */
-export async function downloadFileFromUrl(url, isAdminUser = false, client = null, options = {}) {
+export async function downloadFileFromUrl(url, client = null, options = {}) {
   const urlValidation = validateUrl(url);
   if (!urlValidation.valid) {
     throw new ValidationError(urlValidation.error);
@@ -180,7 +176,7 @@ export async function downloadFileFromUrl(url, isAdminUser = false, client = nul
     try {
       actualUrl = await getRefreshedAttachmentURL(client, url);
       if (actualUrl !== url) {
-        logger.info(`Using refreshed URL for Discord CDN attachment`);
+        logger.debug(`Using refreshed URL for Discord CDN attachment`);
       }
     } catch (error) {
       logger.warn(`Failed to refresh Discord URL, using original: ${error.message}`);
@@ -188,20 +184,20 @@ export async function downloadFileFromUrl(url, isAdminUser = false, client = nul
   }
 
   if (isMegaUrl(actualUrl)) {
-    return downloadFromMega(actualUrl, isAdminUser, MAX_ANY_SIZE);
+    return downloadFromMega(actualUrl, MAX_ANY_SIZE);
   }
 
   if (isInstagramStoryUrl(actualUrl) && hasInstagramSession()) {
-    const story = await downloadFromInstagram(actualUrl, isAdminUser);
+    const story = await downloadFromInstagram(actualUrl);
     return Array.isArray(story) ? story[0] : story;
   }
 
   // Skip Cobalt for Discord CDN URLs as they are handled directly
   if (COBALT_ENABLED && !isDiscordCdnUrl(actualUrl) && isSocialMediaUrl(actualUrl)) {
     try {
-      logger.info(`Detected social media URL, attempting download via Cobalt`);
-      const maxSize = isAdminUser ? Infinity : MAX_VIDEO_SIZE;
-      return await downloadFromSocialMedia(COBALT_API_URL, actualUrl, isAdminUser, maxSize);
+      logger.debug(`Detected social media URL, attempting download via Cobalt`);
+      const maxSize = MAX_VIDEO_SIZE;
+      return await downloadFromSocialMedia(COBALT_API_URL, actualUrl, maxSize);
     } catch (cobaltError) {
       logger.warn(
         `Cobalt download failed, falling back to direct download: ${cobaltError.message}`
@@ -210,13 +206,13 @@ export async function downloadFileFromUrl(url, isAdminUser = false, client = nul
   }
 
   try {
-    return await fetchAnyFile(actualUrl, isAdminUser, options.userAgent);
+    return await fetchAnyFile(actualUrl, options.userAgent);
   } catch (error) {
     if (error instanceof ValidationError) throw error;
     if (isSsrfBlockedError(error)) {
       throw new ValidationError(BLOCKED_DESTINATION_MESSAGE);
     }
-    if (isTooLargeError(error) && !isAdminUser) {
+    if (isTooLargeError(error)) {
       throw new ValidationError(
         `file is too large (max ${mb(MAX_VIDEO_SIZE)}mb for videos, ${mb(MAX_IMAGE_SIZE)}mb for images)`
       );
@@ -234,11 +230,11 @@ export async function downloadFileFromUrl(url, isAdminUser = false, client = nul
     }
     if (error.response?.status === 500 && isDiscordCdnUrl(url) && client && actualUrl === url) {
       try {
-        logger.info(`Got 500 error, attempting to refresh Discord URL`);
+        logger.debug(`Got 500 error, attempting to refresh Discord URL`);
         const refreshedUrl = await getRefreshedAttachmentURL(client, url);
         if (refreshedUrl !== url) {
-          logger.info(`Retrying download with refreshed URL`);
-          return await fetchAnyFile(refreshedUrl, isAdminUser);
+          logger.debug(`Retrying download with refreshed URL`);
+          return await fetchAnyFile(refreshedUrl);
         }
       } catch (refreshError) {
         if (refreshError instanceof ValidationError) throw refreshError;
@@ -256,17 +252,18 @@ export async function downloadFileFromUrl(url, isAdminUser = false, client = nul
   }
 }
 
+export const TENOR_VIEW_URL = /^https?:\/\/(www\.)?tenor\.com\/view\/.+-gif-(\d+)/i;
+
 export async function parseTenorUrl(url) {
   try {
-    const tenorViewPattern = /^https?:\/\/(www\.)?tenor\.com\/view\/.+-gif-(\d+)/i;
-    const match = url.match(tenorViewPattern);
+    const match = url.match(TENOR_VIEW_URL);
 
     if (!match) {
       throw new ValidationError('invalid Tenor URL format');
     }
 
     const gifId = match[2];
-    logger.info(`Parsing Tenor URL, extracted GIF ID: ${gifId}`);
+    logger.debug(`Parsing Tenor URL, extracted GIF ID: ${gifId}`);
 
     // Try to fetch the page and parse meta tags
     try {
@@ -276,6 +273,7 @@ export async function parseTenorUrl(url) {
       const response = await axios.get(url, {
         ...ssrfGuardedRequest(),
         timeout: 30000,
+        maxContentLength: MAX_PAGE_BYTES,
         maxRedirects: 5,
         headers,
       });
@@ -301,7 +299,7 @@ export async function parseTenorUrl(url) {
             storeData.gifs.byId[gifId].results[0].media_formats.gif.url
           ) {
             const gifUrl = storeData.gifs.byId[gifId].results[0].media_formats.gif.url;
-            logger.info(`Found GIF URL from store-cache JSON: ${gifUrl}`);
+            logger.debug(`Found GIF URL from store-cache JSON: ${gifUrl}`);
             return gifUrl;
           }
         } catch (error) {
@@ -314,14 +312,14 @@ export async function parseTenorUrl(url) {
       );
       if (ogImageMatch && ogImageMatch[1]) {
         const gifUrl = ogImageMatch[1];
-        logger.info(`Found GIF URL from og:image meta tag: ${gifUrl}`);
+        logger.debug(`Found GIF URL from og:image meta tag: ${gifUrl}`);
         return gifUrl;
       }
 
       const metaImageMatch = html.match(/<meta\s+name=["']image["']\s+content=["']([^"']+)["']/i);
       if (metaImageMatch && metaImageMatch[1]) {
         const gifUrl = metaImageMatch[1];
-        logger.info(`Found GIF URL from image meta tag: ${gifUrl}`);
+        logger.debug(`Found GIF URL from image meta tag: ${gifUrl}`);
         return gifUrl;
       }
 
@@ -332,11 +330,11 @@ export async function parseTenorUrl(url) {
         try {
           const jsonLd = JSON.parse(jsonLdMatch[1]);
           if (jsonLd.image && typeof jsonLd.image === 'string') {
-            logger.info(`Found GIF URL from JSON-LD: ${jsonLd.image}`);
+            logger.debug(`Found GIF URL from JSON-LD: ${jsonLd.image}`);
             return jsonLd.image;
           }
           if (jsonLd.image && jsonLd.image.url) {
-            logger.info(`Found GIF URL from JSON-LD image object: ${jsonLd.image.url}`);
+            logger.debug(`Found GIF URL from JSON-LD image object: ${jsonLd.image.url}`);
             return jsonLd.image.url;
           }
         } catch {
@@ -350,7 +348,7 @@ export async function parseTenorUrl(url) {
     }
 
     const directUrl = `https://c.tenor.com/${gifId}/tenor.gif`;
-    logger.info(`Using fallback direct URL pattern: ${directUrl}`);
+    logger.debug(`Using fallback direct URL pattern: ${directUrl}`);
     return directUrl;
   } catch (error) {
     if (error instanceof ValidationError) {

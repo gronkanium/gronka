@@ -12,17 +12,7 @@ export const SSRF_BLOCKED_CODE = 'ESSRFBLOCKED';
 export const BLOCKED_DESTINATION_MESSAGE =
   'that url points to a private or internal address, which is not allowed.';
 
-/**
- * dns.lookup replacement that refuses to hand back an address the bot must not connect to.
- *
- * validateUrl only sees the URL string, so a hostname that resolves into the private
- * network (attacker-controlled DNS, `foo.localtest.me`, a Docker service name) sails past
- * it. This runs on the addresses the connection will actually use, and, because the
- * option is reused for every hop, on redirect targets too.
- * @param {string} hostname - Hostname being resolved
- * @param {Object} options - dns.lookup options supplied by the HTTP agent
- * @param {Function} callback - Node lookup callback
- */
+// dns.lookup replacement that refuses to hand back an address the bot must not connect to
 export function guardedLookup(hostname, options, callback) {
   dns.lookup(hostname, { ...options, all: true }, (error, addresses) => {
     if (error) {
@@ -50,12 +40,7 @@ export function guardedLookup(hostname, options, callback) {
   });
 }
 
-/**
- * beforeRedirect hook that re-validates each hop. The DNS guard already blocks the
- * connection itself; this rejects a redirect earlier and with a clearer log, and catches
- * hops that switch to a protocol we never want to follow.
- * @param {Object} options - Redirect request options from follow-redirects
- */
+// beforeRedirect hook that re-validates each hop
 export function guardedBeforeRedirect(options) {
   const target = options.href ?? `${options.protocol}//${options.hostname}${options.path ?? ''}`;
   const validation = validateUrl(target);
@@ -67,13 +52,7 @@ export function guardedBeforeRedirect(options) {
   }
 }
 
-/**
- * Whether a request failure came from this guard. The refusal is raised inside the DNS
- * lookup or the redirect hook, so axios and follow-redirects wrap it, walk the cause
- * chain rather than checking the outermost code.
- * @param {Error} error - Error thrown by a guarded request
- * @returns {boolean} True when the destination was refused by the guard
- */
+// Whether a request failure came from this guard
 export function isSsrfBlockedError(error) {
   let current = error;
   for (let depth = 0; current && depth < 5; depth++) {
@@ -83,17 +62,11 @@ export function isSsrfBlockedError(error) {
   return false;
 }
 
-/**
- * Axios config fragment to spread into any request whose URL came from user input.
- *
- * Usage: `axios.get(url, { ...ssrfGuardedRequest(), responseType: 'stream' })` ,
- * always alongside a validateUrl check on the URL itself.
- *
- * Deliberately NOT used in cobalt.js: those requests target the Cobalt API and its tunnel
- * URLs on the Docker network (private addresses on purpose), and the URLs come from
- * Cobalt's own response rather than from the user.
- * @returns {{lookup: Function, beforeRedirect: Function}} Guard options
- */
+// Axios config fragment to spread into any request whose URL came from user input
+// Scraped pages: a slow or huge one is a broken or hostile site, not a page worth waiting for.
+export const PAGE_FETCH_TIMEOUT_MS = 20000;
+export const MAX_PAGE_BYTES = 2 * 1024 * 1024;
+
 export function ssrfGuardedRequest() {
   return {
     lookup: guardedLookup,

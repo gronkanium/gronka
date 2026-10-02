@@ -2,20 +2,9 @@
   import { onMount } from 'svelte';
   import { currentRoute, initRouter, navigate } from './utils/router.js';
   import {
-    useSse,
-    reconnect,
-    connected as wsConnected,
-    connectionHealth,
-  } from './stores/sse-store.js';
-  import {
     LayoutDashboard,
-    Activity,
     TriangleAlert,
-    TerminalSquare,
     Server,
-    HardDrive,
-    Users as UsersIcon,
-    Shield,
     Globe,
     SlidersHorizontal,
     PanelLeftClose,
@@ -23,93 +12,44 @@
     Menu,
     Sun,
     Moon,
-    Search,
   } from 'lucide-svelte';
-  import NavFlyout from './components/NavFlyout.svelte';
-  import { navStats, savedViews, issueStates, startNavStats, removeView } from './stores/nav.js';
+  import { navStats, issueStates, startNavStats } from './stores/nav.js';
   import { isOpen } from './issues.js';
-  import { menuFor } from './nav-menus.js';
   import Overview from './pages/Overview.svelte';
-  import Requests from './pages/Requests.svelte';
-  import RequestDetail from './pages/Request.svelte';
-  import Logs from './pages/Logs.svelte';
-  import Users from './pages/Users.svelte';
-  import UserProfile from './pages/UserProfile.svelte';
   import Issues from './pages/Issues.svelte';
   import Workers from './pages/Workers.svelte';
-  import Storage from './pages/Storage.svelte';
-  import Moderation from './pages/Moderation.svelte';
   import Sources from './pages/Sources.svelte';
   import BotSettings from './pages/BotSettings.svelte';
 
   const SIDEBAR_KEY = 'gronka:sidebar-open';
   const THEME_KEY = 'gronka:theme';
 
-  const sections = [
-    { items: [{ page: 'dashboard', label: 'Overview', icon: LayoutDashboard }] },
-    {
-      name: 'Activity',
-      items: [
-        { page: 'requests', label: 'Requests', icon: Activity },
-        { page: 'issues', label: 'Issues', icon: TriangleAlert },
-        { page: 'logs', label: 'Logs', icon: TerminalSquare },
-      ],
-    },
-    {
-      name: 'People',
-      items: [
-        { page: 'users', label: 'Users', icon: UsersIcon },
-        { page: 'moderation', label: 'Moderation', icon: Shield },
-      ],
-    },
-    {
-      name: 'System',
-      items: [
-        { page: 'system', label: 'Workers & queue', icon: Server },
-        { page: 'storage', label: 'Storage', icon: HardDrive },
-        { page: 'sources', label: 'Sources', icon: Globe },
-      ],
-    },
+  const items = [
+    { page: 'dashboard', label: 'Overview', icon: LayoutDashboard },
+    { page: 'issues', label: 'Issues', icon: TriangleAlert },
+    { page: 'system', label: 'Workers & queue', icon: Server },
+    { page: 'sources', label: 'Sources', icon: Globe },
   ];
   const settingsItem = { page: 'settings', label: 'Settings', icon: SlidersHorizontal };
-  const allItems = [...sections.flatMap(s => s.items), settingsItem];
   const PAGES = {
     dashboard: Overview,
-    requests: Requests,
-    request: RequestDetail,
-    logs: Logs,
     issues: Issues,
     system: Workers,
-    storage: Storage,
-    users: Users,
-    'user-profile': UserProfile,
-    moderation: Moderation,
     sources: Sources,
     settings: BotSettings,
   };
-  const PARENT = { 'user-profile': 'users', request: 'requests' };
-  // Pages where every pixel is data get the full width.
-  const WIDE = new Set(['logs', 'requests']);
 
   let sidebarOpen = $state(true);
   let theme = $state('light');
-  let fly = $state(null);
-  let flyout = $state();
-  let jump = $state('');
-  let jumpInput = $state();
-  let openTimer;
-  let closeTimer;
 
-  const activePage = $derived($currentRoute.page);
-  const navPage = $derived(PARENT[activePage] ?? activePage);
+  const activePage = $derived(PAGES[$currentRoute.page] ? $currentRoute.page : 'dashboard');
   const activeTitle = $derived(
-    { 'user-profile': 'User', request: 'Request' }[activePage] ??
-      allItems.find(i => i.page === activePage)?.label ??
-      activePage
+    [...items, settingsItem].find(i => i.page === activePage)?.label ?? activePage
   );
   const PageComponent = $derived(PAGES[activePage]);
-  const isOnline = $derived($connectionHealth?.isOnline !== false);
-  const connStatus = $derived($wsConnected ? 'live' : isOnline ? 'connecting' : 'offline');
+  const issueCount = $derived(
+    ($navStats?.issues ?? []).filter(g => isOpen(g, $issueStates)).length
+  );
 
   $effect(() => {
     document.title =
@@ -134,11 +74,9 @@
       sidebarOpen = window.innerWidth > 768;
     }
     initRouter();
-    const cleanup = useSse();
     const stopNav = startNavStats();
     window.addEventListener('keydown', onKeydown);
     return () => {
-      cleanup?.();
       stopNav();
       window.removeEventListener('keydown', onKeydown);
     };
@@ -161,74 +99,9 @@
     }
   }
 
-  function go(page, params) {
-    navigate(page, params);
+  function go(page) {
+    navigate(page);
     if (window.innerWidth <= 768) sidebarOpen = false;
-  }
-
-  // The jump box understands the ids that appear everywhere in the product.
-  function onJump(e) {
-    if (e.key === 'Escape') {
-      jump = '';
-      e.currentTarget.blur();
-      return;
-    }
-    if (e.key !== 'Enter') return;
-    const raw = jump.trim();
-    if (!raw) return;
-    if (/^\d{15,20}$/.test(raw)) go('user-profile', { userId: raw });
-    else if (/^\d{13}-[0-9a-f]{6,}$/i.test(raw)) go('request', { requestId: raw });
-    else if (/^https?:\/\//i.test(raw)) go('requests', { urlPattern: raw.split('?')[0] });
-    else go('requests', { urlPattern: raw });
-    jump = '';
-    e.currentTarget.blur();
-  }
-
-  // Sidebar counts, from the same numbers the flyouts show.
-  function badge(page) {
-    if (page === 'requests') return $navStats?.requests.total;
-    if (page === 'users') return $navStats?.users;
-    return undefined;
-  }
-  const issueCount = $derived(
-    ($navStats?.issues ?? []).filter(g => isOpen(g, $issueStates)).length
-  );
-
-  const canFly = () => window.matchMedia('(hover: hover) and (min-width: 769px)').matches;
-
-  function showMenu(item, target, now = false) {
-    if (!canFly() || !menuFor(item.page, $navStats, $savedViews, $issueStates)) return;
-    clearTimeout(closeTimer);
-    clearTimeout(openTimer);
-    const open = () => (fly = { item, top: target.getBoundingClientRect().top });
-    if (now || fly) open();
-    else openTimer = setTimeout(open, 120);
-  }
-  function hideMenu() {
-    clearTimeout(openTimer);
-    closeTimer = setTimeout(() => (fly = null), 180);
-  }
-  function keepMenu() {
-    clearTimeout(closeTimer);
-  }
-  function closeMenu(refocus) {
-    const page = fly?.item.page;
-    fly = null;
-    if (refocus) document.querySelector(`[data-nav="${page}"]`)?.focus();
-  }
-  function onNavKey(e, item) {
-    if (e.key === 'ArrowRight') {
-      e.preventDefault();
-      showMenu(item, e.currentTarget, true);
-      queueMicrotask(() => flyout?.focusFirst());
-    } else if (e.key === 'Escape') {
-      closeMenu(false);
-    }
-  }
-  function pick(entry) {
-    const page = entry.page ?? fly.item.page;
-    fly = null;
-    go(page, { ...entry.params });
   }
 
   function onKeydown(e) {
@@ -236,9 +109,6 @@
     if (mod && !e.altKey && !e.shiftKey && e.key.toLowerCase() === 'b') {
       e.preventDefault();
       toggleSidebar();
-    } else if (mod && !e.altKey && !e.shiftKey && e.key.toLowerCase() === 'k') {
-      e.preventDefault();
-      jumpInput?.focus();
     }
   }
 </script>
@@ -264,65 +134,36 @@
     </div>
 
     <div class="nav">
-      {#each sections as section, i (i)}
-        {#if section.name}
-          {#if sidebarOpen}<div class="section">{section.name}</div>{:else}<div
-              class="section-rule"
-            ></div>{/if}
-        {/if}
-        {#each section.items as item (item.page)}
-          {@const Icon = item.icon}
-          <button
-            class="link"
-            data-nav={item.page}
-            class:active={navPage === item.page}
-            class:hover={fly?.item.page === item.page}
-            aria-current={navPage === item.page ? 'page' : undefined}
-            aria-haspopup={menuFor(item.page, null, []) ? 'menu' : undefined}
-            aria-expanded={menuFor(item.page, null, []) ? fly?.item.page === item.page : undefined}
-            title={sidebarOpen ? null : item.label}
-            onclick={() => {
-              fly = null;
-              go(item.page);
-            }}
-            onmouseenter={e => showMenu(item, e.currentTarget)}
-            onmouseleave={hideMenu}
-            onkeydown={e => onNavKey(e, item)}
-          >
-            <Icon size={16} strokeWidth={1.9} />
-            {#if sidebarOpen}
-              <span class="grow">{item.label}</span>
-              {#if item.page === 'issues' && issueCount}
-                <span class="count alert">{issueCount}</span>
-              {:else if item.page === 'system' && $navStats?.paused}
-                <span class="count alert">paused</span>
-              {:else if badge(item.page) != null}
-                <span class="count">{badge(item.page).toLocaleString()}</span>
-              {/if}
-            {:else if (item.page === 'issues' && issueCount) || (item.page === 'system' && $navStats?.paused)}
-              <span class="pip"></span>
+      {#each items as item (item.page)}
+        {@const Icon = item.icon}
+        <button
+          class="link"
+          class:active={activePage === item.page}
+          aria-current={activePage === item.page ? 'page' : undefined}
+          title={sidebarOpen ? null : item.label}
+          onclick={() => go(item.page)}
+        >
+          <Icon size={16} strokeWidth={1.9} />
+          {#if sidebarOpen}
+            <span class="grow">{item.label}</span>
+            {#if item.page === 'issues' && issueCount}
+              <span class="count alert">{issueCount}</span>
+            {:else if item.page === 'system' && $navStats?.paused}
+              <span class="count alert">paused</span>
             {/if}
-          </button>
-        {/each}
+          {:else if (item.page === 'issues' && issueCount) || (item.page === 'system' && $navStats?.paused)}
+            <span class="pip"></span>
+          {/if}
+        </button>
       {/each}
     </div>
 
     <div class="foot">
       <button
         class="link"
-        data-nav="settings"
         class:active={activePage === 'settings'}
-        class:hover={fly?.item.page === 'settings'}
-        aria-haspopup="menu"
-        aria-expanded={fly?.item.page === 'settings'}
         title={sidebarOpen ? null : 'Settings'}
-        onclick={() => {
-          fly = null;
-          go('settings');
-        }}
-        onmouseenter={e => showMenu(settingsItem, e.currentTarget)}
-        onmouseleave={hideMenu}
-        onkeydown={e => onNavKey(e, settingsItem)}
+        onclick={() => go('settings')}
       >
         <SlidersHorizontal size={16} strokeWidth={1.9} />
         {#if sidebarOpen}<span class="grow">Settings</span>{/if}
@@ -337,31 +178,7 @@
       <button class="icon-btn mobile-only" onclick={toggleSidebar} aria-label="open menu"
         ><Menu size={20} /></button
       >
-      <label class="searchbox jump">
-        <Search size={15} />
-        <input
-          bind:this={jumpInput}
-          bind:value={jump}
-          onkeydown={onJump}
-          placeholder="Jump to a request id, user id or link"
-          aria-label="jump to"
-          spellcheck="false"
-        />
-        <kbd>Ctrl K</kbd>
-      </label>
       <div class="tools">
-        <button
-          class="pill conn conn-{connStatus}"
-          class:ok={connStatus === 'live'}
-          class:warn={connStatus === 'connecting'}
-          class:bad={connStatus === 'offline'}
-          onclick={reconnect}
-          title={$wsConnected
-            ? `live feed connected, ${$connectionHealth?.messageCount ?? 0} messages received`
-            : 'click to reconnect the live feed'}
-        >
-          {connStatus === 'live' ? 'Live' : connStatus === 'connecting' ? 'Connecting' : 'Offline'}
-        </button>
         <button
           class="icon-btn"
           onclick={toggleTheme}
@@ -373,27 +190,12 @@
       </div>
     </header>
     {#if PageComponent}
-      <div class="page" class:wide={WIDE.has(activePage)}>
+      <div class="page">
         <PageComponent />
       </div>
     {/if}
   </div>
 </div>
-
-{#if fly}
-  <NavFlyout
-    bind:this={flyout}
-    title={fly.item.label}
-    menu={menuFor(fly.item.page, $navStats, $savedViews, $issueStates)}
-    top={fly.top}
-    left={sidebarOpen ? 234 : 58}
-    onpick={pick}
-    onremove={name => removeView(name)}
-    onenter={keepMenu}
-    onleave={hideMenu}
-    onclose={closeMenu}
-  />
-{/if}
 
 <style>
   :global(html),
@@ -502,19 +304,6 @@
     flex-direction: column;
     gap: 2px;
   }
-  .section {
-    padding: 18px 10px 6px;
-    font-size: var(--fs-xs);
-    font-weight: 600;
-    color: var(--text-muted);
-    letter-spacing: 0.06em;
-    text-transform: uppercase;
-  }
-  .section-rule {
-    height: 1px;
-    margin: 10px 8px;
-    background: var(--line);
-  }
   .link {
     height: 34px;
     padding: 0 12px;
@@ -540,10 +329,6 @@
     flex-shrink: 0;
   }
   .link:hover,
-  .link.hover {
-    background: var(--card-3);
-    color: var(--text-bright);
-  }
   .link.active {
     background: var(--card-3);
     color: var(--text-bright);
@@ -604,28 +389,11 @@
     top: 0;
     z-index: 50;
   }
-  .jump {
-    width: 380px;
-    max-width: 100%;
-    box-shadow: none;
-    background: var(--card);
-    border-color: var(--border);
-  }
-  .jump:hover {
-    border-color: var(--border-2);
-  }
-  .jump:focus-within {
-    background: var(--card);
-  }
   .tools {
     margin-left: auto;
     display: flex;
     align-items: center;
     gap: 6px;
-  }
-  .conn {
-    border: 0;
-    cursor: pointer;
   }
   .page {
     flex: 1;
@@ -633,9 +401,6 @@
     width: 100%;
     max-width: 1312px;
     margin: 0 auto;
-  }
-  .page.wide {
-    max-width: none;
   }
   .mobile-only,
   .scrim {
@@ -682,17 +447,6 @@
     .topbar {
       padding: 0 12px;
       height: 52px;
-    }
-    .jump {
-      flex: 1;
-      width: auto;
-      min-width: 0;
-    }
-    .jump input {
-      min-width: 0;
-    }
-    .tools .conn {
-      display: none;
     }
     .page {
       padding: 16px 16px 40px;

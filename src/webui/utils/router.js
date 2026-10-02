@@ -29,20 +29,8 @@ function parseHashOf(full) {
   const [path, queryString] = hash.split('?');
   const segments = path.split('/').filter(Boolean);
 
-  let page = segments[0] || 'dashboard';
+  const page = segments[0] || 'dashboard';
   const params = {};
-
-  // Parse path parameters (e.g., /users/123 -> {userId: '123'})
-  if (page === 'users' && segments[1]) {
-    params.userId = segments[1];
-    page = 'user-profile';
-  }
-  if (page === 'requests' && segments[1]) {
-    params.requestId = segments[1];
-    page = 'request';
-  }
-  // The alerts page became issues.
-  if (page === 'alerts') page = 'issues';
 
   // Parse query parameters
   if (queryString) {
@@ -74,16 +62,6 @@ export function initRouter() {
 // Navigate to a new route
 export function navigate(page, params = {}) {
   let hash = `#/${page}`;
-
-  // Add path parameters
-  if (params.userId) {
-    hash = `#/users/${params.userId}`;
-    delete params.userId;
-  }
-  if (params.requestId) {
-    hash = `#/requests/${params.requestId}`;
-    delete params.requestId;
-  }
 
   // Add query parameters
   const queryParams = Object.keys(params);

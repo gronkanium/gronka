@@ -158,7 +158,7 @@ console.log(JSON.stringify(data))})
   if (result.status !== 0) {
     if (result.stderr?.includes('No such container')) {
       console.error(`Error: Docker container '${containerName}' is not running`);
-      console.error('Start it with: npm run docker:up');
+      console.error('Start it with: docker compose up -d');
     } else if (result.stderr) {
       try {
         const errData = JSON.parse(result.stderr.trim());

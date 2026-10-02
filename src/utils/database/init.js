@@ -5,15 +5,23 @@ import {
   getPostgresInitPromise,
   setPostgresInitPromise,
 } from './connection.js';
-import {
-  getTableDefinitions,
-  getIndexDefinitions,
-  addFileSizeColumnIfNeeded,
-  ensureTemporaryUploadsCascadeDelete,
-  ensureTemporaryUploadsUniqueKey,
-  addR2ExpiredAtColumnIfNeeded,
-  dropUsernameColumnsIfPresent,
-} from './schema-pg.js';
+import { getTableDefinitions, getIndexDefinitions, runMigrations } from './schema-pg.js';
+
+// Bot, workers and web all boot at once; this key serializes their schema setup.
+const SCHEMA_LOCK_KEY = 0x67726f6e;
+
+export async function applySchema(sql) {
+  await sql.begin(async tx => {
+    await tx`SELECT pg_advisory_xact_lock(${SCHEMA_LOCK_KEY})`;
+    for (const table of getTableDefinitions()) {
+      await tx.unsafe(table.sql);
+    }
+    await runMigrations(tx);
+    for (const index of getIndexDefinitions()) {
+      await tx.unsafe(index.sql);
+    }
+  });
+}
 
 export async function initPostgresDatabase() {
   // This MUST be checked first to prevent race conditions in parallel tests
@@ -33,71 +41,7 @@ export async function initPostgresDatabase() {
       const connection = await initPostgresConnection();
       setPostgresConnection(connection);
 
-      // Create tables with error handling for catalog races.
-      // CREATE TABLE IF NOT EXISTS is not atomic at the catalog level: when several
-      // processes (parallel test files) create the same table simultaneously, the
-      // losers get duplicate-key errors (42710/42P07/23505 on pg_type). The safe
-      // recovery is to wait and retry - the winner's table then satisfies IF NOT
-      // EXISTS. Never drop and recreate here: that would destroy a table another
-      // process just created and may be using.
-      const tables = getTableDefinitions();
-      for (const table of tables) {
-        let lastError = null;
-        for (let attempt = 0; attempt < 3; attempt++) {
-          try {
-            await connection.unsafe(table.sql);
-            lastError = null;
-            break;
-          } catch (error) {
-            const isCatalogRace =
-              error.code === '42710' ||
-              error.code === '42P07' ||
-              error.code === '23505' ||
-              error.message?.includes('pg_type_typname_nsp_index');
-            if (!isCatalogRace) {
-              throw error;
-            }
-            console.warn(
-              `[Database Init] Catalog conflict for table "${table.name}" (${error.code || 'unknown'}), retrying (attempt ${attempt + 1}/3)...`
-            );
-            lastError = error;
-            await new Promise(resolve => setTimeout(resolve, 100 * (attempt + 1)));
-          }
-        }
-        if (lastError) {
-          throw lastError;
-        }
-      }
-
-      // Add columns from additive migrations before creating indexes - an index on a
-      // column only introduced via migration (not the original CREATE TABLE) would
-      // fail with "column does not exist" on a pre-existing database otherwise.
-      await addFileSizeColumnIfNeeded(connection);
-      await addR2ExpiredAtColumnIfNeeded(connection);
-      await dropUsernameColumnsIfPresent(connection);
-
-      // Create indexes with error handling for race conditions
-      const indexes = getIndexDefinitions();
-      for (const index of indexes) {
-        try {
-          await connection.unsafe(index.sql);
-        } catch (error) {
-          // Handle index conflicts in parallel test execution
-          // 23505: unique constraint violation (race condition in pg_class catalog)
-          // 42P07: relation already exists (race condition despite IF NOT EXISTS)
-          if (error.code === '23505' || error.code === '42P07') {
-            console.warn(
-              `[Database Init] Index "${index.name}" already exists (${error.code}), skipping...`
-            );
-          } else {
-            throw error;
-          }
-        }
-      }
-
-      // Ensure old databases pick up ON DELETE CASCADE on temporary_uploads (for migration)
-      await ensureTemporaryUploadsCascadeDelete(connection);
-      await ensureTemporaryUploadsUniqueKey(connection);
+      await applySchema(connection);
 
       // Reset SERIAL sequences to match existing data (fixes duplicate key errors after migration)
       await resetSerialSequences(connection);
@@ -112,13 +56,7 @@ export async function initPostgresDatabase() {
   return newInitPromise;
 }
 
-/**
- * Reset SERIAL sequences to match the maximum ID in each table
- * This fixes duplicate key errors after data migration
- * NOTE: Skipped in test mode to prevent race conditions with parallel test execution
- * @param {Object} sql - The postgres.js client instance
- * @returns {Promise<void>}
- */
+// Realigns SERIAL sequences with each table's max id after a restore; skipped in tests, where parallel runs race on it
 async function resetSerialSequences(sql) {
   // Skip sequence reset in test mode - it can cause race conditions
   // with parallel test execution and tests don't need it (they create fresh data)
@@ -127,12 +65,7 @@ async function resetSerialSequences(sql) {
     return;
   }
 
-  const tablesWithSerial = [
-    { table: 'logs', sequence: 'logs_id_seq', column: 'id' },
-    { table: 'operation_logs', sequence: 'operation_logs_id_seq', column: 'id' },
-    { table: 'alerts', sequence: 'alerts_id_seq', column: 'id' },
-    { table: 'temporary_uploads', sequence: 'temporary_uploads_id_seq', column: 'id' },
-  ];
+  const tablesWithSerial = [{ table: 'alerts', sequence: 'alerts_id_seq', column: 'id' }];
 
   for (const { table, sequence, column } of tablesWithSerial) {
     try {
@@ -165,17 +98,14 @@ export async function closePostgresDatabase() {
   setPostgresInitPromise(null);
 }
 
+// The connection is published before the schema is applied, so the init promise is the only
+// proof the tables exist; checking the connection first let early callers query missing tables.
 export async function ensurePostgresInitialized() {
-  const sql = getPostgresConnection();
-  if (sql) {
-    return; // Already initialized
-  }
-
   const initPromise = getPostgresInitPromise();
   if (initPromise) {
     await initPromise;
     return;
   }
-
+  if (getPostgresConnection()) return;
   await initPostgresDatabase();
 }

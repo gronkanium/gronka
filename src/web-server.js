@@ -1,6 +1,6 @@
+import axios from 'axios';
 import crypto from 'node:crypto';
 import fs from 'node:fs/promises';
-import * as simplewebauthn from '@simplewebauthn/server';
 import path from 'node:path';
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
@@ -8,13 +8,15 @@ import { createLogger } from './utils/logger.js';
 import { initDatabase } from './utils/database.js';
 import { r2Config } from './utils/config.js';
 import { acquireMedia, extractAudio } from './core/acquire-media.js';
+import { fetchContent, formatContent } from './content/index.js';
+import { MAX_COMMENTS } from './content/schema.js';
 import { getDisabledServiceLabel, getServiceForUrl } from './utils/download-services.js';
 import { validateUrl, firstUrlIn, parseTimestamp, sanitizeFilename } from './utils/validation.js';
 import { detectFileType } from './utils/storage.js';
-import { uploadToR2, listObjectsInR2, deleteFromR2 } from './utils/r2-storage.js';
+import { uploadToR2, listObjectsInR2, deleteManyFromR2 } from './utils/r2-storage.js';
 import { getStreamInfo, isYouTubeUrl } from './utils/ytdlp.js';
-import { AppError, ValidationError } from './utils/errors.js';
-import * as accounts from './web/accounts.js';
+import { AppError, NetworkError, ValidationError } from './utils/errors.js';
+import * as keys from './web/keys.js';
 import { FFMPEG_INPUT_GUARD } from './utils/video-processor/utils.js';
 import { trimItem } from './utils/video-processor/trim-item.js';
 import { fromPath, tempPath, withJobDir, sweepJobDirs } from './utils/media-file.js';
@@ -47,11 +49,9 @@ const API_INDEX = {
   openapi: 'https://web.gronka.dev/openapi.json',
   health: 'https://api.gronka.dev/v1/health',
   download: 'POST https://api.gronka.dev/v1/download',
+  content: 'POST https://api.gronka.dev/v1/content',
   page: 'https://web.gronka.dev/',
 };
-const RP_ID = env('WEB_RP_ID', 'gronka.dev');
-const CHALLENGE_MS = 5 * 60 * 1000;
-const MAX_CHALLENGES = 10_000;
 
 export function contentDisposition(filename) {
   const ascii = filename.replace(/[^\x20-\x7e]|["\\%]/g, '_');
@@ -126,8 +126,9 @@ export async function workerLane(url, downloadMethod, { split = true, mute = fal
   });
   const probes = await Promise.all(
     parts.map(part =>
-      fetch(part.link.replace('/f/', '/probe/'), { signal: AbortSignal.timeout(10_000) })
-        .then(res => res.json())
+      axios
+        .get(part.link.replace('/f/', '/probe/'), { timeout: 10_000, validateStatus: () => true })
+        .then(res => res.data)
         .catch(() => ({ ok: false }))
     )
   );
@@ -149,30 +150,43 @@ export async function workerLane(url, downloadMethod, { split = true, mute = fal
 // Lane 3 storage. The R2 listing is the only record: no database rows, nothing in memory
 // that says what was fetched, and a restart loses nothing because the next sweep catches up.
 let liveBytes = 0;
+let reservedBytes = 0;
+let sweeping = null;
 
-export async function sweepR2(now = Date.now()) {
-  const objects = await listObjectsInR2(R2_PREFIX, r2Config);
-  let kept = 0;
-  for (const object of objects) {
-    if (now - new Date(object.lastModified).getTime() > FILE_TTL_MS) {
-      await deleteFromR2(object.key, r2Config).catch(error =>
-        logger.warn(`Sweep could not delete an object: ${error.message}`)
-      );
-    } else {
-      kept += object.size;
-    }
-  }
-  liveBytes = kept;
-  return kept;
+export function sweepR2(now = Date.now()) {
+  sweeping ??= (async () => {
+    const objects = await listObjectsInR2(R2_PREFIX, r2Config);
+    const expired = objects.filter(o => now - new Date(o.lastModified).getTime() > FILE_TTL_MS);
+    const failed = expired.length
+      ? await deleteManyFromR2(
+          expired.map(o => o.key),
+          r2Config
+        )
+      : [];
+    if (failed.length) logger.warn(`Sweep could not delete ${failed.length} objects`);
+    const gone = new Set(expired.map(o => o.key).filter(k => !failed.includes(k)));
+    liveBytes = objects.reduce((sum, o) => sum + (gone.has(o.key) ? 0 : o.size), 0);
+    return liveBytes;
+  })().finally(() => (sweeping = null));
+  return sweeping;
 }
 
 async function publishToR2(file, filename, contentType) {
   if (!file?.size) {
     throw new AppError('could not download this content.', 'DOWNLOAD_FAILED', 502);
   }
-  if (liveBytes + file.size > R2_LIMIT_BYTES) {
+  if (liveBytes + reservedBytes + file.size > R2_LIMIT_BYTES) {
     throw new ValidationError('storage is full right now, try again in a few minutes.');
   }
+  reservedBytes += file.size;
+  try {
+    return await uploadReserved(file, filename, contentType);
+  } finally {
+    reservedBytes -= file.size;
+  }
+}
+
+async function uploadReserved(file, filename, contentType) {
   const name = sanitizeFilename(filename);
   const ext = path
     .extname(name)
@@ -180,17 +194,10 @@ async function publishToR2(file, filename, contentType) {
     .replace(/[^.a-z0-9]/g, '');
   const type = contentType || 'application/octet-stream';
   const key = `${R2_PREFIX}${crypto.randomBytes(16).toString('hex')}${ext}`;
-  const url = await uploadToR2(
-    file,
-    key,
-    type,
-    r2Config,
-    {},
-    {
-      ContentDisposition: contentDisposition(name),
-      CacheControl: 'public, max-age=3600',
-    }
-  );
+  const url = await uploadToR2(file, key, type, r2Config, {
+    ContentDisposition: contentDisposition(name),
+    CacheControl: 'public, max-age=3600',
+  });
   liveBytes += file.size;
   return { url, filename: name, size: file.size, type: detectFileType(ext, type, file.head) };
 }
@@ -231,8 +238,10 @@ export async function stripAudio(item) {
   return fromPath(output, { filename: item.filename, contentType: item.contentType });
 }
 
-// Every file a download touches lives in one job dir, gone when the answer is sent.
-export const runDownload = options => withJobDir(() => downloadInJob(options));
+// Every file a download touches lives in one job dir, gone when the answer is sent; the signal
+// cancels everything it started.
+export const runDownload = (options, signal) =>
+  withJobDir(() => downloadInJob(options), { signal });
 
 async function downloadInJob({
   url,
@@ -332,17 +341,62 @@ export function parseDownloadRequest(body) {
   };
 }
 
+const CONTENT_FORMATS = ['json', 'text'];
+
+function parseCount(value, field, max) {
+  if (value === undefined || value === null) {
+    return undefined;
+  }
+  const count = Number(value);
+  if (!Number.isInteger(count) || count < 0 || count > max) {
+    throw new AppError(`${field} must be a whole number from 0 to ${max}.`, 'BAD_REQUEST', 400);
+  }
+  return count;
+}
+
+export function parseContentRequest(body) {
+  if (!body || typeof body !== 'object' || typeof body.url !== 'string') {
+    throw new AppError('send a url.', 'BAD_REQUEST', 400);
+  }
+  const url = firstUrlIn(body.url.slice(0, 4096));
+  const check = url ? validateUrl(url) : { valid: false, error: 'that is not a link.' };
+  if (!check.valid) {
+    throw new AppError(check.error, 'BAD_URL', 400);
+  }
+  const format = body.format ?? 'json';
+  if (!CONTENT_FORMATS.includes(format)) {
+    throw new AppError('format must be json or text.', 'BAD_REQUEST', 400);
+  }
+  if (body.thread !== undefined && typeof body.thread !== 'boolean') {
+    throw new AppError('thread must be true or false.', 'BAD_REQUEST', 400);
+  }
+  const transcript = body.transcript ?? false;
+  if (
+    typeof transcript !== 'boolean' &&
+    !(typeof transcript === 'string' && /^[A-Za-z]{2,3}(-[A-Za-z0-9]{1,8})*$/.test(transcript))
+  ) {
+    throw new AppError('transcript must be true, false or a language code.', 'BAD_REQUEST', 400);
+  }
+  return {
+    url,
+    format,
+    transcript,
+    thread: body.thread !== false,
+    depth: parseCount(body.depth, 'depth', 10),
+    comments: parseCount(body.comments, 'comments', MAX_COMMENTS),
+  };
+}
+
 export async function verifyTurnstile(token, action, secret = TURNSTILE_SECRET) {
   if (!secret || typeof token !== 'string' || !token || token.length > 2048) {
     return false;
   }
   try {
-    const res = await fetch('https://challenges.cloudflare.com/turnstile/v0/siteverify', {
-      method: 'POST',
-      body: new URLSearchParams({ secret, response: token }),
-      signal: AbortSignal.timeout(10_000),
-    });
-    const out = await res.json();
+    const { data: out } = await axios.post(
+      'https://challenges.cloudflare.com/turnstile/v0/siteverify',
+      new URLSearchParams({ secret, response: token }),
+      { timeout: 10_000, validateStatus: () => true }
+    );
     return (
       out.success === true && out.hostname === new URL(WEB_ORIGIN).hostname && out.action === action
     );
@@ -351,17 +405,36 @@ export async function verifyTurnstile(token, action, secret = TURNSTILE_SECRET) 
   }
 }
 
-function toApiError(error, url) {
-  if (error instanceof AppError && error.message) {
-    return { code: error.code, message: error.message };
-  }
-  logger.error(`Download failed (${getServiceForUrl(url)?.id ?? 'other'}):`, error);
-  return { code: 'DOWNLOAD_FAILED', message: 'could not download this content.' };
-}
+// A source that failed or refused is the upstream's fault (502), not a server error; gone is 404.
+const STATUS_BY_CODE = { CONTENT_GONE: 404 };
 
-// Cloudflare drops a tunnelled request that sends nothing for ~100 s, and a big download
-// takes longer. Whitespace before a JSON document is valid JSON, so send some while working.
-function heartbeatJson(work, headers) {
+function toApiError(error, url, fallback = DOWNLOAD_FALLBACK) {
+  if (error instanceof AppError && error.message) {
+    const status =
+      STATUS_BY_CODE[error.code] ??
+      (error instanceof NetworkError && error.statusCode === 500 ? 502 : error.statusCode);
+    return { status, error: { code: error.code, message: error.message } };
+  }
+  logger.error(`${fallback.what} failed (${getServiceForUrl(url)?.id ?? 'other'}):`, error);
+  return { status: 502, error: { code: fallback.code, message: fallback.message } };
+}
+const DOWNLOAD_FALLBACK = {
+  what: 'Download',
+  code: 'DOWNLOAD_FAILED',
+  message: 'could not download this content.',
+};
+const CONTENT_FALLBACK = {
+  what: 'Content fetch',
+  code: 'CONTENT_FAILED',
+  message: 'could not read this content.',
+};
+
+// Cloudflare drops a tunnelled request that sends nothing for ~100 s, so a download that finishes
+// sooner answers with its real status; a longer one keeps the line open with whitespace, which is
+// valid before a JSON document, and reports a late failure in the body.
+const ANSWER_WITHIN_MS = 80_000;
+
+function heartbeatJson(work, headers, onCancel) {
   const encoder = new TextEncoder();
   let timer;
   const body = new ReadableStream({
@@ -387,6 +460,7 @@ function heartbeatJson(work, headers) {
     },
     cancel() {
       clearInterval(timer);
+      onCancel();
     },
   });
   return new Response(body, {
@@ -417,21 +491,6 @@ function retryLater(message, code, status, seconds) {
   return Object.assign(new AppError(message, code, status), { retryAfter: Math.max(1, seconds) });
 }
 
-// __Host-: Secure, no Domain, Path=/, so no other subdomain can set or shadow it.
-const SESSION_COOKIE = '__Host-gw_session';
-
-function sessionCookie(token, maxAgeSeconds) {
-  return `${SESSION_COOKIE}=${token}; Path=/; HttpOnly; Secure; SameSite=Strict; Max-Age=${maxAgeSeconds}`;
-}
-
-function readCookie(req, name) {
-  for (const part of (req.headers.get('cookie') ?? '').split(';')) {
-    const [key, ...value] = part.trim().split('=');
-    if (key === name) return value.join('=');
-  }
-  return null;
-}
-
 async function readJson(req) {
   const length = Number(req.headers.get('content-length') ?? 0);
   if (length > MAX_BODY_BYTES) {
@@ -449,17 +508,17 @@ async function readJson(req) {
 export function createHandler({
   verify = verifyTurnstile,
   download = runDownload,
+  content = fetchContent,
   ipLimit = IP_LIMIT,
   signupLimit = 3,
-  loginLimit = 10,
   authLimit = 30,
-  webauthn = simplewebauthn,
+  answerWithinMs = ANSWER_WITHIN_MS,
 } = {}) {
   // Per-IP state is keyed by an HMAC under a key that rotates daily and lives only here.
   let dayKey = null;
   let day = null;
   const windows = new Map();
-  const stats = { started: new Date().toISOString(), lanes: {}, errors: {} };
+  const stats = { started: new Date().toISOString(), lanes: {}, content: {}, errors: {} };
 
   const ipKey = (req, server) => {
     const today = new Date().toISOString().slice(0, 10);
@@ -477,14 +536,12 @@ export function createHandler({
     const now = Date.now();
     const entry = windows.get(key);
     if (!entry || entry.resetAt <= now) {
-      if (windows.size >= MAX_WINDOWS) {
-        for (const [old, value] of windows) if (value.resetAt <= now) windows.delete(old);
-        // Still full of live entries: drop the oldest, a Map keeps insertion order.
-        for (const old of windows.keys()) {
-          if (windows.size < MAX_WINDOWS) break;
-          windows.delete(old);
-        }
+      // Every window is re-inserted when it starts, so the Map is ordered by expiry: prune from the front.
+      for (const [old, value] of windows) {
+        if (value.resetAt > now && windows.size < MAX_WINDOWS) break;
+        windows.delete(old);
       }
+      windows.delete(key);
       windows.set(key, { count: 1, resetAt: now + IP_WINDOW_MS });
       return 0;
     }
@@ -507,28 +564,11 @@ export function createHandler({
     }
   }
 
-  // WebAuthn challenges live only here, single use, 5 minutes.
-  const challenges = new Map();
-  const putChallenge = (key, challenge) => {
-    const now = Date.now();
-    for (const [old, entry] of challenges) {
-      if (entry.expires > now && challenges.size < MAX_CHALLENGES) break;
-      challenges.delete(old);
-    }
-    challenges.set(key, { challenge, expires: now + CHALLENGE_MS });
-  };
-  const takeChallenge = key => {
-    const entry = challenges.get(key);
-    challenges.delete(key);
-    return entry && entry.expires > Date.now() ? entry.challenge : null;
-  };
-
   const corsHeaders = req => {
     const headers = { 'Cache-Control': 'no-store', 'X-Content-Type-Options': 'nosniff' };
     if (req.headers.get('origin') === WEB_ORIGIN) {
       Object.assign(headers, {
         'Access-Control-Allow-Origin': WEB_ORIGIN,
-        'Access-Control-Allow-Credentials': 'true',
         'Access-Control-Allow-Methods': 'GET, POST, DELETE, OPTIONS',
         'Access-Control-Allow-Headers': 'content-type, authorization',
         'Access-Control-Max-Age': '600',
@@ -538,80 +578,104 @@ export function createHandler({
     return headers;
   };
 
-  // Cookie-authenticated routes: the Origin check is the CSRF guard, SameSite=Strict the second one.
-  async function requireSession(req) {
-    if (req.method !== 'GET' && req.headers.get('origin') !== WEB_ORIGIN) {
-      throw new AppError('not allowed from here.', 'FORBIDDEN', 403);
+  async function requireKey(auth) {
+    const id = await keys.verifyApiKey(String(auth ?? '').replace(/^Bearer\s+/i, ''));
+    if (!id) {
+      throw new AppError('that api key is not valid.', 'UNAUTHORIZED', 401);
     }
-    const accountId = await accounts.getSessionAccount(readCookie(req, SESSION_COOKIE));
-    if (!accountId) {
-      throw new AppError('log in first.', 'UNAUTHORIZED', 401);
-    }
-    return accountId;
+    return id;
   }
 
-  async function requireSessionAnd2fa(req) {
-    const accountId = await requireSession(req);
-    await requireSecondFactor(accountId, (await readJson(req)).code);
-    return accountId;
+  // An api key names the account, otherwise the ip is the caller and Turnstile proves a person.
+  // Downloads and content reads share one quota per caller.
+  async function requireCaller(req, server, body, action, message) {
+    let caller;
+    const auth = req.headers.get('authorization');
+    if (auth) {
+      // Guessing keys is limited per address before any lookup.
+      limit(`auth:${ipKey(req, server)}`, authLimit);
+      caller = `key:${await requireKey(auth)}`;
+    } else {
+      caller = `ip:${ipKey(req, server)}`;
+    }
+    limit(caller, ipLimit, message);
+    if (!auth && !(await verify(body.turnstile, action))) {
+      throw new AppError('verification failed, reload the page.', 'VERIFICATION_FAILED', 403);
+    }
   }
 
-  async function requireSecondFactor(accountId, code) {
-    const result = await accounts.checkSecondFactor(accountId, code);
-    if (result === 'required') {
-      throw new AppError('enter the code from your authenticator app.', 'TOTP_REQUIRED', 401);
+  async function handleContent(req, server, headers) {
+    const body = await readJson(req);
+    const request = parseContentRequest(body);
+    await requireCaller(
+      req,
+      server,
+      body,
+      'content',
+      'too many requests, try again in a few minutes.'
+    );
+    let result;
+    try {
+      result = await content(request.url, request);
+    } catch (error) {
+      // No padding here: a read is quick, so the http status carries the outcome.
+      const { status, error: apiErr } = toApiError(error, request.url, CONTENT_FALLBACK);
+      stats.errors[apiErr.code] = (stats.errors[apiErr.code] ?? 0) + 1;
+      throw new AppError(apiErr.message, apiErr.code, status);
     }
-    if (result === 'invalid') {
-      throw new AppError('that code is not right.', 'TOTP_INVALID', 401);
+    stats.content[result.source] = (stats.content[result.source] ?? 0) + 1;
+    if (request.format === 'text') {
+      return new Response(formatContent(result, 'text'), {
+        status: 200,
+        headers: { ...headers, 'Content-Type': 'text/plain; charset=utf-8' },
+      });
     }
-    if (result === 'locked') {
-      throw new AppError(
-        'too many wrong codes. wait 15 minutes, or log in with a passkey.',
-        'TOTP_LOCKED',
-        429
-      );
-    }
+    return json(result, 200, headers);
   }
 
   async function handleDownload(req, server, headers) {
     const body = await readJson(req);
     const job = parseDownloadRequest(body);
-
-    let caller;
-    const auth = req.headers.get('authorization');
-    if (auth) {
-      // A well-formed key costs an argon2 verify, so the attempts are limited before paying for it.
-      limit(`auth:${ipKey(req, server)}`, authLimit);
-      const key = await accounts.verifyApiKey(auth.replace(/^Bearer\s+/i, ''));
-      if (!key) {
-        throw new AppError('that api key is not valid.', 'UNAUTHORIZED', 401);
-      }
-      caller = `acct:${key.accountId}`;
-    } else {
-      caller = `ip:${ipKey(req, server)}`;
-    }
-    limit(caller, ipLimit, 'too many downloads, try again in a few minutes.');
-    if (!auth && !(await verify(body.turnstile, 'download'))) {
-      throw new AppError('verification failed, reload the page.', 'VERIFICATION_FAILED', 403);
-    }
-    const work = download(job)
+    await requireCaller(
+      req,
+      server,
+      body,
+      'download',
+      'too many downloads, try again in a few minutes.'
+    );
+    // A closed tab or dropped connection cancels the download, wherever it has got to.
+    const cancel = new AbortController();
+    const signal = req.signal ? AbortSignal.any([req.signal, cancel.signal]) : cancel.signal;
+    const work = download(job, signal)
       .then(result => {
         stats.lanes[result.lane] = (stats.lanes[result.lane] ?? 0) + 1;
-        return result;
+        return { status: 200, body: result };
       })
       .catch(error => {
-        const apiErr = toApiError(error, job.url);
+        if (signal.aborted) {
+          stats.cancelled = (stats.cancelled ?? 0) + 1;
+          return { status: 499, body: { error: { code: 'CANCELLED', message: 'cancelled.' } } };
+        }
+        const { status, error: apiErr } = toApiError(error, job.url);
         stats.errors[apiErr.code] = (stats.errors[apiErr.code] ?? 0) + 1;
-        return { error: apiErr };
+        return { status, body: { error: apiErr } };
       });
-    return heartbeatJson(work, headers);
+    let timer;
+    const early = await Promise.race([
+      work,
+      new Promise(resolve => (timer = setTimeout(resolve, answerWithinMs, null))),
+    ]).finally(() => clearTimeout(timer));
+    if (early) return json(early.body, early.status, headers);
+    return heartbeatJson(
+      work.then(answer => answer.body),
+      headers,
+      () => cancel.abort()
+    );
   }
 
   async function route(req, server, headers) {
     const { pathname } = new URL(req.url);
     const { method } = req;
-    const withCookie = (data, status, token, maxAge) =>
-      json(data, status, { ...headers, 'Set-Cookie': sessionCookie(token, maxAge) });
 
     if (method === 'GET' && ['/', '/v1', '/v1/'].includes(pathname)) {
       return new Response(JSON.stringify(API_INDEX, null, 2), {
@@ -625,183 +689,16 @@ export function createHandler({
     if (method === 'POST' && pathname === '/v1/download') {
       return handleDownload(req, server, headers);
     }
-    if (method === 'POST' && pathname === '/v1/account') {
-      await requireHuman(req, server, await readJson(req), 'account', signupLimit);
-      const { id, number } = await accounts.createAccount();
-      const token = await accounts.createSession(id);
-      return withCookie({ id, number }, 201, token, accounts.SESSION_MS / 1000);
-    }
-    if (method === 'POST' && pathname === '/v1/session') {
-      const body = await readJson(req);
-      await requireHuman(req, server, body, 'login', loginLimit);
-      const accountId = await accounts.verifyAccountNumber(body.number);
-      if (!accountId) {
-        throw new AppError('that account number is not right.', 'UNAUTHORIZED', 401);
-      }
-      await requireSecondFactor(accountId, body.totp);
-      const token = await accounts.createSession(accountId);
-      return withCookie({ id: accountId }, 200, token, accounts.SESSION_MS / 1000);
-    }
-    if (method === 'DELETE' && pathname === '/v1/session') {
-      await accounts.deleteSession(readCookie(req, SESSION_COOKIE));
-      return withCookie({ ok: true }, 200, '', 0);
-    }
-    if (pathname === '/v1/account' && (method === 'GET' || method === 'DELETE')) {
-      const accountId = await requireSession(req);
-      if (method === 'GET') {
-        return json(await accounts.getAccountSummary(accountId), 200, headers);
-      }
-      await requireSecondFactor(accountId, (await readJson(req)).code);
-      await accounts.deleteAccount(accountId);
-      return withCookie({ ok: true }, 200, '', 0);
-    }
-    if (method === 'POST' && pathname === '/v1/account/rotate') {
-      const accountId = await requireSessionAnd2fa(req);
-      const number = await accounts.rotateAccountNumber(accountId);
-      await accounts.deleteOtherSessions(accountId, readCookie(req, SESSION_COOKIE));
-      return json({ number }, 200, headers);
+    if (method === 'POST' && pathname === '/v1/content') {
+      return handleContent(req, server, headers);
     }
     if (method === 'POST' && pathname === '/v1/keys') {
-      const accountId = await requireSession(req);
-      const body = await readJson(req);
-      const created = await accounts.createApiKey(accountId, body.label);
-      if (!created) {
-        throw new AppError('10 keys is the limit, revoke one first.', 'KEY_LIMIT', 400);
-      }
-      return json(created, 201, headers);
+      await requireHuman(req, server, await readJson(req), 'key', signupLimit);
+      return json(await keys.createApiKey(), 201, headers);
     }
-    const keyMatch = pathname.match(/^\/v1\/keys\/(gk_[0-9a-z]{8})$/);
-    if (method === 'DELETE' && keyMatch) {
-      const accountId = await requireSession(req);
-      if (!(await accounts.revokeApiKey(accountId, keyMatch[1]))) {
-        throw new AppError('no such key.', 'NOT_FOUND', 404);
-      }
-      return json({ ok: true }, 200, headers);
-    }
-    if (method === 'POST' && pathname === '/v1/totp/setup') {
-      const accountId = await requireSession(req);
-      const started = await accounts.startTotp(accountId);
-      if (!started) {
-        throw new AppError('2fa is already on.', 'TOTP_ON', 409);
-      }
-      return json(started, 200, headers);
-    }
-    if (method === 'POST' && pathname === '/v1/totp/enable') {
-      const accountId = await requireSession(req);
-      const body = await readJson(req);
-      const recoveryCodes = await accounts.enableTotp(accountId, body.code);
-      if (!recoveryCodes) {
-        throw new AppError('that code is not right.', 'TOTP_INVALID', 400);
-      }
-      return json({ recoveryCodes }, 200, headers);
-    }
-    if (method === 'DELETE' && pathname === '/v1/totp') {
-      const accountId = await requireSessionAnd2fa(req);
-      await accounts.disableTotp(accountId);
-      return json({ ok: true }, 200, headers);
-    }
-    if (method === 'POST' && pathname === '/v1/totp/recovery') {
-      const accountId = await requireSession(req);
-      const body = await readJson(req);
-      if (!(await accounts.getAccountSummary(accountId)).totp) {
-        throw new AppError('2fa is off.', 'TOTP_OFF', 409);
-      }
-      await requireSecondFactor(accountId, body.code);
-      const recoveryCodes = await accounts.regenerateRecoveryCodes(accountId);
-      if (!recoveryCodes) {
-        throw new AppError('2fa is off.', 'TOTP_OFF', 409);
-      }
-      return json({ recoveryCodes }, 200, headers);
-    }
-    if (method === 'POST' && pathname === '/v1/passkeys/register/options') {
-      const accountId = await requireSessionAnd2fa(req);
-      const options = await webauthn.generateRegistrationOptions({
-        rpName: 'gronka',
-        rpID: RP_ID,
-        userName: `GW ${accountId}`,
-        userID: new TextEncoder().encode(accountId),
-        attestationType: 'none',
-        excludeCredentials: await accounts.listPasskeys(accountId),
-        authenticatorSelection: { residentKey: 'required', userVerification: 'required' },
-      });
-      putChallenge(`reg:${accountId}`, options.challenge);
-      return json(options, 200, headers);
-    }
-    if (method === 'POST' && pathname === '/v1/passkeys/register') {
-      const accountId = await requireSession(req);
-      const body = await readJson(req);
-      const challenge = takeChallenge(`reg:${accountId}`);
-      const verification =
-        challenge &&
-        (await webauthn
-          .verifyRegistrationResponse({
-            response: body.response,
-            expectedChallenge: challenge,
-            expectedOrigin: WEB_ORIGIN,
-            expectedRPID: RP_ID,
-            requireUserVerification: true,
-          })
-          .catch(() => null));
-      if (!verification?.verified) {
-        throw new AppError('that passkey could not be added, try again.', 'PASSKEY_INVALID', 400);
-      }
-      const added = await accounts.addPasskey(
-        accountId,
-        verification.registrationInfo.credential,
-        body.label
-      );
-      if (!added) {
-        throw new AppError('10 passkeys is the limit, remove one first.', 'PASSKEY_LIMIT', 400);
-      }
-      return json(added, 201, headers);
-    }
-    if (method === 'POST' && pathname === '/v1/passkeys/login/options') {
-      await requireHuman(req, server, await readJson(req), 'login', loginLimit);
-      const options = await webauthn.generateAuthenticationOptions({
-        rpID: RP_ID,
-        userVerification: 'required',
-      });
-      const challengeId = crypto.randomBytes(16).toString('base64url');
-      putChallenge(`auth:${challengeId}`, options.challenge);
-      return json({ challengeId, options }, 200, headers);
-    }
-    if (method === 'POST' && pathname === '/v1/passkeys/login') {
-      const body = await readJson(req);
-      const challenge =
-        typeof body.challengeId === 'string' && takeChallenge(`auth:${body.challengeId}`);
-      const passkey = challenge && (await accounts.getPasskey(body.response?.id));
-      const verification =
-        passkey &&
-        (await webauthn
-          .verifyAuthenticationResponse({
-            response: body.response,
-            expectedChallenge: challenge,
-            expectedOrigin: WEB_ORIGIN,
-            expectedRPID: RP_ID,
-            credential: passkey.credential,
-            requireUserVerification: true,
-          })
-          .catch(() => null));
-      if (!verification?.verified) {
-        throw new AppError('that passkey did not work, try again.', 'PASSKEY_INVALID', 401);
-      }
-      if (
-        !(await accounts.usePasskey(
-          passkey.credential.id,
-          verification.authenticationInfo.newCounter
-        ))
-      ) {
-        throw new AppError('that passkey did not work, try again.', 'PASSKEY_INVALID', 401);
-      }
-      const token = await accounts.createSession(passkey.accountId);
-      return withCookie({ id: passkey.accountId }, 200, token, accounts.SESSION_MS / 1000);
-    }
-    const passkeyMatch = pathname.match(/^\/v1\/passkeys\/([\w-]{1,1400})$/);
-    if (method === 'DELETE' && passkeyMatch) {
-      const accountId = await requireSessionAnd2fa(req);
-      if (!(await accounts.removePasskey(accountId, passkeyMatch[1]))) {
-        throw new AppError('no such passkey.', 'NOT_FOUND', 404);
-      }
+    if (method === 'DELETE' && pathname === '/v1/keys') {
+      limit(`auth:${ipKey(req, server)}`, authLimit);
+      await keys.revokeApiKey(await requireKey(req.headers.get('authorization')));
       return json({ ok: true }, 200, headers);
     }
     throw new AppError(`no such route. the api is described at ${DOCS_URL}`, 'NOT_FOUND', 404);
@@ -837,7 +734,7 @@ if (import.meta.main) {
     10 * 60 * 1000
   );
   await initDatabase();
-  await accounts.ensureWebSchema();
+  await keys.ensureWebSchema();
   const handler = createHandler();
   Bun.serve({
     port: Number(env('WEB_PORT', 3000)),

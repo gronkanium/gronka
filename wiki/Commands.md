@@ -1,33 +1,24 @@
 all available commands and context menu options in gronka.
 
-## prefix commands
+## message commands
 
-every slash command is also available as a message (prefix) command. the default prefix is `^g` (configurable per server), and mentioning the bot always works as a prefix regardless of the configured one.
+every slash command also works as a message: mention the bot, then the command. gronka doesn't use discord's message content intent, so in a server it only sees messages that mention it. in dms the prefix `^g` (`COMMAND_PREFIX`) works too.
 
 ```
-^g download https://twitter.com/user/status/123
-^g convert https://example.com/video.mp4 quality=high start=0:05 end=0:10
-^g optimize lossy=50        (with a gif attached, or replying to one)
-^g info
-^g stats
-^g help
 @gronka download https://twitter.com/user/status/123
+@gronka convert https://example.com/video.mp4 start=0:05 end=0:10
+@gronka optimize lossy=50        (with a gif attached)
+@gronka info
+@gronka help
+^g download https://twitter.com/user/status/123        (dms only)
 ```
 
 **usage:**
 
-- options go after the command as `key=value` pairs: `quality`, `optimize`, `lossy`, `start`, `end`
-- `^g convert` and `^g optimize` accept a url, an attachment on your message, or an attachment on the message you're replying to
-- a bare mention of the bot shows a compact prompt; `^g help` shows the full help embed with the current prefix, commands, and options
-- unknown prefix commands are ignored silently so gronka doesn't clash with other bots sharing the same prefix; unknown commands after an explicit mention get a short pointer to help
-- in dms the default prefix always applies
-
-**changing the prefix (per server):**
-
-- `^g prefix`, show the current prefix (anyone)
-- `^g prefix !`, set a new prefix (requires the manage server permission); 1-3 printable characters, no spaces, and not `@`, `#`, `<`, `>`, backticks, or backslashes
-- `^g prefix reset`, go back to the default
-- if the prefix is ever forgotten or clashes with another bot, mentioning the bot always works: `@gronka prefix !`
+- options go after the command as `key=value` pairs: `optimize`, `lossy`, `start`, `end`, `format`, `mp3`
+- `convert` and `optimize` take a url or an attachment on your message (in dms, also one on the message you reply to)
+- a bare mention shows a short prompt; `help` shows commands and options
+- unknown commands after a mention get a pointer to help; unknown commands after the dm prefix are ignored
 
 ## slash commands
 
@@ -39,8 +30,7 @@ convert a video or image to gif.
 
 - `file` (attachment, optional) - the video or image file to convert
 - `url` (string, optional) - url to a video or image file to convert
-- `format` (choice, optional) - what to convert to: GIF (default), MP4 or WebM video, MP3, M4A, OGG, WAV or FLAC audio, or a PNG, JPG or WebP image. the input type is detected, never chosen. audio needs a video with sound, still images can only become images, and a gif can also become MP4 or WebM. `quality`, `optimize` and `lossy` only apply to gif output
-- `quality` (string, optional) - gif quality preset: `low`, `medium`, or `high` (default: `medium`)
+- `format` (choice, optional) - what to convert to: GIF (default), MP4 or WebM video, MP3, M4A, OGG, WAV or FLAC audio, or a PNG, JPG or WebP image. the input type is detected, never chosen. audio needs a video with sound, still images can only become images, and a gif can also become MP4 or WebM. `optimize` and `lossy` only apply to gif output
 - `optimize` (boolean, optional) - optimize the gif after conversion to reduce file size
 - `lossy` (number, optional) - lossy compression level (0-100, default: 35)
 - `start` (string, optional) - start time for trimming video before conversion, as seconds (`90`, `12.5`) or a timestamp (`3:10`, `1:02:30`) (only applies to video inputs, ignored for images)
@@ -85,9 +75,9 @@ download media from a social media url or direct url.
 - works with social media platforms (twitter, tiktok, instagram, etc.) if cobalt is enabled
 - also works with direct media urls
 - embed-fixer mirror urls are rewritten to the canonical site before downloading: fxtwitter.com, fixupx.com, twittpr.com, pxtwitter.com, vxtwitter.com, fixvx.com, cunnyx.com, girlcockx.com, and stupidpenisx.com all map to twitter.com; fxbsky.app maps to bsky.app
-- youtube downloads are handled by yt-dlp and capped at 5 minutes for non-admin users; use `start`/`end` to grab a clip from a longer video (trimmed downloads bypass the duration cap)
+- youtube downloads are handled by yt-dlp and capped by the max video duration setting; use `start`/`end` to grab a clip from a longer video (trimmed downloads bypass the duration cap)
 - age-restricted tiktok posts fall back from cobalt to yt-dlp, which needs a cookies file, see `YTDLP_COOKIES_PATH` in [[Configuration]]
-- downloads and stores the media without conversion
+- downloads the media without conversion; nothing is kept once it is delivered
 - **for videos**: time parameters (`start`, `end`) trim the video before saving
   - if only `start` is provided, video is trimmed from that time to the end
   - if only `end` is provided, video is trimmed from beginning to that time
@@ -202,15 +192,6 @@ optimize a gif from a message.
 
 - only works with gif files
 - lossy level can be customized via the modal
-- optimized gifs are stored separately from originals
-
-## rate limiting
-
-commands are rate limited to prevent abuse:
-
-- 10-second cooldown between commands per user (configurable via `RATE_LIMIT`)
-- admin users (configured via `ADMIN_USER_IDS`) bypass rate limiting
-- rate limits apply per user, not per server
 
 ## file size limits
 
@@ -220,15 +201,12 @@ default file size limits:
 - images: 50mb maximum (configurable via `MAX_IMAGE_SIZE`)
 - gif optimization: 50mb maximum
 - gif duration: 30 seconds maximum (configurable via `MAX_GIF_DURATION`)
-- youtube downloads: 5 minutes maximum (trimmed downloads via `start`/`end` bypass this)
-
-admin users can bypass these limits.
+- video length: the max video duration setting (trimmed downloads via `start`/`end` bypass this)
 
 ## error messages
 
 common error messages and what they mean:
 
-- "rate limited. please wait before using another command." - you're using commands too quickly
 - "file too large" - the file exceeds size limits
 - "unsupported format" - the file type isn't supported
 - "download failed" - the download couldn't complete (check url or cobalt status)

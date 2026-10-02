@@ -168,6 +168,7 @@ function kit(number) {
       `gronka account number\n\n${number}\n\nmade ${date} on https://web.gronka.dev/account/\n\n` +
         'this number gets you into your gronka account. it holds your api keys.\n' +
         'there is no reset. lose it without a passkey and the account is gone.\n' +
+        'an account never used is deleted after 90 days; once used, after a year without use.\n' +
         'keep this file somewhere safe, like a password manager.\n',
     ],
     { type: 'text/plain' }
@@ -178,6 +179,7 @@ function saveNumber(number, next, { rotated = false } = {}) {
   show(`<img class="peng" src="/p/idle.svg" alt="" width="400" height="400" />
     <h1>${rotated ? 'your new number.' : 'your account number.'}</h1>
     <p>this number gets you back in. <strong>no email. no reset.</strong> lose it without a passkey and the account is gone${rotated ? ', and the old number already stopped working' : ''}.</p>
+    <p class="meta">an account you never use is deleted after 90 days; once used, after a year without use.</p>
     <p class="number ink" id="num">${esc(number)}</p>
     <div class="acts"><button type="button" class="btn" id="dl">${icon('download')}download it</button>
     <button type="button" class="btn line small" id="copy">${icon('copy')}copy</button></div>

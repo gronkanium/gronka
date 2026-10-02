@@ -125,14 +125,26 @@ export async function ensureWebSchema() {
       label TEXT,
       created_on DATE NOT NULL DEFAULT CURRENT_DATE
     )`;
+  // Day only, like a key's last_used_on: enough to tell a dormant account from a live one.
+  await sql`ALTER TABLE web_accounts ADD COLUMN IF NOT EXISTS last_used_on DATE`;
   await sql`CREATE INDEX IF NOT EXISTS idx_web_sessions_expires ON web_sessions (expires_at)`;
   for (const table of ['web_sessions', 'web_api_keys', 'web_passkeys', 'web_recovery_codes']) {
     await sql.unsafe(`CREATE INDEX IF NOT EXISTS idx_${table}_account ON ${table} (account_id)`);
   }
 }
 
+// Never used after the signup day: gone after 90 days. Used at some point: gone after 365 idle days.
+export const UNUSED_ACCOUNT_DAYS = 90;
+export const IDLE_ACCOUNT_DAYS = 365;
+
 export async function pruneExpired() {
-  await getPostgresConnection()`DELETE FROM web_sessions WHERE expires_at < now()`;
+  const sql = getPostgresConnection();
+  await sql`DELETE FROM web_sessions WHERE expires_at < now()`;
+  await sql`
+    DELETE FROM web_accounts
+    WHERE (COALESCE(last_used_on, created_on) <= created_on
+        AND created_on < CURRENT_DATE - ${UNUSED_ACCOUNT_DAYS}::int)
+      OR COALESCE(last_used_on, created_on) < CURRENT_DATE - ${IDLE_ACCOUNT_DAYS}::int`;
 }
 
 export async function createAccount() {
@@ -197,6 +209,9 @@ export async function getSessionAccount(token) {
       WHERE token_hash = ${hash} AND expires_at > now()
         AND (expires_at < least(now() + ${idle}::interval, absolute_at) - interval '1 hour'
           OR expires_at > absolute_at)
+    ), used AS (
+      UPDATE web_accounts SET last_used_on = CURRENT_DATE
+      WHERE id = (SELECT account_id FROM live) AND last_used_on IS DISTINCT FROM CURRENT_DATE
     )
     SELECT account_id FROM live`;
   return row?.account_id ?? null;
@@ -292,9 +307,14 @@ export async function verifyApiKey(input) {
   const sql = getPostgresConnection();
   const [row] = await sql`SELECT account_id, secret_hash FROM web_api_keys WHERE id = ${parsed.id}`;
   if (!row || !sameHmac(parsed.secret, row.secret_hash)) return null;
-  await sql`
-    UPDATE web_api_keys SET last_used_on = CURRENT_DATE
-    WHERE id = ${parsed.id} AND last_used_on IS DISTINCT FROM CURRENT_DATE`;
+  await Promise.all([
+    sql`
+      UPDATE web_api_keys SET last_used_on = CURRENT_DATE
+      WHERE id = ${parsed.id} AND last_used_on IS DISTINCT FROM CURRENT_DATE`,
+    sql`
+      UPDATE web_accounts SET last_used_on = CURRENT_DATE
+      WHERE id = ${row.account_id} AND last_used_on IS DISTINCT FROM CURRENT_DATE`,
+  ]);
   return { keyId: parsed.id, accountId: row.account_id };
 }
 

@@ -1,7 +1,6 @@
 import axios from 'axios';
 import crypto from 'node:crypto';
 import fs from 'node:fs/promises';
-import * as simplewebauthn from '@simplewebauthn/server';
 import path from 'node:path';
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
@@ -17,7 +16,7 @@ import { detectFileType } from './utils/storage.js';
 import { uploadToR2, listObjectsInR2, deleteManyFromR2 } from './utils/r2-storage.js';
 import { getStreamInfo, isYouTubeUrl } from './utils/ytdlp.js';
 import { AppError, NetworkError, ValidationError } from './utils/errors.js';
-import * as accounts from './web/accounts.js';
+import * as keys from './web/keys.js';
 import { FFMPEG_INPUT_GUARD } from './utils/video-processor/utils.js';
 import { trimItem } from './utils/video-processor/trim-item.js';
 import { fromPath, tempPath, withJobDir, sweepJobDirs } from './utils/media-file.js';
@@ -53,9 +52,6 @@ const API_INDEX = {
   content: 'POST https://api.gronka.dev/v1/content',
   page: 'https://web.gronka.dev/',
 };
-const RP_ID = env('WEB_RP_ID', 'gronka.dev');
-const CHALLENGE_MS = 5 * 60 * 1000;
-const MAX_CHALLENGES = 10_000;
 
 export function contentDisposition(filename) {
   const ascii = filename.replace(/[^\x20-\x7e]|["\\%]/g, '_');
@@ -198,17 +194,10 @@ async function uploadReserved(file, filename, contentType) {
     .replace(/[^.a-z0-9]/g, '');
   const type = contentType || 'application/octet-stream';
   const key = `${R2_PREFIX}${crypto.randomBytes(16).toString('hex')}${ext}`;
-  const url = await uploadToR2(
-    file,
-    key,
-    type,
-    r2Config,
-    {},
-    {
-      ContentDisposition: contentDisposition(name),
-      CacheControl: 'public, max-age=3600',
-    }
-  );
+  const url = await uploadToR2(file, key, type, r2Config, {
+    ContentDisposition: contentDisposition(name),
+    CacheControl: 'public, max-age=3600',
+  });
   liveBytes += file.size;
   return { url, filename: name, size: file.size, type: detectFileType(ext, type, file.head) };
 }
@@ -502,21 +491,6 @@ function retryLater(message, code, status, seconds) {
   return Object.assign(new AppError(message, code, status), { retryAfter: Math.max(1, seconds) });
 }
 
-// __Host-: Secure, no Domain, Path=/, so no other subdomain can set or shadow it.
-const SESSION_COOKIE = '__Host-gw_session';
-
-function sessionCookie(token, maxAgeSeconds) {
-  return `${SESSION_COOKIE}=${token}; Path=/; HttpOnly; Secure; SameSite=Strict; Max-Age=${maxAgeSeconds}`;
-}
-
-function readCookie(req, name) {
-  for (const part of (req.headers.get('cookie') ?? '').split(';')) {
-    const [key, ...value] = part.trim().split('=');
-    if (key === name) return value.join('=');
-  }
-  return null;
-}
-
 async function readJson(req) {
   const length = Number(req.headers.get('content-length') ?? 0);
   if (length > MAX_BODY_BYTES) {
@@ -537,9 +511,7 @@ export function createHandler({
   content = fetchContent,
   ipLimit = IP_LIMIT,
   signupLimit = 3,
-  loginLimit = 10,
   authLimit = 30,
-  webauthn = simplewebauthn,
   answerWithinMs = ANSWER_WITHIN_MS,
 } = {}) {
   // Per-IP state is keyed by an HMAC under a key that rotates daily and lives only here.
@@ -592,28 +564,11 @@ export function createHandler({
     }
   }
 
-  // WebAuthn challenges live only here, single use, 5 minutes.
-  const challenges = new Map();
-  const putChallenge = (key, challenge) => {
-    const now = Date.now();
-    for (const [old, entry] of challenges) {
-      if (entry.expires > now && challenges.size < MAX_CHALLENGES) break;
-      challenges.delete(old);
-    }
-    challenges.set(key, { challenge, expires: now + CHALLENGE_MS });
-  };
-  const takeChallenge = key => {
-    const entry = challenges.get(key);
-    challenges.delete(key);
-    return entry && entry.expires > Date.now() ? entry.challenge : null;
-  };
-
   const corsHeaders = req => {
     const headers = { 'Cache-Control': 'no-store', 'X-Content-Type-Options': 'nosniff' };
     if (req.headers.get('origin') === WEB_ORIGIN) {
       Object.assign(headers, {
         'Access-Control-Allow-Origin': WEB_ORIGIN,
-        'Access-Control-Allow-Credentials': 'true',
         'Access-Control-Allow-Methods': 'GET, POST, DELETE, OPTIONS',
         'Access-Control-Allow-Headers': 'content-type, authorization',
         'Access-Control-Max-Age': '600',
@@ -623,43 +578,12 @@ export function createHandler({
     return headers;
   };
 
-  // Cookie-authenticated routes: the Origin check is the CSRF guard, SameSite=Strict the second one.
-  function requireSameOrigin(req) {
-    if (req.method !== 'GET' && req.headers.get('origin') !== WEB_ORIGIN) {
-      throw new AppError('not allowed from here.', 'FORBIDDEN', 403);
+  async function requireKey(auth) {
+    const id = await keys.verifyApiKey(String(auth ?? '').replace(/^Bearer\s+/i, ''));
+    if (!id) {
+      throw new AppError('that api key is not valid.', 'UNAUTHORIZED', 401);
     }
-  }
-
-  async function requireSession(req) {
-    requireSameOrigin(req);
-    const accountId = await accounts.getSessionAccount(readCookie(req, SESSION_COOKIE));
-    if (!accountId) {
-      throw new AppError('log in first.', 'UNAUTHORIZED', 401);
-    }
-    return accountId;
-  }
-
-  async function requireSessionAnd2fa(req) {
-    const accountId = await requireSession(req);
-    await requireSecondFactor(accountId, (await readJson(req)).code);
-    return accountId;
-  }
-
-  async function requireSecondFactor(accountId, code) {
-    const result = await accounts.checkSecondFactor(accountId, code);
-    if (result === 'required') {
-      throw new AppError('enter the code from your authenticator app.', 'TOTP_REQUIRED', 401);
-    }
-    if (result === 'invalid') {
-      throw new AppError('that code is not right.', 'TOTP_INVALID', 401);
-    }
-    if (result === 'locked') {
-      throw new AppError(
-        'too many wrong codes. wait 15 minutes, or log in with a passkey.',
-        'TOTP_LOCKED',
-        429
-      );
-    }
+    return id;
   }
 
   // An api key names the account, otherwise the ip is the caller and Turnstile proves a person.
@@ -670,11 +594,7 @@ export function createHandler({
     if (auth) {
       // Guessing keys is limited per address before any lookup.
       limit(`auth:${ipKey(req, server)}`, authLimit);
-      const key = await accounts.verifyApiKey(auth.replace(/^Bearer\s+/i, ''));
-      if (!key) {
-        throw new AppError('that api key is not valid.', 'UNAUTHORIZED', 401);
-      }
-      caller = `acct:${key.accountId}`;
+      caller = `key:${await requireKey(auth)}`;
     } else {
       caller = `ip:${ipKey(req, server)}`;
     }
@@ -756,8 +676,6 @@ export function createHandler({
   async function route(req, server, headers) {
     const { pathname } = new URL(req.url);
     const { method } = req;
-    const withCookie = (data, status, token, maxAge) =>
-      json(data, status, { ...headers, 'Set-Cookie': sessionCookie(token, maxAge) });
 
     if (method === 'GET' && ['/', '/v1', '/v1/'].includes(pathname)) {
       return new Response(JSON.stringify(API_INDEX, null, 2), {
@@ -774,190 +692,13 @@ export function createHandler({
     if (method === 'POST' && pathname === '/v1/content') {
       return handleContent(req, server, headers);
     }
-    if (method === 'POST' && pathname === '/v1/account') {
-      await requireHuman(req, server, await readJson(req), 'account', signupLimit);
-      const { id, number } = await accounts.createAccount();
-      const token = await accounts.createSession(id);
-      return withCookie({ id, number }, 201, token, accounts.SESSION_MS / 1000);
-    }
-    if (method === 'POST' && pathname === '/v1/session') {
-      const body = await readJson(req);
-      await requireHuman(req, server, body, 'login', loginLimit);
-      const accountId = await accounts.verifyAccountNumber(body.number);
-      if (!accountId) {
-        throw new AppError('that account number is not right.', 'UNAUTHORIZED', 401);
-      }
-      await requireSecondFactor(accountId, body.totp);
-      const token = await accounts.createSession(accountId);
-      return withCookie({ id: accountId }, 200, token, accounts.SESSION_MS / 1000);
-    }
-    if (method === 'DELETE' && pathname === '/v1/session') {
-      requireSameOrigin(req);
-      await accounts.deleteSession(readCookie(req, SESSION_COOKIE));
-      return withCookie({ ok: true }, 200, '', 0);
-    }
-    if (pathname === '/v1/account' && (method === 'GET' || method === 'DELETE')) {
-      const accountId = await requireSession(req);
-      if (method === 'GET') {
-        return json(await accounts.getAccountSummary(accountId), 200, headers);
-      }
-      await requireSecondFactor(accountId, (await readJson(req)).code);
-      await accounts.deleteAccount(accountId);
-      return withCookie({ ok: true }, 200, '', 0);
-    }
-    if (method === 'POST' && pathname === '/v1/account/rotate') {
-      const accountId = await requireSessionAnd2fa(req);
-      const number = await accounts.rotateAccountNumber(accountId);
-      await accounts.deleteOtherSessions(accountId, readCookie(req, SESSION_COOKIE));
-      return json({ number }, 200, headers);
-    }
     if (method === 'POST' && pathname === '/v1/keys') {
-      const accountId = await requireSession(req);
-      const body = await readJson(req);
-      const created = await accounts.createApiKey(accountId, body.label);
-      if (!created) {
-        throw new AppError('10 keys is the limit, revoke one first.', 'KEY_LIMIT', 400);
-      }
-      return json(created, 201, headers);
+      await requireHuman(req, server, await readJson(req), 'key', signupLimit);
+      return json(await keys.createApiKey(), 201, headers);
     }
-    const keyMatch = pathname.match(/^\/v1\/keys\/(gk_[0-9a-z]{8})$/);
-    if (method === 'DELETE' && keyMatch) {
-      const accountId = await requireSession(req);
-      if (!(await accounts.revokeApiKey(accountId, keyMatch[1]))) {
-        throw new AppError('no such key.', 'NOT_FOUND', 404);
-      }
-      return json({ ok: true }, 200, headers);
-    }
-    if (method === 'POST' && pathname === '/v1/totp/setup') {
-      const accountId = await requireSession(req);
-      const started = await accounts.startTotp(accountId);
-      if (!started) {
-        throw new AppError('2fa is already on.', 'TOTP_ON', 409);
-      }
-      return json(started, 200, headers);
-    }
-    if (method === 'POST' && pathname === '/v1/totp/enable') {
-      const accountId = await requireSession(req);
-      const body = await readJson(req);
-      const recoveryCodes = await accounts.enableTotp(accountId, body.code);
-      if (!recoveryCodes) {
-        throw new AppError('that code is not right.', 'TOTP_INVALID', 400);
-      }
-      return json({ recoveryCodes }, 200, headers);
-    }
-    if (method === 'DELETE' && pathname === '/v1/totp') {
-      const accountId = await requireSessionAnd2fa(req);
-      await accounts.disableTotp(accountId);
-      return json({ ok: true }, 200, headers);
-    }
-    if (method === 'POST' && pathname === '/v1/totp/recovery') {
-      const accountId = await requireSession(req);
-      const body = await readJson(req);
-      if (!(await accounts.getAccountSummary(accountId)).totp) {
-        throw new AppError('2fa is off.', 'TOTP_OFF', 409);
-      }
-      await requireSecondFactor(accountId, body.code);
-      const recoveryCodes = await accounts.regenerateRecoveryCodes(accountId);
-      if (!recoveryCodes) {
-        throw new AppError('2fa is off.', 'TOTP_OFF', 409);
-      }
-      return json({ recoveryCodes }, 200, headers);
-    }
-    if (method === 'POST' && pathname === '/v1/passkeys/register/options') {
-      const accountId = await requireSessionAnd2fa(req);
-      const options = await webauthn.generateRegistrationOptions({
-        rpName: 'gronka',
-        rpID: RP_ID,
-        userName: `GW ${accountId}`,
-        userID: new TextEncoder().encode(accountId),
-        attestationType: 'none',
-        excludeCredentials: await accounts.listPasskeys(accountId),
-        authenticatorSelection: { residentKey: 'required', userVerification: 'required' },
-      });
-      putChallenge(`reg:${accountId}`, options.challenge);
-      return json(options, 200, headers);
-    }
-    if (method === 'POST' && pathname === '/v1/passkeys/register') {
-      const accountId = await requireSession(req);
-      const body = await readJson(req);
-      const challenge = takeChallenge(`reg:${accountId}`);
-      const verification =
-        challenge &&
-        (await webauthn
-          .verifyRegistrationResponse({
-            response: body.response,
-            expectedChallenge: challenge,
-            expectedOrigin: WEB_ORIGIN,
-            expectedRPID: RP_ID,
-            requireUserVerification: true,
-          })
-          .catch(error => {
-            logger.warn(`Passkey registration check failed: ${error.message}`);
-            return null;
-          }));
-      if (!verification?.verified) {
-        throw new AppError('that passkey could not be added, try again.', 'PASSKEY_INVALID', 400);
-      }
-      const added = await accounts.addPasskey(
-        accountId,
-        verification.registrationInfo.credential,
-        body.label
-      );
-      if (!added) {
-        throw new AppError('10 passkeys is the limit, remove one first.', 'PASSKEY_LIMIT', 400);
-      }
-      return json(added, 201, headers);
-    }
-    if (method === 'POST' && pathname === '/v1/passkeys/login/options') {
-      await requireHuman(req, server, await readJson(req), 'login', loginLimit);
-      const options = await webauthn.generateAuthenticationOptions({
-        rpID: RP_ID,
-        userVerification: 'required',
-      });
-      const challengeId = crypto.randomBytes(16).toString('base64url');
-      putChallenge(`auth:${challengeId}`, options.challenge);
-      return json({ challengeId, options }, 200, headers);
-    }
-    if (method === 'POST' && pathname === '/v1/passkeys/login') {
-      const body = await readJson(req);
-      const challenge =
-        typeof body.challengeId === 'string' && takeChallenge(`auth:${body.challengeId}`);
-      const passkey = challenge && (await accounts.getPasskey(body.response?.id));
-      const verification =
-        passkey &&
-        (await webauthn
-          .verifyAuthenticationResponse({
-            response: body.response,
-            expectedChallenge: challenge,
-            expectedOrigin: WEB_ORIGIN,
-            expectedRPID: RP_ID,
-            credential: passkey.credential,
-            requireUserVerification: true,
-          })
-          .catch(error => {
-            logger.warn(`Passkey login check failed: ${error.message}`);
-            return null;
-          }));
-      if (!verification?.verified) {
-        throw new AppError('that passkey did not work, try again.', 'PASSKEY_INVALID', 401);
-      }
-      if (
-        !(await accounts.usePasskey(
-          passkey.credential.id,
-          verification.authenticationInfo.newCounter
-        ))
-      ) {
-        throw new AppError('that passkey did not work, try again.', 'PASSKEY_INVALID', 401);
-      }
-      const token = await accounts.createSession(passkey.accountId);
-      return withCookie({ id: passkey.accountId }, 200, token, accounts.SESSION_MS / 1000);
-    }
-    const passkeyMatch = pathname.match(/^\/v1\/passkeys\/([\w-]{1,1400})$/);
-    if (method === 'DELETE' && passkeyMatch) {
-      const accountId = await requireSessionAnd2fa(req);
-      if (!(await accounts.removePasskey(accountId, passkeyMatch[1]))) {
-        throw new AppError('no such passkey.', 'NOT_FOUND', 404);
-      }
+    if (method === 'DELETE' && pathname === '/v1/keys') {
+      limit(`auth:${ipKey(req, server)}`, authLimit);
+      await keys.revokeApiKey(await requireKey(req.headers.get('authorization')));
       return json({ ok: true }, 200, headers);
     }
     throw new AppError(`no such route. the api is described at ${DOCS_URL}`, 'NOT_FOUND', 404);
@@ -993,7 +734,7 @@ if (import.meta.main) {
     10 * 60 * 1000
   );
   await initDatabase();
-  await accounts.ensureWebSchema();
+  await keys.ensureWebSchema();
   const handler = createHandler();
   Bun.serve({
     port: Number(env('WEB_PORT', 3000)),
@@ -1011,7 +752,6 @@ if (import.meta.main) {
     Promise.all([
       sweepR2().catch(error => logger.warn(`R2 sweep failed: ${error.message}`)),
       sweepJobDirs().catch(error => logger.warn(`Job dir sweep failed: ${error.message}`)),
-      accounts.pruneExpired().catch(error => logger.warn(`Session prune failed: ${error.message}`)),
     ]);
   await sweep();
   setInterval(sweep, 5 * 60 * 1000);

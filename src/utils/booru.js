@@ -126,7 +126,7 @@ export async function fetchBooruPost(url, fetchJson = getJson) {
   }
 }
 
-export async function downloadFromBooru(url, isAdminUser = false) {
+export async function downloadFromBooru(url) {
   const { site, postId, data } = await fetchBooruPost(url);
 
   const fileUrl = site.pickFileUrl(data);
@@ -138,7 +138,7 @@ export async function downloadFromBooru(url, isAdminUser = false) {
   }
 
   logger.debug(`Extracted ${site.name} media URL: ${fileUrl}`);
-  const result = await downloadFileFromUrl(fileUrl, isAdminUser, null, { userAgent: BOORU_UA });
+  const result = await downloadFileFromUrl(fileUrl, null, { userAgent: BOORU_UA });
   logger.debug(
     `Downloaded ${site.name} media: ${result.filename} (${result.size} bytes, ${result.contentType})`
   );

@@ -14,12 +14,10 @@ export async function handleModalSubmit(interaction, modalAttachmentCache) {
 
   // Handle optimize modal
   if (customId.startsWith('optimize_modal_')) {
-    const userId = interaction.user.id;
-
     // Retrieve cached attachment info
     const cachedData = modalAttachmentCache.get(customId);
     if (!cachedData) {
-      logger.warn(`No cached data found for optimize modal ${customId} from user ${userId}`);
+      logger.warn(`No cached data found for optimize modal ${customId}`);
 
       // Check if interaction is already responded to or expired
       if (interaction.replied || interaction.deferred) {

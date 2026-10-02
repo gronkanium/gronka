@@ -24,11 +24,7 @@ mkdir gronka && cd gronka
 # 2. Install dependencies
 bun install
 
-# 3. Create directories
-mkdir -p data-prod/gifs data-test/gifs
-chmod 755 data-prod/gifs data-test/gifs
-
-# 4. Configure environment
+# 3. Configure environment
 cp .env.example .env
 nano .env  # Fill in tokens
 
@@ -62,8 +58,7 @@ sudo systemctl start gif-bot
 
 1. Navigate to "Bot" section
 2. Click "Add Bot"
-3. **CRITICAL**: Enable "Message Content Intent" (required to read attachments)
-4. Copy bot token → save to `.env` as `DISCORD_TOKEN`
+3. Copy bot token → save to `.env` as `DISCORD_TOKEN`
 
 ### step 3: set permissions
 
@@ -96,20 +91,13 @@ General Information → Application ID → save to `.env` as `CLIENT_ID`
 DISCORD_TOKEN=YOUR_BOT_TOKEN_HERE.abcdefghijklmnopqrstuvwxyz
 CLIENT_ID=987654321098765432
 
-# Storage (use data-prod for production, data-test for testing)
-GIF_STORAGE_PATH=./data-prod
-MAX_STORAGE_GB=50
-
-# CDN
-CDN_BASE_URL=https://cdn.site.com/gifs
 SERVER_PORT=3000
 
 # Processing
 MAX_GIF_DURATION=30
-
-# Cloudflare (optional, for reference)
-TUNNEL_ID=abc123def-456g-789h-012i-345jkl678mno
 ```
+
+see [[Configuration]] for every key.
 
 **Security Notes**:
 
@@ -129,12 +117,10 @@ configure your `.env` file with prefixed variables:
 # test bot credentials
 TEST_DISCORD_TOKEN=your_test_bot_token
 TEST_CLIENT_ID=your_test_bot_client_id
-TEST_GIF_STORAGE_PATH=./data-test
 
 # prod bot credentials
 PROD_DISCORD_TOKEN=your_prod_bot_token
 PROD_CLIENT_ID=your_prod_bot_client_id
-PROD_GIF_STORAGE_PATH=./data-prod
 ```
 
 ### running the bots
@@ -151,6 +137,6 @@ bun run bot:register:test
 bun run bot:register:prod
 ```
 
-each bot uses a separate database file (`gronka-test.db` and `gronka-prod.db`) and storage directory (`data-test/` and `data-prod/`).
+each bot uses its own postgres database (`TEST_POSTGRES_DB` and `PROD_POSTGRES_DB`).
 
 for complete documentation, see the [[Test-Bot|test bot guide]].

@@ -25,17 +25,8 @@ afterAll(() => {
   delete globalThis.window;
 });
 
-test('requests keeps userId as a filter instead of opening the profile', () => {
-  navigate('requests', { userId: '123' });
-  expect(read(currentRoute).page).toBe('requests');
-  expect(read(currentRoute).params.$userId).toBe('123');
-});
-
-test('user-profile and request take their ids from the path', () => {
-  navigate('user-profile', { userId: '123' });
-  expect(read(currentRoute)).toEqual({ page: 'user-profile', params: { userId: '123' } });
-  navigate('request', { requestId: 'abc', span: 's1' });
-  expect(read(currentRoute).page).toBe('request');
-  expect(read(currentRoute).params.requestId).toBe('abc');
-  expect(read(currentRoute).params.$span).toBe('s1');
+test('query params land prefixed so they cannot touch prototype keys', () => {
+  navigate('issues', { issue: 'abc', __proto__x: '1' });
+  expect(read(currentRoute).page).toBe('issues');
+  expect(read(currentRoute).params.$issue).toBe('abc');
 });

@@ -70,8 +70,8 @@ export function isMediaResponse(contentType, head) {
 }
 
 // Reuses /convert's guarded fetch rather than adding a second one.
-export async function downloadDirectMedia(url, isAdminUser = false, client = null, options = {}) {
-  const fileData = await downloadFileFromUrl(url, isAdminUser, client, options);
+export async function downloadDirectMedia(url, client = null, options = {}) {
+  const fileData = await downloadFileFromUrl(url, client, options);
   if (!isMediaResponse(fileData.contentType, fileData.head)) {
     logger.warn(
       `Direct media URL returned non-media content: ${url} (content-type: ${fileData.contentType || 'none'})`
@@ -125,19 +125,19 @@ function filenameFor(file, url) {
   return 'file';
 }
 
-async function downloadCapped(url, isAdminUser, maxSize, kind) {
+async function downloadCapped(url, maxSize, kind) {
   const urlValidation = validateUrl(url);
   if (!urlValidation.valid) {
     throw new ValidationError(urlValidation.error);
   }
   try {
-    const file = await guardedFetch(url, isAdminUser ? Infinity : maxSize);
+    const file = await guardedFetch(url, maxSize);
     return await withExtension({ ...file, filename: filenameFor(file, url) });
   } catch (error) {
     if (isSsrfBlockedError(error)) {
       throw new ValidationError(BLOCKED_DESTINATION_MESSAGE);
     }
-    if (isTooLargeError(error) && !isAdminUser) {
+    if (isTooLargeError(error)) {
       throw new ValidationError(`${kind} file is too large (max ${mb(maxSize)}mb)`);
     }
     logger.warn(`${kind} download failed: ${error.message}`);
@@ -145,27 +145,27 @@ async function downloadCapped(url, isAdminUser, maxSize, kind) {
   }
 }
 
-export function downloadVideo(url, isAdminUser = false) {
-  return downloadCapped(url, isAdminUser, MAX_VIDEO_SIZE, 'video');
+export function downloadVideo(url) {
+  return downloadCapped(url, MAX_VIDEO_SIZE, 'video');
 }
 
-export function downloadImage(url, isAdminUser = false) {
-  return downloadCapped(url, isAdminUser, MAX_IMAGE_SIZE, 'image');
+export function downloadImage(url) {
+  return downloadCapped(url, MAX_IMAGE_SIZE, 'image');
 }
 
-async function fetchAnyFile(url, isAdminUser, userAgent) {
-  const file = await guardedFetch(url, isAdminUser ? Infinity : MAX_ANY_SIZE, userAgent);
+async function fetchAnyFile(url, userAgent) {
+  const file = await guardedFetch(url, MAX_ANY_SIZE, userAgent);
   const contentType = file.headers['content-type'] || '';
   const isImage =
     !contentType.includes('video') &&
     (contentType.includes('image') || /\.(jpg|jpeg|png|gif|webp|bmp|svg)$/i.test(url));
-  if (!isAdminUser && isImage && file.size > MAX_IMAGE_SIZE) {
+  if (isImage && file.size > MAX_IMAGE_SIZE) {
     throw new ValidationError(`file is too large (max ${mb(MAX_IMAGE_SIZE)}mb for images)`);
   }
   return withExtension({ ...file, contentType, filename: filenameFor(file, url) });
 }
 
-export async function downloadFileFromUrl(url, isAdminUser = false, client = null, options = {}) {
+export async function downloadFileFromUrl(url, client = null, options = {}) {
   const urlValidation = validateUrl(url);
   if (!urlValidation.valid) {
     throw new ValidationError(urlValidation.error);
@@ -184,11 +184,11 @@ export async function downloadFileFromUrl(url, isAdminUser = false, client = nul
   }
 
   if (isMegaUrl(actualUrl)) {
-    return downloadFromMega(actualUrl, isAdminUser, MAX_ANY_SIZE);
+    return downloadFromMega(actualUrl, MAX_ANY_SIZE);
   }
 
   if (isInstagramStoryUrl(actualUrl) && hasInstagramSession()) {
-    const story = await downloadFromInstagram(actualUrl, isAdminUser);
+    const story = await downloadFromInstagram(actualUrl);
     return Array.isArray(story) ? story[0] : story;
   }
 
@@ -196,8 +196,8 @@ export async function downloadFileFromUrl(url, isAdminUser = false, client = nul
   if (COBALT_ENABLED && !isDiscordCdnUrl(actualUrl) && isSocialMediaUrl(actualUrl)) {
     try {
       logger.debug(`Detected social media URL, attempting download via Cobalt`);
-      const maxSize = isAdminUser ? Infinity : MAX_VIDEO_SIZE;
-      return await downloadFromSocialMedia(COBALT_API_URL, actualUrl, isAdminUser, maxSize);
+      const maxSize = MAX_VIDEO_SIZE;
+      return await downloadFromSocialMedia(COBALT_API_URL, actualUrl, maxSize);
     } catch (cobaltError) {
       logger.warn(
         `Cobalt download failed, falling back to direct download: ${cobaltError.message}`
@@ -206,13 +206,13 @@ export async function downloadFileFromUrl(url, isAdminUser = false, client = nul
   }
 
   try {
-    return await fetchAnyFile(actualUrl, isAdminUser, options.userAgent);
+    return await fetchAnyFile(actualUrl, options.userAgent);
   } catch (error) {
     if (error instanceof ValidationError) throw error;
     if (isSsrfBlockedError(error)) {
       throw new ValidationError(BLOCKED_DESTINATION_MESSAGE);
     }
-    if (isTooLargeError(error) && !isAdminUser) {
+    if (isTooLargeError(error)) {
       throw new ValidationError(
         `file is too large (max ${mb(MAX_VIDEO_SIZE)}mb for videos, ${mb(MAX_IMAGE_SIZE)}mb for images)`
       );
@@ -234,7 +234,7 @@ export async function downloadFileFromUrl(url, isAdminUser = false, client = nul
         const refreshedUrl = await getRefreshedAttachmentURL(client, url);
         if (refreshedUrl !== url) {
           logger.debug(`Retrying download with refreshed URL`);
-          return await fetchAnyFile(refreshedUrl, isAdminUser);
+          return await fetchAnyFile(refreshedUrl);
         }
       } catch (refreshError) {
         if (refreshError instanceof ValidationError) throw refreshError;

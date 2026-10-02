@@ -40,7 +40,8 @@ const OFFSITE_HOSTS = [
 ];
 
 // /comments/<id>/... is the canonical form; /s/<id> is what the share sheet emits and 301s to it.
-const POST_PATH = /^\/r\/[^/]+\/(?:comments|s)\/[A-Za-z0-9_]+/;
+// Posts made to a user profile live under /user/<name>/ (or /u/) instead of /r/<sub>/.
+const POST_PATH = /^\/(?:r|u|user)\/[^/]+\/(?:comments|s)\/[A-Za-z0-9_]+/;
 
 const USER_AGENT =
   'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) ' +
@@ -81,7 +82,7 @@ export function commentIdFromUrl(url) {
 // Appending .json to a /s/ share link lands on the subreddit, not the post, so it has to be
 // followed first. HEAD is enough: the 301 names the canonical permalink, comment id included.
 async function canonicalUrl(url) {
-  if (!/^\/r\/[^/]+\/s\//.test(new URL(url).pathname)) {
+  if (!/^\/(?:r|u|user)\/[^/]+\/s\//.test(new URL(url).pathname)) {
     return url;
   }
   try {

@@ -4,33 +4,15 @@ import { groupIssues } from '../issues.js';
 import { poll } from '../utils/poll.js';
 
 export const navStats = writable(null);
-export const savedViews = writable([]);
 export const issueStates = writable({});
 
-const DAY = 24 * 3600 * 1000;
-
 export async function refreshNav() {
-  const since = Date.now() - DAY;
-  const [req, facets, issues, stats, system] = await Promise.all([
-    getJsonOrNull(`/api/requests/outcomes?dateFrom=${since}`),
-    getJsonOrNull(`/api/logs/facets?startTime=${since}`),
+  const [issues, system] = await Promise.all([
     getJsonOrNull('/api/alerts/summary?reasonLimit=300'),
-    getJsonOrNull('/api/stats'),
     getJsonOrNull('/api/system'),
   ]);
-  const ops = req?.requests ?? [];
-  const byType = {};
-  for (const op of ops) byType[op.type] = (byType[op.type] || 0) + 1;
   navStats.set({
-    requests: {
-      total: ops.length,
-      failed: ops.filter(op => op.status === 'error').length,
-      slow: ops.filter(op => op.duration > 10000).length,
-      byType,
-    },
-    logs: facets?.facets ?? {},
     issues: groupIssues(issues?.byReason ?? []),
-    users: stats?.ever_active_users,
     paused: !!system?.jobs?.paused,
     version: system?.version ?? null,
   });
@@ -38,36 +20,17 @@ export async function refreshNav() {
 
 export function startNavStats() {
   refreshNav();
-  loadViews();
+  loadIssueStates();
   return poll(refreshNav, 60_000);
 }
 
-async function loadViews() {
+async function loadIssueStates() {
   try {
     const { settings } = await getJson('/api/settings');
-    savedViews.set(JSON.parse(settings.webui_saved_views?.value || '[]'));
     issueStates.set(JSON.parse(settings.webui_issue_states?.value || '{}'));
   } catch {
-    savedViews.set([]);
+    issueStates.set({});
   }
-}
-
-async function storeViews(views) {
-  const res = await fetch('/api/settings/webui_saved_views', {
-    method: 'PUT',
-    headers: { 'content-type': 'application/json' },
-    body: JSON.stringify({ value: views }),
-  });
-  if (!res.ok) throw new Error('could not save view');
-  savedViews.set(views);
-}
-
-export function saveView(view) {
-  return storeViews([...get(savedViews).filter(v => v.name !== view.name), view]);
-}
-
-export function removeView(name) {
-  return storeViews(get(savedViews).filter(v => v.name !== name));
 }
 
 // state: { state: 'muted', until } | { state: 'resolved', at } | null to reopen.

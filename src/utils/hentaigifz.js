@@ -74,7 +74,7 @@ function decodeMediaUrl(url) {
 }
 
 // Download the media from a hentaigifz.com post URL
-export async function downloadFromHentaiGifz(url, isAdminUser = false) {
+export async function downloadFromHentaiGifz(url) {
   logger.debug(`Resolving hentaigifz post: ${url}`);
 
   let html;
@@ -107,7 +107,7 @@ export async function downloadFromHentaiGifz(url, isAdminUser = false) {
   }
 
   logger.debug(`Extracted hentaigifz media URL: ${mediaUrl}`);
-  const result = await downloadFileFromUrl(mediaUrl, isAdminUser);
+  const result = await downloadFileFromUrl(mediaUrl);
   logger.debug(
     `Downloaded hentaigifz media: ${result.filename} (${result.size} bytes, ${result.contentType})`
   );

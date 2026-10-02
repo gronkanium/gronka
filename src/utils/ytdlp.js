@@ -642,7 +642,6 @@ function emptyDownloadError(error) {
 
 export async function downloadWithYtdlp(
   url,
-  isAdminUser = false,
   maxSize = Infinity,
   quality = null,
   maxDuration = 300,
@@ -650,10 +649,10 @@ export async function downloadWithYtdlp(
   duration = null
 ) {
   logger.debug(
-    `Downloading via yt-dlp: ${url} (admin: ${isAdminUser}, maxDuration: ${maxDuration}, startTime: ${startTime}, duration: ${duration})`
+    `Downloading via yt-dlp: ${url} (maxDuration: ${maxDuration}, startTime: ${startTime}, duration: ${duration})`
   );
 
-  // Fast duration pre-check for non-admin users (skip if using segment download with explicit duration)
+  // Fast duration pre-check (skipped for a segment download with an explicit duration)
   // This prevents waiting for a full download attempt just to find out the video is too long
   const needsDurationCheck = maxDuration !== Infinity && startTime === null && duration === null;
   if (needsDurationCheck) {
@@ -679,15 +678,7 @@ export async function downloadWithYtdlp(
     }
   }
 
-  // Admin users get best quality, regular users get 1080p max
-  const effectiveQuality =
-    quality ||
-    (isAdminUser
-      ? 'bestvideo[ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4]/best'
-      : DEFAULT_YTDLP_FORMAT);
-
-  // Admins are never size-gated; for everyone else the cap drives yt-dlp's --max-filesize.
-  const gateSize = isAdminUser ? Infinity : maxSize;
+  const effectiveQuality = quality || DEFAULT_YTDLP_FORMAT;
 
   const workDir = await tempDir();
   const useSegmentDownload = startTime !== null || duration !== null;
@@ -706,7 +697,7 @@ export async function downloadWithYtdlp(
           maxDuration,
           startTime,
           duration,
-          gateSize
+          maxSize
         );
       } catch (segmentError) {
         // Check if this is a segment download failure (too small file)
@@ -724,7 +715,7 @@ export async function downloadWithYtdlp(
             maxDuration,
             null,
             null,
-            gateSize
+            maxSize
           ).catch(emptyDownloadError);
 
           const trimmedPath = path.join(workDir, 'trimmed_output.mp4');
@@ -745,14 +736,14 @@ export async function downloadWithYtdlp(
         maxDuration,
         startTime,
         duration,
-        gateSize
+        maxSize
       ).catch(emptyDownloadError);
     }
 
     const filename = path.basename(outputPath);
     const contentType = getContentType(path.extname(outputPath));
     const file = await fromPath(outputPath, { contentType, filename });
-    if (!isAdminUser && file.size > maxSize) {
+    if (file.size > maxSize) {
       throw new ValidationError(
         `file is too large (${(file.size / (1024 * 1024)).toFixed(2)}MB, max ${(maxSize / (1024 * 1024)).toFixed(2)}MB)`
       );

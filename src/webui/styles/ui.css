@@ -6,7 +6,7 @@
  *   card       .panel > .ph (header) + .pb (body) + .pf (footer)
  *   stats      .kpis > .kpi   (a row of stat cards)   .strip (a compact one-line stat row)
  *   controls   .btn .seg .tabs .field .searchbox .qbar .qchip .toggle .icon-btn
- *   status     .pill .chip .dot .flash .avatar
+ *   status     .pill .chip .dot .flash
  *   tables     .tbl (DataTable.svelte wraps this with sorting and states) .lrow .pager
  *   states     .empty .skeleton .busy
  */
@@ -985,27 +985,6 @@ textarea.field {
 }
 .flash .stack {
   gap: 2px;
-}
-
-.avatar {
-  flex-shrink: 0;
-}
-.user-cell {
-  display: inline-flex;
-  vertical-align: middle;
-  align-items: center;
-  gap: 8px;
-  min-width: 0;
-}
-.user-cell .id {
-  display: inline-block;
-  line-height: 1;
-  font-family: var(--mono);
-  font-size: var(--fs-sm);
-  color: var(--text-soft);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
 }
 
 /* ---------- lists and tables ---------- */

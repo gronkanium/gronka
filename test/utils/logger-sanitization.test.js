@@ -1,16 +1,18 @@
-import { test, describe, beforeAll, afterAll } from 'bun:test';
+import { test, describe } from 'bun:test';
 import assert from 'node:assert';
 import { createLogger } from '../../src/utils/logger.js';
-import { initDatabase, getLogs } from '../../src/utils/database.js';
 
-beforeAll(async () => {
-  await initDatabase();
-});
-
-afterAll(async () => {
-  // Don't close database here - it's shared across parallel test files
-  // Connection will be cleaned up when Node.js exits
-});
+async function captured(fn) {
+  const lines = [];
+  const original = console.log;
+  console.log = line => lines.push(String(line));
+  try {
+    await fn();
+  } finally {
+    console.log = original;
+  }
+  return lines;
+}
 
 describe('logger sanitization', () => {
   describe('sanitizeLogInput', () => {
@@ -101,33 +103,19 @@ describe('logger sanitization', () => {
       const logger = createLogger('test-injection');
       const maliciousInput = 'Normal log\n[2024-01-01] [INFO] Fake log entry';
 
-      await logger.info(maliciousInput);
-      await new Promise(resolve => setTimeout(resolve, 100));
-
-      const logs = await getLogs({ component: 'test-injection', limit: 1 });
-      assert.ok(logs.length > 0);
-      const log = logs[0];
-      // Verify newline was removed (preventing log injection)
-      // The text will still be there, but the newline that could create a fake log entry is removed
-      assert.ok(!log.message.includes('\n'));
-      assert.ok(log.message.includes('Normal log'));
-      // The fake log text is still present, but without the newline it can't create a separate log entry
-      assert.ok(log.message.includes('[2024-01-01]'));
+      const [line] = await captured(() => logger.warn(maliciousInput));
+      assert.ok(!line.includes('\n'));
+      assert.ok(line.includes('Normal log'));
+      assert.ok(line.includes('[2024-01-01]'));
     });
 
     test('prevents log injection with ANSI codes', async () => {
       const logger = createLogger('test-injection-ansi');
       const maliciousInput = '\x1B[31mFake error\x1B[0m';
 
-      await logger.info(maliciousInput);
-      await new Promise(resolve => setTimeout(resolve, 100));
-
-      const logs = await getLogs({ component: 'test-injection-ansi', limit: 1 });
-      assert.ok(logs.length > 0);
-      const log = logs[0];
-      // Verify ANSI codes were removed
-      assert.ok(!log.message.includes('\x1B'));
-      assert.ok(log.message.includes('Fake error'));
+      const [line] = await captured(() => logger.warn(maliciousInput));
+      assert.ok(!line.includes('\x1B'));
+      assert.ok(line.includes('Fake error'));
     });
 
     test('sanitizes log messages in formatMessage', () => {
@@ -171,26 +159,15 @@ describe('logger sanitization', () => {
       const logger = createLogger('test-all-methods');
       const maliciousInput = 'Test\x00\x01\n\r\tmessage';
 
-      await logger.debug(maliciousInput);
-      await logger.info(maliciousInput);
-      await logger.warn(maliciousInput);
-      await logger.error(maliciousInput);
-
-      await new Promise(resolve => setTimeout(resolve, 100));
-
-      const logs = await getLogs({ component: 'test-all-methods', limit: 10 });
-      assert.ok(logs.length >= 3); // At least INFO, WARN, ERROR (DEBUG may be filtered)
-
-      // Verify all log entries are sanitized
-      for (const log of logs) {
+      const lines = await captured(async () => {
+        await logger.warn(maliciousInput);
+        await logger.error(maliciousInput);
+      });
+      assert.strictEqual(lines.length, 2);
+      for (const line of lines) {
         // eslint-disable-next-line no-control-regex
-        const controlCharRegex = /[\x00-\x1F\x7F-\x9F]/;
-        assert.ok(
-          !controlCharRegex.test(log.message),
-          `Log message contains control characters: ${log.message}`
-        );
-        assert.ok(log.message.includes('Test'));
-        assert.ok(log.message.includes('message'));
+        assert.ok(!/[\x00-\x1F\x7F-\x9F]/.test(line), `control characters in: ${line}`);
+        assert.ok(line.includes('Test') && line.includes('message'));
       }
     });
   });

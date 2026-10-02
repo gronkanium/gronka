@@ -20,13 +20,13 @@ const reason = (text, extra = {}) => ({
 });
 
 describe('issue grouping', () => {
-  test('variants merge their event times and count each user once', () => {
+  test('variants merge their event times and keep no user information', () => {
     const [g] = groupIssues([
-      reason('video is 61m long', { times: [1, 2], userIds: ['a', 'b'] }),
-      reason('video is 62m long', { times: [3], userIds: ['b', 'c'] }),
+      reason('video is 61m long', { times: [1, 2] }),
+      reason('video is 62m long', { times: [3] }),
     ]);
     assert.deepStrictEqual(g.times.sort(), [1, 2, 3]);
-    assert.strictEqual(g.users, 3);
+    assert.ok(!('users' in g) && !('userIds' in g));
   });
 
   test('an issue is new only when every variant first appeared in the last day', () => {

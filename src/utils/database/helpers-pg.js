@@ -30,14 +30,7 @@ export function convertTimestampsInArray(array, timestampFields = ['timestamp'])
   return array.map(obj => convertTimestampsToNumbers(obj, timestampFields));
 }
 
-/**
- * Convert numeric BIGINT fields from strings to numbers in a single object
- * PostgreSQL BIGINT values are returned as strings by postgres.js to avoid precision issues.
- * This function converts them back to JavaScript numbers for fields where we know they fit safely.
- * @param {Object} obj - Object to convert
- * @param {string[]} numericFields - Array of field names that contain numeric BIGINT values
- * @returns {Object} Object with numeric fields converted to numbers
- */
+// postgres.js returns BIGINT as strings; these fields fit safely in a JS number
 export function convertBigIntToNumbers(obj, numericFields = []) {
   if (!obj || typeof obj !== 'object') {
     return obj;

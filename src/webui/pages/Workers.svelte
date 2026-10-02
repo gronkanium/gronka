@@ -1,4 +1,6 @@
 <script>
+  import { poll } from '../utils/poll.js';
+  import { getJsonOrNull, sendJson } from '../utils/api.js';
   import { Pause, Play, AlertTriangle, Cpu } from 'lucide-svelte';
   import { currentRoute, navigate } from '../utils/router.js';
   import { refreshNav } from '../stores/nav.js';
@@ -17,32 +19,25 @@
 
   const statusFilter = $derived($currentRoute.params.$status || '');
 
-  const get = url =>
-    fetch(url)
-      .then(r => (r.ok ? r.json() : null))
-      .catch(() => null);
   async function load() {
-    [data, bot] = await Promise.all([get('/api/system'), get('/api/bot/status')]);
+    [data, bot] = await Promise.all([
+      getJsonOrNull('/api/system'),
+      getJsonOrNull('/api/bot/status'),
+    ]);
     now = Date.now();
     updated = now;
   }
-  const loadDeps = async () => (system = (await get('/api/system/deps')) ?? system);
+  const loadDeps = async () => (system = (await getJsonOrNull('/api/system/deps')) ?? system);
   $effect(() => {
     load();
     loadDeps();
-    const t = setInterval(load, 5000);
-    const d = setInterval(loadDeps, 30_000);
-    const tick = setInterval(() => (now = Date.now()), 1000);
-    return () => (clearInterval(t), clearInterval(d), clearInterval(tick));
+    const stops = [poll(load, 5000), poll(loadDeps, 30_000), poll(() => (now = Date.now()), 1000)];
+    return () => stops.forEach(stop => stop());
   });
 
   async function setPaused(value) {
     busy = true;
-    await fetch('/api/settings/queue_paused', {
-      method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ value }),
-    }).catch(() => null);
+    await sendJson('/api/settings/queue_paused', 'PUT', { value }).catch(() => null);
     await load();
     refreshNav();
     busy = false;

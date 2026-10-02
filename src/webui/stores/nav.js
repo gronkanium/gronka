@@ -1,21 +1,22 @@
+import { getJson, getJsonOrNull } from '../utils/api.js';
 import { writable, get } from 'svelte/store';
 import { groupIssues } from '../issues.js';
+import { poll } from '../utils/poll.js';
 
 export const navStats = writable(null);
 export const savedViews = writable([]);
 export const issueStates = writable({});
 
 const DAY = 24 * 3600 * 1000;
-const json = url => fetch(url).then(r => (r.ok ? r.json() : Promise.reject(new Error(url))));
 
 export async function refreshNav() {
   const since = Date.now() - DAY;
   const [req, facets, issues, stats, system] = await Promise.all([
-    json(`/api/requests?dateFrom=${since}&limit=5000`).catch(() => null),
-    json(`/api/logs/facets?startTime=${since}`).catch(() => null),
-    json('/api/alerts/summary?reasonLimit=300').catch(() => null),
-    json('/api/stats').catch(() => null),
-    json('/api/system').catch(() => null),
+    getJsonOrNull(`/api/requests/outcomes?dateFrom=${since}`),
+    getJsonOrNull(`/api/logs/facets?startTime=${since}`),
+    getJsonOrNull('/api/alerts/summary?reasonLimit=300'),
+    getJsonOrNull('/api/stats'),
+    getJsonOrNull('/api/system'),
   ]);
   const ops = req?.requests ?? [];
   const byType = {};
@@ -24,7 +25,7 @@ export async function refreshNav() {
     requests: {
       total: ops.length,
       failed: ops.filter(op => op.status === 'error').length,
-      slow: ops.filter(op => (op.performanceMetrics?.duration ?? 0) > 10000).length,
+      slow: ops.filter(op => op.duration > 10000).length,
       byType,
     },
     logs: facets?.facets ?? {},
@@ -38,13 +39,12 @@ export async function refreshNav() {
 export function startNavStats() {
   refreshNav();
   loadViews();
-  const timer = setInterval(refreshNav, 60_000);
-  return () => clearInterval(timer);
+  return poll(refreshNav, 60_000);
 }
 
 async function loadViews() {
   try {
-    const { settings } = await json('/api/settings');
+    const { settings } = await getJson('/api/settings');
     savedViews.set(JSON.parse(settings.webui_saved_views?.value || '[]'));
     issueStates.set(JSON.parse(settings.webui_issue_states?.value || '{}'));
   } catch {

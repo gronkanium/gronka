@@ -1,7 +1,7 @@
 import express from 'express';
 import { createLogger } from '../../utils/logger.js';
 import { getPostgresConfig } from '../../utils/database/connection.js';
-import { getOperationTrace, searchOperations } from '../../utils/database.js';
+import { getOperationOutcomes, getOperationTrace, searchOperations } from '../../utils/database.js';
 import { getServiceForUrl } from '../../utils/download-services.js';
 import { operations, storeOperation } from '../operations/storage.js';
 import { reconstructOperationFromTrace } from '../operations/reconstruction.js';
@@ -138,12 +138,19 @@ router.get('/api/requests', async (req, res) => {
   }
 });
 
+router.get('/api/requests/outcomes', async (req, res) => {
+  try {
+    const since = parseInt(req.query.dateFrom, 10) || Date.now() - 24 * 3600e3;
+    res.json({ requests: await getOperationOutcomes(since) });
+  } catch (error) {
+    logger.error('Failed to fetch request outcomes:', error);
+    res.status(500).json({ error: 'failed to fetch request outcomes' });
+  }
+});
+
 router.get('/api/sources/usage', async (req, res) => {
   try {
-    const { operations: ops } = await searchOperations(
-      { dateFrom: Date.now() - 7 * 24 * 3600e3 },
-      { limit: 10000 }
-    );
+    const ops = await getOperationOutcomes(Date.now() - 7 * 24 * 3600e3);
     const usage = {};
     for (const o of ops) {
       const id = o.originalUrl && getServiceForUrl(o.originalUrl)?.id;
@@ -172,27 +179,9 @@ router.get('/api/operations/:operationId', async (req, res) => {
       operation = { ...operation, stepsAvailable: true };
     }
 
-    // If not in memory, try to reconstruct from database
-    if (!operation) {
-      const trace = await getOperationTrace(operationId);
-      if (trace) {
-        operation = await reconstructOperationFromTrace(trace);
-      }
-    }
-
-    // Get detailed trace from database with parsed metadata
     const trace = await getOperationTrace(operationId);
-
-    // Debug logging
-    if (trace) {
-      const executionStepsCount = trace.logs.filter(
-        log => log.step !== 'created' && log.step !== 'status_update' && log.step !== 'error'
-      ).length;
-      logger.debug(
-        `Trace retrieved for operation ${operationId}: ${trace.logs.length} total logs, ${executionStepsCount} execution steps`
-      );
-    } else {
-      logger.debug(`No trace found for operation ${operationId}`);
+    if (!operation && trace) {
+      operation = await reconstructOperationFromTrace(trace);
     }
 
     if (!operation && !trace) {
@@ -207,26 +196,6 @@ router.get('/api/operations/:operationId', async (req, res) => {
     logger.error('Failed to fetch operation details:', error);
     res.status(500).json({
       error: 'failed to fetch operation details',
-      message: error.message,
-    });
-  }
-});
-
-// Operation trace endpoint
-router.get('/api/operations/:operationId/trace', async (req, res) => {
-  try {
-    const { operationId } = req.params;
-    const trace = await getOperationTrace(operationId);
-
-    if (!trace) {
-      return res.status(404).json({ error: 'operation trace not found' });
-    }
-
-    res.json({ trace });
-  } catch (error) {
-    logger.error('Failed to fetch operation trace:', error);
-    res.status(500).json({
-      error: 'failed to fetch operation trace',
       message: error.message,
     });
   }

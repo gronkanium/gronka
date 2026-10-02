@@ -1,4 +1,11 @@
+<script module>
+  // Last load, so coming back to the page draws at once while it refreshes.
+  let cached = null;
+</script>
+
 <script>
+  import { poll } from '../utils/poll.js';
+  import { getJsonOrNull } from '../utils/api.js';
   import { ArrowUpRight, ArrowUp, ArrowDown, Check } from 'lucide-svelte';
   import { currentRoute, navigate } from '../utils/router.js';
   import { issueStates } from '../stores/nav.js';
@@ -37,12 +44,12 @@
     pending: ['idle', 'Queued'],
   };
 
-  let ops = $state([]);
-  let stats = $state(null);
-  let system = $state(null);
-  let issues = $state([]);
-  let loaded = $state(false);
-  let now = $state(Date.now());
+  let ops = $state(cached?.ops ?? []);
+  let stats = $state(cached?.stats ?? null);
+  let system = $state(cached?.system ?? null);
+  let issues = $state(cached?.issues ?? []);
+  let loaded = $state(!!cached);
+  let now = $state(cached?.now ?? Date.now());
 
   const params = $derived($currentRoute.params);
   const absolute = $derived(!!params.$startTime);
@@ -61,19 +68,14 @@
     endTime: params.$endTime || null,
   });
 
+  // Retention keeps 7 days, so one fetch holds every range; switching only filters it.
   async function load() {
     const t = Date.now();
-    const end = range.end ?? t;
-    const from = (range.start ?? t - range.span) - (range.compare ? range.span : 0);
-    const get = url =>
-      fetch(url)
-        .then(r => (r.ok ? r.json() : null))
-        .catch(() => null);
     const [req, st, sys, sum] = await Promise.all([
-      get(`/api/requests?dateFrom=${from}&dateTo=${end}&limit=10000`),
-      get('/api/stats'),
-      get('/api/system'),
-      get('/api/alerts/summary?reasonLimit=300'),
+      getJsonOrNull(`/api/requests/outcomes?dateFrom=${t - RANGES['7d'].span}`),
+      getJsonOrNull('/api/stats'),
+      getJsonOrNull('/api/system'),
+      getJsonOrNull('/api/alerts/summary?reasonLimit=300'),
     ]);
     ops = req?.requests ?? [];
     stats = st;
@@ -81,13 +83,12 @@
     issues = sum?.byReason ?? [];
     now = t;
     loaded = true;
+    cached = { ops, stats, system, issues, now };
   }
 
   $effect(() => {
-    range;
     load();
-    const timer = setInterval(load, 60_000);
-    return () => clearInterval(timer);
+    return poll(load, 60_000);
   });
 
   const winEnd = $derived(range.end ?? now);
@@ -102,8 +103,8 @@
   };
   const durations = list =>
     list
-      .filter(o => o.status === 'success' && o.performanceMetrics?.duration)
-      .map(o => o.performanceMetrics.duration)
+      .filter(o => o.status === 'success' && o.duration)
+      .map(o => o.duration)
       .sort((a, b) => a - b);
   const pct = (sorted, p) =>
     sorted.length ? sorted[Math.min(sorted.length - 1, Math.floor(sorted.length * p))] : null;
@@ -134,13 +135,13 @@
         const inBucket = cur.filter(
           o =>
             o.status === 'success' &&
-            o.performanceMetrics?.duration &&
+            o.duration &&
             o.timestamp >= b.at &&
             o.timestamp < b.at + range.bucket * step
         );
         return (
           pct(
-            inBucket.map(o => o.performanceMetrics.duration).sort((a, b) => a - b),
+            inBucket.map(o => o.duration).sort((a, b) => a - b),
             0.5
           ) ?? 0
         );
@@ -456,11 +457,7 @@
         <span class="user-cell hide-sm"
           ><Avatar id={r.userId} size={18} /><span class="id">{shortId(r.userId)}</span></span
         >
-        <span class="num muted hide-sm"
-          >{r.performanceMetrics?.duration
-            ? formatDuration(r.performanceMetrics.duration)
-            : '—'}</span
-        >
+        <span class="num muted hide-sm">{r.duration ? formatDuration(r.duration) : '—'}</span>
         <span class="num dim">{formatRelativeTime(r.timestamp)}</span>
       {/snippet}
     </DataTable>

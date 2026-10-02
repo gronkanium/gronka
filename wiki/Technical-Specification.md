@@ -102,8 +102,7 @@ default options:
   width: 480,
   fps: 30,
   startTime: null,
-  duration: null,
-  quality: 'medium'
+  duration: null
 }
 ```
 

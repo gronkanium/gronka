@@ -6,10 +6,6 @@ import { convertTimestampsToNumbers } from './helpers-pg.js';
 const banCache = new Map(); // Map<userId, {banned: Object|null, timestamp}>
 const BAN_CACHE_TTL = 10 * 1000; // 10 seconds
 
-/**
- * Invalidate the ban check cache
- * @param {string|null} userId - User ID to invalidate (or null to clear all)
- */
 export function invalidateBanCache(userId = null) {
   if (userId) {
     banCache.delete(userId);
@@ -18,19 +14,10 @@ export function invalidateBanCache(userId = null) {
   }
 }
 
-/**
- * Get a user's ban record, if any
- * @param {string} userId - Discord user ID
- * @returns {Promise<Object|null>} Ban record or null if not banned
- */
 export async function getBan(userId) {
   await ensurePostgresInitialized();
 
   const sql = getPostgresConnection();
-  if (!sql) {
-    console.error('PostgreSQL not initialized. Call initPostgresDatabase() first.');
-    return null;
-  }
 
   const cached = banCache.get(userId);
   if (cached && Date.now() - cached.timestamp < BAN_CACHE_TTL) {
@@ -49,10 +36,6 @@ export async function banUser(userId, reason, appealAllowed = true) {
   await ensurePostgresInitialized();
 
   const sql = getPostgresConnection();
-  if (!sql) {
-    console.error('PostgreSQL not initialized. Call initPostgresDatabase() first.');
-    return;
-  }
 
   const now = Date.now();
 
@@ -72,10 +55,6 @@ export async function unbanUser(userId) {
   await ensurePostgresInitialized();
 
   const sql = getPostgresConnection();
-  if (!sql) {
-    console.error('PostgreSQL not initialized. Call initPostgresDatabase() first.');
-    return false;
-  }
 
   const result = await sql`DELETE FROM banned_users WHERE user_id = ${userId} RETURNING user_id`;
 
@@ -88,10 +67,6 @@ export async function listBans() {
   await ensurePostgresInitialized();
 
   const sql = getPostgresConnection();
-  if (!sql) {
-    console.error('PostgreSQL not initialized. Call initPostgresDatabase() first.');
-    return [];
-  }
 
   const result = await sql`SELECT * FROM banned_users ORDER BY banned_at DESC`;
 

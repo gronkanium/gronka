@@ -1,4 +1,7 @@
 <script>
+  import { poll } from '../utils/poll.js';
+  import { createCopier } from '../utils/copier.svelte.js';
+  import { getJson, getJsonOrNull } from '../utils/api.js';
   import { tick, untrack } from 'svelte';
   import { SvelteSet } from 'svelte/reactivity';
   import {
@@ -14,7 +17,16 @@
   import { currentRoute, navigate } from '../utils/router.js';
   import { alerts as liveAlerts } from '../stores/sse-store.js';
   import { issueStates, setIssueState } from '../stores/nav.js';
-  import { groupIssues, stateOf, isOpen, KIND_LABEL } from '../issues.js';
+  import {
+    groupIssues,
+    stateOf,
+    isOpen,
+    isNew,
+    inTab,
+    buckets,
+    abbr,
+    KIND_LABEL,
+  } from '../issues.js';
   import { formatRelativeTime, formatDateTime, shortId, urlLabel } from '../utils/format.js';
   import PageHeader from '../components/PageHeader.svelte';
   import DataTable from '../components/DataTable.svelte';
@@ -34,7 +46,6 @@
     ['muted', 'Muted'],
     ['resolved', 'Resolved'],
   ];
-  const TAB_KIND = { defects: 'defect', upstream: 'upstream', user: 'user' };
   const KIND_HELP = {
     user: 'A reply to something the user sent. Nothing to fix unless it keeps catching valid links.',
     upstream: 'A site refused or no longer has the content. Worth a look if it spikes.',
@@ -79,7 +90,7 @@
   let now = $state(Date.now());
   let error = $state('');
   let saving = $state(false);
-  let copied = $state(false);
+  const copier = createCopier();
   let muteOpen = $state(false);
   let toast = $state(null);
   let sort = $state({ key: 'n', desc: true });
@@ -110,9 +121,7 @@
   const selectedKey = $derived($currentRoute.params.$issue || '');
 
   async function load() {
-    const r = await fetch('/api/alerts/summary?reasonLimit=300')
-      .then(x => (x.ok ? x.json() : null))
-      .catch(() => null);
+    const r = await getJsonOrNull('/api/alerts/summary?reasonLimit=300');
     now = Date.now();
     if (!r) {
       if (!loaded) loadError = 'Could not load issues';
@@ -129,7 +138,7 @@
   }
   $effect(() => {
     load();
-    const t = setInterval(load, 60_000);
+    const stopPoll = poll(load, 60_000);
     // A new failure alert refreshes the list (debounced: alerts arrive in bursts).
     let soon;
     const unsub = liveAlerts.subscribe(list => {
@@ -138,7 +147,7 @@
       soon = setTimeout(load, 2000);
     });
     return () => {
-      clearInterval(t);
+      stopPoll();
       clearTimeout(soon);
       clearTimeout(toastTimer);
       unsub();
@@ -155,93 +164,26 @@
     muted: withState.filter(g => g.state === 'muted'),
     resolved: withState.filter(g => g.state === 'resolved'),
   });
-  const inTab = (t, g, state) =>
-    t === 'muted' || t === 'resolved'
-      ? state === t
-      : ['open', 'regressed'].includes(state) && (!TAB_KIND[t] || TAB_KIND[t] === g.kind);
 
-  // Per group and period: the alerts' timestamps and distinct users, fetched on demand.
-  let cache = $state.raw({});
-  const inflight = new Set();
-  const queue = [];
-  let active = 0;
-  const entry = (g, p) => (g ? cache[`${g.key}|${p}`] : undefined);
-  const usersOf = g => entry(g, '7d')?.users;
+  const usersOf = g => g?.users;
 
   const alertsFor = (g, extra = '') =>
     Promise.all(
       g.members.map(reason =>
-        fetch(`/api/alerts?reason=${encodeURIComponent(reason)}&limit=${LIMIT}${extra}`)
-          .then(r => (r.ok ? r.json() : Promise.reject(new Error(String(r.status)))))
+        getJson(`/api/alerts?reason=${encodeURIComponent(reason)}&limit=${LIMIT}${extra}`)
           .then(d => d.alerts ?? [])
           .catch(() => null)
       )
     );
 
-  function want(g, p) {
-    const id = `${g.key}|${p}`;
-    const had = cache[id];
-    if (inflight.has(id) || (had && had.lastSeen >= g.lastSeen)) return;
-    inflight.add(id);
-    queue.push(async () => {
-      const span = p === '24h' ? DAY : 7 * DAY;
-      const parts = await alertsFor(g, `&startTime=${Date.now() - span}`);
-      inflight.delete(id);
-      const failed = parts.includes(null);
-      if (failed && had) return;
-      const list = parts.flatMap(x => x ?? []);
-      cache = {
-        ...cache,
-        [id]: {
-          lastSeen: g.lastSeen,
-          times: list.map(a => a.timestamp),
-          users: new Set(list.map(a => a.user_id).filter(Boolean)).size,
-          truncated: parts.some(x => x && x.length >= LIMIT),
-        },
-      };
-    });
-    pump();
-  }
-  function pump() {
-    while (active < 4 && queue.length) {
-      active++;
-      queue
-        .shift()()
-        .finally(() => {
-          active--;
-          pump();
-        });
-    }
-  }
-
-  function bucketStart(unit, at) {
-    const d = new Date(at);
-    if (unit === 'day') d.setHours(0, 0, 0, 0);
-    else d.setMinutes(0, 0, 0);
-    return d.getTime();
-  }
-  function buckets(times, unit, n, at) {
-    const size = unit === 'day' ? DAY : HOUR;
-    const first = bucketStart(unit, at) - (n - 1) * size;
-    const out = Array.from({ length: n }, (_, i) => ({ at: first + i * size, n: 0 }));
-    for (const t of times) {
-      const i = Math.floor((t - first) / size);
-      if (i >= 0 && i < n) out[i].n++;
-    }
-    return out;
-  }
   const bucketLabel = (at, unit) =>
     unit === 'day'
       ? new Date(at).toLocaleDateString([], { weekday: 'short', month: 'short', day: 'numeric' })
       : formatDateTime(at);
 
   function trendOf(g) {
-    const week = entry(g, '7d');
-    // Hourly buckets come from the 7-day fetch unless it hit the row limit.
-    const src = period === '24h' && week?.truncated ? entry(g, '24h') : week;
-    if (!src) return null;
     const { unit, n } = PERIODS[period];
-    const b = buckets(src.times, unit, n, now);
+    const b = buckets(g.times, unit, n, now);
     return {
       values: b.map(x => x.n),
       tips: b.map(x => `${bucketLabel(x.at, unit)} · ${x.n} event${x.n === 1 ? '' : 's'}`),
@@ -252,7 +194,10 @@
   const visible = $derived.by(() => {
     const by = SORTS[sort.key] ?? SORTS.n;
     const dir = sort.desc ? 1 : -1;
-    return [...lists[tab]].sort((a, b) => (by(b) - by(a)) * dir || b.count - a.count);
+    const fresh = g => (sort.key === 'n' && isNew(g, now) ? 1 : 0);
+    return [...lists[tab]].sort(
+      (a, b) => fresh(b) - fresh(a) || (by(b) - by(a)) * dir || b.count - a.count
+    );
   });
   const trends = $derived(Object.fromEntries(visible.map(g => [g.key, trendOf(g)])));
 
@@ -286,14 +231,6 @@
   const selected = $derived(
     withState.find(g => g.key === selectedKey) ?? (wide ? (visible[0] ?? null) : null)
   );
-
-  $effect(() => {
-    for (const g of visible) {
-      want(g, '7d');
-      if (period === '24h' && entry(g, '7d')?.truncated) want(g, '24h');
-    }
-    if (selected) want(selected, '7d');
-  });
 
   // Columns give way as the list narrows, so the issue title keeps room to breathe.
   const show = $derived({
@@ -369,11 +306,7 @@
       occLoading = false;
       const recent = list.slice(0, 8).filter(a => a.operation_id);
       const ops = await Promise.all(
-        recent.map(a =>
-          fetch(`/api/operations/${encodeURIComponent(a.operation_id)}`)
-            .then(r => (r.ok ? r.json() : null))
-            .catch(() => null)
-        )
+        recent.map(a => getJsonOrNull(`/api/operations/${encodeURIComponent(a.operation_id)}`))
       );
       if (stale) return;
       const map = {};
@@ -384,7 +317,7 @@
     return () => (stale = true);
   });
 
-  const week = $derived(entry(selected, '7d'));
+  const week = $derived(selected);
   const hourly = $derived(week ? buckets(week.times, 'hour', 168, now) : []);
   const last24 = $derived(week ? week.times.filter(t => t > now - DAY).length : null);
   const firstSeen = $derived(occ.length ? occ.at(-1).timestamp : null);
@@ -414,13 +347,6 @@
     ]
       .filter(Boolean)
       .join(' · ');
-  function abbr(n) {
-    if (n == null) return '–';
-    if (n < 1000) return String(n);
-    if (n < 1e4) return `${(n / 1e3).toFixed(1).replace(/\.0$/, '')}k`;
-    if (n < 1e6) return `${Math.round(n / 1e3)}k`;
-    return `${(n / 1e6).toFixed(1).replace(/\.0$/, '')}M`;
-  }
   const wait = ms => new Promise(r => setTimeout(r, ms));
 
   let toastTimer;
@@ -485,7 +411,7 @@
 
   function pick(key, scroll = true) {
     muteOpen = false;
-    copied = false;
+    copier.clear();
     navigate('issues', { ...(tab === 'open' ? {} : { tab }), issue: key });
     if (scroll && !wide)
       tick().then(() => document.querySelector('.detail')?.scrollIntoView({ block: 'start' }));
@@ -502,11 +428,6 @@
     tick().then(() =>
       document.querySelector('.issues-list .tr.sel')?.scrollIntoView({ block: 'nearest' })
     );
-  }
-  function copy(text) {
-    navigator.clipboard?.writeText(text);
-    copied = true;
-    setTimeout(() => (copied = false), 1200);
   }
 
   // A click anywhere on a row opens it; the title is the row's keyboard-focusable control.
@@ -705,6 +626,9 @@
           <span class="l1">
             <button class="ttl ellipsis" data-key={g.key} title={g.title}>{g.title}</button>
             <span class="chip {g.kind}">{KIND_LABEL[g.kind]}</span>
+            {#if g.state === 'open' && isNew(g, now)}
+              <span class="pill sm bad">New</span>
+            {/if}
             {#if BADGE[g.state]}
               <span class="pill sm {BADGE[g.state][0]}">{BADGE[g.state][1]}</span>
             {/if}
@@ -798,9 +722,6 @@
               padLeft={28}
               series={[{ key: 'n', label: 'events', color: 'var(--chart-1)' }]}
             />
-            {#if week.truncated}
-              <div class="note">Only the latest {LIMIT} events per variant are counted.</div>
-            {/if}
           {:else}
             <div class="skeleton chart-skel"></div>
           {/if}
@@ -890,10 +811,10 @@
         >
         <button
           class="icon-btn sm"
-          title={copied ? 'Copied' : 'Copy message'}
+          title={copier.copied ? 'Copied' : 'Copy message'}
           aria-label="copy message"
-          onclick={() => copy(selected.members[0])}
-          >{#if copied}<Check size={15} />{:else}<Copy size={15} />{/if}</button
+          onclick={() => copier.copy(selected.members[0])}
+          >{#if copier.copied}<Check size={15} />{:else}<Copy size={15} />{/if}</button
         >
         <span class="grow"></span>
         {#if selected.state !== 'open'}

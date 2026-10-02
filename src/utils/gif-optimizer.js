@@ -7,7 +7,7 @@ import { ValidationError } from './errors.js';
 import { botConfig, isOwnCdnUrl, r2Config } from './config.js';
 import { downloadGifFromR2, isR2Configured, mediaExistsInR2 } from './r2-storage.js';
 import { hashPartsHex } from './hashing.js';
-import { fromPath } from './media-file.js';
+import { fromPath, writeAtomic, jobSignal } from './media-file.js';
 const logger = createLogger('gif-optimizer');
 
 export function isGifFile(filename, contentType) {
@@ -50,7 +50,10 @@ export async function loadStoredGif(hash) {
   if (!isR2Configured(r2Config) || !(await mediaExistsInR2('gif', hash, '.gif', r2Config))) {
     return null;
   }
-  return downloadGifFromR2(hash, r2Config).catch(() => null);
+  return downloadGifFromR2(hash, r2Config).catch(error => {
+    logger.warn(`R2 gif download failed for ${hash}: ${error.message}`);
+    return null;
+  });
 }
 
 // Optimizes a gif once per (content, lossy) pair; returns {hash: its storage key, file}.
@@ -59,29 +62,16 @@ export async function optimizeCached(gif, lossy = null) {
   const stored = await loadStoredGif(hash);
   if (stored) return { hash, file: stored };
   const outputPath = mediaPath('gif', hash, '.gif', botConfig.gifStoragePath);
-  await optimizeGif(gif.path, outputPath, lossy === null ? {} : { lossy });
+  await writeAtomic(outputPath, part =>
+    optimizeGif(gif.path, part, lossy === null ? {} : { lossy })
+  );
   return {
     hash,
     file: await fromPath(outputPath, { contentType: 'image/gif', filename: `${hash}.gif` }),
   };
 }
 
-/**
- * Optimize a GIF file using gifsicle
- * gifsicle ships in the app Docker image; running the bot in Docker is the
- * supported setup (outside it, /optimize fails with a clear error).
- * @param {string} inputPath - Path to input GIF file
- * @param {string} outputPath - Path to output optimized GIF file
- * @param {Object} options - Optimization options
- * @param {number} options.lossy - Lossy compression level (0-100, default: 35). Higher = more compression, lower quality
- * @param {number} options.optimize - Optimization level (1-3, default: 3). Higher = better optimization, slower
- * @returns {Promise<void>}
- */
 export async function optimizeGif(inputPath, outputPath, options = {}) {
-  return optimizeGifImpl(inputPath, outputPath, options);
-}
-
-async function optimizeGifImpl(inputPath, outputPath, options = {}) {
   const lossy = options.lossy ?? 35;
   const optimizeLevel = options.optimize ?? 3;
 
@@ -95,7 +85,7 @@ async function optimizeGifImpl(inputPath, outputPath, options = {}) {
     throw new ValidationError('optimize level must be between 1 and 3');
   }
 
-  logger.info(
+  logger.debug(
     `Optimizing GIF: ${inputPath} -> ${outputPath} (lossy: ${lossy}, optimize: ${optimizeLevel})`
   );
 
@@ -114,9 +104,7 @@ async function optimizeGifImpl(inputPath, outputPath, options = {}) {
 
   try {
     const stderr = await new Promise((resolve, reject) => {
-      const child = spawn('gifsicle', args, {
-        timeout: 300000, // 5 minute timeout
-      });
+      const child = spawn('gifsicle', args, { signal: jobSignal(), timeout: 300000 });
 
       let stderrData = '';
       child.stderr.on('data', data => {
@@ -148,7 +136,7 @@ async function optimizeGifImpl(inputPath, outputPath, options = {}) {
       throw new ValidationError('Optimized GIF file was not created');
     }
 
-    logger.info(`GIF optimization completed: ${outputPath}`);
+    logger.debug(`GIF optimization completed: ${outputPath}`);
   } catch (error) {
     if (error instanceof ValidationError) {
       throw error;
@@ -178,9 +166,4 @@ export function calculateSizeReduction(originalSize, optimizedSize) {
 
   const reduction = ((originalSize - optimizedSize) / originalSize) * 100;
   return Math.round(reduction);
-}
-
-export function formatSizeMb(bytes) {
-  const mb = bytes / (1024 * 1024);
-  return `${mb.toFixed(1)}mb`;
 }

@@ -4,6 +4,7 @@ import {
   ListObjectsV2Command,
   GetObjectCommand,
   DeleteObjectCommand,
+  DeleteObjectsCommand,
 } from '@aws-sdk/client-s3';
 import fs from 'node:fs';
 import { Upload } from '@aws-sdk/lib-storage';
@@ -13,7 +14,7 @@ import { createLogger } from './logger.js';
 import { getLiveBytes } from './database/temporary-uploads-pg.js';
 import { getSetting } from './database/settings-pg.js';
 import { NetworkError, ValidationError } from './errors.js';
-import { writeStream } from './media-file.js';
+import { jobSignal, writeStream } from './media-file.js';
 
 const logger = createLogger('r2-storage');
 
@@ -32,17 +33,12 @@ export function uploadBudgetMs(bytes) {
 // setting; 0 disables the guard. Keeps daily-peak storage (what R2 bills on) under budget.
 const DEFAULT_R2_SOFT_LIMIT_GB = 9;
 
-/**
- * Throw a curated error if uploading `incomingBytes` more would push live R2 storage past the
- * soft limit. Big files auto-expire fast (see upload-tiers.js), so this self-heals in minutes.
- * A read failure fails open (never block uploads because a settings/DB read hiccuped).
- * @param {number} incomingBytes
- */
+// Throw a curated error if uploading `incomingBytes` more would push live R2 storage past the soft limit
 export async function r2SoftLimitGb() {
   return parseFloat(await getSetting('r2_soft_limit_gb', String(DEFAULT_R2_SOFT_LIMIT_GB)));
 }
 
-async function assertR2Capacity(incomingBytes) {
+export async function assertR2Capacity(incomingBytes) {
   let limitGb = DEFAULT_R2_SOFT_LIMIT_GB;
   try {
     limitGb = await r2SoftLimitGb();
@@ -72,31 +68,28 @@ async function assertR2Capacity(incomingBytes) {
   }
 }
 
-function initializeR2Client(config) {
-  // Always create a new client with the provided config to avoid stale configs
-  // The S3Client is lightweight and caching could cause issues if config changes
-  const { accountId, accessKeyId, secretAccessKey } = config;
+// One client per credentials, so connections are reused instead of a TLS handshake per call.
+const clients = new Map();
 
+function getR2Client(config) {
+  const { accountId, accessKeyId, secretAccessKey } = config;
   if (!accountId || !accessKeyId || !secretAccessKey) {
     throw new Error(
       `R2 config incomplete: accountId=${accountId ? 'set' : 'missing'}, accessKeyId=${accessKeyId ? 'set' : 'missing'}, secretAccessKey=${secretAccessKey ? 'set' : 'missing'}`
     );
   }
-
-  const client = new S3Client({
-    region: 'auto',
-    endpoint: `https://${accountId}.r2.cloudflarestorage.com`,
-    credentials: {
-      accessKeyId,
-      secretAccessKey,
-    },
-  });
-
-  return client;
-}
-
-function getR2Client(config) {
-  return initializeR2Client(config);
+  const id = `${accountId}:${accessKeyId}`;
+  if (!clients.has(id)) {
+    clients.set(
+      id,
+      new S3Client({
+        region: 'auto',
+        endpoint: `https://${accountId}.r2.cloudflarestorage.com`,
+        credentials: { accessKeyId, secretAccessKey },
+      })
+    );
+  }
+  return clients.get(id);
 }
 
 // Streams a media file ({path, size}) to R2 as a multipart upload; returns its public URL.
@@ -112,11 +105,8 @@ export async function uploadToR2(file, key, contentType, config, metadata = {}, 
     throw error;
   }
 
-  // Reject before writing if this upload would push live storage past the soft budget.
-  await assertR2Capacity(file.size);
-
   try {
-    logger.info(
+    logger.debug(
       `Uploading to R2: ${key} (${contentType}, ${(file.size / (1024 * 1024)).toFixed(2)}MB) to bucket: ${bucketName}`
     );
 
@@ -134,42 +124,31 @@ export async function uploadToR2(file, key, contentType, config, metadata = {}, 
       },
     });
 
-    let budgetTimer;
+    // The upload stops at its time budget or when the job is cancelled, whichever comes first.
+    const signal = jobSignal(AbortSignal.timeout(uploadBudgetMs(file.size)));
+    let stop;
     const result = await Promise.race([
       upload.done(),
       new Promise((_, reject) => {
-        budgetTimer = setTimeout(() => {
+        stop = () => {
           upload.abort().catch(() => {});
-          reject(new NetworkError('could not upload this file right now, try again shortly.'));
-        }, uploadBudgetMs(file.size));
+          reject(
+            signal.reason?.name === 'TimeoutError'
+              ? new NetworkError('could not upload this file right now, try again shortly.')
+              : signal.reason
+          );
+        };
+        if (signal.aborted) stop();
+        else signal.addEventListener('abort', stop, { once: true });
       }),
-    ]).finally(() => clearTimeout(budgetTimer));
+    ]).finally(() => signal.removeEventListener('abort', stop));
 
     if (result && result.ETag) {
-      logger.info(`Upload completed: ETag=${result.ETag}, Location=${result.Location || 'N/A'}`);
-    }
-
-    // Verify the file exists after upload with a HEAD request
-    // This extra class B operation ensures the upload actually succeeded and the file is immediately accessible
-    // R2 uploads can sometimes appear successful but fail silently, so verification prevents returning broken URLs
-    try {
-      const { HeadObjectCommand } = await import('@aws-sdk/client-s3');
-      await client.send(
-        new HeadObjectCommand({
-          Bucket: bucketName,
-          Key: key,
-        })
-      );
-      logger.info(`Verified file exists in R2: ${key}`);
-    } catch (verifyError) {
-      logger.warn(
-        `Warning: Could not verify file exists in R2 after upload (${key}):`,
-        verifyError.message
-      );
+      logger.debug(`Upload completed: ETag=${result.ETag}, Location=${result.Location || 'N/A'}`);
     }
 
     const publicUrl = `https://${publicDomain}/${key}`;
-    logger.info(`Uploaded to R2: ${publicUrl}`);
+    logger.debug(`Uploaded to R2: ${publicUrl}`);
     return publicUrl;
   } catch (error) {
     logger.error(`Failed to upload to R2 (${key}):`, error.message);
@@ -250,6 +229,7 @@ export function isR2Configured(config) {
 }
 
 export async function uploadMediaToR2(type, file, hash, extension, config, metadata = {}) {
+  await assertR2Capacity(file.size);
   const key = getR2KeyFromHash(hash, type, extension);
   const contentType =
     CONTENT_TYPES[key.slice(key.lastIndexOf('.')).toLowerCase()] ?? FALLBACK_CONTENT_TYPES[type];
@@ -278,7 +258,7 @@ export async function downloadGifFromR2(hash, config) {
 
     const response = await client.send(command);
     const file = await writeStream(response.Body, { ext: '.gif' });
-    logger.info(`Downloaded GIF from R2: ${key} (${(file.size / (1024 * 1024)).toFixed(2)}MB)`);
+    logger.debug(`Downloaded GIF from R2: ${key} (${(file.size / (1024 * 1024)).toFixed(2)}MB)`);
     return { ...file, contentType: 'image/gif', filename: `${safeHash}.gif` };
   } catch (error) {
     logger.error(`Failed to download GIF from R2 (${key}):`, error.message);
@@ -286,12 +266,6 @@ export async function downloadGifFromR2(hash, config) {
   }
 }
 
-/**
- * List objects in R2 with a given prefix
- * @param {string} prefix - Prefix to filter objects (e.g., 'images/', 'gifs/', 'videos/')
- * @param {Object} config - R2 configuration
- * @returns {Promise<Array<{key: string, size: number}>>} Array of objects with key and size
- */
 export async function listObjectsInR2(prefix, config) {
   const client = getR2Client(config);
   const { bucketName } = config;
@@ -327,12 +301,28 @@ export async function listObjectsInR2(prefix, config) {
       continuationToken = response.NextContinuationToken;
     } while (continuationToken);
 
-    logger.debug(`Listed ${objects.length} objects from R2 with prefix: ${prefix}`);
     return objects;
   } catch (error) {
     logger.error(`Failed to list objects from R2 (prefix: ${prefix}):`, error.message);
-    return [];
+    throw error;
   }
+}
+
+// DeleteObjects takes up to 1000 keys per call; returns the keys R2 refused.
+export async function deleteManyFromR2(keys, config) {
+  if (!keys.length) return [];
+  const client = getR2Client(config);
+  const failed = [];
+  for (let i = 0; i < keys.length; i += 1000) {
+    const { Errors = [] } = await client.send(
+      new DeleteObjectsCommand({
+        Bucket: config.bucketName,
+        Delete: { Objects: keys.slice(i, i + 1000).map(Key => ({ Key })), Quiet: true },
+      })
+    );
+    failed.push(...Errors.map(e => e.Key));
+  }
+  return failed;
 }
 
 export async function deleteFromR2(key, config) {
@@ -351,7 +341,7 @@ export async function deleteFromR2(key, config) {
     });
 
     await client.send(command);
-    logger.info(`Deleted file from R2: ${key}`);
+    logger.debug(`Deleted file from R2: ${key}`);
     return true;
   } catch (error) {
     if (error.name === 'NotFound' || error.$metadata?.httpStatusCode === 404) {
@@ -363,12 +353,6 @@ export async function deleteFromR2(key, config) {
   }
 }
 
-/**
- * Extract R2 object key from public URL
- * @param {string} url - Public R2 URL (e.g., https://<R2_PUBLIC_DOMAIN>/gifs/abc123.gif)
- * @param {Object} config - R2 configuration
- * @returns {string|null} R2 object key (e.g., gifs/abc123.gif) or null if URL is not an R2 URL
- */
 export function extractR2KeyFromUrl(url, config) {
   const { publicDomain } = config;
   if (!publicDomain || !url || typeof url !== 'string') {
@@ -394,14 +378,6 @@ function formatTtlMessage(hours) {
   return ttlHours === 1 ? '1 hour' : `${ttlHours} hours`;
 }
 
-/**
- * Format R2 URL with disclaimer if temporary uploads are enabled
- * @param {string} url - URL to format (may be R2 URL or other URL)
- * @param {Object} config - R2 configuration
- * @param {boolean} [isAdmin=false] - Whether the user is an admin (admins get permanent uploads with no disclaimer)
- * @param {number|null} [ttlHoursOverride=null] - Actual retention for this file (tiered by size); falls back to the flat config TTL when omitted
- * @returns {string} URL with disclaimer appended if applicable, or original URL
- */
 export function formatR2UrlWithDisclaimer(url, config, isAdmin = false, ttlHoursOverride = null) {
   // Return original URL if not a string or empty
   if (!url || typeof url !== 'string') {

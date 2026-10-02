@@ -8,7 +8,6 @@ import {
   getAlerts,
   UNKNOWN_REASON,
   insertProcessedUrl,
-  insertOrUpdateUser,
   getR2UserStats,
   getUserR2Media,
   getUserR2MediaCount,
@@ -157,7 +156,6 @@ describe('r2 user stats', () => {
     const userId = `r2stats-user-${uniqueId}`;
     const r2Prefix = `https://${r2Config.publicDomain}/`;
 
-    await insertOrUpdateUser(userId, uniqueId);
     await insertProcessedUrl(
       `r2stats-hash-a-${uniqueId}`,
       'filehash-a',
@@ -202,7 +200,6 @@ describe('r2 user stats', () => {
     const userId = `r2route-user-${uniqueId}`;
     const r2Prefix = `https://${r2Config.publicDomain}/`;
 
-    await insertOrUpdateUser(userId, uniqueId);
     await insertProcessedUrl(
       `r2route-hash-${uniqueId}`,
       'filehash-r',
@@ -240,7 +237,6 @@ describe('r2 user stats', () => {
     const r2Prefix = `https://${r2Config.publicDomain}/`;
     const urlHash = `r2expired-hash-${uniqueId}`;
 
-    await insertOrUpdateUser(userId, uniqueId);
     await insertProcessedUrl(
       urlHash,
       'filehash-expired',

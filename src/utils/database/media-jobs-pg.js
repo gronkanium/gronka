@@ -1,7 +1,8 @@
 import os from 'node:os';
-import pkg from '../../package.json' with { type: 'json' };
-import { getPostgresConnection } from '../utils/database/connection.js';
-import { ensurePostgresInitialized } from '../utils/database/init.js';
+import pkg from '../../../package.json' with { type: 'json' };
+import { getPostgresConnection } from './connection.js';
+import { ensurePostgresInitialized } from './init.js';
+import { getBooleanSetting } from './settings-pg.js';
 
 export const JOB_CHANNEL = 'media_jobs';
 export const DONE_CHANNEL = 'media_jobs_done';
@@ -137,7 +138,9 @@ export async function listen(channel, fn) {
 // Read-only view for the webui. Never selects `reply`: it holds the interaction token.
 export async function jobsOverview({ since = Date.now() - 24 * 3600e3, limit = 25 } = {}) {
   const sql = await db();
-  const [counts, recent, workers] = await Promise.all([
+  const [paused, processes, counts, recent, workers] = await Promise.all([
+    getBooleanSetting(PAUSE_KEY),
+    presence(),
     sql`
       SELECT status, COUNT(*)::int AS count, COUNT(*) FILTER (WHERE attempts > 1)::int AS retried
       FROM media_jobs WHERE status IN ('queued', 'running') OR timestamp >= ${since}
@@ -166,10 +169,9 @@ export async function jobsOverview({ since = Date.now() - 24 * 3600e3, limit = 2
     heartbeat_at: row.heartbeat_at == null ? null : Number(row.heartbeat_at),
     id: Number(row.id),
   });
-  const [pause] = await sql`SELECT value FROM bot_settings WHERE key = ${PAUSE_KEY}`;
   return {
-    paused: pause?.value === 'true',
-    processes: await presence(),
+    paused,
+    processes,
     counts: Object.fromEntries(counts.map(c => [c.status, { count: c.count, retried: c.retried }])),
     recent: recent.map(num),
     workers: workers.map(w => ({

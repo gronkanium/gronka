@@ -4,7 +4,6 @@ import {
   validateUrl,
   sanitizeFilename,
   validateFileExtension,
-  validateFilename,
   parseTimestamp,
   firstUrlIn,
 } from '../../src/utils/validation.js';
@@ -264,67 +263,6 @@ describe('validation utilities', () => {
       assert.strictEqual(validateFileExtension('', ['.png']), false);
     });
   });
-
-  describe('validateFilename', () => {
-    test('accepts valid filenames', () => {
-      const result = validateFilename('image.png', testStoragePath);
-      assert.strictEqual(result.valid, true);
-      assert.strictEqual(result.filename, 'image.png');
-      assert(result.filePath.includes('image.png'));
-    });
-
-    test('sanitizes path traversal attempts', () => {
-      // The function sanitizes path traversal by removing separators and leading dots
-      // So these become valid filenames after sanitization
-      const result1 = validateFilename('../../etc/passwd', testStoragePath);
-      assert.strictEqual(result1.valid, true);
-      assert.strictEqual(result1.filename, 'etcpasswd');
-
-      const result2 = validateFilename('../file.txt', testStoragePath);
-      assert.strictEqual(result2.valid, true);
-      assert.strictEqual(result2.filename, 'file.txt');
-
-      const result3 = validateFilename('./../file.txt', testStoragePath);
-      assert.strictEqual(result3.valid, true);
-      assert.strictEqual(result3.filename, 'file.txt');
-
-      const result4 = validateFilename('..\\file.txt', testStoragePath);
-      assert.strictEqual(result4.valid, true);
-      assert.strictEqual(result4.filename, 'file.txt');
-
-      // However, if .. remains after sanitization (no separators), it should be rejected
-      const result5 = validateFilename('..', testStoragePath);
-      assert.strictEqual(result5.valid, false);
-    });
-
-    test('sanitizes dangerous characters', () => {
-      const result = validateFilename('file\x00name.txt', testStoragePath);
-      assert.strictEqual(result.valid, true);
-      assert.strictEqual(result.filename, 'filename.txt');
-    });
-
-    test('limits length', () => {
-      const longName = 'a'.repeat(300) + '.txt';
-      const result = validateFilename(longName, testStoragePath);
-      assert.strictEqual(result.valid, true);
-      assert(result.filename.length <= 255);
-    });
-
-    test('rejects invalid input', () => {
-      assert.strictEqual(validateFilename(null, testStoragePath).valid, false);
-      assert.strictEqual(validateFilename(undefined, testStoragePath).valid, false);
-      assert.strictEqual(validateFilename('', testStoragePath).valid, false);
-      assert.strictEqual(validateFilename('.', testStoragePath).valid, false);
-      assert.strictEqual(validateFilename('..', testStoragePath).valid, false);
-    });
-
-    test('ensures path stays within storage directory', () => {
-      const result = validateFilename('image.png', testStoragePath);
-      assert.strictEqual(result.valid, true);
-      assert(result.filePath.startsWith(path.resolve(testStoragePath)));
-    });
-  });
-
   describe('parseTimestamp', () => {
     test('parses plain seconds', () => {
       assert.deepStrictEqual(parseTimestamp('90'), { valid: true, seconds: 90 });

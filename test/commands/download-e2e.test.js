@@ -181,24 +181,6 @@ if (!mocksSupported) {
         { name: 'RedGifs', hosts: ['redgifs.com'] },
         { name: 'XVideos', hosts: ['xvideos.com'] },
       ],
-      downloadFromYouTube: async (
-        _url,
-        _admin,
-        _maxSize,
-        _quality,
-        _maxDuration,
-        _startTime,
-        _duration
-      ) => {
-        // yt-dlp is only used as a fallback when Cobalt fails for X/Twitter URLs.
-        // If the URL was deleted, the failure should propagate (not magically succeed).
-        const u = _url || '';
-        if (u.includes('deleted')) {
-          const { NetworkError } = await import('../../src/utils/errors.js');
-          throw new NetworkError('this post is unavailable or has been deleted');
-        }
-        return media(fakeBuffer(4, 4096), 'video/mp4', 'clip.mp4');
-      },
       downloadWithYtdlp: async (
         _url,
         _admin,
@@ -230,6 +212,7 @@ if (!mocksSupported) {
       downloadImage: async () => media(fakeBuffer(6, 4096), 'image/png', 'still.png'),
       downloadFileFromUrl: async () => media(fakeBuffer(7, 4096), 'video/mp4', 'clip.mp4'),
       parseTenorUrl: async u => u,
+      TENOR_VIEW_URL: /^https?:\/\/(www\.)?tenor\.com\/view\/.+-gif-(\d+)/i,
       isDirectMediaUrl: () => false,
       downloadDirectMedia: async () => media(fakeBuffer(8, 4096), 'video/mp4', 'direct.mp4'),
     }));

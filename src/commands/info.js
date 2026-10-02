@@ -6,6 +6,7 @@ import { dirname, join } from 'path';
 import { createLogger } from '../utils/logger.js';
 import { safeInteractionReply } from '../utils/interaction-helpers.js';
 import { getR2CacheStats, getStorageStats } from '../utils/storage.js';
+import { isR2Configured } from '../utils/r2-storage.js';
 import { getUserMetricsCount } from '../utils/database.js';
 import { r2Config, botConfig, supportConfig } from '../utils/config.js';
 
@@ -44,10 +45,7 @@ function formatUptime(milliseconds) {
 }
 
 function formatR2Line(r2CacheStats) {
-  const configured =
-    r2Config.accountId && r2Config.accessKeyId && r2Config.secretAccessKey && r2Config.bucketName;
-
-  if (!configured) return 'r2: `not configured`';
+  if (!isR2Configured(r2Config)) return 'r2: `not configured`';
   if (!r2CacheStats.initialized) return 'r2: `cache not initialized`';
 
   return (
@@ -58,11 +56,10 @@ function formatR2Line(r2CacheStats) {
 
 export async function handleInfoCommand(interaction, botStartTime) {
   try {
-    const storageStats = await getStorageStats(GIF_STORAGE_PATH);
-    // user_metrics, not the users table: `trackUser` writes users on every interaction
-    // before the ban/maintenance gates, so it counts people the bot never served. The webui
-    // reads this same count, one user number across both surfaces.
-    const userCount = await getUserMetricsCount();
+    const [storageStats, userCount] = await Promise.all([
+      getStorageStats(GIF_STORAGE_PATH),
+      getUserMetricsCount(),
+    ]);
     const guildCount = interaction.client.guilds.cache.size;
 
     // botStartTime is null on the prefix path when the bot has not recorded one yet; the

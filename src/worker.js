@@ -1,5 +1,5 @@
 // Media worker: claims jobs from Postgres, runs them, and answers users over Discord REST.
-// Any number can run; a job whose worker dies is reclaimed by another (see jobs/queue.js).
+// Any number can run; a job whose worker dies is reclaimed by another (see utils/database/media-jobs-pg.js).
 import fs from 'node:fs';
 import path from 'node:path';
 import { Client } from 'discord.js';
@@ -13,9 +13,10 @@ import { JOBS_ROOT, sweepJobDirs } from './utils/media-file.js';
 import { jobContext } from './jobs/context.js';
 import { runMediaJob } from './jobs/run-job.js';
 import { interactionFor } from './jobs/reply-target.js';
-import * as queue from './jobs/queue.js';
+import * as queue from './utils/database/media-jobs-pg.js';
 
 const logger = createLogger('worker');
+const warn = what => error => logger.warn(`${what}: ${error.message}`);
 
 // Discord's reply token is dead after 15 minutes, so nothing can be delivered past this.
 const JOB_TIME_LIMIT_MS = 16 * 60 * 1000;
@@ -43,7 +44,7 @@ function runJob(job) {
 }
 
 async function runJobInContext(job) {
-  logger.info(`Job ${job.id} (${job.kind}) attempt ${job.attempts} [user: ${job.user_id}]`);
+  logger.debug(`Job ${job.id} (${job.kind}) attempt ${job.attempts} [user: ${job.user_id}]`);
   let operationId = job.operation_id;
   const beat = setInterval(
     () => queue.heartbeat(job.id).catch(error => logger.warn(`Heartbeat failed: ${error.message}`)),
@@ -58,7 +59,7 @@ async function runJobInContext(job) {
       operationId,
       onOperation: id => {
         operationId = id;
-        queue.setJobOperation(job.id, id).catch(() => {});
+        queue.setJobOperation(job.id, id).catch(warn(`Could not link job ${job.id} to ${id}`));
       },
     };
     const outcome = await Promise.race([
@@ -116,9 +117,9 @@ async function tellInterrupted(job) {
     await markOperationAsFailed(
       job.operation_id,
       'Operation interrupted - its worker stopped and it could not be retried'
-    ).catch(() => {});
+    ).catch(warn(`Could not mark operation ${job.operation_id} failed`));
   }
-  await queue.forgetToken(job.id).catch(() => {});
+  await queue.forgetToken(job.id).catch(warn(`Could not drop the reply token of job ${job.id}`));
 }
 
 async function reclaim() {
@@ -140,7 +141,9 @@ function watchdog() {
     process.exit(1);
   }
   fs.writeFile(ALIVE_FILE, String(Date.now()), () => {});
-  queue.reportPresence({ role: 'worker', running: running.size }).catch(() => {});
+  queue
+    .reportPresence({ role: 'worker', running: running.size })
+    .catch(warn('Presence report failed'));
 }
 
 async function shutdown(signal) {
@@ -151,10 +154,12 @@ async function shutdown(signal) {
     Promise.allSettled([...running.values()]),
     new Promise(resolve => setTimeout(resolve, DRAIN_MS)),
   ]);
-  const released = await queue.releaseJobs([...running.keys()]).catch(() => 0);
+  const released = await queue
+    .releaseJobs([...running.keys()])
+    .catch(warn('Could not hand jobs back to the queue'));
   if (released) logger.info(`Handed ${released} unfinished job(s) back to the queue`);
   await flushAllOperationLogs();
-  await queue.clearPresence().catch(() => {});
+  await queue.clearPresence().catch(warn('Could not clear presence'));
   process.exit(0);
 }
 
@@ -170,11 +175,14 @@ fs.mkdirSync(JOBS_ROOT, { recursive: true, mode: 0o700 });
 await initDatabase();
 await refreshRateLimitSettings();
 await queue.listen(queue.JOB_CHANNEL, () => pump());
-setInterval(() => refreshRateLimitSettings().catch(() => {}), 60_000);
+setInterval(
+  () => refreshRateLimitSettings().catch(warn('Rate limit settings refresh failed')),
+  60_000
+);
 setInterval(pump, POLL_MS);
 setInterval(reclaim, RECLAIM_MS);
 setInterval(watchdog, 10_000);
-setInterval(() => sweepJobDirs().catch(() => {}), 30 * 60 * 1000);
+setInterval(() => sweepJobDirs().catch(warn('Job dir sweep failed')), 30 * 60 * 1000);
 watchdog();
 logger.info(`Worker ${queue.WORKER_ID} ready`);
 await reclaim();

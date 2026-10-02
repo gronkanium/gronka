@@ -1,4 +1,5 @@
 <script>
+  import { getJson } from '../utils/api.js';
   import { untrack } from 'svelte';
   import { Download, Radio, Undo2, SearchX } from 'lucide-svelte';
   import { currentRoute, navigate } from '../utils/router.js';
@@ -152,9 +153,6 @@
   }
   const clearAll = () => setQuery({ filters: {}, negated: {}, search: '' });
 
-  const get = url =>
-    fetch(url).then(r => (r.ok ? r.json() : Promise.reject(new Error(`HTTP ${r.status}`))));
-
   let seq = 0;
   async function load() {
     const mine = ++seq;
@@ -163,9 +161,9 @@
     pending = [];
     try {
       const [l, f, h] = await Promise.all([
-        get(`/api/logs?${query({ limit: PAGE })}`),
-        get(`/api/logs/facets?${query()}`),
-        get(`/api/logs/histogram?${query({ buckets: 80 })}`),
+        getJson(`/api/logs?${query({ limit: PAGE })}`),
+        getJson(`/api/logs/facets?${query()}`),
+        getJson(`/api/logs/histogram?${query({ buckets: 80 })}`),
       ]);
       if (mine !== seq) return;
       rows = l.logs || [];
@@ -188,7 +186,7 @@
     const mine = seq;
     loadingMore = true;
     try {
-      const l = await get(`/api/logs?${query({ limit: PAGE, offset: rows.length })}`);
+      const l = await getJson(`/api/logs?${query({ limit: PAGE, offset: rows.length })}`);
       if (mine !== seq) return;
       const known = new Set(rows.map(r => r.id));
       rows = [...rows, ...(l.logs || []).filter(r => !known.has(r.id))];
@@ -264,10 +262,12 @@
     const op = selected?.metadata?.op;
     related = [];
     if (!op) return;
+    let live = true;
     fetch(`/api/logs?op=${encodeURIComponent(op)}&orderDesc=false&limit=100`)
       .then(r => r.json())
-      .then(l => (related = l.logs || []))
+      .then(l => live && (related = l.logs || []))
       .catch(() => {});
+    return () => (live = false);
   });
 
   const selIndex = $derived(selected ? visible.findIndex(r => r.id === selected.id) : -1);

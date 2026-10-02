@@ -2,8 +2,14 @@ import { AttachmentBuilder } from 'discord.js';
 import { r2Config } from '../../utils/config.js';
 import { ValidationError } from '../../utils/errors.js';
 import { hashUrl } from '../../utils/hashing.js';
-import { safeInteractionEditReply } from '../../utils/interaction-helpers.js';
-import { uploadToR2, getR2KeyFromHash, formatR2UrlWithDisclaimer } from '../../utils/r2-storage.js';
+import { deliverReply } from './deliver.js';
+import {
+  assertR2Capacity,
+  uploadToR2,
+  getR2KeyFromHash,
+  formatR2UrlWithDisclaimer,
+  isR2Configured,
+} from '../../utils/r2-storage.js';
 import { resolveTtlHoursForSize } from '../../utils/storage.js';
 import { OUTPUT_FORMATS } from '../../utils/video-processor.js';
 import { fitsDiscordAttachment } from './attachment-limit.js';
@@ -16,22 +22,18 @@ export async function sendConvertedFile(interaction, ctx, { file, format, baseNa
   const filename = `${baseName}.${format}`;
 
   if (fitsDiscordAttachment(file.size, discordAttachmentLimit)) {
-    await safeInteractionEditReply(interaction, {
+    await deliverReply(interaction, {
       files: [new AttachmentBuilder(file.path, { name: filename })],
     });
     return;
   }
-  if (
-    !r2Config.accountId ||
-    !r2Config.accessKeyId ||
-    !r2Config.secretAccessKey ||
-    !r2Config.bucketName
-  ) {
+  if (!isR2Configured(r2Config)) {
     throw new ValidationError(`the ${format} is too large to attach to Discord.`);
   }
 
   const { hash } = file;
   const key = getR2KeyFromHash(hash, spec.kind, `.${format}`);
+  await assertR2Capacity(file.size);
   const url = await uploadToR2(file, key, spec.mime, r2Config, buildMetadata());
   const urlHash = hashUrl(`${url}#${format}:${hash}`);
   await recordProcessedUrl({
@@ -45,7 +47,7 @@ export async function sendConvertedFile(interaction, ctx, { file, format, baseNa
   });
   await trackR2UploadIfApplicable(urlHash, url, adminUser);
   const ttlHours = await resolveTtlHoursForSize(file.size);
-  await safeInteractionEditReply(interaction, {
+  await deliverReply(interaction, {
     content: formatR2UrlWithDisclaimer(url, r2Config, adminUser, ttlHours),
   });
 }

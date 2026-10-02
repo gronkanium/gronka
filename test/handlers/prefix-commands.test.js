@@ -58,7 +58,6 @@ function makeDeps(overrides = {}) {
     clearPrefix: [],
   };
   const deps = {
-    trackUser: async () => {},
     isAdmin: () => false,
     replyIfBanned: async () => false,
     replyIfMaintenance: async () => false,
@@ -99,7 +98,6 @@ describe('parseArgTokens', () => {
       'https://x.com/a',
       'start=0:05',
       'end=0:10',
-      'quality=high',
       'lossy=35',
       'optimize=true',
     ]);
@@ -107,7 +105,6 @@ describe('parseArgTokens', () => {
       url: 'https://x.com/a',
       start: '0:05',
       end: '0:10',
-      quality: 'high',
       lossy: '35',
       optimize: 'true',
     });
@@ -126,9 +123,10 @@ describe('parseArgTokens', () => {
     });
   });
 
-  test('invalid quality values are dropped so the default applies', () => {
-    assert.deepStrictEqual(parseArgTokens(['quality=bogus']), {});
-    assert.deepStrictEqual(parseArgTokens(['quality=high']), { quality: 'high' });
+  test('format maps through and invalid formats are dropped', () => {
+    assert.deepStrictEqual(parseArgTokens(['format=mp4']), { format: 'mp4' });
+    assert.deepStrictEqual(parseArgTokens(['format=GIF']), { format: 'gif' });
+    assert.deepStrictEqual(parseArgTokens(['format=exe']), {});
   });
 
   test('lossy is clamped to the 0-100 range the slash command enforces', () => {
@@ -198,13 +196,12 @@ describe('handlePrefixMessage', () => {
   test('attaches message attachments as the file option for convert', async () => {
     const { deps, calls } = makeDeps();
     const attachment = { name: 'clip.mp4' };
-    const message = makeMessage({ content: '^g convert quality=high', attachments: [attachment] });
+    const message = makeMessage({ content: '^g convert', attachments: [attachment] });
 
     await handlePrefixMessage(message, { deps });
 
     assert.strictEqual(calls.convert.length, 1);
     assert.strictEqual(calls.convert[0].options.getAttachment('file'), attachment);
-    assert.strictEqual(calls.convert[0].options.getString('quality'), 'high');
   });
 
   test('bare mention replies with a compact prompt', async () => {

@@ -1,8 +1,12 @@
-import ffmpeg from 'fluent-ffmpeg';
 import fs from 'fs/promises';
 import path from 'path';
 import { createLogger } from '../logger.js';
-import { validateNumericParameter, checkFFmpegInstalled, FFMPEG_INPUT_GUARD } from './utils.js';
+import {
+  validateNumericParameter,
+  checkFFmpegInstalled,
+  FFMPEG_INPUT_GUARD,
+  runFfmpeg,
+} from './utils.js';
 
 const logger = createLogger('trim-gif');
 
@@ -37,7 +41,7 @@ export async function trimGif(inputPath, outputPath, options = {}) {
     throw new Error('Either startTime or duration must be provided for GIF trimming');
   }
 
-  logger.info(
+  logger.debug(
     `Starting GIF trim: ${inputPath} -> ${outputPath} (startTime: ${startTime}, duration: ${duration})`
   );
 
@@ -60,49 +64,41 @@ export async function trimGif(inputPath, outputPath, options = {}) {
   const outputDir = path.dirname(outputPath);
   await fs.mkdir(outputDir, { recursive: true });
 
-  return new Promise((resolve, reject) => {
-    const ffmpegCommand = ffmpeg(inputPath).inputOptions(FFMPEG_INPUT_GUARD);
+  // For GIF trimming, we need to:
+  // 1. Seek to start time (as input option for faster seeking)
+  // 2. Trim duration (as output option)
+  // 3. Maintain GIF format and quality
 
-    // For GIF trimming, we need to:
-    // 1. Seek to start time (as input option for faster seeking)
-    // 2. Trim duration (as output option)
-    // 3. Maintain GIF format and quality
+  // Add start time as input option (before -i) for faster seeking
+  const inputOptions = [...FFMPEG_INPUT_GUARD];
+  if (startTime !== null) {
+    inputOptions.push('-ss', `${startTime}`);
+  }
 
-    // Add start time as input option (before -i) for faster seeking
-    if (startTime !== null) {
-      ffmpegCommand.inputOptions([`-ss ${startTime}`]);
-    }
+  // Build output options for GIF
+  const outputOptions = [
+    '-c:v',
+    'gif', // Use GIF codec to maintain GIF format
+    '-loop',
+    '0', // Infinite loop
+    '-gifflags',
+    '+transdiff', // Better compression for GIFs
+    '-avoid_negative_ts',
+    'make_zero', // Handle timestamp issues
+  ];
 
-    // Build output options for GIF
-    const outputOptions = [
-      '-c:v',
-      'gif', // Use GIF codec to maintain GIF format
-      '-loop',
-      '0', // Infinite loop
-      '-gifflags',
-      '+transdiff', // Better compression for GIFs
-      '-avoid_negative_ts',
-      'make_zero', // Handle timestamp issues
-    ];
+  // Add duration as output option
+  if (duration !== null) {
+    outputOptions.push('-t', `${duration}`);
+  }
 
-    // Add duration as output option
-    if (duration !== null) {
-      outputOptions.push('-t', `${duration}`);
-    }
+  outputOptions.push('-y'); // Overwrite output file
 
-    outputOptions.push('-y'); // Overwrite output file
-
-    ffmpegCommand
-      .outputOptions(outputOptions)
-      .output(outputPath)
-      .on('error', (err, stdout, stderr) => {
-        logger.error('FFmpeg GIF trim failed:', stderr);
-        reject(new Error(`GIF trimming failed: ${err.message}`));
-      })
-      .on('end', () => {
-        logger.debug(`GIF trim completed: ${outputPath}`);
-        resolve();
-      })
-      .run();
-  });
+  try {
+    await runFfmpeg([...inputOptions, '-i', inputPath, ...outputOptions, outputPath]);
+  } catch (err) {
+    logger.error('FFmpeg GIF trim failed:', err.stderr);
+    throw new Error(`GIF trimming failed: ${err.message}`, { cause: err });
+  }
+  logger.debug(`GIF trim completed: ${outputPath}`);
 }

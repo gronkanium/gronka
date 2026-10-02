@@ -6,10 +6,6 @@ import { r2Config } from '../../utils/config.js';
 
 const logger = createLogger('url-cache');
 
-// Shared cache-write helpers for the download / convert / optimize commands. Previously the
-// insertProcessedUrl(...) call and the "extract R2 key -> trackTemporaryUpload" pattern were
-// duplicated ~10 times across the three command files.
-
 /**
  * Record a processed result in the URL cache so identical future requests can be served from cache.
  * @param {object} params
@@ -44,14 +40,7 @@ export async function recordProcessedUrl({
   logger.debug(`Recorded processed URL in database (urlHash: ${urlHash.substring(0, 8)}...)`);
 }
 
-/**
- * If the given URL is an R2 upload, record it as a temporary upload so the cleanup job can expire it.
- * No-op for non-R2 (e.g. Discord attachment) URLs.
- * @param {string} urlHash - Cache key the upload is associated with
- * @param {string} fileUrl - The uploaded file URL
- * @param {boolean} adminUser - Whether the uploader is an admin (affects retention)
- * @returns {Promise<void>}
- */
+// If the given URL is an R2 upload, record it as a temporary upload so the cleanup job can expire it
 export async function trackR2UploadIfApplicable(urlHash, fileUrl, adminUser) {
   if (!fileUrl || !fileUrl.startsWith('https://')) {
     return;

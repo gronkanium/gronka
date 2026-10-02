@@ -160,29 +160,6 @@ test('convertToGif - validates duration parameter', async () => {
   }
 });
 
-test('convertToGif - validates quality parameter', async () => {
-  const inputPath = createDummyVideoFile('test.mp4');
-  const outputPath = path.join(testTempPath, 'output.gif');
-
-  // Test invalid quality
-  await assert.rejects(
-    async () => await convertToGif(inputPath, outputPath, { quality: 'invalid' }),
-    {
-      message: /quality must be one of: low, medium, high/,
-    }
-  );
-
-  // Test valid quality values
-  for (const quality of ['low', 'medium', 'high']) {
-    try {
-      await convertToGif(inputPath, outputPath, { quality });
-    } catch (error) {
-      // Should fail with FFmpeg error, not validation error
-      assert(!error.message.includes('quality must be one of'));
-    }
-  }
-});
-
 test('convertToGif - uses default values', async () => {
   const inputPath = createDummyVideoFile('test.mp4');
   const outputPath = path.join(testTempPath, 'output.gif');
@@ -191,7 +168,7 @@ test('convertToGif - uses default values', async () => {
   // Skip actual conversion attempts in CI to avoid hangs
   if (process.env.CI !== 'true' && process.env.GITLAB_CI !== 'true') {
     try {
-      await convertToGif(inputPath, outputPath, { quality: 'medium' });
+      await convertToGif(inputPath, outputPath, {});
     } catch (error) {
       // Should fail with FFmpeg error or file not found, not validation error
       assert(!error.message.includes('must be'));
@@ -203,12 +180,9 @@ test('convertToGif - validates input file exists', async () => {
   const nonExistentPath = path.join(testTempPath, 'nonexistent.mp4');
   const outputPath = path.join(testTempPath, 'output.gif');
 
-  await assert.rejects(
-    async () => await convertToGif(nonExistentPath, outputPath, { quality: 'medium' }),
-    {
-      message: /(Input video file not found|FFmpeg is not installed)/,
-    }
-  );
+  await assert.rejects(async () => await convertToGif(nonExistentPath, outputPath, {}), {
+    message: /(Input video file not found|FFmpeg is not installed)/,
+  });
 });
 
 test('convertToGif - handles string numbers for numeric parameters', async () => {

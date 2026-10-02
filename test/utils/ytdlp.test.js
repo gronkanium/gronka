@@ -1,11 +1,6 @@
 import { test, describe } from 'bun:test';
 import assert from 'node:assert';
-import {
-  isYouTubeUrl,
-  isRedGifsUrl,
-  getYtdlpSite,
-  YtdlpRateLimitError,
-} from '../../src/utils/ytdlp.js';
+import { isYouTubeUrl, getYtdlpSite, YtdlpRateLimitError } from '../../src/utils/ytdlp.js';
 import { NetworkError } from '../../src/utils/errors.js';
 import { getGalleryDlSite } from '../../src/utils/gallery-dl.js';
 
@@ -89,38 +84,6 @@ describe('ytdlp utilities', () => {
       assert.strictEqual(isYouTubeUrl(undefined), false);
     });
   });
-
-  describe('isRedGifsUrl', () => {
-    test('returns true for redgifs watch/ifr URLs', () => {
-      assert.strictEqual(isRedGifsUrl('https://www.redgifs.com/watch/somegif'), true);
-      assert.strictEqual(isRedGifsUrl('https://redgifs.com/watch/somegif'), true);
-      assert.strictEqual(isRedGifsUrl('https://redgifs.com/ifr/somegif'), true);
-      assert.strictEqual(isRedGifsUrl('http://redgifs.com/watch/somegif'), true);
-    });
-
-    test('returns true for redgifs subdomains', () => {
-      assert.strictEqual(isRedGifsUrl('https://v3.redgifs.com/watch/somegif'), true);
-      assert.strictEqual(isRedGifsUrl('https://media.redgifs.com/SomeGif.mp4'), true);
-    });
-
-    test('returns false for non-redgifs URLs', () => {
-      assert.strictEqual(isRedGifsUrl('https://youtube.com/watch?v=abc'), false);
-      assert.strictEqual(isRedGifsUrl('https://gfycat.com/somegif'), false);
-    });
-
-    test('returns false for lookalike domains', () => {
-      assert.strictEqual(isRedGifsUrl('https://notredgifs.com/watch/abc'), false);
-      assert.strictEqual(isRedGifsUrl('https://redgifs.com.fake.com/watch/abc'), false);
-    });
-
-    test('returns false for invalid/empty input', () => {
-      assert.strictEqual(isRedGifsUrl('not-a-url'), false);
-      assert.strictEqual(isRedGifsUrl(''), false);
-      assert.strictEqual(isRedGifsUrl(null), false);
-      assert.strictEqual(isRedGifsUrl(undefined), false);
-    });
-  });
-
   describe('getYtdlpSite', () => {
     test('resolves each supported yt-dlp site to its display name', () => {
       assert.strictEqual(getYtdlpSite('https://youtube.com/watch?v=abc'), 'YouTube');

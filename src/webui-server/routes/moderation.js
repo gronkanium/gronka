@@ -1,7 +1,7 @@
 import express from 'express';
 import { createLogger } from '../../utils/logger.js';
 import { r2Config } from '../../utils/config.js';
-import { deleteFromR2, extractR2KeyFromUrl } from '../../utils/r2-storage.js';
+import { deleteFromR2, deleteManyFromR2, extractR2KeyFromUrl } from '../../utils/r2-storage.js';
 import {
   getUserR2Media,
   getUserR2MediaCount,
@@ -94,40 +94,22 @@ router.delete('/api/moderation/files/bulk', express.json(), async (req, res) => 
       failed: [],
     };
 
-    for (const urlHash of urlHashes) {
-      try {
-        // Get the processed URL record
-        const record = await getProcessedUrl(urlHash);
-        if (!record) {
-          results.failed.push({ urlHash, error: 'record not found' });
-          continue;
-        }
-
-        // Check if it's an R2 URL
-        const r2Key = extractR2KeyFromUrl(record.file_url, r2Config);
-        if (!r2Key) {
-          results.failed.push({ urlHash, error: 'not an r2 file' });
-          continue;
-        }
-
-        // Delete from R2 (ignore errors if file doesn't exist)
-        try {
-          await deleteFromR2(r2Key, r2Config);
-        } catch (r2Error) {
-          logger.warn(`Failed to delete from R2 (may already be deleted): ${r2Error.message}`);
-        }
-
-        // Delete from database
-        const deleted = await deleteProcessedUrl(urlHash);
-        if (deleted) {
-          results.success.push(urlHash);
-        } else {
-          results.failed.push({ urlHash, error: 'database deletion failed' });
-        }
-      } catch (error) {
-        logger.error(`Failed to delete R2 file ${urlHash}:`, error);
-        results.failed.push({ urlHash, error: error.message });
-      }
+    const records = await Promise.all(urlHashes.map(urlHash => getProcessedUrl(urlHash)));
+    const keys = new Map();
+    records.forEach((record, i) => {
+      const r2Key = record && extractR2KeyFromUrl(record.file_url, r2Config);
+      if (r2Key) keys.set(urlHashes[i], r2Key);
+      else
+        results.failed.push({
+          urlHash: urlHashes[i],
+          error: record ? 'not an r2 file' : 'record not found',
+        });
+    });
+    const refused = new Set(await deleteManyFromR2([...keys.values()], r2Config));
+    for (const [urlHash, r2Key] of keys) {
+      if (refused.has(r2Key)) results.failed.push({ urlHash, error: 'r2 refused the delete' });
+      else if (await deleteProcessedUrl(urlHash)) results.success.push(urlHash);
+      else results.failed.push({ urlHash, error: 'database deletion failed' });
     }
 
     logger.info(
@@ -172,13 +154,7 @@ router.delete('/api/moderation/files/:urlHash', express.json(), async (req, res)
       });
     }
 
-    // Delete from R2 (ignore errors if file doesn't exist)
-    try {
-      await deleteFromR2(r2Key, r2Config);
-    } catch (r2Error) {
-      logger.warn(`Failed to delete from R2 (may already be deleted): ${r2Error.message}`);
-      // Continue to delete database record even if R2 deletion fails
-    }
+    await deleteFromR2(r2Key, r2Config);
 
     // Delete from database
     const deleted = await deleteProcessedUrl(urlHash);
@@ -225,26 +201,16 @@ router.delete('/api/moderation/users/:userId/r2-media', express.json(), async (r
 
     logger.info(`Deleting ${total} R2 files for user ${userId}`);
 
-    // Delete each file from R2
-    let r2Deleted = 0;
-    let r2Failed = 0;
-    for (const item of media) {
-      try {
-        const r2Key = extractR2KeyFromUrl(item.file_url, r2Config);
-        if (r2Key) {
-          try {
-            await deleteFromR2(r2Key, r2Config);
-            r2Deleted++;
-          } catch (r2Error) {
-            logger.warn(`Failed to delete from R2 (may already be deleted): ${r2Error.message}`);
-            r2Failed++;
-          }
-        }
-      } catch (error) {
-        logger.warn(`Failed to process R2 deletion for ${item.url_hash}: ${error.message}`);
-        r2Failed++;
-      }
+    const keys = media.map(item => extractR2KeyFromUrl(item.file_url, r2Config)).filter(Boolean);
+    const refused = await deleteManyFromR2(keys, r2Config);
+    if (refused.length) {
+      return res.status(502).json({
+        error: 'r2 refused some deletes',
+        message: `${refused.length} of ${keys.length} files could not be deleted; nothing was removed from the database, try again`,
+      });
     }
+    const r2Deleted = keys.length;
+    const r2Failed = 0;
 
     // Delete all records from database
     const dbDeleted = await deleteUserR2Media(userId);

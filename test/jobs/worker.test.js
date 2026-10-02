@@ -2,7 +2,7 @@ import { test, describe, beforeAll, afterAll } from 'bun:test';
 import assert from 'node:assert';
 import { initDatabase } from '../../src/utils/database.js';
 import { getPostgresConnection } from '../../src/utils/database/connection.js';
-import { STALE_MS, MAX_ATTEMPTS } from '../../src/jobs/queue.js';
+import { STALE_MS, MAX_ATTEMPTS } from '../../src/utils/database/media-jobs-pg.js';
 import { startFakeDiscordApi } from '../helpers/fake-discord-api.js';
 
 let sql;

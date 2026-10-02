@@ -10,21 +10,10 @@ import { parseTimestamp } from '../../utils/validation.js';
 
 const logger = createLogger('command-guards');
 
-/**
- * Shared rate-limit guard for the command entry handlers. If the user is rate limited, it records a
- * failed operation, replies ephemerally, and returns true so the caller can return early.
- *
- * Previously this ~7-line block was duplicated across all six handle* functions (slash +
- * context-menu for download/convert/optimize). Two of those variants did not record a failed
- * operation; this unifies them so every rate-limited entry point is tracked consistently.
- *
- * @param {import('discord.js').Interaction} interaction
- * @param {Object} params
- * @param {'download'|'convert'|'optimize'} params.type - Operation type (for tracking)
- * @param {string} params.action - Verb phrase for the message, e.g. 'downloading another video'
- * @param {'slash'|'context-menu'} params.commandSource
- * @returns {Promise<boolean>} true if rate limited (caller should return early), false otherwise
- */
+// Slash and prefix commands share their handlers; the message adapter marks the prefix ones.
+export const commandSourceOf = interaction => (interaction.isPrefixCommand ? 'prefix' : 'slash');
+
+// Records a failed operation and replies when the user is rate limited; true means the caller returns.
 export async function replyIfRateLimited(interaction, { type, action, commandSource }) {
   const userId = interaction.user.id;
   if (!checkRateLimit(userId)) {
@@ -62,7 +51,7 @@ export async function resolveTimeOptions(interaction, { type }) {
 
   const failWith = async (errorMessage, reason, commandOptions) => {
     createFailedOperation(type, userId, errorMessage, reason, {
-      commandSource: 'slash',
+      commandSource: commandSourceOf(interaction),
       commandOptions,
     });
     await safeInteractionReply(interaction, {

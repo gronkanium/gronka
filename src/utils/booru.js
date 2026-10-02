@@ -3,6 +3,7 @@ import { createLogger } from './logger.js';
 import { NetworkError, ValidationError } from './errors.js';
 import { downloadFileFromUrl } from './file-downloader.js';
 import { ssrfGuardedRequest } from './ssrf-guard.js';
+import { normalizeHost } from './url-host.js';
 
 const logger = createLogger('booru');
 
@@ -63,28 +64,16 @@ const BOORU_SITES = [
 
 /** Match a hostname (www-stripped) to a booru site definition, or null. */
 function matchSite(hostname) {
-  const host = hostname.toLowerCase().replace(/^www\./, '');
+  const host = normalizeHost(hostname);
   return BOORU_SITES.find(site => site.hosts.includes(host)) || null;
 }
 
-/**
- * Extract a numeric post id from a booru post path.
- * Handles /posts/<id> (danbooru, e621) and /post/show/<id> (yande.re, konachan, and
- * legacy e621).
- * @param {string} pathname - URL pathname
- * @returns {string|null} The post id, or null if the path is not a post page
- */
+// Extract a numeric post id from a booru post path
 function parsePostId(pathname) {
   const match = pathname.match(/\/post(?:s|\/show)\/(\d+)/);
   return match ? match[1] : null;
 }
 
-/**
- * Check whether a URL is a supported booru post page.
- * @param {string} url - URL to check
- * @returns {boolean} True if the URL is a post page on a supported board
- *   (danbooru, e621/e926, yande.re, konachan)
- */
 // A bare cdn.donmai.us link skips the post API but its CDN still 403s the Chrome UA.
 export function booruCdnUserAgent(url) {
   try {
@@ -103,16 +92,7 @@ export function isBooruUrl(url) {
   }
 }
 
-/**
- * Download the media for a booru post URL.
- * Fetches the post's JSON API with a descriptive User-Agent, reads the direct file URL,
- * and downloads it via the shared file-downloader (reusing SSRF validation, size limits,
- * and content-type/filename detection), passing the same UA through so the CDN does not
- * 403. Returns the same { buffer, contentType, size, filename } shape as the other paths.
- * @param {string} url - Booru post URL
- * @param {boolean} isAdminUser - Admin users bypass size limits
- * @returns {Promise<{buffer: Buffer, contentType: string, size: number, filename: string}>}
- */
+// Download the media for a booru post URL
 export async function downloadFromBooru(url, isAdminUser = false) {
   const { hostname, pathname } = new URL(url);
   const site = matchSite(hostname);
@@ -121,9 +101,9 @@ export async function downloadFromBooru(url, isAdminUser = false) {
     throw new ValidationError('unsupported or malformed booru URL');
   }
 
-  const host = hostname.toLowerCase().replace(/^www\./, '');
+  const host = normalizeHost(hostname);
   const apiUrl = site.buildApiUrl(host, postId);
-  logger.info(`Resolving ${site.name} post ${postId}: ${apiUrl}`);
+  logger.debug(`Resolving ${site.name} post ${postId}: ${apiUrl}`);
 
   let data;
   try {
@@ -152,9 +132,9 @@ export async function downloadFromBooru(url, isAdminUser = false) {
     throw new ValidationError('no downloadable media found for this post (it may be restricted)');
   }
 
-  logger.info(`Extracted ${site.name} media URL: ${fileUrl}`);
+  logger.debug(`Extracted ${site.name} media URL: ${fileUrl}`);
   const result = await downloadFileFromUrl(fileUrl, isAdminUser, null, { userAgent: BOORU_UA });
-  logger.info(
+  logger.debug(
     `Downloaded ${site.name} media: ${result.filename} (${result.size} bytes, ${result.contentType})`
   );
   return result;

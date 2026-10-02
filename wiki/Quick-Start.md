@@ -84,7 +84,7 @@ cp .env.example .env
 bun run register-commands
 
 # 4. Start bot and server
-bun run local
+bun run bot:prod:webui
 ```
 
 ## test and production bots

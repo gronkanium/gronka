@@ -32,6 +32,8 @@ const fileServerLimiter = rateLimit({
 const apiLimiter = rateLimit({
   windowMs: 60 * 1000, // 1 minute
   max: 300, // Limit each IP to 300 API requests per minute
+  // The bot and workers post every operation update here; under load they would hit the cap and drop them.
+  skip: req => req.method === 'POST' && ['/operations', '/user-metrics'].includes(req.path),
   message: 'too many requests, please try again later',
   standardHeaders: true, // Return rate limit info in the `RateLimit-*` headers
   legacyHeaders: false, // Disable the `X-RateLimit-*` headers

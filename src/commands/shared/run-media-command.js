@@ -15,37 +15,7 @@ import { jobContext } from '../../jobs/context.js';
 
 const logger = createLogger('run-media-command');
 
-/**
- * Lifecycle wrapper shared by the download / convert / optimize commands.
- *
- * It owns ONLY the parts that are identical and reply-agnostic across the three commands:
- *   - create the operation (+ context) and expose `buildMetadata` / `logStep`
- *   - initialize the database (bail if it fails, the initializer already replied/marked error)
- *   - flip the operation to `running`
- *   - on a thrown error: log it, mark the operation `error`, send a curated user reply, and
- *     fire `notifyCommandFailure`
- *   - run inside a job dir (media-file.js), so every file the callback makes is removed after
- *
- * The callback keeps FULL ownership of the download / transform / save / upload / Discord reply /
- * success bookkeeping (`updateOperationStatus('success', …)`, `recordRateLimit`,
- * `notifyCommandSuccess`). That is deliberate: the success/reply path is where the three commands
- * genuinely diverge (single vs picker arrays, attachment vs R2, Discord-URL capture + R2 fallback),
- * so it stays in each command rather than being forced into a one-size-fits-all wrapper.
- *
- * @param {'download'|'convert'|'optimize'} type
- * @param {import('discord.js').Interaction} interaction
- * @param {(ctx: {
- *   operationId: string, userId: string, adminUser: boolean,
- *   operationContext: Object, buildMetadata: () => Object,
- *   logStep: (step: string, status: string, data?: Object) => void,
- * }) => Promise<void>} callback
- * @param {Object} [options]
- * @param {string} [options.commandSource] - 'slash' | 'context-menu'
- * @param {string} [options.commandName] - command name for DB init (defaults to `type`)
- * @param {Object} [options.context] - extra operation context (e.g. { url } or { originalUrl })
- * @param {string} [options.errorFallback] - generic user-facing message for unexpected errors
- * @returns {Promise<void>}
- */
+// The operation lifecycle and error reply shared by download/convert/optimize; delivery stays in each command on purpose.
 export function runMediaCommand(type, interaction, callback, options = {}) {
   return withJobDir(() => runInJob(type, interaction, callback, options));
 }

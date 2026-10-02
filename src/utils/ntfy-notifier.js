@@ -1,3 +1,4 @@
+import axios from 'axios';
 import { createLogger } from './logger.js';
 import { botConfig } from './config.js';
 import { insertAlert, getSetting } from './database.js';
@@ -85,16 +86,15 @@ async function sendNtfyNotification(title, message, options = {}) {
     logger.debug('Sending ntfy notification:', notificationMessage);
 
     const url = `https://${server}/${topic}`;
-    const response = await fetch(url, {
-      method: 'POST',
+    const response = await axios.post(url, notificationMessage, {
       headers: {
         Title: title,
       },
-      body: notificationMessage,
-      signal: AbortSignal.timeout(NTFY_TIMEOUT_MS),
+      timeout: NTFY_TIMEOUT_MS,
+      validateStatus: () => true,
     });
 
-    if (!response.ok) {
+    if (response.status < 200 || response.status >= 300) {
       logger.warn(`Failed to send ntfy notification: ${response.status} ${response.statusText}`);
     } else {
       logger.debug('Sent ntfy notification successfully');

@@ -12,8 +12,7 @@ import crypto from 'crypto';
 import axios from 'axios';
 import {
   insertOperationLog,
-  insertOrUpdateUserMetrics,
-  getUserMetrics,
+  recordUserCommand,
   getStuckOperations,
   markOperationAsFailed,
   getOperationTrace,
@@ -82,20 +81,10 @@ async function broadcastUpdate(operation) {
   const currentPort = getInstancePort();
   const callback = broadcastCallbacks.get(currentPort);
   if (callback) {
-    // Safety check: prevent test operations from calling production port callbacks
-    // Production ports are 3000 (server) and 3001 (webui)
-    // Test ports are 3100 (server) and 3101 (webui)
-    if (isTestMode && (currentPort === 3000 || currentPort === 3001)) {
-      logger.debug(
-        `Skipping broadcast to production port ${currentPort} in test mode (test operations should use test ports 3100/3101)`
-      );
-      return;
-    }
-
     try {
       callback(operation);
     } catch (error) {
-      console.error('Error broadcasting operation update:', error);
+      logger.error('Error broadcasting operation update:', error);
     }
   } else {
     // Prevent test operations from being sent to webui-server via HTTP POST
@@ -118,7 +107,7 @@ async function broadcastUpdate(operation) {
         error.code !== 'ETIMEDOUT' &&
         error.code !== 'ECONNABORTED'
       ) {
-        console.error('Error sending operation update to webui:', error.message);
+        logger.error('Error sending operation update to webui:', error.message);
       }
     }
   }
@@ -212,7 +201,7 @@ export function createFailedOperation(type, userId, errorMessage, errorType, con
 
   // Update user metrics (fire and forget)
   updateUserMetricsForOperation(operation).catch(error => {
-    console.error('Failed to update user metrics for failed operation:', error);
+    logger.error('Failed to update user metrics for failed operation:', error);
   });
 
   broadcastUpdate(operation);
@@ -261,7 +250,7 @@ export function createOperation(type, userId, context = {}, resumeId = null) {
 export function updateOperationStatus(operationId, status, data = {}) {
   const operation = operations.find(op => op.id === operationId);
   if (!operation) {
-    console.warn(`Operation ${operationId} not found`);
+    logger.warn(`Operation ${operationId} not found`);
     return;
   }
 
@@ -297,7 +286,7 @@ export function updateOperationStatus(operationId, status, data = {}) {
   if (status === 'success' || status === 'error') {
     // Fire and forget - don't await to avoid blocking operation updates
     updateUserMetricsForOperation(operation).catch(error => {
-      console.error('Failed to update user metrics:', error);
+      logger.error('Failed to update user metrics:', error);
     });
   }
 
@@ -311,11 +300,6 @@ export function getRecentOperations(limit = null) {
   return operations.slice(0, limit);
 }
 
-/**
- * Get an operation by ID
- * @param {string} operationId - Operation ID
- * @returns {Object|null} Operation object or null if not found
- */
 export function getOperation(operationId) {
   const operation = operations.find(op => op.id === operationId);
   return operation || null;
@@ -324,7 +308,7 @@ export function getOperation(operationId) {
 export function logOperationStep(operationId, step, status, data = {}) {
   const operation = operations.find(op => op.id === operationId);
   if (!operation) {
-    console.warn(`Operation ${operationId} not found`);
+    logger.warn(`Operation ${operationId} not found`);
     return;
   }
 
@@ -350,16 +334,10 @@ export function logOperationStep(operationId, step, status, data = {}) {
   }
 }
 
-/**
- * Log an error with stack trace
- * @param {string} operationId - Operation ID
- * @param {Error|string} error - Error object or message
- * @param {Object} [data] - Additional data
- */
 export function logOperationError(operationId, error, data = {}) {
   const operation = operations.find(op => op.id === operationId);
   if (!operation) {
-    console.warn(`Operation ${operationId} not found`);
+    logger.warn(`Operation ${operationId} not found`);
     return;
   }
 
@@ -382,40 +360,15 @@ export function logOperationError(operationId, error, data = {}) {
 }
 
 async function updateUserMetricsForOperation(operation) {
-  // Gated on userId alone. This used to require a username too, so dropping names would have
-  // silently stopped every metrics write - and with it the /info user count.
+  // Gated on userId alone: requiring anything more silently stops every metrics write.
   if (!operation.userId) {
     return;
   }
 
-  const metrics = {
-    totalCommands: 1,
-    successfulCommands: operation.status === 'success' ? 1 : 0,
-    failedCommands: operation.status === 'error' ? 1 : 0,
-    lastCommandAt: Date.now(),
-  };
-
-  if (operation.type === 'convert') {
-    metrics.totalConvert = 1;
-  } else if (operation.type === 'download') {
-    metrics.totalDownload = 1;
-  } else if (operation.type === 'optimize') {
-    metrics.totalOptimize = 1;
-  } else if (operation.type === 'info') {
-    metrics.totalInfo = 1;
-  }
-
-  if (operation.fileSize && operation.status === 'success') {
-    metrics.totalFileSize = operation.fileSize;
-  }
-
   try {
-    await insertOrUpdateUserMetrics(operation.userId, metrics);
-
-    const updatedMetrics = await getUserMetrics(operation.userId);
-    if (!updatedMetrics) {
-      return; // User metrics not found, skip broadcast
-    }
+    const updatedMetrics = await recordUserCommand(operation.userId, {
+      failed: operation.status === 'error',
+    });
 
     const currentPort = getInstancePort();
     const userMetricsCallback = userMetricsBroadcastCallbacks.get(currentPort);
@@ -424,7 +377,7 @@ async function updateUserMetricsForOperation(operation) {
       try {
         userMetricsCallback(operation.userId, updatedMetrics);
       } catch (error) {
-        console.error('Error broadcasting user metrics:', error);
+        logger.error('Error broadcasting user metrics:', error);
       }
     } else if (process.env.NODE_ENV === 'test') {
       // In test mode, skip HTTP POST to avoid hitting the production webui-server
@@ -451,23 +404,16 @@ async function updateUserMetricsForOperation(operation) {
           error.code !== 'ETIMEDOUT' &&
           error.code !== 'ECONNABORTED'
         ) {
-          console.error('Error sending user metrics update to webui:', error.message);
+          logger.error('Error sending user metrics update to webui:', error.message);
         }
       }
     }
   } catch (error) {
-    console.error('Failed to update user metrics:', error);
+    logger.error('Failed to update user metrics:', error);
   }
 }
 
-/**
- * Clean up operations that are stuck in running/pending status: mark them as
- * failed in the database and in memory, broadcast the change, and optionally
- * DM the affected user.
- * @param {number} [maxAgeMinutes=10] - Maximum age in minutes before an operation is considered stuck
- * @param {Object} [client] - Optional Discord client for sending DM notifications to users
- * @returns {Promise<number>} Number of operations cleaned up
- */
+// Clean up operations that are stuck in running/pending status: mark them as failed in the database and in memory, broadcast the change, and optionally DM the affected user
 export async function cleanupStuckOperations(maxAgeMinutes = 10, client = null) {
   try {
     const cutoffTime = Date.now() - maxAgeMinutes * 60 * 1000;
@@ -485,7 +431,7 @@ export async function cleanupStuckOperations(maxAgeMinutes = 10, client = null) 
     try {
       dbStuckIds = await getStuckOperations(maxAgeMinutes);
     } catch (dbError) {
-      logger.debug(`Could not query stuck operations from database: ${dbError.message}`);
+      logger.warn(`Could not query stuck operations from database: ${dbError.message}`);
     }
 
     // Also check in-memory operations (catches operations that never reached the database)
@@ -509,9 +455,8 @@ export async function cleanupStuckOperations(maxAgeMinutes = 10, client = null) 
         try {
           await markOperationAsFailed(operationId, reason);
         } catch (dbError) {
-          logger.debug(
-            `Could not mark operation ${operationId} as failed in database: ${dbError.message}`
-          );
+          logger.warn(`Could not mark operation ${operationId} as failed: ${dbError.message}`);
+          continue;
         }
 
         const inMemoryOp = operations.find(op => op.id === operationId);
@@ -532,7 +477,7 @@ export async function cleanupStuckOperations(maxAgeMinutes = 10, client = null) 
           try {
             trace = await getOperationTrace(operationId);
           } catch (dbError) {
-            logger.debug(`Could not get trace for operation ${operationId}: ${dbError.message}`);
+            logger.warn(`Could not get trace for operation ${operationId}: ${dbError.message}`);
           }
           userId = trace?.context?.userId || null;
           operationType = trace?.context?.operationType || 'operation';

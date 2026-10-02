@@ -7,9 +7,7 @@ const FACETS = ['level', 'component', 'source', 'command', 'worker'];
 
 async function connection() {
   await ensurePostgresInitialized();
-  const sql = getPostgresConnection();
-  if (!sql) console.error('PostgreSQL not initialized. Call initPostgresDatabase() first.');
-  return sql;
+  return getPostgresConnection();
 }
 
 // Every process writes logs here, so this is the one place that can announce them to the webui.
@@ -17,7 +15,6 @@ export const LOG_CHANNEL = 'gronka_logs';
 
 export async function insertLog(timestamp, component, level, message, metadata = null) {
   const sql = await connection();
-  if (!sql) return;
   const metadataStr = metadata ? JSON.stringify(metadata) : null;
   // Only the id is sent: NOTIFY payloads cap at 8000 bytes and a stack trace can exceed that.
   await sql`
@@ -30,10 +27,11 @@ export async function insertLog(timestamp, component, level, message, metadata =
   `;
 }
 
-export async function onNewLog(fn) {
+// `wanted` lets a listener with nobody to tell skip the row lookup.
+export async function onNewLog(fn, wanted = () => true) {
   const sql = await connection();
-  if (!sql) return null;
   return sql.listen(LOG_CHANNEL, async id => {
+    if (!wanted()) return;
     const [row] = await sql`SELECT * FROM logs WHERE id = ${Number(id)}`.catch(() => []);
     if (row) fn(toLog(row));
   });
@@ -94,7 +92,6 @@ function buildWhere(options = {}, skip = null) {
  */
 export async function getLogs(options = {}) {
   const sql = await connection();
-  if (!sql) return [];
   const { where, params, p } = buildWhere(options);
   let query = `SELECT * FROM logs${where} ORDER BY timestamp ${options.orderDesc === false ? 'ASC' : 'DESC'}, id ${options.orderDesc === false ? 'ASC' : 'DESC'}`;
   if (options.limit != null) query += ` LIMIT ${p(options.limit)}`;
@@ -105,7 +102,6 @@ export async function getLogs(options = {}) {
 
 export async function getLogsCount(options = {}) {
   const sql = await connection();
-  if (!sql) return 0;
   const { where, params } = buildWhere(options);
   const result = await sql.unsafe(`SELECT COUNT(*) AS count FROM logs${where}`, params);
   return parseInt(result[0]?.count || 0, 10);
@@ -113,23 +109,22 @@ export async function getLogsCount(options = {}) {
 
 export async function getLogFacets(options = {}, limit = 12) {
   const sql = await connection();
-  if (!sql) return {};
-  const facets = {};
-  for (const facet of FACETS) {
-    const { where, params, p } = buildWhere(options, facet);
-    const column = LOG_FIELDS.includes(facet) ? `(metadata::jsonb ->> ${p(facet)})` : facet;
-    const rows = await sql.unsafe(
-      `SELECT ${column} AS value, COUNT(*) AS count FROM logs${where} GROUP BY 1 HAVING ${column} IS NOT NULL ORDER BY 2 DESC LIMIT ${p(limit)}`,
-      params
-    );
-    facets[facet] = rows.map(r => ({ value: r.value, count: Number(r.count) }));
-  }
-  return facets;
+  const entries = await Promise.all(
+    FACETS.map(async facet => {
+      const { where, params, p } = buildWhere(options, facet);
+      const column = LOG_FIELDS.includes(facet) ? `(metadata::jsonb ->> ${p(facet)})` : facet;
+      const rows = await sql.unsafe(
+        `SELECT ${column} AS value, COUNT(*) AS count FROM logs${where} GROUP BY 1 HAVING ${column} IS NOT NULL ORDER BY 2 DESC LIMIT ${p(limit)}`,
+        params
+      );
+      return [facet, rows.map(r => ({ value: r.value, count: Number(r.count) }))];
+    })
+  );
+  return Object.fromEntries(entries);
 }
 
 export async function getLogHistogram(options, buckets = 48) {
   const sql = await connection();
-  if (!sql) return { start: 0, size: 0, buckets: [] };
   const start = Number(options.startTime);
   const end = Number(options.endTime ?? Date.now());
   const size = Math.max(1000, Math.ceil((end - start) / buckets));
@@ -148,15 +143,17 @@ export async function getLogHistogram(options, buckets = 48) {
 
 export async function getLogComponents() {
   const sql = await connection();
-  if (!sql) return [];
   const results = await sql`SELECT DISTINCT component FROM logs ORDER BY component`;
   return results.map(r => r.component);
 }
 
-// Newest log line whose message matches a (case-insensitive) regex, in ms, or null.
+// Newest warn/error log line whose message matches a (case-insensitive) regex, in ms, or null.
 export async function lastLogMatching(regex) {
   const sql = await connection();
-  if (!sql) return null;
-  const [row] = await sql`SELECT MAX(timestamp) AS at FROM logs WHERE message ~* ${regex.source}`;
+  const [row] = await sql`
+    SELECT timestamp AS at FROM logs
+    WHERE level IN ('WARN', 'ERROR') AND message ~* ${regex.source}
+    ORDER BY timestamp DESC LIMIT 1
+  `;
   return row?.at ? Number(row.at) : null;
 }

@@ -12,11 +12,6 @@ import {
 const processedUrlCache = new Map(); // Map<urlHash, {data, timestamp}>
 const PROCESSED_URL_CACHE_TTL = 5 * 60 * 1000; // 5 minutes
 
-/**
- * Get cached processed URL if available and not expired
- * @param {string} urlHash - URL hash
- * @returns {Object|null} Cached processed URL or null
- */
 function getCachedProcessedUrl(urlHash) {
   const cached = processedUrlCache.get(urlHash);
   if (!cached) {
@@ -30,11 +25,6 @@ function getCachedProcessedUrl(urlHash) {
   return cached.data;
 }
 
-/**
- * Cache processed URL
- * @param {string} urlHash - URL hash
- * @param {Object|null} processedUrl - Processed URL object to cache
- */
 function setCachedProcessedUrl(urlHash, processedUrl) {
   processedUrlCache.set(urlHash, {
     data: processedUrl,
@@ -50,19 +40,10 @@ function invalidateProcessedUrlCache(urlHash = null) {
   }
 }
 
-/**
- * Get processed URL record by URL hash
- * @param {string} urlHash - sha256 hash of the URL
- * @returns {Promise<Object|null>} Processed URL record or null if not found
- */
 export async function getProcessedUrl(urlHash) {
   await ensurePostgresInitialized();
 
   const sql = getPostgresConnection();
-  if (!sql) {
-    console.error('PostgreSQL not initialized.');
-    return null;
-  }
 
   // Check in-memory cache first
   const cached = getCachedProcessedUrl(urlHash);
@@ -100,51 +81,27 @@ export async function insertProcessedUrl(
   await ensurePostgresInitialized();
 
   const sql = getPostgresConnection();
-  if (!sql) {
-    console.error('PostgreSQL not initialized. Cannot insert processed URL.');
-    return;
-  }
 
-  try {
-    await sql`
-      INSERT INTO processed_urls (url_hash, file_hash, file_type, file_extension, file_url, processed_at, user_id, file_size)
-      VALUES (${urlHash}, ${fileHash}, ${fileType}, ${fileExtension}, ${fileUrl}, ${processedAt}, ${userId}, ${fileSize})
-      ON CONFLICT (url_hash) DO UPDATE SET
-        file_hash = EXCLUDED.file_hash,
-        file_type = EXCLUDED.file_type,
-        file_extension = EXCLUDED.file_extension,
-        file_url = EXCLUDED.file_url,
-        processed_at = EXCLUDED.processed_at,
-        user_id = EXCLUDED.user_id,
-        file_size = EXCLUDED.file_size,
-        r2_expired_at = NULL
-    `;
-    invalidateProcessedUrlCache(urlHash);
-  } catch (error) {
-    // Handle connection errors gracefully (e.g., when database is closed)
-    if (
-      error.message &&
-      (error.message.includes('CONNECTION_ENDED') || error.message.includes('connection'))
-    ) {
-      console.error(
-        `Database connection not available. Cannot insert processed URL: ${error.message}`
-      );
-      return; // Return gracefully instead of throwing
-    }
-    // Log other errors but don't throw - allows graceful degradation
-    console.error(`Failed to insert/update processed URL in database: ${error.message}`);
-    throw error;
-  }
+  await sql`
+    INSERT INTO processed_urls (url_hash, file_hash, file_type, file_extension, file_url, processed_at, user_id, file_size)
+    VALUES (${urlHash}, ${fileHash}, ${fileType}, ${fileExtension}, ${fileUrl}, ${processedAt}, ${userId}, ${fileSize})
+    ON CONFLICT (url_hash) DO UPDATE SET
+      file_hash = EXCLUDED.file_hash,
+      file_type = EXCLUDED.file_type,
+      file_extension = EXCLUDED.file_extension,
+      file_url = EXCLUDED.file_url,
+      processed_at = EXCLUDED.processed_at,
+      user_id = EXCLUDED.user_id,
+      file_size = EXCLUDED.file_size,
+      r2_expired_at = NULL
+  `;
+  invalidateProcessedUrlCache(urlHash);
 }
 
 export async function getUserMedia(userId, options = {}) {
   await ensurePostgresInitialized();
 
   const sql = getPostgresConnection();
-  if (!sql) {
-    console.error('PostgreSQL not initialized.');
-    return [];
-  }
 
   const { limit = null, offset = null } = options;
 
@@ -172,10 +129,6 @@ export async function getUserMediaCount(userId) {
   await ensurePostgresInitialized();
 
   const sql = getPostgresConnection();
-  if (!sql) {
-    console.error('PostgreSQL not initialized.');
-    return 0;
-  }
 
   const result =
     await sql`SELECT COUNT(*) as count FROM processed_urls WHERE user_id = ${userId} AND r2_expired_at IS NULL`;
@@ -186,10 +139,6 @@ export async function getUserR2Media(userId, options = {}) {
   await ensurePostgresInitialized();
 
   const sql = getPostgresConnection();
-  if (!sql) {
-    console.error('PostgreSQL not initialized.');
-    return [];
-  }
 
   const { limit = null, offset = null, fileType = null } = options;
   const publicDomain = r2Config.publicDomain;
@@ -235,10 +184,6 @@ export async function getUserR2MediaCount(userId, fileType = null) {
   await ensurePostgresInitialized();
 
   const sql = getPostgresConnection();
-  if (!sql) {
-    console.error('PostgreSQL not initialized.');
-    return 0;
-  }
 
   const publicDomain = r2Config.publicDomain;
   const r2UrlPrefix = `https://${publicDomain}/`;
@@ -255,18 +200,11 @@ export async function getUserR2MediaCount(userId, fileType = null) {
   return parseInt(result[0]?.count || 0, 10);
 }
 
-/**
- * Get per-user R2 storage stats (file count + total bytes), largest first
- * @returns {Promise<Array>} Rows of { user_id, file_count, total_size }
- */
+// Get per-user R2 storage stats (file count + total bytes), largest first
 export async function getR2UserStats() {
   await ensurePostgresInitialized();
 
   const sql = getPostgresConnection();
-  if (!sql) {
-    console.error('PostgreSQL not initialized.');
-    return [];
-  }
 
   const publicDomain = r2Config.publicDomain;
   const r2UrlPrefix = `https://${publicDomain}/`;
@@ -289,14 +227,7 @@ export async function getR2UserStats() {
   }));
 }
 
-/**
- * Mark processed_urls rows as R2-expired once their backing R2 upload has been
- * confirmed removed. Keeps the historical row (used for request-count stats)
- * while stopping callers - the moderation "on R2" view, the download/convert/
- * optimize URL cache - from treating file_url as still resolvable.
- * @param {string[]} urlHashes - URL hashes whose R2 upload just expired
- * @returns {Promise<void>}
- */
+// Mark processed_urls rows as R2-expired once their backing R2 upload has been confirmed removed
 export async function markProcessedUrlsR2Expired(urlHashes) {
   await ensurePostgresInitialized();
 
@@ -305,17 +236,13 @@ export async function markProcessedUrlsR2Expired(urlHashes) {
     return;
   }
 
-  try {
-    await sql`
-      UPDATE processed_urls
-      SET r2_expired_at = ${Date.now()}
-      WHERE url_hash = ANY(${urlHashes})
-    `;
-    for (const urlHash of urlHashes) {
-      invalidateProcessedUrlCache(urlHash);
-    }
-  } catch (error) {
-    console.error('Failed to mark processed URLs as R2-expired:', error);
+  await sql`
+    UPDATE processed_urls
+    SET r2_expired_at = ${Date.now()}
+    WHERE url_hash = ANY(${urlHashes})
+  `;
+  for (const urlHash of urlHashes) {
+    invalidateProcessedUrlCache(urlHash);
   }
 }
 
@@ -323,39 +250,21 @@ export async function deleteProcessedUrl(urlHash) {
   await ensurePostgresInitialized();
 
   const sql = getPostgresConnection();
-  if (!sql) {
-    console.error('PostgreSQL not initialized.');
-    return false;
-  }
 
-  try {
-    const result = await sql`DELETE FROM processed_urls WHERE url_hash = ${urlHash}`;
-    return result.count > 0;
-  } catch (error) {
-    console.error('Failed to delete processed URL:', error);
-    return false;
-  }
+  const result = await sql`DELETE FROM processed_urls WHERE url_hash = ${urlHash}`;
+  return result.count > 0;
 }
 
 export async function deleteUserR2Media(userId) {
   await ensurePostgresInitialized();
 
   const sql = getPostgresConnection();
-  if (!sql) {
-    console.error('PostgreSQL not initialized.');
-    return 0;
-  }
 
-  try {
-    const publicDomain = r2Config.publicDomain;
-    const r2UrlPrefix = `https://${publicDomain}/`;
-    const result = await sql`
-      DELETE FROM processed_urls
-      WHERE user_id = ${userId} AND file_url LIKE ${`${r2UrlPrefix}%`}
-    `;
-    return result.count;
-  } catch (error) {
-    console.error('Failed to delete user R2 media:', error);
-    return 0;
-  }
+  const publicDomain = r2Config.publicDomain;
+  const r2UrlPrefix = `https://${publicDomain}/`;
+  const result = await sql`
+    DELETE FROM processed_urls
+    WHERE user_id = ${userId} AND file_url LIKE ${`${r2UrlPrefix}%`}
+  `;
+  return result.count;
 }

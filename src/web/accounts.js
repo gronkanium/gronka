@@ -12,7 +12,6 @@ const KEY_ID_LEN = 8;
 const MAX_KEYS = 10;
 export const SESSION_MS = 7 * 24 * 60 * 60 * 1000;
 const SESSION_IDLE_MS = 24 * 60 * 60 * 1000;
-const KEY_CACHE_MS = 5 * 60 * 1000;
 const RECOVERY_CODES = 10;
 const RECOVERY_LEN = 10;
 const MAX_PASSKEYS = 10;
@@ -38,6 +37,12 @@ function pepper() {
 
 const peppered = secret => crypto.createHmac('sha256', pepper()).update(secret).digest('hex');
 const hashSecret = secret => Bun.password.hash(peppered(secret), ARGON);
+// API key secrets and recovery codes are random, so a keyed HMAC is enough and costs no argon2.
+const sameHmac = (secret, stored) => {
+  const mine = Buffer.from(peppered(secret), 'hex');
+  const theirs = Buffer.from(String(stored ?? ''), 'hex');
+  return mine.length === theirs.length && crypto.timingSafeEqual(mine, theirs);
+};
 const sha256 = text => crypto.createHash('sha256').update(text).digest('hex');
 
 let dummyHash;
@@ -120,6 +125,26 @@ export async function ensureWebSchema() {
       label TEXT,
       created_on DATE NOT NULL DEFAULT CURRENT_DATE
     )`;
+  // Day only, like a key's last_used_on: enough to tell a dormant account from a live one.
+  await sql`ALTER TABLE web_accounts ADD COLUMN IF NOT EXISTS last_used_on DATE`;
+  await sql`CREATE INDEX IF NOT EXISTS idx_web_sessions_expires ON web_sessions (expires_at)`;
+  for (const table of ['web_sessions', 'web_api_keys', 'web_passkeys', 'web_recovery_codes']) {
+    await sql.unsafe(`CREATE INDEX IF NOT EXISTS idx_${table}_account ON ${table} (account_id)`);
+  }
+}
+
+// Never used after the signup day: gone after 90 days. Used at some point: gone after 365 idle days.
+export const UNUSED_ACCOUNT_DAYS = 90;
+export const IDLE_ACCOUNT_DAYS = 365;
+
+export async function pruneExpired() {
+  const sql = getPostgresConnection();
+  await sql`DELETE FROM web_sessions WHERE expires_at < now()`;
+  await sql`
+    DELETE FROM web_accounts
+    WHERE (COALESCE(last_used_on, created_on) <= created_on
+        AND created_on < CURRENT_DATE - ${UNUSED_ACCOUNT_DAYS}::int)
+      OR COALESCE(last_used_on, created_on) < CURRENT_DATE - ${IDLE_ACCOUNT_DAYS}::int`;
 }
 
 export async function createAccount() {
@@ -154,20 +179,14 @@ export async function rotateAccountNumber(accountId) {
   return formatAccountNumber(accountId, secret);
 }
 
-const keyCache = new Map();
-
 export async function deleteAccount(accountId) {
   const sql = getPostgresConnection();
   await sql`DELETE FROM web_accounts WHERE id = ${accountId}`;
-  for (const [cacheKey, entry] of keyCache) {
-    if (entry.accountId === accountId) keyCache.delete(cacheKey);
-  }
 }
 
 export async function createSession(accountId) {
   const sql = getPostgresConnection();
   const token = crypto.randomBytes(32).toString('base64url');
-  await sql`DELETE FROM web_sessions WHERE expires_at < now()`;
   await sql`
     INSERT INTO web_sessions (token_hash, account_id, expires_at, absolute_at)
     VALUES (${sha256(token)}, ${accountId}, ${new Date(Date.now() + SESSION_IDLE_MS)},
@@ -179,11 +198,22 @@ export async function getSessionAccount(token) {
   if (typeof token !== 'string' || token.length > 100) return null;
   const sql = getPostgresConnection();
   // Idle for a day or older than a week, whichever comes first; each use pushes the idle limit.
+  const hash = sha256(token);
+  const idle = `${SESSION_IDLE_MS / 1000} seconds`;
+  // Extends at most hourly, so a busy session is not a row write on every request.
   const [row] = await sql`
-    UPDATE web_sessions
-    SET expires_at = least(now() + ${SESSION_IDLE_MS / 1000} * interval '1 second', absolute_at)
-    WHERE token_hash = ${sha256(token)} AND expires_at > now()
-    RETURNING account_id`;
+    WITH live AS (
+      SELECT account_id FROM web_sessions WHERE token_hash = ${hash} AND expires_at > now()
+    ), extended AS (
+      UPDATE web_sessions SET expires_at = least(now() + ${idle}::interval, absolute_at)
+      WHERE token_hash = ${hash} AND expires_at > now()
+        AND (expires_at < least(now() + ${idle}::interval, absolute_at) - interval '1 hour'
+          OR expires_at > absolute_at)
+    ), used AS (
+      UPDATE web_accounts SET last_used_on = CURRENT_DATE
+      WHERE id = (SELECT account_id FROM live) AND last_used_on IS DISTINCT FROM CURRENT_DATE
+    )
+    SELECT account_id FROM live`;
   return row?.account_id ?? null;
 }
 
@@ -202,17 +232,17 @@ export async function deleteSession(token) {
 
 export async function getAccountSummary(accountId) {
   const sql = getPostgresConnection();
-  const [account] =
-    await sql`SELECT id, created_on, totp_secret FROM web_accounts WHERE id = ${accountId}`;
+  const [[account], keys, passkeys, [{ left }]] = await Promise.all([
+    sql`SELECT id, created_on, totp_secret FROM web_accounts WHERE id = ${accountId}`,
+    sql`
+      SELECT id, label, created_on, last_used_on FROM web_api_keys
+      WHERE account_id = ${accountId} ORDER BY created_on, id`,
+    sql`
+      SELECT id, label, created_on FROM web_passkeys
+      WHERE account_id = ${accountId} ORDER BY created_on, id`,
+    sql`SELECT count(*)::int AS left FROM web_recovery_codes WHERE account_id = ${accountId}`,
+  ]);
   if (!account) return null;
-  const keys = await sql`
-    SELECT id, label, created_on, last_used_on FROM web_api_keys
-    WHERE account_id = ${accountId} ORDER BY created_on, id`;
-  const passkeys = await sql`
-    SELECT id, label, created_on FROM web_passkeys
-    WHERE account_id = ${accountId} ORDER BY created_on, id`;
-  const [{ left }] =
-    await sql`SELECT count(*)::int AS left FROM web_recovery_codes WHERE account_id = ${accountId}`;
   const day = date => date?.toISOString().slice(0, 10) ?? null;
   return {
     id: account.id,
@@ -245,7 +275,7 @@ async function underQuota(tx, table, accountId, max) {
 
 export async function createApiKey(accountId, label = null) {
   const secret = crypto.randomBytes(32).toString('base64url');
-  const secretHash = await hashSecret(secret);
+  const secretHash = peppered(secret);
   return getPostgresConnection().begin(async tx => {
     if (!(await underQuota(tx, 'web_api_keys', accountId, MAX_KEYS))) return null;
     for (;;) {
@@ -267,35 +297,25 @@ export async function revokeApiKey(accountId, publicId) {
   const sql = getPostgresConnection();
   const rows = await sql`
     DELETE FROM web_api_keys WHERE id = ${id} AND account_id = ${accountId} RETURNING id`;
-  for (const [cacheKey, entry] of keyCache) {
-    if (entry.keyId === id) keyCache.delete(cacheKey);
-  }
   return rows.length > 0;
 }
 
-// argon2 runs once per key per 5 minutes, so a script making many calls doesn't pay for it each time.
 export async function verifyApiKey(input) {
-  const cacheKey = sha256(String(input));
-  const cached = keyCache.get(cacheKey);
-  if (cached && cached.expires > Date.now()) {
-    return cached;
-  }
   const parsed = parseApiKey(input);
   // The format and checksum are public, so refusing a malformed key early leaks nothing.
   if (!parsed) return null;
   const sql = getPostgresConnection();
-  const [row] = parsed
-    ? await sql`SELECT account_id, secret_hash FROM web_api_keys WHERE id = ${parsed.id}`
-    : [];
-  if (!(await verifySecret(parsed?.secret ?? 'invalid', row?.secret_hash))) {
-    return null;
-  }
-  await sql`
-    UPDATE web_api_keys SET last_used_on = CURRENT_DATE
-    WHERE id = ${parsed.id} AND last_used_on IS DISTINCT FROM CURRENT_DATE`;
-  const entry = { keyId: parsed.id, accountId: row.account_id, expires: Date.now() + KEY_CACHE_MS };
-  keyCache.set(cacheKey, entry);
-  return entry;
+  const [row] = await sql`SELECT account_id, secret_hash FROM web_api_keys WHERE id = ${parsed.id}`;
+  if (!row || !sameHmac(parsed.secret, row.secret_hash)) return null;
+  await Promise.all([
+    sql`
+      UPDATE web_api_keys SET last_used_on = CURRENT_DATE
+      WHERE id = ${parsed.id} AND last_used_on IS DISTINCT FROM CURRENT_DATE`,
+    sql`
+      UPDATE web_accounts SET last_used_on = CURRENT_DATE
+      WHERE id = ${row.account_id} AND last_used_on IS DISTINCT FROM CURRENT_DATE`,
+  ]);
+  return { keyId: parsed.id, accountId: row.account_id };
 }
 
 export async function startTotp(accountId) {
@@ -309,7 +329,7 @@ export async function startTotp(accountId) {
 
 async function createRecoveryCodes(sql, accountId) {
   const codes = Array.from({ length: RECOVERY_CODES }, () => randomBase32(RECOVERY_LEN));
-  const hashes = await Promise.all(codes.map(hashSecret));
+  const hashes = codes.map(peppered);
   await sql`DELETE FROM web_recovery_codes WHERE account_id = ${accountId}`;
   await sql`
     INSERT INTO web_recovery_codes ${sql(
@@ -342,15 +362,11 @@ const normalizeRecovery = input =>
 async function useRecoveryCode(sql, accountId, input) {
   const code = normalizeRecovery(input);
   if (!/^[0-9A-HJKMNP-TV-Z]{10}$/.test(code)) return false;
-  const rows =
-    await sql`SELECT id, code_hash FROM web_recovery_codes WHERE account_id = ${accountId}`;
-  for (const row of rows) {
-    if (await verifySecret(code, row.code_hash)) {
-      const used = await sql`DELETE FROM web_recovery_codes WHERE id = ${row.id} RETURNING id`;
-      return used.length > 0;
-    }
-  }
-  return false;
+  // Deleting by the hash both checks the code and makes it single-use when two logins race.
+  const used = await sql`
+    DELETE FROM web_recovery_codes
+    WHERE account_id = ${accountId} AND code_hash = ${peppered(code)} RETURNING id`;
+  return used.length > 0;
 }
 
 // 'ok' when the account has no TOTP or the code (a TOTP code or a recovery code) is right;

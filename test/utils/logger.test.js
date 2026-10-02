@@ -9,15 +9,10 @@ import {
   getLogHistogram,
   onNewLog,
 } from '../../src/utils/database.js';
-import {
-  getUniqueTestComponent,
-  ensureLogsTableSchema,
-} from '../../src/utils/database/test-helpers.js';
+import { getUniqueTestComponent } from '../helpers/unique.js';
 
 beforeAll(async () => {
   await initDatabase();
-  // Ensure logs table has correct schema (SERIAL PRIMARY KEY on id)
-  await ensureLogsTableSchema();
 });
 
 afterAll(async () => {

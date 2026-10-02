@@ -1,5 +1,6 @@
 import { AsyncLocalStorage } from 'node:async_hooks';
 import { insertLog, initDatabase } from './database.js';
+import { hostOf } from './url-host.js';
 
 const LOG_LEVELS = {
   DEBUG: 0,
@@ -41,13 +42,7 @@ export function withLogContext(fields, fn) {
 }
 
 // The `source` log field: a link's host without www.
-export function sourceOf(url) {
-  try {
-    return new URL(url).hostname.replace(/^www\./, '');
-  } catch {
-    return undefined;
-  }
-}
+export const sourceOf = url => hostOf(url) ?? undefined;
 
 // Format timestamp to seconds precision (removes milliseconds)
 export function formatTimestampSeconds(date = new Date()) {
@@ -114,12 +109,7 @@ class Logger {
     return input;
   }
 
-  /**
-   * Explicitly sanitize a string for console output to prevent log injection
-   * This function is designed to be recognized by CodeQL as a sanitization step
-   * @param {string} message - The message to sanitize
-   * @returns {string} - Sanitized message safe for console output
-   */
+  // Strips control characters before console output; kept as its own function so CodeQL sees the sanitizer
   sanitizeForConsoleOutput(message) {
     // Sanitize unconditionally, non-string values are stringified first so every path
     // through this function strips newlines and control characters.

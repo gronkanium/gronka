@@ -39,7 +39,7 @@ convert downloaded media or files you upload to gifs:
 - video formats: mp4, mov, webm, avi, mkv
 - image formats: png, jpg, jpeg, webp, gif
 
-gifs can also be converted to gifs with different quality settings or optimizations.
+gifs can also be resized, trimmed or optimized.
 
 ## getting started
 

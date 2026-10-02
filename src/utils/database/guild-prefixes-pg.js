@@ -8,10 +8,6 @@ import { ensurePostgresInitialized } from './init.js';
 const prefixCache = new Map(); // Map<guildId, {value, timestamp}>
 const PREFIX_CACHE_TTL = 60 * 1000; // 60 seconds
 
-/**
- * Invalidate the guild prefix cache
- * @param {string|null} guildId - Guild to invalidate (or null to clear all)
- */
 export function invalidateGuildPrefixCache(guildId = null) {
   if (guildId) {
     prefixCache.delete(guildId);
@@ -20,19 +16,10 @@ export function invalidateGuildPrefixCache(guildId = null) {
   }
 }
 
-/**
- * Get a guild's custom command prefix
- * @param {string} guildId - Discord guild ID
- * @returns {Promise<string|null>} Custom prefix, or null when the guild uses the default
- */
 export async function getGuildPrefix(guildId) {
   await ensurePostgresInitialized();
 
   const sql = getPostgresConnection();
-  if (!sql) {
-    console.error('PostgreSQL not initialized. Call initPostgresDatabase() first.');
-    return null;
-  }
 
   const cached = prefixCache.get(guildId);
   if (cached && Date.now() - cached.timestamp < PREFIX_CACHE_TTL) {
@@ -51,10 +38,6 @@ export async function setGuildPrefix(guildId, prefix) {
   await ensurePostgresInitialized();
 
   const sql = getPostgresConnection();
-  if (!sql) {
-    console.error('PostgreSQL not initialized. Call initPostgresDatabase() first.');
-    return;
-  }
 
   const now = Date.now();
 
@@ -71,10 +54,6 @@ export async function clearGuildPrefix(guildId) {
   await ensurePostgresInitialized();
 
   const sql = getPostgresConnection();
-  if (!sql) {
-    console.error('PostgreSQL not initialized. Call initPostgresDatabase() first.');
-    return;
-  }
 
   await sql`DELETE FROM guild_prefixes WHERE guild_id = ${guildId}`;
 

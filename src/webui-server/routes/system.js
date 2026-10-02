@@ -1,10 +1,11 @@
+import axios from 'axios';
 import express from 'express';
 import fs from 'node:fs/promises';
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
 import { createLogger } from '../../utils/logger.js';
 import { botConfig } from '../../utils/config.js';
-import { jobsOverview, jobsForOperation } from '../../jobs/queue.js';
+import { jobsOverview, jobsForOperation } from '../../utils/database/media-jobs-pg.js';
 import { getLiveBytes, getStorageOverview, lastLogMatching } from '../../utils/database.js';
 import { getPostgresConnection } from '../../utils/database/connection.js';
 import { r2SoftLimitGb } from '../../utils/r2-storage.js';
@@ -37,9 +38,12 @@ const probes = {
     return { detail: `${Date.now() - started} ms` };
   },
   cobalt: async started => {
-    const res = await fetch(botConfig.cobaltApiUrl, { signal: AbortSignal.timeout(3000) });
-    if (!res.ok) throw new Error(`HTTP ${res.status}`);
-    const { cobalt } = await res.json();
+    const res = await axios.get(botConfig.cobaltApiUrl, {
+      timeout: 3000,
+      validateStatus: () => true,
+    });
+    if (res.status < 200 || res.status >= 300) throw new Error(`HTTP ${res.status}`);
+    const { cobalt } = res.data;
     return { detail: `v${cobalt.version} · ${Date.now() - started} ms` };
   },
   ytdlp: async () => {
@@ -113,8 +117,14 @@ router.get('/api/storage', async (req, res) => {
   try {
     const [r2, limitGb, space] = await Promise.all([
       getStorageOverview(),
-      r2SoftLimitGb().catch(() => 0),
-      disk().catch(() => null),
+      r2SoftLimitGb().catch(error => {
+        logger.warn(`R2 soft limit read failed: ${error.message}`);
+        return 0;
+      }),
+      disk().catch(error => {
+        logger.warn(`Disk usage read failed: ${error.message}`);
+        return null;
+      }),
     ]);
     res.json({ r2, limitBytes: limitGb > 0 ? limitGb * GB : 0, disk: space });
   } catch (error) {

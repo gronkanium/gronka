@@ -74,7 +74,7 @@
         },
         "responses": {
           "200": {
-            "description": "download result or error after leading spaces",
+            "description": "download result. a download that runs past about 80 seconds sends leading spaces first, and its error, if any, is in the body with this status",
             "content": {
               "application/json": {
                 "schema": {
@@ -148,7 +148,10 @@
           "429": {
             "$ref": "#/components/responses/Error"
           },
-          "503": {
+          "500": {
+            "$ref": "#/components/responses/Error"
+          },
+          "502": {
             "$ref": "#/components/responses/Error"
           }
         },
@@ -846,7 +849,7 @@
         },
         "headers": {
           "Retry-After": {
-            "description": "seconds to wait, on 429 and 503",
+            "description": "seconds to wait, on 429 RATE_LIMITED",
             "schema": {
               "type": "integer"
             }

@@ -12,8 +12,8 @@ const logger = createLogger('booru');
 // not to impersonate a browser, and danbooru's API *and* CDN 403 the shared Chrome UA
 // from getRequestHeaders() while accepting a descriptive one. So both the API fetch and
 // the media download (via downloadFileFromUrl's userAgent override) use BOORU_UA.
-const BOORU_UA = 'gronka (+https://github.com/gronkanium/gronka)';
-const API_TIMEOUT_MS = 20000;
+export const BOORU_UA = 'gronka (+https://github.com/gronkanium/gronka)';
+export const API_TIMEOUT_MS = 20000;
 
 // Danbooru-style boards expose the post directly at /posts/<id>.json.
 const postJsonApiUrl = (host, postId) => `https://${host}/posts/${postId}.json`;
@@ -63,13 +63,13 @@ const BOORU_SITES = [
 ];
 
 /** Match a hostname (www-stripped) to a booru site definition, or null. */
-function matchSite(hostname) {
+export function matchSite(hostname) {
   const host = normalizeHost(hostname);
   return BOORU_SITES.find(site => site.hosts.includes(host)) || null;
 }
 
 // Extract a numeric post id from a booru post path
-function parsePostId(pathname) {
+export function parsePostId(pathname) {
   const match = pathname.match(/\/post(?:s|\/show)\/(\d+)/);
   return match ? match[1] : null;
 }

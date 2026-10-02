@@ -3,8 +3,9 @@ import assert from 'node:assert';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { AttachmentBuilder, Client } from 'discord.js';
+import { AttachmentBuilder, Client, PermissionFlagsBits, PermissionsBitField } from 'discord.js';
 import { interactionFor, replyTargetOf } from '../../src/jobs/reply-target.js';
+import { getDiscordAttachmentLimit } from '../../src/commands/shared/attachment-limit.js';
 import { safeInteractionEditReply } from '../../src/utils/interaction-helpers.js';
 import { startFakeDiscordApi } from '../helpers/fake-discord-api.js';
 
@@ -42,6 +43,22 @@ describe('job reply targets', () => {
       attachmentSizeLimit: 10,
       expiresAt: 1000 + 15 * 60 * 1000,
     });
+  });
+
+  test('a channel without Attach Files queues a zero limit for both kinds', async () => {
+    const appPermissions = new PermissionsBitField(PermissionFlagsBits.SendMessages);
+    const slash = replyTargetOf({ appPermissions, attachmentSizeLimit: 10, createdTimestamp: 0 });
+    assert.strictEqual(slash.attachmentSizeLimit, 0);
+    const prefix = replyTargetOf({
+      isPrefixCommand: true,
+      appPermissions,
+      channelId: '77',
+      message: { id: '10' },
+      replyMessageId: () => '11',
+    });
+    assert.strictEqual(prefix.attachmentSizeLimit, 0);
+    const worker = await interactionFor(client, { reply: JSON.parse(JSON.stringify(prefix)) });
+    assert.strictEqual(getDiscordAttachmentLimit(worker, 8), 0);
   });
 
   test('a worker edits the original interaction reply with a file by path', async () => {

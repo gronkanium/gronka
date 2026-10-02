@@ -1,5 +1,6 @@
 import { Collection, InteractionWebhook } from 'discord.js';
 import { createMessageAdapter } from '../commands/shared/message-adapter.js';
+import { getDiscordAttachmentLimit } from '../commands/shared/attachment-limit.js';
 
 const INTERACTION_TOKEN_MS = 15 * 60 * 1000;
 const MESSAGE_REPLY_MS = 60 * 60 * 1000;
@@ -12,6 +13,7 @@ export function replyTargetOf(interaction) {
       channelId: interaction.channelId,
       messageId: interaction.message.id,
       replyId: interaction.replyMessageId(),
+      attachmentSizeLimit: getDiscordAttachmentLimit(interaction, null),
       expiresAt: Date.now() + MESSAGE_REPLY_MS,
     };
   }
@@ -20,7 +22,7 @@ export function replyTargetOf(interaction) {
     appId: interaction.applicationId,
     token: interaction.token,
     channelId: interaction.channelId,
-    attachmentSizeLimit: interaction.attachmentSizeLimit ?? null,
+    attachmentSizeLimit: getDiscordAttachmentLimit(interaction, null),
     expiresAt: interaction.createdTimestamp + INTERACTION_TOKEN_MS,
   };
 }
@@ -54,7 +56,14 @@ export async function interactionFor(client, job) {
           reply: { messageReference: reply.messageId, failIfNotExists: false },
         }),
     };
-    return createMessageAdapter(message, {}, { replyMessage });
+    return createMessageAdapter(
+      message,
+      {},
+      {
+        replyMessage,
+        attachmentSizeLimit: reply.attachmentSizeLimit ?? undefined,
+      }
+    );
   }
   const webhook = new InteractionWebhook(client, reply.appId, reply.token);
   const edit = async options => asMessage(await webhook.editMessage('@original', options));

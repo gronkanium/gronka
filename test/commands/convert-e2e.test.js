@@ -292,24 +292,17 @@ if (!mocksSupported) {
       assert.strictEqual(calls.reply[0].content, 'lossy level must be between 0 and 100.');
     });
 
-    test.skipIf(!hasGifsicle)(
-      'gif url: optimized once, then served from the url cache',
-      async () => {
-        const url = `https://example.com/anim-${Date.now()}.gif`;
-        const discordUrl = 'https://cdn.discordapp.com/attachments/9/9/optimized.gif';
-        const first = commandInteraction(
-          `op-url-a-${Date.now()}`,
-          { url, lossy: 40 },
-          { messageAttachments: [{ url: discordUrl }] }
-        );
-        await handleOptimizeCommand(first.interaction);
-        assert.ok(first.calls.editReply[0].files, 'first run attaches the gif');
-
-        const second = commandInteraction(`op-url-b-${Date.now()}`, { url, lossy: 40 });
-        await handleOptimizeCommand(second.interaction);
-        assert.strictEqual(second.calls.editReply[0].content, discordUrl);
+    test.skipIf(!hasGifsicle)('gif url: optimized on every run, nothing is cached', async () => {
+      const url = `https://example.com/anim-${Date.now()}.gif`;
+      for (const run of ['a', 'b']) {
+        const { interaction, calls } = commandInteraction(`op-url-${run}-${Date.now()}`, {
+          url,
+          lossy: 40,
+        });
+        await handleOptimizeCommand(interaction);
+        assert.ok(calls.editReply[0].files, `run ${run} attaches a freshly optimized gif`);
       }
-    );
+    });
 
     test('context menu on a gif: asks for the lossy level in a modal', async () => {
       const cache = new Map();

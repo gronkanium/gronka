@@ -6,7 +6,7 @@ answer is one json shape whatever the source, so a script, a bot or a prompt par
 way. this page is the design sketch and the roadmap; the live reference is
 [openapi.json](https://web.gronka.dev/openapi.json) and the [docs page](https://web.gronka.dev/docs/#content).
 
-status: sketch. reddit and x are wired; the shape may still move before it leaves preview.
+status: preview. reddit, x, bluesky, instagram, tiktok, booru sites, pinterest and video sites are wired; the shape may still move before it leaves preview.
 
 ## request
 
@@ -21,9 +21,9 @@ curl https://api.gronka.dev/v1/content \
 | ---------- | -------------------- | ------- | ---------- | ----------------------------------------------------------------- |
 | `url`      | string               |         | all        | a link, or text with a link in it. share links and mirrors work    |
 | `format`   | `json` \| `text`     | `json`  | all        | `text` renders the same content as plain text (see below)          |
-| `thread`   | boolean              | `true`  | x          | walk the author's replies upward from the linked post              |
+| `thread`   | boolean              | `true`  | x, bluesky | walk the author's replies upward from the linked post              |
 | `depth`    | integer 0..10        | 10      | reddit     | comment levels to include; `0` leaves the comments out            |
-| `comments` | integer 0..20        | 0       | reddit, x  | replies to include; off unless set                                 |
+| `comments` | integer 0..20        | 0       | reddit, x, bluesky, youtube | replies to include; off unless set                                 |
 
 auth, quota and turnstile are the same as `/v1/download`: an api key or the web page's turnstile
 token, 50 requests per 10 minutes per caller, and the quota is shared between downloads and
@@ -143,3 +143,12 @@ follow-ups below the post, so a thread is completed downward when replies are as
 query ids change when x ships a new web build. gronka carries the current ones and, when x
 rejects one, reads the fresh ids from x.com's bundle and retries once. the session is touched only
 for hidden posts and replies, to keep the account quiet.
+
+### other sources
+
+- bluesky (`src/content/bluesky.js`): bluesky's public api, one call gives the post, the author's thread above it and replies. no account.
+- instagram (`src/content/instagram.js`): the same signed-in media info call the downloader makes, exactly one per read; caption, author, likes, comments count, views, media. no replies.
+- tiktok (`src/content/tiktok.js`): the data embedded in tiktok's own video page; caption, author, stats, cover, music. short links are followed first. no replies.
+- booru (`src/content/booru.js`): each site's json api through the downloader's `fetchBooruPost`; tags grouped by kind, rating, score, favorites, source link, the original file.
+- pinterest (`src/content/pinterest.js`): the pin page's own embedded data; title, description, pinner, media.
+- video sites (`src/content/video.js`): any other site yt-dlp knows (youtube, soundcloud, twitch, vimeo, dailymotion, ...), read as metadata with no download; title, description, channel, stats, thumbnail, chapters. matched last. replies only on youtube.

@@ -2,7 +2,7 @@ import axios from 'axios';
 import { createLogger } from './logger.js';
 import { NetworkError, ValidationError } from './errors.js';
 import { downloadFileFromUrl } from './file-downloader.js';
-import { ssrfGuardedRequest } from './ssrf-guard.js';
+import { ssrfGuardedRequest, MAX_PAGE_BYTES } from './ssrf-guard.js';
 import { normalizeHost } from './url-host.js';
 
 const logger = createLogger('booru');
@@ -12,8 +12,8 @@ const logger = createLogger('booru');
 // not to impersonate a browser, and danbooru's API *and* CDN 403 the shared Chrome UA
 // from getRequestHeaders() while accepting a descriptive one. So both the API fetch and
 // the media download (via downloadFileFromUrl's userAgent override) use BOORU_UA.
-export const BOORU_UA = 'gronka (+https://github.com/gronkanium/gronka)';
-export const API_TIMEOUT_MS = 20000;
+const BOORU_UA = 'gronka (+https://github.com/gronkanium/gronka)';
+const API_TIMEOUT_MS = 20000;
 
 // Danbooru-style boards expose the post directly at /posts/<id>.json.
 const postJsonApiUrl = (host, postId) => `https://${host}/posts/${postId}.json`;
@@ -63,13 +63,13 @@ const BOORU_SITES = [
 ];
 
 /** Match a hostname (www-stripped) to a booru site definition, or null. */
-export function matchSite(hostname) {
+function matchSite(hostname) {
   const host = normalizeHost(hostname);
   return BOORU_SITES.find(site => site.hosts.includes(host)) || null;
 }
 
 // Extract a numeric post id from a booru post path
-export function parsePostId(pathname) {
+function parsePostId(pathname) {
   const match = pathname.match(/\/post(?:s|\/show)\/(\d+)/);
   return match ? match[1] : null;
 }
@@ -93,36 +93,41 @@ export function isBooruUrl(url) {
 }
 
 // Download the media for a booru post URL
-export async function downloadFromBooru(url, isAdminUser = false) {
+async function getJson(apiUrl) {
+  const response = await axios.get(apiUrl, {
+    ...ssrfGuardedRequest(),
+    responseType: 'json',
+    timeout: API_TIMEOUT_MS,
+    maxContentLength: MAX_PAGE_BYTES,
+    maxRedirects: 5,
+    headers: { 'User-Agent': BOORU_UA, Accept: 'application/json' },
+    validateStatus: status => status >= 200 && status < 400,
+  });
+  return response.data;
+}
+
+// One booru post from its site's json api: { site, host, postId, data }.
+export async function fetchBooruPost(url, fetchJson = getJson) {
   const { hostname, pathname } = new URL(url);
   const site = matchSite(hostname);
   const postId = parsePostId(pathname);
   if (!site || !postId) {
     throw new ValidationError('unsupported or malformed booru URL');
   }
-
   const host = normalizeHost(hostname);
-  const apiUrl = site.buildApiUrl(host, postId);
-  logger.debug(`Resolving ${site.name} post ${postId}: ${apiUrl}`);
-
-  let data;
   try {
-    const response = await axios.get(apiUrl, {
-      ...ssrfGuardedRequest(),
-      responseType: 'json',
-      timeout: API_TIMEOUT_MS,
-      maxRedirects: 5,
-      headers: { 'User-Agent': BOORU_UA, Accept: 'application/json' },
-      validateStatus: status => status >= 200 && status < 400,
-    });
-    data = response.data;
+    return { site, host, postId, data: await fetchJson(site.buildApiUrl(host, postId)) };
   } catch (error) {
     if (error.response?.status === 404) {
-      throw new NetworkError('this post is unavailable or has been deleted');
+      throw new NetworkError('this post is unavailable or has been deleted', 'CONTENT_GONE');
     }
     logger.warn(`Failed to fetch ${site.name} post ${postId}: ${error.message}`);
     throw new NetworkError('failed to fetch the post');
   }
+}
+
+export async function downloadFromBooru(url, isAdminUser = false) {
+  const { site, postId, data } = await fetchBooruPost(url);
 
   const fileUrl = site.pickFileUrl(data);
   if (!fileUrl) {

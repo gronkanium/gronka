@@ -1,12 +1,6 @@
-import axios from 'axios';
-import { createLogger } from '../utils/logger.js';
 import { NetworkError } from '../utils/errors.js';
-import { ssrfGuardedRequest } from '../utils/ssrf-guard.js';
-import { BOORU_UA, API_TIMEOUT_MS, isBooruUrl, matchSite, parsePostId } from '../utils/booru.js';
-import { normalizeHost } from '../utils/url-host.js';
+import { isBooruUrl, fetchBooruPost } from '../utils/booru.js';
 import { post, thread, isoDate, linksIn } from './schema.js';
-
-const logger = createLogger('content-booru');
 
 export const BOORU_LIMITS = {};
 
@@ -152,33 +146,11 @@ export function normalizeBooruPost(json, { url, site }) {
   });
 }
 
-async function request(apiUrl) {
-  const response = await axios.get(apiUrl, {
-    ...ssrfGuardedRequest(),
-    responseType: 'json',
-    timeout: API_TIMEOUT_MS,
-    maxRedirects: 5,
-    headers: { 'User-Agent': BOORU_UA, Accept: 'application/json' },
-    validateStatus: status => status >= 200 && status < 400,
-  });
-  return response.data;
-}
-
-export async function fetchBooruThread(url, { fetchJson = request } = {}) {
-  const parsed = isBooruUrl(url) ? new URL(url) : null;
-  if (!parsed) throw new NetworkError('that is not a link to a booru post', 'BAD_URL', 400);
-  const site = matchSite(parsed.hostname);
-  const id = parsePostId(parsed.pathname);
-  const host = normalizeHost(parsed.hostname);
-  let json;
-  try {
-    json = await fetchJson(site.buildApiUrl(host, id));
-  } catch (error) {
-    if (error.response?.status === 404) throw GONE();
-    logger.warn(`Failed to fetch ${site.name} post ${id}: ${error.message}`);
-    throw new NetworkError('failed to fetch the post');
-  }
-  const canonical = `https://${host}${site.name === 'yande.re' || site.name === 'konachan' ? '/post/show' : '/posts'}/${id}`;
-  const subject = normalizeBooruPost(json, { url: canonical, site });
+export async function fetchBooruThread(url, { fetchJson } = {}) {
+  if (!isBooruUrl(url))
+    throw new NetworkError('that is not a link to a booru post', 'BAD_URL', 400);
+  const { site, host, postId, data } = await fetchBooruPost(url, fetchJson);
+  const canonical = `https://${host}${site.name === 'yande.re' || site.name === 'konachan' ? '/post/show' : '/posts'}/${postId}`;
+  const subject = normalizeBooruPost(data, { url: canonical, site });
   return thread({ source: 'booru', url: canonical, post: subject });
 }

@@ -154,11 +154,7 @@ function normalizeComment(data, depth, budget, state) {
   });
 }
 
-/**
- * A Thread from reddit's own .json listing: the post, then the comment tree capped by depth
- * and total count. A link to one comment makes that comment the post and its replies the tree,
- * the way the downloader treats a comment link as the thing itself.
- */
+// A Thread from reddit's own .json listing: the post, then the comment tree capped by depth and total count
 export function normalizeRedditListing(listing, url, { depth, comments } = {}) {
   const data = listing?.[0]?.data?.children?.[0]?.data;
   if (!data) {

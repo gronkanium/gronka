@@ -182,11 +182,9 @@ const X_HOST_ALIASES = new Set([
   'mobile.twitter.com',
 ]);
 
-// Embed-fixer mirror domains (FxEmbed/FxTwitter, BetterTwitFix, and community
-// instances) mapped to the canonical host Cobalt understands. Cobalt doesn't
+// Embed-fixer mirror domains people paste instead of x.com, mapped to the canonical host Cobalt understands. Cobalt doesn't
 // know these hosts, so they must always be rewritten before the API call.
 const EMBED_FIXER_HOSTS = new Map([
-  // FxEmbed official (fxtwitter/fixupx) + legacy domains
   ['fxtwitter.com', 'twitter.com'],
   ['fixupx.com', 'twitter.com'],
   ['twittpr.com', 'twitter.com'],
@@ -199,7 +197,7 @@ const EMBED_FIXER_HOSTS = new Map([
   ['girlcockx.com', 'twitter.com'],
   ['stupidpenisx.com', 'twitter.com'],
   ['chudx.com', 'twitter.com'],
-  // FxEmbed for Bluesky
+  // Embed mirrors for Bluesky
   ['fxbsky.app', 'bsky.app'],
   ['bskx.app', 'bsky.app'],
   // ddinstagram.com omitted: no longer resolves.

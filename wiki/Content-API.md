@@ -14,7 +14,7 @@ status: sketch. reddit and x are wired; the shape may still move before it leave
 curl https://api.gronka.dev/v1/content \
   -H 'Authorization: Bearer <key>' \
   -H 'Content-Type: application/json' \
-  -d '{"url":"https://www.reddit.com/r/pics/comments/abc123/title/","depth":3,"comments":100}'
+  -d '{"url":"https://www.reddit.com/r/pics/comments/abc123/title/","depth":3,"comments":10}'
 ```
 
 | field      | type                 | default | applies to | what it does                                                      |
@@ -23,7 +23,7 @@ curl https://api.gronka.dev/v1/content \
 | `format`   | `json` \| `text`     | `json`  | all        | `text` renders the same content as plain text (see below)          |
 | `thread`   | boolean              | `true`  | x          | walk the author's replies upward from the linked post              |
 | `depth`    | integer 0..10        | 10      | reddit     | comment levels to include; `0` leaves the comments out            |
-| `comments` | integer 0..500       | 500     | reddit     | cap on comments across the whole tree                              |
+| `comments` | integer 0..20        | 0       | reddit, x  | replies to include; off unless set                                 |
 
 auth, quota and turnstile are the same as `/v1/download`: an api key or the web page's turnstile
 token, 50 requests per 10 minutes per caller, and the quota is shared between downloads and
@@ -44,13 +44,13 @@ carries the outcome.
 ```
 
 - `source`: `reddit` or `twitter`.
-- `url`: the canonical link after share-link and mirror rewriting (`/s/` on reddit, fxtwitter and
+- `url`: the canonical link after share-link and mirror rewriting (`/s/` on reddit, embed mirrors and
   friends on x).
 - `post`: the item the link points at.
 - `thread`: the author's own continuation in order, the post included. x only; empty when the post
   stands alone.
-- `comments`: replies by other people, as a tree. reddit only; always empty for x, which is on
-  purpose: x replies are mostly noise and cost a session to read.
+- `comments`: replies by other people, as a tree; empty unless `comments` is set, and never more
+  than 20. a sample, not the whole conversation.
 - `truncated`: true when `depth`, `comments`, the thread cap (25 posts) or a deleted parent dropped
   something.
 
@@ -129,53 +129,17 @@ not done yet: following `more` stubs (`/api/morechildren`) to fill out big threa
 
 ### x (`src/content/twitter.js`)
 
-[fxtwitter's](https://github.com/FxEmbed/FxEmbed) public json api (`api.fxtwitter.com/i/status/<id>`),
-no cookies. one call gives the post, its author, media, poll, article text, community note, the
-quoted post, and the id and author of the post it replies to. that last pair is how threads are
-rebuilt: while the parent is by the same author, fetch it and prepend, up to 25 posts or 40
-seconds. so a link to the *last* post of a thread returns the whole thread; a link to the *first*
-returns that post alone, because nothing public says what comes after it.
+x's own web api (graphql), the same calls x.com makes in a browser. the post is read as a
+logged-out guest (`TweetResultByRestId` with a guest token), so most reads use no account. posts x
+hides from guests (age-gated, sensitive) are read again with the session cookie in `cookies.json`.
+one call gives the post, its author, stats, media (best mp4 for video, original-size images),
+long-post and article text, poll, community note, the quoted post, and the post it replies to.
 
-the way to also walk *down* (and to read replies, if ever wanted) is x's graphql `TweetDetail`
-with the `auth_token` and `ct0` cookies that `cookies.json` already holds for cobalt. it returns
-the conversation with the author's self-replies in a `conversationthread` module. the cost is a
-query id that rotates with x's web bundle and a session that x may flag, which is why it is the
-second step and not the first. gallery-dl's twitter extractor is the reference implementation if
-we go there.
+threads are rebuilt upward: while the parent is by the same author, read it and prepend, up to 25
+posts or 40 seconds. replies are off unless `comments` is set (at most 20); they come from the
+logged-in conversation view (`TweetDetail`, one page), which also returns the author's own
+follow-ups below the post, so a thread is completed downward when replies are asked for.
 
-## other sites worth adding
-
-ordered by how cheap they are. "free api" means a public json endpoint with no key and no login,
-which is the only kind that stays working.
-
-| site                    | how                                                                                                              | gets                                             | cost  |
-| ----------------------- | ---------------------------------------------------------------------------------------------------------------- | ------------------------------------------------ | ----- |
-| bluesky                 | `public.api.bsky.app/xrpc/app.bsky.feed.getPostThread?uri=at://...` (resolve the handle with `resolveHandle`)   | full thread, replies, quotes as embeds, media    | free api, an afternoon |
-| mastodon / fediverse    | `/api/v1/statuses/:id` and `/context` on the post's own instance                                                 | post, ancestors, descendants, media, polls       | free api; any instance, so the ssrf guard matters |
-| hacker news             | `hacker-news.firebaseio.com/v0/item/:id.json` or algolia `hn.algolia.com/api/v1/items/:id` (whole tree in one call) | story, comment tree, scores                       | free api |
-| lemmy / kbin            | `/api/v3/post?id=` and `/api/v3/comment/list?post_id=` on the instance                                            | reddit-shaped post and tree                       | free api |
-| 4chan                   | `a.4cdn.org/:board/thread/:no.json`                                                                              | whole thread with media on `i.4cdn.org`           | free api |
-| youtube                 | yt-dlp `--dump-json` (already in the image) for title, description, chapters; `--write-comments` for comments    | description text and comments                     | already have yt-dlp; comments are slow |
-| tiktok                  | the caption and author are in the cobalt/yt-dlp metadata we already fetch for the download                       | caption, hashtags                                 | small, no new fetch |
-| instagram               | the media-info api `src/utils/instagram.js` already calls with the session cookie carries the caption and comments preview | caption, first comments                 | cookie we already have |
-| tumblr                  | `api.tumblr.com/v2/blog/:blog/posts/:id?npf=true` with a free api key                                             | post blocks, reblog trail, tags                   | needs a key in env |
-| threads (meta)          | no api without an app review; the page html embeds the post json                                                 | post, replies                                     | scraping, breaks often |
-| facebook                | same as threads, worse                                                                                           |                                                   | skip  |
-| articles (substack, medium, news) | readability over the fetched html, or the site's rss                                                   | title, body text                                  | generic; a different shape (`article`, not `Thread`) |
-
-the first three are the ones to do next: bluesky and mastodon slot into `Thread` without changing
-it (replies become `comments`, embeds become `quoted`), and hacker news is the cleanest "thread"
-there is.
-
-## open questions
-
-- `GET /v1/content?url=` as an alias for the json shape. cacheable and easy to paste in a browser,
-  but the turnstile flow and the body options do not fit a query string. the download endpoint
-  settled on POST, so this does too, for now.
-- caching. a thread does not change much in ten minutes and the same link gets pasted many times.
-  an in-memory lru keyed on the canonical url with a short ttl would cut the source calls without
-  keeping anything on disk, which fits the no-logs promise.
-- x replies. not planned: they need a session and they are the part people least want. if ever,
-  `replies: true` as an option, off by default.
-- a `/v1/content` box on web.gronka.dev. the api comes first; a page that shows a thread as text
-  with a copy button is a small follow-up.
+query ids change when x ships a new web build. gronka carries the current ones and, when x
+rejects one, reads the fresh ids from x.com's bundle and retries once. the session is touched only
+for hidden posts and replies, to keep the account quiet.

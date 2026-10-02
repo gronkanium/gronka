@@ -201,7 +201,7 @@ function executeYtdlp(
     if (maxDuration !== Infinity && startTime === null && duration === null) {
       // The `?` on the operator marks the field optional. Without it yt-dlp rejects any item
       // whose duration is unknown (`NA`), which is every direct-media link handled by the
-      // generic extractor, e.g. an animated webp from gif.fxtwitter.com. Those were skipped
+      // generic extractor, e.g. an animated webp from an embed mirror. Those were skipped
       // silently (exit 0, no output) and then misreported as "duration exceeds the maximum".
       // Unknown-duration items stay bounded by --max-filesize and the post-read size check.
       args.push('--match-filter', `duration<=?${maxDuration}`);

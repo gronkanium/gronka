@@ -10,6 +10,7 @@ import { initDatabase } from './utils/database.js';
 import { r2Config } from './utils/config.js';
 import { acquireMedia, extractAudio } from './core/acquire-media.js';
 import { fetchContent, formatContent } from './content/index.js';
+import { MAX_COMMENTS } from './content/schema.js';
 import { getDisabledServiceLabel, getServiceForUrl } from './utils/download-services.js';
 import { validateUrl, firstUrlIn, parseTimestamp, sanitizeFilename } from './utils/validation.js';
 import { detectFileType } from './utils/storage.js';
@@ -385,7 +386,7 @@ export function parseContentRequest(body) {
     format,
     thread: body.thread !== false,
     depth: parseCount(body.depth, 'depth', 10),
-    comments: parseCount(body.comments, 'comments', 500),
+    comments: parseCount(body.comments, 'comments', MAX_COMMENTS),
   };
 }
 

@@ -1,11 +1,11 @@
 import { createLogger } from '../utils/logger.js';
 import { NetworkError } from '../utils/errors.js';
 import { fetchRedditListing, isRedditPostUrl, commentIdFromUrl } from '../utils/reddit.js';
-import { post, comment, thread, isoDate, linksIn } from './schema.js';
+import { post, comment, thread, isoDate, linksIn, MAX_COMMENTS } from './schema.js';
 
 const logger = createLogger('content-reddit');
 
-export const REDDIT_LIMITS = { depth: 10, comments: 500, listing: 100 };
+export const REDDIT_LIMITS = { depth: 10, comments: MAX_COMMENTS, listing: 100 };
 
 export const isRedditContentUrl = isRedditPostUrl;
 
@@ -169,7 +169,7 @@ export function normalizeRedditListing(listing, url, { depth, comments } = {}) {
   }
   const budget = {
     depth: Math.min(Math.max(depth ?? REDDIT_LIMITS.depth, 0), REDDIT_LIMITS.depth),
-    comments: Math.min(Math.max(comments ?? REDDIT_LIMITS.comments, 0), REDDIT_LIMITS.comments),
+    comments: Math.min(Math.max(comments ?? 0, 0), REDDIT_LIMITS.comments),
   };
   const state = { count: 0, truncated: false };
   const roots = listing?.[1]?.data?.children ?? [];

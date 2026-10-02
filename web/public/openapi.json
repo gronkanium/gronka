@@ -850,7 +850,7 @@
                   "value": {
                     "url": "https://www.reddit.com/r/pics/comments/abc123/title/",
                     "depth": 3,
-                    "comments": 50
+                    "comments": 10
                   }
                 },
                 "x": {
@@ -1162,7 +1162,7 @@
         "properties": {
           "url": {
             "type": "string",
-            "description": "link or text containing a link. reddit post or comment permalinks, /s/ share links, x.com, twitter.com and fxtwitter/vxtwitter mirrors"
+            "description": "link or text containing a link. reddit post or comment permalinks, /s/ share links, x.com, twitter.com and their embed mirrors"
           },
           "format": {
             "type": "string",
@@ -1185,9 +1185,9 @@
           "comments": {
             "type": "integer",
             "minimum": 0,
-            "maximum": 500,
-            "default": 500,
-            "description": "reddit only. cap on the number of comments across the tree"
+            "maximum": 20,
+            "default": 0,
+            "description": "replies to include, at most 20. off unless set"
           },
           "turnstile": {
             "type": "string",

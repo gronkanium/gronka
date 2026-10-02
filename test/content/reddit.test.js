@@ -173,7 +173,7 @@ describe('normalizeRedditListing', () => {
   ];
 
   test('builds the comment tree with depth, op and parent ids', () => {
-    const out = normalizeRedditListing(listing(post(), tree), POST_URL);
+    const out = normalizeRedditListing(listing(post(), tree), POST_URL, { comments: 20 });
     expect(out.source).toBe('reddit');
     expect(out.url).toBe(POST_URL);
     expect(out.thread).toEqual([]);
@@ -192,12 +192,18 @@ describe('normalizeRedditListing', () => {
   });
 
   test('depth and comments caps mark the result truncated', () => {
-    const shallow = normalizeRedditListing(listing(post(), tree), POST_URL, { depth: 1 });
+    const shallow = normalizeRedditListing(listing(post(), tree), POST_URL, {
+      depth: 1,
+      comments: 20,
+    });
     expect(shallow.comments.map(item => item.id)).toEqual(['c1', 'c2']);
     expect(shallow.comments[0].replies).toEqual([]);
     expect(shallow.truncated).toBe(true);
 
-    const none = normalizeRedditListing(listing(post(), tree), POST_URL, { depth: 0 });
+    const none = normalizeRedditListing(listing(post(), tree), POST_URL, {
+      depth: 0,
+      comments: 20,
+    });
     expect(none.comments).toEqual([]);
     expect(none.truncated).toBe(true);
 
@@ -206,13 +212,17 @@ describe('normalizeRedditListing', () => {
     expect(few.comments[0].replies).toHaveLength(1);
     expect(few.truncated).toBe(true);
 
-    const stub = normalizeRedditListing(listing(post(), [reply('c1', 'x'), more(40)]), POST_URL);
+    const stub = normalizeRedditListing(listing(post(), [reply('c1', 'x'), more(40)]), POST_URL, {
+      comments: 20,
+    });
     expect(stub.comments).toHaveLength(1);
     expect(stub.truncated).toBe(true);
   });
 
   test('a comment permalink makes that comment the subject and its replies the tree', () => {
-    const out = normalizeRedditListing(listing(post(), [tree[0]]), `${POST_URL}c1/`);
+    const out = normalizeRedditListing(listing(post(), [tree[0]]), `${POST_URL}c1/`, {
+      comments: 20,
+    });
     expect(out.post).toMatchObject({ id: 'c1', text: 'good dog', title: null });
     expect(out.post.depth).toBeUndefined();
     expect(out.comments.map(item => item.id)).toEqual(['c1a', 'c1b']);
@@ -226,7 +236,9 @@ describe('normalizeRedditListing', () => {
   });
 
   test('plain text puts the post first and indents the comments', () => {
-    const text = toPlainText(normalizeRedditListing(listing(post(), tree), POST_URL));
+    const text = toPlainText(
+      normalizeRedditListing(listing(post(), tree), POST_URL, { comments: 20 })
+    );
     expect(text.startsWith(`reddit: ${POST_URL}\n\n# dog photo shoot\n@photographer`)).toBe(true);
     expect(text).toContain('--- comments ---');
     expect(text).toContain('\n@user_c1 · 2025-10-09 08:53\ngood dog\n');

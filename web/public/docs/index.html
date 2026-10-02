@@ -132,15 +132,16 @@
           </div>
           <p>
             options: <code>format</code> is <code>json</code> (default) or <code>text</code> (a
-            plain-text rendering, comments indented); on reddit, <code>depth</code> (0 to 10) and
-            <code>comments</code> (0 to 500) cap the tree; on x, <code>thread: false</code> stops at
-            the linked post. the answer is one <code>Thread</code>: <code>source</code>,
-            <code>url</code>, <code>post</code>, <code>thread</code> (the author's posts in order),
-            <code>comments</code> (a tree) and <code>truncated</code>. every item has
-            <code>author</code>, <code>text</code>, <code>media</code>, <code>links</code>,
-            <code>quoted</code> and <code>stats</code>. errors use the http status:
-            <code>404 CONTENT_GONE</code>, <code>400 UNSUPPORTED_SOURCE</code>,
-            <code>502 CONTENT_FAILED</code>. reddit and x only for now.
+            plain-text rendering, comments indented); <code>comments</code> (0 to 20, default 0)
+            adds that many replies; on reddit, <code>depth</code> (0 to 10) caps how deep they go;
+            on x, <code>thread: false</code> stops at the linked post. the answer is one
+            <code>Thread</code>: <code>source</code>, <code>url</code>, <code>post</code>,
+            <code>thread</code> (the author's posts in order), <code>comments</code> (a tree) and
+            <code>truncated</code>. every item has <code>author</code>, <code>text</code>,
+            <code>media</code>, <code>links</code>, <code>quoted</code> and <code>stats</code>.
+            errors use the http status: <code>404 CONTENT_GONE</code>,
+            <code>400 UNSUPPORTED_SOURCE</code>, <code>502 CONTENT_FAILED</code>. reddit and x only
+            for now.
           </p>
         </section>
 

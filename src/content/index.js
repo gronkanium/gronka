@@ -22,13 +22,19 @@ export const CONTENT_SOURCES = [
   {
     id: 'twitter',
     label: 'X / Twitter',
-    hosts: ['x.com', 'twitter.com', 'fxtwitter.com', 'vxtwitter.com', 'fixupx.com', 'fixvx.com'],
+    hosts: ['x.com', 'twitter.com'],
     match: isTwitterContentUrl,
     fetch: fetchTweetThread,
-    options: ['thread'],
+    options: ['thread', 'comments'],
     limits: TWITTER_LIMITS,
   },
 ];
+
+// The same link asked for again within a minute is answered from memory: posts barely change in
+// that time, and it keeps a popular link from spending the x session's quota.
+const CACHE_MS = 60_000;
+const CACHE_ENTRIES = 500;
+const recent = new Map();
 
 export function getContentSourceForUrl(url) {
   return CONTENT_SOURCES.find(source => source.match(url)) ?? null;
@@ -49,7 +55,18 @@ export async function fetchContent(url, options = {}) {
       400
     );
   }
-  return source.fetch(url, options);
+  const key = JSON.stringify([
+    url,
+    options.thread !== false,
+    options.depth ?? null,
+    options.comments ?? 0,
+  ]);
+  const hit = recent.get(key);
+  if (hit && hit.expires > Date.now()) return hit.value;
+  const value = await source.fetch(url, options);
+  if (recent.size >= CACHE_ENTRIES) recent.delete(recent.keys().next().value);
+  recent.set(key, { value, expires: Date.now() + CACHE_MS });
+  return value;
 }
 
 /** A Thread, or its plain-text rendering when `format` is text. */

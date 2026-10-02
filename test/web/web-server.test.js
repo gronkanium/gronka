@@ -338,13 +338,13 @@ describe('content', () => {
 
   test('parseContentRequest validates format, thread and the caps', () => {
     expect(
-      parseContentRequest({ url: 'see https://x.com/a/status/1', depth: 2, comments: 50 })
+      parseContentRequest({ url: 'see https://x.com/a/status/1', depth: 2, comments: 5 })
     ).toEqual({
       url: 'https://x.com/a/status/1',
       format: 'json',
       thread: true,
       depth: 2,
-      comments: 50,
+      comments: 5,
     });
     expect(
       parseContentRequest({ url: 'https://x.com/a/status/1', format: 'text', thread: false })
@@ -356,6 +356,7 @@ describe('content', () => {
     expect(() => parseContentRequest({ url: 'https://x.com/a/status/1', format: 'xml' })).toThrow();
     expect(() => parseContentRequest({ url: 'https://x.com/a/status/1', depth: 11 })).toThrow();
     expect(() => parseContentRequest({ url: 'https://x.com/a/status/1', comments: -1 })).toThrow();
+    expect(() => parseContentRequest({ url: 'https://x.com/a/status/1', comments: 21 })).toThrow();
     expect(() => parseContentRequest({ url: 'https://x.com/a/status/1', thread: 'yes' })).toThrow();
     expect(() => parseContentRequest({ url: 'http://127.0.0.1/' })).toThrow();
   });

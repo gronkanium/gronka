@@ -24,6 +24,9 @@
 //
 // Comment extends Post with { depth, replies: Comment[] }
 
+// Replies are a sample, not the conversation: off unless asked for, and never more than this.
+export const MAX_COMMENTS = 20;
+
 function pickNumber(value) {
   return typeof value === 'number' && Number.isFinite(value) ? value : null;
 }

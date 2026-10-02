@@ -58,7 +58,6 @@ const client = new Client({
     GatewayIntentBits.Guilds,
     GatewayIntentBits.GuildMessages,
     GatewayIntentBits.DirectMessages, // Required for DM support
-    GatewayIntentBits.MessageContent, // Required to access attachments
   ],
   partials: [Partials.Channel], // Required to receive MessageCreate in DMs (prefix commands)
 });

@@ -28,7 +28,6 @@ look for "bot logged in as" message in logs. if missing:
 
 - check `DISCORD_TOKEN` is correct
 - verify bot has proper permissions
-- ensure message content intent is enabled
 
 ## commands not appearing
 

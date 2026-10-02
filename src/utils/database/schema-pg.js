@@ -53,17 +53,6 @@ export function getTableDefinitions() {
       `,
     },
     {
-      name: 'guild_prefixes',
-      sql: `
-        CREATE TABLE IF NOT EXISTS guild_prefixes (
-          guild_id TEXT PRIMARY KEY,
-          prefix TEXT NOT NULL,
-          updated_at BIGINT NOT NULL
-        );
-      `,
-    },
-
-    {
       name: 'media_jobs',
       sql: `
         CREATE TABLE IF NOT EXISTS media_jobs (
@@ -113,11 +102,6 @@ export function getIndexDefinitions() {
     {
       name: 'idx_alerts_component',
       sql: 'CREATE INDEX IF NOT EXISTS idx_alerts_component ON alerts(component);',
-    },
-
-    {
-      name: 'idx_guild_prefixes_updated_at',
-      sql: 'CREATE INDEX IF NOT EXISTS idx_guild_prefixes_updated_at ON guild_prefixes(updated_at);',
     },
 
     {
@@ -175,11 +159,17 @@ async function dropRequestHistory(sql) {
   await sql`ALTER TABLE media_jobs DROP COLUMN IF EXISTS user_id`;
 }
 
+// Without the Message Content intent a server's messages arrive empty, so a custom prefix can't be read.
+async function dropGuildPrefixes(sql) {
+  await sql`DROP TABLE IF EXISTS guild_prefixes CASCADE`;
+}
+
 // Append only: a name, once recorded in schema_migrations, never runs again.
 const MIGRATIONS = [
   ['drop_redundant_indexes', dropRedundantIndexes],
   ['drop_url_cache_and_bans', dropUrlCacheAndBans],
   ['drop_request_history', dropRequestHistory],
+  ['drop_guild_prefixes', dropGuildPrefixes],
 ];
 
 export async function runMigrations(sql) {

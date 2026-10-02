@@ -3,6 +3,7 @@ import crypto from 'node:crypto';
 import {
   createHandler,
   parseDownloadRequest,
+  parseContentRequest,
   contentDisposition,
   signStreamToken,
   directStreamInfo,
@@ -308,4 +309,117 @@ test('a client that hangs up mid-download cancels it on a real server', async ()
   } finally {
     server.stop(true);
   }
+});
+
+describe('content', () => {
+  const sample = {
+    source: 'twitter',
+    url: 'https://x.com/a/status/1',
+    post: {
+      id: '1',
+      author: { handle: 'a', name: 'A', url: 'https://x.com/a' },
+      text: 'hi',
+      media: [],
+    },
+    thread: [],
+    comments: [],
+    truncated: false,
+  };
+  const postContent = (body, headers = {}) =>
+    new Request('http://web/v1/content', {
+      method: 'POST',
+      headers: {
+        'content-type': 'application/json',
+        'cf-connecting-ip': '203.0.113.9',
+        ...headers,
+      },
+      body: JSON.stringify(body),
+    });
+
+  test('parseContentRequest validates format, thread and the caps', () => {
+    expect(
+      parseContentRequest({ url: 'see https://x.com/a/status/1', depth: 2, comments: 5 })
+    ).toEqual({
+      url: 'https://x.com/a/status/1',
+      format: 'json',
+      transcript: false,
+      thread: true,
+      depth: 2,
+      comments: 5,
+    });
+    expect(
+      parseContentRequest({ url: 'https://x.com/a/status/1', format: 'text', thread: false })
+    ).toMatchObject({
+      format: 'text',
+      thread: false,
+      depth: undefined,
+    });
+    expect(() => parseContentRequest({ url: 'https://x.com/a/status/1', format: 'xml' })).toThrow();
+    expect(() => parseContentRequest({ url: 'https://x.com/a/status/1', depth: 11 })).toThrow();
+    expect(() => parseContentRequest({ url: 'https://x.com/a/status/1', comments: -1 })).toThrow();
+    expect(() => parseContentRequest({ url: 'https://x.com/a/status/1', comments: 21 })).toThrow();
+    expect(() => parseContentRequest({ url: 'https://x.com/a/status/1', thread: 'yes' })).toThrow();
+    expect(
+      parseContentRequest({ url: 'https://youtu.be/abc', transcript: 'pt-BR' }).transcript
+    ).toBe('pt-BR');
+    expect(() => parseContentRequest({ url: 'https://youtu.be/a', transcript: 'x y' })).toThrow();
+    expect(() => parseContentRequest({ url: 'http://127.0.0.1/' })).toThrow();
+  });
+
+  test('answers json, or plain text on request, and hands the options to the reader', async () => {
+    let seen;
+    const handle = createHandler({
+      verify: ok,
+      content: async (url, options) => ((seen = { url, options }), sample),
+    });
+    const res = await handle(postContent({ ...body, depth: 1 }));
+    expect(res.status).toBe(200);
+    expect(res.headers.get('content-type')).toBe('application/json');
+    expect(await readJson(res)).toEqual(sample);
+    expect(seen.url).toBe('https://x.com/a/status/1');
+    expect(seen.options).toMatchObject({ depth: 1, thread: true });
+    expect(handle.stats().content.twitter).toBe(1);
+
+    const text = await handle(postContent({ ...body, format: 'text' }));
+    expect(text.headers.get('content-type')).toBe('text/plain; charset=utf-8');
+    expect(await text.text()).toBe('twitter: https://x.com/a/status/1\n\n@a (A)\nhi\n');
+  });
+
+  test('source errors use the http status; unknown errors are curated', async () => {
+    const { NetworkError, AppError } = await import('../../src/utils/errors.js');
+    const failing = error =>
+      createHandler({
+        verify: ok,
+        content: async () => {
+          throw error;
+        },
+      });
+    const gone = await failing(new NetworkError('gone', 'CONTENT_GONE'))(postContent(body));
+    expect(gone.status).toBe(404);
+    expect((await readJson(gone)).error).toEqual({ code: 'CONTENT_GONE', message: 'gone' });
+    const unsupported = await failing(new AppError('nope', 'UNSUPPORTED_SOURCE', 400))(
+      postContent(body)
+    );
+    expect(unsupported.status).toBe(400);
+    const down = await failing(new NetworkError('failed to reach x'))(postContent(body));
+    expect(down.status).toBe(502);
+    const raw = await failing(new Error('ENOENT /app/secret'))(postContent(body));
+    expect(raw.status).toBe(502);
+    expect((await readJson(raw)).error).toEqual({
+      code: 'CONTENT_FAILED',
+      message: 'could not read this content.',
+    });
+  });
+
+  test('downloads and content reads share one quota per caller', async () => {
+    const handle = createHandler({
+      verify: ok,
+      download: async () => result,
+      content: async () => sample,
+      ipLimit: 2,
+    });
+    expect((await handle(post(body))).status).toBe(200);
+    expect((await handle(postContent(body))).status).toBe(200);
+    expect((await handle(postContent(body))).status).toBe(429);
+  });
 });

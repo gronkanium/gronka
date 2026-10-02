@@ -107,7 +107,7 @@ export function shortcodeToMediaId(shortcode) {
   return id.toString();
 }
 
-const readCookie = () => readSessionCookie('instagram', 'sessionid=');
+export const readCookie = () => readSessionCookie('instagram', 'sessionid=');
 
 /** Whether the Instagram extractor is usable at all; false means the caller should use cobalt. */
 export function hasInstagramSession() {
@@ -154,7 +154,7 @@ export function selectMediaUrl(media, imgIndex = null) {
   return isMediaHostUrl(image) ? image : null;
 }
 
-async function instagramGet(apiPath, refererPath, cookie, unavailable = 'post') {
+export async function instagramGet(apiPath, refererPath, cookie, unavailable = 'post') {
   let response;
   try {
     response = await axios.get(`https://www.instagram.com${apiPath}`, {
@@ -186,7 +186,7 @@ async function instagramGet(apiPath, refererPath, cookie, unavailable = 'post') 
   } catch (error) {
     const status = error.response?.status;
     if (status === 400 || status === 404) {
-      throw new NetworkError(unavailableMessage(unavailable));
+      throw new NetworkError(unavailableMessage(unavailable), 'CONTENT_GONE');
     }
     // A dead session answers 401/403 on every post, so it reads as "everything is broken"
     // rather than "one post is missing". Say so in the log; the user still gets the curated

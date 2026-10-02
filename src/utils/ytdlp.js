@@ -74,7 +74,7 @@ export function isYouTubeUrl(url) {
 }
 
 // Signed-in requests get ads and a ~5 s wait, so web_embedded (needs bun + yt-dlp-ejs) is sign-in only.
-function getYouTubeArgs(url, signedIn = false) {
+export function getYouTubeArgs(url, signedIn = false) {
   if (!isYouTubeUrl(url)) return [];
   const clients = signedIn ? 'web_embedded,default' : 'default';
   return ['--js-runtimes', 'bun', '--extractor-args', `youtube:player_client=${clients}`];
@@ -82,7 +82,7 @@ function getYouTubeArgs(url, signedIn = false) {
 
 // These answer yt-dlp's own TLS fingerprint with 403; curl-cffi (in the image) lets it pass as Chrome.
 const IMPERSONATE_HOSTS = ['rumble.com'];
-function getImpersonateArgs(url) {
+export function getImpersonateArgs(url) {
   const host = hostOf(url);
   if (!host) return [];
   return IMPERSONATE_HOSTS.some(h => host === h || host.endsWith(`.${h}`))
@@ -201,7 +201,7 @@ function executeYtdlp(
     if (maxDuration !== Infinity && startTime === null && duration === null) {
       // The `?` on the operator marks the field optional. Without it yt-dlp rejects any item
       // whose duration is unknown (`NA`), which is every direct-media link handled by the
-      // generic extractor, e.g. an animated webp from gif.fxtwitter.com. Those were skipped
+      // generic extractor, e.g. an animated webp from an embed mirror. Those were skipped
       // silently (exit 0, no output) and then misreported as "duration exceeds the maximum".
       // Unknown-duration items stay bounded by --max-filesize and the post-read size check.
       args.push('--match-filter', `duration<=?${maxDuration}`);

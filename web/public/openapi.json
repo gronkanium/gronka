@@ -15,8 +15,8 @@
       "name": "download"
     },
     {
-      "name": "account",
-      "description": "the account page uses a cookie session. scripts can use an api key."
+      "name": "keys",
+      "description": "no accounts: a key is shown once and only its keyed hash is stored."
     }
   ],
   "paths": {
@@ -155,15 +155,15 @@
             "$ref": "#/components/responses/Error"
           }
         },
-        "description": "limits: 50 downloads per 10 minutes per ip, or per account for api keys (all keys of an account share them). keyed requests are also limited to 30 key checks per 10 minutes per ip."
+        "description": "limits: 50 downloads per 10 minutes per ip, or per key for api keys. keyed requests are also limited to 30 key checks per 10 minutes per ip."
       }
     },
-    "/v1/account": {
+    "/v1/keys": {
       "post": {
-        "tags": ["account"],
-        "summary": "create an account",
-        "description": "returns the account number once. we cannot recover it.",
+        "tags": ["keys"],
+        "summary": "create an api key",
         "requestBody": {
+          "required": true,
           "content": {
             "application/json": {
               "schema": {
@@ -174,220 +174,7 @@
         },
         "responses": {
           "201": {
-            "description": "account created and session cookie set",
-            "content": {
-              "application/json": {
-                "example": {
-                  "id": "7K3P9",
-                  "number": "GW 7K3P9 ABCDE FGHJK MNPQR STVWX YZ012 3"
-                }
-              }
-            }
-          },
-          "403": {
-            "$ref": "#/components/responses/Error"
-          },
-          "429": {
-            "$ref": "#/components/responses/Error"
-          }
-        }
-      },
-      "get": {
-        "tags": ["account"],
-        "summary": "get account, keys and passkeys",
-        "security": [
-          {
-            "session": []
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "account, keys, 2fa and passkeys",
-            "content": {
-              "application/json": {
-                "example": {
-                  "id": "7K3P9",
-                  "createdOn": "2026-09-28",
-                  "totp": true,
-                  "recoveryCodesLeft": 9,
-                  "keys": [
-                    {
-                      "id": "gk_ab12cd34",
-                      "label": "cli",
-                      "createdOn": "2026-09-28",
-                      "lastUsedOn": null
-                    }
-                  ],
-                  "passkeys": [
-                    {
-                      "id": "b2T9...",
-                      "label": "phone",
-                      "createdOn": "2026-09-28"
-                    }
-                  ]
-                }
-              }
-            }
-          },
-          "401": {
-            "$ref": "#/components/responses/Error"
-          }
-        }
-      },
-      "delete": {
-        "tags": ["account"],
-        "summary": "delete the account and its keys immediately",
-        "security": [
-          {
-            "session": []
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "account deleted"
-          },
-          "401": {
-            "$ref": "#/components/responses/Error"
-          }
-        },
-        "requestBody": {
-          "required": false,
-          "content": {
-            "application/json": {
-              "schema": {
-                "type": "object",
-                "properties": {
-                  "code": {
-                    "type": "string",
-                    "description": "current 2fa code or a recovery code. required when the account has 2fa on"
-                  }
-                }
-              }
-            }
-          }
-        },
-        "description": "delete the account and its keys immediately when 2fa is on, send a current code or a recovery code as `code`, or the answer is TOTP_REQUIRED, TOTP_INVALID or TOTP_LOCKED."
-      }
-    },
-    "/v1/account/rotate": {
-      "post": {
-        "tags": ["account"],
-        "summary": "replace the account number; the old one stops working at once",
-        "security": [
-          {
-            "session": []
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "new account number",
-            "content": {
-              "application/json": {
-                "example": {
-                  "number": "GW 7K3P9 ..."
-                }
-              }
-            }
-          }
-        },
-        "requestBody": {
-          "required": false,
-          "content": {
-            "application/json": {
-              "schema": {
-                "type": "object",
-                "properties": {
-                  "code": {
-                    "type": "string",
-                    "description": "current 2fa code or a recovery code. required when the account has 2fa on"
-                  }
-                }
-              }
-            }
-          }
-        },
-        "description": "replace the account number; the old one stops working at once when 2fa is on, send a current code or a recovery code as `code`, or the answer is TOTP_REQUIRED, TOTP_INVALID or TOTP_LOCKED. ends every other session of the account; the current one stays."
-      }
-    },
-    "/v1/session": {
-      "post": {
-        "tags": ["account"],
-        "summary": "start a session",
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "allOf": [
-                  {
-                    "$ref": "#/components/schemas/Turnstile"
-                  },
-                  {
-                    "type": "object",
-                    "required": ["number"],
-                    "properties": {
-                      "number": {
-                        "type": "string"
-                      },
-                      "totp": {
-                        "type": "string",
-                        "description": "needed when 2fa is on: a 6-digit code, or one recovery code"
-                      }
-                    }
-                  }
-                ]
-              }
-            }
-          }
-        },
-        "responses": {
-          "200": {
-            "description": "session cookie set"
-          },
-          "401": {
-            "$ref": "#/components/responses/Error"
-          },
-          "429": {
-            "$ref": "#/components/responses/Error"
-          }
-        }
-      },
-      "delete": {
-        "tags": ["account"],
-        "summary": "end a session",
-        "responses": {
-          "200": {
-            "description": "session cookie cleared"
-          }
-        }
-      }
-    },
-    "/v1/keys": {
-      "post": {
-        "tags": ["account"],
-        "summary": "create an api key",
-        "security": [
-          {
-            "session": []
-          }
-        ],
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "type": "object",
-                "properties": {
-                  "label": {
-                    "type": "string",
-                    "maxLength": 40
-                  }
-                }
-              }
-            }
-          }
-        },
-        "responses": {
-          "201": {
-            "description": "key shown once. up to 10 keys per account.",
+            "description": "key shown once. it cannot be recovered.",
             "content": {
               "application/json": {
                 "example": {
@@ -397,343 +184,6 @@
               }
             }
           },
-          "400": {
-            "$ref": "#/components/responses/Error"
-          }
-        }
-      }
-    },
-    "/v1/keys/{id}": {
-      "delete": {
-        "tags": ["account"],
-        "summary": "revoke an api key",
-        "security": [
-          {
-            "session": []
-          }
-        ],
-        "parameters": [
-          {
-            "name": "id",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "pattern": "^gk_[0-9a-z]{8}$"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "key revoked"
-          },
-          "404": {
-            "$ref": "#/components/responses/Error"
-          }
-        }
-      }
-    },
-    "/v1/totp/setup": {
-      "post": {
-        "tags": ["account"],
-        "summary": "start turning on 2fa",
-        "description": "returns a new secret. it only takes effect after /v1/totp/enable.",
-        "security": [
-          {
-            "session": []
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "secret and otpauth uri",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "uri": {
-                      "type": "string"
-                    },
-                    "secret": {
-                      "type": "string",
-                      "description": "base32, for typing into an app"
-                    }
-                  }
-                }
-              }
-            }
-          },
-          "409": {
-            "$ref": "#/components/responses/Error"
-          }
-        }
-      }
-    },
-    "/v1/totp/enable": {
-      "post": {
-        "tags": ["account"],
-        "summary": "turn on 2fa",
-        "security": [
-          {
-            "session": []
-          }
-        ],
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "type": "object",
-                "properties": {
-                  "code": {
-                    "type": "string",
-                    "description": "a 6-digit code from the authenticator app, or a recovery code"
-                  }
-                },
-                "required": ["code"]
-              }
-            }
-          }
-        },
-        "responses": {
-          "200": {
-            "description": "recovery codes, shown once",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "recoveryCodes": {
-                      "type": "array",
-                      "items": {
-                        "type": "string"
-                      }
-                    }
-                  }
-                }
-              }
-            }
-          },
-          "400": {
-            "$ref": "#/components/responses/Error"
-          }
-        }
-      }
-    },
-    "/v1/totp": {
-      "delete": {
-        "tags": ["account"],
-        "summary": "turn off 2fa",
-        "security": [
-          {
-            "session": []
-          }
-        ],
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "type": "object",
-                "properties": {
-                  "code": {
-                    "type": "string",
-                    "description": "a 6-digit code from the authenticator app, or a recovery code"
-                  }
-                },
-                "required": ["code"]
-              }
-            }
-          }
-        },
-        "responses": {
-          "200": {
-            "description": "2fa off, recovery codes deleted"
-          },
-          "401": {
-            "$ref": "#/components/responses/Error"
-          },
-          "429": {
-            "$ref": "#/components/responses/Error"
-          }
-        }
-      }
-    },
-    "/v1/totp/recovery": {
-      "post": {
-        "tags": ["account"],
-        "summary": "replace the recovery codes",
-        "security": [
-          {
-            "session": []
-          }
-        ],
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "type": "object",
-                "properties": {
-                  "code": {
-                    "type": "string",
-                    "description": "a 6-digit code from the authenticator app, or a recovery code"
-                  }
-                },
-                "required": ["code"]
-              }
-            }
-          }
-        },
-        "responses": {
-          "200": {
-            "description": "recovery codes, shown once",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "recoveryCodes": {
-                      "type": "array",
-                      "items": {
-                        "type": "string"
-                      }
-                    }
-                  }
-                }
-              }
-            }
-          },
-          "401": {
-            "$ref": "#/components/responses/Error"
-          },
-          "409": {
-            "$ref": "#/components/responses/Error"
-          },
-          "429": {
-            "$ref": "#/components/responses/Error"
-          }
-        }
-      }
-    },
-    "/v1/passkeys/register/options": {
-      "post": {
-        "tags": ["account"],
-        "summary": "start adding a passkey",
-        "security": [
-          {
-            "session": []
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "creation options",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "description": "a WebAuthn options object for navigator.credentials"
-                }
-              }
-            }
-          }
-        },
-        "requestBody": {
-          "required": false,
-          "content": {
-            "application/json": {
-              "schema": {
-                "type": "object",
-                "properties": {
-                  "code": {
-                    "type": "string",
-                    "description": "current 2fa code or a recovery code. required when the account has 2fa on"
-                  }
-                }
-              }
-            }
-          }
-        },
-        "description": "start adding a passkey when 2fa is on, send a current code or a recovery code as `code`, or the answer is TOTP_REQUIRED, TOTP_INVALID or TOTP_LOCKED."
-      }
-    },
-    "/v1/passkeys/register": {
-      "post": {
-        "tags": ["account"],
-        "summary": "finish adding a passkey",
-        "security": [
-          {
-            "session": []
-          }
-        ],
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "type": "object",
-                "properties": {
-                  "response": {
-                    "type": "object",
-                    "description": "the credential from navigator.credentials.create, as JSON"
-                  },
-                  "label": {
-                    "type": "string",
-                    "maxLength": 40
-                  }
-                },
-                "required": ["response"]
-              }
-            }
-          }
-        },
-        "responses": {
-          "201": {
-            "description": "passkey added"
-          },
-          "400": {
-            "$ref": "#/components/responses/Error"
-          }
-        }
-      }
-    },
-    "/v1/passkeys/login/options": {
-      "post": {
-        "tags": ["account"],
-        "summary": "start a passkey login",
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "allOf": [
-                  {
-                    "$ref": "#/components/schemas/Turnstile"
-                  },
-                  {
-                    "type": "object",
-                    "properties": {}
-                  }
-                ]
-              }
-            }
-          }
-        },
-        "responses": {
-          "200": {
-            "description": "request options and a challenge id, valid for 5 minutes",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "challengeId": {
-                      "type": "string"
-                    },
-                    "options": {
-                      "type": "object",
-                      "description": "a WebAuthn options object for navigator.credentials"
-                    }
-                  }
-                }
-              }
-            }
-          },
           "403": {
             "$ref": "#/components/responses/Error"
           },
@@ -741,86 +191,23 @@
             "$ref": "#/components/responses/Error"
           }
         }
-      }
-    },
-    "/v1/passkeys/login": {
-      "post": {
-        "tags": ["account"],
-        "summary": "log in with a passkey",
-        "description": "no account number needed. a passkey login also clears a 2fa lockout.",
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "type": "object",
-                "properties": {
-                  "challengeId": {
-                    "type": "string"
-                  },
-                  "response": {
-                    "type": "object",
-                    "description": "the credential from navigator.credentials.get, as JSON"
-                  }
-                },
-                "required": ["challengeId", "response"]
-              }
-            }
+      },
+      "delete": {
+        "tags": ["keys"],
+        "summary": "revoke the api key sent as the bearer token",
+        "security": [
+          {
+            "apiKey": []
           }
-        },
+        ],
         "responses": {
           "200": {
-            "description": "session cookie set"
+            "description": "key revoked"
           },
           "401": {
             "$ref": "#/components/responses/Error"
           }
         }
-      }
-    },
-    "/v1/passkeys/{id}": {
-      "delete": {
-        "tags": ["account"],
-        "summary": "remove a passkey",
-        "security": [
-          {
-            "session": []
-          }
-        ],
-        "parameters": [
-          {
-            "name": "id",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "passkey removed"
-          },
-          "404": {
-            "$ref": "#/components/responses/Error"
-          }
-        },
-        "requestBody": {
-          "required": false,
-          "content": {
-            "application/json": {
-              "schema": {
-                "type": "object",
-                "properties": {
-                  "code": {
-                    "type": "string",
-                    "description": "current 2fa code or a recovery code. required when the account has 2fa on"
-                  }
-                }
-              }
-            }
-          }
-        },
-        "description": "remove a passkey when 2fa is on, send a current code or a recovery code as `code`, or the answer is TOTP_REQUIRED, TOTP_INVALID or TOTP_LOCKED."
       }
     }
   },
@@ -830,11 +217,6 @@
         "type": "http",
         "scheme": "bearer",
         "description": "api key format: gk_<id>_<secret>"
-      },
-      "session": {
-        "type": "apiKey",
-        "in": "cookie",
-        "name": "__Host-gw_session"
       }
     },
     "responses": {

@@ -19,13 +19,15 @@ export class ApiError extends Error {
 }
 
 // Whitespace heartbeats may precede the JSON, which JSON.parse already tolerates.
-export async function api(path, { method = 'GET', body, signal } = {}) {
+export async function api(path, { method = 'GET', body, signal, key } = {}) {
   let res;
   try {
     res = await fetch(API + path, {
       method,
-      credentials: 'include',
-      headers: body ? { 'Content-Type': 'application/json' } : {},
+      headers: {
+        ...(body && { 'Content-Type': 'application/json' }),
+        ...(key && { Authorization: `Bearer ${key}` }),
+      },
       body: body ? JSON.stringify(body) : undefined,
       signal,
     });

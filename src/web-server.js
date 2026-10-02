@@ -8,6 +8,8 @@ import { createLogger } from './utils/logger.js';
 import { initDatabase } from './utils/database.js';
 import { r2Config } from './utils/config.js';
 import { acquireMedia, extractAudio } from './core/acquire-media.js';
+import { fetchContent, formatContent } from './content/index.js';
+import { MAX_COMMENTS } from './content/schema.js';
 import { getDisabledServiceLabel, getServiceForUrl } from './utils/download-services.js';
 import { validateUrl, firstUrlIn, parseTimestamp, sanitizeFilename } from './utils/validation.js';
 import { detectFileType } from './utils/storage.js';
@@ -47,6 +49,7 @@ const API_INDEX = {
   openapi: 'https://web.gronka.dev/openapi.json',
   health: 'https://api.gronka.dev/v1/health',
   download: 'POST https://api.gronka.dev/v1/download',
+  content: 'POST https://api.gronka.dev/v1/content',
   page: 'https://web.gronka.dev/',
 };
 
@@ -338,6 +341,52 @@ export function parseDownloadRequest(body) {
   };
 }
 
+const CONTENT_FORMATS = ['json', 'text'];
+
+function parseCount(value, field, max) {
+  if (value === undefined || value === null) {
+    return undefined;
+  }
+  const count = Number(value);
+  if (!Number.isInteger(count) || count < 0 || count > max) {
+    throw new AppError(`${field} must be a whole number from 0 to ${max}.`, 'BAD_REQUEST', 400);
+  }
+  return count;
+}
+
+export function parseContentRequest(body) {
+  if (!body || typeof body !== 'object' || typeof body.url !== 'string') {
+    throw new AppError('send a url.', 'BAD_REQUEST', 400);
+  }
+  const url = firstUrlIn(body.url.slice(0, 4096));
+  const check = url ? validateUrl(url) : { valid: false, error: 'that is not a link.' };
+  if (!check.valid) {
+    throw new AppError(check.error, 'BAD_URL', 400);
+  }
+  const format = body.format ?? 'json';
+  if (!CONTENT_FORMATS.includes(format)) {
+    throw new AppError('format must be json or text.', 'BAD_REQUEST', 400);
+  }
+  if (body.thread !== undefined && typeof body.thread !== 'boolean') {
+    throw new AppError('thread must be true or false.', 'BAD_REQUEST', 400);
+  }
+  const transcript = body.transcript ?? false;
+  if (
+    typeof transcript !== 'boolean' &&
+    !(typeof transcript === 'string' && /^[A-Za-z]{2,3}(-[A-Za-z0-9]{1,8})*$/.test(transcript))
+  ) {
+    throw new AppError('transcript must be true, false or a language code.', 'BAD_REQUEST', 400);
+  }
+  return {
+    url,
+    format,
+    transcript,
+    thread: body.thread !== false,
+    depth: parseCount(body.depth, 'depth', 10),
+    comments: parseCount(body.comments, 'comments', MAX_COMMENTS),
+  };
+}
+
 export async function verifyTurnstile(token, action, secret = TURNSTILE_SECRET) {
   if (!secret || typeof token !== 'string' || !token || token.length > 2048) {
     return false;
@@ -356,19 +405,29 @@ export async function verifyTurnstile(token, action, secret = TURNSTILE_SECRET) 
   }
 }
 
-// A source that failed or refused is the upstream's fault (502), not a server error.
-function toApiError(error, url) {
+// A source that failed or refused is the upstream's fault (502), not a server error; gone is 404.
+const STATUS_BY_CODE = { CONTENT_GONE: 404 };
+
+function toApiError(error, url, fallback = DOWNLOAD_FALLBACK) {
   if (error instanceof AppError && error.message) {
     const status =
-      error instanceof NetworkError && error.statusCode === 500 ? 502 : error.statusCode;
+      STATUS_BY_CODE[error.code] ??
+      (error instanceof NetworkError && error.statusCode === 500 ? 502 : error.statusCode);
     return { status, error: { code: error.code, message: error.message } };
   }
-  logger.error(`Download failed (${getServiceForUrl(url)?.id ?? 'other'}):`, error);
-  return {
-    status: 502,
-    error: { code: 'DOWNLOAD_FAILED', message: 'could not download this content.' },
-  };
+  logger.error(`${fallback.what} failed (${getServiceForUrl(url)?.id ?? 'other'}):`, error);
+  return { status: 502, error: { code: fallback.code, message: fallback.message } };
 }
+const DOWNLOAD_FALLBACK = {
+  what: 'Download',
+  code: 'DOWNLOAD_FAILED',
+  message: 'could not download this content.',
+};
+const CONTENT_FALLBACK = {
+  what: 'Content fetch',
+  code: 'CONTENT_FAILED',
+  message: 'could not read this content.',
+};
 
 // Cloudflare drops a tunnelled request that sends nothing for ~100 s, so a download that finishes
 // sooner answers with its real status; a longer one keeps the line open with whitespace, which is
@@ -449,6 +508,7 @@ async function readJson(req) {
 export function createHandler({
   verify = verifyTurnstile,
   download = runDownload,
+  content = fetchContent,
   ipLimit = IP_LIMIT,
   signupLimit = 3,
   authLimit = 30,
@@ -458,7 +518,7 @@ export function createHandler({
   let dayKey = null;
   let day = null;
   const windows = new Map();
-  const stats = { started: new Date().toISOString(), lanes: {}, errors: {} };
+  const stats = { started: new Date().toISOString(), lanes: {}, content: {}, errors: {} };
 
   const ipKey = (req, server) => {
     const today = new Date().toISOString().slice(0, 10);
@@ -526,10 +586,9 @@ export function createHandler({
     return id;
   }
 
-  async function handleDownload(req, server, headers) {
-    const body = await readJson(req);
-    const job = parseDownloadRequest(body);
-
+  // An api key names the account, otherwise the ip is the caller and Turnstile proves a person.
+  // Downloads and content reads share one quota per caller.
+  async function requireCaller(req, server, body, action, message) {
     let caller;
     const auth = req.headers.get('authorization');
     if (auth) {
@@ -539,10 +598,51 @@ export function createHandler({
     } else {
       caller = `ip:${ipKey(req, server)}`;
     }
-    limit(caller, ipLimit, 'too many downloads, try again in a few minutes.');
-    if (!auth && !(await verify(body.turnstile, 'download'))) {
+    limit(caller, ipLimit, message);
+    if (!auth && !(await verify(body.turnstile, action))) {
       throw new AppError('verification failed, reload the page.', 'VERIFICATION_FAILED', 403);
     }
+  }
+
+  async function handleContent(req, server, headers) {
+    const body = await readJson(req);
+    const request = parseContentRequest(body);
+    await requireCaller(
+      req,
+      server,
+      body,
+      'content',
+      'too many requests, try again in a few minutes.'
+    );
+    let result;
+    try {
+      result = await content(request.url, request);
+    } catch (error) {
+      // No padding here: a read is quick, so the http status carries the outcome.
+      const { status, error: apiErr } = toApiError(error, request.url, CONTENT_FALLBACK);
+      stats.errors[apiErr.code] = (stats.errors[apiErr.code] ?? 0) + 1;
+      throw new AppError(apiErr.message, apiErr.code, status);
+    }
+    stats.content[result.source] = (stats.content[result.source] ?? 0) + 1;
+    if (request.format === 'text') {
+      return new Response(formatContent(result, 'text'), {
+        status: 200,
+        headers: { ...headers, 'Content-Type': 'text/plain; charset=utf-8' },
+      });
+    }
+    return json(result, 200, headers);
+  }
+
+  async function handleDownload(req, server, headers) {
+    const body = await readJson(req);
+    const job = parseDownloadRequest(body);
+    await requireCaller(
+      req,
+      server,
+      body,
+      'download',
+      'too many downloads, try again in a few minutes.'
+    );
     // A closed tab or dropped connection cancels the download, wherever it has got to.
     const cancel = new AbortController();
     const signal = req.signal ? AbortSignal.any([req.signal, cancel.signal]) : cancel.signal;
@@ -588,6 +688,9 @@ export function createHandler({
     }
     if (method === 'POST' && pathname === '/v1/download') {
       return handleDownload(req, server, headers);
+    }
+    if (method === 'POST' && pathname === '/v1/content') {
+      return handleContent(req, server, headers);
     }
     if (method === 'POST' && pathname === '/v1/keys') {
       await requireHuman(req, server, await readJson(req), 'key', signupLimit);

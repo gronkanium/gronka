@@ -100,7 +100,7 @@ async function canonicalUrl(url) {
   }
 }
 
-async function fetchListing(url) {
+async function fetchListing(url, limit = 100) {
   const cookie = readCookie();
   if (!cookie) {
     // Curated rather than internal: download.js only propagates a ValidationError out of the
@@ -109,7 +109,7 @@ async function fetchListing(url) {
   }
 
   // raw_json=1 stops Reddit html-escaping the urls it hands back, signatures included.
-  const jsonUrl = `${url.split('?')[0].replace(/\/$/, '')}/.json?limit=100&raw_json=1`;
+  const jsonUrl = `${url.split('?')[0].replace(/\/$/, '')}/.json?limit=${limit}&raw_json=1`;
   try {
     const response = await axios.get(jsonUrl, {
       ...ssrfGuardedRequest(),
@@ -261,4 +261,13 @@ export function selectRedditMedia(listing, url) {
 export async function resolveRedditPost(url) {
   const canonical = await canonicalUrl(url);
   return selectRedditMedia(await fetchListing(canonical), canonical);
+}
+
+/**
+ * The raw post-and-comments listing behind a link, with the canonical permalink it was read
+ * from. The content api normalizes it; the downloader only wants the media out of it.
+ */
+export async function fetchRedditListing(url, { limit = 100 } = {}) {
+  const canonical = await canonicalUrl(url);
+  return { url: canonical, listing: await fetchListing(canonical, limit) };
 }

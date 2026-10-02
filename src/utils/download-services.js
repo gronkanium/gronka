@@ -1,6 +1,7 @@
 import { YTDLP_SITES } from './ytdlp.js';
 import { GALLERY_DL_SITES } from './gallery-dl.js';
 import { getSetting } from './database.js';
+import { hostOf } from './url-host.js';
 
 // Registry of every source /download can pull from, so the webui can list them and each
 // can be individually turned off. This is a *parallel* classifier used only for the
@@ -102,18 +103,9 @@ export const DOWNLOAD_SERVICES = [
 /** Set of valid service ids, for validating the disabled_services setting. */
 export const DOWNLOAD_SERVICE_IDS = new Set(DOWNLOAD_SERVICES.map(s => s.id));
 
-/**
- * Resolve which download service a URL belongs to.
- * @param {string} url - URL to classify
- * @returns {{id: string, label: string, category: string, hosts: string[]}|null}
- */
 export function getServiceForUrl(url) {
-  let hostname;
-  try {
-    hostname = new URL(url).hostname.toLowerCase().replace(/^www\./, '');
-  } catch {
-    return null;
-  }
+  const hostname = hostOf(url);
+  if (!hostname) return null;
   return (
     DOWNLOAD_SERVICES.find(service =>
       service.hosts.some(host => hostname === host || hostname.endsWith(`.${host}`))
@@ -121,12 +113,7 @@ export function getServiceForUrl(url) {
   );
 }
 
-/**
- * If the URL belongs to a service that has been turned off in the webui, return that
- * service's display label; otherwise null. Reads the (cached) disabled_services setting.
- * @param {string} url - URL to check
- * @returns {Promise<string|null>} The disabled service's label, or null
- */
+// If the URL belongs to a service that has been turned off in the webui, return that service's display label; otherwise null
 export async function getDisabledServiceLabel(url) {
   const service = getServiceForUrl(url);
   if (!service) {

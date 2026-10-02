@@ -20,7 +20,6 @@ import { promptForMegaKey } from './mega-key.js';
 import { getDisabledServiceLabel } from '../utils/download-services.js';
 import { AppError, ValidationError } from '../utils/errors.js';
 import { batchAttachmentsForDelivery } from '../utils/attachment-helpers.js';
-import { isAdmin } from '../utils/rate-limit.js';
 import { isDirectMediaUrl } from '../utils/file-downloader.js';
 import { logOperationStep } from '../utils/operations-tracker.js';
 import { resolveTtlHoursForSize } from '../utils/storage.js';
@@ -30,14 +29,22 @@ import {
   formatR2UrlWithDisclaimer,
   formatMultipleR2UrlsWithDisclaimer,
 } from '../utils/r2-storage.js';
-import { storeMedia, toR2, attachmentFor, deliverStored, finishCommand } from './shared/deliver.js';
-import { hashUrl } from '../utils/hashing.js';
-import { getProcessedUrl } from '../utils/database.js';
-import { recordProcessedUrl, trackR2UploadIfApplicable } from './shared/url-cache.js';
+import {
+  storeMedia,
+  attachmentFor,
+  deliverStored,
+  deliverReply,
+  finishCommand,
+} from './shared/deliver.js';
 import { runMediaCommand } from './shared/run-media-command.js';
 import { acquireMedia, extractAudio } from '../core/acquire-media.js';
 import { dispatchMediaJob } from '../jobs/dispatch.js';
-import { replyIfRateLimited, resolveTimeOptions, refuse } from './shared/command-guards.js';
+import {
+  resolveTimeOptions,
+  refuse,
+  replyError,
+  commandSourceOf,
+} from './shared/command-guards.js';
 import { trimItem } from '../utils/video-processor.js';
 import { sendConvertedFile } from './shared/send-converted.js';
 import {
@@ -47,6 +54,7 @@ import {
   safeInteractionDeferReply,
 } from '../utils/interaction-helpers.js';
 import { fitsDiscordAttachment, getDiscordAttachmentLimit } from './shared/attachment-limit.js';
+import { mapLimit, ITEM_FANOUT } from '../utils/map-limit.js';
 
 const logger = createLogger('download');
 
@@ -70,39 +78,20 @@ async function replyWithDirectMediaUrls(interaction, ctx, { url, urls, stepName 
     message: `Returning ${lines.length} direct media URL(s) without downloading`,
     metadata: { url, mediaUrls: lines },
   });
-  await safeInteractionEditReply(interaction, { content: lines.join('\n') });
+  await deliverReply(interaction, { content: lines.join('\n') });
   await finishCommand('download', ctx, 0);
 }
 
 async function deliverArchive(interaction, ctx, fileData, attachmentLimit) {
   if (fitsDiscordAttachment(fileData.size, attachmentLimit)) {
-    await safeInteractionEditReply(interaction, {
+    await deliverReply(interaction, {
       files: [new AttachmentBuilder(fileData.path, { name: fileData.filename })],
     });
   } else if (isR2Configured(r2Config)) {
-    const archiveHash = fileData.hash;
-    const url = await uploadMediaToR2(
-      'archive',
-      fileData,
-      archiveHash,
-      '.zip',
-      r2Config,
-      ctx.buildMetadata()
-    );
-    const archiveUrlHash = hashUrl(`${url}#archive:${archiveHash}`);
-    await recordProcessedUrl({
-      urlHash: archiveUrlHash,
-      contentHash: archiveHash,
-      fileType: 'archive',
-      fileExtension: '.zip',
-      fileUrl: url,
-      userId: ctx.userId,
-      fileSize: fileData.size,
-    });
-    await trackR2UploadIfApplicable(archiveUrlHash, url, ctx.adminUser);
+    const url = await uploadMediaToR2('archive', fileData, '.zip', r2Config);
     const ttlHours = await resolveTtlHoursForSize(fileData.size);
-    await safeInteractionEditReply(interaction, {
-      content: formatR2UrlWithDisclaimer(url, r2Config, ctx.adminUser, ttlHours),
+    await deliverReply(interaction, {
+      content: formatR2UrlWithDisclaimer(url, r2Config, ttlHours),
     });
   } else {
     throw new ValidationError('this ZIP is too large to attach to Discord');
@@ -111,21 +100,20 @@ async function deliverArchive(interaction, ctx, fileData, attachmentLimit) {
 }
 
 // Files that fit go out as attachments (split into batches); the rest become R2 links.
-async function deliverGallery(interaction, ctx, fileData, urlHash, attachmentLimit) {
-  const { userId, adminUser } = ctx;
-  logger.info(`Processing ${fileData.length} media files from picker`);
-  const stored = [];
-  for (const media of fileData) {
-    const item = await storeMedia(media, ctx, attachmentLimit, { defaultExt: '.jpg' });
-    stored.push(item.fits ? item : await toR2(item, ctx));
-  }
+async function deliverGallery(interaction, ctx, fileData, attachmentLimit) {
+  const stored = await mapLimit(fileData, ITEM_FANOUT, media =>
+    storeMedia(media, attachmentLimit, { defaultExt: '.jpg' })
+  );
   const attached = stored.filter(item => item.fits);
   const linked = stored.filter(item => !item.fits);
   const batches = batchAttachmentsForDelivery(attached.map(attachmentFor));
+  const ttlHours = linked.length
+    ? await resolveTtlHoursForSize(Math.max(...linked.map(item => item.size)))
+    : null;
   const content = formatMultipleR2UrlsWithDisclaimer(
     linked.map(item => item.url),
     r2Config,
-    adminUser
+    ttlHours
   );
 
   // A false from the send helpers is a failed delivery, never a success.
@@ -136,48 +124,20 @@ async function deliverGallery(interaction, ctx, fileData, urlHash, attachmentLim
   if (firstMessage === false) {
     throw new AppError('could not deliver the files to discord. please try again.');
   }
-  const sent = [firstMessage];
   for (const batch of batches.slice(1)) {
     const message = await safeInteractionFollowUp(interaction, { files: batch });
     if (message === false) {
       throw new AppError('only part of this post could be delivered to discord. please try again.');
     }
-    sent.push(message);
   }
 
-  const discordUrls = sent.flatMap(message =>
-    message?.attachments ? Array.from(message.attachments.values(), a => a.url) : []
-  );
-  const record = (item, fileUrl) =>
-    recordProcessedUrl({
-      urlHash,
-      contentHash: item.hash,
-      fileType: item.type,
-      fileExtension: item.ext,
-      fileUrl,
-      userId,
-      fileSize: item.size,
-    });
-  for (const [i, item] of attached.entries()) {
-    if (discordUrls[i]) await record(item, discordUrls[i]);
-  }
-  for (const item of linked) {
-    await record(item, item.url);
-    await trackR2UploadIfApplicable(urlHash, item.url, adminUser);
-  }
   const totalSize = fileData.reduce((sum, media) => sum + media.size, 0);
   await finishCommand('download', ctx, totalSize, { mediaCount: stored.length });
 }
 
-// A file already in storage is answered with its link, like the URL cache above.
-async function deliverSingle(interaction, ctx, item, urlHash, attachmentLimit) {
-  const stored = await storeMedia(item, ctx, attachmentLimit);
-  if (stored.cached) {
-    logger.info(`${stored.type} already exists (hash: ${stored.hash}) for user ${ctx.userId}`);
-  }
-  await deliverStored(interaction, ctx, stored.cached ? { ...stored, fits: false } : stored, {
-    urlHash,
-  });
+async function deliverSingle(interaction, ctx, item, attachmentLimit) {
+  const stored = await storeMedia(item, attachmentLimit);
+  await deliverStored(interaction, stored);
   await finishCommand('download', ctx, stored.size);
 }
 
@@ -193,10 +153,9 @@ export async function processDownload(
     'download',
     interaction,
     async ctx => {
-      const { operationId, adminUser } = ctx;
+      const { operationId } = ctx;
       const trimming = startTime !== null || duration !== null;
 
-      // Checked before the URL cache so a disabled source can't serve an old download either.
       const disabledServiceLabel = await getDisabledServiceLabel(url);
       if (disabledServiceLabel) {
         logOperationStep(operationId, 'service_disabled', 'success', {
@@ -206,30 +165,8 @@ export async function processDownload(
         throw new ValidationError(`downloads from ${disabledServiceLabel} are turned off.`);
       }
 
-      // A trimmed or audio request is a different file, so it never reuses the URL cache.
-      const urlHash = hashUrl(url);
-      const cacheable = !galleryOptions.mediaUrls && !galleryOptions.audioOnly && !trimming;
-      const cachedRow = cacheable ? await getProcessedUrl(urlHash) : null;
-      if (cachedRow?.file_type === 'video' && !cachedRow.r2_expired_at) {
-        logOperationStep(operationId, 'url_cache_hit', 'success', {
-          message: 'URL already processed as video, returning cached result',
-          metadata: { url, cachedUrl: cachedRow.file_url },
-        });
-        await safeInteractionEditReply(interaction, {
-          content: formatR2UrlWithDisclaimer(cachedRow.file_url, r2Config, adminUser),
-        });
-        return finishCommand('download', ctx, 0);
-      }
-      logOperationStep(operationId, 'url_cache_miss', 'success', {
-        message: cachedRow
-          ? 'Cached result is expired or not a video, downloading again'
-          : 'URL not in cache, downloading',
-        metadata: { url, cachedType: cachedRow?.file_type ?? null },
-      });
-
       const attachmentLimit = getDiscordAttachmentLimit(interaction, DISCORD_SIZE_LIMIT);
       const acquired = await acquireMedia(url, {
-        adminUser,
         startTime,
         duration,
         galleryOptions,
@@ -267,7 +204,7 @@ export async function processDownload(
         return deliverArchive(interaction, ctx, fileData, attachmentLimit);
       }
       if (Array.isArray(fileData)) {
-        return deliverGallery(interaction, ctx, fileData, urlHash, attachmentLimit);
+        return deliverGallery(interaction, ctx, fileData, attachmentLimit);
       }
 
       // yt-dlp already cut its download with --download-sections.
@@ -279,7 +216,7 @@ export async function processDownload(
           metadata: { startTime, duration, originalSize: fileData.size },
         });
       }
-      await deliverSingle(interaction, ctx, item, urlHash, attachmentLimit);
+      await deliverSingle(interaction, ctx, item, attachmentLimit);
     },
     {
       commandSource,
@@ -356,13 +293,6 @@ export async function handleDownloadContextMenuCommand(interaction) {
   if (!interaction.isMessageContextMenuCommand() || interaction.commandName !== 'download') {
     return;
   }
-  const userId = interaction.user.id;
-  logger.info(`User ${userId} initiated download via context menu`);
-  const guard = { type: 'download', action: 'downloading another video' };
-  if (await replyIfRateLimited(interaction, { ...guard, commandSource: 'context-menu' })) {
-    return;
-  }
-
   const found = firstUrlIn(interaction.targetMessage.content);
   if (!found) {
     const context = { commandSource: 'context-menu' };
@@ -398,12 +328,7 @@ export async function handleDownloadContextMenuCommand(interaction) {
 }
 
 export async function handleDownloadCommand(interaction) {
-  const userId = interaction.user.id;
-  logger.info(`User ${userId} initiated download${isAdmin(userId) ? ' [ADMIN]' : ''}`);
-  const guard = { type: 'download', action: 'downloading another video' };
-  if (await replyIfRateLimited(interaction, { ...guard, commandSource: 'slash' })) {
-    return;
-  }
+  const commandSource = commandSourceOf(interaction);
 
   const rawUrl = interaction.options.getString('url');
   const url = canonicalizeMirrorUrl(firstUrlIn(rawUrl) ?? rawUrl);
@@ -416,7 +341,7 @@ export async function handleDownloadCommand(interaction) {
   const { startTime: trimStart, duration: trimDuration } = times;
 
   if (!url) {
-    const context = { commandSource: 'slash' };
+    const context = { commandSource };
     const message = 'please provide a URL to download from.';
     await refuse(interaction, 'download', {
       message,
@@ -436,29 +361,43 @@ export async function handleDownloadCommand(interaction) {
     } catch (error) {
       logger.warn(`Manga selection failed: ${error.message}`);
       const content = 'could not inspect that manga. please try again later.';
-      await (interaction.deferred
-        ? safeInteractionEditReply(interaction, { content })
-        : safeInteractionReply(interaction, { content, flags: MessageFlags.Ephemeral }));
+      await replyError(interaction, content);
     }
     return;
   }
 
   const megaFileId = keylessMegaFileId(url);
+  if (megaFileId && interaction.isPrefixCommand) {
+    const message = 'send the full mega link including the key (the part after #).';
+    await refuse(interaction, 'download', {
+      message,
+      reason: 'missing_input',
+      context: { originalUrl: url, commandSource },
+    });
+    return;
+  }
   if (megaFileId) {
-    await promptForMegaKey(interaction, megaFileId, 'slash', trimStart, trimDuration, audioOnly);
+    await promptForMegaKey(
+      interaction,
+      megaFileId,
+      commandSource,
+      trimStart,
+      trimDuration,
+      audioOnly
+    );
     return;
   }
 
   const urlValidation = validateUrl(url);
   if (!urlValidation.valid) {
-    const context = { originalUrl: url, commandSource: 'slash' };
+    const context = { originalUrl: url, commandSource };
     const message = `invalid URL: ${urlValidation.error}`;
     await refuse(interaction, 'download', { message, reason: 'invalid_url', context });
     return;
   }
-  if (await refuseUnsupported(interaction, url, 'slash')) {
+  if (await refuseUnsupported(interaction, url, commandSource)) {
     return;
   }
   await safeInteractionDeferReply(interaction);
-  await queueDownload(interaction, url, 'slash', trimStart, trimDuration, { audioOnly });
+  await queueDownload(interaction, url, commandSource, trimStart, trimDuration, { audioOnly });
 }

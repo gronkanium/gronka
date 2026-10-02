@@ -37,14 +37,12 @@ Answers (each one skips its question; with --yes, --token, --client-id and
 --db-password are required unless .env already has them):
   --token            bot token
   --client-id        application id
-  --admin-ids        comma-separated Discord user ids
   --db-password      postgres password (8+ characters)
   --test-token       test bot token (with --test-client-id)
   --test-client-id   test bot application id
   --invite           support server invite url
   --r2-account-id, --r2-access-key-id, --r2-secret-access-key, --r2-bucket, --r2-domain
                      Cloudflare R2; giving any of them turns R2 on
-  --r2-ttl-hours     hours to keep an R2 upload (default 72)
 
 Every answer can also come from the environment as SETUP_ plus the flag in capitals,
 e.g. SETUP_TOKEN, SETUP_DB_PASSWORD. Prefer that for secrets: a flag's value shows up
@@ -65,7 +63,6 @@ const BOOL_FLAGS = {
 const VALUE_FLAGS = new Set([
   'token',
   'client-id',
-  'admin-ids',
   'db-password',
   'test-token',
   'test-client-id',
@@ -75,7 +72,6 @@ const VALUE_FLAGS = new Set([
   'r2-secret-access-key',
   'r2-bucket',
   'r2-domain',
-  'r2-ttl-hours',
 ]);
 
 function parseArgs(args) {
@@ -315,7 +311,7 @@ const MOUNTED_FILES = [
   },
 ];
 
-const MOUNTED_DIRS = ['data-prod', 'data-test', 'temp', 'logs'];
+const MOUNTED_DIRS = ['temp'];
 
 // What each service in cookies.json needs to be useful. Required names are the ones whose
 // absence breaks a feature outright; the rest only widen coverage.
@@ -445,11 +441,6 @@ async function runChecks() {
         ? (bad(`${key} is unset or still the example value`), problems.push(`set ${key}`))
         : ok(key);
     }
-    if (isPlaceholder(env.ADMIN_USER_IDS)) {
-      warn('ADMIN_USER_IDS empty, nobody can bypass limits or see admin surfaces');
-    } else {
-      ok('ADMIN_USER_IDS');
-    }
     const r2Keys = ['R2_ACCOUNT_ID', 'R2_ACCESS_KEY_ID', 'R2_SECRET_ACCESS_KEY', 'R2_BUCKET_NAME'];
     const r2Set = r2Keys.filter(k => !isPlaceholder(env[k]));
     if (r2Set.length === 0) {
@@ -559,16 +550,8 @@ async function wizard() {
     fallback: keep('PROD_CLIENT_ID'),
     validate: v => (SNOWFLAKE.test(v) ? null : 'a Discord id is 17-20 digits'),
   });
-  const admins = await ask(
-    `your Discord user id ${c.dim('(admin: bypasses limits, right-click yourself → Copy User ID)')}`,
-    { flag: 'admin-ids', fallback: keep('ADMIN_USER_IDS') }
-  );
-  if (admins && !admins.split(',').every(id => SNOWFLAKE.test(id.trim()))) {
-    warn('that does not look like a comma-separated list of Discord ids, saving it anyway');
-  }
   text = setEnvValue(text, 'PROD_DISCORD_TOKEN', token);
   text = setEnvValue(text, 'PROD_CLIENT_ID', clientId);
-  text = setEnvValue(text, 'ADMIN_USER_IDS', admins);
 
   heading('Database');
   note('the compose stack runs its own Postgres; this password is what it is created with');
@@ -632,13 +615,7 @@ async function wizard() {
     const domain = await askRequired('public domain (e.g. cdn.example.com)', { flag: 'r2-domain' });
     text = setEnvValue(text, 'R2_PUBLIC_DOMAIN', domain);
     if (await confirm('Expire uploads automatically?', true)) {
-      text = setEnvValue(text, 'R2_TEMP_UPLOADS_ENABLED', 'true');
       text = setEnvValue(text, 'R2_CLEANUP_ENABLED', 'true');
-      text = setEnvValue(
-        text,
-        'R2_TEMP_UPLOAD_TTL_HOURS',
-        await ask('hours to keep an upload', { flag: 'r2-ttl-hours', fallback: '72' })
-      );
     }
     warn('an R2 bucket on a public domain is readable by anyone who has the URL');
   } else {

@@ -1,4 +1,5 @@
 <script>
+  import { sendJson } from '../utils/api.js';
   import { Search, Globe } from 'lucide-svelte';
   import PageHeader from '../components/PageHeader.svelte';
 
@@ -18,12 +19,6 @@
   let search = $state('');
   let toast = $state('');
   let toastTimer;
-  let usage = $state({});
-
-  fetch('/api/sources/usage')
-    .then(r => (r.ok ? r.json() : null))
-    .then(d => (usage = d?.usage ?? {}))
-    .catch(() => {});
 
   const parseIds = value => {
     try {
@@ -64,11 +59,7 @@
     saving = true;
     error = '';
     try {
-      const res = await fetch('/api/settings/disabled_services', {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ value: [...next] }),
-      });
+      const res = await sendJson('/api/settings/disabled_services', 'PUT', { value: [...next] });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(data.message || `HTTP ${res.status}`);
       disabled = new Set(parseIds(data.value));
@@ -122,7 +113,6 @@
     })
   );
   const totalOn = $derived(catalog.length - disabled.size);
-  const maxUse = $derived(Math.max(1, ...Object.values(usage).map(u => u.n)));
 </script>
 
 <PageHeader title="Sources" description="Sites the bot will download from">
@@ -205,8 +195,6 @@
         <div class="tiles">
           {#each c.shown as s (s.id)}
             {@const on = !disabled.has(s.id)}
-            {@const u = usage[s.id]}
-            {@const rate = u ? Math.round((u.ok / u.n) * 100) : null}
             <button
               class="tile"
               class:off={!on}
@@ -221,18 +209,7 @@
                 <span class="name">{s.label.replace(' (gallery-dl)', '')}</span>
                 <span class="toggle sm" class:on aria-hidden="true"></span>
               </span>
-              <span class="use">
-                {#if !on}
-                  <span>Off</span>
-                {:else if u}
-                  <span class="tnum"><b>{u.n}</b> in 7d</span>
-                  <span class="tnum" class:low={rate < 80}>{rate}% ok</span>
-                {:else}
-                  <span>No requests in 7d</span>
-                {/if}
-              </span>
-              <span class="bar"><span style:width={`${((u?.n ?? 0) / maxUse) * 100}%`}></span></span
-              >
+              <span class="use"><span>{on ? 'On' : 'Off'}</span></span>
             </button>
           {/each}
         </div>
@@ -323,24 +300,6 @@
     font-size: var(--fs-sm);
     color: var(--text-muted);
   }
-  .use b {
-    color: var(--text-soft);
-    font-weight: 600;
-  }
-  .use .low {
-    color: var(--warning-text);
-    font-weight: 600;
-  }
-  .bar {
-    height: 3px;
-    margin: 0 -12px;
-    background: var(--line);
-  }
-  .bar span {
-    display: block;
-    height: 100%;
-    background: var(--accent);
-  }
   .tile.off {
     background: none;
     border-style: dashed;
@@ -348,9 +307,6 @@
   .tile.off .name {
     color: var(--text-muted);
     font-weight: 500;
-  }
-  .tile.off .bar span {
-    background: var(--text-dim);
   }
   .linkish.small {
     font-size: var(--fs-sm);

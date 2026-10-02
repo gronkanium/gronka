@@ -4,8 +4,6 @@ import rateLimit from 'express-rate-limit';
 import { createLogger } from './utils/logger.js';
 import { botConfig, serverConfig } from './utils/config.js';
 import { ConfigurationError } from './utils/errors.js';
-import { trackUser, initializeUserTracking } from './utils/user-tracking.js';
-import path from 'node:path';
 import { startRetentionJob, stopRetentionJob } from './utils/retention.js';
 import {
   handleDownloadCommand,
@@ -19,11 +17,11 @@ import { handleModalSubmit } from './handlers/modals.js';
 import { handleMangaInteraction } from './commands/manga.js';
 import { handleMegaKeyInteraction } from './commands/mega-key.js';
 import { handlePrefixMessage } from './handlers/prefix-commands.js';
-import { cleanupStuckOperations } from './utils/operations-tracker.js';
-import { initializeR2UsageCache, formatFileSize } from './utils/storage.js';
+import { cleanupStuckOperations, flushAllOperationLogs } from './utils/operations-tracker.js';
+import { initializeR2UsageCache } from './utils/storage.js';
 import { r2Config } from './utils/config.js';
 import { startCleanupJob, stopCleanupJob } from './utils/r2-cleanup.js';
-import { initDatabase } from './utils/database.js';
+import { initDatabase, closeDatabase } from './utils/database.js';
 import {
   VALID_PRESENCE_STATUSES,
   DEFAULT_PRESENCE_STATUS,
@@ -32,26 +30,13 @@ import {
   loadSavedPresence,
   saveSavedPresence,
 } from './utils/presence.js';
-import { get24HourStats } from './utils/database/stats.js';
-import { replyIfBanned, replyIfMaintenance } from './utils/ban-check.js';
-import { refreshRateLimitSettings, recordRateLimit } from './utils/rate-limit.js';
-import {
-  DONE_CHANNEL,
-  listen as listenForJobs,
-  reportPresence,
-  clearPresence,
-  PRESENCE_MS,
-} from './jobs/queue.js';
+import { replyIfMaintenance } from './utils/maintenance.js';
+import { reportPresence, clearPresence, PRESENCE_MS } from './utils/database/media-jobs-pg.js';
 import { withJobDir, sweepJobDirs } from './utils/media-file.js';
 
 const logger = createLogger('bot');
 
-const {
-  discordToken: DISCORD_TOKEN,
-  clientId: CLIENT_ID,
-  gifStoragePath: GIF_STORAGE_PATH,
-  cdnBaseUrl: CDN_BASE_URL,
-} = botConfig;
+const { discordToken: DISCORD_TOKEN, clientId: CLIENT_ID } = botConfig;
 
 const { serverPort: SERVER_PORT, serverHost: SERVER_HOST } = serverConfig;
 
@@ -73,7 +58,6 @@ const client = new Client({
     GatewayIntentBits.Guilds,
     GatewayIntentBits.GuildMessages,
     GatewayIntentBits.DirectMessages, // Required for DM support
-    GatewayIntentBits.MessageContent, // Required to access attachments
   ],
   partials: [Partials.Channel], // Required to receive MessageCreate in DMs (prefix commands)
 });
@@ -88,13 +72,12 @@ let retentionJobIntervalId = null;
 let httpServer = null;
 
 /**
- * Start minimal HTTP server for stats endpoint
- * Only serves /api/stats/24h for Jekyll stats site integration
+ * Minimal HTTP server: /health for the Docker healthcheck and /api/bot/status
  */
 function startStatsServer() {
   const app = express();
 
-  // Rate limit all stats server routes because they perform database work
+  // Rate limit every route, /api/bot/status writes to the database
   app.use(
     rateLimit({
       windowMs: 15 * 60 * 1000, // 15 minutes
@@ -175,36 +158,11 @@ function startStatsServer() {
     });
   });
 
-  // 24-hour stats endpoint for Jekyll site
-  app.get('/api/stats/24h', async (req, res) => {
-    try {
-      logger.debug('24-hour stats API requested');
-
-      const stats = await get24HourStats();
-
-      res.json({
-        unique_users: stats.unique_users,
-        total_files: stats.total_files,
-        total_data_bytes: stats.total_data_bytes,
-        total_data_formatted: formatFileSize(stats.total_data_bytes),
-        period: '24 hours',
-        last_updated: stats.timestamp,
-      });
-    } catch (error) {
-      logger.error('Failed to get 24-hour stats:', {
-        error: error.message,
-        stack: error.stack,
-      });
-      res.status(500).json({
-        error: 'failed to get stats',
-        message: error.message,
-      });
-    }
-  });
+  app.get('/health', (req, res) => res.status(client.isReady() ? 200 : 503).end());
 
   httpServer = app.listen(SERVER_PORT, SERVER_HOST, () => {
     logger.info(`stats server running on http://${SERVER_HOST}:${SERVER_PORT}`);
-    logger.info(`stats endpoint: http://${SERVER_HOST}:${SERVER_PORT}/api/stats/24h`);
+    logger.info(`health endpoint: http://${SERVER_HOST}:${SERVER_PORT}/health`);
   });
 
   httpServer.on('error', error => {
@@ -215,7 +173,6 @@ function startStatsServer() {
 client.once(Events.ClientReady, async readyClient => {
   try {
     botStartTime = Date.now();
-    await initializeUserTracking();
 
     // The identify payload already carried this presence (see startBot), that is what makes it
     // stick across a restart, with no race against the presence discord.js sends on identify.
@@ -231,42 +188,15 @@ client.once(Events.ClientReady, async readyClient => {
       readyClient.user.setPresence({ status: DEFAULT_PRESENCE_STATUS });
     }
     logger.info(`bot logged in as ${readyClient.user.tag}`);
-    logger.info(`gif storage: ${GIF_STORAGE_PATH}`);
-    logger.info(`cdn url: ${CDN_BASE_URL}`);
 
     // Initialize R2 usage cache on startup (if R2 is configured)
     // This caches R2 stats to limit class A operations (LIST requests) for the /stats Discord command
     await initializeR2UsageCache();
 
-    // Load webui-managed admins + rate-limit cooldown now and keep the cache
-    // fresh (webui writes to the DB from a separate process, so polling is the
-    // sync mechanism)
-    await refreshRateLimitSettings();
-    setInterval(async () => {
-      await refreshRateLimitSettings();
-    }, 60 * 1000);
-
-    // Clean up stuck operations every 5 minutes. The threshold must stay above Discord's
-    // 15-minute interaction token lifetime: at 10 minutes the reaper was flipping still-running
-    // downloads to error and DMing the user a failure, only for the operation to finish and flip
-    // back to success, by which point the token had expired and the reply died with
-    // "Invalid Webhook Token" (50027). Past 16 minutes nothing can be delivered anyway, so
-    // anything still running then is genuinely stuck.
-    // A restart orphans whatever was mid-flight: the row stays 'running' with no process left
-    // to finish it, so the user waited out the full 16 minutes for a failure that was already
-    // certain. This process owns nothing yet, so anything still 'running' now is orphaned by
-    // definition. Reconciling at boot also covers a crash or an OOM kill, which a SIGTERM
-    // handler would miss.
-    try {
-      const orphaned = await cleanupStuckOperations(0, readyClient);
-      if (orphaned > 0) {
-        logger.info(`Failed ${orphaned} operation(s) orphaned by the previous shutdown`);
-      }
-    } catch (error) {
-      logger.error('Error reconciling orphaned operations at startup:', error);
-    }
-
-    const report = () => reportPresence({ role: 'bot' }).catch(() => {});
+    const report = () =>
+      reportPresence({ role: 'bot' }).catch(error =>
+        logger.warn(`Presence report failed: ${error.message}`)
+      );
     report();
     setInterval(report, PRESENCE_MS);
 
@@ -279,7 +209,8 @@ client.once(Events.ClientReady, async readyClient => {
     setInterval(
       async () => {
         try {
-          await cleanupStuckOperations(16, readyClient); // pass client for DM notifications
+          // Past Discord's 15-minute reply token nothing can be delivered, so 16 minutes means stuck.
+          cleanupStuckOperations(16);
         } catch (error) {
           logger.error('Error in stuck operations cleanup:', error);
         }
@@ -291,39 +222,17 @@ client.once(Events.ClientReady, async readyClient => {
       try {
         retentionJobIntervalId = startRetentionJob({
           days: botConfig.retentionDays,
-          mediaDays: botConfig.retentionMediaDays,
-          urlCacheDays: botConfig.retentionUrlCacheDays,
-          // gifStoragePath points at data-*/gifs; retention walks its siblings too.
-          storagePath: path.dirname(botConfig.gifStoragePath),
           intervalMs: botConfig.retentionIntervalMs,
         });
       } catch (error) {
         logger.error(`Failed to start retention job: ${error.message}`, error);
       }
     } else {
-      logger.warn('Retention is disabled: logs, alerts and cached media will grow without limit');
+      logger.warn('Retention is disabled: error logs and alerts will grow without limit');
     }
 
-    // Start R2 cleanup job if enabled
-    if (r2Config.cleanupEnabled && r2Config.tempUploadsEnabled) {
-      try {
-        cleanupJobIntervalId = startCleanupJob(
-          r2Config,
-          r2Config.cleanupIntervalMs,
-          r2Config.cleanupLogLevel
-        );
-        logger.info(
-          `Started R2 cleanup job (interval: ${r2Config.cleanupIntervalMs}ms, log level: ${r2Config.cleanupLogLevel})`
-        );
-      } catch (error) {
-        logger.error(`Failed to start R2 cleanup job: ${error.message}`, error);
-      }
-    } else {
-      if (r2Config.cleanupEnabled && !r2Config.tempUploadsEnabled) {
-        logger.warn(
-          'R2 cleanup job is enabled but temporary uploads tracking is disabled. Cleanup job will not run.'
-        );
-      }
+    if (r2Config.cleanupEnabled) {
+      cleanupJobIntervalId = startCleanupJob(r2Config, r2Config.cleanupIntervalMs);
     }
   } catch (error) {
     logger.error('Unhandled error during ClientReady initialization:', error);
@@ -336,16 +245,6 @@ client.on(Events.InteractionCreate, interaction =>
 
 async function handleInteraction(interaction) {
   try {
-    logger.debug(`Received interaction: ${interaction.type} from user ${interaction.user.id}`);
-    // Track user interaction (non-blocking to avoid interaction timeout)
-    trackUser(interaction.user.id).catch(error => {
-      logger.debug(`Failed to track user ${interaction.user.id}: ${error.message}`);
-    });
-
-    if (await replyIfBanned(interaction)) {
-      return;
-    }
-
     if (await replyIfMaintenance(interaction)) {
       return;
     }
@@ -390,7 +289,7 @@ async function handleInteraction(interaction) {
 // bot/webhook filtering, ban/maintenance checks, and per-guild prefix resolution.
 client.on(Events.MessageCreate, async message => {
   try {
-    await withJobDir(() => handlePrefixMessage(message, { botStartTime }));
+    await handlePrefixMessage(message, { botStartTime });
   } catch (error) {
     logger.error('Unhandled error in message handler:', error);
   }
@@ -421,14 +320,6 @@ async function startBot() {
     await initDatabase();
     logger.info('Database initialized');
 
-    // Workers finish jobs in other processes; a delivered one starts the user's cooldown here.
-    if (botConfig.mediaWorkers) {
-      await listenForJobs(DONE_CHANNEL, payload => {
-        const { userId, success } = JSON.parse(payload);
-        if (success) recordRateLimit(userId);
-      });
-    }
-
     if (SERVER_PORT) {
       startStatsServer();
     }
@@ -458,24 +349,22 @@ async function startBot() {
 
 startBot();
 
-function gracefulShutdown(signal) {
+let shuttingDown = false;
+
+async function gracefulShutdown(signal) {
+  if (shuttingDown) return;
+  shuttingDown = true;
   logger.info(`${signal} received, shutting down gracefully...`);
-  if (cleanupJobIntervalId) {
-    stopCleanupJob(cleanupJobIntervalId);
-  }
-  if (retentionJobIntervalId) {
-    stopRetentionJob(retentionJobIntervalId);
-  }
-  clearPresence().catch(() => {});
-  if (httpServer) {
-    httpServer.close(() => {
-      logger.info('HTTP server closed');
-    });
-  }
-  // Give servers time to close before exiting
-  setTimeout(() => {
-    process.exit(0);
-  }, 1000);
+  setTimeout(() => process.exit(1), 8000).unref();
+  const warn = label => error => logger.warn(`${label}: ${error.message}`);
+  if (cleanupJobIntervalId) stopCleanupJob(cleanupJobIntervalId);
+  if (retentionJobIntervalId) stopRetentionJob(retentionJobIntervalId);
+  await clearPresence().catch(warn('Could not clear presence'));
+  if (httpServer) httpServer.close();
+  await flushAllOperationLogs().catch(warn('Could not flush operation logs'));
+  await client.destroy();
+  await closeDatabase().catch(warn('Could not close database'));
+  process.exit(0);
 }
 
 process.on('SIGTERM', () => gracefulShutdown('SIGTERM'));
@@ -484,5 +373,6 @@ process.on('unhandledRejection', error => {
   logger.error('Unhandled promise rejection:', error);
 });
 process.on('uncaughtException', error => {
-  logger.error('Uncaught exception:', error);
+  logger.error('Uncaught exception, exiting:', error);
+  process.exit(1);
 });

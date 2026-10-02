@@ -18,9 +18,7 @@
 
 ## reference
 
-- [[API-Endpoints]]
-- [[Technical-Specification]]
-- [[Logging-Platform]]
+- [[Content-API]]
 
 ## troubleshooting
 

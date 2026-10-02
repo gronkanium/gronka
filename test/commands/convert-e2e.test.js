@@ -13,14 +13,6 @@ import { mediaFromBytes } from '../helpers/media.js';
 const mocksSupported = process.env.GRONKA_E2E === 'true';
 const hasGifsicle = Boolean(Bun.which('gifsicle'));
 
-const GIF_STORAGE_PATH = mocksSupported
-  ? path.join(os.tmpdir(), `gronka-convert-e2e-${process.pid}-${Date.now()}`, 'gifs')
-  : null;
-if (mocksSupported) {
-  process.env.GIF_STORAGE_PATH = GIF_STORAGE_PATH;
-  process.env.CDN_BASE_URL = 'https://cdn.test/gifs';
-}
-
 const fixtures = {};
 let handleConvertCommand;
 let handleConvertContextMenu;
@@ -126,6 +118,14 @@ if (!mocksSupported) {
     }
     await fs.rm(dir, { recursive: true, force: true });
 
+    const realR2 = await import('../../src/utils/r2-storage.js');
+    mock.module('../../src/utils/r2-storage.js', () => ({
+      ...realR2,
+      isR2Configured: () => true,
+      uploadMediaToR2: async (type, file, ext) =>
+        `https://cdn.test/${realR2.newMediaKey(type, ext)}`,
+    }));
+
     const real = { ...(await import('../../src/utils/file-downloader.js')) };
     mock.module('../../src/utils/file-downloader.js', () => ({
       ...real,
@@ -141,9 +141,8 @@ if (!mocksSupported) {
       await import('../../src/commands/optimize.js'));
   });
 
-  afterAll(async () => {
+  afterAll(() => {
     mock.restore();
-    await fs.rm(path.dirname(GIF_STORAGE_PATH), { recursive: true, force: true });
   });
 
   const isGif = buffer => buffer.subarray(0, 3).toString() === 'GIF';
@@ -193,20 +192,13 @@ if (!mocksSupported) {
       }
     );
 
-    test('url input: converted once, then served from the url cache', async () => {
+    test('url input: converted fresh every time, nothing is cached', async () => {
       const url = `https://example.com/vid-${Date.now()}.mp4`;
-      const discordUrl = 'https://cdn.discordapp.com/attachments/9/9/converted.gif';
-      const first = commandInteraction(
-        `cv-url-a-${Date.now()}`,
-        { url },
-        { messageAttachments: [{ url: discordUrl }] }
-      );
-      await handleConvertCommand(first.interaction);
-      assert.ok(first.calls.editReply[0].files, 'first run attaches the gif');
-
-      const second = commandInteraction(`cv-url-b-${Date.now()}`, { url });
-      await handleConvertCommand(second.interaction);
-      assert.strictEqual(second.calls.editReply[0].content, discordUrl);
+      for (const user of ['a', 'b']) {
+        const { interaction, calls } = commandInteraction(`cv-url-${user}-${Date.now()}`, { url });
+        await handleConvertCommand(interaction);
+        assert.ok(isGif(calls.editReply[0].files[0].attachment), `run ${user} attaches a gif`);
+      }
     });
 
     test('gif over the attachment limit: replies with a CDN link', async () => {
@@ -219,7 +211,7 @@ if (!mocksSupported) {
       await handleConvertCommand(interaction);
       const reply = firstReply(calls);
       assert.strictEqual(reply.files, undefined);
-      assert.ok(reply.content.includes('https://cdn.test/gifs/'), reply.content);
+      assert.match(reply.content, /https:\/\/cdn\.test\/gifs\/[0-9a-f]{32}\.gif/);
     });
 
     test('video longer than the gif limit: refused with the length in the message', async () => {
@@ -248,7 +240,7 @@ if (!mocksSupported) {
       assert.match(calls.reply[0].content, /not both/);
     });
 
-    test('url that is not media: refused as an unsupported format, logged and recorded', async () => {
+    test('url that is not media: refused, and the failure keeps only the site', async () => {
       const since = Date.now();
       const { interaction, calls } = commandInteraction(`cv-html-${since}`, {
         url: `https://example.com/page-${since}`,
@@ -256,20 +248,13 @@ if (!mocksSupported) {
       await handleConvertCommand(interaction);
       assert.match(firstReply(calls).content, /unsupported file format/);
 
-      const { getLogs } = await import('../../src/utils/database.js');
-      const [line] = await getLogs({
-        search: 'convert refused: unsupported content type',
-        startTime: since,
-        limit: 1,
-      });
-      assert.ok(line, 'the refusal writes a log line');
-      assert.strictEqual(line.metadata.command, 'convert');
-      assert.strictEqual(line.metadata.source, 'example.com');
-      assert.match(
-        line.metadata.op,
-        /^\d{13}-[0-9a-f]+$/,
-        'and it names the failed request it recorded'
-      );
+      const { getAlerts } = await import('../../src/utils/database.js');
+      const [alert] = await getAlerts({ command: 'convert', startTime: since, limit: 1 });
+      assert.ok(alert, 'the refusal is recorded as a failure');
+      const metadata = JSON.parse(alert.metadata);
+      assert.strictEqual(metadata.source, 'example.com');
+      assert.ok(!JSON.stringify(alert).includes(`page-${since}`), 'never the link itself');
+      assert.ok(!('user_id' in alert) && !('operation_id' in alert));
     });
 
     test('context menu on a message with a video: converted to a gif', async () => {
@@ -307,24 +292,17 @@ if (!mocksSupported) {
       assert.strictEqual(calls.reply[0].content, 'lossy level must be between 0 and 100.');
     });
 
-    test.skipIf(!hasGifsicle)(
-      'gif url: optimized once, then served from the url cache',
-      async () => {
-        const url = `https://example.com/anim-${Date.now()}.gif`;
-        const discordUrl = 'https://cdn.discordapp.com/attachments/9/9/optimized.gif';
-        const first = commandInteraction(
-          `op-url-a-${Date.now()}`,
-          { url, lossy: 40 },
-          { messageAttachments: [{ url: discordUrl }] }
-        );
-        await handleOptimizeCommand(first.interaction);
-        assert.ok(first.calls.editReply[0].files, 'first run attaches the gif');
-
-        const second = commandInteraction(`op-url-b-${Date.now()}`, { url, lossy: 40 });
-        await handleOptimizeCommand(second.interaction);
-        assert.strictEqual(second.calls.editReply[0].content, discordUrl);
+    test.skipIf(!hasGifsicle)('gif url: optimized on every run, nothing is cached', async () => {
+      const url = `https://example.com/anim-${Date.now()}.gif`;
+      for (const run of ['a', 'b']) {
+        const { interaction, calls } = commandInteraction(`op-url-${run}-${Date.now()}`, {
+          url,
+          lossy: 40,
+        });
+        await handleOptimizeCommand(interaction);
+        assert.ok(calls.editReply[0].files, `run ${run} attaches a freshly optimized gif`);
       }
-    );
+    });
 
     test('context menu on a gif: asks for the lossy level in a modal', async () => {
       const cache = new Map();

@@ -3,10 +3,9 @@ import { createLogger } from './logger.js';
 import { NetworkError, ValidationError } from './errors.js';
 import { getRequestHeaders } from './discord-cdn.js';
 import { downloadFileFromUrl } from './file-downloader.js';
-import { ssrfGuardedRequest } from './ssrf-guard.js';
+import { ssrfGuardedRequest, PAGE_FETCH_TIMEOUT_MS, MAX_PAGE_BYTES } from './ssrf-guard.js';
 
 const logger = createLogger('klipy');
-const PAGE_FETCH_TIMEOUT_MS = 20000;
 const KLIPY_HOST = /(^|\.)klipy\.com$/i;
 const KLIPY_PAGE_PATH = /^\/(?:gifs?|stickers?|memes?)\//i;
 
@@ -97,14 +96,15 @@ export function extractMediaUrl(html) {
   return image;
 }
 
-export async function downloadFromKlipy(url, isAdminUser = false) {
-  logger.info(`Resolving Klipy page: ${url}`);
+export async function downloadFromKlipy(url) {
+  logger.debug(`Resolving Klipy page: ${url}`);
   let response;
   try {
     response = await axios.get(url, {
       ...ssrfGuardedRequest(),
       responseType: 'text',
       timeout: PAGE_FETCH_TIMEOUT_MS,
+      maxContentLength: MAX_PAGE_BYTES,
       maxRedirects: 5,
       headers: {
         ...getRequestHeaders(),
@@ -127,6 +127,6 @@ export async function downloadFromKlipy(url, isAdminUser = false) {
     logger.warn('No media found on Klipy page');
     throw new ValidationError('no downloadable media found on this Klipy page');
   }
-  logger.info(`Extracted Klipy media URL: ${mediaUrl}`);
-  return downloadFileFromUrl(mediaUrl, isAdminUser);
+  logger.debug(`Extracted Klipy media URL: ${mediaUrl}`);
+  return downloadFileFromUrl(mediaUrl);
 }

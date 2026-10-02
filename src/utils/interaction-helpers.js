@@ -22,12 +22,7 @@ export async function safeInteractionReply(interaction, options) {
   }
 }
 
-/**
- * Safely edit a Discord interaction reply, handling expired/already-acknowledged interactions
- * @param {Interaction} interaction - Discord interaction
- * @param {Object} options - Edit options (content, embeds, etc.)
- * @returns {Promise<Message|false>} Message object if edit was successful, false otherwise
- */
+// Safely edit a Discord interaction reply, handling expired/already-acknowledged interactions
 export async function safeInteractionEditReply(interaction, options) {
   if (!interaction.replied && !interaction.deferred) {
     logger.debug(`Interaction not yet responded to, cannot edit reply`);
@@ -69,12 +64,7 @@ export async function safeInteractionEditReply(interaction, options) {
   return false;
 }
 
-/**
- * Safely follow up on a Discord interaction, handling expired/already-acknowledged interactions
- * @param {Interaction} interaction - Discord interaction
- * @param {Object} options - Follow-up options (content, embeds, etc.)
- * @returns {Promise<Message|boolean>} Message if successful, false otherwise
- */
+// Safely follow up on a Discord interaction, handling expired/already-acknowledged interactions
 export async function safeInteractionFollowUp(interaction, options) {
   if (!interaction.replied && !interaction.deferred) {
     logger.debug(`Interaction not yet responded to, cannot follow up`);
@@ -107,8 +97,10 @@ export async function safeInteractionDeferReply(interaction, options = {}) {
     await interaction.deferReply(options);
     return true;
   } catch (error) {
-    // Handle expired interactions (code 10062) or already acknowledged (code 40060)
-    if (error.code === 10062 || error.code === 40060) {
+    if (error.code === 10062) {
+      const age = Date.now() - interaction.createdTimestamp;
+      logger.warn(`Discord expired the interaction before it was acknowledged (${age} ms old)`);
+    } else if (error.code === 40060) {
       logger.debug(
         `Interaction expired or already acknowledged when deferring reply: ${error.message}`
       );

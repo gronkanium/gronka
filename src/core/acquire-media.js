@@ -12,7 +12,7 @@ import {
   getCobaltMediaUrls,
   getRemoteContentLength,
 } from '../utils/cobalt.js';
-import { getYtdlpSite, downloadFromYouTube, downloadWithYtdlp } from '../utils/ytdlp.js';
+import { getYtdlpSite, downloadWithYtdlp } from '../utils/ytdlp.js';
 import { getGalleryDlSite, downloadWithGalleryDl } from '../utils/gallery-dl.js';
 import { isHentaiGifzUrl, downloadFromHentaiGifz } from '../utils/hentaigifz.js';
 import { isBooruUrl, downloadFromBooru, booruCdnUserAgent } from '../utils/booru.js';
@@ -37,6 +37,7 @@ import { getBooleanSetting, getSetting } from '../utils/database.js';
 import { isRedditPostUrl, hasRedditSession, resolveRedditPost } from '../utils/reddit.js';
 import { convertToFormat } from '../utils/video-processor.js';
 import { fitsDiscordAttachment } from '../commands/shared/attachment-limit.js';
+import { hostOf } from '../utils/url-host.js';
 
 const logger = createLogger('acquire-media');
 
@@ -45,12 +46,12 @@ const MAX_REDDIT_GALLERY_SLIDES = 10;
 
 // Each slide carries candidates, best first: the unsigned original, then a signed preview,
 // because the original 404s for crossposts.
-async function downloadRedditSlides(images, adminUser) {
+async function downloadRedditSlides(images) {
   let lastError;
   const downloadSlide = async candidates => {
     for (const candidate of candidates) {
       try {
-        return await downloadFileFromUrl(candidate, adminUser);
+        return await downloadFileFromUrl(candidate);
       } catch (candidateError) {
         lastError = candidateError;
       }
@@ -72,7 +73,7 @@ async function downloadRedditSlides(images, adminUser) {
 
 function isTwitterXUrl(url) {
   try {
-    const hostname = new URL(url).hostname.toLowerCase().replace(/^www\./, '');
+    const hostname = hostOf(url);
     return (
       hostname === 'x.com' ||
       hostname === 'twitter.com' ||
@@ -89,7 +90,7 @@ function isTwitterXUrl(url) {
 // support, so age-restricted posts only work via yt-dlp with a cookies file (YTDLP_COOKIES_PATH).
 function isTikTokUrl(url) {
   try {
-    const hostname = new URL(url).hostname.toLowerCase().replace(/^www\./, '');
+    const hostname = hostOf(url);
     return hostname === 'tiktok.com' || hostname.endsWith('.tiktok.com');
   } catch {
     return false;
@@ -98,13 +99,7 @@ function isTikTokUrl(url) {
 
 // A non-null label makes a Cobalt failure on this host eligible for the yt-dlp retry: Cobalt's
 // extractors are flaky or auth-gated, and yt-dlp covers many of the same hosts.
-function cobaltFallbackLabel(url) {
-  try {
-    return new URL(url).hostname.toLowerCase().replace(/^www\./, '');
-  } catch {
-    return 'this platform';
-  }
-}
+const cobaltFallbackLabel = url => hostOf(url) ?? 'this platform';
 
 const {
   maxVideoSize: MAX_VIDEO_SIZE,
@@ -144,7 +139,6 @@ async function directMediaUrls(url, shouldServe = null, keep = () => {}) {
 export async function acquireMedia(
   url,
   {
-    adminUser = false,
     startTime = null,
     duration = null,
     galleryOptions = {},
@@ -158,7 +152,7 @@ export async function acquireMedia(
   if (await isPrivateHost(url)) {
     throw new ValidationError(BLOCKED_DESTINATION_MESSAGE);
   }
-  const maxSize = adminUser ? Infinity : await getMaxVideoSize();
+  const maxSize = await getMaxVideoSize();
   const trimming = startTime !== null || duration !== null;
   let cobaltResponse = null;
   const keep = response => (cobaltResponse = response);
@@ -171,7 +165,7 @@ export async function acquireMedia(
     try {
       const resolved = await resolveRedditPost(url);
       if (resolved.external) {
-        logger.info(`Reddit post points offsite, following to: ${resolved.external}`);
+        logger.debug(`Reddit post points offsite, following to: ${resolved.external}`);
         // The disabled-source gate above ran on the reddit URL, so re-check the target:
         // following a hand-off must not smuggle past a source the owner turned off.
         const targetDisabled = await getDisabledServiceLabel(resolved.external);
@@ -280,19 +274,17 @@ export async function acquireMedia(
     }
   }
 
-  const ytdlpMaxDuration = async () =>
-    trimming || adminUser ? Infinity : await getMaxVideoDuration();
+  const ytdlpMaxDuration = async () => (trimming ? Infinity : await getMaxVideoDuration());
   const extractors = [
     [
       'ytdlp',
       useYtdlp,
       `${ytdlpSite} via yt-dlp`,
       async () =>
-        downloadFromYouTube(
+        downloadWithYtdlp(
           url,
-          adminUser,
           maxSize,
-          adminUser ? null : YTDLP_QUALITY,
+          YTDLP_QUALITY,
           await ytdlpMaxDuration(),
           startTime,
           duration
@@ -302,20 +294,20 @@ export async function acquireMedia(
       'gallery-dl',
       galleryDlSite && GALLERY_DL_ENABLED,
       `${galleryDlSite} via gallery-dl`,
-      () => downloadWithGalleryDl(url, adminUser, maxSize, galleryOptions),
+      () => downloadWithGalleryDl(url, maxSize, galleryOptions),
     ],
-    ['hentaigifz', isHentaiGifz, 'hentaigifz', () => downloadFromHentaiGifz(url, adminUser)],
-    ['booru', isBooru, 'booru', () => downloadFromBooru(url, adminUser)],
-    ['pinterest', isPinterest, 'Pinterest', () => downloadFromPinterest(url, adminUser)],
-    ['klipy', isKlipy, 'Klipy', () => downloadFromKlipy(url, adminUser)],
-    ['instagram-story', isIgStory, 'Instagram story', () => downloadFromInstagram(url, adminUser)],
+    ['hentaigifz', isHentaiGifz, 'hentaigifz', () => downloadFromHentaiGifz(url)],
+    ['booru', isBooru, 'booru', () => downloadFromBooru(url)],
+    ['pinterest', isPinterest, 'Pinterest', () => downloadFromPinterest(url)],
+    ['klipy', isKlipy, 'Klipy', () => downloadFromKlipy(url)],
+    ['instagram-story', isIgStory, 'Instagram story', () => downloadFromInstagram(url)],
     [
       'direct',
       isDirectMedia,
       'direct media link',
-      () => downloadDirectMedia(url, adminUser, client, { userAgent: booruCdnUserAgent(url) }),
+      () => downloadDirectMedia(url, client, { userAgent: booruCdnUserAgent(url) }),
     ],
-    ['reddit', useReddit, 'Reddit', () => downloadRedditSlides(redditImages, adminUser)],
+    ['reddit', useReddit, 'Reddit', () => downloadRedditSlides(redditImages)],
   ];
   let [downloadMethod, , sourceLabel, extract] = extractors.find(([, applies]) => applies) ?? [
     'cobalt',
@@ -323,21 +315,29 @@ export async function acquireMedia(
     'Cobalt',
     null,
   ];
-  logger.info(`Downloading from ${sourceLabel}: ${url}`);
+  logger.debug(`Downloading from ${sourceLabel}: ${url}`);
   logStep('download_start', 'running', {
     message: `Starting download from ${sourceLabel}`,
-    metadata: { url, maxSize: adminUser ? 'unlimited' : maxSize },
+    metadata: { url, maxSize },
   });
 
   // Started early: it takes ~3 s and decides both the DRM route and the tags.
   const soundcloud =
-    isSoundCloudUrl(url) && !trimming ? soundcloudTrack(url).catch(() => null) : null;
+    isSoundCloudUrl(url) && !trimming
+      ? soundcloudTrack(url).catch(error => {
+          logger.warn(`SoundCloud track read failed: ${error.message}`);
+          return null;
+        })
+      : null;
 
   // Runs beside the SoundCloud read; a DRM-only track has no source links to hand out.
   // cobalt turns X's looping mp4s into real gifs; a raw stream would hand out the mp4.
   const cobaltGif = /\.gif$/i.test(cobaltResponse?.filename ?? '');
   if (streamFirst && !cobaltGif && !trimming) {
-    const lane = streamFirst(url, downloadMethod).catch(() => null);
+    const lane = streamFirst(url, downloadMethod).catch(error => {
+      logger.debug(`Stream lane unavailable, using the download path: ${error.message}`);
+      return null;
+    });
     const streams = (await soundcloud)?.drm ? null : await lane;
     if (streams) {
       return { kind: 'stream', streams, url };
@@ -371,22 +371,18 @@ export async function acquireMedia(
     try {
       // Concurrency is capped inside cobalt.js. The URL cache was already consulted
       // above (and deliberately skipped when trimming), so there is no second check here.
-      fileData = await downloadFromSocialMedia(
-        COBALT_API_URL,
-        url,
-        adminUser,
-        maxSize,
-        cobaltResponse
-      ).catch(async cobaltError => {
-        if (!useInstagram) throw cobaltError;
-        logger.warn(`Cobalt failed for Instagram, trying the session: ${cobaltError.message}`);
-        try {
-          return await downloadFromInstagram(url, adminUser);
-        } catch (instagramError) {
-          logger.warn(`Instagram session extractor failed: ${instagramError.message}`);
-          throw cobaltError;
+      fileData = await downloadFromSocialMedia(COBALT_API_URL, url, maxSize, cobaltResponse).catch(
+        async cobaltError => {
+          if (!useInstagram) throw cobaltError;
+          logger.warn(`Cobalt failed for Instagram, trying the session: ${cobaltError.message}`);
+          try {
+            return await downloadFromInstagram(url);
+          } catch (instagramError) {
+            logger.warn(`Instagram session extractor failed: ${instagramError.message}`);
+            throw cobaltError;
+          }
         }
-      });
+      );
       logStep('download_complete', 'success', {
         message: 'File downloaded successfully',
         metadata: {
@@ -444,7 +440,7 @@ export async function acquireMedia(
       if (track?.drm) {
         return {
           kind: 'file',
-          fileData: await soundcloudViaYoutube(url, { adminUser, maxSize, track }),
+          fileData: await soundcloudViaYoutube(url, { maxSize, track }),
           downloadMethod: 'ytdlp',
           url,
         };
@@ -462,9 +458,8 @@ export async function acquireMedia(
       try {
         fileData = await downloadWithYtdlp(
           url,
-          adminUser,
           maxSize,
-          adminUser ? null : YTDLP_QUALITY,
+          YTDLP_QUALITY,
           await ytdlpMaxDuration(),
           startTime,
           duration
@@ -473,7 +468,7 @@ export async function acquireMedia(
         if (ytdlpFallbackError.code === 'DRM_PROTECTED' && isSoundCloudUrl(url)) {
           return {
             kind: 'file',
-            fileData: await soundcloudViaYoutube(url, { adminUser, maxSize }),
+            fileData: await soundcloudViaYoutube(url, { maxSize }),
             downloadMethod: 'ytdlp',
             url,
           };

@@ -33,13 +33,37 @@ async function newJobDir() {
 }
 
 // Runs fn with a job dir that every file created inside it lands in; the dir goes when fn settles.
-export async function withJobDir(fn) {
+// A signal cancels the job: every request and child process started inside it is aborted.
+export async function withJobDir(fn, { signal } = {}) {
   if (scope.getStore()) return fn();
   const dir = await newJobDir();
   try {
-    return await scope.run({ dir }, fn);
+    return await scope.run({ dir, signal }, fn);
   } finally {
     await fsp.rm(dir, { recursive: true, force: true });
+  }
+}
+
+// The current job's cancel signal, combined with `extra` (e.g. a timeout) when both exist.
+export function jobSignal(extra) {
+  const signals = [scope.getStore()?.signal, extra].filter(Boolean);
+  return signals.length > 1 ? AbortSignal.any(signals) : signals[0];
+}
+
+// Every axios request made inside a cancellable job stops with it.
+axios.interceptors.request.use(config =>
+  config.signal || !jobSignal() ? config : { ...config, signal: jobSignal() }
+);
+
+// Writes beside the final path, then renames, so a killed write never leaves a truncated file there.
+export async function writeAtomic(finalPath, write) {
+  const part = finalPath.replace(/(\.\w+)?$/, `.${randomBytes(6).toString('hex')}.part$1`);
+  try {
+    await write(part);
+    await fsp.rename(part, finalPath);
+  } catch (error) {
+    await fsp.rm(part, { force: true });
+    throw error;
   }
 }
 

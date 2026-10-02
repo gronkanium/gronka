@@ -1,7 +1,6 @@
 import { test, describe, beforeAll, afterAll } from 'bun:test';
 import assert from 'node:assert';
 import { initDatabase, setSetting } from '../src/utils/database.js';
-import { isAdmin, refreshRateLimitSettings } from '../src/utils/rate-limit.js';
 
 let app;
 let server;
@@ -21,11 +20,9 @@ afterAll(async () => {
   // The test DB persists between runs - reset the keys these tests write.
   await setSetting('max_video_duration', '300');
   await setSetting('max_video_size_mb', '1024');
-  await setSetting('admin_user_ids', '[]');
   await setSetting('twitter_delivery', 'hybrid');
   await setSetting('upload_ttl_tiers', '100:72,250:24,500:8,1024:2');
   await setSetting('disabled_services', '[]');
-  await setSetting('webui_saved_views', '[]');
   await setSetting('webui_issue_states', '{}');
   if (server) server.close();
   // Don't close database here - it's shared across parallel test files
@@ -54,8 +51,6 @@ describe('settings route', () => {
     assert.strictEqual(settings.max_video_size_mb.type, 'number');
     assert.strictEqual(settings.max_video_size_mb.min, 50);
     assert.strictEqual(settings.max_video_size_mb.max, 2048);
-    assert.strictEqual(settings.admin_user_ids.type, 'list');
-    assert.ok(Array.isArray(settings.admin_user_ids.envValues));
     assert.strictEqual(settings.twitter_delivery.type, 'select');
     assert.deepStrictEqual(settings.twitter_delivery.options, [
       'hybrid',
@@ -63,9 +58,15 @@ describe('settings route', () => {
       'always_download',
     ]);
     assert.strictEqual(settings.twitter_delivery.value, 'hybrid');
-    assert.strictEqual(settings.admin_uploads_expire.type, 'boolean');
     assert.strictEqual(settings.maintenance_mode.type, 'boolean');
-    assert.strictEqual(settings.rate_limit_cooldown.type, 'number');
+    for (const gone of [
+      'admin_user_ids',
+      'rate_limit_cooldown',
+      'moderation_enabled',
+      'ntfy_topic',
+    ]) {
+      assert.ok(!(gone in settings), `${gone} no longer exists`);
+    }
     assert.strictEqual(settings.upload_ttl_tiers.type, 'tiers');
     assert.strictEqual(settings.disabled_services.type, 'services');
     assert.ok(Array.isArray(settings.disabled_services.catalog));
@@ -125,76 +126,9 @@ describe('settings route', () => {
       assert.strictEqual(response.status, 400, `expected 400 for ${JSON.stringify(bad)}`);
     }
   });
-
-  test('list setting stores a deduplicated array of valid ids', async () => {
-    const { response, data } = await putSetting('admin_user_ids', [
-      '123456789012345678',
-      '123456789012345678',
-      ' 876543210987654321 ',
-    ]);
-    assert.strictEqual(response.status, 200);
-    assert.deepStrictEqual(JSON.parse(data.value), ['123456789012345678', '876543210987654321']);
-  });
-
-  test('list setting rejects non-arrays and malformed ids', async () => {
-    for (const bad of ['123456789012345678', ['not-a-snowflake'], [123], [''], ['123']]) {
-      const { response } = await putSetting('admin_user_ids', bad);
-      assert.strictEqual(response.status, 400, `expected 400 for ${JSON.stringify(bad)}`);
-    }
-  });
 });
 
-describe('db-backed admin cache', () => {
-  test('refreshRateLimitSettings picks up webui-managed admins for isAdmin', async () => {
-    const adminId = '111222333444555666';
-    assert.strictEqual(isAdmin(adminId), false);
-
-    await setSetting('admin_user_ids', JSON.stringify([adminId]));
-    await refreshRateLimitSettings();
-    assert.strictEqual(isAdmin(adminId), true);
-
-    await setSetting('admin_user_ids', '[]');
-    await refreshRateLimitSettings();
-    assert.strictEqual(isAdmin(adminId), false);
-  });
-
-  test('refreshRateLimitSettings keeps the previous cache on malformed data', async () => {
-    const adminId = '999888777666555444';
-    await setSetting('admin_user_ids', JSON.stringify([adminId]));
-    await refreshRateLimitSettings();
-    assert.strictEqual(isAdmin(adminId), true);
-
-    await setSetting('admin_user_ids', 'not json');
-    await refreshRateLimitSettings();
-    assert.strictEqual(isAdmin(adminId), true, 'malformed data must not demote admins');
-
-    await setSetting('admin_user_ids', '[]');
-    await refreshRateLimitSettings();
-  });
-
-  test('saved views store trimmed names and string params only', async () => {
-    const { response, data } = await putSetting('webui_saved_views', [
-      { name: '  cobalt errors  ', page: 'logs', params: { level: 'ERROR', component: 'cobalt' } },
-    ]);
-    assert.strictEqual(response.status, 200);
-    assert.deepStrictEqual(JSON.parse(data.value), [
-      { name: 'cobalt errors', page: 'logs', params: { level: 'ERROR', component: 'cobalt' } },
-    ]);
-  });
-
-  test('saved views reject unknown pages, non-string params and odd keys', async () => {
-    for (const bad of [
-      [{ name: 'x', page: 'settings', params: {} }],
-      [{ name: 'x', page: 'logs', params: { level: ['ERROR'] } }],
-      [{ name: 'x', page: 'logs', params: { 'a b': 'c' } }],
-      [{ name: '   ', page: 'logs', params: {} }],
-      'not a list',
-    ]) {
-      const { response } = await putSetting('webui_saved_views', bad);
-      assert.strictEqual(response.status, 400, JSON.stringify(bad));
-    }
-  });
-
+describe('webui state', () => {
   test('issue states keep muted and resolved entries and reject anything else', async () => {
     const good = { a: { state: 'muted', until: 5 }, b: { state: 'resolved', at: 7 } };
     const { response, data } = await putSetting('webui_issue_states', good);

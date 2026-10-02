@@ -24,55 +24,6 @@ export function formatBytes(bytes) {
   return `${parseFloat((bytes / Math.pow(k, i)).toFixed(2))} ${sizes[i]}`;
 }
 
-export function formatDuration(ms) {
-  if (!ms || ms === 0) return 'N/A';
-  if (ms < 1000) return `${ms}ms`;
-  const seconds = ms / 1000;
-  if (seconds < 60) return `${seconds.toFixed(1)}s`;
-  const minutes = seconds / 60;
-  if (minutes < 60) return `${minutes.toFixed(1)}m`;
-  return `${(minutes / 60).toFixed(1)}h`;
-}
-
-/**
- * Convert a time-range key ('1h', '6h', '24h', '7d', '30d') to a start timestamp,
- * or null for unknown/empty keys.
- */
-export function timeRangeToStartTime(timeRange, now = Date.now()) {
-  const hour = 60 * 60 * 1000;
-  const ranges = {
-    '1h': hour,
-    '6h': 6 * hour,
-    '24h': 24 * hour,
-    '7d': 7 * 24 * hour,
-    '30d': 30 * 24 * hour,
-  };
-  return ranges[timeRange] ? now - ranges[timeRange] : null;
-}
-
-export function shortId(id) {
-  const s = String(id ?? '');
-  return s.length > 10 ? `${s.slice(0, 4)}…${s.slice(-4)}` : s;
-}
-
-export function hostOf(url) {
-  try {
-    return new URL(url).hostname.replace(/^www\./, '');
-  } catch {
-    return null;
-  }
-}
-
-// "x.com/user/status/123" style label for a request's link, without scheme or query.
-export function urlLabel(url) {
-  try {
-    const u = new URL(url);
-    return `${u.hostname.replace(/^www\./, '')}${u.pathname.replace(/\/$/, '')}`;
-  } catch {
-    return url || 'attachment';
-  }
-}
-
 // One way to print a moment everywhere: "Sep 30, 14:21" (with the year only when it differs).
 export function formatDateTime(t, { seconds = false } = {}) {
   if (!t) return '—';
@@ -87,21 +38,4 @@ export function formatDateTime(t, { seconds = false } = {}) {
     ...(seconds ? { second: '2-digit' } : {}),
     hour12: false,
   });
-}
-
-export function formatDate(t) {
-  if (!t) return '—';
-  const d = new Date(t);
-  const sameYear = d.getFullYear() === new Date().getFullYear();
-  return d.toLocaleDateString([], {
-    ...(sameYear ? {} : { year: 'numeric' }),
-    month: 'short',
-    day: 'numeric',
-  });
-}
-
-export function formatTime(t, { millis = false } = {}) {
-  if (!t) return '—';
-  const s = new Date(t).toLocaleTimeString([], { hour12: false });
-  return millis ? `${s}.${String(t % 1000).padStart(3, '0')}` : s;
 }

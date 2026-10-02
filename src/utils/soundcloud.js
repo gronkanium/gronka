@@ -2,8 +2,10 @@ import { execFile } from 'child_process';
 import { promisify } from 'util';
 import fs from 'fs/promises';
 import path from 'path';
+import axios from 'axios';
 import { createLogger } from './logger.js';
 import { ValidationError } from './errors.js';
+import { ssrfGuardedRequest } from './ssrf-guard.js';
 import { fromPath, tempPath } from './media-file.js';
 import { downloadWithYtdlp, getCookieArgs } from './ytdlp.js';
 
@@ -89,10 +91,20 @@ async function fetchCover(url) {
   if (!url) return null;
   try {
     if (!new URL(url).hostname.endsWith('.sndcdn.com')) return null;
-    const res = await fetch(url, { signal: AbortSignal.timeout(10_000) });
-    if (!res.ok || !/^image\/(jpeg|png)/.test(res.headers.get('content-type') ?? '')) return null;
-    const buffer = Buffer.from(await res.arrayBuffer());
-    return buffer.length < 5 * 1024 * 1024 ? buffer : null;
+    const res = await axios.get(url, {
+      ...ssrfGuardedRequest(),
+      responseType: 'arraybuffer',
+      timeout: 10_000,
+      maxContentLength: 5 * 1024 * 1024,
+      validateStatus: () => true,
+    });
+    if (
+      res.status < 200 ||
+      res.status >= 300 ||
+      !/^image\/(jpeg|png)/.test(res.headers['content-type'] ?? '')
+    )
+      return null;
+    return Buffer.from(res.data);
   } catch (error) {
     logger.warn(`No cover: ${error.message}`);
     return null;
@@ -150,10 +162,7 @@ export async function tagAudio(file, track) {
   return fromPath(output, { contentType: 'audio/mpeg', filename: `${name}.mp3`, audioReady: true });
 }
 
-export async function soundcloudViaYoutube(
-  url,
-  { adminUser = false, maxSize = Infinity, track = null } = {}
-) {
+export async function soundcloudViaYoutube(url, { maxSize = Infinity, track = null } = {}) {
   track ??= await soundcloudTrack(url);
   const match = pickMatch(track, await youtubeCandidates(track));
   if (!match) {
@@ -162,10 +171,9 @@ export async function soundcloudViaYoutube(
       'DRM_PROTECTED'
     );
   }
-  logger.info(`DRM SoundCloud track matched to YouTube ${match.id} (${match.channel})`);
+  logger.debug(`DRM SoundCloud track matched to YouTube ${match.id} (${match.channel})`);
   const audio = await downloadWithYtdlp(
     `https://www.youtube.com/watch?v=${match.id}`,
-    adminUser,
     maxSize,
     'bestaudio[ext=m4a]/bestaudio',
     Infinity

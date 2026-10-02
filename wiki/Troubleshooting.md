@@ -28,7 +28,6 @@ look for "bot logged in as" message in logs. if missing:
 
 - check `DISCORD_TOKEN` is correct
 - verify bot has proper permissions
-- ensure message content intent is enabled
 
 ## commands not appearing
 
@@ -72,12 +71,10 @@ sudo apt install ffmpeg
 
 check file size limits:
 
-- videos: 100mb maximum for downloads and conversions (configurable via `MAX_VIDEO_SIZE`)
+- videos: 1 gb maximum for downloads (the max download size webui setting); anything over the discord attachment limit needs [[R2-Storage]]
 - images: 50mb maximum (configurable via `MAX_IMAGE_SIZE`)
 - gif optimization: 50mb maximum
 - gif duration: 30 seconds (configurable via `MAX_GIF_DURATION`)
-
-admin users can bypass these limits.
 
 ### unsupported format
 
@@ -139,7 +136,7 @@ see `YTDLP_COOKIES_PATH` in [[Configuration]] for details.
 
 ### youtube video too long
 
-`/download` caps youtube videos at 5 minutes for non-admin users. to grab part of a longer video, pass `start`/`end`, trimmed downloads bypass the cap. admin users (via `ADMIN_USER_IDS`) are exempt.
+`/download` caps video length with the max video duration webui setting. to grab part of a longer video, pass `start`/`end`; trimmed downloads bypass the cap.
 
 ### download timeout
 
@@ -151,27 +148,6 @@ large files may timeout. the bot uses deferred downloads for this:
 
 ## storage issues
 
-### files not saving
-
-check storage path permissions:
-
-```bash
-# docker
-docker compose exec app ls -la /app/data
-
-# local (check your configured storage path)
-ls -la ./data-prod
-# or for test bot
-ls -la ./data-test
-```
-
-fix permissions:
-
-```bash
-sudo chown -R $USER:$USER data-prod data-test
-chmod -R 755 data-prod data-test
-```
-
 ### r2 upload failures
 
 - verify r2 credentials are correct
@@ -181,7 +157,7 @@ chmod -R 755 data-prod data-test
 
 ### storage full
 
-check disk usage:
+jobs download into `./temp` and delete their folder when they end. check disk usage:
 
 ```bash
 # docker
@@ -217,27 +193,7 @@ test health endpoint:
 curl http://localhost:3000/health
 ```
 
-should return:
-
-```json
-{ "status": "ok", "uptime": 12345 }
-```
-
-if failing, check server logs for errors.
-
-## rate limiting
-
-### commands rate limited
-
-- 10-second cooldown between commands per user (configurable via `RATE_LIMIT`)
-- wait before using another command
-- admin users bypass rate limiting
-
-to become an admin, add your user id to `ADMIN_USER_IDS`:
-
-```env
-ADMIN_USER_IDS=your_user_id_here
-```
+it answers 200 once the bot is connected to discord, 503 before that. if it never turns 200, check the bot logs.
 
 ## docker issues
 
@@ -262,8 +218,8 @@ docker compose config
 fix volume permissions:
 
 ```bash
-sudo chown -R $USER:$USER data-prod data-test temp logs
-chmod -R 755 data-prod data-test temp logs
+sudo chown -R $USER:$USER temp
+chmod -R 755 temp
 ```
 
 ### code changes not reflected
@@ -275,139 +231,6 @@ docker compose build --no-cache
 docker compose up -d
 ```
 
-## jekyll stats issues
-
-### stats not updating
-
-1. **check bot server is running:**
-   ```bash
-   curl http://YOUR_BOT_SERVER_LOCAL_IP:3000/health
-   ```
-
-2. **check api endpoint:**
-   ```bash
-   curl http://YOUR_BOT_SERVER_LOCAL_IP:3000/api/stats/24h
-   # or with auth
-   curl -u "username:password" http://YOUR_BOT_SERVER_LOCAL_IP:3000/api/stats/24h
-   ```
-
-3. **check network connectivity:**
-   ```bash
-   ping YOUR_BOT_SERVER_LOCAL_IP
-   ```
-
-4. **check file permissions:**
-   ```bash
-   ls -la _data/stats.json
-   # ensure the script can write to _data directory
-   ```
-
-5. **check logs:**
-   ```bash
-   tail -f logs/jekyll-update.log
-   ```
-
-6. **check environment variables:**
-   ```bash
-   # verify BOT_API_URL is set correctly
-   grep BOT_API_URL .env
-   ```
-
-### stats show zero or old data
-
-1. **verify bot has processed files:**
-   - check bot database has recent entries in `processed_urls` table
-   - verify files were processed within the last 24 hours
-
-2. **check time window:**
-   - stats are for last 24 hours from current time
-   - if no activity in last 24 hours, stats will be zero
-
-3. **verify file was updated:**
-   ```bash
-   # check modification time
-   ls -l _data/stats.json
-   # should be recent if stats update ran
-   ```
-
-4. **check jekyll rebuild:**
-   - stats file must exist before jekyll builds
-   - verify `scripts/update-jekyll-site.sh` ran the stats update step
-
-5. **verify api response:**
-   ```bash
-   # test the endpoint directly
-   curl http://YOUR_BOT_SERVER_LOCAL_IP:3000/api/stats/24h
-   ```
-
-### authentication errors
-
-1. **verify credentials match:**
-   - `STATS_USERNAME` and `STATS_PASSWORD` on jekyll server must match bot server
-   - check both `.env` files have the same values
-
-2. **check bot server config:**
-   - verify `STATS_USERNAME` and `STATS_PASSWORD` are set on bot server
-   - if not set on bot server, omit them from jekyll server `.env`
-
-3. **test with curl:**
-   ```bash
-   # test authentication
-   curl -u "username:password" http://YOUR_BOT_SERVER_LOCAL_IP:3000/api/stats/24h
-   ```
-
-4. **check basic auth:**
-   - ensure both username and password are provided if auth is enabled
-   - verify no extra spaces or special characters in credentials
-
-### script fails but build continues
-
-this is expected behavior - the update script is designed to continue even if stats update fails. check:
-
-1. **logs:**
-   ```bash
-   # review update script logs
-   tail -f logs/jekyll-update.log
-   # look for warning messages about stats update
-   ```
-
-2. **network issues:**
-   - bot server may be temporarily unavailable
-   - check bot server is running and accessible
-
-3. **api errors:**
-   - check bot server logs for api endpoint errors
-   - verify `/api/stats/24h` endpoint is working
-
-4. **last known stats:**
-   - jekyll will use the last successfully updated stats file
-   - check `_data/stats.json` modification time
-
-### stats not appearing in footer
-
-1. **check stats file exists:**
-   ```bash
-   cat _data/stats.json
-   ```
-
-2. **verify jekyll build:**
-   ```bash
-   # rebuild jekyll
-   bundle exec jekyll build
-   # check footer in built site
-   grep "past 24 hours" _site/index.html
-   ```
-
-3. **check footer template:**
-   - verify `_includes/footer.html` has the stats display code
-   - check for syntax errors in liquid template
-
-4. **verify stats data format:**
-   ```bash
-   # stats.json should have these fields
-   cat _data/stats.json | jq .
-   ```
-
 ## getting help
 
 if you're still having issues:
@@ -417,8 +240,4 @@ if you're still having issues:
 3. test individual components (ffmpeg, cobalt, r2)
 4. check github issues for similar problems
 
-common log locations:
-
-- docker: `docker compose logs -f`
-- local: `logs/combined.log` and `logs/error.log`
-- jekyll updates: `logs/jekyll-update.log`
+logs go to the console only: `docker compose logs -f app worker`. the webui's issues page lists recent failures by command, site and error.

@@ -1,14 +1,12 @@
 <script>
+  import { sendJson } from '../utils/api.js';
   import {
     Share2,
     HardDrive,
     ShieldCheck,
-    Bell,
     Activity,
     SlidersHorizontal,
     Globe,
-    Plus,
-    X,
     Check,
     ArrowUpRight,
   } from 'lucide-svelte';
@@ -36,27 +34,14 @@
       label: 'Limits and storage',
       icon: HardDrive,
       blurb: 'How long uploads live in R2 and how much it may hold',
-      keys: ['upload_ttl_tiers', 'r2_soft_limit_gb', 'admin_uploads_expire'],
+      keys: ['upload_ttl_tiers', 'r2_soft_limit_gb'],
     },
     {
       id: 'access',
-      label: 'Access and moderation',
+      label: 'Availability',
       icon: ShieldCheck,
-      blurb: 'Who may use the bot and when it stops taking work',
-      keys: [
-        'maintenance_mode',
-        'queue_paused',
-        'moderation_enabled',
-        'rate_limit_cooldown',
-        'admin_user_ids',
-      ],
-    },
-    {
-      id: 'notifications',
-      label: 'Notifications',
-      icon: Bell,
-      blurb: 'Where failures and alerts are pushed',
-      keys: ['ntfy_topic', 'ntfy_server'],
+      blurb: 'When the bot stops taking work',
+      keys: ['maintenance_mode', 'queue_paused'],
     },
     {
       id: 'presence',
@@ -68,7 +53,7 @@
     },
   ];
   // Edited on their own pages, not here.
-  const ELSEWHERE = new Set(['services', 'views', 'issuestates']);
+  const ELSEWHERE = new Set(['services', 'issuestates']);
   const LABELS = {
     url_only_mode: 'Reply with links only',
     twitter_delivery: 'X / Twitter delivery',
@@ -77,14 +62,8 @@
     max_video_duration: 'Max video duration',
     upload_ttl_tiers: 'Upload lifetime tiers',
     r2_soft_limit_gb: 'R2 soft limit (GB)',
-    admin_uploads_expire: 'Admin uploads expire',
     maintenance_mode: 'Maintenance mode',
     queue_paused: 'Pause media queue',
-    moderation_enabled: 'Enforce bans',
-    rate_limit_cooldown: 'Rate limit cooldown (s)',
-    admin_user_ids: 'Admins',
-    ntfy_topic: 'ntfy topic',
-    ntfy_server: 'ntfy server',
   };
   const label = key => LABELS[key] ?? key.replace(/_/g, ' ');
 
@@ -129,14 +108,6 @@
     cleanTiers(rows)
       .map(r => `${r.mb}:${r.hours}`)
       .join(',');
-  const listValues = s => {
-    try {
-      const v = JSON.parse(s.value);
-      return Array.isArray(v) ? v : [];
-    } catch {
-      return [];
-    }
-  };
 
   async function load() {
     loading = true;
@@ -168,11 +139,7 @@
     saving[key] = true;
     error = '';
     try {
-      const res = await fetch(`/api/settings/${key}`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ value }),
-      });
+      const res = await sendJson(`/api/settings/${key}`, 'PUT', { value });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(data.message || `HTTP ${res.status}`);
       settings[key].value = data.value;
@@ -184,16 +151,6 @@
     } finally {
       saving[key] = false;
     }
-  }
-
-  function addListItem(key, e) {
-    e.preventDefault();
-    const input = e.currentTarget.elements.value;
-    const item = input.value.trim();
-    const items = listValues(settings[key]);
-    if (item && !items.includes(item) && !(settings[key].envValues || []).includes(item))
-      save(key, [...items, item]);
-    input.value = '';
   }
 
   // Presence lives on /api/bot/status, not in bot_settings.
@@ -211,13 +168,9 @@
   }
   async function savePresence() {
     presenceSaving = true;
-    const res = await fetch('/api/bot/status', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        status: presenceStatus,
-        activity: presenceActivity.trim() || undefined,
-      }),
+    const res = await sendJson('/api/bot/status', 'POST', {
+      status: presenceStatus,
+      activity: presenceActivity.trim() || undefined,
     }).catch(() => null);
     const data = res ? await res.json().catch(() => ({})) : {};
     presenceSaving = false;
@@ -390,33 +343,6 @@
                   >
                 </div>
               {/if}
-            {:else if s.type === 'list'}
-              <div class="list">
-                <div class="chips">
-                  {#each s.envValues ?? [] as v (v)}<span
-                      class="chip mono"
-                      title="set in .env, read-only">{v} · env</span
-                    >{/each}
-                  {#each listValues(s) as v (v)}
-                    <span class="chip mono"
-                      >{v}<button
-                        class="x"
-                        aria-label={`remove ${v}`}
-                        disabled={saving[key]}
-                        onclick={() =>
-                          save(
-                            key,
-                            listValues(s).filter(i => i !== v)
-                          )}><X size={11} /></button
-                      ></span
-                    >
-                  {/each}
-                </div>
-                <form class="row" onsubmit={e => addListItem(key, e)}>
-                  <input class="field mono" name="value" placeholder="Add an id" />
-                  <button class="btn sm" disabled={saving[key]}><Plus size={12} />Add</button>
-                </form>
-              </div>
             {:else}
               <span class="mono dim small">{s.value}</span>
             {/if}
@@ -527,29 +453,6 @@
   .item.stacked .ctl {
     justify-content: flex-end;
   }
-  .list {
-    display: flex;
-    flex-direction: column;
-    gap: 8px;
-    width: 100%;
-  }
-  .chips {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 6px;
-    justify-content: flex-end;
-  }
-  .chip .x {
-    display: flex;
-    padding: 0;
-    border: 0;
-    background: none;
-    color: var(--text-dim);
-    cursor: pointer;
-  }
-  .chip .x:hover {
-    color: var(--danger-text);
-  }
   .foot {
     background: var(--card-2);
     border-radius: 0 0 var(--radius-lg) var(--radius-lg);
@@ -571,8 +474,7 @@
       gap: 10px;
     }
     .ctl,
-    .ctl .row,
-    .chips {
+    .ctl .row {
       justify-content: flex-start;
     }
   }

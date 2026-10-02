@@ -1,26 +1,27 @@
 <script>
+  import { poll } from '../utils/poll.js';
+  import { createCopier } from '../utils/copier.svelte.js';
+  import { getJson, getJsonOrNull } from '../utils/api.js';
   import { tick, untrack } from 'svelte';
   import { SvelteSet } from 'svelte/reactivity';
-  import {
-    SquareTerminal,
-    Copy,
-    Check,
-    BellOff,
-    CircleCheck,
-    RotateCcw,
-    ChevronDown,
-    X,
-  } from 'lucide-svelte';
+  import { Copy, Check, BellOff, CircleCheck, RotateCcw, ChevronDown, X } from 'lucide-svelte';
   import { currentRoute, navigate } from '../utils/router.js';
-  import { alerts as liveAlerts } from '../stores/sse-store.js';
   import { issueStates, setIssueState } from '../stores/nav.js';
-  import { groupIssues, stateOf, isOpen, KIND_LABEL } from '../issues.js';
-  import { formatRelativeTime, formatDateTime, shortId, urlLabel } from '../utils/format.js';
+  import {
+    groupIssues,
+    stateOf,
+    isOpen,
+    isNew,
+    inTab,
+    buckets,
+    abbr,
+    KIND_LABEL,
+  } from '../issues.js';
+  import { formatRelativeTime, formatDateTime } from '../utils/format.js';
   import PageHeader from '../components/PageHeader.svelte';
   import DataTable from '../components/DataTable.svelte';
   import Sparkline from '../components/Sparkline.svelte';
   import Chart from '../components/Chart.svelte';
-  import Avatar from '../components/Avatar.svelte';
 
   const HOUR = 3600e3;
   const DAY = 24 * HOUR;
@@ -34,7 +35,6 @@
     ['muted', 'Muted'],
     ['resolved', 'Resolved'],
   ];
-  const TAB_KIND = { defects: 'defect', upstream: 'upstream', user: 'user' };
   const KIND_HELP = {
     user: 'A reply to something the user sent. Nothing to fix unless it keeps catching valid links.',
     upstream: 'A site refused or no longer has the content. Worth a look if it spikes.',
@@ -79,7 +79,7 @@
   let now = $state(Date.now());
   let error = $state('');
   let saving = $state(false);
-  let copied = $state(false);
+  const copier = createCopier();
   let muteOpen = $state(false);
   let toast = $state(null);
   let sort = $state({ key: 'n', desc: true });
@@ -110,9 +110,7 @@
   const selectedKey = $derived($currentRoute.params.$issue || '');
 
   async function load() {
-    const r = await fetch('/api/alerts/summary?reasonLimit=300')
-      .then(x => (x.ok ? x.json() : null))
-      .catch(() => null);
+    const r = await getJsonOrNull('/api/alerts/summary?reasonLimit=300');
     now = Date.now();
     if (!r) {
       if (!loaded) loadError = 'Could not load issues';
@@ -129,19 +127,10 @@
   }
   $effect(() => {
     load();
-    const t = setInterval(load, 60_000);
-    // A new failure alert refreshes the list (debounced: alerts arrive in bursts).
-    let soon;
-    const unsub = liveAlerts.subscribe(list => {
-      if (!list.some(a => a.severity === 'error')) return;
-      clearTimeout(soon);
-      soon = setTimeout(load, 2000);
-    });
+    const stopPoll = poll(load, 60_000);
     return () => {
-      clearInterval(t);
-      clearTimeout(soon);
+      stopPoll();
       clearTimeout(toastTimer);
-      unsub();
     };
   });
 
@@ -155,104 +144,38 @@
     muted: withState.filter(g => g.state === 'muted'),
     resolved: withState.filter(g => g.state === 'resolved'),
   });
-  const inTab = (t, g, state) =>
-    t === 'muted' || t === 'resolved'
-      ? state === t
-      : ['open', 'regressed'].includes(state) && (!TAB_KIND[t] || TAB_KIND[t] === g.kind);
-
-  // Per group and period: the alerts' timestamps and distinct users, fetched on demand.
-  let cache = $state.raw({});
-  const inflight = new Set();
-  const queue = [];
-  let active = 0;
-  const entry = (g, p) => (g ? cache[`${g.key}|${p}`] : undefined);
-  const usersOf = g => entry(g, '7d')?.users;
 
   const alertsFor = (g, extra = '') =>
     Promise.all(
       g.members.map(reason =>
-        fetch(`/api/alerts?reason=${encodeURIComponent(reason)}&limit=${LIMIT}${extra}`)
-          .then(r => (r.ok ? r.json() : Promise.reject(new Error(String(r.status)))))
+        getJson(`/api/alerts?reason=${encodeURIComponent(reason)}&limit=${LIMIT}${extra}`)
           .then(d => d.alerts ?? [])
           .catch(() => null)
       )
     );
 
-  function want(g, p) {
-    const id = `${g.key}|${p}`;
-    const had = cache[id];
-    if (inflight.has(id) || (had && had.lastSeen >= g.lastSeen)) return;
-    inflight.add(id);
-    queue.push(async () => {
-      const span = p === '24h' ? DAY : 7 * DAY;
-      const parts = await alertsFor(g, `&startTime=${Date.now() - span}`);
-      inflight.delete(id);
-      const failed = parts.includes(null);
-      if (failed && had) return;
-      const list = parts.flatMap(x => x ?? []);
-      cache = {
-        ...cache,
-        [id]: {
-          lastSeen: g.lastSeen,
-          times: list.map(a => a.timestamp),
-          users: new Set(list.map(a => a.user_id).filter(Boolean)).size,
-          truncated: parts.some(x => x && x.length >= LIMIT),
-        },
-      };
-    });
-    pump();
-  }
-  function pump() {
-    while (active < 4 && queue.length) {
-      active++;
-      queue
-        .shift()()
-        .finally(() => {
-          active--;
-          pump();
-        });
-    }
-  }
-
-  function bucketStart(unit, at) {
-    const d = new Date(at);
-    if (unit === 'day') d.setHours(0, 0, 0, 0);
-    else d.setMinutes(0, 0, 0);
-    return d.getTime();
-  }
-  function buckets(times, unit, n, at) {
-    const size = unit === 'day' ? DAY : HOUR;
-    const first = bucketStart(unit, at) - (n - 1) * size;
-    const out = Array.from({ length: n }, (_, i) => ({ at: first + i * size, n: 0 }));
-    for (const t of times) {
-      const i = Math.floor((t - first) / size);
-      if (i >= 0 && i < n) out[i].n++;
-    }
-    return out;
-  }
   const bucketLabel = (at, unit) =>
     unit === 'day'
       ? new Date(at).toLocaleDateString([], { weekday: 'short', month: 'short', day: 'numeric' })
       : formatDateTime(at);
 
   function trendOf(g) {
-    const week = entry(g, '7d');
-    // Hourly buckets come from the 7-day fetch unless it hit the row limit.
-    const src = period === '24h' && week?.truncated ? entry(g, '24h') : week;
-    if (!src) return null;
     const { unit, n } = PERIODS[period];
-    const b = buckets(src.times, unit, n, now);
+    const b = buckets(g.times, unit, n, now);
     return {
       values: b.map(x => x.n),
       tips: b.map(x => `${bucketLabel(x.at, unit)} · ${x.n} event${x.n === 1 ? '' : 's'}`),
     };
   }
 
-  const SORTS = { n: g => g.count, users: g => usersOf(g) ?? -1, last: g => g.lastSeen };
+  const SORTS = { n: g => g.count, last: g => g.lastSeen };
   const visible = $derived.by(() => {
     const by = SORTS[sort.key] ?? SORTS.n;
     const dir = sort.desc ? 1 : -1;
-    return [...lists[tab]].sort((a, b) => (by(b) - by(a)) * dir || b.count - a.count);
+    const fresh = g => (sort.key === 'n' && isNew(g, now) ? 1 : 0);
+    return [...lists[tab]].sort(
+      (a, b) => fresh(b) - fresh(a) || (by(b) - by(a)) * dir || b.count - a.count
+    );
   });
   const trends = $derived(Object.fromEntries(visible.map(g => [g.key, trendOf(g)])));
 
@@ -287,19 +210,10 @@
     withState.find(g => g.key === selectedKey) ?? (wide ? (visible[0] ?? null) : null)
   );
 
-  $effect(() => {
-    for (const g of visible) {
-      want(g, '7d');
-      if (period === '24h' && entry(g, '7d')?.truncated) want(g, '24h');
-    }
-    if (selected) want(selected, '7d');
-  });
-
   // Columns give way as the list narrows, so the issue title keeps room to breathe.
   const show = $derived({
     sel: !listW || listW >= 480,
     trend: !listW || listW >= 560,
-    users: !listW || listW >= 470,
     last: !listW || listW >= 400,
   });
   const trendW = $derived(!listW || listW >= 720 ? 120 : 88);
@@ -313,7 +227,6 @@
         width: `${trendW}px`,
       },
       { key: 'n', label: 'Events', width: '56px', align: 'right', sortable: true },
-      show.users && { key: 'users', label: 'Users', width: '48px', align: 'right', sortable: true },
       show.last && {
         key: 'last',
         label: 'Last seen',
@@ -342,9 +255,7 @@
 
   // Detail: every kept event for the recent requests list and first seen.
   let occ = $state([]);
-  let occOps = $state({});
   let occLoading = $state(false);
-  let opsLoaded = $state(false);
   let occKey = '';
   const selSig = $derived(selected ? `${selected.key}|${selected.lastSeen}` : '');
   $effect(() => {
@@ -356,35 +267,20 @@
     const g = untrack(() => selected);
     if (occKey !== g.key) {
       occ = [];
-      occOps = {};
-      opsLoaded = false;
       occLoading = true;
     }
     let stale = false;
-    alertsFor(g).then(async parts => {
+    alertsFor(g).then(parts => {
       if (stale) return;
       const list = parts.flatMap(x => x ?? []).sort((a, b) => b.timestamp - a.timestamp);
       occ = list;
       occKey = g.key;
       occLoading = false;
-      const recent = list.slice(0, 8).filter(a => a.operation_id);
-      const ops = await Promise.all(
-        recent.map(a =>
-          fetch(`/api/operations/${encodeURIComponent(a.operation_id)}`)
-            .then(r => (r.ok ? r.json() : null))
-            .catch(() => null)
-        )
-      );
-      if (stale) return;
-      const map = {};
-      ops.forEach((o, i) => o?.operation && (map[recent[i].operation_id] = o.operation));
-      occOps = map;
-      opsLoaded = true;
     });
     return () => (stale = true);
   });
 
-  const week = $derived(entry(selected, '7d'));
+  const week = $derived(selected);
   const hourly = $derived(week ? buckets(week.times, 'hour', 168, now) : []);
   const last24 = $derived(week ? week.times.filter(t => t > now - DAY).length : null);
   const firstSeen = $derived(occ.length ? occ.at(-1).timestamp : null);
@@ -402,11 +298,14 @@
       : []
   );
 
-  const logSearch = g =>
-    g.key
-      .split('#')[0]
-      .replace(/[\s,.(:]+$/, '')
-      .slice(0, 60);
+  // Alerts carry their metadata as JSON text; a failure keeps only the site, never the link.
+  const sourceOf = a => {
+    try {
+      return JSON.parse(a.metadata ?? 'null')?.source ?? null;
+    } catch {
+      return null;
+    }
+  };
   const meta = g =>
     [
       g.commands.map(c => `/${c}`).join(', '),
@@ -414,13 +313,6 @@
     ]
       .filter(Boolean)
       .join(' · ');
-  function abbr(n) {
-    if (n == null) return '–';
-    if (n < 1000) return String(n);
-    if (n < 1e4) return `${(n / 1e3).toFixed(1).replace(/\.0$/, '')}k`;
-    if (n < 1e6) return `${Math.round(n / 1e3)}k`;
-    return `${(n / 1e6).toFixed(1).replace(/\.0$/, '')}M`;
-  }
   const wait = ms => new Promise(r => setTimeout(r, ms));
 
   let toastTimer;
@@ -485,7 +377,7 @@
 
   function pick(key, scroll = true) {
     muteOpen = false;
-    copied = false;
+    copier.clear();
     navigate('issues', { ...(tab === 'open' ? {} : { tab }), issue: key });
     if (scroll && !wide)
       tick().then(() => document.querySelector('.detail')?.scrollIntoView({ block: 'start' }));
@@ -502,11 +394,6 @@
     tick().then(() =>
       document.querySelector('.issues-list .tr.sel')?.scrollIntoView({ block: 'nearest' })
     );
-  }
-  function copy(text) {
-    navigator.clipboard?.writeText(text);
-    copied = true;
-    setTimeout(() => (copied = false), 1200);
   }
 
   // A click anywhere on a row opens it; the title is the row's keyboard-focusable control.
@@ -690,7 +577,6 @@
       {/snippet}
       {#snippet row(g)}
         {@const tr = trends[g.key]}
-        {@const users = usersOf(g)}
         {#if show.sel}
           <label class="ck">
             <input
@@ -705,6 +591,9 @@
           <span class="l1">
             <button class="ttl ellipsis" data-key={g.key} title={g.title}>{g.title}</button>
             <span class="chip {g.kind}">{KIND_LABEL[g.kind]}</span>
+            {#if g.state === 'open' && isNew(g, now)}
+              <span class="pill sm bad">New</span>
+            {/if}
             {#if BADGE[g.state]}
               <span class="pill sm {BADGE[g.state][0]}">{BADGE[g.state][1]}</span>
             {/if}
@@ -727,11 +616,6 @@
         <span class="num strong" title="{g.count.toLocaleString()} events in the last 7 days"
           >{abbr(g.count)}</span
         >
-        {#if show.users}
-          <span class="num" title={users == null ? '' : `${users.toLocaleString()} users`}>
-            {#if users == null}<span class="skeleton cell-skel"></span>{:else}{abbr(users)}{/if}
-          </span>
-        {/if}
         {#if show.last}
           <span class="num dim" title="Last seen {formatDateTime(g.lastSeen, { seconds: true })}"
             >{formatRelativeTime(g.lastSeen)}</span
@@ -798,9 +682,6 @@
               padLeft={28}
               series={[{ key: 'n', label: 'events', color: 'var(--chart-1)' }]}
             />
-            {#if week.truncated}
-              <div class="note">Only the latest {LIMIT} events per variant are counted.</div>
-            {/if}
           {:else}
             <div class="skeleton chart-skel"></div>
           {/if}
@@ -815,12 +696,6 @@
             <span class="k">Last 24h</span>
             <span class="v"
               >{#if week}{abbr(last24)}{:else}<span class="skeleton v-skel"></span>{/if}</span
-            >
-          </div>
-          <div>
-            <span class="k">Users</span>
-            <span class="v"
-              >{#if week}{abbr(week.users)}{:else}<span class="skeleton v-skel"></span>{/if}</span
             >
           </div>
         </div>
@@ -840,32 +715,14 @@
         {/if}
 
         <section class="sect flush">
-          <div class="sh"><span>Recent requests</span></div>
+          <div class="sh"><span>Recent failures</span></div>
           {#each occ.slice(0, 8) as a (a.id)}
-            {@const o = occOps[a.operation_id]}
+            {@const source = sourceOf(a)}
             <div class="orow">
               <span class="t" title={formatDateTime(a.timestamp, { seconds: true })}
                 >{formatRelativeTime(a.timestamp)}</span
               >
-              {#if a.operation_id}
-                <a
-                  class="mono ellipsis url"
-                  class:dim={!o}
-                  href="#/requests/{a.operation_id}"
-                  title={o?.originalUrl ?? ''}
-                  >{o ? urlLabel(o.originalUrl) : opsLoaded ? 'no longer kept' : '…'}</a
-                >
-              {:else}
-                <span class="mono ellipsis dim">not linked to a request</span>
-              {/if}
-              {#if a.user_id}
-                <a class="user-cell" href="#/users/{a.user_id}" title="user {a.user_id}"
-                  ><Avatar id={a.user_id} size={18} /><span class="id">{shortId(a.user_id)}</span
-                  ></a
-                >
-              {:else}
-                <span></span>
-              {/if}
+              <span class="mono ellipsis" class:dim={!source}>{source ?? 'attachment'}</span>
             </div>
           {:else}
             {#if occLoading}
@@ -883,17 +740,10 @@
       <footer class="foot">
         <button
           class="icon-btn sm"
-          title="Search logs for this issue"
-          aria-label="search logs for this issue"
-          onclick={() => navigate('logs', { search: logSearch(selected), range: '7d' })}
-          ><SquareTerminal size={15} /></button
-        >
-        <button
-          class="icon-btn sm"
-          title={copied ? 'Copied' : 'Copy message'}
+          title={copier.copied ? 'Copied' : 'Copy message'}
           aria-label="copy message"
-          onclick={() => copy(selected.members[0])}
-          >{#if copied}<Check size={15} />{:else}<Copy size={15} />{/if}</button
+          onclick={() => copier.copy(selected.members[0])}
+          >{#if copier.copied}<Check size={15} />{:else}<Copy size={15} />{/if}</button
         >
         <span class="grow"></span>
         {#if selected.state !== 'open'}
@@ -1296,18 +1146,6 @@
     font-variant-numeric: tabular-nums;
     white-space: nowrap;
   }
-  .orow .url {
-    color: var(--text);
-  }
-  .orow .url:hover {
-    color: var(--accent);
-  }
-  .orow .user-cell:hover {
-    text-decoration: none;
-  }
-  .orow .user-cell:hover .id {
-    color: var(--accent);
-  }
   .none-yet {
     padding: 12px 20px;
     font-size: var(--fs-sm);
@@ -1425,9 +1263,6 @@
     }
     .orow {
       grid-template-columns: 56px minmax(0, 1fr) 28px;
-    }
-    .orow .user-cell .id {
-      display: none;
     }
   }
 </style>

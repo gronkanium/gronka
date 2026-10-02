@@ -3,6 +3,7 @@ import fs from 'fs/promises';
 import path from 'path';
 import { createLogger } from '../logger.js';
 import { validateNumericParameter } from './utils.js';
+import { jobSignal } from '../media-file.js';
 
 const logger = createLogger('convert-animated-webp-to-gif');
 
@@ -33,7 +34,7 @@ async function convertAnimatedWebpToGifImpl(inputPath, outputPath, options = {})
       ? null
       : validateNumericParameter(options.width, 'width', 1, 4096);
 
-  logger.info(
+  logger.debug(
     `Starting animated WebP to GIF conversion: ${inputPath} -> ${outputPath}${
       width ? ` (width: ${width})` : ' (native size)'
     }`
@@ -60,9 +61,7 @@ async function convertAnimatedWebpToGifImpl(inputPath, outputPath, options = {})
 
   try {
     const stderr = await new Promise((resolve, reject) => {
-      const child = spawn('convert', args, {
-        timeout: 300000, // 5 minute timeout
-      });
+      const child = spawn('convert', args, { signal: jobSignal(), timeout: 300000 });
 
       let stderrData = '';
       child.stderr.on('data', data => {

@@ -68,7 +68,7 @@ ci.
 ## dependencies
 
 add packages with `bun add <name>` (or `bun add --dev <name>`) and commit `bun.lock`. if
-`bun run check:sync` says the lock file drifted, `bun run fix:deps` repairs it. docker builds use
+`bun run check:sync` says the lock file drifted, `bun install` repairs it. docker builds use
 `--frozen-lockfile` and fail on drift.
 
 ## docs

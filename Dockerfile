@@ -1,13 +1,6 @@
 # Stage 1: Builder - Install dependencies and build application
 FROM oven/bun:1.3-debian AS builder
 
-# Install build tools for native modules
-RUN apt-get update && apt-get install -y \
-    python3 \
-    make \
-    g++ \
-    && rm -rf /var/lib/apt/lists/*
-
 # Set working directory
 WORKDIR /app
 
@@ -73,8 +66,8 @@ COPY --from=builder /app/scripts ./scripts
 COPY --from=builder /app/package.json /app/bun.lock ./
 
 # Writable dirs for the unprivileged user; everything else stays root-owned and read-only to it
-RUN mkdir -p data-prod/gifs data-test/gifs temp logs \
-    && chown -R bun:bun data-prod data-test temp logs
+RUN mkdir -p temp \
+    && chown -R bun:bun temp
 
 # Copy entrypoint script
 COPY scripts/docker-entrypoint.sh /usr/local/bin/

@@ -20,14 +20,10 @@ services:
     environment: &app-env
       - DISCORD_TOKEN=${PROD_DISCORD_TOKEN}
       - CLIENT_ID=${PROD_CLIENT_ID}
-      - CDN_BASE_URL=${CDN_BASE_URL:-}
       - SERVER_PORT=${SERVER_PORT:-3000}
-      - GIF_STORAGE_PATH=${GIF_STORAGE_PATH:-./data-prod/gifs}
       - MAX_GIF_DURATION=${MAX_GIF_DURATION:-30}
       - MAX_VIDEO_SIZE=${MAX_VIDEO_SIZE:-}
       - MAX_IMAGE_SIZE=${MAX_IMAGE_SIZE:-}
-      - GIF_QUALITY=${GIF_QUALITY:-medium}
-      - ADMIN_USER_IDS=${ADMIN_USER_IDS:-}
       - STATS_CACHE_TTL=${STATS_CACHE_TTL:-}
       - COBALT_API_URL=${COBALT_API_URL:-http://cobalt:9000}
       - COBALT_ENABLED=${COBALT_ENABLED:-true}
@@ -36,28 +32,20 @@ services:
       - R2_SECRET_ACCESS_KEY=${R2_SECRET_ACCESS_KEY:-}
       - R2_BUCKET_NAME=${R2_BUCKET_NAME:-}
       - R2_PUBLIC_DOMAIN=${R2_PUBLIC_DOMAIN:-}
-      - R2_TEMP_UPLOADS_ENABLED=${R2_TEMP_UPLOADS_ENABLED:-}
-      - R2_TEMP_UPLOAD_TTL_HOURS=${R2_TEMP_UPLOAD_TTL_HOURS:-}
       - R2_CLEANUP_ENABLED=${R2_CLEANUP_ENABLED:-}
       - R2_CLEANUP_INTERVAL_MS=${R2_CLEANUP_INTERVAL_MS:-}
-      - R2_CLEANUP_LOG_LEVEL=${R2_CLEANUP_LOG_LEVEL:-}
       - RETENTION_ENABLED=${RETENTION_ENABLED:-true}
       - RETENTION_DAYS=${RETENTION_DAYS:-7}
-      - RETENTION_MEDIA_DAYS=${RETENTION_MEDIA_DAYS:-7}
-      - RETENTION_URL_CACHE_DAYS=${RETENTION_URL_CACHE_DAYS:-7}
       - RETENTION_INTERVAL_MS=${RETENTION_INTERVAL_MS:-}
-      - NTFY_TOPIC=${NTFY_TOPIC:-}
       - SUPPORT_INVITE_URL=${SUPPORT_INVITE_URL:-}
       - LOG_LEVEL=${LOG_LEVEL:-}
-      - LOG_DIR=${LOG_DIR:-}
-      - LOG_ROTATION=${LOG_ROTATION:-}
       - SERVER_HOST=${SERVER_HOST:-}
       - WEBUI_PORT=${WEBUI_PORT:-3001}
       - WEBUI_HOST=${WEBUI_HOST:-0.0.0.0}
       - POSTGRES_HOST=${PROD_POSTGRES_HOST:-postgres}
       - POSTGRES_PORT=${PROD_POSTGRES_PORT:-5432}
       - POSTGRES_USER=${PROD_POSTGRES_USER:-gronka}
-      - POSTGRES_PASSWORD=${PROD_POSTGRES_PASSWORD:-gronka}
+      - POSTGRES_PASSWORD=${PROD_POSTGRES_PASSWORD:?run bun run setup, or set PROD_POSTGRES_PASSWORD in .env}
       - POSTGRES_DB=${PROD_POSTGRES_DB:-gronka}
       - DATABASE_URL=${DATABASE_URL:-}
       # Netscape cookies.txt for yt-dlp (age-restricted TikTok etc.); ignored if the file is absent
@@ -66,13 +54,8 @@ services:
       - INSTAGRAM_COOKIES_PATH=${INSTAGRAM_COOKIES_PATH:-/app/cookies.json}
       # Deferred commands go to the worker service; false runs them inside the bot process.
       - MEDIA_WORKERS=${MEDIA_WORKERS:-true}
-      # Workers report operation progress to the webui across the network.
-      - WEBUI_URL=http://gronka:${WEBUI_PORT:-3001}
     volumes: &app-volumes
-      - ./data-test:/app/data-test
-      - ./data-prod:/app/data-prod
       - ./temp:/app/temp
-      - ./logs:/app/logs
       # Optional yt-dlp cookies file (export from a logged-in browser in Netscape format).
       # If it doesn't exist on the host, Docker mounts an empty directory and yt-dlp runs without cookies.
       - ./ytdlp-cookies.txt:/app/ytdlp-cookies.txt
@@ -84,11 +67,11 @@ services:
     networks:
       - gronka-network
     healthcheck:
-      # node:20-slim does not ship procps (pgrep), so probe the stats server instead
+      # probes the stats server over http; the bun image ships a node shim
       test:
         [
           'CMD-SHELL',
-          'node -e "require(''http'').get(''http://127.0.0.1:''+(process.env.SERVER_PORT||3000)+''/api/stats/24h'',r=>process.exit(r.statusCode<500?0:1)).on(''error'',()=>process.exit(1))"',
+          'node -e "require(''http'').get(''http://127.0.0.1:''+(process.env.SERVER_PORT||3000)+''/health'',r=>process.exit(r.statusCode<500?0:1)).on(''error'',()=>process.exit(1))"',
         ]
       interval: 30s
       timeout: 5s
@@ -133,7 +116,7 @@ services:
     restart: unless-stopped
     environment:
       - POSTGRES_USER=${PROD_POSTGRES_USER:-gronka}
-      - POSTGRES_PASSWORD=${PROD_POSTGRES_PASSWORD:-gronka}
+      - POSTGRES_PASSWORD=${PROD_POSTGRES_PASSWORD:?run bun run setup, or set PROD_POSTGRES_PASSWORD in .env}
       - POSTGRES_DB=${PROD_POSTGRES_DB:-gronka}
       - PGDATA=/var/lib/postgresql/data/pgdata
     volumes:
@@ -175,7 +158,7 @@ services:
 
   # watchtower updates the cobalt image automatically
   watchtower:
-    image: ghcr.io/containrrr/watchtower:latest
+    image: ghcr.io/containrrr/watchtower:1.7.1
     restart: unless-stopped
     command: --cleanup --scope cobalt --interval 900 --include-restarting
     environment:
@@ -184,17 +167,6 @@ services:
       - /var/run/docker.sock:/var/run/docker.sock
     networks:
       - gronka-network
-
-  # if needed, use this image for automatically generating poToken & visitor_data
-  # yt-session-generator:
-  #   image: ghcr.io/imputnet/yt-session-generator:webserver
-  #   init: true
-  #   restart: unless-stopped
-  #   container_name: yt-session-generator
-  #   labels:
-  #     - com.centurylinklabs.watchtower.scope=cobalt
-  #   networks:
-  #     - gronka-network
 
 volumes:
   postgres-data:

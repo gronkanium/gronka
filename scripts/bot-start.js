@@ -49,13 +49,9 @@ env.CLIENT_ID = clientId;
 
 // Also map other prefixed vars if they exist
 const prefixMappings = [
-  'ADMIN_USER_IDS',
-  'CDN_BASE_URL',
-  'GIF_STORAGE_PATH',
   'MAX_GIF_DURATION',
   'MAX_VIDEO_SIZE',
   'MAX_IMAGE_SIZE',
-  'GIF_QUALITY',
   'COBALT_API_URL',
   'COBALT_ENABLED',
   'R2_ACCOUNT_ID',
@@ -63,16 +59,10 @@ const prefixMappings = [
   'R2_SECRET_ACCESS_KEY',
   'R2_BUCKET_NAME',
   'R2_PUBLIC_DOMAIN',
-  'R2_TEMP_UPLOADS_ENABLED',
-  'R2_TEMP_UPLOAD_TTL_HOURS',
   'R2_CLEANUP_ENABLED',
   'R2_CLEANUP_INTERVAL_MS',
-  'R2_CLEANUP_LOG_LEVEL',
-  'NTFY_TOPIC',
   'SUPPORT_INVITE_URL',
   'LOG_LEVEL',
-  'LOG_DIR',
-  'LOG_ROTATION',
   'SERVER_PORT',
   'SERVER_HOST',
   'STATS_USERNAME',
@@ -93,6 +83,11 @@ for (const key of prefixMappings) {
   if (env[prefixedKey] !== undefined) {
     env[key] = env[prefixedKey];
   }
+}
+
+if (prefix === 'TEST' && (!env.POSTGRES_DB || env.POSTGRES_DB === 'gronka')) {
+  console.error('error: refusing to start the test bot on database "gronka", set TEST_POSTGRES_DB');
+  process.exit(1);
 }
 
 // For local dev, override COBALT_API_URL to use localhost

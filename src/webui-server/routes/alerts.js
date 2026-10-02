@@ -74,8 +74,7 @@ router.get('/api/alerts', async (req, res) => {
       offset: parseInt(offset, 10),
     };
 
-    const alerts = await getAlerts(options);
-    const total = await getAlertsCount(options);
+    const [alerts, total] = await Promise.all([getAlerts(options), getAlertsCount(options)]);
 
     res.json({
       alerts,

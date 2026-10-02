@@ -4,17 +4,11 @@ import rateLimit from 'express-rate-limit';
 import { createLogger } from '../utils/logger.js';
 import { securityHeaders } from './middleware/security.js';
 import { staticMiddleware, publicPath } from './middleware/static.js';
-import proxyRoutes from './routes/proxy.js';
-import operationsRoutes, { setSseClients } from './routes/operations.js';
-import usersRoutes from './routes/users.js';
-import logsRoutes from './routes/logs.js';
-import moderationRoutes from './routes/moderation.js';
-import bansRoutes from './routes/bans.js';
+import statsRoutes from './routes/stats.js';
 import alertsRoutes from './routes/alerts.js';
 import settingsRoutes from './routes/settings.js';
 import botStatusRoutes from './routes/bot-status.js';
 import systemRoutes from './routes/system.js';
-import { handleSseConnection } from './sse/handlers.js';
 
 const logger = createLogger('webui');
 
@@ -27,8 +21,7 @@ const fileServerLimiter = rateLimit({
   legacyHeaders: false, // Disable the `X-RateLimit-*` headers
 });
 
-// Rate limiter for API routes - all handlers hit the database, so every request has a cost.
-// Generous limit: the dashboard gets live data over SSE after the initial load.
+// Every API handler hits the database, so every request has a cost.
 const apiLimiter = rateLimit({
   windowMs: 60 * 1000, // 1 minute
   max: 300, // Limit each IP to 300 API requests per minute
@@ -37,7 +30,7 @@ const apiLimiter = rateLimit({
   legacyHeaders: false, // Disable the `X-RateLimit-*` headers
 });
 
-export function createApp(sseClients) {
+export function createApp() {
   const app = express();
 
   // Security headers middleware
@@ -54,27 +47,12 @@ export function createApp(sseClients) {
   // Rate limit all API routes
   app.use('/api', apiLimiter);
 
-  // SSE stream - live updates for the dashboard
-  app.get('/api/events', (req, res) => {
-    handleSseConnection(req, res, sseClients);
-  });
-
   // Register routes
-  app.use(proxyRoutes);
-  app.use(operationsRoutes);
-  app.use(usersRoutes);
-  app.use(logsRoutes);
-  app.use(moderationRoutes);
-  app.use(bansRoutes);
+  app.use(statsRoutes);
   app.use(alertsRoutes);
   app.use(settingsRoutes);
   app.use(botStatusRoutes);
   app.use(systemRoutes);
-
-  // Set SSE clients in operations routes for broadcasting
-  if (sseClients) {
-    setSseClients(sseClients);
-  }
 
   // SPA fallback - serve index.html for all non-API, non-asset routes
   // This must be placed AFTER all API routes so they are matched first

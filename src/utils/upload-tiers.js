@@ -13,12 +13,7 @@ export const DEFAULT_TTL_TIERS = '100:72,250:24,500:8,1024:2';
 
 const MB = 1024 * 1024;
 
-/**
- * Parse a tier string into ascending [{ maxBytes, hours }]. Returns null on any malformed
- * input so callers can fall back to DEFAULT_TTL_TIERS instead of trusting garbage.
- * @param {string} str
- * @returns {Array<{maxBytes:number, hours:number}>|null}
- */
+// Parse a tier string into ascending [{ maxBytes, hours }]
 export function parseTiers(str) {
   if (typeof str !== 'string' || str.trim() === '') {
     return null;
@@ -40,13 +35,7 @@ export function parseTiers(str) {
   return tiers;
 }
 
-/**
- * TTL in hours for a file of the given size under the given tier string.
- * Falls back to the default curve when tiersStr is unusable.
- * @param {number} bytes
- * @param {string} [tiersStr]
- * @returns {number} whole hours
- */
+// TTL in hours for a file of the given size under the given tier string
 export function ttlHoursForSize(bytes, tiersStr = DEFAULT_TTL_TIERS) {
   const tiers = parseTiers(tiersStr) || parseTiers(DEFAULT_TTL_TIERS);
   for (const tier of tiers) {

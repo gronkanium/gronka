@@ -56,7 +56,7 @@
             <a href="#responses">responses</a>
             <a href="#padded-json">padded json</a>
             <a href="#errors">errors</a>
-            <a href="#accounts">accounts</a>
+            <a href="#keys">keys</a>
             <a href="#limits">limits</a>
             <a href="#privacy">privacy</a>
             <a href="#reference">reference</a>
@@ -70,7 +70,7 @@
             <a href="#responses">responses</a>
             <a href="#padded-json">padded json</a>
             <a href="#errors">errors</a>
-            <a href="#accounts">accounts</a>
+            <a href="#keys">keys</a>
             <a href="#limits">limits</a>
             <a href="#privacy">privacy</a>
             <a href="#reference">reference</a>
@@ -89,8 +89,8 @@
         <section id="auth" aria-labelledby="auth-title">
           <h2 id="auth-title">auth</h2>
           <p>
-            send your api key as <code>Authorization: Bearer &lt;key&gt;</code>. make keys on the
-            account page.
+            send your api key as <code>Authorization: Bearer &lt;key&gt;</code>. get one on the
+            <a href="/key/">api key page</a>.
           </p>
         </section>
 
@@ -208,27 +208,15 @@
             <li><code>DOWNLOAD_FAILED</code><span>the download did not finish.</span></li>
             <li><code>FORBIDDEN</code><span>the request origin is not allowed.</span></li>
             <li><code>INTERNAL</code><span>something broke on the server.</span></li>
-            <li><code>KEY_LIMIT</code><span>the account already has 10 keys.</span></li>
             <li>
               <code>NETWORK_ERROR</code><span>the source refused or could not be reached.</span>
             </li>
-            <li><code>NOT_FOUND</code><span>the account, key or passkey was not found.</span></li>
-            <li><code>PASSKEY_INVALID</code><span>the passkey could not be checked.</span></li>
-            <li><code>PASSKEY_LIMIT</code><span>the account already has 10 passkeys.</span></li>
+            <li><code>NOT_FOUND</code><span>no such route.</span></li>
             <li>
               <code>RATE_LIMITED</code
               ><span>too many requests. retry after <code>retryAfter</code> seconds.</span>
             </li>
-            <li>
-              <code>UNAUTHORIZED</code><span>the account or api key is missing or invalid.</span>
-            </li>
-            <li><code>TOTP_INVALID</code><span>the 2fa or recovery code is wrong.</span></li>
-            <li>
-              <code>TOTP_LOCKED</code><span>too many wrong codes; wait, or use a passkey.</span>
-            </li>
-            <li><code>TOTP_OFF</code><span>2fa is not on for this account.</span></li>
-            <li><code>TOTP_ON</code><span>2fa is already on.</span></li>
-            <li><code>TOTP_REQUIRED</code><span>this account needs a 2fa code.</span></li>
+            <li><code>UNAUTHORIZED</code><span>the api key is missing or invalid.</span></li>
             <li><code>VALIDATION_ERROR</code><span>the media or request hit a limit.</span></li>
             <li><code>VERIFICATION_FAILED</code><span>the turnstile check failed.</span></li>
             <li>
@@ -237,41 +225,21 @@
           </ul>
         </section>
 
-        <section id="accounts" aria-labelledby="accounts-title">
-          <h2 id="accounts-title">accounts</h2>
+        <section id="keys" aria-labelledby="keys-title">
+          <h2 id="keys-title">keys</h2>
           <p>
-            an account is a number that holds api keys. add a passkey or 2fa to help protect it:
-          </p>
-          <ul>
-            <li>
-              <strong>passkey</strong>: log in with your phone or laptop, no number needed. we only
-              keep its public key.
-            </li>
-            <li>
-              <strong>2fa</strong>: an authenticator app code on top of the number. turning it on
-              gives 10 recovery codes, each works once, in the same <code>totp</code> field as a
-              code.
-            </li>
-          </ul>
-          <p>
-            wrong codes lock 2fa for 15 minutes after every 5, and for good after 100 in a row. a
-            passkey login clears the lock.
-          </p>
-          <p>
-            with 2fa on, six actions also need a current code (or a recovery code) as
-            <code>code</code> in the json body: <code>POST /v1/account/rotate</code>,
-            <code>DELETE /v1/account</code>, <code>POST /v1/passkeys/register/options</code>,
-            <code>DELETE /v1/passkeys/{id}</code>, <code>DELETE /v1/totp</code> and
-            <code>POST /v1/totp/recovery</code>. a new number also signs out every other session.
+            there are no accounts. <code>POST /v1/keys</code> (behind a turnstile check) returns a
+            new key once; gronka keeps only a keyed hash of it, so a lost key can't be recovered,
+            only replaced. <code>DELETE /v1/keys</code> with the key as its bearer token revokes it.
           </p>
         </section>
 
         <section id="limits" aria-labelledby="limits-title">
           <h2 id="limits-title">limits</h2>
           <p>
-            50 downloads per 10 minutes per ip, or per account with api keys (all keys share the
-            account limit). api key checks are capped at 30 per 10 minutes per ip. files fetched by
-            gronka (lane r2) have a 400 mb cap; images have a 50 mb cap. a
+            50 downloads per 10 minutes per ip, or per key with an api key. api key checks are
+            capped at 30 per 10 minutes per ip. files fetched by gronka (lane r2) have a 400 mb cap;
+            images have a 50 mb cap. a
             <code>RATE_LIMITED</code> <code>429</code> includes <code>error.retryAfter</code> in
             seconds and the same value in a <code>Retry-After</code> header.
           </p>
@@ -294,74 +262,12 @@
               ><span class="endpoint-note">get files from a link</span>
             </li>
             <li>
-              <span class="method">POST</span><code class="route-path">/v1/account</code
-              ><span class="endpoint-note">create an account</span>
-            </li>
-            <li>
-              <span class="method">GET</span><code class="route-path">/v1/account</code
-              ><span class="endpoint-note">get account, keys and passkeys</span>
-            </li>
-            <li>
-              <span class="method">DELETE</span><code class="route-path">/v1/account</code
-              ><span class="endpoint-note">delete the account</span>
-            </li>
-            <li>
-              <span class="method">POST</span><code class="route-path">/v1/account/rotate</code
-              ><span class="endpoint-note">replace account number</span>
-            </li>
-            <li>
-              <span class="method">POST</span><code class="route-path">/v1/session</code
-              ><span class="endpoint-note">start a session</span>
-            </li>
-            <li>
-              <span class="method">DELETE</span><code class="route-path">/v1/session</code
-              ><span class="endpoint-note">end a session</span>
-            </li>
-            <li>
               <span class="method">POST</span><code class="route-path">/v1/keys</code
               ><span class="endpoint-note">create an api key</span>
             </li>
             <li>
-              <span class="method">DELETE</span><code class="route-path">/v1/keys/{id}</code
+              <span class="method">DELETE</span><code class="route-path">/v1/keys</code
               ><span class="endpoint-note">revoke an api key</span>
-            </li>
-            <li>
-              <span class="method">POST</span><code class="route-path">/v1/totp/setup</code
-              ><span class="endpoint-note">start turning on 2fa</span>
-            </li>
-            <li>
-              <span class="method">POST</span><code class="route-path">/v1/totp/enable</code
-              ><span class="endpoint-note">turn on 2fa, get recovery codes</span>
-            </li>
-            <li>
-              <span class="method">DELETE</span><code class="route-path">/v1/totp</code
-              ><span class="endpoint-note">turn off 2fa</span>
-            </li>
-            <li>
-              <span class="method">POST</span><code class="route-path">/v1/totp/recovery</code
-              ><span class="endpoint-note">replace recovery codes</span>
-            </li>
-            <li>
-              <span class="method">POST</span
-              ><code class="route-path">/v1/passkeys/register/options</code
-              ><span class="endpoint-note">start adding a passkey</span>
-            </li>
-            <li>
-              <span class="method">POST</span><code class="route-path">/v1/passkeys/register</code
-              ><span class="endpoint-note">finish adding a passkey</span>
-            </li>
-            <li>
-              <span class="method">POST</span
-              ><code class="route-path">/v1/passkeys/login/options</code
-              ><span class="endpoint-note">start a passkey login</span>
-            </li>
-            <li>
-              <span class="method">POST</span><code class="route-path">/v1/passkeys/login</code
-              ><span class="endpoint-note">log in with a passkey</span>
-            </li>
-            <li>
-              <span class="method">DELETE</span><code class="route-path">/v1/passkeys/{id}</code
-              ><span class="endpoint-note">remove a passkey</span>
             </li>
           </ul>
         </section>

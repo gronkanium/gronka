@@ -3,10 +3,10 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>account / gronka</title>
+    <title>api key / gronka</title>
     <meta
       name="description"
-      content="a gronka account holds api keys. no email or username. sign in with your number or a passkey."
+      content="get a gronka api key. no account, no email. only a keyed hash of the key is stored."
     />
     <meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)" />
     <meta name="theme-color" content="#000000" media="(prefers-color-scheme: dark)" />
@@ -41,9 +41,9 @@
       crossorigin
     />
     <link rel="stylesheet" href="/s.css" />
-    <link rel="stylesheet" href="/account/account.css" />
+    <link rel="stylesheet" href="/key/key.css" />
     <link rel="modulepreload" href="/common.js" />
-    <script type="module" src="/account/account.js"></script>
+    <script type="module" src="/key/key.js"></script>
   </head>
   <body>
     <svg width="0" height="0" class="vh" aria-hidden="true">
@@ -56,13 +56,13 @@
       ><img src="/favicon.svg" alt="" width="28" height="28" /><span>gronka</span></a
     >
     <main id="view" aria-live="polite">
-      <h1>account</h1>
+      <h1>api key</h1>
       <p class="note">loading...</p>
     </main>
     <div id="ts-slot"></div>
     <footer class="foot">
       <a href="/">download</a><a href="/docs/">api docs</a
-      ><a href="/account/" aria-current="page">account</a><a href="/terms/">terms</a
+      ><a href="/key/" aria-current="page">api key</a><a href="/terms/">terms</a
       ><a href="/privacy/">privacy</a>
       <span class="tm">gronka™ © 2025-2026 gronkanium</span>
     </footer>

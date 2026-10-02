@@ -3,8 +3,7 @@ import { pruneTimeSeriesRows } from './database/retention-pg.js';
 
 const logger = createLogger('retention');
 
-// Nothing is kept indefinitely: logs, operation records and alerts go after RETENTION_DAYS.
-// No media and no per-user history is stored, so there is nothing else to prune.
+// Failure records (alerts) go after RETENTION_DAYS; nothing else is stored.
 
 export async function runRetention({ days }) {
   const started = Date.now();

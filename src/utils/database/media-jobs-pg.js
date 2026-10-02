@@ -175,7 +175,8 @@ export async function reportPresence({ role, running = 0 }) {
     ON CONFLICT (id) DO UPDATE SET seen_at = EXCLUDED.seen_at, rss = EXCLUDED.rss,
       cpu = EXCLUDED.cpu, running = EXCLUDED.running, version = EXCLUDED.version
   `;
-  await sql`DELETE FROM media_workers WHERE seen_at < ${now - 24 * 3600e3}`;
+  // A process that died with the database (deploy, crash) never clears its own row.
+  await sql`DELETE FROM media_workers WHERE seen_at < ${now - 30 * PRESENCE_MS}`;
 }
 
 export async function clearPresence() {

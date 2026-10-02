@@ -93,7 +93,6 @@ if (!mocksSupported) {
 
       const result = await downloadWithYtdlp(
         'https://youtu.be/retry-success',
-        false,
         Infinity,
         null,
         Infinity, // skip the duration pre-check so it doesn't spawn an extra yt-dlp call
@@ -111,15 +110,7 @@ if (!mocksSupported) {
 
       await assert.rejects(
         () =>
-          downloadWithYtdlp(
-            'https://youtu.be/rate-limited',
-            false,
-            Infinity,
-            null,
-            Infinity,
-            null,
-            null
-          ),
+          downloadWithYtdlp('https://youtu.be/rate-limited', Infinity, null, Infinity, null, null),
         error => error.name === 'YtdlpRateLimitError'
       );
 
@@ -132,15 +123,7 @@ if (!mocksSupported) {
 
       await assert.rejects(
         () =>
-          downloadWithYtdlp(
-            'https://youtu.be/still-failing',
-            false,
-            Infinity,
-            null,
-            Infinity,
-            null,
-            null
-          ),
+          downloadWithYtdlp('https://youtu.be/still-failing', Infinity, null, Infinity, null, null),
         error =>
           error.message ===
           'could not download this content. it may be deleted, private, age-restricted, or unsupported.'
@@ -173,7 +156,6 @@ if (!mocksSupported) {
         () =>
           downloadWithYtdlp(
             'https://www.instagram.com/p/DbpZVohPsMX/',
-            false,
             Infinity,
             null,
             Infinity,
@@ -190,15 +172,7 @@ if (!mocksSupported) {
 
       await assert.rejects(
         () =>
-          downloadWithYtdlp(
-            'https://youtu.be/no-formats',
-            false,
-            Infinity,
-            null,
-            Infinity,
-            null,
-            null
-          ),
+          downloadWithYtdlp('https://youtu.be/no-formats', Infinity, null, Infinity, null, null),
         error => error.message === 'no downloadable video formats found'
       );
     });
@@ -241,7 +215,7 @@ if (!mocksSupported) {
         spawnBehaviors = [failsWith(stderr)];
 
         await assert.rejects(
-          () => downloadWithYtdlp(url, false, Infinity, null, Infinity, null, null),
+          () => downloadWithYtdlp(url, Infinity, null, Infinity, null, null),
           error => error.message === expected
         );
       });
@@ -253,7 +227,6 @@ if (!mocksSupported) {
 
       const result = await downloadWithYtdlp(
         'https://youtu.be/signin',
-        false,
         Infinity,
         null,
         Infinity,
@@ -284,7 +257,6 @@ if (!mocksSupported) {
 
       const result = await downloadWithYtdlp(
         'https://gif.fxtwitter.com/tweet_video/HNOvuGAXoAAAIQO.webp',
-        false,
         Infinity,
         null,
         3600,
@@ -302,13 +274,12 @@ if (!mocksSupported) {
       assert.ok(result.size > 0, 'the download should still produce a file');
     });
 
-    test('the non-admin format selector accepts formats that report no height', async () => {
+    test('the format selector accepts formats that report no height', async () => {
       spawnCallLog = [];
       spawnBehaviors = [unknownDuration, success];
 
       await downloadWithYtdlp(
         'https://gif.fxtwitter.com/tweet_video/HNOvuGAXoAAAIQO.webp',
-        false,
         Infinity,
         null,
         3600,
@@ -318,10 +289,7 @@ if (!mocksSupported) {
 
       const downloadArgs = spawnCallLog[1].args;
       const format = downloadArgs[downloadArgs.indexOf('-f') + 1];
-      assert.ok(
-        !/height<=\d/.test(format),
-        `non-admin format selector must use height<=?N, got: ${format}`
-      );
+      assert.ok(!/height<=\d/.test(format), `format selector must use height<=?N, got: ${format}`);
       assert.ok(format.includes('height<=?1080'), `expected a 1080p cap, got: ${format}`);
     });
   });

@@ -162,10 +162,7 @@ export async function tagAudio(file, track) {
   return fromPath(output, { contentType: 'audio/mpeg', filename: `${name}.mp3`, audioReady: true });
 }
 
-export async function soundcloudViaYoutube(
-  url,
-  { adminUser = false, maxSize = Infinity, track = null } = {}
-) {
+export async function soundcloudViaYoutube(url, { maxSize = Infinity, track = null } = {}) {
   track ??= await soundcloudTrack(url);
   const match = pickMatch(track, await youtubeCandidates(track));
   if (!match) {
@@ -177,7 +174,6 @@ export async function soundcloudViaYoutube(
   logger.debug(`DRM SoundCloud track matched to YouTube ${match.id} (${match.channel})`);
   const audio = await downloadWithYtdlp(
     `https://www.youtube.com/watch?v=${match.id}`,
-    adminUser,
     maxSize,
     'bestaudio[ext=m4a]/bestaudio',
     Infinity

@@ -14,7 +14,7 @@ const reply = (extra = {}) => ({
   ...extra,
 });
 const enqueue = (extra = {}) =>
-  queue.enqueueJob({ kind: 'download', args: { url: 'x' }, reply: reply(extra), userId: 'u1' });
+  queue.enqueueJob({ kind: 'download', args: { url: 'x' }, reply: reply(extra) });
 const row = async id => (await sql`SELECT * FROM media_jobs WHERE id = ${id}`)[0];
 const goStale = id =>
   sql`UPDATE media_jobs SET heartbeat_at = ${Date.now() - queue.STALE_MS - 1000} WHERE id = ${id}`;
@@ -43,14 +43,12 @@ describe('media job queue', () => {
     assert.strictEqual(String((await queue.claimJob('w1')).id), String(first));
   });
 
-  test('finishing drops the token and only the owner can finish', async () => {
+  test('finishing deletes the job and only the owner can finish', async () => {
     await enqueue();
     const job = await queue.claimJob('w1');
-    assert.strictEqual(await queue.finishJob(job, { ok: true }, 'w2'), false);
-    assert.strictEqual(await queue.finishJob(job, { ok: true, success: true }, 'w1'), true);
-    const done = await row(job.id);
-    assert.strictEqual(done.status, 'done');
-    assert.strictEqual(done.reply.token, undefined);
+    assert.strictEqual(await queue.finishJob(job, 'w2'), false);
+    assert.strictEqual(await queue.finishJob(job, 'w1'), true);
+    assert.strictEqual(await row(job.id), undefined);
   });
 
   test('a stale running job is requeued and a live one is left alone', async () => {
@@ -85,8 +83,8 @@ describe('media job queue', () => {
     assert.strictEqual(failed.length, 1);
     assert.strictEqual(failed[0].reply.token, 't');
     assert.strictEqual((await row(job.id)).status, 'failed');
-    await queue.forgetToken(job.id);
-    assert.strictEqual((await row(job.id)).reply.token, undefined);
+    await queue.deleteJob(job.id);
+    assert.strictEqual(await row(job.id), undefined);
   });
 
   test('a job whose reply token is about to expire is failed, not retried', async () => {

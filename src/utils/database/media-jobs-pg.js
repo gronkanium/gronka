@@ -5,7 +5,6 @@ import { ensurePostgresInitialized } from './init.js';
 import { getBooleanSetting } from './settings-pg.js';
 
 export const JOB_CHANNEL = 'media_jobs';
-export const DONE_CHANNEL = 'media_jobs_done';
 export const HEARTBEAT_MS = 10_000;
 export const STALE_MS = 45_000;
 export const MAX_ATTEMPTS = 3;
@@ -21,12 +20,12 @@ async function db() {
   return getPostgresConnection();
 }
 
-export async function enqueueJob({ kind, args, reply, userId }) {
+export async function enqueueJob({ kind, args, reply }) {
   const sql = await db();
   const now = Date.now();
   const [row] = await sql`
-    INSERT INTO media_jobs (kind, args, reply, user_id, created_at, timestamp)
-    VALUES (${kind}, ${sql.json(args)}, ${sql.json(reply)}, ${userId}, ${now}, ${now})
+    INSERT INTO media_jobs (kind, args, reply, created_at, timestamp)
+    VALUES (${kind}, ${sql.json(args)}, ${sql.json(reply)}, ${now}, ${now})
     RETURNING id
   `;
   await sql`SELECT pg_notify(${JOB_CHANNEL}, ${String(row.id)})`;
@@ -66,20 +65,13 @@ export async function setJobOperation(id, operationId) {
   await sql`UPDATE media_jobs SET operation_id = ${operationId} WHERE id = ${id}`;
 }
 
-// ok: the job ran to the end; success: the command delivered (what starts a user's cooldown).
-// The token is only needed while the job can still reply, so it never outlives the job.
-export async function finishJob(job, { ok, success = false, error = null }, worker = WORKER_ID) {
+// A finished job leaves nothing behind: the row, its args and its reply token go together.
+export async function finishJob(job, worker = WORKER_ID) {
   const sql = await db();
   const rows = await sql`
-    UPDATE media_jobs
-    SET status = ${ok ? 'done' : 'failed'}, error = ${error}, timestamp = ${Date.now()},
-        reply = reply - 'token'
-    WHERE id = ${job.id} AND worker = ${worker} AND status = 'running'
+    DELETE FROM media_jobs WHERE id = ${job.id} AND worker = ${worker} AND status = 'running'
     RETURNING id
   `;
-  if (rows.length) {
-    await sql`SELECT pg_notify(${DONE_CHANNEL}, ${JSON.stringify({ userId: job.user_id, success })})`;
-  }
   return rows.length > 0;
 }
 
@@ -125,9 +117,9 @@ export async function reclaimStaleJobs(now = Date.now()) {
   return failed;
 }
 
-export async function forgetToken(id) {
+export async function deleteJob(id) {
   const sql = await db();
-  await sql`UPDATE media_jobs SET reply = reply - 'token' WHERE id = ${id}`;
+  await sql`DELETE FROM media_jobs WHERE id = ${id}`;
 }
 
 export async function listen(channel, fn) {
@@ -136,65 +128,31 @@ export async function listen(channel, fn) {
 }
 
 // Read-only view for the webui. Never selects `reply`: it holds the interaction token.
-export async function jobsOverview({ since = Date.now() - 24 * 3600e3, limit = 25 } = {}) {
+// Read-only view for the webui. Never selects `reply` (the interaction token) or `args`.
+export async function jobsOverview({ limit = 25 } = {}) {
   const sql = await db();
-  const [paused, processes, counts, recent, workers] = await Promise.all([
+  const [paused, processes, jobs] = await Promise.all([
     getBooleanSetting(PAUSE_KEY),
     presence(),
     sql`
-      SELECT status, COUNT(*)::int AS count, COUNT(*) FILTER (WHERE attempts > 1)::int AS retried
-      FROM media_jobs WHERE status IN ('queued', 'running') OR timestamp >= ${since}
-      GROUP BY status
-    `,
-    sql`
-      SELECT id, kind, status, attempts, worker, error, operation_id, user_id,
-             args->>'url' AS url, (args ? 'attachment') AS attachment,
-             created_at, timestamp, heartbeat_at
+      SELECT id, kind, status, attempts, worker, created_at, timestamp, heartbeat_at
       FROM media_jobs ORDER BY id DESC LIMIT ${limit}
     `,
-    sql`
-      SELECT worker,
-             MAX(GREATEST(timestamp, COALESCE(heartbeat_at, 0))) AS last_seen,
-             COUNT(*) FILTER (WHERE status = 'done')::int AS done,
-             COUNT(*) FILTER (WHERE status = 'failed')::int AS failed,
-             MAX(id) FILTER (WHERE status = 'running') AS running_job
-      FROM media_jobs WHERE worker IS NOT NULL AND timestamp >= ${since}
-      GROUP BY worker ORDER BY worker
-    `,
   ]);
-  const num = row => ({
+  const recent = jobs.map(row => ({
     ...row,
+    id: Number(row.id),
     created_at: Number(row.created_at),
     timestamp: Number(row.timestamp),
     heartbeat_at: row.heartbeat_at == null ? null : Number(row.heartbeat_at),
-    id: Number(row.id),
-  });
+  }));
+  const count = status => recent.filter(job => job.status === status).length;
   return {
     paused,
     processes,
-    counts: Object.fromEntries(counts.map(c => [c.status, { count: c.count, retried: c.retried }])),
-    recent: recent.map(num),
-    workers: workers.map(w => ({
-      ...w,
-      last_seen: Number(w.last_seen),
-      running_job: w.running_job == null ? null : Number(w.running_job),
-    })),
+    counts: { queued: count('queued'), running: count('running') },
+    recent,
   };
-}
-
-export async function jobsForOperation(operationId) {
-  const sql = await db();
-  const rows = await sql`
-    SELECT id, kind, status, attempts, worker, error, created_at, timestamp, heartbeat_at
-    FROM media_jobs WHERE operation_id = ${operationId} ORDER BY id
-  `;
-  return rows.map(r => ({
-    ...r,
-    id: Number(r.id),
-    created_at: Number(r.created_at),
-    timestamp: Number(r.timestamp),
-    heartbeat_at: r.heartbeat_at == null ? null : Number(r.heartbeat_at),
-  }));
 }
 
 // Presence: every bot and worker process reports in, so the webui can tell live, idle and dead apart.

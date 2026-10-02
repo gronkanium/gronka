@@ -8,21 +8,13 @@ export async function insertAlert(alert) {
   const sql = getPostgresConnection();
 
   const timestamp = Date.now();
-  const {
-    severity,
-    component,
-    title,
-    message,
-    operationId = null,
-    userId = null,
-    metadata = null,
-  } = alert;
+  const { severity, component, title, message, metadata = null } = alert;
 
   const metadataStr = metadata ? JSON.stringify(metadata) : null;
 
   const result = await sql`
-    INSERT INTO alerts (timestamp, severity, component, title, message, operation_id, user_id, metadata)
-    VALUES (${timestamp}, ${severity}, ${component}, ${title}, ${message}, ${operationId}, ${userId}, ${metadataStr})
+    INSERT INTO alerts (timestamp, severity, component, title, message, metadata)
+    VALUES (${timestamp}, ${severity}, ${component}, ${title}, ${message}, ${metadataStr})
     RETURNING *
   `;
 
@@ -39,10 +31,8 @@ export async function insertAlert(alert) {
 // fields worth filtering on have to be dug back out of it.
 const COMMAND_EXPR = "metadata::jsonb->>'command'";
 const REASON_EXPR = "NULLIF(metadata::jsonb->>'error', '')";
-// What the bot recorded about the failure: the error class, or an early refusal's reason code.
-const ERROR_CLASS_EXPR = `SELECT COALESCE(NULLIF(ol.metadata::jsonb->>'errorName', ''),
-    NULLIF(ol.metadata::jsonb->>'errorType', ''))
-  FROM operation_logs ol WHERE ol.operation_id = alerts.operation_id AND ol.step = 'error' LIMIT 1`;
+// The error class, or an early refusal's reason code.
+const ERROR_CLASS_EXPR = "NULLIF(metadata::jsonb->>'errorClass', '')";
 
 // Sentinel for failures logged without an error string, a real bucket, not an absence.
 export const UNKNOWN_REASON = '__no_reason__';
@@ -130,9 +120,8 @@ export async function getAlertSummary(options = {}) {
             MAX(timestamp) AS last_seen,
             MIN(timestamp) AS first_seen,
             ARRAY_AGG(timestamp) AS times,
-            ARRAY_REMOVE(ARRAY_AGG(DISTINCT user_id), NULL) AS user_ids,
             ARRAY_REMOVE(ARRAY_AGG(DISTINCT ${COMMAND_EXPR}), NULL) AS commands,
-            ARRAY_REMOVE(ARRAY_AGG(DISTINCT (${ERROR_CLASS_EXPR})), NULL) AS classes
+            ARRAY_REMOVE(ARRAY_AGG(DISTINCT ${ERROR_CLASS_EXPR}), NULL) AS classes
      FROM alerts ${clause} AND severity = 'error'
      GROUP BY 1
      ORDER BY 2 DESC
@@ -173,7 +162,6 @@ export async function getAlertSummary(options = {}) {
     lastSeen: Number(row.last_seen),
     firstSeen: Number(row.first_seen),
     times: row.times.map(Number),
-    userIds: row.user_ids,
   }));
 
   return summary;

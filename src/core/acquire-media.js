@@ -46,12 +46,12 @@ const MAX_REDDIT_GALLERY_SLIDES = 10;
 
 // Each slide carries candidates, best first: the unsigned original, then a signed preview,
 // because the original 404s for crossposts.
-async function downloadRedditSlides(images, adminUser) {
+async function downloadRedditSlides(images) {
   let lastError;
   const downloadSlide = async candidates => {
     for (const candidate of candidates) {
       try {
-        return await downloadFileFromUrl(candidate, adminUser);
+        return await downloadFileFromUrl(candidate);
       } catch (candidateError) {
         lastError = candidateError;
       }
@@ -139,7 +139,6 @@ async function directMediaUrls(url, shouldServe = null, keep = () => {}) {
 export async function acquireMedia(
   url,
   {
-    adminUser = false,
     startTime = null,
     duration = null,
     galleryOptions = {},
@@ -153,7 +152,7 @@ export async function acquireMedia(
   if (await isPrivateHost(url)) {
     throw new ValidationError(BLOCKED_DESTINATION_MESSAGE);
   }
-  const maxSize = adminUser ? Infinity : await getMaxVideoSize();
+  const maxSize = await getMaxVideoSize();
   const trimming = startTime !== null || duration !== null;
   let cobaltResponse = null;
   const keep = response => (cobaltResponse = response);
@@ -275,8 +274,7 @@ export async function acquireMedia(
     }
   }
 
-  const ytdlpMaxDuration = async () =>
-    trimming || adminUser ? Infinity : await getMaxVideoDuration();
+  const ytdlpMaxDuration = async () => (trimming ? Infinity : await getMaxVideoDuration());
   const extractors = [
     [
       'ytdlp',
@@ -285,9 +283,8 @@ export async function acquireMedia(
       async () =>
         downloadWithYtdlp(
           url,
-          adminUser,
           maxSize,
-          adminUser ? null : YTDLP_QUALITY,
+          YTDLP_QUALITY,
           await ytdlpMaxDuration(),
           startTime,
           duration
@@ -297,20 +294,20 @@ export async function acquireMedia(
       'gallery-dl',
       galleryDlSite && GALLERY_DL_ENABLED,
       `${galleryDlSite} via gallery-dl`,
-      () => downloadWithGalleryDl(url, adminUser, maxSize, galleryOptions),
+      () => downloadWithGalleryDl(url, maxSize, galleryOptions),
     ],
-    ['hentaigifz', isHentaiGifz, 'hentaigifz', () => downloadFromHentaiGifz(url, adminUser)],
-    ['booru', isBooru, 'booru', () => downloadFromBooru(url, adminUser)],
-    ['pinterest', isPinterest, 'Pinterest', () => downloadFromPinterest(url, adminUser)],
-    ['klipy', isKlipy, 'Klipy', () => downloadFromKlipy(url, adminUser)],
-    ['instagram-story', isIgStory, 'Instagram story', () => downloadFromInstagram(url, adminUser)],
+    ['hentaigifz', isHentaiGifz, 'hentaigifz', () => downloadFromHentaiGifz(url)],
+    ['booru', isBooru, 'booru', () => downloadFromBooru(url)],
+    ['pinterest', isPinterest, 'Pinterest', () => downloadFromPinterest(url)],
+    ['klipy', isKlipy, 'Klipy', () => downloadFromKlipy(url)],
+    ['instagram-story', isIgStory, 'Instagram story', () => downloadFromInstagram(url)],
     [
       'direct',
       isDirectMedia,
       'direct media link',
-      () => downloadDirectMedia(url, adminUser, client, { userAgent: booruCdnUserAgent(url) }),
+      () => downloadDirectMedia(url, client, { userAgent: booruCdnUserAgent(url) }),
     ],
-    ['reddit', useReddit, 'Reddit', () => downloadRedditSlides(redditImages, adminUser)],
+    ['reddit', useReddit, 'Reddit', () => downloadRedditSlides(redditImages)],
   ];
   let [downloadMethod, , sourceLabel, extract] = extractors.find(([, applies]) => applies) ?? [
     'cobalt',
@@ -321,7 +318,7 @@ export async function acquireMedia(
   logger.debug(`Downloading from ${sourceLabel}: ${url}`);
   logStep('download_start', 'running', {
     message: `Starting download from ${sourceLabel}`,
-    metadata: { url, maxSize: adminUser ? 'unlimited' : maxSize },
+    metadata: { url, maxSize },
   });
 
   // Started early: it takes ~3 s and decides both the DRM route and the tags.
@@ -374,22 +371,18 @@ export async function acquireMedia(
     try {
       // Concurrency is capped inside cobalt.js. The URL cache was already consulted
       // above (and deliberately skipped when trimming), so there is no second check here.
-      fileData = await downloadFromSocialMedia(
-        COBALT_API_URL,
-        url,
-        adminUser,
-        maxSize,
-        cobaltResponse
-      ).catch(async cobaltError => {
-        if (!useInstagram) throw cobaltError;
-        logger.warn(`Cobalt failed for Instagram, trying the session: ${cobaltError.message}`);
-        try {
-          return await downloadFromInstagram(url, adminUser);
-        } catch (instagramError) {
-          logger.warn(`Instagram session extractor failed: ${instagramError.message}`);
-          throw cobaltError;
+      fileData = await downloadFromSocialMedia(COBALT_API_URL, url, maxSize, cobaltResponse).catch(
+        async cobaltError => {
+          if (!useInstagram) throw cobaltError;
+          logger.warn(`Cobalt failed for Instagram, trying the session: ${cobaltError.message}`);
+          try {
+            return await downloadFromInstagram(url);
+          } catch (instagramError) {
+            logger.warn(`Instagram session extractor failed: ${instagramError.message}`);
+            throw cobaltError;
+          }
         }
-      });
+      );
       logStep('download_complete', 'success', {
         message: 'File downloaded successfully',
         metadata: {
@@ -447,7 +440,7 @@ export async function acquireMedia(
       if (track?.drm) {
         return {
           kind: 'file',
-          fileData: await soundcloudViaYoutube(url, { adminUser, maxSize, track }),
+          fileData: await soundcloudViaYoutube(url, { maxSize, track }),
           downloadMethod: 'ytdlp',
           url,
         };
@@ -465,9 +458,8 @@ export async function acquireMedia(
       try {
         fileData = await downloadWithYtdlp(
           url,
-          adminUser,
           maxSize,
-          adminUser ? null : YTDLP_QUALITY,
+          YTDLP_QUALITY,
           await ytdlpMaxDuration(),
           startTime,
           duration
@@ -476,7 +468,7 @@ export async function acquireMedia(
         if (ytdlpFallbackError.code === 'DRM_PROTECTED' && isSoundCloudUrl(url)) {
           return {
             kind: 'file',
-            fileData: await soundcloudViaYoutube(url, { adminUser, maxSize }),
+            fileData: await soundcloudViaYoutube(url, { maxSize }),
             downloadMethod: 'ytdlp',
             url,
           };

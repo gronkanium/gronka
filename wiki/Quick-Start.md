@@ -107,5 +107,5 @@ see the [[Test-Bot|test bot documentation]] for complete setup instructions.
 
 - read the [[Installation|installation guide]] for detailed setup
 - see [[Running-for-Free|running for free]] for the zero-cost hosting + storage path
-- check the [[Technical-Specification|technical specification]] for advanced configuration
+- see [[Configuration|configuration]] for every setting
 - see [[Docker-Deployment|docker deployment]] for production deployment

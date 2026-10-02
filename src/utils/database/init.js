@@ -65,12 +65,7 @@ async function resetSerialSequences(sql) {
     return;
   }
 
-  const tablesWithSerial = [
-    { table: 'logs', sequence: 'logs_id_seq', column: 'id' },
-    { table: 'operation_logs', sequence: 'operation_logs_id_seq', column: 'id' },
-    { table: 'alerts', sequence: 'alerts_id_seq', column: 'id' },
-    { table: 'temporary_uploads', sequence: 'temporary_uploads_id_seq', column: 'id' },
-  ];
+  const tablesWithSerial = [{ table: 'alerts', sequence: 'alerts_id_seq', column: 'id' }];
 
   for (const { table, sequence, column } of tablesWithSerial) {
     try {

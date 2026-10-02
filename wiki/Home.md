@@ -59,12 +59,6 @@ gifs can also be resized, trimmed or optimized.
 - [[Cobalt-Integration]] - set up social media downloads
 - [[Test-Bot]] - test and production bot separation
 
-## reference
-
-- [[API-Endpoints]] - http api endpoints
-- [[Technical-Specification]] - complete technical documentation
-- [[Logging-Platform]] - logging and monitoring
-
 ## troubleshooting
 
 - [[Troubleshooting]] - common issues and solutions
@@ -80,8 +74,8 @@ gifs can also be resized, trimmed or optimized.
 gronka consists of three components:
 
 1. **discord bot** - the part that lives in your server, downloads media, and does the converting
-2. **r2 storage** - stores and serves videos, images, and gifs via cloudflare r2 (optional, falls back to local storage)
-3. **webui** (optional) - a dashboard for statistics, logs, operation tracking, moderation (including user bans), and bot settings (like url-only mode)
+2. **r2 storage** (optional) - files too big for a discord attachment are uploaded under a random name and deleted after a few hours to days, by size
+3. **webui** (optional) - health, failures, workers and settings. it shows no users and no requests: gronka keeps nothing about who uses it
 
 ## license
 

@@ -1,0 +1,54 @@
+main {
+  max-width: 760px;
+}
+h1 {
+  font-size: clamp(2.3rem, 9vw, 4.2rem);
+}
+.cards {
+  display: grid;
+  gap: 22px;
+  margin-top: 26px;
+}
+@media (min-width: 760px) {
+  .cards {
+    grid-template-columns: 1fr 1fr;
+  }
+}
+.card {
+  padding: 22px 20px 24px;
+}
+.card h2 {
+  margin-top: 0;
+}
+.card .btn {
+  width: 100%;
+  margin-top: 8px;
+}
+.number {
+  font:
+    400 clamp(18px, 5.2vw, 30px)/1.35 'Gronka Mono',
+    monospace;
+  word-spacing: 0.1em;
+  padding: 18px 16px;
+  margin: 14px 0;
+  letter-spacing: 0.02em;
+}
+.number.key {
+  font-size: clamp(14px, 3.6vw, 18px);
+}
+.acts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px 12px;
+  align-items: center;
+  margin: 12px 0;
+}
+.err {
+  color: var(--ink);
+  font-weight: 600;
+  padding: 10px 14px;
+  margin: 10px 0;
+}
+.err::before {
+  border-style: dashed;
+}

@@ -58,8 +58,7 @@ sudo systemctl start gif-bot
 
 1. Navigate to "Bot" section
 2. Click "Add Bot"
-3. **CRITICAL**: Enable "Message Content Intent" (required to read attachments)
-4. Copy bot token → save to `.env` as `DISCORD_TOKEN`
+3. Copy bot token → save to `.env` as `DISCORD_TOKEN`
 
 ### step 3: set permissions
 

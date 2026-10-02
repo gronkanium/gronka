@@ -12,4 +12,3 @@ export {
 export * from './database/alerts-pg.js';
 export * from './database/counts-pg.js';
 export * from './database/settings-pg.js';
-export * from './database/guild-prefixes-pg.js';

@@ -6,7 +6,7 @@ everything is set in `.env`. `bun run setup` writes it for you; [`.env.example`]
 
 ## what gronka keeps
 
-nothing about who uses it. files are processed in a temporary folder and deleted when the request ends; a file too big for a discord attachment is uploaded to r2 under a random name and deleted when its time is up. the database holds settings, server prefixes, the media job queue (a row lives only while its job runs), anonymous hourly command counts, and failure records (command, site, error) for `RETENTION_DAYS`. logs go to the console.
+nothing about who uses it. files are processed in a temporary folder and deleted when the request ends; a file too big for a discord attachment is uploaded to r2 under a random name and deleted when its time is up. the database holds settings, the media job queue (a row lives only while its job runs), anonymous hourly command counts, and failure records (command, site, error) for `RETENTION_DAYS`. logs go to the console.
 
 ## discord
 
@@ -14,7 +14,7 @@ nothing about who uses it. files are processed in a temporary folder and deleted
 | --- | --- | --- |
 | `PROD_DISCORD_TOKEN` / `TEST_DISCORD_TOKEN` | | bot token from the developer portal |
 | `PROD_CLIENT_ID` / `TEST_CLIENT_ID` | | application id |
-| `COMMAND_PREFIX` | `^g` | default prefix for message commands; a server can change its own with `@gronka prefix` |
+| `COMMAND_PREFIX` | `^g` | prefix for message commands in dms; in servers, mention the bot |
 | `SUPPORT_INVITE_URL` | | your support server, shown in `/info`; leave empty to show none |
 
 ## media

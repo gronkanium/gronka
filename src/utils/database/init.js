@@ -103,17 +103,14 @@ export async function closePostgresDatabase() {
   setPostgresInitPromise(null);
 }
 
+// The connection is published before the schema is applied, so the init promise is the only
+// proof the tables exist; checking the connection first let early callers query missing tables.
 export async function ensurePostgresInitialized() {
-  const sql = getPostgresConnection();
-  if (sql) {
-    return; // Already initialized
-  }
-
   const initPromise = getPostgresInitPromise();
   if (initPromise) {
     await initPromise;
     return;
   }
-
+  if (getPostgresConnection()) return;
   await initPostgresDatabase();
 }

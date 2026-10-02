@@ -12,12 +12,7 @@ const PRESENCE_ACTIVITY_KEY = 'bot_presence_activity';
 // the local ClientPresence reads back the same way it went out.
 const CUSTOM_ACTIVITY_NAME = 'Custom Status';
 
-/**
- * Build discord.js presence options from a status and custom-status text.
- * @param {string|null} status - One of VALID_PRESENCE_STATUSES, or null to leave unchanged
- * @param {string|null} activity - Custom status text (empty/null clears the activity)
- * @returns {{status?: string, activities?: Array<Object>}} Presence options for setPresence/identify
- */
+// Build discord.js presence options from a status and custom-status text
 export function buildPresenceOptions(status, activity) {
   const options = {};
   if (status) {
@@ -31,12 +26,7 @@ export function buildPresenceOptions(status, activity) {
   return options;
 }
 
-/**
- * Read the text a presence activity actually displays. Custom statuses carry it in `state`;
- * every other activity type displays `name`.
- * @param {Object|null} activity - A discord.js Activity
- * @returns {string|null} Display text, or null if there is none
- */
+// Read the text a presence activity actually displays
 export function activityDisplayText(activity) {
   if (!activity) {
     return null;
@@ -47,10 +37,6 @@ export function activityDisplayText(activity) {
   return activity.name || null;
 }
 
-/**
- * Load the presence last set through the webui/status API.
- * @returns {Promise<{status: string, activity: string}>} Saved status and custom status text
- */
 export async function loadSavedPresence() {
   let status = await getSetting(PRESENCE_STATUS_KEY, DEFAULT_PRESENCE_STATUS);
   if (!VALID_PRESENCE_STATUSES.includes(status)) {
@@ -60,13 +46,7 @@ export async function loadSavedPresence() {
   return { status, activity };
 }
 
-/**
- * Persist a presence so it survives restarts. A status-only update stores an empty activity,
- * mirroring setPresence(), which implicitly clears activities when none are given.
- * @param {string|null} status - Status to persist, or null to leave the stored status alone
- * @param {string|null} activity - Custom status text (empty/null clears the stored activity)
- * @returns {Promise<void>}
- */
+// Persist a presence so it survives restarts
 export async function saveSavedPresence(status, activity) {
   if (status) {
     await setSetting(PRESENCE_STATUS_KEY, status);

@@ -121,6 +121,7 @@ async function precreateTables() {
   // Create all tables/indexes serially before the parallel test processes start.
   // CREATE TABLE IF NOT EXISTS races at the catalog level when ~30 processes hit
   // an empty schema simultaneously; pre-creating makes their CREATEs no-ops.
+  process.env.NODE_ENV = 'test';
   process.env.TEST_POSTGRES_DB = database;
   const { initPostgresDatabase, closePostgresDatabase } =
     await import('../src/utils/database/init.js');

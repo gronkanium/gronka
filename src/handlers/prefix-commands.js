@@ -1,10 +1,10 @@
 import { EmbedBuilder, PermissionFlagsBits } from 'discord.js';
 import { createLogger } from '../utils/logger.js';
 import { botConfig } from '../utils/config.js';
-import { trackUser } from '../utils/user-tracking.js';
 import { isAdmin } from '../utils/rate-limit.js';
 import { replyIfBanned, replyIfMaintenance } from '../utils/ban-check.js';
 import { getGuildPrefix, setGuildPrefix, clearGuildPrefix } from '../utils/database.js';
+import { OUTPUT_FORMATS } from '../utils/output-formats.js';
 import { createMessageAdapter } from '../commands/shared/message-adapter.js';
 import { handleDownloadCommand } from '../commands/download.js';
 import { handleConvertCommand } from '../commands/convert.js';
@@ -22,19 +22,14 @@ const OPTION_ALIASES = {
   start_time: 'start',
   end: 'end',
   end_time: 'end',
-  quality: 'quality',
   optimize: 'optimize',
   lossy: 'lossy',
   mp3: 'mp3',
+  format: 'format',
   url: 'url',
 };
 
-/**
- * Validate a candidate custom prefix: 1-3 printable ASCII chars, no whitespace, and none
- * of the characters Discord parses specially (mentions, channels, code, backslash).
- * @param {string} prefix
- * @returns {boolean}
- */
+// Validate a candidate custom prefix: 1-3 printable ASCII chars, no whitespace, and none of the characters Discord parses specially (mentions, channels, code, backslash)
 export function isValidPrefix(prefix) {
   return /^[!-~]{1,3}$/.test(prefix) && !/[@#`\\<>]/.test(prefix);
 }
@@ -64,15 +59,7 @@ export function matchPrefix(content, { prefix, botUserId }) {
   return null;
 }
 
-/**
- * Parse command argument tokens into slash-shaped named options. A token only counts as
- * key=value when the key is a known option alias - URLs routinely contain "=" (e.g.
- * youtube.com/watch?v=...) and must stay intact as the bare `url` token. Values that the
- * slash UI would have constrained (quality choices, lossy range) are normalized here since
- * prefix input is free-form.
- * @param {string[]} tokens - Whitespace-split tokens after the command name
- * @returns {Object} Named options keyed by slash option name
- */
+// Parse command argument tokens into slash-shaped named options
 export function parseArgTokens(tokens) {
   const options = {};
 
@@ -91,9 +78,9 @@ export function parseArgTokens(tokens) {
     }
   }
 
-  // Slash commands restrict quality via choices; drop anything else so the default applies
-  if (options.quality !== undefined && !['low', 'medium', 'high'].includes(options.quality)) {
-    delete options.quality;
+  if (options.format !== undefined) {
+    options.format = options.format.toLowerCase();
+    if (options.format !== 'gif' && !OUTPUT_FORMATS[options.format]) delete options.format;
   }
 
   // Slash commands enforce 0-100 via min/max; clamp here (non-numeric values are dropped
@@ -108,12 +95,7 @@ export function parseArgTokens(tokens) {
   return options;
 }
 
-/**
- * Resolve the attachment a convert/optimize prefix command should operate on: an attachment
- * on the invoking message, or one on the message it replies to.
- * @param {import('discord.js').Message} message
- * @returns {Promise<import('discord.js').Attachment|null>}
- */
+// Resolve the attachment a convert/optimize prefix command should operate on: an attachment on the invoking message, or one on the message it replies to
 async function resolveAttachment(message) {
   const own = message.attachments.first();
   if (own) {
@@ -144,8 +126,8 @@ export function buildHelpEmbed(prefix) {
       {
         name: 'commands',
         value: [
-          `\`${prefix} download <url>\`, download a video from social media`,
-          `\`${prefix} convert [url]\`, convert a video/image to gif (attach a file, link one, or reply to a message with one)`,
+          `\`${prefix} download <url>\`, download a video from social media (\`mp3=true\` for audio only)`,
+          `\`${prefix} convert [url]\`, convert a video/image to gif, mp4 or another format (attach a file, link one, or reply to a message with one)`,
           `\`${prefix} optimize [url]\`, shrink a gif (attachment, url, or reply)`,
           `\`${prefix} info\`, bot stats and system info`,
           `\`${prefix} help\`, this message`,
@@ -155,7 +137,7 @@ export function buildHelpEmbed(prefix) {
       {
         name: 'options',
         value:
-          `\`key=value\` after a command, e.g. \`${prefix} convert quality=high lossy=35 start=0:05 end=0:10\`\n` +
+          `\`key=value\` after a command, e.g. \`${prefix} convert format=mp4 start=0:05 end=0:10\`, or \`${prefix} convert lossy=35 optimize=true\`\n` +
           `server managers can change the prefix with \`${prefix} prefix <new>\` or \`${prefix} prefix reset\``,
         inline: false,
       }
@@ -171,15 +153,7 @@ function buildMentionEmbed(prefix) {
     );
 }
 
-/**
- * Handle the "prefix" command: show, set, or reset this guild's prefix.
- * Setting/resetting requires the Manage Server permission (or bot admin).
- * @param {import('discord.js').Message} message
- * @param {string[]} tokens - Arguments after "prefix"
- * @param {string} currentPrefix - Effective prefix for this guild
- * @param {Object} deps - Injected dependencies (see handlePrefixMessage)
- * @returns {Promise<void>}
- */
+// Handle the "prefix" command: show, set, or reset this guild's prefix
 async function handlePrefixSetting(message, tokens, currentPrefix, deps) {
   if (tokens.length === 0) {
     await message.reply(`my prefix here is \`${currentPrefix}\`, you can always mention me too.`);
@@ -223,7 +197,6 @@ async function handlePrefixSetting(message, tokens, currentPrefix, deps) {
 }
 
 const defaultDeps = {
-  trackUser,
   isAdmin,
   replyIfBanned,
   replyIfMaintenance,
@@ -293,10 +266,6 @@ export async function handlePrefixMessage(message, context = {}) {
     return;
   }
 
-  deps.trackUser(message.author.id).catch(error => {
-    logger.debug(`Failed to track user ${message.author.id}: ${error.message}`);
-  });
-
   try {
     const namedOptions = parseArgTokens(tokens);
     if (commandName === 'convert' || commandName === 'optimize') {
@@ -327,7 +296,7 @@ export async function handlePrefixMessage(message, context = {}) {
       return;
     }
 
-    logger.info(
+    logger.debug(
       `User ${message.author.id} invoked prefix command "${commandName}" in ${message.guildId || 'DM'}`
     );
 

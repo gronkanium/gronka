@@ -4,7 +4,6 @@ import rateLimit from 'express-rate-limit';
 import { createLogger } from './utils/logger.js';
 import { botConfig, serverConfig } from './utils/config.js';
 import { ConfigurationError } from './utils/errors.js';
-import { trackUser, initializeUserTracking } from './utils/user-tracking.js';
 import path from 'node:path';
 import { startRetentionJob, stopRetentionJob } from './utils/retention.js';
 import {
@@ -19,11 +18,11 @@ import { handleModalSubmit } from './handlers/modals.js';
 import { handleMangaInteraction } from './commands/manga.js';
 import { handleMegaKeyInteraction } from './commands/mega-key.js';
 import { handlePrefixMessage } from './handlers/prefix-commands.js';
-import { cleanupStuckOperations } from './utils/operations-tracker.js';
+import { cleanupStuckOperations, flushAllOperationLogs } from './utils/operations-tracker.js';
 import { initializeR2UsageCache, formatFileSize } from './utils/storage.js';
 import { r2Config } from './utils/config.js';
 import { startCleanupJob, stopCleanupJob } from './utils/r2-cleanup.js';
-import { initDatabase } from './utils/database.js';
+import { initDatabase, closeDatabase } from './utils/database.js';
 import {
   VALID_PRESENCE_STATUSES,
   DEFAULT_PRESENCE_STATUS,
@@ -41,7 +40,7 @@ import {
   reportPresence,
   clearPresence,
   PRESENCE_MS,
-} from './jobs/queue.js';
+} from './utils/database/media-jobs-pg.js';
 import { withJobDir, sweepJobDirs } from './utils/media-file.js';
 
 const logger = createLogger('bot');
@@ -215,7 +214,6 @@ function startStatsServer() {
 client.once(Events.ClientReady, async readyClient => {
   try {
     botStartTime = Date.now();
-    await initializeUserTracking();
 
     // The identify payload already carried this presence (see startBot), that is what makes it
     // stick across a restart, with no race against the presence discord.js sends on identify.
@@ -246,17 +244,7 @@ client.once(Events.ClientReady, async readyClient => {
       await refreshRateLimitSettings();
     }, 60 * 1000);
 
-    // Clean up stuck operations every 5 minutes. The threshold must stay above Discord's
-    // 15-minute interaction token lifetime: at 10 minutes the reaper was flipping still-running
-    // downloads to error and DMing the user a failure, only for the operation to finish and flip
-    // back to success, by which point the token had expired and the reply died with
-    // "Invalid Webhook Token" (50027). Past 16 minutes nothing can be delivered anyway, so
-    // anything still running then is genuinely stuck.
-    // A restart orphans whatever was mid-flight: the row stays 'running' with no process left
-    // to finish it, so the user waited out the full 16 minutes for a failure that was already
-    // certain. This process owns nothing yet, so anything still 'running' now is orphaned by
-    // definition. Reconciling at boot also covers a crash or an OOM kill, which a SIGTERM
-    // handler would miss.
+    // Nothing runs yet, so anything still 'running' was orphaned by the last shutdown, crash or OOM kill.
     try {
       const orphaned = await cleanupStuckOperations(0, readyClient);
       if (orphaned > 0) {
@@ -266,7 +254,10 @@ client.once(Events.ClientReady, async readyClient => {
       logger.error('Error reconciling orphaned operations at startup:', error);
     }
 
-    const report = () => reportPresence({ role: 'bot' }).catch(() => {});
+    const report = () =>
+      reportPresence({ role: 'bot' }).catch(error =>
+        logger.warn(`Presence report failed: ${error.message}`)
+      );
     report();
     setInterval(report, PRESENCE_MS);
 
@@ -279,7 +270,8 @@ client.once(Events.ClientReady, async readyClient => {
     setInterval(
       async () => {
         try {
-          await cleanupStuckOperations(16, readyClient); // pass client for DM notifications
+          // Past Discord's 15-minute reply token nothing can be delivered, so 16 minutes means stuck.
+          await cleanupStuckOperations(16, readyClient);
         } catch (error) {
           logger.error('Error in stuck operations cleanup:', error);
         }
@@ -337,11 +329,6 @@ client.on(Events.InteractionCreate, interaction =>
 async function handleInteraction(interaction) {
   try {
     logger.debug(`Received interaction: ${interaction.type} from user ${interaction.user.id}`);
-    // Track user interaction (non-blocking to avoid interaction timeout)
-    trackUser(interaction.user.id).catch(error => {
-      logger.debug(`Failed to track user ${interaction.user.id}: ${error.message}`);
-    });
-
     if (await replyIfBanned(interaction)) {
       return;
     }
@@ -390,7 +377,7 @@ async function handleInteraction(interaction) {
 // bot/webhook filtering, ban/maintenance checks, and per-guild prefix resolution.
 client.on(Events.MessageCreate, async message => {
   try {
-    await withJobDir(() => handlePrefixMessage(message, { botStartTime }));
+    await handlePrefixMessage(message, { botStartTime });
   } catch (error) {
     logger.error('Unhandled error in message handler:', error);
   }
@@ -458,24 +445,22 @@ async function startBot() {
 
 startBot();
 
-function gracefulShutdown(signal) {
+let shuttingDown = false;
+
+async function gracefulShutdown(signal) {
+  if (shuttingDown) return;
+  shuttingDown = true;
   logger.info(`${signal} received, shutting down gracefully...`);
-  if (cleanupJobIntervalId) {
-    stopCleanupJob(cleanupJobIntervalId);
-  }
-  if (retentionJobIntervalId) {
-    stopRetentionJob(retentionJobIntervalId);
-  }
-  clearPresence().catch(() => {});
-  if (httpServer) {
-    httpServer.close(() => {
-      logger.info('HTTP server closed');
-    });
-  }
-  // Give servers time to close before exiting
-  setTimeout(() => {
-    process.exit(0);
-  }, 1000);
+  setTimeout(() => process.exit(1), 8000).unref();
+  const warn = label => error => logger.warn(`${label}: ${error.message}`);
+  if (cleanupJobIntervalId) stopCleanupJob(cleanupJobIntervalId);
+  if (retentionJobIntervalId) stopRetentionJob(retentionJobIntervalId);
+  await clearPresence().catch(warn('Could not clear presence'));
+  if (httpServer) httpServer.close();
+  await flushAllOperationLogs().catch(warn('Could not flush operation logs'));
+  await client.destroy();
+  await closeDatabase().catch(warn('Could not close database'));
+  process.exit(0);
 }
 
 process.on('SIGTERM', () => gracefulShutdown('SIGTERM'));
@@ -484,5 +469,6 @@ process.on('unhandledRejection', error => {
   logger.error('Unhandled promise rejection:', error);
 });
 process.on('uncaughtException', error => {
-  logger.error('Uncaught exception:', error);
+  logger.error('Uncaught exception, exiting:', error);
+  process.exit(1);
 });

@@ -1,9 +1,8 @@
 import { createLogger } from './logger.js';
-import { deleteFromR2, fileExistsInR2 } from './r2-storage.js';
+import { deleteFromR2 } from './r2-storage.js';
 import {
   getExpiredR2Keys,
   getTemporaryUploadsByR2Key,
-  markTemporaryUploadDeleted,
   markTemporaryUploadDeletionFailed,
   deleteTemporaryUploadsByR2Key,
   markProcessedUrlsR2Expired,
@@ -12,34 +11,13 @@ import { insertAlert } from './database.js';
 
 const logger = createLogger('r2-cleanup');
 
-/**
- * Mark a batch of temporary_uploads records as deleted, remove them, and flag their
- * processed_urls rows as R2-expired so the moderation view and the download/convert/
- * optimize URL cache stop treating file_url as still resolvable.
- * @param {Array} expiredUploads - temporary_uploads rows for one r2Key
- * @param {string} r2Key - The R2 object key these uploads reference
- * @param {number} now - Current timestamp
- * @returns {Promise<void>}
- */
-async function finalizeDeletedUploads(expiredUploads, r2Key, now) {
-  for (const upload of expiredUploads) {
-    await markTemporaryUploadDeleted(upload.id, now);
-  }
-  // Mark by key, and before the delete. Marking only `expiredUploads` skipped any row the
-  // deleted_at filter dropped, and deleting the tracking rows first left nothing to re-derive
-  // the url_hashes from if this step never ran, either way processed_urls kept serving a
-  // cdn.gronka.dev link to an object that was already gone.
+// Flag processed_urls expired before dropping the tracking rows, or a failed delete strands a dead link.
+async function finalizeDeletedUploads(r2Key) {
   const tracked = await getTemporaryUploadsByR2Key(r2Key);
   await markProcessedUrlsR2Expired([...new Set(tracked.map(u => u.url_hash))]);
   await deleteTemporaryUploadsByR2Key(r2Key);
 }
 
-/**
- * Delete expired R2 files with reference counting and error handling
- * @param {Object} config - R2 configuration
- * @param {string} logLevel - Logging level: 'minimal', 'detailed', or 'debug'
- * @returns {Promise<{deleted: number, failed: number, skipped: number, errors: Array}>} Cleanup statistics
- */
 async function deleteExpiredR2Files(config, logLevel = 'detailed') {
   const now = Date.now();
   const stats = {
@@ -59,7 +37,7 @@ async function deleteExpiredR2Files(config, logLevel = 'detailed') {
 
     if (expiredR2Keys.length === 0) {
       if (logLevel !== 'minimal') {
-        logger.info('No expired R2 files to delete');
+        logger.debug('No expired R2 files to delete');
       }
       return stats;
     }
@@ -90,21 +68,9 @@ async function deleteExpiredR2Files(config, logLevel = 'detailed') {
           continue;
         }
 
-        // Check if file still exists in R2 (idempotent deletion)
-        const exists = await fileExistsInR2(r2Key, config);
-        if (!exists) {
-          // File already deleted from R2, mark all uploads as deleted
-          if (logLevel === 'detailed' || logLevel === 'debug') {
-            logger.info(`R2 file already deleted: ${r2Key}, marking records as deleted`);
-          }
-          await finalizeDeletedUploads(expiredUploads, r2Key, now);
-          stats.deleted++;
-          continue;
-        }
-
         // Delete from R2 first
         if (logLevel === 'detailed' || logLevel === 'debug') {
-          logger.info(`Deleting expired R2 file: ${r2Key}`);
+          logger.debug(`Deleting expired R2 file: ${r2Key}`);
         }
 
         try {
@@ -112,19 +78,19 @@ async function deleteExpiredR2Files(config, logLevel = 'detailed') {
           if (!deleted) {
             // File not found (already deleted)
             if (logLevel === 'detailed' || logLevel === 'debug') {
-              logger.info(`R2 file not found (already deleted): ${r2Key}`);
+              logger.debug(`R2 file not found (already deleted): ${r2Key}`);
             }
-            await finalizeDeletedUploads(expiredUploads, r2Key, now);
+            await finalizeDeletedUploads(r2Key);
             stats.deleted++;
             continue;
           }
 
           // R2 deletion succeeded, mark all uploads as deleted and delete records
-          await finalizeDeletedUploads(expiredUploads, r2Key, now);
+          await finalizeDeletedUploads(r2Key);
 
           stats.deleted++;
           if (logLevel === 'detailed' || logLevel === 'debug') {
-            logger.info(`Successfully deleted R2 file: ${r2Key}`);
+            logger.debug(`Successfully deleted R2 file: ${r2Key}`);
           }
         } catch (deleteError) {
           // R2 deletion failed, mark as failed for retry

@@ -1,6 +1,7 @@
 import { spawn } from 'child_process';
 import { createLogger } from '../logger.js';
 import { FFMPEG_INPUT_GUARD } from './utils.js';
+import { jobSignal } from '../media-file.js';
 
 const logger = createLogger('video-metadata');
 
@@ -11,16 +12,7 @@ const logger = createLogger('video-metadata');
 // applies to every file, keyed on nothing about the input itself.
 const FFPROBE_TIMEOUT_MS = 30000;
 
-/**
- * Get video metadata via ffprobe.
- *
- * Spawns ffprobe directly (rather than fluent-ffmpeg's `ffprobe`) so the timeout
- * can actually SIGKILL the child on a hang, fluent-ffmpeg doesn't expose the
- * process handle, so a stuck probe there would leak. Output shape matches the
- * `-show_format -show_streams` JSON consumers already read (`.format`, `.streams`).
- * @param {string} inputPath - Path to input video file
- * @returns {Promise<Object>} Parsed ffprobe metadata ({ format, streams })
- */
+// Get video metadata via ffprobe
 export async function getVideoMetadata(inputPath) {
   return new Promise((resolve, reject) => {
     const args = [
@@ -35,6 +27,7 @@ export async function getVideoMetadata(inputPath) {
     ];
 
     const child = spawn('ffprobe', args, {
+      signal: jobSignal(),
       timeout: FFPROBE_TIMEOUT_MS,
       killSignal: 'SIGKILL',
     });

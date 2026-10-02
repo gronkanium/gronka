@@ -3,6 +3,8 @@ import { createLogger } from './logger.js';
 import { NetworkError, ValidationError } from './errors.js';
 import { fetchToFile, withExtension } from './media-file.js';
 import { detectFileType } from './storage.js';
+import { mapLimit, ITEM_FANOUT } from './map-limit.js';
+import { normalizeHost } from './url-host.js';
 
 const logger = createLogger('cobalt');
 
@@ -88,14 +90,7 @@ function getCobaltErrorMessage(errorCode, context = {}) {
   return COBALT_ERROR_MESSAGES[errorCode] || null;
 }
 
-/**
- * Classify a Cobalt API error response.
- * Rate limiting is only assumed on explicit signals (HTTP 429 or a rate error code);
- * everything else is either "not found" (don't retry) or a plain failure.
- * @param {Object} data - Cobalt API error response data
- * @param {Object} errorObj - Full axios error object
- * @returns {Object} { isRateLimit, isNotFound, userMessage, errorCode, context }
- */
+// Classify a Cobalt API error response
 function analyzeError(data, errorObj) {
   const result = {
     isRateLimit: false,
@@ -233,9 +228,7 @@ export function canonicalizeMirrorUrl(url) {
     if (giphyId) {
       return `https://i.giphy.com/${giphyId}.gif`;
     }
-    const canonicalHost = EMBED_FIXER_HOSTS.get(
-      urlObj.hostname.toLowerCase().replace(/^www\./, '')
-    );
+    const canonicalHost = EMBED_FIXER_HOSTS.get(normalizeHost(urlObj.hostname));
     if (!canonicalHost) {
       return url;
     }
@@ -246,19 +239,13 @@ export function canonicalizeMirrorUrl(url) {
   }
 }
 
-/**
- * Normalize social media URLs before sending them to Cobalt.
- * X/Twitter share links commonly include tracking params like ?s=46 which are
- * not needed for fetching and can make public-post handling less reliable.
- * @param {string} url - Original URL
- * @returns {string} Normalized URL
- */
+// Normalize social media URLs before sending them to Cobalt
 export function normalizeSocialMediaUrlForCobalt(url) {
   try {
     const urlObj = new URL(url);
     let hostname = urlObj.hostname.toLowerCase();
 
-    const canonicalHost = EMBED_FIXER_HOSTS.get(hostname.replace(/^www\./, ''));
+    const canonicalHost = EMBED_FIXER_HOSTS.get(normalizeHost(hostname));
     if (canonicalHost) {
       urlObj.hostname = canonicalHost;
       hostname = canonicalHost;
@@ -315,7 +302,7 @@ const SOCIAL_MEDIA_DOMAINS = [
 export function isSocialMediaUrl(url) {
   try {
     const urlObj = new URL(url);
-    const hostname = urlObj.hostname.toLowerCase().replace(/^www\./, '');
+    const hostname = normalizeHost(urlObj.hostname);
 
     return SOCIAL_MEDIA_DOMAINS.some(
       domain => hostname === domain || hostname.endsWith(`.${domain}`)
@@ -334,10 +321,10 @@ async function callCobaltApi(apiUrl, url, retryCount = 0, maxRetries = 3) {
   const normalizedUrl = normalizeSocialMediaUrlForCobalt(url);
 
   if (normalizedUrl !== url) {
-    logger.info(`Normalized social media URL for Cobalt: ${url} -> ${normalizedUrl}`);
+    logger.debug(`Normalized social media URL for Cobalt: ${url} -> ${normalizedUrl}`);
   }
 
-  logger.info(
+  logger.debug(
     `Calling Cobalt API at ${apiUrl} with URL: ${normalizedUrl} (attempt ${attemptNum}/${maxRetries})`
   );
 
@@ -361,7 +348,7 @@ async function callCobaltApi(apiUrl, url, retryCount = 0, maxRetries = 3) {
       }
     );
 
-    logger.info(`Cobalt API response status: ${response.status}`);
+    logger.debug(`Cobalt API response status: ${response.status}`);
     if (response.status !== 200) {
       throw new NetworkError(`cobalt api returned status ${response.status}`);
     }
@@ -492,7 +479,7 @@ async function downloadPhoto(photoUrl, index, isAdminUser = false, maxSize = Inf
   const contentType = file.headers['content-type'] || 'image/jpeg';
   const filename =
     file.dispositionName ?? `photo_${index + 1}${PHOTO_EXTENSIONS[contentType] || '.jpg'}`;
-  logger.info(
+  logger.debug(
     `Downloaded photo ${index + 1}: ${filename}, size: ${file.size} bytes, content-type: ${contentType}`
   );
   return withExtension({ ...file, contentType, filename });
@@ -509,7 +496,7 @@ async function downloadVideo(videoUrl, index, isAdminUser = false, maxSize = Inf
   const contentType = resolveContentType(file.headers['content-type'], named, file.head);
   const filename =
     file.dispositionName ?? `video_${index + 1}${CONTENT_TYPE_EXTENSIONS[contentType] || '.mp4'}`;
-  logger.info(
+  logger.debug(
     `Downloaded video ${index + 1}: ${filename}, size: ${file.size} bytes, content-type: ${contentType}`
   );
   return withExtension({ ...file, contentType, filename });
@@ -524,30 +511,21 @@ async function downloadMediaFromPicker(pickerArray, isAdminUser = false, maxSize
     throw new NetworkError('no media files (photos or videos) found in picker response');
   }
 
-  logger.info(
+  logger.debug(
     `Found ${mediaItems.length} media items in picker response (${mediaItems.filter(i => i.type === 'photo').length} photos, ${mediaItems.filter(i => i.type === 'video').length} videos)`
   );
 
-  const results = await Promise.all(
-    mediaItems.map((item, index) =>
-      item.type === 'photo'
-        ? downloadPhoto(item.url, index, isAdminUser, maxSize)
-        : downloadVideo(item.url, index, isAdminUser, maxSize)
-    )
+  const results = await mapLimit(mediaItems, ITEM_FANOUT, (item, index) =>
+    item.type === 'photo'
+      ? downloadPhoto(item.url, index, isAdminUser, maxSize)
+      : downloadVideo(item.url, index, isAdminUser, maxSize)
   );
-  logger.info(`Successfully downloaded ${results.length} media items from picker`);
+  logger.debug(`Successfully downloaded ${results.length} media items from picker`);
 
   return results;
 }
 
-/**
- * Replace hostname in URL with hostname from API URL
- * This is needed when Cobalt returns tunnel URLs with Docker hostnames (e.g., "cobalt")
- * that aren't resolvable from outside the Docker network
- * @param {string} url - URL to fix
- * @param {string} apiUrl - Cobalt API URL to extract hostname from
- * @returns {string} URL with replaced hostname
- */
+// Cobalt's tunnel URLs carry its Docker hostname ("cobalt"), which only resolves inside the Docker network
 function replaceTunnelHostname(url, apiUrl) {
   try {
     const urlObj = new URL(url);
@@ -558,7 +536,7 @@ function replaceTunnelHostname(url, apiUrl) {
       if (apiUrlObj.port) {
         urlObj.port = apiUrlObj.port;
       }
-      logger.info(`Replacing tunnel hostname: ${url} -> ${urlObj.toString()}`);
+      logger.debug(`Replacing tunnel hostname: ${url} -> ${urlObj.toString()}`);
       return urlObj.toString();
     }
     return url;
@@ -568,14 +546,6 @@ function replaceTunnelHostname(url, apiUrl) {
   }
 }
 
-/**
- * Download video from Cobalt response
- * @param {Object} cobaltResponse - Response from Cobalt API
- * @param {boolean} isAdminUser - Whether the user is an admin (allows larger files)
- * @param {number} maxSize - Maximum file size in bytes
- * @param {string} apiUrl - Cobalt API URL (used to fix tunnel hostnames)
- * @returns {Promise<Object|Array>} Media file (path, size, hash, contentType, filename) (or array of objects for picker)
- */
 async function downloadFromCobalt(
   cobaltResponse,
   isAdminUser = false,
@@ -590,7 +560,7 @@ async function downloadFromCobalt(
     cobaltResponse.picker &&
     Array.isArray(cobaltResponse.picker)
   ) {
-    logger.info('Detected picker response with media files');
+    logger.debug('Detected picker response with media files');
     return await downloadMediaFromPicker(cobaltResponse.picker, isAdminUser, maxSize);
   }
 
@@ -617,7 +587,7 @@ async function downloadFromCobalt(
     }
   } else if (cobaltResponse.status === 'tunnel') {
     // Handle tunnel response - Cobalt returns a tunnel URL that needs to be accessed
-    logger.info('Detected tunnel response from Cobalt');
+    logger.debug('Detected tunnel response from Cobalt');
     if (cobaltResponse.url) {
       videoUrl = cobaltResponse.url;
       // Replace Docker hostname with API URL hostname if needed
@@ -663,29 +633,14 @@ async function downloadFromCobalt(
   const named = file.dispositionName ?? filename;
   const contentType = resolveContentType(generic ? '' : declared, named, file.head);
   const finalName = normalizeFilenameForContentType(named, contentType);
-  logger.info(
+  logger.debug(
     `Downloaded file: ${finalName}, size: ${file.size} bytes, content-type: ${contentType}`
   );
   return withExtension({ ...file, contentType, filename: finalName });
 }
 
-/**
- * Get direct media URLs from Cobalt without downloading anything.
- * Only returns URLs that are publicly reachable (redirect/picker responses).
- * Tunnel responses proxy through the local cobalt instance and are not usable
- * outside the Docker network, so they are reported as unavailable.
- * @param {string} apiUrl - Cobalt API URL
- * @param {string} url - Social media URL
- * @returns {Promise<{urls: Array<{url: string, type: string, filename: string|null}>, direct: boolean}>}
- *   direct is false when cobalt only offers a tunnel (caller should fall back to downloading)
- */
 export async function getCobaltMediaUrls(apiUrl, url) {
-  return getCobaltMediaUrlsImpl(apiUrl, url);
-}
-
-async function getCobaltMediaUrlsImpl(apiUrl, url) {
   const cobaltResponse = await callCobaltApi(apiUrl, url);
-  logger.info(`Cobalt API response (url-only mode): ${JSON.stringify(cobaltResponse)}`);
 
   if (
     cobaltResponse.status === 'picker' &&
@@ -729,13 +684,7 @@ async function getCobaltMediaUrlsImpl(apiUrl, url) {
   return { urls: [], direct: false, response: cobaltResponse };
 }
 
-/**
- * Get the byte size of a remote media URL without downloading it, via a ranged GET
- * (more widely supported than HEAD on media CDNs). Returns null when the size can't
- * be determined - callers should treat that as "unknown" and fall back to downloading.
- * @param {string} mediaUrl - Direct media URL (e.g. video.twimg.com)
- * @returns {Promise<number|null>} Size in bytes, or null if unknown
- */
+// Get the byte size of a remote media URL without downloading it, via a ranged GET (more widely supported than HEAD on media CDNs)
 export async function getRemoteContentLength(mediaUrl) {
   try {
     const response = await axios.get(mediaUrl, {
@@ -743,10 +692,12 @@ export async function getRemoteContentLength(mediaUrl) {
         'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
         Range: 'bytes=0-0',
       },
-      responseType: 'arraybuffer',
+      responseType: 'stream',
       timeout: 10000,
       maxRedirects: 5,
     });
+    // Only the headers are needed; a host that ignores Range would otherwise send the whole file.
+    response.data?.destroy?.();
     // content-range: "bytes 0-0/12345678" - the total after the slash is the full size
     const contentRange = response.headers['content-range'] || '';
     const totalMatch = contentRange.match(/\/(\d+)$/);
@@ -762,14 +713,6 @@ export async function getRemoteContentLength(mediaUrl) {
   }
 }
 
-/**
- * Download video or photos from social media URL using Cobalt
- * @param {string} apiUrl - Cobalt API URL
- * @param {string} url - Social media URL
- * @param {boolean} isAdminUser - Whether the user is an admin
- * @param {number} maxSize - Maximum file size in bytes
- * @returns {Promise<Object|Array>} Media file (path, size, hash, contentType, filename) (or array for multiple photos)
- */
 export async function downloadFromSocialMedia(
   apiUrl,
   url,
@@ -777,25 +720,20 @@ export async function downloadFromSocialMedia(
   maxSize = Infinity,
   prefetched = null
 ) {
-  return downloadFromSocialMediaImpl(apiUrl, url, isAdminUser, maxSize, prefetched);
-}
-
-async function downloadFromSocialMediaImpl(apiUrl, url, isAdminUser, maxSize, prefetched) {
-  logger.info(`Attempting to download from social media URL via Cobalt: ${url}`);
+  logger.debug(`Attempting to download from social media URL via Cobalt: ${url}`);
 
   try {
     const cobaltResponse = prefetched ?? (await callCobaltApi(apiUrl, url));
-    logger.info(`Cobalt API response: ${JSON.stringify(cobaltResponse)}`);
-    logger.info('Cobalt API call successful, downloading media');
+    logger.debug('Cobalt API call successful, downloading media');
     const result = await downloadFromCobalt(cobaltResponse, isAdminUser, maxSize, apiUrl);
 
     // Check if result is an array (multiple photos) or single object
     if (Array.isArray(result)) {
-      logger.info(
+      logger.debug(
         `Successfully downloaded ${result.length} photos from Cobalt (total size: ${result.reduce((sum, r) => sum + r.size, 0)} bytes)`
       );
     } else {
-      logger.info(
+      logger.debug(
         `Successfully downloaded media from Cobalt: ${result.filename} (${result.size} bytes, content-type: ${result.contentType})`
       );
     }

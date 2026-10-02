@@ -24,7 +24,6 @@ import {
 } from '../utils/video-processor.js';
 import { mediaPath } from '../utils/storage.js';
 import { getDiscordAttachmentLimit } from './shared/attachment-limit.js';
-import { trackRecentConversion } from '../utils/user-tracking.js';
 import { loadStoredGif, optimizeCached } from '../utils/gif-optimizer.js';
 import { logOperationStep } from '../utils/operations-tracker.js';
 import { hashUrlWithParams, hashPartsHex } from '../utils/hashing.js';
@@ -32,16 +31,18 @@ import { getProcessedUrl } from '../utils/database.js';
 import { runMediaCommand } from './shared/run-media-command.js';
 import { sendConvertedFile } from './shared/send-converted.js';
 import { ValidationError } from '../utils/errors.js';
-import { replyIfRateLimited, resolveTimeOptions, refuse } from './shared/command-guards.js';
-import { initializeDatabaseWithErrorHandling } from '../utils/database-init.js';
 import {
-  safeInteractionEditReply,
-  safeInteractionDeferReply,
-} from '../utils/interaction-helpers.js';
-import { storeMedia, deliverStored, finishCommand } from './shared/deliver.js';
+  replyIfRateLimited,
+  resolveTimeOptions,
+  refuse,
+  commandSourceOf,
+} from './shared/command-guards.js';
+import { initializeDatabaseWithErrorHandling } from '../utils/database-init.js';
+import { safeInteractionDeferReply } from '../utils/interaction-helpers.js';
+import { storeMedia, deliverStored, deliverReply, finishCommand } from './shared/deliver.js';
 import { fetchUrlInput } from './shared/url-input.js';
 import { dispatchMediaJob } from '../jobs/dispatch.js';
-import { fromPath } from '../utils/media-file.js';
+import { fromPath, writeAtomic } from '../utils/media-file.js';
 
 const logger = createLogger('convert');
 
@@ -56,12 +57,6 @@ const IMAGE_EXTENSIONS = ['.png', '.jpg', '.jpeg', '.webp', '.awebp', '.gif'];
 const UNSUPPORTED_FORMAT =
   'unsupported file format. please provide a video (mp4, mov, webm, avi, mkv) or image (png, jpg, jpeg, webp, gif).';
 
-/**
- * Probe a media file's width and fps via ffprobe, with safe fallbacks.
- * @param {string} filePath - Path to the media file
- * @param {number} fallbackWidth - Width to assume when probing fails
- * @returns {Promise<{width: number, fps: number}>}
- */
 async function probeMediaInfo(filePath, fallbackWidth) {
   let width = fallbackWidth;
   let fps = 30;
@@ -102,30 +97,21 @@ async function probeMediaInfo(filePath, fallbackWidth) {
 const DEFAULT_MAX_GIF_WIDTH = 640;
 const DEFAULT_MAX_GIF_FPS = 20;
 
-/**
- * Resolve the effective settings for a video-to-GIF conversion.
- * Policy: follow the source's width and fps unless the user overrides them, but clamp the
- * defaults to sane ceilings (DEFAULT_MAX_GIF_WIDTH / DEFAULT_MAX_GIF_FPS) so an unspecified
- * convert never produces an enormous GIF; default quality to the GIF_QUALITY config.
- * @param {Object} options - User-provided options (width, fps, quality, startTime, duration)
- * @param {{width: number, fps: number}} probed - Probed source dimensions
- * @returns {Object} Options object for convertToGif
- */
+// Resolve the effective settings for a video-to-GIF conversion
 function resolveVideoConversionOptions(options, probed) {
   const defaultWidth = Math.min(probed.width, DEFAULT_MAX_GIF_WIDTH);
   if (options.width == null && probed.width > DEFAULT_MAX_GIF_WIDTH) {
-    logger.info(`Clamping default width from ${probed.width}px to ${defaultWidth}px`);
+    logger.debug(`Clamping default width from ${probed.width}px to ${defaultWidth}px`);
   }
 
   const defaultFps = Math.min(probed.fps, DEFAULT_MAX_GIF_FPS);
   if (options.fps == null && probed.fps > DEFAULT_MAX_GIF_FPS) {
-    logger.info(`Clamping default FPS from ${probed.fps.toFixed(1)}fps to ${defaultFps}fps`);
+    logger.debug(`Clamping default FPS from ${probed.fps.toFixed(1)}fps to ${defaultFps}fps`);
   }
 
   return {
     width: options.width ?? defaultWidth,
     fps: options.fps ?? defaultFps,
-    quality: options.quality ?? botConfig.gifQuality,
     startTime: options.startTime ?? null,
     duration: options.duration ?? null,
   };
@@ -138,7 +124,8 @@ async function processFormatConversion(
   preDownloaded,
   format,
   trim,
-  originalUrl
+  originalUrl,
+  commandSource = null
 ) {
   const spec = OUTPUT_FORMATS[format];
   const isGif = attachment.contentType === 'image/gif';
@@ -181,7 +168,7 @@ async function processFormatConversion(
       await finishCommand('convert', ctx, output.size);
     },
     {
-      commandSource: 'slash',
+      commandSource,
       skipDbInit: true,
       errorFallback: 'an error occurred while converting the file.',
       context: {
@@ -213,46 +200,43 @@ async function renderGif(ctx, { attachment, attachmentType, adminUser, file, opt
     metadata: { inputFile: attachment.name, inputSize: attachment.size },
   });
 
-  if (attachmentType === 'video') {
-    const seconds = await getVideoMetadata(inputPath).then(
-      metadata => metadata.format.duration,
-      () => null
-    );
-    if (seconds > MAX_GIF_DURATION && !adminUser) {
-      throw new ValidationError(
-        `video is too long (${Math.ceil(seconds)}s). maximum duration: ${MAX_GIF_DURATION}s`
+  await writeAtomic(gifPath, async out => {
+    if (attachmentType === 'video') {
+      const seconds = (await getVideoMetadata(inputPath)).format.duration;
+      if (seconds > MAX_GIF_DURATION && !adminUser) {
+        throw new ValidationError(
+          `video is too long (${Math.ceil(seconds)}s). maximum duration: ${MAX_GIF_DURATION}s`
+        );
+      }
+      const conversionOptions = resolveVideoConversionOptions(
+        options,
+        await probeMediaInfo(inputPath, 480)
       );
-    }
-    const conversionOptions = resolveVideoConversionOptions(
-      options,
-      await probeMediaInfo(inputPath, 480)
-    );
-    const { startTime, duration } = conversionOptions;
-    if (seconds && startTime !== null && duration !== null && startTime + duration > seconds) {
-      throw new ValidationError(
-        `requested timeframe (${startTime}s to ${(startTime + duration).toFixed(1)}s) exceeds video length (${seconds.toFixed(1)}s).`
-      );
-    }
-    await convertToGif(inputPath, gifPath, conversionOptions);
-  } else if (attachment.contentType === 'image/gif' || ext === '.gif') {
-    if (options.width) {
-      await convertImageToGif(inputPath, gifPath, {
-        width: options.width,
-        quality: options.quality ?? botConfig.gifQuality,
-      });
+      const { startTime, duration } = conversionOptions;
+      if (seconds && startTime !== null && duration !== null && startTime + duration > seconds) {
+        throw new ValidationError(
+          `requested timeframe (${startTime}s to ${(startTime + duration).toFixed(1)}s) exceeds video length (${seconds.toFixed(1)}s).`
+        );
+      }
+      await convertToGif(inputPath, out, conversionOptions);
+    } else if (attachment.contentType === 'image/gif' || ext === '.gif') {
+      if (options.width) {
+        await convertImageToGif(inputPath, out, {
+          width: options.width,
+        });
+      } else {
+        await fs.copyFile(inputPath, out);
+      }
+    } else if (isAnimatedWebp(file.head)) {
+      // ffmpeg can't demux animated webp (e.g. TikTok stickers), so ImageMagick converts it.
+      await convertAnimatedWebpToGif(inputPath, out, { width: options.width });
     } else {
-      await fs.copyFile(inputPath, gifPath);
+      const { width } = await probeMediaInfo(inputPath, 720);
+      await convertImageToGif(inputPath, out, {
+        width: options.width ?? width,
+      });
     }
-  } else if (isAnimatedWebp(file.head)) {
-    // ffmpeg can't demux animated webp (e.g. TikTok stickers), so ImageMagick converts it.
-    await convertAnimatedWebpToGif(inputPath, gifPath, { width: options.width });
-  } else {
-    const { width } = await probeMediaInfo(inputPath, 720);
-    await convertImageToGif(inputPath, gifPath, {
-      width: options.width ?? width,
-      quality: options.quality ?? botConfig.gifQuality,
-    });
-  }
+  });
   logOperationStep(operationId, 'conversion_complete', 'success', {
     message: `${attachmentType} converted to GIF`,
   });
@@ -294,7 +278,7 @@ async function processConversion(
           message: 'URL already converted, returning cached result',
           metadata: { originalUrl, cachedUrl: cachedRow.file_url },
         });
-        await safeInteractionEditReply(interaction, { content: cachedRow.file_url });
+        await deliverReply(interaction, { content: cachedRow.file_url });
         return finishCommand('convert', ctx, 0);
       }
 
@@ -306,7 +290,7 @@ async function processConversion(
 
       // The gif is stored under its source and the options that shaped it, so a trimmed or
       // resized convert never reuses the plain one.
-      const shape = [options.quality, options.width, options.startTime, options.duration];
+      const shape = [options.width, options.startTime, options.duration];
       const hash = shape.every(value => value == null)
         ? file.hash
         : hashPartsHex([file.hash, 'gif', ...shape.map(v => (v == null ? null : String(v)))]);
@@ -337,7 +321,6 @@ async function processConversion(
         attachmentLimit,
         { hash: finalHash }
       );
-      trackRecentConversion(userId, stored.url);
       await deliverStored(interaction, ctx, stored, { urlHash: urlHash ?? finalHash });
       await finishCommand('convert', ctx, stored.size);
     },
@@ -467,7 +450,8 @@ export async function runConvertJob(
       input.file,
       format,
       trim,
-      input.originalUrl
+      input.originalUrl,
+      commandSource
     );
     return;
   }
@@ -520,11 +504,12 @@ export async function handleConvertContextMenu(interaction) {
 export async function handleConvertCommand(interaction) {
   const userId = interaction.user.id;
   const adminUser = isAdmin(userId);
-  logger.info(
+  const commandSource = commandSourceOf(interaction);
+  logger.debug(
     `User ${userId} initiated conversion via slash command${adminUser ? ' [ADMIN]' : ''}`
   );
   const guard = { type: 'convert', action: 'converting another video or image' };
-  if (await replyIfRateLimited(interaction, { ...guard, commandSource: 'slash' })) {
+  if (await replyIfRateLimited(interaction, { ...guard, commandSource })) {
     return;
   }
 
@@ -537,7 +522,7 @@ export async function handleConvertCommand(interaction) {
     return;
   }
 
-  const context = { commandSource: 'slash' };
+  const context = { commandSource };
   if (!attachment && !url) {
     const message =
       'please provide either a video/image attachment or a URL to a video/image file.';
@@ -550,7 +535,6 @@ export async function handleConvertCommand(interaction) {
     return;
   }
 
-  const commandSource = 'slash';
   if (!(await acceptInput(interaction, { attachment, url, adminUser, commandSource }))) return;
   await safeInteractionDeferReply(interaction);
   const lossy = interaction.options.getNumber('lossy');
@@ -560,7 +544,6 @@ export async function handleConvertCommand(interaction) {
     format,
     times: { startTime: times.startTime, duration: times.duration },
     gifOptions: {
-      quality: interaction.options.getString('quality') || undefined,
       optimize: interaction.options.getBoolean('optimize') ?? false,
       lossy: lossy !== null ? lossy : undefined,
     },

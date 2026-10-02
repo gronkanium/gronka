@@ -152,7 +152,7 @@ function parseViews(value) {
     if (!name || entries.length > 20) return null;
     if (
       entries.some(
-        ([k, val]) => !/^\w{1,32}$/.test(k) || typeof val !== 'string' || val.length > 500
+        ([k, val]) => !/^-?\w{1,32}$/.test(k) || typeof val !== 'string' || val.length > 500
       )
     ) {
       return null;

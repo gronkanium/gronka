@@ -1,3 +1,4 @@
+import axios from 'axios';
 import crypto from 'node:crypto';
 import fs from 'node:fs/promises';
 import * as simplewebauthn from '@simplewebauthn/server';
@@ -11,9 +12,9 @@ import { acquireMedia, extractAudio } from './core/acquire-media.js';
 import { getDisabledServiceLabel, getServiceForUrl } from './utils/download-services.js';
 import { validateUrl, firstUrlIn, parseTimestamp, sanitizeFilename } from './utils/validation.js';
 import { detectFileType } from './utils/storage.js';
-import { uploadToR2, listObjectsInR2, deleteFromR2 } from './utils/r2-storage.js';
+import { uploadToR2, listObjectsInR2, deleteManyFromR2 } from './utils/r2-storage.js';
 import { getStreamInfo, isYouTubeUrl } from './utils/ytdlp.js';
-import { AppError, ValidationError } from './utils/errors.js';
+import { AppError, NetworkError, ValidationError } from './utils/errors.js';
 import * as accounts from './web/accounts.js';
 import { FFMPEG_INPUT_GUARD } from './utils/video-processor/utils.js';
 import { trimItem } from './utils/video-processor/trim-item.js';
@@ -126,8 +127,9 @@ export async function workerLane(url, downloadMethod, { split = true, mute = fal
   });
   const probes = await Promise.all(
     parts.map(part =>
-      fetch(part.link.replace('/f/', '/probe/'), { signal: AbortSignal.timeout(10_000) })
-        .then(res => res.json())
+      axios
+        .get(part.link.replace('/f/', '/probe/'), { timeout: 10_000, validateStatus: () => true })
+        .then(res => res.data)
         .catch(() => ({ ok: false }))
     )
   );
@@ -149,30 +151,43 @@ export async function workerLane(url, downloadMethod, { split = true, mute = fal
 // Lane 3 storage. The R2 listing is the only record: no database rows, nothing in memory
 // that says what was fetched, and a restart loses nothing because the next sweep catches up.
 let liveBytes = 0;
+let reservedBytes = 0;
+let sweeping = null;
 
-export async function sweepR2(now = Date.now()) {
-  const objects = await listObjectsInR2(R2_PREFIX, r2Config);
-  let kept = 0;
-  for (const object of objects) {
-    if (now - new Date(object.lastModified).getTime() > FILE_TTL_MS) {
-      await deleteFromR2(object.key, r2Config).catch(error =>
-        logger.warn(`Sweep could not delete an object: ${error.message}`)
-      );
-    } else {
-      kept += object.size;
-    }
-  }
-  liveBytes = kept;
-  return kept;
+export function sweepR2(now = Date.now()) {
+  sweeping ??= (async () => {
+    const objects = await listObjectsInR2(R2_PREFIX, r2Config);
+    const expired = objects.filter(o => now - new Date(o.lastModified).getTime() > FILE_TTL_MS);
+    const failed = expired.length
+      ? await deleteManyFromR2(
+          expired.map(o => o.key),
+          r2Config
+        )
+      : [];
+    if (failed.length) logger.warn(`Sweep could not delete ${failed.length} objects`);
+    const gone = new Set(expired.map(o => o.key).filter(k => !failed.includes(k)));
+    liveBytes = objects.reduce((sum, o) => sum + (gone.has(o.key) ? 0 : o.size), 0);
+    return liveBytes;
+  })().finally(() => (sweeping = null));
+  return sweeping;
 }
 
 async function publishToR2(file, filename, contentType) {
   if (!file?.size) {
     throw new AppError('could not download this content.', 'DOWNLOAD_FAILED', 502);
   }
-  if (liveBytes + file.size > R2_LIMIT_BYTES) {
+  if (liveBytes + reservedBytes + file.size > R2_LIMIT_BYTES) {
     throw new ValidationError('storage is full right now, try again in a few minutes.');
   }
+  reservedBytes += file.size;
+  try {
+    return await uploadReserved(file, filename, contentType);
+  } finally {
+    reservedBytes -= file.size;
+  }
+}
+
+async function uploadReserved(file, filename, contentType) {
   const name = sanitizeFilename(filename);
   const ext = path
     .extname(name)
@@ -231,8 +246,10 @@ export async function stripAudio(item) {
   return fromPath(output, { filename: item.filename, contentType: item.contentType });
 }
 
-// Every file a download touches lives in one job dir, gone when the answer is sent.
-export const runDownload = options => withJobDir(() => downloadInJob(options));
+// Every file a download touches lives in one job dir, gone when the answer is sent; the signal
+// cancels everything it started.
+export const runDownload = (options, signal) =>
+  withJobDir(() => downloadInJob(options), { signal });
 
 async function downloadInJob({
   url,
@@ -337,12 +354,11 @@ export async function verifyTurnstile(token, action, secret = TURNSTILE_SECRET) 
     return false;
   }
   try {
-    const res = await fetch('https://challenges.cloudflare.com/turnstile/v0/siteverify', {
-      method: 'POST',
-      body: new URLSearchParams({ secret, response: token }),
-      signal: AbortSignal.timeout(10_000),
-    });
-    const out = await res.json();
+    const { data: out } = await axios.post(
+      'https://challenges.cloudflare.com/turnstile/v0/siteverify',
+      new URLSearchParams({ secret, response: token }),
+      { timeout: 10_000, validateStatus: () => true }
+    );
     return (
       out.success === true && out.hostname === new URL(WEB_ORIGIN).hostname && out.action === action
     );
@@ -351,17 +367,26 @@ export async function verifyTurnstile(token, action, secret = TURNSTILE_SECRET) 
   }
 }
 
+// A source that failed or refused is the upstream's fault (502), not a server error.
 function toApiError(error, url) {
   if (error instanceof AppError && error.message) {
-    return { code: error.code, message: error.message };
+    const status =
+      error instanceof NetworkError && error.statusCode === 500 ? 502 : error.statusCode;
+    return { status, error: { code: error.code, message: error.message } };
   }
   logger.error(`Download failed (${getServiceForUrl(url)?.id ?? 'other'}):`, error);
-  return { code: 'DOWNLOAD_FAILED', message: 'could not download this content.' };
+  return {
+    status: 502,
+    error: { code: 'DOWNLOAD_FAILED', message: 'could not download this content.' },
+  };
 }
 
-// Cloudflare drops a tunnelled request that sends nothing for ~100 s, and a big download
-// takes longer. Whitespace before a JSON document is valid JSON, so send some while working.
-function heartbeatJson(work, headers) {
+// Cloudflare drops a tunnelled request that sends nothing for ~100 s, so a download that finishes
+// sooner answers with its real status; a longer one keeps the line open with whitespace, which is
+// valid before a JSON document, and reports a late failure in the body.
+const ANSWER_WITHIN_MS = 80_000;
+
+function heartbeatJson(work, headers, onCancel) {
   const encoder = new TextEncoder();
   let timer;
   const body = new ReadableStream({
@@ -387,6 +412,7 @@ function heartbeatJson(work, headers) {
     },
     cancel() {
       clearInterval(timer);
+      onCancel();
     },
   });
   return new Response(body, {
@@ -454,6 +480,7 @@ export function createHandler({
   loginLimit = 10,
   authLimit = 30,
   webauthn = simplewebauthn,
+  answerWithinMs = ANSWER_WITHIN_MS,
 } = {}) {
   // Per-IP state is keyed by an HMAC under a key that rotates daily and lives only here.
   let dayKey = null;
@@ -477,14 +504,12 @@ export function createHandler({
     const now = Date.now();
     const entry = windows.get(key);
     if (!entry || entry.resetAt <= now) {
-      if (windows.size >= MAX_WINDOWS) {
-        for (const [old, value] of windows) if (value.resetAt <= now) windows.delete(old);
-        // Still full of live entries: drop the oldest, a Map keeps insertion order.
-        for (const old of windows.keys()) {
-          if (windows.size < MAX_WINDOWS) break;
-          windows.delete(old);
-        }
+      // Every window is re-inserted when it starts, so the Map is ordered by expiry: prune from the front.
+      for (const [old, value] of windows) {
+        if (value.resetAt > now && windows.size < MAX_WINDOWS) break;
+        windows.delete(old);
       }
+      windows.delete(key);
       windows.set(key, { count: 1, resetAt: now + IP_WINDOW_MS });
       return 0;
     }
@@ -539,10 +564,14 @@ export function createHandler({
   };
 
   // Cookie-authenticated routes: the Origin check is the CSRF guard, SameSite=Strict the second one.
-  async function requireSession(req) {
+  function requireSameOrigin(req) {
     if (req.method !== 'GET' && req.headers.get('origin') !== WEB_ORIGIN) {
       throw new AppError('not allowed from here.', 'FORBIDDEN', 403);
     }
+  }
+
+  async function requireSession(req) {
+    requireSameOrigin(req);
     const accountId = await accounts.getSessionAccount(readCookie(req, SESSION_COOKIE));
     if (!accountId) {
       throw new AppError('log in first.', 'UNAUTHORIZED', 401);
@@ -580,7 +609,7 @@ export function createHandler({
     let caller;
     const auth = req.headers.get('authorization');
     if (auth) {
-      // A well-formed key costs an argon2 verify, so the attempts are limited before paying for it.
+      // Guessing keys is limited per address before any lookup.
       limit(`auth:${ipKey(req, server)}`, authLimit);
       const key = await accounts.verifyApiKey(auth.replace(/^Bearer\s+/i, ''));
       if (!key) {
@@ -594,17 +623,34 @@ export function createHandler({
     if (!auth && !(await verify(body.turnstile, 'download'))) {
       throw new AppError('verification failed, reload the page.', 'VERIFICATION_FAILED', 403);
     }
-    const work = download(job)
+    // A closed tab or dropped connection cancels the download, wherever it has got to.
+    const cancel = new AbortController();
+    const signal = req.signal ? AbortSignal.any([req.signal, cancel.signal]) : cancel.signal;
+    const work = download(job, signal)
       .then(result => {
         stats.lanes[result.lane] = (stats.lanes[result.lane] ?? 0) + 1;
-        return result;
+        return { status: 200, body: result };
       })
       .catch(error => {
-        const apiErr = toApiError(error, job.url);
+        if (signal.aborted) {
+          stats.cancelled = (stats.cancelled ?? 0) + 1;
+          return { status: 499, body: { error: { code: 'CANCELLED', message: 'cancelled.' } } };
+        }
+        const { status, error: apiErr } = toApiError(error, job.url);
         stats.errors[apiErr.code] = (stats.errors[apiErr.code] ?? 0) + 1;
-        return { error: apiErr };
+        return { status, body: { error: apiErr } };
       });
-    return heartbeatJson(work, headers);
+    let timer;
+    const early = await Promise.race([
+      work,
+      new Promise(resolve => (timer = setTimeout(resolve, answerWithinMs, null))),
+    ]).finally(() => clearTimeout(timer));
+    if (early) return json(early.body, early.status, headers);
+    return heartbeatJson(
+      work.then(answer => answer.body),
+      headers,
+      () => cancel.abort()
+    );
   }
 
   async function route(req, server, headers) {
@@ -643,6 +689,7 @@ export function createHandler({
       return withCookie({ id: accountId }, 200, token, accounts.SESSION_MS / 1000);
     }
     if (method === 'DELETE' && pathname === '/v1/session') {
+      requireSameOrigin(req);
       await accounts.deleteSession(readCookie(req, SESSION_COOKIE));
       return withCookie({ ok: true }, 200, '', 0);
     }
@@ -741,7 +788,10 @@ export function createHandler({
             expectedRPID: RP_ID,
             requireUserVerification: true,
           })
-          .catch(() => null));
+          .catch(error => {
+            logger.warn(`Passkey registration check failed: ${error.message}`);
+            return null;
+          }));
       if (!verification?.verified) {
         throw new AppError('that passkey could not be added, try again.', 'PASSKEY_INVALID', 400);
       }
@@ -781,7 +831,10 @@ export function createHandler({
             credential: passkey.credential,
             requireUserVerification: true,
           })
-          .catch(() => null));
+          .catch(error => {
+            logger.warn(`Passkey login check failed: ${error.message}`);
+            return null;
+          }));
       if (!verification?.verified) {
         throw new AppError('that passkey did not work, try again.', 'PASSKEY_INVALID', 401);
       }
@@ -855,6 +908,7 @@ if (import.meta.main) {
     Promise.all([
       sweepR2().catch(error => logger.warn(`R2 sweep failed: ${error.message}`)),
       sweepJobDirs().catch(error => logger.warn(`Job dir sweep failed: ${error.message}`)),
+      accounts.pruneExpired().catch(error => logger.warn(`Session prune failed: ${error.message}`)),
     ]);
   await sweep();
   setInterval(sweep, 5 * 60 * 1000);

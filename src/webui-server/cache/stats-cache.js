@@ -40,11 +40,11 @@ export async function getStats() {
       throw new Error('Storage path not configured');
     }
 
-    // Calculate stats directly using storage utility
-    const stats = await getStorageStats(storagePath);
-
-    const activeUsers = await getActiveUserCounts();
-    const hourlyRequests = await getHourlyRequestCounts(24);
+    const [stats, activeUsers, hourlyRequests] = await Promise.all([
+      getStorageStats(storagePath),
+      getActiveUserCounts(),
+      getHourlyRequestCounts(24),
+    ]);
 
     // Format response to match expected API format
     const response = {
@@ -77,20 +77,7 @@ export async function getStats() {
       return statsCache;
     }
 
-    // Return a fallback stats response instead of throwing
-    const fallbackStats = {
-      total_gifs: 0,
-      total_videos: 0,
-      total_images: 0,
-      disk_usage_formatted: '0 B',
-      gifs_disk_usage_formatted: '0 B',
-      videos_disk_usage_formatted: '0 B',
-      images_disk_usage_formatted: '0 B',
-      storage_path: 'unknown',
-      error: error.message,
-    };
-
-    return fallbackStats;
+    throw error;
   }
 }
 

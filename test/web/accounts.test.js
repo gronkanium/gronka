@@ -168,9 +168,67 @@ describe('account routes', () => {
     const summary = await (await call('GET', '/v1/account', { cookie })).json();
     expect(summary.keys.map(key => key.id)).toEqual([created.id]);
 
+    expect(
+      (await call('DELETE', '/v1/session', { cookie, origin: 'https://evil.example' })).status
+    ).toBe(403);
+    expect((await call('GET', '/v1/account', { cookie })).status).toBe(200);
     await call('DELETE', '/v1/session', { cookie });
     expect((await call('GET', '/v1/account', { cookie })).status).toBe(401);
     await call('DELETE', '/v1/account', { cookie: cookieOf(login) });
     expect(await accounts.verifyAccountNumber(number)).toBeNull();
+  });
+});
+
+describe('dormant accounts', () => {
+  test('unused accounts go after 90 days, used ones after 365 idle days', async () => {
+    const { getPostgresConnection } = await import('../../src/utils/database/connection.js');
+    const sql = getPostgresConnection();
+    const make = async (createdAgo, usedAgo) => {
+      const { id } = await accounts.createAccount();
+      await sql`
+        UPDATE web_accounts SET created_on = CURRENT_DATE - ${createdAgo}::int,
+          last_used_on = ${usedAgo === null ? null : sql`CURRENT_DATE - ${usedAgo}::int`}
+        WHERE id = ${id}`;
+      return id;
+    };
+    const ids = {
+      neverUsed: await make(100, null),
+      signupDayOnly: await make(100, 100),
+      usedSince: await make(100, 50),
+      idleTooLong: await make(400, 370),
+      idleOk: await make(400, 300),
+      fresh: await make(10, null),
+    };
+    await accounts.pruneExpired();
+    const left = new Set(
+      (await sql`SELECT id FROM web_accounts WHERE id IN ${sql(Object.values(ids))}`).map(r => r.id)
+    );
+    expect(Object.fromEntries(Object.entries(ids).map(([k, id]) => [k, left.has(id)]))).toEqual({
+      neverUsed: false,
+      signupDayOnly: false,
+      usedSince: true,
+      idleTooLong: false,
+      idleOk: true,
+      fresh: true,
+    });
+    for (const id of left) await accounts.deleteAccount(id);
+  });
+
+  test('a signed-in request or an api key call marks the account used today', async () => {
+    const { getPostgresConnection } = await import('../../src/utils/database/connection.js');
+    const sql = getPostgresConnection();
+    const usedOn = async id =>
+      (await sql`SELECT last_used_on = CURRENT_DATE AS today FROM web_accounts WHERE id = ${id}`)[0]
+        .today;
+    const a = await accounts.createAccount();
+    await accounts.getSessionAccount(await accounts.createSession(a.id));
+    expect(await usedOn(a.id)).toBe(true);
+    const b = await accounts.createAccount();
+    const { key } = await accounts.createApiKey(b.id);
+    expect(await usedOn(b.id)).toBeNull();
+    await accounts.verifyApiKey(key);
+    expect(await usedOn(b.id)).toBe(true);
+    await accounts.deleteAccount(a.id);
+    await accounts.deleteAccount(b.id);
   });
 });

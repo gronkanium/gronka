@@ -99,7 +99,7 @@ const broadcastUserMetricsWrapper = (userId, metrics) => {
 
   setBroadcastCallback(broadcastOperationWrapper, WEBUI_PORT);
 
-  await onNewLog(broadcastLogWrapper);
+  await onNewLog(broadcastLogWrapper, () => clients.size > 0);
 
   setAlertBroadcastCallback(broadcastAlertWrapper);
 
@@ -128,7 +128,3 @@ function gracefulShutdown() {
 
 process.on('SIGTERM', gracefulShutdown);
 process.on('SIGINT', gracefulShutdown);
-
-export { broadcastLogWrapper as broadcastLog };
-export { broadcastAlertWrapper as broadcastAlert };
-export { broadcastUserMetricsWrapper as broadcastUserMetrics };

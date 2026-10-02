@@ -39,6 +39,14 @@ describe('reddit utilities', () => {
     assert.strictEqual(isRedditPostUrl('https://old.reddit.com/r/aww/comments/abc123/x/'), true);
   });
 
+  test('isRedditPostUrl accepts posts made to a user profile', () => {
+    const post = 'https://www.reddit.com/user/Skiddydippity/comments/1wuqkjr/felt_good_today/';
+    assert.strictEqual(isRedditPostUrl(post), true);
+    assert.strictEqual(isRedditPostUrl('https://reddit.com/u/someone/comments/abc123/x/'), true);
+    assert.strictEqual(isRedditPostUrl('https://www.reddit.com/u/someone/s/9EjV8nKm1j'), true);
+    assert.strictEqual(commentIdFromUrl(`${post}pa1l75m/`), 'pa1l75m');
+  });
+
   test('isRedditPostUrl rejects subreddits, users, and lookalike hosts', () => {
     assert.strictEqual(isRedditPostUrl('https://www.reddit.com/r/aww/'), false);
     assert.strictEqual(isRedditPostUrl('https://www.reddit.com/user/someone'), false);

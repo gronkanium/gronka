@@ -4,7 +4,6 @@ import {
   isGifFile,
   parseOwnCdnUrl,
   calculateSizeReduction,
-  formatSizeMb,
 } from '../../src/utils/gif-optimizer.js';
 
 const extractHashFromCdnUrl = url => parseOwnCdnUrl(url)?.hash ?? null;
@@ -141,35 +140,6 @@ describe('gif optimizer utilities', () => {
       assert.strictEqual(calculateSizeReduction(1000, 666), 33); // 33.4% rounds to 33
       assert.strictEqual(calculateSizeReduction(1000, 667), 33); // 33.3% rounds to 33
       assert.strictEqual(calculateSizeReduction(1000, 665), 34); // 33.5% rounds to 34
-    });
-  });
-
-  describe('formatSizeMb', () => {
-    test('formats bytes to MB', () => {
-      assert.strictEqual(formatSizeMb(1024 * 1024), '1.0mb');
-      assert.strictEqual(formatSizeMb(5 * 1024 * 1024), '5.0mb');
-      assert.strictEqual(formatSizeMb(1536 * 1024), '1.5mb');
-    });
-
-    test('handles zero bytes', () => {
-      assert.strictEqual(formatSizeMb(0), '0.0mb');
-    });
-
-    test('handles small sizes', () => {
-      assert.strictEqual(formatSizeMb(512 * 1024), '0.5mb');
-      assert.strictEqual(formatSizeMb(256 * 1024), '0.3mb'); // 0.25MB rounds to 0.3MB
-    });
-
-    test('handles large sizes', () => {
-      assert.strictEqual(formatSizeMb(10 * 1024 * 1024), '10.0mb');
-      assert.strictEqual(formatSizeMb(100 * 1024 * 1024), '100.0mb');
-    });
-
-    test('rounds to one decimal place', () => {
-      assert.strictEqual(formatSizeMb(1536 * 1024), '1.5mb');
-      assert.strictEqual(formatSizeMb(1537 * 1024), '1.5mb'); // Rounds down
-      assert.strictEqual(formatSizeMb(1538 * 1024), '1.5mb'); // Rounds down
-      assert.strictEqual(formatSizeMb(1543 * 1024), '1.5mb'); // Rounds up
     });
   });
 });

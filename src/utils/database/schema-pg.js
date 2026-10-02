@@ -3,19 +3,14 @@
  * Converts SQLite schema to PostgreSQL syntax
  */
 
-/**
- * Get all table creation SQL statements
- * @returns {Array<{name: string, sql: string}>} Array of table definitions
- */
 export function getTableDefinitions() {
   return [
     {
-      name: 'users',
+      name: 'schema_migrations',
       sql: `
-        CREATE TABLE IF NOT EXISTS users (
-          user_id TEXT PRIMARY KEY,
-          first_used BIGINT NOT NULL,
-          last_used BIGINT NOT NULL
+        CREATE TABLE IF NOT EXISTS schema_migrations (
+          name TEXT PRIMARY KEY,
+          applied_at BIGINT NOT NULL
         );
       `,
     },
@@ -70,15 +65,9 @@ export function getTableDefinitions() {
         CREATE TABLE IF NOT EXISTS user_metrics (
           user_id TEXT PRIMARY KEY,
           total_commands BIGINT DEFAULT 0,
-          successful_commands BIGINT DEFAULT 0,
           failed_commands BIGINT DEFAULT 0,
-          total_convert BIGINT DEFAULT 0,
-          total_download BIGINT DEFAULT 0,
-          total_optimize BIGINT DEFAULT 0,
-          total_info BIGINT DEFAULT 0,
-          total_file_size BIGINT DEFAULT 0,
-          last_command_at BIGINT,
-          updated_at BIGINT NOT NULL
+          first_used BIGINT NOT NULL,
+          last_command_at BIGINT
         );
       `,
     },
@@ -184,31 +173,11 @@ export function getTableDefinitions() {
   ];
 }
 
-/**
- * Get all index creation SQL statements
- * @returns {Array<{name: string, sql: string}>} Array of index definitions
- */
 export function getIndexDefinitions() {
   return [
     {
-      name: 'idx_users_user_id',
-      sql: 'CREATE INDEX IF NOT EXISTS idx_users_user_id ON users(user_id);',
-    },
-    {
-      name: 'idx_users_last_used',
-      sql: 'CREATE INDEX IF NOT EXISTS idx_users_last_used ON users(last_used);',
-    },
-    {
       name: 'idx_logs_timestamp',
       sql: 'CREATE INDEX IF NOT EXISTS idx_logs_timestamp ON logs(timestamp);',
-    },
-    {
-      name: 'idx_logs_component',
-      sql: 'CREATE INDEX IF NOT EXISTS idx_logs_component ON logs(component);',
-    },
-    {
-      name: 'idx_logs_level',
-      sql: 'CREATE INDEX IF NOT EXISTS idx_logs_level ON logs(level);',
     },
     {
       name: 'idx_logs_component_timestamp',
@@ -227,20 +196,8 @@ export function getIndexDefinitions() {
       sql: 'CREATE INDEX IF NOT EXISTS idx_processed_urls_user_id ON processed_urls(user_id);',
     },
     {
-      name: 'idx_operation_logs_operation_id',
-      sql: 'CREATE INDEX IF NOT EXISTS idx_operation_logs_operation_id ON operation_logs(operation_id);',
-    },
-    {
       name: 'idx_operation_logs_timestamp',
       sql: 'CREATE INDEX IF NOT EXISTS idx_operation_logs_timestamp ON operation_logs(timestamp);',
-    },
-    {
-      name: 'idx_operation_logs_status',
-      sql: 'CREATE INDEX IF NOT EXISTS idx_operation_logs_status ON operation_logs(status);',
-    },
-    {
-      name: 'idx_operation_logs_step',
-      sql: 'CREATE INDEX IF NOT EXISTS idx_operation_logs_step ON operation_logs(step);',
     },
     {
       name: 'idx_operation_logs_operation_id_timestamp',
@@ -283,10 +240,6 @@ export function getIndexDefinitions() {
       sql: 'CREATE INDEX IF NOT EXISTS idx_temporary_uploads_r2_key ON temporary_uploads(r2_key);',
     },
     {
-      name: 'idx_temporary_uploads_url_hash',
-      sql: 'CREATE INDEX IF NOT EXISTS idx_temporary_uploads_url_hash ON temporary_uploads(url_hash);',
-    },
-    {
       name: 'idx_temporary_uploads_deleted_at',
       sql: 'CREATE INDEX IF NOT EXISTS idx_temporary_uploads_deleted_at ON temporary_uploads(deleted_at);',
     },
@@ -306,6 +259,22 @@ export function getIndexDefinitions() {
       name: 'idx_media_jobs_status',
       sql: 'CREATE INDEX IF NOT EXISTS idx_media_jobs_status ON media_jobs(status, id);',
     },
+    {
+      name: 'idx_operation_logs_status_update',
+      sql: "CREATE INDEX IF NOT EXISTS idx_operation_logs_status_update ON operation_logs(operation_id, timestamp DESC) WHERE step = 'status_update';",
+    },
+    {
+      name: 'idx_operation_logs_created',
+      sql: "CREATE INDEX IF NOT EXISTS idx_operation_logs_created ON operation_logs(timestamp) WHERE step = 'created';",
+    },
+    {
+      name: 'idx_media_jobs_timestamp',
+      sql: 'CREATE INDEX IF NOT EXISTS idx_media_jobs_timestamp ON media_jobs(timestamp);',
+    },
+    {
+      name: 'idx_media_jobs_operation_id',
+      sql: 'CREATE INDEX IF NOT EXISTS idx_media_jobs_operation_id ON media_jobs(operation_id) WHERE operation_id IS NOT NULL;',
+    },
   ];
 }
 
@@ -313,61 +282,96 @@ async function columnExists(sql, tableName, columnName) {
   const result = await sql`
     SELECT column_name
     FROM information_schema.columns
-    WHERE table_name = ${tableName}
+    WHERE table_schema = current_schema()
+      AND table_name = ${tableName}
       AND column_name = ${columnName}
   `;
   return result.length > 0;
 }
 
-export async function addFileSizeColumnIfNeeded(sql) {
+async function addFileSizeColumnIfNeeded(sql) {
   const exists = await columnExists(sql, 'processed_urls', 'file_size');
   if (!exists) {
     await sql`ALTER TABLE processed_urls ADD COLUMN file_size BIGINT`;
   }
 }
 
-/**
- * Add r2_expired_at column to processed_urls if it doesn't exist (for migration).
- * Set by the R2 cleanup job once a row's backing R2 upload has actually expired
- * and been removed, so callers can stop treating file_url as resolvable without
- * losing the historical processed_urls row (used for request-count stats).
- * @param {postgres.Sql} sql - PostgreSQL connection
- * @returns {Promise<void>}
- */
-export async function addR2ExpiredAtColumnIfNeeded(sql) {
+// Add r2_expired_at column to processed_urls if it doesn't exist (for migration)
+async function addR2ExpiredAtColumnIfNeeded(sql) {
   const exists = await columnExists(sql, 'processed_urls', 'r2_expired_at');
   if (!exists) {
     await sql`ALTER TABLE processed_urls ADD COLUMN r2_expired_at BIGINT`;
   }
 }
 
-/**
- * Drop the username columns if an older database still has them.
- *
- * gronka stores Discord ids only, a name is never needed for anything the bot does, and every
- * surface that showed one now shows the id. Dropping rather than leaving them empty means the
- * names are actually gone, not merely unreferenced. Names already embedded in operation_logs /
- * alerts / logs messages are left to age out with the retention job.
- * @param {postgres.Sql} sql - PostgreSQL connection
- * @returns {Promise<void>}
- */
-export async function dropUsernameColumnsIfPresent(sql) {
-  for (const table of ['users', 'user_metrics']) {
-    if (await columnExists(sql, table, 'username')) {
-      await sql.unsafe(`ALTER TABLE ${table} DROP COLUMN username`);
+// Drop the username columns if an older database still has them
+async function dropUsernameColumnsIfPresent(sql) {
+  await sql`ALTER TABLE user_metrics DROP COLUMN IF EXISTS username`;
+}
+
+// One row per user: request and failure counts, first and last use. Everything else was dropped.
+export async function mergeUsersIntoUserMetrics(sql) {
+  if (!(await columnExists(sql, 'user_metrics', 'updated_at'))) {
+    return;
+  }
+  await sql`ALTER TABLE user_metrics ADD COLUMN IF NOT EXISTS first_used BIGINT`;
+  if (await columnExists(sql, 'users', 'first_used')) {
+    await sql`
+      UPDATE user_metrics m SET first_used = u.first_used
+      FROM users u WHERE u.user_id = m.user_id AND m.first_used IS NULL`;
+  }
+  await sql`
+    UPDATE user_metrics m SET first_used = COALESCE(
+      (SELECT MIN(processed_at) FROM processed_urls p WHERE p.user_id = m.user_id),
+      m.last_command_at, 0)
+    WHERE m.first_used IS NULL`;
+  await sql`ALTER TABLE user_metrics ALTER COLUMN first_used SET NOT NULL`;
+  await sql`DROP TABLE IF EXISTS users`;
+  await sql`
+    ALTER TABLE user_metrics
+      DROP COLUMN IF EXISTS successful_commands, DROP COLUMN IF EXISTS total_convert,
+      DROP COLUMN IF EXISTS total_download, DROP COLUMN IF EXISTS total_optimize,
+      DROP COLUMN IF EXISTS total_info, DROP COLUMN IF EXISTS total_file_size,
+      DROP COLUMN IF EXISTS updated_at`;
+}
+
+// Each is a prefix of another index or has about four distinct values; they only cost writes.
+async function dropRedundantIndexes(sql) {
+  for (const name of [
+    'idx_logs_component',
+    'idx_logs_level',
+    'idx_operation_logs_operation_id',
+    'idx_operation_logs_status',
+    'idx_operation_logs_step',
+    'idx_temporary_uploads_url_hash',
+  ]) {
+    await sql.unsafe(`DROP INDEX IF EXISTS ${name}`);
+  }
+}
+
+// Append only: a name, once recorded in schema_migrations, never runs again.
+const MIGRATIONS = [
+  ['processed_urls_file_size', addFileSizeColumnIfNeeded],
+  ['processed_urls_r2_expired_at', addR2ExpiredAtColumnIfNeeded],
+  ['drop_username_columns', dropUsernameColumnsIfPresent],
+  ['merge_users_into_user_metrics', mergeUsersIntoUserMetrics],
+  ['temporary_uploads_cascade_delete', ensureTemporaryUploadsCascadeDelete],
+  ['temporary_uploads_unique_key', ensureTemporaryUploadsUniqueKey],
+  ['drop_redundant_indexes', dropRedundantIndexes],
+];
+
+export async function runMigrations(sql) {
+  const applied = new Set((await sql`SELECT name FROM schema_migrations`).map(r => r.name));
+  for (const [name, migrate] of MIGRATIONS) {
+    if (!applied.has(name)) {
+      await migrate(sql);
+      await sql`INSERT INTO schema_migrations (name, applied_at) VALUES (${name}, ${Date.now()})`;
     }
   }
 }
 
-/**
- * Ensure temporary_uploads.url_hash foreign key cascades on delete (for migration).
- * Without this, deleting a processed_urls row that still has a temporary_uploads
- * reference fails with a foreign key violation - the R2 file gets deleted but the
- * DB row is left behind.
- * @param {postgres.Sql} sql - PostgreSQL connection
- * @returns {Promise<void>}
- */
-export async function ensureTemporaryUploadsCascadeDelete(sql) {
+// Ensure temporary_uploads.url_hash foreign key cascades on delete (for migration)
+async function ensureTemporaryUploadsCascadeDelete(sql) {
   const result = await sql`
     SELECT confdeltype
     FROM pg_constraint
@@ -388,7 +392,7 @@ export async function ensureTemporaryUploadsCascadeDelete(sql) {
 }
 
 // ON CONFLICT (url_hash, r2_key) is rejected without this key; older databases may lack it.
-export async function ensureTemporaryUploadsUniqueKey(sql) {
+async function ensureTemporaryUploadsUniqueKey(sql) {
   const keyed = await sql`
     SELECT 1 FROM pg_index i
     WHERE i.indrelid = 'temporary_uploads'::regclass AND i.indisunique AND i.indpred IS NULL

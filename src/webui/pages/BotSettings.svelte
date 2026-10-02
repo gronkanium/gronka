@@ -1,4 +1,5 @@
 <script>
+  import { sendJson } from '../utils/api.js';
   import {
     Share2,
     HardDrive,
@@ -168,11 +169,7 @@
     saving[key] = true;
     error = '';
     try {
-      const res = await fetch(`/api/settings/${key}`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ value }),
-      });
+      const res = await sendJson(`/api/settings/${key}`, 'PUT', { value });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(data.message || `HTTP ${res.status}`);
       settings[key].value = data.value;
@@ -211,13 +208,9 @@
   }
   async function savePresence() {
     presenceSaving = true;
-    const res = await fetch('/api/bot/status', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        status: presenceStatus,
-        activity: presenceActivity.trim() || undefined,
-      }),
+    const res = await sendJson('/api/bot/status', 'POST', {
+      status: presenceStatus,
+      activity: presenceActivity.trim() || undefined,
     }).catch(() => null);
     const data = res ? await res.json().catch(() => ({})) : {};
     presenceSaving = false;

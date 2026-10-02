@@ -10,6 +10,7 @@ import {
 } from '../../src/web-server.js';
 import { trimItem } from '../../src/utils/video-processor/trim-item.js';
 import { redactForWeb } from '../../src/utils/logger.js';
+import { NetworkError, ValidationError } from '../../src/utils/errors.js';
 
 const ok = async () => true;
 const result = { lane: 'direct', files: [{ url: 'https://video.example/a.mp4' }] };
@@ -85,28 +86,67 @@ describe('handler', () => {
     expect(calls).toBe(0);
   });
 
-  test('a download answers with padded json carrying the result', async () => {
+  test('a download that finishes in time answers with its result and a real status', async () => {
     const handle = createHandler({ verify: ok, download: async () => result });
+    const res = await handle(post(body));
+    expect(res.status).toBe(200);
+    expect(await readJson(res)).toEqual(result);
+    expect(handle.stats().lanes.direct).toBe(1);
+  });
+
+  test('a download past the answer window keeps the line open with padded json', async () => {
+    const handle = createHandler({
+      verify: ok,
+      download: () => new Promise(resolve => setTimeout(resolve, 20, result)),
+      answerWithinMs: 0,
+    });
     const res = await handle(post(body));
     expect(res.status).toBe(200);
     const text = await res.text();
     expect(text.startsWith(' ')).toBe(true);
     expect(JSON.parse(text)).toEqual(result);
-    expect(handle.stats().lanes.direct).toBe(1);
   });
 
-  test('internal errors are curated, AppErrors pass through', async () => {
-    const handle = createHandler({
-      verify: ok,
-      download: async () => {
-        throw new Error('ENOENT /app/temp/secret-path');
-      },
-    });
-    const out = await readJson(await handle(post(body)));
-    expect(out.error).toEqual({
+  test('failures carry their status: 400 for the user, 502 for the source, curated internals', async () => {
+    const failing = error =>
+      createHandler({
+        verify: ok,
+        download: async () => {
+          throw error;
+        },
+      });
+    const internal = await failing(new Error('ENOENT /app/temp/secret-path'))(post(body));
+    expect(internal.status).toBe(502);
+    expect((await readJson(internal)).error).toEqual({
       code: 'DOWNLOAD_FAILED',
       message: 'could not download this content.',
     });
+    const user = await failing(new ValidationError('video is too long.'))(post(body));
+    expect(user.status).toBe(400);
+    expect((await readJson(user)).error.message).toBe('video is too long.');
+    const source = await failing(new NetworkError('this post is unavailable.'))(post(body));
+    expect(source.status).toBe(502);
+  });
+
+  test('a dropped request cancels the download it started', async () => {
+    let seen;
+    const handle = createHandler({
+      verify: ok,
+      download: (_job, signal) =>
+        new Promise((_, reject) => {
+          seen = signal;
+          signal.addEventListener('abort', () => reject(signal.reason));
+        }),
+    });
+    const client = new AbortController();
+    const req = new Request(post(body), { signal: client.signal });
+    const pending = handle(req);
+    await new Promise(resolve => setTimeout(resolve, 10));
+    client.abort();
+    const res = await pending;
+    expect(seen.aborted).toBe(true);
+    expect(res.status).toBe(499);
+    expect(handle.stats().cancelled).toBe(1);
   });
 
   test('per-ip limit', async () => {
@@ -239,4 +279,33 @@ test('trimItem cuts a video to the requested section and leaves images alone', a
   const image = { path: '/nonexistent.jpg', filename: 'a.jpg', contentType: 'image/jpeg' };
   expect(await trimItem(image, { startTime: 1, duration: 2 })).toBe(image);
   fs.rmSync(dir, { recursive: true });
+});
+
+test('a client that hangs up mid-download cancels it on a real server', async () => {
+  let seen;
+  const handle = createHandler({
+    verify: ok,
+    download: (_job, signal) =>
+      new Promise((_, reject) => {
+        seen = signal;
+        signal.addEventListener('abort', () => reject(signal.reason));
+      }),
+  });
+  const server = Bun.serve({ port: 0, fetch: (req, srv) => handle(req, srv) });
+  try {
+    const client = new AbortController();
+    const res = fetch(`http://127.0.0.1:${server.port}/v1/download`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify(body),
+      signal: client.signal,
+    }).catch(() => null);
+    await new Promise(resolve => setTimeout(resolve, 100));
+    client.abort();
+    await res;
+    await new Promise(resolve => setTimeout(resolve, 100));
+    expect(seen?.aborted).toBe(true);
+  } finally {
+    server.stop(true);
+  }
 });

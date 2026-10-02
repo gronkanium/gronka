@@ -9,13 +9,7 @@ const logger = createLogger('ban-check');
 
 const BAN_EMBED_COLOR = 0xed4245; // Discord red - distinct from the 0x5865f2 blurple used by /info and /stats
 
-/**
- * If the moderation system is enabled and the interacting user is banned, reply with the ban
- * embed and return true so the caller can skip dispatching the interaction. This is the single
- * choke point for ban enforcement - it must run before ANY command/context-menu/modal handler.
- * @param {import('discord.js').Interaction} interaction
- * @returns {Promise<boolean>} true if the user is banned (caller should return early)
- */
+// If the moderation system is enabled and the interacting user is banned, reply with the ban embed and return true so the caller can skip dispatching the interaction
 export async function replyIfBanned(interaction) {
   const moderationEnabled = await getBooleanSetting('moderation_enabled', false);
   if (!moderationEnabled) {
@@ -59,13 +53,7 @@ export async function replyIfBanned(interaction) {
   return true;
 }
 
-/**
- * If maintenance mode (webui setting) is on and the user is not an admin, reply with a
- * maintenance notice and return true so the caller can skip dispatching the interaction.
- * Runs at the same choke point as replyIfBanned, before any command handler.
- * @param {import('discord.js').Interaction} interaction
- * @returns {Promise<boolean>} true if the interaction was blocked (caller should return early)
- */
+// If maintenance mode (webui setting) is on and the user is not an admin, reply with a maintenance notice and return true so the caller can skip dispatching the interaction
 export async function replyIfMaintenance(interaction) {
   let maintenanceMode;
   try {

@@ -1,9 +1,10 @@
 <script>
+  import { getJsonOrNull } from '../utils/api.js';
   import { onDestroy } from 'svelte';
   import { Search, Users as UsersIcon, ArrowUpRight } from 'lucide-svelte';
   import { navigate } from '../utils/router.js';
   import { userMetrics } from '../stores/sse-store.js';
-  import { formatBytes, formatRelativeTime } from '../utils/format.js';
+  import { formatDate, formatRelativeTime } from '../utils/format.js';
   import PageHeader from '../components/PageHeader.svelte';
   import DataTable from '../components/DataTable.svelte';
   import Avatar from '../components/Avatar.svelte';
@@ -27,13 +28,6 @@
     ['total_commands', 'Most active'],
     ['last_command_at', 'Recently seen'],
     ['failed_commands', 'Most failures'],
-    ['total_file_size', 'Most data'],
-  ];
-  const MIX = [
-    ['total_download', '/download'],
-    ['total_convert', '/convert'],
-    ['total_optimize', '/optimize'],
-    ['total_info', '/info'],
   ];
 
   let users = $state([]);
@@ -51,13 +45,13 @@
   const split = $derived(innerWidth > 1100);
 
   const rate = u =>
-    u.total_commands ? Math.round((u.successful_commands / u.total_commands) * 100) : 0;
-  const get = url =>
-    fetch(url)
-      .then(r => (r.ok ? r.json() : Promise.reject(new Error())))
-      .catch(() => null);
+    u.total_commands
+      ? Math.round(((u.total_commands - u.failed_commands) / u.total_commands) * 100)
+      : 0;
 
+  let seq = 0;
   async function load() {
+    const mine = ++seq;
     loading = true;
     error = '';
     const q = new URLSearchParams({
@@ -67,7 +61,8 @@
       offset: String(offset),
     });
     if (search.trim()) q.set('search', search.trim());
-    const data = await get(`/api/users?${q}`);
+    const data = await getJsonOrNull(`/api/users?${q}`);
+    if (mine !== seq) return;
     if (!data) error = 'could not load users';
     users = data?.users ?? [];
     total = data?.total ?? 0;
@@ -76,8 +71,8 @@
 
   async function loadStats() {
     const [st, top] = await Promise.all([
-      get('/api/stats'),
-      get('/api/users?sortBy=total_commands&sortDesc=true&limit=1'),
+      getJsonOrNull('/api/stats'),
+      getJsonOrNull('/api/users?sortBy=total_commands&sortDesc=true&limit=1'),
     ]);
     stats = st;
     topUser = top?.users?.[0] ?? null;
@@ -118,7 +113,6 @@
   const selected = $derived(users.find(u => u.user_id === picked) ?? users[0] ?? null);
   const openRow = u =>
     split ? (picked = u.user_id) : navigate('user-profile', { userId: u.user_id });
-  const mixMax = u => Math.max(1, ...MIX.map(([k]) => u[k] ?? 0));
 
   // Same as Issues: the panes fill the viewport below the header, so measure where they start.
   let gridEl = $state();
@@ -270,7 +264,7 @@
             <div class="facts">
               <div>
                 <span class="k">Delivered</span><b class="tnum"
-                  >{u.successful_commands.toLocaleString()}</b
+                  >{(u.total_commands - u.failed_commands).toLocaleString()}</b
                 >
               </div>
               <div>
@@ -279,20 +273,8 @@
                 >
               </div>
               <div>
-                <span class="k">Data</span><b class="tnum">{formatBytes(u.total_file_size)}</b>
+                <span class="k">First seen</span><b class="tnum">{formatDate(u.first_used)}</b>
               </div>
-            </div>
-            <div class="mix">
-              <span class="section-label">Commands</span>
-              {#each MIX as [key, label] (key)}
-                <div class="mrow">
-                  <span class="mono small">{label}</span>
-                  <span class="bar-track"
-                    ><span style="width:{((u[key] ?? 0) / mixMax(u)) * 100}%"></span></span
-                  >
-                  <span class="num small tnum">{(u[key] ?? 0).toLocaleString()}</span>
-                </div>
-              {/each}
             </div>
           </div>
           <div class="dfoot">
@@ -450,25 +432,6 @@
   .facts b {
     font-size: var(--fs-md);
     color: var(--text-bright);
-  }
-  .mix {
-    display: flex;
-    flex-direction: column;
-    gap: 10px;
-    padding: 16px 20px;
-  }
-  .mrow {
-    display: grid;
-    grid-template-columns: 76px minmax(0, 1fr) 48px;
-    align-items: center;
-    gap: 10px;
-    color: var(--text-soft);
-  }
-  .mrow .bar-track {
-    height: 6px;
-  }
-  .mrow .bar-track > span {
-    background: var(--chart-1);
   }
   .dfoot {
     padding: 12px 20px;

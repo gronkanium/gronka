@@ -1,4 +1,5 @@
 <script>
+  import { getJsonOrNull, sendJson } from '../utils/api.js';
   import { Search, Globe } from 'lucide-svelte';
   import PageHeader from '../components/PageHeader.svelte';
 
@@ -20,10 +21,7 @@
   let toastTimer;
   let usage = $state({});
 
-  fetch('/api/sources/usage')
-    .then(r => (r.ok ? r.json() : null))
-    .then(d => (usage = d?.usage ?? {}))
-    .catch(() => {});
+  getJsonOrNull('/api/sources/usage').then(d => (usage = d?.usage ?? {}));
 
   const parseIds = value => {
     try {
@@ -64,11 +62,7 @@
     saving = true;
     error = '';
     try {
-      const res = await fetch('/api/settings/disabled_services', {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ value: [...next] }),
-      });
+      const res = await sendJson('/api/settings/disabled_services', 'PUT', { value: [...next] });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(data.message || `HTTP ${res.status}`);
       disabled = new Set(parseIds(data.value));

@@ -191,9 +191,11 @@
         <section id="padded-json" aria-labelledby="padded-title">
           <h2 id="padded-title">padded json</h2>
           <p>
-            while a download runs, the response starts with spaces, then json. parse the full
-            response as usual. errors after it starts use the json body; errors before it starts use
-            an http status.
+            a download that finishes within about 80 seconds answers with its http status: 200, 400
+            when the link or options are the problem, 502 when the source failed. a longer one
+            starts sending spaces to keep the connection open, then json; parse the full response as
+            usual, and look for <code>error</code> in the body, since the status is already 200.
+            closing the connection cancels the download.
           </p>
         </section>
 
@@ -215,10 +217,7 @@
             <li><code>PASSKEY_LIMIT</code><span>the account already has 10 passkeys.</span></li>
             <li>
               <code>RATE_LIMITED</code
-              ><span
-                >too many downloads or one is already running. retry after
-                <code>retryAfter</code> seconds.</span
-              >
+              ><span>too many requests. retry after <code>retryAfter</code> seconds.</span>
             </li>
             <li>
               <code>UNAUTHORIZED</code><span>the account or api key is missing or invalid.</span>
@@ -232,6 +231,9 @@
             <li><code>TOTP_REQUIRED</code><span>this account needs a 2fa code.</span></li>
             <li><code>VALIDATION_ERROR</code><span>the media or request hit a limit.</span></li>
             <li><code>VERIFICATION_FAILED</code><span>the turnstile check failed.</span></li>
+            <li>
+              <code>CONTENT_GONE</code><span>the post was removed or is no longer available.</span>
+            </li>
           </ul>
         </section>
 
@@ -256,10 +258,11 @@
             passkey login clears the lock.
           </p>
           <p>
-            with 2fa on, four actions also need a current code (or a recovery code) as
+            with 2fa on, six actions also need a current code (or a recovery code) as
             <code>code</code> in the json body: <code>POST /v1/account/rotate</code>,
-            <code>DELETE /v1/account</code>, <code>POST /v1/passkeys/register/options</code> and
-            <code>DELETE /v1/passkeys/{id}</code>. a new number also signs out every other session.
+            <code>DELETE /v1/account</code>, <code>POST /v1/passkeys/register/options</code>,
+            <code>DELETE /v1/passkeys/{id}</code>, <code>DELETE /v1/totp</code> and
+            <code>POST /v1/totp/recovery</code>. a new number also signs out every other session.
           </p>
         </section>
 
@@ -269,8 +272,8 @@
             50 downloads per 10 minutes per ip, or per account with api keys (all keys share the
             account limit). api key checks are capped at 30 per 10 minutes per ip. files fetched by
             gronka (lane r2) have a 400 mb cap; images have a 50 mb cap. a
-            <code>429</code> or <code>503</code> includes <code>error.retryAfter</code> in seconds
-            and the same value in a <code>Retry-After</code> header.
+            <code>RATE_LIMITED</code> <code>429</code> includes <code>error.retryAfter</code> in
+            seconds and the same value in a <code>Retry-After</code> header.
           </p>
         </section>
 

@@ -20,8 +20,9 @@ there is no manual step.
 | `RETENTION_URL_CACHE_DAYS` | `7` | `processed_urls` (the URL → file cache) |
 | `RETENTION_INTERVAL_MS` | `21600000` | how often the job runs (6 hours) |
 
-**Not pruned:** `users` and `user_metrics`. Those are one row per Discord id with counters, not a
-history, and they are what `/info` and the webui report as the user count. Pruning them would lose
+**Not pruned:** `user_metrics`, one row per Discord id holding its request and failure counts and
+the dates of first and last use. It is not a history, and it is what `/info` and the webui report
+as the user count. Pruning them would lose
 the only figure gronka publishes about its users. Ban records are kept too, for obvious reasons.
 
 A cache row whose R2 upload is still live is never pruned, deleting it would orphan the object in
@@ -373,33 +374,6 @@ MAX_IMAGE_SIZE=52428800
 # or for test/prod bots
 TEST_MAX_IMAGE_SIZE=26214400
 PROD_MAX_IMAGE_SIZE=52428800
-```
-
-### `GIF_QUALITY`
-
-gif conversion quality setting.
-
-**default:** `medium`
-
-**options:**
-
-- `low` - faster conversion, lower quality, smaller file size
-- `medium` - balanced quality and file size (recommended)
-- `high` - slower conversion, higher quality, larger file size
-
-**notes:**
-
-- affects the quality of converted gifs
-- higher quality takes longer to process
-- lower quality produces smaller files
-
-**example:**
-
-```env
-GIF_QUALITY=medium
-# or for test/prod bots
-TEST_GIF_QUALITY=low
-PROD_GIF_QUALITY=high
 ```
 
 ## server configuration
@@ -890,7 +864,6 @@ all environment variables support the `TEST_` and `PROD_` prefixes, including:
 **file size limits:**
 - `TEST_MAX_VIDEO_SIZE` / `PROD_MAX_VIDEO_SIZE`
 - `TEST_MAX_IMAGE_SIZE` / `PROD_MAX_IMAGE_SIZE`
-- `TEST_GIF_QUALITY` / `PROD_GIF_QUALITY`
 
 **processing options:**
 - `TEST_MAX_GIF_DURATION` / `PROD_MAX_GIF_DURATION`
@@ -968,7 +941,7 @@ for more details, see the [[Test-Bot|test bot documentation]].
 
 ## local vs docker deployment variable handling
 
-there is an important difference in how environment variables are handled between local deployments (using `bun run bot:prod:webui`) and docker deployments (using `bun run docker:up`).
+there is an important difference in how environment variables are handled between local deployments (using `bun run bot:prod:webui`) and docker deployments (using `docker compose up -d`).
 
 ### local deployment (`bun run bot:prod:webui`)
 
@@ -990,9 +963,9 @@ bun run bot:test:webui    # uses TEST_* variables
 
 **example:** if you set `PROD_MAX_GIF_DURATION=60` in your `.env`, the bot will use 60 seconds when started with `bun run bot:prod:webui`.
 
-### docker deployment (`bun run docker:up`)
+### docker deployment (`docker compose up -d`)
 
-when you run `bun run docker:up`, it uses `docker-compose.yml` which:
+when you run `docker compose up -d`, it uses `docker-compose.yml` which:
 
 1. sets environment variables directly in the container
 2. **only supports `PROD_*` prefix for 4 variables:**
@@ -1028,7 +1001,6 @@ all other variables in `docker-compose.yml` use standard names and do not suppor
 # these use standard names (no PROD_ prefix support)
 CDN_BASE_URL=${CDN_BASE_URL:-}
 MAX_GIF_DURATION=${MAX_GIF_DURATION:-30}
-GIF_QUALITY=${GIF_QUALITY:-medium}
 ADMIN_USER_IDS=${ADMIN_USER_IDS:-}
 STATS_USERNAME=${STATS_USERNAME:-}
 R2_ACCOUNT_ID=${R2_ACCOUNT_ID:-}
@@ -1055,22 +1027,20 @@ if you need different values for docker deployment, you must set the standard va
 PROD_DISCORD_TOKEN=prod_token
 PROD_CLIENT_ID=prod_client_id
 PROD_MAX_GIF_DURATION=60
-PROD_GIF_QUALITY=high
 PROD_R2_BUCKET_NAME=prod-bucket
 ```
 
-**docker deployment with `bun run docker:up`:**
+**docker deployment with `docker compose up -d`:**
 ```env
 PROD_DISCORD_TOKEN=prod_token           # supports PROD_ prefix
 PROD_CLIENT_ID=prod_client_id          # supports PROD_ prefix
 PROD_GIF_STORAGE_PATH=./data-prod      # supports PROD_ prefix
 
 MAX_GIF_DURATION=60                    # standard name (no prefix)
-GIF_QUALITY=high                       # standard name (no prefix)
 R2_BUCKET_NAME=prod-bucket             # standard name (no prefix)
 ```
 
-notice that `MAX_GIF_DURATION`, `GIF_QUALITY`, and `R2_BUCKET_NAME` use standard names in docker, not `PROD_*` prefixes.
+notice that `MAX_GIF_DURATION` and `R2_BUCKET_NAME` use standard names in docker, not `PROD_*` prefixes.
 
 ## example configuration
 
@@ -1106,7 +1076,6 @@ RATE_LIMIT=10
 # file size limits
 MAX_VIDEO_SIZE=104857600
 MAX_IMAGE_SIZE=52428800
-GIF_QUALITY=medium
 
 # server
 SERVER_PORT=3000
@@ -1173,12 +1142,10 @@ PROD_ADMIN_USER_IDS=987654321098765432
 # test bot file size limits
 TEST_MAX_VIDEO_SIZE=52428800
 TEST_MAX_IMAGE_SIZE=26214400
-TEST_GIF_QUALITY=low
 
 # prod bot file size limits
 PROD_MAX_VIDEO_SIZE=104857600
 PROD_MAX_IMAGE_SIZE=52428800
-PROD_GIF_QUALITY=medium
 
 # test bot processing
 TEST_MAX_GIF_DURATION=15

@@ -108,20 +108,26 @@
       <p>you only need one for api keys. an account holds:</p>
       <ul>
         <li>
-          a hash of your account number and of each api key and recovery code (salted argon2id with
-          a server secret that is not in the database), never the number or keys themselves;
+          a hash of your account number (salted argon2id) and of each api key and recovery code (a
+          keyed hash), both mixed with a server secret that is not in the database, never the number
+          or keys themselves;
         </li>
         <li>your 2fa secret, if you turned 2fa on, encrypted;</li>
         <li>the public half of each passkey (the private half never leaves your device);</li>
         <li>
-          dates: the day things were made and the day each key was last used, so you can spot a
-          leaked key.
+          dates: the day things were made, the day each key was last used (so you can spot a leaked
+          key), and the day the account was last used.
         </li>
       </ul>
       <p>
         an account holds no email, name, ip address, browser details, or download history. while
         you're logged in, a session cookie keeps you in (stored hashed on our side, gone after a day
         idle or a week at most). deleting your account removes all of it right away.
+      </p>
+      <p>
+        unused accounts are deleted on their own: an account never used after the day it was made
+        goes after 90 days, and any other account goes after 365 days without being used. using it
+        means logging in, using the site while logged in, or calling the api with one of its keys.
       </p>
 
       <h2>cloudflare</h2>

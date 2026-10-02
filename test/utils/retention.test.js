@@ -4,9 +4,12 @@ import fs from 'node:fs/promises';
 import { mkdtempSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { pruneLocalMedia, pruneTimeSeriesRows, pruneUrlCache } from '../../src/utils/retention.js';
+import { pruneLocalMedia } from '../../src/utils/retention.js';
+import { pruneTimeSeriesRows, pruneUrlCache } from '../../src/utils/database/retention-pg.js';
 import { getPostgresConnection } from '../../src/utils/database/connection.js';
 import { ensurePostgresInitialized } from '../../src/utils/database/init.js';
+
+const daysAgo = days => Date.now() - days * 24 * 60 * 60 * 1000;
 
 const DAY = 24 * 60 * 60 * 1000;
 
@@ -93,7 +96,7 @@ describe('retention', () => {
       await sql`INSERT INTO alerts (timestamp, severity, component, title, message)
                 VALUES (${newTs}, 'info', ${tag}, 'new', 'new')`;
 
-      await pruneTimeSeriesRows(30);
+      await pruneTimeSeriesRows(daysAgo(30));
 
       const left = await sql`SELECT title FROM alerts WHERE component = ${tag}`;
       assert.deepStrictEqual(
@@ -116,7 +119,7 @@ describe('retention', () => {
       await sql`INSERT INTO temporary_uploads (url_hash, r2_key, uploaded_at, expires_at)
                 VALUES (${hash}, ${`videos/${hash}.mp4`}, ${oldTs}, ${Date.now() + DAY})`;
 
-      await pruneUrlCache(30);
+      await pruneUrlCache(daysAgo(30));
 
       const still = await sql`SELECT 1 FROM processed_urls WHERE url_hash = ${hash}`;
       assert.strictEqual(still.length, 1, 'row with a live upload is retained');
@@ -133,7 +136,7 @@ describe('retention', () => {
       await sql`INSERT INTO processed_urls (url_hash, file_hash, file_type, file_url, processed_at)
                 VALUES (${hash}, ${hash}, 'video', 'https://cdn.discordapp.com/x.mp4', ${Date.now() - 90 * DAY})`;
 
-      await pruneUrlCache(30);
+      await pruneUrlCache(daysAgo(30));
 
       const gone = await sql`SELECT 1 FROM processed_urls WHERE url_hash = ${hash}`;
       assert.strictEqual(gone.length, 0);

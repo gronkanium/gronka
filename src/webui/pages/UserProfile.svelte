@@ -1,4 +1,6 @@
 <script>
+  import { createCopier } from '../utils/copier.svelte.js';
+  import { getJson, getJsonOrNull, sendJson } from '../utils/api.js';
   import {
     TerminalSquare,
     Activity,
@@ -30,9 +32,7 @@
     running: ['info', 'Running'],
     pending: ['idle', 'Queued'],
   };
-  const SPLIT_COLORS = ['var(--chart-1)', 'var(--chart-5)', 'var(--chart-6)'];
 
-  let user = $state(null);
   let metrics = $state(null);
   let error = $state('');
   let ops = $state([]);
@@ -47,23 +47,20 @@
   let banOpen = $state(false);
   let banReason = $state('');
   let busy = $state(false);
-  let copied = $state(false);
+  const copier = createCopier();
 
   const userId = $derived($currentRoute.params.userId);
-  const get = url =>
-    fetch(url).then(r => (r.ok ? r.json() : Promise.reject(new Error(String(r.status)))));
 
   async function loadProfile(id) {
     error = '';
-    user = metrics = null;
-    try {
-      const data = await get(`/api/users/${id}`);
-      user = data.user;
-      metrics = data.metrics;
-    } catch {
-      error = 'no user with this id';
-    }
-    const bans = await get('/api/bans').catch(() => null);
+    metrics = null;
+    const [m, bans] = await Promise.all([
+      getJsonOrNull(`/api/users/${id}`),
+      getJsonOrNull('/api/bans'),
+    ]);
+    if (id !== userId) return;
+    metrics = m?.metrics ?? null;
+    if (!m) error = 'no user with this id';
     ban = bans?.bans?.find(b => b.user_id === id) ?? null;
   }
   $effect(() => {
@@ -73,52 +70,46 @@
   });
   $effect(() => {
     if (!userId) return;
+    let live = true;
     opsLoading = true;
-    get(`/api/users/${userId}/operations?limit=${OPS}&offset=${opsOffset}`)
+    getJson(`/api/users/${userId}/operations?limit=${OPS}&offset=${opsOffset}`)
       .then(d => {
+        if (!live) return;
         ops = d.operations ?? [];
         opsTotal = d.total ?? 0;
       })
-      .catch(() => (ops = []))
-      .finally(() => (opsLoading = false));
+      .catch(() => live && (ops = []))
+      .finally(() => live && (opsLoading = false));
+    return () => (live = false);
   });
   $effect(() => {
     if (!userId) return;
+    let live = true;
     mediaLoading = true;
-    get(`/api/users/${userId}/media?limit=${MEDIA}&offset=${mediaOffset}`)
+    getJson(`/api/users/${userId}/media?limit=${MEDIA}&offset=${mediaOffset}`)
       .then(d => {
+        if (!live) return;
         media = d.media ?? [];
         mediaTotal = d.total ?? 0;
       })
-      .catch(() => (media = []))
-      .finally(() => (mediaLoading = false));
+      .catch(() => live && (media = []))
+      .finally(() => live && (mediaLoading = false));
+    return () => (live = false);
   });
 
   const rate = $derived(
     metrics?.total_commands
-      ? ((metrics.successful_commands / metrics.total_commands) * 100).toFixed(1)
+      ? (
+          ((metrics.total_commands - metrics.failed_commands) / metrics.total_commands) *
+          100
+        ).toFixed(1)
       : null
-  );
-  const split = $derived(
-    metrics
-      ? [
-          ['download', metrics.total_download],
-          ['convert', metrics.total_convert],
-          ['optimize', metrics.total_optimize],
-        ]
-      : []
-  );
-  const splitTotal = $derived(
-    Math.max(
-      1,
-      split.reduce((s, [, n]) => s + n, 0)
-    )
   );
   const failedRecent = $derived(ops.filter(o => o.status === 'error').length);
   const description = $derived(
     [
-      user?.first_used && `First seen ${formatDate(user.first_used)}`,
-      `last seen ${formatRelativeTime(metrics?.last_command_at ?? user?.last_used)}`,
+      metrics?.first_used && `First seen ${formatDate(metrics.first_used)}`,
+      metrics && `last seen ${formatRelativeTime(metrics.last_command_at)}`,
     ]
       .filter(Boolean)
       .join(' · ')
@@ -126,11 +117,9 @@
 
   async function doBan() {
     busy = true;
-    const res = await fetch('/api/bans', {
-      method: 'POST',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ userId, reason: banReason.trim() }),
-    }).catch(() => null);
+    const res = await sendJson('/api/bans', 'POST', { userId, reason: banReason.trim() }).catch(
+      () => null
+    );
     busy = false;
     if (res?.ok) {
       banOpen = false;
@@ -145,11 +134,6 @@
     busy = false;
     loadProfile(userId);
   }
-  function copyId() {
-    navigator.clipboard?.writeText(userId);
-    copied = true;
-    setTimeout(() => (copied = false), 1200);
-  }
 </script>
 
 <PageHeader
@@ -159,8 +143,12 @@
   description={error ? '' : description}
 >
   {#if ban}<span class="pill bad">Banned</span>{/if}
-  <button class="icon-btn sm" onclick={copyId} title="copy id" aria-label="copy user id"
-    >{#if copied}<Check size={14} />{:else}<Copy size={14} />{/if}</button
+  <button
+    class="icon-btn sm"
+    onclick={() => copier.copy(userId)}
+    title="copy id"
+    aria-label="copy user id"
+    >{#if copier.copied}<Check size={14} />{:else}<Copy size={14} />{/if}</button
   >
   {#snippet actions()}
     <button class="btn" onclick={() => navigate('requests', { userId })}
@@ -220,7 +208,9 @@
         <div class="v">
           {rate == null ? '—' : rate}{#if rate != null}<span class="unit">%</span>{/if}
         </div>
-        <div class="s">{metrics?.successful_commands?.toLocaleString() ?? 0} delivered</div>
+        <div class="s">
+          {metrics ? (metrics.total_commands - metrics.failed_commands).toLocaleString() : 0} delivered
+        </div>
       </div>
       <div class="kpi">
         <div class="k">Failed</div>
@@ -229,33 +219,9 @@
         <div class="s">user and site errors included</div>
       </div>
       <div class="kpi">
-        <div class="k">Data</div>
-        <div class="v">{metrics ? formatBytes(metrics.total_file_size) : '—'}</div>
-        <div class="s">processed for them</div>
-      </div>
-    </section>
-
-    <section class="panel" aria-label="commands">
-      <div class="pb split">
-        <span class="section-label">Commands</span>
-        <div class="bar-track tall">
-          {#each split as [name, n], i (name)}
-            <span
-              style="width:{(n / splitTotal) * 100}%; background:{SPLIT_COLORS[i]}"
-              title="/{name}: {n}"
-            ></span>
-          {/each}
-        </div>
-        <div class="legend">
-          {#each split as [name, n], i (name)}
-            <span
-              ><i style="background:{SPLIT_COLORS[i]}"></i><span class="mono">/{name}</span>
-              <b>{n.toLocaleString()}</b><span class="dim"
-                >{Math.round((n / splitTotal) * 100)}%</span
-              ></span
-            >
-          {/each}
-        </div>
+        <div class="k">First seen</div>
+        <div class="v">{metrics?.first_used ? formatDate(metrics.first_used) : '—'}</div>
+        <div class="s">last {metrics ? formatRelativeTime(metrics.last_command_at) : '—'}</div>
       </div>
     </section>
 
@@ -339,33 +305,6 @@
     display: flex;
     align-items: center;
     gap: 10px;
-  }
-  .split {
-    display: flex;
-    flex-direction: column;
-    gap: 10px;
-  }
-  .legend {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 6px 20px;
-    font-size: var(--fs-sm);
-    color: var(--text-muted);
-  }
-  .legend > span {
-    display: inline-flex;
-    align-items: center;
-    gap: 6px;
-  }
-  .legend i {
-    width: 8px;
-    height: 8px;
-    border-radius: 2px;
-  }
-  .legend b {
-    font-weight: 600;
-    color: var(--text-bright);
-    font-variant-numeric: tabular-nums;
   }
   .errline {
     font-size: var(--fs-sm);

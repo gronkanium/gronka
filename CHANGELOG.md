@@ -5,6 +5,79 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres (attempts) to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.0.0](https://github.com/gronkanium/gronka/compare/v2.4.0...v3.0.0) (2026-10-02)
+
+
+### ⚠ BREAKING CHANGES
+
+* drop the message content intent; message commands work by mentioning the bot
+* **web:** replace accounts with api keys kept only as a keyed hash
+* store nothing about users, requests or media
+* **convert:** the /convert quality option and GIF_QUALITY are removed. Every gif now uses floyd_steinberg dithering, 256 colors and rectangle diffing, which beat the old medium default on size and quality on real clips.
+* **privacy:** keep only request counts and first/last use per user
+
+### Features
+
+* **convert:** replace the gif quality presets with one measured setting ([9325fbe](https://github.com/gronkanium/gronka/commit/9325fbe31d487c6c65f42b285ce81d7b44d9232e))
+* drop the message content intent; message commands work by mentioning the bot ([768c039](https://github.com/gronkanium/gronka/commit/768c039a1cc84c88280d215d1e9186b6c097a3e5))
+* **privacy:** keep only request counts and first/last use per user ([8ae43de](https://github.com/gronkanium/gronka/commit/8ae43de06527b2a2cb493d22b7be2cd602e30632))
+* store nothing about users, requests or media ([a8a1c30](https://github.com/gronkanium/gronka/commit/a8a1c3069cef763017f6476ee5a0df153f77d354))
+* **web:** cancel a download when the client goes away and answer with its real http status ([aacd18b](https://github.com/gronkanium/gronka/commit/aacd18b89dcffd7eb0e0567475c7590e8a502339))
+* **web:** delete accounts unused for 90 days after signup or idle for 365 days ([5187dbf](https://github.com/gronkanium/gronka/commit/5187dbffb14c50ae0aa99939e743563cf2962795))
+* **web:** read bluesky, instagram, tiktok, booru, pinterest and video-site posts ([816b8a9](https://github.com/gronkanium/gronka/commit/816b8a902d8ccc66cb9a37d2abe5ef52a7f8f779))
+* **web:** read posts as json from reddit, x, bluesky, instagram, tiktok, booru, pinterest and video sites ([1bb2471](https://github.com/gronkanium/gronka/commit/1bb2471b5d33692a9b998551a45281ee237b1eab))
+* **web:** read reddit and x posts as json at POST /v1/content ([aea1cd7](https://github.com/gronkanium/gronka/commit/aea1cd76633b4ba2a107cc7e513742163e9f5e33))
+* **web:** read x posts from x's own api, replies capped at 20 and off by default ([6977d42](https://github.com/gronkanium/gronka/commit/6977d423bcff992b814fb00632ad311e5de24989))
+* **web:** replace accounts with api keys kept only as a keyed hash ([e9d4f9d](https://github.com/gronkanium/gronka/commit/e9d4f9d02808ad1881bb0bba31ff1e0f025e2102))
+* **web:** youtube transcripts on POST /v1/content with transcript: true or a language code ([dbd3e74](https://github.com/gronkanium/gronka/commit/dbd3e7484c52238708e2aa48e50ad3584fc2ee74))
+
+
+### Bug Fixes
+
+* **bot:** exit on uncaught exceptions and flush logs on shutdown ([6012804](https://github.com/gronkanium/gronka/commit/6012804765457d69de4bb6fce7e719d6574f6892))
+* **bot:** stop a command when Discord expired the interaction before the defer ([c898f80](https://github.com/gronkanium/gronka/commit/c898f809fe50dfdc8bf6802cd510b36dba1f9785))
+* **convert:** write cached gifs atomically and time out every ffmpeg run ([aafcfbf](https://github.com/gronkanium/gronka/commit/aafcfbf390847bf90af8de6920bbb2d7735fd514))
+* **db:** honour POSTGRES_HOST, take test mode from NODE_ENV only, retry after a failed connect ([9ee72a9](https://github.com/gronkanium/gronka/commit/9ee72a9b0e340a3eaf868fb717a768fc09da2c12))
+* **db:** serialize schema setup across processes and record applied migrations ([42916fd](https://github.com/gronkanium/gronka/commit/42916fdd311ffa7ad359694fa488c5f75771e489))
+* **db:** surface database write failures instead of returning empty results ([0829fde](https://github.com/gronkanium/gronka/commit/0829fdeffe4d9ddf3c4dc7904ed97ea6b523e8bd))
+* **db:** wait for the schema, not just the connection, before the first query ([94b73d1](https://github.com/gronkanium/gronka/commit/94b73d1b2467aecb9b11670486c8e54b4fbfd2b2))
+* **docker:** pin watchtower, drop unused build tools, require the postgres password ([473e8ef](https://github.com/gronkanium/gronka/commit/473e8efc8f087d0abfd6929cfaddec39383f350a))
+* **download:** cap scraped pages at 2 MB and stop the size probe from reading a whole file ([4d7bdb6](https://github.com/gronkanium/gronka/commit/4d7bdb6c10bc06bb773c525445a4e60e13be74c7))
+* **download:** refuse keyless mega links from prefix commands instead of crashing on showModal ([d80824a](https://github.com/gronkanium/gronka/commit/d80824a62eec134eede5517011eee5fdfb920ef1))
+* fail a request whose final reply never reached Discord, and stop deleting rows for R2 objects that were not deleted ([8e4fad8](https://github.com/gronkanium/gronka/commit/8e4fad84fe19c06a793eaef161a12f91f425c527))
+* log stuck-operation and job hand-back failures instead of counting them as done ([d3f2f93](https://github.com/gronkanium/gronka/commit/d3f2f93d22b55cd914cec9443cd3d116f71d58a5))
+* log why fallback lanes and passkey checks failed ([8a1cf9b](https://github.com/gronkanium/gronka/commit/8a1cf9b8e4cd8d22d2dcfed0bde3a9d8f3785679))
+* **prefix:** accept format= for convert and list mp3/format in help ([b1ba453](https://github.com/gronkanium/gronka/commit/b1ba4533983dc9eee0c8443351fc0fb8dc39f985))
+* **prefix:** record prefix commands as prefix instead of slash ([521f8c9](https://github.com/gronkanium/gronka/commit/521f8c9ceaaa7ad1b0ffe2cbe0ac2079437c47ba))
+* **reddit:** download posts made to a user profile (/user/&lt;name&gt;/comments/...) ([9748b91](https://github.com/gronkanium/gronka/commit/9748b914d40d5b912531ab6e7667f8d6d174174f))
+* send files as links where gronka lacks Attach Files instead of failing with Missing Permissions ([62d3343](https://github.com/gronkanium/gronka/commit/62d33430022ada84b8deca5c92e264b8d6dcbe11))
+* **storage:** count local files beside GIF_STORAGE_PATH and throw instead of reporting an empty store ([e6a3600](https://github.com/gronkanium/gronka/commit/e6a36000b5eeb3dbf67ce35f918a41ba9c9ef328))
+* **web:** check recovery codes and api keys with one keyed-hash lookup instead of argon2 ([777261b](https://github.com/gronkanium/gronka/commit/777261b6fb8bc1a2ad15245ecd836722f2e84ea6))
+* **web:** require a same-origin request to log out, document CONTENT_GONE ([cd4417c](https://github.com/gronkanium/gronka/commit/cd4417c27a445fe55c7db10017efbf91d2450d83))
+* **web:** reserve R2 bytes, fail closed on a failed listing, batch the sweep, index accounts; reuse one R2 client ([c04650b](https://github.com/gronkanium/gronka/commit/c04650bea475ea2788d90ebb1caf38395f57b604))
+* **webui:** allow excluded log filters in saved views ([9e76457](https://github.com/gronkanium/gronka/commit/9e76457b7da47ce39b4c1e3b880405b8981b1b32))
+* **webui:** draw requests chart areas from zero instead of stacked ([a1e97c7](https://github.com/gronkanium/gronka/commit/a1e97c74ab8bc27ca572e6161a713020cf110b2a))
+* **webui:** drop stale responses, mark new issues, working copy buttons over http ([29b1b91](https://github.com/gronkanium/gronka/commit/29b1b91699e1b951c62f6f89783e17f2439239e2))
+* **webui:** drop worker presence rows silent for five minutes ([7c81d81](https://github.com/gronkanium/gronka/commit/7c81d81d6fa7b1e4e709abb0da9407de114ac4bb))
+* **webui:** keep userId as a filter on the requests page instead of opening the profile ([fadc1a2](https://github.com/gronkanium/gronka/commit/fadc1a28c889e90b54de5effe3b039726d7949e9))
+* **webui:** load the overview's 7 days once and filter ranges in the browser ([2d32ec5](https://github.com/gronkanium/gronka/commit/2d32ec59bb123f9b8104dfe45984c5378f9d8182))
+* **webui:** stale worker rows and stacked requests chart ([09b5d7d](https://github.com/gronkanium/gronka/commit/09b5d7d9eedcd1063dbf3ae78ac202291d193596))
+* **webui:** stop rate limiting the bot's own operation updates ([edfa9f7](https://github.com/gronkanium/gronka/commit/edfa9f75a45325399a30c98a7182091a2aa9f150))
+* **worker:** log background failures instead of swallowing them ([7ff687a](https://github.com/gronkanium/gronka/commit/7ff687a0a8c5c95853eb344d25047af1374f8925))
+
+
+### Performance Improvements
+
+* **db:** drop six redundant indexes and add partial ones for request lookups and the job table ([23ed916](https://github.com/gronkanium/gronka/commit/23ed916b0a84c07aff629bae75d480110056de44))
+* **db:** one query each for expired R2 keys, stuck operations, request outcomes, 24h stats and metrics ([d5881dd](https://github.com/gronkanium/gronka/commit/d5881dd97e0885097cac339e35bd7f63de1eb2a6))
+* **db:** rebuild operations in one query, narrow the session log scan, run log facets together ([3fe7b3d](https://github.com/gronkanium/gronka/commit/3fe7b3dd74db4bbb9dca8dbbf5d6a39da99852de))
+* **download:** fetch and store gallery, manga and picker items four at a time instead of all at once or one by one ([2fbc837](https://github.com/gronkanium/gronka/commit/2fbc83781c3b4cc6a96e72d97e4a4433d0a1c4a1))
+* **logs:** skip the live-log lookup with no viewers and stop at the newest matching line ([5862e69](https://github.com/gronkanium/gronka/commit/5862e69a3b1d2204e088f5ebb703859a49ebcd03))
+* **web:** extend sessions at most hourly and prune rate-limit windows from the front ([bd79f7a](https://github.com/gronkanium/gronka/commit/bd79f7a4e5a43f10d7977020204c451f62ac2dc1))
+* **webui:** count requests from one narrow query instead of rebuilding thousands ([c96302c](https://github.com/gronkanium/gronka/commit/c96302c45df660791017d4c016996ccc0cb29492))
+* **webui:** issue trends and user counts come with the summary instead of one request per reason ([c83194b](https://github.com/gronkanium/gronka/commit/c83194b6eac0da65886bee986392be01b11f2995))
+* **webui:** pause polling while the tab is hidden ([7dfa3fb](https://github.com/gronkanium/gronka/commit/7dfa3fb23e9462182d1147d2e692d490b0298858))
+
 ## [2.4.0](https://github.com/gronkanium/gronka/compare/v2.3.0...v2.4.0) (2026-10-01)
 
 

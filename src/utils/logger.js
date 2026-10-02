@@ -1,7 +1,3 @@
-import { AsyncLocalStorage } from 'node:async_hooks';
-import { insertLog, initDatabase } from './database.js';
-import { hostOf } from './url-host.js';
-
 const LOG_LEVELS = {
   DEBUG: 0,
   INFO: 1,
@@ -15,8 +11,6 @@ const LOG_LEVEL_NAMES = {
   2: 'WARN',
   3: 'ERROR',
 };
-
-let dbInitPromise = null;
 
 const isWebMode = () => process.env.GRONKA_WEB === 'true';
 
@@ -33,16 +27,6 @@ const REDACTIONS = [
 export function redactForWeb(text) {
   return REDACTIONS.reduce((out, [pattern, label]) => out.replace(pattern, label), text);
 }
-
-// Fields stamped on every log line written inside a request or job (op, command, source, worker...).
-const logContext = new AsyncLocalStorage();
-
-export function withLogContext(fields, fn) {
-  return logContext.run({ ...logContext.getStore(), ...fields }, fn);
-}
-
-// The `source` log field: a link's host without www.
-export const sourceOf = url => hostOf(url) ?? undefined;
 
 // Format timestamp to seconds precision (removes milliseconds)
 export function formatTimestampSeconds(date = new Date()) {
@@ -76,17 +60,6 @@ class Logger {
 
     const levelName = logLevel.toUpperCase();
     this.logLevel = LOG_LEVELS[levelName] !== undefined ? LOG_LEVELS[levelName] : LOG_LEVELS.INFO;
-
-    // Skip if we're in a test environment where database might not be available
-    if (!dbInitPromise && !process.env.SKIP_DB_INIT && !isWebMode()) {
-      dbInitPromise = initDatabase().catch(error => {
-        // Silently fail in test environments to avoid cluttering test output
-        if (!process.env.NODE_ENV || process.env.NODE_ENV !== 'test') {
-          console.error(`Failed to initialize database for logger:`, error);
-        }
-        return null; // Return null on error so we don't retry infinitely
-      });
-    }
   }
 
   // Sanitize user input to prevent log injection
@@ -143,40 +116,8 @@ class Logger {
       return;
     }
 
-    const timestamp = Date.now();
-    const levelName = LOG_LEVEL_NAMES[level];
-    const formattedMessage = this.formatMessage(level, message, ...args);
-
-    // Explicitly sanitize formattedMessage to prevent log injection
-    // Use dedicated sanitization function so CodeQL can track the sanitization flow
-    const sanitizedForConsole = this.sanitizeForConsoleOutput(formattedMessage);
-    console.log(sanitizedForConsole);
-
-    // Sanitize to prevent log injection
-    const sanitizedMessage = this.sanitizeLogInput(message);
-    const fullMessage =
-      args.length > 0
-        ? `${sanitizedMessage} ${args.map(arg => this.sanitizeLogInput(stringifyArg(arg))).join(' ')}`
-        : sanitizedMessage;
-
-    try {
-      if (dbInitPromise) {
-        const initResult = await dbInitPromise;
-        if (initResult === null) {
-          return; // Skip database logging if init failed
-        }
-      }
-      await insertLog(
-        timestamp,
-        this.component,
-        levelName,
-        fullMessage,
-        logContext.getStore() || null
-      );
-    } catch (error) {
-      // Don't fail if database write fails, but log to console
-      console.error(`Failed to write log to database:`, error);
-    }
+    // Console only: docker keeps it, rotated. Nothing about a request is written to the database.
+    console.log(this.sanitizeForConsoleOutput(this.formatMessage(level, message, ...args)));
   }
 
   debug(message, ...args) {

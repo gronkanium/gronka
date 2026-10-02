@@ -22,7 +22,7 @@ describe('file downloader utilities', () => {
       axios.get = throwMaxContentLength;
       try {
         await assert.rejects(
-          () => downloadImage('https://example.com/huge.gif', false),
+          () => downloadImage('https://example.com/huge.gif'),
           error => {
             assert.match(error.message, /image file is too large/);
             return true;
@@ -38,7 +38,7 @@ describe('file downloader utilities', () => {
       axios.get = throwMaxContentLength;
       try {
         await assert.rejects(
-          () => downloadVideo('https://example.com/huge.mp4', false),
+          () => downloadVideo('https://example.com/huge.mp4'),
           error => {
             assert.match(error.message, /video file is too large/);
             return true;
@@ -56,7 +56,7 @@ describe('file downloader utilities', () => {
       };
       try {
         await assert.rejects(
-          () => downloadImage('https://example.com/missing.gif', false),
+          () => downloadImage('https://example.com/missing.gif'),
           error => {
             assert.match(error.message, /may be unavailable/);
             return true;

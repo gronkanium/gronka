@@ -68,7 +68,6 @@ export function groupIssues(byReason = []) {
       lastSeen: 0,
       firstSeen: Infinity,
       times: [],
-      userIds: new Set(),
       commands: new Set(),
       classes: new Set(),
     };
@@ -77,7 +76,6 @@ export function groupIssues(byReason = []) {
     g.lastSeen = Math.max(g.lastSeen, r.lastSeen);
     g.firstSeen = Math.min(g.firstSeen, r.firstSeen ?? r.lastSeen);
     g.times.push(...(r.times ?? []));
-    (r.userIds ?? []).forEach(id => g.userIds.add(id));
     r.commands.forEach(c => g.commands.add(c));
     (r.classes ?? []).forEach(c => g.classes.add(c));
     groups.set(key, g);
@@ -85,10 +83,8 @@ export function groupIssues(byReason = []) {
   return [...groups.values()]
     .map(g => {
       const classes = [...g.classes];
-      const { userIds, ...rest } = g;
       return {
-        ...rest,
-        users: userIds.size,
+        ...g,
         title: g.members.length > 1 ? g.key.replace(/#/g, 'N') : g.members[0],
         commands: [...g.commands],
         classes,

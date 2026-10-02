@@ -2,7 +2,7 @@ live-editable bot settings, managed from the webui settings page. unlike the env
 
 ## how it works
 
-open the webui (default `http://localhost:3001`) and go to **settings**. every change is saved immediately. most settings are read per command through a short cache, so changes take effect within about 10 seconds. two settings (`admin_user_ids` and `rate_limit_cooldown`) are instead cached inside the bot process and refresh on a one-minute interval, as noted on each.
+open the webui (default `http://localhost:3001`) and go to **settings**. every change is saved immediately. settings are read per command through a short cache, so changes take effect within about 10 seconds.
 
 ## delivery settings
 
@@ -40,59 +40,35 @@ reply with the direct media url from cobalt instead of downloading/uploading, fo
 
 ### `max_video_duration`
 
-maximum video length in seconds for non-admin downloads. admins are unlimited.
+maximum video length in seconds for downloads. size is the main limit; this only catches very long videos.
 
 **default:** `300` (5 minutes) · **range:** 30-7200
 
-### `rate_limit_cooldown`
+### `max_video_size_mb`
 
-seconds a non-admin must wait between commands. overrides the `RATE_LIMIT` environment variable when set.
+largest download in mb. oversized videos are refused before they are downloaded.
 
-**default:** the `RATE_LIMIT` env value (10 if unset) · **range:** 1-3600
+### `upload_ttl_tiers`
 
-**notes:** cached in the bot process; changes apply within a minute.
+how long an r2 upload lives, by size: `MB:hours` pairs, e.g. `100:72,250:24,500:8,1024:2`. a file keeps the hours of the first tier it fits under. used by the cleanup job and shown in the reply. see [[R2-Storage]].
 
-## access control
+### `r2_soft_limit_gb`
 
-### `admin_user_ids`
+new r2 uploads are refused while the bucket holds more than this. `0` turns the guard off.
 
-discord user ids with admin privileges (bypass rate limiting and size/duration caps), managed as an add/remove list in the webui. entries from the `ADMIN_USER_IDS` environment variable are shown read-only and always remain admins.
-
-**notes:** cached in the bot process; changes apply within a minute.
-
-### `moderation_enabled`
-
-enforce user bans - when on, banned users are blocked from every command.
-
-**default:** `off`
+## availability
 
 ### `maintenance_mode`
 
-when on, all commands reply with a maintenance notice for non-admin users. admins can still use the bot normally.
+when on, every command replies with a maintenance notice.
 
 **default:** `off`
 
-## storage
+### `queue_paused`
 
-### `admin_uploads_expire`
-
-apply the temporary-upload ttl cleanup ([[Configuration|`R2_TEMP_UPLOAD_TTL_HOURS`]]) to admin r2 uploads too. off means admin uploads are permanent.
+workers stop taking new media jobs; running ones finish. use it to drain before a deploy.
 
 **default:** `off`
-
-**notes:** only affects uploads made after enabling; files uploaded while it was off stay permanent.
-
-## notifications
-
-### `ntfy_topic`
-
-ntfy topic to push command/alert notifications to. blank disables ntfy. defaults to the `NTFY_TOPIC` environment variable.
-
-### `ntfy_server`
-
-ntfy server hostname, for self-hosted ntfy instances.
-
-**default:** `ntfy.sh`
 
 ## bot presence
 

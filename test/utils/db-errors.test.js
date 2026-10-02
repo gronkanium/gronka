@@ -1,12 +1,13 @@
 import { test, beforeAll } from 'bun:test';
 import assert from 'node:assert';
-import { initDatabase } from '../../src/utils/database.js';
-import { markTemporaryUploadDeletionFailed } from '../../src/utils/database/temporary-uploads-pg.js';
+import { initDatabase, insertAlert } from '../../src/utils/database.js';
 
 beforeAll(async () => {
   await initDatabase();
 });
 
-test('a failed write rejects instead of looking like nothing matched', async () => {
-  await assert.rejects(markTemporaryUploadDeletionFailed('not-a-number', 'x', 1));
+test('a failed write rejects instead of looking like nothing happened', async () => {
+  await assert.rejects(
+    insertAlert({ severity: null, component: 'test', title: 't', message: 'm' })
+  );
 });

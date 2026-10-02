@@ -16,17 +16,12 @@ describe('runMediaCommand (Discord lifecycle E2E)', () => {
   test('success: the callback reply is sent once and the wrapper does NOT reply again', async () => {
     const { interaction, calls } = createFakeInteraction();
 
-    await runMediaCommand(
-      'optimize',
-      interaction,
-      async () => {
-        // A command's success path replies itself; the wrapper must not reply again.
-        await safeInteractionEditReply(interaction, {
-          content: 'https://cdn.example.com/gifs/abc.gif',
-        });
-      },
-      { skipDbInit: true }
-    );
+    await runMediaCommand('optimize', interaction, async () => {
+      // A command's success path replies itself; the wrapper must not reply again.
+      await safeInteractionEditReply(interaction, {
+        content: 'https://cdn.example.com/gifs/abc.gif',
+      });
+    });
 
     assert.strictEqual(calls.editReply.length, 1, 'exactly one reply, no double reply');
     assert.strictEqual(calls.editReply[0].content, 'https://cdn.example.com/gifs/abc.gif');
@@ -35,16 +30,11 @@ describe('runMediaCommand (Discord lifecycle E2E)', () => {
   test('success with an attachment: wrapper leaves the attachment reply untouched', async () => {
     const { interaction, calls } = createFakeInteraction();
 
-    await runMediaCommand(
-      'download',
-      interaction,
-      async () => {
-        await safeInteractionEditReply(interaction, {
-          files: [{ name: 'abc.mp4' }],
-        });
-      },
-      { skipDbInit: true }
-    );
+    await runMediaCommand('download', interaction, async () => {
+      await safeInteractionEditReply(interaction, {
+        files: [{ name: 'abc.mp4' }],
+      });
+    });
 
     assert.strictEqual(calls.editReply.length, 1);
     assert.ok(calls.editReply[0].files, 'attachment reply preserved');
@@ -54,14 +44,9 @@ describe('runMediaCommand (Discord lifecycle E2E)', () => {
   test('AppError: the curated, user-facing message is shown', async () => {
     const { interaction, calls } = createFakeInteraction();
 
-    await runMediaCommand(
-      'optimize',
-      interaction,
-      async () => {
-        throw new ValidationError('file too large. maximum size for gif files is 50mb.');
-      },
-      { skipDbInit: true }
-    );
+    await runMediaCommand('optimize', interaction, async () => {
+      throw new ValidationError('file too large. maximum size for gif files is 50mb.');
+    });
 
     assert.strictEqual(calls.editReply.length, 1);
     assert.strictEqual(
@@ -79,7 +64,7 @@ describe('runMediaCommand (Discord lifecycle E2E)', () => {
       async () => {
         throw new NetworkError('this post is unavailable or has been deleted');
       },
-      { skipDbInit: true, errorFallback: 'could not download this content.' }
+      { errorFallback: 'could not download this content.' }
     );
 
     assert.strictEqual(calls.editReply[0].content, 'this post is unavailable or has been deleted');
@@ -95,7 +80,7 @@ describe('runMediaCommand (Discord lifecycle E2E)', () => {
       async () => {
         throw new Error('Cannot read properties of undefined (reading "buffer")');
       },
-      { skipDbInit: true, errorFallback: fallback }
+      { errorFallback: fallback }
     );
 
     assert.strictEqual(calls.editReply.length, 1);
@@ -109,32 +94,22 @@ describe('runMediaCommand (Discord lifecycle E2E)', () => {
   test('files made in the job dir are removed on success', async () => {
     const { interaction } = createFakeInteraction();
     let tmpFile;
-    await runMediaCommand(
-      'convert',
-      interaction,
-      async () => {
-        tmpFile = await tempPath('.tmp');
-        await fs.writeFile(tmpFile, 'data');
-        await safeInteractionEditReply(interaction, { content: 'ok' });
-      },
-      { skipDbInit: true }
-    );
+    await runMediaCommand('convert', interaction, async () => {
+      tmpFile = await tempPath('.tmp');
+      await fs.writeFile(tmpFile, 'data');
+      await safeInteractionEditReply(interaction, { content: 'ok' });
+    });
     await assert.rejects(() => fs.access(tmpFile), 'job file should be deleted after success');
   });
 
   test('files made in the job dir are removed when the callback throws', async () => {
     const { interaction } = createFakeInteraction();
     let tmpFile;
-    await runMediaCommand(
-      'convert',
-      interaction,
-      async () => {
-        tmpFile = await tempPath('.tmp');
-        await fs.writeFile(tmpFile, 'data');
-        throw new ValidationError('boom');
-      },
-      { skipDbInit: true }
-    );
+    await runMediaCommand('convert', interaction, async () => {
+      tmpFile = await tempPath('.tmp');
+      await fs.writeFile(tmpFile, 'data');
+      throw new ValidationError('boom');
+    });
     await assert.rejects(() => fs.access(tmpFile), 'job file should be deleted on error too');
   });
 
@@ -142,16 +117,11 @@ describe('runMediaCommand (Discord lifecycle E2E)', () => {
     const { interaction } = createFakeInteraction();
     let capturedId;
 
-    await runMediaCommand(
-      'convert',
-      interaction,
-      async ctx => {
-        capturedId = ctx.operationId;
-        // mirrors convert.js's "video is too long" path: replies, returns, marks nothing
-        await safeInteractionEditReply(interaction, { content: 'video is too long (45s).' });
-      },
-      { skipDbInit: true }
-    );
+    await runMediaCommand('convert', interaction, async ctx => {
+      capturedId = ctx.operationId;
+      // mirrors convert.js's "video is too long" path: replies, returns, marks nothing
+      await safeInteractionEditReply(interaction, { content: 'video is too long (45s).' });
+    });
 
     assert.strictEqual(getOperation(capturedId).status, 'error');
   });
@@ -160,42 +130,24 @@ describe('runMediaCommand (Discord lifecycle E2E)', () => {
     const { interaction } = createFakeInteraction();
     let capturedId;
 
-    await runMediaCommand(
-      'convert',
-      interaction,
-      async ctx => {
-        capturedId = ctx.operationId;
-        updateOperationStatus(ctx.operationId, 'success', { fileSize: 1 });
-      },
-      { skipDbInit: true }
-    );
+    await runMediaCommand('convert', interaction, async ctx => {
+      capturedId = ctx.operationId;
+      updateOperationStatus(ctx.operationId, 'success', { fileSize: 1 });
+    });
 
     assert.strictEqual(getOperation(capturedId).status, 'success');
   });
 
-  test('ctx exposes the expected helpers to the callback', async () => {
+  test('ctx exposes the operation and its step logger, and nothing about the user', async () => {
     const { interaction } = createFakeInteraction();
     let seen = null;
 
-    await runMediaCommand(
-      'optimize',
-      interaction,
-      async ctx => {
-        seen = {
-          hasOperationId: typeof ctx.operationId === 'string' && ctx.operationId.length > 0,
-          userId: ctx.userId,
-          adminUser: ctx.adminUser,
-          logStepFn: typeof ctx.logStep === 'function',
-          buildMetadataFn: typeof ctx.buildMetadata === 'function',
-        };
-      },
-      { skipDbInit: true }
-    );
+    await runMediaCommand('optimize', interaction, async ctx => {
+      seen = ctx;
+    });
 
-    assert.ok(seen.hasOperationId);
-    assert.strictEqual(seen.userId, 'e2e-user');
-    assert.strictEqual(seen.adminUser, false);
-    assert.ok(seen.logStepFn);
-    assert.ok(seen.buildMetadataFn);
+    assert.ok(typeof seen.operationId === 'string' && seen.operationId.length > 0);
+    assert.strictEqual(typeof seen.logStep, 'function');
+    assert.ok(!('userId' in seen) && !('adminUser' in seen) && !('buildMetadata' in seen));
   });
 });

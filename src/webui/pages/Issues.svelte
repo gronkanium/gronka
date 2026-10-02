@@ -4,18 +4,8 @@
   import { getJson, getJsonOrNull } from '../utils/api.js';
   import { tick, untrack } from 'svelte';
   import { SvelteSet } from 'svelte/reactivity';
-  import {
-    SquareTerminal,
-    Copy,
-    Check,
-    BellOff,
-    CircleCheck,
-    RotateCcw,
-    ChevronDown,
-    X,
-  } from 'lucide-svelte';
+  import { Copy, Check, BellOff, CircleCheck, RotateCcw, ChevronDown, X } from 'lucide-svelte';
   import { currentRoute, navigate } from '../utils/router.js';
-  import { alerts as liveAlerts } from '../stores/sse-store.js';
   import { issueStates, setIssueState } from '../stores/nav.js';
   import {
     groupIssues,
@@ -27,12 +17,11 @@
     abbr,
     KIND_LABEL,
   } from '../issues.js';
-  import { formatRelativeTime, formatDateTime, shortId, urlLabel } from '../utils/format.js';
+  import { formatRelativeTime, formatDateTime } from '../utils/format.js';
   import PageHeader from '../components/PageHeader.svelte';
   import DataTable from '../components/DataTable.svelte';
   import Sparkline from '../components/Sparkline.svelte';
   import Chart from '../components/Chart.svelte';
-  import Avatar from '../components/Avatar.svelte';
 
   const HOUR = 3600e3;
   const DAY = 24 * HOUR;
@@ -139,18 +128,9 @@
   $effect(() => {
     load();
     const stopPoll = poll(load, 60_000);
-    // A new failure alert refreshes the list (debounced: alerts arrive in bursts).
-    let soon;
-    const unsub = liveAlerts.subscribe(list => {
-      if (!list.some(a => a.severity === 'error')) return;
-      clearTimeout(soon);
-      soon = setTimeout(load, 2000);
-    });
     return () => {
       stopPoll();
-      clearTimeout(soon);
       clearTimeout(toastTimer);
-      unsub();
     };
   });
 
@@ -164,8 +144,6 @@
     muted: withState.filter(g => g.state === 'muted'),
     resolved: withState.filter(g => g.state === 'resolved'),
   });
-
-  const usersOf = g => g?.users;
 
   const alertsFor = (g, extra = '') =>
     Promise.all(
@@ -190,7 +168,7 @@
     };
   }
 
-  const SORTS = { n: g => g.count, users: g => usersOf(g) ?? -1, last: g => g.lastSeen };
+  const SORTS = { n: g => g.count, last: g => g.lastSeen };
   const visible = $derived.by(() => {
     const by = SORTS[sort.key] ?? SORTS.n;
     const dir = sort.desc ? 1 : -1;
@@ -236,7 +214,6 @@
   const show = $derived({
     sel: !listW || listW >= 480,
     trend: !listW || listW >= 560,
-    users: !listW || listW >= 470,
     last: !listW || listW >= 400,
   });
   const trendW = $derived(!listW || listW >= 720 ? 120 : 88);
@@ -250,7 +227,6 @@
         width: `${trendW}px`,
       },
       { key: 'n', label: 'Events', width: '56px', align: 'right', sortable: true },
-      show.users && { key: 'users', label: 'Users', width: '48px', align: 'right', sortable: true },
       show.last && {
         key: 'last',
         label: 'Last seen',
@@ -279,9 +255,7 @@
 
   // Detail: every kept event for the recent requests list and first seen.
   let occ = $state([]);
-  let occOps = $state({});
   let occLoading = $state(false);
-  let opsLoaded = $state(false);
   let occKey = '';
   const selSig = $derived(selected ? `${selected.key}|${selected.lastSeen}` : '');
   $effect(() => {
@@ -293,26 +267,15 @@
     const g = untrack(() => selected);
     if (occKey !== g.key) {
       occ = [];
-      occOps = {};
-      opsLoaded = false;
       occLoading = true;
     }
     let stale = false;
-    alertsFor(g).then(async parts => {
+    alertsFor(g).then(parts => {
       if (stale) return;
       const list = parts.flatMap(x => x ?? []).sort((a, b) => b.timestamp - a.timestamp);
       occ = list;
       occKey = g.key;
       occLoading = false;
-      const recent = list.slice(0, 8).filter(a => a.operation_id);
-      const ops = await Promise.all(
-        recent.map(a => getJsonOrNull(`/api/operations/${encodeURIComponent(a.operation_id)}`))
-      );
-      if (stale) return;
-      const map = {};
-      ops.forEach((o, i) => o?.operation && (map[recent[i].operation_id] = o.operation));
-      occOps = map;
-      opsLoaded = true;
     });
     return () => (stale = true);
   });
@@ -335,11 +298,14 @@
       : []
   );
 
-  const logSearch = g =>
-    g.key
-      .split('#')[0]
-      .replace(/[\s,.(:]+$/, '')
-      .slice(0, 60);
+  // Alerts carry their metadata as JSON text; a failure keeps only the site, never the link.
+  const sourceOf = a => {
+    try {
+      return JSON.parse(a.metadata ?? 'null')?.source ?? null;
+    } catch {
+      return null;
+    }
+  };
   const meta = g =>
     [
       g.commands.map(c => `/${c}`).join(', '),
@@ -611,7 +577,6 @@
       {/snippet}
       {#snippet row(g)}
         {@const tr = trends[g.key]}
-        {@const users = usersOf(g)}
         {#if show.sel}
           <label class="ck">
             <input
@@ -651,11 +616,6 @@
         <span class="num strong" title="{g.count.toLocaleString()} events in the last 7 days"
           >{abbr(g.count)}</span
         >
-        {#if show.users}
-          <span class="num" title={users == null ? '' : `${users.toLocaleString()} users`}>
-            {#if users == null}<span class="skeleton cell-skel"></span>{:else}{abbr(users)}{/if}
-          </span>
-        {/if}
         {#if show.last}
           <span class="num dim" title="Last seen {formatDateTime(g.lastSeen, { seconds: true })}"
             >{formatRelativeTime(g.lastSeen)}</span
@@ -738,12 +698,6 @@
               >{#if week}{abbr(last24)}{:else}<span class="skeleton v-skel"></span>{/if}</span
             >
           </div>
-          <div>
-            <span class="k">Users</span>
-            <span class="v"
-              >{#if week}{abbr(week.users)}{:else}<span class="skeleton v-skel"></span>{/if}</span
-            >
-          </div>
         </div>
 
         {#if variants.length > 1}
@@ -761,32 +715,14 @@
         {/if}
 
         <section class="sect flush">
-          <div class="sh"><span>Recent requests</span></div>
+          <div class="sh"><span>Recent failures</span></div>
           {#each occ.slice(0, 8) as a (a.id)}
-            {@const o = occOps[a.operation_id]}
+            {@const source = sourceOf(a)}
             <div class="orow">
               <span class="t" title={formatDateTime(a.timestamp, { seconds: true })}
                 >{formatRelativeTime(a.timestamp)}</span
               >
-              {#if a.operation_id}
-                <a
-                  class="mono ellipsis url"
-                  class:dim={!o}
-                  href="#/requests/{a.operation_id}"
-                  title={o?.originalUrl ?? ''}
-                  >{o ? urlLabel(o.originalUrl) : opsLoaded ? 'no longer kept' : '…'}</a
-                >
-              {:else}
-                <span class="mono ellipsis dim">not linked to a request</span>
-              {/if}
-              {#if a.user_id}
-                <a class="user-cell" href="#/users/{a.user_id}" title="user {a.user_id}"
-                  ><Avatar id={a.user_id} size={18} /><span class="id">{shortId(a.user_id)}</span
-                  ></a
-                >
-              {:else}
-                <span></span>
-              {/if}
+              <span class="mono ellipsis" class:dim={!source}>{source ?? 'attachment'}</span>
             </div>
           {:else}
             {#if occLoading}
@@ -802,13 +738,6 @@
       </div>
 
       <footer class="foot">
-        <button
-          class="icon-btn sm"
-          title="Search logs for this issue"
-          aria-label="search logs for this issue"
-          onclick={() => navigate('logs', { search: logSearch(selected), range: '7d' })}
-          ><SquareTerminal size={15} /></button
-        >
         <button
           class="icon-btn sm"
           title={copier.copied ? 'Copied' : 'Copy message'}
@@ -1217,18 +1146,6 @@
     font-variant-numeric: tabular-nums;
     white-space: nowrap;
   }
-  .orow .url {
-    color: var(--text);
-  }
-  .orow .url:hover {
-    color: var(--accent);
-  }
-  .orow .user-cell:hover {
-    text-decoration: none;
-  }
-  .orow .user-cell:hover .id {
-    color: var(--accent);
-  }
   .none-yet {
     padding: 12px 20px;
     font-size: var(--fs-sm);
@@ -1346,9 +1263,6 @@
     }
     .orow {
       grid-template-columns: 56px minmax(0, 1fr) 28px;
-    }
-    .orow .user-cell .id {
-      display: none;
     }
   }
 </style>

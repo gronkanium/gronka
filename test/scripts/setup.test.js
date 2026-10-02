@@ -82,10 +82,10 @@ describe('setup', () => {
 
   test('--yes keeps the values an existing .env already has', () => {
     run(['--yes', `--token=${TOKEN}`, `--client-id=${CLIENT_ID}`, `--db-password=${PASSWORD}`]);
-    const { code, out } = run(['--yes', '--admin-ids=987654321098765432']);
+    const { code, out } = run(['--yes']);
     assert.strictEqual(code, 0, out);
     assert.match(env(), new RegExp(`^PROD_DISCORD_TOKEN=${TOKEN}$`, 'm'));
-    assert.match(env(), /^ADMIN_USER_IDS=987654321098765432$/m);
+    assert.match(env(), new RegExp(`^PROD_CLIENT_ID=${CLIENT_ID}$`, 'm'));
   });
 
   test('an invalid flag value fails instead of prompting', () => {

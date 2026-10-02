@@ -66,7 +66,6 @@ export async function beginMangaSelection(interaction, url) {
   const sessionToken = token();
   sessions.set(sessionToken, {
     createdAt: Date.now(),
-    userId: interaction.user.id,
     sourceUrl: url,
     title: manga.title,
     chapters: manga.chapters,
@@ -100,7 +99,7 @@ export async function handleMangaInteraction(interaction, processDownload) {
   if (!isMangaInteraction(interaction)) return false;
   const [, action, sessionToken] = interaction.customId.split(':');
   const session = sessions.get(sessionToken);
-  if (!session || session.userId !== interaction.user.id) {
+  if (!session) {
     await safeInteractionReply(interaction, {
       content: 'this manga picker has expired. run `/download` again.',
       flags: MessageFlags.Ephemeral,

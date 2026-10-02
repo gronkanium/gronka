@@ -46,7 +46,6 @@ describe('job reply targets', () => {
 
   test('a worker edits the original interaction reply with a file by path', async () => {
     const job = {
-      user_id: 'u1',
       reply: { kind: 'interaction', appId: 'app', token: 'tok', channelId: '5' },
     };
     const interaction = await interactionFor(client, job);
@@ -58,11 +57,11 @@ describe('job reply targets', () => {
     assert.strictEqual(decodeURIComponent(call.path), '/webhooks/app/tok/messages/@original');
     assert.deepStrictEqual(call.files, [{ name: 'out.gif', size: 12 }]);
     assert.ok(sent.attachments.first().url.endsWith('/out.gif'));
-    assert.strictEqual(interaction.user.id, 'u1');
+    assert.strictEqual(interaction.user, undefined);
   });
 
   test('a worker follows up on an interaction', async () => {
-    const job = { user_id: 'u1', reply: { kind: 'interaction', appId: 'app', token: 'tok' } };
+    const job = { reply: { kind: 'interaction', appId: 'app', token: 'tok' } };
     const interaction = await interactionFor(client, job);
     await interaction.followUp({ content: 'part two' });
     const call = api.calls.at(-1);
@@ -73,7 +72,6 @@ describe('job reply targets', () => {
 
   test('a worker edits a prefix command placeholder and replies to the command', async () => {
     const job = {
-      user_id: 'u1',
       reply: { kind: 'message', channelId: '77', messageId: '10', replyId: '11' },
     };
     const interaction = await interactionFor(client, job);

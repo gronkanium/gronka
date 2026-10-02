@@ -200,14 +200,14 @@ export async function discoverMangaDexTitle(url) {
   };
 }
 
-async function downloadMangaPages(urls, isAdminUser, maxSize) {
+async function downloadMangaPages(urls, maxSize) {
   const { downloadFileFromUrl } = await import('./file-downloader.js');
   if (urls.length === 0) {
     throw new NetworkError('no pages found in this chapter');
   }
   const results = await mapLimit(urls, ITEM_FANOUT, async pageUrl => {
-    const fileData = await downloadFileFromUrl(pageUrl, isAdminUser);
-    if (!isAdminUser && fileData.size > maxSize) {
+    const fileData = await downloadFileFromUrl(pageUrl);
+    if (fileData.size > maxSize) {
       throw new ValidationError('a manga page is too large to download');
     }
     return fileData;
@@ -218,14 +218,9 @@ async function downloadMangaPages(urls, isAdminUser, maxSize) {
   return results;
 }
 
-export async function downloadWithGalleryDl(
-  url,
-  isAdminUser = false,
-  maxSize = Infinity,
-  options = {}
-) {
+export async function downloadWithGalleryDl(url, maxSize = Infinity, options = {}) {
   if (options.mediaUrls) {
-    return downloadMangaPages(options.mediaUrls, isAdminUser, maxSize);
+    return downloadMangaPages(options.mediaUrls, maxSize);
   }
   const workDir = await tempDir();
   await runGalleryDl(url, workDir);
@@ -242,7 +237,7 @@ export async function downloadWithGalleryDl(
       contentType: contentTypeForExtension(path.extname(filePath)),
       filename: path.basename(filePath),
     });
-    if (!isAdminUser && file.size > maxSize) {
+    if (file.size > maxSize) {
       throw new ValidationError('a gallery file is too large to download');
     }
     results.push(file);

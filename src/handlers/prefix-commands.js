@@ -1,8 +1,7 @@
 import { EmbedBuilder, PermissionFlagsBits } from 'discord.js';
 import { createLogger } from '../utils/logger.js';
 import { botConfig } from '../utils/config.js';
-import { isAdmin } from '../utils/rate-limit.js';
-import { replyIfBanned, replyIfMaintenance } from '../utils/ban-check.js';
+import { replyIfMaintenance } from '../utils/maintenance.js';
 import { getGuildPrefix, setGuildPrefix, clearGuildPrefix } from '../utils/database.js';
 import { OUTPUT_FORMATS } from '../utils/output-formats.js';
 import { createMessageAdapter } from '../commands/shared/message-adapter.js';
@@ -165,10 +164,7 @@ async function handlePrefixSetting(message, tokens, currentPrefix, deps) {
     return;
   }
 
-  const isManager =
-    message.member?.permissions?.has(PermissionFlagsBits.ManageGuild) ||
-    deps.isAdmin(message.author.id);
-  if (!isManager) {
+  if (!message.member?.permissions?.has(PermissionFlagsBits.ManageGuild)) {
     await message.reply('you need the manage server permission to change the prefix.');
     return;
   }
@@ -177,7 +173,6 @@ async function handlePrefixSetting(message, tokens, currentPrefix, deps) {
 
   if (requested === 'reset' || requested === 'default') {
     await deps.clearGuildPrefix(message.guildId);
-    logger.info(`Prefix reset to default in guild ${message.guildId} by ${message.author.id}`);
     await message.reply(`prefix reset to the default \`${botConfig.commandPrefix}\`.`);
     return;
   }
@@ -190,15 +185,12 @@ async function handlePrefixSetting(message, tokens, currentPrefix, deps) {
   }
 
   await deps.setGuildPrefix(message.guildId, requested);
-  logger.info(`Prefix set to "${requested}" in guild ${message.guildId} by ${message.author.id}`);
   await message.reply(
     `prefix set to \`${requested}\` for this server. use \`${requested} help\` or mention me if you forget it.`
   );
 }
 
 const defaultDeps = {
-  isAdmin,
-  replyIfBanned,
   replyIfMaintenance,
   getGuildPrefix,
   setGuildPrefix,
@@ -277,9 +269,6 @@ export async function handlePrefixMessage(message, context = {}) {
     });
 
     // Same gauntlet the interaction handler runs before dispatching anything
-    if (await deps.replyIfBanned(adapter)) {
-      return;
-    }
     if (await deps.replyIfMaintenance(adapter)) {
       return;
     }
@@ -295,10 +284,6 @@ export async function handlePrefixMessage(message, context = {}) {
       await handlePrefixSetting(message, tokens, prefix, deps);
       return;
     }
-
-    logger.debug(
-      `User ${message.author.id} invoked prefix command "${commandName}" in ${message.guildId || 'DM'}`
-    );
 
     if (commandName === 'download') {
       await deps.handleDownloadCommand(adapter);

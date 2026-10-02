@@ -19,11 +19,11 @@ const pngAttachment = {
 async function insertJob({ status, attempts = 0, heartbeatAge = 0, token }) {
   const now = Date.now();
   const [row] = await sql`
-    INSERT INTO media_jobs (kind, args, reply, user_id, status, attempts, worker, created_at,
+    INSERT INTO media_jobs (kind, args, reply, status, attempts, worker, created_at,
                             timestamp, heartbeat_at)
     VALUES ('optimize', ${sql.json({ attachment: pngAttachment, commandSource: 'slash' })},
             ${sql.json({ kind: 'interaction', appId: 'app', token, expiresAt: now + 600_000 })},
-            'worker-test-user', ${status}, ${attempts}, ${status === 'running' ? 'dead-worker' : null},
+            ${status}, ${attempts}, ${status === 'running' ? 'dead-worker' : null},
             ${now}, ${now}, ${status === 'running' ? now - heartbeatAge : null})
     RETURNING id
   `;
@@ -80,26 +80,16 @@ describe('media worker process', () => {
       stderr: 'ignore',
     });
 
+    // A finished job, done or failed, leaves no row behind.
     const settled = await until(async () => {
       const rows = await Promise.all([orphan, spent, fresh].map(statusOf));
-      return rows.every(row => ['done', 'failed'].includes(row.status));
+      return rows.every(row => row === undefined);
     });
-    assert.ok(settled, 'all three jobs should settle');
+    assert.ok(settled, 'all three jobs should finish and be deleted');
 
-    const orphanRow = await statusOf(orphan);
-    assert.strictEqual(orphanRow.status, 'done');
-    assert.strictEqual(orphanRow.attempts, 2);
     assert.match(editsFor('orphan').at(-1).body.content, /only works on gif/);
-
-    const spentRow = await statusOf(spent);
-    assert.strictEqual(spentRow.status, 'failed');
-    assert.strictEqual(spentRow.reply.token, undefined);
     assert.match(editsFor('spent').at(-1).body.content, /interrupted/);
-
-    const freshRow = await statusOf(fresh);
-    assert.strictEqual(freshRow.status, 'done');
-    assert.strictEqual(freshRow.attempts, 1);
-    assert.strictEqual(freshRow.reply.token, undefined);
+    assert.match(editsFor('fresh').at(-1).body.content, /only works on gif/);
 
     worker.kill('SIGTERM');
     assert.strictEqual(await worker.exited, 0, 'worker exits cleanly on SIGTERM');

@@ -6,7 +6,6 @@ import { validateUrl, validateFileExtension, firstUrlIn } from '../utils/validat
 import { validateMediaFile } from './shared/media-validation.js';
 import { curatedErrorMessage } from './shared/command-errors.js';
 import { downloadVideo, downloadImage } from '../utils/file-downloader.js';
-import { isAdmin } from '../utils/rate-limit.js';
 import {
   ALLOWED_VIDEO_TYPES,
   ALLOWED_IMAGE_TYPES,
@@ -22,35 +21,22 @@ import {
   convertToFormat,
   OUTPUT_FORMATS,
 } from '../utils/video-processor.js';
-import { mediaPath } from '../utils/storage.js';
 import { getDiscordAttachmentLimit } from './shared/attachment-limit.js';
-import { loadStoredGif, optimizeCached } from '../utils/gif-optimizer.js';
+import { optimizeToJob } from '../utils/gif-optimizer.js';
 import { logOperationStep } from '../utils/operations-tracker.js';
-import { hashUrlWithParams, hashPartsHex } from '../utils/hashing.js';
-import { getProcessedUrl } from '../utils/database.js';
 import { runMediaCommand } from './shared/run-media-command.js';
 import { sendConvertedFile } from './shared/send-converted.js';
 import { ValidationError } from '../utils/errors.js';
-import {
-  replyIfRateLimited,
-  resolveTimeOptions,
-  refuse,
-  commandSourceOf,
-} from './shared/command-guards.js';
-import { initializeDatabaseWithErrorHandling } from '../utils/database-init.js';
+import { resolveTimeOptions, refuse, commandSourceOf } from './shared/command-guards.js';
 import { safeInteractionDeferReply } from '../utils/interaction-helpers.js';
-import { storeMedia, deliverStored, deliverReply, finishCommand } from './shared/deliver.js';
+import { storeMedia, deliverStored, finishCommand } from './shared/deliver.js';
 import { fetchUrlInput } from './shared/url-input.js';
 import { dispatchMediaJob } from '../jobs/dispatch.js';
-import { fromPath, writeAtomic } from '../utils/media-file.js';
+import { fromPath, tempPath, writeAtomic } from '../utils/media-file.js';
 
 const logger = createLogger('convert');
 
-const {
-  gifStoragePath: GIF_STORAGE_PATH,
-  maxGifDuration: MAX_GIF_DURATION,
-  discordSizeLimit: DISCORD_SIZE_LIMIT,
-} = botConfig;
+const { maxGifDuration: MAX_GIF_DURATION, discordSizeLimit: DISCORD_SIZE_LIMIT } = botConfig;
 
 const VIDEO_EXTENSIONS = ['.mp4', '.mov', '.webm', '.avi', '.mkv'];
 const IMAGE_EXTENSIONS = ['.png', '.jpg', '.jpeg', '.webp', '.awebp', '.gif'];
@@ -120,7 +106,6 @@ function resolveVideoConversionOptions(options, probed) {
 async function processFormatConversion(
   interaction,
   attachment,
-  adminUser,
   preDownloaded,
   format,
   trim,
@@ -143,9 +128,7 @@ async function processFormatConversion(
       }
       const input =
         preDownloaded ||
-        (isVideo
-          ? await downloadVideo(attachment.url, adminUser)
-          : await downloadImage(attachment.url, adminUser));
+        (isVideo ? await downloadVideo(attachment.url) : await downloadImage(attachment.url));
       logOperationStep(operationId, 'format_convert', 'running', {
         message: `Converting to ${format}`,
         metadata: { format, inputSize: input.size },
@@ -169,7 +152,6 @@ async function processFormatConversion(
     },
     {
       commandSource,
-      skipDbInit: true,
       errorFallback: 'an error occurred while converting the file.',
       context: {
         commandOptions: { format, ...trim },
@@ -186,7 +168,7 @@ async function processFormatConversion(
 }
 
 // Renders the source file into gifPath with ffmpeg or ImageMagick.
-async function renderGif(ctx, { attachment, attachmentType, adminUser, file, options, gifPath }) {
+async function renderGif(ctx, { attachment, attachmentType, file, options, gifPath }) {
   const { operationId } = ctx;
   let ext = path.extname(attachment.name ?? '').toLowerCase();
   const allowed = attachmentType === 'video' ? VIDEO_EXTENSIONS : IMAGE_EXTENSIONS;
@@ -203,7 +185,7 @@ async function renderGif(ctx, { attachment, attachmentType, adminUser, file, opt
   await writeAtomic(gifPath, async out => {
     if (attachmentType === 'video') {
       const seconds = (await getVideoMetadata(inputPath)).format.duration;
-      if (seconds > MAX_GIF_DURATION && !adminUser) {
+      if (seconds > MAX_GIF_DURATION) {
         throw new ValidationError(
           `video is too long (${Math.ceil(seconds)}s). maximum duration: ${MAX_GIF_DURATION}s`
         );
@@ -246,7 +228,6 @@ async function processConversion(
   interaction,
   attachment,
   attachmentType,
-  adminUser,
   preDownloaded = null,
   options = {},
   originalUrl = null,
@@ -256,77 +237,34 @@ async function processConversion(
     'convert',
     interaction,
     async ctx => {
-      const { operationId, userId } = ctx;
+      const { operationId } = ctx;
       const attachmentLimit = getDiscordAttachmentLimit(interaction, DISCORD_SIZE_LIMIT);
-
-      if (originalUrl) {
-        const dbReady = await initializeDatabaseWithErrorHandling({
-          operationId,
-          userId,
-          commandName: 'convert',
-          interaction,
-          context: { originalUrl },
-        });
-        if (!dbReady) return;
-      }
-
-      const urlHash = originalUrl ? hashUrlWithParams(originalUrl, options) : null;
-      const cachedRow = urlHash ? await getProcessedUrl(urlHash) : null;
-      const cachedGif = cachedRow?.file_type === 'gif' || cachedRow?.file_extension === '.gif';
-      if (cachedGif && !cachedRow.r2_expired_at) {
-        logOperationStep(operationId, 'url_cache_hit', 'success', {
-          message: 'URL already converted, returning cached result',
-          metadata: { originalUrl, cachedUrl: cachedRow.file_url },
-        });
-        await deliverReply(interaction, { content: cachedRow.file_url });
-        return finishCommand('convert', ctx, 0);
-      }
 
       const file =
         preDownloaded ||
         (attachmentType === 'video'
-          ? await downloadVideo(attachment.url, adminUser)
-          : await downloadImage(attachment.url, adminUser));
+          ? await downloadVideo(attachment.url)
+          : await downloadImage(attachment.url));
+      const gifPath = await tempPath('.gif');
+      await renderGif(ctx, { attachment, attachmentType, file, options, gifPath });
+      let gif = await fromPath(gifPath, { contentType: 'image/gif', filename: 'gronka.gif' });
 
-      // The gif is stored under its source and the options that shaped it, so a trimmed or
-      // resized convert never reuses the plain one.
-      const shape = [options.width, options.startTime, options.duration];
-      const hash = shape.every(value => value == null)
-        ? file.hash
-        : hashPartsHex([file.hash, 'gif', ...shape.map(v => (v == null ? null : String(v)))]);
-      const gifPath = mediaPath('gif', hash, '.gif', GIF_STORAGE_PATH);
       const lossy = options.lossy ?? null;
-      const optimize = Boolean(options.optimize) || lossy !== null;
-
-      let gif = await loadStoredGif(hash);
-      if (!gif) {
-        await renderGif(ctx, { attachment, attachmentType, adminUser, file, options, gifPath });
-        gif = await fromPath(gifPath, { contentType: 'image/gif', filename: `${hash}.gif` });
-      }
-
-      let finalHash = hash;
-      if (optimize) {
-        const optimized = await optimizeCached(gif, lossy);
+      if (options.optimize || lossy !== null) {
+        const optimized = await optimizeToJob(gif, lossy);
         logOperationStep(operationId, 'optimization_complete', 'success', {
           message: 'GIF optimized',
-          metadata: { originalSize: gif.size, optimizedSize: optimized.file.size, lossy },
+          metadata: { originalSize: gif.size, optimizedSize: optimized.size, lossy },
         });
-        finalHash = optimized.hash;
-        gif = optimized.file;
+        gif = optimized;
       }
 
-      const stored = await storeMedia(
-        { ...gif, filename: `${finalHash}.gif`, contentType: 'image/gif' },
-        ctx,
-        attachmentLimit,
-        { hash: finalHash }
-      );
-      await deliverStored(interaction, ctx, stored, { urlHash: urlHash ?? finalHash });
+      const stored = await storeMedia(gif, attachmentLimit);
+      await deliverStored(interaction, stored);
       await finishCommand('convert', ctx, stored.size);
     },
     {
       commandSource,
-      skipDbInit: true,
       errorFallback: 'an error occurred while converting the file.',
       context: {
         commandOptions: options,
@@ -363,12 +301,12 @@ const attachmentJson = attachment =>
 
 // The file (downloading a url) a convert was given, typed as video or image; replies and
 // returns null when it cannot be converted.
-async function resolveInput(interaction, { attachment, url, adminUser, commandSource }) {
+async function resolveInput(interaction, { attachment, url, commandSource }) {
   let file = null;
   let originalUrl = null;
   if (url) {
     try {
-      ({ attachment, file, originalUrl } = await fetchUrlInput(url, adminUser, interaction.client));
+      ({ attachment, file, originalUrl } = await fetchUrlInput(url, interaction.client));
     } catch (error) {
       await refuse(interaction, 'convert', {
         message: curatedErrorMessage(error, 'failed to download file from URL.'),
@@ -397,9 +335,7 @@ async function resolveInput(interaction, { attachment, url, adminUser, commandSo
     return null;
   }
   const validation =
-    type === 'video'
-      ? validateVideoAttachment(attachment, adminUser)
-      : validateImageAttachment(attachment, adminUser);
+    type === 'video' ? validateVideoAttachment(attachment) : validateImageAttachment(attachment);
   if (!validation.valid) {
     const { name, size, contentType } = attachment;
     await refuse(interaction, 'convert', {
@@ -414,9 +350,8 @@ async function resolveInput(interaction, { attachment, url, adminUser, commandSo
 }
 
 // The bot's half: checks that answer privately before anything is deferred or queued.
-async function acceptInput(interaction, { attachment, url, adminUser, commandSource }) {
-  if (!url)
-    return (await resolveInput(interaction, { attachment, adminUser, commandSource })) !== null;
+async function acceptInput(interaction, { attachment, url, commandSource }) {
+  if (!url) return (await resolveInput(interaction, { attachment, commandSource })) !== null;
   const check = validateUrl(url);
   if (!check.valid) {
     await refuse(interaction, 'convert', {
@@ -434,8 +369,7 @@ export async function runConvertJob(
   interaction,
   { attachment, url, format = 'gif', times = null, gifOptions = {}, commandSource }
 ) {
-  const adminUser = isAdmin(interaction.user.id);
-  const input = await resolveInput(interaction, { attachment, url, adminUser, commandSource });
+  const input = await resolveInput(interaction, { attachment, url, commandSource });
   if (!input) return;
   // Start and end only mean something for a video.
   const trim = {
@@ -446,7 +380,6 @@ export async function runConvertJob(
     await processFormatConversion(
       interaction,
       input.attachment,
-      adminUser,
       input.file,
       format,
       trim,
@@ -459,7 +392,6 @@ export async function runConvertJob(
     interaction,
     input.attachment,
     input.type,
-    adminUser,
     input.file,
     { ...gifOptions, ...trim },
     input.originalUrl,
@@ -469,11 +401,6 @@ export async function runConvertJob(
 
 export async function handleConvertContextMenu(interaction) {
   if (!interaction.isMessageContextMenuCommand() || interaction.commandName !== 'convert to gif') {
-    return;
-  }
-  const adminUser = isAdmin(interaction.user.id);
-  const guard = { type: 'convert', action: 'converting another video or image' };
-  if (await replyIfRateLimited(interaction, { ...guard, commandSource: 'context-menu' })) {
     return;
   }
 
@@ -492,7 +419,7 @@ export async function handleConvertContextMenu(interaction) {
     return;
   }
   const commandSource = 'context-menu';
-  if (!(await acceptInput(interaction, { attachment, url, adminUser, commandSource }))) return;
+  if (!(await acceptInput(interaction, { attachment, url, commandSource }))) return;
   await safeInteractionDeferReply(interaction);
   await dispatchMediaJob(interaction, 'convert', {
     attachment: attachmentJson(attachment),
@@ -502,16 +429,7 @@ export async function handleConvertContextMenu(interaction) {
 }
 
 export async function handleConvertCommand(interaction) {
-  const userId = interaction.user.id;
-  const adminUser = isAdmin(userId);
   const commandSource = commandSourceOf(interaction);
-  logger.debug(
-    `User ${userId} initiated conversion via slash command${adminUser ? ' [ADMIN]' : ''}`
-  );
-  const guard = { type: 'convert', action: 'converting another video or image' };
-  if (await replyIfRateLimited(interaction, { ...guard, commandSource })) {
-    return;
-  }
 
   const attachment = interaction.options.getAttachment('file');
   const rawUrl = interaction.options.getString('url');
@@ -535,7 +453,7 @@ export async function handleConvertCommand(interaction) {
     return;
   }
 
-  if (!(await acceptInput(interaction, { attachment, url, adminUser, commandSource }))) return;
+  if (!(await acceptInput(interaction, { attachment, url, commandSource }))) return;
   await safeInteractionDeferReply(interaction);
   const lossy = interaction.options.getNumber('lossy');
   await dispatchMediaJob(interaction, 'convert', {

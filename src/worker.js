@@ -3,11 +3,11 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { Client } from 'discord.js';
-import { createLogger, withLogContext } from './utils/logger.js';
+import { createLogger } from './utils/logger.js';
 import { botConfig } from './utils/config.js';
-import { initDatabase, markOperationAsFailed } from './utils/database.js';
-import { refreshRateLimitSettings } from './utils/rate-limit.js';
-import { flushAllOperationLogs, getOperation } from './utils/operations-tracker.js';
+import { initDatabase } from './utils/database.js';
+import { recordFailure } from './utils/failures.js';
+import { flushAllOperationLogs } from './utils/operations-tracker.js';
 import { safeInteractionEditReply } from './utils/interaction-helpers.js';
 import { JOBS_ROOT, sweepJobDirs } from './utils/media-file.js';
 import { jobContext } from './jobs/context.js';
@@ -39,12 +39,8 @@ const running = new Map();
 let draining = false;
 let lastPump = Date.now();
 
-function runJob(job) {
-  return withLogContext({ worker: queue.WORKER_ID, job: job.id }, () => runJobInContext(job));
-}
-
-async function runJobInContext(job) {
-  logger.debug(`Job ${job.id} (${job.kind}) attempt ${job.attempts} [user: ${job.user_id}]`);
+async function runJob(job) {
+  logger.debug(`Job ${job.id} (${job.kind}) attempt ${job.attempts}`);
   let operationId = job.operation_id;
   const beat = setInterval(
     () => queue.heartbeat(job.id).catch(error => logger.warn(`Heartbeat failed: ${error.message}`)),
@@ -52,7 +48,6 @@ async function runJobInContext(job) {
   );
   let timer;
   const overtime = new Promise(resolve => (timer = setTimeout(resolve, JOB_TIME_LIMIT_MS, 'late')));
-  let result;
   try {
     const interaction = await interactionFor(client, job);
     const context = {
@@ -66,18 +61,14 @@ async function runJobInContext(job) {
       jobContext.run(context, () => runMediaJob(interaction, job)).then(() => 'done'),
       overtime,
     ]);
-    result =
-      outcome === 'late'
-        ? { ok: false, error: 'time limit' }
-        : { ok: true, success: getOperation(operationId)?.status === 'success' };
+    if (outcome === 'late') logger.error(`Job ${job.id} (${job.kind}) hit the time limit`);
   } catch (error) {
     logger.error(`Job ${job.id} crashed: ${error.message}`, error);
-    result = { ok: false, error: error.message };
   } finally {
     clearInterval(beat);
     clearTimeout(timer);
   }
-  await queue.finishJob(job, result).catch(error => {
+  await queue.finishJob(job).catch(error => {
     logger.error(`Could not record job ${job.id} as finished: ${error.message}`);
   });
 }
@@ -113,13 +104,12 @@ async function tellInterrupted(job) {
   } catch (error) {
     logger.warn(`Could not tell user about interrupted job ${job.id}: ${error.message}`);
   }
-  if (job.operation_id) {
-    await markOperationAsFailed(
-      job.operation_id,
-      'Operation interrupted - its worker stopped and it could not be retried'
-    ).catch(warn(`Could not mark operation ${job.operation_id} failed`));
-  }
-  await queue.forgetToken(job.id).catch(warn(`Could not drop the reply token of job ${job.id}`));
+  await recordFailure(job.kind, {
+    error: 'interrupted: its worker stopped and it could not be retried',
+    errorClass: 'interrupted',
+    url: job.args?.url ?? null,
+  });
+  await queue.deleteJob(job.id).catch(warn(`Could not delete job ${job.id}`));
 }
 
 async function reclaim() {
@@ -173,12 +163,7 @@ process.on('uncaughtException', error => {
 
 fs.mkdirSync(JOBS_ROOT, { recursive: true, mode: 0o700 });
 await initDatabase();
-await refreshRateLimitSettings();
 await queue.listen(queue.JOB_CHANNEL, () => pump());
-setInterval(
-  () => refreshRateLimitSettings().catch(warn('Rate limit settings refresh failed')),
-  60_000
-);
 setInterval(pump, POLL_MS);
 setInterval(reclaim, RECLAIM_MS);
 setInterval(watchdog, 10_000);

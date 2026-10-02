@@ -342,6 +342,7 @@ describe('content', () => {
     ).toEqual({
       url: 'https://x.com/a/status/1',
       format: 'json',
+      transcript: false,
       thread: true,
       depth: 2,
       comments: 5,
@@ -358,6 +359,10 @@ describe('content', () => {
     expect(() => parseContentRequest({ url: 'https://x.com/a/status/1', comments: -1 })).toThrow();
     expect(() => parseContentRequest({ url: 'https://x.com/a/status/1', comments: 21 })).toThrow();
     expect(() => parseContentRequest({ url: 'https://x.com/a/status/1', thread: 'yes' })).toThrow();
+    expect(
+      parseContentRequest({ url: 'https://youtu.be/abc', transcript: 'pt-BR' }).transcript
+    ).toBe('pt-BR');
+    expect(() => parseContentRequest({ url: 'https://youtu.be/a', transcript: 'x y' })).toThrow();
     expect(() => parseContentRequest({ url: 'http://127.0.0.1/' })).toThrow();
   });
 

@@ -381,9 +381,17 @@ export function parseContentRequest(body) {
   if (body.thread !== undefined && typeof body.thread !== 'boolean') {
     throw new AppError('thread must be true or false.', 'BAD_REQUEST', 400);
   }
+  const transcript = body.transcript ?? false;
+  if (
+    typeof transcript !== 'boolean' &&
+    !(typeof transcript === 'string' && /^[A-Za-z]{2,3}(-[A-Za-z0-9]{1,8})*$/.test(transcript))
+  ) {
+    throw new AppError('transcript must be true, false or a language code.', 'BAD_REQUEST', 400);
+  }
   return {
     url,
     format,
+    transcript,
     thread: body.thread !== false,
     depth: parseCount(body.depth, 'depth', 10),
     comments: parseCount(body.comments, 'comments', MAX_COMMENTS),

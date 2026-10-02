@@ -97,7 +97,7 @@ export const CONTENT_SOURCES = [
     ],
     match: isVideoContentUrl,
     fetch: fetchVideoThread,
-    options: ['comments'],
+    options: ['comments', 'transcript'],
     limits: VIDEO_LIMITS,
   },
 ];
@@ -126,6 +126,7 @@ export async function fetchContent(url, options = {}) {
     options.thread !== false,
     options.depth ?? null,
     options.comments ?? 0,
+    options.transcript ?? false,
   ]);
   const hit = recent.get(key);
   if (hit && hit.expires > Date.now()) return hit.value;

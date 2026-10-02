@@ -24,6 +24,7 @@ curl https://api.gronka.dev/v1/content \
 | `thread`   | boolean              | `true`  | x, bluesky | walk the author's replies upward from the linked post              |
 | `depth`    | integer 0..10        | 10      | reddit     | comment levels to include; `0` leaves the comments out            |
 | `comments` | integer 0..20        | 0       | reddit, x, bluesky, youtube | replies to include; off unless set                                 |
+| `transcript` | boolean or language code | `false` | youtube | add the captions as timed lines; `true` picks the video's own language |
 
 auth, quota and turnstile are the same as `/v1/download`: an api key or the web page's turnstile
 token, 50 requests per 10 minutes per caller, and the quota is shared between downloads and
@@ -69,7 +70,12 @@ carries the outcome.
 | `parent`    | `{ id, url, author }` of what this replies to, or null                                   |
 | `stats`     | `{ likes, reposts, replies, score, views }`, each a number or null when the source has no such thing |
 | `flags`     | `{ nsfw, spoiler, edited }`                                                              |
-| `extra`     | source-specific leftovers: reddit `subreddit`, `flair`, `upvoteRatio`, `poll`, `removed`; x `lang`, `source`, `poll`, `article`, `communityNote`; comments `op`, `distinguished`, `stickied`, `awards` |
+| `extra`     | source-specific leftovers: reddit `subreddit`, `flair`, `upvoteRatio`, `poll`, `removed`; x `lang`, `source`, `poll`, `article`, `communityNote`; youtube `transcript` (below); comments `op`, `distinguished`, `stickied`, `awards` |
+
+`extra.transcript` on a youtube post asked for with `transcript` is
+`{ language, generated, segments: [{ start, end, text }] }`, times in seconds. uploaded captions win
+over youtube's automatic ones (`generated: true`); null when the video has no captions in that
+language.
 
 a `Comment` is a `Post` plus `depth` (0 at the top of the tree) and `replies: Comment[]`.
 

@@ -1189,6 +1189,14 @@
             "default": 0,
             "description": "replies to include, at most 20. off unless set"
           },
+          "transcript": {
+            "oneOf": [
+              { "type": "boolean" },
+              { "type": "string", "pattern": "^[A-Za-z]{2,3}(-[A-Za-z0-9]{1,8})*$" }
+            ],
+            "default": false,
+            "description": "youtube only. adds post.extra.transcript: { language, generated, segments: [{ start, end, text }] }, or null when there are no captions. true picks the video's own language, a code like \"en\" picks that one"
+          },
           "turnstile": {
             "type": "string",
             "description": "web page only. scripts use an api key"

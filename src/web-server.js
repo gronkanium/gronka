@@ -195,17 +195,10 @@ async function uploadReserved(file, filename, contentType) {
     .replace(/[^.a-z0-9]/g, '');
   const type = contentType || 'application/octet-stream';
   const key = `${R2_PREFIX}${crypto.randomBytes(16).toString('hex')}${ext}`;
-  const url = await uploadToR2(
-    file,
-    key,
-    type,
-    r2Config,
-    {},
-    {
-      ContentDisposition: contentDisposition(name),
-      CacheControl: 'public, max-age=3600',
-    }
-  );
+  const url = await uploadToR2(file, key, type, r2Config, {
+    ContentDisposition: contentDisposition(name),
+    CacheControl: 'public, max-age=3600',
+  });
   liveBytes += file.size;
   return { url, filename: name, size: file.size, type: detectFileType(ext, type, file.head) };
 }

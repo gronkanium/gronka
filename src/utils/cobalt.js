@@ -469,11 +469,11 @@ const PHOTO_EXTENSIONS = {
   'image/webp': '.webp',
 };
 
-async function downloadPhoto(photoUrl, index, isAdminUser = false, maxSize = Infinity) {
+async function downloadPhoto(photoUrl, index, maxSize = Infinity) {
   const file = await fetchCobaltFile(photoUrl, {
     accept: 'image/*,*/*',
     timeout: 60000,
-    maxSize: isAdminUser ? Infinity : maxSize,
+    maxSize,
     what: `photo ${index + 1}`,
   });
   const contentType = file.headers['content-type'] || 'image/jpeg';
@@ -485,11 +485,11 @@ async function downloadPhoto(photoUrl, index, isAdminUser = false, maxSize = Inf
   return withExtension({ ...file, contentType, filename });
 }
 
-async function downloadVideo(videoUrl, index, isAdminUser = false, maxSize = Infinity) {
+async function downloadVideo(videoUrl, index, maxSize = Infinity) {
   const file = await fetchCobaltFile(videoUrl, {
     accept: 'video/*,*/*',
     timeout: 300000,
-    maxSize: isAdminUser ? Infinity : maxSize,
+    maxSize,
     what: `video ${index + 1}`,
   });
   const named = file.dispositionName ?? `video_${index + 1}.mp4`;
@@ -502,7 +502,7 @@ async function downloadVideo(videoUrl, index, isAdminUser = false, maxSize = Inf
   return withExtension({ ...file, contentType, filename });
 }
 
-async function downloadMediaFromPicker(pickerArray, isAdminUser = false, maxSize = Infinity) {
+async function downloadMediaFromPicker(pickerArray, maxSize = Infinity) {
   const mediaItems = pickerArray.filter(
     item => (item.type === 'photo' || item.type === 'video') && item.url
   );
@@ -517,8 +517,8 @@ async function downloadMediaFromPicker(pickerArray, isAdminUser = false, maxSize
 
   const results = await mapLimit(mediaItems, ITEM_FANOUT, (item, index) =>
     item.type === 'photo'
-      ? downloadPhoto(item.url, index, isAdminUser, maxSize)
-      : downloadVideo(item.url, index, isAdminUser, maxSize)
+      ? downloadPhoto(item.url, index, maxSize)
+      : downloadVideo(item.url, index, maxSize)
   );
   logger.debug(`Successfully downloaded ${results.length} media items from picker`);
 
@@ -546,12 +546,7 @@ function replaceTunnelHostname(url, apiUrl) {
   }
 }
 
-async function downloadFromCobalt(
-  cobaltResponse,
-  isAdminUser = false,
-  maxSize = Infinity,
-  apiUrl = null
-) {
+async function downloadFromCobalt(cobaltResponse, maxSize = Infinity, apiUrl = null) {
   // Cobalt API returns different response formats depending on the platform
 
   // Check for picker response (e.g., Twitter with multiple photos/videos)
@@ -561,7 +556,7 @@ async function downloadFromCobalt(
     Array.isArray(cobaltResponse.picker)
   ) {
     logger.debug('Detected picker response with media files');
-    return await downloadMediaFromPicker(cobaltResponse.picker, isAdminUser, maxSize);
+    return await downloadMediaFromPicker(cobaltResponse.picker, maxSize);
   }
 
   let videoUrl = null;
@@ -624,7 +619,7 @@ async function downloadFromCobalt(
   const file = await fetchCobaltFile(videoUrl, {
     accept: '*/*',
     timeout: 300000,
-    maxSize: isAdminUser ? Infinity : maxSize,
+    maxSize,
     what: 'file',
     failMessage: 'the download failed. the content may be unavailable.',
   });
@@ -713,19 +708,13 @@ export async function getRemoteContentLength(mediaUrl) {
   }
 }
 
-export async function downloadFromSocialMedia(
-  apiUrl,
-  url,
-  isAdminUser = false,
-  maxSize = Infinity,
-  prefetched = null
-) {
+export async function downloadFromSocialMedia(apiUrl, url, maxSize = Infinity, prefetched = null) {
   logger.debug(`Attempting to download from social media URL via Cobalt: ${url}`);
 
   try {
     const cobaltResponse = prefetched ?? (await callCobaltApi(apiUrl, url));
     logger.debug('Cobalt API call successful, downloading media');
-    const result = await downloadFromCobalt(cobaltResponse, isAdminUser, maxSize, apiUrl);
+    const result = await downloadFromCobalt(cobaltResponse, maxSize, apiUrl);
 
     // Check if result is an array (multiple photos) or single object
     if (Array.isArray(result)) {

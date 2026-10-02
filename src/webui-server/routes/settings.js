@@ -29,50 +29,20 @@ const KNOWN_SETTINGS = {
     description:
       'How /download serves X/Twitter videos: hybrid replies with the direct URL only when the video is too big for a Discord attachment (saves bandwidth and R2 storage), always_url skips downloading whenever a direct URL exists, always_download keeps the old rehost-everything behavior',
   },
-  admin_uploads_expire: {
-    type: 'boolean',
-    default: 'false',
-    description:
-      'Apply the temporary-upload TTL cleanup to admin R2 uploads too (off = admin uploads are permanent)',
-  },
+
   maintenance_mode: {
     type: 'boolean',
     default: 'false',
-    description: 'Disable all commands for non-admins with a maintenance message',
+    description: 'Disable all commands with a maintenance message',
   },
-  rate_limit_cooldown: {
-    type: 'number',
-    default: process.env.RATE_LIMIT || '10',
-    description:
-      'Seconds a non-admin must wait between commands (bot picks up changes within a minute)',
-    min: 1,
-    max: 3600,
-  },
-  ntfy_topic: {
-    type: 'string',
-    // Read directly from env rather than botConfig: botConfig bundles in DISCORD_TOKEN
-    // validation, which webui-only dev/test runs shouldn't need just for this default.
-    default: process.env.NTFY_TOPIC || '',
-    description: 'ntfy.sh topic to push command/alert notifications to (blank disables ntfy)',
-    pattern: /^[A-Za-z0-9_-]{0,64}$/,
-  },
-  ntfy_server: {
-    type: 'string',
-    default: 'ntfy.sh',
-    description: 'ntfy server hostname (use your own if self-hosting ntfy)',
-    pattern: /^[A-Za-z0-9.-]{1,253}$/,
-  },
+
   queue_paused: {
     type: 'boolean',
     default: 'false',
     description:
       'Workers stop taking new media jobs; running ones finish (drain before a deploy). Queued requests wait, and are told they were interrupted after about 15 minutes. No effect with MEDIA_WORKERS=false',
   },
-  moderation_enabled: {
-    type: 'boolean',
-    default: 'false',
-    description: 'Enforce user bans (blocks every command for banned users when on)',
-  },
+
   max_video_size_mb: {
     type: 'number',
     // Mirror the MAX_VIDEO_SIZE env/config default (bytes) as MB so the shown default matches
@@ -81,7 +51,7 @@ const KNOWN_SETTINGS = {
       Math.floor((Number(process.env.MAX_VIDEO_SIZE) || 1024 * 1024 * 1024) / (1024 * 1024))
     ),
     description:
-      'Maximum download size in MB for non-admins, the primary limit. Oversized videos are rejected before download (yt-dlp aborts the pull). Applies immediately; admins are unlimited',
+      'Maximum download size in MB, the primary limit. Oversized videos are rejected before download (yt-dlp aborts the pull). Applies immediately',
     min: 50,
     max: 2048,
   },
@@ -89,7 +59,7 @@ const KNOWN_SETTINGS = {
     type: 'number',
     default: '3600',
     description:
-      'Backstop for non-admin video length in seconds. Size is the primary limit, oversized videos are rejected before download, so this only catches pathologically long ones (admins are unlimited)',
+      'Backstop for video length in seconds. Size is the primary limit, oversized videos are rejected before download, so this only catches pathologically long ones',
     min: 30,
     max: 21600,
   },
@@ -103,7 +73,7 @@ const KNOWN_SETTINGS = {
     type: 'number',
     default: '9',
     description:
-      'Soft cap (GB) on total live temporary R2 storage. New uploads that would exceed it are rejected with a "storage full" message until files expire. 0 disables the guard',
+      'Soft cap (GB) on total R2 storage. New uploads that would exceed it are rejected with a "storage full" message until files expire. 0 disables the guard',
     min: 0,
     max: 1000,
   },
@@ -113,54 +83,13 @@ const KNOWN_SETTINGS = {
     description:
       'Download sources that are turned off. A /download from a turned-off source is refused with a message instead of downloading. Everything not listed here is on; the bot picks up changes within a minute',
   },
-  admin_user_ids: {
-    type: 'list',
-    default: '[]',
-    description:
-      'Admin Discord user IDs (bypass rate limits and size/duration caps). Merged with the ADMIN_USER_IDS env list; bot picks up changes within a minute',
-    itemPattern: /^\d{17,20}$/,
-    // Env-provided admins are shown read-only next to the editable DB list.
-    // Read from env directly (botConfig would require DISCORD_TOKEN in webui-only runs).
-    envValues: () =>
-      (process.env.ADMIN_USER_IDS || '')
-        .split(',')
-        .map(id => id.trim())
-        .filter(id => id.length > 0),
-  },
+
   webui_issue_states: {
     type: 'issuestates',
     default: '{}',
     description: 'Muted and resolved issues on the webui Issues page',
   },
-  webui_saved_views: {
-    type: 'views',
-    default: '[]',
-    description: 'Filtered views pinned to the webui sidebar menus',
-  },
 };
-
-const VIEW_PAGES = new Set(['logs', 'requests', 'issues']);
-
-// [{ name, page, params }] with short string params only: this is rendered straight into nav links.
-function parseViews(value) {
-  if (!Array.isArray(value) || value.length > 50) return null;
-  const views = [];
-  for (const v of value) {
-    if (!v || typeof v.name !== 'string' || !VIEW_PAGES.has(v.page)) return null;
-    const name = v.name.trim().slice(0, 60);
-    const entries = Object.entries(v.params ?? {});
-    if (!name || entries.length > 20) return null;
-    if (
-      entries.some(
-        ([k, val]) => !/^-?\w{1,32}$/.test(k) || typeof val !== 'string' || val.length > 500
-      )
-    ) {
-      return null;
-    }
-    views.push({ name, page: v.page, params: Object.fromEntries(entries) });
-  }
-  return views;
-}
 
 // { [issueKey]: { state: 'muted', until } | { state: 'resolved', at } }
 function parseIssueStates(value) {
@@ -192,9 +121,6 @@ router.get('/api/settings', async (req, res) => {
       if (meta.min !== undefined) {
         settings[key].min = meta.min;
         settings[key].max = meta.max;
-      }
-      if (meta.envValues) {
-        settings[key].envValues = meta.envValues();
       }
       if (meta.options) {
         settings[key].options = meta.options;
@@ -279,21 +205,6 @@ router.put('/api/settings/:key', express.json(), async (req, res) => {
         });
       }
       textValue = value;
-    } else if (meta.type === 'list') {
-      if (!Array.isArray(value) || value.some(item => typeof item !== 'string')) {
-        return res.status(400).json({
-          error: 'invalid value',
-          message: `"${key}" expects an array of strings`,
-        });
-      }
-      const items = [...new Set(value.map(item => item.trim()))];
-      if (meta.itemPattern && items.some(item => !meta.itemPattern.test(item))) {
-        return res.status(400).json({
-          error: 'invalid value',
-          message: `"${key}" contains an entry with an invalid format`,
-        });
-      }
-      textValue = JSON.stringify(items);
     } else if (meta.type === 'services') {
       // Array of disabled service ids. Silently drop unknown ids (a service removed from
       // the registry shouldn't wedge the whole save) and store a canonical sorted set.
@@ -314,23 +225,8 @@ router.put('/api/settings/:key', express.json(), async (req, res) => {
         });
       }
       textValue = JSON.stringify(states);
-    } else if (meta.type === 'views') {
-      const views = parseViews(value);
-      if (!views) {
-        return res.status(400).json({
-          error: 'invalid value',
-          message: `"${key}" expects a list of { name, page, params } views`,
-        });
-      }
-      textValue = JSON.stringify(views);
     } else {
-      textValue = String(value).trim();
-      if (meta.pattern && !meta.pattern.test(textValue)) {
-        return res.status(400).json({
-          error: 'invalid value',
-          message: `"${key}" has an invalid format`,
-        });
-      }
+      return res.status(400).json({ error: 'invalid value', message: `"${key}" is read-only` });
     }
 
     await setSetting(key, textValue);

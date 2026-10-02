@@ -3,22 +3,8 @@ import { createLogger } from '../utils/logger.js';
 import { webuiConfig } from '../utils/config.js';
 import { ConfigurationError } from '../utils/errors.js';
 import { getPostgresConfig } from '../utils/database/connection.js';
-import { initDatabase, getRecentOperations, onNewLog } from '../utils/database.js';
-import {
-  setBroadcastCallback,
-  setUserMetricsBroadcastCallback,
-} from '../utils/operations-tracker.js';
-import { setBroadcastCallback as setAlertBroadcastCallback } from '../utils/ntfy-notifier.js';
+import { initDatabase } from '../utils/database.js';
 import { createApp } from './app.js';
-import { startHeartbeatInterval, stopHeartbeatInterval, clients } from './sse/server.js';
-import { heartbeatClients } from './sse/handlers.js';
-import {
-  broadcastOperation,
-  broadcastLog,
-  broadcastAlert,
-  broadcastUserMetrics,
-} from './sse/broadcast.js';
-import { operations, MAX_OPERATIONS } from './operations/storage.js';
 
 const logger = createLogger('webui');
 
@@ -41,19 +27,6 @@ try {
   process.exit(1);
 }
 
-const broadcastOperationWrapper = operation => {
-  broadcastOperation(clients, operation);
-};
-const broadcastLogWrapper = logEntry => {
-  broadcastLog(clients, logEntry);
-};
-const broadcastAlertWrapper = alert => {
-  broadcastAlert(clients, alert);
-};
-const broadcastUserMetricsWrapper = (userId, metrics) => {
-  broadcastUserMetrics(clients, userId, metrics);
-};
-
 (async () => {
   try {
     const dbConfig = getPostgresConfig();
@@ -71,53 +44,21 @@ const broadcastUserMetricsWrapper = (userId, metrics) => {
 
     await initDatabase();
     logger.info('database initialized');
-
-    // Clear in-memory operations before loading from database to prevent stale test operations
-    operations.length = 0;
-
-    try {
-      const recentOps = await getRecentOperations(MAX_OPERATIONS);
-      if (recentOps && Array.isArray(recentOps) && recentOps.length > 0) {
-        // Add operations to in-memory store (most recent first)
-        operations.push(...recentOps);
-        logger.info(`loaded ${recentOps.length} operations from database`);
-      } else {
-        logger.info('no operations found in database or invalid response format');
-      }
-    } catch (error) {
-      logger.error('failed to load operations from database:', error);
-      // Continue startup even if loading operations fails
-    }
   } catch (error) {
     logger.error('failed to initialize database:', error);
     process.exit(1);
   }
 
-  const app = createApp(clients);
-
-  server = http.createServer(app);
-
-  setBroadcastCallback(broadcastOperationWrapper, WEBUI_PORT);
-
-  await onNewLog(broadcastLogWrapper, () => clients.size > 0);
-
-  setAlertBroadcastCallback(broadcastAlertWrapper);
-
-  setUserMetricsBroadcastCallback(broadcastUserMetricsWrapper, WEBUI_PORT);
+  server = http.createServer(createApp());
 
   server.listen(WEBUI_PORT, WEBUI_HOST, () => {
     logger.info(`webui server running on http://${WEBUI_HOST}:${WEBUI_PORT}`);
     logger.info(`dashboard: http://${WEBUI_HOST}:${WEBUI_PORT}`);
-    logger.info(`sse stream: http://${WEBUI_HOST}:${WEBUI_PORT}/api/events`);
-
-    // Start SSE heartbeat (every 30 seconds)
-    startHeartbeatInterval(() => heartbeatClients(clients));
   });
 })();
 
 function gracefulShutdown() {
   logger.info('Shutdown signal received, shutting down gracefully...');
-  stopHeartbeatInterval();
   if (server) {
     server.close(() => {
       logger.info('HTTP server closed');

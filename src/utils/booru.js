@@ -93,7 +93,7 @@ export function isBooruUrl(url) {
 }
 
 // Download the media for a booru post URL
-export async function downloadFromBooru(url, isAdminUser = false) {
+export async function downloadFromBooru(url) {
   const { hostname, pathname } = new URL(url);
   const site = matchSite(hostname);
   const postId = parsePostId(pathname);
@@ -133,7 +133,7 @@ export async function downloadFromBooru(url, isAdminUser = false) {
   }
 
   logger.debug(`Extracted ${site.name} media URL: ${fileUrl}`);
-  const result = await downloadFileFromUrl(fileUrl, isAdminUser, null, { userAgent: BOORU_UA });
+  const result = await downloadFileFromUrl(fileUrl, null, { userAgent: BOORU_UA });
   logger.debug(
     `Downloaded ${site.name} media: ${result.filename} (${result.size} bytes, ${result.contentType})`
   );

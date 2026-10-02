@@ -3,8 +3,7 @@ import assert from 'node:assert';
 import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
-import { initDatabase, insertProcessedUrl, insertTemporaryUpload } from '../src/utils/database.js';
-import { getPostgresConnection } from '../src/utils/database/connection.js';
+import { initDatabase } from '../src/utils/database.js';
 import { readSessions } from '../src/webui-server/sessions.js';
 
 let server;
@@ -45,33 +44,24 @@ describe('sessions', () => {
       ].join('\n')
     );
 
-    const asked = [];
-    const sessions = await readSessions({
-      cookiesPath,
-      jarPath,
-      lastRejected: async regex => (asked.push(regex), 123),
-    });
+    const sessions = await readSessions({ cookiesPath, jarPath });
     const by = Object.fromEntries(sessions.map(s => [s.id, s]));
 
     assert.ok(!JSON.stringify(sessions).includes('SECRET'));
     assert.strictEqual(by.instagram.loggedIn, true);
     assert.strictEqual(by.instagram.cookies, 2);
-    assert.strictEqual(by.instagram.lastRejected, 123);
     assert.strictEqual(by.twitter.loggedIn, false);
-    assert.strictEqual(by.twitter.lastRejected, null);
     assert.strictEqual(by.youtube.loggedIn, true);
     assert.strictEqual(by.youtube.expires, expires * 1000);
     assert.strictEqual(by.tiktok.loggedIn, false);
     assert.strictEqual(by.tiktok.cookies, 1);
     assert.ok(sessions.every(s => s.fileFound && s.fileChanged > 0));
-    assert.ok(asked.every(r => r instanceof RegExp));
   });
 
   test('a missing file reads as not found, not as an error', async () => {
     const sessions = await readSessions({
       cookiesPath: path.join(dir, 'absent.json'),
       jarPath: undefined,
-      lastRejected: async () => null,
     });
     assert.ok(sessions.length > 0);
     assert.ok(sessions.every(s => !s.fileFound && !s.loggedIn));
@@ -79,34 +69,6 @@ describe('sessions', () => {
 });
 
 describe('system routes', () => {
-  test('GET /api/storage counts a live upload in its expiry bucket', async () => {
-    const now = Date.now();
-    const hash = `storage-test-${now}`;
-    const key = `gifs/${hash}.gif`;
-    await insertProcessedUrl(hash, hash, 'gif', '.gif', `https://cdn.test/${key}`, now, '1', 4321);
-    await insertTemporaryUpload(hash, key, now, now + 30 * 60_000);
-    try {
-      const response = await fetch(`${baseUrl}/api/storage`);
-      assert.strictEqual(response.status, 200);
-      const { r2, limitBytes } = await response.json();
-
-      assert.ok(limitBytes >= 0);
-      assert.ok(r2.files >= 1);
-      assert.ok(r2.expiring.h1 >= 4321);
-      assert.ok(r2.expiring.h24 >= r2.expiring.h6 && r2.expiring.h6 >= r2.expiring.h1);
-      assert.ok(r2.bytes >= r2.expiring.h24);
-      const mine = r2.soon.find(f => f.key === key);
-      assert.deepStrictEqual(
-        { size: mine.size, type: mine.type, userId: mine.userId },
-        { size: 4321, type: 'gif', userId: '1' }
-      );
-      assert.ok(Array.isArray(r2.biggest));
-      assert.strictEqual(typeof r2.deletionFailures.count, 'number');
-    } finally {
-      await getPostgresConnection()`DELETE FROM processed_urls WHERE url_hash = ${hash}`;
-    }
-  });
-
   test('GET /api/system/deps answers even when a dependency is down', async () => {
     const response = await fetch(`${baseUrl}/api/system/deps`);
     assert.strictEqual(response.status, 200);

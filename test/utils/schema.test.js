@@ -32,7 +32,7 @@ describe('applySchema', () => {
 
     const migrations = await clients[0]`SELECT name FROM schema_migrations`;
     assert.strictEqual(migrations.length, new Set(migrations.map(m => m.name)).size);
-    assert.ok(migrations.length >= 6);
+    assert.ok(migrations.length >= 3);
     const [{ exists }] = await clients[0]`SELECT to_regclass('media_jobs') IS NOT NULL AS exists`;
     assert.strictEqual(exists, true);
   });

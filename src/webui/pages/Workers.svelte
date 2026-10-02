@@ -2,9 +2,9 @@
   import { poll } from '../utils/poll.js';
   import { getJsonOrNull, sendJson } from '../utils/api.js';
   import { Pause, Play, AlertTriangle, Cpu } from 'lucide-svelte';
-  import { currentRoute, navigate } from '../utils/router.js';
+  import { navigate } from '../utils/router.js';
   import { refreshNav } from '../stores/nav.js';
-  import { formatBytes, formatRelativeTime, urlLabel } from '../utils/format.js';
+  import { formatBytes, formatRelativeTime } from '../utils/format.js';
   import PageHeader from '../components/PageHeader.svelte';
   import DataTable from '../components/DataTable.svelte';
 
@@ -16,8 +16,6 @@
   let now = $state(Date.now());
   let updated = $state(0);
   let busy = $state(false);
-
-  const statusFilter = $derived($currentRoute.params.$status || '');
 
   async function load() {
     [data, bot] = await Promise.all([
@@ -58,13 +56,8 @@
   const mismatch = $derived(
     versions.length > 1 || (data?.version && versions.length === 1 && versions[0] !== data.version)
   );
-  const recent = $derived(
-    (jobs?.recent ?? []).filter(j => !statusFilter || j.status === statusFilter)
-  );
-  const count = s => jobs?.counts?.[s]?.count ?? 0;
-  const retried = $derived(
-    Object.values(jobs?.counts ?? {}).reduce((n, c) => n + (c.retried || 0), 0)
-  );
+  const recent = $derived(jobs?.recent ?? []);
+  const count = s => jobs?.counts?.[s] ?? 0;
   const until = ms =>
     ms < 86_400_000 ? `${Math.ceil(ms / 3_600_000)}h` : `${Math.floor(ms / 86_400_000)}d`;
   const uptime = ms => {
@@ -76,8 +69,6 @@
         : `${Math.floor(m / 1440)}d ${Math.floor((m % 1440) / 60)}h`;
   };
   const JOB_STATUS = {
-    done: ['ok', 'Done'],
-    failed: ['bad', 'Failed'],
     running: ['info', 'Running'],
     queued: ['idle', 'Queued'],
   };
@@ -94,13 +85,12 @@
             ? `expired ${formatRelativeTime(s.expires)}`
             : `expires in ${until(s.expires - now)}`
           : `${s.cookies} cookies`;
-  const sessionBad = s => s.loggedIn && s.lastRejected && s.lastRejected > s.fileChanged;
   const ago = $derived(updated ? Math.max(0, Math.round((now - updated) / 1000)) : null);
 
   const JOB_COLUMNS = [
     { key: 'id', label: 'Job', width: '64px' },
     { key: 'state', label: 'State', width: '96px' },
-    { key: 'req', label: 'Request' },
+    { key: 'req', label: 'Command' },
     { key: 'worker', label: 'Worker', width: '120px', sm: false },
     { key: 'attempts', label: 'Attempts', width: '76px', align: 'right', sm: false },
     { key: 'age', label: 'Age', width: '70px', align: 'right' },
@@ -166,7 +156,7 @@
     </div>
   {/if}
 
-  <section class="kpis" style="--kpi-cols: 4" aria-label="queue">
+  <section class="kpis" style="--kpi-cols: 2" aria-label="queue">
     <div class="kpi" class:warn={paused && count('queued')}>
       <div class="k">Queued</div>
       <div class="v">{jobs ? count('queued') : '—'}</div>
@@ -177,23 +167,6 @@
       <div class="k">Running</div>
       <div class="v">{jobs ? count('running') : '—'}</div>
       <div class="s">right now</div>
-    </div>
-    <div class="kpi">
-      <div class="k">Done</div>
-      <div class="v">{jobs ? count('done').toLocaleString() : '—'}</div>
-      {#if retried}<span class="d plain">{retried} needed a retry</span>{/if}
-      <div class="s">last 24h</div>
-    </div>
-    <div class="kpi" class:bad={count('failed') > 0}>
-      <div class="k">Failed</div>
-      <div class="v">{jobs ? count('failed') : '—'}</div>
-      <div class="s">
-        <button
-          class="linkish"
-          onclick={() => navigate('system', statusFilter === 'failed' ? {} : { status: 'failed' })}
-          >{statusFilter === 'failed' ? 'Show all jobs' : 'Show only failed'}</button
-        >
-      </div>
     </div>
   </section>
 
@@ -265,18 +238,6 @@
         {/each}
       </div>
     </section>
-  {:else if jobs}
-    <div class="panel pb note">
-      Live process status appears once this version is running: each bot and worker reports in every
-      10 s. Until then, workers are known only from the jobs they ran:
-      {#each jobs.workers as w (w.worker)}
-        <span class="chip mono"
-          >{w.worker} · {w.done} done{w.failed ? ` · ${w.failed} failed` : ''} · {formatRelativeTime(
-            w.last_seen
-          )}</span
-        >
-      {/each}
-    </div>
   {/if}
 
   <div class="two wide-left">
@@ -285,26 +246,14 @@
       columns={JOB_COLUMNS}
       rows={recent}
       loading={!jobs}
-      empty={statusFilter ? `No ${statusFilter} jobs` : 'No jobs yet'}
-      onrow={j => navigate('request', { requestId: j.operation_id })}
-      rowDisabled={j => !j.operation_id}
+      empty="No jobs running"
       label="media jobs"
     >
-      {#snippet header()}
-        {#if statusFilter}
-          <span class="chip warn">{statusFilter} only</span>
-          <button class="linkish" onclick={() => navigate('system', {})}>Clear</button>
-        {:else}
-          <span class="dim">most recent first</span>
-        {/if}
-      {/snippet}
       {#snippet row(j)}
         {@const [kind, label] = JOB_STATUS[j.status] ?? ['idle', j.status]}
         <span class="mono dim">#{j.id}</span>
         <span><span class="pill sm {kind}">{label}</span></span>
-        <span class="mono ellipsis"
-          >{j.kind} {j.url ? urlLabel(j.url) : j.attachment ? 'attachment' : ''}</span
-        >
+        <span class="mono ellipsis">{j.kind}</span>
         <span class="mono muted ellipsis hide-sm">{j.worker ?? '—'}</span>
         <span class="num hide-sm" class:warn-text={j.attempts > 1}>{j.attempts}</span>
         <span class="num dim">{formatRelativeTime(j.created_at)}</span>
@@ -353,17 +302,11 @@
         </div>
         {#each system?.sessions ?? [] as s (s.id)}
           <div class="lrow dep">
-            <span
-              class="dot"
-              class:ok={s.loggedIn && !sessionBad(s)}
-              class:err={sessionBad(s) || !s.fileFound}
-            ></span>
+            <span class="dot" class:ok={s.loggedIn} class:err={!s.fileFound}></span>
             <div class="grow">
               <div class="strong">{s.label}</div>
               <div class="dim small">
-                {#if sessionBad(s)}
-                  rejected {formatRelativeTime(s.lastRejected)}, needs a fresh cookie
-                {:else if s.fileFound}
+                {#if s.fileFound}
                   file updated {formatRelativeTime(s.fileChanged)}
                 {/if}
               </div>

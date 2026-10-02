@@ -46,7 +46,7 @@ test('validateVideoAttachment - rejects attachments without content type', () =>
 test('validateVideoAttachment - rejects files exceeding size limit for non-admins', () => {
   const oversizedFile = MAX_VIDEO_SIZE + 1;
   const attachment = createAttachment('video/mp4', oversizedFile);
-  const result = validateVideoAttachment(attachment, false);
+  const result = validateVideoAttachment(attachment);
 
   assert.strictEqual(result.valid, false);
   assert(result.error.includes('too large'));
@@ -56,22 +56,14 @@ test('validateVideoAttachment - rejects files exceeding size limit for non-admin
 
 test('validateVideoAttachment - accepts files at size limit', () => {
   const attachment = createAttachment('video/mp4', MAX_VIDEO_SIZE);
-  const result = validateVideoAttachment(attachment, false);
-
-  assert.strictEqual(result.valid, true);
-});
-
-test('validateVideoAttachment - allows oversized files for admins', () => {
-  const oversizedFile = MAX_VIDEO_SIZE + 1024 * 1024 * 100; // 100MB over limit
-  const attachment = createAttachment('video/mp4', oversizedFile);
-  const result = validateVideoAttachment(attachment, true);
+  const result = validateVideoAttachment(attachment);
 
   assert.strictEqual(result.valid, true);
 });
 
 test('validateVideoAttachment - accepts small files', () => {
   const attachment = createAttachment('video/mp4', 1024); // 1KB
-  const result = validateVideoAttachment(attachment, false);
+  const result = validateVideoAttachment(attachment);
 
   assert.strictEqual(result.valid, true);
 });
@@ -105,7 +97,7 @@ test('validateImageAttachment - rejects files exceeding size limit for non-admin
   const maxSize = 50 * 1024 * 1024; // 50MB
   const oversizedFile = maxSize + 1;
   const attachment = createAttachment('image/png', oversizedFile);
-  const result = validateImageAttachment(attachment, false);
+  const result = validateImageAttachment(attachment);
 
   assert.strictEqual(result.valid, false);
   assert(result.error.includes('too large'));
@@ -115,37 +107,28 @@ test('validateImageAttachment - rejects files exceeding size limit for non-admin
 test('validateImageAttachment - accepts files at size limit', () => {
   const maxSize = 50 * 1024 * 1024; // 50MB
   const attachment = createAttachment('image/png', maxSize);
-  const result = validateImageAttachment(attachment, false);
-
-  assert.strictEqual(result.valid, true);
-});
-
-test('validateImageAttachment - allows oversized files for admins', () => {
-  const maxSize = 50 * 1024 * 1024; // 50MB
-  const oversizedFile = maxSize + 1024 * 1024 * 10; // 10MB over limit
-  const attachment = createAttachment('image/png', oversizedFile);
-  const result = validateImageAttachment(attachment, true);
+  const result = validateImageAttachment(attachment);
 
   assert.strictEqual(result.valid, true);
 });
 
 test('validateImageAttachment - accepts small files', () => {
   const attachment = createAttachment('image/png', 1024); // 1KB
-  const result = validateImageAttachment(attachment, false);
+  const result = validateImageAttachment(attachment);
 
   assert.strictEqual(result.valid, true);
 });
 
 test('validateVideoAttachment - handles zero-size files', () => {
   const attachment = createAttachment('video/mp4', 0);
-  const result = validateVideoAttachment(attachment, false);
+  const result = validateVideoAttachment(attachment);
 
   assert.strictEqual(result.valid, true);
 });
 
 test('validateImageAttachment - handles zero-size files', () => {
   const attachment = createAttachment('image/png', 0);
-  const result = validateImageAttachment(attachment, false);
+  const result = validateImageAttachment(attachment);
 
   assert.strictEqual(result.valid, true);
 });

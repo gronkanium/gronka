@@ -81,7 +81,7 @@ function isMediaHostUrl(url) {
 }
 
 // Download the media for a Pinterest pin URL
-export async function downloadFromPinterest(url, isAdminUser = false) {
+export async function downloadFromPinterest(url) {
   logger.debug(`Resolving Pinterest pin: ${url}`);
 
   let response;
@@ -118,7 +118,7 @@ export async function downloadFromPinterest(url, isAdminUser = false) {
   }
 
   logger.debug(`Extracted Pinterest media URL: ${mediaUrl}`);
-  const result = await downloadFileFromUrl(mediaUrl, isAdminUser);
+  const result = await downloadFileFromUrl(mediaUrl);
   logger.debug(
     `Downloaded Pinterest media: ${result.filename} (${result.size} bytes, ${result.contentType})`
   );

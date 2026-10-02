@@ -66,8 +66,8 @@ COPY --from=builder /app/scripts ./scripts
 COPY --from=builder /app/package.json /app/bun.lock ./
 
 # Writable dirs for the unprivileged user; everything else stays root-owned and read-only to it
-RUN mkdir -p data-prod/gifs data-test/gifs temp logs \
-    && chown -R bun:bun data-prod data-test temp logs
+RUN mkdir -p temp \
+    && chown -R bun:bun temp
 
 # Copy entrypoint script
 COPY scripts/docker-entrypoint.sh /usr/local/bin/

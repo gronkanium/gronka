@@ -36,7 +36,6 @@ const fetchChannel = (client, id) => client.channels.fetch(id, { allowUnknownGui
 // Rebuilds the interaction surface the commands use, over REST only (no gateway session).
 export async function interactionFor(client, job) {
   const { reply } = job;
-  const user = { id: job.user_id };
   if (reply.kind === 'message') {
     const channel = await fetchChannel(client, reply.channelId);
     // Edits go straight to REST: a REST-fetched message has no cached channel to edit through.
@@ -46,7 +45,6 @@ export async function interactionFor(client, job) {
     };
     const message = {
       id: reply.messageId,
-      author: user,
       channel,
       channelId: reply.channelId,
       client,
@@ -61,7 +59,6 @@ export async function interactionFor(client, job) {
   const webhook = new InteractionWebhook(client, reply.appId, reply.token);
   const edit = async options => asMessage(await webhook.editMessage('@original', options));
   return {
-    user,
     client,
     applicationId: reply.appId,
     channelId: reply.channelId,

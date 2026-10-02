@@ -58,8 +58,6 @@ function makeDeps(overrides = {}) {
     clearPrefix: [],
   };
   const deps = {
-    isAdmin: () => false,
-    replyIfBanned: async () => false,
     replyIfMaintenance: async () => false,
     getGuildPrefix: async () => null,
     setGuildPrefix: async (guildId, prefix) => calls.setPrefix.push({ guildId, prefix }),
@@ -242,14 +240,8 @@ describe('handlePrefixMessage', () => {
     assert.match(mentioned._replies[0], /unknown command/);
   });
 
-  test('banned users are blocked before dispatch', async () => {
-    const { deps, calls } = makeDeps({ replyIfBanned: async () => true });
-    await handlePrefixMessage(makeMessage({ content: '^g download https://x.com/a' }), { deps });
-    assert.strictEqual(calls.download.length, 0);
-  });
-
-  test('ban and maintenance checks also gate help and prefix', async () => {
-    const { deps, calls } = makeDeps({ replyIfBanned: async () => true });
+  test('maintenance gates every prefix command, help and prefix included', async () => {
+    const { deps, calls } = makeDeps({ replyIfMaintenance: async () => true });
 
     const help = makeMessage({ content: `<@${BOT_ID}>` });
     await handlePrefixMessage(help, { deps });
@@ -259,11 +251,8 @@ describe('handlePrefixMessage', () => {
     await handlePrefixMessage(prefixMsg, { deps });
     assert.strictEqual(calls.setPrefix.length, 0);
 
-    const { deps: maintDeps, calls: maintCalls } = makeDeps({
-      replyIfMaintenance: async () => true,
-    });
-    await handlePrefixMessage(makeMessage({ content: '^g info' }), { deps: maintDeps });
-    assert.strictEqual(maintCalls.info.length, 0);
+    await handlePrefixMessage(makeMessage({ content: '^g info' }), { deps });
+    assert.strictEqual(calls.info.length, 0);
   });
 
   test('prefix set requires manage server permission', async () => {

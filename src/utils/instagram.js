@@ -251,7 +251,7 @@ async function fetchStoryItems({ highlightId, mediaId }, refererPath, cookie) {
 }
 
 // Download the media behind an Instagram post URL via the web client's media-info API
-export async function downloadFromInstagram(url, isAdminUser = false) {
+export async function downloadFromInstagram(url) {
   const cookie = readCookie();
   if (!cookie) {
     throw new ValidationError('no instagram session configured');
@@ -272,7 +272,7 @@ export async function downloadFromInstagram(url, isAdminUser = false) {
           if (!mediaUrl) {
             return null;
           }
-          return downloadFileFromUrl(mediaUrl, isAdminUser).catch(error => {
+          return downloadFileFromUrl(mediaUrl).catch(error => {
             logger.warn(`Instagram story item failed: ${error.message}`);
             return null;
           });
@@ -308,7 +308,7 @@ export async function downloadFromInstagram(url, isAdminUser = false) {
     throw new ValidationError('no downloadable media found on this post');
   }
 
-  const result = await downloadFileFromUrl(mediaUrl, isAdminUser);
+  const result = await downloadFileFromUrl(mediaUrl);
   logger.debug(
     `Downloaded Instagram media: ${result.filename} (${result.size} bytes, ${result.contentType})`
   );

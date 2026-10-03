@@ -3,6 +3,7 @@ x-logging: &logging
   options:
     max-size: 5m
     max-file: '1'
+    compress: 'false'
 
 services:
   app:

@@ -1,22 +1,16 @@
 #!/usr/bin/env bun
 
-/**
- * Reset the test database schema before a test run.
- * Mirrors what CI does (DROP SCHEMA public CASCADE) so local runs start from
- * a clean slate instead of accumulating state across runs.
- *
- * Runs automatically via the npm "pretest" hook. Safe by construction: it
- * refuses to touch any database that doesn't contain "test" in its name.
- */
+// Runs a test command against its own fresh database, dropped afterwards, so a run never sees
+// another branch's schema or another worktree's rows: bun scripts/with-test-db.js <command...>
 
 import dotenv from 'dotenv';
 import postgres from 'postgres';
 import fs from 'fs';
+import { spawn } from 'child_process';
+import { randomBytes } from 'crypto';
 
-dotenv.config();
+dotenv.config({ quiet: true });
 
-// Match the docker-vs-local host detection in src/utils/database/connection.js:
-// inside the app container postgres is the "postgres" compose service, not localhost
 const isInDocker = fs.existsSync('/.dockerenv');
 const host =
   process.env.TEST_POSTGRES_HOST ||
@@ -24,14 +18,8 @@ const host =
 const port = parseInt(process.env.TEST_POSTGRES_PORT || process.env.POSTGRES_PORT || '5432', 10);
 const username = process.env.TEST_POSTGRES_USER || process.env.POSTGRES_USER || 'gronka';
 const password = process.env.TEST_POSTGRES_PASSWORD || process.env.POSTGRES_PASSWORD || 'gronka';
-const database = process.env.TEST_POSTGRES_DB || 'gronka_test';
-
-if (!database.includes('test')) {
-  console.error(
-    `[test-db-reset] SAFETY: refusing to reset database "${database}" - test databases must contain "test" in their name`
-  );
-  process.exit(1);
-}
+const PREFIX = 'gronka_test_run_';
+const database = `${PREFIX}${process.pid}_${randomBytes(3).toString('hex')}`;
 
 const connectionOptions = {
   host,
@@ -81,7 +69,7 @@ async function ensureRoleExists() {
       // missing role. Surface the original error.
       throw probeError;
     }
-    console.log(`[test-db-reset] Role "${username}" missing, creating it as "${adminUser}"`);
+    console.log(`[test-db] Role "${username}" missing, creating it as "${adminUser}"`);
     const quotedRole = `"${username.replace(/"/g, '""')}"`;
     const quotedPassword = `'${password.replace(/'/g, "''")}'`;
     // SUPERUSER to match the role docker-compose provisions (POSTGRES_USER of the
@@ -92,56 +80,72 @@ async function ensureRoleExists() {
   }
 }
 
-async function ensureDatabaseExists() {
-  // Connect to the maintenance database to create the test database if missing
-  const admin = postgres({ ...connectionOptions, database: 'postgres' });
+async function admin(fn) {
+  const sql = postgres({ ...connectionOptions, database: 'postgres' });
   try {
-    const exists = await admin`SELECT 1 FROM pg_database WHERE datname = ${database}`;
-    if (exists.length === 0) {
-      console.log(`[test-db-reset] Creating missing test database "${database}"`);
-      await admin.unsafe(`CREATE DATABASE "${database.replace(/"/g, '""')}"`);
-    }
-  } finally {
-    await admin.end();
-  }
-}
-
-async function resetSchema() {
-  const sql = postgres({ ...connectionOptions, database });
-  try {
-    await sql.unsafe('DROP SCHEMA IF EXISTS public CASCADE');
-    await sql.unsafe('CREATE SCHEMA public');
-    console.log(`[test-db-reset] Reset schema in "${database}" on ${host}:${port}`);
+    return await fn(sql);
   } finally {
     await sql.end();
   }
 }
 
+const alive = pid => {
+  try {
+    process.kill(pid, 0);
+    return true;
+  } catch (error) {
+    return error.code === 'EPERM';
+  }
+};
+
+// Databases of runs that were killed before they could drop their own.
+async function dropAbandoned(sql) {
+  const rows = await sql`SELECT datname FROM pg_database WHERE starts_with(datname, ${PREFIX})`;
+  for (const { datname } of rows) {
+    const pid = Number(datname.slice(PREFIX.length).split('_')[0]);
+    if (!alive(pid)) await sql.unsafe(`DROP DATABASE IF EXISTS "${datname}" WITH (FORCE)`);
+  }
+}
+
+// CREATE TABLE IF NOT EXISTS races at the catalog level when many test processes hit an empty
+// schema at once, so the schema is built once, serially, before they start.
 async function precreateTables() {
-  // Create all tables/indexes serially before the parallel test processes start.
-  // CREATE TABLE IF NOT EXISTS races at the catalog level when ~30 processes hit
-  // an empty schema simultaneously; pre-creating makes their CREATEs no-ops.
-  process.env.NODE_ENV = 'test';
-  process.env.TEST_POSTGRES_DB = database;
   const { initPostgresDatabase, closePostgresDatabase } =
     await import('../src/utils/database/init.js');
   await initPostgresDatabase();
   await closePostgresDatabase();
-  console.log('[test-db-reset] Pre-created tables and indexes');
 }
 
+const command = process.argv.slice(2);
+if (command.length === 0) {
+  console.error('usage: bun scripts/with-test-db.js <command...>');
+  process.exit(2);
+}
+
+process.env.NODE_ENV = 'test';
+process.env.TEST_POSTGRES_DB = database;
 try {
   await ensureRoleExists();
-  await ensureDatabaseExists();
-  await resetSchema();
+  await admin(async sql => {
+    await dropAbandoned(sql);
+    await sql.unsafe(`CREATE DATABASE "${database}"`);
+  });
   await precreateTables();
 } catch (error) {
-  console.error(`[test-db-reset] Failed to reset test database "${database}": ${error.message}`);
+  console.error(`[test-db] Could not create a test database: ${error.message}`);
   console.error(
-    '[test-db-reset] Is PostgreSQL running? (docker compose up -d postgres, or check TEST_POSTGRES_* env vars)'
-  );
-  console.error(
-    `[test-db-reset] If the "${username}" role is missing and auto-creation failed, set TEST_POSTGRES_ADMIN_USER/TEST_POSTGRES_ADMIN_PASSWORD to a role that can CREATE ROLE`
+    '[test-db] Is PostgreSQL running? (docker compose up -d postgres, or check TEST_POSTGRES_* env vars)'
   );
   process.exit(1);
 }
+
+// Ctrl-C reaches the child too; wait for it so the database is still dropped.
+for (const signal of ['SIGINT', 'SIGTERM']) process.on(signal, () => {});
+const child = spawn(command[0], command.slice(1), { stdio: 'inherit', env: process.env });
+const code = await new Promise(resolve =>
+  child.on('exit', (status, signal) => resolve(status ?? (signal ? 1 : 0)))
+);
+await admin(sql => sql.unsafe(`DROP DATABASE IF EXISTS "${database}" WITH (FORCE)`)).catch(error =>
+  console.error(`[test-db] Could not drop ${database}: ${error.message}`)
+);
+process.exit(code);

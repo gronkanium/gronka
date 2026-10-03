@@ -17,7 +17,7 @@ import { handleModalSubmit } from './handlers/modals.js';
 import { handleMangaInteraction } from './commands/manga.js';
 import { handleMegaKeyInteraction } from './commands/mega-key.js';
 import { handlePrefixMessage } from './handlers/prefix-commands.js';
-import { cleanupStuckOperations, flushAllOperationLogs } from './utils/operations-tracker.js';
+import { flushCounts } from './utils/operations-tracker.js';
 import { initializeR2UsageCache } from './utils/storage.js';
 import { r2Config } from './utils/config.js';
 import { startCleanupJob, stopCleanupJob } from './utils/r2-cleanup.js';
@@ -206,18 +206,6 @@ client.once(Events.ClientReady, async readyClient => {
       30 * 60 * 1000
     );
 
-    setInterval(
-      async () => {
-        try {
-          // Past Discord's 15-minute reply token nothing can be delivered, so 16 minutes means stuck.
-          cleanupStuckOperations(16);
-        } catch (error) {
-          logger.error('Error in stuck operations cleanup:', error);
-        }
-      },
-      5 * 60 * 1000
-    ); // Run cleanup every 5 minutes
-
     if (botConfig.retentionEnabled) {
       try {
         retentionJobIntervalId = startRetentionJob({
@@ -361,7 +349,7 @@ async function gracefulShutdown(signal) {
   if (retentionJobIntervalId) stopRetentionJob(retentionJobIntervalId);
   await clearPresence().catch(warn('Could not clear presence'));
   if (httpServer) httpServer.close();
-  await flushAllOperationLogs().catch(warn('Could not flush operation logs'));
+  await flushCounts().catch(warn('Could not flush counts'));
   await client.destroy();
   await closeDatabase().catch(warn('Could not close database'));
   process.exit(0);

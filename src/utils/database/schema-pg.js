@@ -62,7 +62,6 @@ export function getTableDefinitions() {
           reply JSONB NOT NULL,
           status TEXT NOT NULL DEFAULT 'queued',
           attempts INTEGER NOT NULL DEFAULT 0,
-          operation_id TEXT,
           worker TEXT,
           error TEXT,
           created_at BIGINT NOT NULL,
@@ -112,10 +111,6 @@ export function getIndexDefinitions() {
     {
       name: 'idx_media_jobs_timestamp',
       sql: 'CREATE INDEX IF NOT EXISTS idx_media_jobs_timestamp ON media_jobs(timestamp);',
-    },
-    {
-      name: 'idx_media_jobs_operation_id',
-      sql: 'CREATE INDEX IF NOT EXISTS idx_media_jobs_operation_id ON media_jobs(operation_id) WHERE operation_id IS NOT NULL;',
     },
   ];
 }
@@ -176,6 +171,11 @@ async function purgeEarlierRows(sql) {
       'webui_saved_views')`;
 }
 
+// Jobs no longer carry a request id between attempts; the index goes with the column.
+async function dropJobOperationId(sql) {
+  await sql`ALTER TABLE media_jobs DROP COLUMN IF EXISTS operation_id`;
+}
+
 // Append only: a name, once recorded in schema_migrations, never runs again.
 const MIGRATIONS = [
   ['drop_redundant_indexes', dropRedundantIndexes],
@@ -183,6 +183,7 @@ const MIGRATIONS = [
   ['drop_request_history', dropRequestHistory],
   ['drop_guild_prefixes', dropGuildPrefixes],
   ['purge_earlier_rows', purgeEarlierRows],
+  ['drop_job_operation_id', dropJobOperationId],
 ];
 
 export async function runMigrations(sql) {

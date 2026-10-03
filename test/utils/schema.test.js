@@ -64,6 +64,7 @@ describe('applySchema', () => {
       '{"command":"download","error":null,"errorClass":null,"source":null}'
     );
     await alert('r2-cleanup', 'R2 cleanup: deletions failed', '{"count":1}');
+    await sql`INSERT INTO bot_settings (key, value, updated_at) VALUES ('ntfy_topic', 'x', 1), ('queue_paused', 'false', 1)`;
     await sql`DELETE FROM schema_migrations WHERE name = 'purge_earlier_rows'`;
 
     await applySchema(sql);
@@ -79,5 +80,10 @@ describe('applySchema', () => {
       ['bot', 'r2-cleanup']
     );
     assert.ok(alerts[0].metadata.includes('"errorClass"'));
+    const settings = await sql`SELECT key FROM bot_settings ORDER BY key`;
+    assert.deepStrictEqual(
+      settings.map(r => r.key),
+      ['queue_paused']
+    );
   });
 });

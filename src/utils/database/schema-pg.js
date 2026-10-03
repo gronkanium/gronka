@@ -170,6 +170,10 @@ async function purgeEarlierRows(sql) {
   await sql`
     DELETE FROM alerts WHERE component <> 'r2-cleanup'
       AND NOT (title = 'command failed' AND metadata LIKE '%"errorClass"%')`;
+  await sql`
+    DELETE FROM bot_settings WHERE key IN ('moderation_enabled', 'rate_limit_cooldown',
+      'discord_portal_install_users', 'discord_portal_install_users_fetched_at', 'ntfy_topic',
+      'webui_saved_views')`;
 }
 
 // Append only: a name, once recorded in schema_migrations, never runs again.

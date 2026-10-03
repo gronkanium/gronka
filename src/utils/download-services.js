@@ -74,6 +74,7 @@ const customServices = [
   // main domain and the pin.it shortener, not every regional ccTLD isPinterestUrl accepts.
   { id: 'pinterest', label: 'Pinterest', category: 'social', hosts: ['pinterest.com', 'pin.it'] },
   { id: 'klipy', label: 'Klipy', category: 'social', hosts: ['klipy.com'] },
+  { id: 'threads', label: 'Threads', category: 'social', hosts: ['threads.com', 'threads.net'] },
   { id: 'giphy', label: 'Giphy', category: 'social', hosts: ['giphy.com'] },
   { id: 'mega', label: 'Mega', category: 'video', hosts: ['mega.nz', 'mega.io'] },
   { id: 'hentaigifz', label: 'hentaigifz', category: 'adult', hosts: ['hentaigifz.com'] },

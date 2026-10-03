@@ -25,6 +25,7 @@ download media from social platforms using the `/download` command:
 - redgifs, imgur, kick, coub, rumble, newgrounds, niconico, bilibili (via yt-dlp)
 - pornhub, xvideos, xhamster, redtube, rule34video (via yt-dlp)
 - pinterest, including pin.it share links (via a dedicated extractor, not cobalt)
+- threads posts: videos, photos and every slide of a carousel (read from the public post page)
 - hentaigifz (via a dedicated page-scrape extractor, not cobalt)
 - danbooru, e621, e926, yande.re, konachan (via their JSON APIs, not cobalt)
 

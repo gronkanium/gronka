@@ -4,10 +4,11 @@ import { isDiscordCdnUrl } from '../../utils/discord-cdn.js';
 import { acquireMedia } from '../../core/acquire-media.js';
 import { isSocialMediaUrl } from '../../utils/cobalt.js';
 import { getYtdlpSite } from '../../utils/ytdlp.js';
+import { isThreadsUrl } from '../../utils/threads.js';
 
 // Known sites take /download's path (yt-dlp with its session, site extractors); others are plain files.
 async function fetchSource(url, client) {
-  if (isDiscordCdnUrl(url) || !(isSocialMediaUrl(url) || getYtdlpSite(url))) {
+  if (isDiscordCdnUrl(url) || !(isSocialMediaUrl(url) || getYtdlpSite(url) || isThreadsUrl(url))) {
     return downloadFileFromUrl(url, client);
   }
   const result = await acquireMedia(url, { client, urlOnly: false });

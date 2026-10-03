@@ -2,9 +2,7 @@ name: CodeQL
 
 on:
   push:
-    branches:
-      - main
-      - master
+    branches: [master]
     paths-ignore:
       - '**.md'
       - '.github/workflows/**'
@@ -12,9 +10,6 @@ on:
       - 'src/webui/**'
       - 'test/**'
   pull_request:
-    branches:
-      - main
-      - master
     paths-ignore:
       - '**.md'
       - '.github/workflows/**'

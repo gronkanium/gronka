@@ -132,7 +132,14 @@ if (!mocksSupported) {
       downloadVideo: async url => fixtureFor(url),
       downloadImage: async url => fixtureFor(url),
       downloadFileFromUrl: async url => fixtureFor(url),
+      downloadDirectMedia: async url => fixtureFor(url),
       parseTenorUrl: async url => url,
+    }));
+
+    const realYtdlp = await import('../../src/utils/ytdlp.js');
+    mock.module('../../src/utils/ytdlp.js', () => ({
+      ...realYtdlp,
+      downloadWithYtdlp: async () => media(fixtures.mp4, 'video/mp4', 'yt.mp4'),
     }));
 
     ({ handleConvertCommand, handleConvertContextMenu } =
@@ -199,6 +206,14 @@ if (!mocksSupported) {
         await handleConvertCommand(interaction);
         assert.ok(isGif(calls.editReply[0].files[0].attachment), `run ${user} attaches a gif`);
       }
+    });
+
+    test('youtube url: fetched through yt-dlp, not as the watch page', async () => {
+      const { interaction, calls } = commandInteraction(`cv-yt-${Date.now()}`, {
+        url: 'https://www.youtube.com/watch?v=dQw4w9WgXcQ',
+      });
+      await handleConvertCommand(interaction);
+      assert.ok(isGif(calls.editReply[0].files[0].attachment));
     });
 
     test('gif over the attachment limit: replies with a CDN link', async () => {

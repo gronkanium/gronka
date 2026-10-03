@@ -164,12 +164,25 @@ async function dropGuildPrefixes(sql) {
   await sql`DROP TABLE IF EXISTS guild_prefixes CASCADE`;
 }
 
+// Rows older versions left behind: success alerts, failures with unredacted errors, finished jobs.
+async function purgeEarlierRows(sql) {
+  await sql`DELETE FROM media_jobs WHERE status NOT IN ('queued', 'running')`;
+  await sql`
+    DELETE FROM alerts WHERE component <> 'r2-cleanup'
+      AND NOT (title = 'command failed' AND metadata LIKE '%"errorClass"%')`;
+  await sql`
+    DELETE FROM bot_settings WHERE key IN ('moderation_enabled', 'rate_limit_cooldown',
+      'discord_portal_install_users', 'discord_portal_install_users_fetched_at', 'ntfy_topic',
+      'webui_saved_views')`;
+}
+
 // Append only: a name, once recorded in schema_migrations, never runs again.
 const MIGRATIONS = [
   ['drop_redundant_indexes', dropRedundantIndexes],
   ['drop_url_cache_and_bans', dropUrlCacheAndBans],
   ['drop_request_history', dropRequestHistory],
   ['drop_guild_prefixes', dropGuildPrefixes],
+  ['purge_earlier_rows', purgeEarlierRows],
 ];
 
 export async function runMigrations(sql) {

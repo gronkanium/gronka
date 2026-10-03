@@ -41,11 +41,12 @@ these aren't considered security vulnerabilities:
 
 ### data protection
 
-- files are stored on cloudflare r2 or local filesystem with proper access controls
-- files are identified by SHA-256 hash for deduplication and integrity checking
-- storage access is restricted to necessary operations only
-- user data isn't directly linked to stored files
-- the bot stores discord ids only, never usernames, and prunes logs and history after 7 days
+- the bot stores nothing about who asked or what they asked for: no user, server or channel id,
+  no link, no request history
+- media is processed in a per-request temporary folder that is deleted when the request ends
+- a result too big for a discord attachment goes to r2 under a random key and expires
+- the database keeps anonymous hourly command counts and failure records (command, site, error),
+  deleted after `RETENTION_DAYS`
 
 ### authentication
 

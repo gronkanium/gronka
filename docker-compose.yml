@@ -1,5 +1,12 @@
+x-logging: &logging
+  driver: local
+  options:
+    max-size: 5m
+    max-file: '1'
+
 services:
   app:
+    logging: *logging
     image: gronka-app
     build:
       context: .
@@ -81,6 +88,7 @@ services:
   # Runs media jobs from the media_jobs table and answers users over Discord REST. A job whose
   # worker dies or is redeployed is picked up by another; scale with --scale worker=N.
   worker:
+    logging: *logging
     image: gronka-app
     pull_policy: never
     entrypoint: ['bun', 'src/worker.js']
@@ -111,6 +119,7 @@ services:
       start_period: 20s
 
   postgres:
+    logging: *logging
     image: postgres:16-alpine
     container_name: gronka-postgres
     restart: unless-stopped
@@ -134,6 +143,7 @@ services:
       start_period: 10s
 
   cobalt:
+    logging: *logging
     image: ghcr.io/imputnet/cobalt:11
     init: true
     read_only: true
@@ -158,6 +168,7 @@ services:
 
   # watchtower updates the cobalt image automatically
   watchtower:
+    logging: *logging
     image: ghcr.io/containrrr/watchtower:1.7.1
     restart: unless-stopped
     command: --cleanup --scope cobalt --interval 900 --include-restarting

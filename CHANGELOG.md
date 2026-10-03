@@ -5,6 +5,20 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres (attempts) to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.1.0](https://github.com/gronkanium/gronka/compare/v3.0.0...v3.1.0) (2026-10-03)
+
+
+### Features
+
+* **download:** add threads posts ([#121](https://github.com/gronkanium/gronka/issues/121)) ([d9e6b2b](https://github.com/gronkanium/gronka/commit/d9e6b2be84277b94a117ebc57362b6e7e7b3188e))
+
+
+### Bug Fixes
+
+* /convert on YouTube links, and failures that explain themselves ([#119](https://github.com/gronkanium/gronka/issues/119)) ([877f082](https://github.com/gronkanium/gronka/commit/877f082ca8675e0b6eabf1cfc341c6ee3291cdc8))
+* finish the zero-retention pivot in counts and logs ([#120](https://github.com/gronkanium/gronka/issues/120)) ([0f2c3db](https://github.com/gronkanium/gronka/commit/0f2c3db6abb573828e7e323b08665363f7ae8833))
+* purge pre-v3 rows on upgrade and cap container logs ([#118](https://github.com/gronkanium/gronka/issues/118)) ([00146fc](https://github.com/gronkanium/gronka/commit/00146fcf699a768c92b06edbfbcb05993f25a42c))
+
 ## [3.0.0](https://github.com/gronkanium/gronka/compare/v2.4.0...v3.0.0) (2026-10-02)
 
 

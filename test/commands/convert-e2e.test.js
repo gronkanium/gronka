@@ -233,12 +233,12 @@ if (!mocksSupported) {
       assert.match(reply.content, /https:\/\/cdn\.test\/gifs\/[0-9a-f]{32}\.gif/);
     });
 
-    test('video longer than the gif limit: refused with the length in the message', async () => {
+    test('long video: converted, no length limit', async () => {
       const { interaction, calls } = commandInteraction(`cv-long-${Date.now()}`, {
         url: `https://example.com/longvid-${Date.now()}.mp4`,
       });
       await handleConvertCommand(interaction);
-      assert.match(firstReply(calls).content, /video is too long \(40s\)/);
+      assert.ok(isGif(firstReply(calls).files[0].attachment));
     });
 
     test('format mp3: the audio track comes back as an mp3 attachment', async () => {

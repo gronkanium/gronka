@@ -89,7 +89,6 @@ function getBotConfig() {
     retentionEnabled: getStringEnv('RETENTION_ENABLED', 'true').toLowerCase() === 'true',
     retentionDays: parseIntEnv('RETENTION_DAYS', 7, 1, 3650),
     retentionIntervalMs: parseIntEnv('RETENTION_INTERVAL_MS', 21600000, 60000, 604800000),
-    maxGifDuration: parseIntEnv('MAX_GIF_DURATION', 30, 1, 300),
     // 1GB hard ceiling: bigger files are rejected outright. Files under it are
     // delivered as expiring R2 URLs whose TTL shrinks with size (see upload-tiers.js), rather
     // than bounced at 100MB. Configurable via MAX_VIDEO_SIZE env var.

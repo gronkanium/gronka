@@ -35,7 +35,7 @@ import { fromPath, tempPath, writeAtomic } from '../utils/media-file.js';
 
 const logger = createLogger('convert');
 
-const { maxGifDuration: MAX_GIF_DURATION, discordSizeLimit: DISCORD_SIZE_LIMIT } = botConfig;
+const { discordSizeLimit: DISCORD_SIZE_LIMIT } = botConfig;
 
 const VIDEO_EXTENSIONS = ['.mp4', '.mov', '.webm', '.avi', '.mkv'];
 const IMAGE_EXTENSIONS = ['.png', '.jpg', '.jpeg', '.webp', '.awebp', '.gif'];
@@ -170,11 +170,6 @@ async function renderGif(ctx, { attachment, attachmentType, file, options, gifPa
   await writeAtomic(gifPath, async out => {
     if (attachmentType === 'video') {
       const seconds = (await getVideoMetadata(inputPath)).format.duration;
-      if (seconds > MAX_GIF_DURATION) {
-        throw new ValidationError(
-          `video is too long (${Math.ceil(seconds)}s). maximum duration: ${MAX_GIF_DURATION}s`
-        );
-      }
       const conversionOptions = resolveVideoConversionOptions(
         options,
         await probeMediaInfo(inputPath, 480)

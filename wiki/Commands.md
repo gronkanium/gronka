@@ -197,10 +197,9 @@ optimize a gif from a message.
 
 default file size limits:
 
-- videos: 100mb maximum for downloads and conversions (configurable via `MAX_VIDEO_SIZE`)
+- videos: 1gb maximum for downloads and conversions (configurable via `MAX_VIDEO_SIZE`)
 - images: 50mb maximum (configurable via `MAX_IMAGE_SIZE`)
 - gif optimization: 50mb maximum
-- gif duration: 30 seconds maximum (configurable via `MAX_GIF_DURATION`)
 - video length: the max video duration setting (trimmed downloads via `start`/`end` bypass this)
 
 ## error messages

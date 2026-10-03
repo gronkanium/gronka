@@ -21,7 +21,6 @@ nothing about who uses it. files are processed in a temporary folder and deleted
 
 | key | default | what it does |
 | --- | --- | --- |
-| `MAX_GIF_DURATION` | `30` | longest video `/convert` turns into a gif, in seconds |
 | `MAX_VIDEO_SIZE` | 1 GB | largest download, in bytes (the webui setting overrides it) |
 | `MAX_IMAGE_SIZE` | 50 MB | largest image, in bytes |
 | `DISCORD_SIZE_LIMIT` | 8 MB | fallback attachment limit when discord does not say |

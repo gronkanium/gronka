@@ -48,6 +48,8 @@ docker compose up -d --build --remove-orphans app worker
 
 pause the queue in the webui first (workers & queue, or the `queue_paused` setting) and wait for running jobs to finish if you do not want any interrupted. a job that is interrupted is retried by another worker.
 
+coming from a version before 3.0.0: delete `data-prod/` and `data-test/`. they held the old local media cache, which 3.0.0 no longer mounts, reads or cleans up, so the files people downloaded through the bot otherwise stay on disk.
+
 ## troubleshooting
 
 - container will not start: `docker compose logs app`; a missing `.env` key is named in the error

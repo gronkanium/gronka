@@ -49,7 +49,6 @@ env.CLIENT_ID = clientId;
 
 // Also map other prefixed vars if they exist
 const prefixMappings = [
-  'MAX_GIF_DURATION',
   'MAX_VIDEO_SIZE',
   'MAX_IMAGE_SIZE',
   'COBALT_API_URL',

@@ -92,9 +92,6 @@ DISCORD_TOKEN=YOUR_BOT_TOKEN_HERE.abcdefghijklmnopqrstuvwxyz
 CLIENT_ID=987654321098765432
 
 SERVER_PORT=3000
-
-# Processing
-MAX_GIF_DURATION=30
 ```
 
 see [[Configuration]] for every key.

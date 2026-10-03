@@ -55,7 +55,8 @@ a pre-commit hook (husky) checks lock file sync and runs eslint and prettier on 
 
 - plain esm javascript on bun, no typescript.
 - users only ever see curated error messages; raw errors go to the log.
-- the bot stores discord ids only, never usernames.
+- the bot stores nothing about users or requests: anything new that would outlive a request
+  (a table, column, log line or file) needs a reason in the pull request.
 - comments explain why, not what, and stay short.
 
 ### public files stay generic

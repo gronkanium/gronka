@@ -43,4 +43,47 @@ describe('applySchema', () => {
     const after = await clients[0]`SELECT name, applied_at FROM schema_migrations ORDER BY name`;
     assert.deepStrictEqual(after, before);
   });
+
+  test('upgrading purges what earlier versions stored and keeps failures and live jobs', async () => {
+    const sql = clients[0];
+    const job = status => sql`
+      INSERT INTO media_jobs (kind, args, reply, status, created_at, timestamp)
+      VALUES ('download', ${sql.json({ url: 'https://example.com/v/1' })}, ${sql.json({ channelId: '1' })},
+              ${status}, 1, ${Date.now()})`;
+    const alert = (component, title, metadata) => sql`
+      INSERT INTO alerts (timestamp, severity, component, title, message, metadata)
+      VALUES (${Date.now()}, 'info', ${component}, ${title}, 'm', ${metadata})`;
+    await job('done');
+    await job('queued');
+    await job('running');
+    await alert('bot', 'command success', '{"command":"download","duration":1}');
+    await alert('bot', 'command failed', '{"command":"download","error":"https://example.com/a"}');
+    await alert(
+      'bot',
+      'command failed',
+      '{"command":"download","error":null,"errorClass":null,"source":null}'
+    );
+    await alert('r2-cleanup', 'R2 cleanup: deletions failed', '{"count":1}');
+    await sql`INSERT INTO bot_settings (key, value, updated_at) VALUES ('ntfy_topic', 'x', 1), ('queue_paused', 'false', 1)`;
+    await sql`DELETE FROM schema_migrations WHERE name = 'purge_earlier_rows'`;
+
+    await applySchema(sql);
+
+    const jobs = await sql`SELECT status FROM media_jobs ORDER BY status`;
+    assert.deepStrictEqual(
+      jobs.map(j => j.status),
+      ['queued', 'running']
+    );
+    const alerts = await sql`SELECT component, metadata FROM alerts ORDER BY component`;
+    assert.deepStrictEqual(
+      alerts.map(a => a.component),
+      ['bot', 'r2-cleanup']
+    );
+    assert.ok(alerts[0].metadata.includes('"errorClass"'));
+    const settings = await sql`SELECT key FROM bot_settings ORDER BY key`;
+    assert.deepStrictEqual(
+      settings.map(r => r.key),
+      ['queue_paused']
+    );
+  });
 });

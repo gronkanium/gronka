@@ -9,7 +9,8 @@ set -e
 [ "$SKIP_HOOKS" = "1" ] && exit 0
 
 BRANCH=$(git rev-parse --abbrev-ref HEAD)
-[ "$BRANCH" = "HEAD" ] && exit 0
+# Only master moves under you; rebasing a feature branch and pushing it with --force-with-lease is normal.
+[ "$BRANCH" = "master" ] || exit 0
 
 git fetch --quiet origin "$BRANCH" 2>/dev/null || exit 0
 

@@ -13,7 +13,6 @@ on:
       - 'docs/**'
   # No path filter on pull requests: the checks are required, and a skipped one never reports.
   pull_request:
-  # release-please dispatches this on its branch: its PR is opened with GITHUB_TOKEN, which starts no workflow.
   workflow_dispatch:
 
 concurrency:

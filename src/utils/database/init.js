@@ -6,6 +6,9 @@ import {
   setPostgresInitPromise,
 } from './connection.js';
 import { getTableDefinitions, getIndexDefinitions, runMigrations } from './schema-pg.js';
+import { createLogger } from '../logger.js';
+
+const logger = createLogger('postgres');
 
 // Bot, workers and web all boot at once; this key serializes their schema setup.
 const SCHEMA_LOCK_KEY = 0x67726f6e;
@@ -86,7 +89,7 @@ async function resetSerialSequences(sql) {
     } catch (error) {
       // If sequence doesn't exist yet or table doesn't exist, that's okay
       // It will be created on first insert
-      console.warn(`Could not reset sequence ${sequence} for table ${table}:`, error.message);
+      logger.warn(`Could not reset sequence ${sequence} for table ${table}: ${error.message}`);
     }
   }
 }

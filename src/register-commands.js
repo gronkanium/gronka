@@ -3,7 +3,7 @@ import dotenv from 'dotenv';
 import { OUTPUT_FORMATS } from './utils/output-formats.js';
 
 // Load environment variables
-dotenv.config();
+dotenv.config({ quiet: true });
 
 // Get prefix from command line argument (TEST or PROD) or use default
 const prefixArg = process.argv[2]?.toUpperCase();

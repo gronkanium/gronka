@@ -359,22 +359,13 @@ async function callCobaltApi(apiUrl, url, retryCount = 0, maxRetries = 3) {
     if (error.response) {
       const status = error.response.status;
       const data = error.response.data;
-      logger.error(`Cobalt API error response: status=${status}, data=${JSON.stringify(data)}`);
-
+      logger.debug(`Cobalt answered ${status}: ${JSON.stringify(data)}`);
       const errorAnalysis = analyzeError(data, error);
-
-      if (errorAnalysis.errorCode) {
-        logger.error(`Cobalt error code: ${errorAnalysis.errorCode}`);
-        if (errorAnalysis.context) {
-          logger.error(`Error context: ${JSON.stringify(errorAnalysis.context)}`);
-        }
-      }
 
       // If content doesn't exist, don't retry
       if (errorAnalysis.isNotFound) {
         const notFoundMessage =
           errorAnalysis.userMessage || 'content not found, deleted, or unavailable';
-        logger.error(`Content error: ${notFoundMessage}`);
         throw new NetworkError(notFoundMessage);
       }
 
@@ -414,14 +405,12 @@ async function callCobaltApi(apiUrl, url, retryCount = 0, maxRetries = 3) {
       throw new NetworkError(message);
     }
     if (error.code === 'ECONNABORTED') {
-      logger.error('Cobalt API request timed out');
       throw new NetworkError('cobalt api request timed out');
     }
     if (error.code === 'ECONNREFUSED') {
-      logger.error('Cobalt service connection refused - is it running?');
       throw new NetworkError('cobalt service is not available');
     }
-    logger.error(`Cobalt API call failed: ${error.message}, code: ${error.code}`);
+    logger.warn(`Cobalt API call failed: ${error.message}, code: ${error.code}`);
     throw new NetworkError('failed to reach the download service. please try again later.');
   }
 }
@@ -708,25 +697,6 @@ export async function getRemoteContentLength(mediaUrl) {
 
 export async function downloadFromSocialMedia(apiUrl, url, maxSize = Infinity, prefetched = null) {
   logger.debug(`Attempting to download from social media URL via Cobalt: ${url}`);
-
-  try {
-    const cobaltResponse = prefetched ?? (await callCobaltApi(apiUrl, url));
-    logger.debug('Cobalt API call successful, downloading media');
-    const result = await downloadFromCobalt(cobaltResponse, maxSize, apiUrl);
-
-    // Check if result is an array (multiple photos) or single object
-    if (Array.isArray(result)) {
-      logger.debug(
-        `Successfully downloaded ${result.length} photos from Cobalt (total size: ${result.reduce((sum, r) => sum + r.size, 0)} bytes)`
-      );
-    } else {
-      logger.debug(
-        `Successfully downloaded media from Cobalt: ${result.filename} (${result.size} bytes, content-type: ${result.contentType})`
-      );
-    }
-    return result;
-  } catch (error) {
-    logger.warn(`Cobalt download failed: ${error.message}`);
-    throw error;
-  }
+  const cobaltResponse = prefetched ?? (await callCobaltApi(apiUrl, url));
+  return downloadFromCobalt(cobaltResponse, maxSize, apiUrl);
 }

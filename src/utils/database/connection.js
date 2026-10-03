@@ -1,5 +1,8 @@
 import postgres from 'postgres';
 import fs from 'fs';
+import { createLogger } from '../logger.js';
+
+const logger = createLogger('postgres');
 
 let sql = null;
 let initPromise = null;
@@ -113,20 +116,15 @@ export async function initPostgresConnection() {
 
       const mode = testMode ? 'TEST' : 'PROD';
       const host = typeof config === 'string' ? 'from URL' : config.host;
-      console.log(`[PostgreSQL] Connecting to database "${dbName}" on ${host} (${mode} mode)`);
+      logger.info(`Connecting to database "${dbName}" on ${host} (${mode} mode)`);
 
       // Add onnotice handler to suppress verbose NOTICE logs
       const suppressNotices = testMode;
 
-      // Idempotent schema init (CREATE ... IF NOT EXISTS) emits "already exists,
-      // skipping" notices on every startup, drop those, log anything else as one line
-      // instead of postgres.js's default raw-object dump.
+      // Idempotent schema init and migrations emit "already exists" / "does not exist, skipping".
       const onnotice = suppressNotices
         ? () => {}
-        : notice => {
-            if (notice.message && notice.message.includes('already exists, skipping')) return;
-            console.log(`[PostgreSQL] ${notice.severity}: ${notice.message}`);
-          };
+        : notice => logger.debug(`${notice.severity}: ${notice.message}`);
 
       let connectionOptions;
       if (typeof config === 'string') {
@@ -165,7 +163,7 @@ export async function initPostgresConnection() {
 
       await sql`SELECT 1`;
 
-      console.log(`[PostgreSQL] Connected successfully to "${dbName}"`);
+      logger.info(`Connected to "${dbName}"`);
 
       return sql;
     } catch (error) {

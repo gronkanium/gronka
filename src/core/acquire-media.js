@@ -134,7 +134,7 @@ async function directMediaUrls(url, shouldServe = null, keep = () => {}) {
   return urls;
 }
 
-// Discord-free half of /download: returns {kind: 'urls', urls, stepName} when a direct media URL
+// Discord-free half of /download: returns {kind: 'urls', urls} when a direct media URL
 // should be handed out instead of a file, else {kind: 'file', fileData, downloadMethod, url}.
 export async function acquireMedia(
   url,
@@ -144,7 +144,6 @@ export async function acquireMedia(
     galleryOptions = {},
     attachmentLimit = Infinity,
     client = null,
-    logStep = () => {},
     urlOnly = null,
     streamFirst = null,
   } = {}
@@ -219,25 +218,13 @@ export async function acquireMedia(
     !trimming &&
     (urlOnly ?? (await getBooleanSetting('url_only_mode', false)))
   ) {
-    logStep('url_only_mode', 'running', {
-      message: 'URL-only mode enabled, fetching direct media URL from cobalt',
-      metadata: { url },
-    });
     try {
       const urls = await directMediaUrls(url, null, keep);
       if (urls) {
-        return { kind: 'urls', urls, stepName: 'url_only_mode', url };
+        return { kind: 'urls', urls, url };
       }
-      logStep('url_only_mode', 'success', {
-        message: 'No direct URL available (tunnel response), falling back to normal download',
-        metadata: { url },
-      });
     } catch (urlModeError) {
       logger.warn(`URL-only mode failed, falling back to download: ${urlModeError.message}`);
-      logStep('url_only_mode', 'success', {
-        message: 'URL-only mode failed, falling back to normal download',
-        metadata: { url, reason: urlModeError.message },
-      });
     }
   }
 
@@ -260,16 +247,12 @@ export async function acquireMedia(
           keep
         );
         if (urls) {
-          return { kind: 'urls', urls, stepName: 'twitter_delivery', url };
+          return { kind: 'urls', urls, url };
         }
       } catch (deliveryError) {
         logger.warn(
           `Twitter delivery policy (${deliveryMode}) failed, downloading instead: ${deliveryError.message}`
         );
-        logStep('twitter_delivery', 'success', {
-          message: 'Direct URL delivery failed, falling back to normal download',
-          metadata: { url, deliveryMode, reason: deliveryError.message },
-        });
       }
     }
   }
@@ -316,10 +299,6 @@ export async function acquireMedia(
     null,
   ];
   logger.debug(`Downloading from ${sourceLabel}: ${url}`);
-  logStep('download_start', 'running', {
-    message: `Starting download from ${sourceLabel}`,
-    metadata: { url, maxSize },
-  });
 
   // Started early: it takes ~3 s and decides both the DRM route and the tags.
   const soundcloud =
@@ -348,21 +327,9 @@ export async function acquireMedia(
   if (extract) {
     try {
       fileData = await extract();
-      logStep('download_complete', 'success', {
-        message: `file downloaded successfully via ${sourceLabel}`,
-        metadata: {
-          url,
-          fileCount: Array.isArray(fileData) ? fileData.length : 1,
-          trimmedByYtdlp: downloadMethod === 'ytdlp' && trimming,
-        },
-      });
     } catch (extractError) {
       if (downloadMethod !== 'reddit') throw extractError;
       logger.warn(`Reddit image fetch failed, falling back to cobalt: ${extractError.message}`);
-      logStep('download_fallback', 'running', {
-        message: 'Reddit image fetch failed, retrying with cobalt',
-        metadata: { url, reason: extractError.message },
-      });
       downloadMethod = 'cobalt';
     }
   }
@@ -383,13 +350,6 @@ export async function acquireMedia(
           }
         }
       );
-      logStep('download_complete', 'success', {
-        message: 'File downloaded successfully',
-        metadata: {
-          url,
-          fileCount: Array.isArray(fileData) ? fileData.length : 1,
-        },
-      });
     } catch (cobaltError) {
       const fallbackSite = isTwitterXUrl(url)
         ? 'X/Twitter'
@@ -405,25 +365,13 @@ export async function acquireMedia(
         if (!(await getBooleanSetting('twitter_direct_url_fallback', true))) {
           return null;
         }
-        logStep('direct_url_fallback', 'running', {
-          message: 'Download failed for X/Twitter URL, trying direct media URL',
-          metadata: { url },
-        });
         try {
           const urls = await directMediaUrls(url);
           if (urls) {
             return urls;
           }
-          logStep('direct_url_fallback', 'success', {
-            message: 'No direct URL available (tunnel response), surfacing download error',
-            metadata: { url },
-          });
         } catch (directUrlError) {
           logger.warn(`Direct URL fallback failed: ${directUrlError.message}`);
-          logStep('direct_url_fallback', 'success', {
-            message: 'Direct URL fallback failed, surfacing download error',
-            metadata: { url, reason: directUrlError.message },
-          });
         }
         return null;
       };
@@ -431,7 +379,7 @@ export async function acquireMedia(
       if (!fallbackSite || !YTDLP_ENABLED) {
         const urls = await tryTwitterDirectUrl();
         if (urls) {
-          return { kind: 'urls', urls, stepName: 'direct_url_fallback', url };
+          return { kind: 'urls', urls, url };
         }
         throw cobaltError;
       }
@@ -449,11 +397,6 @@ export async function acquireMedia(
       logger.warn(
         `Cobalt failed for ${fallbackSite} URL, falling back to yt-dlp: ` + cobaltError.message
       );
-
-      logStep('download_fallback', 'running', {
-        message: `Cobalt failed for ${fallbackSite} URL, retrying with yt-dlp`,
-        metadata: { url, reason: cobaltError.message },
-      });
 
       try {
         fileData = await downloadWithYtdlp(
@@ -475,7 +418,7 @@ export async function acquireMedia(
         }
         const urls = await tryTwitterDirectUrl();
         if (urls) {
-          return { kind: 'urls', urls, stepName: 'direct_url_fallback', url };
+          return { kind: 'urls', urls, url };
         }
         throw ytdlpFallbackError;
       }
@@ -483,19 +426,6 @@ export async function acquireMedia(
       // yt-dlp already trimmed via --download-sections; mark the method so the
       // ffmpeg trim step below is skipped (otherwise it re-trims the segment).
       downloadMethod = 'ytdlp';
-
-      logStep('download_fallback', 'success', {
-        message: `yt-dlp fallback succeeded for ${fallbackSite} URL`,
-        metadata: { url },
-      });
-      logStep('download_complete', 'success', {
-        message: 'file downloaded successfully via yt-dlp fallback',
-        metadata: {
-          url,
-          fileCount: 1,
-          fallbackFrom: 'cobalt',
-        },
-      });
     }
   }
 

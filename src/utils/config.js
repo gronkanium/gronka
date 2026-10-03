@@ -2,7 +2,7 @@ import dotenv from 'dotenv';
 import { ConfigurationError } from './errors.js';
 
 // Load environment variables
-dotenv.config();
+dotenv.config({ quiet: true });
 
 // Non-admin download format. The 1080p cap has to be expressed twice, once on height, once
 // on width, because `height<=?1080` alone rejects every format of a portrait video (a 720x1280

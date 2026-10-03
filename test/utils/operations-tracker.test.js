@@ -1,77 +1,48 @@
 import { test, expect, describe, beforeAll } from 'bun:test';
 import {
-  createOperation,
-  createFailedOperation,
-  updateOperationStatus,
-  logOperationStep,
-  getOperation,
-  getRecentOperations,
-  cleanupStuckOperations,
-  flushAllOperationLogs,
+  trackRequest,
+  succeed,
+  failed,
+  requestOutcome,
+  flushCounts,
 } from '../../src/utils/operations-tracker.js';
 import { initDatabase, getCommandTotals } from '../../src/utils/database.js';
 
 const total = async (command, outcome) =>
   (await getCommandTotals()).find(r => r.command === command && r.outcome === outcome)?.count ?? 0;
 
-describe('operations tracker', () => {
+describe('request outcome', () => {
   beforeAll(async () => {
     await initDatabase();
   });
 
-  test('an operation holds no user, only what it is and how it is going', () => {
-    const id = createOperation('download', { commandSource: 'slash' });
-    const op = getOperation(id);
-    expect(op).toMatchObject({ id, type: 'download', status: 'pending', source: 'slash' });
-    expect(op).not.toHaveProperty('userId');
-    expect(op).not.toHaveProperty('originalUrl');
-  });
-
-  test('status changes and steps stay in memory', () => {
-    const id = createOperation('convert');
-    updateOperationStatus(id, 'running');
-    logOperationStep(id, 'render', 'success', { message: 'done', metadata: { secret: 1 } });
-    const op = getOperation(id);
-    expect(op.status).toBe('running');
-    expect(op.performanceMetrics.steps[0]).toMatchObject({ step: 'render', message: 'done' });
-    expect(op.performanceMetrics.steps[0]).not.toHaveProperty('metadata');
-  });
-
-  test('a finished operation adds one anonymous count for its outcome', async () => {
+  test('each request adds exactly one anonymous count for how it ended', async () => {
     const command = `t${Date.now()}`;
-    const ok = createOperation(command);
-    updateOperationStatus(ok, 'success', { fileSize: 10 });
-    const bad = createOperation(command);
-    updateOperationStatus(bad, 'error', { error: 'boom' });
-    createFailedOperation(command, 'refused');
-    await flushAllOperationLogs();
+    await trackRequest(command, async () => succeed());
+    await trackRequest(command, async () => failed());
+    await trackRequest(command, async () => {});
+    await trackRequest(command, async () => {
+      throw new Error('boom');
+    }).catch(() => {});
+    await flushCounts();
     expect(await total(command, 'success')).toBe(1);
-    expect(await total(command, 'error')).toBe(2);
-    expect(getOperation(ok).performanceMetrics.duration).toBeGreaterThan(0);
+    expect(await total(command, 'error')).toBe(3);
   });
 
-  test('keeps at most 100 operations, newest first', () => {
-    for (let i = 0; i < 120; i++) createOperation('optimize');
-    const recent = getRecentOperations();
-    expect(recent.length).toBe(100);
-    expect(recent[0].timestamp).toBeGreaterThanOrEqual(recent[99].timestamp);
+  test('a failure after success inside one request still counts once, as an error', async () => {
+    const command = `t2${Date.now()}`;
+    await trackRequest(command, async () => {
+      succeed();
+      failed();
+      expect(requestOutcome()).toBe('error');
+    });
+    await flushCounts();
+    expect(await total(command, 'error')).toBe(1);
+    expect(await total(command, 'success')).toBe(0);
   });
 
-  test('stuck operations are marked failed, finished ones are left alone', async () => {
-    const stuck = createOperation('download');
-    updateOperationStatus(stuck, 'running');
-    getOperation(stuck).timestamp = Date.now() - 20 * 60 * 1000;
-    const done = createOperation('download');
-    updateOperationStatus(done, 'success');
-    expect(cleanupStuckOperations(16)).toBeGreaterThanOrEqual(1);
-    expect(getOperation(stuck).status).toBe('error');
-    expect(getOperation(done).status).toBe('success');
-    await flushAllOperationLogs();
-  });
-
-  test('unknown ids are ignored', () => {
-    expect(() => updateOperationStatus('nope', 'success')).not.toThrow();
-    expect(() => logOperationStep('nope', 'x', 'success')).not.toThrow();
-    expect(getOperation('nope')).toBeNull();
+  test('outside a request there is nothing to mark', () => {
+    expect(failed()).toBe(false);
+    expect(requestOutcome()).toBeNull();
   });
 });

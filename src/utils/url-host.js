@@ -8,3 +8,7 @@ export function hostOf(url) {
     return null;
   }
 }
+
+// Every link in a piece of text cut down to its host.
+export const hostsOnly = text =>
+  text?.replace(/https?:\/\/[^\s"'<>)]+/gi, url => hostOf(url) ?? '<link>') ?? null;

@@ -60,11 +60,6 @@ export async function heartbeat(id, worker = WORKER_ID) {
   return rows.length > 0;
 }
 
-export async function setJobOperation(id, operationId) {
-  const sql = await db();
-  await sql`UPDATE media_jobs SET operation_id = ${operationId} WHERE id = ${id}`;
-}
-
 // A finished job leaves nothing behind: the row, its args and its reply token go together.
 export async function finishJob(job, worker = WORKER_ID) {
   const sql = await db();

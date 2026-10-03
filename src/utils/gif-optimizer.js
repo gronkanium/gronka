@@ -108,12 +108,3 @@ export async function optimizeGif(inputPath, outputPath, options = {}) {
     throw new ValidationError('GIF optimization failed. Please try again.');
   }
 }
-
-export function calculateSizeReduction(originalSize, optimizedSize) {
-  if (originalSize === 0) {
-    return 0;
-  }
-
-  const reduction = ((originalSize - optimizedSize) / originalSize) * 100;
-  return Math.round(reduction);
-}

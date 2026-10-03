@@ -1,3 +1,6 @@
+import { AsyncLocalStorage } from 'node:async_hooks';
+import { hostsOnly } from './url-host.js';
+
 const LOG_LEVELS = {
   DEBUG: 0,
   INFO: 1,
@@ -13,6 +16,11 @@ const LOG_LEVEL_NAMES = {
 };
 
 const isWebMode = () => process.env.GRONKA_WEB === 'true';
+
+// A random reference for the job a line belongs to, also stored on its failure record.
+const refScope = new AsyncLocalStorage();
+export const withLogRef = (ref, fn) => refScope.run(ref, fn);
+export const logRef = () => refScope.getStore() ?? null;
 
 // gronka-web keeps no history: nothing that says who fetched what may reach stdout.
 const REDACTIONS = [
@@ -101,7 +109,8 @@ class Logger {
       args.length > 0
         ? ' ' + args.map(arg => this.sanitizeLogInput(stringifyArg(arg))).join(' ')
         : '';
-    return `[${timestamp}] [${levelStr}] ${sanitizedMessage}${formattedArgs}`;
+    const ref = logRef() ? ` [${logRef()}]` : '';
+    return `[${timestamp}] [${levelStr}]${ref} ${sanitizedMessage}${formattedArgs}`;
   }
 
   async log(level, message, ...args) {
@@ -115,8 +124,9 @@ class Logger {
       return;
     }
 
-    // Console only: docker keeps it, rotated. Nothing about a request is written to the database.
-    console.log(this.sanitizeForConsoleOutput(this.formatMessage(level, message, ...args)));
+    // Console only, and never a whole link: who fetched what must not outlive the request.
+    const cut = [message, ...args].map(arg => hostsOnly(stringifyArg(arg)));
+    console.log(this.sanitizeForConsoleOutput(this.formatMessage(level, ...cut)));
   }
 
   debug(message, ...args) {

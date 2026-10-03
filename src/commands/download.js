@@ -21,7 +21,6 @@ import { getDisabledServiceLabel } from '../utils/download-services.js';
 import { AppError, ValidationError } from '../utils/errors.js';
 import { batchAttachmentsForDelivery } from '../utils/attachment-helpers.js';
 import { isDirectMediaUrl } from '../utils/file-downloader.js';
-import { logOperationStep } from '../utils/operations-tracker.js';
 import { resolveTtlHoursForSize } from '../utils/storage.js';
 import {
   uploadMediaToR2,
@@ -66,7 +65,7 @@ const {
 } = botConfig;
 
 // Discord caps a message at 2000 characters, so as many links as fit.
-async function replyWithDirectMediaUrls(interaction, ctx, { url, urls, stepName }) {
+async function replyWithDirectMediaUrls(interaction, ctx, { urls }) {
   const lines = [];
   let length = 0;
   for (const item of urls) {
@@ -74,12 +73,8 @@ async function replyWithDirectMediaUrls(interaction, ctx, { url, urls, stepName 
     lines.push(item.url);
     length += item.url.length + 1;
   }
-  logOperationStep(ctx.operationId, stepName, 'success', {
-    message: `Returning ${lines.length} direct media URL(s) without downloading`,
-    metadata: { url, mediaUrls: lines },
-  });
   await deliverReply(interaction, { content: lines.join('\n') });
-  await finishCommand('download', ctx, 0);
+  await finishCommand();
 }
 
 async function deliverArchive(interaction, ctx, fileData, attachmentLimit) {
@@ -96,7 +91,7 @@ async function deliverArchive(interaction, ctx, fileData, attachmentLimit) {
   } else {
     throw new ValidationError('this ZIP is too large to attach to Discord');
   }
-  await finishCommand('download', ctx, fileData.size);
+  await finishCommand();
 }
 
 // Files that fit go out as attachments (split into batches); the rest become R2 links.
@@ -131,14 +126,13 @@ async function deliverGallery(interaction, ctx, fileData, attachmentLimit) {
     }
   }
 
-  const totalSize = fileData.reduce((sum, media) => sum + media.size, 0);
-  await finishCommand('download', ctx, totalSize, { mediaCount: stored.length });
+  await finishCommand();
 }
 
 async function deliverSingle(interaction, ctx, item, attachmentLimit) {
   const stored = await storeMedia(item, attachmentLimit);
   await deliverStored(interaction, stored);
-  await finishCommand('download', ctx, stored.size);
+  await finishCommand();
 }
 
 export async function processDownload(
@@ -153,15 +147,10 @@ export async function processDownload(
     'download',
     interaction,
     async ctx => {
-      const { operationId } = ctx;
       const trimming = startTime !== null || duration !== null;
 
       const disabledServiceLabel = await getDisabledServiceLabel(url);
       if (disabledServiceLabel) {
-        logOperationStep(operationId, 'service_disabled', 'success', {
-          message: 'Download source is turned off',
-          metadata: { url, service: disabledServiceLabel },
-        });
         throw new ValidationError(`downloads from ${disabledServiceLabel} are turned off.`);
       }
 
@@ -172,7 +161,6 @@ export async function processDownload(
         galleryOptions,
         attachmentLimit,
         client: interaction.client,
-        logStep: ctx.logStep,
       });
       if (acquired.kind === 'urls') {
         return replyWithDirectMediaUrls(interaction, ctx, acquired);
@@ -181,10 +169,6 @@ export async function processDownload(
       const { fileData, downloadMethod } = acquired;
 
       if (galleryOptions.audioOnly) {
-        logOperationStep(operationId, 'audio_extract', 'running', {
-          message: 'Extracting audio as mp3',
-          metadata: { url },
-        });
         const { file: mp3, baseName } = await extractAudio(fileData, downloadMethod, {
           startTime,
           duration,
@@ -194,11 +178,7 @@ export async function processDownload(
           { ...ctx, discordAttachmentLimit: attachmentLimit },
           { file: mp3, format: 'mp3', baseName }
         );
-        logOperationStep(operationId, 'audio_extract', 'success', {
-          message: 'mp3 delivered',
-          metadata: { url, fileSize: mp3.size },
-        });
-        return finishCommand('download', ctx, mp3.size);
+        return finishCommand();
       }
       if (fileData?.archive) {
         return deliverArchive(interaction, ctx, fileData, attachmentLimit);
@@ -211,10 +191,6 @@ export async function processDownload(
       let item = fileData;
       if (trimming && downloadMethod !== 'ytdlp') {
         item = await trimItem(fileData, { startTime, duration });
-        logOperationStep(operationId, 'media_trim', item === fileData ? 'error' : 'success', {
-          message: item === fileData ? 'Trim failed, sending the untrimmed file' : 'Trimmed',
-          metadata: { startTime, duration, originalSize: fileData.size },
-        });
       }
       await deliverSingle(interaction, ctx, item, attachmentLimit);
     },
@@ -276,14 +252,13 @@ async function refuseUnsupported(interaction, url, commandSource) {
       message,
       reason: 'cobalt_disabled',
       context,
-      notify: true,
     });
     return true;
   }
   if (!isSocialMediaUrl(url)) {
     const message = 'url is not from a supported social media platform.';
     const reason = 'invalid_social_media_url';
-    await refuse(interaction, 'download', { message, reason, context, notify: true });
+    await refuse(interaction, 'download', { message, reason, context });
     return true;
   }
   return false;
@@ -301,7 +276,6 @@ export async function handleDownloadContextMenuCommand(interaction) {
       message,
       reason: 'missing_url',
       context,
-      notify: true,
     });
     return;
   }
@@ -347,7 +321,6 @@ export async function handleDownloadCommand(interaction) {
       message,
       reason: 'missing_url',
       context,
-      notify: true,
     });
     return;
   }

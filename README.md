@@ -24,7 +24,7 @@ right-click a message → apps does the same: **convert to gif**, **download**, 
 
 ## sites
 
-tiktok, instagram, youtube, x, reddit, soundcloud, bluesky, pinterest, twitch, tumblr, imgur, giphy
+tiktok, instagram, youtube, x, reddit, soundcloud, bluesky, threads, pinterest, twitch, tumblr, imgur, giphy
 and about 30 more, through [cobalt](https://github.com/imputnet/cobalt), yt-dlp, gallery-dl and a few
 extractors of its own. the full list is on [web.gronka.dev](https://web.gronka.dev).
 

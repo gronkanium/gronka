@@ -18,6 +18,7 @@ import { isHentaiGifzUrl, downloadFromHentaiGifz } from '../utils/hentaigifz.js'
 import { isBooruUrl, downloadFromBooru, booruCdnUserAgent } from '../utils/booru.js';
 import { isPinterestUrl, downloadFromPinterest } from '../utils/pinterest.js';
 import { isKlipyUrl, downloadFromKlipy } from '../utils/klipy.js';
+import { isThreadsUrl, downloadFromThreads } from '../utils/threads.js';
 import {
   isInstagramPostUrl,
   isInstagramStoryUrl,
@@ -195,6 +196,7 @@ export async function acquireMedia(
   const isBooru = isBooruUrl(url);
   const isPinterest = isPinterestUrl(url);
   const isKlipy = isKlipyUrl(url);
+  const isThreads = isThreadsUrl(url);
   const isDirectMedia = isDirectMediaUrl(url);
   // Cobalt tries Instagram's logged-out routes first; the session extractor is only the backstop.
   const useInstagram = isInstagramPostUrl(url) && hasInstagramSession();
@@ -213,6 +215,7 @@ export async function acquireMedia(
     !isBooru &&
     !isPinterest &&
     !isKlipy &&
+    !isThreads &&
     !isIgStory &&
     !isDirectMedia &&
     !trimming &&
@@ -283,6 +286,7 @@ export async function acquireMedia(
     ['booru', isBooru, 'booru', () => downloadFromBooru(url)],
     ['pinterest', isPinterest, 'Pinterest', () => downloadFromPinterest(url)],
     ['klipy', isKlipy, 'Klipy', () => downloadFromKlipy(url)],
+    ['threads', isThreads, 'Threads', () => downloadFromThreads(url)],
     ['instagram-story', isIgStory, 'Instagram story', () => downloadFromInstagram(url)],
     [
       'direct',

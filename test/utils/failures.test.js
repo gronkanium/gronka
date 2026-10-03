@@ -2,6 +2,7 @@ import { test, describe } from 'bun:test';
 import assert from 'node:assert';
 import { recordFailure } from '../../src/utils/failures.js';
 import { getAlerts } from '../../src/utils/database.js';
+import { withLogRef } from '../../src/utils/logger.js';
 
 const latest = async (command, since) =>
   JSON.parse((await getAlerts({ command, startTime: since, limit: 1 }))[0].metadata);
@@ -25,5 +26,12 @@ describe('recordFailure', () => {
     await recordFailure(command, { error: 'boom', cause: new Error('boom') });
     const metadata = await latest(command, since);
     assert.strictEqual(metadata.cause, null);
+  });
+
+  test('the record carries the reference of the job that failed', async () => {
+    const since = Date.now();
+    const command = `t-ref-${since}`;
+    await withLogRef('ref123', () => recordFailure(command, { error: 'x' }));
+    assert.strictEqual((await latest(command, since)).ref, 'ref123');
   });
 });

@@ -32,4 +32,4 @@ the test bot shares cobalt and the cookie files with the docker bot. it has its 
 ## tips
 
 - use a separate r2 bucket for the test bot, or none
-- the test database persists between runs; tests never assume it is empty
+- the test bot keeps its data in `gronka_test` between runs; the test suites never touch it, each run gets a fresh database of its own and drops it afterwards

@@ -18,6 +18,8 @@ let handleConvertCommand;
 let handleConvertContextMenu;
 let handleOptimizeCommand;
 let handleOptimizeContextMenuCommand;
+let runMediaJob;
+let JOBS_ROOT;
 
 function ffmpeg(args) {
   const run = Bun.spawnSync(['ffmpeg', '-y', '-v', 'error', ...args]);
@@ -132,13 +134,22 @@ if (!mocksSupported) {
       downloadVideo: async url => fixtureFor(url),
       downloadImage: async url => fixtureFor(url),
       downloadFileFromUrl: async url => fixtureFor(url),
+      downloadDirectMedia: async url => fixtureFor(url),
       parseTenorUrl: async url => url,
+    }));
+
+    const realYtdlp = await import('../../src/utils/ytdlp.js');
+    mock.module('../../src/utils/ytdlp.js', () => ({
+      ...realYtdlp,
+      downloadWithYtdlp: async () => media(fixtures.mp4, 'video/mp4', 'yt.mp4'),
     }));
 
     ({ handleConvertCommand, handleConvertContextMenu } =
       await import('../../src/commands/convert.js'));
     ({ handleOptimizeCommand, handleOptimizeContextMenuCommand } =
       await import('../../src/commands/optimize.js'));
+    ({ runMediaJob } = await import('../../src/jobs/run-job.js'));
+    ({ JOBS_ROOT } = await import('../../src/utils/media-file.js'));
   });
 
   afterAll(() => {
@@ -199,6 +210,14 @@ if (!mocksSupported) {
         await handleConvertCommand(interaction);
         assert.ok(isGif(calls.editReply[0].files[0].attachment), `run ${user} attaches a gif`);
       }
+    });
+
+    test('youtube url: fetched through yt-dlp, not as the watch page', async () => {
+      const { interaction, calls } = commandInteraction(`cv-yt-${Date.now()}`, {
+        url: 'https://www.youtube.com/watch?v=dQw4w9WgXcQ',
+      });
+      await handleConvertCommand(interaction);
+      assert.ok(isGif(calls.editReply[0].files[0].attachment));
     });
 
     test('gif over the attachment limit: replies with a CDN link', async () => {
@@ -264,6 +283,24 @@ if (!mocksSupported) {
       await handleConvertContextMenu(interaction);
       assert.ok(isGif(firstReply(calls).files[0].attachment));
     });
+  });
+
+  describe('worker jobs', () => {
+    const jobDirs = async () =>
+      (await fs.readdir(JOBS_ROOT).catch(() => [])).filter(name => name.startsWith('job-'));
+
+    for (const [kind, url] of [
+      ['convert', 'https://example.com/vid-worker.mp4'],
+      ['convert', 'https://example.com/page-worker'],
+      ['optimize', 'https://example.com/anim-worker.gif'],
+    ]) {
+      test(`${kind} ${url.split('/').pop()}: leaves no file behind`, async () => {
+        const before = await jobDirs();
+        const { interaction } = commandInteraction(`job-${kind}-${Date.now()}`);
+        await runMediaJob(interaction, { kind, args: { url, commandSource: 'slash' } });
+        assert.deepStrictEqual(await jobDirs(), before);
+      });
+    }
   });
 
   describe('/optimize (full-pipeline E2E)', () => {

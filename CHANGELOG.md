@@ -5,6 +5,14 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres (attempts) to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.1.1](https://github.com/gronkanium/gronka/compare/v3.1.0...v3.1.1) (2026-10-03)
+
+
+### Bug Fixes
+
+* **convert:** drop the 30 second gif length limit ([#130](https://github.com/gronkanium/gronka/issues/130)) ([29f3140](https://github.com/gronkanium/gronka/commit/29f31406bd80fe31a19bf4ed4997f9a2845123c8))
+* disable log compression so containers start with max-file 1 ([#128](https://github.com/gronkanium/gronka/issues/128)) ([597db41](https://github.com/gronkanium/gronka/commit/597db4167250d9c98787c78ef5f5dcdee8113aa7))
+
 ## [3.1.0](https://github.com/gronkanium/gronka/compare/v3.0.0...v3.1.0) (2026-10-03)
 
 

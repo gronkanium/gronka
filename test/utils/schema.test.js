@@ -58,16 +58,26 @@ describe('applySchema', () => {
     await job('running');
     await alert('bot', 'command success', '{"command":"download","duration":1}');
     await alert('bot', 'command failed', '{"command":"download","error":"https://example.com/a"}');
-    await alert('bot', 'command failed', '{"command":"download","error":null,"errorClass":null,"source":null}');
+    await alert(
+      'bot',
+      'command failed',
+      '{"command":"download","error":null,"errorClass":null,"source":null}'
+    );
     await alert('r2-cleanup', 'R2 cleanup: deletions failed', '{"count":1}');
     await sql`DELETE FROM schema_migrations WHERE name = 'purge_earlier_rows'`;
 
     await applySchema(sql);
 
     const jobs = await sql`SELECT status FROM media_jobs ORDER BY status`;
-    assert.deepStrictEqual(jobs.map(j => j.status), ['queued', 'running']);
+    assert.deepStrictEqual(
+      jobs.map(j => j.status),
+      ['queued', 'running']
+    );
     const alerts = await sql`SELECT component, metadata FROM alerts ORDER BY component`;
-    assert.deepStrictEqual(alerts.map(a => a.component), ['bot', 'r2-cleanup']);
+    assert.deepStrictEqual(
+      alerts.map(a => a.component),
+      ['bot', 'r2-cleanup']
+    );
     assert.ok(alerts[0].metadata.includes('"errorClass"'));
   });
 });

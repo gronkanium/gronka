@@ -1,6 +1,7 @@
 import { processDownload } from '../commands/download.js';
 import { runConvertJob } from '../commands/convert.js';
 import { runOptimizeJob } from '../commands/optimize.js';
+import { withJobDir } from '../utils/media-file.js';
 
 const RUNNERS = {
   download: (interaction, a) =>
@@ -19,5 +20,6 @@ const RUNNERS = {
 export function runMediaJob(interaction, { kind, args }) {
   const run = RUNNERS[kind];
   if (!run) throw new Error(`unknown media job kind: ${kind}`);
-  return run(interaction, args);
+  // The input is fetched before runMediaCommand opens its dir, so the job owns one from the start.
+  return withJobDir(() => run(interaction, args));
 }

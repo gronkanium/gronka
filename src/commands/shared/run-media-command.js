@@ -59,6 +59,7 @@ async function runOperation(type, interaction, callback, options, ctx) {
       error: errorMessage,
       errorClass: error?.name || 'Error',
       url: operationContext.originalUrl || operationContext.url || null,
+      cause: error,
     });
   }
 }

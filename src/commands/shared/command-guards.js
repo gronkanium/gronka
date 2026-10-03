@@ -75,13 +75,14 @@ export async function refuse(
   const error = detail || cause?.message || message;
   const operationId = reason ? createFailedOperation(type, error, context) : null;
   if (operationId) jobContext.getStore()?.onOperation?.(operationId);
-  if (cause) logger.warn(`${type} refused: ${error}`, cause);
+  if (cause || notify) logger.warn(`${type} refused: ${error}`, ...[cause].filter(Boolean));
   await replyError(interaction, message);
   if (notify) {
     await recordFailure(type, {
       error,
       errorClass: reason,
       url: context.originalUrl || context.url || null,
+      cause,
     });
   }
 }

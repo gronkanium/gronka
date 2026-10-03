@@ -43,6 +43,7 @@ async function readBody(request) {
 
 export function startFakeDiscordApi() {
   const calls = [];
+  const failures = new Map();
   const server = Bun.serve({
     port: 0,
     async fetch(request) {
@@ -50,6 +51,15 @@ export function startFakeDiscordApi() {
       const path = pathname.replace(/^\/api\/v\d+/, '');
       const { body, files } = await readBody(request);
       calls.push({ method: request.method, path, body, files });
+      const failurePath = decodeURIComponent(path);
+      const failure = failures.get(failurePath);
+      if (failure) {
+        failures.delete(failurePath);
+        return Response.json(
+          { message: 'rejected', code: failure.code },
+          { status: failure.status }
+        );
+      }
       let match;
       if (/^\/webhooks\/[^/]+\/[^/]+(?:\/messages\/.+)?$/.test(path)) {
         return Response.json(message('900', body, files));
@@ -72,5 +82,10 @@ export function startFakeDiscordApi() {
       return new Response('{"message":"not found"}', { status: 404 });
     },
   });
-  return { url: `http://127.0.0.1:${server.port}/api`, calls, stop: () => server.stop(true) };
+  return {
+    url: `http://127.0.0.1:${server.port}/api`,
+    calls,
+    failures,
+    stop: () => server.stop(true),
+  };
 }

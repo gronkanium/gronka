@@ -35,6 +35,7 @@ function fakeBuffer(seed, size = 1024) {
 }
 
 let handleDownloadCommand;
+let runMediaJob;
 const fixtures = {};
 // What reached the (mocked) R2 bucket: nothing about the user, just the file.
 const uploads = [];
@@ -132,6 +133,21 @@ if (!mocksSupported) {
       getRemoteContentLength: async mediaUrl =>
         mediaUrl.includes('huge') ? 50 * 1024 * 1024 : 4096,
       downloadFromSocialMedia: async (_apiUrl, url) => {
+        if (url.includes('cancelled')) {
+          const { jobSignal } = await import('../../src/utils/media-file.js');
+          const signal = jobSignal();
+          await new Promise((_, reject) => {
+            signal.addEventListener('abort', () => reject(new Error('transport cancelled')), {
+              once: true,
+            });
+          });
+        }
+        if (url.includes('archive')) {
+          return {
+            ...(await media(fakeBuffer(1, 4096), 'application/zip', 'post.zip')),
+            archive: true,
+          };
+        }
         // A carousel bigger than Discord's 10-attachment ceiling, to exercise batching.
         if (url.includes('carousel')) {
           return Promise.all(
@@ -208,6 +224,7 @@ if (!mocksSupported) {
 
     // Dynamically import AFTER mocks are in place so the mocked modules are used.
     ({ handleDownloadCommand } = await import('../../src/commands/download.js'));
+    ({ runMediaJob } = await import('../../src/jobs/run-job.js'));
   });
 
   afterAll(() => {
@@ -226,6 +243,100 @@ if (!mocksSupported) {
   }
 
   describe('handleDownloadCommand (full-pipeline E2E)', () => {
+    test('a rejected gallery upload falls back to links for every file', async () => {
+      const { interaction, calls } = downloadInteraction(
+        `https://x.com/user/status/carousel-reject-${Date.now()}`
+      );
+      const edit = interaction.editReply;
+      interaction.editReply = async payload => {
+        if (payload.files?.length)
+          throw Object.assign(new Error('upload rejected'), { status: 413 });
+        return edit(payload);
+      };
+      const before = uploads.length;
+      await handleDownloadCommand(interaction);
+      assert.strictEqual(uploads.length - before, 10);
+      assert.strictEqual(calls.editReply[0].content.match(/https:\/\/cdn\.test/g).length, 10);
+      assert.strictEqual(calls.followUp[0].files.length, 2);
+    });
+
+    test('a rejected ZIP upload falls back to an archive link', async () => {
+      const { interaction, calls } = downloadInteraction(
+        `https://x.com/user/status/archive-${Date.now()}`
+      );
+      const edit = interaction.editReply;
+      interaction.editReply = async payload => {
+        if (payload.files?.length)
+          throw Object.assign(new Error('upload rejected'), { status: 413 });
+        return edit(payload);
+      };
+      const before = uploads.length;
+      await handleDownloadCommand(interaction);
+      assert.deepStrictEqual(uploads.slice(before), [{ type: 'archive', size: 4096 }]);
+      assert.match(calls.editReply[0].content, /https:\/\/cdn\.test\/archives\/[0-9a-f]{32}\.zip/);
+    });
+
+    test('a cancelled worker job stops acquisition and replies with the timeout reason', async () => {
+      const { interaction, calls } = createFakeInteraction({ deferred: true });
+      const { AppError } = await import('../../src/utils/errors.js');
+      const controller = new AbortController();
+      const timer = setTimeout(
+        () =>
+          controller.abort(
+            new AppError(
+              'processing took too long. please try a smaller file or shorter clip.',
+              'JOB_TIMEOUT'
+            )
+          ),
+        50
+      );
+      try {
+        await runMediaJob(
+          interaction,
+          { kind: 'download', args: { url: 'https://x.com/user/status/cancelled' } },
+          { signal: controller.signal }
+        );
+        assert.strictEqual(
+          calls.editReply.at(-1).content,
+          'processing took too long. please try a smaller file or shorter clip.'
+        );
+      } finally {
+        clearTimeout(timer);
+      }
+    });
+
+    test('a rejected gallery follow-up falls back without resending the first batch', async () => {
+      const { interaction, calls } = downloadInteraction(
+        `https://x.com/user/status/carousel-followup-${Date.now()}`
+      );
+      const followUp = interaction.followUp;
+      interaction.followUp = async payload => {
+        if (payload.files?.length)
+          throw Object.assign(new Error('upload rejected'), { status: 413 });
+        return followUp(payload);
+      };
+      const before = uploads.length;
+      await handleDownloadCommand(interaction);
+      assert.strictEqual(uploads.length - before, 2);
+      assert.strictEqual(calls.editReply[0].files.length, 10);
+      assert.strictEqual(calls.followUp[0].content.match(/https:\/\/cdn\.test/g).length, 2);
+    });
+
+    test('an expired reply produces a specific error and does not upload to R2', async () => {
+      const { interaction } = downloadInteraction(
+        `https://x.com/user/status/multi-expired-${Date.now()}`
+      );
+      const contents = [];
+      interaction.editReply = async payload => {
+        contents.push(payload.content);
+        throw Object.assign(new Error('invalid token'), { code: 50027 });
+      };
+      const before = uploads.length;
+      await handleDownloadCommand(interaction);
+      assert.strictEqual(uploads.length, before);
+      assert.match(contents.at(-1), /discord reply expired/);
+    });
+
     test('single-file video: downloads, saves, and replies with a Discord attachment', async () => {
       const url = `https://x.com/user/status/single-${Date.now()}`;
       const { interaction, calls } = downloadInteraction(url, 'e2e-dl-single');

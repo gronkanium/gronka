@@ -8,6 +8,7 @@ import { botConfig } from './utils/config.js';
 import { initDatabase } from './utils/database.js';
 import { recordFailure } from './utils/failures.js';
 import { countOutcome, flushCounts } from './utils/operations-tracker.js';
+import { AppError } from './utils/errors.js';
 import { safeInteractionEditReply } from './utils/interaction-helpers.js';
 import { JOBS_ROOT, sweepJobDirs } from './utils/media-file.js';
 import { runMediaJob } from './jobs/run-job.js';
@@ -17,7 +18,6 @@ import * as queue from './utils/database/media-jobs-pg.js';
 const logger = createLogger('worker');
 const warn = what => error => logger.warn(`${what}: ${error.message}`);
 
-// Discord's reply token is dead after 15 minutes, so nothing can be delivered past this.
 const JOB_TIME_LIMIT_MS = 16 * 60 * 1000;
 const POLL_MS = 2000;
 const RECLAIM_MS = 15_000;
@@ -44,15 +44,26 @@ async function runJob(job) {
     () => queue.heartbeat(job.id).catch(error => logger.warn(`Heartbeat failed: ${error.message}`)),
     queue.HEARTBEAT_MS
   );
-  let timer;
-  const overtime = new Promise(resolve => (timer = setTimeout(resolve, JOB_TIME_LIMIT_MS, 'late')));
+  const controller = new AbortController();
+  const budget = Math.min(
+    JOB_TIME_LIMIT_MS,
+    (job.reply.expiresAt ?? Infinity) - Date.now() - 30_000
+  );
+  const timer = setTimeout(
+    () => {
+      logger.error(`Job ${job.id} (${job.kind}) hit the time limit`);
+      controller.abort(
+        new AppError(
+          'processing took too long. please try a smaller file or shorter clip.',
+          'JOB_TIMEOUT'
+        )
+      );
+    },
+    Math.max(0, budget)
+  );
   try {
     const interaction = await interactionFor(client, job);
-    const outcome = await Promise.race([
-      runMediaJob(interaction, job).then(() => 'done'),
-      overtime,
-    ]);
-    if (outcome === 'late') logger.error(`Job ${job.id} (${job.kind}) hit the time limit`);
+    await runMediaJob(interaction, job, { signal: controller.signal });
   } catch (error) {
     logger.error(`Job ${job.id} crashed: ${error.message}`, error);
   } finally {

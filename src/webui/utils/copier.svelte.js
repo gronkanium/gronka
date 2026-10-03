@@ -1,4 +1,4 @@
-// navigator.clipboard only exists in secure contexts; the webui is served over plain http on the LAN.
+// navigator.clipboard only exists in secure contexts; the webui is often served over plain http.
 async function writeText(text) {
   if (navigator.clipboard && window.isSecureContext) {
     await navigator.clipboard.writeText(text);

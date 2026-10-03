@@ -46,7 +46,7 @@ describe('parseDownloadRequest', () => {
 
   test('refuses private hosts, bad modes and backwards trims', () => {
     expect(() => parseDownloadRequest({ url: 'http://127.0.0.1/' })).toThrow();
-    expect(() => parseDownloadRequest({ url: 'http://192.168.0.212:3000/' })).toThrow();
+    expect(() => parseDownloadRequest({ url: 'http://192.168.1.1:3000/' })).toThrow();
     expect(() => parseDownloadRequest({ url: 'no link here' })).toThrow();
     expect(() => parseDownloadRequest({ url: 'https://x.com/', mode: 'gif' })).toThrow();
     expect(() => parseDownloadRequest({ url: 'https://x.com/', start: '20', end: '10' })).toThrow();

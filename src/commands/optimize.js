@@ -5,8 +5,7 @@ import { validateUrl, firstUrlIn } from '../utils/validation.js';
 import { validateMediaFile } from './shared/media-validation.js';
 import { curatedErrorMessage } from './shared/command-errors.js';
 import { downloadImage } from '../utils/file-downloader.js';
-import { isGifFile, optimizeToJob, calculateSizeReduction } from '../utils/gif-optimizer.js';
-import { logOperationStep } from '../utils/operations-tracker.js';
+import { isGifFile, optimizeToJob } from '../utils/gif-optimizer.js';
 import { runMediaCommand } from './shared/run-media-command.js';
 import { getDiscordAttachmentLimit } from './shared/attachment-limit.js';
 import { refuse, commandSourceOf } from './shared/command-guards.js';
@@ -31,30 +30,16 @@ export async function processOptimization(
   await runMediaCommand(
     'optimize',
     interaction,
-    async ctx => {
-      const { operationId } = ctx;
+    async () => {
       const gif = validateMediaFile(preDownloaded ?? (await downloadImage(attachment.url)), 'gif');
-      logOperationStep(operationId, 'optimization_start', 'running', {
-        message: 'Starting GIF optimization',
-        metadata: { inputFile: attachment.name || 'unknown', inputSize: gif.size, lossy },
-      });
       const optimized = await optimizeToJob(gif, lossy);
-      logOperationStep(operationId, 'optimization_complete', 'success', {
-        message: 'GIF optimization completed',
-        metadata: {
-          originalSize: gif.size,
-          optimizedSize: optimized.size,
-          sizeReduction: calculateSizeReduction(gif.size, optimized.size),
-          lossy,
-        },
-      });
 
       const stored = await storeMedia(
         optimized,
         getDiscordAttachmentLimit(interaction, DISCORD_SIZE_LIMIT)
       );
       await deliverStored(interaction, stored);
-      await finishCommand('optimize', ctx, stored.size);
+      await finishCommand();
     },
     {
       commandSource,
@@ -98,7 +83,6 @@ async function resolveGif(interaction, { attachment, url, commandSource }) {
         cause: error,
         reason: 'url_download_failed',
         context: { originalUrl: url, commandSource },
-        notify: true,
       });
       return null;
     }
@@ -109,7 +93,6 @@ async function resolveGif(interaction, { attachment, url, commandSource }) {
       message: 'this command only works on gif files.',
       reason: url ? null : 'invalid_attachment_type',
       context: { attachment: { name, size, contentType, url: attachment.url }, commandSource },
-      notify: true,
     });
     return null;
   }
@@ -125,7 +108,6 @@ async function acceptGif(interaction, { attachment, url, commandSource }) {
       message: `invalid URL: ${check.error}`,
       reason: 'invalid_url',
       context: { originalUrl: url, commandSource },
-      notify: true,
     });
   }
   return check.valid;
@@ -165,7 +147,6 @@ export async function handleOptimizeContextMenuCommand(interaction, modalAttachm
       message: 'no gif attachment or URL found in this message.',
       reason: 'missing_input',
       context: { commandSource: 'context-menu' },
-      notify: true,
     });
     return;
   }

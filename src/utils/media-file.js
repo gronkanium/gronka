@@ -7,7 +7,7 @@ import path from 'node:path';
 import { Transform } from 'node:stream';
 import { pipeline } from 'node:stream/promises';
 import axios from 'axios';
-import { createLogger } from './logger.js';
+import { createLogger, withLogRef } from './logger.js';
 
 const logger = createLogger('media-file');
 
@@ -38,7 +38,7 @@ export async function withJobDir(fn, { signal } = {}) {
   if (scope.getStore()) return fn();
   const dir = await newJobDir();
   try {
-    return await scope.run({ dir, signal }, fn);
+    return await scope.run({ dir, signal }, () => withLogRef(path.basename(dir).slice(4), fn));
   } finally {
     await fsp.rm(dir, { recursive: true, force: true });
   }

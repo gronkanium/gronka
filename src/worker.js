@@ -7,10 +7,9 @@ import { createLogger } from './utils/logger.js';
 import { botConfig } from './utils/config.js';
 import { initDatabase } from './utils/database.js';
 import { recordFailure } from './utils/failures.js';
-import { flushAllOperationLogs } from './utils/operations-tracker.js';
+import { countOutcome, flushCounts } from './utils/operations-tracker.js';
 import { safeInteractionEditReply } from './utils/interaction-helpers.js';
 import { JOBS_ROOT, sweepJobDirs } from './utils/media-file.js';
-import { jobContext } from './jobs/context.js';
 import { runMediaJob } from './jobs/run-job.js';
 import { interactionFor } from './jobs/reply-target.js';
 import * as queue from './utils/database/media-jobs-pg.js';
@@ -41,7 +40,6 @@ let lastPump = Date.now();
 
 async function runJob(job) {
   logger.debug(`Job ${job.id} (${job.kind}) attempt ${job.attempts}`);
-  let operationId = job.operation_id;
   const beat = setInterval(
     () => queue.heartbeat(job.id).catch(error => logger.warn(`Heartbeat failed: ${error.message}`)),
     queue.HEARTBEAT_MS
@@ -50,15 +48,8 @@ async function runJob(job) {
   const overtime = new Promise(resolve => (timer = setTimeout(resolve, JOB_TIME_LIMIT_MS, 'late')));
   try {
     const interaction = await interactionFor(client, job);
-    const context = {
-      operationId,
-      onOperation: id => {
-        operationId = id;
-        queue.setJobOperation(job.id, id).catch(warn(`Could not link job ${job.id} to ${id}`));
-      },
-    };
     const outcome = await Promise.race([
-      jobContext.run(context, () => runMediaJob(interaction, job)).then(() => 'done'),
+      runMediaJob(interaction, job).then(() => 'done'),
       overtime,
     ]);
     if (outcome === 'late') logger.error(`Job ${job.id} (${job.kind}) hit the time limit`);
@@ -104,6 +95,7 @@ async function tellInterrupted(job) {
   } catch (error) {
     logger.warn(`Could not tell user about interrupted job ${job.id}: ${error.message}`);
   }
+  countOutcome(job.kind, 'error');
   await recordFailure(job.kind, {
     error: 'interrupted: its worker stopped and it could not be retried',
     errorClass: 'interrupted',
@@ -148,7 +140,7 @@ async function shutdown(signal) {
     .releaseJobs([...running.keys()])
     .catch(warn('Could not hand jobs back to the queue'));
   if (released) logger.info(`Handed ${released} unfinished job(s) back to the queue`);
-  await flushAllOperationLogs();
+  await flushCounts();
   await queue.clearPresence().catch(warn('Could not clear presence'));
   process.exit(0);
 }

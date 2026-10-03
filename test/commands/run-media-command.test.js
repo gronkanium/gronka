@@ -5,7 +5,8 @@ import { runMediaCommand } from '../../src/commands/shared/run-media-command.js'
 import { ValidationError, NetworkError } from '../../src/utils/errors.js';
 import { safeInteractionEditReply } from '../../src/utils/interaction-helpers.js';
 import { createFakeInteraction } from '../helpers/fake-interaction.js';
-import { getOperation, updateOperationStatus } from '../../src/utils/operations-tracker.js';
+import { succeed, flushCounts } from '../../src/utils/operations-tracker.js';
+import { getAlerts, getCommandTotals } from '../../src/utils/database.js';
 import { tempPath } from '../../src/utils/media-file.js';
 
 // In-process E2E for the shared command lifecycle: drives runMediaCommand with a fake Discord
@@ -113,41 +114,37 @@ describe('runMediaCommand (Discord lifecycle E2E)', () => {
     await assert.rejects(() => fs.access(tmpFile), 'job file should be deleted on error too');
   });
 
-  test('a callback that returns without marking the operation does not leave it running', async () => {
-    const { interaction } = createFakeInteraction();
-    let capturedId;
+  const totals = async type => {
+    await flushCounts();
+    const rows = (await getCommandTotals()).filter(r => r.command === type);
+    return Object.fromEntries(rows.map(r => [r.outcome, r.count]));
+  };
 
-    await runMediaCommand('convert', interaction, async ctx => {
-      capturedId = ctx.operationId;
-      // mirrors convert.js's "video is too long" path: replies, returns, marks nothing
+  test('a callback that ends without a result counts as a failure and leaves a record', async () => {
+    const { interaction } = createFakeInteraction();
+    const type = `noresult${Date.now()}`;
+    const since = Date.now();
+    await runMediaCommand(type, interaction, async () => {
       await safeInteractionEditReply(interaction, { content: 'video is too long (45s).' });
     });
-
-    assert.strictEqual(getOperation(capturedId).status, 'error');
+    assert.deepStrictEqual(await totals(type), { error: 1 });
+    const [alert] = await getAlerts({ command: type, startTime: since, limit: 1 });
+    assert.match(alert.message, /ended without a result/);
   });
 
-  test('a callback that marks success keeps that status', async () => {
+  test('a callback that marks success is counted once as a success', async () => {
     const { interaction } = createFakeInteraction();
-    let capturedId;
-
-    await runMediaCommand('convert', interaction, async ctx => {
-      capturedId = ctx.operationId;
-      updateOperationStatus(ctx.operationId, 'success', { fileSize: 1 });
-    });
-
-    assert.strictEqual(getOperation(capturedId).status, 'success');
+    const type = `ok${Date.now()}`;
+    await runMediaCommand(type, interaction, async () => succeed());
+    assert.deepStrictEqual(await totals(type), { success: 1 });
   });
 
-  test('ctx exposes the operation and its step logger, and nothing about the user', async () => {
+  test('ctx carries the request context and nothing about the user', async () => {
     const { interaction } = createFakeInteraction();
     let seen = null;
-
     await runMediaCommand('optimize', interaction, async ctx => {
       seen = ctx;
     });
-
-    assert.ok(typeof seen.operationId === 'string' && seen.operationId.length > 0);
-    assert.strictEqual(typeof seen.logStep, 'function');
-    assert.ok(!('userId' in seen) && !('adminUser' in seen) && !('buildMetadata' in seen));
+    assert.deepStrictEqual(Object.keys(seen), ['operationContext']);
   });
 });

@@ -1,9 +1,8 @@
 import { MessageFlags } from 'discord.js';
 import { createLogger } from '../../utils/logger.js';
-import { createFailedOperation } from '../../utils/operations-tracker.js';
+import { countOutcome, failed } from '../../utils/operations-tracker.js';
 import { safeInteractionReply, safeInteractionEditReply } from '../../utils/interaction-helpers.js';
 import { recordFailure } from '../../utils/failures.js';
-import { jobContext } from '../../jobs/context.js';
 import { parseTimestamp } from '../../utils/validation.js';
 
 const logger = createLogger('command-guards');
@@ -25,11 +24,7 @@ export const commandSourceOf = interaction => (interaction.isPrefixCommand ? 'pr
  */
 export async function resolveTimeOptions(interaction, { type }) {
   const failWith = async errorMessage => {
-    createFailedOperation(type, errorMessage, { commandSource: commandSourceOf(interaction) });
-    await safeInteractionReply(interaction, {
-      content: errorMessage,
-      flags: MessageFlags.Ephemeral,
-    });
+    await refuse(interaction, type, { message: errorMessage, reason: 'invalid_time' });
     return null;
   };
 
@@ -65,24 +60,18 @@ export function replyError(interaction, content) {
     : safeInteractionReply(interaction, { content, flags: MessageFlags.Ephemeral });
 }
 
-// Turns a request away before any work: a live failed operation, a log line, the reply, and with
-// `notify` a failure record. `detail`/`cause` are what we record; `message` is what the user sees.
-export async function refuse(
-  interaction,
-  type,
-  { message, detail, cause, reason, context = {}, notify = false }
-) {
-  const error = detail || cause?.message || message;
-  const operationId = reason ? createFailedOperation(type, error, context) : null;
-  if (operationId) jobContext.getStore()?.onOperation?.(operationId);
-  if (cause || notify) logger.warn(`${type} refused: ${error}`, ...[cause].filter(Boolean));
+// Turns a request away: the reply, and with a `reason` one failed count, a log line and a failure
+// record. `detail`/`cause` are what we record; `message` is what the user sees.
+export async function refuse(interaction, type, { message, detail, cause, reason, context = {} }) {
   await replyError(interaction, message);
-  if (notify) {
-    await recordFailure(type, {
-      error,
-      errorClass: reason,
-      url: context.originalUrl || context.url || null,
-      cause,
-    });
-  }
+  if (!reason) return;
+  const error = detail || cause?.message || message;
+  if (!failed()) countOutcome(type, 'error');
+  logger.warn(`${type} refused: ${error}`, ...[cause].filter(Boolean));
+  await recordFailure(type, {
+    error,
+    errorClass: reason,
+    url: context.originalUrl || context.url || null,
+    cause,
+  });
 }

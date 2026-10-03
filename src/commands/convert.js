@@ -23,7 +23,6 @@ import {
 } from '../utils/video-processor.js';
 import { getDiscordAttachmentLimit } from './shared/attachment-limit.js';
 import { optimizeToJob } from '../utils/gif-optimizer.js';
-import { logOperationStep } from '../utils/operations-tracker.js';
 import { runMediaCommand } from './shared/run-media-command.js';
 import { sendConvertedFile } from './shared/send-converted.js';
 import { ValidationError } from '../utils/errors.js';
@@ -119,7 +118,6 @@ async function processFormatConversion(
     'convert',
     interaction,
     async ctx => {
-      const { operationId } = ctx;
       if (!isVideo && spec.kind === 'audio') {
         throw new ValidationError('only videos have audio to turn into audio files.');
       }
@@ -129,10 +127,6 @@ async function processFormatConversion(
       const input =
         preDownloaded ||
         (isVideo ? await downloadVideo(attachment.url) : await downloadImage(attachment.url));
-      logOperationStep(operationId, 'format_convert', 'running', {
-        message: `Converting to ${format}`,
-        metadata: { format, inputSize: input.size },
-      });
       const output = await convertToFormat(input, format, isVideo ? trim : {});
       const baseName =
         path.parse(attachment.name || 'file').name.replace(/[^\w.-]+/g, '_') || 'file';
@@ -144,11 +138,7 @@ async function processFormatConversion(
         },
         { file: output, format, baseName }
       );
-      logOperationStep(operationId, 'format_convert', 'success', {
-        message: `Converted to ${format}`,
-        metadata: { format, outputSize: output.size },
-      });
-      await finishCommand('convert', ctx, output.size);
+      await finishCommand();
     },
     {
       commandSource,
@@ -169,7 +159,6 @@ async function processFormatConversion(
 
 // Renders the source file into gifPath with ffmpeg or ImageMagick.
 async function renderGif(ctx, { attachment, attachmentType, file, options, gifPath }) {
-  const { operationId } = ctx;
   let ext = path.extname(attachment.name ?? '').toLowerCase();
   const allowed = attachmentType === 'video' ? VIDEO_EXTENSIONS : IMAGE_EXTENSIONS;
   if (!ext || !validateFileExtension(attachment.name, allowed)) {
@@ -177,10 +166,6 @@ async function renderGif(ctx, { attachment, attachmentType, file, options, gifPa
   }
   const inputPath = validateMediaFile(file, attachmentType).path;
   await fs.mkdir(path.dirname(gifPath), { recursive: true });
-  logOperationStep(operationId, 'conversion_start', 'running', {
-    message: `Starting ${attachmentType} to GIF conversion`,
-    metadata: { inputFile: attachment.name, inputSize: attachment.size },
-  });
 
   await writeAtomic(gifPath, async out => {
     if (attachmentType === 'video') {
@@ -219,9 +204,6 @@ async function renderGif(ctx, { attachment, attachmentType, file, options, gifPa
       });
     }
   });
-  logOperationStep(operationId, 'conversion_complete', 'success', {
-    message: `${attachmentType} converted to GIF`,
-  });
 }
 
 async function processConversion(
@@ -237,7 +219,6 @@ async function processConversion(
     'convert',
     interaction,
     async ctx => {
-      const { operationId } = ctx;
       const attachmentLimit = getDiscordAttachmentLimit(interaction, DISCORD_SIZE_LIMIT);
 
       const file =
@@ -252,16 +233,12 @@ async function processConversion(
       const lossy = options.lossy ?? null;
       if (options.optimize || lossy !== null) {
         const optimized = await optimizeToJob(gif, lossy);
-        logOperationStep(operationId, 'optimization_complete', 'success', {
-          message: 'GIF optimized',
-          metadata: { originalSize: gif.size, optimizedSize: optimized.size, lossy },
-        });
         gif = optimized;
       }
 
       const stored = await storeMedia(gif, attachmentLimit);
       await deliverStored(interaction, stored);
-      await finishCommand('convert', ctx, stored.size);
+      await finishCommand();
     },
     {
       commandSource,
@@ -313,7 +290,6 @@ async function resolveInput(interaction, { attachment, url, commandSource }) {
         cause: error,
         reason: 'url_download_failed',
         context: { originalUrl: url, commandSource },
-        notify: true,
       });
       return null;
     }
@@ -330,7 +306,6 @@ async function resolveInput(interaction, { attachment, url, commandSource }) {
         attachment: { name, size, contentType, url: attachment.url },
         commandSource,
       },
-      notify: true,
     });
     return null;
   }
@@ -342,7 +317,6 @@ async function resolveInput(interaction, { attachment, url, commandSource }) {
       message: validation.error,
       reason: url ? null : 'invalid_attachment',
       context: { attachment: { name, size, contentType, url: attachment.url }, commandSource },
-      notify: true,
     });
     return null;
   }
@@ -358,7 +332,6 @@ async function acceptInput(interaction, { attachment, url, commandSource }) {
       message: `invalid URL: ${check.error}`,
       reason: 'invalid_url',
       context: { originalUrl: url, commandSource },
-      notify: true,
     });
   }
   return check.valid;
@@ -414,7 +387,6 @@ export async function handleConvertContextMenu(interaction) {
       message: 'no video or image attachment or URL found in this message.',
       reason: 'missing_input',
       context: { commandSource: 'context-menu' },
-      notify: true,
     });
     return;
   }

@@ -4,7 +4,7 @@ import { createLogger } from '../../utils/logger.js';
 import { r2Config } from '../../utils/config.js';
 import { AppError } from '../../utils/errors.js';
 import { safeInteractionEditReply } from '../../utils/interaction-helpers.js';
-import { updateOperationStatus } from '../../utils/operations-tracker.js';
+import { succeed } from '../../utils/operations-tracker.js';
 import { detectFileType, resolveTtlHoursForSize } from '../../utils/storage.js';
 import {
   isR2Configured,
@@ -42,8 +42,8 @@ export const attachmentFor = (stored, index = 0) =>
     name: `gronka${index ? `-${index + 1}` : ''}${stored.ext}`,
   });
 
-export async function finishCommand(type, ctx, fileSize, extra = {}) {
-  updateOperationStatus(ctx.operationId, 'success', { fileSize, ...extra });
+export function finishCommand() {
+  succeed();
 }
 
 // The final reply of a command; a failed edit means the user got nothing, so the request failed.

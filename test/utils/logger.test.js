@@ -1,6 +1,6 @@
 import { test, describe } from 'bun:test';
 import assert from 'node:assert';
-import { createLogger, formatTimestampSeconds } from '../../src/utils/logger.js';
+import { createLogger, formatTimestampSeconds, withLogRef } from '../../src/utils/logger.js';
 
 // Console is the only place a line goes; capture it.
 async function captured(fn) {
@@ -52,5 +52,19 @@ describe('logger', () => {
   test('an Error keeps its message and stack', async () => {
     const lines = await captured(() => createLogger('t').error('failed:', new Error('boom')));
     assert.match(lines[0], /failed: Error: boom/);
+  });
+
+  test('a link never reaches the log, only its site', async () => {
+    const lines = await captured(() =>
+      createLogger('t').warn('yt-dlp: https://www.youtube.com/watch?v=abc failed', {
+        at: 'https://x.com/someone/status/1',
+      })
+    );
+    assert.match(lines[0], /yt-dlp: youtube\.com failed \{"at":"x\.com"\}$/);
+  });
+
+  test('a line inside a job carries its reference', async () => {
+    const lines = await captured(() => withLogRef('ab12cd', () => createLogger('t').warn('hi')));
+    assert.match(lines[0], /\[WARN \] \[ab12cd\] hi$/);
   });
 });

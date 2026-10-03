@@ -7,15 +7,14 @@ permissions:
 
 on:
   push:
-    branches: [main, master]
+    branches: [master]
     paths-ignore:
       - '**.md'
       - 'docs/**'
+  # No path filter on pull requests: the checks are required, and a skipped one never reports.
   pull_request:
-    branches: [main, master]
-    paths-ignore:
-      - '**.md'
-      - 'docs/**'
+  # release-please dispatches this on its branch: its PR is opened with GITHUB_TOKEN, which starts no workflow.
+  workflow_dispatch:
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}

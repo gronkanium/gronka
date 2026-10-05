@@ -12,8 +12,8 @@ const logger = createLogger('webui');
 const router = express.Router();
 
 function filterOptionsFrom(query) {
-  const { severity, component, command, reason, startTime, endTime, search } = query;
-  const options = { severity, component, command, reason, search };
+  const { severity, component, command, reason, cause, startTime, endTime, search } = query;
+  const options = { severity, component, command, reason, cause, search };
   if (startTime) options.startTime = parseInt(startTime, 10);
   if (endTime) options.endTime = parseInt(endTime, 10);
   return options;

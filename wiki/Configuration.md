@@ -6,7 +6,7 @@ everything is set in `.env`. `bun run setup` writes it for you; [`.env.example`]
 
 ## what gronka keeps
 
-nothing about who uses it. files are processed in a temporary folder and deleted when the request ends; a file too big for a discord attachment is uploaded to r2 under a random name and deleted when its time is up. the database holds settings, the media job queue (a row lives only while its job runs), anonymous hourly command counts, and failure records (command, site, error) for `RETENTION_DAYS`. logs go to the console.
+nothing about who uses it. files are processed in a temporary folder and deleted when the request ends; a file too big for a discord attachment is uploaded to r2 under a random name and deleted when its time is up. the database holds settings, the media job queue (a row lives only while its job runs), anonymous hourly command counts, and failure records (command, full link, error, steps tried) for `RETENTION_DAYS`, never tied to a user. logs go to the console.
 
 ## discord
 

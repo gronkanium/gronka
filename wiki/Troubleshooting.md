@@ -240,4 +240,4 @@ if you're still having issues:
 3. test individual components (ffmpeg, cobalt, r2)
 4. check github issues for similar problems
 
-logs go to the console only: `docker compose logs -f app worker`. the webui's issues page lists recent failures by command, site and error.
+logs go to the console only: `docker compose logs -f app worker`. the webui's issues page lists recent failures by command, site and error, with the full link, cause and steps tried for each.

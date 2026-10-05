@@ -330,4 +330,15 @@ describe('downloadFromInstagram stories', () => {
       /failed to reach instagram/
     );
   });
+
+  test('an Instagram 500 keeps the endpoint and status as the cause', async () => {
+    stubApi({ topsearch: httpError(500) });
+    const error = await downloadFromInstagram('https://www.instagram.com/stories/someuser/').catch(
+      caught => caught
+    );
+    assert.match(
+      error.cause.message,
+      /^instagram www\.instagram\.com\/api\/v1\/web\/search\/topsearch\/ HTTP 500$/
+    );
+  });
 });

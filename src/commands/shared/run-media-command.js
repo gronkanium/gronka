@@ -21,7 +21,12 @@ async function runOperation(type, interaction, callback, options, context) {
     await callback({ operationContext: context });
     if (!requestOutcome()) {
       logger.warn(`${type} ended without a result`);
-      await recordFailure(type, { error: 'ended without a result', errorClass: 'no_result', url });
+      await recordFailure(type, {
+        error: 'ended without a result',
+        errorClass: 'no_result',
+        url,
+        options: context.commandOptions,
+      });
     }
   } catch (caught) {
     const error = jobSignal()?.aborted ? jobSignal().reason : caught;
@@ -37,6 +42,7 @@ async function runOperation(type, interaction, callback, options, context) {
       errorClass: error?.name || 'Error',
       url,
       cause: error,
+      options: context.commandOptions,
     });
   }
 }

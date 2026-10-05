@@ -259,7 +259,7 @@ if (!mocksSupported) {
       assert.match(calls.reply[0].content, /not both/);
     });
 
-    test('url that is not media: refused, and the failure keeps only the site', async () => {
+    test('url that is not media: refused, and the failure keeps the full link', async () => {
       const since = Date.now();
       const { interaction, calls } = commandInteraction(`cv-html-${since}`, {
         url: `https://example.com/page-${since}`,
@@ -272,7 +272,7 @@ if (!mocksSupported) {
       assert.ok(alert, 'the refusal is recorded as a failure');
       const metadata = JSON.parse(alert.metadata);
       assert.strictEqual(metadata.source, 'example.com');
-      assert.ok(!JSON.stringify(alert).includes(`page-${since}`), 'never the link itself');
+      assert.strictEqual(metadata.url, `https://example.com/page-${since}`);
       assert.ok(!('user_id' in alert) && !('operation_id' in alert));
     });
 

@@ -10,7 +10,7 @@ import { Upload } from '@aws-sdk/lib-storage';
 import { createLogger } from './logger.js';
 // A leaf DB module, not the ./database.js barrel: storage.js imports this file.
 import { getSetting } from './database/settings-pg.js';
-import { NetworkError, ValidationError } from './errors.js';
+import { NetworkError, ValidationError, withCause, describeCause } from './errors.js';
 import { jobSignal, jobRemainingMs } from './media-file.js';
 
 const logger = createLogger('r2-storage');
@@ -107,7 +107,10 @@ export async function uploadToR2(file, key, contentType, config, extraParams = {
     logger.warn(
       `Skipping R2 upload of ${key}: ${Math.round(jobRemainingMs() / 1000)}s left in job`
     );
-    throw new NetworkError('there was not enough time left to upload this file. please try again.');
+    throw withCause(
+      new NetworkError('there was not enough time left to upload this file. please try again.'),
+      `r2: ${Math.round(jobRemainingMs() / 1000)}s left in the job, ${Math.round(uploadBudgetMs(file.size) / 1000)}s needed for ${(file.size / 1048576).toFixed(1)}MB`
+    );
   }
 
   try {
@@ -138,7 +141,10 @@ export async function uploadToR2(file, key, contentType, config, extraParams = {
           upload.abort().catch(() => {});
           reject(
             signal.reason?.name === 'TimeoutError'
-              ? new NetworkError('could not upload this file right now, try again shortly.')
+              ? withCause(
+                  new NetworkError('could not upload this file right now, try again shortly.'),
+                  `r2: upload of ${(file.size / 1048576).toFixed(1)}MB hit its ${Math.round(uploadBudgetMs(file.size) / 1000)}s budget`
+                )
               : signal.reason
           );
         };
@@ -155,7 +161,7 @@ export async function uploadToR2(file, key, contentType, config, extraParams = {
     logger.debug(`Uploaded to R2: ${publicUrl}`);
     return publicUrl;
   } catch (error) {
-    logger.error(`Failed to upload to R2 (${key}):`, error.message);
+    logger.error(`Failed to upload to R2 (${key}): ${describeCause(error.cause ?? error)}`);
     logger.error(`Error details:`, error);
     if (error.$metadata) {
       logger.error(`AWS Error metadata:`, error.$metadata);

@@ -170,6 +170,13 @@ if (!mocksSupported) {
           const { NetworkError } = await import('../../src/utils/errors.js');
           throw new NetworkError('this post is unavailable or has been deleted');
         }
+        if (url.includes('bothfail')) {
+          const { NetworkError, withCause } = await import('../../src/utils/errors.js');
+          throw withCause(
+            new NetworkError('failed to reach the download service.'),
+            'cobalt: error.api.fetch.empty'
+          );
+        }
         if (url.includes('toolong')) {
           const { ValidationError } = await import('../../src/utils/errors.js');
           throw new ValidationError('file is too large (max 100mb)');
@@ -196,6 +203,13 @@ if (!mocksSupported) {
       ],
       downloadWithYtdlp: async (_url, _maxSize, _quality, _maxDuration, _startTime, _duration) => {
         const u = _url || '';
+        if (u.includes('bothfail')) {
+          const { NetworkError, withCause } = await import('../../src/utils/errors.js');
+          throw withCause(
+            new NetworkError('the download failed. the content may be unavailable.'),
+            'yt-dlp: ERROR: [twitter] Unable to extract'
+          );
+        }
         if (u.includes('deleted')) {
           const { NetworkError } = await import('../../src/utils/errors.js');
           throw new NetworkError('this post is unavailable or has been deleted');
@@ -436,6 +450,31 @@ if (!mocksSupported) {
         'this post is unavailable or has been deleted'
       );
       assert.strictEqual(calls.editReply[0].files, undefined, 'no files on error');
+    });
+
+    test('a failed fallback chain records the link, the cause and every step tried', async () => {
+      const url = `https://x.com/user/status/bothfail-${Date.now()}`;
+      const since = Date.now();
+      const { interaction, calls } = downloadInteraction(url, 'e2e-dl-bothfail');
+
+      await handleDownloadCommand(interaction);
+
+      assert.strictEqual(
+        calls.editReply.at(-1).content,
+        'the download failed. the content may be unavailable.'
+      );
+      const { getAlerts } = await import('../../src/utils/database.js');
+      const alert = (await getAlerts({ command: 'download', startTime: since, limit: 50 }))
+        .map(row => JSON.parse(row.metadata))
+        .find(metadata => metadata.url === url);
+      assert.ok(alert, 'a failure record for this link');
+      assert.strictEqual(alert.cause, 'yt-dlp: ERROR: [twitter] Unable to extract');
+      assert.deepStrictEqual(
+        alert.trail.map(step => step.step),
+        ['cobalt twitter delivery', 'cobalt', 'yt-dlp', 'cobalt direct url']
+      );
+      assert.strictEqual(alert.trail[1].error, 'cobalt: error.api.fetch.empty');
+      assert.strictEqual(alert.trail[2].error, 'yt-dlp: ERROR: [twitter] Unable to extract');
     });
 
     test('turned-off source: /download is refused with a curated message, no files', async () => {

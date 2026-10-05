@@ -3,7 +3,7 @@ import path from 'path';
 import { createLogger } from './logger.js';
 import { botConfig } from './config.js';
 import { validateUrl } from './validation.js';
-import { ValidationError, NetworkError } from './errors.js';
+import { ValidationError, NetworkError, withCause, describeCause } from './errors.js';
 import { isSocialMediaUrl, downloadFromSocialMedia } from './cobalt.js';
 import { isInstagramStoryUrl, hasInstagramSession, downloadFromInstagram } from './instagram.js';
 import { isDiscordCdnUrl, getRefreshedAttachmentURL, getRequestHeaders } from './discord-cdn.js';
@@ -135,13 +135,19 @@ async function downloadCapped(url, maxSize, kind) {
     return await withExtension({ ...file, filename: filenameFor(file, url) });
   } catch (error) {
     if (isSsrfBlockedError(error)) {
-      throw new ValidationError(BLOCKED_DESTINATION_MESSAGE);
+      throw withCause(new ValidationError(BLOCKED_DESTINATION_MESSAGE), error);
     }
     if (isTooLargeError(error)) {
-      throw new ValidationError(`${kind} file is too large (max ${mb(maxSize)}mb)`);
+      throw withCause(
+        new ValidationError(`${kind} file is too large (max ${mb(maxSize)}mb)`),
+        error
+      );
     }
-    logger.warn(`${kind} download failed: ${error.message}`);
-    throw new NetworkError(`failed to download the ${kind}. it may be unavailable.`);
+    logger.warn(`${kind} download failed: ${describeCause(error)}`);
+    throw withCause(
+      new NetworkError(`failed to download the ${kind}. it may be unavailable.`),
+      error
+    );
   }
 }
 
@@ -210,23 +216,29 @@ export async function downloadFileFromUrl(url, client = null, options = {}) {
   } catch (error) {
     if (error instanceof ValidationError) throw error;
     if (isSsrfBlockedError(error)) {
-      throw new ValidationError(BLOCKED_DESTINATION_MESSAGE);
+      throw withCause(new ValidationError(BLOCKED_DESTINATION_MESSAGE), error);
     }
     if (isTooLargeError(error)) {
-      throw new ValidationError(
-        `file is too large (max ${mb(MAX_VIDEO_SIZE)}mb for videos, ${mb(MAX_IMAGE_SIZE)}mb for images)`
+      throw withCause(
+        new ValidationError(
+          `file is too large (max ${mb(MAX_VIDEO_SIZE)}mb for videos, ${mb(MAX_IMAGE_SIZE)}mb for images)`
+        ),
+        error
       );
     }
     if (error.response?.status === 404) {
-      throw new NetworkError('file not found at the provided URL');
+      throw withCause(new NetworkError('file not found at the provided URL'), error);
     }
     if (error.response?.status === 403) {
-      throw new NetworkError(
-        'access denied to the file URL (may be expired or require authentication)'
+      throw withCause(
+        new NetworkError(
+          'access denied to the file URL (may be expired or require authentication)'
+        ),
+        error
       );
     }
     if (error.response?.status === 401) {
-      throw new NetworkError('authentication required to access the file URL');
+      throw withCause(new NetworkError('authentication required to access the file URL'), error);
     }
     if (error.response?.status === 500 && isDiscordCdnUrl(url) && client && actualUrl === url) {
       try {
@@ -238,17 +250,20 @@ export async function downloadFileFromUrl(url, client = null, options = {}) {
         }
       } catch (refreshError) {
         if (refreshError instanceof ValidationError) throw refreshError;
-        logger.warn(`Failed to refresh and retry Discord URL: ${refreshError.message}`);
+        logger.warn(`Failed to refresh and retry Discord URL: ${describeCause(refreshError)}`);
       }
-      throw new NetworkError(
-        'discord cdn returned an error. the url may be expired or invalid. please try using a fresh url from discord.'
+      throw withCause(
+        new NetworkError(
+          'discord cdn returned an error. the url may be expired or invalid. please try using a fresh url from discord.'
+        ),
+        error
       );
     }
     if (error.code === 'ECONNABORTED') {
-      throw new NetworkError('request timed out while downloading file');
+      throw withCause(new NetworkError('request timed out while downloading file'), error);
     }
-    logger.warn(`File download from URL failed: ${error.message}`);
-    throw new NetworkError('failed to download the file from the provided url.');
+    logger.warn(`File download from URL failed: ${describeCause(error)}`);
+    throw withCause(new NetworkError('failed to download the file from the provided url.'), error);
   }
 }
 
@@ -355,6 +370,6 @@ export async function parseTenorUrl(url) {
       throw error;
     }
     logger.warn(`Tenor URL parse failed: ${error.message}`);
-    throw new NetworkError('failed to parse the tenor url.');
+    throw withCause(new NetworkError('failed to parse the tenor url.'), error);
   }
 }

@@ -3,7 +3,7 @@ import { promisify } from 'util';
 import fsSync from 'fs';
 import path from 'path';
 import { createLogger } from './logger.js';
-import { NetworkError, ValidationError } from './errors.js';
+import { NetworkError, ValidationError, withCause, describeCause } from './errors.js';
 import { trimVideo } from './video-processor/trim-video.js';
 import { DEFAULT_YTDLP_FORMAT } from './config.js';
 import { fromPath, tempDir, jobSignal } from './media-file.js';
@@ -50,6 +50,16 @@ export function getCookieArgs(url = null, signedIn = false) {
 /**
  * Custom error for yt-dlp rate limiting
  */
+// yt-dlp's own ERROR line, else the last thing it said.
+function ytdlpReason(output, code) {
+  const lines = output
+    .split('\n')
+    .map(line => line.trim())
+    .filter(Boolean);
+  const line = lines.findLast(l => l.startsWith('ERROR:')) ?? lines.at(-1);
+  return line ? line.slice(0, 300) : `exit ${code} with no output`;
+}
+
 export class YtdlpRateLimitError extends NetworkError {
   constructor(message, retryAfter = null) {
     super(message);
@@ -249,11 +259,18 @@ function executeYtdlp(
 
     const timeoutId = setTimeout(() => {
       ytdlp.kill('SIGKILL');
-      reject(new NetworkError('yt-dlp download timed out'));
+      reject(
+        withCause(
+          new NetworkError('yt-dlp download timed out'),
+          `yt-dlp: timed out after ${timeout / 1000}s`
+        )
+      );
     }, timeout);
 
     ytdlp.on('close', code => {
       clearTimeout(timeoutId);
+      const rejectWith = (error, detail) =>
+        reject(withCause(error, `yt-dlp: ${detail ?? ytdlpReason(stderr || stdout, code)}`));
 
       if (code === 0) {
         const combinedOutput = stdout + stderr;
@@ -262,7 +279,7 @@ function executeYtdlp(
         // max-filesize ... Aborting"), so this loud path catches the size cap. The quiet
         // --match-filter duration skip is handled by the no-output fallback further down.
         if (/larger than max-filesize/i.test(combinedOutput)) {
-          reject(new ValidationError(tooLargeMessage(maxSize)));
+          rejectWith(new ValidationError(tooLargeMessage(maxSize)));
           return;
         }
 
@@ -275,7 +292,7 @@ function executeYtdlp(
           /does not pass filter \(duration/.test(combinedOutput) ||
           combinedOutput.includes('Video is longer than')
         ) {
-          reject(
+          rejectWith(
             new ValidationError(
               `video duration exceeds the maximum allowed (${Math.floor(maxDuration / 60)} minutes).` +
                 TRIM_TIP
@@ -315,13 +332,18 @@ function executeYtdlp(
                 logger.error(
                   `yt-dlp produced a suspiciously small file (${stats.size} bytes), likely a failed segment download`
                 );
-                reject(new NetworkError('yt-dlp segment download failed: output file too small'));
+                rejectWith(
+                  new NetworkError('yt-dlp segment download failed: output file too small')
+                );
                 return;
               }
               logger.debug(`yt-dlp download complete: ${outputPath} (${stats.size} bytes)`);
               resolve(outputPath);
             } else {
-              reject(new NetworkError('yt-dlp output path is not a file'));
+              rejectWith(
+                new NetworkError('yt-dlp output path is not a file'),
+                'output path is not a file'
+              );
             }
           } catch (statError) {
             const files = fsSync.readdirSync(outputDir);
@@ -333,7 +355,9 @@ function executeYtdlp(
                 logger.error(
                   `yt-dlp produced a suspiciously small file (${fallbackStats.size} bytes), likely a failed segment download`
                 );
-                reject(new NetworkError('yt-dlp segment download failed: output file too small'));
+                rejectWith(
+                  new NetworkError('yt-dlp segment download failed: output file too small')
+                );
                 return;
               }
               logger.debug(
@@ -342,7 +366,10 @@ function executeYtdlp(
               resolve(actualPath);
             } else {
               logger.error(`yt-dlp output file not found at ${outputPath}: ${statError.message}`);
-              reject(new NetworkError('the download failed. the content may be unavailable.'));
+              rejectWith(
+                new NetworkError('the download failed. the content may be unavailable.'),
+                `exit 0 but no output file at ${outputPath}: ${statError.message}`
+              );
             }
           }
         } else {
@@ -356,7 +383,9 @@ function executeYtdlp(
                 logger.error(
                   `yt-dlp produced a suspiciously small file (${fallbackStats.size} bytes), likely a failed segment download`
                 );
-                reject(new NetworkError('yt-dlp segment download failed: output file too small'));
+                rejectWith(
+                  new NetworkError('yt-dlp segment download failed: output file too small')
+                );
                 return;
               }
               logger.debug(
@@ -367,21 +396,27 @@ function executeYtdlp(
               // No files in output directory after successful exit - video was likely filtered out
               // This happens when --match-filter skips the video (--quiet may suppress the message)
               if (maxDuration !== Infinity && startTime === null && duration === null) {
-                reject(
+                rejectWith(
                   new ValidationError(
                     `video duration exceeds the maximum allowed (${Math.floor(maxDuration / 60)} minutes).` +
                       TRIM_TIP
                   )
                 );
               } else {
-                reject(new NetworkError('yt-dlp did not return output file path'));
+                rejectWith(
+                  new NetworkError('yt-dlp did not return output file path'),
+                  'exit 0 with an empty output dir'
+                );
               }
             }
           } catch (readError) {
             logger.error(
               `yt-dlp did not return output file path and could not read output directory: ${readError.message}`
             );
-            reject(new NetworkError('the download failed. the content may be unavailable.'));
+            rejectWith(
+              new NetworkError('the download failed. the content may be unavailable.'),
+              `exit 0 and the output dir is unreadable: ${readError.message}`
+            );
           }
         }
       } else {
@@ -389,53 +424,55 @@ function executeYtdlp(
         logger.error(`yt-dlp failed with code ${code}: ${errorOutput}`);
 
         if (errorOutput.includes('HTTP Error 429') || errorOutput.includes('Too Many Requests')) {
-          reject(
+          rejectWith(
             new YtdlpRateLimitError(
               `${siteLabel(url)} is rate limiting downloads right now, try again in a few minutes.`,
               5 * 60 * 1000
             )
           );
         } else if (/\[youtube:tab\] post: .*does not have a .* tab/.test(errorOutput)) {
-          reject(new ValidationError('youtube community posts are not supported.'));
+          rejectWith(new ValidationError('youtube community posts are not supported.'));
         } else if (
           errorOutput.includes('Video unavailable') ||
           errorOutput.includes('Private video')
         ) {
-          reject(new NetworkError('video is unavailable or private'));
+          rejectWith(new NetworkError('video is unavailable or private'));
         } else if (errorOutput.includes('Sign in to confirm your age')) {
-          reject(new NetworkError('video requires age verification'));
+          rejectWith(new NetworkError('video requires age verification'));
         } else if (/members-only|Join this channel to get access/i.test(errorOutput)) {
-          reject(new NetworkError('this video is members-only'));
+          rejectWith(new NetworkError('this video is members-only'));
         } else if (
           errorOutput.includes("Sign in to confirm you're not a bot") ||
           errorOutput.includes('Please sign in')
         ) {
-          reject(
+          rejectWith(
             new NetworkError(
               `${siteLabel(url)} is asking this server to sign in, this is usually temporary.`,
               'YTDLP_RETRYABLE'
             )
           );
         } else if (/Your IP address is blocked/i.test(errorOutput)) {
-          reject(
+          rejectWith(
             new NetworkError(`${siteLabel(url)} is blocking downloads from this server right now.`)
           );
         } else if (errorOutput.includes('Cannot parse data')) {
-          reject(new NetworkError(`${siteLabel(url)} changed its page and cannot be read yet.`));
+          rejectWith(
+            new NetworkError(`${siteLabel(url)} changed its page and cannot be read yet.`)
+          );
         } else if (errorOutput.includes('Unsupported URL')) {
-          reject(new ValidationError('this link is not a downloadable video page.'));
+          rejectWith(new ValidationError('this link is not a downloadable video page.'));
         } else if (errorOutput.includes('is not a valid URL')) {
-          reject(new ValidationError(`invalid ${siteLabel(url)} URL`));
+          rejectWith(new ValidationError(`invalid ${siteLabel(url)} URL`));
         } else if (errorOutput.includes('There is no video in this post')) {
           // Image-only posts (common on Instagram /p/ links). The post is perfectly fine ,
           // there is simply no video for yt-dlp to take, so neither the generic "may be
           // deleted or private" message nor a formats-related one describes what happened.
-          reject(new NetworkError('this post has no video in it.'));
+          rejectWith(new NetworkError('this post has no video in it.'));
         } else if (errorOutput.includes('No video formats found')) {
           // Instagram reports photo posts this way instead of the "There is no video in this
           // post" wording handled above, so a plain photo permalink reads to the user as a
           // bot failure. Every one of these seen in production was an instagram /p/ link.
-          reject(
+          rejectWith(
             new NetworkError(
               isInstagramPostUrl(url)
                 ? 'this post has no video in it.'
@@ -443,14 +480,14 @@ function executeYtdlp(
             )
           );
         } else if (/larger than max-filesize/i.test(errorOutput)) {
-          reject(new ValidationError(tooLargeMessage(maxSize)));
+          rejectWith(new ValidationError(tooLargeMessage(maxSize)));
         } else if (
           // Same care as the exit-0 path: only blame length when the duration filter is what
           // rejected the item, not on any filter message that happens to mention a skip.
           /does not pass filter \(duration/.test(errorOutput) ||
           errorOutput.includes('duration >')
         ) {
-          reject(
+          rejectWith(
             new ValidationError(
               `video duration exceeds the maximum allowed (${Math.floor(maxDuration / 60)} minutes).` +
                 TRIM_TIP
@@ -463,10 +500,10 @@ function executeYtdlp(
           errorOutput.includes('account is no longer available') ||
           /account .*(suspended|deactivated)/i.test(errorOutput)
         ) {
-          reject(new NetworkError('this post is unavailable or has been deleted'));
+          rejectWith(new NetworkError('this post is unavailable or has been deleted'));
         } else if (/DRM protected/i.test(errorOutput)) {
           // before the 'protected' check below, which is about protected X accounts
-          reject(
+          rejectWith(
             new ValidationError(
               "the site only streams this one encrypted (drm), so it can't be downloaded.",
               'DRM_PROTECTED'
@@ -479,10 +516,10 @@ function executeYtdlp(
           errorOutput.includes('login required') ||
           errorOutput.includes('Requested content is not available')
         ) {
-          reject(new NetworkError('this post is private and cannot be downloaded'));
+          rejectWith(new NetworkError('this post is private and cannot be downloaded'));
         } else {
           // Never surface raw yt-dlp stderr to users; full output is logged above.
-          reject(new NetworkError(GENERIC_FAILURE_MESSAGE));
+          rejectWith(new NetworkError(GENERIC_FAILURE_MESSAGE));
         }
       }
     });
@@ -493,7 +530,12 @@ function executeYtdlp(
         reject(new NetworkError('yt-dlp is not installed or not in PATH'));
       } else {
         logger.error(`yt-dlp process error: ${err.message}`);
-        reject(new NetworkError('the download failed. please try again later.'));
+        reject(
+          withCause(
+            new NetworkError('the download failed. please try again later.'),
+            `yt-dlp: could not run: ${err.message}`
+          )
+        );
       }
     });
   });
@@ -637,7 +679,10 @@ export async function getStreamInfo(url, timeout = 30000) {
 // Past the segment fallback, "output file too small" is a user-facing failure, not a control signal.
 function emptyDownloadError(error) {
   if (error?.message?.includes('output file too small')) {
-    throw new NetworkError('could not download this content, the link may not point to any media.');
+    throw withCause(
+      new NetworkError('could not download this content, the link may not point to any media.'),
+      error.cause ?? error
+    );
   }
   throw error;
 }
@@ -755,7 +800,7 @@ export async function downloadWithYtdlp(
     );
     return file;
   } catch (error) {
-    logger.error(`yt-dlp download failed: ${error.message}`);
+    logger.error(`yt-dlp download failed: ${describeCause(error.cause ?? error)}`);
     throw error;
   }
 }

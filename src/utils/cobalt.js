@@ -1,6 +1,6 @@
 import axios from 'axios';
 import { createLogger } from './logger.js';
-import { NetworkError, ValidationError } from './errors.js';
+import { NetworkError, ValidationError, withCause, describeCause } from './errors.js';
 import { fetchToFile, withExtension } from './media-file.js';
 import { detectFileType } from './storage.js';
 import { mapLimit, ITEM_FANOUT } from './map-limit.js';
@@ -348,7 +348,10 @@ async function callCobaltApi(apiUrl, url, retryCount = 0, maxRetries = 3) {
 
     logger.debug(`Cobalt API response status: ${response.status}`);
     if (response.status !== 200) {
-      throw new NetworkError(`cobalt api returned status ${response.status}`);
+      throw withCause(
+        new NetworkError(`cobalt api returned status ${response.status}`),
+        `cobalt: HTTP ${response.status}`
+      );
     }
 
     const data = response.data;
@@ -361,12 +364,13 @@ async function callCobaltApi(apiUrl, url, retryCount = 0, maxRetries = 3) {
       const data = error.response.data;
       logger.debug(`Cobalt answered ${status}: ${JSON.stringify(data)}`);
       const errorAnalysis = analyzeError(data, error);
+      const why = `cobalt: ${errorAnalysis.errorCode ?? `HTTP ${status} ${JSON.stringify(data ?? '').slice(0, 200)}`}`;
 
       // If content doesn't exist, don't retry
       if (errorAnalysis.isNotFound) {
         const notFoundMessage =
           errorAnalysis.userMessage || 'content not found, deleted, or unavailable';
-        throw new NetworkError(notFoundMessage);
+        throw withCause(new NetworkError(notFoundMessage), why);
       }
 
       if (errorAnalysis.isRateLimit && retryCount < maxRetries - 1) {
@@ -402,16 +406,25 @@ async function callCobaltApi(apiUrl, url, retryCount = 0, maxRetries = 3) {
         message = `Cobalt API error: ${status}`;
       }
 
-      throw new NetworkError(message);
+      throw withCause(new NetworkError(message), why);
     }
     if (error.code === 'ECONNABORTED') {
-      throw new NetworkError('cobalt api request timed out');
+      throw withCause(
+        new NetworkError('cobalt api request timed out'),
+        `cobalt: ${describeCause(error)}`
+      );
     }
     if (error.code === 'ECONNREFUSED') {
-      throw new NetworkError('cobalt service is not available');
+      throw withCause(
+        new NetworkError('cobalt service is not available'),
+        `cobalt: ${describeCause(error)}`
+      );
     }
-    logger.warn(`Cobalt API call failed: ${error.message}, code: ${error.code}`);
-    throw new NetworkError('failed to reach the download service. please try again later.');
+    logger.warn(`Cobalt API call failed: ${describeCause(error)}`);
+    throw withCause(
+      new NetworkError('failed to reach the download service. please try again later.'),
+      `cobalt: ${describeCause(error)}`
+    );
   }
 }
 
@@ -433,18 +446,33 @@ async function fetchCobaltFile(url, { accept, timeout, maxSize, what, failMessag
       { maxSize }
     );
     // cobalt's tunnel answers 200 with no body when its own fetch fails (seen on Bluesky HLS).
-    if (file.size === 0) throw new NetworkError('cobalt returned an empty file');
+    if (file.size === 0) {
+      throw withCause(
+        new NetworkError('cobalt returned an empty file'),
+        'cobalt: tunnel answered 200 with an empty body'
+      );
+    }
     const match = (file.headers['content-disposition'] || '').match(DISPOSITION_NAME);
     return { ...file, dispositionName: match?.[1]?.replace(/['"]/g, '') || null };
   } catch (error) {
     if (error.code === 'TOO_LARGE' || error.response?.status === 413) {
-      throw new ValidationError(`${what} is too large (max ${maxSize / (1024 * 1024)}mb)`);
+      throw new ValidationError(
+        `${what} is too large (max ${maxSize / (1024 * 1024)}mb)`,
+        undefined,
+        undefined,
+        { cause: error }
+      );
     }
     if (error instanceof NetworkError) throw error;
-    if (error.response?.status === 404) throw new NetworkError(`${what} not found at url`);
-    if (error.code === 'ECONNABORTED') throw new NetworkError(`${what} download timed out`);
-    logger.warn(`Cobalt ${what} download failed: ${error.message}`);
-    throw new NetworkError(failMessage ?? `${what} could not be downloaded`);
+    const why = `cobalt file: ${describeCause(error)}`;
+    if (error.response?.status === 404) {
+      throw withCause(new NetworkError(`${what} not found at url`), why);
+    }
+    if (error.code === 'ECONNABORTED') {
+      throw withCause(new NetworkError(`${what} download timed out`), why);
+    }
+    logger.warn(`Cobalt ${what} download failed: ${describeCause(error)}`);
+    throw withCause(new NetworkError(failMessage ?? `${what} could not be downloaded`), why);
   }
 }
 
@@ -495,7 +523,10 @@ async function downloadMediaFromPicker(pickerArray, maxSize = Infinity) {
   );
 
   if (mediaItems.length === 0) {
-    throw new NetworkError('no media files (photos or videos) found in picker response');
+    throw withCause(
+      new NetworkError('no media files (photos or videos) found in picker response'),
+      'cobalt: picker had no photo or video with a url'
+    );
   }
 
   logger.debug(
@@ -577,14 +608,20 @@ async function downloadFromCobalt(cobaltResponse, maxSize = Infinity, apiUrl = n
         videoUrl = replaceTunnelHostname(videoUrl, apiUrl);
       }
     } else {
-      throw new NetworkError('cobalt tunnel response missing url');
+      throw withCause(
+        new NetworkError('cobalt tunnel response missing url'),
+        'cobalt: tunnel response had no url'
+      );
     }
 
     if (cobaltResponse.filename) {
       filename = cobaltResponse.filename;
     }
   } else if (cobaltResponse.status === 'error') {
-    throw new NetworkError(cobaltResponse.text || 'cobalt api returned an error');
+    throw withCause(
+      new NetworkError(cobaltResponse.text || 'cobalt api returned an error'),
+      `cobalt: status error ${cobaltResponse.error?.code ?? cobaltResponse.text ?? ''}`.trim()
+    );
   } else {
     const possibleKeys = ['url', 'video', 'videoUrl', 'downloadUrl', 'directUrl'];
     for (const key of possibleKeys) {
@@ -600,7 +637,10 @@ async function downloadFromCobalt(cobaltResponse, maxSize = Infinity, apiUrl = n
   }
 
   if (!videoUrl) {
-    throw new NetworkError('cobalt api did not return a video url');
+    throw withCause(
+      new NetworkError('cobalt api did not return a video url'),
+      `cobalt: status ${cobaltResponse.status} with no url`
+    );
   }
 
   const file = await fetchCobaltFile(videoUrl, {
@@ -660,7 +700,10 @@ export async function getCobaltMediaUrls(apiUrl, url) {
   }
 
   if (cobaltResponse.status === 'error') {
-    throw new NetworkError(cobaltResponse.text || 'cobalt api returned an error');
+    throw withCause(
+      new NetworkError(cobaltResponse.text || 'cobalt api returned an error'),
+      `cobalt: status error ${cobaltResponse.error?.code ?? cobaltResponse.text ?? ''}`.trim()
+    );
   }
 
   return { urls: [], direct: false, response: cobaltResponse };

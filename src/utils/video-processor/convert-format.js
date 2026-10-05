@@ -1,7 +1,7 @@
 import { execFile } from 'child_process';
 import { promisify } from 'util';
 import { createLogger } from '../logger.js';
-import { ValidationError } from '../errors.js';
+import { ValidationError, withCause } from '../errors.js';
 import { FFMPEG_INPUT_GUARD } from './utils.js';
 import { OUTPUT_FORMATS } from '../output-formats.js';
 import { fromPath, tempPath } from '../media-file.js';
@@ -39,8 +39,14 @@ export async function convertToFormat(input, format, { startTime = null, duratio
     const stderr = String(error.stderr || error.message);
     logger.warn(`ffmpeg ${format} conversion failed: ${stderr.trim().slice(0, 500)}`);
     if (spec.kind === 'audio' && /does not contain any stream|matches no streams/i.test(stderr)) {
-      throw new ValidationError('that file has no audio to extract.');
+      throw withCause(
+        new ValidationError('that file has no audio to extract.'),
+        `ffmpeg: ${stderr.trim().slice(-300)}`
+      );
     }
-    throw new ValidationError(`could not convert that file to ${format}.`);
+    throw withCause(
+      new ValidationError(`could not convert that file to ${format}.`),
+      `ffmpeg: ${stderr.trim().slice(-300)}`
+    );
   }
 }

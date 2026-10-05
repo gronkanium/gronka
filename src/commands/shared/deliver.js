@@ -2,7 +2,7 @@ import path from 'path';
 import { AttachmentBuilder } from 'discord.js';
 import { createLogger } from '../../utils/logger.js';
 import { r2Config } from '../../utils/config.js';
-import { AppError } from '../../utils/errors.js';
+import { AppError, describeCause } from '../../utils/errors.js';
 import { safeInteractionEditReply } from '../../utils/interaction-helpers.js';
 import { succeed } from '../../utils/operations-tracker.js';
 import { detectFileType, resolveTtlHoursForSize } from '../../utils/storage.js';
@@ -32,7 +32,9 @@ export function deliveryError(interaction, partial = false) {
   }
   return new AppError(
     partial ? `only part of this post was sent. ${message}` : message,
-    'DISCORD_DELIVERY_FAILED'
+    'DISCORD_DELIVERY_FAILED',
+    500,
+    { cause: error ?? new Error('discord: the reply failed with no error recorded') }
   );
 }
 
@@ -62,7 +64,11 @@ export async function toR2(stored) {
   jobSignal()?.throwIfAborted();
   if (stored.url) return stored;
   if (!isR2Configured(r2Config)) {
-    throw new AppError('this file is too big to send on discord.', 'TOO_LARGE', 413);
+    throw new AppError('this file is too big to send on discord.', 'TOO_LARGE', 413, {
+      cause: new Error(
+        `r2 is not configured and the file is ${(stored.size / 1048576).toFixed(1)}MB`
+      ),
+    });
   }
   return { ...stored, url: await uploadMediaToR2(stored.type, stored.file, stored.ext, r2Config) };
 }
@@ -103,6 +109,8 @@ export async function deliverStored(interaction, stored, { name } = {}) {
   if (!canRecoverUpload(interaction)) {
     throw deliveryError(interaction);
   }
-  logger.warn('Discord attachment upload failed, falling back to R2');
+  logger.warn(
+    `Discord attachment upload failed (${describeCause(interaction.deliveryError)}), falling back to R2`
+  );
   await replyWithLink(interaction, (await toR2(stored)).url, ttlHours);
 }

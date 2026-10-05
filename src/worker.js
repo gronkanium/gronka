@@ -114,6 +114,11 @@ async function tellInterrupted(job) {
     error: 'interrupted: its worker stopped and it could not be retried',
     errorClass: 'interrupted',
     url: job.args?.url ?? null,
+    options: {
+      startTime: job.args?.startTime,
+      duration: job.args?.duration,
+      mp3: job.args?.galleryOptions?.audioOnly,
+    },
   });
   await queue.deleteJob(job.id).catch(warn(`Could not delete job ${job.id}`));
 }

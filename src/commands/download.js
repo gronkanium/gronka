@@ -225,7 +225,10 @@ export async function processDownload(
       commandSource,
       errorFallback:
         'could not download this content. it may be deleted, private, age-restricted, or unsupported.',
-      context: { originalUrl: url },
+      context: {
+        originalUrl: url,
+        commandOptions: { startTime, duration, mp3: galleryOptions.audioOnly },
+      },
     }
   );
 }

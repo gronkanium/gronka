@@ -73,5 +73,6 @@ export async function refuse(interaction, type, { message, detail, cause, reason
     errorClass: reason,
     url: context.originalUrl || context.url || null,
     cause,
+    options: context.commandOptions,
   });
 }

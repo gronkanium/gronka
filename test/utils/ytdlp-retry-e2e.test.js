@@ -87,6 +87,32 @@ if (!mocksSupported) {
   }
 
   describe('yt-dlp generic-failure retry', () => {
+    test('the failure keeps yt-dlp ERROR line as its cause', async () => {
+      const failing = child => {
+        child.stderr.emit(
+          'data',
+          Buffer.from(
+            '[instagram:story] x: Downloading\nERROR: [instagram:story] You need to log in\n'
+          )
+        );
+        child.emit('close', 1);
+      };
+      spawnCallLog = [];
+      spawnBehaviors = [failing, failing];
+      const error = await downloadWithYtdlp(
+        'https://youtu.be/needs-login',
+        Infinity,
+        null,
+        Infinity,
+        null,
+        null
+      ).catch(caught => caught);
+      assert.strictEqual(
+        error.cause.message,
+        'yt-dlp: ERROR: [instagram:story] You need to log in'
+      );
+    });
+
     test('retries once and succeeds when the first attempt hits the generic failure bucket', async () => {
       spawnCallLog = [];
       spawnBehaviors = [genericFailure, success];

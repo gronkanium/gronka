@@ -26,7 +26,7 @@ import {
   downloadFromInstagram,
 } from '../utils/instagram.js';
 import { getDisabledServiceLabel } from '../utils/download-services.js';
-import { ValidationError } from '../utils/errors.js';
+import { ValidationError, describeCause, rootCause } from '../utils/errors.js';
 import { BLOCKED_DESTINATION_MESSAGE, isPrivateHost } from '../utils/ssrf-guard.js';
 import {
   isDirectMediaUrl,
@@ -156,6 +156,10 @@ export async function acquireMedia(
   const trimming = startTime !== null || duration !== null;
   let cobaltResponse = null;
   const keep = response => (cobaltResponse = response);
+  // Every extractor tried and why it failed, in order; the final error carries it for recordFailure.
+  const trail = [];
+  const note = (step, error) => trail.push({ step, error: describeCause(rootCause(error)) });
+  const fail = error => Object.assign(error, { trail });
   // Reddit deprecated the unauthenticated .json endpoints in May 2026, so yt-dlp cannot read
   // a post at all. Resolve it before the source flags below are computed: most posts are
   // link-aggregator entries whose media lives on redgifs/imgur, and swapping url for that
@@ -186,7 +190,10 @@ export async function acquireMedia(
       if (redditError instanceof ValidationError || redditError.code === 'CONTENT_GONE') {
         throw redditError;
       }
-      logger.warn(`Reddit resolution failed, falling back to cobalt: ${redditError.message}`);
+      note('reddit post', redditError);
+      logger.warn(
+        `Reddit resolution failed, falling back to cobalt: ${describeCause(rootCause(redditError))}`
+      );
     }
   }
 
@@ -227,7 +234,10 @@ export async function acquireMedia(
         return { kind: 'urls', urls, url };
       }
     } catch (urlModeError) {
-      logger.warn(`URL-only mode failed, falling back to download: ${urlModeError.message}`);
+      note('cobalt url-only', urlModeError);
+      logger.warn(
+        `URL-only mode failed, falling back to download: ${describeCause(rootCause(urlModeError))}`
+      );
     }
   }
 
@@ -253,8 +263,9 @@ export async function acquireMedia(
           return { kind: 'urls', urls, url };
         }
       } catch (deliveryError) {
+        note('cobalt twitter delivery', deliveryError);
         logger.warn(
-          `Twitter delivery policy (${deliveryMode}) failed, downloading instead: ${deliveryError.message}`
+          `Twitter delivery policy (${deliveryMode}) failed, downloading instead: ${describeCause(rootCause(deliveryError))}`
         );
       }
     }
@@ -332,8 +343,11 @@ export async function acquireMedia(
     try {
       fileData = await extract();
     } catch (extractError) {
-      if (downloadMethod !== 'reddit') throw extractError;
-      logger.warn(`Reddit image fetch failed, falling back to cobalt: ${extractError.message}`);
+      note(sourceLabel, extractError);
+      if (downloadMethod !== 'reddit') throw fail(extractError);
+      logger.warn(
+        `Reddit image fetch failed, falling back to cobalt: ${describeCause(rootCause(extractError))}`
+      );
       downloadMethod = 'cobalt';
     }
   }
@@ -345,16 +359,23 @@ export async function acquireMedia(
       fileData = await downloadFromSocialMedia(COBALT_API_URL, url, maxSize, cobaltResponse).catch(
         async cobaltError => {
           if (!useInstagram) throw cobaltError;
-          logger.warn(`Cobalt failed for Instagram, trying the session: ${cobaltError.message}`);
+          note('cobalt', cobaltError);
+          logger.warn(
+            `Cobalt failed for Instagram, trying the session: ${describeCause(rootCause(cobaltError))}`
+          );
           try {
             return await downloadFromInstagram(url);
           } catch (instagramError) {
-            logger.warn(`Instagram session extractor failed: ${instagramError.message}`);
+            note('instagram session', instagramError);
+            logger.warn(
+              `Instagram session extractor failed: ${describeCause(rootCause(instagramError))}`
+            );
             throw cobaltError;
           }
         }
       );
     } catch (cobaltError) {
+      if (!useInstagram) note('cobalt', cobaltError);
       const fallbackSite = isTwitterXUrl(url)
         ? 'X/Twitter'
         : isTikTokUrl(url)
@@ -375,7 +396,8 @@ export async function acquireMedia(
             return urls;
           }
         } catch (directUrlError) {
-          logger.warn(`Direct URL fallback failed: ${directUrlError.message}`);
+          note('cobalt direct url', directUrlError);
+          logger.warn(`Direct URL fallback failed: ${describeCause(rootCause(directUrlError))}`);
         }
         return null;
       };
@@ -385,7 +407,7 @@ export async function acquireMedia(
         if (urls) {
           return { kind: 'urls', urls, url };
         }
-        throw cobaltError;
+        throw fail(cobaltError);
       }
 
       const track = await soundcloud;
@@ -399,7 +421,7 @@ export async function acquireMedia(
       }
 
       logger.warn(
-        `Cobalt failed for ${fallbackSite} URL, falling back to yt-dlp: ` + cobaltError.message
+        `Cobalt failed for ${fallbackSite} URL, falling back to yt-dlp: ${describeCause(rootCause(cobaltError))}`
       );
 
       try {
@@ -412,6 +434,7 @@ export async function acquireMedia(
           duration
         );
       } catch (ytdlpFallbackError) {
+        note('yt-dlp', ytdlpFallbackError);
         if (ytdlpFallbackError.code === 'DRM_PROTECTED' && isSoundCloudUrl(url)) {
           return {
             kind: 'file',
@@ -424,7 +447,7 @@ export async function acquireMedia(
         if (urls) {
           return { kind: 'urls', urls, url };
         }
-        throw ytdlpFallbackError;
+        throw fail(ytdlpFallbackError);
       }
 
       // yt-dlp already trimmed via --download-sections; mark the method so the

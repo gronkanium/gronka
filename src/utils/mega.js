@@ -2,7 +2,7 @@ import axios from 'axios';
 import crypto from 'crypto';
 import path from 'path';
 import { createLogger } from './logger.js';
-import { NetworkError, ValidationError } from './errors.js';
+import { NetworkError, ValidationError, withCause, describeCause } from './errors.js';
 import { sanitizeFilename } from './validation.js';
 import { ssrfGuardedRequest } from './ssrf-guard.js';
 import { writeStream } from './media-file.js';
@@ -88,14 +88,17 @@ export async function downloadFromMega(url, maxSize) {
     });
     info = Array.isArray(response.data) ? response.data[0] : response.data;
   } catch (error) {
-    logger.warn(`Mega API request failed: ${error.message}`);
-    throw new NetworkError('failed to reach mega, try again in a bit.');
+    logger.warn(`Mega API request failed: ${describeCause(error)}`);
+    throw withCause(new NetworkError('failed to reach mega, try again in a bit.'), error);
   }
   // Mega answers with a bare negative number for a missing (-9), taken-down (-16) or
   // over-quota (-17) file.
   if (typeof info === 'number' || !info?.g) {
     logger.warn(`Mega API error for ${id}: ${JSON.stringify(info)}`);
-    throw new ValidationError('this mega file is unavailable or has been taken down.');
+    throw withCause(
+      new ValidationError('this mega file is unavailable or has been taken down.'),
+      `mega: api answered ${typeof info === 'number' ? info : 'no download link'}`
+    );
   }
 
   const { n: name = 'file' } = decryptMegaAttributes(info.at, aesKey);
@@ -125,8 +128,11 @@ export async function downloadFromMega(url, maxSize) {
     if (error.code === 'TOO_LARGE') {
       throw new ValidationError(`file is too large (max ${maxSize / (1024 * 1024)}mb)`);
     }
-    logger.warn(`Mega file download failed: ${error.message}`);
-    throw new NetworkError('failed to download the mega file. it may be unavailable.');
+    logger.warn(`Mega file download failed: ${describeCause(error)}`);
+    throw withCause(
+      new NetworkError('failed to download the mega file. it may be unavailable.'),
+      error
+    );
   }
   return { ...file, contentType: MIME_BY_EXT[ext], filename: sanitizeFilename(name) };
 }

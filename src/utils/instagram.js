@@ -1,7 +1,7 @@
 import axios from 'axios';
 import { readSessionCookie } from './session-cookie.js';
 import { createLogger } from './logger.js';
-import { NetworkError, ValidationError } from './errors.js';
+import { NetworkError, ValidationError, withCause } from './errors.js';
 import { downloadFileFromUrl } from './file-downloader.js';
 import { ssrfGuardedRequest } from './ssrf-guard.js';
 import { normalizeHost } from './url-host.js';
@@ -197,8 +197,11 @@ export async function instagramGet(
     });
   } catch (error) {
     const status = error.response?.status;
+    const why = `instagram ${host}${apiPath.split('?')[0]} ${status ? `HTTP ${status}` : error.code || error.message}`;
     if (status === 400 || status === 404) {
-      throw new NetworkError(unavailableMessage(unavailable), 'CONTENT_GONE');
+      throw new NetworkError(unavailableMessage(unavailable), 'CONTENT_GONE', 500, {
+        cause: new Error(why),
+      });
     }
     // A dead session answers 401/403 on every post, so it reads as "everything is broken"
     // rather than "one post is missing". Say so in the log; the user still gets the curated
@@ -211,14 +214,13 @@ export async function instagramGet(
           status +
           '), the sessionid in the cookie file needs refreshing'
       );
-      throw new NetworkError('instagram rejected our session');
+      throw withCause(new NetworkError('instagram rejected our session'), why);
     }
     if (status === 429) {
-      throw new NetworkError('instagram is rate limiting downloads right now');
+      throw withCause(new NetworkError('instagram is rate limiting downloads right now'), why);
     }
-    const reason = status ? `HTTP ${status}` : error.code || error.message;
-    logger.warn(`Instagram ${host}${apiPath.split('?')[0]} failed (${reason})`);
-    throw new NetworkError('failed to reach instagram');
+    logger.warn(`${why} failed`);
+    throw withCause(new NetworkError('failed to reach instagram'), why);
   }
 
   wwwClaim = response.headers?.['x-ig-set-www-claim'] || wwwClaim;
@@ -231,7 +233,10 @@ function unavailableMessage(kind) {
     : 'this post is unavailable, it may be deleted or private';
 }
 
-const storyGone = () => new NetworkError(unavailableMessage('story'), 'CONTENT_GONE');
+const storyGone = reason =>
+  new NetworkError(unavailableMessage('story'), 'CONTENT_GONE', 500, {
+    cause: new Error(`instagram: ${reason}`),
+  });
 
 async function userIdFor(username, refererPath, cookie) {
   const query = `context=blended&query=${encodeURIComponent(username)}&include_reel=true&search_surface=web_top_search`;
@@ -245,7 +250,7 @@ async function userIdFor(username, refererPath, cookie) {
     entry => entry?.user?.username?.toLowerCase() === username.toLowerCase()
   );
   if (!match?.user?.pk) {
-    throw storyGone();
+    throw storyGone(`no user ${username} in the search results`);
   }
   return String(match.user.pk);
 }
@@ -277,7 +282,7 @@ async function fetchStoryItems({ highlightId, username, mediaId }, refererPath, 
     }
   }
   if (!highlightId && !username) {
-    throw storyGone();
+    throw storyGone(`story ${mediaId} not found and the link names no user or highlight`);
   }
   const reelId = highlightId
     ? `highlight:${highlightId}`
@@ -285,7 +290,7 @@ async function fetchStoryItems({ highlightId, username, mediaId }, refererPath, 
   const items = await reelItems(reelId, refererPath, cookie);
   const wanted = mediaId ? items.filter(item => String(item.pk) === mediaId) : items;
   if (wanted.length === 0) {
-    throw storyGone();
+    throw storyGone(`reel ${reelId} has ${items.length} item(s), none matching`);
   }
   return wanted.slice(0, MAX_HIGHLIGHT_ITEMS);
 }
@@ -320,7 +325,10 @@ export async function downloadFromInstagram(url) {
       )
     ).filter(Boolean);
     if (downloaded.length === 0) {
-      throw new ValidationError('no downloadable media found on this story');
+      throw withCause(
+        new ValidationError('no downloadable media found on this story'),
+        `instagram: ${items.length} story item(s), none with a downloadable url`
+      );
     }
     return downloaded.length === 1 ? downloaded[0] : downloaded;
   }
@@ -340,12 +348,18 @@ export async function downloadFromInstagram(url) {
 
   const media = data?.items?.[0];
   if (!media) {
-    throw new NetworkError('this post is unavailable, it may be deleted or private');
+    throw withCause(
+      new NetworkError('this post is unavailable, it may be deleted or private'),
+      `instagram: media ${mediaId} info had no items`
+    );
   }
 
   const mediaUrl = selectMediaUrl(media, imgIndex);
   if (!mediaUrl) {
-    throw new ValidationError('no downloadable media found on this post');
+    throw withCause(
+      new ValidationError('no downloadable media found on this post'),
+      `instagram: media ${mediaId} has no downloadable url`
+    );
   }
 
   const result = await downloadFileFromUrl(mediaUrl);

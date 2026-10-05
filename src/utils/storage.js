@@ -25,6 +25,7 @@ export async function initializeR2UsageCache() {
 
 export function detectFileType(extension, contentType = '', head = null) {
   const ext = extension.toLowerCase();
+  if (ext === '.zip') return 'archive';
 
   // Magic bytes beat both other signals: they describe the file we actually have, whereas the
   // extension and the content-type are both claims by the source. Some sources serve real GIFs

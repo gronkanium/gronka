@@ -1,6 +1,7 @@
 import { test, describe } from 'bun:test';
 import assert from 'node:assert';
-import { uploadBudgetMs } from '../../src/utils/r2-storage.js';
+import { uploadBudgetMs, uploadToR2 } from '../../src/utils/r2-storage.js';
+import { withJobDir, jobRemainingMs } from '../../src/utils/media-file.js';
 
 describe('uploadBudgetMs', () => {
   test('gives small uploads the floor rather than a few milliseconds', () => {
@@ -17,5 +18,35 @@ describe('uploadBudgetMs', () => {
   test('the observed 60MB stall would have been aborted', () => {
     // 60MB took 16m57s at ~60KB/s on the degraded route.
     assert.ok(uploadBudgetMs(60 * 1024 * 1024) < 17 * 60_000);
+  });
+});
+
+describe('R2 upload against the job deadline', () => {
+  const config = {
+    accountId: 'a',
+    accessKeyId: 'k',
+    secretAccessKey: 's',
+    bucketName: 'b',
+    publicDomain: 'cdn.test',
+  };
+
+  test('refuses up front when the job has less time left than the upload budget', async () => {
+    const started = Date.now();
+    await withJobDir(
+      async () => {
+        assert.ok(jobRemainingMs() < 60_000);
+        await assert.rejects(
+          uploadToR2({ path: '/nonexistent', size: 1024 }, 'k', 'video/mp4', config),
+          error => error.name === 'NetworkError' && /not enough time left/.test(error.message)
+        );
+      },
+      { deadline: Date.now() + 5_000 }
+    );
+    assert.ok(Date.now() - started < 2_000);
+  });
+
+  test('a job without a deadline has unlimited time', async () => {
+    assert.strictEqual(jobRemainingMs(), Infinity);
+    await withJobDir(async () => assert.strictEqual(jobRemainingMs(), Infinity));
   });
 });

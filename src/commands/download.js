@@ -1,4 +1,4 @@
-import { MessageFlags, AttachmentBuilder } from 'discord.js';
+import { MessageFlags } from 'discord.js';
 import { createLogger } from '../utils/logger.js';
 import { botConfig, r2Config } from '../utils/config.js';
 import { validateUrl, firstUrlIn } from '../utils/validation.js';
@@ -19,22 +19,20 @@ import { isThreadsUrl } from '../utils/threads.js';
 import { keylessMegaFileId } from '../utils/mega.js';
 import { promptForMegaKey } from './mega-key.js';
 import { getDisabledServiceLabel } from '../utils/download-services.js';
-import { AppError, ValidationError } from '../utils/errors.js';
+import { ValidationError } from '../utils/errors.js';
 import { batchAttachmentsForDelivery } from '../utils/attachment-helpers.js';
 import { isDirectMediaUrl } from '../utils/file-downloader.js';
 import { resolveTtlHoursForSize } from '../utils/storage.js';
-import {
-  uploadMediaToR2,
-  isR2Configured,
-  formatR2UrlWithDisclaimer,
-  formatMultipleR2UrlsWithDisclaimer,
-} from '../utils/r2-storage.js';
+import { isR2Configured, formatMultipleR2UrlsWithDisclaimer } from '../utils/r2-storage.js';
 import {
   storeMedia,
   attachmentFor,
   deliverStored,
   deliverReply,
   finishCommand,
+  toR2,
+  deliveryError,
+  canRecoverUpload,
 } from './shared/deliver.js';
 import { runMediaCommand } from './shared/run-media-command.js';
 import { acquireMedia, extractAudio } from '../core/acquire-media.js';
@@ -79,19 +77,16 @@ async function replyWithDirectMediaUrls(interaction, ctx, { urls }) {
 }
 
 async function deliverArchive(interaction, ctx, fileData, attachmentLimit) {
-  if (fitsDiscordAttachment(fileData.size, attachmentLimit)) {
-    await deliverReply(interaction, {
-      files: [new AttachmentBuilder(fileData.path, { name: fileData.filename })],
-    });
-  } else if (isR2Configured(r2Config)) {
-    const url = await uploadMediaToR2('archive', fileData, '.zip', r2Config);
-    const ttlHours = await resolveTtlHoursForSize(fileData.size);
-    await deliverReply(interaction, {
-      content: formatR2UrlWithDisclaimer(url, r2Config, ttlHours),
-    });
-  } else {
+  if (!fitsDiscordAttachment(fileData.size, attachmentLimit) && !isR2Configured(r2Config)) {
     throw new ValidationError('this ZIP is too large to attach to Discord');
   }
+  await deliverStored(
+    interaction,
+    await storeMedia(fileData, attachmentLimit, { defaultExt: '.zip' }),
+    {
+      name: fileData.filename,
+    }
+  );
   await finishCommand();
 }
 
@@ -102,7 +97,7 @@ async function deliverGallery(interaction, ctx, fileData, attachmentLimit) {
   );
   const attached = stored.filter(item => item.fits);
   const linked = stored.filter(item => !item.fits);
-  const batches = batchAttachmentsForDelivery(attached.map(attachmentFor));
+  const batches = batchAttachmentsForDelivery(attached);
   const ttlHours = linked.length
     ? await resolveTtlHoursForSize(Math.max(...linked.map(item => item.size)))
     : null;
@@ -114,20 +109,50 @@ async function deliverGallery(interaction, ctx, fileData, attachmentLimit) {
 
   // A false from the send helpers is a failed delivery, never a success.
   const firstMessage = await safeInteractionEditReply(interaction, {
-    files: batches[0],
+    files: batches[0]?.map(item => attachmentFor(item, attached.indexOf(item))),
     content: content || undefined,
   });
   if (firstMessage === false) {
-    throw new AppError('could not deliver the files to discord. please try again.');
+    if (!batches[0]?.length || !canRecoverUpload(interaction)) throw deliveryError(interaction);
+    await deliverGalleryLinks(interaction, [...batches[0], ...linked]);
   }
   for (const batch of batches.slice(1)) {
-    const message = await safeInteractionFollowUp(interaction, { files: batch });
+    const message = await safeInteractionFollowUp(interaction, {
+      files: batch.map(item => attachmentFor(item, attached.indexOf(item))),
+    });
     if (message === false) {
-      throw new AppError('only part of this post could be delivered to discord. please try again.');
+      if (!canRecoverUpload(interaction)) throw deliveryError(interaction, true);
+      await deliverGalleryLinks(interaction, batch, true);
     }
   }
 
   await finishCommand();
+}
+
+async function deliverGalleryLinks(interaction, items, followUp = false) {
+  const linked = await mapLimit(items, ITEM_FANOUT, toR2);
+  const ttlHours = await resolveTtlHoursForSize(Math.max(...items.map(item => item.size)));
+  const chunks = [];
+  let urls = [];
+  for (const item of linked) {
+    const next = [...urls, item.url];
+    if (urls.length && formatMultipleR2UrlsWithDisclaimer(next, r2Config, ttlHours).length > 2000) {
+      chunks.push(urls);
+      urls = [];
+    }
+    urls.push(item.url);
+  }
+  chunks.push(urls);
+  for (const chunk of chunks) {
+    const payload = { content: formatMultipleR2UrlsWithDisclaimer(chunk, r2Config, ttlHours) };
+    if (followUp) {
+      if ((await safeInteractionFollowUp(interaction, payload)) === false)
+        throw deliveryError(interaction, true);
+    } else {
+      await deliverReply(interaction, payload);
+      followUp = true;
+    }
+  }
 }
 
 async function deliverSingle(interaction, ctx, item, attachmentLimit) {

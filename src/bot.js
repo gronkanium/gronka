@@ -4,6 +4,7 @@ import rateLimit from 'express-rate-limit';
 import { createLogger } from './utils/logger.js';
 import { botConfig, serverConfig } from './utils/config.js';
 import { ConfigurationError } from './utils/errors.js';
+import { DISCORD_REST_TIMEOUT_MS } from './utils/interaction-helpers.js';
 import { startRetentionJob, stopRetentionJob } from './utils/retention.js';
 import {
   handleDownloadCommand,
@@ -60,6 +61,7 @@ const client = new Client({
     GatewayIntentBits.DirectMessages, // Required for DM support
   ],
   partials: [Partials.Channel], // Required to receive MessageCreate in DMs (prefix commands)
+  rest: { timeout: DISCORD_REST_TIMEOUT_MS },
 });
 
 let botStartTime = null;

@@ -110,22 +110,34 @@ describe('instagram story urls', () => {
       parseStoryUrl(
         'https://www.instagram.com/stories/some.user/3884905143972195700/?utm_source=ig'
       ),
-      { highlightId: null, mediaId: '3884905143972195700' }
+      { highlightId: null, username: 'some.user', mediaId: '3884905143972195700' }
     );
     assert.deepStrictEqual(parseStoryUrl('https://www.instagram.com/stories/highlights/1796/'), {
       highlightId: '1796',
+      username: null,
       mediaId: null,
     });
     assert.deepStrictEqual(
       parseStoryUrl(
         `${highlightShare('17966681567900583')}?story_media_id=3884905143972195700&stkn=x`
       ),
-      { highlightId: '17966681567900583', mediaId: '3884905143972195700' }
+      {
+        highlightId: '17966681567900583',
+        username: null,
+        mediaId: '3884905143972195700',
+      }
     );
     assert.deepStrictEqual(parseStoryUrl(highlightShare('17966681567900583')), {
       highlightId: '17966681567900583',
+      username: null,
       mediaId: null,
     });
+    assert.deepStrictEqual(parseStoryUrl('https://www.instagram.com/stories/someuser/'), {
+      highlightId: null,
+      username: 'someuser',
+      mediaId: null,
+    });
+    assert.strictEqual(parseStoryUrl('https://www.instagram.com/stories/highlights/'), null);
   });
 
   test('parseStoryUrl rejects other /s/ links, profiles, posts and lookalike hosts', () => {
@@ -133,7 +145,6 @@ describe('instagram story urls', () => {
       isInstagramStoryUrl('https://www.instagram.com/s/bm90IGEgaGlnaGxpZ2h0'),
       false
     );
-    assert.strictEqual(isInstagramStoryUrl('https://www.instagram.com/stories/someuser/'), false);
     assert.strictEqual(isInstagramStoryUrl('https://www.instagram.com/p/DbzojBsOC6p/'), false);
     assert.strictEqual(isInstagramStoryUrl('https://instagram.com.evil.com/stories/u/123/'), false);
     assert.strictEqual(isInstagramStoryUrl('not a url'), false);
@@ -253,6 +264,70 @@ describe('downloadFromInstagram stories', () => {
     await assert.rejects(
       downloadFromInstagram('https://www.instagram.com/stories/highlights/1796/'),
       /this story is unavailable/
+    );
+  });
+
+  const search = { users: [{ user: { pk: '77', username: 'SomeUser' } }] };
+
+  test('a bare user stories link resolves the user id and downloads the whole reel', async () => {
+    const calls = stubApi({
+      topsearch: search,
+      'reels_media/?reel_ids=77': {
+        reels: {
+          77: {
+            items: [
+              item('1', 'https://scontent.cdninstagram.com/a.mp4'),
+              item('2', 'https://scontent.cdninstagram.com/b.mp4'),
+            ],
+          },
+        },
+      },
+    });
+    const result = await downloadFromInstagram('https://www.instagram.com/stories/someuser/');
+    assert.strictEqual(result.length, 2);
+    assert.ok(calls.some(c => c.startsWith('https://i.instagram.com/api/v1/feed/reels_media')));
+  });
+
+  test('a story id that media-info rejects falls back to that item in the user reel', async () => {
+    stubApi({
+      '/media/9/info/': httpError(400),
+      topsearch: search,
+      reels_media: {
+        reels_media: [
+          {
+            items: [
+              item('8', 'https://scontent.cdninstagram.com/x.mp4'),
+              item('9', 'https://scontent.cdninstagram.com/y.mp4'),
+            ],
+          },
+        ],
+      },
+    });
+    const result = await downloadFromInstagram('https://www.instagram.com/stories/someuser/9/');
+    assert.ok(!Array.isArray(result));
+  });
+
+  test('a user with no live story is CONTENT_GONE', async () => {
+    stubApi({ topsearch: search, reels_media: { reels: {}, status: 'ok' } });
+    await assert.rejects(
+      downloadFromInstagram('https://www.instagram.com/stories/someuser/'),
+      error => error.code === 'CONTENT_GONE' && /this story is unavailable/.test(error.message)
+    );
+  });
+
+  test('an unknown username is CONTENT_GONE', async () => {
+    stubApi({ topsearch: { users: [{ user: { pk: '5', username: 'other' } }] } });
+    await assert.rejects(
+      downloadFromInstagram('https://www.instagram.com/stories/someuser/'),
+      error => error.code === 'CONTENT_GONE'
+    );
+  });
+
+  test('an Instagram 500 logs the endpoint and status and stays a network error', async () => {
+    stubApi({ topsearch: httpError(500) });
+    await assert.rejects(
+      downloadFromInstagram('https://www.instagram.com/stories/someuser/'),
+      /failed to reach instagram/
     );
   });
 });

@@ -41,8 +41,10 @@ const USER_AGENT =
   'Chrome/153.0.0.0 Safari/537.36';
 const SEC_CH_UA = '"Chromium";v="153", "Not_A Brand";v="8"';
 
-// /stories/<user>/<mediaId>, /stories/highlights/<id>, and the share sheet's /s/<base64 highlight:<id>>.
-const STORY_PATH = /^\/stories\/(?:highlights\/(\d+)|[^/]+\/(\d+))/;
+// /stories/<user>/[<mediaId>], /stories/highlights/<id>, and the share sheet's /s/<base64 highlight:<id>>.
+const STORY_PATH = /^\/stories\/(?:highlights\/(\d+)|(?!highlights(?:\/|$))([^/]+)(?:\/(\d+))?)/;
+// Reel feeds and username search answer on the web host only some of the time; i. is what yt-dlp uses.
+const REELS_HOST = 'i.instagram.com';
 const SHARE_PATH = /^\/s\/([A-Za-z0-9_-]+)/;
 const MAX_HIGHLIGHT_ITEMS = 10;
 
@@ -51,7 +53,7 @@ function isInstagramHost(hostname) {
   return host === 'instagram.com' || host.endsWith('.instagram.com');
 }
 
-/** {highlightId, mediaId} for a story or highlight link (either may be null), else null. */
+/** {highlightId, username, mediaId} for a story or highlight link (each may be null), else null. */
 export function parseStoryUrl(url) {
   try {
     const { hostname, pathname, searchParams } = new URL(url);
@@ -60,7 +62,11 @@ export function parseStoryUrl(url) {
     }
     const story = pathname.match(STORY_PATH);
     if (story) {
-      return { highlightId: story[1] ?? null, mediaId: story[2] ?? null };
+      return {
+        highlightId: story[1] ?? null,
+        username: story[2] ?? null,
+        mediaId: story[3] ?? null,
+      };
     }
     const share = pathname.match(SHARE_PATH);
     const decoded = share && Buffer.from(share[1], 'base64url').toString('utf8');
@@ -69,7 +75,7 @@ export function parseStoryUrl(url) {
       return null;
     }
     const mediaId = searchParams.get('story_media_id');
-    return { highlightId, mediaId: /^\d+$/.test(mediaId ?? '') ? mediaId : null };
+    return { highlightId, username: null, mediaId: /^\d+$/.test(mediaId ?? '') ? mediaId : null };
   } catch {
     return null;
   }
@@ -154,10 +160,16 @@ export function selectMediaUrl(media, imgIndex = null) {
   return isMediaHostUrl(image) ? image : null;
 }
 
-export async function instagramGet(apiPath, refererPath, cookie, unavailable = 'post') {
+export async function instagramGet(
+  apiPath,
+  refererPath,
+  cookie,
+  unavailable = 'post',
+  host = 'www.instagram.com'
+) {
   let response;
   try {
-    response = await axios.get(`https://www.instagram.com${apiPath}`, {
+    response = await axios.get(`https://${host}${apiPath}`, {
       ...ssrfGuardedRequest(),
       responseType: 'json',
       timeout: API_TIMEOUT_MS,
@@ -204,7 +216,8 @@ export async function instagramGet(apiPath, refererPath, cookie, unavailable = '
     if (status === 429) {
       throw new NetworkError('instagram is rate limiting downloads right now');
     }
-    logger.warn(`Instagram request failed: ${error.message}`);
+    const reason = status ? `HTTP ${status}` : error.code || error.message;
+    logger.warn(`Instagram ${host}${apiPath.split('?')[0]} failed (${reason})`);
     throw new NetworkError('failed to reach instagram');
   }
 
@@ -218,7 +231,37 @@ function unavailableMessage(kind) {
     : 'this post is unavailable, it may be deleted or private';
 }
 
-async function fetchStoryItems({ highlightId, mediaId }, refererPath, cookie) {
+const storyGone = () => new NetworkError(unavailableMessage('story'), 'CONTENT_GONE');
+
+async function userIdFor(username, refererPath, cookie) {
+  const query = `context=blended&query=${encodeURIComponent(username)}&include_reel=true&search_surface=web_top_search`;
+  const data = await instagramGet(
+    `/api/v1/web/search/topsearch/?${query}`,
+    refererPath,
+    cookie,
+    'story'
+  );
+  const match = data?.users?.find(
+    entry => entry?.user?.username?.toLowerCase() === username.toLowerCase()
+  );
+  if (!match?.user?.pk) {
+    throw storyGone();
+  }
+  return String(match.user.pk);
+}
+
+async function reelItems(reelId, refererPath, cookie) {
+  const data = await instagramGet(
+    `/api/v1/feed/reels_media/?reel_ids=${encodeURIComponent(reelId)}`,
+    refererPath,
+    cookie,
+    'story',
+    REELS_HOST
+  );
+  return data?.reels?.[reelId]?.items ?? data?.reels_media?.[0]?.items ?? [];
+}
+
+async function fetchStoryItems({ highlightId, username, mediaId }, refererPath, cookie) {
   if (mediaId) {
     try {
       const item = (
@@ -228,24 +271,21 @@ async function fetchStoryItems({ highlightId, mediaId }, refererPath, cookie) {
         return [item];
       }
     } catch (error) {
-      if (!highlightId) {
+      if (!highlightId && !username) {
         throw error;
       }
     }
   }
-  if (!highlightId) {
-    throw new NetworkError(unavailableMessage('story'));
+  if (!highlightId && !username) {
+    throw storyGone();
   }
-  const data = await instagramGet(
-    `/api/v1/feed/reels_media/?reel_ids=highlight%3A${highlightId}`,
-    refererPath,
-    cookie,
-    'story'
-  );
-  const items = data?.reels_media?.[0]?.items ?? [];
+  const reelId = highlightId
+    ? `highlight:${highlightId}`
+    : await userIdFor(username, refererPath, cookie);
+  const items = await reelItems(reelId, refererPath, cookie);
   const wanted = mediaId ? items.filter(item => String(item.pk) === mediaId) : items;
   if (wanted.length === 0) {
-    throw new NetworkError(unavailableMessage('story'));
+    throw storyGone();
   }
   return wanted.slice(0, MAX_HIGHLIGHT_ITEMS);
 }

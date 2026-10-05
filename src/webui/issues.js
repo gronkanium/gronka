@@ -56,13 +56,14 @@ function classify(classes, text) {
   };
 }
 
-export function groupIssues(byReason = []) {
+export function groupIssues(byReason = [], by = 'error') {
   const groups = new Map();
   for (const r of byReason) {
     if (!r.reason) continue;
-    const key = keyOf(r.reason);
+    const key = (by === 'cause' ? 'cause~' : '') + keyOf(r.reason);
     const g = groups.get(key) ?? {
       key,
+      by,
       members: [],
       count: 0,
       lastSeen: 0,
@@ -137,4 +138,25 @@ export function abbr(n) {
   if (n < 1e4) return `${(n / 1e3).toFixed(1).replace(/\.0$/, '')}k`;
   if (n < 1e6) return `${Math.round(n / 1e3)}k`;
   return `${(n / 1e6).toFixed(1).replace(/\.0$/, '')}M`;
+}
+
+const text = v => (typeof v === 'string' && v ? v : null);
+
+export function failureOf(alert) {
+  let m;
+  try {
+    m = JSON.parse(alert.metadata ?? 'null');
+  } catch {
+    // malformed row
+  }
+  m ??= {};
+  const url = text(m.url);
+  return {
+    url: url && /^https?:\/\//i.test(url) ? url : null,
+    source: text(m.source),
+    cause: text(m.cause),
+    ref: text(m.ref),
+    trail: Array.isArray(m.trail) ? m.trail.filter(t => t && (t.step || t.error)) : [],
+    options: m.options && typeof m.options === 'object' ? Object.entries(m.options) : [],
+  };
 }

@@ -31,6 +31,7 @@ export async function insertAlert(alert) {
 // fields worth filtering on have to be dug back out of it.
 const COMMAND_EXPR = "metadata::jsonb->>'command'";
 const REASON_EXPR = "NULLIF(metadata::jsonb->>'error', '')";
+const CAUSE_EXPR = "NULLIF(metadata::jsonb->>'cause', '')";
 // The error class, or an early refusal's reason code.
 const ERROR_CLASS_EXPR = "NULLIF(metadata::jsonb->>'errorClass', '')";
 
@@ -55,6 +56,8 @@ function buildAlertWhere(options = {}) {
   } else if (options.reason) {
     clause += ` AND ${REASON_EXPR} = ${bind(options.reason)}`;
   }
+
+  if (options.cause) clause += ` AND ${CAUSE_EXPR} = ${bind(options.cause)}`;
 
   if (options.startTime !== null && options.startTime !== undefined) {
     clause += ` AND timestamp >= ${bind(options.startTime)}`;
@@ -100,22 +103,22 @@ export async function getAlerts(options = {}) {
 export async function getAlertSummary(options = {}) {
   await ensurePostgresInitialized();
 
-  const empty = { total: 0, errors: 0, info: 0, warnings: 0, byCommand: [], byReason: [] };
+  const empty = {
+    total: 0,
+    errors: 0,
+    info: 0,
+    warnings: 0,
+    byCommand: [],
+    byReason: [],
+    byCause: [],
+  };
 
   const sql = getPostgresConnection();
 
   const { reasonLimit = 25 } = options;
   const { clause, params } = buildAlertWhere(options);
 
-  const [severityRows, reasonRows] = await Promise.all([
-    sql.unsafe(
-      `SELECT severity, ${COMMAND_EXPR} AS command, COUNT(*)::int AS count
-     FROM alerts ${clause}
-     GROUP BY 1, 2`,
-      params
-    ),
-    sql.unsafe(
-      `SELECT ${REASON_EXPR} AS reason,
+  const groupSql = expr => `SELECT ${expr} AS reason,
             COUNT(*)::int AS count,
             MAX(timestamp) AS last_seen,
             MIN(timestamp) AS first_seen,
@@ -125,12 +128,20 @@ export async function getAlertSummary(options = {}) {
      FROM alerts ${clause} AND severity = 'error'
      GROUP BY 1
      ORDER BY 2 DESC
-     LIMIT $${params.length + 1}`,
-      [...params, reasonLimit]
+     LIMIT $${params.length + 1}`;
+
+  const [severityRows, reasonRows, causeRows] = await Promise.all([
+    sql.unsafe(
+      `SELECT severity, ${COMMAND_EXPR} AS command, COUNT(*)::int AS count
+     FROM alerts ${clause}
+     GROUP BY 1, 2`,
+      params
     ),
+    sql.unsafe(groupSql(REASON_EXPR), [...params, reasonLimit]),
+    sql.unsafe(groupSql(CAUSE_EXPR), [...params, reasonLimit]),
   ]);
 
-  const summary = { ...empty, byCommand: [], byReason: [] };
+  const summary = { ...empty, byCommand: [], byReason: [], byCause: [] };
   const byCommand = new Map();
 
   for (const row of severityRows) {
@@ -154,7 +165,7 @@ export async function getAlertSummary(options = {}) {
   summary.byCommand = [...byCommand.values()].sort(
     (a, b) => b.errors - a.errors || b.total - a.total
   );
-  summary.byReason = reasonRows.map(row => ({
+  const shape = row => ({
     reason: row.reason,
     count: row.count,
     commands: row.commands ?? [],
@@ -162,7 +173,9 @@ export async function getAlertSummary(options = {}) {
     lastSeen: Number(row.last_seen),
     firstSeen: Number(row.first_seen),
     times: row.times.map(Number),
-  }));
+  });
+  summary.byReason = reasonRows.map(shape);
+  summary.byCause = causeRows.map(shape);
 
   return summary;
 }

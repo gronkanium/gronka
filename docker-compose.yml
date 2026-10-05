@@ -1,7 +1,7 @@
 x-logging: &logging
   driver: local
   options:
-    max-size: 5m
+    max-size: 50m
     max-file: '1'
     compress: 'false'
 

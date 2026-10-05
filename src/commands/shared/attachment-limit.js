@@ -7,6 +7,9 @@ export function getDiscordAttachmentLimit(interaction, fallback) {
   return Number.isFinite(limit) && limit >= 0 ? limit : fallback;
 }
 
+// Cloudflare 413s a whole multipart request near the limit; the file plus its form framing must fit.
+export const MULTIPART_HEADROOM = 64 * 1024;
+
 export function fitsDiscordAttachment(size, limit) {
-  return size <= limit;
+  return size + MULTIPART_HEADROOM <= limit;
 }

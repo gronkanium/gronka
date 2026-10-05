@@ -2,6 +2,9 @@ import { createLogger } from './logger.js';
 
 const logger = createLogger('interaction-helpers');
 
+// discord.js aborts any request at 15s by default, which cuts attachment uploads off on a slow route.
+export const DISCORD_REST_TIMEOUT_MS = 90_000;
+
 export async function safeInteractionReply(interaction, options) {
   if (interaction.replied || interaction.deferred) {
     logger.debug(`Interaction already responded to, cannot reply`);
@@ -24,6 +27,7 @@ export async function safeInteractionReply(interaction, options) {
 
 // Safely edit a Discord interaction reply, handling expired/already-acknowledged interactions
 export async function safeInteractionEditReply(interaction, options) {
+  interaction.deliveryError = null;
   if (!interaction.replied && !interaction.deferred) {
     logger.debug(`Interaction not yet responded to, cannot edit reply`);
     return false;
@@ -35,6 +39,7 @@ export async function safeInteractionEditReply(interaction, options) {
       const message = await interaction.editReply(options);
       return message;
     } catch (error) {
+      interaction.deliveryError = error;
       // Handle expired interactions (code 10062) or already acknowledged (code 40060) - no retry
       if (error.code === 10062 || error.code === 40060) {
         logger.debug(
@@ -46,7 +51,9 @@ export async function safeInteractionEditReply(interaction, options) {
       // Retry on socket/network errors (e.g. UND_ERR_SOCKET "other side closed")
       // Discord closes idle HTTP connections after ~15-30s; a retry opens a fresh connection
       if (
-        (error.code === 'UND_ERR_SOCKET' || error.code === 'UND_ERR_CONNECT_TIMEOUT') &&
+        ['UND_ERR_SOCKET', 'UND_ERR_CONNECT_TIMEOUT', 'ECONNRESET', 'ETIMEDOUT'].includes(
+          error.code ?? error.cause?.code
+        ) &&
         attempt < MAX_RETRIES
       ) {
         logger.warn(
@@ -66,6 +73,7 @@ export async function safeInteractionEditReply(interaction, options) {
 
 // Safely follow up on a Discord interaction, handling expired/already-acknowledged interactions
 export async function safeInteractionFollowUp(interaction, options) {
+  interaction.deliveryError = null;
   if (!interaction.replied && !interaction.deferred) {
     logger.debug(`Interaction not yet responded to, cannot follow up`);
     return false;
@@ -75,6 +83,7 @@ export async function safeInteractionFollowUp(interaction, options) {
     const message = await interaction.followUp(options);
     return message;
   } catch (error) {
+    interaction.deliveryError = error;
     // Handle expired interactions (code 10062) or already acknowledged (code 40060)
     if (error.code === 10062 || error.code === 40060) {
       logger.debug(

@@ -2,7 +2,7 @@ import { createLogger } from '../../utils/logger.js';
 import { trackRequest, requestOutcome } from '../../utils/operations-tracker.js';
 import { replyWithCuratedError } from './command-errors.js';
 import { recordFailure } from '../../utils/failures.js';
-import { withJobDir } from '../../utils/media-file.js';
+import { withJobDir, jobSignal } from '../../utils/media-file.js';
 import { ValidationError } from '../../utils/errors.js';
 
 const logger = createLogger('run-media-command');
@@ -23,7 +23,8 @@ async function runOperation(type, interaction, callback, options, context) {
       logger.warn(`${type} ended without a result`);
       await recordFailure(type, { error: 'ended without a result', errorClass: 'no_result', url });
     }
-  } catch (error) {
+  } catch (caught) {
+    const error = jobSignal()?.aborted ? jobSignal().reason : caught;
     if (error instanceof ValidationError) logger.warn(`${type} failed: ${error.message}`);
     else logger.error(`${type} failed:`, error);
     await replyWithCuratedError(

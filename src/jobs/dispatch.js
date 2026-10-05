@@ -1,7 +1,7 @@
 import { botConfig } from '../utils/config.js';
 import { createLogger } from '../utils/logger.js';
 import { enqueueJob } from '../utils/database/media-jobs-pg.js';
-import { replyTargetOf } from './reply-target.js';
+import { prepareReplyTarget } from './reply-target.js';
 import { runMediaJob } from './run-job.js';
 
 const logger = createLogger('jobs');
@@ -12,7 +12,7 @@ export async function dispatchMediaJob(interaction, kind, args) {
   if (!interaction.deferred && !interaction.replied) return;
   if (botConfig.mediaWorkers) {
     try {
-      const reply = replyTargetOf(interaction);
+      const reply = await prepareReplyTarget(interaction);
       await enqueueJob({ kind, args, reply });
       return;
     } catch (error) {

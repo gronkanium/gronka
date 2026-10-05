@@ -2,6 +2,7 @@ import { test, describe } from 'bun:test';
 import assert from 'node:assert';
 import { PermissionFlagsBits, PermissionsBitField } from 'discord.js';
 import {
+  MULTIPART_HEADROOM,
   fitsDiscordAttachment,
   getDiscordAttachmentLimit,
 } from '../../../src/commands/shared/attachment-limit.js';
@@ -28,8 +29,10 @@ describe('Discord attachment limits', () => {
     assert.strictEqual(getDiscordAttachmentLimit({ attachmentSizeLimit: 0 }, 8), 0);
   });
 
-  test('accepts a file exactly at the limit', () => {
-    assert.strictEqual(fitsDiscordAttachment(20, 20), true);
-    assert.strictEqual(fitsDiscordAttachment(20.1, 20), false);
+  test('leaves headroom for the multipart framing around the file', () => {
+    const limit = 10 * 1024 * 1024;
+    assert.strictEqual(fitsDiscordAttachment(limit - MULTIPART_HEADROOM, limit), true);
+    assert.strictEqual(fitsDiscordAttachment(limit - MULTIPART_HEADROOM + 1, limit), false);
+    assert.strictEqual(fitsDiscordAttachment(limit, limit), false);
   });
 });

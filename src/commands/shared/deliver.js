@@ -12,11 +12,40 @@ import {
   formatR2UrlWithDisclaimer,
 } from '../../utils/r2-storage.js';
 import { fitsDiscordAttachment } from './attachment-limit.js';
+import { jobSignal } from '../../utils/media-file.js';
 
 const logger = createLogger('deliver');
 
+export function deliveryError(interaction, partial = false) {
+  const error = interaction.deliveryError;
+  let message = 'discord could not receive the file right now. please try again shortly.';
+  if ([10015, 10062, 50027].includes(error?.code)) {
+    message = 'this took too long and the discord reply expired. please try a shorter clip.';
+  } else if ([50001, 50013].includes(error?.code)) {
+    message = 'i cannot send files in this channel. please check my channel permissions.';
+  } else if (error?.status === 413 || error?.code === 40005) {
+    message =
+      'discord rejected this upload as too large. please try a smaller file or shorter clip.';
+  } else if (error?.code === 10008) {
+    message =
+      'the reply message was deleted before the file could be sent. please run the command again.';
+  }
+  return new AppError(
+    partial ? `only part of this post was sent. ${message}` : message,
+    'DISCORD_DELIVERY_FAILED'
+  );
+}
+
+export function canRecoverUpload(interaction) {
+  return (
+    isR2Configured(r2Config) &&
+    ![10008, 10015, 10062, 50001, 50027].includes(interaction.deliveryError?.code)
+  );
+}
+
 // Says where a file will go: attached from its job dir when it fits, else a link on R2.
 export async function storeMedia(media, attachmentLimit, { defaultExt = '.mp4' } = {}) {
+  jobSignal()?.throwIfAborted();
   const ext = path.extname(media.filename ?? '').toLowerCase() || defaultExt;
   const stored = {
     ext,
@@ -30,6 +59,7 @@ export async function storeMedia(media, attachmentLimit, { defaultExt = '.mp4' }
 }
 
 export async function toR2(stored) {
+  jobSignal()?.throwIfAborted();
   if (stored.url) return stored;
   if (!isR2Configured(r2Config)) {
     throw new AppError('this file is too big to send on discord.', 'TOO_LARGE', 413);
@@ -48,9 +78,10 @@ export function finishCommand() {
 
 // The final reply of a command; a failed edit means the user got nothing, so the request failed.
 export async function deliverReply(interaction, payload) {
+  jobSignal()?.throwIfAborted();
   const message = await safeInteractionEditReply(interaction, payload);
   if (message === false) {
-    throw new AppError('could not deliver the file to discord. please try again.');
+    throw deliveryError(interaction);
   }
   return message;
 }
@@ -61,14 +92,17 @@ export async function replyWithLink(interaction, url, ttlHours) {
 }
 
 // Attaches the file when it fits, else links it; a rejected attachment falls back to an R2 link.
-export async function deliverStored(interaction, stored) {
+export async function deliverStored(interaction, stored, { name } = {}) {
+  jobSignal()?.throwIfAborted();
   const ttlHours = await resolveTtlHoursForSize(stored.size);
   if (!stored.fits) return replyWithLink(interaction, stored.url, ttlHours);
-  const message = await safeInteractionEditReply(interaction, { files: [attachmentFor(stored)] });
+  const attachment = attachmentFor(stored);
+  if (name) attachment.setName(name);
+  const message = await safeInteractionEditReply(interaction, { files: [attachment] });
   if (message !== false) return;
-  logger.warn('Discord attachment upload failed, falling back to R2');
-  if (!isR2Configured(r2Config)) {
-    throw new AppError('could not deliver the file to discord. please try again.');
+  if (!canRecoverUpload(interaction)) {
+    throw deliveryError(interaction);
   }
+  logger.warn('Discord attachment upload failed, falling back to R2');
   await replyWithLink(interaction, (await toR2(stored)).url, ttlHours);
 }

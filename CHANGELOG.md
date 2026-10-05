@@ -5,6 +5,21 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres (attempts) to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.2.0](https://github.com/gronkanium/gronka/compare/v3.1.1...v3.2.0) (2026-10-05)
+
+
+### Features
+
+* **failures:** record the link, real cause and extractor trail of every failure ([#135](https://github.com/gronkanium/gronka/issues/135)) ([85f67c6](https://github.com/gronkanium/gronka/commit/85f67c6243b09cebf8c1456ef806ec1bd205d47c))
+* **webui:** show failure link, cause, trail and options on Issues, group by cause ([#136](https://github.com/gronkanium/gronka/issues/136)) ([8282e55](https://github.com/gronkanium/gronka/commit/8282e556511f6c7d5119d621ded7162798ec1dec))
+
+
+### Bug Fixes
+
+* **download:** accept scheme-less links, resolve share.google, name youtube community posts ([#133](https://github.com/gronkanium/gronka/issues/133)) ([0148714](https://github.com/gronkanium/gronka/commit/0148714492531f0d31e356ee3610c81d474d00fc))
+* **instagram:** download stories from user links and log the real status ([#132](https://github.com/gronkanium/gronka/issues/132)) ([b474bb9](https://github.com/gronkanium/gronka/commit/b474bb9b7e95656177caa30274a0c1f26cb70b68))
+* recover failed Discord deliveries and stop uploads that cannot finish ([#131](https://github.com/gronkanium/gronka/issues/131)) ([cf917f8](https://github.com/gronkanium/gronka/commit/cf917f8c3ef30abe7a842bb0f84da68c1c802af8))
+
 ## [3.1.1](https://github.com/gronkanium/gronka/compare/v3.1.0...v3.1.1) (2026-10-03)
 
 

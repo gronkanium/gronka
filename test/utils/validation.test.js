@@ -198,6 +198,26 @@ describe('validation utilities', () => {
       );
     });
 
+    test('accepts links without a scheme, in brackets, markdown or with trailing punctuation', () => {
+      const cases = [
+        ['x.com/user/status/123', 'https://x.com/user/status/123'],
+        ['www.tiktok.com', 'https://www.tiktok.com'],
+        ['<https://example.com/a>', 'https://example.com/a'],
+        ['[watch](https://example.com/a)', 'https://example.com/a'],
+        ['see https://example.com/a.', 'https://example.com/a'],
+        ['https://en.wikipedia.org/wiki/A_(b)', 'https://en.wikipedia.org/wiki/A_(b)'],
+        ['share.google/AbC123', 'https://share.google/AbC123'],
+      ];
+      for (const [input, expected] of cases) {
+        assert.strictEqual(firstUrlIn(input), expected, input);
+      }
+    });
+
+    test('does not take file names or abbreviations for links', () => {
+      assert.strictEqual(firstUrlIn('e.g. this'), null);
+      assert.strictEqual(firstUrlIn('clip.mp4 please'), null);
+    });
+
     test('leaves a bare url alone and returns null when there is none', () => {
       assert.strictEqual(firstUrlIn('https://example.com/a'), 'https://example.com/a');
       assert.strictEqual(firstUrlIn('and'), null);

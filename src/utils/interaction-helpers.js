@@ -2,6 +2,9 @@ import { createLogger } from './logger.js';
 
 const logger = createLogger('interaction-helpers');
 
+// discord.js aborts any request at 15s by default, which cuts attachment uploads off on a slow route.
+export const DISCORD_REST_TIMEOUT_MS = 90_000;
+
 export async function safeInteractionReply(interaction, options) {
   if (interaction.replied || interaction.deferred) {
     logger.debug(`Interaction already responded to, cannot reply`);

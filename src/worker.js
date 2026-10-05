@@ -9,7 +9,7 @@ import { initDatabase } from './utils/database.js';
 import { recordFailure } from './utils/failures.js';
 import { countOutcome, flushCounts } from './utils/operations-tracker.js';
 import { AppError } from './utils/errors.js';
-import { safeInteractionEditReply } from './utils/interaction-helpers.js';
+import { safeInteractionEditReply, DISCORD_REST_TIMEOUT_MS } from './utils/interaction-helpers.js';
 import { JOBS_ROOT, sweepJobDirs } from './utils/media-file.js';
 import { runMediaJob } from './jobs/run-job.js';
 import { interactionFor } from './jobs/reply-target.js';
@@ -29,7 +29,10 @@ const INTERRUPTED = 'this was interrupted before it could finish. please try aga
 
 const client = new Client({
   intents: [],
-  ...(process.env.DISCORD_API_URL ? { rest: { api: process.env.DISCORD_API_URL } } : {}),
+  rest: {
+    timeout: DISCORD_REST_TIMEOUT_MS,
+    ...(process.env.DISCORD_API_URL ? { api: process.env.DISCORD_API_URL } : {}),
+  },
 });
 client.token = botConfig.discordToken;
 client.rest.setToken(botConfig.discordToken);
@@ -45,25 +48,25 @@ async function runJob(job) {
     queue.HEARTBEAT_MS
   );
   const controller = new AbortController();
-  const budget = Math.min(
-    JOB_TIME_LIMIT_MS,
-    (job.reply.expiresAt ?? Infinity) - Date.now() - 30_000
+  const budget = Math.max(
+    0,
+    Math.min(JOB_TIME_LIMIT_MS, (job.reply.expiresAt ?? Infinity) - Date.now() - 30_000)
   );
-  const timer = setTimeout(
-    () => {
-      logger.error(`Job ${job.id} (${job.kind}) hit the time limit`);
-      controller.abort(
-        new AppError(
-          'processing took too long. please try a smaller file or shorter clip.',
-          'JOB_TIMEOUT'
-        )
-      );
-    },
-    Math.max(0, budget)
-  );
+  const timer = setTimeout(() => {
+    logger.error(`Job ${job.id} (${job.kind}) hit the time limit`);
+    controller.abort(
+      new AppError(
+        'processing took too long. please try a smaller file or shorter clip.',
+        'JOB_TIMEOUT'
+      )
+    );
+  }, budget);
   try {
     const interaction = await interactionFor(client, job);
-    await runMediaJob(interaction, job, { signal: controller.signal });
+    await runMediaJob(interaction, job, {
+      signal: controller.signal,
+      deadline: Date.now() + budget,
+    });
   } catch (error) {
     logger.error(`Job ${job.id} crashed: ${error.message}`, error);
   } finally {

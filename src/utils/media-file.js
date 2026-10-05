@@ -34,11 +34,13 @@ async function newJobDir() {
 
 // Runs fn with a job dir that every file created inside it lands in; the dir goes when fn settles.
 // A signal cancels the job: every request and child process started inside it is aborted.
-export async function withJobDir(fn, { signal } = {}) {
+export async function withJobDir(fn, { signal, deadline } = {}) {
   if (scope.getStore()) return fn();
   const dir = await newJobDir();
   try {
-    return await scope.run({ dir, signal }, () => withLogRef(path.basename(dir).slice(4), fn));
+    return await scope.run({ dir, signal, deadline }, () =>
+      withLogRef(path.basename(dir).slice(4), fn)
+    );
   } finally {
     await fsp.rm(dir, { recursive: true, force: true });
   }
@@ -48,6 +50,11 @@ export async function withJobDir(fn, { signal } = {}) {
 export function jobSignal(extra) {
   const signals = [scope.getStore()?.signal, extra].filter(Boolean);
   return signals.length > 1 ? AbortSignal.any(signals) : signals[0];
+}
+
+export function jobRemainingMs() {
+  const deadline = scope.getStore()?.deadline;
+  return deadline ? deadline - Date.now() : Infinity;
 }
 
 // Every axios request made inside a cancellable job stops with it.

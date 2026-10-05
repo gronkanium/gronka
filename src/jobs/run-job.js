@@ -17,9 +17,9 @@ const RUNNERS = {
   optimize: (interaction, args) => runOptimizeJob(interaction, args),
 };
 
-export function runMediaJob(interaction, { kind, args }, { signal } = {}) {
+export function runMediaJob(interaction, { kind, args }, { signal, deadline } = {}) {
   const run = RUNNERS[kind];
   if (!run) throw new Error(`unknown media job kind: ${kind}`);
   // The input is fetched before runMediaCommand opens its dir, so the job owns one from the start.
-  return withJobDir(() => run(interaction, args), { signal });
+  return withJobDir(() => run(interaction, args), { signal, deadline });
 }

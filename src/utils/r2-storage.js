@@ -11,7 +11,7 @@ import { createLogger } from './logger.js';
 // A leaf DB module, not the ./database.js barrel: storage.js imports this file.
 import { getSetting } from './database/settings-pg.js';
 import { NetworkError, ValidationError } from './errors.js';
-import { jobSignal } from './media-file.js';
+import { jobSignal, jobRemainingMs } from './media-file.js';
 
 const logger = createLogger('r2-storage');
 
@@ -101,6 +101,13 @@ export async function uploadToR2(file, key, contentType, config, extraParams = {
     );
     logger.error(`Failed to upload to R2 (${key}):`, error.message);
     throw error;
+  }
+
+  if (jobRemainingMs() < uploadBudgetMs(file.size)) {
+    logger.warn(
+      `Skipping R2 upload of ${key}: ${Math.round(jobRemainingMs() / 1000)}s left in job`
+    );
+    throw new NetworkError('there was not enough time left to upload this file. please try again.');
   }
 
   try {

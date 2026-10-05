@@ -337,6 +337,32 @@ if (!mocksSupported) {
       assert.match(contents.at(-1), /discord reply expired/);
     });
 
+    test('a deleted reply message produces a specific error and does not upload to R2', async () => {
+      const { interaction } = downloadInteraction(
+        `https://x.com/user/status/multi-deleted-${Date.now()}`
+      );
+      const contents = [];
+      interaction.editReply = async payload => {
+        contents.push(payload.content);
+        throw Object.assign(new Error('Unknown Message'), { code: 10008 });
+      };
+      const before = uploads.length;
+      await handleDownloadCommand(interaction);
+      assert.strictEqual(uploads.length, before);
+      assert.match(contents.at(-1), /reply message was deleted/);
+    });
+
+    test('a single file just under the limit goes as a link, leaving room for the upload framing', async () => {
+      const { interaction, calls } = downloadInteraction(
+        `https://x.com/user/status/over-headroom-${Date.now()}`,
+        'e2e-dl-headroom'
+      );
+      interaction.attachmentSizeLimit = 4096 + 1024;
+      await handleDownloadCommand(interaction);
+      assert.strictEqual(calls.editReply[0].files, undefined);
+      assert.match(calls.editReply[0].content, /https:\/\/cdn\.test\//);
+    });
+
     test('single-file video: downloads, saves, and replies with a Discord attachment', async () => {
       const url = `https://x.com/user/status/single-${Date.now()}`;
       const { interaction, calls } = downloadInteraction(url, 'e2e-dl-single');
@@ -547,7 +573,7 @@ if (!mocksSupported) {
     test('gallery with one oversized item: small one attaches, big one becomes a link', async () => {
       const url = `https://x.com/user/status/multi-split-${Date.now()}`;
       const { interaction, calls } = downloadInteraction(url, 'e2e-dl-multisplit');
-      interaction.attachmentSizeLimit = 2500;
+      interaction.attachmentSizeLimit = 2048 + 64 * 1024 + 100;
 
       await handleDownloadCommand(interaction);
 

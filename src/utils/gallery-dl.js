@@ -2,7 +2,9 @@ import fs from 'fs/promises';
 import path from 'path';
 import { spawn } from 'child_process';
 import { createLogger } from './logger.js';
-import { NetworkError, ValidationError } from './errors.js';
+import { NetworkError, ValidationError, withCause } from './errors.js';
+
+const lastLine = text => text.trim().split('\n').at(-1)?.slice(0, 300) || 'no output';
 import { writeZip } from './archive.js';
 import { fromPath, tempDir, jobSignal } from './media-file.js';
 import { mapLimit, ITEM_FANOUT } from './map-limit.js';
@@ -68,7 +70,12 @@ function runGalleryDl(url, outputDir, timeout = 300000) {
     let stderr = '';
     const timeoutId = setTimeout(() => {
       child.kill('SIGKILL');
-      reject(new NetworkError('gallery download timed out'));
+      reject(
+        withCause(
+          new NetworkError('gallery download timed out'),
+          `gallery-dl: timed out after ${timeout / 1000}s`
+        )
+      );
     }, timeout);
 
     child.stderr.on('data', data => {
@@ -77,9 +84,12 @@ function runGalleryDl(url, outputDir, timeout = 300000) {
     child.on('error', error => {
       clearTimeout(timeoutId);
       reject(
-        error.code === 'ENOENT'
-          ? new NetworkError('gallery downloads are unavailable right now')
-          : new NetworkError('gallery download failed')
+        withCause(
+          error.code === 'ENOENT'
+            ? new NetworkError('gallery downloads are unavailable right now')
+            : new NetworkError('gallery download failed'),
+          `gallery-dl: could not run: ${error.message}`
+        )
       );
     });
     child.on('close', code => {
@@ -88,7 +98,12 @@ function runGalleryDl(url, outputDir, timeout = 300000) {
         resolve();
       } else {
         logger.warn(`gallery-dl exited with code ${code}: ${stderr.slice(0, 300)}`);
-        reject(new NetworkError('could not download this gallery'));
+        reject(
+          withCause(
+            new NetworkError('could not download this gallery'),
+            `gallery-dl: exit ${code}: ${lastLine(stderr)}`
+          )
+        );
       }
     });
   });
@@ -154,7 +169,12 @@ function runGalleryDlJson(url, timeout = 300000) {
     let stderr = '';
     const timeoutId = setTimeout(() => {
       child.kill('SIGTERM');
-      reject(new NetworkError('gallery discovery timed out'));
+      reject(
+        withCause(
+          new NetworkError('gallery discovery timed out'),
+          `gallery-dl: discovery timed out after ${timeout / 1000}s`
+        )
+      );
     }, timeout);
     child.stdout.on('data', chunk => {
       stdout += chunk;
@@ -164,13 +184,23 @@ function runGalleryDlJson(url, timeout = 300000) {
     });
     child.on('error', error => {
       clearTimeout(timeoutId);
-      reject(new NetworkError(`gallery discovery failed: ${error.message}`));
+      reject(
+        withCause(
+          new NetworkError(`gallery discovery failed: ${error.message}`),
+          `gallery-dl: could not run: ${error.message}`
+        )
+      );
     });
     child.on('close', code => {
       clearTimeout(timeoutId);
       if (code !== 0) {
         logger.warn(`gallery-dl discovery exited with code ${code}: ${stderr.slice(0, 300)}`);
-        reject(new NetworkError('could not inspect this manga'));
+        reject(
+          withCause(
+            new NetworkError('could not inspect this manga'),
+            `gallery-dl: discovery exit ${code}: ${lastLine(stderr)}`
+          )
+        );
         return;
       }
       try {

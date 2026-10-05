@@ -1,6 +1,6 @@
 import axios from 'axios';
 import { createLogger } from './logger.js';
-import { NetworkError, ValidationError } from './errors.js';
+import { NetworkError, ValidationError, withCause, describeCause } from './errors.js';
 import { getRequestHeaders } from './discord-cdn.js';
 import { downloadFileFromUrl } from './file-downloader.js';
 import { ssrfGuardedRequest, PAGE_FETCH_TIMEOUT_MS, MAX_PAGE_BYTES } from './ssrf-guard.js';
@@ -97,10 +97,10 @@ export async function downloadFromPinterest(url) {
     });
   } catch (error) {
     if (error.response?.status === 404 || error.response?.status === 410) {
-      throw new NetworkError('this pin is unavailable or has been deleted');
+      throw withCause(new NetworkError('this pin is unavailable or has been deleted'), error);
     }
-    logger.warn(`Failed to fetch Pinterest pin page: ${error.message}`);
-    throw new NetworkError('failed to fetch the pin page');
+    logger.warn(`Failed to fetch Pinterest pin page: ${describeCause(error)}`);
+    throw withCause(new NetworkError('failed to fetch the pin page'), error);
   }
 
   // A dead pin.it link is answered with a 200, not a 404: Pinterest redirects it to the
@@ -108,7 +108,10 @@ export async function downloadFromPinterest(url) {
   // is gone rather than the misleading "no downloadable media" below.
   const finalUrl = response.request?.res?.responseUrl || url;
   if (finalUrl.includes('show_error=true')) {
-    throw new NetworkError('this pin is unavailable or has been deleted');
+    throw withCause(
+      new NetworkError('this pin is unavailable or has been deleted'),
+      `pinterest: redirected to ${finalUrl.split('?')[0]} (dead link)`
+    );
   }
 
   const mediaUrl = extractMediaUrl(response.data);

@@ -1,6 +1,6 @@
 import axios from 'axios';
 import { createLogger } from './logger.js';
-import { NetworkError, ValidationError } from './errors.js';
+import { NetworkError, ValidationError, withCause } from './errors.js';
 import { downloadFileFromUrl } from './file-downloader.js';
 import { selectMediaUrl } from './instagram.js';
 import { ssrfGuardedRequest, PAGE_FETCH_TIMEOUT_MS, MAX_PAGE_BYTES } from './ssrf-guard.js';
@@ -87,16 +87,22 @@ export async function downloadFromThreads(url) {
     });
   } catch (error) {
     if (error.response?.status === 404) {
-      throw Object.assign(new NetworkError('this post is unavailable or has been deleted'), {
-        code: 'CONTENT_GONE',
-      });
+      throw withCause(
+        Object.assign(new NetworkError('this post is unavailable or has been deleted'), {
+          code: 'CONTENT_GONE',
+        }),
+        error
+      );
     }
-    throw new NetworkError(`failed to fetch the threads post (${error.message})`);
+    throw withCause(new NetworkError(`failed to fetch the threads post (${error.message})`), error);
   }
 
   const mediaUrls = extractThreadsMedia(response.data, code);
   if (mediaUrls === null) {
-    throw new NetworkError('threads did not return this post, it may be deleted or private');
+    throw withCause(
+      new NetworkError('threads did not return this post, it may be deleted or private'),
+      'threads: page had no post data'
+    );
   }
   if (mediaUrls.length === 0) {
     throw new ValidationError('this threads post has no photo or video to download');

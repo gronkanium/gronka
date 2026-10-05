@@ -1,7 +1,7 @@
 import axios from 'axios';
 import { readSessionCookie } from './session-cookie.js';
 import { createLogger } from './logger.js';
-import { NetworkError } from './errors.js';
+import { NetworkError, withCause, describeCause } from './errors.js';
 import { ssrfGuardedRequest } from './ssrf-guard.js';
 import { hostOf, normalizeHost } from './url-host.js';
 
@@ -105,7 +105,10 @@ async function fetchListing(url, limit = 100) {
   if (!cookie) {
     // Curated rather than internal: download.js only propagates a ValidationError out of the
     // resolver, and that is reserved for the disabled-source gate.
-    throw new NetworkError('reddit downloads are unavailable right now');
+    throw withCause(
+      new NetworkError('reddit downloads are unavailable right now'),
+      'reddit: no reddit_session cookie configured'
+    );
   }
 
   // raw_json=1 stops Reddit html-escaping the urls it hands back, signatures included.
@@ -124,20 +127,25 @@ async function fetchListing(url, limit = 100) {
     if (status === 404) {
       throw new NetworkError(
         'this post is unavailable, it may be deleted or private',
-        'CONTENT_GONE'
+        'CONTENT_GONE',
+        500,
+        { cause: error }
       );
     }
     if (status === 429) {
-      throw new NetworkError('reddit is rate limiting downloads right now, try again shortly.');
+      throw withCause(
+        new NetworkError('reddit is rate limiting downloads right now, try again shortly.'),
+        error
+      );
     }
     if (status === 401 || status === 403) {
       logger.error(
         `Reddit refused the session cookie (HTTP ${status}), the reddit_session in the cookie file needs refreshing`
       );
-      throw new NetworkError('reddit rejected our session');
+      throw withCause(new NetworkError('reddit rejected our session'), error);
     }
-    logger.warn(`Reddit API request failed: ${error.message}`);
-    throw new NetworkError('failed to reach reddit');
+    logger.warn(`Reddit API request failed: ${describeCause(error)}`);
+    throw withCause(new NetworkError('failed to reach reddit'), error);
   }
 }
 
@@ -236,7 +244,10 @@ function mediaOf(post, depth = 0) {
 export function selectRedditMedia(listing, url) {
   const post = listing?.[0]?.data?.children?.[0]?.data;
   if (!post) {
-    throw new NetworkError('this post is unavailable, it may be deleted or private');
+    throw withCause(
+      new NetworkError('this post is unavailable, it may be deleted or private'),
+      'reddit: listing had no post'
+    );
   }
 
   const commentId = commentIdFromUrl(url);

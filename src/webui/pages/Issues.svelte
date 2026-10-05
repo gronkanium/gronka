@@ -15,6 +15,7 @@
     inTab,
     buckets,
     abbr,
+    failureOf,
     KIND_LABEL,
   } from '../issues.js';
   import { formatRelativeTime, formatDateTime } from '../utils/format.js';
@@ -72,8 +73,11 @@
     reopen: { make: () => null, done: n => `Reopened${plural(n)}` },
   };
 
-  let groups = $state([]);
-  let variantCounts = $state({});
+  let summary = $state({ byReason: [], byCause: [] });
+  let by = $state('error');
+  const rows = $derived(by === 'cause' ? summary.byCause : summary.byReason);
+  const groups = $derived(groupIssues(rows, by));
+  const variantCounts = $derived(Object.fromEntries(rows.map(x => [x.reason, x.count])));
   let loaded = $state(false);
   let loadError = $state('');
   let now = $state(Date.now());
@@ -118,9 +122,7 @@
       loaded = true;
       return;
     }
-    const byReason = r.byReason ?? [];
-    groups = groupIssues(byReason);
-    variantCounts = Object.fromEntries(byReason.map(x => [x.reason, x.count]));
+    summary = { byReason: r.byReason ?? [], byCause: r.byCause ?? [] };
     loadError = '';
     if (error === 'Could not refresh') error = '';
     loaded = true;
@@ -148,7 +150,7 @@
   const alertsFor = (g, extra = '') =>
     Promise.all(
       g.members.map(reason =>
-        getJson(`/api/alerts?reason=${encodeURIComponent(reason)}&limit=${LIMIT}${extra}`)
+        getJson(`/api/alerts?${g.by}=${encodeURIComponent(reason)}&limit=${LIMIT}${extra}`)
           .then(d => d.alerts ?? [])
           .catch(() => null)
       )
@@ -298,14 +300,6 @@
       : []
   );
 
-  // Alerts carry their metadata as JSON text; a failure keeps only the site, never the link.
-  const sourceOf = a => {
-    try {
-      return JSON.parse(a.metadata ?? 'null')?.source ?? null;
-    } catch {
-      return null;
-    }
-  };
   const meta = g =>
     [
       g.commands.map(c => `/${c}`).join(', '),
@@ -553,6 +547,18 @@
                 ? `${visible.length} ${visible.length === 1 ? 'issue' : 'issues'}`
                 : ''}</span
             >
+            <div class="seg xs" role="group" aria-label="group by">
+              {#each [['error', 'Error'], ['cause', 'Cause']] as [g, label] (g)}
+                <button
+                  class:on={by === g}
+                  aria-pressed={by === g}
+                  title={g === 'error'
+                    ? 'Group by the message users see'
+                    : 'Group by the underlying cause'}
+                  onclick={() => (by = g)}>{label}</button
+                >
+              {/each}
+            </div>
             {#if show.trend}
               <div class="seg xs" role="group" aria-label="trend period">
                 {#each ['24h', '7d'] as p (p)}
@@ -717,12 +723,39 @@
         <section class="sect flush">
           <div class="sh"><span>Recent failures</span></div>
           {#each occ.slice(0, 8) as a (a.id)}
-            {@const source = sourceOf(a)}
+            {@const f = failureOf(a)}
             <div class="orow">
               <span class="t" title={formatDateTime(a.timestamp, { seconds: true })}
                 >{formatRelativeTime(a.timestamp)}</span
               >
-              <span class="mono ellipsis" class:dim={!source}>{source ?? 'attachment'}</span>
+              {#if f.url}
+                <a
+                  class="mono ellipsis"
+                  href={f.url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  title={f.url}>{f.url}</a
+                >
+              {:else}
+                <span class="mono ellipsis" class:dim={!f.source}>{f.source ?? 'attachment'}</span>
+              {/if}
+              {#if f.ref}<span class="mono dim ref">{f.ref}</span>{/if}
+              {#if f.cause}<div class="cause">{f.cause}</div>{/if}
+              {#if f.trail.length}
+                <ol class="trail">
+                  {#each f.trail as t, i (i)}
+                    <li>
+                      <b>{t.step ?? ''}</b>{#if t.error}
+                        <span>{t.error}</span>{/if}
+                    </li>
+                  {/each}
+                </ol>
+              {/if}
+              {#if f.options.length}
+                <div class="opts mono dim">
+                  {f.options.map(([k, v]) => `${k}=${v}`).join(' ')}
+                </div>
+              {/if}
             </div>
           {:else}
             {#if occLoading}
@@ -1130,13 +1163,32 @@
   }
   .orow {
     display: grid;
-    grid-template-columns: 64px minmax(0, 1fr) 104px;
-    gap: 10px;
+    grid-template-columns: 64px minmax(0, 1fr) auto;
+    gap: 4px 10px;
     align-items: center;
-    height: 36px;
-    padding: 0 20px;
+    min-height: 36px;
+    padding: 6px 20px;
     border-top: 1px solid var(--line);
     font-size: var(--fs-sm);
+  }
+  .orow a {
+    color: var(--accent, inherit);
+  }
+  .orow .cause,
+  .orow .trail,
+  .orow .opts {
+    grid-column: 2 / -1;
+    min-width: 0;
+    overflow-wrap: anywhere;
+  }
+  .orow .trail {
+    margin: 0;
+    padding-left: 18px;
+    color: var(--text-dim);
+  }
+  .orow .trail b {
+    font-weight: 500;
+    color: var(--text-soft);
   }
   .orow:hover {
     background: var(--row-hover);

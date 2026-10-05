@@ -76,7 +76,7 @@ gronka consists of three components:
 
 1. **discord bot** - the part that lives in your server, downloads media, and does the converting
 2. **r2 storage** (optional) - files too big for a discord attachment are uploaded under a random name and deleted after a few hours to days, by size
-3. **webui** (optional) - health, failures, workers and settings. it shows no users and no requests: gronka keeps nothing about who uses it
+3. **webui** (optional) - health, failures, workers and settings. it shows no users: gronka keeps nothing about who uses it, and only failed requests (link, error, steps tried) are kept, for 7 days
 
 ## license
 

@@ -8,6 +8,7 @@ import {
   inTab,
   buckets,
   abbr,
+  failureOf,
 } from '../../src/webui/issues.js';
 
 const reason = (text, extra = {}) => ({
@@ -126,4 +127,34 @@ test('abbr shortens big counts', () => {
     '2.5M',
     '–',
   ]);
+});
+
+describe('failure details', () => {
+  test('reads link, cause, trail and options, and survives old rows', () => {
+    const f = failureOf({
+      metadata: JSON.stringify({
+        url: 'https://a.test/v',
+        cause: 'HTTP 403',
+        ref: 'r1',
+        trail: [{ step: 'cobalt', error: 'timeout' }, null],
+        options: { format: 'mp4' },
+      }),
+    });
+    assert.strictEqual(f.url, 'https://a.test/v');
+    assert.strictEqual(f.trail.length, 1);
+    assert.deepStrictEqual(f.options, [['format', 'mp4']]);
+    const old = failureOf({ metadata: '{"source":"a.test"}' });
+    assert.deepStrictEqual([old.url, old.cause, old.trail, old.options], [null, null, [], []]);
+    assert.strictEqual(failureOf({ metadata: 'nope' }).url, null);
+  });
+
+  test('a non-http link is never offered as a href', () => {
+    assert.strictEqual(failureOf({ metadata: '{"url":"javascript:alert(1)"}' }).url, null);
+  });
+
+  test('cause groups get their own keys so states never collide with error groups', () => {
+    const [a] = groupIssues([reason('HTTP 403')], 'error');
+    const [b] = groupIssues([reason('HTTP 403')], 'cause');
+    assert.notStrictEqual(a.key, b.key);
+  });
 });

@@ -61,6 +61,11 @@
         and reset on every restart.
       </p>
       <p>
+        when a request fails, the link, the error and which download steps were tried are kept for
+        up to 7 days so the failure can be fixed. nothing is kept for requests that succeed, and no
+        user, server or channel ids are kept.
+      </p>
+      <p>
         to stop one person hogging the server, requests are counted per ip address for 10 minutes,
         as a keyed hash in memory under a key that changes daily, never the address itself.
       </p>
@@ -79,7 +84,7 @@
         <a href="https://www.cloudflare.com/privacypolicy/">cloudflare's privacy policy</a> covers
         what they see.
       </p>
-      <p class="note">updated 2026-10-02.</p>
+      <p class="note">updated 2026-10-04.</p>
     </main>
     <footer class="foot">
       <a href="/">download</a><a href="/docs/">api docs</a><a href="/key/">api key</a

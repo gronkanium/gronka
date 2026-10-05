@@ -207,6 +207,11 @@ if (!mocksSupported) {
         'https://www.tiktok.com/discover/thing',
         'this link is not a downloadable video page.',
       ],
+      [
+        'ERROR: [youtube:tab] post: This channel does not have a Ugkx6CER0XHMa-PhkkWJGvLWfpEzEDk8ID-v tab',
+        'https://www.youtube.com/post/UgkxABC',
+        'youtube community posts are not supported.',
+      ],
     ];
 
     for (const [stderr, url, expected] of cases) {

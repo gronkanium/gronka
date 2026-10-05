@@ -3,6 +3,7 @@ import { createLogger } from '../utils/logger.js';
 import { botConfig, r2Config } from '../utils/config.js';
 import { validateUrl, firstUrlIn } from '../utils/validation.js';
 import { canonicalizeMirrorUrl, isSocialMediaUrl } from '../utils/cobalt.js';
+import { resolveShortLink } from '../utils/short-links.js';
 import { getYtdlpSite } from '../utils/ytdlp.js';
 import {
   getGalleryDlSite,
@@ -289,7 +290,7 @@ export async function handleDownloadContextMenuCommand(interaction) {
     });
     return;
   }
-  const url = canonicalizeMirrorUrl(found);
+  const url = canonicalizeMirrorUrl(await resolveShortLink(found));
 
   const megaFileId = keylessMegaFileId(url);
   if (megaFileId) {
@@ -307,7 +308,7 @@ export async function handleDownloadCommand(interaction) {
   const commandSource = commandSourceOf(interaction);
 
   const rawUrl = interaction.options.getString('url');
-  const url = canonicalizeMirrorUrl(firstUrlIn(rawUrl) ?? rawUrl);
+  const url = canonicalizeMirrorUrl(await resolveShortLink(firstUrlIn(rawUrl) ?? rawUrl));
   const audioOnly = interaction.options.getBoolean('mp3') === true;
 
   const times = await resolveTimeOptions(interaction, { type: 'download' });

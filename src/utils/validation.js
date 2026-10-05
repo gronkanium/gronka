@@ -1,10 +1,16 @@
 import path from 'path';
 import net from 'net';
 
-// Both the url option and the context menu are handed raw human text, so pull the first real
-// link out of it rather than rejecting a message that contains one.
+// Scheme-less links need a path or www. so "e.g." and filenames are not taken for hosts.
+const URL_IN_TEXT =
+  /(?:https?:\/\/|www\.|\b[a-z0-9-]+(?:\.[a-z0-9-]+)*\.[a-z]{2,}\/)[^\s<>"{}|\\^`[\]]+/i;
+
 export function firstUrlIn(text) {
-  return text?.match(/https?:\/\/[^\s<>"{}|\\^`[\]]+/i)?.[0] ?? null;
+  let found = text?.match(URL_IN_TEXT)?.[0];
+  if (!found) return null;
+  found = found.replace(/[.,;:!?'*_~]+$/, '');
+  while (found.endsWith(')') && !found.includes('(')) found = found.slice(0, -1);
+  return /^https?:\/\//i.test(found) ? found : `https://${found}`;
 }
 
 export const LOOPBACK_ERROR = 'localhost and loopback addresses are not allowed';

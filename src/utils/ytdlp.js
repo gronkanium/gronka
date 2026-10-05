@@ -395,6 +395,8 @@ function executeYtdlp(
               5 * 60 * 1000
             )
           );
+        } else if (/\[youtube:tab\] post: .*does not have a .* tab/.test(errorOutput)) {
+          reject(new ValidationError('youtube community posts are not supported.'));
         } else if (
           errorOutput.includes('Video unavailable') ||
           errorOutput.includes('Private video')

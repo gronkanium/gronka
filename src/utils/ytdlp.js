@@ -3,7 +3,7 @@ import { promisify } from 'util';
 import fsSync from 'fs';
 import path from 'path';
 import { createLogger } from './logger.js';
-import { NetworkError, ValidationError, withCause, describeCause } from './errors.js';
+import { NetworkError, ValidationError, withCause, describeCause, contentGone } from './errors.js';
 import { trimVideo } from './video-processor/trim-video.js';
 import { DEFAULT_YTDLP_FORMAT } from './config.js';
 import { fromPath, tempDir, jobSignal } from './media-file.js';
@@ -14,6 +14,7 @@ const execFileAsync = promisify(execFile);
 
 // Appended to every duration/size-cap rejection so users know there's a way around it
 // instead of just hitting a dead end.
+const SAVE_FAILURE_MESSAGE = 'the download finished but the file could not be saved, try again.';
 const TRIM_TIP = ' use the start and end options to grab a clip under the limit.';
 
 // Curated user-facing message for a video yt-dlp aborted (or we rejected) for exceeding the
@@ -22,11 +23,6 @@ function tooLargeMessage(maxSize) {
   const mb = Math.floor(maxSize / (1024 * 1024));
   return `this video is too large to download (over ${mb}MB).` + TRIM_TIP;
 }
-
-// The generic yt-dlp failure bucket in executeYtdlp() below - kept as a constant so the
-// retry wrapper can match on it without duplicating the string.
-const GENERIC_FAILURE_MESSAGE =
-  'could not download this content. it may be deleted, private, age-restricted, or unsupported.';
 
 // Optional --cookies args for yt-dlp
 export function getCookieArgs(url = null, signedIn = false) {
@@ -91,16 +87,26 @@ export function getYouTubeArgs(url, signedIn = false) {
 }
 
 // These answer yt-dlp's own TLS fingerprint with 403; curl-cffi (in the image) lets it pass as Chrome.
-const IMPERSONATE_HOSTS = ['rumble.com'];
-export function getImpersonateArgs(url) {
+const IMPERSONATE_HOSTS = ['rumble.com', 'pornhub.com'];
+const hostIn = (url, hosts) => {
   const host = hostOf(url);
-  if (!host) return [];
-  return IMPERSONATE_HOSTS.some(h => host === h || host.endsWith(`.${h}`))
-    ? ['--impersonate', 'chrome']
-    : [];
+  return Boolean(host) && hosts.some(h => host === h || host.endsWith(`.${h}`));
+};
+
+// Per-site yt-dlp args: Chrome's TLS fingerprint where needed, GEO_PROXY_URL for sites that
+// refuse this server's region, and the site's own extra args.
+export function getSiteArgs(url) {
+  const geoProxy = process.env.GEO_PROXY_URL;
+  const site = YTDLP_SITES.find(s => hostIn(url, s.hosts));
+  return [
+    ...(hostIn(url, IMPERSONATE_HOSTS) ? ['--impersonate', 'chrome'] : []),
+    // One fragment at a time crawls through the tunnel (xHamster 223 KB/s vs 1.4 MB/s at 8).
+    ...(geoProxy && site?.geoBlocked ? ['--proxy', geoProxy, '-N', '8'] : []),
+    ...(site?.args ?? []),
+  ];
 }
 
-const siteLabel = url => hostOf(url) ?? 'this site';
+const siteLabel = url => getYtdlpSite(url) ?? hostOf(url) ?? 'this site';
 
 // /p/ permalinks carry photos as often as video; /reel/ and /tv/ are always video.
 function isInstagramPostUrl(url) {
@@ -143,8 +149,16 @@ export const YTDLP_SITES = [
   // Tenor yields mp4; /convert is the gif route.
   { name: 'Tenor', hosts: ['tenor.com'] },
   { name: 'XVideos', hosts: ['xvideos.com'] },
-  { name: 'xHamster', hosts: ['xhamster.com'] },
-  { name: 'RedTube', hosts: ['redtube.com'] },
+  // Behind age-verification walls in some US states; they go through GEO_PROXY_URL when set.
+  { name: 'Pornhub', hosts: ['pornhub.com'], geoBlocked: true },
+  { name: 'xHamster', hosts: ['xhamster.com'], geoBlocked: true },
+  // Its CDN answers 410 Gone to any request without the site as referer.
+  {
+    name: 'RedTube',
+    hosts: ['redtube.com'],
+    geoBlocked: true,
+    args: ['--referer', 'https://www.redtube.com/'],
+  },
   { name: 'Rule34Video', hosts: ['rule34video.com'] },
 ];
 
@@ -201,7 +215,7 @@ function executeYtdlp(
       '--no-progress',
       ...getCookieArgs(url, signedIn),
       ...getYouTubeArgs(url, signedIn),
-      ...getImpersonateArgs(url),
+      ...getSiteArgs(url),
       '-f',
       quality,
       '--merge-output-format',
@@ -261,7 +275,7 @@ function executeYtdlp(
       ytdlp.kill('SIGKILL');
       reject(
         withCause(
-          new NetworkError('yt-dlp download timed out'),
+          new NetworkError('the download took too long and was stopped, try again later.'),
           `yt-dlp: timed out after ${timeout / 1000}s`
         )
       );
@@ -340,10 +354,7 @@ function executeYtdlp(
               logger.debug(`yt-dlp download complete: ${outputPath} (${stats.size} bytes)`);
               resolve(outputPath);
             } else {
-              rejectWith(
-                new NetworkError('yt-dlp output path is not a file'),
-                'output path is not a file'
-              );
+              rejectWith(new NetworkError(SAVE_FAILURE_MESSAGE), 'output path is not a file');
             }
           } catch (statError) {
             const files = fsSync.readdirSync(outputDir);
@@ -367,7 +378,7 @@ function executeYtdlp(
             } else {
               logger.error(`yt-dlp output file not found at ${outputPath}: ${statError.message}`);
               rejectWith(
-                new NetworkError('the download failed. the content may be unavailable.'),
+                new NetworkError(SAVE_FAILURE_MESSAGE),
                 `exit 0 but no output file at ${outputPath}: ${statError.message}`
               );
             }
@@ -404,7 +415,7 @@ function executeYtdlp(
                 );
               } else {
                 rejectWith(
-                  new NetworkError('yt-dlp did not return output file path'),
+                  new NetworkError(SAVE_FAILURE_MESSAGE),
                   'exit 0 with an empty output dir'
                 );
               }
@@ -414,7 +425,7 @@ function executeYtdlp(
               `yt-dlp did not return output file path and could not read output directory: ${readError.message}`
             );
             rejectWith(
-              new NetworkError('the download failed. the content may be unavailable.'),
+              new NetworkError(SAVE_FAILURE_MESSAGE),
               `exit 0 and the output dir is unreadable: ${readError.message}`
             );
           }
@@ -430,13 +441,11 @@ function executeYtdlp(
               5 * 60 * 1000
             )
           );
-        } else if (/\[youtube:tab\] post: .*does not have a .* tab/.test(errorOutput)) {
-          rejectWith(new ValidationError('youtube community posts are not supported.'));
         } else if (
           errorOutput.includes('Video unavailable') ||
           errorOutput.includes('Private video')
         ) {
-          rejectWith(new NetworkError('video is unavailable or private'));
+          rejectWith(contentGone());
         } else if (errorOutput.includes('Sign in to confirm your age')) {
           rejectWith(new NetworkError('video requires age verification'));
         } else if (/members-only|Join this channel to get access/i.test(errorOutput)) {
@@ -449,6 +458,14 @@ function executeYtdlp(
             new NetworkError(
               `${siteLabel(url)} is asking this server to sign in, this is usually temporary.`,
               'YTDLP_RETRYABLE'
+            )
+          );
+        } else if (
+          /Unable to connect to proxy|ProxyError|proxy.*(refused|timed out)/i.test(errorOutput)
+        ) {
+          rejectWith(
+            new NetworkError(
+              `${siteLabel(url)} downloads go through a vpn that is not reachable right now, try again later.`
             )
           );
         } else if (/Your IP address is blocked/i.test(errorOutput)) {
@@ -500,7 +517,7 @@ function executeYtdlp(
           errorOutput.includes('account is no longer available') ||
           /account .*(suspended|deactivated)/i.test(errorOutput)
         ) {
-          rejectWith(new NetworkError('this post is unavailable or has been deleted'));
+          rejectWith(contentGone());
         } else if (/DRM protected/i.test(errorOutput)) {
           // before the 'protected' check below, which is about protected X accounts
           rejectWith(
@@ -519,7 +536,9 @@ function executeYtdlp(
           rejectWith(new NetworkError('this post is private and cannot be downloaded'));
         } else {
           // Never surface raw yt-dlp stderr to users; full output is logged above.
-          rejectWith(new NetworkError(GENERIC_FAILURE_MESSAGE));
+          rejectWith(
+            new NetworkError(`could not download this ${siteLabel(url)} link.`, 'YTDLP_UNKNOWN')
+          );
         }
       }
     });
@@ -527,7 +546,12 @@ function executeYtdlp(
     ytdlp.on('error', err => {
       clearTimeout(timeoutId);
       if (err.code === 'ENOENT') {
-        reject(new NetworkError('yt-dlp is not installed or not in PATH'));
+        reject(
+          withCause(
+            new NetworkError('video downloads are unavailable right now'),
+            'yt-dlp: not installed or not on PATH'
+          )
+        );
       } else {
         logger.error(`yt-dlp process error: ${err.message}`);
         reject(
@@ -560,7 +584,7 @@ async function executeYtdlpWithRetry(...args) {
       logger.debug(`YouTube asked to sign in, retrying signed in: ${args[0]}`);
       return await executeYtdlp(...Array.from({ length: 8 }, (_, i) => args[i]), true);
     }
-    if (error.message !== GENERIC_FAILURE_MESSAGE && error.code !== 'YTDLP_RETRYABLE') {
+    if (error.code !== 'YTDLP_UNKNOWN' && error.code !== 'YTDLP_RETRYABLE') {
       throw error;
     }
     logger.warn(`yt-dlp generic failure, retrying once after a short delay: ${args[0]}`);
@@ -575,7 +599,7 @@ function getVideoDuration(url, timeout = 15000) {
       '--no-playlist',
       '--no-warnings',
       ...getCookieArgs(url),
-      ...getImpersonateArgs(url),
+      ...getSiteArgs(url),
       '--print',
       'duration',
       url,
@@ -645,7 +669,7 @@ export async function getStreamInfo(url, timeout = 30000) {
     '--ies',
     'default,-generic',
     ...getYouTubeArgs(url),
-    ...getImpersonateArgs(url),
+    ...getSiteArgs(url),
     '-S',
     'res:1080,ext:mp4:m4a',
     '-f',
@@ -734,7 +758,28 @@ export async function downloadWithYtdlp(
     let outputPath;
     let usedFallback = false;
 
-    if (useSegmentDownload) {
+    const downloadThenTrim = async () => {
+      usedFallback = true;
+      const fullPath = await executeYtdlpWithRetry(
+        url,
+        workDir,
+        effectiveQuality,
+        300000,
+        maxDuration,
+        null,
+        null,
+        maxSize
+      ).catch(emptyDownloadError);
+      const trimmedPath = path.join(workDir, 'trimmed_output.mp4');
+      await trimVideo(fullPath, trimmedPath, { startTime, duration });
+      logger.debug(`Fallback trim completed: ${trimmedPath}`);
+      return trimmedPath;
+    };
+
+    // --download-sections hands the fetch to ffmpeg, whose http proxy support crashes on these.
+    if (useSegmentDownload && getSiteArgs(url).includes('--proxy')) {
+      outputPath = await downloadThenTrim();
+    } else if (useSegmentDownload) {
       try {
         outputPath = await executeYtdlpWithRetry(
           url,
@@ -747,32 +792,11 @@ export async function downloadWithYtdlp(
           maxSize
         );
       } catch (segmentError) {
-        // Check if this is a segment download failure (too small file)
-        if (segmentError.message && segmentError.message.includes('output file too small')) {
-          logger.warn(
-            `Segment download failed, falling back to full download + FFmpeg trim: ${segmentError.message}`
-          );
-          usedFallback = true;
-
-          outputPath = await executeYtdlpWithRetry(
-            url,
-            workDir,
-            effectiveQuality,
-            300000,
-            maxDuration,
-            null,
-            null,
-            maxSize
-          ).catch(emptyDownloadError);
-
-          const trimmedPath = path.join(workDir, 'trimmed_output.mp4');
-          await trimVideo(outputPath, trimmedPath, { startTime, duration });
-
-          outputPath = trimmedPath;
-          logger.debug(`Fallback trim completed: ${outputPath}`);
-        } else {
-          throw segmentError;
-        }
+        if (!segmentError.message?.includes('output file too small')) throw segmentError;
+        logger.warn(
+          `Segment download failed, falling back to full download + FFmpeg trim: ${segmentError.message}`
+        );
+        outputPath = await downloadThenTrim();
       }
     } else {
       outputPath = await executeYtdlpWithRetry(
@@ -791,8 +815,9 @@ export async function downloadWithYtdlp(
     const contentType = getContentType(path.extname(outputPath));
     const file = await fromPath(outputPath, { contentType, filename });
     if (file.size > maxSize) {
-      throw new ValidationError(
-        `file is too large (${(file.size / (1024 * 1024)).toFixed(2)}MB, max ${(maxSize / (1024 * 1024)).toFixed(2)}MB)`
+      throw withCause(
+        new ValidationError(tooLargeMessage(maxSize)),
+        `yt-dlp: file is ${file.size} bytes, limit ${maxSize}`
       );
     }
     logger.debug(

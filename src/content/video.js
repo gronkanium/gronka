@@ -2,14 +2,14 @@ import axios from 'axios';
 import { execFile } from 'child_process';
 import { promisify } from 'util';
 import { createLogger } from '../utils/logger.js';
-import { NetworkError } from '../utils/errors.js';
+import { NetworkError, contentGone } from '../utils/errors.js';
 import { jobSignal } from '../utils/media-file.js';
 import { hostOf } from '../utils/url-host.js';
 import {
   getYtdlpSite,
   getCookieArgs,
   getYouTubeArgs,
-  getImpersonateArgs,
+  getSiteArgs,
   isYouTubeUrl,
 } from '../utils/ytdlp.js';
 import { post, comment, thread, isoDate, linksIn, MAX_COMMENTS } from './schema.js';
@@ -53,9 +53,6 @@ export function isVideoContentUrl(url) {
   return siteOf(url) !== null;
 }
 
-const GONE = () =>
-  new NetworkError('this post is unavailable, it may be deleted or private', 'CONTENT_GONE');
-
 function classify(stderr) {
   if (/Unsupported URL|is not a valid URL/i.test(stderr)) {
     return new NetworkError('that is not a link to a video page', 'BAD_URL', 400);
@@ -65,7 +62,7 @@ function classify(stderr) {
       stderr
     )
   ) {
-    return GONE();
+    return contentGone();
   }
   return null;
 }
@@ -94,7 +91,7 @@ async function defaultRunner(args) {
 function dump(url, site, wantComments, signedIn) {
   const args = ['--dump-single-json', '--skip-download', '--no-playlist', '--no-warnings'];
   args.push(...getCookieArgs(url, signedIn), ...getYouTubeArgs(url, signedIn));
-  args.push(...getImpersonateArgs(url));
+  args.push(...getSiteArgs(url));
   if (wantComments) {
     args.push(
       '--write-comments',

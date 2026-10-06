@@ -1,6 +1,11 @@
 import { test, describe } from 'bun:test';
 import assert from 'node:assert';
-import { isYouTubeUrl, getYtdlpSite, YtdlpRateLimitError } from '../../src/utils/ytdlp.js';
+import {
+  isYouTubeUrl,
+  getYtdlpSite,
+  getSiteArgs,
+  YtdlpRateLimitError,
+} from '../../src/utils/ytdlp.js';
 import { NetworkError } from '../../src/utils/errors.js';
 import { getGalleryDlSite } from '../../src/utils/gallery-dl.js';
 
@@ -84,6 +89,44 @@ describe('ytdlp utilities', () => {
       assert.strictEqual(isYouTubeUrl(undefined), false);
     });
   });
+  describe('getSiteArgs', () => {
+    test('sends only geo-blocked sites through GEO_PROXY_URL, and only when it is set', () => {
+      const saved = process.env.GEO_PROXY_URL;
+      try {
+        delete process.env.GEO_PROXY_URL;
+        assert.deepStrictEqual(getSiteArgs('https://xhamster.com/videos/x-1'), []);
+        process.env.GEO_PROXY_URL = 'http://vpn:8888';
+        assert.deepStrictEqual(getSiteArgs('https://xhamster.com/videos/x-1'), [
+          '--proxy',
+          'http://vpn:8888',
+          '-N',
+          '8',
+        ]);
+        assert.deepStrictEqual(getSiteArgs('https://www.pornhub.com/view_video.php?viewkey=1'), [
+          '--impersonate',
+          'chrome',
+          '--proxy',
+          'http://vpn:8888',
+          '-N',
+          '8',
+        ]);
+        assert.deepStrictEqual(getSiteArgs('https://www.redtube.com/1'), [
+          '--proxy',
+          'http://vpn:8888',
+          '-N',
+          '8',
+          '--referer',
+          'https://www.redtube.com/',
+        ]);
+        assert.deepStrictEqual(getSiteArgs('https://www.youtube.com/watch?v=x'), []);
+        assert.deepStrictEqual(getSiteArgs('https://rumble.com/v1'), ['--impersonate', 'chrome']);
+      } finally {
+        if (saved === undefined) delete process.env.GEO_PROXY_URL;
+        else process.env.GEO_PROXY_URL = saved;
+      }
+    });
+  });
+
   describe('getYtdlpSite', () => {
     test('resolves each supported yt-dlp site to its display name', () => {
       assert.strictEqual(getYtdlpSite('https://youtube.com/watch?v=abc'), 'YouTube');

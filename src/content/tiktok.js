@@ -1,6 +1,6 @@
 import axios from 'axios';
 import { createLogger } from '../utils/logger.js';
-import { NetworkError } from '../utils/errors.js';
+import { NetworkError, contentGone } from '../utils/errors.js';
 import { normalizeHost } from '../utils/url-host.js';
 import { post, thread, isoDate, linksIn } from './schema.js';
 
@@ -33,9 +33,6 @@ export function isTiktokContentUrl(url) {
   if (SHORT_HOSTS.has(parsed.host)) return parsed.pathname.length > 1;
   return VIDEO_PATH.test(parsed.pathname) || /^\/t\/[\w-]+/.test(parsed.pathname);
 }
-
-const GONE = () =>
-  new NetworkError('this post is unavailable, it may be deleted or private', 'CONTENT_GONE');
 
 const keepOnTiktok = options => {
   if (!isTiktokHost(options.hostname ?? '')) throw new Error('redirect left tiktok');
@@ -156,7 +153,7 @@ export async function fetchTiktokThread(url, { http = defaultHttp } = {}) {
   try {
     page = await http.page(url);
   } catch (error) {
-    if (error.response?.status === 404) throw GONE();
+    if (error.response?.status === 404) throw contentGone();
     logger.warn(`TikTok page request failed: ${error.message}`);
     throw new NetworkError('failed to reach tiktok');
   }
@@ -172,13 +169,13 @@ export async function fetchTiktokThread(url, { http = defaultHttp } = {}) {
     const subject = normalizeTiktokItem(item, canonical);
     return thread({ source: 'tiktok', url: canonical, post: subject });
   }
-  if (gone) throw GONE();
+  if (gone) throw contentGone();
 
   let oembed;
   try {
     oembed = await http.oembed(canonical);
   } catch (error) {
-    if (error.response && error.response.status < 500) throw GONE();
+    if (error.response && error.response.status < 500) throw contentGone();
     logger.warn(`TikTok oembed request failed: ${error.message}`);
     throw new NetworkError('failed to reach tiktok');
   }

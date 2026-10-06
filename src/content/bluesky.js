@@ -1,6 +1,6 @@
 import axios from 'axios';
 import { createLogger } from '../utils/logger.js';
-import { NetworkError } from '../utils/errors.js';
+import { NetworkError, contentGone } from '../utils/errors.js';
 import { post, comment, thread, MAX_COMMENTS } from './schema.js';
 
 const logger = createLogger('content-bluesky');
@@ -29,9 +29,6 @@ export function isBlueskyContentUrl(url) {
   return parseUrl(url) !== null;
 }
 
-const GONE = () =>
-  new NetworkError('this post is unavailable, it may be deleted or private', 'CONTENT_GONE');
-
 async function request(uri, { depth, parentHeight }) {
   try {
     const { data } = await axios.get(API, {
@@ -44,7 +41,7 @@ async function request(uri, { depth, parentHeight }) {
     const status = error.response?.status;
     if (status === 400 || status === 404) {
       const code = error.response?.data?.error;
-      if (code === 'NotFound' || code === 'InvalidRequest') throw GONE();
+      if (code === 'NotFound' || code === 'InvalidRequest') throw contentGone();
     }
     logger.warn(`Bluesky getPostThread failed: ${error.message}`);
     throw new NetworkError('failed to reach bluesky');
@@ -182,7 +179,7 @@ export async function fetchBlueskyThread(
   });
   const node = data?.thread;
   const subject = isPost(node) ? normalizePost(node.post) : null;
-  if (!subject) throw GONE();
+  if (!subject) throw contentGone();
   const did = node.post.author.did;
 
   const chain = [subject];

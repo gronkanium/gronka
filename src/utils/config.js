@@ -14,7 +14,8 @@ dotenv.config({ quiet: true });
 export const DEFAULT_YTDLP_FORMAT =
   'bestvideo[height<=?1080][ext=mp4]+bestaudio[ext=m4a]/' +
   'bestvideo[width<=?1080][ext=mp4]+bestaudio[ext=m4a]/' +
-  'best[height<=?1080][ext=mp4]/best[width<=?1080][ext=mp4]/best';
+  'best[height<=?1080][ext=mp4]/best[width<=?1080][ext=mp4]/' +
+  'bestvideo[height<=?1080]+bestaudio/best';
 
 function parseIntEnv(name, defaultValue, min = -Infinity, max = Infinity) {
   const value = process.env[name];

@@ -5,6 +5,23 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres (attempts) to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.3.0](https://github.com/gronkanium/gronka/compare/v3.2.0...v3.3.0) (2026-10-06)
+
+
+### Features
+
+* **download:** accept koutube.com YouTube mirror links ([dee1a3b](https://github.com/gronkanium/gronka/commit/dee1a3b3666882d1dc7dee239e69c7c6c3048f3d))
+* **download:** DeviantArt mature posts and YouTube community post images ([3dfeb11](https://github.com/gronkanium/gronka/commit/3dfeb1146d4ad25c39f94750bb91e330d7059678))
+* **download:** Mullvad proxy for geo-blocked sites, DeviantArt, community posts, Instagram private shares ([468a45e](https://github.com/gronkanium/gronka/commit/468a45e0d78deee69a10415c8e7ca23014fe4502))
+* **download:** Pornhub, xHamster and RedTube through an optional Mullvad proxy ([9188082](https://github.com/gronkanium/gronka/commit/918808292249bbff54b3032c3a250756c6644cbe))
+
+
+### Bug Fixes
+
+* **deps:** override proxy-addr and source-map-js to patched versions ([ed59b67](https://github.com/gronkanium/gronka/commit/ed59b67277a931a6126aed00db0bcc1929e0920b))
+* **download:** curate every extractor failure and say which site failed ([961eafa](https://github.com/gronkanium/gronka/commit/961eafa8c1c32db1a8de5ffc7f50e01d3b2062e2))
+* **instagram:** read posts shared from private accounts ([f1453f5](https://github.com/gronkanium/gronka/commit/f1453f572b58dfb3345956feb18b73d48fd2f55f))
+
 ## [3.2.0](https://github.com/gronkanium/gronka/compare/v3.1.1...v3.2.0) (2026-10-05)
 
 

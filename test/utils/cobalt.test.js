@@ -166,6 +166,7 @@ describe('cobalt utilities', () => {
           'https://tiktok.com/@u/video/7678109247363730706',
         ],
         ['https://tfxktok.com/@u/video/123', 'https://tiktok.com/@u/video/123'],
+        ['https://koutube.com/shorts/pHCDrGukqPI', 'https://youtube.com/shorts/pHCDrGukqPI'],
         [
           'https://www.vxinstagram.com/reel/DdrMVSqvK_G/',
           'https://instagram.com/reel/DdrMVSqvK_G/',

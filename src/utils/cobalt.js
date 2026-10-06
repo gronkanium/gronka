@@ -1,10 +1,10 @@
 import axios from 'axios';
 import { createLogger } from './logger.js';
-import { NetworkError, ValidationError, withCause, describeCause } from './errors.js';
+import { NetworkError, ValidationError, withCause, describeCause, contentGone } from './errors.js';
 import { fetchToFile, withExtension } from './media-file.js';
 import { detectFileType } from './storage.js';
 import { mapLimit, ITEM_FANOUT } from './map-limit.js';
-import { normalizeHost } from './url-host.js';
+import { hostOf, normalizeHost } from './url-host.js';
 
 const logger = createLogger('cobalt');
 
@@ -53,118 +53,49 @@ export function normalizeFilenameForContentType(filename, contentType) {
     : `${filename}${extension}`;
 }
 
-/**
- * Map of Cobalt API error codes to user-friendly messages
- */
+const RATE_LIMITED = site =>
+  `${site} is rate limiting downloads right now, try again in a few minutes.`;
+const FETCH_FAILED = site => `failed to reach ${site}, try again in a bit.`;
+
+// What the user is told for each of cobalt's error codes (error.api.<code>); anything else is
+// "could not download", with cobalt's code kept as the cause.
 const COBALT_ERROR_MESSAGES = {
-  // Content errors
-  'error.api.content.post.unavailable': 'this post is unavailable or has been deleted',
-  'error.api.content.post.age': 'this post is age-restricted and cannot be downloaded',
-  'error.api.content.video.unavailable': 'this video is unavailable or has been deleted',
-  'error.api.content.too_large': 'this content is too large to download',
-
-  // Fetch errors
-  'error.api.fetch.empty': 'unable to fetch content (it may be deleted, private, or rate-limited)',
-  'error.api.fetch.fail': 'failed to fetch content from the platform',
-  'error.api.fetch.rate': 'rate limited by the platform, please try again later',
-
-  // Link/Service errors
-  'error.api.link.invalid': 'invalid or unsupported url format',
-  'error.api.link.unsupported': 'this service is not supported', // Will be customized with service name
-
-  // Generic errors
-  'error.api.generic': 'an error occurred while processing your request',
-  'error.api.auth.jwt.missing': 'authentication required',
-  'error.api.auth.jwt.invalid': 'invalid authentication token',
+  'content.post.private': 'this post is private.',
+  'content.video.private': 'this video is private.',
+  'content.post.age': 'this post is age-restricted and cannot be downloaded.',
+  'content.video.age': 'this video is age-restricted and cannot be downloaded.',
+  'content.region': 'this post is not available in the country the bot runs from.',
+  'content.video.region': 'this video is not available in the country the bot runs from.',
+  'content.video.live': 'live streams can be downloaded once they end.',
+  'content.paid': 'this is paid content and cannot be downloaded.',
+  'content.too_long': 'this video is too long to download.',
+  'fetch.empty': site => `${site} returned nothing to download for this link.`,
+  'fetch.fail': FETCH_FAILED,
+  'fetch.critical': FETCH_FAILED,
+  'fetch.critical.core': FETCH_FAILED,
+  'fetch.rate': RATE_LIMITED,
+  rate_exceeded: RATE_LIMITED,
+  'fetch.short_link': 'this short link could not be opened, try the full link.',
+  'link.invalid': 'that link is not valid.',
+  'link.unsupported': site => `${site} links are not supported.`,
+  'service.unsupported': site => `${site} links are not supported.`,
+  'service.disabled': site => `downloads from ${site} are turned off.`,
+  'youtube.login': 'youtube is asking this server to sign in, this is usually temporary.',
+  'youtube.drm': "the site only streams this one encrypted (drm), so it can't be downloaded.",
 };
 
-function getCobaltErrorMessage(errorCode, context = {}) {
-  if (!errorCode) {
-    return null;
+// Gone, private, invalid and unsupported are final; only rate limits are worth a retry.
+export function cobaltError(errorCode, site) {
+  const code = (errorCode ?? '').replace(/^error\.api\./, '');
+  if (code === 'content.post.unavailable' || code === 'content.video.unavailable') {
+    return contentGone();
   }
-
-  if (errorCode === 'error.api.link.unsupported' && context?.service) {
-    return `the service "${context.service}" is not supported by cobalt`;
-  }
-
-  return COBALT_ERROR_MESSAGES[errorCode] || null;
-}
-
-// Classify a Cobalt API error response
-function analyzeError(data, errorObj) {
-  const result = {
-    isRateLimit: false,
-    isNotFound: false,
-    userMessage: null,
-    errorCode: null,
-    context: null,
-  };
-
-  // Extract error code from response (can be in data.code or data.error.code)
-  const errorCode = data?.code || data?.error?.code;
-  const errorContext = data?.context || data?.error?.context;
-
-  if (errorCode) {
-    result.errorCode = errorCode;
-    result.context = errorContext;
-
-    const friendlyMessage = getCobaltErrorMessage(errorCode, errorContext);
-    if (friendlyMessage) {
-      result.userMessage = friendlyMessage;
-    }
-  }
-
-  if (errorCode && errorCode.includes('rate')) {
-    result.isRateLimit = true;
-    return result;
-  }
-
-  // Check HTTP status code (429 is definitive rate limit)
-  if (errorObj?.response?.status === 429) {
-    result.isRateLimit = true;
-    return result;
-  }
-
-  switch (errorCode) {
-    case 'error.api.content.post.unavailable':
-    case 'error.api.content.video.unavailable':
-      result.isNotFound = true;
-      return result;
-
-    case 'error.api.content.post.age':
-      result.isNotFound = true; // Don't retry age-restricted content
-      return result;
-
-    case 'error.api.link.invalid':
-    case 'error.api.link.unsupported':
-      result.isNotFound = true; // Don't retry invalid/unsupported URLs
-      return result;
-
-    case 'error.api.fetch.rate':
-      result.isRateLimit = true;
-      return result;
-
-    case 'error.api.fetch.fail':
-      // Fetch failures could be temporary, but don't classify as rate limit
-      return result;
-  }
-
-  // error.api.fetch.empty is ambiguous: treat as "not found" when the response
-  // text says so, otherwise as a plain failure (never guess it's a rate limit).
-  if (errorCode === 'error.api.fetch.empty') {
-    const errorText = (data?.error?.text || data?.text || '').toLowerCase();
-    if (
-      errorText.includes('not found') ||
-      errorText.includes("doesn't exist") ||
-      errorText.includes('unavailable') ||
-      errorText.includes('deleted')
-    ) {
-      result.isNotFound = true;
-    }
-    return result;
-  }
-
-  return result;
+  const entry = COBALT_ERROR_MESSAGES[code];
+  const message = typeof entry === 'function' ? entry(site) : entry;
+  return new NetworkError(
+    message ?? `could not download this ${site} link.`,
+    code.includes('rate') ? 'RATE_LIMITED' : 'NETWORK_ERROR'
+  );
 }
 
 function sleep(ms) {
@@ -349,7 +280,7 @@ async function callCobaltApi(apiUrl, url, retryCount = 0, maxRetries = 3) {
     logger.debug(`Cobalt API response status: ${response.status}`);
     if (response.status !== 200) {
       throw withCause(
-        new NetworkError(`cobalt api returned status ${response.status}`),
+        new NetworkError(`could not download this ${hostOf(url) ?? 'site'} link.`),
         `cobalt: HTTP ${response.status}`
       );
     }
@@ -363,18 +294,10 @@ async function callCobaltApi(apiUrl, url, retryCount = 0, maxRetries = 3) {
       const status = error.response.status;
       const data = error.response.data;
       logger.debug(`Cobalt answered ${status}: ${JSON.stringify(data)}`);
-      const errorAnalysis = analyzeError(data, error);
-      const why = `cobalt: ${errorAnalysis.errorCode ?? `HTTP ${status} ${JSON.stringify(data ?? '').slice(0, 200)}`}`;
-
-      // If content doesn't exist, don't retry
-      if (errorAnalysis.isNotFound) {
-        const notFoundMessage =
-          errorAnalysis.userMessage || 'content not found, deleted, or unavailable';
-        throw withCause(new NetworkError(notFoundMessage), why);
-      }
-
-      if (errorAnalysis.isRateLimit && retryCount < maxRetries - 1) {
-        // Calculate exponential backoff delay: 1s, 2s, 4s
+      const errorCode = data?.code || data?.error?.code;
+      const why = `cobalt: ${errorCode ?? `HTTP ${status} ${JSON.stringify(data ?? '').slice(0, 200)}`}`;
+      const curated = cobaltError(errorCode, hostOf(url) ?? 'this site');
+      if ((curated.code === 'RATE_LIMITED' || status === 429) && retryCount < maxRetries - 1) {
         const delayMs = Math.pow(2, retryCount) * 1000;
         logger.warn(
           `Rate limit detected, retrying in ${delayMs}ms (attempt ${attemptNum}/${maxRetries})`
@@ -382,41 +305,17 @@ async function callCobaltApi(apiUrl, url, retryCount = 0, maxRetries = 3) {
         await sleep(delayMs);
         return callCobaltApi(apiUrl, url, retryCount + 1, maxRetries);
       }
-
-      let message = null;
-
-      // First priority: Use our user-friendly message if available
-      if (errorAnalysis.userMessage) {
-        message = errorAnalysis.userMessage;
-      }
-      // Second priority: Extract error message from response
-      else if (typeof data?.text === 'string') {
-        message = data.text;
-      } else if (typeof data?.message === 'string') {
-        message = data.message;
-      } else if (typeof data?.error === 'string') {
-        message = data.error;
-      } else if (data?.error && typeof data.error === 'object') {
-        message = data.error.message || data.error.text || JSON.stringify(data.error);
-      } else if (data) {
-        message = typeof data === 'string' ? data : JSON.stringify(data);
-      }
-
-      if (!message) {
-        message = `Cobalt API error: ${status}`;
-      }
-
-      throw withCause(new NetworkError(message), why);
+      throw withCause(curated, why);
     }
     if (error.code === 'ECONNABORTED') {
       throw withCause(
-        new NetworkError('cobalt api request timed out'),
+        new NetworkError('the download service took too long to answer, try again in a bit.'),
         `cobalt: ${describeCause(error)}`
       );
     }
     if (error.code === 'ECONNREFUSED') {
       throw withCause(
-        new NetworkError('cobalt service is not available'),
+        new NetworkError('the download service is down right now, try again in a bit.'),
         `cobalt: ${describeCause(error)}`
       );
     }
@@ -428,6 +327,7 @@ async function callCobaltApi(apiUrl, url, retryCount = 0, maxRetries = 3) {
   }
 }
 
+const MISSING_FILE_MESSAGE = 'the download service answered without a file, try again.';
 const BROWSER_UA =
   'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36';
 const DISPOSITION_NAME = /filename[^;=\n]*=((['"]).*?\2|[^;\n]*)/;
@@ -448,7 +348,7 @@ async function fetchCobaltFile(url, { accept, timeout, maxSize, what, failMessag
     // cobalt's tunnel answers 200 with no body when its own fetch fails (seen on Bluesky HLS).
     if (file.size === 0) {
       throw withCause(
-        new NetworkError('cobalt returned an empty file'),
+        new NetworkError('the download came back empty.'),
         'cobalt: tunnel answered 200 with an empty body'
       );
     }
@@ -466,10 +366,10 @@ async function fetchCobaltFile(url, { accept, timeout, maxSize, what, failMessag
     if (error instanceof NetworkError) throw error;
     const why = `cobalt file: ${describeCause(error)}`;
     if (error.response?.status === 404) {
-      throw withCause(new NetworkError(`${what} not found at url`), why);
+      throw contentGone(why);
     }
     if (error.code === 'ECONNABORTED') {
-      throw withCause(new NetworkError(`${what} download timed out`), why);
+      throw withCause(new NetworkError(`the ${what} took too long to download, try again.`), why);
     }
     logger.warn(`Cobalt ${what} download failed: ${describeCause(error)}`);
     throw withCause(new NetworkError(failMessage ?? `${what} could not be downloaded`), why);
@@ -524,7 +424,7 @@ async function downloadMediaFromPicker(pickerArray, maxSize = Infinity) {
 
   if (mediaItems.length === 0) {
     throw withCause(
-      new NetworkError('no media files (photos or videos) found in picker response'),
+      new NetworkError('this post has no photo or video to download.'),
       'cobalt: picker had no photo or video with a url'
     );
   }
@@ -608,10 +508,7 @@ async function downloadFromCobalt(cobaltResponse, maxSize = Infinity, apiUrl = n
         videoUrl = replaceTunnelHostname(videoUrl, apiUrl);
       }
     } else {
-      throw withCause(
-        new NetworkError('cobalt tunnel response missing url'),
-        'cobalt: tunnel response had no url'
-      );
+      throw withCause(new NetworkError(MISSING_FILE_MESSAGE), 'cobalt: tunnel response had no url');
     }
 
     if (cobaltResponse.filename) {
@@ -619,7 +516,7 @@ async function downloadFromCobalt(cobaltResponse, maxSize = Infinity, apiUrl = n
     }
   } else if (cobaltResponse.status === 'error') {
     throw withCause(
-      new NetworkError(cobaltResponse.text || 'cobalt api returned an error'),
+      cobaltError(cobaltResponse.error?.code, 'this site'),
       `cobalt: status error ${cobaltResponse.error?.code ?? cobaltResponse.text ?? ''}`.trim()
     );
   } else {
@@ -638,7 +535,7 @@ async function downloadFromCobalt(cobaltResponse, maxSize = Infinity, apiUrl = n
 
   if (!videoUrl) {
     throw withCause(
-      new NetworkError('cobalt api did not return a video url'),
+      new NetworkError(MISSING_FILE_MESSAGE),
       `cobalt: status ${cobaltResponse.status} with no url`
     );
   }
@@ -648,7 +545,7 @@ async function downloadFromCobalt(cobaltResponse, maxSize = Infinity, apiUrl = n
     timeout: 300000,
     maxSize,
     what: 'file',
-    failMessage: 'the download failed. the content may be unavailable.',
+    failMessage: 'the file could not be downloaded, try again.',
   });
   const declared = file.headers['content-type'];
   const generic = declared === 'application/octet-stream' || declared === 'binary/octet-stream';
@@ -701,7 +598,7 @@ export async function getCobaltMediaUrls(apiUrl, url) {
 
   if (cobaltResponse.status === 'error') {
     throw withCause(
-      new NetworkError(cobaltResponse.text || 'cobalt api returned an error'),
+      cobaltError(cobaltResponse.error?.code, 'this site'),
       `cobalt: status error ${cobaltResponse.error?.code ?? cobaltResponse.text ?? ''}`.trim()
     );
   }

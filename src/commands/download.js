@@ -223,8 +223,7 @@ export async function processDownload(
     },
     {
       commandSource,
-      errorFallback:
-        'could not download this content. it may be deleted, private, age-restricted, or unsupported.',
+      errorFallback: 'something broke on our end with this download. it has been logged.',
       context: {
         originalUrl: url,
         commandOptions: { startTime, duration, mp3: galleryOptions.audioOnly },

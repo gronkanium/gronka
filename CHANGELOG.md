@@ -5,6 +5,13 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres (attempts) to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.4.0](https://github.com/gronkanium/gronka/compare/v3.3.0...v3.4.0) (2026-10-06)
+
+
+### Features
+
+* **download:** accept 59 more embed-fixer mirror links ([#139](https://github.com/gronkanium/gronka/issues/139)) ([399733d](https://github.com/gronkanium/gronka/commit/399733dc782d5b9c4efbf01f6d57bc8d07c0b5c0))
+
 ## [3.3.0](https://github.com/gronkanium/gronka/compare/v3.2.0...v3.3.0) (2026-10-06)
 
 

@@ -14,6 +14,7 @@ import {
 } from '../utils/cobalt.js';
 import { getYtdlpSite, downloadWithYtdlp } from '../utils/ytdlp.js';
 import { getGalleryDlSite, downloadWithGalleryDl } from '../utils/gallery-dl.js';
+import { isDeviationUrl, downloadFromDeviantArt } from '../utils/deviantart.js';
 import { isHentaiGifzUrl, downloadFromHentaiGifz } from '../utils/hentaigifz.js';
 import { isBooruUrl, downloadFromBooru, booruCdnUserAgent } from '../utils/booru.js';
 import { isPinterestUrl, downloadFromPinterest } from '../utils/pinterest.js';
@@ -39,6 +40,7 @@ import { isRedditPostUrl, hasRedditSession, resolveRedditPost } from '../utils/r
 import { convertToFormat } from '../utils/video-processor.js';
 import { fitsDiscordAttachment } from '../commands/shared/attachment-limit.js';
 import { hostOf } from '../utils/url-host.js';
+import { youtubePostId, resolveYoutubePost } from '../utils/youtube-post.js';
 
 const logger = createLogger('acquire-media');
 
@@ -197,8 +199,18 @@ export async function acquireMedia(
     }
   }
 
-  const ytdlpSite = getYtdlpSite(url);
-  const galleryDlSite = getGalleryDlSite(url);
+  // yt-dlp cannot read community posts: images get their own extractor, a linked video goes to yt-dlp.
+  let postImages = null;
+  const postId = youtubePostId(url);
+  if (postId) {
+    const post = await resolveYoutubePost(postId);
+    if (post.videoId) url = `https://www.youtube.com/watch?v=${post.videoId}`;
+    else postImages = post.images;
+  }
+
+  const ytdlpSite = postImages ? null : getYtdlpSite(url);
+  const isDeviation = isDeviationUrl(url);
+  const galleryDlSite = isDeviation ? null : getGalleryDlSite(url);
   const isHentaiGifz = isHentaiGifzUrl(url);
   const isBooru = isBooruUrl(url);
   const isPinterest = isPinterestUrl(url);
@@ -218,11 +230,13 @@ export async function acquireMedia(
     COBALT_ENABLED &&
     !useYtdlp &&
     !galleryDlSite &&
+    !isDeviation &&
     !isHentaiGifz &&
     !isBooru &&
     !isPinterest &&
     !isKlipy &&
     !isThreads &&
+    !postImages &&
     !isIgStory &&
     !isDirectMedia &&
     !trimming &&
@@ -293,6 +307,7 @@ export async function acquireMedia(
       `${galleryDlSite} via gallery-dl`,
       () => downloadWithGalleryDl(url, maxSize, galleryOptions),
     ],
+    ['deviantart', isDeviation, 'DeviantArt', () => downloadFromDeviantArt(url, maxSize)],
     ['hentaigifz', isHentaiGifz, 'hentaigifz', () => downloadFromHentaiGifz(url)],
     ['booru', isBooru, 'booru', () => downloadFromBooru(url)],
     ['pinterest', isPinterest, 'Pinterest', () => downloadFromPinterest(url)],
@@ -306,6 +321,15 @@ export async function acquireMedia(
       () => downloadDirectMedia(url, client, { userAgent: booruCdnUserAgent(url) }),
     ],
     ['reddit', useReddit, 'Reddit', () => downloadRedditSlides(redditImages)],
+    [
+      'youtube-post',
+      postImages !== null,
+      'YouTube post',
+      async () => {
+        const files = await Promise.all(postImages.map(image => downloadFileFromUrl(image)));
+        return files.length === 1 ? files[0] : files;
+      },
+    ],
   ];
   let [downloadMethod, , sourceLabel, extract] = extractors.find(([, applies]) => applies) ?? [
     'cobalt',

@@ -142,6 +142,7 @@ const EMBED_FIXER_HOSTS = new Map([
   ['tnktok.com', 'tiktok.com'],
   ['tfxktok.com', 'tiktok.com'],
   ['vxtiktok.com', 'tiktok.com'],
+  ['koutube.com', 'youtube.com'],
 ]);
 
 const GIPHY_PAGE_PATH = /^\/(?:gifs|stickers|embed)\/(?:[^/]*-)?([A-Za-z0-9]+)\/?$/;

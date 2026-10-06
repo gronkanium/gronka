@@ -80,3 +80,10 @@ export function withCause(error, cause) {
   error.cause = typeof cause === 'string' ? new Error(cause) : cause;
   return error;
 }
+
+// The one answer for a post that is deleted, private or never existed, from any extractor.
+export const contentGone = cause =>
+  withCause(
+    new NetworkError('this post is unavailable, it may be deleted or private', 'CONTENT_GONE'),
+    cause
+  );

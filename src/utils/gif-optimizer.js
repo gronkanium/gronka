@@ -2,9 +2,10 @@ import { spawn } from 'child_process';
 import fs from 'fs/promises';
 import path from 'path';
 import { createLogger } from './logger.js';
-import { ValidationError } from './errors.js';
+import { AppError, ValidationError, withCause } from './errors.js';
 import { fromPath, tempPath, jobSignal } from './media-file.js';
 const logger = createLogger('gif-optimizer');
+const OPTIMIZE_FAILED = 'could not optimize this gif, try again.';
 
 export function isGifFile(filename, contentType) {
   const ext = path.extname(filename ?? '').toLowerCase();
@@ -43,7 +44,7 @@ export async function optimizeGif(inputPath, outputPath, options = {}) {
   try {
     await fs.access(inputPath);
   } catch {
-    throw new ValidationError(`Input GIF file not found: ${inputPath}`);
+    throw withCause(new AppError(OPTIMIZE_FAILED), `gifsicle: input missing at ${inputPath}`);
   }
 
   // Ensure output directory exists
@@ -83,12 +84,12 @@ export async function optimizeGif(inputPath, outputPath, options = {}) {
     try {
       await fs.access(outputPath);
     } catch {
-      throw new ValidationError('Optimized GIF file was not created');
+      throw withCause(new AppError(OPTIMIZE_FAILED), 'gifsicle: exit 0 but no output file');
     }
 
     logger.debug(`GIF optimization completed: ${outputPath}`);
   } catch (error) {
-    if (error instanceof ValidationError) {
+    if (error instanceof AppError) {
       throw error;
     }
 
@@ -97,14 +98,12 @@ export async function optimizeGif(inputPath, outputPath, options = {}) {
       `GIF optimization failed: ${error.message}${error.stderr ? ` - ${error.stderr}` : ''}`
     );
 
-    if (error.code === 'ENOENT') {
-      throw new ValidationError('gifsicle not found. Is it installed and on PATH?');
-    }
     if (error.signal === 'SIGTERM') {
-      throw new ValidationError('GIF optimization timed out');
+      throw withCause(new AppError('optimizing this gif took too long and was stopped.'), error);
     }
-
-    // Return generic error message to user (detailed errors logged above)
-    throw new ValidationError('GIF optimization failed. Please try again.');
+    throw withCause(
+      new AppError(OPTIMIZE_FAILED),
+      `gifsicle: ${error.code === 'ENOENT' ? 'not installed' : error.message} ${error.stderr ?? ''}`.trim()
+    );
   }
 }

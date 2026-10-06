@@ -1,7 +1,7 @@
 import axios from 'axios';
 import { readSessionCookie } from './session-cookie.js';
 import { createLogger } from './logger.js';
-import { NetworkError, withCause, describeCause } from './errors.js';
+import { NetworkError, withCause, describeCause, contentGone } from './errors.js';
 import { ssrfGuardedRequest } from './ssrf-guard.js';
 import { hostOf, normalizeHost } from './url-host.js';
 
@@ -29,6 +29,7 @@ const OFFSITE_HOSTS = [
   'x.com',
   'tiktok.com',
   'xvideos.com',
+  'pornhub.com',
   'xhamster.com',
   'redtube.com',
   'rule34video.com',
@@ -125,12 +126,7 @@ async function fetchListing(url, limit = 100) {
   } catch (error) {
     const status = error.response?.status;
     if (status === 404) {
-      throw new NetworkError(
-        'this post is unavailable, it may be deleted or private',
-        'CONTENT_GONE',
-        500,
-        { cause: error }
-      );
+      throw contentGone(error);
     }
     if (status === 429) {
       throw withCause(
@@ -244,10 +240,7 @@ function mediaOf(post, depth = 0) {
 export function selectRedditMedia(listing, url) {
   const post = listing?.[0]?.data?.children?.[0]?.data;
   if (!post) {
-    throw withCause(
-      new NetworkError('this post is unavailable, it may be deleted or private'),
-      'reddit: listing had no post'
-    );
+    throw contentGone('reddit: listing had no post');
   }
 
   const commentId = commentIdFromUrl(url);

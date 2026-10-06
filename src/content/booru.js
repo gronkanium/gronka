@@ -1,13 +1,10 @@
-import { NetworkError } from '../utils/errors.js';
+import { NetworkError, contentGone } from '../utils/errors.js';
 import { isBooruUrl, fetchBooruPost } from '../utils/booru.js';
 import { post, thread, isoDate, linksIn } from './schema.js';
 
 export const BOORU_LIMITS = {};
 
 export const isBooruContentUrl = isBooruUrl;
-
-const GONE = () =>
-  new NetworkError('this post is unavailable, it may be deleted or private', 'CONTENT_GONE');
 
 const RATINGS = { g: 'safe', s: 'safe', q: 'questionable', e: 'explicit' };
 const VIDEO = new Set(['mp4', 'webm', 'mov', 'm4v']);
@@ -116,7 +113,7 @@ function pick(json) {
 
 export function normalizeBooruPost(json, { url, site }) {
   const data = pick(json);
-  if (!data || data.deleted) throw GONE();
+  if (!data || data.deleted) throw contentGone();
   const fileUrl = site.pickFileUrl(json);
   const links = sourceLinks(data.source);
   const mediaUrl = fileUrl ? new URL(fileUrl, url).href : null;

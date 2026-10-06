@@ -1,6 +1,6 @@
 import axios from 'axios';
 import { createLogger } from '../utils/logger.js';
-import { NetworkError } from '../utils/errors.js';
+import { NetworkError, contentGone } from '../utils/errors.js';
 import { getRequestHeaders } from '../utils/discord-cdn.js';
 import { ssrfGuardedRequest, PAGE_FETCH_TIMEOUT_MS, MAX_PAGE_BYTES } from '../utils/ssrf-guard.js';
 import { isPinterestUrl, extractMediaUrl } from '../utils/pinterest.js';
@@ -11,9 +11,6 @@ const logger = createLogger('content-pinterest');
 export const PINTEREST_LIMITS = {};
 
 export const isPinterestContentUrl = isPinterestUrl;
-
-const GONE = () =>
-  new NetworkError('this post is unavailable, it may be deleted or private', 'CONTENT_GONE');
 
 async function request(url) {
   const response = await axios.get(url, {
@@ -56,7 +53,7 @@ export function normalizePinterestPin(html, finalUrl) {
   const media = extractMediaUrl(html);
   const { SocialMediaPosting: posting, VideoObject: video } = jsonLd(html);
   const main = posting ?? video;
-  if (!main || !media) throw GONE();
+  if (!main || !media) throw contentGone();
   const isVideo = media === video?.contentUrl;
   const pinner = posting?.author;
   const text = posting?.articleBody ?? video?.description ?? '';
@@ -100,11 +97,11 @@ export async function fetchPinterestThread(url, { fetchPage = request } = {}) {
   try {
     page = await fetchPage(url);
   } catch (error) {
-    if ([404, 410].includes(error.response?.status)) throw GONE();
+    if ([404, 410].includes(error.response?.status)) throw contentGone();
     logger.warn(`Failed to fetch Pinterest pin page: ${error.message}`);
     throw new NetworkError('failed to fetch the pin page');
   }
-  if (page.url.includes('show_error=true')) throw GONE();
+  if (page.url.includes('show_error=true')) throw contentGone();
   const subject = normalizePinterestPin(String(page.html ?? ''), page.url);
   return thread({ source: 'pinterest', url: subject.url, post: subject });
 }

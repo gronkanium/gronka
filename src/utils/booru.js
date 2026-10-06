@@ -1,6 +1,6 @@
 import axios from 'axios';
 import { createLogger } from './logger.js';
-import { NetworkError, ValidationError, withCause, describeCause } from './errors.js';
+import { NetworkError, ValidationError, withCause, describeCause, contentGone } from './errors.js';
 import { downloadFileFromUrl } from './file-downloader.js';
 import { ssrfGuardedRequest, MAX_PAGE_BYTES } from './ssrf-guard.js';
 import { normalizeHost } from './url-host.js';
@@ -119,12 +119,10 @@ export async function fetchBooruPost(url, fetchJson = getJson) {
     return { site, host, postId, data: await fetchJson(site.buildApiUrl(host, postId)) };
   } catch (error) {
     if (error.response?.status === 404) {
-      throw new NetworkError('this post is unavailable or has been deleted', 'CONTENT_GONE', 500, {
-        cause: error,
-      });
+      throw contentGone(error);
     }
     logger.warn(`Failed to fetch ${site.name} post ${postId}: ${describeCause(error)}`);
-    throw withCause(new NetworkError('failed to fetch the post'), error);
+    throw withCause(new NetworkError(`failed to reach ${site.name}`), error);
   }
 }
 

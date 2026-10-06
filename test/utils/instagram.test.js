@@ -56,6 +56,10 @@ describe('instagram utilities', () => {
     // verified against the live api: these ids are what /api/v1/media/<id>/info/ answers to
     assert.strictEqual(shortcodeToMediaId('DbzojBsOC6p'), '3959686826246549161');
     assert.strictEqual(shortcodeToMediaId('CPESdZpl7MD'), '2577266072006144771');
+    assert.strictEqual(
+      shortcodeToMediaId('DbzojBsOC6p' + 'd79hVEWk-biTmvi2oO7bLN80RQo0'),
+      '3959686826246549161'
+    );
     assert.strictEqual(shortcodeToMediaId('!!bad!!'), null);
     assert.strictEqual(shortcodeToMediaId(''), null);
   });

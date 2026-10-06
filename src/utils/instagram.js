@@ -102,8 +102,10 @@ export function shortcodeToMediaId(shortcode) {
   if (typeof shortcode !== 'string' || shortcode.length === 0) {
     return null;
   }
+  // private-account share links append a 28-char token to the real shortcode
+  const code = shortcode.length > 28 ? shortcode.slice(0, -28) : shortcode;
   let id = 0n;
-  for (const char of shortcode) {
+  for (const char of code) {
     const index = SHORTCODE_ALPHABET.indexOf(char);
     if (index < 0) {
       return null;

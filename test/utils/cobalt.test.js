@@ -167,6 +167,17 @@ describe('cobalt utilities', () => {
         ],
         ['https://tfxktok.com/@u/video/123', 'https://tiktok.com/@u/video/123'],
         ['https://koutube.com/shorts/pHCDrGukqPI', 'https://youtube.com/shorts/pHCDrGukqPI'],
+        ['https://koutu.be/dQw4w9WgXcQ', 'https://youtu.be/dQw4w9WgXcQ'],
+        ['https://xcancel.com/jack/status/20', 'https://twitter.com/jack/status/20'],
+        ['https://fxig.seria.moe/p/CPESdZpl7MD/', 'https://instagram.com/p/CPESdZpl7MD/'],
+        [
+          'https://www.tpmblr.com/staff/808359876436852736',
+          'https://tumblr.com/staff/808359876436852736',
+        ],
+        [
+          'https://pinterestez.com/pin/144467100516777301/',
+          'https://pinterest.com/pin/144467100516777301/',
+        ],
         [
           'https://www.vxinstagram.com/reel/DdrMVSqvK_G/',
           'https://instagram.com/reel/DdrMVSqvK_G/',

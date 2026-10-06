@@ -61,6 +61,8 @@ services:
       - INSTAGRAM_COOKIES_PATH=${INSTAGRAM_COOKIES_PATH:-/app/cookies.json}
       # Deferred commands go to the worker service; false runs them inside the bot process.
       - MEDIA_WORKERS=${MEDIA_WORKERS:-true}
+      # Proxy for sources that block this server's region, e.g. http://vpn:8888 with the vpn profile
+      - GEO_PROXY_URL=${GEO_PROXY_URL:-}
     volumes: &app-volumes
       - ./temp:/app/temp
       # Optional yt-dlp cookies file (export from a logged-in browser in Netscape format).
@@ -165,6 +167,30 @@ services:
       # Cobalt's OWN copy: it mounts this read-write and rewrites the file, dropping any service
       # it does not recognise. Sharing one file with the app cost us the reddit entry once.
       - ./cobalt-cookies.json:/cookies.json
+
+  # Optional (COMPOSE_PROFILES=vpn): a Mullvad WireGuard tunnel whose HTTP proxy only the sources
+  # flagged geo-blocked use, via GEO_PROXY_URL=http://vpn:8888. No published ports.
+  vpn:
+    logging: *logging
+    image: qmcgaw/gluetun:v3.41.3
+    profiles: [vpn]
+    container_name: gronka-vpn
+    restart: unless-stopped
+    cap_add:
+      - NET_ADMIN
+    devices:
+      - /dev/net/tun:/dev/net/tun
+    environment:
+      - VPN_SERVICE_PROVIDER=mullvad
+      - VPN_TYPE=wireguard
+      - WIREGUARD_PRIVATE_KEY=${VPN_WIREGUARD_PRIVATE_KEY:-}
+      - WIREGUARD_ADDRESSES=${VPN_WIREGUARD_ADDRESSES:-}
+      - SERVER_CITIES=${VPN_SERVER_CITIES:-New York NY}
+      - HTTPPROXY=on
+      - HTTPPROXY_LOG=off
+      - DOT=off
+    networks:
+      - gronka-network
 
   # watchtower updates the cobalt image automatically
   watchtower:

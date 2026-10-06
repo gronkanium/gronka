@@ -1,5 +1,5 @@
 import { createLogger } from '../utils/logger.js';
-import { NetworkError } from '../utils/errors.js';
+import { contentGone } from '../utils/errors.js';
 import { fetchRedditListing, isRedditPostUrl, commentIdFromUrl } from '../utils/reddit.js';
 import { post, comment, thread, isoDate, linksIn, MAX_COMMENTS } from './schema.js';
 
@@ -158,10 +158,7 @@ function normalizeComment(data, depth, budget, state) {
 export function normalizeRedditListing(listing, url, { depth, comments } = {}) {
   const data = listing?.[0]?.data?.children?.[0]?.data;
   if (!data) {
-    throw new NetworkError(
-      'this post is unavailable, it may be deleted or private',
-      'CONTENT_GONE'
-    );
+    throw contentGone('reddit: listing had no post');
   }
   const budget = {
     depth: Math.min(Math.max(depth ?? REDDIT_LIMITS.depth, 0), REDDIT_LIMITS.depth),

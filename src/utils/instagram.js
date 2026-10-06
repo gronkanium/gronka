@@ -1,7 +1,7 @@
 import axios from 'axios';
 import { readSessionCookie } from './session-cookie.js';
 import { createLogger } from './logger.js';
-import { NetworkError, ValidationError, withCause } from './errors.js';
+import { NetworkError, ValidationError, withCause, contentGone } from './errors.js';
 import { downloadFileFromUrl } from './file-downloader.js';
 import { ssrfGuardedRequest } from './ssrf-guard.js';
 import { normalizeHost } from './url-host.js';
@@ -102,8 +102,10 @@ export function shortcodeToMediaId(shortcode) {
   if (typeof shortcode !== 'string' || shortcode.length === 0) {
     return null;
   }
+  // private-account share links append a 28-char token to the real shortcode
+  const code = shortcode.length > 28 ? shortcode.slice(0, -28) : shortcode;
   let id = 0n;
-  for (const char of shortcode) {
+  for (const char of code) {
     const index = SHORTCODE_ALPHABET.indexOf(char);
     if (index < 0) {
       return null;
@@ -230,7 +232,7 @@ export async function instagramGet(
 function unavailableMessage(kind) {
   return kind === 'story'
     ? 'this story is unavailable, it may have expired (stories last 24 hours) or be private'
-    : 'this post is unavailable, it may be deleted or private';
+    : contentGone().message;
 }
 
 const storyGone = reason =>
@@ -348,10 +350,7 @@ export async function downloadFromInstagram(url) {
 
   const media = data?.items?.[0];
   if (!media) {
-    throw withCause(
-      new NetworkError('this post is unavailable, it may be deleted or private'),
-      `instagram: media ${mediaId} info had no items`
-    );
+    throw contentGone(`instagram: media ${mediaId} info had no items`);
   }
 
   const mediaUrl = selectMediaUrl(media, imgIndex);

@@ -169,6 +169,6 @@ describe('fetchBooruThread', () => {
         throw new Error('socket hang up');
       },
     }).catch(e => e);
-    expect(error.message).toBe('failed to fetch the post');
+    expect(error.message).toBe('failed to reach e621');
   });
 });

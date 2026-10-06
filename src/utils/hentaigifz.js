@@ -1,6 +1,6 @@
 import axios from 'axios';
 import { createLogger } from './logger.js';
-import { NetworkError, ValidationError, withCause, describeCause } from './errors.js';
+import { NetworkError, ValidationError, withCause, describeCause, contentGone } from './errors.js';
 import { getRequestHeaders } from './discord-cdn.js';
 import { downloadFileFromUrl } from './file-downloader.js';
 import { ssrfGuardedRequest, PAGE_FETCH_TIMEOUT_MS, MAX_PAGE_BYTES } from './ssrf-guard.js';
@@ -91,7 +91,7 @@ export async function downloadFromHentaiGifz(url) {
     html = response.data;
   } catch (error) {
     if (error.response?.status === 404) {
-      throw withCause(new NetworkError('this post is unavailable or has been deleted'), error);
+      throw contentGone(error);
     }
     if (error.response?.status === 403) {
       throw withCause(new NetworkError('access to this post was denied'), error);

@@ -28,6 +28,7 @@ const YTDLP_CATEGORY = {
   Xiaohongshu: 'social',
   RedGifs: 'adult',
   XVideos: 'adult',
+  Pornhub: 'adult',
   xHamster: 'adult',
   RedTube: 'adult',
   Rule34Video: 'adult',

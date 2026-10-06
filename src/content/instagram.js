@@ -1,5 +1,5 @@
 import { createLogger } from '../utils/logger.js';
-import { NetworkError } from '../utils/errors.js';
+import { NetworkError, contentGone } from '../utils/errors.js';
 import {
   isInstagramPostUrl,
   shortcodeToMediaId,
@@ -85,10 +85,7 @@ export async function fetchInstagramThread(url, { get = instagramGet, cookie = r
   const item = data?.items?.[0];
   if (!item) {
     logger.debug(`Instagram returned no item for ${shortcode}`);
-    throw new NetworkError(
-      'this post is unavailable, it may be deleted or private',
-      'CONTENT_GONE'
-    );
+    throw contentGone(`instagram: media ${mediaId} info had no items`);
   }
   const subject = normalizeInstagramItem(item, shortcode);
   return thread({ source: 'instagram', url: subject.url, post: subject, thread: [], comments: [] });

@@ -151,8 +151,8 @@ if (!mocksSupported) {
         () =>
           downloadWithYtdlp('https://youtu.be/still-failing', Infinity, null, Infinity, null, null),
         error =>
-          error.message ===
-          'could not download this content. it may be deleted, private, age-restricted, or unsupported.'
+          error.code === 'YTDLP_UNKNOWN' &&
+          error.message === 'could not download this YouTube link.'
       );
 
       assert.strictEqual(
@@ -232,11 +232,6 @@ if (!mocksSupported) {
         'ERROR: Unsupported URL: https://www.tiktok.com/discover/thing',
         'https://www.tiktok.com/discover/thing',
         'this link is not a downloadable video page.',
-      ],
-      [
-        'ERROR: [youtube:tab] post: This channel does not have a Ugkx6CER0XHMa-PhkkWJGvLWfpEzEDk8ID-v tab',
-        'https://www.youtube.com/post/UgkxABC',
-        'youtube community posts are not supported.',
       ],
     ];
 

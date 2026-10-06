@@ -1,6 +1,6 @@
 import axios from 'axios';
 import { createLogger } from '../utils/logger.js';
-import { NetworkError } from '../utils/errors.js';
+import { NetworkError, contentGone } from '../utils/errors.js';
 import { canonicalizeMirrorUrl } from '../utils/cobalt.js';
 import { readSessionCookie } from '../utils/session-cookie.js';
 import { post, comment, thread, MAX_COMMENTS } from './schema.js';
@@ -244,9 +244,6 @@ export function normalizeTweet(result, depth = 0) {
   });
 }
 
-const GONE = () =>
-  new NetworkError('this post is unavailable, it may be deleted or private', 'CONTENT_GONE');
-
 // One post: as a guest first, then with the session when x hides it from guests.
 async function readTweet(id, gql) {
   const variables = {
@@ -261,7 +258,7 @@ async function readTweet(id, gql) {
     const asUser = await gql('TweetResultByRestId', variables, { session: true });
     result = asUser?.data?.tweetResult?.result;
   }
-  if (!unwrap(result)?.legacy) throw GONE();
+  if (!unwrap(result)?.legacy) throw contentGone();
   return unwrap(result);
 }
 

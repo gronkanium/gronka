@@ -2,9 +2,7 @@ import fs from 'fs/promises';
 import path from 'path';
 import { spawn } from 'child_process';
 import { createLogger } from './logger.js';
-import { NetworkError, ValidationError, withCause } from './errors.js';
-
-const lastLine = text => text.trim().split('\n').at(-1)?.slice(0, 300) || 'no output';
+import { NetworkError, ValidationError, withCause, contentGone } from './errors.js';
 import { writeZip } from './archive.js';
 import { fromPath, tempDir, jobSignal } from './media-file.js';
 import { mapLimit, ITEM_FANOUT } from './map-limit.js';
@@ -38,6 +36,35 @@ const MEDIA_EXTENSIONS = new Set([
 const MAX_GALLERY_FILES = 25;
 const MAX_MANGA_IMAGES = 10;
 
+// Turns gallery-dl's own error or warning lines (run with -w) into what the user is told.
+export function galleryDlError(stderr, site) {
+  const lines = stderr.trim().split('\n').filter(Boolean);
+  const line = lines.findLast(l => l.includes('][error]')) ?? lines.at(-1);
+  const reason = line
+    ? line.replace(/^\[[^\]]+\]\[\w+\] /, '').slice(0, 300)
+    : 'no files and no output';
+  const where = site ?? 'this site';
+  let error;
+  if (/^NotFoundError|\b404\b/.test(reason)) {
+    error = contentGone();
+  } else if (
+    /AuthRequired|Authentication|Authorization|credentials|refresh-token|log ?in/i.test(stderr)
+  ) {
+    error = new ValidationError(`${where} only shows this to logged in accounts.`);
+  } else if (/^ChallengeError/.test(reason)) {
+    error = new NetworkError(`${where} is blocking downloads right now, try again later`);
+  } else if (/\b429\b/.test(stderr)) {
+    error = new NetworkError(
+      `${where} is rate limiting downloads right now, try again in a few minutes.`
+    );
+  } else if (!line) {
+    error = new ValidationError(`this ${where} link has no image or video to download.`);
+  } else {
+    error = new NetworkError(`could not download this ${where} post`);
+  }
+  return withCause(error, `gallery-dl: ${reason}`);
+}
+
 export function getGalleryDlSite(url) {
   try {
     const hostname = hostOf(url);
@@ -58,14 +85,16 @@ function runGalleryDl(url, outputDir, timeout = 300000) {
       [
         '--config-ignore',
         '--no-input',
-        '--quiet',
+        '--warning',
         '--no-mtime',
         '--no-part',
+        '--range',
+        `1-${MAX_GALLERY_FILES + 1}`,
         '--directory',
         outputDir,
         url,
       ],
-      { signal: jobSignal(), stdio: ['ignore', 'pipe', 'pipe'] }
+      { signal: jobSignal(), stdio: ['ignore', 'ignore', 'pipe'] }
     );
     let stderr = '';
     const timeoutId = setTimeout(() => {
@@ -95,15 +124,10 @@ function runGalleryDl(url, outputDir, timeout = 300000) {
     child.on('close', code => {
       clearTimeout(timeoutId);
       if (code === 0) {
-        resolve();
+        resolve(stderr);
       } else {
         logger.warn(`gallery-dl exited with code ${code}: ${stderr.slice(0, 300)}`);
-        reject(
-          withCause(
-            new NetworkError('could not download this gallery'),
-            `gallery-dl: exit ${code}: ${lastLine(stderr)}`
-          )
-        );
+        reject(galleryDlError(stderr, getGalleryDlSite(url)));
       }
     });
   });
@@ -162,7 +186,7 @@ function runGalleryDlJson(url, timeout = 300000) {
   return new Promise((resolve, reject) => {
     const child = spawn(
       'gallery-dl',
-      ['--config-ignore', '--no-input', '--quiet', '--resolve-json', '--dump-json', url],
+      ['--config-ignore', '--no-input', '--warning', '--resolve-json', '--dump-json', url],
       { signal: jobSignal(), stdio: ['ignore', 'pipe', 'pipe'] }
     );
     let stdout = '';
@@ -195,18 +219,13 @@ function runGalleryDlJson(url, timeout = 300000) {
       clearTimeout(timeoutId);
       if (code !== 0) {
         logger.warn(`gallery-dl discovery exited with code ${code}: ${stderr.slice(0, 300)}`);
-        reject(
-          withCause(
-            new NetworkError('could not inspect this manga'),
-            `gallery-dl: discovery exit ${code}: ${lastLine(stderr)}`
-          )
-        );
+        reject(galleryDlError(stderr, 'MangaDex'));
         return;
       }
       try {
         resolve(JSON.parse(stdout));
-      } catch {
-        reject(new NetworkError('gallery-dl returned invalid manga data'));
+      } catch (error) {
+        reject(withCause(new NetworkError('could not read this manga'), error));
       }
     });
   });
@@ -253,10 +272,10 @@ export async function downloadWithGalleryDl(url, maxSize = Infinity, options = {
     return downloadMangaPages(options.mediaUrls, maxSize);
   }
   const workDir = await tempDir();
-  await runGalleryDl(url, workDir);
+  const warnings = await runGalleryDl(url, workDir);
   const files = await findMediaFiles(workDir);
   if (files.length === 0) {
-    throw new NetworkError('no downloadable media found in this gallery');
+    throw galleryDlError(warnings, getGalleryDlSite(url));
   }
   if (files.length > MAX_GALLERY_FILES) {
     throw new ValidationError('this gallery contains too many files to download at once');

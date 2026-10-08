@@ -86,8 +86,8 @@ export function getYouTubeArgs(url, signedIn = false) {
   return ['--js-runtimes', 'bun', '--extractor-args', `youtube:player_client=${clients}`];
 }
 
-// These answer yt-dlp's own TLS fingerprint with 403; curl-cffi (in the image) lets it pass as Chrome.
-const IMPERSONATE_HOSTS = ['rumble.com', 'pornhub.com'];
+// These reject yt-dlp's own TLS fingerprint (403, or Facebook's "Cannot parse data" once logged in); curl-cffi passes as Chrome.
+const IMPERSONATE_HOSTS = ['rumble.com', 'pornhub.com', 'facebook.com', 'fb.watch'];
 const hostIn = (url, hosts) => {
   const host = hostOf(url);
   return Boolean(host) && hosts.some(h => host === h || host.endsWith(`.${h}`));
@@ -450,10 +450,7 @@ function executeYtdlp(
           rejectWith(new NetworkError('video requires age verification'));
         } else if (/members-only|Join this channel to get access/i.test(errorOutput)) {
           rejectWith(new NetworkError('this video is members-only'));
-        } else if (
-          errorOutput.includes("Sign in to confirm you're not a bot") ||
-          errorOutput.includes('Please sign in')
-        ) {
+        } else if (/Sign in to confirm you['’]re not a bot|Please sign in/i.test(errorOutput)) {
           rejectWith(
             new NetworkError(
               `${siteLabel(url)} is asking this server to sign in, this is usually temporary.`,

@@ -32,6 +32,7 @@ import { storeMedia, deliverStored, finishCommand } from './shared/deliver.js';
 import { fetchUrlInput } from './shared/url-input.js';
 import { dispatchMediaJob } from '../jobs/dispatch.js';
 import { fromPath, tempPath, writeAtomic } from '../utils/media-file.js';
+import { messageMediaInput } from './shared/message-media.js';
 
 const logger = createLogger('convert');
 
@@ -372,11 +373,12 @@ export async function handleConvertContextMenu(interaction) {
     return;
   }
 
-  const { attachments, content } = interaction.targetMessage;
-  const attachment =
-    attachments.find(att => ALLOWED_VIDEO_TYPES.includes(att.contentType)) ??
-    attachments.find(att => ALLOWED_IMAGE_TYPES.includes(att.contentType));
-  const url = attachment ? null : firstUrlIn(content);
+  const { attachment, url } = messageMediaInput(
+    interaction.targetMessage,
+    attachments =>
+      attachments.find(att => ALLOWED_VIDEO_TYPES.includes(att.contentType)) ??
+      attachments.find(att => ALLOWED_IMAGE_TYPES.includes(att.contentType))
+  );
   if (!attachment && !url) {
     await refuse(interaction, 'convert', {
       message: 'no video or image attachment or URL found in this message.',
@@ -400,7 +402,7 @@ export async function handleConvertCommand(interaction) {
 
   const attachment = interaction.options.getAttachment('file');
   const rawUrl = interaction.options.getString('url');
-  const url = firstUrlIn(rawUrl) ?? rawUrl;
+  const url = attachment ? null : (firstUrlIn(rawUrl) ?? rawUrl);
   const format = interaction.options.getString('format') || 'gif';
   const times = await resolveTimeOptions(interaction, { type: 'convert' });
   if (times === null) {
@@ -412,11 +414,6 @@ export async function handleConvertCommand(interaction) {
     const message =
       'please provide either a video/image attachment or a URL to a video/image file.';
     await refuse(interaction, 'convert', { message, reason: 'missing_input', context });
-    return;
-  }
-  if (attachment && url) {
-    const message = 'please provide either a file attachment or a URL, not both.';
-    await refuse(interaction, 'convert', { message, reason: 'multiple_inputs', context });
     return;
   }
 

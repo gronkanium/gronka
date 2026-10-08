@@ -100,6 +100,7 @@ async function convertToGifImpl(inputPath, outputPath, options = {}) {
     ...(startTime !== null ? ['-ss', `${startTime}`] : []),
     ...(duration !== null ? ['-t', `${duration}`] : []),
   ];
+  const videoStream = options.videoIndex == null ? '0:v' : `0:${options.videoIndex}`;
   const timedOut = async () => {
     logger.error(`FFmpeg GIF conversion timed out after ${encodeTimeoutMs / 1000}s, killing`);
     await cleanupPalette();
@@ -112,6 +113,8 @@ async function convertToGifImpl(inputPath, outputPath, options = {}) {
         ...inputOptions,
         '-i',
         inputPath,
+        '-map',
+        videoStream,
         '-vf',
         `fps=${fps},scale=${width}:-1:flags=lanczos,${GIF_PALETTEGEN}`,
         '-y',
@@ -134,7 +137,7 @@ async function convertToGifImpl(inputPath, outputPath, options = {}) {
         '-i',
         palettePath,
         '-filter_complex',
-        `[0:v]fps=${fps},scale=${width}:-1:flags=lanczos[v];[v][1:v]${GIF_PALETTEUSE}`,
+        `[${videoStream}]fps=${fps},scale=${width}:-1:flags=lanczos[v];[v][1:v]${GIF_PALETTEUSE}`,
         '-loop',
         '0',
         '-y',

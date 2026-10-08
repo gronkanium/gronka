@@ -13,6 +13,7 @@ import {
 } from './commands/download.js';
 import { handleOptimizeCommand, handleOptimizeContextMenuCommand } from './commands/optimize.js';
 import { handleConvertCommand, handleConvertContextMenu } from './commands/convert.js';
+import { handleConvertInteraction } from './commands/convert-picker.js';
 import { handleInfoCommand } from './commands/info.js';
 import { handleModalSubmit } from './handlers/modals.js';
 import { handleMangaInteraction } from './commands/manga.js';
@@ -235,6 +236,7 @@ client.on(Events.InteractionCreate, interaction =>
 
 async function handleInteraction(interaction) {
   try {
+    if (interaction.isMessageComponent() && (await handleConvertInteraction(interaction))) return;
     if (await replyIfMaintenance(interaction)) {
       return;
     }
@@ -254,7 +256,7 @@ async function handleInteraction(interaction) {
         await handleDownloadContextMenuCommand(interaction);
       } else if (interaction.commandName === 'optimize') {
         await handleOptimizeContextMenuCommand(interaction, modalAttachmentCache);
-      } else if (interaction.commandName === 'convert to gif') {
+      } else if (interaction.commandName === 'convert') {
         await handleConvertContextMenu(interaction);
       }
     } else if (interaction.isChatInputCommand()) {

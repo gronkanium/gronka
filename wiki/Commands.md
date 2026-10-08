@@ -24,39 +24,43 @@ every slash command also works as a message: mention the bot, then the command. 
 
 ### `/convert`
 
-convert a video or image to gif.
+convert video, audio or images to a compatible format.
 
 **parameters:**
 
-- `file` (attachment, optional) - the video or image file to convert
-- `url` (string, optional) - url to a video or image file to convert
-- `format` (choice, optional) - what to convert to: GIF (default), MP4 or WebM video, MP3, M4A, OGG, WAV or FLAC audio, or a PNG, JPG or WebP image. the input type is detected, never chosen. audio needs a video with sound, still images can only become images, and a gif can also become MP4 or WebM. `optimize` and `lossy` only apply to gif output
-- `optimize` (boolean, optional) - optimize the gif after conversion to reduce file size
-- `lossy` (number, optional) - lossy compression level (0-100, default: 35)
-- `start` (string, optional) - start time for trimming video before conversion, as seconds (`90`, `12.5`) or a timestamp (`3:10`, `1:02:30`) (only applies to video inputs, ignored for images)
-- `end` (string, optional) - end time for trimming video before conversion, as seconds (`90`, `12.5`) or a timestamp (`3:10`, `1:02:30`) (only applies to video inputs, ignored for images)
+- `file` (attachment, optional) - the video, audio or image file to convert
+- `url` (string, optional) - a media file or supported social media link
+- `format` (choice, optional) - omit it to choose from compatible formats, or select GIF, MP4, WebM, MP3, M4A, OGG, WAV, FLAC, PNG, JPG or WebP directly
+- `optimize` (boolean, optional) - optimize GIF output to reduce its size
+- `lossy` (number, optional) - GIF output only, compression level from 0 to 100 (default: 35)
+- `start` and `end` (strings, optional) - trim video, audio or animation, using seconds (`90`, `12.5`) or a timestamp (`3:10`, `1:02:30`)
 
 **usage:**
 
-- provide either a file attachment or a url (or both)
-- if both are provided, the file attachment takes precedence
-- the `optimize` flag applies lossy compression after conversion
-- **for videos**: time parameters (`start`, `end`) trim the video first, then convert to gif
-  - if only `start` is provided, conversion starts at that time and continues to end of video
-  - if only `end` is provided, conversion starts at beginning and ends at that time
-  - if both are provided, conversion uses the specified range
-  - `end` must be greater than `start` if both are provided
-- **for images**: time parameters are ignored (images don't have a time dimension)
+1. provide a file or link; when both are supplied, the file takes precedence
+2. without `format`, choose a compatible output from the picker
+3. the converted file is posted to chat, or delivered as a link when it exceeds the attachment limit
+
+slash-command and context-menu pickers are private. message-command pickers appear in chat and only the person who invoked the command can use them. a picker expires after five minutes or can be cancelled. temporary files are removed when the request finishes, expires or is cancelled.
+
+| input | available outputs |
+| --- | --- |
+| video | GIF, MP4, WebM; PNG, JPG and WebP still frames; audio formats when the source has sound |
+| audio | MP3, M4A, OGG, WAV, FLAC |
+| GIF or animated WebP | GIF, MP4, WebM; PNG, JPG and WebP still frames |
+| still image | PNG, JPG, WebP, GIF |
+
+audio files with embedded artwork are treated as audio. multiple audio tracks use the marked default, or the first track when none is marked. same-format choices are allowed and use the normal conversion preset; GIF can also be copied or optimized. choosing FLAC or WAV cannot restore detail already lost to compression. GIF has no sound, JPG has no transparency, and still-image outputs contain one frame rather than the whole animation.
+
+`start` alone converts from that point to the end; `end` alone converts from the beginning. `end` must be after `start` and the range must fit the source. still images reject timestamps. a still frame is extracted at `start`, or at the beginning when `start` is omitted. `optimize` and `lossy` affect GIF output only.
 
 **examples:**
 
 ```
-/convert file:<attach video>
-/convert url:https://example.com/video.mp4
-/convert file:<attach image> optimize:true
-/convert url:https://example.com/video.mp4 start:30 end:60
-/convert url:https://example.com/video.mp4 start:1:30 end:3:10
-/convert file:<attach video> start:10
+/convert file:<attach video>                  (choose an output, including GIF)
+/convert file:<attach audio> format:mp3
+/convert url:https://example.com/video.mp4 format:gif start:30 end:60
+/convert file:<attach image> format:webp
 ```
 
 ### `/download`
@@ -145,21 +149,16 @@ view usage, storage, and system information in one embed.
 
 context menu commands are available by right-clicking on a message in discord.
 
-### convert to gif
+### convert
 
-convert media from a message to gif.
+convert media from a message to a compatible format.
 
-**usage:**
+1. right-click a message containing video, audio, an image or a media link
+2. select "apps" → "convert"
+3. open the dropdown in the private reply and choose an output format
+4. the converted file is posted to chat, or delivered as a link
 
-1. right-click on a message containing a video or image
-2. select "apps" → "convert to gif"
-3. the bot will convert the media and reply with a gif link
-
-**notes:**
-
-- works with message attachments
-- also works with media urls in the message content
-- automatically detects video or image format
+attachments take precedence over links. if a message contains several attachments, the first supported media file is used and its filename is shown in the picker. embeds and forwarded attachments are supported. conversion processes one media file per request; social media galleries use the first item.
 
 ### download
 
@@ -197,7 +196,7 @@ optimize a gif from a message.
 
 default file size limits:
 
-- videos: 1gb maximum for downloads and conversions (configurable via `MAX_VIDEO_SIZE`)
+- video and audio: 1gb maximum for downloads and conversions (configurable via `MAX_VIDEO_SIZE`)
 - images: 50mb maximum (configurable via `MAX_IMAGE_SIZE`)
 - gif optimization: 50mb maximum
 - video length: the max video duration setting (trimmed downloads via `start`/`end` bypass this)

@@ -9,6 +9,7 @@ import { convertToFormat, OUTPUT_FORMATS } from '../../src/utils/video-processor
 const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'gronka-fmt-test-'));
 let clip;
 let silent;
+const audioInputs = {};
 
 beforeAll(() => {
   const make = (name, inputs) => {
@@ -28,6 +29,21 @@ beforeAll(() => {
     '-shortest',
   ]);
   silent = make('silent.mp4', ['-f', 'lavfi', '-i', 'testsrc=d=1:s=160x120']);
+  for (const format of ['mp3', 'm4a', 'ogg', 'wav', 'flac']) {
+    const file = path.join(dir, `track.${format}`);
+    execFileSync('ffmpeg', [
+      '-loglevel',
+      'error',
+      '-y',
+      '-f',
+      'lavfi',
+      '-i',
+      'sine=d=1',
+      ...OUTPUT_FORMATS[format].args,
+      file,
+    ]);
+    audioInputs[format] = { path: file, filename: `track.${format}` };
+  }
 });
 
 const MAGIC = {
@@ -44,6 +60,29 @@ const MAGIC = {
 };
 
 describe('convertToFormat', () => {
+  for (const inputFormat of ['mp3', 'm4a', 'ogg', 'wav', 'flac']) {
+    test(`accepts ${inputFormat} audio as input`, async () => {
+      const format = inputFormat === 'mp3' ? 'flac' : 'mp3';
+      const out = await convertToFormat(audioInputs[inputFormat], format);
+      assert.ok(MAGIC[format](out.head));
+    });
+  }
+
+  test('a one-pixel GIF can become a playable MP4', async () => {
+    const file = path.join(dir, 'pixel.gif');
+    fs.writeFileSync(
+      file,
+      Buffer.from('R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7', 'base64')
+    );
+    const out = await convertToFormat({ path: file, filename: 'pixel.gif' }, 'mp4');
+    const metadata = JSON.parse(
+      execFileSync('ffprobe', ['-v', 'error', '-show_streams', '-of', 'json', out.path], {
+        encoding: 'utf8',
+      })
+    );
+    assert.strictEqual(metadata.streams[0].width, 2);
+    assert.strictEqual(metadata.streams[0].height, 2);
+  });
   test('every listed format has a magic-byte check here', () => {
     assert.deepStrictEqual(Object.keys(OUTPUT_FORMATS).sort(), Object.keys(MAGIC).sort());
   });

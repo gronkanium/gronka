@@ -173,6 +173,10 @@ export function downloadImage(url) {
   return downloadCapped(url, MAX_IMAGE_SIZE, 'image');
 }
 
+export function downloadAudio(url) {
+  return downloadCapped(url, MAX_VIDEO_SIZE, 'audio');
+}
+
 async function fetchAnyFile(url, userAgent) {
   const file = await guardedFetch(url, MAX_ANY_SIZE, userAgent);
   const contentType = file.headers['content-type'] || '';

@@ -114,10 +114,10 @@ describe('parseArgTokens', () => {
     });
   });
 
-  test('format maps through and invalid formats are dropped', () => {
+  test('format maps through so the command can report invalid formats', () => {
     assert.deepStrictEqual(parseArgTokens(['format=mp4']), { format: 'mp4' });
     assert.deepStrictEqual(parseArgTokens(['format=GIF']), { format: 'gif' });
-    assert.deepStrictEqual(parseArgTokens(['format=exe']), {});
+    assert.deepStrictEqual(parseArgTokens(['format=exe']), { format: 'exe' });
   });
 
   test('lossy is clamped to the 0-100 range the slash command enforces', () => {

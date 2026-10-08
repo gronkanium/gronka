@@ -1,4 +1,6 @@
 import { botConfig } from './config.js';
+import { OUTPUT_FORMATS } from './output-formats.js';
+import path from 'node:path';
 
 const { maxVideoSize: MAX_VIDEO_SIZE, maxImageSize: MAX_IMAGE_SIZE } = botConfig;
 
@@ -22,6 +24,41 @@ export const ALLOWED_IMAGE_TYPES = [
   'image/webp',
   'image/gif',
 ];
+
+export function attachmentMediaKind(attachment) {
+  const mime = (attachment.contentType ?? '').split(';')[0].toLowerCase();
+  if (ALLOWED_VIDEO_TYPES.includes(mime)) return 'video';
+  if (ALLOWED_IMAGE_TYPES.includes(mime)) return 'image';
+  if (mime.startsWith('audio/') || mime === 'application/ogg') return 'audio';
+  if (mime && mime !== 'application/octet-stream' && mime !== 'binary/octet-stream') return null;
+  const ext = path
+    .extname(attachment.name ?? '')
+    .slice(1)
+    .toLowerCase();
+  if (['mp4', 'mov', 'webm', 'avi', 'mkv'].includes(ext)) return 'video';
+  if (['gif', 'png', 'jpg', 'jpeg', 'webp', 'awebp'].includes(ext)) return 'image';
+  if (OUTPUT_FORMATS[ext]?.kind === 'audio') return 'audio';
+  return 'unknown';
+}
+
+export function validateConversionAttachment(attachment) {
+  const kind = attachmentMediaKind(attachment);
+  const max = kind === 'image' ? MAX_IMAGE_SIZE : MAX_VIDEO_SIZE;
+  return attachment.size > max
+    ? {
+        valid: false,
+        error: `the ${kind === 'unknown' ? 'media' : kind} file is too large (max ${max / (1024 * 1024)}mb).`,
+      }
+    : { valid: true };
+}
+
+export function firstConvertibleAttachment(attachments) {
+  return (
+    attachments.find(attachment =>
+      ['video', 'audio', 'image'].includes(attachmentMediaKind(attachment))
+    ) ?? attachments.find(attachment => attachmentMediaKind(attachment) === 'unknown')
+  );
+}
 
 export function validateVideoAttachment(attachment) {
   // Check if it's a video

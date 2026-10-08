@@ -32,7 +32,7 @@ export async function enqueueJob({ kind, args, reply }) {
   return row.id;
 }
 
-export async function claimJob(worker = WORKER_ID) {
+export async function claimJob(worker = WORKER_ID, id = null) {
   const sql = await db();
   const now = Date.now();
   const [row] = await sql`
@@ -41,6 +41,7 @@ export async function claimJob(worker = WORKER_ID) {
         heartbeat_at = ${now}, timestamp = ${now}
     WHERE id = (
       SELECT id FROM media_jobs WHERE status = 'queued'
+        AND (${id}::bigint IS NULL OR id = ${id})
         AND NOT EXISTS (SELECT 1 FROM bot_settings WHERE key = ${PAUSE_KEY} AND value = 'true')
       ORDER BY id FOR UPDATE SKIP LOCKED LIMIT 1
     )
@@ -115,6 +116,55 @@ export async function reclaimStaleJobs(now = Date.now()) {
 export async function deleteJob(id) {
   const sql = await db();
   await sql`DELETE FROM media_jobs WHERE id = ${id}`;
+}
+
+export async function getConvertPicker(id, token) {
+  const sql = await db();
+  const [job] = await sql`
+    SELECT * FROM media_jobs WHERE id = ${id} AND kind = 'convert'
+      AND status IN ('queued', 'running') AND args->'picker'->>'token' = ${token}
+  `;
+  return job ?? null;
+}
+
+export async function publishConvertPicker(id, token, formats, expiresAt, worker = WORKER_ID) {
+  const sql = await db();
+  const rows = await sql`
+    UPDATE media_jobs SET args = args || jsonb_build_object('picker',
+      (args->'picker') || ${sql.json({ formats, expiresAt })}::jsonb)
+    WHERE id = ${id} AND kind = 'convert' AND worker = ${worker} AND status = 'running'
+      AND args->'picker'->>'token' = ${token} AND args->>'format' IS NULL
+      AND args->'picker'->>'cancelled' IS NULL
+    RETURNING id
+  `;
+  return rows.length > 0;
+}
+
+export async function chooseConvertFormat(id, token, format, reply) {
+  const sql = await db();
+  const rows = await sql`
+    UPDATE media_jobs SET args = args || ${sql.json({ format })}::jsonb,
+      reply = ${sql.json(reply)}, timestamp = ${Date.now()}
+    WHERE id = ${id} AND kind = 'convert' AND status IN ('queued', 'running')
+      AND args->'picker'->>'token' = ${token} AND args->>'format' IS NULL
+      AND args->'picker'->>'cancelled' IS NULL
+      AND (args->'picker'->>'expiresAt')::bigint > ${Date.now()}
+      AND (args->'picker'->'formats') ? ${format}
+    RETURNING id
+  `;
+  return rows.length > 0;
+}
+
+export async function cancelConvertPicker(id, token) {
+  const sql = await db();
+  const rows = await sql`
+    UPDATE media_jobs SET args = jsonb_set(args, '{picker,cancelled}', 'true'::jsonb)
+    WHERE id = ${id} AND kind = 'convert' AND status IN ('queued', 'running')
+      AND args->'picker'->>'token' = ${token} AND args->>'format' IS NULL
+      AND args->'picker'->>'cancelled' IS NULL
+    RETURNING id
+  `;
+  return rows.length > 0;
 }
 
 export async function listen(channel, fn) {

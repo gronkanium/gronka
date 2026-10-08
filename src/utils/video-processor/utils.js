@@ -9,7 +9,7 @@ export const FFMPEG_INPUT_GUARD = [
   '-protocol_whitelist',
   'file',
   '-format_whitelist',
-  'mov,matroska,avi,flv,mpegts,gif,apng,image2,png_pipe,jpeg_pipe,webp_pipe,bmp_pipe,gif_pipe',
+  'mov,matroska,avi,flv,mpegts,gif,apng,image2,png_pipe,jpeg_pipe,webp_pipe,bmp_pipe,gif_pipe,mp3,ogg,wav,flac',
 ];
 
 // Measured best size for quality on real clips; error diffusion only redraws each frame's changed rectangle.

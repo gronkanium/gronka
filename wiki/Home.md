@@ -1,10 +1,10 @@
 # gronka
 
-a discord bot that downloads media from social media platforms and urls, then converts it to gifs.
+a discord bot that downloads media from social media platforms and urls, and converts video, audio and images between common formats.
 
 ## what it does
 
-gronka downloads videos and images from social media platforms or direct urls, stores them, and can convert them to gifs.
+gronka downloads media from social media platforms or direct urls and converts files to compatible formats. files are removed after delivery.
 
 ### downloading media
 
@@ -35,12 +35,15 @@ you can also download media from direct urls using `/convert` with a url paramet
 
 ### converting media
 
-convert downloaded media or files you upload to gifs:
+convert downloaded media or files you upload by choosing a compatible output format:
 
 - video formats: mp4, mov, webm, avi, mkv
 - image formats: png, jpg, jpeg, webp, gif
+- audio formats: mp3, m4a, ogg, wav, flac
 
-gifs can also be resized, trimmed or optimized.
+video can become GIF, MP4 or WebM, audio can change between MP3, M4A, OGG, WAV and FLAC, and images can become PNG, JPG, WebP or GIF. video and animated-image inputs can also produce a still frame.
+
+`/convert` and right-click → apps → convert show a format picker. an explicit `format` skips the picker. GIF output can also be trimmed or optimized.
 
 ## getting started
 

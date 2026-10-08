@@ -37,7 +37,7 @@ if (!CLIENT_ID) {
 // Define the commands
 const commands = [
   {
-    name: 'convert to gif',
+    name: 'convert',
     type: 3, // MESSAGE type (right-click on message)
     default_member_permissions: null, // Available to everyone
     dm_permission: true, // Enable in DMs
@@ -62,24 +62,25 @@ const commands = [
   },
   {
     name: 'convert',
-    description: 'convert a video or image to a gif, mp4, mp3 or other format',
+    description: 'convert video, audio or images: choose a compatible output format',
     type: 1, // CHAT_INPUT type (slash command)
     options: [
       {
         name: 'file',
-        description: 'the video or image file to convert',
+        description: 'the video, audio or image file to convert',
         type: 11, // ATTACHMENT type
+        file_types: ['video', 'audio', 'image'],
         required: false,
       },
       {
         name: 'url',
-        description: 'url to a video or image to download and convert',
+        description: 'url to media to download and convert',
         type: 3, // STRING type
         required: false,
       },
       {
         name: 'format',
-        description: 'what to convert it to. default: gif',
+        description: 'output format. leave blank to choose from compatible formats',
         type: 3, // STRING type
         required: false,
         choices: [
@@ -89,14 +90,14 @@ const commands = [
       },
       {
         name: 'optimize',
-        description: 'optimize the gif after conversion to reduce file size',
+        description: 'GIF output only: optimize after conversion to reduce file size',
         type: 5, // BOOLEAN type
         required: false,
       },
       {
         name: 'lossy',
         description:
-          'lossy compression (0-100, default: 35). higher = more compression, lower quality',
+          'GIF output only: lossy compression (0-100, default: 35). higher = smaller, lower quality',
         type: 10, // NUMBER type
         required: false,
         min_value: 0,
@@ -105,14 +106,14 @@ const commands = [
       {
         name: 'start',
         description:
-          'start time for trimming, in seconds or as a timestamp (e.g. 90 or 1:30) (videos only)',
+          'start time for video, audio or animation, in seconds or as a timestamp (e.g. 90 or 1:30)',
         type: 3, // STRING type (accepts seconds or MM:SS / HH:MM:SS timestamps)
         required: false,
       },
       {
         name: 'end',
         description:
-          'end time for trimming, in seconds or as a timestamp (e.g. 90 or 1:30) (videos only)',
+          'end time for video, audio or animation, in seconds or as a timestamp (e.g. 90 or 1:30)',
         type: 3, // STRING type (accepts seconds or MM:SS / HH:MM:SS timestamps)
         required: false,
       },
@@ -217,7 +218,7 @@ const rest = new REST({ version: '10' }).setToken(DISCORD_TOKEN);
     console.log(`✓ successfully registered ${data.length} command(s)\n`);
 
     console.log('context menu commands:');
-    console.log('  • convert to gif');
+    console.log('  • convert');
     console.log('  • download');
     console.log('  • optimize');
 

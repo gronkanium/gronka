@@ -152,6 +152,10 @@ describe('cobalt utilities', () => {
     test('rewrites each verified mirror to its canonical host, path intact', () => {
       const cases = [
         ['https://kkinstagram.com/reel/DcjrASIDZfX', 'https://instagram.com/reel/DcjrASIDZfX'],
+        [
+          'https://www.kkkinstagram.com/reel/Dd4uUdLDPuu/',
+          'https://instagram.com/reel/Dd4uUdLDPuu/',
+        ],
         ['https://eeinstagram.com/p/DbYuey/', 'https://instagram.com/p/DbYuey/'],
         [
           'https://rxddit.com/r/videos/comments/1vk/x/',

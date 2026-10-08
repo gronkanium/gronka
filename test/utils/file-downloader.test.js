@@ -237,6 +237,12 @@ describe('file downloader utilities', () => {
       assert.strictEqual(isDirectMediaUrl('https://example.com/PHOTO.JPEG'), true);
     });
 
+    test('accepts direct audio files instead of requiring a social-media host', () => {
+      for (const ext of ['ogg', 'mp3', 'm4a', 'wav', 'flac']) {
+        assert.strictEqual(isDirectMediaUrl(`https://example.com/track.${ext}?download=1`), true);
+      }
+    });
+
     test('ignores the query string when reading the extension', () => {
       assert.strictEqual(
         isDirectMediaUrl('https://cdn.discordapp.com/attachments/1/2/f.mp4?ex=a&is=b&hm=c'),
@@ -267,6 +273,24 @@ describe('file downloader utilities', () => {
     test('accepts a media content-type', () => {
       assert.strictEqual(isMediaResponse('video/mp4', mp4), true);
       assert.strictEqual(isMediaResponse('image/gif', gif), true);
+    });
+
+    test('accepts audio responses and sniffs generic audio downloads', () => {
+      assert.strictEqual(isMediaResponse('audio/ogg', Buffer.from('OggS' + 'x'.repeat(20))), true);
+      assert.strictEqual(
+        isMediaResponse('application/ogg', Buffer.from('OggS' + 'x'.repeat(20))),
+        true
+      );
+      assert.strictEqual(isMediaResponse('application/ogg', html), false);
+      for (const signature of ['OggS', 'fLaC', 'ID3']) {
+        const bytes = Buffer.from(signature + 'x'.repeat(20));
+        assert.strictEqual(isMediaResponse('application/octet-stream', bytes), true);
+        assert.strictEqual(isMediaResponse('text/html', bytes), false);
+      }
+      const wav = Buffer.from('RIFFxxxxWAVE' + 'x'.repeat(20));
+      assert.strictEqual(isMediaResponse('application/octet-stream', wav), true);
+      const mp3 = Buffer.concat([Buffer.from([0xff, 0xfb, 0x90, 0x00]), Buffer.alloc(20)]);
+      assert.strictEqual(isMediaResponse('application/octet-stream', mp3), true);
     });
 
     test('rejects a non-media content-type even when the bytes look like media', () => {

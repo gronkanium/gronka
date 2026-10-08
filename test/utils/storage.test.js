@@ -28,6 +28,18 @@ test('detectFileType - detects image from extension', () => {
   assert.strictEqual(detectFileType('.webp'), 'image');
 });
 
+test('detectFileType - keeps audio files in the audio storage lane', () => {
+  for (const ext of ['.ogg', '.mp3', '.m4a', '.wav', '.flac']) {
+    assert.strictEqual(detectFileType(ext), 'audio');
+  }
+  assert.strictEqual(detectFileType('.unknown', 'audio/ogg'), 'audio');
+  const m4a = Buffer.concat([Buffer.alloc(4), Buffer.from('ftypM4A '), Buffer.alloc(8)]);
+  assert.strictEqual(detectFileType('.m4a', 'audio/mp4', m4a), 'audio');
+  assert.strictEqual(detectFileType('.m4a', 'application/octet-stream', m4a), 'audio');
+  assert.strictEqual(detectFileType('.ogg', 'video/ogg'), 'video');
+  assert.strictEqual(detectFileType('.mp3', 'image/png'), 'image');
+});
+
 test('detectFileType - uses content type when extension is ambiguous', () => {
   assert.strictEqual(detectFileType('.unknown', 'image/gif'), 'gif');
   assert.strictEqual(detectFileType('.unknown', 'video/mp4'), 'video');

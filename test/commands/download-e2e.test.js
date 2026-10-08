@@ -226,14 +226,18 @@ if (!mocksSupported) {
       YtdlpRateLimitError: class YtdlpRateLimitError extends Error {},
     }));
 
+    const realFileDownloader = await import('../../src/utils/file-downloader.js');
     mock.module('../../src/utils/file-downloader.js', () => ({
+      ...realFileDownloader,
       downloadVideo: async () => media(fakeBuffer(5, 4096), 'video/mp4', 'clip.mp4'),
       downloadImage: async () => media(fakeBuffer(6, 4096), 'image/png', 'still.png'),
       downloadFileFromUrl: async () => media(fakeBuffer(7, 4096), 'video/mp4', 'clip.mp4'),
       parseTenorUrl: async u => u,
       TENOR_VIEW_URL: /^https?:\/\/(www\.)?tenor\.com\/view\/.+-gif-(\d+)/i,
-      isDirectMediaUrl: () => false,
-      downloadDirectMedia: async () => media(fakeBuffer(8, 4096), 'video/mp4', 'direct.mp4'),
+      downloadDirectMedia: async url =>
+        url.endsWith('.ogg')
+          ? media(Buffer.from('OggS' + 'x'.repeat(4092)), 'application/ogg', 'track.ogg')
+          : media(fakeBuffer(8, 4096), 'video/mp4', 'direct.mp4'),
     }));
 
     // Dynamically import AFTER mocks are in place so the mocked modules are used.
@@ -257,6 +261,22 @@ if (!mocksSupported) {
   }
 
   describe('handleDownloadCommand (full-pipeline E2E)', () => {
+    test('direct Ogg audio is downloaded and attached', async () => {
+      const { interaction, calls } = downloadInteraction('https://example.com/track.ogg');
+      await handleDownloadCommand(interaction);
+      const [file] = calls.editReply[0].files;
+      assert.ok(file.name.endsWith('.ogg'));
+      assert.strictEqual(file.attachment.subarray(0, 4).toString(), 'OggS');
+    });
+
+    test('direct audio over the attachment limit uses the audio R2 lane', async () => {
+      const { interaction, calls } = downloadInteraction('https://example.com/track.ogg');
+      interaction.attachmentSizeLimit = 1000;
+      await handleDownloadCommand(interaction);
+      assert.match(calls.editReply[0].content, /https:\/\/cdn\.test\/audio\/[0-9a-f]{32}\.ogg/);
+      assert.deepStrictEqual(uploads.at(-1), { type: 'audio', size: 4096 });
+    });
+
     test('a rejected gallery upload falls back to links for every file', async () => {
       const { interaction, calls } = downloadInteraction(
         `https://x.com/user/status/carousel-reject-${Date.now()}`

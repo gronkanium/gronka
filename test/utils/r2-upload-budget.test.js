@@ -30,7 +30,7 @@ describe('R2 upload against the job deadline', () => {
     publicDomain: 'cdn.test',
   };
 
-  test('refuses up front when the job has less time left than the upload budget', async () => {
+  test('refuses up front when the job has under a minute left', async () => {
     const started = Date.now();
     await withJobDir(
       async () => {
@@ -43,6 +43,18 @@ describe('R2 upload against the job deadline', () => {
       { deadline: Date.now() + 5_000 }
     );
     assert.ok(Date.now() - started < 2_000);
+  });
+
+  test('does not refuse a large file the job still has minutes for', async () => {
+    await withJobDir(
+      async () => {
+        await assert.rejects(
+          uploadToR2({ path: '/nonexistent', size: 641.8 * 1048576 }, 'k', 'video/mp4', config),
+          error => !/not enough time left/.test(error.message)
+        );
+      },
+      { deadline: Date.now() + 851_000 }
+    );
   });
 
   test('a job without a deadline has unlimited time', async () => {

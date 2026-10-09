@@ -5,6 +5,26 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres (attempts) to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [4.0.0](https://github.com/gronkanium/gronka/compare/v3.4.0...v4.0.0) (2026-10-09)
+
+
+### ⚠ BREAKING CHANGES
+
+* **convert:** choose compatible formats for media files ([#143](https://github.com/gronkanium/gronka/issues/143))
+* **convert:** convert without format opens a picker; the right-click command is now convert.
+
+### Features
+
+* **convert:** choose compatible formats for media files ([bcc6514](https://github.com/gronkanium/gronka/commit/bcc6514f366d8e8e2bb7f869e6fed88ad95a982c))
+* **convert:** choose compatible formats for media files ([#143](https://github.com/gronkanium/gronka/issues/143)) ([b7baa59](https://github.com/gronkanium/gronka/commit/b7baa59c1cd532a0212f77091ac9777253072a91))
+
+
+### Bug Fixes
+
+* **deps:** update shell-quote to a patched version ([6d76764](https://github.com/gronkanium/gronka/commit/6d767648130e84906e407d1b903fcdc0a2eeabe3))
+* recover avoidable media download and input failures ([d2cc2d3](https://github.com/gronkanium/gronka/commit/d2cc2d3b9b2e03dc275b543ee15d3dd2059bee35))
+* recover media failures and patch shell-quote ([#142](https://github.com/gronkanium/gronka/issues/142)) ([b79df67](https://github.com/gronkanium/gronka/commit/b79df67258837c88ef353a7298c69a94705a22b1))
+
 ## [3.4.0](https://github.com/gronkanium/gronka/compare/v3.3.0...v3.4.0) (2026-10-06)
 
 

@@ -262,6 +262,29 @@ if (!mocksSupported) {
       assert.ok(result);
       assert.strictEqual(spawnCallLog.length, 2);
     });
+
+    for (const apostrophe of ["'", '’']) {
+      test(`a bot challenge with ${apostrophe} switches to the signed-in client`, async () => {
+        spawnCallLog = [];
+        spawnBehaviors = [
+          failsWith(`ERROR: [youtube] abc: Sign in to confirm you${apostrophe}re not a bot.`),
+          success,
+        ];
+
+        const result = await downloadWithYtdlp(
+          'https://youtu.be/challenge',
+          Infinity,
+          null,
+          Infinity,
+          null,
+          null
+        );
+        assert.ok(result.size > 0);
+        assert.strictEqual(spawnCallLog.length, 2);
+        assert.ok(spawnCallLog[0].args.includes('youtube:player_client=default'));
+        assert.ok(spawnCallLog[1].args.includes('youtube:player_client=web_embedded,default'));
+      });
+    }
   });
 
   // Regression: a direct-media link (e.g. an animated webp from gif.fxtwitter.com) goes through

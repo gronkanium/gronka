@@ -216,6 +216,11 @@ const EMBED_FIXER_HOSTS = new Map([
   ['pinterestez.com', 'pinterest.com'],
 ]);
 
+// Fixers keep minting <letters>instagram.com hosts (kkinstagram, kkkinstagram...), so match the shape too.
+const mirrorTarget = host =>
+  EMBED_FIXER_HOSTS.get(host) ??
+  (/^[a-z0-9-]+instagram\.com$/.test(host) ? 'instagram.com' : undefined);
+
 const GIPHY_PAGE_PATH = /^\/(?:gifs|stickers|embed)\/(?:[^/]*-)?([A-Za-z0-9]+)\/?$/;
 
 // Canonicalize before routing: the Instagram extractor matches canonical hosts only.
@@ -229,7 +234,7 @@ export function canonicalizeMirrorUrl(url) {
     if (giphyId) {
       return `https://i.giphy.com/${giphyId}.gif`;
     }
-    const canonicalHost = EMBED_FIXER_HOSTS.get(normalizeHost(urlObj.hostname));
+    const canonicalHost = mirrorTarget(normalizeHost(urlObj.hostname));
     if (!canonicalHost) {
       return url;
     }
@@ -246,7 +251,7 @@ export function normalizeSocialMediaUrlForCobalt(url) {
     const urlObj = new URL(url);
     let hostname = urlObj.hostname.toLowerCase();
 
-    const canonicalHost = EMBED_FIXER_HOSTS.get(normalizeHost(hostname));
+    const canonicalHost = mirrorTarget(normalizeHost(hostname));
     if (canonicalHost) {
       urlObj.hostname = canonicalHost;
       hostname = canonicalHost;

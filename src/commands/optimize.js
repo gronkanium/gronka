@@ -13,6 +13,7 @@ import { safeInteractionDeferReply } from '../utils/interaction-helpers.js';
 import { storeMedia, deliverStored, finishCommand } from './shared/deliver.js';
 import { fetchUrlInput } from './shared/url-input.js';
 import { dispatchMediaJob } from '../jobs/dispatch.js';
+import { messageMediaInput } from './shared/message-media.js';
 
 const logger = createLogger('optimize');
 
@@ -137,11 +138,9 @@ export async function handleOptimizeContextMenuCommand(interaction, modalAttachm
     return;
   }
 
-  const { attachments, content } = interaction.targetMessage;
-  const attachment = attachments.find(
-    att => att.contentType === 'image/gif' || att.name?.toLowerCase().endsWith('.gif')
+  const { attachment, url } = messageMediaInput(interaction.targetMessage, attachments =>
+    attachments.find(att => isGifFile(att.name, att.contentType))
   );
-  const url = attachment ? null : firstUrlIn(content);
   if (!attachment && !url) {
     await refuse(interaction, 'optimize', {
       message: 'no gif attachment or URL found in this message.',
@@ -191,7 +190,7 @@ export async function handleOptimizeContextMenuCommand(interaction, modalAttachm
 export async function handleOptimizeCommand(interaction) {
   const attachment = interaction.options.getAttachment('file');
   const rawUrl = interaction.options.getString('url');
-  const url = firstUrlIn(rawUrl) ?? rawUrl;
+  const url = attachment ? null : (firstUrlIn(rawUrl) ?? rawUrl);
   const lossyLevel = interaction.options.getNumber('lossy');
   const context = { commandSource: commandSourceOf(interaction) };
 
@@ -208,13 +207,19 @@ export async function handleOptimizeCommand(interaction) {
     await refuse(interaction, 'optimize', { message, reason: 'missing_input', context });
     return;
   }
-  if (attachment && url) {
-    const message = 'please provide either a file attachment or a URL, not both.';
-    await refuse(interaction, 'optimize', { message, reason: 'multiple_inputs', context });
-    return;
-  }
 
   const commandSource = commandSourceOf(interaction);
+  if (attachment && !isGifFile(attachment.name, attachment.contentType)) {
+    await safeInteractionDeferReply(interaction);
+    await dispatchMediaJob(interaction, 'convert', {
+      attachment: attachmentJson(attachment),
+      url: null,
+      format: 'gif',
+      gifOptions: { optimize: true, lossy: lossyLevel ?? undefined },
+      commandSource,
+    });
+    return;
+  }
   if (!(await acceptGif(interaction, { attachment, url, commandSource }))) return;
   await safeInteractionDeferReply(interaction);
   await dispatchMediaJob(interaction, 'optimize', {

@@ -12,6 +12,7 @@ import { createLogger } from './logger.js';
 import { getSetting } from './database/settings-pg.js';
 import { NetworkError, ValidationError, withCause, describeCause } from './errors.js';
 import { jobSignal, jobRemainingMs } from './media-file.js';
+import { OUTPUT_FORMATS } from './output-formats.js';
 
 const logger = createLogger('r2-storage');
 
@@ -103,13 +104,13 @@ export async function uploadToR2(file, key, contentType, config, extraParams = {
     throw error;
   }
 
-  if (jobRemainingMs() < uploadBudgetMs(file.size)) {
+  if (jobRemainingMs() < MIN_UPLOAD_BUDGET_MS) {
     logger.warn(
       `Skipping R2 upload of ${key}: ${Math.round(jobRemainingMs() / 1000)}s left in job`
     );
     throw withCause(
       new NetworkError('there was not enough time left to upload this file. please try again.'),
-      `r2: ${Math.round(jobRemainingMs() / 1000)}s left in the job, ${Math.round(uploadBudgetMs(file.size) / 1000)}s needed for ${(file.size / 1048576).toFixed(1)}MB`
+      `r2: ${Math.round(jobRemainingMs() / 1000)}s left in the job for ${(file.size / 1048576).toFixed(1)}MB`
     );
   }
 
@@ -132,7 +133,8 @@ export async function uploadToR2(file, key, contentType, config, extraParams = {
     });
 
     // The upload stops at its time budget or when the job is cancelled, whichever comes first.
-    const signal = jobSignal(AbortSignal.timeout(uploadBudgetMs(file.size)));
+    const timeoutMs = Math.min(jobRemainingMs(), uploadBudgetMs(file.size));
+    const signal = jobSignal(AbortSignal.timeout(timeoutMs));
     let stop;
     const result = await Promise.race([
       upload.done(),
@@ -143,7 +145,7 @@ export async function uploadToR2(file, key, contentType, config, extraParams = {
             signal.reason?.name === 'TimeoutError'
               ? withCause(
                   new NetworkError('could not upload this file right now, try again shortly.'),
-                  `r2: upload of ${(file.size / 1048576).toFixed(1)}MB hit its ${Math.round(uploadBudgetMs(file.size) / 1000)}s budget`
+                  `r2: upload of ${(file.size / 1048576).toFixed(1)}MB hit its ${Math.round(timeoutMs / 1000)}s budget`
                 )
               : signal.reason
           );
@@ -193,16 +195,14 @@ export function newMediaKey(type, extension) {
 }
 
 export const CONTENT_TYPES = {
+  ...Object.fromEntries(
+    Object.entries(OUTPUT_FORMATS).map(([ext, spec]) => [`.${ext}`, spec.mime])
+  ),
   '.gif': 'image/gif',
-  '.mp4': 'video/mp4',
-  '.webm': 'video/webm',
   '.mov': 'video/quicktime',
   '.avi': 'video/x-msvideo',
   '.mkv': 'video/x-matroska',
-  '.png': 'image/png',
-  '.jpg': 'image/jpeg',
   '.jpeg': 'image/jpeg',
-  '.webp': 'image/webp',
   '.zip': 'application/zip',
 };
 const FALLBACK_CONTENT_TYPES = { video: 'video/mp4', image: 'image/png' };

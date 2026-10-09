@@ -4,6 +4,7 @@ import { r2Config, botConfig } from './config.js';
 import { isR2Configured, listMediaInR2, getR2Usage, setR2Usage } from './r2-storage.js';
 import { getSetting } from './database.js';
 import { ttlHoursForSize, DEFAULT_TTL_TIERS } from './upload-tiers.js';
+import { OUTPUT_FORMATS } from './output-formats.js';
 
 const logger = createLogger('storage');
 
@@ -25,6 +26,8 @@ export async function initializeR2UsageCache() {
 
 export function detectFileType(extension, contentType = '', head = null) {
   const ext = extension.toLowerCase();
+  const audio = contentType.toLowerCase().startsWith('audio/');
+  const audioExtension = OUTPUT_FORMATS[ext.slice(1)]?.kind === 'audio';
   if (ext === '.zip') return 'archive';
 
   // Magic bytes beat both other signals: they describe the file we actually have, whereas the
@@ -37,9 +40,13 @@ export function detectFileType(extension, contentType = '', head = null) {
     }
     // ISO-BMFF ('ftyp' at offset 4) covers mp4/mov/m4v, an mp4 named .gif lands here.
     if (head.length >= 12 && head.subarray(4, 8).toString('latin1') === 'ftyp') {
-      return 'video';
+      return audio || (audioExtension && !contentType.toLowerCase().startsWith('video/'))
+        ? 'audio'
+        : 'video';
     }
   }
+
+  if (audio) return 'audio';
 
   // Check content-type first if provided (more reliable than extension)
   // This handles cases where files have incorrect extensions (e.g., .gif filename but video/mp4 content-type)
@@ -59,6 +66,7 @@ export function detectFileType(extension, contentType = '', head = null) {
   }
 
   // Fall back to extension if content-type is not available or doesn't match known types
+  if (audioExtension) return 'audio';
   if (ext === '.gif') {
     return 'gif';
   }

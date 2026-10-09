@@ -16,6 +16,7 @@ import {
   MAX_PAGE_BYTES,
 } from './ssrf-guard.js';
 import { isMegaUrl, downloadFromMega } from './mega.js';
+import { OUTPUT_FORMATS } from './output-formats.js';
 
 const logger = createLogger('file-downloader');
 
@@ -33,6 +34,7 @@ const DIRECT_MEDIA_EXTENSIONS = new Set([
   'png',
   'webp',
   'bmp',
+  ...Object.keys(OUTPUT_FORMATS).filter(ext => OUTPUT_FORMATS[ext].kind === 'audio'),
 ]);
 
 export function isDirectMediaUrl(url) {
@@ -47,8 +49,11 @@ export function isDirectMediaUrl(url) {
 
 export function isMediaResponse(contentType, head) {
   const type = (contentType || '').toLowerCase();
-  if (type.startsWith('video/') || type.startsWith('image/')) {
+  if (type.startsWith('video/') || type.startsWith('image/') || type.startsWith('audio/')) {
     return true;
+  }
+  if (type.split(';')[0] === 'application/ogg') {
+    return head?.subarray(0, 4).toString('latin1') === 'OggS';
   }
   // An explicit non-media type is a real answer; only sniff when it's absent or generic.
   if (type && !type.startsWith('application/octet-stream') && !type.startsWith('binary/')) {
@@ -61,10 +66,19 @@ export function isMediaResponse(contentType, head) {
   return (
     latin.startsWith('GIF87a') ||
     latin.startsWith('GIF89a') ||
+    latin.startsWith('OggS') ||
+    latin.startsWith('fLaC') ||
+    latin.startsWith('ID3') ||
+    (head[0] === 0xff &&
+      (head[1] & 0xe0) === 0xe0 &&
+      (head[1] & 0x06) !== 0 &&
+      (head[1] & 0x18) !== 0x08 &&
+      (head[2] & 0xf0) !== 0xf0) ||
     head.subarray(4, 8).toString('latin1') === 'ftyp' ||
     latin.startsWith('\x89PNG\r\n\x1a\n') ||
     (head[0] === 0xff && head[1] === 0xd8 && head[2] === 0xff) ||
     (latin.startsWith('RIFF') && head.subarray(8, 12).toString('latin1') === 'WEBP') ||
+    (latin.startsWith('RIFF') && head.subarray(8, 12).toString('latin1') === 'WAVE') ||
     latin.startsWith('\x1aE\xdf\xa3')
   );
 }
@@ -76,7 +90,7 @@ export async function downloadDirectMedia(url, client = null, options = {}) {
     logger.warn(
       `Direct media URL returned non-media content: ${url} (content-type: ${fileData.contentType || 'none'})`
     );
-    throw new ValidationError('that link does not point to a video or image file.');
+    throw new ValidationError('that link does not point to a video, image or audio file.');
   }
   return fileData;
 }

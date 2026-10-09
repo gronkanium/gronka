@@ -220,6 +220,22 @@ if (!mocksSupported) {
       assert.ok(isGif(calls.editReply[0].files[0].attachment));
     });
 
+    test('context menu finds a video embed without a text URL or attachment', async () => {
+      const { interaction, calls } = contextInteraction('cv-embed', 'convert to gif', []);
+      interaction.targetMessage.embeds = [{ video: { url: 'https://example.com/vid-embed.mp4' } }];
+      await handleConvertContextMenu(interaction);
+      assert.ok(isGif(firstReply(calls).files[0].attachment));
+    });
+
+    test('context menu converts an attachment in a forwarded message', async () => {
+      const { interaction, calls } = contextInteraction('cv-forward', 'convert to gif', []);
+      interaction.targetMessage.messageSnapshots = new Map([
+        ['source', { attachments: [attachmentOf('vid')], content: '' }],
+      ]);
+      await handleConvertContextMenu(interaction);
+      assert.ok(isGif(firstReply(calls).files[0].attachment));
+    });
+
     test('gif over the attachment limit: replies with a CDN link', async () => {
       const { interaction, calls } = commandInteraction(`cv-big-${Date.now()}`, {
         file: attachmentOf('vid'),
@@ -250,13 +266,13 @@ if (!mocksSupported) {
       assert.ok(firstReply(calls).files[0].name.endsWith('.mp3'));
     });
 
-    test('both a file and a url: refused', async () => {
+    test('both a file and a url: the file is converted', async () => {
       const { interaction, calls } = commandInteraction(`cv-both-${Date.now()}`, {
         file: attachmentOf('vid'),
         url: 'https://example.com/vid.mp4',
       });
       await handleConvertCommand(interaction);
-      assert.match(calls.reply[0].content, /not both/);
+      assert.ok(isGif(firstReply(calls).files[0].attachment));
     });
 
     test('url that is not media: refused, and the failure keeps the full link', async () => {
@@ -312,12 +328,29 @@ if (!mocksSupported) {
       assert.ok(isGif(firstReply(calls).files[0].attachment));
     });
 
-    test('non-gif attachment: refused', async () => {
+    test.skipIf(!hasGifsicle)('non-gif attachment: converted to an optimized gif', async () => {
       const { interaction, calls } = commandInteraction(`op-png-${Date.now()}`, {
         file: attachmentOf('still'),
       });
       await handleOptimizeCommand(interaction);
-      assert.strictEqual(calls.reply[0].content, 'this command only works on gif files.');
+      assert.ok(isGif(firstReply(calls).files[0].attachment));
+    });
+
+    test.skipIf(!hasGifsicle)('video attachment: converted to an optimized gif', async () => {
+      const { interaction, calls } = commandInteraction('op-video', {
+        file: attachmentOf('vid'),
+      });
+      await handleOptimizeCommand(interaction);
+      assert.ok(isGif(firstReply(calls).files[0].attachment));
+    });
+
+    test.skipIf(!hasGifsicle)('file and URL: optimizes the attached gif', async () => {
+      const { interaction, calls } = commandInteraction('op-both', {
+        file: attachmentOf('anim'),
+        url: 'https://example.com/page.html',
+      });
+      await handleOptimizeCommand(interaction);
+      assert.ok(isGif(firstReply(calls).files[0].attachment));
     });
 
     test('lossy out of range: refused before any work', async () => {
@@ -349,6 +382,16 @@ if (!mocksSupported) {
       await handleOptimizeContextMenuCommand(interaction, cache);
       assert.strictEqual(calls.showModal.length, 1);
       assert.strictEqual(cache.size, 1);
+    });
+
+    test('context menu finds an embedded gif without message text', async () => {
+      const cache = new Map();
+      const { interaction, calls } = contextInteraction('op-embed', 'optimize', []);
+      const url = 'https://example.com/anim-embed.gif';
+      interaction.targetMessage.embeds = [{ image: { url } }];
+      await handleOptimizeContextMenuCommand(interaction, cache);
+      assert.strictEqual(calls.showModal.length, 1);
+      assert.strictEqual([...cache.values()][0].url, url);
     });
   });
 }

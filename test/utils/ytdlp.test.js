@@ -120,6 +120,10 @@ describe('ytdlp utilities', () => {
         ]);
         assert.deepStrictEqual(getSiteArgs('https://www.youtube.com/watch?v=x'), []);
         assert.deepStrictEqual(getSiteArgs('https://rumble.com/v1'), ['--impersonate', 'chrome']);
+        assert.deepStrictEqual(getSiteArgs('https://www.facebook.com/reel/1'), [
+          '--impersonate',
+          'chrome',
+        ]);
       } finally {
         if (saved === undefined) delete process.env.GEO_PROXY_URL;
         else process.env.GEO_PROXY_URL = saved;

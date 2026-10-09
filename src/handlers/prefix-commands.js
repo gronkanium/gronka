@@ -2,8 +2,9 @@ import { EmbedBuilder } from 'discord.js';
 import { createLogger } from '../utils/logger.js';
 import { botConfig } from '../utils/config.js';
 import { replyIfMaintenance } from '../utils/maintenance.js';
-import { OUTPUT_FORMATS } from '../utils/output-formats.js';
 import { createMessageAdapter } from '../commands/shared/message-adapter.js';
+import { messageMediaInput } from '../commands/shared/message-media.js';
+import { firstConvertibleAttachment } from '../utils/attachment-helpers.js';
 import { handleDownloadCommand } from '../commands/download.js';
 import { handleConvertCommand } from '../commands/convert.js';
 import { handleOptimizeCommand } from '../commands/optimize.js';
@@ -73,7 +74,6 @@ export function parseArgTokens(tokens) {
 
   if (options.format !== undefined) {
     options.format = options.format.toLowerCase();
-    if (options.format !== 'gif' && !OUTPUT_FORMATS[options.format]) delete options.format;
   }
 
   // Slash commands enforce 0-100 via min/max; clamp here (non-numeric values are dropped
@@ -89,8 +89,10 @@ export function parseArgTokens(tokens) {
 }
 
 // Resolve the attachment a convert/optimize prefix command should operate on: an attachment on the invoking message, or one on the message it replies to
-async function resolveAttachment(message) {
-  const own = message.attachments.first();
+async function resolveAttachment(message, convert = false) {
+  const select = attachments =>
+    convert ? firstConvertibleAttachment(attachments) : attachments[0];
+  const own = messageMediaInput(message, select).attachment;
   if (own) {
     return own;
   }
@@ -98,7 +100,7 @@ async function resolveAttachment(message) {
   if (message.reference?.messageId) {
     try {
       const referenced = await message.fetchReference();
-      return referenced.attachments.first() ?? null;
+      return messageMediaInput(referenced, select).attachment;
     } catch (error) {
       logger.debug(`Could not fetch referenced message: ${error.message}`);
     }
@@ -113,7 +115,7 @@ export function buildHelpEmbed(prefix, me = '@gronka') {
     .setTitle('gronka')
     .setColor(EMBED_COLOR)
     .setDescription(
-      `media bot: download from social media, convert videos/images to gif, optimize gifs.\n` +
+      `media bot: download from social media, convert video/audio/images, optimize gifs.\n` +
         `mention me to run a command, or use slash commands (\`/download\` etc.). in dms, \`${prefix}\` works too.`
     )
     .addFields(
@@ -121,7 +123,7 @@ export function buildHelpEmbed(prefix, me = '@gronka') {
         name: 'commands',
         value: [
           `${me} \`download <url>\`, download a video from social media (\`mp3=true\` for audio only)`,
-          `${me} \`convert [url]\`, convert a video/image to gif, mp4 or another format (attach a file or link one)`,
+          `${me} \`convert [url]\`, choose a compatible output for video/audio/images (attach a file or link one; \`format=gif\` skips the picker)`,
           `${me} \`optimize [url]\`, shrink a gif (attach it or link one)`,
           `${me} \`info\`, bot stats and system info`,
           `${me} \`help\`, this message`,
@@ -206,7 +208,7 @@ export async function handlePrefixMessage(message, context = {}) {
   try {
     const namedOptions = parseArgTokens(tokens);
     if (commandName === 'convert' || commandName === 'optimize') {
-      namedOptions.file = await resolveAttachment(message);
+      namedOptions.file = await resolveAttachment(message, commandName === 'convert');
     }
 
     const adapter = createMessageAdapter(message, namedOptions, {

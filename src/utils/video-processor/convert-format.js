@@ -1,18 +1,19 @@
-import { execFile } from 'child_process';
-import { promisify } from 'util';
 import { createLogger } from '../logger.js';
 import { ValidationError, withCause } from '../errors.js';
-import { FFMPEG_INPUT_GUARD } from './utils.js';
+import { FFMPEG_INPUT_GUARD, runFfmpeg } from './utils.js';
 import { OUTPUT_FORMATS } from '../output-formats.js';
 import { fromPath, tempPath } from '../media-file.js';
 
 export { OUTPUT_FORMATS };
 
 const logger = createLogger('convert-format');
-const execFileAsync = promisify(execFile);
 
 // Converts a media file to `format`; returns the result as a new media file.
-export async function convertToFormat(input, format, { startTime = null, duration = null } = {}) {
+export async function convertToFormat(
+  input,
+  format,
+  { startTime = null, duration = null, videoIndex = null, audioIndex = null } = {}
+) {
   const spec = OUTPUT_FORMATS[format];
   if (!spec) throw new ValidationError('that output format is not supported.');
 
@@ -27,13 +28,22 @@ export async function convertToFormat(input, format, { startTime = null, duratio
     ...(startTime !== null ? ['-ss', String(startTime)] : []),
     '-i',
     inputPath,
+    '-map',
+    spec.kind === 'audio'
+      ? audioIndex !== null
+        ? `0:${audioIndex}`
+        : '0:a:0'
+      : videoIndex !== null
+        ? `0:${videoIndex}`
+        : '0:v:0',
+    ...(spec.kind === 'video' ? ['-map', audioIndex !== null ? `0:${audioIndex}` : '0:a:0?'] : []),
     ...(duration !== null ? ['-t', String(duration)] : []),
     ...spec.args,
     outputPath,
   ];
 
   try {
-    await execFileAsync('ffmpeg', args, { timeout: 10 * 60 * 1000, maxBuffer: 4 * 1024 * 1024 });
+    await runFfmpeg(args);
     return await fromPath(outputPath, { contentType: spec.mime, filename: `out.${format}` });
   } catch (error) {
     const stderr = String(error.stderr || error.message);

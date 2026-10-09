@@ -1,4 +1,4 @@
-const EVEN_DIMENSIONS = 'scale=trunc(iw/2)*2:trunc(ih/2)*2';
+const EVEN_DIMENSIONS = 'scale=max(2\\,trunc(iw/2)*2):max(2\\,trunc(ih/2)*2)';
 
 // The only outputs /convert and /download's mp3 option can produce; ffmpeg never sees a user-chosen flag.
 export const OUTPUT_FORMATS = {

@@ -1,16 +1,21 @@
 import fs from 'fs/promises';
 import path from 'path';
+import { randomBytes } from 'node:crypto';
+import { MessageFlags } from 'discord.js';
 import { createLogger } from '../utils/logger.js';
 import { botConfig } from '../utils/config.js';
-import { validateUrl, validateFileExtension, firstUrlIn } from '../utils/validation.js';
-import { validateMediaFile } from './shared/media-validation.js';
+import { validateUrl, firstUrlIn } from '../utils/validation.js';
 import { curatedErrorMessage } from './shared/command-errors.js';
-import { downloadVideo, downloadImage } from '../utils/file-downloader.js';
 import {
-  ALLOWED_VIDEO_TYPES,
-  ALLOWED_IMAGE_TYPES,
-  validateVideoAttachment,
-  validateImageAttachment,
+  downloadVideo,
+  downloadImage,
+  downloadAudio,
+  downloadDirectMedia,
+} from '../utils/file-downloader.js';
+import {
+  attachmentMediaKind,
+  validateConversionAttachment,
+  firstConvertibleAttachment,
 } from '../utils/attachment-helpers.js';
 import {
   convertToGif,
@@ -25,7 +30,7 @@ import { getDiscordAttachmentLimit } from './shared/attachment-limit.js';
 import { optimizeToJob } from '../utils/gif-optimizer.js';
 import { runMediaCommand } from './shared/run-media-command.js';
 import { sendConvertedFile } from './shared/send-converted.js';
-import { ValidationError } from '../utils/errors.js';
+import { ValidationError, withCause } from '../utils/errors.js';
 import { resolveTimeOptions, refuse, commandSourceOf } from './shared/command-guards.js';
 import { safeInteractionDeferReply } from '../utils/interaction-helpers.js';
 import { storeMedia, deliverStored, finishCommand } from './shared/deliver.js';
@@ -33,15 +38,15 @@ import { fetchUrlInput } from './shared/url-input.js';
 import { dispatchMediaJob } from '../jobs/dispatch.js';
 import { fromPath, tempPath, writeAtomic } from '../utils/media-file.js';
 import { messageMediaInput } from './shared/message-media.js';
+import { conversionInfo, compatibleFormats, conversionTrim } from '../utils/conversion-options.js';
+import { waitForConvertFormat } from './convert-picker.js';
 
 const logger = createLogger('convert');
 
 const { discordSizeLimit: DISCORD_SIZE_LIMIT } = botConfig;
 
-const VIDEO_EXTENSIONS = ['.mp4', '.mov', '.webm', '.avi', '.mkv'];
-const IMAGE_EXTENSIONS = ['.png', '.jpg', '.jpeg', '.webp', '.awebp', '.gif'];
 const UNSUPPORTED_FORMAT =
-  'unsupported file format. please provide a video (mp4, mov, webm, avi, mkv) or image (png, jpg, jpeg, webp, gif).';
+  'unsupported file format. please provide a video, audio file (mp3, m4a, ogg, wav, flac) or image (png, jpg, webp, gif).';
 
 async function probeMediaInfo(filePath, fallbackWidth) {
   let width = fallbackWidth;
@@ -49,7 +54,9 @@ async function probeMediaInfo(filePath, fallbackWidth) {
 
   try {
     const metadata = await getVideoMetadata(filePath);
-    const videoStream = metadata.streams?.find(s => s.codec_type === 'video');
+    const videoStream = metadata.streams?.find(
+      s => s.codec_type === 'video' && !s.disposition?.attached_pic
+    );
     if (videoStream) {
       if (typeof videoStream.width === 'number' && videoStream.width > 0) {
         width = videoStream.width;
@@ -100,6 +107,7 @@ function resolveVideoConversionOptions(options, probed) {
     fps: options.fps ?? defaultFps,
     startTime: options.startTime ?? null,
     duration: options.duration ?? null,
+    videoIndex: options.videoIndex ?? null,
   };
 }
 
@@ -110,25 +118,18 @@ async function processFormatConversion(
   format,
   trim,
   originalUrl,
-  commandSource = null
+  commandSource = null,
+  info = null
 ) {
-  const spec = OUTPUT_FORMATS[format];
-  const isGif = attachment.contentType === 'image/gif';
-  const isVideo = ALLOWED_VIDEO_TYPES.includes(attachment.contentType);
   await runMediaCommand(
     'convert',
     interaction,
     async ctx => {
-      if (!isVideo && spec.kind === 'audio') {
-        throw new ValidationError('only videos have audio to turn into audio files.');
-      }
-      if (!isVideo && !isGif && spec.kind === 'video') {
-        throw new ValidationError('still images can only be converted to png, jpg, webp or gif.');
-      }
-      const input =
-        preDownloaded ||
-        (isVideo ? await downloadVideo(attachment.url) : await downloadImage(attachment.url));
-      const output = await convertToFormat(input, format, isVideo ? trim : {});
+      const output = await convertToFormat(preDownloaded, format, {
+        ...trim,
+        videoIndex: info?.videoIndex ?? null,
+        audioIndex: info?.audioIndex ?? null,
+      });
       const baseName =
         path.parse(attachment.name || 'file').name.replace(/[^\w.-]+/g, '_') || 'file';
       await sendConvertedFile(
@@ -160,27 +161,16 @@ async function processFormatConversion(
 
 // Renders the source file into gifPath with ffmpeg or ImageMagick.
 async function renderGif(ctx, { attachment, attachmentType, file, options, gifPath }) {
-  let ext = path.extname(attachment.name ?? '').toLowerCase();
-  const allowed = attachmentType === 'video' ? VIDEO_EXTENSIONS : IMAGE_EXTENSIONS;
-  if (!ext || !validateFileExtension(attachment.name, allowed)) {
-    ext = attachmentType === 'video' ? '.mp4' : '.png';
-  }
-  const inputPath = validateMediaFile(file, attachmentType).path;
+  const ext = path.extname(attachment.name ?? '').toLowerCase();
+  const inputPath = file.path;
   await fs.mkdir(path.dirname(gifPath), { recursive: true });
 
   await writeAtomic(gifPath, async out => {
-    if (attachmentType === 'video') {
-      const seconds = (await getVideoMetadata(inputPath)).format.duration;
+    if (attachmentType === 'video' || options.startTime !== null || options.duration !== null) {
       const conversionOptions = resolveVideoConversionOptions(
         options,
         await probeMediaInfo(inputPath, 480)
       );
-      const { startTime, duration } = conversionOptions;
-      if (seconds && startTime !== null && duration !== null && startTime + duration > seconds) {
-        throw new ValidationError(
-          `requested timeframe (${startTime}s to ${(startTime + duration).toFixed(1)}s) exceeds video length (${seconds.toFixed(1)}s).`
-        );
-      }
       await convertToGif(inputPath, out, conversionOptions);
     } else if (attachment.contentType === 'image/gif' || ext === '.gif') {
       if (options.width) {
@@ -190,9 +180,6 @@ async function renderGif(ctx, { attachment, attachmentType, file, options, gifPa
       } else {
         await fs.copyFile(inputPath, out);
       }
-    } else if (isAnimatedWebp(file.head)) {
-      // ffmpeg can't demux animated webp (e.g. TikTok stickers), so ImageMagick converts it.
-      await convertAnimatedWebpToGif(inputPath, out, { width: options.width });
     } else {
       const { width } = await probeMediaInfo(inputPath, 720);
       await convertImageToGif(inputPath, out, {
@@ -257,13 +244,6 @@ async function processConversion(
   );
 }
 
-const inputType = attachment =>
-  ALLOWED_VIDEO_TYPES.includes(attachment.contentType)
-    ? 'video'
-    : ALLOWED_IMAGE_TYPES.includes(attachment.contentType)
-      ? 'image'
-      : null;
-
 const attachmentJson = attachment =>
   attachment && {
     url: attachment.url,
@@ -272,8 +252,6 @@ const attachmentJson = attachment =>
     contentType: attachment.contentType,
   };
 
-// The file (downloading a url) a convert was given, typed as video or image; replies and
-// returns null when it cannot be converted.
 async function resolveInput(interaction, { attachment, url, commandSource }) {
   let file = null;
   let originalUrl = null;
@@ -290,7 +268,7 @@ async function resolveInput(interaction, { attachment, url, commandSource }) {
       return null;
     }
   }
-  const type = inputType(attachment);
+  const type = attachmentMediaKind(attachment);
   if (!type) {
     const { name, size, contentType } = attachment;
     await refuse(interaction, 'convert', {
@@ -298,21 +276,24 @@ async function resolveInput(interaction, { attachment, url, commandSource }) {
       detail: `unsupported content type: ${contentType || 'unknown'}`,
       reason: 'unsupported_format',
       context: {
-        originalUrl,
+        originalUrl: originalUrl ?? attachment.url,
         attachment: { name, size, contentType, url: attachment.url },
         commandSource,
       },
     });
     return null;
   }
-  const validation =
-    type === 'video' ? validateVideoAttachment(attachment) : validateImageAttachment(attachment);
+  const validation = validateConversionAttachment(attachment);
   if (!validation.valid) {
     const { name, size, contentType } = attachment;
     await refuse(interaction, 'convert', {
       message: validation.error,
       reason: url ? null : 'invalid_attachment',
-      context: { attachment: { name, size, contentType, url: attachment.url }, commandSource },
+      context: {
+        originalUrl: originalUrl ?? attachment.url,
+        attachment: { name, size, contentType, url: attachment.url },
+        commandSource,
+      },
     });
     return null;
   }
@@ -336,15 +317,84 @@ async function acceptInput(interaction, { attachment, url, commandSource }) {
 // The job half, run by a worker (or inline): fetch, then convert to gif or another format.
 export async function runConvertJob(
   interaction,
-  { attachment, url, format = 'gif', times = null, gifOptions = {}, commandSource }
+  { attachment, url, format = 'gif', times = null, gifOptions = {}, commandSource, picker },
+  jobId = null
 ) {
   const input = await resolveInput(interaction, { attachment, url, commandSource });
   if (!input) return;
-  // Start and end only mean something for a video.
-  const trim = {
-    startTime: input.type === 'video' ? (times?.startTime ?? null) : null,
-    duration: input.type === 'video' ? (times?.duration ?? null) : null,
-  };
+  let info;
+  let trim;
+  try {
+    const download =
+      input.type === 'image'
+        ? downloadImage
+        : input.type === 'audio'
+          ? downloadAudio
+          : input.type === 'video'
+            ? downloadVideo
+            : downloadDirectMedia;
+    input.file ??= await download(input.attachment.url, interaction.client);
+    const sourceSize = input.file.size;
+    if (isAnimatedWebp(input.file.head)) {
+      if (sourceSize > botConfig.maxImageSize)
+        throw new ValidationError(
+          `that media file is too large (max ${botConfig.maxImageSize / 1024 / 1024}mb).`
+        );
+      const gifPath = await tempPath('.gif');
+      await convertAnimatedWebpToGif(input.file.path, gifPath);
+      input.file = await fromPath(gifPath, { contentType: 'image/gif', filename: 'animation.gif' });
+      input.attachment = { ...input.attachment, contentType: 'image/gif' };
+    }
+    let metadata;
+    try {
+      metadata = await getVideoMetadata(input.file.path);
+    } catch (error) {
+      throw withCause(
+        new ValidationError('could not read that media file. it may be damaged or unsupported.'),
+        error
+      );
+    }
+    info = { ...conversionInfo(metadata), filename: input.attachment.name };
+    if (metadata.format?.format_name === 'gif') input.attachment.contentType = 'image/gif';
+    const max = ['image', 'animation'].includes(info.kind)
+      ? botConfig.maxImageSize
+      : botConfig.maxVideoSize;
+    if (sourceSize > max)
+      throw new ValidationError(`that media file is too large (max ${max / 1024 / 1024}mb).`);
+    trim = conversionTrim(info, times);
+    if (picker) {
+      const selected = await waitForConvertFormat(
+        interaction,
+        jobId,
+        picker,
+        compatibleFormats(info),
+        info
+      );
+      if (!selected) return;
+      ({ format, interaction } = selected);
+    }
+    if (!compatibleFormats(info).includes(format)) {
+      throw new ValidationError(
+        info.kind === 'audio'
+          ? 'audio files can only be converted to mp3, m4a, ogg, wav or flac.'
+          : OUTPUT_FORMATS[format]?.kind === 'audio'
+            ? 'that file has no audio to extract.'
+            : `cannot convert that file to ${format}.`
+      );
+    }
+  } catch (error) {
+    await refuse(interaction, 'convert', {
+      message: curatedErrorMessage(error, 'could not prepare that file for conversion.'),
+      cause: error,
+      reason: 'conversion_input_failed',
+      context: {
+        originalUrl: url ?? input.attachment.url,
+        commandSource,
+        commandOptions: { format, ...times },
+      },
+    });
+    return;
+  }
   if (format !== 'gif') {
     await processFormatConversion(
       interaction,
@@ -352,36 +402,35 @@ export async function runConvertJob(
       input.file,
       format,
       trim,
-      input.originalUrl,
-      commandSource
+      input.originalUrl ?? input.attachment.url,
+      commandSource,
+      info
     );
     return;
   }
   await processConversion(
     interaction,
     input.attachment,
-    input.type,
+    info.kind === 'video' || info.demuxer === 'apng' ? 'video' : 'image',
     input.file,
-    { ...gifOptions, ...trim },
-    input.originalUrl,
+    { ...gifOptions, ...trim, videoIndex: info.videoIndex },
+    input.originalUrl ?? input.attachment.url,
     commandSource
   );
 }
 
 export async function handleConvertContextMenu(interaction) {
-  if (!interaction.isMessageContextMenuCommand() || interaction.commandName !== 'convert to gif') {
+  if (!interaction.isMessageContextMenuCommand() || interaction.commandName !== 'convert') {
     return;
   }
 
   const { attachment, url } = messageMediaInput(
     interaction.targetMessage,
-    attachments =>
-      attachments.find(att => ALLOWED_VIDEO_TYPES.includes(att.contentType)) ??
-      attachments.find(att => ALLOWED_IMAGE_TYPES.includes(att.contentType))
+    firstConvertibleAttachment
   );
   if (!attachment && !url) {
     await refuse(interaction, 'convert', {
-      message: 'no video or image attachment or URL found in this message.',
+      message: 'no video, audio or image attachment or URL found in this message.',
       reason: 'missing_input',
       context: { commandSource: 'context-menu' },
     });
@@ -389,11 +438,13 @@ export async function handleConvertContextMenu(interaction) {
   }
   const commandSource = 'context-menu';
   if (!(await acceptInput(interaction, { attachment, url, commandSource }))) return;
-  await safeInteractionDeferReply(interaction);
-  await dispatchMediaJob(interaction, 'convert', {
+  await safeInteractionDeferReply(interaction, { flags: MessageFlags.Ephemeral });
+  await queueConversion(interaction, {
     attachment: attachmentJson(attachment),
     url,
     commandSource,
+    format: null,
+    picker: { token: randomBytes(12).toString('hex') },
   });
 }
 
@@ -403,27 +454,39 @@ export async function handleConvertCommand(interaction) {
   const attachment = interaction.options.getAttachment('file');
   const rawUrl = interaction.options.getString('url');
   const url = attachment ? null : (firstUrlIn(rawUrl) ?? rawUrl);
-  const format = interaction.options.getString('format') || 'gif';
+  const format = interaction.options.getString('format');
   const times = await resolveTimeOptions(interaction, { type: 'convert' });
   if (times === null) {
     return;
   }
 
-  const context = { commandSource };
+  const context = { commandSource, originalUrl: url ?? attachment?.url };
   if (!attachment && !url) {
-    const message =
-      'please provide either a video/image attachment or a URL to a video/image file.';
+    const message = 'please provide a video, audio or image attachment, or a URL to a media file.';
     await refuse(interaction, 'convert', { message, reason: 'missing_input', context });
     return;
   }
 
+  if (format !== null && format !== 'gif' && !OUTPUT_FORMATS[format]) {
+    await refuse(interaction, 'convert', {
+      message: 'that output format is not supported.',
+      reason: 'unsupported_output',
+      context,
+    });
+    return;
+  }
+
   if (!(await acceptInput(interaction, { attachment, url, commandSource }))) return;
-  await safeInteractionDeferReply(interaction);
+  await safeInteractionDeferReply(
+    interaction,
+    format === null ? { flags: MessageFlags.Ephemeral } : {}
+  );
   const lossy = interaction.options.getNumber('lossy');
-  await dispatchMediaJob(interaction, 'convert', {
+  await queueConversion(interaction, {
     attachment: attachmentJson(attachment),
     url,
     format,
+    ...(format === null ? { picker: { token: randomBytes(12).toString('hex') } } : {}),
     times: { startTime: times.startTime, duration: times.duration },
     gifOptions: {
       optimize: interaction.options.getBoolean('optimize') ?? false,
@@ -431,4 +494,20 @@ export async function handleConvertCommand(interaction) {
     },
     commandSource,
   });
+}
+
+async function queueConversion(interaction, args) {
+  try {
+    await dispatchMediaJob(interaction, 'convert', args);
+  } catch (error) {
+    await refuse(interaction, 'convert', {
+      message: curatedErrorMessage(error, 'could not start the conversion. please try again.'),
+      cause: error,
+      reason: 'conversion_queue_failed',
+      context: {
+        originalUrl: args.url ?? args.attachment?.url,
+        commandSource: args.commandSource,
+      },
+    });
+  }
 }

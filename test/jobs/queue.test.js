@@ -146,4 +146,59 @@ describe('media job queue', () => {
     }
     assert.strictEqual((await queue.claimJob('w1')).id, id);
   });
+
+  test('an inline picker claims its own job without taking an older queued request', async () => {
+    const older = await enqueue();
+    const wanted = await enqueue();
+    const job = await queue.claimJob('inline', wanted);
+    assert.strictEqual(job.id, wanted);
+    assert.strictEqual((await row(older)).status, 'queued');
+  });
+
+  test('format selection is atomic and cannot be overwritten by a duplicate click', async () => {
+    const id = await queue.enqueueJob({
+      kind: 'convert',
+      args: { picker: { token: 'picker-token' } },
+      reply: reply(),
+    });
+    await queue.claimJob('w1');
+    assert.ok(
+      await queue.publishConvertPicker(id, 'picker-token', ['gif', 'mp4'], Date.now() + 60000, 'w1')
+    );
+    const choices = await Promise.all([
+      queue.chooseConvertFormat(id, 'picker-token', 'gif', reply({ token: 'new-a' })),
+      queue.chooseConvertFormat(id, 'picker-token', 'mp4', reply({ token: 'new-b' })),
+    ]);
+    assert.strictEqual(choices.filter(Boolean).length, 1);
+    assert.ok(['gif', 'mp4'].includes((await row(id)).args.format));
+    assert.ok((await row(id)).reply.token.startsWith('new-'));
+  });
+
+  test('a wrong token, incompatible output or expired picker cannot select a format', async () => {
+    const id = await queue.enqueueJob({
+      kind: 'convert',
+      args: { picker: { token: 'secret' } },
+      reply: reply(),
+    });
+    await queue.claimJob('w1');
+    await queue.publishConvertPicker(id, 'secret', ['gif'], Date.now() + 60000, 'w1');
+    assert.strictEqual(await queue.chooseConvertFormat(id, 'wrong', 'gif', reply()), false);
+    assert.strictEqual(await queue.chooseConvertFormat(id, 'secret', 'mp3', reply()), false);
+    await queue.publishConvertPicker(id, 'secret', ['gif'], Date.now() - 1, 'w1');
+    assert.strictEqual(await queue.chooseConvertFormat(id, 'secret', 'gif', reply()), false);
+  });
+
+  test('cancelling a picker prevents selection and finishing removes its state', async () => {
+    const id = await queue.enqueueJob({
+      kind: 'convert',
+      args: { picker: { token: 'cancel' } },
+      reply: reply(),
+    });
+    const job = await queue.claimJob('w1');
+    await queue.publishConvertPicker(id, 'cancel', ['gif'], Date.now() + 60000, 'w1');
+    assert.strictEqual(await queue.cancelConvertPicker(id, 'cancel'), true);
+    assert.strictEqual(await queue.chooseConvertFormat(id, 'cancel', 'gif', reply()), false);
+    await queue.finishJob(job, 'w1');
+    assert.strictEqual(await queue.getConvertPicker(id, 'cancel'), null);
+  });
 });

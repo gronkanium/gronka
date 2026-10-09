@@ -149,6 +149,21 @@ describe('cobalt utilities', () => {
   });
 
   describe('canonicalizeMirrorUrl', () => {
+    test('routes tt.site short links to TikTok with their path and query intact', () => {
+      for (const host of ['tt.site', 'www.tt.site']) {
+        const url = `https://${host}/t/short123/?a=1`;
+        assert.strictEqual(isSocialMediaUrl(url), true);
+        assert.strictEqual(canonicalizeMirrorUrl(url), 'https://tiktok.com/t/short123/?a=1');
+        assert.strictEqual(
+          normalizeSocialMediaUrlForCobalt(url),
+          'https://tiktok.com/t/short123/?a=1'
+        );
+      }
+      const lookalike = 'https://tt.site.evil.example/t/short123/';
+      assert.strictEqual(isSocialMediaUrl(lookalike), false);
+      assert.strictEqual(canonicalizeMirrorUrl(lookalike), lookalike);
+    });
+
     test('rewrites each verified mirror to its canonical host, path intact', () => {
       const cases = [
         ['https://kkinstagram.com/reel/DcjrASIDZfX', 'https://instagram.com/reel/DcjrASIDZfX'],

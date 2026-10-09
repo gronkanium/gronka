@@ -41,7 +41,7 @@ docker compose -f docker-compose.web.yml -f web/docker-compose.vpn.yml \
   --env-file .env --env-file .env.web up -d gronka-web
 ```
 
-The bot stack creates the private proxy network; only its VPN and the web backend join it. Their databases stay on separate networks. `GEO_PROXY_NETWORK` changes the shared network name (default `gronka-geo-proxy`); both stacks must use the same value. Start the bot's VPN first, and include the overlay whenever updating the web backend. Without the overlay, the web stack has no shared network dependency.
+The bot stack creates the private proxy network; only its VPN and the web backend join it. Their databases stay on separate networks. `GEO_PROXY_NETWORK` changes the shared network name (default `gronka-geo-proxy`); both stacks must use the same value. Start the bot's VPN first, and include the overlay whenever updating the web backend. Without the overlay, the web stack has no shared network dependency. To use a separately reachable proxy without the overlay, set `WEB_GEO_PROXY_URL` in `.env.web`.
 
 ## r2 (optional)
 

@@ -44,15 +44,16 @@ function config(files, env = {}) {
 describe('compose networking', () => {
   test('the default stacks need no shared network', () => {
     const bot = config(['docker-compose.yml']);
-    const web = config(['docker-compose.web.yml']);
+    const web = config(['docker-compose.web.yml'], { GEO_PROXY_URL: 'http://vpn:8888' });
     assert.ok(Object.values(bot.networks).every(network => !network.external));
     assert.ok(Object.values(web.networks).every(network => !network.external));
     assert.deepEqual(Object.keys(web.services['gronka-web'].networks).sort(), ['web', 'web-db']);
+    assert.equal(web.services['gronka-web'].environment.GEO_PROXY_URL, '');
   });
 
   test('web receives a configured external geo proxy', () => {
     const proxy = 'http://proxy.example.com:8888';
-    const web = config(['docker-compose.web.yml'], { GEO_PROXY_URL: proxy });
+    const web = config(['docker-compose.web.yml'], { WEB_GEO_PROXY_URL: proxy });
     assert.equal(web.services['gronka-web'].environment.GEO_PROXY_URL, proxy);
   });
 

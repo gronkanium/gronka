@@ -40,6 +40,7 @@ let acquireMedia;
 const fixtures = {};
 // What reached the (mocked) R2 bucket: nothing about the user, just the file.
 const uploads = [];
+const galleryCalls = [];
 
 function ffmpeg(args) {
   const run = Bun.spawnSync(['ffmpeg', '-y', '-v', 'error', ...args]);
@@ -95,10 +96,10 @@ if (!mocksSupported) {
         return `https://cdn.test/${realR2.newMediaKey(type, ext)}`;
       },
     }));
-    const { canonicalizeMirrorUrl } = await import('../../src/utils/cobalt.js');
+    const { canonicalizeMirrorUrl, isSocialMediaUrl } = await import('../../src/utils/cobalt.js');
     mock.module('../../src/utils/cobalt.js', () => ({
       canonicalizeMirrorUrl,
-      isSocialMediaUrl: url => /^https?:\/\/(www\.|mobile\.)?(x|twitter|tiktok)\.com\//i.test(url),
+      isSocialMediaUrl,
       // Reached via the twitter_delivery policy (default hybrid probes every
       // X/Twitter URL), url_only_mode (no test enables it), or the direct-URL
       // fallback for downloads that failed (e.g. over the size/duration caps).
@@ -135,6 +136,13 @@ if (!mocksSupported) {
       getRemoteContentLength: async mediaUrl =>
         mediaUrl.includes('huge') ? 50 * 1024 * 1024 : 4096,
       downloadFromSocialMedia: async (_apiUrl, url) => {
+        if (url.includes('photo-fallback')) {
+          const { NetworkError, withCause } = await import('../../src/utils/errors.js');
+          throw withCause(
+            new NetworkError('could not download this TikTok post.'),
+            'cobalt: error.api.fetch.fail'
+          );
+        }
         if (url.includes('cancelled')) {
           const { jobSignal } = await import('../../src/utils/media-file.js');
           const signal = jobSignal();
@@ -205,6 +213,16 @@ if (!mocksSupported) {
       ],
       downloadWithYtdlp: async (_url, _maxSize, _quality, _maxDuration, _startTime, _duration) => {
         const u = _url || '';
+        if (u.includes('photo-fallback')) {
+          const { ValidationError, withCause } = await import('../../src/utils/errors.js');
+          throw withCause(
+            new ValidationError(
+              'this link is not a downloadable video page.',
+              'YTDLP_UNSUPPORTED_URL'
+            ),
+            'yt-dlp: ERROR: Unsupported URL: https://www.tiktok.com/@example/photo/1234567890'
+          );
+        }
         if (u.includes('bothfail')) {
           const { NetworkError, withCause } = await import('../../src/utils/errors.js');
           throw withCause(
@@ -226,6 +244,28 @@ if (!mocksSupported) {
         return media(fakeBuffer(4, 4096), 'video/mp4', 'clip.mp4');
       },
       YtdlpRateLimitError: class YtdlpRateLimitError extends Error {},
+    }));
+
+    const realGallery = await import('../../src/utils/gallery-dl.js');
+    mock.module('../../src/utils/gallery-dl.js', () => ({
+      ...realGallery,
+      downloadWithGalleryDl: async (url, maxSize, options) => {
+        galleryCalls.push({ url, maxSize, options });
+        if (url.includes('photo-fallback-denied')) {
+          const { NetworkError, withCause } = await import('../../src/utils/errors.js');
+          throw withCause(
+            new NetworkError(
+              'this post is unavailable, it may be deleted or private',
+              'CONTENT_GONE'
+            ),
+            'gallery-dl: Requested post not available'
+          );
+        }
+        return [
+          await media(fakeBuffer(1, 2048), 'image/jpeg', 'first.jpg'),
+          await media(fakeBuffer(2, 3072), 'image/jpeg', 'second.jpg'),
+        ];
+      },
     }));
 
     const realFileDownloader = await import('../../src/utils/file-downloader.js');
@@ -264,6 +304,69 @@ if (!mocksSupported) {
   }
 
   describe('handleDownloadCommand (full-pipeline E2E)', () => {
+    test('TikTok photo links use the gallery fallback when cobalt and yt-dlp cannot read them', async () => {
+      const url = 'https://www.tiktok.com/@example/photo/1234567890?photo-fallback';
+      const { interaction, calls } = downloadInteraction(url);
+      const before = galleryCalls.length;
+      await handleDownloadCommand(interaction);
+      assert.equal(galleryCalls.length - before, 1);
+      assert.equal(galleryCalls.at(-1).url, url);
+      assert.deepEqual(
+        calls.editReply[0].files.map(file => file.name),
+        ['gronka.jpg', 'gronka-2.jpg']
+      );
+      assert.equal(calls.editReply[0].files[0].attachment[0], 1);
+      assert.equal(calls.editReply[0].files[1].attachment[0], 2);
+    });
+
+    test('TikTok short links can reach the photo fallback', async () => {
+      const url = 'https://vm.tiktok.com/photo-fallback/';
+      const { interaction, calls } = downloadInteraction(url);
+      const before = galleryCalls.length;
+      await handleDownloadCommand(interaction);
+      assert.equal(galleryCalls.length - before, 1);
+      assert.equal(galleryCalls.at(-1).url, url);
+      assert.equal(calls.editReply[0].files.length, 2);
+    });
+
+    test('a working TikTok carousel keeps using cobalt', async () => {
+      const { interaction, calls } = downloadInteraction(
+        'https://www.tiktok.com/@example/photo/1234567890?multi'
+      );
+      const before = galleryCalls.length;
+      await handleDownloadCommand(interaction);
+      assert.equal(galleryCalls.length, before);
+      assert.equal(calls.editReply[0].files.length, 2);
+    });
+
+    test('other unsupported URLs do not invoke the TikTok gallery fallback', async () => {
+      const { interaction } = downloadInteraction('https://x.com/example/status/photo-fallback');
+      const before = galleryCalls.length;
+      await handleDownloadCommand(interaction);
+      assert.equal(galleryCalls.length, before);
+    });
+
+    test('a failed TikTok gallery fallback records all extractors and its real cause', async () => {
+      const url = 'https://www.tiktok.com/@example/photo/1234567890?photo-fallback-denied';
+      const { interaction, calls } = downloadInteraction(url);
+      const since = Date.now();
+      await handleDownloadCommand(interaction);
+      assert.equal(
+        calls.editReply[0].content,
+        'this post is unavailable, it may be deleted or private'
+      );
+      const { getAlerts } = await import('../../src/utils/database.js');
+      const alert = (await getAlerts({ command: 'download', startTime: since, limit: 50 }))
+        .map(row => JSON.parse(row.metadata))
+        .find(metadata => metadata.url === url);
+      assert.ok(alert);
+      assert.equal(alert.cause, 'gallery-dl: Requested post not available');
+      assert.deepEqual(
+        alert.trail.map(step => step.step),
+        ['cobalt', 'yt-dlp', 'gallery-dl']
+      );
+    });
+
     test('Jumpshare file pages reach the extractor and attach the media', async () => {
       const { interaction, calls } = downloadInteraction(
         'https://jumpshare.com/s/file123AbC',

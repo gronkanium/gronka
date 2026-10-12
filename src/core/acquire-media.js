@@ -43,6 +43,7 @@ import { convertToFormat } from '../utils/video-processor.js';
 import { fitsDiscordAttachment } from '../commands/shared/attachment-limit.js';
 import { hostOf } from '../utils/url-host.js';
 import { youtubePostId, resolveYoutubePost } from '../utils/youtube-post.js';
+import { isTiktokContentUrl } from '../content/tiktok.js';
 
 const logger = createLogger('acquire-media');
 
@@ -400,12 +401,13 @@ export async function acquireMedia(
             logger.warn(
               `Instagram session extractor failed: ${describeCause(rootCause(instagramError))}`
             );
-            throw cobaltError;
+            throw instagramError.code === 'CONTENT_GONE' ? instagramError : cobaltError;
           }
         }
       );
     } catch (cobaltError) {
       if (!useInstagram) note('cobalt', cobaltError);
+      if (useInstagram && cobaltError.code === 'CONTENT_GONE') throw fail(cobaltError);
       const fallbackSite = isTwitterXUrl(url)
         ? 'X/Twitter'
         : isTikTokUrl(url)
@@ -465,6 +467,23 @@ export async function acquireMedia(
         );
       } catch (ytdlpFallbackError) {
         note('yt-dlp', ytdlpFallbackError);
+        if (
+          GALLERY_DL_ENABLED &&
+          isTiktokContentUrl(url) &&
+          ytdlpFallbackError.code === 'YTDLP_UNSUPPORTED_URL'
+        ) {
+          try {
+            return {
+              kind: 'file',
+              fileData: await downloadWithGalleryDl(url, maxSize, galleryOptions),
+              downloadMethod: 'gallery-dl',
+              url,
+            };
+          } catch (galleryError) {
+            note('gallery-dl', galleryError);
+            throw fail(galleryError);
+          }
+        }
         if (ytdlpFallbackError.code === 'DRM_PROTECTED' && isSoundCloudUrl(url)) {
           return {
             kind: 'file',

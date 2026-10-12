@@ -474,7 +474,12 @@ function executeYtdlp(
             new NetworkError(`${siteLabel(url)} changed its page and cannot be read yet.`)
           );
         } else if (errorOutput.includes('Unsupported URL')) {
-          rejectWith(new ValidationError('this link is not a downloadable video page.'));
+          rejectWith(
+            new ValidationError(
+              'this link is not a downloadable video page.',
+              'YTDLP_UNSUPPORTED_URL'
+            )
+          );
         } else if (errorOutput.includes('is not a valid URL')) {
           rejectWith(new ValidationError(`invalid ${siteLabel(url)} URL`));
         } else if (errorOutput.includes('There is no video in this post')) {

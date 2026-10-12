@@ -10,7 +10,7 @@ import { Upload } from '@aws-sdk/lib-storage';
 import { createLogger } from './logger.js';
 // A leaf DB module, not the ./database.js barrel: storage.js imports this file.
 import { getSetting } from './database/settings-pg.js';
-import { NetworkError, ValidationError, withCause, describeCause } from './errors.js';
+import { AppError, NetworkError, ValidationError, withCause, describeCause } from './errors.js';
 import { jobSignal, jobRemainingMs } from './media-file.js';
 import { OUTPUT_FORMATS } from './output-formats.js';
 
@@ -84,6 +84,7 @@ function getR2Client(config) {
       new S3Client({
         region: 'auto',
         endpoint: `https://${accountId}.r2.cloudflarestorage.com`,
+        requestHandler: { requestTimeout: 60_000, throwOnRequestTimeout: true },
         credentials: { accessKeyId, secretAccessKey },
       })
     );
@@ -168,7 +169,12 @@ export async function uploadToR2(file, key, contentType, config, extraParams = {
     if (error.$metadata) {
       logger.error(`AWS Error metadata:`, error.$metadata);
     }
-    throw error;
+    throw error instanceof AppError
+      ? error
+      : withCause(
+          new NetworkError('could not upload this file right now, try again shortly.'),
+          error
+        );
   }
 }
 

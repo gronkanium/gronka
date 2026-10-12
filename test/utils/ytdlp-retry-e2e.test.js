@@ -232,17 +232,18 @@ if (!mocksSupported) {
         'ERROR: Unsupported URL: https://www.tiktok.com/discover/thing',
         'https://www.tiktok.com/discover/thing',
         'this link is not a downloadable video page.',
+        'YTDLP_UNSUPPORTED_URL',
       ],
     ];
 
-    for (const [stderr, url, expected] of cases) {
+    for (const [stderr, url, expected, code] of cases) {
       test(expected, async () => {
         spawnCallLog = [];
         spawnBehaviors = [failsWith(stderr)];
 
         await assert.rejects(
           () => downloadWithYtdlp(url, Infinity, null, Infinity, null, null),
-          error => error.message === expected
+          error => error.message === expected && (!code || error.code === code)
         );
       });
     }

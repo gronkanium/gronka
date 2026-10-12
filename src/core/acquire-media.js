@@ -401,12 +401,13 @@ export async function acquireMedia(
             logger.warn(
               `Instagram session extractor failed: ${describeCause(rootCause(instagramError))}`
             );
-            throw cobaltError;
+            throw instagramError.code === 'CONTENT_GONE' ? instagramError : cobaltError;
           }
         }
       );
     } catch (cobaltError) {
       if (!useInstagram) note('cobalt', cobaltError);
+      if (useInstagram && cobaltError.code === 'CONTENT_GONE') throw fail(cobaltError);
       const fallbackSite = isTwitterXUrl(url)
         ? 'X/Twitter'
         : isTikTokUrl(url)

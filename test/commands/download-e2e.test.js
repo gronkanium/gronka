@@ -246,6 +246,16 @@ if (!mocksSupported) {
       YtdlpRateLimitError: class YtdlpRateLimitError extends Error {},
     }));
 
+    const realInstagram = await import('../../src/utils/instagram.js');
+    mock.module('../../src/utils/instagram.js', () => ({
+      ...realInstagram,
+      hasInstagramSession: () => true,
+      downloadFromInstagram: async () => {
+        const { NetworkError } = await import('../../src/utils/errors.js');
+        throw new NetworkError('this post is unavailable', 'CONTENT_GONE', 500);
+      },
+    }));
+
     const realGallery = await import('../../src/utils/gallery-dl.js');
     mock.module('../../src/utils/gallery-dl.js', () => ({
       ...realGallery,
@@ -413,6 +423,14 @@ if (!mocksSupported) {
         assert.strictEqual(result.kind, 'file');
         assert.strictEqual(result.downloadMethod, 'jumpshare');
       });
+    });
+
+    test('an Instagram post the session says is gone stops before yt-dlp', async () => {
+      await assert.rejects(
+        acquireMedia('https://www.instagram.com/p/bothfail/', { urlOnly: false }),
+        error =>
+          error.code === 'CONTENT_GONE' && error.trail.some(s => s.step === 'instagram session')
+      );
     });
 
     test('direct Ogg audio is downloaded and attached', async () => {

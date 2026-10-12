@@ -20,6 +20,7 @@ import * as keys from './web/keys.js';
 import { FFMPEG_INPUT_GUARD } from './utils/video-processor/utils.js';
 import { trimItem } from './utils/video-processor/trim-item.js';
 import { fromPath, tempPath, withJobDir, sweepJobDirs } from './utils/media-file.js';
+import { getDirectMediaHeaders } from './utils/file-downloader.js';
 
 const execFileAsync = promisify(execFile);
 
@@ -85,7 +86,7 @@ export function directStreamInfo(url) {
   return {
     title: name,
     ext,
-    parts: [{ url, headers: {}, ext, kind: 'file' }],
+    parts: [{ url, headers: getDirectMediaHeaders(url), ext, kind: 'file' }],
   };
 }
 

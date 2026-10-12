@@ -44,6 +44,7 @@ services:
       TURNSTILE_SECRET: ${TURNSTILE_SECRET:?}
       COBALT_API_URL: http://cobalt-web:9000
       COBALT_ENABLED: 'true'
+      GEO_PROXY_URL: ${WEB_GEO_PROXY_URL:-}
       # downloads stream to disk here, never into memory or tmpfs
       MEDIA_TEMP_DIR: /jobs
       R2_ACCOUNT_ID: ${R2_ACCOUNT_ID:?}

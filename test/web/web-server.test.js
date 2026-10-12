@@ -186,6 +186,15 @@ test('a plain media link becomes one worker part named after the file', () => {
   });
 });
 
+test('Rule34 worker streams carry the hotlink referer only for the correct host', () => {
+  expect(directStreamInfo('https://ahri2mp4.rule34.xxx//images/test.mp4').parts[0].headers).toEqual(
+    {
+      Referer: 'https://rule34.xxx/',
+    }
+  );
+  expect(directStreamInfo('https://rule34.xxx.evil.example/test.mp4').parts[0].headers).toEqual({});
+});
+
 test('content disposition keeps unicode names but sanitizes the ascii fallback', () => {
   expect(contentDisposition('ça "va".mp4')).toBe(
     `attachment; filename="_a _va_.mp4"; filename*=UTF-8''%C3%A7a%20%22va%22.mp4`

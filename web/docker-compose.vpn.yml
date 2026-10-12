@@ -1,0 +1,10 @@
+services:
+  gronka-web:
+    environment:
+      GEO_PROXY_URL: ${GEO_PROXY_URL:-http://vpn:8888}
+    networks: [geo-proxy]
+
+networks:
+  geo-proxy:
+    name: ${GEO_PROXY_NETWORK:-gronka-geo-proxy}
+    external: true

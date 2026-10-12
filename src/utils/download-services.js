@@ -2,6 +2,7 @@ import { YTDLP_SITES } from './ytdlp.js';
 import { GALLERY_DL_SITES } from './gallery-dl.js';
 import { getSetting } from './database.js';
 import { hostOf } from './url-host.js';
+import { canonicalizeMirrorUrl } from './cobalt.js';
 
 // Registry of every source /download can pull from, so the webui can list them and each
 // can be individually turned off. This is a *parallel* classifier used only for the
@@ -78,6 +79,7 @@ const customServices = [
   { id: 'threads', label: 'Threads', category: 'social', hosts: ['threads.com', 'threads.net'] },
   { id: 'giphy', label: 'Giphy', category: 'social', hosts: ['giphy.com'] },
   { id: 'mega', label: 'Mega', category: 'video', hosts: ['mega.nz', 'mega.io'] },
+  { id: 'jumpshare', label: 'Jumpshare', category: 'video', hosts: ['jumpshare.com'] },
   { id: 'hentaigifz', label: 'hentaigifz', category: 'adult', hosts: ['hentaigifz.com'] },
   { id: 'danbooru', label: 'Danbooru', category: 'booru', hosts: ['danbooru.donmai.us'] },
   { id: 'e621', label: 'e621 / e926', category: 'booru', hosts: ['e621.net', 'e926.net'] },
@@ -106,7 +108,7 @@ export const DOWNLOAD_SERVICES = [
 export const DOWNLOAD_SERVICE_IDS = new Set(DOWNLOAD_SERVICES.map(s => s.id));
 
 export function getServiceForUrl(url) {
-  const hostname = hostOf(url);
+  const hostname = hostOf(canonicalizeMirrorUrl(url));
   if (!hostname) return null;
   return (
     DOWNLOAD_SERVICES.find(service =>

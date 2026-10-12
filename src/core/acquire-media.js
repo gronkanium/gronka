@@ -11,6 +11,7 @@ import {
   downloadFromSocialMedia,
   getCobaltMediaUrls,
   getRemoteContentLength,
+  canonicalizeMirrorUrl,
 } from '../utils/cobalt.js';
 import { getYtdlpSite, downloadWithYtdlp } from '../utils/ytdlp.js';
 import { getGalleryDlSite, downloadWithGalleryDl } from '../utils/gallery-dl.js';
@@ -19,6 +20,7 @@ import { isHentaiGifzUrl, downloadFromHentaiGifz } from '../utils/hentaigifz.js'
 import { isBooruUrl, downloadFromBooru, booruCdnUserAgent } from '../utils/booru.js';
 import { isPinterestUrl, downloadFromPinterest } from '../utils/pinterest.js';
 import { isKlipyUrl, downloadFromKlipy } from '../utils/klipy.js';
+import { isJumpshareUrl } from '../utils/jumpshare.js';
 import { isThreadsUrl, downloadFromThreads } from '../utils/threads.js';
 import {
   isInstagramPostUrl,
@@ -151,6 +153,7 @@ export async function acquireMedia(
     streamFirst = null,
   } = {}
 ) {
+  url = canonicalizeMirrorUrl(url);
   if (await isPrivateHost(url)) {
     throw new ValidationError(BLOCKED_DESTINATION_MESSAGE);
   }
@@ -215,6 +218,7 @@ export async function acquireMedia(
   const isBooru = isBooruUrl(url);
   const isPinterest = isPinterestUrl(url);
   const isKlipy = isKlipyUrl(url);
+  const isJumpshare = isJumpshareUrl(url);
   const isThreads = isThreadsUrl(url);
   const isDirectMedia = isDirectMediaUrl(url);
   // Cobalt tries Instagram's logged-out routes first; the session extractor is only the backstop.
@@ -235,6 +239,7 @@ export async function acquireMedia(
     !isBooru &&
     !isPinterest &&
     !isKlipy &&
+    !isJumpshare &&
     !isThreads &&
     !postImages &&
     !isIgStory &&
@@ -312,6 +317,7 @@ export async function acquireMedia(
     ['booru', isBooru, 'booru', () => downloadFromBooru(url)],
     ['pinterest', isPinterest, 'Pinterest', () => downloadFromPinterest(url)],
     ['klipy', isKlipy, 'Klipy', () => downloadFromKlipy(url)],
+    ['jumpshare', isJumpshare, 'Jumpshare', () => downloadDirectMedia(url, client)],
     ['threads', isThreads, 'Threads', () => downloadFromThreads(url)],
     ['instagram-story', isIgStory, 'Instagram story', () => downloadFromInstagram(url)],
     [

@@ -191,6 +191,7 @@ services:
       - DOT=off
     networks:
       - gronka-network
+      - geo-proxy
 
   # watchtower updates the cobalt image automatically
   watchtower:
@@ -212,3 +213,6 @@ volumes:
 networks:
   gronka-network:
     driver: bridge
+  geo-proxy:
+    name: ${GEO_PROXY_NETWORK:-gronka-geo-proxy}
+    internal: true

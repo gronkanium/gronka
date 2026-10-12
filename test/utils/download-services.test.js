@@ -27,6 +27,8 @@ describe('download-services registry', () => {
   test('getServiceForUrl maps representative URLs across categories', () => {
     assert.strictEqual(getServiceForUrl('https://x.com/u/status/1')?.id, 'twitter');
     assert.strictEqual(getServiceForUrl('https://www.tiktok.com/@u/video/1')?.id, 'tiktok');
+    assert.strictEqual(getServiceForUrl('https://www.tt.site/t/short123/')?.id, 'tiktok');
+    assert.strictEqual(getServiceForUrl('https://jumpshare.com/s/file123AbC')?.id, 'jumpshare');
     assert.strictEqual(getServiceForUrl('https://v.redd.it/abc')?.id, 'reddit');
     assert.strictEqual(getServiceForUrl('https://youtu.be/abc')?.id, 'youtube');
     assert.strictEqual(getServiceForUrl('https://www.xvideos.com/video1/x')?.id, 'xvideos');
@@ -68,5 +70,12 @@ describe('getDisabledServiceLabel gating', () => {
 
     await setSetting('disabled_services', '[]');
     assert.strictEqual(await getDisabledServiceLabel('https://www.xvideos.com/video1/x'), null);
+  });
+
+  test('TikTok aliases and Jumpshare respect their source switches', async () => {
+    await setSetting('disabled_services', JSON.stringify(['tiktok', 'jumpshare']));
+    assert.strictEqual(await getDisabledServiceLabel('https://www.tt.site/t/short123/'), 'TikTok');
+    assert.strictEqual(await getDisabledServiceLabel('https://jumpshare.com/s/test'), 'Jumpshare');
+    await setSetting('disabled_services', '[]');
   });
 });

@@ -36,6 +36,7 @@ function fakeBuffer(seed, size = 1024) {
 
 let handleDownloadCommand;
 let runMediaJob;
+let acquireMedia;
 const fixtures = {};
 // What reached the (mocked) R2 bucket: nothing about the user, just the file.
 const uploads = [];
@@ -94,9 +95,10 @@ if (!mocksSupported) {
         return `https://cdn.test/${realR2.newMediaKey(type, ext)}`;
       },
     }));
+    const { canonicalizeMirrorUrl } = await import('../../src/utils/cobalt.js');
     mock.module('../../src/utils/cobalt.js', () => ({
-      canonicalizeMirrorUrl: url => url,
-      isSocialMediaUrl: url => /^https?:\/\/(www\.|mobile\.)?(x|twitter)\.com\//i.test(url),
+      canonicalizeMirrorUrl,
+      isSocialMediaUrl: url => /^https?:\/\/(www\.|mobile\.)?(x|twitter|tiktok)\.com\//i.test(url),
       // Reached via the twitter_delivery policy (default hybrid probes every
       // X/Twitter URL), url_only_mode (no test enables it), or the direct-URL
       // fallback for downloads that failed (e.g. over the size/duration caps).
@@ -243,6 +245,7 @@ if (!mocksSupported) {
     // Dynamically import AFTER mocks are in place so the mocked modules are used.
     ({ handleDownloadCommand } = await import('../../src/commands/download.js'));
     ({ runMediaJob } = await import('../../src/jobs/run-job.js'));
+    ({ acquireMedia } = await import('../../src/core/acquire-media.js'));
   });
 
   afterAll(() => {
@@ -261,6 +264,54 @@ if (!mocksSupported) {
   }
 
   describe('handleDownloadCommand (full-pipeline E2E)', () => {
+    test('Jumpshare file pages reach the extractor and attach the media', async () => {
+      const { interaction, calls } = downloadInteraction(
+        'https://jumpshare.com/s/file123AbC',
+        'e2e-jumpshare'
+      );
+      await handleDownloadCommand(interaction);
+      assert.strictEqual(calls.editReply.length, 1);
+      assert.strictEqual(calls.editReply[0].files?.length, 1);
+      assert.ok(calls.editReply[0].files[0].name.endsWith('.mp4'));
+    });
+
+    test('tt.site short links pass the command source check and attach TikTok media', async () => {
+      const { interaction, calls } = downloadInteraction(
+        'https://www.tt.site/t/short123/',
+        'e2e-tt-site'
+      );
+      await handleDownloadCommand(interaction);
+      assert.strictEqual(calls.editReply.length, 1);
+      assert.strictEqual(calls.editReply[0].files?.length, 1);
+    });
+
+    test('the shared downloader canonicalizes tt.site before web stream routing', async () => {
+      const result = await acquireMedia('https://www.tt.site/t/short123/', {
+        urlOnly: false,
+        streamFirst: async (url, method) => {
+          assert.strictEqual(url, 'https://tiktok.com/t/short123/');
+          assert.strictEqual(method, 'cobalt');
+          return { files: [] };
+        },
+      });
+      assert.strictEqual(result.kind, 'stream');
+    });
+
+    test('Jumpshare uses its own extractor instead of passing page HTML to the web stream lane', async () => {
+      const { withJobDir } = await import('../../src/utils/media-file.js');
+      await withJobDir(async () => {
+        const result = await acquireMedia('https://jumpshare.com/s/file123AbC', {
+          urlOnly: true,
+          streamFirst: async (_url, method) => {
+            assert.strictEqual(method, 'jumpshare');
+            return null;
+          },
+        });
+        assert.strictEqual(result.kind, 'file');
+        assert.strictEqual(result.downloadMethod, 'jumpshare');
+      });
+    });
+
     test('direct Ogg audio is downloaded and attached', async () => {
       const { interaction, calls } = downloadInteraction('https://example.com/track.ogg');
       await handleDownloadCommand(interaction);

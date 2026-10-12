@@ -16,6 +16,7 @@ import { isHentaiGifzUrl } from '../utils/hentaigifz.js';
 import { isBooruUrl } from '../utils/booru.js';
 import { isPinterestUrl } from '../utils/pinterest.js';
 import { isKlipyUrl } from '../utils/klipy.js';
+import { isJumpshareUrl } from '../utils/jumpshare.js';
 import { isThreadsUrl } from '../utils/threads.js';
 import { keylessMegaFileId } from '../utils/mega.js';
 import { promptForMegaKey } from './mega-key.js';
@@ -273,6 +274,7 @@ async function refuseUnsupported(interaction, url, commandSource) {
     isBooruUrl(url) ||
     isPinterestUrl(url) ||
     isKlipyUrl(url) ||
+    isJumpshareUrl(url) ||
     isThreadsUrl(url) ||
     isDirectMediaUrl(url);
   if (ownExtractor) return false;

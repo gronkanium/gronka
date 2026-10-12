@@ -6,9 +6,83 @@ import {
   downloadVideo,
   isDirectMediaUrl,
   isMediaResponse,
+  downloadDirectMedia,
+  downloadFileFromUrl,
 } from '../../src/utils/file-downloader.js';
 import axios from 'axios';
 import { Readable } from 'node:stream';
+import { withJobDir } from '../../src/utils/media-file.js';
+
+describe('source-specific file downloads', () => {
+  test('Rule34 CDN files use the site referer and retain guarded requests', async () => {
+    const originalGet = axios.get;
+    const calls = [];
+    axios.get = async (url, options) => {
+      calls.push({ url, options });
+      const body =
+        options.headers.Referer === 'https://rule34.xxx/'
+          ? Buffer.from('\x00\x00\x00\x20ftypisom')
+          : Buffer.from('<html>hotlink blocked</html>');
+      return {
+        data: Readable.from([body]),
+        headers: { 'content-type': body[0] === 0 ? 'video/mp4' : 'text/html' },
+      };
+    };
+    try {
+      await withJobDir(async () => {
+        const file = await downloadDirectMedia(
+          'https://ahri2mp4.rule34.xxx//images/2968/test.mp4?14061804'
+        );
+        assert.strictEqual(file.contentType, 'video/mp4');
+        assert.ok(file.size > 0);
+        await downloadFileFromUrl('https://rule34.xxx.evil.example/test.mp4');
+      });
+      assert.strictEqual(calls[0].options.headers.Referer, 'https://rule34.xxx/');
+      assert.strictEqual(typeof calls[0].options.lookup, 'function');
+      assert.strictEqual(typeof calls[0].options.beforeRedirect, 'function');
+      assert.strictEqual(calls[1].options.headers.Referer, 'https://discord.com/');
+    } finally {
+      axios.get = originalGet;
+    }
+  });
+
+  test('Jumpshare downloads the original file instead of its share-page HTML', async () => {
+    const originalGet = axios.get;
+    const share = 'https://jumpshare.com/s/file123AbC';
+    const media = 'https://cdn.jumpshare.com/download/original?token=1&key=2';
+    const html = `<a class="download" data-id="file123AbC" data-link="${media.replace('&', '&amp;')}">Download</a>`;
+    const calls = [];
+    axios.get = async (url, options) => {
+      calls.push(url);
+      assert.strictEqual(typeof options.lookup, 'function');
+      assert.strictEqual(typeof options.beforeRedirect, 'function');
+      if (url === share) {
+        return {
+          data: options.responseType === 'text' ? html : Readable.from([html]),
+          headers: { 'content-type': 'text/html' },
+        };
+      }
+      assert.strictEqual(url, media);
+      return {
+        data: Readable.from([Buffer.from('\x00\x00\x00\x20ftypisom')]),
+        headers: {
+          'content-type': 'video/mp4',
+          'content-disposition': 'attachment; filename="84754.mp4"',
+        },
+      };
+    };
+    try {
+      await withJobDir(async () => {
+        const file = await downloadFileFromUrl(share);
+        assert.strictEqual(file.contentType, 'video/mp4');
+        assert.strictEqual(file.filename, '84754.mp4');
+      });
+      assert.deepStrictEqual(calls, [share, media]);
+    } finally {
+      axios.get = originalGet;
+    }
+  });
+});
 
 describe('file downloader utilities', () => {
   describe('oversize downloads report the size cap, not "unavailable"', () => {

@@ -17,6 +17,8 @@ import {
 } from './ssrf-guard.js';
 import { isMegaUrl, downloadFromMega } from './mega.js';
 import { OUTPUT_FORMATS } from './output-formats.js';
+import { isJumpshareUrl, resolveJumpshareUrl } from './jumpshare.js';
+import { hostOf } from './url-host.js';
 
 const logger = createLogger('file-downloader');
 
@@ -109,7 +111,16 @@ const {
 const MAX_ANY_SIZE = Math.max(MAX_VIDEO_SIZE, MAX_IMAGE_SIZE);
 const mb = bytes => bytes / (1024 * 1024);
 
+export function getDirectMediaHeaders(url) {
+  const host = hostOf(url);
+  return host === 'rule34.xxx' || host?.endsWith('.rule34.xxx')
+    ? { Referer: 'https://rule34.xxx/' }
+    : {};
+}
+
 function guardedFetch(url, maxSize, userAgent = null) {
+  const headers = { ...getRequestHeaders(), ...getDirectMediaHeaders(url) };
+  if (userAgent) headers['User-Agent'] = userAgent;
   return fetchToFile(
     url,
     {
@@ -117,9 +128,7 @@ function guardedFetch(url, maxSize, userAgent = null) {
       timeout: 60000,
       maxRedirects: 5,
       validateStatus: status => status >= 200 && status < 400,
-      headers: userAgent
-        ? { ...getRequestHeaders(), 'User-Agent': userAgent }
-        : getRequestHeaders(),
+      headers,
     },
     { maxSize }
   );
@@ -209,6 +218,10 @@ export async function downloadFileFromUrl(url, client = null, options = {}) {
 
   if (isMegaUrl(actualUrl)) {
     return downloadFromMega(actualUrl, MAX_ANY_SIZE);
+  }
+
+  if (isJumpshareUrl(actualUrl)) {
+    actualUrl = await resolveJumpshareUrl(actualUrl);
   }
 
   if (isInstagramStoryUrl(actualUrl) && hasInstagramSession()) {

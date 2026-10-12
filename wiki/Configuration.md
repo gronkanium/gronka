@@ -30,6 +30,19 @@ nothing about who uses it. files are processed in a temporary folder and deleted
 | `YTDLP_COOKIES_PATH`, `INSTAGRAM_COOKIES_PATH` | | logins for gated content, see [[Cookies]] |
 | `MEDIA_WORKERS` | `true` in docker | run media jobs in the worker containers; `false` runs them in the bot |
 
+## geo-blocked sources (optional)
+
+`GEO_PROXY_URL` sends Pornhub, xHamster and RedTube through an HTTP proxy. Other sources use their usual connection. The `vpn` profile provides a Mullvad WireGuard tunnel: set `COMPOSE_PROFILES=vpn`, `VPN_WIREGUARD_PRIVATE_KEY`, `VPN_WIREGUARD_ADDRESSES` and `GEO_PROXY_URL=http://vpn:8888` in `.env`, then run `docker compose up -d vpn`.
+
+The hosted web backend can use that same tunnel with the tracked VPN overlay:
+
+```bash
+docker compose -f docker-compose.web.yml -f web/docker-compose.vpn.yml \
+  --env-file .env --env-file .env.web up -d gronka-web
+```
+
+The bot stack creates the private proxy network; only its VPN and the web backend join it. Their databases stay on separate networks. `GEO_PROXY_NETWORK` changes the shared network name (default `gronka-geo-proxy`); both stacks must use the same value. Start the bot's VPN first, and include the overlay whenever updating the web backend. Without the overlay, the web stack has no shared network dependency. To use a separately reachable proxy without the overlay, set `WEB_GEO_PROXY_URL` in `.env.web`.
+
 ## r2 (optional)
 
 without r2, files too big for a discord attachment are refused. with it, they are uploaded and linked. see [[R2-Storage]].

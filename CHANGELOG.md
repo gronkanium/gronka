@@ -5,6 +5,18 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres (attempts) to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [4.1.0](https://github.com/gronkanium/gronka/compare/v4.0.0...v4.1.0) (2026-10-12)
+
+
+### Features
+
+* support tt.site and Jumpshare and share the web VPN ([#145](https://github.com/gronkanium/gronka/issues/145)) ([7bdfaff](https://github.com/gronkanium/gronka/commit/7bdfaffd7ff2716224c1b2036eb648af8428a58f))
+
+
+### Bug Fixes
+
+* recover TikTok photos, retry stalled R2 uploads, stop at gone Instagram posts ([#149](https://github.com/gronkanium/gronka/issues/149)) ([ca11dd8](https://github.com/gronkanium/gronka/commit/ca11dd89a365d91a98e134cb3218fbe10875a673))
+
 ## [4.0.0](https://github.com/gronkanium/gronka/compare/v3.4.0...v4.0.0) (2026-10-09)
 
 

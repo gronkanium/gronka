@@ -5,6 +5,14 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres (attempts) to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [4.1.1](https://github.com/gronkanium/gronka/compare/v4.1.0...v4.1.1) (2026-10-15)
+
+
+### Bug Fixes
+
+* **download:** resolve Pornhub shorties links to the video page ([#151](https://github.com/gronkanium/gronka/issues/151)) ([976bd1e](https://github.com/gronkanium/gronka/commit/976bd1e45d85d12649e9f0c636ea15296d06a1ec))
+* **download:** say deleted or private when TikTok reports an unavailable post ([#152](https://github.com/gronkanium/gronka/issues/152)) ([538148e](https://github.com/gronkanium/gronka/commit/538148e838885042fb8639a931f7280c844dbe77))
+
 ## [4.1.0](https://github.com/gronkanium/gronka/compare/v4.0.0...v4.1.0) (2026-10-12)
 
 

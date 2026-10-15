@@ -465,10 +465,8 @@ function executeYtdlp(
               `${siteLabel(url)} downloads go through a vpn that is not reachable right now, try again later.`
             )
           );
-        } else if (/Your IP address is blocked/i.test(errorOutput)) {
-          rejectWith(
-            new NetworkError(`${siteLabel(url)} is blocking downloads from this server right now.`)
-          );
+        } else if (/Your IP address is blocked|status code 10231/i.test(errorOutput)) {
+          rejectWith(contentGone());
         } else if (errorOutput.includes('Cannot parse data')) {
           rejectWith(
             new NetworkError(`${siteLabel(url)} changed its page and cannot be read yet.`)

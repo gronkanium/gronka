@@ -176,6 +176,11 @@ export function getYtdlpSite(url) {
   }
 }
 
+export function canonicalYtdlpUrl(url) {
+  const match = /^https?:\/\/(?:[\w-]+\.)?pornhub\.com\/shorties\/(\w+)/i.exec(url);
+  return match ? `https://www.pornhub.com/view_video.php?viewkey=${match[1]}` : url;
+}
+
 function getContentType(ext) {
   const extLower = ext.toLowerCase().replace(/^\./, '');
   const mimeTypes = {
@@ -662,7 +667,8 @@ function getVideoDuration(url, timeout = 15000) {
 
 // Resolved without cookies so no link we hand out is tied to our sessions, and http(s) only
 // because a proxy can pass a file through but cannot stitch HLS/DASH fragments.
-export async function getStreamInfo(url, timeout = 30000) {
+export async function getStreamInfo(rawUrl, timeout = 30000) {
+  const url = canonicalYtdlpUrl(rawUrl);
   const args = [
     '-J',
     '--no-playlist',
@@ -714,13 +720,14 @@ function emptyDownloadError(error) {
 }
 
 export async function downloadWithYtdlp(
-  url,
+  rawUrl,
   maxSize = Infinity,
   quality = null,
   maxDuration = 300,
   startTime = null,
   duration = null
 ) {
+  const url = canonicalYtdlpUrl(rawUrl);
   logger.debug(
     `Downloading via yt-dlp: ${url} (maxDuration: ${maxDuration}, startTime: ${startTime}, duration: ${duration})`
   );

@@ -4,12 +4,22 @@ import {
   isYouTubeUrl,
   getYtdlpSite,
   getSiteArgs,
+  canonicalYtdlpUrl,
   YtdlpRateLimitError,
 } from '../../src/utils/ytdlp.js';
 import { NetworkError } from '../../src/utils/errors.js';
 import { getGalleryDlSite } from '../../src/utils/gallery-dl.js';
 
 describe('ytdlp utilities', () => {
+  test('pornhub shorties links resolve to the video page', () => {
+    assert.strictEqual(
+      canonicalYtdlpUrl('https://www.pornhub.com/shorties/683af55667459?x=1'),
+      'https://www.pornhub.com/view_video.php?viewkey=683af55667459'
+    );
+    const other = 'https://www.pornhub.com/view_video.php?viewkey=1';
+    assert.strictEqual(canonicalYtdlpUrl(other), other);
+  });
+
   describe('gallery-dl site detection', () => {
     test('resolves supported gallery hosts', () => {
       assert.strictEqual(

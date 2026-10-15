@@ -221,7 +221,7 @@ if (!mocksSupported) {
       [
         'ERROR: [TikTok] 123: Your IP address is blocked from accessing this post',
         'https://www.tiktok.com/@a/video/123',
-        'tiktok.com is blocking downloads from this server right now.',
+        'this post is unavailable, it may be deleted or private',
       ],
       [
         'ERROR: [facebook] 123: Cannot parse data; please report this issue',

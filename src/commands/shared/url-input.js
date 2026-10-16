@@ -1,6 +1,10 @@
-import { AppError } from '../../utils/errors.js';
+import { AppError, ValidationError } from '../../utils/errors.js';
 import { downloadFileFromUrl, parseTenorUrl, TENOR_VIEW_URL } from '../../utils/file-downloader.js';
-import { isDiscordCdnUrl } from '../../utils/discord-cdn.js';
+import {
+  isDiscordCdnUrl,
+  isDiscordMessageLink,
+  DISCORD_MESSAGE_LINK_MESSAGE,
+} from '../../utils/discord-cdn.js';
 import { acquireMedia } from '../../core/acquire-media.js';
 import { isSocialMediaUrl } from '../../utils/cobalt.js';
 import { getYtdlpSite } from '../../utils/ytdlp.js';
@@ -18,6 +22,7 @@ async function fetchSource(url, client) {
 
 // The file behind a url option, as {attachment, file, originalUrl}.
 export async function fetchUrlInput(url, client) {
+  if (isDiscordMessageLink(url)) throw new ValidationError(DISCORD_MESSAGE_LINK_MESSAGE);
   let source = url;
   if (TENOR_VIEW_URL.test(url)) {
     try {

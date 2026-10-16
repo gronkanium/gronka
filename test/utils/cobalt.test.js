@@ -165,6 +165,20 @@ describe('cobalt utilities', () => {
       assert.strictEqual(canonicalizeMirrorUrl(lookalike), lookalike);
     });
 
+    test('keeps the vm./vt. share prefix on TikTok mirrors', () => {
+      const url = 'https://vm.kktiktok.com/ZGdC5ErUk/';
+      assert.strictEqual(isSocialMediaUrl(url), true);
+      assert.strictEqual(canonicalizeMirrorUrl(url), 'https://vm.tiktok.com/ZGdC5ErUk/');
+      assert.strictEqual(
+        canonicalizeMirrorUrl('https://vt.vxtiktok.com/ZS1/'),
+        'https://vt.tiktok.com/ZS1/'
+      );
+      assert.strictEqual(
+        canonicalizeMirrorUrl('https://vm.kkinstagram.com/x/'),
+        'https://vm.kkinstagram.com/x/'
+      );
+    });
+
     test('rewrites each verified mirror to its canonical host, path intact', () => {
       const cases = [
         ['https://kkinstagram.com/reel/DcjrASIDZfX', 'https://instagram.com/reel/DcjrASIDZfX'],

@@ -4,6 +4,7 @@ import {
   isDiscordCdnUrl,
   isAttachmentExpired,
   getRequestHeaders,
+  isDiscordMessageLink,
 } from '../../src/utils/discord-cdn.js';
 
 describe('discord cdn utilities', () => {
@@ -192,5 +193,27 @@ describe('discord cdn utilities', () => {
       assert.notStrictEqual(headers1, headers2);
       assert.deepStrictEqual(headers1, headers2);
     });
+  });
+});
+
+describe('isDiscordMessageLink', () => {
+  test('matches message links on every discord host', () => {
+    for (const url of [
+      'https://discord.com/channels/1/2/3',
+      'https://ptb.discord.com/channels/@me/2/3',
+      'https://discordapp.com/channels/1/2/3',
+    ]) {
+      assert.strictEqual(isDiscordMessageLink(url), true, url);
+    }
+  });
+
+  test('leaves files, invites and lookalikes alone', () => {
+    for (const url of [
+      'https://cdn.discordapp.com/attachments/1/2/a.gif',
+      'https://discord.gg/abc',
+      'https://discord.com.evil.example/channels/1/2/3',
+    ]) {
+      assert.strictEqual(isDiscordMessageLink(url), false, url);
+    }
   });
 });

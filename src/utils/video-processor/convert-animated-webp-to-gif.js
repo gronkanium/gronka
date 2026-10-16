@@ -2,7 +2,7 @@ import { spawn } from 'child_process';
 import fs from 'fs/promises';
 import path from 'path';
 import { createLogger } from '../logger.js';
-import { validateNumericParameter } from './utils.js';
+import { validateNumericParameter, MAX_GIF_WIDTH } from './utils.js';
 import { jobSignal } from '../media-file.js';
 
 const logger = createLogger('convert-animated-webp-to-gif');
@@ -32,7 +32,7 @@ async function convertAnimatedWebpToGifImpl(inputPath, outputPath, options = {})
   const width =
     options.width === undefined || options.width === null
       ? null
-      : validateNumericParameter(options.width, 'width', 1, 4096);
+      : validateNumericParameter(options.width, 'width', 1, MAX_GIF_WIDTH);
 
   logger.debug(
     `Starting animated WebP to GIF conversion: ${inputPath} -> ${outputPath}${

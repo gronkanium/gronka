@@ -271,11 +271,11 @@ describe('downloadFromInstagram stories', () => {
     );
   });
 
-  const search = { users: [{ user: { pk: '77', username: 'SomeUser' } }] };
+  const search = { data: { user: { id: '77' } }, status: 'ok' };
 
   test('a bare user stories link resolves the user id and downloads the whole reel', async () => {
     const calls = stubApi({
-      topsearch: search,
+      web_profile_info: search,
       'reels_media/?reel_ids=77': {
         reels: {
           77: {
@@ -295,7 +295,7 @@ describe('downloadFromInstagram stories', () => {
   test('a story id that media-info rejects falls back to that item in the user reel', async () => {
     stubApi({
       '/media/9/info/': httpError(400),
-      topsearch: search,
+      web_profile_info: search,
       reels_media: {
         reels_media: [
           {
@@ -312,7 +312,7 @@ describe('downloadFromInstagram stories', () => {
   });
 
   test('a user with no live story is CONTENT_GONE', async () => {
-    stubApi({ topsearch: search, reels_media: { reels: {}, status: 'ok' } });
+    stubApi({ web_profile_info: search, reels_media: { reels: {}, status: 'ok' } });
     await assert.rejects(
       downloadFromInstagram('https://www.instagram.com/stories/someuser/'),
       error => error.code === 'CONTENT_GONE' && /this story is unavailable/.test(error.message)
@@ -320,7 +320,7 @@ describe('downloadFromInstagram stories', () => {
   });
 
   test('an unknown username is CONTENT_GONE', async () => {
-    stubApi({ topsearch: { users: [{ user: { pk: '5', username: 'other' } }] } });
+    stubApi({ web_profile_info: { data: { user: null }, status: 'ok' } });
     await assert.rejects(
       downloadFromInstagram('https://www.instagram.com/stories/someuser/'),
       error => error.code === 'CONTENT_GONE'
@@ -328,7 +328,7 @@ describe('downloadFromInstagram stories', () => {
   });
 
   test('an Instagram 500 logs the endpoint and status and stays a network error', async () => {
-    stubApi({ topsearch: httpError(500) });
+    stubApi({ web_profile_info: httpError(500) });
     await assert.rejects(
       downloadFromInstagram('https://www.instagram.com/stories/someuser/'),
       /failed to reach instagram/
@@ -336,13 +336,13 @@ describe('downloadFromInstagram stories', () => {
   });
 
   test('an Instagram 500 keeps the endpoint and status as the cause', async () => {
-    stubApi({ topsearch: httpError(500) });
+    stubApi({ web_profile_info: httpError(500) });
     const error = await downloadFromInstagram('https://www.instagram.com/stories/someuser/').catch(
       caught => caught
     );
     assert.match(
       error.cause.message,
-      /^instagram www\.instagram\.com\/api\/v1\/web\/search\/topsearch\/ HTTP 500$/
+      /^instagram www\.instagram\.com\/api\/v1\/users\/web_profile_info\/ HTTP 500$/
     );
   });
 });

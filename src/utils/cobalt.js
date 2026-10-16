@@ -219,9 +219,15 @@ const EMBED_FIXER_HOSTS = new Map([
 ]);
 
 // Fixers keep minting <letters>instagram.com hosts (kkinstagram, kkkinstagram...), so match the shape too.
-const mirrorTarget = host =>
-  EMBED_FIXER_HOSTS.get(host) ??
-  (/^[a-z0-9-]+instagram\.com$/.test(host) ? 'instagram.com' : undefined);
+const mirrorTarget = host => {
+  // TikTok mirrors keep the app's vm./vt. share-link prefix in front of their own domain.
+  const short = /^(vm|vt)\.(.+)$/.exec(host);
+  if (short && EMBED_FIXER_HOSTS.get(short[2]) === 'tiktok.com') return `${short[1]}.tiktok.com`;
+  return (
+    EMBED_FIXER_HOSTS.get(host) ??
+    (/^[a-z0-9-]+instagram\.com$/.test(host) ? 'instagram.com' : undefined)
+  );
+};
 
 const GIPHY_PAGE_PATH = /^\/(?:gifs|stickers|embed)\/(?:[^/]*-)?([A-Za-z0-9]+)\/?$/;
 

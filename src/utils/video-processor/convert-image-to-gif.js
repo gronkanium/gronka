@@ -3,6 +3,7 @@ import path from 'path';
 import { createLogger } from '../logger.js';
 import {
   validateNumericParameter,
+  MAX_GIF_WIDTH,
   checkFFmpegInstalled,
   FFMPEG_INPUT_GUARD,
   GIF_PALETTEGEN,
@@ -27,7 +28,7 @@ export async function convertImageToGif(inputPath, outputPath, options = {}) {
 
 async function convertImageToGifImpl(inputPath, outputPath, options = {}) {
   // Validate and sanitize numeric parameters
-  const width = validateNumericParameter(options.width ?? 720, 'width', 1, 4096);
+  const width = validateNumericParameter(options.width ?? 720, 'width', 1, MAX_GIF_WIDTH);
 
   logger.debug(`Starting image to GIF conversion: ${inputPath} -> ${outputPath} (width: ${width})`);
 

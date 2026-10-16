@@ -163,6 +163,42 @@ if (!mocksSupported) {
     });
   });
 
+  describe('TikTok video missing from the local CDN', () => {
+    function missingCopy(child) {
+      child.stderr.emit(
+        'data',
+        Buffer.from('ERROR: unable to download video data: HTTP Error 404: Not Found')
+      );
+      child.emit('close', 1);
+    }
+    const url = 'https://www.tiktok.com/@a/video/7667652642516028679';
+
+    test('retries once through the geo proxy', async () => {
+      process.env.GEO_PROXY_URL = 'http://vpn:8888';
+      spawnCallLog = [];
+      spawnBehaviors = [missingCopy, success];
+      try {
+        const result = await downloadWithYtdlp(url, Infinity, null, Infinity, null, null);
+        assert.ok(result.size > 0);
+      } finally {
+        delete process.env.GEO_PROXY_URL;
+      }
+      assert.strictEqual(spawnCallLog.length, 2);
+      assert.ok(!spawnCallLog[0].args.includes('--proxy'));
+      assert.ok(spawnCallLog[1].args.includes('--proxy'));
+    });
+
+    test('fails with a curated message when no geo proxy is set', async () => {
+      spawnCallLog = [];
+      spawnBehaviors = [missingCopy];
+      await assert.rejects(
+        () => downloadWithYtdlp(url, Infinity, null, Infinity, null, null),
+        error => error.code === 'REGION_COPY_MISSING'
+      );
+      assert.strictEqual(spawnCallLog.length, 1);
+    });
+  });
+
   // yt-dlp reports an Instagram photo post as a formats problem, which read to users as a bot
   // failure on a post that simply has no video. Every production occurrence was an /p/ link.
   describe('Instagram photo posts blame the post, not the formats', () => {

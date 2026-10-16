@@ -11,7 +11,7 @@ export { convertImageToGif } from './video-processor/convert-image-to-gif.js';
 export { convertAnimatedWebpToGif } from './video-processor/convert-animated-webp-to-gif.js';
 
 // Animated-WebP header sniff (routing)
-export { isAnimatedWebp } from './video-processor/utils.js';
+export { isAnimatedWebp, MAX_GIF_WIDTH } from './video-processor/utils.js';
 
 // Video trimming
 export { trimVideo } from './video-processor/trim-video.js';

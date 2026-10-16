@@ -22,6 +22,7 @@ import { keylessMegaFileId } from '../utils/mega.js';
 import { promptForMegaKey } from './mega-key.js';
 import { getDisabledServiceLabel } from '../utils/download-services.js';
 import { ValidationError } from '../utils/errors.js';
+import { isDiscordMessageLink, DISCORD_MESSAGE_LINK_MESSAGE } from '../utils/discord-cdn.js';
 import { batchAttachmentsForDelivery } from '../utils/attachment-helpers.js';
 import { isDirectMediaUrl } from '../utils/file-downloader.js';
 import { resolveTtlHoursForSize } from '../utils/storage.js';
@@ -285,6 +286,11 @@ async function refuseUnsupported(interaction, url, commandSource) {
       reason: 'cobalt_disabled',
       context,
     });
+    return true;
+  }
+  if (isDiscordMessageLink(url)) {
+    const message = DISCORD_MESSAGE_LINK_MESSAGE;
+    await refuse(interaction, 'download', { message, reason: 'discord_message_link', context });
     return true;
   }
   if (!isSocialMediaUrl(url)) {

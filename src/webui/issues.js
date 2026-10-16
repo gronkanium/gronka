@@ -20,7 +20,7 @@ const UPSTREAM = new Set(['NetworkError', 'YtdlpRateLimitError', 'url_download_f
 const GUESSES = [
   [
     'user',
-    /not from a supported|no video or image attachment|please provide|invalid url|not a valid|too large|too long|maximum allowed|exceeds the maximum|no video in it|private or internal address|only works on|unsupported content type|wait \d|rate limit|cooldown|banned|maintenance/i,
+    /not from a supported|link to a discord message|no video or image attachment|please provide|invalid url|not a valid|too large|too long|maximum allowed|exceeds the maximum|no video in it|private or internal address|only works on|unsupported content type|wait \d|rate limit|cooldown|banned|maintenance/i,
   ],
   [
     'upstream',

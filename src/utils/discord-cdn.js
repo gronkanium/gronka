@@ -20,6 +20,21 @@ export function isDiscordCdnUrl(url) {
   }
 }
 
+export const DISCORD_MESSAGE_LINK_MESSAGE =
+  "that's a link to a discord message, not a file. right-click the message and pick apps, then download, convert or optimize.";
+
+export function isDiscordMessageLink(url) {
+  try {
+    const { hostname, pathname } = new URL(url);
+    return (
+      /^(?:(?:ptb|canary)\.)?discord(?:app)?\.com$/.test(hostname) &&
+      pathname.startsWith('/channels/')
+    );
+  } catch {
+    return false;
+  }
+}
+
 export function isAttachmentExpired(url) {
   try {
     const urlObj = new URL(url);

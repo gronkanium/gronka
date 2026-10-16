@@ -44,8 +44,9 @@ export function galleryDlError(stderr, site) {
     ? line.replace(/^\[[^\]]+\]\[\w+\] /, '').slice(0, 300)
     : 'no files and no output';
   const where = site ?? 'this site';
+  const named = site ? `${site} ` : '';
   let error;
-  if (/^NotFoundError|\b404\b/.test(reason)) {
+  if (/^NotFoundError|\b404\b|post not available/i.test(reason)) {
     error = contentGone();
   } else if (
     /AuthRequired|Authentication|Authorization|credentials|refresh-token|log ?in/i.test(stderr)
@@ -58,9 +59,9 @@ export function galleryDlError(stderr, site) {
       `${where} is rate limiting downloads right now, try again in a few minutes.`
     );
   } else if (!line) {
-    error = new ValidationError(`this ${where} link has no image or video to download.`);
+    error = new ValidationError(`this ${named}link has no image or video to download.`);
   } else {
-    error = new NetworkError(`could not download this ${where} post`);
+    error = new NetworkError(`could not download this ${named}post`);
   }
   return withCause(error, `gallery-dl: ${reason}`);
 }

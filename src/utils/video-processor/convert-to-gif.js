@@ -3,6 +3,7 @@ import path from 'path';
 import { createLogger } from '../logger.js';
 import {
   validateNumericParameter,
+  MAX_GIF_WIDTH,
   checkFFmpegInstalled,
   FFMPEG_TIMEOUT_MS,
   colorspaceRepairInputOptions,
@@ -33,7 +34,7 @@ export async function convertToGif(inputPath, outputPath, options = {}) {
 
 async function convertToGifImpl(inputPath, outputPath, options = {}) {
   // Validate and sanitize numeric parameters
-  const width = validateNumericParameter(options.width ?? 480, 'width', 1, 4096);
+  const width = validateNumericParameter(options.width ?? 480, 'width', 1, MAX_GIF_WIDTH);
   const fps = validateNumericParameter(options.fps ?? 30, 'fps', 0.1, 120);
   const startTime = validateNumericParameter(
     options.startTime ?? null,

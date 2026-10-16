@@ -241,20 +241,17 @@ const storyGone = reason =>
   });
 
 async function userIdFor(username, refererPath, cookie) {
-  const query = `context=blended&query=${encodeURIComponent(username)}&include_reel=true&search_surface=web_top_search`;
   const data = await instagramGet(
-    `/api/v1/web/search/topsearch/?${query}`,
+    `/api/v1/users/web_profile_info/?username=${encodeURIComponent(username)}`,
     refererPath,
     cookie,
     'story'
   );
-  const match = data?.users?.find(
-    entry => entry?.user?.username?.toLowerCase() === username.toLowerCase()
-  );
-  if (!match?.user?.pk) {
-    throw storyGone(`no user ${username} in the search results`);
+  const id = data?.data?.user?.id;
+  if (!id) {
+    throw storyGone(`no user ${username}`);
   }
-  return String(match.user.pk);
+  return String(id);
 }
 
 async function reelItems(reelId, refererPath, cookie) {

@@ -16,6 +16,18 @@ describe('galleryDlError', () => {
     );
   });
 
+  test('a TikTok post that is gone is CONTENT_GONE', () => {
+    const error = galleryDlError(
+      '[tiktok][error] https://www.tiktok.com/@a/video/7686889905351314719: Requested post not available\n'
+    );
+    assert.strictEqual(error.code, 'CONTENT_GONE');
+  });
+
+  test('an unnamed site never reads as "this this site"', () => {
+    const error = galleryDlError('[x][error] SomethingOdd: boom\n');
+    assert.strictEqual(error.message, 'could not download this post');
+  });
+
   test('a login wall says so, naming the site', () => {
     const error = galleryDlError(
       "[rule34][error] AuthRequired: 'api-key' & 'user-id' needed to access the API\n",

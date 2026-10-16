@@ -87,7 +87,7 @@ export function getYouTubeArgs(url, signedIn = false) {
 }
 
 // These reject yt-dlp's own TLS fingerprint (403, or Facebook's "Cannot parse data" once logged in); curl-cffi passes as Chrome.
-const IMPERSONATE_HOSTS = ['rumble.com', 'pornhub.com', 'facebook.com', 'fb.watch'];
+const IMPERSONATE_HOSTS = ['rumble.com', 'pornhub.com', 'facebook.com', 'fb.watch', 'rule34.xxx'];
 const hostIn = (url, hosts) => {
   const host = hostOf(url);
   return Boolean(host) && hosts.some(h => host === h || host.endsWith(`.${h}`));
@@ -95,13 +95,13 @@ const hostIn = (url, hosts) => {
 
 // Per-site yt-dlp args: Chrome's TLS fingerprint where needed, GEO_PROXY_URL for sites that
 // refuse this server's region, and the site's own extra args.
-export function getSiteArgs(url) {
+export function getSiteArgs(url, viaGeoProxy = false) {
   const geoProxy = process.env.GEO_PROXY_URL;
   const site = YTDLP_SITES.find(s => hostIn(url, s.hosts));
   return [
     ...(hostIn(url, IMPERSONATE_HOSTS) ? ['--impersonate', 'chrome'] : []),
     // One fragment at a time crawls through the tunnel (xHamster 223 KB/s vs 1.4 MB/s at 8).
-    ...(geoProxy && site?.geoBlocked ? ['--proxy', geoProxy, '-N', '8'] : []),
+    ...(geoProxy && (site?.geoBlocked || viaGeoProxy) ? ['--proxy', geoProxy, '-N', '8'] : []),
     ...(site?.args ?? []),
   ];
 }
@@ -208,7 +208,8 @@ function executeYtdlp(
   startTime = null,
   duration = null,
   maxSize = Infinity,
-  signedIn = false
+  signedIn = false,
+  viaGeoProxy = false
 ) {
   return new Promise((resolve, reject) => {
     const outputTemplate = path.join(outputDir, '%(title)s.%(ext)s');
@@ -220,7 +221,7 @@ function executeYtdlp(
       '--no-progress',
       ...getCookieArgs(url, signedIn),
       ...getYouTubeArgs(url, signedIn),
-      ...getSiteArgs(url),
+      ...getSiteArgs(url, viaGeoProxy),
       '-f',
       quality,
       '--merge-output-format',
@@ -470,7 +471,20 @@ function executeYtdlp(
               `${siteLabel(url)} downloads go through a vpn that is not reachable right now, try again later.`
             )
           );
-        } else if (/Your IP address is blocked|status code 10231/i.test(errorOutput)) {
+        } else if (/Your IP address is blocked|status code 102\d\d/i.test(errorOutput)) {
+          rejectWith(contentGone());
+        } else if (
+          // TikTok US storage is missing some videos its global CDN still serves.
+          hostIn(url, ['tiktok.com']) &&
+          /unable to download video data: HTTP Error 404/.test(errorOutput)
+        ) {
+          rejectWith(
+            new NetworkError(
+              "tiktok isn't serving this video's file right now.",
+              'REGION_COPY_MISSING'
+            )
+          );
+        } else if (/Unable to download webpage: HTTP Error (404|410)/.test(errorOutput)) {
           rejectWith(contentGone());
         } else if (errorOutput.includes('Cannot parse data')) {
           rejectWith(
@@ -485,7 +499,9 @@ function executeYtdlp(
           );
         } else if (errorOutput.includes('is not a valid URL')) {
           rejectWith(new ValidationError(`invalid ${siteLabel(url)} URL`));
-        } else if (errorOutput.includes('There is no video in this post')) {
+        } else if (
+          /There is no video in this post|No video could be found in this tweet/.test(errorOutput)
+        ) {
           // Image-only posts (common on Instagram /p/ links). The post is perfectly fine ,
           // there is simply no video for yt-dlp to take, so neither the generic "may be
           // deleted or private" message nor a formats-related one describes what happened.
@@ -588,6 +604,12 @@ async function executeYtdlpWithRetry(...args) {
     if (isYouTubeUrl(args[0]) && signInAsked) {
       logger.debug(`YouTube asked to sign in, retrying signed in: ${args[0]}`);
       return await executeYtdlp(...Array.from({ length: 8 }, (_, i) => args[i]), true);
+    }
+    // --download-sections crashes behind the proxy; the caller's full download + trim retries it.
+    const trimming = args[5] != null || args[6] != null;
+    if (error.code === 'REGION_COPY_MISSING' && process.env.GEO_PROXY_URL && !trimming) {
+      logger.warn(`No local copy of this video, retrying through the geo proxy: ${args[0]}`);
+      return await executeYtdlp(...Array.from({ length: 8 }, (_, i) => args[i]), false, true);
     }
     if (error.code !== 'YTDLP_UNKNOWN' && error.code !== 'YTDLP_RETRYABLE') {
       throw error;
@@ -799,7 +821,12 @@ export async function downloadWithYtdlp(
           maxSize
         );
       } catch (segmentError) {
-        if (!segmentError.message?.includes('output file too small')) throw segmentError;
+        if (
+          !segmentError.message?.includes('output file too small') &&
+          segmentError.code !== 'REGION_COPY_MISSING'
+        ) {
+          throw segmentError;
+        }
         logger.warn(
           `Segment download failed, falling back to full download + FFmpeg trim: ${segmentError.message}`
         );

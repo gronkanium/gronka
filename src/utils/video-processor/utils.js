@@ -39,6 +39,8 @@ export function runFfmpeg(args, { signal = AbortSignal.timeout(FFMPEG_TIMEOUT_MS
   });
 }
 
+export const MAX_GIF_WIDTH = 4096;
+
 export function validateNumericParameter(value, name, min = 0, max = Infinity, allowNull = false) {
   if (value === null || value === undefined) {
     if (allowNull) return null;

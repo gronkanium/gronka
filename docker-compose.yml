@@ -169,7 +169,8 @@ services:
       - ./cobalt-cookies.json:/cookies.json
 
   # Optional (COMPOSE_PROFILES=vpn): a Mullvad WireGuard tunnel whose HTTP proxy only the sources
-  # flagged geo-blocked use, via GEO_PROXY_URL=http://vpn:8888. No published ports.
+  # flagged geo-blocked use, via GEO_PROXY_URL=http://vpn:8888. No published ports. Outside the US
+  # so TikTok videos missing from its US CDN can be retried through it.
   vpn:
     logging: *logging
     image: qmcgaw/gluetun:v3.41.3
@@ -185,7 +186,7 @@ services:
       - VPN_TYPE=wireguard
       - WIREGUARD_PRIVATE_KEY=${VPN_WIREGUARD_PRIVATE_KEY:-}
       - WIREGUARD_ADDRESSES=${VPN_WIREGUARD_ADDRESSES:-}
-      - SERVER_CITIES=${VPN_SERVER_CITIES:-New York NY}
+      - SERVER_CITIES=${VPN_SERVER_CITIES:-Montreal}
       - HTTPPROXY=on
       - HTTPPROXY_LOG=off
       - DOT=off

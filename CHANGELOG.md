@@ -5,6 +5,18 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres (attempts) to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [4.2.0](https://github.com/gronkanium/gronka/compare/v4.1.1...v4.2.0) (2026-10-16)
+
+
+### Features
+
+* **download:** support gubbyx.com embed mirror ([#154](https://github.com/gronkanium/gronka/issues/154)) ([aaebeef](https://github.com/gronkanium/gronka/commit/aaebeef34fbcb04518ac32f799a9eb0495073254))
+
+
+### Bug Fixes
+
+* **download:** retry TikTok videos its US CDN lost through the vpn, and fix a week of failures ([#156](https://github.com/gronkanium/gronka/issues/156)) ([da8691d](https://github.com/gronkanium/gronka/commit/da8691df1533ad20818392bc23c189a7a6d82efd))
+
 ## [4.1.1](https://github.com/gronkanium/gronka/compare/v4.1.0...v4.1.1) (2026-10-15)
 
 

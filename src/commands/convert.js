@@ -25,6 +25,7 @@ import {
   isAnimatedWebp,
   convertToFormat,
   OUTPUT_FORMATS,
+  MAX_GIF_WIDTH,
 } from '../utils/video-processor.js';
 import { getDiscordAttachmentLimit } from './shared/attachment-limit.js';
 import { optimizeToJob } from '../utils/gif-optimizer.js';
@@ -183,7 +184,7 @@ async function renderGif(ctx, { attachment, attachmentType, file, options, gifPa
     } else {
       const { width } = await probeMediaInfo(inputPath, 720);
       await convertImageToGif(inputPath, out, {
-        width: options.width ?? width,
+        width: options.width ?? Math.min(width, MAX_GIF_WIDTH),
       });
     }
   });

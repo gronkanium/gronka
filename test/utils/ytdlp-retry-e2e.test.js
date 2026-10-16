@@ -173,8 +173,13 @@ if (!mocksSupported) {
     }
     const url = 'https://www.tiktok.com/@a/video/7667652642516028679';
 
-    test('retries once through the geo proxy', async () => {
+    test('retries once through the geo proxy, without the session cookies', async () => {
       process.env.GEO_PROXY_URL = 'http://vpn:8888';
+      const jar = path.join(process.cwd(), 'temp', 'test-cookies.txt');
+      fsSync.mkdirSync(path.dirname(jar), { recursive: true });
+      fsSync.writeFileSync(jar, '# Netscape HTTP Cookie File\n');
+      const savedJar = process.env.YTDLP_COOKIES_PATH;
+      process.env.YTDLP_COOKIES_PATH = jar;
       spawnCallLog = [];
       spawnBehaviors = [missingCopy, success];
       try {
@@ -182,10 +187,15 @@ if (!mocksSupported) {
         assert.ok(result.size > 0);
       } finally {
         delete process.env.GEO_PROXY_URL;
+        if (savedJar === undefined) delete process.env.YTDLP_COOKIES_PATH;
+        else process.env.YTDLP_COOKIES_PATH = savedJar;
+        fsSync.rmSync(jar, { force: true });
       }
       assert.strictEqual(spawnCallLog.length, 2);
       assert.ok(!spawnCallLog[0].args.includes('--proxy'));
+      assert.ok(spawnCallLog[0].args.includes('--cookies'));
       assert.ok(spawnCallLog[1].args.includes('--proxy'));
+      assert.ok(!spawnCallLog[1].args.includes('--cookies'));
     });
 
     test('fails with a curated message when no geo proxy is set', async () => {

@@ -219,7 +219,8 @@ function executeYtdlp(
       '--no-warnings',
       '--quiet',
       '--no-progress',
-      ...getCookieArgs(url, signedIn),
+      // The session cookies pin TikTok to its US CDN even through the proxy.
+      ...(viaGeoProxy ? [] : getCookieArgs(url, signedIn)),
       ...getYouTubeArgs(url, signedIn),
       ...getSiteArgs(url, viaGeoProxy),
       '-f',

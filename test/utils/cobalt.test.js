@@ -64,6 +64,7 @@ describe('cobalt utilities', () => {
     'fixvx.com',
     'cunnyx.com',
     'girlcockx.com',
+    'gubbyx.com',
     'stupidpenisx.com',
   ];
 

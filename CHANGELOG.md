@@ -5,6 +5,13 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres (attempts) to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [4.2.1](https://github.com/gronkanium/gronka/compare/v4.2.0...v4.2.1) (2026-10-16)
+
+
+### Bug Fixes
+
+* **download:** retry TikTok through the vpn without the session cookies ([#157](https://github.com/gronkanium/gronka/issues/157)) ([35df348](https://github.com/gronkanium/gronka/commit/35df348bec089b419d79546346d79cb0062c5b46))
+
 ## [4.2.0](https://github.com/gronkanium/gronka/compare/v4.1.1...v4.2.0) (2026-10-16)
 
 

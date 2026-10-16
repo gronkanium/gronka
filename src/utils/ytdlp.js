@@ -87,7 +87,7 @@ export function getYouTubeArgs(url, signedIn = false) {
 }
 
 // These reject yt-dlp's own TLS fingerprint (403, or Facebook's "Cannot parse data" once logged in); curl-cffi passes as Chrome.
-const IMPERSONATE_HOSTS = ['rumble.com', 'pornhub.com', 'facebook.com', 'fb.watch'];
+const IMPERSONATE_HOSTS = ['rumble.com', 'pornhub.com', 'facebook.com', 'fb.watch', 'rule34.xxx'];
 const hostIn = (url, hosts) => {
   const host = hostOf(url);
   return Boolean(host) && hosts.some(h => host === h || host.endsWith(`.${h}`));

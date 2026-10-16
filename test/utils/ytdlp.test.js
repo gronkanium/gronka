@@ -134,6 +134,16 @@ describe('ytdlp utilities', () => {
           '--impersonate',
           'chrome',
         ]);
+        assert.deepStrictEqual(getSiteArgs('https://rule34.xxx/index.php?page=post&s=view&id=1'), [
+          '--impersonate',
+          'chrome',
+        ]);
+        assert.deepStrictEqual(getSiteArgs('https://www.tiktok.com/@a/video/1', true), [
+          '--proxy',
+          'http://vpn:8888',
+          '-N',
+          '8',
+        ]);
       } finally {
         if (saved === undefined) delete process.env.GEO_PROXY_URL;
         else process.env.GEO_PROXY_URL = saved;

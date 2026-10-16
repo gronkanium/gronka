@@ -499,7 +499,9 @@ function executeYtdlp(
           );
         } else if (errorOutput.includes('is not a valid URL')) {
           rejectWith(new ValidationError(`invalid ${siteLabel(url)} URL`));
-        } else if (errorOutput.includes('There is no video in this post')) {
+        } else if (
+          /There is no video in this post|No video could be found in this tweet/.test(errorOutput)
+        ) {
           // Image-only posts (common on Instagram /p/ links). The post is perfectly fine ,
           // there is simply no video for yt-dlp to take, so neither the generic "may be
           // deleted or private" message nor a formats-related one describes what happened.

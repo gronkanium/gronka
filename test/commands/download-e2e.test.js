@@ -65,12 +65,8 @@ function probeSeconds(buffer, ext) {
 }
 
 if (!mocksSupported) {
-  // No --experimental-test-module-mocks: register a single skipped placeholder so the file is
-  // visible in the suite but does not fail the main test:safe run.
   describe('handleDownloadCommand (full-pipeline E2E)', () => {
-    test('skipped: module mocks are e2e-only (run via bun run test:e2e)', () => {
-      assert.ok(true);
-    });
+    test.skip('module mocks are e2e-only (run via bun run test:e2e)', () => {});
   });
 } else {
   beforeAll(async () => {
@@ -180,6 +176,14 @@ if (!mocksSupported) {
           const { NetworkError } = await import('../../src/utils/errors.js');
           throw new NetworkError('this post is unavailable or has been deleted');
         }
+        if (url.includes('cdnmissing')) {
+          const { NetworkError } = await import('../../src/utils/errors.js');
+          throw new NetworkError('this post is unavailable', 'CONTENT_GONE', 404);
+        }
+        if (url.includes('cobaltbig')) {
+          const { ValidationError } = await import('../../src/utils/errors.js');
+          throw new ValidationError('file is too large (max 100mb)');
+        }
         if (url.includes('bothfail')) {
           const { NetworkError, withCause } = await import('../../src/utils/errors.js');
           throw withCause(
@@ -276,6 +280,12 @@ if (!mocksSupported) {
           await media(fakeBuffer(2, 3072), 'image/jpeg', 'second.jpg'),
         ];
       },
+    }));
+
+    const realJumpshare = await import('../../src/utils/jumpshare.js');
+    mock.module('../../src/utils/jumpshare.js', () => ({
+      ...realJumpshare,
+      resolveJumpshareUrl: async () => 'https://cdn.jumpshare.com/download/original?token=1',
     }));
 
     const realFileDownloader = await import('../../src/utils/file-downloader.js');
@@ -431,6 +441,18 @@ if (!mocksSupported) {
         error =>
           error.code === 'CONTENT_GONE' && error.trail.some(s => s.step === 'instagram session')
       );
+    });
+
+    test('cobalt calling a TikTok video gone still lets yt-dlp try', async () => {
+      const result = await acquireMedia('https://www.tiktok.com/@a/video/cdnmissing', {
+        urlOnly: false,
+      });
+      assert.strictEqual(result.downloadMethod, 'ytdlp');
+    });
+
+    test('a file too large for cobalt still lets yt-dlp pick a smaller one', async () => {
+      const result = await acquireMedia('https://x.com/a/status/cobaltbig', { urlOnly: false });
+      assert.strictEqual(result.downloadMethod, 'ytdlp');
     });
 
     test('direct Ogg audio is downloaded and attached', async () => {

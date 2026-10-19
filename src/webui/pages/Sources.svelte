@@ -1,43 +1,38 @@
 <script>
   import { sendJson } from '../utils/api.js';
-  import { Search, Globe } from 'lucide-svelte';
+  import { Search, Globe, ChevronDown, ArrowUp, ArrowDown, RotateCcw } from 'lucide-svelte';
   import PageHeader from '../components/PageHeader.svelte';
 
-  // Order + display names for the category sections; unknown categories render after these.
   const CATEGORY_ORDER = [
     { id: 'social', label: 'Social' },
     { id: 'video', label: 'Video' },
+    { id: 'gallery', label: 'Galleries' },
     { id: 'adult', label: 'Adult' },
     { id: 'booru', label: 'Booru' },
   ];
 
-  let catalog = $state([]);
-  let disabled = $state(new Set());
+  // Shared downloaders are worth naming; a site's own extractor is just "built in".
+  const GENERIC = new Set(['cobalt', 'ytdlp', 'gallery-dl', 'direct']);
+
+  let tools = $state({});
+  let routes = $state({});
+  let sites = $state([]);
   let loading = $state(true);
   let error = $state('');
   let saving = $state(false);
-  let search = $state('');
+  let query = $state('');
+  let tested = $state(null);
+  let open = $state(null);
   let toast = $state('');
   let toastTimer;
-
-  const parseIds = value => {
-    try {
-      const arr = JSON.parse(value || '[]');
-      return Array.isArray(arr) ? arr : [];
-    } catch {
-      return [];
-    }
-  };
+  let testTimer;
 
   async function load() {
-    loading = true;
     error = '';
     try {
-      const res = await fetch('/api/settings');
+      const res = await fetch('/api/sources');
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      const svc = (await res.json()).settings.disabled_services || {};
-      catalog = svc.catalog || [];
-      disabled = new Set(parseIds(svc.value));
+      ({ tools, routes, sites } = await res.json());
     } catch (err) {
       error = err.message || 'failed to load sources';
     } finally {
@@ -52,18 +47,15 @@
     toastTimer = setTimeout(() => (toast = ''), 2000);
   }
 
-  // Optimistic: the caller already changed `disabled`; a failure reloads what's actually stored.
-  async function persist(next, what) {
-    if (saving) return;
-    disabled = next;
+  async function put(key, value, what) {
     saving = true;
     error = '';
     try {
-      const res = await sendJson('/api/settings/disabled_services', 'PUT', { value: [...next] });
+      const res = await sendJson(`/api/settings/${key}`, 'PUT', { value });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(data.message || `HTTP ${res.status}`);
-      disabled = new Set(parseIds(data.value));
-      say(what ?? 'Saved');
+      say(what);
+      if (tested) runTest();
     } catch (err) {
       error = err.message || 'failed to save';
       await load();
@@ -72,68 +64,139 @@
     }
   }
 
-  function toggle(s) {
-    const next = new Set(disabled);
-    const off = !next.has(s.id);
-    off ? next.add(s.id) : next.delete(s.id);
-    persist(next, `${s.label} turned ${off ? 'off' : 'on'}`);
-  }
-  function setMany(ids, off, what) {
-    const next = new Set(disabled);
-    for (const id of ids) off ? next.add(id) : next.delete(id);
-    persist(next, what);
-  }
-  function allOff() {
-    if (!confirm(`Turn off all ${catalog.length} sources? Every /download link will be refused.`))
-      return;
-    setMany(
-      catalog.map(s => s.id),
-      true,
-      'All sources turned off'
+  const saveSwitches = what =>
+    put(
+      'disabled_services',
+      sites.filter(s => !s.on).map(s => s.id),
+      what
     );
+  function toggle(site) {
+    site.on = !site.on;
+    saveSwitches(`${site.label} turned ${site.on ? 'on' : 'off'}`);
+  }
+  function setAll(list, on, what) {
+    for (const s of list) s.on = on;
+    saveSwitches(what);
   }
 
-  const query = $derived(search.trim().toLowerCase());
-  const categories = $derived(
+  const saveOrder = what =>
+    put(
+      'source_routes',
+      Object.fromEntries(
+        Object.values(routes).map(r => [
+          r.id,
+          r.steps.map(({ tool, on }) => ({ engine: tool, on })),
+        ])
+      ),
+      what
+    );
+  function move(route, from, to) {
+    const steps = [...route.steps];
+    const [step] = steps.splice(from, 1);
+    steps.splice(to, 0, step);
+    route.steps = steps;
+    saveOrder(`${route.name}: ${tries(route) || 'nothing'}`);
+  }
+  function skip(route, index) {
+    const step = route.steps[index];
+    if (step.on && route.steps.filter(s => s.on).length === 1) {
+      error = `${route.name} needs at least one downloader. Turn the site off instead.`;
+      return;
+    }
+    route.steps[index] = { ...step, on: !step.on };
+    saveOrder(`${tools[step.tool]?.name} ${step.on ? 'skipped' : 'used again'} for ${route.name}`);
+  }
+  function reset(route) {
+    route.steps = route.defaults.map(d => ({
+      ...route.steps.find(s => s.tool === d.tool),
+      on: d.on,
+    }));
+    saveOrder(`${route.name} back to the default order`);
+  }
+
+  const key = steps => steps.map(s => `${s.tool}:${s.on}`).join();
+  const changed = route => key(route.steps) !== key(route.defaults);
+  const usable = step => step.on && tools[step.tool]?.available;
+  const tries = route =>
+    route.steps
+      .filter(usable)
+      .map(s => tools[s.tool].name + (s.note ? ` (${s.note})` : ''))
+      .join(', then ');
+
+  const isLink = $derived(/^(https?:\/\/)?[\w-]+(\.[\w-]+)+\/\S*/i.test(query.trim()));
+  async function runTest() {
+    const url = query.trim();
+    if (!isLink) {
+      tested = null;
+      return;
+    }
+    const res = await fetch(`/api/sources/test?url=${encodeURIComponent(url)}`).catch(() => null);
+    tested = res?.ok ? await res.json() : { error: 'could not check that link' };
+    if (tested.route && (tested.route.steps.length > 1 || !tested.site)) open = tested.site ?? null;
+  }
+  function onQuery() {
+    clearTimeout(testTimer);
+    testTimer = setTimeout(runTest, 300);
+  }
+
+  const shared = $derived(
+    Object.fromEntries(
+      Object.keys(routes).map(id => [id, sites.filter(s => s.route === id).map(s => s.label)])
+    )
+  );
+  const filter = $derived(isLink ? '' : query.trim().toLowerCase());
+  const groups = $derived(
     [
-      ...CATEGORY_ORDER.filter(c => catalog.some(s => s.category === c.id)),
-      ...[...new Set(catalog.map(s => s.category))]
+      ...CATEGORY_ORDER,
+      ...[...new Set(sites.map(s => s.category))]
         .filter(c => !CATEGORY_ORDER.some(o => o.id === c))
         .map(c => ({ id: c, label: c })),
-    ].map(c => {
-      const all = catalog.filter(s => s.category === c.id);
-      return {
-        ...c,
-        all,
-        shown: all.filter(
-          s => !query || s.label.toLowerCase().includes(query) || s.id.includes(query)
-        ),
-        on: all.filter(s => !disabled.has(s.id)).length,
-      };
-    })
+    ]
+      .map(c => {
+        const all = sites.filter(s => s.category === c.id);
+        return {
+          ...c,
+          all,
+          shown: all.filter(s => !filter || s.label.toLowerCase().includes(filter)),
+          on: all.filter(s => s.on).length,
+        };
+      })
+      .filter(c => c.all.length)
   );
-  const totalOn = $derived(catalog.length - disabled.size);
+  const totalOn = $derived(sites.filter(s => s.on).length);
+  const testedSteps = $derived(
+    (tested?.route?.steps ?? []).map(s => ({
+      ...s,
+      why: !s.on
+        ? 'skipped'
+        : s.applies === false
+          ? `only ${s.note}`
+          : !tools[s.tool]?.available
+            ? 'not installed here'
+            : null,
+    }))
+  );
 </script>
 
-<PageHeader title="Sources" description="Sites the bot will download from">
+<PageHeader
+  title="Sources"
+  description="Which sites the bot downloads from, and what it tries for each"
+>
   {#snippet actions()}
-    <span class="pill" class:ok={totalOn === catalog.length} class:warn={totalOn < catalog.length}
-      >{saving ? 'Saving…' : `${totalOn} of ${catalog.length} on`}</span
+    <span class="pill" class:ok={totalOn === sites.length} class:warn={totalOn < sites.length}
+      >{saving ? 'Saving…' : `${totalOn} of ${sites.length} on`}</span
     >
     <button
       class="btn"
-      disabled={saving || !disabled.size}
-      onclick={() =>
-        setMany(
-          catalog.map(s => s.id),
-          false,
-          'All sources turned on'
-        )}>Turn all on</button
+      disabled={saving || totalOn === sites.length}
+      onclick={() => setAll(sites, true, 'All sites turned on')}>Turn all on</button
     >
     <button
       class="btn danger"
-      disabled={saving || disabled.size === catalog.length}
-      onclick={allOff}>Turn all off</button
+      disabled={saving || totalOn === 0}
+      onclick={() =>
+        confirm(`Turn off all ${sites.length} sites? Every /download link will be refused.`) &&
+        setAll(sites, false, 'All sites turned off')}>Turn all off</button
     >
   {/snippet}
 </PageHeader>
@@ -141,78 +204,165 @@
 <div class="sources stack">
   {#if error}<div class="flash error">{error}</div>{/if}
 
-  <section class="panel" aria-label="download sources">
-    <div class="ph">
-      <span class="nowrap">Download sources</span>
-      <span class="sub">a turned-off source refuses /download with a message</span>
-      <span class="meta">
-        <label class="searchbox find">
-          <Search size={14} />
-          <input bind:value={search} placeholder="Find a source" aria-label="find a source" />
-        </label>
-      </span>
+  <section class="panel" aria-label="sites">
+    <div class="finder">
+      <label class="searchbox">
+        <Search size={15} />
+        <input
+          bind:value={query}
+          oninput={onQuery}
+          placeholder="Find a site, or paste a link to see where it goes"
+          aria-label="find a site or test a link"
+        />
+      </label>
+      {#if isLink && tested}
+        <div class="verdict" class:bad={tested.error || !tested.route}>
+          {#if tested.error}
+            {tested.error}
+          {:else if !tested.route}
+            No site takes this link, so /download refuses it.
+          {:else}
+            <span class="muted">Goes to</span>
+            <b>{sites.find(s => s.id === tested.site)?.label ?? tested.route.name}</b>
+            <span class="muted">and tries</span>
+            {#each testedSteps as s, i (s.tool)}
+              <span class="chip" class:dim={s.why} title={s.why ?? ''}
+                >{tools[s.tool]?.name}{#if s.why}<em>{s.why}</em>{/if}</span
+              >{#if i < testedSteps.length - 1}<span class="then">then</span>{/if}
+            {/each}
+          {/if}
+        </div>
+      {/if}
     </div>
-    {#if loading && !catalog.length}
+
+    {#if loading}
       <div class="skel-rows">
         {#each Array(8) as _, i (i)}<span class="skeleton" style="width:{70 - (i % 3) * 12}%"
           ></span>{/each}
       </div>
-    {:else if !categories.some(c => c.shown.length)}
+    {:else if !groups.some(g => g.shown.length)}
       <div class="empty">
         <span class="ic"><Globe size={20} /></span>
-        <b>No source matches</b>Try another name
+        <b>No site matches</b>Try another name, or paste a whole link
       </div>
     {/if}
-    {#each categories as c (c.id)}
-      {#if c.shown.length}
+
+    {#each groups as g (g.id)}
+      {#if g.shown.length}
         <div class="group">
-          <span class="section-label">{c.label}</span>
-          <span class="dim small tnum">{c.on}/{c.all.length} on</span>
+          <span class="section-label">{g.label}</span>
+          <span class="dim small tnum">{g.on}/{g.all.length} on</span>
           <span class="right row">
             <button
               class="linkish small"
-              disabled={saving || c.on === c.all.length}
-              onclick={() =>
-                setMany(
-                  c.all.map(s => s.id),
-                  false,
-                  `${c.label} sources turned on`
-                )}>All on</button
+              disabled={saving || g.on === g.all.length}
+              onclick={() => setAll(g.all, true, `${g.label} turned on`)}>All on</button
             >
             <span class="dim">·</span>
             <button
               class="linkish small"
-              disabled={saving || c.on === 0}
-              onclick={() =>
-                setMany(
-                  c.all.map(s => s.id),
-                  true,
-                  `${c.label} sources turned off`
-                )}>All off</button
+              disabled={saving || g.on === 0}
+              onclick={() => setAll(g.all, false, `${g.label} turned off`)}>All off</button
             >
           </span>
         </div>
-        <div class="tiles">
-          {#each c.shown as s (s.id)}
-            {@const on = !disabled.has(s.id)}
-            <button
-              class="tile"
-              class:off={!on}
-              role="switch"
-              aria-checked={on}
-              aria-label={`${s.label} ${on ? 'on' : 'off'}`}
-              title={s.id}
-              disabled={saving}
-              onclick={() => toggle(s)}
-            >
-              <span class="top">
-                <span class="name">{s.label.replace(' (gallery-dl)', '')}</span>
-                <span class="toggle sm" class:on aria-hidden="true"></span>
-              </span>
-              <span class="use"><span>{on ? 'On' : 'Off'}</span></span>
-            </button>
+        <ul class="rows">
+          {#each g.shown as site (site.id)}
+            {@const route = routes[site.route]}
+            {@const editable = route && route.steps.length > 1}
+            <li class="site" class:off={!site.on} class:hit={tested?.site === site.id}>
+              <div class="line">
+                <button
+                  class="toggle"
+                  class:on={site.on}
+                  role="switch"
+                  aria-checked={site.on}
+                  aria-label={`${site.label} ${site.on ? 'on' : 'off'}`}
+                  disabled={saving}
+                  onclick={() => toggle(site)}
+                ></button>
+                <span class="name">{site.label}</span>
+                {#if route}
+                  {#if editable}
+                    <button
+                      class="tries"
+                      class:changed={changed(route)}
+                      aria-expanded={open === site.id}
+                      onclick={() => (open = open === site.id ? null : site.id)}
+                    >
+                      <span class="ell">{tries(route) || 'nothing switched on'}</span>
+                      <ChevronDown size={14} />
+                    </button>
+                  {:else}
+                    <span class="tries plain"
+                      ><span class="ell"
+                        >{tools[route.steps[0].tool]?.name === site.label ||
+                        !GENERIC.has(route.steps[0].tool)
+                          ? 'built in'
+                          : tries(route)}</span
+                      ></span
+                    >
+                  {/if}
+                {/if}
+              </div>
+              {#if editable && open === site.id}
+                <div class="order">
+                  <ol>
+                    {#each route.steps as s, i (s.tool)}
+                      <li class:skipped={!s.on}>
+                        <span class="n tnum"
+                          >{s.on ? route.steps.slice(0, i + 1).filter(x => x.on).length : '–'}</span
+                        >
+                        <span class="what">
+                          <b>{tools[s.tool]?.name}</b>
+                          {#if s.note}<span class="dim small">only {s.note}</span>{/if}
+                          {#if !tools[s.tool]?.available}<span class="warn-text small"
+                              >not installed here</span
+                            >{/if}
+                        </span>
+                        <span class="acts">
+                          <button
+                            class="icon"
+                            aria-label="try earlier"
+                            disabled={saving || i === 0}
+                            onclick={() => move(route, i, i - 1)}><ArrowUp size={14} /></button
+                          >
+                          <button
+                            class="icon"
+                            aria-label="try later"
+                            disabled={saving || i === route.steps.length - 1}
+                            onclick={() => move(route, i, i + 1)}><ArrowDown size={14} /></button
+                          >
+                          <button class="btn sm" disabled={saving} onclick={() => skip(route, i)}
+                            >{s.on ? 'Skip' : 'Use'}</button
+                          >
+                        </span>
+                      </li>
+                    {/each}
+                  </ol>
+                  <div class="foot">
+                    {#if shared[route.id].length > 1}
+                      <span class="dim small"
+                        >Same order for {shared[route.id]
+                          .filter(l => l !== site.label)
+                          .join(', ')}</span
+                      >
+                    {:else}
+                      <span class="dim small">If one fails, the next one tries.</span>
+                    {/if}
+                    {#if changed(route)}
+                      <button
+                        class="linkish small right"
+                        disabled={saving}
+                        onclick={() => reset(route)}><RotateCcw size={11} /> Default order</button
+                      >
+                    {/if}
+                  </div>
+                </div>
+              {/if}
+            </li>
           {/each}
-        </div>
+        </ul>
       {/if}
     {/each}
   </section>
@@ -222,114 +372,248 @@
 
 <style>
   .sources {
-    max-width: 1100px;
+    max-width: 960px;
   }
-  .find {
-    width: 220px;
-    max-width: 100%;
+  .finder {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    padding: 14px 16px;
+    border-bottom: 1px solid var(--line);
   }
-  .find input {
-    min-width: 0;
+  .finder .searchbox {
     width: 100%;
-    height: 28px;
+  }
+  .finder input {
+    width: 100%;
+    min-width: 0;
+    height: 34px;
+  }
+  .verdict {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 6px;
+    font-size: var(--fs-sm);
+  }
+  .verdict b {
+    color: var(--text-bright);
+  }
+  .verdict.bad {
+    color: var(--danger-text);
+  }
+  .chip {
+    display: inline-flex;
+    align-items: baseline;
+    gap: 6px;
+    padding: 2px 9px;
+    border: 1px solid var(--accent-border);
+    border-radius: 999px;
+    background: var(--accent-bg);
+    color: var(--text-bright);
+  }
+  .chip.dim {
+    border-style: dashed;
+    border-color: var(--border-2);
+    background: none;
+    color: var(--text-muted);
+  }
+  .chip em {
+    font-style: normal;
+    color: var(--text-dim);
+  }
+  .then {
+    color: var(--text-dim);
   }
   .group {
     display: flex;
     align-items: center;
     gap: 10px;
-    padding: 14px 16px 6px;
+    padding: 16px 16px 6px;
+  }
+  .rows {
+    margin: 0 0 6px;
+    padding: 0;
+    list-style: none;
+  }
+  .site {
     border-top: 1px solid var(--line);
   }
-  .group:first-of-type {
+  .site:first-child {
     border-top: 0;
   }
-  .tiles {
+  .site.hit {
+    background: var(--accent-bg);
+    box-shadow: inset 3px 0 0 var(--accent);
+  }
+  .line {
     display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(min(140px, 100%), 1fr));
-    gap: 8px;
-    padding: 4px 16px 16px;
-  }
-  .tile {
-    display: flex;
-    flex-direction: column;
-    gap: 6px;
-    padding: 10px 12px 0;
-    border: 1px solid var(--border-2);
-    border-radius: var(--radius);
-    background: var(--card);
-    font: inherit;
-    text-align: left;
-    color: var(--text);
-    cursor: pointer;
-    overflow: hidden;
-    transition:
-      border-color 0.12s,
-      background 0.12s;
-  }
-  .tile:hover:not(:disabled) {
-    border-color: var(--text-dim);
-    background: var(--card-2);
-  }
-  .tile:focus-visible {
-    outline: 2px solid var(--accent);
-    outline-offset: 1px;
-  }
-  .top {
-    display: flex;
+    grid-template-columns: auto minmax(0, 1fr);
     align-items: center;
-    justify-content: space-between;
-    gap: 8px;
+    column-gap: 12px;
+    row-gap: 2px;
+    min-height: 44px;
+    padding: 6px 16px;
+  }
+  .line .toggle {
+    grid-row: span 2;
   }
   .name {
     font-weight: 600;
     color: var(--text-bright);
-    white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
+    white-space: nowrap;
   }
-  .toggle.sm {
-    display: block;
-    pointer-events: none;
-    transform: scale(0.8);
-    transform-origin: right center;
-  }
-  .use {
-    display: flex;
-    justify-content: space-between;
-    gap: 8px;
-    font-size: var(--fs-sm);
-    color: var(--text-muted);
-  }
-  .tile.off {
-    background: none;
-    border-style: dashed;
-  }
-  .tile.off .name {
+  .site.off .name {
     color: var(--text-muted);
     font-weight: 500;
   }
-  .linkish.small {
+  .tries {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    justify-self: start;
+    max-width: 100%;
+    padding: 0;
+    border: 0;
+    background: none;
+    font: inherit;
     font-size: var(--fs-sm);
+    color: var(--text-muted);
+    text-align: left;
   }
-  .nowrap {
+  button.tries {
+    cursor: pointer;
+  }
+  button.tries:hover {
+    color: var(--text-bright);
+  }
+  button.tries:focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 2px;
+    border-radius: 4px;
+  }
+  .tries.changed {
+    color: var(--accent);
+  }
+  .ell {
+    overflow: hidden;
+    text-overflow: ellipsis;
     white-space: nowrap;
+    min-width: 0;
   }
-  .ph .sub {
-    display: none;
+  .site.off .tries {
+    opacity: 0.6;
   }
-  @media (min-width: 640px) {
-    .tiles {
-      grid-template-columns: repeat(auto-fill, minmax(190px, 1fr));
+  .order {
+    margin: 0 16px 12px 16px;
+    border: 1px solid var(--border-2);
+    border-radius: var(--radius);
+    background: var(--card);
+  }
+  .order ol {
+    margin: 0;
+    padding: 0;
+    list-style: none;
+  }
+  .order li {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 8px 10px;
+    border-top: 1px solid var(--line);
+  }
+  .order li:first-child {
+    border-top: 0;
+  }
+  .n {
+    display: inline-grid;
+    place-items: center;
+    flex: none;
+    width: 22px;
+    height: 22px;
+    border-radius: 999px;
+    background: var(--accent);
+    color: var(--on-accent);
+    font-size: 11px;
+    font-weight: 600;
+  }
+  .skipped .n {
+    background: var(--card-3);
+    color: var(--text-muted);
+  }
+  .skipped .what b {
+    color: var(--text-muted);
+    font-weight: 500;
+    text-decoration: line-through;
+  }
+  .what {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    gap: 2px 8px;
+    flex: 1;
+    min-width: 0;
+  }
+  .what b {
+    color: var(--text-bright);
+  }
+  .warn-text {
+    color: var(--warning-text);
+  }
+  .acts {
+    display: flex;
+    align-items: center;
+    gap: 2px;
+    flex: none;
+  }
+  .acts .btn {
+    margin-left: 6px;
+    min-width: 52px;
+  }
+  .icon {
+    display: inline-grid;
+    place-items: center;
+    width: 30px;
+    height: 30px;
+    border: 0;
+    border-radius: var(--radius);
+    background: none;
+    color: var(--text-muted);
+    cursor: pointer;
+  }
+  .icon:hover:not(:disabled) {
+    background: var(--card-2);
+    color: var(--text-bright);
+  }
+  .icon:disabled {
+    opacity: 0.3;
+    cursor: default;
+  }
+  .foot {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 8px 10px;
+    border-top: 1px solid var(--line);
+    background: var(--card-2);
+    border-radius: 0 0 var(--radius) var(--radius);
+  }
+  .foot .linkish {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+  }
+  @media (min-width: 720px) {
+    .line {
+      grid-template-columns: auto 200px minmax(0, 1fr);
     }
-  }
-  @media (min-width: 1000px) {
-    .ph .sub {
-      display: inline;
-      font-size: var(--fs-sm);
-      white-space: nowrap;
-      overflow: hidden;
-      text-overflow: ellipsis;
-      min-width: 0;
+    .line .toggle {
+      grid-row: auto;
+    }
+    .order {
+      margin-left: 76px;
     }
   }
 </style>

@@ -1,5 +1,5 @@
 import { MessageFlags } from 'discord.js';
-import { getBooleanSetting } from './database.js';
+import { readSetting } from './settings.js';
 import { safeInteractionReply } from './interaction-helpers.js';
 import { createLogger } from './logger.js';
 
@@ -9,7 +9,7 @@ const logger = createLogger('maintenance');
 export async function replyIfMaintenance(interaction) {
   let maintenanceMode;
   try {
-    maintenanceMode = await getBooleanSetting('maintenance_mode', false);
+    maintenanceMode = await readSetting('maintenance_mode');
   } catch (error) {
     logger.error(`Failed to check maintenance mode: ${error.message}`);
     return false; // fail open - a DB hiccup shouldn't lock out every user

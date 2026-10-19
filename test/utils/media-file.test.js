@@ -84,7 +84,8 @@ describe('writeAtomic', () => {
         writeAtomic(final, async part => {
           await fs.writeFile(part, 'half');
           throw new Error('killed');
-        })
+        }),
+        /killed/
       );
       assert.deepEqual(await fs.readdir(dir), []);
       await writeAtomic(final, part => fs.writeFile(part, 'whole'));

@@ -6,7 +6,7 @@ import { mediaFromBytes } from '../helpers/media.js';
 import { withJobDir } from '../../src/utils/media-file.js';
 
 if (process.env.GRONKA_E2E !== 'true') {
-  test('R2 transport tests run in the isolated e2e suite', () => {});
+  test.skip('R2 transport tests run in the isolated e2e suite', () => {});
 } else {
   let server;
   let uploadToR2;

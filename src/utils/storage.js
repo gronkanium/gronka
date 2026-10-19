@@ -2,8 +2,8 @@ import path from 'path';
 import { createLogger } from './logger.js';
 import { r2Config, botConfig } from './config.js';
 import { isR2Configured, listMediaInR2, getR2Usage, setR2Usage } from './r2-storage.js';
-import { getSetting } from './database.js';
-import { ttlHoursForSize, DEFAULT_TTL_TIERS } from './upload-tiers.js';
+import { readSetting } from './settings.js';
+import { ttlHoursForSize } from './upload-tiers.js';
 import { OUTPUT_FORMATS } from './output-formats.js';
 
 const logger = createLogger('storage');
@@ -166,6 +166,5 @@ export function getR2CacheStats() {
 
 // Resolve the tiered retention (in hours) for a file of the given size, reading the steerable `upload_ttl_tiers` setting and falling back to the default curve
 export async function resolveTtlHoursForSize(bytes) {
-  const tiersStr = await getSetting('upload_ttl_tiers', DEFAULT_TTL_TIERS);
-  return ttlHoursForSize(bytes, tiersStr);
+  return ttlHoursForSize(bytes, await readSetting('upload_ttl_tiers'));
 }

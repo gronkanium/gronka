@@ -4,7 +4,8 @@ import { randomBytes } from 'node:crypto';
 import { MessageFlags } from 'discord.js';
 import { createLogger } from '../utils/logger.js';
 import { botConfig } from '../utils/config.js';
-import { validateUrl, firstUrlIn } from '../utils/validation.js';
+import { firstUrlIn } from '../utils/validation.js';
+import { readLink } from '../core/intake.js';
 import { curatedErrorMessage } from './shared/command-errors.js';
 import {
   downloadVideo,
@@ -309,15 +310,14 @@ async function resolveInput(interaction, { attachment, url, commandSource }) {
 // The bot's half: checks that answer privately before anything is deferred or queued.
 async function acceptInput(interaction, { attachment, url, commandSource }) {
   if (!url) return (await resolveInput(interaction, { attachment, commandSource })) !== null;
-  const check = validateUrl(url);
-  if (!check.valid) {
+  const { refusal } = readLink(url);
+  if (refusal) {
     await refuse(interaction, 'convert', {
-      message: `invalid URL: ${check.error}`,
-      reason: 'invalid_url',
+      ...refusal,
       context: { originalUrl: url, commandSource },
     });
   }
-  return check.valid;
+  return !refusal;
 }
 
 // The job half, run by a worker (or inline): fetch, then convert to gif or another format.

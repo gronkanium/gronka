@@ -1,7 +1,8 @@
 import { ModalBuilder, TextInputBuilder, TextInputStyle, ActionRowBuilder } from 'discord.js';
 import { createLogger } from '../utils/logger.js';
 import { botConfig } from '../utils/config.js';
-import { validateUrl, firstUrlIn } from '../utils/validation.js';
+import { firstUrlIn } from '../utils/validation.js';
+import { readLink } from '../core/intake.js';
 import { validateMediaFile } from './shared/media-validation.js';
 import { curatedErrorMessage } from './shared/command-errors.js';
 import { downloadImage } from '../utils/file-downloader.js';
@@ -103,15 +104,14 @@ async function resolveGif(interaction, { attachment, url, commandSource }) {
 // The bot's half: checks that answer privately before anything is deferred or queued.
 async function acceptGif(interaction, { attachment, url, commandSource }) {
   if (!url) return (await resolveGif(interaction, { attachment, commandSource })) !== null;
-  const check = validateUrl(url);
-  if (!check.valid) {
+  const { refusal } = readLink(url);
+  if (refusal) {
     await refuse(interaction, 'optimize', {
-      message: `invalid URL: ${check.error}`,
-      reason: 'invalid_url',
+      ...refusal,
       context: { originalUrl: url, commandSource },
     });
   }
-  return check.valid;
+  return !refusal;
 }
 
 // The job half, run by a worker (or inline).

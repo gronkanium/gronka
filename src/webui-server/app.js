@@ -7,6 +7,7 @@ import { staticMiddleware, publicPath } from './middleware/static.js';
 import statsRoutes from './routes/stats.js';
 import alertsRoutes from './routes/alerts.js';
 import settingsRoutes from './routes/settings.js';
+import sourcesRoutes from './routes/sources.js';
 import botStatusRoutes from './routes/bot-status.js';
 import systemRoutes from './routes/system.js';
 
@@ -51,6 +52,7 @@ export function createApp() {
   app.use(statsRoutes);
   app.use(alertsRoutes);
   app.use(settingsRoutes);
+  app.use(sourcesRoutes);
   app.use(botStatusRoutes);
   app.use(systemRoutes);
 

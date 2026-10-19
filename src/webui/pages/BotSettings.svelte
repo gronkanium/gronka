@@ -14,58 +14,37 @@
   import PageHeader from '../components/PageHeader.svelte';
   import TierChart from '../components/TierChart.svelte';
 
-  // Which settings live in which section; unknown server keys fall into "other" so none vanish.
+  // Each setting names its section on the server; unknown sections fall into "other" so none vanish.
   const SECTIONS = [
     {
       id: 'delivery',
       label: 'Delivery',
       icon: Share2,
       blurb: 'How the bot hands files back to Discord',
-      keys: [
-        'url_only_mode',
-        'twitter_delivery',
-        'twitter_direct_url_fallback',
-        'max_video_size_mb',
-        'max_video_duration',
-      ],
     },
     {
       id: 'storage',
       label: 'Limits and storage',
       icon: HardDrive,
       blurb: 'How long uploads live in R2 and how much it may hold',
-      keys: ['upload_ttl_tiers', 'r2_soft_limit_gb'],
     },
     {
       id: 'access',
       label: 'Availability',
       icon: ShieldCheck,
       blurb: 'When the bot stops taking work',
-      keys: ['maintenance_mode', 'queue_paused'],
     },
     {
       id: 'presence',
       label: 'Bot presence',
       icon: Activity,
       blurb: 'What Discord shows next to the bot',
-      keys: [],
       presence: true,
     },
   ];
   // Edited on their own pages, not here.
-  const ELSEWHERE = new Set(['services', 'issuestates']);
-  const LABELS = {
-    url_only_mode: 'Reply with links only',
-    twitter_delivery: 'X / Twitter delivery',
-    twitter_direct_url_fallback: 'X / Twitter link fallback',
-    max_video_size_mb: 'Max download size (MB)',
-    max_video_duration: 'Max video duration',
-    upload_ttl_tiers: 'Upload lifetime tiers',
-    r2_soft_limit_gb: 'R2 soft limit (GB)',
-    maintenance_mode: 'Maintenance mode',
-    queue_paused: 'Pause media queue',
-  };
-  const label = key => LABELS[key] ?? key.replace(/_/g, ' ');
+  const ELSEWHERE = new Set(['services', 'issuestates', 'routes']);
+  const label = key => settings[key]?.label ?? key.replace(/_/g, ' ');
 
   let settings = $state({});
   let loading = $state(true);
@@ -77,12 +56,11 @@
   let toastTimer;
 
   const sections = $derived.by(() => {
-    const grouped = new Set(SECTIONS.flatMap(s => s.keys));
-    const other = Object.keys(settings).filter(
-      k => !grouped.has(k) && !ELSEWHERE.has(settings[k].type)
-    );
+    const keys = Object.keys(settings).filter(k => !ELSEWHERE.has(settings[k].type));
+    const known = new Set(SECTIONS.map(s => s.id));
+    const other = keys.filter(k => !known.has(settings[k].section));
     return [
-      ...SECTIONS,
+      ...SECTIONS.map(s => ({ ...s, keys: keys.filter(k => settings[k].section === s.id) })),
       ...(other.length
         ? [{ id: 'other', label: 'Other', icon: SlidersHorizontal, keys: other, blurb: '' }]
         : []),

@@ -3,6 +3,7 @@ import {
   $,
   api,
   online,
+  turnstileReady,
   turnstileToken,
   warmTurnstile,
   icon,
@@ -330,10 +331,13 @@ async function start({ split } = {}) {
   input.value = request.url;
   job?.abort();
   const controller = (job = new AbortController());
-  setState('verifying', 'verify');
-  draw(
-    `<h2><span class="spin" aria-hidden="true"></span>one sec.</h2><p class="meta">cloudflare is checking you're a person.</p>`
-  );
+  // The check runs on page load, so a token is normally waiting and this screen never shows.
+  if (!turnstileReady('download')) {
+    setState('verifying', 'verify');
+    draw(
+      `<h2><span class="spin" aria-hidden="true"></span>one sec.</h2><p class="meta">cloudflare is checking you're a person.</p>`
+    );
+  }
   if (request.mode === 'auto' && !prefetchLibav.done) prefetchLibav();
   try {
     request.turnstile = await turnstileToken('download');
@@ -600,8 +604,8 @@ $('.mode').addEventListener(
 form.addEventListener('change', event => {
   if (event.target.name === 'mode') playMode(event.target.value);
 });
+warmTurnstile();
 const intent = () => {
-  warmTurnstile();
   for (const name of [
     'verify',
     ...FLIPS.fetching[0],

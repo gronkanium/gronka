@@ -58,7 +58,7 @@ export const ENGINES = {
   cobalt: {
     name: 'cobalt',
     enabled: () => COBALT_ENABLED,
-    disabledMessage: () => 'cobalt is not enabled. please enable it to use the download command.',
+    disabledMessage: () => 'downloads from this site are turned off.',
     extract: (url, ctx) =>
       downloadFromSocialMedia(COBALT_API_URL, url, ctx.maxSize, ctx.cobaltResponse),
     streams: true,
@@ -116,12 +116,7 @@ export const isEnabled = engine => engine.enabled?.() ?? true;
 
 const step = (engine, extra = {}) => ({ engine, ...extra });
 
-// Which site a link belongs to: the first route whose `match` takes it. Each route tries its
-// chain in order, moving on when a step fails for a reason that is not the user's or the post's;
-// the owner can reorder a chain or switch steps off from the webui. `when` limits a step to some
-// of the route's links, `on: false` ships a step switched off. `services` are the webui on/off
-// switches for sites that have no engine table of their own; `switchIds` claims existing switches
-// whose bare host would land elsewhere.
+// The first route whose `match` takes a link owns it; the owner can reorder or switch off its chain.
 export const ROUTES = [
   {
     id: 'medal',
@@ -268,8 +263,7 @@ export const routeById = id => routesById.get(id) ?? null;
 // The route that owns a URL, or null when no route takes it.
 export const routeFor = url => ROUTES.find(route => route.match(url)) ?? null;
 
-// A route's steps with the owner's saved order and switches applied; steps the saved order does
-// not know keep their default place at the end, saved steps the code no longer has are dropped.
+// The owner's saved order applied; steps it doesn't know go last, steps the code dropped vanish.
 export function arrangeChain(route, saved) {
   const order = Array.isArray(saved?.[route.id]) ? saved[route.id] : null;
   const steps = route.chain.map(s => ({ ...s, on: s.on ?? true }));
@@ -288,6 +282,13 @@ export async function chainFor(url, route = routeFor(url)) {
   const steps = arrangeChain(route, await readSetting('source_routes')).filter(
     s => s.on && (!s.when || s.when(url))
   );
+  if (!steps.length) {
+    const off = {
+      id: route.id,
+      disabledMessage: () => `downloads from ${route.name} are turned off.`,
+    };
+    return { route, engines: [], disabled: off };
+  }
   const engines = steps.map(s => ({ id: s.engine, ...ENGINES[s.engine] }));
   const enabled = engines.filter(isEnabled);
   return { route, engines: enabled, disabled: enabled.length ? null : (engines[0] ?? null) };

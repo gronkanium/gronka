@@ -256,7 +256,13 @@ async function downloadInJob({
 }) {
   const url = await prepareLink(link);
   const refusal = await refusalFor(url);
-  if (refusal) throw new ValidationError(refusal.message, 'UNSUPPORTED_SOURCE');
+  if (refusal) {
+    const message =
+      refusal.reason === 'discord_message_link'
+        ? "that's a link to a discord message, not a file."
+        : refusal.message;
+    throw new ValidationError(message, 'UNSUPPORTED_SOURCE');
+  }
   const disabled = await getDisabledServiceLabel(url);
   if (disabled) {
     throw new ValidationError(`downloads from ${disabled} are turned off.`);

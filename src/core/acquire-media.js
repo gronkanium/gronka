@@ -16,13 +16,12 @@ import { getDisabledServiceLabel } from '../utils/download-services.js';
 import { ValidationError, describeCause, rootCause } from '../utils/errors.js';
 import { BLOCKED_DESTINATION_MESSAGE, isPrivateHost } from '../utils/ssrf-guard.js';
 import { downloadFileFromUrl } from '../utils/file-downloader.js';
-import { routeFor, chainFor, ENGINES } from './sources.js';
+import { routeFor, routeById, chainFor } from './sources.js';
 import { detectFileType } from '../utils/storage.js';
 import { readSetting } from '../utils/settings.js';
 import { isRedditPostUrl, hasRedditSession, resolveRedditPost } from '../utils/reddit.js';
 import { convertToFormat } from '../utils/video-processor.js';
 import { fitsDiscordAttachment } from '../commands/shared/attachment-limit.js';
-import { hostOf } from '../utils/url-host.js';
 import { youtubePostId, resolveYoutubePost } from '../utils/youtube-post.js';
 
 const logger = createLogger('acquire-media');
@@ -57,30 +56,14 @@ async function downloadRedditSlides(images) {
   return downloaded.length === 1 ? downloaded[0] : downloaded;
 }
 
-function isTwitterXUrl(url) {
-  try {
-    const hostname = hostOf(url);
-    return (
-      hostname === 'x.com' ||
-      hostname === 'twitter.com' ||
-      hostname === 'mobile.twitter.com' ||
-      hostname.endsWith('.x.com') ||
-      hostname.endsWith('.twitter.com')
-    );
-  } catch {
-    return false;
-  }
-}
+const isTwitterXUrl = url => routeById('x').match(url);
 
-const {
-  maxVideoSize: MAX_VIDEO_SIZE,
-  cobaltApiUrl: COBALT_API_URL,
-  cobaltEnabled: COBALT_ENABLED,
-} = botConfig;
+const { maxVideoSize: MAX_VIDEO_SIZE, cobaltApiUrl: COBALT_API_URL } = botConfig;
 
-// A failure the user or the post caused stops the chain; an engine that can't read the link does not.
+// A site extractor's gone or refused answer stops the chain; cobalt's never does (a TikTok US-CDN 404 reads as gone).
 const GONE = ['CONTENT_GONE', 'CLIP_NOT_PUBLISHED'];
-const worthAnotherSource = error =>
+const worthAnotherSource = (engine, error) =>
+  engine.id === 'cobalt' ||
   error.code === 'YTDLP_UNSUPPORTED_URL' ||
   (!(error instanceof ValidationError) && !GONE.includes(error.code));
 
@@ -199,12 +182,11 @@ export async function acquireMedia(
     : redditImages?.length > 0
       ? { id: 'reddit', name: 'Reddit', extract: () => downloadRedditSlides(redditImages) }
       : null;
-  const { route, engines: routed, disabled } = await chainFor(url);
+  const { engines: routed, disabled } = await chainFor(url);
   if (!local && disabled) {
     throw new ValidationError(disabled.disabledMessage(url));
   }
-  const fallbackEngines = route || !COBALT_ENABLED ? routed : [{ id: 'cobalt', ...ENGINES.cobalt }];
-  const engines = local ? [local, ...(postImages ? [] : fallbackEngines)] : fallbackEngines;
+  const engines = local ? [local, ...(postImages ? [] : routed)] : routed;
   if (!engines.length) {
     throw new ValidationError('url is not from a supported social media platform.');
   }
@@ -289,6 +271,7 @@ export async function acquireMedia(
   let fileData;
   let method = null;
   let lastError = null;
+  let gone = false;
   for (const [index, engine] of engines.entries()) {
     if (lastError) {
       // A DRM-only SoundCloud track has nothing for the next engine; its YouTube copy does.
@@ -305,8 +288,9 @@ export async function acquireMedia(
     } catch (error) {
       note(engine.name.toLowerCase(), error);
       lastError = error;
+      gone ||= GONE.includes(error.code);
       if (error.code === 'DRM_PROTECTED' && isSoundCloudUrl(url)) return viaYoutube();
-      if (!worthAnotherSource(error)) break;
+      if (!worthAnotherSource(engine, error)) break;
     }
   }
 
@@ -315,7 +299,7 @@ export async function acquireMedia(
     if (
       isTwitterXUrl(url) &&
       !trimming &&
-      !GONE.includes(lastError?.code) &&
+      !gone &&
       (await readSetting('twitter_direct_url_fallback'))
     ) {
       try {

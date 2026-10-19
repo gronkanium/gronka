@@ -108,6 +108,7 @@ if (!e2e) {
     cobalt = startCobalt();
     process.env.COBALT_API_URL = `http://127.0.0.1:${cobalt.port}`;
     process.env.COBALT_ENABLED = 'true';
+    process.env.YTDLP_ENABLED = 'false';
     ({ JOBS_ROOT: jobsRoot } = await import('../../src/utils/media-file.js'));
     ({ handleDownloadCommand } = await import('../../src/commands/download.js'));
     ({ getAlerts } = await import('../../src/utils/database.js'));
@@ -159,9 +160,7 @@ if (!e2e) {
       expect(reply.content).toBe('this post is unavailable, it may be deleted or private');
       const alert = await alertFor(url, since);
       expect(alert.cause).toContain('error.api.content.post.unavailable');
-      const steps = alert.trail.map(step => step.step);
-      expect(steps).not.toContain('yt-dlp');
-      expect(steps).not.toContain('cobalt direct url');
+      expect(alert.trail.map(step => step.step)).not.toContain('cobalt direct url');
     });
 
     test('a link to a private address is refused before cobalt is asked', async () => {

@@ -88,6 +88,22 @@ describe('source routes', () => {
     await setSetting('source_routes', '{}');
   });
 
+  test('a link whose every step is switched off is refused as turned off', async () => {
+    await setSetting(
+      'source_routes',
+      JSON.stringify({
+        tiktok: [
+          { engine: 'cobalt', on: false },
+          { engine: 'ytdlp', on: false },
+        ],
+      })
+    );
+    const { engines, disabled } = await chainFor('https://www.tiktok.com/@a/video/1');
+    assert.deepEqual(engines, []);
+    assert.equal(disabled.disabledMessage(), 'downloads from TikTok are turned off.');
+    await setSetting('source_routes', '{}');
+  });
+
   test('every source switch has a unique id and finds its own hosts', () => {
     const ids = ROUTES.flatMap(route => (route.services ?? []).map(service => service.id));
     assert.equal(new Set(ids).size, ids.length);

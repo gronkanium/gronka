@@ -7,9 +7,11 @@ import {
 } from '../../utils/discord-cdn.js';
 import { acquireMedia } from '../../core/acquire-media.js';
 import { routeFor } from '../../core/sources.js';
+import { canonicalizeMirrorUrl } from '../../utils/cobalt.js';
 
 // Known sites take /download's path (yt-dlp with its session, site extractors); others are plain files.
-async function fetchSource(url, client) {
+async function fetchSource(link, client) {
+  const url = canonicalizeMirrorUrl(link);
   const source = isDiscordCdnUrl(url) ? null : routeFor(url);
   if (!source || source.id === 'direct') {
     return downloadFileFromUrl(url, client);

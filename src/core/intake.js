@@ -4,8 +4,7 @@ import { canonicalizeMirrorUrl } from '../utils/cobalt.js';
 import { isDiscordMessageLink, DISCORD_MESSAGE_LINK_MESSAGE } from '../utils/discord-cdn.js';
 import { chainFor } from './sources.js';
 
-// Every front door (slash, prefix, context menu, web) takes a link through these, in order:
-// readLink (which link, is it safe), prepareLink (where it really points), refusalFor (can we take it).
+// Every front door takes a link through readLink, then prepareLink, then refusalFor.
 export function readLink(text, missingMessage = 'please provide a URL.') {
   if (!text?.trim()) return { refusal: { message: missingMessage, reason: 'missing_url' } };
   const url = firstUrlIn(text) ?? text.trim();

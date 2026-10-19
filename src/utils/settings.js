@@ -4,8 +4,7 @@ import { DEFAULT_TTL_TIERS } from './upload-tiers.js';
 
 const MB = 1024 * 1024;
 
-// Every runtime setting the owner can change from the webui: one definition of its type,
-// default, label and page section. Readers go through readSetting, never a raw key + default.
+// Every webui setting, defined once; read it through readSetting, never a raw key + default.
 export const SETTINGS = {
   url_only_mode: {
     type: 'boolean',

@@ -176,6 +176,14 @@ if (!mocksSupported) {
           const { NetworkError } = await import('../../src/utils/errors.js');
           throw new NetworkError('this post is unavailable or has been deleted');
         }
+        if (url.includes('cdnmissing')) {
+          const { NetworkError } = await import('../../src/utils/errors.js');
+          throw new NetworkError('this post is unavailable', 'CONTENT_GONE', 404);
+        }
+        if (url.includes('cobaltbig')) {
+          const { ValidationError } = await import('../../src/utils/errors.js');
+          throw new ValidationError('file is too large (max 100mb)');
+        }
         if (url.includes('bothfail')) {
           const { NetworkError, withCause } = await import('../../src/utils/errors.js');
           throw withCause(
@@ -433,6 +441,18 @@ if (!mocksSupported) {
         error =>
           error.code === 'CONTENT_GONE' && error.trail.some(s => s.step === 'instagram session')
       );
+    });
+
+    test('cobalt calling a TikTok video gone still lets yt-dlp try', async () => {
+      const result = await acquireMedia('https://www.tiktok.com/@a/video/cdnmissing', {
+        urlOnly: false,
+      });
+      assert.strictEqual(result.downloadMethod, 'ytdlp');
+    });
+
+    test('a file too large for cobalt still lets yt-dlp pick a smaller one', async () => {
+      const result = await acquireMedia('https://x.com/a/status/cobaltbig', { urlOnly: false });
+      assert.strictEqual(result.downloadMethod, 'ytdlp');
     });
 
     test('direct Ogg audio is downloaded and attached', async () => {

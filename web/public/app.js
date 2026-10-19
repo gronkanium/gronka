@@ -423,6 +423,15 @@ function savedToast(name, size) {
   el.addEventListener('animationend', e => e.animationName === 'toast-out' && el.remove());
 }
 
+const fileRow = (name, size, source) =>
+  `<div class="file">${icon('download')}<div><p class="name">${esc(name)}</p>
+    <p class="meta">${[size && mb(size), source && `from ${esc(source)}`].filter(Boolean).join(' · ')}</p></div></div>`;
+
+const savedLine = el => {
+  el.classList.add('ok');
+  el.innerHTML = `${icon('check')}saved to your downloads`;
+};
+
 const openLink = (url, text) =>
   `<a class="btn line small" href="${esc(url)}" target="_blank" rel="noopener noreferrer">${text}</a>`;
 
@@ -434,12 +443,12 @@ async function deliver(result, request) {
   const name = nameOf(file);
   setState('done', 'got-1');
   play('gotit', { then: () => play('party', { times: 2, then: 'done' }) });
-  draw(`<h2>got it.</h2><p class="meta">${esc(name)}${file.size ? ` · ${mb(file.size)}` : ''}</p>
-    <p class="say note">${esc(result.note ?? LANE_NOTE[result.lane](site))}</p><p class="meta" id="saving"></p>
+  draw(`${fileRow(name, file.size, site)}<p class="status" id="saving">ready. press save file.</p>
     <div class="acts"><button type="button" class="btn" id="save">${icon('download')}save file</button>
     <button type="button" class="btn line small" id="copy">${icon('copy')}copy link</button>
     ${navigator.share ? `<button type="button" class="btn line small" id="share">${icon('share')}share</button>` : ''}
-    <button type="button" class="linkish" id="other">another link</button></div>`);
+    <button type="button" class="linkish" id="other">another link</button></div>
+    <p class="note">${esc(result.note ?? LANE_NOTE[result.lane](site))}</p>`);
   const saving = $('#saving');
   let bytes;
   const run = () =>
@@ -448,7 +457,7 @@ async function deliver(result, request) {
       saving.textContent = total ? `saving ${mb(got)} of ${mb(total)}` : `saving ${mb(got)}`;
     }).then(saved => {
       if (saved) {
-        saving.textContent = 'saved. check your downloads.';
+        savedLine(saving);
         savedToast(name, file.size ?? bytes);
         return;
       }
@@ -587,12 +596,13 @@ async function merge(result, request) {
 function deliverBlob(blob, filename, request) {
   setState('done', 'got-1');
   play('gotit', { then: () => play('party', { times: 2, then: 'done' }) });
-  draw(`<h2>got it.</h2><p class="meta">${esc(filename)} · ${mb(blob.size)}</p>
-    <p class="say note">joined in your browser from ${esc(siteOf(request.url))}'s own files.</p>
+  draw(`${fileRow(filename, blob.size, siteOf(request.url))}<p class="status" id="saving">ready. press save file.</p>
     <div class="acts"><button type="button" class="btn" id="save">${icon('download')}save file</button>
-    <button type="button" class="linkish" id="other">another one</button></div>`);
+    <button type="button" class="linkish" id="other">another one</button></div>
+    <p class="note">joined in your browser from ${esc(siteOf(request.url))}'s own files.</p>`);
   const keep = () => {
     save(blob, filename);
+    savedLine($('#saving'));
     savedToast(filename, blob.size);
   };
   $('#save').onclick = keep;

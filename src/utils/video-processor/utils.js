@@ -1,8 +1,8 @@
 import { promisify } from 'util';
-import { exec, spawn } from 'child_process';
+import { execFile, spawn } from 'child_process';
 import { jobSignal } from '../media-file.js';
 
-const execAsync = promisify(exec);
+const execAsync = promisify(execFile);
 
 // Untrusted input: without this, ffmpeg sniffs a text file as a concat/hls playlist and opens what it names.
 export const FFMPEG_INPUT_GUARD = [
@@ -75,7 +75,7 @@ export function isAnimatedWebp(buffer) {
 
 let ffmpegCheck;
 export function checkFFmpegInstalled() {
-  ffmpegCheck ??= execAsync('ffmpeg -version').then(
+  ffmpegCheck ??= execAsync('ffmpeg', ['-version']).then(
     () => true,
     () => false
   );

@@ -199,17 +199,139 @@ function getContentType(ext) {
   return mimeTypes[extLower] || 'video/mp4';
 }
 
+const durationError = maxDuration =>
+  new ValidationError(
+    `video duration exceeds the maximum allowed (${Math.floor(maxDuration / 60)} minutes).` +
+      TRIM_TIP
+  );
+
+// What a failed yt-dlp run said, in order: the first pattern that matches and returns an error wins.
+const FAILURES = [
+  [
+    /HTTP Error 429|Too Many Requests/,
+    url =>
+      new YtdlpRateLimitError(
+        `${siteLabel(url)} is rate limiting downloads right now, try again in a few minutes.`,
+        5 * 60 * 1000
+      ),
+  ],
+  [/Video unavailable|Private video/, () => contentGone()],
+  [
+    /Sign in to confirm your age/,
+    () => new NetworkError('video requires age verification', 'AGE_RESTRICTED'),
+  ],
+  [
+    /members-only|Join this channel to get access/i,
+    () => new NetworkError('this video is members-only'),
+  ],
+  [
+    /Sign in to confirm you['’]re not a bot|Please sign in/i,
+    url =>
+      new NetworkError(
+        `${siteLabel(url)} is asking this server to sign in, this is usually temporary.`,
+        'YTDLP_RETRYABLE'
+      ),
+  ],
+  [
+    /Unable to connect to proxy|ProxyError|proxy.*(refused|timed out)/i,
+    url =>
+      new NetworkError(
+        `${siteLabel(url)} downloads go through a vpn that is not reachable right now, try again later.`
+      ),
+  ],
+  [/Your IP address is blocked|status code 102\d\d/i, () => contentGone()],
+  // TikTok US storage is missing some videos its global CDN still serves.
+  [
+    /unable to download video data: HTTP Error 404/,
+    url =>
+      hostIn(url, ['tiktok.com']) &&
+      new NetworkError("tiktok isn't serving this video's file right now.", 'REGION_COPY_MISSING'),
+  ],
+  // Medal answers 403 until a fresh clip finishes publishing, usually within a minute.
+  [
+    /HTTP Error 403/,
+    url =>
+      hostIn(url, ['medal.tv']) &&
+      new NetworkError(
+        'this medal clip is still being published, try again in a minute.',
+        'CLIP_NOT_PUBLISHED'
+      ),
+  ],
+  [/Unable to download webpage: HTTP Error (404|410)/, () => contentGone()],
+  [
+    /Cannot parse data/,
+    url => new NetworkError(`${siteLabel(url)} changed its page and cannot be read yet.`),
+  ],
+  [
+    /Unsupported URL/,
+    () =>
+      new ValidationError('this link is not a downloadable video page.', 'YTDLP_UNSUPPORTED_URL'),
+  ],
+  [/is not a valid URL/, url => new ValidationError(`invalid ${siteLabel(url)} URL`)],
+  [
+    /There is no video in this post|No video could be found in this tweet/,
+    () => new NetworkError('this post has no video in it.'),
+  ],
+  // Instagram reports photo posts this way too.
+  [
+    /No video formats found/,
+    url =>
+      new NetworkError(
+        isInstagramPostUrl(url)
+          ? 'this post has no video in it.'
+          : 'no downloadable video formats found'
+      ),
+  ],
+  [
+    /larger than max-filesize/i,
+    (url, { maxSize }) => new ValidationError(tooLargeMessage(maxSize)),
+  ],
+  // Only the duration filter may be blamed for length, not any message that mentions a skip.
+  [
+    /does not pass filter \(duration|duration >/,
+    (url, { maxDuration }) => durationError(maxDuration),
+  ],
+  [
+    /BounceDeleted|tweet (was )?(deleted|not found|unavailable)|account is no longer available|account .*(suspended|deactivated)/i,
+    () => contentGone(),
+  ],
+  // Before the 'protected' check below, which is about protected X accounts.
+  [
+    /DRM protected/i,
+    () =>
+      new ValidationError(
+        "the site only streams this one encrypted (drm), so it can't be downloaded.",
+        'DRM_PROTECTED'
+      ),
+  ],
+  [
+    /NSFW tweet requires authentication|protected|login required|Requested content is not available/,
+    () => new NetworkError('this post is private and cannot be downloaded'),
+  ],
+];
+
+// Never surface raw yt-dlp stderr to users; the caller logs it in full.
+export function classifyYtdlpFailure(output, url, limits = {}) {
+  for (const [pattern, toError] of FAILURES) {
+    const error = pattern.test(output) && toError(url, limits);
+    if (error) return error;
+  }
+  return new NetworkError(`could not download this ${siteLabel(url)} link.`, 'YTDLP_UNKNOWN');
+}
+
 function executeYtdlp(
   url,
   outputDir,
-  quality,
-  timeout = 300000,
-  maxDuration = 300,
-  startTime = null,
-  duration = null,
-  maxSize = Infinity,
-  signedIn = false,
-  viaGeoProxy = false
+  {
+    quality,
+    timeout = 300000,
+    maxDuration = 300,
+    startTime = null,
+    duration = null,
+    maxSize = Infinity,
+    signedIn = false,
+    viaGeoProxy = false,
+  } = {}
 ) {
   return new Promise((resolve, reject) => {
     const outputTemplate = path.join(outputDir, '%(title)s.%(ext)s');
@@ -313,12 +435,7 @@ function executeYtdlp(
           /does not pass filter \(duration/.test(combinedOutput) ||
           combinedOutput.includes('Video is longer than')
         ) {
-          rejectWith(
-            new ValidationError(
-              `video duration exceeds the maximum allowed (${Math.floor(maxDuration / 60)} minutes).` +
-                TRIM_TIP
-            )
-          );
+          rejectWith(durationError(maxDuration));
           return;
         }
 
@@ -415,10 +532,7 @@ function executeYtdlp(
               // This happens when --match-filter skips the video (--quiet may suppress the message)
               if (maxDuration !== Infinity && startTime === null && duration === null) {
                 rejectWith(
-                  new ValidationError(
-                    `video duration exceeds the maximum allowed (${Math.floor(maxDuration / 60)} minutes).` +
-                      TRIM_TIP
-                  ),
+                  durationError(maxDuration),
                   'exit 0 with no file, skipped by the duration filter'
                 );
               } else {
@@ -442,135 +556,7 @@ function executeYtdlp(
         const errorOutput = stderr || stdout;
         logger.error(`yt-dlp failed with code ${code}: ${errorOutput}`);
 
-        if (errorOutput.includes('HTTP Error 429') || errorOutput.includes('Too Many Requests')) {
-          rejectWith(
-            new YtdlpRateLimitError(
-              `${siteLabel(url)} is rate limiting downloads right now, try again in a few minutes.`,
-              5 * 60 * 1000
-            )
-          );
-        } else if (
-          errorOutput.includes('Video unavailable') ||
-          errorOutput.includes('Private video')
-        ) {
-          rejectWith(contentGone());
-        } else if (errorOutput.includes('Sign in to confirm your age')) {
-          rejectWith(new NetworkError('video requires age verification'));
-        } else if (/members-only|Join this channel to get access/i.test(errorOutput)) {
-          rejectWith(new NetworkError('this video is members-only'));
-        } else if (/Sign in to confirm you['’]re not a bot|Please sign in/i.test(errorOutput)) {
-          rejectWith(
-            new NetworkError(
-              `${siteLabel(url)} is asking this server to sign in, this is usually temporary.`,
-              'YTDLP_RETRYABLE'
-            )
-          );
-        } else if (
-          /Unable to connect to proxy|ProxyError|proxy.*(refused|timed out)/i.test(errorOutput)
-        ) {
-          rejectWith(
-            new NetworkError(
-              `${siteLabel(url)} downloads go through a vpn that is not reachable right now, try again later.`
-            )
-          );
-        } else if (/Your IP address is blocked|status code 102\d\d/i.test(errorOutput)) {
-          rejectWith(contentGone());
-        } else if (
-          // TikTok US storage is missing some videos its global CDN still serves.
-          hostIn(url, ['tiktok.com']) &&
-          /unable to download video data: HTTP Error 404/.test(errorOutput)
-        ) {
-          rejectWith(
-            new NetworkError(
-              "tiktok isn't serving this video's file right now.",
-              'REGION_COPY_MISSING'
-            )
-          );
-        } else if (hostIn(url, ['medal.tv']) && /HTTP Error 403/.test(errorOutput)) {
-          // Medal answers 403 until a fresh clip finishes publishing, usually within a minute.
-          rejectWith(
-            new NetworkError(
-              'this medal clip is still being published, try again in a minute.',
-              'CLIP_NOT_PUBLISHED'
-            )
-          );
-        } else if (/Unable to download webpage: HTTP Error (404|410)/.test(errorOutput)) {
-          rejectWith(contentGone());
-        } else if (errorOutput.includes('Cannot parse data')) {
-          rejectWith(
-            new NetworkError(`${siteLabel(url)} changed its page and cannot be read yet.`)
-          );
-        } else if (errorOutput.includes('Unsupported URL')) {
-          rejectWith(
-            new ValidationError(
-              'this link is not a downloadable video page.',
-              'YTDLP_UNSUPPORTED_URL'
-            )
-          );
-        } else if (errorOutput.includes('is not a valid URL')) {
-          rejectWith(new ValidationError(`invalid ${siteLabel(url)} URL`));
-        } else if (
-          /There is no video in this post|No video could be found in this tweet/.test(errorOutput)
-        ) {
-          // Image-only posts (common on Instagram /p/ links). The post is perfectly fine ,
-          // there is simply no video for yt-dlp to take, so neither the generic "may be
-          // deleted or private" message nor a formats-related one describes what happened.
-          rejectWith(new NetworkError('this post has no video in it.'));
-        } else if (errorOutput.includes('No video formats found')) {
-          // Instagram reports photo posts this way instead of the "There is no video in this
-          // post" wording handled above, so a plain photo permalink reads to the user as a
-          // bot failure. Every one of these seen in production was an instagram /p/ link.
-          rejectWith(
-            new NetworkError(
-              isInstagramPostUrl(url)
-                ? 'this post has no video in it.'
-                : 'no downloadable video formats found'
-            )
-          );
-        } else if (/larger than max-filesize/i.test(errorOutput)) {
-          rejectWith(new ValidationError(tooLargeMessage(maxSize)));
-        } else if (
-          // Same care as the exit-0 path: only blame length when the duration filter is what
-          // rejected the item, not on any filter message that happens to mention a skip.
-          /does not pass filter \(duration/.test(errorOutput) ||
-          errorOutput.includes('duration >')
-        ) {
-          rejectWith(
-            new ValidationError(
-              `video duration exceeds the maximum allowed (${Math.floor(maxDuration / 60)} minutes).` +
-                TRIM_TIP
-            )
-          );
-        } else if (
-          // X/Twitter: deleted or removed posts
-          errorOutput.includes('BounceDeleted') ||
-          /tweet (was )?(deleted|not found|unavailable)/i.test(errorOutput) ||
-          errorOutput.includes('account is no longer available') ||
-          /account .*(suspended|deactivated)/i.test(errorOutput)
-        ) {
-          rejectWith(contentGone());
-        } else if (/DRM protected/i.test(errorOutput)) {
-          // before the 'protected' check below, which is about protected X accounts
-          rejectWith(
-            new ValidationError(
-              "the site only streams this one encrypted (drm), so it can't be downloaded.",
-              'DRM_PROTECTED'
-            )
-          );
-        } else if (
-          // X/Twitter: private, protected, or auth-gated posts
-          errorOutput.includes('NSFW tweet requires authentication') ||
-          errorOutput.includes('protected') ||
-          errorOutput.includes('login required') ||
-          errorOutput.includes('Requested content is not available')
-        ) {
-          rejectWith(new NetworkError('this post is private and cannot be downloaded'));
-        } else {
-          // Never surface raw yt-dlp stderr to users; full output is logged above.
-          rejectWith(
-            new NetworkError(`could not download this ${siteLabel(url)} link.`, 'YTDLP_UNKNOWN')
-          );
-        }
+        rejectWith(classifyYtdlpFailure(errorOutput, url, { maxSize, maxDuration }));
       }
     });
 
@@ -605,28 +591,26 @@ function executeYtdlp(
  * state and retrying it immediately would just waste time, so only this bucket and the
  * failures tagged YTDLP_RETRYABLE retry.
  */
-async function executeYtdlpWithRetry(...args) {
+async function executeYtdlpWithRetry(url, outputDir, options) {
   try {
-    return await executeYtdlp(...args);
+    return await executeYtdlp(url, outputDir, options);
   } catch (error) {
-    const signInAsked =
-      error.message === 'video requires age verification' || error.code === 'YTDLP_RETRYABLE';
-    if (isYouTubeUrl(args[0]) && signInAsked) {
-      logger.debug(`YouTube asked to sign in, retrying signed in: ${args[0]}`);
-      return await executeYtdlp(...Array.from({ length: 8 }, (_, i) => args[i]), true);
+    if (isYouTubeUrl(url) && ['AGE_RESTRICTED', 'YTDLP_RETRYABLE'].includes(error.code)) {
+      logger.debug(`YouTube asked to sign in, retrying signed in: ${url}`);
+      return await executeYtdlp(url, outputDir, { ...options, signedIn: true });
     }
     // --download-sections crashes behind the proxy; the caller's full download + trim retries it.
-    const trimming = args[5] != null || args[6] != null;
+    const trimming = options.startTime != null || options.duration != null;
     if (error.code === 'REGION_COPY_MISSING' && process.env.GEO_PROXY_URL && !trimming) {
-      logger.warn(`No local copy of this video, retrying through the geo proxy: ${args[0]}`);
-      return await executeYtdlp(...Array.from({ length: 8 }, (_, i) => args[i]), false, true);
+      logger.warn(`No local copy of this video, retrying through the geo proxy: ${url}`);
+      return await executeYtdlp(url, outputDir, { ...options, viaGeoProxy: true });
     }
     if (error.code !== 'YTDLP_UNKNOWN' && error.code !== 'YTDLP_RETRYABLE') {
       throw error;
     }
-    logger.warn(`yt-dlp generic failure, retrying once after a short delay: ${args[0]}`);
+    logger.warn(`yt-dlp generic failure, retrying once after a short delay: ${url}`);
     await new Promise(resolve => setTimeout(resolve, 2000));
-    return await executeYtdlp(...args);
+    return await executeYtdlp(url, outputDir, options);
   }
 }
 
@@ -687,7 +671,7 @@ function getVideoDuration(url, timeout = 15000) {
         if (errorOutput.includes('Video unavailable') || errorOutput.includes('Private video')) {
           reject(new NetworkError('video is unavailable or private'));
         } else if (errorOutput.includes('Sign in to confirm your age')) {
-          reject(new NetworkError('video requires age verification'));
+          reject(new NetworkError('video requires age verification', 'AGE_RESTRICTED'));
         } else {
           reject(
             new NetworkError(`failed to get video duration: ${errorOutput.substring(0, 100)}`)
@@ -759,11 +743,7 @@ function emptyDownloadError(error) {
 
 export async function downloadWithYtdlp(
   rawUrl,
-  maxSize = Infinity,
-  quality = null,
-  maxDuration = 300,
-  startTime = null,
-  duration = null
+  { maxSize = Infinity, quality = null, maxDuration = 300, startTime = null, duration = null } = {}
 ) {
   const url = canonicalYtdlpUrl(rawUrl);
   logger.debug(
@@ -807,16 +787,11 @@ export async function downloadWithYtdlp(
 
     const downloadThenTrim = async () => {
       usedFallback = true;
-      const fullPath = await executeYtdlpWithRetry(
-        url,
-        workDir,
-        effectiveQuality,
-        300000,
+      const fullPath = await executeYtdlpWithRetry(url, workDir, {
+        quality: effectiveQuality,
         maxDuration,
-        null,
-        null,
-        maxSize
-      ).catch(emptyDownloadError);
+        maxSize,
+      }).catch(emptyDownloadError);
       const trimmedPath = path.join(workDir, 'trimmed_output.mp4');
       await trimVideo(fullPath, trimmedPath, { startTime, duration });
       logger.debug(`Fallback trim completed: ${trimmedPath}`);
@@ -828,16 +803,13 @@ export async function downloadWithYtdlp(
       outputPath = await downloadThenTrim();
     } else if (useSegmentDownload) {
       try {
-        outputPath = await executeYtdlpWithRetry(
-          url,
-          workDir,
-          effectiveQuality,
-          300000,
+        outputPath = await executeYtdlpWithRetry(url, workDir, {
+          quality: effectiveQuality,
           maxDuration,
           startTime,
           duration,
-          maxSize
-        );
+          maxSize,
+        });
       } catch (segmentError) {
         if (
           !segmentError.message?.includes('output file too small') &&
@@ -851,16 +823,13 @@ export async function downloadWithYtdlp(
         outputPath = await downloadThenTrim();
       }
     } else {
-      outputPath = await executeYtdlpWithRetry(
-        url,
-        workDir,
-        effectiveQuality,
-        300000,
+      outputPath = await executeYtdlpWithRetry(url, workDir, {
+        quality: effectiveQuality,
         maxDuration,
         startTime,
         duration,
-        maxSize
-      ).catch(emptyDownloadError);
+        maxSize,
+      }).catch(emptyDownloadError);
     }
 
     const filename = path.basename(outputPath);
@@ -875,7 +844,7 @@ export async function downloadWithYtdlp(
     logger.debug(
       `Successfully downloaded media via yt-dlp${usedFallback ? ' (via fallback)' : ''}, size: ${file.size} bytes, content-type: ${contentType}`
     );
-    return file;
+    return { ...file, trimmed: useSegmentDownload };
   } catch (error) {
     logger.error(`yt-dlp download failed: ${describeCause(error.cause ?? error)}`);
     throw error;

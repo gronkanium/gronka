@@ -84,8 +84,9 @@ describe('ssrf guard', () => {
     });
 
     test('reconstructs the target when href is absent', () => {
-      assert.throws(() =>
-        guardedBeforeRedirect({ protocol: 'http:', hostname: '127.0.0.1', path: '/' })
+      assert.throws(
+        () => guardedBeforeRedirect({ protocol: 'http:', hostname: '127.0.0.1', path: '/' }),
+        { code: 'ESSRFBLOCKED' }
       );
     });
   });

@@ -4,8 +4,6 @@ import { createLogger } from './logger.js';
 import { botConfig } from './config.js';
 import { validateUrl } from './validation.js';
 import { ValidationError, NetworkError, withCause, describeCause } from './errors.js';
-import { isSocialMediaUrl, downloadFromSocialMedia } from './cobalt.js';
-import { isInstagramStoryUrl, hasInstagramSession, downloadFromInstagram } from './instagram.js';
 import { isDiscordCdnUrl, getRefreshedAttachmentURL, getRequestHeaders } from './discord-cdn.js';
 import { sanitizeFilename } from './validation.js';
 import { fetchToFile, withExtension } from './media-file.js';
@@ -15,9 +13,7 @@ import {
   ssrfGuardedRequest,
   MAX_PAGE_BYTES,
 } from './ssrf-guard.js';
-import { isMegaUrl, downloadFromMega } from './mega.js';
 import { OUTPUT_FORMATS } from './output-formats.js';
-import { isJumpshareUrl, resolveJumpshareUrl } from './jumpshare.js';
 import { hostOf } from './url-host.js';
 
 const logger = createLogger('file-downloader');
@@ -40,7 +36,6 @@ const DIRECT_MEDIA_EXTENSIONS = new Set([
 ]);
 
 export function isDirectMediaUrl(url) {
-  if (isMegaUrl(url)) return true;
   try {
     const ext = path.extname(new URL(url).pathname).slice(1).toLowerCase();
     return DIRECT_MEDIA_EXTENSIONS.has(ext);
@@ -102,12 +97,7 @@ function isTooLargeError(error) {
   return error?.response?.status === 413 || error?.code === 'TOO_LARGE';
 }
 
-const {
-  maxVideoSize: MAX_VIDEO_SIZE,
-  maxImageSize: MAX_IMAGE_SIZE,
-  cobaltApiUrl: COBALT_API_URL,
-  cobaltEnabled: COBALT_ENABLED,
-} = botConfig;
+const { maxVideoSize: MAX_VIDEO_SIZE, maxImageSize: MAX_IMAGE_SIZE } = botConfig;
 const MAX_ANY_SIZE = Math.max(MAX_VIDEO_SIZE, MAX_IMAGE_SIZE);
 const mb = bytes => bytes / (1024 * 1024);
 
@@ -213,32 +203,6 @@ export async function downloadFileFromUrl(url, client = null, options = {}) {
       }
     } catch (error) {
       logger.warn(`Failed to refresh Discord URL, using original: ${error.message}`);
-    }
-  }
-
-  if (isMegaUrl(actualUrl)) {
-    return downloadFromMega(actualUrl, MAX_ANY_SIZE);
-  }
-
-  if (isJumpshareUrl(actualUrl)) {
-    actualUrl = await resolveJumpshareUrl(actualUrl);
-  }
-
-  if (isInstagramStoryUrl(actualUrl) && hasInstagramSession()) {
-    const story = await downloadFromInstagram(actualUrl);
-    return Array.isArray(story) ? story[0] : story;
-  }
-
-  // Skip Cobalt for Discord CDN URLs as they are handled directly
-  if (COBALT_ENABLED && !isDiscordCdnUrl(actualUrl) && isSocialMediaUrl(actualUrl)) {
-    try {
-      logger.debug(`Detected social media URL, attempting download via Cobalt`);
-      const maxSize = MAX_VIDEO_SIZE;
-      return await downloadFromSocialMedia(COBALT_API_URL, actualUrl, maxSize);
-    } catch (cobaltError) {
-      logger.warn(
-        `Cobalt download failed, falling back to direct download: ${cobaltError.message}`
-      );
     }
   }
 

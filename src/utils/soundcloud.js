@@ -172,12 +172,11 @@ export async function soundcloudViaYoutube(url, { maxSize = Infinity, track = nu
     );
   }
   logger.debug(`DRM SoundCloud track matched to YouTube ${match.id} (${match.channel})`);
-  const audio = await downloadWithYtdlp(
-    `https://www.youtube.com/watch?v=${match.id}`,
+  const audio = await downloadWithYtdlp(`https://www.youtube.com/watch?v=${match.id}`, {
     maxSize,
-    'bestaudio[ext=m4a]/bestaudio',
-    Infinity
-  );
+    quality: 'bestaudio[ext=m4a]/bestaudio',
+    maxDuration: Infinity,
+  });
   const tagged = await tagAudio(audio, track);
   return {
     ...tagged,

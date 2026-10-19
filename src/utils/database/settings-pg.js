@@ -32,14 +32,6 @@ export async function getSetting(key, defaultValue = null) {
   return value ?? defaultValue;
 }
 
-export async function getBooleanSetting(key, defaultValue = false) {
-  const value = await getSetting(key, null);
-  if (value === null) {
-    return defaultValue;
-  }
-  return value === 'true';
-}
-
 export async function setSetting(key, value) {
   await ensurePostgresInitialized();
 

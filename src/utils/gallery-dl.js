@@ -7,6 +7,7 @@ import { writeZip } from './archive.js';
 import { fromPath, tempDir, jobSignal } from './media-file.js';
 import { mapLimit, ITEM_FANOUT } from './map-limit.js';
 import { hostOf, normalizeHost } from './url-host.js';
+import { getCookieArgs } from './ytdlp.js';
 
 const logger = createLogger('gallery-dl');
 
@@ -66,6 +67,18 @@ export function galleryDlError(stderr, site) {
   return withCause(error, `gallery-dl: ${reason}`);
 }
 
+// cobalt and yt-dlp only take Facebook video; gallery-dl reads photo pages.
+export function isFacebookPhotoUrl(url) {
+  try {
+    const { pathname } = new URL(url);
+    return (
+      hostOf(url) === 'facebook.com' && /^\/(photo\.php|photo\/|[^/]+\/photos\/)/.test(pathname)
+    );
+  } catch {
+    return false;
+  }
+}
+
 export function getGalleryDlSite(url) {
   try {
     const hostname = hostOf(url);
@@ -93,6 +106,9 @@ function runGalleryDl(url, outputDir, timeout = 300000) {
         `1-${MAX_GALLERY_FILES + 1}`,
         '--directory',
         outputDir,
+        ...getCookieArgs(url),
+        // gallery-dl writes the jar back on exit, which would undo a refresh made meanwhile.
+        ...['-o', 'cookies-update=false'],
         url,
       ],
       { signal: jobSignal(), stdio: ['ignore', 'ignore', 'pipe'] }

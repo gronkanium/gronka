@@ -8,43 +8,21 @@ import {
   tagAudio,
 } from '../utils/soundcloud.js';
 import {
-  downloadFromSocialMedia,
   getCobaltMediaUrls,
   getRemoteContentLength,
   canonicalizeMirrorUrl,
 } from '../utils/cobalt.js';
-import { getYtdlpSite, downloadWithYtdlp } from '../utils/ytdlp.js';
-import { getGalleryDlSite, downloadWithGalleryDl } from '../utils/gallery-dl.js';
-import { isDeviationUrl, downloadFromDeviantArt } from '../utils/deviantart.js';
-import { isHentaiGifzUrl, downloadFromHentaiGifz } from '../utils/hentaigifz.js';
-import { isBooruUrl, downloadFromBooru, booruCdnUserAgent } from '../utils/booru.js';
-import { isPinterestUrl, downloadFromPinterest } from '../utils/pinterest.js';
-import { isKlipyUrl, downloadFromKlipy } from '../utils/klipy.js';
-import { isJumpshareUrl } from '../utils/jumpshare.js';
-import { isMedalUrl, downloadFromMedal } from '../utils/medal.js';
-import { isThreadsUrl, downloadFromThreads } from '../utils/threads.js';
-import {
-  isInstagramPostUrl,
-  isInstagramStoryUrl,
-  hasInstagramSession,
-  downloadFromInstagram,
-} from '../utils/instagram.js';
 import { getDisabledServiceLabel } from '../utils/download-services.js';
 import { ValidationError, describeCause, rootCause } from '../utils/errors.js';
 import { BLOCKED_DESTINATION_MESSAGE, isPrivateHost } from '../utils/ssrf-guard.js';
-import {
-  isDirectMediaUrl,
-  downloadDirectMedia,
-  downloadFileFromUrl,
-} from '../utils/file-downloader.js';
+import { downloadFileFromUrl } from '../utils/file-downloader.js';
+import { routeFor, routeById, chainFor } from './sources.js';
 import { detectFileType } from '../utils/storage.js';
-import { getBooleanSetting, getSetting } from '../utils/database.js';
+import { readSetting } from '../utils/settings.js';
 import { isRedditPostUrl, hasRedditSession, resolveRedditPost } from '../utils/reddit.js';
 import { convertToFormat } from '../utils/video-processor.js';
 import { fitsDiscordAttachment } from '../commands/shared/attachment-limit.js';
-import { hostOf } from '../utils/url-host.js';
 import { youtubePostId, resolveYoutubePost } from '../utils/youtube-post.js';
-import { isTiktokContentUrl } from '../content/tiktok.js';
 
 const logger = createLogger('acquire-media');
 
@@ -78,55 +56,23 @@ async function downloadRedditSlides(images) {
   return downloaded.length === 1 ? downloaded[0] : downloaded;
 }
 
-function isTwitterXUrl(url) {
-  try {
-    const hostname = hostOf(url);
-    return (
-      hostname === 'x.com' ||
-      hostname === 'twitter.com' ||
-      hostname === 'mobile.twitter.com' ||
-      hostname.endsWith('.x.com') ||
-      hostname.endsWith('.twitter.com')
-    );
-  } catch {
-    return false;
-  }
-}
+const isTwitterXUrl = url => routeById('x').owns(url);
 
-// TikTok URLs get the same Cobalt→yt-dlp fallback as X/Twitter: Cobalt has no TikTok cookie
-// support, so age-restricted posts only work via yt-dlp with a cookies file (YTDLP_COOKIES_PATH).
-function isTikTokUrl(url) {
-  try {
-    const hostname = hostOf(url);
-    return hostname === 'tiktok.com' || hostname.endsWith('.tiktok.com');
-  } catch {
-    return false;
-  }
-}
+const { maxVideoSize: MAX_VIDEO_SIZE, cobaltApiUrl: COBALT_API_URL } = botConfig;
 
-// A non-null label makes a Cobalt failure on this host eligible for the yt-dlp retry: Cobalt's
-// extractors are flaky or auth-gated, and yt-dlp covers many of the same hosts.
-const cobaltFallbackLabel = url => hostOf(url) ?? 'this platform';
-
-const {
-  maxVideoSize: MAX_VIDEO_SIZE,
-  cobaltApiUrl: COBALT_API_URL,
-  cobaltEnabled: COBALT_ENABLED,
-  ytdlpEnabled: YTDLP_ENABLED,
-  ytdlpQuality: YTDLP_QUALITY,
-  galleryDlEnabled: GALLERY_DL_ENABLED,
-} = botConfig;
+// A site extractor's gone or refused answer stops the chain; cobalt's never does (a TikTok US-CDN 404 reads as gone).
+const GONE = ['CONTENT_GONE', 'CLIP_NOT_PUBLISHED'];
+const worthAnotherSource = (engine, error) =>
+  engine.id === 'cobalt' ||
+  error.code === 'YTDLP_UNSUPPORTED_URL' ||
+  (!(error instanceof ValidationError) && !GONE.includes(error.code));
 
 // Size is the real gate (--max-filesize); this only caps pathological lengths.
-async function getMaxVideoDuration() {
-  const raw = await getSetting('max_video_duration', '3600');
-  const parsed = parseInt(raw, 10);
-  return Number.isFinite(parsed) && parsed > 0 ? parsed : 3600;
-}
+const getMaxVideoDuration = () => readSetting('max_video_duration');
 
 async function getMaxVideoSize() {
-  const mb = parseInt(await getSetting('max_video_size_mb', ''), 10);
-  return Number.isFinite(mb) && mb > 0 ? mb * 1024 * 1024 : MAX_VIDEO_SIZE;
+  const mb = await readSetting('max_video_size_mb');
+  return mb > 0 ? mb * 1024 * 1024 : MAX_VIDEO_SIZE;
 }
 
 async function directMediaUrls(url, shouldServe = null, keep = () => {}) {
@@ -161,8 +107,6 @@ export async function acquireMedia(
   }
   const maxSize = await getMaxVideoSize();
   const trimming = startTime !== null || duration !== null;
-  let cobaltResponse = null;
-  const keep = response => (cobaltResponse = response);
   // Every extractor tried and why it failed, in order; the final error carries it for recordFailure.
   const trail = [];
   const note = (step, error) => trail.push({ step, error: describeCause(rootCause(error)) });
@@ -175,7 +119,10 @@ export async function acquireMedia(
   if (isRedditPostUrl(url) && hasRedditSession()) {
     try {
       const resolved = await resolveRedditPost(url);
-      if (resolved.external) {
+      if (resolved.external && !routeFor(resolved.external)) {
+        logger.debug(`Reddit post links to a site no source takes: ${resolved.external}`);
+        redditImages = [];
+      } else if (resolved.external) {
         logger.debug(`Reddit post points offsite, following to: ${resolved.external}`);
         // The disabled-source gate above ran on the reddit URL, so re-check the target:
         // following a hand-off must not smuggle past a source the owner turned off.
@@ -213,43 +160,40 @@ export async function acquireMedia(
     else postImages = post.images;
   }
 
-  const ytdlpSite = postImages ? null : getYtdlpSite(url);
-  const isDeviation = isDeviationUrl(url);
-  const galleryDlSite = isDeviation ? null : getGalleryDlSite(url);
-  const isHentaiGifz = isHentaiGifzUrl(url);
-  const isBooru = isBooruUrl(url);
-  const isPinterest = isPinterestUrl(url);
-  const isKlipy = isKlipyUrl(url);
-  const isJumpshare = isJumpshareUrl(url);
-  const isMedal = isMedalUrl(url);
-  const isThreads = isThreadsUrl(url);
-  const isDirectMedia = isDirectMediaUrl(url);
-  // Cobalt tries Instagram's logged-out routes first; the session extractor is only the backstop.
-  const useInstagram = isInstagramPostUrl(url) && hasInstagramSession();
-  const isIgStory = isInstagramStoryUrl(url) && hasInstagramSession();
-  const useReddit = redditImages !== null && redditImages.length > 0;
-  // yt-dlp only does video, so a still image on a yt-dlp host (i.imgur.com/x.jpg) goes direct.
-  const isStillImage = isDirectMedia && /\.(jpe?g|png|webp|bmp)$/i.test(new URL(url).pathname);
-  const useYtdlp = ytdlpSite !== null && YTDLP_ENABLED && !isStillImage;
+  const ctx = {
+    client,
+    maxSize,
+    startTime,
+    duration,
+    galleryOptions,
+    cobaltResponse: null,
+    maxDuration: async () => (trimming ? Infinity : await getMaxVideoDuration()),
+  };
+  const keep = response => (ctx.cobaltResponse = response);
+  const local = postImages
+    ? {
+        id: 'youtube-post',
+        name: 'YouTube post',
+        extract: async () => {
+          const files = await Promise.all(postImages.map(image => downloadFileFromUrl(image)));
+          return files.length === 1 ? files[0] : files;
+        },
+      }
+    : redditImages?.length > 0
+      ? { id: 'reddit', name: 'Reddit', extract: () => downloadRedditSlides(redditImages) }
+      : null;
+  const { engines: routed, disabled } = await chainFor(url);
+  if (!local && disabled) {
+    throw new ValidationError(disabled.disabledMessage(url));
+  }
+  const engines = local ? [local, ...(postImages ? [] : routed)] : routed;
+  if (!engines.length) {
+    throw new ValidationError('url is not from a supported social media platform.');
+  }
+  const [first] = engines;
 
-  // Trims need real bytes, and yt-dlp/gallery/booru/Pinterest sources have no cobalt URL.
-  if (
-    COBALT_ENABLED &&
-    !useYtdlp &&
-    !galleryDlSite &&
-    !isDeviation &&
-    !isHentaiGifz &&
-    !isBooru &&
-    !isPinterest &&
-    !isKlipy &&
-    !isJumpshare &&
-    !isThreads &&
-    !postImages &&
-    !isIgStory &&
-    !isDirectMedia &&
-    !trimming &&
-    (urlOnly ?? (await getBooleanSetting('url_only_mode', false)))
-  ) {
+  // Trims need real bytes, and only cobalt has a cobalt URL to hand out.
+  if (first.id === 'cobalt' && !trimming && (urlOnly ?? (await readSetting('url_only_mode')))) {
     try {
       const urls = await directMediaUrls(url, null, keep);
       if (urls) {
@@ -264,8 +208,8 @@ export async function acquireMedia(
   }
 
   // 'hybrid' still attaches small clips, which outlive the tweet; big ones get the twimg URL.
-  if (COBALT_ENABLED && !cobaltResponse && isTwitterXUrl(url) && !trimming) {
-    const deliveryMode = await getSetting('twitter_delivery', 'hybrid');
+  if (first.id === 'cobalt' && !ctx.cobaltResponse && isTwitterXUrl(url) && !trimming) {
+    const deliveryMode = await readSetting('twitter_delivery');
     if (deliveryMode === 'always_url' || deliveryMode === 'hybrid') {
       try {
         const urls = await directMediaUrls(
@@ -293,77 +237,7 @@ export async function acquireMedia(
     }
   }
 
-  const ytdlpMaxDuration = async () => (trimming ? Infinity : await getMaxVideoDuration());
-  const extractors = [
-    [
-      'medal',
-      isMedal,
-      'Medal',
-      async () => {
-        const maxDuration = await ytdlpMaxDuration();
-        try {
-          return await downloadFromMedal(url, maxDuration);
-        } catch (medalError) {
-          if (medalError instanceof ValidationError || !YTDLP_ENABLED) throw medalError;
-          if (['CONTENT_GONE', 'CLIP_NOT_PUBLISHED'].includes(medalError.code)) throw medalError;
-          note('Medal', medalError);
-          logger.warn(`Medal api failed, trying yt-dlp: ${describeCause(rootCause(medalError))}`);
-          return downloadWithYtdlp(url, maxSize, YTDLP_QUALITY, maxDuration, null, null);
-        }
-      },
-    ],
-    [
-      'ytdlp',
-      useYtdlp,
-      `${ytdlpSite} via yt-dlp`,
-      async () =>
-        downloadWithYtdlp(
-          url,
-          maxSize,
-          YTDLP_QUALITY,
-          await ytdlpMaxDuration(),
-          startTime,
-          duration
-        ),
-    ],
-    [
-      'gallery-dl',
-      galleryDlSite && GALLERY_DL_ENABLED,
-      `${galleryDlSite} via gallery-dl`,
-      () => downloadWithGalleryDl(url, maxSize, galleryOptions),
-    ],
-    ['deviantart', isDeviation, 'DeviantArt', () => downloadFromDeviantArt(url, maxSize)],
-    ['hentaigifz', isHentaiGifz, 'hentaigifz', () => downloadFromHentaiGifz(url)],
-    ['booru', isBooru, 'booru', () => downloadFromBooru(url)],
-    ['pinterest', isPinterest, 'Pinterest', () => downloadFromPinterest(url)],
-    ['klipy', isKlipy, 'Klipy', () => downloadFromKlipy(url)],
-    ['jumpshare', isJumpshare, 'Jumpshare', () => downloadDirectMedia(url, client)],
-    ['threads', isThreads, 'Threads', () => downloadFromThreads(url)],
-    ['instagram-story', isIgStory, 'Instagram story', () => downloadFromInstagram(url)],
-    [
-      'direct',
-      isDirectMedia,
-      'direct media link',
-      () => downloadDirectMedia(url, client, { userAgent: booruCdnUserAgent(url) }),
-    ],
-    ['reddit', useReddit, 'Reddit', () => downloadRedditSlides(redditImages)],
-    [
-      'youtube-post',
-      postImages !== null,
-      'YouTube post',
-      async () => {
-        const files = await Promise.all(postImages.map(image => downloadFileFromUrl(image)));
-        return files.length === 1 ? files[0] : files;
-      },
-    ],
-  ];
-  let [downloadMethod, , sourceLabel, extract] = extractors.find(([, applies]) => applies) ?? [
-    'cobalt',
-    true,
-    'Cobalt',
-    null,
-  ];
-  logger.debug(`Downloading from ${sourceLabel}: ${url}`);
+  logger.debug(`Downloading from ${engines.map(e => e.name).join(' > ')}: ${url}`);
 
   // Started early: it takes ~3 s and decides both the DRM route and the tags.
   const soundcloud =
@@ -376,9 +250,9 @@ export async function acquireMedia(
 
   // Runs beside the SoundCloud read; a DRM-only track has no source links to hand out.
   // cobalt turns X's looping mp4s into real gifs; a raw stream would hand out the mp4.
-  const cobaltGif = /\.gif$/i.test(cobaltResponse?.filename ?? '');
-  if (streamFirst && !cobaltGif && !trimming) {
-    const lane = streamFirst(url, downloadMethod).catch(error => {
+  const cobaltGif = /\.gif$/i.test(ctx.cobaltResponse?.filename ?? '');
+  if (streamFirst && first.streams && !cobaltGif && !trimming) {
+    const lane = streamFirst(url, first.id).catch(error => {
       logger.debug(`Stream lane unavailable, using the download path: ${error.message}`);
       return null;
     });
@@ -388,140 +262,55 @@ export async function acquireMedia(
     }
   }
 
+  const viaYoutube = async track => ({
+    kind: 'file',
+    fileData: await soundcloudViaYoutube(url, { maxSize, track }),
+    downloadMethod: 'ytdlp',
+    url,
+  });
   let fileData;
-  if (extract) {
-    try {
-      fileData = await extract();
-    } catch (extractError) {
-      note(sourceLabel, extractError);
-      if (downloadMethod !== 'reddit') throw fail(extractError);
+  let method = null;
+  let lastError = null;
+  let gone = false;
+  for (const [index, engine] of engines.entries()) {
+    if (lastError) {
+      // A DRM-only SoundCloud track has nothing for the next engine; its YouTube copy does.
+      const track = await soundcloud;
+      if (track?.drm) return viaYoutube(track);
       logger.warn(
-        `Reddit image fetch failed, falling back to cobalt: ${describeCause(rootCause(extractError))}`
+        `${engines[index - 1].name} failed, trying ${engine.name}: ${describeCause(rootCause(lastError))}`
       );
-      downloadMethod = 'cobalt';
+    }
+    try {
+      fileData = await engine.extract(url, ctx);
+      method = engine.id;
+      break;
+    } catch (error) {
+      note(engine.name.toLowerCase(), error);
+      lastError = error;
+      gone ||= GONE.includes(error.code);
+      if (error.code === 'DRM_PROTECTED' && isSoundCloudUrl(url)) return viaYoutube();
+      if (!worthAnotherSource(engine, error)) break;
     }
   }
 
-  if (downloadMethod === 'cobalt') {
-    try {
-      // Concurrency is capped inside cobalt.js. The URL cache was already consulted
-      // above (and deliberately skipped when trimming), so there is no second check here.
-      fileData = await downloadFromSocialMedia(COBALT_API_URL, url, maxSize, cobaltResponse).catch(
-        async cobaltError => {
-          if (!useInstagram) throw cobaltError;
-          note('cobalt', cobaltError);
-          logger.warn(
-            `Cobalt failed for Instagram, trying the session: ${describeCause(rootCause(cobaltError))}`
-          );
-          try {
-            return await downloadFromInstagram(url);
-          } catch (instagramError) {
-            note('instagram session', instagramError);
-            logger.warn(
-              `Instagram session extractor failed: ${describeCause(rootCause(instagramError))}`
-            );
-            throw instagramError.code === 'CONTENT_GONE' ? instagramError : cobaltError;
-          }
-        }
-      );
-    } catch (cobaltError) {
-      if (!useInstagram) note('cobalt', cobaltError);
-      if (useInstagram && cobaltError.code === 'CONTENT_GONE') throw fail(cobaltError);
-      const fallbackSite = isTwitterXUrl(url)
-        ? 'X/Twitter'
-        : isTikTokUrl(url)
-          ? 'TikTok'
-          : cobaltFallbackLabel(url);
-
-      // X only: Discord plays a twimg URL in full, so the caps don't apply; others don't embed.
-      const tryTwitterDirectUrl = async () => {
-        if (!isTwitterXUrl(url) || trimming) {
-          return null;
-        }
-        if (!(await getBooleanSetting('twitter_direct_url_fallback', true))) {
-          return null;
-        }
-        try {
-          const urls = await directMediaUrls(url);
-          if (urls) {
-            return urls;
-          }
-        } catch (directUrlError) {
-          note('cobalt direct url', directUrlError);
-          logger.warn(`Direct URL fallback failed: ${describeCause(rootCause(directUrlError))}`);
-        }
-        return null;
-      };
-
-      if (!fallbackSite || !YTDLP_ENABLED) {
-        const urls = await tryTwitterDirectUrl();
-        if (urls) {
-          return { kind: 'urls', urls, url };
-        }
-        throw fail(cobaltError);
-      }
-
-      const track = await soundcloud;
-      if (track?.drm) {
-        return {
-          kind: 'file',
-          fileData: await soundcloudViaYoutube(url, { maxSize, track }),
-          downloadMethod: 'ytdlp',
-          url,
-        };
-      }
-
-      logger.warn(
-        `Cobalt failed for ${fallbackSite} URL, falling back to yt-dlp: ${describeCause(rootCause(cobaltError))}`
-      );
-
+  if (!method) {
+    // X only: Discord plays a twimg URL in full, so the caps don't apply; others don't embed.
+    if (
+      isTwitterXUrl(url) &&
+      !trimming &&
+      !gone &&
+      (await readSetting('twitter_direct_url_fallback'))
+    ) {
       try {
-        fileData = await downloadWithYtdlp(
-          url,
-          maxSize,
-          YTDLP_QUALITY,
-          await ytdlpMaxDuration(),
-          startTime,
-          duration
-        );
-      } catch (ytdlpFallbackError) {
-        note('yt-dlp', ytdlpFallbackError);
-        if (
-          GALLERY_DL_ENABLED &&
-          isTiktokContentUrl(url) &&
-          ytdlpFallbackError.code === 'YTDLP_UNSUPPORTED_URL'
-        ) {
-          try {
-            return {
-              kind: 'file',
-              fileData: await downloadWithGalleryDl(url, maxSize, galleryOptions),
-              downloadMethod: 'gallery-dl',
-              url,
-            };
-          } catch (galleryError) {
-            note('gallery-dl', galleryError);
-            throw fail(galleryError);
-          }
-        }
-        if (ytdlpFallbackError.code === 'DRM_PROTECTED' && isSoundCloudUrl(url)) {
-          return {
-            kind: 'file',
-            fileData: await soundcloudViaYoutube(url, { maxSize }),
-            downloadMethod: 'ytdlp',
-            url,
-          };
-        }
-        const urls = await tryTwitterDirectUrl();
-        if (urls) {
-          return { kind: 'urls', urls, url };
-        }
-        throw fail(ytdlpFallbackError);
+        const urls = await directMediaUrls(url);
+        if (urls) return { kind: 'urls', urls, url };
+      } catch (directUrlError) {
+        note('cobalt direct url', directUrlError);
+        logger.warn(`Direct URL fallback failed: ${describeCause(rootCause(directUrlError))}`);
       }
-
-      // yt-dlp already trimmed via --download-sections; mark the method so the
-      // ffmpeg trim step below is skipped (otherwise it re-trims the segment).
-      downloadMethod = 'ytdlp';
     }
+    throw fail(lastError);
   }
 
   const track = soundcloud && (await soundcloud);
@@ -533,14 +322,10 @@ export async function acquireMedia(
     }
   }
 
-  return { kind: 'file', fileData, downloadMethod, url };
+  return { kind: 'file', fileData, downloadMethod: method, url };
 }
 
-export async function extractAudio(
-  fileData,
-  downloadMethod,
-  { startTime = null, duration = null } = {}
-) {
+export async function extractAudio(fileData, { startTime = null, duration = null } = {}) {
   const source = Array.isArray(fileData)
     ? fileData.find(
         media =>
@@ -558,8 +343,7 @@ export async function extractAudio(
   if (source.audioReady && startTime === null && duration === null) {
     return { file: source, baseName: path.parse(source.filename).name };
   }
-  // yt-dlp (and its fallback) already cut the requested section.
-  const trim = downloadMethod === 'ytdlp' ? {} : { startTime, duration };
+  const trim = source.trimmed ? {} : { startTime, duration };
   const file = await convertToFormat(source, 'mp3', trim);
   const baseName = path.parse(source.filename).name.replace(/[^\w.-]+/g, '_') || 'audio';
   return { file, baseName };

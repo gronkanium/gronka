@@ -1,7 +1,8 @@
 import { createLogger } from './logger.js';
 import { listMediaInR2, deleteManyFromR2, setR2Usage } from './r2-storage.js';
-import { getSetting, insertAlert } from './database.js';
-import { ttlHoursForSize, DEFAULT_TTL_TIERS } from './upload-tiers.js';
+import { insertAlert } from './database.js';
+import { readSetting } from './settings.js';
+import { ttlHoursForSize } from './upload-tiers.js';
 
 const logger = createLogger('r2-cleanup');
 
@@ -13,7 +14,7 @@ export function expiredKeys(objects, tiers, now = Date.now()) {
 }
 
 export async function deleteExpiredR2Files(config) {
-  const tiers = await getSetting('upload_ttl_tiers', DEFAULT_TTL_TIERS);
+  const tiers = await readSetting('upload_ttl_tiers');
   const objects = await listMediaInR2(config);
   const expired = expiredKeys(objects, tiers);
   const failed = new Set(await deleteManyFromR2(expired, config));

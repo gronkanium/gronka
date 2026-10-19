@@ -83,7 +83,7 @@ describe('createMessageAdapter', () => {
     const { message } = makeFakeMessage();
     const adapter = createMessageAdapter(message);
 
-    await assert.rejects(() => adapter.editReply({ content: 'nope' }));
+    await assert.rejects(() => adapter.editReply({ content: 'nope' }), /before deferReply/);
   });
 
   test('reply strips interaction-only flags and marks replied', async () => {

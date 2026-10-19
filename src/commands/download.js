@@ -1,30 +1,18 @@
-import { MessageFlags } from 'discord.js';
 import { createLogger } from '../utils/logger.js';
 import { botConfig, r2Config } from '../utils/config.js';
-import { validateUrl, firstUrlIn } from '../utils/validation.js';
-import { canonicalizeMirrorUrl, isSocialMediaUrl } from '../utils/cobalt.js';
-import { resolveShortLink } from '../utils/short-links.js';
-import { getYtdlpSite } from '../utils/ytdlp.js';
+import { firstUrlIn } from '../utils/validation.js';
+import { readLink, prepareLink, refusalFor } from '../core/intake.js';
 import {
-  getGalleryDlSite,
   isMangaDexTitleUrl,
   isMangaDexChapterUrl,
   isNhentaiGalleryUrl,
 } from '../utils/gallery-dl.js';
 import { beginMangaSelection } from './manga.js';
-import { isHentaiGifzUrl } from '../utils/hentaigifz.js';
-import { isBooruUrl } from '../utils/booru.js';
-import { isPinterestUrl } from '../utils/pinterest.js';
-import { isKlipyUrl } from '../utils/klipy.js';
-import { isJumpshareUrl } from '../utils/jumpshare.js';
-import { isThreadsUrl } from '../utils/threads.js';
 import { keylessMegaFileId } from '../utils/mega.js';
 import { promptForMegaKey } from './mega-key.js';
 import { getDisabledServiceLabel } from '../utils/download-services.js';
 import { ValidationError } from '../utils/errors.js';
-import { isDiscordMessageLink, DISCORD_MESSAGE_LINK_MESSAGE } from '../utils/discord-cdn.js';
 import { batchAttachmentsForDelivery } from '../utils/attachment-helpers.js';
-import { isDirectMediaUrl } from '../utils/file-downloader.js';
 import { resolveTtlHoursForSize } from '../utils/storage.js';
 import { isR2Configured, formatMultipleR2UrlsWithDisclaimer } from '../utils/r2-storage.js';
 import {
@@ -49,7 +37,6 @@ import {
 import { trimItem } from '../utils/video-processor.js';
 import { sendConvertedFile } from './shared/send-converted.js';
 import {
-  safeInteractionReply,
   safeInteractionEditReply,
   safeInteractionFollowUp,
   safeInteractionDeferReply,
@@ -59,12 +46,7 @@ import { mapLimit, ITEM_FANOUT } from '../utils/map-limit.js';
 
 const logger = createLogger('download');
 
-const {
-  cobaltEnabled: COBALT_ENABLED,
-  ytdlpEnabled: YTDLP_ENABLED,
-  galleryDlEnabled: GALLERY_DL_ENABLED,
-  discordSizeLimit: DISCORD_SIZE_LIMIT,
-} = botConfig;
+const { galleryDlEnabled: GALLERY_DL_ENABLED, discordSizeLimit: DISCORD_SIZE_LIMIT } = botConfig;
 
 // Discord caps a message at 2000 characters, so as many links as fit.
 async function replyWithDirectMediaUrls(interaction, ctx, { urls }) {
@@ -195,10 +177,10 @@ export async function processDownload(
         return replyWithDirectMediaUrls(interaction, ctx, acquired);
       }
       url = acquired.url;
-      const { fileData, downloadMethod } = acquired;
+      const { fileData } = acquired;
 
       if (galleryOptions.audioOnly) {
-        const { file: mp3, baseName } = await extractAudio(fileData, downloadMethod, {
+        const { file: mp3, baseName } = await extractAudio(fileData, {
           startTime,
           duration,
         });
@@ -216,9 +198,8 @@ export async function processDownload(
         return deliverGallery(interaction, ctx, fileData, attachmentLimit);
       }
 
-      // yt-dlp already cut its download with --download-sections.
       let item = fileData;
-      if (trimming && downloadMethod !== 'ytdlp') {
+      if (trimming && !fileData.trimmed) {
         item = await trimItem(fileData, { startTime, duration });
       }
       await deliverSingle(interaction, ctx, item, attachmentLimit);
@@ -254,78 +235,31 @@ export function queueDownload(
 
 // Replies and returns true when no extractor can take this URL.
 async function refuseUnsupported(interaction, url, commandSource) {
-  const context = { originalUrl: url, commandSource };
-  const ytdlpSite = getYtdlpSite(url);
-  const galleryDlSite = getGalleryDlSite(url);
-
-  if (ytdlpSite && !YTDLP_ENABLED) {
-    const message = `${ytdlpSite.toLowerCase()} downloads are disabled.`;
-    await refuse(interaction, 'download', { message, reason: 'ytdlp_disabled', context });
-    return true;
-  }
-  if (galleryDlSite && !GALLERY_DL_ENABLED) {
-    const message = `${galleryDlSite.toLowerCase()} downloads are disabled.`;
-    await refuse(interaction, 'download', { message, reason: 'gallery_dl_disabled', context });
-    return true;
-  }
-  const ownExtractor =
-    ytdlpSite ||
-    galleryDlSite ||
-    isHentaiGifzUrl(url) ||
-    isBooruUrl(url) ||
-    isPinterestUrl(url) ||
-    isKlipyUrl(url) ||
-    isJumpshareUrl(url) ||
-    isThreadsUrl(url) ||
-    isDirectMediaUrl(url);
-  if (ownExtractor) return false;
-  if (!COBALT_ENABLED) {
-    const message = 'cobalt is not enabled. please enable it to use the download command.';
-    await refuse(interaction, 'download', {
-      message,
-      reason: 'cobalt_disabled',
-      context,
-    });
-    return true;
-  }
-  if (isDiscordMessageLink(url)) {
-    const message = DISCORD_MESSAGE_LINK_MESSAGE;
-    await refuse(interaction, 'download', { message, reason: 'discord_message_link', context });
-    return true;
-  }
-  if (!isSocialMediaUrl(url)) {
-    const message = 'url is not from a supported social media platform.';
-    const reason = 'invalid_social_media_url';
-    await refuse(interaction, 'download', { message, reason, context });
-    return true;
-  }
-  return false;
+  const refusal = await refusalFor(url);
+  if (!refusal) return false;
+  await refuse(interaction, 'download', {
+    ...refusal,
+    context: { originalUrl: url, commandSource },
+  });
+  return true;
 }
 
 export async function handleDownloadContextMenuCommand(interaction) {
   if (!interaction.isMessageContextMenuCommand() || interaction.commandName !== 'download') {
     return;
   }
-  const found = firstUrlIn(interaction.targetMessage.content);
-  if (!found) {
-    const context = { commandSource: 'context-menu' };
-    const message = 'no URL found in this message.';
+  const read = readLink(
+    firstUrlIn(interaction.targetMessage.content),
+    'no URL found in this message.'
+  );
+  if (read.refusal) {
     await refuse(interaction, 'download', {
-      message,
-      reason: 'missing_url',
-      context,
+      ...read.refusal,
+      context: { commandSource: 'context-menu' },
     });
     return;
   }
-  const urlValidation = validateUrl(found);
-  if (!urlValidation.valid) {
-    await safeInteractionReply(interaction, {
-      content: `invalid URL: ${urlValidation.error}`,
-      flags: MessageFlags.Ephemeral,
-    });
-    return;
-  }
-  const url = canonicalizeMirrorUrl(await resolveShortLink(found));
+  const url = await prepareLink(read.url);
 
   const megaFileId = keylessMegaFileId(url);
   if (megaFileId) {
@@ -343,7 +277,13 @@ export async function handleDownloadCommand(interaction) {
   const commandSource = commandSourceOf(interaction);
 
   const rawUrl = interaction.options.getString('url');
-  const url = canonicalizeMirrorUrl(await resolveShortLink(firstUrlIn(rawUrl) ?? rawUrl));
+  const read = readLink(rawUrl, 'please provide a URL to download from.');
+  if (read.refusal) {
+    const context = { originalUrl: rawUrl, commandSource };
+    await refuse(interaction, 'download', { ...read.refusal, context });
+    return;
+  }
+  const url = await prepareLink(read.url);
   const audioOnly = interaction.options.getBoolean('mp3') === true;
 
   const times = await resolveTimeOptions(interaction, { type: 'download' });
@@ -351,17 +291,6 @@ export async function handleDownloadCommand(interaction) {
     return;
   }
   const { startTime: trimStart, duration: trimDuration } = times;
-
-  if (!url) {
-    const context = { commandSource };
-    const message = 'please provide a URL to download from.';
-    await refuse(interaction, 'download', {
-      message,
-      reason: 'missing_url',
-      context,
-    });
-    return;
-  }
 
   if (
     GALLERY_DL_ENABLED &&
@@ -399,13 +328,6 @@ export async function handleDownloadCommand(interaction) {
     return;
   }
 
-  const urlValidation = validateUrl(url);
-  if (!urlValidation.valid) {
-    const context = { originalUrl: url, commandSource };
-    const message = `invalid URL: ${urlValidation.error}`;
-    await refuse(interaction, 'download', { message, reason: 'invalid_url', context });
-    return;
-  }
   if (await refuseUnsupported(interaction, url, commandSource)) {
     return;
   }

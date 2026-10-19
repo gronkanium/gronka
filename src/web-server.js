@@ -11,7 +11,8 @@ import { acquireMedia, extractAudio } from './core/acquire-media.js';
 import { fetchContent, formatContent } from './content/index.js';
 import { MAX_COMMENTS } from './content/schema.js';
 import { getDisabledServiceLabel, getServiceForUrl } from './utils/download-services.js';
-import { validateUrl, firstUrlIn, parseTimestamp, sanitizeFilename } from './utils/validation.js';
+import { parseTimestamp, sanitizeFilename } from './utils/validation.js';
+import { readLink, prepareLink, refusalFor } from './core/intake.js';
 import { detectFileType } from './utils/storage.js';
 import { uploadToR2, listObjectsInR2, deleteManyFromR2 } from './utils/r2-storage.js';
 import { getStreamInfo, isYouTubeUrl } from './utils/ytdlp.js';
@@ -21,6 +22,7 @@ import { FFMPEG_INPUT_GUARD } from './utils/video-processor/utils.js';
 import { trimItem } from './utils/video-processor/trim-item.js';
 import { fromPath, tempPath, withJobDir, sweepJobDirs } from './utils/media-file.js';
 import { getDirectMediaHeaders } from './utils/file-downloader.js';
+import { ENGINES } from './core/sources.js';
 
 const execFileAsync = promisify(execFile);
 
@@ -92,8 +94,8 @@ export function directStreamInfo(url) {
 
 // Lane 2: the Worker fetches from the source itself, so it only works for links not tied to
 // our IP or cookies. The probe asks the Worker, from Cloudflare's side, whether that holds.
-export async function workerLane(url, downloadMethod, { split = true, mute = false } = {}) {
-  if (!STREAM_BASE || !STREAM_KEY || !['ytdlp', 'cobalt', 'direct'].includes(downloadMethod)) {
+export async function workerLane(url, sourceId, { split = true, mute = false } = {}) {
+  if (!STREAM_BASE || !STREAM_KEY || !ENGINES[sourceId]?.streams) {
     return null;
   }
   // googlevideo links carry ip= for the address that resolved them (measured 2026-09-28).
@@ -102,7 +104,7 @@ export async function workerLane(url, downloadMethod, { split = true, mute = fal
   }
   let info;
   try {
-    info = downloadMethod === 'direct' ? directStreamInfo(url) : await getStreamInfo(url);
+    info = sourceId === 'direct' ? directStreamInfo(url) : await getStreamInfo(url);
   } catch (error) {
     logger.debug(`No stream info, using R2: ${error.message}`);
     return null;
@@ -245,13 +247,22 @@ export const runDownload = (options, signal) =>
   withJobDir(() => downloadInJob(options), { signal });
 
 async function downloadInJob({
-  url,
+  url: link,
   audio,
   mute = false,
   startTime = null,
   duration = null,
   split = true,
 }) {
+  const url = await prepareLink(link);
+  const refusal = await refusalFor(url);
+  if (refusal) {
+    const message =
+      refusal.reason === 'discord_message_link'
+        ? "that's a link to a discord message, not a file."
+        : refusal.message;
+    throw new ValidationError(message, 'UNSUPPORTED_SOURCE');
+  }
   const disabled = await getDisabledServiceLabel(url);
   if (disabled) {
     throw new ValidationError(`downloads from ${disabled} are turned off.`);
@@ -275,10 +286,10 @@ async function downloadInJob({
   if (acquired.kind === 'stream') {
     return { lane: 'worker', ...acquired.streams };
   }
-  const { fileData, downloadMethod } = acquired;
+  const { fileData } = acquired;
   const note = fileData?.note ? { note: fileData.note } : {};
   if (audio) {
-    const { file, baseName } = await extractAudio(fileData, downloadMethod, {
+    const { file, baseName } = await extractAudio(fileData, {
       startTime,
       duration,
     });
@@ -288,7 +299,7 @@ async function downloadInJob({
       files: [await publishToR2(file, `${baseName}.mp3`, 'audio/mpeg')],
     };
   }
-  const trim = (startTime !== null || duration !== null) && downloadMethod !== 'ytdlp';
+  const trim = (startTime !== null || duration !== null) && !fileData.trimmed;
   const items = Array.isArray(fileData) ? fileData : [fileData];
   const files = [];
   for (const item of items) {
@@ -311,15 +322,17 @@ function parseSeconds(value, field) {
   return parsed.seconds;
 }
 
+function bodyLink(text) {
+  const read = readLink(text.slice(0, 4096), 'send a url.');
+  if (read.refusal) throw new AppError(read.refusal.message, 'BAD_URL', 400);
+  return read.url;
+}
+
 export function parseDownloadRequest(body) {
   if (!body || typeof body !== 'object' || typeof body.url !== 'string') {
     throw new AppError('send a url.', 'BAD_REQUEST', 400);
   }
-  const url = firstUrlIn(body.url.slice(0, 4096));
-  const check = url ? validateUrl(url) : { valid: false, error: 'that is not a link.' };
-  if (!check.valid) {
-    throw new AppError(check.error, 'BAD_URL', 400);
-  }
+  const url = bodyLink(body.url);
   const mode = body.mode ?? 'auto';
   if (!['auto', 'audio', 'mute'].includes(mode)) {
     throw new AppError('mode must be auto, audio or mute.', 'BAD_REQUEST', 400);
@@ -359,11 +372,7 @@ export function parseContentRequest(body) {
   if (!body || typeof body !== 'object' || typeof body.url !== 'string') {
     throw new AppError('send a url.', 'BAD_REQUEST', 400);
   }
-  const url = firstUrlIn(body.url.slice(0, 4096));
-  const check = url ? validateUrl(url) : { valid: false, error: 'that is not a link.' };
-  if (!check.valid) {
-    throw new AppError(check.error, 'BAD_URL', 400);
-  }
+  const url = bodyLink(body.url);
   const format = body.format ?? 'json';
   if (!CONTENT_FORMATS.includes(format)) {
     throw new AppError('format must be json or text.', 'BAD_REQUEST', 400);

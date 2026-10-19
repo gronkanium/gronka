@@ -2,7 +2,7 @@ import os from 'node:os';
 import pkg from '../../../package.json' with { type: 'json' };
 import { getPostgresConnection } from './connection.js';
 import { ensurePostgresInitialized } from './init.js';
-import { getBooleanSetting } from './settings-pg.js';
+import { readSetting } from '../settings.js';
 
 export const JOB_CHANNEL = 'media_jobs';
 export const HEARTBEAT_MS = 10_000;
@@ -172,12 +172,11 @@ export async function listen(channel, fn) {
   return sql.listen(channel, fn);
 }
 
-// Read-only view for the webui. Never selects `reply`: it holds the interaction token.
 // Read-only view for the webui. Never selects `reply` (the interaction token) or `args`.
 export async function jobsOverview({ limit = 25 } = {}) {
   const sql = await db();
   const [paused, processes, jobs] = await Promise.all([
-    getBooleanSetting(PAUSE_KEY),
+    readSetting(PAUSE_KEY),
     presence(),
     sql`
       SELECT id, kind, status, attempts, worker, created_at, timestamp, heartbeat_at

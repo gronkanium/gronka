@@ -1,6 +1,7 @@
 import { test, describe } from 'bun:test';
 import assert from 'node:assert';
 import {
+  classifyYtdlpFailure,
   isYouTubeUrl,
   getYtdlpSite,
   getSiteArgs,
@@ -241,6 +242,33 @@ describe('ytdlp utilities', () => {
         }
       }
       assert.strictEqual(caught, true);
+    });
+  });
+
+  describe('classifyYtdlpFailure', () => {
+    const code = (output, url = 'https://youtu.be/x') => classifyYtdlpFailure(output, url).code;
+
+    test('site-specific answers apply only to their site', () => {
+      const tiktok404 = 'ERROR: unable to download video data: HTTP Error 404: Not Found';
+      assert.strictEqual(
+        code(tiktok404, 'https://www.tiktok.com/@a/video/1'),
+        'REGION_COPY_MISSING'
+      );
+      assert.strictEqual(code(tiktok404, 'https://youtu.be/x'), 'YTDLP_UNKNOWN');
+      assert.strictEqual(code('HTTP Error 403', 'https://medal.tv/clips/x'), 'CLIP_NOT_PUBLISHED');
+      assert.strictEqual(code('HTTP Error 403', 'https://youtu.be/x'), 'YTDLP_UNKNOWN');
+    });
+
+    test('order decides overlapping wording', () => {
+      assert.strictEqual(code('ERROR: This video is DRM protected'), 'DRM_PROTECTED');
+      assert.strictEqual(code('Sign in to confirm your age'), 'AGE_RESTRICTED');
+    });
+
+    test('limits reach the messages that name them', () => {
+      const error = classifyYtdlpFailure('does not pass filter (duration', 'https://youtu.be/x', {
+        maxDuration: 3600,
+      });
+      assert.match(error.message, /60 minutes/);
     });
   });
 });

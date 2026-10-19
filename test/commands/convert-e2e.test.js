@@ -13,6 +13,8 @@ import { mediaFromBytes } from '../helpers/media.js';
 // the mocks are gated on GRONKA_E2E.
 const mocksSupported = process.env.GRONKA_E2E === 'true';
 const hasGifsicle = Boolean(Bun.which('gifsicle'));
+// CI installs gifsicle, so a missing one there fails instead of skipping.
+const skipGifsicle = !hasGifsicle && !process.env.CI;
 
 const fixtures = {};
 let handleConvertCommand;
@@ -167,9 +169,7 @@ async function chooseFrom(calls, work, format = 'gif') {
 
 if (!mocksSupported) {
   describe('convert and optimize (full-pipeline E2E)', () => {
-    test('skipped: module mocks are e2e-only (run via bun run test:e2e)', () => {
-      assert.ok(true);
-    });
+    test.skip('module mocks are e2e-only (run via bun run test:e2e)', () => {});
   });
 } else {
   beforeAll(async () => {
@@ -593,7 +593,7 @@ if (!mocksSupported) {
       assert.ok(isGif(file.attachment));
     });
 
-    test.skipIf(!hasGifsicle)(
+    test.skipIf(skipGifsicle)(
       'gif attachment with optimize: an optimized gif comes back',
       async () => {
         const { interaction, calls } = commandInteraction(`cv-opt-${Date.now()}`, {
@@ -723,7 +723,7 @@ if (!mocksSupported) {
   });
 
   describe('/optimize (full-pipeline E2E)', () => {
-    test.skipIf(!hasGifsicle)('gif attachment: optimized gif attached', async () => {
+    test.skipIf(skipGifsicle)('gif attachment: optimized gif attached', async () => {
       const { interaction, calls } = commandInteraction(`op-gif-${Date.now()}`, {
         file: attachmentOf('anim'),
       });
@@ -731,7 +731,7 @@ if (!mocksSupported) {
       assert.ok(isGif(firstReply(calls).files[0].attachment));
     });
 
-    test.skipIf(!hasGifsicle)('non-gif attachment: converted to an optimized gif', async () => {
+    test.skipIf(skipGifsicle)('non-gif attachment: converted to an optimized gif', async () => {
       const { interaction, calls } = commandInteraction(`op-png-${Date.now()}`, {
         file: attachmentOf('still'),
       });
@@ -739,7 +739,7 @@ if (!mocksSupported) {
       assert.ok(isGif(firstReply(calls).files[0].attachment));
     });
 
-    test.skipIf(!hasGifsicle)('video attachment: converted to an optimized gif', async () => {
+    test.skipIf(skipGifsicle)('video attachment: converted to an optimized gif', async () => {
       const { interaction, calls } = commandInteraction('op-video', {
         file: attachmentOf('vid'),
       });
@@ -747,7 +747,7 @@ if (!mocksSupported) {
       assert.ok(isGif(firstReply(calls).files[0].attachment));
     });
 
-    test.skipIf(!hasGifsicle)('file and URL: optimizes the attached gif', async () => {
+    test.skipIf(skipGifsicle)('file and URL: optimizes the attached gif', async () => {
       const { interaction, calls } = commandInteraction('op-both', {
         file: attachmentOf('anim'),
         url: 'https://example.com/page.html',
@@ -765,7 +765,7 @@ if (!mocksSupported) {
       assert.strictEqual(calls.reply[0].content, 'lossy level must be between 0 and 100.');
     });
 
-    test.skipIf(!hasGifsicle)('gif url: optimized on every run, nothing is cached', async () => {
+    test.skipIf(skipGifsicle)('gif url: optimized on every run, nothing is cached', async () => {
       const url = `https://example.com/anim-${Date.now()}.gif`;
       for (const run of ['a', 'b']) {
         const { interaction, calls } = commandInteraction(`op-url-${run}-${Date.now()}`, {

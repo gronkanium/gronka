@@ -15,6 +15,7 @@ import { isKlipyUrl, downloadFromKlipy } from '../utils/klipy.js';
 import { isJumpshareUrl, resolveJumpshareUrl } from '../utils/jumpshare.js';
 import { isMedalUrl, downloadFromMedal } from '../utils/medal.js';
 import { isThreadsUrl, downloadFromThreads } from '../utils/threads.js';
+import { downloadFromX } from '../utils/x-media.js';
 import { isMegaUrl, downloadFromMega } from '../utils/mega.js';
 import {
   isInstagramStoryUrl,
@@ -104,6 +105,7 @@ export const ENGINES = {
     extract: async (url, ctx) => downloadDirectMedia(await resolveJumpshareUrl(url), ctx.client),
   },
   threads: { name: 'Threads', extract: url => downloadFromThreads(url) },
+  x: { name: 'X', extract: url => downloadFromX(url) },
   mega: { name: 'Mega', extract: (url, ctx) => downloadFromMega(url, ctx.maxSize) },
   direct: {
     name: 'direct file',
@@ -228,7 +230,7 @@ export const ROUTES = [
     id: 'x',
     name: 'X / Twitter',
     owns: onHost('x.com', 'twitter.com'),
-    chain: [step('cobalt'), step('ytdlp')],
+    chain: [step('cobalt'), step('x'), step('ytdlp')],
   },
   {
     id: 'youtube',

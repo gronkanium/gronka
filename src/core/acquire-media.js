@@ -79,10 +79,10 @@ const {
 } = botConfig;
 
 // A failure the user or the post caused stops the chain; an engine that can't read the link does not.
+const GONE = ['CONTENT_GONE', 'CLIP_NOT_PUBLISHED'];
 const worthAnotherSource = error =>
   error.code === 'YTDLP_UNSUPPORTED_URL' ||
-  (!(error instanceof ValidationError) &&
-    !['CONTENT_GONE', 'CLIP_NOT_PUBLISHED'].includes(error.code));
+  (!(error instanceof ValidationError) && !GONE.includes(error.code));
 
 // Size is the real gate (--max-filesize); this only caps pathological lengths.
 const getMaxVideoDuration = () => readSetting('max_video_duration');
@@ -312,7 +312,12 @@ export async function acquireMedia(
 
   if (!method) {
     // X only: Discord plays a twimg URL in full, so the caps don't apply; others don't embed.
-    if (isTwitterXUrl(url) && !trimming && (await readSetting('twitter_direct_url_fallback'))) {
+    if (
+      isTwitterXUrl(url) &&
+      !trimming &&
+      !GONE.includes(lastError?.code) &&
+      (await readSetting('twitter_direct_url_fallback'))
+    ) {
       try {
         const urls = await directMediaUrls(url);
         if (urls) return { kind: 'urls', urls, url };

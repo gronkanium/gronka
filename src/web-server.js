@@ -11,8 +11,8 @@ import { acquireMedia, extractAudio } from './core/acquire-media.js';
 import { fetchContent, formatContent } from './content/index.js';
 import { MAX_COMMENTS } from './content/schema.js';
 import { getDisabledServiceLabel, getServiceForUrl } from './utils/download-services.js';
-import { validateUrl, firstUrlIn, parseTimestamp, sanitizeFilename } from './utils/validation.js';
-import { prepareLink, refusalFor } from './core/intake.js';
+import { parseTimestamp, sanitizeFilename } from './utils/validation.js';
+import { readLink, prepareLink, refusalFor } from './core/intake.js';
 import { detectFileType } from './utils/storage.js';
 import { uploadToR2, listObjectsInR2, deleteManyFromR2 } from './utils/r2-storage.js';
 import { getStreamInfo, isYouTubeUrl } from './utils/ytdlp.js';
@@ -316,15 +316,17 @@ function parseSeconds(value, field) {
   return parsed.seconds;
 }
 
+function bodyLink(text) {
+  const read = readLink(text.slice(0, 4096), 'send a url.');
+  if (read.refusal) throw new AppError(read.refusal.message, 'BAD_URL', 400);
+  return read.url;
+}
+
 export function parseDownloadRequest(body) {
   if (!body || typeof body !== 'object' || typeof body.url !== 'string') {
     throw new AppError('send a url.', 'BAD_REQUEST', 400);
   }
-  const url = firstUrlIn(body.url.slice(0, 4096));
-  const check = url ? validateUrl(url) : { valid: false, error: 'that is not a link.' };
-  if (!check.valid) {
-    throw new AppError(check.error, 'BAD_URL', 400);
-  }
+  const url = bodyLink(body.url);
   const mode = body.mode ?? 'auto';
   if (!['auto', 'audio', 'mute'].includes(mode)) {
     throw new AppError('mode must be auto, audio or mute.', 'BAD_REQUEST', 400);
@@ -364,11 +366,7 @@ export function parseContentRequest(body) {
   if (!body || typeof body !== 'object' || typeof body.url !== 'string') {
     throw new AppError('send a url.', 'BAD_REQUEST', 400);
   }
-  const url = firstUrlIn(body.url.slice(0, 4096));
-  const check = url ? validateUrl(url) : { valid: false, error: 'that is not a link.' };
-  if (!check.valid) {
-    throw new AppError(check.error, 'BAD_URL', 400);
-  }
+  const url = bodyLink(body.url);
   const format = body.format ?? 'json';
   if (!CONTENT_FORMATS.includes(format)) {
     throw new AppError('format must be json or text.', 'BAD_REQUEST', 400);

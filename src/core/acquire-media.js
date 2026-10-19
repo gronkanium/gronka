@@ -25,7 +25,7 @@ import { BLOCKED_DESTINATION_MESSAGE, isPrivateHost } from '../utils/ssrf-guard.
 import { downloadFileFromUrl } from '../utils/file-downloader.js';
 import { routeFor, sourceById, isEnabled } from './sources.js';
 import { detectFileType } from '../utils/storage.js';
-import { getBooleanSetting, getSetting } from '../utils/database.js';
+import { readSetting } from '../utils/settings.js';
 import { isRedditPostUrl, hasRedditSession, resolveRedditPost } from '../utils/reddit.js';
 import { convertToFormat } from '../utils/video-processor.js';
 import { fitsDiscordAttachment } from '../commands/shared/attachment-limit.js';
@@ -109,15 +109,11 @@ const worthAnotherSource = error =>
   !['CONTENT_GONE', 'CLIP_NOT_PUBLISHED'].includes(error.code);
 
 // Size is the real gate (--max-filesize); this only caps pathological lengths.
-async function getMaxVideoDuration() {
-  const raw = await getSetting('max_video_duration', '3600');
-  const parsed = parseInt(raw, 10);
-  return Number.isFinite(parsed) && parsed > 0 ? parsed : 3600;
-}
+const getMaxVideoDuration = () => readSetting('max_video_duration');
 
 async function getMaxVideoSize() {
-  const mb = parseInt(await getSetting('max_video_size_mb', ''), 10);
-  return Number.isFinite(mb) && mb > 0 ? mb * 1024 * 1024 : MAX_VIDEO_SIZE;
+  const mb = await readSetting('max_video_size_mb');
+  return mb > 0 ? mb * 1024 * 1024 : MAX_VIDEO_SIZE;
 }
 
 async function directMediaUrls(url, shouldServe = null, keep = () => {}) {
@@ -244,7 +240,7 @@ export async function acquireMedia(
     COBALT_ENABLED &&
     source.id === 'cobalt' &&
     !trimming &&
-    (urlOnly ?? (await getBooleanSetting('url_only_mode', false)))
+    (urlOnly ?? (await readSetting('url_only_mode')))
   ) {
     try {
       const urls = await directMediaUrls(url, null, keep);
@@ -267,7 +263,7 @@ export async function acquireMedia(
     isTwitterXUrl(url) &&
     !trimming
   ) {
-    const deliveryMode = await getSetting('twitter_delivery', 'hybrid');
+    const deliveryMode = await readSetting('twitter_delivery');
     if (deliveryMode === 'always_url' || deliveryMode === 'hybrid') {
       try {
         const urls = await directMediaUrls(
@@ -382,7 +378,7 @@ export async function acquireMedia(
         if (!isTwitterXUrl(url) || trimming) {
           return null;
         }
-        if (!(await getBooleanSetting('twitter_direct_url_fallback', true))) {
+        if (!(await readSetting('twitter_direct_url_fallback'))) {
           return null;
         }
         try {

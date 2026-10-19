@@ -1,6 +1,6 @@
 import { YTDLP_SITES } from './ytdlp.js';
 import { GALLERY_DL_SITES } from './gallery-dl.js';
-import { getSetting } from './database.js';
+import { readSetting } from './settings.js';
 import { hostOf } from './url-host.js';
 import { canonicalizeMirrorUrl } from './cobalt.js';
 import { SOURCES } from '../core/sources.js';
@@ -101,11 +101,6 @@ export async function getDisabledServiceLabel(url) {
   if (!service) {
     return null;
   }
-  let disabled;
-  try {
-    disabled = JSON.parse(await getSetting('disabled_services', '[]'));
-  } catch {
-    disabled = [];
-  }
-  return Array.isArray(disabled) && disabled.includes(service.id) ? service.label : null;
+  const disabled = await readSetting('disabled_services');
+  return disabled.includes(service.id) ? service.label : null;
 }

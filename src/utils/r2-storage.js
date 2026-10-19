@@ -9,7 +9,7 @@ import { randomBytes } from 'node:crypto';
 import { Upload } from '@aws-sdk/lib-storage';
 import { createLogger } from './logger.js';
 // A leaf DB module, not the ./database.js barrel: storage.js imports this file.
-import { getSetting } from './database/settings-pg.js';
+import { readSetting, SETTINGS } from './settings.js';
 import { AppError, NetworkError, ValidationError, withCause, describeCause } from './errors.js';
 import { jobSignal, jobRemainingMs } from './media-file.js';
 import { OUTPUT_FORMATS } from './output-formats.js';
@@ -34,17 +34,11 @@ export function setR2Usage(bytes) {
   usage = { bytes, at: Date.now() };
 }
 
-// Soft cap on media bytes in R2. Steerable via the `r2_soft_limit_gb`
-// setting; 0 disables the guard. Keeps daily-peak storage (what R2 bills on) under budget.
-const DEFAULT_R2_SOFT_LIMIT_GB = 9;
-
-// Throw a curated error if uploading `incomingBytes` more would push live R2 storage past the soft limit
-export async function r2SoftLimitGb() {
-  return parseFloat(await getSetting('r2_soft_limit_gb', String(DEFAULT_R2_SOFT_LIMIT_GB)));
-}
+// Soft cap on media bytes in R2; 0 disables the guard. Keeps daily-peak storage (what R2 bills on) under budget.
+export const r2SoftLimitGb = () => readSetting('r2_soft_limit_gb');
 
 export async function assertR2Capacity(incomingBytes) {
-  let limitGb = DEFAULT_R2_SOFT_LIMIT_GB;
+  let limitGb = Number(SETTINGS.r2_soft_limit_gb.default);
   try {
     limitGb = await r2SoftLimitGb();
   } catch (error) {

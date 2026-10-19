@@ -2,94 +2,13 @@ import express from 'express';
 import { createLogger } from '../../utils/logger.js';
 import { getAllSettings, setSetting } from '../../utils/database.js';
 import { parseTiers } from '../../utils/upload-tiers.js';
+import { SETTINGS } from '../../utils/settings.js';
 import { DOWNLOAD_SERVICES, DOWNLOAD_SERVICE_IDS } from '../../utils/download-services.js';
 
 const MB = 1024 * 1024;
 
 const logger = createLogger('webui');
 const router = express.Router();
-
-// Settings exposed to the webui; add new keys here as features grow
-const KNOWN_SETTINGS = {
-  url_only_mode: {
-    type: 'boolean',
-    default: 'false',
-    description: 'Reply with the direct media URL from cobalt instead of downloading/uploading',
-  },
-  twitter_direct_url_fallback: {
-    type: 'boolean',
-    default: 'true',
-    description:
-      'When an X/Twitter download fails (e.g. over the size or duration limit), reply with the direct media URL instead of an error',
-  },
-  twitter_delivery: {
-    type: 'select',
-    default: 'hybrid',
-    options: ['hybrid', 'always_url', 'always_download'],
-    description:
-      'How /download serves X/Twitter videos: hybrid replies with the direct URL only when the video is too big for a Discord attachment (saves bandwidth and R2 storage), always_url skips downloading whenever a direct URL exists, always_download keeps the old rehost-everything behavior',
-  },
-
-  maintenance_mode: {
-    type: 'boolean',
-    default: 'false',
-    description: 'Disable all commands with a maintenance message',
-  },
-
-  queue_paused: {
-    type: 'boolean',
-    default: 'false',
-    description:
-      'Workers stop taking new media jobs; running ones finish (drain before a deploy). Queued requests wait, and are told they were interrupted after about 15 minutes. No effect with MEDIA_WORKERS=false',
-  },
-
-  max_video_size_mb: {
-    type: 'number',
-    // Mirror the MAX_VIDEO_SIZE env/config default (bytes) as MB so the shown default matches
-    // what the bot actually falls back to when this setting is unset.
-    default: String(
-      Math.floor((Number(process.env.MAX_VIDEO_SIZE) || 1024 * 1024 * 1024) / (1024 * 1024))
-    ),
-    description:
-      'Maximum download size in MB, the primary limit. Oversized videos are rejected before download (yt-dlp aborts the pull). Applies immediately',
-    min: 50,
-    max: 2048,
-  },
-  max_video_duration: {
-    type: 'number',
-    default: '3600',
-    description:
-      'Backstop for video length in seconds. Size is the primary limit, oversized videos are rejected before download, so this only catches pathologically long ones',
-    min: 30,
-    max: 21600,
-  },
-  upload_ttl_tiers: {
-    type: 'tiers',
-    default: '100:72,250:24,500:8,1024:2',
-    description:
-      'How long an upload stays in R2. A file is kept for the first tier it fits under, so bigger files are deleted sooner',
-  },
-  r2_soft_limit_gb: {
-    type: 'number',
-    default: '9',
-    description:
-      'Soft cap (GB) on total R2 storage. New uploads that would exceed it are rejected with a "storage full" message until files expire. 0 disables the guard',
-    min: 0,
-    max: 1000,
-  },
-  disabled_services: {
-    type: 'services',
-    default: '[]',
-    description:
-      'Download sources that are turned off. A /download from a turned-off source is refused with a message instead of downloading. Everything not listed here is on; the bot picks up changes within a minute',
-  },
-
-  webui_issue_states: {
-    type: 'issuestates',
-    default: '{}',
-    description: 'Muted and resolved issues on the webui Issues page',
-  },
-};
 
 // { [issueKey]: { state: 'muted', until } | { state: 'resolved', at } }
 function parseIssueStates(value) {
@@ -112,10 +31,12 @@ router.get('/api/settings', async (req, res) => {
   try {
     const stored = await getAllSettings();
     const settings = {};
-    for (const [key, meta] of Object.entries(KNOWN_SETTINGS)) {
+    for (const [key, meta] of Object.entries(SETTINGS)) {
       settings[key] = {
         value: stored[key] ?? meta.default,
         type: meta.type,
+        label: meta.label,
+        section: meta.section,
         description: meta.description,
       };
       if (meta.min !== undefined) {
@@ -146,7 +67,7 @@ router.put('/api/settings/:key', express.json(), async (req, res) => {
   try {
     const { key } = req.params;
     // Object.hasOwn guards against prototype-chain lookups (e.g. "__proto__", "constructor")
-    const meta = Object.hasOwn(KNOWN_SETTINGS, key) ? KNOWN_SETTINGS[key] : undefined;
+    const meta = Object.hasOwn(SETTINGS, key) ? SETTINGS[key] : undefined;
 
     if (!meta) {
       return res.status(404).json({

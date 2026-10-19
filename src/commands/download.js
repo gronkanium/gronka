@@ -1,9 +1,7 @@
-import { MessageFlags } from 'discord.js';
 import { createLogger } from '../utils/logger.js';
 import { botConfig, r2Config } from '../utils/config.js';
-import { validateUrl, firstUrlIn } from '../utils/validation.js';
-import { canonicalizeMirrorUrl } from '../utils/cobalt.js';
-import { resolveShortLink } from '../utils/short-links.js';
+import { firstUrlIn } from '../utils/validation.js';
+import { readLink, prepareLink, refusalFor } from '../core/intake.js';
 import {
   isMangaDexTitleUrl,
   isMangaDexChapterUrl,
@@ -14,7 +12,6 @@ import { keylessMegaFileId } from '../utils/mega.js';
 import { promptForMegaKey } from './mega-key.js';
 import { getDisabledServiceLabel } from '../utils/download-services.js';
 import { ValidationError } from '../utils/errors.js';
-import { isDiscordMessageLink, DISCORD_MESSAGE_LINK_MESSAGE } from '../utils/discord-cdn.js';
 import { batchAttachmentsForDelivery } from '../utils/attachment-helpers.js';
 import { resolveTtlHoursForSize } from '../utils/storage.js';
 import { isR2Configured, formatMultipleR2UrlsWithDisclaimer } from '../utils/r2-storage.js';
@@ -30,7 +27,6 @@ import {
 } from './shared/deliver.js';
 import { runMediaCommand } from './shared/run-media-command.js';
 import { acquireMedia, extractAudio } from '../core/acquire-media.js';
-import { routeFor, isEnabled } from '../core/sources.js';
 import { dispatchMediaJob } from '../jobs/dispatch.js';
 import {
   resolveTimeOptions,
@@ -41,7 +37,6 @@ import {
 import { trimItem } from '../utils/video-processor.js';
 import { sendConvertedFile } from './shared/send-converted.js';
 import {
-  safeInteractionReply,
   safeInteractionEditReply,
   safeInteractionFollowUp,
   safeInteractionDeferReply,
@@ -240,25 +235,12 @@ export function queueDownload(
 
 // Replies and returns true when no extractor can take this URL.
 async function refuseUnsupported(interaction, url, commandSource) {
-  const context = { originalUrl: url, commandSource };
-  const source = routeFor(url);
-  if (source && !isEnabled(source)) {
-    const reason = `${source.id.replace('-', '_')}_disabled`;
-    await refuse(interaction, 'download', {
-      message: source.disabledMessage(url),
-      reason,
-      context,
-    });
-    return true;
-  }
-  if (source) return false;
-  if (isDiscordMessageLink(url)) {
-    const message = DISCORD_MESSAGE_LINK_MESSAGE;
-    await refuse(interaction, 'download', { message, reason: 'discord_message_link', context });
-    return true;
-  }
-  const message = 'url is not from a supported social media platform.';
-  await refuse(interaction, 'download', { message, reason: 'invalid_social_media_url', context });
+  const refusal = refusalFor(url);
+  if (!refusal) return false;
+  await refuse(interaction, 'download', {
+    ...refusal,
+    context: { originalUrl: url, commandSource },
+  });
   return true;
 }
 
@@ -266,26 +248,18 @@ export async function handleDownloadContextMenuCommand(interaction) {
   if (!interaction.isMessageContextMenuCommand() || interaction.commandName !== 'download') {
     return;
   }
-  const found = firstUrlIn(interaction.targetMessage.content);
-  if (!found) {
-    const context = { commandSource: 'context-menu' };
-    const message = 'no URL found in this message.';
+  const read = readLink(
+    firstUrlIn(interaction.targetMessage.content),
+    'no URL found in this message.'
+  );
+  if (read.refusal) {
     await refuse(interaction, 'download', {
-      message,
-      reason: 'missing_url',
-      context,
+      ...read.refusal,
+      context: { commandSource: 'context-menu' },
     });
     return;
   }
-  const urlValidation = validateUrl(found);
-  if (!urlValidation.valid) {
-    await safeInteractionReply(interaction, {
-      content: `invalid URL: ${urlValidation.error}`,
-      flags: MessageFlags.Ephemeral,
-    });
-    return;
-  }
-  const url = canonicalizeMirrorUrl(await resolveShortLink(found));
+  const url = await prepareLink(read.url);
 
   const megaFileId = keylessMegaFileId(url);
   if (megaFileId) {
@@ -303,7 +277,13 @@ export async function handleDownloadCommand(interaction) {
   const commandSource = commandSourceOf(interaction);
 
   const rawUrl = interaction.options.getString('url');
-  const url = canonicalizeMirrorUrl(await resolveShortLink(firstUrlIn(rawUrl) ?? rawUrl));
+  const read = readLink(rawUrl, 'please provide a URL to download from.');
+  if (read.refusal) {
+    const context = { originalUrl: rawUrl, commandSource };
+    await refuse(interaction, 'download', { ...read.refusal, context });
+    return;
+  }
+  const url = await prepareLink(read.url);
   const audioOnly = interaction.options.getBoolean('mp3') === true;
 
   const times = await resolveTimeOptions(interaction, { type: 'download' });
@@ -311,17 +291,6 @@ export async function handleDownloadCommand(interaction) {
     return;
   }
   const { startTime: trimStart, duration: trimDuration } = times;
-
-  if (!url) {
-    const context = { commandSource };
-    const message = 'please provide a URL to download from.';
-    await refuse(interaction, 'download', {
-      message,
-      reason: 'missing_url',
-      context,
-    });
-    return;
-  }
 
   if (
     GALLERY_DL_ENABLED &&
@@ -359,13 +328,6 @@ export async function handleDownloadCommand(interaction) {
     return;
   }
 
-  const urlValidation = validateUrl(url);
-  if (!urlValidation.valid) {
-    const context = { originalUrl: url, commandSource };
-    const message = `invalid URL: ${urlValidation.error}`;
-    await refuse(interaction, 'download', { message, reason: 'invalid_url', context });
-    return;
-  }
   if (await refuseUnsupported(interaction, url, commandSource)) {
     return;
   }

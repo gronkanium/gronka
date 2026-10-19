@@ -12,6 +12,7 @@ import { fetchContent, formatContent } from './content/index.js';
 import { MAX_COMMENTS } from './content/schema.js';
 import { getDisabledServiceLabel, getServiceForUrl } from './utils/download-services.js';
 import { validateUrl, firstUrlIn, parseTimestamp, sanitizeFilename } from './utils/validation.js';
+import { prepareLink, refusalFor } from './core/intake.js';
 import { detectFileType } from './utils/storage.js';
 import { uploadToR2, listObjectsInR2, deleteManyFromR2 } from './utils/r2-storage.js';
 import { getStreamInfo, isYouTubeUrl } from './utils/ytdlp.js';
@@ -246,13 +247,16 @@ export const runDownload = (options, signal) =>
   withJobDir(() => downloadInJob(options), { signal });
 
 async function downloadInJob({
-  url,
+  url: link,
   audio,
   mute = false,
   startTime = null,
   duration = null,
   split = true,
 }) {
+  const url = await prepareLink(link);
+  const refusal = refusalFor(url);
+  if (refusal) throw new ValidationError(refusal.message, 'UNSUPPORTED_SOURCE');
   const disabled = await getDisabledServiceLabel(url);
   if (disabled) {
     throw new ValidationError(`downloads from ${disabled} are turned off.`);

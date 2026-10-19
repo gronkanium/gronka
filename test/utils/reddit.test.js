@@ -183,12 +183,12 @@ describe('reddit utilities', () => {
     assert.strictEqual(external, 'https://redgifs.com/watch/digitalmysteriousanglerfish');
   });
 
-  test('offsite hosts the pipeline cannot route are left to cobalt', () => {
+  test('any offsite link is handed back, the caller decides whether a source takes it', () => {
     const { external, images } = selectRedditMedia(
       listing({ url: 'https://example.com/thing' }),
       POST_URL
     );
-    assert.strictEqual(external, null);
+    assert.strictEqual(external, 'https://example.com/thing');
     assert.deepStrictEqual(images, []);
   });
 

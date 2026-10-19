@@ -2,29 +2,20 @@ import { MessageFlags } from 'discord.js';
 import { createLogger } from '../utils/logger.js';
 import { botConfig, r2Config } from '../utils/config.js';
 import { validateUrl, firstUrlIn } from '../utils/validation.js';
-import { canonicalizeMirrorUrl, isSocialMediaUrl } from '../utils/cobalt.js';
+import { canonicalizeMirrorUrl } from '../utils/cobalt.js';
 import { resolveShortLink } from '../utils/short-links.js';
-import { getYtdlpSite } from '../utils/ytdlp.js';
 import {
-  getGalleryDlSite,
   isMangaDexTitleUrl,
   isMangaDexChapterUrl,
   isNhentaiGalleryUrl,
 } from '../utils/gallery-dl.js';
 import { beginMangaSelection } from './manga.js';
-import { isHentaiGifzUrl } from '../utils/hentaigifz.js';
-import { isBooruUrl } from '../utils/booru.js';
-import { isPinterestUrl } from '../utils/pinterest.js';
-import { isKlipyUrl } from '../utils/klipy.js';
-import { isJumpshareUrl } from '../utils/jumpshare.js';
-import { isThreadsUrl } from '../utils/threads.js';
 import { keylessMegaFileId } from '../utils/mega.js';
 import { promptForMegaKey } from './mega-key.js';
 import { getDisabledServiceLabel } from '../utils/download-services.js';
 import { ValidationError } from '../utils/errors.js';
 import { isDiscordMessageLink, DISCORD_MESSAGE_LINK_MESSAGE } from '../utils/discord-cdn.js';
 import { batchAttachmentsForDelivery } from '../utils/attachment-helpers.js';
-import { isDirectMediaUrl } from '../utils/file-downloader.js';
 import { resolveTtlHoursForSize } from '../utils/storage.js';
 import { isR2Configured, formatMultipleR2UrlsWithDisclaimer } from '../utils/r2-storage.js';
 import {
@@ -39,6 +30,7 @@ import {
 } from './shared/deliver.js';
 import { runMediaCommand } from './shared/run-media-command.js';
 import { acquireMedia, extractAudio } from '../core/acquire-media.js';
+import { routeFor, isEnabled } from '../core/sources.js';
 import { dispatchMediaJob } from '../jobs/dispatch.js';
 import {
   resolveTimeOptions,
@@ -59,12 +51,7 @@ import { mapLimit, ITEM_FANOUT } from '../utils/map-limit.js';
 
 const logger = createLogger('download');
 
-const {
-  cobaltEnabled: COBALT_ENABLED,
-  ytdlpEnabled: YTDLP_ENABLED,
-  galleryDlEnabled: GALLERY_DL_ENABLED,
-  discordSizeLimit: DISCORD_SIZE_LIMIT,
-} = botConfig;
+const { galleryDlEnabled: GALLERY_DL_ENABLED, discordSizeLimit: DISCORD_SIZE_LIMIT } = botConfig;
 
 // Discord caps a message at 2000 characters, so as many links as fit.
 async function replyWithDirectMediaUrls(interaction, ctx, { urls }) {
@@ -195,10 +182,10 @@ export async function processDownload(
         return replyWithDirectMediaUrls(interaction, ctx, acquired);
       }
       url = acquired.url;
-      const { fileData, downloadMethod } = acquired;
+      const { fileData } = acquired;
 
       if (galleryOptions.audioOnly) {
-        const { file: mp3, baseName } = await extractAudio(fileData, downloadMethod, {
+        const { file: mp3, baseName } = await extractAudio(fileData, {
           startTime,
           duration,
         });
@@ -216,9 +203,8 @@ export async function processDownload(
         return deliverGallery(interaction, ctx, fileData, attachmentLimit);
       }
 
-      // yt-dlp already cut its download with --download-sections.
       let item = fileData;
-      if (trimming && downloadMethod !== 'ytdlp') {
+      if (trimming && !fileData.trimmed) {
         item = await trimItem(fileData, { startTime, duration });
       }
       await deliverSingle(interaction, ctx, item, attachmentLimit);
@@ -255,51 +241,25 @@ export function queueDownload(
 // Replies and returns true when no extractor can take this URL.
 async function refuseUnsupported(interaction, url, commandSource) {
   const context = { originalUrl: url, commandSource };
-  const ytdlpSite = getYtdlpSite(url);
-  const galleryDlSite = getGalleryDlSite(url);
-
-  if (ytdlpSite && !YTDLP_ENABLED) {
-    const message = `${ytdlpSite.toLowerCase()} downloads are disabled.`;
-    await refuse(interaction, 'download', { message, reason: 'ytdlp_disabled', context });
-    return true;
-  }
-  if (galleryDlSite && !GALLERY_DL_ENABLED) {
-    const message = `${galleryDlSite.toLowerCase()} downloads are disabled.`;
-    await refuse(interaction, 'download', { message, reason: 'gallery_dl_disabled', context });
-    return true;
-  }
-  const ownExtractor =
-    ytdlpSite ||
-    galleryDlSite ||
-    isHentaiGifzUrl(url) ||
-    isBooruUrl(url) ||
-    isPinterestUrl(url) ||
-    isKlipyUrl(url) ||
-    isJumpshareUrl(url) ||
-    isThreadsUrl(url) ||
-    isDirectMediaUrl(url);
-  if (ownExtractor) return false;
-  if (!COBALT_ENABLED) {
-    const message = 'cobalt is not enabled. please enable it to use the download command.';
+  const source = routeFor(url);
+  if (source && !isEnabled(source)) {
+    const reason = `${source.id.replace('-', '_')}_disabled`;
     await refuse(interaction, 'download', {
-      message,
-      reason: 'cobalt_disabled',
+      message: source.disabledMessage(url),
+      reason,
       context,
     });
     return true;
   }
+  if (source) return false;
   if (isDiscordMessageLink(url)) {
     const message = DISCORD_MESSAGE_LINK_MESSAGE;
     await refuse(interaction, 'download', { message, reason: 'discord_message_link', context });
     return true;
   }
-  if (!isSocialMediaUrl(url)) {
-    const message = 'url is not from a supported social media platform.';
-    const reason = 'invalid_social_media_url';
-    await refuse(interaction, 'download', { message, reason, context });
-    return true;
-  }
-  return false;
+  const message = 'url is not from a supported social media platform.';
+  await refuse(interaction, 'download', { message, reason: 'invalid_social_media_url', context });
+  return true;
 }
 
 export async function handleDownloadContextMenuCommand(interaction) {

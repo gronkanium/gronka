@@ -3,19 +3,15 @@ import { GALLERY_DL_SITES } from './gallery-dl.js';
 import { getSetting } from './database.js';
 import { hostOf } from './url-host.js';
 import { canonicalizeMirrorUrl } from './cobalt.js';
+import { SOURCES } from '../core/sources.js';
 
-// Registry of every source /download can pull from, so the webui can list them and each
-// can be individually turned off. This is a *parallel* classifier used only for the
-// catalog + the enable/disable gate, the real routing still uses isSocialMediaUrl,
-// getYtdlpSite, isHentaiGifzUrl, isBooruUrl, and isPinterestUrl unchanged. Host matching mirrors those:
-// exact-or-subdomain on the www-stripped hostname.
+// The on/off switches for every source, so the webui can list them and each can be turned off.
+// Routing lives in core/sources.js; a switch only says whether its hosts may be downloaded.
 //
 // `category` groups services in the settings UI. `id` is the stable key stored in the
 // disabled_services setting (never rename an id or existing toggles reset).
 
-// yt-dlp services are derived from the shared YTDLP_SITES table so their host lists have a
-// single source of truth. Everything else (cobalt-social, hentaigifz, booru) is defined
-// here since those hosts live behind boolean matchers with no per-service breakdown.
+// yt-dlp and gallery-dl switches come from their site tables; cobalt's sites are listed here.
 const YTDLP_CATEGORY = {
   YouTube: 'video',
   Bilibili: 'video',
@@ -71,26 +67,8 @@ const cobaltServices = [
   { id: 'snapchat', label: 'Snapchat', category: 'social', hosts: ['snapchat.com'] },
 ];
 
-const customServices = [
-  // Pinterest is a custom extractor rather than a cobalt service; its hosts list covers the
-  // main domain and the pin.it shortener, not every regional ccTLD isPinterestUrl accepts.
-  { id: 'pinterest', label: 'Pinterest', category: 'social', hosts: ['pinterest.com', 'pin.it'] },
-  { id: 'klipy', label: 'Klipy', category: 'social', hosts: ['klipy.com'] },
-  { id: 'threads', label: 'Threads', category: 'social', hosts: ['threads.com', 'threads.net'] },
-  { id: 'giphy', label: 'Giphy', category: 'social', hosts: ['giphy.com'] },
-  { id: 'mega', label: 'Mega', category: 'video', hosts: ['mega.nz', 'mega.io'] },
-  { id: 'jumpshare', label: 'Jumpshare', category: 'video', hosts: ['jumpshare.com'] },
-  { id: 'hentaigifz', label: 'hentaigifz', category: 'adult', hosts: ['hentaigifz.com'] },
-  { id: 'danbooru', label: 'Danbooru', category: 'booru', hosts: ['danbooru.donmai.us'] },
-  { id: 'e621', label: 'e621 / e926', category: 'booru', hosts: ['e621.net', 'e926.net'] },
-  { id: 'yandere', label: 'yande.re', category: 'booru', hosts: ['yande.re'] },
-  {
-    id: 'konachan',
-    label: 'Konachan',
-    category: 'booru',
-    hosts: ['konachan.com', 'konachan.net'],
-  },
-];
+// Sources with their own extractor carry their switches in the source table.
+const customServices = SOURCES.flatMap(source => source.services ?? []);
 
 // v.redd.it routes through yt-dlp but is not a separate source to a user: a yt-dlp entry whose
 // name a cobalt entry already owns contributes its hosts for routing, without a second toggle.

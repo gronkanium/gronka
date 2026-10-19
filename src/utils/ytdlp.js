@@ -875,7 +875,7 @@ export async function downloadWithYtdlp(
     logger.debug(
       `Successfully downloaded media via yt-dlp${usedFallback ? ' (via fallback)' : ''}, size: ${file.size} bytes, content-type: ${contentType}`
     );
-    return file;
+    return { ...file, trimmed: useSegmentDownload };
   } catch (error) {
     logger.error(`yt-dlp download failed: ${describeCause(error.cause ?? error)}`);
     throw error;

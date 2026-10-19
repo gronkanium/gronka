@@ -21,6 +21,7 @@ import { FFMPEG_INPUT_GUARD } from './utils/video-processor/utils.js';
 import { trimItem } from './utils/video-processor/trim-item.js';
 import { fromPath, tempPath, withJobDir, sweepJobDirs } from './utils/media-file.js';
 import { getDirectMediaHeaders } from './utils/file-downloader.js';
+import { sourceById } from './core/sources.js';
 
 const execFileAsync = promisify(execFile);
 
@@ -92,8 +93,8 @@ export function directStreamInfo(url) {
 
 // Lane 2: the Worker fetches from the source itself, so it only works for links not tied to
 // our IP or cookies. The probe asks the Worker, from Cloudflare's side, whether that holds.
-export async function workerLane(url, downloadMethod, { split = true, mute = false } = {}) {
-  if (!STREAM_BASE || !STREAM_KEY || !['ytdlp', 'cobalt', 'direct'].includes(downloadMethod)) {
+export async function workerLane(url, sourceId, { split = true, mute = false } = {}) {
+  if (!STREAM_BASE || !STREAM_KEY || !sourceById(sourceId)?.streams) {
     return null;
   }
   // googlevideo links carry ip= for the address that resolved them (measured 2026-09-28).
@@ -102,7 +103,7 @@ export async function workerLane(url, downloadMethod, { split = true, mute = fal
   }
   let info;
   try {
-    info = downloadMethod === 'direct' ? directStreamInfo(url) : await getStreamInfo(url);
+    info = sourceId === 'direct' ? directStreamInfo(url) : await getStreamInfo(url);
   } catch (error) {
     logger.debug(`No stream info, using R2: ${error.message}`);
     return null;
@@ -275,10 +276,10 @@ async function downloadInJob({
   if (acquired.kind === 'stream') {
     return { lane: 'worker', ...acquired.streams };
   }
-  const { fileData, downloadMethod } = acquired;
+  const { fileData } = acquired;
   const note = fileData?.note ? { note: fileData.note } : {};
   if (audio) {
-    const { file, baseName } = await extractAudio(fileData, downloadMethod, {
+    const { file, baseName } = await extractAudio(fileData, {
       startTime,
       duration,
     });
@@ -288,7 +289,7 @@ async function downloadInJob({
       files: [await publishToR2(file, `${baseName}.mp3`, 'audio/mpeg')],
     };
   }
-  const trim = (startTime !== null || duration !== null) && downloadMethod !== 'ytdlp';
+  const trim = (startTime !== null || duration !== null) && !fileData.trimmed;
   const items = Array.isArray(fileData) ? fileData : [fileData];
   const files = [];
   for (const item of items) {

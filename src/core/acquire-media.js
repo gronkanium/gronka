@@ -13,30 +13,18 @@ import {
   getRemoteContentLength,
   canonicalizeMirrorUrl,
 } from '../utils/cobalt.js';
-import { getYtdlpSite, downloadWithYtdlp } from '../utils/ytdlp.js';
-import { getGalleryDlSite, downloadWithGalleryDl } from '../utils/gallery-dl.js';
-import { isDeviationUrl, downloadFromDeviantArt } from '../utils/deviantart.js';
-import { isHentaiGifzUrl, downloadFromHentaiGifz } from '../utils/hentaigifz.js';
-import { isBooruUrl, downloadFromBooru, booruCdnUserAgent } from '../utils/booru.js';
-import { isPinterestUrl, downloadFromPinterest } from '../utils/pinterest.js';
-import { isKlipyUrl, downloadFromKlipy } from '../utils/klipy.js';
-import { isJumpshareUrl } from '../utils/jumpshare.js';
-import { isMedalUrl, downloadFromMedal } from '../utils/medal.js';
-import { isThreadsUrl, downloadFromThreads } from '../utils/threads.js';
+import { downloadWithYtdlp } from '../utils/ytdlp.js';
+import { downloadWithGalleryDl } from '../utils/gallery-dl.js';
 import {
   isInstagramPostUrl,
-  isInstagramStoryUrl,
   hasInstagramSession,
   downloadFromInstagram,
 } from '../utils/instagram.js';
 import { getDisabledServiceLabel } from '../utils/download-services.js';
 import { ValidationError, describeCause, rootCause } from '../utils/errors.js';
 import { BLOCKED_DESTINATION_MESSAGE, isPrivateHost } from '../utils/ssrf-guard.js';
-import {
-  isDirectMediaUrl,
-  downloadDirectMedia,
-  downloadFileFromUrl,
-} from '../utils/file-downloader.js';
+import { downloadFileFromUrl } from '../utils/file-downloader.js';
+import { routeFor, sourceById, isEnabled } from './sources.js';
 import { detectFileType } from '../utils/storage.js';
 import { getBooleanSetting, getSetting } from '../utils/database.js';
 import { isRedditPostUrl, hasRedditSession, resolveRedditPost } from '../utils/reddit.js';
@@ -117,6 +105,11 @@ const {
   galleryDlEnabled: GALLERY_DL_ENABLED,
 } = botConfig;
 
+// A failure the user or the post caused stays; anything else gets the source's fallback.
+const worthAnotherSource = error =>
+  !(error instanceof ValidationError) &&
+  !['CONTENT_GONE', 'CLIP_NOT_PUBLISHED'].includes(error.code);
+
 // Size is the real gate (--max-filesize); this only caps pathological lengths.
 async function getMaxVideoDuration() {
   const raw = await getSetting('max_video_duration', '3600');
@@ -175,7 +168,10 @@ export async function acquireMedia(
   if (isRedditPostUrl(url) && hasRedditSession()) {
     try {
       const resolved = await resolveRedditPost(url);
-      if (resolved.external) {
+      if (resolved.external && !routeFor(resolved.external)) {
+        logger.debug(`Reddit post links to a site no source takes: ${resolved.external}`);
+        redditImages = [];
+      } else if (resolved.external) {
         logger.debug(`Reddit post points offsite, following to: ${resolved.external}`);
         // The disabled-source gate above ran on the reddit URL, so re-check the target:
         // following a hand-off must not smuggle past a source the owner turned off.
@@ -213,40 +209,42 @@ export async function acquireMedia(
     else postImages = post.images;
   }
 
-  const ytdlpSite = postImages ? null : getYtdlpSite(url);
-  const isDeviation = isDeviationUrl(url);
-  const galleryDlSite = isDeviation ? null : getGalleryDlSite(url);
-  const isHentaiGifz = isHentaiGifzUrl(url);
-  const isBooru = isBooruUrl(url);
-  const isPinterest = isPinterestUrl(url);
-  const isKlipy = isKlipyUrl(url);
-  const isJumpshare = isJumpshareUrl(url);
-  const isMedal = isMedalUrl(url);
-  const isThreads = isThreadsUrl(url);
-  const isDirectMedia = isDirectMediaUrl(url);
   // Cobalt tries Instagram's logged-out routes first; the session extractor is only the backstop.
   const useInstagram = isInstagramPostUrl(url) && hasInstagramSession();
-  const isIgStory = isInstagramStoryUrl(url) && hasInstagramSession();
-  const useReddit = redditImages !== null && redditImages.length > 0;
-  // yt-dlp only does video, so a still image on a yt-dlp host (i.imgur.com/x.jpg) goes direct.
-  const isStillImage = isDirectMedia && /\.(jpe?g|png|webp|bmp)$/i.test(new URL(url).pathname);
-  const useYtdlp = ytdlpSite !== null && YTDLP_ENABLED && !isStillImage;
+  const ctx = {
+    client,
+    maxSize,
+    startTime,
+    duration,
+    galleryOptions,
+    maxDuration: async () => (trimming ? Infinity : await getMaxVideoDuration()),
+  };
+  const source = postImages
+    ? {
+        id: 'youtube-post',
+        label: () => 'YouTube post',
+        extract: async () => {
+          const files = await Promise.all(postImages.map(image => downloadFileFromUrl(image)));
+          return files.length === 1 ? files[0] : files;
+        },
+      }
+    : redditImages?.length > 0
+      ? {
+          id: 'reddit',
+          label: () => 'Reddit',
+          extract: () => downloadRedditSlides(redditImages),
+          fallback: 'cobalt',
+        }
+      : (routeFor(url) ?? sourceById('cobalt'));
+  if (!isEnabled(source)) {
+    throw new ValidationError(source.disabledMessage(url));
+  }
+  const sourceLabel = source.label(url);
 
-  // Trims need real bytes, and yt-dlp/gallery/booru/Pinterest sources have no cobalt URL.
+  // Trims need real bytes, and only cobalt sources have a cobalt URL to hand out.
   if (
     COBALT_ENABLED &&
-    !useYtdlp &&
-    !galleryDlSite &&
-    !isDeviation &&
-    !isHentaiGifz &&
-    !isBooru &&
-    !isPinterest &&
-    !isKlipy &&
-    !isJumpshare &&
-    !isThreads &&
-    !postImages &&
-    !isIgStory &&
-    !isDirectMedia &&
+    source.id === 'cobalt' &&
     !trimming &&
     (urlOnly ?? (await getBooleanSetting('url_only_mode', false)))
   ) {
@@ -264,7 +262,13 @@ export async function acquireMedia(
   }
 
   // 'hybrid' still attaches small clips, which outlive the tweet; big ones get the twimg URL.
-  if (COBALT_ENABLED && !cobaltResponse && isTwitterXUrl(url) && !trimming) {
+  if (
+    COBALT_ENABLED &&
+    source.id === 'cobalt' &&
+    !cobaltResponse &&
+    isTwitterXUrl(url) &&
+    !trimming
+  ) {
     const deliveryMode = await getSetting('twitter_delivery', 'hybrid');
     if (deliveryMode === 'always_url' || deliveryMode === 'hybrid') {
       try {
@@ -293,76 +297,6 @@ export async function acquireMedia(
     }
   }
 
-  const ytdlpMaxDuration = async () => (trimming ? Infinity : await getMaxVideoDuration());
-  const extractors = [
-    [
-      'medal',
-      isMedal,
-      'Medal',
-      async () => {
-        const maxDuration = await ytdlpMaxDuration();
-        try {
-          return await downloadFromMedal(url, maxDuration);
-        } catch (medalError) {
-          if (medalError instanceof ValidationError || !YTDLP_ENABLED) throw medalError;
-          if (['CONTENT_GONE', 'CLIP_NOT_PUBLISHED'].includes(medalError.code)) throw medalError;
-          note('Medal', medalError);
-          logger.warn(`Medal api failed, trying yt-dlp: ${describeCause(rootCause(medalError))}`);
-          return downloadWithYtdlp(url, maxSize, YTDLP_QUALITY, maxDuration, null, null);
-        }
-      },
-    ],
-    [
-      'ytdlp',
-      useYtdlp,
-      `${ytdlpSite} via yt-dlp`,
-      async () =>
-        downloadWithYtdlp(
-          url,
-          maxSize,
-          YTDLP_QUALITY,
-          await ytdlpMaxDuration(),
-          startTime,
-          duration
-        ),
-    ],
-    [
-      'gallery-dl',
-      galleryDlSite && GALLERY_DL_ENABLED,
-      `${galleryDlSite} via gallery-dl`,
-      () => downloadWithGalleryDl(url, maxSize, galleryOptions),
-    ],
-    ['deviantart', isDeviation, 'DeviantArt', () => downloadFromDeviantArt(url, maxSize)],
-    ['hentaigifz', isHentaiGifz, 'hentaigifz', () => downloadFromHentaiGifz(url)],
-    ['booru', isBooru, 'booru', () => downloadFromBooru(url)],
-    ['pinterest', isPinterest, 'Pinterest', () => downloadFromPinterest(url)],
-    ['klipy', isKlipy, 'Klipy', () => downloadFromKlipy(url)],
-    ['jumpshare', isJumpshare, 'Jumpshare', () => downloadDirectMedia(url, client)],
-    ['threads', isThreads, 'Threads', () => downloadFromThreads(url)],
-    ['instagram-story', isIgStory, 'Instagram story', () => downloadFromInstagram(url)],
-    [
-      'direct',
-      isDirectMedia,
-      'direct media link',
-      () => downloadDirectMedia(url, client, { userAgent: booruCdnUserAgent(url) }),
-    ],
-    ['reddit', useReddit, 'Reddit', () => downloadRedditSlides(redditImages)],
-    [
-      'youtube-post',
-      postImages !== null,
-      'YouTube post',
-      async () => {
-        const files = await Promise.all(postImages.map(image => downloadFileFromUrl(image)));
-        return files.length === 1 ? files[0] : files;
-      },
-    ],
-  ];
-  let [downloadMethod, , sourceLabel, extract] = extractors.find(([, applies]) => applies) ?? [
-    'cobalt',
-    true,
-    'Cobalt',
-    null,
-  ];
   logger.debug(`Downloading from ${sourceLabel}: ${url}`);
 
   // Started early: it takes ~3 s and decides both the DRM route and the tags.
@@ -377,8 +311,8 @@ export async function acquireMedia(
   // Runs beside the SoundCloud read; a DRM-only track has no source links to hand out.
   // cobalt turns X's looping mp4s into real gifs; a raw stream would hand out the mp4.
   const cobaltGif = /\.gif$/i.test(cobaltResponse?.filename ?? '');
-  if (streamFirst && !cobaltGif && !trimming) {
-    const lane = streamFirst(url, downloadMethod).catch(error => {
+  if (streamFirst && source.streams && !cobaltGif && !trimming) {
+    const lane = streamFirst(url, source.id).catch(error => {
       logger.debug(`Stream lane unavailable, using the download path: ${error.message}`);
       return null;
     });
@@ -389,20 +323,32 @@ export async function acquireMedia(
   }
 
   let fileData;
-  if (extract) {
+  let method = source.id;
+  if (source.extract) {
     try {
-      fileData = await extract();
+      fileData = await source.extract(url, ctx);
     } catch (extractError) {
       note(sourceLabel, extractError);
-      if (downloadMethod !== 'reddit') throw fail(extractError);
+      const fallback = source.fallback ? sourceById(source.fallback) : null;
+      if (!fallback || !isEnabled(fallback) || !worthAnotherSource(extractError)) {
+        throw fail(extractError);
+      }
       logger.warn(
-        `Reddit image fetch failed, falling back to cobalt: ${describeCause(rootCause(extractError))}`
+        `${sourceLabel} failed, trying ${fallback.id}: ${describeCause(rootCause(extractError))}`
       );
-      downloadMethod = 'cobalt';
+      method = fallback.id;
+      if (fallback.extract) {
+        try {
+          fileData = await fallback.extract(url, ctx);
+        } catch (fallbackError) {
+          note(fallback.label(url), fallbackError);
+          throw fail(fallbackError);
+        }
+      }
     }
   }
 
-  if (downloadMethod === 'cobalt') {
+  if (method === 'cobalt') {
     try {
       // Concurrency is capped inside cobalt.js. The URL cache was already consulted
       // above (and deliberately skipped when trimming), so there is no second check here.
@@ -480,7 +426,7 @@ export async function acquireMedia(
           url,
           maxSize,
           YTDLP_QUALITY,
-          await ytdlpMaxDuration(),
+          await ctx.maxDuration(),
           startTime,
           duration
         );
@@ -518,9 +464,7 @@ export async function acquireMedia(
         throw fail(ytdlpFallbackError);
       }
 
-      // yt-dlp already trimmed via --download-sections; mark the method so the
-      // ffmpeg trim step below is skipped (otherwise it re-trims the segment).
-      downloadMethod = 'ytdlp';
+      method = 'ytdlp';
     }
   }
 
@@ -533,14 +477,10 @@ export async function acquireMedia(
     }
   }
 
-  return { kind: 'file', fileData, downloadMethod, url };
+  return { kind: 'file', fileData, downloadMethod: method, url };
 }
 
-export async function extractAudio(
-  fileData,
-  downloadMethod,
-  { startTime = null, duration = null } = {}
-) {
+export async function extractAudio(fileData, { startTime = null, duration = null } = {}) {
   const source = Array.isArray(fileData)
     ? fileData.find(
         media =>
@@ -558,8 +498,7 @@ export async function extractAudio(
   if (source.audioReady && startTime === null && duration === null) {
     return { file: source, baseName: path.parse(source.filename).name };
   }
-  // yt-dlp (and its fallback) already cut the requested section.
-  const trim = downloadMethod === 'ytdlp' ? {} : { startTime, duration };
+  const trim = source.trimmed ? {} : { startTime, duration };
   const file = await convertToFormat(source, 'mp3', trim);
   const baseName = path.parse(source.filename).name.replace(/[^\w.-]+/g, '_') || 'audio';
   return { file, baseName };

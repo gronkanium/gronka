@@ -7,7 +7,7 @@ import {
   megaKeys,
   decryptMegaAttributes,
 } from '../../src/utils/mega.js';
-import { isDirectMediaUrl } from '../../src/utils/file-downloader.js';
+import { routeFor } from '../../src/core/sources.js';
 
 const KEY = 'M0_bBx49HYqVvZG_kROyYrgCI6KyFkxsaEyGSAgjVpg';
 
@@ -19,7 +19,7 @@ describe('mega utilities', () => {
     assert.strictEqual(parseMegaUrl('https://mega.nz/file/XdcWEbjR'), null);
     assert.strictEqual(parseMegaUrl(`https://mega.nz/folder/XdcWEbjR#${KEY}`), null);
     assert.strictEqual(parseMegaUrl(`https://mega.nz.evil.example/file/XdcWEbjR#${KEY}`), null);
-    assert.strictEqual(isDirectMediaUrl(`https://mega.nz/file/XdcWEbjR#${KEY}`), true);
+    assert.strictEqual(routeFor(`https://mega.nz/file/XdcWEbjR#${KEY}`)?.id, 'mega');
   });
 
   test('finds the file id of a link shared without its key', () => {

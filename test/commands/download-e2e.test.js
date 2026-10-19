@@ -278,6 +278,12 @@ if (!mocksSupported) {
       },
     }));
 
+    const realJumpshare = await import('../../src/utils/jumpshare.js');
+    mock.module('../../src/utils/jumpshare.js', () => ({
+      ...realJumpshare,
+      resolveJumpshareUrl: async () => 'https://cdn.jumpshare.com/download/original?token=1',
+    }));
+
     const realFileDownloader = await import('../../src/utils/file-downloader.js');
     mock.module('../../src/utils/file-downloader.js', () => ({
       ...realFileDownloader,

@@ -13,33 +13,6 @@ const logger = createLogger('reddit');
 // post's. The API labels post media, gallery order and per-comment media separately.
 const API_TIMEOUT_MS = 20000;
 
-// Reddit is mostly a link aggregator, so a post's media often is not Reddit's at all. These are
-// the offsite hosts worth handing back to the caller, which re-runs its own source selection on
-// the target rather than duplicating the routing table here.
-// Keep in step with what the pipeline can actually route: every host here must be matched by
-// YTDLP_SITES, GALLERY_DL_SITES, a custom extractor, or cobalt, or the hand-off dead-ends.
-const OFFSITE_HOSTS = [
-  'redgifs.com',
-  'imgur.com',
-  'gfycat.com',
-  'streamable.com',
-  'youtube.com',
-  'youtu.be',
-  'twitter.com',
-  'x.com',
-  'tiktok.com',
-  'xvideos.com',
-  'pornhub.com',
-  'xhamster.com',
-  'redtube.com',
-  'rule34video.com',
-  'kick.com',
-  'twitch.tv',
-  'medal.tv',
-  'tenor.com',
-  'soundcloud.com',
-];
-
 // /comments/<id>/... is the canonical form; /s/<id> is what the share sheet emits and 301s to it.
 // Posts made to a user profile live under /user/<name>/ (or /u/) instead of /r/<sub>/.
 const POST_PATH = /^\/(?:r|u|user)\/[^/]+\/(?:comments|s)\/[A-Za-z0-9_]+/;
@@ -179,10 +152,11 @@ function candidatesFor(id, entry) {
   return [extension && `https://i.redd.it/${id}.${extension}`, entry.s?.u].filter(Boolean);
 }
 
+// A link post's target off reddit, handed back for the caller's own routing to judge.
 function isOffsiteUrl(url) {
   try {
     const host = hostOf(url);
-    return OFFSITE_HOSTS.some(offsite => host === offsite || host.endsWith(`.${offsite}`));
+    return /^https?:/i.test(url) && !/(^|\.)(reddit\.com|redd\.it)$/.test(host);
   } catch {
     return false;
   }

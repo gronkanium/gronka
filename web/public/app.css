@@ -3,25 +3,30 @@ main {
   flex-direction: column;
   justify-content: center;
 }
-h1 {
-  max-width: 9ch;
+/* one centred stack, heading to button, so the eye lands on the box */
+main h1 {
+  text-align: center;
+  font-size: clamp(2.1rem, 7vw, 3.9rem);
+  max-width: 13ch;
+  margin: clamp(4px, 3vh, 32px) auto 10px;
 }
 .lede {
   color: var(--pencil);
-  max-width: min(34ch, 58%);
-  margin-bottom: 0;
+  text-align: center;
+  max-width: 40ch;
+  margin: 0 auto;
 }
 
 .stage {
-  --pw: clamp(150px, 38vw, 230px);
-  --pt: calc(var(--pw) * 0.7);
+  --pw: clamp(68px, 20vw, 96px);
+  --pt: calc(var(--pw) * 0.86); /* his whole head clears the lede */
   position: relative;
   padding-top: var(--pt);
 }
 /* he stands behind the box: it hides his feet and belly, so he peeks over it instead of hovering on it */
 .peng {
   position: absolute;
-  right: 4%;
+  right: 8px;
   bottom: calc(100% - var(--pt) - var(--pw) * 0.19);
   width: var(--pw);
   height: auto;
@@ -189,6 +194,7 @@ details[open] summary::after {
   padding: 20px;
 }
 .terms {
+  text-align: center;
   color: var(--pencil);
   font-size: 14px;
   margin: 14px 0 0;
@@ -212,21 +218,18 @@ details[open] summary::after {
 :root:not([data-phase='idle']) .terms {
   display: none;
 }
-:root:not([data-phase='idle']) .paste,
-:root:not([data-phase='idle']) .lede {
+:root:not([data-phase='idle']) .paste {
   display: none;
-}
-:root:not([data-phase='idle']) h1 {
-  font-size: clamp(1.9rem, 6vw, 3.4rem);
-}
-:root:not([data-phase='idle']) .stage {
-  --pw: clamp(120px, 28vw, 172px);
 }
 .panel:empty {
   display: none;
 }
 .panel {
   margin-top: 18px;
+  text-align: center;
+}
+.panel .acts {
+  justify-content: center;
 }
 .panel h2 {
   margin: 0 0 6px;
@@ -238,7 +241,7 @@ details[open] summary::after {
 .toast {
   position: fixed;
   left: 50%;
-  bottom: max(28px, env(safe-area-inset-bottom));
+  top: max(18px, env(safe-area-inset-top));
   z-index: 10;
   display: flex;
   align-items: center;
@@ -289,7 +292,7 @@ details[open] summary::after {
 @keyframes toast-in {
   from {
     opacity: 0;
-    transform: translate(-50%, 40px) scale(0.9);
+    transform: translate(-50%, -40px) scale(0.9);
   }
   to {
     transform: translate(-50%, 0);
@@ -301,7 +304,7 @@ details[open] summary::after {
   }
   to {
     opacity: 0;
-    transform: translate(-50%, 24px);
+    transform: translate(-50%, -24px);
   }
 }
 .panel .say {
@@ -438,15 +441,14 @@ details[open] summary::after {
 }
 
 @media (min-width: 900px) {
-  h1 {
-    font-size: clamp(4.4rem, 6.6vw, 6.4rem);
-    max-width: 10ch;
+  main h1 {
+    font-size: clamp(3.6rem, 5vw, 4.6rem);
   }
   .lede {
     font-size: 20px;
   }
   .stage {
-    --pw: 250px;
+    --pw: 130px;
   }
   .big input {
     font-size: 24px;
@@ -468,6 +470,7 @@ details[open] summary::after {
 
 .sites {
   margin-top: 18px;
+  text-align: center;
 }
 .sites summary {
   display: inline-block;
@@ -481,6 +484,7 @@ details[open] summary::after {
   display: flex;
   flex-wrap: wrap;
   gap: 6px;
+  justify-content: center;
 }
 .sites li {
   font-size: 14px;

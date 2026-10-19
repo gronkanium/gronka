@@ -20,6 +20,29 @@ describe('resolveShortLink', () => {
     assert.ok(spy.mock.calls[0][1].beforeRedirect);
   });
 
+  test('follows a facebook share link to its post', async () => {
+    spy = spyOn(axios, 'get').mockResolvedValue({
+      data: { destroy() {} },
+      request: { res: { responseUrl: 'https://www.facebook.com/1/posts/2/' } },
+    });
+    assert.strictEqual(
+      await resolveShortLink('https://www.facebook.com/share/AbC/'),
+      'https://www.facebook.com/1/posts/2/'
+    );
+  });
+
+  test('takes the image out of a google image result, never a private one', async () => {
+    spy = spyOn(axios, 'get');
+    const wrapped = image => `https://www.google.com/imgres?imgurl=${encodeURIComponent(image)}`;
+    assert.strictEqual(
+      await resolveShortLink(wrapped('https://pbs.twimg.com/media/X?format=webp')),
+      'https://pbs.twimg.com/media/X?format=webp'
+    );
+    const local = wrapped('http://127.0.0.1/a.png');
+    assert.strictEqual(await resolveShortLink(local), local);
+    assert.strictEqual(spy.mock.calls.length, 0);
+  });
+
   test('leaves other hosts alone without a request', async () => {
     spy = spyOn(axios, 'get');
     assert.strictEqual(await resolveShortLink('https://example.com/a'), 'https://example.com/a');

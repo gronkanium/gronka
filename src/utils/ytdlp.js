@@ -270,16 +270,16 @@ const FAILURES = [
   [/is not a valid URL/, url => new ValidationError(`invalid ${siteLabel(url)} URL`)],
   [
     /There is no video in this post|No video could be found in this tweet/,
-    () => new NetworkError('this post has no video in it.'),
+    () => new NetworkError('this post has no video in it.', 'NO_VIDEO'),
   ],
   // Instagram reports photo posts this way too.
   [
     /No video formats found/,
     url =>
       new NetworkError(
-        isInstagramPostUrl(url)
-          ? 'this post has no video in it.'
-          : 'no downloadable video formats found'
+        ...(isInstagramPostUrl(url)
+          ? ['this post has no video in it.', 'NO_VIDEO']
+          : ['no downloadable video formats found'])
       ),
   ],
   [

@@ -47,6 +47,23 @@ describe('source-specific file downloads', () => {
     }
   });
 
+  test('a file whose link has no extension is named from its content type', async () => {
+    const originalGet = axios.get;
+    axios.get = async () => ({
+      data: Readable.from([Buffer.from('RIFF\x00\x00\x00\x00WEBPVP8 ')]),
+      headers: { 'content-type': 'image/webp' },
+    });
+    try {
+      await withJobDir(async () => {
+        const file = await downloadDirectMedia('https://pbs.twimg.com/media/HTaV?format=webp');
+        assert.strictEqual(file.filename, 'HTaV.webp');
+        assert.ok(file.path.endsWith('.webp'));
+      });
+    } finally {
+      axios.get = originalGet;
+    }
+  });
+
   test('Jumpshare downloads the original file instead of its share-page HTML', async () => {
     const originalGet = axios.get;
     const share = 'https://jumpshare.com/s/file123AbC';
@@ -310,6 +327,12 @@ describe('file downloader utilities', () => {
       assert.strictEqual(isDirectMediaUrl('https://video.twimg.com/ext_tw/1/vid.mp4'), true);
       assert.strictEqual(isDirectMediaUrl('https://example.com/a.gif'), true);
       assert.strictEqual(isDirectMediaUrl('https://example.com/PHOTO.JPEG'), true);
+      assert.strictEqual(isDirectMediaUrl('https://pbs.twimg.com/media/X?format=jpg'), true);
+      assert.strictEqual(
+        isDirectMediaUrl('https://cdn.discordapp.com/a/1/2/song.mp3.mpeg?ex=1'),
+        true
+      );
+      assert.strictEqual(isDirectMediaUrl('https://example.com/page?format=json'), false);
     });
 
     test('accepts direct audio files instead of requiring a social-media host', () => {

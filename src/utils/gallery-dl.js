@@ -68,6 +68,17 @@ export function galleryDlError(stderr, site) {
 }
 
 // cobalt and yt-dlp only take Facebook video; gallery-dl reads photo pages.
+export function isFacebookPostUrl(url) {
+  try {
+    return (
+      hostOf(url) === 'facebook.com' &&
+      /^\/([^/]+\/posts\/|permalink\.php|story\.php)/.test(new URL(url).pathname)
+    );
+  } catch {
+    return false;
+  }
+}
+
 export function isFacebookPhotoUrl(url) {
   try {
     const { pathname } = new URL(url);

@@ -2,14 +2,31 @@ import axios from 'axios';
 import { createLogger } from './logger.js';
 import { hostOf } from './url-host.js';
 import { ssrfGuardedRequest } from './ssrf-guard.js';
+import { validateUrl } from './validation.js';
 
 const logger = createLogger('short-links');
 
 const SHORT_LINK_HOSTS = new Set(['share.google']);
 
+const pathOf = url => new URL(url).pathname;
+// facebook.com/share/ links redirect to the post; extractors only read the post url.
+const isShortLink = (url, host) =>
+  SHORT_LINK_HOSTS.has(host) ||
+  ((host === 'facebook.com' || host === 'm.facebook.com') && pathOf(url).startsWith('/share/'));
+
+// A Google image result carries the image itself in imgurl.
+function googleImage(url, host) {
+  if (!/^google\.[a-z.]+$/.test(host) || pathOf(url) !== '/imgres') return null;
+  const image = new URL(url).searchParams.get('imgurl');
+  return image && validateUrl(image).valid ? image : null;
+}
+
 export async function resolveShortLink(url) {
   const host = hostOf(url);
-  if (!SHORT_LINK_HOSTS.has(host)) return url;
+  if (!host) return url;
+  const image = googleImage(url, host);
+  if (image) return image;
+  if (!isShortLink(url, host)) return url;
 
   try {
     const response = await axios.get(url, {

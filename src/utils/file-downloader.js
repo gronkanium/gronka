@@ -6,7 +6,7 @@ import { validateUrl } from './validation.js';
 import { ValidationError, NetworkError, withCause, describeCause } from './errors.js';
 import { isDiscordCdnUrl, getRefreshedAttachmentURL, getRequestHeaders } from './discord-cdn.js';
 import { sanitizeFilename } from './validation.js';
-import { fetchToFile, withExtension } from './media-file.js';
+import { fetchToFile, withExtension, extensionForType } from './media-file.js';
 import {
   BLOCKED_DESTINATION_MESSAGE,
   isSsrfBlockedError,
@@ -26,6 +26,8 @@ const DIRECT_MEDIA_EXTENSIONS = new Set([
   'm4v',
   'avi',
   'mkv',
+  'mpeg',
+  'mpg',
   'gif',
   'jpg',
   'jpeg',
@@ -37,8 +39,10 @@ const DIRECT_MEDIA_EXTENSIONS = new Set([
 
 export function isDirectMediaUrl(url) {
   try {
-    const ext = path.extname(new URL(url).pathname).slice(1).toLowerCase();
-    return DIRECT_MEDIA_EXTENSIONS.has(ext);
+    const { pathname, searchParams } = new URL(url);
+    const ext = path.extname(pathname).slice(1).toLowerCase();
+    // pbs.twimg.com/media/ID?format=jpg names its type in the query.
+    return DIRECT_MEDIA_EXTENSIONS.has(ext || searchParams.get('format')?.toLowerCase());
   } catch {
     return false;
   }
@@ -131,7 +135,8 @@ function filenameFor(file, url) {
   if (match?.[1]) return sanitizeFilename(match[1].replace(/['"]/g, ''));
   try {
     const name = path.basename(new URL(url).pathname);
-    if (name && name !== '/') return sanitizeFilename(name);
+    const ext = path.extname(name) ? '' : extensionForType(file.headers['content-type']);
+    if (name && name !== '/') return sanitizeFilename(name + ext);
   } catch {
     // keep the default
   }

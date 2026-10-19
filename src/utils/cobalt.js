@@ -1,7 +1,7 @@
 import axios from 'axios';
 import { createLogger } from './logger.js';
 import { NetworkError, ValidationError, withCause, describeCause, contentGone } from './errors.js';
-import { fetchToFile, withExtension } from './media-file.js';
+import { fetchToFile, withExtension, extensionForType } from './media-file.js';
 import { detectFileType } from './storage.js';
 import { mapLimit, ITEM_FANOUT } from './map-limit.js';
 import { hostOf, normalizeHost } from './url-host.js';
@@ -11,18 +11,6 @@ const logger = createLogger('cobalt');
 // How many items of a single picker/carousel response download at once. Bounds the memory a
 // single multi-file post can hold; picker items are usually photos, so this stays generous
 // enough not to slow normal carousels down.
-
-const CONTENT_TYPE_EXTENSIONS = {
-  'video/mp4': '.mp4',
-  'video/quicktime': '.mov',
-  'video/webm': '.webm',
-  'video/x-msvideo': '.avi',
-  'video/x-matroska': '.mkv',
-  'image/gif': '.gif',
-  'image/jpeg': '.jpg',
-  'image/png': '.png',
-  'image/webp': '.webp',
-};
 
 // Cobalt's tunnel sends no content-type header at all, so defaulting to video/mp4 relabelled
 // every real GIF (x.com animated GIFs arrive as GIF89a) and /convert then rejected them as
@@ -43,7 +31,7 @@ export function resolveContentType(headerType, filename, head) {
 }
 
 export function normalizeFilenameForContentType(filename, contentType) {
-  const extension = CONTENT_TYPE_EXTENSIONS[contentType.toLowerCase().split(';', 1)[0].trim()];
+  const extension = extensionForType(contentType);
   if (!extension) {
     return filename;
   }
@@ -463,14 +451,6 @@ async function fetchCobaltFile(url, { accept, timeout, maxSize, what, failMessag
   }
 }
 
-const PHOTO_EXTENSIONS = {
-  'image/jpeg': '.jpg',
-  'image/jpg': '.jpg',
-  'image/png': '.png',
-  'image/gif': '.gif',
-  'image/webp': '.webp',
-};
-
 async function downloadPhoto(photoUrl, index, maxSize = Infinity) {
   const file = await fetchCobaltFile(photoUrl, {
     accept: 'image/*,*/*',
@@ -480,7 +460,7 @@ async function downloadPhoto(photoUrl, index, maxSize = Infinity) {
   });
   const contentType = file.headers['content-type'] || 'image/jpeg';
   const filename =
-    file.dispositionName ?? `photo_${index + 1}${PHOTO_EXTENSIONS[contentType] || '.jpg'}`;
+    file.dispositionName ?? `photo_${index + 1}${extensionForType(contentType) || '.jpg'}`;
   logger.debug(
     `Downloaded photo ${index + 1}: ${filename}, size: ${file.size} bytes, content-type: ${contentType}`
   );
@@ -497,7 +477,7 @@ async function downloadVideo(videoUrl, index, maxSize = Infinity) {
   const named = file.dispositionName ?? `video_${index + 1}.mp4`;
   const contentType = resolveContentType(file.headers['content-type'], named, file.head);
   const filename =
-    file.dispositionName ?? `video_${index + 1}${CONTENT_TYPE_EXTENSIONS[contentType] || '.mp4'}`;
+    file.dispositionName ?? `video_${index + 1}${extensionForType(contentType) || '.mp4'}`;
   logger.debug(
     `Downloaded video ${index + 1}: ${filename}, size: ${file.size} bytes, content-type: ${contentType}`
   );

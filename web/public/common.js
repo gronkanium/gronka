@@ -144,6 +144,7 @@ function prepare(action) {
 }
 
 export const warmTurnstile = (action = 'download') => void prepare(action);
+export const turnstileReady = action => Boolean(widgets.get(action)?.token);
 
 export function turnstileToken(action) {
   const w = prepare(action);

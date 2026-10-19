@@ -32,7 +32,7 @@ const ROUTED = [
   ['https://example.com/clip.mp4', 'direct'],
   ['https://www.facebook.com/photo.php?fbid=1&set=a.2&type=3', 'facebook-photo'],
   ['https://www.facebook.com/someone/photos/a.1/2/', 'facebook-photo'],
-  ['https://www.facebook.com/watch/?v=1', 'social'],
+  ['https://www.facebook.com/watch/?v=1', 'facebook'],
   ['https://x.com/a/status/1', 'x'],
   ['https://www.tiktok.com/@a/video/1', 'tiktok'],
   ['https://www.reddit.com/r/a/comments/abc/x/', 'social'],
@@ -86,6 +86,19 @@ describe('source routes', () => {
       live(['ytdlp', 'cobalt'])
     );
     await setSetting('source_routes', '{}');
+  });
+
+  test('a Facebook post reaches gallery-dl after yt-dlp; a video page does not', () => {
+    const steps = url =>
+      routeFor(url)
+        .chain.filter(s => !s.when || s.when(url))
+        .map(s => s.engine);
+    assert.deepEqual(steps('https://www.facebook.com/someone/posts/123/'), [
+      'cobalt',
+      'ytdlp',
+      'gallery-dl',
+    ]);
+    assert.deepEqual(steps('https://www.facebook.com/watch?v=1'), ['cobalt', 'ytdlp']);
   });
 
   test('a link whose every step is switched off is refused as turned off', async () => {

@@ -145,6 +145,22 @@ export async function fetchToFile(url, options = {}, { maxSize = Infinity, ext =
   };
 }
 
+const TYPE_EXTENSIONS = {
+  'video/mp4': '.mp4',
+  'video/quicktime': '.mov',
+  'video/webm': '.webm',
+  'video/x-msvideo': '.avi',
+  'video/x-matroska': '.mkv',
+  'image/gif': '.gif',
+  'image/jpeg': '.jpg',
+  'image/jpg': '.jpg',
+  'image/png': '.png',
+  'image/webp': '.webp',
+};
+
+export const extensionForType = type =>
+  TYPE_EXTENSIONS[(type ?? '').toLowerCase().split(';', 1)[0].trim()] ?? '';
+
 // Gives an item's file its filename's extension; tools like ffmpeg's image2 pick a demuxer by it.
 export async function withExtension(item) {
   const ext = path.extname(item.filename ?? '').toLowerCase();

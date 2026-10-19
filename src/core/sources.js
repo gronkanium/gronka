@@ -5,6 +5,7 @@ import {
   getGalleryDlSite,
   downloadWithGalleryDl,
   isFacebookPhotoUrl,
+  isFacebookPostUrl,
 } from '../utils/gallery-dl.js';
 import { isDeviationUrl, downloadFromDeviantArt } from '../utils/deviantart.js';
 import { isHentaiGifzUrl, downloadFromHentaiGifz } from '../utils/hentaigifz.js';
@@ -248,6 +249,17 @@ export const ROUTES = [
     chain: [step('direct')],
     // giphy pages canonicalize to their i.giphy.com file.
     services: switches('social', ['giphy', 'Giphy', ['giphy.com']]),
+  },
+  // A photo post has no video for yt-dlp; gallery-dl reads its photos.
+  {
+    id: 'facebook',
+    name: 'Facebook',
+    owns: onHost('facebook.com', 'fb.watch'),
+    chain: [
+      step('cobalt'),
+      step('ytdlp'),
+      step('gallery-dl', { when: isFacebookPostUrl, note: 'photo posts' }),
+    ],
   },
   {
     id: 'social',

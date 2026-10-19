@@ -431,6 +431,8 @@ describe('content', () => {
       });
     const gone = await failing(new NetworkError('gone', 'CONTENT_GONE'))(postContent(body));
     expect(gone.status).toBe(404);
+    const noVideo = await failing(new NetworkError('no video', 'NO_VIDEO'))(postContent(body));
+    expect(noVideo.status).toBe(422);
     expect((await readJson(gone)).error).toEqual({ code: 'CONTENT_GONE', message: 'gone' });
     const unsupported = await failing(new AppError('nope', 'UNSUPPORTED_SOURCE', 400))(
       postContent(body)

@@ -5,6 +5,19 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres (attempts) to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [4.4.0](https://github.com/gronkanium/gronka/compare/v4.3.0...v4.4.0) (2026-10-19)
+
+
+### Features
+
+* **download:** native X engine after cobalt, with link-card photos ([#165](https://github.com/gronkanium/gronka/issues/165)) ([6caea6a](https://github.com/gronkanium/gronka/commit/6caea6a9f5a5f2a532489a9012a5124289f90b2d))
+* **web:** save X videos, a saved toast, a centred page and a file card result ([#164](https://github.com/gronkanium/gronka/issues/164)) ([53c977f](https://github.com/gronkanium/gronka/commit/53c977f644667cbef5e363aabe3a669739e8aec4))
+
+
+### Bug Fixes
+
+* **web:** run the turnstile check on page load, not on submit ([#163](https://github.com/gronkanium/gronka/issues/163)) ([58fe23f](https://github.com/gronkanium/gronka/commit/58fe23f6b04238f36dfded40394c48ce281a8883))
+
 ## [4.3.0](https://github.com/gronkanium/gronka/compare/v4.2.1...v4.3.0) (2026-10-19)
 
 

@@ -246,6 +246,78 @@ details[open] summary::after {
   margin: 0 0 12px;
   word-break: break-word;
 }
+.toast {
+  position: fixed;
+  left: 50%;
+  top: max(18px, env(safe-area-inset-top));
+  z-index: 10;
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  max-width: min(92vw, 560px);
+  padding: 18px 26px 18px 22px;
+  color: var(--paper);
+  pointer-events: none;
+  animation: toast-in 0.42s cubic-bezier(0.2, 1.4, 0.4, 1) both;
+}
+.toast::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: var(--ink);
+  border-radius: 16px;
+  filter: url(#wobble);
+  z-index: -1;
+}
+.toast > span {
+  min-width: 0;
+}
+.toast > span {
+  min-width: 0;
+}
+.toast .i {
+  width: 34px;
+  height: 34px;
+  flex: none;
+}
+.toast b {
+  display: block;
+  font:
+    800 clamp(20px, 4.6vw, 26px) 'Archivo Expanded',
+    sans-serif;
+  letter-spacing: -0.02em;
+}
+.toast .file {
+  display: block;
+  font:
+    15px/1.4 'Gronka Mono',
+    monospace;
+  opacity: 0.75;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.toast.out {
+  animation: toast-out 0.3s ease-in both;
+}
+@keyframes toast-in {
+  from {
+    opacity: 0;
+    transform: translate(-50%, -40px) scale(0.9);
+  }
+  to {
+    transform: translate(-50%, 0);
+  }
+}
+@keyframes toast-out {
+  from {
+    transform: translate(-50%, 0);
+  }
+  to {
+    opacity: 0;
+    transform: translate(-50%, -24px);
+  }
+}
 /* a done result: the file, what happened to it, what you can do, then the small print */
 .file {
   display: flex;

@@ -1,7 +1,11 @@
 import { botConfig } from '../utils/config.js';
 import { isSocialMediaUrl } from '../utils/cobalt.js';
 import { getYtdlpSite, downloadWithYtdlp } from '../utils/ytdlp.js';
-import { getGalleryDlSite, downloadWithGalleryDl } from '../utils/gallery-dl.js';
+import {
+  getGalleryDlSite,
+  downloadWithGalleryDl,
+  isFacebookPhotoUrl,
+} from '../utils/gallery-dl.js';
 import { isDeviationUrl, downloadFromDeviantArt } from '../utils/deviantart.js';
 import { isHentaiGifzUrl, downloadFromHentaiGifz } from '../utils/hentaigifz.js';
 import { isBooruUrl, downloadFromBooru, booruCdnUserAgent } from '../utils/booru.js';
@@ -74,6 +78,14 @@ export const SOURCES = [
     match: url => !isDeviationUrl(url) && getGalleryDlSite(url) !== null,
     enabled: () => GALLERY_DL_ENABLED,
     disabledMessage: url => `${getGalleryDlSite(url).toLowerCase()} downloads are disabled.`,
+    extract: (url, ctx) => downloadWithGalleryDl(url, ctx.maxSize, ctx.galleryOptions),
+  },
+  {
+    id: 'facebook-photo',
+    label: () => 'Facebook photo',
+    match: isFacebookPhotoUrl,
+    enabled: () => GALLERY_DL_ENABLED,
+    disabledMessage: () => 'facebook photo downloads are disabled.',
     extract: (url, ctx) => downloadWithGalleryDl(url, ctx.maxSize, ctx.galleryOptions),
   },
   {

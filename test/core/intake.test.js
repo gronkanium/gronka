@@ -16,9 +16,12 @@ describe('link intake', () => {
     );
   });
 
-  test('refusalFor takes routed links and names why it refuses the rest', () => {
-    assert.equal(refusalFor('https://www.youtube.com/watch?v=abc'), null);
-    assert.equal(refusalFor('https://discord.com/channels/1/2/3').reason, 'discord_message_link');
-    assert.equal(refusalFor('https://example.com/page').reason, 'invalid_social_media_url');
+  test('refusalFor takes routed links and names why it refuses the rest', async () => {
+    assert.equal(await refusalFor('https://www.youtube.com/watch?v=abc'), null);
+    assert.equal(
+      (await refusalFor('https://discord.com/channels/1/2/3')).reason,
+      'discord_message_link'
+    );
+    assert.equal((await refusalFor('https://example.com/page')).reason, 'invalid_social_media_url');
   });
 });

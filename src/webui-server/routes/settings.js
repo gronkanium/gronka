@@ -3,6 +3,7 @@ import { createLogger } from '../../utils/logger.js';
 import { getAllSettings, setSetting } from '../../utils/database.js';
 import { parseTiers } from '../../utils/upload-tiers.js';
 import { SETTINGS } from '../../utils/settings.js';
+import { ROUTES, arrangeChain } from '../../core/sources.js';
 import { DOWNLOAD_SERVICES, DOWNLOAD_SERVICE_IDS } from '../../utils/download-services.js';
 
 const MB = 1024 * 1024;
@@ -137,6 +138,21 @@ router.put('/api/settings/:key', express.json(), async (req, res) => {
       }
       const ids = [...new Set(value)].filter(id => DOWNLOAD_SERVICE_IDS.has(id)).sort();
       textValue = JSON.stringify(ids);
+    } else if (meta.type === 'routes') {
+      if (!value || typeof value !== 'object' || Array.isArray(value)) {
+        return res.status(400).json({
+          error: 'invalid value',
+          message: `"${key}" expects { route: [{ engine, on }] }`,
+        });
+      }
+      const saved = {};
+      for (const route of ROUTES) {
+        if (!Array.isArray(value[route.id])) continue;
+        const steps = arrangeChain(route, value).map(({ engine, on }) => ({ engine, on }));
+        const defaults = arrangeChain(route, {}).map(({ engine, on }) => ({ engine, on }));
+        if (JSON.stringify(steps) !== JSON.stringify(defaults)) saved[route.id] = steps;
+      }
+      textValue = JSON.stringify(saved);
     } else if (meta.type === 'issuestates') {
       const states = parseIssueStates(value);
       if (!states) {

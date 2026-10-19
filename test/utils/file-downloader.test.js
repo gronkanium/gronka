@@ -12,7 +12,7 @@ import {
 import axios from 'axios';
 import { Readable } from 'node:stream';
 import { withJobDir } from '../../src/utils/media-file.js';
-import { sourceById } from '../../src/core/sources.js';
+import { ENGINES } from '../../src/core/sources.js';
 
 describe('source-specific file downloads', () => {
   test('Rule34 CDN files use the site referer and retain guarded requests', async () => {
@@ -74,7 +74,7 @@ describe('source-specific file downloads', () => {
     };
     try {
       await withJobDir(async () => {
-        const file = await sourceById('jumpshare').extract(share, { client: null });
+        const file = await ENGINES.jumpshare.extract(share, { client: null });
         assert.strictEqual(file.contentType, 'video/mp4');
         assert.strictEqual(file.filename, '84754.mp4');
       });

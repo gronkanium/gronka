@@ -235,7 +235,7 @@ export function queueDownload(
 
 // Replies and returns true when no extractor can take this URL.
 async function refuseUnsupported(interaction, url, commandSource) {
-  const refusal = refusalFor(url);
+  const refusal = await refusalFor(url);
   if (!refusal) return false;
   await refuse(interaction, 'download', {
     ...refusal,

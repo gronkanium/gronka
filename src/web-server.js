@@ -22,7 +22,7 @@ import { FFMPEG_INPUT_GUARD } from './utils/video-processor/utils.js';
 import { trimItem } from './utils/video-processor/trim-item.js';
 import { fromPath, tempPath, withJobDir, sweepJobDirs } from './utils/media-file.js';
 import { getDirectMediaHeaders } from './utils/file-downloader.js';
-import { sourceById } from './core/sources.js';
+import { ENGINES } from './core/sources.js';
 
 const execFileAsync = promisify(execFile);
 
@@ -95,7 +95,7 @@ export function directStreamInfo(url) {
 // Lane 2: the Worker fetches from the source itself, so it only works for links not tied to
 // our IP or cookies. The probe asks the Worker, from Cloudflare's side, whether that holds.
 export async function workerLane(url, sourceId, { split = true, mute = false } = {}) {
-  if (!STREAM_BASE || !STREAM_KEY || !sourceById(sourceId)?.streams) {
+  if (!STREAM_BASE || !STREAM_KEY || !ENGINES[sourceId]?.streams) {
     return null;
   }
   // googlevideo links carry ip= for the address that resolved them (measured 2026-09-28).
@@ -255,7 +255,7 @@ async function downloadInJob({
   split = true,
 }) {
   const url = await prepareLink(link);
-  const refusal = refusalFor(url);
+  const refusal = await refusalFor(url);
   if (refusal) throw new ValidationError(refusal.message, 'UNSUPPORTED_SOURCE');
   const disabled = await getDisabledServiceLabel(url);
   if (disabled) {

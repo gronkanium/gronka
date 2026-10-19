@@ -3,7 +3,7 @@ import { GALLERY_DL_SITES } from './gallery-dl.js';
 import { readSetting } from './settings.js';
 import { hostOf } from './url-host.js';
 import { canonicalizeMirrorUrl } from './cobalt.js';
-import { SOURCES } from '../core/sources.js';
+import { ROUTES } from '../core/sources.js';
 
 // The on/off switches for every source, so the webui can list them and each can be turned off.
 // Routing lives in core/sources.js; a switch only says whether its hosts may be downloaded.
@@ -68,7 +68,7 @@ const cobaltServices = [
 ];
 
 // Sources with their own extractor carry their switches in the source table.
-const customServices = SOURCES.flatMap(source => source.services ?? []);
+const customServices = ROUTES.flatMap(route => route.services ?? []);
 
 // v.redd.it routes through yt-dlp but is not a separate source to a user: a yt-dlp entry whose
 // name a cobalt entry already owns contributes its hosts for routing, without a second toggle.

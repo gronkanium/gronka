@@ -1,5 +1,5 @@
 import { botConfig } from '../utils/config.js';
-import { isSocialMediaUrl } from '../utils/cobalt.js';
+import { isSocialMediaUrl, downloadFromSocialMedia } from '../utils/cobalt.js';
 import { getYtdlpSite, downloadWithYtdlp } from '../utils/ytdlp.js';
 import {
   getGalleryDlSite,
@@ -17,13 +17,18 @@ import { isThreadsUrl, downloadFromThreads } from '../utils/threads.js';
 import { isMegaUrl, downloadFromMega } from '../utils/mega.js';
 import {
   isInstagramStoryUrl,
+  isInstagramPostUrl,
   hasInstagramSession,
   downloadFromInstagram,
 } from '../utils/instagram.js';
 import { isDirectMediaUrl, downloadDirectMedia } from '../utils/file-downloader.js';
+import { isTiktokContentUrl } from '../content/tiktok.js';
+import { hostOf } from '../utils/url-host.js';
+import { readSetting } from '../utils/settings.js';
 
 const {
   cobaltEnabled: COBALT_ENABLED,
+  cobaltApiUrl: COBALT_API_URL,
   ytdlpEnabled: YTDLP_ENABLED,
   ytdlpQuality: YTDLP_QUALITY,
   galleryDlEnabled: GALLERY_DL_ENABLED,
@@ -38,74 +43,118 @@ const isStillImage = url => {
   }
 };
 
-const ytdlp = async (url, ctx) =>
-  downloadWithYtdlp(url, {
-    maxSize: ctx.maxSize,
-    quality: YTDLP_QUALITY,
-    maxDuration: await ctx.maxDuration(),
-    startTime: ctx.startTime,
-    duration: ctx.duration,
-  });
+const onHost =
+  (...hosts) =>
+  url => {
+    const host = hostOf(url);
+    return Boolean(host) && hosts.some(h => host === h || host.endsWith(`.${h}`));
+  };
 
 const switches = (category, ...entries) =>
   entries.map(([id, label, hosts]) => ({ id, label, category, hosts }));
 
-// Every download source, in the order they are tried: the first whose `match` takes a URL owns it.
-// `enabled` false means the source exists but is turned off here; `fallback` is tried when the
-// source fails for a reason that is not the user's or the post's; `streams` lets web hand out a
-// stream link; `services` are its on/off switches in the webui (yt-dlp, gallery-dl and cobalt
-// sites take theirs from their own tables).
-export const SOURCES = [
-  {
-    id: 'medal',
-    label: () => 'Medal',
-    match: isMedalUrl,
-    extract: (url, ctx) => ctx.maxDuration().then(max => downloadFromMedal(url, max)),
-    fallback: 'ytdlp',
-  },
-  {
-    id: 'ytdlp',
-    label: url => `${getYtdlpSite(url)} via yt-dlp`,
-    match: url => getYtdlpSite(url) !== null && !isStillImage(url),
-    enabled: () => YTDLP_ENABLED,
-    disabledMessage: url => `${getYtdlpSite(url).toLowerCase()} downloads are disabled.`,
-    extract: (url, ctx) => ytdlp(url, ctx),
+// What can fetch a link. `streams` lets web hand out a stream link instead of the file.
+export const ENGINES = {
+  cobalt: {
+    name: 'cobalt',
+    enabled: () => COBALT_ENABLED,
+    disabledMessage: () => 'cobalt is not enabled. please enable it to use the download command.',
+    extract: (url, ctx) =>
+      downloadFromSocialMedia(COBALT_API_URL, url, ctx.maxSize, ctx.cobaltResponse),
     streams: true,
   },
-  {
-    id: 'gallery-dl',
-    label: url => `${getGalleryDlSite(url)} via gallery-dl`,
-    match: url => !isDeviationUrl(url) && getGalleryDlSite(url) !== null,
+  ytdlp: {
+    name: 'yt-dlp',
+    enabled: () => YTDLP_ENABLED,
+    disabledMessage: url =>
+      `${(getYtdlpSite(url) ?? 'this site').toLowerCase()} downloads are disabled.`,
+    extract: async (url, ctx) =>
+      downloadWithYtdlp(url, {
+        maxSize: ctx.maxSize,
+        quality: YTDLP_QUALITY,
+        maxDuration: await ctx.maxDuration(),
+        startTime: ctx.startTime,
+        duration: ctx.duration,
+      }),
+    streams: true,
+  },
+  'gallery-dl': {
+    name: 'gallery-dl',
     enabled: () => GALLERY_DL_ENABLED,
-    disabledMessage: url => `${getGalleryDlSite(url).toLowerCase()} downloads are disabled.`,
+    disabledMessage: url =>
+      `${(getGalleryDlSite(url) ?? 'gallery').toLowerCase()} downloads are disabled.`,
     extract: (url, ctx) => downloadWithGalleryDl(url, ctx.maxSize, ctx.galleryOptions),
+  },
+  instagram: { name: 'Instagram session', extract: url => downloadFromInstagram(url) },
+  medal: {
+    name: 'Medal',
+    extract: (url, ctx) => ctx.maxDuration().then(max => downloadFromMedal(url, max)),
+  },
+  deviantart: {
+    name: 'DeviantArt',
+    extract: (url, ctx) => downloadFromDeviantArt(url, ctx.maxSize),
+  },
+  hentaigifz: { name: 'hentaigifz', extract: url => downloadFromHentaiGifz(url) },
+  booru: { name: 'booru', extract: url => downloadFromBooru(url) },
+  pinterest: { name: 'Pinterest', extract: url => downloadFromPinterest(url) },
+  klipy: { name: 'Klipy', extract: url => downloadFromKlipy(url) },
+  jumpshare: {
+    name: 'Jumpshare',
+    extract: async (url, ctx) => downloadDirectMedia(await resolveJumpshareUrl(url), ctx.client),
+  },
+  threads: { name: 'Threads', extract: url => downloadFromThreads(url) },
+  mega: { name: 'Mega', extract: (url, ctx) => downloadFromMega(url, ctx.maxSize) },
+  direct: {
+    name: 'direct file',
+    extract: (url, ctx) =>
+      downloadDirectMedia(url, ctx.client, { userAgent: booruCdnUserAgent(url) }),
+    streams: true,
+  },
+};
+
+export const isEnabled = engine => engine.enabled?.() ?? true;
+
+const step = (engine, extra = {}) => ({ engine, ...extra });
+
+// Which site a link belongs to: the first route whose `match` takes it. Each route tries its
+// chain in order, moving on when a step fails for a reason that is not the user's or the post's;
+// the owner can reorder a chain or switch steps off from the webui. `when` limits a step to some
+// of the route's links, `on: false` ships a step switched off. `services` are the webui on/off
+// switches for sites that have no engine table of their own; `switchIds` claims existing switches
+// whose bare host would land elsewhere.
+export const ROUTES = [
+  {
+    id: 'medal',
+    name: 'Medal',
+    match: isMedalUrl,
+    chain: [step('medal'), step('ytdlp')],
+    switchIds: ['medal'],
   },
   {
     id: 'facebook-photo',
-    label: () => 'Facebook photo',
+    name: 'Facebook photos',
     match: isFacebookPhotoUrl,
-    enabled: () => GALLERY_DL_ENABLED,
-    disabledMessage: () => 'facebook photo downloads are disabled.',
-    extract: (url, ctx) => downloadWithGalleryDl(url, ctx.maxSize, ctx.galleryOptions),
+    chain: [step('gallery-dl')],
   },
+  { id: 'deviantart', name: 'DeviantArt', match: isDeviationUrl, chain: [step('deviantart')] },
   {
-    id: 'deviantart',
-    label: () => 'DeviantArt',
-    match: isDeviationUrl,
-    extract: (url, ctx) => downloadFromDeviantArt(url, ctx.maxSize),
+    id: 'gallery-dl',
+    name: 'Galleries',
+    match: url => getGalleryDlSite(url) !== null,
+    chain: [step('gallery-dl')],
   },
   {
     id: 'hentaigifz',
-    label: () => 'hentaigifz',
+    name: 'hentaigifz',
     match: isHentaiGifzUrl,
-    extract: url => downloadFromHentaiGifz(url),
+    chain: [step('hentaigifz')],
     services: switches('adult', ['hentaigifz', 'hentaigifz', ['hentaigifz.com']]),
   },
   {
     id: 'booru',
-    label: () => 'booru',
+    name: 'Boorus',
     match: isBooruUrl,
-    extract: url => downloadFromBooru(url),
+    chain: [step('booru')],
     services: switches(
       'booru',
       ['danbooru', 'Danbooru', ['danbooru.donmai.us']],
@@ -116,69 +165,130 @@ export const SOURCES = [
   },
   {
     id: 'pinterest',
-    label: () => 'Pinterest',
+    name: 'Pinterest',
     match: isPinterestUrl,
-    extract: url => downloadFromPinterest(url),
+    chain: [step('pinterest')],
     services: switches('social', ['pinterest', 'Pinterest', ['pinterest.com', 'pin.it']]),
   },
   {
     id: 'klipy',
-    label: () => 'Klipy',
+    name: 'Klipy',
     match: isKlipyUrl,
-    extract: url => downloadFromKlipy(url),
+    chain: [step('klipy')],
     services: switches('social', ['klipy', 'Klipy', ['klipy.com']]),
   },
   {
     id: 'jumpshare',
-    label: () => 'Jumpshare',
+    name: 'Jumpshare',
     match: isJumpshareUrl,
-    extract: async (url, ctx) => downloadDirectMedia(await resolveJumpshareUrl(url), ctx.client),
+    chain: [step('jumpshare')],
     services: switches('video', ['jumpshare', 'Jumpshare', ['jumpshare.com']]),
   },
   {
     id: 'threads',
-    label: () => 'Threads',
+    name: 'Threads',
     match: isThreadsUrl,
-    extract: url => downloadFromThreads(url),
+    chain: [step('threads')],
     services: switches('social', ['threads', 'Threads', ['threads.com', 'threads.net']]),
   },
   {
     id: 'instagram-story',
-    label: () => 'Instagram story',
+    name: 'Instagram stories',
     match: url => isInstagramStoryUrl(url) && hasInstagramSession(),
-    extract: url => downloadFromInstagram(url),
+    chain: [step('instagram')],
   },
   {
     id: 'mega',
-    label: () => 'Mega',
+    name: 'Mega',
     match: isMegaUrl,
-    extract: (url, ctx) => downloadFromMega(url, ctx.maxSize),
+    chain: [step('mega')],
     services: switches('video', ['mega', 'Mega', ['mega.nz', 'mega.io']]),
+  },
+  // Cobalt tries Instagram's logged-out routes first; the session extractor is the backstop.
+  {
+    id: 'instagram',
+    name: 'Instagram',
+    match: onHost('instagram.com'),
+    chain: [
+      step('cobalt'),
+      step('instagram', {
+        when: url => isInstagramPostUrl(url) && hasInstagramSession(),
+        note: 'posts',
+      }),
+      step('ytdlp'),
+    ],
+  },
+  {
+    id: 'tiktok',
+    name: 'TikTok',
+    match: onHost('tiktok.com'),
+    chain: [
+      step('cobalt'),
+      step('ytdlp'),
+      step('gallery-dl', { when: isTiktokContentUrl, note: 'posts' }),
+    ],
+  },
+  {
+    id: 'x',
+    name: 'X / Twitter',
+    match: onHost('x.com', 'twitter.com'),
+    chain: [step('cobalt'), step('ytdlp')],
+  },
+  {
+    id: 'youtube',
+    name: 'YouTube',
+    match: onHost('youtube.com', 'youtu.be'),
+    chain: [step('ytdlp'), step('cobalt', { on: false })],
+  },
+  {
+    id: 'ytdlp',
+    name: 'yt-dlp sites',
+    match: url => getYtdlpSite(url) !== null && !isStillImage(url),
+    chain: [step('ytdlp')],
   },
   {
     id: 'direct',
-    label: () => 'direct media link',
+    name: 'Direct file links',
     match: isDirectMediaUrl,
-    extract: (url, ctx) =>
-      downloadDirectMedia(url, ctx.client, { userAgent: booruCdnUserAgent(url) }),
-    streams: true,
+    chain: [step('direct')],
     // giphy pages canonicalize to their i.giphy.com file.
     services: switches('social', ['giphy', 'Giphy', ['giphy.com']]),
   },
   {
-    id: 'cobalt',
-    label: () => 'Cobalt',
+    id: 'social',
+    name: 'Other social sites',
     match: isSocialMediaUrl,
-    enabled: () => COBALT_ENABLED,
-    disabledMessage: () => 'cobalt is not enabled. please enable it to use the download command.',
-    streams: true,
+    chain: [step('cobalt'), step('ytdlp')],
   },
 ];
 
-const byId = new Map(SOURCES.map(source => [source.id, source]));
-export const sourceById = id => byId.get(id) ?? null;
+const routesById = new Map(ROUTES.map(route => [route.id, route]));
+export const routeById = id => routesById.get(id) ?? null;
 
-// The source that owns a URL, or null when no source takes it.
-export const routeFor = url => SOURCES.find(source => source.match(url)) ?? null;
+// The route that owns a URL, or null when no route takes it.
+export const routeFor = url => ROUTES.find(route => route.match(url)) ?? null;
 
-export const isEnabled = source => source.enabled?.() ?? true;
+// A route's steps with the owner's saved order and switches applied; steps the saved order does
+// not know keep their default place at the end, saved steps the code no longer has are dropped.
+export function arrangeChain(route, saved) {
+  const order = Array.isArray(saved?.[route.id]) ? saved[route.id] : null;
+  const steps = route.chain.map(s => ({ ...s, on: s.on ?? true }));
+  if (!order) return steps;
+  const byEngine = new Map(steps.map(s => [s.engine, s]));
+  const arranged = order
+    .filter(s => byEngine.has(s?.engine))
+    .map(s => ({ ...byEngine.get(s.engine), on: s.on !== false }));
+  const seen = new Set(arranged.map(s => s.engine));
+  return [...arranged, ...steps.filter(s => !seen.has(s.engine))];
+}
+
+// The engines that will try a URL, in order: switched on, applying to this link, and enabled.
+export async function chainFor(url, route = routeFor(url)) {
+  if (!route) return { route: null, engines: [], disabled: null };
+  const steps = arrangeChain(route, await readSetting('source_routes')).filter(
+    s => s.on && (!s.when || s.when(url))
+  );
+  const engines = steps.map(s => ({ id: s.engine, ...ENGINES[s.engine] }));
+  const enabled = engines.filter(isEnabled);
+  return { route, engines: enabled, disabled: enabled.length ? null : (engines[0] ?? null) };
+}

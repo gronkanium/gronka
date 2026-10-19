@@ -92,6 +92,14 @@ export const SETTINGS = {
     description:
       'Download sources that are turned off. A /download from a turned-off source is refused with a message instead of downloading. Everything not listed here is on; the bot picks up changes within a minute',
   },
+  source_routes: {
+    type: 'routes',
+    default: '{}',
+    label: 'Source priority',
+    section: 'sources',
+    description:
+      'Per site, the order the bot tries its download engines in and which are switched off. Sites not listed use the built-in order',
+  },
   webui_issue_states: {
     type: 'issuestates',
     default: '{}',
@@ -117,6 +125,7 @@ const PARSE = {
     return Array.isArray(value) ? value : [];
   },
   issuestates: text => parseJson(text, {}),
+  routes: text => parseJson(text, {}),
 };
 
 // The stored value of a known setting, parsed to its type; the default when unset or unreadable.

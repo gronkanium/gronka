@@ -2,7 +2,7 @@ import { firstUrlIn, validateUrl } from '../utils/validation.js';
 import { resolveShortLink } from '../utils/short-links.js';
 import { canonicalizeMirrorUrl } from '../utils/cobalt.js';
 import { isDiscordMessageLink, DISCORD_MESSAGE_LINK_MESSAGE } from '../utils/discord-cdn.js';
-import { routeFor, isEnabled } from './sources.js';
+import { chainFor } from './sources.js';
 
 // Every front door (slash, prefix, context menu, web) takes a link through these, in order:
 // readLink (which link, is it safe), prepareLink (where it really points), refusalFor (can we take it).
@@ -18,15 +18,14 @@ export function readLink(text, missingMessage = 'please provide a URL.') {
 
 export const prepareLink = async url => canonicalizeMirrorUrl(await resolveShortLink(url));
 
-export function refusalFor(url) {
-  const source = routeFor(url);
-  if (source && !isEnabled(source)) {
+export async function refusalFor(url) {
+  const { route, disabled } = await chainFor(url);
+  if (disabled)
     return {
-      message: source.disabledMessage(url),
-      reason: `${source.id.replace('-', '_')}_disabled`,
+      message: disabled.disabledMessage(url),
+      reason: `${disabled.id.replace('-', '_')}_disabled`,
     };
-  }
-  if (source) return null;
+  if (route) return null;
   if (isDiscordMessageLink(url)) {
     return { message: DISCORD_MESSAGE_LINK_MESSAGE, reason: 'discord_message_link' };
   }

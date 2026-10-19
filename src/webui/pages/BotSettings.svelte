@@ -43,7 +43,7 @@
     },
   ];
   // Edited on their own pages, not here.
-  const ELSEWHERE = new Set(['services', 'issuestates']);
+  const ELSEWHERE = new Set(['services', 'issuestates', 'routes']);
   const label = key => settings[key]?.label ?? key.replace(/_/g, ' ');
 
   let settings = $state({});

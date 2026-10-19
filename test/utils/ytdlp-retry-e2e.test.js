@@ -99,14 +99,10 @@ if (!mocksSupported) {
       };
       spawnCallLog = [];
       spawnBehaviors = [failing, failing];
-      const error = await downloadWithYtdlp(
-        'https://youtu.be/needs-login',
-        Infinity,
-        null,
-        Infinity,
-        null,
-        null
-      ).catch(caught => caught);
+      const error = await downloadWithYtdlp('https://youtu.be/needs-login', {
+        maxSize: Infinity,
+        maxDuration: Infinity,
+      }).catch(caught => caught);
       assert.strictEqual(
         error.cause.message,
         'yt-dlp: ERROR: [instagram:story] You need to log in'
@@ -117,14 +113,10 @@ if (!mocksSupported) {
       spawnCallLog = [];
       spawnBehaviors = [genericFailure, success];
 
-      const result = await downloadWithYtdlp(
-        'https://youtu.be/retry-success',
-        Infinity,
-        null,
-        Infinity, // skip the duration pre-check so it doesn't spawn an extra yt-dlp call
-        null,
-        null
-      );
+      const result = await downloadWithYtdlp('https://youtu.be/retry-success', {
+        maxSize: Infinity,
+        maxDuration: Infinity,
+      });
 
       assert.strictEqual(spawnCallLog.length, 2, 'expected exactly one retry (two spawn calls)');
       assert.ok(result.size > 0);
@@ -136,7 +128,10 @@ if (!mocksSupported) {
 
       await assert.rejects(
         () =>
-          downloadWithYtdlp('https://youtu.be/rate-limited', Infinity, null, Infinity, null, null),
+          downloadWithYtdlp('https://youtu.be/rate-limited', {
+            maxSize: Infinity,
+            maxDuration: Infinity,
+          }),
         error => error.name === 'YtdlpRateLimitError'
       );
 
@@ -149,7 +144,10 @@ if (!mocksSupported) {
 
       await assert.rejects(
         () =>
-          downloadWithYtdlp('https://youtu.be/still-failing', Infinity, null, Infinity, null, null),
+          downloadWithYtdlp('https://youtu.be/still-failing', {
+            maxSize: Infinity,
+            maxDuration: Infinity,
+          }),
         error =>
           error.code === 'YTDLP_UNKNOWN' &&
           error.message === 'could not download this YouTube link.'
@@ -183,7 +181,7 @@ if (!mocksSupported) {
       spawnCallLog = [];
       spawnBehaviors = [missingCopy, success];
       try {
-        const result = await downloadWithYtdlp(url, Infinity, null, Infinity, null, null);
+        const result = await downloadWithYtdlp(url, { maxSize: Infinity, maxDuration: Infinity });
         assert.ok(result.size > 0);
       } finally {
         delete process.env.GEO_PROXY_URL;
@@ -202,7 +200,7 @@ if (!mocksSupported) {
       spawnCallLog = [];
       spawnBehaviors = [missingCopy];
       await assert.rejects(
-        () => downloadWithYtdlp(url, Infinity, null, Infinity, null, null),
+        () => downloadWithYtdlp(url, { maxSize: Infinity, maxDuration: Infinity }),
         error => error.code === 'REGION_COPY_MISSING'
       );
       assert.strictEqual(spawnCallLog.length, 1);
@@ -226,14 +224,10 @@ if (!mocksSupported) {
 
       await assert.rejects(
         () =>
-          downloadWithYtdlp(
-            'https://www.instagram.com/p/DbpZVohPsMX/',
-            Infinity,
-            null,
-            Infinity,
-            null,
-            null
-          ),
+          downloadWithYtdlp('https://www.instagram.com/p/DbpZVohPsMX/', {
+            maxSize: Infinity,
+            maxDuration: Infinity,
+          }),
         error => error.message === 'this post has no video in it.'
       );
     });
@@ -244,7 +238,10 @@ if (!mocksSupported) {
 
       await assert.rejects(
         () =>
-          downloadWithYtdlp('https://youtu.be/no-formats', Infinity, null, Infinity, null, null),
+          downloadWithYtdlp('https://youtu.be/no-formats', {
+            maxSize: Infinity,
+            maxDuration: Infinity,
+          }),
         error => error.message === 'no downloadable video formats found'
       );
     });
@@ -294,7 +291,7 @@ if (!mocksSupported) {
         spawnBehaviors = [failsWith(stderr)];
 
         await assert.rejects(
-          () => downloadWithYtdlp(url, Infinity, null, Infinity, null, null),
+          () => downloadWithYtdlp(url, { maxSize: Infinity, maxDuration: Infinity }),
           error => error.message === expected && (!code || error.code === code)
         );
       });
@@ -304,14 +301,10 @@ if (!mocksSupported) {
       spawnCallLog = [];
       spawnBehaviors = [failsWith('ERROR: [youtube] abc: Please sign in. Use --cookies'), success];
 
-      const result = await downloadWithYtdlp(
-        'https://youtu.be/signin',
-        Infinity,
-        null,
-        Infinity,
-        null,
-        null
-      );
+      const result = await downloadWithYtdlp('https://youtu.be/signin', {
+        maxSize: Infinity,
+        maxDuration: Infinity,
+      });
       assert.ok(result);
       assert.strictEqual(spawnCallLog.length, 2);
     });
@@ -324,14 +317,10 @@ if (!mocksSupported) {
           success,
         ];
 
-        const result = await downloadWithYtdlp(
-          'https://youtu.be/challenge',
-          Infinity,
-          null,
-          Infinity,
-          null,
-          null
-        );
+        const result = await downloadWithYtdlp('https://youtu.be/challenge', {
+          maxSize: Infinity,
+          maxDuration: Infinity,
+        });
         assert.ok(result.size > 0);
         assert.strictEqual(spawnCallLog.length, 2);
         assert.ok(spawnCallLog[0].args.includes('youtube:player_client=default'));
@@ -363,7 +352,10 @@ if (!mocksSupported) {
       ];
       await assert.rejects(
         () =>
-          downloadWithYtdlp('https://www.youtube.com/live/abc', Infinity, null, 3600, null, null),
+          downloadWithYtdlp('https://www.youtube.com/live/abc', {
+            maxSize: Infinity,
+            maxDuration: 3600,
+          }),
         error => error.code === 'STREAM_IS_LIVE'
       );
       assert.strictEqual(spawnCallLog.length, 1);
@@ -375,11 +367,7 @@ if (!mocksSupported) {
 
       const result = await downloadWithYtdlp(
         'https://gif.fxtwitter.com/tweet_video/HNOvuGAXoAAAIQO.webp',
-        Infinity,
-        null,
-        3600,
-        null,
-        null
+        { maxSize: Infinity, maxDuration: 3600 }
       );
 
       const downloadArgs = spawnCallLog[1].args;
@@ -396,14 +384,10 @@ if (!mocksSupported) {
       spawnCallLog = [];
       spawnBehaviors = [unknownDuration, success];
 
-      await downloadWithYtdlp(
-        'https://gif.fxtwitter.com/tweet_video/HNOvuGAXoAAAIQO.webp',
-        Infinity,
-        null,
-        3600,
-        null,
-        null
-      );
+      await downloadWithYtdlp('https://gif.fxtwitter.com/tweet_video/HNOvuGAXoAAAIQO.webp', {
+        maxSize: Infinity,
+        maxDuration: 3600,
+      });
 
       const downloadArgs = spawnCallLog[1].args;
       const format = downloadArgs[downloadArgs.indexOf('-f') + 1];

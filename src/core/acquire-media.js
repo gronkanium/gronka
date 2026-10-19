@@ -13,7 +13,6 @@ import {
   getRemoteContentLength,
   canonicalizeMirrorUrl,
 } from '../utils/cobalt.js';
-import { downloadWithYtdlp } from '../utils/ytdlp.js';
 import { downloadWithGalleryDl } from '../utils/gallery-dl.js';
 import {
   isInstagramPostUrl,
@@ -101,7 +100,6 @@ const {
   cobaltApiUrl: COBALT_API_URL,
   cobaltEnabled: COBALT_ENABLED,
   ytdlpEnabled: YTDLP_ENABLED,
-  ytdlpQuality: YTDLP_QUALITY,
   galleryDlEnabled: GALLERY_DL_ENABLED,
 } = botConfig;
 
@@ -422,14 +420,7 @@ export async function acquireMedia(
       );
 
       try {
-        fileData = await downloadWithYtdlp(
-          url,
-          maxSize,
-          YTDLP_QUALITY,
-          await ctx.maxDuration(),
-          startTime,
-          duration
-        );
+        fileData = await sourceById('ytdlp').extract(url, ctx);
       } catch (ytdlpFallbackError) {
         note('yt-dlp', ytdlpFallbackError);
         if (

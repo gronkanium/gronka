@@ -34,19 +34,14 @@ const isStillImage = url => {
   }
 };
 
-const ytdlp = (url, ctx, trim = true) =>
-  ctx
-    .maxDuration()
-    .then(maxDuration =>
-      downloadWithYtdlp(
-        url,
-        ctx.maxSize,
-        YTDLP_QUALITY,
-        maxDuration,
-        trim ? ctx.startTime : null,
-        trim ? ctx.duration : null
-      )
-    );
+const ytdlp = async (url, ctx) =>
+  downloadWithYtdlp(url, {
+    maxSize: ctx.maxSize,
+    quality: YTDLP_QUALITY,
+    maxDuration: await ctx.maxDuration(),
+    startTime: ctx.startTime,
+    duration: ctx.duration,
+  });
 
 const switches = (category, ...entries) =>
   entries.map(([id, label, hosts]) => ({ id, label, category, hosts }));

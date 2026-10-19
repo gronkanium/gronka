@@ -328,6 +328,10 @@ describe('file downloader utilities', () => {
       assert.strictEqual(isDirectMediaUrl('https://example.com/a.gif'), true);
       assert.strictEqual(isDirectMediaUrl('https://example.com/PHOTO.JPEG'), true);
       assert.strictEqual(isDirectMediaUrl('https://pbs.twimg.com/media/X?format=jpg'), true);
+      assert.strictEqual(
+        isDirectMediaUrl('https://cdn.discordapp.com/a/1/2/song.mp3.mpeg?ex=1'),
+        true
+      );
       assert.strictEqual(isDirectMediaUrl('https://example.com/page?format=json'), false);
     });
 

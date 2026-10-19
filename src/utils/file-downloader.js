@@ -26,6 +26,8 @@ const DIRECT_MEDIA_EXTENSIONS = new Set([
   'm4v',
   'avi',
   'mkv',
+  'mpeg',
+  'mpg',
   'gif',
   'jpg',
   'jpeg',

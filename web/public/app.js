@@ -330,6 +330,7 @@ async function start({ split } = {}) {
   }
   input.value = request.url;
   job?.abort();
+  $('.toast')?.remove(); // nothing may cover the turnstile widget
   const controller = (job = new AbortController());
   // The check runs on page load, so a token is normally waiting and this screen never shows.
   if (!turnstileReady('download')) {
@@ -398,14 +399,38 @@ async function saveOne(file, lane, i = 0, onBytes = () => {}) {
     a.click();
     return true;
   }
-  try {
-    save(await fetchWithProgress(file.url, onBytes), nameOf(file, i));
-    return true;
-  } catch {
-    // the site's cdn allows no cross-origin reads, so only opening the link works
-    return false;
+  // file.save is the same file through our Worker, for CDNs that allow no cross-origin reads
+  for (const url of [file.url, file.save].filter(Boolean)) {
+    try {
+      save(await fetchWithProgress(url, onBytes), nameOf(file, i));
+      return true;
+    } catch {
+      // try the next copy; with none left, only opening the link works
+    }
   }
+  return false;
 }
+
+// The panel's text is small next to a playing video; this says the file landed, big, for a moment.
+function savedToast(name, size) {
+  $('.toast')?.remove();
+  const el = document.createElement('div');
+  el.className = 'toast';
+  el.setAttribute('role', 'status');
+  el.innerHTML = `${icon('download')}<span><b>saved to downloads</b><span class="file">${esc(name)}${size ? ` · ${mb(size)}` : ''}</span></span>`;
+  document.body.append(el);
+  setTimeout(() => el.classList.add('out'), 4500);
+  el.addEventListener('animationend', e => e.animationName === 'toast-out' && el.remove());
+}
+
+const fileRow = (name, size, source) =>
+  `<div class="file">${icon('download')}<div><p class="name">${esc(name)}</p>
+    <p class="meta">${[size && mb(size), source && `from ${esc(source)}`].filter(Boolean).join(' · ')}</p></div></div>`;
+
+const savedLine = el => {
+  el.classList.add('ok');
+  el.innerHTML = `${icon('check')}saved to your downloads`;
+};
 
 const openLink = (url, text) =>
   `<a class="btn line small" href="${esc(url)}" target="_blank" rel="noopener noreferrer">${text}</a>`;
@@ -418,19 +443,22 @@ async function deliver(result, request) {
   const name = nameOf(file);
   setState('done', 'got-1');
   play('gotit', { then: () => play('party', { times: 2, then: 'done' }) });
-  draw(`<h2>got it.</h2><p class="meta">${esc(name)}${file.size ? ` · ${mb(file.size)}` : ''}</p>
-    <p class="say note">${esc(result.note ?? LANE_NOTE[result.lane](site))}</p><p class="meta" id="saving"></p>
+  draw(`${fileRow(name, file.size, site)}<p class="status" id="saving">ready. press save file.</p>
     <div class="acts"><button type="button" class="btn" id="save">${icon('download')}save file</button>
     <button type="button" class="btn line small" id="copy">${icon('copy')}copy link</button>
     ${navigator.share ? `<button type="button" class="btn line small" id="share">${icon('share')}share</button>` : ''}
-    <button type="button" class="linkish" id="other">another link</button></div>`);
+    <button type="button" class="linkish" id="other">another link</button></div>
+    <p class="note">${esc(result.note ?? LANE_NOTE[result.lane](site))}</p>`);
   const saving = $('#saving');
+  let bytes;
   const run = () =>
     saveOne(file, result.lane, 0, (got, total) => {
+      bytes = got;
       saving.textContent = total ? `saving ${mb(got)} of ${mb(total)}` : `saving ${mb(got)}`;
     }).then(saved => {
       if (saved) {
-        saving.textContent = 'saved. check your downloads.';
+        savedLine(saving);
+        savedToast(name, file.size ?? bytes);
         return;
       }
       saving.textContent = 'this site blocks direct saving. open the file and save it there.';
@@ -504,6 +532,10 @@ function picker(result, site) {
       await new Promise(r => setTimeout(r, 700));
     }
     pose(failed.length ? 'think' : 'done');
+    if (failed.length < picked.length) {
+      const n = picked.length - failed.length;
+      savedToast(n === 1 ? nameOf(result.files[picked[0]], picked[0]) : `${n} files`);
+    }
     $('#saving').innerHTML = failed.length
       ? `${failed.length === picked.length ? 'this site' : `${failed.length} of these`} won't let the page save directly. open and save:
         <span class="acts">${failed.map(i => openLink(result.files[i].url, `open ${i + 1}`)).join('')}</span>`
@@ -564,17 +596,22 @@ async function merge(result, request) {
 function deliverBlob(blob, filename, request) {
   setState('done', 'got-1');
   play('gotit', { then: () => play('party', { times: 2, then: 'done' }) });
-  draw(`<h2>got it.</h2><p class="meta">${esc(filename)} · ${mb(blob.size)}</p>
-    <p class="say note">joined in your browser from ${esc(siteOf(request.url))}'s own files.</p>
+  draw(`${fileRow(filename, blob.size, siteOf(request.url))}<p class="status" id="saving">ready. press save file.</p>
     <div class="acts"><button type="button" class="btn" id="save">${icon('download')}save file</button>
-    <button type="button" class="linkish" id="other">another one</button></div>`);
-  $('#save').onclick = () => save(blob, filename);
+    <button type="button" class="linkish" id="other">another one</button></div>
+    <p class="note">joined in your browser from ${esc(siteOf(request.url))}'s own files.</p>`);
+  const keep = () => {
+    save(blob, filename);
+    savedLine($('#saving'));
+    savedToast(filename, blob.size);
+  };
+  $('#save').onclick = keep;
   $('#other').onclick = () => {
     input.value = '';
     idle();
     input.focus();
   };
-  if (navigator.userActivation?.isActive ?? true) save(blob, filename);
+  if (navigator.userActivation?.isActive ?? true) keep();
   else $('#save').focus();
 }
 

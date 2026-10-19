@@ -69,16 +69,29 @@ export function signStreamToken(payload, key = STREAM_KEY) {
 
 const FORWARDED_HEADERS = ['user-agent', 'referer', 'origin', 'accept', 'accept-language'];
 
-function streamToken(part, filename) {
+function streamToken(part, filename, key = STREAM_KEY) {
   const headers = Object.fromEntries(
     Object.entries(part.headers).filter(([name]) => FORWARDED_HEADERS.includes(name.toLowerCase()))
   );
-  return signStreamToken({
-    u: part.url,
-    h: headers,
-    n: filename,
-    e: Math.floor((Date.now() + FILE_TTL_MS) / 1000),
-  });
+  return signStreamToken(
+    {
+      u: part.url,
+      h: headers,
+      n: filename,
+      e: Math.floor((Date.now() + FILE_TTL_MS) / 1000),
+    },
+    key
+  );
+}
+
+// The page saves a direct file by reading it, and some CDNs (X's) refuse cross-origin reads.
+// This Worker link is the page's second try: same file, fetched by Cloudflare, readable by the page.
+export function saveLink({ url, filename }, base = STREAM_BASE, key = STREAM_KEY) {
+  if (!base || !key) return {};
+  const name = sanitizeFilename(filename || directStreamInfo(url).title);
+  return {
+    save: `${base}/f/${streamToken({ url, headers: getDirectMediaHeaders(url) }, name, key)}`,
+  };
 }
 
 // A plain media link needs no resolving; the Worker also reaches hosts that block our IP (i.ibb.co).
@@ -280,6 +293,7 @@ async function downloadInJob({
         url: item.url,
         filename: item.filename,
         type: item.type,
+        ...saveLink(item),
       })),
     };
   }

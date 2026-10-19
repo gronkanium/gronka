@@ -398,13 +398,16 @@ async function saveOne(file, lane, i = 0, onBytes = () => {}) {
     a.click();
     return true;
   }
-  try {
-    save(await fetchWithProgress(file.url, onBytes), nameOf(file, i));
-    return true;
-  } catch {
-    // the site's cdn allows no cross-origin reads, so only opening the link works
-    return false;
+  // file.save is the same file through our Worker, for CDNs that allow no cross-origin reads
+  for (const url of [file.url, file.save].filter(Boolean)) {
+    try {
+      save(await fetchWithProgress(url, onBytes), nameOf(file, i));
+      return true;
+    } catch {
+      // try the next copy; with none left, only opening the link works
+    }
   }
+  return false;
 }
 
 const openLink = (url, text) =>

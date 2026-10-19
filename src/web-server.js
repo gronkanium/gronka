@@ -416,7 +416,7 @@ export async function verifyTurnstile(token, action, secret = TURNSTILE_SECRET) 
 }
 
 // A source that failed or refused is the upstream's fault (502), not a server error; gone is 404.
-const STATUS_BY_CODE = { CONTENT_GONE: 404 };
+const STATUS_BY_CODE = { CONTENT_GONE: 404, NO_VIDEO: 422 };
 
 function toApiError(error, url, fallback = DOWNLOAD_FALLBACK) {
   if (error instanceof AppError && error.message) {

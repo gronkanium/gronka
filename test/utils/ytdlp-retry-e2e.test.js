@@ -226,7 +226,7 @@ if (!mocksSupported) {
             maxSize: Infinity,
             maxDuration: Infinity,
           }),
-        error => error.message === 'this post has no video in it.'
+        error => error.message === 'this post has no video in it.' && error.code === 'NO_VIDEO'
       );
     });
 

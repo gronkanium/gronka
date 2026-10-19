@@ -21,6 +21,7 @@ import { isBooruUrl, downloadFromBooru, booruCdnUserAgent } from '../utils/booru
 import { isPinterestUrl, downloadFromPinterest } from '../utils/pinterest.js';
 import { isKlipyUrl, downloadFromKlipy } from '../utils/klipy.js';
 import { isJumpshareUrl } from '../utils/jumpshare.js';
+import { isMedalUrl, downloadFromMedal } from '../utils/medal.js';
 import { isThreadsUrl, downloadFromThreads } from '../utils/threads.js';
 import {
   isInstagramPostUrl,
@@ -220,6 +221,7 @@ export async function acquireMedia(
   const isPinterest = isPinterestUrl(url);
   const isKlipy = isKlipyUrl(url);
   const isJumpshare = isJumpshareUrl(url);
+  const isMedal = isMedalUrl(url);
   const isThreads = isThreadsUrl(url);
   const isDirectMedia = isDirectMediaUrl(url);
   // Cobalt tries Instagram's logged-out routes first; the session extractor is only the backstop.
@@ -293,6 +295,23 @@ export async function acquireMedia(
 
   const ytdlpMaxDuration = async () => (trimming ? Infinity : await getMaxVideoDuration());
   const extractors = [
+    [
+      'medal',
+      isMedal,
+      'Medal',
+      async () => {
+        const maxDuration = await ytdlpMaxDuration();
+        try {
+          return await downloadFromMedal(url, maxDuration);
+        } catch (medalError) {
+          if (medalError instanceof ValidationError || !YTDLP_ENABLED) throw medalError;
+          if (['CONTENT_GONE', 'CLIP_NOT_PUBLISHED'].includes(medalError.code)) throw medalError;
+          note('Medal', medalError);
+          logger.warn(`Medal api failed, trying yt-dlp: ${describeCause(rootCause(medalError))}`);
+          return downloadWithYtdlp(url, maxSize, YTDLP_QUALITY, maxDuration, null, null);
+        }
+      },
+    ],
     [
       'ytdlp',
       useYtdlp,

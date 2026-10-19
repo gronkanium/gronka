@@ -418,7 +418,8 @@ function executeYtdlp(
                   new ValidationError(
                     `video duration exceeds the maximum allowed (${Math.floor(maxDuration / 60)} minutes).` +
                       TRIM_TIP
-                  )
+                  ),
+                  'exit 0 with no file, skipped by the duration filter'
                 );
               } else {
                 rejectWith(
@@ -483,6 +484,14 @@ function executeYtdlp(
             new NetworkError(
               "tiktok isn't serving this video's file right now.",
               'REGION_COPY_MISSING'
+            )
+          );
+        } else if (hostIn(url, ['medal.tv']) && /HTTP Error 403/.test(errorOutput)) {
+          // Medal answers 403 until a fresh clip finishes publishing, usually within a minute.
+          rejectWith(
+            new NetworkError(
+              'this medal clip is still being published, try again in a minute.',
+              'CLIP_NOT_PUBLISHED'
             )
           );
         } else if (/Unable to download webpage: HTTP Error (404|410)/.test(errorOutput)) {
@@ -629,7 +638,7 @@ function getVideoDuration(url, timeout = 15000) {
       ...getCookieArgs(url),
       ...getSiteArgs(url),
       '--print',
-      'duration',
+      '%(live_status)s %(duration)s',
       url,
     ];
 
@@ -659,8 +668,16 @@ function getVideoDuration(url, timeout = 15000) {
       clearTimeout(timeoutId);
 
       if (code === 0) {
-        const duration = parseFloat(stdout.trim());
-        if (isNaN(duration)) {
+        const [liveStatus, rawDuration] = stdout.trim().split(' ');
+        const duration = parseFloat(rawDuration);
+        if (liveStatus === 'is_live' || liveStatus === 'is_upcoming') {
+          reject(
+            new ValidationError(
+              'this stream is still live, try again once it has ended.',
+              'STREAM_IS_LIVE'
+            )
+          );
+        } else if (isNaN(duration)) {
           reject(new NetworkError('could not parse video duration'));
         } else {
           resolve(duration);

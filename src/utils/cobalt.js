@@ -220,6 +220,8 @@ const EMBED_FIXER_HOSTS = new Map([
 
 // Fixers keep minting <letters>instagram.com hosts (kkinstagram, kkkinstagram...), so match the shape too.
 const mirrorTarget = host => {
+  // Fixers serve direct-file links under a d. prefix (d.tiktokez.com, d.vxtwitter.com).
+  if (host.startsWith('d.') && EMBED_FIXER_HOSTS.has(host.slice(2))) host = host.slice(2);
   // TikTok mirrors keep the app's vm./vt. share-link prefix in front of their own domain.
   const short = /^(vm|vt)\.(.+)$/.exec(host);
   if (short && EMBED_FIXER_HOSTS.get(short[2]) === 'tiktok.com') return `${short[1]}.tiktok.com`;

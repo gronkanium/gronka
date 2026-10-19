@@ -10,6 +10,16 @@ const logger = createLogger('command-guards');
 // Slash and prefix commands share their handlers; the message adapter marks the prefix ones.
 export const commandSourceOf = interaction => (interaction.isPrefixCommand ? 'prefix' : 'slash');
 
+// Without the Message Content intent a mention cannot see the files on the message it replies to.
+export const missingInputRefusal = (interaction, type, message) =>
+  interaction.isPrefixCommand && interaction.message?.reference
+    ? {
+        message: `i can't see files on the message you replied to. right-click (or long-press) it and pick apps > ${type} instead.`,
+        detail:
+          'mention replied to a message whose attachments are hidden without the message content intent',
+      }
+    : { message };
+
 /**
  * Read and parse the start/end string options from a slash command interaction.
  * Values may be plain seconds ("90", "12.5") or timestamps ("3:10", "1:02:30"). On an invalid

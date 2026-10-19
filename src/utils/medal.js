@@ -1,0 +1,73 @@
+import axios from 'axios';
+import { NetworkError, ValidationError, withCause, contentGone } from './errors.js';
+import { getRequestHeaders } from './discord-cdn.js';
+import { downloadFileFromUrl } from './file-downloader.js';
+import { ssrfGuardedRequest, PAGE_FETCH_TIMEOUT_MS, MAX_PAGE_BYTES } from './ssrf-guard.js';
+import { hostOf } from './url-host.js';
+
+export function medalClipId(url) {
+  try {
+    const { pathname, searchParams } = new URL(url);
+    if (hostOf(url) !== 'medal.tv') return null;
+    const id =
+      pathname.match(/\/clips?\/([A-Za-z0-9_-]+)/)?.[1] ?? searchParams.get('contentId') ?? null;
+    return id && /^[A-Za-z0-9_-]+$/.test(id) ? id : null;
+  } catch {
+    return null;
+  }
+}
+
+export const isMedalUrl = url => medalClipId(url) !== null;
+
+const notPublished = cause =>
+  withCause(
+    new NetworkError(
+      'this medal clip is still being published, try again in a minute.',
+      'CLIP_NOT_PUBLISHED'
+    ),
+    cause
+  );
+
+export function pickMedalVideo(clip) {
+  for (const key of ['contentUrl', 'contentUrl1080p', 'contentUrl720p', 'socialMediaVideo']) {
+    const value = clip?.[key];
+    try {
+      const target = new URL(value);
+      if (target.protocol === 'https:' && target.hostname === 'cdn.medal.tv') return value;
+    } catch {
+      continue;
+    }
+  }
+  return null;
+}
+
+export async function downloadFromMedal(url, maxDuration = Infinity) {
+  const id = medalClipId(url);
+  if (!id) throw new ValidationError('invalid Medal clip link.');
+  let clip;
+  try {
+    ({ data: clip } = await axios.get(`https://medal.tv/api/content/${id}`, {
+      ...ssrfGuardedRequest(),
+      responseType: 'json',
+      timeout: PAGE_FETCH_TIMEOUT_MS,
+      maxContentLength: MAX_PAGE_BYTES,
+      headers: getRequestHeaders(),
+    }));
+  } catch (error) {
+    const status = error.response?.status;
+    if (status === 404 || status === 410) throw contentGone(error);
+    if (status === 403) throw notPublished(error);
+    throw withCause(new NetworkError('could not read this Medal clip.'), error);
+  }
+  if (clip?.processed === 0 || clip?.publishedAt == null) {
+    throw notPublished(`medal: clip ${id} has no publishedAt yet`);
+  }
+  if (clip.videoLengthSeconds > maxDuration) {
+    throw new ValidationError(
+      `this clip is longer than the maximum allowed (${Math.floor(maxDuration / 60)} minutes).`
+    );
+  }
+  const videoUrl = pickMedalVideo(clip);
+  if (!videoUrl) throw contentGone(`medal: clip ${id} has no cdn.medal.tv video url`);
+  return downloadFileFromUrl(videoUrl);
+}

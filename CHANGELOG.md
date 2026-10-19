@@ -5,6 +5,19 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres (attempts) to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [4.3.0](https://github.com/gronkanium/gronka/compare/v4.2.1...v4.3.0) (2026-10-19)
+
+
+### Features
+
+* **sources:** configurable per-site download order, Facebook photos and one link intake ([#160](https://github.com/gronkanium/gronka/issues/160)) ([6fa3e1a](https://github.com/gronkanium/gronka/commit/6fa3e1afcf97ba6be7aaf66096ef4f43ef4ddd63))
+
+
+### Bug Fixes
+
+* **download:** Facebook share links, Google image links and .mpeg files ([#161](https://github.com/gronkanium/gronka/issues/161)) ([984d4a2](https://github.com/gronkanium/gronka/commit/984d4a2128ceee97254609e9b2e10947a8c7967a))
+* **download:** own Medal extractor, refuse live streams up front, and route /convert links like /download ([#159](https://github.com/gronkanium/gronka/issues/159)) ([fe0911e](https://github.com/gronkanium/gronka/commit/fe0911e000619bd03060aaebf323d6989df7eac5))
+
 ## [4.2.1](https://github.com/gronkanium/gronka/compare/v4.2.0...v4.2.1) (2026-10-16)
 
 

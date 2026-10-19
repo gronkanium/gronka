@@ -280,6 +280,12 @@ if (!mocksSupported) {
         'this link is not a downloadable video page.',
         'YTDLP_UNSUPPORTED_URL',
       ],
+      [
+        'ERROR: [MedalTV] abc: Unable to download JSON metadata: HTTP Error 403: Forbidden',
+        'https://medal.tv/games/x/clips/abc',
+        'this medal clip is still being published, try again in a minute.',
+        'CLIP_NOT_PUBLISHED',
+      ],
     ];
 
     for (const [stderr, url, expected, code] of cases) {
@@ -343,9 +349,25 @@ if (!mocksSupported) {
     // First spawn is the duration pre-check (`--print duration`); yt-dlp prints "NA" when the
     // extractor has no duration. Second spawn is the real download.
     function unknownDuration(child) {
-      child.stdout.emit('data', Buffer.from('NA\n'));
+      child.stdout.emit('data', Buffer.from('NA NA\n'));
       child.emit('close', 0);
     }
+
+    test('a stream that is still live is refused before downloading', async () => {
+      spawnCallLog = [];
+      spawnBehaviors = [
+        child => {
+          child.stdout.emit('data', Buffer.from('is_live NA\n'));
+          child.emit('close', 0);
+        },
+      ];
+      await assert.rejects(
+        () =>
+          downloadWithYtdlp('https://www.youtube.com/live/abc', Infinity, null, 3600, null, null),
+        error => error.code === 'STREAM_IS_LIVE'
+      );
+      assert.strictEqual(spawnCallLog.length, 1);
+    });
 
     test('passes the optional-duration form so unknown-duration media still downloads', async () => {
       spawnCallLog = [];

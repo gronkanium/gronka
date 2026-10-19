@@ -8,7 +8,7 @@ import { downloadImage } from '../utils/file-downloader.js';
 import { isGifFile, optimizeToJob } from '../utils/gif-optimizer.js';
 import { runMediaCommand } from './shared/run-media-command.js';
 import { getDiscordAttachmentLimit } from './shared/attachment-limit.js';
-import { refuse, commandSourceOf } from './shared/command-guards.js';
+import { refuse, commandSourceOf, missingInputRefusal } from './shared/command-guards.js';
 import { safeInteractionDeferReply } from '../utils/interaction-helpers.js';
 import { storeMedia, deliverStored, finishCommand } from './shared/deliver.js';
 import { fetchUrlInput } from './shared/url-input.js';
@@ -204,7 +204,11 @@ export async function handleOptimizeCommand(interaction) {
   }
   if (!attachment && !url) {
     const message = 'please provide either a gif attachment or a URL to a gif file.';
-    await refuse(interaction, 'optimize', { message, reason: 'missing_input', context });
+    await refuse(interaction, 'optimize', {
+      ...missingInputRefusal(interaction, 'optimize', message),
+      reason: 'missing_input',
+      context,
+    });
     return;
   }
 

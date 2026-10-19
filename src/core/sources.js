@@ -25,6 +25,7 @@ import {
 } from '../utils/instagram.js';
 import { isDirectMediaUrl, downloadDirectMedia } from '../utils/file-downloader.js';
 import { isTiktokContentUrl } from '../content/tiktok.js';
+import { isTwitterContentUrl } from '../content/twitter.js';
 import { hostOf } from '../utils/url-host.js';
 import { readSetting } from '../utils/settings.js';
 
@@ -230,7 +231,7 @@ export const ROUTES = [
     id: 'x',
     name: 'X / Twitter',
     owns: onHost('x.com', 'twitter.com'),
-    chain: [step('cobalt'), step('x'), step('ytdlp')],
+    chain: [step('cobalt'), step('x', { when: isTwitterContentUrl, note: 'posts' }), step('ytdlp')],
   },
   {
     id: 'youtube',

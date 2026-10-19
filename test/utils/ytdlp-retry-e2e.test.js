@@ -25,9 +25,7 @@ function fakeChildProcess() {
 
 if (!mocksSupported) {
   describe('yt-dlp generic-failure retry', () => {
-    test('skipped: module mocks are e2e-only (run via bun run test:e2e)', () => {
-      assert.ok(true);
-    });
+    test.skip('module mocks are e2e-only (run via bun run test:e2e)', () => {});
   });
 } else {
   let downloadWithYtdlp;

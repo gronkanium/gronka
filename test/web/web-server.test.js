@@ -25,6 +25,14 @@ function post(body, headers = {}) {
 }
 const body = { url: 'https://x.com/a/status/1', turnstile: 'token' };
 const readJson = async res => JSON.parse(await res.text());
+const codeOf = fn => {
+  try {
+    fn();
+  } catch (error) {
+    return error.code;
+  }
+  return 'no error';
+};
 
 describe('parseDownloadRequest', () => {
   test('pulls the link out of pasted text and converts trims to start + duration', () => {
@@ -41,15 +49,21 @@ describe('parseDownloadRequest', () => {
     expect(parseDownloadRequest({ url: 'https://x.com/a/status/1', split: false }).split).toBe(
       false
     );
-    expect(() => parseDownloadRequest({ url: 'https://x.com/a/status/1', split: 'no' })).toThrow();
+    expect(
+      codeOf(() => parseDownloadRequest({ url: 'https://x.com/a/status/1', split: 'no' }))
+    ).toBe('BAD_REQUEST');
   });
 
   test('refuses private hosts, bad modes and backwards trims', () => {
-    expect(() => parseDownloadRequest({ url: 'http://127.0.0.1/' })).toThrow();
-    expect(() => parseDownloadRequest({ url: 'http://192.168.1.1:3000/' })).toThrow();
-    expect(() => parseDownloadRequest({ url: 'no link here' })).toThrow();
-    expect(() => parseDownloadRequest({ url: 'https://x.com/', mode: 'gif' })).toThrow();
-    expect(() => parseDownloadRequest({ url: 'https://x.com/', start: '20', end: '10' })).toThrow();
+    for (const url of ['http://127.0.0.1/', 'http://192.168.1.1:3000/', 'no link here', ' ']) {
+      expect([url, codeOf(() => parseDownloadRequest({ url }))]).toEqual([url, 'BAD_URL']);
+    }
+    expect(codeOf(() => parseDownloadRequest({ url: 'https://x.com/', mode: 'gif' }))).toBe(
+      'BAD_REQUEST'
+    );
+    expect(
+      codeOf(() => parseDownloadRequest({ url: 'https://x.com/', start: '20', end: '10' }))
+    ).toBe('BAD_REQUEST');
   });
 });
 
@@ -363,16 +377,28 @@ describe('content', () => {
       thread: false,
       depth: undefined,
     });
-    expect(() => parseContentRequest({ url: 'https://x.com/a/status/1', format: 'xml' })).toThrow();
-    expect(() => parseContentRequest({ url: 'https://x.com/a/status/1', depth: 11 })).toThrow();
-    expect(() => parseContentRequest({ url: 'https://x.com/a/status/1', comments: -1 })).toThrow();
-    expect(() => parseContentRequest({ url: 'https://x.com/a/status/1', comments: 21 })).toThrow();
-    expect(() => parseContentRequest({ url: 'https://x.com/a/status/1', thread: 'yes' })).toThrow();
+    expect(
+      codeOf(() => parseContentRequest({ url: 'https://x.com/a/status/1', format: 'xml' }))
+    ).toBe('BAD_REQUEST');
+    expect(codeOf(() => parseContentRequest({ url: 'https://x.com/a/status/1', depth: 11 }))).toBe(
+      'BAD_REQUEST'
+    );
+    expect(
+      codeOf(() => parseContentRequest({ url: 'https://x.com/a/status/1', comments: -1 }))
+    ).toBe('BAD_REQUEST');
+    expect(
+      codeOf(() => parseContentRequest({ url: 'https://x.com/a/status/1', comments: 21 }))
+    ).toBe('BAD_REQUEST');
+    expect(
+      codeOf(() => parseContentRequest({ url: 'https://x.com/a/status/1', thread: 'yes' }))
+    ).toBe('BAD_REQUEST');
     expect(
       parseContentRequest({ url: 'https://youtu.be/abc', transcript: 'pt-BR' }).transcript
     ).toBe('pt-BR');
-    expect(() => parseContentRequest({ url: 'https://youtu.be/a', transcript: 'x y' })).toThrow();
-    expect(() => parseContentRequest({ url: 'http://127.0.0.1/' })).toThrow();
+    expect(
+      codeOf(() => parseContentRequest({ url: 'https://youtu.be/a', transcript: 'x y' }))
+    ).toBe('BAD_REQUEST');
+    expect(codeOf(() => parseContentRequest({ url: 'http://127.0.0.1/' }))).toBe('BAD_URL');
   });
 
   test('answers json, or plain text on request, and hands the options to the reader', async () => {

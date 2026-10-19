@@ -65,12 +65,8 @@ function probeSeconds(buffer, ext) {
 }
 
 if (!mocksSupported) {
-  // No --experimental-test-module-mocks: register a single skipped placeholder so the file is
-  // visible in the suite but does not fail the main test:safe run.
   describe('handleDownloadCommand (full-pipeline E2E)', () => {
-    test('skipped: module mocks are e2e-only (run via bun run test:e2e)', () => {
-      assert.ok(true);
-    });
+    test.skip('module mocks are e2e-only (run via bun run test:e2e)', () => {});
   });
 } else {
   beforeAll(async () => {

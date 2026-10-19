@@ -1,30 +1,7 @@
 import { test, describe } from 'bun:test';
 import assert from 'node:assert';
 
-// Extract validateNumericParameter logic for testing
-// This matches the implementation in video-processor.js
-function validateNumericParameter(value, name, min = 0, max = Infinity, allowNull = false) {
-  if (value === null || value === undefined) {
-    if (allowNull) return null;
-    throw new Error(`${name} cannot be null or undefined`);
-  }
-
-  const num = Number(value);
-
-  if (isNaN(num) || !isFinite(num)) {
-    throw new Error(`${name} must be a valid number`);
-  }
-
-  if (num < min) {
-    throw new Error(`${name} must be at least ${min}`);
-  }
-
-  if (num > max) {
-    throw new Error(`${name} must be at most ${max}`);
-  }
-
-  return num;
-}
+import { validateNumericParameter } from '../../src/utils/video-processor/utils.js';
 
 describe('video-processor validation', () => {
   describe('validateNumericParameter', () => {

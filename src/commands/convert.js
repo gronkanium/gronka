@@ -32,7 +32,12 @@ import { optimizeToJob } from '../utils/gif-optimizer.js';
 import { runMediaCommand } from './shared/run-media-command.js';
 import { sendConvertedFile } from './shared/send-converted.js';
 import { ValidationError, withCause } from '../utils/errors.js';
-import { resolveTimeOptions, refuse, commandSourceOf } from './shared/command-guards.js';
+import {
+  resolveTimeOptions,
+  refuse,
+  commandSourceOf,
+  missingInputRefusal,
+} from './shared/command-guards.js';
 import { safeInteractionDeferReply } from '../utils/interaction-helpers.js';
 import { storeMedia, deliverStored, finishCommand } from './shared/deliver.js';
 import { fetchUrlInput } from './shared/url-input.js';
@@ -464,7 +469,11 @@ export async function handleConvertCommand(interaction) {
   const context = { commandSource, originalUrl: url ?? attachment?.url };
   if (!attachment && !url) {
     const message = 'please provide a video, audio or image attachment, or a URL to a media file.';
-    await refuse(interaction, 'convert', { message, reason: 'missing_input', context });
+    await refuse(interaction, 'convert', {
+      ...missingInputRefusal(interaction, 'convert', message),
+      reason: 'missing_input',
+      context: { ...context, commandOptions: { format, ...times } },
+    });
     return;
   }
 

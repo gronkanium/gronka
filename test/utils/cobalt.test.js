@@ -165,6 +165,21 @@ describe('cobalt utilities', () => {
       assert.strictEqual(canonicalizeMirrorUrl(lookalike), lookalike);
     });
 
+    test('drops the d. direct-file prefix on mirrors', () => {
+      assert.strictEqual(
+        canonicalizeMirrorUrl('https://d.tiktokez.com/@a/video/7660684575982603550'),
+        'https://tiktok.com/@a/video/7660684575982603550'
+      );
+      assert.strictEqual(
+        canonicalizeMirrorUrl('https://d.vxtwitter.com/a/status/1'),
+        'https://twitter.com/a/status/1'
+      );
+      assert.strictEqual(
+        canonicalizeMirrorUrl('https://d.example.com/x'),
+        'https://d.example.com/x'
+      );
+    });
+
     test('keeps the vm./vt. share prefix on TikTok mirrors', () => {
       const url = 'https://vm.kktiktok.com/ZGdC5ErUk/';
       assert.strictEqual(isSocialMediaUrl(url), true);

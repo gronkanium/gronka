@@ -161,10 +161,22 @@ function mediaOf(legacy) {
   }));
 }
 
-function pollOf(card) {
-  const values = Object.fromEntries(
-    (card?.legacy?.binding_values ?? []).map(({ key, value }) => [key, value])
+const cardValues = card =>
+  Object.fromEntries((card?.legacy?.binding_values ?? []).map(({ key, value }) => [key, value]));
+
+// A link's large preview image, which x keeps on its own cdn (pbs.twimg.com/card_img). For old
+// posts this is the only copy of a photo whose host is gone (twitpic). Small thumbnail cards don't count.
+function cardImageOf(card) {
+  const values = cardValues(card);
+  return (
+    values.photo_image_full_size_original?.image_value?.url ??
+    values.summary_photo_image_original?.image_value?.url ??
+    null
   );
+}
+
+function pollOf(card) {
+  const values = cardValues(card);
   if (!values.choice1_label) return null;
   const options = [];
   for (let i = 1; values[`choice${i}_label`]; i++) {
@@ -239,6 +251,7 @@ export function normalizeTweet(result, depth = 0) {
       lang: legacy.lang ?? null,
       quotes: legacy.quote_count ?? null,
       poll: pollOf(tweet.card),
+      cardImage: cardImageOf(tweet.card),
       communityNote: tweet.birdwatch_pivot?.subtitle?.text ?? null,
     },
   });

@@ -56,7 +56,7 @@ async function downloadRedditSlides(images) {
   return downloaded.length === 1 ? downloaded[0] : downloaded;
 }
 
-const isTwitterXUrl = url => routeById('x').match(url);
+const isTwitterXUrl = url => routeById('x').owns(url);
 
 const { maxVideoSize: MAX_VIDEO_SIZE, cobaltApiUrl: COBALT_API_URL } = botConfig;
 

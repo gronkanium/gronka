@@ -116,39 +116,39 @@ export const isEnabled = engine => engine.enabled?.() ?? true;
 
 const step = (engine, extra = {}) => ({ engine, ...extra });
 
-// The first route whose `match` takes a link owns it; the owner can reorder or switch off its chain.
+// The first route whose `owns` takes a link owns it; the owner can reorder or switch off its chain.
 export const ROUTES = [
   {
     id: 'medal',
     name: 'Medal',
-    match: isMedalUrl,
+    owns: isMedalUrl,
     chain: [step('medal'), step('ytdlp')],
     switchIds: ['medal'],
   },
   {
     id: 'facebook-photo',
     name: 'Facebook photos',
-    match: isFacebookPhotoUrl,
+    owns: isFacebookPhotoUrl,
     chain: [step('gallery-dl')],
   },
-  { id: 'deviantart', name: 'DeviantArt', match: isDeviationUrl, chain: [step('deviantart')] },
+  { id: 'deviantart', name: 'DeviantArt', owns: isDeviationUrl, chain: [step('deviantart')] },
   {
     id: 'gallery-dl',
     name: 'Galleries',
-    match: url => getGalleryDlSite(url) !== null,
+    owns: url => getGalleryDlSite(url) !== null,
     chain: [step('gallery-dl')],
   },
   {
     id: 'hentaigifz',
     name: 'hentaigifz',
-    match: isHentaiGifzUrl,
+    owns: isHentaiGifzUrl,
     chain: [step('hentaigifz')],
     services: switches('adult', ['hentaigifz', 'hentaigifz', ['hentaigifz.com']]),
   },
   {
     id: 'booru',
     name: 'Boorus',
-    match: isBooruUrl,
+    owns: isBooruUrl,
     chain: [step('booru')],
     services: switches(
       'booru',
@@ -161,41 +161,41 @@ export const ROUTES = [
   {
     id: 'pinterest',
     name: 'Pinterest',
-    match: isPinterestUrl,
+    owns: isPinterestUrl,
     chain: [step('pinterest')],
     services: switches('social', ['pinterest', 'Pinterest', ['pinterest.com', 'pin.it']]),
   },
   {
     id: 'klipy',
     name: 'Klipy',
-    match: isKlipyUrl,
+    owns: isKlipyUrl,
     chain: [step('klipy')],
     services: switches('social', ['klipy', 'Klipy', ['klipy.com']]),
   },
   {
     id: 'jumpshare',
     name: 'Jumpshare',
-    match: isJumpshareUrl,
+    owns: isJumpshareUrl,
     chain: [step('jumpshare')],
     services: switches('video', ['jumpshare', 'Jumpshare', ['jumpshare.com']]),
   },
   {
     id: 'threads',
     name: 'Threads',
-    match: isThreadsUrl,
+    owns: isThreadsUrl,
     chain: [step('threads')],
     services: switches('social', ['threads', 'Threads', ['threads.com', 'threads.net']]),
   },
   {
     id: 'instagram-story',
     name: 'Instagram stories',
-    match: url => isInstagramStoryUrl(url) && hasInstagramSession(),
+    owns: url => isInstagramStoryUrl(url) && hasInstagramSession(),
     chain: [step('instagram')],
   },
   {
     id: 'mega',
     name: 'Mega',
-    match: isMegaUrl,
+    owns: isMegaUrl,
     chain: [step('mega')],
     services: switches('video', ['mega', 'Mega', ['mega.nz', 'mega.io']]),
   },
@@ -203,7 +203,7 @@ export const ROUTES = [
   {
     id: 'instagram',
     name: 'Instagram',
-    match: onHost('instagram.com'),
+    owns: onHost('instagram.com'),
     chain: [
       step('cobalt'),
       step('instagram', {
@@ -216,7 +216,7 @@ export const ROUTES = [
   {
     id: 'tiktok',
     name: 'TikTok',
-    match: onHost('tiktok.com'),
+    owns: onHost('tiktok.com'),
     chain: [
       step('cobalt'),
       step('ytdlp'),
@@ -226,25 +226,25 @@ export const ROUTES = [
   {
     id: 'x',
     name: 'X / Twitter',
-    match: onHost('x.com', 'twitter.com'),
+    owns: onHost('x.com', 'twitter.com'),
     chain: [step('cobalt'), step('ytdlp')],
   },
   {
     id: 'youtube',
     name: 'YouTube',
-    match: onHost('youtube.com', 'youtu.be'),
+    owns: onHost('youtube.com', 'youtu.be'),
     chain: [step('ytdlp'), step('cobalt', { on: false })],
   },
   {
     id: 'ytdlp',
     name: 'yt-dlp sites',
-    match: url => getYtdlpSite(url) !== null && !isStillImage(url),
+    owns: url => getYtdlpSite(url) !== null && !isStillImage(url),
     chain: [step('ytdlp')],
   },
   {
     id: 'direct',
     name: 'Direct file links',
-    match: isDirectMediaUrl,
+    owns: isDirectMediaUrl,
     chain: [step('direct')],
     // giphy pages canonicalize to their i.giphy.com file.
     services: switches('social', ['giphy', 'Giphy', ['giphy.com']]),
@@ -252,7 +252,7 @@ export const ROUTES = [
   {
     id: 'social',
     name: 'Other social sites',
-    match: isSocialMediaUrl,
+    owns: isSocialMediaUrl,
     chain: [step('cobalt'), step('ytdlp')],
   },
 ];
@@ -261,7 +261,7 @@ const routesById = new Map(ROUTES.map(route => [route.id, route]));
 export const routeById = id => routesById.get(id) ?? null;
 
 // The route that owns a URL, or null when no route takes it.
-export const routeFor = url => ROUTES.find(route => route.match(url)) ?? null;
+export const routeFor = url => ROUTES.find(route => route.owns(url)) ?? null;
 
 // The owner's saved order applied; steps it doesn't know go last, steps the code dropped vanish.
 export function arrangeChain(route, saved) {

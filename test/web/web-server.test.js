@@ -5,6 +5,7 @@ import {
   parseDownloadRequest,
   parseContentRequest,
   contentDisposition,
+  saveLink,
   signStreamToken,
   directStreamInfo,
   stripAudio,
@@ -459,4 +460,18 @@ describe('content', () => {
     expect((await handle(postContent(body))).status).toBe(200);
     expect((await handle(postContent(body))).status).toBe(429);
   });
+});
+
+test('saveLink signs a Worker copy of a direct file, and only when the Worker is configured', () => {
+  expect(saveLink({ url: 'https://video.twimg.com/a/clip.mp4' }, '', 'k')).toEqual({});
+  const { save } = saveLink(
+    { url: 'https://video.twimg.com/a/clip.mp4' },
+    'https://dl.example',
+    'k'
+  );
+  expect(save).toStartWith('https://dl.example/f/');
+  const payload = JSON.parse(
+    Buffer.from(save.split('/f/')[1].split('.')[0], 'base64url').toString()
+  );
+  expect(payload).toMatchObject({ u: 'https://video.twimg.com/a/clip.mp4', n: 'clip.mp4' });
 });

@@ -244,7 +244,7 @@ export async function handlePrefixMessage(message, context = {}) {
     // 50013/50001: can't post in that channel. Guild permissions, not a defect.
     if (error?.code === 50013 || error?.code === 50001) {
       logger.debug(
-        `Cannot reply to prefix command "${isHelp ? 'help' : commandName}" in ${message.guildId || 'DM'}: ${error.message}`
+        `Cannot reply to prefix command "${isHelp ? 'help' : commandName}": ${error.message}`
       );
       return;
     }

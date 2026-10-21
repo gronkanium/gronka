@@ -1,5 +1,8 @@
 import { test, describe } from 'bun:test';
 import assert from 'node:assert';
+import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
 import {
   classifyYtdlpFailure,
   isYouTubeUrl,
@@ -7,6 +10,7 @@ import {
   getSiteArgs,
   canonicalYtdlpUrl,
   YtdlpRateLimitError,
+  getCookieArgs,
 } from '../../src/utils/ytdlp.js';
 import { NetworkError } from '../../src/utils/errors.js';
 import { getGalleryDlSite } from '../../src/utils/gallery-dl.js';
@@ -280,5 +284,24 @@ describe('ytdlp utilities', () => {
       });
       assert.match(error.message, /60 minutes/);
     });
+  });
+  test('yt-dlp gets a private copy of the cookie jar that follows the original', () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'jar-'));
+    const jar = path.join(dir, 'jar.txt');
+    const saved = process.env.YTDLP_COOKIES_PATH;
+    process.env.YTDLP_COOKIES_PATH = jar;
+    try {
+      fs.writeFileSync(jar, 'one');
+      const [, copy] = getCookieArgs('https://www.tiktok.com/@a/video/1');
+      assert.notStrictEqual(copy, jar);
+      assert.strictEqual(fs.readFileSync(copy, 'utf8'), 'one');
+      fs.writeFileSync(jar, 'two');
+      fs.utimesSync(jar, new Date(), new Date(Date.now() + 5000));
+      assert.strictEqual(fs.readFileSync(getCookieArgs('https://x.com/a')[1], 'utf8'), 'two');
+    } finally {
+      if (saved === undefined) delete process.env.YTDLP_COOKIES_PATH;
+      else process.env.YTDLP_COOKIES_PATH = saved;
+      fs.rmSync(dir, { recursive: true, force: true });
+    }
   });
 });

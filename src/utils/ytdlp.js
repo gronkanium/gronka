@@ -1,6 +1,7 @@
 import { spawn, execFile } from 'child_process';
 import { promisify } from 'util';
 import fsSync from 'fs';
+import os from 'os';
 import path from 'path';
 import { createLogger } from './logger.js';
 import { NetworkError, ValidationError, withCause, describeCause, contentGone } from './errors.js';
@@ -42,6 +43,19 @@ function tooLargeMessage(maxSize) {
   return `this video is too large to download (over ${mb}MB).` + TRIM_TIP;
 }
 
+// yt-dlp rewrites its jar after every run, so it gets a private copy and the mounted one stays read-only.
+let jarCopy = null;
+function privateJar(source, stats) {
+  if (jarCopy?.mtimeMs !== stats.mtimeMs || jarCopy.source !== source) {
+    const dir = jarCopy?.dir ?? fsSync.mkdtempSync(path.join(os.tmpdir(), 'ytdlp-jar-'));
+    const file = path.join(dir, 'cookies.txt');
+    fsSync.copyFileSync(source, file);
+    fsSync.chmodSync(file, 0o600);
+    jarCopy = { dir, file, source, mtimeMs: stats.mtimeMs };
+  }
+  return jarCopy.file;
+}
+
 // Optional --cookies args for yt-dlp
 export function getCookieArgs(url = null, signedIn = false) {
   // Signed-in YouTube gets ads, and yt-dlp waits ~5 s for each to be skippable: only sign in when asked.
@@ -52,8 +66,9 @@ export function getCookieArgs(url = null, signedIn = false) {
   }
   try {
     // A missing host file makes Docker mount a directory in its place - isFile() guards that.
-    if (fsSync.statSync(cookiesPath).isFile()) {
-      return ['--cookies', cookiesPath];
+    const stats = fsSync.statSync(cookiesPath);
+    if (stats.isFile()) {
+      return ['--cookies', privateJar(cookiesPath, stats)];
     }
   } catch {
     // File not present; proceed without cookies.

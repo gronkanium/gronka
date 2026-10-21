@@ -49,6 +49,8 @@ export function galleryDlError(stderr, site) {
   let error;
   if (/^NotFoundError|\b404\b|post not available/i.test(reason)) {
     error = contentGone();
+  } else if (/File size larger than allowed maximum/.test(stderr)) {
+    error = new ValidationError('a gallery file is too large to download');
   } else if (
     /AuthRequired|Authentication|Authorization|credentials|refresh-token|log ?in/i.test(stderr)
   ) {
@@ -103,7 +105,7 @@ export function getGalleryDlSite(url) {
   }
 }
 
-function runGalleryDl(url, outputDir, timeout = 300000) {
+function runGalleryDl(url, outputDir, maxSize = Infinity, timeout = 300000) {
   return new Promise((resolve, reject) => {
     const child = spawn(
       'gallery-dl',
@@ -115,6 +117,7 @@ function runGalleryDl(url, outputDir, timeout = 300000) {
         '--no-part',
         '--range',
         `1-${MAX_GALLERY_FILES + 1}`,
+        ...(Number.isFinite(maxSize) ? ['--filesize-max', String(Math.floor(maxSize))] : []),
         '--directory',
         outputDir,
         ...getCookieArgs(url),
@@ -300,7 +303,7 @@ export async function downloadWithGalleryDl(url, maxSize = Infinity, options = {
     return downloadMangaPages(options.mediaUrls, maxSize);
   }
   const workDir = await tempDir();
-  const warnings = await runGalleryDl(url, workDir);
+  const warnings = await runGalleryDl(url, workDir, maxSize);
   const files = await findMediaFiles(workDir);
   if (files.length === 0) {
     throw galleryDlError(warnings, getGalleryDlSite(url));

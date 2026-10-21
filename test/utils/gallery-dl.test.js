@@ -4,6 +4,15 @@ import { galleryDlError } from '../../src/utils/gallery-dl.js';
 import { ValidationError } from '../../src/utils/errors.js';
 
 describe('galleryDlError', () => {
+  test('files skipped for size say the file is too large', () => {
+    const error = galleryDlError(
+      '[downloader.http][warning] File size larger than allowed maximum (90000000 > 10485760)\n',
+      'Imgur'
+    );
+    assert.ok(error instanceof ValidationError);
+    assert.strictEqual(error.message, 'a gallery file is too large to download');
+  });
+
   test('a missing post is CONTENT_GONE and keeps the reason from gallery-dl', () => {
     const error = galleryDlError(
       "[artstation][warning] '404 Not Found' for 'https://www.artstation.com/projects/x.json'\n[artstation][error] NotFoundError: Requested user could not be found\n",

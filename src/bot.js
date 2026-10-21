@@ -56,6 +56,7 @@ setInterval(() => {
 }, 60 * 1000); // Run cleanup every minute
 
 const client = new Client({
+  allowedMentions: { parse: [], repliedUser: true },
   intents: [
     GatewayIntentBits.Guilds,
     GatewayIntentBits.GuildMessages,

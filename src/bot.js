@@ -35,6 +35,7 @@ import {
 import { replyIfMaintenance } from './utils/maintenance.js';
 import { reportPresence, clearPresence, PRESENCE_MS } from './utils/database/media-jobs-pg.js';
 import { withJobDir, sweepJobDirs } from './utils/media-file.js';
+import { hostGuard, securityHeaders } from './webui-server/middleware/security.js';
 
 const logger = createLogger('bot');
 
@@ -92,14 +93,9 @@ function startStatsServer() {
     })
   );
 
+  app.use(hostGuard);
   app.use(express.json());
-
-  app.use((req, res, next) => {
-    res.set('X-Content-Type-Options', 'nosniff');
-    res.set('X-Frame-Options', 'DENY');
-    res.set('X-XSS-Protection', '1; mode=block');
-    next();
-  });
+  app.use(securityHeaders);
 
   // Used by npm run bot:status script to update presence without creating a new Discord connection
   app.post('/api/bot/status', async (req, res) => {
@@ -108,6 +104,11 @@ function startStatsServer() {
 
       if (!client.isReady()) {
         return res.status(503).json({ error: 'bot is not ready' });
+      }
+
+      // Discord caps a custom status at 128 characters.
+      if (activity != null && (typeof activity !== 'string' || activity.length > 128)) {
+        return res.status(400).json({ error: 'activity must be text of at most 128 characters' });
       }
 
       if (status && !VALID_PRESENCE_STATUSES.includes(status)) {

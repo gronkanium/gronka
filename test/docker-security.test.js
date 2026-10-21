@@ -12,11 +12,11 @@ const everyService = [...Object.entries(bot), ...Object.entries(web)];
 const bindsAllInterfaces = mapping => !/^(127\.0\.0\.1|localhost):/.test(String(mapping));
 
 describe('compose security', () => {
-  test('only watchtower mounts the docker socket', () => {
+  test('nothing mounts the docker socket', () => {
     const withSocket = everyService
       .filter(([, s]) => (s.volumes ?? []).some(v => String(v).includes('docker.sock')))
       .map(([name]) => name);
-    expect(withSocket).toEqual(['watchtower']);
+    expect(withSocket).toEqual([]);
   });
 
   test('no service runs privileged or shares a host namespace', () => {

@@ -162,7 +162,7 @@ services:
 
   cobalt:
     logging: *logging
-    image: ghcr.io/imputnet/cobalt:11
+    image: ghcr.io/imputnet/cobalt:11.7.1
     init: true
     read_only: true
     cap_drop: [ALL]
@@ -177,8 +177,6 @@ services:
       # Path to cookies.json file for authenticating with services (Twitter, Instagram, Reddit, etc.)
       # Required for accessing content that requires authentication
       COOKIE_PATH: '/cookies.json'
-    labels:
-      - com.centurylinklabs.watchtower.scope=cobalt
     networks:
       - gronka-network
     volumes:
@@ -211,19 +209,6 @@ services:
     networks:
       - gronka-network
       - geo-proxy
-
-  # watchtower updates the cobalt image automatically
-  watchtower:
-    logging: *logging
-    image: ghcr.io/containrrr/watchtower:1.7.1
-    restart: unless-stopped
-    command: --cleanup --scope cobalt --interval 900 --include-restarting
-    environment:
-      - DOCKER_API_VERSION=1.52
-    volumes:
-      - /var/run/docker.sock:/var/run/docker.sock
-    networks:
-      - gronka-network
 
 volumes:
   postgres-data:

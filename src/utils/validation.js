@@ -113,8 +113,23 @@ function blockedIpv6Reason(address) {
 
   if ((groups[0] & 0xfe00) === 0xfc00) return PRIVATE_ADDRESS_ERROR; // fc00::/7 unique-local
   if ((groups[0] & 0xffc0) === 0xfe80) return PRIVATE_ADDRESS_ERROR; // fe80::/10 link-local
+  if ((groups[0] & 0xffc0) === 0xfec0) return PRIVATE_ADDRESS_ERROR; // fec0::/10 site-local
+  if (groups[0] === 0x2001 && groups[1] === 0) return PRIVATE_ADDRESS_ERROR; // 2001::/32 Teredo
   if ((groups[0] & 0xff00) === 0xff00) return PRIVATE_ADDRESS_ERROR; // ff00::/8 multicast
   return null;
+}
+
+// One IPv6 /64 is one client: a single host is handed the whole block.
+export function rateLimitAddress(ip) {
+  const groups = net.isIPv6(ip) ? ipv6Groups(ip.toLowerCase()) : null;
+  if (!groups) return ip;
+  return (
+    embeddedIpv4(groups) ??
+    `${groups
+      .slice(0, 4)
+      .map(g => g.toString(16))
+      .join(':')}::/64`
+  );
 }
 
 // Decide whether an IP address is safe for the bot to connect to

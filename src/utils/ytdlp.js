@@ -99,6 +99,9 @@ export function getSiteArgs(url, viaGeoProxy = false) {
   const geoProxy = process.env.GEO_PROXY_URL;
   const site = YTDLP_SITES.find(s => hostIn(url, s.hosts));
   return [
+    // The generic extractor follows any page or redirect, into our own network included.
+    '--ies',
+    'default,-generic',
     ...(hostIn(url, IMPERSONATE_HOSTS) ? ['--impersonate', 'chrome'] : []),
     // One fragment at a time crawls through the tunnel (xHamster 223 KB/s vs 1.4 MB/s at 8).
     ...(geoProxy && (site?.geoBlocked || viaGeoProxy) ? ['--proxy', geoProxy, '-N', '8'] : []),
@@ -352,11 +355,7 @@ function executeYtdlp(
     ];
 
     if (maxDuration !== Infinity && startTime === null && duration === null) {
-      // The `?` on the operator marks the field optional. Without it yt-dlp rejects any item
-      // whose duration is unknown (`NA`), which is every direct-media link handled by the
-      // generic extractor, e.g. an animated webp from an embed mirror. Those were skipped
-      // silently (exit 0, no output) and then misreported as "duration exceeds the maximum".
-      // Unknown-duration items stay bounded by --max-filesize and the post-read size check.
+      // The `?` lets items with an unknown duration (`NA`) through instead of skipping them silently.
       args.push('--match-filter', `duration<=?${maxDuration}`);
     }
 
@@ -695,9 +694,6 @@ export async function getStreamInfo(rawUrl, timeout = 30000) {
     '-J',
     '--no-playlist',
     '--no-warnings',
-    // The generic extractor would follow any link, redirects into our own network included.
-    '--ies',
-    'default,-generic',
     ...getYouTubeArgs(url),
     ...getSiteArgs(url),
     '-S',

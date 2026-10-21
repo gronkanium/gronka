@@ -30,10 +30,12 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          branch=$(gh pr list --repo "$GITHUB_REPOSITORY" --label 'autorelease: pending' --state open --json headRefName --jq '.[0].headRefName')
-          [ -n "$branch" ] || exit 0
+          # Match the release PR's own commit, so a fork branch with the same name is never approved.
+          sha=$(gh pr list --repo "$GITHUB_REPOSITORY" --label 'autorelease: pending' --state open --json headRefOid,isCrossRepository \
+            --jq 'map(select(.isCrossRepository | not)) | .[0].headRefOid // empty')
+          [ -n "$sha" ] || exit 0
           for attempt in $(seq 1 12); do
-            held=$(gh run list --repo "$GITHUB_REPOSITORY" --branch "$branch" --event pull_request --status action_required \
+            held=$(gh run list --repo "$GITHUB_REPOSITORY" --commit "$sha" --event pull_request --status action_required \
               --json databaseId,workflowName --jq 'group_by(.workflowName) | map(max_by(.databaseId).databaseId) | .[]')
             [ -n "$held" ] && break
             sleep 10

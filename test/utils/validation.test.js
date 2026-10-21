@@ -355,4 +355,10 @@ describe('validation utilities', () => {
     assert.strictEqual(rateLimitAddress('::ffff:1.2.3.4'), '1.2.3.4');
     assert.strictEqual(rateLimitAddress('1.2.3.4'), '1.2.3.4');
   });
+  test('refuses timestamps past a day, Infinity included', () => {
+    assert.strictEqual(parseTimestamp('86400').valid, true);
+    assert.strictEqual(parseTimestamp('86401').valid, false);
+    assert.strictEqual(parseTimestamp('9'.repeat(400)).valid, false);
+    assert.strictEqual(parseTimestamp('25:00:00').valid, false);
+  });
 });

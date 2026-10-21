@@ -196,6 +196,12 @@ export function validateUrl(url) {
   return { valid: true };
 }
 
+const MAX_TIMESTAMP_SECONDS = 24 * 60 * 60;
+const withinADay = seconds =>
+  seconds <= MAX_TIMESTAMP_SECONDS
+    ? { valid: true, seconds }
+    : { valid: false, error: 'timestamps can be at most 24 hours.' };
+
 // Parse a timestamp string into seconds Accepts plain seconds ("90", "12.5"), MM:SS ("3:10"), and HH:MM:SS ("1:02:30")
 export function parseTimestamp(input) {
   if (input === null || input === undefined || typeof input !== 'string') {
@@ -222,7 +228,7 @@ export function parseTimestamp(input) {
     if (!/^\d+(\.\d+)?$/.test(trimmed)) {
       return invalidFormat;
     }
-    return { valid: true, seconds: parseFloat(trimmed) };
+    return withinADay(parseFloat(trimmed));
   }
 
   // MM:SS or HH:MM:SS, every segment before the last must be whole digits,
@@ -247,7 +253,7 @@ export function parseTimestamp(input) {
     seconds = seconds * 60 + parseFloat(part);
   }
 
-  return { valid: true, seconds };
+  return withinADay(seconds);
 }
 
 export function sanitizeFilename(filename) {

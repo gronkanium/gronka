@@ -84,6 +84,28 @@ if (!mocksSupported) {
     child.emit('close', 0);
   }
 
+  describe('yt-dlp disk watchdog', () => {
+    test('stops a download that writes past twice the size limit', async () => {
+      let killed = false;
+      const runaway = (child, outputDir) => {
+        child.kill = () => {
+          killed = true;
+          child.emit('close', null);
+        };
+        fsSync.writeFileSync(path.join(outputDir, 'video.mp4.part'), Buffer.alloc(5000, 1));
+      };
+      spawnCallLog = [];
+      spawnBehaviors = [runaway];
+      const error = await downloadWithYtdlp('https://youtu.be/endless', {
+        maxSize: 1000,
+        maxDuration: Infinity,
+      }).catch(caught => caught);
+      assert.ok(killed, 'yt-dlp should have been killed');
+      assert.strictEqual(error.name, 'ValidationError');
+      assert.match(error.cause.message, /on disk/);
+    });
+  });
+
   describe('yt-dlp generic-failure retry', () => {
     test('the failure keeps yt-dlp ERROR line as its cause', async () => {
       const failing = child => {

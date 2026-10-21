@@ -21,7 +21,7 @@ no component requires a paid subscription, api key, or domain name.
 
 ## step 1: pick where to run it
 
-the bot needs docker, roughly 2 gb of ram (the stack runs four containers: bot, postgres, cobalt, watchtower), and a few gb of disk. it makes only outbound connections to discord, so you do **not** need a public ip, port forwarding, or a domain, it runs fine behind any home nat.
+the bot needs docker, roughly 2 gb of ram (the stack runs bot, two media workers, postgres and cobalt), and a few gb of disk. it makes only outbound connections to discord, so you do **not** need a public ip, port forwarding, or a domain, it runs fine behind any home nat.
 
 ### option a: your own hardware
 

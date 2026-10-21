@@ -70,6 +70,15 @@ describe('source routes', () => {
     );
   });
 
+  test('a step saved twice runs once', () => {
+    const tiktok = ROUTES.find(r => r.id === 'tiktok');
+    const saved = { tiktok: Array.from({ length: 500 }, () => ({ engine: 'ytdlp' })) };
+    assert.deepEqual(
+      arrangeChain(tiktok, saved).map(s => s.engine),
+      ['ytdlp', 'cobalt', 'gallery-dl']
+    );
+  });
+
   test('chainFor follows the saved order and skips steps that do not apply', async () => {
     const video = 'https://www.tiktok.com/@a/video/1';
     const live = ids => ids.filter(id => isEnabled(ENGINES[id]));

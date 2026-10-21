@@ -11,6 +11,24 @@ import { hostOf, normalizeHost } from './url-host.js';
 
 const logger = createLogger('ytdlp');
 const execFileAsync = promisify(execFile);
+const SIZE_WATCH_MS = 2000;
+
+export async function usedBytes(dir) {
+  const entries = await fsSync.promises
+    .readdir(dir, { recursive: true, withFileTypes: true })
+    .catch(() => []);
+  const sizes = await Promise.all(
+    entries
+      .filter(entry => entry.isFile())
+      .map(entry =>
+        fsSync.promises.stat(path.join(entry.parentPath, entry.name)).then(
+          stats => stats.size,
+          () => 0
+        )
+      )
+  );
+  return sizes.reduce((sum, size) => sum + size, 0);
+}
 
 // Appended to every duration/size-cap rejection so users know there's a way around it
 // instead of just hitting a dead end.
@@ -399,7 +417,20 @@ function executeYtdlp(
       stderr += data.toString();
     });
 
+    // --max-filesize can't bound section downloads or streams of unknown size; the disk can.
+    // Twice the limit leaves room for the video and audio parts beside their merge.
+    let overSize = false;
+    const sizeWatch =
+      Number.isFinite(maxSize) &&
+      setInterval(async () => {
+        if ((await usedBytes(outputDir)) > maxSize * 2) {
+          overSize = true;
+          ytdlp.kill('SIGKILL');
+        }
+      }, SIZE_WATCH_MS);
+
     const timeoutId = setTimeout(() => {
+      clearInterval(sizeWatch);
       ytdlp.kill('SIGKILL');
       reject(
         withCause(
@@ -411,8 +442,17 @@ function executeYtdlp(
 
     ytdlp.on('close', code => {
       clearTimeout(timeoutId);
+      clearInterval(sizeWatch);
       const rejectWith = (error, detail) =>
         reject(withCause(error, `yt-dlp: ${detail ?? ytdlpReason(stderr || stdout, code)}`));
+
+      if (overSize) {
+        rejectWith(
+          new ValidationError(tooLargeMessage(maxSize)),
+          `stopped at over ${maxSize * 2} bytes on disk`
+        );
+        return;
+      }
 
       if (code === 0) {
         const combinedOutput = stdout + stderr;

@@ -101,19 +101,29 @@ describe('ytdlp utilities', () => {
     });
   });
   describe('getSiteArgs', () => {
+    const siteArgs = (...args) => getSiteArgs(...args).slice(2);
+    test('turns off the generic extractor for every site', () => {
+      for (const url of [
+        'https://evil.tumblr.com/x',
+        'https://www.youtube.com/watch?v=x',
+        'https://rumble.com/v1',
+      ]) {
+        assert.deepStrictEqual(getSiteArgs(url).slice(0, 2), ['--ies', 'default,-generic']);
+      }
+    });
     test('sends only geo-blocked sites through GEO_PROXY_URL, and only when it is set', () => {
       const saved = process.env.GEO_PROXY_URL;
       try {
         delete process.env.GEO_PROXY_URL;
-        assert.deepStrictEqual(getSiteArgs('https://xhamster.com/videos/x-1'), []);
+        assert.deepStrictEqual(siteArgs('https://xhamster.com/videos/x-1'), []);
         process.env.GEO_PROXY_URL = 'http://vpn:8888';
-        assert.deepStrictEqual(getSiteArgs('https://xhamster.com/videos/x-1'), [
+        assert.deepStrictEqual(siteArgs('https://xhamster.com/videos/x-1'), [
           '--proxy',
           'http://vpn:8888',
           '-N',
           '8',
         ]);
-        assert.deepStrictEqual(getSiteArgs('https://www.pornhub.com/view_video.php?viewkey=1'), [
+        assert.deepStrictEqual(siteArgs('https://www.pornhub.com/view_video.php?viewkey=1'), [
           '--impersonate',
           'chrome',
           '--proxy',
@@ -121,7 +131,7 @@ describe('ytdlp utilities', () => {
           '-N',
           '8',
         ]);
-        assert.deepStrictEqual(getSiteArgs('https://www.redtube.com/1'), [
+        assert.deepStrictEqual(siteArgs('https://www.redtube.com/1'), [
           '--proxy',
           'http://vpn:8888',
           '-N',
@@ -129,17 +139,17 @@ describe('ytdlp utilities', () => {
           '--referer',
           'https://www.redtube.com/',
         ]);
-        assert.deepStrictEqual(getSiteArgs('https://www.youtube.com/watch?v=x'), []);
-        assert.deepStrictEqual(getSiteArgs('https://rumble.com/v1'), ['--impersonate', 'chrome']);
-        assert.deepStrictEqual(getSiteArgs('https://www.facebook.com/reel/1'), [
+        assert.deepStrictEqual(siteArgs('https://www.youtube.com/watch?v=x'), []);
+        assert.deepStrictEqual(siteArgs('https://rumble.com/v1'), ['--impersonate', 'chrome']);
+        assert.deepStrictEqual(siteArgs('https://www.facebook.com/reel/1'), [
           '--impersonate',
           'chrome',
         ]);
-        assert.deepStrictEqual(getSiteArgs('https://rule34.xxx/index.php?page=post&s=view&id=1'), [
+        assert.deepStrictEqual(siteArgs('https://rule34.xxx/index.php?page=post&s=view&id=1'), [
           '--impersonate',
           'chrome',
         ]);
-        assert.deepStrictEqual(getSiteArgs('https://www.tiktok.com/@a/video/1', true), [
+        assert.deepStrictEqual(siteArgs('https://www.tiktok.com/@a/video/1', true), [
           '--proxy',
           'http://vpn:8888',
           '-N',

@@ -6,6 +6,7 @@ import {
   validateFileExtension,
   parseTimestamp,
   firstUrlIn,
+  rateLimitAddress,
 } from '../../src/utils/validation.js';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -111,6 +112,8 @@ describe('validation utilities', () => {
       // fd00::/8 is the half of fc00::/7 that real deployments actually use
       for (const url of [
         'http://[fd00::1]/',
+        'http://[fec0::1]/',
+        'http://[2001:0:4136:e378:8000:63bf:3fff:fdd2]/',
         'http://[fc00::1]/',
         'http://[fe80::1]/',
         'http://[ff02::1]/',
@@ -342,5 +345,14 @@ describe('validation utilities', () => {
       assert.strictEqual(result.valid, false);
       assert(result.error.includes('abc'));
     });
+  });
+  test('rate limits an IPv6 client by its /64', () => {
+    assert.strictEqual(
+      rateLimitAddress('2001:db8:1:2:3:4:5:6'),
+      rateLimitAddress('2001:DB8:1:2::9')
+    );
+    assert.notStrictEqual(rateLimitAddress('2001:db8:1:2::1'), rateLimitAddress('2001:db8:1:3::1'));
+    assert.strictEqual(rateLimitAddress('::ffff:1.2.3.4'), '1.2.3.4');
+    assert.strictEqual(rateLimitAddress('1.2.3.4'), '1.2.3.4');
   });
 });

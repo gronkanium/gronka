@@ -67,7 +67,8 @@ async function canonicalUrl(url) {
       validateStatus: status => status >= 200 && status < 400,
       headers: { 'User-Agent': USER_AGENT },
     });
-    return response.headers.location || url;
+    const location = response.headers.location && new URL(response.headers.location, url).href;
+    return location && isRedditPostUrl(location) ? location : url;
   } catch (error) {
     logger.warn(`Could not resolve Reddit share link: ${error.message}`);
     return url;
@@ -86,7 +87,12 @@ async function fetchListing(url, limit = 100) {
   }
 
   // raw_json=1 stops Reddit html-escaping the urls it hands back, signatures included.
-  const jsonUrl = `${url.split('?')[0].replace(/\/$/, '')}/.json?limit=${limit}&raw_json=1`;
+  // The session cookie rides on this request, so never over plain http.
+  const base = url
+    .split('?')[0]
+    .replace(/\/$/, '')
+    .replace(/^http:/i, 'https:');
+  const jsonUrl = `${base}/.json?limit=${limit}&raw_json=1`;
   try {
     const response = await axios.get(jsonUrl, {
       ...ssrfGuardedRequest(),

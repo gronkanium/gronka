@@ -4,4 +4,5 @@
 !bun.lock
 !src/
 !scripts/
+!docker/requirements.txt
 src/public/

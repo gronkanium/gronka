@@ -14,6 +14,7 @@ import { safeInteractionDeferReply } from '../utils/interaction-helpers.js';
 import { storeMedia, deliverStored, finishCommand } from './shared/deliver.js';
 import { fetchUrlInput } from './shared/url-input.js';
 import { dispatchMediaJob } from '../jobs/dispatch.js';
+import { formatSizeChange } from './shared/media-reply.js';
 import { messageMediaInput } from './shared/message-media.js';
 
 const logger = createLogger('optimize');
@@ -40,7 +41,9 @@ export async function processOptimization(
         optimized,
         getDiscordAttachmentLimit(interaction, DISCORD_SIZE_LIMIT)
       );
-      await deliverStored(interaction, stored);
+      await deliverStored(interaction, stored, {
+        description: formatSizeChange(gif.size, optimized.size),
+      });
       await finishCommand();
     },
     {

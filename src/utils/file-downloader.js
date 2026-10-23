@@ -267,7 +267,8 @@ export async function downloadFileFromUrl(url, client = null, options = {}) {
   }
 }
 
-export const TENOR_VIEW_URL = /^https?:\/\/(www\.)?tenor\.com\/view\/.+-gif-(\d+)/i;
+export const TENOR_VIEW_URL =
+  /^https?:\/\/(www\.)?tenor\.com\/(?:[a-z]{2}(?:-[a-z]{2})?\/)?view\/.+-gif-(\d+)/i;
 
 export async function parseTenorUrl(url) {
   try {

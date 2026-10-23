@@ -97,10 +97,15 @@ if (!mocksSupported) {
     mock.module('../../src/utils/cobalt.js', () => ({
       canonicalizeMirrorUrl,
       isSocialMediaUrl,
-      // Reached via the twitter_delivery policy (default hybrid probes every
-      // X/Twitter URL), url_only_mode (no test enables it), or the direct-URL
-      // fallback for downloads that failed (e.g. over the size/duration caps).
       getCobaltMediaUrls: async (_apiUrl, url) => {
+        if (url.includes('photo-links')) {
+          return {
+            urls: [
+              { url: 'https://example.com/photo.jpg', type: 'photo', filename: 'holiday.jpg' },
+            ],
+            direct: true,
+          };
+        }
         if (url.includes('toolong')) {
           return {
             urls: [
@@ -612,6 +617,34 @@ if (!mocksSupported) {
       await handleDownloadCommand(interaction);
       assert.strictEqual(calls.editReply[0].files, undefined);
       assert.match(calls.editReply[0].embeds.find(e => e.url)?.url, /https:\/\/cdn\.test\//);
+    });
+
+    test('URL-only photo galleries retain their image previews and filenames', async () => {
+      await setSetting('url_only_mode', true);
+      try {
+        const { interaction, calls } = downloadInteraction('https://x.com/user/status/photo-links');
+        await handleDownloadCommand(interaction);
+        const reply = calls.editReply[0];
+        assert.equal(reply.embeds[0].title, 'holiday.jpg');
+        assert.deepEqual(reply.embeds[0].image, { url: 'https://example.com/photo.jpg' });
+        assert.equal(reply.files, undefined);
+      } finally {
+        await setSetting('url_only_mode', false);
+      }
+    });
+
+    test('a failed gallery follow-up clears success embeds from the error reply', async () => {
+      const { interaction, calls } = downloadInteraction(
+        'https://x.com/user/status/carousel-denied'
+      );
+      interaction.followUp = async () => {
+        throw Object.assign(new Error('Missing Permissions'), { code: 50013 });
+      };
+      await handleDownloadCommand(interaction);
+      assert.equal(calls.editReply[0].embeds.length, 10);
+      const error = calls.editReply.at(-1);
+      assert.match(error.content, /only part of this post was sent/);
+      assert.deepEqual(error.embeds, []);
     });
 
     test('single-file video: downloads, saves, and replies with a Discord attachment', async () => {

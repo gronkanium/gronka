@@ -23,7 +23,12 @@ import {
   hasInstagramSession,
   downloadFromInstagram,
 } from '../utils/instagram.js';
-import { isDirectMediaUrl, downloadDirectMedia } from '../utils/file-downloader.js';
+import {
+  isDirectMediaUrl,
+  downloadDirectMedia,
+  parseTenorUrl,
+  TENOR_VIEW_URL,
+} from '../utils/file-downloader.js';
 import { isTiktokContentUrl } from '../content/tiktok.js';
 import { isTwitterContentUrl } from '../content/twitter.js';
 import { hostOf } from '../utils/url-host.js';
@@ -104,6 +109,10 @@ export const ENGINES = {
   jumpshare: {
     name: 'Jumpshare',
     extract: async (url, ctx) => downloadDirectMedia(await resolveJumpshareUrl(url), ctx.client),
+  },
+  tenor: {
+    name: 'Tenor',
+    extract: async (url, ctx) => downloadDirectMedia(await parseTenorUrl(url), ctx.client),
   },
   threads: { name: 'Threads', extract: url => downloadFromThreads(url) },
   x: { name: 'X', extract: url => downloadFromX(url) },
@@ -240,12 +249,16 @@ export const ROUTES = [
     chain: [step('ytdlp'), step('cobalt', { on: false })],
   },
   {
+    id: 'tenor',
+    name: 'Tenor',
+    owns: url => TENOR_VIEW_URL.test(url),
+    chain: [step('tenor')],
+    services: switches('social', ['tenor', 'Tenor', ['tenor.com']]),
+  },
+  {
     id: 'ytdlp',
     name: 'yt-dlp sites',
-    owns: url =>
-      getYtdlpSite(url) !== null &&
-      !isStillImage(url) &&
-      !(onHost('tenor.com')(url) && isDirectMediaUrl(url)),
+    owns: url => getYtdlpSite(url) !== null && !isStillImage(url),
     chain: [step('ytdlp')],
   },
   {

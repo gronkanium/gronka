@@ -4,7 +4,8 @@ import fs from 'fs/promises';
 import fsSync from 'fs';
 import path from 'path';
 import os from 'os';
-import { mock } from 'bun:test';
+import { mock, spyOn } from 'bun:test';
+import axios from 'axios';
 import { createFakeInteraction } from '../helpers/fake-interaction.js';
 import { mediaFromBytes } from '../helpers/media.js';
 import { setSetting } from '../../src/utils/database.js';
@@ -342,11 +343,21 @@ if (!mocksSupported) {
     test('TikTok short links can reach the photo fallback', async () => {
       const url = 'https://vm.tiktok.com/photo-fallback/';
       const { interaction, calls } = downloadInteraction(url);
-      const before = galleryCalls.length;
-      await handleDownloadCommand(interaction);
-      assert.equal(galleryCalls.length - before, 1);
-      assert.equal(galleryCalls.at(-1).url, url);
-      assert.equal(calls.editReply[0].files.length, 2);
+      const target = 'https://www.tiktok.com/@example/photo/1234567890?photo-fallback';
+      const spy = spyOn(axios, 'get').mockResolvedValue({
+        data: { destroy() {} },
+        request: { res: { responseUrl: target } },
+      });
+      try {
+        const before = galleryCalls.length;
+        await handleDownloadCommand(interaction);
+        assert.equal(galleryCalls.length - before, 1);
+        assert.equal(galleryCalls.at(-1).url, target);
+        assert.equal(calls.editReply[0].files.length, 2);
+        assert.ok(spy.mock.calls[0][1].beforeRedirect);
+      } finally {
+        spy.mockRestore();
+      }
     });
 
     test('a working TikTok carousel keeps using cobalt', async () => {
@@ -467,7 +478,10 @@ if (!mocksSupported) {
       const { interaction, calls } = downloadInteraction('https://example.com/track.ogg');
       interaction.attachmentSizeLimit = 1000;
       await handleDownloadCommand(interaction);
-      assert.match(calls.editReply[0].content, /https:\/\/cdn\.test\/audio\/[0-9a-f]{32}\.ogg/);
+      assert.match(
+        calls.editReply[0].embeds.find(e => e.url)?.url,
+        /https:\/\/cdn\.test\/audio\/[0-9a-f]{32}\.ogg/
+      );
       assert.deepStrictEqual(uploads.at(-1), { type: 'audio', size: 4096 });
     });
 
@@ -484,7 +498,10 @@ if (!mocksSupported) {
       const before = uploads.length;
       await handleDownloadCommand(interaction);
       assert.strictEqual(uploads.length - before, 10);
-      assert.strictEqual(calls.editReply[0].content.match(/https:\/\/cdn\.test/g).length, 10);
+      assert.strictEqual(
+        calls.editReply[0].embeds.filter(e => e.url?.startsWith('https://cdn.test/')).length,
+        10
+      );
       assert.strictEqual(calls.followUp[0].files.length, 2);
     });
 
@@ -501,7 +518,10 @@ if (!mocksSupported) {
       const before = uploads.length;
       await handleDownloadCommand(interaction);
       assert.deepStrictEqual(uploads.slice(before), [{ type: 'archive', size: 4096 }]);
-      assert.match(calls.editReply[0].content, /https:\/\/cdn\.test\/archives\/[0-9a-f]{32}\.zip/);
+      assert.match(
+        calls.editReply[0].embeds.find(e => e.url)?.url,
+        /https:\/\/cdn\.test\/archives\/[0-9a-f]{32}\.zip/
+      );
     });
 
     test('a cancelled worker job stops acquisition and replies with the timeout reason', async () => {
@@ -547,7 +567,10 @@ if (!mocksSupported) {
       await handleDownloadCommand(interaction);
       assert.strictEqual(uploads.length - before, 2);
       assert.strictEqual(calls.editReply[0].files.length, 10);
-      assert.strictEqual(calls.followUp[0].content.match(/https:\/\/cdn\.test/g).length, 2);
+      assert.strictEqual(
+        calls.followUp[0].embeds.filter(e => e.url?.startsWith('https://cdn.test/')).length,
+        2
+      );
     });
 
     test('an expired reply produces a specific error and does not upload to R2', async () => {
@@ -588,7 +611,7 @@ if (!mocksSupported) {
       interaction.attachmentSizeLimit = 4096 + 1024;
       await handleDownloadCommand(interaction);
       assert.strictEqual(calls.editReply[0].files, undefined);
-      assert.match(calls.editReply[0].content, /https:\/\/cdn\.test\//);
+      assert.match(calls.editReply[0].embeds.find(e => e.url)?.url, /https:\/\/cdn\.test\//);
     });
 
     test('single-file video: downloads, saves, and replies with a Discord attachment', async () => {
@@ -603,7 +626,8 @@ if (!mocksSupported) {
       assert.ok(reply.files, 'reply includes files (Discord attachment path)');
       assert.strictEqual(reply.files.length, 1);
       assert.ok(reply.files[0].name.endsWith('.mp4'), 'attachment has .mp4 filename');
-      assert.strictEqual(reply.content, undefined, 'no URL content clobbering the attachment');
+      assert.strictEqual(reply.content, '');
+      assert.equal(reply.embeds[0].title, reply.files[0].name);
     });
 
     test('multi-file picker: downloads array and replies with multiple attachments', async () => {
@@ -722,7 +746,7 @@ if (!mocksSupported) {
 
       assert.strictEqual(calls.editReply.length, 1, 'exactly one reply');
       assert.strictEqual(
-        calls.editReply[0].content,
+        calls.editReply[0].embeds[0].url,
         'https://video.twimg.com/ext_tw_video/huge/vid/avc1/big.mp4',
         'reply is the direct media URL'
       );
@@ -739,7 +763,7 @@ if (!mocksSupported) {
 
       assert.strictEqual(calls.editReply.length, 1, 'exactly one reply');
       assert.strictEqual(
-        calls.editReply[0].content,
+        calls.editReply[0].embeds[0].url,
         'https://video.twimg.com/ext_tw_video/toolong/vid/avc1/full.mp4',
         'reply is the direct media URL'
       );
@@ -819,7 +843,10 @@ if (!mocksSupported) {
 
       assert.strictEqual(calls.editReply.length, 1);
       assert.strictEqual(calls.editReply[0].files, undefined, 'no attachment');
-      assert.match(calls.editReply[0].content, /https:\/\/cdn\.test\/videos\/[0-9a-f]{32}\.mp4/);
+      assert.match(
+        calls.editReply[0].embeds.find(e => e.url)?.url,
+        /https:\/\/cdn\.test\/videos\/[0-9a-f]{32}\.mp4/
+      );
       assert.deepStrictEqual(uploads.at(-1), { type: 'video', size: 4096 });
     });
 
@@ -832,7 +859,10 @@ if (!mocksSupported) {
 
       const reply = calls.editReply[0];
       assert.strictEqual(reply.files.length, 1, 'only the 2048-byte photo attaches');
-      assert.match(reply.content, /https:\/\/cdn\.test\/images\/[0-9a-f]{32}\.png/);
+      assert.match(
+        reply.embeds.find(e => e.url)?.url,
+        /https:\/\/cdn\.test\/images\/[0-9a-f]{32}\.png/
+      );
     });
   });
 }

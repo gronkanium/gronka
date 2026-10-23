@@ -348,19 +348,7 @@ function formatTtlMessage(hours) {
   return hours === 1 ? '1 hour' : `${hours} hours`;
 }
 
-const disclaimer = hours =>
-  `-# this link will expire in ${formatTtlMessage(hours)}, please save and reupload to discord to keep forever`;
-
-// Links only expire when the cleanup job runs.
-export function formatR2UrlWithDisclaimer(url, config, ttlHours) {
-  if (!config.cleanupEnabled || !extractR2KeyFromUrl(url, config)) return url;
-  return `${url}\n${disclaimer(ttlHours)}`;
-}
-
-export function formatMultipleR2UrlsWithDisclaimer(urls, config, ttlHours) {
-  if (!urls?.length) return '';
-  const anyR2 = urls.some(url => extractR2KeyFromUrl(url, config));
-  return config.cleanupEnabled && anyR2
-    ? `${urls.join('\n')}\n${disclaimer(ttlHours)}`
-    : urls.join('\n');
+export function r2ExpiryText(url, config, ttlHours) {
+  if (!config.cleanupEnabled || !extractR2KeyFromUrl(url, config) || !(ttlHours > 0)) return null;
+  return `expires in ${formatTtlMessage(ttlHours)} • save and reupload to keep`;
 }

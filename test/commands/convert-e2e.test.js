@@ -1,3 +1,5 @@
+import { spyOn } from 'bun:test';
+import axios from 'axios';
 import { test, describe, beforeAll, afterAll, mock } from 'bun:test';
 import assert from 'node:assert';
 import fs from 'fs/promises';
@@ -639,6 +641,26 @@ if (!mocksSupported) {
       assert.ok(isGif(firstReply(selected.calls).files[0].attachment));
     });
 
+    test('a short link is resolved before conversion and the result has an embed', async () => {
+      const spy = spyOn(axios, 'get').mockResolvedValue({
+        data: { destroy() {} },
+        request: { res: { responseUrl: 'https://example.com/vid.mp4' } },
+      });
+      try {
+        const { interaction, calls } = commandInteraction('cv-short-link', {
+          url: 'https://vt.tiktok.com/example/',
+          format: 'webm',
+        });
+        await handleConvertCommand(interaction);
+        const reply = firstReply(calls);
+        assert.ok(reply.files[0].name.endsWith('.webm'));
+        assert.equal(reply.embeds[0].title, reply.files[0].name);
+        assert.ok(spy.mock.calls[0][1].beforeRedirect);
+      } finally {
+        spy.mockRestore();
+      }
+    });
+
     test('gif over the attachment limit: replies with a CDN link', async () => {
       const { interaction, calls } = commandInteraction(`cv-big-${Date.now()}`, {
         file: attachmentOf('vid'),
@@ -649,7 +671,7 @@ if (!mocksSupported) {
       await handleConvertCommand(interaction);
       const reply = firstReply(calls);
       assert.strictEqual(reply.files, undefined);
-      assert.match(reply.content, /https:\/\/cdn\.test\/gifs\/[0-9a-f]{32}\.gif/);
+      assert.match(reply.embeds[0].url, /https:\/\/cdn\.test\/gifs\/[0-9a-f]{32}\.gif/);
     });
 
     test('long video: converted, no length limit', async () => {
@@ -729,6 +751,7 @@ if (!mocksSupported) {
       });
       await handleOptimizeCommand(interaction);
       assert.ok(isGif(firstReply(calls).files[0].attachment));
+      assert.match(firstReply(calls).embeds[0].description, /→.*(?:smaller|larger|unchanged)/);
     });
 
     test.skipIf(skipGifsicle)('non-gif attachment: converted to an optimized gif', async () => {
@@ -737,6 +760,7 @@ if (!mocksSupported) {
       });
       await handleOptimizeCommand(interaction);
       assert.ok(isGif(firstReply(calls).files[0].attachment));
+      assert.match(firstReply(calls).embeds[0].description, /→.*(?:smaller|larger|unchanged)/);
     });
 
     test.skipIf(skipGifsicle)('video attachment: converted to an optimized gif', async () => {
@@ -745,6 +769,7 @@ if (!mocksSupported) {
       });
       await handleOptimizeCommand(interaction);
       assert.ok(isGif(firstReply(calls).files[0].attachment));
+      assert.match(firstReply(calls).embeds[0].description, /→.*(?:smaller|larger|unchanged)/);
     });
 
     test.skipIf(skipGifsicle)('file and URL: optimizes the attached gif', async () => {
@@ -754,6 +779,7 @@ if (!mocksSupported) {
       });
       await handleOptimizeCommand(interaction);
       assert.ok(isGif(firstReply(calls).files[0].attachment));
+      assert.match(firstReply(calls).embeds[0].description, /→.*(?:smaller|larger|unchanged)/);
     });
 
     test('lossy out of range: refused before any work', async () => {

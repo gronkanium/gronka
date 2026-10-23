@@ -20,7 +20,8 @@ const ROUTED = [
   ['https://i.imgur.com/abc.jpg', 'direct'],
   ['https://media1.tenor.com/m/abc/example.gif', 'direct'],
   ['https://media.tenor.com/abc/example.mp4', 'direct'],
-  ['https://tenor.com/view/example-gif-123', 'ytdlp'],
+  ['https://tenor.com/view/example-gif-123', 'tenor'],
+  ['https://tenor.com/en-GB/view/example-gif-123', 'tenor'],
   ['https://v.redd.it/abc/HLSPlaylist.m3u8', 'ytdlp'],
   ['https://www.pornhub.com/view_video.php?viewkey=abc', 'ytdlp'],
   ['https://www.deviantart.com/someone/art/thing-123456', 'deviantart'],
@@ -135,5 +136,7 @@ describe('source routes', () => {
     for (const id of ids) assert.ok(DOWNLOAD_SERVICE_IDS.has(id), id);
     assert.equal(getServiceForUrl('https://klipy.com/gifs/x')?.id, 'klipy');
     assert.equal(getServiceForUrl('https://medal.tv/clips/x')?.id, 'medal');
+    assert.equal(getServiceForUrl('https://tenor.com/en-GB/view/example-gif-123')?.id, 'tenor');
+    assert.equal(getServiceForUrl('https://media.tenor.com/abc/tenor.gif')?.id, 'tenor');
   });
 });

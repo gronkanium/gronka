@@ -106,6 +106,24 @@ describe('job reply targets', () => {
     assert.strictEqual(getDiscordAttachmentLimit(worker, 8), 0);
   });
 
+  test('both queued reply kinds preserve denied Embed Links permission', async () => {
+    const appPermissions = new PermissionsBitField(PermissionFlagsBits.SendMessages);
+    for (const isPrefixCommand of [false, true]) {
+      const reply = replyTargetOf({
+        isPrefixCommand,
+        appPermissions,
+        channelId: '77',
+        applicationId: 'app',
+        token: 'tok',
+        createdTimestamp: Date.now(),
+        message: { id: '10' },
+        replyMessageId: () => '11',
+      });
+      const worker = await interactionFor(client, { reply: JSON.parse(JSON.stringify(reply)) });
+      assert.equal(worker.embedLinksAllowed, false);
+    }
+  });
+
   test('a worker edits the original interaction reply with a file by path', async () => {
     const job = {
       reply: { kind: 'interaction', appId: 'app', token: 'tok', channelId: '5' },

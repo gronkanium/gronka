@@ -126,15 +126,29 @@ const hostIn = (url, hosts) => {
   return Boolean(host) && hosts.some(h => host === h || host.endsWith(`.${h}`));
 };
 
-// Per-site yt-dlp args: Chrome's TLS fingerprint where needed, GEO_PROXY_URL for sites that
-// refuse this server's region, and the site's own extra args.
+function isRedditManifest(url) {
+  try {
+    const parsed = new URL(url);
+    return (
+      parsed.protocol === 'https:' &&
+      parsed.hostname === 'v.redd.it' &&
+      !parsed.port &&
+      !parsed.username &&
+      !parsed.password &&
+      /^\/[a-z0-9]+\/HLSPlaylist\.m3u8$/.test(parsed.pathname)
+    );
+  } catch {
+    return false;
+  }
+}
+
 export function getSiteArgs(url, viaGeoProxy = false) {
   const geoProxy = process.env.GEO_PROXY_URL;
   const site = YTDLP_SITES.find(s => hostIn(url, s.hosts));
   return [
-    // The generic extractor follows any page or redirect, into our own network included.
+    // Only Reddit's native manifests need the generic media reader.
     '--ies',
-    'default,-generic',
+    isRedditManifest(url) ? 'default' : 'default,-generic',
     ...(hostIn(url, IMPERSONATE_HOSTS) ? ['--impersonate', 'chrome'] : []),
     // One fragment at a time crawls through the tunnel (xHamster 223 KB/s vs 1.4 MB/s at 8).
     ...(geoProxy && (site?.geoBlocked || viaGeoProxy) ? ['--proxy', geoProxy, '-N', '8'] : []),
@@ -182,8 +196,6 @@ export const YTDLP_SITES = [
   // stripping it makes the same post fail to resolve.
   { name: 'Xiaohongshu', hosts: ['xiaohongshu.com', 'xhslink.com'] },
   { name: 'Medal', hosts: ['medal.tv'] },
-  // Tenor yields mp4; /convert is the gif route.
-  { name: 'Tenor', hosts: ['tenor.com'] },
   { name: 'XVideos', hosts: ['xvideos.com'] },
   // Behind age-verification walls in some US states; they go through GEO_PROXY_URL when set.
   { name: 'Pornhub', hosts: ['pornhub.com'], geoBlocked: true },

@@ -1,5 +1,5 @@
-import { AppError, ValidationError } from '../../utils/errors.js';
-import { downloadFileFromUrl, parseTenorUrl, TENOR_VIEW_URL } from '../../utils/file-downloader.js';
+import { ValidationError } from '../../utils/errors.js';
+import { downloadFileFromUrl } from '../../utils/file-downloader.js';
 import {
   isDiscordCdnUrl,
   isDiscordMessageLink,
@@ -7,12 +7,10 @@ import {
 } from '../../utils/discord-cdn.js';
 import { acquireMedia } from '../../core/acquire-media.js';
 import { routeFor } from '../../core/sources.js';
-import { readLink } from '../../core/intake.js';
-import { canonicalizeMirrorUrl } from '../../utils/cobalt.js';
+import { readLink, prepareLink } from '../../core/intake.js';
 
 // Known sites take /download's path (yt-dlp with its session, site extractors); others are plain files.
-async function fetchSource(link, client) {
-  const url = canonicalizeMirrorUrl(link);
+async function fetchSource(url, client) {
   const source = isDiscordCdnUrl(url) ? null : routeFor(url);
   if (!source || source.id === 'direct') {
     return downloadFileFromUrl(url, client);
@@ -27,14 +25,7 @@ export async function fetchUrlInput(text, client) {
   const { url, refusal } = readLink(text);
   if (refusal) throw new ValidationError(refusal.message);
   if (isDiscordMessageLink(url)) throw new ValidationError(DISCORD_MESSAGE_LINK_MESSAGE);
-  let source = url;
-  if (TENOR_VIEW_URL.test(url)) {
-    try {
-      source = await parseTenorUrl(url);
-    } catch (error) {
-      throw error instanceof AppError ? error : new AppError('failed to parse Tenor URL.');
-    }
-  }
+  const source = await prepareLink(url);
   const file = await fetchSource(source, client);
   return {
     attachment: {

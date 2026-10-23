@@ -21,7 +21,6 @@ const YTDLP_CATEGORY = {
   Kick: 'video',
   Niconico: 'video',
   Medal: 'video',
-  Tenor: 'social',
   Xiaohongshu: 'social',
   RedGifs: 'adult',
   XVideos: 'adult',

@@ -1,4 +1,4 @@
-import { test, describe } from 'bun:test';
+import { test, describe, spyOn } from 'bun:test';
 import assert from 'node:assert';
 import {
   parseTenorUrl,
@@ -270,6 +270,20 @@ describe('file downloader utilities', () => {
         assert.strictEqual(result, mockGifUrl);
       } finally {
         axios.get = originalGet;
+      }
+    });
+
+    test('parses localized Tenor pages', async () => {
+      const spy = spyOn(axios, 'get').mockResolvedValue({
+        data: '<meta property="og:image" content="https://media.tenor.com/abc/tenor.gif">',
+      });
+      try {
+        assert.equal(
+          await parseTenorUrl('https://tenor.com/en-GB/view/dance-gif-123'),
+          'https://media.tenor.com/abc/tenor.gif'
+        );
+      } finally {
+        spy.mockRestore();
       }
     });
 

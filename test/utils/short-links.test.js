@@ -31,6 +31,25 @@ describe('resolveShortLink', () => {
     );
   });
 
+  test('resolves all TikTok share formats through guarded redirects', async () => {
+    const target = 'https://www.tiktok.com/@creator/video/123';
+    spy = spyOn(axios, 'get').mockResolvedValue({
+      data: { destroy() {} },
+      request: { res: { responseUrl: target } },
+    });
+    for (const url of [
+      'https://vm.tiktok.com/abc/',
+      'https://vt.tiktok.com/abc/',
+      'https://www.tiktok.com/t/abc/',
+      'https://tiktok.com/t/abc/',
+    ]) {
+      assert.equal(await resolveShortLink(url), target);
+      const options = spy.mock.calls.at(-1)[1];
+      assert.ok(options.lookup);
+      assert.ok(options.beforeRedirect);
+    }
+  });
+
   test('takes the image out of a google image result, never a private one', async () => {
     spy = spyOn(axios, 'get');
     const wrapped = image => `https://www.google.com/imgres?imgurl=${encodeURIComponent(image)}`;

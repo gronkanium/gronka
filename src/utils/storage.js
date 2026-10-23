@@ -86,7 +86,10 @@ export function detectFileType(extension, contentType = '', head = null) {
 }
 
 export function formatFileSize(bytes) {
-  const mb = Math.max(0, Number(bytes) || 0) / (1024 * 1024);
+  const size = Math.max(0, Number(bytes) || 0);
+  if (size < 1024) return `${size} B`;
+  if (size < 1024 * 1024) return `${(size / 1024).toFixed(2)} KB`;
+  const mb = size / (1024 * 1024);
   return mb >= 1024 ? `${(mb / 1024).toFixed(2)} GB` : `${mb.toFixed(2)} MB`;
 }
 

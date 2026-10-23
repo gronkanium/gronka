@@ -2,7 +2,7 @@ import express from 'express';
 import path from 'path';
 import rateLimit from 'express-rate-limit';
 import { createLogger } from '../utils/logger.js';
-import { securityHeaders } from './middleware/security.js';
+import { hostGuard, securityHeaders } from './middleware/security.js';
 import { staticMiddleware, publicPath } from './middleware/static.js';
 import statsRoutes from './routes/stats.js';
 import alertsRoutes from './routes/alerts.js';
@@ -34,7 +34,7 @@ const apiLimiter = rateLimit({
 export function createApp() {
   const app = express();
 
-  // Security headers middleware
+  app.use(hostGuard);
   app.use(securityHeaders);
 
   // Serve static files

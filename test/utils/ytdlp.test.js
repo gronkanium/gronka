@@ -1,5 +1,8 @@
 import { test, describe } from 'bun:test';
 import assert from 'node:assert';
+import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
 import {
   classifyYtdlpFailure,
   isYouTubeUrl,
@@ -7,6 +10,7 @@ import {
   getSiteArgs,
   canonicalYtdlpUrl,
   YtdlpRateLimitError,
+  getCookieArgs,
 } from '../../src/utils/ytdlp.js';
 import { NetworkError } from '../../src/utils/errors.js';
 import { getGalleryDlSite } from '../../src/utils/gallery-dl.js';
@@ -101,19 +105,29 @@ describe('ytdlp utilities', () => {
     });
   });
   describe('getSiteArgs', () => {
+    const siteArgs = (...args) => getSiteArgs(...args).slice(2);
+    test('turns off the generic extractor for every site', () => {
+      for (const url of [
+        'https://evil.tumblr.com/x',
+        'https://www.youtube.com/watch?v=x',
+        'https://rumble.com/v1',
+      ]) {
+        assert.deepStrictEqual(getSiteArgs(url).slice(0, 2), ['--ies', 'default,-generic']);
+      }
+    });
     test('sends only geo-blocked sites through GEO_PROXY_URL, and only when it is set', () => {
       const saved = process.env.GEO_PROXY_URL;
       try {
         delete process.env.GEO_PROXY_URL;
-        assert.deepStrictEqual(getSiteArgs('https://xhamster.com/videos/x-1'), []);
+        assert.deepStrictEqual(siteArgs('https://xhamster.com/videos/x-1'), []);
         process.env.GEO_PROXY_URL = 'http://vpn:8888';
-        assert.deepStrictEqual(getSiteArgs('https://xhamster.com/videos/x-1'), [
+        assert.deepStrictEqual(siteArgs('https://xhamster.com/videos/x-1'), [
           '--proxy',
           'http://vpn:8888',
           '-N',
           '8',
         ]);
-        assert.deepStrictEqual(getSiteArgs('https://www.pornhub.com/view_video.php?viewkey=1'), [
+        assert.deepStrictEqual(siteArgs('https://www.pornhub.com/view_video.php?viewkey=1'), [
           '--impersonate',
           'chrome',
           '--proxy',
@@ -121,7 +135,7 @@ describe('ytdlp utilities', () => {
           '-N',
           '8',
         ]);
-        assert.deepStrictEqual(getSiteArgs('https://www.redtube.com/1'), [
+        assert.deepStrictEqual(siteArgs('https://www.redtube.com/1'), [
           '--proxy',
           'http://vpn:8888',
           '-N',
@@ -129,17 +143,17 @@ describe('ytdlp utilities', () => {
           '--referer',
           'https://www.redtube.com/',
         ]);
-        assert.deepStrictEqual(getSiteArgs('https://www.youtube.com/watch?v=x'), []);
-        assert.deepStrictEqual(getSiteArgs('https://rumble.com/v1'), ['--impersonate', 'chrome']);
-        assert.deepStrictEqual(getSiteArgs('https://www.facebook.com/reel/1'), [
+        assert.deepStrictEqual(siteArgs('https://www.youtube.com/watch?v=x'), []);
+        assert.deepStrictEqual(siteArgs('https://rumble.com/v1'), ['--impersonate', 'chrome']);
+        assert.deepStrictEqual(siteArgs('https://www.facebook.com/reel/1'), [
           '--impersonate',
           'chrome',
         ]);
-        assert.deepStrictEqual(getSiteArgs('https://rule34.xxx/index.php?page=post&s=view&id=1'), [
+        assert.deepStrictEqual(siteArgs('https://rule34.xxx/index.php?page=post&s=view&id=1'), [
           '--impersonate',
           'chrome',
         ]);
-        assert.deepStrictEqual(getSiteArgs('https://www.tiktok.com/@a/video/1', true), [
+        assert.deepStrictEqual(siteArgs('https://www.tiktok.com/@a/video/1', true), [
           '--proxy',
           'http://vpn:8888',
           '-N',
@@ -270,5 +284,24 @@ describe('ytdlp utilities', () => {
       });
       assert.match(error.message, /60 minutes/);
     });
+  });
+  test('yt-dlp gets a private copy of the cookie jar that follows the original', () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'jar-'));
+    const jar = path.join(dir, 'jar.txt');
+    const saved = process.env.YTDLP_COOKIES_PATH;
+    process.env.YTDLP_COOKIES_PATH = jar;
+    try {
+      fs.writeFileSync(jar, 'one');
+      const [, copy] = getCookieArgs('https://www.tiktok.com/@a/video/1');
+      assert.notStrictEqual(copy, jar);
+      assert.strictEqual(fs.readFileSync(copy, 'utf8'), 'one');
+      fs.writeFileSync(jar, 'two');
+      fs.utimesSync(jar, new Date(), new Date(Date.now() + 5000));
+      assert.strictEqual(fs.readFileSync(getCookieArgs('https://x.com/a')[1], 'utf8'), 'two');
+    } finally {
+      if (saved === undefined) delete process.env.YTDLP_COOKIES_PATH;
+      else process.env.YTDLP_COOKIES_PATH = saved;
+      fs.rmSync(dir, { recursive: true, force: true });
+    }
   });
 });

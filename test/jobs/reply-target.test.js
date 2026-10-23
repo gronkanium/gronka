@@ -183,4 +183,20 @@ describe('job reply targets', () => {
     assert.strictEqual(followUp.path, '/channels/77/messages');
     assert.strictEqual(followUp.body.message_reference.message_id, '10');
   });
+
+  test('a worker can edit a prefix reply repeatedly without a cached channel', async () => {
+    const interaction = await interactionFor(client, {
+      reply: { kind: 'message', channelId: '77', messageId: '10', replyId: '11' },
+    });
+    client.channels.cache.delete('77');
+    await interaction.editReply({ content: 'processing...' });
+    const sent = await interaction.editReply({
+      content: 'choose an output format',
+      files: [new AttachmentBuilder(file, { name: 'out.gif' })],
+    });
+    assert.strictEqual(api.calls.at(-1).path, '/channels/77/messages/11');
+    assert.ok(sent.attachments.first().url.endsWith('/out.gif'));
+    await interaction.editReply({ content: 'done' });
+    assert.strictEqual(api.calls.at(-1).body.content, 'done');
+  });
 });

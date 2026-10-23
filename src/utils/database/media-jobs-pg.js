@@ -23,12 +23,15 @@ async function db() {
 export async function enqueueJob({ kind, args, reply }) {
   const sql = await db();
   const now = Date.now();
+  // One statement: a failed notify can't leave a queued row behind for the caller to run again.
   const [row] = await sql`
-    INSERT INTO media_jobs (kind, args, reply, created_at, timestamp)
-    VALUES (${kind}, ${sql.json(args)}, ${sql.json(reply)}, ${now}, ${now})
-    RETURNING id
+    WITH job AS (
+      INSERT INTO media_jobs (kind, args, reply, created_at, timestamp)
+      VALUES (${kind}, ${sql.json(args)}, ${sql.json(reply)}, ${now}, ${now})
+      RETURNING id
+    )
+    SELECT id, pg_notify(${JOB_CHANNEL}, id::text) FROM job
   `;
-  await sql`SELECT pg_notify(${JOB_CHANNEL}, ${String(row.id)})`;
   return row.id;
 }
 

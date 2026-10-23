@@ -1,6 +1,7 @@
 import { spawn, execFile } from 'child_process';
 import { promisify } from 'util';
 import fsSync from 'fs';
+import os from 'os';
 import path from 'path';
 import { createLogger } from './logger.js';
 import { NetworkError, ValidationError, withCause, describeCause, contentGone } from './errors.js';
@@ -11,6 +12,24 @@ import { hostOf, normalizeHost } from './url-host.js';
 
 const logger = createLogger('ytdlp');
 const execFileAsync = promisify(execFile);
+const SIZE_WATCH_MS = 2000;
+
+export async function usedBytes(dir) {
+  const entries = await fsSync.promises
+    .readdir(dir, { recursive: true, withFileTypes: true })
+    .catch(() => []);
+  const sizes = await Promise.all(
+    entries
+      .filter(entry => entry.isFile())
+      .map(entry =>
+        fsSync.promises.stat(path.join(entry.parentPath, entry.name)).then(
+          stats => stats.size,
+          () => 0
+        )
+      )
+  );
+  return sizes.reduce((sum, size) => sum + size, 0);
+}
 
 // Appended to every duration/size-cap rejection so users know there's a way around it
 // instead of just hitting a dead end.
@@ -24,6 +43,19 @@ function tooLargeMessage(maxSize) {
   return `this video is too large to download (over ${mb}MB).` + TRIM_TIP;
 }
 
+// yt-dlp rewrites its jar after every run, so it gets a private copy and the mounted one stays read-only.
+let jarCopy = null;
+function privateJar(source, stats) {
+  if (jarCopy?.mtimeMs !== stats.mtimeMs || jarCopy.source !== source) {
+    const dir = jarCopy?.dir ?? fsSync.mkdtempSync(path.join(os.tmpdir(), 'ytdlp-jar-'));
+    const file = path.join(dir, 'cookies.txt');
+    fsSync.copyFileSync(source, file);
+    fsSync.chmodSync(file, 0o600);
+    jarCopy = { dir, file, source, mtimeMs: stats.mtimeMs };
+  }
+  return jarCopy.file;
+}
+
 // Optional --cookies args for yt-dlp
 export function getCookieArgs(url = null, signedIn = false) {
   // Signed-in YouTube gets ads, and yt-dlp waits ~5 s for each to be skippable: only sign in when asked.
@@ -34,8 +66,9 @@ export function getCookieArgs(url = null, signedIn = false) {
   }
   try {
     // A missing host file makes Docker mount a directory in its place - isFile() guards that.
-    if (fsSync.statSync(cookiesPath).isFile()) {
-      return ['--cookies', cookiesPath];
+    const stats = fsSync.statSync(cookiesPath);
+    if (stats.isFile()) {
+      return ['--cookies', privateJar(cookiesPath, stats)];
     }
   } catch {
     // File not present; proceed without cookies.
@@ -99,6 +132,9 @@ export function getSiteArgs(url, viaGeoProxy = false) {
   const geoProxy = process.env.GEO_PROXY_URL;
   const site = YTDLP_SITES.find(s => hostIn(url, s.hosts));
   return [
+    // The generic extractor follows any page or redirect, into our own network included.
+    '--ies',
+    'default,-generic',
     ...(hostIn(url, IMPERSONATE_HOSTS) ? ['--impersonate', 'chrome'] : []),
     // One fragment at a time crawls through the tunnel (xHamster 223 KB/s vs 1.4 MB/s at 8).
     ...(geoProxy && (site?.geoBlocked || viaGeoProxy) ? ['--proxy', geoProxy, '-N', '8'] : []),
@@ -352,11 +388,7 @@ function executeYtdlp(
     ];
 
     if (maxDuration !== Infinity && startTime === null && duration === null) {
-      // The `?` on the operator marks the field optional. Without it yt-dlp rejects any item
-      // whose duration is unknown (`NA`), which is every direct-media link handled by the
-      // generic extractor, e.g. an animated webp from an embed mirror. Those were skipped
-      // silently (exit 0, no output) and then misreported as "duration exceeds the maximum".
-      // Unknown-duration items stay bounded by --max-filesize and the post-read size check.
+      // The `?` lets items with an unknown duration (`NA`) through instead of skipping them silently.
       args.push('--match-filter', `duration<=?${maxDuration}`);
     }
 
@@ -400,7 +432,20 @@ function executeYtdlp(
       stderr += data.toString();
     });
 
+    // --max-filesize can't bound section downloads or streams of unknown size; the disk can.
+    // Twice the limit leaves room for the video and audio parts beside their merge.
+    let overSize = false;
+    const sizeWatch =
+      Number.isFinite(maxSize) &&
+      setInterval(async () => {
+        if ((await usedBytes(outputDir)) > maxSize * 2) {
+          overSize = true;
+          ytdlp.kill('SIGKILL');
+        }
+      }, SIZE_WATCH_MS);
+
     const timeoutId = setTimeout(() => {
+      clearInterval(sizeWatch);
       ytdlp.kill('SIGKILL');
       reject(
         withCause(
@@ -412,8 +457,17 @@ function executeYtdlp(
 
     ytdlp.on('close', code => {
       clearTimeout(timeoutId);
+      clearInterval(sizeWatch);
       const rejectWith = (error, detail) =>
         reject(withCause(error, `yt-dlp: ${detail ?? ytdlpReason(stderr || stdout, code)}`));
+
+      if (overSize) {
+        rejectWith(
+          new ValidationError(tooLargeMessage(maxSize)),
+          `stopped at over ${maxSize * 2} bytes on disk`
+        );
+        return;
+      }
 
       if (code === 0) {
         const combinedOutput = stdout + stderr;
@@ -695,9 +749,6 @@ export async function getStreamInfo(rawUrl, timeout = 30000) {
     '-J',
     '--no-playlist',
     '--no-warnings',
-    // The generic extractor would follow any link, redirects into our own network included.
-    '--ies',
-    'default,-generic',
     ...getYouTubeArgs(url),
     ...getSiteArgs(url),
     '-S',

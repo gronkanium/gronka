@@ -28,6 +28,7 @@ const ALIVE_FILE = path.join(JOBS_ROOT, 'alive');
 const INTERRUPTED = 'this was interrupted before it could finish. please try again.';
 
 const client = new Client({
+  allowedMentions: { parse: [], repliedUser: true },
   intents: [],
   rest: {
     timeout: DISCORD_REST_TIMEOUT_MS,

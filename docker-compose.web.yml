@@ -92,7 +92,7 @@ services:
 
   cobalt-web:
     <<: *hardening
-    image: ghcr.io/imputnet/cobalt:11
+    image: ghcr.io/imputnet/cobalt:11.7.1
     container_name: cobalt-web
     init: true
     mem_limit: 1g
@@ -107,7 +107,7 @@ services:
 
   cloudflared:
     <<: *hardening
-    image: cloudflare/cloudflared:2026.8.3
+    image: cloudflare/cloudflared:2026.10.2
     container_name: gronka-web-cloudflared
     command: ['tunnel', '--no-autoupdate', 'run', '--url', 'http://gronka-web:3000']
     user: '65532:65532'

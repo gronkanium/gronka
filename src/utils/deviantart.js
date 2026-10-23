@@ -52,7 +52,8 @@ export async function downloadFromDeviantArt(url, maxSize = Infinity) {
   const cookie = readCookie();
   let html;
   try {
-    const response = await axios.get(url, {
+    // The session cookie rides on this request, so never over plain http.
+    const response = await axios.get(url.replace(/^http:/i, 'https:'), {
       ...ssrfGuardedRequest(),
       responseType: 'text',
       timeout: PAGE_FETCH_TIMEOUT_MS,

@@ -12,11 +12,11 @@ const everyService = [...Object.entries(bot), ...Object.entries(web)];
 const bindsAllInterfaces = mapping => !/^(127\.0\.0\.1|localhost):/.test(String(mapping));
 
 describe('compose security', () => {
-  test('only watchtower mounts the docker socket', () => {
+  test('nothing mounts the docker socket', () => {
     const withSocket = everyService
       .filter(([, s]) => (s.volumes ?? []).some(v => String(v).includes('docker.sock')))
       .map(([name]) => name);
-    expect(withSocket).toEqual(['watchtower']);
+    expect(withSocket).toEqual([]);
   });
 
   test('no service runs privileged or shares a host namespace', () => {
@@ -27,9 +27,29 @@ describe('compose security', () => {
     }
   });
 
-  test('only the vpn adds a capability, and only NET_ADMIN', () => {
+  test('capabilities are added only to the vpn and to the bot containers contain.sh drops', () => {
     const added = everyService.filter(([, s]) => s.cap_add?.length).map(([n, s]) => [n, s.cap_add]);
-    expect(added).toEqual([['vpn', ['NET_ADMIN']]]);
+    const contain = ['NET_ADMIN', 'SETUID', 'SETGID', 'SETPCAP'];
+    expect(added).toEqual([
+      ['app', contain],
+      ['worker', contain],
+      ['vpn', ['NET_ADMIN']],
+    ]);
+  });
+
+  test('bot containers fence egress, then run read-only with no capabilities', () => {
+    for (const name of ['app', 'worker']) {
+      const s = bot[name];
+      expect([name, s.read_only, s.cap_drop]).toEqual([name, true, ['ALL']]);
+      expect(s.security_opt).toContain('no-new-privileges:true');
+      for (const volume of s.volumes.filter(v => /cookies/.test(v)))
+        expect(volume).toEndWith(':ro');
+    }
+    expect(bot.worker.entrypoint[0]).toBe('contain.sh');
+    expect(read('Dockerfile')).toContain('ENTRYPOINT ["contain.sh", "docker-entrypoint.sh"]');
+    const contain = read('scripts/contain.sh');
+    expect(contain).toContain('192.168.0.0/16');
+    expect(contain).toMatch(/exec setpriv .*--bounding-set=-all.*--no-new-privs/);
   });
 
   test('no host system directory is bind mounted', () => {

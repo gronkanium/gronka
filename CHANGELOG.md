@@ -5,6 +5,32 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres (attempts) to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [4.5.0](https://github.com/gronkanium/gronka/compare/v4.4.0...v4.5.0) (2026-10-23)
+
+
+### Features
+
+* **docker:** fence bot and worker egress, then run with no capabilities ([88152d8](https://github.com/gronkanium/gronka/commit/88152d8332014ac8e6eaece49053e41376ae8a9b))
+
+
+### Bug Fixes
+
+* **bot:** host guard on the stats server, activity capped at 128 characters ([49f5c6e](https://github.com/gronkanium/gronka/commit/49f5c6e103551ef290505a09132277ed804a4819))
+* **deps:** patch ip-address and update pending dependencies ([76fe8c6](https://github.com/gronkanium/gronka/commit/76fe8c6f5cf02eb755de7008fc2e75aaab397f6d))
+* **deps:** pin follow-redirects 1.16.1 and cloudflared 2026.10.2 ([31b3f41](https://github.com/gronkanium/gronka/commit/31b3f41595a53e4dcde439e46ac5df8b43d54292))
+* **download:** stop yt-dlp at twice the size limit on disk, cap timestamps at a day ([75bfe0c](https://github.com/gronkanium/gronka/commit/75bfe0c5ccced8bba7bce17569590cd4eaa83536))
+* **jobs:** queue and notify in one statement so a job never runs twice ([8263cc5](https://github.com/gronkanium/gronka/commit/8263cc5f37f09ab1b26be5d13e82edb09e57ce11))
+* preserve worker reply edits and download Tenor files directly ([711ac6a](https://github.com/gronkanium/gronka/commit/711ac6a8ad86bc4e9351144161552ca878dff0e1))
+* **privacy:** drop the server id from the prefix reply failure log ([490a39d](https://github.com/gronkanium/gronka/commit/490a39de383aebe9598e49016d53521c23823514))
+* **security:** mentions off by default, size cap for gallery-dl, validate convert links ([f5b44bd](https://github.com/gronkanium/gronka/commit/f5b44bd311be158a55ecac7608462f3223a6ad76))
+* **security:** refuse webui and stats requests under an unknown host name ([20cac7a](https://github.com/gronkanium/gronka/commit/20cac7a471aa38ba5f36eb5fd665e4391bfda384))
+* **security:** security pass and container containment ([8348661](https://github.com/gronkanium/gronka/commit/8348661ea7929e14c49162d7132acfbe469b66d1))
+* **security:** send reddit and deviantart session cookies over https only ([1b902d9](https://github.com/gronkanium/gronka/commit/1b902d922f6e08d922b211d19290cc964cd29e44))
+* **security:** turn off yt-dlp's generic extractor on every call ([a743bc3](https://github.com/gronkanium/gronka/commit/a743bc3630c8f83dafc069e0c2580be68e3f0336))
+* **sources:** run a step saved twice in the download order once ([ddc4fc5](https://github.com/gronkanium/gronka/commit/ddc4fc51d312a6c7dd687fae722d8370f8365e03))
+* **web:** rate limit IPv6 clients by /64, give audio stripping a timeout ([10b6130](https://github.com/gronkanium/gronka/commit/10b6130bd48897083e99b441ff1a7246d061482a))
+* **ytdlp:** give yt-dlp a private copy of the cookie jar ([21b60d8](https://github.com/gronkanium/gronka/commit/21b60d80bc068bdc52af1263d4e1b9ccbf0b4322))
+
 ## [4.4.0](https://github.com/gronkanium/gronka/compare/v4.3.0...v4.4.0) (2026-10-19)
 
 

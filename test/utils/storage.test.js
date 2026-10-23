@@ -99,11 +99,17 @@ test('formatFileSize - formats large sizes to GB', () => {
 });
 
 test('formatFileSize - handles zero bytes', () => {
-  assert.strictEqual(formatFileSize(0), '0.00 MB');
+  assert.strictEqual(formatFileSize(0), '0 B');
 });
 
 test('getStorageStats - without R2 there is nothing stored to count', async () => {
   const stats = await getStorageStats();
   assert.strictEqual(stats.totalGifs + stats.totalVideos + stats.totalImages, 0);
   assert.strictEqual(stats.diskUsageBytes, 0);
+});
+
+test('formatFileSize - keeps small file sizes readable', () => {
+  assert.strictEqual(formatFileSize(750), '750 B');
+  assert.strictEqual(formatFileSize(1024), '1.00 KB');
+  assert.strictEqual(formatFileSize(1536), '1.50 KB');
 });

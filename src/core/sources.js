@@ -242,7 +242,10 @@ export const ROUTES = [
   {
     id: 'ytdlp',
     name: 'yt-dlp sites',
-    owns: url => getYtdlpSite(url) !== null && !isStillImage(url),
+    owns: url =>
+      getYtdlpSite(url) !== null &&
+      !isStillImage(url) &&
+      !(onHost('tenor.com')(url) && isDirectMediaUrl(url)),
     chain: [step('ytdlp')],
   },
   {

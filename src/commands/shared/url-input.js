@@ -7,6 +7,7 @@ import {
 } from '../../utils/discord-cdn.js';
 import { acquireMedia } from '../../core/acquire-media.js';
 import { routeFor } from '../../core/sources.js';
+import { readLink } from '../../core/intake.js';
 import { canonicalizeMirrorUrl } from '../../utils/cobalt.js';
 
 // Known sites take /download's path (yt-dlp with its session, site extractors); others are plain files.
@@ -22,7 +23,9 @@ async function fetchSource(link, client) {
 }
 
 // The file behind a url option, as {attachment, file, originalUrl}.
-export async function fetchUrlInput(url, client) {
+export async function fetchUrlInput(text, client) {
+  const { url, refusal } = readLink(text);
+  if (refusal) throw new ValidationError(refusal.message);
   if (isDiscordMessageLink(url)) throw new ValidationError(DISCORD_MESSAGE_LINK_MESSAGE);
   let source = url;
   if (TENOR_VIEW_URL.test(url)) {

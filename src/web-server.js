@@ -2,8 +2,6 @@ import axios from 'axios';
 import crypto from 'node:crypto';
 import fs from 'node:fs/promises';
 import path from 'node:path';
-import { execFile } from 'node:child_process';
-import { promisify } from 'node:util';
 import { createLogger } from './utils/logger.js';
 import { initDatabase } from './utils/database.js';
 import { r2Config } from './utils/config.js';
@@ -11,20 +9,18 @@ import { acquireMedia, extractAudio } from './core/acquire-media.js';
 import { fetchContent, formatContent } from './content/index.js';
 import { MAX_COMMENTS } from './content/schema.js';
 import { getDisabledServiceLabel, getServiceForUrl } from './utils/download-services.js';
-import { parseTimestamp, sanitizeFilename } from './utils/validation.js';
+import { parseTimestamp, rateLimitAddress, sanitizeFilename } from './utils/validation.js';
 import { readLink, prepareLink, refusalFor } from './core/intake.js';
 import { detectFileType } from './utils/storage.js';
 import { uploadToR2, listObjectsInR2, deleteManyFromR2 } from './utils/r2-storage.js';
 import { getStreamInfo, isYouTubeUrl } from './utils/ytdlp.js';
 import { AppError, NetworkError, ValidationError } from './utils/errors.js';
 import * as keys from './web/keys.js';
-import { FFMPEG_INPUT_GUARD } from './utils/video-processor/utils.js';
+import { FFMPEG_INPUT_GUARD, runFfmpeg } from './utils/video-processor/utils.js';
 import { trimItem } from './utils/video-processor/trim-item.js';
 import { fromPath, tempPath, withJobDir, sweepJobDirs } from './utils/media-file.js';
 import { getDirectMediaHeaders } from './utils/file-downloader.js';
 import { ENGINES } from './core/sources.js';
-
-const execFileAsync = promisify(execFile);
 
 const logger = createLogger('web');
 
@@ -239,7 +235,7 @@ export async function stripAudio(item) {
   if (!isVideo(item)) return item;
   const ext = path.extname(item.filename ?? '').toLowerCase() || '.mp4';
   const output = await tempPath(ext);
-  await execFileAsync('ffmpeg', [
+  await runFfmpeg([
     '-v',
     'error',
     ...FFMPEG_INPUT_GUARD,
@@ -553,7 +549,7 @@ export function createHandler({
     }
     // Only cloudflared can reach this server, so its header is the real client address.
     const ip = req.headers.get('cf-connecting-ip') || server?.requestIP?.(req)?.address || '';
-    return crypto.createHmac('sha256', dayKey).update(ip).digest('base64url');
+    return crypto.createHmac('sha256', dayKey).update(rateLimitAddress(ip)).digest('base64url');
   };
 
   const overLimit = (key, limit) => {

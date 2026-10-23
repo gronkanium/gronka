@@ -113,8 +113,23 @@ function blockedIpv6Reason(address) {
 
   if ((groups[0] & 0xfe00) === 0xfc00) return PRIVATE_ADDRESS_ERROR; // fc00::/7 unique-local
   if ((groups[0] & 0xffc0) === 0xfe80) return PRIVATE_ADDRESS_ERROR; // fe80::/10 link-local
+  if ((groups[0] & 0xffc0) === 0xfec0) return PRIVATE_ADDRESS_ERROR; // fec0::/10 site-local
+  if (groups[0] === 0x2001 && groups[1] === 0) return PRIVATE_ADDRESS_ERROR; // 2001::/32 Teredo
   if ((groups[0] & 0xff00) === 0xff00) return PRIVATE_ADDRESS_ERROR; // ff00::/8 multicast
   return null;
+}
+
+// One IPv6 /64 is one client: a single host is handed the whole block.
+export function rateLimitAddress(ip) {
+  const groups = net.isIPv6(ip) ? ipv6Groups(ip.toLowerCase()) : null;
+  if (!groups) return ip;
+  return (
+    embeddedIpv4(groups) ??
+    `${groups
+      .slice(0, 4)
+      .map(g => g.toString(16))
+      .join(':')}::/64`
+  );
 }
 
 // Decide whether an IP address is safe for the bot to connect to
@@ -181,6 +196,12 @@ export function validateUrl(url) {
   return { valid: true };
 }
 
+const MAX_TIMESTAMP_SECONDS = 24 * 60 * 60;
+const withinADay = seconds =>
+  seconds <= MAX_TIMESTAMP_SECONDS
+    ? { valid: true, seconds }
+    : { valid: false, error: 'timestamps can be at most 24 hours.' };
+
 // Parse a timestamp string into seconds Accepts plain seconds ("90", "12.5"), MM:SS ("3:10"), and HH:MM:SS ("1:02:30")
 export function parseTimestamp(input) {
   if (input === null || input === undefined || typeof input !== 'string') {
@@ -207,7 +228,7 @@ export function parseTimestamp(input) {
     if (!/^\d+(\.\d+)?$/.test(trimmed)) {
       return invalidFormat;
     }
-    return { valid: true, seconds: parseFloat(trimmed) };
+    return withinADay(parseFloat(trimmed));
   }
 
   // MM:SS or HH:MM:SS, every segment before the last must be whole digits,
@@ -232,7 +253,7 @@ export function parseTimestamp(input) {
     seconds = seconds * 60 + parseFloat(part);
   }
 
-  return { valid: true, seconds };
+  return withinADay(seconds);
 }
 
 export function sanitizeFilename(filename) {

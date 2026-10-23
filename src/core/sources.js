@@ -242,7 +242,10 @@ export const ROUTES = [
   {
     id: 'ytdlp',
     name: 'yt-dlp sites',
-    owns: url => getYtdlpSite(url) !== null && !isStillImage(url),
+    owns: url =>
+      getYtdlpSite(url) !== null &&
+      !isStillImage(url) &&
+      !(onHost('tenor.com')(url) && isDirectMediaUrl(url)),
     chain: [step('ytdlp')],
   },
   {
@@ -284,10 +287,10 @@ export function arrangeChain(route, saved) {
   const steps = route.chain.map(s => ({ ...s, on: s.on ?? true }));
   if (!order) return steps;
   const byEngine = new Map(steps.map(s => [s.engine, s]));
+  const seen = new Set();
   const arranged = order
-    .filter(s => byEngine.has(s?.engine))
+    .filter(s => byEngine.has(s?.engine) && !seen.has(s.engine) && seen.add(s.engine))
     .map(s => ({ ...byEngine.get(s.engine), on: s.on !== false }));
-  const seen = new Set(arranged.map(s => s.engine));
   return [...arranged, ...steps.filter(s => !seen.has(s.engine))];
 }
 

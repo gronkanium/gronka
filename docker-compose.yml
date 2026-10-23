@@ -5,8 +5,21 @@ x-logging: &logging
     max-file: '1'
     compress: 'false'
 
+# Starts as root only so contain.sh can fence egress (no private ranges, not the host), then runs
+# the app as bun with every capability gone. Root filesystem read-only; it writes temp/ and tmpfs.
+x-contained: &contained
+  user: root
+  read_only: true
+  cap_drop: [ALL]
+  cap_add: [NET_ADMIN, SETUID, SETGID, SETPCAP]
+  security_opt: ['no-new-privileges:true']
+  tmpfs:
+    - /tmp
+    - /home/bun:uid=1000,gid=1000,mode=0700
+
 services:
   app:
+    <<: *contained
     logging: *logging
     image: gronka-app
     build:
@@ -63,11 +76,13 @@ services:
       - MEDIA_WORKERS=${MEDIA_WORKERS:-true}
       # Proxy for sources that block this server's region, e.g. http://vpn:8888 with the vpn profile
       - GEO_PROXY_URL=${GEO_PROXY_URL:-}
+      # Private IPv4 ranges the containers may reach besides their own networks, e.g. a LAN database
+      - EGRESS_ALLOW=${EGRESS_ALLOW:-}
     volumes: &app-volumes
       - ./temp:/app/temp
       # Optional yt-dlp cookies file (export from a logged-in browser in Netscape format).
       # If it doesn't exist on the host, Docker mounts an empty directory and yt-dlp runs without cookies.
-      - ./ytdlp-cookies.txt:/app/ytdlp-cookies.txt
+      - ./ytdlp-cookies.txt:/app/ytdlp-cookies.txt:ro
       # Read-only, and no longer shared with cobalt, so nothing rewrites it under the app.
       - ./cookies.json:/app/cookies.json:ro
     ports:
@@ -90,10 +105,11 @@ services:
   # Runs media jobs from the media_jobs table and answers users over Discord REST. A job whose
   # worker dies or is redeployed is picked up by another; scale with --scale worker=N.
   worker:
+    <<: *contained
     logging: *logging
     image: gronka-app
     pull_policy: never
-    entrypoint: ['bun', 'src/worker.js']
+    entrypoint: ['contain.sh', 'bun', 'src/worker.js']
     restart: unless-stopped
     mem_limit: ${WORKER_MEM_LIMIT:-3g}
     # Room to finish what it holds; anything left is handed back to the queue before exit.
@@ -113,7 +129,7 @@ services:
       test:
         [
           'CMD-SHELL',
-          'test $(( $(date +%s) - $(stat -c %Y /app/temp/jobs/$(hostname)/alive) )) -lt 60',
+          "setpriv --reuid=bun --regid=bun --clear-groups sh -c 'test $(( $(date +%s) - $(stat -c %Y /app/temp/jobs/$(hostname)/alive) )) -lt 60'",
         ]
       interval: 30s
       timeout: 5s
@@ -146,9 +162,11 @@ services:
 
   cobalt:
     logging: *logging
-    image: ghcr.io/imputnet/cobalt:11
+    image: ghcr.io/imputnet/cobalt:11.7.1
     init: true
     read_only: true
+    cap_drop: [ALL]
+    security_opt: ['no-new-privileges:true']
     restart: unless-stopped
     container_name: cobalt
     ports:
@@ -159,8 +177,6 @@ services:
       # Path to cookies.json file for authenticating with services (Twitter, Instagram, Reddit, etc.)
       # Required for accessing content that requires authentication
       COOKIE_PATH: '/cookies.json'
-    labels:
-      - com.centurylinklabs.watchtower.scope=cobalt
     networks:
       - gronka-network
     volumes:
@@ -193,19 +209,6 @@ services:
     networks:
       - gronka-network
       - geo-proxy
-
-  # watchtower updates the cobalt image automatically
-  watchtower:
-    logging: *logging
-    image: ghcr.io/containrrr/watchtower:1.7.1
-    restart: unless-stopped
-    command: --cleanup --scope cobalt --interval 900 --include-restarting
-    environment:
-      - DOCKER_API_VERSION=1.52
-    volumes:
-      - /var/run/docker.sock:/var/run/docker.sock
-    networks:
-      - gronka-network
 
 volumes:
   postgres-data:

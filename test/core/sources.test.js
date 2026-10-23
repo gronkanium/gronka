@@ -18,6 +18,9 @@ const ROUTED = [
   ['https://imgur.com/gallery/abc', 'ytdlp'],
   ['https://i.imgur.com/abc.gif', 'ytdlp'],
   ['https://i.imgur.com/abc.jpg', 'direct'],
+  ['https://media1.tenor.com/m/abc/example.gif', 'direct'],
+  ['https://media.tenor.com/abc/example.mp4', 'direct'],
+  ['https://tenor.com/view/example-gif-123', 'ytdlp'],
   ['https://v.redd.it/abc/HLSPlaylist.m3u8', 'ytdlp'],
   ['https://www.pornhub.com/view_video.php?viewkey=abc', 'ytdlp'],
   ['https://www.deviantart.com/someone/art/thing-123456', 'deviantart'],
@@ -67,6 +70,15 @@ describe('source routes', () => {
     assert.deepEqual(
       arrangeChain(tiktok, saved).map(s => `${s.engine}:${s.on}`),
       ['ytdlp:true', 'cobalt:false', 'gallery-dl:true']
+    );
+  });
+
+  test('a step saved twice runs once', () => {
+    const tiktok = ROUTES.find(r => r.id === 'tiktok');
+    const saved = { tiktok: Array.from({ length: 500 }, () => ({ engine: 'ytdlp' })) };
+    assert.deepEqual(
+      arrangeChain(tiktok, saved).map(s => s.engine),
+      ['ytdlp', 'cobalt', 'gallery-dl']
     );
   });
 

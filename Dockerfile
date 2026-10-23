@@ -32,8 +32,10 @@ FROM oven/bun:1.3-debian AS runtime
 
 # Install runtime dependencies: FFmpeg, gifsicle (GIF optimization), ImageMagick
 # (animated-WebP -> GIF; ffmpeg can't demux animated webp), ca-certificates, yt-dlp, and gallery-dl.
+# nftables + iproute2 let contain.sh fence the container's egress before dropping root.
 # yt-dlp-ejs ships the solver script for YouTube's `n` challenge; without it every YouTube
 # format is skipped and only storyboards remain. curl-cffi: Rumble 403s yt-dlp's own TLS fingerprint.
+COPY docker/requirements.txt /tmp/requirements.txt
 RUN apt-get update && apt-get install -y \
     ffmpeg \
     gifsicle \
@@ -41,8 +43,10 @@ RUN apt-get update && apt-get install -y \
     ca-certificates \
     python3 \
     python3-pip \
-    && pip3 install --break-system-packages 'yt-dlp[curl-cffi]' yt-dlp-ejs gallery-dl \
-    && rm -rf /var/lib/apt/lists/*
+    nftables \
+    iproute2 \
+    && pip3 install --no-cache-dir --break-system-packages -r /tmp/requirements.txt \
+    && rm -rf /var/lib/apt/lists/* /tmp/requirements.txt
 
 # Set working directory
 WORKDIR /app
@@ -70,8 +74,8 @@ RUN mkdir -p temp \
     && chown -R bun:bun temp
 
 # Copy entrypoint script
-COPY scripts/docker-entrypoint.sh /usr/local/bin/
-RUN chmod +x /usr/local/bin/docker-entrypoint.sh
+COPY scripts/docker-entrypoint.sh scripts/contain.sh /usr/local/bin/
+RUN chmod +x /usr/local/bin/docker-entrypoint.sh /usr/local/bin/contain.sh
 
 # Expose server ports
 EXPOSE 3000
@@ -83,4 +87,4 @@ HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
 USER bun
 
 # Use entrypoint script to run both processes
-ENTRYPOINT ["docker-entrypoint.sh"]
+ENTRYPOINT ["contain.sh", "docker-entrypoint.sh"]

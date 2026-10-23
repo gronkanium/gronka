@@ -67,6 +67,7 @@ export function createMessageAdapter(message, namedOptions = {}, extras = {}) {
     client: message.client,
     appPermissions: message.guild ? message.channel?.permissionsFor?.(message.client.user) : null,
     attachmentSizeLimit: extras.attachmentSizeLimit,
+    embedLinksAllowed: extras.embedLinksAllowed,
     message,
     replied: false,
     deferred: Boolean(replyMessage),

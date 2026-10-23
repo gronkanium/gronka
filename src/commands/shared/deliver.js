@@ -6,12 +6,9 @@ import { AppError, describeCause } from '../../utils/errors.js';
 import { safeInteractionEditReply } from '../../utils/interaction-helpers.js';
 import { succeed } from '../../utils/operations-tracker.js';
 import { detectFileType, resolveTtlHoursForSize } from '../../utils/storage.js';
-import {
-  isR2Configured,
-  uploadMediaToR2,
-  formatR2UrlWithDisclaimer,
-} from '../../utils/r2-storage.js';
+import { isR2Configured, uploadMediaToR2 } from '../../utils/r2-storage.js';
 import { fitsDiscordAttachment } from './attachment-limit.js';
+import { mediaReplyPayload } from './media-reply.js';
 import { jobSignal } from '../../utils/media-file.js';
 
 const logger = createLogger('deliver');
@@ -92,19 +89,26 @@ export async function deliverReply(interaction, payload) {
   return message;
 }
 
-export async function replyWithLink(interaction, url, ttlHours) {
-  const content = formatR2UrlWithDisclaimer(url, r2Config, ttlHours);
-  await deliverReply(interaction, { content });
+export async function storedReplyItem(stored, { name, index = 0, description } = {}) {
+  const attachment = stored.fits ? attachmentFor(stored, index) : null;
+  if (name && attachment) attachment.setName(name);
+  return {
+    name: name || attachment?.name || `gronka${stored.ext}`,
+    size: stored.size,
+    type: stored.type,
+    url: stored.fits ? null : stored.url,
+    attachment,
+    description,
+    ttlHours: stored.fits ? null : await resolveTtlHoursForSize(stored.size),
+  };
 }
 
 // Attaches the file when it fits, else links it; a rejected attachment falls back to an R2 link.
-export async function deliverStored(interaction, stored, { name } = {}) {
+export async function deliverStored(interaction, stored, options = {}) {
   jobSignal()?.throwIfAborted();
-  const ttlHours = await resolveTtlHoursForSize(stored.size);
-  if (!stored.fits) return replyWithLink(interaction, stored.url, ttlHours);
-  const attachment = attachmentFor(stored);
-  if (name) attachment.setName(name);
-  const message = await safeInteractionEditReply(interaction, { files: [attachment] });
+  const payload = mediaReplyPayload(interaction, [await storedReplyItem(stored, options)]);
+  if (!stored.fits) return deliverReply(interaction, payload);
+  const message = await safeInteractionEditReply(interaction, payload);
   if (message !== false) return;
   if (!canRecoverUpload(interaction)) {
     throw deliveryError(interaction);
@@ -112,5 +116,9 @@ export async function deliverStored(interaction, stored, { name } = {}) {
   logger.warn(
     `Discord attachment upload failed (${describeCause(interaction.deliveryError)}), falling back to R2`
   );
-  await replyWithLink(interaction, (await toR2(stored)).url, ttlHours);
+  const linked = { ...(await toR2(stored)), fits: false };
+  await deliverReply(
+    interaction,
+    mediaReplyPayload(interaction, [await storedReplyItem(linked, options)])
+  );
 }

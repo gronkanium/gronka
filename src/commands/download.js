@@ -13,11 +13,10 @@ import { promptForMegaKey } from './mega-key.js';
 import { getDisabledServiceLabel } from '../utils/download-services.js';
 import { ValidationError } from '../utils/errors.js';
 import { batchAttachmentsForDelivery } from '../utils/attachment-helpers.js';
-import { resolveTtlHoursForSize } from '../utils/storage.js';
-import { isR2Configured, formatMultipleR2UrlsWithDisclaimer } from '../utils/r2-storage.js';
+import { isR2Configured } from '../utils/r2-storage.js';
 import {
   storeMedia,
-  attachmentFor,
+  storedReplyItem,
   deliverStored,
   deliverReply,
   finishCommand,
@@ -42,22 +41,25 @@ import {
   safeInteractionDeferReply,
 } from '../utils/interaction-helpers.js';
 import { fitsDiscordAttachment, getDiscordAttachmentLimit } from './shared/attachment-limit.js';
+import { mediaReplyPayload, mediaReplyBatches } from './shared/media-reply.js';
 import { mapLimit, ITEM_FANOUT } from '../utils/map-limit.js';
 
 const logger = createLogger('download');
 
 const { galleryDlEnabled: GALLERY_DL_ENABLED, discordSizeLimit: DISCORD_SIZE_LIMIT } = botConfig;
 
-// Discord caps a message at 2000 characters, so as many links as fit.
 async function replyWithDirectMediaUrls(interaction, ctx, { urls }) {
-  const lines = [];
-  let length = 0;
-  for (const item of urls) {
-    if (length + item.url.length + 1 > 1990) break;
-    lines.push(item.url);
-    length += item.url.length + 1;
+  let followUp = false;
+  for (const batch of mediaReplyBatches(interaction, urls)) {
+    const payload = mediaReplyPayload(interaction, batch);
+    if (followUp) {
+      if ((await safeInteractionFollowUp(interaction, payload)) === false)
+        throw deliveryError(interaction, true);
+    } else {
+      await deliverReply(interaction, payload);
+      followUp = true;
+    }
   }
-  await deliverReply(interaction, { content: lines.join('\n') });
   await finishCommand();
 }
 
@@ -83,53 +85,36 @@ async function deliverGallery(interaction, ctx, fileData, attachmentLimit) {
   const attached = stored.filter(item => item.fits);
   const linked = stored.filter(item => !item.fits);
   const batches = batchAttachmentsForDelivery(attached);
-  const ttlHours = linked.length
-    ? await resolveTtlHoursForSize(Math.max(...linked.map(item => item.size)))
-    : null;
-  const content = formatMultipleR2UrlsWithDisclaimer(
-    linked.map(item => item.url),
-    r2Config,
-    ttlHours
-  );
-
-  // A false from the send helpers is a failed delivery, never a success.
-  const firstMessage = await safeInteractionEditReply(interaction, {
-    files: batches[0]?.map(item => attachmentFor(item, attached.indexOf(item))),
-    content: content || undefined,
-  });
-  if (firstMessage === false) {
-    if (!batches[0]?.length || !canRecoverUpload(interaction)) throw deliveryError(interaction);
-    await deliverGalleryLinks(interaction, [...batches[0], ...linked]);
-  }
-  for (const batch of batches.slice(1)) {
-    const message = await safeInteractionFollowUp(interaction, {
-      files: batch.map(item => attachmentFor(item, attached.indexOf(item))),
-    });
-    if (message === false) {
-      if (!canRecoverUpload(interaction)) throw deliveryError(interaction, true);
-      await deliverGalleryLinks(interaction, batch, true);
+  const groups = [[...(batches[0] ?? []), ...linked], ...batches.slice(1)];
+  let followUp = false;
+  for (const group of groups) {
+    const items = await Promise.all(
+      group.map(item => storedReplyItem(item, { index: stored.indexOf(item) }))
+    );
+    for (const batch of mediaReplyBatches(interaction, items)) {
+      const payload = mediaReplyPayload(interaction, batch);
+      const send = followUp ? safeInteractionFollowUp : safeInteractionEditReply;
+      const message = await send(interaction, payload);
+      if (message === false) {
+        if (!payload.files?.length || !canRecoverUpload(interaction))
+          throw deliveryError(interaction, followUp);
+        const storedBatch = batch.map(item => group[items.indexOf(item)]);
+        await deliverGalleryLinks(interaction, storedBatch, followUp);
+      }
+      followUp = true;
     }
   }
-
   await finishCommand();
 }
 
 async function deliverGalleryLinks(interaction, items, followUp = false) {
-  const linked = await mapLimit(items, ITEM_FANOUT, toR2);
-  const ttlHours = await resolveTtlHoursForSize(Math.max(...items.map(item => item.size)));
-  const chunks = [];
-  let urls = [];
-  for (const item of linked) {
-    const next = [...urls, item.url];
-    if (urls.length && formatMultipleR2UrlsWithDisclaimer(next, r2Config, ttlHours).length > 2000) {
-      chunks.push(urls);
-      urls = [];
-    }
-    urls.push(item.url);
-  }
-  chunks.push(urls);
-  for (const chunk of chunks) {
-    const payload = { content: formatMultipleR2UrlsWithDisclaimer(chunk, r2Config, ttlHours) };
+  const linked = await mapLimit(items, ITEM_FANOUT, async item => ({
+    ...(await toR2(item)),
+    fits: false,
+  }));
+  const replies = await Promise.all(linked.map(item => storedReplyItem(item)));
+  for (const batch of mediaReplyBatches(interaction, replies)) {
+    const payload = mediaReplyPayload(interaction, batch);
     if (followUp) {
       if ((await safeInteractionFollowUp(interaction, payload)) === false)
         throw deliveryError(interaction, true);

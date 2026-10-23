@@ -115,8 +115,7 @@ export function createMessageAdapter(message, namedOptions = {}, extras = {}) {
       if (payload.content === undefined && (payload.files?.length || payload.embeds?.length)) {
         payload.content = '';
       }
-      replyMessage = await replyMessage.edit(payload);
-      return replyMessage;
+      return replyMessage.edit(payload);
     },
 
     async followUp(options) {

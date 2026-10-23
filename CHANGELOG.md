@@ -5,6 +5,21 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres (attempts) to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [4.6.0](https://github.com/gronkanium/gronka/compare/v4.5.0...v4.6.0) (2026-10-23)
+
+
+### Features
+
+* embed media replies and restore source downloads ([#175](https://github.com/gronkanium/gronka/issues/175)) ([4c13a9a](https://github.com/gronkanium/gronka/commit/4c13a9ab0f8cc72d1060d8e30966788e4e2244dd))
+
+
+### Bug Fixes
+
+* **deps:** update AWS SDK packages to 3.1153.0 ([#170](https://github.com/gronkanium/gronka/issues/170)) ([335f0b0](https://github.com/gronkanium/gronka/commit/335f0b021da5e48d55807b71aeb35d01123e1124))
+* **deps:** update charset-normalizer to 3.5.2 ([#173](https://github.com/gronkanium/gronka/issues/173)) ([57bb626](https://github.com/gronkanium/gronka/commit/57bb626a36a1cfb78a4fe936b290fc360fd76ae3))
+* **deps:** update gallery-dl to 1.32.17 ([66d2266](https://github.com/gronkanium/gronka/commit/66d2266e1c15f9a51eb37fc67c1b732681191596))
+* **deps:** update pycparser to 3.11 ([#171](https://github.com/gronkanium/gronka/issues/171)) ([72a0854](https://github.com/gronkanium/gronka/commit/72a08545238338dbf1428a09e3e24beccf93214d))
+
 ## [4.5.0](https://github.com/gronkanium/gronka/compare/v4.4.0...v4.5.0) (2026-10-23)
 
 

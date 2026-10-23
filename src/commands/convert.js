@@ -41,6 +41,7 @@ import {
 } from './shared/command-guards.js';
 import { safeInteractionDeferReply } from '../utils/interaction-helpers.js';
 import { storeMedia, deliverStored, finishCommand } from './shared/deliver.js';
+import { formatSizeChange } from './shared/media-reply.js';
 import { fetchUrlInput } from './shared/url-input.js';
 import { dispatchMediaJob } from '../jobs/dispatch.js';
 import { fromPath, tempPath, writeAtomic } from '../utils/media-file.js';
@@ -221,13 +222,15 @@ async function processConversion(
       let gif = await fromPath(gifPath, { contentType: 'image/gif', filename: 'gronka.gif' });
 
       const lossy = options.lossy ?? null;
+      let description;
       if (options.optimize || lossy !== null) {
         const optimized = await optimizeToJob(gif, lossy);
+        description = formatSizeChange(gif.size, optimized.size);
         gif = optimized;
       }
 
       const stored = await storeMedia(gif, attachmentLimit);
-      await deliverStored(interaction, stored);
+      await deliverStored(interaction, stored, { description });
       await finishCommand();
     },
     {

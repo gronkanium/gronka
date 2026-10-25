@@ -103,7 +103,7 @@
 
   const openIssues = $derived(
     groupIssues(issues)
-      .filter(g => isOpen(g, $issueStates))
+      .filter(g => !['user', 'gone'].includes(g.kind) && isOpen(g, $issueStates))
       .slice(0, 5)
   );
 </script>
@@ -172,7 +172,7 @@
         {#if loaded}
           <div class="empty">
             <span class="ic"><Check size={20} /></span>
-            <b>All clear</b>No failures in the last 7 days
+            <b>All clear</b>Nothing of ours or a site's failing
           </div>
         {:else}
           <div class="skel-rows">

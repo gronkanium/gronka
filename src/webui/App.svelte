@@ -48,7 +48,7 @@
   );
   const PageComponent = $derived(PAGES[activePage]);
   const issueCount = $derived(
-    ($navStats?.issues ?? []).filter(g => isOpen(g, $issueStates)).length
+    ($navStats?.issues ?? []).filter(g => g.kind === 'defect' && isOpen(g, $issueStates)).length
   );
 
   $effect(() => {

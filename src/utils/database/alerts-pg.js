@@ -34,6 +34,7 @@ const REASON_EXPR = "NULLIF(metadata::jsonb->>'error', '')";
 const CAUSE_EXPR = "NULLIF(metadata::jsonb->>'cause', '')";
 // The error class, or an early refusal's reason code.
 const ERROR_CLASS_EXPR = "NULLIF(metadata::jsonb->>'errorClass', '')";
+const CODE_EXPR = "NULLIF(metadata::jsonb->>'code', '')";
 
 // Sentinel for failures logged without an error string, a real bucket, not an absence.
 export const UNKNOWN_REASON = '__no_reason__';
@@ -124,7 +125,8 @@ export async function getAlertSummary(options = {}) {
             MIN(timestamp) AS first_seen,
             ARRAY_AGG(timestamp) AS times,
             ARRAY_REMOVE(ARRAY_AGG(DISTINCT ${COMMAND_EXPR}), NULL) AS commands,
-            ARRAY_REMOVE(ARRAY_AGG(DISTINCT ${ERROR_CLASS_EXPR}), NULL) AS classes
+            ARRAY_REMOVE(ARRAY_AGG(DISTINCT ${ERROR_CLASS_EXPR}), NULL) AS classes,
+            ARRAY_REMOVE(ARRAY_AGG(DISTINCT ${CODE_EXPR}), NULL) AS codes
      FROM alerts ${clause} AND severity = 'error'
      GROUP BY 1
      ORDER BY 2 DESC
@@ -170,6 +172,7 @@ export async function getAlertSummary(options = {}) {
     count: row.count,
     commands: row.commands ?? [],
     classes: row.classes ?? [],
+    codes: row.codes ?? [],
     lastSeen: Number(row.last_seen),
     firstSeen: Number(row.first_seen),
     times: row.times.map(Number),

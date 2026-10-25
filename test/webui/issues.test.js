@@ -73,6 +73,30 @@ describe('issue grouping', () => {
   });
 });
 
+test('a group whose every code is CONTENT_GONE is a dead link, other codes keep the class rule', () => {
+  const [gone, mixed, guessed] = groupIssues([
+    reason('this post was removed', {
+      classes: ['NetworkError'],
+      codes: ['CONTENT_GONE'],
+      count: 3,
+    }),
+    reason('x', { classes: ['NetworkError'], codes: ['CONTENT_GONE', 'NETWORK_ERROR'], count: 2 }),
+    reason('this post is unavailable, it may be deleted or private'),
+  ]);
+  assert.deepStrictEqual([gone.kind, mixed.kind, guessed.kind], ['gone', 'upstream', 'gone']);
+  assert.ok(inTab('gone', gone, 'open') && !inTab('upstream', gone, 'open'));
+});
+
+test('per-site disabled refusals and a deleted reply are user errors', () => {
+  const kinds = groupIssues([
+    reason('a', { classes: ['instagram_story_disabled'] }),
+    reason('b', { classes: ['discord_message_link'] }),
+    reason('c', { classes: ['AppError'], codes: ['REPLY_DELETED'] }),
+    reason('d', { classes: ['AppError'], codes: ['DISCORD_DELIVERY_FAILED'] }),
+  ]).map(g => g.kind);
+  assert.deepStrictEqual(kinds, ['user', 'user', 'user', 'defect']);
+});
+
 describe('issue state', () => {
   const [g] = groupIssues([reason('boom', { lastSeen: 1000 })]);
 

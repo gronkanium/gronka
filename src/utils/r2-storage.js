@@ -350,5 +350,5 @@ function formatTtlMessage(hours) {
 
 export function r2ExpiryText(url, config, ttlHours) {
   if (!config.cleanupEnabled || !extractR2KeyFromUrl(url, config) || !(ttlHours > 0)) return null;
-  return `expires in ${formatTtlMessage(ttlHours)} • save and reupload to keep`;
+  return `-# this link will expire in ${formatTtlMessage(ttlHours)}, please save and reupload to discord to keep forever`;
 }

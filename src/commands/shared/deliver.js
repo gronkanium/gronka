@@ -29,7 +29,7 @@ export function deliveryError(interaction, partial = false) {
   }
   return new AppError(
     partial ? `only part of this post was sent. ${message}` : message,
-    'DISCORD_DELIVERY_FAILED',
+    error?.code === 10008 ? 'REPLY_DELETED' : 'DISCORD_DELIVERY_FAILED',
     500,
     { cause: error ?? new Error('discord: the reply failed with no error recorded') }
   );

@@ -1,6 +1,7 @@
 import { promisify } from 'util';
 import { execFile, spawn } from 'child_process';
 import { jobSignal } from '../media-file.js';
+import { ValidationError } from '../errors.js';
 
 const execAsync = promisify(execFile);
 
@@ -50,15 +51,15 @@ export function validateNumericParameter(value, name, min = 0, max = Infinity, a
   const num = Number(value);
 
   if (isNaN(num) || !isFinite(num)) {
-    throw new Error(`${name} must be a valid number`);
+    throw new ValidationError(`${name} must be a valid number`);
   }
 
   if (num < min) {
-    throw new Error(`${name} must be at least ${min}`);
+    throw new ValidationError(`${name} must be at least ${min}`);
   }
 
   if (num > max) {
-    throw new Error(`${name} must be at most ${max}`);
+    throw new ValidationError(`${name} must be at most ${max}`);
   }
 
   return num;

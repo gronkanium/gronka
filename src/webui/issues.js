@@ -4,20 +4,25 @@
 const USER = new Set([
   'ValidationError',
   'invalid_url',
+  'invalid_social_media_url',
+  'discord_message_link',
+  'invalid_time',
+  'unsupported_output',
   'missing_url',
   'missing_input',
   'multiple_inputs',
   'invalid_attachment',
   'invalid_lossy_level',
   'unsupported_format',
-  'ytdlp_disabled',
-  'gallery_dl_disabled',
-  'cobalt_disabled',
 ]);
+const isUser = c => USER.has(c) || c.endsWith('_disabled');
+// A code that settles the kind whatever class carried it.
+const CODE_KIND = { CONTENT_GONE: 'gone', REPLY_DELETED: 'user' };
 const UPSTREAM = new Set(['NetworkError', 'YtdlpRateLimitError', 'url_download_failed']);
 
 // Fallback for failures with nothing recorded (early refusals before refuse() recorded them).
 const GUESSES = [
+  ['gone', /deleted or private|was removed|has expired|may have expired|no longer available/i],
   [
     'user',
     /not from a supported|link to a discord message|no video or image attachment|please provide|invalid url|not a valid|too large|too long|maximum allowed|exceeds the maximum|no video in it|private or internal address|only works on|unsupported content type|wait \d|rate limit|cooldown|banned|maintenance/i,
@@ -28,7 +33,12 @@ const GUESSES = [
   ],
 ];
 
-export const KIND_LABEL = { defect: 'defect', upstream: 'upstream', user: 'user error' };
+export const KIND_LABEL = {
+  defect: 'defect',
+  upstream: 'upstream',
+  gone: 'dead link',
+  user: 'user error',
+};
 
 // Variants of one cause differ only in numbers or a charset suffix.
 export const keyOf = reason =>
@@ -38,11 +48,12 @@ export const keyOf = reason =>
     .replace(/\d+(\.\d+)?/g, '#')
     .trim();
 
-function classify(classes, text) {
+function classify(classes, codes, text) {
+  const byCode = CODE_KIND[codes[0]];
+  if (byCode && codes.every(c => CODE_KIND[c] === byCode))
+    return { kind: byCode, basis: `from the recorded code (${codes.join(', ')})` };
   if (classes.length) {
-    const kinds = classes.map(c =>
-      USER.has(c) ? 'user' : UPSTREAM.has(c) ? 'upstream' : 'defect'
-    );
+    const kinds = classes.map(c => (isUser(c) ? 'user' : UPSTREAM.has(c) ? 'upstream' : 'defect'));
     const kind = kinds.includes('defect')
       ? 'defect'
       : kinds.includes('upstream')
@@ -71,6 +82,7 @@ export function groupIssues(byReason = [], by = 'error') {
       times: [],
       commands: new Set(),
       classes: new Set(),
+      codes: new Set(),
     };
     g.members.push(r.reason);
     g.count += r.count;
@@ -79,17 +91,20 @@ export function groupIssues(byReason = [], by = 'error') {
     g.times.push(...(r.times ?? []));
     r.commands.forEach(c => g.commands.add(c));
     (r.classes ?? []).forEach(c => g.classes.add(c));
+    (r.codes ?? []).forEach(c => g.codes.add(c));
     groups.set(key, g);
   }
   return [...groups.values()]
     .map(g => {
       const classes = [...g.classes];
+      const codes = [...g.codes];
       return {
         ...g,
+        codes,
         title: g.members.length > 1 ? g.key.replace(/#/g, 'N') : g.members[0],
         commands: [...g.commands],
         classes,
-        ...classify(classes, g.members[0]),
+        ...classify(classes, codes, g.members[0]),
       };
     })
     .sort((a, b) => b.count - a.count);
@@ -107,7 +122,7 @@ export const isNew = (group, now = Date.now()) => group.firstSeen > now - 24 * 3
 
 export const isOpen = (group, states) => ['open', 'regressed'].includes(stateOf(group, states));
 
-const TAB_KIND = { defects: 'defect', upstream: 'upstream', user: 'user' };
+const TAB_KIND = { defects: 'defect', upstream: 'upstream', gone: 'gone', user: 'user' };
 
 export const inTab = (tab, group, state) =>
   tab === 'muted' || tab === 'resolved'

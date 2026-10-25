@@ -32,13 +32,15 @@
     ['open', 'Open'],
     ['defects', 'Defects'],
     ['upstream', 'Upstream'],
+    ['gone', 'Dead links'],
     ['user', 'User errors'],
     ['muted', 'Muted'],
     ['resolved', 'Resolved'],
   ];
   const KIND_HELP = {
     user: 'A reply to something the user sent. Nothing to fix unless it keeps catching valid links.',
-    upstream: 'A site refused or no longer has the content. Worth a look if it spikes.',
+    upstream: 'A site refused the download. Worth a look if it spikes.',
+    gone: 'The post was deleted, made private or expired. Nothing to fix.',
     defect: 'Not a user error or a site refusing, so treat it as ours until proven otherwise.',
   };
   const BADGE = {
@@ -50,6 +52,7 @@
     open: 'No failures in the last 7 days.',
     defects: 'No open failures that look like ours.',
     upstream: 'No open failures from sites refusing.',
+    gone: 'No open failures from deleted or private posts.',
     user: 'No open failures caused by what users sent.',
     muted: 'Muted issues wait here until the mute ends.',
     resolved: 'Resolved issues come back to Open if they happen again.',
@@ -142,6 +145,7 @@
     open,
     defects: open.filter(g => g.kind === 'defect'),
     upstream: open.filter(g => g.kind === 'upstream'),
+    gone: open.filter(g => g.kind === 'gone'),
     user: open.filter(g => g.kind === 'user'),
     muted: withState.filter(g => g.state === 'muted'),
     resolved: withState.filter(g => g.state === 'resolved'),

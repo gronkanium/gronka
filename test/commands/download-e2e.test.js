@@ -483,10 +483,7 @@ if (!mocksSupported) {
       const { interaction, calls } = downloadInteraction('https://example.com/track.ogg');
       interaction.attachmentSizeLimit = 1000;
       await handleDownloadCommand(interaction);
-      assert.match(
-        calls.editReply[0].embeds.find(e => e.url)?.url,
-        /https:\/\/cdn\.test\/audio\/[0-9a-f]{32}\.ogg/
-      );
+      assert.match(calls.editReply[0].content, /https:\/\/cdn\.test\/audio\/[0-9a-f]{32}\.ogg/);
       assert.deepStrictEqual(uploads.at(-1), { type: 'audio', size: 4096 });
     });
 
@@ -503,10 +500,7 @@ if (!mocksSupported) {
       const before = uploads.length;
       await handleDownloadCommand(interaction);
       assert.strictEqual(uploads.length - before, 10);
-      assert.strictEqual(
-        calls.editReply[0].embeds.filter(e => e.url?.startsWith('https://cdn.test/')).length,
-        10
-      );
+      assert.strictEqual(calls.editReply[0].content.match(/https:\/\/cdn\.test\//g).length, 10);
       assert.strictEqual(calls.followUp[0].files.length, 2);
     });
 
@@ -523,10 +517,7 @@ if (!mocksSupported) {
       const before = uploads.length;
       await handleDownloadCommand(interaction);
       assert.deepStrictEqual(uploads.slice(before), [{ type: 'archive', size: 4096 }]);
-      assert.match(
-        calls.editReply[0].embeds.find(e => e.url)?.url,
-        /https:\/\/cdn\.test\/archives\/[0-9a-f]{32}\.zip/
-      );
+      assert.match(calls.editReply[0].content, /https:\/\/cdn\.test\/archives\/[0-9a-f]{32}\.zip/);
     });
 
     test('a cancelled worker job stops acquisition and replies with the timeout reason', async () => {
@@ -572,10 +563,7 @@ if (!mocksSupported) {
       await handleDownloadCommand(interaction);
       assert.strictEqual(uploads.length - before, 2);
       assert.strictEqual(calls.editReply[0].files.length, 10);
-      assert.strictEqual(
-        calls.followUp[0].embeds.filter(e => e.url?.startsWith('https://cdn.test/')).length,
-        2
-      );
+      assert.strictEqual(calls.followUp[0].content.match(/https:\/\/cdn\.test\//g).length, 2);
     });
 
     test('an expired reply produces a specific error and does not upload to R2', async () => {
@@ -616,24 +604,24 @@ if (!mocksSupported) {
       interaction.attachmentSizeLimit = 4096 + 1024;
       await handleDownloadCommand(interaction);
       assert.strictEqual(calls.editReply[0].files, undefined);
-      assert.match(calls.editReply[0].embeds.find(e => e.url)?.url, /https:\/\/cdn\.test\//);
+      assert.match(calls.editReply[0].content, /https:\/\/cdn\.test\//);
     });
 
-    test('URL-only photo galleries retain their image previews and filenames', async () => {
+    test('URL-only photo galleries reply with the plain photo link', async () => {
       await setSetting('url_only_mode', true);
       try {
         const { interaction, calls } = downloadInteraction('https://x.com/user/status/photo-links');
         await handleDownloadCommand(interaction);
         const reply = calls.editReply[0];
-        assert.equal(reply.embeds[0].title, 'holiday.jpg');
-        assert.deepEqual(reply.embeds[0].image, { url: 'https://example.com/photo.jpg' });
+        assert.equal(reply.content, 'https://example.com/photo.jpg');
+        assert.equal(reply.embeds, undefined);
         assert.equal(reply.files, undefined);
       } finally {
         await setSetting('url_only_mode', false);
       }
     });
 
-    test('a failed gallery follow-up clears success embeds from the error reply', async () => {
+    test('a failed gallery follow-up tells the user only part was sent', async () => {
       const { interaction, calls } = downloadInteraction(
         'https://x.com/user/status/carousel-denied'
       );
@@ -641,10 +629,9 @@ if (!mocksSupported) {
         throw Object.assign(new Error('Missing Permissions'), { code: 50013 });
       };
       await handleDownloadCommand(interaction);
-      assert.equal(calls.editReply[0].embeds.length, 10);
+      assert.equal(calls.editReply[0].files.length, 10);
       const error = calls.editReply.at(-1);
       assert.match(error.content, /only part of this post was sent/);
-      assert.deepEqual(error.embeds, []);
     });
 
     test('single-file video: downloads, saves, and replies with a Discord attachment', async () => {
@@ -660,7 +647,7 @@ if (!mocksSupported) {
       assert.strictEqual(reply.files.length, 1);
       assert.ok(reply.files[0].name.endsWith('.mp4'), 'attachment has .mp4 filename');
       assert.strictEqual(reply.content, '');
-      assert.equal(reply.embeds[0].title, reply.files[0].name);
+      assert.equal(reply.embeds, undefined);
     });
 
     test('multi-file picker: downloads array and replies with multiple attachments', async () => {
@@ -779,7 +766,7 @@ if (!mocksSupported) {
 
       assert.strictEqual(calls.editReply.length, 1, 'exactly one reply');
       assert.strictEqual(
-        calls.editReply[0].embeds[0].url,
+        calls.editReply[0].content,
         'https://video.twimg.com/ext_tw_video/huge/vid/avc1/big.mp4',
         'reply is the direct media URL'
       );
@@ -796,7 +783,7 @@ if (!mocksSupported) {
 
       assert.strictEqual(calls.editReply.length, 1, 'exactly one reply');
       assert.strictEqual(
-        calls.editReply[0].embeds[0].url,
+        calls.editReply[0].content,
         'https://video.twimg.com/ext_tw_video/toolong/vid/avc1/full.mp4',
         'reply is the direct media URL'
       );
@@ -876,10 +863,7 @@ if (!mocksSupported) {
 
       assert.strictEqual(calls.editReply.length, 1);
       assert.strictEqual(calls.editReply[0].files, undefined, 'no attachment');
-      assert.match(
-        calls.editReply[0].embeds.find(e => e.url)?.url,
-        /https:\/\/cdn\.test\/videos\/[0-9a-f]{32}\.mp4/
-      );
+      assert.match(calls.editReply[0].content, /https:\/\/cdn\.test\/videos\/[0-9a-f]{32}\.mp4/);
       assert.deepStrictEqual(uploads.at(-1), { type: 'video', size: 4096 });
     });
 
@@ -892,10 +876,7 @@ if (!mocksSupported) {
 
       const reply = calls.editReply[0];
       assert.strictEqual(reply.files.length, 1, 'only the 2048-byte photo attaches');
-      assert.match(
-        reply.embeds.find(e => e.url)?.url,
-        /https:\/\/cdn\.test\/images\/[0-9a-f]{32}\.png/
-      );
+      assert.match(reply.content, /https:\/\/cdn\.test\/images\/[0-9a-f]{32}\.png/);
     });
   });
 }

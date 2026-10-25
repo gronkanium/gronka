@@ -1,46 +1,49 @@
-import { describe, test } from 'bun:test';
+import { describe, onTestFinished, test } from 'bun:test';
 import assert from 'node:assert/strict';
-import { AttachmentBuilder, PermissionsBitField } from 'discord.js';
+import { AttachmentBuilder } from 'discord.js';
 import {
   mediaReplyPayload,
   mediaReplyBatches,
   formatSizeChange,
 } from '../../../src/commands/shared/media-reply.js';
 import { r2ExpiryText } from '../../../src/utils/r2-storage.js';
+import { r2Config } from '../../../src/utils/config.js';
 
 describe('media replies', () => {
-  test('keeps files attached and previews images inside their embeds', () => {
+  test('a file goes as a bare attachment, no embed and no text', () => {
     const attachment = new AttachmentBuilder(Buffer.from('gif'), { name: 'gronka.gif' });
-    const payload = mediaReplyPayload({}, [
-      { name: 'gronka.gif', size: 3, type: 'gif', attachment },
-    ]);
-    assert.equal(payload.files[0], attachment);
-    assert.equal(payload.content, '');
-    assert.equal(payload.embeds[0].title, 'gronka.gif');
-    assert.equal(payload.embeds[0].image.url, 'attachment://gronka.gif');
-    assert.equal(payload.embeds[0].footer, undefined);
+    const payload = mediaReplyPayload([{ size: 3, type: 'gif', attachment }]);
+    assert.deepEqual(payload, { content: '', files: [attachment] });
   });
 
-  test('links media titles without promising expiry for external links', () => {
+  test('a link goes as plain text so Discord shows its own player', () => {
     const url = 'https://example.com/video.mp4';
-    const payload = mediaReplyPayload({}, [{ url, name: 'video.mp4', type: 'video' }]);
-    assert.equal(payload.embeds[0].url, url);
-    assert.equal(payload.embeds[0].footer, undefined);
-    assert.equal(payload.files, undefined);
+    const payload = mediaReplyPayload([{ url, type: 'video' }]);
+    assert.deepEqual(payload, { content: url });
   });
 
-  test('previews Cobalt photo links and preserves source filenames', () => {
-    const item = {
-      url: 'https://example.com/photo.jpg',
-      type: 'photo',
-      filename: 'holiday.jpg',
-    };
-    const payload = mediaReplyPayload({}, [item]);
-    assert.equal(payload.embeds[0].title, item.filename);
-    assert.deepEqual(payload.embeds[0].image, { url: item.url });
+  test('a size change rides along as a small text line', () => {
+    const attachment = new AttachmentBuilder(Buffer.from('gif'), { name: 'gronka.gif' });
+    const payload = mediaReplyPayload([{ attachment, description: formatSizeChange(1000, 750) }]);
+    assert.equal(payload.embeds, undefined);
+    assert.match(payload.content, /^-# .*25\.0% smaller\)$/);
   });
 
-  test('uses each temporary link lifetime only when cleanup is enabled', () => {
+  test('temporary links get one expiry note for the longest lifetime', () => {
+    const saved = { ...r2Config };
+    Object.assign(r2Config, { cleanupEnabled: true, publicDomain: 'cdn.test' });
+    onTestFinished(() => Object.assign(r2Config, saved));
+    const items = [
+      { url: 'https://cdn.test/videos/a.mp4', ttlHours: 6 },
+      { url: 'https://cdn.test/videos/b.mp4', ttlHours: 48 },
+    ];
+    const lines = mediaReplyPayload(items).content.split('\n');
+    assert.deepEqual(lines.slice(0, 2), [items[0].url, items[1].url]);
+    assert.equal(lines.length, 3);
+    assert.match(lines[2], /^-# this link will expire in 2 days/);
+  });
+
+  test('expiry is promised only for our own links while cleanup runs', () => {
     const config = { cleanupEnabled: true, publicDomain: 'files.example.com' };
     const url = 'https://files.example.com/videos/a.mp4';
     assert.match(r2ExpiryText(url, config, 6), /6 hours/);
@@ -56,28 +59,15 @@ describe('media replies', () => {
     assert.doesNotMatch(formatSizeChange(0, 1000), /Infinity|NaN/);
   });
 
-  test('falls back to text without losing attachments or size changes', () => {
-    const attachment = new AttachmentBuilder(Buffer.from('gif'), { name: 'gronka.gif' });
-    const payload = mediaReplyPayload({ appPermissions: new PermissionsBitField() }, [
-      { attachment, description: formatSizeChange(1000, 1250) },
-    ]);
-    assert.deepEqual(payload.embeds, []);
-    assert.equal(payload.files[0], attachment);
-    assert.match(payload.content, /25.0% larger/);
-  });
-
   test('batches every link within Discord limits without dropping any', () => {
     const items = Array.from({ length: 23 }, (_, i) => ({ url: `https://example.com/${i}.mp4` }));
-    const batches = mediaReplyBatches({}, items);
     assert.deepEqual(
-      batches.map(b => b.length),
+      mediaReplyBatches(items).map(b => b.length),
       [10, 10, 3]
     );
-    assert.deepEqual(batches.flat(), items);
     const long = items.map(item => ({ url: item.url + '?q=' + 'a'.repeat(700) }));
-    const plain = mediaReplyBatches({ embedLinksAllowed: false }, long);
-    assert.deepEqual(plain.flat(), long);
-    for (const batch of plain)
-      assert.ok(mediaReplyPayload({ embedLinksAllowed: false }, batch).content.length <= 2000);
+    const batches = mediaReplyBatches(long);
+    assert.deepEqual(batches.flat(), long);
+    for (const batch of batches) assert.ok(mediaReplyPayload(batch).content.length <= 2000);
   });
 });

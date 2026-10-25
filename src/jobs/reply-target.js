@@ -1,6 +1,5 @@
 import { Collection, InteractionWebhook, PermissionFlagsBits } from 'discord.js';
 import { createMessageAdapter } from '../commands/shared/message-adapter.js';
-import { canEmbedMedia } from '../commands/shared/media-reply.js';
 import { getDiscordAttachmentLimit } from '../commands/shared/attachment-limit.js';
 
 const INTERACTION_TOKEN_MS = 15 * 60 * 1000;
@@ -36,7 +35,6 @@ export function replyTargetOf(interaction) {
   if (interaction.isPrefixCommand) {
     return {
       kind: 'message',
-      ...(!canEmbedMedia(interaction) ? { embedLinksAllowed: false } : {}),
       channelId: interaction.channelId,
       messageId: interaction.message.id,
       replyId: interaction.replyMessageId(),
@@ -46,7 +44,6 @@ export function replyTargetOf(interaction) {
   }
   return {
     kind: 'interaction',
-    ...(!canEmbedMedia(interaction) ? { embedLinksAllowed: false } : {}),
     appId: interaction.applicationId,
     token: interaction.token,
     channelId: interaction.channelId,
@@ -90,7 +87,6 @@ export async function interactionFor(client, job) {
       {
         replyMessage,
         attachmentSizeLimit: reply.attachmentSizeLimit ?? undefined,
-        embedLinksAllowed: reply.embedLinksAllowed,
       }
     );
   }
@@ -116,7 +112,6 @@ export async function interactionFor(client, job) {
     applicationId: reply.appId,
     channelId: reply.channelId,
     attachmentSizeLimit: reply.attachmentSizeLimit ?? undefined,
-    embedLinksAllowed: reply.embedLinksAllowed,
     channel: reply.channelId
       ? {
           messages: {

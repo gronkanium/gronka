@@ -15,11 +15,15 @@ export function isGifFile(filename, contentType) {
   return isGifExt || isGifContentType;
 }
 
-// Optimizes a gif into the job dir; returns the optimized media file.
+// Optimizes a gif into the job dir; an already-tight gif can come out bigger, so the smaller one wins.
 export async function optimizeToJob(gif, lossy = null) {
   const outputPath = await tempPath('.gif');
   await optimizeGif(gif.path, outputPath, lossy === null ? {} : { lossy });
-  return fromPath(outputPath, { contentType: 'image/gif', filename: 'gronka.gif' });
+  const optimized = await fromPath(outputPath, {
+    contentType: 'image/gif',
+    filename: 'gronka.gif',
+  });
+  return optimized.size < gif.size ? optimized : gif;
 }
 
 export async function optimizeGif(inputPath, outputPath, options = {}) {

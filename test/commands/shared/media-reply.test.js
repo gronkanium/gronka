@@ -29,6 +29,17 @@ describe('media replies', () => {
     assert.equal(payload.files, undefined);
   });
 
+  test('previews Cobalt photo links and preserves source filenames', () => {
+    const item = {
+      url: 'https://example.com/photo.jpg',
+      type: 'photo',
+      filename: 'holiday.jpg',
+    };
+    const payload = mediaReplyPayload({}, [item]);
+    assert.equal(payload.embeds[0].title, item.filename);
+    assert.deepEqual(payload.embeds[0].image, { url: item.url });
+  });
+
   test('uses each temporary link lifetime only when cleanup is enabled', () => {
     const config = { cleanupEnabled: true, publicDomain: 'files.example.com' };
     const url = 'https://files.example.com/videos/a.mp4';

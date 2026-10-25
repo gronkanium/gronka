@@ -29,11 +29,11 @@ export function mediaReplyPayload(interaction, items) {
     return { content, embeds: [], ...(files.length ? { files } : {}) };
   }
   const embeds = items.map(item => {
-    const name = (item.name || 'media').slice(0, 200);
+    const name = (item.name || item.filename || 'media').slice(0, 200);
     const description =
       item.description ?? (Number.isFinite(item.size) ? formatFileSize(item.size) : null);
     const footer = r2ExpiryText(item.url, r2Config, item.ttlHours);
-    const image = ['image', 'gif'].includes(item.type)
+    const image = ['image', 'gif', 'photo'].includes(item.type)
       ? { url: item.url || `attachment://${item.attachment.name}` }
       : null;
     return {

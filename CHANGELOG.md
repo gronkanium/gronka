@@ -5,6 +5,24 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres (attempts) to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [4.6.0](https://github.com/gronkanium/gronka/compare/v4.5.0...v4.6.0) (2026-10-25)
+
+
+### Features
+
+* embed media replies and restore source downloads ([#175](https://github.com/gronkanium/gronka/issues/175)) ([4c13a9a](https://github.com/gronkanium/gronka/commit/4c13a9ab0f8cc72d1060d8e30966788e4e2244dd))
+* **webui:** a Dead links tab for deleted or private posts, defects-only nav badge ([#178](https://github.com/gronkanium/gronka/issues/178)) ([2634240](https://github.com/gronkanium/gronka/commit/2634240eb970520e7a49922ecd8d153f6e1a27df))
+
+
+### Bug Fixes
+
+* **deps:** update AWS SDK packages to 3.1153.0 ([#170](https://github.com/gronkanium/gronka/issues/170)) ([335f0b0](https://github.com/gronkanium/gronka/commit/335f0b021da5e48d55807b71aeb35d01123e1124))
+* **deps:** update charset-normalizer to 3.5.2 ([#173](https://github.com/gronkanium/gronka/issues/173)) ([57bb626](https://github.com/gronkanium/gronka/commit/57bb626a36a1cfb78a4fe936b290fc360fd76ae3))
+* **deps:** update gallery-dl to 1.32.17 ([66d2266](https://github.com/gronkanium/gronka/commit/66d2266e1c15f9a51eb37fc67c1b732681191596))
+* **deps:** update pycparser to 3.11 ([#171](https://github.com/gronkanium/gronka/issues/171)) ([72a0854](https://github.com/gronkanium/gronka/commit/72a08545238338dbf1428a09e3e24beccf93214d))
+* plain file and link replies, dependency and containment fixes ([#177](https://github.com/gronkanium/gronka/issues/177)) ([7eddf08](https://github.com/gronkanium/gronka/commit/7eddf0873398ff8ed3fd7832e484008e058c63aa))
+* preserve media previews and dashboard host configuration ([#176](https://github.com/gronkanium/gronka/issues/176)) ([c26eec3](https://github.com/gronkanium/gronka/commit/c26eec33b7aa865f7d8fd5ab7d249eb9d8b3b5e3))
+
 ## [4.5.0](https://github.com/gronkanium/gronka/compare/v4.4.0...v4.5.0) (2026-10-23)
 
 

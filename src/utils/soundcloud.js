@@ -25,7 +25,16 @@ export function isSoundCloudUrl(url) {
 export async function soundcloudTrack(url) {
   const { stdout } = await execFileAsync(
     'yt-dlp',
-    ['-J', '--no-playlist', '--no-warnings', '--ignore-no-formats-error', ...getCookieArgs(), url],
+    [
+      '-J',
+      '--no-playlist',
+      '--no-warnings',
+      '--ignore-no-formats-error',
+      '--ies',
+      'default,-generic',
+      ...getCookieArgs(),
+      url,
+    ],
     { timeout: 30_000, maxBuffer: 20 * 1024 * 1024 }
   );
   const info = JSON.parse(stdout);

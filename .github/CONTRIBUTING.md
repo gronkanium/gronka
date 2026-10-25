@@ -24,8 +24,8 @@ the [wiki](https://github.com/gronkanium/gronka/wiki) covers configuration in de
 | webui         | `src/webui-server.js`, `src/webui/` | the operator dashboard (svelte, built by `src/webui/vite.config.js`)                            |
 | gronka web    | `src/web-server.js`, `web/`         | the hosted site at web.gronka.dev; it needs cloudflare and is not part of a self-hosted install |
 
-`docker compose up` starts `app` (bot and webui), `worker`, `postgres`, `cobalt` (the media downloader)
-and `watchtower` (keeps cobalt updated). gifs are optimized with `gifsicle` inside the image.
+`docker compose up` starts `app` (bot and webui), `worker`, `postgres` and `cobalt` (the media
+downloader). gifs are optimized with `gifsicle` inside the image.
 
 ## the development loop
 

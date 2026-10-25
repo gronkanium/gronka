@@ -9,5 +9,6 @@ export function curatedErrorMessage(error, fallback) {
 export function replyWithCuratedError(interaction, error, fallback) {
   return safeInteractionEditReply(interaction, {
     content: curatedErrorMessage(error, fallback),
+    embeds: [],
   });
 }

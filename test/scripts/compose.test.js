@@ -51,6 +51,12 @@ describe('compose networking', () => {
     assert.equal(web.services['gronka-web'].environment.GEO_PROXY_URL, '');
   });
 
+  test('the app receives configured dashboard hostnames', () => {
+    const hosts = 'dashboard.example.com,other.example.com';
+    const bot = config(['docker-compose.yml'], { WEBUI_ALLOWED_HOSTS: hosts });
+    assert.equal(bot.services.app.environment.WEBUI_ALLOWED_HOSTS, hosts);
+  });
+
   test('web receives a configured external geo proxy', () => {
     const proxy = 'http://proxy.example.com:8888';
     const web = config(['docker-compose.web.yml'], { WEB_GEO_PROXY_URL: proxy });

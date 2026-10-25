@@ -93,9 +93,6 @@ export async function storedReplyItem(stored, { name, index = 0, description } =
   const attachment = stored.fits ? attachmentFor(stored, index) : null;
   if (name && attachment) attachment.setName(name);
   return {
-    name: name || attachment?.name || `gronka${stored.ext}`,
-    size: stored.size,
-    type: stored.type,
     url: stored.fits ? null : stored.url,
     attachment,
     description,
@@ -106,7 +103,7 @@ export async function storedReplyItem(stored, { name, index = 0, description } =
 // Attaches the file when it fits, else links it; a rejected attachment falls back to an R2 link.
 export async function deliverStored(interaction, stored, options = {}) {
   jobSignal()?.throwIfAborted();
-  const payload = mediaReplyPayload(interaction, [await storedReplyItem(stored, options)]);
+  const payload = mediaReplyPayload([await storedReplyItem(stored, options)]);
   if (!stored.fits) return deliverReply(interaction, payload);
   const message = await safeInteractionEditReply(interaction, payload);
   if (message !== false) return;
@@ -117,8 +114,5 @@ export async function deliverStored(interaction, stored, options = {}) {
     `Discord attachment upload failed (${describeCause(interaction.deliveryError)}), falling back to R2`
   );
   const linked = { ...(await toR2(stored)), fits: false };
-  await deliverReply(
-    interaction,
-    mediaReplyPayload(interaction, [await storedReplyItem(linked, options)])
-  );
+  await deliverReply(interaction, mediaReplyPayload([await storedReplyItem(linked, options)]));
 }

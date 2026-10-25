@@ -50,8 +50,8 @@ const { galleryDlEnabled: GALLERY_DL_ENABLED, discordSizeLimit: DISCORD_SIZE_LIM
 
 async function replyWithDirectMediaUrls(interaction, ctx, { urls }) {
   let followUp = false;
-  for (const batch of mediaReplyBatches(interaction, urls)) {
-    const payload = mediaReplyPayload(interaction, batch);
+  for (const batch of mediaReplyBatches(urls)) {
+    const payload = mediaReplyPayload(batch);
     if (followUp) {
       if ((await safeInteractionFollowUp(interaction, payload)) === false)
         throw deliveryError(interaction, true);
@@ -91,8 +91,8 @@ async function deliverGallery(interaction, ctx, fileData, attachmentLimit) {
     const items = await Promise.all(
       group.map(item => storedReplyItem(item, { index: stored.indexOf(item) }))
     );
-    for (const batch of mediaReplyBatches(interaction, items)) {
-      const payload = mediaReplyPayload(interaction, batch);
+    for (const batch of mediaReplyBatches(items)) {
+      const payload = mediaReplyPayload(batch);
       const send = followUp ? safeInteractionFollowUp : safeInteractionEditReply;
       const message = await send(interaction, payload);
       if (message === false) {
@@ -113,8 +113,8 @@ async function deliverGalleryLinks(interaction, items, followUp = false) {
     fits: false,
   }));
   const replies = await Promise.all(linked.map(item => storedReplyItem(item)));
-  for (const batch of mediaReplyBatches(interaction, replies)) {
-    const payload = mediaReplyPayload(interaction, batch);
+  for (const batch of mediaReplyBatches(replies)) {
+    const payload = mediaReplyPayload(batch);
     if (followUp) {
       if ((await safeInteractionFollowUp(interaction, payload)) === false)
         throw deliveryError(interaction, true);

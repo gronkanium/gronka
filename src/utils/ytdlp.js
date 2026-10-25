@@ -447,13 +447,17 @@ function executeYtdlp(
     // --max-filesize can't bound section downloads or streams of unknown size; the disk can.
     // Twice the limit leaves room for the video and audio parts beside their merge.
     let overSize = false;
+    let measuring = false;
     const sizeWatch =
       Number.isFinite(maxSize) &&
       setInterval(async () => {
+        if (measuring) return;
+        measuring = true;
         if ((await usedBytes(outputDir)) > maxSize * 2) {
           overSize = true;
           ytdlp.kill('SIGKILL');
         }
+        measuring = false;
       }, SIZE_WATCH_MS);
 
     const timeoutId = setTimeout(() => {

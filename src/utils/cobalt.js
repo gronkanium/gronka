@@ -152,6 +152,7 @@ const EMBED_FIXER_HOSTS = new Map([
   ['twitterez.com', 'twitter.com'],
   ['xeezz.com', 'twitter.com'],
   ['gubbyx.com', 'twitter.com'],
+  ['pawbsx.com', 'twitter.com'],
   // Nitter front ends keep x.com's paths
   ['xcancel.com', 'twitter.com'],
   ['nitter.tiekoetter.com', 'twitter.com'],

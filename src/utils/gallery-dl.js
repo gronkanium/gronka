@@ -34,7 +34,9 @@ const MEDIA_EXTENSIONS = new Set([
   '.webp',
 ]);
 
-const MAX_GALLERY_FILES = 25;
+// Past MAX_LOOSE_FILES a gallery goes out as one zip; MAX_GALLERY_FILES stops a whole profile.
+const MAX_LOOSE_FILES = 25;
+const MAX_GALLERY_FILES = 200;
 const MAX_MANGA_IMAGES = 10;
 
 // Turns gallery-dl's own error or warning lines (run with -w) into what the user is told.
@@ -309,10 +311,13 @@ export async function downloadWithGalleryDl(url, maxSize = Infinity, options = {
     throw galleryDlError(warnings, getGalleryDlSite(url));
   }
   if (files.length > MAX_GALLERY_FILES) {
-    throw new ValidationError('this gallery contains too many files to download at once');
+    throw new ValidationError(
+      `this gallery has more than ${MAX_GALLERY_FILES} files, link a single post instead`
+    );
   }
   const results = [];
-  for (const filePath of files) {
+  let total = 0;
+  for (const filePath of files.sort((a, b) => a.localeCompare(b, undefined, { numeric: true }))) {
     const file = await fromPath(filePath, {
       contentType: contentTypeForExtension(path.extname(filePath)),
       filename: path.basename(filePath),
@@ -320,7 +325,14 @@ export async function downloadWithGalleryDl(url, maxSize = Infinity, options = {
     if (file.size > maxSize) {
       throw new ValidationError('a gallery file is too large to download');
     }
+    total += file.size;
+    if (total > maxSize) {
+      throw new ValidationError('this gallery is too large to download');
+    }
     results.push(file);
+  }
+  if (results.length > MAX_LOOSE_FILES) {
+    return writeZip(results, 'gallery.zip');
   }
   return results.length === 1 ? results[0] : results;
 }

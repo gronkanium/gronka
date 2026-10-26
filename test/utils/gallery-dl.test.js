@@ -1,6 +1,10 @@
 import { describe, test } from 'bun:test';
 import assert from 'node:assert';
-import { galleryDlError } from '../../src/utils/gallery-dl.js';
+import fs from 'node:fs/promises';
+import os from 'node:os';
+import path from 'node:path';
+import { galleryDlError, downloadWithGalleryDl } from '../../src/utils/gallery-dl.js';
+import { withJobDir } from '../../src/utils/media-file.js';
 import { ValidationError } from '../../src/utils/errors.js';
 
 describe('galleryDlError', () => {
@@ -69,5 +73,49 @@ describe('galleryDlError', () => {
     const error = galleryDlError('', 'Wallhaven');
     assert.strictEqual(error.message, 'this Wallhaven link has no image or video to download.');
     assert.strictEqual(error.cause.message, 'gallery-dl: no files and no output');
+  });
+});
+
+describe('downloadWithGalleryDl', () => {
+  const fakeGalleryDl = async pages => {
+    const bin = await fs.mkdtemp(path.join(os.tmpdir(), 'fake-gallery-dl-'));
+    const script = `#!/bin/sh
+while [ "$1" != "--directory" ]; do shift; done
+for i in $(seq 1 ${pages}); do printf 'page' > "$2/page_$i.jpg"; done
+`;
+    await fs.writeFile(path.join(bin, 'gallery-dl'), script, { mode: 0o755 });
+    return bin;
+  };
+  const withFake = async (pages, fn) => {
+    const bin = await fakeGalleryDl(pages);
+    const saved = process.env.PATH;
+    process.env.PATH = `${bin}:${saved}`;
+    try {
+      return await withJobDir(fn);
+    } finally {
+      process.env.PATH = saved;
+      await fs.rm(bin, { recursive: true, force: true });
+    }
+  };
+
+  test('a gallery over the loose-file limit comes back as one zip, pages in order', async () => {
+    await withFake(30, async () => {
+      const zip = await downloadWithGalleryDl('https://nhentai.net/g/1/');
+      assert.strictEqual(zip.archive, true);
+      const entries = [
+        ...(await fs.readFile(zip.path)).toString('latin1').matchAll(/page_\d+\.jpg/g),
+      ]
+        .map(m => m[0])
+        .slice(0, 30);
+      assert.deepStrictEqual(entries.slice(0, 3), ['page_1.jpg', 'page_2.jpg', 'page_3.jpg']);
+      assert.strictEqual(entries[29], 'page_30.jpg');
+    });
+  });
+
+  test('a small gallery still comes back as loose files', async () => {
+    await withFake(3, async () => {
+      const files = await downloadWithGalleryDl('https://nhentai.net/g/1/');
+      assert.strictEqual(files.length, 3);
+    });
   });
 });

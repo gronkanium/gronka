@@ -8,6 +8,7 @@ import {
   resolveContentType,
 } from '../../src/utils/cobalt.js';
 import { isInstagramPostUrl } from '../../src/utils/instagram.js';
+import { describeCause, rootCause } from '../../src/utils/errors.js';
 
 describe('cobalt utilities', () => {
   test('normalizes a filename when Cobalt labels MP4 bytes as GIF', () => {
@@ -292,6 +293,20 @@ describe('cobalt utilities', () => {
       );
     });
   });
+});
+
+test('a cover image cobalt returns for an Instagram reel counts as a miss', async () => {
+  const { downloadFromSocialMedia } = await import('../../src/utils/cobalt.js');
+  const cover = { status: 'tunnel', url: 'http://cobalt:9000/tunnel?id=x', filename: 'a.jpg' };
+  for (const url of [
+    'https://www.instagram.com/reel/De6r82TCaVC/?cplk=MWV6NnI1bGQxbnp5',
+    'https://instagram.com/user/reels/De6r82TCaVC/',
+    'https://www.instagram.com/tv/De6r82TCaVC/',
+  ]) {
+    await assert.rejects(downloadFromSocialMedia(null, url, Infinity, cover), error =>
+      /only its cover image/.test(describeCause(rootCause(error)))
+    );
+  }
 });
 
 test('repairUrl drops the stray scheme cobalt puts on streamable links', async () => {

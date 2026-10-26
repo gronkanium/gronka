@@ -163,7 +163,8 @@ services:
 
   cobalt:
     logging: *logging
-    image: ghcr.io/imputnet/cobalt:11.7.1
+    image: gronka-cobalt:11.7.1
+    build: { context: ./docker, dockerfile: cobalt.Dockerfile }
     init: true
     read_only: true
     cap_drop: [ALL]

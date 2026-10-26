@@ -255,6 +255,13 @@ export const ROUTES = [
     chain: [step('tenor')],
     services: switches('social', ['tenor', 'Tenor', ['tenor.com']]),
   },
+  // yt-dlp reads only the videos in an Imgur post; gallery-dl takes photo posts and albums.
+  {
+    id: 'imgur',
+    name: 'Imgur',
+    owns: url => onHost('imgur.com')(url) && !isStillImage(url),
+    chain: [step('ytdlp'), step('gallery-dl', { note: 'photo posts' })],
+  },
   {
     id: 'ytdlp',
     name: 'yt-dlp sites',

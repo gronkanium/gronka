@@ -247,6 +247,8 @@ function getContentType(ext) {
   return mimeTypes[extLower] || 'video/mp4';
 }
 
+const noVideo = () => new NetworkError('this post has no video in it.', 'NO_VIDEO');
+
 const durationError = maxDuration =>
   new ValidationError(
     `video duration exceeds the maximum allowed (${Math.floor(maxDuration / 60)} minutes).` +
@@ -316,19 +318,12 @@ const FAILURES = [
       new ValidationError('this link is not a downloadable video page.', 'YTDLP_UNSUPPORTED_URL'),
   ],
   [/is not a valid URL/, url => new ValidationError(`invalid ${siteLabel(url)} URL`)],
-  [
-    /There is no video in this post|No video could be found in this tweet/,
-    () => new NetworkError('this post has no video in it.', 'NO_VIDEO'),
-  ],
+  [/There is no video in this post|No video could be found in this tweet/, noVideo],
   // Instagram reports photo posts this way too.
   [
     /No video formats found/,
     url =>
-      new NetworkError(
-        ...(isInstagramPostUrl(url)
-          ? ['this post has no video in it.', 'NO_VIDEO']
-          : ['no downloadable video formats found'])
-      ),
+      isInstagramPostUrl(url) ? noVideo() : new NetworkError('no downloadable video formats found'),
   ],
   [
     /larger than max-filesize/i,
@@ -598,19 +593,8 @@ function executeYtdlp(
               );
               resolve(actualPath);
             } else {
-              // No files in output directory after successful exit - video was likely filtered out
-              // This happens when --match-filter skips the video (--quiet may suppress the message)
-              if (maxDuration !== Infinity && startTime === null && duration === null) {
-                rejectWith(
-                  durationError(maxDuration),
-                  'exit 0 with no file, skipped by the duration filter'
-                );
-              } else {
-                rejectWith(
-                  new NetworkError(SAVE_FAILURE_MESSAGE),
-                  'exit 0 with an empty output dir'
-                );
-              }
+              // A post with no video (an Imgur photo album) is a playlist of zero items to yt-dlp.
+              rejectWith(noVideo(), 'exit 0 with no file: yt-dlp found no video entries');
             }
           } catch (readError) {
             logger.error(

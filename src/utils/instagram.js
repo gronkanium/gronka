@@ -98,6 +98,15 @@ export function isInstagramPostUrl(url) {
   }
 }
 
+export function isInstagramReelUrl(url) {
+  try {
+    const { hostname, pathname } = new URL(url);
+    return isInstagramHost(hostname) && /^(?:\/[^/]+)?\/(?:reels?|tv)\/[\w-]+/.test(pathname);
+  } catch {
+    return false;
+  }
+}
+
 export function shortcodeToMediaId(shortcode) {
   if (typeof shortcode !== 'string' || shortcode.length === 0) {
     return null;

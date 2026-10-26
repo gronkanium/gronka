@@ -5,6 +5,7 @@ import { fetchToFile, withExtension, extensionForType } from './media-file.js';
 import { detectFileType } from './storage.js';
 import { mapLimit, ITEM_FANOUT } from './map-limit.js';
 import { hostOf, normalizeHost } from './url-host.js';
+import { isInstagramReelUrl } from './instagram.js';
 
 const logger = createLogger('cobalt');
 
@@ -705,5 +706,12 @@ export async function getRemoteContentLength(mediaUrl) {
 export async function downloadFromSocialMedia(apiUrl, url, maxSize = Infinity, prefetched = null) {
   logger.debug(`Attempting to download from social media URL via Cobalt: ${url}`);
   const cobaltResponse = prefetched ?? (await callCobaltApi(apiUrl, url));
+  // Logged out, cobalt answers some reels with only the cover jpg; a miss lets the session extractor try.
+  if (isInstagramReelUrl(url) && /\.(jpe?g|png|webp|heic)$/i.test(cobaltResponse?.filename ?? '')) {
+    throw withCause(
+      new NetworkError(MISSING_FILE_MESSAGE),
+      `cobalt: answered an instagram reel with only its cover image (${cobaltResponse.filename})`
+    );
+  }
   return downloadFromCobalt(cobaltResponse, maxSize, apiUrl);
 }

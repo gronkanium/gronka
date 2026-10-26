@@ -4,13 +4,13 @@ import { isHentaiGifzUrl, extractMediaUrl } from '../../src/utils/hentaigifz.js'
 
 describe('hentaigifz utilities', () => {
   test('isHentaiGifzUrl recognizes post URLs', () => {
-    assert.strictEqual(isHentaiGifzUrl('https://hentaigifz.com/nezuko-exclusive-animation/'), true);
+    assert.strictEqual(isHentaiGifzUrl('https://hentaigifz.com/example-animation/'), true);
     assert.strictEqual(isHentaiGifzUrl('https://www.hentaigifz.com/some-slug/'), true);
     assert.strictEqual(isHentaiGifzUrl('http://hentaigifz.com/some-slug'), true);
   });
 
   test('isHentaiGifzUrl rejects other hosts and the bare cdn subdomain', () => {
-    assert.strictEqual(isHentaiGifzUrl('https://example.com/nezuko/'), false);
+    assert.strictEqual(isHentaiGifzUrl('https://example.com/example-animation/'), false);
     assert.strictEqual(isHentaiGifzUrl('https://hentaigifz.com.evil.com/x/'), false);
     // cdn URLs are direct assets, not post pages the extractor should be handed
     assert.strictEqual(isHentaiGifzUrl('https://cdn.hentaigifz.com/116592/x.gif'), false);
@@ -21,16 +21,16 @@ describe('hentaigifz utilities', () => {
     const html = `
       <script type="application/ld+json">
       {"@context":"https://schema.org","@type":"ImageObject",
-       "contentUrl":"https://cdn.hentaigifz.com/116592/nezuko-exclusive-animation.gif",
-       "name":"Nezuko"}
+       "contentUrl":"https://cdn.hentaigifz.com/116592/example-animation.gif",
+       "name":"Example"}
       </script>
       <div class="single-post-media"><picture>
-        <source srcset="https://cdn.hentaigifz.com/116592/nezuko-exclusive-animation-scaled.webp" type="image/webp">
-        <img src="https://cdn.hentaigifz.com/116592/nezuko-exclusive-animation.gif" alt="Nezuko">
+        <source srcset="https://cdn.hentaigifz.com/116592/example-animation-scaled.webp" type="image/webp">
+        <img src="https://cdn.hentaigifz.com/116592/example-animation.gif" alt="Example">
       </picture></div>`;
     assert.strictEqual(
       extractMediaUrl(html),
-      'https://cdn.hentaigifz.com/116592/nezuko-exclusive-animation.gif'
+      'https://cdn.hentaigifz.com/116592/example-animation.gif'
     );
   });
 

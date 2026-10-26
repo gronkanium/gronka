@@ -7,14 +7,17 @@ export const navStats = writable(null);
 export const issueStates = writable({});
 
 export async function refreshNav() {
-  const [issues, system] = await Promise.all([
+  const [issues, system, checks] = await Promise.all([
     getJsonOrNull('/api/alerts/summary?reasonLimit=300'),
     getJsonOrNull('/api/system'),
+    getJsonOrNull('/api/sources/checks'),
   ]);
   navStats.set({
     issues: groupIssues(issues?.byReason ?? []),
     paused: !!system?.jobs?.paused,
     version: system?.version ?? null,
+    checkProblems: (checks?.checks ?? []).filter(c => ['fail', 'gone'].includes(c.result?.status))
+      .length,
   });
 }
 

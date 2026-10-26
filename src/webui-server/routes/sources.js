@@ -4,6 +4,9 @@ import { readLink, prepareLink } from '../../core/intake.js';
 import { DOWNLOAD_SERVICES, getServiceForUrl } from '../../utils/download-services.js';
 import { readSetting } from '../../utils/settings.js';
 import { createLogger } from '../../utils/logger.js';
+import { SOURCE_EXAMPLES } from '../../core/source-examples.js';
+import { isRunning, runAndSave, runSourceChecks } from '../../core/source-checks.js';
+import { listSourceChecks } from '../../utils/database/source-checks-pg.js';
 
 const logger = createLogger('webui');
 const router = express.Router();
@@ -69,6 +72,41 @@ router.get('/api/sources/test', async (req, res) => {
   } catch (error) {
     logger.error('Failed to test a link:', error);
     res.status(500).json({ error: 'failed to test that link', message: error.message });
+  }
+});
+
+router.get('/api/sources/checks', async (req, res) => {
+  try {
+    const rows = new Map((await listSourceChecks()).map(row => [row.url, row]));
+    res.json({
+      enabled: await readSetting('source_checks'),
+      running: isRunning(),
+      checks: SOURCE_EXAMPLES.map(example => ({
+        ...example,
+        result: rows.get(example.url) ?? null,
+      })),
+    });
+  } catch (error) {
+    logger.error('Failed to read source checks:', error);
+    res.status(500).json({ error: 'failed to read source checks', message: error.message });
+  }
+});
+
+// With a url, checks that one example and answers with its result; without, starts a full run.
+router.post('/api/sources/checks/run', express.json(), async (req, res) => {
+  try {
+    const url = req.body?.url;
+    if (url === undefined) {
+      if (isRunning()) return res.status(409).json({ error: 'a run is already going' });
+      runSourceChecks().catch(error => logger.error('Source check run failed:', error));
+      return res.status(202).json({ running: true });
+    }
+    const example = SOURCE_EXAMPLES.find(e => e.url === url);
+    if (!example) return res.status(404).json({ error: 'not one of the example links' });
+    res.json(await runAndSave(example));
+  } catch (error) {
+    logger.error('Failed to run a source check:', error);
+    res.status(500).json({ error: 'failed to run the check', message: error.message });
   }
 });
 

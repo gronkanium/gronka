@@ -1,5 +1,5 @@
 # Stage 1: Builder - Install dependencies and build application
-FROM oven/bun:1.3-debian AS builder
+FROM oven/bun:1.4-debian AS builder
 
 # Set working directory
 WORKDIR /app
@@ -28,7 +28,7 @@ RUN bun run build:webui
 RUN rm -rf node_modules && bun install --frozen-lockfile --production --ignore-scripts
 
 # Stage 2: Runtime - Minimal production image
-FROM oven/bun:1.3-debian AS runtime
+FROM oven/bun:1.4-debian AS runtime
 
 # Install runtime dependencies: FFmpeg, gifsicle (GIF optimization), ImageMagick
 # (animated-WebP -> GIF; ffmpeg can't demux animated webp), ca-certificates, yt-dlp, and gallery-dl.

@@ -400,6 +400,20 @@ if (!mocksSupported) {
       assert.ok(result.size > 0, 'the download should still produce a file');
     });
 
+    test('a post yt-dlp finds no video in is not blamed on its length', async () => {
+      spawnCallLog = [];
+      spawnBehaviors = [unknownDuration, child => child.emit('close', 0)];
+      await assert.rejects(
+        () =>
+          downloadWithYtdlp('https://imgur.com/gallery/photos', {
+            maxSize: Infinity,
+            maxDuration: 3600,
+          }),
+        error =>
+          error.code === 'NO_VIDEO' && /no video entries/.test(error.cause?.message ?? error.cause)
+      );
+    });
+
     test('the format selector accepts formats that report no height', async () => {
       spawnCallLog = [];
       spawnBehaviors = [unknownDuration, success];

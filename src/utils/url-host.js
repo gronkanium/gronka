@@ -12,3 +12,6 @@ export function hostOf(url) {
 // Every link in a piece of text cut down to its host.
 export const hostsOnly = text =>
   text?.replace(/https?:\/\/[^\s"'<>)]+/gi, url => hostOf(url) ?? '<link>') ?? null;
+
+export const isBilibiliCdnHost = host =>
+  /(^|\.)bilivideo\.(com|cn)$|^upos-[\w-]+\.akamaized\.net$/.test(host ?? '');

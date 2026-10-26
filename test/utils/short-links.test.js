@@ -40,6 +40,7 @@ describe('resolveShortLink', () => {
     for (const url of [
       'https://vm.tiktok.com/abc/',
       'https://vt.tiktok.com/abc/',
+      'https://b23.tv/abc123',
       'https://www.tiktok.com/t/abc/',
       'https://tiktok.com/t/abc/',
     ]) {

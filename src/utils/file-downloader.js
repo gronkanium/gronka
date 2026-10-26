@@ -14,7 +14,7 @@ import {
   MAX_PAGE_BYTES,
 } from './ssrf-guard.js';
 import { OUTPUT_FORMATS } from './output-formats.js';
-import { hostOf } from './url-host.js';
+import { hostOf, isBilibiliCdnHost } from './url-host.js';
 
 const logger = createLogger('file-downloader');
 
@@ -107,9 +107,10 @@ const mb = bytes => bytes / (1024 * 1024);
 
 export function getDirectMediaHeaders(url) {
   const host = hostOf(url);
-  return host === 'rule34.xxx' || host?.endsWith('.rule34.xxx')
-    ? { Referer: 'https://rule34.xxx/' }
-    : {};
+  if (host === 'rule34.xxx' || host?.endsWith('.rule34.xxx')) {
+    return { Referer: 'https://rule34.xxx/' };
+  }
+  return isBilibiliCdnHost(host) ? { Referer: 'https://www.bilibili.com/' } : {};
 }
 
 function guardedFetch(url, maxSize, userAgent = null) {

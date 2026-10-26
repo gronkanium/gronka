@@ -92,7 +92,8 @@ services:
 
   cobalt-web:
     <<: *hardening
-    image: ghcr.io/imputnet/cobalt:11.7.1
+    image: gronka-cobalt:11.7.1
+    build: { context: ./docker, dockerfile: cobalt.Dockerfile }
     container_name: cobalt-web
     init: true
     mem_limit: 1g

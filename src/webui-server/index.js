@@ -5,6 +5,7 @@ import { ConfigurationError } from '../utils/errors.js';
 import { getPostgresConfig } from '../utils/database/connection.js';
 import { initDatabase } from '../utils/database.js';
 import { createApp } from './app.js';
+import { startSourceCheckJob } from '../core/source-checks.js';
 
 const logger = createLogger('webui');
 
@@ -55,6 +56,8 @@ try {
     logger.info(`webui server running on http://${WEBUI_HOST}:${WEBUI_PORT}`);
     logger.info(`dashboard: http://${WEBUI_HOST}:${WEBUI_PORT}`);
   });
+
+  startSourceCheckJob();
 })();
 
 function gracefulShutdown() {

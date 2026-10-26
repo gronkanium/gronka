@@ -6,6 +6,7 @@
     TriangleAlert,
     Server,
     Globe,
+    ShieldCheck,
     SlidersHorizontal,
     PanelLeftClose,
     PanelLeftOpen,
@@ -19,6 +20,7 @@
   import Issues from './pages/Issues.svelte';
   import Workers from './pages/Workers.svelte';
   import Sources from './pages/Sources.svelte';
+  import Checks from './pages/Checks.svelte';
   import BotSettings from './pages/BotSettings.svelte';
 
   const SIDEBAR_KEY = 'gronka:sidebar-open';
@@ -27,6 +29,7 @@
   const items = [
     { page: 'dashboard', label: 'Overview', icon: LayoutDashboard },
     { page: 'issues', label: 'Issues', icon: TriangleAlert },
+    { page: 'checks', label: 'Checks', icon: ShieldCheck },
     { page: 'system', label: 'Workers & queue', icon: Server },
     { page: 'sources', label: 'Sources', icon: Globe },
   ];
@@ -34,6 +37,7 @@
   const PAGES = {
     dashboard: Overview,
     issues: Issues,
+    checks: Checks,
     system: Workers,
     sources: Sources,
     settings: BotSettings,
@@ -148,10 +152,12 @@
             <span class="grow">{item.label}</span>
             {#if item.page === 'issues' && issueCount}
               <span class="count alert">{issueCount}</span>
+            {:else if item.page === 'checks' && $navStats?.checkProblems}
+              <span class="count alert">{$navStats.checkProblems}</span>
             {:else if item.page === 'system' && $navStats?.paused}
               <span class="count alert">paused</span>
             {/if}
-          {:else if (item.page === 'issues' && issueCount) || (item.page === 'system' && $navStats?.paused)}
+          {:else if (item.page === 'issues' && issueCount) || (item.page === 'checks' && $navStats?.checkProblems) || (item.page === 'system' && $navStats?.paused)}
             <span class="pip"></span>
           {/if}
         </button>

@@ -14,6 +14,7 @@ import { isPinterestUrl, downloadFromPinterest } from '../utils/pinterest.js';
 import { isKlipyUrl, downloadFromKlipy } from '../utils/klipy.js';
 import { isJumpshareUrl, resolveJumpshareUrl } from '../utils/jumpshare.js';
 import { isMedalUrl, downloadFromMedal } from '../utils/medal.js';
+import { isBilibiliUrl, downloadFromBilibili } from '../utils/bilibili.js';
 import { isThreadsUrl, downloadFromThreads } from '../utils/threads.js';
 import { downloadFromX } from '../utils/x-media.js';
 import { isMegaUrl, downloadFromMega } from '../utils/mega.js';
@@ -98,6 +99,13 @@ export const ENGINES = {
     name: 'Medal',
     extract: (url, ctx) => ctx.maxDuration().then(max => downloadFromMedal(url, max)),
   },
+  bilibili: {
+    name: 'Bilibili',
+    extract: (url, ctx) =>
+      ctx
+        .maxDuration()
+        .then(maxDuration => downloadFromBilibili(url, { maxDuration, maxSize: ctx.maxSize })),
+  },
   deviantart: {
     name: 'DeviantArt',
     extract: (url, ctx) => downloadFromDeviantArt(url, ctx.maxSize),
@@ -137,6 +145,13 @@ export const ROUTES = [
     owns: isMedalUrl,
     chain: [step('medal'), step('ytdlp')],
     switchIds: ['medal'],
+  },
+  {
+    id: 'bilibili',
+    name: 'Bilibili',
+    owns: isBilibiliUrl,
+    chain: [step('bilibili'), step('ytdlp')],
+    switchIds: ['bilibili'],
   },
   {
     id: 'facebook-photo',

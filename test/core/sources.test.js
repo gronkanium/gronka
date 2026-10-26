@@ -15,6 +15,7 @@ const ROUTED = [
   ['https://www.youtube.com/watch?v=abc', 'youtube'],
   ['https://youtu.be/abc', 'youtube'],
   ['https://medal.tv/games/x/clips/nJTQxdciaB7h8wwtq', 'medal'],
+  ['https://www.bilibili.com/video/BV1xx411c7mD', 'bilibili'],
   ['https://imgur.com/gallery/abc', 'imgur'],
   ['https://i.imgur.com/abc.gif', 'imgur'],
   ['https://i.imgur.com/abc.jpg', 'direct'],

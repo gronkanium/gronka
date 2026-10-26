@@ -2,6 +2,7 @@
   import { sendJson } from '../utils/api.js';
   import { Search, Globe, ChevronDown, ArrowUp, ArrowDown, RotateCcw } from 'lucide-svelte';
   import PageHeader from '../components/PageHeader.svelte';
+  import { navigate } from '../utils/router.js';
 
   const CATEGORY_ORDER = [
     { id: 'social', label: 'Social' },
@@ -22,6 +23,7 @@
   let saving = $state(false);
   let query = $state('');
   let tested = $state(null);
+  let checks = $state([]);
   let open = $state(null);
   let toast = $state('');
   let toastTimer;
@@ -33,6 +35,8 @@
       const res = await fetch('/api/sources');
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       ({ tools, routes, sites } = await res.json());
+      const checked = await fetch('/api/sources/checks').catch(() => null);
+      if (checked?.ok) ({ checks } = await checked.json());
     } catch (err) {
       error = err.message || 'failed to load sources';
     } finally {
@@ -164,6 +168,22 @@
       .filter(c => c.all.length)
   );
   const totalOn = $derived(sites.filter(s => s.on).length);
+  const WORST = ['fail', 'gone', 'pass'];
+  const DOT = {
+    fail: ['err', 'nightly check failing'],
+    gone: ['bad', 'example post is gone'],
+    pass: ['ok', 'nightly check passing'],
+  };
+  const health = $derived(
+    Object.fromEntries(
+      Object.entries(
+        Object.groupBy(
+          checks.filter(c => c.result),
+          c => c.site
+        )
+      ).map(([site, list]) => [site, DOT[WORST.find(w => list.some(c => c.result.status === w))]])
+    )
+  );
   const testedSteps = $derived(
     (tested?.route?.steps ?? []).map(s => ({
       ...s,
@@ -281,7 +301,14 @@
                   disabled={saving}
                   onclick={() => toggle(site)}
                 ></button>
-                <span class="name">{site.label}</span>
+                <span class="name"
+                  >{#if health[site.id]}<button
+                      class="health dot {health[site.id][0]}"
+                      title={health[site.id][1]}
+                      aria-label={health[site.id][1]}
+                      onclick={() => navigate('checks')}
+                    ></button>{/if}{site.label}</span
+                >
                 {#if route}
                   {#if editable}
                     <button
@@ -464,6 +491,13 @@
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
+  }
+  .health {
+    margin-right: 8px;
+    padding: 0;
+    border: 0;
+    vertical-align: 1px;
+    cursor: pointer;
   }
   .site.off .name {
     color: var(--text-muted);

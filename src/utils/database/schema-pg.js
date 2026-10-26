@@ -85,6 +85,22 @@ export function getTableDefinitions() {
         );
       `,
     },
+    {
+      name: 'source_checks',
+      sql: `
+        CREATE TABLE IF NOT EXISTS source_checks (
+          url TEXT PRIMARY KEY,
+          site TEXT NOT NULL,
+          status TEXT NOT NULL,
+          expected TEXT,
+          got TEXT,
+          cause TEXT,
+          ms INTEGER,
+          checked_at BIGINT NOT NULL,
+          passed_at BIGINT
+        );
+      `,
+    },
   ];
 }
 

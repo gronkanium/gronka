@@ -99,6 +99,14 @@ export const SETTINGS = {
     description:
       'Per site, the order the bot tries its download engines in and which are switched off. Sites not listed use the built-in order',
   },
+  source_checks: {
+    type: 'boolean',
+    default: 'false',
+    label: 'Nightly source check',
+    section: 'sources',
+    description:
+      'Once a day, download one public example link per source and check each returns the expected kind of media. Results show on the Checks page',
+  },
   webui_issue_states: {
     type: 'issuestates',
     default: '{}',

@@ -67,6 +67,7 @@ describe('cobalt utilities', () => {
     'girlcockx.com',
     'gubbyx.com',
     'stupidpenisx.com',
+    'pawbsx.com',
   ];
 
   test('isSocialMediaUrl recognizes embed-fixer mirror URLs', () => {

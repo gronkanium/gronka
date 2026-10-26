@@ -5,6 +5,21 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres (attempts) to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [4.8.0](https://github.com/gronkanium/gronka/compare/v4.7.0...v4.8.0) (2026-10-26)
+
+
+### Features
+
+* **bilibili:** own extractor on Bilibili's signed web API ([#185](https://github.com/gronkanium/gronka/issues/185)) ([2ba91ad](https://github.com/gronkanium/gronka/commit/2ba91adf9dba5240e1e1f2dc8da599f44b40d56c))
+* **webui:** a nightly source check that downloads a public example per source ([#187](https://github.com/gronkanium/gronka/issues/187)) ([93b4530](https://github.com/gronkanium/gronka/commit/93b45302d703590f35e1376eb29d7dc2018e86da))
+
+
+### Bug Fixes
+
+* **deps:** update yt-dlp to 2026.10.21 ([#183](https://github.com/gronkanium/gronka/issues/183)) ([da47c7a](https://github.com/gronkanium/gronka/commit/da47c7a2e4d78957cf4fb89db931414b2446539f))
+* **gallery:** send galleries over 25 files as a zip instead of refusing them ([#182](https://github.com/gronkanium/gronka/issues/182)) ([184e00c](https://github.com/gronkanium/gronka/commit/184e00cdbc1e1af0780c6e2c94192ae16e7a0949))
+* **imgur:** download photo posts and albums instead of blaming their length ([#184](https://github.com/gronkanium/gronka/issues/184)) ([603be15](https://github.com/gronkanium/gronka/commit/603be15b906138427de602ddae75a6a81698a5ff))
+
 ## [4.7.0](https://github.com/gronkanium/gronka/compare/v4.6.0...v4.7.0) (2026-10-26)
 
 

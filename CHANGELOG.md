@@ -5,6 +5,14 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres (attempts) to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [4.8.1](https://github.com/gronkanium/gronka/compare/v4.8.0...v4.8.1) (2026-10-26)
+
+
+### Bug Fixes
+
+* **deps:** move to Bun 1.4 for the Brotli decoder fix (CVE-2026-111497) ([#188](https://github.com/gronkanium/gronka/issues/188)) ([d4a1cda](https://github.com/gronkanium/gronka/commit/d4a1cda62ac812e5ce77df8915ca866b78eb4d8a))
+* **deps:** run cobalt on Node 24.22.1 and patched Alpine packages ([#190](https://github.com/gronkanium/gronka/issues/190)) ([aad506e](https://github.com/gronkanium/gronka/commit/aad506eb596255815cfdfcc46a518beef3d89824))
+
 ## [4.8.0](https://github.com/gronkanium/gronka/compare/v4.7.0...v4.8.0) (2026-10-26)
 
 

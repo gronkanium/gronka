@@ -5,6 +5,18 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres (attempts) to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [4.7.0](https://github.com/gronkanium/gronka/compare/v4.6.0...v4.7.0) (2026-10-26)
+
+
+### Features
+
+* accept pawbsx.com links as X posts ([#180](https://github.com/gronkanium/gronka/issues/180)) ([678ebfb](https://github.com/gronkanium/gronka/commit/678ebfb0ad8459b26674b55c589dacc6725396ca))
+
+
+### Bug Fixes
+
+* **instagram:** fall back to the session when cobalt returns only a reel's cover image ([#179](https://github.com/gronkanium/gronka/issues/179)) ([c23e213](https://github.com/gronkanium/gronka/commit/c23e213447fb6e4028184e854370f0c585b53898))
+
 ## [4.6.0](https://github.com/gronkanium/gronka/compare/v4.5.0...v4.6.0) (2026-10-25)
 
 

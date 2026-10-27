@@ -5,6 +5,19 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres (attempts) to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [4.10.0](https://github.com/gronkanium/gronka/compare/v4.9.0...v4.10.0) (2026-10-27)
+
+
+### Features
+
+* **download:** Tumblr photo, gif and reblog posts ([#196](https://github.com/gronkanium/gronka/issues/196)) ([7188ec1](https://github.com/gronkanium/gronka/commit/7188ec1b41e64d3e1c94b9af017e12b36e9ccaa1))
+
+
+### Bug Fixes
+
+* **download:** Pinterest share links, removed pins and HLS-only video pages ([#197](https://github.com/gronkanium/gronka/issues/197)) ([7eed022](https://github.com/gronkanium/gronka/commit/7eed022d4e11bad25ca2ad027ef416a86c4cc5c5))
+* **download:** tell a just-published TikTok short link apart from a deleted one ([#198](https://github.com/gronkanium/gronka/issues/198)) ([6e256d1](https://github.com/gronkanium/gronka/commit/6e256d10d20a23df414ee18bb05e8ce2daecb6a0))
+
 ## [4.9.0](https://github.com/gronkanium/gronka/compare/v4.8.1...v4.9.0) (2026-10-27)
 
 

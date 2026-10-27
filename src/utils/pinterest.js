@@ -40,6 +40,24 @@ export function isPinterestUrl(url) {
   }
 }
 
+// pin.it lands on /pin/<id>/sent/?invite_code=..., which Pinterest bounces to ?show_error=true,
+// so hops are followed by hand and the plain /pin/<id>/ page is fetched instead.
+export async function resolvePinUrl(url) {
+  for (let hop = 0; hop < 5 && !PIN_PATH.test(new URL(url).pathname); hop++) {
+    const response = await axios.get(url, {
+      ...ssrfGuardedRequest(),
+      timeout: PAGE_FETCH_TIMEOUT_MS,
+      maxRedirects: 0,
+      headers: getRequestHeaders(),
+      validateStatus: status => status >= 200 && status < 400,
+    });
+    if (!response.headers.location) break;
+    url = new URL(response.headers.location, url).href;
+  }
+  const id = /^\/pin\/(\d+)/.exec(new URL(url).pathname)?.[1];
+  return id ? `https://www.pinterest.com/pin/${id}/` : url;
+}
+
 // Extract the primary media URL from a pin page's HTML
 export function extractMediaUrl(html) {
   if (typeof html !== 'string' || html.length === 0) {
@@ -57,7 +75,11 @@ export function extractMediaUrl(html) {
       continue;
     }
     if (data?.['@type'] === 'VideoObject' && isMediaHostUrl(data.contentUrl)) {
-      return data.contentUrl;
+      // Some page loads name the HLS playlist here; the same page still carries the mp4.
+      const mp4 = /\.m3u8$/i.test(data.contentUrl)
+        ? /https:\/\/v1\.pinimg\.com\/videos\/[^"\\\s]+\.mp4/.exec(html)?.[0]
+        : null;
+      return mp4 ?? data.contentUrl;
     }
     if (data?.['@type'] === 'SocialMediaPosting' && !image && isMediaHostUrl(data.image)) {
       image = data.image;
@@ -86,7 +108,7 @@ export async function downloadFromPinterest(url) {
 
   let response;
   try {
-    response = await axios.get(url, {
+    response = await axios.get(await resolvePinUrl(url), {
       ...ssrfGuardedRequest(),
       responseType: 'text',
       timeout: PAGE_FETCH_TIMEOUT_MS,
@@ -112,6 +134,10 @@ export async function downloadFromPinterest(url) {
   }
 
   const mediaUrl = extractMediaUrl(response.data);
+  // A removed pin still answers 200, with the page shell and no JSON-LD at all.
+  if (!mediaUrl && !String(response.data).includes('application/ld+json')) {
+    throw contentGone(`pinterest: ${finalUrl} has no pin data`);
+  }
   if (!mediaUrl) {
     logger.warn(`No media found on Pinterest pin: ${finalUrl}`);
     throw new ValidationError('no downloadable media found on this pin');

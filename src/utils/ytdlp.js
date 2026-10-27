@@ -326,7 +326,7 @@ const FAILURES = [
     url => new NetworkError(`${siteLabel(url)} changed its page and cannot be read yet.`),
   ],
   [
-    /Unsupported URL/,
+    /Unsupported URL|No suitable extractor found/,
     () =>
       new ValidationError('this link is not a downloadable video page.', 'YTDLP_UNSUPPORTED_URL'),
   ],

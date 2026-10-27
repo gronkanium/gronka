@@ -304,6 +304,13 @@ describe('ytdlp utilities', () => {
       assert.strictEqual(code('HTTP Error 403', 'https://youtu.be/x'), 'YTDLP_UNKNOWN');
     });
 
+    test('a link no extractor matches is unsupported, not unknown', () => {
+      assert.strictEqual(
+        code('ERROR: No suitable extractor found for URL https://share.snapchat.com/m/x'),
+        'YTDLP_UNSUPPORTED_URL'
+      );
+    });
+
     test('order decides overlapping wording', () => {
       assert.strictEqual(code('ERROR: This video is DRM protected'), 'DRM_PROTECTED');
       assert.strictEqual(code('Sign in to confirm your age'), 'AGE_RESTRICTED');

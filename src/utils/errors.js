@@ -88,6 +88,16 @@ export const contentGone = cause =>
     cause
   );
 
+// The one answer for a post the site does not serve yet because it went up moments ago.
+export const notPublishedYet = cause =>
+  withCause(
+    new NetworkError(
+      'this post was only just published and is not downloadable yet, try again in a minute.',
+      'CLIP_NOT_PUBLISHED'
+    ),
+    cause
+  );
+
 // The one answer for a site or file that stopped answering mid-download; the cause says which step.
 export const timedOut = cause =>
   withCause(

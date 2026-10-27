@@ -300,7 +300,7 @@ if (!mocksSupported) {
       [
         'ERROR: [MedalTV] abc: Unable to download JSON metadata: HTTP Error 403: Forbidden',
         'https://medal.tv/games/x/clips/abc',
-        'this medal clip is still being published, try again in a minute.',
+        'this post was only just published and is not downloadable yet, try again in a minute.',
         'CLIP_NOT_PUBLISHED',
       ],
     ];

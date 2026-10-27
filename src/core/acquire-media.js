@@ -13,7 +13,8 @@ import {
   canonicalizeMirrorUrl,
 } from '../utils/cobalt.js';
 import { getDisabledServiceLabel } from '../utils/download-services.js';
-import { ValidationError, describeCause, rootCause } from '../utils/errors.js';
+import { ValidationError, describeCause, rootCause, notPublishedYet } from '../utils/errors.js';
+import { isFreshPost } from '../utils/post-age.js';
 import { BLOCKED_DESTINATION_MESSAGE, isPrivateHost } from '../utils/ssrf-guard.js';
 import { downloadFileFromUrl } from '../utils/file-downloader.js';
 import { routeFor, routeById, chainFor } from './sources.js';
@@ -310,7 +311,7 @@ export async function acquireMedia(
         logger.warn(`Direct URL fallback failed: ${describeCause(rootCause(directUrlError))}`);
       }
     }
-    throw fail(lastError);
+    throw fail(gone && isFreshPost(url) ? notPublishedYet(lastError) : lastError);
   }
 
   const track = soundcloud && (await soundcloud);

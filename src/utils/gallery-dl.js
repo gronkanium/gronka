@@ -18,6 +18,8 @@ export const GALLERY_DL_SITES = [
   { name: 'Wallhaven', hosts: ['wallhaven.cc'] },
   { name: 'MangaDex', hosts: ['mangadex.org'] },
   { name: 'nhentai', hosts: ['nhentai.net'] },
+  { name: 'Gofile', hosts: ['gofile.io'] },
+  { name: 'Erome', hosts: ['erome.com'] },
 ];
 
 const MEDIA_EXTENSIONS = new Set([

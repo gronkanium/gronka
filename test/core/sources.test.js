@@ -30,6 +30,8 @@ const ROUTED = [
   ['https://www.artstation.com/artwork/abc', 'gallery-dl'],
   ['https://danbooru.donmai.us/posts/123', 'booru'],
   ['https://www.pinterest.com/pin/123/', 'pinterest'],
+  ['https://nasa.tumblr.com/post/828471464226406400', 'tumblr'],
+  ['https://www.tumblr.com/nasa/828471464226406400/slug', 'tumblr'],
   ['https://klipy.com/gifs/some-gif', 'klipy'],
   ['https://jumpshare.com/s/abc123', 'jumpshare'],
   ['https://www.threads.com/@someone/post/ABC123', 'threads'],

@@ -48,7 +48,7 @@ const logger = createLogger('convert');
 const { discordSizeLimit: DISCORD_SIZE_LIMIT } = botConfig;
 
 const UNSUPPORTED_FORMAT =
-  'unsupported file format. please provide a video, audio file (mp3, m4a, ogg, wav, flac) or image (png, jpg, webp, gif).';
+  'unsupported file format. please provide a video, audio file (mp3, m4a, ogg, wav, flac) or image (png, jpg, webp, avif, gif).';
 
 async function probeMediaInfo(filePath, fallbackWidth) {
   let width = fallbackWidth;

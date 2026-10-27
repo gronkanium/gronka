@@ -220,6 +220,8 @@ export const YTDLP_SITES = [
     args: ['--referer', 'https://www.redtube.com/'],
   },
   { name: 'Rule34Video', hosts: ['rule34video.com'] },
+  { name: 'Bandcamp', hosts: ['bandcamp.com'] },
+  { name: 'Internet Archive', hosts: ['archive.org'] },
 ];
 
 export function getYtdlpSite(url) {

@@ -45,6 +45,7 @@ env:
 jobs:
   dependency-review:
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     if: github.event_name == 'pull_request'
     steps:
       - uses: actions/checkout@v7
@@ -70,6 +71,7 @@ jobs:
   # one - a gate that always exits 0 would repeat the failure it exists to fix.
   dependency-audit:
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v7
       # pinned to a tag's commit — tags are movable, SHAs are not
@@ -82,6 +84,7 @@ jobs:
 
   validate-code:
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v7
       # pinned to a tag's commit — tags are movable, SHAs are not
@@ -100,6 +103,7 @@ jobs:
   # and four chances to typo a path filter into a silently-empty run.
   test:
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     services:
       postgres:
         image: postgres:16-alpine
@@ -120,12 +124,15 @@ jobs:
         with:
           bun-version: ${{ env.BUN_VERSION }}
       - run: bun install --frozen-lockfile
-      - run: sudo apt-get update && sudo apt-get install -y ffmpeg gifsicle imagemagick postgresql-client
+      # A stalled Ubuntu mirror otherwise hangs the job until GitHub's 6-hour limit.
+      - run: sudo apt-get -o Acquire::Retries=3 -o Acquire::http::Timeout=30 update && sudo apt-get -o Acquire::Retries=3 -o Acquire::http::Timeout=30 install -y ffmpeg gifsicle imagemagick postgresql-client
+        timeout-minutes: 5
       - run: psql -c 'DROP SCHEMA IF EXISTS public CASCADE; CREATE SCHEMA public;'
       - run: bun run test:safe
 
   test-e2e:
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     services:
       postgres:
         image: postgres:16-alpine
@@ -146,7 +153,9 @@ jobs:
         with:
           bun-version: ${{ env.BUN_VERSION }}
       - run: bun install --frozen-lockfile
-      - run: sudo apt-get update && sudo apt-get install -y ffmpeg gifsicle imagemagick postgresql-client
+      # A stalled Ubuntu mirror otherwise hangs the job until GitHub's 6-hour limit.
+      - run: sudo apt-get -o Acquire::Retries=3 -o Acquire::http::Timeout=30 update && sudo apt-get -o Acquire::Retries=3 -o Acquire::http::Timeout=30 install -y ffmpeg gifsicle imagemagick postgresql-client
+        timeout-minutes: 5
       - run: psql -c 'DROP SCHEMA IF EXISTS public CASCADE; CREATE SCHEMA public;'
       # GRONKA_E2E (set by the script) is what un-skips the module-mock suites, and
       # run-e2e-tests.js fails on zero discovered files, so this job cannot pass vacuously.

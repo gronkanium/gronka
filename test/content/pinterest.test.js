@@ -133,6 +133,7 @@ describe('fetchPinterestThread', () => {
     for (const source of gone) {
       const error = await fetchPinterestThread('https://pin.it/abc', source).catch(e => e);
       expect(error.code).toBe('CONTENT_GONE');
+      expect(error.cause).toBeInstanceOf(Error);
     }
   });
 });

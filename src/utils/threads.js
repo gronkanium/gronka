@@ -5,13 +5,13 @@ import { downloadFileFromUrl } from './file-downloader.js';
 import { selectMediaUrl } from './instagram.js';
 import { ssrfGuardedRequest, PAGE_FETCH_TIMEOUT_MS, MAX_PAGE_BYTES } from './ssrf-guard.js';
 import { normalizeHost } from './url-host.js';
+import { BROWSER_USER_AGENT } from './browser-agent.js';
 
 const logger = createLogger('threads');
 
 // Without browser navigation headers threads.com answers with an empty app shell, not the post.
 const NAVIGATION_HEADERS = {
-  'User-Agent':
-    'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0.0.0 Safari/537.36',
+  'User-Agent': BROWSER_USER_AGENT,
   Accept: 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
   'Accept-Language': 'en-US,en;q=0.9',
   'Accept-Encoding': 'gzip, deflate, br',

@@ -2,8 +2,6 @@ import { test, describe, spyOn } from 'bun:test';
 import assert from 'node:assert';
 import {
   parseTenorUrl,
-  downloadImage,
-  downloadVideo,
   isDirectMediaUrl,
   isMediaResponse,
   downloadDirectMedia,
@@ -65,7 +63,7 @@ describe('source-specific file downloads', () => {
       await withJobDir(async () => {
         assert.ok((await downloadFileFromUrl('https://cdn.medal.tv/mediac/a.mp4')).size > 0);
         assert.ok(
-          (await downloadVideo('https://cdn.discordapp.com/attachments/1/2/b.mp4')).size > 0
+          (await downloadFileFromUrl('https://cdn.discordapp.com/attachments/1/2/b.mp4')).size > 0
         );
       });
       assert.strictEqual(calls, 4);
@@ -136,14 +134,14 @@ describe('file downloader utilities', () => {
       headers: { 'content-length': String(1e12) },
     });
 
-    test('downloadImage surfaces the size message on a client-side abort', async () => {
+    test('a declared size over the cap surfaces the size message', async () => {
       const originalGet = axios.get;
       axios.get = throwMaxContentLength;
       try {
         await assert.rejects(
-          () => downloadImage('https://example.com/huge.gif'),
+          () => downloadFileFromUrl('https://example.com/huge.mp4'),
           error => {
-            assert.match(error.message, /image file is too large/);
+            assert.match(error.message, /file is too large/);
             return true;
           }
         );
@@ -152,32 +150,16 @@ describe('file downloader utilities', () => {
       }
     });
 
-    test('downloadVideo surfaces the size message on a client-side abort', async () => {
-      const originalGet = axios.get;
-      axios.get = throwMaxContentLength;
-      try {
-        await assert.rejects(
-          () => downloadVideo('https://example.com/huge.mp4'),
-          error => {
-            assert.match(error.message, /video file is too large/);
-            return true;
-          }
-        );
-      } finally {
-        axios.get = originalGet;
-      }
-    });
-
-    test('a genuine fetch failure still reports as unavailable', async () => {
+    test('a genuine fetch failure still reports as a failed download', async () => {
       const originalGet = axios.get;
       axios.get = async () => {
         throw new Error('getaddrinfo ENOTFOUND example.com');
       };
       try {
         await assert.rejects(
-          () => downloadImage('https://example.com/missing.gif'),
+          () => downloadFileFromUrl('https://example.com/missing.gif'),
           error => {
-            assert.match(error.message, /may be unavailable/);
+            assert.match(error.message, /failed to download the file/);
             return true;
           }
         );
@@ -185,6 +167,31 @@ describe('file downloader utilities', () => {
         axios.get = originalGet;
       }
     });
+  });
+
+  test('dead, forbidden and stalled file links each get one curated answer with the cause kept', async () => {
+    const originalGet = axios.get;
+    const cases = [
+      [{ response: { status: 410 } }, 'FILE_NOT_FOUND'],
+      [{ response: { status: 401 } }, 'FILE_FORBIDDEN'],
+      [{ code: 'ETIMEDOUT' }, 'TIMED_OUT'],
+    ];
+    try {
+      for (const [failure, code] of cases) {
+        axios.get = async () => {
+          throw Object.assign(new Error('upstream'), failure);
+        };
+        await assert.rejects(
+          () => downloadFileFromUrl('https://example.com/a.mp4'),
+          error =>
+            error.code === code &&
+            !/url/i.test(error.message) &&
+            error.cause?.message === 'upstream'
+        );
+      }
+    } finally {
+      axios.get = originalGet;
+    }
   });
 
   describe('parseTenorUrl', () => {

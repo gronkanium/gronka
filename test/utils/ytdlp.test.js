@@ -25,6 +25,15 @@ describe('ytdlp utilities', () => {
     assert.strictEqual(canonicalYtdlpUrl(other), other);
   });
 
+  test('drops the creator from Snapchat spotlight links, which yt-dlp only matches bare', () => {
+    assert.strictEqual(
+      canonicalYtdlpUrl('https://www.snapchat.com/@nasa/spotlight/W7_EDlXWTBiX?locale=en'),
+      'https://www.snapchat.com/spotlight/W7_EDlXWTBiX'
+    );
+    const bare = 'https://www.snapchat.com/spotlight/W7_EDlXWTBiX';
+    assert.strictEqual(canonicalYtdlpUrl(bare), bare);
+  });
+
   describe('gallery-dl site detection', () => {
     test('resolves supported gallery hosts', () => {
       assert.strictEqual(
@@ -293,6 +302,13 @@ describe('ytdlp utilities', () => {
       assert.strictEqual(code(tiktok404, 'https://youtu.be/x'), 'YTDLP_UNKNOWN');
       assert.strictEqual(code('HTTP Error 403', 'https://medal.tv/clips/x'), 'CLIP_NOT_PUBLISHED');
       assert.strictEqual(code('HTTP Error 403', 'https://youtu.be/x'), 'YTDLP_UNKNOWN');
+    });
+
+    test('a link no extractor matches is unsupported, not unknown', () => {
+      assert.strictEqual(
+        code('ERROR: No suitable extractor found for URL https://share.snapchat.com/m/x'),
+        'YTDLP_UNSUPPORTED_URL'
+      );
     });
 
     test('order decides overlapping wording', () => {

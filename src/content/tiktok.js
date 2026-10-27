@@ -2,12 +2,11 @@ import axios from 'axios';
 import { createLogger } from '../utils/logger.js';
 import { NetworkError, contentGone } from '../utils/errors.js';
 import { normalizeHost } from '../utils/url-host.js';
+import { BROWSER_USER_AGENT } from '../utils/browser-agent.js';
 import { post, thread, isoDate, linksIn } from './schema.js';
 
 const logger = createLogger('content-tiktok');
 
-const USER_AGENT =
-  'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0.0.0 Safari/537.36';
 const TIMEOUT_MS = 15000;
 const MAX_PAGE_BYTES = 2 * 1024 * 1024;
 
@@ -47,7 +46,7 @@ const defaultHttp = {
       maxRedirects: 5,
       beforeRedirect: keepOnTiktok,
       responseType: 'text',
-      headers: { 'user-agent': USER_AGENT, 'accept-language': 'en-US,en;q=0.9' },
+      headers: { 'user-agent': BROWSER_USER_AGENT, 'accept-language': 'en-US,en;q=0.9' },
     });
     return { html: response.data, url: response.request?.res?.responseUrl ?? url };
   },
@@ -56,7 +55,7 @@ const defaultHttp = {
       params: { url },
       timeout: TIMEOUT_MS,
       maxContentLength: MAX_PAGE_BYTES,
-      headers: { 'user-agent': USER_AGENT },
+      headers: { 'user-agent': BROWSER_USER_AGENT },
     });
     return data;
   },
@@ -153,7 +152,7 @@ export async function fetchTiktokThread(url, { http = defaultHttp } = {}) {
   try {
     page = await http.page(url);
   } catch (error) {
-    if (error.response?.status === 404) throw contentGone();
+    if (error.response?.status === 404) throw contentGone(error);
     logger.warn(`TikTok page request failed: ${error.message}`);
     throw new NetworkError('failed to reach tiktok');
   }
@@ -169,13 +168,13 @@ export async function fetchTiktokThread(url, { http = defaultHttp } = {}) {
     const subject = normalizeTiktokItem(item, canonical);
     return thread({ source: 'tiktok', url: canonical, post: subject });
   }
-  if (gone) throw contentGone();
+  if (gone) throw contentGone('tiktok: page marks the item unavailable');
 
   let oembed;
   try {
     oembed = await http.oembed(canonical);
   } catch (error) {
-    if (error.response && error.response.status < 500) throw contentGone();
+    if (error.response && error.response.status < 500) throw contentGone(error);
     logger.warn(`TikTok oembed request failed: ${error.message}`);
     throw new NetworkError('failed to reach tiktok');
   }

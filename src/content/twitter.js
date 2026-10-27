@@ -4,6 +4,7 @@ import { NetworkError, contentGone } from '../utils/errors.js';
 import { canonicalizeMirrorUrl } from '../utils/cobalt.js';
 import { readSessionCookie } from '../utils/session-cookie.js';
 import { post, comment, thread, MAX_COMMENTS } from './schema.js';
+import { SESSION_USER_AGENT as USER_AGENT } from '../utils/browser-agent.js';
 
 const logger = createLogger('content-twitter');
 
@@ -11,8 +12,6 @@ const logger = createLogger('content-twitter');
 // for what guests cannot see (age-gated posts) and for replies, so the account stays quiet.
 const BEARER =
   'AAAAAAAAAAAAAAAAAAAAANRILgAAAAAAnNwIzUejRCOuH5E6I8xnZz4puTs%3D1Zv7ttfk8LF81IUq16cHjhLTvJu4FA33AGWWjCpTnA';
-const USER_AGENT =
-  'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0.0.0 Safari/537.36';
 const API_TIMEOUT_MS = 15000;
 const GUEST_TTL_MS = 60 * 60 * 1000;
 
@@ -271,7 +270,10 @@ async function readTweet(id, gql) {
     const asUser = await gql('TweetResultByRestId', variables, { session: true });
     result = asUser?.data?.tweetResult?.result;
   }
-  if (!unwrap(result)?.legacy) throw contentGone();
+  if (!unwrap(result)?.legacy) {
+    const why = [result?.__typename ?? 'no result', result?.reason].filter(Boolean).join(' ');
+    throw contentGone(`x: TweetResultByRestId answered ${why}`);
+  }
   return unwrap(result);
 }
 

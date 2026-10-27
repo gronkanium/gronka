@@ -240,9 +240,6 @@ if (!mocksSupported) {
     const real = { ...(await import('../../src/utils/file-downloader.js')) };
     mock.module('../../src/utils/file-downloader.js', () => ({
       ...real,
-      downloadVideo: async url => fixtureFor(url),
-      downloadImage: async url => fixtureFor(url),
-      downloadAudio: async url => fixtureFor(url),
       downloadFileFromUrl: async url => fixtureFor(url),
       downloadDirectMedia: async url => fixtureFor(url),
       parseTenorUrl: async url => url,

@@ -1,5 +1,6 @@
 import { NetworkError, contentGone } from '../utils/errors.js';
 import { isBooruUrl, fetchBooruPost } from '../utils/booru.js';
+import { hostOf } from '../utils/url-host.js';
 import { post, thread, isoDate, linksIn } from './schema.js';
 
 export const BOORU_LIMITS = {};
@@ -113,7 +114,11 @@ function pick(json) {
 
 export function normalizeBooruPost(json, { url, site }) {
   const data = pick(json);
-  if (!data || data.deleted) throw contentGone();
+  if (!data || data.deleted) {
+    throw contentGone(
+      `${hostOf(url) ?? 'booru'}: ${data ? 'post is deleted' : 'no post in answer'}`
+    );
+  }
   const fileUrl = site.pickFileUrl(json);
   const links = sourceLinks(data.source);
   const mediaUrl = fileUrl ? new URL(fileUrl, url).href : null;

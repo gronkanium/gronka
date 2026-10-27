@@ -1,10 +1,21 @@
 import axios from 'axios';
 import { readSessionCookie } from './session-cookie.js';
 import { createLogger } from './logger.js';
-import { NetworkError, ValidationError, withCause, contentGone } from './errors.js';
+import {
+  NetworkError,
+  ValidationError,
+  withCause,
+  contentGone,
+  describeCause,
+  rootCause,
+} from './errors.js';
 import { downloadFileFromUrl } from './file-downloader.js';
 import { ssrfGuardedRequest } from './ssrf-guard.js';
 import { normalizeHost } from './url-host.js';
+import {
+  SESSION_USER_AGENT as USER_AGENT,
+  SESSION_SEC_CH_UA as SEC_CH_UA,
+} from './browser-agent.js';
 
 const logger = createLogger('instagram');
 
@@ -34,12 +45,6 @@ const POST_PATH = /^(?:\/[^/]+)?\/(?:p|reel|reels|tv)\/([A-Za-z0-9_-]+)/;
 // Shortcodes are the media id written in this base64 alphabet, so the id is recoverable
 // locally, no extra lookup request just to turn a permalink into an api id.
 const SHORTCODE_ALPHABET = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_';
-
-// Must match the browser that holds the session (ig-session), or one sessionid shows two devices.
-const USER_AGENT =
-  'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) ' +
-  'Chrome/153.0.0.0 Safari/537.36';
-const SEC_CH_UA = '"Chromium";v="153", "Not_A Brand";v="8"';
 
 // /stories/<user>/[<mediaId>], /stories/highlights/<id>, and the share sheet's /s/<base64 highlight:<id>>.
 const STORY_PATH = /^\/stories\/(?:highlights\/(\d+)|(?!highlights(?:\/|$))([^/]+)(?:\/(\d+))?)/;
@@ -244,8 +249,8 @@ function unavailableMessage(kind) {
     : contentGone().message;
 }
 
-const storyGone = reason =>
-  new NetworkError(unavailableMessage('story'), 'CONTENT_GONE', 500, {
+const storyGone = (reason, kind = 'story') =>
+  new NetworkError(unavailableMessage(kind), 'CONTENT_GONE', 500, {
     cause: new Error(`instagram: ${reason}`),
   });
 
@@ -263,30 +268,33 @@ async function userIdFor(username, refererPath, cookie) {
   return String(id);
 }
 
-async function reelItems(reelId, refererPath, cookie) {
+async function reelItems(reelId, refererPath, cookie, kind) {
   const data = await instagramGet(
     `/api/v1/feed/reels_media/?reel_ids=${encodeURIComponent(reelId)}`,
     refererPath,
     cookie,
-    'story',
+    kind,
     REELS_HOST
   );
   return data?.reels?.[reelId]?.items ?? data?.reels_media?.[0]?.items ?? [];
 }
 
 async function fetchStoryItems({ highlightId, username, mediaId }, refererPath, cookie) {
+  const kind = highlightId ? 'highlight' : 'story';
+  let infoMiss = '';
   if (mediaId) {
     try {
-      const item = (
-        await instagramGet(`/api/v1/media/${mediaId}/info/`, refererPath, cookie, 'story')
-      )?.items?.[0];
+      const item = (await instagramGet(`/api/v1/media/${mediaId}/info/`, refererPath, cookie, kind))
+        ?.items?.[0];
       if (item) {
         return [item];
       }
+      infoMiss = '; media info had no item';
     } catch (error) {
       if (!highlightId && !username) {
         throw error;
       }
+      infoMiss = `; media info failed: ${describeCause(rootCause(error))}`;
     }
   }
   if (!highlightId && !username) {
@@ -295,10 +303,10 @@ async function fetchStoryItems({ highlightId, username, mediaId }, refererPath, 
   const reelId = highlightId
     ? `highlight:${highlightId}`
     : await userIdFor(username, refererPath, cookie);
-  const items = await reelItems(reelId, refererPath, cookie);
+  const items = await reelItems(reelId, refererPath, cookie, kind);
   const wanted = mediaId ? items.filter(item => String(item.pk) === mediaId) : items;
   if (wanted.length === 0) {
-    throw storyGone(`reel ${reelId} has ${items.length} item(s), none matching`);
+    throw storyGone(`reel ${reelId} has ${items.length} item(s), none matching${infoMiss}`, kind);
   }
   return wanted.slice(0, MAX_HIGHLIGHT_ITEMS);
 }

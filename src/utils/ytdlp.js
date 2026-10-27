@@ -4,7 +4,15 @@ import fsSync from 'fs';
 import os from 'os';
 import path from 'path';
 import { createLogger } from './logger.js';
-import { NetworkError, ValidationError, withCause, describeCause, contentGone } from './errors.js';
+import {
+  NetworkError,
+  ValidationError,
+  withCause,
+  describeCause,
+  contentGone,
+  notPublishedYet,
+  timedOut,
+} from './errors.js';
 import { trimVideo } from './video-processor/trim-video.js';
 import { DEFAULT_YTDLP_FORMAT } from './config.js';
 import { fromPath, tempDir, jobSignal } from './media-file.js';
@@ -212,6 +220,8 @@ export const YTDLP_SITES = [
     args: ['--referer', 'https://www.redtube.com/'],
   },
   { name: 'Rule34Video', hosts: ['rule34video.com'] },
+  { name: 'Bandcamp', hosts: ['bandcamp.com'] },
+  { name: 'Internet Archive', hosts: ['archive.org'] },
 ];
 
 export function getYtdlpSite(url) {
@@ -229,8 +239,10 @@ export function getYtdlpSite(url) {
 }
 
 export function canonicalYtdlpUrl(url) {
-  const match = /^https?:\/\/(?:[\w-]+\.)?pornhub\.com\/shorties\/(\w+)/i.exec(url);
-  return match ? `https://www.pornhub.com/view_video.php?viewkey=${match[1]}` : url;
+  const shorty = /^https?:\/\/(?:[\w-]+\.)?pornhub\.com\/shorties\/(\w+)/i.exec(url);
+  if (shorty) return `https://www.pornhub.com/view_video.php?viewkey=${shorty[1]}`;
+  const spotlight = /^https?:\/\/(?:www\.)?snapchat\.com\/@[\w.-]+\/spotlight\/([\w-]+)/i.exec(url);
+  return spotlight ? `https://www.snapchat.com/spotlight/${spotlight[1]}` : url;
 }
 
 function getContentType(ext) {
@@ -302,22 +314,14 @@ const FAILURES = [
       new NetworkError("tiktok isn't serving this video's file right now.", 'REGION_COPY_MISSING'),
   ],
   // Medal answers 403 until a fresh clip finishes publishing, usually within a minute.
-  [
-    /HTTP Error 403/,
-    url =>
-      hostIn(url, ['medal.tv']) &&
-      new NetworkError(
-        'this medal clip is still being published, try again in a minute.',
-        'CLIP_NOT_PUBLISHED'
-      ),
-  ],
+  [/HTTP Error 403/, url => hostIn(url, ['medal.tv']) && notPublishedYet()],
   [/Unable to download webpage: HTTP Error (404|410)/, () => contentGone()],
   [
     /Cannot parse data/,
     url => new NetworkError(`${siteLabel(url)} changed its page and cannot be read yet.`),
   ],
   [
-    /Unsupported URL/,
+    /Unsupported URL|No suitable extractor found/,
     () =>
       new ValidationError('this link is not a downloadable video page.', 'YTDLP_UNSUPPORTED_URL'),
   ],
@@ -462,12 +466,7 @@ function executeYtdlp(
     const timeoutId = setTimeout(() => {
       clearInterval(sizeWatch);
       ytdlp.kill('SIGKILL');
-      reject(
-        withCause(
-          new NetworkError('the download took too long and was stopped, try again later.'),
-          `yt-dlp: timed out after ${timeout / 1000}s`
-        )
-      );
+      reject(timedOut(`yt-dlp: timed out after ${timeout / 1000}s`));
     }, timeout);
 
     ytdlp.on('close', code => {
@@ -725,16 +724,8 @@ function getVideoDuration(url, timeout = 15000) {
           resolve(duration);
         }
       } else {
-        const errorOutput = stderr || stdout;
-        if (errorOutput.includes('Video unavailable') || errorOutput.includes('Private video')) {
-          reject(new NetworkError('video is unavailable or private'));
-        } else if (errorOutput.includes('Sign in to confirm your age')) {
-          reject(new NetworkError('video requires age verification', 'AGE_RESTRICTED'));
-        } else {
-          reject(
-            new NetworkError(`failed to get video duration: ${errorOutput.substring(0, 100)}`)
-          );
-        }
+        // Logged only: the download that follows classifies the same failure for the user.
+        reject(new Error(`duration check exit ${code}: ${(stderr || stdout).substring(0, 200)}`));
       }
     });
 

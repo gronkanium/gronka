@@ -4,6 +4,7 @@ import { createLogger } from './logger.js';
 import { NetworkError, withCause, describeCause, contentGone } from './errors.js';
 import { ssrfGuardedRequest } from './ssrf-guard.js';
 import { hostOf, normalizeHost } from './url-host.js';
+import { BROWSER_USER_AGENT as USER_AGENT } from './browser-agent.js';
 
 const logger = createLogger('reddit');
 
@@ -16,10 +17,6 @@ const API_TIMEOUT_MS = 20000;
 // /comments/<id>/... is the canonical form; /s/<id> is what the share sheet emits and 301s to it.
 // Posts made to a user profile live under /user/<name>/ (or /u/) instead of /r/<sub>/.
 const POST_PATH = /^\/(?:r|u|user)\/[^/]+\/(?:comments|s)\/[A-Za-z0-9_]+/;
-
-const USER_AGENT =
-  'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) ' +
-  'Chrome/126.0.0.0 Safari/537.36';
 
 export function isRedditPostUrl(url) {
   try {

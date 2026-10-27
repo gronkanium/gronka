@@ -297,8 +297,6 @@ if (!mocksSupported) {
     const realFileDownloader = await import('../../src/utils/file-downloader.js');
     mock.module('../../src/utils/file-downloader.js', () => ({
       ...realFileDownloader,
-      downloadVideo: async () => media(fakeBuffer(5, 4096), 'video/mp4', 'clip.mp4'),
-      downloadImage: async () => media(fakeBuffer(6, 4096), 'image/png', 'still.png'),
       downloadFileFromUrl: async () => media(fakeBuffer(7, 4096), 'video/mp4', 'clip.mp4'),
       parseTenorUrl: async u => u,
       TENOR_VIEW_URL: /^https?:\/\/(www\.)?tenor\.com\/view\/.+-gif-(\d+)/i,

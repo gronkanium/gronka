@@ -8,12 +8,6 @@ import { firstUrlIn } from '../utils/validation.js';
 import { readLink } from '../core/intake.js';
 import { curatedErrorMessage } from './shared/command-errors.js';
 import {
-  downloadVideo,
-  downloadImage,
-  downloadAudio,
-  downloadDirectMedia,
-} from '../utils/file-downloader.js';
-import {
   attachmentMediaKind,
   validateConversionAttachment,
   firstConvertibleAttachment,
@@ -42,7 +36,7 @@ import {
 import { safeInteractionDeferReply } from '../utils/interaction-helpers.js';
 import { storeMedia, deliverStored, finishCommand } from './shared/deliver.js';
 import { formatSizeChange } from './shared/media-reply.js';
-import { fetchUrlInput } from './shared/url-input.js';
+import { fetchInput } from './shared/media-input.js';
 import { dispatchMediaJob } from '../jobs/dispatch.js';
 import { fromPath, tempPath, writeAtomic } from '../utils/media-file.js';
 import { messageMediaInput } from './shared/message-media.js';
@@ -122,7 +116,7 @@ function resolveVideoConversionOptions(options, probed) {
 async function processFormatConversion(
   interaction,
   attachment,
-  preDownloaded,
+  file,
   format,
   trim,
   originalUrl,
@@ -133,7 +127,7 @@ async function processFormatConversion(
     'convert',
     interaction,
     async ctx => {
-      const output = await convertToFormat(preDownloaded, format, {
+      const output = await convertToFormat(file, format, {
         ...trim,
         videoIndex: info?.videoIndex ?? null,
         audioIndex: info?.audioIndex ?? null,
@@ -201,7 +195,7 @@ async function processConversion(
   interaction,
   attachment,
   attachmentType,
-  preDownloaded = null,
+  file,
   options = {},
   originalUrl = null,
   commandSource = null
@@ -211,12 +205,6 @@ async function processConversion(
     interaction,
     async ctx => {
       const attachmentLimit = getDiscordAttachmentLimit(interaction, DISCORD_SIZE_LIMIT);
-
-      const file =
-        preDownloaded ||
-        (attachmentType === 'video'
-          ? await downloadVideo(attachment.url)
-          : await downloadImage(attachment.url));
       const gifPath = await tempPath('.gif');
       await renderGif(ctx, { attachment, attachmentType, file, options, gifPath });
       let gif = await fromPath(gifPath, { contentType: 'image/gif', filename: 'gronka.gif' });
@@ -262,57 +250,67 @@ const attachmentJson = attachment =>
     contentType: attachment.contentType,
   };
 
-async function resolveInput(interaction, { attachment, url, commandSource }) {
-  let file = null;
-  let originalUrl = null;
-  if (url) {
-    try {
-      ({ attachment, file, originalUrl } = await fetchUrlInput(url, interaction.client));
-    } catch (error) {
-      await refuse(interaction, 'convert', {
-        message: curatedErrorMessage(error, 'failed to download file from URL.'),
-        cause: error,
-        reason: 'url_download_failed',
-        context: { originalUrl: url, commandSource },
-      });
-      return null;
-    }
-  }
-  const type = attachmentMediaKind(attachment);
-  if (!type) {
-    const { name, size, contentType } = attachment;
+// Refuses a file convert cannot take, from its name, type and size alone.
+async function checkAttachment(interaction, attachment, { originalUrl, fromUrl, commandSource }) {
+  const { name, size, contentType } = attachment;
+  const context = {
+    originalUrl: originalUrl ?? attachment.url,
+    attachment: { name, size, contentType, url: attachment.url },
+    commandSource,
+  };
+  if (!attachmentMediaKind(attachment)) {
     await refuse(interaction, 'convert', {
       message: UNSUPPORTED_FORMAT,
       detail: `unsupported content type: ${contentType || 'unknown'}`,
       reason: 'unsupported_format',
-      context: {
-        originalUrl: originalUrl ?? attachment.url,
-        attachment: { name, size, contentType, url: attachment.url },
-        commandSource,
-      },
+      context,
     });
-    return null;
+    return false;
   }
   const validation = validateConversionAttachment(attachment);
   if (!validation.valid) {
-    const { name, size, contentType } = attachment;
     await refuse(interaction, 'convert', {
       message: validation.error,
-      reason: url ? null : 'invalid_attachment',
-      context: {
-        originalUrl: originalUrl ?? attachment.url,
-        attachment: { name, size, contentType, url: attachment.url },
-        commandSource,
-      },
+      reason: fromUrl ? null : 'invalid_attachment',
+      context,
+    });
+    return false;
+  }
+  return true;
+}
+
+async function resolveInput(interaction, { attachment, url, commandSource }) {
+  if (attachment && !(await checkAttachment(interaction, attachment, { commandSource }))) {
+    return null;
+  }
+  let input;
+  try {
+    input = await fetchInput({ attachment, url }, interaction.client);
+  } catch (error) {
+    await refuse(interaction, 'convert', {
+      message: curatedErrorMessage(error, 'failed to download that file.'),
+      cause: error,
+      reason: 'url_download_failed',
+      context: { originalUrl: url ?? attachment.url, commandSource },
     });
     return null;
   }
-  return { attachment, file, originalUrl, type };
+  if (
+    url &&
+    !(await checkAttachment(interaction, input.attachment, {
+      originalUrl: input.originalUrl,
+      fromUrl: true,
+      commandSource,
+    }))
+  ) {
+    return null;
+  }
+  return input;
 }
 
 // The bot's half: checks that answer privately before anything is deferred or queued.
 async function acceptInput(interaction, { attachment, url, commandSource }) {
-  if (!url) return (await resolveInput(interaction, { attachment, commandSource })) !== null;
+  if (!url) return checkAttachment(interaction, attachment, { commandSource });
   const { refusal } = readLink(url);
   if (refusal) {
     await refuse(interaction, 'convert', {
@@ -334,15 +332,6 @@ export async function runConvertJob(
   let info;
   let trim;
   try {
-    const download =
-      input.type === 'image'
-        ? downloadImage
-        : input.type === 'audio'
-          ? downloadAudio
-          : input.type === 'video'
-            ? downloadVideo
-            : downloadDirectMedia;
-    input.file ??= await download(input.attachment.url, interaction.client);
     const sourceSize = input.file.size;
     if (isAnimatedWebp(input.file.head)) {
       if (sourceSize > botConfig.maxImageSize)

@@ -5,14 +5,13 @@ import { firstUrlIn } from '../utils/validation.js';
 import { readLink } from '../core/intake.js';
 import { validateMediaFile } from './shared/media-validation.js';
 import { curatedErrorMessage } from './shared/command-errors.js';
-import { downloadImage } from '../utils/file-downloader.js';
 import { isGifFile, optimizeToJob } from '../utils/gif-optimizer.js';
 import { runMediaCommand } from './shared/run-media-command.js';
 import { getDiscordAttachmentLimit } from './shared/attachment-limit.js';
 import { refuse, commandSourceOf, missingInputRefusal } from './shared/command-guards.js';
 import { safeInteractionDeferReply } from '../utils/interaction-helpers.js';
 import { storeMedia, deliverStored, finishCommand } from './shared/deliver.js';
-import { fetchUrlInput } from './shared/url-input.js';
+import { fetchInput } from './shared/media-input.js';
 import { dispatchMediaJob } from '../jobs/dispatch.js';
 import { formatSizeChange } from './shared/media-reply.js';
 import { messageMediaInput } from './shared/message-media.js';
@@ -21,10 +20,10 @@ const logger = createLogger('optimize');
 
 const { discordSizeLimit: DISCORD_SIZE_LIMIT } = botConfig;
 
-export async function processOptimization(
+async function processOptimization(
   interaction,
   attachment,
-  preDownloaded = null,
+  file,
   lossyLevel = null,
   originalUrl = null,
   commandSource = null
@@ -34,7 +33,7 @@ export async function processOptimization(
     'optimize',
     interaction,
     async () => {
-      const gif = validateMediaFile(preDownloaded ?? (await downloadImage(attachment.url)), 'gif');
+      const gif = validateMediaFile(file, 'gif');
       const optimized = await optimizeToJob(gif, lossy);
 
       const stored = await storeMedia(
@@ -75,38 +74,41 @@ const attachmentJson = attachment =>
     contentType: attachment.contentType,
   };
 
-// The gif (downloading a url) an optimize was given; replies and returns null on failure.
+async function checkGif(interaction, attachment, { fromUrl, commandSource }) {
+  if (isGifFile(attachment.name, attachment.contentType)) return true;
+  const { name, size, contentType } = attachment;
+  await refuse(interaction, 'optimize', {
+    message: 'this command only works on gif files.',
+    reason: fromUrl ? null : 'invalid_attachment_type',
+    context: { attachment: { name, size, contentType, url: attachment.url }, commandSource },
+  });
+  return false;
+}
+
+// The gif an optimize was given, downloaded; replies and returns null on failure.
 async function resolveGif(interaction, { attachment, url, commandSource }) {
-  let file = null;
-  let originalUrl = null;
-  if (url) {
-    try {
-      ({ attachment, file, originalUrl } = await fetchUrlInput(url, interaction.client));
-    } catch (error) {
-      await refuse(interaction, 'optimize', {
-        message: curatedErrorMessage(error, 'failed to download file from URL.'),
-        cause: error,
-        reason: 'url_download_failed',
-        context: { originalUrl: url, commandSource },
-      });
-      return null;
-    }
-  }
-  if (!isGifFile(attachment.name, attachment.contentType)) {
-    const { name, size, contentType } = attachment;
+  if (attachment && !(await checkGif(interaction, attachment, { commandSource }))) return null;
+  let input;
+  try {
+    input = await fetchInput({ attachment, url }, interaction.client);
+  } catch (error) {
     await refuse(interaction, 'optimize', {
-      message: 'this command only works on gif files.',
-      reason: url ? null : 'invalid_attachment_type',
-      context: { attachment: { name, size, contentType, url: attachment.url }, commandSource },
+      message: curatedErrorMessage(error, 'failed to download that file.'),
+      cause: error,
+      reason: 'url_download_failed',
+      context: { originalUrl: url ?? attachment.url, commandSource },
     });
     return null;
   }
-  return { attachment, file, originalUrl };
+  if (url && !(await checkGif(interaction, input.attachment, { fromUrl: true, commandSource }))) {
+    return null;
+  }
+  return input;
 }
 
 // The bot's half: checks that answer privately before anything is deferred or queued.
 async function acceptGif(interaction, { attachment, url, commandSource }) {
-  if (!url) return (await resolveGif(interaction, { attachment, commandSource })) !== null;
+  if (!url) return checkGif(interaction, attachment, { commandSource });
   const { refusal } = readLink(url);
   if (refusal) {
     await refuse(interaction, 'optimize', {

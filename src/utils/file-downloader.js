@@ -113,20 +113,32 @@ export function getDirectMediaHeaders(url) {
   return isBilibiliCdnHost(host) ? { Referer: 'https://www.bilibili.com/' } : {};
 }
 
-function guardedFetch(url, maxSize, userAgent = null) {
+const isTransient = error =>
+  ['ECONNABORTED', 'ECONNRESET', 'ETIMEDOUT'].includes(error?.code) ||
+  [502, 503, 504].includes(error?.response?.status);
+
+async function guardedFetch(url, maxSize, userAgent = null) {
   const headers = { ...getRequestHeaders(), ...getDirectMediaHeaders(url) };
   if (userAgent) headers['User-Agent'] = userAgent;
-  return fetchToFile(
-    url,
-    {
-      ...ssrfGuardedRequest(),
-      timeout: 60000,
-      maxRedirects: 5,
-      validateStatus: status => status >= 200 && status < 400,
-      headers,
-    },
-    { maxSize }
-  );
+  const fetchOnce = () =>
+    fetchToFile(
+      url,
+      {
+        ...ssrfGuardedRequest(),
+        timeout: 60000,
+        maxRedirects: 5,
+        validateStatus: status => status >= 200 && status < 400,
+        headers,
+      },
+      { maxSize }
+    );
+  try {
+    return await fetchOnce();
+  } catch (error) {
+    if (!isTransient(error)) throw error;
+    logger.warn(`Retrying ${hostOf(url)} once after ${describeCause(error)}`);
+    return fetchOnce();
+  }
 }
 
 function filenameFor(file, url) {

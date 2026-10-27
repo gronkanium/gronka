@@ -47,6 +47,33 @@ describe('source-specific file downloads', () => {
     }
   });
 
+  test('a stalled or 5xx download is tried once more before failing', async () => {
+    const originalGet = axios.get;
+    const stalls = [
+      Object.assign(new Error('timeout of 60000ms exceeded'), { code: 'ECONNABORTED' }),
+      Object.assign(new Error('bad gateway'), { response: { status: 504 } }),
+    ];
+    let calls = 0;
+    axios.get = async () => {
+      if (calls++ % 2 === 0) throw stalls.shift();
+      return {
+        data: Readable.from([Buffer.from('\x00\x00\x00\x20ftypisom')]),
+        headers: { 'content-type': 'video/mp4' },
+      };
+    };
+    try {
+      await withJobDir(async () => {
+        assert.ok((await downloadFileFromUrl('https://cdn.medal.tv/mediac/a.mp4')).size > 0);
+        assert.ok(
+          (await downloadVideo('https://cdn.discordapp.com/attachments/1/2/b.mp4')).size > 0
+        );
+      });
+      assert.strictEqual(calls, 4);
+    } finally {
+      axios.get = originalGet;
+    }
+  });
+
   test('a file whose link has no extension is named from its content type', async () => {
     const originalGet = axios.get;
     axios.get = async () => ({

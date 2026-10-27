@@ -5,6 +5,30 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres (attempts) to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [4.9.0](https://github.com/gronkanium/gronka/compare/v4.8.1...v4.9.0) (2026-10-27)
+
+
+### Features
+
+* **convert:** accept AVIF images ([f5d14a6](https://github.com/gronkanium/gronka/commit/f5d14a6db450ae89fcbb1bbabd024be4ff8c5c6d))
+* **download:** add Bandcamp, Internet Archive, Gofile and Erome ([f5d14a6](https://github.com/gronkanium/gronka/commit/f5d14a6db450ae89fcbb1bbabd024be4ff8c5c6d))
+
+
+### Bug Fixes
+
+* **content:** record why every deleted or private post was judged gone ([f5d14a6](https://github.com/gronkanium/gronka/commit/f5d14a6db450ae89fcbb1bbabd024be4ff8c5c6d))
+* **convert:** fetch every /convert and /optimize input through one path ([f5d14a6](https://github.com/gronkanium/gronka/commit/f5d14a6db450ae89fcbb1bbabd024be4ff8c5c6d))
+* **download:** one current browser user agent for requests made without a login ([f5d14a6](https://github.com/gronkanium/gronka/commit/f5d14a6db450ae89fcbb1bbabd024be4ff8c5c6d))
+* **download:** read Rule34Video through yt-dlp's generic player extractor ([fad93ce](https://github.com/gronkanium/gronka/commit/fad93cea007aac1092afc15eeecab45c78e93e96))
+* **download:** read Snapchat spotlight links that name the creator ([f5d14a6](https://github.com/gronkanium/gronka/commit/f5d14a6db450ae89fcbb1bbabd024be4ff8c5c6d))
+* **download:** retry a direct file download once after a stall or 502/503/504 ([fad93ce](https://github.com/gronkanium/gronka/commit/fad93cea007aac1092afc15eeecab45c78e93e96))
+* **download:** send X the same browser identity as the session that logs it in ([f5d14a6](https://github.com/gronkanium/gronka/commit/f5d14a6db450ae89fcbb1bbabd024be4ff8c5c6d))
+* **download:** stop calling Instagram highlights expired stories, keep the media-info failure ([f5d14a6](https://github.com/gronkanium/gronka/commit/f5d14a6db450ae89fcbb1bbabd024be4ff8c5c6d))
+* **download:** tell a just-published X or TikTok post apart from a deleted one ([f5d14a6](https://github.com/gronkanium/gronka/commit/f5d14a6db450ae89fcbb1bbabd024be4ff8c5c6d))
+* **download:** treat yt-dlp's 'no suitable extractor' as an unsupported link ([f5d14a6](https://github.com/gronkanium/gronka/commit/f5d14a6db450ae89fcbb1bbabd024be4ff8c5c6d))
+* **download:** wait for a Medal clip that publishes seconds after its link is shared ([fad93ce](https://github.com/gronkanium/gronka/commit/fad93cea007aac1092afc15eeecab45c78e93e96))
+* **errors:** one curated answer for timeouts and dead or forbidden file links ([f5d14a6](https://github.com/gronkanium/gronka/commit/f5d14a6db450ae89fcbb1bbabd024be4ff8c5c6d))
+
 ## [4.8.1](https://github.com/gronkanium/gronka/compare/v4.8.0...v4.8.1) (2026-10-26)
 
 

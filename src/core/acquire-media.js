@@ -311,7 +311,8 @@ export async function acquireMedia(
         logger.warn(`Direct URL fallback failed: ${describeCause(rootCause(directUrlError))}`);
       }
     }
-    throw fail(gone && isFreshPost(url) ? notPublishedYet(lastError) : lastError);
+    const fresh = gone && isFreshPost(url, Date.now(), describeCause(rootCause(lastError)));
+    throw fail(fresh ? notPublishedYet(lastError) : lastError);
   }
 
   const track = soundcloud && (await soundcloud);

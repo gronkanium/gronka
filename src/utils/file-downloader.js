@@ -156,44 +156,6 @@ function filenameFor(file, url) {
   return 'file';
 }
 
-async function downloadCapped(url, maxSize, kind) {
-  const urlValidation = validateUrl(url);
-  if (!urlValidation.valid) {
-    throw new ValidationError(urlValidation.error);
-  }
-  try {
-    const file = await guardedFetch(url, maxSize);
-    return await withExtension({ ...file, filename: filenameFor(file, url) });
-  } catch (error) {
-    if (isSsrfBlockedError(error)) {
-      throw withCause(new ValidationError(BLOCKED_DESTINATION_MESSAGE), error);
-    }
-    if (isTooLargeError(error)) {
-      throw withCause(
-        new ValidationError(`${kind} file is too large (max ${mb(maxSize)}mb)`),
-        error
-      );
-    }
-    logger.warn(`${kind} download failed: ${describeCause(error)}`);
-    throw withCause(
-      new NetworkError(`failed to download the ${kind}. it may be unavailable.`),
-      error
-    );
-  }
-}
-
-export function downloadVideo(url) {
-  return downloadCapped(url, MAX_VIDEO_SIZE, 'video');
-}
-
-export function downloadImage(url) {
-  return downloadCapped(url, MAX_IMAGE_SIZE, 'image');
-}
-
-export function downloadAudio(url) {
-  return downloadCapped(url, MAX_VIDEO_SIZE, 'audio');
-}
-
 async function fetchAnyFile(url, userAgent) {
   const file = await guardedFetch(url, MAX_ANY_SIZE, userAgent);
   const contentType = file.headers['content-type'] || '';

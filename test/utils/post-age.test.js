@@ -15,6 +15,17 @@ describe('isFreshPost', () => {
     assert.equal(isFreshPost(tiktok, tiktokPostedAt + 60 * 60_000), false);
   });
 
+  test('a TikTok short link takes its id from the yt-dlp error', () => {
+    const cause =
+      'yt-dlp: ERROR: [TikTok] 7699935817971780897: Your IP address is blocked from accessing this post';
+    const postedAt = Number(7699935817971780897n >> 32n) * 1000;
+    assert.equal(isFreshPost('https://vm.tiktok.com/ZGdCt3Nva/', postedAt + 60_000, cause), true);
+    assert.equal(
+      isFreshPost('https://vm.tiktok.com/ZGdCt3Nva/', postedAt + 86_400_000, cause),
+      false
+    );
+  });
+
   test('a link without a time-coded id is never fresh', () => {
     assert.equal(isFreshPost('https://vm.tiktok.com/ZGdCt3Nva/'), false);
     assert.equal(isFreshPost('https://www.youtube.com/watch?v=123'), false);

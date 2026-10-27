@@ -8,7 +8,13 @@ import {
   ALLOWED_VIDEO_TYPES,
   ALLOWED_IMAGE_TYPES,
   MAX_VIDEO_SIZE,
+  attachmentMediaKind,
 } from '../../src/utils/attachment-helpers.js';
+
+test('attachmentMediaKind - takes avif images by type or by name', () => {
+  assert.strictEqual(attachmentMediaKind({ contentType: 'image/avif', name: 'a.avif' }), 'image');
+  assert.strictEqual(attachmentMediaKind({ contentType: '', name: 'convert.avif' }), 'image');
+});
 
 // Mock attachment objects
 function createAttachment(contentType, size) {

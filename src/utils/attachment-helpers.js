@@ -23,6 +23,7 @@ export const ALLOWED_IMAGE_TYPES = [
   'image/jpg',
   'image/webp',
   'image/gif',
+  'image/avif',
 ];
 
 export function attachmentMediaKind(attachment) {
@@ -36,7 +37,7 @@ export function attachmentMediaKind(attachment) {
     .slice(1)
     .toLowerCase();
   if (['mp4', 'mov', 'webm', 'avi', 'mkv'].includes(ext)) return 'video';
-  if (['gif', 'png', 'jpg', 'jpeg', 'webp', 'awebp'].includes(ext)) return 'image';
+  if (['gif', 'png', 'jpg', 'jpeg', 'webp', 'awebp', 'avif'].includes(ext)) return 'image';
   if (OUTPUT_FORMATS[ext]?.kind === 'audio') return 'audio';
   return 'unknown';
 }

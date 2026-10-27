@@ -10,6 +10,7 @@ import {
   withCause,
   describeCause,
   contentGone,
+  notPublishedYet,
   timedOut,
 } from './errors.js';
 import { trimVideo } from './video-processor/trim-video.js';
@@ -311,15 +312,7 @@ const FAILURES = [
       new NetworkError("tiktok isn't serving this video's file right now.", 'REGION_COPY_MISSING'),
   ],
   // Medal answers 403 until a fresh clip finishes publishing, usually within a minute.
-  [
-    /HTTP Error 403/,
-    url =>
-      hostIn(url, ['medal.tv']) &&
-      new NetworkError(
-        'this medal clip is still being published, try again in a minute.',
-        'CLIP_NOT_PUBLISHED'
-      ),
-  ],
+  [/HTTP Error 403/, url => hostIn(url, ['medal.tv']) && notPublishedYet()],
   [/Unable to download webpage: HTTP Error (404|410)/, () => contentGone()],
   [
     /Cannot parse data/,

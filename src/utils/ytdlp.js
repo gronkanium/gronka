@@ -236,8 +236,10 @@ export function getYtdlpSite(url) {
 }
 
 export function canonicalYtdlpUrl(url) {
-  const match = /^https?:\/\/(?:[\w-]+\.)?pornhub\.com\/shorties\/(\w+)/i.exec(url);
-  return match ? `https://www.pornhub.com/view_video.php?viewkey=${match[1]}` : url;
+  const shorty = /^https?:\/\/(?:[\w-]+\.)?pornhub\.com\/shorties\/(\w+)/i.exec(url);
+  if (shorty) return `https://www.pornhub.com/view_video.php?viewkey=${shorty[1]}`;
+  const spotlight = /^https?:\/\/(?:www\.)?snapchat\.com\/@[\w.-]+\/spotlight\/([\w-]+)/i.exec(url);
+  return spotlight ? `https://www.snapchat.com/spotlight/${spotlight[1]}` : url;
 }
 
 function getContentType(ext) {

@@ -153,7 +153,7 @@ export async function fetchTiktokThread(url, { http = defaultHttp } = {}) {
   try {
     page = await http.page(url);
   } catch (error) {
-    if (error.response?.status === 404) throw contentGone();
+    if (error.response?.status === 404) throw contentGone(error);
     logger.warn(`TikTok page request failed: ${error.message}`);
     throw new NetworkError('failed to reach tiktok');
   }
@@ -169,13 +169,13 @@ export async function fetchTiktokThread(url, { http = defaultHttp } = {}) {
     const subject = normalizeTiktokItem(item, canonical);
     return thread({ source: 'tiktok', url: canonical, post: subject });
   }
-  if (gone) throw contentGone();
+  if (gone) throw contentGone('tiktok: page marks the item unavailable');
 
   let oembed;
   try {
     oembed = await http.oembed(canonical);
   } catch (error) {
-    if (error.response && error.response.status < 500) throw contentGone();
+    if (error.response && error.response.status < 500) throw contentGone(error);
     logger.warn(`TikTok oembed request failed: ${error.message}`);
     throw new NetworkError('failed to reach tiktok');
   }

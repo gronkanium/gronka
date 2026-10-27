@@ -271,7 +271,10 @@ async function readTweet(id, gql) {
     const asUser = await gql('TweetResultByRestId', variables, { session: true });
     result = asUser?.data?.tweetResult?.result;
   }
-  if (!unwrap(result)?.legacy) throw contentGone();
+  if (!unwrap(result)?.legacy) {
+    const why = [result?.__typename ?? 'no result', result?.reason].filter(Boolean).join(' ');
+    throw contentGone(`x: TweetResultByRestId answered ${why}`);
+  }
   return unwrap(result);
 }
 

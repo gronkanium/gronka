@@ -62,7 +62,7 @@ function classify(stderr) {
       stderr
     )
   ) {
-    return contentGone();
+    return contentGone(`yt-dlp: ${lastLine(stderr)}`);
   }
   return null;
 }

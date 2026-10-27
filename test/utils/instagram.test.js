@@ -263,11 +263,18 @@ describe('downloadFromInstagram stories', () => {
     );
   });
 
-  test('a highlight the feed no longer returns is reported unavailable', async () => {
+  test('a highlight the feed no longer returns is gone, not an expired story', async () => {
     stubApi({ reels_media: { reels_media: [] } });
     await assert.rejects(
       downloadFromInstagram('https://www.instagram.com/stories/highlights/1796/'),
-      /this story is unavailable/
+      error => error.code === 'CONTENT_GONE' && !/24 hours/.test(error.message)
+    );
+  });
+
+  test('a dead highlight item keeps why the media-info lookup failed', async () => {
+    stubApi({ '/api/v1/media/22/info/': httpError(404), reels_media: { reels_media: [] } });
+    await assert.rejects(downloadFromInstagram(`${highlightShare('5')}?story_media_id=22`), error =>
+      /media info .*404/.test(error.cause.message)
     );
   });
 

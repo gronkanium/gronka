@@ -1,6 +1,6 @@
 import { describe, test } from 'bun:test';
 import assert from 'node:assert';
-import { isPinterestUrl, extractMediaUrl } from '../../src/utils/pinterest.js';
+import { isPinterestUrl, extractMediaUrl, resolvePinUrl } from '../../src/utils/pinterest.js';
 
 const videoLd = url =>
   `<script type="application/ld+json">{"@type":"VideoObject","@context":"http://schema.org/","name":"zamnn","contentUrl":"${url}","duration":"PT15S"}</script>`;
@@ -35,6 +35,14 @@ describe('pinterest utilities', () => {
     assert.strictEqual(extractMediaUrl(videoLd(url)), url);
   });
 
+  test('extractMediaUrl swaps an HLS contentUrl for the mp4 elsewhere on the page', () => {
+    const mp4 = 'https://v1.pinimg.com/videos/iht/expMp4/27/1a/86/271a86_720w.mp4';
+    const html =
+      videoLd('https://v1.pinimg.com/videos/iht/hls/27/1a/86/271a86.m3u8') +
+      `<script>{"url":"${mp4}"}</script>`;
+    assert.strictEqual(extractMediaUrl(html), mp4);
+  });
+
   test('extractMediaUrl prefers video over the posting image on a video pin', () => {
     // A video pin publishes its still frame as the SocialMediaPosting image, so both blocks
     // are present and the video has to win.
@@ -65,5 +73,14 @@ describe('pinterest utilities', () => {
     assert.strictEqual(extractMediaUrl('<html><body>nothing here</body></html>'), null);
     assert.strictEqual(extractMediaUrl(''), null);
     assert.strictEqual(extractMediaUrl(null), null);
+  });
+
+  test('resolvePinUrl drops the invite page Pinterest bounces to its error page', async () => {
+    assert.strictEqual(
+      await resolvePinUrl(
+        'https://it.pinterest.com/pin/1150599404826702429/sent/?invite_code=a&sfo=1'
+      ),
+      'https://www.pinterest.com/pin/1150599404826702429/'
+    );
   });
 });

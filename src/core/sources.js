@@ -18,6 +18,7 @@ import { isBilibiliUrl, downloadFromBilibili } from '../utils/bilibili.js';
 import { isThreadsUrl, downloadFromThreads } from '../utils/threads.js';
 import { downloadFromX } from '../utils/x-media.js';
 import { isMegaUrl, downloadFromMega } from '../utils/mega.js';
+import { isTumblrUrl, downloadFromTumblr } from '../utils/tumblr.js';
 import {
   isInstagramStoryUrl,
   isInstagramPostUrl,
@@ -125,6 +126,7 @@ export const ENGINES = {
   threads: { name: 'Threads', extract: url => downloadFromThreads(url) },
   x: { name: 'X', extract: url => downloadFromX(url) },
   mega: { name: 'Mega', extract: (url, ctx) => downloadFromMega(url, ctx.maxSize) },
+  tumblr: { name: 'Tumblr', extract: url => downloadFromTumblr(url) },
   direct: {
     name: 'direct file',
     extract: (url, ctx) =>
@@ -226,6 +228,13 @@ export const ROUTES = [
     owns: isMegaUrl,
     chain: [step('mega')],
     services: switches('video', ['mega', 'Mega', ['mega.nz', 'mega.io']]),
+  },
+  // cobalt reads only video posts, and yt-dlp hits the browser check on <blog>.tumblr.com.
+  {
+    id: 'tumblr',
+    name: 'Tumblr',
+    owns: isTumblrUrl,
+    chain: [step('tumblr'), step('cobalt')],
   },
   // Cobalt tries Instagram's logged-out routes first; the session extractor is the backstop.
   {

@@ -53,7 +53,9 @@ export function normalizePinterestPin(html, finalUrl) {
   const media = extractMediaUrl(html);
   const { SocialMediaPosting: posting, VideoObject: video } = jsonLd(html);
   const main = posting ?? video;
-  if (!main || !media) throw contentGone();
+  if (!main || !media) {
+    throw contentGone(`pinterest: pin page had no ${main ? 'media url' : 'post data'}`);
+  }
   const isVideo = media === video?.contentUrl;
   const pinner = posting?.author;
   const text = posting?.articleBody ?? video?.description ?? '';
@@ -97,11 +99,13 @@ export async function fetchPinterestThread(url, { fetchPage = request } = {}) {
   try {
     page = await fetchPage(url);
   } catch (error) {
-    if ([404, 410].includes(error.response?.status)) throw contentGone();
+    if ([404, 410].includes(error.response?.status)) throw contentGone(error);
     logger.warn(`Failed to fetch Pinterest pin page: ${error.message}`);
     throw new NetworkError('failed to fetch the pin page');
   }
-  if (page.url.includes('show_error=true')) throw contentGone();
+  if (page.url.includes('show_error=true')) {
+    throw contentGone(`pinterest: redirected to ${page.url.split('?')[0]} with show_error`);
+  }
   const subject = normalizePinterestPin(String(page.html ?? ''), page.url);
   return thread({ source: 'pinterest', url: subject.url, post: subject });
 }

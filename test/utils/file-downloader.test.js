@@ -169,6 +169,31 @@ describe('file downloader utilities', () => {
     });
   });
 
+  test('dead, forbidden and stalled file links each get one curated answer with the cause kept', async () => {
+    const originalGet = axios.get;
+    const cases = [
+      [{ response: { status: 410 } }, 'FILE_NOT_FOUND'],
+      [{ response: { status: 401 } }, 'FILE_FORBIDDEN'],
+      [{ code: 'ETIMEDOUT' }, 'TIMED_OUT'],
+    ];
+    try {
+      for (const [failure, code] of cases) {
+        axios.get = async () => {
+          throw Object.assign(new Error('upstream'), failure);
+        };
+        await assert.rejects(
+          () => downloadFileFromUrl('https://example.com/a.mp4'),
+          error =>
+            error.code === code &&
+            !/url/i.test(error.message) &&
+            error.cause?.message === 'upstream'
+        );
+      }
+    } finally {
+      axios.get = originalGet;
+    }
+  });
+
   describe('parseTenorUrl', () => {
     test('extracts GIF URL from store-cache JSON', async () => {
       const tenorUrl = 'https://tenor.com/view/test-gif-1234567890';

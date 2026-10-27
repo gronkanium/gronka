@@ -3,7 +3,7 @@ import { createLogger } from '../utils/logger.js';
 import { NetworkError, contentGone } from '../utils/errors.js';
 import { getRequestHeaders } from '../utils/discord-cdn.js';
 import { ssrfGuardedRequest, PAGE_FETCH_TIMEOUT_MS, MAX_PAGE_BYTES } from '../utils/ssrf-guard.js';
-import { isPinterestUrl, extractMediaUrl } from '../utils/pinterest.js';
+import { isPinterestUrl, extractMediaUrl, resolvePinUrl } from '../utils/pinterest.js';
 import { post, thread, linksIn } from './schema.js';
 
 const logger = createLogger('content-pinterest');
@@ -13,6 +13,7 @@ export const PINTEREST_LIMITS = {};
 export const isPinterestContentUrl = isPinterestUrl;
 
 async function request(url) {
+  url = await resolvePinUrl(url);
   const response = await axios.get(url, {
     ...ssrfGuardedRequest(),
     responseType: 'text',

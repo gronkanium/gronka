@@ -146,21 +146,25 @@ describe('fetchTiktokThread', () => {
 
   test('a non-zero page status is CONTENT_GONE without an oembed call', async () => {
     const http = fakeHttp({ html: pageOf(null, 10204) });
-    await expect(fetchTiktokThread(canonical, { http })).rejects.toMatchObject({
-      code: 'CONTENT_GONE',
-    });
+    const gone = await fetchTiktokThread(canonical, { http }).catch(e => e);
+    expect(gone.code).toBe('CONTENT_GONE');
+    expect(gone.cause).toBeInstanceOf(Error);
     expect(http.calls.oembed).toHaveLength(0);
   });
 
   test('a 404 page and a 4xx oembed are CONTENT_GONE', async () => {
     const notFound = Object.assign(new Error('nf'), { response: { status: 404 } });
-    await expect(
-      fetchTiktokThread(canonical, { http: fakeHttp({ pageError: notFound }) })
-    ).rejects.toMatchObject({ code: 'CONTENT_GONE' });
+    const notFoundError = await fetchTiktokThread(canonical, {
+      http: fakeHttp({ pageError: notFound }),
+    }).catch(e => e);
+    expect(notFoundError.code).toBe('CONTENT_GONE');
+    expect(notFoundError.cause).toBe(notFound);
     const refused = Object.assign(new Error('bad'), { response: { status: 400 } });
-    await expect(
-      fetchTiktokThread(canonical, { http: fakeHttp({ html: '<html></html>', oembed: refused }) })
-    ).rejects.toMatchObject({ code: 'CONTENT_GONE' });
+    const refusedError = await fetchTiktokThread(canonical, {
+      http: fakeHttp({ html: '<html></html>', oembed: refused }),
+    }).catch(e => e);
+    expect(refusedError.code).toBe('CONTENT_GONE');
+    expect(refusedError.cause).toBe(refused);
   });
 
   test('a short link that lands off a video is BAD_URL', async () => {

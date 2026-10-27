@@ -19,8 +19,8 @@ describe('download-services registry', () => {
 
   test('every yt-dlp site has a registry entry', () => {
     for (const site of YTDLP_SITES) {
-      const id = site.name.toLowerCase();
-      assert.ok(DOWNLOAD_SERVICE_IDS.has(id), `missing registry entry for ${site.name}`);
+      const service = getServiceForUrl(`https://${site.hosts[0]}/x`);
+      assert.ok(DOWNLOAD_SERVICE_IDS.has(service?.id), `missing registry entry for ${site.name}`);
     }
   });
 
@@ -29,6 +29,8 @@ describe('download-services registry', () => {
     assert.strictEqual(getServiceForUrl('https://www.tiktok.com/@u/video/1')?.id, 'tiktok');
     assert.strictEqual(getServiceForUrl('https://www.tt.site/t/short123/')?.id, 'tiktok');
     assert.strictEqual(getServiceForUrl('https://jumpshare.com/s/file123AbC')?.id, 'jumpshare');
+    assert.strictEqual(getServiceForUrl('https://archive.org/details/x')?.id, 'internet-archive');
+    assert.strictEqual(getServiceForUrl('https://gofile.io/d/x')?.id, 'gallery-dl-gofile');
     assert.strictEqual(getServiceForUrl('https://v.redd.it/abc')?.id, 'reddit');
     assert.strictEqual(getServiceForUrl('https://youtu.be/abc')?.id, 'youtube');
     assert.strictEqual(getServiceForUrl('https://www.xvideos.com/video1/x')?.id, 'xvideos');

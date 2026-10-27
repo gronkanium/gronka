@@ -3,7 +3,7 @@ import path from 'path';
 import { createLogger } from './logger.js';
 import { botConfig } from './config.js';
 import { validateUrl } from './validation.js';
-import { ValidationError, NetworkError, withCause, describeCause } from './errors.js';
+import { ValidationError, NetworkError, withCause, describeCause, timedOut } from './errors.js';
 import { isDiscordCdnUrl, getRefreshedAttachmentURL, getRequestHeaders } from './discord-cdn.js';
 import { sanitizeFilename } from './validation.js';
 import { fetchToFile, withExtension, extensionForType } from './media-file.js';
@@ -156,44 +156,6 @@ function filenameFor(file, url) {
   return 'file';
 }
 
-async function downloadCapped(url, maxSize, kind) {
-  const urlValidation = validateUrl(url);
-  if (!urlValidation.valid) {
-    throw new ValidationError(urlValidation.error);
-  }
-  try {
-    const file = await guardedFetch(url, maxSize);
-    return await withExtension({ ...file, filename: filenameFor(file, url) });
-  } catch (error) {
-    if (isSsrfBlockedError(error)) {
-      throw withCause(new ValidationError(BLOCKED_DESTINATION_MESSAGE), error);
-    }
-    if (isTooLargeError(error)) {
-      throw withCause(
-        new ValidationError(`${kind} file is too large (max ${mb(maxSize)}mb)`),
-        error
-      );
-    }
-    logger.warn(`${kind} download failed: ${describeCause(error)}`);
-    throw withCause(
-      new NetworkError(`failed to download the ${kind}. it may be unavailable.`),
-      error
-    );
-  }
-}
-
-export function downloadVideo(url) {
-  return downloadCapped(url, MAX_VIDEO_SIZE, 'video');
-}
-
-export function downloadImage(url) {
-  return downloadCapped(url, MAX_IMAGE_SIZE, 'image');
-}
-
-export function downloadAudio(url) {
-  return downloadCapped(url, MAX_VIDEO_SIZE, 'audio');
-}
-
 async function fetchAnyFile(url, userAgent) {
   const file = await guardedFetch(url, MAX_ANY_SIZE, userAgent);
   const contentType = file.headers['content-type'] || '';
@@ -239,19 +201,19 @@ export async function downloadFileFromUrl(url, client = null, options = {}) {
         error
       );
     }
-    if (error.response?.status === 404) {
-      throw withCause(new NetworkError('file not found at the provided URL'), error);
-    }
-    if (error.response?.status === 403) {
+    const status = error.response?.status;
+    // Not contentGone: a site extractor's dead CDN copy must not stop the next engine.
+    if (status === 404 || status === 410) {
       throw withCause(
-        new NetworkError(
-          'access denied to the file URL (may be expired or require authentication)'
-        ),
+        new NetworkError('that file is no longer at that link.', 'FILE_NOT_FOUND'),
         error
       );
     }
-    if (error.response?.status === 401) {
-      throw withCause(new NetworkError('authentication required to access the file URL'), error);
+    if (status === 401 || status === 403) {
+      throw withCause(
+        new NetworkError('that file link has expired or is private.', 'FILE_FORBIDDEN'),
+        error
+      );
     }
     if (error.response?.status === 500 && isDiscordCdnUrl(url) && client && actualUrl === url) {
       try {
@@ -272,9 +234,7 @@ export async function downloadFileFromUrl(url, client = null, options = {}) {
         error
       );
     }
-    if (error.code === 'ECONNABORTED') {
-      throw withCause(new NetworkError('request timed out while downloading file'), error);
-    }
+    if (['ECONNABORTED', 'ETIMEDOUT'].includes(error.code)) throw timedOut(error);
     logger.warn(`File download from URL failed: ${describeCause(error)}`);
     throw withCause(new NetworkError('failed to download the file from the provided url.'), error);
   }

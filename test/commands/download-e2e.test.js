@@ -182,7 +182,7 @@ if (!mocksSupported) {
           const { NetworkError } = await import('../../src/utils/errors.js');
           throw new NetworkError('this post is unavailable or has been deleted');
         }
-        if (url.includes('cdnmissing')) {
+        if (url.includes('cdnmissing') || url.includes('justposted')) {
           const { NetworkError } = await import('../../src/utils/errors.js');
           throw new NetworkError('this post is unavailable', 'CONTENT_GONE', 404);
         }
@@ -244,6 +244,12 @@ if (!mocksSupported) {
           const { NetworkError } = await import('../../src/utils/errors.js');
           throw new NetworkError('this post is unavailable or has been deleted');
         }
+        if (u.includes('justposted')) {
+          const { contentGone } = await import('../../src/utils/errors.js');
+          throw contentGone(
+            'yt-dlp: ERROR: [TikTok] 1: Your IP address is blocked from accessing this post'
+          );
+        }
         if (u.includes('toolong')) {
           const { ValidationError } = await import('../../src/utils/errors.js');
           throw new ValidationError(
@@ -297,8 +303,6 @@ if (!mocksSupported) {
     const realFileDownloader = await import('../../src/utils/file-downloader.js');
     mock.module('../../src/utils/file-downloader.js', () => ({
       ...realFileDownloader,
-      downloadVideo: async () => media(fakeBuffer(5, 4096), 'video/mp4', 'clip.mp4'),
-      downloadImage: async () => media(fakeBuffer(6, 4096), 'image/png', 'still.png'),
       downloadFileFromUrl: async () => media(fakeBuffer(7, 4096), 'video/mp4', 'clip.mp4'),
       parseTenorUrl: async u => u,
       TENOR_VIEW_URL: /^https?:\/\/(www\.)?tenor\.com\/view\/.+-gif-(\d+)/i,
@@ -380,6 +384,18 @@ if (!mocksSupported) {
       const before = galleryCalls.length;
       await handleDownloadCommand(interaction);
       assert.equal(galleryCalls.length, before);
+    });
+
+    test('a post the site calls gone a minute after it went up is reported as too new', async () => {
+      const id = BigInt(Math.floor(Date.now() / 1000) - 60) << 32n;
+      const { interaction, calls } = downloadInteraction(
+        `https://www.tiktok.com/@example/video/${id}?justposted`
+      );
+      await handleDownloadCommand(interaction);
+      assert.equal(
+        calls.editReply[0].content,
+        'this post was only just published and is not downloadable yet, try again in a minute.'
+      );
     });
 
     test('a failed TikTok gallery fallback records all extractors and its real cause', async () => {

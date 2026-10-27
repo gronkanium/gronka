@@ -41,7 +41,7 @@ async function request(uri, { depth, parentHeight }) {
     const status = error.response?.status;
     if (status === 400 || status === 404) {
       const code = error.response?.data?.error;
-      if (code === 'NotFound' || code === 'InvalidRequest') throw contentGone();
+      if (code === 'NotFound' || code === 'InvalidRequest') throw contentGone(error);
     }
     logger.warn(`Bluesky getPostThread failed: ${error.message}`);
     throw new NetworkError('failed to reach bluesky');
@@ -179,7 +179,7 @@ export async function fetchBlueskyThread(
   });
   const node = data?.thread;
   const subject = isPost(node) ? normalizePost(node.post) : null;
-  if (!subject) throw contentGone();
+  if (!subject) throw contentGone(`bluesky: thread is ${node?.$type ?? 'missing'}`);
   const did = node.post.author.did;
 
   const chain = [subject];

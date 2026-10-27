@@ -4,11 +4,8 @@ import path from 'node:path';
 
 const { maxVideoSize: MAX_VIDEO_SIZE, maxImageSize: MAX_IMAGE_SIZE } = botConfig;
 
-// Export video size limit for use in tests
-export { MAX_VIDEO_SIZE };
-
 // Allowed video content types
-export const ALLOWED_VIDEO_TYPES = [
+const ALLOWED_VIDEO_TYPES = [
   'video/mp4',
   'video/quicktime',
   'video/webm',
@@ -17,12 +14,13 @@ export const ALLOWED_VIDEO_TYPES = [
 ];
 
 // Allowed image content types
-export const ALLOWED_IMAGE_TYPES = [
+const ALLOWED_IMAGE_TYPES = [
   'image/png',
   'image/jpeg',
   'image/jpg',
   'image/webp',
   'image/gif',
+  'image/avif',
 ];
 
 export function attachmentMediaKind(attachment) {
@@ -36,7 +34,7 @@ export function attachmentMediaKind(attachment) {
     .slice(1)
     .toLowerCase();
   if (['mp4', 'mov', 'webm', 'avi', 'mkv'].includes(ext)) return 'video';
-  if (['gif', 'png', 'jpg', 'jpeg', 'webp', 'awebp'].includes(ext)) return 'image';
+  if (['gif', 'png', 'jpg', 'jpeg', 'webp', 'awebp', 'avif'].includes(ext)) return 'image';
   if (OUTPUT_FORMATS[ext]?.kind === 'audio') return 'audio';
   return 'unknown';
 }
@@ -58,44 +56,6 @@ export function firstConvertibleAttachment(attachments) {
       ['video', 'audio', 'image'].includes(attachmentMediaKind(attachment))
     ) ?? attachments.find(attachment => attachmentMediaKind(attachment) === 'unknown')
   );
-}
-
-export function validateVideoAttachment(attachment) {
-  // Check if it's a video
-  if (!attachment.contentType || !ALLOWED_VIDEO_TYPES.includes(attachment.contentType)) {
-    return {
-      valid: false,
-      error: `unsupported video format. supported formats: mp4, mov, webm, avi, mkv`,
-    };
-  }
-
-  if (attachment.size > MAX_VIDEO_SIZE) {
-    return {
-      valid: false,
-      error: `video file is too large (max ${MAX_VIDEO_SIZE / (1024 * 1024)}mb)`,
-    };
-  }
-
-  return { valid: true };
-}
-
-export function validateImageAttachment(attachment) {
-  // Check if it's an image
-  if (!attachment.contentType || !ALLOWED_IMAGE_TYPES.includes(attachment.contentType)) {
-    return {
-      valid: false,
-      error: `unsupported image format. supported formats: png, jpg, jpeg, webp, gif`,
-    };
-  }
-
-  if (attachment.size > MAX_IMAGE_SIZE) {
-    return {
-      valid: false,
-      error: `image file is too large (max ${MAX_IMAGE_SIZE / (1024 * 1024)}mb)`,
-    };
-  }
-
-  return { valid: true };
 }
 
 // Discord rejects an entire message carrying more than 10 attachments (API error 50035,

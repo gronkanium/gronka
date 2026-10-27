@@ -1,6 +1,12 @@
 import axios from 'axios';
 import { setTimeout as sleep } from 'node:timers/promises';
-import { NetworkError, ValidationError, withCause, contentGone } from './errors.js';
+import {
+  NetworkError,
+  ValidationError,
+  withCause,
+  contentGone,
+  notPublishedYet,
+} from './errors.js';
 import { getRequestHeaders } from './discord-cdn.js';
 import { downloadFileFromUrl } from './file-downloader.js';
 import { ssrfGuardedRequest, PAGE_FETCH_TIMEOUT_MS, MAX_PAGE_BYTES } from './ssrf-guard.js';
@@ -19,15 +25,6 @@ export function medalClipId(url) {
 }
 
 export const isMedalUrl = url => medalClipId(url) !== null;
-
-const notPublished = cause =>
-  withCause(
-    new NetworkError(
-      'this medal clip is still being published, try again in a minute.',
-      'CLIP_NOT_PUBLISHED'
-    ),
-    cause
-  );
 
 export function pickMedalVideo(clip) {
   for (const key of ['contentUrl', 'contentUrl1080p', 'contentUrl720p', 'socialMediaVideo']) {
@@ -58,11 +55,11 @@ async function fetchPublishedClip(id) {
   } catch (error) {
     const status = error.response?.status;
     if (status === 404 || status === 410) throw contentGone(error);
-    if (status === 403) throw notPublished(error);
+    if (status === 403) throw notPublishedYet(error);
     throw withCause(new NetworkError('could not read this Medal clip.'), error);
   }
   if (clip?.processed === 0 || clip?.publishedAt == null) {
-    throw notPublished(`medal: clip ${id} has no publishedAt yet`);
+    throw notPublishedYet(`medal: clip ${id} has no publishedAt yet`);
   }
   return clip;
 }

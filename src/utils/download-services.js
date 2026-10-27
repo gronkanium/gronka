@@ -31,7 +31,7 @@ const YTDLP_CATEGORY = {
 };
 
 const ytdlpServices = YTDLP_SITES.map(site => ({
-  id: site.name.toLowerCase(),
+  id: site.name.toLowerCase().replace(/[^a-z0-9]+/g, '-'),
   label: site.name,
   category: YTDLP_CATEGORY[site.name] || 'video',
   hosts: site.hosts,

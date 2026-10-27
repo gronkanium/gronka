@@ -1,11 +1,19 @@
 import axios from 'axios';
 import { createLogger } from './logger.js';
-import { NetworkError, ValidationError, withCause, describeCause, contentGone } from './errors.js';
+import {
+  NetworkError,
+  ValidationError,
+  withCause,
+  describeCause,
+  contentGone,
+  timedOut,
+} from './errors.js';
 import { fetchToFile, withExtension, extensionForType } from './media-file.js';
 import { detectFileType } from './storage.js';
 import { mapLimit, ITEM_FANOUT } from './map-limit.js';
 import { hostOf, normalizeHost } from './url-host.js';
 import { isInstagramReelUrl } from './instagram.js';
+import { BROWSER_USER_AGENT } from './browser-agent.js';
 
 const logger = createLogger('cobalt');
 
@@ -349,7 +357,7 @@ async function callCobaltApi(apiUrl, url, retryCount = 0, maxRetries = 3) {
         headers: {
           Accept: 'application/json',
           'Content-Type': 'application/json',
-          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+          'User-Agent': BROWSER_USER_AGENT,
         },
       }
     );
@@ -405,8 +413,6 @@ async function callCobaltApi(apiUrl, url, retryCount = 0, maxRetries = 3) {
 }
 
 const MISSING_FILE_MESSAGE = 'the download service answered without a file, try again.';
-const BROWSER_UA =
-  'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36';
 const DISPOSITION_NAME = /filename[^;=\n]*=((['"]).*?\2|[^;\n]*)/;
 
 // Streams a cobalt (or source) URL to disk. {what} names the file in user-facing errors.
@@ -418,7 +424,7 @@ async function fetchCobaltFile(url, { accept, timeout, maxSize, what, failMessag
         timeout,
         maxRedirects: 5,
         validateStatus: status => status >= 200 && status < 400,
-        headers: { 'User-Agent': BROWSER_UA, Accept: accept, Referer: url },
+        headers: { 'User-Agent': BROWSER_USER_AGENT, Accept: accept, Referer: url },
       },
       { maxSize }
     );
@@ -446,7 +452,7 @@ async function fetchCobaltFile(url, { accept, timeout, maxSize, what, failMessag
       throw contentGone(why);
     }
     if (error.code === 'ECONNABORTED') {
-      throw withCause(new NetworkError(`the ${what} took too long to download, try again.`), why);
+      throw timedOut(`${what}: ${why}`);
     }
     logger.warn(`Cobalt ${what} download failed: ${describeCause(error)}`);
     throw withCause(new NetworkError(failMessage ?? `${what} could not be downloaded`), why);
@@ -680,7 +686,7 @@ export async function getRemoteContentLength(mediaUrl) {
   try {
     const response = await axios.get(mediaUrl, {
       headers: {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+        'User-Agent': BROWSER_USER_AGENT,
         Range: 'bytes=0-0',
       },
       responseType: 'stream',

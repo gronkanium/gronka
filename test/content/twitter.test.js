@@ -214,9 +214,9 @@ describe('fetchTweetThread', () => {
 
   test('a deleted post is CONTENT_GONE and a non-status link is BAD_URL', async () => {
     const { gql } = api([]);
-    await expect(fetchTweetThread('https://x.com/pen/status/9', { gql })).rejects.toMatchObject({
-      code: 'CONTENT_GONE',
-    });
+    const gone = await fetchTweetThread('https://x.com/pen/status/9', { gql }).catch(e => e);
+    expect(gone.code).toBe('CONTENT_GONE');
+    expect(gone.cause.message).toBe('x: TweetResultByRestId answered TweetTombstone');
     await expect(fetchTweetThread('https://x.com/pen', { gql })).rejects.toMatchObject({
       code: 'BAD_URL',
     });

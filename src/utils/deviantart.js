@@ -1,5 +1,6 @@
 import axios from 'axios';
 import { readSessionCookie } from './session-cookie.js';
+import { BROWSER_USER_AGENT as USER_AGENT } from './browser-agent.js';
 import { createLogger } from './logger.js';
 import { NetworkError, ValidationError, withCause, contentGone } from './errors.js';
 import { downloadFileFromUrl } from './file-downloader.js';
@@ -8,8 +9,6 @@ import { hostOf } from './url-host.js';
 
 const logger = createLogger('deviantart');
 
-const USER_AGENT =
-  'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0.0.0 Safari/537.36';
 const STATE = /window\.__INITIAL_STATE__ = JSON\.parse\("((?:\\.|[^"\\])*)"\)/;
 
 const readCookie = () => readSessionCookie('deviantart', 'auth_secure=');

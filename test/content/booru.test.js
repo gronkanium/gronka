@@ -160,6 +160,7 @@ describe('fetchBooruThread', () => {
     for (const source of gone) {
       const error = await fetchBooruThread('https://yande.re/post/show/5', source).catch(e => e);
       expect(error.code).toBe('CONTENT_GONE');
+      expect(error.cause).toBeInstanceOf(Error);
     }
   });
 

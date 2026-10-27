@@ -1,5 +1,5 @@
 import { ValidationError } from '../../utils/errors.js';
-import { downloadFileFromUrl } from '../../utils/file-downloader.js';
+import { downloadFileFromUrl, downloadDirectMedia } from '../../utils/file-downloader.js';
 import {
   isDiscordCdnUrl,
   isDiscordMessageLink,
@@ -10,23 +10,30 @@ import { routeFor } from '../../core/sources.js';
 import { readLink, prepareLink } from '../../core/intake.js';
 
 // Known sites take /download's path (yt-dlp with its session, site extractors); others are plain files.
-async function fetchSource(url, client) {
+async function fetchLink(url, client) {
   const source = isDiscordCdnUrl(url) ? null : routeFor(url);
   if (!source || source.id === 'direct') {
-    return downloadFileFromUrl(url, client);
+    return downloadDirectMedia(url, client);
   }
   const result = await acquireMedia(url, { client, urlOnly: false });
-  if (result.kind === 'urls') return downloadFileFromUrl(result.urls[0].url);
+  if (result.kind === 'urls') return downloadDirectMedia(result.urls[0].url);
   return Array.isArray(result.fileData) ? result.fileData[0] : result.fileData;
 }
 
-// The file behind a url option, as {attachment, file, originalUrl}.
-export async function fetchUrlInput(text, client) {
-  const { url, refusal } = readLink(text);
+// The one way /convert and /optimize get their input, as {attachment, file, originalUrl}.
+export async function fetchInput({ attachment, url }, client) {
+  if (attachment) {
+    return {
+      attachment,
+      file: await downloadFileFromUrl(attachment.url, client),
+      originalUrl: null,
+    };
+  }
+  const { url: link, refusal } = readLink(url);
   if (refusal) throw new ValidationError(refusal.message);
-  if (isDiscordMessageLink(url)) throw new ValidationError(DISCORD_MESSAGE_LINK_MESSAGE);
-  const source = await prepareLink(url);
-  const file = await fetchSource(source, client);
+  if (isDiscordMessageLink(link)) throw new ValidationError(DISCORD_MESSAGE_LINK_MESSAGE);
+  const source = await prepareLink(link);
+  const file = await fetchLink(source, client);
   return {
     attachment: {
       url: source,

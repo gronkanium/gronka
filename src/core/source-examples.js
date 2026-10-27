@@ -62,6 +62,11 @@ export const SOURCE_EXAMPLES = [
     expect: { type: 'video' },
   },
   {
+    site: 'bandcamp',
+    url: 'https://youtube-dl.bandcamp.com/track/youtube-dl-test-song',
+    expect: { type: 'audio' },
+  },
+  {
     site: 'medal',
     url: 'https://medal.tv/games/clippords-clips/clips/1aOnX9X39EbuhM',
     expect: { type: 'video' },

@@ -2,7 +2,7 @@ import axios from 'axios';
 import { execFile } from 'child_process';
 import { promisify } from 'util';
 import { createLogger } from '../utils/logger.js';
-import { NetworkError, contentGone } from '../utils/errors.js';
+import { NetworkError, contentGone, timedOut } from '../utils/errors.js';
 import { jobSignal } from '../utils/media-file.js';
 import { hostOf } from '../utils/url-host.js';
 import {
@@ -125,7 +125,7 @@ async function readInfo(url, site, wantComments, runner) {
     const known = classify(String(error.stderr ?? ''));
     if (known) throw known;
     if (error.killed || error.signal) {
-      throw new NetworkError('reading this video timed out');
+      throw timedOut(`yt-dlp: reading ${site} stopped by ${error.signal ?? 'timeout'}`);
     }
     logger.warn(`yt-dlp could not read ${site}: ${lastLine(error.stderr || error.message)}`);
     throw new NetworkError('failed to read this video');

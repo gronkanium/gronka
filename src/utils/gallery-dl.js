@@ -2,7 +2,7 @@ import fs from 'fs/promises';
 import path from 'path';
 import { spawn } from 'child_process';
 import { createLogger } from './logger.js';
-import { NetworkError, ValidationError, withCause, contentGone } from './errors.js';
+import { NetworkError, ValidationError, withCause, contentGone, timedOut } from './errors.js';
 import { writeZip } from './archive.js';
 import { fromPath, tempDir, jobSignal } from './media-file.js';
 import { mapLimit, ITEM_FANOUT } from './map-limit.js';
@@ -132,12 +132,7 @@ function runGalleryDl(url, outputDir, maxSize = Infinity, timeout = 300000) {
     let stderr = '';
     const timeoutId = setTimeout(() => {
       child.kill('SIGKILL');
-      reject(
-        withCause(
-          new NetworkError('gallery download timed out'),
-          `gallery-dl: timed out after ${timeout / 1000}s`
-        )
-      );
+      reject(timedOut(`gallery-dl: timed out after ${timeout / 1000}s`));
     }, timeout);
 
     child.stderr.on('data', data => {
@@ -226,12 +221,7 @@ function runGalleryDlJson(url, timeout = 300000) {
     let stderr = '';
     const timeoutId = setTimeout(() => {
       child.kill('SIGTERM');
-      reject(
-        withCause(
-          new NetworkError('gallery discovery timed out'),
-          `gallery-dl: discovery timed out after ${timeout / 1000}s`
-        )
-      );
+      reject(timedOut(`gallery-dl: discovery timed out after ${timeout / 1000}s`));
     }, timeout);
     child.stdout.on('data', chunk => {
       stdout += chunk;

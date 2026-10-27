@@ -1,6 +1,13 @@
 import axios from 'axios';
 import { createLogger } from './logger.js';
-import { NetworkError, ValidationError, withCause, describeCause, contentGone } from './errors.js';
+import {
+  NetworkError,
+  ValidationError,
+  withCause,
+  describeCause,
+  contentGone,
+  timedOut,
+} from './errors.js';
 import { fetchToFile, withExtension, extensionForType } from './media-file.js';
 import { detectFileType } from './storage.js';
 import { mapLimit, ITEM_FANOUT } from './map-limit.js';
@@ -446,7 +453,7 @@ async function fetchCobaltFile(url, { accept, timeout, maxSize, what, failMessag
       throw contentGone(why);
     }
     if (error.code === 'ECONNABORTED') {
-      throw withCause(new NetworkError(`the ${what} took too long to download, try again.`), why);
+      throw timedOut(`${what}: ${why}`);
     }
     logger.warn(`Cobalt ${what} download failed: ${describeCause(error)}`);
     throw withCause(new NetworkError(failMessage ?? `${what} could not be downloaded`), why);

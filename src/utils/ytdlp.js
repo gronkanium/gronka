@@ -4,7 +4,14 @@ import fsSync from 'fs';
 import os from 'os';
 import path from 'path';
 import { createLogger } from './logger.js';
-import { NetworkError, ValidationError, withCause, describeCause, contentGone } from './errors.js';
+import {
+  NetworkError,
+  ValidationError,
+  withCause,
+  describeCause,
+  contentGone,
+  timedOut,
+} from './errors.js';
 import { trimVideo } from './video-processor/trim-video.js';
 import { DEFAULT_YTDLP_FORMAT } from './config.js';
 import { fromPath, tempDir, jobSignal } from './media-file.js';
@@ -462,12 +469,7 @@ function executeYtdlp(
     const timeoutId = setTimeout(() => {
       clearInterval(sizeWatch);
       ytdlp.kill('SIGKILL');
-      reject(
-        withCause(
-          new NetworkError('the download took too long and was stopped, try again later.'),
-          `yt-dlp: timed out after ${timeout / 1000}s`
-        )
-      );
+      reject(timedOut(`yt-dlp: timed out after ${timeout / 1000}s`));
     }, timeout);
 
     ytdlp.on('close', code => {
@@ -725,16 +727,8 @@ function getVideoDuration(url, timeout = 15000) {
           resolve(duration);
         }
       } else {
-        const errorOutput = stderr || stdout;
-        if (errorOutput.includes('Video unavailable') || errorOutput.includes('Private video')) {
-          reject(new NetworkError('video is unavailable or private'));
-        } else if (errorOutput.includes('Sign in to confirm your age')) {
-          reject(new NetworkError('video requires age verification', 'AGE_RESTRICTED'));
-        } else {
-          reject(
-            new NetworkError(`failed to get video duration: ${errorOutput.substring(0, 100)}`)
-          );
-        }
+        // Logged only: the download that follows classifies the same failure for the user.
+        reject(new Error(`duration check exit ${code}: ${(stderr || stdout).substring(0, 200)}`));
       }
     });
 

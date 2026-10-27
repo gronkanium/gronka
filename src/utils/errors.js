@@ -87,3 +87,10 @@ export const contentGone = cause =>
     new NetworkError('this post is unavailable, it may be deleted or private', 'CONTENT_GONE'),
     cause
   );
+
+// The one answer for a site or file that stopped answering mid-download; the cause says which step.
+export const timedOut = cause =>
+  withCause(
+    new NetworkError('the download took too long, try again in a bit.', 'TIMED_OUT'),
+    cause
+  );

@@ -32,16 +32,40 @@ describe('medal', () => {
     assert.equal(pickMedalVideo({ contentUrl: 'http://cdn.medal.tv/a.mp4' }), null);
   });
 
-  test('a 403 means the clip is still being published', async () => {
+  test('a 403 that outlasts every retry means the clip is still being published', async () => {
     const originalGet = axios.get;
+    let calls = 0;
     axios.get = async () => {
+      calls++;
       throw Object.assign(new Error('forbidden'), { response: { status: 403 } });
     };
     try {
       await assert.rejects(
-        () => downloadFromMedal('https://medal.tv/clips/abc'),
+        () => downloadFromMedal('https://medal.tv/clips/abc', Infinity, [0, 0]),
         error => error.code === 'CLIP_NOT_PUBLISHED'
       );
+      assert.equal(calls, 3);
+    } finally {
+      axios.get = originalGet;
+    }
+  });
+
+  test('waits for a clip that publishes a moment after the link is shared', async () => {
+    const originalGet = axios.get;
+    const responses = [
+      () => {
+        throw Object.assign(new Error('forbidden'), { response: { status: 403 } });
+      },
+      () => ({ data: { processed: 0, publishedAt: null } }),
+      () => ({ data: { contentUrl: cdn, publishedAt: 1, processed: 1, videoLengthSeconds: 4000 } }),
+    ];
+    axios.get = async () => responses.shift()();
+    try {
+      await assert.rejects(
+        () => downloadFromMedal('https://medal.tv/clips/abc', 3600, [0, 0]),
+        error => error.code === 'VALIDATION_ERROR'
+      );
+      assert.equal(responses.length, 0);
     } finally {
       axios.get = originalGet;
     }

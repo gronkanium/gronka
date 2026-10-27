@@ -132,6 +132,13 @@ describe('ytdlp utilities', () => {
       ])
         assert.equal(getSiteArgs(url)[1], 'default,-generic', url);
     });
+    test('reads Rule34Video through the generic KVS player instead of its broken extractor', () => {
+      assert.equal(getSiteArgs('https://rule34video.com/video/1/x')[1], 'default,-rule34video');
+      assert.equal(
+        getSiteArgs('https://rule34video.com.evil.com/video/1/x')[1],
+        'default,-generic'
+      );
+    });
     test('sends only geo-blocked sites through GEO_PROXY_URL, and only when it is set', () => {
       const saved = process.env.GEO_PROXY_URL;
       try {

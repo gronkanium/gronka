@@ -1,4 +1,5 @@
 import axios from 'axios';
+import { setTimeout as sleep } from 'node:timers/promises';
 import { NetworkError, ValidationError, withCause, contentGone } from './errors.js';
 import { getRequestHeaders } from './discord-cdn.js';
 import { downloadFileFromUrl } from './file-downloader.js';
@@ -41,9 +42,10 @@ export function pickMedalVideo(clip) {
   return null;
 }
 
-export async function downloadFromMedal(url, maxDuration = Infinity) {
-  const id = medalClipId(url);
-  if (!id) throw new ValidationError('invalid Medal clip link.');
+// Links are usually shared the second a clip is made; Medal publishes it a few seconds later.
+const PUBLISH_RETRY_DELAYS_MS = [2000, 4000, 8000];
+
+async function fetchPublishedClip(id) {
   let clip;
   try {
     ({ data: clip } = await axios.get(`https://medal.tv/api/content/${id}`, {
@@ -61,6 +63,25 @@ export async function downloadFromMedal(url, maxDuration = Infinity) {
   }
   if (clip?.processed === 0 || clip?.publishedAt == null) {
     throw notPublished(`medal: clip ${id} has no publishedAt yet`);
+  }
+  return clip;
+}
+
+export async function downloadFromMedal(
+  url,
+  maxDuration = Infinity,
+  retryDelaysMs = PUBLISH_RETRY_DELAYS_MS
+) {
+  const id = medalClipId(url);
+  if (!id) throw new ValidationError('invalid Medal clip link.');
+  let clip;
+  for (let attempt = 0; !clip; attempt++) {
+    try {
+      clip = await fetchPublishedClip(id);
+    } catch (error) {
+      if (error.code !== 'CLIP_NOT_PUBLISHED' || attempt >= retryDelaysMs.length) throw error;
+      await sleep(retryDelaysMs[attempt]);
+    }
   }
   if (clip.videoLengthSeconds > maxDuration) {
     throw new ValidationError(

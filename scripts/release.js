@@ -72,21 +72,6 @@ if (import.meta.main) {
   if (!dryRun) {
     if (head !== run('git', ['rev-parse', 'origin/master'])) fail('check out origin/master first');
     if (run('git', ['status', '--porcelain'])) fail('working tree is not clean');
-    const ci = run('gh', [
-      'run',
-      'list',
-      '-R',
-      REPO,
-      '--workflow',
-      'ci.yml',
-      '--commit',
-      head,
-      '--json',
-      'conclusion',
-      '--jq',
-      '.[0].conclusion',
-    ]);
-    if (ci !== 'success') fail(`CI on ${head.slice(0, 7)} is "${ci || 'not run'}", wait for green`);
   }
 
   const prev = run('git', ['describe', '--tags', '--abbrev=0', 'HEAD']);

@@ -2,6 +2,7 @@ import axios from 'axios';
 import { execFile } from 'child_process';
 import { promisify } from 'util';
 import { createLogger } from '../utils/logger.js';
+import { ssrfGuardedRequest } from '../utils/ssrf-guard.js';
 import { NetworkError, contentGone, timedOut } from '../utils/errors.js';
 import { jobSignal } from '../utils/media-file.js';
 import { hostOf } from '../utils/url-host.js';
@@ -238,6 +239,7 @@ export function parseJson3(data) {
 
 async function defaultFetcher(url) {
   const { data } = await axios.get(url, {
+    ...ssrfGuardedRequest(),
     timeout: VIDEO_LIMITS.timeoutMs,
     maxContentLength: VIDEO_LIMITS.transcriptBytes,
     responseType: 'json',

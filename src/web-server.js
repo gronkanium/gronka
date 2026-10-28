@@ -92,7 +92,13 @@ export function saveLink({ url, filename }, base = STREAM_BASE, key = STREAM_KEY
 
 // A plain media link needs no resolving; the Worker also reaches hosts that block our IP (i.ibb.co).
 export function directStreamInfo(url) {
-  const name = decodeURIComponent(new URL(url).pathname.split('/').pop() || 'file');
+  const last = new URL(url).pathname.split('/').pop() || 'file';
+  let name;
+  try {
+    name = decodeURIComponent(last);
+  } catch {
+    name = last;
+  }
   const ext = path.extname(name).slice(1).toLowerCase() || 'bin';
   return {
     title: name,
@@ -518,11 +524,16 @@ async function readJson(req) {
   }
   const text = await req.text();
   if (!text) return {};
+  let body;
   try {
-    return JSON.parse(text);
+    body = JSON.parse(text);
   } catch {
+    body = null;
+  }
+  if (!body || typeof body !== 'object' || Array.isArray(body)) {
     throw new AppError('send json.', 'BAD_REQUEST', 400);
   }
+  return body;
 }
 
 export function createHandler({

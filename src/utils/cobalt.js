@@ -1,5 +1,6 @@
 import axios from 'axios';
 import { createLogger } from './logger.js';
+import { ssrfGuardedRequest } from './ssrf-guard.js';
 import {
   NetworkError,
   ValidationError,
@@ -685,6 +686,7 @@ export async function getCobaltMediaUrls(apiUrl, url) {
 export async function getRemoteContentLength(mediaUrl) {
   try {
     const response = await axios.get(mediaUrl, {
+      ...ssrfGuardedRequest(),
       headers: {
         'User-Agent': BROWSER_USER_AGENT,
         Range: 'bytes=0-0',

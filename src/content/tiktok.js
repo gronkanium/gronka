@@ -3,6 +3,7 @@ import { createLogger } from '../utils/logger.js';
 import { NetworkError, contentGone } from '../utils/errors.js';
 import { normalizeHost } from '../utils/url-host.js';
 import { BROWSER_USER_AGENT } from '../utils/browser-agent.js';
+import { guardedBeforeRedirect, ssrfGuardedRequest } from '../utils/ssrf-guard.js';
 import { post, thread, isoDate, linksIn } from './schema.js';
 
 const logger = createLogger('content-tiktok');
@@ -41,10 +42,14 @@ const keepOnTiktok = options => {
 const defaultHttp = {
   async page(url) {
     const response = await axios.get(url, {
+      ...ssrfGuardedRequest(),
       timeout: TIMEOUT_MS,
       maxContentLength: MAX_PAGE_BYTES,
       maxRedirects: 5,
-      beforeRedirect: keepOnTiktok,
+      beforeRedirect: options => {
+        guardedBeforeRedirect(options);
+        keepOnTiktok(options);
+      },
       responseType: 'text',
       headers: { 'user-agent': BROWSER_USER_AGENT, 'accept-language': 'en-US,en;q=0.9' },
     });

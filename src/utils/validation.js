@@ -271,8 +271,11 @@ export function sanitizeFilename(filename) {
   // Limit length
   if (sanitized.length > 255) {
     const ext = path.extname(sanitized);
-    sanitized = sanitized.substring(0, 255 - ext.length) + ext;
+    const keep = ext.length <= 16 ? ext : '';
+    sanitized = sanitized.substring(0, 255 - keep.length) + keep;
   }
+  // A lone surrogate (from a site's JSON, or the cut above) makes encodeURIComponent throw later.
+  sanitized = sanitized.toWellFormed();
 
   // If empty after sanitization, use default
   if (!sanitized || sanitized === '.' || sanitized === '..') {

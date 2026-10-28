@@ -45,9 +45,9 @@ downloader). gifs are optimized with `gifsicle` inside the image.
 ### commits
 
 use [conventional commits](https://www.conventionalcommits.org/en/v1.0.0/): `feat:`, `fix:`, `docs:`,
-`refactor:`, `test:`, `chore:`, `ci:`. release-please turns `feat:` and `fix:` subjects into the
+`refactor:`, `test:`, `chore:`, `ci:`. the release script turns `feat:` and `fix:` subjects into the
 changelog word for word, so make the subject say what changed. never edit `CHANGELOG.md` or the
-version in `package.json` by hand; merging the release pull request does both.
+version in `package.json` by hand; cutting a release does both.
 
 a pre-commit hook (husky) checks lock file sync and runs eslint and prettier on staged files.
 

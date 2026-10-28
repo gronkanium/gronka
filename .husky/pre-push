@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Turn git's "fetch first" rejection into an actionable message.
 #
-# Merging a release-please PR puts a commit on the remote that you do not have locally. Committing
+# Merging a PR or cutting a release puts a commit on the remote that you do not have locally. Committing
 # on top of that stale base is the single thing that has broken this repo's history, so say exactly
 # what to run instead of letting the push fail with a hint about fast-forwards.
 set -e
@@ -21,7 +21,7 @@ echo ""
 echo "  pre-push: origin/$BRANCH has $BEHIND commit(s) you do not have:"
 git log --oneline "HEAD..origin/$BRANCH" | sed 's/^/      /'
 echo ""
-echo "  This is usually a release-please merge. Rebase your work on top of it:"
+echo "  This is usually a merged PR or a release. Rebase your work on top of it:"
 echo ""
 echo "      git pull --rebase origin $BRANCH"
 echo ""

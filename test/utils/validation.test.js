@@ -253,6 +253,18 @@ describe('validation utilities', () => {
       assert(result.endsWith('.txt'));
     });
 
+    test('a dot far from the end does not push the name past 255', () => {
+      assert.strictEqual(sanitizeFilename('a.' + 'b'.repeat(300)).length, 255);
+      assert.strictEqual(sanitizeFilename('a'.repeat(300) + '.' + 'b'.repeat(20)).length, 255);
+    });
+
+    test('never leaves a lone surrogate, from the input or from the length cut', () => {
+      assert.doesNotThrow(() => encodeURIComponent(sanitizeFilename('clip\ud83e.mp4')));
+      const cut = sanitizeFilename('a'.repeat(250) + '🦆🦆🦆🦆.mp4');
+      assert.strictEqual(cut.length, 255);
+      assert.doesNotThrow(() => encodeURIComponent(cut));
+    });
+
     test('handles invalid input', () => {
       assert.strictEqual(sanitizeFilename(null), 'file');
       assert.strictEqual(sanitizeFilename(undefined), 'file');

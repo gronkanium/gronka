@@ -132,14 +132,19 @@ if (import.meta.main) {
   );
 
   // PRs carry the "next" milestone until the release that ships them names it.
-  const milestones = JSON.parse(run('gh', ['api', `repos/${REPO}/milestones`]));
-  const next = milestones.find(m => m.title === 'next');
+  const next = run('gh', [
+    'api',
+    '--paginate',
+    `repos/${REPO}/milestones?per_page=100`,
+    '--jq',
+    '.[] | select(.title == "next") | .number',
+  ]);
   if (next) {
     run('gh', [
       'api',
       '-X',
       'PATCH',
-      `repos/${REPO}/milestones/${next.number}`,
+      `repos/${REPO}/milestones/${next}`,
       '-f',
       `title=${tag}`,
       '-f',

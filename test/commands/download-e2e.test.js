@@ -149,9 +149,9 @@ if (!mocksSupported) {
           const { jobSignal } = await import('../../src/utils/media-file.js');
           const signal = jobSignal();
           await new Promise((_, reject) => {
-            signal.addEventListener('abort', () => reject(new Error('transport cancelled')), {
-              once: true,
-            });
+            const cancel = () => reject(new Error('transport cancelled'));
+            if (signal.aborted) cancel();
+            else signal.addEventListener('abort', cancel, { once: true });
           });
         }
         if (url.includes('archive')) {

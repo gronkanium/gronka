@@ -5,6 +5,7 @@
   "main": "src/bot.js",
   "type": "module",
   "scripts": {
+    "release": "bun scripts/release.js",
     "start": "bun src/bot.js",
     "setup": "bun scripts/setup.js",
     "setup:check": "bun scripts/setup.js --check",

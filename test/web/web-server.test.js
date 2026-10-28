@@ -96,6 +96,10 @@ describe('handler', () => {
     const download = async () => (calls++, result);
     const handle = createHandler({ verify: async () => false, download });
     expect((await handle(post('{nope'))).status).toBe(400);
+    for (const scalar of ['null', '1', '"x"', '[]']) {
+      const keys = new Request('http://web/v1/keys', { method: 'POST', body: scalar });
+      expect([scalar, (await handle(keys)).status]).toEqual([scalar, 400]);
+    }
     const res = await handle(post(body));
     expect(res.status).toBe(403);
     expect((await readJson(res)).error.code).toBe('VERIFICATION_FAILED');

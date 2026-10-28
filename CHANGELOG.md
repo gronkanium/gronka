@@ -5,6 +5,13 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres (attempts) to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [4.10.1](https://github.com/gronkanium/gronka/compare/v4.10.0...v4.10.1) (2026-10-28)
+
+
+### Bug Fixes
+
+* security fuzz suite and the bugs it found ([#200](https://github.com/gronkanium/gronka/issues/200)) ([c221628](https://github.com/gronkanium/gronka/commit/c2216284895e9d14f075020c060856cfc538bd24))
+
 ## [4.10.0](https://github.com/gronkanium/gronka/compare/v4.9.0...v4.10.0) (2026-10-27)
 
 

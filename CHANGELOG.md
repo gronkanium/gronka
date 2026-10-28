@@ -5,6 +5,23 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and versions are release dates (`YYYY.MM.DD`, `.N` for a later release the same day).
 
+## [2026.10.28](https://github.com/gronkanium/gronka/compare/v4.10.0...v2026.10.28) (2026-10-28)
+
+
+### Bug Fixes
+
+* keep sanitized filenames at 255 chars and free of lone surrogates ([#200](https://github.com/gronkanium/gronka/issues/200)) ([c221628](https://github.com/gronkanium/gronka/commit/c2216284895e9d14f075020c060856cfc538bd24))
+* **deps:** qs 6.17.0 (GHSA-6pq8-jhm2-2vcw) ([#200](https://github.com/gronkanium/gronka/issues/200)) ([c221628](https://github.com/gronkanium/gronka/commit/c2216284895e9d14f075020c060856cfc538bd24))
+* **web:** ssrf-guard every outbound fetch, 400 for non-object json bodies, tolerate bad escapes in direct links ([#200](https://github.com/gronkanium/gronka/issues/200)) ([c221628](https://github.com/gronkanium/gronka/commit/c2216284895e9d14f075020c060856cfc538bd24))
+
+
+### Dependencies
+
+* **deps:** bump certifi from 2026.10.19 to 2026.10.23 in /docker ([#203](https://github.com/gronkanium/gronka/issues/203)) ([ce7b514](https://github.com/gronkanium/gronka/commit/ce7b51403a52128c39c697a39ca07119d6b068e2))
+* **deps:** bump cloudflare/cloudflared from 2026.10.2 to 2026.10.3 ([#202](https://github.com/gronkanium/gronka/issues/202)) ([e9df03b](https://github.com/gronkanium/gronka/commit/e9df03bf0ad873a4f5265ab5be95092923dbe0e9))
+* **deps:** bump pycparser from 3.11 to 3.12 in /docker ([#204](https://github.com/gronkanium/gronka/issues/204)) ([800e7c7](https://github.com/gronkanium/gronka/commit/800e7c7468f26b3fd9ee43e5762eaf44b4f644b4))
+* **deps:** bump the security-updates group across 1 directory with 4 updates ([#201](https://github.com/gronkanium/gronka/issues/201)) ([3ac15cf](https://github.com/gronkanium/gronka/commit/3ac15cfa38b77e8523e66782b4853536dd637312))
+
 ## [4.10.0](https://github.com/gronkanium/gronka/compare/v4.9.0...v4.10.0) (2026-10-27)
 
 

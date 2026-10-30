@@ -57,7 +57,7 @@ router.post('/api/bot/status', express.json(), async (req, res) => {
     res.json(data);
   } catch (error) {
     logger.error('Failed to reach bot process for status update:', error);
-    res.status(502).json({ error: 'failed to reach bot process', message: error.message });
+    res.status(502).json({ error: 'failed to reach bot process' });
   }
 });
 
@@ -75,7 +75,7 @@ router.get('/api/bot/status', async (req, res) => {
     res.json(data);
   } catch (error) {
     logger.error('Failed to reach bot process for status fetch:', error);
-    res.status(502).json({ error: 'failed to reach bot process', message: error.message });
+    res.status(502).json({ error: 'failed to reach bot process' });
   }
 });
 

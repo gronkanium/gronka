@@ -1,11 +1,10 @@
-import axios from 'axios';
 import { readSessionCookie } from './session-cookie.js';
 import { BROWSER_USER_AGENT as USER_AGENT } from './browser-agent.js';
 import { createLogger } from './logger.js';
-import { NetworkError, ValidationError, withCause, contentGone } from './errors.js';
+import { NetworkError, ValidationError, withCause } from './errors.js';
 import { downloadFileFromUrl } from './file-downloader.js';
 import { maxDownloadBytes } from './size-limit.js';
-import { ssrfGuardedRequest, PAGE_FETCH_TIMEOUT_MS, MAX_PAGE_BYTES } from './ssrf-guard.js';
+import { fetchPage } from './ssrf-guard.js';
 import { hostOf } from './url-host.js';
 
 const logger = createLogger('deviantart');
@@ -50,23 +49,11 @@ export function pickMedia(deviation, maxSize = Infinity) {
 export async function downloadFromDeviantArt(url) {
   const id = deviationId(url);
   const cookie = readCookie();
-  let html;
-  try {
-    // The session cookie rides on this request, so never over plain http.
-    const response = await axios.get(url.replace(/^http:/i, 'https:'), {
-      ...ssrfGuardedRequest(),
-      responseType: 'text',
-      timeout: PAGE_FETCH_TIMEOUT_MS,
-      maxContentLength: MAX_PAGE_BYTES,
-      headers: { 'User-Agent': USER_AGENT, ...(cookie && { Cookie: cookie }) },
-    });
-    html = response.data;
-  } catch (error) {
-    if (error.response?.status === 404) {
-      throw contentGone(error);
-    }
-    throw withCause(new NetworkError('failed to reach DeviantArt'), error);
-  }
+  // The session cookie rides on this request, so never over plain http.
+  const { data: html } = await fetchPage(url.replace(/^http:/i, 'https:'), {
+    failMessage: 'failed to reach DeviantArt',
+    headers: { 'User-Agent': USER_AGENT, ...(cookie && { Cookie: cookie }) },
+  });
 
   let state;
   try {

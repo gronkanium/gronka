@@ -1,9 +1,9 @@
 import axios from 'axios';
 import { createLogger } from './logger.js';
-import { NetworkError, ValidationError, withCause, describeCause, contentGone } from './errors.js';
+import { ValidationError, contentGone } from './errors.js';
 import { getRequestHeaders } from './discord-cdn.js';
 import { downloadFileFromUrl } from './file-downloader.js';
-import { ssrfGuardedRequest, PAGE_FETCH_TIMEOUT_MS, MAX_PAGE_BYTES } from './ssrf-guard.js';
+import { ssrfGuardedRequest, PAGE_FETCH_TIMEOUT_MS, fetchPage } from './ssrf-guard.js';
 import { normalizeHost } from './url-host.js';
 
 const logger = createLogger('pinterest');
@@ -102,40 +102,32 @@ function isMediaHostUrl(url) {
   }
 }
 
+// The pin's page html and the url it landed on after redirects.
+export async function fetchPinPage(url) {
+  const pageUrl = await resolvePinUrl(url);
+  const response = await fetchPage(pageUrl, {
+    failMessage: 'failed to fetch the pin page',
+    headers: getRequestHeaders(),
+  });
+  return { html: response.data, url: response.request?.res?.responseUrl || pageUrl };
+}
+
 // Download the media for a Pinterest pin URL
 export async function downloadFromPinterest(url) {
   logger.debug(`Resolving Pinterest pin: ${url}`);
 
-  let response;
-  try {
-    response = await axios.get(await resolvePinUrl(url), {
-      ...ssrfGuardedRequest(),
-      responseType: 'text',
-      timeout: PAGE_FETCH_TIMEOUT_MS,
-      maxContentLength: MAX_PAGE_BYTES,
-      maxRedirects: 5,
-      headers: getRequestHeaders(),
-      validateStatus: status => status >= 200 && status < 400,
-    });
-  } catch (error) {
-    if (error.response?.status === 404 || error.response?.status === 410) {
-      throw contentGone(error);
-    }
-    logger.warn(`Failed to fetch Pinterest pin page: ${describeCause(error)}`);
-    throw withCause(new NetworkError('failed to fetch the pin page'), error);
-  }
+  const { html, url: finalUrl } = await fetchPinPage(url);
 
   // A dead pin.it link is answered with a 200, not a 404: Pinterest redirects it to the
   // regional home page with ?show_error=true. Detect that here so the user is told the pin
   // is gone rather than the misleading "no downloadable media" below.
-  const finalUrl = response.request?.res?.responseUrl || url;
   if (finalUrl.includes('show_error=true')) {
     throw contentGone(`pinterest: redirected to ${finalUrl.split('?')[0]} (dead link)`);
   }
 
-  const mediaUrl = extractMediaUrl(response.data);
+  const mediaUrl = extractMediaUrl(html);
   // A removed pin still answers 200, with the page shell and no JSON-LD at all.
-  if (!mediaUrl && !String(response.data).includes('application/ld+json')) {
+  if (!mediaUrl && !String(html).includes('application/ld+json')) {
     throw contentGone(`pinterest: ${finalUrl} has no pin data`);
   }
   if (!mediaUrl) {

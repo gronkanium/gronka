@@ -1,30 +1,10 @@
-import axios from 'axios';
-import { createLogger } from '../utils/logger.js';
 import { NetworkError, contentGone } from '../utils/errors.js';
-import { getRequestHeaders } from '../utils/discord-cdn.js';
-import { ssrfGuardedRequest, PAGE_FETCH_TIMEOUT_MS, MAX_PAGE_BYTES } from '../utils/ssrf-guard.js';
-import { isPinterestUrl, extractMediaUrl, resolvePinUrl } from '../utils/pinterest.js';
+import { isPinterestUrl, extractMediaUrl, fetchPinPage } from '../utils/pinterest.js';
 import { post, thread, linksIn } from './schema.js';
-
-const logger = createLogger('content-pinterest');
 
 export const PINTEREST_LIMITS = {};
 
 export const isPinterestContentUrl = isPinterestUrl;
-
-async function request(url) {
-  url = await resolvePinUrl(url);
-  const response = await axios.get(url, {
-    ...ssrfGuardedRequest(),
-    responseType: 'text',
-    timeout: PAGE_FETCH_TIMEOUT_MS,
-    maxContentLength: MAX_PAGE_BYTES,
-    maxRedirects: 5,
-    headers: getRequestHeaders(),
-    validateStatus: status => status >= 200 && status < 400,
-  });
-  return { html: response.data, url: response.request?.res?.responseUrl || url };
-}
 
 function jsonLd(html) {
   const found = {};
@@ -92,18 +72,11 @@ export function normalizePinterestPin(html, finalUrl) {
   });
 }
 
-export async function fetchPinterestThread(url, { fetchPage = request } = {}) {
+export async function fetchPinterestThread(url, { fetchPage = fetchPinPage } = {}) {
   if (!isPinterestUrl(url)) {
     throw new NetworkError('that is not a link to a pinterest pin', 'BAD_URL', 400);
   }
-  let page;
-  try {
-    page = await fetchPage(url);
-  } catch (error) {
-    if ([404, 410].includes(error.response?.status)) throw contentGone(error);
-    logger.warn(`Failed to fetch Pinterest pin page: ${error.message}`);
-    throw new NetworkError('failed to fetch the pin page');
-  }
+  const page = await fetchPage(url);
   if (page.url.includes('show_error=true')) {
     throw contentGone(`pinterest: redirected to ${page.url.split('?')[0]} with show_error`);
   }

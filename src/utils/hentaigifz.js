@@ -1,9 +1,8 @@
-import axios from 'axios';
 import { createLogger } from './logger.js';
-import { NetworkError, ValidationError, withCause, describeCause, contentGone } from './errors.js';
+import { NetworkError, ValidationError, withCause } from './errors.js';
 import { getRequestHeaders } from './discord-cdn.js';
 import { downloadFileFromUrl } from './file-downloader.js';
-import { ssrfGuardedRequest, PAGE_FETCH_TIMEOUT_MS, MAX_PAGE_BYTES } from './ssrf-guard.js';
+import { fetchPage } from './ssrf-guard.js';
 import { normalizeHost } from './url-host.js';
 
 const logger = createLogger('hentaigifz');
@@ -77,28 +76,15 @@ function decodeMediaUrl(url) {
 export async function downloadFromHentaiGifz(url) {
   logger.debug(`Resolving hentaigifz post: ${url}`);
 
-  let html;
-  try {
-    const response = await axios.get(url, {
-      ...ssrfGuardedRequest(),
-      responseType: 'text',
-      timeout: PAGE_FETCH_TIMEOUT_MS,
-      maxContentLength: MAX_PAGE_BYTES,
-      maxRedirects: 5,
-      headers: getRequestHeaders(),
-      validateStatus: status => status >= 200 && status < 400,
-    });
-    html = response.data;
-  } catch (error) {
-    if (error.response?.status === 404) {
-      throw contentGone(error);
-    }
-    if (error.response?.status === 403) {
-      throw withCause(new NetworkError('access to this post was denied'), error);
-    }
-    logger.warn(`Failed to fetch hentaigifz post page: ${describeCause(error)}`);
-    throw withCause(new NetworkError('failed to fetch the post page'), error);
-  }
+  const { data: html } = await fetchPage(url, {
+    failMessage: 'failed to fetch the post page',
+    headers: getRequestHeaders(),
+    onError: error => {
+      if (error.response?.status === 403) {
+        throw withCause(new NetworkError('access to this post was denied'), error);
+      }
+    },
+  });
 
   const mediaUrl = extractMediaUrl(html);
   if (!mediaUrl) {

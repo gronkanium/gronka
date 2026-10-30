@@ -1,9 +1,8 @@
-import axios from 'axios';
 import { createLogger } from './logger.js';
-import { NetworkError, ValidationError, withCause, describeCause, contentGone } from './errors.js';
+import { ValidationError } from './errors.js';
 import { getRequestHeaders } from './discord-cdn.js';
 import { downloadFileFromUrl } from './file-downloader.js';
-import { ssrfGuardedRequest, PAGE_FETCH_TIMEOUT_MS, MAX_PAGE_BYTES } from './ssrf-guard.js';
+import { fetchPage } from './ssrf-guard.js';
 
 const logger = createLogger('klipy');
 const KLIPY_HOST = /(^|\.)klipy\.com$/i;
@@ -98,29 +97,15 @@ export function extractMediaUrl(html) {
 
 export async function downloadFromKlipy(url) {
   logger.debug(`Resolving Klipy page: ${url}`);
-  let response;
-  try {
-    response = await axios.get(url, {
-      ...ssrfGuardedRequest(),
-      responseType: 'text',
-      timeout: PAGE_FETCH_TIMEOUT_MS,
-      maxContentLength: MAX_PAGE_BYTES,
-      maxRedirects: 5,
-      headers: {
-        ...getRequestHeaders(),
-        // Klipy blocks generic browser user agents from data-center IPs; Discordbot is the
-        // crawler identity it explicitly allows for link previews.
-        'User-Agent': 'Discordbot/2.0',
-      },
-      validateStatus: status => status >= 200 && status < 400,
-    });
-  } catch (error) {
-    if (error.response?.status === 404 || error.response?.status === 410) {
-      throw contentGone(error);
-    }
-    logger.warn(`Failed to fetch Klipy page: ${describeCause(error)}`);
-    throw withCause(new NetworkError('failed to fetch the Klipy page'), error);
-  }
+  const response = await fetchPage(url, {
+    failMessage: 'failed to fetch the Klipy page',
+    headers: {
+      ...getRequestHeaders(),
+      // Klipy blocks generic browser user agents from data-center IPs; Discordbot is the
+      // crawler identity it explicitly allows for link previews.
+      'User-Agent': 'Discordbot/2.0',
+    },
+  });
 
   const mediaUrl = extractMediaUrl(response.data);
   if (!mediaUrl) {

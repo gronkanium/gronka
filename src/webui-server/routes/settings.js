@@ -59,7 +59,7 @@ router.get('/api/settings', async (req, res) => {
     res.json({ settings });
   } catch (error) {
     logger.error('Failed to fetch settings:', error);
-    res.status(500).json({ error: 'failed to fetch settings', message: error.message });
+    res.status(500).json({ error: 'failed to fetch settings' });
   }
 });
 
@@ -175,7 +175,7 @@ router.put('/api/settings/:key', express.json(), async (req, res) => {
     res.json({ success: true, key, value: textValue });
   } catch (error) {
     logger.error(`Failed to update setting ${req.params.key}:`, error);
-    res.status(500).json({ error: 'failed to update setting', message: error.message });
+    res.status(500).json({ error: 'failed to update setting' });
   }
 });
 

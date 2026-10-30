@@ -68,7 +68,7 @@ function buildAlertWhere(options = {}) {
   }
 
   if (options.search) {
-    const placeholder = bind(`%${options.search}%`);
+    const placeholder = bind(`%${options.search.replace(/[\\%_]/g, '\\$&')}%`);
     clause += ` AND (title ILIKE ${placeholder} OR message ILIKE ${placeholder} OR metadata ILIKE ${placeholder})`;
   }
 

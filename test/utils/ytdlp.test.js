@@ -11,11 +11,18 @@ import {
   canonicalYtdlpUrl,
   YtdlpRateLimitError,
   getCookieArgs,
+  stripCookieLines,
 } from '../../src/utils/ytdlp.js';
 import { NetworkError } from '../../src/utils/errors.js';
 import { getGalleryDlSite } from '../../src/utils/gallery-dl.js';
 
 describe('ytdlp utilities', () => {
+  test('cookie lines yt-dlp could not parse never reach the log or the alert', () => {
+    const out =
+      "WARNING: skipping cookie file entry due to invalid length 8: '.x.com\\tTRUE\\t/\\tTRUE\\t0\\tauth\\tsecret'\nERROR: no video";
+    assert.strictEqual(stripCookieLines(out), 'ERROR: no video');
+  });
+
   test('pornhub shorties links resolve to the video page', () => {
     assert.strictEqual(
       canonicalYtdlpUrl('https://www.pornhub.com/shorties/683af55667459?x=1'),

@@ -61,9 +61,17 @@ export function getCookieArgs(url = null, signedIn = false) {
 /**
  * Custom error for yt-dlp rate limiting
  */
+// yt-dlp echoes a cookie line it cannot parse, value included, even under --no-warnings.
+const COOKIE_LINE_WARNING = /skipping cookie file entry/i;
+export const stripCookieLines = output =>
+  output
+    .split('\n')
+    .filter(line => !COOKIE_LINE_WARNING.test(line))
+    .join('\n');
+
 // yt-dlp's own ERROR line, else the last thing it said.
 function ytdlpReason(output, code) {
-  const lines = output
+  const lines = stripCookieLines(output)
     .split('\n')
     .map(line => line.trim())
     .filter(Boolean);
@@ -306,6 +314,7 @@ function executeYtdlp(
     const outputTemplate = path.join(outputDir, '%(title)s.%(ext)s');
 
     const args = [
+      '--ignore-config',
       '--no-playlist',
       '--no-warnings',
       '--quiet',
@@ -345,7 +354,15 @@ function executeYtdlp(
       args.push('--force-keyframes-at-cuts'); // cleaner segment extraction
     }
 
-    args.push('-o', outputTemplate, '--restrict-filenames', '--print', 'after_move:filepath', url);
+    args.push(
+      '-o',
+      outputTemplate,
+      '--restrict-filenames',
+      '--print',
+      'after_move:filepath',
+      '--',
+      url
+    );
 
     logger.debug(`Executing yt-dlp with args: ${args.join(' ')}`);
 
@@ -506,7 +523,7 @@ function executeYtdlp(
           }
         }
       } else {
-        const errorOutput = stderr || stdout;
+        const errorOutput = stripCookieLines(stderr || stdout);
         logger.error(`yt-dlp failed with code ${code}: ${errorOutput}`);
 
         rejectWith(classifyYtdlpFailure(errorOutput, url, { maxSize }));
@@ -573,6 +590,7 @@ async function executeYtdlpWithRetry(url, outputDir, options) {
 export async function getStreamInfo(rawUrl, timeout = 30000) {
   const url = canonicalYtdlpUrl(rawUrl);
   const args = [
+    '--ignore-config',
     '-J',
     '--no-playlist',
     '--no-warnings',
@@ -582,6 +600,7 @@ export async function getStreamInfo(rawUrl, timeout = 30000) {
     'res:1080,ext:mp4:m4a',
     '-f',
     'b[protocol^=http][vcodec!=none][acodec!=none]/bv*[protocol^=http]+ba[protocol^=http]/b*[protocol^=http]',
+    '--',
     url,
   ];
   const { stdout } = await execFileAsync('yt-dlp', args, {

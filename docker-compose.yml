@@ -13,6 +13,7 @@ x-contained: &contained
   cap_drop: [ALL]
   cap_add: [NET_ADMIN, SETUID, SETGID, SETPCAP]
   security_opt: ['no-new-privileges:true']
+  pids_limit: 512
   tmpfs:
     - /tmp
     - /home/bun:uid=1000,gid=1000,mode=0700
@@ -141,6 +142,9 @@ services:
     image: postgres:16-alpine
     container_name: gronka-postgres
     restart: unless-stopped
+    security_opt: ['no-new-privileges:true']
+    mem_limit: 512m
+    pids_limit: 256
     environment:
       - POSTGRES_USER=${PROD_POSTGRES_USER:-gronka}
       - POSTGRES_PASSWORD=${PROD_POSTGRES_PASSWORD:?run bun run setup, or set PROD_POSTGRES_PASSWORD in .env}
@@ -160,20 +164,28 @@ services:
       retries: 5
       start_period: 10s
 
+  # Fenced like app and worker (contain.sh in the image), so a site redirecting cobalt to a
+  # private address goes nowhere.
   cobalt:
     logging: *logging
     image: gronka-cobalt:11.7.1
-    build: { context: ./docker, dockerfile: cobalt.Dockerfile }
+    build: { context: ., dockerfile: docker/cobalt.Dockerfile }
     init: true
     read_only: true
+    user: root
     cap_drop: [ALL]
+    cap_add: [NET_ADMIN, SETUID, SETGID, SETPCAP]
     security_opt: ['no-new-privileges:true']
+    mem_limit: 1g
+    pids_limit: 256
     restart: unless-stopped
     container_name: cobalt
     ports:
       # Host-only: it holds the cookie sessions and has no API key; the app uses cobalt:9000
       - 127.0.0.1:9000:9000/tcp
     environment:
+      CONTAIN_USER: node
+      EGRESS_ALLOW: ${EGRESS_ALLOW:-}
       API_URL: ${COBALT_API_URL:-http://cobalt:9000}
       # Path to cookies.json file for authenticating with services (Twitter, Instagram, Reddit, etc.)
       # Required for accessing content that requires authentication

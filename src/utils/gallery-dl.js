@@ -117,6 +117,7 @@ function runGalleryDl(url, outputDir, maxSize, timeout = 300000) {
         ...getCookieArgs(url),
         // gallery-dl writes the jar back on exit, which would undo a refresh made meanwhile.
         ...['-o', 'cookies-update=false'],
+        '--',
         url,
       ],
       { signal: jobSignal(), stdio: ['ignore', 'ignore', 'pipe'] }

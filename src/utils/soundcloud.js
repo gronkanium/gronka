@@ -6,7 +6,8 @@ import axios from 'axios';
 import { createLogger } from './logger.js';
 import { ValidationError } from './errors.js';
 import { ssrfGuardedRequest } from './ssrf-guard.js';
-import { fromPath, tempPath } from './media-file.js';
+import { fromPath, tempPath, jobSignal } from './media-file.js';
+import { runFfmpeg } from './video-processor/utils.js';
 import { downloadWithYtdlp, getCookieArgs } from './ytdlp.js';
 import { hostUnder } from './url-host.js';
 
@@ -36,7 +37,7 @@ export async function soundcloudTrack(url) {
       ...getCookieArgs(),
       url,
     ],
-    { timeout: 30_000, maxBuffer: 20 * 1024 * 1024 }
+    { timeout: 30_000, maxBuffer: 20 * 1024 * 1024, signal: jobSignal() }
   );
   const info = JSON.parse(stdout);
   const art =
@@ -92,7 +93,7 @@ async function youtubeCandidates(track) {
       'bun',
       `ytsearch10:${track.artist} ${track.title}`,
     ],
-    { timeout: 30_000, maxBuffer: 20 * 1024 * 1024 }
+    { timeout: 30_000, maxBuffer: 20 * 1024 * 1024, signal: jobSignal() }
   );
   return JSON.parse(stdout).entries ?? [];
 }
@@ -143,8 +144,7 @@ export async function tagAudio(file, track) {
     ['genre', track.genre],
     ['date', track.year],
   ].flatMap(([key, value]) => (value ? ['-metadata', `${key}=${value}`] : []));
-  await execFileAsync(
-    'ffmpeg',
+  await runFfmpeg(
     [
       '-v',
       'error',
@@ -166,7 +166,7 @@ export async function tagAudio(file, track) {
       '3',
       output,
     ],
-    { timeout: 120_000 }
+    { signal: AbortSignal.timeout(120_000) }
   );
   const name = `${track.artist} - ${track.title}`.replace(/[\\/:*?"<>|]+/g, '').slice(0, 150);
   return fromPath(output, { contentType: 'audio/mpeg', filename: `${name}.mp3`, audioReady: true });

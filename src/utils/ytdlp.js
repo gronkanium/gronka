@@ -624,6 +624,7 @@ export async function getStreamInfo(rawUrl, timeout = 30000) {
   const { stdout } = await execFileAsync('yt-dlp', args, {
     timeout,
     maxBuffer: 64 * 1024 * 1024,
+    signal: jobSignal(),
   });
   const info = JSON.parse(stdout);
   const formats = info.requested_formats ?? [info];

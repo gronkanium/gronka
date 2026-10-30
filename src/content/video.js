@@ -25,7 +25,7 @@ export const VIDEO_LIMITS = {
   transcriptBytes: 8 * 1024 * 1024,
 };
 
-// Sites yt-dlp reads that are not in YTDLP_SITES (those download through cobalt).
+// Sites yt-dlp reads that it does not download (those go through cobalt).
 const EXTRA_SITES = [
   { name: 'SoundCloud', hosts: ['soundcloud.com'] },
   { name: 'Twitch', hosts: ['twitch.tv'] },
@@ -33,7 +33,7 @@ const EXTRA_SITES = [
   { name: 'Dailymotion', hosts: ['dailymotion.com', 'dai.ly'] },
 ];
 
-// Sources of their own win; v.redd.it is in YTDLP_SITES for downloads only.
+// Sources of their own win; v.redd.it is a yt-dlp host for downloads only.
 const OWN_SOURCES = [
   'reddit.com',
   'redd.it',

@@ -11,7 +11,7 @@ import {
 } from './errors.js';
 import { downloadFileFromUrl } from './file-downloader.js';
 import { ssrfGuardedRequest } from './ssrf-guard.js';
-import { normalizeHost } from './url-host.js';
+import { normalizeHost, hostUnder } from './url-host.js';
 import {
   SESSION_USER_AGENT as USER_AGENT,
   SESSION_SEC_CH_UA as SEC_CH_UA,
@@ -55,7 +55,7 @@ const MAX_HIGHLIGHT_ITEMS = 10;
 
 function isInstagramHost(hostname) {
   const host = normalizeHost(hostname);
-  return host === 'instagram.com' || host.endsWith('.instagram.com');
+  return hostUnder(host, 'instagram.com');
 }
 
 /** {highlightId, username, mediaId} for a story or highlight link (each may be null), else null. */
@@ -95,9 +95,7 @@ export function isInstagramPostUrl(url) {
   try {
     const { hostname, pathname } = new URL(url);
     const host = normalizeHost(hostname);
-    return (
-      (host === 'instagram.com' || host.endsWith('.instagram.com')) && POST_PATH.test(pathname)
-    );
+    return hostUnder(host, 'instagram.com') && POST_PATH.test(pathname);
   } catch {
     return false;
   }
@@ -142,7 +140,7 @@ function isMediaHostUrl(url) {
   }
   try {
     const host = new URL(url).hostname.toLowerCase();
-    return MEDIA_HOSTS.some(media => host === media || host.endsWith(`.${media}`));
+    return hostUnder(host, MEDIA_HOSTS);
   } catch {
     return false;
   }

@@ -3,7 +3,7 @@ import { NetworkError, ValidationError, withCause } from './errors.js';
 import { getRequestHeaders } from './discord-cdn.js';
 import { downloadFileFromUrl } from './file-downloader.js';
 import { fetchPage } from './ssrf-guard.js';
-import { normalizeHost } from './url-host.js';
+import { normalizeHost, hostUnder } from './url-host.js';
 
 const logger = createLogger('hentaigifz');
 
@@ -61,7 +61,7 @@ function isMediaHostUrl(url) {
   try {
     const { hostname } = new URL(url);
     const host = hostname.toLowerCase();
-    return host === MEDIA_HOST || host.endsWith(`.${MEDIA_HOST}`);
+    return hostUnder(host, MEDIA_HOST);
   } catch {
     return false;
   }

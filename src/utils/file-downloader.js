@@ -13,7 +13,7 @@ import {
   MAX_PAGE_BYTES,
 } from './ssrf-guard.js';
 import { OUTPUT_FORMATS } from './output-formats.js';
-import { hostOf, isBilibiliCdnHost } from './url-host.js';
+import { hostOf, isBilibiliCdnHost, hostUnder } from './url-host.js';
 
 const logger = createLogger('file-downloader');
 
@@ -97,7 +97,7 @@ export async function downloadDirectMedia(url, client = null, options = {}) {
 
 export function getDirectMediaHeaders(url) {
   const host = hostOf(url);
-  if (host === 'rule34.xxx' || host?.endsWith('.rule34.xxx')) {
+  if (hostUnder(host, 'rule34.xxx')) {
     return { Referer: 'https://rule34.xxx/' };
   }
   return isBilibiliCdnHost(host) ? { Referer: 'https://www.bilibili.com/' } : {};

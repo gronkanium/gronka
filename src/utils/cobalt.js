@@ -12,7 +12,7 @@ import {
 import { fetchToFile, withExtension, extensionForType } from './media-file.js';
 import { detectFileType } from './storage.js';
 import { mapLimit, ITEM_FANOUT } from './map-limit.js';
-import { hostOf, normalizeHost } from './url-host.js';
+import { hostOf, normalizeHost, hostUnder } from './url-host.js';
 import { isInstagramReelUrl } from './instagram.js';
 import { BROWSER_USER_AGENT } from './browser-agent.js';
 
@@ -319,9 +319,7 @@ export function isSocialMediaUrl(url) {
     const urlObj = new URL(url);
     const hostname = normalizeHost(urlObj.hostname);
 
-    return SOCIAL_MEDIA_DOMAINS.some(
-      domain => hostname === domain || hostname.endsWith(`.${domain}`)
-    );
+    return hostUnder(hostname, SOCIAL_MEDIA_DOMAINS);
   } catch {
     return false;
   }

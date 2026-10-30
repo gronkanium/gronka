@@ -5,7 +5,7 @@ import { NetworkError, ValidationError, withCause } from './errors.js';
 import { downloadFileFromUrl } from './file-downloader.js';
 import { maxDownloadBytes } from './size-limit.js';
 import { fetchPage } from './ssrf-guard.js';
-import { hostOf } from './url-host.js';
+import { hostOf, hostUnder } from './url-host.js';
 
 const logger = createLogger('deviantart');
 
@@ -16,7 +16,7 @@ const readCookie = () => readSessionCookie('deviantart', 'auth_secure=');
 export function deviationId(url) {
   try {
     const host = hostOf(url);
-    if (host !== 'deviantart.com' && !host.endsWith('.deviantart.com')) return null;
+    if (!hostUnder(host, 'deviantart.com')) return null;
     return new URL(url).pathname.match(/\/art\/(?:[^/]*-)?(\d+)\/?$/)?.[1] ?? null;
   } catch {
     return null;

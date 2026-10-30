@@ -1,7 +1,7 @@
 import { YTDLP_SITES } from './ytdlp.js';
 import { GALLERY_DL_SITES } from './gallery-dl.js';
 import { readSetting } from './settings.js';
-import { hostOf } from './url-host.js';
+import { hostOf, hostUnder } from './url-host.js';
 import { canonicalizeMirrorUrl } from './cobalt.js';
 import { ROUTES } from '../core/sources.js';
 
@@ -87,11 +87,7 @@ export const DOWNLOAD_SERVICE_IDS = new Set(DOWNLOAD_SERVICES.map(s => s.id));
 export function getServiceForUrl(url) {
   const hostname = hostOf(canonicalizeMirrorUrl(url));
   if (!hostname) return null;
-  return (
-    DOWNLOAD_SERVICES.find(service =>
-      service.hosts.some(host => hostname === host || hostname.endsWith(`.${host}`))
-    ) || null
-  );
+  return DOWNLOAD_SERVICES.find(service => hostUnder(hostname, service.hosts)) || null;
 }
 
 // If the URL belongs to a service that has been turned off in the webui, return that service's display label; otherwise null

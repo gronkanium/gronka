@@ -7,7 +7,7 @@ import { writeZip } from './archive.js';
 import { fromPath, tempDir, jobSignal, watchDirSize } from './media-file.js';
 import { maxDownloadBytes, tooLarge } from './size-limit.js';
 import { mapLimit, ITEM_FANOUT } from './map-limit.js';
-import { hostOf, normalizeHost } from './url-host.js';
+import { hostOf, normalizeHost, hostUnder } from './url-host.js';
 import { getCookieArgs } from './ytdlp.js';
 
 const logger = createLogger('gallery-dl');
@@ -100,11 +100,7 @@ export function isFacebookPhotoUrl(url) {
 export function getGalleryDlSite(url) {
   try {
     const hostname = hostOf(url);
-    return (
-      GALLERY_DL_SITES.find(site =>
-        site.hosts.some(host => hostname === host || hostname.endsWith(`.${host}`))
-      )?.name || null
-    );
+    return GALLERY_DL_SITES.find(site => hostUnder(hostname, site.hosts))?.name || null;
   } catch {
     return null;
   }

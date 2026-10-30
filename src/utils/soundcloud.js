@@ -8,6 +8,7 @@ import { ValidationError } from './errors.js';
 import { ssrfGuardedRequest } from './ssrf-guard.js';
 import { fromPath, tempPath } from './media-file.js';
 import { downloadWithYtdlp, getCookieArgs } from './ytdlp.js';
+import { hostUnder } from './url-host.js';
 
 const logger = createLogger('soundcloud');
 const execFileAsync = promisify(execFile);
@@ -15,7 +16,7 @@ const execFileAsync = promisify(execFile);
 export function isSoundCloudUrl(url) {
   try {
     const host = new URL(url).hostname.toLowerCase();
-    return host === 'soundcloud.com' || host.endsWith('.soundcloud.com');
+    return hostUnder(host, 'soundcloud.com');
   } catch {
     return false;
   }

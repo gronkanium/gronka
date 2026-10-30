@@ -17,7 +17,7 @@ import { trimVideo } from './video-processor/trim-video.js';
 import { DEFAULT_YTDLP_FORMAT } from './config.js';
 import { fromPath, tempDir, jobSignal, watchDirSize } from './media-file.js';
 import { maxDownloadBytes, tooLarge } from './size-limit.js';
-import { hostOf, normalizeHost } from './url-host.js';
+import { hostOf, normalizeHost, hostUnder } from './url-host.js';
 
 const logger = createLogger('ytdlp');
 const execFileAsync = promisify(execFile);
@@ -102,10 +102,7 @@ export function getYouTubeArgs(url, signedIn = false) {
 
 // These reject yt-dlp's own TLS fingerprint (403, or Facebook's "Cannot parse data" once logged in); curl-cffi passes as Chrome.
 const IMPERSONATE_HOSTS = ['rumble.com', 'pornhub.com', 'facebook.com', 'fb.watch', 'rule34.xxx'];
-const hostIn = (url, hosts) => {
-  const host = hostOf(url);
-  return Boolean(host) && hosts.some(h => host === h || host.endsWith(`.${h}`));
-};
+const hostIn = (url, hosts) => hostUnder(hostOf(url), hosts);
 
 function isRedditManifest(url) {
   try {
@@ -148,10 +145,7 @@ function isInstagramPostUrl(url) {
   try {
     const urlObj = new URL(url);
     const hostname = normalizeHost(urlObj.hostname);
-    return (
-      (hostname === 'instagram.com' || hostname.endsWith('.instagram.com')) &&
-      /^(?:\/[^/]+)?\/p\//.test(urlObj.pathname)
-    );
+    return hostUnder(hostname, 'instagram.com') && /^(?:\/[^/]+)?\/p\//.test(urlObj.pathname);
   } catch {
     return false;
   }
@@ -201,7 +195,7 @@ export function getYtdlpSite(url) {
   try {
     const hostname = hostOf(url);
     for (const site of YTDLP_SITES) {
-      if (site.hosts.some(h => hostname === h || hostname.endsWith(`.${h}`))) {
+      if (hostUnder(hostname, site.hosts)) {
         return site.name;
       }
     }

@@ -33,7 +33,7 @@ import {
 } from '../utils/file-downloader.js';
 import { isTiktokContentUrl } from '../content/tiktok.js';
 import { isTwitterContentUrl } from '../content/twitter.js';
-import { hostOf } from '../utils/url-host.js';
+import { hostOf, hostUnder } from '../utils/url-host.js';
 import { readSetting } from '../utils/settings.js';
 
 const {
@@ -55,10 +55,8 @@ const isStillImage = url => {
 
 const onHost =
   (...hosts) =>
-  url => {
-    const host = hostOf(url);
-    return Boolean(host) && hosts.some(h => host === h || host.endsWith(`.${h}`));
-  };
+  url =>
+    hostUnder(hostOf(url), hosts);
 
 const switches = (category, ...entries) =>
   entries.map(([id, label, hosts]) => ({ id, label, category, hosts }));

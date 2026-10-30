@@ -4,7 +4,7 @@ import { ValidationError, contentGone } from './errors.js';
 import { getRequestHeaders } from './discord-cdn.js';
 import { downloadFileFromUrl } from './file-downloader.js';
 import { ssrfGuardedRequest, PAGE_FETCH_TIMEOUT_MS, fetchPage } from './ssrf-guard.js';
-import { normalizeHost } from './url-host.js';
+import { normalizeHost, hostUnder } from './url-host.js';
 
 const logger = createLogger('pinterest');
 
@@ -96,7 +96,7 @@ function isMediaHostUrl(url) {
   }
   try {
     const host = new URL(url).hostname.toLowerCase();
-    return host === MEDIA_HOST || host.endsWith(`.${MEDIA_HOST}`);
+    return hostUnder(host, MEDIA_HOST);
   } catch {
     return false;
   }

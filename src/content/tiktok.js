@@ -1,7 +1,7 @@
 import axios from 'axios';
 import { createLogger } from '../utils/logger.js';
 import { NetworkError, contentGone } from '../utils/errors.js';
-import { normalizeHost } from '../utils/url-host.js';
+import { normalizeHost, hostUnder } from '../utils/url-host.js';
 import { BROWSER_USER_AGENT } from '../utils/browser-agent.js';
 import { guardedBeforeRedirect, ssrfGuardedRequest } from '../utils/ssrf-guard.js';
 import { post, thread, isoDate, linksIn } from './schema.js';
@@ -16,7 +16,7 @@ export const TIKTOK_LIMITS = { thread: 0, comments: 0, pages: 1, budgetMs: 30000
 const VIDEO_PATH = /^\/@([\w.-]+)\/(video|photo)\/(\d{5,25})(?:\/|$)/;
 const SHORT_HOSTS = new Set(['vm.tiktok.com', 'vt.tiktok.com']);
 
-const isTiktokHost = host => host === 'tiktok.com' || host.endsWith('.tiktok.com');
+const isTiktokHost = host => hostUnder(host, 'tiktok.com');
 
 function parse(url) {
   try {

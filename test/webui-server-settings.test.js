@@ -119,7 +119,7 @@ describe('settings route', () => {
   });
 
   test('number setting rejects non-integers and out-of-range values', async () => {
-    for (const bad of [12.5, 'abc', -1, 999999, true]) {
+    for (const bad of [12.5, 'abc', -1, 999999, true, '', null]) {
       const { response } = await putSetting('r2_soft_limit_gb', bad);
       assert.strictEqual(response.status, 400, `expected 400 for ${JSON.stringify(bad)}`);
     }

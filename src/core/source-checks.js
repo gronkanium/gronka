@@ -106,7 +106,7 @@ export function startSourceCheckJob(intervalMs = 60 * 60 * 1000) {
   const tick = async () => {
     try {
       if (!(await readSetting('source_checks'))) return;
-      const checked = new Map((await listSourceChecks()).map(row => [row.url, row.checked_at]));
+      const checked = new Map((await listSourceChecks()).map(row => [row.url, row.checkedAt]));
       const due = SOURCE_EXAMPLES.some(e => Date.now() - (checked.get(e.url) ?? 0) >= DAY_MS);
       if (!due) return;
       await runSourceChecks();

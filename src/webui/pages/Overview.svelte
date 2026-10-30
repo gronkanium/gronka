@@ -74,7 +74,7 @@
 
   const strip = $derived.by(() => {
     const procs = (system?.jobs?.processes ?? []).filter(p => p.role === 'worker');
-    const live = procs.filter(p => Date.now() - p.seen_at < 30_000).length;
+    const live = procs.filter(p => Date.now() - p.seenAt < 30_000).length;
     const running = system?.jobs?.counts?.running ?? 0;
     const queued = system?.jobs?.counts?.queued ?? 0;
     const paused = !!system?.jobs?.paused;

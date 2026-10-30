@@ -69,12 +69,7 @@ sudo apt install ffmpeg
 
 ### file too large
 
-check file size limits:
-
-- videos: 1 gb maximum for downloads (the max download size webui setting); anything over the discord attachment limit needs [[R2-Storage]]
-- images: 50mb maximum (configurable via `MAX_IMAGE_SIZE`)
-- gif optimization: 50mb maximum
-- gif duration: 30 seconds (configurable via `MAX_GIF_DURATION`)
+every file the bot downloads, converts or optimizes has one size limit: 1gb by default (the max download size webui setting). anything over the discord attachment limit needs [[R2-Storage]]. for a video, `start`/`end` grab a clip under the limit.
 
 ### unsupported format
 
@@ -134,9 +129,9 @@ cobalt has no tiktok cookie support, so age-restricted tiktok posts always fail 
 
 see `YTDLP_COOKIES_PATH` in [[Configuration]] for details.
 
-### youtube video too long
+### video too big
 
-`/download` caps video length with the max video duration webui setting. to grab part of a longer video, pass `start`/`end`; trimmed downloads bypass the cap.
+there is no length limit, only the size limit. a long video over it can still be grabbed in part with `start`/`end`. a stream that is still live is refused until it ends.
 
 ### download timeout
 

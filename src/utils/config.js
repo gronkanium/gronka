@@ -90,11 +90,8 @@ function getBotConfig() {
     retentionEnabled: getStringEnv('RETENTION_ENABLED', 'true').toLowerCase() === 'true',
     retentionDays: parseIntEnv('RETENTION_DAYS', 7, 1, 3650),
     retentionIntervalMs: parseIntEnv('RETENTION_INTERVAL_MS', 21600000, 60000, 604800000),
-    // 1GB hard ceiling: bigger files are rejected outright. Files under it are
-    // delivered as expiring R2 URLs whose TTL shrinks with size (see upload-tiers.js), rather
-    // than bounced at 100MB. Configurable via MAX_VIDEO_SIZE env var.
+    // Default for the webui's max size; read it through size-limit.js, never directly.
     maxVideoSize: parseIntEnv('MAX_VIDEO_SIZE', 1024 * 1024 * 1024, 1),
-    maxImageSize: parseIntEnv('MAX_IMAGE_SIZE', 50 * 1024 * 1024, 1), // 50MB default, configurable via MAX_IMAGE_SIZE env var
     cobaltApiUrl: getStringEnv('COBALT_API_URL', 'http://cobalt:9000'),
     cobaltEnabled: getStringEnv('COBALT_ENABLED', 'true').toLowerCase() === 'true',
     ytdlpEnabled: getStringEnv('YTDLP_ENABLED', 'true').toLowerCase() === 'true',

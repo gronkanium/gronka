@@ -5,13 +5,10 @@ import { setSetting } from '../../src/utils/database.js';
 
 describe('readSetting', () => {
   test('returns stored values parsed to their type, defaults when unreadable', async () => {
-    await setSetting('max_video_duration', '1200');
-    assert.equal(await readSetting('max_video_duration'), 1200);
-    await setSetting('max_video_duration', 'nonsense');
-    assert.equal(
-      await readSetting('max_video_duration'),
-      Number(SETTINGS.max_video_duration.default)
-    );
+    await setSetting('r2_soft_limit_gb', '20');
+    assert.equal(await readSetting('r2_soft_limit_gb'), 20);
+    await setSetting('r2_soft_limit_gb', 'nonsense');
+    assert.equal(await readSetting('r2_soft_limit_gb'), Number(SETTINGS.r2_soft_limit_gb.default));
     await setSetting('disabled_services', '{"not":"a list"}');
     assert.deepEqual(await readSetting('disabled_services'), []);
     await setSetting('url_only_mode', 'true');

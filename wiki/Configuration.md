@@ -21,8 +21,7 @@ nothing about who uses it. files are processed in a temporary folder and deleted
 
 | key | default | what it does |
 | --- | --- | --- |
-| `MAX_VIDEO_SIZE` | 1 GB | largest download, in bytes (the webui setting overrides it) |
-| `MAX_IMAGE_SIZE` | 50 MB | largest image, in bytes |
+| `MAX_VIDEO_SIZE` | 1 GB | largest file the bot downloads, converts or optimizes, in bytes (the webui setting overrides it) |
 | `DISCORD_SIZE_LIMIT` | 8 MB | fallback attachment limit when discord does not say |
 | `COBALT_ENABLED`, `COBALT_API_URL` | `true`, `http://cobalt:9000` | the cobalt instance downloads go through |
 | `YTDLP_ENABLED`, `YTDLP_QUALITY` | `true` | yt-dlp for youtube and the sites cobalt does not cover |

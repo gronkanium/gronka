@@ -95,7 +95,10 @@ router.put('/api/settings/:key', express.json(), async (req, res) => {
       }
       textValue = String(value === true || value === 'true');
     } else if (meta.type === 'number') {
-      const num = Number(value);
+      const num =
+        typeof value === 'number' || (typeof value === 'string' && value.trim())
+          ? Number(value)
+          : NaN;
       if (
         !Number.isInteger(num) ||
         (meta.min !== undefined && num < meta.min) ||

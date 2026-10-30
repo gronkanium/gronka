@@ -13,5 +13,10 @@ export function hostOf(url) {
 export const hostsOnly = text =>
   text?.replace(/https?:\/\/[^\s"'<>)]+/gi, url => hostOf(url) ?? '<link>') ?? null;
 
+export const BILIBILI_REFERER = 'https://www.bilibili.com/';
 export const isBilibiliCdnHost = host =>
   /(^|\.)bilivideo\.(com|cn)$|^upos-[\w-]+\.akamaized\.net$/.test(host ?? '');
+
+// The host is the domain or one of its subdomains, for any of `domains` (a string or a list).
+export const hostUnder = (host, domains) =>
+  Boolean(host) && [domains].flat().some(d => host === d || host.endsWith(`.${d}`));

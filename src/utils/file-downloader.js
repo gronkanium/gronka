@@ -1,12 +1,11 @@
 import axios from 'axios';
 import path from 'path';
 import { createLogger } from './logger.js';
-import { botConfig } from './config.js';
 import { validateUrl } from './validation.js';
 import { ValidationError, NetworkError, withCause, describeCause, timedOut } from './errors.js';
 import { isDiscordCdnUrl, getRefreshedAttachmentURL, getRequestHeaders } from './discord-cdn.js';
 import { sanitizeFilename } from './validation.js';
-import { fetchToFile, withExtension, extensionForType } from './media-file.js';
+import { fetchToFile, withExtension, extensionForType, dispositionName } from './media-file.js';
 import {
   BLOCKED_DESTINATION_MESSAGE,
   isSsrfBlockedError,
@@ -14,7 +13,7 @@ import {
   MAX_PAGE_BYTES,
 } from './ssrf-guard.js';
 import { OUTPUT_FORMATS } from './output-formats.js';
-import { hostOf, isBilibiliCdnHost } from './url-host.js';
+import { hostOf, isBilibiliCdnHost, BILIBILI_REFERER, hostUnder } from './url-host.js';
 
 const logger = createLogger('file-downloader');
 
@@ -96,42 +95,29 @@ export async function downloadDirectMedia(url, client = null, options = {}) {
   return fileData;
 }
 
-// A 413, or our own cap tripping mid-stream.
-function isTooLargeError(error) {
-  return error?.response?.status === 413 || error?.code === 'TOO_LARGE';
-}
-
-const { maxVideoSize: MAX_VIDEO_SIZE, maxImageSize: MAX_IMAGE_SIZE } = botConfig;
-const MAX_ANY_SIZE = Math.max(MAX_VIDEO_SIZE, MAX_IMAGE_SIZE);
-const mb = bytes => bytes / (1024 * 1024);
-
 export function getDirectMediaHeaders(url) {
   const host = hostOf(url);
-  if (host === 'rule34.xxx' || host?.endsWith('.rule34.xxx')) {
+  if (hostUnder(host, 'rule34.xxx')) {
     return { Referer: 'https://rule34.xxx/' };
   }
-  return isBilibiliCdnHost(host) ? { Referer: 'https://www.bilibili.com/' } : {};
+  return isBilibiliCdnHost(host) ? { Referer: BILIBILI_REFERER } : {};
 }
 
 const isTransient = error =>
   ['ECONNABORTED', 'ECONNRESET', 'ETIMEDOUT'].includes(error?.code) ||
   [502, 503, 504].includes(error?.response?.status);
 
-async function guardedFetch(url, maxSize, userAgent = null) {
+async function guardedFetch(url, userAgent = null) {
   const headers = { ...getRequestHeaders(), ...getDirectMediaHeaders(url) };
   if (userAgent) headers['User-Agent'] = userAgent;
   const fetchOnce = () =>
-    fetchToFile(
-      url,
-      {
-        ...ssrfGuardedRequest(),
-        timeout: 60000,
-        maxRedirects: 5,
-        validateStatus: status => status >= 200 && status < 400,
-        headers,
-      },
-      { maxSize }
-    );
+    fetchToFile(url, {
+      ...ssrfGuardedRequest(),
+      timeout: 60000,
+      maxRedirects: 5,
+      validateStatus: status => status >= 200 && status < 400,
+      headers,
+    });
   try {
     return await fetchOnce();
   } catch (error) {
@@ -142,10 +128,8 @@ async function guardedFetch(url, maxSize, userAgent = null) {
 }
 
 function filenameFor(file, url) {
-  const match = (file.headers['content-disposition'] || '').match(
-    /filename[^;=\n]*=((['"]).*?\2|[^;\n]*)/
-  );
-  if (match?.[1]) return sanitizeFilename(match[1].replace(/['"]/g, ''));
+  const named = dispositionName(file.headers);
+  if (named) return sanitizeFilename(named);
   try {
     const name = path.basename(new URL(url).pathname);
     const ext = path.extname(name) ? '' : extensionForType(file.headers['content-type']);
@@ -157,14 +141,8 @@ function filenameFor(file, url) {
 }
 
 async function fetchAnyFile(url, userAgent) {
-  const file = await guardedFetch(url, MAX_ANY_SIZE, userAgent);
+  const file = await guardedFetch(url, userAgent);
   const contentType = file.headers['content-type'] || '';
-  const isImage =
-    !contentType.includes('video') &&
-    (contentType.includes('image') || /\.(jpg|jpeg|png|gif|webp|bmp|svg)$/i.test(url));
-  if (isImage && file.size > MAX_IMAGE_SIZE) {
-    throw new ValidationError(`file is too large (max ${mb(MAX_IMAGE_SIZE)}mb for images)`);
-  }
   return withExtension({ ...file, contentType, filename: filenameFor(file, url) });
 }
 
@@ -192,14 +170,6 @@ export async function downloadFileFromUrl(url, client = null, options = {}) {
     if (error instanceof ValidationError) throw error;
     if (isSsrfBlockedError(error)) {
       throw withCause(new ValidationError(BLOCKED_DESTINATION_MESSAGE), error);
-    }
-    if (isTooLargeError(error)) {
-      throw withCause(
-        new ValidationError(
-          `file is too large (max ${mb(MAX_VIDEO_SIZE)}mb for videos, ${mb(MAX_IMAGE_SIZE)}mb for images)`
-        ),
-        error
-      );
     }
     const status = error.response?.status;
     // Not contentGone: a site extractor's dead CDN copy must not stop the next engine.

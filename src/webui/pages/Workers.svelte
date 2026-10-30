@@ -47,7 +47,7 @@
     return (jobs?.processes ?? []).map(p => ({
       ...p,
       name: p.role === 'bot' ? 'gronka (bot)' : `worker-${++w}`,
-      live: now - p.seen_at < LIVE_MS,
+      live: now - p.seenAt < LIVE_MS,
     }));
   });
   const down = $derived(processes.filter(p => !p.live));
@@ -142,7 +142,7 @@
         {#if down.length}
           <b>{down.length} process{down.length === 1 ? '' : 'es'} not reporting:</b>
           {down.map(p => p.name).join(', ')}. Last heartbeat {formatRelativeTime(
-            Math.max(...down.map(p => p.seen_at))
+            Math.max(...down.map(p => p.seenAt))
           )}.
         {/if}
         {#if mismatch}
@@ -213,8 +213,8 @@
                 >v{p.version ?? '?'}</span
               ></span
             >
-            <span class="mono small muted">{formatRelativeTime(p.seen_at)}</span>
-            <span class="mono small muted">{uptime(now - p.started_at)}</span>
+            <span class="mono small muted">{formatRelativeTime(p.seenAt)}</span>
+            <span class="mono small muted">{uptime(now - p.startedAt)}</span>
             <span class="meter num">
               <span class="bar-track"
                 ><span
@@ -256,7 +256,7 @@
         <span class="mono ellipsis">{j.kind}</span>
         <span class="mono muted ellipsis hide-sm">{j.worker ?? '—'}</span>
         <span class="num hide-sm" class:warn-text={j.attempts > 1}>{j.attempts}</span>
-        <span class="num dim">{formatRelativeTime(j.created_at)}</span>
+        <span class="num dim">{formatRelativeTime(j.createdAt)}</span>
       {/snippet}
     </DataTable>
 

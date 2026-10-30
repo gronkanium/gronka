@@ -7,11 +7,7 @@ import { botConfig } from '../utils/config.js';
 import { firstUrlIn } from '../utils/validation.js';
 import { readLink } from '../core/intake.js';
 import { curatedErrorMessage } from './shared/command-errors.js';
-import {
-  attachmentMediaKind,
-  validateConversionAttachment,
-  firstConvertibleAttachment,
-} from '../utils/attachment-helpers.js';
+import { attachmentMediaKind, firstConvertibleAttachment } from '../utils/attachment-helpers.js';
 import {
   convertToGif,
   getVideoMetadata,
@@ -250,8 +246,8 @@ const attachmentJson = attachment =>
     contentType: attachment.contentType,
   };
 
-// Refuses a file convert cannot take, from its name, type and size alone.
-async function checkAttachment(interaction, attachment, { originalUrl, fromUrl, commandSource }) {
+// Refuses a file convert cannot take, from its name and type alone.
+async function checkAttachment(interaction, attachment, { originalUrl, commandSource }) {
   const { name, size, contentType } = attachment;
   const context = {
     originalUrl: originalUrl ?? attachment.url,
@@ -263,15 +259,6 @@ async function checkAttachment(interaction, attachment, { originalUrl, fromUrl, 
       message: UNSUPPORTED_FORMAT,
       detail: `unsupported content type: ${contentType || 'unknown'}`,
       reason: 'unsupported_format',
-      context,
-    });
-    return false;
-  }
-  const validation = validateConversionAttachment(attachment);
-  if (!validation.valid) {
-    await refuse(interaction, 'convert', {
-      message: validation.error,
-      reason: fromUrl ? null : 'invalid_attachment',
       context,
     });
     return false;
@@ -299,7 +286,6 @@ async function resolveInput(interaction, { attachment, url, commandSource }) {
     url &&
     !(await checkAttachment(interaction, input.attachment, {
       originalUrl: input.originalUrl,
-      fromUrl: true,
       commandSource,
     }))
   ) {
@@ -332,12 +318,7 @@ export async function runConvertJob(
   let info;
   let trim;
   try {
-    const sourceSize = input.file.size;
     if (isAnimatedWebp(input.file.head)) {
-      if (sourceSize > botConfig.maxImageSize)
-        throw new ValidationError(
-          `that media file is too large (max ${botConfig.maxImageSize / 1024 / 1024}mb).`
-        );
       const gifPath = await tempPath('.gif');
       await convertAnimatedWebpToGif(input.file.path, gifPath);
       input.file = await fromPath(gifPath, { contentType: 'image/gif', filename: 'animation.gif' });
@@ -354,11 +335,6 @@ export async function runConvertJob(
     }
     info = { ...conversionInfo(metadata), filename: input.attachment.name };
     if (metadata.format?.format_name === 'gif') input.attachment.contentType = 'image/gif';
-    const max = ['image', 'animation'].includes(info.kind)
-      ? botConfig.maxImageSize
-      : botConfig.maxVideoSize;
-    if (sourceSize > max)
-      throw new ValidationError(`that media file is too large (max ${max / 1024 / 1024}mb).`);
     trim = conversionTrim(info, times);
     if (picker) {
       const selected = await waitForConvertFormat(

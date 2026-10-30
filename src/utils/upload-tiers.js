@@ -8,7 +8,7 @@ import assert from 'assert';
 //
 // Format: comma-separated `MB:hours` pairs, ascending by size. A file uses the first tier
 // whose size ceiling it fits under; anything larger than the last tier gets that last (shortest)
-// TTL. Files above the hard MAX_VIDEO_SIZE ceiling are rejected before they ever reach here.
+// TTL. Files over the size limit (size-limit.js) never reach here.
 export const DEFAULT_TTL_TIERS = '100:72,250:24,500:8,1024:2';
 
 const MB = 1024 * 1024;

@@ -1,3 +1,4 @@
+import axios from 'axios';
 import { test, expect, describe } from 'bun:test';
 import { isPinterestContentUrl, fetchPinterestThread } from '../../src/content/pinterest.js';
 
@@ -124,16 +125,27 @@ describe('fetchPinterestThread', () => {
     const gone = [
       page('<html>nothing</html>'),
       page('', 'https://www.pinterest.com/?show_error=true'),
-      {
-        fetchPage: async () => {
-          throw Object.assign(new Error('nope'), { response: { status: 404 } });
-        },
-      },
     ];
     for (const source of gone) {
       const error = await fetchPinterestThread('https://pin.it/abc', source).catch(e => e);
       expect(error.code).toBe('CONTENT_GONE');
       expect(error.cause).toBeInstanceOf(Error);
+    }
+  });
+
+  test('a pin page that answers 404 or 410 is CONTENT_GONE with its cause', async () => {
+    const originalGet = axios.get;
+    try {
+      for (const status of [404, 410]) {
+        axios.get = async () => {
+          throw Object.assign(new Error('gone'), { response: { status } });
+        };
+        const error = await fetchPinterestThread('https://www.pinterest.com/pin/1/').catch(e => e);
+        expect(error.code).toBe('CONTENT_GONE');
+        expect(error.cause.response.status).toBe(status);
+      }
+    } finally {
+      axios.get = originalGet;
     }
   });
 });

@@ -1,6 +1,5 @@
-import axios from 'axios';
-import { NetworkError, ValidationError, withCause, contentGone } from './errors.js';
-import { ssrfGuardedRequest, PAGE_FETCH_TIMEOUT_MS, MAX_PAGE_BYTES } from './ssrf-guard.js';
+import { ValidationError, contentGone } from './errors.js';
+import { fetchPage } from './ssrf-guard.js';
 import { normalizeHost } from './url-host.js';
 
 const POST_ID = /^[\w-]{10,}$/;
@@ -63,20 +62,10 @@ export function extractYoutubePost(html, id) {
 }
 
 export async function resolveYoutubePost(id) {
-  let response;
-  try {
-    response = await axios.get(`https://www.youtube.com/post/${id}`, {
-      ...ssrfGuardedRequest(),
-      responseType: 'text',
-      timeout: PAGE_FETCH_TIMEOUT_MS,
-      maxContentLength: MAX_PAGE_BYTES,
-      maxRedirects: 5,
-      headers: { 'Accept-Language': 'en-US,en;q=0.9' },
-    });
-  } catch (error) {
-    if (error.response?.status === 404) throw contentGone(error);
-    throw withCause(new NetworkError('failed to reach youtube'), error);
-  }
+  const response = await fetchPage(`https://www.youtube.com/post/${id}`, {
+    failMessage: 'failed to reach youtube',
+    headers: { 'Accept-Language': 'en-US,en;q=0.9' },
+  });
   const post = extractYoutubePost(response.data, id);
   if (!post) throw contentGone('youtube: page had no post data');
   if (!post.videoId && post.images.length === 0) {

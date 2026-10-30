@@ -3,6 +3,8 @@ import assert from 'node:assert/strict';
 import axios from 'axios';
 import { Readable } from 'stream';
 import { withJobDir } from '../../src/utils/media-file.js';
+import { setSetting } from '../../src/utils/database/settings-pg.js';
+import { SETTINGS } from '../../src/utils/settings.js';
 import { getDirectMediaHeaders } from '../../src/utils/file-downloader.js';
 import {
   bilibiliVideo,
@@ -134,33 +136,27 @@ describe('bilibili', () => {
     );
   });
 
-  test('a part longer than the limit is refused before the play request', async () => {
-    await withApi(
-      {
-        '/x/web-interface/nav': NAV,
-        '/x/web-interface/wbi/view': {
-          code: 0,
-          data: {
-            cid: 1,
-            duration: 10,
-            pages: [
-              { cid: 1, duration: 10 },
-              { cid: 2, duration: 9000 },
-            ],
-          },
+  test('a file the play api sizes over the limit is refused before downloading', async () => {
+    const main = 'https://upos-sz-mirrorcos.bilivideo.com/a.mp4';
+    await setSetting('max_video_size_mb', '1');
+    try {
+      await withApi(
+        {
+          '/x/web-interface/nav': NAV,
+          '/x/web-interface/wbi/view': { code: 0, data: { cid: 1 } },
+          '/x/player/wbi/playurl': { code: 0, data: { durl: [{ url: main, size: 2 * 2 ** 20 }] } },
         },
-      },
-      async seen => {
-        const error = await downloadFromBilibili(
-          'https://www.bilibili.com/video/BV1xx411c7mD?p=2',
-          {
-            maxDuration: 3600,
-          }
-        ).catch(e => e);
-        assert.equal(error.name, 'ValidationError');
-        assert.ok(!seen.some(u => u.includes('playurl')));
-      }
-    );
+        async seen => {
+          const error = await downloadFromBilibili(
+            'https://www.bilibili.com/video/BV1xx411c7mD'
+          ).catch(e => e);
+          assert.equal(error.code, 'TOO_LARGE');
+          assert.ok(!seen.some(u => u.includes('/a.mp4')));
+        }
+      );
+    } finally {
+      await setSetting('max_video_size_mb', SETTINGS.max_video_size_mb.default);
+    }
   });
 
   test('a 412 block says bilibili is blocking, and keeps the cause', async () => {

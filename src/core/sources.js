@@ -33,7 +33,7 @@ import {
 } from '../utils/file-downloader.js';
 import { isTiktokContentUrl } from '../content/tiktok.js';
 import { isTwitterContentUrl } from '../content/twitter.js';
-import { hostOf } from '../utils/url-host.js';
+import { hostOf, hostUnder } from '../utils/url-host.js';
 import { readSetting } from '../utils/settings.js';
 
 const {
@@ -55,10 +55,8 @@ const isStillImage = url => {
 
 const onHost =
   (...hosts) =>
-  url => {
-    const host = hostOf(url);
-    return Boolean(host) && hosts.some(h => host === h || host.endsWith(`.${h}`));
-  };
+  url =>
+    hostUnder(hostOf(url), hosts);
 
 const switches = (category, ...entries) =>
   entries.map(([id, label, hosts]) => ({ id, label, category, hosts }));
@@ -69,8 +67,7 @@ export const ENGINES = {
     name: 'cobalt',
     enabled: () => COBALT_ENABLED,
     disabledMessage: () => 'downloads from this site are turned off.',
-    extract: (url, ctx) =>
-      downloadFromSocialMedia(COBALT_API_URL, url, ctx.maxSize, ctx.cobaltResponse),
+    extract: (url, ctx) => downloadFromSocialMedia(COBALT_API_URL, url, ctx.cobaltResponse),
     streams: true,
   },
   ytdlp: {
@@ -80,9 +77,7 @@ export const ENGINES = {
       `${(getYtdlpSite(url) ?? 'this site').toLowerCase()} downloads are disabled.`,
     extract: async (url, ctx) =>
       downloadWithYtdlp(url, {
-        maxSize: ctx.maxSize,
         quality: YTDLP_QUALITY,
-        maxDuration: await ctx.maxDuration(),
         startTime: ctx.startTime,
         duration: ctx.duration,
       }),
@@ -93,23 +88,20 @@ export const ENGINES = {
     enabled: () => GALLERY_DL_ENABLED,
     disabledMessage: url =>
       `${(getGalleryDlSite(url) ?? 'gallery').toLowerCase()} downloads are disabled.`,
-    extract: (url, ctx) => downloadWithGalleryDl(url, ctx.maxSize, ctx.galleryOptions),
+    extract: (url, ctx) => downloadWithGalleryDl(url, ctx.galleryOptions),
   },
   instagram: { name: 'Instagram session', extract: url => downloadFromInstagram(url) },
   medal: {
     name: 'Medal',
-    extract: (url, ctx) => ctx.maxDuration().then(max => downloadFromMedal(url, max)),
+    extract: url => downloadFromMedal(url),
   },
   bilibili: {
     name: 'Bilibili',
-    extract: (url, ctx) =>
-      ctx
-        .maxDuration()
-        .then(maxDuration => downloadFromBilibili(url, { maxDuration, maxSize: ctx.maxSize })),
+    extract: url => downloadFromBilibili(url),
   },
   deviantart: {
     name: 'DeviantArt',
-    extract: (url, ctx) => downloadFromDeviantArt(url, ctx.maxSize),
+    extract: url => downloadFromDeviantArt(url),
   },
   hentaigifz: { name: 'hentaigifz', extract: url => downloadFromHentaiGifz(url) },
   booru: { name: 'booru', extract: url => downloadFromBooru(url) },
@@ -125,7 +117,7 @@ export const ENGINES = {
   },
   threads: { name: 'Threads', extract: url => downloadFromThreads(url) },
   x: { name: 'X', extract: url => downloadFromX(url) },
-  mega: { name: 'Mega', extract: (url, ctx) => downloadFromMega(url, ctx.maxSize) },
+  mega: { name: 'Mega', extract: url => downloadFromMega(url) },
   tumblr: { name: 'Tumblr', extract: url => downloadFromTumblr(url) },
   direct: {
     name: 'direct file',

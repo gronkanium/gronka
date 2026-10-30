@@ -59,7 +59,7 @@ async function downloadRedditSlides(images) {
 
 const isTwitterXUrl = url => routeById('x').owns(url);
 
-const { maxVideoSize: MAX_VIDEO_SIZE, cobaltApiUrl: COBALT_API_URL } = botConfig;
+const { cobaltApiUrl: COBALT_API_URL } = botConfig;
 
 // A site extractor's gone or refused answer stops the chain; cobalt's never does (a TikTok US-CDN 404 reads as gone).
 const GONE = ['CONTENT_GONE', 'CLIP_NOT_PUBLISHED'];
@@ -67,14 +67,6 @@ const worthAnotherSource = (engine, error) =>
   engine.id === 'cobalt' ||
   error.code === 'YTDLP_UNSUPPORTED_URL' ||
   (!(error instanceof ValidationError) && !GONE.includes(error.code));
-
-// Size is the real gate (--max-filesize); this only caps pathological lengths.
-const getMaxVideoDuration = () => readSetting('max_video_duration');
-
-async function getMaxVideoSize() {
-  const mb = await readSetting('max_video_size_mb');
-  return mb > 0 ? mb * 1024 * 1024 : MAX_VIDEO_SIZE;
-}
 
 async function directMediaUrls(url, shouldServe = null, keep = () => {}) {
   const { urls, direct, response } = await getCobaltMediaUrls(COBALT_API_URL, url);
@@ -106,7 +98,6 @@ export async function acquireMedia(
   if (await isPrivateHost(url)) {
     throw new ValidationError(BLOCKED_DESTINATION_MESSAGE);
   }
-  const maxSize = await getMaxVideoSize();
   const trimming = startTime !== null || duration !== null;
   // Every extractor tried and why it failed, in order; the final error carries it for recordFailure.
   const trail = [];
@@ -163,12 +154,10 @@ export async function acquireMedia(
 
   const ctx = {
     client,
-    maxSize,
     startTime,
     duration,
     galleryOptions,
     cobaltResponse: null,
-    maxDuration: async () => (trimming ? Infinity : await getMaxVideoDuration()),
   };
   const keep = response => (ctx.cobaltResponse = response);
   const local = postImages
@@ -265,7 +254,7 @@ export async function acquireMedia(
 
   const viaYoutube = async track => ({
     kind: 'file',
-    fileData: await soundcloudViaYoutube(url, { maxSize, track }),
+    fileData: await soundcloudViaYoutube(url, { track }),
     downloadMethod: 'ytdlp',
     url,
   });

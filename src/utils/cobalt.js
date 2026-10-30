@@ -1,6 +1,10 @@
 import axios from 'axios';
 import { createLogger } from './logger.js';
-import { ssrfGuardedRequest } from './ssrf-guard.js';
+import {
+  ssrfGuardedRequest,
+  isSsrfBlockedError,
+  BLOCKED_DESTINATION_MESSAGE,
+} from './ssrf-guard.js';
 import {
   NetworkError,
   ValidationError,
@@ -414,10 +418,20 @@ async function callCobaltApi(apiUrl, url, retryCount = 0, maxRetries = 3) {
 const MISSING_FILE_MESSAGE = 'the download service answered without a file, try again.';
 const DISPOSITION_NAME = /filename[^;=\n]*=((['"]).*?\2|[^;\n]*)/;
 
+const sameOrigin = (url, other) => {
+  try {
+    return new URL(url).origin === new URL(other).origin;
+  } catch {
+    return false;
+  }
+};
+
 // Streams a cobalt (or source) URL to disk. {what} names the file in user-facing errors.
-async function fetchCobaltFile(url, { accept, timeout, what, failMessage }) {
+// Only cobalt's own tunnel is exempt from the guard: it lives on a private address by design.
+async function fetchCobaltFile(url, { accept, timeout, what, failMessage, apiUrl }) {
   try {
     const file = await fetchToFile(url, {
+      ...(apiUrl && sameOrigin(url, apiUrl) ? {} : ssrfGuardedRequest()),
       timeout,
       maxRedirects: 5,
       validateStatus: status => status >= 200 && status < 400,
@@ -434,6 +448,9 @@ async function fetchCobaltFile(url, { accept, timeout, what, failMessage }) {
     return { ...file, dispositionName: match?.[1]?.replace(/['"]/g, '') || null };
   } catch (error) {
     if (error instanceof ValidationError || error instanceof NetworkError) throw error;
+    if (isSsrfBlockedError(error)) {
+      throw withCause(new ValidationError(BLOCKED_DESTINATION_MESSAGE), error);
+    }
     const why = `cobalt file: ${describeCause(error)}`;
     if (error.response?.status === 404) {
       throw contentGone(why);
@@ -446,11 +463,12 @@ async function fetchCobaltFile(url, { accept, timeout, what, failMessage }) {
   }
 }
 
-async function downloadPhoto(photoUrl, index) {
+async function downloadPhoto(photoUrl, index, apiUrl) {
   const file = await fetchCobaltFile(photoUrl, {
     accept: 'image/*,*/*',
     timeout: 60000,
     what: `photo ${index + 1}`,
+    apiUrl,
   });
   const contentType = file.headers['content-type'] || 'image/jpeg';
   const filename =
@@ -461,11 +479,12 @@ async function downloadPhoto(photoUrl, index) {
   return withExtension({ ...file, contentType, filename });
 }
 
-async function downloadVideo(videoUrl, index) {
+async function downloadVideo(videoUrl, index, apiUrl) {
   const file = await fetchCobaltFile(videoUrl, {
     accept: 'video/*,*/*',
     timeout: 300000,
     what: `video ${index + 1}`,
+    apiUrl,
   });
   const named = file.dispositionName ?? `video_${index + 1}.mp4`;
   const contentType = resolveContentType(file.headers['content-type'], named, file.head);
@@ -477,7 +496,7 @@ async function downloadVideo(videoUrl, index) {
   return withExtension({ ...file, contentType, filename });
 }
 
-async function downloadMediaFromPicker(pickerArray) {
+async function downloadMediaFromPicker(pickerArray, apiUrl) {
   const mediaItems = pickerArray.filter(
     item => (item.type === 'photo' || item.type === 'video') && item.url
   );
@@ -494,7 +513,9 @@ async function downloadMediaFromPicker(pickerArray) {
   );
 
   const results = await mapLimit(mediaItems, ITEM_FANOUT, (item, index) =>
-    item.type === 'photo' ? downloadPhoto(item.url, index) : downloadVideo(item.url, index)
+    item.type === 'photo'
+      ? downloadPhoto(item.url, index, apiUrl)
+      : downloadVideo(item.url, index, apiUrl)
   );
   logger.debug(`Successfully downloaded ${results.length} media items from picker`);
 
@@ -532,7 +553,7 @@ async function downloadFromCobalt(cobaltResponse, apiUrl = null) {
     Array.isArray(cobaltResponse.picker)
   ) {
     logger.debug('Detected picker response with media files');
-    return await downloadMediaFromPicker(cobaltResponse.picker);
+    return await downloadMediaFromPicker(cobaltResponse.picker, apiUrl);
   }
 
   let videoUrl = null;
@@ -602,6 +623,7 @@ async function downloadFromCobalt(cobaltResponse, apiUrl = null) {
     accept: '*/*',
     timeout: 300000,
     what: 'file',
+    apiUrl,
     failMessage: 'the file could not be downloaded, try again.',
   });
   const declared = file.headers['content-type'];

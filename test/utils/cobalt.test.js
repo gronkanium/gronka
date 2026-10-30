@@ -9,6 +9,9 @@ import {
 } from '../../src/utils/cobalt.js';
 import { isInstagramPostUrl } from '../../src/utils/instagram.js';
 import { describeCause, rootCause } from '../../src/utils/errors.js';
+import axios from 'axios';
+import { Readable } from 'node:stream';
+import { withJobDir } from '../../src/utils/media-file.js';
 
 describe('cobalt utilities', () => {
   test('normalizes a filename when Cobalt labels MP4 bytes as GIF', () => {
@@ -294,6 +297,34 @@ describe('cobalt utilities', () => {
       );
     });
   });
+});
+
+test('picker files go through the ssrf guard, the cobalt tunnel does not', async () => {
+  const { downloadFromSocialMedia } = await import('../../src/utils/cobalt.js');
+  const originalGet = axios.get;
+  const guarded = {};
+  axios.get = async (url, options) => {
+    guarded[url] = Boolean(options.lookup);
+    return { data: Readable.from([Buffer.from('GIF89a-and-some-bytes')]), headers: {} };
+  };
+  try {
+    const picker = {
+      status: 'picker',
+      picker: [
+        { type: 'photo', url: 'https://pbs.twimg.com/media/a.jpg' },
+        { type: 'video', url: 'http://cobalt:9000/tunnel?id=b' },
+      ],
+    };
+    await withJobDir(() =>
+      downloadFromSocialMedia('http://cobalt:9000', 'https://x.com/a/status/1', picker)
+    );
+    assert.deepStrictEqual(guarded, {
+      'https://pbs.twimg.com/media/a.jpg': true,
+      'http://cobalt:9000/tunnel?id=b': false,
+    });
+  } finally {
+    axios.get = originalGet;
+  }
 });
 
 test('a cover image cobalt returns for an Instagram reel counts as a miss', async () => {

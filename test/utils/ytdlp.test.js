@@ -317,10 +317,10 @@ describe('ytdlp utilities', () => {
     });
 
     test('limits reach the messages that name them', () => {
-      const error = classifyYtdlpFailure('does not pass filter (duration', 'https://youtu.be/x', {
-        maxDuration: 3600,
+      const error = classifyYtdlpFailure('larger than max-filesize', 'https://youtu.be/x', {
+        maxSize: 50 * 2 ** 20,
       });
-      assert.match(error.message, /60 minutes/);
+      assert.match(error.message, /over the 50MB limit/);
     });
   });
   test('yt-dlp gets a private copy of the cookie jar that follows the original', () => {

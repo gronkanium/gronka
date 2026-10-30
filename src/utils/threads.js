@@ -1,9 +1,8 @@
-import axios from 'axios';
 import { createLogger } from './logger.js';
-import { NetworkError, ValidationError, withCause, contentGone } from './errors.js';
+import { ValidationError, contentGone } from './errors.js';
 import { downloadFileFromUrl } from './file-downloader.js';
 import { selectMediaUrl } from './instagram.js';
-import { ssrfGuardedRequest, PAGE_FETCH_TIMEOUT_MS, MAX_PAGE_BYTES } from './ssrf-guard.js';
+import { fetchPage } from './ssrf-guard.js';
 import { normalizeHost } from './url-host.js';
 import { BROWSER_USER_AGENT } from './browser-agent.js';
 
@@ -75,22 +74,10 @@ export function extractThreadsMedia(html, code) {
 
 export async function downloadFromThreads(url) {
   const code = threadsPostCode(url);
-  let response;
-  try {
-    response = await axios.get(url, {
-      ...ssrfGuardedRequest(),
-      responseType: 'text',
-      timeout: PAGE_FETCH_TIMEOUT_MS,
-      maxContentLength: MAX_PAGE_BYTES,
-      maxRedirects: 5,
-      headers: NAVIGATION_HEADERS,
-    });
-  } catch (error) {
-    if (error.response?.status === 404) {
-      throw contentGone(error);
-    }
-    throw withCause(new NetworkError('failed to reach threads'), error);
-  }
+  const response = await fetchPage(url, {
+    failMessage: 'failed to reach threads',
+    headers: NAVIGATION_HEADERS,
+  });
 
   const mediaUrls = extractThreadsMedia(response.data, code);
   if (mediaUrls === null) {

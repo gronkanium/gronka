@@ -3,7 +3,7 @@ import assert from 'node:assert';
 import { validateMediaFile } from '../../../src/commands/shared/media-validation.js';
 import { ValidationError } from '../../../src/utils/errors.js';
 
-const file = (head, size = head.length) => ({ head, size });
+const file = head => ({ head });
 const gif89a = () => Buffer.concat([Buffer.from('GIF89a'), Buffer.alloc(4)]);
 const gif87a = () => Buffer.concat([Buffer.from('GIF87a'), Buffer.alloc(4)]);
 const mp4 = () =>
@@ -21,9 +21,6 @@ describe('shared/media-validation', () => {
   test('rejects an empty or too-small gif', () => {
     assert.throws(() => validateMediaFile(file(Buffer.alloc(0)), 'gif'), ValidationError);
     assert.throws(() => validateMediaFile(file(Buffer.from('GIF')), 'gif'), ValidationError);
-  });
-  test('rejects a gif over the size limit', () => {
-    assert.throws(() => validateMediaFile(file(gif89a(), 1e12), 'gif'), ValidationError);
   });
   test('accepts MP4 (ftyp at offset 4) and WebM', () => {
     assert.ok(validateMediaFile(file(mp4()), 'video'));

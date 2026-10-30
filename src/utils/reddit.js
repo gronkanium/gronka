@@ -3,7 +3,7 @@ import { readSessionCookie } from './session-cookie.js';
 import { createLogger } from './logger.js';
 import { NetworkError, withCause, describeCause, contentGone } from './errors.js';
 import { ssrfGuardedRequest } from './ssrf-guard.js';
-import { hostOf, normalizeHost } from './url-host.js';
+import { hostOf, normalizeHost, hostUnder } from './url-host.js';
 import { BROWSER_USER_AGENT as USER_AGENT } from './browser-agent.js';
 
 const logger = createLogger('reddit');
@@ -22,7 +22,7 @@ export function isRedditPostUrl(url) {
   try {
     const { hostname, pathname } = new URL(url);
     const host = normalizeHost(hostname);
-    return (host === 'reddit.com' || host.endsWith('.reddit.com')) && POST_PATH.test(pathname);
+    return hostUnder(host, 'reddit.com') && POST_PATH.test(pathname);
   } catch {
     return false;
   }

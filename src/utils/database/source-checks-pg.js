@@ -24,10 +24,15 @@ export async function listSourceChecks() {
   const sql = await db();
   const rows = await sql`SELECT * FROM source_checks`;
   return rows.map(row => ({
-    ...row,
+    url: row.url,
+    site: row.site,
+    status: row.status,
+    expected: row.expected,
+    got: row.got,
+    cause: row.cause,
     ms: row.ms === null ? null : Number(row.ms),
-    checked_at: Number(row.checked_at),
-    passed_at: row.passed_at === null ? null : Number(row.passed_at),
+    checkedAt: Number(row.checked_at),
+    passedAt: row.passed_at === null ? null : Number(row.passed_at),
   }));
 }
 

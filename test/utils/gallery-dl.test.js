@@ -6,15 +6,19 @@ import path from 'node:path';
 import { galleryDlError, downloadWithGalleryDl } from '../../src/utils/gallery-dl.js';
 import { withJobDir } from '../../src/utils/media-file.js';
 import { ValidationError } from '../../src/utils/errors.js';
+import { setSetting } from '../../src/utils/database/settings-pg.js';
+import { SETTINGS } from '../../src/utils/settings.js';
 
 describe('galleryDlError', () => {
   test('files skipped for size say the file is too large', () => {
     const error = galleryDlError(
       '[downloader.http][warning] File size larger than allowed maximum (90000000 > 10485760)\n',
-      'Imgur'
+      'Imgur',
+      10485760
     );
     assert.ok(error instanceof ValidationError);
-    assert.strictEqual(error.message, 'a gallery file is too large to download');
+    assert.strictEqual(error.code, 'TOO_LARGE');
+    assert.match(error.message, /over the 10MB limit/);
   });
 
   test('a missing post is CONTENT_GONE and keeps the reason from gallery-dl', () => {
@@ -77,17 +81,18 @@ describe('galleryDlError', () => {
 });
 
 describe('downloadWithGalleryDl', () => {
-  const fakeGalleryDl = async pages => {
+  const pages = count => `for i in $(seq 1 ${count}); do printf 'page' > "$2/page_$i.jpg"; done`;
+  const fakeGalleryDl = async body => {
     const bin = await fs.mkdtemp(path.join(os.tmpdir(), 'fake-gallery-dl-'));
     const script = `#!/bin/sh
 while [ "$1" != "--directory" ]; do shift; done
-for i in $(seq 1 ${pages}); do printf 'page' > "$2/page_$i.jpg"; done
+${body}
 `;
     await fs.writeFile(path.join(bin, 'gallery-dl'), script, { mode: 0o755 });
     return bin;
   };
-  const withFake = async (pages, fn) => {
-    const bin = await fakeGalleryDl(pages);
+  const withFake = async (body, fn) => {
+    const bin = await fakeGalleryDl(body);
     const saved = process.env.PATH;
     process.env.PATH = `${bin}:${saved}`;
     try {
@@ -99,7 +104,7 @@ for i in $(seq 1 ${pages}); do printf 'page' > "$2/page_$i.jpg"; done
   };
 
   test('a gallery over the loose-file limit comes back as one zip, pages in order', async () => {
-    await withFake(30, async () => {
+    await withFake(pages(30), async () => {
       const zip = await downloadWithGalleryDl('https://nhentai.net/g/1/');
       assert.strictEqual(zip.archive, true);
       const entries = [
@@ -113,9 +118,23 @@ for i in $(seq 1 ${pages}); do printf 'page' > "$2/page_$i.jpg"; done
   });
 
   test('a small gallery still comes back as loose files', async () => {
-    await withFake(3, async () => {
+    await withFake(pages(3), async () => {
       const files = await downloadWithGalleryDl('https://nhentai.net/g/1/');
       assert.strictEqual(files.length, 3);
     });
+  });
+
+  test('a gallery that passes the size limit mid-download is stopped and refused', async () => {
+    await setSetting('max_video_size_mb', '1');
+    try {
+      await withFake('head -c 2097152 /dev/zero > "$2/big.jpg"; exec sleep 30', async () => {
+        const started = Date.now();
+        const error = await downloadWithGalleryDl('https://nhentai.net/g/1/').catch(e => e);
+        assert.strictEqual(error.code, 'TOO_LARGE');
+        assert.ok(Date.now() - started < 10_000, 'killed by the size watch, not the timeout');
+      });
+    } finally {
+      await setSetting('max_video_size_mb', SETTINGS.max_video_size_mb.default);
+    }
   });
 });

@@ -41,7 +41,7 @@ describe('medal', () => {
     };
     try {
       await assert.rejects(
-        () => downloadFromMedal('https://medal.tv/clips/abc', Infinity, [0, 0]),
+        () => downloadFromMedal('https://medal.tv/clips/abc', [0, 0]),
         error => error.code === 'CLIP_NOT_PUBLISHED'
       );
       assert.equal(calls, 3);
@@ -57,30 +57,15 @@ describe('medal', () => {
         throw Object.assign(new Error('forbidden'), { response: { status: 403 } });
       },
       () => ({ data: { processed: 0, publishedAt: null } }),
-      () => ({ data: { contentUrl: cdn, publishedAt: 1, processed: 1, videoLengthSeconds: 4000 } }),
+      () => ({ data: { publishedAt: 1, processed: 1 } }),
     ];
     axios.get = async () => responses.shift()();
     try {
       await assert.rejects(
-        () => downloadFromMedal('https://medal.tv/clips/abc', 3600, [0, 0]),
-        error => error.code === 'VALIDATION_ERROR'
+        () => downloadFromMedal('https://medal.tv/clips/abc', [0, 0]),
+        error => error.code === 'CONTENT_GONE'
       );
       assert.equal(responses.length, 0);
-    } finally {
-      axios.get = originalGet;
-    }
-  });
-
-  test('a clip over the length cap is refused before downloading', async () => {
-    const originalGet = axios.get;
-    axios.get = async () => ({
-      data: { contentUrl: cdn, publishedAt: 1, processed: 1, videoLengthSeconds: 4000 },
-    });
-    try {
-      await assert.rejects(
-        () => downloadFromMedal('https://medal.tv/clips/abc', 3600),
-        error => error.code === 'VALIDATION_ERROR'
-      );
     } finally {
       axios.get = originalGet;
     }

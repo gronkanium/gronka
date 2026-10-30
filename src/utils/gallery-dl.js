@@ -4,9 +4,10 @@ import { spawn } from 'child_process';
 import { createLogger } from './logger.js';
 import { NetworkError, ValidationError, withCause, contentGone, timedOut } from './errors.js';
 import { writeZip } from './archive.js';
-import { fromPath, tempDir, jobSignal } from './media-file.js';
+import { fromPath, tempDir, jobSignal, watchDirSize } from './media-file.js';
+import { maxDownloadBytes, tooLarge } from './size-limit.js';
 import { mapLimit, ITEM_FANOUT } from './map-limit.js';
-import { hostOf, normalizeHost } from './url-host.js';
+import { hostOf, normalizeHost, hostUnder } from './url-host.js';
 import { getCookieArgs } from './ytdlp.js';
 
 const logger = createLogger('gallery-dl');
@@ -42,7 +43,7 @@ const MAX_GALLERY_FILES = 200;
 const MAX_MANGA_IMAGES = 10;
 
 // Turns gallery-dl's own error or warning lines (run with -w) into what the user is told.
-export function galleryDlError(stderr, site) {
+export function galleryDlError(stderr, site, maxSize) {
   const lines = stderr.trim().split('\n').filter(Boolean);
   const line = lines.findLast(l => l.includes('][error]')) ?? lines.at(-1);
   const reason = line
@@ -54,7 +55,7 @@ export function galleryDlError(stderr, site) {
   if (/^NotFoundError|\b404\b|post not available/i.test(reason)) {
     error = contentGone();
   } else if (/File size larger than allowed maximum/.test(stderr)) {
-    error = new ValidationError('a gallery file is too large to download');
+    error = tooLarge(maxSize);
   } else if (
     /AuthRequired|Authentication|Authorization|credentials|refresh-token|log ?in/i.test(stderr)
   ) {
@@ -99,17 +100,13 @@ export function isFacebookPhotoUrl(url) {
 export function getGalleryDlSite(url) {
   try {
     const hostname = hostOf(url);
-    return (
-      GALLERY_DL_SITES.find(site =>
-        site.hosts.some(host => hostname === host || hostname.endsWith(`.${host}`))
-      )?.name || null
-    );
+    return GALLERY_DL_SITES.find(site => hostUnder(hostname, site.hosts))?.name || null;
   } catch {
     return null;
   }
 }
 
-function runGalleryDl(url, outputDir, maxSize = Infinity, timeout = 300000) {
+function runGalleryDl(url, outputDir, maxSize, timeout = 300000) {
   return new Promise((resolve, reject) => {
     const child = spawn(
       'gallery-dl',
@@ -121,7 +118,8 @@ function runGalleryDl(url, outputDir, maxSize = Infinity, timeout = 300000) {
         '--no-part',
         '--range',
         `1-${MAX_GALLERY_FILES + 1}`,
-        ...(Number.isFinite(maxSize) ? ['--filesize-max', String(Math.floor(maxSize))] : []),
+        '--filesize-max',
+        String(Math.floor(maxSize)),
         '--directory',
         outputDir,
         ...getCookieArgs(url),
@@ -132,7 +130,13 @@ function runGalleryDl(url, outputDir, maxSize = Infinity, timeout = 300000) {
       { signal: jobSignal(), stdio: ['ignore', 'ignore', 'pipe'] }
     );
     let stderr = '';
+    let overSize = false;
+    const stopWatch = watchDirSize(outputDir, maxSize, () => {
+      overSize = true;
+      child.kill('SIGKILL');
+    });
     const timeoutId = setTimeout(() => {
+      stopWatch();
       child.kill('SIGKILL');
       reject(timedOut(`gallery-dl: timed out after ${timeout / 1000}s`));
     }, timeout);
@@ -142,6 +146,7 @@ function runGalleryDl(url, outputDir, maxSize = Infinity, timeout = 300000) {
     });
     child.on('error', error => {
       clearTimeout(timeoutId);
+      stopWatch();
       reject(
         withCause(
           error.code === 'ENOENT'
@@ -153,11 +158,14 @@ function runGalleryDl(url, outputDir, maxSize = Infinity, timeout = 300000) {
     });
     child.on('close', code => {
       clearTimeout(timeoutId);
-      if (code === 0) {
+      stopWatch();
+      if (overSize) {
+        reject(tooLarge(maxSize, `gallery-dl: stopped at over ${maxSize} bytes on disk`));
+      } else if (code === 0) {
         resolve(stderr);
       } else {
         logger.warn(`gallery-dl exited with code ${code}: ${stderr.slice(0, 300)}`);
-        reject(galleryDlError(stderr, getGalleryDlSite(url)));
+        reject(galleryDlError(stderr, getGalleryDlSite(url), maxSize));
       }
     });
   });
@@ -274,33 +282,28 @@ export async function discoverMangaDexTitle(url) {
   };
 }
 
-async function downloadMangaPages(urls, maxSize) {
+async function downloadMangaPages(urls) {
   const { downloadFileFromUrl } = await import('./file-downloader.js');
   if (urls.length === 0) {
     throw new NetworkError('no pages found in this chapter');
   }
-  const results = await mapLimit(urls, ITEM_FANOUT, async pageUrl => {
-    const fileData = await downloadFileFromUrl(pageUrl);
-    if (fileData.size > maxSize) {
-      throw new ValidationError('a manga page is too large to download');
-    }
-    return fileData;
-  });
+  const results = await mapLimit(urls, ITEM_FANOUT, pageUrl => downloadFileFromUrl(pageUrl));
   if (results.length > MAX_MANGA_IMAGES) {
     return writeZip(results, 'manga-pages.zip');
   }
   return results;
 }
 
-export async function downloadWithGalleryDl(url, maxSize = Infinity, options = {}) {
+export async function downloadWithGalleryDl(url, options = {}) {
   if (options.mediaUrls) {
-    return downloadMangaPages(options.mediaUrls, maxSize);
+    return downloadMangaPages(options.mediaUrls);
   }
+  const maxSize = await maxDownloadBytes();
   const workDir = await tempDir();
   const warnings = await runGalleryDl(url, workDir, maxSize);
   const files = await findMediaFiles(workDir);
   if (files.length === 0) {
-    throw galleryDlError(warnings, getGalleryDlSite(url));
+    throw galleryDlError(warnings, getGalleryDlSite(url), maxSize);
   }
   if (files.length > MAX_GALLERY_FILES) {
     throw new ValidationError(
@@ -314,13 +317,8 @@ export async function downloadWithGalleryDl(url, maxSize = Infinity, options = {
       contentType: contentTypeForExtension(path.extname(filePath)),
       filename: path.basename(filePath),
     });
-    if (file.size > maxSize) {
-      throw new ValidationError('a gallery file is too large to download');
-    }
     total += file.size;
-    if (total > maxSize) {
-      throw new ValidationError('this gallery is too large to download');
-    }
+    if (total > maxSize) throw tooLarge(maxSize, `gallery-dl: gallery totals ${total} bytes`);
     results.push(file);
   }
   if (results.length > MAX_LOOSE_FILES) {

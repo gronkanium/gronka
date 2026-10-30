@@ -1,8 +1,7 @@
-import axios from 'axios';
-import { NetworkError, ValidationError, withCause, contentGone, describeCause } from './errors.js';
+import { NetworkError, ValidationError, withCause, describeCause } from './errors.js';
 import { createLogger } from './logger.js';
 import { getRequestHeaders } from './discord-cdn.js';
-import { ssrfGuardedRequest, PAGE_FETCH_TIMEOUT_MS, MAX_PAGE_BYTES } from './ssrf-guard.js';
+import { fetchPage } from './ssrf-guard.js';
 
 const logger = createLogger('jumpshare');
 
@@ -52,29 +51,19 @@ export async function resolveJumpshareUrl(url) {
   const id = shareId(url);
   if (!id) throw new ValidationError('invalid Jumpshare file link.');
   let response;
-  for (let attempt = 0; attempt < 2; attempt++) {
+  for (let attempt = 0; !response; attempt++) {
     try {
-      response = await axios.get(url, {
-        ...ssrfGuardedRequest(),
-        responseType: 'text',
-        timeout: PAGE_FETCH_TIMEOUT_MS,
-        maxContentLength: MAX_PAGE_BYTES,
-        maxRedirects: 5,
+      response = await fetchPage(url, {
+        failMessage: 'could not read this Jumpshare link.',
         headers: getRequestHeaders(),
-        validateStatus: status => status >= 200 && status < 400,
       });
-      break;
     } catch (error) {
-      if (error.response?.status === 404 || error.response?.status === 410)
-        throw contentGone(error);
+      const { cause } = error;
       const transient =
-        error.response?.status >= 500 ||
-        ['ECONNRESET', 'EAI_AGAIN', 'ETIMEDOUT', 'ECONNABORTED'].includes(error.code);
-      if (attempt === 0 && transient) {
-        logger.warn(`Jumpshare page fetch failed, retrying: ${describeCause(error)}`);
-        continue;
-      }
-      throw withCause(new NetworkError('could not read this Jumpshare link.'), error);
+        cause?.response?.status >= 500 ||
+        ['ECONNRESET', 'EAI_AGAIN', 'ETIMEDOUT', 'ECONNABORTED'].includes(cause?.code);
+      if (attempt > 0 || !transient) throw error;
+      logger.warn(`Jumpshare page fetch failed, retrying: ${describeCause(cause)}`);
     }
   }
   const mediaUrl = extractJumpshareUrl(response.data, id);

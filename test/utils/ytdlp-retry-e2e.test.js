@@ -98,7 +98,6 @@ if (!mocksSupported) {
       spawnBehaviors = [runaway];
       const error = await downloadWithYtdlp('https://youtu.be/endless', {
         maxSize: 1000,
-        maxDuration: Infinity,
       }).catch(caught => caught);
       assert.ok(killed, 'yt-dlp should have been killed');
       assert.strictEqual(error.name, 'ValidationError');
@@ -121,7 +120,6 @@ if (!mocksSupported) {
       spawnBehaviors = [failing, failing];
       const error = await downloadWithYtdlp('https://youtu.be/needs-login', {
         maxSize: Infinity,
-        maxDuration: Infinity,
       }).catch(caught => caught);
       assert.strictEqual(
         error.cause.message,
@@ -135,7 +133,6 @@ if (!mocksSupported) {
 
       const result = await downloadWithYtdlp('https://youtu.be/retry-success', {
         maxSize: Infinity,
-        maxDuration: Infinity,
       });
 
       assert.strictEqual(spawnCallLog.length, 2, 'expected exactly one retry (two spawn calls)');
@@ -150,7 +147,6 @@ if (!mocksSupported) {
         () =>
           downloadWithYtdlp('https://youtu.be/rate-limited', {
             maxSize: Infinity,
-            maxDuration: Infinity,
           }),
         error => error.name === 'YtdlpRateLimitError'
       );
@@ -166,7 +162,6 @@ if (!mocksSupported) {
         () =>
           downloadWithYtdlp('https://youtu.be/still-failing', {
             maxSize: Infinity,
-            maxDuration: Infinity,
           }),
         error =>
           error.code === 'YTDLP_UNKNOWN' &&
@@ -201,7 +196,7 @@ if (!mocksSupported) {
       spawnCallLog = [];
       spawnBehaviors = [missingCopy, success];
       try {
-        const result = await downloadWithYtdlp(url, { maxSize: Infinity, maxDuration: Infinity });
+        const result = await downloadWithYtdlp(url, { maxSize: Infinity });
         assert.ok(result.size > 0);
       } finally {
         delete process.env.GEO_PROXY_URL;
@@ -220,7 +215,7 @@ if (!mocksSupported) {
       spawnCallLog = [];
       spawnBehaviors = [missingCopy];
       await assert.rejects(
-        () => downloadWithYtdlp(url, { maxSize: Infinity, maxDuration: Infinity }),
+        () => downloadWithYtdlp(url, { maxSize: Infinity }),
         error => error.code === 'REGION_COPY_MISSING'
       );
       assert.strictEqual(spawnCallLog.length, 1);
@@ -246,7 +241,6 @@ if (!mocksSupported) {
         () =>
           downloadWithYtdlp('https://www.instagram.com/p/DbpZVohPsMX/', {
             maxSize: Infinity,
-            maxDuration: Infinity,
           }),
         error => error.message === 'this post has no video in it.' && error.code === 'NO_VIDEO'
       );
@@ -260,7 +254,6 @@ if (!mocksSupported) {
         () =>
           downloadWithYtdlp('https://youtu.be/no-formats', {
             maxSize: Infinity,
-            maxDuration: Infinity,
           }),
         error => error.message === 'no downloadable video formats found'
       );
@@ -311,7 +304,7 @@ if (!mocksSupported) {
         spawnBehaviors = [failsWith(stderr)];
 
         await assert.rejects(
-          () => downloadWithYtdlp(url, { maxSize: Infinity, maxDuration: Infinity }),
+          () => downloadWithYtdlp(url, { maxSize: Infinity }),
           error => error.message === expected && (!code || error.code === code)
         );
       });
@@ -323,7 +316,6 @@ if (!mocksSupported) {
 
       const result = await downloadWithYtdlp('https://youtu.be/signin', {
         maxSize: Infinity,
-        maxDuration: Infinity,
       });
       assert.ok(result);
       assert.strictEqual(spawnCallLog.length, 2);
@@ -339,7 +331,6 @@ if (!mocksSupported) {
 
         const result = await downloadWithYtdlp('https://youtu.be/challenge', {
           maxSize: Infinity,
-          maxDuration: Infinity,
         });
         assert.ok(result.size > 0);
         assert.strictEqual(spawnCallLog.length, 2);
@@ -349,66 +340,33 @@ if (!mocksSupported) {
     }
   });
 
-  // Regression: a direct-media link (e.g. an animated webp from gif.fxtwitter.com) goes through
-  // yt-dlp's generic extractor, which reports no duration. A plain `duration <= N` match-filter
-  // rejects unknown-duration items outright, so yt-dlp skipped the file, exited 0 with no output,
-  // and the no-output fallback reported "video duration exceeds the maximum allowed (60 minutes)"
-  // for a two-second gif. The `?` on the operator makes the field optional.
-  describe('duration match-filter treats an unknown duration as passing', () => {
-    // First spawn is the duration pre-check (`--print duration`); yt-dlp prints "NA" when the
-    // extractor has no duration. Second spawn is the real download.
-    function unknownDuration(child) {
-      child.stdout.emit('data', Buffer.from('NA NA\n'));
+  describe('live streams', () => {
+    const prints = line => child => {
+      child.stdout.emit('data', Buffer.from(`${line}\n`));
       child.emit('close', 0);
-    }
+    };
 
-    test('a stream that is still live is refused before downloading', async () => {
+    test('a stream the live filter skips is refused as live, in one run', async () => {
       spawnCallLog = [];
-      spawnBehaviors = [
-        child => {
-          child.stdout.emit('data', Buffer.from('is_live NA\n'));
-          child.emit('close', 0);
-        },
-      ];
+      spawnBehaviors = [prints('gronka-live-status:is_live')];
       await assert.rejects(
-        () =>
-          downloadWithYtdlp('https://www.youtube.com/live/abc', {
-            maxSize: Infinity,
-            maxDuration: 3600,
-          }),
+        () => downloadWithYtdlp('https://www.youtube.com/live/abc', { maxSize: Infinity }),
         error => error.code === 'STREAM_IS_LIVE'
       );
       assert.strictEqual(spawnCallLog.length, 1);
-    });
-
-    test('passes the optional-duration form so unknown-duration media still downloads', async () => {
-      spawnCallLog = [];
-      spawnBehaviors = [unknownDuration, success];
-
-      const result = await downloadWithYtdlp(
-        'https://gif.fxtwitter.com/tweet_video/HNOvuGAXoAAAIQO.webp',
-        { maxSize: Infinity, maxDuration: 3600 }
-      );
-
-      const downloadArgs = spawnCallLog[1].args;
-      const filterValue = downloadArgs[downloadArgs.indexOf('--match-filter') + 1];
+      const { args } = spawnCallLog[0];
       assert.strictEqual(
-        filterValue,
-        'duration<=?3600',
-        'the `?` must sit on the operator, or yt-dlp drops every unknown-duration item'
+        args[args.indexOf('--match-filter') + 1],
+        '!is_live & live_status!=?is_upcoming',
+        'the `?` must sit on the operator, or yt-dlp drops every site that reports no live_status'
       );
-      assert.ok(result.size > 0, 'the download should still produce a file');
     });
 
-    test('a post yt-dlp finds no video in is not blamed on its length', async () => {
+    test('a post yt-dlp finds no video in is not blamed on a live stream', async () => {
       spawnCallLog = [];
-      spawnBehaviors = [unknownDuration, child => child.emit('close', 0)];
+      spawnBehaviors = [prints('gronka-live-status:NA')];
       await assert.rejects(
-        () =>
-          downloadWithYtdlp('https://imgur.com/gallery/photos', {
-            maxSize: Infinity,
-            maxDuration: 3600,
-          }),
+        () => downloadWithYtdlp('https://imgur.com/gallery/photos', { maxSize: Infinity }),
         error =>
           error.code === 'NO_VIDEO' && /no video entries/.test(error.cause?.message ?? error.cause)
       );
@@ -416,14 +374,13 @@ if (!mocksSupported) {
 
     test('the format selector accepts formats that report no height', async () => {
       spawnCallLog = [];
-      spawnBehaviors = [unknownDuration, success];
+      spawnBehaviors = [success];
 
       await downloadWithYtdlp('https://gif.fxtwitter.com/tweet_video/HNOvuGAXoAAAIQO.webp', {
         maxSize: Infinity,
-        maxDuration: 3600,
       });
 
-      const downloadArgs = spawnCallLog[1].args;
+      const downloadArgs = spawnCallLog[0].args;
       const format = downloadArgs[downloadArgs.indexOf('-f') + 1];
       assert.ok(!/height<=\d/.test(format), `format selector must use height<=?N, got: ${format}`);
       assert.ok(format.includes('height<=?1080'), `expected a 1080p cap, got: ${format}`);

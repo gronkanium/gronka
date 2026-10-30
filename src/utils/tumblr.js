@@ -1,12 +1,8 @@
-import axios from 'axios';
-import { createLogger } from './logger.js';
-import { NetworkError, ValidationError, withCause, describeCause, contentGone } from './errors.js';
+import { NetworkError, ValidationError, withCause, contentGone } from './errors.js';
 import { getRequestHeaders } from './discord-cdn.js';
 import { downloadFileFromUrl } from './file-downloader.js';
-import { ssrfGuardedRequest, PAGE_FETCH_TIMEOUT_MS, MAX_PAGE_BYTES } from './ssrf-guard.js';
+import { fetchPage } from './ssrf-guard.js';
 import { normalizeHost } from './url-host.js';
-
-const logger = createLogger('tumblr');
 
 // <blog>.tumblr.com/post/<id> answers bots with a browser check; the same post on
 // www.tumblr.com/<blog>/<id> is served whole, with the post as NPF in ___INITIAL_STATE___.
@@ -66,21 +62,10 @@ export async function downloadFromTumblr(url) {
   if (!id) throw new ValidationError('that is not a link to a tumblr post');
   const pageUrl = `https://www.tumblr.com/${blog}/${id}`;
 
-  let response;
-  try {
-    response = await axios.get(pageUrl, {
-      ...ssrfGuardedRequest(),
-      responseType: 'text',
-      timeout: PAGE_FETCH_TIMEOUT_MS,
-      maxContentLength: MAX_PAGE_BYTES,
-      maxRedirects: 5,
-      headers: getRequestHeaders(),
-    });
-  } catch (error) {
-    if ([404, 410].includes(error.response?.status)) throw contentGone(error);
-    logger.warn(`Failed to fetch Tumblr post page: ${describeCause(error)}`);
-    throw withCause(new NetworkError('failed to fetch the tumblr post'), error);
-  }
+  const response = await fetchPage(pageUrl, {
+    failMessage: 'failed to fetch the tumblr post',
+    headers: getRequestHeaders(),
+  });
 
   const post = findTumblrPost(String(response.data ?? ''), id);
   if (!post) {

@@ -123,6 +123,7 @@ describe('media job queue', () => {
     assert.strictEqual(me.role, 'worker');
     assert.strictEqual(me.running, 1);
     assert.ok(me.rss > 0);
+    assert.ok(me.seenAt >= me.startedAt && !('seen_at' in me));
     assert.strictEqual(typeof me.cpu, 'number', 'second report knows the cpu delta');
     await queue.clearPresence();
     assert.ok(!(await queue.presence()).some(p => p.id === queue.WORKER_ID));
@@ -132,6 +133,7 @@ describe('media job queue', () => {
     await enqueue();
     const { recent } = await queue.jobsOverview();
     assert.ok(recent.length > 0);
+    assert.ok(recent.every(j => j.createdAt > 0 && !('created_at' in j)));
     assert.ok(recent.every(j => !('reply' in j) && !JSON.stringify(j).includes('"token"')));
   });
 

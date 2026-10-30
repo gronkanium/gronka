@@ -3,8 +3,9 @@ import { createHash } from 'crypto';
 import { NetworkError, ValidationError, withCause, contentGone } from './errors.js';
 import { getRequestHeaders } from './discord-cdn.js';
 import { downloadFileFromUrl } from './file-downloader.js';
+import { maxDownloadBytes, tooLarge } from './size-limit.js';
 import { ssrfGuardedRequest, PAGE_FETCH_TIMEOUT_MS, MAX_PAGE_BYTES } from './ssrf-guard.js';
-import { hostOf, isBilibiliCdnHost } from './url-host.js';
+import { hostOf, isBilibiliCdnHost, BILIBILI_REFERER } from './url-host.js';
 
 const API = 'https://api.bilibili.com';
 // Bilibili's fixed shuffle of the two WBI key halves (from its player script).
@@ -61,7 +62,7 @@ async function api(path, query) {
       responseType: 'json',
       timeout: PAGE_FETCH_TIMEOUT_MS,
       maxContentLength: MAX_PAGE_BYTES,
-      headers: { ...getRequestHeaders(), Referer: 'https://www.bilibili.com/' },
+      headers: { ...getRequestHeaders(), Referer: BILIBILI_REFERER },
     }));
   } catch (error) {
     const status = error.response?.status;
@@ -104,10 +105,7 @@ export function pickBilibiliFile(play) {
 }
 
 // The html5 player's single-file mp4 (720p, audio included), so nothing needs muxing.
-export async function downloadFromBilibili(
-  url,
-  { maxDuration = Infinity, maxSize = Infinity } = {}
-) {
+export async function downloadFromBilibili(url) {
   const video = bilibiliVideo(url);
   if (!video) throw new ValidationError('invalid bilibili video link.');
   const nav = await api('/x/web-interface/nav');
@@ -120,13 +118,9 @@ export async function downloadFromBilibili(
   }
   const key = wbiKey(img.img_url, img.sub_url);
   const view = payload(await api('/x/web-interface/wbi/view', signWbi(video.id, key)), 'view');
-  const part = view.pages?.[video.page - 1] ?? { cid: view.cid, duration: view.duration };
-  if (part.duration > maxDuration) {
-    throw new ValidationError(
-      `this video is longer than the maximum allowed (${Math.floor(maxDuration / 60)} minutes).`
-    );
-  }
+  const part = view.pages?.[video.page - 1] ?? { cid: view.cid };
   const playParams = { ...video.id, cid: part.cid, qn: 64, fnval: 1, platform: 'html5' };
+  const maxSize = await maxDownloadBytes();
   let failed;
   // Mirrors now and then 403 a fresh link or drop the socket; the next mirror or play url serves it.
   for (let attempt = 0; attempt < 2; attempt++) {
@@ -138,7 +132,7 @@ export async function downloadFromBilibili(
         `bilibili: playurl gave ${play.durl?.length ?? 0} files, none single on a bilivideo host`
       );
     }
-    if (file.size > maxSize) throw new ValidationError('this video is too large to download');
+    if (file.size > maxSize) throw tooLarge(maxSize, `bilibili: playurl says ${file.size} bytes`);
     for (const fileUrl of file.urls) {
       try {
         return await downloadFileFromUrl(fileUrl);

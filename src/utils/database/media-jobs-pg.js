@@ -187,11 +187,14 @@ export async function jobsOverview({ limit = 25 } = {}) {
     `,
   ]);
   const recent = jobs.map(row => ({
-    ...row,
     id: Number(row.id),
-    created_at: Number(row.created_at),
+    kind: row.kind,
+    status: row.status,
+    attempts: row.attempts,
+    worker: row.worker,
+    createdAt: Number(row.created_at),
     timestamp: Number(row.timestamp),
-    heartbeat_at: row.heartbeat_at == null ? null : Number(row.heartbeat_at),
+    heartbeatAt: row.heartbeat_at == null ? null : Number(row.heartbeat_at),
   }));
   const count = status => recent.filter(job => job.status === status).length;
   return {
@@ -235,9 +238,13 @@ export async function presence() {
   const sql = await db();
   const rows = await sql`SELECT * FROM media_workers ORDER BY role, started_at`;
   return rows.map(r => ({
-    ...r,
-    started_at: Number(r.started_at),
-    seen_at: Number(r.seen_at),
+    id: r.id,
+    role: r.role,
+    version: r.version,
+    startedAt: Number(r.started_at),
+    seenAt: Number(r.seen_at),
     rss: r.rss == null ? null : Number(r.rss),
+    cpu: r.cpu,
+    running: r.running,
   }));
 }

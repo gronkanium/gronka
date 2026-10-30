@@ -1,5 +1,7 @@
 import dns from 'dns';
+import axios from 'axios';
 import { createLogger } from './logger.js';
+import { NetworkError, withCause, contentGone } from './errors.js';
 import { blockedAddressReason, validateUrl } from './validation.js';
 
 const logger = createLogger('ssrf-guard');
@@ -62,11 +64,11 @@ export function isSsrfBlockedError(error) {
   return false;
 }
 
-// Axios config fragment to spread into any request whose URL came from user input
 // Scraped pages: a slow or huge one is a broken or hostile site, not a page worth waiting for.
 export const PAGE_FETCH_TIMEOUT_MS = 20000;
 export const MAX_PAGE_BYTES = 2 * 1024 * 1024;
 
+// Axios config fragment to spread into any request whose URL came from user input
 export function ssrfGuardedRequest() {
   return {
     lookup: guardedLookup,
@@ -81,4 +83,25 @@ export function isPrivateHost(url) {
   return new Promise(resolve =>
     guardedLookup(hostname, { all: true }, error => resolve(error?.code === SSRF_BLOCKED_CODE))
   );
+}
+
+// A source's page or API: 404/410 means gone, onError may throw a site's own reason, else failMessage.
+export async function fetchPage(
+  url,
+  { failMessage, headers, responseType = 'text', onError } = {}
+) {
+  try {
+    return await axios.get(url, {
+      ...ssrfGuardedRequest(),
+      responseType,
+      timeout: PAGE_FETCH_TIMEOUT_MS,
+      maxContentLength: MAX_PAGE_BYTES,
+      maxRedirects: 5,
+      headers,
+    });
+  } catch (error) {
+    if ([404, 410].includes(error.response?.status)) throw contentGone(error);
+    onError?.(error);
+    throw withCause(new NetworkError(failMessage), error);
+  }
 }

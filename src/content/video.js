@@ -5,7 +5,7 @@ import { createLogger } from '../utils/logger.js';
 import { ssrfGuardedRequest } from '../utils/ssrf-guard.js';
 import { NetworkError, contentGone, timedOut } from '../utils/errors.js';
 import { jobSignal } from '../utils/media-file.js';
-import { hostOf } from '../utils/url-host.js';
+import { hostOf, hostUnder } from '../utils/url-host.js';
 import {
   getYtdlpSite,
   getCookieArgs,
@@ -42,12 +42,11 @@ const OWN_SOURCES = [
   'instagram.com',
   'tiktok.com',
 ];
-const under = (host, hosts) => hosts.some(h => host === h || host.endsWith(`.${h}`));
 
 function siteOf(url) {
   const host = hostOf(url);
-  if (!host || !/^https?:/i.test(url) || under(host, OWN_SOURCES)) return null;
-  return getYtdlpSite(url) ?? EXTRA_SITES.find(s => under(host, s.hosts))?.name ?? null;
+  if (!host || !/^https?:/i.test(url) || hostUnder(host, OWN_SOURCES)) return null;
+  return getYtdlpSite(url) ?? EXTRA_SITES.find(s => hostUnder(host, s.hosts))?.name ?? null;
 }
 
 export function isVideoContentUrl(url) {

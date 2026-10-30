@@ -72,7 +72,7 @@
         (labels[a.site] ?? a.site).localeCompare(labels[b.site] ?? b.site)
     )
   );
-  const lastRun = $derived(Math.max(0, ...checks.map(c => c.result?.checked_at ?? 0)));
+  const lastRun = $derived(Math.max(0, ...checks.map(c => c.result?.checkedAt ?? 0)));
 
   const columns = [
     { key: 'status', label: 'Status', width: '96px' },
@@ -236,7 +236,7 @@
         </span>
       </span>
       <span class="num dim small hide-sm"
-        >{c.result?.passed_at ? formatRelativeTime(c.result.passed_at) : 'never'}</span
+        >{c.result?.passedAt ? formatRelativeTime(c.result.passedAt) : 'never'}</span
       >
       <span class="num">
         <button

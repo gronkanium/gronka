@@ -2,7 +2,7 @@ import axios from 'axios';
 import { readSessionCookie } from './session-cookie.js';
 import { createLogger } from './logger.js';
 import { NetworkError, withCause, describeCause, contentGone } from './errors.js';
-import { ssrfGuardedRequest } from './ssrf-guard.js';
+import { ssrfGuardedRequest, MAX_PAGE_BYTES } from './ssrf-guard.js';
 import { hostOf, normalizeHost, hostUnder } from './url-host.js';
 import { BROWSER_USER_AGENT as USER_AGENT } from './browser-agent.js';
 
@@ -88,13 +88,15 @@ async function fetchListing(url, limit = 100) {
   const base = url
     .split('?')[0]
     .replace(/\/$/, '')
-    .replace(/^http:/i, 'https:');
+    .replace(/^http:/i, 'https:')
+    .replace(/^https:\/\/[^/]*reddit\.com/i, 'https://www.reddit.com');
   const jsonUrl = `${base}/.json?limit=${limit}&raw_json=1`;
   try {
     const response = await axios.get(jsonUrl, {
       ...ssrfGuardedRequest(),
       responseType: 'json',
       timeout: API_TIMEOUT_MS,
+      maxContentLength: MAX_PAGE_BYTES,
       maxRedirects: 3,
       headers: { 'User-Agent': USER_AGENT, Accept: 'application/json', Cookie: cookie },
     });

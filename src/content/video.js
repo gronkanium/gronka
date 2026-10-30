@@ -89,7 +89,13 @@ async function defaultRunner(args) {
 }
 
 function dump(url, site, wantComments, signedIn) {
-  const args = ['--dump-single-json', '--skip-download', '--no-playlist', '--no-warnings'];
+  const args = [
+    '--ignore-config',
+    '--dump-single-json',
+    '--skip-download',
+    '--no-playlist',
+    '--no-warnings',
+  ];
   args.push(...getCookieArgs(url, signedIn), ...getYouTubeArgs(url, signedIn));
   args.push(...getSiteArgs(url));
   if (wantComments) {
@@ -99,7 +105,7 @@ function dump(url, site, wantComments, signedIn) {
       `youtube:max_comments=${wantComments},all,0,0`
     );
   }
-  return [...args, url];
+  return [...args, '--', url];
 }
 
 async function readInfo(url, site, wantComments, runner) {

@@ -1,6 +1,6 @@
 import { createLogger, logRef } from './logger.js';
 import { insertAlert } from './database.js';
-import { hostOf, hostsOnly } from './url-host.js';
+import { hostOf, hostsOnly, stripQueries } from './url-host.js';
 import { describeCause, rootCause } from './errors.js';
 
 const logger = createLogger('failures');
@@ -13,8 +13,13 @@ export async function recordFailure(
   { error = null, errorClass = null, url = null, cause = null, options = null } = {}
 ) {
   const reason = hostsOnly(error);
-  const underlying = describeCause(rootCause(cause));
+  const underlying = stripQueries(describeCause(rootCause(cause)));
   const kept = Object.entries(options ?? {}).filter(([, v]) => v != null && v !== false);
+  // The fragment is never sent to a site, and for mega it is the decryption key.
+  const link = url ? url.replace(/#.*$/, '') : null;
+  const trail = cause?.trail?.length
+    ? cause.trail.map(step => ({ ...step, error: stripQueries(step.error) }))
+    : null;
   try {
     await insertAlert({
       severity: 'error',
@@ -29,8 +34,8 @@ export async function recordFailure(
         cause: underlying && underlying !== error ? underlying : null,
         source: hostOf(url) ?? null,
         ref: logRef(),
-        url: url ?? null,
-        trail: cause?.trail?.length ? cause.trail : null,
+        url: link,
+        trail,
         options: kept.length ? Object.fromEntries(kept) : null,
       },
     });

@@ -15,7 +15,6 @@ const logger = createLogger('convert-image-to-gif');
 
 /**
  * Convert image file to GIF using FFmpeg.
- * Runs inside a bounded media-processing slot so concurrent encodes can't starve the box.
  * @param {string} inputPath - Path to input image file
  * @param {string} outputPath - Path to output GIF file
  * @param {Object} options - Conversion options

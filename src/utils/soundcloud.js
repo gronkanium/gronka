@@ -28,6 +28,7 @@ export async function soundcloudTrack(url) {
   const { stdout } = await execFileAsync(
     'yt-dlp',
     [
+      '--ignore-config',
       '-J',
       '--no-playlist',
       '--no-warnings',
@@ -35,6 +36,7 @@ export async function soundcloudTrack(url) {
       '--ies',
       'default,-generic',
       ...getCookieArgs(),
+      '--',
       url,
     ],
     { timeout: 30_000, maxBuffer: 20 * 1024 * 1024, signal: jobSignal() }
@@ -86,6 +88,7 @@ async function youtubeCandidates(track) {
   const { stdout } = await execFileAsync(
     'yt-dlp',
     [
+      '--ignore-config',
       '--flat-playlist',
       '-J',
       '--no-warnings',

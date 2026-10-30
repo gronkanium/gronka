@@ -14,6 +14,10 @@ export const hostsOnly = text =>
   text?.replace(/https?:\/\/[^\s"'<>)]+/gi, url => hostOf(url) ?? '<link>') ?? null;
 
 export const BILIBILI_REFERER = 'https://www.bilibili.com/';
+// Every link in a piece of text without its query and fragment: signed CDN links carry their tokens there.
+export const stripQueries = text =>
+  text?.replace(/(https?:\/\/[^\s"'<>)?#]+)[?#][^\s"'<>)]*/gi, '$1') ?? null;
+
 export const isBilibiliCdnHost = host =>
   /(^|\.)bilivideo\.(com|cn)$|^upos-[\w-]+\.akamaized\.net$/.test(host ?? '');
 

@@ -18,6 +18,7 @@ import { DEFAULT_YTDLP_FORMAT } from './config.js';
 import { fromPath, tempDir, jobSignal, watchDirSize } from './media-file.js';
 import { maxDownloadBytes, tooLarge } from './size-limit.js';
 import { hostOf, normalizeHost, hostUnder } from './url-host.js';
+import { sitesFor } from '../core/sites.js';
 
 const logger = createLogger('ytdlp');
 const execFileAsync = promisify(execFile);
@@ -151,45 +152,7 @@ function isInstagramPostUrl(url) {
   }
 }
 
-// Sites that download through yt-dlp instead of Cobalt. Either Cobalt has no extractor
-// for them (imgur, kick, coub, rumble, niconico, bilibili, the adult tube sites,
-// redgifs) or we deliberately prefer yt-dlp (youtube). Each entry maps a display name to
-// the hostnames it owns; matching is exact-or-subdomain on the www-stripped hostname.
-// Order does not matter (hosts are disjoint). All were confirmed against the running
-// yt-dlp build's extractor list.
-export const YTDLP_SITES = [
-  { name: 'YouTube', hosts: ['youtube.com', 'youtu.be'] },
-  { name: 'RedGifs', hosts: ['redgifs.com'] },
-  // Reddit-hosted video. The post page is unreadable (see reddit.js), but the CMAF streams the
-  // HLS manifest points at are public, and yt-dlp muxes the separate video and audio itself.
-  { name: 'Reddit', hosts: ['v.redd.it'] },
-  { name: 'Imgur', hosts: ['imgur.com'] },
-  { name: 'Kick', hosts: ['kick.com'] },
-  { name: 'Coub', hosts: ['coub.com'] },
-  { name: 'Rumble', hosts: ['rumble.com'] },
-  // `nico.ms` is niconico's own shortener; yt-dlp resolves it to the /watch/ URL itself.
-  { name: 'Niconico', hosts: ['nicovideo.jp', 'nico.ms'] },
-  { name: 'Bilibili', hosts: ['bilibili.com', 'b23.tv'] },
-  // Xiaohongshu / RedNote. `xhslink.com` is the app's share-link shortener. Pass these URLs
-  // through untouched: the `xsec_token` query param on an /explore/ link is load-bearing, and
-  // stripping it makes the same post fail to resolve.
-  { name: 'Xiaohongshu', hosts: ['xiaohongshu.com', 'xhslink.com'] },
-  { name: 'Medal', hosts: ['medal.tv'] },
-  { name: 'XVideos', hosts: ['xvideos.com'] },
-  // Behind age-verification walls in some US states; they go through GEO_PROXY_URL when set.
-  { name: 'Pornhub', hosts: ['pornhub.com'], geoBlocked: true },
-  { name: 'xHamster', hosts: ['xhamster.com'], geoBlocked: true },
-  // Its CDN answers 410 Gone to any request without the site as referer.
-  {
-    name: 'RedTube',
-    hosts: ['redtube.com'],
-    geoBlocked: true,
-    args: ['--referer', 'https://www.redtube.com/'],
-  },
-  { name: 'Rule34Video', hosts: ['rule34video.com'] },
-  { name: 'Bandcamp', hosts: ['bandcamp.com'] },
-  { name: 'Internet Archive', hosts: ['archive.org'] },
-];
+const YTDLP_SITES = sitesFor('ytdlp');
 
 export function getYtdlpSite(url) {
   try {

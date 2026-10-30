@@ -19,6 +19,7 @@ import { mapLimit, ITEM_FANOUT } from './map-limit.js';
 import { hostOf, normalizeHost, hostUnder } from './url-host.js';
 import { isInstagramReelUrl } from './instagram.js';
 import { BROWSER_USER_AGENT } from './browser-agent.js';
+import { sitesFor } from '../core/sites.js';
 
 const logger = createLogger('cobalt');
 
@@ -289,33 +290,10 @@ export function normalizeSocialMediaUrlForCobalt(url) {
   }
 }
 
-// Hosts cobalt handles; each also matches its subdomains (www., m., vm., clips. ...).
 const SOCIAL_MEDIA_DOMAINS = [
-  'twitter.com',
-  'x.com',
+  ...sitesFor('cobalt').flatMap(site => site.hosts),
   // Embed-fixer mirrors (rewritten to canonical hosts before hitting Cobalt)
   ...EMBED_FIXER_HOSTS.keys(),
-  'bsky.app',
-  'tiktok.com',
-  'instagram.com',
-  'youtube.com',
-  'youtu.be',
-  'reddit.com',
-  'v.redd.it',
-  'facebook.com',
-  'fb.watch',
-  // pinterest intentionally NOT listed: Cobalt 11 returns error.api.fetch.empty and yt-dlp's
-  // extractor has been globally broken since ~2025-06 (yt-dlp #13554). Pinterest is handled by
-  // the custom JSON-LD extractor in pinterest.js instead, routed before this list is consulted.
-  // twitch: cobalt only handles clips (clips.twitch.tv + twitch.tv/<channel>/clip/<slug>),
-  // matched host-only here, non-clip twitch URLs route through and get a curated error.
-  'twitch.tv',
-  'soundcloud.com', // also covers m./on. subdomains + short links
-  'tumblr.com', // covers <blog>.tumblr.com and www.tumblr.com
-  'streamable.com',
-  'dailymotion.com',
-  'dai.ly', // dailymotion short links
-  'snapchat.com', // covers t.snapchat.com spotlight links
 ];
 
 export function isSocialMediaUrl(url) {

@@ -6,7 +6,7 @@ import {
   getServiceForUrl,
   getDisabledServiceLabel,
 } from '../../src/utils/download-services.js';
-import { YTDLP_SITES } from '../../src/utils/ytdlp.js';
+import { sitesFor } from '../../src/core/sites.js';
 import { initDatabase, setSetting } from '../../src/utils/database.js';
 
 describe('download-services registry', () => {
@@ -18,7 +18,7 @@ describe('download-services registry', () => {
   });
 
   test('every yt-dlp site has a registry entry', () => {
-    for (const site of YTDLP_SITES) {
+    for (const site of sitesFor('ytdlp')) {
       const service = getServiceForUrl(`https://${site.hosts[0]}/x`);
       assert.ok(DOWNLOAD_SERVICE_IDS.has(service?.id), `missing registry entry for ${site.name}`);
     }

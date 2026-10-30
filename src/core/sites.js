@@ -1,0 +1,167 @@
+// `id` is the stored disabled_services key (renaming resets the switch); a tool key's `hosts` narrows its links.
+export const SITES = [
+  {
+    id: 'twitter',
+    name: 'Twitter / X',
+    category: 'social',
+    hosts: ['twitter.com', 'x.com'],
+    cobalt: true,
+  },
+  { id: 'bluesky', name: 'Bluesky', category: 'social', hosts: ['bsky.app'], cobalt: true },
+  { id: 'tiktok', name: 'TikTok', category: 'social', hosts: ['tiktok.com'], cobalt: true },
+  {
+    id: 'instagram',
+    name: 'Instagram',
+    category: 'social',
+    hosts: ['instagram.com'],
+    cobalt: true,
+  },
+  // The post page is unreadable (see reddit.js), but the HLS streams on v.redd.it are public.
+  {
+    id: 'reddit',
+    name: 'Reddit',
+    category: 'social',
+    hosts: ['reddit.com', 'redd.it'],
+    cobalt: { hosts: ['reddit.com', 'v.redd.it'] },
+    ytdlp: { hosts: ['v.redd.it'] },
+  },
+  {
+    id: 'facebook',
+    name: 'Facebook',
+    category: 'social',
+    hosts: ['facebook.com', 'fb.watch'],
+    cobalt: true,
+  },
+  // cobalt only reads clips; other twitch links route here and get a curated error.
+  {
+    id: 'twitch',
+    name: 'Twitch',
+    label: 'Twitch (clips)',
+    category: 'social',
+    hosts: ['twitch.tv'],
+    cobalt: true,
+  },
+  {
+    id: 'soundcloud',
+    name: 'SoundCloud',
+    category: 'social',
+    hosts: ['soundcloud.com'],
+    cobalt: true,
+  },
+  { id: 'tumblr', name: 'Tumblr', category: 'social', hosts: ['tumblr.com'], cobalt: true },
+  {
+    id: 'streamable',
+    name: 'Streamable',
+    category: 'social',
+    hosts: ['streamable.com'],
+    cobalt: true,
+  },
+  {
+    id: 'dailymotion',
+    name: 'Dailymotion',
+    category: 'social',
+    hosts: ['dailymotion.com', 'dai.ly'],
+    cobalt: true,
+  },
+  { id: 'snapchat', name: 'Snapchat', category: 'social', hosts: ['snapchat.com'], cobalt: true },
+  {
+    id: 'youtube',
+    name: 'YouTube',
+    category: 'video',
+    hosts: ['youtube.com', 'youtu.be'],
+    cobalt: true,
+    ytdlp: true,
+  },
+  { id: 'redgifs', name: 'RedGifs', category: 'adult', hosts: ['redgifs.com'], ytdlp: true },
+  { id: 'imgur', name: 'Imgur', category: 'video', hosts: ['imgur.com'], ytdlp: true },
+  { id: 'kick', name: 'Kick', category: 'video', hosts: ['kick.com'], ytdlp: true },
+  { id: 'coub', name: 'Coub', category: 'video', hosts: ['coub.com'], ytdlp: true },
+  { id: 'rumble', name: 'Rumble', category: 'video', hosts: ['rumble.com'], ytdlp: true },
+  {
+    id: 'niconico',
+    name: 'Niconico',
+    category: 'video',
+    hosts: ['nicovideo.jp', 'nico.ms'],
+    ytdlp: true,
+  },
+  {
+    id: 'bilibili',
+    name: 'Bilibili',
+    category: 'video',
+    hosts: ['bilibili.com', 'b23.tv'],
+    ytdlp: true,
+  },
+  // Pass these through untouched: the `xsec_token` query param on an /explore/ link is load-bearing.
+  {
+    id: 'xiaohongshu',
+    name: 'Xiaohongshu',
+    category: 'social',
+    hosts: ['xiaohongshu.com', 'xhslink.com'],
+    ytdlp: true,
+  },
+  { id: 'medal', name: 'Medal', category: 'video', hosts: ['medal.tv'], ytdlp: true },
+  { id: 'xvideos', name: 'XVideos', category: 'adult', hosts: ['xvideos.com'], ytdlp: true },
+  // Behind age-verification walls in some US states; they go through GEO_PROXY_URL when set.
+  {
+    id: 'pornhub',
+    name: 'Pornhub',
+    category: 'adult',
+    hosts: ['pornhub.com'],
+    ytdlp: { geoBlocked: true },
+  },
+  {
+    id: 'xhamster',
+    name: 'xHamster',
+    category: 'adult',
+    hosts: ['xhamster.com'],
+    ytdlp: { geoBlocked: true },
+  },
+  // Its CDN answers 410 Gone to any request without the site as referer.
+  {
+    id: 'redtube',
+    name: 'RedTube',
+    category: 'adult',
+    hosts: ['redtube.com'],
+    ytdlp: { geoBlocked: true, args: ['--referer', 'https://www.redtube.com/'] },
+  },
+  {
+    id: 'rule34video',
+    name: 'Rule34Video',
+    category: 'adult',
+    hosts: ['rule34video.com'],
+    ytdlp: true,
+  },
+  { id: 'bandcamp', name: 'Bandcamp', category: 'video', hosts: ['bandcamp.com'], ytdlp: true },
+  {
+    id: 'internet-archive',
+    name: 'Internet Archive',
+    category: 'video',
+    hosts: ['archive.org'],
+    ytdlp: true,
+  },
+  ...[
+    ['deviantart', 'DeviantArt', 'deviantart.com'],
+    ['artstation', 'ArtStation', 'artstation.com'],
+    ['flickr', 'Flickr', 'flickr.com'],
+    ['wallhaven', 'Wallhaven', 'wallhaven.cc'],
+    ['mangadex', 'MangaDex', 'mangadex.org'],
+    ['nhentai', 'nhentai', 'nhentai.net'],
+    ['gofile', 'Gofile', 'gofile.io'],
+    ['erome', 'Erome', 'erome.com'],
+  ].map(([id, name, host]) => ({
+    id: `gallery-dl-${id}`,
+    name,
+    label: `${name} (gallery-dl)`,
+    category: 'gallery',
+    hosts: [host],
+    galleryDl: true,
+  })),
+];
+
+// The sites one tool downloads, with that tool's own hosts and options merged in.
+export const sitesFor = tool =>
+  SITES.filter(site => site[tool]).map(site => ({
+    ...site,
+    ...site[tool],
+    hosts: site[tool].hosts ?? site.hosts,
+  }));

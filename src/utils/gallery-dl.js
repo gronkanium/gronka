@@ -9,19 +9,11 @@ import { maxDownloadBytes, tooLarge } from './size-limit.js';
 import { mapLimit, ITEM_FANOUT } from './map-limit.js';
 import { hostOf, normalizeHost, hostUnder } from './url-host.js';
 import { getCookieArgs } from './ytdlp.js';
+import { sitesFor } from '../core/sites.js';
 
 const logger = createLogger('gallery-dl');
 
-export const GALLERY_DL_SITES = [
-  { name: 'DeviantArt', hosts: ['deviantart.com'] },
-  { name: 'ArtStation', hosts: ['artstation.com'] },
-  { name: 'Flickr', hosts: ['flickr.com'] },
-  { name: 'Wallhaven', hosts: ['wallhaven.cc'] },
-  { name: 'MangaDex', hosts: ['mangadex.org'] },
-  { name: 'nhentai', hosts: ['nhentai.net'] },
-  { name: 'Gofile', hosts: ['gofile.io'] },
-  { name: 'Erome', hosts: ['erome.com'] },
-];
+const GALLERY_DL_SITES = sitesFor('galleryDl');
 
 const MEDIA_EXTENSIONS = new Set([
   '.avif',

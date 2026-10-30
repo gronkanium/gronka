@@ -5,6 +5,33 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and versions are release dates (`YYYY.MM.DD`, `.N` for a later release the same day).
 
+## [2026.10.30](https://github.com/gronkanium/gronka/compare/v2026.10.28...v2026.10.30) (2026-10-30)
+
+
+### ⚠ BREAKING CHANGES
+
+* drop the video length limit, refuse live streams in the download run ([#210](https://github.com/gronkanium/gronka/issues/210)) ([965ffdd](https://github.com/gronkanium/gronka/commit/965ffddb11cdb6ed98f2753ffb3cfa327b96d8e8))
+* one size limit for every download, enforced where bytes are written ([#210](https://github.com/gronkanium/gronka/issues/210)) ([965ffdd](https://github.com/gronkanium/gronka/commit/965ffddb11cdb6ed98f2753ffb3cfa327b96d8e8))
+
+
+### Features
+
+* drop the video length limit, refuse live streams in the download run ([#210](https://github.com/gronkanium/gronka/issues/210)) ([965ffdd](https://github.com/gronkanium/gronka/commit/965ffddb11cdb6ed98f2753ffb3cfa327b96d8e8))
+
+
+### Bug Fixes
+
+* cancelling a job stops its SoundCloud and stream-info subprocesses ([#210](https://github.com/gronkanium/gronka/issues/210)) ([965ffdd](https://github.com/gronkanium/gronka/commit/965ffddb11cdb6ed98f2753ffb3cfa327b96d8e8))
+* clamp alert paging, escape search wildcards, add a CSP and drop error details from webui 500s ([#212](https://github.com/gronkanium/gronka/issues/212)) ([4daf4f4](https://github.com/gronkanium/gronka/commit/4daf4f4ae86ee6688c49259c00e89182ec3075cc))
+* fence cobalt and gronka-web egress with contain.sh like the bot containers ([#212](https://github.com/gronkanium/gronka/issues/212)) ([4daf4f4](https://github.com/gronkanium/gronka/commit/4daf4f4ae86ee6688c49259c00e89182ec3075cc))
+* guard URLs cobalt hands back and refuse non-JSON source-check runs ([#212](https://github.com/gronkanium/gronka/issues/212)) ([4daf4f4](https://github.com/gronkanium/gronka/commit/4daf4f4ae86ee6688c49259c00e89182ec3075cc))
+* keep link tokens, the mega key and cookie lines out of failure records, cap gallery disk use and jobs per worker ([#212](https://github.com/gronkanium/gronka/issues/212)) ([4daf4f4](https://github.com/gronkanium/gronka/commit/4daf4f4ae86ee6688c49259c00e89182ec3075cc))
+* one size limit for every download, enforced where bytes are written ([#210](https://github.com/gronkanium/gronka/issues/210)) ([965ffdd](https://github.com/gronkanium/gronka/commit/965ffddb11cdb6ed98f2753ffb3cfa327b96d8e8))
+* pin cookie request hosts through the URL parser, not a regex ([#212](https://github.com/gronkanium/gronka/issues/212)) ([4daf4f4](https://github.com/gronkanium/gronka/commit/4daf4f4ae86ee6688c49259c00e89182ec3075cc))
+* pin reddit and deviantart cookie requests to www and cap api response sizes ([#212](https://github.com/gronkanium/gronka/issues/212)) ([4daf4f4](https://github.com/gronkanium/gronka/commit/4daf4f4ae86ee6688c49259c00e89182ec3075cc))
+* **cobalt:** picker and redirect files go through the ssrf guard ([#210](https://github.com/gronkanium/gronka/issues/210)) ([965ffdd](https://github.com/gronkanium/gronka/commit/965ffddb11cdb6ed98f2753ffb3cfa327b96d8e8))
+* **webui:** number settings refuse booleans, blanks and null ([#210](https://github.com/gronkanium/gronka/issues/210)) ([965ffdd](https://github.com/gronkanium/gronka/commit/965ffddb11cdb6ed98f2753ffb3cfa327b96d8e8))
+
 ## [2026.10.28](https://github.com/gronkanium/gronka/compare/v4.10.0...v2026.10.28) (2026-10-28)
 
 

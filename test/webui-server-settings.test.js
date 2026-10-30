@@ -18,7 +18,7 @@ beforeAll(async () => {
 
 afterAll(async () => {
   // The test DB persists between runs - reset the keys these tests write.
-  await setSetting('max_video_duration', '300');
+  await setSetting('r2_soft_limit_gb', '9');
   await setSetting('max_video_size_mb', '1024');
   await setSetting('twitter_delivery', 'hybrid');
   await setSetting('upload_ttl_tiers', '100:72,250:24,500:8,1024:2');
@@ -45,9 +45,7 @@ describe('settings route', () => {
     const { settings } = await response.json();
 
     assert.strictEqual(settings.twitter_direct_url_fallback.type, 'boolean');
-    assert.strictEqual(settings.max_video_duration.type, 'number');
-    assert.strictEqual(settings.max_video_duration.min, 30);
-    assert.strictEqual(settings.max_video_duration.max, 21600);
+    assert.ok(!('max_video_duration' in settings), 'there is no length limit, only size');
     assert.strictEqual(settings.max_video_size_mb.type, 'number');
     assert.strictEqual(settings.max_video_size_mb.min, 50);
     assert.strictEqual(settings.max_video_size_mb.max, 2048);
@@ -115,14 +113,14 @@ describe('settings route', () => {
   });
 
   test('number setting accepts an in-range integer', async () => {
-    const { response, data } = await putSetting('max_video_duration', 600);
+    const { response, data } = await putSetting('r2_soft_limit_gb', 20);
     assert.strictEqual(response.status, 200);
-    assert.strictEqual(data.value, '600');
+    assert.strictEqual(data.value, '20');
   });
 
   test('number setting rejects non-integers and out-of-range values', async () => {
-    for (const bad of [12.5, 'abc', 10, 999999, true]) {
-      const { response } = await putSetting('max_video_duration', bad);
+    for (const bad of [12.5, 'abc', -1, 999999, true]) {
+      const { response } = await putSetting('r2_soft_limit_gb', bad);
       assert.strictEqual(response.status, 400, `expected 400 for ${JSON.stringify(bad)}`);
     }
   });

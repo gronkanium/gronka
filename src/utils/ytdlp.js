@@ -21,10 +21,8 @@ import { hostOf, normalizeHost } from './url-host.js';
 
 const logger = createLogger('ytdlp');
 const execFileAsync = promisify(execFile);
-// Appended to every duration/size-cap rejection so users know there's a way around it
-// instead of just hitting a dead end.
 const SAVE_FAILURE_MESSAGE = 'the download finished but the file could not be saved, try again.';
-const TRIM_TIP = ' use the start and end options to grab a clip under the limit.';
+const LIVE_MARK = 'gronka-live-status:';
 
 // yt-dlp rewrites its jar after every run, so it gets a private copy and the mounted one stays read-only.
 let jarCopy = null;
@@ -240,11 +238,8 @@ function getContentType(ext) {
 
 const noVideo = () => new NetworkError('this post has no video in it.', 'NO_VIDEO');
 
-const durationError = maxDuration =>
-  new ValidationError(
-    `video duration exceeds the maximum allowed (${Math.floor(maxDuration / 60)} minutes).` +
-      TRIM_TIP
-  );
+const streamIsLive = () =>
+  new ValidationError('this stream is still live, try again once it has ended.', 'STREAM_IS_LIVE');
 
 // What a failed yt-dlp run said, in order: the first pattern that matches and returns an error wins.
 const FAILURES = [
@@ -309,11 +304,6 @@ const FAILURES = [
       isInstagramPostUrl(url) ? noVideo() : new NetworkError('no downloadable video formats found'),
   ],
   [/larger than max-filesize/i, (url, { maxSize }) => tooLarge(maxSize)],
-  // Only the duration filter may be blamed for length, not any message that mentions a skip.
-  [
-    /does not pass filter \(duration|duration >/,
-    (url, { maxDuration }) => durationError(maxDuration),
-  ],
   [
     /BounceDeleted|tweet (was )?(deleted|not found|unavailable)|account is no longer available|account .*(suspended|deactivated)/i,
     () => contentGone(),
@@ -348,7 +338,6 @@ function executeYtdlp(
   {
     quality,
     timeout = 300000,
-    maxDuration = 300,
     startTime = null,
     duration = null,
     maxSize,
@@ -372,12 +361,13 @@ function executeYtdlp(
       quality,
       '--merge-output-format',
       'mp4',
+      // A live stream would record until a limit cut it off. `!=?` lets sites with no live_status through.
+      '--match-filter',
+      '!is_live & live_status!=?is_upcoming',
+      // The filter's skip is silent under --quiet; this prints before it, so the skip can be named.
+      '--print',
+      `pre_process:${LIVE_MARK}%(live_status)s`,
     ];
-
-    if (maxDuration !== Infinity && startTime === null && duration === null) {
-      // The `?` lets items with an unknown duration (`NA`) through instead of skipping them silently.
-      args.push('--match-filter', `duration<=?${maxDuration}`);
-    }
 
     // Abort oversized downloads before/while pulling instead of catching them after the whole
     // file is buffered in RAM. Only for full downloads: with --download-sections, yt-dlp
@@ -448,23 +438,9 @@ function executeYtdlp(
         const combinedOutput = stdout + stderr;
 
         // --max-filesize aborts print to stderr even under --quiet ("File is larger than
-        // max-filesize ... Aborting"), so this loud path catches the size cap. The quiet
-        // --match-filter duration skip is handled by the no-output fallback further down.
+        // max-filesize ... Aborting"), so this loud path catches the size cap.
         if (/larger than max-filesize/i.test(combinedOutput)) {
           rejectWith(tooLarge(maxSize));
-          return;
-        }
-
-        // yt-dlp exits with code 0 when --match-filter skips a video.
-        // Only the duration filter may be blamed here: yt-dlp prints "Skipping" for plenty of
-        // unrelated reasons (fragments, player responses, already-downloaded files), and
-        // treating any of them as a length overage is how a user gets told a two-second gif
-        // is longer than an hour.
-        if (
-          /does not pass filter \(duration/.test(combinedOutput) ||
-          combinedOutput.includes('Video is longer than')
-        ) {
-          rejectWith(durationError(maxDuration));
           return;
         }
 
@@ -556,6 +532,8 @@ function executeYtdlp(
                 `yt-dlp download complete (fallback): ${actualPath} (${fallbackStats.size} bytes)`
               );
               resolve(actualPath);
+            } else if (new RegExp(`${LIVE_MARK}is_(live|upcoming)`).test(stdout)) {
+              rejectWith(streamIsLive(), 'exit 0 with no file: the live stream filter skipped it');
             } else {
               // A post with no video (an Imgur photo album) is a playlist of zero items to yt-dlp.
               rejectWith(noVideo(), 'exit 0 with no file: yt-dlp found no video entries');
@@ -574,7 +552,7 @@ function executeYtdlp(
         const errorOutput = stderr || stdout;
         logger.error(`yt-dlp failed with code ${code}: ${errorOutput}`);
 
-        rejectWith(classifyYtdlpFailure(errorOutput, url, { maxSize, maxDuration }));
+        rejectWith(classifyYtdlpFailure(errorOutput, url, { maxSize }));
       }
     });
 
@@ -606,7 +584,7 @@ function executeYtdlp(
  * That bucket covers anything yt-dlp didn't give us a specific reason for, which in practice
  * includes transient YouTube-side extraction hiccups that clear up seconds later - retrying
  * once recovers those silently instead of surfacing a false "unavailable" to the user. Every
- * other failure (rate limit, private/age-gated, invalid URL, duration cap) is a confirmed
+ * other failure (rate limit, private/age-gated, invalid URL, live stream) is a confirmed
  * state and retrying it immediately would just waste time, so only this bucket and the
  * failures tagged YTDLP_RETRYABLE retry.
  */
@@ -631,71 +609,6 @@ async function executeYtdlpWithRetry(url, outputDir, options) {
     await new Promise(resolve => setTimeout(resolve, 2000));
     return await executeYtdlp(url, outputDir, options);
   }
-}
-
-function getVideoDuration(url, timeout = 15000) {
-  return new Promise((resolve, reject) => {
-    const args = [
-      '--no-playlist',
-      '--no-warnings',
-      ...getCookieArgs(url),
-      ...getSiteArgs(url),
-      '--print',
-      '%(live_status)s %(duration)s',
-      url,
-    ];
-
-    const ytdlp = spawn('yt-dlp', args, {
-      signal: jobSignal(),
-      timeout,
-      stdio: ['ignore', 'pipe', 'pipe'],
-    });
-
-    let stdout = '';
-    let stderr = '';
-
-    ytdlp.stdout.on('data', data => {
-      stdout += data.toString();
-    });
-
-    ytdlp.stderr.on('data', data => {
-      stderr += data.toString();
-    });
-
-    const timeoutId = setTimeout(() => {
-      ytdlp.kill('SIGKILL');
-      reject(new NetworkError('duration check timed out'));
-    }, timeout);
-
-    ytdlp.on('close', code => {
-      clearTimeout(timeoutId);
-
-      if (code === 0) {
-        const [liveStatus, rawDuration] = stdout.trim().split(' ');
-        const duration = parseFloat(rawDuration);
-        if (liveStatus === 'is_live' || liveStatus === 'is_upcoming') {
-          reject(
-            new ValidationError(
-              'this stream is still live, try again once it has ended.',
-              'STREAM_IS_LIVE'
-            )
-          );
-        } else if (isNaN(duration)) {
-          reject(new NetworkError('could not parse video duration'));
-        } else {
-          resolve(duration);
-        }
-      } else {
-        // Logged only: the download that follows classifies the same failure for the user.
-        reject(new Error(`duration check exit ${code}: ${(stderr || stdout).substring(0, 200)}`));
-      }
-    });
-
-    ytdlp.on('error', err => {
-      clearTimeout(timeoutId);
-      reject(new NetworkError(`duration check failed: ${err.message}`));
-    });
-  });
 }
 
 // Resolved without cookies so no link we hand out is tied to our sessions, and http(s) only
@@ -751,39 +664,11 @@ function emptyDownloadError(error) {
 
 export async function downloadWithYtdlp(
   rawUrl,
-  { maxSize, quality = null, maxDuration = 300, startTime = null, duration = null } = {}
+  { maxSize, quality = null, startTime = null, duration = null } = {}
 ) {
   maxSize ??= await maxDownloadBytes();
   const url = canonicalYtdlpUrl(rawUrl);
-  logger.debug(
-    `Downloading via yt-dlp: ${url} (maxDuration: ${maxDuration}, startTime: ${startTime}, duration: ${duration})`
-  );
-
-  // Fast duration pre-check (skipped for a segment download with an explicit duration)
-  // This prevents waiting for a full download attempt just to find out the video is too long
-  const needsDurationCheck = maxDuration !== Infinity && startTime === null && duration === null;
-  if (needsDurationCheck) {
-    try {
-      const videoDuration = await getVideoDuration(url);
-      logger.debug(`Video duration: ${videoDuration}s (max: ${maxDuration}s)`);
-
-      if (videoDuration > maxDuration) {
-        const minutes = Math.floor(videoDuration / 60);
-        const seconds = Math.round(videoDuration % 60);
-        throw new ValidationError(
-          `video is ${minutes}m ${seconds}s long, maximum allowed is ${Math.floor(maxDuration / 60)} minutes.` +
-            TRIM_TIP
-        );
-      }
-    } catch (error) {
-      if (error instanceof ValidationError) {
-        throw error;
-      }
-      // For other errors (network issues, etc.), log and continue with download
-      // The download will fail with its own error if there's a real problem
-      logger.warn(`Duration pre-check failed, proceeding with download: ${error.message}`);
-    }
-  }
+  logger.debug(`Downloading via yt-dlp: ${url} (startTime: ${startTime}, duration: ${duration})`);
 
   const effectiveQuality = quality || DEFAULT_YTDLP_FORMAT;
 
@@ -798,7 +683,6 @@ export async function downloadWithYtdlp(
       usedFallback = true;
       const fullPath = await executeYtdlpWithRetry(url, workDir, {
         quality: effectiveQuality,
-        maxDuration,
         maxSize,
       }).catch(emptyDownloadError);
       const trimmedPath = path.join(workDir, 'trimmed_output.mp4');
@@ -814,7 +698,6 @@ export async function downloadWithYtdlp(
       try {
         outputPath = await executeYtdlpWithRetry(url, workDir, {
           quality: effectiveQuality,
-          maxDuration,
           startTime,
           duration,
           maxSize,
@@ -834,7 +717,6 @@ export async function downloadWithYtdlp(
     } else {
       outputPath = await executeYtdlpWithRetry(url, workDir, {
         quality: effectiveQuality,
-        maxDuration,
         startTime,
         duration,
         maxSize,

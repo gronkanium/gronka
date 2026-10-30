@@ -225,7 +225,7 @@ describe('parser fuzz', () => {
         : junk(r, 40);
       let error;
       try {
-        error = classifyYtdlpFailure(output, url, { maxSize: 100 * 2 ** 20, maxDuration: 600 });
+        error = classifyYtdlpFailure(output, url, { maxSize: 100 * 2 ** 20 });
       } catch (caught) {
         throw new Error(
           `classifyYtdlpFailure threw on ${describeCase(SEED, i, { output, url })}: ${caught.message}`,

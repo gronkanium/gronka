@@ -80,7 +80,6 @@ export const ENGINES = {
     extract: async (url, ctx) =>
       downloadWithYtdlp(url, {
         quality: YTDLP_QUALITY,
-        maxDuration: await ctx.maxDuration(),
         startTime: ctx.startTime,
         duration: ctx.duration,
       }),
@@ -96,12 +95,11 @@ export const ENGINES = {
   instagram: { name: 'Instagram session', extract: url => downloadFromInstagram(url) },
   medal: {
     name: 'Medal',
-    extract: (url, ctx) => ctx.maxDuration().then(max => downloadFromMedal(url, max)),
+    extract: url => downloadFromMedal(url),
   },
   bilibili: {
     name: 'Bilibili',
-    extract: (url, ctx) =>
-      ctx.maxDuration().then(maxDuration => downloadFromBilibili(url, { maxDuration })),
+    extract: url => downloadFromBilibili(url),
   },
   deviantart: {
     name: 'DeviantArt',

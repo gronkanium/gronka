@@ -105,7 +105,7 @@ export function pickBilibiliFile(play) {
 }
 
 // The html5 player's single-file mp4 (720p, audio included), so nothing needs muxing.
-export async function downloadFromBilibili(url, { maxDuration = Infinity } = {}) {
+export async function downloadFromBilibili(url) {
   const video = bilibiliVideo(url);
   if (!video) throw new ValidationError('invalid bilibili video link.');
   const nav = await api('/x/web-interface/nav');
@@ -118,12 +118,7 @@ export async function downloadFromBilibili(url, { maxDuration = Infinity } = {})
   }
   const key = wbiKey(img.img_url, img.sub_url);
   const view = payload(await api('/x/web-interface/wbi/view', signWbi(video.id, key)), 'view');
-  const part = view.pages?.[video.page - 1] ?? { cid: view.cid, duration: view.duration };
-  if (part.duration > maxDuration) {
-    throw new ValidationError(
-      `this video is longer than the maximum allowed (${Math.floor(maxDuration / 60)} minutes).`
-    );
-  }
+  const part = view.pages?.[video.page - 1] ?? { cid: view.cid };
   const playParams = { ...video.id, cid: part.cid, qn: 64, fnval: 1, platform: 'html5' };
   const maxSize = await maxDownloadBytes();
   let failed;

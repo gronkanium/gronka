@@ -221,8 +221,8 @@ if (!mocksSupported) {
         { name: 'RedGifs', hosts: ['redgifs.com'] },
         { name: 'XVideos', hosts: ['xvideos.com'] },
       ],
-      downloadWithYtdlp: async (_url, _maxSize, _quality, _maxDuration, _startTime, _duration) => {
-        const u = _url || '';
+      downloadWithYtdlp: async url => {
+        const u = url || '';
         if (u.includes('photo-fallback')) {
           const { ValidationError, withCause } = await import('../../src/utils/errors.js');
           throw withCause(
@@ -251,11 +251,8 @@ if (!mocksSupported) {
           );
         }
         if (u.includes('toolong')) {
-          const { ValidationError } = await import('../../src/utils/errors.js');
-          throw new ValidationError(
-            'video duration exceeds the maximum allowed (5 minutes).' +
-              ' use the start and end options to grab a clip under the limit.'
-          );
+          const { tooLarge } = await import('../../src/utils/size-limit.js');
+          throw tooLarge(1024 * 2 ** 20);
         }
         return media(fakeBuffer(4, 4096), 'video/mp4', 'clip.mp4');
       },
@@ -789,8 +786,8 @@ if (!mocksSupported) {
       assert.strictEqual(calls.editReply[0].files, undefined, 'no attachment');
     });
 
-    test('too-long X/Twitter video: falls back to the direct media URL, no files', async () => {
-      // Cobalt download fails (too large), yt-dlp fallback fails (duration cap), so the
+    test('too-large X/Twitter video: falls back to the direct media URL, no files', async () => {
+      // Cobalt download fails (too large), yt-dlp fallback fails (too large too), so the
       // command should hand out the direct video.twimg.com URL from cobalt instead of erroring.
       const url = `https://x.com/user/status/toolong-${Date.now()}`;
       const { interaction, calls } = downloadInteraction(url, 'e2e-dl-toolong');

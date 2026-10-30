@@ -26,7 +26,7 @@ how `/download` serves x/twitter videos.
 
 ### `twitter_direct_url_fallback`
 
-when an x/twitter download fails (for example the video is over the size or duration limit), reply with the direct media url instead of an error.
+when an x/twitter download fails (for example the video is over the size limit), reply with the direct media url instead of an error.
 
 **default:** `on`
 
@@ -37,12 +37,6 @@ reply with the direct media url from cobalt instead of downloading/uploading, fo
 **default:** `off`
 
 ## limits
-
-### `max_video_duration`
-
-maximum video length in seconds for downloads. size is the main limit; this only catches very long videos.
-
-**default:** `300` (5 minutes) · **range:** 30-7200
 
 ### `max_video_size_mb`
 

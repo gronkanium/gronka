@@ -68,9 +68,6 @@ const worthAnotherSource = (engine, error) =>
   error.code === 'YTDLP_UNSUPPORTED_URL' ||
   (!(error instanceof ValidationError) && !GONE.includes(error.code));
 
-// Size is the real gate (--max-filesize); this only caps pathological lengths.
-const getMaxVideoDuration = () => readSetting('max_video_duration');
-
 async function directMediaUrls(url, shouldServe = null, keep = () => {}) {
   const { urls, direct, response } = await getCobaltMediaUrls(COBALT_API_URL, url);
   keep(response);
@@ -161,7 +158,6 @@ export async function acquireMedia(
     duration,
     galleryOptions,
     cobaltResponse: null,
-    maxDuration: async () => (trimming ? Infinity : await getMaxVideoDuration()),
   };
   const keep = response => (ctx.cobaltResponse = response);
   const local = postImages

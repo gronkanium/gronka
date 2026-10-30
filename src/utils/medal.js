@@ -64,11 +64,7 @@ async function fetchPublishedClip(id) {
   return clip;
 }
 
-export async function downloadFromMedal(
-  url,
-  maxDuration = Infinity,
-  retryDelaysMs = PUBLISH_RETRY_DELAYS_MS
-) {
+export async function downloadFromMedal(url, retryDelaysMs = PUBLISH_RETRY_DELAYS_MS) {
   const id = medalClipId(url);
   if (!id) throw new ValidationError('invalid Medal clip link.');
   let clip;
@@ -79,11 +75,6 @@ export async function downloadFromMedal(
       if (error.code !== 'CLIP_NOT_PUBLISHED' || attempt >= retryDelaysMs.length) throw error;
       await sleep(retryDelaysMs[attempt]);
     }
-  }
-  if (clip.videoLengthSeconds > maxDuration) {
-    throw new ValidationError(
-      `this clip is longer than the maximum allowed (${Math.floor(maxDuration / 60)} minutes).`
-    );
   }
   const videoUrl = pickMedalVideo(clip);
   if (!videoUrl) throw contentGone(`medal: clip ${id} has no cdn.medal.tv video url`);

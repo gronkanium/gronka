@@ -28,7 +28,7 @@ export const SETTINGS = {
     label: 'X / Twitter link fallback',
     section: 'delivery',
     description:
-      'When an X/Twitter download fails (e.g. over the size or duration limit), reply with the direct media URL instead of an error',
+      'When an X/Twitter download fails (e.g. over the size limit), reply with the direct media URL instead of an error',
   },
   max_video_size_mb: {
     type: 'number',
@@ -39,16 +39,6 @@ export const SETTINGS = {
       'Largest file the bot downloads, converts or optimizes, in MB. Refused before download when the source reports a size, else stopped the moment it passes. Applies immediately',
     min: 50,
     max: 2048,
-  },
-  max_video_duration: {
-    type: 'number',
-    default: '3600',
-    label: 'Max video duration',
-    section: 'delivery',
-    description:
-      'Backstop for video length in seconds. Size is the primary limit, oversized videos are rejected before download, so this only catches pathologically long ones',
-    min: 30,
-    max: 21600,
   },
   upload_ttl_tiers: {
     type: 'tiers',

@@ -79,7 +79,7 @@ download media from a social media url or direct url.
 - works with social media platforms (twitter, tiktok, instagram, etc.) if cobalt is enabled
 - also works with direct media urls
 - embed-fixer mirror urls are rewritten to the canonical site before downloading: fxtwitter.com, fixupx.com, twittpr.com, pxtwitter.com, vxtwitter.com, fixvx.com, cunnyx.com, girlcockx.com, and stupidpenisx.com all map to twitter.com; fxbsky.app maps to bsky.app
-- youtube downloads are handled by yt-dlp and capped by the max video duration setting; use `start`/`end` to grab a clip from a longer video (trimmed downloads bypass the duration cap)
+- youtube downloads are handled by yt-dlp; a video over the size limit can still be grabbed as a clip with `start`/`end`. live streams are refused until they end
 - age-restricted tiktok posts fall back from cobalt to yt-dlp, which needs a cookies file, see `YTDLP_COOKIES_PATH` in [[Configuration]]
 - downloads the media without conversion; nothing is kept once it is delivered
 - **for videos**: time parameters (`start`, `end`) trim the video before saving
@@ -196,8 +196,6 @@ optimize a gif from a message.
 
 one size limit covers every file the bot downloads, converts or optimizes: 1gb by default, set by the max download size webui setting (`MAX_VIDEO_SIZE` when it is unset). files over the discord attachment limit are sent as [[R2-Storage]] links.
 
-- video length: the max video duration setting (trimmed downloads via `start`/`end` bypass this)
-
 ## error messages
 
 common error messages and what they mean:
@@ -205,5 +203,5 @@ common error messages and what they mean:
 - "file too large" - the file exceeds size limits
 - "unsupported format" - the file type isn't supported
 - "download failed" - the download couldn't complete (check url or cobalt status)
-- "video duration exceeds the maximum allowed (5 minutes)" - the video is over the youtube duration cap; use `start`/`end` to download a clip under the limit
+- "this file is over the 1024MB limit" - the file is bigger than the size limit; for a video, use `start`/`end` to download a clip under it
 - "conversion failed" - ffmpeg couldn't process the file

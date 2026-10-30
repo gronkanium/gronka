@@ -129,9 +129,9 @@ cobalt has no tiktok cookie support, so age-restricted tiktok posts always fail 
 
 see `YTDLP_COOKIES_PATH` in [[Configuration]] for details.
 
-### youtube video too long
+### video too big
 
-`/download` caps video length with the max video duration webui setting. to grab part of a longer video, pass `start`/`end`; trimmed downloads bypass the cap.
+there is no length limit, only the size limit. a long video over it can still be grabbed in part with `start`/`end`. a stream that is still live is refused until it ends.
 
 ### download timeout
 

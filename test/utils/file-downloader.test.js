@@ -11,6 +11,8 @@ import axios from 'axios';
 import { Readable } from 'node:stream';
 import { withJobDir } from '../../src/utils/media-file.js';
 import { ENGINES } from '../../src/core/sources.js';
+import { setSetting } from '../../src/utils/database/settings-pg.js';
+import { SETTINGS } from '../../src/utils/settings.js';
 
 describe('source-specific file downloads', () => {
   test('Rule34 CDN files use the site referer and retain guarded requests', async () => {
@@ -141,12 +143,34 @@ describe('file downloader utilities', () => {
         await assert.rejects(
           () => downloadFileFromUrl('https://example.com/huge.mp4'),
           error => {
-            assert.match(error.message, /file is too large/);
+            assert.strictEqual(error.code, 'TOO_LARGE');
+            assert.match(error.message, /over the \d+MB limit/);
             return true;
           }
         );
       } finally {
         axios.get = originalGet;
+      }
+    });
+
+    test('a direct link follows the webui size limit, streamed or declared', async () => {
+      const originalGet = axios.get;
+      await setSetting('max_video_size_mb', '1');
+      try {
+        for (const headers of [{ 'content-length': String(2 * 2 ** 20) }, {}]) {
+          axios.get = async () => ({
+            data: Readable.from([Buffer.alloc(2 ** 20), Buffer.alloc(2 ** 20)]),
+            headers,
+          });
+          const error = await withJobDir(() =>
+            downloadFileFromUrl('https://example.com/a.mp4')
+          ).catch(e => e);
+          assert.strictEqual(error.code, 'TOO_LARGE');
+          assert.match(error.message, /over the 1MB limit/);
+        }
+      } finally {
+        axios.get = originalGet;
+        await setSetting('max_video_size_mb', SETTINGS.max_video_size_mb.default);
       }
     });
 

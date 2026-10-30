@@ -6,6 +6,7 @@ import { NetworkError, ValidationError, withCause, describeCause } from './error
 import { sanitizeFilename } from './validation.js';
 import { ssrfGuardedRequest } from './ssrf-guard.js';
 import { writeStream } from './media-file.js';
+import { maxDownloadBytes, tooLarge } from './size-limit.js';
 
 const logger = createLogger('mega');
 const MEGA_API = 'https://g.api.mega.co.nz/cs';
@@ -76,7 +77,7 @@ export function decryptMegaAttributes(at, aesKey) {
   return JSON.parse(plain.slice(4));
 }
 
-export async function downloadFromMega(url, maxSize) {
+export async function downloadFromMega(url) {
   const { id, key } = parseMegaUrl(url);
   const { aesKey, iv } = megaKeys(key);
 
@@ -102,9 +103,8 @@ export async function downloadFromMega(url, maxSize) {
   }
 
   const { n: name = 'file' } = decryptMegaAttributes(info.at, aesKey);
-  if (info.s > maxSize) {
-    throw new ValidationError(`file is too large (max ${maxSize / (1024 * 1024)}mb)`);
-  }
+  const maxSize = await maxDownloadBytes();
+  if (info.s > maxSize) throw tooLarge(maxSize, `mega: file is ${info.s} bytes`);
   const ext = path.extname(name).slice(1).toLowerCase();
   if (!MIME_BY_EXT[ext]) {
     throw new ValidationError('that mega link does not point to a video or image file.');
@@ -125,9 +125,7 @@ export async function downloadFromMega(url, maxSize) {
       maxSize,
     });
   } catch (error) {
-    if (error.code === 'TOO_LARGE') {
-      throw new ValidationError(`file is too large (max ${maxSize / (1024 * 1024)}mb)`);
-    }
+    if (error instanceof ValidationError) throw error;
     logger.warn(`Mega file download failed: ${describeCause(error)}`);
     throw withCause(
       new NetworkError('failed to download the mega file. it may be unavailable.'),

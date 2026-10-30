@@ -15,41 +15,16 @@ import {
 } from './errors.js';
 import { trimVideo } from './video-processor/trim-video.js';
 import { DEFAULT_YTDLP_FORMAT } from './config.js';
-import { fromPath, tempDir, jobSignal } from './media-file.js';
+import { fromPath, tempDir, jobSignal, watchDirSize } from './media-file.js';
+import { maxDownloadBytes, tooLarge } from './size-limit.js';
 import { hostOf, normalizeHost } from './url-host.js';
 
 const logger = createLogger('ytdlp');
 const execFileAsync = promisify(execFile);
-const SIZE_WATCH_MS = 2000;
-
-export async function usedBytes(dir) {
-  const entries = await fsSync.promises
-    .readdir(dir, { recursive: true, withFileTypes: true })
-    .catch(() => []);
-  const sizes = await Promise.all(
-    entries
-      .filter(entry => entry.isFile())
-      .map(entry =>
-        fsSync.promises.stat(path.join(entry.parentPath, entry.name)).then(
-          stats => stats.size,
-          () => 0
-        )
-      )
-  );
-  return sizes.reduce((sum, size) => sum + size, 0);
-}
-
 // Appended to every duration/size-cap rejection so users know there's a way around it
 // instead of just hitting a dead end.
 const SAVE_FAILURE_MESSAGE = 'the download finished but the file could not be saved, try again.';
 const TRIM_TIP = ' use the start and end options to grab a clip under the limit.';
-
-// Curated user-facing message for a video yt-dlp aborted (or we rejected) for exceeding the
-// size cap. Raw byte counts stay in the logs; users just get the MB ceiling.
-function tooLargeMessage(maxSize) {
-  const mb = Math.floor(maxSize / (1024 * 1024));
-  return `this video is too large to download (over ${mb}MB).` + TRIM_TIP;
-}
 
 // yt-dlp rewrites its jar after every run, so it gets a private copy and the mounted one stays read-only.
 let jarCopy = null;
@@ -333,10 +308,7 @@ const FAILURES = [
     url =>
       isInstagramPostUrl(url) ? noVideo() : new NetworkError('no downloadable video formats found'),
   ],
-  [
-    /larger than max-filesize/i,
-    (url, { maxSize }) => new ValidationError(tooLargeMessage(maxSize)),
-  ],
+  [/larger than max-filesize/i, (url, { maxSize }) => tooLarge(maxSize)],
   // Only the duration filter may be blamed for length, not any message that mentions a skip.
   [
     /does not pass filter \(duration|duration >/,
@@ -379,7 +351,7 @@ function executeYtdlp(
     maxDuration = 300,
     startTime = null,
     duration = null,
-    maxSize = Infinity,
+    maxSize,
     signedIn = false,
     viaGeoProxy = false,
   } = {}
@@ -412,7 +384,7 @@ function executeYtdlp(
     // compares --max-filesize against the *entire* video's reported size, which would wrongly
     // abort a small requested clip. The post-read length check remains the definitive backstop
     // for sources whose size yt-dlp can't determine up front (e.g. some HLS streams).
-    if (maxSize !== Infinity && startTime === null && duration === null) {
+    if (Number.isFinite(maxSize) && startTime === null && duration === null) {
       const maxMb = Math.max(1, Math.floor(maxSize / (1024 * 1024)));
       args.push('--max-filesize', `${maxMb}M`);
     }
@@ -450,36 +422,25 @@ function executeYtdlp(
     // --max-filesize can't bound section downloads or streams of unknown size; the disk can.
     // Twice the limit leaves room for the video and audio parts beside their merge.
     let overSize = false;
-    let measuring = false;
-    const sizeWatch =
-      Number.isFinite(maxSize) &&
-      setInterval(async () => {
-        if (measuring) return;
-        measuring = true;
-        if ((await usedBytes(outputDir)) > maxSize * 2) {
-          overSize = true;
-          ytdlp.kill('SIGKILL');
-        }
-        measuring = false;
-      }, SIZE_WATCH_MS);
+    const stopWatch = watchDirSize(outputDir, maxSize * 2, () => {
+      overSize = true;
+      ytdlp.kill('SIGKILL');
+    });
 
     const timeoutId = setTimeout(() => {
-      clearInterval(sizeWatch);
+      stopWatch();
       ytdlp.kill('SIGKILL');
       reject(timedOut(`yt-dlp: timed out after ${timeout / 1000}s`));
     }, timeout);
 
     ytdlp.on('close', code => {
       clearTimeout(timeoutId);
-      clearInterval(sizeWatch);
+      stopWatch();
       const rejectWith = (error, detail) =>
         reject(withCause(error, `yt-dlp: ${detail ?? ytdlpReason(stderr || stdout, code)}`));
 
       if (overSize) {
-        rejectWith(
-          new ValidationError(tooLargeMessage(maxSize)),
-          `stopped at over ${maxSize * 2} bytes on disk`
-        );
+        rejectWith(tooLarge(maxSize), `stopped at over ${maxSize * 2} bytes on disk`);
         return;
       }
 
@@ -490,7 +451,7 @@ function executeYtdlp(
         // max-filesize ... Aborting"), so this loud path catches the size cap. The quiet
         // --match-filter duration skip is handled by the no-output fallback further down.
         if (/larger than max-filesize/i.test(combinedOutput)) {
-          rejectWith(new ValidationError(tooLargeMessage(maxSize)));
+          rejectWith(tooLarge(maxSize));
           return;
         }
 
@@ -619,6 +580,7 @@ function executeYtdlp(
 
     ytdlp.on('error', err => {
       clearTimeout(timeoutId);
+      stopWatch();
       if (err.code === 'ENOENT') {
         reject(
           withCause(
@@ -789,8 +751,9 @@ function emptyDownloadError(error) {
 
 export async function downloadWithYtdlp(
   rawUrl,
-  { maxSize = Infinity, quality = null, maxDuration = 300, startTime = null, duration = null } = {}
+  { maxSize, quality = null, maxDuration = 300, startTime = null, duration = null } = {}
 ) {
+  maxSize ??= await maxDownloadBytes();
   const url = canonicalYtdlpUrl(rawUrl);
   logger.debug(
     `Downloading via yt-dlp: ${url} (maxDuration: ${maxDuration}, startTime: ${startTime}, duration: ${duration})`
@@ -881,12 +844,7 @@ export async function downloadWithYtdlp(
     const filename = path.basename(outputPath);
     const contentType = getContentType(path.extname(outputPath));
     const file = await fromPath(outputPath, { contentType, filename });
-    if (file.size > maxSize) {
-      throw withCause(
-        new ValidationError(tooLargeMessage(maxSize)),
-        `yt-dlp: file is ${file.size} bytes, limit ${maxSize}`
-      );
-    }
+    if (file.size > maxSize) throw tooLarge(maxSize, `yt-dlp: file is ${file.size} bytes`);
     logger.debug(
       `Successfully downloaded media via yt-dlp${usedFallback ? ' (via fallback)' : ''}, size: ${file.size} bytes, content-type: ${contentType}`
     );

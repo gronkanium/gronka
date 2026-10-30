@@ -194,11 +194,8 @@ optimize a gif from a message.
 
 ## file size limits
 
-default file size limits:
+one size limit covers every file the bot downloads, converts or optimizes: 1gb by default, set by the max download size webui setting (`MAX_VIDEO_SIZE` when it is unset). files over the discord attachment limit are sent as [[R2-Storage]] links.
 
-- video and audio: 1gb maximum for downloads and conversions (configurable via `MAX_VIDEO_SIZE`)
-- images: 50mb maximum (configurable via `MAX_IMAGE_SIZE`)
-- gif optimization: 50mb maximum
 - video length: the max video duration setting (trimmed downloads via `start`/`end` bypass this)
 
 ## error messages

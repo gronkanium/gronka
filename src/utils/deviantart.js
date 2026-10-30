@@ -4,6 +4,7 @@ import { BROWSER_USER_AGENT as USER_AGENT } from './browser-agent.js';
 import { createLogger } from './logger.js';
 import { NetworkError, ValidationError, withCause, contentGone } from './errors.js';
 import { downloadFileFromUrl } from './file-downloader.js';
+import { maxDownloadBytes } from './size-limit.js';
 import { ssrfGuardedRequest, PAGE_FETCH_TIMEOUT_MS, MAX_PAGE_BYTES } from './ssrf-guard.js';
 import { hostOf } from './url-host.js';
 
@@ -46,7 +47,7 @@ export function pickMedia(deviation, maxSize = Infinity) {
   return `${media.baseUri}${path}${token ? `?token=${token}` : ''}`;
 }
 
-export async function downloadFromDeviantArt(url, maxSize = Infinity) {
+export async function downloadFromDeviantArt(url) {
   const id = deviationId(url);
   const cookie = readCookie();
   let html;
@@ -80,7 +81,7 @@ export async function downloadFromDeviantArt(url, maxSize = Infinity) {
       `deviantart: deviation ${id} missing from page state`
     );
   }
-  const mediaUrl = pickMedia(deviation, maxSize);
+  const mediaUrl = pickMedia(deviation, await maxDownloadBytes());
   if (!mediaUrl) {
     const loggedIn = state['@@publicSession']?.isLoggedIn === true;
     if (deviation.isMature && !loggedIn) {

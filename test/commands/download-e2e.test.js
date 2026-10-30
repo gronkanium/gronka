@@ -275,8 +275,8 @@ if (!mocksSupported) {
     const realGallery = await import('../../src/utils/gallery-dl.js');
     mock.module('../../src/utils/gallery-dl.js', () => ({
       ...realGallery,
-      downloadWithGalleryDl: async (url, maxSize, options) => {
-        galleryCalls.push({ url, maxSize, options });
+      downloadWithGalleryDl: async (url, options) => {
+        galleryCalls.push({ url, options });
         if (url.includes('photo-fallback-denied')) {
           const { NetworkError, withCause } = await import('../../src/utils/errors.js');
           throw withCause(

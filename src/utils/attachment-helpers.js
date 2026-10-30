@@ -1,8 +1,5 @@
-import { botConfig } from './config.js';
 import { OUTPUT_FORMATS } from './output-formats.js';
 import path from 'node:path';
-
-const { maxVideoSize: MAX_VIDEO_SIZE, maxImageSize: MAX_IMAGE_SIZE } = botConfig;
 
 // Allowed video content types
 const ALLOWED_VIDEO_TYPES = [
@@ -37,17 +34,6 @@ export function attachmentMediaKind(attachment) {
   if (['gif', 'png', 'jpg', 'jpeg', 'webp', 'awebp', 'avif'].includes(ext)) return 'image';
   if (OUTPUT_FORMATS[ext]?.kind === 'audio') return 'audio';
   return 'unknown';
-}
-
-export function validateConversionAttachment(attachment) {
-  const kind = attachmentMediaKind(attachment);
-  const max = kind === 'image' ? MAX_IMAGE_SIZE : MAX_VIDEO_SIZE;
-  return attachment.size > max
-    ? {
-        valid: false,
-        error: `the ${kind === 'unknown' ? 'media' : kind} file is too large (max ${max / (1024 * 1024)}mb).`,
-      }
-    : { valid: true };
 }
 
 export function firstConvertibleAttachment(attachments) {

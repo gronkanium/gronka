@@ -304,7 +304,7 @@ test('a cover image cobalt returns for an Instagram reel counts as a miss', asyn
     'https://instagram.com/user/reels/De6r82TCaVC/',
     'https://www.instagram.com/tv/De6r82TCaVC/',
   ]) {
-    await assert.rejects(downloadFromSocialMedia(null, url, Infinity, cover), error =>
+    await assert.rejects(downloadFromSocialMedia(null, url, cover), error =>
       /only its cover image/.test(describeCause(rootCause(error)))
     );
   }

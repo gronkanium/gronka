@@ -8,6 +8,7 @@ import { Transform } from 'node:stream';
 import { pipeline } from 'node:stream/promises';
 import axios from 'axios';
 import { createLogger, withLogRef } from './logger.js';
+import { maxDownloadBytes, tooLarge } from './size-limit.js';
 
 const logger = createLogger('media-file');
 
@@ -17,15 +18,8 @@ const JOBS_BASE = path.resolve(process.env.MEDIA_TEMP_DIR || 'temp/jobs');
 export const JOBS_ROOT = path.join(JOBS_BASE, os.hostname());
 const HEAD_BYTES = 64;
 const IDLE_TIMEOUT_MS = 60_000;
+const DIR_WATCH_MS = 2000;
 const scope = new AsyncLocalStorage();
-
-export class TooLargeError extends Error {
-  constructor(maxSize) {
-    super(`file exceeds ${maxSize} bytes`);
-    this.code = 'TOO_LARGE';
-    this.maxSize = maxSize;
-  }
-}
 
 async function newJobDir() {
   await fsp.mkdir(JOBS_ROOT, { recursive: true, mode: 0o700 });
@@ -87,6 +81,36 @@ export async function tempDir() {
   return dir;
 }
 
+async function usedBytes(dir) {
+  const entries = await fsp.readdir(dir, { recursive: true, withFileTypes: true }).catch(() => []);
+  const sizes = await Promise.all(
+    entries
+      .filter(entry => entry.isFile())
+      .map(entry =>
+        fsp.stat(path.join(entry.parentPath, entry.name)).then(
+          stats => stats.size,
+          () => 0
+        )
+      )
+  );
+  return sizes.reduce((sum, size) => sum + size, 0);
+}
+
+// For tools that write their own files: calls onOver once when dir passes limit bytes. Returns stop.
+export function watchDirSize(dir, limit, onOver) {
+  let measuring = false;
+  const timer = setInterval(async () => {
+    if (measuring) return;
+    measuring = true;
+    if ((await usedBytes(dir)) > limit) {
+      clearInterval(timer);
+      onOver();
+    }
+    measuring = false;
+  }, DIR_WATCH_MS);
+  return () => clearInterval(timer);
+}
+
 function meter(maxSize, onChunk = () => {}) {
   const hash = createHash('sha256');
   const state = { size: 0, head: Buffer.alloc(0) };
@@ -94,7 +118,8 @@ function meter(maxSize, onChunk = () => {}) {
     transform(chunk, _encoding, callback) {
       onChunk();
       state.size += chunk.length;
-      if (state.size > maxSize) return callback(new TooLargeError(maxSize));
+      if (state.size > maxSize)
+        return callback(tooLarge(maxSize, `stream passed ${maxSize} bytes`));
       hash.update(chunk);
       if (state.head.length < HEAD_BYTES) {
         state.head = Buffer.concat([state.head, chunk.subarray(0, HEAD_BYTES - state.head.length)]);
@@ -106,10 +131,8 @@ function meter(maxSize, onChunk = () => {}) {
 }
 
 // Streams a readable to a new temp file, hashing on the way; nothing is held in memory.
-export async function writeStream(
-  readable,
-  { ext = '', maxSize = Infinity, transforms = [] } = {}
-) {
+export async function writeStream(readable, { ext = '', maxSize, transforms = [] } = {}) {
+  maxSize ??= await maxDownloadBytes();
   const file = await tempPath(ext);
   let idle;
   const touch = () => {
@@ -130,12 +153,13 @@ export async function writeStream(
 }
 
 // GETs url straight to disk. axios's maxContentLength does not apply to streams, so the cap is ours.
-export async function fetchToFile(url, options = {}, { maxSize = Infinity, ext = '' } = {}) {
+export async function fetchToFile(url, options = {}, { maxSize, ext = '' } = {}) {
+  maxSize ??= await maxDownloadBytes();
   const response = await axios.get(url, { ...options, responseType: 'stream' });
   const declared = Number(response.headers['content-length']);
   if (Number.isFinite(declared) && declared > maxSize) {
     response.data.destroy();
-    throw new TooLargeError(maxSize);
+    throw tooLarge(maxSize, `content-length ${declared}`);
   }
   const written = await writeStream(response.data, { ext, maxSize });
   return {

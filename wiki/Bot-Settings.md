@@ -46,7 +46,9 @@ maximum video length in seconds for downloads. size is the main limit; this only
 
 ### `max_video_size_mb`
 
-largest download in mb. oversized videos are refused before they are downloaded.
+largest file the bot downloads, converts or optimizes, in mb. when the source reports a size, a file over it is refused before anything downloads; otherwise the download stops the moment it passes the limit.
+
+**default:** `MAX_VIDEO_SIZE` (1024) · **range:** 50-2048
 
 ### `upload_ttl_tiers`
 

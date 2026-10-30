@@ -36,7 +36,7 @@ export const SETTINGS = {
     label: 'Max download size (MB)',
     section: 'delivery',
     description:
-      'Maximum download size in MB, the primary limit. Oversized videos are rejected before download (yt-dlp aborts the pull). Applies immediately',
+      'Largest file the bot downloads, converts or optimizes, in MB. Refused before download when the source reports a size, else stopped the moment it passes. Applies immediately',
     min: 50,
     max: 2048,
   },

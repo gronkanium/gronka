@@ -6,12 +6,12 @@
     <title>privacy / gronka</title>
     <meta
       name="description"
-      content="what gronka's web page keeps: nothing about who you are or what you download."
+      content="what gronka keeps, on the web and in discord: nothing about who you are or what you download."
     />
     <meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)" />
     <meta name="theme-color" content="#000000" media="(prefers-color-scheme: dark)" />
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
-    <link rel="canonical" href="https://web.gronka.dev/privacy/" />
+    <link rel="canonical" href="https://gronka.dev/privacy/" />
     <link
       rel="preload"
       href="/fonts/Archivo-Regular.woff2"
@@ -51,8 +51,7 @@
       <p class="lede">
         gronka keeps no record of who you are or what you download. we are not interested in spying
         on anyone; we keep only what it takes to keep the service working. this page covers
-        web.gronka.dev and api.gronka.dev. the discord bot has
-        <a href="https://gronka.dev/privacy">its own policy</a>.
+        gronka.dev, api.gronka.dev and the gronka discord bot.
       </p>
       <p>
         no request logs, no download history, no analytics, ads, trackers or cookies. when something
@@ -85,11 +84,41 @@
         <a href="https://www.cloudflare.com/privacypolicy/">cloudflare's privacy policy</a> covers
         what they see.
       </p>
-      <p class="note">updated 2026-10-04.</p>
+
+      <h2>the discord bot</h2>
+      <p>
+        each command run bumps an anonymous counter for that command, with no user, server or
+        channel id; <code>/info</code> shows the totals. failures are kept as described above.
+      </p>
+      <p>
+        your media is processed in a temporary folder and deleted as soon as the result is
+        delivered. a result too big to attach on discord goes to cdn.gronka.dev under a random link
+        that anyone holding it can open, deleted within three days.
+      </p>
+      <p>
+        the bot does not read your server's messages. discord only shows it messages that mention
+        it, direct messages, and the message you run a command on. message text is never stored or
+        logged, and nothing about servers or channels is kept once a request ends.
+      </p>
+      <p>
+        we sell or share nothing. gronka is not meant for anyone under 13. questions:
+        <a href="mailto:gronkasupport@proton.me">gronkasupport@proton.me</a>.
+      </p>
+      <p class="note">updated 2026-10-30.</p>
     </main>
     <footer class="foot">
       <a href="/">download</a><a href="/docs/">api docs</a><a href="/key/">api key</a
       ><a href="/terms/">terms</a><a href="/privacy/" aria-current="page">privacy</a>
+      <a
+        class="me"
+        href="https://discord.gg/5Z4hEeHshH"
+        aria-label="gronka discord server"
+        title="discord server"
+        ><svg viewBox="0 0 16 16" aria-hidden="true">
+          <path
+            d="M13.545 2.907a13.2 13.2 0 0 0-3.257-1.011.05.05 0 0 0-.052.025c-.141.25-.297.577-.406.833a12.2 12.2 0 0 0-3.658 0 8 8 0 0 0-.412-.833.05.05 0 0 0-.052-.025c-1.125.194-2.22.534-3.257 1.011a.04.04 0 0 0-.021.018C.356 6.024-.213 9.047.066 12.032q.003.022.021.037a13.3 13.3 0 0 0 3.995 2.02.05.05 0 0 0 .056-.019q.463-.63.818-1.329a.05.05 0 0 0-.01-.059l-.018-.011a9 9 0 0 1-1.248-.595.05.05 0 0 1-.02-.066l.015-.019q.127-.095.248-.195a.05.05 0 0 1 .051-.007c2.619 1.196 5.454 1.196 8.041 0a.05.05 0 0 1 .053.007q.121.1.248.195a.05.05 0 0 1-.004.085 8 8 0 0 1-1.249.594.05.05 0 0 0-.03.03.05.05 0 0 0 .003.041c.24.465.515.909.817 1.329a.05.05 0 0 0 .056.019 13.2 13.2 0 0 0 4.001-2.02.05.05 0 0 0 .021-.037c.334-3.451-.559-6.449-2.366-9.106a.03.03 0 0 0-.02-.019m-8.198 7.307c-.789 0-1.438-.724-1.438-1.612s.637-1.613 1.438-1.613c.807 0 1.45.73 1.438 1.613 0 .888-.637 1.612-1.438 1.612m5.316 0c-.788 0-1.438-.724-1.438-1.612s.637-1.613 1.438-1.613c.807 0 1.451.73 1.438 1.613 0 .888-.631 1.612-1.438 1.612"
+          /></svg
+      ></a>
       <span class="tm">gronka™ © 2025-2026 gronkanium</span>
     </footer>
   </body>

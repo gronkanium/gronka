@@ -75,15 +75,15 @@ describe('handler', () => {
     for (const path of ['/', '/v1']) {
       const index = await handle(new Request(`http://web${path}`));
       expect(index.status).toBe(200);
-      expect((await readJson(index)).docs).toBe('https://web.gronka.dev/docs/');
+      expect((await readJson(index)).docs).toBe('https://gronka.dev/docs/');
     }
     const pre = await handle(
       new Request('http://web/v1/download', {
         method: 'OPTIONS',
-        headers: { origin: 'https://web.gronka.dev' },
+        headers: { origin: 'https://gronka.dev' },
       })
     );
-    expect(pre.headers.get('access-control-allow-origin')).toBe('https://web.gronka.dev');
+    expect(pre.headers.get('access-control-allow-origin')).toBe('https://gronka.dev');
     const foreign = await handle(
       new Request('http://web/v1/health', { headers: { origin: 'https://evil.example' } })
     );

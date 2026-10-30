@@ -97,7 +97,7 @@ function randomRequest(r) {
       `Bearer gk_${r.chars('0123456789abcdefghjkmnpqrstvwxyz'.split(''), 8, 8)}_${r.chars(ASCII, 51, 51)}`,
     ]);
   if (r.chance(0.3))
-    headers.origin = r.pick(['https://web.gronka.dev', 'https://evil.example', r.chars(ASCII, 20)]);
+    headers.origin = r.pick(['https://gronka.dev', 'https://evil.example', r.chars(ASCII, 20)]);
   if (r.chance(0.2)) headers['content-length'] = r.pick(['-1', '99999999', 'abc', '0']);
   let body;
   if (['POST', 'PUT', 'PATCH', 'DELETE'].includes(method)) {
@@ -162,7 +162,7 @@ describe('web api fuzz', () => {
       expect([why, res.headers.get('content-type')]).toEqual([why, 'application/json']);
       expect([why, res.headers.get('x-content-type-options')]).toEqual([why, 'nosniff']);
       const allowOrigin = res.headers.get('access-control-allow-origin');
-      expect([why, allowOrigin === null || allowOrigin === 'https://web.gronka.dev']).toEqual([
+      expect([why, allowOrigin === null || allowOrigin === 'https://gronka.dev']).toEqual([
         why,
         true,
       ]);

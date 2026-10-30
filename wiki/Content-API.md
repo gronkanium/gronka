@@ -4,7 +4,7 @@
 post with its comment tree, or an x post with the post it quotes and the author's own thread. the
 answer is one json shape whatever the source, so a script, a bot or a prompt parses it the same
 way. this page is the design sketch and the roadmap; the live reference is
-[openapi.json](https://web.gronka.dev/openapi.json) and the [docs page](https://web.gronka.dev/docs/#content).
+[openapi.json](https://gronka.dev/openapi.json) and the [docs page](https://gronka.dev/docs/#content).
 
 status: preview. reddit, x, bluesky, instagram, tiktok, booru sites, pinterest and video sites are wired; the shape may still move before it leaves preview.
 

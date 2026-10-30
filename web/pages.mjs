@@ -3,7 +3,7 @@
 import fs from 'node:fs';
 
 const ROOT = new URL('./public/', import.meta.url);
-const SITE = 'https://web.gronka.dev';
+const SITE = 'https://gronka.dev';
 
 const PLATFORMS = [
   {

@@ -13,7 +13,7 @@ docker compose up -d --build
 
 The container registers the slash commands every time it starts.
 
-This is the Discord bot. web.gronka.dev is a hosted service built on Cloudflare (tunnel,
+This is the Discord bot. gronka.dev is a hosted service built on Cloudflare (tunnel,
 Turnstile, R2) and is not part of a self-hosted install; `docker-compose.web.yml` is its
 deployment and nothing in the bot stack depends on it.
 

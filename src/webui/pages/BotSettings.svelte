@@ -240,7 +240,7 @@
             class="field wide"
             bind:value={presenceActivity}
             maxlength="128"
-            placeholder="e.g. web.gronka.dev"
+            placeholder="e.g. gronka.dev"
           />
         </div>
       </div>

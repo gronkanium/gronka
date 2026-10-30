@@ -85,11 +85,10 @@ async function fetchListing(url, limit = 100) {
 
   // raw_json=1 stops Reddit html-escaping the urls it hands back, signatures included.
   // The session cookie rides on this request, so never over plain http.
-  const base = url
-    .split('?')[0]
-    .replace(/\/$/, '')
-    .replace(/^http:/i, 'https:')
-    .replace(/^https:\/\/[^/]*reddit\.com/i, 'https://www.reddit.com');
+  const post = new URL(url);
+  post.protocol = 'https:';
+  post.hostname = 'www.reddit.com';
+  const base = `${post.origin}${post.pathname.replace(/\/$/, '')}`;
   const jsonUrl = `${base}/.json?limit=${limit}&raw_json=1`;
   try {
     const response = await axios.get(jsonUrl, {

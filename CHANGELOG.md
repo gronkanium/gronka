@@ -5,6 +5,14 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and versions are release dates (`YYYY.MM.DD`, `.N` for a later release the same day).
 
+## [2026.10.30.1](https://github.com/gronkanium/gronka/compare/v2026.10.30...v2026.10.30.1) (2026-10-30)
+
+
+### Features
+
+* **web:** redirect web.gronka.dev and www.gronka.dev to gronka.dev ([#214](https://github.com/gronkanium/gronka/issues/214)) ([852f9c7](https://github.com/gronkanium/gronka/commit/852f9c7e1676e294b6c0090a2dccef33fd307ec5))
+* **web:** serve the downloader at gronka.dev, with links to the discord bot ([#214](https://github.com/gronkanium/gronka/issues/214)) ([852f9c7](https://github.com/gronkanium/gronka/commit/852f9c7e1676e294b6c0090a2dccef33fd307ec5))
+
 ## [2026.10.30](https://github.com/gronkanium/gronka/compare/v2026.10.28...v2026.10.30) (2026-10-30)
 
 

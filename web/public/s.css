@@ -306,6 +306,12 @@ input:not([type]) {
   margin-left: auto;
   color: var(--pencil);
 }
+.foot .me svg {
+  display: block;
+  width: 22px;
+  height: 22px;
+  fill: currentColor;
+}
 .foot .tm {
   flex-basis: 100%;
   color: var(--pencil);

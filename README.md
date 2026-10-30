@@ -7,11 +7,11 @@
   <a href="https://github.com/gronkanium/gronka/releases/latest"><img src="https://img.shields.io/github/v/release/gronkanium/gronka?color=000&label=release" alt="release"></a>
   <a href="LICENSE"><img src="https://img.shields.io/github/license/gronkanium/gronka?color=000" alt="MIT"></a>
   <a href="https://discord.com/oauth2/authorize?client_id=1522194017692156046"><img src="https://img.shields.io/badge/add_to-discord-000?logo=discord&logoColor=white" alt="add to discord"></a>
-  <a href="https://web.gronka.dev"><img src="https://img.shields.io/badge/web-gronka.dev-000" alt="web.gronka.dev"></a>
+  <a href="https://gronka.dev"><img src="https://img.shields.io/badge/web-gronka.dev-000" alt="gronka.dev"></a>
 </p>
 
 paste a link, get the file. gronka™ downloads media from 40+ sites, turns video into gifs and shrinks
-gifs, as a discord bot and on [web.gronka.dev](https://web.gronka.dev).
+gifs, as a discord bot and on [gronka.dev](https://gronka.dev).
 
 ## commands
 
@@ -26,7 +26,7 @@ right-click a message → apps does the same: **convert**, **download**, **optim
 
 tiktok, instagram, youtube, x, reddit, soundcloud, bluesky, threads, pinterest, twitch, tumblr, imgur, giphy
 and about 30 more, through [cobalt](https://github.com/imputnet/cobalt), yt-dlp, gallery-dl and a few
-extractors of its own. the full list is on [web.gronka.dev](https://web.gronka.dev).
+extractors of its own. the full list is on [gronka.dev](https://gronka.dev).
 
 ## run your own
 
@@ -41,7 +41,7 @@ only `DISCORD_TOKEN` and `CLIENT_ID` are required. cookies, cloudflare r2 and ev
 optional: see the [wiki](https://github.com/gronkanium/gronka/wiki). `bun run setup --help`
 lists flags for scripted installs.
 
-self-hosting runs the discord bot. web.gronka.dev is a hosted service built on cloudflare and is
+self-hosting runs the discord bot. gronka.dev is a hosted service built on cloudflare and is
 not part of a self-hosted install.
 
 ## development

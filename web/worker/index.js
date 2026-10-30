@@ -3,7 +3,7 @@
 // (HMAC-SHA256 over the payload, shared STREAM_KEY) are served, so this is not an open proxy.
 // Token: base64url(JSON {u: source url, h: request headers, n: filename, e: expiry unix s}) + "." + base64url(sig)
 
-const ALLOWED_ORIGIN = 'https://web.gronka.dev';
+const ALLOWED_ORIGIN = 'https://gronka.dev';
 const PASS_HEADERS = ['content-length', 'content-range', 'accept-ranges', 'last-modified', 'etag'];
 const MEDIA_TYPE = /^(video|audio|image)\/[\w.+-]+$/i;
 const encoder = new TextEncoder();
@@ -52,7 +52,7 @@ const cors = {
   'access-control-expose-headers': 'content-length, content-range, content-disposition',
 };
 
-const WEB_PAGE = 'https://web.gronka.dev/';
+const WEB_PAGE = 'https://gronka.dev/';
 const text = (body, status) =>
   new Response(body, {
     status,

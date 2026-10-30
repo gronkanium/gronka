@@ -1,0 +1,12 @@
+name = "gronka-redirect"
+main = "index.js"
+compatibility_date = "2026-09-01"
+upload_source_maps = false
+workers_dev = false
+routes = [
+  { pattern = "web.gronka.dev", custom_domain = true },
+  { pattern = "www.gronka.dev", custom_domain = true },
+]
+
+[observability]
+enabled = false

@@ -16,7 +16,7 @@ include this stuff in your report:
 
 ### what we're interested in
 
-security issues in the discord bot, the code in this repository, web.gronka.dev and api.gronka.dev that affect:
+security issues in the discord bot, the code in this repository, gronka.dev and api.gronka.dev that affect:
 
 - authentication or authorization problems
 - data leaks or exposure

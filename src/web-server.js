@@ -25,7 +25,7 @@ import { ENGINES } from './core/sources.js';
 const logger = createLogger('web');
 
 const env = (name, fallback) => process.env[name]?.trim() || fallback;
-const WEB_ORIGIN = env('WEB_ORIGIN', 'https://web.gronka.dev');
+const WEB_ORIGIN = env('WEB_ORIGIN', 'https://gronka.dev');
 const TURNSTILE_SECRET = env('TURNSTILE_SECRET', '');
 const STREAM_BASE = env('WEB_STREAM_BASE', '');
 const STREAM_KEY = env('WEB_STREAM_KEY', '');
@@ -37,7 +37,7 @@ const R2_PREFIX = 'web/';
 const MAX_BODY_BYTES = 16 * 1024;
 const HEARTBEAT_MS = 15_000;
 const MAX_WINDOWS = 10_000;
-const DOCS_URL = 'https://web.gronka.dev/docs/';
+const DOCS_URL = 'https://gronka.dev/docs/';
 const API_INDEX = {
   name: 'gronka',
   about:
@@ -45,11 +45,11 @@ const API_INDEX = {
   version: 'v1',
   status: 'public preview',
   docs: DOCS_URL,
-  openapi: 'https://web.gronka.dev/openapi.json',
+  openapi: 'https://gronka.dev/openapi.json',
   health: 'https://api.gronka.dev/v1/health',
   download: 'POST https://api.gronka.dev/v1/download',
   content: 'POST https://api.gronka.dev/v1/content',
-  page: 'https://web.gronka.dev/',
+  page: 'https://gronka.dev/',
 };
 
 export function contentDisposition(filename) {

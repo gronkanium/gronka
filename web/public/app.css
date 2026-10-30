@@ -553,6 +553,11 @@ details[open] summary::after {
   text-decoration: underline;
   text-underline-offset: 3px;
 }
+.bot {
+  margin: 22px 0 0;
+  text-align: center;
+  font-size: 15px;
+}
 .sites .note {
   font-size: 13px;
   margin: 10px 0 0;

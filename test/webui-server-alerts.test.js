@@ -71,6 +71,16 @@ describe('alert components', () => {
   });
 });
 
+describe('alert paging', () => {
+  test('limit and offset are clamped, never passed through raw', async () => {
+    const bad = await (await fetch(`${baseUrl}/api/alerts?limit=abc&offset=-5`)).json();
+    assert.strictEqual(bad.limit, 100);
+    assert.strictEqual(bad.offset, 0);
+    const huge = await (await fetch(`${baseUrl}/api/alerts?limit=99999999`)).json();
+    assert.strictEqual(huge.limit, 1000);
+  });
+});
+
 describe('alert summary', () => {
   // Scoped to its own component because the test DB persists between runs
   const component = `alerts-summary-test-${Date.now()}`;

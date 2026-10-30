@@ -35,6 +35,10 @@ only `./temp` is mounted for media: each job works in its own folder there and d
 
 the webui has no login: keep port `3001` on your own network.
 
+## egress fence
+
+compose starts `app`, `worker` and `cobalt` as root so `contain.sh` can install an nftables rule set (no private ranges, no host, no link-local or metadata addresses), then drops to an unprivileged user with every capability gone. a plain `docker run` of the image starts as that user and skips the fence: use compose, or add `--user root --cap-add NET_ADMIN --cap-add SETUID --cap-add SETGID --cap-add SETPCAP` yourself. a private address the bot must reach (a LAN database, say) goes in `EGRESS_ALLOW`.
+
 ## health checks
 
 `app` answers `GET /health` with 200 once it is connected to discord; workers touch a heartbeat file. docker restarts either when they stop.

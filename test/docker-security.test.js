@@ -27,29 +27,46 @@ describe('compose security', () => {
     }
   });
 
-  test('capabilities are added only to the vpn and to the bot containers contain.sh drops', () => {
+  const fenced = ['app', 'worker', 'cobalt', 'gronka-web', 'cobalt-web'];
+
+  test('capabilities are added only to the vpn and to the containers contain.sh drops', () => {
     const added = everyService.filter(([, s]) => s.cap_add?.length).map(([n, s]) => [n, s.cap_add]);
     const contain = ['NET_ADMIN', 'SETUID', 'SETGID', 'SETPCAP'];
     expect(added).toEqual([
       ['app', contain],
       ['worker', contain],
+      ['cobalt', contain],
       ['vpn', ['NET_ADMIN']],
+      ['gronka-web', contain],
+      ['cobalt-web', contain],
     ]);
   });
 
-  test('bot containers fence egress, then run read-only with no capabilities', () => {
-    for (const name of ['app', 'worker']) {
-      const s = bot[name];
-      expect([name, s.read_only, s.cap_drop]).toEqual([name, true, ['ALL']]);
+  test('fenced containers start as root for contain.sh, then run read-only with no capabilities', () => {
+    for (const name of fenced) {
+      const s = bot[name] ?? web[name];
+      expect([name, s.user, s.read_only, s.cap_drop]).toEqual([name, 'root', true, ['ALL']]);
       expect(s.security_opt).toContain('no-new-privileges:true');
-      for (const volume of s.volumes.filter(v => /cookies/.test(v)))
+      // cobalt rewrites its own copy of the jar; the app's files are read-only
+      for (const volume of (s.volumes ?? []).filter(v => /:\/(app|secrets)\/.*cookies/.test(v)))
         expect(volume).toEndWith(':ro');
     }
     expect(bot.worker.entrypoint[0]).toBe('contain.sh');
+    expect(web['gronka-web'].entrypoint[0]).toBe('contain.sh');
     expect(read('Dockerfile')).toContain('ENTRYPOINT ["contain.sh", "docker-entrypoint.sh"]');
+    expect(read('docker/cobalt.Dockerfile')).toContain(
+      'ENTRYPOINT ["contain.sh", "docker-entrypoint.sh"]'
+    );
     const contain = read('scripts/contain.sh');
     expect(contain).toContain('192.168.0.0/16');
-    expect(contain).toMatch(/exec setpriv .*--bounding-set=-all.*--no-new-privs/);
+    expect(contain).toMatch(/exec "\$setpriv" .*--bounding-set=-all.*--no-new-privs/);
+  });
+
+  test('every container has a pid and memory cap', () => {
+    for (const [name, s] of everyService) {
+      if (name === 'vpn') continue;
+      expect([name, Boolean(s.mem_limit), Boolean(s.pids_limit)]).toEqual([name, true, true]);
+    }
   });
 
   test('no host system directory is bind mounted', () => {
@@ -87,22 +104,17 @@ describe('compose security', () => {
     expect(web.postgres.networks).toEqual(['web-db']);
   });
 
-  test('web containers are read-only, drop every capability and run as non-root', () => {
-    for (const name of ['gronka-web', 'cobalt-web', 'cloudflared']) {
-      expect([name, web[name].read_only, web[name].cap_drop]).toEqual([name, true, ['ALL']]);
-      expect(web[name].security_opt).toContain('no-new-privileges:true');
-    }
-    expect(web['gronka-web'].user).not.toMatch(/^(0|root)\b/);
+  test('cloudflared is read-only, drops every capability and runs as non-root', () => {
+    expect([web.cloudflared.read_only, web.cloudflared.cap_drop]).toEqual([true, ['ALL']]);
+    expect(web.cloudflared.security_opt).toContain('no-new-privileges:true');
     expect(web.cloudflared.user).not.toMatch(/^(0|root)\b/);
   });
 
-  test('the app image drops root and the bot containers have memory caps', () => {
+  test('the app image drops root', () => {
     const lastUser = read('Dockerfile')
       .match(/^USER\s+(\S+)/gm)
       ?.at(-1);
     expect(lastUser).toBe('USER bun');
-    expect(bot.app.mem_limit).toBeTruthy();
-    expect(bot.worker.mem_limit).toBeTruthy();
   });
 
   test('secrets come from the environment, never from the compose file', () => {

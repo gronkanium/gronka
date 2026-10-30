@@ -9,6 +9,10 @@ export function securityHeaders(req, res, next) {
   // Only include recognized Permissions-Policy features to avoid console warnings
   // Only set well-known, recognized features - omitting Privacy Sandbox features that cause warnings
   res.set('Permissions-Policy', 'geolocation=(), microphone=(), camera=()');
+  res.set(
+    'Content-Security-Policy',
+    "default-src 'self'; img-src 'self' data:; style-src 'self' 'unsafe-inline'; frame-ancestors 'none'"
+  );
   next();
 }
 

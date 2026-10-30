@@ -4,7 +4,7 @@ import path from 'path';
 import { createLogger } from './logger.js';
 import { NetworkError, ValidationError, withCause, describeCause } from './errors.js';
 import { sanitizeFilename } from './validation.js';
-import { ssrfGuardedRequest } from './ssrf-guard.js';
+import { ssrfGuardedRequest, MAX_PAGE_BYTES } from './ssrf-guard.js';
 import { writeStream } from './media-file.js';
 import { maxDownloadBytes, tooLarge } from './size-limit.js';
 
@@ -86,6 +86,7 @@ export async function downloadFromMega(url) {
     const response = await axios.post(MEGA_API, [{ a: 'g', g: 1, ssl: 1, p: id }], {
       params: { id: 0 },
       timeout: 20000,
+      maxContentLength: MAX_PAGE_BYTES,
     });
     info = Array.isArray(response.data) ? response.data[0] : response.data;
   } catch (error) {

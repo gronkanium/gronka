@@ -140,7 +140,7 @@ function startStatsServer() {
       });
     } catch (error) {
       logger.error('Failed to update bot status:', error);
-      res.status(500).json({ error: error.message });
+      res.status(500).json({ error: 'failed to update bot status' });
     }
   });
 

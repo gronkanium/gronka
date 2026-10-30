@@ -49,8 +49,11 @@ export function pickMedia(deviation, maxSize = Infinity) {
 export async function downloadFromDeviantArt(url) {
   const id = deviationId(url);
   const cookie = readCookie();
-  // The session cookie rides on this request, so never over plain http.
-  const { data: html } = await fetchPage(url.replace(/^http:/i, 'https:'), {
+  // The session cookie rides on this request, so never over plain http, and only to www.
+  const page = new URL(url);
+  page.protocol = 'https:';
+  page.hostname = 'www.deviantart.com';
+  const { data: html } = await fetchPage(page.href, {
     failMessage: 'failed to reach DeviantArt',
     headers: { 'User-Agent': USER_AGENT, ...(cookie && { Cookie: cookie }) },
   });

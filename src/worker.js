@@ -23,6 +23,7 @@ const POLL_MS = 2000;
 const RECLAIM_MS = 15_000;
 const STALL_MS = 2 * 60 * 1000;
 const DRAIN_MS = Number(process.env.WORKER_DRAIN_MS || 90_000);
+const MAX_RUNNING_JOBS = Number(process.env.WORKER_MAX_JOBS || 4);
 // Read by the compose healthcheck; lives in this worker's own job dir, not a shared temp dir.
 const ALIVE_FILE = path.join(JOBS_ROOT, 'alive');
 const INTERRUPTED = 'this was interrupted before it could finish. please try again.';
@@ -91,8 +92,13 @@ async function pump() {
   try {
     do {
       again = false;
-      for (let job; !draining && (job = await queue.claimJob());) {
-        const work = runJob(job).finally(() => running.delete(job.id));
+      while (!draining && running.size < MAX_RUNNING_JOBS) {
+        const job = await queue.claimJob();
+        if (!job) break;
+        const work = runJob(job).finally(() => {
+          running.delete(job.id);
+          pump();
+        });
         running.set(job.id, work);
       }
     } while (again && !draining);

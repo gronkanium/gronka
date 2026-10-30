@@ -9,7 +9,7 @@ const latest = async (command, since) =>
   JSON.parse((await getAlerts({ command, startTime: since, limit: 1 }))[0].metadata);
 
 describe('recordFailure', () => {
-  test('keeps the cause and its code, with any link cut to the site', async () => {
+  test('keeps the cause and its code, with any link cut to its path', async () => {
     const since = Date.now();
     const command = `t-cause-${since}`;
     const cause = Object.assign(new Error('cobalt said no for https://youtu.be/abc?si=x'), {
@@ -20,8 +20,23 @@ describe('recordFailure', () => {
     assert.strictEqual(metadata.code, 'error.api.content.video.age');
     assert.strictEqual(
       metadata.cause,
-      'error.api.content.video.age: cobalt said no for https://youtu.be/abc?si=x'
+      'error.api.content.video.age: cobalt said no for https://youtu.be/abc'
     );
+  });
+
+  test('drops the link fragment and the tokens in trail links', async () => {
+    const since = Date.now();
+    const command = `t-secret-${since}`;
+    const cause = new Error('x');
+    cause.trail = [{ step: 'cdn', error: 'GET https://cdn.example/v.mp4?token=abc#frag 403' }];
+    await recordFailure(command, {
+      error: 'could not download this file',
+      url: 'https://mega.nz/file/abc123#decryptionkey',
+      cause,
+    });
+    const metadata = await latest(command, since);
+    assert.strictEqual(metadata.url, 'https://mega.nz/file/abc123');
+    assert.strictEqual(metadata.trail[0].error, 'GET https://cdn.example/v.mp4 403');
   });
 
   test('keeps the full link, the specific cause, the trail and the options', async () => {

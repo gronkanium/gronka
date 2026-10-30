@@ -18,13 +18,16 @@ x-hardening: &hardening
       compress: 'false'
 
 services:
+  # Starts as root only so contain.sh can fence egress (same as the bot stack), then runs as bun
+  # with every capability gone.
   gronka-web:
     <<: *hardening
     image: ${WEB_IMAGE:-gronka-web:preview}
     pull_policy: never
     container_name: gronka-web
-    entrypoint: ['bun', 'src/web-server.js']
-    user: '1000:1000'
+    entrypoint: ['contain.sh', 'bun', 'src/web-server.js']
+    user: root
+    cap_add: [NET_ADMIN, SETUID, SETGID, SETPCAP]
     mem_limit: 4g
     pids_limit: 256
     tmpfs:
@@ -75,6 +78,7 @@ services:
     restart: unless-stopped
     security_opt: [no-new-privileges:true]
     mem_limit: 512m
+    pids_limit: 256
     environment:
       POSTGRES_USER: gronka_web
       POSTGRES_DB: gronka_web
@@ -93,12 +97,15 @@ services:
   cobalt-web:
     <<: *hardening
     image: gronka-cobalt:11.7.1
-    build: { context: ./docker, dockerfile: cobalt.Dockerfile }
+    build: { context: ., dockerfile: docker/cobalt.Dockerfile }
     container_name: cobalt-web
     init: true
+    user: root
+    cap_add: [NET_ADMIN, SETUID, SETGID, SETPCAP]
     mem_limit: 1g
     pids_limit: 256
     environment:
+      CONTAIN_USER: node
       API_URL: http://cobalt-web:9000
       COOKIE_PATH: /cookies.json
     volumes:

@@ -10,7 +10,7 @@ import {
   rootCause,
 } from './errors.js';
 import { downloadFileFromUrl } from './file-downloader.js';
-import { ssrfGuardedRequest } from './ssrf-guard.js';
+import { ssrfGuardedRequest, MAX_PAGE_BYTES } from './ssrf-guard.js';
 import { normalizeHost, hostUnder } from './url-host.js';
 import {
   SESSION_USER_AGENT as USER_AGENT,
@@ -187,6 +187,7 @@ export async function instagramGet(
       ...ssrfGuardedRequest(),
       responseType: 'json',
       timeout: API_TIMEOUT_MS,
+      maxContentLength: MAX_PAGE_BYTES,
       maxRedirects: 0,
       headers: {
         'User-Agent': USER_AGENT,

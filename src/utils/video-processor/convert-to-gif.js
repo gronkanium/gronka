@@ -18,7 +18,6 @@ const logger = createLogger('convert-to-gif');
 
 /**
  * Convert video file to GIF using FFmpeg with two-pass palette generation.
- * Runs inside a bounded media-processing slot so concurrent encodes can't starve the box.
  * @param {string} inputPath - Path to input video file
  * @param {string} outputPath - Path to output GIF file
  * @param {Object} options - Conversion options

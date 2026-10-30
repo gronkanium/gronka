@@ -53,7 +53,7 @@ router.get('/api/sources', async (req, res) => {
     });
   } catch (error) {
     logger.error('Failed to read sources:', error);
-    res.status(500).json({ error: 'failed to read sources', message: error.message });
+    res.status(500).json({ error: 'failed to read sources' });
   }
 });
 
@@ -71,7 +71,7 @@ router.get('/api/sources/test', async (req, res) => {
     });
   } catch (error) {
     logger.error('Failed to test a link:', error);
-    res.status(500).json({ error: 'failed to test that link', message: error.message });
+    res.status(500).json({ error: 'failed to test that link' });
   }
 });
 
@@ -88,12 +88,14 @@ router.get('/api/sources/checks', async (req, res) => {
     });
   } catch (error) {
     logger.error('Failed to read source checks:', error);
-    res.status(500).json({ error: 'failed to read source checks', message: error.message });
+    res.status(500).json({ error: 'failed to read source checks' });
   }
 });
 
 // With a url, checks that one example and answers with its result; without, starts a full run.
 router.post('/api/sources/checks/run', express.json(), async (req, res) => {
+  // A bodiless POST is a CORS "simple request": any page could start a run cross-origin.
+  if (!req.is('application/json')) return res.status(415).json({ error: 'json only' });
   try {
     const url = req.body?.url;
     if (url === undefined) {
@@ -106,7 +108,7 @@ router.post('/api/sources/checks/run', express.json(), async (req, res) => {
     res.json(await runAndSave(example));
   } catch (error) {
     logger.error('Failed to run a source check:', error);
-    res.status(500).json({ error: 'failed to run the check', message: error.message });
+    res.status(500).json({ error: 'failed to run the check' });
   }
 });
 

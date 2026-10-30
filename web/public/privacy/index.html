@@ -63,7 +63,8 @@
       <p>
         when a request fails, the link, the error and which download steps were tried are kept for
         up to 7 days so the failure can be fixed. nothing is kept for requests that succeed, and no
-        user, server or channel ids are kept.
+        user, server or channel ids are kept. while a discord request runs, the bot holds a handle
+        for its reply (which channel to answer in); it is deleted the moment the request ends.
       </p>
       <p>
         to stop one person hogging the server, requests are counted per ip address for 10 minutes,

@@ -3,6 +3,7 @@ import { createLogger } from '../utils/logger.js';
 import { NetworkError, contentGone } from '../utils/errors.js';
 import { canonicalizeMirrorUrl } from '../utils/cobalt.js';
 import { readSessionCookie } from '../utils/session-cookie.js';
+import { MAX_PAGE_BYTES } from '../utils/ssrf-guard.js';
 import { post, comment, thread, MAX_COMMENTS } from './schema.js';
 import { SESSION_USER_AGENT as USER_AGENT } from '../utils/browser-agent.js';
 
@@ -117,6 +118,7 @@ async function request(op, variables, { session, retried = false }) {
   try {
     const { data } = await axios.get(`${host}/graphql/${queryIds[op]}/${op}?${params}`, {
       timeout: API_TIMEOUT_MS,
+      maxContentLength: MAX_PAGE_BYTES,
       headers,
     });
     return data;

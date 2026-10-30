@@ -13,6 +13,7 @@ export function hostOf(url) {
 export const hostsOnly = text =>
   text?.replace(/https?:\/\/[^\s"'<>)]+/gi, url => hostOf(url) ?? '<link>') ?? null;
 
+export const BILIBILI_REFERER = 'https://www.bilibili.com/';
 export const isBilibiliCdnHost = host =>
   /(^|\.)bilivideo\.(com|cn)$|^upos-[\w-]+\.akamaized\.net$/.test(host ?? '');
 

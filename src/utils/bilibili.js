@@ -5,7 +5,7 @@ import { getRequestHeaders } from './discord-cdn.js';
 import { downloadFileFromUrl } from './file-downloader.js';
 import { maxDownloadBytes, tooLarge } from './size-limit.js';
 import { ssrfGuardedRequest, PAGE_FETCH_TIMEOUT_MS, MAX_PAGE_BYTES } from './ssrf-guard.js';
-import { hostOf, isBilibiliCdnHost } from './url-host.js';
+import { hostOf, isBilibiliCdnHost, BILIBILI_REFERER } from './url-host.js';
 
 const API = 'https://api.bilibili.com';
 // Bilibili's fixed shuffle of the two WBI key halves (from its player script).
@@ -62,7 +62,7 @@ async function api(path, query) {
       responseType: 'json',
       timeout: PAGE_FETCH_TIMEOUT_MS,
       maxContentLength: MAX_PAGE_BYTES,
-      headers: { ...getRequestHeaders(), Referer: 'https://www.bilibili.com/' },
+      headers: { ...getRequestHeaders(), Referer: BILIBILI_REFERER },
     }));
   } catch (error) {
     const status = error.response?.status;

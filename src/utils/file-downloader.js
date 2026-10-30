@@ -5,7 +5,7 @@ import { validateUrl } from './validation.js';
 import { ValidationError, NetworkError, withCause, describeCause, timedOut } from './errors.js';
 import { isDiscordCdnUrl, getRefreshedAttachmentURL, getRequestHeaders } from './discord-cdn.js';
 import { sanitizeFilename } from './validation.js';
-import { fetchToFile, withExtension, extensionForType } from './media-file.js';
+import { fetchToFile, withExtension, extensionForType, dispositionName } from './media-file.js';
 import {
   BLOCKED_DESTINATION_MESSAGE,
   isSsrfBlockedError,
@@ -13,7 +13,7 @@ import {
   MAX_PAGE_BYTES,
 } from './ssrf-guard.js';
 import { OUTPUT_FORMATS } from './output-formats.js';
-import { hostOf, isBilibiliCdnHost, hostUnder } from './url-host.js';
+import { hostOf, isBilibiliCdnHost, BILIBILI_REFERER, hostUnder } from './url-host.js';
 
 const logger = createLogger('file-downloader');
 
@@ -100,7 +100,7 @@ export function getDirectMediaHeaders(url) {
   if (hostUnder(host, 'rule34.xxx')) {
     return { Referer: 'https://rule34.xxx/' };
   }
-  return isBilibiliCdnHost(host) ? { Referer: 'https://www.bilibili.com/' } : {};
+  return isBilibiliCdnHost(host) ? { Referer: BILIBILI_REFERER } : {};
 }
 
 const isTransient = error =>
@@ -128,10 +128,8 @@ async function guardedFetch(url, userAgent = null) {
 }
 
 function filenameFor(file, url) {
-  const match = (file.headers['content-disposition'] || '').match(
-    /filename[^;=\n]*=((['"]).*?\2|[^;\n]*)/
-  );
-  if (match?.[1]) return sanitizeFilename(match[1].replace(/['"]/g, ''));
+  const named = dispositionName(file.headers);
+  if (named) return sanitizeFilename(named);
   try {
     const name = path.basename(new URL(url).pathname);
     const ext = path.extname(name) ? '' : extensionForType(file.headers['content-type']);

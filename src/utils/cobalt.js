@@ -13,7 +13,7 @@ import {
   contentGone,
   timedOut,
 } from './errors.js';
-import { fetchToFile, withExtension, extensionForType } from './media-file.js';
+import { fetchToFile, withExtension, extensionForType, dispositionName } from './media-file.js';
 import { detectFileType } from './storage.js';
 import { mapLimit, ITEM_FANOUT } from './map-limit.js';
 import { hostOf, normalizeHost, hostUnder } from './url-host.js';
@@ -416,7 +416,6 @@ async function callCobaltApi(apiUrl, url, retryCount = 0, maxRetries = 3) {
 }
 
 const MISSING_FILE_MESSAGE = 'the download service answered without a file, try again.';
-const DISPOSITION_NAME = /filename[^;=\n]*=((['"]).*?\2|[^;\n]*)/;
 
 const sameOrigin = (url, other) => {
   try {
@@ -444,8 +443,7 @@ async function fetchCobaltFile(url, { accept, timeout, what, failMessage, apiUrl
         'cobalt: tunnel answered 200 with an empty body'
       );
     }
-    const match = (file.headers['content-disposition'] || '').match(DISPOSITION_NAME);
-    return { ...file, dispositionName: match?.[1]?.replace(/['"]/g, '') || null };
+    return { ...file, dispositionName: dispositionName(file.headers) };
   } catch (error) {
     if (error instanceof ValidationError || error instanceof NetworkError) throw error;
     if (isSsrfBlockedError(error)) {

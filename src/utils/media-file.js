@@ -229,3 +229,11 @@ export async function sweepJobDirs(maxAgeMs = 6 * 60 * 60 * 1000) {
   if (removed) logger.info(`Removed ${removed} stale job dir(s)`);
   return removed;
 }
+
+// The filename a response's Content-Disposition names, unsanitized, or null.
+export function dispositionName(headers) {
+  const match = (headers?.['content-disposition'] || '').match(
+    /filename[^;=\n]*=((['"]).*?\2|[^;\n]*)/
+  );
+  return match?.[1]?.replace(/['"]/g, '') || null;
+}

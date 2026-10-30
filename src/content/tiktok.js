@@ -3,13 +3,12 @@ import { createLogger } from '../utils/logger.js';
 import { NetworkError, contentGone } from '../utils/errors.js';
 import { normalizeHost, hostUnder } from '../utils/url-host.js';
 import { BROWSER_USER_AGENT } from '../utils/browser-agent.js';
-import { guardedBeforeRedirect, ssrfGuardedRequest } from '../utils/ssrf-guard.js';
+import { guardedBeforeRedirect, ssrfGuardedRequest, MAX_PAGE_BYTES } from '../utils/ssrf-guard.js';
 import { post, thread, isoDate, linksIn } from './schema.js';
 
 const logger = createLogger('content-tiktok');
 
 const TIMEOUT_MS = 15000;
-const MAX_PAGE_BYTES = 2 * 1024 * 1024;
 
 export const TIKTOK_LIMITS = { thread: 0, comments: 0, pages: 1, budgetMs: 30000 };
 

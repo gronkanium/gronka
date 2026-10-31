@@ -5,6 +5,23 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and versions are release dates (`YYYY.MM.DD`, `.N` for a later release the same day).
 
+## [2026.10.31](https://github.com/gronkanium/gronka/compare/v2026.10.30.1...v2026.10.31) (2026-10-31)
+
+
+### Features
+
+* **web:** link the GitHub repo beside the Discord icon ([#215](https://github.com/gronkanium/gronka/issues/215)) ([7ed6d4f](https://github.com/gronkanium/gronka/commit/7ed6d4f7ff2e430522dfaf94f08d3b51874672d7))
+
+
+### Bug Fixes
+
+* **web:** remove the Discord bot promotion below the form ([#215](https://github.com/gronkanium/gronka/issues/215)) ([7ed6d4f](https://github.com/gronkanium/gronka/commit/7ed6d4f7ff2e430522dfaf94f08d3b51874672d7))
+
+
+### Dependencies
+
+* patch follow-redirects and minimatch audit findings ([#215](https://github.com/gronkanium/gronka/issues/215)) ([7ed6d4f](https://github.com/gronkanium/gronka/commit/7ed6d4f7ff2e430522dfaf94f08d3b51874672d7))
+
 ## [2026.10.30.1](https://github.com/gronkanium/gronka/compare/v2026.10.30...v2026.10.30.1) (2026-10-30)
 
 

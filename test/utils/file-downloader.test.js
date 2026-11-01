@@ -47,6 +47,31 @@ describe('source-specific file downloads', () => {
     }
   });
 
+  test('X videos download even though video.twimg.com 403s a discord referer', async () => {
+    const originalGet = axios.get;
+    axios.get = async (url, options) => {
+      if (options.headers.Referer === 'https://discord.com/') {
+        throw Object.assign(new Error('Request failed with status code 403'), {
+          response: { status: 403 },
+        });
+      }
+      return {
+        data: Readable.from([Buffer.from('\x00\x00\x00\x20ftypisom')]),
+        headers: { 'content-type': 'video/mp4' },
+      };
+    };
+    try {
+      await withJobDir(async () => {
+        const file = await downloadFileFromUrl(
+          'https://video.twimg.com/tweet_video/GtRxrEoaAAAz-AI.mp4'
+        );
+        assert.strictEqual(file.contentType, 'video/mp4');
+      });
+    } finally {
+      axios.get = originalGet;
+    }
+  });
+
   test('a stalled or 5xx download is tried once more before failing', async () => {
     const originalGet = axios.get;
     const stalls = [

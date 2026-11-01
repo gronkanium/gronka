@@ -8,6 +8,7 @@ import {
   resolveContentType,
 } from '../../src/utils/cobalt.js';
 import { isInstagramPostUrl } from '../../src/utils/instagram.js';
+import { isRedditPostUrl } from '../../src/utils/reddit.js';
 import { describeCause, rootCause } from '../../src/utils/errors.js';
 import axios from 'axios';
 import { Readable } from 'node:stream';
@@ -50,6 +51,18 @@ describe('cobalt utilities', () => {
     const normalized = normalizeSocialMediaUrlForCobalt(input);
 
     assert.strictEqual(normalized, 'https://twitter.com/neetyboyfriend/status/2044473679753425120');
+  });
+
+  test('a TikTok story share link fits cobalt 1 KB request body', () => {
+    const story =
+      'https://www.tiktok.com/@ricksbuttkisser/video/7703318871520054541?_d=secCgYIASAHKAESPgo8&aweme_type=40&story_type=1&ug_photo_idx=0&' +
+      `checksum=${'9'.repeat(64)}&share_link_id=${'a'.repeat(900)}`;
+    const normalized = normalizeSocialMediaUrlForCobalt(story);
+
+    assert.strictEqual(
+      normalized,
+      'https://www.tiktok.com/@ricksbuttkisser/video/7703318871520054541'
+    );
   });
 
   test('normalizeSocialMediaUrlForCobalt preserves non-tracking params', () => {
@@ -170,6 +183,13 @@ describe('cobalt utilities', () => {
       assert.strictEqual(canonicalizeMirrorUrl(lookalike), lookalike);
     });
 
+    test('routes a privacy-enhanced youtube embed to youtube', () => {
+      assert.strictEqual(
+        canonicalizeMirrorUrl('https://www.youtube-nocookie.com/embed/jNQXAC9IVRw?start=3'),
+        'https://youtube.com/embed/jNQXAC9IVRw?start=3'
+      );
+    });
+
     test('drops the d. direct-file prefix on mirrors', () => {
       assert.strictEqual(
         canonicalizeMirrorUrl('https://d.tiktokez.com/@a/video/7660684575982603550'),
@@ -287,6 +307,24 @@ describe('cobalt utilities', () => {
       ];
       for (const [input, expected] of cases) {
         assert.strictEqual(canonicalizeMirrorUrl(input), expected);
+      }
+    });
+
+    test('maps redd.it and /gallery/ links to the post they name', () => {
+      const post = 'https://www.reddit.com/comments/1ipfhdw';
+      for (const input of [
+        'https://redd.it/1ipfhdw',
+        'https://www.reddit.com/gallery/1ipfhdw?utm_source=share',
+        'https://rxddit.com/gallery/1ipfhdw/',
+      ]) {
+        assert.strictEqual(canonicalizeMirrorUrl(input), post);
+        assert.strictEqual(isRedditPostUrl(canonicalizeMirrorUrl(input)), true);
+      }
+      for (const media of [
+        'https://i.redd.it/svkhd26e05je1.png',
+        'https://v.redd.it/exhn7hikrnse1',
+      ]) {
+        assert.strictEqual(canonicalizeMirrorUrl(media), media);
       }
     });
 

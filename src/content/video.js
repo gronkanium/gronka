@@ -12,6 +12,7 @@ import {
   getYouTubeArgs,
   getSiteArgs,
   isYouTubeUrl,
+  ONE_ITEM,
 } from '../utils/ytdlp.js';
 import { post, comment, thread, isoDate, linksIn, MAX_COMMENTS } from './schema.js';
 
@@ -93,7 +94,7 @@ function dump(url, site, wantComments, signedIn) {
     '--ignore-config',
     '--dump-single-json',
     '--skip-download',
-    '--no-playlist',
+    ...ONE_ITEM,
     '--no-warnings',
   ];
   args.push(...getCookieArgs(url, signedIn), ...getYouTubeArgs(url, signedIn));

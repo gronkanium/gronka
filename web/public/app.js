@@ -42,6 +42,7 @@ const SITES = [
   ['twitch', 'twitch'],
   ['vimeo', 'vimeo'],
   ['soundcloud', 'soundcloud'],
+  ['spotify', 'spotify'],
   ['giphy', 'giphy'],
   ['tenor', 'tenor'],
   ['mega.nz', 'mega'],

@@ -31,7 +31,7 @@ describe('resolveShortLink', () => {
     );
   });
 
-  test('resolves all TikTok share formats through guarded redirects', async () => {
+  test('resolves TikTok, bilibili and spotify share links through guarded redirects', async () => {
     const target = 'https://www.tiktok.com/@creator/video/123';
     spy = spyOn(axios, 'get').mockResolvedValue({
       data: { destroy() {} },
@@ -44,11 +44,31 @@ describe('resolveShortLink', () => {
       'https://www.tiktok.com/t/abc/',
       'https://tiktok.com/t/abc/',
       'https://lite.tiktok.com/t/ZSgch2MXx/',
+      'https://spotify.link/AbC123',
+      'https://spotify.app.link/AbC123',
     ]) {
       assert.equal(await resolveShortLink(url), target);
       const options = spy.mock.calls.at(-1)[1];
       assert.ok(options.lookup);
       assert.ok(options.beforeRedirect);
+    }
+  });
+
+  test('follows SoundCloud and Niconico share links, which no extractor reads', async () => {
+    for (const [short, target] of [
+      [
+        'https://on.soundcloud.com/ilDONmw57JvRysSXVO',
+        'https://soundcloud.com/a/b?ref=clipboard&si=02e5c8d7',
+      ],
+      ['https://nico.ms/sm9', 'https://www.nicovideo.jp/watch/sm9'],
+    ]) {
+      spy?.mockRestore();
+      spy = spyOn(axios, 'get').mockResolvedValue({
+        data: { destroy() {} },
+        request: { res: { responseUrl: target } },
+      });
+      assert.strictEqual(await resolveShortLink(short), target);
+      assert.ok(spy.mock.calls[0][1].lookup);
     }
   });
 
@@ -61,6 +81,40 @@ describe('resolveShortLink', () => {
     );
     const local = wrapped('http://127.0.0.1/a.png');
     assert.strictEqual(await resolveShortLink(local), local);
+    assert.strictEqual(spy.mock.calls.length, 0);
+  });
+
+  test('takes the page out of a google redirect link without a request', async () => {
+    spy = spyOn(axios, 'get');
+    const page = 'https://www.reddit.com/r/a/comments/b/c/';
+    for (const url of [
+      `https://www.google.com/url?q=${encodeURIComponent(page)}&sa=U`,
+      `https://www.google.co.uk/url?sa=t&url=${encodeURIComponent(page)}`,
+    ]) {
+      assert.strictEqual(await resolveShortLink(url), page);
+    }
+    const local = `https://www.google.com/url?q=${encodeURIComponent('http://127.0.0.1/')}`;
+    assert.strictEqual(await resolveShortLink(local), local);
+    assert.strictEqual(spy.mock.calls.length, 0);
+  });
+
+  test('follows a google goto link, whose target is encoded, through the ssrf guard', async () => {
+    const target = 'https://danbooru.donmai.us/posts/5826884';
+    spy = spyOn(axios, 'get').mockResolvedValue({
+      data: { destroy() {} },
+      request: { res: { responseUrl: target } },
+    });
+    assert.strictEqual(
+      await resolveShortLink('https://www.google.com/goto?url=CAESYAHrOzAVS7_vQztT'),
+      target
+    );
+    assert.ok(spy.mock.calls[0][1].beforeRedirect);
+  });
+
+  test('leaves other google pages alone without a request', async () => {
+    spy = spyOn(axios, 'get');
+    const search = 'https://www.google.com/search?q=cats';
+    assert.strictEqual(await resolveShortLink(search), search);
     assert.strictEqual(spy.mock.calls.length, 0);
   });
 

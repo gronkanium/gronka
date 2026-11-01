@@ -272,8 +272,13 @@ async function readTweet(id, gql) {
     const asUser = await gql('TweetResultByRestId', variables, { session: true });
     result = asUser?.data?.tweetResult?.result;
   }
+  if (!result) {
+    throw contentGone(
+      `x: post ${id} does not exist (deleted, or its account is gone): TweetResultByRestId answered no result`
+    );
+  }
   if (!unwrap(result)?.legacy) {
-    const why = [result?.__typename ?? 'no result', result?.reason].filter(Boolean).join(' ');
+    const why = [result.__typename, result.reason].filter(Boolean).join(' ');
     throw contentGone(`x: TweetResultByRestId answered ${why}`);
   }
   return unwrap(result);

@@ -229,10 +229,11 @@ export async function reportPresence({ role, running = 0 }) {
     VALUES (${WORKER_ID}, ${role}, ${pkg.version}, ${startedAt}, ${now}, ${process.memoryUsage().rss},
             ${cpu}, ${running})
     ON CONFLICT (id) DO UPDATE SET seen_at = EXCLUDED.seen_at, rss = EXCLUDED.rss,
-      cpu = EXCLUDED.cpu, running = EXCLUDED.running, version = EXCLUDED.version
+      cpu = EXCLUDED.cpu, running = EXCLUDED.running, version = EXCLUDED.version,
+      started_at = EXCLUDED.started_at
   `;
-  // A process that died with the database (deploy, crash) never clears its own row.
-  await sql`DELETE FROM media_workers WHERE seen_at < ${now - 30 * PRESENCE_MS}`;
+  // A process that died without clearing its row (reboot, crash) drops out a minute later.
+  await sql`DELETE FROM media_workers WHERE seen_at < ${now - 2 * PRESENCE_LIVE_MS}`;
 }
 
 export async function clearPresence() {

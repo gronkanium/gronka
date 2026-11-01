@@ -68,6 +68,7 @@ const client = new Client({
 });
 
 let botStartTime = null;
+let presenceIntervalId = null;
 
 // Track R2 cleanup job interval ID for graceful shutdown
 let cleanupJobIntervalId = null;
@@ -201,7 +202,7 @@ client.once(Events.ClientReady, async readyClient => {
         logger.warn(`Presence report failed: ${error.message}`)
       );
     report();
-    setInterval(report, PRESENCE_MS);
+    presenceIntervalId = setInterval(report, PRESENCE_MS);
 
     await sweepJobDirs().catch(error => logger.warn(`Job dir sweep failed: ${error.message}`));
     setInterval(
@@ -351,6 +352,7 @@ async function gracefulShutdown(signal) {
   const warn = label => error => logger.warn(`${label}: ${error.message}`);
   if (cleanupJobIntervalId) stopCleanupJob(cleanupJobIntervalId);
   if (retentionJobIntervalId) stopRetentionJob(retentionJobIntervalId);
+  clearInterval(presenceIntervalId);
   await clearPresence().catch(warn('Could not clear presence'));
   if (httpServer) httpServer.close();
   await flushCounts().catch(warn('Could not flush counts'));

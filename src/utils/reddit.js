@@ -16,7 +16,7 @@ const API_TIMEOUT_MS = 20000;
 
 // /comments/<id>/... is the canonical form; /s/<id> is what the share sheet emits and 301s to it.
 // Posts made to a user profile live under /user/<name>/ (or /u/) instead of /r/<sub>/.
-const POST_PATH = /^\/(?:r|u|user)\/[^/]+\/(?:comments|s)\/[A-Za-z0-9_]+/;
+const POST_PATH = /^\/(?:(?:r|u|user)\/[^/]+\/(?:comments|s)|comments)\/[A-Za-z0-9_]+/;
 
 export function isRedditPostUrl(url) {
   try {

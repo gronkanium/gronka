@@ -125,6 +125,13 @@ export const SITES = [
     ytdlp: { geoBlocked: true, args: ['--referer', 'https://www.redtube.com/'] },
   },
   {
+    id: 'eporner',
+    name: 'Eporner',
+    category: 'adult',
+    hosts: ['eporner.com'],
+    ytdlp: { geoBlocked: true },
+  },
+  {
     id: 'rule34video',
     name: 'Rule34Video',
     category: 'adult',

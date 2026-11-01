@@ -222,6 +222,15 @@ describe('fetchTweetThread', () => {
     });
   });
 
+  test('a post x has no record of says it does not exist', async () => {
+    const gql = async () => ({ data: { tweetResult: {} } });
+    const gone = await fetchTweetThread('https://x.com/pen/status/9', { gql }).catch(e => e);
+    expect(gone.code).toBe('CONTENT_GONE');
+    expect(gone.cause.message).toBe(
+      'x: post 9 does not exist (deleted, or its account is gone): TweetResultByRestId answered no result'
+    );
+  });
+
   test('replies are off unless asked for, and plain text renders the thread in order', async () => {
     const { gql, calls } = api(chain);
     const out = await fetchTweetThread('https://x.com/pen/status/3', { gql });

@@ -5,6 +5,19 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and versions are release dates (`YYYY.MM.DD`, `.N` for a later release the same day).
 
+## [2026.11.01.3](https://github.com/gronkanium/gronka/compare/v2026.11.01.2...v2026.11.01.3) (2026-11-01)
+
+
+### Features
+
+* **info:** lay the embed out as fields with avatar, links and footer ([5981df6](https://github.com/gronkanium/gronka/commit/5981df680479659c36f61ed636c6e07b23fff2c8))
+
+
+### Bug Fixes
+
+* **web:** drop sandbox from dl links so Safari's View player keeps its controls ([c47c8be](https://github.com/gronkanium/gronka/commit/c47c8be26f90ac01258018ceb1ff558e6c186422))
+* **web:** save through the dl link so iOS always prompts, and let View play it ([#219](https://github.com/gronkanium/gronka/issues/219)) ([0fb0bbe](https://github.com/gronkanium/gronka/commit/0fb0bbebda908cf1d677f299ce4027d71fcea578))
+
 ## [2026.11.01.2](https://github.com/gronkanium/gronka/compare/v2026.11.01.1...v2026.11.01.2) (2026-11-01)
 
 

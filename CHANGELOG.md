@@ -5,6 +5,18 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and versions are release dates (`YYYY.MM.DD`, `.N` for a later release the same day).
 
+## [2026.11.01.1](https://github.com/gronkanium/gronka/compare/v2026.11.01...v2026.11.01.1) (2026-11-01)
+
+
+### Features
+
+* **info:** show version, memory, uptime, queue and runtime instead of storage stats ([#217](https://github.com/gronkanium/gronka/issues/217)) ([adf00c5](https://github.com/gronkanium/gronka/commit/adf00c5bc160a45bdafcf7d49bdab26ec99f4dc5))
+
+
+### Bug Fixes
+
+* **download:** resolve TikTok Lite /t/ short links like tiktok.com ones ([47ae689](https://github.com/gronkanium/gronka/commit/47ae6899616a3d1c032d1d798ddd7ed408857b91))
+
 ## [2026.11.01](https://github.com/gronkanium/gronka/compare/v2026.10.31...v2026.11.01) (2026-11-01)
 
 

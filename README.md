@@ -18,7 +18,7 @@ gifs, as a discord bot and on [gronka.dev](https://gronka.dev).
 - `/download`: a video, image or gallery from a link, or `mp3` for just the audio
 - `/convert`: video, audio or images to a compatible format; choose from a picker, or use `format` directly
 - `/optimize`: shrink an existing gif
-- `/info`: version, uptime, commands run and what is on r2
+- `/info`: version, memory, uptime and queue status
 
 right-click a message → apps does the same: **convert**, **download**, **optimize**.
 

@@ -128,16 +128,20 @@ optimize an existing gif to reduce file size.
 
 ### `/info`
 
-view usage, storage, and system information in one embed.
+bot version, memory, uptime and queue status in one embed.
 
 **parameters:** none
 
-**usage:**
+**shows:**
 
-- **usage**, uptime, guild count, unique user count
-- **storage**, files stored (gifs, videos, images), disk usage, and r2 usage against its
-  limit with the cache age
-- **system**, platform, cpu count, memory, bun and gronka versions
+- **version**, the running gronka release
+- **memory**, the bot process and, with media workers on, the total across the bot and every live worker
+- **uptime**, since the bot started and since it connected to discord
+- **queue**, running or paused, with running and waiting job counts
+- **host**, platform and cpu count
+- **runtime**, bun and discord.js versions
+- **servers**, how many servers the bot is in
+- links to the support server (when `SUPPORT_INVITE_URL` is set) and the source code
 
 **examples:**
 

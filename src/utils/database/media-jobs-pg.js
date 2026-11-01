@@ -178,9 +178,10 @@ export async function listen(channel, fn) {
 // Read-only view for the webui. Never selects `reply` (the interaction token) or `args`.
 export async function jobsOverview({ limit = 25 } = {}) {
   const sql = await db();
-  const [paused, processes, jobs] = await Promise.all([
+  const [paused, processes, counts, jobs] = await Promise.all([
     readSetting(PAUSE_KEY),
     presence(),
+    queueCounts(),
     sql`
       SELECT id, kind, status, attempts, worker, created_at, timestamp, heartbeat_at
       FROM media_jobs ORDER BY id DESC LIMIT ${limit}
@@ -196,17 +197,22 @@ export async function jobsOverview({ limit = 25 } = {}) {
     timestamp: Number(row.timestamp),
     heartbeatAt: row.heartbeat_at == null ? null : Number(row.heartbeat_at),
   }));
-  const count = status => recent.filter(job => job.status === status).length;
-  return {
-    paused,
-    processes,
-    counts: { queued: count('queued'), running: count('running') },
-    recent,
-  };
+  return { paused, processes, counts, recent };
+}
+
+export async function queueCounts() {
+  const sql = await db();
+  const rows = await sql`
+    SELECT status, COUNT(*)::int AS n FROM media_jobs
+    WHERE status IN ('queued', 'running') GROUP BY status
+  `;
+  const n = status => rows.find(row => row.status === status)?.n ?? 0;
+  return { queued: n('queued'), running: n('running') };
 }
 
 // Presence: every bot and worker process reports in, so the webui can tell live, idle and dead apart.
 export const PRESENCE_MS = 10_000;
+export const PRESENCE_LIVE_MS = 3 * PRESENCE_MS;
 let lastCpu = null;
 
 export async function reportPresence({ role, running = 0 }) {
@@ -237,6 +243,7 @@ export async function clearPresence() {
 export async function presence() {
   const sql = await db();
   const rows = await sql`SELECT * FROM media_workers ORDER BY role, started_at`;
+  const now = Date.now();
   return rows.map(r => ({
     id: r.id,
     role: r.role,
@@ -246,5 +253,6 @@ export async function presence() {
     rss: r.rss == null ? null : Number(r.rss),
     cpu: r.cpu,
     running: r.running,
+    live: now - Number(r.seen_at) < PRESENCE_LIVE_MS,
   }));
 }

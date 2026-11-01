@@ -125,8 +125,20 @@ describe('media job queue', () => {
     assert.ok(me.rss > 0);
     assert.ok(me.seenAt >= me.startedAt && !('seen_at' in me));
     assert.strictEqual(typeof me.cpu, 'number', 'second report knows the cpu delta');
+    assert.strictEqual(me.live, true);
+    await sql`UPDATE media_workers SET seen_at = ${Date.now() - queue.PRESENCE_LIVE_MS - 1000}
+      WHERE id = ${queue.WORKER_ID}`;
+    assert.strictEqual((await queue.presence()).find(p => p.id === me.id).live, false);
     await queue.clearPresence();
     assert.ok(!(await queue.presence()).some(p => p.id === queue.WORKER_ID));
+  });
+
+  test('queue counts cover every job, not just the recent page', async () => {
+    for (let i = 0; i < 30; i++) await enqueue();
+    await queue.claimJob('w1');
+    const { counts, recent } = await queue.jobsOverview({ limit: 5 });
+    assert.strictEqual(recent.length, 5);
+    assert.deepStrictEqual(counts, { queued: 29, running: 1 });
   });
 
   test('the webui overview never exposes a reply token', async () => {

@@ -235,6 +235,8 @@ const mirrorTarget = host => {
   );
 };
 
+const REDDIT_SHORT_PATH = /^\/([a-z0-9]+)\/?$/i;
+const REDDIT_GALLERY_PATH = /^\/gallery\/([a-z0-9]+)\/?$/i;
 const GIPHY_PAGE_PATH = /^\/(?:gifs|stickers|embed)\/(?:[^/]*-)?([A-Za-z0-9]+)\/?$/;
 
 // Canonicalize before routing: the Instagram extractor matches canonical hosts only.
@@ -249,6 +251,17 @@ export function canonicalizeMirrorUrl(url) {
       return `https://i.giphy.com/${giphyId}.gif`;
     }
     const canonicalHost = mirrorTarget(normalizeHost(urlObj.hostname));
+    const host = canonicalHost ?? normalizeHost(urlObj.hostname);
+    // Reddit 403s a bot following these redirects; /comments/<id> is what they point at.
+    const redditId =
+      host === 'redd.it'
+        ? urlObj.pathname.match(REDDIT_SHORT_PATH)?.[1]
+        : hostUnder(host, ['reddit.com'])
+          ? urlObj.pathname.match(REDDIT_GALLERY_PATH)?.[1]
+          : null;
+    if (redditId) {
+      return `https://www.reddit.com/comments/${redditId}`;
+    }
     if (!canonicalHost) {
       return url;
     }

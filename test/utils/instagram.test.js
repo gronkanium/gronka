@@ -78,20 +78,6 @@ describe('instagram utilities', () => {
     );
   });
 
-  test('selectMediaUrl honours a 1-based img_index into a carousel', () => {
-    const carousel = {
-      carousel_media: [
-        image('https://scontent.cdninstagram.com/one.jpg'),
-        image('https://scontent.cdninstagram.com/two.jpg'),
-      ],
-    };
-    assert.strictEqual(selectMediaUrl(carousel, 2), 'https://scontent.cdninstagram.com/two.jpg');
-    // no index, or an index past the end, falls back to the first slide
-    assert.strictEqual(selectMediaUrl(carousel, null), 'https://scontent.cdninstagram.com/one.jpg');
-    assert.strictEqual(selectMediaUrl(carousel, 9), 'https://scontent.cdninstagram.com/one.jpg');
-    assert.strictEqual(selectMediaUrl(carousel, 0), 'https://scontent.cdninstagram.com/one.jpg');
-  });
-
   test('selectMediaUrl refuses media hosted off the instagram CDN', () => {
     assert.strictEqual(selectMediaUrl(image('https://evil.example.com/x.jpg')), null);
     // an off-CDN video url is dropped, leaving the (host-checked) still frame
@@ -285,6 +271,39 @@ describe('downloadFromInstagram stories', () => {
     await assert.rejects(downloadFromInstagram(`${highlightShare('5')}?story_media_id=22`), error =>
       /media info .*HTTP 400 Media not found or unavailable/.test(error.cause.message)
     );
+  });
+
+  const carouselPost = {
+    '/api/v1/media/2577266072006144771/info/': {
+      items: [
+        {
+          carousel_media: [
+            image('https://scontent.cdninstagram.com/one.jpg'),
+            video('https://scontent.cdninstagram.com/two.mp4'),
+            image('https://scontent.cdninstagram.com/three.jpg'),
+          ],
+        },
+      ],
+    },
+  };
+
+  test('a carousel post link downloads every slide, not just the first', async () => {
+    stubApi(carouselPost);
+    const result = await downloadFromInstagram(
+      'https://www.instagram.com/p/CPESdZpl7MD/?igsh=MWQ1ZGUxMzBkMA=='
+    );
+    assert.deepStrictEqual(
+      result.map(file => file.contentType),
+      ['image/jpeg', 'video/mp4', 'image/jpeg']
+    );
+  });
+
+  test('a carousel link tagged img_index=1 by the share sheet still gets every slide', async () => {
+    stubApi(carouselPost);
+    const result = await downloadFromInstagram(
+      'https://www.instagram.com/p/CPESdZpl7MD/?img_index=1&igsh=MWJ1'
+    );
+    assert.strictEqual(result.length, 3);
   });
 
   const search = { data: { user: { id: '77' } }, status: 'ok' };

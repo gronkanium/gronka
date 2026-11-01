@@ -8,6 +8,7 @@ import {
   resolveContentType,
 } from '../../src/utils/cobalt.js';
 import { isInstagramPostUrl } from '../../src/utils/instagram.js';
+import { isRedditPostUrl } from '../../src/utils/reddit.js';
 import { describeCause, rootCause } from '../../src/utils/errors.js';
 import axios from 'axios';
 import { Readable } from 'node:stream';
@@ -299,6 +300,24 @@ describe('cobalt utilities', () => {
       ];
       for (const [input, expected] of cases) {
         assert.strictEqual(canonicalizeMirrorUrl(input), expected);
+      }
+    });
+
+    test('maps redd.it and /gallery/ links to the post they name', () => {
+      const post = 'https://www.reddit.com/comments/1ipfhdw';
+      for (const input of [
+        'https://redd.it/1ipfhdw',
+        'https://www.reddit.com/gallery/1ipfhdw?utm_source=share',
+        'https://rxddit.com/gallery/1ipfhdw/',
+      ]) {
+        assert.strictEqual(canonicalizeMirrorUrl(input), post);
+        assert.strictEqual(isRedditPostUrl(canonicalizeMirrorUrl(input)), true);
+      }
+      for (const media of [
+        'https://i.redd.it/svkhd26e05je1.png',
+        'https://v.redd.it/exhn7hikrnse1',
+      ]) {
+        assert.strictEqual(canonicalizeMirrorUrl(media), media);
       }
     });
 

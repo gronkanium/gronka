@@ -421,6 +421,18 @@ if (!mocksSupported) {
       assert.ok(calls.editReply[0].files[0].name.endsWith('.mp4'));
     });
 
+    test('Google Drive file links download through their own extractor', async () => {
+      const { withJobDir } = await import('../../src/utils/media-file.js');
+      await withJobDir(async () => {
+        const result = await acquireMedia(
+          'https://drive.google.com/file/d/1LuUURO_7J7stf0u59TH7NykJLvnA-uoO/view?usp=sharing',
+          { urlOnly: true }
+        );
+        assert.strictEqual(result.kind, 'file');
+        assert.strictEqual(result.downloadMethod, 'google-drive');
+      });
+    });
+
     test('tt.site short links pass the command source check and attach TikTok media', async () => {
       const { interaction, calls } = downloadInteraction(
         'https://www.tt.site/t/short123/',

@@ -2,13 +2,10 @@
   import { poll } from '../utils/poll.js';
   import { getJsonOrNull, sendJson } from '../utils/api.js';
   import { Pause, Play, AlertTriangle, Cpu } from 'lucide-svelte';
-  import { navigate } from '../utils/router.js';
   import { refreshNav } from '../stores/nav.js';
   import { formatBytes, formatRelativeTime } from '../utils/format.js';
   import PageHeader from '../components/PageHeader.svelte';
   import DataTable from '../components/DataTable.svelte';
-
-  const LIVE_MS = 30_000;
 
   let data = $state(null);
   let system = $state(null);
@@ -42,39 +39,52 @@
   }
 
   const jobs = $derived(data?.jobs);
-  const processes = $derived.by(() => {
-    let w = 0;
-    return (jobs?.processes ?? []).map(p => ({
-      ...p,
-      name: p.role === 'bot' ? 'gronka (bot)' : `worker-${++w}`,
-      live: now - p.seenAt < LIVE_MS,
-    }));
-  });
-  const down = $derived(processes.filter(p => !p.live));
-  // Every process should run the same build; a mismatch means a deploy is half done.
-  const versions = $derived([...new Set(processes.map(p => p.version).filter(Boolean))]);
-  const mismatch = $derived(
-    versions.length > 1 || (data?.version && versions.length === 1 && versions[0] !== data.version)
-  );
-  const recent = $derived(jobs?.recent ?? []);
+  const paused = $derived(!!jobs?.paused);
   const count = s => jobs?.counts?.[s] ?? 0;
-  const until = ms =>
-    ms < 86_400_000 ? `${Math.ceil(ms / 3_600_000)}h` : `${Math.floor(ms / 86_400_000)}d`;
+
+  // Ids are `<container id>-<pid>`: a new container (deploy) or pid (restart) is a new process.
+  const processes = $derived.by(() => {
+    let n = 0;
+    return (jobs?.processes ?? []).map(p => {
+      const cut = p.id.lastIndexOf('-');
+      return {
+        ...p,
+        name: p.role === 'bot' ? 'Bot' : `Worker ${++n}`,
+        container: p.id.slice(0, cut),
+        pid: p.id.slice(cut + 1),
+      };
+    });
+  });
+  const nameOf = $derived(Object.fromEntries(processes.map(p => [p.id, p.name])));
+  const workers = $derived(processes.filter(p => p.role === 'worker'));
+  const liveWorkers = $derived(workers.filter(p => p.live).length);
+  const down = $derived(processes.filter(p => !p.live));
+  const build = $derived(data?.version);
+  const stale = $derived(processes.filter(p => p.live && p.version !== build));
+
+  const attention = $derived(
+    [
+      paused &&
+        (count('running')
+          ? `Queue paused: ${count('running')} running job${count('running') === 1 ? '' : 's'} will finish, nothing new starts.`
+          : 'Queue paused and drained: a deploy interrupts nothing.'),
+      down.length &&
+        `${down.map(p => p.name).join(', ')} stopped reporting ${formatRelativeTime(
+          Math.max(...down.map(p => p.seenAt))
+        )}. A process that stays silent drops off this list after a minute.`,
+      stale.length &&
+        `${stale.map(p => `${p.name} runs v${p.version}`).join(', ')}, the webui runs v${build}. Restart the older process.`,
+    ].filter(Boolean)
+  );
+
   const uptime = ms => {
     const m = Math.floor(ms / 60000);
-    return m < 60
-      ? `${m}m`
-      : m < 1440
-        ? `${Math.floor(m / 60)}h ${m % 60}m`
-        : `${Math.floor(m / 1440)}d ${Math.floor((m % 1440) / 60)}h`;
+    if (m < 60) return `${m}m`;
+    if (m < 1440) return `${Math.floor(m / 60)}h ${m % 60}m`;
+    return `${Math.floor(m / 1440)}d ${Math.floor((m % 1440) / 60)}h`;
   };
-  const JOB_STATUS = {
-    running: ['info', 'Running'],
-    queued: ['idle', 'Queued'],
-  };
-  const paused = $derived(!!jobs?.paused);
-  const liveWorkers = $derived(processes.filter(p => p.live && p.role !== 'bot').length);
-  const allWorkers = $derived(processes.filter(p => p.role !== 'bot').length);
+  const until = ms =>
+    ms < 86_400_000 ? `${Math.ceil(ms / 3_600_000)}h` : `${Math.floor(ms / 86_400_000)}d`;
   const sessionNote = s =>
     !s.fileFound
       ? `${s.file} not found`
@@ -86,23 +96,37 @@
             : `expires in ${until(s.expires - now)}`
           : `${s.cookies} cookies`;
   const ago = $derived(updated ? Math.max(0, Math.round((now - updated) / 1000)) : null);
+  const status = p =>
+    !p.live
+      ? ['bad', 'Not reporting']
+      : p.role === 'bot'
+        ? ['ok', 'Connected']
+        : p.running
+          ? ['info', `Running ${p.running}`]
+          : ['ok', 'Idle'];
 
-  const JOB_COLUMNS = [
-    { key: 'id', label: 'Job', width: '64px' },
-    { key: 'state', label: 'State', width: '96px' },
-    { key: 'req', label: 'Command' },
-    { key: 'worker', label: 'Worker', width: '120px', sm: false },
-    { key: 'attempts', label: 'Attempts', width: '76px', align: 'right', sm: false },
-    { key: 'age', label: 'Age', width: '70px', align: 'right' },
+  const PROC_COLUMNS = [
+    { key: 'name', label: 'Process' },
+    { key: 'status', label: 'Status', width: '130px' },
+    { key: 'uptime', label: 'Uptime', width: '90px', align: 'right' },
+    { key: 'rss', label: 'Memory', width: '100px', align: 'right' },
+    { key: 'cpu', label: 'CPU', width: '80px', align: 'right', sm: false },
+    { key: 'seen', label: 'Last report', width: '110px', align: 'right', sm: false },
   ];
+  const JOB_COLUMNS = [
+    { key: 'id', label: 'Job', width: '72px' },
+    { key: 'state', label: 'State', width: '96px' },
+    { key: 'kind', label: 'Command' },
+    { key: 'worker', label: 'Worker', width: '110px', sm: false },
+    { key: 'attempts', label: 'Attempts', width: '80px', align: 'right', sm: false },
+    { key: 'age', label: 'Age', width: '80px', align: 'right' },
+  ];
+  const JOB_STATUS = { running: ['info', 'Running'], queued: ['idle', 'Queued'] };
 </script>
 
 <PageHeader title="Workers & queue" description="Media jobs and the processes that run them">
   {#snippet actions()}
     {#if ago != null}<span class="dim small tnum">Updated {ago}s ago</span>{/if}
-    {#if paused}<span class="pill warn">Queue paused</span>{:else if jobs}<span class="pill ok"
-        >Queue running</span
-      >{/if}
     {#if jobs && data?.mediaWorkers !== false}
       <button class="btn" class:primary={paused} disabled={busy} onclick={() => setPaused(!paused)}>
         {#if paused}<Play size={14} />Resume queue{:else}<Pause size={14} />Pause queue{/if}
@@ -115,138 +139,71 @@
   {#if data?.mediaWorkers === false}
     <div class="flash">
       <Cpu size={14} />
-      Media jobs run inside the bot (MEDIA_WORKERS=false), so there are no worker processes
+      Media jobs run inside the bot (MEDIA_WORKERS=false), so there are no worker processes.
     </div>
   {/if}
 
-  {#if paused}
-    <div class="flash" class:warn={count('running')} class:ok={!count('running')} role="status">
-      <span class="grow">
-        {#if count('running')}
-          <b>Queue paused, draining.</b>
-          {count('running')} running job{count('running') === 1 ? '' : 's'} will finish; nothing new starts.
-        {:else}
-          <b>Queue paused and drained.</b> No job is running, so a deploy interrupts nothing.
-        {/if}
-        {#if count('queued')}{count('queued')} queued and waiting.{/if}
-      </span>
-      <button class="btn primary sm" disabled={busy} onclick={() => setPaused(false)}>Resume</button
-      >
-    </div>
-  {/if}
-
-  {#if down.length || mismatch}
+  {#if attention.length}
     <div class="flash warn" role="status">
       <AlertTriangle size={14} />
-      <span class="grow">
-        {#if down.length}
-          <b>{down.length} process{down.length === 1 ? '' : 'es'} not reporting:</b>
-          {down.map(p => p.name).join(', ')}. Last heartbeat {formatRelativeTime(
-            Math.max(...down.map(p => p.seenAt))
-          )}.
-        {/if}
-        {#if mismatch}
-          <b>Version mismatch:</b>
-          {[...new Set([...versions, data?.version])]
-            .filter(Boolean)
-            .map(v => `v${v}`)
-            .join(', ')}. Restart the older process.
-        {/if}
-      </span>
+      <ul class="grow attention">
+        {#each attention as line (line)}<li>{line}</li>{/each}
+      </ul>
     </div>
   {/if}
 
-  <section class="kpis" style="--kpi-cols: 2" aria-label="queue">
+  <section class="kpis" style="--kpi-cols: 4" aria-label="queue">
+    <div class="kpi" class:bad={workers.length && liveWorkers < workers.length}>
+      <div class="k">Workers</div>
+      <div class="v tnum">{jobs ? `${liveWorkers} of ${workers.length}` : '–'}</div>
+      <div class="s">reporting in the last 30 s</div>
+    </div>
     <div class="kpi" class:warn={paused && count('queued')}>
       <div class="k">Queued</div>
-      <div class="v">{jobs ? count('queued') : '—'}</div>
-      {#if paused}<span class="d warn">paused</span>{/if}
-      <div class="s">waiting for a worker</div>
+      <div class="v tnum">{jobs ? count('queued') : '–'}</div>
+      <div class="s">{paused ? 'held while paused' : 'waiting for a worker'}</div>
     </div>
     <div class="kpi">
       <div class="k">Running</div>
-      <div class="v">{jobs ? count('running') : '—'}</div>
+      <div class="v tnum">{jobs ? count('running') : '–'}</div>
       <div class="s">right now</div>
+    </div>
+    <div class="kpi" class:warn={stale.length}>
+      <div class="k">Build</div>
+      <div class="v mono build">{build ? `v${build}` : '–'}</div>
+      <div class="s">{stale.length ? 'mixed versions' : 'every process matches'}</div>
     </div>
   </section>
 
-  {#if processes.length}
-    <section class="panel" aria-label="processes">
-      <div class="ph">
-        <span>Processes</span>
-        <span class="meta"
-          ><span class="tnum"
-            >{allWorkers ? `${liveWorkers} of ${allWorkers} workers live` : ''}</span
-          >{#if data?.version}<span class="dim mono">webui v{data.version}</span>{/if}</span
-        >
-      </div>
-      <div class="procs">
-        <div class="pr head">
-          <span></span><span>Process</span><span>State</span><span>Build</span><span>Heartbeat</span
-          ><span>Uptime</span><span class="num">Memory</span><span class="num">CPU</span>
-        </div>
-        {#each processes as p (p.id)}
-          <div class="pr">
-            <span
-              class="dot"
-              class:ok={p.live}
-              class:err={!p.live}
-              class:pulse={p.live && p.running}
-            ></span>
-            <span class="pname">
-              <span class="strong">{p.name}</span>
-              <span class="mono xs dim ellipsis" title={p.id}>{p.id}</span>
-            </span>
-            <span
-              ><span class="pill sm" class:ok={p.live} class:bad={!p.live}
-                >{!p.live
-                  ? 'Not reporting'
-                  : p.role === 'bot'
-                    ? 'Gateway ready'
-                    : p.running
-                      ? `Running ${p.running}`
-                      : 'Idle'}</span
-              ></span
-            >
-            <span
-              ><span class="chip mono" class:warn={mismatch && p.version !== data?.version}
-                >v{p.version ?? '?'}</span
-              ></span
-            >
-            <span class="mono small muted">{formatRelativeTime(p.seenAt)}</span>
-            <span class="mono small muted">{uptime(now - p.startedAt)}</span>
-            <span class="meter num">
-              <span class="bar-track"
-                ><span
-                  style="width:{Math.min(
-                    100,
-                    ((p.rss ?? 0) / 1024 ** 3) * 100
-                  )}%; background: var(--chart-1)"
-                ></span></span
-              >{p.rss ? formatBytes(p.rss) : '—'}
-            </span>
-            <span class="meter num">
-              <span class="bar-track"
-                ><span
-                  style="width:{Math.min(100, p.cpu ?? 0)}%; background: {(p.cpu ?? 0) > 80
-                    ? 'var(--warning)'
-                    : 'var(--chart-1)'}"
-                ></span></span
-              >{p.cpu == null ? '—' : `${p.cpu.toFixed(1)}%`}
-            </span>
-          </div>
-        {/each}
-      </div>
-    </section>
-  {/if}
+  <DataTable
+    title="Processes"
+    columns={PROC_COLUMNS}
+    rows={processes}
+    loading={!jobs}
+    empty="No process has reported yet"
+    label="processes"
+  >
+    {#snippet row(p)}
+      {@const [tone, label] = status(p)}
+      <span class="pname">
+        <span class="strong">{p.name}</span>
+        <span class="mono xs dim">container {p.container} · pid {p.pid}</span>
+      </span>
+      <span><span class="pill sm {tone}">{label}</span></span>
+      <span class="num tnum muted">{uptime(now - p.startedAt)}</span>
+      <span class="num tnum">{p.rss ? formatBytes(p.rss) : '–'}</span>
+      <span class="num tnum muted hide-sm">{p.cpu == null ? '–' : `${p.cpu.toFixed(1)}%`}</span>
+      <span class="num dim hide-sm">{formatRelativeTime(p.seenAt)}</span>
+    {/snippet}
+  </DataTable>
 
   <div class="two wide-left">
     <DataTable
       title="Media jobs"
       columns={JOB_COLUMNS}
-      rows={recent}
+      rows={jobs?.recent ?? []}
       loading={!jobs}
-      empty="No jobs running"
+      empty="No jobs queued or running"
       label="media jobs"
     >
       {#snippet row(j)}
@@ -254,7 +211,9 @@
         <span class="mono dim">#{j.id}</span>
         <span><span class="pill sm {kind}">{label}</span></span>
         <span class="mono ellipsis">{j.kind}</span>
-        <span class="mono muted ellipsis hide-sm">{j.worker ?? '—'}</span>
+        <span class="muted ellipsis hide-sm" title={j.worker ?? ''}
+          >{j.worker ? (nameOf[j.worker] ?? 'stopped process') : '–'}</span
+        >
         <span class="num hide-sm" class:warn-text={j.attempts > 1}>{j.attempts}</span>
         <span class="num dim">{formatRelativeTime(j.createdAt)}</span>
       {/snippet}
@@ -271,7 +230,7 @@
               class:err={!bot.status || bot.status === 'offline'}
             ></span>
             <span class="strong">Discord</span>
-            <span class="mono dim small right ellipsis">{bot.botTag ?? '—'} · {bot.status}</span>
+            <span class="mono dim small right ellipsis">{bot.botTag ?? '–'} · {bot.status}</span>
           </div>
         {/if}
         {#each system?.deps ?? [] as d (d.id)}
@@ -325,64 +284,23 @@
 </div>
 
 <style>
-  .note {
-    font-size: var(--fs);
-    line-height: 1.6;
-    color: var(--text-muted);
-    display: flex;
-    flex-wrap: wrap;
-    align-items: center;
-    gap: 8px;
-  }
-  .procs {
-    overflow-x: auto;
-  }
-  .pr {
+  .attention {
+    margin: 0;
+    padding: 0;
+    list-style: none;
     display: grid;
-    grid-template-columns: 14px minmax(160px, 1.2fr) 130px 76px 90px 80px 130px 110px;
-    align-items: center;
-    gap: 14px;
-    min-height: 48px;
-    padding: 6px 16px;
-    border-top: 1px solid var(--line);
-    font-size: var(--fs);
-  }
-  .pr.head {
-    min-height: 36px;
-    padding: 0 16px;
-    border-top: 0;
-    background: var(--card-2);
-    font-size: var(--fs-sm);
-    font-weight: 500;
-    color: var(--text-muted);
-  }
-  .pr > * {
-    min-width: 0;
+    gap: 4px;
   }
   .pname {
     display: flex;
     flex-direction: column;
     line-height: 1.3;
+    min-width: 0;
   }
-  .meter {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    font-size: var(--fs-sm);
-  }
-  .meter .bar-track {
-    flex: 1;
-    height: 5px;
+  .build {
+    font-size: var(--fs-lg, 1.1rem);
   }
   .dep {
     padding: 11px 16px;
-  }
-  @media (max-width: 900px) {
-    .pr {
-      grid-template-columns: 14px minmax(140px, 1fr) 120px;
-    }
-    .pr > :nth-child(n + 4) {
-      display: none;
-    }
   }
 </style>

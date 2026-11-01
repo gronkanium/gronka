@@ -133,6 +133,22 @@ describe('media job queue', () => {
     assert.ok(!(await queue.presence()).some(p => p.id === queue.WORKER_ID));
   });
 
+  test('a silent process drops out after a minute and a restart resets its uptime', async () => {
+    const at = Date.now();
+    await sql`
+      INSERT INTO media_workers (id, role, version, started_at, seen_at, rss, cpu, running) VALUES
+        ('gone-1', 'worker', 'old', ${at - 3_600_000}, ${at - 2 * queue.PRESENCE_LIVE_MS - 1000}, 1, 0, 0),
+        ('quiet-1', 'worker', 'old', ${at - 3_600_000}, ${at - queue.PRESENCE_LIVE_MS - 1000}, 1, 0, 0),
+        (${queue.WORKER_ID}, 'worker', 'old', ${at - 3_600_000}, ${at}, 1, 0, 0)
+      ON CONFLICT (id) DO UPDATE SET started_at = EXCLUDED.started_at`;
+    await queue.reportPresence({ role: 'worker' });
+    const rows = await queue.presence();
+    assert.ok(!rows.some(p => p.id === 'gone-1'));
+    assert.strictEqual(rows.find(p => p.id === 'quiet-1').live, false);
+    assert.ok(rows.find(p => p.id === queue.WORKER_ID).startedAt > at - 3_600_000);
+    await sql`DELETE FROM media_workers WHERE id IN ('quiet-1', ${queue.WORKER_ID})`;
+  });
+
   test('queue counts cover every job, not just the recent page', async () => {
     for (let i = 0; i < 30; i++) await enqueue();
     await queue.claimJob('w1');

@@ -154,6 +154,7 @@ export const SITES = [
     ['mangadex', 'MangaDex', 'mangadex.org'],
     ['nhentai', 'nhentai', 'nhentai.net'],
     ['gofile', 'Gofile', 'gofile.io'],
+    ['pixeldrain', 'Pixeldrain', 'pixeldrain.com'],
     ['erome', 'Erome', 'erome.com'],
   ].map(([id, name, host]) => ({
     id: `gallery-dl-${id}`,

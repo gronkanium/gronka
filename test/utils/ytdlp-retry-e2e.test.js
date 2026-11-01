@@ -211,6 +211,20 @@ if (!mocksSupported) {
       assert.ok(!spawnCallLog[1].args.includes('--cookies'));
     });
 
+    test('a photo post that yields only its sound fails so the next engine gets the photos', async () => {
+      const soundOnly = (child, outputDir) => {
+        const file = path.join(outputDir, 'sound.m4a');
+        fsSync.writeFileSync(file, Buffer.alloc(2048, 1));
+        child.stdout.emit('data', Buffer.from(file + '\n'));
+        child.emit('close', 0);
+      };
+      spawnCallLog = [];
+      spawnBehaviors = [soundOnly];
+      const error = await downloadWithYtdlp(url, { maxSize: Infinity }).catch(caught => caught);
+      assert.strictEqual(error.name, 'NetworkError');
+      assert.match(error.cause.message ?? error.cause, /only the sound track/);
+    });
+
     test('fails with a curated message when no geo proxy is set', async () => {
       spawnCallLog = [];
       spawnBehaviors = [missingCopy];

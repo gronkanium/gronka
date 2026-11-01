@@ -5,6 +5,33 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and versions are release dates (`YYYY.MM.DD`, `.N` for a later release the same day).
 
+## [2026.11.01.4](https://github.com/gronkanium/gronka/compare/v2026.11.01.3...v2026.11.01.4) (2026-11-01)
+
+
+### Features
+
+* **download:** add Eporner via yt-dlp through the geo proxy ([c0cfb56](https://github.com/gronkanium/gronka/commit/c0cfb566a6e25311fb656f3195146a2a15e8a63d))
+* **download:** add Google Drive public file links ([d2d5cec](https://github.com/gronkanium/gronka/commit/d2d5cec91e8a87459b69ea4bab15e904e02b6696))
+* **download:** add Pixeldrain files, lists and folders via gallery-dl ([e834426](https://github.com/gronkanium/gronka/commit/e834426028fca070ce322b513ce0c85c9dbd899d))
+* **download:** Spotify track links as tagged mp3s via YouTube ([f64ce2b](https://github.com/gronkanium/gronka/commit/f64ce2b91dfd786cb892774124f5300b70ed376d))
+* **download:** unwrap google.com/url and google.com/goto redirect links ([cfe6997](https://github.com/gronkanium/gronka/commit/cfe699749f269ce00494e6b15457f088d1994d3c))
+
+
+### Bug Fixes
+
+* a reply deleted before delivery is not a failure ([8eb35c5](https://github.com/gronkanium/gronka/commit/8eb35c51f4edefacbad5cb6d29f9130f062193ec))
+* **download:** accept youtube-nocookie.com embed links as YouTube ([f60ea50](https://github.com/gronkanium/gronka/commit/f60ea507929b887166e4cad1604438976afc3295))
+* **download:** fetch X videos and gifs from video.twimg.com with an x.com referer ([e689664](https://github.com/gronkanium/gronka/commit/e68966401e158624378f2bfbb712f496cff5709a))
+* **download:** follow on.soundcloud.com and nico.ms share links before routing ([1f5633c](https://github.com/gronkanium/gronka/commit/1f5633c2b58f1806b21983535288c2b316bb853b))
+* **download:** read redd.it and reddit.com/gallery/ links as the post they name ([7de0971](https://github.com/gronkanium/gronka/commit/7de0971996d712a74781e5aedf2fff2ceebaecb1))
+* **download:** read YouTube's "This video is unavailable" as a gone video, not a failure ([886ac05](https://github.com/gronkanium/gronka/commit/886ac05ce4e5d9a6a03c68f2725980b0ab839110))
+* **download:** send every slide of an Instagram carousel from the session extractor ([8d63e9f](https://github.com/gronkanium/gronka/commit/8d63e9f987dd9d5342f1a531f2aa8f4625ccc84e))
+* **download:** send TikTok story links to cobalt without their 1 KB of share params ([f67aa6a](https://github.com/gronkanium/gronka/commit/f67aa6afa36c48bc1b6049fe78a22bc3682b61bb))
+* **download:** take only the first entry of a set, album or playlist link ([4d4dca6](https://github.com/gronkanium/gronka/commit/4d4dca6c734c8649fc50947eef3d8e77112e929f))
+* **download:** TikTok stories, wrong-file fallbacks, and new sources ([2f56ac6](https://github.com/gronkanium/gronka/commit/2f56ac6005df89d960b2c8f1bb61e10f8de8582a))
+* **instagram:** say a dead highlight is gone and record Instagram's own reason ([fe0c3bc](https://github.com/gronkanium/gronka/commit/fe0c3bc54ffc2649d32e8415ff90a2201cd389eb))
+* **x:** record a post X has no record of as nonexistent, not an empty answer ([6d7bab1](https://github.com/gronkanium/gronka/commit/6d7bab10c37a22bd42491a1c943bd09ff876bd8b))
+
 ## [2026.11.01.3](https://github.com/gronkanium/gronka/compare/v2026.11.01.2...v2026.11.01.3) (2026-11-01)
 
 

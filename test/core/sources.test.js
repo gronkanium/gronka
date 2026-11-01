@@ -37,6 +37,8 @@ const ROUTED = [
   ['https://jumpshare.com/s/abc123', 'jumpshare'],
   ['https://www.threads.com/@someone/post/ABC123', 'threads'],
   ['https://mega.nz/file/AbCdEfGh#' + 'a'.repeat(43), 'mega'],
+  ['https://drive.google.com/file/d/1LuUURO_7J7stf0u59TH7NykJLvnA-uoO/view', 'google-drive'],
+  ['https://drive.google.com/drive/folders/1LuUURO_7J7stf0u59TH7NykJLvnA-uoO', null],
   ['https://example.com/clip.mp4', 'direct'],
   ['https://www.facebook.com/photo.php?fbid=1&set=a.2&type=3', 'facebook-photo'],
   ['https://www.facebook.com/someone/photos/a.1/2/', 'facebook-photo'],

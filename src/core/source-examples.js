@@ -67,6 +67,11 @@ export const SOURCE_EXAMPLES = [
     expect: { type: 'audio' },
   },
   {
+    site: 'google-drive',
+    url: 'https://drive.google.com/file/d/10YD7sJI_HHDXmQM4h96alvyGIU53nGYZ/view?usp=sharing',
+    expect: { type: 'image' },
+  },
+  {
     site: 'medal',
     url: 'https://medal.tv/games/clippords-clips/clips/1aOnX9X39EbuhM',
     expect: { type: 'video' },

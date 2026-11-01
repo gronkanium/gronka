@@ -29,6 +29,7 @@ download media from social platforms using the `/download` command:
 - threads posts: videos, photos and every slide of a carousel (read from the public post page)
 - hentaigifz (via a dedicated page-scrape extractor, not cobalt)
 - rule34.xxx posts: original images, gifs and videos from the public page, no API key needed
+- google drive files: public videos, images and audio
 - danbooru, e621, e926, yande.re, konachan (via their JSON APIs, not cobalt)
 
 each of these sources can be individually turned on or off from the webui **sources** page (in the sidebar). a turned-off source refuses `/download` with a short message instead of downloading.

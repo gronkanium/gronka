@@ -5,6 +5,18 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and versions are release dates (`YYYY.MM.DD`, `.N` for a later release the same day).
 
+## [2026.11.01](https://github.com/gronkanium/gronka/compare/v2026.10.31...v2026.11.01) (2026-11-01)
+
+
+### Features
+
+* **download:** restore rule34.xxx post downloads ([#216](https://github.com/gronkanium/gronka/issues/216)) ([b562f5a](https://github.com/gronkanium/gronka/commit/b562f5ab8f894667167324307589f9ed351505dd))
+
+
+### Bug Fixes
+
+* **download:** retry transient page fetches once in fetchPage, pin every resolved address ([#216](https://github.com/gronkanium/gronka/issues/216)) ([b562f5a](https://github.com/gronkanium/gronka/commit/b562f5ab8f894667167324307589f9ed351505dd))
+
 ## [2026.10.31](https://github.com/gronkanium/gronka/compare/v2026.10.30.1...v2026.10.31) (2026-10-31)
 
 

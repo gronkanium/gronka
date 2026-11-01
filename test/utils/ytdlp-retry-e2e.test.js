@@ -386,6 +386,16 @@ if (!mocksSupported) {
       );
     });
 
+    test('a set or playlist link downloads its first entry, not every track', async () => {
+      spawnCallLog = [];
+      spawnBehaviors = [success];
+      await downloadWithYtdlp('https://soundcloud.com/nasa/sets/sounds-of-the-sea', {
+        maxSize: Infinity,
+      });
+      const { args } = spawnCallLog[0];
+      assert.strictEqual(args[args.indexOf('--playlist-items') + 1], '1');
+    });
+
     test('the format selector accepts formats that report no height', async () => {
       spawnCallLog = [];
       spawnBehaviors = [success];

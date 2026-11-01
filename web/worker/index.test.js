@@ -65,8 +65,9 @@ test('the page may read files, and a viewer tab may play them but run nothing', 
   expect(res.headers.get('access-control-allow-origin')).toBe('https://gronka.dev');
   const csp = res.headers.get('content-security-policy');
   expect(csp).toContain("media-src 'self'");
-  expect(csp).toContain('sandbox');
+  expect(csp).toContain("default-src 'none'");
   expect(csp).not.toContain('script-src');
+  expect(csp).not.toContain('sandbox');
 });
 
 test('probe reports whether the source serves this edge, with its size', async () => {

@@ -47,6 +47,7 @@ export async function soundcloudTrack(url) {
     info.thumbnails?.find(t => t.id === 'original') ??
     null;
   return {
+    site: 'soundcloud',
     title: info.title,
     artist: info.artist || info.uploader,
     duration: info.duration,
@@ -61,30 +62,35 @@ export async function soundcloudTrack(url) {
 const norm = text =>
   String(text ?? '')
     .toLowerCase()
-    .replace(/[^a-z0-9]+/g, '');
+    .replace(/[^\p{L}\p{N}]+/gu, '');
 const VARIANT =
   /\b(remix|sped ?up|slowed|nightcore|cover|live|8d|reverb|instrumental|karaoke|bass ?boosted|edit)\b/i;
 const MAX_DRIFT_S = 2;
+const untagged = text => norm(String(text ?? '').replace(/\s*[([].*?[)\]]/g, ''));
 
-// Only the artist's own upload (channel or "- Topic") counts; no match beats a wrong song.
+// Only an official upload counts; no match beats a wrong song.
 export function pickMatch(track, entries) {
   const artist = norm(track.artist);
-  const title = norm(String(track.title).replace(/\s*[([].*?[)\]]/g, ''));
+  const title = untagged(track.title);
   if (!artist || !title || !track.duration) return null;
   let best = null;
   for (const entry of entries) {
     const drift = Math.abs((entry.duration ?? -99) - track.duration);
     const channel = norm(entry.channel ?? entry.uploader);
-    const official = channel === artist || channel === `${artist}topic`;
-    if (drift > MAX_DRIFT_S || !official || !norm(entry.title).includes(title)) continue;
+    const own = channel === artist || channel === `${artist}topic`;
+    // YouTube's art tracks, often under the artist's name in another script.
+    const artTrack = / - Topic$/.test(entry.channel ?? '') && untagged(entry.title) === title;
+    const label = entry.channel_is_verified && untagged(entry.title) === `${artist}${title}`;
+    if (drift > MAX_DRIFT_S || !(own || artTrack || label)) continue;
+    if (!norm(entry.title).includes(title)) continue;
     if (VARIANT.test(entry.title) && !VARIANT.test(track.title)) continue;
-    const score = (channel === `${artist}topic` ? 1 : 0) - drift;
+    const score = (own ? 2 : 0) + (artTrack ? 1 : 0) - drift;
     if (!best || score > best.score) best = { entry, score };
   }
   return best?.entry ?? null;
 }
 
-async function youtubeCandidates(track) {
+async function youtubeCandidates(query) {
   const { stdout } = await execFileAsync(
     'yt-dlp',
     [
@@ -94,7 +100,7 @@ async function youtubeCandidates(track) {
       '--no-warnings',
       '--js-runtimes',
       'bun',
-      `ytsearch10:${track.artist} ${track.title}`,
+      `ytsearch10:${query}`,
     ],
     { timeout: 30_000, maxBuffer: 20 * 1024 * 1024, signal: jobSignal() }
   );
@@ -104,7 +110,7 @@ async function youtubeCandidates(track) {
 async function fetchCover(url) {
   if (!url) return null;
   try {
-    if (!new URL(url).hostname.endsWith('.sndcdn.com')) return null;
+    if (!hostUnder(new URL(url).hostname, ['sndcdn.com', 'scdn.co'])) return null;
     const res = await axios.get(url, {
       ...ssrfGuardedRequest(),
       responseType: 'arraybuffer',
@@ -133,7 +139,7 @@ const AUDIO_INPUT_GUARD = [
   'mov,matroska,mp3,ogg,flac,wav,aac,image2,jpeg_pipe,png_pipe',
 ];
 
-// An mp3 carrying SoundCloud's title, artist and cover, whatever the audio came from.
+// An mp3 carrying the track page's title, artist and cover, whatever the audio came from.
 export async function tagAudio(file, track) {
   const ext = path.extname(file.filename ?? '').toLowerCase() || '.m4a';
   const input = file.path;
@@ -175,22 +181,29 @@ export async function tagAudio(file, track) {
   return fromPath(output, { contentType: 'audio/mpeg', filename: `${name}.mp3`, audioReady: true });
 }
 
-export async function soundcloudViaYoutube(url, { track = null } = {}) {
-  track ??= await soundcloudTrack(url);
-  const match = pickMatch(track, await youtubeCandidates(track));
+const DRM = {
+  soundcloud: { only: 'soundcloud only streams this one', why: 'soundcloud encrypts this one' },
+  spotify: { only: 'spotify only streams its audio', why: 'spotify encrypts its audio' },
+};
+
+export async function trackViaYoutube(track) {
+  const drm = DRM[track.site];
+  const match =
+    pickMatch(track, await youtubeCandidates(`${track.artist} ${track.title}`)) ??
+    pickMatch(track, await youtubeCandidates(`${track.artist} - Topic ${track.title}`));
   if (!match) {
     throw new ValidationError(
-      "soundcloud only streams this one encrypted (drm), and the artist's own upload isn't on youtube to use instead.",
+      `${drm.only} encrypted (drm), and the artist's own upload isn't on youtube to use instead.`,
       'DRM_PROTECTED'
     );
   }
-  logger.debug(`DRM SoundCloud track matched to YouTube ${match.id} (${match.channel})`);
+  logger.debug(`DRM ${track.site} track matched to YouTube ${match.id} (${match.channel})`);
   const audio = await downloadWithYtdlp(`https://www.youtube.com/watch?v=${match.id}`, {
     quality: 'bestaudio[ext=m4a]/bestaudio',
   });
   const tagged = await tagAudio(audio, track);
   return {
     ...tagged,
-    note: `soundcloud encrypts this one, so this is ${track.artist}'s own upload from youtube, tagged with soundcloud's cover and details.`,
+    note: `${drm.why}, so this is ${track.artist}'s own upload from youtube, tagged with ${track.site}'s cover and details.`,
   };
 }

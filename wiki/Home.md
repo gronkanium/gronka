@@ -18,6 +18,7 @@ download media from social platforms using the `/download` command:
 - facebook
 - twitch clips
 - soundcloud
+- spotify tracks: the artist's own youtube upload of the song, as a tagged mp3 with the cover (spotify audio itself is drm-only)
 - tumblr
 - streamable
 - dailymotion

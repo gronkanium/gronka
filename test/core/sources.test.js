@@ -46,7 +46,9 @@ const ROUTED = [
   ['https://www.reddit.com/r/a/comments/abc/x/', 'social'],
   ['https://www.instagram.com/p/abc/', 'instagram'],
   ['https://bsky.app/profile/a/post/b', 'social'],
-  ['https://open.spotify.com/track/1', null],
+  ['https://open.spotify.com/track/1', 'spotify'],
+  ['https://open.spotify.com/intl-de/album/1', 'spotify'],
+  ['https://spotify.link/AbC', 'spotify'],
   ['https://example.com/page', null],
 ];
 

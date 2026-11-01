@@ -193,7 +193,7 @@ const commands = [
   },
   {
     name: 'info',
-    description: 'view system information, cache stats, and storage usage',
+    description: 'bot version, memory, uptime and queue status',
     type: 1, // CHAT_INPUT type (slash command)
     default_member_permissions: null, // Available to everyone
     dm_permission: true, // Enable in DMs

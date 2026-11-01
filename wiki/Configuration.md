@@ -69,7 +69,7 @@ without r2, files too big for a discord attachment are refused. with it, they ar
 | `PROD_SERVER_PORT` / `SERVER_PORT` | `3000` | `/health` and `/api/bot/status` |
 | `PROD_WEBUI_PORT` / `WEBUI_PORT` | `3001` | the webui |
 | `PROD_POSTGRES_*` / `TEST_POSTGRES_*` | | postgres host, port, user, password and database |
-| `STATS_CACHE_TTL` | 5 minutes | how long the webui and `/info` reuse the r2 file count |
+| `STATS_CACHE_TTL` | 5 minutes | how long the webui reuses the r2 file count |
 
 ## webui settings
 

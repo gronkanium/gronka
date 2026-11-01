@@ -702,6 +702,13 @@ export async function downloadWithYtdlp(
 
     const filename = path.basename(outputPath);
     const contentType = getContentType(path.extname(outputPath));
+    // yt-dlp lists a TikTok photo post as its sound alone; gallery-dl gets the photos.
+    if (hostIn(url, ['tiktok.com']) && contentType.startsWith('audio/')) {
+      throw withCause(
+        new NetworkError('could not download this tiktok post.'),
+        'yt-dlp: tiktok photo post, only the sound track'
+      );
+    }
     const file = await fromPath(outputPath, { contentType, filename });
     if (file.size > maxSize) throw tooLarge(maxSize, `yt-dlp: file is ${file.size} bytes`);
     logger.debug(

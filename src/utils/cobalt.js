@@ -284,6 +284,15 @@ export function normalizeSocialMediaUrlForCobalt(url) {
       }
     }
 
+    // Story share links carry ~1 KB of tracking params; cobalt caps the request body at 1 KB.
+    if (
+      hostUnder(normalizeHost(hostname), ['tiktok.com']) &&
+      /^\/@[^/]+\/(video|photo)\//.test(urlObj.pathname)
+    ) {
+      urlObj.search = '';
+      urlObj.hash = '';
+    }
+
     return urlObj.toString();
   } catch {
     return url;

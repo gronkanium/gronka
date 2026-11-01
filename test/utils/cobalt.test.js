@@ -52,6 +52,18 @@ describe('cobalt utilities', () => {
     assert.strictEqual(normalized, 'https://twitter.com/neetyboyfriend/status/2044473679753425120');
   });
 
+  test('a TikTok story share link fits cobalt 1 KB request body', () => {
+    const story =
+      'https://www.tiktok.com/@ricksbuttkisser/video/7703318871520054541?_d=secCgYIASAHKAESPgo8&aweme_type=40&story_type=1&ug_photo_idx=0&' +
+      `checksum=${'9'.repeat(64)}&share_link_id=${'a'.repeat(900)}`;
+    const normalized = normalizeSocialMediaUrlForCobalt(story);
+
+    assert.strictEqual(
+      normalized,
+      'https://www.tiktok.com/@ricksbuttkisser/video/7703318871520054541'
+    );
+  });
+
   test('normalizeSocialMediaUrlForCobalt preserves non-tracking params', () => {
     const input = 'https://twitter.com/user/status/1234567890?lang=en&s=46';
     const normalized = normalizeSocialMediaUrlForCobalt(input);

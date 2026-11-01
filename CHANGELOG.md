@@ -5,6 +5,13 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and versions are release dates (`YYYY.MM.DD`, `.N` for a later release the same day).
 
+## [2026.11.01.2](https://github.com/gronkanium/gronka/compare/v2026.11.01.1...v2026.11.01.2) (2026-11-01)
+
+
+### Bug Fixes
+
+* **webui:** drop silent workers after a minute and rework the workers page ([#218](https://github.com/gronkanium/gronka/issues/218)) ([8ff2227](https://github.com/gronkanium/gronka/commit/8ff222776528fcd58c2fd523b0b1bffcd53d0148))
+
 ## [2026.11.01.1](https://github.com/gronkanium/gronka/compare/v2026.11.01...v2026.11.01.1) (2026-11-01)
 
 

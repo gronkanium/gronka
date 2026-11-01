@@ -64,6 +64,7 @@ const MORE = [
   ['tumblr', 'tumblr', 'videos'],
   ['twitch', 'twitch', 'clips'],
   ['soundcloud', 'soundcloud', 'tracks as audio'],
+  ['spotify', 'spotify', 'tracks as audio'],
   ['streamable', 'streamable', 'videos'],
   ['dailymotion', 'dailymotion', 'videos'],
   ['imgur', 'imgur', 'videos'],

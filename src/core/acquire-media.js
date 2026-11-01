@@ -3,7 +3,7 @@ import { createLogger } from '../utils/logger.js';
 import { botConfig } from '../utils/config.js';
 import {
   isSoundCloudUrl,
-  soundcloudViaYoutube,
+  trackViaYoutube,
   soundcloudTrack,
   tagAudio,
 } from '../utils/soundcloud.js';
@@ -254,7 +254,7 @@ export async function acquireMedia(
 
   const viaYoutube = async track => ({
     kind: 'file',
-    fileData: await soundcloudViaYoutube(url, { track }),
+    fileData: await trackViaYoutube(track ?? (await soundcloudTrack(url))),
     downloadMethod: 'ytdlp',
     url,
   });

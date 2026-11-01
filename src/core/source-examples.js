@@ -282,6 +282,11 @@ export const SOURCE_EXAMPLES = [
     expect: { type: 'audio' },
   },
   {
+    site: 'spotify',
+    url: 'https://open.spotify.com/track/7I4ibsZgwuf46g0xHuTC8s',
+    expect: { type: 'audio' },
+  },
+  {
     site: 'tumblr',
     url: 'https://nasa.tumblr.com/post/826039965713612800',
     expect: { type: 'video' },

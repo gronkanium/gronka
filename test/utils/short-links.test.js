@@ -31,7 +31,7 @@ describe('resolveShortLink', () => {
     );
   });
 
-  test('resolves all TikTok share formats through guarded redirects', async () => {
+  test('resolves TikTok, bilibili and spotify share links through guarded redirects', async () => {
     const target = 'https://www.tiktok.com/@creator/video/123';
     spy = spyOn(axios, 'get').mockResolvedValue({
       data: { destroy() {} },
@@ -44,6 +44,8 @@ describe('resolveShortLink', () => {
       'https://www.tiktok.com/t/abc/',
       'https://tiktok.com/t/abc/',
       'https://lite.tiktok.com/t/ZSgch2MXx/',
+      'https://spotify.link/AbC123',
+      'https://spotify.app.link/AbC123',
     ]) {
       assert.equal(await resolveShortLink(url), target);
       const options = spy.mock.calls.at(-1)[1];

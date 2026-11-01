@@ -62,6 +62,34 @@ test('a remix on soundcloud may match a remix on youtube', () => {
   assert.strictEqual(pickMatch(remix, [hit])?.id, 'r');
 });
 
+// The real ytsearch results for these tracks on 2026-11-01.
+test('takes a Topic art track of the exact title even when the artist is spelled in another script', () => {
+  const song = { artist: 'Peremotka', title: 'Встречная', duration: 242 };
+  const results = [
+    { id: 'fan', channel: 'Speck of Dust', title: 'Перемотка - Встречная', duration: 241 },
+    {
+      id: 'video',
+      channel: 'Перемотка / Peremotka',
+      title: 'Перемотка – Встречная',
+      duration: 232,
+    },
+    { id: 'nc', channel: 'Перемотка - Topic', title: 'Встречная (Nightcore Remix)', duration: 242 },
+    { id: 'other', channel: 'Release - Topic', title: 'Встречная', duration: 103 },
+    { id: 'art', channel: 'Перемотка - Topic', title: 'Встречная', duration: 242 },
+  ];
+  assert.strictEqual(pickMatch(song, results)?.id, 'art');
+  assert.strictEqual(pickMatch(song, results.slice(0, 4)), null);
+});
+
+test("takes a verified label channel's exact upload, never an unverified one", () => {
+  const song = { artist: 'BONES', title: 'HDMI', duration: 139 };
+  const fan = { id: 'fan', channel: 'FusionVibes', title: 'Bones - HDMI', duration: 140 };
+  const label = { ...fan, id: 'label', channel: 'TeamSESH', channel_is_verified: true };
+  const lyrics = { ...label, id: 'lyrics', title: 'BONES - HDMI Lyrics!' };
+  assert.strictEqual(pickMatch(song, [fan, lyrics]), null);
+  assert.strictEqual(pickMatch(song, [fan, lyrics, label])?.id, 'label');
+});
+
 test('soundcloud hosts only', () => {
   assert.ok(isSoundCloudUrl('https://soundcloud.com/liluzivert/xo-tour-llif3-1'));
   assert.ok(isSoundCloudUrl('https://on.soundcloud.com/abc'));

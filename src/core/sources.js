@@ -20,6 +20,7 @@ import { isThreadsUrl, downloadFromThreads } from '../utils/threads.js';
 import { downloadFromX } from '../utils/x-media.js';
 import { isMegaUrl, downloadFromMega } from '../utils/mega.js';
 import { isTumblrUrl, downloadFromTumblr } from '../utils/tumblr.js';
+import { isSpotifyUrl, downloadFromSpotify, SPOTIFY_HOSTS } from '../utils/spotify.js';
 import {
   isInstagramStoryUrl,
   isInstagramPostUrl,
@@ -121,6 +122,7 @@ export const ENGINES = {
   x: { name: 'X', extract: url => downloadFromX(url) },
   mega: { name: 'Mega', extract: url => downloadFromMega(url) },
   tumblr: { name: 'Tumblr', extract: url => downloadFromTumblr(url) },
+  spotify: { name: 'Spotify', extract: url => downloadFromSpotify(url) },
   direct: {
     name: 'direct file',
     extract: (url, ctx) =>
@@ -216,6 +218,13 @@ export const ROUTES = [
     owns: isThreadsUrl,
     chain: [step('threads')],
     services: switches('social', ['threads', 'Threads', ['threads.com', 'threads.net']]),
+  },
+  {
+    id: 'spotify',
+    name: 'Spotify',
+    owns: isSpotifyUrl,
+    chain: [step('spotify')],
+    services: switches('social', ['spotify', 'Spotify', SPOTIFY_HOSTS]),
   },
   {
     id: 'instagram-story',

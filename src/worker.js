@@ -149,6 +149,7 @@ function watchdog() {
     process.exit(1);
   }
   fs.writeFile(ALIVE_FILE, String(Date.now()), () => {});
+  if (draining) return;
   queue
     .reportPresence({ role: 'worker', running: running.size })
     .catch(warn('Presence report failed'));

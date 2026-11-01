@@ -64,6 +64,40 @@ describe('resolveShortLink', () => {
     assert.strictEqual(spy.mock.calls.length, 0);
   });
 
+  test('takes the page out of a google redirect link without a request', async () => {
+    spy = spyOn(axios, 'get');
+    const page = 'https://www.reddit.com/r/a/comments/b/c/';
+    for (const url of [
+      `https://www.google.com/url?q=${encodeURIComponent(page)}&sa=U`,
+      `https://www.google.co.uk/url?sa=t&url=${encodeURIComponent(page)}`,
+    ]) {
+      assert.strictEqual(await resolveShortLink(url), page);
+    }
+    const local = `https://www.google.com/url?q=${encodeURIComponent('http://127.0.0.1/')}`;
+    assert.strictEqual(await resolveShortLink(local), local);
+    assert.strictEqual(spy.mock.calls.length, 0);
+  });
+
+  test('follows a google goto link, whose target is encoded, through the ssrf guard', async () => {
+    const target = 'https://danbooru.donmai.us/posts/5826884';
+    spy = spyOn(axios, 'get').mockResolvedValue({
+      data: { destroy() {} },
+      request: { res: { responseUrl: target } },
+    });
+    assert.strictEqual(
+      await resolveShortLink('https://www.google.com/goto?url=CAESYAHrOzAVS7_vQztT'),
+      target
+    );
+    assert.ok(spy.mock.calls[0][1].beforeRedirect);
+  });
+
+  test('leaves other google pages alone without a request', async () => {
+    spy = spyOn(axios, 'get');
+    const search = 'https://www.google.com/search?q=cats';
+    assert.strictEqual(await resolveShortLink(search), search);
+    assert.strictEqual(spy.mock.calls.length, 0);
+  });
+
   test('leaves other hosts alone without a request', async () => {
     spy = spyOn(axios, 'get');
     assert.strictEqual(await resolveShortLink('https://example.com/a'), 'https://example.com/a');

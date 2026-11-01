@@ -321,6 +321,14 @@ describe('ytdlp utilities', () => {
       );
     });
 
+    test('both of youtube wordings for a removed video read as gone', () => {
+      assert.strictEqual(code('ERROR: [youtube] x: Video unavailable'), 'CONTENT_GONE');
+      assert.strictEqual(
+        code('ERROR: [youtube] FS7acwuRpig: This video is unavailable'),
+        'CONTENT_GONE'
+      );
+    });
+
     test('order decides overlapping wording', () => {
       assert.strictEqual(code('ERROR: This video is DRM protected'), 'DRM_PROTECTED');
       assert.strictEqual(code('Sign in to confirm your age'), 'AGE_RESTRICTED');

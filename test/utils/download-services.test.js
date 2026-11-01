@@ -36,6 +36,10 @@ describe('download-services registry', () => {
     assert.strictEqual(getServiceForUrl('https://www.xvideos.com/video1/x')?.id, 'xvideos');
     assert.strictEqual(getServiceForUrl('https://redgifs.com/watch/x')?.id, 'redgifs');
     assert.strictEqual(getServiceForUrl('https://hentaigifz.com/slug/')?.id, 'hentaigifz');
+    assert.strictEqual(
+      getServiceForUrl('https://rule34.xxx/index.php?page=post&s=view&id=123')?.id,
+      'rule34'
+    );
     assert.strictEqual(getServiceForUrl('https://danbooru.donmai.us/posts/1')?.id, 'danbooru');
     assert.strictEqual(getServiceForUrl('https://e926.net/posts/1')?.id, 'e621');
     assert.strictEqual(
@@ -78,6 +82,17 @@ describe('getDisabledServiceLabel gating', () => {
     await setSetting('disabled_services', JSON.stringify(['tiktok', 'jumpshare']));
     assert.strictEqual(await getDisabledServiceLabel('https://www.tt.site/t/short123/'), 'TikTok');
     assert.strictEqual(await getDisabledServiceLabel('https://jumpshare.com/s/test'), 'Jumpshare');
+    await setSetting('disabled_services', '[]');
+  });
+
+  test('Rule34 post pages and direct files share the source switch', async () => {
+    await setSetting('disabled_services', JSON.stringify(['rule34']));
+    for (const url of [
+      'https://rule34.xxx/index.php?page=post&s=view&id=123',
+      'https://wimg.rule34.xxx/images/1/file.png',
+    ]) {
+      assert.strictEqual(await getDisabledServiceLabel(url), 'Rule34');
+    }
     await setSetting('disabled_services', '[]');
   });
 });

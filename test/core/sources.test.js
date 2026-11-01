@@ -29,6 +29,7 @@ const ROUTED = [
   ['https://www.deviantart.com/someone/gallery', 'gallery-dl'],
   ['https://www.artstation.com/artwork/abc', 'gallery-dl'],
   ['https://danbooru.donmai.us/posts/123', 'booru'],
+  ['https://rule34.xxx/index.php?page=post&s=view&id=123&tags=example+', 'rule34'],
   ['https://www.pinterest.com/pin/123/', 'pinterest'],
   ['https://nasa.tumblr.com/post/828471464226406400', 'tumblr'],
   ['https://www.tumblr.com/nasa/828471464226406400/slug', 'tumblr'],

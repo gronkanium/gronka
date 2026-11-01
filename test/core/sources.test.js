@@ -28,6 +28,8 @@ const ROUTED = [
   ['https://www.deviantart.com/someone/art/thing-123456', 'deviantart'],
   ['https://www.deviantart.com/someone/gallery', 'gallery-dl'],
   ['https://www.artstation.com/artwork/abc', 'gallery-dl'],
+  ['https://pixeldrain.com/u/abcdefgh', 'gallery-dl'],
+  ['https://pixeldrain.com/l/abcdefgh', 'gallery-dl'],
   ['https://danbooru.donmai.us/posts/123', 'booru'],
   ['https://rule34.xxx/index.php?page=post&s=view&id=123&tags=example+', 'rule34'],
   ['https://www.pinterest.com/pin/123/', 'pinterest'],

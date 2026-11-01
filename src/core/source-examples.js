@@ -102,6 +102,11 @@ export const SOURCE_EXAMPLES = [
     expect: { type: 'image', count: 11 },
   },
   {
+    site: 'gallery-dl-pixeldrain',
+    url: 'https://pixeldrain.com/d/8xz8hcYJ',
+    expect: { type: 'video' },
+  },
+  {
     site: 'klipy',
     url: 'https://klipy.com/gifs/cats-kittens-106',
     expect: { type: 'gif' },

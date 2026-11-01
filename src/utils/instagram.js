@@ -147,25 +147,10 @@ function isMediaHostUrl(url) {
 }
 
 /**
- * Pick the item a carousel URL points at. Instagram's own ?img_index= is 1-based and is what
- * the share sheet puts on a link to a specific slide; anything else falls back to the first.
- */
-function selectCarouselItem(media, imgIndex) {
-  const items = media?.carousel_media;
-  if (!Array.isArray(items) || items.length === 0) {
-    return media;
-  }
-  const index =
-    Number.isInteger(imgIndex) && imgIndex >= 1 && imgIndex <= items.length ? imgIndex - 1 : 0;
-  return items[index];
-}
-
-/**
  * Best media URL for a single item. Both candidate lists are ordered highest-quality-first.
  * Video wins over image because a video item also carries its own still frame.
  */
-export function selectMediaUrl(media, imgIndex = null) {
-  const item = selectCarouselItem(media, imgIndex);
+export function selectMediaUrl(item) {
   const video = item?.video_versions?.[0]?.url;
   if (isMediaHostUrl(video)) {
     return video;
@@ -310,6 +295,36 @@ async function fetchStoryItems({ highlightId, username, mediaId }, refererPath, 
   return wanted.slice(0, MAX_HIGHLIGHT_ITEMS);
 }
 
+// A slide that fails is skipped; only when none arrive does the last failure surface.
+async function downloadItems(items, kind) {
+  let lastError = null;
+  const downloaded = (
+    await Promise.all(
+      items.map(async item => {
+        const mediaUrl = selectMediaUrl(item);
+        if (!mediaUrl) {
+          return null;
+        }
+        return downloadFileFromUrl(mediaUrl).catch(error => {
+          lastError = error;
+          logger.warn(`Instagram ${kind} item failed: ${error.message}`);
+          return null;
+        });
+      })
+    )
+  ).filter(Boolean);
+  if (downloaded.length === 0) {
+    throw (
+      lastError ??
+      withCause(
+        new ValidationError(`no downloadable media found on this ${kind}`),
+        `instagram: ${items.length} ${kind} item(s), none with a downloadable url`
+      )
+    );
+  }
+  return downloaded.length === 1 ? downloaded[0] : downloaded;
+}
+
 // Download the media behind an Instagram post URL via the web client's media-info API
 export async function downloadFromInstagram(url) {
   const cookie = readCookie();
@@ -324,28 +339,7 @@ export async function downloadFromInstagram(url) {
     logger.debug(
       `Resolving Instagram story (highlight ${story.highlightId}, media ${story.mediaId})`
     );
-    const items = await fetchStoryItems(story, parsed.pathname, cookie);
-    const downloaded = (
-      await Promise.all(
-        items.map(async item => {
-          const mediaUrl = selectMediaUrl(item);
-          if (!mediaUrl) {
-            return null;
-          }
-          return downloadFileFromUrl(mediaUrl).catch(error => {
-            logger.warn(`Instagram story item failed: ${error.message}`);
-            return null;
-          });
-        })
-      )
-    ).filter(Boolean);
-    if (downloaded.length === 0) {
-      throw withCause(
-        new ValidationError('no downloadable media found on this story'),
-        `instagram: ${items.length} story item(s), none with a downloadable url`
-      );
-    }
-    return downloaded.length === 1 ? downloaded[0] : downloaded;
+    return downloadItems(await fetchStoryItems(story, parsed.pathname, cookie), 'story');
   }
 
   const shortcode = parsed.pathname.match(POST_PATH)?.[1];
@@ -353,9 +347,6 @@ export async function downloadFromInstagram(url) {
   if (!mediaId) {
     throw new ValidationError('could not read the post id from this instagram link');
   }
-
-  const imgIndexParam = Number.parseInt(parsed.searchParams.get('img_index') ?? '', 10);
-  const imgIndex = Number.isNaN(imgIndexParam) ? null : imgIndexParam;
 
   logger.debug(`Resolving Instagram post ${shortcode} (media ${mediaId})`);
 
@@ -366,17 +357,6 @@ export async function downloadFromInstagram(url) {
     throw contentGone(`instagram: media ${mediaId} info had no items`);
   }
 
-  const mediaUrl = selectMediaUrl(media, imgIndex);
-  if (!mediaUrl) {
-    throw withCause(
-      new ValidationError('no downloadable media found on this post'),
-      `instagram: media ${mediaId} has no downloadable url`
-    );
-  }
-
-  const result = await downloadFileFromUrl(mediaUrl);
-  logger.debug(
-    `Downloaded Instagram media: ${result.filename} (${result.size} bytes, ${result.contentType})`
-  );
-  return result;
+  // The whole carousel, as cobalt sends it: the share sheet tags every link ?img_index=1.
+  return downloadItems(media.carousel_media?.length ? media.carousel_media : [media], 'post');
 }

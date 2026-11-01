@@ -100,6 +100,10 @@ export function getDirectMediaHeaders(url) {
   if (hostUnder(host, 'rule34.xxx')) {
     return { Referer: 'https://rule34.xxx/' };
   }
+  // It answers 403 to any other site as referer, discord's default included.
+  if (host === 'video.twimg.com') {
+    return { Referer: 'https://x.com/' };
+  }
   return isBilibiliCdnHost(host) ? { Referer: BILIBILI_REFERER } : {};
 }
 

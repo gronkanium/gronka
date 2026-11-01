@@ -212,7 +212,9 @@ export async function instagramGet(
     });
   } catch (error) {
     const status = error.response?.status;
-    const why = `instagram ${host}${apiPath.split('?')[0]} ${status ? `HTTP ${status}` : error.code || error.message}`;
+    const said =
+      typeof error.response?.data?.message === 'string' ? ` ${error.response.data.message}` : '';
+    const why = `instagram ${host}${apiPath.split('?')[0]} ${status ? `HTTP ${status}${said}` : error.code || error.message}`;
     if (status === 400 || status === 404) {
       throw new NetworkError(unavailableMessage(unavailable), 'CONTENT_GONE', 500, {
         cause: new Error(why),
@@ -243,8 +245,11 @@ export async function instagramGet(
 }
 
 function unavailableMessage(kind) {
-  return kind === 'story'
-    ? 'this story is unavailable, it may have expired (stories last 24 hours) or be private'
+  if (kind === 'story') {
+    return 'this story is unavailable, it may have expired (stories last 24 hours) or be private';
+  }
+  return kind === 'highlight'
+    ? 'this highlight is unavailable, it may be deleted or private'
     : contentGone().message;
 }
 
@@ -304,6 +309,9 @@ async function fetchStoryItems({ highlightId, username, mediaId }, refererPath, 
     : await userIdFor(username, refererPath, cookie);
   const items = await reelItems(reelId, refererPath, cookie, kind);
   const wanted = mediaId ? items.filter(item => String(item.pk) === mediaId) : items;
+  if (items.length === 0) {
+    throw storyGone(`reel ${reelId} not returned${infoMiss}`, kind);
+  }
   if (wanted.length === 0) {
     throw storyGone(`reel ${reelId} has ${items.length} item(s), none matching${infoMiss}`, kind);
   }

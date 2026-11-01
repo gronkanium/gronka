@@ -1,8 +1,11 @@
 import dns from 'dns';
 import axios from 'axios';
+import { execFile } from 'node:child_process';
+import { fileURLToPath } from 'node:url';
 import { createLogger } from './logger.js';
 import { NetworkError, withCause, contentGone } from './errors.js';
 import { blockedAddressReason, validateUrl } from './validation.js';
+import { jobSignal } from './media-file.js';
 
 const logger = createLogger('ssrf-guard');
 
@@ -85,12 +88,74 @@ export function isPrivateHost(url) {
   );
 }
 
+const PAGE_FETCH_SCRIPT = fileURLToPath(new URL('../../scripts/fetch-page.py', import.meta.url));
+
+async function impersonatedPage(url, headers) {
+  const signal = jobSignal(AbortSignal.timeout(PAGE_FETCH_TIMEOUT_MS));
+  for (let hop = 0; hop <= 5; hop++) {
+    guardedBeforeRedirect({ href: url });
+    const target = new URL(url);
+    const hostname = target.hostname.replace(/^\[|\]$/g, '');
+    const addresses = await new Promise((resolve, reject) =>
+      guardedLookup(hostname, { all: true }, (error, found) =>
+        error ? reject(error) : resolve(found)
+      )
+    );
+    const address = addresses[0].address;
+    const pinned = address.includes(':') ? `[${address}]` : address;
+    const response = await new Promise((resolve, reject) => {
+      const child = execFile(
+        'python3',
+        [PAGE_FETCH_SCRIPT],
+        { signal, maxBuffer: MAX_PAGE_BYTES * 6 + 65536 },
+        (error, stdout) => {
+          if (error) return reject(error);
+          try {
+            const result = JSON.parse(stdout);
+            if (result.error) {
+              reject(Object.assign(new Error(result.error), { code: result.code }));
+            } else resolve(result);
+          } catch (parseError) {
+            reject(parseError);
+          }
+        }
+      );
+      child.stdin.on('error', () => {});
+      child.stdin.end(
+        JSON.stringify({
+          url,
+          headers: headers ?? {},
+          resolve: `${target.hostname}:${target.port || (target.protocol === 'https:' ? 443 : 80)}:${pinned}`,
+          timeoutMs: PAGE_FETCH_TIMEOUT_MS,
+          maxBytes: MAX_PAGE_BYTES,
+        })
+      );
+    }).catch(error => {
+      error.config = { url };
+      if (signal.reason?.name === 'TimeoutError') error.code = 'ETIMEDOUT';
+      throw error;
+    });
+    if ([301, 302, 303, 307, 308].includes(response.status) && response.headers.location) {
+      const next = new URL(response.headers.location, url);
+      if (next.origin !== target.origin) headers = undefined;
+      url = next.href;
+      continue;
+    }
+    if (response.status < 200 || response.status >= 300) {
+      throw Object.assign(new Error(`HTTP ${response.status}`), { response, config: { url } });
+    }
+    return response;
+  }
+  throw new Error('page exceeded the redirect limit');
+}
+
 // A source's page or API: 404/410 means gone, onError may throw a site's own reason, else failMessage.
 export async function fetchPage(
   url,
-  { failMessage, headers, responseType = 'text', onError } = {}
+  { failMessage, headers, responseType = 'text', onError, impersonate = false } = {}
 ) {
   try {
+    if (impersonate) return await impersonatedPage(url, headers);
     return await axios.get(url, {
       ...ssrfGuardedRequest(),
       responseType,
@@ -100,6 +165,7 @@ export async function fetchPage(
       headers,
     });
   } catch (error) {
+    if (impersonate) error.config ??= { url };
     if ([404, 410].includes(error.response?.status)) throw contentGone(error);
     onError?.(error);
     throw withCause(new NetworkError(failMessage), error);

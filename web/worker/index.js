@@ -106,7 +106,11 @@ export default {
     const type = upstream.headers.get('content-type')?.split(';')[0].trim() ?? '';
     out.set('content-type', MEDIA_TYPE.test(type) ? type : 'application/octet-stream');
     out.set('content-disposition', disposition(payload.n || 'file'));
-    out.set('content-security-policy', "default-src 'none'; sandbox");
+    // media-src: Safari's "View" opens the file in a player page that loads it from this URL.
+    out.set(
+      'content-security-policy',
+      "default-src 'none'; media-src 'self'; img-src 'self'; style-src 'unsafe-inline'; sandbox"
+    );
     out.set('x-content-type-options', 'nosniff');
     out.set('referrer-policy', 'no-referrer');
     out.set('cache-control', 'no-store');

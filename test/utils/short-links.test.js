@@ -43,6 +43,7 @@ describe('resolveShortLink', () => {
       'https://b23.tv/abc123',
       'https://www.tiktok.com/t/abc/',
       'https://tiktok.com/t/abc/',
+      'https://lite.tiktok.com/t/ZSgch2MXx/',
     ]) {
       assert.equal(await resolveShortLink(url), target);
       const options = spy.mock.calls.at(-1)[1];

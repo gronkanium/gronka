@@ -12,7 +12,7 @@ const pathOf = url => new URL(url).pathname;
 // facebook.com/share/ links redirect to the post; extractors only read the post url.
 const isShortLink = (url, host) =>
   SHORT_LINK_HOSTS.has(host) ||
-  (host === 'tiktok.com' && pathOf(url).startsWith('/t/')) ||
+  ((host === 'tiktok.com' || host === 'lite.tiktok.com') && pathOf(url).startsWith('/t/')) ||
   ((host === 'facebook.com' || host === 'm.facebook.com') && pathOf(url).startsWith('/share/'));
 
 // A Google image result carries the image itself in imgurl.

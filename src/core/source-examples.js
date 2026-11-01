@@ -132,6 +132,11 @@ export const SOURCE_EXAMPLES = [
     expect: { type: 'video' },
   },
   {
+    site: 'eporner',
+    url: 'https://www.eporner.com/video-1gQiN9ohbdj/indian-webseries-adult-actress-muskaan-agarwal-hot-shower-nude-scene/',
+    expect: { type: 'video' },
+  },
+  {
     site: 'gallery-dl-nhentai',
     url: 'https://nhentai.net/g/103795/',
     expect: { type: 'archive' },

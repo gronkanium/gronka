@@ -215,6 +215,7 @@ if (!mocksSupported) {
     mock.module('../../src/utils/ytdlp.js', () => ({
       getYtdlpSite: () => null,
       getCookieArgs: () => [],
+      ONE_ITEM: [],
       downloadWithYtdlp: async url => {
         const u = url || '';
         if (u.includes('photo-fallback')) {

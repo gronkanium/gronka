@@ -147,6 +147,9 @@ export function getSiteArgs(url, viaGeoProxy = false) {
   ];
 }
 
+// --no-playlist only picks the video out of a watch?v=&list= link; a bare set or album would download every entry.
+export const ONE_ITEM = ['--no-playlist', '--playlist-items', '1'];
+
 const siteLabel = url => getYtdlpSite(url) ?? hostOf(url) ?? 'this site';
 
 // /p/ permalinks carry photos as often as video; /reel/ and /tv/ are always video.
@@ -315,7 +318,7 @@ function executeYtdlp(
 
     const args = [
       '--ignore-config',
-      '--no-playlist',
+      ...ONE_ITEM,
       '--no-warnings',
       '--quiet',
       '--no-progress',
@@ -592,7 +595,7 @@ export async function getStreamInfo(rawUrl, timeout = 30000) {
   const args = [
     '--ignore-config',
     '-J',
-    '--no-playlist',
+    ...ONE_ITEM,
     '--no-warnings',
     ...getYouTubeArgs(url),
     ...getSiteArgs(url),

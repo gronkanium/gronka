@@ -8,7 +8,7 @@ import { ValidationError } from './errors.js';
 import { ssrfGuardedRequest } from './ssrf-guard.js';
 import { fromPath, tempPath, jobSignal } from './media-file.js';
 import { runFfmpeg } from './video-processor/utils.js';
-import { downloadWithYtdlp, getCookieArgs } from './ytdlp.js';
+import { downloadWithYtdlp, getCookieArgs, ONE_ITEM } from './ytdlp.js';
 import { hostUnder } from './url-host.js';
 
 const logger = createLogger('soundcloud');
@@ -30,7 +30,7 @@ export async function soundcloudTrack(url) {
     [
       '--ignore-config',
       '-J',
-      '--no-playlist',
+      ...ONE_ITEM,
       '--no-warnings',
       '--ignore-no-formats-error',
       '--ies',
@@ -41,7 +41,8 @@ export async function soundcloudTrack(url) {
     ],
     { timeout: 30_000, maxBuffer: 20 * 1024 * 1024, signal: jobSignal() }
   );
-  const info = JSON.parse(stdout);
+  const parsed = JSON.parse(stdout);
+  const info = parsed.entries?.[0] ?? parsed;
   const art =
     info.thumbnails?.find(t => t.id === 't500x500') ??
     info.thumbnails?.find(t => t.id === 'original') ??

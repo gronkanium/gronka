@@ -8,11 +8,11 @@ import { OUTPUT_FORMATS } from './output-formats.js';
 
 const logger = createLogger('storage');
 
-// R2 LIST results for /info and the webui; TTL from STATS_CACHE_TTL (0 disables).
+// R2 LIST results for the webui; TTL from STATS_CACHE_TTL (0 disables).
 let statsCache = null;
 let statsCalculation = null;
 
-// One LIST at startup so the soft limit and /info have a number before the first cleanup run.
+// One LIST at startup so the soft limit has a number before the first cleanup run.
 export async function initializeR2UsageCache() {
   if (!isR2Configured(r2Config)) return;
   try {
@@ -140,31 +140,6 @@ export async function getStorageStats() {
     statsCalculation = null;
   });
   return statsCalculation;
-}
-
-export function getR2CacheStats() {
-  const R2_FREE_LIMIT_GB = 10;
-  const limitBytes = R2_FREE_LIMIT_GB * 1024 * 1024 * 1024;
-  const usage = getR2Usage();
-  const usageBytes = usage?.bytes ?? 0;
-  const age = usage ? Date.now() - usage.at : null;
-  return {
-    initialized: Boolean(usage),
-    usageBytes,
-    usageFormatted: formatFileSize(usageBytes),
-    freeBytes: Math.max(0, limitBytes - usageBytes),
-    freeFormatted: formatFileSize(Math.max(0, limitBytes - usageBytes)),
-    limitBytes,
-    limitFormatted: `${R2_FREE_LIMIT_GB} GB`,
-    percentageUsed: Math.min(100, ((usageBytes / limitBytes) * 100).toFixed(2)),
-    cacheAge: age,
-    cacheAgeFormatted:
-      age === null
-        ? 'N/A'
-        : age < 60000
-          ? `${Math.round(age / 1000)}s`
-          : `${Math.round(age / 60000)}m`,
-  };
 }
 
 // Resolve the tiered retention (in hours) for a file of the given size, reading the steerable `upload_ttl_tiers` setting and falling back to the default curve

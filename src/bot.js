@@ -194,8 +194,6 @@ client.once(Events.ClientReady, async readyClient => {
     }
     logger.info(`bot logged in as ${readyClient.user.tag}`);
 
-    // Initialize R2 usage cache on startup (if R2 is configured)
-    // This caches R2 stats to limit class A operations (LIST requests) for the /stats Discord command
     await initializeR2UsageCache();
 
     const report = () =>

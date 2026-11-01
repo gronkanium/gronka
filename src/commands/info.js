@@ -1,113 +1,71 @@
-import { EmbedBuilder, MessageFlags } from 'discord.js';
-import os from 'os';
-import { readFileSync } from 'fs';
-import { fileURLToPath } from 'url';
-import { dirname, join } from 'path';
+import { EmbedBuilder, MessageFlags, version as discordVersion } from 'discord.js';
+import os from 'node:os';
+import pkg from '../../package.json' with { type: 'json' };
 import { createLogger } from '../utils/logger.js';
 import { safeInteractionReply } from '../utils/interaction-helpers.js';
-import { getR2CacheStats, getStorageStats } from '../utils/storage.js';
-import { isR2Configured } from '../utils/r2-storage.js';
-import { getCommandTotals } from '../utils/database.js';
-import { r2Config, supportConfig } from '../utils/config.js';
-
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = dirname(__filename);
-const packageJson = JSON.parse(readFileSync(join(__dirname, '../../package.json'), 'utf-8'));
+import { jobsOverview } from '../utils/database/media-jobs-pg.js';
+import { botConfig, supportConfig } from '../utils/config.js';
 
 const logger = createLogger('info');
+const SOURCE_URL = 'https://github.com/gronkanium/gronka';
 
-function formatBytes(bytes) {
-  const mb = bytes / (1024 * 1024);
-  if (mb >= 1024) {
-    const gb = mb / 1024;
-    return `${gb.toFixed(2)} GB`;
-  }
-  return `${mb.toFixed(2)} MB`;
+const mb = bytes => `${Math.round(bytes / 1024 ** 2)} MB`;
+
+export function formatDuration(ms) {
+  const m = Math.floor(ms / 60000);
+  if (m < 60) return `${m}m`;
+  if (m < 1440) return `${Math.floor(m / 60)}h ${m % 60}m`;
+  return `${Math.floor(m / 1440)}d ${Math.floor((m % 1440) / 60)}h`;
 }
 
-function formatUptime(milliseconds) {
-  const seconds = Math.floor(milliseconds / 1000);
-  const minutes = Math.floor(seconds / 60);
-  const hours = Math.floor(minutes / 60);
-  const days = Math.floor(hours / 24);
-
-  if (days > 0) {
-    return `${days}d ${hours % 24}h ${minutes % 60}m`;
-  } else if (hours > 0) {
-    return `${hours}h ${minutes % 60}m ${seconds % 60}s`;
-  } else if (minutes > 0) {
-    return `${minutes}m ${seconds % 60}s`;
-  } else {
-    return `${seconds}s`;
-  }
+export function memoryLine(botRss, processes, workersEnabled) {
+  if (!workersEnabled) return `${mb(botRss)}`;
+  const workers = processes.filter(p => p.role === 'worker' && p.live && p.rss != null);
+  const total = botRss + workers.reduce((sum, p) => sum + p.rss, 0);
+  const n = workers.length;
+  return `${mb(botRss)} bot · ${mb(total)} total (bot + ${n} worker${n === 1 ? '' : 's'})`;
 }
 
-function formatR2Line(r2CacheStats) {
-  if (!isR2Configured(r2Config)) return 'r2: `not configured`';
-  if (!r2CacheStats.initialized) return 'r2: `cache not initialized`';
+export function queueLine(overview, workersEnabled) {
+  if (!workersEnabled) return 'jobs run in the bot';
+  const { queued, running } = overview.counts;
+  return `${overview.paused ? 'paused' : 'running'} · ${running} running, ${queued} waiting`;
+}
 
-  return (
-    `r2: \`${r2CacheStats.usageFormatted} / ${r2CacheStats.limitFormatted} ` +
-    `(${r2CacheStats.percentageUsed}%)\` · cache age: \`${r2CacheStats.cacheAgeFormatted}\``
-  );
+export function infoEmbed({ botStartTime, client, overview, workersEnabled, botRss, inviteUrl }) {
+  const uptime = botStartTime ? Date.now() - botStartTime : process.uptime() * 1000;
+  const lines = [
+    ['version', `v${pkg.version}`],
+    ['memory', memoryLine(botRss, overview.processes, workersEnabled)],
+    [
+      'uptime',
+      `${formatDuration(uptime)} · discord connected ${formatDuration(client.uptime ?? 0)}`,
+    ],
+    ['queue', queueLine(overview, workersEnabled)],
+    ['host', `${os.platform()} ${os.arch()} · ${os.cpus().length} cpus`],
+    ['runtime', `bun ${process.versions.bun} · discord.js ${discordVersion}`],
+    ['servers', client.guilds.cache.size.toLocaleString('en-US')],
+  ];
+  const links = [inviteUrl && `[support server](${inviteUrl})`, `[source code](${SOURCE_URL})`];
+  return new EmbedBuilder()
+    .setTitle('gronka')
+    .setColor(0x5865f2)
+    .setDescription(
+      `${lines.map(([k, v]) => `**${k}** ${v}`).join('\n')}\n\n${links.filter(Boolean).join(' · ')}`
+    );
 }
 
 export async function handleInfoCommand(interaction, botStartTime) {
   try {
-    const [storageStats, totals] = await Promise.all([getStorageStats(), getCommandTotals()]);
-    const commandsRun = totals.reduce((sum, row) => sum + row.count, 0);
-    const guildCount = interaction.client.guilds.cache.size;
-
-    // botStartTime is null on the prefix path when the bot has not recorded one yet; the
-    // process clock is the same number in practice, since the bot logs in at startup.
-    const uptime = botStartTime ? Date.now() - botStartTime : process.uptime() * 1000;
-
-    const totalMem = os.totalmem();
-    const usedMem = totalMem - os.freemem();
-    const memUsagePercent = ((usedMem / totalMem) * 100).toFixed(1);
-
-    // process.version reports the Node API level Bun emulates, not a real Node install ,
-    // the container runs Bun only, so report that instead or the number is a lie.
-    const bunVersion = process.versions.bun;
-
-    const embed = new EmbedBuilder()
-      .setTitle('info')
-      .setColor(0x5865f2)
-      .addFields(
-        {
-          name: 'usage',
-          value:
-            `uptime: \`${formatUptime(uptime)}\`\n` +
-            `guilds: \`${guildCount.toLocaleString()}\` · commands run: \`${commandsRun.toLocaleString()}\``,
-          inline: false,
-        },
-        {
-          name: 'links on r2',
-          value:
-            `gifs: \`${storageStats.totalGifs.toLocaleString()}\` · ` +
-            `videos: \`${storageStats.totalVideos.toLocaleString()}\` · ` +
-            `images: \`${storageStats.totalImages.toLocaleString()}\`\n` +
-            formatR2Line(getR2CacheStats()),
-          inline: false,
-        },
-        {
-          name: 'system',
-          value:
-            `\`${os.platform()}/${os.arch()}\` · \`${os.cpus().length} cpus\` · ` +
-            `memory: \`${formatBytes(usedMem)} / ${formatBytes(totalMem)} (${memUsagePercent}%)\`\n` +
-            `bun: \`v${bunVersion}\` · gronka: \`v${packageJson.version}\``,
-          inline: false,
-        }
-      );
-
-    if (supportConfig.inviteUrl) {
-      embed.addFields({
-        name: '​',
-        value: `[join our server for questions or feature requests](${supportConfig.inviteUrl})`,
-        inline: false,
-      });
-    }
-
+    const overview = await jobsOverview({ limit: 1 });
+    const embed = infoEmbed({
+      botStartTime,
+      client: interaction.client,
+      overview,
+      workersEnabled: botConfig.mediaWorkers,
+      botRss: process.memoryUsage().rss,
+      inviteUrl: supportConfig.inviteUrl,
+    });
     await safeInteractionReply(interaction, { embeds: [embed] });
   } catch (error) {
     logger.error('Failed to get info:', error);

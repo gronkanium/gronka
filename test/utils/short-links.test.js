@@ -54,6 +54,24 @@ describe('resolveShortLink', () => {
     }
   });
 
+  test('follows SoundCloud and Niconico share links, which no extractor reads', async () => {
+    for (const [short, target] of [
+      [
+        'https://on.soundcloud.com/ilDONmw57JvRysSXVO',
+        'https://soundcloud.com/a/b?ref=clipboard&si=02e5c8d7',
+      ],
+      ['https://nico.ms/sm9', 'https://www.nicovideo.jp/watch/sm9'],
+    ]) {
+      spy?.mockRestore();
+      spy = spyOn(axios, 'get').mockResolvedValue({
+        data: { destroy() {} },
+        request: { res: { responseUrl: target } },
+      });
+      assert.strictEqual(await resolveShortLink(short), target);
+      assert.ok(spy.mock.calls[0][1].lookup);
+    }
+  });
+
   test('takes the image out of a google image result, never a private one', async () => {
     spy = spyOn(axios, 'get');
     const wrapped = image => `https://www.google.com/imgres?imgurl=${encodeURIComponent(image)}`;

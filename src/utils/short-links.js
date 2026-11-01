@@ -13,6 +13,8 @@ const SHORT_LINK_HOSTS = new Set([
   'b23.tv',
   'spotify.link',
   'spotify.app.link',
+  'on.soundcloud.com',
+  'nico.ms',
 ]);
 
 const pathOf = url => new URL(url).pathname;

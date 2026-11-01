@@ -8,6 +8,7 @@ import { createFakeInteraction } from '../helpers/fake-interaction.js';
 import { succeed, flushCounts } from '../../src/utils/operations-tracker.js';
 import { getAlerts, getCommandTotals } from '../../src/utils/database.js';
 import { tempPath } from '../../src/utils/media-file.js';
+import { deliveryError } from '../../src/commands/shared/deliver.js';
 
 // In-process E2E for the shared command lifecycle: drives runMediaCommand with a fake Discord
 // interaction and asserts exactly what the user would see. Covers the Discord reply paths that
@@ -136,6 +137,19 @@ describe('runMediaCommand (Discord lifecycle E2E)', () => {
     const { interaction } = createFakeInteraction();
     const type = `ok${Date.now()}`;
     await runMediaCommand(type, interaction, async () => succeed());
+    assert.deepStrictEqual(await totals(type), { success: 1 });
+  });
+
+  test('a reply the user deleted is no failure: nothing recorded, no reply to a message that is gone', async () => {
+    const { interaction, calls } = createFakeInteraction();
+    const type = `replygone${Date.now()}`;
+    const since = Date.now();
+    await runMediaCommand(type, interaction, async () => {
+      interaction.deliveryError = Object.assign(new Error('Unknown Message'), { code: 10008 });
+      throw deliveryError(interaction);
+    });
+    assert.strictEqual(calls.editReply.length, 0);
+    assert.deepStrictEqual(await getAlerts({ command: type, startTime: since, limit: 1 }), []);
     assert.deepStrictEqual(await totals(type), { success: 1 });
   });
 

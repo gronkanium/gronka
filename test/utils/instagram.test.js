@@ -267,14 +267,23 @@ describe('downloadFromInstagram stories', () => {
     stubApi({ reels_media: { reels_media: [] } });
     await assert.rejects(
       downloadFromInstagram('https://www.instagram.com/stories/highlights/1796/'),
-      error => error.code === 'CONTENT_GONE' && !/24 hours/.test(error.message)
+      error =>
+        error.code === 'CONTENT_GONE' &&
+        error.message === 'this highlight is unavailable, it may be deleted or private' &&
+        /reel highlight:1796 not returned/.test(error.cause.message)
     );
   });
 
   test('a dead highlight item keeps why the media-info lookup failed', async () => {
-    stubApi({ '/api/v1/media/22/info/': httpError(404), reels_media: { reels_media: [] } });
+    const gone = Object.assign(httpError(400), {
+      response: {
+        status: 400,
+        data: { message: 'Media not found or unavailable', status: 'fail' },
+      },
+    });
+    stubApi({ '/api/v1/media/22/info/': gone, reels_media: { reels: {}, status: 'ok' } });
     await assert.rejects(downloadFromInstagram(`${highlightShare('5')}?story_media_id=22`), error =>
-      /media info .*404/.test(error.cause.message)
+      /media info .*HTTP 400 Media not found or unavailable/.test(error.cause.message)
     );
   });
 

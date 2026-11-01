@@ -204,6 +204,7 @@ const EMBED_FIXER_HOSTS = new Map([
   ['kktiktok.com', 'tiktok.com'],
   ['tiktokez.com', 'tiktok.com'],
   ['tt.site', 'tiktok.com'],
+  ['youtube-nocookie.com', 'youtube.com'],
   ['koutube.com', 'youtube.com'],
   ['fixyoutube.com', 'youtube.com'],
   ['yfxtube.com', 'youtube.com'],

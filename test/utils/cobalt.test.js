@@ -182,6 +182,13 @@ describe('cobalt utilities', () => {
       assert.strictEqual(canonicalizeMirrorUrl(lookalike), lookalike);
     });
 
+    test('routes a privacy-enhanced youtube embed to youtube', () => {
+      assert.strictEqual(
+        canonicalizeMirrorUrl('https://www.youtube-nocookie.com/embed/jNQXAC9IVRw?start=3'),
+        'https://youtube.com/embed/jNQXAC9IVRw?start=3'
+      );
+    });
+
     test('drops the d. direct-file prefix on mirrors', () => {
       assert.strictEqual(
         canonicalizeMirrorUrl('https://d.tiktokez.com/@a/video/7660684575982603550'),

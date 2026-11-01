@@ -392,23 +392,21 @@ async function fetchWithProgress(url, onBytes, signal) {
 }
 
 async function saveOne(file, lane, i = 0, onBytes = () => {}) {
-  if (lane !== 'direct') {
+  // An attachment link downloads by navigation; a fetched blob is dropped by iOS once the tap is ~1s old.
+  const link = lane === 'direct' ? file.save : file.url;
+  if (link) {
     const a = document.createElement('a');
-    a.href = file.url;
+    a.href = link;
     a.rel = 'noreferrer';
     a.click();
     return true;
   }
-  // file.save is the same file through our Worker, for CDNs that allow no cross-origin reads
-  for (const url of [file.url, file.save].filter(Boolean)) {
-    try {
-      save(await fetchWithProgress(url, onBytes), nameOf(file, i));
-      return true;
-    } catch {
-      // try the next copy; with none left, only opening the link works
-    }
+  try {
+    save(await fetchWithProgress(file.url, onBytes), nameOf(file, i));
+    return true;
+  } catch {
+    return false;
   }
-  return false;
 }
 
 // The panel's text is small next to a playing video; this says the file landed, big, for a moment.
@@ -448,7 +446,7 @@ async function deliver(result, request) {
     <button type="button" class="btn line small" id="copy">${icon('copy')}copy link</button>
     ${navigator.share ? `<button type="button" class="btn line small" id="share">${icon('share')}share</button>` : ''}
     <button type="button" class="linkish" id="other">another link</button></div>
-    <p class="note">${esc(result.note ?? LANE_NOTE[result.lane](site))}</p>`);
+    <p class="note">${esc(result.note ?? LANE_NOTE[file.save ? 'worker' : result.lane](site))}</p>`);
   const saving = $('#saving');
   let bytes;
   const run = () =>
@@ -501,7 +499,7 @@ function picker(result, site) {
         <span class="cap"><span>${i + 1}</span><span>${esc(nameOf(file, i).split('.').pop())}</span></span></label>`;
     })
     .join('');
-  draw(`<h2>${result.files.length} files in this one.</h2><p class="say">pick the ones you want. ${LANE_NOTE[result.lane](site)}</p>
+  draw(`<h2>${result.files.length} files in this one.</h2><p class="say">pick the ones you want. ${LANE_NOTE[result.files[0].save ? 'worker' : result.lane](site)}</p>
     <div class="grid" id="grid">${tiles}</div><p class="meta" id="saving"></p>
     <div class="acts"><button type="button" class="btn" id="some"></button>
     <button type="button" class="btn line small" id="all">${icon('download')}all ${result.files.length}</button>

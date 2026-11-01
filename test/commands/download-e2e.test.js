@@ -8,7 +8,7 @@ import { mock, spyOn } from 'bun:test';
 import axios from 'axios';
 import { createFakeInteraction } from '../helpers/fake-interaction.js';
 import { mediaFromBytes } from '../helpers/media.js';
-import { setSetting } from '../../src/utils/database.js';
+import { setSetting, getAlerts } from '../../src/utils/database.js';
 
 // Full-pipeline E2E for the download command. The network boundary (Cobalt / yt-dlp / file
 // downloader) is mocked at the module level so these run without any real HTTP, but everything
@@ -588,19 +588,21 @@ if (!mocksSupported) {
       assert.match(contents.at(-1), /discord reply expired/);
     });
 
-    test('a deleted reply message produces a specific error and does not upload to R2', async () => {
-      const { interaction } = downloadInteraction(
-        `https://x.com/user/status/multi-deleted-${Date.now()}`
-      );
-      const contents = [];
-      interaction.editReply = async payload => {
-        contents.push(payload.content);
+    test('a deleted reply message is not a failure and does not upload to R2', async () => {
+      const url = `https://x.com/user/status/multi-deleted-${Date.now()}`;
+      const { interaction } = downloadInteraction(url);
+      let edits = 0;
+      interaction.editReply = async () => {
+        edits++;
         throw Object.assign(new Error('Unknown Message'), { code: 10008 });
       };
       const before = uploads.length;
+      const since = Date.now();
       await handleDownloadCommand(interaction);
       assert.strictEqual(uploads.length, before);
-      assert.match(contents.at(-1), /reply message was deleted/);
+      assert.strictEqual(edits, 1);
+      const alerts = await getAlerts({ command: 'download', startTime: since, limit: 50 });
+      assert.ok(!alerts.some(row => JSON.parse(row.metadata).url === url));
     });
 
     test('a single file just under the limit goes as a link, leaving room for the upload framing', async () => {

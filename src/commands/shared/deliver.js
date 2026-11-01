@@ -23,9 +23,6 @@ export function deliveryError(interaction, partial = false) {
   } else if (error?.status === 413 || error?.code === 40005) {
     message =
       'discord rejected this upload as too large. please try a smaller file or shorter clip.';
-  } else if (error?.code === 10008) {
-    message =
-      'the reply message was deleted before the file could be sent. please run the command again.';
   }
   return new AppError(
     partial ? `only part of this post was sent. ${message}` : message,

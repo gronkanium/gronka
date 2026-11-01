@@ -10,6 +10,7 @@ import {
 import { isDeviationUrl, downloadFromDeviantArt } from '../utils/deviantart.js';
 import { isHentaiGifzUrl, downloadFromHentaiGifz } from '../utils/hentaigifz.js';
 import { isBooruUrl, downloadFromBooru, booruCdnUserAgent } from '../utils/booru.js';
+import { isRule34Url, downloadFromRule34 } from '../utils/rule34.js';
 import { isPinterestUrl, downloadFromPinterest } from '../utils/pinterest.js';
 import { isKlipyUrl, downloadFromKlipy } from '../utils/klipy.js';
 import { isJumpshareUrl, resolveJumpshareUrl } from '../utils/jumpshare.js';
@@ -105,6 +106,7 @@ export const ENGINES = {
   },
   hentaigifz: { name: 'hentaigifz', extract: url => downloadFromHentaiGifz(url) },
   booru: { name: 'booru', extract: url => downloadFromBooru(url) },
+  rule34: { name: 'Rule34', extract: url => downloadFromRule34(url) },
   pinterest: { name: 'Pinterest', extract: url => downloadFromPinterest(url) },
   klipy: { name: 'Klipy', extract: url => downloadFromKlipy(url) },
   jumpshare: {
@@ -166,6 +168,13 @@ export const ROUTES = [
     owns: isHentaiGifzUrl,
     chain: [step('hentaigifz')],
     services: switches('adult', ['hentaigifz', 'hentaigifz', ['hentaigifz.com']]),
+  },
+  {
+    id: 'rule34',
+    name: 'Rule34',
+    owns: isRule34Url,
+    chain: [step('rule34')],
+    services: switches('adult', ['rule34', 'Rule34', ['rule34.xxx']]),
   },
   {
     id: 'booru',

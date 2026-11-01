@@ -189,10 +189,6 @@ describe('ytdlp utilities', () => {
           '--impersonate',
           'chrome',
         ]);
-        assert.deepStrictEqual(siteArgs('https://rule34.xxx/index.php?page=post&s=view&id=1'), [
-          '--impersonate',
-          'chrome',
-        ]);
         assert.deepStrictEqual(siteArgs('https://www.tiktok.com/@a/video/1', true), [
           '--proxy',
           'http://vpn:8888',

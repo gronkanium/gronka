@@ -3,7 +3,10 @@ import { createHash } from 'crypto';
 import fs from 'fs';
 import os from 'os';
 import path from 'path';
+import axios from 'axios';
+import { Readable } from 'node:stream';
 import { createFakeInteraction } from '../helpers/fake-interaction.js';
+import { fakePage } from '../helpers/fake-page.js';
 
 // No module mocks: a fake cobalt answers over real HTTP with files ffmpeg made, and everything
 // from intake to the Discord reply is the real code. Only Discord and the upstream site are fake.
@@ -103,6 +106,10 @@ if (!e2e) {
       ['-f', 'lavfi', '-i', 'testsrc=size=50x20', '-frames:v', '1'],
       `${dir}/b.jpg`
     );
+    files.gif = ffmpeg(
+      ['-f', 'lavfi', '-i', 'testsrc=size=40x30:rate=2:duration=1'],
+      `${dir}/a.gif`
+    );
     fs.rmSync(dir, { recursive: true, force: true });
 
     cobalt = startCobalt();
@@ -171,6 +178,63 @@ if (!e2e) {
 
       expect(asked).not.toContain(url);
       expect(calls.editReply.at(-1)?.files ?? calls.reply.at(-1)?.files).toBeUndefined();
+    });
+  });
+
+  describe('Rule34 download pipeline', () => {
+    for (const [ext, type] of [
+      ['png', 'image/png'],
+      ['gif', 'image/gif'],
+      ['mp4', 'video/mp4'],
+    ]) {
+      test(`a post sends its original ${ext} attachment and cleans up its job`, async () => {
+        const upstream = await fakePage();
+        const get = axios.get;
+        const url = 'https://rule34.xxx/index.php?page=post&s=view&id=123&tags=example+';
+        const media = `https://wimg.rule34.xxx/images/42/original.${ext}`;
+        const before = jobDirs();
+        try {
+          await upstream.respond({ data: `<a href="${media}">Original image</a>` });
+          axios.get = async (target, options) => {
+            expect(target).toBe(media);
+            expect(options.headers.Referer).toBe('https://rule34.xxx/');
+            return {
+              data: Readable.from(files[ext]),
+              status: 200,
+              headers: { 'content-type': type },
+            };
+          };
+          const { interaction, calls } = download(url);
+          await handleDownloadCommand(interaction);
+          const sent = calls.editReply.at(-1).files;
+          expect(sent).toHaveLength(1);
+          expect(sha(sent[0].attachment)).toBe(sha(files[ext]));
+          expect(sent[0].name).toEndWith(`.${ext}`);
+          expect(await alertFor(url, 0)).toBeUndefined();
+          expect(jobDirs()).toEqual(before);
+        } finally {
+          axios.get = get;
+          await upstream.close();
+        }
+      });
+    }
+
+    test('a failed post records the Rule34 extractor and the upstream HTTP status', async () => {
+      const upstream = await fakePage();
+      const url = 'https://rule34.xxx/index.php?page=post&s=view&id=456';
+      try {
+        await upstream.respond({ status: 403 });
+        const { interaction, calls } = download(url);
+        await handleDownloadCommand(interaction);
+        expect(calls.editReply.at(-1).content).toBe(
+          'rule34 is blocking downloads right now, try again later'
+        );
+        const alert = await alertFor(url, 0);
+        expect(alert.cause).toBe('GET rule34.xxx/index.php HTTP 403');
+        expect(alert.trail).toEqual([{ step: 'rule34', error: alert.cause }]);
+      } finally {
+        await upstream.close();
+      }
     });
   });
 }

@@ -100,6 +100,7 @@ const OTHER_SITES = [
   'xhamster',
   'redtube',
   'rule34video',
+  'rule34.xxx',
   'nhentai',
   'hentaigifz',
   'danbooru',

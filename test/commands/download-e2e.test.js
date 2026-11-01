@@ -8,7 +8,7 @@ import { mock, spyOn } from 'bun:test';
 import axios from 'axios';
 import { createFakeInteraction } from '../helpers/fake-interaction.js';
 import { mediaFromBytes } from '../helpers/media.js';
-import { setSetting } from '../../src/utils/database.js';
+import { setSetting, getAlerts } from '../../src/utils/database.js';
 
 // Full-pipeline E2E for the download command. The network boundary (Cobalt / yt-dlp / file
 // downloader) is mocked at the module level so these run without any real HTTP, but everything
@@ -215,6 +215,7 @@ if (!mocksSupported) {
     mock.module('../../src/utils/ytdlp.js', () => ({
       getYtdlpSite: () => null,
       getCookieArgs: () => [],
+      ONE_ITEM: [],
       downloadWithYtdlp: async url => {
         const u = url || '';
         if (u.includes('photo-fallback')) {
@@ -421,6 +422,18 @@ if (!mocksSupported) {
       assert.ok(calls.editReply[0].files[0].name.endsWith('.mp4'));
     });
 
+    test('Google Drive file links download through their own extractor', async () => {
+      const { withJobDir } = await import('../../src/utils/media-file.js');
+      await withJobDir(async () => {
+        const result = await acquireMedia(
+          'https://drive.google.com/file/d/1LuUURO_7J7stf0u59TH7NykJLvnA-uoO/view?usp=sharing',
+          { urlOnly: true }
+        );
+        assert.strictEqual(result.kind, 'file');
+        assert.strictEqual(result.downloadMethod, 'google-drive');
+      });
+    });
+
     test('tt.site short links pass the command source check and attach TikTok media', async () => {
       const { interaction, calls } = downloadInteraction(
         'https://www.tt.site/t/short123/',
@@ -588,19 +601,21 @@ if (!mocksSupported) {
       assert.match(contents.at(-1), /discord reply expired/);
     });
 
-    test('a deleted reply message produces a specific error and does not upload to R2', async () => {
-      const { interaction } = downloadInteraction(
-        `https://x.com/user/status/multi-deleted-${Date.now()}`
-      );
-      const contents = [];
-      interaction.editReply = async payload => {
-        contents.push(payload.content);
+    test('a deleted reply message is not a failure and does not upload to R2', async () => {
+      const url = `https://x.com/user/status/multi-deleted-${Date.now()}`;
+      const { interaction } = downloadInteraction(url);
+      let edits = 0;
+      interaction.editReply = async () => {
+        edits++;
         throw Object.assign(new Error('Unknown Message'), { code: 10008 });
       };
       const before = uploads.length;
+      const since = Date.now();
       await handleDownloadCommand(interaction);
       assert.strictEqual(uploads.length, before);
-      assert.match(contents.at(-1), /reply message was deleted/);
+      assert.strictEqual(edits, 1);
+      const alerts = await getAlerts({ command: 'download', startTime: since, limit: 50 });
+      assert.ok(!alerts.some(row => JSON.parse(row.metadata).url === url));
     });
 
     test('a single file just under the limit goes as a link, leaving room for the upload framing', async () => {

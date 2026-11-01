@@ -6,27 +6,44 @@ import { validateUrl } from './validation.js';
 
 const logger = createLogger('short-links');
 
-const SHORT_LINK_HOSTS = new Set(['share.google', 'vm.tiktok.com', 'vt.tiktok.com', 'b23.tv']);
+const SHORT_LINK_HOSTS = new Set([
+  'share.google',
+  'vm.tiktok.com',
+  'vt.tiktok.com',
+  'b23.tv',
+  'spotify.link',
+  'spotify.app.link',
+  'on.soundcloud.com',
+  'nico.ms',
+]);
 
 const pathOf = url => new URL(url).pathname;
-// facebook.com/share/ links redirect to the post; extractors only read the post url.
+const isGoogle = host => /^google\.[a-z.]+$/.test(host);
+// facebook.com/share/ and google.com/goto links only reveal their target by redirecting to it.
 const isShortLink = (url, host) =>
   SHORT_LINK_HOSTS.has(host) ||
   ((host === 'tiktok.com' || host === 'lite.tiktok.com') && pathOf(url).startsWith('/t/')) ||
-  ((host === 'facebook.com' || host === 'm.facebook.com') && pathOf(url).startsWith('/share/'));
+  ((host === 'facebook.com' || host === 'm.facebook.com') && pathOf(url).startsWith('/share/')) ||
+  (isGoogle(host) && pathOf(url) === '/goto');
 
-// A Google image result carries the image itself in imgurl.
-function googleImage(url, host) {
-  if (!/^google\.[a-z.]+$/.test(host) || pathOf(url) !== '/imgres') return null;
-  const image = new URL(url).searchParams.get('imgurl');
-  return image && validateUrl(image).valid ? image : null;
+// Google result links carry their target in the query: an image in imgurl, a page in q or url.
+function googleTarget(url, host) {
+  if (!isGoogle(host)) return null;
+  const { pathname, searchParams } = new URL(url);
+  const target =
+    pathname === '/imgres'
+      ? searchParams.get('imgurl')
+      : pathname === '/url'
+        ? (searchParams.get('q') ?? searchParams.get('url'))
+        : null;
+  return target && validateUrl(target).valid ? target : null;
 }
 
 export async function resolveShortLink(url) {
   const host = hostOf(url);
   if (!host) return url;
-  const image = googleImage(url, host);
-  if (image) return image;
+  const target = googleTarget(url, host);
+  if (target) return target;
   if (!isShortLink(url, host)) return url;
 
   try {

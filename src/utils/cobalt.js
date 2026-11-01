@@ -204,6 +204,7 @@ const EMBED_FIXER_HOSTS = new Map([
   ['kktiktok.com', 'tiktok.com'],
   ['tiktokez.com', 'tiktok.com'],
   ['tt.site', 'tiktok.com'],
+  ['youtube-nocookie.com', 'youtube.com'],
   ['koutube.com', 'youtube.com'],
   ['fixyoutube.com', 'youtube.com'],
   ['yfxtube.com', 'youtube.com'],
@@ -235,6 +236,8 @@ const mirrorTarget = host => {
   );
 };
 
+const REDDIT_SHORT_PATH = /^\/([a-z0-9]+)\/?$/i;
+const REDDIT_GALLERY_PATH = /^\/gallery\/([a-z0-9]+)\/?$/i;
 const GIPHY_PAGE_PATH = /^\/(?:gifs|stickers|embed)\/(?:[^/]*-)?([A-Za-z0-9]+)\/?$/;
 
 // Canonicalize before routing: the Instagram extractor matches canonical hosts only.
@@ -249,6 +252,17 @@ export function canonicalizeMirrorUrl(url) {
       return `https://i.giphy.com/${giphyId}.gif`;
     }
     const canonicalHost = mirrorTarget(normalizeHost(urlObj.hostname));
+    const host = canonicalHost ?? normalizeHost(urlObj.hostname);
+    // Reddit 403s a bot following these redirects; /comments/<id> is what they point at.
+    const redditId =
+      host === 'redd.it'
+        ? urlObj.pathname.match(REDDIT_SHORT_PATH)?.[1]
+        : hostUnder(host, ['reddit.com'])
+          ? urlObj.pathname.match(REDDIT_GALLERY_PATH)?.[1]
+          : null;
+    if (redditId) {
+      return `https://www.reddit.com/comments/${redditId}`;
+    }
     if (!canonicalHost) {
       return url;
     }
@@ -282,6 +296,15 @@ export function normalizeSocialMediaUrlForCobalt(url) {
       if ([...urlObj.searchParams.keys()].length === 0) {
         urlObj.search = '';
       }
+    }
+
+    // Story share links carry ~1 KB of tracking params; cobalt caps the request body at 1 KB.
+    if (
+      hostUnder(normalizeHost(hostname), ['tiktok.com']) &&
+      /^\/@[^/]+\/(video|photo)\//.test(urlObj.pathname)
+    ) {
+      urlObj.search = '';
+      urlObj.hash = '';
     }
 
     return urlObj.toString();

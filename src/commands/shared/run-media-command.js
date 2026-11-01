@@ -1,5 +1,5 @@
 import { createLogger } from '../../utils/logger.js';
-import { trackRequest, requestOutcome } from '../../utils/operations-tracker.js';
+import { trackRequest, requestOutcome, succeed } from '../../utils/operations-tracker.js';
 import { replyWithCuratedError } from './command-errors.js';
 import { recordFailure } from '../../utils/failures.js';
 import { withJobDir, jobSignal } from '../../utils/media-file.js';
@@ -30,6 +30,12 @@ async function runOperation(type, interaction, callback, options, context) {
     }
   } catch (caught) {
     const error = jobSignal()?.aborted ? jobSignal().reason : caught;
+    // The bot never deletes its own reply, so someone in the chat did: there is no one left to tell.
+    if (error?.code === 'REPLY_DELETED') {
+      logger.info(`${type} finished but its reply had been deleted, nothing to deliver to`);
+      succeed();
+      return;
+    }
     if (error instanceof ValidationError) logger.warn(`${type} failed: ${error.message}`);
     else logger.error(`${type} failed:`, error);
     await replyWithCuratedError(

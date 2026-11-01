@@ -67,6 +67,11 @@ export const SOURCE_EXAMPLES = [
     expect: { type: 'audio' },
   },
   {
+    site: 'google-drive',
+    url: 'https://drive.google.com/file/d/10YD7sJI_HHDXmQM4h96alvyGIU53nGYZ/view?usp=sharing',
+    expect: { type: 'image' },
+  },
+  {
     site: 'medal',
     url: 'https://medal.tv/games/clippords-clips/clips/1aOnX9X39EbuhM',
     expect: { type: 'video' },
@@ -95,6 +100,11 @@ export const SOURCE_EXAMPLES = [
     site: 'gallery-dl-mangadex',
     url: 'https://mangadex.org/chapter/aaa8687d-7b4d-40de-9772-cd2cc9fedacd',
     expect: { type: 'image', count: 11 },
+  },
+  {
+    site: 'gallery-dl-pixeldrain',
+    url: 'https://pixeldrain.com/d/8xz8hcYJ',
+    expect: { type: 'video' },
   },
   {
     site: 'klipy',
@@ -129,6 +139,11 @@ export const SOURCE_EXAMPLES = [
   {
     site: 'redtube',
     url: 'https://www.redtube.com/800741',
+    expect: { type: 'video' },
+  },
+  {
+    site: 'eporner',
+    url: 'https://www.eporner.com/video-1gQiN9ohbdj/indian-webseries-adult-actress-muskaan-agarwal-hot-shower-nude-scene/',
     expect: { type: 'video' },
   },
   {
@@ -279,6 +294,11 @@ export const SOURCE_EXAMPLES = [
   {
     site: 'soundcloud',
     url: 'https://soundcloud.com/nasa/sun-sonification',
+    expect: { type: 'audio' },
+  },
+  {
+    site: 'spotify',
+    url: 'https://open.spotify.com/track/7I4ibsZgwuf46g0xHuTC8s',
     expect: { type: 'audio' },
   },
   {

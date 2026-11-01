@@ -175,6 +175,12 @@ describe('ytdlp utilities', () => {
           '-N',
           '8',
         ]);
+        assert.deepStrictEqual(siteArgs('https://www.eporner.com/video-abc/x/'), [
+          '--proxy',
+          'http://vpn:8888',
+          '-N',
+          '8',
+        ]);
         assert.deepStrictEqual(siteArgs('https://www.redtube.com/1'), [
           '--proxy',
           'http://vpn:8888',
@@ -223,6 +229,7 @@ describe('ytdlp utilities', () => {
       assert.strictEqual(getYtdlpSite('https://xhamster.com/videos/x'), 'xHamster');
       assert.strictEqual(getYtdlpSite('https://www.redtube.com/123'), 'RedTube');
       assert.strictEqual(getYtdlpSite('https://rule34video.com/video/1/x/'), 'Rule34Video');
+      assert.strictEqual(getYtdlpSite('https://www.eporner.com/video-abc/x/'), 'Eporner');
       assert.strictEqual(getYtdlpSite('https://www.xiaohongshu.com/explore/abc'), 'Xiaohongshu');
       assert.strictEqual(getYtdlpSite('http://xhslink.com/o/abc'), 'Xiaohongshu');
       assert.strictEqual(getYtdlpSite('https://medal.tv/games/x/clips/abc'), 'Medal');
@@ -311,6 +318,14 @@ describe('ytdlp utilities', () => {
       assert.strictEqual(
         code('ERROR: No suitable extractor found for URL https://share.snapchat.com/m/x'),
         'YTDLP_UNSUPPORTED_URL'
+      );
+    });
+
+    test('both of youtube wordings for a removed video read as gone', () => {
+      assert.strictEqual(code('ERROR: [youtube] x: Video unavailable'), 'CONTENT_GONE');
+      assert.strictEqual(
+        code('ERROR: [youtube] FS7acwuRpig: This video is unavailable'),
+        'CONTENT_GONE'
       );
     });
 

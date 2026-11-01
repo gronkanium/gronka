@@ -19,7 +19,9 @@ import { isBilibiliUrl, downloadFromBilibili } from '../utils/bilibili.js';
 import { isThreadsUrl, downloadFromThreads } from '../utils/threads.js';
 import { downloadFromX } from '../utils/x-media.js';
 import { isMegaUrl, downloadFromMega } from '../utils/mega.js';
+import { isGoogleDriveUrl, googleDriveDownloadUrl } from '../utils/google-drive.js';
 import { isTumblrUrl, downloadFromTumblr } from '../utils/tumblr.js';
+import { isSpotifyUrl, downloadFromSpotify, SPOTIFY_HOSTS } from '../utils/spotify.js';
 import {
   isInstagramStoryUrl,
   isInstagramPostUrl,
@@ -120,7 +122,12 @@ export const ENGINES = {
   threads: { name: 'Threads', extract: url => downloadFromThreads(url) },
   x: { name: 'X', extract: url => downloadFromX(url) },
   mega: { name: 'Mega', extract: url => downloadFromMega(url) },
+  'google-drive': {
+    name: 'Google Drive',
+    extract: (url, ctx) => downloadDirectMedia(googleDriveDownloadUrl(url), ctx.client),
+  },
   tumblr: { name: 'Tumblr', extract: url => downloadFromTumblr(url) },
+  spotify: { name: 'Spotify', extract: url => downloadFromSpotify(url) },
   direct: {
     name: 'direct file',
     extract: (url, ctx) =>
@@ -218,6 +225,13 @@ export const ROUTES = [
     services: switches('social', ['threads', 'Threads', ['threads.com', 'threads.net']]),
   },
   {
+    id: 'spotify',
+    name: 'Spotify',
+    owns: isSpotifyUrl,
+    chain: [step('spotify')],
+    services: switches('social', ['spotify', 'Spotify', SPOTIFY_HOSTS]),
+  },
+  {
     id: 'instagram-story',
     name: 'Instagram stories',
     owns: url => isInstagramStoryUrl(url) && hasInstagramSession(),
@@ -229,6 +243,17 @@ export const ROUTES = [
     owns: isMegaUrl,
     chain: [step('mega')],
     services: switches('video', ['mega', 'Mega', ['mega.nz', 'mega.io']]),
+  },
+  {
+    id: 'google-drive',
+    name: 'Google Drive',
+    owns: isGoogleDriveUrl,
+    chain: [step('google-drive')],
+    services: switches('video', [
+      'google-drive',
+      'Google Drive',
+      ['drive.google.com', 'drive.usercontent.google.com'],
+    ]),
   },
   // cobalt reads only video posts, and yt-dlp hits the browser check on <blog>.tumblr.com.
   {

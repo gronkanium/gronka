@@ -51,7 +51,10 @@ class requests:
   process.env.PYTHONPATH = dir;
   dns.lookup = (hostname, options, callback) => {
     if (['rule34.xxx', 'www.rule34.xxx'].includes(hostname)) {
-      callback(null, [{ address: '93.184.216.34', family: 4 }]);
+      callback(null, [
+        { address: '93.184.216.34', family: 4 },
+        { address: '2606:2800:220:1::1', family: 6 },
+      ]);
     } else if (hostname === 'private.example') {
       callback(null, [{ address: '192.168.1.1', family: 4 }]);
     } else lookup(hostname, options, callback);

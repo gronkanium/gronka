@@ -1,10 +1,7 @@
-import { NetworkError, ValidationError, withCause, contentGone, describeCause } from './errors.js';
+import { NetworkError, ValidationError, withCause, contentGone } from './errors.js';
 import { fetchPage } from './ssrf-guard.js';
 import { downloadDirectMedia } from './file-downloader.js';
 import { hostUnder } from './url-host.js';
-import { createLogger } from './logger.js';
-
-const logger = createLogger('rule34');
 
 export function rule34PostId(url) {
   try {
@@ -79,30 +76,18 @@ export async function downloadFromRule34(url) {
   const id = rule34PostId(url);
   if (!id) throw new ValidationError('invalid rule34 post link.');
   const page = `https://rule34.xxx/index.php?page=post&s=view&id=${id}`;
-  let response;
-  for (let attempt = 0; !response; attempt++) {
-    try {
-      response = await fetchPage(page, {
-        failMessage: 'could not read this rule34 post.',
-        impersonate: true,
-        onError: error => {
-          if ([403, 429].includes(error.response?.status)) {
-            throw withCause(
-              new NetworkError('rule34 is blocking downloads right now, try again later'),
-              error
-            );
-          }
-        },
-      });
-    } catch (error) {
-      const { cause } = error;
-      const transient =
-        cause?.response?.status >= 500 ||
-        [7, 18, 28, 35, 52, 55, 56, 'ETIMEDOUT', 'EAI_AGAIN', 'ECONNRESET'].includes(cause?.code);
-      if (attempt > 0 || !transient) throw error;
-      logger.warn(`Rule34 page fetch failed, retrying: ${describeCause(cause)}`);
-    }
-  }
+  const response = await fetchPage(page, {
+    failMessage: 'could not read this rule34 post.',
+    impersonate: true,
+    onError: error => {
+      if ([403, 429].includes(error.response?.status)) {
+        throw withCause(
+          new NetworkError('rule34 is blocking downloads right now, try again later'),
+          error
+        );
+      }
+    },
+  });
   const media = extractRule34Media(response.data);
   if (!media) {
     if (/<title>[^<]*(?:captcha|just a moment)/i.test(response.data)) {

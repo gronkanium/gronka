@@ -3,7 +3,7 @@ import axios from 'axios';
 import { execFile } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { createLogger } from './logger.js';
-import { NetworkError, withCause, contentGone } from './errors.js';
+import { NetworkError, withCause, contentGone, describeCause } from './errors.js';
 import { blockedAddressReason, validateUrl } from './validation.js';
 import { jobSignal } from './media-file.js';
 
@@ -101,8 +101,9 @@ async function impersonatedPage(url, headers) {
         error ? reject(error) : resolve(found)
       )
     );
-    const address = addresses[0].address;
-    const pinned = address.includes(':') ? `[${address}]` : address;
+    const pinned = addresses
+      .map(({ address }) => (address.includes(':') ? `[${address}]` : address))
+      .join(',');
     const response = await new Promise((resolve, reject) => {
       const child = execFile(
         'python3',
@@ -149,25 +150,37 @@ async function impersonatedPage(url, headers) {
   throw new Error('page exceeded the redirect limit');
 }
 
-// A source's page or API: 404/410 means gone, onError may throw a site's own reason, else failMessage.
+// curl exit codes from the impersonated fetch: connect, partial, timeout, TLS, empty reply, send, recv.
+const CURL_TRANSIENT = [7, 18, 28, 35, 52, 55, 56];
+const ERRNO_TRANSIENT = ['ETIMEDOUT', 'EAI_AGAIN', 'ECONNRESET', 'ECONNABORTED'];
+const isTransientPageError = error =>
+  error?.response?.status >= 500 || [...CURL_TRANSIENT, ...ERRNO_TRANSIENT].includes(error?.code);
+
+// A source's page or API: one retry on a transient failure, 404/410 means gone, onError may throw a site's own reason, else failMessage.
 export async function fetchPage(
   url,
   { failMessage, headers, responseType = 'text', onError, impersonate = false } = {}
 ) {
-  try {
-    if (impersonate) return await impersonatedPage(url, headers);
-    return await axios.get(url, {
-      ...ssrfGuardedRequest(),
-      responseType,
-      timeout: PAGE_FETCH_TIMEOUT_MS,
-      maxContentLength: MAX_PAGE_BYTES,
-      maxRedirects: 5,
-      headers,
-    });
-  } catch (error) {
-    if (impersonate) error.config ??= { url };
-    if ([404, 410].includes(error.response?.status)) throw contentGone(error);
-    onError?.(error);
-    throw withCause(new NetworkError(failMessage), error);
+  for (let attempt = 0; ; attempt++) {
+    try {
+      if (impersonate) return await impersonatedPage(url, headers);
+      return await axios.get(url, {
+        ...ssrfGuardedRequest(),
+        responseType,
+        timeout: PAGE_FETCH_TIMEOUT_MS,
+        maxContentLength: MAX_PAGE_BYTES,
+        maxRedirects: 5,
+        headers,
+      });
+    } catch (error) {
+      if (impersonate) error.config ??= { url };
+      if (attempt === 0 && isTransientPageError(error)) {
+        logger.warn(`Page fetch failed, retrying: ${describeCause(error)}`);
+        continue;
+      }
+      if ([404, 410].includes(error.response?.status)) throw contentGone(error);
+      onError?.(error);
+      throw withCause(new NetworkError(failMessage), error);
+    }
   }
 }

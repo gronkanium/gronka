@@ -1,9 +1,6 @@
-import { NetworkError, ValidationError, withCause, describeCause } from './errors.js';
-import { createLogger } from './logger.js';
+import { NetworkError, ValidationError, withCause } from './errors.js';
 import { getRequestHeaders } from './discord-cdn.js';
 import { fetchPage } from './ssrf-guard.js';
-
-const logger = createLogger('jumpshare');
 
 function shareId(url) {
   try {
@@ -50,22 +47,10 @@ export function extractJumpshareUrl(html, id) {
 export async function resolveJumpshareUrl(url) {
   const id = shareId(url);
   if (!id) throw new ValidationError('invalid Jumpshare file link.');
-  let response;
-  for (let attempt = 0; !response; attempt++) {
-    try {
-      response = await fetchPage(url, {
-        failMessage: 'could not read this Jumpshare link.',
-        headers: getRequestHeaders(),
-      });
-    } catch (error) {
-      const { cause } = error;
-      const transient =
-        cause?.response?.status >= 500 ||
-        ['ECONNRESET', 'EAI_AGAIN', 'ETIMEDOUT', 'ECONNABORTED'].includes(cause?.code);
-      if (attempt > 0 || !transient) throw error;
-      logger.warn(`Jumpshare page fetch failed, retrying: ${describeCause(cause)}`);
-    }
-  }
+  const response = await fetchPage(url, {
+    failMessage: 'could not read this Jumpshare link.',
+    headers: getRequestHeaders(),
+  });
   const mediaUrl = extractJumpshareUrl(response.data, id);
   if (!mediaUrl) {
     throw withCause(

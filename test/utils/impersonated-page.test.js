@@ -25,12 +25,15 @@ afterEach(async () => {
 });
 
 describe('impersonated page fetch', () => {
-  test('pins the guarded address, disables proxies and caps the real Python response', async () => {
+  test('pins every guarded address, disables proxies and caps the real Python response', async () => {
     await upstream.respond({ data: html });
     assert.equal((await fetchPage(post, { impersonate: true })).data, html);
     const [call] = await upstream.calls();
     assert.equal(call.session.trust_env, false);
-    assert.equal(call.session.curl_options.resolve[0], 'rule34.xxx:443:93.184.216.34');
+    assert.equal(
+      call.session.curl_options.resolve[0],
+      'rule34.xxx:443:93.184.216.34,[2606:2800:220:1::1]'
+    );
     assert.equal(call.session.curl_options.proxy, '');
     assert.equal(call.impersonate, 'chrome');
     assert.equal(call.allow_redirects, false);
@@ -88,7 +91,7 @@ describe('impersonated page fetch', () => {
       error => /redirect limit/.test(error.cause.message)
     );
     assert.equal((await upstream.calls()).length, 6);
-    await upstream.respond({ status: 503 });
+    await upstream.respond({ status: 503 }, { status: 503 });
     await assert.rejects(
       () => fetchPage(post, { impersonate: true, failMessage: 'unavailable' }),
       error =>

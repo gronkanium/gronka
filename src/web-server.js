@@ -80,8 +80,8 @@ function streamToken(part, filename, key = STREAM_KEY) {
   );
 }
 
-// The page saves a direct file by reading it, and some CDNs (X's) refuse cross-origin reads.
-// This Worker link is the page's second try: same file, fetched by Cloudflare, readable by the page.
+// The page saves a direct file through this attachment link: iOS drops a fetched blob's save once
+// the tap is ~1s old, and some CDNs refuse cross-origin reads.
 export function saveLink({ url, filename }, base = STREAM_BASE, key = STREAM_KEY) {
   if (!base || !key) return {};
   const name = sanitizeFilename(filename || directStreamInfo(url).title);

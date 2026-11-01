@@ -59,6 +59,16 @@ test('streams the source with our headers, forcing non-media types to octet-stre
   expect(await res.text()).toBe('<html>');
 });
 
+test('the page may read files, and a viewer tab may play them but run nothing', async () => {
+  globalThis.fetch = async () => new Response('x', { headers: { 'content-type': 'video/mp4' } });
+  const res = await get(`/f/${sign(payload())}`);
+  expect(res.headers.get('access-control-allow-origin')).toBe('https://gronka.dev');
+  const csp = res.headers.get('content-security-policy');
+  expect(csp).toContain("media-src 'self'");
+  expect(csp).toContain('sandbox');
+  expect(csp).not.toContain('script-src');
+});
+
 test('probe reports whether the source serves this edge, with its size', async () => {
   globalThis.fetch = async () =>
     new Response('x', { status: 206, headers: { 'content-range': 'bytes 0-0/1234' } });

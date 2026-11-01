@@ -24,12 +24,13 @@ download media from social platforms using the `/download` command:
 - dailymotion
 - snapchat
 - redgifs, imgur, kick, coub, rumble, newgrounds, niconico, bilibili, bandcamp, archive.org (via yt-dlp)
-- pornhub, xvideos, xhamster, redtube, rule34video (via yt-dlp)
-- gofile folders and erome albums (via gallery-dl)
+- pornhub, xvideos, xhamster, redtube, rule34video, eporner (via yt-dlp)
+- gofile folders, erome albums and pixeldrain files and lists (via gallery-dl)
 - pinterest, including pin.it share links (via a dedicated extractor, not cobalt)
 - threads posts: videos, photos and every slide of a carousel (read from the public post page)
 - hentaigifz (via a dedicated page-scrape extractor, not cobalt)
 - rule34.xxx posts: original images, gifs and videos from the public page, no API key needed
+- google drive files: public videos, images and audio
 - danbooru, e621, e926, yande.re, konachan (via their JSON APIs, not cobalt)
 
 each of these sources can be individually turned on or off from the webui **sources** page (in the sidebar). a turned-off source refuses `/download` with a short message instead of downloading.

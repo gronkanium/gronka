@@ -5,6 +5,25 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and versions are release dates (`YYYY.MM.DD`, `.N` for a later release the same day).
 
+## [2026.11.03](https://github.com/gronkanium/gronka/compare/v2026.11.01.4...v2026.11.03) (2026-11-03)
+
+
+### Features
+
+* **download:** add Bunny Stream embeds via yt-dlp ([416b9ef](https://github.com/gronkanium/gronka/commit/416b9ef58aa40d8ba5ac2417f6ca1284bfb78a64))
+
+
+### Bug Fixes
+
+* long gifs, over-limit videos, Bunny Stream, Snapchat Spotlight ([f3aeaa5](https://github.com/gronkanium/gronka/commit/f3aeaa513f3c8586fe9c72da83d1ec84abb5b483))
+* **convert:** scale long gifs to fit the encode time and sample the palette ([7a95d36](https://github.com/gronkanium/gronka/commit/7a95d360735c2a046d0c7eb3b57c24a381a2e2a5))
+* **download:** refetch an over-limit video in the best format that fits, and say so ([5a609f1](https://github.com/gronkanium/gronka/commit/5a609f14f7266a76aeff84b4bc71304c9e0447cf))
+
+
+### Dependencies
+
+* bump yt-dlp to 2026.10.26, fixing Snapchat Spotlight ([6781250](https://github.com/gronkanium/gronka/commit/6781250d9e29eefe6503574865c09bd89feb1044))
+
 ## [2026.11.01.4](https://github.com/gronkanium/gronka/compare/v2026.11.01.3...v2026.11.01.4) (2026-11-01)
 
 

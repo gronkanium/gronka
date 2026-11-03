@@ -13,6 +13,7 @@ import { isBooruUrl, downloadFromBooru, booruCdnUserAgent } from '../utils/booru
 import { isRule34Url, downloadFromRule34 } from '../utils/rule34.js';
 import { isPinterestUrl, downloadFromPinterest } from '../utils/pinterest.js';
 import { isKlipyUrl, downloadFromKlipy } from '../utils/klipy.js';
+import { isSnapchatSpotlightUrl, downloadFromSnapchat } from '../utils/snapchat.js';
 import { isJumpshareUrl, resolveJumpshareUrl } from '../utils/jumpshare.js';
 import { isMedalUrl, downloadFromMedal } from '../utils/medal.js';
 import { isBilibiliUrl, downloadFromBilibili } from '../utils/bilibili.js';
@@ -111,6 +112,7 @@ export const ENGINES = {
   rule34: { name: 'Rule34', extract: url => downloadFromRule34(url) },
   pinterest: { name: 'Pinterest', extract: url => downloadFromPinterest(url) },
   klipy: { name: 'Klipy', extract: url => downloadFromKlipy(url) },
+  snapchat: { name: 'Snapchat', extract: url => downloadFromSnapchat(url) },
   jumpshare: {
     name: 'Jumpshare',
     extract: async (url, ctx) => downloadDirectMedia(await resolveJumpshareUrl(url), ctx.client),
@@ -148,6 +150,13 @@ export const ROUTES = [
     owns: isMedalUrl,
     chain: [step('medal'), step('ytdlp')],
     switchIds: ['medal'],
+  },
+  {
+    id: 'snapchat-spotlight',
+    name: 'Snapchat Spotlight',
+    owns: isSnapchatSpotlightUrl,
+    chain: [step('snapchat'), step('cobalt')],
+    switchIds: ['snapchat'],
   },
   {
     id: 'bilibili',

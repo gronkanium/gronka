@@ -4,6 +4,7 @@ import {
   conversionInfo,
   compatibleFormats,
   conversionTrim,
+  gifSettings,
 } from '../../src/utils/conversion-options.js';
 
 const metadata = (streams, format_name = 'mov,mp4,m4a,3gp,3g2,mj2') => ({
@@ -103,5 +104,45 @@ describe('conversion compatibility', () => {
       () => conversionTrim({ kind: 'audio', duration: 6 }, { duration: 0 }),
       /after the start/
     );
+  });
+});
+
+describe('gif settings', () => {
+  const portrait = { width: 1080, height: 1440, fps: 60 };
+
+  test('a short clip keeps the 640px, 20fps defaults', () => {
+    const settings = gifSettings({}, { ...portrait, duration: 10 });
+    assert.strictEqual(settings.width, 640);
+    assert.strictEqual(settings.fps, 20);
+  });
+
+  test('a long clip steps fps then width down to stay encodable', () => {
+    const settings = gifSettings({}, { ...portrait, duration: 143.5 });
+    assert.strictEqual(settings.fps, 12);
+    assert.ok(settings.width < 640 && settings.width >= 320, `width ${settings.width}`);
+  });
+
+  test('a trim is what gets budgeted, not the whole file', () => {
+    const settings = gifSettings({ startTime: 0, duration: 10 }, { ...portrait, duration: 3600 });
+    assert.strictEqual(settings.width, 640);
+  });
+
+  test('explicit width and fps are kept', () => {
+    const settings = gifSettings({ width: 600, fps: 15 }, { ...portrait, duration: 60 });
+    assert.strictEqual(settings.width, 600);
+    assert.strictEqual(settings.fps, 15);
+  });
+
+  test('a clip too long even at the floor is refused up front', () => {
+    assert.throws(
+      () => gifSettings({}, { ...portrait, duration: 3600 }),
+      /too long to make into a gif/
+    );
+  });
+
+  test('an unprobed file falls back to the defaults', () => {
+    const settings = gifSettings({}, { width: 480, height: null, fps: 30, duration: null });
+    assert.strictEqual(settings.width, 480);
+    assert.strictEqual(settings.fps, 20);
   });
 });

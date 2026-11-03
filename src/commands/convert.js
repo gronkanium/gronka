@@ -36,7 +36,12 @@ import { fetchInput } from './shared/media-input.js';
 import { dispatchMediaJob } from '../jobs/dispatch.js';
 import { fromPath, tempPath, writeAtomic } from '../utils/media-file.js';
 import { messageMediaInput } from './shared/message-media.js';
-import { conversionInfo, compatibleFormats, conversionTrim } from '../utils/conversion-options.js';
+import {
+  conversionInfo,
+  compatibleFormats,
+  conversionTrim,
+  gifSettings,
+} from '../utils/conversion-options.js';
 import { waitForConvertFormat } from './convert-picker.js';
 
 const logger = createLogger('convert');
@@ -48,16 +53,20 @@ const UNSUPPORTED_FORMAT =
 
 async function probeMediaInfo(filePath, fallbackWidth) {
   let width = fallbackWidth;
+  let height = null;
   let fps = 30;
+  let duration = null;
 
   try {
     const metadata = await getVideoMetadata(filePath);
+    duration = Number(metadata.format?.duration) || null;
     const videoStream = metadata.streams?.find(
       s => s.codec_type === 'video' && !s.disposition?.attached_pic
     );
     if (videoStream) {
       if (typeof videoStream.width === 'number' && videoStream.width > 0) {
         width = videoStream.width;
+        height = videoStream.height;
       }
       // fps comes as a fraction string like "30000/1001"
       const fpsStr = videoStream.r_frame_rate || videoStream.avg_frame_rate;
@@ -77,36 +86,7 @@ async function probeMediaInfo(filePath, fallbackWidth) {
     logger.warn(`Failed to probe media metadata, using fallbacks: ${error.message}`);
   }
 
-  return { width, fps };
-}
-
-// Default ceilings for a video-to-GIF conversion when the user doesn't specify.
-// GIF is a wildly inefficient container: a source-resolution / full-framerate encode of an
-// ordinary phone clip balloons to 100-240MB, which is slow to encode, can't go to Discord, and
-// (when several run at once) starved the box until the stuck-operation reaper failed the job.
-// These caps keep default output sane and fast to encode; an explicit width/fps still overrides.
-const DEFAULT_MAX_GIF_WIDTH = 640;
-const DEFAULT_MAX_GIF_FPS = 20;
-
-// Resolve the effective settings for a video-to-GIF conversion
-function resolveVideoConversionOptions(options, probed) {
-  const defaultWidth = Math.min(probed.width, DEFAULT_MAX_GIF_WIDTH);
-  if (options.width == null && probed.width > DEFAULT_MAX_GIF_WIDTH) {
-    logger.debug(`Clamping default width from ${probed.width}px to ${defaultWidth}px`);
-  }
-
-  const defaultFps = Math.min(probed.fps, DEFAULT_MAX_GIF_FPS);
-  if (options.fps == null && probed.fps > DEFAULT_MAX_GIF_FPS) {
-    logger.debug(`Clamping default FPS from ${probed.fps.toFixed(1)}fps to ${defaultFps}fps`);
-  }
-
-  return {
-    width: options.width ?? defaultWidth,
-    fps: options.fps ?? defaultFps,
-    startTime: options.startTime ?? null,
-    duration: options.duration ?? null,
-    videoIndex: options.videoIndex ?? null,
-  };
+  return { width, height, fps, duration };
 }
 
 async function processFormatConversion(
@@ -165,11 +145,11 @@ async function renderGif(ctx, { attachment, attachmentType, file, options, gifPa
 
   await writeAtomic(gifPath, async out => {
     if (attachmentType === 'video' || options.startTime !== null || options.duration !== null) {
-      const conversionOptions = resolveVideoConversionOptions(
-        options,
-        await probeMediaInfo(inputPath, 480)
+      await convertToGif(
+        inputPath,
+        out,
+        gifSettings(options, await probeMediaInfo(inputPath, 480))
       );
-      await convertToGif(inputPath, out, conversionOptions);
     } else if (attachment.contentType === 'image/gif' || ext === '.gif') {
       if (options.width) {
         await convertImageToGif(inputPath, out, {

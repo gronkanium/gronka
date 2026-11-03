@@ -67,6 +67,11 @@ export const SOURCE_EXAMPLES = [
     expect: { type: 'audio' },
   },
   {
+    site: 'bunny',
+    url: 'https://iframe.mediadelivery.net/embed/113933/e73edec1-e381-4c8b-ae73-717a140e0924',
+    expect: { type: 'video' },
+  },
+  {
     site: 'google-drive',
     url: 'https://drive.google.com/file/d/10YD7sJI_HHDXmQM4h96alvyGIU53nGYZ/view?usp=sharing',
     expect: { type: 'image' },

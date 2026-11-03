@@ -54,3 +54,42 @@ export function conversionTrim(info, times = {}) {
   }
   return trim;
 }
+
+const DEFAULT_GIF_WIDTH = 640;
+const DEFAULT_GIF_FPS = 20;
+const MIN_GIF_WIDTH = 320;
+const MIN_GIF_FPS = 12;
+// Output pixels (width x height x frames) one encode can turn into a GIF well inside FFMPEG_TIMEOUT_MS.
+const GIF_PIXEL_BUDGET = 500e6;
+
+// Defaults step down (fps, then width) so a long clip stays inside the budget; set options are kept.
+export function gifSettings(options, probed) {
+  let width = options.width ?? Math.min(probed.width, DEFAULT_GIF_WIDTH);
+  let fps = options.fps ?? Math.min(probed.fps, DEFAULT_GIF_FPS);
+  const seconds = options.duration ?? probed.duration - (options.startTime ?? 0);
+  const aspect = probed.height / probed.width;
+  const settings = () => ({
+    width,
+    fps,
+    startTime: options.startTime ?? null,
+    duration: options.duration ?? null,
+    videoIndex: options.videoIndex ?? null,
+  });
+  if (!(seconds > 0) || !(aspect > 0)) return settings();
+  const pixels = () => width * width * aspect * fps * seconds;
+  if (options.fps == null && pixels() > GIF_PIXEL_BUDGET) {
+    fps = Math.max(MIN_GIF_FPS, Math.floor(GIF_PIXEL_BUDGET / (width * width * aspect * seconds)));
+  }
+  if (options.width == null && pixels() > GIF_PIXEL_BUDGET) {
+    width = Math.max(
+      MIN_GIF_WIDTH,
+      Math.floor(Math.sqrt(GIF_PIXEL_BUDGET / (aspect * fps * seconds)))
+    );
+  }
+  if (pixels() > GIF_PIXEL_BUDGET) {
+    throw new ValidationError(
+      'that clip is too long to make into a gif. use the start and end options to pick a part of it.'
+    );
+  }
+  return settings();
+}

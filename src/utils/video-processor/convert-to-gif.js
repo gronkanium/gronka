@@ -16,6 +16,8 @@ import { getVideoMetadata } from './metadata.js';
 
 const logger = createLogger('convert-to-gif');
 
+const PALETTE_FRAMES = 300;
+
 /**
  * Convert video file to GIF using FFmpeg with two-pass palette generation.
  * @param {string} inputPath - Path to input video file
@@ -75,8 +77,11 @@ async function convertToGifImpl(inputPath, outputPath, options = {}) {
 
   // Both passes need this: pass 2 reads the same input through the same buffer source.
   let colorspaceRepair = [];
+  let seconds = duration;
   try {
-    colorspaceRepair = colorspaceRepairInputOptions(await getVideoMetadata(inputPath));
+    const metadata = await getVideoMetadata(inputPath);
+    seconds ??= Number(metadata.format?.duration) - (startTime ?? 0);
+    colorspaceRepair = colorspaceRepairInputOptions(metadata);
     if (colorspaceRepair.length > 0) {
       logger.debug(`Repairing reserved colorspace tag on ${inputPath}`);
     }
@@ -101,6 +106,8 @@ async function convertToGifImpl(inputPath, outputPath, options = {}) {
     ...(duration !== null ? ['-t', `${duration}`] : []),
   ];
   const videoStream = options.videoIndex == null ? '0:v' : `0:${options.videoIndex}`;
+  // palettegen costs ~70ms a frame on grainy video; 300 spread-out frames are plenty for 256 colors.
+  const paletteFps = seconds > 0 ? Math.min(fps, PALETTE_FRAMES / seconds) : fps;
   const timedOut = async () => {
     logger.error(`FFmpeg GIF conversion timed out after ${encodeTimeoutMs / 1000}s, killing`);
     await cleanupPalette();
@@ -116,7 +123,7 @@ async function convertToGifImpl(inputPath, outputPath, options = {}) {
         '-map',
         videoStream,
         '-vf',
-        `fps=${fps},scale=${width}:-1:flags=lanczos,${GIF_PALETTEGEN}`,
+        `fps=${paletteFps},scale=${width}:-1:flags=lanczos,${GIF_PALETTEGEN}`,
         '-y',
         palettePath,
       ],

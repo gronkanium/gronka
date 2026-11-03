@@ -106,20 +106,35 @@
   -H 'Content-Type: application/json' \
   -d '{"url":"https://x.com/user/status/123"}'</code></pre>
           </div>
-          <p>
-            options: <code>mode</code> is <code>auto</code> (default), <code>audio</code> (an mp3)
-            or <code>mute</code> (the video without its sound); <code>start</code> and
-            <code>end</code> trim, in seconds or <code>m:ss</code>; <code>split: false</code> asks
-            for one finished file instead of separate video and audio parts.
-          </p>
+          <h3>options</h3>
+          <ul class="option-list">
+            <li><code>url</code><span>the link. required.</span></li>
+            <li>
+              <code>mode</code
+              ><span
+                ><code>auto</code> (default), <code>audio</code> for an mp3, or
+                <code>mute</code> for the video without its sound.</span
+              >
+            </li>
+            <li>
+              <code>start, end</code
+              ><span>trim, in seconds or <code>m:ss</code>. end has to be after start.</span>
+            </li>
+            <li>
+              <code>split</code
+              ><span
+                ><code>false</code> asks for one finished file instead of separate video and audio
+                parts.</span
+              >
+            </li>
+          </ul>
         </section>
 
         <section id="content" aria-labelledby="content-title">
           <h2 id="content-title">content</h2>
           <p>
             the text behind a link, not the file: send a link as json to
-            <code>POST /v1/content</code>. reddit answers with the post and its comment tree; x
-            answers with the post, the post it quotes, and the author's own thread above it.
+            <code>POST /v1/content</code>.
           </p>
           <div class="codebox">
             <button class="copy" type="button" aria-label="copy content curl command" hidden>
@@ -130,21 +145,48 @@
   -H 'Content-Type: application/json' \
   -d '{"url":"https://www.reddit.com/r/pics/comments/abc123/title/","depth":3}'</code></pre>
           </div>
+          <h3>options</h3>
+          <ul class="option-list">
+            <li><code>url</code><span>the link. required.</span></li>
+            <li>
+              <code>format</code
+              ><span
+                ><code>json</code> (default) or <code>text</code>, a plain-text rendering with
+                comments indented.</span
+              >
+            </li>
+            <li><code>comments</code><span>0 to 20 replies to include. default 0.</span></li>
+            <li><code>depth</code><span>reddit: 0 to 10, how deep the replies go.</span></li>
+            <li>
+              <code>thread</code
+              ><span>x: <code>false</code> stops at the linked post. default true.</span>
+            </li>
+            <li>
+              <code>transcript</code
+              ><span
+                >youtube: <code>true</code> or a language code like <code>"en"</code> adds the
+                captions as timed lines in <code>post.extra.transcript</code>.</span
+              >
+            </li>
+          </ul>
+          <h3>answer</h3>
           <p>
-            options: <code>format</code> is <code>json</code> (default) or <code>text</code> (a
-            plain-text rendering, comments indented); <code>comments</code> (0 to 20, default 0)
-            adds that many replies; on reddit, <code>depth</code> (0 to 10) caps how deep they go;
-            on x, <code>thread: false</code> stops at the linked post; on youtube,
-            <code>transcript: true</code> (or a language code like <code>"en"</code>) adds the
-            captions as timed lines in <code>post.extra.transcript</code>. the answer is one
-            <code>Thread</code>: <code>source</code>, <code>url</code>, <code>post</code>,
+            one <code>Thread</code>: <code>source</code>, <code>url</code>, <code>post</code>,
             <code>thread</code> (the author's posts in order), <code>comments</code> (a tree) and
             <code>truncated</code>. every item has <code>author</code>, <code>text</code>,
             <code>media</code>, <code>links</code>, <code>quoted</code> and <code>stats</code>.
+            reddit answers with the post and its comment tree; x with the post, the post it quotes
+            and the author's own thread above it.
+          </p>
+          <p>
             errors use the http status: <code>404 CONTENT_GONE</code>,
-            <code>400 UNSUPPORTED_SOURCE</code>, <code>502 CONTENT_FAILED</code>. sites: reddit, x,
-            bluesky, instagram, tiktok, danbooru, e621, yande.re, konachan, pinterest, and youtube,
-            soundcloud and other video sites (title, description, stats and youtube transcripts).
+            <code>400 UNSUPPORTED_SOURCE</code>, <code>502 CONTENT_FAILED</code>.
+          </p>
+          <h3>sites</h3>
+          <p>
+            reddit, x, bluesky, instagram, tiktok, danbooru, e621, yande.re, konachan and pinterest.
+            youtube, soundcloud and other video sites give the title, description and stats, and
+            youtube its transcripts.
           </p>
         </section>
 
@@ -205,7 +247,25 @@
           </div>
           <div class="shape">
             <h3>r2</h3>
-            <p>a copy on <code>cdn.gronka.dev</code>, deleted after an hour.</p>
+            <p>
+              a copy on <code>cdn.gronka.dev</code>, deleted after an hour. when gronka had to
+              change the file to deliver it, <code>note</code> says how.
+            </p>
+            <div class="codebox">
+              <button class="copy" type="button" aria-label="copy r2 response" hidden>copy</button>
+              <pre tabindex="0"><code>{
+  "lane": "r2",
+  "note": "sent at 720p to fit the 400MB limit.",
+  "files": [
+    {
+      "url": "https://cdn.gronka.dev/...",
+      "filename": "video.mp4",
+      "type": "video",
+      "size": 312345678
+    }
+  ]
+}</code></pre>
+            </div>
           </div>
           <div class="shape">
             <h3>error</h3>
@@ -216,8 +276,8 @@
               </button>
               <pre tabindex="0"><code>{
   "error": {
-    "code": "VALIDATION_ERROR",
-    "message": "video duration exceeds the maximum allowed (60 minutes)."
+    "code": "TOO_LARGE",
+    "message": "this file is over the 400MB limit. for a video, the start and end options can grab a clip under it."
   }
 }</code></pre>
             </div>
@@ -242,18 +302,22 @@
             <li><code>BAD_REQUEST</code><span>the request body or options are invalid.</span></li>
             <li><code>BAD_URL</code><span>the url is missing or invalid.</span></li>
             <li><code>CONTENT_FAILED</code><span>the content could not be read.</span></li>
-            <li><code>CONTENT_GONE</code><span>the post is deleted, private or removed.</span></li>
+            <li>
+              <code>CONTENT_GONE</code
+              ><span>the post is deleted, private or removed. http 404.</span>
+            </li>
             <li><code>DOWNLOAD_FAILED</code><span>the download did not finish.</span></li>
-            <li><code>FORBIDDEN</code><span>the request origin is not allowed.</span></li>
             <li><code>INTERNAL</code><span>something broke on the server.</span></li>
             <li>
               <code>NETWORK_ERROR</code><span>the source refused or could not be reached.</span>
             </li>
+            <li><code>NO_VIDEO</code><span>the post has no photo or video. http 422.</span></li>
             <li><code>NOT_FOUND</code><span>no such route.</span></li>
             <li>
               <code>RATE_LIMITED</code
               ><span>too many requests. retry after <code>retryAfter</code> seconds.</span>
             </li>
+            <li><code>TOO_LARGE</code><span>the file is over the size cap. http 413.</span></li>
             <li><code>UNAUTHORIZED</code><span>the api key is missing or invalid.</span></li>
             <li>
               <code>UNSUPPORTED_SOURCE</code
@@ -261,9 +325,6 @@
             </li>
             <li><code>VALIDATION_ERROR</code><span>the media or request hit a limit.</span></li>
             <li><code>VERIFICATION_FAILED</code><span>the turnstile check failed.</span></li>
-            <li>
-              <code>CONTENT_GONE</code><span>the post was removed or is no longer available.</span>
-            </li>
           </ul>
         </section>
 
@@ -281,7 +342,8 @@
           <p>
             50 downloads or content reads per 10 minutes per ip, or per key with an api key. api key
             checks are capped at 30 per 10 minutes per ip. files fetched by gronka (lane r2) have a
-            400 mb cap; images have a 50 mb cap. a
+            400 mb cap; on sites that list their file sizes, a video over it comes at a lower
+            resolution that fits. a
             <code>RATE_LIMITED</code> <code>429</code> includes <code>error.retryAfter</code> in
             seconds and the same value in a <code>Retry-After</code> header.
           </p>

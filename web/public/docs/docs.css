@@ -236,22 +236,26 @@ pre,
   font-size: 0.9rem;
 }
 .error-list,
+.option-list,
 .endpoint-list {
   margin: 0;
   padding: 0;
   list-style: none;
 }
-.error-list li {
+.error-list li,
+.option-list li {
   display: grid;
   grid-template-columns: 12.5rem minmax(0, 1fr);
   gap: 1rem;
   padding: 0.55rem 0;
   border-bottom: 1px solid var(--line);
 }
-.error-list code {
+.error-list code,
+.option-list code {
   font-size: 0.8rem;
 }
-.error-list span {
+.error-list span,
+.option-list span {
   color: var(--dim);
 }
 .endpoint-list li {
@@ -319,7 +323,8 @@ pre,
   h1 {
     margin-bottom: 2rem;
   }
-  .error-list li {
+  .error-list li,
+  .option-list li {
     grid-template-columns: minmax(9.5rem, 0.8fr) minmax(0, 1fr);
     gap: 0.6rem;
   }

@@ -5,6 +5,7 @@ import fsSync from 'fs';
 import path from 'path';
 import { mock } from 'bun:test';
 import * as realChildProcess from 'child_process';
+import { promisify } from 'util';
 
 // Exercises the retry-on-generic-failure behavior in ytdlp.js's executeYtdlpWithRetry.
 // spawn() is mocked at the module level so this runs without a real yt-dlp binary or network
@@ -34,12 +35,20 @@ if (!mocksSupported) {
   // successive spawn() call.
   let spawnBehaviors;
   let spawnCallLog;
+  // Successive yt-dlp size-probe answers (stdout), one per execFile('yt-dlp') call.
+  let probeAnswers = [];
 
   beforeAll(async () => {
+    const execFile = (...args) => realChildProcess.execFile(...args);
+    execFile[promisify.custom] = (cmd, args, options) =>
+      cmd === 'yt-dlp'
+        ? Promise.resolve({ stdout: probeAnswers.shift() ?? '' })
+        : promisify(realChildProcess.execFile)(cmd, args, options);
     const childProcessMock = () => ({
       // Other modules in the dependency chain (e.g. video-processor/utils.js) also import
       // from 'child_process' - pass everything else through untouched and only override spawn.
       ...realChildProcess,
+      execFile,
       spawn: (cmd, args) => {
         const child = fakeChildProcess();
         const callNumber = spawnCallLog.push({ args });
@@ -102,6 +111,43 @@ if (!mocksSupported) {
       assert.ok(killed, 'yt-dlp should have been killed');
       assert.strictEqual(error.name, 'ValidationError');
       assert.match(error.cause.message, /on disk/);
+    });
+  });
+
+  describe('yt-dlp size fit', () => {
+    const MB = 1048576;
+    const runaway = (child, outputDir) => {
+      child.kill = () => child.emit('close', null);
+      fsSync.writeFileSync(path.join(outputDir, 'video.mp4.part'), Buffer.alloc(3 * MB, 1));
+    };
+
+    test('an over-limit video is fetched again in a format that fits, and says so', async () => {
+      spawnCallLog = [];
+      spawnBehaviors = [runaway, success];
+      probeAnswers = ['', '398+140 600000'];
+      const file = await downloadWithYtdlp('https://youtu.be/long', { maxSize: MB });
+      const retry = spawnCallLog[1].args;
+      assert.strictEqual(retry[retry.indexOf('-f') + 1], '398+140');
+      assert.strictEqual(file.note, 'sent at 720p to fit the 1MB limit.');
+    });
+
+    test('a fit at full resolution adds no note', async () => {
+      spawnCallLog = [];
+      spawnBehaviors = [runaway, success];
+      probeAnswers = ['399+140 600000'];
+      const file = await downloadWithYtdlp('https://youtu.be/long', { maxSize: MB });
+      assert.strictEqual(file.note, null);
+    });
+
+    test('no format with a known size that fits keeps the too-large error', async () => {
+      spawnCallLog = [];
+      spawnBehaviors = [runaway];
+      probeAnswers = ['137+140 2000000', '', ''];
+      const error = await downloadWithYtdlp('https://youtu.be/long', { maxSize: MB }).catch(
+        caught => caught
+      );
+      assert.strictEqual(error.code, 'TOO_LARGE');
+      assert.strictEqual(spawnCallLog.length, 1);
     });
   });
 

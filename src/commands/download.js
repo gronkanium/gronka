@@ -127,7 +127,7 @@ async function deliverGalleryLinks(interaction, items, followUp = false) {
 
 async function deliverSingle(interaction, ctx, item, attachmentLimit) {
   const stored = await storeMedia(item, attachmentLimit);
-  await deliverStored(interaction, stored);
+  await deliverStored(interaction, stored, { description: item.note });
   await finishCommand();
 }
 

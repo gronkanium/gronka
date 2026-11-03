@@ -96,11 +96,15 @@ for (const [slug, name, what] of MORE) {
 }
 
 const OTHER_SITES = [
+  'google drive',
+  'pixeldrain',
+  'bunny stream',
   'redgifs',
   'xvideos',
   'xhamster',
   'redtube',
   'rule34video',
+  'eporner',
   'rule34.xxx',
   'nhentai',
   'hentaigifz',

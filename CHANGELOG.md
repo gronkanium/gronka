@@ -5,6 +5,25 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and versions are release dates (`YYYY.MM.DD`, `.N` for a later release the same day).
 
+## [2026.11.03.1](https://github.com/gronkanium/gronka/compare/v2026.11.03...v2026.11.03.1) (2026-11-03)
+
+
+### Bug Fixes
+
+* **web:** list google drive, pixeldrain, eporner and bunny stream in the site generator ([b63afb2](https://github.com/gronkanium/gronka/commit/b63afb240f583105f03e153acd1c0bf27768fc51))
+
+
+### Dependencies
+
+* **deps:** bump cloudflare/cloudflared from 2026.10.3 to 2026.10.7 ([bd1ca2d](https://github.com/gronkanium/gronka/commit/bd1ca2d3c84b96dffaf4bb5223f9e6df6d03472c))
+* **deps:** bump cloudflare/cloudflared from 2026.10.3 to 2026.10.7 ([15d5ed4](https://github.com/gronkanium/gronka/commit/15d5ed450fa42f55f753d4afa251626f8b890de3))
+* **deps:** bump curl-cffi from 0.16.3 to 0.17.0 in /docker ([66a26a3](https://github.com/gronkanium/gronka/commit/66a26a3dc24a5147e0f9745ae50ab2848ac2f3f9))
+* **deps:** bump curl-cffi from 0.16.3 to 0.17.0 in /docker ([940ebd8](https://github.com/gronkanium/gronka/commit/940ebd8bc0c46d9d032f781373e1480401673903))
+* **deps:** bump gallery-dl from 1.32.17 to 1.32.18 in /docker ([5c043af](https://github.com/gronkanium/gronka/commit/5c043af6e0a0ea9cdeb6413a94a54b72281ce2df))
+* **deps:** bump gallery-dl from 1.32.17 to 1.32.18 in /docker ([f102d1f](https://github.com/gronkanium/gronka/commit/f102d1f24a17ec2b585d37d73f1228ad8a5734f2))
+* **deps:** bump the security-updates group with 8 updates ([1a16893](https://github.com/gronkanium/gronka/commit/1a168939e5bfb7a04fe848f3b3968299c1ee8b17))
+* **deps:** bump the security-updates group with 8 updates ([36f2ef5](https://github.com/gronkanium/gronka/commit/36f2ef59717d2243d6cc2e4de9e9944d4dbc0f5a))
+
 ## [2026.11.03](https://github.com/gronkanium/gronka/compare/v2026.11.01.4...v2026.11.03) (2026-11-03)
 
 

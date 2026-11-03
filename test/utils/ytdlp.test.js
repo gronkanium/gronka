@@ -32,13 +32,9 @@ describe('ytdlp utilities', () => {
     assert.strictEqual(canonicalYtdlpUrl(other), other);
   });
 
-  test('drops the creator from Snapchat spotlight links, which yt-dlp only matches bare', () => {
-    assert.strictEqual(
-      canonicalYtdlpUrl('https://www.snapchat.com/@nasa/spotlight/W7_EDlXWTBiX?locale=en'),
-      'https://www.snapchat.com/spotlight/W7_EDlXWTBiX'
-    );
-    const bare = 'https://www.snapchat.com/spotlight/W7_EDlXWTBiX';
-    assert.strictEqual(canonicalYtdlpUrl(bare), bare);
+  test('keeps the creator in Snapchat spotlight links, the bare page has no video data', () => {
+    const link = 'https://www.snapchat.com/@nasa/spotlight/W7_EDlXWTBiX';
+    assert.strictEqual(canonicalYtdlpUrl(link), link);
   });
 
   describe('gallery-dl site detection', () => {

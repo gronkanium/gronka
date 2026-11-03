@@ -5,6 +5,13 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and versions are release dates (`YYYY.MM.DD`, `.N` for a later release the same day).
 
+## [2026.11.03.2](https://github.com/gronkanium/gronka/compare/v2026.11.03.1...v2026.11.03.2) (2026-11-03)
+
+
+### Bug Fixes
+
+* **download:** stop rewriting Snapchat spotlight links to the bare page, which has no video data ([66e5218](https://github.com/gronkanium/gronka/commit/66e5218de01c9056913d11cd5cd225a10aab65f9))
+
 ## [2026.11.03.1](https://github.com/gronkanium/gronka/compare/v2026.11.03...v2026.11.03.1) (2026-11-03)
 
 

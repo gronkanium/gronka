@@ -631,6 +631,42 @@ export async function getStreamInfo(rawUrl, timeout = 30000) {
   };
 }
 
+const FIT_HEIGHTS = [1080, 720, 480];
+// -f filters judge each part alone; only the printed filesize_approx is the merged total.
+const KNOWN_SIZE_FORMAT = 'bv*[filesize_approx>0]+ba[filesize_approx>0]/b[filesize_approx>0]';
+
+// The best format id whose known total size fits, stepping the resolution down.
+async function fittingFormat(url, maxSize) {
+  for (const height of FIT_HEIGHTS) {
+    const args = [
+      '--ignore-config',
+      ...ONE_ITEM,
+      '--no-warnings',
+      ...getCookieArgs(url),
+      ...getYouTubeArgs(url),
+      ...getSiteArgs(url),
+      '-S',
+      `res:${height},ext:mp4:m4a`,
+      '-f',
+      KNOWN_SIZE_FORMAT,
+      '--print',
+      '%(format_id)s %(filesize_approx)s',
+      '--',
+      url,
+    ];
+    const { stdout } = await execFileAsync('yt-dlp', args, {
+      timeout: 60000,
+      signal: jobSignal(),
+    }).catch(error => {
+      logger.warn(`Could not list sizes for ${url}: ${error.message}`);
+      return { stdout: '' };
+    });
+    const [format, size] = stdout.trim().split(' ');
+    if (format && Number(size) > 0 && Number(size) < maxSize * 0.95) return { format, height };
+  }
+  return null;
+}
+
 // Past the segment fallback, "output file too small" is a user-facing failure, not a control signal.
 function emptyDownloadError(error) {
   if (error?.message?.includes('output file too small')) {
@@ -658,13 +694,37 @@ export async function downloadWithYtdlp(
   try {
     let outputPath;
     let usedFallback = false;
+    let note = null;
+
+    // An over-limit full download is fetched again in the best format whose size fits.
+    const fullDownload = async () => {
+      let overLimit;
+      try {
+        const fullPath = await executeYtdlpWithRetry(url, workDir, {
+          quality: effectiveQuality,
+          maxSize,
+        });
+        const size = fsSync.statSync(fullPath).size;
+        if (size <= maxSize) return fullPath;
+        overLimit = tooLarge(maxSize, `yt-dlp: file is ${size} bytes`);
+      } catch (error) {
+        if (error.code !== 'TOO_LARGE') throw error;
+        overLimit = error;
+      }
+      const fit = await fittingFormat(url, maxSize);
+      if (!fit) throw overLimit;
+      logger.warn(`Over the size limit, retrying as format ${fit.format} (${fit.height}p): ${url}`);
+      fsSync.rmSync(workDir, { recursive: true, force: true });
+      fsSync.mkdirSync(workDir, { recursive: true });
+      if (fit.height < FIT_HEIGHTS[0]) {
+        note = `sent at ${fit.height}p to fit the ${Math.floor(maxSize / 1048576)}MB limit.`;
+      }
+      return executeYtdlp(url, workDir, { quality: fit.format, maxSize });
+    };
 
     const downloadThenTrim = async () => {
       usedFallback = true;
-      const fullPath = await executeYtdlpWithRetry(url, workDir, {
-        quality: effectiveQuality,
-        maxSize,
-      }).catch(emptyDownloadError);
+      const fullPath = await fullDownload().catch(emptyDownloadError);
       const trimmedPath = path.join(workDir, 'trimmed_output.mp4');
       await trimVideo(fullPath, trimmedPath, { startTime, duration });
       logger.debug(`Fallback trim completed: ${trimmedPath}`);
@@ -695,12 +755,7 @@ export async function downloadWithYtdlp(
         outputPath = await downloadThenTrim();
       }
     } else {
-      outputPath = await executeYtdlpWithRetry(url, workDir, {
-        quality: effectiveQuality,
-        startTime,
-        duration,
-        maxSize,
-      }).catch(emptyDownloadError);
+      outputPath = await fullDownload().catch(emptyDownloadError);
     }
 
     const filename = path.basename(outputPath);
@@ -717,7 +772,7 @@ export async function downloadWithYtdlp(
     logger.debug(
       `Successfully downloaded media via yt-dlp${usedFallback ? ' (via fallback)' : ''}, size: ${file.size} bytes, content-type: ${contentType}`
     );
-    return { ...file, trimmed: useSegmentDownload };
+    return { ...file, trimmed: useSegmentDownload, note };
   } catch (error) {
     logger.error(`yt-dlp download failed: ${describeCause(error.cause ?? error)}`);
     throw error;

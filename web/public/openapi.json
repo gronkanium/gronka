@@ -469,6 +469,10 @@
             "type": "string",
             "description": "suggested name for the merged file"
           },
+          "note": {
+            "type": "string",
+            "description": "r2 lane only, when gronka changed the file to deliver it, e.g. a lower resolution to fit the size cap"
+          },
           "files": {
             "type": "array",
             "items": {
@@ -515,7 +519,10 @@
                   "DOWNLOAD_FAILED",
                   "INTERNAL",
                   "NETWORK_ERROR",
+                  "NOT_FOUND",
+                  "NO_VIDEO",
                   "RATE_LIMITED",
+                  "TOO_LARGE",
                   "UNAUTHORIZED",
                   "UNSUPPORTED_SOURCE",
                   "VALIDATION_ERROR",

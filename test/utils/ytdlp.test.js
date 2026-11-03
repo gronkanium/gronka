@@ -215,6 +215,10 @@ describe('ytdlp utilities', () => {
       assert.strictEqual(getYtdlpSite('https://www.redgifs.com/watch/x'), 'RedGifs');
       assert.strictEqual(getYtdlpSite('https://imgur.com/gallery/x'), 'Imgur');
       assert.strictEqual(getYtdlpSite('https://i.imgur.com/x.mp4'), 'Imgur');
+      assert.strictEqual(
+        getYtdlpSite('https://iframe.mediadelivery.net/play/1/abc'),
+        'Bunny Stream'
+      );
       assert.strictEqual(getYtdlpSite('https://kick.com/user/clips/x'), 'Kick');
       assert.strictEqual(getYtdlpSite('https://coub.com/view/x'), 'Coub');
       assert.strictEqual(getYtdlpSite('https://rumble.com/v123-title.html'), 'Rumble');

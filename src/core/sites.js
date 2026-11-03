@@ -146,6 +146,13 @@ export const SITES = [
     hosts: ['archive.org'],
     ytdlp: true,
   },
+  {
+    id: 'bunny',
+    name: 'Bunny Stream',
+    category: 'video',
+    hosts: ['iframe.mediadelivery.net', 'player.mediadelivery.net', 'video.bunnycdn.com'],
+    ytdlp: true,
+  },
   ...[
     ['deviantart', 'DeviantArt', 'deviantart.com'],
     ['artstation', 'ArtStation', 'artstation.com'],

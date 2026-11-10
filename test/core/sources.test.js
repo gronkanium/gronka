@@ -50,6 +50,7 @@ const ROUTED = [
   ['https://www.reddit.com/r/a/comments/abc/x/', 'social'],
   ['https://www.instagram.com/p/abc/', 'instagram'],
   ['https://bsky.app/profile/a/post/b', 'social'],
+  ['https://share.snapchat.com/m/JNAF5_Y5?src=memories', 'snapchat-spotlight'],
   ['https://open.spotify.com/track/1', 'spotify'],
   ['https://open.spotify.com/intl-de/album/1', 'spotify'],
   ['https://spotify.link/AbC', 'spotify'],

@@ -13,7 +13,7 @@ import { isBooruUrl, downloadFromBooru, booruCdnUserAgent } from '../utils/booru
 import { isRule34Url, downloadFromRule34 } from '../utils/rule34.js';
 import { isPinterestUrl, downloadFromPinterest } from '../utils/pinterest.js';
 import { isKlipyUrl, downloadFromKlipy } from '../utils/klipy.js';
-import { isSnapchatSpotlightUrl, downloadFromSnapchat } from '../utils/snapchat.js';
+import { isSnapchatMediaUrl, downloadFromSnapchat } from '../utils/snapchat.js';
 import { isJumpshareUrl, resolveJumpshareUrl } from '../utils/jumpshare.js';
 import { isMedalUrl, downloadFromMedal } from '../utils/medal.js';
 import { isBilibiliUrl, downloadFromBilibili } from '../utils/bilibili.js';
@@ -153,8 +153,8 @@ export const ROUTES = [
   },
   {
     id: 'snapchat-spotlight',
-    name: 'Snapchat Spotlight',
-    owns: isSnapchatSpotlightUrl,
+    name: 'Snapchat',
+    owns: isSnapchatMediaUrl,
     chain: [step('snapchat'), step('cobalt')],
     switchIds: ['snapchat'],
   },

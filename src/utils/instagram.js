@@ -243,7 +243,18 @@ const storyGone = (reason, kind = 'story') =>
     cause: new Error(`instagram: ${reason}`),
   });
 
+// Memory only, never stored; the week caps how long a renamed username can point at the wrong account.
+const USER_ID_MAX_AGE_MS = 7 * 24 * 60 * 60 * 1000;
+const userIds = new Map();
+
+export const forgetUserIds = () => userIds.clear();
+
 async function userIdFor(username, refererPath, cookie) {
+  const now = Date.now();
+  const cached = userIds.get(username);
+  if (cached && now - cached.at < USER_ID_MAX_AGE_MS) {
+    return cached.id;
+  }
   const data = await instagramGet(
     `/api/v1/users/web_profile_info/?username=${encodeURIComponent(username)}`,
     refererPath,
@@ -254,6 +265,10 @@ async function userIdFor(username, refererPath, cookie) {
   if (!id) {
     throw storyGone(`no user ${username}`);
   }
+  for (const [name, entry] of userIds) {
+    if (now - entry.at >= USER_ID_MAX_AGE_MS) userIds.delete(name);
+  }
+  userIds.set(username, { id: String(id), at: now });
   return String(id);
 }
 

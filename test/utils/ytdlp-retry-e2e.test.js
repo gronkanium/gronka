@@ -370,6 +370,22 @@ if (!mocksSupported) {
       });
     }
 
+    test('a video youtube removed for a policy violation is gone, with no retry', async () => {
+      spawnCallLog = [];
+      spawnBehaviors = [
+        failsWith(
+          "ERROR: [youtube] abc: This video has been removed for violating YouTube's policy on violent or graphic content"
+        ),
+        success,
+      ];
+
+      await assert.rejects(
+        () => downloadWithYtdlp('https://youtu.be/removed', { maxSize: Infinity }),
+        error => error.code === 'CONTENT_GONE'
+      );
+      assert.strictEqual(spawnCallLog.length, 1);
+    });
+
     test('a sign-in demand is retried once before it reaches the user', async () => {
       spawnCallLog = [];
       spawnBehaviors = [failsWith('ERROR: [youtube] abc: Please sign in. Use --cookies'), success];

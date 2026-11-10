@@ -217,7 +217,7 @@ const FAILURES = [
         5 * 60 * 1000
       ),
   ],
-  [/Video unavailable|video is unavailable|Private video/, () => contentGone()],
+  [/Video unavailable|video is unavailable|Private video|has been removed/, () => contentGone()],
   [
     /Sign in to confirm your age/,
     () => new NetworkError('video requires age verification', 'AGE_RESTRICTED'),

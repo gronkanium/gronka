@@ -368,10 +368,24 @@ describe('ytdlp utilities', () => {
     const { PATH } = process.env;
     const clip = { maxSize: 2 ** 24, startTime: 1, duration: 1 };
     let dir;
-    const assertChildGone = () => {
+    // A killed child can linger as a zombie until its new parent reaps it; that counts as gone.
+    const gone = pid => {
+      try {
+        process.kill(pid, 0);
+      } catch (error) {
+        return error.code === 'ESRCH';
+      }
+      try {
+        return fs.readFileSync(`/proc/${pid}/stat`, 'utf8').split(') ')[1]?.[0] === 'Z';
+      } catch {
+        return true;
+      }
+    };
+    const assertChildGone = async () => {
       const child = Number(fs.readFileSync(`${dir}/child.pid`, 'utf8'));
       fs.rmSync(`${dir}/child.pid`);
-      assert.throws(() => process.kill(child, 0), { code: 'ESRCH' }, 'its child is still running');
+      for (let i = 0; i < 40 && !gone(child); i++) await Bun.sleep(50);
+      assert.ok(gone(child), 'its child is still running');
     };
 
     beforeAll(() => {
@@ -411,7 +425,7 @@ cp "${dir}/a.mp4" "$out/video.mp4" && echo "$out/video.mp4"
       } finally {
         globalThis.setTimeout = realSetTimeout;
       }
-      assertChildGone();
+      await assertChildGone();
     });
 
     test('a cancelled job kills its ffmpeg', async () => {
@@ -419,7 +433,7 @@ cp "${dir}/a.mp4" "$out/video.mp4" && echo "$out/video.mp4"
         signal: AbortSignal.timeout(500),
       }).catch(caught => caught);
       assert.ok(error instanceof Error);
-      assertChildGone();
+      await assertChildGone();
     });
   });
 });

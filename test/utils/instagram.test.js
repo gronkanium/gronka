@@ -346,6 +346,21 @@ describe('downloadFromInstagram stories', () => {
     assert.ok(!Array.isArray(result));
   });
 
+  test('a failed user lookup after media-info failed keeps both reasons', async () => {
+    const gone = Object.assign(httpError(400), {
+      response: { status: 400, data: { message: 'Media not found or unavailable' } },
+    });
+    stubApi({ '/media/9/info/': gone, web_profile_info: httpError(429) });
+    const error = await downloadFromInstagram(
+      'https://www.instagram.com/stories/someuser/9/'
+    ).catch(caught => caught);
+    assert.strictEqual(error.message, 'instagram is rate limiting downloads right now');
+    assert.match(
+      error.cause.message,
+      /web_profile_info\/ HTTP 429; media info failed: .*\/media\/9\/info\/ HTTP 400 Media not found/
+    );
+  });
+
   test('a user with no live story is CONTENT_GONE', async () => {
     stubApi({ web_profile_info: search, reels_media: { reels: {}, status: 'ok' } });
     await assert.rejects(

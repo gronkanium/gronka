@@ -289,10 +289,13 @@ async function fetchStoryItems({ highlightId, username, mediaId }, refererPath, 
   if (!highlightId && !username) {
     throw storyGone(`story ${mediaId} not found and the link names no user or highlight`);
   }
+  const keepInfoMiss = error => {
+    throw infoMiss ? withCause(error, `${describeCause(rootCause(error))}${infoMiss}`) : error;
+  };
   const reelId = highlightId
     ? `highlight:${highlightId}`
-    : await userIdFor(username, refererPath, cookie);
-  const items = await reelItems(reelId, refererPath, cookie, kind);
+    : await userIdFor(username, refererPath, cookie).catch(keepInfoMiss);
+  const items = await reelItems(reelId, refererPath, cookie, kind).catch(keepInfoMiss);
   const wanted = mediaId ? items.filter(item => String(item.pk) === mediaId) : items;
   if (items.length === 0) {
     throw storyGone(`reel ${reelId} not returned${infoMiss}`, kind);

@@ -6,6 +6,7 @@ import {
   parseArgTokens,
   buildHelpEmbed,
 } from '../../src/handlers/prefix-commands.js';
+import { logRef } from '../../src/utils/logger.js';
 
 const BOT_ID = '999888777';
 
@@ -218,6 +219,13 @@ describe('handlePrefixMessage', () => {
 
     await handlePrefixMessage(makeMessage({ content: '^g info' }), { deps });
     assert.strictEqual(calls.info.length, 0);
+  });
+
+  test('runs a command under a log ref, as slash commands do, so its failure record has one', async () => {
+    const refs = [];
+    const { deps } = makeDeps({ handleDownloadCommand: async () => refs.push(logRef()) });
+    await handlePrefixMessage(makeMessage({ content: '^g download https://x.com/a' }), { deps });
+    assert.match(refs[0] ?? '', /^[A-Za-z0-9]{6}$/);
   });
 
   test('prefix is no longer a command', async () => {

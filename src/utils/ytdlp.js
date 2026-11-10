@@ -207,6 +207,10 @@ const noVideo = () => new NetworkError('this post has no video in it.', 'NO_VIDE
 const streamIsLive = () =>
   new ValidationError('this stream is still live, try again once it has ended.', 'STREAM_IS_LIVE');
 
+const regionCopyMissing = url =>
+  hostIn(url, ['tiktok.com']) &&
+  new NetworkError("tiktok isn't serving this video's file right now.", 'REGION_COPY_MISSING');
+
 // What a failed yt-dlp run said, in order: the first pattern that matches and returns an error wins.
 const FAILURES = [
   [
@@ -241,14 +245,14 @@ const FAILURES = [
         `${siteLabel(url)} downloads go through a vpn that is not reachable right now, try again later.`
       ),
   ],
+  // TikTok refuses some posts to one address only, so the vpn gets a try before they read as gone.
+  [
+    /Your IP address is blocked/,
+    (url, { viaGeoProxy }) => process.env.GEO_PROXY_URL && !viaGeoProxy && regionCopyMissing(url),
+  ],
   [/Your IP address is blocked|status code 102\d\d/i, () => contentGone()],
   // TikTok US storage is missing some videos its global CDN still serves.
-  [
-    /unable to download video data: HTTP Error 404/,
-    url =>
-      hostIn(url, ['tiktok.com']) &&
-      new NetworkError("tiktok isn't serving this video's file right now.", 'REGION_COPY_MISSING'),
-  ],
+  [/unable to download video data: HTTP Error 404/, regionCopyMissing],
   // Medal answers 403 until a fresh clip finishes publishing, usually within a minute.
   [/HTTP Error 403/, url => hostIn(url, ['medal.tv']) && notPublishedYet()],
   [/Unable to download webpage: HTTP Error (404|410)/, () => contentGone()],
@@ -290,9 +294,9 @@ const FAILURES = [
 ];
 
 // Never surface raw yt-dlp stderr to users; the caller logs it in full.
-export function classifyYtdlpFailure(output, url, limits = {}) {
+export function classifyYtdlpFailure(output, url, run = {}) {
   for (const [pattern, toError] of FAILURES) {
-    const error = pattern.test(output) && toError(url, limits);
+    const error = pattern.test(output) && toError(url, run);
     if (error) return error;
   }
   return new NetworkError(`could not download this ${siteLabel(url)} link.`, 'YTDLP_UNKNOWN');
@@ -527,7 +531,7 @@ function executeYtdlp(
         const errorOutput = stripCookieLines(stderr || stdout);
         logger.error(`yt-dlp failed with code ${code}: ${errorOutput}`);
 
-        rejectWith(classifyYtdlpFailure(errorOutput, url, { maxSize }));
+        rejectWith(classifyYtdlpFailure(errorOutput, url, { maxSize, viaGeoProxy }));
       }
     });
 

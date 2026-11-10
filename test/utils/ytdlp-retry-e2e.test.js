@@ -280,6 +280,41 @@ if (!mocksSupported) {
       );
       assert.strictEqual(spawnCallLog.length, 1);
     });
+
+    describe('a post tiktok blocks from this address', () => {
+      function ipBlocked(child) {
+        child.stderr.emit(
+          'data',
+          Buffer.from(
+            'ERROR: [TikTok] 7705380521676655879: Your IP address is blocked from accessing this post'
+          )
+        );
+        child.emit('close', 1);
+      }
+      const viaProxy = async behaviors => {
+        process.env.GEO_PROXY_URL = 'http://vpn:8888';
+        spawnCallLog = [];
+        spawnBehaviors = behaviors;
+        try {
+          return await downloadWithYtdlp(url, { maxSize: Infinity }).catch(caught => caught);
+        } finally {
+          delete process.env.GEO_PROXY_URL;
+        }
+      };
+
+      test('is retried once through the geo proxy', async () => {
+        const result = await viaProxy([ipBlocked, success]);
+        assert.ok(result.size > 0);
+        assert.strictEqual(spawnCallLog.length, 2);
+        assert.ok(spawnCallLog[1].args.includes('--proxy'));
+      });
+
+      test('reads as gone when the geo proxy is blocked too', async () => {
+        const error = await viaProxy([ipBlocked, ipBlocked]);
+        assert.strictEqual(error.code, 'CONTENT_GONE');
+        assert.strictEqual(spawnCallLog.length, 2);
+      });
+    });
   });
 
   // yt-dlp reports an Instagram photo post as a formats problem, which read to users as a bot

@@ -6,9 +6,18 @@ const URL_IN_TEXT =
   /(?:https?:\/\/|www\.|\b[a-z0-9-]+(?:\.[a-z0-9-]+)*\.[a-z]{2,}\/)[^\s<>"{}|\\^`[\]]+/i;
 
 export function firstUrlIn(text) {
-  let found = text?.match(URL_IN_TEXT)?.[0];
-  if (!found) return null;
-  found = found.replace(/[.,;:!?'*_~]+$/, '');
+  const match = text?.match(URL_IN_TEXT);
+  if (!match) return null;
+  // `_` can end a shortcode or username, so strip only the ones closing markdown opened before the link
+  let opened = 0;
+  for (let i = match.index - 1; i >= 0 && '*_~'.includes(text[i]); i--) {
+    if (text[i] === '_') opened++;
+  }
+  let end = match[0].length;
+  while (".,;:!?'*~".includes(match[0][end - 1]) || (match[0][end - 1] === '_' && opened-- > 0)) {
+    end--;
+  }
+  let found = match[0].slice(0, end);
   while (found.endsWith(')') && !found.includes('(')) found = found.slice(0, -1);
   return /^https?:\/\//i.test(found) ? found : `https://${found}`;
 }

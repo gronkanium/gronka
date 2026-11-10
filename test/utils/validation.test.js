@@ -216,6 +216,44 @@ describe('validation utilities', () => {
       }
     });
 
+    test('keeps a trailing underscore that belongs to the link', () => {
+      const cases = [
+        [
+          'https://www.instagram.com/reel/DfiZamChug_',
+          'https://www.instagram.com/reel/DfiZamChug_',
+        ],
+        [
+          'see https://www.instagram.com/reel/DfiZamChug_.',
+          'https://www.instagram.com/reel/DfiZamChug_',
+        ],
+        [
+          '_https://www.instagram.com/reel/DfiZamChug__',
+          'https://www.instagram.com/reel/DfiZamChug_',
+        ],
+        ['x.com/someone_', 'https://x.com/someone_'],
+      ];
+      for (const [input, expected] of cases) {
+        assert.strictEqual(firstUrlIn(input), expected, input);
+      }
+    });
+
+    test('strips discord markdown wrapped around a link', () => {
+      const cases = [
+        ['_https://x.com/a_', 'https://x.com/a'],
+        ['__https://x.com/a__', 'https://x.com/a'],
+        ['*https://x.com/a*', 'https://x.com/a'],
+        ['**https://x.com/a**', 'https://x.com/a'],
+        ['~~https://x.com/a~~', 'https://x.com/a'],
+        ['_**https://x.com/a**_', 'https://x.com/a'],
+        ['*_https://x.com/a_*', 'https://x.com/a'],
+        ['_https://x.com/a._', 'https://x.com/a'],
+        ['look _https://x.com/a_, ok', 'https://x.com/a'],
+      ];
+      for (const [input, expected] of cases) {
+        assert.strictEqual(firstUrlIn(input), expected, input);
+      }
+    });
+
     test('does not take file names or abbreviations for links', () => {
       assert.strictEqual(firstUrlIn('e.g. this'), null);
       assert.strictEqual(firstUrlIn('clip.mp4 please'), null);

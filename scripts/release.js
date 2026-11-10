@@ -1,5 +1,5 @@
 #!/usr/bin/env bun
-// Dated releases (vYYYY.MM.DD, .N for another that day) cut from origin/master by the owner.
+// Semver releases cut from origin/master by the owner, bumped from the conventional commits since the last tag.
 import { execFileSync } from 'node:child_process';
 import { readFileSync, writeFileSync } from 'node:fs';
 
@@ -15,10 +15,11 @@ const SECTIONS = [
 const CONVENTIONAL =
   /^(feat|fix|perf|revert|deps|docs|chore|refactor|test|ci|build|style)(?:\(([^)]+)\))?(!)?: (.+)$/;
 
-export function nextVersion(date, tags) {
-  const base = date.toISOString().slice(0, 10).replaceAll('-', '.');
-  const taken = tags.filter(t => t === `v${base}` || t.startsWith(`v${base}.`)).length;
-  return taken ? `${base}.${taken}` : base;
+export function nextVersion(current, entries) {
+  const [major, minor, patch] = current.split('.').map(Number);
+  if (entries.some(e => e.breaking)) return `${major + 1}.0.0`;
+  if (entries.some(e => e.type === 'feat')) return `${major}.${minor + 1}.0`;
+  return `${major}.${minor}.${patch + 1}`;
 }
 
 // A squash merge whose body lists conventional subjects contributes those, not its own subject.
@@ -82,18 +83,19 @@ if (import.meta.main) {
       const [sha, message] = s.trim().split('\x1f');
       return { sha, message };
     });
-  const notes = renderNotes(changelogEntries(commits));
+  const entries = changelogEntries(commits);
+  const notes = renderNotes(entries);
   if (!notes) fail(`nothing to release since ${prev} (no feat, fix, perf, revert or deps commits)`);
 
   const now = new Date();
-  const version = nextVersion(now, run('git', ['tag', '-l', 'v*']).split('\n'));
+  const pkg = readFileSync('package.json', 'utf8');
+  const version = nextVersion(JSON.parse(pkg).version, entries);
   const tag = `v${version}`;
   if (dryRun) {
     console.log(`${tag} (since ${prev})\n\n${notes}`);
     process.exit(0);
   }
 
-  const pkg = readFileSync('package.json', 'utf8');
   writeFileSync('package.json', pkg.replace(/"version": "[^"]+"/, `"version": "${version}"`));
   const changelog = readFileSync('CHANGELOG.md', 'utf8');
   const at = changelog.indexOf('\n## ');

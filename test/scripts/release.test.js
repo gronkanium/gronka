@@ -2,20 +2,20 @@ import { test, describe } from 'bun:test';
 import assert from 'node:assert';
 import { nextVersion, changelogEntries, renderNotes } from '../../scripts/release.js';
 
-const day = new Date('2026-10-28T12:00:00Z');
-
 describe('nextVersion', () => {
-  test('first release of the day is the date', () => {
-    assert.strictEqual(nextVersion(day, ['v4.10.0', 'v2026.10.27']), '2026.10.28');
+  test('fixes bump the patch', () => {
+    assert.strictEqual(nextVersion('4.10.0', [{ type: 'fix' }, { type: 'deps' }]), '4.10.1');
   });
 
-  test('later releases that day get a suffix', () => {
-    assert.strictEqual(nextVersion(day, ['v2026.10.28']), '2026.10.28.1');
-    assert.strictEqual(nextVersion(day, ['v2026.10.28', 'v2026.10.28.1']), '2026.10.28.2');
+  test('a feature bumps the minor and resets the patch', () => {
+    assert.strictEqual(nextVersion('4.10.3', [{ type: 'fix' }, { type: 'feat' }]), '4.11.0');
   });
 
-  test('pads month and day', () => {
-    assert.strictEqual(nextVersion(new Date('2027-01-05T00:00:00Z'), []), '2027.01.05');
+  test('a breaking change bumps the major', () => {
+    assert.strictEqual(
+      nextVersion('4.10.3', [{ type: 'feat' }, { type: 'ci', breaking: 'x' }]),
+      '5.0.0'
+    );
   });
 });
 

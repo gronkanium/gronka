@@ -7,6 +7,7 @@ import {
   VIDEO_LIMITS,
 } from '../../src/content/video.js';
 import { toPlainText } from '../../src/content/schema.js';
+import { classifyYtdlpFailure } from '../../src/utils/ytdlp.js';
 
 const info = (fields = {}) => ({
   id: 'abc',
@@ -144,6 +145,18 @@ describe('fetchVideoThread', () => {
       runner: failing('ERROR: [youtube] abc: Video unavailable'),
     }).catch(e => e);
     expect(error.code).toBe('CONTENT_GONE');
+  });
+
+  test('failures read the same as they do for a download', async () => {
+    for (const line of [
+      'ERROR: [youtube] abc: HTTP Error 429: Too Many Requests',
+      "ERROR: [youtube] abc: This video has been removed for violating YouTube's Terms of Service",
+      'ERROR: [youtube] abc: Join this channel to get access to members-only content',
+    ]) {
+      const error = await fetchVideoThread(url, { runner: failing(line) }).catch(e => e);
+      expect(error.code).toBe(classifyYtdlpFailure(line, url).code);
+      expect(error.cause?.message).toContain('yt-dlp:');
+    }
   });
 
   test('unsupported pages are a 400', async () => {

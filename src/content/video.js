@@ -3,10 +3,11 @@ import { execFile } from 'child_process';
 import { promisify } from 'util';
 import { createLogger } from '../utils/logger.js';
 import { ssrfGuardedRequest } from '../utils/ssrf-guard.js';
-import { NetworkError, contentGone, timedOut } from '../utils/errors.js';
+import { NetworkError, timedOut, withCause } from '../utils/errors.js';
 import { jobSignal } from '../utils/media-file.js';
 import { hostOf, hostUnder } from '../utils/url-host.js';
 import {
+  classifyYtdlpFailure,
   getYtdlpSite,
   getCookieArgs,
   getYouTubeArgs,
@@ -54,18 +55,14 @@ export function isVideoContentUrl(url) {
   return siteOf(url) !== null;
 }
 
-function classify(stderr) {
-  if (/Unsupported URL|is not a valid URL/i.test(stderr)) {
+// The download table decides; only "not a video page" becomes this reader's own 400.
+function classify(stderr, url) {
+  const error = classifyYtdlpFailure(stderr, url);
+  if (error.code === 'YTDLP_UNKNOWN') return null;
+  if (error.code === 'YTDLP_UNSUPPORTED_URL' || error.code === 'YTDLP_INVALID_URL') {
     return new NetworkError('that is not a link to a video page', 'BAD_URL', 400);
   }
-  if (
-    /Video unavailable|video is unavailable|Private video|members-only|Join this channel|has been removed|no longer available|does not exist|not found|404|account .*(suspended|terminated)|This video is private|login required|requires authentication/i.test(
-      stderr
-    )
-  ) {
-    return contentGone(`yt-dlp: ${lastLine(stderr)}`);
-  }
-  return null;
+  return withCause(error, `yt-dlp: ${lastLine(stderr)}`);
 }
 
 const lastLine = text =>
@@ -129,7 +126,7 @@ async function readInfo(url, site, wantComments, runner) {
   try {
     return await attempt(false);
   } catch (error) {
-    const known = classify(String(error.stderr ?? ''));
+    const known = classify(String(error.stderr ?? ''), url);
     if (known) throw known;
     if (error.killed || error.signal) {
       throw timedOut(`yt-dlp: reading ${site} stopped by ${error.signal ?? 'timeout'}`);

@@ -217,7 +217,10 @@ const FAILURES = [
         5 * 60 * 1000
       ),
   ],
-  [/Video unavailable|video is unavailable|Private video|has been removed/, () => contentGone()],
+  [
+    /Video unavailable|video is unavailable|Private video|This video is private|has been removed|no longer available|does not exist/,
+    () => contentGone(),
+  ],
   [
     /Sign in to confirm your age/,
     () => new NetworkError('video requires age verification', 'AGE_RESTRICTED'),
@@ -261,7 +264,10 @@ const FAILURES = [
     () =>
       new ValidationError('this link is not a downloadable video page.', 'YTDLP_UNSUPPORTED_URL'),
   ],
-  [/is not a valid URL/, url => new ValidationError(`invalid ${siteLabel(url)} URL`)],
+  [
+    /is not a valid URL/,
+    url => new ValidationError(`invalid ${siteLabel(url)} URL`, 'YTDLP_INVALID_URL'),
+  ],
   [/There is no video in this post|No video could be found in this tweet/, noVideo],
   // Instagram reports photo posts this way too.
   [
@@ -271,7 +277,7 @@ const FAILURES = [
   ],
   [/larger than max-filesize/i, (url, { maxSize }) => tooLarge(maxSize)],
   [
-    /BounceDeleted|tweet (was )?(deleted|not found|unavailable)|account is no longer available|account .*(suspended|deactivated)/i,
+    /BounceDeleted|tweet (was )?(deleted|not found|unavailable)|account is no longer available|account .*(suspended|deactivated|terminated)/i,
     () => contentGone(),
   ],
   // Before the 'protected' check below, which is about protected X accounts.
@@ -284,7 +290,7 @@ const FAILURES = [
       ),
   ],
   [
-    /NSFW tweet requires authentication|protected|login required|Requested content is not available/,
+    /requires authentication|protected|login required|Requested content is not available/,
     () => new NetworkError('this post is private and cannot be downloaded'),
   ],
 ];

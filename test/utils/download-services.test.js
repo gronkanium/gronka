@@ -35,6 +35,7 @@ describe('download-services registry', () => {
     assert.strictEqual(getServiceForUrl('https://v.redd.it/abc')?.id, 'reddit');
     assert.strictEqual(getServiceForUrl('https://youtu.be/abc')?.id, 'youtube');
     assert.strictEqual(getServiceForUrl('https://www.xvideos.com/video1/x')?.id, 'xvideos');
+    assert.strictEqual(getServiceForUrl('https://spankbang.com/9kwt0/video/x')?.id, 'spankbang');
     assert.strictEqual(getServiceForUrl('https://redgifs.com/watch/x')?.id, 'redgifs');
     assert.strictEqual(getServiceForUrl('https://hentaigifz.com/slug/')?.id, 'hentaigifz');
     assert.strictEqual(

@@ -125,6 +125,15 @@ describe('source routes', () => {
     assert.deepEqual(steps('https://www.facebook.com/watch?v=1'), ['cobalt', 'ytdlp']);
   });
 
+  test('a file link on a yt-dlp site falls back to a direct download; a page does not', () => {
+    const steps = url =>
+      routeFor(url)
+        .chain.filter(s => !s.when || s.when(url))
+        .map(s => s.engine);
+    assert.deepEqual(steps('https://dn1.ca.archive.org/0/items/x/y.ia.mp4'), ['ytdlp', 'direct']);
+    assert.deepEqual(steps('https://archive.org/details/x'), ['ytdlp']);
+  });
+
   test('a link whose every step is switched off is refused as turned off', async () => {
     await setSetting(
       'source_routes',

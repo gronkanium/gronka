@@ -325,7 +325,8 @@ export const ROUTES = [
     id: 'ytdlp',
     name: 'yt-dlp sites',
     owns: url => getYtdlpSite(url) !== null && !isStillImage(url),
-    chain: [step('ytdlp')],
+    // A file host under a yt-dlp site (dn1.ca.archive.org/x.mp4) has no extractor of its own.
+    chain: [step('ytdlp'), step('direct', { when: isDirectMediaUrl, note: 'file links' })],
   },
   {
     id: 'direct',

@@ -1,9 +1,12 @@
-import { test, describe } from 'bun:test';
+import { test, describe, beforeAll, afterAll } from 'bun:test';
 import assert from 'node:assert';
+import { execFileSync } from 'node:child_process';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
+import { withJobDir } from '../../src/utils/media-file.js';
 import {
+  downloadWithYtdlp,
   classifyYtdlpFailure,
   isYouTubeUrl,
   getYtdlpSite,
@@ -359,5 +362,64 @@ describe('ytdlp utilities', () => {
       else process.env.YTDLP_COOKIES_PATH = saved;
       fs.rmSync(dir, { recursive: true, force: true });
     }
+  });
+
+  describe('a clip download stopped midway', () => {
+    const { PATH } = process.env;
+    const clip = { maxSize: 2 ** 24, startTime: 1, duration: 1 };
+    let dir;
+    const assertChildGone = () => {
+      const child = Number(fs.readFileSync(`${dir}/child.pid`, 'utf8'));
+      fs.rmSync(`${dir}/child.pid`);
+      assert.throws(() => process.kill(child, 0), { code: 'ESRCH' }, 'its child is still running');
+    };
+
+    beforeAll(() => {
+      fs.mkdirSync(path.join(process.cwd(), 'temp'), { recursive: true });
+      dir = fs.mkdtempSync(path.join(process.cwd(), 'temp', 'fake-ytdlp-'));
+      execFileSync('ffmpeg', ['-v', 'error', '-f', 'lavfi', '-i', 'testsrc=d=3', `${dir}/a.mp4`]);
+      // A section download hangs in a child holding yt-dlp's pipes, the way its ffmpeg does.
+      fs.writeFileSync(
+        `${dir}/yt-dlp`,
+        `#!/bin/sh
+for arg; do
+  [ "$prev" = -o ] && out=$(dirname "$arg")
+  [ "$arg" = --download-sections ] && clip=1
+  prev=$arg
+done
+if [ "$clip" ]; then sleep 10 & echo $! > "${dir}/child.pid"; wait; fi
+cp "${dir}/a.mp4" "$out/video.mp4" && echo "$out/video.mp4"
+`,
+        { mode: 0o755 }
+      );
+      process.env.PATH = `${dir}:${PATH}`;
+    });
+
+    afterAll(() => {
+      process.env.PATH = PATH;
+      fs.rmSync(dir, { recursive: true, force: true });
+    });
+
+    test('a timeout falls back to the whole video, trimmed, and kills its ffmpeg', async () => {
+      const realSetTimeout = globalThis.setTimeout;
+      globalThis.setTimeout = (fn, ms, ...rest) =>
+        realSetTimeout(fn, ms === 300_000 ? 1000 : ms, ...rest);
+      try {
+        const file = await downloadWithYtdlp('https://youtu.be/clip', clip);
+        assert.strictEqual(file.trimmed, true);
+        assert.strictEqual(file.filename, 'trimmed_output.mp4');
+      } finally {
+        globalThis.setTimeout = realSetTimeout;
+      }
+      assertChildGone();
+    });
+
+    test('a cancelled job kills its ffmpeg', async () => {
+      const error = await withJobDir(() => downloadWithYtdlp('https://youtu.be/clip', clip), {
+        signal: AbortSignal.timeout(500),
+      }).catch(caught => caught);
+      assert.ok(error instanceof Error);
+      assertChildGone();
+    });
   });
 });

@@ -37,8 +37,14 @@ if (!mocksSupported) {
   let spawnCallLog;
   // Successive yt-dlp size-probe answers (stdout), one per execFile('yt-dlp') call.
   let probeAnswers = [];
+  // Past pid_max, so a group kill aimed at a fake can never reach a real process.
+  const fakes = new Map();
+  let nextPid = 1e9;
+  const realKill = process.kill;
 
   beforeAll(async () => {
+    process.kill = (pid, signal) =>
+      fakes.has(-pid) ? fakes.get(-pid).kill(signal) : realKill.call(process, pid, signal);
     const execFile = (...args) => realChildProcess.execFile(...args);
     execFile[promisify.custom] = (cmd, args, options) =>
       cmd === 'yt-dlp'
@@ -51,6 +57,8 @@ if (!mocksSupported) {
       execFile,
       spawn: (cmd, args) => {
         const child = fakeChildProcess();
+        child.pid = ++nextPid;
+        fakes.set(child.pid, child);
         const callNumber = spawnCallLog.push({ args });
         // executeYtdlp passes '-o', '<outputDir>/%(title)s.%(ext)s' - recover the real
         // per-call temp directory so a "successful" run can drop a file there.
@@ -73,6 +81,7 @@ if (!mocksSupported) {
 
   afterAll(() => {
     mock.restore();
+    process.kill = realKill;
   });
 
   function genericFailure(child) {

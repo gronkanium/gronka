@@ -77,6 +77,13 @@ describe('system routes', () => {
     assert.strictEqual((await (await fetch(`${baseUrl}/api/system`)).json()).maintenance, false);
   });
 
+  test('GET /api/system reports MEDIA_WORKERS as the bot reads it', async () => {
+    assert.strictEqual(process.env.MEDIA_WORKERS, undefined);
+    const response = await fetch(`${baseUrl}/api/system`);
+    assert.strictEqual(response.status, 200);
+    assert.strictEqual((await response.json()).mediaWorkers, false);
+  });
+
   test('GET /api/system/deps answers even when a dependency is down', async () => {
     const response = await fetch(`${baseUrl}/api/system/deps`);
     assert.strictEqual(response.status, 200);

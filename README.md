@@ -50,7 +50,7 @@ not part of a self-hosted install.
 bun run lint && bun run test:safe && bun run test:e2e
 ```
 
-plain esm javascript on bun 1.3. issues and PRs welcome, see [CONTRIBUTING](.github/CONTRIBUTING.md).
+plain esm javascript on bun 1.4. issues and PRs welcome, see [CONTRIBUTING](.github/CONTRIBUTING.md).
 
 ## license
 

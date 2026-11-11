@@ -1,16 +1,9 @@
 import dotenv from 'dotenv';
 import { ConfigurationError } from './errors.js';
 
-// Load environment variables
 dotenv.config({ quiet: true });
 
-// Non-admin download format. The 1080p cap has to be expressed twice, once on height, once
-// on width, because `height<=?1080` alone rejects every format of a portrait video (a 720x1280
-// reel is 1280 tall), which is most of what the bot is asked for. yt-dlp has no OR inside a
-// filter, so the `/` chain supplies it: landscape matches on height, portrait on width.
-// `<=?` keeps formats that report no dimensions at all (direct-file links via the generic
-// extractor). The bare trailing `best` means a resolution filter can never be the sole reason a
-// download fails; --max-filesize still bounds what it picks.
+// Height, then width cap (`height<=?1080` alone drops every portrait video); bare `best` means a filter never fails a download.
 export const DEFAULT_YTDLP_FORMAT =
   'bestvideo[height<=?1080][ext=mp4]+bestaudio[ext=m4a]/' +
   'bestvideo[width<=?1080][ext=mp4]+bestaudio[ext=m4a]/' +
@@ -70,7 +63,6 @@ function validateUrlFormat(url) {
   }
 }
 
-// Bot configuration - lazy loaded to avoid requiring DISCORD_TOKEN for webui
 let _botConfig = null;
 function getBotConfig() {
   if (_botConfig) return _botConfig;
@@ -85,8 +77,7 @@ function getBotConfig() {
           'Discord bot token from https://discord.com/developers/applications'
         ),
     clientId: web ? '' : requireStringEnv('CLIENT_ID', 'Discord application/client ID'),
-    // Nothing is kept indefinitely. On by default: a self-hoster should not have to opt in to
-    // not hoarding other people's data. Minimum 1 day so a typo cannot wipe live history.
+    // On by default, and at least a day so a typo cannot wipe live history.
     retentionEnabled: getStringEnv('RETENTION_ENABLED', 'true').toLowerCase() === 'true',
     retentionDays: parseIntEnv('RETENTION_DAYS', 7, 1, 3650),
     retentionIntervalMs: parseIntEnv('RETENTION_INTERVAL_MS', 21600000, 60000, 604800000),
@@ -97,16 +88,15 @@ function getBotConfig() {
     ytdlpEnabled: getStringEnv('YTDLP_ENABLED', 'true').toLowerCase() === 'true',
     ytdlpQuality: getStringEnv('YTDLP_QUALITY', DEFAULT_YTDLP_FORMAT),
     galleryDlEnabled: getStringEnv('GALLERY_DL_ENABLED', 'true').toLowerCase() === 'true',
-    // Media jobs go to worker processes through Postgres; off runs them in the bot process.
+    // Off for a bare bot process, which has no workers; docker-compose.yml turns it on.
     mediaWorkers: getStringEnv('MEDIA_WORKERS', 'false').toLowerCase() === 'true',
-    statsCacheTtl: parseIntEnv('STATS_CACHE_TTL', 300000, 0), // 5 minutes default, 0 to disable
+    statsCacheTtl: parseIntEnv('STATS_CACHE_TTL', 300000, 0),
   };
 
   return _botConfig;
 }
 
-// botConfig is lazy: reading any property triggers getBotConfig(), which requires
-// DISCORD_TOKEN. This lets the webui server import this module without a token set.
+// Lazy, so a module can import this without DISCORD_TOKEN until it reads a property.
 export const botConfig = new Proxy(
   {},
   {
@@ -122,10 +112,7 @@ export const botConfig = new Proxy(
   }
 );
 
-// Community/support server surfaced by /info and the ban-appeal embed. Empty by default: a
-// self-hosted instance must not send its users to the upstream gronka server, which cannot
-// answer for a bot it doesn't run. Surfaces that use it drop the link when it's unset.
-// A getter, not a snapshot, so it tracks the env.
+// Empty by default: a self-hosted bot must not send its users to the upstream server.
 export const supportConfig = {
   get inviteUrl() {
     return getStringEnv('SUPPORT_INVITE_URL', '');
@@ -139,43 +126,23 @@ if (supportConfig.inviteUrl && !validateUrlFormat(supportConfig.inviteUrl)) {
   );
 }
 
-// R2 configuration
 export const r2Config = {
   accountId: getStringEnv('R2_ACCOUNT_ID', ''),
   accessKeyId: getStringEnv('R2_ACCESS_KEY_ID', ''),
   secretAccessKey: getStringEnv('R2_SECRET_ACCESS_KEY', ''),
   bucketName: getStringEnv('R2_BUCKET_NAME', ''),
-  // No default: an unset domain must disable public URLs, not silently mint links on the
-  // upstream instance's CDN that this deployment doesn't own. r2-storage guards on empty.
+  // No default: an unset domain must not mint links on a CDN this deployment doesn't own.
   publicDomain: getStringEnv('R2_PUBLIC_DOMAIN', ''),
   cleanupEnabled: getStringEnv('R2_CLEANUP_ENABLED', 'false').toLowerCase() === 'true',
-  cleanupIntervalMs: parseIntEnv('R2_CLEANUP_INTERVAL_MS', 3600000, 60000, 86400000), // 1 hour default, min 1 minute, max 1 day
+  cleanupIntervalMs: parseIntEnv('R2_CLEANUP_INTERVAL_MS', 3600000, 60000, 86400000),
 };
 
-// Server configuration for the minimal HTTP server in bot.js
-// (serves /api/stats/24h â€” used by the Docker healthcheck â€” and /api/bot/status).
 export const serverConfig = {
   serverPort: parseIntEnv('SERVER_PORT', 3000, 1, 65535),
   serverHost: getStringEnv('SERVER_HOST', '0.0.0.0'),
 };
 
-// WebUI configuration
-// Note: MAIN_SERVER_URL has been removed - WebUI now calculates stats directly
 export const webuiConfig = {
   webuiPort: parseIntEnv('WEBUI_PORT', 3001, 1, 65535),
   webuiHost: getStringEnv('WEBUI_HOST', '127.0.0.1'),
 };
-
-// Logger configuration
-const loggerConfig = {
-  logLevel: getStringEnv('LOG_LEVEL', 'INFO').toUpperCase(),
-};
-
-// Validate log level
-const validLogLevels = ['DEBUG', 'INFO', 'WARN', 'ERROR'];
-if (!validLogLevels.includes(loggerConfig.logLevel)) {
-  throw new ConfigurationError(
-    `LOG_LEVEL must be one of: ${validLogLevels.join(', ')}, got: ${loggerConfig.logLevel}`,
-    'INVALID_LOG_LEVEL'
-  );
-}

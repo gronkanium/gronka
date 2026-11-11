@@ -332,8 +332,7 @@ async function runChecks() {
   heading('Toolchain');
   const bun = version('bun --version');
   if (bun) {
-    const major = Number.parseInt(bun, 10);
-    major >= 1 ? ok(`bun ${bun}`) : warn(`bun ${bun}, 1.3+ expected`);
+    Bun.semver.order(bun, '1.4.4') >= 0 ? ok(`bun ${bun}`) : warn(`bun ${bun}, 1.4.4+ expected`);
   } else {
     bad('bun not found, https://bun.sh');
     problems.push('install bun');

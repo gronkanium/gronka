@@ -52,6 +52,32 @@ how long an r2 upload lives, by size: `MB:hours` pairs, e.g. `100:72,250:24,500:
 
 new r2 uploads are refused while the bucket holds more than this. `0` turns the guard off.
 
+## sources
+
+the webui **sources** and **checks** pages edit these too.
+
+### `disabled_services`
+
+download sources that are turned off. a `/download` from a turned-off source is refused with a message instead of downloading; every source not listed is on.
+
+**default:** none
+
+### `source_routes`
+
+per site, the order the bot tries its download engines in and which engines are switched off. sites not listed use the built-in order.
+
+**default:** the built-in order
+
+### `source_checks`
+
+once a day, download one public example link per source and check each returns the expected kind of media. results show on the checks page.
+
+**default:** `off`
+
+### `webui_issue_states`
+
+which issues are muted or resolved on the webui **issues** page, where it is set.
+
 ## availability
 
 ### `maintenance_mode`

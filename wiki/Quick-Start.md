@@ -17,10 +17,10 @@ This is the Discord bot. gronka.dev is a hosted service built on Cloudflare (tun
 Turnstile, R2) and is not part of a self-hosted install; `docker-compose.web.yml` is its
 deployment and nothing in the bot stack depends on it.
 
-`bun run setup` is the whole configuration step. It asks only for what it cannot work out , 
-bot token, application id, your Discord user id, a Postgres password, and optionally walks you
-through a test bot and R2. It writes `.env` from `.env.example` and **keeps the comments**, so the
-generated file still documents every remaining knob.
+`bun run setup` is the whole configuration step. It asks only for what it cannot work out:
+bot token, application id, a Postgres password, and optionally a support invite, a test bot and
+R2. It writes `.env` from `.env.example` and **keeps the comments**, so the generated file still
+documents every remaining knob.
 
 It also creates the three files docker bind-mounts **as files**. This matters more than it looks:
 if one is missing, Docker creates a *directory* in its place, and yt-dlp/cobalt then run

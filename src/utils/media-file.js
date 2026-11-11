@@ -14,7 +14,7 @@ const logger = createLogger('media-file');
 
 // Real disk, never tmpfs: a job dir holds whole downloads. The bot and every worker share the
 // base, so each process works under its own host dir and only age ever deletes another's.
-const JOBS_BASE = path.resolve(process.env.MEDIA_TEMP_DIR || 'temp/jobs');
+export const JOBS_BASE = path.resolve(process.env.MEDIA_TEMP_DIR || 'temp/jobs');
 export const JOBS_ROOT = path.join(JOBS_BASE, os.hostname());
 const HEAD_BYTES = 64;
 const IDLE_TIMEOUT_MS = 60_000;

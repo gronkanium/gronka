@@ -1,4 +1,5 @@
 import { AsyncLocalStorage } from 'node:async_hooks';
+import { ConfigurationError } from './errors.js';
 import { hostsOnly } from './url-host.js';
 
 const LOG_LEVELS = {
@@ -62,11 +63,9 @@ function stringifyArg(arg) {
 }
 
 class Logger {
-  constructor(component, logLevel = 'INFO') {
+  constructor(component, levelName) {
     this.component = component;
-
-    const levelName = logLevel.toUpperCase();
-    this.logLevel = LOG_LEVELS[levelName] !== undefined ? LOG_LEVELS[levelName] : LOG_LEVELS.INFO;
+    this.logLevel = LOG_LEVELS[levelName];
   }
 
   // Sanitize user input to prevent log injection
@@ -147,6 +146,12 @@ class Logger {
 }
 
 export function createLogger(component) {
-  const logLevel = process.env.LOG_LEVEL || (isWebMode() ? 'ERROR' : 'INFO');
-  return new Logger(component, logLevel);
+  const level = process.env.LOG_LEVEL?.trim().toUpperCase() || (isWebMode() ? 'ERROR' : 'INFO');
+  if (!Object.hasOwn(LOG_LEVELS, level)) {
+    throw new ConfigurationError(
+      `LOG_LEVEL must be one of: ${Object.keys(LOG_LEVELS).join(', ')}, got: ${level}`,
+      'INVALID_LOG_LEVEL'
+    );
+  }
+  return new Logger(component, level);
 }

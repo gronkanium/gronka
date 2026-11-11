@@ -80,6 +80,9 @@ for (const key of prefixMappings) {
   const prefixedKey = `${envPrefix}${key}`;
   if (env[prefixedKey] !== undefined) {
     env[key] = env[prefixedKey];
+  } else if (prefix === 'TEST' && key.startsWith('R2_')) {
+    // Plain R2_* is prod's bucket. Blank, not deleted: the bot's own dotenv load would refill it.
+    env[key] = '';
   }
 }
 

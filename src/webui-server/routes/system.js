@@ -7,6 +7,7 @@ import { createLogger } from '../../utils/logger.js';
 import { botConfig } from '../../utils/config.js';
 import { jobsOverview } from '../../utils/database/media-jobs-pg.js';
 import { getPostgresConnection } from '../../utils/database/connection.js';
+import { JOBS_BASE } from '../../utils/media-file.js';
 import { r2SoftLimitGb } from '../../utils/r2-storage.js';
 import { getStorageStats } from '../../utils/storage.js';
 import { readSetting } from '../../utils/settings.js';
@@ -27,9 +28,10 @@ async function check(id, label, probe) {
   }
 }
 
-// Job dirs are the only thing gronka writes to disk.
+// Job dirs are the only thing gronka writes to disk; their base is absent until a job or worker starts.
 async function disk() {
-  const s = await fs.statfs(process.env.MEDIA_TEMP_DIR || 'temp');
+  await fs.mkdir(JOBS_BASE, { recursive: true });
+  const s = await fs.statfs(JOBS_BASE);
   return { free: s.bavail * s.bsize, total: s.blocks * s.bsize };
 }
 
@@ -88,7 +90,7 @@ router.get('/api/system', async (req, res) => {
     res.json({
       jobs,
       maintenance,
-      mediaWorkers: process.env.MEDIA_WORKERS !== 'false',
+      mediaWorkers: botConfig.mediaWorkers,
       version: pkg.version,
     });
   } catch (error) {

@@ -105,15 +105,13 @@ async function processFormatConversion(
         videoIndex: info?.videoIndex ?? null,
         audioIndex: info?.audioIndex ?? null,
       });
-      const baseName =
-        path.parse(attachment.name || 'file').name.replace(/[^\w.-]+/g, '_') || 'file';
       await sendConvertedFile(
         interaction,
         {
           ...ctx,
           discordAttachmentLimit: getDiscordAttachmentLimit(interaction),
         },
-        { file: output, format, baseName }
+        { file: output, format }
       );
       await finishCommand();
     },
@@ -180,7 +178,10 @@ async function processConversion(
       const attachmentLimit = getDiscordAttachmentLimit(interaction);
       const gifPath = await tempPath('.gif');
       await renderGif(ctx, { attachment, attachmentType, file, options, gifPath });
-      let gif = await fromPath(gifPath, { contentType: 'image/gif', filename: 'gronka.gif' });
+      let gif = await fromPath(gifPath, {
+        contentType: 'image/gif',
+        filename: path.basename(gifPath),
+      });
 
       const lossy = options.lossy ?? null;
       let description;

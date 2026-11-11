@@ -333,10 +333,10 @@ if (!mocksSupported) {
       await handleDownloadCommand(interaction);
       assert.equal(galleryCalls.length - before, 1);
       assert.equal(galleryCalls.at(-1).url, url);
-      assert.deepEqual(
-        calls.editReply[0].files.map(file => file.name),
-        ['gronka.jpg', 'gronka-2.jpg']
-      );
+      const names = calls.editReply[0].files.map(file => file.name);
+      assert.match(names[0], /^[0-9a-f]{32}\.jpg$/);
+      assert.match(names[1], /^[0-9a-f]{32}\.jpg$/);
+      assert.notEqual(names[0], names[1]);
       assert.equal(calls.editReply[0].files[0].attachment[0], 1);
       assert.equal(calls.editReply[0].files[1].attachment[0], 2);
     });

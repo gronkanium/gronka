@@ -88,9 +88,7 @@ async function deliverGallery(interaction, ctx, fileData, attachmentLimit) {
   const groups = [[...(batches[0] ?? []), ...linked], ...batches.slice(1)];
   let followUp = false;
   for (const group of groups) {
-    const items = await Promise.all(
-      group.map(item => storedReplyItem(item, { index: stored.indexOf(item) }))
-    );
+    const items = await Promise.all(group.map(item => storedReplyItem(item)));
     for (const batch of mediaReplyBatches(items)) {
       const payload = mediaReplyPayload(batch);
       const send = followUp ? safeInteractionFollowUp : safeInteractionEditReply;

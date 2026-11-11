@@ -21,7 +21,7 @@ export async function optimizeToJob(gif, lossy = null) {
   await optimizeGif(gif.path, outputPath, lossy === null ? {} : { lossy });
   const optimized = await fromPath(outputPath, {
     contentType: 'image/gif',
-    filename: 'gronka.gif',
+    filename: path.basename(outputPath),
   });
   return optimized.size < gif.size ? optimized : gif;
 }

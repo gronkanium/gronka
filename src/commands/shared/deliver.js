@@ -6,7 +6,7 @@ import { AppError, describeCause } from '../../utils/errors.js';
 import { safeInteractionEditReply } from '../../utils/interaction-helpers.js';
 import { succeed } from '../../utils/operations-tracker.js';
 import { detectFileType, resolveTtlHoursForSize } from '../../utils/storage.js';
-import { isR2Configured, uploadMediaToR2 } from '../../utils/r2-storage.js';
+import { isR2Configured, randomFileName, uploadMediaToR2 } from '../../utils/r2-storage.js';
 import { fitsDiscordAttachment } from './attachment-limit.js';
 import { mediaReplyPayload } from './media-reply.js';
 import { jobSignal } from '../../utils/media-file.js';
@@ -67,10 +67,8 @@ export async function toR2(stored) {
   return { ...stored, url: await uploadMediaToR2(stored.type, stored.file, stored.ext, r2Config) };
 }
 
-export const attachmentFor = (stored, index = 0) =>
-  new AttachmentBuilder(stored.file.path, {
-    name: `gronka${index ? `-${index + 1}` : ''}${stored.ext}`,
-  });
+export const attachmentFor = stored =>
+  new AttachmentBuilder(stored.file.path, { name: randomFileName(stored.ext) });
 
 export function finishCommand() {
   succeed();
@@ -86,9 +84,8 @@ export async function deliverReply(interaction, payload) {
   return message;
 }
 
-export async function storedReplyItem(stored, { name, index = 0, description } = {}) {
-  const attachment = stored.fits ? attachmentFor(stored, index) : null;
-  if (name && attachment) attachment.setName(name);
+export async function storedReplyItem(stored, { description } = {}) {
+  const attachment = stored.fits ? attachmentFor(stored) : null;
   return {
     url: stored.fits ? null : stored.url,
     attachment,

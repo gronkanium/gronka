@@ -185,13 +185,15 @@ export const MEDIA_PREFIXES = {
   audio: 'audio',
 };
 
-// Random, so a link says nothing about the file and cannot be derived from it.
+// Random, so a link or file name says nothing about the file and cannot be derived from it.
+export const randomFileName = ext => `${randomBytes(16).toString('hex')}${ext}`;
+
 export function newMediaKey(type, extension) {
   const dir = MEDIA_PREFIXES[type];
   if (!dir) throw new Error(`Unknown file type: ${type}`);
   const safe = extension.replace(/[^a-zA-Z0-9.]/g, '');
   const ext = type === 'gif' ? '.gif' : safe.startsWith('.') ? safe : `.${safe}`;
-  return `${dir}/${randomBytes(16).toString('hex')}${ext}`;
+  return `${dir}/${randomFileName(ext)}`;
 }
 
 export const CONTENT_TYPES = {

@@ -504,7 +504,7 @@ if (!mocksSupported) {
           ['mp3', 'm4a', 'ogg', 'wav', 'flac'].includes(option.value)
         )
       );
-      assert.strictEqual(firstReply(selected.calls).files[0].name, 'track.mp3');
+      assert.match(firstReply(selected.calls).files[0].name, /^[0-9a-f]{32}\.mp3$/);
     });
 
     test('still-image pickers exclude video and audio outputs', async () => {

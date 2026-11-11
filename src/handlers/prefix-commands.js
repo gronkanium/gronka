@@ -24,7 +24,6 @@ const OPTION_ALIASES = {
   end_time: 'end',
   optimize: 'optimize',
   lossy: 'lossy',
-  mp3: 'mp3',
   format: 'format',
   url: 'url',
 };

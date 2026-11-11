@@ -11,19 +11,10 @@ import { safeInteractionReply, safeInteractionDeferReply } from '../utils/intera
 const PREFIX = 'megakey:';
 
 // Everything the submit needs rides in the custom id, so there is no session to expire.
-export async function promptForMegaKey(
-  interaction,
-  fileId,
-  commandSource,
-  startTime,
-  duration,
-  audioOnly = false
-) {
+export async function promptForMegaKey(interaction, fileId, commandSource, startTime, duration) {
   const source = commandSource === 'context-menu' ? 'c' : 's';
   const modal = new ModalBuilder()
-    .setCustomId(
-      `${PREFIX}${fileId}:${source}:${startTime ?? ''}:${duration ?? ''}:${audioOnly ? 1 : ''}`
-    )
+    .setCustomId(`${PREFIX}${fileId}:${source}:${startTime ?? ''}:${duration ?? ''}`)
     .setTitle('Mega decryption key');
   const keyInput = new TextInputBuilder()
     .setCustomId('mega_key')
@@ -39,9 +30,7 @@ export async function promptForMegaKey(
 
 export async function handleMegaKeyInteraction(interaction, processDownload) {
   if (!interaction.isModalSubmit() || !interaction.customId.startsWith(PREFIX)) return false;
-  const [fileId, source, start, duration, audio] = interaction.customId
-    .slice(PREFIX.length)
-    .split(':');
+  const [fileId, source, start, duration] = interaction.customId.slice(PREFIX.length).split(':');
   const key = interaction.fields.getTextInputValue('mega_key').match(/[\w-]{43}/)?.[0];
   const url = `https://mega.nz/file/${fileId}#${key}`;
   if (!key || !parseMegaUrl(url)) {
@@ -57,8 +46,7 @@ export async function handleMegaKeyInteraction(interaction, processDownload) {
     url,
     source === 'c' ? 'context-menu' : 'slash',
     start === '' ? null : Number(start),
-    duration === '' ? null : Number(duration),
-    { audioOnly: audio === '1' }
+    duration === '' ? null : Number(duration)
   );
   return true;
 }

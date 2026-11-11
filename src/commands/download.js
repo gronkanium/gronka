@@ -25,7 +25,7 @@ import {
   canRecoverUpload,
 } from './shared/deliver.js';
 import { runMediaCommand } from './shared/run-media-command.js';
-import { acquireMedia, extractAudio } from '../core/acquire-media.js';
+import { acquireMedia } from '../core/acquire-media.js';
 import { dispatchMediaJob } from '../jobs/dispatch.js';
 import {
   resolveTimeOptions,
@@ -34,7 +34,6 @@ import {
   commandSourceOf,
 } from './shared/command-guards.js';
 import { trimItem } from '../utils/video-processor.js';
-import { sendConvertedFile } from './shared/send-converted.js';
 import {
   safeInteractionEditReply,
   safeInteractionFollowUp,
@@ -159,18 +158,6 @@ export async function processDownload(
       url = acquired.url;
       const { fileData } = acquired;
 
-      if (galleryOptions.audioOnly) {
-        const { file, baseName, format } = await extractAudio(fileData, {
-          startTime,
-          duration,
-        });
-        await sendConvertedFile(
-          interaction,
-          { ...ctx, discordAttachmentLimit: attachmentLimit },
-          { file, format, baseName }
-        );
-        return finishCommand();
-      }
       if (fileData?.archive) {
         return deliverArchive(interaction, ctx, fileData, attachmentLimit);
       }
@@ -189,7 +176,7 @@ export async function processDownload(
       errorFallback: 'something broke on our end with this download. it has been logged.',
       context: {
         originalUrl: url,
-        commandOptions: { startTime, duration, mp3: galleryOptions.audioOnly },
+        commandOptions: { startTime, duration },
       },
     }
   );
@@ -264,7 +251,6 @@ export async function handleDownloadCommand(interaction) {
     return;
   }
   const url = await prepareLink(read.url);
-  const audioOnly = interaction.options.getBoolean('mp3') === true;
 
   const times = await resolveTimeOptions(interaction, { type: 'download' });
   if (times === null) {
@@ -297,14 +283,7 @@ export async function handleDownloadCommand(interaction) {
     return;
   }
   if (megaFileId) {
-    await promptForMegaKey(
-      interaction,
-      megaFileId,
-      commandSource,
-      trimStart,
-      trimDuration,
-      audioOnly
-    );
+    await promptForMegaKey(interaction, megaFileId, commandSource, trimStart, trimDuration);
     return;
   }
 
@@ -312,5 +291,5 @@ export async function handleDownloadCommand(interaction) {
     return;
   }
   await safeInteractionDeferReply(interaction);
-  await queueDownload(interaction, url, commandSource, trimStart, trimDuration, { audioOnly });
+  await queueDownload(interaction, url, commandSource, trimStart, trimDuration);
 }

@@ -180,12 +180,6 @@ const commands = [
         type: 3, // STRING type (accepts seconds or MM:SS / HH:MM:SS timestamps)
         required: false,
       },
-      {
-        name: 'mp3',
-        description: 'send just the audio as an mp3',
-        type: 5, // BOOLEAN type
-        required: false,
-      },
     ],
     default_member_permissions: null, // Available to everyone
     dm_permission: true, // Enable in DMs

@@ -15,7 +15,7 @@ every slash command also works as a message: mention the bot, then the command. 
 
 **usage:**
 
-- options go after the command as `key=value` pairs: `optimize`, `lossy`, `start`, `end`, `format`, `mp3`
+- options go after the command as `key=value` pairs: `optimize`, `lossy`, `start`, `end`, `format`
 - `convert` and `optimize` take a url or an attachment on your message (in dms, also one on the message you reply to)
 - a bare mention shows a short prompt; `help` shows commands and options
 - unknown commands after a mention get a pointer to help; unknown commands after the dm prefix are ignored
@@ -72,7 +72,6 @@ download media from a social media url or direct url.
 - `url` (string, required) - url to download media from
 - `start` (string, optional) - start time for video trimming, as seconds (`90`, `12.5`) or a timestamp (`3:10`, `1:02:30`) (only applies to videos, ignored for images/gifs)
 - `end` (string, optional) - end time for video trimming, as seconds (`90`, `12.5`) or a timestamp (`3:10`, `1:02:30`) (only applies to videos, ignored for images/gifs)
-- `mp3` (boolean, optional) - send just the audio as an mp3 instead of the video. works with any source that has sound, and respects `start`/`end`
 
 **usage:**
 

@@ -124,7 +124,6 @@ async function tellInterrupted(job) {
     options: {
       startTime: job.args?.startTime,
       duration: job.args?.duration,
-      mp3: job.args?.galleryOptions?.audioOnly,
     },
   });
   await queue.deleteJob(job.id).catch(warn(`Could not delete job ${job.id}`));

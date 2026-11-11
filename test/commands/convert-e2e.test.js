@@ -497,34 +497,20 @@ if (!mocksSupported) {
       assert.strictEqual(selected.calls.reply[0].flags, MessageFlags.Ephemeral);
     });
 
-    test('a public prefix picker checks the invoking message author without storing a user id', async () => {
-      const { interaction, calls } = commandInteraction('cv-owner', {
+    test('a picker reached from a public message is refused and stays usable', async () => {
+      const { interaction, calls } = commandInteraction('cv-public', {
         file: attachmentOf('vid'),
         format: null,
       });
-      interaction.isPrefixCommand = true;
-      interaction.channelId = 'prefix-channel';
-      interaction.message = { id: 'prefix-source', author: interaction.user };
-      interaction.replyMessageId = () => 'prefix-placeholder';
       const work = handleConvertCommand(interaction);
       const menu = await pickerFor(calls);
-      const selected = pickerInteraction(menu, 'gif', { ephemeral: false });
-      selected.interaction.channel.messages.fetch = async () => interaction.message;
-      selected.interaction.user.id = 'someone-else';
+      const outsider = pickerInteraction(menu, 'gif', { ephemeral: false });
+      await handleConvertInteraction(outsider.interaction);
+      assert.match(outsider.calls.reply[0].content, /run convert again/);
+      const selected = pickerInteraction(menu, 'gif');
       await handleConvertInteraction(selected.interaction);
-      assert.match(selected.calls.reply[0].content, /only the person/);
-      const [, , id, token] = selected.interaction.customId.split(':');
-      const { getConvertPicker } = await import('../../src/utils/database/media-jobs-pg.js');
-      const job = await getConvertPicker(id, token);
-      assert.ok(
-        !JSON.stringify({ args: job.args, reply: job.reply }).includes(interaction.user.id)
-      );
-      const owner = pickerInteraction(menu, 'gif', { ephemeral: false });
-      owner.interaction.user.id = interaction.user.id;
-      owner.interaction.channel.messages.fetch = async () => interaction.message;
-      await handleConvertInteraction(owner.interaction);
       await work;
-      assert.ok(isGif(firstReply(owner.calls).files[0].attachment));
+      assert.ok(isGif(firstReply(selected.calls).files[0].attachment));
     });
 
     test('generic MIME and an extensionless filename are classified by actual media streams', async () => {

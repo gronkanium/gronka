@@ -22,12 +22,7 @@ import { optimizeToJob } from '../utils/gif-optimizer.js';
 import { runMediaCommand } from './shared/run-media-command.js';
 import { sendConvertedFile } from './shared/send-converted.js';
 import { ValidationError, withCause } from '../utils/errors.js';
-import {
-  resolveTimeOptions,
-  refuse,
-  commandSourceOf,
-  missingInputRefusal,
-} from './shared/command-guards.js';
+import { resolveTimeOptions, refuse } from './shared/command-guards.js';
 import { safeInteractionDeferReply } from '../utils/interaction-helpers.js';
 import { storeMedia, deliverStored, finishCommand } from './shared/deliver.js';
 import { formatSizeChange } from './shared/media-reply.js';
@@ -423,7 +418,7 @@ export async function startConvert(
 }
 
 export async function handleConvertCommand(interaction) {
-  const commandSource = commandSourceOf(interaction);
+  const commandSource = 'slash';
 
   const attachment = interaction.options.getAttachment('file');
   const rawUrl = interaction.options.getString('link');
@@ -437,22 +432,14 @@ export async function handleConvertCommand(interaction) {
   const lossy = interaction.options.getNumber('lossy') ?? undefined;
 
   if (!attachment && !url) {
-    if (commandSource === 'slash') {
-      const { startTime, duration } = times;
-      await askForInput(interaction, 'convert', CONVERT_UPLOAD, [
-        format,
-        startTime,
-        duration,
-        optimize ? 1 : '',
-        lossy,
-      ]);
-      return;
-    }
-    await refuse(interaction, 'convert', {
-      ...missingInputRefusal(interaction, 'convert', MISSING_INPUT),
-      reason: 'missing_input',
-      context: { commandSource, commandOptions: { format, ...times } },
-    });
+    const { startTime, duration } = times;
+    await askForInput(interaction, 'convert', CONVERT_UPLOAD, [
+      format,
+      startTime,
+      duration,
+      optimize ? 1 : '',
+      lossy,
+    ]);
     return;
   }
 

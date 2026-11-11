@@ -100,7 +100,6 @@ function getBotConfig() {
     // Media jobs go to worker processes through Postgres; off runs them in the bot process.
     mediaWorkers: getStringEnv('MEDIA_WORKERS', 'false').toLowerCase() === 'true',
     statsCacheTtl: parseIntEnv('STATS_CACHE_TTL', 300000, 0), // 5 minutes default, 0 to disable
-    commandPrefix: getStringEnv('COMMAND_PREFIX', '^g'), // default prefix for message (prefix) commands; guilds can override via "@bot prefix"
   };
 
   return _botConfig;

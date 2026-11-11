@@ -32,12 +32,7 @@ import {
 import { runMediaCommand } from './shared/run-media-command.js';
 import { acquireMedia } from '../core/acquire-media.js';
 import { dispatchMediaJob } from '../jobs/dispatch.js';
-import {
-  resolveTimeOptions,
-  refuse,
-  replyError,
-  commandSourceOf,
-} from './shared/command-guards.js';
+import { resolveTimeOptions, refuse, replyError } from './shared/command-guards.js';
 import { trimItem } from '../utils/video-processor.js';
 import {
   safeInteractionEditReply,
@@ -294,7 +289,7 @@ export async function handleDownloadContextMenuCommand(interaction, pending) {
 }
 
 export async function handleDownloadCommand(interaction) {
-  const commandSource = commandSourceOf(interaction);
+  const commandSource = 'slash';
 
   const rawUrl = interaction.options.getString('link');
   const read = readLink(rawUrl, 'please provide a URL to download from.');
@@ -326,15 +321,6 @@ export async function handleDownloadCommand(interaction) {
   }
 
   const megaFileId = keylessMegaFileId(url);
-  if (megaFileId && interaction.isPrefixCommand) {
-    const message = 'send the full mega link including the key (the part after #).';
-    await refuse(interaction, 'download', {
-      message,
-      reason: 'missing_input',
-      context: { originalUrl: url, commandSource },
-    });
-    return;
-  }
   if (megaFileId) {
     await promptForMegaKey(interaction, megaFileId, commandSource, trimStart, trimDuration);
     return;

@@ -1,24 +1,4 @@
-all available commands and context menu options in gronka.
-
-## message commands
-
-every slash command also works as a message: mention the bot, then the command. gronka doesn't use discord's message content intent, so in a server it only sees messages that mention it. in dms the prefix `^g` (`COMMAND_PREFIX`) works too.
-
-```
-@gronka download https://twitter.com/user/status/123
-@gronka convert https://example.com/video.mp4 start=0:05 end=0:10
-@gronka optimize lossy=50        (with a gif attached)
-@gronka info
-@gronka help
-^g download https://twitter.com/user/status/123        (dms only)
-```
-
-**usage:**
-
-- options go after the command as `key=value` pairs: `optimize`, `lossy`, `start`, `end`, `format`
-- `convert` and `optimize` take a url or an attachment on your message (in dms, also one on the message you reply to)
-- a bare mention shows a short prompt; `help` shows commands and options
-- unknown commands after a mention get a pointer to help; unknown commands after the dm prefix are ignored
+all available commands and context menu options in gronka. gronka works through slash commands and context menus only; mentioning it does nothing.
 
 ## slash commands
 
@@ -41,7 +21,7 @@ convert video, audio or images to a compatible format.
 2. without `format`, choose a compatible output from the picker
 3. the converted file is posted to chat, or delivered as a link when it exceeds the attachment limit
 
-slash-command and context-menu pickers are private. message-command pickers appear in chat and only the person who invoked the command can use them. a picker expires after five minutes or can be cancelled. temporary files are removed when the request finishes, expires or is cancelled.
+pickers are private. a picker expires after five minutes or can be cancelled. temporary files are removed when the request finishes, expires or is cancelled.
 
 | input | available outputs |
 | --- | --- |

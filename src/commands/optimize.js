@@ -7,7 +7,7 @@ import { curatedErrorMessage } from './shared/command-errors.js';
 import { isGifFile, optimizeToJob } from '../utils/gif-optimizer.js';
 import { runMediaCommand } from './shared/run-media-command.js';
 import { getDiscordAttachmentLimit } from './shared/attachment-limit.js';
-import { refuse, commandSourceOf, missingInputRefusal } from './shared/command-guards.js';
+import { refuse } from './shared/command-guards.js';
 import { safeInteractionDeferReply } from '../utils/interaction-helpers.js';
 import { storeMedia, deliverStored, finishCommand } from './shared/deliver.js';
 import { fetchInput } from './shared/media-input.js';
@@ -193,7 +193,7 @@ export async function handleOptimizeCommand(interaction) {
   const rawUrl = interaction.options.getString('link');
   const url = attachment ? null : (firstUrlIn(rawUrl) ?? rawUrl);
   const lossyLevel = interaction.options.getNumber('lossy');
-  const commandSource = commandSourceOf(interaction);
+  const commandSource = 'slash';
   const context = { commandSource };
 
   if (lossyLevel !== null && (lossyLevel < 0 || lossyLevel > 100)) {
@@ -205,15 +205,7 @@ export async function handleOptimizeCommand(interaction) {
     return;
   }
   if (!attachment && !url) {
-    if (commandSource === 'slash') {
-      await askForInput(interaction, 'optimize', GIF_UPLOAD, [lossyLevel]);
-      return;
-    }
-    await refuse(interaction, 'optimize', {
-      ...missingInputRefusal(interaction, 'optimize', MISSING_INPUT),
-      reason: 'missing_input',
-      context,
-    });
+    await askForInput(interaction, 'optimize', GIF_UPLOAD, [lossyLevel]);
     return;
   }
   await startOptimize(interaction, { attachment, url, lossyLevel, commandSource });

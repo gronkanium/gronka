@@ -22,7 +22,7 @@ async function insertJob({ status, attempts = 0, heartbeatAge = 0, token }) {
     INSERT INTO media_jobs (kind, args, reply, status, attempts, worker, created_at,
                             timestamp, heartbeat_at)
     VALUES ('optimize', ${sql.json({ attachment: pngAttachment, commandSource: 'slash' })},
-            ${sql.json({ kind: 'interaction', appId: 'app', token, expiresAt: now + 600_000 })},
+            ${sql.json({ appId: 'app', token, expiresAt: now + 600_000 })},
             ${status}, ${attempts}, ${status === 'running' ? 'dead-worker' : null},
             ${now}, ${now}, ${status === 'running' ? now - heartbeatAge : null})
     RETURNING id

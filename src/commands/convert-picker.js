@@ -111,15 +111,7 @@ export async function handleConvertInteraction(interaction) {
       await reply(expired);
       return true;
     }
-    if (job.reply.kind === 'message') {
-      const original = await interaction.channel?.messages
-        .fetch(job.reply.messageId)
-        .catch(() => null);
-      if (!original || original.author?.id !== interaction.user.id) {
-        await reply('only the person who ran convert can use this picker.');
-        return true;
-      }
-    } else if (!interaction.message?.flags?.has(MessageFlags.Ephemeral)) {
+    if (!interaction.message?.flags?.has(MessageFlags.Ephemeral)) {
       await reply('run convert again to open your own picker.');
       return true;
     }

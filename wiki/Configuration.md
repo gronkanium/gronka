@@ -14,7 +14,6 @@ nothing about who uses it. files are processed in a temporary folder and deleted
 | --- | --- | --- |
 | `PROD_DISCORD_TOKEN` / `TEST_DISCORD_TOKEN` | | bot token from the developer portal |
 | `PROD_CLIENT_ID` / `TEST_CLIENT_ID` | | application id |
-| `COMMAND_PREFIX` | `^g` | prefix for message commands in dms; in servers, mention the bot |
 | `SUPPORT_INVITE_URL` | | your support server, shown in `/info`; leave empty to show none |
 
 ## media

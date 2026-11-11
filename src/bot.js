@@ -19,7 +19,6 @@ import { handleInfoCommand } from './commands/info.js';
 import { handleModalSubmit } from './handlers/modals.js';
 import { handleMangaInteraction } from './commands/manga.js';
 import { handleMegaKeyInteraction } from './commands/mega-key.js';
-import { handlePrefixMessage } from './handlers/prefix-commands.js';
 import { flushCounts } from './utils/operations-tracker.js';
 import { initializeR2UsageCache } from './utils/storage.js';
 import { r2Config } from './utils/config.js';
@@ -60,12 +59,8 @@ setInterval(() => {
 
 const client = new Client({
   allowedMentions: { parse: [], repliedUser: true },
-  intents: [
-    GatewayIntentBits.Guilds,
-    GatewayIntentBits.GuildMessages,
-    GatewayIntentBits.DirectMessages, // Required for DM support
-  ],
-  partials: [Partials.Channel], // Required to receive MessageCreate in DMs (prefix commands)
+  intents: [GatewayIntentBits.Guilds],
+  partials: [Partials.Channel], // resolves interaction.channel in DMs and user installs
   rest: { timeout: DISCORD_REST_TIMEOUT_MS },
 });
 
@@ -332,16 +327,6 @@ async function handleInteraction(interaction) {
     logger.error('Unhandled error in interaction handler:', error);
   }
 }
-
-// Prefix commands ("^download <url>", "@gronka help", ...). The handler does its own
-// bot/webhook filtering, ban/maintenance checks, and per-guild prefix resolution.
-client.on(Events.MessageCreate, async message => {
-  try {
-    await handlePrefixMessage(message, { botStartTime });
-  } catch (error) {
-    logger.error('Unhandled error in message handler:', error);
-  }
-});
 
 client.on(Events.Error, error => {
   logger.error('Discord error:', error);

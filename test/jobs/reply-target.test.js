@@ -54,7 +54,6 @@ describe('job reply targets', () => {
   test('an expired public interaction edits the same message with bot authentication', async () => {
     const interaction = await interactionFor(client, {
       reply: {
-        kind: 'interaction',
         appId: 'app',
         token: 'tok',
         channelId: '77',
@@ -68,7 +67,6 @@ describe('job reply targets', () => {
     assert.deepStrictEqual(edit.files, [{ name: 'out.gif', size: 12 }]);
     await interaction.followUp({ content: 'part two' });
     assert.strictEqual(api.calls.at(-1).path, '/channels/77/messages');
-    assert.strictEqual(interaction.isPrefixCommand, undefined);
   });
 
   test('an interaction target round-trips through the queue JSON', () => {
@@ -81,7 +79,6 @@ describe('job reply targets', () => {
     };
     const target = JSON.parse(JSON.stringify(replyTargetOf(interaction)));
     assert.deepStrictEqual(target, {
-      kind: 'interaction',
       appId: 'app',
       token: 'tok',
       channelId: '5',
@@ -90,25 +87,17 @@ describe('job reply targets', () => {
     });
   });
 
-  test('a channel without Attach Files queues a zero limit for both kinds', async () => {
+  test('a channel without Attach Files queues a zero limit the worker keeps', async () => {
     const appPermissions = new PermissionsBitField(PermissionFlagsBits.SendMessages);
-    const slash = replyTargetOf({ appPermissions, attachmentSizeLimit: 10, createdTimestamp: 0 });
-    assert.strictEqual(slash.attachmentSizeLimit, 0);
-    const prefix = replyTargetOf({
-      isPrefixCommand: true,
-      appPermissions,
-      channelId: '77',
-      message: { id: '10' },
-      replyMessageId: () => '11',
-    });
-    assert.strictEqual(prefix.attachmentSizeLimit, 0);
-    const worker = await interactionFor(client, { reply: JSON.parse(JSON.stringify(prefix)) });
+    const target = replyTargetOf({ appPermissions, attachmentSizeLimit: 10, createdTimestamp: 0 });
+    assert.strictEqual(target.attachmentSizeLimit, 0);
+    const worker = await interactionFor(client, { reply: JSON.parse(JSON.stringify(target)) });
     assert.strictEqual(getDiscordAttachmentLimit(worker, 8), 0);
   });
 
   test('a worker edits the original interaction reply with a file by path', async () => {
     const job = {
-      reply: { kind: 'interaction', appId: 'app', token: 'tok', channelId: '5' },
+      reply: { appId: 'app', token: 'tok', channelId: '5' },
     };
     const interaction = await interactionFor(client, job);
     const sent = await safeInteractionEditReply(interaction, {
@@ -125,7 +114,6 @@ describe('job reply targets', () => {
   test('token rejection recovers through the existing public message', async () => {
     const interaction = await interactionFor(client, {
       reply: {
-        kind: 'interaction',
         appId: 'app',
         token: 'expired',
         channelId: '77',
@@ -141,7 +129,6 @@ describe('job reply targets', () => {
   test('a permission rejection is not redirected to a channel message', async () => {
     const interaction = await interactionFor(client, {
       reply: {
-        kind: 'interaction',
         appId: 'app',
         token: 'denied',
         channelId: '77',
@@ -158,45 +145,12 @@ describe('job reply targets', () => {
   });
 
   test('a worker follows up on an interaction', async () => {
-    const job = { reply: { kind: 'interaction', appId: 'app', token: 'tok' } };
+    const job = { reply: { appId: 'app', token: 'tok' } };
     const interaction = await interactionFor(client, job);
     await interaction.followUp({ content: 'part two' });
     const call = api.calls.at(-1);
     assert.strictEqual(call.method, 'POST');
     assert.strictEqual(call.path, '/webhooks/app/tok');
     assert.strictEqual(call.body.content, 'part two');
-  });
-
-  test('a worker edits a prefix command placeholder and replies to the command', async () => {
-    const job = {
-      reply: { kind: 'message', channelId: '77', messageId: '10', replyId: '11' },
-    };
-    const interaction = await interactionFor(client, job);
-    assert.strictEqual(interaction.deferred, true);
-    await safeInteractionEditReply(interaction, { content: 'done' });
-    const edit = api.calls.at(-1);
-    assert.strictEqual(edit.method, 'PATCH');
-    assert.strictEqual(edit.path, '/channels/77/messages/11');
-    assert.strictEqual(edit.body.content, 'done');
-    await interaction.followUp({ content: 'more' });
-    const followUp = api.calls.at(-1);
-    assert.strictEqual(followUp.path, '/channels/77/messages');
-    assert.strictEqual(followUp.body.message_reference.message_id, '10');
-  });
-
-  test('a worker can edit a prefix reply repeatedly without a cached channel', async () => {
-    const interaction = await interactionFor(client, {
-      reply: { kind: 'message', channelId: '77', messageId: '10', replyId: '11' },
-    });
-    client.channels.cache.delete('77');
-    await interaction.editReply({ content: 'processing...' });
-    const sent = await interaction.editReply({
-      content: 'choose an output format',
-      files: [new AttachmentBuilder(file, { name: 'out.gif' })],
-    });
-    assert.strictEqual(api.calls.at(-1).path, '/channels/77/messages/11');
-    assert.ok(sent.attachments.first().url.endsWith('/out.gif'));
-    await interaction.editReply({ content: 'done' });
-    assert.strictEqual(api.calls.at(-1).body.content, 'done');
   });
 });

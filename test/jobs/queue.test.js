@@ -7,7 +7,6 @@ import { setSetting } from '../../src/utils/database/settings-pg.js';
 
 let sql;
 const reply = (extra = {}) => ({
-  kind: 'interaction',
   appId: 'a',
   token: 't',
   expiresAt: Date.now() + 10 * 60_000,

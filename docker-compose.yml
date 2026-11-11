@@ -120,6 +120,8 @@ services:
     pull_policy: never
     entrypoint: ['contain.sh', 'bun', 'src/worker.js']
     restart: unless-stopped
+    # bun runs as PID 1 and never reaps orphans; an ffmpeg it lost track of sat as a zombie for days.
+    init: true
     mem_limit: ${WORKER_MEM_LIMIT:-3g}
     # Room to finish what it holds; anything left is handed back to the queue before exit.
     stop_grace_period: 2m

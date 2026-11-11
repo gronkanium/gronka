@@ -1,6 +1,6 @@
 import { test, describe, expect, beforeAll } from 'bun:test';
 import { createHandler } from '../../src/web-server.js';
-import { ensureWebSchema } from '../../src/web/keys.js';
+import { ensureWebSchema } from '../../src/utils/database/web-keys-pg.js';
 import { AppError, NetworkError, ValidationError } from '../../src/utils/errors.js';
 import { rng, junk, SEED, ITERATIONS, describeCase, ASCII } from './rng.js';
 

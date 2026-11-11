@@ -23,16 +23,20 @@ const postJsonApiUrl = (host, postId) => `https://${host}/posts/${postId}.json`;
 const moebooruApiUrl = (host, postId) => `https://${host}/post.json?tags=id:${postId}`;
 const moebooruFileUrl = json => (Array.isArray(json) ? (json[0]?.file_url ?? null) : null);
 
-const BOORU_SITES = [
+export const BOORU_SITES = [
   {
+    id: 'danbooru',
     name: 'danbooru',
+    label: 'Danbooru',
     hosts: ['danbooru.donmai.us'],
     buildApiUrl: postJsonApiUrl,
     // { ..., file_url: "https://cdn.donmai.us/original/.../<md5>.<ext>" }
     pickFileUrl: json => json.file_url || null,
   },
   {
+    id: 'e621',
     name: 'e621',
+    label: 'e621 / e926',
     hosts: ['e621.net', 'e926.net'],
     buildApiUrl: postJsonApiUrl,
     // { post: { file: { url: "https://static1.e621.net/data/.../<md5>.<ext>" } } }
@@ -47,14 +51,18 @@ const BOORU_SITES = [
     },
   },
   {
+    id: 'yandere',
     name: 'yande.re',
+    label: 'yande.re',
     hosts: ['yande.re'],
     buildApiUrl: moebooruApiUrl,
     // [ { ..., file_url: "https://files.yande.re/image/<md5>/yande.re%20<id>%20<tags>.<ext>" } ]
     pickFileUrl: moebooruFileUrl,
   },
   {
+    id: 'konachan',
     name: 'konachan',
+    label: 'Konachan',
     hosts: ['konachan.com', 'konachan.net'],
     buildApiUrl: moebooruApiUrl,
     // [ { ..., file_url: "https://konachan.com/image/<md5>/Konachan.com%20-%20<id>%20<tags>.<ext>" } ]

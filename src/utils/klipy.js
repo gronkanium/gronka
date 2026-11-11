@@ -3,17 +3,16 @@ import { ValidationError } from './errors.js';
 import { getRequestHeaders } from './discord-cdn.js';
 import { downloadFileFromUrl } from './file-downloader.js';
 import { fetchPage } from './ssrf-guard.js';
+import { normalizeHost, hostUnder } from './url-host.js';
 
 const logger = createLogger('klipy');
-const KLIPY_HOST = /(^|\.)klipy\.com$/i;
+export const KLIPY_HOSTS = ['klipy.com'];
 const KLIPY_PAGE_PATH = /^\/(?:gifs?|stickers?|memes?)\//i;
 
 export function isKlipyUrl(url) {
   try {
     const { hostname, pathname } = new URL(url);
-    return (
-      (hostname === 'klipy.com' || hostname === 'www.klipy.com') && KLIPY_PAGE_PATH.test(pathname)
-    );
+    return KLIPY_HOSTS.includes(normalizeHost(hostname)) && KLIPY_PAGE_PATH.test(pathname);
   } catch {
     return false;
   }
@@ -31,7 +30,7 @@ function isKlipyMediaUrl(url) {
   if (typeof url !== 'string') return false;
   try {
     const { hostname, protocol } = new URL(url);
-    return protocol === 'https:' && KLIPY_HOST.test(hostname);
+    return protocol === 'https:' && hostUnder(hostname, KLIPY_HOSTS);
   } catch {
     return false;
   }

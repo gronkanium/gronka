@@ -2,10 +2,34 @@ import { test, expect, describe, beforeAll } from 'bun:test';
 import * as keys from '../../src/web/keys.js';
 import { createHandler } from '../../src/web-server.js';
 import { getPostgresConnection } from '../../src/utils/database/connection.js';
+import { ensureWebSchema } from '../../src/utils/database/web-keys-pg.js';
 
 process.env.WEB_PEPPER ??= 'test-pepper-test-pepper-test-pepper-0123';
 
-beforeAll(() => keys.ensureWebSchema());
+beforeAll(() => ensureWebSchema());
+
+describe('web schema', () => {
+  test('an account-era database loses its account data once and keeps its keys', async () => {
+    const sql = getPostgresConnection();
+    const { id } = await keys.createApiKey();
+    await sql`CREATE TABLE web_accounts (id TEXT PRIMARY KEY)`;
+    await sql`ALTER TABLE web_api_keys ADD COLUMN label TEXT`;
+    await sql`DELETE FROM schema_migrations WHERE name = 'drop_web_accounts'`;
+    const exists = async () =>
+      (await sql`SELECT to_regclass('web_accounts') IS NOT NULL AS exists`)[0].exists;
+
+    await ensureWebSchema();
+    expect(await exists()).toBe(false);
+    const [row] = await sql`SELECT * FROM web_api_keys WHERE id = ${id.slice(3)}`;
+    expect(Object.keys(row).sort()).toEqual(['id', 'secret_hash']);
+
+    await sql`CREATE TABLE web_accounts (id TEXT PRIMARY KEY)`;
+    await ensureWebSchema();
+    expect(await exists()).toBe(true);
+    await sql`DROP TABLE web_accounts`;
+    await keys.revokeApiKey(id.slice(3));
+  });
+});
 
 describe('api keys', () => {
   test('a key verifies, a tampered one does not, and only its keyed hash is stored', async () => {

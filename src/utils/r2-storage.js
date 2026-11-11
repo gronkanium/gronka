@@ -11,8 +11,7 @@ import { createLogger } from './logger.js';
 // A leaf DB module, not the ./database.js barrel: storage.js imports this file.
 import { readSetting, SETTINGS } from './settings.js';
 import { AppError, NetworkError, ValidationError, withCause, describeCause } from './errors.js';
-import { jobSignal, jobRemainingMs } from './media-file.js';
-import { OUTPUT_FORMATS } from './output-formats.js';
+import { jobSignal, jobRemainingMs, typeForExtension } from './media-file.js';
 
 const logger = createLogger('r2-storage');
 
@@ -188,25 +187,18 @@ export const MEDIA_PREFIXES = {
 // Random, so a link or file name says nothing about the file and cannot be derived from it.
 export const randomFileName = ext => `${randomBytes(16).toString('hex')}${ext}`;
 
+export function randomKey(prefix, extension) {
+  const safe = extension.replace(/[^a-zA-Z0-9.]/g, '');
+  const ext = !safe || safe.startsWith('.') ? safe : `.${safe}`;
+  return `${prefix}${randomFileName(ext)}`;
+}
+
 export function newMediaKey(type, extension) {
   const dir = MEDIA_PREFIXES[type];
   if (!dir) throw new Error(`Unknown file type: ${type}`);
-  const safe = extension.replace(/[^a-zA-Z0-9.]/g, '');
-  const ext = type === 'gif' ? '.gif' : safe.startsWith('.') ? safe : `.${safe}`;
-  return `${dir}/${randomFileName(ext)}`;
+  return randomKey(`${dir}/`, type === 'gif' ? '.gif' : extension);
 }
 
-export const CONTENT_TYPES = {
-  ...Object.fromEntries(
-    Object.entries(OUTPUT_FORMATS).map(([ext, spec]) => [`.${ext}`, spec.mime])
-  ),
-  '.gif': 'image/gif',
-  '.mov': 'video/quicktime',
-  '.avi': 'video/x-msvideo',
-  '.mkv': 'video/x-matroska',
-  '.jpeg': 'image/jpeg',
-  '.zip': 'application/zip',
-};
 const FALLBACK_CONTENT_TYPES = { video: 'video/mp4', image: 'image/png' };
 
 export function isR2Configured(config) {
@@ -223,7 +215,7 @@ export async function uploadMediaToR2(type, file, extension, config, contentType
     file,
     key,
     contentType ??
-      CONTENT_TYPES[key.slice(key.lastIndexOf('.')).toLowerCase()] ??
+      typeForExtension(key.slice(key.lastIndexOf('.'))) ??
       FALLBACK_CONTENT_TYPES[type],
     config
   );
@@ -279,6 +271,14 @@ export async function listObjectsInR2(prefix, config) {
     logger.error(`Failed to list objects from R2 (prefix: ${prefix}):`, error.message);
     throw error;
   }
+}
+
+// Deletes the expired keys of a listing; `bytes` is what the listing holds once they are gone.
+export async function deleteExpired(objects, expired, config) {
+  const failed = new Set(await deleteManyFromR2(expired, config));
+  const gone = new Set(expired.filter(key => !failed.has(key)));
+  const bytes = objects.reduce((sum, o) => sum + (gone.has(o.key) ? 0 : o.size), 0);
+  return { deleted: gone.size, failed: failed.size, bytes };
 }
 
 // DeleteObjects takes up to 1000 keys per call; returns the keys R2 refused.

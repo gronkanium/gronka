@@ -174,6 +174,9 @@ export const SITES = [
   })),
 ];
 
+export const siteHosts = (...ids) =>
+  SITES.filter(site => ids.includes(site.id)).flatMap(site => site.hosts);
+
 // The sites one tool downloads, with that tool's own hosts and options merged in.
 export const sitesFor = tool =>
   SITES.filter(site => site[tool]).map(site => ({

@@ -1,5 +1,5 @@
 import { createLogger } from './logger.js';
-import { listMediaInR2, deleteManyFromR2, setR2Usage } from './r2-storage.js';
+import { listMediaInR2, deleteExpired, setR2Usage } from './r2-storage.js';
 import { insertAlert } from './database.js';
 import { readSetting } from './settings.js';
 import { ttlHoursForSize } from './upload-tiers.js';
@@ -16,25 +16,27 @@ export function expiredKeys(objects, tiers, now = Date.now()) {
 export async function deleteExpiredR2Files(config) {
   const tiers = await readSetting('upload_ttl_tiers');
   const objects = await listMediaInR2(config);
-  const expired = expiredKeys(objects, tiers);
-  const failed = new Set(await deleteManyFromR2(expired, config));
-  const gone = new Set(expired.filter(key => !failed.has(key)));
-  setR2Usage(objects.filter(o => !gone.has(o.key)).reduce((sum, o) => sum + o.size, 0));
-  if (failed.size) {
-    logger.error(`R2 cleanup could not delete ${failed.size} object(s)`);
+  const { deleted, failed, bytes } = await deleteExpired(
+    objects,
+    expiredKeys(objects, tiers),
+    config
+  );
+  setR2Usage(bytes);
+  if (failed) {
+    logger.error(`R2 cleanup could not delete ${failed} object(s)`);
     // `error` is what groups this into an issue on the webui Issues page.
     await insertAlert({
       severity: 'warning',
       component: 'r2-cleanup',
       title: 'R2 cleanup: deletions failed',
-      message: `${failed.size} expired object(s) could not be deleted and will be retried`,
+      message: `${failed} expired object(s) could not be deleted and will be retried`,
       metadata: {
         error: 'R2 cleanup could not delete expired files, it retries them on the next run',
-        count: failed.size,
+        count: failed,
       },
     }).catch(error => logger.error(`Failed to insert alert: ${error.message}`));
   }
-  return { deleted: gone.size, failed: failed.size };
+  return { deleted, failed };
 }
 
 export function startCleanupJob(config, intervalMs) {

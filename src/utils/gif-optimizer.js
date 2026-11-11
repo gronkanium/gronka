@@ -4,6 +4,7 @@ import path from 'path';
 import { createLogger } from './logger.js';
 import { AppError, ValidationError, withCause } from './errors.js';
 import { fromPath, tempPath, jobSignal } from './media-file.js';
+import { FFMPEG_TIMEOUT_MS } from './video-processor/utils.js';
 const logger = createLogger('gif-optimizer');
 const OPTIMIZE_FAILED = 'could not optimize this gif, try again.';
 
@@ -59,7 +60,10 @@ export async function optimizeGif(inputPath, outputPath, options = {}) {
 
   try {
     const stderr = await new Promise((resolve, reject) => {
-      const child = spawn('gifsicle', args, { signal: jobSignal(), timeout: 300000 });
+      const child = spawn('gifsicle', args, {
+        signal: jobSignal(),
+        timeout: FFMPEG_TIMEOUT_MS,
+      });
 
       let stderrData = '';
       child.stderr.on('data', data => {

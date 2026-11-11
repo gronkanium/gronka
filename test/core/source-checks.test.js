@@ -4,7 +4,7 @@ import { checkExample, verdict } from '../../src/core/source-checks.js';
 import { SOURCE_EXAMPLES } from '../../src/core/source-examples.js';
 import { routeFor } from '../../src/core/sources.js';
 import { DOWNLOAD_SERVICES } from '../../src/utils/download-services.js';
-import { canonicalizeMirrorUrl } from '../../src/utils/cobalt.js';
+import { canonicalizeMirrorUrl } from '../../src/utils/mirror-links.js';
 import { NetworkError, withCause } from '../../src/utils/errors.js';
 
 const PNG = Buffer.from('89504e470d0a1a0a0000000d49484452', 'hex');

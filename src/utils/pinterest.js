@@ -26,6 +26,8 @@ const MEDIA_HOST = 'pinimg.com';
 const PINTEREST_HOST = /(^|\.)pinterest\.[a-z]{2,}(\.[a-z]{2,})?$/;
 const PIN_PATH = /^\/pin\/\d+/;
 
+export const isPinterestHost = host => host === 'pin.it' || PINTEREST_HOST.test(host);
+
 // Check whether a URL is a Pinterest pin we can extract media from: a /pin/<id> page on any pinterest domain, or a pin.it share link (whose path is an opaque slug)
 export function isPinterestUrl(url) {
   try {

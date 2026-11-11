@@ -4,7 +4,7 @@ import { spawn } from 'child_process';
 import { createLogger } from './logger.js';
 import { NetworkError, ValidationError, withCause, contentGone, timedOut } from './errors.js';
 import { writeZip } from './archive.js';
-import { fromPath, tempDir, jobSignal, watchDirSize } from './media-file.js';
+import { fromPath, tempDir, jobSignal, watchDirSize, typeForExtension } from './media-file.js';
 import { maxDownloadBytes, tooLarge } from './size-limit.js';
 import { mapLimit, ITEM_FANOUT } from './map-limit.js';
 import { hostOf, normalizeHost, hostUnder } from './url-host.js';
@@ -307,7 +307,7 @@ export async function downloadWithGalleryDl(url, options = {}) {
   let total = 0;
   for (const filePath of files.sort((a, b) => a.localeCompare(b, undefined, { numeric: true }))) {
     const file = await fromPath(filePath, {
-      contentType: contentTypeForExtension(path.extname(filePath)),
+      contentType: typeForExtension(path.extname(filePath)) ?? 'video/mp4',
       filename: path.basename(filePath),
     });
     total += file.size;
@@ -318,16 +318,4 @@ export async function downloadWithGalleryDl(url, options = {}) {
     return writeZip(results, 'gallery.zip');
   }
   return results.length === 1 ? results[0] : results;
-}
-
-function contentTypeForExtension(extension) {
-  const ext = extension.toLowerCase();
-  if (ext === '.gif') return 'image/gif';
-  if (ext === '.webp') return 'image/webp';
-  if (ext === '.png') return 'image/png';
-  if (ext === '.jpg' || ext === '.jpeg') return 'image/jpeg';
-  if (ext === '.webm') return 'video/webm';
-  if (ext === '.mov') return 'video/quicktime';
-  if (ext === '.mkv') return 'video/x-matroska';
-  return 'video/mp4';
 }

@@ -1,9 +1,9 @@
-const DRIVE_HOSTS = new Set(['drive.google.com', 'drive.usercontent.google.com']);
+export const DRIVE_HOSTS = ['drive.google.com', 'drive.usercontent.google.com'];
 
 export function googleDriveFileId(url) {
   try {
     const { hostname, pathname, protocol, searchParams } = new URL(url);
-    if (!['http:', 'https:'].includes(protocol) || !DRIVE_HOSTS.has(hostname)) return null;
+    if (!['http:', 'https:'].includes(protocol) || !DRIVE_HOSTS.includes(hostname)) return null;
     const id =
       pathname.match(/^\/file(?:\/u\/\d+)?\/d\/([\w-]+)/)?.[1] ??
       (/^\/(?:open|uc|download)$/.test(pathname) ? searchParams.get('id') : null);

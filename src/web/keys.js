@@ -1,7 +1,6 @@
 import crypto from 'node:crypto';
 import { crc32 } from 'node:zlib';
-import { getPostgresConnection } from '../utils/database/connection.js';
-import { ensurePostgresInitialized } from '../utils/database/init.js';
+import { insertApiKey, getApiKeyHash, deleteApiKey } from '../utils/database/web-keys-pg.js';
 
 // Crockford base32: no I, L, O, U.
 const ALPHABET = '0123456789abcdefghjkmnpqrstvwxyz';
@@ -28,33 +27,11 @@ export function parseApiKey(input) {
   return match && keyChecksum(match[1]) === match[4] ? { id: match[2], secret: match[3] } : null;
 }
 
-export async function ensureWebSchema() {
-  await ensurePostgresInitialized();
-  const sql = getPostgresConnection();
-  await sql`
-    CREATE TABLE IF NOT EXISTS web_api_keys (
-      id TEXT PRIMARY KEY,
-      secret_hash TEXT NOT NULL
-    )`;
-  // Accounts are gone: a key is its id and keyed hash, nothing else. Existing keys keep working.
-  await sql`DROP TABLE IF EXISTS web_sessions, web_recovery_codes, web_passkeys, web_accounts CASCADE`;
-  await sql`
-    ALTER TABLE web_api_keys
-      DROP COLUMN IF EXISTS account_id,
-      DROP COLUMN IF EXISTS label,
-      DROP COLUMN IF EXISTS created_on,
-      DROP COLUMN IF EXISTS last_used_on`;
-}
-
 export async function createApiKey() {
-  const sql = getPostgresConnection();
   const secret = crypto.randomBytes(32).toString('base64url');
   for (;;) {
     const id = Array.from(crypto.randomBytes(KEY_ID_LEN), b => ALPHABET[b & 31]).join('');
-    const rows = await sql`
-      INSERT INTO web_api_keys (id, secret_hash) VALUES (${id}, ${peppered(secret)})
-      ON CONFLICT (id) DO NOTHING RETURNING id`;
-    if (rows.length) {
+    if (await insertApiKey(id, peppered(secret))) {
       const body = `gk_${id}_${secret}`;
       return { id: `gk_${id}`, key: body + keyChecksum(body) };
     }
@@ -65,14 +42,9 @@ export async function verifyApiKey(input) {
   const parsed = parseApiKey(input);
   // The format and checksum are public, so refusing a malformed key early leaks nothing.
   if (!parsed) return null;
-  const sql = getPostgresConnection();
-  const [row] = await sql`SELECT secret_hash FROM web_api_keys WHERE id = ${parsed.id}`;
   const mine = Buffer.from(peppered(parsed.secret), 'hex');
-  const theirs = Buffer.from(String(row?.secret_hash ?? ''), 'hex');
+  const theirs = Buffer.from((await getApiKeyHash(parsed.id)) ?? '', 'hex');
   return mine.length === theirs.length && crypto.timingSafeEqual(mine, theirs) ? parsed.id : null;
 }
 
-export async function revokeApiKey(id) {
-  const sql = getPostgresConnection();
-  await sql`DELETE FROM web_api_keys WHERE id = ${id}`;
-}
+export const revokeApiKey = id => deleteApiKey(id);

@@ -14,15 +14,14 @@ const logger = createLogger('hentaigifz');
 // which reuses the shared SSRF checks, size caps, browser User-Agent, and redirect
 // following. Cloudflare fronts the site and 403s non-browser User-Agents, so the
 // page fetch must send one too (getRequestHeaders() already does).
-const PAGE_HOST = 'hentaigifz.com';
-const MEDIA_HOST = 'hentaigifz.com'; // media lives on cdn.<host> / cdn2.<host>
+export const HENTAIGIFZ_HOSTS = ['hentaigifz.com'];
 
 // Check whether a URL is a hentaigifz.com post page we can extract media from
 export function isHentaiGifzUrl(url) {
   try {
     const { hostname } = new URL(url);
     const host = normalizeHost(hostname);
-    return host === PAGE_HOST;
+    return HENTAIGIFZ_HOSTS.includes(host);
   } catch {
     return false;
   }
@@ -61,7 +60,7 @@ function isMediaHostUrl(url) {
   try {
     const { hostname } = new URL(url);
     const host = hostname.toLowerCase();
-    return hostUnder(host, MEDIA_HOST);
+    return hostUnder(host, HENTAIGIFZ_HOSTS);
   } catch {
     return false;
   }

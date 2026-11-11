@@ -1,7 +1,7 @@
 import axios from 'axios';
 import { createLogger } from '../utils/logger.js';
 import { NetworkError, contentGone } from '../utils/errors.js';
-import { canonicalizeMirrorUrl } from '../utils/cobalt.js';
+import { canonicalizeMirrorUrl } from '../utils/mirror-links.js';
 import { readSessionCookie } from '../utils/session-cookie.js';
 import { MAX_PAGE_BYTES } from '../utils/ssrf-guard.js';
 import { post, comment, thread, MAX_COMMENTS } from './schema.js';

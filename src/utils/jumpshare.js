@@ -1,12 +1,15 @@
 import { NetworkError, ValidationError, withCause } from './errors.js';
 import { getRequestHeaders } from './discord-cdn.js';
 import { fetchPage } from './ssrf-guard.js';
+import { normalizeHost } from './url-host.js';
+
+export const JUMPSHARE_HOSTS = ['jumpshare.com'];
 
 function shareId(url) {
   try {
     const { hostname, pathname, protocol } = new URL(url);
     if (!['http:', 'https:'].includes(protocol)) return null;
-    if (hostname !== 'jumpshare.com' && hostname !== 'www.jumpshare.com') return null;
+    if (!JUMPSHARE_HOSTS.includes(normalizeHost(hostname))) return null;
     return pathname.match(/^\/(?:s|share)\/([A-Za-z0-9]+)\/?$/)?.[1] ?? null;
   } catch {
     return null;

@@ -1,14 +1,16 @@
 import { NetworkError, ValidationError, withCause, contentGone } from './errors.js';
 import { fetchPage } from './ssrf-guard.js';
 import { downloadDirectMedia } from './file-downloader.js';
-import { hostUnder } from './url-host.js';
+import { normalizeHost, hostUnder } from './url-host.js';
+
+export const RULE34_HOSTS = ['rule34.xxx'];
 
 export function rule34PostId(url) {
   try {
     const target = new URL(url);
     if (
       !['http:', 'https:'].includes(target.protocol) ||
-      !['rule34.xxx', 'www.rule34.xxx'].includes(target.hostname) ||
+      !RULE34_HOSTS.includes(normalizeHost(target.hostname)) ||
       target.port ||
       target.username ||
       target.password ||
@@ -34,7 +36,7 @@ function mediaUrl(value) {
     const target = new URL(value.replaceAll('&amp;', '&'), 'https://rule34.xxx/');
     if (
       target.protocol === 'https:' &&
-      hostUnder(target.hostname, 'rule34.xxx') &&
+      hostUnder(target.hostname, RULE34_HOSTS) &&
       !target.port &&
       !target.username &&
       !target.password &&

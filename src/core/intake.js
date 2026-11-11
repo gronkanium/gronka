@@ -1,6 +1,6 @@
 import { firstUrlIn, validateUrl, INVALID_URL_ERROR } from '../utils/validation.js';
 import { resolveShortLink } from '../utils/short-links.js';
-import { canonicalizeMirrorUrl } from '../utils/cobalt.js';
+import { canonicalizeMirrorUrl } from '../utils/mirror-links.js';
 import { isDiscordMessageLink, DISCORD_MESSAGE_LINK_MESSAGE } from '../utils/discord-cdn.js';
 import { chainFor } from './sources.js';
 

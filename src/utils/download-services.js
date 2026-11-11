@@ -1,6 +1,6 @@
 import { readSetting } from './settings.js';
 import { hostOf, hostUnder } from './url-host.js';
-import { canonicalizeMirrorUrl } from './cobalt.js';
+import { canonicalizeMirrorUrl } from './mirror-links.js';
 import { ROUTES } from '../core/sources.js';
 import { SITES } from '../core/sites.js';
 
@@ -19,10 +19,14 @@ export const DOWNLOAD_SERVICES = [
 /** Set of valid service ids, for validating the disabled_services setting. */
 export const DOWNLOAD_SERVICE_IDS = new Set(DOWNLOAD_SERVICES.map(s => s.id));
 
+// A switch's hosts are a list, or a test for the hosts no list can name (pinterest's regional domains).
+const covers = (hosts, host) =>
+  typeof hosts === 'function' ? hosts(host) : hostUnder(host, hosts);
+
 export function getServiceForUrl(url) {
   const hostname = hostOf(canonicalizeMirrorUrl(url));
   if (!hostname) return null;
-  return DOWNLOAD_SERVICES.find(service => hostUnder(hostname, service.hosts)) || null;
+  return DOWNLOAD_SERVICES.find(service => covers(service.hosts, hostname)) || null;
 }
 
 // If the URL belongs to a service that has been turned off in the webui, return that service's display label; otherwise null

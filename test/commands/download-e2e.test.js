@@ -94,9 +94,8 @@ if (!mocksSupported) {
         return `https://cdn.test/${realR2.newMediaKey(type, ext)}`;
       },
     }));
-    const { canonicalizeMirrorUrl, isSocialMediaUrl } = await import('../../src/utils/cobalt.js');
+    const { isSocialMediaUrl } = await import('../../src/utils/cobalt.js');
     mock.module('../../src/utils/cobalt.js', () => ({
-      canonicalizeMirrorUrl,
       isSocialMediaUrl,
       getCobaltMediaUrls: async (_apiUrl, url) => {
         if (url.includes('photo-links')) {

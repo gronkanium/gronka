@@ -7,11 +7,8 @@ import {
   soundcloudTrack,
   tagAudio,
 } from '../utils/soundcloud.js';
-import {
-  getCobaltMediaUrls,
-  getRemoteContentLength,
-  canonicalizeMirrorUrl,
-} from '../utils/cobalt.js';
+import { getCobaltMediaUrls, getRemoteContentLength } from '../utils/cobalt.js';
+import { canonicalizeMirrorUrl } from '../utils/mirror-links.js';
 import { getDisabledServiceLabel } from '../utils/download-services.js';
 import { ValidationError, describeCause, rootCause, notPublishedYet } from '../utils/errors.js';
 import { isFreshPost } from '../utils/post-age.js';

@@ -12,10 +12,11 @@ import { getDisabledServiceLabel, getServiceForUrl } from './utils/download-serv
 import { parseTimestamp, rateLimitAddress, sanitizeFilename } from './utils/validation.js';
 import { readLink, prepareLink, refusalFor } from './core/intake.js';
 import { detectFileType } from './utils/storage.js';
-import { uploadToR2, listObjectsInR2, deleteManyFromR2 } from './utils/r2-storage.js';
+import { uploadToR2, listObjectsInR2, deleteExpired, randomKey } from './utils/r2-storage.js';
 import { getStreamInfo, isYouTubeUrl } from './utils/ytdlp.js';
 import { AppError, NetworkError, ValidationError } from './utils/errors.js';
 import * as keys from './web/keys.js';
+import { ensureWebSchema } from './utils/database/web-keys-pg.js';
 import { FFMPEG_INPUT_GUARD, runFfmpeg } from './utils/video-processor/utils.js';
 import { trimItem } from './utils/video-processor/trim-item.js';
 import { OUTPUT_FORMATS } from './utils/output-formats.js';
@@ -174,16 +175,12 @@ let sweeping = null;
 export function sweepR2(now = Date.now()) {
   sweeping ??= (async () => {
     const objects = await listObjectsInR2(R2_PREFIX, r2Config);
-    const expired = objects.filter(o => now - new Date(o.lastModified).getTime() > FILE_TTL_MS);
-    const failed = expired.length
-      ? await deleteManyFromR2(
-          expired.map(o => o.key),
-          r2Config
-        )
-      : [];
-    if (failed.length) logger.warn(`Sweep could not delete ${failed.length} objects`);
-    const gone = new Set(expired.map(o => o.key).filter(k => !failed.includes(k)));
-    liveBytes = objects.reduce((sum, o) => sum + (gone.has(o.key) ? 0 : o.size), 0);
+    const expired = objects
+      .filter(o => now - new Date(o.lastModified).getTime() > FILE_TTL_MS)
+      .map(o => o.key);
+    const { failed, bytes } = await deleteExpired(objects, expired, r2Config);
+    if (failed) logger.warn(`Sweep could not delete ${failed} objects`);
+    liveBytes = bytes;
     return liveBytes;
   })().finally(() => (sweeping = null));
   return sweeping;
@@ -211,10 +208,9 @@ async function uploadReserved(file, filename, contentType) {
     .toLowerCase()
     .replace(/[^.a-z0-9]/g, '');
   const type = contentType || 'application/octet-stream';
-  const key = `${R2_PREFIX}${crypto.randomBytes(16).toString('hex')}${ext}`;
-  const url = await uploadToR2(file, key, type, r2Config, {
+  const url = await uploadToR2(file, randomKey(R2_PREFIX, ext), type, r2Config, {
     ContentDisposition: contentDisposition(name),
-    CacheControl: 'public, max-age=3600',
+    CacheControl: `public, max-age=${FILE_TTL_MS / 1000}`,
   });
   liveBytes += file.size;
   return { url, filename: name, size: file.size, type: detectFileType(ext, type, file.head) };
@@ -765,7 +761,7 @@ if (import.meta.main) {
     10 * 60 * 1000
   );
   await initDatabase();
-  await keys.ensureWebSchema();
+  await ensureWebSchema();
   const handler = createHandler();
   Bun.serve({
     port: Number(env('WEB_PORT', 3000)),

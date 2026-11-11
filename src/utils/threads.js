@@ -21,13 +21,13 @@ const NAVIGATION_HEADERS = {
   'Upgrade-Insecure-Requests': '1',
 };
 
-const THREADS_HOSTS = new Set(['threads.com', 'threads.net']);
+export const THREADS_HOSTS = ['threads.com', 'threads.net'];
 const POST_PATH = /^\/@[\w.]+\/post\/([A-Za-z0-9_-]+)/;
 
 export function threadsPostCode(url) {
   try {
     const { hostname, pathname } = new URL(url);
-    return THREADS_HOSTS.has(normalizeHost(hostname))
+    return THREADS_HOSTS.includes(normalizeHost(hostname))
       ? (pathname.match(POST_PATH)?.[1] ?? null)
       : null;
   } catch {

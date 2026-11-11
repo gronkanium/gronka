@@ -13,9 +13,14 @@ const logger = createLogger('postgres');
 // Bot, workers and web all boot at once; this key serializes their schema setup.
 const SCHEMA_LOCK_KEY = 0x67726f6e;
 
-export async function applySchema(sql) {
-  await sql.begin(async tx => {
+export const withSchemaLock = (sql, apply) =>
+  sql.begin(async tx => {
     await tx`SELECT pg_advisory_xact_lock(${SCHEMA_LOCK_KEY})`;
+    await apply(tx);
+  });
+
+export async function applySchema(sql) {
+  await withSchemaLock(sql, async tx => {
     for (const table of getTableDefinitions()) {
       await tx.unsafe(table.sql);
     }

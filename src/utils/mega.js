@@ -5,31 +5,19 @@ import { createLogger } from './logger.js';
 import { NetworkError, ValidationError, withCause, describeCause } from './errors.js';
 import { sanitizeFilename } from './validation.js';
 import { ssrfGuardedRequest, MAX_PAGE_BYTES } from './ssrf-guard.js';
-import { writeStream } from './media-file.js';
+import { writeStream, typeForExtension } from './media-file.js';
 import { maxDownloadBytes, tooLarge } from './size-limit.js';
+import { normalizeHost } from './url-host.js';
 
 const logger = createLogger('mega');
 const MEGA_API = 'https://g.api.mega.co.nz/cs';
-const MEGA_HOSTS = new Set(['mega.nz', 'www.mega.nz', 'mega.io', 'www.mega.io']);
+export const MEGA_HOSTS = ['mega.nz', 'mega.io'];
 const MEGA_FILE_LINK = /^\/(?:file\/([\w-]{8})#([\w-]{43})|#!([\w-]{8})!([\w-]{43}))$/;
-const MIME_BY_EXT = {
-  mp4: 'video/mp4',
-  m4v: 'video/mp4',
-  mov: 'video/quicktime',
-  webm: 'video/webm',
-  mkv: 'video/x-matroska',
-  avi: 'video/x-msvideo',
-  gif: 'image/gif',
-  png: 'image/png',
-  jpg: 'image/jpeg',
-  jpeg: 'image/jpeg',
-  webp: 'image/webp',
-};
 
 export function parseMegaUrl(url) {
   try {
     const { hostname, pathname, hash } = new URL(url);
-    if (!MEGA_HOSTS.has(hostname)) return null;
+    if (!MEGA_HOSTS.includes(normalizeHost(hostname))) return null;
     const match = (pathname + hash).match(MEGA_FILE_LINK);
     if (!match) return null;
     return { id: match[1] ?? match[3], key: Buffer.from(match[2] ?? match[4], 'base64url') };
@@ -42,7 +30,7 @@ export function parseMegaUrl(url) {
 export function keylessMegaFileId(url) {
   try {
     const { hostname, pathname, hash } = new URL(url);
-    if (!MEGA_HOSTS.has(hostname)) return null;
+    if (!MEGA_HOSTS.includes(normalizeHost(hostname))) return null;
     if (parseMegaUrl(url)) return null;
     return (
       (pathname + hash)
@@ -106,8 +94,9 @@ export async function downloadFromMega(url) {
   const { n: name = 'file' } = decryptMegaAttributes(info.at, aesKey);
   const maxSize = await maxDownloadBytes();
   if (info.s > maxSize) throw tooLarge(maxSize, `mega: file is ${info.s} bytes`);
-  const ext = path.extname(name).slice(1).toLowerCase();
-  if (!MIME_BY_EXT[ext]) {
+  const ext = path.extname(name).toLowerCase();
+  const contentType = typeForExtension(ext);
+  if (!/^(video|image)\//.test(contentType)) {
     throw new ValidationError('that mega link does not point to a video or image file.');
   }
 
@@ -122,7 +111,7 @@ export async function downloadFromMega(url) {
     });
     file = await writeStream(response.data, {
       transforms: [decipher],
-      ext: `.${ext}`,
+      ext,
       maxSize,
     });
   } catch (error) {
@@ -133,5 +122,5 @@ export async function downloadFromMega(url) {
       error
     );
   }
-  return { ...file, contentType: MIME_BY_EXT[ext], filename: sanitizeFilename(name) };
+  return { ...file, contentType, filename: sanitizeFilename(name) };
 }

@@ -319,6 +319,16 @@ describe('ytdlp utilities', () => {
       assert.strictEqual(code('HTTP Error 403', 'https://youtu.be/x'), 'YTDLP_UNKNOWN');
     });
 
+    test('gone wordings the video reader used to keep apart read as gone here too', () => {
+      for (const line of [
+        'ERROR: [youtube] x: This video is no longer available because the YouTube account associated with this video has been terminated.',
+        'ERROR: [vimeo] 1: This video is private',
+        'ERROR: [dailymotion] x: This video does not exist',
+      ]) {
+        assert.strictEqual(code(line), 'CONTENT_GONE', line);
+      }
+    });
+
     test('a link no extractor matches is unsupported, not unknown', () => {
       assert.strictEqual(
         code('ERROR: No suitable extractor found for URL https://share.snapchat.com/m/x'),

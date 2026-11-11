@@ -1,4 +1,4 @@
-import { ModalBuilder, TextInputBuilder, TextInputStyle, ActionRowBuilder } from 'discord.js';
+import { ModalBuilder, LabelBuilder, RadioGroupBuilder } from 'discord.js';
 import { createLogger } from '../utils/logger.js';
 import { firstUrlIn } from '../utils/validation.js';
 import { readLink } from '../core/intake.js';
@@ -155,16 +155,17 @@ export async function handleOptimizeContextMenuCommand(interaction, modalAttachm
     .setCustomId(`optimize_modal_${Date.now()}`)
     .setTitle('optimize gif');
 
-  const lossyInput = new TextInputBuilder()
+  const lossy = new RadioGroupBuilder()
     .setCustomId('lossy_level')
-    .setLabel('lossy level (0-100, default: 35)')
-    .setStyle(TextInputStyle.Short)
-    .setPlaceholder('35')
-    .setRequired(false)
-    .setMaxLength(3);
-
-  const actionRow = new ActionRowBuilder().addComponents(lossyInput);
-  modal.addComponents(actionRow);
+    .setRequired(true)
+    .addOptions(
+      { label: 'light', value: '15', description: 'less compression, bigger file' },
+      { label: 'balanced', value: '35', description: 'the default', default: true },
+      { label: 'strong', value: '80', description: 'more compression, smaller file' }
+    );
+  modal.addLabelComponents(
+    new LabelBuilder().setLabel('compression').setRadioGroupComponent(lossy)
+  );
 
   const modalId = modal.data.custom_id;
   modalAttachmentCache.set(modalId, {

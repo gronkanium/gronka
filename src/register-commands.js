@@ -133,6 +133,7 @@ const commands = [
         description: 'the gif file to optimize',
         type: 11, // ATTACHMENT type
         required: false,
+        file_types: ['.gif'],
       },
       {
         name: 'url',

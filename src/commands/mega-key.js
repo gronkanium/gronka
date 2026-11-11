@@ -1,5 +1,5 @@
 import {
-  ActionRowBuilder,
+  LabelBuilder,
   MessageFlags,
   ModalBuilder,
   TextInputBuilder,
@@ -27,12 +27,13 @@ export async function promptForMegaKey(
     .setTitle('Mega decryption key');
   const keyInput = new TextInputBuilder()
     .setCustomId('mega_key')
-    .setLabel('Decryption key for this file')
     .setPlaceholder('the part after # in the full link')
     .setStyle(TextInputStyle.Short)
     .setRequired(true)
     .setMaxLength(200);
-  modal.addComponents(new ActionRowBuilder().addComponents(keyInput));
+  modal.addLabelComponents(
+    new LabelBuilder().setLabel('Decryption key for this file').setTextInputComponent(keyInput)
+  );
   await interaction.showModal(modal);
 }
 

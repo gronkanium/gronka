@@ -12,6 +12,7 @@ import {
   downloadFromInstagram,
   shortcodeToMediaId,
   selectMediaUrl,
+  forgetUserIds,
 } from '../../src/utils/instagram.js';
 
 const image = url => ({ image_versions2: { candidates: [{ url }, { url: `${url}?small` }] } });
@@ -168,6 +169,7 @@ describe('downloadFromInstagram stories', () => {
 
   afterEach(() => {
     spy?.mockRestore();
+    forgetUserIds();
     fs.rmSync(cookieFile, { force: true });
     if (previousPath === undefined) delete process.env.INSTAGRAM_COOKIES_PATH;
     else process.env.INSTAGRAM_COOKIES_PATH = previousPath;
@@ -325,6 +327,34 @@ describe('downloadFromInstagram stories', () => {
     const result = await downloadFromInstagram('https://www.instagram.com/stories/someuser/');
     assert.strictEqual(result.length, 2);
     assert.ok(calls.some(c => c.startsWith('https://i.instagram.com/api/v1/feed/reels_media')));
+  });
+
+  const userReel = {
+    web_profile_info: search,
+    'reels_media/?reel_ids=77': {
+      reels: { 77: { items: [item('1', 'https://scontent.cdninstagram.com/a.mp4')] } },
+    },
+  };
+  const lookups = calls => calls.filter(c => c.includes('web_profile_info')).length;
+
+  test('a second story request for the same user reuses its id instead of looking it up', async () => {
+    const calls = stubApi(userReel);
+    await downloadFromInstagram('https://www.instagram.com/stories/someuser/');
+    await downloadFromInstagram('https://www.instagram.com/stories/someuser/');
+    assert.strictEqual(lookups(calls), 1);
+  });
+
+  test('a user id older than a week is looked up again', async () => {
+    const calls = stubApi(userReel);
+    await downloadFromInstagram('https://www.instagram.com/stories/someuser/');
+    const now = Date.now();
+    const clock = spyOn(Date, 'now').mockReturnValue(now + 8 * 24 * 60 * 60 * 1000);
+    try {
+      await downloadFromInstagram('https://www.instagram.com/stories/someuser/');
+    } finally {
+      clock.mockRestore();
+    }
+    assert.strictEqual(lookups(calls), 2);
   });
 
   test('a story id that media-info rejects falls back to that item in the user reel', async () => {

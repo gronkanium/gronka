@@ -106,6 +106,7 @@ export async function safeInteractionDeferReply(interaction, options = {}) {
     await interaction.deferReply(options);
     return true;
   } catch (error) {
+    interaction.deliveryError = error;
     if (error.code === 10062) {
       const age = Date.now() - interaction.createdTimestamp;
       logger.warn(`Discord expired the interaction before it was acknowledged (${age} ms old)`);

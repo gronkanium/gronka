@@ -7,6 +7,7 @@ import { firstConvertibleAttachment } from '../utils/attachment-helpers.js';
 import { messageMediaInput } from './shared/message-media.js';
 import { startConvert } from './convert.js';
 import { SITE_URL } from './info.js';
+import { isShortLink } from '../utils/short-links.js';
 import {
   isMangaDexTitleUrl,
   isMangaDexChapterUrl,
@@ -217,6 +218,12 @@ async function refuseUnsupported(interaction, url, commandSource) {
   return true;
 }
 
+// Resolving a short link can outlast the 3 s Discord allows before the first response.
+async function prepareAcknowledged(interaction, url) {
+  if (isShortLink(url)) await safeInteractionDeferReply(interaction);
+  return prepareLink(url);
+}
+
 const CONVERT_OFFER = 'convertoffer:';
 
 async function refuseNoLink(interaction, pending) {
@@ -274,7 +281,7 @@ export async function handleDownloadContextMenuCommand(interaction, pending) {
     });
     return;
   }
-  const url = await prepareLink(read.url);
+  const url = await prepareAcknowledged(interaction, read.url);
 
   const megaFileId = keylessMegaFileId(url);
   if (megaFileId) {
@@ -298,13 +305,13 @@ export async function handleDownloadCommand(interaction) {
     await refuse(interaction, 'download', { ...read.refusal, context });
     return;
   }
-  const url = await prepareLink(read.url);
 
   const times = await resolveTimeOptions(interaction, { type: 'download' });
   if (times === null) {
     return;
   }
   const { startTime: trimStart, duration: trimDuration } = times;
+  const url = await prepareAcknowledged(interaction, read.url);
 
   if (
     GALLERY_DL_ENABLED &&

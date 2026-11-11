@@ -7,11 +7,21 @@ import {
 } from 'discord.js';
 import { parseMegaUrl } from '../utils/mega.js';
 import { safeInteractionReply, safeInteractionDeferReply } from '../utils/interaction-helpers.js';
+import { refuse } from './shared/command-guards.js';
 
 const PREFIX = 'megakey:';
 
 // Everything the submit needs rides in the custom id, so there is no session to expire.
 export async function promptForMegaKey(interaction, fileId, commandSource, startTime, duration) {
+  // A modal can only be the first response, so a link that was deferred to resolve asks again.
+  if (interaction.deferred) {
+    await refuse(interaction, 'download', {
+      message: 'send the full mega link including the key (the part after #).',
+      reason: 'missing_input',
+      context: { originalUrl: `https://mega.nz/file/${fileId}`, commandSource },
+    });
+    return;
+  }
   const source = commandSource === 'context-menu' ? 'c' : 's';
   const modal = new ModalBuilder()
     .setCustomId(`${PREFIX}${fileId}:${source}:${startTime ?? ''}:${duration ?? ''}`)

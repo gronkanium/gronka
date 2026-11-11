@@ -3,7 +3,7 @@ import { createLogger } from '../utils/logger.js';
 import { botConfig } from '../utils/config.js';
 import {
   isSoundCloudUrl,
-  trackViaYoutube,
+  downloadMatchedTrack,
   soundcloudTrack,
   tagAudio,
 } from '../utils/soundcloud.js';
@@ -252,9 +252,9 @@ export async function acquireMedia(
     }
   }
 
-  const viaYoutube = async track => ({
+  const viaMatch = async track => ({
     kind: 'file',
-    fileData: await trackViaYoutube(track ?? (await soundcloudTrack(url))),
+    fileData: await downloadMatchedTrack(track ?? (await soundcloudTrack(url))),
     downloadMethod: 'ytdlp',
     url,
   });
@@ -264,9 +264,9 @@ export async function acquireMedia(
   let gone = false;
   for (const [index, engine] of engines.entries()) {
     if (lastError) {
-      // A DRM-only SoundCloud track has nothing for the next engine; its YouTube copy does.
+      // A DRM-only SoundCloud track has nothing for the next engine; its matched copy does.
       const track = await soundcloud;
-      if (track?.drm) return viaYoutube(track);
+      if (track?.drm) return viaMatch(track);
       logger.warn(
         `${engines[index - 1].name} failed, trying ${engine.name}: ${describeCause(rootCause(lastError))}`
       );
@@ -279,7 +279,7 @@ export async function acquireMedia(
       note(engine.name.toLowerCase(), error);
       lastError = error;
       gone ||= GONE.includes(error.code);
-      if (error.code === 'DRM_PROTECTED' && isSoundCloudUrl(url)) return viaYoutube();
+      if (error.code === 'DRM_PROTECTED' && isSoundCloudUrl(url)) return viaMatch();
       if (!worthAnotherSource(engine, error)) break;
     }
   }
@@ -331,7 +331,8 @@ export async function extractAudio(fileData, { startTime = null, duration = null
     throw new ValidationError('there is no audio in that post to turn into an mp3.');
   }
   // Already a tagged mp3: re-encoding would drop the cover and tags for nothing.
-  if (source.audioReady && startTime === null && duration === null) {
+  const mp3 = path.extname(source.filename ?? '').toLowerCase() === '.mp3';
+  if (source.audioReady && mp3 && startTime === null && duration === null) {
     return { file: source, baseName: path.parse(source.filename).name };
   }
   const trim = source.trimmed ? {} : { startTime, duration };

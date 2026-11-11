@@ -69,10 +69,7 @@ async function deliverArchive(interaction, ctx, fileData, attachmentLimit) {
   }
   await deliverStored(
     interaction,
-    await storeMedia(fileData, attachmentLimit, { defaultExt: '.zip' }),
-    {
-      name: fileData.filename,
-    }
+    await storeMedia(fileData, attachmentLimit, { defaultExt: '.zip' })
   );
   await finishCommand();
 }

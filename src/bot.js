@@ -33,6 +33,7 @@ import {
   saveSavedPresence,
 } from './utils/presence.js';
 import { replyIfMaintenance } from './utils/maintenance.js';
+import { parseProfileEdit } from './utils/bot-profile.js';
 import { reportPresence, clearPresence, PRESENCE_MS } from './utils/database/media-jobs-pg.js';
 import { withJobDir, sweepJobDirs } from './utils/media-file.js';
 import { hostGuard, securityHeaders } from './webui-server/middleware/security.js';
@@ -95,6 +96,8 @@ function startStatsServer() {
   );
 
   app.use(hostGuard);
+  // An avatar or banner arrives inline as a data URI.
+  app.use('/api/bot/profile', express.json({ limit: '25mb' }));
   app.use(express.json());
   app.use(securityHeaders);
 
@@ -162,6 +165,54 @@ function startStatsServer() {
       activity: activityDisplayText(activity),
       botTag: client.user.tag,
     });
+  });
+
+  app.get('/api/bot/profile', async (req, res) => {
+    if (!client.isReady()) {
+      return res.status(503).json({ error: 'bot is not ready' });
+    }
+    try {
+      const [user, application] = await Promise.all([
+        client.user.fetch(true),
+        client.application.fetch(),
+      ]);
+      res.json({
+        username: user.username,
+        avatar: user.displayAvatarURL({ size: 256 }),
+        hasAvatar: Boolean(user.avatar),
+        defaultAvatar: user.defaultAvatarURL,
+        banner: user.bannerURL({ size: 1024 }) ?? null,
+        accentColor: user.hexAccentColor ?? null,
+        bio: application.description ?? '',
+      });
+    } catch (error) {
+      logger.error('Failed to read bot profile:', error);
+      res.status(502).json({ error: 'could not read the profile from discord' });
+    }
+  });
+
+  app.patch('/api/bot/profile', async (req, res) => {
+    if (!client.isReady()) {
+      return res.status(503).json({ error: 'bot is not ready' });
+    }
+    let edit;
+    try {
+      edit = parseProfileEdit(req.body);
+    } catch (error) {
+      return res.status(400).json({ error: error.message });
+    }
+    try {
+      if (Object.keys(edit.user).length) await client.user.edit(edit.user);
+      if (edit.bio !== undefined) await client.application.edit({ description: edit.bio });
+      const changed = [...Object.keys(edit.user), ...(edit.bio === undefined ? [] : ['bio'])];
+      logger.info(`Bot profile updated: ${changed.join(', ')}`);
+      res.json({ success: true });
+    } catch (error) {
+      logger.error('Failed to update bot profile:', error);
+      res
+        .status(error.status >= 400 && error.status < 500 ? 400 : 502)
+        .json({ error: error.message || 'discord refused the change' });
+    }
   });
 
   app.get('/health', (req, res) => res.status(client.isReady() ? 200 : 503).end());

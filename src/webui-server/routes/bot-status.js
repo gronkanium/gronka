@@ -79,4 +79,27 @@ router.get('/api/bot/status', async (req, res) => {
   }
 });
 
+// Avatars and banners ride inline, past axios's default 10MB request body cap.
+async function forward(req, res, route) {
+  try {
+    const response = await axios({
+      ...botRequest,
+      method: req.method,
+      url: `http://127.0.0.1:${serverConfig.serverPort}${route}`,
+      data: req.method === 'GET' ? undefined : (req.body ?? {}),
+      timeout: 60_000,
+      maxBodyLength: Infinity,
+    });
+    res.status(response.status).json(response.data);
+  } catch (error) {
+    logger.error(`Failed to reach bot process for ${route}:`, error);
+    res.status(502).json({ error: 'failed to reach bot process' });
+  }
+}
+
+router.get('/api/bot/profile', (req, res) => forward(req, res, '/api/bot/profile'));
+router.patch('/api/bot/profile', express.json({ limit: '25mb' }), (req, res) =>
+  forward(req, res, '/api/bot/profile')
+);
+
 export default router;

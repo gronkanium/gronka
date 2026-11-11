@@ -4,7 +4,6 @@
     Share2,
     HardDrive,
     ShieldCheck,
-    Activity,
     SlidersHorizontal,
     Globe,
     Check,
@@ -33,13 +32,6 @@
       label: 'Availability',
       icon: ShieldCheck,
       blurb: 'When the bot stops taking work',
-    },
-    {
-      id: 'presence',
-      label: 'Bot presence',
-      icon: Activity,
-      blurb: 'What Discord shows next to the bot',
-      presence: true,
     },
   ];
   // Edited on their own pages, not here.
@@ -130,38 +122,6 @@
       saving[key] = false;
     }
   }
-
-  // Presence lives on /api/bot/status, not in bot_settings.
-  const STATUS_OPTIONS = ['online', 'idle', 'dnd', 'invisible'];
-  let presence = $state(null);
-  let presenceStatus = $state('online');
-  let presenceActivity = $state('');
-  let presenceSaving = $state(false);
-  async function loadPresence() {
-    presence = await fetch('/api/bot/status')
-      .then(r => r.json())
-      .catch(() => null);
-    if (presence?.status) presenceStatus = presence.status;
-    presenceActivity = presence?.activity ?? '';
-  }
-  async function savePresence() {
-    presenceSaving = true;
-    const res = await sendJson('/api/bot/status', 'POST', {
-      status: presenceStatus,
-      activity: presenceActivity.trim() || undefined,
-    }).catch(() => null);
-    const data = res ? await res.json().catch(() => ({})) : {};
-    presenceSaving = false;
-    if (res?.ok) {
-      say('Presence updated');
-      loadPresence();
-    } else error = data.error || data.message || 'could not update presence';
-  }
-  loadPresence();
-  const presenceDirty = $derived(
-    presence &&
-      (presenceStatus !== presence.status || presenceActivity.trim() !== (presence.activity ?? ''))
-  );
 </script>
 
 <PageHeader title="Settings" description="Changes apply within a minute">
@@ -198,59 +158,6 @@
       <div class="skel-rows">
         {#each Array(4) as _, i (i)}<span class="skeleton" style="width:{60 - i * 8}%"
           ></span>{/each}
-      </div>
-    {:else if active.presence}
-      <div class="item">
-        <div class="lbl">
-          <b>Current presence</b>
-          <p>What Discord shows right now</p>
-        </div>
-        <div class="ctl">
-          <span
-            class="pill"
-            class:ok={presence?.status === 'online'}
-            class:idle={presence?.status !== 'online'}
-            >{presence
-              ? `${presence.botTag ?? 'bot'} · ${presence.status}${presence.activity ? ` · ${presence.activity}` : ''}`
-              : 'unavailable'}</span
-          >
-        </div>
-      </div>
-      <div class="item">
-        <div class="lbl">
-          <b>Status</b>
-          <p>The dot next to the bot's name</p>
-        </div>
-        <div class="ctl">
-          <div class="seg">
-            {#each STATUS_OPTIONS as o (o)}<button
-                class:on={presenceStatus === o}
-                onclick={() => (presenceStatus = o)}>{o}</button
-              >{/each}
-          </div>
-        </div>
-      </div>
-      <div class="item">
-        <div class="lbl">
-          <b>Custom status</b>
-          <p>Leave empty for none. Survives restarts.</p>
-        </div>
-        <div class="ctl">
-          <input
-            class="field wide"
-            bind:value={presenceActivity}
-            maxlength="128"
-            placeholder="e.g. gronka.dev"
-          />
-        </div>
-      </div>
-      <div class="pf foot">
-        <span class="dim">{presenceDirty ? 'Unsaved changes' : 'Up to date'}</span>
-        <button
-          class="btn primary right"
-          disabled={presenceSaving || !presenceDirty}
-          onclick={savePresence}>Apply</button
-        >
       </div>
     {:else}
       {#each activeKeys as key (key)}
@@ -430,10 +337,6 @@
   }
   .item.stacked .ctl {
     justify-content: flex-end;
-  }
-  .foot {
-    background: var(--card-2);
-    border-radius: 0 0 var(--radius-lg) var(--radius-lg);
   }
   @media (max-width: 860px) {
     .settings {

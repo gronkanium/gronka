@@ -68,4 +68,4 @@ workers stop taking new media jobs; running ones finish. use it to drain before 
 
 ## bot presence
 
-the card at the top of the settings page sets the bot's discord status (`online`/`idle`/`dnd`/`invisible`) and custom activity text. the presence is persisted and restored when the bot restarts.
+the **bot** page sets what discord shows for the bot: username, avatar, banner, about me, status (`online`/`idle`/`dnd`/`invisible`) and custom status. changes wait behind a save bar with **reset** and **save changes**. the presence is persisted and restored when the bot restarts; discord itself keeps the rest.

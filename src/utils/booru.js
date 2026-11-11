@@ -7,11 +7,7 @@ import { normalizeHost } from './url-host.js';
 
 const logger = createLogger('booru');
 
-// Booru image boards expose a clean per-post JSON API returning the direct file URL, so
-// no HTML scraping is needed. Two caveats drive the custom User-Agent: e621 asks clients
-// not to impersonate a browser, and danbooru's API *and* CDN 403 the shared Chrome UA
-// from getRequestHeaders() while accepting a descriptive one. So both the API fetch and
-// the media download (via downloadFileFromUrl's userAgent override) use BOORU_UA.
+// API and media download both: e621 bans browser UAs, danbooru's API and CDN 403 our Chrome one.
 const BOORU_UA = 'gronka (+https://github.com/gronkanium/gronka)';
 const API_TIMEOUT_MS = 20000;
 
@@ -39,9 +35,7 @@ export const BOORU_SITES = [
     label: 'e621 / e926',
     hosts: ['e621.net', 'e926.net'],
     buildApiUrl: postJsonApiUrl,
-    // { post: { file: { url: "https://static1.e621.net/data/.../<md5>.<ext>" } } }
-    // url is null for anonymous clients on some posts, but the CDN path is derivable
-    // from md5 + ext and serves fine.
+    // url is null for anonymous clients on some posts; the CDN path from md5 + ext still serves.
     pickFileUrl: json => {
       const file = json.post?.file;
       if (file?.url) return file.url;

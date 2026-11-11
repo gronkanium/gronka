@@ -83,12 +83,7 @@ export function checkFFmpegInstalled() {
   return ffmpegCheck;
 }
 
-// A stream tagged matrix_coefficients=3 ("reserved", an encoder bug, but common in the wild)
-// makes ffmpeg 7.x reject the frame at the filter graph's buffer source with "Invalid color
-// space", killing the conversion before any filter runs. That placement is why `setparams`
-// can't repair it: the only lever upstream of buffersrc is the bitstream, so we rewrite the tag
-// to 2 (unspecified) on the way in. Only matrix_coefficients trips it, reserved primaries and
-// transfer characteristics decode fine.
+// matrix_coefficients=3 fails at buffersrc, before setparams can act, so fix the bitstream.
 const METADATA_BSF_BY_CODEC = {
   h264: 'h264_metadata',
   hevc: 'hevc_metadata',

@@ -19,15 +19,7 @@ const logger = createLogger('convert-to-gif');
 const PALETTE_FRAMES = 300;
 
 /**
- * Convert video file to GIF using FFmpeg with two-pass palette generation.
- * @param {string} inputPath - Path to input video file
- * @param {string} outputPath - Path to output GIF file
- * @param {Object} options - Conversion options
- * @param {number} options.width - Output width in pixels (default: 480)
- * @param {number} options.fps - Frames per second (default: 30)
- * @param {number|null} options.startTime - Trim start time in seconds (optional)
- * @param {number|null} options.duration - Trim duration in seconds (optional)
- * @returns {Promise<void>}
+ * @param {{width?: number, fps?: number, startTime?: number|null, duration?: number|null}} options
  */
 export async function convertToGif(inputPath, outputPath, options = {}) {
   return convertToGifImpl(inputPath, outputPath, options);

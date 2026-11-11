@@ -56,10 +56,7 @@ export function createApp() {
   app.use(botStatusRoutes);
   app.use(systemRoutes);
 
-  // SPA fallback - serve index.html for all non-API, non-asset routes
-  // This must be placed AFTER all API routes so they are matched first
-  // Rate limited to prevent abuse
-  // Express 5 uses /*splat syntax for wildcard routes
+  // SPA fallback, after every API route so those match first.
   app.get('/*splat', fileServerLimiter, (req, res) => {
     // Skip if this is an API route or asset request (shouldn't reach here, but safety check)
     if (req.path.startsWith('/api') || req.path.startsWith('/assets')) {

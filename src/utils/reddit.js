@@ -8,10 +8,7 @@ import { BROWSER_USER_AGENT as USER_AGENT } from './browser-agent.js';
 
 const logger = createLogger('reddit');
 
-// Reddit's .json API is 403 only anonymously; with the session cookie it answers 200, so the
-// earlier HTML scraping was never necessary. It also cost us a real bug: the page carries the
-// whole comment tree, and a regex over it downloaded commenters' images as if they were the
-// post's. The API labels post media, gallery order and per-comment media separately.
+// The API, not the HTML: a regex over the page's comment tree grabbed commenters' images.
 const API_TIMEOUT_MS = 20000;
 
 // /comments/<id>/... is the canonical form; /s/<id> is what the share sheet emits and 301s to it.
@@ -35,12 +32,7 @@ export function hasRedditSession() {
   return readCookie() !== null;
 }
 
-/**
- * The comment id when the link points at one comment rather than at the post.
- * Both shapes Reddit emits put it sixth: /r/<sub>/comments/<post>/<slug>/<comment> and
- * /r/<sub>/comments/<post>/comment/<comment>. A bare post link is shorter, so there is nothing
- * to confuse it with.
- */
+// Both comment link shapes put the id sixth: .../<post>/<slug>/<id> and .../<post>/comment/<id>.
 export function commentIdFromUrl(url) {
   try {
     const segments = new URL(url).pathname.split('/').filter(Boolean);
@@ -130,14 +122,7 @@ const IMAGE_EXTENSIONS = {
   'image/webp': 'webp',
 };
 
-/**
- * Download candidates for one media_metadata entry, best first.
- *
- * The entry's key is the i.redd.it basename, so the unsigned original rebuilds from the mime
- * type; the signed preview stays as the fallback because the original 404s for crossposts.
- * Giphy comment gifs are the exception: Reddit marks them `invalid` and hands back no url at
- * all, but the key carries giphy's own id, which is all the cdn path needs.
- */
+// The signed preview stays as a fallback: the rebuilt original 404s for crossposts.
 function candidatesFor(id, entry) {
   const giphy = /^giphy\|(\w+)$/.exec(id);
   if (giphy) {
@@ -206,15 +191,7 @@ function mediaOf(post, depth = 0) {
   return parent && depth === 0 ? mediaOf(parent, 1) : { external: null, images: [] };
 }
 
-/**
- * Where the linked media lives, in the order the caller should prefer:
- *   `external`, a v.redd.it manifest or an offsite host, handed back for the caller's own source
- *               selection to route (yt-dlp handles both).
- *   `images`, per-item download candidates for Reddit-hosted images.
- *
- * A link to one comment resolves to that comment's media and nothing else. A link to the post
- * resolves to the post's own media and never touches the comment tree.
- */
+// `external` (v.redd.it or offsite) is for the caller to route; `images` are Reddit-hosted.
 export function selectRedditMedia(listing, url) {
   const post = listing?.[0]?.data?.children?.[0]?.data;
   if (!post) {
@@ -245,10 +222,6 @@ export async function resolveRedditPost(url) {
   return selectRedditMedia(await fetchListing(canonical), canonical);
 }
 
-/**
- * The raw post-and-comments listing behind a link, with the canonical permalink it was read
- * from. The content api normalizes it; the downloader only wants the media out of it.
- */
 export async function fetchRedditListing(url, { limit = 100 } = {}) {
   const canonical = await canonicalUrl(url);
   return { url: canonical, listing: await fetchListing(canonical, limit) };

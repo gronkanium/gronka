@@ -120,9 +120,7 @@ export async function downloadFromPinterest(url) {
 
   const { html, url: finalUrl } = await fetchPinPage(url);
 
-  // A dead pin.it link is answered with a 200, not a 404: Pinterest redirects it to the
-  // regional home page with ?show_error=true. Detect that here so the user is told the pin
-  // is gone rather than the misleading "no downloadable media" below.
+  // A dead pin.it link answers 200: a redirect to the home page with ?show_error=true.
   if (finalUrl.includes('show_error=true')) {
     throw contentGone(`pinterest: redirected to ${finalUrl.split('?')[0]} (dead link)`);
   }

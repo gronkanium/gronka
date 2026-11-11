@@ -19,17 +19,7 @@ import {
 
 const logger = createLogger('instagram');
 
-// Cobalt 11 answers error.api.fetch.empty for every /p/ permalink, and yt-dlp's Instagram
-// extractor only ever returns video, so an image post fails there as "no video in it", the
-// bot's single most common real error. Instagram's own web client does not read either of
-// those surfaces: it calls /api/v1/media/<media_id>/info/ with the public web app id and the
-// viewer's session cookie, and that route still returns the full media payload (images,
-// videos, and carousels alike). This extractor calls exactly that route.
-//
-// It needs a logged-in sessionid; there is no anonymous form of this endpoint (without the
-// cookie Instagram serves the client-rendered app shell, which contains no media at all).
-// When no session is configured the caller falls back to cobalt, so self-hosters without
-// cookies behave exactly as before.
+// Cobalt and yt-dlp miss image posts; the web client's own media-info route needs a sessionid.
 const APP_ID = '936619743392459'; // the public web-client id instagram.com sends on its own calls
 const ASBD_ID = '129477'; // the web client's constant; it does not vary per session
 const API_TIMEOUT_MS = 20000;
@@ -146,10 +136,7 @@ function isMediaHostUrl(url) {
   }
 }
 
-/**
- * Best media URL for a single item. Both candidate lists are ordered highest-quality-first.
- * Video wins over image because a video item also carries its own still frame.
- */
+// Video first: a video item also carries a still frame. Both lists are best-first.
 export function selectMediaUrl(item) {
   const video = item?.video_versions?.[0]?.url;
   if (isMediaHostUrl(video)) {
@@ -205,11 +192,7 @@ export async function instagramGet(
         cause: new Error(why),
       });
     }
-    // A dead session answers 401/403 on every post, so it reads as "everything is broken"
-    // rather than "one post is missing". Say so in the log; the user still gets the curated
-    // error from whatever the caller falls back to.
-    // An expired sessionid usually 302s to /accounts/login/ instead of answering 401, hence
-    // maxRedirects: 0, so that lands here rather than as a generic redirect-loop error.
+    // An expired sessionid 302s to /accounts/login/ (hence maxRedirects: 0) or 401s every post.
     if (status === 401 || status === 403 || (status >= 300 && status < 400)) {
       logger.error(
         'Instagram rejected the session cookie (HTTP ' +

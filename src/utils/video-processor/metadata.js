@@ -5,11 +5,7 @@ import { jobSignal } from '../media-file.js';
 
 const logger = createLogger('video-metadata');
 
-// ffprobe returns in well under a second on a readable file; a hang means a
-// malformed/streaming input it can neither parse nor error on. Bound it so a bad
-// input fails fast with a real error instead of blocking the whole conversion
-// until the 10-minute stuck-operation reaper notices. Input-agnostic: the timer
-// applies to every file, keyed on nothing about the input itself.
+// ffprobe hangs on some malformed input; fail fast instead of waiting for the stuck-job reaper.
 const FFPROBE_TIMEOUT_MS = 30000;
 
 // Get video metadata via ffprobe
@@ -66,10 +62,7 @@ export async function getVideoMetadata(inputPath) {
       }
       try {
         const parsed = JSON.parse(stdout);
-        // ffprobe emits format.duration as a string ("2.000000"); the previous
-        // fluent-ffmpeg impl returned it as a number. Coerce so consumers doing
-        // numeric comparisons/arithmetic behave exactly as before. Leave "N/A"
-        // (non-finite) untouched.
+        // ffprobe emits format.duration as a string ("2.000000"); "N/A" stays as is.
         if (parsed.format && parsed.format.duration !== undefined) {
           const d = Number(parsed.format.duration);
           if (Number.isFinite(d)) parsed.format.duration = d;

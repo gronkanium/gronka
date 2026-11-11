@@ -1,8 +1,3 @@
-/**
- * PostgreSQL schema definitions
- * Converts SQLite schema to PostgreSQL syntax
- */
-
 export function getTableDefinitions() {
   return [
     {

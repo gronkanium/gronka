@@ -7,9 +7,7 @@ export const DEFAULT_PRESENCE_STATUS = 'dnd';
 const PRESENCE_STATUS_KEY = 'bot_presence_status';
 const PRESENCE_ACTIVITY_KEY = 'bot_presence_activity';
 
-// Discord's own client sends custom statuses as name "Custom Status" with the text in `state`;
-// discord.js silently rewrites {name: text, type: Custom} into that shape. Build it explicitly so
-// the local ClientPresence reads back the same way it went out.
+// discord.js silently rewrites a custom activity to this name, text in `state`; match it locally.
 const CUSTOM_ACTIVITY_NAME = 'Custom Status';
 
 // Build discord.js presence options from a status and custom-status text

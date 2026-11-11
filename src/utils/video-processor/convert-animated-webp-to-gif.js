@@ -7,22 +7,7 @@ import { jobSignal } from '../media-file.js';
 
 const logger = createLogger('convert-animated-webp-to-gif');
 
-/**
- * Convert an animated WebP to an animated GIF using ImageMagick.
- *
- * FFmpeg (5.1 in the app image) can't demux animated WebP, so this path shells
- * out to ImageMagick's `convert` instead. `-coalesce` rebuilds each frame to the
- * full canvas (animated WebP frames can be partial/disposed regions), then an
- * optional `-resize` scales to a requested width. The output contract matches
- * `convertImageToGif`: read `inputPath`, write a `.gif` at `outputPath`.
- *
- * @param {string} inputPath - Path to the input animated WebP file
- * @param {string} outputPath - Path to the output GIF file
- * @param {Object} options - Conversion options
- * @param {number} [options.width] - Output width in px; when omitted the source
- *   dimensions are preserved (no upscaling of small stickers)
- * @returns {Promise<void>}
- */
+// ImageMagick because FFmpeg 5.1 cannot demux animated WebP; -coalesce rebuilds partial frames.
 export async function convertAnimatedWebpToGif(inputPath, outputPath, options = {}) {
   return convertAnimatedWebpToGifImpl(inputPath, outputPath, options);
 }

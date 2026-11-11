@@ -74,9 +74,7 @@ let retentionJobIntervalId = null;
 // HTTP server for stats endpoint (minimal, only for Jekyll stats site)
 let httpServer = null;
 
-/**
- * Minimal HTTP server: /health for the Docker healthcheck and /api/bot/status
- */
+// /health for the Docker healthcheck, /api/bot/status for presence updates.
 function startStatsServer() {
   const app = express();
 
@@ -149,9 +147,7 @@ function startStatsServer() {
       return res.status(503).json({ error: 'bot is not ready' });
     }
 
-    // This is the client's own presence, which Discord never echoes back to bots (that would
-    // need the GuildPresences intent), so it reflects what this process last sent. Since the
-    // saved presence now rides along in the identify payload, that matches what Discord shows.
+    // Discord never echoes a bot's own presence (needs GuildPresences): this is what we sent.
     const presence = client.user.presence;
     const activity = presence.activities.find(a => a.type === ActivityType.Custom) || null;
 
@@ -227,11 +223,7 @@ client.once(Events.ClientReady, async readyClient => {
   try {
     botStartTime = Date.now();
 
-    // The identify payload already carried this presence (see startBot), that is what makes it
-    // stick across a restart, with no race against the presence discord.js sends on identify.
-    // Re-assert it here anyway: identify does not patch the client's local presence, which is
-    // what GET /api/bot/status reads back, and this also covers a pre-login load that failed.
-    // Both paths send the same values, so whichever Discord applies last is the right one.
+    // Identify does not set the local presence GET /api/bot/status reads, so set it again.
     try {
       const { status, activity } = await loadSavedPresence();
       readyClient.user.setPresence(buildPresenceOptions(status, activity));
@@ -357,12 +349,7 @@ async function startBot() {
       startStatsServer();
     }
 
-    // Restore the last presence set via the webui/stats API by putting it in the identify
-    // payload. discord.js always sends a presence on identify (defaulting to online with no
-    // activities), so setting it after ClientReady loses a race against that default and the
-    // bot comes up online with no custom status. Doing it here also means a gateway
-    // re-identify (reconnect after a failed resume) replays the presence for free.
-    // A DB hiccup here must not abort startup, ClientReady retries.
+    // In the identify payload: set after ClientReady, it loses to discord.js's default presence.
     try {
       const { status, activity } = await loadSavedPresence();
       client.options.presence = buildPresenceOptions(status, activity);

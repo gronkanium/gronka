@@ -63,8 +63,6 @@ const prefixMappings = [
   'LOG_LEVEL',
   'SERVER_PORT',
   'SERVER_HOST',
-  'STATS_USERNAME',
-  'STATS_PASSWORD',
   'STATS_CACHE_TTL',
   'WEBUI_PORT',
   'WEBUI_HOST',

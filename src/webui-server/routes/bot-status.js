@@ -20,9 +20,7 @@ const botRequest = {
   ],
 };
 
-// Proxies to the bot process's internal stats server (bot.js), which holds the
-// live Discord client and actually owns setPresence(). webui-server and the bot
-// run as separate processes in the same container - see scripts/docker-entrypoint.sh.
+// The bot process owns the Discord client, so this proxies to its stats server (bot.js).
 router.post('/api/bot/status', express.json(), async (req, res) => {
   const { status, activity } = req.body ?? {};
 

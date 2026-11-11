@@ -73,31 +73,12 @@ if (!validStatuses.includes(status)) {
 }
 
 function getEnvVar(name) {
-  // Match docker-compose fallback logic: PROD_* -> TEST_* -> base
-  if (prefix === 'PROD') {
-    const prodName = `PROD_${name}`;
-    if (process.env[prodName]) {
-      return process.env[prodName];
-    }
-    // Fall back to TEST_ prefix (matches docker-compose behavior)
-    const testName = `TEST_${name}`;
-    if (process.env[testName]) {
-      return process.env[testName];
-    }
-  } else if (prefix === 'TEST') {
-    const testName = `TEST_${name}`;
-    if (process.env[testName]) {
-      return process.env[testName];
-    }
-  }
-  return process.env[name];
+  return (prefix && process.env[`${prefix}_${name}`]) || process.env[name];
 }
 
 // Get server configuration (check prefixed vars first, then fall back)
 const SERVER_PORT = getEnvVar('SERVER_PORT') || '3000';
 const SERVER_HOST = getEnvVar('SERVER_HOST') || '127.0.0.1';
-const STATS_USERNAME = getEnvVar('STATS_USERNAME');
-const STATS_PASSWORD = getEnvVar('STATS_PASSWORD');
 
 // For Docker mode, we connect inside the container so always use 127.0.0.1
 const DOCKER_HOST = '127.0.0.1';
@@ -109,32 +90,16 @@ const body = {};
 if (status) body.status = status;
 if (activityText) body.activity = activityText;
 
-// Build headers
-const headers = {
-  'Content-Type': 'application/json',
-};
-
-// Add basic auth if credentials are configured
-if (STATS_USERNAME && STATS_PASSWORD) {
-  const credentials = Buffer.from(`${STATS_USERNAME}:${STATS_PASSWORD}`).toString('base64');
-  headers['Authorization'] = `Basic ${credentials}`;
-}
+const headers = { 'Content-Type': 'application/json' };
 
 // Docker mode: use docker exec to run a bun fetch inside the container
 if (useDocker) {
   const containerName = 'gronka';
   const dockerUrl = `http://${DOCKER_HOST}:${SERVER_PORT}/api/bot/status`;
 
-  // Build headers object for the script
-  const scriptHeaders = { 'Content-Type': 'application/json' };
-  if (STATS_USERNAME && STATS_PASSWORD) {
-    const creds = Buffer.from(`${STATS_USERNAME}:${STATS_PASSWORD}`).toString('base64');
-    scriptHeaders['Authorization'] = `Basic ${creds}`;
-  }
-
   // Inline script - using template that will have values injected
   const inlineScript = `
-const h=${JSON.stringify(scriptHeaders)};
+const h=${JSON.stringify(headers)};
 const b=${JSON.stringify(body)};
 fetch("${dockerUrl}",{method:"POST",headers:h,body:JSON.stringify(b)})
 .then(r=>r.json().then(d=>({ok:r.ok,data:d})))
@@ -209,9 +174,7 @@ console.log(JSON.stringify(data))})
     const data = await response.json();
 
     if (!response.ok) {
-      if (response.status === 401) {
-        console.error('Error: Authentication failed. Check STATS_USERNAME and STATS_PASSWORD.');
-      } else if (response.status === 503) {
+      if (response.status === 503) {
         console.error('Error: Bot is not ready yet. Wait for it to connect to Discord.');
       } else {
         console.error(`Error: ${data.error || 'Unknown error'}`);

@@ -30,9 +30,7 @@ export function detectFileType(extension, contentType = '', head = null) {
   const audioExtension = OUTPUT_FORMATS[ext.slice(1)]?.kind === 'audio';
   if (ext === '.zip') return 'archive';
 
-  // Magic bytes beat both other signals: they describe the file we actually have, whereas the
-  // extension and the content-type are both claims by the source. Some sources serve real GIFs
-  // under a video/* content-type, and trusting that put genuine gifs behind the videos/ prefix.
+  // Magic bytes first: some sources serve real GIFs under a video/* content-type.
   if (head && head.length >= 6) {
     const magic = head.subarray(0, 6).toString('latin1');
     if (magic === 'GIF87a' || magic === 'GIF89a') {

@@ -100,10 +100,7 @@ export async function acquireMedia(
   const trail = [];
   const note = (step, error) => trail.push({ step, error: describeCause(rootCause(error)) });
   const fail = error => Object.assign(error, { trail });
-  // Reddit deprecated the unauthenticated .json endpoints in May 2026, so yt-dlp cannot read
-  // a post at all. Resolve it before the source flags below are computed: most posts are
-  // link-aggregator entries whose media lives on redgifs/imgur, and swapping url for that
-  // target lets the normal selection route it to the extractor that already handles it.
+  // yt-dlp lost reddit with the anonymous .json API; resolve first so a link post routes.
   let redditImages = null;
   if (isRedditPostUrl(url) && hasRedditSession()) {
     try {
@@ -127,9 +124,7 @@ export async function acquireMedia(
         redditImages = resolved.images;
       }
     } catch (redditError) {
-      // Falling back to cobalt is the net for a resolution failure, but it must not become a
-      // way around the disabled-source gate two lines up, and a post reddit itself says is
-      // gone has nothing for cobalt or yt-dlp to find either.
+      // Cobalt must not route around the disabled-source gate, nor retry a post reddit calls gone.
       if (redditError instanceof ValidationError || redditError.code === 'CONTENT_GONE') {
         throw redditError;
       }

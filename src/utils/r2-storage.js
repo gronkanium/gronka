@@ -1,9 +1,4 @@
-import {
-  S3Client,
-  ListObjectsV2Command,
-  DeleteObjectCommand,
-  DeleteObjectsCommand,
-} from '@aws-sdk/client-s3';
+import { S3Client, ListObjectsV2Command, DeleteObjectsCommand } from '@aws-sdk/client-s3';
 import fs from 'node:fs';
 import { randomBytes } from 'node:crypto';
 import { Upload } from '@aws-sdk/lib-storage';
@@ -15,10 +10,7 @@ import { jobSignal, jobRemainingMs, typeForExtension } from './media-file.js';
 
 const logger = createLogger('r2-storage');
 
-// A degraded Cloudflare route holds an upload open at a trickle instead of failing: 60MB took
-// 16m57s on 2026-09-15, long past the 15-minute interaction token, which held a download slot
-// and let the stuck-operation reaper fail everything queued behind it. Socket timeouts never
-// fire on a trickle, so bound the upload on effective throughput instead.
+// A degraded route trickles (60MB in 17 min) and never trips a socket timeout: bound throughput.
 const MIN_UPLOAD_BYTES_PER_SEC = 500 * 1024;
 const MIN_UPLOAD_BUDGET_MS = 60_000;
 
@@ -171,11 +163,6 @@ export async function uploadToR2(file, key, contentType, config, extraParams = {
   }
 }
 
-export function getR2PublicUrl(key, config) {
-  const { publicDomain } = config;
-  return `https://${publicDomain}/${key}`;
-}
-
 export const MEDIA_PREFIXES = {
   gif: 'gifs',
   video: 'videos',
@@ -296,34 +283,6 @@ export async function deleteManyFromR2(keys, config) {
     failed.push(...Errors.map(e => e.Key));
   }
   return failed;
-}
-
-export async function deleteFromR2(key, config) {
-  const client = getR2Client(config);
-  const { bucketName } = config;
-
-  if (!bucketName) {
-    logger.warn('Cannot delete from R2: bucketName not configured');
-    return false;
-  }
-
-  try {
-    const command = new DeleteObjectCommand({
-      Bucket: bucketName,
-      Key: key,
-    });
-
-    await client.send(command);
-    logger.debug(`Deleted file from R2: ${key}`);
-    return true;
-  } catch (error) {
-    if (error.name === 'NotFound' || error.$metadata?.httpStatusCode === 404) {
-      logger.debug(`File not found in R2 (already deleted?): ${key}`);
-      return false;
-    }
-    logger.error(`Failed to delete file from R2 (${key}):`, error.message);
-    throw error;
-  }
 }
 
 export function extractR2KeyFromUrl(url, config) {

@@ -59,9 +59,6 @@ export function getCookieArgs(url = null, signedIn = false) {
   return [];
 }
 
-/**
- * Custom error for yt-dlp rate limiting
- */
 // yt-dlp echoes a cookie line it cannot parse, value included, even under --no-warnings.
 const COOKIE_LINE_WARNING = /skipping cookie file entry/i;
 export const stripCookieLines = output =>
@@ -310,11 +307,7 @@ function executeYtdlp(
       `pre_process:${LIVE_MARK}%(live_status)s`,
     ];
 
-    // Abort oversized downloads before/while pulling instead of catching them after the whole
-    // file is buffered in RAM. Only for full downloads: with --download-sections, yt-dlp
-    // compares --max-filesize against the *entire* video's reported size, which would wrongly
-    // abort a small requested clip. The post-read length check remains the definitive backstop
-    // for sources whose size yt-dlp can't determine up front (e.g. some HLS streams).
+    // Not for clips: with --download-sections yt-dlp checks the limit against the whole video.
     if (Number.isFinite(maxSize) && startTime === null && duration === null) {
       const maxMb = Math.max(1, Math.floor(maxSize / (1024 * 1024)));
       args.push('--max-filesize', `${maxMb}M`);
@@ -539,15 +532,7 @@ function executeYtdlp(
   });
 }
 
-/**
- * Wraps executeYtdlp() with a single retry when it fails with the generic catch-all message.
- * That bucket covers anything yt-dlp didn't give us a specific reason for, which in practice
- * includes transient YouTube-side extraction hiccups that clear up seconds later - retrying
- * once recovers those silently instead of surfacing a false "unavailable" to the user. Every
- * other failure (rate limit, private/age-gated, invalid URL, live stream) is a confirmed
- * state and retrying it immediately would just waste time, so only this bucket and the
- * failures tagged YTDLP_RETRYABLE retry.
- */
+// One retry, only for the catch-all bucket and YTDLP_RETRYABLE: YouTube hiccups clear in seconds.
 async function executeYtdlpWithRetry(url, outputDir, options) {
   try {
     return await executeYtdlp(url, outputDir, options);

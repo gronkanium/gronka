@@ -1,184 +1,24 @@
 import { test, describe, beforeAll, afterAll } from 'bun:test';
 import assert from 'node:assert';
-import express from 'express';
-import rateLimit from 'express-rate-limit';
 
 describe('webui-server rate limiting', () => {
-  describe('fileServerLimiter configuration', () => {
-    test('rate limiter is configured with correct window', () => {
-      const limiter = rateLimit({
-        windowMs: 15 * 60 * 1000, // 15 minutes
-        max: 100, // Limit each IP to 100 requests per windowMs
-        message: 'too many requests, please try again later',
-        standardHeaders: true,
-        legacyHeaders: false,
-      });
+  let server;
 
-      assert.ok(limiter);
-      // Verify configuration by checking the limiter object structure
-      assert.ok(typeof limiter === 'function');
-    });
-
-    test('rate limiter has correct window duration', () => {
-      const windowMs = 15 * 60 * 1000; // 15 minutes
-      assert.strictEqual(windowMs, 900000);
-    });
-
-    test('rate limiter has correct max requests', () => {
-      const max = 100;
-      assert.strictEqual(max, 100);
-    });
-
-    test('rate limiter message is correct', () => {
-      const message = 'too many requests, please try again later';
-      assert.strictEqual(message, 'too many requests, please try again later');
-    });
-
-    test('rate limiter uses standard headers', () => {
-      const standardHeaders = true;
-      assert.strictEqual(standardHeaders, true);
-    });
-
-    test('rate limiter disables legacy headers', () => {
-      const legacyHeaders = false;
-      assert.strictEqual(legacyHeaders, false);
+  beforeAll(async () => {
+    const { createApp } = await import('../src/webui-server/app.js');
+    await new Promise(resolve => {
+      server = createApp().listen(0, resolve);
     });
   });
 
-  describe('rate limiter middleware application', () => {
-    let app;
-    let limiter;
+  afterAll(() => server?.close());
 
-    beforeAll(() => {
-      app = express();
-      limiter = rateLimit({
-        windowMs: 15 * 60 * 1000,
-        max: 100,
-        message: 'too many requests, please try again later',
-        standardHeaders: true,
-        legacyHeaders: false,
-      });
-    });
-
-    test('rate limiter can be applied as middleware', () => {
-      app.get('/test', limiter, (req, res) => {
-        res.json({ message: 'ok' });
-      });
-
-      assert.ok(app);
-    });
-
-    test('rate limiter is a function (middleware)', () => {
-      assert.ok(typeof limiter === 'function');
-    });
-  });
-
-  describe('rate limit behavior', () => {
-    let app;
-    let server;
-    let limiter;
-
-    beforeAll(() => {
-      app = express();
-      // Use a very short window and low max for testing
-      limiter = rateLimit({
-        windowMs: 1000, // 1 second for testing
-        max: 2, // Only 2 requests for testing
-        message: 'too many requests, please try again later',
-        standardHeaders: true,
-        legacyHeaders: false,
-      });
-
-      app.get('/limited', limiter, (req, res) => {
-        res.json({ message: 'ok' });
-      });
-
-      return new Promise(resolve => {
-        server = app.listen(0, () => {
-          resolve();
-        });
-      });
-    });
-
-    afterAll(() => {
-      if (server) {
-        server.close();
-      }
-    });
-
-    test('allows requests within limit', async () => {
-      const port = server.address().port;
-      const response1 = await fetch(`http://localhost:${port}/limited`);
-      assert.strictEqual(response1.status, 200);
-    });
-
-    test('blocks requests exceeding limit', async () => {
-      const port = server.address().port;
-
-      // Make requests up to the limit
-      await fetch(`http://localhost:${port}/limited`);
-      await fetch(`http://localhost:${port}/limited`);
-
-      // This should be rate limited
-      const response3 = await fetch(`http://localhost:${port}/limited`);
-      assert.strictEqual(response3.status, 429);
-
-      const body = await response3.text();
-      assert.ok(body.includes('too many requests'));
-    });
-
-    test('rate limit headers are present', async () => {
-      const port = server.address().port;
-      const response = await fetch(`http://localhost:${port}/limited`);
-
-      // Headers may or may not be present depending on express-rate-limit version
-      // Just verify the response is valid
-      assert.ok(response.status === 200 || response.status === 429);
-    });
-  });
-
-  describe('api rate limiter application', () => {
-    let app;
-    let server;
-
-    beforeAll(async () => {
-      const { createApp } = await import('../src/webui-server/app.js');
-      app = createApp();
-      return new Promise(resolve => {
-        server = app.listen(0, () => {
-          resolve();
-        });
-      });
-    });
-
-    afterAll(() => {
-      if (server) {
-        server.close();
-      }
-    });
-
-    test('api routes pass through the rate limiter', async () => {
-      const port = server.address().port;
-      const response = await fetch(`http://localhost:${port}/api/nonexistent-route`);
-
-      // Unknown /api paths should 404 (not fall through to the SPA)
-      assert.strictEqual(response.status, 404);
-
-      // The rate limiter sets standard RateLimit-* headers on every /api response
-      const hasRateLimitHeader = [...response.headers.keys()].some(name =>
-        name.toLowerCase().startsWith('ratelimit')
-      );
-      assert.ok(hasRateLimitHeader, 'expected RateLimit headers on /api responses');
-    });
-  });
-
-  describe('rate limiter message format', () => {
-    test('rate limit message is lowercase monotone style', () => {
-      const message = 'too many requests, please try again later';
-      // Verify it's lowercase
-      assert.strictEqual(message, message.toLowerCase());
-      // Verify no capital letters
-      assert.ok(!/[A-Z]/.test(message));
-    });
+  test('api routes pass through the rate limiter', async () => {
+    const response = await fetch(`http://localhost:${server.address().port}/api/nonexistent-route`);
+    assert.strictEqual(response.status, 404);
+    const hasRateLimitHeader = [...response.headers.keys()].some(name =>
+      name.toLowerCase().startsWith('ratelimit')
+    );
+    assert.ok(hasRateLimitHeader, 'expected RateLimit headers on /api responses');
   });
 });

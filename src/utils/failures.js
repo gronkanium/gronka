@@ -5,9 +5,7 @@ import { describeCause, rootCause } from './errors.js';
 
 const logger = createLogger('failures');
 
-// The one record a failed request leaves: which command, what the user was told, the real cause,
-// every extractor tried (error.trail), the full link and the non-identifying options. Never who
-// asked, and nothing at all for a request that worked.
+// The one record a failed request leaves; never who asked, and nothing for a request that worked.
 export async function recordFailure(
   command,
   { error = null, errorClass = null, url = null, cause = null, options = null } = {}

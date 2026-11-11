@@ -22,6 +22,9 @@ export function buildPresenceOptions(status, activity) {
     options.activities = [
       { name: CUSTOM_ACTIVITY_NAME, state: activity, type: ActivityType.Custom },
     ];
+  } else if (status) {
+    // Without an explicit empty list discord.js carries the previous custom status forward.
+    options.activities = [];
   }
   return options;
 }

@@ -101,6 +101,7 @@ export const SITES = [
   },
   { id: 'medal', name: 'Medal', category: 'video', hosts: ['medal.tv'], ytdlp: true },
   { id: 'xvideos', name: 'XVideos', category: 'adult', hosts: ['xvideos.com'], ytdlp: true },
+  { id: 'spankbang', name: 'SpankBang', category: 'adult', hosts: ['spankbang.com'], ytdlp: true },
   // Behind age-verification walls in some US states; they go through GEO_PROXY_URL when set.
   {
     id: 'pornhub',

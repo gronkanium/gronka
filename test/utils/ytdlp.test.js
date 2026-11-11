@@ -186,6 +186,7 @@ describe('ytdlp utilities', () => {
           'https://www.redtube.com/',
         ]);
         assert.deepStrictEqual(siteArgs('https://www.youtube.com/watch?v=x'), []);
+        assert.deepStrictEqual(siteArgs('https://spankbang.com/9kwt0/video/x'), []);
         assert.deepStrictEqual(siteArgs('https://rumble.com/v1'), ['--impersonate', 'chrome']);
         assert.deepStrictEqual(siteArgs('https://www.facebook.com/reel/1'), [
           '--impersonate',
@@ -230,6 +231,7 @@ describe('ytdlp utilities', () => {
       assert.strictEqual(getYtdlpSite('https://www.redtube.com/123'), 'RedTube');
       assert.strictEqual(getYtdlpSite('https://rule34video.com/video/1/x/'), 'Rule34Video');
       assert.strictEqual(getYtdlpSite('https://www.eporner.com/video-abc/x/'), 'Eporner');
+      assert.strictEqual(getYtdlpSite('https://spankbang.com/9kwt0/video/x'), 'SpankBang');
       assert.strictEqual(getYtdlpSite('https://www.xiaohongshu.com/explore/abc'), 'Xiaohongshu');
       assert.strictEqual(getYtdlpSite('http://xhslink.com/o/abc'), 'Xiaohongshu');
       assert.strictEqual(getYtdlpSite('https://medal.tv/games/x/clips/abc'), 'Medal');

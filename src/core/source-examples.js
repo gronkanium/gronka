@@ -137,6 +137,11 @@ export const SOURCE_EXAMPLES = [
     expect: { type: 'video' },
   },
   {
+    site: 'spankbang',
+    url: 'https://spankbang.com/9kwt0/video/rub+me+tease+me',
+    expect: { type: 'video' },
+  },
+  {
     site: 'pornhub',
     url: 'https://www.pornhub.com/view_video.php?viewkey=ph584b3f77e4a16',
     expect: { type: 'video' },

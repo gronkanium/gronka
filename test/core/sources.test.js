@@ -25,6 +25,7 @@ const ROUTED = [
   ['https://tenor.com/en-GB/view/example-gif-123', 'tenor'],
   ['https://v.redd.it/abc/HLSPlaylist.m3u8', 'ytdlp'],
   ['https://www.pornhub.com/view_video.php?viewkey=abc', 'ytdlp'],
+  ['https://spankbang.com/9kwt0/video/rub+me+tease+me', 'ytdlp'],
   ['https://www.deviantart.com/someone/art/thing-123456', 'deviantart'],
   ['https://www.deviantart.com/someone/gallery', 'gallery-dl'],
   ['https://www.artstation.com/artwork/abc', 'gallery-dl'],

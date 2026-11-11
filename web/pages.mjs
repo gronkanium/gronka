@@ -105,6 +105,7 @@ const OTHER_SITES = [
   'redtube',
   'rule34video',
   'eporner',
+  'spankbang',
   'rule34.xxx',
   'nhentai',
   'hentaigifz',

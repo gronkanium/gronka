@@ -4,7 +4,7 @@ import fs from 'fs/promises';
 import path from 'path';
 import axios from 'axios';
 import { createLogger } from './logger.js';
-import { ValidationError, describeCause } from './errors.js';
+import { ValidationError, describeCause, withCause } from './errors.js';
 import { fetchPage, ssrfGuardedRequest } from './ssrf-guard.js';
 import { fromPath, tempPath, jobSignal } from './media-file.js';
 import { runFfmpeg } from './video-processor/utils.js';
@@ -75,7 +75,10 @@ const plain = text =>
     .replace(/\s*[([].*?[)\]]/g, '')
     .replace(/ - [^-]*remaster[^-]*$/i, '');
 const untagged = text => norm(plain(text));
-// A credit like "A, B & C" or "A featuring B" is tried whole first, then artist by artist.
+const FEATURING = /\s(?:feat\.?|featuring|ft\.?)\s/i;
+// "A featuring B" bills two artists for sure; "A, B & C" may be one name ("Tyler, The Creator").
+const billedOf = credit =>
+  [credit, ...String(credit ?? '').split(FEATURING)].map(norm).filter(Boolean);
 const artistsOf = credit =>
   [credit, ...String(credit ?? '').split(/,|\s(?:feat\.?|featuring|ft\.?|&|x)\s/i)]
     .map(norm)
@@ -93,11 +96,16 @@ export function pickMatch(track, entries) {
   const names = artistsOf(track.artist);
   const title = untagged(track.title);
   if (!names.length || !title || !track.duration) return null;
+  const billed = billedOf(track.artist);
   let best = null;
   for (const entry of entries) {
     const drift = Math.abs((entry.duration ?? -99) - track.duration);
     const channel = norm(entry.channel ?? entry.uploader);
-    const own = names.some(name => channel === name || channel === `${name}topic`);
+    const own = names.some(
+      name =>
+        channel === `${name}topic` ||
+        (channel === name && (billed.includes(name) || entry.channel_is_verified))
+    );
     // YouTube's art tracks, often under the artist's name in another script.
     const artTrack = / - Topic$/.test(entry.channel ?? '') && untagged(entry.title) === title;
     const label =
@@ -248,26 +256,29 @@ const DRM = {
 async function fromSaavn(track) {
   try {
     const url = pickSaavn(track, await saavnCandidates(`${track.artist} ${track.title}`));
-    if (!url) return null;
+    if (!url || !hostUnder(new URL(url).hostname, 'jiosaavn.com')) return { why: 'no 320k match' };
     logger.debug(`DRM ${track.site} track matched to JioSaavn ${url}`);
-    return await downloadWithYtdlp(url, { quality: '320' });
+    return { file: await downloadWithYtdlp(url, { quality: '320' }) };
   } catch (error) {
     logger.warn(`JioSaavn unavailable, trying YouTube: ${describeCause(error)}`);
-    return null;
+    return { why: describeCause(error) };
   }
 }
 
 export async function downloadMatchedTrack(track) {
   const drm = DRM[track.site];
   const saavn = await fromSaavn(track);
-  if (saavn) return tagAudio(saavn, track);
+  if (saavn.file) return tagAudio(saavn.file, track);
   const match =
     pickMatch(track, await youtubeCandidates(`${track.artist} ${plain(track.title)}`)) ??
     pickMatch(track, await youtubeCandidates(`${track.artist} - Topic ${plain(track.title)}`));
   if (!match) {
-    throw new ValidationError(
-      `${drm.only} encrypted (drm), and the artist's own upload isn't on youtube to use instead.`,
-      'DRM_PROTECTED'
+    throw withCause(
+      new ValidationError(
+        `${drm.only} encrypted (drm), and the artist's own upload isn't on youtube to use instead.`,
+        'DRM_PROTECTED'
+      ),
+      `jiosaavn: ${saavn.why}; youtube: no official upload`
     );
   }
   logger.debug(`DRM ${track.site} track matched to YouTube ${match.id} (${match.channel})`);

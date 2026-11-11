@@ -90,6 +90,18 @@ test("takes a verified label channel's exact upload, never an unverified one", (
   assert.strictEqual(pickMatch(song, [fan, lyrics, label])?.id, 'label');
 });
 
+test('one name split off a credit counts only on a verified or Topic channel', () => {
+  const song = { artist: 'Tyler, The Creator', title: 'See You Again', duration: 180 };
+  const stranger = { id: 'tyler', channel: 'Tyler', title: 'See You Again', duration: 180 };
+  assert.strictEqual(pickMatch(song, [stranger]), null);
+  const own = { ...stranger, id: 'own', channel: 'Tyler, The Creator' };
+  assert.strictEqual(pickMatch(song, [stranger, own])?.id, 'own');
+  const duet = { artist: 'Drake, Future', title: 'Jumpman', duration: 205 };
+  const drake = { id: 'drake', channel: 'Drake', title: 'Jumpman', duration: 205 };
+  assert.strictEqual(pickMatch(duet, [drake]), null);
+  assert.strictEqual(pickMatch(duet, [{ ...drake, channel_is_verified: true }])?.id, 'drake');
+});
+
 const saavn = (title, artists, duration, url, hq = 'true') => ({
   title,
   perma_url: url,

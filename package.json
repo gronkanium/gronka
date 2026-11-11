@@ -34,6 +34,7 @@
     "fetch:security": "bun scripts/fetch-code-scanning-issues.js",
     "fetch:commands": "bun scripts/fetch-registered-commands.js",
     "validate": "bun run check:sync && bun run check:public && bun run lint && bun run format:check",
+    "gate": "bun run validate && bun run test:safe && bun run test:e2e",
     "test": "NODE_ENV=test MEDIA_TEMP_DIR=./temp/test-jobs DISCORD_TOKEN=test-token CLIENT_ID=test-client-id R2_ACCOUNT_ID= R2_ACCESS_KEY_ID= R2_SECRET_ACCESS_KEY= R2_BUCKET_NAME= COBALT_ENABLED=false WEBUI_PORT=3101 bun scripts/with-test-db.js bun test test/ web/worker/ --timeout 30000",
     "test:safe": "bun run test",
     "test:fuzz": "NODE_ENV=test MEDIA_TEMP_DIR=./temp/test-jobs DISCORD_TOKEN=test-token CLIENT_ID=test-client-id R2_ACCOUNT_ID= R2_ACCESS_KEY_ID= R2_SECRET_ACCESS_KEY= R2_BUCKET_NAME= COBALT_ENABLED=false WEBUI_PORT=3101 FUZZ_ITERATIONS=${FUZZ_ITERATIONS:-5000} bun scripts/with-test-db.js bun test test/fuzz --timeout 120000",

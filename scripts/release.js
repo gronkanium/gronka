@@ -1,5 +1,5 @@
 #!/usr/bin/env bun
-// Semver releases cut from origin/master by the owner, bumped from the conventional commits since the last tag.
+// Semver releases cut from master by the owner, bumped from the conventional commits since the last tag.
 import { execFileSync } from 'node:child_process';
 import { readFileSync, writeFileSync } from 'node:fs';
 
@@ -69,9 +69,13 @@ const fail = msg => {
 if (import.meta.main) {
   const dryRun = process.argv.includes('--dry-run');
   run('git', ['fetch', '--quiet', '--tags', 'origin', 'master']);
-  const head = run('git', ['rev-parse', 'HEAD']);
   if (!dryRun) {
-    if (head !== run('git', ['rev-parse', 'origin/master'])) fail('check out origin/master first');
+    if (run('git', ['branch', '--show-current']) !== 'master') fail('switch to master first');
+    try {
+      run('git', ['merge-base', '--is-ancestor', 'origin/master', 'HEAD'], { stdio: 'pipe' });
+    } catch {
+      fail('origin/master has commits this checkout lacks: git pull --rebase origin master');
+    }
     if (run('git', ['status', '--porcelain'])) fail('working tree is not clean');
   }
 
@@ -133,26 +137,5 @@ if (import.meta.main) {
     { input: notes }
   );
 
-  // PRs carry the "next" milestone until the release that ships them names it.
-  const next = run('gh', [
-    'api',
-    '--paginate',
-    `repos/${REPO}/milestones?per_page=100`,
-    '--jq',
-    '.[] | select(.title == "next") | .number',
-  ]);
-  if (next) {
-    run('gh', [
-      'api',
-      '-X',
-      'PATCH',
-      `repos/${REPO}/milestones/${next}`,
-      '-f',
-      `title=${tag}`,
-      '-f',
-      'state=closed',
-    ]);
-  }
-  run('gh', ['api', '-X', 'POST', `repos/${REPO}/milestones`, '-f', 'title=next']);
   console.log(`released ${tag}: ${URL}/releases/tag/${tag}`);
 }

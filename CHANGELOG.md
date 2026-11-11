@@ -5,6 +5,56 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and versions are release dates (`YYYY.MM.DD`, `.N` for a later release the same day).
 
+## [5.0.0](https://github.com/gronkanium/gronka/compare/v2026.11.03.3...v5.0.0) (2026-11-11)
+
+
+### ⚠ BREAKING CHANGES
+
+* release with semantic versions (vX.Y.Z) again ([8f27350](https://github.com/gronkanium/gronka/commit/8f27350f800154ba9d6675d8c98a66d7310a91f3))
+* slash commands only, mention commands removed ([d7a6d40](https://github.com/gronkanium/gronka/commit/d7a6d40b3a43fd9c25cc112753abdb051ea4d758))
+* **download:** remove the mp3 option, /convert turns a download into an mp3 ([6cceec3](https://github.com/gronkanium/gronka/commit/6cceec30c6fbf4637abcbcd07188c2ca78d8e277))
+
+
+### Features
+
+* random file names for every upload instead of gronka.ext ([8d0ee5b](https://github.com/gronkanium/gronka/commit/8d0ee5bcdf39013ec53f182cc6f9b230fadc43e2))
+* slash commands only, mention commands removed ([d7a6d40](https://github.com/gronkanium/gronka/commit/d7a6d40b3a43fd9c25cc112753abdb051ea4d758))
+* upload form for empty commands, clearer refusals, `link` option ([9a5e693](https://github.com/gronkanium/gronka/commit/9a5e69320179e7d17f3e6d1ef73b8d6f089040ea))
+* **apple-music:** apple music song links download as tagged audio ([237d118](https://github.com/gronkanium/gronka/commit/237d11879f3e337e3c0cca5868c0a7e7dd397135))
+* **convert:** components v2 picker card with a live expiry countdown ([0c70347](https://github.com/gronkanium/gronka/commit/0c7034777d0aeabcda501c8ea9cf02992fa60d77))
+* **download:** add SpankBang via yt-dlp ([#7](https://github.com/gronkanium/gronka/issues/7)) ([40c28a4](https://github.com/gronkanium/gronka/commit/40c28a44e77349e7a43afcd6bd0524d3fefa9ec0))
+* **modals:** optimize compression presets, label layout in every modal ([b046501](https://github.com/gronkanium/gronka/commit/b0465014e64c856c6c0c759a3f687f45fd0f21f9))
+* **music:** DRM-only tracks from JioSaavn at 320k, no mp3 re-encode ([217d77c](https://github.com/gronkanium/gronka/commit/217d77cdeb78cf7f7ae177911db7b8e89f4f2346))
+* **webui:** Bot page for name, avatar, banner, about me and status ([191016d](https://github.com/gronkanium/gronka/commit/191016dd661a8d9dfc773a6ba407c037f812712c))
+* **webui:** issue filters back, warnings shown, register commands ([f5cff39](https://github.com/gronkanium/gronka/commit/f5cff39e9404b5fbcb10d1e80c4f94f22748f17c))
+
+
+### Bug Fixes
+
+* record why X no-media, Instagram story and prefix command failures failed ([#9](https://github.com/gronkanium/gronka/issues/9)) ([846963d](https://github.com/gronkanium/gronka/commit/846963d3c51b35c8cbe0f10ea6675f776f42e0ed))
+* take the upload limit only from Discord, drop DISCORD_SIZE_LIMIT ([1db41e6](https://github.com/gronkanium/gronka/commit/1db41e68c31c6b2a558404119bc5c3802a1adf78))
+* **config:** no prod R2 for the test bot, compose passes documented settings ([d91864f](https://github.com/gronkanium/gronka/commit/d91864f8571c1461359ea8a41d9b4e43e5208111))
+* **download:** acknowledge Discord before resolving short links ([74e6c0b](https://github.com/gronkanium/gronka/commit/74e6c0bbb5dd800aeeeda5443ec7e3f640431fd4))
+* **download:** download Snapchat shared snaps from share.snapchat.com ([a130b99](https://github.com/gronkanium/gronka/commit/a130b9915a9878a1125ab9f7cd35d1511207eb88))
+* **download:** fall back to a direct download for file links on yt-dlp sites ([79474de](https://github.com/gronkanium/gronka/commit/79474deacd39347c3ed4d3f570ea020faa1287b2))
+* **download:** fall back to a full download when a clip times out, and kill its ffmpeg ([#11](https://github.com/gronkanium/gronka/issues/11)) ([8012d72](https://github.com/gronkanium/gronka/commit/8012d72d7f1ef8bd2d537576b639a068c3fc1529))
+* **download:** keep a trailing underscore that belongs to the link ([#8](https://github.com/gronkanium/gronka/issues/8)) ([f31a7a3](https://github.com/gronkanium/gronka/commit/f31a7a3041ca69568dcacf1896577c1520d948da))
+* **download:** read a YouTube video removed for a policy as gone, without a retry ([#12](https://github.com/gronkanium/gronka/issues/12)) ([6d5517d](https://github.com/gronkanium/gronka/commit/6d5517d5564af020789aaf16514ffde6cd5d658c))
+* **download:** read yt-dlp failures through one table for downloads and video pages ([#12](https://github.com/gronkanium/gronka/issues/12)) ([6d5517d](https://github.com/gronkanium/gronka/commit/6d5517d5564af020789aaf16514ffde6cd5d658c))
+* **download:** retry an IP-blocked TikTok post through the vpn before calling it gone ([#13](https://github.com/gronkanium/gronka/issues/13)) ([cbed012](https://github.com/gronkanium/gronka/commit/cbed012b9a7ea49b030e8f9b2ca9867ebc624a4a))
+* **download:** try yt-dlp when the Medal API keeps refusing a clip ([#6](https://github.com/gronkanium/gronka/issues/6)) ([796f53a](https://github.com/gronkanium/gronka/commit/796f53a55daad22bfddc7e84ce69be48a04f4ca9))
+* **instagram:** reuse a story user's id instead of looking it up every time ([#10](https://github.com/gronkanium/gronka/issues/10)) ([e8f2c37](https://github.com/gronkanium/gronka/commit/e8f2c377e1f9efca0c4caff7c5749832626a1ab7))
+* **music:** matched tracks go out as they are, with cover and tags ([4d3e93d](https://github.com/gronkanium/gronka/commit/4d3e93d7f9bf436209341b892829543079b61f1f))
+* **music:** send matched songs without the explanation text ([8660a6b](https://github.com/gronkanium/gronka/commit/8660a6b5cda5635dcd30479d942c18800664fb3c))
+* **music:** stricter artist match, JioSaavn link check and failure cause ([bd764f8](https://github.com/gronkanium/gronka/commit/bd764f8ab6715d08558793d6b354c9362b847ce0))
+* **presence:** clearing the custom status clears it on Discord ([d90116b](https://github.com/gronkanium/gronka/commit/d90116b1b473c3c5f2fafb57385291f79afcaf61))
+
+
+### Dependencies
+
+* **deps:** bump gallery-dl from 1.32.18 to 1.32.19 in /docker ([#14](https://github.com/gronkanium/gronka/issues/14)) ([af84799](https://github.com/gronkanium/gronka/commit/af8479981879fe5f2e4b55a2a29e71ee9d00add9))
+* **deps:** bump the security-updates group with 7 updates ([#5](https://github.com/gronkanium/gronka/issues/5)) ([2727842](https://github.com/gronkanium/gronka/commit/272784268ba2bbf4b695639d0daf0a99df54557a))
+
 ## [2026.11.03.3](https://github.com/gronkanium/gronka/compare/v2026.11.03.2...v2026.11.03.3) (2026-11-03)
 
 

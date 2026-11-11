@@ -1,6 +1,5 @@
 import { ModalBuilder, TextInputBuilder, TextInputStyle, ActionRowBuilder } from 'discord.js';
 import { createLogger } from '../utils/logger.js';
-import { botConfig } from '../utils/config.js';
 import { firstUrlIn } from '../utils/validation.js';
 import { readLink } from '../core/intake.js';
 import { validateMediaFile } from './shared/media-validation.js';
@@ -18,8 +17,6 @@ import { messageMediaInput } from './shared/message-media.js';
 
 const logger = createLogger('optimize');
 
-const { discordSizeLimit: DISCORD_SIZE_LIMIT } = botConfig;
-
 async function processOptimization(
   interaction,
   attachment,
@@ -36,10 +33,7 @@ async function processOptimization(
       const gif = validateMediaFile(file, 'gif');
       const optimized = await optimizeToJob(gif, lossy);
 
-      const stored = await storeMedia(
-        optimized,
-        getDiscordAttachmentLimit(interaction, DISCORD_SIZE_LIMIT)
-      );
+      const stored = await storeMedia(optimized, getDiscordAttachmentLimit(interaction));
       await deliverStored(interaction, stored, {
         description: formatSizeChange(gif.size, optimized.size),
       });

@@ -46,7 +46,7 @@ import { mapLimit, ITEM_FANOUT } from '../utils/map-limit.js';
 
 const logger = createLogger('download');
 
-const { galleryDlEnabled: GALLERY_DL_ENABLED, discordSizeLimit: DISCORD_SIZE_LIMIT } = botConfig;
+const { galleryDlEnabled: GALLERY_DL_ENABLED } = botConfig;
 
 async function replyWithDirectMediaUrls(interaction, ctx, { urls }) {
   let followUp = false;
@@ -150,7 +150,7 @@ export async function processDownload(
         throw new ValidationError(`downloads from ${disabledServiceLabel} are turned off.`);
       }
 
-      const attachmentLimit = getDiscordAttachmentLimit(interaction, DISCORD_SIZE_LIMIT);
+      const attachmentLimit = getDiscordAttachmentLimit(interaction);
       const acquired = await acquireMedia(url, {
         startTime,
         duration,

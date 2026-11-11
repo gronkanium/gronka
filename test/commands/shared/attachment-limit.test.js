@@ -12,9 +12,14 @@ describe('Discord attachment limits', () => {
     assert.strictEqual(getDiscordAttachmentLimit({ attachmentSizeLimit: 20 }, 8), 20);
   });
 
-  test('falls back when the interaction has no limit', () => {
-    assert.strictEqual(getDiscordAttachmentLimit({ attachmentSizeLimit: null }, 8), 8);
-    assert.strictEqual(getDiscordAttachmentLimit({}, 8), 8);
+  test('a plain message reply has no limit from Discord, so no number of ours stands in for it', () => {
+    assert.strictEqual(getDiscordAttachmentLimit({ attachmentSizeLimit: null }), Infinity);
+    assert.strictEqual(getDiscordAttachmentLimit({}), Infinity);
+    assert.strictEqual(
+      fitsDiscordAttachment(500 * 1024 * 1024, getDiscordAttachmentLimit({})),
+      true
+    );
+    assert.strictEqual(getDiscordAttachmentLimit({}, null), null);
   });
 
   test('is zero without Attach Files, so every file goes out as a link', () => {

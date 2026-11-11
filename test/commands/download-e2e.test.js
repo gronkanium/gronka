@@ -783,6 +783,7 @@ if (!mocksSupported) {
       // throws if reached, proving no bytes were transferred.
       const url = `https://x.com/user/status/huge-${Date.now()}`;
       const { interaction, calls } = downloadInteraction(url, 'e2e-dl-huge');
+      interaction.attachmentSizeLimit = 20 * 1024 * 1024;
 
       await handleDownloadCommand(interaction);
 

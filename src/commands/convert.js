@@ -3,7 +3,6 @@ import path from 'path';
 import { randomBytes } from 'node:crypto';
 import { MessageFlags } from 'discord.js';
 import { createLogger } from '../utils/logger.js';
-import { botConfig } from '../utils/config.js';
 import { firstUrlIn } from '../utils/validation.js';
 import { readLink } from '../core/intake.js';
 import { curatedErrorMessage } from './shared/command-errors.js';
@@ -45,8 +44,6 @@ import {
 import { waitForConvertFormat } from './convert-picker.js';
 
 const logger = createLogger('convert');
-
-const { discordSizeLimit: DISCORD_SIZE_LIMIT } = botConfig;
 
 const UNSUPPORTED_FORMAT =
   'unsupported file format. please provide a video, audio file (mp3, m4a, ogg, wav, flac) or image (png, jpg, webp, avif, gif).';
@@ -114,7 +111,7 @@ async function processFormatConversion(
         interaction,
         {
           ...ctx,
-          discordAttachmentLimit: getDiscordAttachmentLimit(interaction, DISCORD_SIZE_LIMIT),
+          discordAttachmentLimit: getDiscordAttachmentLimit(interaction),
         },
         { file: output, format, baseName }
       );
@@ -180,7 +177,7 @@ async function processConversion(
     'convert',
     interaction,
     async ctx => {
-      const attachmentLimit = getDiscordAttachmentLimit(interaction, DISCORD_SIZE_LIMIT);
+      const attachmentLimit = getDiscordAttachmentLimit(interaction);
       const gifPath = await tempPath('.gif');
       await renderGif(ctx, { attachment, attachmentType, file, options, gifPath });
       let gif = await fromPath(gifPath, { contentType: 'image/gif', filename: 'gronka.gif' });

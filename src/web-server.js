@@ -18,6 +18,7 @@ import { AppError, NetworkError, ValidationError } from './utils/errors.js';
 import * as keys from './web/keys.js';
 import { FFMPEG_INPUT_GUARD, runFfmpeg } from './utils/video-processor/utils.js';
 import { trimItem } from './utils/video-processor/trim-item.js';
+import { OUTPUT_FORMATS } from './utils/output-formats.js';
 import { fromPath, tempPath, withJobDir, sweepJobDirs } from './utils/media-file.js';
 import { getDirectMediaHeaders } from './utils/file-downloader.js';
 import { ENGINES } from './core/sources.js';
@@ -305,14 +306,14 @@ async function downloadInJob({
   const { fileData } = acquired;
   const note = fileData?.note ? { note: fileData.note } : {};
   if (audio) {
-    const { file, baseName } = await extractAudio(fileData, {
+    const { file, baseName, format } = await extractAudio(fileData, {
       startTime,
       duration,
     });
     return {
       lane: 'r2',
       ...note,
-      files: [await publishToR2(file, `${baseName}.mp3`, 'audio/mpeg')],
+      files: [await publishToR2(file, `${baseName}.${format}`, OUTPUT_FORMATS[format].mime)],
     };
   }
   const trim = (startTime !== null || duration !== null) && !fileData.trimmed;

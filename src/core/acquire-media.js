@@ -330,13 +330,13 @@ export async function extractAudio(fileData, { startTime = null, duration = null
   if (!source?.path || fileData?.archive) {
     throw new ValidationError('there is no audio in that post to turn into an mp3.');
   }
-  // Already a tagged mp3: re-encoding would drop the cover and tags for nothing.
-  const mp3 = path.extname(source.filename ?? '').toLowerCase() === '.mp3';
-  if (source.audioReady && mp3 && startTime === null && duration === null) {
-    return { file: source, baseName: path.parse(source.filename).name };
+  // A tagged track is already the audio: re-encoding would drop the cover and tags and lose quality.
+  if (source.audioReady && startTime === null && duration === null) {
+    const format = path.extname(source.filename).toLowerCase().slice(1);
+    return { file: source, baseName: path.parse(source.filename).name, format };
   }
   const trim = source.trimmed ? {} : { startTime, duration };
   const file = await convertToFormat(source, 'mp3', trim);
   const baseName = path.parse(source.filename).name.replace(/[^\w.-]+/g, '_') || 'audio';
-  return { file, baseName };
+  return { file, baseName, format: 'mp3' };
 }

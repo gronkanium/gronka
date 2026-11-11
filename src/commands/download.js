@@ -165,14 +165,14 @@ export async function processDownload(
       const { fileData } = acquired;
 
       if (galleryOptions.audioOnly) {
-        const { file: mp3, baseName } = await extractAudio(fileData, {
+        const { file, baseName, format } = await extractAudio(fileData, {
           startTime,
           duration,
         });
         await sendConvertedFile(
           interaction,
           { ...ctx, discordAttachmentLimit: attachmentLimit },
-          { file: mp3, format: 'mp3', baseName }
+          { file, format, baseName }
         );
         return finishCommand();
       }

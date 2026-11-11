@@ -10,11 +10,16 @@ const tone = async ext => {
   return fromPath(out, { filename: `Artist - Song${ext}`, audioReady: true });
 };
 
-test('the mp3 option turns a matched m4a into an mp3 and passes a tagged mp3 through', async () => {
+test('a matched track goes out as it came, with its cover and tags, and only a trim re-encodes it', async () => {
   await withJobDir(async () => {
     const m4a = await tone('.m4a');
-    assert.match((await extractAudio(m4a)).file.filename, /\.mp3$/);
+    const kept = await extractAudio(m4a);
+    assert.strictEqual(kept.file, m4a);
+    assert.strictEqual(kept.format, 'm4a');
     const mp3 = await tone('.mp3');
     assert.strictEqual((await extractAudio(mp3)).file, mp3);
+    const cut = await extractAudio(m4a, { startTime: 0, duration: 0.5 });
+    assert.match(cut.file.filename, /\.mp3$/);
+    assert.strictEqual(cut.format, 'mp3');
   });
 });

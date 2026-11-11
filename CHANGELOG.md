@@ -5,6 +5,13 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and versions are release dates (`YYYY.MM.DD`, `.N` for a later release the same day).
 
+## [5.0.1](https://github.com/gronkanium/gronka/compare/v5.0.0...v5.0.1) (2026-11-11)
+
+
+### Bug Fixes
+
+* **docker:** run the worker under an init so a lost ffmpeg gets reaped ([37ec7ca](https://github.com/gronkanium/gronka/commit/37ec7caa0593e3a8bba7a7964be3de8ebf408342))
+
 ## [5.0.0](https://github.com/gronkanium/gronka/compare/v2026.11.03.3...v5.0.0) (2026-11-11)
 
 

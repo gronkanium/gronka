@@ -40,15 +40,16 @@ async function fetchPublishedClip(id) {
     failMessage: 'could not read this Medal clip.',
     responseType: 'json',
     headers: getRequestHeaders(),
-    onError: error => {
-      if (error.response?.status === 403) throw notPublishedYet(error);
-    },
   });
   if (clip?.processed === 0 || clip?.publishedAt == null) {
     throw notPublishedYet(`medal: clip ${id} has no publishedAt yet`);
   }
   return clip;
 }
+
+// A 403 is a clip still publishing or Medal refusing us, so once the wait is over yt-dlp gets the link.
+const mayStillPublish = error =>
+  error.code === 'CLIP_NOT_PUBLISHED' || error.cause?.response?.status === 403;
 
 export async function downloadFromMedal(url, retryDelaysMs = PUBLISH_RETRY_DELAYS_MS) {
   const id = medalClipId(url);
@@ -58,7 +59,7 @@ export async function downloadFromMedal(url, retryDelaysMs = PUBLISH_RETRY_DELAY
     try {
       clip = await fetchPublishedClip(id);
     } catch (error) {
-      if (error.code !== 'CLIP_NOT_PUBLISHED' || attempt >= retryDelaysMs.length) throw error;
+      if (!mayStillPublish(error) || attempt >= retryDelaysMs.length) throw error;
       await sleep(retryDelaysMs[attempt]);
     }
   }

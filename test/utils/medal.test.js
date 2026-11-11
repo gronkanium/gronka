@@ -32,7 +32,7 @@ describe('medal', () => {
     assert.equal(pickMedalVideo({ contentUrl: 'http://cdn.medal.tv/a.mp4' }), null);
   });
 
-  test('a 403 that outlasts every retry means the clip is still being published', async () => {
+  test('a 403 that outlasts every retry is not taken as proof the clip is unpublished', async () => {
     const originalGet = axios.get;
     let calls = 0;
     axios.get = async () => {
@@ -42,7 +42,10 @@ describe('medal', () => {
     try {
       await assert.rejects(
         () => downloadFromMedal('https://medal.tv/clips/abc', [0, 0]),
-        error => error.code === 'CLIP_NOT_PUBLISHED'
+        error =>
+          error.name === 'NetworkError' &&
+          error.code !== 'CLIP_NOT_PUBLISHED' &&
+          error.cause.response.status === 403
       );
       assert.equal(calls, 3);
     } finally {

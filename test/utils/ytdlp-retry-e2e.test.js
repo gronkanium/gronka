@@ -4,7 +4,9 @@ import { EventEmitter } from 'events';
 import fsSync from 'fs';
 import path from 'path';
 import { mock } from 'bun:test';
+import axios from 'axios';
 import * as realChildProcess from 'child_process';
+import * as realTimers from 'node:timers/promises';
 import { promisify } from 'util';
 
 // Exercises the retry-on-generic-failure behavior in ytdlp.js's executeYtdlpWithRetry.
@@ -30,6 +32,7 @@ if (!mocksSupported) {
   });
 } else {
   let downloadWithYtdlp;
+  let acquireMedia;
 
   // Reconfigured per-test: an array of (child, outputDir) => void functions, one per
   // successive spawn() call.
@@ -67,8 +70,15 @@ if (!mocksSupported) {
     // so both specifiers need the mock for it to catch every importer.
     mock.module('child_process', childProcessMock);
     mock.module('node:child_process', childProcessMock);
+    // Medal's publish wait would otherwise sleep 14 s per test.
+    const { setTimeout: realSleep } = realTimers;
+    mock.module('node:timers/promises', () => ({
+      ...realTimers,
+      setTimeout: (_ms, value, options) => realSleep(0, value, options),
+    }));
 
     ({ downloadWithYtdlp } = await import('../../src/utils/ytdlp.js'));
+    ({ acquireMedia } = await import('../../src/core/acquire-media.js'));
   });
 
   afterAll(() => {
@@ -454,6 +464,63 @@ if (!mocksSupported) {
       const format = downloadArgs[downloadArgs.indexOf('-f') + 1];
       assert.ok(!/height<=\d/.test(format), `format selector must use height<=?N, got: ${format}`);
       assert.ok(format.includes('height<=?1080'), `expected a 1080p cap, got: ${format}`);
+    });
+  });
+
+  describe('Medal API refusing a clip', () => {
+    const url = 'https://medal.tv/games/roblox/clips/nS7VCha8OL5ss9IbW?invite=cr-x';
+    let apiCalls;
+    const withForbiddenApi = async run => {
+      const originalGet = axios.get;
+      apiCalls = 0;
+      axios.get = async () => {
+        apiCalls++;
+        throw Object.assign(new Error('Request failed with status code 403'), {
+          config: { method: 'get', url: 'https://medal.tv/api/content/nS7VCha8OL5ss9IbW' },
+          response: { status: 403 },
+        });
+      };
+      try {
+        return await run();
+      } finally {
+        axios.get = originalGet;
+      }
+    };
+
+    test('a 403 that outlasts the publish wait falls back to yt-dlp', async () => {
+      spawnCallLog = [];
+      spawnBehaviors = [success];
+      const result = await withForbiddenApi(() => acquireMedia(url, { urlOnly: false }));
+      assert.strictEqual(apiCalls, 4);
+      assert.strictEqual(result.downloadMethod, 'ytdlp');
+      assert.ok(spawnCallLog[0].args.includes(url));
+    });
+
+    test('when yt-dlp is refused too, the failure records both attempts', async () => {
+      spawnCallLog = [];
+      spawnBehaviors = [
+        child => {
+          child.stderr.emit(
+            'data',
+            Buffer.from(
+              'ERROR: [MedalTV] nS7VCha8OL5ss9IbW: Unable to download JSON metadata: HTTP Error 403: Forbidden\n'
+            )
+          );
+          child.emit('close', 1);
+        },
+      ];
+      const error = await withForbiddenApi(() => acquireMedia(url, { urlOnly: false })).catch(
+        caught => caught
+      );
+      assert.strictEqual(error.code, 'CLIP_NOT_PUBLISHED');
+      assert.deepStrictEqual(error.trail, [
+        { step: 'medal', error: 'GET medal.tv/api/content/nS7VCha8OL5ss9IbW HTTP 403' },
+        {
+          step: 'yt-dlp',
+          error:
+            'yt-dlp: ERROR: [MedalTV] nS7VCha8OL5ss9IbW: Unable to download JSON metadata: HTTP Error 403: Forbidden',
+        },
+      ]);
     });
   });
 }

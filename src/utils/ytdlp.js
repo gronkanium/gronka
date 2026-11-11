@@ -367,11 +367,21 @@ function executeYtdlp(
 
     logger.debug(`Executing yt-dlp with args: ${args.join(' ')}`);
 
+    const signal = jobSignal();
     const ytdlp = spawn('yt-dlp', args, {
-      signal: jobSignal(),
-      timeout,
+      signal,
+      // A group of its own, so a kill also reaches the ffmpeg it runs for --download-sections.
+      detached: true,
       stdio: ['ignore', 'pipe', 'pipe'],
     });
+    const killTree = () => {
+      try {
+        process.kill(-ytdlp.pid, 'SIGKILL');
+      } catch {
+        // Already gone.
+      }
+    };
+    signal?.addEventListener('abort', killTree);
 
     let stdout = '';
     let stderr = '';
@@ -389,18 +399,19 @@ function executeYtdlp(
     let overSize = false;
     const stopWatch = watchDirSize(outputDir, maxSize * 2, () => {
       overSize = true;
-      ytdlp.kill('SIGKILL');
+      killTree();
     });
 
     const timeoutId = setTimeout(() => {
       stopWatch();
-      ytdlp.kill('SIGKILL');
+      killTree();
       reject(timedOut(`yt-dlp: timed out after ${timeout / 1000}s`));
     }, timeout);
 
     ytdlp.on('close', code => {
       clearTimeout(timeoutId);
       stopWatch();
+      signal?.removeEventListener('abort', killTree);
       const rejectWith = (error, detail) =>
         reject(withCause(error, `yt-dlp: ${detail ?? ytdlpReason(stderr || stdout, code)}`));
 
@@ -743,7 +754,7 @@ export async function downloadWithYtdlp(
       } catch (segmentError) {
         if (
           !segmentError.message?.includes('output file too small') &&
-          segmentError.code !== 'REGION_COPY_MISSING'
+          !['REGION_COPY_MISSING', 'TIMED_OUT'].includes(segmentError.code)
         ) {
           throw segmentError;
         }

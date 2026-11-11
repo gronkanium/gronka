@@ -22,7 +22,7 @@ export function isDiscordCdnUrl(url) {
 }
 
 export const DISCORD_MESSAGE_LINK_MESSAGE =
-  "that's a link to a discord message, not a file. right-click the message and pick apps, then download, convert or optimize.";
+  "that's a link to a discord message. right-click it and pick apps, then download, convert or optimize.";
 
 export function isDiscordMessageLink(url) {
   try {

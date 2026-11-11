@@ -73,8 +73,8 @@ const commands = [
         required: false,
       },
       {
-        name: 'url',
-        description: 'url to media to download and convert',
+        name: 'link',
+        description: 'link to the media to download and convert',
         type: 3, // STRING type
         required: false,
       },
@@ -136,8 +136,8 @@ const commands = [
         file_types: ['.gif'],
       },
       {
-        name: 'url',
-        description: 'url to a gif to optimize',
+        name: 'link',
+        description: 'link to a gif to optimize',
         type: 3, // STRING type
         required: false,
       },
@@ -162,8 +162,8 @@ const commands = [
     type: 1, // CHAT_INPUT type (slash command)
     options: [
       {
-        name: 'url',
-        description: 'url to a social media post or media file to download',
+        name: 'link',
+        description: 'link to a social media post or media file to download',
         type: 3, // STRING type
         required: true,
       },

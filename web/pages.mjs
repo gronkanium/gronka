@@ -125,7 +125,8 @@ const esc = text =>
   text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 const ld = data => `<script type="application/ld+json">${JSON.stringify(data)}</script>`;
 
-const sitesList = current => `<details class="sites">
+// The bot's unsupported-site reply links to #sites.
+const sitesList = current => `<details class="sites" id="sites">
           <summary>supported sites</summary>
           <ul>${PLATFORMS.map(p =>
             p.slug === current
@@ -167,7 +168,7 @@ function withHead(html, { title, desc, url, jsonld }) {
 
 function withSites(html, current) {
   html = html.replace(/\s*<section class="more">[\s\S]*?<\/section>/, '');
-  html = html.replace(/\s*<details class="sites">[\s\S]*?<\/details>/, '');
+  html = html.replace(/\s*<details class="sites"[^>]*>[\s\S]*?<\/details>/, '');
   // Below the result panel, so it never sits between the link and the answer.
   const panel = /(<section id="panel"[^>]*><\/section>(?:\s*<div id="ts-slot"><\/div>)?)/;
   if (!panel.test(html)) throw new Error('template lost the panel');

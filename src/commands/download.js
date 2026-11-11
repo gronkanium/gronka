@@ -1,7 +1,12 @@
+import { randomBytes } from 'node:crypto';
+import { ActionRowBuilder, ButtonBuilder, ButtonStyle } from 'discord.js';
 import { createLogger } from '../utils/logger.js';
 import { botConfig, r2Config } from '../utils/config.js';
-import { firstUrlIn } from '../utils/validation.js';
 import { readLink, prepareLink, refusalFor } from '../core/intake.js';
+import { firstConvertibleAttachment } from '../utils/attachment-helpers.js';
+import { messageMediaInput } from './shared/message-media.js';
+import { startConvert } from './convert.js';
+import { SITE_URL } from './info.js';
 import {
   isMangaDexTitleUrl,
   isMangaDexChapterUrl,
@@ -204,21 +209,69 @@ export function queueDownload(
 async function refuseUnsupported(interaction, url, commandSource) {
   const refusal = await refusalFor(url);
   if (!refusal) return false;
+  const message =
+    refusal.reason === 'invalid_social_media_url'
+      ? `${refusal.message} supported sites are listed on <${SITE_URL}/#sites>.`
+      : refusal.message;
   await refuse(interaction, 'download', {
     ...refusal,
+    message,
+    detail: refusal.message,
     context: { originalUrl: url, commandSource },
   });
   return true;
 }
 
-export async function handleDownloadContextMenuCommand(interaction) {
+const CONVERT_OFFER = 'convertoffer:';
+
+async function refuseNoLink(interaction, pending) {
+  const { attachment } = messageMediaInput(interaction.targetMessage, firstConvertibleAttachment);
+  let components;
+  if (attachment) {
+    const id = `${CONVERT_OFFER}${randomBytes(12).toString('hex')}`;
+    pending.set(id, { attachment, timestamp: Date.now() });
+    const button = new ButtonBuilder()
+      .setCustomId(id)
+      .setLabel('convert it')
+      .setStyle(ButtonStyle.Primary);
+    components = [new ActionRowBuilder().addComponents(button)];
+  }
+  await refuse(interaction, 'download', {
+    message: attachment
+      ? 'this message has no link to download, but its file can be converted.'
+      : 'this message has no link to download. use /download and paste one.',
+    detail: 'no URL found in this message.',
+    reason: 'missing_url',
+    components,
+    context: { commandSource: 'context-menu' },
+  });
+}
+
+export async function handleConvertOffer(interaction, pending) {
+  if (!interaction.customId?.startsWith(CONVERT_OFFER)) return false;
+  const offer = pending.get(interaction.customId);
+  pending.delete(interaction.customId);
+  if (!offer) {
+    await replyError(
+      interaction,
+      'this button has expired. right-click the message and pick apps > convert.'
+    );
+    return true;
+  }
+  await startConvert(interaction, { attachment: offer.attachment, commandSource: 'context-menu' });
+  return true;
+}
+
+export async function handleDownloadContextMenuCommand(interaction, pending) {
   if (!interaction.isMessageContextMenuCommand() || interaction.commandName !== 'download') {
     return;
   }
-  const read = readLink(
-    firstUrlIn(interaction.targetMessage.content),
-    'no URL found in this message.'
-  );
+  const { url: link } = messageMediaInput(interaction.targetMessage, () => null);
+  if (!link) {
+    await refuseNoLink(interaction, pending);
+    return;
+  }
+  const read = readLink(link);
   if (read.refusal) {
     await refuse(interaction, 'download', {
       ...read.refusal,
@@ -243,7 +296,7 @@ export async function handleDownloadContextMenuCommand(interaction) {
 export async function handleDownloadCommand(interaction) {
   const commandSource = commandSourceOf(interaction);
 
-  const rawUrl = interaction.options.getString('url');
+  const rawUrl = interaction.options.getString('link');
   const read = readLink(rawUrl, 'please provide a URL to download from.');
   if (read.refusal) {
     const context = { originalUrl: rawUrl, commandSource };

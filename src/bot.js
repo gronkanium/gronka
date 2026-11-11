@@ -9,6 +9,7 @@ import { startRetentionJob, stopRetentionJob } from './utils/retention.js';
 import {
   handleDownloadCommand,
   handleDownloadContextMenuCommand,
+  handleConvertOffer,
   queueDownload,
 } from './commands/download.js';
 import { handleOptimizeCommand, handleOptimizeContextMenuCommand } from './commands/optimize.js';
@@ -44,7 +45,7 @@ const { discordToken: DISCORD_TOKEN, clientId: CLIENT_ID } = botConfig;
 
 const { serverPort: SERVER_PORT, serverHost: SERVER_HOST } = serverConfig;
 
-// Optimize modal state; the file is re-fetched on submit since the menu's job dir is gone by then.
+// Optimize modal and download's convert button state; the file is re-fetched when it is used.
 const modalAttachmentCache = new Map();
 
 // Clean up modal cache entries older than 5 minutes
@@ -300,12 +301,15 @@ async function handleInteraction(interaction) {
       if (await handleMegaKeyInteraction(interaction, queueDownload)) {
         return;
       }
+      if (await handleConvertOffer(interaction, modalAttachmentCache)) {
+        return;
+      }
       if (interaction.isModalSubmit()) {
         await handleModalSubmit(interaction, modalAttachmentCache);
       }
     } else if (interaction.isMessageContextMenuCommand()) {
       if (interaction.commandName === 'download') {
-        await handleDownloadContextMenuCommand(interaction);
+        await handleDownloadContextMenuCommand(interaction, modalAttachmentCache);
       } else if (interaction.commandName === 'optimize') {
         await handleOptimizeContextMenuCommand(interaction, modalAttachmentCache);
       } else if (interaction.commandName === 'convert') {

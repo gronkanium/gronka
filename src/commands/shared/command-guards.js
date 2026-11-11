@@ -64,16 +64,21 @@ export async function resolveTimeOptions(interaction, { type }) {
 }
 
 // Ephemeral before the reply is deferred, an edit of the deferred reply after.
-export function replyError(interaction, content) {
+export function replyError(interaction, content, components) {
+  const payload = components ? { content, components } : { content };
   return interaction.deferred
-    ? safeInteractionEditReply(interaction, { content })
-    : safeInteractionReply(interaction, { content, flags: MessageFlags.Ephemeral });
+    ? safeInteractionEditReply(interaction, payload)
+    : safeInteractionReply(interaction, { ...payload, flags: MessageFlags.Ephemeral });
 }
 
 // Turns a request away: the reply, and with a `reason` one failed count, a log line and a failure
 // record. `detail`/`cause` are what we record; `message` is what the user sees.
-export async function refuse(interaction, type, { message, detail, cause, reason, context = {} }) {
-  await replyError(interaction, message);
+export async function refuse(
+  interaction,
+  type,
+  { message, detail, cause, reason, context = {}, components }
+) {
+  await replyError(interaction, message, components);
   if (!reason) return;
   const error = detail || cause?.message || message;
   if (!failed()) countOutcome(type, 'error');

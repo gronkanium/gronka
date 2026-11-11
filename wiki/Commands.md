@@ -29,7 +29,7 @@ convert video, audio or images to a compatible format.
 **parameters:**
 
 - `file` (attachment, optional) - the video, audio or image file to convert
-- `url` (string, optional) - a media file or supported social media link
+- `link` (string, optional) - a media file or supported social media link
 - `format` (choice, optional) - omit it to choose from compatible formats, or select GIF, MP4, WebM, MP3, M4A, OGG, WAV, FLAC, PNG, JPG or WebP directly
 - `optimize` (boolean, optional) - optimize GIF output to reduce its size
 - `lossy` (number, optional) - GIF output only, compression level from 0 to 100 (default: 35)
@@ -37,7 +37,7 @@ convert video, audio or images to a compatible format.
 
 **usage:**
 
-1. provide a file or link; when both are supplied, the file takes precedence
+1. provide a file or link; when both are supplied, the file takes precedence. with neither, a form opens to upload a file or paste a link
 2. without `format`, choose a compatible output from the picker
 3. the converted file is posted to chat, or delivered as a link when it exceeds the attachment limit
 
@@ -59,17 +59,17 @@ audio files with embedded artwork are treated as audio. multiple audio tracks us
 ```
 /convert file:<attach video>                  (choose an output, including GIF)
 /convert file:<attach audio> format:mp3
-/convert url:https://example.com/video.mp4 format:gif start:30 end:60
+/convert link:https://example.com/video.mp4 format:gif start:30 end:60
 /convert file:<attach image> format:webp
 ```
 
 ### `/download`
 
-download media from a social media url or direct url.
+download media from a social media link or direct file link.
 
 **parameters:**
 
-- `url` (string, required) - url to download media from
+- `link` (string, required) - link to download media from
 - `start` (string, optional) - start time for video trimming, as seconds (`90`, `12.5`) or a timestamp (`3:10`, `1:02:30`) (only applies to videos, ignored for images/gifs)
 - `end` (string, optional) - end time for video trimming, as seconds (`90`, `12.5`) or a timestamp (`3:10`, `1:02:30`) (only applies to videos, ignored for images/gifs)
 
@@ -93,11 +93,11 @@ download media from a social media url or direct url.
 **examples:**
 
 ```
-/download url:https://twitter.com/user/status/123
-/download url:https://example.com/video.mp4
-/download url:https://example.com/video.mp4 start:30 end:60
-/download url:https://example.com/video.mp4 start:1:30 end:3:10
-/download url:https://example.com/video.mp4 start:10
+/download link:https://twitter.com/user/status/123
+/download link:https://example.com/video.mp4
+/download link:https://example.com/video.mp4 start:30 end:60
+/download link:https://example.com/video.mp4 start:1:30 end:3:10
+/download link:https://example.com/video.mp4 start:10
 ```
 
 ### `/optimize`
@@ -107,12 +107,12 @@ optimize an existing gif to reduce file size.
 **parameters:**
 
 - `file` (attachment, optional) - the gif file to optimize
-- `url` (string, optional) - url to a gif file to optimize
+- `link` (string, optional) - link to a gif file to optimize
 - `lossy` (integer, optional) - lossy compression level (0-100, default: 35)
 
 **usage:**
 
-- provide either a file attachment or a url
+- provide either a file attachment or a link; with neither, a form opens to upload a gif or paste a link
 - `lossy` level controls compression:
   - 0-30: minimal compression, highest quality, larger files
   - 30-60: balanced compression and quality (default: 35)
@@ -122,7 +122,7 @@ optimize an existing gif to reduce file size.
 
 ```
 /optimize file:<attach gif>
-/optimize url:https://example.com/gif.gif lossy:50
+/optimize link:https://example.com/gif.gif lossy:50
 ```
 
 ### `/info`
@@ -161,7 +161,7 @@ convert media from a message to a compatible format.
 3. open the dropdown in the private reply and choose an output format
 4. the converted file is posted to chat, or delivered as a link
 
-attachments take precedence over links. if a message contains several attachments, the first supported media file is used and its filename is shown in the picker. embeds and forwarded attachments are supported. conversion processes one media file per request; social media galleries use the first item.
+attachments take precedence over links. a message with neither opens a form to upload a file or paste a link. if a message contains several attachments, the first supported media file is used and its filename is shown in the picker. embeds and forwarded attachments are supported. conversion processes one media file per request; social media galleries use the first item.
 
 ### download
 
@@ -178,6 +178,7 @@ download media from a message.
 - works with social media urls if cobalt is enabled
 - also works with direct media urls
 - downloads without conversion
+- a message with no link but a video, audio or image file gets a button to convert that file instead
 
 ### optimize
 
@@ -192,7 +193,7 @@ optimize a gif from a message.
 
 **notes:**
 
-- only works with gif files
+- only works with gif files; a message without one opens a form to upload a gif or paste a link
 - lossy level can be customized via the modal
 
 ## file size limits

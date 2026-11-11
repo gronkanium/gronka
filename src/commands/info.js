@@ -7,7 +7,7 @@ import { jobsOverview } from '../utils/database/media-jobs-pg.js';
 import { botConfig, supportConfig } from '../utils/config.js';
 
 const logger = createLogger('info');
-const SITE_URL = 'https://gronka.dev';
+export const SITE_URL = 'https://gronka.dev';
 const SOURCE_URL = 'https://github.com/gronkanium/gronka';
 
 const mb = bytes => `${Math.round(bytes / 1024 ** 2)} MB`;

@@ -2,6 +2,9 @@ import { MessageFlags } from 'discord.js';
 import { createLogger } from '../utils/logger.js';
 import { dispatchMediaJob } from '../jobs/dispatch.js';
 import { safeInteractionReply, safeInteractionDeferReply } from '../utils/interaction-helpers.js';
+import { readInputModal } from '../commands/shared/input-modal.js';
+import { submitConvertInput } from '../commands/convert.js';
+import { submitOptimizeInput } from '../commands/optimize.js';
 
 const logger = createLogger('modals');
 
@@ -11,6 +14,10 @@ export async function handleModalSubmit(interaction, modalAttachmentCache) {
   }
 
   const customId = interaction.customId;
+
+  const input = readInputModal(interaction);
+  if (input?.command === 'convert') return submitConvertInput(interaction, input);
+  if (input?.command === 'optimize') return submitOptimizeInput(interaction, input);
 
   // Handle optimize modal
   if (customId.startsWith('optimize_modal_')) {

@@ -14,8 +14,13 @@ import { fetchInput } from './shared/media-input.js';
 import { dispatchMediaJob } from '../jobs/dispatch.js';
 import { formatSizeChange } from './shared/media-reply.js';
 import { messageMediaInput } from './shared/message-media.js';
+import { askForInput } from './shared/input-modal.js';
 
 const logger = createLogger('optimize');
+
+const MISSING_INPUT = 'please provide either a gif attachment or a URL to a gif file.';
+// Discord's docs say extension-only types break mobile pickers; other images become optimized gifs.
+const GIF_UPLOAD = { label: 'upload a gif', fileTypes: ['image'] };
 
 async function processOptimization(
   interaction,
@@ -141,11 +146,7 @@ export async function handleOptimizeContextMenuCommand(interaction, modalAttachm
     attachments.find(att => isGifFile(att.name, att.contentType))
   );
   if (!attachment && !url) {
-    await refuse(interaction, 'optimize', {
-      message: 'no gif attachment or URL found in this message.',
-      reason: 'missing_input',
-      context: { commandSource: 'context-menu' },
-    });
+    await askForInput(interaction, 'optimize', GIF_UPLOAD, []);
     return;
   }
   const commandSource = 'context-menu';
@@ -189,10 +190,11 @@ export async function handleOptimizeContextMenuCommand(interaction, modalAttachm
 
 export async function handleOptimizeCommand(interaction) {
   const attachment = interaction.options.getAttachment('file');
-  const rawUrl = interaction.options.getString('url');
+  const rawUrl = interaction.options.getString('link');
   const url = attachment ? null : (firstUrlIn(rawUrl) ?? rawUrl);
   const lossyLevel = interaction.options.getNumber('lossy');
-  const context = { commandSource: commandSourceOf(interaction) };
+  const commandSource = commandSourceOf(interaction);
+  const context = { commandSource };
 
   if (lossyLevel !== null && (lossyLevel < 0 || lossyLevel > 100)) {
     await refuse(interaction, 'optimize', {
@@ -203,16 +205,35 @@ export async function handleOptimizeCommand(interaction) {
     return;
   }
   if (!attachment && !url) {
-    const message = 'please provide either a gif attachment or a URL to a gif file.';
+    if (commandSource === 'slash') {
+      await askForInput(interaction, 'optimize', GIF_UPLOAD, [lossyLevel]);
+      return;
+    }
     await refuse(interaction, 'optimize', {
-      ...missingInputRefusal(interaction, 'optimize', message),
+      ...missingInputRefusal(interaction, 'optimize', MISSING_INPUT),
       reason: 'missing_input',
       context,
     });
     return;
   }
+  await startOptimize(interaction, { attachment, url, lossyLevel, commandSource });
+}
 
-  const commandSource = commandSourceOf(interaction);
+export async function submitOptimizeInput(interaction, { options: [lossy], attachment, url }) {
+  const commandSource = 'slash';
+  if (!attachment && !url) {
+    await refuse(interaction, 'optimize', {
+      message: MISSING_INPUT,
+      reason: 'missing_input',
+      context: { commandSource },
+    });
+    return;
+  }
+  const lossyLevel = lossy ? Number(lossy) : null;
+  await startOptimize(interaction, { attachment, url, lossyLevel, commandSource });
+}
+
+async function startOptimize(interaction, { attachment, url, lossyLevel, commandSource }) {
   if (attachment && !isGifFile(attachment.name, attachment.contentType)) {
     await safeInteractionDeferReply(interaction);
     await dispatchMediaJob(interaction, 'convert', {

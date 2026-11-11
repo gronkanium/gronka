@@ -240,12 +240,9 @@ export async function tagAudio(file, track) {
 }
 
 const DRM = {
-  soundcloud: { only: 'soundcloud only streams this one', why: 'soundcloud encrypts this one' },
-  spotify: { only: 'spotify only streams its audio', why: 'spotify encrypts its audio' },
-  'apple music': {
-    only: 'apple music only streams its audio',
-    why: 'apple music encrypts its audio',
-  },
+  soundcloud: { only: 'soundcloud only streams this one' },
+  spotify: { only: 'spotify only streams its audio' },
+  'apple music': { only: 'apple music only streams its audio' },
 };
 
 async function fromSaavn(track) {
@@ -263,12 +260,7 @@ async function fromSaavn(track) {
 export async function downloadMatchedTrack(track) {
   const drm = DRM[track.site];
   const saavn = await fromSaavn(track);
-  if (saavn) {
-    return {
-      ...(await tagAudio(saavn, track)),
-      note: `${drm.why}, so this is the same recording from jiosaavn at 320k, tagged with ${track.site}'s cover and details.`,
-    };
-  }
+  if (saavn) return tagAudio(saavn, track);
   const match =
     pickMatch(track, await youtubeCandidates(`${track.artist} ${plain(track.title)}`)) ??
     pickMatch(track, await youtubeCandidates(`${track.artist} - Topic ${plain(track.title)}`));
@@ -282,9 +274,5 @@ export async function downloadMatchedTrack(track) {
   const audio = await downloadWithYtdlp(`https://www.youtube.com/watch?v=${match.id}`, {
     quality: 'bestaudio[ext=m4a]/bestaudio',
   });
-  const tagged = await tagAudio(audio, track);
-  return {
-    ...tagged,
-    note: `${drm.why}, so this is ${track.artist}'s own upload from youtube, tagged with ${track.site}'s cover and details.`,
-  };
+  return tagAudio(audio, track);
 }

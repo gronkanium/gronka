@@ -55,6 +55,8 @@ const ROUTED = [
   ['https://open.spotify.com/track/1', 'spotify'],
   ['https://open.spotify.com/intl-de/album/1', 'spotify'],
   ['https://spotify.link/AbC', 'spotify'],
+  ['https://music.apple.com/us/album/a/1?i=2', 'applemusic'],
+  ['https://music.apple.com/gb/song/a/2', 'applemusic'],
   ['https://example.com/page', null],
 ];
 

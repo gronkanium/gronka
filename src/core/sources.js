@@ -24,6 +24,11 @@ import { isGoogleDriveUrl, googleDriveDownloadUrl } from '../utils/google-drive.
 import { isTumblrUrl, downloadFromTumblr } from '../utils/tumblr.js';
 import { isSpotifyUrl, downloadFromSpotify, SPOTIFY_HOSTS } from '../utils/spotify.js';
 import {
+  isAppleMusicUrl,
+  downloadFromAppleMusic,
+  APPLE_MUSIC_HOSTS,
+} from '../utils/apple-music.js';
+import {
   isInstagramStoryUrl,
   isInstagramPostUrl,
   hasInstagramSession,
@@ -130,6 +135,7 @@ export const ENGINES = {
   },
   tumblr: { name: 'Tumblr', extract: url => downloadFromTumblr(url) },
   spotify: { name: 'Spotify', extract: url => downloadFromSpotify(url) },
+  applemusic: { name: 'Apple Music', extract: url => downloadFromAppleMusic(url) },
   direct: {
     name: 'direct file',
     extract: (url, ctx) =>
@@ -239,6 +245,13 @@ export const ROUTES = [
     owns: isSpotifyUrl,
     chain: [step('spotify')],
     services: switches('social', ['spotify', 'Spotify', SPOTIFY_HOSTS]),
+  },
+  {
+    id: 'applemusic',
+    name: 'Apple Music',
+    owns: isAppleMusicUrl,
+    chain: [step('applemusic')],
+    services: switches('social', ['applemusic', 'Apple Music', APPLE_MUSIC_HOSTS]),
   },
   {
     id: 'instagram-story',

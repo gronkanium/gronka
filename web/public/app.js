@@ -43,6 +43,7 @@ const SITES = [
   ['vimeo', 'vimeo'],
   ['soundcloud', 'soundcloud'],
   ['spotify', 'spotify'],
+  ['music.apple.com', 'apple music'],
   ['giphy', 'giphy'],
   ['tenor', 'tenor'],
   ['mega.nz', 'mega'],

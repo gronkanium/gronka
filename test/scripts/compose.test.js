@@ -57,6 +57,25 @@ describe('compose networking', () => {
     assert.equal(bot.services.app.environment.WEBUI_ALLOWED_HOSTS, hosts);
   });
 
+  test('the app and workers receive the documented media, worker and pool settings', () => {
+    const env = {
+      YTDLP_ENABLED: 'false',
+      YTDLP_QUALITY: 'bestvideo[height<=?720]+bestaudio/best',
+      GALLERY_DL_ENABLED: 'false',
+      WORKER_MAX_JOBS: '2',
+      WORKER_DRAIN_MS: '30000',
+      POSTGRES_MAX_CONNECTIONS: '5',
+      POSTGRES_IDLE_TIMEOUT: '60',
+      POSTGRES_CONNECT_TIMEOUT: '20',
+    };
+    const bot = config(['docker-compose.yml'], env);
+    for (const service of ['app', 'worker']) {
+      for (const [key, value] of Object.entries(env)) {
+        assert.equal(bot.services[service].environment[key], value, `${service} ${key}`);
+      }
+    }
+  });
+
   test('web receives a configured external geo proxy', () => {
     const proxy = 'http://proxy.example.com:8888';
     const web = config(['docker-compose.web.yml'], { WEB_GEO_PROXY_URL: proxy });

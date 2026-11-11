@@ -6,6 +6,7 @@ import { describe, expect, test } from 'bun:test';
 import {
   fromPath,
   tempPath,
+  typeForExtension,
   withExtension,
   withJobDir,
   writeAtomic,
@@ -72,6 +73,16 @@ describe('media-file', () => {
     assert.ok(named.path.endsWith('.mp4'));
     await fs.access(named.path);
   });
+});
+
+test('typeForExtension gives every downloader the same content type', () => {
+  assert.equal(typeForExtension('.MKV'), 'video/x-matroska');
+  assert.equal(typeForExtension('.m4v'), 'video/mp4');
+  assert.equal(typeForExtension('.jpeg'), 'image/jpeg');
+  assert.equal(typeForExtension('.mp3'), 'audio/mpeg');
+  assert.equal(typeForExtension('.zip'), 'application/zip');
+  assert.equal(typeForExtension('.part'), null);
+  assert.equal(typeForExtension(''), null);
 });
 
 describe('writeAtomic', () => {

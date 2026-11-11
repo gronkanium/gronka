@@ -1,5 +1,4 @@
 import { Collection, InteractionWebhook, PermissionFlagsBits } from 'discord.js';
-import { createMessageAdapter } from '../commands/shared/message-adapter.js';
 import { getDiscordAttachmentLimit } from '../commands/shared/attachment-limit.js';
 
 const INTERACTION_TOKEN_MS = 15 * 60 * 1000;
@@ -10,7 +9,6 @@ export async function prepareReplyTarget(interaction) {
   const member = interaction.guild?.members?.me;
   const permissions = member && interaction.channel?.permissionsFor?.(member);
   if (
-    reply.kind !== 'interaction' ||
     interaction.ephemeral ||
     !permissions?.has([
       PermissionFlagsBits.ViewChannel,
@@ -32,18 +30,7 @@ export async function prepareReplyTarget(interaction) {
 
 // Where a job's answer goes, as plain JSON for the queue.
 export function replyTargetOf(interaction) {
-  if (interaction.isPrefixCommand) {
-    return {
-      kind: 'message',
-      channelId: interaction.channelId,
-      messageId: interaction.message.id,
-      replyId: interaction.replyMessageId(),
-      attachmentSizeLimit: getDiscordAttachmentLimit(interaction, null),
-      expiresAt: Date.now() + MESSAGE_REPLY_MS,
-    };
-  }
   return {
-    kind: 'interaction',
     appId: interaction.applicationId,
     token: interaction.token,
     channelId: interaction.channelId,
@@ -63,33 +50,6 @@ const fetchChannel = (client, id) => client.channels.fetch(id, { allowUnknownGui
 // Rebuilds the interaction surface the commands use, over REST only (no gateway session).
 export async function interactionFor(client, job) {
   const { reply } = job;
-  if (reply.kind === 'message') {
-    const channel = await fetchChannel(client, reply.channelId);
-    // Edits go straight to REST: a REST-fetched message has no cached channel to edit through.
-    const replyMessage = reply.replyId && {
-      id: reply.replyId,
-      edit: payload => channel.messages.edit(reply.replyId, payload),
-    };
-    const message = {
-      id: reply.messageId,
-      channel,
-      channelId: reply.channelId,
-      client,
-      reply: payload =>
-        channel.send({
-          ...payload,
-          reply: { messageReference: reply.messageId, failIfNotExists: false },
-        }),
-    };
-    return createMessageAdapter(
-      message,
-      {},
-      {
-        replyMessage,
-        attachmentSizeLimit: reply.attachmentSizeLimit ?? undefined,
-      }
-    );
-  }
   const webhook = new InteractionWebhook(client, reply.appId, reply.token);
   let useChannel = Boolean(reply.replyId && Date.now() >= reply.webhookExpiresAt);
   const send = async (options, followUp = false) => {

@@ -9,6 +9,7 @@ import { startRetentionJob, stopRetentionJob } from './utils/retention.js';
 import {
   handleDownloadCommand,
   handleDownloadContextMenuCommand,
+  handleConvertOffer,
   queueDownload,
 } from './commands/download.js';
 import { handleOptimizeCommand, handleOptimizeContextMenuCommand } from './commands/optimize.js';
@@ -18,7 +19,6 @@ import { handleInfoCommand } from './commands/info.js';
 import { handleModalSubmit } from './handlers/modals.js';
 import { handleMangaInteraction } from './commands/manga.js';
 import { handleMegaKeyInteraction } from './commands/mega-key.js';
-import { handlePrefixMessage } from './handlers/prefix-commands.js';
 import { flushCounts } from './utils/operations-tracker.js';
 import { initializeR2UsageCache } from './utils/storage.js';
 import { r2Config } from './utils/config.js';
@@ -33,6 +33,7 @@ import {
   saveSavedPresence,
 } from './utils/presence.js';
 import { replyIfMaintenance } from './utils/maintenance.js';
+import { parseProfileEdit } from './utils/bot-profile.js';
 import { reportPresence, clearPresence, PRESENCE_MS } from './utils/database/media-jobs-pg.js';
 import { withJobDir, sweepJobDirs } from './utils/media-file.js';
 import { hostGuard, securityHeaders } from './webui-server/middleware/security.js';
@@ -43,7 +44,7 @@ const { discordToken: DISCORD_TOKEN, clientId: CLIENT_ID } = botConfig;
 
 const { serverPort: SERVER_PORT, serverHost: SERVER_HOST } = serverConfig;
 
-// Optimize modal state; the file is re-fetched on submit since the menu's job dir is gone by then.
+// Optimize modal and download's convert button state; the file is re-fetched when it is used.
 const modalAttachmentCache = new Map();
 
 // Clean up modal cache entries older than 5 minutes
@@ -58,12 +59,8 @@ setInterval(() => {
 
 const client = new Client({
   allowedMentions: { parse: [], repliedUser: true },
-  intents: [
-    GatewayIntentBits.Guilds,
-    GatewayIntentBits.GuildMessages,
-    GatewayIntentBits.DirectMessages, // Required for DM support
-  ],
-  partials: [Partials.Channel], // Required to receive MessageCreate in DMs (prefix commands)
+  intents: [GatewayIntentBits.Guilds],
+  partials: [Partials.Channel], // resolves interaction.channel in DMs and user installs
   rest: { timeout: DISCORD_REST_TIMEOUT_MS },
 });
 
@@ -77,9 +74,7 @@ let retentionJobIntervalId = null;
 // HTTP server for stats endpoint (minimal, only for Jekyll stats site)
 let httpServer = null;
 
-/**
- * Minimal HTTP server: /health for the Docker healthcheck and /api/bot/status
- */
+// /health for the Docker healthcheck, /api/bot/status for presence updates.
 function startStatsServer() {
   const app = express();
 
@@ -95,6 +90,8 @@ function startStatsServer() {
   );
 
   app.use(hostGuard);
+  // An avatar or banner arrives inline as a data URI.
+  app.use('/api/bot/profile', express.json({ limit: '25mb' }));
   app.use(express.json());
   app.use(securityHeaders);
 
@@ -150,9 +147,7 @@ function startStatsServer() {
       return res.status(503).json({ error: 'bot is not ready' });
     }
 
-    // This is the client's own presence, which Discord never echoes back to bots (that would
-    // need the GuildPresences intent), so it reflects what this process last sent. Since the
-    // saved presence now rides along in the identify payload, that matches what Discord shows.
+    // Discord never echoes a bot's own presence (needs GuildPresences): this is what we sent.
     const presence = client.user.presence;
     const activity = presence.activities.find(a => a.type === ActivityType.Custom) || null;
 
@@ -162,6 +157,54 @@ function startStatsServer() {
       activity: activityDisplayText(activity),
       botTag: client.user.tag,
     });
+  });
+
+  app.get('/api/bot/profile', async (req, res) => {
+    if (!client.isReady()) {
+      return res.status(503).json({ error: 'bot is not ready' });
+    }
+    try {
+      const [user, application] = await Promise.all([
+        client.user.fetch(true),
+        client.application.fetch(),
+      ]);
+      res.json({
+        username: user.username,
+        avatar: user.displayAvatarURL({ size: 256 }),
+        hasAvatar: Boolean(user.avatar),
+        defaultAvatar: user.defaultAvatarURL,
+        banner: user.bannerURL({ size: 1024 }) ?? null,
+        accentColor: user.hexAccentColor ?? null,
+        bio: application.description ?? '',
+      });
+    } catch (error) {
+      logger.error('Failed to read bot profile:', error);
+      res.status(502).json({ error: 'could not read the profile from discord' });
+    }
+  });
+
+  app.patch('/api/bot/profile', async (req, res) => {
+    if (!client.isReady()) {
+      return res.status(503).json({ error: 'bot is not ready' });
+    }
+    let edit;
+    try {
+      edit = parseProfileEdit(req.body);
+    } catch (error) {
+      return res.status(400).json({ error: error.message });
+    }
+    try {
+      if (Object.keys(edit.user).length) await client.user.edit(edit.user);
+      if (edit.bio !== undefined) await client.application.edit({ description: edit.bio });
+      const changed = [...Object.keys(edit.user), ...(edit.bio === undefined ? [] : ['bio'])];
+      logger.info(`Bot profile updated: ${changed.join(', ')}`);
+      res.json({ success: true });
+    } catch (error) {
+      logger.error('Failed to update bot profile:', error);
+      res
+        .status(error.status >= 400 && error.status < 500 ? 400 : 502)
+        .json({ error: error.message || 'discord refused the change' });
+    }
   });
 
   app.get('/health', (req, res) => res.status(client.isReady() ? 200 : 503).end());
@@ -180,11 +223,7 @@ client.once(Events.ClientReady, async readyClient => {
   try {
     botStartTime = Date.now();
 
-    // The identify payload already carried this presence (see startBot), that is what makes it
-    // stick across a restart, with no race against the presence discord.js sends on identify.
-    // Re-assert it here anyway: identify does not patch the client's local presence, which is
-    // what GET /api/bot/status reads back, and this also covers a pre-login load that failed.
-    // Both paths send the same values, so whichever Discord applies last is the right one.
+    // Identify does not set the local presence GET /api/bot/status reads, so set it again.
     try {
       const { status, activity } = await loadSavedPresence();
       readyClient.user.setPresence(buildPresenceOptions(status, activity));
@@ -249,12 +288,15 @@ async function handleInteraction(interaction) {
       if (await handleMegaKeyInteraction(interaction, queueDownload)) {
         return;
       }
+      if (await handleConvertOffer(interaction, modalAttachmentCache)) {
+        return;
+      }
       if (interaction.isModalSubmit()) {
         await handleModalSubmit(interaction, modalAttachmentCache);
       }
     } else if (interaction.isMessageContextMenuCommand()) {
       if (interaction.commandName === 'download') {
-        await handleDownloadContextMenuCommand(interaction);
+        await handleDownloadContextMenuCommand(interaction, modalAttachmentCache);
       } else if (interaction.commandName === 'optimize') {
         await handleOptimizeContextMenuCommand(interaction, modalAttachmentCache);
       } else if (interaction.commandName === 'convert') {
@@ -277,16 +319,6 @@ async function handleInteraction(interaction) {
     logger.error('Unhandled error in interaction handler:', error);
   }
 }
-
-// Prefix commands ("^download <url>", "@gronka help", ...). The handler does its own
-// bot/webhook filtering, ban/maintenance checks, and per-guild prefix resolution.
-client.on(Events.MessageCreate, async message => {
-  try {
-    await handlePrefixMessage(message, { botStartTime });
-  } catch (error) {
-    logger.error('Unhandled error in message handler:', error);
-  }
-});
 
 client.on(Events.Error, error => {
   logger.error('Discord error:', error);
@@ -317,12 +349,7 @@ async function startBot() {
       startStatsServer();
     }
 
-    // Restore the last presence set via the webui/stats API by putting it in the identify
-    // payload. discord.js always sends a presence on identify (defaulting to online with no
-    // activities), so setting it after ClientReady loses a race against that default and the
-    // bot comes up online with no custom status. Doing it here also means a gateway
-    // re-identify (reconnect after a failed resume) replays the presence for free.
-    // A DB hiccup here must not abort startup, ClientReady retries.
+    // In the identify payload: set after ClientReady, it loses to discord.js's default presence.
     try {
       const { status, activity } = await loadSavedPresence();
       client.options.presence = buildPresenceOptions(status, activity);

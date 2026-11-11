@@ -1,9 +1,6 @@
 import { describe, test } from 'bun:test';
 import assert from 'node:assert/strict';
-import {
-  missingInputRefusal,
-  resolveTimeOptions,
-} from '../../../src/commands/shared/command-guards.js';
+import { resolveTimeOptions } from '../../../src/commands/shared/command-guards.js';
 import { createFakeInteraction } from '../../helpers/fake-interaction.js';
 
 function withTimes(start, end) {
@@ -12,27 +9,6 @@ function withTimes(start, end) {
   interaction.options = { getString: name => given[name] ?? null };
   return { interaction, calls };
 }
-
-describe('missingInputRefusal', () => {
-  test('a mention that replies to a message points at the apps menu', () => {
-    const refusal = missingInputRefusal(
-      { isPrefixCommand: true, message: { reference: { messageId: '1' } } },
-      'convert',
-      'please provide a file.'
-    );
-    assert.match(refusal.message, /apps > convert/);
-    assert.ok(refusal.detail);
-  });
-
-  test('anything else keeps the plain message', () => {
-    assert.deepEqual(missingInputRefusal({}, 'convert', 'please provide a file.'), {
-      message: 'please provide a file.',
-    });
-    assert.deepEqual(missingInputRefusal({ isPrefixCommand: true, message: {} }, 'optimize', 'x'), {
-      message: 'x',
-    });
-  });
-});
 
 describe('resolveTimeOptions', () => {
   test('turns start and end into a start and a duration', async () => {

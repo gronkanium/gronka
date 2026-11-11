@@ -3,7 +3,7 @@ import assert from 'node:assert';
 import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
-import { initDatabase } from '../src/utils/database.js';
+import { initDatabase, setSetting } from '../src/utils/database.js';
 import { readSessions } from '../src/webui-server/sessions.js';
 
 let server;
@@ -21,6 +21,7 @@ beforeAll(async () => {
 });
 
 afterAll(async () => {
+  await setSetting('maintenance_mode', 'false');
   if (server) server.close();
   await fs.rm(dir, { recursive: true, force: true });
 });
@@ -69,6 +70,20 @@ describe('sessions', () => {
 });
 
 describe('system routes', () => {
+  test('GET /api/system says whether maintenance mode is on, for the sidebar badge', async () => {
+    await setSetting('maintenance_mode', 'true');
+    assert.strictEqual((await (await fetch(`${baseUrl}/api/system`)).json()).maintenance, true);
+    await setSetting('maintenance_mode', 'false');
+    assert.strictEqual((await (await fetch(`${baseUrl}/api/system`)).json()).maintenance, false);
+  });
+
+  test('GET /api/system reports MEDIA_WORKERS as the bot reads it', async () => {
+    assert.strictEqual(process.env.MEDIA_WORKERS, undefined);
+    const response = await fetch(`${baseUrl}/api/system`);
+    assert.strictEqual(response.status, 200);
+    assert.strictEqual((await response.json()).mediaWorkers, false);
+  });
+
   test('GET /api/system/deps answers even when a dependency is down', async () => {
     const response = await fetch(`${baseUrl}/api/system/deps`);
     assert.strictEqual(response.status, 200);

@@ -49,6 +49,17 @@ describe('logger', () => {
     }
   });
 
+  test('an unknown LOG_LEVEL fails instead of falling back to INFO', () => {
+    const original = process.env.LOG_LEVEL;
+    process.env.LOG_LEVEL = 'LOUD';
+    try {
+      assert.throws(() => createLogger('t'), { code: 'INVALID_LOG_LEVEL' });
+    } finally {
+      if (original === undefined) delete process.env.LOG_LEVEL;
+      else process.env.LOG_LEVEL = original;
+    }
+  });
+
   test('an Error keeps its message and stack', async () => {
     const lines = await captured(() => createLogger('t').error('failed:', new Error('boom')));
     assert.match(lines[0], /failed: Error: boom/);

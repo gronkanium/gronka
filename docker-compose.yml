@@ -47,6 +47,9 @@ services:
       - STATS_CACHE_TTL=${STATS_CACHE_TTL:-}
       - COBALT_API_URL=${COBALT_API_URL:-http://cobalt:9000}
       - COBALT_ENABLED=${COBALT_ENABLED:-true}
+      - YTDLP_ENABLED=${YTDLP_ENABLED:-}
+      - YTDLP_QUALITY=${YTDLP_QUALITY:-}
+      - GALLERY_DL_ENABLED=${GALLERY_DL_ENABLED:-}
       - R2_ACCOUNT_ID=${R2_ACCOUNT_ID:-}
       - R2_ACCESS_KEY_ID=${R2_ACCESS_KEY_ID:-}
       - R2_SECRET_ACCESS_KEY=${R2_SECRET_ACCESS_KEY:-}
@@ -69,12 +72,17 @@ services:
       - POSTGRES_PASSWORD=${PROD_POSTGRES_PASSWORD:?run bun run setup, or set PROD_POSTGRES_PASSWORD in .env}
       - POSTGRES_DB=${PROD_POSTGRES_DB:-gronka}
       - DATABASE_URL=${DATABASE_URL:-}
+      - POSTGRES_MAX_CONNECTIONS=${POSTGRES_MAX_CONNECTIONS:-}
+      - POSTGRES_IDLE_TIMEOUT=${POSTGRES_IDLE_TIMEOUT:-}
+      - POSTGRES_CONNECT_TIMEOUT=${POSTGRES_CONNECT_TIMEOUT:-}
       # Netscape cookies.txt for yt-dlp (age-restricted TikTok etc.); ignored if the file is absent
       - YTDLP_COOKIES_PATH=${YTDLP_COOKIES_PATH:-/app/ytdlp-cookies.txt}
       # The app's own cookie file (cobalt has a separate copy): `instagram` and `reddit` entries
       - INSTAGRAM_COOKIES_PATH=${INSTAGRAM_COOKIES_PATH:-/app/cookies.json}
       # Deferred commands go to the worker service; false runs them inside the bot process.
       - MEDIA_WORKERS=${MEDIA_WORKERS:-true}
+      - WORKER_MAX_JOBS=${WORKER_MAX_JOBS:-}
+      - WORKER_DRAIN_MS=${WORKER_DRAIN_MS:-}
       # Proxy for sources that block this server's region, e.g. http://vpn:8888 with the vpn profile
       - GEO_PROXY_URL=${GEO_PROXY_URL:-}
       # Private IPv4 ranges the containers may reach besides their own networks, e.g. a LAN database

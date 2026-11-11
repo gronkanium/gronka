@@ -1,6 +1,6 @@
-import { firstUrlIn, validateUrl } from '../utils/validation.js';
+import { firstUrlIn, validateUrl, INVALID_URL_ERROR } from '../utils/validation.js';
 import { resolveShortLink } from '../utils/short-links.js';
-import { canonicalizeMirrorUrl } from '../utils/cobalt.js';
+import { canonicalizeMirrorUrl } from '../utils/mirror-links.js';
 import { isDiscordMessageLink, DISCORD_MESSAGE_LINK_MESSAGE } from '../utils/discord-cdn.js';
 import { chainFor } from './sources.js';
 
@@ -10,7 +10,12 @@ export function readLink(text, missingMessage = 'please provide a URL.') {
   const url = firstUrlIn(text) ?? text.trim();
   const check = validateUrl(url);
   if (!check.valid) {
-    return { refusal: { message: `invalid URL: ${check.error}`, reason: 'invalid_url' } };
+    const detail = `invalid URL: ${check.error}`;
+    const message =
+      check.error === INVALID_URL_ERROR
+        ? "that's not a link. paste the whole link to the post."
+        : detail;
+    return { refusal: { message, detail, reason: 'invalid_url' } };
   }
   return { url };
 }

@@ -10,14 +10,14 @@ const PLATFORMS = [
     slug: 'tiktok',
     name: 'tiktok',
     title: 'tiktok downloader: save tiktok videos',
-    desc: 'save a tiktok video or just its sound. paste the link, get the file. free, no ads, no account, no request logs.',
+    desc: 'save a tiktok video or just its sound. free, no ads, no account, no request logs.',
     placeholder: 'paste a tiktok link',
   },
   {
     slug: 'instagram',
     name: 'instagram',
     title: 'instagram downloader: reels, posts, stories',
-    desc: 'save instagram reels, photo posts, carousels, stories and highlights. paste the link, get the file. free, no ads, no account.',
+    desc: 'save instagram reels, photo posts, carousels, stories and highlights. free, no ads, no account.',
     placeholder: 'paste an instagram link',
   },
   {
@@ -38,7 +38,7 @@ const PLATFORMS = [
     slug: 'reddit',
     name: 'reddit',
     title: 'reddit video downloader: videos, galleries, gifs',
-    desc: 'save reddit videos with sound, whole galleries in order, and gifs from comments. paste the link, get the file. free, no ads.',
+    desc: 'save reddit videos with sound, whole galleries in order, and gifs from comments. free, no ads.',
     placeholder: 'paste a reddit link',
   },
   {
@@ -65,6 +65,7 @@ const MORE = [
   ['twitch', 'twitch', 'clips'],
   ['soundcloud', 'soundcloud', 'tracks as audio'],
   ['spotify', 'spotify', 'tracks as audio'],
+  ['apple-music', 'apple music', 'songs as audio'],
   ['streamable', 'streamable', 'videos'],
   ['dailymotion', 'dailymotion', 'videos'],
   ['imgur', 'imgur', 'videos'],
@@ -90,7 +91,7 @@ for (const [slug, name, what] of MORE) {
     slug,
     name,
     title: `${name} downloader: save ${what}`,
-    desc: `save ${what} from ${name}. paste the link, get the file. free, no ads, no account, no request logs.`,
+    desc: `save ${what} from ${name}. free, no ads, no account, no request logs.`,
     placeholder: `paste ${/^[aeiox]/.test(name) ? 'an' : 'a'} ${name} link`,
   });
 }
@@ -117,14 +118,15 @@ const OTHER_SITES = [
 
 const HOME = {
   title: 'gronka: free video downloader, no ads, no account',
-  desc: 'paste a link from tiktok, instagram, x, youtube, reddit and more, get the file. free, no ads, no account, no request logs.',
+  desc: 'download videos, images and audio from tiktok, instagram, x, youtube, reddit and 40+ more sites. free, no ads, no account, no request logs.',
 };
 
 const esc = text =>
   text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 const ld = data => `<script type="application/ld+json">${JSON.stringify(data)}</script>`;
 
-const sitesList = current => `<details class="sites">
+// The bot's unsupported-site reply links to #sites.
+const sitesList = current => `<details class="sites" id="sites">
           <summary>supported sites</summary>
           <ul>${PLATFORMS.map(p =>
             p.slug === current
@@ -166,7 +168,7 @@ function withHead(html, { title, desc, url, jsonld }) {
 
 function withSites(html, current) {
   html = html.replace(/\s*<section class="more">[\s\S]*?<\/section>/, '');
-  html = html.replace(/\s*<details class="sites">[\s\S]*?<\/details>/, '');
+  html = html.replace(/\s*<details class="sites"[^>]*>[\s\S]*?<\/details>/, '');
   // Below the result panel, so it never sits between the link and the answer.
   const panel = /(<section id="panel"[^>]*><\/section>(?:\s*<div id="ts-slot"><\/div>)?)/;
   if (!panel.test(html)) throw new Error('template lost the panel');
@@ -220,10 +222,7 @@ for (const p of PLATFORMS) {
     ],
   });
   const swaps = [
-    [
-      /<h1>[\s\S]*?<\/h1>/,
-      `<h1>paste ${/^[aeiox]/.test(p.name) ? 'an' : 'a'} ${esc(p.name)} link, get the file.</h1>`,
-    ],
+    [/<h1>[\s\S]*?<\/h1>/, `<h1>${esc(p.name)} downloader</h1>`],
     [/placeholder="paste a link"/, `placeholder="${esc(p.placeholder)}"`],
   ];
   for (const [pattern, text] of swaps) {

@@ -1,4 +1,5 @@
 import { AsyncLocalStorage } from 'node:async_hooks';
+import { ConfigurationError } from './errors.js';
 import { hostsOnly } from './url-host.js';
 
 const LOG_LEVELS = {
@@ -40,9 +41,7 @@ export function formatTimestampSeconds(date = new Date()) {
   return date.toISOString().replace(/\.\d{3}Z$/, 'Z');
 }
 
-// JSON.stringify(new Error('boom')) is '{}', message and stack are non-enumerable. AppError
-// subclasses set their own enumerable fields so they survived, which hid this: every plain
-// Error logged as a bare `{}` with the cause erased.
+// JSON.stringify(new Error('boom')) is '{}': message and stack are non-enumerable.
 function stringifyArg(arg) {
   if (arg instanceof Error) {
     // AppError carries stack/message as own enumerable props; drop them so the fields the
@@ -62,21 +61,14 @@ function stringifyArg(arg) {
 }
 
 class Logger {
-  constructor(component, logLevel = 'INFO') {
+  constructor(component, levelName) {
     this.component = component;
-
-    const levelName = logLevel.toUpperCase();
-    this.logLevel = LOG_LEVELS[levelName] !== undefined ? LOG_LEVELS[levelName] : LOG_LEVELS.INFO;
+    this.logLevel = LOG_LEVELS[levelName];
   }
 
-  // Sanitize user input to prevent log injection
-  // Removes newlines, carriage returns, ANSI escape codes, and all control characters
-  // that could be used to forge log entries or manipulate log output
+  // Strips ANSI codes and control characters so user input cannot forge log lines.
   sanitizeLogInput(input) {
     if (typeof input === 'string') {
-      // Remove ANSI escape codes (used for colored terminal output)
-      // Remove newlines, carriage returns, tabs, and ALL other control characters
-      // (0x00-0x1F and 0x7F-0x9F) to prevent log injection and log forging attacks
       return (
         input
           // eslint-disable-next-line no-control-regex
@@ -147,6 +139,12 @@ class Logger {
 }
 
 export function createLogger(component) {
-  const logLevel = process.env.LOG_LEVEL || (isWebMode() ? 'ERROR' : 'INFO');
-  return new Logger(component, logLevel);
+  const level = process.env.LOG_LEVEL?.trim().toUpperCase() || (isWebMode() ? 'ERROR' : 'INFO');
+  if (!Object.hasOwn(LOG_LEVELS, level)) {
+    throw new ConfigurationError(
+      `LOG_LEVEL must be one of: ${Object.keys(LOG_LEVELS).join(', ')}, got: ${level}`,
+      'INVALID_LOG_LEVEL'
+    );
+  }
+  return new Logger(component, level);
 }

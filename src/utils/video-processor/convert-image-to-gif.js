@@ -13,14 +13,6 @@ import {
 
 const logger = createLogger('convert-image-to-gif');
 
-/**
- * Convert image file to GIF using FFmpeg.
- * @param {string} inputPath - Path to input image file
- * @param {string} outputPath - Path to output GIF file
- * @param {Object} options - Conversion options
- * @param {number} options.width - Output width in pixels (default: 720)
- * @returns {Promise<void>}
- */
 export async function convertImageToGif(inputPath, outputPath, options = {}) {
   return convertImageToGifImpl(inputPath, outputPath, options);
 }

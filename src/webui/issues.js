@@ -1,4 +1,5 @@
 // Issue grouping, classification and state, shared by the Issues page, Overview and the nav.
+import { NO_DATA } from './utils/format.js';
 
 // What the bot recorded for a failure: an error class, or an early refusal's reason code.
 const USER = new Set([
@@ -48,6 +49,12 @@ export const keyOf = reason =>
     .replace(/\d+(\.\d+)?/g, '#')
     .trim();
 
+// The key an issue's mute or resolve is saved under; the server prunes states by it too.
+export const issueKey = (reason, by = 'error') => (by === 'cause' ? 'cause~' : '') + keyOf(reason);
+
+// The /api/alerts filter that fetches one variant's events.
+export const variantFilter = by => (by === 'cause' ? 'cause' : 'reason');
+
 function classify(classes, codes, text) {
   const byCode = CODE_KIND[codes[0]];
   if (byCode && codes.every(c => CODE_KIND[c] === byCode))
@@ -71,7 +78,7 @@ export function groupIssues(byReason = [], by = 'error') {
   const groups = new Map();
   for (const r of byReason) {
     if (!r.reason) continue;
-    const key = (by === 'cause' ? 'cause~' : '') + keyOf(r.reason);
+    const key = issueKey(r.reason, by);
     const g = groups.get(key) ?? {
       key,
       by,
@@ -148,7 +155,7 @@ export function buckets(times, unit, n, at) {
 }
 
 export function abbr(n) {
-  if (n == null) return '–';
+  if (n == null) return NO_DATA;
   if (n < 1000) return String(n);
   if (n < 1e4) return `${(n / 1e3).toFixed(1).replace(/\.0$/, '')}k`;
   if (n < 1e6) return `${Math.round(n / 1e3)}k`;

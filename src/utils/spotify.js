@@ -1,7 +1,7 @@
 import { NetworkError, ValidationError, withCause } from './errors.js';
 import { fetchPage } from './ssrf-guard.js';
 import { hostOf, hostUnder } from './url-host.js';
-import { trackViaYoutube } from './soundcloud.js';
+import { downloadMatchedTrack } from './soundcloud.js';
 
 export const SPOTIFY_HOSTS = ['open.spotify.com', 'spotify.link', 'spotify.app.link'];
 
@@ -48,4 +48,4 @@ export async function spotifyTrack(url) {
   };
 }
 
-export const downloadFromSpotify = async url => trackViaYoutube(await spotifyTrack(url));
+export const downloadFromSpotify = async url => downloadMatchedTrack(await spotifyTrack(url));

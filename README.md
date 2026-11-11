@@ -10,12 +10,12 @@
   <a href="https://gronka.dev"><img src="https://img.shields.io/badge/web-gronka.dev-000" alt="gronka.dev"></a>
 </p>
 
-paste a link, get the file. gronka™ downloads media from 40+ sites, turns video into gifs and shrinks
+gronka™ downloads media from 40+ sites, turns video into gifs and shrinks
 gifs, as a discord bot and on [gronka.dev](https://gronka.dev).
 
 ## commands
 
-- `/download`: a video, image or gallery from a link, or `mp3` for just the audio
+- `/download`: a video, image or gallery from a link
 - `/convert`: video, audio or images to a compatible format; choose from a picker, or use `format` directly
 - `/optimize`: shrink an existing gif
 - `/info`: version, memory, uptime and queue status
@@ -24,7 +24,7 @@ right-click a message → apps does the same: **convert**, **download**, **optim
 
 ## sites
 
-tiktok, instagram, youtube, x, reddit, soundcloud, spotify, bluesky, threads, pinterest, twitch, tumblr, imgur, giphy
+tiktok, instagram, youtube, x, reddit, soundcloud, spotify, apple music, bluesky, threads, pinterest, twitch, tumblr, imgur, giphy
 and about 30 more, through [cobalt](https://github.com/imputnet/cobalt), yt-dlp, gallery-dl and a few
 extractors of its own. the full list is on [gronka.dev](https://gronka.dev).
 
@@ -50,7 +50,7 @@ not part of a self-hosted install.
 bun run lint && bun run test:safe && bun run test:e2e
 ```
 
-plain esm javascript on bun 1.3. issues and PRs welcome, see [CONTRIBUTING](.github/CONTRIBUTING.md).
+plain esm javascript on bun 1.4. issues and PRs welcome, see [CONTRIBUTING](.github/CONTRIBUTING.md).
 
 ## license
 

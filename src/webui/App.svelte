@@ -8,6 +8,7 @@
     Globe,
     ShieldCheck,
     SlidersHorizontal,
+    Bot,
     PanelLeftClose,
     PanelLeftOpen,
     Menu,
@@ -22,6 +23,7 @@
   import Sources from './pages/Sources.svelte';
   import Checks from './pages/Checks.svelte';
   import BotSettings from './pages/BotSettings.svelte';
+  import BotProfile from './pages/Bot.svelte';
 
   const SIDEBAR_KEY = 'gronka:sidebar-open';
   const THEME_KEY = 'gronka:theme';
@@ -32,6 +34,7 @@
     { page: 'checks', label: 'Checks', icon: ShieldCheck },
     { page: 'system', label: 'Workers & queue', icon: Server },
     { page: 'sources', label: 'Sources', icon: Globe },
+    { page: 'bot', label: 'Bot', icon: Bot },
   ];
   const settingsItem = { page: 'settings', label: 'Settings', icon: SlidersHorizontal };
   const PAGES = {
@@ -40,6 +43,7 @@
     checks: Checks,
     system: Workers,
     sources: Sources,
+    bot: BotProfile,
     settings: BotSettings,
   };
 
@@ -172,7 +176,12 @@
         onclick={() => go('settings')}
       >
         <SlidersHorizontal size={16} strokeWidth={1.9} />
-        {#if sidebarOpen}<span class="grow">Settings</span>{/if}
+        {#if sidebarOpen}
+          <span class="grow">Settings</span>
+          {#if $navStats?.maintenance}<span class="count alert">maintenance</span>{/if}
+        {:else if $navStats?.maintenance}
+          <span class="pip"></span>
+        {/if}
       </button>
     </div>
   </nav>

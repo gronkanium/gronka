@@ -2,6 +2,9 @@ import { MessageFlags } from 'discord.js';
 import { createLogger } from '../utils/logger.js';
 import { dispatchMediaJob } from '../jobs/dispatch.js';
 import { safeInteractionReply, safeInteractionDeferReply } from '../utils/interaction-helpers.js';
+import { readInputModal } from '../commands/shared/input-modal.js';
+import { submitConvertInput } from '../commands/convert.js';
+import { submitOptimizeInput } from '../commands/optimize.js';
 
 const logger = createLogger('modals');
 
@@ -11,6 +14,10 @@ export async function handleModalSubmit(interaction, modalAttachmentCache) {
   }
 
   const customId = interaction.customId;
+
+  const input = readInputModal(interaction);
+  if (input?.command === 'convert') return submitConvertInput(interaction, input);
+  if (input?.command === 'optimize') return submitOptimizeInput(interaction, input);
 
   // Handle optimize modal
   if (customId.startsWith('optimize_modal_')) {
@@ -48,40 +55,7 @@ export async function handleModalSubmit(interaction, modalAttachmentCache) {
 
     const { attachment, url } = cachedData;
 
-    // Parse lossy level
-    const lossyValue = interaction.fields.getTextInputValue('lossy_level') || null;
-    let lossyLevel = null;
-
-    if (lossyValue && lossyValue.trim() !== '') {
-      const parsed = parseInt(lossyValue.trim(), 10);
-      if (isNaN(parsed) || parsed < 0 || parsed > 100) {
-        // Check if interaction is already responded to or expired
-        if (interaction.replied || interaction.deferred) {
-          logger.debug(
-            `Interaction already responded to for invalid lossy level in modal ${customId}`
-          );
-          return;
-        }
-
-        try {
-          await safeInteractionReply(interaction, {
-            content: 'invalid lossy level. must be a number between 0 and 100.',
-            flags: MessageFlags.Ephemeral,
-          });
-        } catch (error) {
-          // Handle expired interactions (code 10062) or already acknowledged (code 40060)
-          if (error.code === 10062 || error.code === 40060) {
-            logger.debug(
-              `Interaction expired or already acknowledged for invalid lossy level in modal ${customId}: ${error.message}`
-            );
-          } else {
-            logger.error(`Failed to reply to modal interaction ${customId}:`, error);
-          }
-        }
-        return;
-      }
-      lossyLevel = parsed;
-    }
+    const lossyLevel = Number(interaction.fields.getRadioGroup('lossy_level', true));
 
     // Check if interaction is already responded to or expired before deferring
     if (interaction.replied || interaction.deferred) {

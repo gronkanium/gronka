@@ -12,7 +12,7 @@ bun run setup            # writes .env; `bun run setup --help` lists flags for s
 docker compose up -d --build
 ```
 
-you need [bun](https://bun.sh) 1.3, docker with compose, and a discord application for the bot token.
+you need [bun](https://bun.sh) 1.4.4 or newer, docker with compose, and a discord application for the bot token.
 the [wiki](https://github.com/gronkanium/gronka/wiki) covers configuration in detail.
 
 ## how it fits together

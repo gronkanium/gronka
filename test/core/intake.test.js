@@ -9,6 +9,19 @@ describe('link intake', () => {
     assert.equal(readLink('http://127.0.0.1/a.mp4').refusal.reason, 'invalid_url');
   });
 
+  test('text that is not a link is told so, and the record keeps the old reason', () => {
+    for (const text of ['@ari: mind yall', 'd7277a17-7530-4167.gif', '<Pink']) {
+      const { refusal } = readLink(text);
+      assert.equal(refusal.message, "that's not a link. paste the whole link to the post.");
+      assert.equal(refusal.detail, 'invalid URL: invalid URL format');
+      assert.equal(refusal.reason, 'invalid_url');
+    }
+    assert.equal(
+      readLink('http://localhost/a.mp4').refusal.message,
+      'invalid URL: localhost and loopback addresses are not allowed'
+    );
+  });
+
   test('prepareLink folds mirrors onto the real site', async () => {
     assert.equal(
       await prepareLink('https://fxtwitter.com/a/status/1'),

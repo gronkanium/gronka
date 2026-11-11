@@ -312,6 +312,11 @@ export const SOURCE_EXAMPLES = [
     expect: { type: 'audio' },
   },
   {
+    site: 'applemusic',
+    url: 'https://music.apple.com/us/album/love-is-a-long-road/1440825367?i=1440825626',
+    expect: { type: 'audio' },
+  },
+  {
     site: 'tumblr',
     url: 'https://nasa.tumblr.com/post/826039965713612800',
     expect: { type: 'video' },

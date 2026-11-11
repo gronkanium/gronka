@@ -10,15 +10,6 @@ import {
 
 const logger = createLogger('trim-video');
 
-/**
- * Trim video file using FFmpeg (keeps original format, no conversion)
- * @param {string} inputPath - Path to input video file
- * @param {string} outputPath - Path to output video file
- * @param {Object} options - Trim options
- * @param {number|null} options.startTime - Trim start time in seconds (optional)
- * @param {number|null} options.duration - Trim duration in seconds (optional)
- * @returns {Promise<void>}
- */
 export async function trimVideo(inputPath, outputPath, options = {}) {
   // Validate and sanitize numeric parameters
   const startTime = validateNumericParameter(
@@ -64,15 +55,7 @@ export async function trimVideo(inputPath, outputPath, options = {}) {
   const outputDir = path.dirname(outputPath);
   await fs.mkdir(outputDir, { recursive: true });
 
-  // For accurate trimming, we need to re-encode instead of using -c copy
-  // Stream copy (-c copy) can only cut at keyframes, which can cause:
-  // 1. Inaccurate trim points
-  // 2. Corrupted files when trim points don't align with keyframes
-  // 3. Empty or unplayable files
-  // Re-encoding ensures frame-accurate trimming and valid output files
-
-  // Add start time as input option (before -i) for faster seeking
-  // Then decode and trim accurately
+  // Re-encode, not -c copy: stream copy cuts only at keyframes and can leave an unplayable file.
   const inputOptions = [...FFMPEG_INPUT_GUARD];
   if (startTime !== null) {
     inputOptions.push('-ss', `${startTime}`);

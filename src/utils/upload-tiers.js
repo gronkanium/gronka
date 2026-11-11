@@ -1,14 +1,7 @@
 import { fileURLToPath } from 'url';
 import assert from 'assert';
 
-// Size-based retention: bigger R2 uploads expire sooner so the shared bucket stays under its
-// (soft) budget. R2 bills on the average of daily-peak storage, so short TTLs on big files
-// keep that peak - and the bill - down. The curve is steerable via the `upload_ttl_tiers`
-// bot setting; this is the fallback when the setting is unset or malformed.
-//
-// Format: comma-separated `MB:hours` pairs, ascending by size. A file uses the first tier
-// whose size ceiling it fits under; anything larger than the last tier gets that last (shortest)
-// TTL. Files over the size limit (size-limit.js) never reach here.
+// `MB:hours` pairs: R2 bills on daily-peak storage, so big files expire first.
 export const DEFAULT_TTL_TIERS = '100:72,250:24,500:8,1024:2';
 
 const MB = 1024 * 1024;

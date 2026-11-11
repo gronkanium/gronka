@@ -3,15 +3,12 @@ import { createLogger } from '../utils/logger.js';
 import { botConfig } from '../utils/config.js';
 import {
   isSoundCloudUrl,
-  trackViaYoutube,
+  downloadMatchedTrack,
   soundcloudTrack,
   tagAudio,
 } from '../utils/soundcloud.js';
-import {
-  getCobaltMediaUrls,
-  getRemoteContentLength,
-  canonicalizeMirrorUrl,
-} from '../utils/cobalt.js';
+import { getCobaltMediaUrls, getRemoteContentLength } from '../utils/cobalt.js';
+import { canonicalizeMirrorUrl } from '../utils/mirror-links.js';
 import { getDisabledServiceLabel } from '../utils/download-services.js';
 import { ValidationError, describeCause, rootCause, notPublishedYet } from '../utils/errors.js';
 import { isFreshPost } from '../utils/post-age.js';
@@ -103,10 +100,7 @@ export async function acquireMedia(
   const trail = [];
   const note = (step, error) => trail.push({ step, error: describeCause(rootCause(error)) });
   const fail = error => Object.assign(error, { trail });
-  // Reddit deprecated the unauthenticated .json endpoints in May 2026, so yt-dlp cannot read
-  // a post at all. Resolve it before the source flags below are computed: most posts are
-  // link-aggregator entries whose media lives on redgifs/imgur, and swapping url for that
-  // target lets the normal selection route it to the extractor that already handles it.
+  // yt-dlp lost reddit with the anonymous .json API; resolve first so a link post routes.
   let redditImages = null;
   if (isRedditPostUrl(url) && hasRedditSession()) {
     try {
@@ -130,9 +124,7 @@ export async function acquireMedia(
         redditImages = resolved.images;
       }
     } catch (redditError) {
-      // Falling back to cobalt is the net for a resolution failure, but it must not become a
-      // way around the disabled-source gate two lines up, and a post reddit itself says is
-      // gone has nothing for cobalt or yt-dlp to find either.
+      // Cobalt must not route around the disabled-source gate, nor retry a post reddit calls gone.
       if (redditError instanceof ValidationError || redditError.code === 'CONTENT_GONE') {
         throw redditError;
       }
@@ -252,9 +244,9 @@ export async function acquireMedia(
     }
   }
 
-  const viaYoutube = async track => ({
+  const viaMatch = async track => ({
     kind: 'file',
-    fileData: await trackViaYoutube(track ?? (await soundcloudTrack(url))),
+    fileData: await downloadMatchedTrack(track ?? (await soundcloudTrack(url))),
     downloadMethod: 'ytdlp',
     url,
   });
@@ -264,9 +256,9 @@ export async function acquireMedia(
   let gone = false;
   for (const [index, engine] of engines.entries()) {
     if (lastError) {
-      // A DRM-only SoundCloud track has nothing for the next engine; its YouTube copy does.
+      // A DRM-only SoundCloud track has nothing for the next engine; its matched copy does.
       const track = await soundcloud;
-      if (track?.drm) return viaYoutube(track);
+      if (track?.drm) return viaMatch(track);
       logger.warn(
         `${engines[index - 1].name} failed, trying ${engine.name}: ${describeCause(rootCause(lastError))}`
       );
@@ -279,7 +271,7 @@ export async function acquireMedia(
       note(engine.name.toLowerCase(), error);
       lastError = error;
       gone ||= GONE.includes(error.code);
-      if (error.code === 'DRM_PROTECTED' && isSoundCloudUrl(url)) return viaYoutube();
+      if (error.code === 'DRM_PROTECTED' && isSoundCloudUrl(url)) return viaMatch();
       if (!worthAnotherSource(engine, error)) break;
     }
   }
@@ -330,12 +322,13 @@ export async function extractAudio(fileData, { startTime = null, duration = null
   if (!source?.path || fileData?.archive) {
     throw new ValidationError('there is no audio in that post to turn into an mp3.');
   }
-  // Already a tagged mp3: re-encoding would drop the cover and tags for nothing.
+  // A tagged track is already the audio: re-encoding would drop the cover and tags and lose quality.
   if (source.audioReady && startTime === null && duration === null) {
-    return { file: source, baseName: path.parse(source.filename).name };
+    const format = path.extname(source.filename).toLowerCase().slice(1);
+    return { file: source, baseName: path.parse(source.filename).name, format };
   }
   const trim = source.trimmed ? {} : { startTime, duration };
   const file = await convertToFormat(source, 'mp3', trim);
   const baseName = path.parse(source.filename).name.replace(/[^\w.-]+/g, '_') || 'audio';
-  return { file, baseName };
+  return { file, baseName, format: 'mp3' };
 }

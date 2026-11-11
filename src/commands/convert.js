@@ -3,7 +3,6 @@ import path from 'path';
 import { randomBytes } from 'node:crypto';
 import { MessageFlags } from 'discord.js';
 import { createLogger } from '../utils/logger.js';
-import { botConfig } from '../utils/config.js';
 import { firstUrlIn } from '../utils/validation.js';
 import { readLink } from '../core/intake.js';
 import { curatedErrorMessage } from './shared/command-errors.js';
@@ -23,12 +22,7 @@ import { optimizeToJob } from '../utils/gif-optimizer.js';
 import { runMediaCommand } from './shared/run-media-command.js';
 import { sendConvertedFile } from './shared/send-converted.js';
 import { ValidationError, withCause } from '../utils/errors.js';
-import {
-  resolveTimeOptions,
-  refuse,
-  commandSourceOf,
-  missingInputRefusal,
-} from './shared/command-guards.js';
+import { resolveTimeOptions, refuse } from './shared/command-guards.js';
 import { safeInteractionDeferReply } from '../utils/interaction-helpers.js';
 import { storeMedia, deliverStored, finishCommand } from './shared/deliver.js';
 import { formatSizeChange } from './shared/media-reply.js';
@@ -43,13 +37,18 @@ import {
   gifSettings,
 } from '../utils/conversion-options.js';
 import { waitForConvertFormat } from './convert-picker.js';
+import { askForInput } from './shared/input-modal.js';
 
 const logger = createLogger('convert');
 
-const { discordSizeLimit: DISCORD_SIZE_LIMIT } = botConfig;
-
 const UNSUPPORTED_FORMAT =
   'unsupported file format. please provide a video, audio file (mp3, m4a, ogg, wav, flac) or image (png, jpg, webp, avif, gif).';
+const MISSING_INPUT =
+  'please provide a video, audio or image attachment, or a URL to a media file.';
+const CONVERT_UPLOAD = {
+  label: 'upload a video, audio file or image',
+  fileTypes: ['video', 'audio', 'image'],
+};
 
 async function probeMediaInfo(filePath, fallbackWidth) {
   let width = fallbackWidth;
@@ -108,15 +107,13 @@ async function processFormatConversion(
         videoIndex: info?.videoIndex ?? null,
         audioIndex: info?.audioIndex ?? null,
       });
-      const baseName =
-        path.parse(attachment.name || 'file').name.replace(/[^\w.-]+/g, '_') || 'file';
       await sendConvertedFile(
         interaction,
         {
           ...ctx,
-          discordAttachmentLimit: getDiscordAttachmentLimit(interaction, DISCORD_SIZE_LIMIT),
+          discordAttachmentLimit: getDiscordAttachmentLimit(interaction),
         },
-        { file: output, format, baseName }
+        { file: output, format }
       );
       await finishCommand();
     },
@@ -180,10 +177,13 @@ async function processConversion(
     'convert',
     interaction,
     async ctx => {
-      const attachmentLimit = getDiscordAttachmentLimit(interaction, DISCORD_SIZE_LIMIT);
+      const attachmentLimit = getDiscordAttachmentLimit(interaction);
       const gifPath = await tempPath('.gif');
       await renderGif(ctx, { attachment, attachmentType, file, options, gifPath });
-      let gif = await fromPath(gifPath, { contentType: 'image/gif', filename: 'gronka.gif' });
+      let gif = await fromPath(gifPath, {
+        contentType: 'image/gif',
+        filename: path.basename(gifPath),
+      });
 
       const lossy = options.lossy ?? null;
       let description;
@@ -383,74 +383,96 @@ export async function handleConvertContextMenu(interaction) {
     firstConvertibleAttachment
   );
   if (!attachment && !url) {
+    await askForInput(interaction, 'convert', CONVERT_UPLOAD, []);
+    return;
+  }
+  await startConvert(interaction, { attachment, url, commandSource: 'context-menu' });
+}
+
+export async function startConvert(
+  interaction,
+  { attachment, url, format = null, times = null, gifOptions = {}, commandSource }
+) {
+  if (format !== null && format !== 'gif' && !OUTPUT_FORMATS[format]) {
     await refuse(interaction, 'convert', {
-      message: 'no video, audio or image attachment or URL found in this message.',
-      reason: 'missing_input',
-      context: { commandSource: 'context-menu' },
+      message: 'that output format is not supported.',
+      reason: 'unsupported_output',
+      context: { commandSource, originalUrl: url ?? attachment?.url },
     });
     return;
   }
-  const commandSource = 'context-menu';
   if (!(await acceptInput(interaction, { attachment, url, commandSource }))) return;
-  await safeInteractionDeferReply(interaction, { flags: MessageFlags.Ephemeral });
+  await safeInteractionDeferReply(
+    interaction,
+    format === null ? { flags: MessageFlags.Ephemeral } : {}
+  );
   await queueConversion(interaction, {
     attachment: attachmentJson(attachment),
     url,
+    format,
+    ...(format === null ? { picker: { token: randomBytes(12).toString('hex') } } : {}),
+    times,
+    gifOptions,
     commandSource,
-    format: null,
-    picker: { token: randomBytes(12).toString('hex') },
   });
 }
 
 export async function handleConvertCommand(interaction) {
-  const commandSource = commandSourceOf(interaction);
+  const commandSource = 'slash';
 
   const attachment = interaction.options.getAttachment('file');
-  const rawUrl = interaction.options.getString('url');
+  const rawUrl = interaction.options.getString('link');
   const url = attachment ? null : (firstUrlIn(rawUrl) ?? rawUrl);
   const format = interaction.options.getString('format');
   const times = await resolveTimeOptions(interaction, { type: 'convert' });
   if (times === null) {
     return;
   }
+  const optimize = interaction.options.getBoolean('optimize') ?? false;
+  const lossy = interaction.options.getNumber('lossy') ?? undefined;
 
-  const context = { commandSource, originalUrl: url ?? attachment?.url };
   if (!attachment && !url) {
-    const message = 'please provide a video, audio or image attachment, or a URL to a media file.';
-    await refuse(interaction, 'convert', {
-      ...missingInputRefusal(interaction, 'convert', message),
-      reason: 'missing_input',
-      context: { ...context, commandOptions: { format, ...times } },
-    });
+    const { startTime, duration } = times;
+    await askForInput(interaction, 'convert', CONVERT_UPLOAD, [
+      format,
+      startTime,
+      duration,
+      optimize ? 1 : '',
+      lossy,
+    ]);
     return;
   }
 
-  if (format !== null && format !== 'gif' && !OUTPUT_FORMATS[format]) {
-    await refuse(interaction, 'convert', {
-      message: 'that output format is not supported.',
-      reason: 'unsupported_output',
-      context,
-    });
-    return;
-  }
-
-  if (!(await acceptInput(interaction, { attachment, url, commandSource }))) return;
-  await safeInteractionDeferReply(
-    interaction,
-    format === null ? { flags: MessageFlags.Ephemeral } : {}
-  );
-  const lossy = interaction.options.getNumber('lossy');
-  await queueConversion(interaction, {
-    attachment: attachmentJson(attachment),
+  await startConvert(interaction, {
+    attachment,
     url,
     format,
-    ...(format === null ? { picker: { token: randomBytes(12).toString('hex') } } : {}),
     times: { startTime: times.startTime, duration: times.duration },
-    gifOptions: {
-      optimize: interaction.options.getBoolean('optimize') ?? false,
-      lossy: lossy !== null ? lossy : undefined,
-    },
+    gifOptions: { optimize, lossy },
     commandSource,
+  });
+}
+
+const optionNumber = value => (value ? Number(value) : null);
+
+export async function submitConvertInput(interaction, { options, attachment, url }) {
+  const [format, startTime, duration, optimize, lossy] = options;
+  const times = { startTime: optionNumber(startTime), duration: optionNumber(duration) };
+  if (!attachment && !url) {
+    await refuse(interaction, 'convert', {
+      message: MISSING_INPUT,
+      reason: 'missing_input',
+      context: { commandSource: 'slash', commandOptions: { format: format || null, ...times } },
+    });
+    return;
+  }
+  await startConvert(interaction, {
+    attachment,
+    url,
+    format: format || null,
+    times,
+    gifOptions: { optimize: optimize === '1', lossy: optionNumber(lossy) ?? undefined },
+    commandSource: 'slash',
   });
 }
 

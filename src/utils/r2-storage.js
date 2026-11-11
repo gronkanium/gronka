@@ -1,9 +1,4 @@
-import {
-  S3Client,
-  ListObjectsV2Command,
-  DeleteObjectCommand,
-  DeleteObjectsCommand,
-} from '@aws-sdk/client-s3';
+import { S3Client, ListObjectsV2Command, DeleteObjectsCommand } from '@aws-sdk/client-s3';
 import fs from 'node:fs';
 import { randomBytes } from 'node:crypto';
 import { Upload } from '@aws-sdk/lib-storage';
@@ -11,15 +6,11 @@ import { createLogger } from './logger.js';
 // A leaf DB module, not the ./database.js barrel: storage.js imports this file.
 import { readSetting, SETTINGS } from './settings.js';
 import { AppError, NetworkError, ValidationError, withCause, describeCause } from './errors.js';
-import { jobSignal, jobRemainingMs } from './media-file.js';
-import { OUTPUT_FORMATS } from './output-formats.js';
+import { jobSignal, jobRemainingMs, typeForExtension } from './media-file.js';
 
 const logger = createLogger('r2-storage');
 
-// A degraded Cloudflare route holds an upload open at a trickle instead of failing: 60MB took
-// 16m57s on 2026-09-15, long past the 15-minute interaction token, which held a download slot
-// and let the stuck-operation reaper fail everything queued behind it. Socket timeouts never
-// fire on a trickle, so bound the upload on effective throughput instead.
+// A degraded route trickles (60MB in 17 min) and never trips a socket timeout: bound throughput.
 const MIN_UPLOAD_BYTES_PER_SEC = 500 * 1024;
 const MIN_UPLOAD_BUDGET_MS = 60_000;
 
@@ -172,11 +163,6 @@ export async function uploadToR2(file, key, contentType, config, extraParams = {
   }
 }
 
-export function getR2PublicUrl(key, config) {
-  const { publicDomain } = config;
-  return `https://${publicDomain}/${key}`;
-}
-
 export const MEDIA_PREFIXES = {
   gif: 'gifs',
   video: 'videos',
@@ -185,26 +171,21 @@ export const MEDIA_PREFIXES = {
   audio: 'audio',
 };
 
-// Random, so a link says nothing about the file and cannot be derived from it.
+// Random, so a link or file name says nothing about the file and cannot be derived from it.
+export const randomFileName = ext => `${randomBytes(16).toString('hex')}${ext}`;
+
+export function randomKey(prefix, extension) {
+  const safe = extension.replace(/[^a-zA-Z0-9.]/g, '');
+  const ext = !safe || safe.startsWith('.') ? safe : `.${safe}`;
+  return `${prefix}${randomFileName(ext)}`;
+}
+
 export function newMediaKey(type, extension) {
   const dir = MEDIA_PREFIXES[type];
   if (!dir) throw new Error(`Unknown file type: ${type}`);
-  const safe = extension.replace(/[^a-zA-Z0-9.]/g, '');
-  const ext = type === 'gif' ? '.gif' : safe.startsWith('.') ? safe : `.${safe}`;
-  return `${dir}/${randomBytes(16).toString('hex')}${ext}`;
+  return randomKey(`${dir}/`, type === 'gif' ? '.gif' : extension);
 }
 
-export const CONTENT_TYPES = {
-  ...Object.fromEntries(
-    Object.entries(OUTPUT_FORMATS).map(([ext, spec]) => [`.${ext}`, spec.mime])
-  ),
-  '.gif': 'image/gif',
-  '.mov': 'video/quicktime',
-  '.avi': 'video/x-msvideo',
-  '.mkv': 'video/x-matroska',
-  '.jpeg': 'image/jpeg',
-  '.zip': 'application/zip',
-};
 const FALLBACK_CONTENT_TYPES = { video: 'video/mp4', image: 'image/png' };
 
 export function isR2Configured(config) {
@@ -221,7 +202,7 @@ export async function uploadMediaToR2(type, file, extension, config, contentType
     file,
     key,
     contentType ??
-      CONTENT_TYPES[key.slice(key.lastIndexOf('.')).toLowerCase()] ??
+      typeForExtension(key.slice(key.lastIndexOf('.'))) ??
       FALLBACK_CONTENT_TYPES[type],
     config
   );
@@ -279,6 +260,14 @@ export async function listObjectsInR2(prefix, config) {
   }
 }
 
+// Deletes the expired keys of a listing; `bytes` is what the listing holds once they are gone.
+export async function deleteExpired(objects, expired, config) {
+  const failed = new Set(await deleteManyFromR2(expired, config));
+  const gone = new Set(expired.filter(key => !failed.has(key)));
+  const bytes = objects.reduce((sum, o) => sum + (gone.has(o.key) ? 0 : o.size), 0);
+  return { deleted: gone.size, failed: failed.size, bytes };
+}
+
 // DeleteObjects takes up to 1000 keys per call; returns the keys R2 refused.
 export async function deleteManyFromR2(keys, config) {
   if (!keys.length) return [];
@@ -294,34 +283,6 @@ export async function deleteManyFromR2(keys, config) {
     failed.push(...Errors.map(e => e.Key));
   }
   return failed;
-}
-
-export async function deleteFromR2(key, config) {
-  const client = getR2Client(config);
-  const { bucketName } = config;
-
-  if (!bucketName) {
-    logger.warn('Cannot delete from R2: bucketName not configured');
-    return false;
-  }
-
-  try {
-    const command = new DeleteObjectCommand({
-      Bucket: bucketName,
-      Key: key,
-    });
-
-    await client.send(command);
-    logger.debug(`Deleted file from R2: ${key}`);
-    return true;
-  } catch (error) {
-    if (error.name === 'NotFound' || error.$metadata?.httpStatusCode === 404) {
-      logger.debug(`File not found in R2 (already deleted?): ${key}`);
-      return false;
-    }
-    logger.error(`Failed to delete file from R2 (${key}):`, error.message);
-    throw error;
-  }
 }
 
 export function extractR2KeyFromUrl(url, config) {

@@ -5,28 +5,31 @@ common problems and how to fix them.
 ### check bot is running
 
 ```bash
-# docker
+# docker: app is the bot and webui, worker runs the media jobs
 docker compose ps
-
-# local
-ps aux | grep node
 ```
+
+run locally (`bun run bot:prod`), the bot lives in the terminal that started it; when it exits, that terminal shows why.
 
 ### check logs
 
+the bot and the workers log to the console:
+
 ```bash
 # docker
-docker compose logs -f app
+docker compose logs -f app worker
 
-# local
-tail -f logs/combined.log
+# the webui's own output stays inside the app container
+docker compose exec -u bun app tail -n 50 /tmp/webui.log
 ```
+
+run locally, the log is that terminal's output.
 
 ### verify discord connection
 
 look for "bot logged in as" message in logs. if missing:
 
-- check `DISCORD_TOKEN` is correct
+- check `PROD_DISCORD_TOKEN` in `.env` is correct (`TEST_DISCORD_TOKEN` for the test bot)
 - verify bot has proper permissions
 
 ## commands not appearing
@@ -34,12 +37,14 @@ look for "bot logged in as" message in logs. if missing:
 ### register commands
 
 ```bash
-# docker
-docker compose run --rm app bun run register-commands
+# docker (runs inside the running container; `compose run` would start a second bot)
+bun run docker:register
 
 # local
 bun run register-commands
 ```
+
+or open the webui's **settings > slash commands** and press **register**.
 
 ### wait for propagation
 
@@ -96,7 +101,7 @@ docker ps | grep cobalt
 docker logs cobalt
 
 # test cobalt directly
-curl http://localhost:9000/api/info
+curl http://localhost:9000/
 ```
 
 verify `COBALT_API_URL` matches your cobalt instance.
@@ -135,11 +140,7 @@ there is no length limit, only the size limit. a long video over it can still be
 
 ### download timeout
 
-large files may timeout. the bot uses deferred downloads for this:
-
-1. download is queued
-2. you receive a notification when complete
-3. check bot logs for errors
+a job has until the discord interaction expires, about 15 minutes, and the reply says it took too long when it runs out. for a long video, `start`/`end` grab a shorter clip. check the worker logs (`docker compose logs worker`) for what was slow.
 
 ## storage issues
 

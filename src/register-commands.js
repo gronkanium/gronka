@@ -2,40 +2,8 @@ import { REST, Routes } from 'discord.js';
 import dotenv from 'dotenv';
 import { OUTPUT_FORMATS } from './utils/output-formats.js';
 
-// Load environment variables
-dotenv.config({ quiet: true });
-
-// Get prefix from command line argument (TEST or PROD) or use default
-const prefixArg = process.argv[2]?.toUpperCase();
-const usePrefix = prefixArg && ['TEST', 'PROD'].includes(prefixArg);
-
-// Get token and client ID based on prefix
-let DISCORD_TOKEN, CLIENT_ID;
-
-if (usePrefix) {
-  const envPrefix = `${prefixArg}_`;
-  DISCORD_TOKEN = process.env[`${envPrefix}DISCORD_TOKEN`];
-  CLIENT_ID = process.env[`${envPrefix}CLIENT_ID`];
-} else {
-  // Default behavior: use standard env vars
-  DISCORD_TOKEN = process.env.DISCORD_TOKEN;
-  CLIENT_ID = process.env.CLIENT_ID;
-}
-
-if (!DISCORD_TOKEN) {
-  const varName = usePrefix ? `${prefixArg}_DISCORD_TOKEN` : 'DISCORD_TOKEN';
-  console.error(`${varName} is not set in environment variables`);
-  process.exit(1);
-}
-
-if (!CLIENT_ID) {
-  const varName = usePrefix ? `${prefixArg}_CLIENT_ID` : 'CLIENT_ID';
-  console.error(`${varName} is not set in environment variables`);
-  process.exit(1);
-}
-
 // Define the commands
-const commands = [
+export const commands = [
   {
     name: 'convert',
     type: 3, // MESSAGE type (right-click on message)
@@ -73,8 +41,8 @@ const commands = [
         required: false,
       },
       {
-        name: 'url',
-        description: 'url to media to download and convert',
+        name: 'link',
+        description: 'link to the media to download and convert',
         type: 3, // STRING type
         required: false,
       },
@@ -133,10 +101,11 @@ const commands = [
         description: 'the gif file to optimize',
         type: 11, // ATTACHMENT type
         required: false,
+        file_types: ['.gif'],
       },
       {
-        name: 'url',
-        description: 'url to a gif to optimize',
+        name: 'link',
+        description: 'link to a gif to optimize',
         type: 3, // STRING type
         required: false,
       },
@@ -161,8 +130,8 @@ const commands = [
     type: 1, // CHAT_INPUT type (slash command)
     options: [
       {
-        name: 'url',
-        description: 'url to a social media post or media file to download',
+        name: 'link',
+        description: 'link to a social media post or media file to download',
         type: 3, // STRING type
         required: true,
       },
@@ -177,12 +146,6 @@ const commands = [
         name: 'end',
         description: 'end time for video trimming, in seconds or as a timestamp (e.g. 90 or 1:30)',
         type: 3, // STRING type (accepts seconds or MM:SS / HH:MM:SS timestamps)
-        required: false,
-      },
-      {
-        name: 'mp3',
-        description: 'send just the audio as an mp3',
-        type: 5, // BOOLEAN type
         required: false,
       },
     ],
@@ -202,18 +165,60 @@ const commands = [
   },
 ];
 
-// Construct and prepare an instance of the REST module
-const rest = new REST({ version: '10' }).setToken(DISCORD_TOKEN);
+// Replaces the application's global commands with this list; returns what Discord stored.
+export function registerCommands(token, clientId) {
+  return new REST({ version: '10' })
+    .setToken(token)
+    .put(Routes.applicationCommands(clientId), { body: commands });
+}
 
-// Register commands globally
-(async () => {
+export function registerErrorHint(error) {
+  if (error.code === 50001)
+    return 'missing access: the bot does not have permission to register commands';
+  if (error.code === 50035) return 'invalid form body: command structure is invalid';
+  if (error.status === 401) return 'unauthorized: invalid bot token';
+  return null;
+}
+
+if (import.meta.main) {
+  // Load environment variables
+  dotenv.config({ quiet: true });
+
+  // Get prefix from command line argument (TEST or PROD) or use default
+  const prefixArg = process.argv[2]?.toUpperCase();
+  const usePrefix = prefixArg && ['TEST', 'PROD'].includes(prefixArg);
+
+  // Get token and client ID based on prefix
+  let DISCORD_TOKEN, CLIENT_ID;
+
+  if (usePrefix) {
+    const envPrefix = `${prefixArg}_`;
+    DISCORD_TOKEN = process.env[`${envPrefix}DISCORD_TOKEN`];
+    CLIENT_ID = process.env[`${envPrefix}CLIENT_ID`];
+  } else {
+    // Default behavior: use standard env vars
+    DISCORD_TOKEN = process.env.DISCORD_TOKEN;
+    CLIENT_ID = process.env.CLIENT_ID;
+  }
+
+  if (!DISCORD_TOKEN) {
+    const varName = usePrefix ? `${prefixArg}_DISCORD_TOKEN` : 'DISCORD_TOKEN';
+    console.error(`${varName} is not set in environment variables`);
+    process.exit(1);
+  }
+
+  if (!CLIENT_ID) {
+    const varName = usePrefix ? `${prefixArg}_CLIENT_ID` : 'CLIENT_ID';
+    console.error(`${varName} is not set in environment variables`);
+    process.exit(1);
+  }
+
   try {
     console.log('\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
     console.log('registering global application commands');
     console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n');
 
-    // Register commands globally
-    const data = await rest.put(Routes.applicationCommands(CLIENT_ID), { body: commands });
+    const data = await registerCommands(DISCORD_TOKEN, CLIENT_ID);
 
     console.log(`✓ successfully registered ${data.length} command(s)\n`);
 
@@ -234,15 +239,8 @@ const rest = new REST({ version: '10' }).setToken(DISCORD_TOKEN);
     console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n');
   } catch (error) {
     console.error('an error occurred:', error);
-
-    if (error.code === 50001) {
-      console.error('   missing access: the bot does not have permission to register commands.');
-    } else if (error.code === 50035) {
-      console.error('   invalid form body: command structure is invalid.');
-    } else if (error.status === 401) {
-      console.error('   unauthorized: invalid bot token.');
-    }
-
+    const hint = registerErrorHint(error);
+    if (hint) console.error(`   ${hint}.`);
     process.exit(1);
   }
-})();
+}

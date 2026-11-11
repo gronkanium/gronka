@@ -38,6 +38,7 @@ const CODE_EXPR = "NULLIF(metadata::jsonb->>'code', '')";
 
 // Sentinel for failures logged without an error string, a real bucket, not an absence.
 export const UNKNOWN_REASON = '__no_reason__';
+export const REASON_LIMIT = 300;
 
 function buildAlertWhere(options = {}) {
   const params = [];
@@ -116,7 +117,6 @@ export async function getAlertSummary(options = {}) {
 
   const sql = getPostgresConnection();
 
-  const { reasonLimit = 25 } = options;
   const { clause, params } = buildAlertWhere(options);
 
   const groupSql = expr => `SELECT ${expr} AS reason,
@@ -127,7 +127,7 @@ export async function getAlertSummary(options = {}) {
             ARRAY_REMOVE(ARRAY_AGG(DISTINCT ${COMMAND_EXPR}), NULL) AS commands,
             ARRAY_REMOVE(ARRAY_AGG(DISTINCT ${ERROR_CLASS_EXPR}), NULL) AS classes,
             ARRAY_REMOVE(ARRAY_AGG(DISTINCT ${CODE_EXPR}), NULL) AS codes
-     FROM alerts ${clause} AND severity = 'error'
+     FROM alerts ${clause} AND severity IN ('error', 'warning')
      GROUP BY 1
      ORDER BY 2 DESC
      LIMIT $${params.length + 1}`;
@@ -139,8 +139,8 @@ export async function getAlertSummary(options = {}) {
      GROUP BY 1, 2`,
       params
     ),
-    sql.unsafe(groupSql(REASON_EXPR), [...params, reasonLimit]),
-    sql.unsafe(groupSql(CAUSE_EXPR), [...params, reasonLimit]),
+    sql.unsafe(groupSql(REASON_EXPR), [...params, REASON_LIMIT]),
+    sql.unsafe(groupSql(CAUSE_EXPR), [...params, REASON_LIMIT]),
   ]);
 
   const summary = { ...empty, byCommand: [], byReason: [], byCause: [] };
@@ -183,13 +183,17 @@ export async function getAlertSummary(options = {}) {
   return summary;
 }
 
-export async function getAlertComponents() {
+export async function getAlertReasons() {
   await ensurePostgresInitialized();
 
   const sql = getPostgresConnection();
 
-  const rows = await sql`SELECT DISTINCT component FROM alerts ORDER BY component`;
-  return rows.map(row => row.component);
+  const [row] = await sql.unsafe(
+    `SELECT ARRAY_REMOVE(ARRAY_AGG(DISTINCT ${REASON_EXPR}), NULL) AS reasons,
+            ARRAY_REMOVE(ARRAY_AGG(DISTINCT ${CAUSE_EXPR}), NULL) AS causes
+     FROM alerts`
+  );
+  return { reasons: row?.reasons ?? [], causes: row?.causes ?? [] };
 }
 
 export async function getAlertCommands() {

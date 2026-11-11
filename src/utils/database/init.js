@@ -13,9 +13,14 @@ const logger = createLogger('postgres');
 // Bot, workers and web all boot at once; this key serializes their schema setup.
 const SCHEMA_LOCK_KEY = 0x67726f6e;
 
-export async function applySchema(sql) {
-  await sql.begin(async tx => {
+export const withSchemaLock = (sql, apply) =>
+  sql.begin(async tx => {
     await tx`SELECT pg_advisory_xact_lock(${SCHEMA_LOCK_KEY})`;
+    await apply(tx);
+  });
+
+export async function applySchema(sql) {
+  await withSchemaLock(sql, async tx => {
     for (const table of getTableDefinitions()) {
       await tx.unsafe(table.sql);
     }
@@ -77,11 +82,7 @@ async function resetSerialSequences(sql) {
       const maxResult = await sql.unsafe(maxQuery);
       const maxId = parseInt(maxResult[0]?.max_id || 0, 10);
 
-      // Reset the sequence to max_id + 1 (or 1 if table is empty).
-      // GREATEST ensures the sequence only ever moves forward: multiple processes
-      // (bot + webui, or parallel test files) can run this concurrently, and moving
-      // a sequence backwards while another process is inserting hands out
-      // already-used ids and causes duplicate-key errors.
+      // GREATEST: processes run this concurrently, and a sequence moved back reissues used ids.
       const nextVal = maxId > 0 ? maxId + 1 : 1;
       await sql.unsafe(
         `SELECT setval('${sequence}', GREATEST(COALESCE((SELECT last_value FROM ${sequence}), 1), ${nextVal}), false)`

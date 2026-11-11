@@ -1,12 +1,12 @@
 import { describe, test } from 'bun:test';
 import assert from 'node:assert';
 import {
-  canonicalizeMirrorUrl,
   isSocialMediaUrl,
   normalizeFilenameForContentType,
   normalizeSocialMediaUrlForCobalt,
   resolveContentType,
 } from '../../src/utils/cobalt.js';
+import { canonicalizeMirrorUrl } from '../../src/utils/mirror-links.js';
 import { isInstagramPostUrl } from '../../src/utils/instagram.js';
 import { isRedditPostUrl } from '../../src/utils/reddit.js';
 import { describeCause, rootCause } from '../../src/utils/errors.js';
@@ -37,6 +37,15 @@ describe('cobalt utilities', () => {
     assert.strictEqual(resolveContentType(undefined, 'twitter_123.gif', mp4), 'video/mp4');
   });
 
+  test('an audio tunnel with no content-type header is labelled as audio', () => {
+    const m4a = Buffer.concat([Buffer.alloc(4), Buffer.from('ftypM4A '), Buffer.alloc(16)]);
+    assert.strictEqual(
+      resolveContentType(undefined, 'track.mp3', Buffer.from('ID3')),
+      'audio/mpeg'
+    );
+    assert.strictEqual(resolveContentType(undefined, 'track.m4a', m4a), 'audio/mp4');
+  });
+
   test('a content-type the server actually sent is left alone', () => {
     const gif = Buffer.concat([Buffer.from('GIF89a'), Buffer.alloc(16)]);
     assert.strictEqual(resolveContentType('video/webm', 'clip.webm', gif), 'video/webm');
@@ -51,6 +60,12 @@ describe('cobalt utilities', () => {
     const normalized = normalizeSocialMediaUrlForCobalt(input);
 
     assert.strictEqual(normalized, 'https://twitter.com/neetyboyfriend/status/2044473679753425120');
+    for (const host of ['www.x.com', 'mobile.x.com', 'mobile.twitter.com']) {
+      assert.strictEqual(
+        normalizeSocialMediaUrlForCobalt(`https://${host}/a/status/1?s=20`),
+        'https://twitter.com/a/status/1'
+      );
+    }
   });
 
   test('a TikTok story share link fits cobalt 1 KB request body', () => {

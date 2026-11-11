@@ -10,7 +10,7 @@ the toolchain, the bind-mounted files, cookies, required config and port conflic
 ## prerequisites
 
 - [ ] Ubuntu 20.04+ or Debian 11+ server
-- [ ] Bun 1.3+ installed
+- [ ] Bun 1.4.4+ installed
 - [ ] FFmpeg installed (`sudo apt install ffmpeg`)
 - [ ] Domain name configured in Cloudflare
 - [ ] Discord bot created and token obtained

@@ -80,7 +80,7 @@ function startCobalt() {
 function download(url) {
   const { interaction, calls } = createFakeInteraction({ deferred: false });
   interaction.options = {
-    getString: name => (name === 'url' ? url : null),
+    getString: name => (name === 'link' ? url : null),
     getBoolean: () => null,
     getNumber: () => null,
   };

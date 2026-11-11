@@ -6,7 +6,7 @@ import fs from 'fs/promises';
 import fsSync from 'fs';
 import path from 'path';
 import os from 'os';
-import { Client, MessageFlags } from 'discord.js';
+import { Client, MessageFlags, ModalSubmitFields, ModalSubmitInteraction } from 'discord.js';
 import { createFakeInteraction } from '../helpers/fake-interaction.js';
 import { mediaFromBytes } from '../helpers/media.js';
 
@@ -26,6 +26,9 @@ let handleOptimizeContextMenuCommand;
 let runMediaJob;
 let JOBS_ROOT;
 let handleConvertInteraction;
+let handleModalSubmit;
+let handleDownloadContextMenuCommand;
+let handleConvertOffer;
 const fetches = new Map();
 const publicReplies = new Map();
 
@@ -112,6 +115,8 @@ function commandInteraction(userId, values = {}, fake = {}) {
     getBoolean: name => values[name] ?? null,
     getNumber: name => values[name] ?? null,
   };
+  calls.showModal = [];
+  interaction.showModal = async modal => calls.showModal.push(modal);
   return { interaction, calls };
 }
 
@@ -131,6 +136,37 @@ function contextInteraction(userId, commandName, attachments, content = '') {
   return { interaction, calls };
 }
 
+// A submit of the modal a command showed, parsed by discord.js itself from the raw API shape.
+function modalSubmit(modal, { file = null, link = '' } = {}) {
+  const { interaction, calls } = createFakeInteraction({ deferred: false });
+  interaction.client = restClient;
+  interaction.applicationId = 'fake-app';
+  interaction.token = `modal-${Date.now()}-${Math.random()}`;
+  interaction.createdTimestamp = Date.now();
+  interaction.customId = modal.toJSON().custom_id;
+  interaction.isModalSubmit = () => true;
+  const resolved = file && {
+    attachments: {
+      9: {
+        id: '9',
+        url: file.url,
+        filename: file.name,
+        size: file.size,
+        content_type: file.contentType,
+      },
+    },
+  };
+  const raw = [
+    { type: 18, component: { type: 19, custom_id: 'file', values: file ? ['9'] : [] } },
+    { type: 18, component: { type: 4, custom_id: 'link', value: link } },
+  ];
+  interaction.fields = new ModalSubmitFields(
+    raw.map(c => ModalSubmitInteraction.transformComponent(c, resolved, { client: restClient })),
+    resolved
+  );
+  return { interaction, calls };
+}
+
 const firstReply = calls => calls.editReply[0] ?? calls.reply[0];
 
 async function pickerFor(calls) {
@@ -143,9 +179,18 @@ async function pickerFor(calls) {
   throw new Error(`picker was not shown: ${JSON.stringify(calls)}`);
 }
 
+const controls = component =>
+  [component, ...(component.components ?? []).flatMap(controls)].filter(c => c.custom_id);
+const control = (menu, action) =>
+  menu.components.flatMap(controls).find(c => c.custom_id.startsWith(`convert:${action}:`));
+const textOf = payload =>
+  JSON.parse(JSON.stringify(payload))
+    .components.map(c => c.content)
+    .join('');
+
 function pickerInteraction(menu, format, { cancel = false, ephemeral = true } = {}) {
   const { interaction, calls } = createFakeInteraction({ deferred: false });
-  interaction.customId = menu.components[cancel ? 1 : 0].components[0].custom_id;
+  interaction.customId = control(menu, cancel ? 'cancel' : 'format').custom_id;
   interaction.applicationId = 'fake-app';
   interaction.token = `choice-${Date.now()}-${Math.random()}`;
   interaction.createdTimestamp = Date.now();
@@ -258,6 +303,9 @@ if (!mocksSupported) {
     ({ runMediaJob } = await import('../../src/jobs/run-job.js'));
     ({ JOBS_ROOT } = await import('../../src/utils/media-file.js'));
     ({ handleConvertInteraction } = await import('../../src/commands/convert-picker.js'));
+    ({ handleModalSubmit } = await import('../../src/handlers/modals.js'));
+    ({ handleDownloadContextMenuCommand, handleConvertOffer } =
+      await import('../../src/commands/download.js'));
   });
 
   afterAll(() => {
@@ -291,9 +339,7 @@ if (!mocksSupported) {
         format: null,
       });
       const selected = await chooseFrom(calls, handleConvertCommand(interaction), 'mp4');
-      assert.ok(
-        selected.menu.components[0].components[0].options.some(option => option.value === 'mp4')
-      );
+      assert.ok(control(selected.menu, 'format').options.some(option => option.value === 'mp4'));
       const seconds = probeSeconds(firstReply(selected.calls).files[0].attachment, '.mp4');
       assert.ok(seconds > 5.5 && seconds < 6.5);
     });
@@ -307,9 +353,10 @@ if (!mocksSupported) {
       });
       const selected = await chooseFrom(calls, handleConvertCommand(interaction));
       assert.strictEqual(calls.deferReply[0].flags, MessageFlags.Ephemeral);
-      assert.ok(
-        selected.menu.components[0].components[0].options.some(option => option.value === 'gif')
-      );
+      assert.strictEqual(selected.menu.flags, MessageFlags.IsComponentsV2);
+      assert.match(JSON.stringify(selected.menu), /expires <t:\d+:R>/);
+      assert.ok(control(selected.menu, 'format').options.some(option => option.value === 'gif'));
+      assert.match(textOf(calls.editReply.at(-1)), /^selected gif\./);
       assert.strictEqual(selected.calls.deferReply[0].flags, undefined);
       assert.ok(isGif(firstReply(selected.calls).files[0].attachment));
       assert.strictEqual(fetches.get(attachment.url) - before, 1);
@@ -324,7 +371,9 @@ if (!mocksSupported) {
       });
       const selected = await chooseFrom(calls, handleConvertCommand(interaction), 'mp3');
       assert.deepStrictEqual(
-        selected.menu.components[0].components[0].options.map(option => option.value).sort(),
+        control(selected.menu, 'format')
+          .options.map(option => option.value)
+          .sort(),
         ['flac', 'm4a', 'mp3', 'ogg', 'wav']
       );
       const file = firstReply(selected.calls).files[0];
@@ -344,11 +393,11 @@ if (!mocksSupported) {
       });
       const work = handleConvertCommand(interaction);
       const menu = await pickerFor(calls);
-      assert.ok(!menu.components[0].components[0].options.some(option => option.value === 'mp3'));
+      assert.ok(!control(menu, 'format').options.some(option => option.value === 'mp3'));
       const selected = pickerInteraction(menu, null, { cancel: true });
       await handleConvertInteraction(selected.interaction);
       await work;
-      assert.strictEqual(calls.editReply.at(-1).content, 'conversion cancelled.');
+      assert.strictEqual(textOf(calls.editReply.at(-1)), 'conversion cancelled.');
       assert.deepStrictEqual(
         (await fs.readdir(JOBS_ROOT)).filter(name => name.startsWith('job-')),
         before
@@ -366,7 +415,7 @@ if (!mocksSupported) {
       });
       const selected = await chooseFrom(calls, handleConvertCommand(interaction), 'wav');
       assert.ok(
-        selected.menu.components[0].components[0].options.every(option =>
+        control(selected.menu, 'format').options.every(option =>
           ['mp3', 'm4a', 'ogg', 'wav', 'flac'].includes(option.value)
         )
       );
@@ -433,11 +482,11 @@ if (!mocksSupported) {
       });
       const work = handleConvertCommand(interaction);
       const menu = await pickerFor(calls);
-      const [, , id, token] = menu.components[0].components[0].custom_id.split(':');
+      const [, , id, token] = control(menu, 'format').custom_id.split(':');
       const { publishConvertPicker } = await import('../../src/utils/database/media-jobs-pg.js');
       await publishConvertPicker(id, token, ['gif'], Date.now() - 1);
       await work;
-      assert.match(calls.editReply.at(-1).content, /expired/);
+      assert.match(textOf(calls.editReply.at(-1)), /expired/);
       assert.deepStrictEqual(
         (await fs.readdir(JOBS_ROOT)).filter(name => name.startsWith('job-')),
         before
@@ -448,34 +497,20 @@ if (!mocksSupported) {
       assert.strictEqual(selected.calls.reply[0].flags, MessageFlags.Ephemeral);
     });
 
-    test('a public prefix picker checks the invoking message author without storing a user id', async () => {
-      const { interaction, calls } = commandInteraction('cv-owner', {
+    test('a picker reached from a public message is refused and stays usable', async () => {
+      const { interaction, calls } = commandInteraction('cv-public', {
         file: attachmentOf('vid'),
         format: null,
       });
-      interaction.isPrefixCommand = true;
-      interaction.channelId = 'prefix-channel';
-      interaction.message = { id: 'prefix-source', author: interaction.user };
-      interaction.replyMessageId = () => 'prefix-placeholder';
       const work = handleConvertCommand(interaction);
       const menu = await pickerFor(calls);
-      const selected = pickerInteraction(menu, 'gif', { ephemeral: false });
-      selected.interaction.channel.messages.fetch = async () => interaction.message;
-      selected.interaction.user.id = 'someone-else';
+      const outsider = pickerInteraction(menu, 'gif', { ephemeral: false });
+      await handleConvertInteraction(outsider.interaction);
+      assert.match(outsider.calls.reply[0].content, /run convert again/);
+      const selected = pickerInteraction(menu, 'gif');
       await handleConvertInteraction(selected.interaction);
-      assert.match(selected.calls.reply[0].content, /only the person/);
-      const [, , id, token] = selected.interaction.customId.split(':');
-      const { getConvertPicker } = await import('../../src/utils/database/media-jobs-pg.js');
-      const job = await getConvertPicker(id, token);
-      assert.ok(
-        !JSON.stringify({ args: job.args, reply: job.reply }).includes(interaction.user.id)
-      );
-      const owner = pickerInteraction(menu, 'gif', { ephemeral: false });
-      owner.interaction.user.id = interaction.user.id;
-      owner.interaction.channel.messages.fetch = async () => interaction.message;
-      await handleConvertInteraction(owner.interaction);
       await work;
-      assert.ok(isGif(firstReply(owner.calls).files[0].attachment));
+      assert.ok(isGif(firstReply(selected.calls).files[0].attachment));
     });
 
     test('generic MIME and an extensionless filename are classified by actual media streams', async () => {
@@ -490,11 +525,11 @@ if (!mocksSupported) {
       });
       const selected = await chooseFrom(calls, handleConvertCommand(interaction), 'mp3');
       assert.ok(
-        selected.menu.components[0].components[0].options.every(option =>
+        control(selected.menu, 'format').options.every(option =>
           ['mp3', 'm4a', 'ogg', 'wav', 'flac'].includes(option.value)
         )
       );
-      assert.strictEqual(firstReply(selected.calls).files[0].name, 'track.mp3');
+      assert.match(firstReply(selected.calls).files[0].name, /^[0-9a-f]{32}\.mp3$/);
     });
 
     test('still-image pickers exclude video and audio outputs', async () => {
@@ -504,7 +539,9 @@ if (!mocksSupported) {
       });
       const selected = await chooseFrom(calls, handleConvertCommand(interaction), 'webp');
       assert.deepStrictEqual(
-        selected.menu.components[0].components[0].options.map(option => option.value).sort(),
+        control(selected.menu, 'format')
+          .options.map(option => option.value)
+          .sort(),
         ['gif', 'jpg', 'png', 'webp']
       );
       assert.strictEqual(
@@ -534,9 +571,7 @@ if (!mocksSupported) {
         end: '3',
       });
       const selected = await chooseFrom(calls, handleConvertCommand(interaction));
-      const png = selected.menu.components[0].components[0].options.find(
-        option => option.value === 'png'
-      );
+      const png = control(selected.menu, 'format').options.find(option => option.value === 'png');
       assert.match(png.description, /still frame/);
       const seconds = probeSeconds(firstReply(selected.calls).files[0].attachment, '.gif');
       assert.ok(seconds > 1.5 && seconds < 2.6);
@@ -608,7 +643,9 @@ if (!mocksSupported) {
     test('url input: converted fresh every time, nothing is cached', async () => {
       const url = `https://example.com/vid-${Date.now()}.mp4`;
       for (const user of ['a', 'b']) {
-        const { interaction, calls } = commandInteraction(`cv-url-${user}-${Date.now()}`, { url });
+        const { interaction, calls } = commandInteraction(`cv-url-${user}-${Date.now()}`, {
+          link: url,
+        });
         await handleConvertCommand(interaction);
         assert.ok(isGif(calls.editReply[0].files[0].attachment), `run ${user} attaches a gif`);
       }
@@ -616,7 +653,7 @@ if (!mocksSupported) {
 
     test('youtube url: fetched through yt-dlp, not as the watch page', async () => {
       const { interaction, calls } = commandInteraction(`cv-yt-${Date.now()}`, {
-        url: 'https://www.youtube.com/watch?v=dQw4w9WgXcQ',
+        link: 'https://www.youtube.com/watch?v=dQw4w9WgXcQ',
       });
       await handleConvertCommand(interaction);
       assert.ok(isGif(calls.editReply[0].files[0].attachment));
@@ -645,7 +682,7 @@ if (!mocksSupported) {
       });
       try {
         const { interaction, calls } = commandInteraction('cv-short-link', {
-          url: 'https://vt.tiktok.com/example/',
+          link: 'https://vt.tiktok.com/example/',
           format: 'webm',
         });
         await handleConvertCommand(interaction);
@@ -673,7 +710,7 @@ if (!mocksSupported) {
 
     test('long video: converted, no length limit', async () => {
       const { interaction, calls } = commandInteraction(`cv-long-${Date.now()}`, {
-        url: `https://example.com/longvid-${Date.now()}.mp4`,
+        link: `https://example.com/longvid-${Date.now()}.mp4`,
       });
       await handleConvertCommand(interaction);
       assert.ok(isGif(firstReply(calls).files[0].attachment));
@@ -691,7 +728,7 @@ if (!mocksSupported) {
     test('both a file and a url: the file is converted', async () => {
       const { interaction, calls } = commandInteraction(`cv-both-${Date.now()}`, {
         file: attachmentOf('vid'),
-        url: 'https://example.com/vid.mp4',
+        link: 'https://example.com/vid.mp4',
       });
       await handleConvertCommand(interaction);
       assert.ok(isGif(firstReply(calls).files[0].attachment));
@@ -700,7 +737,7 @@ if (!mocksSupported) {
     test('url that is not media: refused, and the failure keeps the full link', async () => {
       const since = Date.now();
       const { interaction, calls } = commandInteraction(`cv-html-${since}`, {
-        url: `https://example.com/page-${since}`,
+        link: `https://example.com/page-${since}`,
       });
       await handleConvertCommand(interaction);
       assert.match(firstReply(calls).content, /unsupported file format/);
@@ -720,6 +757,183 @@ if (!mocksSupported) {
       ]);
       const selected = await chooseFrom(calls, handleConvertContextMenu(interaction));
       assert.ok(isGif(firstReply(selected.calls).files[0].attachment));
+    });
+  });
+
+  describe('missing input', () => {
+    const alertsSince = async (command, since) => {
+      const { getAlerts } = await import('../../src/utils/database.js');
+      return (await getAlerts({ command, startTime: since, limit: 50 })).map(row =>
+        JSON.parse(row.metadata)
+      );
+    };
+
+    test('/convert with nothing opens a file and link modal instead of refusing', async () => {
+      const since = Date.now();
+      const { interaction, calls } = commandInteraction('cv-modal', { format: null });
+      await handleConvertCommand(interaction);
+      assert.strictEqual(calls.reply.length, 0);
+      const [modal] = calls.showModal;
+      const fields = modal.toJSON().components.map(label => label.component);
+      assert.deepStrictEqual(
+        fields.map(field => [field.type, field.custom_id]),
+        [
+          [19, 'file'],
+          [4, 'link'],
+        ]
+      );
+      assert.deepStrictEqual(fields[0].file_types, ['video', 'audio', 'image']);
+      assert.strictEqual((await alertsSince('convert', since)).length, 0);
+    });
+
+    test('a file from the convert modal is converted with the options the command was given', async () => {
+      const { interaction, calls } = commandInteraction('cv-modal-file', { start: '1', end: '3' });
+      await handleConvertCommand(interaction);
+      const submit = modalSubmit(calls.showModal[0], { file: attachmentOf('vid-modal') });
+      await handleModalSubmit(submit.interaction, new Map());
+      const [file] = firstReply(submit.calls).files;
+      assert.ok(isGif(file.attachment));
+      const seconds = probeSeconds(file.attachment, '.gif');
+      assert.ok(seconds > 1.5 && seconds < 2.6, `~2s gif, got ${seconds}`);
+    });
+
+    test('a link from the convert modal opens the picker', async () => {
+      const { interaction, calls } = commandInteraction('cv-modal-link', { format: null });
+      await handleConvertCommand(interaction);
+      const submit = modalSubmit(calls.showModal[0], {
+        link: 'here https://example.com/vid-modal-link.mp4',
+      });
+      const selected = await chooseFrom(
+        submit.calls,
+        handleModalSubmit(submit.interaction, new Map())
+      );
+      assert.ok(isGif(firstReply(selected.calls).files[0].attachment));
+    });
+
+    test('an empty convert modal gets the curated refusal and is recorded as missing input', async () => {
+      const since = Date.now();
+      const { interaction, calls } = commandInteraction('cv-modal-empty');
+      await handleConvertCommand(interaction);
+      const submit = modalSubmit(calls.showModal[0]);
+      await handleModalSubmit(submit.interaction, new Map());
+      assert.strictEqual(
+        submit.calls.reply[0].content,
+        'please provide a video, audio or image attachment, or a URL to a media file.'
+      );
+      assert.strictEqual(submit.calls.reply[0].flags, MessageFlags.Ephemeral);
+      const [alert] = await alertsSince('convert', since);
+      assert.strictEqual(alert.errorClass, 'missing_input');
+    });
+
+    test('/optimize with nothing asks for a gif', async () => {
+      const { interaction, calls } = commandInteraction('op-modal', { lossy: 40 });
+      await handleOptimizeCommand(interaction);
+      assert.strictEqual(calls.reply.length, 0);
+      const fields = calls.showModal[0].toJSON().components.map(label => label.component);
+      assert.deepStrictEqual(fields[0].file_types, ['image']);
+    });
+
+    test.skipIf(skipGifsicle)('a gif from the optimize modal is optimized', async () => {
+      const { interaction, calls } = commandInteraction('op-modal-gif', { lossy: 40 });
+      await handleOptimizeCommand(interaction);
+      const submit = modalSubmit(calls.showModal[0], { file: attachmentOf('anim-modal') });
+      await handleModalSubmit(submit.interaction, new Map());
+      assert.ok(isGif(firstReply(submit.calls).files[0].attachment));
+      assert.match(firstReply(submit.calls).content, /^-# .*→/);
+    });
+
+    test('an empty optimize modal gets the curated refusal', async () => {
+      const since = Date.now();
+      const { interaction, calls } = commandInteraction('op-modal-empty');
+      await handleOptimizeCommand(interaction);
+      const submit = modalSubmit(calls.showModal[0]);
+      await handleModalSubmit(submit.interaction, new Map());
+      assert.strictEqual(
+        submit.calls.reply[0].content,
+        'please provide either a gif attachment or a URL to a gif file.'
+      );
+      const [alert] = await alertsSince('optimize', since);
+      assert.strictEqual(alert.errorClass, 'missing_input');
+    });
+
+    test('download on a message with a file but no link offers to convert it', async () => {
+      const since = Date.now();
+      const pending = new Map();
+      const { interaction, calls } = contextInteraction('dl-offer', 'download', [
+        attachmentOf('vid-offer'),
+      ]);
+      await handleDownloadContextMenuCommand(interaction, pending);
+      const reply = JSON.parse(JSON.stringify(calls.reply[0]));
+      assert.match(reply.content, /no link to download, but its file can be converted/);
+      assert.strictEqual(reply.flags, MessageFlags.Ephemeral);
+      const [button] = reply.components[0].components;
+      const [alert] = await alertsSince('download', since);
+      assert.strictEqual(alert.errorClass, 'missing_url');
+      assert.strictEqual(alert.error, 'no URL found in this message.');
+
+      const click = createFakeInteraction({ deferred: false });
+      Object.assign(click.interaction, {
+        customId: button.custom_id,
+        client: restClient,
+        applicationId: 'fake-app',
+        token: `offer-${Date.now()}`,
+        createdTimestamp: Date.now(),
+      });
+      const selected = await chooseFrom(
+        click.calls,
+        handleConvertOffer(click.interaction, pending)
+      );
+      assert.strictEqual(click.calls.deferReply[0].flags, MessageFlags.Ephemeral);
+      assert.ok(isGif(firstReply(selected.calls).files[0].attachment));
+
+      const again = createFakeInteraction({ deferred: false });
+      again.interaction.customId = button.custom_id;
+      await handleConvertOffer(again.interaction, pending);
+      assert.match(again.calls.reply[0].content, /expired/);
+    });
+
+    test('download on a message with no link or file says how to download', async () => {
+      const { interaction, calls } = contextInteraction('dl-nothing', 'download', [], 'just text');
+      await handleDownloadContextMenuCommand(interaction, new Map());
+      assert.strictEqual(
+        calls.reply[0].content,
+        'this message has no link to download. use /download and paste one.'
+      );
+      assert.strictEqual(calls.reply[0].components, undefined);
+    });
+
+    test('right-click convert on a message without media opens the form, its file gets the picker', async () => {
+      const since = Date.now();
+      const { interaction, calls } = contextInteraction('cv-ctx-form', 'convert', [], 'hi');
+      await handleConvertContextMenu(interaction);
+      assert.strictEqual(calls.reply.length, 0);
+      assert.strictEqual((await alertsSince('convert', since)).length, 0);
+      const submit = modalSubmit(calls.showModal[0], { file: attachmentOf('vid-ctx-form') });
+      const selected = await chooseFrom(
+        submit.calls,
+        handleModalSubmit(submit.interaction, new Map())
+      );
+      assert.ok(isGif(firstReply(selected.calls).files[0].attachment));
+    });
+
+    test('right-click optimize on a message without a gif opens the form; empty is refused', async () => {
+      const since = Date.now();
+      const { interaction, calls } = contextInteraction('op-ctx-form', 'optimize', [
+        attachmentOf('vid-not-gif'),
+      ]);
+      const pending = new Map();
+      await handleOptimizeContextMenuCommand(interaction, pending);
+      assert.strictEqual(pending.size, 0);
+      const fields = calls.showModal[0].toJSON().components.map(label => label.component);
+      assert.deepStrictEqual(fields[0].file_types, ['image']);
+      const submit = modalSubmit(calls.showModal[0]);
+      await handleModalSubmit(submit.interaction, pending);
+      assert.strictEqual(
+        submit.calls.reply[0].content,
+        'please provide either a gif attachment or a URL to a gif file.'
+      );
+      const [alert] = await alertsSince('optimize', since);
+      assert.strictEqual(alert.errorClass, 'missing_input');
     });
   });
 
@@ -772,7 +986,7 @@ if (!mocksSupported) {
     test.skipIf(skipGifsicle)('file and URL: optimizes the attached gif', async () => {
       const { interaction, calls } = commandInteraction('op-both', {
         file: attachmentOf('anim'),
-        url: 'https://example.com/page.html',
+        link: 'https://example.com/page.html',
       });
       await handleOptimizeCommand(interaction);
       assert.ok(isGif(firstReply(calls).files[0].attachment));
@@ -792,7 +1006,7 @@ if (!mocksSupported) {
       const url = `https://example.com/anim-${Date.now()}.gif`;
       for (const run of ['a', 'b']) {
         const { interaction, calls } = commandInteraction(`op-url-${run}-${Date.now()}`, {
-          url,
+          link: url,
           lossy: 40,
         });
         await handleOptimizeCommand(interaction);

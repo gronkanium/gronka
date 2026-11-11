@@ -1,5 +1,5 @@
 import {
-  ActionRowBuilder,
+  LabelBuilder,
   MessageFlags,
   ModalBuilder,
   TextInputBuilder,
@@ -7,40 +7,40 @@ import {
 } from 'discord.js';
 import { parseMegaUrl } from '../utils/mega.js';
 import { safeInteractionReply, safeInteractionDeferReply } from '../utils/interaction-helpers.js';
+import { refuse } from './shared/command-guards.js';
 
 const PREFIX = 'megakey:';
 
 // Everything the submit needs rides in the custom id, so there is no session to expire.
-export async function promptForMegaKey(
-  interaction,
-  fileId,
-  commandSource,
-  startTime,
-  duration,
-  audioOnly = false
-) {
+export async function promptForMegaKey(interaction, fileId, commandSource, startTime, duration) {
+  // A modal can only be the first response, so a link that was deferred to resolve asks again.
+  if (interaction.deferred) {
+    await refuse(interaction, 'download', {
+      message: 'send the full mega link including the key (the part after #).',
+      reason: 'missing_input',
+      context: { originalUrl: `https://mega.nz/file/${fileId}`, commandSource },
+    });
+    return;
+  }
   const source = commandSource === 'context-menu' ? 'c' : 's';
   const modal = new ModalBuilder()
-    .setCustomId(
-      `${PREFIX}${fileId}:${source}:${startTime ?? ''}:${duration ?? ''}:${audioOnly ? 1 : ''}`
-    )
+    .setCustomId(`${PREFIX}${fileId}:${source}:${startTime ?? ''}:${duration ?? ''}`)
     .setTitle('Mega decryption key');
   const keyInput = new TextInputBuilder()
     .setCustomId('mega_key')
-    .setLabel('Decryption key for this file')
     .setPlaceholder('the part after # in the full link')
     .setStyle(TextInputStyle.Short)
     .setRequired(true)
     .setMaxLength(200);
-  modal.addComponents(new ActionRowBuilder().addComponents(keyInput));
+  modal.addLabelComponents(
+    new LabelBuilder().setLabel('Decryption key for this file').setTextInputComponent(keyInput)
+  );
   await interaction.showModal(modal);
 }
 
 export async function handleMegaKeyInteraction(interaction, processDownload) {
   if (!interaction.isModalSubmit() || !interaction.customId.startsWith(PREFIX)) return false;
-  const [fileId, source, start, duration, audio] = interaction.customId
-    .slice(PREFIX.length)
-    .split(':');
+  const [fileId, source, start, duration] = interaction.customId.slice(PREFIX.length).split(':');
   const key = interaction.fields.getTextInputValue('mega_key').match(/[\w-]{43}/)?.[0];
   const url = `https://mega.nz/file/${fileId}#${key}`;
   if (!key || !parseMegaUrl(url)) {
@@ -56,8 +56,7 @@ export async function handleMegaKeyInteraction(interaction, processDownload) {
     url,
     source === 'c' ? 'context-menu' : 'slash',
     start === '' ? null : Number(start),
-    duration === '' ? null : Number(duration),
-    { audioOnly: audio === '1' }
+    duration === '' ? null : Number(duration)
   );
   return true;
 }

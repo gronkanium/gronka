@@ -18,7 +18,7 @@ download media from social platforms using the `/download` command:
 - facebook
 - twitch clips
 - soundcloud
-- spotify tracks: the artist's own youtube upload of the song, as a tagged mp3 with the cover (spotify audio itself is drm-only)
+- spotify tracks and apple music songs: the same recording from jiosaavn at 320k when it lists it, otherwise the artist's own youtube upload, untouched and tagged with the cover (their own audio is drm-only)
 - tumblr
 - streamable
 - dailymotion

@@ -11,6 +11,8 @@ import {
   WORKER_ID,
 } from '../utils/database/media-jobs-pg.js';
 import { AppError } from '../utils/errors.js';
+import { countOutcome } from '../utils/operations-tracker.js';
+import { recordFailure } from '../utils/failures.js';
 import { prepareReplyTarget } from './reply-target.js';
 import { runMediaJob } from './run-job.js';
 
@@ -19,7 +21,16 @@ const logger = createLogger('jobs');
 // Hands a deferred command to a worker; runs it here when workers are off or the queue is down.
 export async function dispatchMediaJob(interaction, kind, args) {
   // A failed defer means Discord already expired the token; nothing could reach the user.
-  if (!interaction.deferred && !interaction.replied) return;
+  if (!interaction.deferred && !interaction.replied) {
+    countOutcome(kind, 'error');
+    await recordFailure(kind, {
+      error: 'the interaction could not be acknowledged',
+      errorClass: 'not_acknowledged',
+      url: args.url ?? args.attachment?.url ?? null,
+      cause: interaction.deliveryError ?? new Error('the command was never deferred'),
+    });
+    return;
+  }
   if (kind === 'convert' && args.picker) {
     const reply = await prepareReplyTarget(interaction);
     const id = await enqueueJob({ kind, args, reply });

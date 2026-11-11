@@ -7,11 +7,7 @@ import { normalizeHost } from './url-host.js';
 
 const logger = createLogger('booru');
 
-// Booru image boards expose a clean per-post JSON API returning the direct file URL, so
-// no HTML scraping is needed. Two caveats drive the custom User-Agent: e621 asks clients
-// not to impersonate a browser, and danbooru's API *and* CDN 403 the shared Chrome UA
-// from getRequestHeaders() while accepting a descriptive one. So both the API fetch and
-// the media download (via downloadFileFromUrl's userAgent override) use BOORU_UA.
+// API and media download both: e621 bans browser UAs, danbooru's API and CDN 403 our Chrome one.
 const BOORU_UA = 'gronka (+https://github.com/gronkanium/gronka)';
 const API_TIMEOUT_MS = 20000;
 
@@ -23,21 +19,23 @@ const postJsonApiUrl = (host, postId) => `https://${host}/posts/${postId}.json`;
 const moebooruApiUrl = (host, postId) => `https://${host}/post.json?tags=id:${postId}`;
 const moebooruFileUrl = json => (Array.isArray(json) ? (json[0]?.file_url ?? null) : null);
 
-const BOORU_SITES = [
+export const BOORU_SITES = [
   {
+    id: 'danbooru',
     name: 'danbooru',
+    label: 'Danbooru',
     hosts: ['danbooru.donmai.us'],
     buildApiUrl: postJsonApiUrl,
     // { ..., file_url: "https://cdn.donmai.us/original/.../<md5>.<ext>" }
     pickFileUrl: json => json.file_url || null,
   },
   {
+    id: 'e621',
     name: 'e621',
+    label: 'e621 / e926',
     hosts: ['e621.net', 'e926.net'],
     buildApiUrl: postJsonApiUrl,
-    // { post: { file: { url: "https://static1.e621.net/data/.../<md5>.<ext>" } } }
-    // url is null for anonymous clients on some posts, but the CDN path is derivable
-    // from md5 + ext and serves fine.
+    // url is null for anonymous clients on some posts; the CDN path from md5 + ext still serves.
     pickFileUrl: json => {
       const file = json.post?.file;
       if (file?.url) return file.url;
@@ -47,14 +45,18 @@ const BOORU_SITES = [
     },
   },
   {
+    id: 'yandere',
     name: 'yande.re',
+    label: 'yande.re',
     hosts: ['yande.re'],
     buildApiUrl: moebooruApiUrl,
     // [ { ..., file_url: "https://files.yande.re/image/<md5>/yande.re%20<id>%20<tags>.<ext>" } ]
     pickFileUrl: moebooruFileUrl,
   },
   {
+    id: 'konachan',
     name: 'konachan',
+    label: 'Konachan',
     hosts: ['konachan.com', 'konachan.net'],
     buildApiUrl: moebooruApiUrl,
     // [ { ..., file_url: "https://konachan.com/image/<md5>/Konachan.com%20-%20<id>%20<tags>.<ext>" } ]

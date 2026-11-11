@@ -11,7 +11,7 @@ export function securityHeaders(req, res, next) {
   res.set('Permissions-Policy', 'geolocation=(), microphone=(), camera=()');
   res.set(
     'Content-Security-Policy',
-    "default-src 'self'; img-src 'self' data:; style-src 'self' 'unsafe-inline'; frame-ancestors 'none'"
+    "default-src 'self'; img-src 'self' data: https://cdn.discordapp.com; style-src 'self' 'unsafe-inline'; frame-ancestors 'none'"
   );
   next();
 }

@@ -14,7 +14,6 @@ nothing about who uses it. files are processed in a temporary folder and deleted
 | --- | --- | --- |
 | `PROD_DISCORD_TOKEN` / `TEST_DISCORD_TOKEN` | | bot token from the developer portal |
 | `PROD_CLIENT_ID` / `TEST_CLIENT_ID` | | application id |
-| `COMMAND_PREFIX` | `^g` | prefix for message commands in dms; in servers, mention the bot |
 | `SUPPORT_INVITE_URL` | | your support server, shown in `/info`; leave empty to show none |
 
 ## media
@@ -22,12 +21,21 @@ nothing about who uses it. files are processed in a temporary folder and deleted
 | key | default | what it does |
 | --- | --- | --- |
 | `MAX_VIDEO_SIZE` | 1 GB | largest file the bot downloads, converts or optimizes, in bytes (the webui setting overrides it) |
-| `DISCORD_SIZE_LIMIT` | 8 MB | fallback attachment limit when discord does not say |
 | `COBALT_ENABLED`, `COBALT_API_URL` | `true`, `http://cobalt:9000` | the cobalt instance downloads go through |
-| `YTDLP_ENABLED`, `YTDLP_QUALITY` | `true` | yt-dlp for youtube and the sites cobalt does not cover |
+| `YTDLP_ENABLED` | `true` | yt-dlp for youtube and the sites cobalt does not cover |
+| `YTDLP_QUALITY` | 1080p, landscape or portrait | yt-dlp format string |
 | `GALLERY_DL_ENABLED` | `true` | gallery-dl for manga and galleries |
 | `YTDLP_COOKIES_PATH`, `INSTAGRAM_COOKIES_PATH` | | logins for gated content, see [[Cookies]] |
-| `MEDIA_WORKERS` | `true` in docker | run media jobs in the worker containers; `false` runs them in the bot |
+
+## workers
+
+| key | default | what it does |
+| --- | --- | --- |
+| `MEDIA_WORKERS` | `true` in docker, `false` outside it | run media jobs in the worker containers; `false` runs them in the bot |
+| `WORKER_REPLICAS` | `2` | how many worker containers compose starts |
+| `WORKER_MAX_JOBS` | `4` | jobs one worker runs at once |
+| `WORKER_DRAIN_MS` | 90 seconds | on stop, how long a worker lets its jobs finish before handing them back to the queue; keep it under the worker's 2 minute stop grace period |
+| `APP_MEM_LIMIT`, `WORKER_MEM_LIMIT` | `3g` | memory cap per container |
 
 ## geo-blocked sources (optional)
 
@@ -44,7 +52,7 @@ The bot stack creates the private proxy network; only its VPN and the web backen
 
 ## r2 (optional)
 
-without r2, files too big for a discord attachment are refused. with it, they are uploaded and linked. see [[R2-Storage]].
+without r2, files too big for a discord attachment are refused. with it, they are uploaded and linked. see [[R2-Storage]]. the [[Test-Bot]] reads only `TEST_R2_*` versions of these keys and has no r2 without them.
 
 | key | default | what it does |
 | --- | --- | --- |
@@ -68,7 +76,11 @@ without r2, files too big for a discord attachment are refused. with it, they ar
 | --- | --- | --- |
 | `PROD_SERVER_PORT` / `SERVER_PORT` | `3000` | `/health` and `/api/bot/status` |
 | `PROD_WEBUI_PORT` / `WEBUI_PORT` | `3001` | the webui |
+| `WEBUI_ALLOWED_HOSTS` | | hostnames the webui and stats server answer to besides ip addresses and `localhost`, comma-separated; any other host gets 421 |
 | `PROD_POSTGRES_*` / `TEST_POSTGRES_*` | | postgres host, port, user, password and database |
+| `POSTGRES_MAX_CONNECTIONS` | `20` | connection pool size per process (bot, webui, each worker); ignored when `DATABASE_URL` is set |
+| `POSTGRES_IDLE_TIMEOUT` | 30 seconds | how long an idle connection stays open; the test suites use 1 second |
+| `POSTGRES_CONNECT_TIMEOUT` | 10 seconds | how long to wait for a new connection |
 | `STATS_CACHE_TTL` | 5 minutes | how long the webui reuses the r2 file count |
 
 ## webui settings

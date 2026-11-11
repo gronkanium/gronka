@@ -20,9 +20,7 @@ const botRequest = {
   ],
 };
 
-// Proxies to the bot process's internal stats server (bot.js), which holds the
-// live Discord client and actually owns setPresence(). webui-server and the bot
-// run as separate processes in the same container - see scripts/docker-entrypoint.sh.
+// The bot process owns the Discord client, so this proxies to its stats server (bot.js).
 router.post('/api/bot/status', express.json(), async (req, res) => {
   const { status, activity } = req.body ?? {};
 
@@ -78,5 +76,28 @@ router.get('/api/bot/status', async (req, res) => {
     res.status(502).json({ error: 'failed to reach bot process' });
   }
 });
+
+// Avatars and banners ride inline, past axios's default 10MB request body cap.
+async function forward(req, res, route) {
+  try {
+    const response = await axios({
+      ...botRequest,
+      method: req.method,
+      url: `http://127.0.0.1:${serverConfig.serverPort}${route}`,
+      data: req.method === 'GET' ? undefined : (req.body ?? {}),
+      timeout: 60_000,
+      maxBodyLength: Infinity,
+    });
+    res.status(response.status).json(response.data);
+  } catch (error) {
+    logger.error(`Failed to reach bot process for ${route}:`, error);
+    res.status(502).json({ error: 'failed to reach bot process' });
+  }
+}
+
+router.get('/api/bot/profile', (req, res) => forward(req, res, '/api/bot/profile'));
+router.patch('/api/bot/profile', express.json({ limit: '25mb' }), (req, res) =>
+  forward(req, res, '/api/bot/profile')
+);
 
 export default router;

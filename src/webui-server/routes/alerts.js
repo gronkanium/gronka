@@ -3,7 +3,6 @@ import { createLogger } from '../../utils/logger.js';
 import {
   getAlerts,
   getAlertsCount,
-  getAlertComponents,
   getAlertCommands,
   getAlertSummary,
 } from '../../utils/database.js';
@@ -24,17 +23,6 @@ function filterOptionsFrom(query) {
   return options;
 }
 
-// Distinct alert components (for the filter dropdown)
-router.get('/api/alerts/components', async (req, res) => {
-  try {
-    const components = await getAlertComponents();
-    res.json({ components });
-  } catch (error) {
-    logger.error('Failed to fetch alert components:', error);
-    res.status(500).json({ error: 'failed to fetch alert components' });
-  }
-});
-
 // Distinct commands seen in alert metadata (for the filter dropdown)
 router.get('/api/alerts/commands', async (req, res) => {
   try {
@@ -50,9 +38,7 @@ router.get('/api/alerts/commands', async (req, res) => {
 // totals from one page of rows
 router.get('/api/alerts/summary', async (req, res) => {
   try {
-    const options = filterOptionsFrom(req.query);
-    if (req.query.reasonLimit) options.reasonLimit = clamp(req.query.reasonLimit, 25, 1, 200);
-    res.json(await getAlertSummary(options));
+    res.json(await getAlertSummary(filterOptionsFrom(req.query)));
   } catch (error) {
     logger.error('Failed to fetch alert summary:', error);
     res.status(500).json({ error: 'failed to fetch alert summary' });

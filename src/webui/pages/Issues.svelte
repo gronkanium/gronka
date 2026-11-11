@@ -4,7 +4,16 @@
   import { getJson, getJsonOrNull } from '../utils/api.js';
   import { tick, untrack } from 'svelte';
   import { SvelteSet } from 'svelte/reactivity';
-  import { Copy, Check, BellOff, CircleCheck, RotateCcw, ChevronDown, X } from 'lucide-svelte';
+  import {
+    Copy,
+    Check,
+    BellOff,
+    CircleCheck,
+    RotateCcw,
+    ChevronDown,
+    X,
+    Search,
+  } from 'lucide-svelte';
   import { currentRoute, navigate } from '../utils/router.js';
   import { issueStates, setIssueState } from '../stores/nav.js';
   import {
@@ -16,6 +25,7 @@
     buckets,
     abbr,
     failureOf,
+    variantFilter,
     KIND_LABEL,
   } from '../issues.js';
   import { formatRelativeTime, formatDateTime } from '../utils/format.js';
@@ -57,6 +67,14 @@
     muted: 'Muted issues wait here until the mute ends.',
     resolved: 'Resolved issues come back to Open if they happen again.',
   };
+  // The first sends no start, so it covers every alert still kept.
+  const RANGES = [
+    ['', 'Last 7 days'],
+    ['24h', 'Last 24 hours', DAY],
+    ['6h', 'Last 6 hours', 6 * HOUR],
+    ['1h', 'Last hour', HOUR],
+  ];
+  const OCC_PAGE = 8;
   // Trend periods: bucket unit and count. 7d reuses the per-group 7-day fetch.
   const PERIODS = { '24h': { unit: 'hour', n: 24 }, '7d': { unit: 'day', n: 7 } };
   const plural = n => (n > 1 ? ` ${n} issues` : '');
@@ -92,6 +110,11 @@
   let sort = $state({ key: 'n', desc: true });
   let listW = $state(0);
   let period = $state(readPeriod());
+  let filter = $state({ search: '', command: '', severity: '', range: '' });
+  let searchDraft = $state('');
+  let commands = $state([]);
+  const filterKey = $derived(JSON.stringify(filter));
+  const filtering = $derived(Object.values(filter).some(Boolean));
   const checked = new SvelteSet();
   const leaving = new SvelteSet();
 
@@ -116,8 +139,30 @@
   );
   const selectedKey = $derived($currentRoute.params.$issue || '');
 
+  function filterParams(extra = {}) {
+    const p = new URLSearchParams(extra);
+    for (const k of ['search', 'command', 'severity']) if (filter[k]) p.set(k, filter[k]);
+    const span = RANGES.find(([id]) => id === filter.range)?.[2];
+    if (span) p.set('startTime', String(Date.now() - span));
+    return p;
+  }
+  let searchTimer;
+  function onSearch() {
+    clearTimeout(searchTimer);
+    searchTimer = setTimeout(() => (filter.search = searchDraft.trim()), 300);
+  }
+  function clearFilters() {
+    clearTimeout(searchTimer);
+    searchDraft = '';
+    filter = { search: '', command: '', severity: '', range: '' };
+  }
+  getJsonOrNull('/api/alerts/commands').then(d => (commands = d?.commands ?? []));
+
+  let loadSeq = 0;
   async function load() {
-    const r = await getJsonOrNull('/api/alerts/summary?reasonLimit=300');
+    const seq = ++loadSeq;
+    const r = await getJsonOrNull(`/api/alerts/summary?${filterParams()}`);
+    if (seq !== loadSeq) return;
     now = Date.now();
     if (!r) {
       if (!loaded) loadError = 'Could not load issues';
@@ -131,12 +176,13 @@
     loaded = true;
   }
   $effect(() => {
+    void filterKey;
     load();
-    const stopPoll = poll(load, 60_000);
-    return () => {
-      stopPoll();
-      clearTimeout(toastTimer);
-    };
+    return poll(load, 60_000);
+  });
+  $effect(() => () => {
+    clearTimeout(toastTimer);
+    clearTimeout(searchTimer);
   });
 
   const withState = $derived(groups.map(g => ({ ...g, state: stateOf(g, $issueStates) })));
@@ -151,10 +197,10 @@
     resolved: withState.filter(g => g.state === 'resolved'),
   });
 
-  const alertsFor = (g, extra = '') =>
+  const alertsFor = g =>
     Promise.all(
       g.members.map(reason =>
-        getJson(`/api/alerts?${g.by}=${encodeURIComponent(reason)}&limit=${LIMIT}${extra}`)
+        getJson(`/api/alerts?${filterParams({ [variantFilter(g.by)]: reason, limit: LIMIT })}`)
           .then(d => d.alerts ?? [])
           .catch(() => null)
       )
@@ -262,8 +308,9 @@
   // Detail: every kept event for the recent requests list and first seen.
   let occ = $state([]);
   let occLoading = $state(false);
+  let occShown = $state(OCC_PAGE);
   let occKey = '';
-  const selSig = $derived(selected ? `${selected.key}|${selected.lastSeen}` : '');
+  const selSig = $derived(selected ? `${selected.key}|${selected.lastSeen}|${filterKey}` : '');
   $effect(() => {
     if (!selSig) {
       occ = [];
@@ -274,6 +321,7 @@
     if (occKey !== g.key) {
       occ = [];
       occLoading = true;
+      occShown = OCC_PAGE;
     }
     let stale = false;
     alertsFor(g).then(parts => {
@@ -451,7 +499,10 @@
 
 <svelte:window onkeydown={onKey} onclick={onWindowClick} />
 
-<PageHeader title="Issues" description="Failures from the last 7 days, grouped by cause.">
+<PageHeader
+  title="Issues"
+  description="Failures and warnings from the last 7 days, grouped by cause."
+>
   {#snippet actions()}
     {#if error}<span class="error-text small">{error}</span>{/if}
     <span class="pill" class:warn={lists.defects.length} class:ok={!lists.defects.length}
@@ -472,6 +523,32 @@
           {label}<span class="n">{lists[id].length}</span>
         </button>
       {/each}
+    </div>
+    <div class="filters">
+      <label class="searchbox">
+        <Search size={14} />
+        <input
+          bind:value={searchDraft}
+          oninput={onSearch}
+          placeholder="Search errors, causes, links or a ref"
+          aria-label="search issues"
+        />
+      </label>
+      <select class="field sm" bind:value={filter.command} aria-label="command">
+        <option value="">All commands</option>
+        {#each commands as c (c)}<option value={c}>/{c}</option>{/each}
+      </select>
+      <select class="field sm" bind:value={filter.severity} aria-label="severity">
+        <option value="">Errors and warnings</option>
+        <option value="error">Errors</option>
+        <option value="warning">Warnings</option>
+      </select>
+      <select class="field sm" bind:value={filter.range} aria-label="time range">
+        {#each RANGES as [id, label] (id)}<option value={id}>{label}</option>{/each}
+      </select>
+      {#if filtering}
+        <button class="btn sm" onclick={clearFilters}><X size={13} />Clear</button>
+      {/if}
     </div>
   {/snippet}
 </PageHeader>
@@ -582,7 +659,7 @@
         <div class="empty big">
           <span class="ic ok"><CircleCheck size={20} /></span>
           <b>{tab === 'open' ? 'Nothing open' : 'No issues in this list'}</b>
-          {EMPTY_HINT[tab]}
+          {filtering ? 'Nothing matches these filters.' : EMPTY_HINT[tab]}
         </div>
       {/snippet}
       {#snippet row(g)}
@@ -726,7 +803,7 @@
 
         <section class="sect flush">
           <div class="sh"><span>Recent failures</span></div>
-          {#each occ.slice(0, 8) as a (a.id)}
+          {#each occ.slice(0, occShown) as a (a.id)}
             {@const f = failureOf(a)}
             <div class="orow">
               <span class="t" title={formatDateTime(a.timestamp, { seconds: true })}
@@ -771,6 +848,13 @@
               <div class="none-yet">No events kept for this issue.</div>
             {/if}
           {/each}
+          {#if occ.length > occShown}
+            <div class="more">
+              <button class="btn sm" onclick={() => (occShown += 20)}
+                >Show {Math.min(20, occ.length - occShown)} more</button
+              >
+            </div>
+          {/if}
         </section>
       </div>
 
@@ -1201,6 +1285,22 @@
     color: var(--text-dim);
     font-variant-numeric: tabular-nums;
     white-space: nowrap;
+  }
+  .more {
+    padding: 10px 20px;
+    border-top: 1px solid var(--line);
+  }
+  .filters {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 8px;
+    margin-top: 12px;
+  }
+  .filters .searchbox {
+    height: 28px;
+    width: 300px;
+    max-width: 100%;
   }
   .none-yet {
     padding: 12px 20px;

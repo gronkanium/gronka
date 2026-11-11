@@ -63,8 +63,6 @@ const prefixMappings = [
   'LOG_LEVEL',
   'SERVER_PORT',
   'SERVER_HOST',
-  'STATS_USERNAME',
-  'STATS_PASSWORD',
   'STATS_CACHE_TTL',
   'WEBUI_PORT',
   'WEBUI_HOST',
@@ -80,6 +78,9 @@ for (const key of prefixMappings) {
   const prefixedKey = `${envPrefix}${key}`;
   if (env[prefixedKey] !== undefined) {
     env[key] = env[prefixedKey];
+  } else if (prefix === 'TEST' && key.startsWith('R2_')) {
+    // Plain R2_* is prod's bucket. Blank, not deleted: the bot's own dotenv load would refill it.
+    env[key] = '';
   }
 }
 

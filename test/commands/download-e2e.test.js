@@ -36,6 +36,7 @@ function fakeBuffer(seed, size = 1024) {
 }
 
 let handleDownloadCommand;
+let handleDownloadContextMenuCommand;
 let runMediaJob;
 let acquireMedia;
 const fixtures = {};
@@ -93,9 +94,8 @@ if (!mocksSupported) {
         return `https://cdn.test/${realR2.newMediaKey(type, ext)}`;
       },
     }));
-    const { canonicalizeMirrorUrl, isSocialMediaUrl } = await import('../../src/utils/cobalt.js');
+    const { isSocialMediaUrl } = await import('../../src/utils/cobalt.js');
     mock.module('../../src/utils/cobalt.js', () => ({
-      canonicalizeMirrorUrl,
       isSocialMediaUrl,
       getCobaltMediaUrls: async (_apiUrl, url) => {
         if (url.includes('photo-links')) {
@@ -305,7 +305,8 @@ if (!mocksSupported) {
     }));
 
     // Dynamically import AFTER mocks are in place so the mocked modules are used.
-    ({ handleDownloadCommand } = await import('../../src/commands/download.js'));
+    ({ handleDownloadCommand, handleDownloadContextMenuCommand } =
+      await import('../../src/commands/download.js'));
     ({ runMediaJob } = await import('../../src/jobs/run-job.js'));
     ({ acquireMedia } = await import('../../src/core/acquire-media.js'));
   });
@@ -316,7 +317,7 @@ if (!mocksSupported) {
 
   function downloadInteraction(url, userId = 'e2e-user', { start = null, end = null } = {}) {
     const { interaction, calls } = createFakeInteraction({ deferred: false, userId });
-    const strings = { url, start, end };
+    const strings = { link: url, start, end };
     interaction.options = {
       getString: name => strings[name] ?? null,
       getBoolean: () => null,
@@ -333,10 +334,10 @@ if (!mocksSupported) {
       await handleDownloadCommand(interaction);
       assert.equal(galleryCalls.length - before, 1);
       assert.equal(galleryCalls.at(-1).url, url);
-      assert.deepEqual(
-        calls.editReply[0].files.map(file => file.name),
-        ['gronka.jpg', 'gronka-2.jpg']
-      );
+      const names = calls.editReply[0].files.map(file => file.name);
+      assert.match(names[0], /^[0-9a-f]{32}\.jpg$/);
+      assert.match(names[1], /^[0-9a-f]{32}\.jpg$/);
+      assert.notEqual(names[0], names[1]);
       assert.equal(calls.editReply[0].files[0].attachment[0], 1);
       assert.equal(calls.editReply[0].files[1].attachment[0], 2);
     });
@@ -757,6 +758,53 @@ if (!mocksSupported) {
       assert.strictEqual(alert.trail[2].error, 'yt-dlp: ERROR: [twitter] Unable to extract');
     });
 
+    test('an unsupported site points to the list of supported sites, the record is unchanged', async () => {
+      const url = `https://example.org/page-${Date.now()}`;
+      const since = Date.now();
+      const { interaction, calls } = downloadInteraction(url);
+      await handleDownloadCommand(interaction);
+      assert.strictEqual(
+        calls.reply[0].content,
+        'url is not from a supported social media platform. supported sites are listed on <https://gronka.dev/#sites>.'
+      );
+      const alert = (await getAlerts({ command: 'download', startTime: since, limit: 50 }))
+        .map(row => JSON.parse(row.metadata))
+        .find(metadata => metadata.url === url);
+      assert.strictEqual(alert.errorClass, 'invalid_social_media_url');
+      assert.strictEqual(alert.error, 'url is not from a supported social media platform.');
+    });
+
+    test('a discord message link is not fetched: the reply says to right-click it', async () => {
+      const url = `https://discord.com/channels/1/2/${Date.now()}`;
+      const since = Date.now();
+      const { interaction, calls } = downloadInteraction(url);
+      await handleDownloadCommand(interaction);
+      assert.strictEqual(
+        calls.reply[0].content,
+        "that's a link to a discord message. right-click it and pick apps, then download, convert or optimize."
+      );
+      assert.strictEqual(calls.deferReply.length, 0);
+      const alert = (await getAlerts({ command: 'download', startTime: since, limit: 50 }))
+        .map(row => JSON.parse(row.metadata))
+        .find(metadata => metadata.url === url);
+      assert.strictEqual(alert.errorClass, 'discord_message_link');
+    });
+
+    test('right-click download finds the link in a forwarded message', async () => {
+      const { interaction, calls } = createFakeInteraction({ deferred: false });
+      interaction.commandName = 'download';
+      interaction.isMessageContextMenuCommand = () => true;
+      interaction.targetMessage = {
+        content: '',
+        attachments: [],
+        messageSnapshots: new Map([
+          ['s', { content: 'https://x.com/user/status/forwarded-1', attachments: [] }],
+        ]),
+      };
+      await handleDownloadContextMenuCommand(interaction, new Map());
+      assert.strictEqual(calls.editReply[0].files.length, 1);
+    });
+
     test('turned-off source: /download is refused with a curated message, no files', async () => {
       // Turn off the Twitter/X source, then attempt an x.com download.
       await setSetting('disabled_services', JSON.stringify(['twitter']));
@@ -783,6 +831,7 @@ if (!mocksSupported) {
       // throws if reached, proving no bytes were transferred.
       const url = `https://x.com/user/status/huge-${Date.now()}`;
       const { interaction, calls } = downloadInteraction(url, 'e2e-dl-huge');
+      interaction.attachmentSizeLimit = 20 * 1024 * 1024;
 
       await handleDownloadCommand(interaction);
 

@@ -2,6 +2,8 @@
  * Shared display formatters for webui pages
  */
 
+export const NO_DATA = '–';
+
 export function formatRelativeTime(timestamp) {
   if (!timestamp) return 'N/A';
   const seconds = Math.floor((Date.now() - timestamp) / 1000);
@@ -26,7 +28,7 @@ export function formatBytes(bytes) {
 
 // One way to print a moment everywhere: "Sep 30, 14:21" (with the year only when it differs).
 export function formatDateTime(t, { seconds = false } = {}) {
-  if (!t) return '—';
+  if (!t) return NO_DATA;
   const d = new Date(t);
   const sameYear = d.getFullYear() === new Date().getFullYear();
   return d.toLocaleString([], {

@@ -17,7 +17,7 @@ PROD_CLIENT_ID=your_prod_bot_client_id
 PROD_POSTGRES_DB=gronka
 ```
 
-`bun run bot:test` copies every `TEST_` key onto its plain name (`TEST_DISCORD_TOKEN` becomes `DISCORD_TOKEN`) before starting. any key in [[Configuration]] can be given a `TEST_` version this way.
+`bun run bot:test` copies `TEST_` keys onto their plain names (`TEST_DISCORD_TOKEN` becomes `DISCORD_TOKEN`) before starting. the tokens, ports, postgres, cobalt, r2, log level and a few other keys can be given a `TEST_` version this way (the list is in `scripts/bot-start.js`); every other key is shared by both bots.
 
 ## running
 
@@ -27,9 +27,9 @@ bun run bot:test:webui         # bot plus webui on TEST_WEBUI_PORT (3101)
 bun run bot:test:dev           # restart on file changes
 ```
 
-the test bot shares cobalt and the cookie files with the docker bot. it has its own database and, as long as you leave the `TEST_R2_*` keys unset or set `TEST_R2_CLEANUP_ENABLED=false`, no r2 cleanup of its own.
+the test bot shares cobalt and the cookie files with the docker bot. it has its own database, and it never touches the docker bot's r2 bucket: it reads only the `TEST_R2_*` keys, and without them it has no r2 at all (files too big for discord are refused).
 
 ## tips
 
-- use a separate r2 bucket for the test bot, or none
+- to test uploads, point `TEST_R2_*` at a separate bucket, never the docker bot's
 - the test bot keeps its data in `gronka_test` between runs; the test suites never touch it, each run gets a fresh database of its own and drops it afterwards

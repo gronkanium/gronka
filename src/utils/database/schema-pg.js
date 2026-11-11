@@ -1,8 +1,3 @@
-/**
- * PostgreSQL schema definitions
- * Converts SQLite schema to PostgreSQL syntax
- */
-
 export function getTableDefinitions() {
   return [
     {
@@ -202,9 +197,9 @@ const MIGRATIONS = [
   ['drop_job_operation_id', dropJobOperationId],
 ];
 
-export async function runMigrations(sql) {
+export async function runMigrations(sql, migrations = MIGRATIONS) {
   const applied = new Set((await sql`SELECT name FROM schema_migrations`).map(r => r.name));
-  for (const [name, migrate] of MIGRATIONS) {
+  for (const [name, migrate] of migrations) {
     if (!applied.has(name)) {
       await migrate(sql);
       await sql`INSERT INTO schema_migrations (name, applied_at) VALUES (${name}, ${Date.now()})`;

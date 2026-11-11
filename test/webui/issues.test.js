@@ -9,6 +9,7 @@ import {
   buckets,
   abbr,
   failureOf,
+  issueKey,
 } from '../../src/webui/issues.js';
 
 const reason = (text, extra = {}) => ({
@@ -180,5 +181,7 @@ describe('failure details', () => {
     const [a] = groupIssues([reason('HTTP 403')], 'error');
     const [b] = groupIssues([reason('HTTP 403')], 'cause');
     assert.notStrictEqual(a.key, b.key);
+    assert.strictEqual(a.key, issueKey('HTTP 403'));
+    assert.strictEqual(b.key, issueKey('HTTP 403', 'cause'));
   });
 });

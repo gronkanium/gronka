@@ -43,6 +43,7 @@ const SITES = [
   ['vimeo', 'vimeo'],
   ['soundcloud', 'soundcloud'],
   ['spotify', 'spotify'],
+  ['music.apple.com', 'apple music'],
   ['giphy', 'giphy'],
   ['tenor', 'tenor'],
   ['mega.nz', 'mega'],
@@ -364,7 +365,9 @@ const LANE_NOTE = {
   r2: () => 'this link works for an hour. then the file goes.',
 };
 
-function nameOf(file, i = 0) {
+const randomName = ext => `${window.crypto.randomUUID().replaceAll('-', '')}${ext}`;
+
+function nameOf(file) {
   if (file.filename) return file.filename;
   try {
     const last = new URL(file.url).pathname.split('/').pop();
@@ -372,7 +375,8 @@ function nameOf(file, i = 0) {
   } catch {
     // not a parseable url, fall through to a generic name
   }
-  return `gronka-${i + 1}${file.type === 'image' || file.type === 'photo' ? '.jpg' : '.mp4'}`;
+  file.filename = randomName(file.type === 'image' || file.type === 'photo' ? '.jpg' : '.mp4');
+  return file.filename;
 }
 
 async function fetchWithProgress(url, onBytes, signal) {
@@ -392,7 +396,7 @@ async function fetchWithProgress(url, onBytes, signal) {
   return new Blob(chunks, { type: res.headers.get('content-type') || '' });
 }
 
-async function saveOne(file, lane, i = 0, onBytes = () => {}) {
+async function saveOne(file, lane, onBytes = () => {}) {
   // An attachment link downloads by navigation; a fetched blob is dropped by iOS once the tap is ~1s old.
   const link = lane === 'direct' ? file.save : file.url;
   if (link) {
@@ -403,7 +407,7 @@ async function saveOne(file, lane, i = 0, onBytes = () => {}) {
     return true;
   }
   try {
-    save(await fetchWithProgress(file.url, onBytes), nameOf(file, i));
+    save(await fetchWithProgress(file.url, onBytes), nameOf(file));
     return true;
   } catch {
     return false;
@@ -451,7 +455,7 @@ async function deliver(result, request) {
   const saving = $('#saving');
   let bytes;
   const run = () =>
-    saveOne(file, result.lane, 0, (got, total) => {
+    saveOne(file, result.lane, (got, total) => {
       bytes = got;
       saving.textContent = total ? `saving ${mb(got)} of ${mb(total)}` : `saving ${mb(got)}`;
     }).then(saved => {
@@ -495,9 +499,9 @@ function picker(result, site) {
         : /image|photo/.test(type) || /\.(jpe?g|png|webp|gif|avif)(\?|$)/i.test(file.url)
           ? `<img class="thumb" src="${esc(file.url)}" alt="" loading="lazy" referrerpolicy="no-referrer" />`
           : `<span class="thumb none">${icon('download')}</span>`;
-      return `<label class="tile"><input type="checkbox" checked value="${i}" aria-label="file ${i + 1}, ${esc(nameOf(file, i))}" />
+      return `<label class="tile"><input type="checkbox" checked value="${i}" aria-label="file ${i + 1}, ${esc(nameOf(file))}" />
         <span class="tick">${icon('check')}</span><span class="ink">${thumb}</span>
-        <span class="cap"><span>${i + 1}</span><span>${esc(nameOf(file, i).split('.').pop())}</span></span></label>`;
+        <span class="cap"><span>${i + 1}</span><span>${esc(nameOf(file).split('.').pop())}</span></span></label>`;
     })
     .join('');
   draw(`<h2>${result.files.length} files in this one.</h2><p class="say">pick the ones you want. ${LANE_NOTE[result.files[0].save ? 'worker' : result.lane](site)}</p>
@@ -527,13 +531,13 @@ function picker(result, site) {
     const failed = [];
     for (const [n, i] of picked.entries()) {
       $('#saving').textContent = `saving ${n + 1} of ${picked.length}`;
-      if (!(await saveOne(result.files[i], result.lane, i))) failed.push(i);
+      if (!(await saveOne(result.files[i], result.lane))) failed.push(i);
       await new Promise(r => setTimeout(r, 700));
     }
     pose(failed.length ? 'think' : 'done');
     if (failed.length < picked.length) {
       const n = picked.length - failed.length;
-      savedToast(n === 1 ? nameOf(result.files[picked[0]], picked[0]) : `${n} files`);
+      savedToast(n === 1 ? nameOf(result.files[picked[0]]) : `${n} files`);
     }
     $('#saving').innerHTML = failed.length
       ? `${failed.length === picked.length ? 'this site' : `${failed.length} of these`} won't let the page save directly. open and save:
@@ -581,7 +585,7 @@ async function merge(result, request) {
     const v = video < 0 ? 0 : video;
     const out = await remux(blobs[v], blobs[1 - v], result.filename);
     $('#fill').style.width = '100%';
-    const name = result.filename || 'gronka.mp4';
+    const name = result.filename || randomName('.mp4');
     deliverBlob(out, out.type === 'video/webm' ? name.replace(/\.\w+$/, '.webm') : name, request);
   } catch (error) {
     console.warn('browser merge failed', error);

@@ -1,6 +1,5 @@
-import { ModalBuilder, TextInputBuilder, TextInputStyle, ActionRowBuilder } from 'discord.js';
+import { ModalBuilder, LabelBuilder, RadioGroupBuilder } from 'discord.js';
 import { createLogger } from '../utils/logger.js';
-import { botConfig } from '../utils/config.js';
 import { firstUrlIn } from '../utils/validation.js';
 import { readLink } from '../core/intake.js';
 import { validateMediaFile } from './shared/media-validation.js';
@@ -8,17 +7,20 @@ import { curatedErrorMessage } from './shared/command-errors.js';
 import { isGifFile, optimizeToJob } from '../utils/gif-optimizer.js';
 import { runMediaCommand } from './shared/run-media-command.js';
 import { getDiscordAttachmentLimit } from './shared/attachment-limit.js';
-import { refuse, commandSourceOf, missingInputRefusal } from './shared/command-guards.js';
+import { refuse } from './shared/command-guards.js';
 import { safeInteractionDeferReply } from '../utils/interaction-helpers.js';
 import { storeMedia, deliverStored, finishCommand } from './shared/deliver.js';
 import { fetchInput } from './shared/media-input.js';
 import { dispatchMediaJob } from '../jobs/dispatch.js';
 import { formatSizeChange } from './shared/media-reply.js';
 import { messageMediaInput } from './shared/message-media.js';
+import { askForInput } from './shared/input-modal.js';
 
 const logger = createLogger('optimize');
 
-const { discordSizeLimit: DISCORD_SIZE_LIMIT } = botConfig;
+const MISSING_INPUT = 'please provide either a gif attachment or a URL to a gif file.';
+// Discord's docs say extension-only types break mobile pickers; other images become optimized gifs.
+const GIF_UPLOAD = { label: 'upload a gif', fileTypes: ['image'] };
 
 async function processOptimization(
   interaction,
@@ -36,10 +38,7 @@ async function processOptimization(
       const gif = validateMediaFile(file, 'gif');
       const optimized = await optimizeToJob(gif, lossy);
 
-      const stored = await storeMedia(
-        optimized,
-        getDiscordAttachmentLimit(interaction, DISCORD_SIZE_LIMIT)
-      );
+      const stored = await storeMedia(optimized, getDiscordAttachmentLimit(interaction));
       await deliverStored(interaction, stored, {
         description: formatSizeChange(gif.size, optimized.size),
       });
@@ -147,11 +146,7 @@ export async function handleOptimizeContextMenuCommand(interaction, modalAttachm
     attachments.find(att => isGifFile(att.name, att.contentType))
   );
   if (!attachment && !url) {
-    await refuse(interaction, 'optimize', {
-      message: 'no gif attachment or URL found in this message.',
-      reason: 'missing_input',
-      context: { commandSource: 'context-menu' },
-    });
+    await askForInput(interaction, 'optimize', GIF_UPLOAD, []);
     return;
   }
   const commandSource = 'context-menu';
@@ -161,16 +156,17 @@ export async function handleOptimizeContextMenuCommand(interaction, modalAttachm
     .setCustomId(`optimize_modal_${Date.now()}`)
     .setTitle('optimize gif');
 
-  const lossyInput = new TextInputBuilder()
+  const lossy = new RadioGroupBuilder()
     .setCustomId('lossy_level')
-    .setLabel('lossy level (0-100, default: 35)')
-    .setStyle(TextInputStyle.Short)
-    .setPlaceholder('35')
-    .setRequired(false)
-    .setMaxLength(3);
-
-  const actionRow = new ActionRowBuilder().addComponents(lossyInput);
-  modal.addComponents(actionRow);
+    .setRequired(true)
+    .addOptions(
+      { label: 'light', value: '15', description: 'less compression, bigger file' },
+      { label: 'balanced', value: '35', description: 'the default', default: true },
+      { label: 'strong', value: '80', description: 'more compression, smaller file' }
+    );
+  modal.addLabelComponents(
+    new LabelBuilder().setLabel('compression').setRadioGroupComponent(lossy)
+  );
 
   const modalId = modal.data.custom_id;
   modalAttachmentCache.set(modalId, {
@@ -194,10 +190,11 @@ export async function handleOptimizeContextMenuCommand(interaction, modalAttachm
 
 export async function handleOptimizeCommand(interaction) {
   const attachment = interaction.options.getAttachment('file');
-  const rawUrl = interaction.options.getString('url');
+  const rawUrl = interaction.options.getString('link');
   const url = attachment ? null : (firstUrlIn(rawUrl) ?? rawUrl);
   const lossyLevel = interaction.options.getNumber('lossy');
-  const context = { commandSource: commandSourceOf(interaction) };
+  const commandSource = 'slash';
+  const context = { commandSource };
 
   if (lossyLevel !== null && (lossyLevel < 0 || lossyLevel > 100)) {
     await refuse(interaction, 'optimize', {
@@ -208,16 +205,27 @@ export async function handleOptimizeCommand(interaction) {
     return;
   }
   if (!attachment && !url) {
-    const message = 'please provide either a gif attachment or a URL to a gif file.';
+    await askForInput(interaction, 'optimize', GIF_UPLOAD, [lossyLevel]);
+    return;
+  }
+  await startOptimize(interaction, { attachment, url, lossyLevel, commandSource });
+}
+
+export async function submitOptimizeInput(interaction, { options: [lossy], attachment, url }) {
+  const commandSource = 'slash';
+  if (!attachment && !url) {
     await refuse(interaction, 'optimize', {
-      ...missingInputRefusal(interaction, 'optimize', message),
+      message: MISSING_INPUT,
       reason: 'missing_input',
-      context,
+      context: { commandSource },
     });
     return;
   }
+  const lossyLevel = lossy ? Number(lossy) : null;
+  await startOptimize(interaction, { attachment, url, lossyLevel, commandSource });
+}
 
-  const commandSource = commandSourceOf(interaction);
+async function startOptimize(interaction, { attachment, url, lossyLevel, commandSource }) {
   if (attachment && !isGifFile(attachment.name, attachment.contentType)) {
     await safeInteractionDeferReply(interaction);
     await dispatchMediaJob(interaction, 'convert', {

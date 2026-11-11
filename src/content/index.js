@@ -16,7 +16,6 @@ export const CONTENT_SOURCES = [
   {
     id: 'reddit',
     label: 'Reddit',
-    hosts: ['reddit.com', 'redd.it'],
     match: isRedditContentUrl,
     fetch: fetchRedditThread,
     options: ['depth', 'comments'],
@@ -25,7 +24,6 @@ export const CONTENT_SOURCES = [
   {
     id: 'twitter',
     label: 'X / Twitter',
-    hosts: ['x.com', 'twitter.com'],
     match: isTwitterContentUrl,
     fetch: fetchTweetThread,
     options: ['thread', 'comments'],
@@ -34,7 +32,6 @@ export const CONTENT_SOURCES = [
   {
     id: 'bluesky',
     label: 'Bluesky',
-    hosts: ['bsky.app'],
     match: isBlueskyContentUrl,
     fetch: fetchBlueskyThread,
     options: ['thread', 'comments'],
@@ -43,7 +40,6 @@ export const CONTENT_SOURCES = [
   {
     id: 'instagram',
     label: 'Instagram',
-    hosts: ['instagram.com'],
     match: isInstagramContentUrl,
     fetch: fetchInstagramThread,
     options: [],
@@ -52,7 +48,6 @@ export const CONTENT_SOURCES = [
   {
     id: 'tiktok',
     label: 'TikTok',
-    hosts: ['tiktok.com'],
     match: isTiktokContentUrl,
     fetch: fetchTiktokThread,
     options: [],
@@ -61,14 +56,6 @@ export const CONTENT_SOURCES = [
   {
     id: 'booru',
     label: 'Booru',
-    hosts: [
-      'danbooru.donmai.us',
-      'e621.net',
-      'e926.net',
-      'yande.re',
-      'konachan.com',
-      'konachan.net',
-    ],
     match: isBooruContentUrl,
     fetch: fetchBooruThread,
     options: [],
@@ -77,7 +64,6 @@ export const CONTENT_SOURCES = [
   {
     id: 'pinterest',
     label: 'Pinterest',
-    hosts: ['pinterest.com', 'pin.it'],
     match: isPinterestContentUrl,
     fetch: fetchPinterestThread,
     options: [],
@@ -87,14 +73,6 @@ export const CONTENT_SOURCES = [
   {
     id: 'video',
     label: 'Video sites',
-    hosts: [
-      'youtube.com',
-      'youtu.be',
-      'soundcloud.com',
-      'twitch.tv',
-      'vimeo.com',
-      'dailymotion.com',
-    ],
     match: isVideoContentUrl,
     fetch: fetchVideoThread,
     options: ['comments', 'transcript'],

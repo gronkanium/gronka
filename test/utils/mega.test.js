@@ -15,6 +15,7 @@ describe('mega utilities', () => {
   test('parses new and legacy file links and rejects everything else', () => {
     assert.strictEqual(parseMegaUrl(`https://mega.nz/file/XdcWEbjR#${KEY}`).id, 'XdcWEbjR');
     assert.strictEqual(parseMegaUrl(`https://mega.nz/#!XdcWEbjR!${KEY}`).id, 'XdcWEbjR');
+    assert.strictEqual(parseMegaUrl(`https://www.mega.io/file/XdcWEbjR#${KEY}`).id, 'XdcWEbjR');
     assert.strictEqual(parseMegaUrl(`https://mega.nz/file/XdcWEbjR#${KEY}`).key.length, 32);
     assert.strictEqual(parseMegaUrl('https://mega.nz/file/XdcWEbjR'), null);
     assert.strictEqual(parseMegaUrl(`https://mega.nz/folder/XdcWEbjR#${KEY}`), null);

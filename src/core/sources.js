@@ -8,21 +8,26 @@ import {
   isFacebookPostUrl,
 } from '../utils/gallery-dl.js';
 import { isDeviationUrl, downloadFromDeviantArt } from '../utils/deviantart.js';
-import { isHentaiGifzUrl, downloadFromHentaiGifz } from '../utils/hentaigifz.js';
-import { isBooruUrl, downloadFromBooru, booruCdnUserAgent } from '../utils/booru.js';
-import { isRule34Url, downloadFromRule34 } from '../utils/rule34.js';
-import { isPinterestUrl, downloadFromPinterest } from '../utils/pinterest.js';
-import { isKlipyUrl, downloadFromKlipy } from '../utils/klipy.js';
+import { isHentaiGifzUrl, downloadFromHentaiGifz, HENTAIGIFZ_HOSTS } from '../utils/hentaigifz.js';
+import { isBooruUrl, downloadFromBooru, booruCdnUserAgent, BOORU_SITES } from '../utils/booru.js';
+import { isRule34Url, downloadFromRule34, RULE34_HOSTS } from '../utils/rule34.js';
+import { isPinterestUrl, isPinterestHost, downloadFromPinterest } from '../utils/pinterest.js';
+import { isKlipyUrl, downloadFromKlipy, KLIPY_HOSTS } from '../utils/klipy.js';
 import { isSnapchatMediaUrl, downloadFromSnapchat } from '../utils/snapchat.js';
-import { isJumpshareUrl, resolveJumpshareUrl } from '../utils/jumpshare.js';
+import { isJumpshareUrl, resolveJumpshareUrl, JUMPSHARE_HOSTS } from '../utils/jumpshare.js';
 import { isMedalUrl, downloadFromMedal } from '../utils/medal.js';
 import { isBilibiliUrl, downloadFromBilibili } from '../utils/bilibili.js';
-import { isThreadsUrl, downloadFromThreads } from '../utils/threads.js';
+import { isThreadsUrl, downloadFromThreads, THREADS_HOSTS } from '../utils/threads.js';
 import { downloadFromX } from '../utils/x-media.js';
-import { isMegaUrl, downloadFromMega } from '../utils/mega.js';
-import { isGoogleDriveUrl, googleDriveDownloadUrl } from '../utils/google-drive.js';
+import { isMegaUrl, downloadFromMega, MEGA_HOSTS } from '../utils/mega.js';
+import { isGoogleDriveUrl, googleDriveDownloadUrl, DRIVE_HOSTS } from '../utils/google-drive.js';
 import { isTumblrUrl, downloadFromTumblr } from '../utils/tumblr.js';
 import { isSpotifyUrl, downloadFromSpotify, SPOTIFY_HOSTS } from '../utils/spotify.js';
+import {
+  isAppleMusicUrl,
+  downloadFromAppleMusic,
+  APPLE_MUSIC_HOSTS,
+} from '../utils/apple-music.js';
 import {
   isInstagramStoryUrl,
   isInstagramPostUrl,
@@ -39,6 +44,7 @@ import { isTiktokContentUrl } from '../content/tiktok.js';
 import { isTwitterContentUrl } from '../content/twitter.js';
 import { hostOf, hostUnder } from '../utils/url-host.js';
 import { readSetting } from '../utils/settings.js';
+import { siteHosts } from './sites.js';
 
 const {
   cobaltEnabled: COBALT_ENABLED,
@@ -57,10 +63,10 @@ const isStillImage = url => {
   }
 };
 
-const onHost =
-  (...hosts) =>
+const onSite =
+  (...ids) =>
   url =>
-    hostUnder(hostOf(url), hosts);
+    hostUnder(hostOf(url), siteHosts(...ids));
 
 const switches = (category, ...entries) =>
   entries.map(([id, label, hosts]) => ({ id, label, category, hosts }));
@@ -130,6 +136,7 @@ export const ENGINES = {
   },
   tumblr: { name: 'Tumblr', extract: url => downloadFromTumblr(url) },
   spotify: { name: 'Spotify', extract: url => downloadFromSpotify(url) },
+  applemusic: { name: 'Apple Music', extract: url => downloadFromAppleMusic(url) },
   direct: {
     name: 'direct file',
     extract: (url, ctx) =>
@@ -183,55 +190,49 @@ export const ROUTES = [
     name: 'hentaigifz',
     owns: isHentaiGifzUrl,
     chain: [step('hentaigifz')],
-    services: switches('adult', ['hentaigifz', 'hentaigifz', ['hentaigifz.com']]),
+    services: switches('adult', ['hentaigifz', 'hentaigifz', HENTAIGIFZ_HOSTS]),
   },
   {
     id: 'rule34',
     name: 'Rule34',
     owns: isRule34Url,
     chain: [step('rule34')],
-    services: switches('adult', ['rule34', 'Rule34', ['rule34.xxx']]),
+    services: switches('adult', ['rule34', 'Rule34', RULE34_HOSTS]),
   },
   {
     id: 'booru',
     name: 'Boorus',
     owns: isBooruUrl,
     chain: [step('booru')],
-    services: switches(
-      'booru',
-      ['danbooru', 'Danbooru', ['danbooru.donmai.us']],
-      ['e621', 'e621 / e926', ['e621.net', 'e926.net']],
-      ['yandere', 'yande.re', ['yande.re']],
-      ['konachan', 'Konachan', ['konachan.com', 'konachan.net']]
-    ),
+    services: switches('booru', ...BOORU_SITES.map(site => [site.id, site.label, site.hosts])),
   },
   {
     id: 'pinterest',
     name: 'Pinterest',
     owns: isPinterestUrl,
     chain: [step('pinterest')],
-    services: switches('social', ['pinterest', 'Pinterest', ['pinterest.com', 'pin.it']]),
+    services: switches('social', ['pinterest', 'Pinterest', isPinterestHost]),
   },
   {
     id: 'klipy',
     name: 'Klipy',
     owns: isKlipyUrl,
     chain: [step('klipy')],
-    services: switches('social', ['klipy', 'Klipy', ['klipy.com']]),
+    services: switches('social', ['klipy', 'Klipy', KLIPY_HOSTS]),
   },
   {
     id: 'jumpshare',
     name: 'Jumpshare',
     owns: isJumpshareUrl,
     chain: [step('jumpshare')],
-    services: switches('video', ['jumpshare', 'Jumpshare', ['jumpshare.com']]),
+    services: switches('video', ['jumpshare', 'Jumpshare', JUMPSHARE_HOSTS]),
   },
   {
     id: 'threads',
     name: 'Threads',
     owns: isThreadsUrl,
     chain: [step('threads')],
-    services: switches('social', ['threads', 'Threads', ['threads.com', 'threads.net']]),
+    services: switches('social', ['threads', 'Threads', THREADS_HOSTS]),
   },
   {
     id: 'spotify',
@@ -239,6 +240,13 @@ export const ROUTES = [
     owns: isSpotifyUrl,
     chain: [step('spotify')],
     services: switches('social', ['spotify', 'Spotify', SPOTIFY_HOSTS]),
+  },
+  {
+    id: 'applemusic',
+    name: 'Apple Music',
+    owns: isAppleMusicUrl,
+    chain: [step('applemusic')],
+    services: switches('social', ['applemusic', 'Apple Music', APPLE_MUSIC_HOSTS]),
   },
   {
     id: 'instagram-story',
@@ -251,18 +259,14 @@ export const ROUTES = [
     name: 'Mega',
     owns: isMegaUrl,
     chain: [step('mega')],
-    services: switches('video', ['mega', 'Mega', ['mega.nz', 'mega.io']]),
+    services: switches('video', ['mega', 'Mega', MEGA_HOSTS]),
   },
   {
     id: 'google-drive',
     name: 'Google Drive',
     owns: isGoogleDriveUrl,
     chain: [step('google-drive')],
-    services: switches('video', [
-      'google-drive',
-      'Google Drive',
-      ['drive.google.com', 'drive.usercontent.google.com'],
-    ]),
+    services: switches('video', ['google-drive', 'Google Drive', DRIVE_HOSTS]),
   },
   // cobalt reads only video posts, and yt-dlp hits the browser check on <blog>.tumblr.com.
   {
@@ -275,7 +279,7 @@ export const ROUTES = [
   {
     id: 'instagram',
     name: 'Instagram',
-    owns: onHost('instagram.com'),
+    owns: onSite('instagram'),
     chain: [
       step('cobalt'),
       step('instagram', {
@@ -288,7 +292,7 @@ export const ROUTES = [
   {
     id: 'tiktok',
     name: 'TikTok',
-    owns: onHost('tiktok.com'),
+    owns: onSite('tiktok'),
     chain: [
       step('cobalt'),
       step('ytdlp'),
@@ -298,13 +302,13 @@ export const ROUTES = [
   {
     id: 'x',
     name: 'X / Twitter',
-    owns: onHost('x.com', 'twitter.com'),
+    owns: onSite('twitter'),
     chain: [step('cobalt'), step('x', { when: isTwitterContentUrl, note: 'posts' }), step('ytdlp')],
   },
   {
     id: 'youtube',
     name: 'YouTube',
-    owns: onHost('youtube.com', 'youtu.be'),
+    owns: onSite('youtube'),
     chain: [step('ytdlp'), step('cobalt', { on: false })],
   },
   {
@@ -318,7 +322,7 @@ export const ROUTES = [
   {
     id: 'imgur',
     name: 'Imgur',
-    owns: url => onHost('imgur.com')(url) && !isStillImage(url),
+    owns: url => onSite('imgur')(url) && !isStillImage(url),
     chain: [step('ytdlp'), step('gallery-dl', { note: 'photo posts' })],
   },
   {
@@ -340,7 +344,7 @@ export const ROUTES = [
   {
     id: 'facebook',
     name: 'Facebook',
-    owns: onHost('facebook.com', 'fb.watch'),
+    owns: onSite('facebook'),
     chain: [
       step('cobalt'),
       step('ytdlp'),

@@ -20,11 +20,9 @@ describe('presence options', () => {
     ]);
   });
 
-  test('omits activities entirely when there is no text', () => {
-    // setPresence clears activities when the key is absent - an empty array would be a
-    // different thing to reason about, so make sure the key simply is not there.
-    assert.deepStrictEqual(buildPresenceOptions('idle', ''), { status: 'idle' });
-    assert.deepStrictEqual(buildPresenceOptions('idle', null), { status: 'idle' });
+  test('no text sends an empty activity list, so a status change clears the old text', () => {
+    assert.deepStrictEqual(buildPresenceOptions('idle', ''), { status: 'idle', activities: [] });
+    assert.deepStrictEqual(buildPresenceOptions('idle', null), { status: 'idle', activities: [] });
   });
 
   test('omits status when only the activity changes', () => {
@@ -73,6 +71,12 @@ describe('presence round trip through discord.js', () => {
     assert.strictEqual(packet.activities[0].name, 'Custom Status');
     assert.strictEqual(packet.activities[0].state, text);
     assert.strictEqual(activityDisplayText(packet.activities[0]), text);
+  });
+
+  test('empty text clears a custom status set earlier', () => {
+    const before = new ClientPresence({});
+    before._patch(before._parse(buildPresenceOptions('dnd', 'old text')));
+    assert.deepStrictEqual(before._parse(buildPresenceOptions('dnd', '')).activities, []);
   });
 
   test('a status-only presence sends no activities', () => {

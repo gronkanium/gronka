@@ -1,6 +1,7 @@
 import {
   ActionRowBuilder,
   EmbedBuilder,
+  LabelBuilder,
   MessageFlags,
   ModalBuilder,
   StringSelectMenuBuilder,
@@ -122,13 +123,17 @@ export async function handleMangaInteraction(interaction, processDownload) {
       .setTitle('Choose manga pages');
     const pageRange = new TextInputBuilder()
       .setCustomId('page_range')
-      .setLabel('Pages (1-10 are images; 11+ becomes a ZIP)')
       .setPlaceholder(`1-${Math.min(10, chapter.urls.length)}, or one page number`)
       .setValue(`1-${Math.min(10, chapter.urls.length)}`)
       .setStyle(TextInputStyle.Short)
       .setRequired(true)
       .setMaxLength(20);
-    modal.addComponents(new ActionRowBuilder().addComponents(pageRange));
+    modal.addLabelComponents(
+      new LabelBuilder()
+        .setLabel('Pages')
+        .setDescription('1-10 are sent as images; 11 or more become a ZIP')
+        .setTextInputComponent(pageRange)
+    );
     await interaction.showModal(modal);
     return true;
   }

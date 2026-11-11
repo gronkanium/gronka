@@ -9,12 +9,13 @@ import { pipeline } from 'node:stream/promises';
 import axios from 'axios';
 import { createLogger, withLogRef } from './logger.js';
 import { maxDownloadBytes, tooLarge } from './size-limit.js';
+import { OUTPUT_FORMATS } from './output-formats.js';
 
 const logger = createLogger('media-file');
 
 // Real disk, never tmpfs: a job dir holds whole downloads. The bot and every worker share the
 // base, so each process works under its own host dir and only age ever deletes another's.
-const JOBS_BASE = path.resolve(process.env.MEDIA_TEMP_DIR || 'temp/jobs');
+export const JOBS_BASE = path.resolve(process.env.MEDIA_TEMP_DIR || 'temp/jobs');
 export const JOBS_ROOT = path.join(JOBS_BASE, os.hostname());
 const HEAD_BYTES = 64;
 const IDLE_TIMEOUT_MS = 60_000;
@@ -184,6 +185,23 @@ const TYPE_EXTENSIONS = {
 
 export const extensionForType = type =>
   TYPE_EXTENSIONS[(type ?? '').toLowerCase().split(';', 1)[0].trim()] ?? '';
+
+const EXTENSION_TYPES = {
+  ...Object.fromEntries(
+    Object.entries(OUTPUT_FORMATS).map(([ext, spec]) => [`.${ext}`, spec.mime])
+  ),
+  '.gif': 'image/gif',
+  '.jpeg': 'image/jpeg',
+  '.avif': 'image/avif',
+  '.mov': 'video/quicktime',
+  '.m4v': 'video/mp4',
+  '.avi': 'video/x-msvideo',
+  '.mkv': 'video/x-matroska',
+  '.flv': 'video/x-flv',
+  '.zip': 'application/zip',
+};
+
+export const typeForExtension = ext => EXTENSION_TYPES[ext.toLowerCase()] ?? null;
 
 // Gives an item's file its filename's extension; tools like ffmpeg's image2 pick a demuxer by it.
 export async function withExtension(item) {

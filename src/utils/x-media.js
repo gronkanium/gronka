@@ -5,10 +5,7 @@ import { hostOf } from './url-host.js';
 
 const X_HOST = /(^|\.)(x|twitter)\.com$|^t\.co$/;
 
-// X's own web api (the content reader), tried after cobalt. It sees every photo, gif and video
-// on a post; a post with none falls back to its link card's image (an old tweet whose photo was
-// a twitpic link shows it only that way), and with no card either it says so, instead of
-// yt-dlp's "no video formats".
+// A post with no media falls back to its card image: old twitpic photos exist only there.
 export async function downloadFromX(url, { gql } = {}) {
   const { post } = await fetchTweetThread(url, { thread: false, ...(gql && { gql }) });
   const card = post.extra?.cardImage;

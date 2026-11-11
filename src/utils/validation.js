@@ -22,6 +22,7 @@ export function firstUrlIn(text) {
   return /^https?:\/\//i.test(found) ? found : `https://${found}`;
 }
 
+export const INVALID_URL_ERROR = 'invalid URL format';
 export const LOOPBACK_ERROR = 'localhost and loopback addresses are not allowed';
 export const PRIVATE_ADDRESS_ERROR = 'private and internal IP addresses are not allowed';
 
@@ -157,7 +158,7 @@ export function validateUrl(url) {
   } catch {
     return {
       valid: false,
-      error: 'invalid URL format',
+      error: INVALID_URL_ERROR,
     };
   }
 
@@ -173,7 +174,7 @@ export function validateUrl(url) {
   if (!hostname) {
     return {
       valid: false,
-      error: 'invalid URL format',
+      error: INVALID_URL_ERROR,
     };
   }
 
@@ -182,7 +183,7 @@ export function validateUrl(url) {
   if (bracketed && net.isIP(hostname) !== 6) {
     return {
       valid: false,
-      error: 'invalid URL format',
+      error: INVALID_URL_ERROR,
     };
   }
 

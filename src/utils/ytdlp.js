@@ -15,10 +15,11 @@ import {
 } from './errors.js';
 import { trimVideo } from './video-processor/trim-video.js';
 import { DEFAULT_YTDLP_FORMAT } from './config.js';
-import { fromPath, tempDir, jobSignal, watchDirSize } from './media-file.js';
+import { fromPath, tempDir, jobSignal, watchDirSize, typeForExtension } from './media-file.js';
 import { maxDownloadBytes, tooLarge } from './size-limit.js';
-import { hostOf, normalizeHost, hostUnder } from './url-host.js';
-import { sitesFor } from '../core/sites.js';
+import { hostOf, hostUnder } from './url-host.js';
+import { sitesFor, siteHosts } from '../core/sites.js';
+import { isInstagramPostUrl, isInstagramReelUrl } from './instagram.js';
 
 const logger = createLogger('ytdlp');
 const execFileAsync = promisify(execFile);
@@ -58,9 +59,6 @@ export function getCookieArgs(url = null, signedIn = false) {
   return [];
 }
 
-/**
- * Custom error for yt-dlp rate limiting
- */
 // yt-dlp echoes a cookie line it cannot parse, value included, even under --no-warnings.
 const COOKIE_LINE_WARNING = /skipping cookie file entry/i;
 export const stripCookieLines = output =>
@@ -87,19 +85,10 @@ export class YtdlpRateLimitError extends NetworkError {
   }
 }
 
+const hostIn = (url, hosts) => hostUnder(hostOf(url), hosts);
+
 export function isYouTubeUrl(url) {
-  try {
-    const urlObj = new URL(url);
-    const hostname = normalizeHost(urlObj.hostname);
-    return (
-      hostname === 'youtube.com' ||
-      hostname === 'youtu.be' ||
-      hostname === 'm.youtube.com' ||
-      hostname.endsWith('.youtube.com')
-    );
-  } catch {
-    return false;
-  }
+  return hostIn(url, siteHosts('youtube'));
 }
 
 // Signed-in requests get ads and a ~5 s wait, so web_embedded (needs bun + yt-dlp-ejs) is sign-in only.
@@ -110,8 +99,7 @@ export function getYouTubeArgs(url, signedIn = false) {
 }
 
 // These reject yt-dlp's own TLS fingerprint (403, or Facebook's "Cannot parse data" once logged in); curl-cffi passes as Chrome.
-const IMPERSONATE_HOSTS = ['rumble.com', 'pornhub.com', 'facebook.com', 'fb.watch'];
-const hostIn = (url, hosts) => hostUnder(hostOf(url), hosts);
+const IMPERSONATE_HOSTS = siteHosts('rumble', 'pornhub', 'facebook');
 
 function isRedditManifest(url) {
   try {
@@ -137,7 +125,7 @@ export function getSiteArgs(url, viaGeoProxy = false) {
     '--ies',
     isRedditManifest(url)
       ? 'default'
-      : hostIn(url, ['rule34video.com'])
+      : site?.id === 'rule34video'
         ? 'default,-rule34video'
         : 'default,-generic',
     ...(hostIn(url, IMPERSONATE_HOSTS) ? ['--impersonate', 'chrome'] : []),
@@ -151,17 +139,6 @@ export function getSiteArgs(url, viaGeoProxy = false) {
 export const ONE_ITEM = ['--no-playlist', '--playlist-items', '1'];
 
 const siteLabel = url => getYtdlpSite(url) ?? hostOf(url) ?? 'this site';
-
-// /p/ permalinks carry photos as often as video; /reel/ and /tv/ are always video.
-function isInstagramPostUrl(url) {
-  try {
-    const urlObj = new URL(url);
-    const hostname = normalizeHost(urlObj.hostname);
-    return hostUnder(hostname, 'instagram.com') && /^(?:\/[^/]+)?\/p\//.test(urlObj.pathname);
-  } catch {
-    return false;
-  }
-}
 
 const YTDLP_SITES = sitesFor('ytdlp');
 
@@ -184,31 +161,13 @@ export function canonicalYtdlpUrl(url) {
   return shorty ? `https://www.pornhub.com/view_video.php?viewkey=${shorty[1]}` : url;
 }
 
-function getContentType(ext) {
-  const extLower = ext.toLowerCase().replace(/^\./, '');
-  const mimeTypes = {
-    mp4: 'video/mp4',
-    webm: 'video/webm',
-    mkv: 'video/x-matroska',
-    mov: 'video/quicktime',
-    avi: 'video/x-msvideo',
-    flv: 'video/x-flv',
-    m4v: 'video/x-m4v',
-    mp3: 'audio/mpeg',
-    m4a: 'audio/mp4',
-    wav: 'audio/wav',
-    ogg: 'audio/ogg',
-  };
-  return mimeTypes[extLower] || 'video/mp4';
-}
-
 const noVideo = () => new NetworkError('this post has no video in it.', 'NO_VIDEO');
 
 const streamIsLive = () =>
   new ValidationError('this stream is still live, try again once it has ended.', 'STREAM_IS_LIVE');
 
 const regionCopyMissing = url =>
-  hostIn(url, ['tiktok.com']) &&
+  hostIn(url, siteHosts('tiktok')) &&
   new NetworkError("tiktok isn't serving this video's file right now.", 'REGION_COPY_MISSING');
 
 // What a failed yt-dlp run said, in order: the first pattern that matches and returns an error wins.
@@ -257,7 +216,7 @@ const FAILURES = [
   // TikTok US storage is missing some videos its global CDN still serves.
   [/unable to download video data: HTTP Error 404/, regionCopyMissing],
   // Medal answers 403 until a fresh clip finishes publishing, usually within a minute.
-  [/HTTP Error 403/, url => hostIn(url, ['medal.tv']) && notPublishedYet()],
+  [/HTTP Error 403/, url => hostIn(url, siteHosts('medal')) && notPublishedYet()],
   [/Unable to download webpage: HTTP Error (404|410)/, () => contentGone()],
   [
     /Cannot parse data/,
@@ -273,11 +232,13 @@ const FAILURES = [
     url => new ValidationError(`invalid ${siteLabel(url)} URL`, 'YTDLP_INVALID_URL'),
   ],
   [/There is no video in this post|No video could be found in this tweet/, noVideo],
-  // Instagram reports photo posts this way too.
+  // Instagram reports photo posts this way too; a reel is always video.
   [
     /No video formats found/,
     url =>
-      isInstagramPostUrl(url) ? noVideo() : new NetworkError('no downloadable video formats found'),
+      isInstagramPostUrl(url) && !isInstagramReelUrl(url)
+        ? noVideo()
+        : new NetworkError('no downloadable video formats found'),
   ],
   [/larger than max-filesize/i, (url, { maxSize }) => tooLarge(maxSize)],
   [
@@ -346,11 +307,7 @@ function executeYtdlp(
       `pre_process:${LIVE_MARK}%(live_status)s`,
     ];
 
-    // Abort oversized downloads before/while pulling instead of catching them after the whole
-    // file is buffered in RAM. Only for full downloads: with --download-sections, yt-dlp
-    // compares --max-filesize against the *entire* video's reported size, which would wrongly
-    // abort a small requested clip. The post-read length check remains the definitive backstop
-    // for sources whose size yt-dlp can't determine up front (e.g. some HLS streams).
+    // Not for clips: with --download-sections yt-dlp checks the limit against the whole video.
     if (Number.isFinite(maxSize) && startTime === null && duration === null) {
       const maxMb = Math.max(1, Math.floor(maxSize / (1024 * 1024)));
       args.push('--max-filesize', `${maxMb}M`);
@@ -575,15 +532,7 @@ function executeYtdlp(
   });
 }
 
-/**
- * Wraps executeYtdlp() with a single retry when it fails with the generic catch-all message.
- * That bucket covers anything yt-dlp didn't give us a specific reason for, which in practice
- * includes transient YouTube-side extraction hiccups that clear up seconds later - retrying
- * once recovers those silently instead of surfacing a false "unavailable" to the user. Every
- * other failure (rate limit, private/age-gated, invalid URL, live stream) is a confirmed
- * state and retrying it immediately would just waste time, so only this bucket and the
- * failures tagged YTDLP_RETRYABLE retry.
- */
+// One retry, only for the catch-all bucket and YTDLP_RETRYABLE: YouTube hiccups clear in seconds.
 async function executeYtdlpWithRetry(url, outputDir, options) {
   try {
     return await executeYtdlp(url, outputDir, options);
@@ -778,9 +727,9 @@ export async function downloadWithYtdlp(
     }
 
     const filename = path.basename(outputPath);
-    const contentType = getContentType(path.extname(outputPath));
+    const contentType = typeForExtension(path.extname(outputPath)) ?? 'video/mp4';
     // yt-dlp lists a TikTok photo post as its sound alone; gallery-dl gets the photos.
-    if (hostIn(url, ['tiktok.com']) && contentType.startsWith('audio/')) {
+    if (hostIn(url, siteHosts('tiktok')) && contentType.startsWith('audio/')) {
       throw withCause(
         new NetworkError('could not download this tiktok post.'),
         'yt-dlp: tiktok photo post, only the sound track'

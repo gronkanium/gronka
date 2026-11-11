@@ -6,7 +6,6 @@ test('the same link and options within a minute are answered without asking the 
   const fake = {
     id: 'fake',
     label: 'Fake',
-    hosts: ['fake.example'],
     match: url => url.startsWith('https://fake.example/'),
     fetch: async () => ({ calls: ++calls }),
   };

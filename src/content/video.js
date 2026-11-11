@@ -16,6 +16,7 @@ import {
   ONE_ITEM,
 } from '../utils/ytdlp.js';
 import { post, comment, thread, isoDate, linksIn, MAX_COMMENTS } from './schema.js';
+import { SITES, siteHosts } from '../core/sites.js';
 
 const logger = createLogger('content-video');
 const execFileAsync = promisify(execFile);
@@ -29,21 +30,12 @@ export const VIDEO_LIMITS = {
 
 // Sites yt-dlp reads that it does not download (those go through cobalt).
 const EXTRA_SITES = [
-  { name: 'SoundCloud', hosts: ['soundcloud.com'] },
-  { name: 'Twitch', hosts: ['twitch.tv'] },
+  ...SITES.filter(site => ['soundcloud', 'twitch', 'dailymotion'].includes(site.id)),
   { name: 'Vimeo', hosts: ['vimeo.com'] },
-  { name: 'Dailymotion', hosts: ['dailymotion.com', 'dai.ly'] },
 ];
 
 // Sources of their own win; v.redd.it is a yt-dlp host for downloads only.
-const OWN_SOURCES = [
-  'reddit.com',
-  'redd.it',
-  'x.com',
-  'twitter.com',
-  'instagram.com',
-  'tiktok.com',
-];
+const OWN_SOURCES = siteHosts('reddit', 'twitter', 'instagram', 'tiktok');
 
 function siteOf(url) {
   const host = hostOf(url);

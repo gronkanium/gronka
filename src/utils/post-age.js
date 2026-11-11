@@ -1,4 +1,5 @@
 import { hostOf, hostUnder } from './url-host.js';
+import { siteHosts } from '../core/sites.js';
 
 const FRESH_MS = 10 * 60 * 1000;
 const X_EPOCH_MS = 1288834974657n;
@@ -8,11 +9,11 @@ function postedAt(url, cause) {
   const host = hostOf(url);
   if (!host) return null;
   const path = new URL(url).pathname;
-  if (['x.com', 'twitter.com'].includes(host)) {
+  if (siteHosts('twitter').includes(host)) {
     const id = /\/status\/(\d{15,20})/.exec(path)?.[1];
     return id ? Number((BigInt(id) >> 22n) + X_EPOCH_MS) : null;
   }
-  if (hostUnder(host, 'tiktok.com')) {
+  if (hostUnder(host, siteHosts('tiktok'))) {
     // vm./vt. short links carry no id; yt-dlp names it in its error.
     const id =
       /\/(?:video|photo)\/(\d{15,20})/.exec(path)?.[1] ?? /\[TikTok\] (\d{15,20})/.exec(cause)?.[1];

@@ -1,7 +1,13 @@
+import { randomBytes } from 'node:crypto';
+import { ActionRowBuilder, ButtonBuilder, ButtonStyle } from 'discord.js';
 import { createLogger } from '../utils/logger.js';
 import { botConfig, r2Config } from '../utils/config.js';
-import { firstUrlIn } from '../utils/validation.js';
 import { readLink, prepareLink, refusalFor } from '../core/intake.js';
+import { firstConvertibleAttachment } from '../utils/attachment-helpers.js';
+import { messageMediaInput } from './shared/message-media.js';
+import { startConvert } from './convert.js';
+import { SITE_URL } from './info.js';
+import { isShortLink } from '../utils/short-links.js';
 import {
   isMangaDexTitleUrl,
   isMangaDexChapterUrl,
@@ -25,16 +31,10 @@ import {
   canRecoverUpload,
 } from './shared/deliver.js';
 import { runMediaCommand } from './shared/run-media-command.js';
-import { acquireMedia, extractAudio } from '../core/acquire-media.js';
+import { acquireMedia } from '../core/acquire-media.js';
 import { dispatchMediaJob } from '../jobs/dispatch.js';
-import {
-  resolveTimeOptions,
-  refuse,
-  replyError,
-  commandSourceOf,
-} from './shared/command-guards.js';
+import { resolveTimeOptions, refuse, replyError } from './shared/command-guards.js';
 import { trimItem } from '../utils/video-processor.js';
-import { sendConvertedFile } from './shared/send-converted.js';
 import {
   safeInteractionEditReply,
   safeInteractionFollowUp,
@@ -46,7 +46,7 @@ import { mapLimit, ITEM_FANOUT } from '../utils/map-limit.js';
 
 const logger = createLogger('download');
 
-const { galleryDlEnabled: GALLERY_DL_ENABLED, discordSizeLimit: DISCORD_SIZE_LIMIT } = botConfig;
+const { galleryDlEnabled: GALLERY_DL_ENABLED } = botConfig;
 
 async function replyWithDirectMediaUrls(interaction, ctx, { urls }) {
   let followUp = false;
@@ -69,10 +69,7 @@ async function deliverArchive(interaction, ctx, fileData, attachmentLimit) {
   }
   await deliverStored(
     interaction,
-    await storeMedia(fileData, attachmentLimit, { defaultExt: '.zip' }),
-    {
-      name: fileData.filename,
-    }
+    await storeMedia(fileData, attachmentLimit, { defaultExt: '.zip' })
   );
   await finishCommand();
 }
@@ -88,9 +85,7 @@ async function deliverGallery(interaction, ctx, fileData, attachmentLimit) {
   const groups = [[...(batches[0] ?? []), ...linked], ...batches.slice(1)];
   let followUp = false;
   for (const group of groups) {
-    const items = await Promise.all(
-      group.map(item => storedReplyItem(item, { index: stored.indexOf(item) }))
-    );
+    const items = await Promise.all(group.map(item => storedReplyItem(item)));
     for (const batch of mediaReplyBatches(items)) {
       const payload = mediaReplyPayload(batch);
       const send = followUp ? safeInteractionFollowUp : safeInteractionEditReply;
@@ -150,7 +145,7 @@ export async function processDownload(
         throw new ValidationError(`downloads from ${disabledServiceLabel} are turned off.`);
       }
 
-      const attachmentLimit = getDiscordAttachmentLimit(interaction, DISCORD_SIZE_LIMIT);
+      const attachmentLimit = getDiscordAttachmentLimit(interaction);
       const acquired = await acquireMedia(url, {
         startTime,
         duration,
@@ -164,18 +159,6 @@ export async function processDownload(
       url = acquired.url;
       const { fileData } = acquired;
 
-      if (galleryOptions.audioOnly) {
-        const { file: mp3, baseName } = await extractAudio(fileData, {
-          startTime,
-          duration,
-        });
-        await sendConvertedFile(
-          interaction,
-          { ...ctx, discordAttachmentLimit: attachmentLimit },
-          { file: mp3, format: 'mp3', baseName }
-        );
-        return finishCommand();
-      }
       if (fileData?.archive) {
         return deliverArchive(interaction, ctx, fileData, attachmentLimit);
       }
@@ -194,7 +177,7 @@ export async function processDownload(
       errorFallback: 'something broke on our end with this download. it has been logged.',
       context: {
         originalUrl: url,
-        commandOptions: { startTime, duration, mp3: galleryOptions.audioOnly },
+        commandOptions: { startTime, duration },
       },
     }
   );
@@ -222,21 +205,75 @@ export function queueDownload(
 async function refuseUnsupported(interaction, url, commandSource) {
   const refusal = await refusalFor(url);
   if (!refusal) return false;
+  const message =
+    refusal.reason === 'invalid_social_media_url'
+      ? `${refusal.message} supported sites are listed on <${SITE_URL}/#sites>.`
+      : refusal.message;
   await refuse(interaction, 'download', {
     ...refusal,
+    message,
+    detail: refusal.message,
     context: { originalUrl: url, commandSource },
   });
   return true;
 }
 
-export async function handleDownloadContextMenuCommand(interaction) {
+// Resolving a short link can outlast the 3 s Discord allows before the first response.
+async function prepareAcknowledged(interaction, url) {
+  if (isShortLink(url)) await safeInteractionDeferReply(interaction);
+  return prepareLink(url);
+}
+
+const CONVERT_OFFER = 'convertoffer:';
+
+async function refuseNoLink(interaction, pending) {
+  const { attachment } = messageMediaInput(interaction.targetMessage, firstConvertibleAttachment);
+  let components;
+  if (attachment) {
+    const id = `${CONVERT_OFFER}${randomBytes(12).toString('hex')}`;
+    pending.set(id, { attachment, timestamp: Date.now() });
+    const button = new ButtonBuilder()
+      .setCustomId(id)
+      .setLabel('convert it')
+      .setStyle(ButtonStyle.Primary);
+    components = [new ActionRowBuilder().addComponents(button)];
+  }
+  await refuse(interaction, 'download', {
+    message: attachment
+      ? 'this message has no link to download, but its file can be converted.'
+      : 'this message has no link to download. use /download and paste one.',
+    detail: 'no URL found in this message.',
+    reason: 'missing_url',
+    components,
+    context: { commandSource: 'context-menu' },
+  });
+}
+
+export async function handleConvertOffer(interaction, pending) {
+  if (!interaction.customId?.startsWith(CONVERT_OFFER)) return false;
+  const offer = pending.get(interaction.customId);
+  pending.delete(interaction.customId);
+  if (!offer) {
+    await replyError(
+      interaction,
+      'this button has expired. right-click the message and pick apps > convert.'
+    );
+    return true;
+  }
+  await startConvert(interaction, { attachment: offer.attachment, commandSource: 'context-menu' });
+  return true;
+}
+
+export async function handleDownloadContextMenuCommand(interaction, pending) {
   if (!interaction.isMessageContextMenuCommand() || interaction.commandName !== 'download') {
     return;
   }
-  const read = readLink(
-    firstUrlIn(interaction.targetMessage.content),
-    'no URL found in this message.'
-  );
+  const { url: link } = messageMediaInput(interaction.targetMessage, () => null);
+  if (!link) {
+    await refuseNoLink(interaction, pending);
+    return;
+  }
+  const read = readLink(link);
   if (read.refusal) {
     await refuse(interaction, 'download', {
       ...read.refusal,
@@ -244,7 +281,7 @@ export async function handleDownloadContextMenuCommand(interaction) {
     });
     return;
   }
-  const url = await prepareLink(read.url);
+  const url = await prepareAcknowledged(interaction, read.url);
 
   const megaFileId = keylessMegaFileId(url);
   if (megaFileId) {
@@ -259,23 +296,22 @@ export async function handleDownloadContextMenuCommand(interaction) {
 }
 
 export async function handleDownloadCommand(interaction) {
-  const commandSource = commandSourceOf(interaction);
+  const commandSource = 'slash';
 
-  const rawUrl = interaction.options.getString('url');
+  const rawUrl = interaction.options.getString('link');
   const read = readLink(rawUrl, 'please provide a URL to download from.');
   if (read.refusal) {
     const context = { originalUrl: rawUrl, commandSource };
     await refuse(interaction, 'download', { ...read.refusal, context });
     return;
   }
-  const url = await prepareLink(read.url);
-  const audioOnly = interaction.options.getBoolean('mp3') === true;
 
   const times = await resolveTimeOptions(interaction, { type: 'download' });
   if (times === null) {
     return;
   }
   const { startTime: trimStart, duration: trimDuration } = times;
+  const url = await prepareAcknowledged(interaction, read.url);
 
   if (
     GALLERY_DL_ENABLED &&
@@ -292,24 +328,8 @@ export async function handleDownloadCommand(interaction) {
   }
 
   const megaFileId = keylessMegaFileId(url);
-  if (megaFileId && interaction.isPrefixCommand) {
-    const message = 'send the full mega link including the key (the part after #).';
-    await refuse(interaction, 'download', {
-      message,
-      reason: 'missing_input',
-      context: { originalUrl: url, commandSource },
-    });
-    return;
-  }
   if (megaFileId) {
-    await promptForMegaKey(
-      interaction,
-      megaFileId,
-      commandSource,
-      trimStart,
-      trimDuration,
-      audioOnly
-    );
+    await promptForMegaKey(interaction, megaFileId, commandSource, trimStart, trimDuration);
     return;
   }
 
@@ -317,5 +337,5 @@ export async function handleDownloadCommand(interaction) {
     return;
   }
   await safeInteractionDeferReply(interaction);
-  await queueDownload(interaction, url, commandSource, trimStart, trimDuration, { audioOnly });
+  await queueDownload(interaction, url, commandSource, trimStart, trimDuration);
 }

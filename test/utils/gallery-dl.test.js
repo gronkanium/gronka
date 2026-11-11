@@ -124,6 +124,16 @@ ${body}
     });
   });
 
+  test('each file is labelled by its extension, an avif as an image', async () => {
+    await withFake(`printf 'a' > "$2/1.avif"; printf 'b' > "$2/2.mp4"`, async () => {
+      const files = await downloadWithGalleryDl('https://nhentai.net/g/1/');
+      assert.deepStrictEqual(
+        files.map(f => f.contentType),
+        ['image/avif', 'video/mp4']
+      );
+    });
+  });
+
   test('a gallery that passes the size limit mid-download is stopped and refused', async () => {
     await setSetting('max_video_size_mb', '1');
     try {

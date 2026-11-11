@@ -20,39 +20,27 @@ gronka uses multiple downloaders for social media content. cobalt.tools handles 
 
 ## setup
 
-### step 1: deploy cobalt
+### step 1: cobalt comes with the stack
 
-cobalt can be deployed using docker:
+`docker compose up -d --build` already builds and runs cobalt; there is nothing separate to deploy. the image is built from `docker/cobalt.Dockerfile`: upstream cobalt with a patched node and openssl, plus the same egress fence as the bot, so a site cannot redirect it to a private address. it reads its own cookie file, `cobalt-cookies.json` (see [[Cookies]]).
+
+cobalt has no api key and holds the cookie sessions, so it is published on `127.0.0.1:9000` only; the bot reaches it inside the compose network at `http://cobalt:9000`. after changing the dockerfile, rebuild it with:
 
 ```bash
-docker run -d \
-  --name cobalt \
-  -p 9000:9000 \
-  --restart unless-stopped \
-  ghcr.io/imputnet/cobalt
-```
-
-or add it to your docker-compose.yml:
-
-```yaml
-cobalt:
-  image: ghcr.io/imputnet/cobalt:latest
-  container_name: cobalt
-  ports:
-    - '9000:9000'
-  restart: unless-stopped
+docker compose build cobalt
+docker compose up -d cobalt
 ```
 
 ### step 2: configure gronka
 
-add these environment variables to your `.env` file:
+`.env.example` already sets these, and they are also the defaults:
 
 ```env
 COBALT_API_URL=http://cobalt:9000
 COBALT_ENABLED=true
 ```
 
-if running cobalt on a different host or port, adjust `COBALT_API_URL` accordingly.
+to use a cobalt instance elsewhere, point `COBALT_API_URL` at it and keep it off the public internet.
 
 ### yt-dlp configuration (for youtube)
 
@@ -60,11 +48,11 @@ yt-dlp is bundled in the docker image and enabled by default. configure with the
 
 ```env
 YTDLP_ENABLED=true
-YTDLP_QUALITY=bestvideo[height<=1080][ext=mp4]+bestaudio[ext=m4a]/best[height<=1080][ext=mp4]/best[height<=1080]
+#YTDLP_QUALITY=
 ```
 
 - `YTDLP_ENABLED`: enable/disable youtube downloads (default: true)
-- `YTDLP_QUALITY`: yt-dlp format string for video quality (default: 1080p max)
+- `YTDLP_QUALITY`: yt-dlp format string for video quality. the default caps both landscape and portrait video at 1080p; a filter on height alone, like `bestvideo[height<=1080]`, rejects every portrait video
 
 for local development without docker, install yt-dlp:
 
@@ -81,7 +69,7 @@ apt install yt-dlp   # debian/ubuntu
 
 1. start cobalt and gronka
 2. use `/download` with a social media url
-3. the bot should download the media and store it
+3. the bot should reply with the file
 
 ## how it works
 
@@ -94,21 +82,13 @@ when you use `/download` with a social media url:
 3. for other platforms:
    - the bot sends a request to your cobalt api instance
    - cobalt downloads the media from the platform
-4. the bot receives the media and stores it in your configured storage (r2 or local)
-5. you receive a link to the stored file
+4. the bot attaches the file to its reply. a file too big for a discord attachment is uploaded to [[R2-Storage]] and linked instead, or refused when r2 is not set up
 
-the bot handles both video and image downloads. for platforms that return multiple images (like instagram carousels), all images are downloaded and stored.
+the bot handles both video and image downloads. for platforms that return multiple images (like instagram carousels), all images are downloaded and attached.
 
-## deferred downloads
+## long downloads
 
-for large files or slow downloads, the bot uses a deferred download queue:
-
-1. the bot immediately responds that the download is queued
-2. the download happens in the background
-3. you receive a notification when the download completes
-4. the notification includes a link to the downloaded file
-
-this prevents discord command timeouts for long-running downloads.
+every `/download`, `/convert` and `/optimize` reply is deferred: discord shows the bot thinking while a worker (or the bot itself, with `MEDIA_WORKERS=false`) runs the job, and the result replaces that reply. a job has until the discord interaction expires, about 15 minutes; past that the reply says it took too long. there is no separate queue message or notification.
 
 ## url-only mode
 
@@ -123,13 +103,9 @@ url-only mode automatically falls back to the normal download pipeline when:
 - the url is a youtube link handled by yt-dlp (no direct url to hand out)
 - cobalt only offers a tunnel response (tunnel urls are only reachable inside the docker network)
 
-## url processing
+## nothing is cached
 
-the bot tracks processed urls to avoid re-downloading the same content:
-
-- each url is hashed and stored in a database
-- if a url was already processed, the bot returns the existing file immediately
-- this works across all users and servers
+the bot keeps no record of what it downloaded: every request downloads fresh, and a job's files are deleted when it ends. only a failed request leaves a record (command, full link, error and the steps tried), kept for `RETENTION_DAYS` and never tied to a user. see [[Configuration]].
 
 ## troubleshooting
 
@@ -137,7 +113,7 @@ the bot tracks processed urls to avoid re-downloading the same content:
 
 - verify cobalt container is running: `docker ps | grep cobalt`
 - check cobalt logs: `docker logs cobalt`
-- test cobalt directly: `curl http://localhost:9000/api/info`
+- test cobalt directly: `curl http://localhost:9000/` answers with its version and services
 - verify `COBALT_API_URL` matches your cobalt instance
 
 ### downloads failing
@@ -150,7 +126,7 @@ the bot tracks processed urls to avoid re-downloading the same content:
 ### slow downloads
 
 - cobalt downloads can take time depending on file size
-- use deferred downloads for large files
+- a job has about 15 minutes; for a long video, `start`/`end` grab a shorter clip
 - check your network connection
 - verify cobalt has sufficient resources
 

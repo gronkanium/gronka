@@ -7,19 +7,6 @@ import { parseTimestamp } from '../../utils/validation.js';
 
 const logger = createLogger('command-guards');
 
-// Slash and prefix commands share their handlers; the message adapter marks the prefix ones.
-export const commandSourceOf = interaction => (interaction.isPrefixCommand ? 'prefix' : 'slash');
-
-// Without the Message Content intent a mention cannot see the files on the message it replies to.
-export const missingInputRefusal = (interaction, type, message) =>
-  interaction.isPrefixCommand && interaction.message?.reference
-    ? {
-        message: `i can't see files on the message you replied to. right-click (or long-press) it and pick apps > ${type} instead.`,
-        detail:
-          'mention replied to a message whose attachments are hidden without the message content intent',
-      }
-    : { message };
-
 /**
  * Read and parse the start/end string options from a slash command interaction.
  * Values may be plain seconds ("90", "12.5") or timestamps ("3:10", "1:02:30"). On an invalid
@@ -64,16 +51,21 @@ export async function resolveTimeOptions(interaction, { type }) {
 }
 
 // Ephemeral before the reply is deferred, an edit of the deferred reply after.
-export function replyError(interaction, content) {
+export function replyError(interaction, content, components) {
+  const payload = components ? { content, components } : { content };
   return interaction.deferred
-    ? safeInteractionEditReply(interaction, { content })
-    : safeInteractionReply(interaction, { content, flags: MessageFlags.Ephemeral });
+    ? safeInteractionEditReply(interaction, payload)
+    : safeInteractionReply(interaction, { ...payload, flags: MessageFlags.Ephemeral });
 }
 
 // Turns a request away: the reply, and with a `reason` one failed count, a log line and a failure
 // record. `detail`/`cause` are what we record; `message` is what the user sees.
-export async function refuse(interaction, type, { message, detail, cause, reason, context = {} }) {
-  await replyError(interaction, message);
+export async function refuse(
+  interaction,
+  type,
+  { message, detail, cause, reason, context = {}, components }
+) {
+  await replyError(interaction, message, components);
   if (!reason) return;
   const error = detail || cause?.message || message;
   if (!failed()) countOutcome(type, 'error');

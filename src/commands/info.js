@@ -7,7 +7,7 @@ import { jobsOverview } from '../utils/database/media-jobs-pg.js';
 import { botConfig, supportConfig } from '../utils/config.js';
 
 const logger = createLogger('info');
-const SITE_URL = 'https://gronka.dev';
+export const SITE_URL = 'https://gronka.dev';
 const SOURCE_URL = 'https://github.com/gronkanium/gronka';
 
 const mb = bytes => `${Math.round(bytes / 1024 ** 2)} MB`;
@@ -53,7 +53,7 @@ export function infoEmbed({ botStartTime, client, overview, workersEnabled, botR
   return new EmbedBuilder()
     .setAuthor({ name: 'gronka', iconURL: client.user?.displayAvatarURL(), url: SITE_URL })
     .setColor(0x5865f2)
-    .setDescription(`paste a link, get the file.\n${links.join(' · ')}`)
+    .setDescription(`downloads, converts and optimizes media from 40+ sites.\n${links.join(' · ')}`)
     .addFields(
       field('servers', client.guilds.cache.size.toLocaleString('en-US')),
       field('uptime', uptimeLine(uptime, client.uptime ?? 0)),

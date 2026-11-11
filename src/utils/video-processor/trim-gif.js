@@ -10,15 +10,6 @@ import {
 
 const logger = createLogger('trim-gif');
 
-/**
- * Trim GIF file using FFmpeg (keeps GIF format, no conversion)
- * @param {string} inputPath - Path to input GIF file
- * @param {string} outputPath - Path to output GIF file
- * @param {Object} options - Trim options
- * @param {number|null} options.startTime - Trim start time in seconds (optional)
- * @param {number|null} options.duration - Trim duration in seconds (optional)
- * @returns {Promise<void>}
- */
 export async function trimGif(inputPath, outputPath, options = {}) {
   // Validate and sanitize numeric parameters
   const startTime = validateNumericParameter(
@@ -63,11 +54,6 @@ export async function trimGif(inputPath, outputPath, options = {}) {
   // Ensure output directory exists
   const outputDir = path.dirname(outputPath);
   await fs.mkdir(outputDir, { recursive: true });
-
-  // For GIF trimming, we need to:
-  // 1. Seek to start time (as input option for faster seeking)
-  // 2. Trim duration (as output option)
-  // 3. Maintain GIF format and quality
 
   // Add start time as input option (before -i) for faster seeking
   const inputOptions = [...FFMPEG_INPUT_GUARD];

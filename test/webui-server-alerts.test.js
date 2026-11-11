@@ -1,12 +1,13 @@
 import { test, describe, beforeAll, afterAll } from 'bun:test';
 import assert from 'node:assert';
+import { variantFilter } from '../src/webui/issues.js';
 import {
   initDatabase,
   insertAlert,
-  getAlertComponents,
   getAlertSummary,
   getAlerts,
   UNKNOWN_REASON,
+  REASON_LIMIT,
 } from '../src/utils/database.js';
 
 let app;
@@ -28,47 +29,8 @@ afterAll(() => {
   // Don't close database here - it's shared across parallel test files
 });
 
-describe('alert components', () => {
-  test('getAlertComponents returns distinct components including new ones', async () => {
-    const component = `alerts-comp-test-${Date.now()}`;
-    await insertAlert({
-      severity: 'info',
-      component,
-      title: 'test alert',
-      message: 'component listing test',
-    });
-    // Insert a duplicate to verify DISTINCT
-    await insertAlert({
-      severity: 'warning',
-      component,
-      title: 'test alert 2',
-      message: 'component listing test 2',
-    });
-
-    const components = await getAlertComponents();
-    assert.ok(Array.isArray(components));
-    assert.strictEqual(
-      components.filter(c => c === component).length,
-      1,
-      'component should appear exactly once'
-    );
-  });
-
-  test('GET /api/alerts/components returns the components list', async () => {
-    const component = `alerts-route-test-${Date.now()}`;
-    await insertAlert({
-      severity: 'error',
-      component,
-      title: 'route test alert',
-      message: 'route test',
-    });
-
-    const response = await fetch(`${baseUrl}/api/alerts/components`);
-    assert.strictEqual(response.status, 200);
-    const data = await response.json();
-    assert.ok(Array.isArray(data.components));
-    assert.ok(data.components.includes(component));
-  });
+test('GET /api/alerts/components is gone', async () => {
+  assert.strictEqual((await fetch(`${baseUrl}/api/alerts/components`)).status, 404);
 });
 
 describe('alert paging', () => {
@@ -151,5 +113,80 @@ describe('alert summary', () => {
     const data = await response.json();
     assert.ok(data.commands.includes('download'));
     assert.ok(data.commands.includes('convert'));
+  });
+});
+
+describe('issue groups', () => {
+  test('the summary lists up to REASON_LIMIT reasons whatever the query asks for', async () => {
+    const component = `alerts-limit-test-${Date.now()}`;
+    await Promise.all(
+      Array.from({ length: REASON_LIMIT + 5 }, (_, i) =>
+        insertAlert({
+          severity: 'error',
+          component,
+          title: 'command failed',
+          message: 'download failed',
+          metadata: { command: 'download', error: `limit reason ${i}` },
+        })
+      )
+    );
+    for (const query of ['', '&reasonLimit=300', '&reasonLimit=5']) {
+      const data = await (
+        await fetch(`${baseUrl}/api/alerts/summary?component=${component}${query}`)
+      ).json();
+      assert.strictEqual(data.byReason.length, REASON_LIMIT, `query "${query}"`);
+    }
+  });
+
+  test("an issue's events are fetched by a filter /api/alerts applies, for both groupings", async () => {
+    const component = `alerts-variant-test-${Date.now()}`;
+    for (const n of [1, 2]) {
+      await insertAlert({
+        severity: 'error',
+        component,
+        title: 'command failed',
+        message: `download failed - error ${n}`,
+        metadata: { command: 'download', error: `error ${n}`, cause: `cause ${n}` },
+      });
+    }
+    for (const [by, value] of [
+      ['error', 'error 1'],
+      ['cause', 'cause 1'],
+    ]) {
+      const query = new URLSearchParams({ component, [variantFilter(by)]: value });
+      const data = await (await fetch(`${baseUrl}/api/alerts?${query}`)).json();
+      assert.strictEqual(data.total, 1, `grouped by ${by}`);
+    }
+  });
+
+  test('warnings group into issues and the severity filter picks them out', async () => {
+    const component = `alerts-warning-test-${Date.now()}`;
+    await insertAlert({
+      severity: 'warning',
+      component,
+      title: 'R2 cleanup: deletions failed',
+      message: '2 expired object(s) could not be deleted',
+      metadata: { error: 'cleanup could not delete expired files', count: 2 },
+    });
+    await insertAlert({
+      severity: 'error',
+      component,
+      title: 'command failed',
+      message: 'download failed - boom',
+      metadata: { command: 'download', error: 'boom' },
+    });
+
+    const all = await (await fetch(`${baseUrl}/api/alerts/summary?component=${component}`)).json();
+    assert.deepStrictEqual(all.byReason.map(r => r.reason).sort(), [
+      'boom',
+      'cleanup could not delete expired files',
+    ]);
+    const warnings = await (
+      await fetch(`${baseUrl}/api/alerts/summary?component=${component}&severity=warning`)
+    ).json();
+    assert.deepStrictEqual(
+      warnings.byReason.map(r => r.reason),
+      ['cleanup could not delete expired files']
+    );
   });
 });

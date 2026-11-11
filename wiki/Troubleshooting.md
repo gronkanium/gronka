@@ -41,6 +41,8 @@ docker compose run --rm app bun run register-commands
 bun run register-commands
 ```
 
+or open the webui's **settings > slash commands** and press **register**.
+
 ### wait for propagation
 
 discord commands can take up to an hour to appear globally. they may appear immediately in servers where the bot is present.

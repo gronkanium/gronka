@@ -3,7 +3,7 @@
   import { getJsonOrNull, sendJson } from '../utils/api.js';
   import { Pause, Play, AlertTriangle, Cpu } from 'lucide-svelte';
   import { refreshNav } from '../stores/nav.js';
-  import { formatBytes, formatRelativeTime } from '../utils/format.js';
+  import { formatBytes, formatRelativeTime, NO_DATA } from '../utils/format.js';
   import PageHeader from '../components/PageHeader.svelte';
   import DataTable from '../components/DataTable.svelte';
 
@@ -155,22 +155,22 @@
   <section class="kpis" style="--kpi-cols: 4" aria-label="queue">
     <div class="kpi" class:bad={workers.length && liveWorkers < workers.length}>
       <div class="k">Workers</div>
-      <div class="v tnum">{jobs ? `${liveWorkers} of ${workers.length}` : '–'}</div>
+      <div class="v tnum">{jobs ? `${liveWorkers} of ${workers.length}` : NO_DATA}</div>
       <div class="s">reporting in the last 30 s</div>
     </div>
     <div class="kpi" class:warn={paused && count('queued')}>
       <div class="k">Queued</div>
-      <div class="v tnum">{jobs ? count('queued') : '–'}</div>
+      <div class="v tnum">{jobs ? count('queued') : NO_DATA}</div>
       <div class="s">{paused ? 'held while paused' : 'waiting for a worker'}</div>
     </div>
     <div class="kpi">
       <div class="k">Running</div>
-      <div class="v tnum">{jobs ? count('running') : '–'}</div>
+      <div class="v tnum">{jobs ? count('running') : NO_DATA}</div>
       <div class="s">right now</div>
     </div>
     <div class="kpi" class:warn={stale.length}>
       <div class="k">Build</div>
-      <div class="v mono build">{build ? `v${build}` : '–'}</div>
+      <div class="v mono build">{build ? `v${build}` : NO_DATA}</div>
       <div class="s">{stale.length ? 'mixed versions' : 'every process matches'}</div>
     </div>
   </section>
@@ -191,8 +191,8 @@
       </span>
       <span><span class="pill sm {tone}">{label}</span></span>
       <span class="num tnum muted">{uptime(now - p.startedAt)}</span>
-      <span class="num tnum">{p.rss ? formatBytes(p.rss) : '–'}</span>
-      <span class="num tnum muted hide-sm">{p.cpu == null ? '–' : `${p.cpu.toFixed(1)}%`}</span>
+      <span class="num tnum">{p.rss ? formatBytes(p.rss) : NO_DATA}</span>
+      <span class="num tnum muted hide-sm">{p.cpu == null ? NO_DATA : `${p.cpu.toFixed(1)}%`}</span>
       <span class="num dim hide-sm">{formatRelativeTime(p.seenAt)}</span>
     {/snippet}
   </DataTable>
@@ -212,7 +212,7 @@
         <span><span class="pill sm {kind}">{label}</span></span>
         <span class="mono ellipsis">{j.kind}</span>
         <span class="muted ellipsis hide-sm" title={j.worker ?? ''}
-          >{j.worker ? (nameOf[j.worker] ?? 'stopped process') : '–'}</span
+          >{j.worker ? (nameOf[j.worker] ?? 'stopped process') : NO_DATA}</span
         >
         <span class="num hide-sm" class:warn-text={j.attempts > 1}>{j.attempts}</span>
         <span class="num dim">{formatRelativeTime(j.createdAt)}</span>
@@ -230,7 +230,8 @@
               class:err={!bot.status || bot.status === 'offline'}
             ></span>
             <span class="strong">Discord</span>
-            <span class="mono dim small right ellipsis">{bot.botTag ?? '–'} · {bot.status}</span>
+            <span class="mono dim small right ellipsis">{bot.botTag ?? NO_DATA} · {bot.status}</span
+            >
           </div>
         {/if}
         {#each system?.deps ?? [] as d (d.id)}

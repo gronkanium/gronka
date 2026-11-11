@@ -56,7 +56,7 @@ new r2 uploads are refused while the bucket holds more than this. `0` turns the 
 
 ### `maintenance_mode`
 
-when on, every command replies with a maintenance notice.
+when on, every command replies with a maintenance notice. the webui sidebar marks **settings** with a maintenance badge while it is on.
 
 **default:** `off`
 

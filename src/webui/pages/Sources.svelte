@@ -3,6 +3,7 @@
   import { Search, Globe, ChevronDown, ArrowUp, ArrowDown, RotateCcw } from 'lucide-svelte';
   import PageHeader from '../components/PageHeader.svelte';
   import { navigate } from '../utils/router.js';
+  import { NO_DATA } from '../utils/format.js';
 
   const CATEGORY_ORDER = [
     { id: 'social', label: 'Social' },
@@ -338,7 +339,9 @@
                     {#each route.steps as s, i (s.tool)}
                       <li class:skipped={!s.on}>
                         <span class="n tnum"
-                          >{s.on ? route.steps.slice(0, i + 1).filter(x => x.on).length : '–'}</span
+                          >{s.on
+                            ? route.steps.slice(0, i + 1).filter(x => x.on).length
+                            : NO_DATA}</span
                         >
                         <span class="what">
                           <b>{tools[s.tool]?.name}</b>

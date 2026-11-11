@@ -1,10 +1,13 @@
 import express from 'express';
 import { createLogger } from '../../utils/logger.js';
-import { getAllSettings, setSetting } from '../../utils/database.js';
+import { getAllSettings, getAlertReasons, setSetting } from '../../utils/database.js';
 import { parseTiers } from '../../utils/upload-tiers.js';
 import { SETTINGS } from '../../utils/settings.js';
 import { ROUTES, arrangeChain } from '../../core/sources.js';
 import { DOWNLOAD_SERVICES, DOWNLOAD_SERVICE_IDS } from '../../utils/download-services.js';
+import { issueKey } from '../../webui/issues.js';
+import { botConfig } from '../../utils/config.js';
+import { registerCommands, registerErrorHint } from '../../register-commands.js';
 
 const MB = 1024 * 1024;
 
@@ -14,9 +17,7 @@ const router = express.Router();
 // { [issueKey]: { state: 'muted', until } | { state: 'resolved', at } }
 function parseIssueStates(value) {
   if (!value || typeof value !== 'object' || Array.isArray(value)) return null;
-  const entries = Object.entries(value);
-  if (entries.length > 500) return null;
-  const states = entries.map(([key, s]) => {
+  const states = Object.entries(value).map(([key, s]) => {
     if (key.length > 300 || !s || typeof s !== 'object') return null;
     if (s.state === 'muted' && Number.isFinite(s.until))
       return [key, { state: 'muted', until: s.until }];
@@ -24,7 +25,17 @@ function parseIssueStates(value) {
       return [key, { state: 'resolved', at: s.at }];
     return null;
   });
-  return states.includes(null) ? null : Object.fromEntries(states);
+  return states.includes(null) ? null : states;
+}
+
+// A lapsed mute does nothing, and a resolve whose alerts were all pruned has nothing left to hide.
+async function pruneIssueStates(states) {
+  const { reasons, causes } = await getAlertReasons();
+  const live = new Set([
+    ...reasons.map(r => issueKey(r)),
+    ...causes.map(c => issueKey(c, 'cause')),
+  ]);
+  return states.filter(([key, s]) => (s.state === 'muted' ? s.until > Date.now() : live.has(key)));
 }
 
 // Get all bot settings (known settings filled with defaults)
@@ -157,14 +168,15 @@ router.put('/api/settings/:key', express.json(), async (req, res) => {
       }
       textValue = JSON.stringify(saved);
     } else if (meta.type === 'issuestates') {
-      const states = parseIssueStates(value);
-      if (!states) {
+      const parsed = parseIssueStates(value);
+      const states = parsed && (await pruneIssueStates(parsed));
+      if (!states || states.length > 500) {
         return res.status(400).json({
           error: 'invalid value',
           message: `"${key}" expects { key: { state: 'muted', until } | { state: 'resolved', at } }`,
         });
       }
-      textValue = JSON.stringify(states);
+      textValue = JSON.stringify(Object.fromEntries(states));
     } else {
       return res.status(400).json({ error: 'invalid value', message: `"${key}" is read-only` });
     }
@@ -176,6 +188,21 @@ router.put('/api/settings/:key', express.json(), async (req, res) => {
   } catch (error) {
     logger.error(`Failed to update setting ${req.params.key}:`, error);
     res.status(500).json({ error: 'failed to update setting' });
+  }
+});
+
+router.post('/api/commands/register', express.json(), async (req, res) => {
+  // A JSON body keeps a cross-site form from triggering this without a CORS preflight.
+  if (req.body?.confirm !== true) {
+    return res.status(400).json({ error: 'confirm: true is required in a JSON body' });
+  }
+  try {
+    const registered = await registerCommands(botConfig.discordToken, botConfig.clientId);
+    logger.info(`Registered ${registered.length} application command(s) from the webui`);
+    res.json({ count: registered.length });
+  } catch (error) {
+    logger.error('Failed to register application commands:', error);
+    res.status(502).json({ error: registerErrorHint(error) ?? 'could not register commands' });
   }
 });
 

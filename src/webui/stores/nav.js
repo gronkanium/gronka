@@ -8,13 +8,14 @@ export const issueStates = writable({});
 
 export async function refreshNav() {
   const [issues, system, checks] = await Promise.all([
-    getJsonOrNull('/api/alerts/summary?reasonLimit=300'),
+    getJsonOrNull('/api/alerts/summary'),
     getJsonOrNull('/api/system'),
     getJsonOrNull('/api/sources/checks'),
   ]);
   navStats.set({
     issues: groupIssues(issues?.byReason ?? []),
     paused: !!system?.jobs?.paused,
+    maintenance: !!system?.maintenance,
     version: system?.version ?? null,
     checkProblems: (checks?.checks ?? []).filter(c => ['fail', 'gone'].includes(c.result?.status))
       .length,
@@ -47,5 +48,5 @@ export async function setIssueState(key, state) {
     body: JSON.stringify({ value: next }),
   });
   if (!res.ok) throw new Error('could not save issue state');
-  issueStates.set(next);
+  issueStates.set(JSON.parse((await res.json()).value));
 }

@@ -8,10 +8,12 @@
     Globe,
     Check,
     ArrowUpRight,
+    SquareSlash,
   } from 'lucide-svelte';
   import { currentRoute, navigate } from '../utils/router.js';
   import PageHeader from '../components/PageHeader.svelte';
   import TierChart from '../components/TierChart.svelte';
+  import { refreshNav } from '../stores/nav.js';
 
   // Each setting names its section on the server; unknown sections fall into "other" so none vanish.
   const SECTIONS = [
@@ -28,6 +30,13 @@
       blurb: 'How long uploads live in R2 and how much it may hold',
     },
     {
+      id: 'commands',
+      label: 'Slash commands',
+      icon: SquareSlash,
+      blurb: 'What Discord offers when someone types /',
+      commands: true,
+    },
+    {
       id: 'access',
       label: 'Availability',
       icon: ShieldCheck,
@@ -35,7 +44,7 @@
     },
   ];
   // Edited on their own pages, not here.
-  const ELSEWHERE = new Set(['services', 'issuestates', 'routes']);
+  const ELSEWHERE = new Set(['sources', 'issues']);
   const label = key => settings[key]?.label ?? key.replace(/_/g, ' ');
 
   let settings = $state({});
@@ -48,7 +57,7 @@
   let toastTimer;
 
   const sections = $derived.by(() => {
-    const keys = Object.keys(settings).filter(k => !ELSEWHERE.has(settings[k].type));
+    const keys = Object.keys(settings).filter(k => !ELSEWHERE.has(settings[k].section));
     const known = new Set(SECTIONS.map(s => s.id));
     const other = keys.filter(k => !known.has(settings[k].section));
     return [
@@ -105,6 +114,24 @@
     toastTimer = setTimeout(() => (toast = ''), 2000);
   }
 
+  let confirming = $state(false);
+  let registering = $state(false);
+  let registered = $state('');
+  async function register() {
+    registering = true;
+    error = '';
+    const res = await sendJson('/api/commands/register', 'POST', { confirm: true }).catch(
+      () => null
+    );
+    const data = res ? await res.json().catch(() => ({})) : {};
+    registering = false;
+    confirming = false;
+    if (res?.ok) {
+      registered = `Registered ${data.count} commands`;
+      say(registered);
+    } else error = `Commands: ${data.error || 'could not reach the webui server'}`;
+  }
+
   async function save(key, value) {
     saving[key] = true;
     error = '';
@@ -116,6 +143,7 @@
       drafts[key] = data.value;
       if (settings[key].type === 'tiers') tierDrafts[key] = parseTiers(data.value);
       say(`${label(key)} saved`);
+      refreshNav();
     } catch (err) {
       error = `${label(key)}: ${err.message}`;
     } finally {
@@ -234,6 +262,31 @@
           </div>
         </div>
       {/each}
+      {#if active.commands}
+        <div class="item">
+          <div class="lbl">
+            <b>Register commands</b>
+            <p>
+              Replace the bot's commands on Discord with the ones this version defines. Use it when
+              Discord shows an old or missing command.
+            </p>
+          </div>
+          <div class="ctl">
+            {#if confirming}
+              <span class="small muted">Replace them on Discord?</span>
+              <button class="btn sm" disabled={registering} onclick={() => (confirming = false)}
+                >Cancel</button
+              >
+              <button class="btn primary sm" disabled={registering} onclick={register}
+                >Register</button
+              >
+            {:else}
+              <button class="btn sm" onclick={() => (confirming = true)}>Register…</button>
+            {/if}
+            {#if registered}<span class="small muted">{registered}</span>{/if}
+          </div>
+        </div>
+      {/if}
     {/if}
   </section>
 </div>

@@ -10,7 +10,7 @@
   import { navigate } from '../utils/router.js';
   import { issueStates } from '../stores/nav.js';
   import { groupIssues, isOpen, KIND_LABEL } from '../issues.js';
-  import { formatRelativeTime } from '../utils/format.js';
+  import { formatRelativeTime, NO_DATA } from '../utils/format.js';
   import PageHeader from '../components/PageHeader.svelte';
   import Chart from '../components/Chart.svelte';
 
@@ -29,7 +29,7 @@
     const [st, sys, sum] = await Promise.all([
       getJsonOrNull('/api/stats'),
       getJsonOrNull('/api/system'),
-      getJsonOrNull('/api/alerts/summary?reasonLimit=300'),
+      getJsonOrNull('/api/alerts/summary'),
     ]);
     stats = st;
     system = sys;
@@ -55,14 +55,14 @@
       { k: 'Requests', v: total.toLocaleString(), s: 'last 24 hours' },
       {
         k: 'Delivered',
-        v: rate === null ? '—' : `${rate}%`,
+        v: rate === null ? NO_DATA : `${rate}%`,
         s: `${(total - ok).toLocaleString()} failed in 24h`,
         bad: rate !== null && rate < 90,
       },
       { k: 'All time', v: sum(stats?.commands?.allTime).toLocaleString(), s: 'commands run' },
       {
         k: 'On R2',
-        v: stats?.storage?.diskUsageFormatted ?? '—',
+        v: stats?.storage?.diskUsageFormatted ?? NO_DATA,
         s: `${(stats?.storage?.totalGifs ?? 0) + (stats?.storage?.totalVideos ?? 0) + (stats?.storage?.totalImages ?? 0)} files waiting to expire`,
       },
     ];
@@ -83,7 +83,7 @@
         ? { label: 'Workers', value: 'in bot', note: '' }
         : {
             label: 'Workers',
-            value: procs.length ? `${live} / ${procs.length}` : '—',
+            value: procs.length ? `${live} / ${procs.length}` : NO_DATA,
             note:
               procs.length && live < procs.length
                 ? 'not reporting'
@@ -127,7 +127,7 @@
     {#each strip as s (s.label)}
       <button class="item" onclick={() => navigate('system')}>
         <span>{s.label}</span>
-        <b>{loaded ? s.value : '—'}</b>
+        <b>{loaded ? s.value : NO_DATA}</b>
         {#if s.note}<span class="pill sm {s.tone || 'idle'}" class:nodot={!s.tone}>{s.note}</span
           >{/if}
       </button>

@@ -22,13 +22,16 @@ export async function deleteExpiredR2Files(config) {
   setR2Usage(objects.filter(o => !gone.has(o.key)).reduce((sum, o) => sum + o.size, 0));
   if (failed.size) {
     logger.error(`R2 cleanup could not delete ${failed.size} object(s)`);
+    // `error` is what groups this into an issue on the webui Issues page.
     await insertAlert({
-      timestamp: Date.now(),
       severity: 'warning',
       component: 'r2-cleanup',
       title: 'R2 cleanup: deletions failed',
       message: `${failed.size} expired object(s) could not be deleted and will be retried`,
-      metadata: JSON.stringify({ count: failed.size }),
+      metadata: {
+        error: 'R2 cleanup could not delete expired files, it retries them on the next run',
+        count: failed.size,
+      },
     }).catch(error => logger.error(`Failed to insert alert: ${error.message}`));
   }
   return { deleted: gone.size, failed: failed.size };

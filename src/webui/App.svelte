@@ -176,7 +176,12 @@
         onclick={() => go('settings')}
       >
         <SlidersHorizontal size={16} strokeWidth={1.9} />
-        {#if sidebarOpen}<span class="grow">Settings</span>{/if}
+        {#if sidebarOpen}
+          <span class="grow">Settings</span>
+          {#if $navStats?.maintenance}<span class="count alert">maintenance</span>{/if}
+        {:else if $navStats?.maintenance}
+          <span class="pip"></span>
+        {/if}
       </button>
     </div>
   </nav>

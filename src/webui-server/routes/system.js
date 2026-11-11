@@ -9,6 +9,7 @@ import { jobsOverview } from '../../utils/database/media-jobs-pg.js';
 import { getPostgresConnection } from '../../utils/database/connection.js';
 import { r2SoftLimitGb } from '../../utils/r2-storage.js';
 import { getStorageStats } from '../../utils/storage.js';
+import { readSetting } from '../../utils/settings.js';
 import { readSessions } from '../sessions.js';
 import pkg from '../../../package.json' with { type: 'json' };
 
@@ -80,8 +81,13 @@ const LABELS = {
 
 router.get('/api/system', async (req, res) => {
   try {
+    const [jobs, maintenance] = await Promise.all([
+      jobsOverview(),
+      readSetting('maintenance_mode'),
+    ]);
     res.json({
-      jobs: await jobsOverview(),
+      jobs,
+      maintenance,
       mediaWorkers: process.env.MEDIA_WORKERS !== 'false',
       version: pkg.version,
     });

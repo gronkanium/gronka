@@ -143,9 +143,18 @@ async function pickerFor(calls) {
   throw new Error(`picker was not shown: ${JSON.stringify(calls)}`);
 }
 
+const controls = component =>
+  [component, ...(component.components ?? []).flatMap(controls)].filter(c => c.custom_id);
+const control = (menu, action) =>
+  menu.components.flatMap(controls).find(c => c.custom_id.startsWith(`convert:${action}:`));
+const textOf = payload =>
+  JSON.parse(JSON.stringify(payload))
+    .components.map(c => c.content)
+    .join('');
+
 function pickerInteraction(menu, format, { cancel = false, ephemeral = true } = {}) {
   const { interaction, calls } = createFakeInteraction({ deferred: false });
-  interaction.customId = menu.components[cancel ? 1 : 0].components[0].custom_id;
+  interaction.customId = control(menu, cancel ? 'cancel' : 'format').custom_id;
   interaction.applicationId = 'fake-app';
   interaction.token = `choice-${Date.now()}-${Math.random()}`;
   interaction.createdTimestamp = Date.now();
@@ -291,9 +300,7 @@ if (!mocksSupported) {
         format: null,
       });
       const selected = await chooseFrom(calls, handleConvertCommand(interaction), 'mp4');
-      assert.ok(
-        selected.menu.components[0].components[0].options.some(option => option.value === 'mp4')
-      );
+      assert.ok(control(selected.menu, 'format').options.some(option => option.value === 'mp4'));
       const seconds = probeSeconds(firstReply(selected.calls).files[0].attachment, '.mp4');
       assert.ok(seconds > 5.5 && seconds < 6.5);
     });
@@ -307,9 +314,10 @@ if (!mocksSupported) {
       });
       const selected = await chooseFrom(calls, handleConvertCommand(interaction));
       assert.strictEqual(calls.deferReply[0].flags, MessageFlags.Ephemeral);
-      assert.ok(
-        selected.menu.components[0].components[0].options.some(option => option.value === 'gif')
-      );
+      assert.strictEqual(selected.menu.flags, MessageFlags.IsComponentsV2);
+      assert.match(JSON.stringify(selected.menu), /expires <t:\d+:R>/);
+      assert.ok(control(selected.menu, 'format').options.some(option => option.value === 'gif'));
+      assert.match(textOf(calls.editReply.at(-1)), /^selected gif\./);
       assert.strictEqual(selected.calls.deferReply[0].flags, undefined);
       assert.ok(isGif(firstReply(selected.calls).files[0].attachment));
       assert.strictEqual(fetches.get(attachment.url) - before, 1);
@@ -324,7 +332,9 @@ if (!mocksSupported) {
       });
       const selected = await chooseFrom(calls, handleConvertCommand(interaction), 'mp3');
       assert.deepStrictEqual(
-        selected.menu.components[0].components[0].options.map(option => option.value).sort(),
+        control(selected.menu, 'format')
+          .options.map(option => option.value)
+          .sort(),
         ['flac', 'm4a', 'mp3', 'ogg', 'wav']
       );
       const file = firstReply(selected.calls).files[0];
@@ -344,11 +354,11 @@ if (!mocksSupported) {
       });
       const work = handleConvertCommand(interaction);
       const menu = await pickerFor(calls);
-      assert.ok(!menu.components[0].components[0].options.some(option => option.value === 'mp3'));
+      assert.ok(!control(menu, 'format').options.some(option => option.value === 'mp3'));
       const selected = pickerInteraction(menu, null, { cancel: true });
       await handleConvertInteraction(selected.interaction);
       await work;
-      assert.strictEqual(calls.editReply.at(-1).content, 'conversion cancelled.');
+      assert.strictEqual(textOf(calls.editReply.at(-1)), 'conversion cancelled.');
       assert.deepStrictEqual(
         (await fs.readdir(JOBS_ROOT)).filter(name => name.startsWith('job-')),
         before
@@ -366,7 +376,7 @@ if (!mocksSupported) {
       });
       const selected = await chooseFrom(calls, handleConvertCommand(interaction), 'wav');
       assert.ok(
-        selected.menu.components[0].components[0].options.every(option =>
+        control(selected.menu, 'format').options.every(option =>
           ['mp3', 'm4a', 'ogg', 'wav', 'flac'].includes(option.value)
         )
       );
@@ -433,11 +443,11 @@ if (!mocksSupported) {
       });
       const work = handleConvertCommand(interaction);
       const menu = await pickerFor(calls);
-      const [, , id, token] = menu.components[0].components[0].custom_id.split(':');
+      const [, , id, token] = control(menu, 'format').custom_id.split(':');
       const { publishConvertPicker } = await import('../../src/utils/database/media-jobs-pg.js');
       await publishConvertPicker(id, token, ['gif'], Date.now() - 1);
       await work;
-      assert.match(calls.editReply.at(-1).content, /expired/);
+      assert.match(textOf(calls.editReply.at(-1)), /expired/);
       assert.deepStrictEqual(
         (await fs.readdir(JOBS_ROOT)).filter(name => name.startsWith('job-')),
         before
@@ -490,7 +500,7 @@ if (!mocksSupported) {
       });
       const selected = await chooseFrom(calls, handleConvertCommand(interaction), 'mp3');
       assert.ok(
-        selected.menu.components[0].components[0].options.every(option =>
+        control(selected.menu, 'format').options.every(option =>
           ['mp3', 'm4a', 'ogg', 'wav', 'flac'].includes(option.value)
         )
       );
@@ -504,7 +514,9 @@ if (!mocksSupported) {
       });
       const selected = await chooseFrom(calls, handleConvertCommand(interaction), 'webp');
       assert.deepStrictEqual(
-        selected.menu.components[0].components[0].options.map(option => option.value).sort(),
+        control(selected.menu, 'format')
+          .options.map(option => option.value)
+          .sort(),
         ['gif', 'jpg', 'png', 'webp']
       );
       assert.strictEqual(
@@ -534,9 +546,7 @@ if (!mocksSupported) {
         end: '3',
       });
       const selected = await chooseFrom(calls, handleConvertCommand(interaction));
-      const png = selected.menu.components[0].components[0].options.find(
-        option => option.value === 'png'
-      );
+      const png = control(selected.menu, 'format').options.find(option => option.value === 'png');
       assert.match(png.description, /still frame/);
       const seconds = probeSeconds(firstReply(selected.calls).files[0].attachment, '.gif');
       assert.ok(seconds > 1.5 && seconds < 2.6);

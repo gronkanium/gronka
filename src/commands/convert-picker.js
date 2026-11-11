@@ -1,9 +1,10 @@
 import {
-  ActionRowBuilder,
   ButtonBuilder,
   ButtonStyle,
+  ContainerBuilder,
   MessageFlags,
   StringSelectMenuBuilder,
+  TextDisplayBuilder,
 } from 'discord.js';
 import { setTimeout as delay } from 'node:timers/promises';
 import { OUTPUT_FORMATS } from '../utils/output-formats.js';
@@ -26,6 +27,10 @@ import { refuse } from './shared/command-guards.js';
 
 export const CONVERT_PICKER_TTL_MS = 5 * 60 * 1000;
 const expired = 'this convert picker has expired. run convert again.';
+
+// A V2 message stays V2: every later edit of the picker must be components too.
+const V2 = { content: '', flags: MessageFlags.IsComponentsV2 };
+const notice = text => ({ ...V2, components: [new TextDisplayBuilder().setContent(text)] });
 
 export async function waitForConvertFormat(interaction, jobId, picker, formats, info) {
   let job = await getConvertPicker(jobId, picker.token);
@@ -52,13 +57,19 @@ export async function waitForConvertFormat(interaction, jobId, picker, formats, 
         .setCustomId(`convert:cancel:${jobId}:${picker.token}`)
         .setLabel('cancel')
         .setStyle(ButtonStyle.Secondary);
+      const name = (info.filename ?? 'this file').replace(/[`\r\n]/g, '').slice(0, 160);
+      const card = new ContainerBuilder()
+        .addTextDisplayComponents(text =>
+          text.setContent(
+            `**convert \`${name}\`**\n-# formats that work for this file. expires <t:${Math.floor(expiresAt / 1000)}:R>`
+          )
+        )
+        .addActionRowComponents(row => row.setComponents(menu))
+        .addActionRowComponents(row => row.setComponents(cancel));
       const shown = await safeInteractionEditReply(interaction, {
-        content: `choose an output format for \`${(info.filename ?? 'this file').replace(/[`\r\n]/g, '').slice(0, 160)}\`. this picker expires in ${Math.max(1, Math.ceil((expiresAt - Date.now()) / 60000))} minutes.`,
+        ...V2,
         allowedMentions: { parse: [] },
-        components: [
-          new ActionRowBuilder().addComponents(menu),
-          new ActionRowBuilder().addComponents(cancel),
-        ],
+        components: [card],
       });
       if (!shown) return null;
     }
@@ -67,20 +78,20 @@ export async function waitForConvertFormat(interaction, jobId, picker, formats, 
     job = await getConvertPicker(jobId, picker.token);
     if (!job || job.worker !== WORKER_ID) return null;
     if (job.args.format) {
-      await safeInteractionEditReply(interaction, {
-        content: `selected ${job.args.format}. the converted file will be posted to chat.`,
-        components: [],
-      });
+      await safeInteractionEditReply(
+        interaction,
+        notice(`selected ${job.args.format}. the converted file will be posted to chat.`)
+      );
       return {
         format: job.args.format,
         interaction: await interactionFor(interaction.client, job),
       };
     }
     if (job.args.picker.cancelled || Date.now() >= (job.args.picker.expiresAt ?? expiresAt)) {
-      await safeInteractionEditReply(interaction, {
-        content: job.args.picker.cancelled ? 'conversion cancelled.' : expired,
-        components: [],
-      });
+      await safeInteractionEditReply(
+        interaction,
+        notice(job.args.picker.cancelled ? 'conversion cancelled.' : expired)
+      );
       return null;
     }
     await delay(500, undefined, { signal: jobSignal() });

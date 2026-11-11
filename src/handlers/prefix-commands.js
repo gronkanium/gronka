@@ -1,5 +1,6 @@
 import { EmbedBuilder } from 'discord.js';
 import { createLogger } from '../utils/logger.js';
+import { withJobDir } from '../utils/media-file.js';
 import { botConfig } from '../utils/config.js';
 import { replyIfMaintenance } from '../utils/maintenance.js';
 import { createMessageAdapter } from '../commands/shared/message-adapter.js';
@@ -169,7 +170,12 @@ const defaultDeps = {
  * @param {Object} [context.deps] - Dependency overrides for tests
  * @returns {Promise<void>}
  */
-export async function handlePrefixMessage(message, context = {}) {
+export function handlePrefixMessage(message, context = {}) {
+  // A job dir like slash commands get in bot.js, so a failure's log lines and alert share one ref.
+  return withJobDir(() => prefixMessage(message, context));
+}
+
+async function prefixMessage(message, context) {
   const deps = { ...defaultDeps, ...(context.deps || {}) };
 
   if (message.author?.bot || message.webhookId || !message.content) {

@@ -49,6 +49,50 @@ test('a pre-t.co post with its link only in the text names it too', async () => 
   });
 });
 
+test('a post with no media records what x returned as the cause', async () => {
+  const textOnly = async () => {
+    const out = await gql();
+    out.data.tweetResult.result.legacy.full_text = 'just words';
+    out.data.tweetResult.result.legacy.entities.urls = [];
+    return out;
+  };
+  const error = await downloadFromX('https://x.com/jkrums/status/1121915133', {
+    gql: textOnly,
+  }).catch(caught => caught);
+  expect(error.message).toBe('this post has no photo or video to download.');
+  expect(error.cause?.message).toBe(
+    'x returned post 1121915133 with no media entities and no card image'
+  );
+});
+
+test('a quote post with no media of its own names the quoted media in the cause', async () => {
+  const quoting = async () => {
+    const out = await gql();
+    out.data.tweetResult.result.legacy.full_text = 'look';
+    out.data.tweetResult.result.legacy.entities.urls = [];
+    out.data.tweetResult.result.quoted_status_result = {
+      result: {
+        __typename: 'Tweet',
+        rest_id: '42',
+        legacy: {
+          id_str: '42',
+          full_text: '',
+          extended_entities: {
+            media: [{ type: 'photo', media_url_https: 'https://pbs.twimg.com/media/a.jpg' }],
+          },
+        },
+      },
+    };
+    return out;
+  };
+  const error = await downloadFromX('https://x.com/jkrums/status/1121915133', {
+    gql: quoting,
+  }).catch(caught => caught);
+  expect(error.cause?.message).toBe(
+    'x returned post 1121915133 with no media entities and no card image, quoting post 42 with 1 media'
+  );
+});
+
 test('a post with no media but a large link card hands back the card image', async () => {
   const carded = async () => {
     const out = await gql();

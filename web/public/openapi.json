@@ -3,7 +3,7 @@
   "info": {
     "title": "gronka api",
     "version": "1.0.0-preview",
-    "description": "paste a link, get the file. preview: not live yet and may change."
+    "description": "the same downloader as the gronka discord bot, as a json api. preview: not live yet and may change."
   },
   "servers": [
     {

@@ -10,7 +10,7 @@
   <a href="https://gronka.dev"><img src="https://img.shields.io/badge/web-gronka.dev-000" alt="gronka.dev"></a>
 </p>
 
-paste a link, get the file. gronka™ downloads media from 40+ sites, turns video into gifs and shrinks
+gronka™ downloads media from 40+ sites, turns video into gifs and shrinks
 gifs, as a discord bot and on [gronka.dev](https://gronka.dev).
 
 ## commands

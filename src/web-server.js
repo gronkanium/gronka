@@ -41,8 +41,7 @@ const MAX_WINDOWS = 10_000;
 const DOCS_URL = 'https://gronka.dev/docs/';
 const API_INDEX = {
   name: 'gronka',
-  about:
-    'paste a link, get the file. the same downloader as the gronka discord bot, as a json api.',
+  about: 'the same downloader as the gronka discord bot, as a json api.',
   version: 'v1',
   status: 'public preview',
   docs: DOCS_URL,

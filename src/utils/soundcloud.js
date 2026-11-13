@@ -60,7 +60,7 @@ export async function soundcloudTrack(url) {
   };
 }
 
-const norm = text =>
+export const norm = text =>
   String(text ?? '')
     .normalize('NFKD')
     .toLowerCase()

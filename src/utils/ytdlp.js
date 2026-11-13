@@ -121,13 +121,9 @@ export function getSiteArgs(url, viaGeoProxy = false) {
   const geoProxy = process.env.GEO_PROXY_URL;
   const site = YTDLP_SITES.find(s => hostIn(url, s.hosts));
   return [
-    // Only Reddit's native manifests and Rule34Video (its own extractor finds no formats) need generic.
+    // Generic only where a site asks for it, or for Reddit's native manifests.
     '--ies',
-    isRedditManifest(url)
-      ? 'default'
-      : site?.id === 'rule34video'
-        ? 'default,-rule34video'
-        : 'default,-generic',
+    isRedditManifest(url) ? 'default' : (site?.ies ?? 'default,-generic'),
     ...(hostIn(url, IMPERSONATE_HOSTS) ? ['--impersonate', 'chrome'] : []),
     // One fragment at a time crawls through the tunnel (xHamster 223 KB/s vs 1.4 MB/s at 8).
     ...(geoProxy && (site?.geoBlocked || viaGeoProxy) ? ['--proxy', geoProxy, '-N', '8'] : []),

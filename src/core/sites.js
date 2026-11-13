@@ -114,7 +114,15 @@ export const SITES = [
     id: 'xhamster',
     name: 'xHamster',
     category: 'adult',
-    hosts: ['xhamster.com'],
+    hosts: [
+      'xhamster.com',
+      'xhamster.one',
+      'xhamster.desi',
+      'xhamster2.com',
+      'xhms.pro',
+      'xhday.com',
+      'xhvid.com',
+    ],
     ytdlp: { geoBlocked: true },
   },
   // Its CDN answers 410 Gone to any request without the site as referer.
@@ -137,7 +145,30 @@ export const SITES = [
     name: 'Rule34Video',
     category: 'adult',
     hosts: ['rule34video.com'],
-    ytdlp: true,
+    // Its own extractor finds no formats; the page's player is plain enough for generic.
+    ytdlp: { ies: 'default,-rule34video' },
+  },
+  // No extractor of their own; yt-dlp's generic one reads the page's player.
+  {
+    id: 'hentaigasm',
+    name: 'Hentaigasm',
+    category: 'adult',
+    hosts: ['hentaigasm.com'],
+    ytdlp: { ies: 'default' },
+  },
+  {
+    id: 'bigassporn',
+    name: 'BigAssPorn',
+    category: 'adult',
+    hosts: ['bigassporn.tv'],
+    ytdlp: { ies: 'default' },
+  },
+  {
+    id: 'gayporno',
+    name: 'GayPorno.fm',
+    category: 'adult',
+    hosts: ['gayporno.fm'],
+    ytdlp: { ies: 'default' },
   },
   { id: 'bandcamp', name: 'Bandcamp', category: 'video', hosts: ['bandcamp.com'], ytdlp: true },
   {

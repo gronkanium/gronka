@@ -21,6 +21,7 @@ export const EMBED_FIXER_HOSTS = new Map([
   ['mpregx.com', 'twitter.com'],
   ['furryfeetx.com', 'twitter.com'],
   ['hotyurisex.com', 'twitter.com'],
+  ['yurisex.com', 'twitter.com'],
   ['yaoisex.com', 'twitter.com'],
   ['skibidix.com', 'twitter.com'],
   ['peepeepoopoodumdumtwitterx.org', 'twitter.com'],

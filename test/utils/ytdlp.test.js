@@ -149,6 +149,8 @@ describe('ytdlp utilities', () => {
     });
     test('reads Rule34Video through the generic KVS player instead of its broken extractor', () => {
       assert.equal(getSiteArgs('https://rule34video.com/video/1/x')[1], 'default,-rule34video');
+      assert.equal(getSiteArgs('https://hentaigasm.com/a-title/')[1], 'default');
+      assert.equal(getSiteArgs('https://xhamster.desi/videos/x-1')[1], 'default,-generic');
       assert.equal(
         getSiteArgs('https://rule34video.com.evil.com/video/1/x')[1],
         'default,-generic'

@@ -81,6 +81,20 @@ describe('resolveShortLink', () => {
     );
     const local = wrapped('http://127.0.0.1/a.png');
     assert.strictEqual(await resolveShortLink(local), local);
+    const result = (image, page) => `${wrapped(image)}&imgrefurl=${encodeURIComponent(page)}`;
+    assert.strictEqual(
+      await resolveShortLink(
+        result(
+          'https://rule34video.com/contents/videos_screenshots/3434000/3434001/preview_720p.mp4.jpg',
+          'https://rule34video.com/video/3434001/title/'
+        )
+      ),
+      'https://rule34video.com/video/3434001/title/'
+    );
+    assert.strictEqual(
+      await resolveShortLink(result('https://blog.example/a.jpg', 'https://blog.example/post/1')),
+      'https://blog.example/a.jpg'
+    );
     assert.strictEqual(spy.mock.calls.length, 0);
   });
 

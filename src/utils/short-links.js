@@ -3,6 +3,7 @@ import { createLogger } from './logger.js';
 import { hostOf } from './url-host.js';
 import { ssrfGuardedRequest } from './ssrf-guard.js';
 import { validateUrl } from './validation.js';
+import { routeFor } from '../core/sources.js';
 
 const logger = createLogger('short-links');
 
@@ -26,17 +27,18 @@ export const isShortLink = (url, host = hostOf(url)) =>
   ((host === 'facebook.com' || host === 'm.facebook.com') && pathOf(url).startsWith('/share/')) ||
   (isGoogle(host) && pathOf(url) === '/goto');
 
-// Google result links carry their target in the query: an image in imgurl, a page in q or url.
+const valid = target => (target && validateUrl(target).valid ? target : null);
+
+// Google result links carry their target in the query: a page in imgrefurl, q or url, an image in imgurl.
 function googleTarget(url, host) {
   if (!isGoogle(host)) return null;
   const { pathname, searchParams } = new URL(url);
-  const target =
-    pathname === '/imgres'
-      ? searchParams.get('imgurl')
-      : pathname === '/url'
-        ? (searchParams.get('q') ?? searchParams.get('url'))
-        : null;
-  return target && validateUrl(target).valid ? target : null;
+  if (pathname === '/imgres') {
+    // A video result's imgurl is its thumbnail, so a page a source can read wins.
+    const page = valid(searchParams.get('imgrefurl'));
+    return page && routeFor(page) ? page : valid(searchParams.get('imgurl'));
+  }
+  return pathname === '/url' ? valid(searchParams.get('q') ?? searchParams.get('url')) : null;
 }
 
 export async function resolveShortLink(url) {

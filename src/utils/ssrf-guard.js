@@ -159,7 +159,7 @@ const isTransientPageError = error =>
 // A source's page or API: one retry on a transient failure, 404/410 means gone, onError may throw a site's own reason, else failMessage.
 export async function fetchPage(
   url,
-  { failMessage, headers, responseType = 'text', onError, impersonate = false } = {}
+  { failMessage, headers, responseType = 'text', onError, impersonate = false, redirects = 5 } = {}
 ) {
   for (let attempt = 0; ; attempt++) {
     try {
@@ -169,7 +169,8 @@ export async function fetchPage(
         responseType,
         timeout: PAGE_FETCH_TIMEOUT_MS,
         maxContentLength: MAX_PAGE_BYTES,
-        maxRedirects: 5,
+        maxRedirects: redirects,
+        validateStatus: status => status >= 200 && status < (redirects ? 300 : 400),
         headers,
       });
     } catch (error) {

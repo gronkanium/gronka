@@ -1,9 +1,8 @@
-import axios from 'axios';
 import { createLogger } from './logger.js';
 import { ValidationError, contentGone } from './errors.js';
 import { getRequestHeaders } from './discord-cdn.js';
 import { downloadFileFromUrl } from './file-downloader.js';
-import { ssrfGuardedRequest, PAGE_FETCH_TIMEOUT_MS, fetchPage } from './ssrf-guard.js';
+import { fetchPage } from './ssrf-guard.js';
 import { normalizeHost, hostUnder } from './url-host.js';
 
 const logger = createLogger('pinterest');
@@ -46,12 +45,10 @@ export function isPinterestUrl(url) {
 // so hops are followed by hand and the plain /pin/<id>/ page is fetched instead.
 export async function resolvePinUrl(url) {
   for (let hop = 0; hop < 5 && !PIN_PATH.test(new URL(url).pathname); hop++) {
-    const response = await axios.get(url, {
-      ...ssrfGuardedRequest(),
-      timeout: PAGE_FETCH_TIMEOUT_MS,
-      maxRedirects: 0,
+    const response = await fetchPage(url, {
+      failMessage: "couldn't open that pinterest link right now.",
       headers: getRequestHeaders(),
-      validateStatus: status => status >= 200 && status < 400,
+      redirects: 0,
     });
     if (!response.headers.location) break;
     url = new URL(response.headers.location, url).href;

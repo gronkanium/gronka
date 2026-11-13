@@ -1,5 +1,6 @@
-import { describe, test } from 'bun:test';
+import { describe, test, afterEach, spyOn } from 'bun:test';
 import assert from 'node:assert';
+import axios from 'axios';
 import { isPinterestUrl, extractMediaUrl, resolvePinUrl } from '../../src/utils/pinterest.js';
 
 const videoLd = url =>
@@ -82,5 +83,38 @@ describe('pinterest utilities', () => {
       ),
       'https://www.pinterest.com/pin/1150599404826702429/'
     );
+  });
+
+  describe('pin.it hops', () => {
+    let spy;
+    afterEach(() => spy?.mockRestore());
+    const timeout = Object.assign(new Error('timeout of 20000ms exceeded'), {
+      code: 'ECONNABORTED',
+    });
+
+    test('a slow pin.it answer is retried once', async () => {
+      spy = spyOn(axios, 'get')
+        .mockRejectedValueOnce(timeout)
+        .mockResolvedValueOnce({
+          status: 308,
+          headers: { location: 'https://www.pinterest.com/pin/123/sent/?invite_code=x' },
+        });
+      assert.strictEqual(
+        await resolvePinUrl('https://pin.it/2DHBYLcSh'),
+        'https://www.pinterest.com/pin/123/'
+      );
+      assert.strictEqual(spy.mock.calls[0][1].maxRedirects, 0);
+    });
+
+    test('a pin.it link that keeps timing out is a curated failure with its cause', async () => {
+      spy = spyOn(axios, 'get').mockRejectedValue(timeout);
+      await assert.rejects(
+        resolvePinUrl('https://pin.it/2DHBYLcSh'),
+        error =>
+          error.message === "couldn't open that pinterest link right now." &&
+          error.cause === timeout
+      );
+      assert.strictEqual(spy.mock.calls.length, 2);
+    });
   });
 });

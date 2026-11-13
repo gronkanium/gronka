@@ -505,7 +505,11 @@
 >
   {#snippet actions()}
     {#if error}<span class="error-text small">{error}</span>{/if}
-    <span class="pill" class:warn={lists.defects.length} class:ok={!lists.defects.length}
+    <span
+      class="pill"
+      class:skeleton={!loaded}
+      class:warn={lists.defects.length}
+      class:ok={!lists.defects.length}
       >{lists.defects.length
         ? `${lists.defects.length} defect${lists.defects.length === 1 ? '' : 's'} open`
         : 'No open defects'}</span
@@ -520,7 +524,7 @@
           class:on={tab === id}
           onclick={() => navigate('issues', id === 'open' ? {} : { tab: id })}
         >
-          {label}<span class="n">{lists[id].length}</span>
+          {label}<span class="n" class:skeleton={!loaded}>{lists[id].length}</span>
         </button>
       {/each}
     </div>

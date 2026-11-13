@@ -132,6 +132,7 @@
     {#if error}<span class="error-text small">{error}</span>{/if}
     <span
       class="pill"
+      class:skeleton={!loaded}
       class:bad={counts.fail}
       class:warn={!counts.fail && counts.gone}
       class:ok={loaded && checks.length && counts.pass === checks.length}
@@ -168,7 +169,7 @@
           class:on={activeTab === id}
           onclick={() => (tab = id)}
         >
-          {label}<span class="n">{lists[id].length}</span>
+          {label}<span class="n" class:skeleton={!loaded}>{lists[id].length}</span>
         </button>
       {/each}
     </div>
@@ -183,15 +184,19 @@
     </div>
   {/if}
   <p class="summary dim small">
-    {[
-      lastRun && `Last checked ${formatRelativeTime(lastRun)}`,
-      `${counts.pass} of ${checks.length} passing`,
-      counts.fail && `${counts.fail} failing`,
-      counts.gone && `${counts.gone} gone`,
-      counts.never && `${counts.never} not run`,
-    ]
-      .filter(Boolean)
-      .join(' · ')}
+    {#if loaded}
+      {[
+        lastRun && `Last checked ${formatRelativeTime(lastRun)}`,
+        `${counts.pass} of ${checks.length} passing`,
+        counts.fail && `${counts.fail} failing`,
+        counts.gone && `${counts.gone} gone`,
+        counts.never && `${counts.never} not run`,
+      ]
+        .filter(Boolean)
+        .join(' · ')}
+    {:else}
+      <span class="skeleton">Last checked 00 hours ago · 00 of 00 passing</span>
+    {/if}
   </p>
 
   <DataTable

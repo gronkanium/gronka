@@ -129,9 +129,57 @@
   {/snippet}
 </PageHeader>
 
+{#snippet skelItem(ctl)}
+  <div class="item" class:stacked={ctl === 'area' || ctl === 'statuses'}>
+    <div class="lbl">
+      <span class="skeleton sk-label"></span>
+      <span class="skeleton sk-help"></span>
+    </div>
+    {#if ctl === 'buttons'}
+      <div class="ctl">
+        <span class="skeleton sk-btn"></span><span class="skeleton sk-btn"></span>
+      </div>
+    {:else if ctl === 'statuses'}
+      <div class="statuses">
+        {#each Array(4) as _, i (i)}<span class="skeleton sk-status"></span>{/each}
+      </div>
+    {:else}
+      <span class="skeleton sk-{ctl}"></span>
+    {/if}
+  </div>
+{/snippet}
+
 {#if loading}
-  <div class="panel pb skel-rows">
-    {#each Array(4) as _, i (i)}<span class="skeleton" style="width:{60 - i * 8}%"></span>{/each}
+  <div class="bot" aria-hidden="true">
+    <div class="forms">
+      <section class="panel">
+        <div class="ph"><span>Profile</span></div>
+        {@render skelItem('field')}
+        {@render skelItem('buttons')}
+        {@render skelItem('buttons')}
+        {@render skelItem('area')}
+      </section>
+      <section class="panel">
+        <div class="ph"><span>Presence</span></div>
+        {@render skelItem('statuses')}
+        {@render skelItem('field')}
+      </section>
+    </div>
+    <aside class="preview">
+      <span class="section-label">Preview</span>
+      <div class="card">
+        <div class="banner skeleton"></div>
+        <div class="avatar"><span class="skeleton sk-avatar"></span></div>
+        <div class="body">
+          <span class="skeleton sk-name"></span>
+          <div class="about">
+            <span>About me</span>
+            <span class="skeleton sk-text"></span>
+            <span class="skeleton sk-text short"></span>
+          </div>
+        </div>
+      </div>
+    </aside>
   </div>
 {:else if draft}
   <div class="bot" class:dirty>
@@ -460,6 +508,64 @@
     line-height: 1.5;
     white-space: pre-wrap;
     overflow-wrap: anywhere;
+  }
+  .sk-label,
+  .sk-help,
+  .sk-field,
+  .sk-area,
+  .sk-avatar,
+  .sk-name,
+  .sk-text {
+    display: block;
+  }
+  .sk-label {
+    width: 90px;
+    height: 14px;
+  }
+  .sk-help {
+    width: 220px;
+    max-width: 100%;
+    height: 12px;
+    margin-top: 7px;
+  }
+  .sk-field,
+  .sk-btn,
+  .sk-area,
+  .sk-status {
+    border-radius: var(--radius);
+  }
+  .sk-field {
+    height: 32px;
+  }
+  .sk-btn {
+    width: 120px;
+    height: 32px;
+  }
+  .sk-area {
+    height: 120px;
+  }
+  .sk-status {
+    height: 40px;
+  }
+  .banner.skeleton {
+    border-radius: 0;
+  }
+  .sk-avatar {
+    width: 100%;
+    height: 100%;
+    border-radius: 50%;
+    border: 6px solid var(--card);
+  }
+  .sk-name {
+    width: 140px;
+    height: 22px;
+  }
+  .sk-text {
+    height: 14px;
+    margin-top: 8px;
+  }
+  .sk-text.short {
+    width: 60%;
   }
   .unsaved {
     position: fixed;

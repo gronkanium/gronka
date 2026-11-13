@@ -127,8 +127,11 @@
     {#each strip as s (s.label)}
       <button class="item" onclick={() => navigate('system')}>
         <span>{s.label}</span>
-        <b>{loaded ? s.value : NO_DATA}</b>
-        {#if s.note}<span class="pill sm {s.tone || 'idle'}" class:nodot={!s.tone}>{s.note}</span
+        <b
+          >{#if loaded}{s.value}{:else}<span class="skeleton">0 / 0</span>{/if}</b
+        >
+        {#if loaded && s.note}<span class="pill sm {s.tone || 'idle'}" class:nodot={!s.tone}
+            >{s.note}</span
           >{/if}
       </button>
     {/each}
@@ -145,7 +148,11 @@
         </span>
       </div>
       <div class="chart">
-        <Chart type="area" series={SERIES} data={bars} bucket={HOUR} height={240} />
+        {#if loaded}
+          <Chart type="area" series={SERIES} data={bars} bucket={HOUR} height={240} />
+        {:else}
+          <div class="skeleton" style="height:240px"></div>
+        {/if}
       </div>
     </section>
 

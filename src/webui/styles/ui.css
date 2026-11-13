@@ -1132,6 +1132,10 @@ button.lrow:hover:not(:disabled) {
   border-radius: 4px;
   color: transparent !important;
 }
+.pill.skeleton {
+  border-radius: 999px;
+  background: var(--card-3);
+}
 .skeleton::after {
   content: '';
   position: absolute;

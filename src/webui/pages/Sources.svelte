@@ -204,7 +204,11 @@
   description="Which sites the bot downloads from, and what it tries for each"
 >
   {#snippet actions()}
-    <span class="pill" class:ok={totalOn === sites.length} class:warn={totalOn < sites.length}
+    <span
+      class="pill"
+      class:skeleton={loading}
+      class:ok={totalOn === sites.length}
+      class:warn={totalOn < sites.length}
       >{saving ? 'Saving…' : `${totalOn} of ${sites.length} on`}</span
     >
     <button

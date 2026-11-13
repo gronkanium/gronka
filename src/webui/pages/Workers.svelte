@@ -155,23 +155,33 @@
   <section class="kpis" style="--kpi-cols: 4" aria-label="queue">
     <div class="kpi" class:bad={workers.length && liveWorkers < workers.length}>
       <div class="k">Workers</div>
-      <div class="v tnum">{jobs ? `${liveWorkers} of ${workers.length}` : NO_DATA}</div>
+      <div class="v tnum">
+        {#if jobs}{liveWorkers} of {workers.length}{:else}<span class="skeleton">0000</span>{/if}
+      </div>
       <div class="s">reporting in the last 30 s</div>
     </div>
     <div class="kpi" class:warn={paused && count('queued')}>
       <div class="k">Queued</div>
-      <div class="v tnum">{jobs ? count('queued') : NO_DATA}</div>
+      <div class="v tnum">
+        {#if jobs}{count('queued')}{:else}<span class="skeleton">00</span>{/if}
+      </div>
       <div class="s">{paused ? 'held while paused' : 'waiting for a worker'}</div>
     </div>
     <div class="kpi">
       <div class="k">Running</div>
-      <div class="v tnum">{jobs ? count('running') : NO_DATA}</div>
+      <div class="v tnum">
+        {#if jobs}{count('running')}{:else}<span class="skeleton">00</span>{/if}
+      </div>
       <div class="s">right now</div>
     </div>
     <div class="kpi" class:warn={stale.length}>
       <div class="k">Build</div>
-      <div class="v mono build">{build ? `v${build}` : NO_DATA}</div>
-      <div class="s">{stale.length ? 'mixed versions' : 'every process matches'}</div>
+      <div class="v mono build">
+        {#if data}{build ? `v${build}` : NO_DATA}{:else}<span class="skeleton">v0.0.0</span>{/if}
+      </div>
+      <div class="s">
+        {jobs ? (stale.length ? 'mixed versions' : 'every process matches') : ' '}
+      </div>
     </div>
   </section>
 

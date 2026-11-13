@@ -319,6 +319,16 @@ describe('ytdlp utilities', () => {
       assert.strictEqual(code('HTTP Error 403', 'https://youtu.be/x'), 'YTDLP_UNKNOWN');
     });
 
+    test('a region block is named, not retried as unknown', () => {
+      for (const line of [
+        'ERROR: [youtube] vpt03mcP_ak: The uploader has not made this video available in your country',
+        'ERROR: [youtube] x: Video unavailable. The uploader has not made this video available in your country',
+        'ERROR: [vimeo] 1: This video is not available from your location due to geo restriction',
+      ]) {
+        assert.strictEqual(code(line), 'GEO_BLOCKED', line);
+      }
+    });
+
     test('gone wordings the video reader used to keep apart read as gone here too', () => {
       for (const line of [
         'ERROR: [youtube] x: This video is no longer available because the YouTube account associated with this video has been terminated.',

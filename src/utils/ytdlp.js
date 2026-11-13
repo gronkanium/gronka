@@ -181,6 +181,10 @@ const FAILURES = [
       ),
   ],
   [
+    /not made this video available in your country|not available from your location/i,
+    () => new NetworkError("the uploader blocked this video in the bot's country.", 'GEO_BLOCKED'),
+  ],
+  [
     /Video unavailable|video is unavailable|Private video|This video is private|has been removed|no longer available|does not exist/,
     () => contentGone(),
   ],

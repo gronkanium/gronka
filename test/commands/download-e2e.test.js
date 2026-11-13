@@ -190,7 +190,7 @@ if (!mocksSupported) {
           const { ValidationError } = await import('../../src/utils/errors.js');
           throw new ValidationError('file is too large (max 100mb)');
         }
-        if (url.includes('bothfail')) {
+        if (url.includes('bothfail') || url.includes('sessionrefused')) {
           const { NetworkError, withCause } = await import('../../src/utils/errors.js');
           throw withCause(
             new NetworkError('failed to reach the download service.'),
@@ -239,6 +239,10 @@ if (!mocksSupported) {
           const { NetworkError } = await import('../../src/utils/errors.js');
           throw new NetworkError('this post is unavailable or has been deleted');
         }
+        if (u.includes('sessionrefused')) {
+          const { ValidationError } = await import('../../src/utils/errors.js');
+          throw new ValidationError('this post has no video in it.', 'NO_VIDEO');
+        }
         if (u.includes('justposted')) {
           const { contentGone } = await import('../../src/utils/errors.js');
           throw contentGone(
@@ -283,6 +287,16 @@ if (!mocksSupported) {
           await media(fakeBuffer(1, 2048), 'image/jpeg', 'first.jpg'),
           await media(fakeBuffer(2, 3072), 'image/jpeg', 'second.jpg'),
         ];
+      },
+    }));
+
+    mock.module('../../src/utils/x-media.js', () => ({
+      downloadFromX: async () => {
+        const { NetworkError, withCause } = await import('../../src/utils/errors.js');
+        throw withCause(
+          new NetworkError('x only shows this post to signed-in accounts', 'SESSION_REFUSED'),
+          'HTTP 401'
+        );
       },
     }));
 
@@ -477,6 +491,16 @@ if (!mocksSupported) {
         acquireMedia('https://www.instagram.com/p/bothfail/', { urlOnly: false }),
         error =>
           error.code === 'CONTENT_GONE' && error.trail.some(s => s.step === 'instagram session')
+      );
+    });
+
+    test("an X session refusal is the reason, not a logged-out engine's empty answer", async () => {
+      const error = await acquireMedia('https://x.com/sessionrefused/status/1234567890123456789', {
+        urlOnly: false,
+      }).catch(caught => caught);
+      assert.deepStrictEqual(
+        [error.code, ...error.trail.map(s => s.step)],
+        ['SESSION_REFUSED', 'cobalt twitter delivery', 'cobalt', 'x', 'yt-dlp', 'cobalt direct url']
       );
     });
 

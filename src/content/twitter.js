@@ -1,6 +1,6 @@
 import axios from 'axios';
 import { createLogger } from '../utils/logger.js';
-import { NetworkError, contentGone } from '../utils/errors.js';
+import { NetworkError, contentGone, withCause } from '../utils/errors.js';
 import { canonicalizeMirrorUrl } from '../utils/mirror-links.js';
 import { readSessionCookie } from '../utils/session-cookie.js';
 import { MAX_PAGE_BYTES } from '../utils/ssrf-guard.js';
@@ -138,9 +138,16 @@ async function request(op, variables, { session, retried = false }) {
       logger.error(
         `X refused the session cookie (HTTP ${status}); the twitter entry needs a fresh login`
       );
+      throw withCause(
+        new NetworkError(
+          "x only shows this post to signed-in accounts, and the bot's x login isn't working right now. try again later.",
+          'SESSION_REFUSED'
+        ),
+        error
+      );
     }
     logger.warn(`X ${op} request failed: ${error.message}`);
-    throw new NetworkError('failed to reach x');
+    throw withCause(new NetworkError('failed to reach x'), error);
   }
 }
 

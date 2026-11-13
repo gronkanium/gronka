@@ -253,6 +253,8 @@ export async function acquireMedia(
   let fileData;
   let method = null;
   let lastError = null;
+  // Engines after a refused session read logged out, so their "no video" is not the reason.
+  let sessionRefused = null;
   let gone = false;
   for (const [index, engine] of engines.entries()) {
     if (lastError) {
@@ -270,6 +272,7 @@ export async function acquireMedia(
     } catch (error) {
       note(engine.name.toLowerCase(), error);
       lastError = error;
+      if (error.code === 'SESSION_REFUSED') sessionRefused ??= error;
       gone ||= GONE.includes(error.code);
       if (error.code === 'DRM_PROTECTED' && isSoundCloudUrl(url)) return viaMatch();
       if (!worthAnotherSource(engine, error)) break;
@@ -293,7 +296,7 @@ export async function acquireMedia(
       }
     }
     const fresh = gone && isFreshPost(url, Date.now(), describeCause(rootCause(lastError)));
-    throw fail(fresh ? notPublishedYet(lastError) : lastError);
+    throw fail(fresh ? notPublishedYet(lastError) : (sessionRefused ?? lastError));
   }
 
   const track = soundcloud && (await soundcloud);

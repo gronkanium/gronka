@@ -15,11 +15,19 @@ import {
 } from './errors.js';
 import { trimVideo } from './video-processor/trim-video.js';
 import { DEFAULT_YTDLP_FORMAT } from './config.js';
-import { fromPath, tempDir, jobSignal, watchDirSize, typeForExtension } from './media-file.js';
+import {
+  fromPath,
+  tempDir,
+  tempPath,
+  jobSignal,
+  watchDirSize,
+  typeForExtension,
+} from './media-file.js';
 import { maxDownloadBytes, tooLarge } from './size-limit.js';
 import { hostOf, hostUnder } from './url-host.js';
 import { sitesFor, siteHosts } from '../core/sites.js';
 import { isInstagramPostUrl, isInstagramReelUrl } from './instagram.js';
+import { exitRelay, relayForwarder } from './geo-exit.js';
 
 const logger = createLogger('ytdlp');
 const execFileAsync = promisify(execFile);
@@ -117,16 +125,17 @@ function isRedditManifest(url) {
   }
 }
 
-export function getSiteArgs(url, viaGeoProxy = false) {
+export function getSiteArgs(url, viaGeoProxy = false, exitProxy = null) {
   const geoProxy = process.env.GEO_PROXY_URL;
   const site = YTDLP_SITES.find(s => hostIn(url, s.hosts));
+  const proxy = exitProxy ?? (geoProxy && (site?.geoBlocked || viaGeoProxy) ? geoProxy : null);
   return [
     // Generic only where a site asks for it, or for Reddit's native manifests.
     '--ies',
     isRedditManifest(url) ? 'default' : (site?.ies ?? 'default,-generic'),
     ...(hostIn(url, IMPERSONATE_HOSTS) ? ['--impersonate', 'chrome'] : []),
     // One fragment at a time crawls through the tunnel (xHamster 223 KB/s vs 1.4 MB/s at 8).
-    ...(geoProxy && (site?.geoBlocked || viaGeoProxy) ? ['--proxy', geoProxy, '-N', '8'] : []),
+    ...(proxy ? ['--proxy', proxy, '-N', '8'] : []),
     ...(site?.args ?? []),
   ];
 }
@@ -178,7 +187,11 @@ const FAILURES = [
   ],
   [
     /not made this video available in your country|not available from your location/i,
-    () => new NetworkError("the uploader blocked this video in the bot's country.", 'GEO_BLOCKED'),
+    (url, run, output) =>
+      Object.assign(
+        new NetworkError("the uploader blocked this video in the bot's country.", 'GEO_BLOCKED'),
+        { countries: /This video is available in ([^.]+)\./.exec(output)?.[1].split(', ') ?? [] }
+      ),
   ],
   [
     /Video unavailable|video is unavailable|Private video|This video is private|has been removed|no longer available|does not exist/,
@@ -263,7 +276,7 @@ const FAILURES = [
 // Never surface raw yt-dlp stderr to users; the caller logs it in full.
 export function classifyYtdlpFailure(output, url, run = {}) {
   for (const [pattern, toError] of FAILURES) {
-    const error = pattern.test(output) && toError(url, run);
+    const error = pattern.test(output) && toError(url, run, output);
     if (error) return error;
   }
   return new NetworkError(`could not download this ${siteLabel(url)} link.`, 'YTDLP_UNKNOWN');
@@ -280,6 +293,8 @@ function executeYtdlp(
     maxSize,
     signedIn = false,
     viaGeoProxy = false,
+    exitProxy = null,
+    infoJson = null,
   } = {}
 ) {
   return new Promise((resolve, reject) => {
@@ -294,7 +309,7 @@ function executeYtdlp(
       // The session cookies pin TikTok to its US CDN even through the proxy.
       ...(viaGeoProxy ? [] : getCookieArgs(url, signedIn)),
       ...getYouTubeArgs(url, signedIn),
-      ...getSiteArgs(url, viaGeoProxy),
+      ...getSiteArgs(url, viaGeoProxy, exitProxy),
       '-f',
       quality,
       '--merge-output-format',
@@ -328,8 +343,7 @@ function executeYtdlp(
       '--restrict-filenames',
       '--print',
       'after_move:filepath',
-      '--',
-      url
+      ...(infoJson ? ['--load-info-json', infoJson] : ['--', url])
     );
 
     logger.debug(`Executing yt-dlp with args: ${args.join(' ')}`);
@@ -532,6 +546,62 @@ function executeYtdlp(
   });
 }
 
+// An ISP's Google cache answers only that ISP's customers; a media URL's `mn` list ends with Google's own node.
+export function googleNode(mediaUrl) {
+  const parsed = URL.parse(mediaUrl ?? '');
+  const [rr, node] = parsed?.hostname.split('---') ?? [];
+  const nodes = parsed?.searchParams.get('mn')?.split(',') ?? [];
+  if (!node?.endsWith('.googlevideo.com') || nodes.length < 2) return mediaUrl;
+  parsed.hostname = `${rr}---${nodes.at(-1)}.googlevideo.com`;
+  return parsed.href;
+}
+
+async function youtubeInfoVia(url, exitProxy) {
+  const { stdout } = await execFileAsync(
+    'yt-dlp',
+    ['--ignore-config', '-J', ...ONE_ITEM, '--no-warnings', ...getYouTubeArgs(url)].concat([
+      '--proxy',
+      exitProxy,
+      '--',
+      url,
+    ]),
+    { timeout: 60_000, maxBuffer: 50 * 1024 * 1024, signal: jobSignal() }
+  );
+  const info = JSON.parse(stdout);
+  // HLS segment lists name the cache node too and can't be re-pointed, so only direct formats stay.
+  info.formats = (info.formats ?? [])
+    .filter(format => format.protocol === 'https')
+    .map(format => ({ ...format, url: googleNode(format.url) }));
+  const file = await tempPath('.json');
+  fsSync.writeFileSync(file, JSON.stringify(info));
+  return file;
+}
+
+// The vpn's own exit when the video names no country, else a Mullvad relay in one it allows.
+async function viaAllowedCountry(url, outputDir, options, error) {
+  const retry = extra => executeYtdlp(url, outputDir, { ...options, viaGeoProxy: true, ...extra });
+  if (!error.countries.length) return retry();
+  const relay = await exitRelay(error.countries).catch(relayError => {
+    logger.warn(`No vpn relay list: ${describeCause(relayError)}`);
+    return null;
+  });
+  if (!relay) {
+    const where = error.countries.join(', ');
+    throw withCause(
+      error,
+      `${error.cause?.message}; available only in ${where}, no vpn exit there`
+    );
+  }
+  logger.warn(`Region-blocked, retrying through ${relay.host} (${relay.country})`);
+  const exit = await relayForwarder(relay, process.env.GEO_PROXY_URL);
+  try {
+    const infoJson = isYouTubeUrl(url) ? await youtubeInfoVia(url, exit.url) : null;
+    return await retry({ exitProxy: exit.url, infoJson });
+  } finally {
+    exit.close();
+  }
+}
+
 // One retry, only for the catch-all bucket and YTDLP_RETRYABLE: YouTube hiccups clear in seconds.
 async function executeYtdlpWithRetry(url, outputDir, options) {
   try {
@@ -546,6 +616,9 @@ async function executeYtdlpWithRetry(url, outputDir, options) {
     if (error.code === 'REGION_COPY_MISSING' && process.env.GEO_PROXY_URL && !trimming) {
       logger.warn(`No local copy of this video, retrying through the geo proxy: ${url}`);
       return await executeYtdlp(url, outputDir, { ...options, viaGeoProxy: true });
+    }
+    if (error.code === 'GEO_BLOCKED' && process.env.GEO_PROXY_URL && !trimming) {
+      return await viaAllowedCountry(url, outputDir, options, error);
     }
     if (error.code !== 'YTDLP_UNKNOWN' && error.code !== 'YTDLP_RETRYABLE') {
       throw error;
@@ -713,7 +786,7 @@ export async function downloadWithYtdlp(
       } catch (segmentError) {
         if (
           !segmentError.message?.includes('output file too small') &&
-          !['REGION_COPY_MISSING', 'TIMED_OUT'].includes(segmentError.code)
+          !['REGION_COPY_MISSING', 'GEO_BLOCKED', 'TIMED_OUT'].includes(segmentError.code)
         ) {
           throw segmentError;
         }

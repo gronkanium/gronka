@@ -41,6 +41,8 @@ nothing about who uses it. files are processed in a temporary folder and deleted
 
 `GEO_PROXY_URL` sends Pornhub, xHamster and RedTube through an HTTP proxy. Other sources use their usual connection. The `vpn` profile provides a Mullvad WireGuard tunnel: set `COMPOSE_PROFILES=vpn`, `VPN_WIREGUARD_PRIVATE_KEY`, `VPN_WIREGUARD_ADDRESSES` and `GEO_PROXY_URL=http://vpn:8888` in `.env`, then run `docker compose up -d vpn`.
 
+A video its uploader has limited to certain countries is retried once through the tunnel. When yt-dlp names the allowed countries, the bot picks a Mullvad relay in one of them and goes out through that relay's SOCKS5 proxy, which only works with the Mullvad tunnel. For YouTube it also skips the ISP cache servers that only answer local customers. If no country is named, the retry uses the tunnel's own exit.
+
 The hosted web backend can use that same tunnel with the tracked VPN overlay:
 
 ```bash

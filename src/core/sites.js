@@ -170,6 +170,13 @@ export const SITES = [
     hosts: ['gayporno.fm'],
     ytdlp: { ies: 'default' },
   },
+  {
+    id: 'hentaihaven',
+    name: 'Hentai Haven',
+    category: 'adult',
+    hosts: ['hentaihaven.xxx'],
+    ytdlp: { ies: 'default', args: ['--replace-in-metadata', 'title', ' - Hentai Haven.*$', ''] },
+  },
   { id: 'bandcamp', name: 'Bandcamp', category: 'video', hosts: ['bandcamp.com'], ytdlp: true },
   {
     id: 'internet-archive',

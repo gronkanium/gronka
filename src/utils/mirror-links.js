@@ -124,6 +124,7 @@ export const mirrorTarget = host => {
 const REDDIT_SHORT_PATH = /^\/([a-z0-9]+)\/?$/i;
 const REDDIT_GALLERY_PATH = /^\/gallery\/([a-z0-9]+)\/?$/i;
 const GIPHY_PAGE_PATH = /^\/(?:gifs|stickers|embed)\/(?:[^/]*-)?([A-Za-z0-9]+)\/?$/;
+const HENTAIHAVEN_PATH = /^\/(?:video\/|watch\/)?([\w-]+)(?:\/(episode-\d+))?\/?$/i;
 
 // Canonicalize before routing: the Instagram extractor matches canonical hosts only.
 export function canonicalizeMirrorUrl(url) {
@@ -147,6 +148,13 @@ export function canonicalizeMirrorUrl(url) {
           : null;
     if (redditId) {
       return `https://www.reddit.com/comments/${redditId}`;
+    }
+    // hentaihaven.com's video servers are gone and its shows moved to .xxx; a series link opens at episode 1.
+    const haven = /^hentaihaven\.(com|xxx)$/.test(host)
+      ? urlObj.pathname.match(HENTAIHAVEN_PATH)
+      : null;
+    if (haven) {
+      return `https://hentaihaven.xxx/watch/${haven[1].toLowerCase()}/${haven[2]?.toLowerCase() ?? 'episode-1'}/`;
     }
     if (!canonicalHost) {
       return url;

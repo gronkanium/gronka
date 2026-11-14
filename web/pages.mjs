@@ -110,6 +110,7 @@ const OTHER_SITES = [
   'hentaigasm',
   'bigassporn',
   'gayporno.fm',
+  'hentai haven',
   'rule34.xxx',
   'nhentai',
   'hentaigifz',

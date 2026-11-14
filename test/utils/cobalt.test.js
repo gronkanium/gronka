@@ -325,6 +325,25 @@ describe('cobalt utilities', () => {
       }
     });
 
+    test('moves hentai haven links to the .xxx watch page, a series to its first episode', () => {
+      const cases = [
+        ['https://Hentaihaven.com/overflow', 'https://hentaihaven.xxx/watch/overflow/episode-1/'],
+        [
+          'https://hentaihaven.com/video/overflow/episode-3/',
+          'https://hentaihaven.xxx/watch/overflow/episode-3/',
+        ],
+        [
+          'https://hentaihaven.xxx/watch/overflow/episode-2',
+          'https://hentaihaven.xxx/watch/overflow/episode-2/',
+        ],
+        ['https://hentaihaven.xxx/', 'https://hentaihaven.xxx/'],
+        ['https://hentaihaven.xxx/search/a/b', 'https://hentaihaven.xxx/search/a/b'],
+      ];
+      for (const [input, expected] of cases) {
+        assert.strictEqual(canonicalizeMirrorUrl(input), expected);
+      }
+    });
+
     test('maps redd.it and /gallery/ links to the post they name', () => {
       const post = 'https://www.reddit.com/comments/1ipfhdw';
       for (const input of [

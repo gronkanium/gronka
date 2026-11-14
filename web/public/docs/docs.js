@@ -21,9 +21,3 @@ document.querySelectorAll('.copy').forEach(button => {
     }
   });
 });
-
-document.querySelectorAll('.mobile-toc a').forEach(link => {
-  link.addEventListener('click', () => {
-    link.closest('details').open = false;
-  });
-});

@@ -3,11 +3,16 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <meta name="description" content="api docs for gronka." />
-    <meta name="theme-color" content="#f6f5f1" />
     <title>api / gronka</title>
+    <meta
+      name="description"
+      content="the gronka api: get the files behind a link, or read what a link says, as json."
+    />
+    <meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)" />
+    <meta name="theme-color" content="#000000" media="(prefers-color-scheme: dark)" />
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
+    <link rel="canonical" href="https://gronka.dev/docs/" />
     <link
       rel="preload"
       href="/fonts/Archivo-Regular.woff2"
@@ -36,355 +41,643 @@
       type="font/woff2"
       crossorigin
     />
+    <link rel="stylesheet" href="/s.css" />
     <link rel="stylesheet" href="/docs/docs.css" />
     <script src="/docs/docs.js" defer></script>
   </head>
   <body>
-    <header class="topbar">
-      <a class="wordmark" href="/"
-        ><img src="/favicon.svg" alt="" width="24" height="24" />gronka</a
+    <header class="top">
+      <a class="home" href="/"
+        ><img src="/favicon.svg" alt="" width="28" height="28" /><span>gronka</span></a
       >
-      <a class="spec-link" href="/openapi.json">openapi.json</a>
+      <a class="tag" href="/openapi.json">openapi.json</a>
     </header>
-    <div class="layout">
-      <aside class="sidebar" aria-label="page navigation">
-        <nav class="desktop-toc" aria-label="sections">
-          <p class="toc-label">on this page</p>
-          <div class="toc-links">
-            <a href="#auth">auth</a>
-            <a href="#download">download</a>
-            <a href="#content">content</a>
-            <a href="#responses">responses</a>
-            <a href="#padded-json">padded json</a>
-            <a href="#errors">errors</a>
-            <a href="#keys">keys</a>
-            <a href="#limits">limits</a>
-            <a href="#privacy">privacy</a>
-            <a href="#reference">reference</a>
-          </div>
-        </nav>
-        <details class="mobile-toc">
-          <summary>on this page</summary>
-          <nav class="toc-links" aria-label="sections">
-            <a href="#auth">auth</a>
-            <a href="#download">download</a>
-            <a href="#content">content</a>
-            <a href="#responses">responses</a>
-            <a href="#padded-json">padded json</a>
-            <a href="#errors">errors</a>
-            <a href="#keys">keys</a>
-            <a href="#limits">limits</a>
-            <a href="#privacy">privacy</a>
-            <a href="#reference">reference</a>
-          </nav>
-        </details>
-      </aside>
-      <main>
-        <section aria-labelledby="intro-title">
-          <h1 id="intro-title">gronka api</h1>
-          <p class="preview" id="preview">
-            public preview: the api runs at <code>api.gronka.dev</code>, but it may still change
-            before the release.
-          </p>
-        </section>
+    <main class="docs">
+      <h1>api</h1>
+      <p class="lede">
+        two calls: get the files behind a link, or read what a link says. json in, json out.
+      </p>
+      <p class="preview" id="preview">
+        public preview: the api runs at <code>api.gronka.dev</code> and may still change before the
+        release.
+      </p>
 
-        <section id="auth" aria-labelledby="auth-title">
-          <h2 id="auth-title">auth</h2>
-          <p>
-            send your api key as <code>Authorization: Bearer &lt;key&gt;</code>. get one on the
-            <a href="/key/">api key page</a>.
-          </p>
-        </section>
+      <nav class="toc" aria-label="on this page">
+        <a href="#start">start</a><a href="#download">download</a><a href="#content">content</a
+        ><a href="#sources">sources</a><a href="#answer">the answer</a><a href="#errors">errors</a
+        ><a href="#limits">limits</a><a href="#keys">keys</a><a href="#reference">reference</a>
+      </nav>
 
-        <section id="download" aria-labelledby="download-title">
-          <h2 id="download-title">download</h2>
-          <p>send a link as json to <code>POST /v1/download</code>.</p>
-          <div class="codebox">
-            <button class="copy" type="button" aria-label="copy curl command" hidden>copy</button>
-            <pre tabindex="0"><code>curl https://api.gronka.dev/v1/download \
+      <section id="start" aria-labelledby="start-title">
+        <h2 id="start-title">start</h2>
+        <ol class="steps">
+          <li>get a key on the <a href="/key/">api key page</a>. there are no accounts.</li>
+          <li>send it on every call as <code>Authorization: Bearer &lt;key&gt;</code>.</li>
+          <li>post a link as json:</li>
+        </ol>
+        <div class="codebox">
+          <button class="copy" type="button" aria-label="copy the download example" hidden>
+            copy
+          </button>
+          <pre tabindex="0"><code>curl https://api.gronka.dev/v1/download \
   -H 'Authorization: Bearer &lt;key&gt;' \
   -H 'Content-Type: application/json' \
   -d '{"url":"https://x.com/user/status/123"}'</code></pre>
-          </div>
-          <h3>options</h3>
-          <ul class="option-list">
-            <li><code>url</code><span>the link. required.</span></li>
-            <li>
-              <code>mode</code
-              ><span
-                ><code>auto</code> (default), <code>audio</code> for an mp3, or
-                <code>mute</code> for the video without its sound.</span
-              >
-            </li>
-            <li>
-              <code>start, end</code
-              ><span>trim, in seconds or <code>m:ss</code>. end has to be after start.</span>
-            </li>
-            <li>
-              <code>split</code
-              ><span
-                ><code>false</code> asks for one finished file instead of separate video and audio
-                parts.</span
-              >
-            </li>
-          </ul>
-        </section>
+        </div>
+      </section>
 
-        <section id="content" aria-labelledby="content-title">
-          <h2 id="content-title">content</h2>
-          <p>
-            the text behind a link, not the file: send a link as json to
-            <code>POST /v1/content</code>.
-          </p>
-          <div class="codebox">
-            <button class="copy" type="button" aria-label="copy content curl command" hidden>
-              copy
-            </button>
-            <pre tabindex="0"><code>curl https://api.gronka.dev/v1/content \
-  -H 'Authorization: Bearer &lt;key&gt;' \
-  -H 'Content-Type: application/json' \
-  -d '{"url":"https://www.reddit.com/r/pics/comments/abc123/title/","depth":3}'</code></pre>
-          </div>
-          <h3>options</h3>
-          <ul class="option-list">
-            <li><code>url</code><span>the link. required.</span></li>
-            <li>
-              <code>format</code
-              ><span
-                ><code>json</code> (default) or <code>text</code>, a plain-text rendering with
-                comments indented.</span
-              >
-            </li>
-            <li><code>comments</code><span>0 to 20 replies to include. default 0.</span></li>
-            <li><code>depth</code><span>reddit: 0 to 10, how deep the replies go.</span></li>
-            <li>
-              <code>thread</code
-              ><span>x: <code>false</code> stops at the linked post. default true.</span>
-            </li>
-            <li>
-              <code>transcript</code
-              ><span
-                >youtube: <code>true</code> or a language code like <code>"en"</code> adds the
-                captions as timed lines in <code>post.extra.transcript</code>.</span
-              >
-            </li>
-          </ul>
-          <h3>answer</h3>
-          <p>
-            one <code>Thread</code>: <code>source</code>, <code>url</code>, <code>post</code>,
-            <code>thread</code> (the author's posts in order), <code>comments</code> (a tree) and
-            <code>truncated</code>. every item has <code>author</code>, <code>text</code>,
-            <code>media</code>, <code>links</code>, <code>quoted</code> and <code>stats</code>.
-            reddit answers with the post and its comment tree; x with the post, the post it quotes
-            and the author's own thread above it.
-          </p>
-          <p>
-            errors use the http status: <code>404 CONTENT_GONE</code>,
-            <code>400 UNSUPPORTED_SOURCE</code>, <code>502 CONTENT_FAILED</code>.
-          </p>
-          <h3>sites</h3>
-          <p>
-            reddit, x, bluesky, instagram, tiktok, danbooru, e621, yande.re, konachan and pinterest.
-            youtube, soundcloud and other video sites give the title, description and stats, and
-            youtube its transcripts.
-          </p>
-        </section>
+      <section id="download" aria-labelledby="download-title">
+        <h2 id="download-title">download</h2>
+        <p class="route"><span class="method">POST</span> <code>/v1/download</code></p>
+        <p>send a link, get the file back as a link you can save.</p>
+        <div class="scroll">
+          <table>
+            <thead>
+              <tr>
+                <th scope="col">field</th>
+                <th scope="col">what it does</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <th scope="row"><code>url</code></th>
+                <td>the link. required.</td>
+              </tr>
+              <tr>
+                <th scope="row"><code>mode</code></th>
+                <td>
+                  <code>auto</code> (default), <code>audio</code> for an mp3, or
+                  <code>mute</code> for the video without its sound.
+                </td>
+              </tr>
+              <tr>
+                <th scope="row"><code>start</code>, <code>end</code></th>
+                <td>trim, in seconds or <code>m:ss</code>. end has to be after start.</td>
+              </tr>
+              <tr>
+                <th scope="row"><code>split</code></th>
+                <td>
+                  <code>false</code> asks for one finished file instead of separate video and audio
+                  parts.
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+        <p>
+          a playlist link gives its first 10 videos. a soundcloud set, spotify album or playlist, or
+          apple music album gives up to 25 tracks in one zip. <code>note</code> says when a list was
+          cut short or a track couldn't be found.
+        </p>
 
-        <section id="responses" aria-labelledby="responses-title">
-          <h2 id="responses-title">responses</h2>
-          <div class="shape">
-            <h3>direct</h3>
-            <p>the link points to the file on its source site.</p>
-            <div class="codebox">
-              <button class="copy" type="button" aria-label="copy direct response" hidden>
-                copy
-              </button>
-              <pre tabindex="0"><code>{
-  "lane": "direct",
-  "files": [
-    {
-      "url": "https://video.twimg.com/...",
-      "filename": null,
-      "type": "video"
-    }
-  ]
-}</code></pre>
-            </div>
-          </div>
-          <div class="shape">
-            <h3>worker</h3>
-            <p>
-              signed links on <code>dl.gronka.dev</code>, good for an hour. usually one file, with
-              <code>kind</code> <code>video</code>, <code>audio</code> or <code>file</code> (an
-              image or other plain file). with <code>merge: true</code>, the files are separate
-              video and audio streams for you to join, or send <code>split: false</code> to get one
-              file.
-            </p>
-            <div class="codebox">
-              <button class="copy" type="button" aria-label="copy worker response" hidden>
-                copy
-              </button>
-              <pre tabindex="0"><code>{
+        <h3>where the file is</h3>
+        <p>
+          every answer has a <code>lane</code> and a list of <code>files</code>. the lane says where
+          those links point.
+        </p>
+        <div class="scroll">
+          <table>
+            <thead>
+              <tr>
+                <th scope="col">lane</th>
+                <th scope="col">the links point to</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <th scope="row"><code>direct</code></th>
+                <td>the file on its source site.</td>
+              </tr>
+              <tr>
+                <th scope="row"><code>worker</code></th>
+                <td>
+                  signed links on <code>dl.gronka.dev</code>, good for an hour. each file has a
+                  <code>kind</code>: <code>video</code>, <code>audio</code> or <code>file</code>.
+                  with <code>merge: true</code> the files are separate video and audio streams for
+                  you to join; send <code>split: false</code> to get one file instead.
+                </td>
+              </tr>
+              <tr>
+                <th scope="row"><code>r2</code></th>
+                <td>
+                  a copy on <code>cdn.gronka.dev</code>, deleted after an hour. when gronka had to
+                  change the file to deliver it, <code>note</code> says how.
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+        <div class="codebox">
+          <button class="copy" type="button" aria-label="copy the worker answer" hidden>
+            copy
+          </button>
+          <pre tabindex="0"><code>{
   "lane": "worker",
   "merge": true,
   "filename": "clip.mp4",
   "files": [
-    {
-      "url": "https://dl.gronka.dev/f/...",
-      "filename": "clip.video.mp4",
-      "kind": "video",
-      "size": 30123456
-    },
-    {
-      "url": "https://dl.gronka.dev/f/...",
-      "filename": "clip.audio.m4a",
-      "kind": "audio",
-      "size": 1234567
-    }
+    { "url": "https://dl.gronka.dev/f/...", "filename": "clip.video.mp4", "kind": "video", "size": 30123456 },
+    { "url": "https://dl.gronka.dev/f/...", "filename": "clip.audio.m4a", "kind": "audio", "size": 1234567 }
   ]
 }</code></pre>
-            </div>
-          </div>
-          <div class="shape">
-            <h3>r2</h3>
-            <p>
-              a copy on <code>cdn.gronka.dev</code>, deleted after an hour. when gronka had to
-              change the file to deliver it, <code>note</code> says how.
-            </p>
-            <div class="codebox">
-              <button class="copy" type="button" aria-label="copy r2 response" hidden>copy</button>
-              <pre tabindex="0"><code>{
+        </div>
+        <div class="codebox">
+          <button class="copy" type="button" aria-label="copy the r2 answer" hidden>copy</button>
+          <pre tabindex="0"><code>{
   "lane": "r2",
   "note": "sent at 720p to fit the 400MB limit.",
   "files": [
-    {
-      "url": "https://cdn.gronka.dev/...",
-      "filename": "video.mp4",
-      "type": "video",
-      "size": 312345678
-    }
+    { "url": "https://cdn.gronka.dev/...", "filename": "video.mp4", "type": "video", "size": 312345678 }
   ]
 }</code></pre>
-            </div>
-          </div>
-          <div class="shape">
-            <h3>error</h3>
-            <p>a download error has an <code>error.code</code> and <code>error.message</code>.</p>
-            <div class="codebox">
-              <button class="copy" type="button" aria-label="copy error response" hidden>
-                copy
-              </button>
-              <pre tabindex="0"><code>{
-  "error": {
-    "code": "TOO_LARGE",
-    "message": "this file is over the 400MB limit. for a video, the start and end options can grab a clip under it."
-  }
+        </div>
+
+        <h3 id="padded-json">long downloads</h3>
+        <p>
+          a download that finishes within about 80 seconds answers with its http status: 200, 400
+          when the link or options are the problem, 502 when the source failed. a longer one starts
+          sending spaces to keep the connection open, then the json. parse the whole response as
+          usual and check the body for <code>error</code>, since the status is already 200. closing
+          the connection cancels the download.
+        </p>
+      </section>
+
+      <section id="content" aria-labelledby="content-title">
+        <h2 id="content-title">content</h2>
+        <p class="route"><span class="method">POST</span> <code>/v1/content</code></p>
+        <p>
+          the words behind a link, not the file: the post, who wrote it and when, its media, and
+          replies when you ask for them. short links and embed-fixer mirrors are followed first.
+        </p>
+        <div class="codebox">
+          <button class="copy" type="button" aria-label="copy the content example" hidden>
+            copy
+          </button>
+          <pre tabindex="0"><code>curl https://api.gronka.dev/v1/content \
+  -H 'Authorization: Bearer &lt;key&gt;' \
+  -H 'Content-Type: application/json' \
+  -d '{"url":"https://www.reddit.com/r/pics/comments/abc123/title/","comments":10,"depth":2}'</code></pre>
+        </div>
+        <div class="scroll">
+          <table>
+            <thead>
+              <tr>
+                <th scope="col">field</th>
+                <th scope="col">works on</th>
+                <th scope="col">what it does</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <th scope="row"><code>url</code></th>
+                <td>every source</td>
+                <td>the link. required.</td>
+              </tr>
+              <tr>
+                <th scope="row"><code>format</code></th>
+                <td>every source</td>
+                <td>
+                  <code>json</code> (default) or <code>text</code>: the same answer as plain text,
+                  replies indented, ready to paste into a prompt.
+                </td>
+              </tr>
+              <tr>
+                <th scope="row"><code>comments</code></th>
+                <td>reddit, x, bluesky, youtube</td>
+                <td>0 to 20 replies to include. default 0.</td>
+              </tr>
+              <tr>
+                <th scope="row"><code>depth</code></th>
+                <td>reddit</td>
+                <td>0 to 10, how deep the reply tree goes. needs <code>comments</code>.</td>
+              </tr>
+              <tr>
+                <th scope="row"><code>thread</code></th>
+                <td>x, bluesky</td>
+                <td>
+                  <code>false</code> stops at the linked post instead of adding the author's own
+                  thread. default true.
+                </td>
+              </tr>
+              <tr>
+                <th scope="row"><code>transcript</code></th>
+                <td>youtube</td>
+                <td>
+                  <code>true</code> or a language code like <code>"en"</code>: the captions as timed
+                  lines in <code>post.extra.transcript</code>.
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <section id="sources" aria-labelledby="sources-title">
+        <h2 id="sources-title">sources</h2>
+        <p>
+          any http link gets an answer. <code>source</code> in the answer names the reader that took
+          it.
+        </p>
+        <div class="scroll">
+          <table>
+            <thead>
+              <tr>
+                <th scope="col">source</th>
+                <th scope="col">links</th>
+                <th scope="col">what you get</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <th scope="row"><code>reddit</code></th>
+                <td>posts and comment links</td>
+                <td>the post, its score and subreddit, and the comment tree</td>
+              </tr>
+              <tr>
+                <th scope="row"><code>twitter</code></th>
+                <td>x and twitter posts</td>
+                <td>the post, the post it quotes, the author's thread and replies</td>
+              </tr>
+              <tr>
+                <th scope="row"><code>bluesky</code></th>
+                <td>posts</td>
+                <td>the post, the author's thread and replies</td>
+              </tr>
+              <tr>
+                <th scope="row"><code>instagram</code></th>
+                <td>posts and reels</td>
+                <td>the caption, every photo or video, and its stats</td>
+              </tr>
+              <tr>
+                <th scope="row"><code>threads</code></th>
+                <td>posts</td>
+                <td>the text, its media, likes, replies and reposts</td>
+              </tr>
+              <tr>
+                <th scope="row"><code>tiktok</code></th>
+                <td>videos and photo posts</td>
+                <td>the caption, media, stats and the sound it uses</td>
+              </tr>
+              <tr>
+                <th scope="row"><code>booru</code></th>
+                <td>danbooru, e621, yande.re, konachan</td>
+                <td>the image, its tags, rating and score</td>
+              </tr>
+              <tr>
+                <th scope="row"><code>pinterest</code></th>
+                <td>pins</td>
+                <td>the title, text and the full-size image or video</td>
+              </tr>
+              <tr>
+                <th scope="row"><code>list</code></th>
+                <td>
+                  youtube playlists, soundcloud sets, spotify albums and playlists, apple music
+                  albums
+                </td>
+                <td>
+                  up to 100 entries in <code>post.extra.entries</code>, each with its link, title,
+                  artist and length
+                </td>
+              </tr>
+              <tr>
+                <th scope="row"><code>video</code></th>
+                <td>youtube and the other video sites gronka downloads from</td>
+                <td>
+                  the title, description, stats, tags and chapters; youtube also replies and
+                  transcripts
+                </td>
+              </tr>
+              <tr>
+                <th scope="row"><code>page</code></th>
+                <td>any other web page</td>
+                <td>
+                  the title, author, date, article text, picture and site name, from the page's own
+                  metadata
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <section id="answer" aria-labelledby="answer-title">
+        <h2 id="answer-title">the answer</h2>
+        <p>every source answers with the same shape.</p>
+        <div class="scroll">
+          <table>
+            <thead>
+              <tr>
+                <th scope="col">field</th>
+                <th scope="col">what it is</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <th scope="row"><code>source</code></th>
+                <td>the reader that answered, from the table above.</td>
+              </tr>
+              <tr>
+                <th scope="row"><code>url</code></th>
+                <td>the canonical link.</td>
+              </tr>
+              <tr>
+                <th scope="row"><code>post</code></th>
+                <td>the linked post.</td>
+              </tr>
+              <tr>
+                <th scope="row"><code>thread</code></th>
+                <td>the author's own posts around it, in order.</td>
+              </tr>
+              <tr>
+                <th scope="row"><code>comments</code></th>
+                <td>
+                  replies as a tree: each has <code>depth</code> and its own <code>replies</code>.
+                </td>
+              </tr>
+              <tr>
+                <th scope="row"><code>truncated</code></th>
+                <td>true when there were more replies or entries than came back.</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+        <p>every post, and every reply, has these fields:</p>
+        <div class="scroll">
+          <table>
+            <thead>
+              <tr>
+                <th scope="col">field</th>
+                <th scope="col">what it is</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <th scope="row"><code>author</code></th>
+                <td><code>handle</code>, <code>name</code> and <code>url</code>.</td>
+              </tr>
+              <tr>
+                <th scope="row"><code>createdAt</code></th>
+                <td>when it was posted, as an iso 8601 time.</td>
+              </tr>
+              <tr>
+                <th scope="row"><code>title</code>, <code>text</code></th>
+                <td>the words. a web page's text is its article.</td>
+              </tr>
+              <tr>
+                <th scope="row"><code>media</code></th>
+                <td>
+                  each with <code>type</code> (<code>image</code>, <code>video</code> or
+                  <code>audio</code>), <code>url</code>, <code>alt</code>, <code>width</code> and
+                  <code>height</code>.
+                </td>
+              </tr>
+              <tr>
+                <th scope="row"><code>links</code></th>
+                <td>outbound links in the text, in order.</td>
+              </tr>
+              <tr>
+                <th scope="row"><code>quoted</code>, <code>parent</code></th>
+                <td>the post it quotes, and the one it replies to.</td>
+              </tr>
+              <tr>
+                <th scope="row"><code>stats</code></th>
+                <td>
+                  <code>likes</code>, <code>reposts</code>, <code>replies</code>,
+                  <code>score</code> and <code>views</code>. <code>null</code> when the source
+                  doesn't say.
+                </td>
+              </tr>
+              <tr>
+                <th scope="row"><code>flags</code></th>
+                <td><code>nsfw</code>, <code>spoiler</code> and <code>edited</code>.</td>
+              </tr>
+              <tr>
+                <th scope="row"><code>extra</code></th>
+                <td>
+                  what only that source has: chapters and transcripts for videos, entries for lists,
+                  the site name and description for pages.
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+        <div class="codebox">
+          <button class="copy" type="button" aria-label="copy the content answer" hidden>
+            copy
+          </button>
+          <pre tabindex="0"><code>{
+  "source": "list",
+  "url": "https://open.spotify.com/album/...",
+  "post": {
+    "title": "Album name",
+    "author": { "handle": null, "name": null, "url": null },
+    "media": [
+      { "type": "image", "url": "https://i.scdn.co/image/...", "alt": null, "width": null, "height": null }
+    ],
+    "extra": {
+      "kind": "audio",
+      "total": 12,
+      "entries": [
+        {
+          "url": "https://open.spotify.com/track/...",
+          "title": "First track",
+          "artist": "Artist",
+          "duration": 214
+        }
+      ]
+    }
+  },
+  "thread": [],
+  "comments": [],
+  "truncated": false
 }</code></pre>
-            </div>
-          </div>
-        </section>
+        </div>
+      </section>
 
-        <section id="padded-json" aria-labelledby="padded-title">
-          <h2 id="padded-title">padded json</h2>
-          <p>
-            a download that finishes within about 80 seconds answers with its http status: 200, 400
-            when the link or options are the problem, 502 when the source failed. a longer one
-            starts sending spaces to keep the connection open, then json; parse the full response as
-            usual, and look for <code>error</code> in the body, since the status is already 200.
-            closing the connection cancels the download.
-          </p>
-        </section>
+      <section id="errors" aria-labelledby="errors-title">
+        <h2 id="errors-title">errors</h2>
+        <p>
+          an error answers with <code>{"error": {"code", "message"}}</code>. the
+          <code>message</code> is written to be shown to people as it is.
+        </p>
+        <div class="scroll">
+          <table>
+            <thead>
+              <tr>
+                <th scope="col">code</th>
+                <th scope="col">http</th>
+                <th scope="col">what happened</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <th scope="row"><code>BAD_REQUEST</code></th>
+                <td>400</td>
+                <td>the body or an option is invalid.</td>
+              </tr>
+              <tr>
+                <th scope="row"><code>BAD_URL</code></th>
+                <td>400</td>
+                <td>the url is missing, invalid, or not something that can be read.</td>
+              </tr>
+              <tr>
+                <th scope="row"><code>UNSUPPORTED_SOURCE</code></th>
+                <td>400</td>
+                <td>that site isn't supported for this call.</td>
+              </tr>
+              <tr>
+                <th scope="row"><code>VALIDATION_ERROR</code></th>
+                <td>400</td>
+                <td>the media or the request hit a limit.</td>
+              </tr>
+              <tr>
+                <th scope="row"><code>UNAUTHORIZED</code></th>
+                <td>401</td>
+                <td>the api key is missing or not valid.</td>
+              </tr>
+              <tr>
+                <th scope="row"><code>VERIFICATION_FAILED</code></th>
+                <td>403</td>
+                <td>the turnstile check failed.</td>
+              </tr>
+              <tr>
+                <th scope="row"><code>CONTENT_GONE</code></th>
+                <td>404</td>
+                <td>the post is deleted, private or removed.</td>
+              </tr>
+              <tr>
+                <th scope="row"><code>NOT_FOUND</code></th>
+                <td>404</td>
+                <td>no such route.</td>
+              </tr>
+              <tr>
+                <th scope="row"><code>TOO_LARGE</code></th>
+                <td>413</td>
+                <td>the file is over the size cap.</td>
+              </tr>
+              <tr>
+                <th scope="row"><code>NO_VIDEO</code></th>
+                <td>422</td>
+                <td>the post has no photo or video.</td>
+              </tr>
+              <tr>
+                <th scope="row"><code>RATE_LIMITED</code></th>
+                <td>429</td>
+                <td>too many requests. retry after <code>error.retryAfter</code> seconds.</td>
+              </tr>
+              <tr>
+                <th scope="row"><code>INTERNAL</code></th>
+                <td>500</td>
+                <td>something broke on our side.</td>
+              </tr>
+              <tr>
+                <th scope="row"><code>NETWORK_ERROR</code></th>
+                <td>502</td>
+                <td>the source refused or couldn't be reached.</td>
+              </tr>
+              <tr>
+                <th scope="row"><code>DOWNLOAD_FAILED</code></th>
+                <td>502</td>
+                <td>the download didn't finish.</td>
+              </tr>
+              <tr>
+                <th scope="row"><code>CONTENT_FAILED</code></th>
+                <td>502</td>
+                <td>the content couldn't be read.</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
 
-        <section id="errors" aria-labelledby="errors-title">
-          <h2 id="errors-title">errors</h2>
-          <p class="muted">common error codes. <code>message</code> is safe to show to users.</p>
-          <ul class="error-list">
-            <li><code>BAD_REQUEST</code><span>the request body or options are invalid.</span></li>
-            <li><code>BAD_URL</code><span>the url is missing or invalid.</span></li>
-            <li><code>CONTENT_FAILED</code><span>the content could not be read.</span></li>
-            <li>
-              <code>CONTENT_GONE</code
-              ><span>the post is deleted, private or removed. http 404.</span>
-            </li>
-            <li><code>DOWNLOAD_FAILED</code><span>the download did not finish.</span></li>
-            <li><code>INTERNAL</code><span>something broke on the server.</span></li>
-            <li>
-              <code>NETWORK_ERROR</code><span>the source refused or could not be reached.</span>
-            </li>
-            <li><code>NO_VIDEO</code><span>the post has no photo or video. http 422.</span></li>
-            <li><code>NOT_FOUND</code><span>no such route.</span></li>
-            <li>
-              <code>RATE_LIMITED</code
-              ><span>too many requests. retry after <code>retryAfter</code> seconds.</span>
-            </li>
-            <li><code>TOO_LARGE</code><span>the file is over the size cap. http 413.</span></li>
-            <li><code>UNAUTHORIZED</code><span>the api key is missing or invalid.</span></li>
-            <li>
-              <code>UNSUPPORTED_SOURCE</code
-              ><span>that site is not supported, or not for this request.</span>
-            </li>
-            <li><code>VALIDATION_ERROR</code><span>the media or request hit a limit.</span></li>
-            <li><code>VERIFICATION_FAILED</code><span>the turnstile check failed.</span></li>
-          </ul>
-        </section>
+      <section id="limits" aria-labelledby="limits-title">
+        <h2 id="limits-title">limits</h2>
+        <p>
+          50 downloads or content reads per 10 minutes, per ip, or per key when you send one. key
+          checks are capped at 30 per 10 minutes per ip. a <code>429</code> carries
+          <code>error.retryAfter</code> in seconds and the same value in a
+          <code>Retry-After</code> header.
+        </p>
+        <p>
+          files gronka fetches itself (lane <code>r2</code>) have a 400 mb cap. on sites that list
+          their file sizes, a video over it comes at a lower resolution that fits.
+        </p>
+      </section>
 
-        <section id="keys" aria-labelledby="keys-title">
-          <h2 id="keys-title">keys</h2>
-          <p>
-            there are no accounts. <code>POST /v1/keys</code> (behind a turnstile check) returns a
-            new key once; gronka keeps only a keyed hash of it, so a lost key can't be recovered,
-            only replaced. <code>DELETE /v1/keys</code> with the key as its bearer token revokes it.
-          </p>
-        </section>
+      <section id="keys" aria-labelledby="keys-title">
+        <h2 id="keys-title">keys</h2>
+        <p>
+          <code>POST /v1/keys</code>, behind a turnstile check, returns a new key once. gronka keeps
+          only a keyed hash of it, so a lost key can't be recovered, only replaced.
+          <code>DELETE /v1/keys</code> with the key as its bearer token revokes it.
+        </p>
+        <p>
+          no request logs. files are gone after an hour. the full policy is on the
+          <a href="/privacy/">privacy page</a>.
+        </p>
+      </section>
 
-        <section id="limits" aria-labelledby="limits-title">
-          <h2 id="limits-title">limits</h2>
-          <p>
-            50 downloads or content reads per 10 minutes per ip, or per key with an api key. api key
-            checks are capped at 30 per 10 minutes per ip. files fetched by gronka (lane r2) have a
-            400 mb cap; on sites that list their file sizes, a video over it comes at a lower
-            resolution that fits. a
-            <code>RATE_LIMITED</code> <code>429</code> includes <code>error.retryAfter</code> in
-            seconds and the same value in a <code>Retry-After</code> header.
-          </p>
-        </section>
-
-        <section id="privacy" aria-labelledby="privacy-title">
-          <h2 id="privacy-title">privacy</h2>
-          <p>no request logs. files are gone after an hour.</p>
-        </section>
-
-        <section id="reference" aria-labelledby="reference-title">
-          <h2 id="reference-title">reference</h2>
-          <ul class="endpoint-list">
-            <li>
-              <span class="method">GET</span><code class="route-path">/v1/health</code
-              ><span class="endpoint-note">check service status</span>
-            </li>
-            <li>
-              <span class="method">POST</span><code class="route-path">/v1/download</code
-              ><span class="endpoint-note">get files from a link</span>
-            </li>
-            <li>
-              <span class="method">POST</span><code class="route-path">/v1/content</code
-              ><span class="endpoint-note">read the text behind a link</span>
-            </li>
-            <li>
-              <span class="method">POST</span><code class="route-path">/v1/keys</code
-              ><span class="endpoint-note">create an api key</span>
-            </li>
-            <li>
-              <span class="method">DELETE</span><code class="route-path">/v1/keys</code
-              ><span class="endpoint-note">revoke an api key</span>
-            </li>
-          </ul>
-        </section>
-
-        <footer class="page-foot">
-          full schema: <a href="/openapi.json">openapi.json</a>
-          <span id="copy-status" role="status" aria-live="polite"></span>
-        </footer>
-      </main>
-    </div>
+      <section id="reference" aria-labelledby="reference-title">
+        <h2 id="reference-title">reference</h2>
+        <div class="scroll">
+          <table class="routes">
+            <tbody>
+              <tr>
+                <td><span class="method">GET</span></td>
+                <th scope="row"><code>/v1/health</code></th>
+                <td>is the service up</td>
+              </tr>
+              <tr>
+                <td><span class="method">POST</span></td>
+                <th scope="row">
+                  <a href="#download"><code>/v1/download</code></a>
+                </th>
+                <td>get the files from a link</td>
+              </tr>
+              <tr>
+                <td><span class="method">POST</span></td>
+                <th scope="row">
+                  <a href="#content"><code>/v1/content</code></a>
+                </th>
+                <td>read what a link says</td>
+              </tr>
+              <tr>
+                <td><span class="method">POST</span></td>
+                <th scope="row">
+                  <a href="#keys"><code>/v1/keys</code></a>
+                </th>
+                <td>create an api key</td>
+              </tr>
+              <tr>
+                <td><span class="method">DELETE</span></td>
+                <th scope="row">
+                  <a href="#keys"><code>/v1/keys</code></a>
+                </th>
+                <td>revoke an api key</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+        <p class="note">
+          the full schema is in <a href="/openapi.json">openapi.json</a>.
+          <span id="copy-status" class="vh" role="status" aria-live="polite"></span>
+        </p>
+      </section>
+    </main>
+    <footer class="foot">
+      <a href="/">download</a><a href="/docs/" aria-current="page">api docs</a
+      ><a href="/key/">api key</a><a href="/terms/">terms</a><a href="/privacy/">privacy</a>
+      <a
+        class="me"
+        href="https://discord.gg/5Z4hEeHshH"
+        aria-label="gronka discord server"
+        title="discord server"
+        ><svg viewBox="0 0 16 16" aria-hidden="true">
+          <path
+            d="M13.545 2.907a13.2 13.2 0 0 0-3.257-1.011.05.05 0 0 0-.052.025c-.141.25-.297.577-.406.833a12.2 12.2 0 0 0-3.658 0 8 8 0 0 0-.412-.833.05.05 0 0 0-.052-.025c-1.125.194-2.22.534-3.257 1.011a.04.04 0 0 0-.021.018C.356 6.024-.213 9.047.066 12.032q.003.022.021.037a13.3 13.3 0 0 0 3.995 2.02.05.05 0 0 0 .056-.019q.463-.63.818-1.329a.05.05 0 0 0-.01-.059l-.018-.011a9 9 0 0 1-1.248-.595.05.05 0 0 1-.02-.066l.015-.019q.127-.095.248-.195a.05.05 0 0 1 .051-.007c2.619 1.196 5.454 1.196 8.041 0a.05.05 0 0 1 .053.007q.121.1.248.195a.05.05 0 0 1-.004.085 8 8 0 0 1-1.249.594.05.05 0 0 0-.03.03.05.05 0 0 0 .003.041c.24.465.515.909.817 1.329a.05.05 0 0 0 .056.019 13.2 13.2 0 0 0 4.001-2.02.05.05 0 0 0 .021-.037c.334-3.451-.559-6.449-2.366-9.106a.03.03 0 0 0-.02-.019m-8.198 7.307c-.789 0-1.438-.724-1.438-1.612s.637-1.613 1.438-1.613c.807 0 1.45.73 1.438 1.613 0 .888-.637 1.612-1.438 1.612m5.316 0c-.788 0-1.438-.724-1.438-1.612s.637-1.613 1.438-1.613c.807 0 1.451.73 1.438 1.613 0 .888-.631 1.612-1.438 1.612"
+          /></svg
+      ></a>
+      <span class="tm">gronka™ © 2025-2026 gronkanium</span>
+    </footer>
   </body>
 </html>

@@ -1,360 +1,225 @@
-/* Archivo (OFL) and Gronka Mono, a renamed IBM Plex Mono subset (OFL): /fonts/OFL-*.txt */
-@font-face {
-  font-family: 'Archivo';
-  src: url('/fonts/Archivo-Regular.woff2') format('woff2');
-  font-weight: 400;
-  font-display: block;
-}
-@font-face {
-  font-family: 'Archivo';
-  src: url('/fonts/Archivo-SemiBold.woff2') format('woff2');
-  font-weight: 600 700;
-  font-display: block;
-}
-@font-face {
-  font-family: 'Archivo Expanded';
-  src: url('/fonts/Archivo-ExpandedExtraBold.woff2') format('woff2');
-  font-weight: 800;
-  font-display: block;
-}
-@font-face {
-  font-family: 'Gronka Mono';
-  src: url('/fonts/GronkaMono-Regular.woff2') format('woff2');
-  font-weight: 400;
-  font-display: block;
-}
-html {
-  scrollbar-width: none;
-}
-html::-webkit-scrollbar {
-  display: none;
-}
 :root {
-  color-scheme: light;
-  --bg: #fff;
-  --fg: #000;
-  --dim: #5f5c56;
-  --line: #e2e0da;
-  --wash: #f1f0ec;
-  --focus: #000;
-}
-@media (prefers-color-scheme: dark) {
-  :root {
-    color-scheme: dark;
-    --bg: #000;
-    --fg: #fff;
-    --dim: #a9a59d;
-    --line: #2a2a2a;
-    --wash: #151515;
-    --focus: #fff;
-  }
-}
-* {
-  box-sizing: border-box;
+  --rule: color-mix(in srgb, var(--ink) 14%, var(--paper));
 }
 html {
   scroll-behavior: smooth;
 }
-body {
-  margin: 0;
-  background: var(--bg);
-  color: var(--fg);
-  font:
-    15px/1.6 'Archivo',
-    sans-serif;
-  -webkit-font-smoothing: antialiased;
+.docs section {
+  scroll-margin-top: 16px;
+  padding-top: 8px;
 }
-a {
-  color: inherit;
-  text-underline-offset: 0.18em;
+.docs h2 {
+  margin-top: 56px;
 }
-a:hover {
-  text-decoration-thickness: 2px;
+.preview {
+  border: 2px solid var(--ink);
+  border-radius: 8px;
+  padding: 12px 16px;
+  font-size: 15px;
+  max-width: 640px;
 }
-a:focus-visible,
-button:focus-visible,
-summary:focus-visible {
-  outline: 3px solid var(--focus);
-  outline-offset: 3px;
-}
-.topbar {
-  min-height: 4rem;
-  padding: 0 clamp(1rem, 4vw, 3rem);
+.toc {
   display: flex;
-  align-items: center;
-  justify-content: space-between;
-  border-bottom: 1px solid var(--line);
-}
-.wordmark {
-  font-family: 'Archivo Expanded', 'Archivo', sans-serif;
-  font-weight: 800;
-  font-size: 1.05rem;
-  font-weight: 650;
-  letter-spacing: -0.04em;
-  text-decoration: none;
-}
-.spec-link {
+  flex-wrap: wrap;
+  gap: 4px 18px;
+  margin: 28px 0 0;
+  padding: 12px 0;
+  border-top: 1px solid var(--rule);
+  border-bottom: 1px solid var(--rule);
   font:
-    0.83rem/1.4 'Gronka Mono',
+    14px/1.6 'Gronka Mono',
     monospace;
 }
-.layout {
-  width: min(100% - 2rem, 68rem);
-  margin: 0 auto;
-  padding: 3.5rem 0 6rem;
-  display: grid;
-  grid-template-columns: 11rem minmax(0, 42rem);
-  gap: clamp(2.5rem, 7vw, 6rem);
-  align-items: start;
-}
-.sidebar {
-  position: sticky;
-  top: 2rem;
-}
-.toc-label {
-  margin: 0 0 0.8rem;
-  color: var(--dim);
-  font-size: 0.72rem;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-}
-.toc-links {
-  display: grid;
-  gap: 0.45rem;
-}
-.toc-links a {
-  color: var(--dim);
-  font-size: 0.9rem;
+.toc a {
+  color: var(--pencil);
   text-decoration: none;
 }
-.toc-links a:hover,
-.toc-links a:focus-visible {
-  color: var(--fg);
+.toc a:hover {
+  color: var(--ink);
+  text-decoration: underline;
 }
-.mobile-toc {
-  display: none;
+.docs p,
+.steps {
+  max-width: 640px;
 }
-main {
-  min-width: 0;
+.steps {
+  padding-left: 1.3em;
+  margin: 0 0 14px;
 }
-section {
-  padding: 0 0 2.7rem;
-  scroll-margin-top: 2rem;
-}
-section + section {
-  border-top: 1px solid var(--line);
-  padding-top: 2.2rem;
-}
-h1,
-h2,
-h3,
-p {
-  margin-top: 0;
-}
-h1 {
-  font-family: 'Archivo Expanded', 'Archivo', sans-serif;
-  font-weight: 800;
-  max-width: 18ch;
-  margin-bottom: 2.4rem;
-  font-size: clamp(2.1rem, 5vw, 3rem);
-  line-height: 1.08;
-  letter-spacing: -0.02em;
-}
-h2 {
-  margin-bottom: 0.75rem;
-  font-size: 1.17rem;
-  line-height: 1.3;
-  letter-spacing: -0.025em;
-  font-weight: 620;
-}
-h3 {
-  margin: 1.45rem 0 0.5rem;
-  font-size: 0.95rem;
-  font-weight: 620;
-}
-p {
-  margin-bottom: 0.8rem;
-}
-.muted {
-  color: var(--dim);
+.steps li {
+  margin-bottom: 6px;
 }
 code,
-pre,
-.method,
-.route-path {
-  font-family: 'Gronka Mono', monospace;
+pre {
+  font-family: 'Gronka Mono', ui-monospace, monospace;
 }
 :not(pre) > code {
-  font-size: 0.9em;
+  font-size: 0.88em;
+  padding: 1px 5px;
+  border-radius: 4px;
+  background: var(--soft);
+  overflow-wrap: anywhere;
+}
+th > code,
+th > a > code {
+  background: none;
+  padding: 0;
+}
+.route {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 10px;
+}
+.route code {
+  font-size: 17px;
+  background: none;
+  padding: 0;
+}
+.method {
+  font:
+    600 12px/1 'Gronka Mono',
+    monospace;
+  letter-spacing: 0.04em;
+  padding: 5px 7px;
+  border-radius: 4px;
+  background: var(--ink);
+  color: var(--paper);
 }
 .codebox {
   position: relative;
-  margin: 1rem 0 0;
-  border: 1px solid var(--line);
-  border-radius: 0.45rem;
-  background: var(--wash);
-}
-.codebox pre::-webkit-scrollbar {
-  display: none;
+  margin: 16px 0;
+  border-radius: 8px;
+  background: var(--soft);
 }
 .codebox pre {
-  scrollbar-width: none;
-  overflow: auto;
   margin: 0;
-  padding: 1rem 4.5rem 1rem 1rem;
-  color: var(--fg);
-  font-size: 0.82rem;
+  padding: 16px 18px;
+  overflow-x: auto;
+  scrollbar-width: thin;
+  font-size: 14px;
   line-height: 1.65;
   tab-size: 2;
 }
+.codebox .copy + pre {
+  padding-right: 76px;
+}
 .copy {
   position: absolute;
-  top: 0.55rem;
-  right: 0.55rem;
-  padding: 0.28rem 0.55rem;
-  border: 1px solid var(--line);
-  border-radius: 0.3rem;
-  background: var(--bg);
-  color: var(--dim);
-  font: inherit;
-  font-size: 0.73rem;
+  top: 10px;
+  right: 10px;
+  padding: 4px 10px;
+  border: 1px solid var(--rule);
+  border-radius: 6px;
+  background: var(--paper);
+  color: var(--pencil);
+  font:
+    13px 'Archivo',
+    sans-serif;
   cursor: pointer;
 }
 .copy:hover {
-  color: var(--fg);
-  border-color: var(--dim);
+  color: var(--ink);
+  border-color: var(--pencil);
 }
-.shape {
-  margin-top: 1.45rem;
+.scroll {
+  overflow-x: auto;
+  margin: 16px 0;
 }
-.shape h3 {
-  margin-top: 0;
+table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 16px;
+  line-height: 1.45;
 }
-.shape p {
-  margin-bottom: 0.5rem;
-  color: var(--dim);
-  font-size: 0.9rem;
+th,
+td {
+  text-align: left;
+  vertical-align: top;
+  padding: 10px 16px 10px 0;
+  border-bottom: 1px solid var(--rule);
 }
-.error-list,
-.option-list,
-.endpoint-list {
-  margin: 0;
-  padding: 0;
-  list-style: none;
+th:last-child,
+td:last-child {
+  padding-right: 0;
 }
-.error-list li,
-.option-list li {
-  display: grid;
-  grid-template-columns: 12.5rem minmax(0, 1fr);
-  gap: 1rem;
-  padding: 0.55rem 0;
-  border-bottom: 1px solid var(--line);
+thead th {
+  padding-top: 0;
+  color: var(--pencil);
+  font:
+    13px 'Gronka Mono',
+    monospace;
+  border-bottom-color: var(--ink);
 }
-.error-list code,
-.option-list code {
-  font-size: 0.8rem;
-}
-.error-list span,
-.option-list span {
-  color: var(--dim);
-}
-.endpoint-list li {
-  display: grid;
-  grid-template-columns: 3.2rem minmax(0, 14rem) minmax(0, 1fr);
-  gap: 0.7rem;
-  align-items: baseline;
-  padding: 0.65rem 0;
-  border-bottom: 1px solid var(--line);
-}
-.method {
-  color: var(--dim);
-  font-size: 0.72rem;
-}
-.route-path {
-  font-size: 0.79rem;
-  overflow-wrap: anywhere;
-}
-.endpoint-note {
-  color: var(--dim);
-  font-size: 0.86rem;
-}
-.page-foot {
-  padding-top: 0.5rem;
-  color: var(--dim);
-  font-size: 0.82rem;
-}
-.page-foot a {
-  color: var(--fg);
-}
-#copy-status {
-  position: absolute;
-  width: 1px;
-  height: 1px;
-  overflow: hidden;
-  clip: rect(0, 0, 0, 0);
+tbody th {
+  font-weight: 400;
   white-space: nowrap;
 }
-@media (max-width: 760px) {
-  .layout {
-    width: min(100% - 2rem, 42rem);
-    padding-top: 1.2rem;
+tbody th code {
+  font-size: 15px;
+}
+tr:has(> :nth-child(3)) > td:nth-child(2) {
+  color: var(--pencil);
+  font-size: 15px;
+}
+.routes td,
+.routes th {
+  vertical-align: middle;
+}
+.routes tr > :not(:last-child) {
+  width: 1%;
+  white-space: nowrap;
+  padding-right: 28px;
+}
+.routes .method {
+  display: inline-block;
+  width: 64px;
+  text-align: center;
+  color: var(--paper);
+}
+.routes tr > td:last-child {
+  color: var(--pencil);
+}
+.routes a {
+  text-decoration: none;
+}
+.routes a:hover code {
+  text-decoration: underline;
+}
+@media (max-width: 640px) {
+  table:not(.routes) thead {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip: rect(0 0 0 0);
+  }
+  table:not(.routes) tr {
     display: block;
+    padding: 12px 0;
+    border-bottom: 1px solid var(--rule);
   }
-  .sidebar {
-    position: static;
-    margin-bottom: 2rem;
+  table:not(.routes) :is(th, td) {
+    display: block;
+    padding: 0;
+    border: 0;
   }
-  .desktop-toc {
+  table:not(.routes) tbody th {
+    white-space: normal;
+    margin-bottom: 2px;
+  }
+  .routes tr > td:last-child {
     display: none;
   }
-  .mobile-toc {
-    display: block;
-    border-bottom: 1px solid var(--line);
+  .codebox pre {
+    font-size: 13px;
   }
-  .mobile-toc summary {
-    padding: 0.65rem 0;
-    color: var(--dim);
-    cursor: pointer;
-    font-size: 0.85rem;
-  }
-  .mobile-toc .toc-links {
-    padding: 0 0 0.8rem;
-  }
-  h1 {
-    margin-bottom: 2rem;
-  }
-  .error-list li,
-  .option-list li {
-    grid-template-columns: minmax(9.5rem, 0.8fr) minmax(0, 1fr);
-    gap: 0.6rem;
-  }
-  .endpoint-list li {
-    grid-template-columns: 2.8rem minmax(0, 1fr);
-    gap: 0.25rem 0.65rem;
-  }
-  .endpoint-note {
-    grid-column: 2;
+  .codebox .copy + pre {
+    padding: 48px 16px 16px;
   }
 }
 @media (prefers-reduced-motion: reduce) {
   html {
     scroll-behavior: auto;
-  }
-}
-.preview {
-  border: 3px solid var(--fg);
-  border-radius: 0.5rem;
-  padding: 0.7rem 0.9rem;
-  color: var(--fg);
-}
-.wordmark img {
-  width: 24px;
-  height: 24px;
-  vertical-align: -6px;
-  margin-right: 8px;
-}
-@media (prefers-color-scheme: dark) {
-  .wordmark img {
-    filter: invert(1);
   }
 }

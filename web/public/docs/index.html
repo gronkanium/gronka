@@ -607,9 +607,10 @@
       <section id="keys" aria-labelledby="keys-title">
         <h2 id="keys-title">keys</h2>
         <p>
-          <code>POST /v1/keys</code>, behind a turnstile check, returns a new key once. gronka keeps
-          only a keyed hash of it, so a lost key can't be recovered, only replaced.
-          <code>DELETE /v1/keys</code> with the key as its bearer token revokes it.
+          <code>POST /v1/keys</code>, behind a turnstile check, returns a new key once, at most 3
+          per 10 minutes per ip. gronka keeps only a keyed hash of it, so a lost key can't be
+          recovered, only replaced. <code>DELETE /v1/keys</code> with the key as its bearer token
+          revokes it.
         </p>
         <p>
           no request logs. files are gone after an hour. the full policy is on the

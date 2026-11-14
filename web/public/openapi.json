@@ -3,7 +3,7 @@
   "info": {
     "title": "gronka api",
     "version": "1.0.0-preview",
-    "description": "the same downloader as the gronka discord bot, as a json api. preview: not live yet and may change."
+    "description": "the same downloader as the gronka discord bot, as a json api. public preview: the shape may still change."
   },
   "servers": [
     {
@@ -16,7 +16,7 @@
     },
     {
       "name": "content",
-      "description": "the text behind a link: posts, threads and comments as json."
+      "description": "the text behind a link as json: posts, threads, comments, video details, playlists and web pages."
     },
     {
       "name": "keys",
@@ -24,9 +24,37 @@
     }
   ],
   "paths": {
+    "/v1": {
+      "get": {
+        "summary": "describe the api",
+        "description": "also served at /.",
+        "responses": {
+          "200": {
+            "description": "links to the docs, the spec and the endpoints",
+            "content": {
+              "application/json": {
+                "example": {
+                  "name": "gronka",
+                  "about": "the same downloader as the gronka discord bot, as a json api.",
+                  "version": "v1",
+                  "status": "public preview",
+                  "docs": "https://gronka.dev/docs/",
+                  "openapi": "https://gronka.dev/openapi.json",
+                  "health": "https://api.gronka.dev/v1/health",
+                  "download": "POST https://api.gronka.dev/v1/download",
+                  "content": "POST https://api.gronka.dev/v1/content",
+                  "page": "https://gronka.dev/"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/v1/health": {
       "get": {
         "summary": "check the service",
+        "description": "also served at /health.",
         "responses": {
           "200": {
             "description": "service is up",
@@ -45,6 +73,7 @@
       "post": {
         "tags": ["download"],
         "summary": "download from a link",
+        "description": "limits: 50 requests per 10 minutes per ip, or per key for api keys, shared with /v1/content. keyed requests are also limited to 30 key checks per 10 minutes per ip.",
         "security": [
           {
             "apiKey": []
@@ -99,7 +128,8 @@
                         {
                           "url": "https://video.twimg.com/...",
                           "filename": null,
-                          "type": "video"
+                          "type": "video",
+                          "save": "https://dl.gronka.dev/f/..."
                         }
                       ]
                     }
@@ -146,7 +176,13 @@
           "403": {
             "$ref": "#/components/responses/Error"
           },
+          "404": {
+            "$ref": "#/components/responses/Error"
+          },
           "413": {
+            "$ref": "#/components/responses/Error"
+          },
+          "422": {
             "$ref": "#/components/responses/Error"
           },
           "429": {
@@ -158,14 +194,14 @@
           "502": {
             "$ref": "#/components/responses/Error"
           }
-        },
-        "description": "limits: 50 downloads per 10 minutes per ip, or per key for api keys. keyed requests are also limited to 30 key checks per 10 minutes per ip."
+        }
       }
     },
     "/v1/keys": {
       "post": {
         "tags": ["keys"],
         "summary": "create an api key",
+        "description": "limit: 3 requests per 10 minutes per ip.",
         "requestBody": {
           "required": true,
           "content": {
@@ -188,6 +224,9 @@
               }
             }
           },
+          "400": {
+            "$ref": "#/components/responses/Error"
+          },
           "403": {
             "$ref": "#/components/responses/Error"
           },
@@ -206,9 +245,19 @@
         ],
         "responses": {
           "200": {
-            "description": "key revoked"
+            "description": "key revoked",
+            "content": {
+              "application/json": {
+                "example": {
+                  "ok": true
+                }
+              }
+            }
           },
           "401": {
+            "$ref": "#/components/responses/Error"
+          },
+          "429": {
             "$ref": "#/components/responses/Error"
           }
         }
@@ -217,8 +266,8 @@
     "/v1/content": {
       "post": {
         "tags": ["content"],
-        "summary": "read a post, thread or comments from a link",
-        "description": "reads reddit posts (with the comment tree) and x posts (with the quoted post and the author's thread above it). same quota as /v1/download, shared per caller. preview: the shape may still change.",
+        "summary": "read a post, thread, video, playlist or page from a link",
+        "description": "short links and mirror domains are resolved first, then the link goes to the first reader that takes it, in this order: reddit, twitter, bluesky, instagram, threads, tiktok, booru, pinterest, list, video, page. page takes any other http(s) link. source in the answer names the reader. the same link with the same options within a minute is answered from memory. same quota as /v1/download, shared per caller. the answer is not padded: the http status carries the outcome.",
         "security": [
           {
             "apiKey": []
@@ -245,6 +294,12 @@
                     "url": "https://x.com/user/status/123"
                   }
                 },
+                "transcript": {
+                  "value": {
+                    "url": "https://www.youtube.com/watch?v=abc",
+                    "transcript": "en"
+                  }
+                },
                 "text": {
                   "value": {
                     "url": "https://x.com/user/status/123",
@@ -263,99 +318,162 @@
                 "schema": {
                   "$ref": "#/components/schemas/Thread"
                 },
-                "example": {
-                  "source": "twitter",
-                  "url": "https://x.com/user/status/123",
-                  "post": {
-                    "id": "123",
-                    "url": "https://x.com/user/status/123",
-                    "author": {
-                      "handle": "user",
-                      "name": "User",
-                      "url": "https://x.com/user"
-                    },
-                    "createdAt": "2026-09-30T12:00:00.000Z",
-                    "title": null,
-                    "text": "3/ and that is why the penguin wins.",
-                    "media": [],
-                    "links": [],
-                    "quoted": {
-                      "id": "100",
-                      "url": "https://x.com/other/status/100",
-                      "author": {
-                        "handle": "other",
-                        "name": "Other",
-                        "url": "https://x.com/other"
+                "examples": {
+                  "x": {
+                    "value": {
+                      "source": "twitter",
+                      "url": "https://x.com/user/status/123",
+                      "post": {
+                        "id": "123",
+                        "url": "https://x.com/user/status/123",
+                        "author": {
+                          "handle": "user",
+                          "name": "User",
+                          "url": "https://x.com/user"
+                        },
+                        "createdAt": "2026-09-30T12:00:00.000Z",
+                        "title": null,
+                        "text": "but they can swim",
+                        "media": [],
+                        "links": [],
+                        "quoted": {
+                          "id": "100",
+                          "url": "https://x.com/other/status/100",
+                          "author": {
+                            "handle": "other",
+                            "name": "Other",
+                            "url": "https://x.com/other"
+                          },
+                          "createdAt": "2026-09-29T08:00:00.000Z",
+                          "title": null,
+                          "text": "penguins cannot fly",
+                          "media": [],
+                          "links": [],
+                          "quoted": null,
+                          "parent": null,
+                          "stats": {
+                            "likes": 12,
+                            "reposts": 1,
+                            "replies": 3,
+                            "score": null,
+                            "views": 900
+                          },
+                          "flags": {
+                            "nsfw": false,
+                            "spoiler": false,
+                            "edited": false
+                          },
+                          "extra": {
+                            "lang": "en",
+                            "quotes": 1,
+                            "poll": null,
+                            "cardImage": null,
+                            "communityNote": null
+                          }
+                        },
+                        "parent": null,
+                        "stats": {
+                          "likes": 40,
+                          "reposts": 4,
+                          "replies": 2,
+                          "score": null,
+                          "views": 3100
+                        },
+                        "flags": {
+                          "nsfw": false,
+                          "spoiler": false,
+                          "edited": false
+                        },
+                        "extra": {
+                          "lang": "en",
+                          "quotes": 0,
+                          "poll": null,
+                          "cardImage": null,
+                          "communityNote": null
+                        }
                       },
-                      "createdAt": "2026-09-29T08:00:00.000Z",
-                      "title": null,
-                      "text": "penguins cannot fly",
-                      "media": [],
-                      "links": [],
-                      "quoted": null,
-                      "parent": null,
-                      "stats": {
-                        "likes": 12,
-                        "reposts": 1,
-                        "replies": 3,
-                        "score": null,
-                        "views": 900
-                      },
-                      "flags": {
-                        "nsfw": false,
-                        "spoiler": false,
-                        "edited": false
-                      },
-                      "extra": {}
-                    },
-                    "parent": {
-                      "id": "122",
-                      "url": "https://x.com/user/status/122",
-                      "author": {
-                        "handle": "user",
-                        "name": null,
-                        "url": "https://x.com/user"
-                      }
-                    },
-                    "stats": {
-                      "likes": 40,
-                      "reposts": 4,
-                      "replies": 2,
-                      "score": null,
-                      "views": 3100
-                    },
-                    "flags": {
-                      "nsfw": false,
-                      "spoiler": false,
-                      "edited": false
-                    },
-                    "extra": {
-                      "lang": "en"
+                      "thread": [],
+                      "comments": [],
+                      "truncated": false
                     }
                   },
-                  "thread": [
-                    {
-                      "id": "121",
-                      "text": "1/ a thread about penguins"
-                    },
-                    {
-                      "id": "122",
-                      "text": "2/ they are birds"
-                    },
-                    {
-                      "id": "123",
-                      "text": "3/ and that is why the penguin wins."
+                  "list": {
+                    "value": {
+                      "source": "list",
+                      "url": "https://open.spotify.com/album/...",
+                      "post": {
+                        "id": null,
+                        "url": "https://open.spotify.com/album/...",
+                        "author": {
+                          "handle": null,
+                          "name": "the penguins",
+                          "url": null
+                        },
+                        "createdAt": null,
+                        "title": "songs for penguins",
+                        "text": "an album by the penguins.",
+                        "media": [
+                          {
+                            "type": "image",
+                            "url": "https://i.scdn.co/image/...",
+                            "alt": null,
+                            "width": 640,
+                            "height": 640
+                          }
+                        ],
+                        "links": [],
+                        "quoted": null,
+                        "parent": null,
+                        "stats": {
+                          "likes": null,
+                          "reposts": null,
+                          "replies": null,
+                          "score": null,
+                          "views": null
+                        },
+                        "flags": {
+                          "nsfw": false,
+                          "spoiler": false,
+                          "edited": false
+                        },
+                        "extra": {
+                          "site": "Spotify",
+                          "type": "music.album",
+                          "language": "en",
+                          "description": null,
+                          "modifiedAt": null,
+                          "duration": null,
+                          "tags": [],
+                          "kind": "audio",
+                          "total": 2,
+                          "entries": [
+                            {
+                              "url": "https://open.spotify.com/track/...",
+                              "title": "ice",
+                              "artist": "the penguins",
+                              "duration": 192
+                            },
+                            {
+                              "url": "https://open.spotify.com/track/...",
+                              "title": "fish",
+                              "artist": "the penguins",
+                              "duration": 245
+                            }
+                          ]
+                        }
+                      },
+                      "thread": [],
+                      "comments": [],
+                      "truncated": false
                     }
-                  ],
-                  "comments": [],
-                  "truncated": false
+                  }
                 }
               },
               "text/plain": {
                 "schema": {
                   "type": "string"
                 },
-                "example": "twitter: https://x.com/user/status/123\n\n@user (User) · 2026-09-30 12:00\n1/ a thread about penguins\n"
+                "example": "twitter: https://x.com/user/status/123\n\n@user (User) · 2026-09-30 12:00\nbut they can swim\n> quoting https://x.com/other/status/100\n> @other (Other) · 2026-09-29 08:00\n> penguins cannot fly\n"
               }
             }
           },
@@ -371,7 +489,13 @@
           "404": {
             "$ref": "#/components/responses/Error"
           },
+          "413": {
+            "$ref": "#/components/responses/Error"
+          },
           "429": {
+            "$ref": "#/components/responses/Error"
+          },
+          "500": {
             "$ref": "#/components/responses/Error"
           },
           "502": {
@@ -425,7 +549,7 @@
         "properties": {
           "url": {
             "type": "string",
-            "description": "link or text containing a link"
+            "description": "link or text containing a link. short links and mirror domains are resolved first"
           },
           "mode": {
             "type": "string",
@@ -439,7 +563,7 @@
           },
           "end": {
             "type": "string",
-            "description": "trim end in seconds, m:ss, or h:mm:ss"
+            "description": "trim end in seconds, m:ss, or h:mm:ss. must be after start"
           },
           "split": {
             "type": "boolean",
@@ -496,6 +620,10 @@
                 },
                 "size": {
                   "type": ["integer", "null"]
+                },
+                "save": {
+                  "type": "string",
+                  "description": "direct lane only. the same file through dl.gronka.dev, sent as an attachment so it saves instead of opening; lasts one hour"
                 }
               }
             }
@@ -508,6 +636,7 @@
         "properties": {
           "error": {
             "type": "object",
+            "required": ["code", "message"],
             "properties": {
               "code": {
                 "type": "string",
@@ -520,8 +649,10 @@
                   "INTERNAL",
                   "NETWORK_ERROR",
                   "NOT_FOUND",
+                  "NO_SESSION",
                   "NO_VIDEO",
                   "RATE_LIMITED",
+                  "TIMED_OUT",
                   "TOO_LARGE",
                   "UNAUTHORIZED",
                   "UNSUPPORTED_SOURCE",
@@ -547,7 +678,7 @@
         "properties": {
           "url": {
             "type": "string",
-            "description": "link or text containing a link. reddit post or comment permalinks, /s/ share links, x.com, twitter.com and their embed mirrors"
+            "description": "link or text containing a link. short links (t.co, vm.tiktok.com, spotify.link, on.soundcloud.com and others) and mirror domains (fxtwitter.com, vxtwitter.com, kkinstagram.com and others) are resolved first"
           },
           "format": {
             "type": "string",
@@ -558,7 +689,7 @@
           "thread": {
             "type": "boolean",
             "default": true,
-            "description": "x only. follow the author's own replies upward from the linked post to rebuild the thread"
+            "description": "x and bluesky. follow the author's own replies around the linked post to rebuild the thread"
           },
           "depth": {
             "type": "integer",
@@ -572,7 +703,7 @@
             "minimum": 0,
             "maximum": 20,
             "default": 0,
-            "description": "replies to include, at most 20. off unless set"
+            "description": "reddit, x, bluesky and youtube. replies to include, at most 20. off unless set"
           },
           "transcript": {
             "oneOf": [
@@ -585,7 +716,7 @@
               }
             ],
             "default": false,
-            "description": "youtube only. adds post.extra.transcript: { language, generated, segments: [{ start, end, text }] }, or null when there are no captions. true picks the video's own language, a code like \"en\" picks that one"
+            "description": "youtube only. adds post.extra.transcript, or null when there are no captions in that language. true picks the video's own language, a code like \"en\" picks that one"
           },
           "turnstile": {
             "type": "string",
@@ -593,9 +724,119 @@
           }
         }
       },
+      "Author": {
+        "type": "object",
+        "required": ["handle", "name", "url"],
+        "properties": {
+          "handle": {
+            "type": ["string", "null"],
+            "description": "the @name or u/name, without the prefix"
+          },
+          "name": {
+            "type": ["string", "null"]
+          },
+          "url": {
+            "type": ["string", "null"]
+          }
+        }
+      },
+      "Media": {
+        "type": "object",
+        "required": ["type", "url", "alt", "width", "height"],
+        "properties": {
+          "type": {
+            "type": "string",
+            "enum": ["image", "video", "gif", "audio"]
+          },
+          "url": {
+            "type": "string"
+          },
+          "alt": {
+            "type": ["string", "null"]
+          },
+          "width": {
+            "type": ["integer", "null"]
+          },
+          "height": {
+            "type": ["integer", "null"]
+          },
+          "duration": {
+            "type": ["number", "null"],
+            "description": "video sites only: the video's length in seconds"
+          }
+        }
+      },
+      "Transcript": {
+        "type": "object",
+        "required": ["language", "generated", "segments"],
+        "properties": {
+          "language": {
+            "type": "string",
+            "description": "the caption track's language code"
+          },
+          "generated": {
+            "type": "boolean",
+            "description": "true for youtube's automatic captions; uploaded captions win when both exist"
+          },
+          "segments": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "required": ["start", "end", "text"],
+              "properties": {
+                "start": {
+                  "type": "number",
+                  "description": "seconds"
+                },
+                "end": {
+                  "type": "number",
+                  "description": "seconds"
+                },
+                "text": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        }
+      },
+      "ListEntry": {
+        "type": "object",
+        "required": ["url", "title", "artist", "duration"],
+        "properties": {
+          "url": {
+            "type": "string"
+          },
+          "title": {
+            "type": ["string", "null"]
+          },
+          "artist": {
+            "type": ["string", "null"],
+            "description": "the artist, or the channel or uploader for a video"
+          },
+          "duration": {
+            "type": ["number", "null"],
+            "description": "seconds"
+          }
+        }
+      },
       "Post": {
         "type": "object",
-        "required": ["id", "url", "author", "text", "media", "links", "stats"],
+        "required": [
+          "id",
+          "url",
+          "author",
+          "createdAt",
+          "title",
+          "text",
+          "media",
+          "links",
+          "quoted",
+          "parent",
+          "stats",
+          "flags",
+          "extra"
+        ],
         "properties": {
           "id": {
             "type": ["string", "null"]
@@ -604,19 +845,7 @@
             "type": ["string", "null"]
           },
           "author": {
-            "type": "object",
-            "properties": {
-              "handle": {
-                "type": ["string", "null"],
-                "description": "the @name or u/name, without the prefix"
-              },
-              "name": {
-                "type": ["string", "null"]
-              },
-              "url": {
-                "type": ["string", "null"]
-              }
-            }
+            "$ref": "#/components/schemas/Author"
           },
           "createdAt": {
             "type": ["string", "null"],
@@ -624,35 +853,16 @@
           },
           "title": {
             "type": ["string", "null"],
-            "description": "reddit post title"
+            "description": "a reddit post, x article, pin, video, list or page title"
           },
           "text": {
             "type": "string",
-            "description": "the body as plain text; reddit markdown is left as written"
+            "description": "the body as plain text; reddit markdown is left as written. for a page, the article text, else its description, at most 20000 characters"
           },
           "media": {
             "type": "array",
             "items": {
-              "type": "object",
-              "required": ["type", "url"],
-              "properties": {
-                "type": {
-                  "type": "string",
-                  "enum": ["image", "video", "gif"]
-                },
-                "url": {
-                  "type": "string"
-                },
-                "alt": {
-                  "type": ["string", "null"]
-                },
-                "width": {
-                  "type": ["integer", "null"]
-                },
-                "height": {
-                  "type": ["integer", "null"]
-                }
-              }
+              "$ref": "#/components/schemas/Media"
             }
           },
           "links": {
@@ -663,7 +873,7 @@
             "description": "outbound links in the text, a reddit link post's target included"
           },
           "quoted": {
-            "description": "the quoted post or crosspost parent",
+            "description": "the quoted post (x, bluesky) or crosspost original (reddit), one level deep",
             "oneOf": [
               {
                 "$ref": "#/components/schemas/Post"
@@ -686,19 +896,7 @@
               "author": {
                 "oneOf": [
                   {
-                    "type": "object",
-                    "properties": {
-                      "handle": {
-                        "type": ["string", "null"],
-                        "description": "the @name or u/name, without the prefix"
-                      },
-                      "name": {
-                        "type": ["string", "null"]
-                      },
-                      "url": {
-                        "type": ["string", "null"]
-                      }
-                    }
+                    "$ref": "#/components/schemas/Author"
                   },
                   {
                     "type": "null"
@@ -722,7 +920,7 @@
               },
               "score": {
                 "type": ["integer", "null"],
-                "description": "reddit net votes"
+                "description": "reddit net votes, booru score"
               },
               "views": {
                 "type": ["integer", "null"]
@@ -745,7 +943,35 @@
           },
           "extra": {
             "type": "object",
-            "description": "source fields that do not fit above: subreddit, flair, poll, article, communityNote, op, distinguished"
+            "description": "source fields that do not fit above. reddit: subreddit, flair, upvoteRatio, removed, poll; reddit comments: op, distinguished, stickied, awards. twitter: lang, quotes, poll, cardImage, communityNote. bluesky: lang, quotes. instagram: kind. threads: kind, quotes. tiktok: kind, music. booru: site, tags, rating, score, favorites, source, md5, fileSize, width, height, uploaderId. list: kind, total, entries, plus the page fields when the list's page could be read. video: site, duration, tags, categories, chapters, liveStatus, followers, transcript when asked. page: site, type, language, description, modifiedAt, duration, tags. pinterest sets none.",
+            "properties": {
+              "transcript": {
+                "description": "youtube, when transcript is asked for",
+                "oneOf": [
+                  {
+                    "$ref": "#/components/schemas/Transcript"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "kind": {
+                "type": "string",
+                "description": "list: video or audio. instagram and threads: photo, video or carousel. tiktok: video or photo"
+              },
+              "total": {
+                "type": "integer",
+                "description": "list: how many entries the list has, when the source says, else how many came back"
+              },
+              "entries": {
+                "type": "array",
+                "description": "list: up to 100 entries in order",
+                "items": {
+                  "$ref": "#/components/schemas/ListEntry"
+                }
+              }
+            }
           }
         }
       },
@@ -756,9 +982,11 @@
           },
           {
             "type": "object",
+            "required": ["depth", "replies"],
             "properties": {
               "depth": {
-                "type": "integer"
+                "type": "integer",
+                "description": "0 at the top of the tree"
               },
               "replies": {
                 "type": "array",
@@ -781,10 +1009,13 @@
               "twitter",
               "bluesky",
               "instagram",
+              "threads",
               "tiktok",
               "booru",
               "pinterest",
-              "video"
+              "list",
+              "video",
+              "page"
             ]
           },
           "url": {
@@ -799,18 +1030,18 @@
             "items": {
               "$ref": "#/components/schemas/Post"
             },
-            "description": "the author's own thread in order, the post included; empty when the post stands alone"
+            "description": "x and bluesky: the author's own thread in order, the post included; empty when the post stands alone"
           },
           "comments": {
             "type": "array",
             "items": {
               "$ref": "#/components/schemas/Comment"
             },
-            "description": "replies by others as a tree (reddit); always empty for x"
+            "description": "replies by others as a tree (reddit, x, bluesky, youtube); empty unless comments is set"
           },
           "truncated": {
             "type": "boolean",
-            "description": "true when depth, comments or thread caps dropped something"
+            "description": "true when something was left out: replies past the comments or depth caps or folded away by reddit, a thread walk that hit its cap or a post it could not read, x replies asked for with no session, or more than 100 list entries. reddit sets it only when comments were asked for; youtube sets it when as many comments came back as were asked for"
           }
         }
       }

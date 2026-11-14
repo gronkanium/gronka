@@ -21,6 +21,7 @@ import { isRedditPostUrl, hasRedditSession, resolveRedditPost } from '../utils/r
 import { convertToFormat } from '../utils/video-processor.js';
 import { fitsDiscordAttachment } from '../commands/shared/attachment-limit.js';
 import { youtubePostId, resolveYoutubePost } from '../utils/youtube-post.js';
+import { collectionOf, downloadCollection } from '../utils/collections.js';
 
 const logger = createLogger('acquire-media');
 
@@ -89,6 +90,7 @@ export async function acquireMedia(
     client = null,
     urlOnly = null,
     streamFirst = null,
+    collection = true,
   } = {}
 ) {
   url = canonicalizeMirrorUrl(url);
@@ -96,6 +98,13 @@ export async function acquireMedia(
     throw new ValidationError(BLOCKED_DESTINATION_MESSAGE);
   }
   const trimming = startTime !== null || duration !== null;
+  const list = collection && !trimming ? collectionOf(url) : null;
+  if (list) {
+    const fileData = await downloadCollection(url, list, entry =>
+      acquireMedia(entry, { attachmentLimit, client, urlOnly: false, collection: false })
+    );
+    return { kind: 'file', fileData, downloadMethod: 'collection', url };
+  }
   // Every extractor tried and why it failed, in order; the final error carries it for recordFailure.
   const trail = [];
   const note = (step, error) => trail.push({ step, error: describeCause(rootCause(error)) });

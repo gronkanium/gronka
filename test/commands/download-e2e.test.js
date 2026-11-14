@@ -216,6 +216,13 @@ if (!mocksSupported) {
       getYtdlpSite: () => null,
       getCookieArgs: () => [],
       ONE_ITEM: [],
+      ytdlpEntries: async () => ({
+        title: 'Mix',
+        total: 37,
+        entries: ['aaaaaaaaaaa', 'bbbbbbbbbbb'].map(id => ({
+          url: `https://www.youtube.com/watch?v=${id}`,
+        })),
+      }),
       downloadWithYtdlp: async url => {
         const u = url || '';
         if (u.includes('photo-fallback')) {
@@ -695,6 +702,18 @@ if (!mocksSupported) {
       assert.ok(reply.files[0].name.endsWith('.mp4'), 'attachment has .mp4 filename');
       assert.strictEqual(reply.content, '');
       assert.equal(reply.embeds, undefined);
+    });
+
+    test('a youtube playlist replies once with each video and says the list was cut', async () => {
+      const url = 'https://www.youtube.com/playlist?list=PLe2e';
+      const { interaction, calls } = downloadInteraction(url, 'e2e-dl-playlist');
+
+      await handleDownloadCommand(interaction);
+
+      assert.strictEqual(calls.editReply.length, 1, 'exactly one reply');
+      const reply = calls.editReply[0];
+      assert.strictEqual(reply.files?.length, 2, 'one attachment per video');
+      assert.ok(reply.content.includes('the first 2 of 37 videos.'), reply.content);
     });
 
     test('multi-file picker: downloads array and replies with multiple attachments', async () => {

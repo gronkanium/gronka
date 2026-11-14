@@ -27,7 +27,7 @@ function spotifyLink(url) {
     ) ?? [];
   if (!id) {
     throw new ValidationError(
-      'only spotify track and episode links work: albums, playlists, artists and shows are not supported.'
+      'only spotify track, episode, album and playlist links work: artists and shows are not supported.'
     );
   }
   return { kind, id };
@@ -70,6 +70,46 @@ export async function spotifyEpisode(url) {
     title: decode(title),
     show,
     year: meta(html, 'music:release_date')?.slice(0, 4) ?? null,
+  };
+}
+
+// The public page renders its track list in the browser; the embed ships it, up to 100 entries.
+export async function spotifyTracks(kind, id) {
+  const failMessage = `couldn't read that spotify ${kind} right now.`;
+  const { data: html } = await fetchPage(`https://open.spotify.com/embed/${kind}/${id}`, {
+    failMessage,
+  });
+  let entity;
+  try {
+    const next = /<script id="__NEXT_DATA__" type="application\/json">([\s\S]*?)<\/script>/.exec(
+      html
+    );
+    entity = JSON.parse(next[1]).props.pageProps.state.data.entity;
+  } catch {
+    entity = null;
+  }
+  if (!Array.isArray(entity?.trackList)) {
+    throw withCause(
+      new NetworkError(failMessage),
+      `spotify: ${kind} ${id} embed has no track list`
+    );
+  }
+  return {
+    title: entity.name ?? null,
+    total: null,
+    entries: entity.trackList.flatMap(track => {
+      const [, type, trackId] =
+        /^spotify:(track|episode):([A-Za-z0-9]{22})$/.exec(track.uri ?? '') ?? [];
+      if (!trackId) return [];
+      return [
+        {
+          url: `https://open.spotify.com/${type}/${trackId}`,
+          title: track.title ?? null,
+          artist: track.subtitle ?? null,
+          duration: track.duration ? Math.round(track.duration / 1000) : null,
+        },
+      ];
+    }),
   };
 }
 

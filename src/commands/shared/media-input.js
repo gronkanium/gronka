@@ -15,7 +15,7 @@ async function fetchLink(url, client) {
   if (!source || source.id === 'direct') {
     return downloadDirectMedia(url, client);
   }
-  const result = await acquireMedia(url, { client, urlOnly: false });
+  const result = await acquireMedia(url, { client, urlOnly: false, collection: false });
   if (result.kind === 'urls') return downloadDirectMedia(result.urls[0].url);
   return Array.isArray(result.fileData) ? result.fileData[0] : result.fileData;
 }

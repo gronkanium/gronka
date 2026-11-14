@@ -30,8 +30,8 @@ const PLATFORMS = [
   {
     slug: 'youtube',
     name: 'youtube',
-    title: 'youtube downloader: videos, shorts and audio',
-    desc: 'save a youtube video, a short, or just the audio as an mp3. trim to the part you want. free, no ads, no account, no request logs.',
+    title: 'youtube downloader: videos, shorts, playlists and audio',
+    desc: 'save a youtube video or short, the first 10 videos of a playlist, or just the audio as an mp3. trim to the part you want. free, no ads, no account, no request logs.',
     placeholder: 'paste a youtube link',
   },
   {
@@ -63,9 +63,9 @@ const MORE = [
   ['snapchat', 'snapchat', 'videos'],
   ['tumblr', 'tumblr', 'videos'],
   ['twitch', 'twitch', 'clips'],
-  ['soundcloud', 'soundcloud', 'tracks as audio'],
-  ['spotify', 'spotify', 'tracks and podcast episodes as audio'],
-  ['apple-music', 'apple music', 'songs as audio'],
+  ['soundcloud', 'soundcloud', 'tracks and sets as audio'],
+  ['spotify', 'spotify', 'tracks, albums, playlists and podcast episodes as audio'],
+  ['apple-music', 'apple music', 'songs and albums as audio'],
   ['streamable', 'streamable', 'videos'],
   ['dailymotion', 'dailymotion', 'videos'],
   ['imgur', 'imgur', 'videos'],

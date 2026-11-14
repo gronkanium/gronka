@@ -300,7 +300,8 @@ async function downloadInJob({
   }
   const { fileData } = acquired;
   const note = fileData?.note ? { note: fileData.note } : {};
-  if (audio) {
+  // An album is already a zip of tagged tracks.
+  if (audio && !(fileData.archive && fileData.audioReady)) {
     const { file, baseName, format } = await extractAudio(fileData, {
       startTime,
       duration,

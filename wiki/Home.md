@@ -20,6 +20,7 @@ download media from social platforms using the `/download` command:
 - soundcloud
 - spotify tracks and apple music songs: the same recording from jiosaavn at 320k when it lists it, otherwise the artist's own youtube upload, untouched and tagged with the cover (their own audio is drm-only)
 - spotify podcast episodes: the episode's own file from the show's public feed, tagged with the cover (shows only on spotify are drm-only)
+- playlists and albums: a youtube playlist sends its first 10 videos; a soundcloud set, spotify album or playlist, or apple music album sends up to 25 tracks as one numbered zip. the reply says when a list was cut short or a track couldn't be found. a link to one video inside a playlist downloads just that video, and profiles are never downloaded as lists
 - tumblr
 - streamable
 - dailymotion

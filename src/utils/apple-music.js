@@ -21,7 +21,7 @@ export async function appleMusicTrack(url) {
     : /^\/[a-z]{2}\/song\/(?:[^/]+\/)?(\d+)$/.exec(pathname)?.[1];
   if (!store || !id) {
     throw new ValidationError(
-      'only apple music song links work: albums, playlists and artists are not supported.'
+      'only apple music song and album links work: playlists and artists are not supported.'
     );
   }
   const failMessage = "couldn't read that apple music song right now.";
@@ -48,6 +48,28 @@ export async function appleMusicTrack(url) {
     year: song.datePublished?.slice(0, 4) ?? null,
     genre: song.genre?.find(genre => genre !== 'Music') ?? null,
     cover: song.image?.replace(/\/\d+x\d+bb(\.\w+)?$/, '/600x600bb.jpg') ?? null,
+  };
+}
+
+export async function appleAlbumTracks(store, id) {
+  const { data } = await fetchPage(
+    `https://itunes.apple.com/lookup?id=${id}&entity=song&country=${store}&limit=200`,
+    { failMessage: "couldn't read that apple music album right now.", responseType: 'json' }
+  );
+  const results = data?.results ?? [];
+  const album = results.find(result => result.wrapperType === 'collection');
+  const songs = results
+    .filter(result => result.wrapperType === 'track' && result.trackViewUrl)
+    .sort((a, b) => a.discNumber - b.discNumber || a.trackNumber - b.trackNumber);
+  return {
+    title: album?.collectionName ?? null,
+    total: album?.trackCount ?? null,
+    entries: songs.map(song => ({
+      url: song.trackViewUrl,
+      title: song.trackName ?? null,
+      artist: song.artistName ?? null,
+      duration: song.trackTimeMillis ? Math.round(song.trackTimeMillis / 1000) : null,
+    })),
   };
 }
 

@@ -672,6 +672,35 @@ export async function getStreamInfo(rawUrl, timeout = 30000) {
   };
 }
 
+// A playlist or set, listed without downloading anything: each entry's own link, in order.
+export async function ytdlpEntries(url, max) {
+  const args = ['--ignore-config', '--flat-playlist', '-J', '--playlist-items', `1:${max}`]
+    .concat(['--no-warnings', ...getCookieArgs(url), ...getYouTubeArgs(url), ...getSiteArgs(url)])
+    .concat(['--', url]);
+  const { stdout } = await execFileAsync('yt-dlp', args, {
+    timeout: 60_000,
+    maxBuffer: 64 * 1024 * 1024,
+    signal: jobSignal(),
+  }).catch(error => {
+    const output = String(error.stderr ?? '');
+    const line = output.split('\n').find(text => text.startsWith('ERROR'));
+    throw withCause(classifyYtdlpFailure(output, url), line ?? `yt-dlp listing: ${error.message}`);
+  });
+  const list = JSON.parse(stdout);
+  return {
+    title: list.title ?? null,
+    total: list.playlist_count ?? null,
+    entries: (list.entries ?? [])
+      .filter(entry => entry.url)
+      .map(entry => ({
+        url: entry.url,
+        title: entry.title ?? null,
+        artist: entry.channel ?? entry.uploader ?? null,
+        duration: entry.duration ?? null,
+      })),
+  };
+}
+
 const FIT_HEIGHTS = [1080, 720, 480];
 // -f filters judge each part alone; only the printed filesize_approx is the merged total.
 const KNOWN_SIZE_FORMAT = 'bv*[filesize_approx>0]+ba[filesize_approx>0]/b[filesize_approx>0]';

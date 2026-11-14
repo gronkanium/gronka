@@ -5,6 +5,7 @@ import {
   isSpotifyUrl,
   spotifyTrack,
   spotifyEpisode,
+  spotifyTracks,
   feedEpisode,
 } from '../../src/utils/spotify.js';
 
@@ -52,21 +53,58 @@ describe('spotify', () => {
     });
   });
 
-  test('albums, playlists, shows and artists are refused before any request', async () => {
+  test('shows and artists are refused before any request', async () => {
     spy = spyOn(axios, 'get');
     for (const url of [
-      'https://open.spotify.com/album/2jgKK8iIX83mPrCyDhvEdf',
-      'https://open.spotify.com/intl-fr/playlist/37i9dQZF1DXcBWIGoYBM5M?si=x',
       'https://open.spotify.com/show/4rOoJ6Egrf8K2IrywzwOMk',
       'https://open.spotify.com/artist/5v2WhpA59TJSdPh7LCx1lN',
       'https://spotify.link/unresolved',
     ]) {
       await assert.rejects(spotifyTrack(url), {
         name: 'ValidationError',
-        message: /track and episode links/,
+        message: /artists and shows are not supported/,
       });
     }
     assert.strictEqual(spy.mock.calls.length, 0);
+  });
+
+  test("an album's embed lists its tracks and episodes in order", async () => {
+    const entity = {
+      name: 'Mix',
+      trackList: [
+        {
+          uri: 'spotify:track:6OmhkSOpvYBokMKQxpIGx2',
+          title: 'Global Warming',
+          subtitle: 'Pitbull',
+          duration: 85400,
+        },
+        { uri: 'spotify:local:junk' },
+        { uri: 'spotify:episode:4rOoJ6Egrf8K2IrywzwOMk' },
+      ],
+    };
+    const next = JSON.stringify({ props: { pageProps: { state: { data: { entity } } } } });
+    spy = spyOn(axios, 'get').mockResolvedValue({
+      status: 200,
+      data: `<script id="__NEXT_DATA__" type="application/json">${next}</script>`,
+    });
+    assert.deepStrictEqual(await spotifyTracks('album', '2jgKK8iIX83mPrCyDhvEdf'), {
+      title: 'Mix',
+      total: null,
+      entries: [
+        {
+          url: 'https://open.spotify.com/track/6OmhkSOpvYBokMKQxpIGx2',
+          title: 'Global Warming',
+          artist: 'Pitbull',
+          duration: 85,
+        },
+        {
+          url: 'https://open.spotify.com/episode/4rOoJ6Egrf8K2IrywzwOMk',
+          title: null,
+          artist: null,
+          duration: null,
+        },
+      ],
+    });
   });
 
   test('reads the episode page for its title and show', async () => {

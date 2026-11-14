@@ -54,17 +54,16 @@ describe('apple music', () => {
     assert.strictEqual(spy.mock.calls[0][0], 'https://music.apple.com/gb/song/1440825626');
   });
 
-  test('albums, playlists and artists are refused before any request', async () => {
+  test('playlists and artists are refused before any request', async () => {
     spy = spyOn(axios, 'get');
     for (const url of [
-      'https://music.apple.com/us/album/full-moon-fever/1440825367',
       'https://music.apple.com/us/playlist/a/pl.u-abc',
       'https://music.apple.com/us/artist/tom-petty/5072272',
       'https://music.apple.com/us/music-video/a/1',
     ]) {
       await assert.rejects(appleMusicTrack(url), {
         name: 'ValidationError',
-        message: /song links/,
+        message: /playlists and artists are not supported/,
       });
     }
     assert.strictEqual(spy.mock.calls.length, 0);

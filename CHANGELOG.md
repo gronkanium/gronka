@@ -5,6 +5,29 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and versions are release dates (`YYYY.MM.DD`, `.N` for a later release the same day).
 
+## [5.1.0](https://github.com/gronkanium/gronka/compare/v5.0.1...v5.1.0) (2026-11-14)
+
+
+### Features
+
+* **content:** read any web page, playlists and albums, and threads posts ([b64f199](https://github.com/gronkanium/gronka/commit/b64f199be0ece256360759caba71ad5aa7773ce3))
+* **download:** hentai haven episodes, with old .com and series links sent to episode 1 ([143f09a](https://github.com/gronkanium/gronka/commit/143f09abd8657ec1cc955d4b5279cb6f347a7c8b))
+* **download:** hentaigasm, bigassporn, gayporno.fm, xHamster mirrors, yurisex links ([591ae4f](https://github.com/gronkanium/gronka/commit/591ae4ffff1d02667cc479def4449b8a9f5069d5))
+* **download:** playlists and albums: a playlist's first 10 videos, or up to 25 tracks as one zip ([6e762a5](https://github.com/gronkanium/gronka/commit/6e762a5dafb53a803cf65ed09a0ad4d808db93c1))
+* **download:** region-blocked videos retry through a Mullvad relay in an allowed country ([1023c48](https://github.com/gronkanium/gronka/commit/1023c48559c1e25d0448ca30fb2b3ab839b3e6a6))
+* **download:** Spotify podcast episodes from the show's public feed ([fea7392](https://github.com/gronkanium/gronka/commit/fea73924426942fa531380813bb5a9108b3e4582))
+* **webui:** skeleton loaders for the bot page, stats, charts and status pills ([238290b](https://github.com/gronkanium/gronka/commit/238290bc8c8105a7faffddf9f38adfb9ea270df4))
+
+
+### Bug Fixes
+
+* **content:** resolve short and mirror links first, and only call a read truncated when comments were asked for ([db3901c](https://github.com/gronkanium/gronka/commit/db3901c938322a458a7f163d6ce6a92b6383c883))
+* **content:** t.co links resolve to what they point at, and a youtube read is truncated only when comments were left out ([1259375](https://github.com/gronkanium/gronka/commit/12593752296d1416c7eda509e9646961214f99ec))
+* **links:** a Google image result opens its page when a source reads it ([87e3036](https://github.com/gronkanium/gronka/commit/87e3036d8cb72532cfc7af4e7f4bb79432538b1d))
+* **pinterest:** retry a slow pin.it hop and record why it failed ([f8a6bf5](https://github.com/gronkanium/gronka/commit/f8a6bf5762b0c9ebeeb696403e265f668f7c01bd))
+* **x:** report a refused X session instead of a logged-out "no video" ([8b2a2bb](https://github.com/gronkanium/gronka/commit/8b2a2bba8fd4dd75baaa3796db769511903cd098))
+* **ytdlp:** name region-blocked videos instead of retrying them ([c8c9913](https://github.com/gronkanium/gronka/commit/c8c99138439e38421b939d5a88edbcbff7107cf6))
+
 ## [5.0.1](https://github.com/gronkanium/gronka/compare/v5.0.0...v5.0.1) (2026-11-11)
 
 

@@ -425,6 +425,16 @@ describe('content', () => {
     expect(await text.text()).toBe('twitter: https://x.com/a/status/1\n\n@a (A)\nhi\n');
   });
 
+  test('a mirror link is read as the post it mirrors', async () => {
+    let seen;
+    const handle = createHandler({
+      verify: ok,
+      content: async url => ((seen = url), sample),
+    });
+    await handle(postContent({ ...body, url: 'https://fxtwitter.com/a/status/1' }));
+    expect(seen).toBe('https://twitter.com/a/status/1');
+  });
+
   test('source errors use the http status; unknown errors are curated', async () => {
     const { NetworkError, AppError } = await import('../../src/utils/errors.js');
     const failing = error =>

@@ -644,7 +644,7 @@ export function createHandler({
     );
     let result;
     try {
-      result = await content(request.url, request);
+      result = await content(await prepareLink(request.url), request);
     } catch (error) {
       // No padding here: a read is quick, so the http status carries the outcome.
       const { status, error: apiErr } = toApiError(error, request.url, CONTENT_FALLBACK);

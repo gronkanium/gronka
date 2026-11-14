@@ -187,7 +187,7 @@ export function normalizeRedditListing(listing, url, { depth, comments } = {}) {
       url,
       post: subject,
       comments: replies,
-      truncated: state.truncated,
+      truncated: budget.comments > 0 && state.truncated,
     });
   }
 
@@ -210,7 +210,7 @@ export function normalizeRedditListing(listing, url, { depth, comments } = {}) {
     url,
     post: normalizeRedditPost(data),
     comments: tree,
-    truncated: state.truncated,
+    truncated: budget.comments > 0 && state.truncated,
   });
 }
 

@@ -219,6 +219,12 @@ describe('normalizeRedditListing', () => {
     expect(stub.truncated).toBe(true);
   });
 
+  test('a post read without comments is not called truncated', () => {
+    const out = normalizeRedditListing(listing(post(), [...tree, more(40)]), POST_URL, {});
+    expect(out.comments).toEqual([]);
+    expect(out.truncated).toBe(false);
+  });
+
   test('a comment permalink makes that comment the subject and its replies the tree', () => {
     const out = normalizeRedditListing(listing(post(), [tree[0]]), `${POST_URL}c1/`, {
       comments: 20,

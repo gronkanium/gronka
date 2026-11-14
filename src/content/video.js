@@ -275,6 +275,6 @@ export async function fetchVideoThread(
     url: subject.url,
     post: subject,
     comments: replies.slice(0, want).map(commentOf),
-    truncated: want > 0 && replies.length >= want,
+    truncated: want > 0 && (info.comment_count ?? 0) > Math.min(replies.length, want),
   });
 }

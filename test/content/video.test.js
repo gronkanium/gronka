@@ -131,6 +131,14 @@ describe('fetchVideoThread', () => {
     expect(result.truncated).toBe(true);
   });
 
+  test('a video whose every comment came back is not truncated', async () => {
+    const comments = [1, 2].map(i => ({ id: `c${i}`, text: 'hi', parent: 'root' }));
+    const read = comment_count =>
+      fetchVideoThread(url, { comments: 2, runner: runnerOf(info({ comments, comment_count })) });
+    expect((await read(2)).truncated).toBe(false);
+    expect((await read(3)).truncated).toBe(true);
+  });
+
   test('comments are ignored off YouTube', async () => {
     const calls = [];
     await fetchVideoThread('https://soundcloud.com/a/b', {

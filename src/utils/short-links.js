@@ -9,6 +9,7 @@ const logger = createLogger('short-links');
 
 const SHORT_LINK_HOSTS = new Set([
   'share.google',
+  't.co',
   'vm.tiktok.com',
   'vt.tiktok.com',
   'b23.tv',

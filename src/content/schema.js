@@ -86,6 +86,11 @@ function postLines(item, indent = '') {
   for (const media of item.media ?? []) {
     lines.push(`${indent}[${media.type}] ${media.url}${media.alt ? ` (${media.alt})` : ''}`);
   }
+  for (const [index, entry] of (item.extra?.entries ?? []).entries()) {
+    const name = [entry.artist, entry.title].filter(Boolean).join(' - ') || entry.url;
+    const length = entry.duration ? ` (${clock(entry.duration)})` : '';
+    lines.push(`${indent}${index + 1}. ${name}${length} ${entry.url}`);
+  }
   if (item.extra?.transcript?.segments?.length) {
     lines.push(`${indent}--- transcript (${item.extra.transcript.language}) ---`);
     for (const seg of item.extra.transcript.segments) {

@@ -53,40 +53,49 @@ function findPost(value, code) {
   return null;
 }
 
-// Every slide of the post, in order; null when the page does not carry that post at all.
-export function extractThreadsMedia(html, code) {
+function postIn(html, code) {
   for (const match of html.matchAll(
     /<script type="application\/json"[^>]*>([\s\S]*?)<\/script>/g
   )) {
     if (!match[1].includes(`"code":"${code}"`)) continue;
-    let post;
     try {
-      post = findPost(JSON.parse(match[1]), code);
+      const post = findPost(JSON.parse(match[1]), code);
+      if (post) return post;
     } catch {
       continue;
     }
-    if (!post) continue;
-    const items = post.carousel_media?.length ? post.carousel_media : [post];
-    return items.map(item => selectMediaUrl(item)).filter(Boolean);
   }
   return null;
 }
 
-export async function downloadFromThreads(url) {
+const mediaOf = post =>
+  (post.carousel_media?.length ? post.carousel_media : [post])
+    .map(item => selectMediaUrl(item))
+    .filter(Boolean);
+
+// Every slide of the post, in order; null when the page does not carry that post at all.
+export function extractThreadsMedia(html, code) {
+  const post = postIn(html, code);
+  return post ? mediaOf(post) : null;
+}
+
+export async function fetchThreadsPost(url) {
   const code = threadsPostCode(url);
   const response = await fetchPage(url, {
     failMessage: 'failed to reach threads',
     headers: NAVIGATION_HEADERS,
   });
+  const post = postIn(String(response.data ?? ''), code);
+  if (!post) throw contentGone('threads: page had no post data');
+  return post;
+}
 
-  const mediaUrls = extractThreadsMedia(response.data, code);
-  if (mediaUrls === null) {
-    throw contentGone('threads: page had no post data');
-  }
+export async function downloadFromThreads(url) {
+  const mediaUrls = mediaOf(await fetchThreadsPost(url));
   if (mediaUrls.length === 0) {
     throw new ValidationError('this threads post has no photo or video to download');
   }
-  logger.debug(`Threads post ${code}: ${mediaUrls.length} media item(s)`);
+  logger.debug(`Threads post ${threadsPostCode(url)}: ${mediaUrls.length} media item(s)`);
   const files = await Promise.all(mediaUrls.map(mediaUrl => downloadFileFromUrl(mediaUrl)));
   return files.length === 1 ? files[0] : files;
 }

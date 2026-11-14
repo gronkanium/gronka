@@ -7,6 +7,9 @@ import { isTiktokContentUrl, fetchTiktokThread, TIKTOK_LIMITS } from './tiktok.j
 import { isBooruContentUrl, fetchBooruThread, BOORU_LIMITS } from './booru.js';
 import { isPinterestContentUrl, fetchPinterestThread, PINTEREST_LIMITS } from './pinterest.js';
 import { isVideoContentUrl, fetchVideoThread, VIDEO_LIMITS } from './video.js';
+import { isListContentUrl, fetchListThread, LIST_LIMITS } from './list.js';
+import { isThreadsContentUrl, fetchThreadsThread, THREADS_LIMITS } from './threads.js';
+import { isPageContentUrl, fetchPageThread, PAGE_LIMITS } from './page.js';
 import { toPlainText } from './schema.js';
 
 export { toPlainText } from './schema.js';
@@ -46,6 +49,14 @@ export const CONTENT_SOURCES = [
     limits: INSTAGRAM_LIMITS,
   },
   {
+    id: 'threads',
+    label: 'Threads',
+    match: isThreadsContentUrl,
+    fetch: fetchThreadsThread,
+    options: [],
+    limits: THREADS_LIMITS,
+  },
+  {
     id: 'tiktok',
     label: 'TikTok',
     match: isTiktokContentUrl,
@@ -69,7 +80,15 @@ export const CONTENT_SOURCES = [
     options: [],
     limits: PINTEREST_LIMITS,
   },
-  // Last: any other site yt-dlp knows, read as video metadata.
+  // Before video: a YouTube playlist is a list, not its first video.
+  {
+    id: 'list',
+    label: 'Playlists and albums',
+    match: isListContentUrl,
+    fetch: fetchListThread,
+    options: [],
+    limits: LIST_LIMITS,
+  },
   {
     id: 'video',
     label: 'Video sites',
@@ -77,6 +96,15 @@ export const CONTENT_SOURCES = [
     fetch: fetchVideoThread,
     options: ['comments', 'transcript'],
     limits: VIDEO_LIMITS,
+  },
+  // Last: any other web page, read from its own metadata and article text.
+  {
+    id: 'page',
+    label: 'Web pages',
+    match: isPageContentUrl,
+    fetch: fetchPageThread,
+    options: [],
+    limits: PAGE_LIMITS,
   },
 ];
 
@@ -93,11 +121,7 @@ export function getContentSourceForUrl(url) {
 export async function fetchContent(url, options = {}) {
   const source = getContentSourceForUrl(url);
   if (!source) {
-    throw new AppError(
-      `content is only available for ${CONTENT_SOURCES.map(s => s.label.toLowerCase()).join(' and ')} posts.`,
-      'UNSUPPORTED_SOURCE',
-      400
-    );
+    throw new AppError("content isn't available for that link.", 'UNSUPPORTED_SOURCE', 400);
   }
   const key = JSON.stringify([
     url,

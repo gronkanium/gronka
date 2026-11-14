@@ -44,6 +44,7 @@ export default [
         clearTimeout: 'readonly',
         fetch: 'readonly',
         Bun: 'readonly',
+        HTMLRewriter: 'readonly',
         Request: 'readonly',
         Response: 'readonly',
         ReadableStream: 'readonly',

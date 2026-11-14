@@ -17,6 +17,7 @@ import {
 } from '../utils/ytdlp.js';
 import { post, comment, thread, isoDate, linksIn, MAX_COMMENTS } from './schema.js';
 import { SITES, siteHosts } from '../core/sites.js';
+import { isDirectMediaUrl } from '../utils/file-downloader.js';
 
 const logger = createLogger('content-video');
 const execFileAsync = promisify(execFile);
@@ -43,8 +44,9 @@ function siteOf(url) {
   return getYtdlpSite(url) ?? EXTRA_SITES.find(s => hostUnder(host, s.hosts))?.name ?? null;
 }
 
+// A direct file on a video host (i.imgur.com/x.jpg) is a file, not a video page.
 export function isVideoContentUrl(url) {
-  return siteOf(url) !== null;
+  return siteOf(url) !== null && !isDirectMediaUrl(url);
 }
 
 // The download table decides; only "not a video page" becomes this reader's own 400.
@@ -193,8 +195,8 @@ export function normalizeVideo(info, url, site) {
       tags: (info.tags ?? []).slice(0, VIDEO_LIMITS.tags),
       categories: info.categories ?? [],
       chapters: (info.chapters ?? []).map(c => ({ title: c.title, start: c.start_time })),
-      live_status: info.live_status ?? null,
-      channel_follower_count: info.channel_follower_count ?? null,
+      liveStatus: info.live_status ?? null,
+      followers: info.channel_follower_count ?? null,
     },
   });
 }

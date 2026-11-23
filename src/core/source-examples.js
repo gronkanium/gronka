@@ -52,6 +52,16 @@ export const SOURCE_EXAMPLES = [
     expect: { type: 'video' },
   },
   {
+    site: 'vk',
+    url: 'https://vk.com/video-77521_162222515',
+    expect: { type: 'video' },
+  },
+  {
+    site: 'xiaohongshu',
+    url: 'https://www.xiaohongshu.com/explore/6411cf99000000001300b6d9',
+    expect: { type: 'video' },
+  },
+  {
     site: 'niconico',
     url: 'https://www.nicovideo.jp/watch/sm9',
     expect: { type: 'video' },
@@ -65,6 +75,11 @@ export const SOURCE_EXAMPLES = [
     site: 'bandcamp',
     url: 'https://youtube-dl.bandcamp.com/track/youtube-dl-test-song',
     expect: { type: 'audio' },
+  },
+  {
+    site: 'internet-archive',
+    url: 'https://archive.org/details/Cops1922',
+    expect: { type: 'video' },
   },
   {
     site: 'bunny',
@@ -149,6 +164,61 @@ export const SOURCE_EXAMPLES = [
   {
     site: 'redtube',
     url: 'https://www.redtube.com/800741',
+    expect: { type: 'video' },
+  },
+  {
+    site: 'xhamster',
+    url: 'https://xhamster.com/videos/femaleagent-shy-beauty-takes-the-bait-1509445',
+    expect: { type: 'video' },
+  },
+  {
+    site: '3movs',
+    url: 'https://www.3movs.com/videos/468692/paige-owens-shows-off-her-gaping-pussy-while-cumming/',
+    expect: { type: 'video' },
+  },
+  {
+    site: 'xcafe',
+    url: 'https://xcafe.com/374363/',
+    expect: { type: 'video' },
+  },
+  {
+    site: 'gayporno',
+    url: 'https://gayporno.fm/under-the-surface-with-ryder_2944736.html',
+    expect: { type: 'video' },
+  },
+  {
+    site: 'bigassporn',
+    url: 'https://bigassporn.tv/videos/10615/inked-girl-liya-silver-gorges-on-a-big-dick/',
+    expect: { type: 'video' },
+  },
+  {
+    site: 'rule34video',
+    url: 'https://rule34video.com/video/3065157/shot-it-mmd-hmv/',
+    expect: { type: 'video' },
+  },
+  {
+    site: 'hentaihaven',
+    url: 'https://hentaihaven.xxx/watch/aisai-nikki/episode-1/',
+    expect: { type: 'video' },
+  },
+  {
+    site: 'hentaigasm',
+    url: 'https://hentaigasm.com/akuryou-taisan-onegai-iro-kamisama-1-subbed/',
+    expect: { type: 'video' },
+  },
+  {
+    site: 'rule34',
+    url: 'https://rule34.xxx/index.php?page=post&s=view&id=1000',
+    expect: { type: 'image' },
+  },
+  {
+    site: 'gallery-dl-erome',
+    url: 'https://www.erome.com/a/WuMJEvLU',
+    expect: { type: 'video' },
+  },
+  {
+    site: 'gallery-dl-gofile',
+    url: 'https://gofile.io/d/OR0c1oUW',
     expect: { type: 'video' },
   },
   {

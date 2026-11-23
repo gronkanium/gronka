@@ -67,4 +67,10 @@ describe('source checks', () => {
       urls.add(example.url);
     }
   });
+
+  test('every site has a nightly example, except file hosts with no small public file', () => {
+    const covered = new Set(SOURCE_EXAMPLES.map(e => e.site));
+    const missing = DOWNLOAD_SERVICES.map(s => s.id).filter(id => !covered.has(id));
+    assert.deepStrictEqual(missing.sort(), ['jumpshare', 'mega']);
+  });
 });

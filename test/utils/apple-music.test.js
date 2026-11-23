@@ -3,20 +3,21 @@ import assert from 'node:assert';
 import axios from 'axios';
 import { isAppleMusicUrl, appleMusicTrack } from '../../src/utils/apple-music.js';
 
-const SONG = {
-  '@type': 'MusicComposition',
-  name: 'Love Is a Long Road',
-  audio: {
-    name: 'Love Is a Long Road',
-    datePublished: '1989-04-24',
-    duration: 'PT4M7S',
-    image:
-      'https://is1-ssl.mzstatic.com/image/thumb/Music112/v4/f3/06UMGIM04214.rgb.jpg/1200x630bb.jpg',
-    byArtist: [{ '@type': 'MusicGroup', name: 'Tom Petty' }],
-    genre: ['Rock', 'Music'],
-  },
+const LOOKUP = {
+  resultCount: 1,
+  results: [
+    {
+      wrapperType: 'track',
+      trackName: 'Love Is a Long Road',
+      artistName: 'Tom Petty',
+      trackTimeMillis: 247_093,
+      releaseDate: '1989-04-24T07:00:00Z',
+      primaryGenreName: 'Rock',
+      artworkUrl100:
+        'https://is1-ssl.mzstatic.com/image/thumb/Music112/v4/f3/06UMGIM04214.rgb.jpg/100x100bb.jpg',
+    },
+  ],
 };
-const PAGE = `<html><head><script id=schema:song type="application/ld+json">${JSON.stringify(SONG)}</script></head></html>`;
 
 describe('apple music', () => {
   let spy;
@@ -29,12 +30,15 @@ describe('apple music', () => {
     assert.ok(!isAppleMusicUrl('https://podcasts.apple.com/us/podcast/a/id1'));
   });
 
-  test('an album link with ?i= reads that song page for title, artist, length and cover', async () => {
-    spy = spyOn(axios, 'get').mockResolvedValue({ data: PAGE });
+  test('an album link with ?i= looks that song up for title, artist, length and cover', async () => {
+    spy = spyOn(axios, 'get').mockResolvedValue({ data: LOOKUP });
     const track = await appleMusicTrack(
       'https://music.apple.com/us/album/love-is-a-long-road/1440825367?i=1440825626'
     );
-    assert.strictEqual(spy.mock.calls[0][0], 'https://music.apple.com/us/song/1440825626');
+    assert.strictEqual(
+      spy.mock.calls[0][0],
+      'https://itunes.apple.com/lookup?id=1440825626&country=us'
+    );
     assert.ok(spy.mock.calls[0][1].lookup);
     assert.deepStrictEqual(track, {
       site: 'apple music',
@@ -48,10 +52,20 @@ describe('apple music', () => {
     });
   });
 
+  test('a length is whole seconds rounded down, as the song page shows it', async () => {
+    const song = { ...LOOKUP.results[0], trackTimeMillis: 221_600 };
+    spy = spyOn(axios, 'get').mockResolvedValue({ data: { results: [song] } });
+    const track = await appleMusicTrack('https://music.apple.com/gr/song/o-manolis/723886726');
+    assert.strictEqual(track.duration, 221);
+  });
+
   test('a song link keeps its storefront', async () => {
-    spy = spyOn(axios, 'get').mockResolvedValue({ data: PAGE });
+    spy = spyOn(axios, 'get').mockResolvedValue({ data: LOOKUP });
     await appleMusicTrack('https://music.apple.com/gb/song/love-is-a-long-road/1440825626');
-    assert.strictEqual(spy.mock.calls[0][0], 'https://music.apple.com/gb/song/1440825626');
+    assert.strictEqual(
+      spy.mock.calls[0][0],
+      'https://itunes.apple.com/lookup?id=1440825626&country=gb'
+    );
   });
 
   test('playlists and artists are refused before any request', async () => {
@@ -69,8 +83,16 @@ describe('apple music', () => {
     assert.strictEqual(spy.mock.calls.length, 0);
   });
 
-  test('a page without song data is a curated failure, not a blind search', async () => {
-    spy = spyOn(axios, 'get').mockResolvedValue({ data: '<html></html>' });
+  test('a song the store no longer lists reads as gone, not as a hiccup to retry', async () => {
+    spy = spyOn(axios, 'get').mockResolvedValue({ data: { resultCount: 0, results: [] } });
+    await assert.rejects(appleMusicTrack('https://music.apple.com/us/song/a/1440825626'), {
+      code: 'CONTENT_GONE',
+      message: "that apple music song isn't in that store anymore.",
+    });
+  });
+
+  test('a lookup answer without the song is a curated failure, not a blind search', async () => {
+    spy = spyOn(axios, 'get').mockResolvedValue({ data: { results: [{ wrapperType: 'artist' }] } });
     await assert.rejects(appleMusicTrack('https://music.apple.com/us/song/a/1440825626'), {
       message: /couldn't read that apple music song/,
     });

@@ -7,12 +7,7 @@ export const APPLE_MUSIC_HOSTS = ['music.apple.com'];
 
 export const isAppleMusicUrl = url => hostUnder(hostOf(url), APPLE_MUSIC_HOSTS);
 
-const seconds = iso => {
-  const [, h = 0, m = 0, s = 0] = /^PT(?:(\d+)H)?(?:(\d+)M)?(?:(\d+)S)?$/.exec(iso ?? '') ?? [];
-  return h * 3600 + m * 60 + Number(s);
-};
-
-// Apple Music audio is FairPlay-only, but the song page's JSON-LD names the song, artist and length.
+// Apple Music audio is FairPlay-only; the lookup API names the song, artist and length, even of an album-only track.
 export async function appleMusicTrack(url) {
   const { pathname, searchParams } = new URL(url);
   const store = /^\/([a-z]{2})\//.exec(pathname)?.[1];
@@ -25,29 +20,29 @@ export async function appleMusicTrack(url) {
     );
   }
   const failMessage = "couldn't read that apple music song right now.";
-  const { data: html } = await fetchPage(`https://music.apple.com/${store}/song/${id}`, {
+  const { data } = await fetchPage(`https://itunes.apple.com/lookup?id=${id}&country=${store}`, {
     failMessage,
+    responseType: 'json',
   });
-  const json = /<script[^>]*id="?schema:song"?[^>]*>([\s\S]*?)<\/script>/.exec(html)?.[1];
-  let song;
-  try {
-    song = JSON.parse(json).audio;
-  } catch {
-    song = null;
+  if (Array.isArray(data?.results) && !data.results.length) {
+    throw withCause(
+      new NetworkError("that apple music song isn't in that store anymore.", 'CONTENT_GONE'),
+      `apple music: lookup has no song ${id} in ${store}`
+    );
   }
-  const duration = seconds(song?.duration);
-  const artist = song?.byArtist?.[0]?.name;
-  if (!song?.name || !artist || !duration) {
-    throw withCause(new NetworkError(failMessage), `apple music: song ${id} page has no song data`);
+  const song = data?.results?.find(result => result.wrapperType === 'track');
+  if (!song?.trackName || !song.artistName || !song.trackTimeMillis) {
+    throw withCause(new NetworkError(failMessage), `apple music: lookup has no song ${id}`);
   }
   return {
     site: 'apple music',
-    title: song.name,
-    artist,
-    duration,
-    year: song.datePublished?.slice(0, 4) ?? null,
-    genre: song.genre?.find(genre => genre !== 'Music') ?? null,
-    cover: song.image?.replace(/\/\d+x\d+bb(\.\w+)?$/, '/600x600bb.jpg') ?? null,
+    title: song.trackName,
+    artist: song.artistName,
+    duration: Math.floor(song.trackTimeMillis / 1000),
+    year: song.releaseDate?.slice(0, 4) ?? null,
+    genre:
+      song.primaryGenreName && song.primaryGenreName !== 'Music' ? song.primaryGenreName : null,
+    cover: song.artworkUrl100?.replace(/\/\d+x\d+bb(\.\w+)?$/, '/600x600bb.jpg') ?? null,
   };
 }
 
@@ -68,7 +63,7 @@ export async function appleAlbumTracks(store, id) {
       url: song.trackViewUrl,
       title: song.trackName ?? null,
       artist: song.artistName ?? null,
-      duration: song.trackTimeMillis ? Math.round(song.trackTimeMillis / 1000) : null,
+      duration: song.trackTimeMillis ? Math.floor(song.trackTimeMillis / 1000) : null,
     })),
   };
 }

@@ -66,8 +66,12 @@ export const norm = text =>
     .toLowerCase()
     .replace(/&(#\d+|#x[\da-f]+|[a-z]+);/g, '')
     .replace(/[^\p{L}\p{N}]+/gu, '');
-const VARIANT =
-  /\b(remix|sped ?up|slowed|nightcore|cover|live|8d|reverb|instrumental|karaoke|bass ?boosted|edit|re-?record(ed|ing)?)\b/i;
+const VARIANTS =
+  /\b(?:remix|sped ?up|slowed|nightcore|cover|live|8d|reverb|instrumental|karaoke|bass ?boosted|edit|re-?record(?:ed|ing)?|acoustic|demo|unplugged|sessions?|concert|festival|style of|originally performed|made famous|tribute)\b/gi;
+const versionOf = text =>
+  [...new Set((String(text ?? '').match(VARIANTS) ?? []).map(norm))].sort().join();
+// A version only one side names (a remix, a festival set, a live cut) is another recording.
+const otherCut = (title, trackTitle) => versionOf(title) !== versionOf(trackTitle);
 const MAX_DRIFT_S = 2;
 // Spotify writes a version as "Dreams - 2004 Remaster", JioSaavn and Apple as "Dreams (2004 Remaster)".
 const plain = text =>
@@ -75,6 +79,9 @@ const plain = text =>
     .replace(/\s*[([].*?[)\]]/g, '')
     .replace(/ - [^-]*remaster[^-]*$/i, '');
 const untagged = text => norm(plain(text));
+// Only Spotify writes a version after " - "; elsewhere a dash is part of the title ("Fado - Nação").
+const songOf = track =>
+  plain(track.site === 'spotify' ? String(track.title ?? '').replace(/ - .*$/, '') : track.title);
 const FEATURING = /\s(?:feat\.?|featuring|ft\.?)\s/i;
 // "A featuring B" bills two artists for sure; "A, B & C" may be one name ("Tyler, The Creator").
 const billedOf = credit =>
@@ -94,7 +101,7 @@ const workOf = (text, names) => {
 // Only an official upload counts; no match beats a wrong song.
 export function pickMatch(track, entries) {
   const names = artistsOf(track.artist);
-  const title = untagged(track.title);
+  const title = norm(songOf(track));
   if (!names.length || !title || !track.duration) return null;
   const billed = billedOf(track.artist);
   let best = null;
@@ -110,10 +117,17 @@ export function pickMatch(track, entries) {
     const artTrack = / - Topic$/.test(entry.channel ?? '') && untagged(entry.title) === title;
     const label =
       entry.channel_is_verified && names.some(name => untagged(entry.title) === `${name}${title}`);
-    if (drift > MAX_DRIFT_S || !(own || artTrack || label)) continue;
+    // Label-delivered audio reads "Provided to YouTube by <label> ... Title · Artist", on any channel.
+    const delivered =
+      /^Provided to YouTube by /.test(entry.description ?? '') &&
+      entry.description
+        .split('·')
+        .slice(1)
+        .some(part => names.some(name => norm(part).startsWith(name)));
+    if (drift > MAX_DRIFT_S || !(own || artTrack || label || delivered)) continue;
     if (!norm(entry.title).includes(title)) continue;
-    if (VARIANT.test(entry.title) && !VARIANT.test(track.title)) continue;
-    const score = (own ? 2 : 0) + (artTrack ? 1 : 0) - drift;
+    if (otherCut(entry.title, track.title)) continue;
+    const score = (own ? 2 : 0) + (artTrack || delivered ? 1 : 0) - drift;
     if (!best || score > best.score) best = { entry, score };
   }
   return best?.entry ?? null;
@@ -122,7 +136,7 @@ export function pickMatch(track, entries) {
 // JioSaavn serves the label's own file as plain 320k AAC; only the 320k original counts.
 export function pickSaavn(track, songs) {
   const names = artistsOf(track.artist);
-  const title = untagged(track.title);
+  const title = norm(songOf(track));
   if (!names.length || !title || !track.duration) return null;
   return (
     songs.find(song => {
@@ -130,7 +144,7 @@ export function pickSaavn(track, songs) {
       return (
         info['320kbps'] === 'true' &&
         workOf(song.title, names) === title &&
-        !(VARIANT.test(song.title) && !VARIANT.test(track.title)) &&
+        !otherCut(song.title, track.title) &&
         (info.artistMap?.primary_artists ?? []).some(a => names.includes(norm(a.name))) &&
         Math.abs(Number(info.duration) - track.duration) <= MAX_DRIFT_S
       );
@@ -151,7 +165,8 @@ async function saavnCandidates(query) {
   return data?.results ?? [];
 }
 
-async function youtubeCandidates(query) {
+// One results page is 20; about one search in 16 comes back without channel names, so it is asked again once.
+async function youtubeCandidates(query, retry = true) {
   const { stdout } = await execFileAsync(
     'yt-dlp',
     [
@@ -161,11 +176,14 @@ async function youtubeCandidates(query) {
       '--no-warnings',
       '--js-runtimes',
       'bun',
-      `ytsearch10:${query}`,
+      `ytsearch20:${query}`,
     ],
     { timeout: 30_000, maxBuffer: 20 * 1024 * 1024, signal: jobSignal() }
   );
-  return JSON.parse(stdout).entries ?? [];
+  const entries = JSON.parse(stdout).entries ?? [];
+  return retry && entries.length && !entries.some(entry => entry.channel)
+    ? youtubeCandidates(query, false)
+    : entries;
 }
 
 async function fetchCover(url) {
@@ -269,9 +287,8 @@ export async function downloadMatchedTrack(track) {
   const drm = DRM[track.site];
   const saavn = await fromSaavn(track);
   if (saavn.file) return tagAudio(saavn.file, track);
-  const match =
-    pickMatch(track, await youtubeCandidates(`${track.artist} ${plain(track.title)}`)) ??
-    pickMatch(track, await youtubeCandidates(`${track.artist} - Topic ${plain(track.title)}`));
+  const search = extra => youtubeCandidates(`${track.artist} ${extra}${songOf(track)}`);
+  const match = pickMatch(track, await search('')) ?? pickMatch(track, await search('- Topic '));
   if (!match) {
     throw withCause(
       new ValidationError(

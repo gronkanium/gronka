@@ -102,6 +102,136 @@ test('one name split off a credit counts only on a verified or Topic channel', (
   assert.strictEqual(pickMatch(duet, [{ ...drake, channel_is_verified: true }])?.id, 'drake');
 });
 
+// The real ytsearch results for these tracks on 2026-11-14.
+test("takes label-delivered audio on the artist's channel of another name", () => {
+  const song = { artist: 'Jack Johnson', title: 'Situations', duration: 77 };
+  const art = {
+    id: 'dhVGrxlxPWs',
+    channel: 'jackjohnsonmusic',
+    title: 'Situations',
+    duration: 78,
+    description:
+      'Provided to YouTube by Universal Music Group Situations · Jack Johnson In Between',
+  };
+  const cover = {
+    ...art,
+    id: 'cover',
+    channel: 'Someone Else',
+    description: 'Provided to YouTube by DistroKid Situations · Someone Else Covers ℗ 2020',
+  };
+  assert.strictEqual(pickMatch(song, [cover]), null);
+  assert.strictEqual(pickMatch(song, [cover, art])?.id, 'dhVGrxlxPWs');
+});
+
+test('a demo never takes a festival set or another version of the same length', () => {
+  const demo = { artist: 'Jack Johnson', title: 'Constellations (Demo Version)', duration: 213 };
+  const festival = {
+    id: '4Tfvezq4BYw',
+    channel: 'jackjohnsonmusic',
+    channel_is_verified: true,
+    title: 'Jack Johnson - Constellations (Kokua Festival 2010)',
+    duration: 215,
+  };
+  const live = { ...festival, id: 'live', title: 'Jack Johnson - Constellations (Live Demo)' };
+  assert.strictEqual(pickMatch(demo, [festival, live]), null);
+});
+
+test("a karaoke label's Topic track 'in the style of' the artist is not the song", () => {
+  const song = { artist: 'Jack Johnson', title: 'Sitting, Waiting, Wishing', duration: 184 };
+  const karaoke = {
+    id: 'zEzqLHeEZmM',
+    channel: 'Zoom Karaoke - Topic',
+    title: "Sitting, Waiting, Wishing (In The Style Of 'Jack Johnson')",
+    duration: 182,
+    description:
+      "Provided to YouTube by Virgin Music Group Sitting, Waiting, Wishing (In The Style Of 'Jack Johnson') · Zoom Karaoke",
+  };
+  assert.strictEqual(pickMatch(song, [karaoke]), null);
+});
+
+test("spotify's ' - featured in ...' suffix is not part of the title", () => {
+  const song = {
+    site: 'spotify',
+    artist: 'Pitbull',
+    title: 'Back in Time - featured in "Men In Black 3"',
+    duration: 207,
+  };
+  const entry = {
+    id: 'ILgn4eBflf0',
+    channel: 'Pitbull',
+    channel_is_verified: true,
+    title: 'Pitbull - Back in Time (featured in "Men In Black III") [Audio]',
+    duration: 207,
+  };
+  assert.strictEqual(pickMatch(song, [entry])?.id, 'ILgn4eBflf0');
+});
+
+// The real ytsearch and jiosaavn results for these apple music tracks on 2026-11-23.
+test("a title with its own ' - ' is matched whole, never cut at the dash", () => {
+  const noise = {
+    artist: 'Noise Foundation',
+    title: 'White Noise - 417 Hz LPF (Loopable Version)',
+    duration: 179,
+  };
+  const art = {
+    id: 'FhRU1lZmyjI',
+    channel: 'ノイズ財団 - Topic',
+    title: 'White Noise - 417 Hz LPF (Loopable Version)',
+    duration: 180,
+  };
+  const other = { ...art, id: 'other', title: 'White Noise' };
+  assert.strictEqual(pickMatch(noise, [other]), null);
+  assert.strictEqual(pickMatch(noise, [other, art])?.id, 'FhRU1lZmyjI');
+  const fado = { artist: 'Rita Dias', title: 'Fado - Nação', duration: 150 };
+  assert.strictEqual(
+    pickSaavn(fado, [saavn('Fado-Nação', ['Rita Dias'], 150, 'H18EYUVxQGc')]),
+    'H18EYUVxQGc'
+  );
+});
+
+test('a live recording never takes the studio cut of about the same length', () => {
+  const live = {
+    artist: 'Sufjan Stevens',
+    title: 'Size Too Small (Live In Brussells)',
+    duration: 187,
+  };
+  const studio = {
+    id: 'studio',
+    channel: 'Sufjan Stevens',
+    channel_is_verified: true,
+    title: 'Size Too Small',
+    duration: 185,
+  };
+  assert.strictEqual(pickMatch(live, [studio]), null);
+  assert.strictEqual(
+    pickSaavn(live, [saavn('Size Too Small', ['Sufjan Stevens'], 186, 's')]),
+    null
+  );
+  assert.strictEqual(
+    pickMatch(live, [{ ...studio, title: 'Size Too Small (Live)' }])?.id,
+    'studio'
+  );
+});
+
+test("a fan's cover or remake naming the artist and the title is never the song", () => {
+  const closing = { artist: 'King Gnu', title: '閉会式', duration: 90 };
+  const fans = [
+    {
+      id: 'cello',
+      channel: 'チェロのあそびばcello play room',
+      title: '【ヌー民が閉会式弾いてみた】閉会式 King Gnu チェロ弾いてみた',
+      duration: 92,
+    },
+    {
+      id: 'garageband',
+      channel: 'GarageBand Steve',
+      title: 'King Gnu - 閉会式 (Closing Ceremony) in GarageBand',
+      duration: 89,
+    },
+  ];
+  assert.strictEqual(pickMatch(closing, fans), null);
+});
+
 const saavn = (title, artists, duration, url, hq = 'true') => ({
   title,
   perma_url: url,

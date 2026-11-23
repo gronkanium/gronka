@@ -125,6 +125,9 @@ function isRedditManifest(url) {
   }
 }
 
+// Our own extractors for pages yt-dlp has none for (scripts/ytdlp-plugins/gronka/yt_dlp_plugins/extractor).
+const PLUGIN_DIR = path.join(import.meta.dir, '../../scripts/ytdlp-plugins');
+
 export function getSiteArgs(url, viaGeoProxy = false, exitProxy = null) {
   const geoProxy = process.env.GEO_PROXY_URL;
   const site = YTDLP_SITES.find(s => hostIn(url, s.hosts));
@@ -137,6 +140,8 @@ export function getSiteArgs(url, viaGeoProxy = false, exitProxy = null) {
     // One fragment at a time crawls through the tunnel (xHamster 223 KB/s vs 1.4 MB/s at 8).
     ...(proxy ? ['--proxy', proxy, '-N', '8'] : []),
     ...(site?.args ?? []),
+    '--plugin-dirs',
+    PLUGIN_DIR,
   ];
 }
 

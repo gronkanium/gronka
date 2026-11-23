@@ -120,7 +120,7 @@ describe('ytdlp utilities', () => {
     });
   });
   describe('getSiteArgs', () => {
-    const siteArgs = (...args) => getSiteArgs(...args).slice(2);
+    const siteArgs = (...args) => getSiteArgs(...args).slice(2, -2);
     test('turns off the generic extractor for every site', () => {
       for (const url of [
         'https://evil.tumblr.com/x',
@@ -129,6 +129,11 @@ describe('ytdlp utilities', () => {
       ]) {
         assert.deepStrictEqual(getSiteArgs(url).slice(0, 2), ['--ies', 'default,-generic']);
       }
+    });
+    test('hands yt-dlp our own extractors, for pages it has none for', () => {
+      const [flag, dir] = getSiteArgs('https://xhamster.com/shorts/a-xh1').slice(-2);
+      assert.strictEqual(flag, '--plugin-dirs');
+      assert.ok(fs.existsSync(path.join(dir, 'gronka/yt_dlp_plugins/extractor/gronka.py')), dir);
     });
     test('allows the manifest reader only for native Reddit HLS manifests', () => {
       assert.deepStrictEqual(

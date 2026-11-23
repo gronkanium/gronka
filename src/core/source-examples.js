@@ -172,6 +172,11 @@ export const SOURCE_EXAMPLES = [
     expect: { type: 'video' },
   },
   {
+    site: 'xhamster',
+    url: 'https://xhamster.com/shorts/aoi-lewd-scenes-gallery-lifeguard-xh8QV24',
+    expect: { type: 'video' },
+  },
+  {
     site: '3movs',
     url: 'https://www.3movs.com/videos/468692/paige-owens-shows-off-her-gaping-pussy-while-cumming/',
     expect: { type: 'video' },

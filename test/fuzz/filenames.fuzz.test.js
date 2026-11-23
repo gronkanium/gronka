@@ -1,6 +1,6 @@
 import { test, describe, expect } from 'bun:test';
 import path from 'node:path';
-import { sanitizeFilename, validateFileExtension } from '../../src/utils/validation.js';
+import { sanitizeFilename } from '../../src/utils/validation.js';
 import { contentDisposition, directStreamInfo } from '../../src/web-server.js';
 import { tempPath, withJobDir, JOBS_ROOT } from '../../src/utils/media-file.js';
 import { writeZip } from '../../src/utils/archive.js';
@@ -83,21 +83,6 @@ describe('filename fuzz', () => {
         ]);
       }
     });
-  });
-
-  test(`validateFileExtension never throws and only matches the listed extensions (seed ${SEED})`, () => {
-    const r = rng(SEED + 3);
-    const allowed = ['mp4', '.gif', 'png'];
-    for (let i = 0; i < ITERATIONS; i++) {
-      const name = junk(r, 80);
-      let ok;
-      expect(() => (ok = validateFileExtension(name, allowed))).not.toThrow();
-      const ext = path.extname(name).toLowerCase().slice(1);
-      expect([describeCase(SEED, i, name), ok]).toEqual([
-        describeCase(SEED, i, name),
-        ['mp4', 'gif', 'png'].includes(ext),
-      ]);
-    }
   });
 
   test(`directStreamInfo never throws on a hostile path (seed ${SEED})`, () => {

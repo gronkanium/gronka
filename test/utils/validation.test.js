@@ -3,7 +3,6 @@ import assert from 'node:assert';
 import {
   validateUrl,
   sanitizeFilename,
-  validateFileExtension,
   parseTimestamp,
   firstUrlIn,
   rateLimitAddress,
@@ -317,25 +316,6 @@ describe('validation utilities', () => {
     });
   });
 
-  describe('validateFileExtension', () => {
-    test('accepts valid extensions', () => {
-      assert.strictEqual(validateFileExtension('image.png', ['.png', '.jpg']), true);
-      assert.strictEqual(validateFileExtension('image.jpg', ['.png', '.jpg']), true);
-      assert.strictEqual(validateFileExtension('video.mp4', ['mp4', 'mov']), true);
-      assert.strictEqual(validateFileExtension('file.MP4', ['mp4']), true); // case insensitive
-    });
-
-    test('rejects invalid extensions', () => {
-      assert.strictEqual(validateFileExtension('image.png', ['.jpg', '.gif']), false);
-      assert.strictEqual(validateFileExtension('file.txt', ['.png', '.jpg']), false);
-      assert.strictEqual(validateFileExtension('file', ['.png']), false);
-    });
-
-    test('handles missing filename', () => {
-      assert.strictEqual(validateFileExtension(null, ['.png']), false);
-      assert.strictEqual(validateFileExtension('', ['.png']), false);
-    });
-  });
   describe('parseTimestamp', () => {
     test('parses plain seconds', () => {
       assert.deepStrictEqual(parseTimestamp('90'), { valid: true, seconds: 90 });

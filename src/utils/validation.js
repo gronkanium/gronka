@@ -294,15 +294,3 @@ export function sanitizeFilename(filename) {
 
   return sanitized;
 }
-
-export function validateFileExtension(filename, allowedExtensions) {
-  if (!filename) return false;
-
-  const ext = path.extname(filename).toLowerCase();
-  const extWithoutDot = ext.startsWith('.') ? ext.substring(1) : ext;
-
-  return allowedExtensions.some(allowed => {
-    const allowedExt = allowed.startsWith('.') ? allowed.substring(1) : allowed;
-    return extWithoutDot === allowedExt.toLowerCase();
-  });
-}

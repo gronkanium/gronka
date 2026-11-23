@@ -5,6 +5,20 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and versions are release dates (`YYYY.MM.DD`, `.N` for a later release the same day).
 
+## [5.3.0](https://github.com/gronkanium/gronka/compare/v5.2.0...v5.3.0) (2026-11-23)
+
+
+### Features
+
+* **download:** ThisVid, with a Chrome fingerprint since it refuses yt-dlp's own ([b4c66c1](https://github.com/gronkanium/gronka/commit/b4c66c1fd3b7cbe2861b27b54f0ea97297d7e4b2))
+* **download:** xHamster shorts, read by our own yt-dlp extractor ([739d61b](https://github.com/gronkanium/gronka/commit/739d61b0f25e82c4a9128f3b268b5036985f8ed6))
+
+
+### Bug Fixes
+
+* **download:** a slow host gets the job's remaining time, not yt-dlp's fixed 5 minutes ([7df425e](https://github.com/gronkanium/gronka/commit/7df425e74c31035b728ca0a10fc35f53d9172e6d))
+* **download:** three connections at once for hosts that hold each one to ~300 KB/s ([c375ade](https://github.com/gronkanium/gronka/commit/c375ade76b72318da0922aa5722a47df4ce98a68))
+
 ## [5.2.0](https://github.com/gronkanium/gronka/compare/v5.1.0...v5.2.0) (2026-11-23)
 
 

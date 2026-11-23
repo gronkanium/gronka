@@ -1,3 +1,6 @@
+// These hosts hold each connection to ~300 KB/s; three at once triple it. Without aria2c yt-dlp uses its own.
+const PARALLEL = ['--downloader', 'http:aria2c', '--downloader-args', 'aria2c:-q -x 3 -s 3 -k 1M'];
+
 // `id` is the stored disabled_services key (renaming resets the switch); a tool key's `hosts` narrows its links.
 export const SITES = [
   {
@@ -153,7 +156,7 @@ export const SITES = [
     name: 'Hentaigasm',
     category: 'adult',
     hosts: ['hentaigasm.com'],
-    ytdlp: { ies: 'default' },
+    ytdlp: { ies: 'default', args: PARALLEL },
   },
   // Its own extractor hands the page to the generic one.
   {
@@ -168,7 +171,7 @@ export const SITES = [
     name: 'BigAssPorn',
     category: 'adult',
     hosts: ['bigassporn.tv'],
-    ytdlp: { ies: 'default' },
+    ytdlp: { ies: 'default', args: PARALLEL },
   },
   {
     id: 'gayporno',

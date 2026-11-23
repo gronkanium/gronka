@@ -35,6 +35,7 @@ FROM oven/bun:1.4-debian AS runtime
 # nftables + iproute2 let contain.sh fence the container's egress before dropping root.
 # yt-dlp-ejs ships the solver script for YouTube's `n` challenge; without it every YouTube
 # format is skipped and only storyboards remain. curl-cffi: Rumble 403s yt-dlp's own TLS fingerprint.
+# aria2: parallel connections for hosts that throttle each one (see PARALLEL in src/core/sites.js).
 COPY docker/requirements.txt /tmp/requirements.txt
 RUN apt-get update && apt-get install -y \
     ffmpeg \
@@ -45,6 +46,7 @@ RUN apt-get update && apt-get install -y \
     python3-pip \
     nftables \
     iproute2 \
+    aria2 \
     && pip3 install --no-cache-dir --break-system-packages -r /tmp/requirements.txt \
     && rm -rf /var/lib/apt/lists/* /tmp/requirements.txt
 

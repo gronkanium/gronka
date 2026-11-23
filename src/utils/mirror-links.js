@@ -1,4 +1,5 @@
 import { normalizeHost, hostUnder } from './url-host.js';
+import { siteHosts } from '../core/sites.js';
 
 // Embed-fixer mirror domains people paste instead of x.com, mapped to the canonical host Cobalt understands. Cobalt doesn't
 // know these hosts, so they must always be rewritten before the API call.
@@ -108,6 +109,9 @@ export const EMBED_FIXER_HOSTS = new Map([
   ['pinterestez.com', 'pinterest.com'],
 ]);
 
+// Same paths as the main site, but some 404 (xhamster.one) or fail TLS (xhday.com) on a live video.
+const XHAMSTER_MIRRORS = new Set(siteHosts('xhamster').filter(host => host !== 'xhamster.com'));
+
 // Fixers keep minting <letters>instagram.com hosts and xHamster numbered mirrors, so match the shape.
 export const mirrorTarget = host => {
   // Fixers serve direct-file links under a d. prefix (d.tiktokez.com, d.vxtwitter.com).
@@ -118,7 +122,9 @@ export const mirrorTarget = host => {
   return (
     EMBED_FIXER_HOSTS.get(host) ??
     (/^[a-z0-9-]+instagram\.com$/.test(host) ? 'instagram.com' : undefined) ??
-    (/^xhamster\d+\.(com|desi)$/.test(host) ? 'xhamster.com' : undefined)
+    (XHAMSTER_MIRRORS.has(host) || /^xhamster\d+\.(com|desi)$/.test(host)
+      ? 'xhamster.com'
+      : undefined)
   );
 };
 

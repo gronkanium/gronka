@@ -27,10 +27,13 @@ describe('link intake', () => {
       await prepareLink('https://fxtwitter.com/a/status/1'),
       'https://twitter.com/a/status/1'
     );
-    assert.equal(
-      await prepareLink('https://xhamster1.desi/videos/a-xhrGOij'),
-      'https://xhamster.com/videos/a-xhrGOij'
-    );
+    for (const host of ['xhamster1.desi', 'xhamster.one', 'xhday.com', 'xhvid.com']) {
+      assert.equal(
+        await prepareLink(`https://${host}/videos/a-xhrGOij`),
+        'https://xhamster.com/videos/a-xhrGOij',
+        host
+      );
+    }
   });
 
   test('links people were refused for now route', async () => {

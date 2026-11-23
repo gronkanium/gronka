@@ -5,6 +5,31 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and versions are release dates (`YYYY.MM.DD`, `.N` for a later release the same day).
 
+## [5.2.0](https://github.com/gronkanium/gronka/compare/v5.1.0...v5.2.0) (2026-11-23)
+
+
+### Features
+
+* **download:** vk video, 3movs, xcafe and every numbered xhamster mirror ([11d6410](https://github.com/gronkanium/gronka/commit/11d64108ef95a8637164e939338ae8126685f8e7))
+
+
+### Bug Fixes
+
+* **apple-music:** read songs from the lookup API and report a removed song as gone ([c110cb1](https://github.com/gronkanium/gronka/commit/c110cb1d090e9797ed3439c3e220a6d12c1eabea))
+* **convert:** a conversion past ffmpeg's 5 minute limit says it took too long ([3b0d8f0](https://github.com/gronkanium/gronka/commit/3b0d8f05daa271cf0206976bab7447fcbd1d6d87))
+* **discord:** expired-interaction log splits late delivery from a slow ack ([2333dba](https://github.com/gronkanium/gronka/commit/2333dbafe8cf9e34540287fb5a8763d911f0f4de))
+* **download:** a quote post with no media of its own downloads the quoted post's media ([9752b26](https://github.com/gronkanium/gronka/commit/9752b26f18d34c4a0654c1b686afbe4243595a5e))
+* **download:** fold every xHamster mirror domain onto xhamster.com ([4e5ce82](https://github.com/gronkanium/gronka/commit/4e5ce82a20197e327a8fbfce2980c50b50bafb13))
+* **music:** match titles with a dash whole and never take another cut of a song ([94abcc2](https://github.com/gronkanium/gronka/commit/94abcc2fd33bbbc3f39fca08c0ef2cbd73b9ee73))
+
+
+### Dependencies
+
+* **deps:** bump cloudflare/cloudflared from 2026.10.7 to 2026.11.0 ([#15](https://github.com/gronkanium/gronka/issues/15)) ([7b5d4f8](https://github.com/gronkanium/gronka/commit/7b5d4f8070c230baef44cece4b79a1de00addab4))
+* **deps:** bump cloudflare/cloudflared from 2026.11.0 to 2026.11.1 ([#18](https://github.com/gronkanium/gronka/issues/18)) ([1ca3fb5](https://github.com/gronkanium/gronka/commit/1ca3fb5dcbde488fb8d389a3696a3a764e2b78d2))
+* **deps:** bump gallery-dl from 1.32.19 to 1.32.20 in /docker ([#17](https://github.com/gronkanium/gronka/issues/17)) ([4653260](https://github.com/gronkanium/gronka/commit/465326029b368febd04015558e268626e0e881b8))
+* **deps:** bump the security-updates group with 9 updates ([#16](https://github.com/gronkanium/gronka/issues/16)) ([915ddf3](https://github.com/gronkanium/gronka/commit/915ddf3224d51d9ac9dbc0942d2664966faa78e0))
+
 ## [5.1.0](https://github.com/gronkanium/gronka/compare/v5.0.1...v5.1.0) (2026-11-14)
 
 

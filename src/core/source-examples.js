@@ -192,6 +192,11 @@ export const SOURCE_EXAMPLES = [
     expect: { type: 'video' },
   },
   {
+    site: 'thisvid',
+    url: 'https://thisvid.com/videos/car-sex100/',
+    expect: { type: 'video' },
+  },
+  {
     site: 'bigassporn',
     url: 'https://bigassporn.tv/videos/10615/inked-girl-liya-silver-gorges-on-a-big-dick/',
     expect: { type: 'video' },

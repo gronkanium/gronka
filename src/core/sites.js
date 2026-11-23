@@ -155,6 +155,14 @@ export const SITES = [
     hosts: ['hentaigasm.com'],
     ytdlp: { ies: 'default' },
   },
+  // Its own extractor hands the page to the generic one.
+  {
+    id: 'thisvid',
+    name: 'ThisVid',
+    category: 'adult',
+    hosts: ['thisvid.com'],
+    ytdlp: { ies: 'default' },
+  },
   {
     id: 'bigassporn',
     name: 'BigAssPorn',

@@ -26,7 +26,7 @@ download media from social platforms using the `/download` command:
 - dailymotion
 - snapchat
 - redgifs, imgur, kick, coub, rumble, vk video, newgrounds, niconico, bilibili, bandcamp, archive.org, bunny stream embeds (via yt-dlp)
-- pornhub, xvideos, xhamster (videos and shorts), redtube, rule34video, eporner, spankbang, hentaigasm, bigassporn, gayporno.fm, 3movs, xcafe, hentai haven (via yt-dlp)
+- pornhub, xvideos, xhamster (videos and shorts), redtube, rule34video, eporner, spankbang, hentaigasm, bigassporn, gayporno.fm, 3movs, xcafe, thisvid, hentai haven (via yt-dlp)
 - gofile folders, erome albums and pixeldrain files and lists (via gallery-dl)
 - pinterest, including pin.it share links (via a dedicated extractor, not cobalt)
 - threads posts: videos, photos and every slide of a carousel (read from the public post page)

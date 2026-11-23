@@ -30,6 +30,8 @@ updates:
     ignore:
       - dependency-name: 'postgres'
         update-types: ['version-update:semver-major']
+      # Built locally from docker/cobalt.Dockerfile, not on any registry.
+      - dependency-name: 'gronka-cobalt'
     commit-message:
       prefix: 'deps'
       include: 'scope'

@@ -47,6 +47,8 @@ export function jobSignal(extra) {
   return signals.length > 1 ? AbortSignal.any(signals) : signals[0];
 }
 
+export const JOB_TIME_LIMIT_MS = 16 * 60 * 1000;
+
 export function jobRemainingMs() {
   const deadline = scope.getStore()?.deadline;
   return deadline ? deadline - Date.now() : Infinity;

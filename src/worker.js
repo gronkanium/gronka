@@ -10,7 +10,7 @@ import { recordFailure } from './utils/failures.js';
 import { countOutcome, flushCounts } from './utils/operations-tracker.js';
 import { AppError } from './utils/errors.js';
 import { safeInteractionEditReply, DISCORD_REST_TIMEOUT_MS } from './utils/interaction-helpers.js';
-import { JOBS_ROOT, sweepJobDirs } from './utils/media-file.js';
+import { JOBS_ROOT, JOB_TIME_LIMIT_MS, sweepJobDirs } from './utils/media-file.js';
 import { runMediaJob } from './jobs/run-job.js';
 import { interactionFor } from './jobs/reply-target.js';
 import * as queue from './utils/database/media-jobs-pg.js';
@@ -18,7 +18,6 @@ import * as queue from './utils/database/media-jobs-pg.js';
 const logger = createLogger('worker');
 const warn = what => error => logger.warn(`${what}: ${error.message}`);
 
-const JOB_TIME_LIMIT_MS = 16 * 60 * 1000;
 const POLL_MS = 2000;
 const RECLAIM_MS = 15_000;
 const STALL_MS = 2 * 60 * 1000;

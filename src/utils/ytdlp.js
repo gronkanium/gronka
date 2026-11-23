@@ -20,6 +20,7 @@ import {
   tempDir,
   tempPath,
   jobSignal,
+  jobRemainingMs,
   watchDirSize,
   typeForExtension,
 } from './media-file.js';
@@ -292,7 +293,8 @@ function executeYtdlp(
   outputDir,
   {
     quality,
-    timeout = 300000,
+    // A job's deadline is the limit; slow hosts (~300 KB/s) need longer than 5 minutes for 100MB.
+    timeout = Number.isFinite(jobRemainingMs()) ? jobRemainingMs() : 300_000,
     startTime = null,
     duration = null,
     maxSize,

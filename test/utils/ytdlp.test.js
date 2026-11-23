@@ -431,6 +431,7 @@ for arg; do
   prev=$arg
 done
 if [ "$clip" ]; then sleep 10 & echo $! > "${dir}/child.pid"; wait; fi
+case "$*" in *slow-host*) sleep 2 ;; esac
 cp "${dir}/a.mp4" "$out/video.mp4" && echo "$out/video.mp4"
 `,
         { mode: 0o755 }
@@ -455,6 +456,24 @@ cp "${dir}/a.mp4" "$out/video.mp4" && echo "$out/video.mp4"
         globalThis.setTimeout = realSetTimeout;
       }
       await assertChildGone();
+    });
+
+    test("a slow host gets the job's remaining time, not a fixed 5 minutes", async () => {
+      const realSetTimeout = globalThis.setTimeout;
+      globalThis.setTimeout = (fn, ms, ...rest) =>
+        realSetTimeout(fn, ms === 300_000 ? 1000 : ms, ...rest);
+      try {
+        const saved = await withJobDir(
+          async () =>
+            fs.existsSync(
+              (await downloadWithYtdlp('https://youtu.be/slow-host', { maxSize: 2 ** 24 })).path
+            ),
+          { deadline: Date.now() + 60_000 }
+        );
+        assert.strictEqual(saved, true);
+      } finally {
+        globalThis.setTimeout = realSetTimeout;
+      }
     });
 
     test('a cancelled job kills its ffmpeg', async () => {

@@ -1,7 +1,7 @@
 import path from 'path';
 import { createLogger } from '../utils/logger.js';
 import { describeCause, rootCause } from '../utils/errors.js';
-import { withJobDir } from '../utils/media-file.js';
+import { withJobDir, JOB_TIME_LIMIT_MS } from '../utils/media-file.js';
 import { detectFileType } from '../utils/storage.js';
 import { readSetting } from '../utils/settings.js';
 import {
@@ -49,8 +49,9 @@ export async function checkExample(example, { acquire = acquireMedia } = {}) {
   const started = Date.now();
   const base = { url: example.url, site: example.site, expected: describeExpect(example.expect) };
   try {
-    const types = await withJobDir(async () =>
-      mediaOf(await acquire(example.url, { urlOnly: false }))
+    const types = await withJobDir(
+      async () => mediaOf(await acquire(example.url, { urlOnly: false })),
+      { deadline: Date.now() + JOB_TIME_LIMIT_MS }
     );
     return {
       ...base,

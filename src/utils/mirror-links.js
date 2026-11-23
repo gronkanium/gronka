@@ -108,7 +108,7 @@ export const EMBED_FIXER_HOSTS = new Map([
   ['pinterestez.com', 'pinterest.com'],
 ]);
 
-// Fixers keep minting <letters>instagram.com hosts (kkinstagram, kkkinstagram...), so match the shape too.
+// Fixers keep minting <letters>instagram.com hosts and xHamster numbered mirrors, so match the shape.
 export const mirrorTarget = host => {
   // Fixers serve direct-file links under a d. prefix (d.tiktokez.com, d.vxtwitter.com).
   if (host.startsWith('d.') && EMBED_FIXER_HOSTS.has(host.slice(2))) host = host.slice(2);
@@ -117,7 +117,8 @@ export const mirrorTarget = host => {
   if (short && EMBED_FIXER_HOSTS.get(short[2]) === 'tiktok.com') return `${short[1]}.tiktok.com`;
   return (
     EMBED_FIXER_HOSTS.get(host) ??
-    (/^[a-z0-9-]+instagram\.com$/.test(host) ? 'instagram.com' : undefined)
+    (/^[a-z0-9-]+instagram\.com$/.test(host) ? 'instagram.com' : undefined) ??
+    (/^xhamster\d+\.(com|desi)$/.test(host) ? 'xhamster.com' : undefined)
   );
 };
 

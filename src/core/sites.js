@@ -78,6 +78,13 @@ export const SITES = [
   { id: 'coub', name: 'Coub', category: 'video', hosts: ['coub.com'], ytdlp: true },
   { id: 'rumble', name: 'Rumble', category: 'video', hosts: ['rumble.com'], ytdlp: true },
   {
+    id: 'vk',
+    name: 'VK Video',
+    category: 'video',
+    hosts: ['vk.com', 'vk.ru', 'vkvideo.ru'],
+    ytdlp: true,
+  },
+  {
     id: 'niconico',
     name: 'Niconico',
     category: 'video',
@@ -114,15 +121,7 @@ export const SITES = [
     id: 'xhamster',
     name: 'xHamster',
     category: 'adult',
-    hosts: [
-      'xhamster.com',
-      'xhamster.one',
-      'xhamster.desi',
-      'xhamster2.com',
-      'xhms.pro',
-      'xhday.com',
-      'xhvid.com',
-    ],
+    hosts: ['xhamster.com', 'xhamster.one', 'xhamster.desi', 'xhms.pro', 'xhday.com', 'xhvid.com'],
     ytdlp: { geoBlocked: true },
   },
   // Its CDN answers 410 Gone to any request without the site as referer.
@@ -168,6 +167,20 @@ export const SITES = [
     name: 'GayPorno.fm',
     category: 'adult',
     hosts: ['gayporno.fm'],
+    ytdlp: { ies: 'default' },
+  },
+  {
+    id: '3movs',
+    name: '3Movs',
+    category: 'adult',
+    hosts: ['3movs.com'],
+    ytdlp: { ies: 'default' },
+  },
+  {
+    id: 'xcafe',
+    name: 'xCafe',
+    category: 'adult',
+    hosts: ['xcafe.com'],
     ytdlp: { ies: 'default' },
   },
   {

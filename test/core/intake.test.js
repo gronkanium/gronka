@@ -27,6 +27,22 @@ describe('link intake', () => {
       await prepareLink('https://fxtwitter.com/a/status/1'),
       'https://twitter.com/a/status/1'
     );
+    assert.equal(
+      await prepareLink('https://xhamster1.desi/videos/a-xhrGOij'),
+      'https://xhamster.com/videos/a-xhrGOij'
+    );
+  });
+
+  test('links people were refused for now route', async () => {
+    for (const url of [
+      'https://vkvideo.ru/video-34217658_456239169',
+      'https://vk.com/video-34217658_456239169',
+      'https://www.3movs.com/videos/362923/a/',
+      'https://xcafe.com/gifs/a/',
+      await prepareLink('https://xhamster1.desi/videos/a-xhrGOij'),
+    ]) {
+      assert.equal(await refusalFor(url), null, url);
+    }
   });
 
   test('refusalFor takes routed links and names why it refuses the rest', async () => {

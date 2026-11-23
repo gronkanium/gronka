@@ -102,14 +102,16 @@ export async function safeInteractionDeferReply(interaction, options = {}) {
     return false;
   }
 
+  const sentAt = Date.now();
   try {
     await interaction.deferReply(options);
     return true;
   } catch (error) {
     interaction.deliveryError = error;
     if (error.code === 10062) {
-      const age = Date.now() - interaction.createdTimestamp;
-      logger.warn(`Discord expired the interaction before it was acknowledged (${age} ms old)`);
+      logger.warn(
+        `Discord expired the interaction before it was acknowledged (${sentAt - interaction.createdTimestamp} ms old when sent, refused after ${Date.now() - sentAt} ms)`
+      );
     } else if (error.code === 40060) {
       logger.debug(
         `Interaction expired or already acknowledged when deferring reply: ${error.message}`

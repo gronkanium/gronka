@@ -65,7 +65,7 @@ test('a post with no media records what x returned as the cause', async () => {
   );
 });
 
-test('a quote post with no media of its own names the quoted media in the cause', async () => {
+test('a quote post with no media of its own downloads the quoted media', async () => {
   const quoting = async () => {
     const out = await gql();
     out.data.tweetResult.result.legacy.full_text = 'look';
@@ -78,19 +78,17 @@ test('a quote post with no media of its own names the quoted media in the cause'
           id_str: '42',
           full_text: '',
           extended_entities: {
-            media: [{ type: 'photo', media_url_https: 'https://pbs.twimg.com/media/a.jpg' }],
+            media: [{ type: 'photo', media_url_https: 'http://127.0.0.1:1/media/a.jpg' }],
           },
         },
       },
     };
     return out;
   };
-  const error = await downloadFromX('https://x.com/jkrums/status/1121915133', {
-    gql: quoting,
-  }).catch(caught => caught);
-  expect(error.cause?.message).toBe(
-    'x returned post 1121915133 with no media entities and no card image, quoting post 42 with 1 media'
-  );
+  // The media url is unreachable here, so reaching the download (not the no-media error) is the proof.
+  await expect(
+    downloadFromX('https://x.com/jkrums/status/1121915133', { gql: quoting })
+  ).rejects.not.toMatchObject({ code: 'NO_VIDEO' });
 });
 
 test('a post with no media but a large link card hands back the card image', async () => {

@@ -10,7 +10,9 @@ export async function downloadFromX(url, { gql } = {}) {
   const { post } = await fetchTweetThread(url, { thread: false, ...(gql && { gql }) });
   const card = post.extra?.cardImage;
   if (!post.media?.length && card) return downloadFileFromUrl(card);
-  if (!post.media?.length) {
+  // A quote post with nothing of its own is shared for the post it quotes.
+  const media = post.media?.length ? post.media : (post.quoted?.media ?? []);
+  if (!media.length) {
     // Tweets from before t.co (2009 and earlier) keep their links as plain text.
     const links = [...(post.links ?? []), ...(post.text?.match(/https?:\/\/\S+/g) ?? [])];
     const linked = links.map(hostOf).find(host => host && !X_HOST.test(host));
@@ -28,6 +30,6 @@ export async function downloadFromX(url, { gql } = {}) {
       `x returned post ${post.id} with no media entities and no card image${quoted}`
     );
   }
-  const files = await Promise.all(post.media.map(item => downloadFileFromUrl(item.url)));
+  const files = await Promise.all(media.map(item => downloadFileFromUrl(item.url)));
   return files.length === 1 ? files[0] : files;
 }

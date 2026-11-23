@@ -1,4 +1,4 @@
-import { describe, test, beforeAll } from 'bun:test';
+import { describe, test, beforeAll, spyOn } from 'bun:test';
 import assert from 'node:assert';
 import { execFileSync } from 'child_process';
 import fs from 'fs';
@@ -102,6 +102,21 @@ describe('convertToFormat', () => {
 
   test('says so when asked for audio from a silent video', async () => {
     await assert.rejects(convertToFormat(silent, 'mp3'), /no audio to extract/);
+  });
+
+  test('an encode past the ffmpeg time limit says it took too long', async () => {
+    const real = AbortSignal.timeout.bind(AbortSignal);
+    const spy = spyOn(AbortSignal, 'timeout').mockImplementation(() => real(1));
+    try {
+      await assert.rejects(convertToFormat(clip, 'webm'), error => {
+        assert.strictEqual(error.code, 'TIMED_OUT');
+        assert.match(error.message, /took too long/);
+        assert.match(error.cause.message, /ffmpeg timed out after 300s/);
+        return true;
+      });
+    } finally {
+      spy.mockRestore();
+    }
   });
 
   test('rejects formats outside the list', async () => {

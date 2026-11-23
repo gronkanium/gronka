@@ -20,10 +20,11 @@ export const GIF_PALETTEUSE = 'paletteuse=dither=floyd_steinberg:diff_mode=recta
 // A real encode (ffmpeg, gifsicle, convert) takes a couple of minutes; a longer run is stalled.
 export const FFMPEG_TIMEOUT_MS = 300000;
 
-export function runFfmpeg(args, { signal = AbortSignal.timeout(FFMPEG_TIMEOUT_MS) } = {}) {
+export function runFfmpeg(args) {
+  const timeout = AbortSignal.timeout(FFMPEG_TIMEOUT_MS);
   return new Promise((resolve, reject) => {
     const child = spawn('ffmpeg', args, {
-      signal: jobSignal(signal),
+      signal: jobSignal(timeout),
       killSignal: 'SIGKILL',
       stdio: ['ignore', 'ignore', 'pipe'],
     });
@@ -31,7 +32,16 @@ export function runFfmpeg(args, { signal = AbortSignal.timeout(FFMPEG_TIMEOUT_MS
     child.stderr.on('data', d => {
       stderr = (stderr + d).slice(-65536);
     });
-    child.on('error', reject);
+    child.on('error', error =>
+      reject(
+        timeout.aborted
+          ? Object.assign(
+              new Error(`ffmpeg timed out after ${FFMPEG_TIMEOUT_MS / 1000}s`, { cause: error }),
+              { code: 'ETIMEDOUT' }
+            )
+          : error
+      )
+    );
     child.on('close', code => {
       if (code === 0) return resolve();
       const lastLine = stderr.trim().split('\n').pop();

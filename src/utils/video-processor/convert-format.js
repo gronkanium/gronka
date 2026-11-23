@@ -1,5 +1,5 @@
 import { createLogger } from '../logger.js';
-import { ValidationError, withCause } from '../errors.js';
+import { AppError, ValidationError, withCause } from '../errors.js';
 import { FFMPEG_INPUT_GUARD, runFfmpeg } from './utils.js';
 import { OUTPUT_FORMATS } from '../output-formats.js';
 import { fromPath, tempPath } from '../media-file.js';
@@ -48,6 +48,15 @@ export async function convertToFormat(
   } catch (error) {
     const stderr = String(error.stderr || error.message);
     logger.warn(`ffmpeg ${format} conversion failed: ${stderr.trim().slice(0, 500)}`);
+    if (error.code === 'ETIMEDOUT') {
+      throw withCause(
+        new AppError(
+          'converting that took too long. pick a shorter part with start and end.',
+          'TIMED_OUT'
+        ),
+        error
+      );
+    }
     if (spec.kind === 'audio' && /does not contain any stream|matches no streams/i.test(stderr)) {
       throw withCause(
         new ValidationError('that file has no audio to extract.'),

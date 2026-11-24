@@ -551,7 +551,7 @@ if (!mocksSupported) {
       spawnCallLog = [];
       spawnBehaviors = [success];
       const result = await withForbiddenApi(() => acquireMedia(url, { urlOnly: false }));
-      assert.strictEqual(apiCalls, 4);
+      assert.strictEqual(apiCalls, 6);
       assert.strictEqual(result.downloadMethod, 'ytdlp');
       assert.ok(spawnCallLog[0].args.includes(url));
     });

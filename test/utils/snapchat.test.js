@@ -1,6 +1,8 @@
-import { describe, test } from 'bun:test';
+import { describe, test, spyOn } from 'bun:test';
 import assert from 'node:assert';
+import axios from 'axios';
 import {
+  downloadFromSnapchat,
   isSnapchatMediaUrl,
   spotlightVideoUrl,
   sharedSnapMedia,
@@ -61,5 +63,25 @@ describe('snapchat spotlight', () => {
       { url: 'https://cf-st.sc-cdn.net/d/b.1034', ext: 'jpg' },
     ]);
     assert.deepStrictEqual(sharedSnapMedia('<html></html>'), []);
+  });
+
+  test('a removed snap, served as the bare default preview, reads as gone', async () => {
+    const page = html => ({ status: 200, headers: {}, data: html });
+    const spy = spyOn(axios, 'get').mockResolvedValue(
+      page(
+        '<title>Snapchat</title><meta property="og:image" content="https://www.snapchat.com/images/default-preview/facebook.png"/>'
+      )
+    );
+    try {
+      await assert.rejects(downloadFromSnapchat('https://www.snapchat.com/@a/spotlight/W7_b'), {
+        code: 'CONTENT_GONE',
+      });
+      spy.mockResolvedValue(page('<title>Snapchat</title>'));
+      await assert.rejects(downloadFromSnapchat('https://www.snapchat.com/@a/spotlight/W7_b'), {
+        code: 'NETWORK_ERROR',
+      });
+    } finally {
+      spy.mockRestore();
+    }
   });
 });

@@ -1,4 +1,4 @@
-import { NetworkError, withCause } from './errors.js';
+import { NetworkError, contentGone, withCause } from './errors.js';
 import { downloadFileFromUrl } from './file-downloader.js';
 import { fetchPage } from './ssrf-guard.js';
 import { withExtension } from './media-file.js';
@@ -53,11 +53,11 @@ export async function downloadFromSnapchat(url) {
   const video = spotlightVideoUrl(page.data);
   // The CDN names files like abc.27.IRZXSOY, so the extension comes from the page.
   const files = video ? [{ url: video, ext: 'mp4' }] : sharedSnapMedia(page.data);
+  const cause = `snapchat: no og:video or shared media on ${new URL(url).pathname}`;
+  // A removed or unknown snap still answers 200, with Snapchat's bare default preview image.
+  if (!files.length && page.data?.includes('/images/default-preview/')) throw contentGone(cause);
   if (!files.length) {
-    throw withCause(
-      new NetworkError('could not download this snapchat link.'),
-      `snapchat: no og:video or shared media on ${new URL(url).pathname}`
-    );
+    throw withCause(new NetworkError('could not download this snapchat link.'), cause);
   }
   const downloaded = await Promise.all(
     files.map(async file =>

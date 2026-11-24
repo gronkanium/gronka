@@ -57,7 +57,7 @@ const {
 // yt-dlp only does video, so a still image on a yt-dlp host (i.imgur.com/x.jpg) goes direct.
 const isStillImage = url => {
   try {
-    return /\.(jpe?g|png|webp|bmp)$/i.test(new URL(url).pathname);
+    return /\.(jpe?g|png|pnj|webp|bmp)$/i.test(new URL(url).pathname);
   } catch {
     return false;
   }

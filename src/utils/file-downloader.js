@@ -31,6 +31,8 @@ const DIRECT_MEDIA_EXTENSIONS = new Set([
   'jpg',
   'jpeg',
   'png',
+  // Tumblr's CDN names some PNGs .pnj.
+  'pnj',
   'webp',
   'bmp',
   ...Object.keys(OUTPUT_FORMATS).filter(ext => OUTPUT_FORMATS[ext].kind === 'audio'),

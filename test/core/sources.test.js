@@ -19,6 +19,7 @@ const ROUTED = [
   ['https://imgur.com/gallery/abc', 'imgur'],
   ['https://i.imgur.com/abc.gif', 'imgur'],
   ['https://i.imgur.com/abc.jpg', 'direct'],
+  ['https://64.media.tumblr.com/a/b-19/s500x750/c.pnj', 'direct'],
   ['https://media1.tenor.com/m/abc/example.gif', 'direct'],
   ['https://media.tenor.com/abc/example.mp4', 'direct'],
   ['https://tenor.com/view/example-gif-123', 'tenor'],

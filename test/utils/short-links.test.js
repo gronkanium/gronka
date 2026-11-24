@@ -55,13 +55,14 @@ describe('resolveShortLink', () => {
     }
   });
 
-  test('follows SoundCloud and Niconico share links, which no extractor reads', async () => {
+  test('follows SoundCloud, Niconico and Snapchat share links, which no extractor reads', async () => {
     for (const [short, target] of [
       [
         'https://on.soundcloud.com/ilDONmw57JvRysSXVO',
         'https://soundcloud.com/a/b?ref=clipboard&si=02e5c8d7',
       ],
       ['https://nico.ms/sm9', 'https://www.nicovideo.jp/watch/sm9'],
+      ['https://snapchat.com/t/8WCfuyJ4', 'https://www.snapchat.com/@a/spotlight/W7_b?type=t1'],
     ]) {
       spy?.mockRestore();
       spy = spyOn(axios, 'get').mockResolvedValue({

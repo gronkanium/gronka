@@ -24,7 +24,8 @@ const isGoogle = host => /^google\.[a-z.]+$/.test(host);
 // facebook.com/share/ and google.com/goto links only reveal their target by redirecting to it.
 export const isShortLink = (url, host = hostOf(url)) =>
   SHORT_LINK_HOSTS.has(host) ||
-  ((host === 'tiktok.com' || host === 'lite.tiktok.com') && pathOf(url).startsWith('/t/')) ||
+  (['tiktok.com', 'lite.tiktok.com', 'snapchat.com'].includes(host) &&
+    pathOf(url).startsWith('/t/')) ||
   ((host === 'facebook.com' || host === 'm.facebook.com') && pathOf(url).startsWith('/share/')) ||
   (isGoogle(host) && pathOf(url) === '/goto');
 

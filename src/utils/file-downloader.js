@@ -13,6 +13,7 @@ import {
   MAX_PAGE_BYTES,
 } from './ssrf-guard.js';
 import { OUTPUT_FORMATS } from './output-formats.js';
+import { DRIVE_HOSTS } from './google-drive.js';
 import { hostOf, isBilibiliCdnHost, BILIBILI_REFERER, hostUnder } from './url-host.js';
 
 const logger = createLogger('file-downloader');
@@ -92,7 +93,17 @@ export async function downloadDirectMedia(url, client = null, options = {}) {
     logger.warn(
       `Direct media URL returned non-media content: ${url} (content-type: ${fileData.contentType || 'none'})`
     );
-    throw new ValidationError('that link does not point to a video, image or audio file.');
+    const host = hostOf(url);
+    // Drive answers a file it does not share publicly with its sign-in page.
+    const drivePrivate = DRIVE_HOSTS.includes(host) && /html/i.test(fileData.contentType);
+    throw withCause(
+      new ValidationError(
+        drivePrivate
+          ? 'that google drive file is not shared publicly. set it to anyone with the link, then try again.'
+          : 'that link does not point to a video, image or audio file.'
+      ),
+      `${host} answered ${fileData.contentType || 'no content type'}`
+    );
   }
   return fileData;
 }

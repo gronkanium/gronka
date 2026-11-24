@@ -116,6 +116,34 @@ describe('source-specific file downloads', () => {
     }
   });
 
+  test('a page instead of a file says what came back, and a private Drive file says so', async () => {
+    const originalGet = axios.get;
+    axios.get = async () => ({
+      data: Readable.from([Buffer.from('<html>sign in</html>')]),
+      headers: { 'content-type': 'text/html; charset=utf-8' },
+    });
+    try {
+      await withJobDir(async () => {
+        await assert.rejects(downloadDirectMedia('https://example.com/a.mp4'), error => {
+          assert.strictEqual(
+            error.message,
+            'that link does not point to a video, image or audio file.'
+          );
+          assert.strictEqual(error.cause?.message, 'example.com answered text/html; charset=utf-8');
+          return true;
+        });
+        await assert.rejects(
+          downloadDirectMedia(
+            'https://drive.usercontent.google.com/download?id=117MgfP_NsIAHWIETzAVjck5D5p48WkiL'
+          ),
+          { message: /google drive file is not shared publicly/ }
+        );
+      });
+    } finally {
+      axios.get = originalGet;
+    }
+  });
+
   test('Jumpshare downloads the original file instead of its share-page HTML', async () => {
     const originalGet = axios.get;
     const share = 'https://jumpshare.com/s/file123AbC';

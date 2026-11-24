@@ -5,6 +5,26 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and versions are release dates (`YYYY.MM.DD`, `.N` for a later release the same day).
 
+## [5.3.1](https://github.com/gronkanium/gronka/compare/v5.3.0...v5.3.1) (2026-11-24)
+
+
+### Bug Fixes
+
+* **booru:** read e621's new post shape, where files, stats and tags moved ([4338ae4](https://github.com/gronkanium/gronka/commit/4338ae4bd0f292a81ffbfc569dafda8c70386e61))
+* **convert:** ffmpeg honors a caller's deadline again, so a GIF gets one 5 minute budget for both passes ([7446f63](https://github.com/gronkanium/gronka/commit/7446f630fc0e5de0ecd309d0145f8db279deac3b))
+* **download:** a 410 Gone from a site's API reads as a deleted post (RedGifs) ([3c28de3](https://github.com/gronkanium/gronka/commit/3c28de3b329b64670c9304ad4dbf47107cbc4aa7))
+* **download:** a private Google Drive file says it is not shared, and a non-media answer records what came back ([c1b5947](https://github.com/gronkanium/gronka/commit/c1b59479612b1c3052faad64e071c0cd8be3ed2d))
+* **download:** a removed Snapchat snap reads as gone instead of a failed download ([e0952b9](https://github.com/gronkanium/gronka/commit/e0952b968d7bd71fb7cc10ba7046fc59f863738d))
+* **download:** Bandcamp gets a Safari fingerprint, since it now challenges Chrome's ([d8fd423](https://github.com/gronkanium/gronka/commit/d8fd423e463b3f1842ea0b1e44450c0d0dedfe6b))
+* **download:** Medal clips get a minute to publish before the bot gives up ([1ee051c](https://github.com/gronkanium/gronka/commit/1ee051cd7c3d095231f89d0da37a25fc83480c51))
+* **download:** Snapchat /t/ share links resolve to the snap they point at ([c6069c7](https://github.com/gronkanium/gronka/commit/c6069c726f2d110a481edafc7894ac058a534116))
+* **download:** Tumblr .pnj image links download directly instead of failing in yt-dlp ([357d02e](https://github.com/gronkanium/gronka/commit/357d02ebd66a10bf2e66d7aa300fe3d5fb8c1ee7))
+
+
+### Dependencies
+
+* **deps:** bump the security-updates group across 1 directory with 5 updates ([78ccb76](https://github.com/gronkanium/gronka/commit/78ccb76bfceb937239f9c98035edf2d0b6c1ff86))
+
 ## [5.3.0](https://github.com/gronkanium/gronka/compare/v5.2.0...v5.3.0) (2026-11-23)
 
 

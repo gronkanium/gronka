@@ -150,8 +150,10 @@
         class="lbl muted"
         x={(x(last.mb) + x(dom.xMax)) / 2}
         y={y(last.hours) - 10}
-        text-anchor="middle">{compact ? 'larger' : `larger · ${fmtH(last.hours)}`}</text
+        text-anchor="middle"
       >
+        {compact ? 'larger' : `larger · ${fmtH(last.hours)}`}
+      </text>
     {/if}
 
     {#each steps as s (s.i)}
@@ -185,16 +187,18 @@
           onfocus={() => (focused = s.i)}
           onblur={() => (focused = -1)}
         />
-        <text class="lbl" x={(x0 + x1) / 2} y={y(s.hours) - 10} text-anchor="middle"
-          >{fmtH(s.hours)}</text
-        >
+        <text class="lbl" x={(x0 + x1) / 2} y={y(s.hours) - 10} text-anchor="middle">
+          {fmtH(s.hours)}
+        </text>
         {#if tiers.length > 1 && x1 - x0 > 56}
           <foreignObject x={x1 - 22} y={y(s.hours) + 4} width="20" height="20">
             <button
               class="rm"
               aria-label={`remove the ${fmtMb(s.mb)} tier`}
-              onclick={() => remove(s.i)}><X size={12} /></button
+              onclick={() => remove(s.i)}
             >
+              <X size={12} />
+            </button>
           </foreignObject>
         {/if}
 
@@ -242,10 +246,10 @@
     {:else if hover?.hours}
       A <b>{fmtMb(hover.mb)}</b> file is kept <b>{fmtH(hover.hours)}</b>
     {:else}
-      <span class="dim"
-        >Drag a step up or down to change how long, drag a size marker sideways to move the
-        boundary. Double-click to split a step.</span
-      >
+      <span class="dim">
+        Drag a step up or down to change how long, drag a size marker sideways to move the boundary.
+        Double-click to split a step.
+      </span>
     {/if}
   </div>
 </div>

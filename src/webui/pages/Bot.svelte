@@ -201,12 +201,12 @@
             <p>PNG, JPEG, GIF or WebP</p>
           </div>
           <div class="ctl">
-            <button class="btn" onclick={() => pick('avatar')}
-              ><ImagePlus size={14} />Change avatar</button
-            >
-            <button class="btn" disabled={!hasAvatar} onclick={removeAvatar}
-              ><Trash2 size={14} />Remove</button
-            >
+            <button class="btn" onclick={() => pick('avatar')}>
+              <ImagePlus size={14} />Change avatar
+            </button>
+            <button class="btn" disabled={!hasAvatar} onclick={removeAvatar}>
+              <Trash2 size={14} />Remove
+            </button>
           </div>
         </div>
         <div class="item">
@@ -215,12 +215,12 @@
             <p>Shown across the top of the profile</p>
           </div>
           <div class="ctl">
-            <button class="btn" onclick={() => pick('banner')}
-              ><ImagePlus size={14} />Change banner</button
-            >
-            <button class="btn" disabled={!bannerSrc} onclick={removeBanner}
-              ><Trash2 size={14} />Remove</button
-            >
+            <button class="btn" onclick={() => pick('banner')}>
+              <ImagePlus size={14} />Change banner
+            </button>
+            <button class="btn" disabled={!bannerSrc} onclick={removeBanner}>
+              <Trash2 size={14} />Remove
+            </button>
           </div>
         </div>
         <div class="item stacked">
@@ -303,12 +303,12 @@
   {#if dirty}
     <div class="unsaved" role="status">
       <span>Careful, you have unsaved changes!</span>
-      <button class="btn reset" disabled={saving} onclick={() => (draft = fresh(saved))}
-        >Reset</button
-      >
-      <button class="btn save" disabled={saving} onclick={save}
-        >{saving ? 'Saving...' : 'Save Changes'}</button
-      >
+      <button class="btn reset" disabled={saving} onclick={() => (draft = fresh(saved))}>
+        Reset
+      </button>
+      <button class="btn save" disabled={saving} onclick={save}>
+        {saving ? 'Saving...' : 'Save Changes'}
+      </button>
     </div>
   {/if}
 {/if}

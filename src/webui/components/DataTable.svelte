@@ -114,8 +114,9 @@
     {#if error}
       <div class="empty error-text">
         {error}
-        {#if onretry}<button class="btn sm" onclick={onretry}><RefreshCw size={11} />Retry</button
-          >{/if}
+        {#if onretry}<button class="btn sm" onclick={onretry}>
+            <RefreshCw size={11} />Retry
+          </button>{/if}
       </div>
     {:else if loading && !rows.length}
       {#each Array(skeleton) as _, i (i)}
@@ -151,22 +152,26 @@
   {#if footer}{@render footer()}{/if}
   {#if pager && pager.total > 0}
     <div class="pager">
-      <span class="tnum"
-        >{from.toLocaleString()}–{to.toLocaleString()} of {pager.total.toLocaleString()}</span
-      >
+      <span class="tnum">
+        {from.toLocaleString()}–{to.toLocaleString()} of {pager.total.toLocaleString()}
+      </span>
       <span class="row">
         <button
           class="icon-btn sm"
           disabled={pager.offset === 0}
           onclick={() => pager.onpage(Math.max(0, pager.offset - pager.limit))}
-          aria-label="previous page"><ChevronLeft size={15} /></button
+          aria-label="previous page"
         >
+          <ChevronLeft size={15} />
+        </button>
         <button
           class="icon-btn sm"
           disabled={pager.offset + pager.limit >= pager.total}
           onclick={() => pager.onpage(pager.offset + pager.limit)}
-          aria-label="next page"><ChevronRight size={15} /></button
+          aria-label="next page"
         >
+          <ChevronRight size={15} />
+        </button>
       </span>
     </div>
   {/if}

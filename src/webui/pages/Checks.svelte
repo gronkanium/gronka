@@ -137,14 +137,15 @@
       class:warn={!counts.fail && counts.gone}
       class:ok={loaded && checks.length && counts.pass === checks.length}
       class:idle={!problems && counts.pass < checks.length}
-      >{running
+    >
+      {running
         ? 'Running…'
         : problems
           ? `${problems} need${problems === 1 ? 's' : ''} attention`
           : counts.pass === checks.length
             ? 'All passing'
-            : `${counts.never} not run yet`}</span
-    >
+            : `${counts.never} not run yet`}
+    </span>
     <label class="nightly">
       <button
         class="toggle"
@@ -156,9 +157,10 @@
       ></button>
       Nightly
     </label>
-    <button class="btn primary" disabled={running} onclick={runAll}
-      ><RefreshCw size={13} /> {running ? 'Running' : 'Run all now'}</button
-    >
+    <button class="btn primary" disabled={running} onclick={runAll}>
+      <RefreshCw size={13} />
+      {running ? 'Running' : 'Run all now'}
+    </button>
   {/snippet}
   {#snippet below()}
     <div class="tabs" role="tablist">
@@ -223,9 +225,9 @@
       <span><span class="pill sm {STATUS[status][0]}">{STATUS[status][1]}</span></span>
       <span class="site hide-sm ellipsis">{labels[c.site] ?? c.site}</span>
       <span class="what">
-        <a class="link ellipsis mono" href={c.url} target="_blank" rel="noreferrer"
-          >{shortLink(c.url)}</a
-        >
+        <a class="link ellipsis mono" href={c.url} target="_blank" rel="noreferrer">
+          {shortLink(c.url)}
+        </a>
         <span class="l2 ellipsis" title={c.result?.cause ?? ''}>
           {#if status === 'fail' && c.result.got}
             wanted <b>{c.result.expected}</b>, got <b class="bad">{c.result.got}</b>
@@ -240,17 +242,18 @@
           {/if}
         </span>
       </span>
-      <span class="num dim small hide-sm"
-        >{c.result?.passedAt ? formatRelativeTime(c.result.passedAt) : 'never'}</span
-      >
+      <span class="num dim small hide-sm">
+        {c.result?.passedAt ? formatRelativeTime(c.result.passedAt) : 'never'}
+      </span>
       <span class="num">
         <button
           class="btn sm ghost"
           disabled={busy.has(c.url) || running}
           aria-label="check {shortLink(c.url)} now"
           onclick={() => runOne(c)}
-          >{#if busy.has(c.url)}…{:else}<Play size={11} />{/if}</button
         >
+          {#if busy.has(c.url)}…{:else}<Play size={11} />{/if}
+        </button>
       </span>
     {/snippet}
   </DataTable>

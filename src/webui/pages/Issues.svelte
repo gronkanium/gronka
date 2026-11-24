@@ -510,10 +510,11 @@
       class:skeleton={!loaded}
       class:warn={lists.defects.length}
       class:ok={!lists.defects.length}
-      >{lists.defects.length
-        ? `${lists.defects.length} defect${lists.defects.length === 1 ? '' : 's'} open`
-        : 'No open defects'}</span
     >
+      {lists.defects.length
+        ? `${lists.defects.length} defect${lists.defects.length === 1 ? '' : 's'} open`
+        : 'No open defects'}
+    </span>
   {/snippet}
   {#snippet below()}
     <div class="tabs" role="tablist">
@@ -603,11 +604,13 @@
                   apply(
                     picked.filter(g => g.state !== 'resolved'),
                     'resolve'
-                  )}><CircleCheck size={13} />Resolve</button
+                  )}
               >
-              <button class="btn sm" disabled={saving} onclick={() => apply(picked, 'mute7')}
-                ><BellOff size={13} />Mute 7d</button
-              >
+                <CircleCheck size={13} />Resolve
+              </button>
+              <button class="btn sm" disabled={saving} onclick={() => apply(picked, 'mute7')}>
+                <BellOff size={13} />Mute 7d
+              </button>
               {#if picked.some(g => g.state !== 'open')}
                 <button
                   class="btn sm"
@@ -616,22 +619,24 @@
                     apply(
                       picked.filter(g => g.state !== 'open'),
                       'reopen'
-                    )}><RotateCcw size={13} />Reopen</button
+                    )}
                 >
+                  <RotateCcw size={13} />Reopen
+                </button>
               {/if}
               <button
                 class="icon-btn sm"
                 title="Clear selection (Esc)"
                 aria-label="clear selection"
-                onclick={() => checked.clear()}><X size={14} /></button
+                onclick={() => checked.clear()}
               >
+                <X size={14} />
+              </button>
             </div>
           {:else}
-            <span class="count"
-              >{loaded
-                ? `${visible.length} ${visible.length === 1 ? 'issue' : 'issues'}`
-                : ''}</span
-            >
+            <span class="count">
+              {loaded ? `${visible.length} ${visible.length === 1 ? 'issue' : 'issues'}` : ''}
+            </span>
             <div class="seg xs" role="group" aria-label="group by">
               {#each [['error', 'Error'], ['cause', 'Cause']] as [g, label] (g)}
                 <button
@@ -640,8 +645,10 @@
                   title={g === 'error'
                     ? 'Group by the message users see'
                     : 'Group by the underlying cause'}
-                  onclick={() => (by = g)}>{label}</button
+                  onclick={() => (by = g)}
                 >
+                  {label}
+                </button>
               {/each}
             </div>
             {#if show.trend}
@@ -651,8 +658,10 @@
                     class:on={period === p}
                     aria-pressed={period === p}
                     title={p === '24h' ? 'Hourly, last 24 hours' : 'Daily, last 7 days'}
-                    onclick={() => setPeriod(p)}>{p}</button
+                    onclick={() => setPeriod(p)}
                   >
+                    {p}
+                  </button>
                 {/each}
               </div>
             {/if}
@@ -704,13 +713,13 @@
             />
           </span>
         {/if}
-        <span class="num strong" title="{g.count.toLocaleString()} events in the last 7 days"
-          >{abbr(g.count)}</span
-        >
+        <span class="num strong" title="{g.count.toLocaleString()} events in the last 7 days">
+          {abbr(g.count)}
+        </span>
         {#if show.last}
-          <span class="num dim" title="Last seen {formatDateTime(g.lastSeen, { seconds: true })}"
-            >{formatRelativeTime(g.lastSeen)}</span
-          >
+          <span class="num dim" title="Last seen {formatDateTime(g.lastSeen, { seconds: true })}">
+            {formatRelativeTime(g.lastSeen)}
+          </span>
         {/if}
       {/snippet}
     </DataTable>
@@ -730,8 +739,10 @@
                 class="icon-btn sm right"
                 title="Close (Esc)"
                 aria-label="close"
-                onclick={close}><X size={15} /></button
+                onclick={close}
               >
+                <X size={15} />
+              </button>
             {/if}
           </div>
           <h2>{selected.title}</h2>
@@ -785,9 +796,9 @@
           </div>
           <div>
             <span class="k">Last 24h</span>
-            <span class="v"
-              >{#if week}{abbr(last24)}{:else}<span class="skeleton v-skel"></span>{/if}</span
-            >
+            <span class="v">
+              {#if week}{abbr(last24)}{:else}<span class="skeleton v-skel"></span>{/if}
+            </span>
           </div>
         </div>
 
@@ -810,17 +821,19 @@
           {#each occ.slice(0, occShown) as a (a.id)}
             {@const f = failureOf(a)}
             <div class="orow">
-              <span class="t" title={formatDateTime(a.timestamp, { seconds: true })}
-                >{formatRelativeTime(a.timestamp)}</span
-              >
+              <span class="t" title={formatDateTime(a.timestamp, { seconds: true })}>
+                {formatRelativeTime(a.timestamp)}
+              </span>
               {#if f.url}
                 <a
                   class="mono ellipsis"
                   href={f.url}
                   target="_blank"
                   rel="noopener noreferrer"
-                  title={f.url}>{f.url}</a
+                  title={f.url}
                 >
+                  {f.url}
+                </a>
               {:else}
                 <span class="mono ellipsis" class:dim={!f.source}>{f.source ?? 'attachment'}</span>
               {/if}
@@ -854,9 +867,9 @@
           {/each}
           {#if occ.length > occShown}
             <div class="more">
-              <button class="btn sm" onclick={() => (occShown += 20)}
-                >Show {Math.min(20, occ.length - occShown)} more</button
-              >
+              <button class="btn sm" onclick={() => (occShown += 20)}>
+                Show {Math.min(20, occ.length - occShown)} more
+              </button>
             </div>
           {/if}
         </section>
@@ -868,13 +881,14 @@
           title={copier.copied ? 'Copied' : 'Copy message'}
           aria-label="copy message"
           onclick={() => copier.copy(selected.members[0])}
-          >{#if copier.copied}<Check size={15} />{:else}<Copy size={15} />{/if}</button
         >
+          {#if copier.copied}<Check size={15} />{:else}<Copy size={15} />{/if}
+        </button>
         <span class="grow"></span>
         {#if selected.state !== 'open'}
-          <button class="btn sm" disabled={saving} onclick={() => apply([selected], 'reopen')}
-            ><RotateCcw size={13} />Reopen</button
-          >
+          <button class="btn sm" disabled={saving} onclick={() => apply([selected], 'reopen')}>
+            <RotateCcw size={13} />Reopen
+          </button>
         {/if}
         {#if selected.state !== 'muted'}
           <div class="mute">
@@ -884,16 +898,18 @@
               aria-haspopup="menu"
               aria-expanded={muteOpen}
               title="Mute (M mutes for 24 hours)"
-              onclick={toggleMute}><BellOff size={13} />Mute<ChevronDown size={13} /></button
+              onclick={toggleMute}
             >
+              <BellOff size={13} />Mute<ChevronDown size={13} />
+            </button>
             {#if muteOpen}
               <div class="pop mute-menu" role="menu" aria-label="mute for">
-                <button role="menuitem" onclick={() => apply([selected], 'mute24')}
-                  >For 24 hours<kbd>M</kbd></button
-                >
-                <button role="menuitem" onclick={() => apply([selected], 'mute7')}
-                  >For 7 days</button
-                >
+                <button role="menuitem" onclick={() => apply([selected], 'mute24')}>
+                  For 24 hours<kbd>M</kbd>
+                </button>
+                <button role="menuitem" onclick={() => apply([selected], 'mute7')}>
+                  For 7 days
+                </button>
               </div>
             {/if}
           </div>
@@ -903,8 +919,10 @@
             class="btn sm primary"
             disabled={saving}
             title="Resolve (R)"
-            onclick={() => apply([selected], 'resolve')}><CircleCheck size={13} />Resolve</button
+            onclick={() => apply([selected], 'resolve')}
           >
+            <CircleCheck size={13} />Resolve
+          </button>
         {/if}
       </footer>
     </section>

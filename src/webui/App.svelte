@@ -190,9 +190,9 @@
 
   <div class="main" id="main-content">
     <header class="topbar">
-      <button class="icon-btn mobile-only" onclick={toggleSidebar} aria-label="open menu"
-        ><Menu size={20} /></button
-      >
+      <button class="icon-btn mobile-only" onclick={toggleSidebar} aria-label="open menu">
+        <Menu size={20} />
+      </button>
       <div class="tools">
         <button
           class="icon-btn"

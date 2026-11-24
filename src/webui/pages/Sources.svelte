@@ -209,20 +209,25 @@
       class:skeleton={loading}
       class:ok={totalOn === sites.length}
       class:warn={totalOn < sites.length}
-      >{saving ? 'Saving…' : `${totalOn} of ${sites.length} on`}</span
     >
+      {saving ? 'Saving…' : `${totalOn} of ${sites.length} on`}
+    </span>
     <button
       class="btn"
       disabled={saving || totalOn === sites.length}
-      onclick={() => setAll(sites, true, 'All sites turned on')}>Turn all on</button
+      onclick={() => setAll(sites, true, 'All sites turned on')}
     >
+      Turn all on
+    </button>
     <button
       class="btn danger"
       disabled={saving || totalOn === 0}
       onclick={() =>
         confirm(`Turn off all ${sites.length} sites? Every /download link will be refused.`) &&
-        setAll(sites, false, 'All sites turned off')}>Turn all off</button
+        setAll(sites, false, 'All sites turned off')}
     >
+      Turn all off
+    </button>
   {/snippet}
 </PageHeader>
 
@@ -251,9 +256,9 @@
             <b>{sites.find(s => s.id === tested.site)?.label ?? tested.route.name}</b>
             <span class="muted">and tries</span>
             {#each testedSteps as s, i (s.tool)}
-              <span class="chip" class:dim={s.why} title={s.why ?? ''}
-                >{tools[s.tool]?.name}{#if s.why}<em>{s.why}</em>{/if}</span
-              >{#if i < testedSteps.length - 1}<span class="then">then</span>{/if}
+              <span class="chip" class:dim={s.why} title={s.why ?? ''}>
+                {tools[s.tool]?.name}{#if s.why}<em>{s.why}</em>{/if}
+              </span>{#if i < testedSteps.length - 1}<span class="then">then</span>{/if}
             {/each}
           {/if}
         </div>
@@ -281,14 +286,18 @@
             <button
               class="linkish small"
               disabled={saving || g.on === g.all.length}
-              onclick={() => setAll(g.all, true, `${g.label} turned on`)}>All on</button
+              onclick={() => setAll(g.all, true, `${g.label} turned on`)}
             >
+              All on
+            </button>
             <span class="dim">·</span>
             <button
               class="linkish small"
               disabled={saving || g.on === 0}
-              onclick={() => setAll(g.all, false, `${g.label} turned off`)}>All off</button
+              onclick={() => setAll(g.all, false, `${g.label} turned off`)}
             >
+              All off
+            </button>
           </span>
         </div>
         <ul class="rows">
@@ -306,14 +315,14 @@
                   disabled={saving}
                   onclick={() => toggle(site)}
                 ></button>
-                <span class="name"
-                  >{#if health[site.id]}<button
+                <span class="name">
+                  {#if health[site.id]}<button
                       class="health dot {health[site.id][0]}"
                       title={health[site.id][1]}
                       aria-label={health[site.id][1]}
                       onclick={() => navigate('checks')}
-                    ></button>{/if}{site.label}</span
-                >
+                    ></button>{/if}{site.label}
+                </span>
                 {#if route}
                   {#if editable}
                     <button
@@ -326,14 +335,14 @@
                       <ChevronDown size={14} />
                     </button>
                   {:else}
-                    <span class="tries plain"
-                      ><span class="ell"
-                        >{tools[route.steps[0].tool]?.name === site.label ||
+                    <span class="tries plain">
+                      <span class="ell">
+                        {tools[route.steps[0].tool]?.name === site.label ||
                         !GENERIC.has(route.steps[0].tool)
                           ? 'built in'
-                          : tries(route)}</span
-                      ></span
-                    >
+                          : tries(route)}
+                      </span>
+                    </span>
                   {/if}
                 {/if}
               </div>
@@ -342,45 +351,45 @@
                   <ol>
                     {#each route.steps as s, i (s.tool)}
                       <li class:skipped={!s.on}>
-                        <span class="n tnum"
-                          >{s.on
-                            ? route.steps.slice(0, i + 1).filter(x => x.on).length
-                            : NO_DATA}</span
-                        >
+                        <span class="n tnum">
+                          {s.on ? route.steps.slice(0, i + 1).filter(x => x.on).length : NO_DATA}
+                        </span>
                         <span class="what">
                           <b>{tools[s.tool]?.name}</b>
                           {#if s.note}<span class="dim small">only {s.note}</span>{/if}
-                          {#if !tools[s.tool]?.available}<span class="warn-text small"
-                              >not installed here</span
-                            >{/if}
+                          {#if !tools[s.tool]?.available}<span class="warn-text small">
+                              not installed here
+                            </span>{/if}
                         </span>
                         <span class="acts">
                           <button
                             class="icon"
                             aria-label="try earlier"
                             disabled={saving || i === 0}
-                            onclick={() => move(route, i, i - 1)}><ArrowUp size={14} /></button
+                            onclick={() => move(route, i, i - 1)}
                           >
+                            <ArrowUp size={14} />
+                          </button>
                           <button
                             class="icon"
                             aria-label="try later"
                             disabled={saving || i === route.steps.length - 1}
-                            onclick={() => move(route, i, i + 1)}><ArrowDown size={14} /></button
+                            onclick={() => move(route, i, i + 1)}
                           >
-                          <button class="btn sm" disabled={saving} onclick={() => skip(route, i)}
-                            >{s.on ? 'Skip' : 'Use'}</button
-                          >
+                            <ArrowDown size={14} />
+                          </button>
+                          <button class="btn sm" disabled={saving} onclick={() => skip(route, i)}>
+                            {s.on ? 'Skip' : 'Use'}
+                          </button>
                         </span>
                       </li>
                     {/each}
                   </ol>
                   <div class="foot">
                     {#if shared[route.id].length > 1}
-                      <span class="dim small"
-                        >Same order for {shared[route.id]
-                          .filter(l => l !== site.label)
-                          .join(', ')}</span
-                      >
+                      <span class="dim small">
+                        Same order for {shared[route.id].filter(l => l !== site.label).join(', ')}
+                      </span>
                     {:else}
                       <span class="dim small">If one fails, the next one tries.</span>
                     {/if}
@@ -388,8 +397,10 @@
                       <button
                         class="linkish small right"
                         disabled={saving}
-                        onclick={() => reset(route)}><RotateCcw size={11} /> Default order</button
+                        onclick={() => reset(route)}
                       >
+                        <RotateCcw size={11} /> Default order
+                      </button>
                     {/if}
                   </div>
                 </div>

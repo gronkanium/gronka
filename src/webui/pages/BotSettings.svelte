@@ -170,11 +170,11 @@
         <Icon size={15} strokeWidth={1.8} /><span>{s.label}</span>
       </button>
     {/each}
-    <button class="sec" onclick={() => navigate('sources')}
-      ><Globe size={15} strokeWidth={1.8} /><span>Sources</span><span class="arrow"
-        ><ArrowUpRight size={13} /></span
-      ></button
-    >
+    <button class="sec" onclick={() => navigate('sources')}>
+      <Globe size={15} strokeWidth={1.8} /><span>Sources</span><span class="arrow">
+        <ArrowUpRight size={13} />
+      </span>
+    </button>
   </nav>
 
   <section class="panel content" aria-label={active.label}>
@@ -235,8 +235,10 @@
                 {#if s.min !== undefined}<span class="dim small nowrap">{s.min}–{s.max}</span>{/if}
                 {#if String(drafts[key]) !== String(s.value)}<button
                     class="btn primary sm"
-                    disabled={saving[key]}><Check size={12} />Save</button
-                  >{/if}
+                    disabled={saving[key]}
+                  >
+                    <Check size={12} />Save
+                  </button>{/if}
               </form>
             {:else if s.type === 'tiers'}
               <TierChart
@@ -245,15 +247,16 @@
               />
               {#if serializeTiers(tierDrafts[key] ?? []) !== s.value}
                 <div class="row">
-                  <button class="btn sm" onclick={() => (tierDrafts[key] = parseTiers(s.value))}
-                    >Discard</button
-                  >
+                  <button class="btn sm" onclick={() => (tierDrafts[key] = parseTiers(s.value))}>
+                    Discard
+                  </button>
                   <button
                     class="btn primary sm"
                     disabled={saving[key] || !serializeTiers(tierDrafts[key] ?? [])}
                     onclick={() => save(key, serializeTiers(tierDrafts[key]))}
-                    ><Check size={12} />Save</button
                   >
+                    <Check size={12} />Save
+                  </button>
                 </div>
               {/if}
             {:else}
@@ -274,12 +277,12 @@
           <div class="ctl">
             {#if confirming}
               <span class="small muted">Replace them on Discord?</span>
-              <button class="btn sm" disabled={registering} onclick={() => (confirming = false)}
-                >Cancel</button
-              >
-              <button class="btn primary sm" disabled={registering} onclick={register}
-                >Register</button
-              >
+              <button class="btn sm" disabled={registering} onclick={() => (confirming = false)}>
+                Cancel
+              </button>
+              <button class="btn primary sm" disabled={registering} onclick={register}>
+                Register
+              </button>
             {:else}
               <button class="btn sm" onclick={() => (confirming = true)}>Register…</button>
             {/if}

@@ -221,9 +221,9 @@
         <span class="mono dim">#{j.id}</span>
         <span><span class="pill sm {kind}">{label}</span></span>
         <span class="mono ellipsis">{j.kind}</span>
-        <span class="muted ellipsis hide-sm" title={j.worker ?? ''}
-          >{j.worker ? (nameOf[j.worker] ?? 'stopped process') : NO_DATA}</span
-        >
+        <span class="muted ellipsis hide-sm" title={j.worker ?? ''}>
+          {j.worker ? (nameOf[j.worker] ?? 'stopped process') : NO_DATA}
+        </span>
         <span class="num hide-sm" class:warn-text={j.attempts > 1}>{j.attempts}</span>
         <span class="num dim">{formatRelativeTime(j.createdAt)}</span>
       {/snippet}
@@ -240,8 +240,9 @@
               class:err={!bot.status || bot.status === 'offline'}
             ></span>
             <span class="strong">Discord</span>
-            <span class="mono dim small right ellipsis">{bot.botTag ?? NO_DATA} · {bot.status}</span
-            >
+            <span class="mono dim small right ellipsis">
+              {bot.botTag ?? NO_DATA} · {bot.status}
+            </span>
           </div>
         {/if}
         {#each system?.deps ?? [] as d (d.id)}
@@ -253,9 +254,9 @@
               class:err={d.status === 'error'}
             ></span>
             <span class="strong">{d.label}</span>
-            <span class="mono dim small right ellipsis" title={d.detail}
-              >{d.detail ?? d.status}</span
-            >
+            <span class="mono dim small right ellipsis" title={d.detail}>
+              {d.detail ?? d.status}
+            </span>
           </div>
         {:else}
           {#if system}<div class="empty">No checks</div>{:else}<div class="skel-rows">

@@ -127,12 +127,12 @@
     {#each strip as s (s.label)}
       <button class="item" onclick={() => navigate('system')}>
         <span>{s.label}</span>
-        <b
-          >{#if loaded}{s.value}{:else}<span class="skeleton">0 / 0</span>{/if}</b
-        >
-        {#if loaded && s.note}<span class="pill sm {s.tone || 'idle'}" class:nodot={!s.tone}
-            >{s.note}</span
-          >{/if}
+        <b>
+          {#if loaded}{s.value}{:else}<span class="skeleton">0 / 0</span>{/if}
+        </b>
+        {#if loaded && s.note}<span class="pill sm {s.tone || 'idle'}" class:nodot={!s.tone}>
+            {s.note}
+          </span>{/if}
       </button>
     {/each}
   </div>
@@ -159,20 +159,20 @@
     <section class="panel" aria-label="open issues">
       <div class="ph">
         <span>Open issues</span>
-        <button class="linkish meta" onclick={() => navigate('issues')}
-          >View all <ArrowUpRight size={13} /></button
-        >
+        <button class="linkish meta" onclick={() => navigate('issues')}>
+          View all <ArrowUpRight size={13} />
+        </button>
       </div>
       {#each openIssues as i (i.key)}
         <button class="lrow issue" onclick={() => navigate('issues', { issue: i.key })}>
           <span class="n">{i.count}</span>
           <span class="grow">
             <span class="t ellipsis">{i.title}</span>
-            <span class="m"
-              ><span class="chip {i.kind}">{KIND_LABEL[i.kind]}</span>{i.commands
+            <span class="m">
+              <span class="chip {i.kind}">{KIND_LABEL[i.kind]}</span>{i.commands
                 .map(c => `/${c}`)
-                .join(', ')} · {formatRelativeTime(i.lastSeen)}</span
-            >
+                .join(', ')} · {formatRelativeTime(i.lastSeen)}
+            </span>
           </span>
         </button>
       {:else}

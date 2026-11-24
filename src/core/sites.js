@@ -201,7 +201,14 @@ export const SITES = [
     hosts: ['hentaihaven.xxx'],
     ytdlp: { ies: 'default', args: ['--replace-in-metadata', 'title', ' - Hentai Haven.*$', ''] },
   },
-  { id: 'bandcamp', name: 'Bandcamp', category: 'video', hosts: ['bandcamp.com'], ytdlp: true },
+  {
+    id: 'bandcamp',
+    name: 'Bandcamp',
+    category: 'video',
+    hosts: ['bandcamp.com'],
+    // Bandcamp challenges yt-dlp's default Chrome fingerprint (2026-11); Safari gets through.
+    ytdlp: { args: ['--impersonate', 'safari'] },
+  },
   {
     id: 'internet-archive',
     name: 'Internet Archive',

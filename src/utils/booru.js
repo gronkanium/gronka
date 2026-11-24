@@ -17,6 +17,21 @@ const postJsonApiUrl = (host, postId) => `https://${host}/posts/${postId}.json`;
 // Moebooru boards (yande.re, konachan) have no per-post endpoint, the index is queried by
 // id tag and answers with a one-element array, or an empty one when the post is gone.
 const moebooruApiUrl = (host, postId) => `https://${host}/post.json?tags=id:${postId}`;
+// e621's 2026-11 API returns a bare post with `files`, `stats` and uncategorized tags: map it to the old shape.
+function e621LegacyShape(json) {
+  if (json?.post || !json?.files) return json;
+  const { files, stats, tags, ...rest } = json;
+  return {
+    post: {
+      ...rest,
+      file: { ...files.meta, ...files.original, url: files.original?.url ?? null },
+      score: stats?.score,
+      fav_count: stats?.fav_count,
+      tags: Array.isArray(tags) ? { general: tags.filter(tag => tag !== 'conditional_dnp') } : tags,
+    },
+  };
+}
+
 const moebooruFileUrl = json => (Array.isArray(json) ? (json[0]?.file_url ?? null) : null);
 
 export const BOORU_SITES = [
@@ -35,6 +50,7 @@ export const BOORU_SITES = [
     label: 'e621 / e926',
     hosts: ['e621.net', 'e926.net'],
     buildApiUrl: postJsonApiUrl,
+    normalize: e621LegacyShape,
     // url is null for anonymous clients on some posts; the CDN path from md5 + ext still serves.
     pickFileUrl: json => {
       const file = json.post?.file;
@@ -118,7 +134,8 @@ export async function fetchBooruPost(url, fetchJson = getJson) {
   }
   const host = normalizeHost(hostname);
   try {
-    return { site, host, postId, data: await fetchJson(site.buildApiUrl(host, postId)) };
+    const data = await fetchJson(site.buildApiUrl(host, postId));
+    return { site, host, postId, data: site.normalize ? site.normalize(data) : data };
   } catch (error) {
     if (error.response?.status === 404) {
       throw contentGone(error);

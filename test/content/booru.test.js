@@ -134,6 +134,25 @@ describe('fetchBooruThread', () => {
     expect(post.links).toEqual(['https://example.com/a', 'https://example.com/b']);
   });
 
+  test('e621: reads the bare post shape (files, stats, flat tags)', async () => {
+    const bare = {
+      id: 9,
+      rating: 's',
+      flags: { deleted: false },
+      files: {
+        meta: { md5: 'ffeedd', ext: 'png', size: 99 },
+        original: { width: 10, height: 20, url: 'https://static1.e621.net/data/ff/ee/ffeedd.png' },
+      },
+      stats: { score: { total: 50 }, fav_count: 5 },
+      tags: ['solo', 'conditional_dnp', 'fox'],
+    };
+    const { post } = await fetchBooruThread('https://e621.net/posts/9', serve(bare));
+    expect(post.media[0].url).toBe('https://static1.e621.net/data/ff/ee/ffeedd.png');
+    expect(post.media[0].type).toBe('image');
+    expect(post.stats.score).toBe(50);
+    expect(post.extra.tags.general).toEqual(['solo', 'fox']);
+  });
+
   test('moebooru: gif media, uploader, questionable is nsfw, unix date', async () => {
     const calls = [];
     const { post, url } = await fetchBooruThread('https://yande.re/post/show/5', serve(moe, calls));

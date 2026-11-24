@@ -32,8 +32,8 @@ export function pickMedalVideo(clip) {
   return null;
 }
 
-// Links are usually shared the second a clip is made; Medal publishes it a few seconds later.
-const PUBLISH_RETRY_DELAYS_MS = [2000, 4000, 8000];
+// Links are shared the second a clip is made; Medal publishes it up to a minute later (14s missed by 1-4s).
+const PUBLISH_RETRY_DELAYS_MS = [2000, 4000, 8000, 15000, 30000];
 
 async function fetchPublishedClip(id) {
   const { data: clip } = await fetchPage(`https://medal.tv/api/content/${id}`, {

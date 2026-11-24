@@ -236,7 +236,11 @@ const FAILURES = [
   [/unable to download video data: HTTP Error 404/, regionCopyMissing],
   // Medal answers 403 until a fresh clip finishes publishing, usually within a minute.
   [/HTTP Error 403/, url => hostIn(url, siteHosts('medal')) && notPublishedYet()],
-  [/Unable to download webpage: HTTP Error (404|410)/, () => contentGone()],
+  // A 404 from an API can be the site moving it; a 410 is the post gone either way.
+  [
+    /Unable to download (webpage: HTTP Error (404|410)|JSON metadata: HTTP Error 410)/,
+    () => contentGone(),
+  ],
   [
     /Cannot parse data/,
     url => new NetworkError(`${siteLabel(url)} changed its page and cannot be read yet.`),

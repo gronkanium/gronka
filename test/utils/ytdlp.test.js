@@ -341,6 +341,7 @@ describe('ytdlp utilities', () => {
         'ERROR: [youtube] x: This video is no longer available because the YouTube account associated with this video has been terminated.',
         'ERROR: [vimeo] 1: This video is private',
         'ERROR: [dailymotion] x: This video does not exist',
+        'ERROR: [RedGifs] x: Unable to download JSON metadata: HTTP Error 410: Gone (caused by <HTTPError 410: Gone>)',
       ]) {
         assert.strictEqual(code(line), 'CONTENT_GONE', line);
       }

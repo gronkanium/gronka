@@ -130,4 +130,14 @@ describe('job cancellation', () => {
       server.stop(true);
     }
   });
+
+  test("a caller's own deadline stops ffmpeg before the default limit", async () => {
+    const { runFfmpeg } = await import('../../src/utils/video-processor/utils.js');
+    const started = Date.now();
+    const run = runFfmpeg(['-re', '-f', 'lavfi', '-i', 'anullsrc', '-t', '60', '-f', 'null', '-'], {
+      signal: AbortSignal.timeout(200),
+    });
+    await expect(run).rejects.toThrow();
+    expect(Date.now() - started).toBeLessThan(5000);
+  });
 });
